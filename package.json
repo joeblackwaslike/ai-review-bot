@@ -17,10 +17,14 @@
 		"docs:preview": "vitepress preview docs"
 	},
 	"dependencies": {
+		"@ai-sdk/anthropic": "^3.0.78",
+		"@ai-sdk/openai": "^3.0.64",
 		"@anthropic-ai/sdk": "^0.39.0",
 		"@vercel/functions": "^3.4.4",
 		"@vercel/node": "^3.2.25",
-		"octokit": "^4.0.2"
+		"ai": "^6.0.188",
+		"octokit": "^4.0.2",
+		"zod": "^4.4.3"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.12",

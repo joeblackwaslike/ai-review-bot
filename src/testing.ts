@@ -90,7 +90,11 @@ export function buildInlineComment(
 export interface ModelReviewFixture {
 	summary: string;
 	event: "COMMENT" | "REQUEST_CHANGES";
-	general_findings: Array<{ title: string; body: string }>;
+	general_findings: Array<{
+		title: string;
+		body: string;
+		severity: "high" | "medium" | "low";
+	}>;
 	inline_comments: InlineCommentFixture[];
 }
 
@@ -226,20 +230,13 @@ export function reviewedCommitMarker(headSha: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Anthropic response mock helpers
+// Vercel AI SDK response mock helpers
 // ---------------------------------------------------------------------------
 
-/** Wraps a ModelReviewFixture in the Anthropic tool_use content block shape. */
-export function buildAnthropicToolUseResponse(review: ModelReviewFixture) {
+/** Wraps a ModelReviewFixture in the generateObject() return shape. */
+export function buildGenerateObjectResponse(review: ModelReviewFixture) {
 	return {
-		content: [
-			{
-				type: "tool_use",
-				id: "tu_test",
-				name: "submit_review",
-				input: review,
-			},
-		],
-		stop_reason: "tool_use",
+		object: review,
+		usage: { promptTokens: 100, completionTokens: 50 },
 	};
 }

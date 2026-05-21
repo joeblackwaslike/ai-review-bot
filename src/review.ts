@@ -1,7 +1,9 @@
-import type Anthropic from "@anthropic-ai/sdk";
-import { getAnthropicClient } from "./anthropic.js";
-import { getConfig } from "./config.js";
+import { generateObject } from "ai";
+import { z } from "zod";
+import { computeCost, createAIModel } from "./models.js";
 import { buildAgentSystemPrompt, buildUserMessage } from "./prompt.js";
+import type { ModelSelection } from "./router.js";
+import { routeModel } from "./router.js";
 
 type OctokitLike = {
 	request: <T>(
@@ -31,39 +33,17 @@ interface ReviewContext {
 	additions: number;
 	deletions: number;
 	changedFiles: number;
+	labels: string[];
 	commentPrefix: string;
 	extraInstructions: string;
 	force: boolean;
+	provider: "anthropic" | "openai";
 }
 
 interface ReviewDecision {
 	event: "COMMENT" | "REQUEST_CHANGES";
 	body: string;
 	comments: ReviewComment[];
-}
-
-interface ModelFinding {
-	title: string;
-	body: string;
-}
-
-interface ModelInlineComment {
-	title: string;
-	body: string;
-	path: string;
-	line: number;
-	start_line: number | null;
-}
-
-export interface ModelReview {
-	summary: string;
-	event: "COMMENT" | "REQUEST_CHANGES";
-	general_findings: ModelFinding[];
-	inline_comments: ModelInlineComment[];
-}
-
-interface PullRequestReview {
-	body?: string | null;
 }
 
 interface ReviewComment {
@@ -75,6 +55,47 @@ interface ReviewComment {
 	start_side?: "RIGHT";
 }
 
+interface PullRequestReview {
+	body?: string | null;
+}
+
+interface TokenUsage {
+	promptTokens: number;
+	completionTokens: number;
+}
+
+const ModelReviewSchema = z.object({
+	summary: z.string(),
+	event: z.enum(["COMMENT", "REQUEST_CHANGES"]),
+	general_findings: z.array(
+		z.object({
+			title: z.string(),
+			body: z.string(),
+			severity: z.enum(["high", "medium", "low"]),
+		}),
+	),
+	inline_comments: z.array(
+		z.object({
+			title: z.string(),
+			body: z.string(),
+			path: z.string(),
+			line: z.number().int(),
+			start_line: z.number().int().nullable(),
+		}),
+	),
+});
+
+export type ModelReview = z.infer<typeof ModelReviewSchema>;
+
+type ModelFinding = ModelReview["general_findings"][number];
+type ModelInlineComment = ModelReview["inline_comments"][number];
+
+const SEVERITY_EMOJI: Record<"high" | "medium" | "low", string> = {
+	high: "🔴",
+	medium: "🟡",
+	low: "🟢",
+};
+
 // The 5 agent skills run in parallel — one focused API call per framework.
 const AGENT_SKILLS = [
 	"code-reviewer.md",
@@ -84,92 +105,43 @@ const AGENT_SKILLS = [
 	"code-review-and-quality.md",
 ] as const;
 
-const SUBMIT_REVIEW_TOOL = {
-	name: "submit_review",
-	description:
-		"Submit the final code review with findings and inline comments.",
-	input_schema: {
-		type: "object" as const,
-		additionalProperties: false,
-		required: ["summary", "event", "general_findings", "inline_comments"],
-		properties: {
-			summary: { type: "string" },
-			event: {
-				type: "string",
-				enum: ["COMMENT", "REQUEST_CHANGES"],
-			},
-			general_findings: {
-				type: "array",
-				items: {
-					type: "object",
-					additionalProperties: false,
-					required: ["title", "body"],
-					properties: {
-						title: { type: "string" },
-						body: { type: "string" },
-					},
-				},
-			},
-			inline_comments: {
-				type: "array",
-				items: {
-					type: "object",
-					additionalProperties: false,
-					required: ["title", "body", "path", "line", "start_line"],
-					properties: {
-						title: { type: "string" },
-						body: { type: "string" },
-						path: { type: "string" },
-						line: { type: "integer" },
-						start_line: { type: ["integer", "null"] },
-					},
-				},
-			},
-		},
-	},
-} as const;
-
 async function runAgent(
 	skillPath: string,
 	userMessage: string,
-	model: string,
-	client: ReturnType<typeof getAnthropicClient>,
+	selection: ModelSelection,
 	customPrompt: string,
-): Promise<ModelReview | null> {
+): Promise<{ review: ModelReview; usage: TokenUsage } | null> {
 	const system = buildAgentSystemPrompt(skillPath, customPrompt);
 
-	const response = await client.messages.create({
-		model,
-		max_tokens: 4096,
-		system: [
-			{ type: "text", text: system, cache_control: { type: "ephemeral" } },
-		],
-		tool_choice: { type: "tool", name: "submit_review" },
-		tools: [SUBMIT_REVIEW_TOOL],
-		messages: [{ role: "user", content: userMessage }],
-	});
+	try {
+		const { object, usage } = await generateObject({
+			model: createAIModel(selection),
+			schema: ModelReviewSchema,
+			maxOutputTokens: 4096,
+			system,
+			messages: [{ role: "user", content: userMessage }],
+		});
 
-	const toolBlock = response.content.find(
-		(b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
-	);
-
-	if (!toolBlock) {
-		console.error("Agent did not call submit_review tool", { skillPath });
+		return {
+			review: object,
+			usage: {
+				promptTokens: usage.inputTokens ?? 0,
+				completionTokens: usage.outputTokens ?? 0,
+			},
+		};
+	} catch (err) {
+		console.error("Agent threw during generateObject", { skillPath, err });
 		return null;
 	}
-
-	return toolBlock.input as ModelReview;
 }
 
 function mergeReviews(agentResults: ModelReview[]): ModelReview {
-	// Determine verdict: REQUEST_CHANGES if any agent found blocking issues.
 	const event: "COMMENT" | "REQUEST_CHANGES" = agentResults.some(
 		(r) => r.event === "REQUEST_CHANGES",
 	)
 		? "REQUEST_CHANGES"
 		: "COMMENT";
 
-	// Combine summaries, skipping empty or "no issues" ones.
 	const summaries = agentResults
 		.map((r) => r.summary.trim())
 		.filter(
@@ -180,7 +152,6 @@ function mergeReviews(agentResults: ModelReview[]): ModelReview {
 		);
 	const summary = summaries.length > 0 ? summaries.join("\n\n") : "";
 
-	// Deduplicate general findings by title (case-insensitive).
 	const seenTitles = new Set<string>();
 	const general_findings = agentResults
 		.flatMap((r) => r.general_findings)
@@ -191,9 +162,6 @@ function mergeReviews(agentResults: ModelReview[]): ModelReview {
 			return true;
 		});
 
-	// Deduplicate inline comments by path:line.
-	// When two agents flag the same location, prefer the one from a
-	// REQUEST_CHANGES agent (more conservative finding wins).
 	const commentMap = new Map<
 		string,
 		{ comment: ModelInlineComment; priority: number }
@@ -222,11 +190,11 @@ function formatFindings(findings: ModelFinding[]): string {
 		return "";
 	}
 
-	return findings
-		.map((finding) => {
-			return `#### ${finding.title}\n\n${finding.body}`;
-		})
-		.join("\n\n");
+	const rows = findings
+		.map((f) => `| ${SEVERITY_EMOJI[f.severity]} | **${f.title}** |`)
+		.join("\n");
+
+	return `| Sev | Finding |\n|---|---|\n${rows}`;
 }
 
 export function collectRightSideLines(patch: string): Set<number> {
@@ -253,10 +221,6 @@ export function collectRightSideLines(patch: string): Set<number> {
 		if (line.startsWith(" ")) {
 			lines.add(nextRightLine);
 			nextRightLine += 1;
-			continue;
-		}
-
-		if (line.startsWith("-")) {
 		}
 	}
 
@@ -375,11 +339,20 @@ export async function buildReview(
 		},
 	);
 
-	const config = getConfig();
-	const client = getAnthropicClient();
 	const customPrompt =
 		process.env.CUSTOM_REVIEW_PROMPT ??
 		"Focus on correctness, security, regressions, and missing tests.";
+
+	const filePaths = files.map((f) => f.filename);
+	const selection = routeModel(
+		{
+			additions: context.additions,
+			deletions: context.deletions,
+			filePaths,
+			labels: context.labels,
+		},
+		context.provider,
+	);
 
 	const userMessage = buildUserMessage({
 		owner: context.owner,
@@ -395,20 +368,16 @@ export async function buildReview(
 		files,
 	});
 
-	// Agent layer: run all 5 skill frameworks in parallel.
 	const agentPromises = AGENT_SKILLS.map((skillPath) =>
-		runAgent(
-			skillPath,
-			userMessage,
-			config.anthropicModel,
-			client,
-			customPrompt,
-		),
+		runAgent(skillPath, userMessage, selection, customPrompt),
 	);
 
 	const settled = await Promise.allSettled(agentPromises);
 
 	const agentResults: ModelReview[] = [];
+	let totalPromptTokens = 0;
+	let totalCompletionTokens = 0;
+
 	for (const [i, result] of settled.entries()) {
 		if (result.status === "rejected") {
 			console.error("Agent failed", {
@@ -416,7 +385,9 @@ export async function buildReview(
 				error: result.reason,
 			});
 		} else if (result.value !== null) {
-			agentResults.push(result.value);
+			agentResults.push(result.value.review);
+			totalPromptTokens += result.value.usage.promptTokens;
+			totalCompletionTokens += result.value.usage.completionTokens;
 		}
 	}
 
@@ -430,7 +401,6 @@ export async function buildReview(
 		failed: AGENT_SKILLS.length - agentResults.length,
 	});
 
-	// Merge layer: deduplicate findings, resolve conflicts, emit verdict.
 	const modelReview = mergeReviews(agentResults);
 
 	console.log("merged review", {
@@ -452,11 +422,21 @@ export async function buildReview(
 		dropped: modelReview.inline_comments.length - reviewComments.length,
 	});
 
+	const cost = computeCost(
+		{
+			promptTokens: totalPromptTokens,
+			completionTokens: totalCompletionTokens,
+		},
+		selection.model,
+	);
+
 	const findingsBlock = formatFindings(modelReview.general_findings);
 	const inlineSummary =
 		reviewComments.length > 0
 			? `Inline comments: ${reviewComments.length}`
 			: "Inline comments: none";
+	const costFooter = `---\n*Model: ${selection.model} · ${AGENT_SKILLS.length} agents · $${cost.toFixed(6)} · [claude-review-bot](https://github.com/joeblackwaslike/claude-review-bot)*`;
+
 	const body = [
 		`### ${context.commentPrefix}`,
 		"",
@@ -465,6 +445,8 @@ export async function buildReview(
 		inlineSummary,
 		findingsBlock ? `\n${findingsBlock}\n` : "",
 		reviewMarker,
+		"",
+		costFooter,
 	]
 		.filter((part) => part.length > 0)
 		.join("\n");

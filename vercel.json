@@ -2,7 +2,10 @@
 	"buildCommand": "",
 	"functions": {
 		"api/github/webhook.ts": {
-			"maxDuration": 300
+			"maxDuration": 900
+		},
+		"api/github/webhook-openai.ts": {
+			"maxDuration": 900
 		}
 	}
 }

@@ -5,7 +5,7 @@ import {
 	collectRightSideLines,
 } from "./review.js";
 import {
-	buildAnthropicToolUseResponse,
+	buildGenerateObjectResponse,
 	buildInlineComment,
 	buildModelReview,
 	buildPullFile,
@@ -15,7 +15,16 @@ import {
 	TWO_HUNK_PATCH,
 } from "./testing.js";
 
-const mockCreate = vi.fn();
+const mockGenerateObject = vi.hoisted(() => vi.fn());
+
+vi.mock("ai", () => ({
+	generateObject: mockGenerateObject,
+}));
+
+vi.mock("./models.js", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("./models.js")>();
+	return { ...actual, createAIModel: vi.fn().mockReturnValue("mocked-model") };
+});
 
 vi.mock("./config.js", () => ({
 	getConfig: () => ({
@@ -25,15 +34,6 @@ vi.mock("./config.js", () => ({
 		reviewEnabled: true,
 		reviewCommentPrefix: "claude-review-bot",
 		reviewCommand: "/claude-review",
-		anthropicModel: "claude-sonnet-4-6",
-	}),
-}));
-
-vi.mock("./anthropic.js", () => ({
-	getAnthropicClient: () => ({
-		messages: {
-			create: mockCreate,
-		},
 	}),
 }));
 
@@ -192,26 +192,26 @@ describe("buildReviewComments", () => {
 // buildReview — integration
 // ---------------------------------------------------------------------------
 
+function buildOctokit(overrides?: {
+	existingReviews?: Array<{ body: string }>;
+	files?: Array<{ filename: string; status: string; patch?: string }>;
+}) {
+	return {
+		request: vi
+			.fn()
+			.mockResolvedValue(reviewsResponse(overrides?.existingReviews)),
+		paginate: vi
+			.fn()
+			.mockResolvedValue(
+				overrides?.files ?? [buildPullFile("src/review.ts", SIMPLE_PATCH)],
+			),
+	};
+}
+
 describe("buildReview", () => {
 	beforeEach(() => {
-		mockCreate.mockReset();
+		mockGenerateObject.mockReset();
 	});
-
-	function buildOctokit(overrides?: {
-		existingReviews?: Array<{ body: string }>;
-		files?: Array<{ filename: string; status: string; patch?: string }>;
-	}) {
-		return {
-			request: vi
-				.fn()
-				.mockResolvedValue(reviewsResponse(overrides?.existingReviews)),
-			paginate: vi
-				.fn()
-				.mockResolvedValue(
-					overrides?.files ?? [buildPullFile("src/review.ts", SIMPLE_PATCH)],
-				),
-		};
-	}
 
 	const baseContext = {
 		owner: "joeblackwaslike",
@@ -223,14 +223,16 @@ describe("buildReview", () => {
 		additions: 1,
 		deletions: 0,
 		changedFiles: 1,
+		labels: [],
 		commentPrefix: "claude-review-bot",
 		extraInstructions: "",
 		force: false,
+		provider: "anthropic" as const,
 	};
 
 	it("converts model output into a review with validated inline comments", async () => {
-		mockCreate.mockResolvedValue(
-			buildAnthropicToolUseResponse(
+		mockGenerateObject.mockResolvedValue(
+			buildGenerateObjectResponse(
 				buildModelReview({
 					summary: "Two issues found.",
 					event: "REQUEST_CHANGES",
@@ -238,6 +240,7 @@ describe("buildReview", () => {
 						{
 							title: "Missing test coverage",
 							body: "This behavior change should be covered by a regression test.",
+							severity: "high",
 						},
 					],
 					inline_comments: [
@@ -277,12 +280,14 @@ describe("buildReview", () => {
 	// Regression: when ALL inline comments are dropped (e.g. model returned
 	// start_line: 0 instead of null), the review should still post body-only.
 	it("regression: posts body-only when all inline comments are filtered out", async () => {
-		mockCreate.mockResolvedValue(
-			buildAnthropicToolUseResponse(
+		mockGenerateObject.mockResolvedValue(
+			buildGenerateObjectResponse(
 				buildModelReview({
 					summary: "Found issues.",
 					event: "REQUEST_CHANGES",
-					general_findings: [{ title: "Security risk", body: "Details here." }],
+					general_findings: [
+						{ title: "Security risk", body: "Details here.", severity: "high" },
+					],
 					inline_comments: [
 						// start_line: 0 — the specific model bug, should be dropped
 						buildInlineComment({
@@ -332,10 +337,8 @@ describe("buildReview", () => {
 	it("resubmits when force is true even if already reviewed", async () => {
 		const headSha = "1234567890abcdef";
 
-		mockCreate.mockResolvedValue(
-			buildAnthropicToolUseResponse(
-				buildModelReview({ summary: "Re-review." }),
-			),
+		mockGenerateObject.mockResolvedValue(
+			buildGenerateObjectResponse(buildModelReview({ summary: "Re-review." })),
 		);
 
 		const octokit = buildOctokit({
@@ -351,5 +354,43 @@ describe("buildReview", () => {
 
 		expect(review).not.toBeNull();
 		expect(octokit.paginate).toHaveBeenCalled();
+	});
+
+	it("renders severity emoji table for general findings", async () => {
+		mockGenerateObject.mockResolvedValue(
+			buildGenerateObjectResponse(
+				buildModelReview({
+					general_findings: [
+						{ title: "Critical bug", body: "Details.", severity: "high" },
+						{ title: "Minor style nit", body: "Details.", severity: "low" },
+					],
+				}),
+			),
+		);
+
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+		});
+
+		expect(review?.body).toMatch(/🔴|🟡|🟢/);
+		expect(review?.body).toContain("Critical bug");
+		expect(review?.body).toContain("Minor style nit");
+	});
+
+	it("includes cost footer with GitHub project link", async () => {
+		mockGenerateObject.mockResolvedValue(
+			buildGenerateObjectResponse(buildModelReview()),
+		);
+
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+		});
+
+		expect(review?.body).toContain("$");
+		expect(review?.body).toContain(
+			"github.com/joeblackwaslike/claude-review-bot",
+		);
 	});
 });

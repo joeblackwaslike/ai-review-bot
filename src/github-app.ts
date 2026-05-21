@@ -1,6 +1,7 @@
 import { App } from "octokit";
 import { isTrustedAuthorAssociation, parseReviewCommand } from "./commands.js";
-import { getConfig } from "./config.js";
+import type { AppConfig } from "./config.js";
+import { getConfig, getOpenAIAppConfig } from "./config.js";
 import { buildReview } from "./review.js";
 
 type PullRequestWebhookPayload = {
@@ -47,9 +48,11 @@ type PullRequestDetails = {
 	changed_files: number;
 	title: string;
 	body: string | null;
+	labels?: Array<{ name: string }>;
 };
 
 let appSingleton: App | null = null;
+let openAIAppSingleton: App | null = null;
 
 /** @internal Exported for unit testing only. */
 export async function maybeSubmitReview(args: {
@@ -61,8 +64,8 @@ export async function maybeSubmitReview(args: {
 	pullRequest: PullRequestDetails;
 	extraInstructions: string;
 	force: boolean;
+	config: AppConfig;
 }) {
-	const config = getConfig();
 	const {
 		app,
 		installationId,
@@ -72,6 +75,7 @@ export async function maybeSubmitReview(args: {
 		pullRequest,
 		extraInstructions,
 		force,
+		config,
 	} = args;
 
 	if (!config.reviewEnabled) {
@@ -97,9 +101,11 @@ export async function maybeSubmitReview(args: {
 		additions: pullRequest.additions,
 		deletions: pullRequest.deletions,
 		changedFiles: pullRequest.changed_files,
+		labels: pullRequest.labels?.map((l) => l.name) ?? [],
 		commentPrefix: config.reviewCommentPrefix,
 		extraInstructions,
 		force,
+		provider: config.provider,
 	});
 
 	if (!review) {
@@ -150,7 +156,7 @@ export async function maybeSubmitReview(args: {
 	}
 }
 
-function registerHandlers(app: App) {
+function registerHandlers(app: App, configFn: () => AppConfig) {
 	app.webhooks.on(
 		[
 			"pull_request.opened",
@@ -165,9 +171,20 @@ function registerHandlers(app: App) {
 				throw new Error("Webhook payload did not include an installation id");
 			}
 
+			const config = configFn();
 			const owner = prPayload.repository.owner.login;
 			const repo = prPayload.repository.name;
 			const pullNumber = prPayload.number;
+			if (config.reviewDelayMs > 0) {
+				console.log(`delaying review by ${config.reviewDelayMs / 1000}s`, {
+					owner,
+					repo,
+					pullNumber,
+				});
+				await new Promise((resolve) =>
+					setTimeout(resolve, config.reviewDelayMs),
+				);
+			}
 			await maybeSubmitReview({
 				app,
 				installationId,
@@ -177,12 +194,13 @@ function registerHandlers(app: App) {
 				pullRequest: prPayload.pull_request,
 				extraInstructions: "",
 				force: false,
+				config,
 			});
 		},
 	);
 
 	app.webhooks.on("issue_comment.created", async ({ payload }) => {
-		const config = getConfig();
+		const config = configFn();
 		const commentPayload = payload as IssueCommentWebhookPayload;
 
 		console.log("issue_comment.created received", {
@@ -249,6 +267,7 @@ function registerHandlers(app: App) {
 			pullRequest: pullResponse.data as PullRequestDetails,
 			extraInstructions: command.extraInstructions,
 			force: command.force,
+			config,
 		});
 	});
 
@@ -271,6 +290,24 @@ export function getGitHubApp(): App {
 		},
 	});
 
-	registerHandlers(appSingleton);
+	registerHandlers(appSingleton, getConfig);
 	return appSingleton;
+}
+
+export function getOpenAIGitHubApp(): App {
+	if (openAIAppSingleton) {
+		return openAIAppSingleton;
+	}
+
+	const config = getOpenAIAppConfig();
+	openAIAppSingleton = new App({
+		appId: config.appId,
+		privateKey: config.privateKey,
+		webhooks: {
+			secret: config.webhookSecret,
+		},
+	});
+
+	registerHandlers(openAIAppSingleton, getOpenAIAppConfig);
+	return openAIAppSingleton;
 }

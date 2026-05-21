@@ -12,7 +12,7 @@ vi.mock("./config.js", () => ({
 		reviewEnabled: true,
 		reviewCommentPrefix: "claude-review-bot",
 		reviewCommand: "/claude-review",
-		anthropicModel: "claude-sonnet-4-6",
+		provider: "anthropic",
 	}),
 }));
 
@@ -39,6 +39,16 @@ const baseArgs = {
 	pullRequest: pr,
 	extraInstructions: "",
 	force: false,
+	config: {
+		appId: "1",
+		privateKey: "pem",
+		webhookSecret: "secret",
+		reviewEnabled: true,
+		reviewDelayMs: 0,
+		reviewCommentPrefix: "claude-review-bot",
+		reviewCommand: "/claude-review",
+		provider: "anthropic" as const,
+	},
 };
 
 describe("maybeSubmitReview", () => {
