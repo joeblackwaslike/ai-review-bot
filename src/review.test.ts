@@ -389,8 +389,6 @@ describe("buildReview", () => {
 		});
 
 		expect(review?.body).toContain("$");
-		expect(review?.body).toContain(
-			"github.com/joeblackwaslike/ai-review-bot",
-		);
+		expect(review?.body).toContain("github.com/joeblackwaslike/ai-review-bot");
 	});
 });

@@ -23,10 +23,7 @@ describe("parseReviewCommand", () => {
 
 	it("parses force and extra instructions together", () => {
 		expect(
-			parseReviewCommand(
-				"/ai-review --force security only",
-				"/ai-review",
-			),
+			parseReviewCommand("/ai-review --force security only", "/ai-review"),
 		).toEqual({
 			force: true,
 			extraInstructions: "security only",
