@@ -2,7 +2,7 @@
 
 ## Context
 
-The project `/Users/joeblack/github/joeblackwaslike/claude-review-bot` is an empty repo being bootstrapped as a GitHub bot that uses Claude to perform automated code review on PRs. This document maps every installed skill relevant to GitHub code review across two dimensions: (1) skills the bot should invoke **during a review**, and (2) skills to use **while building the bot**.
+The project `/Users/joeblack/github/joeblackwaslike/ai-review-bot` is an empty repo being bootstrapped as a GitHub bot that uses Claude to perform automated code review on PRs. This document maps every installed skill relevant to GitHub code review across two dimensions: (1) skills the bot should invoke **during a review**, and (2) skills to use **while building the bot**.
 
 ---
 
@@ -66,13 +66,13 @@ Searched: [agentskills.io](https://agentskills.io), [agentskills.me](https://age
 
 | Skill | Source | What makes it notable |
 |---|---|---|
-| `github-pr-review` | [moltenbits/claude-review](https://github.com/moltenbits/claude-review) | Creates pending **draft** reviews (not posted until human submits from GitHub UI). Batches all comments. ` ```suggestion ` blocks for one-click fixes. 5 parallel agents: SOLID, Security, Performance, Error Handling, Boundaries. P0–P3 severity + 80% confidence threshold. `--offline` mode for local staging. v2.0+ |
+| `github-pr-review` | [moltenbits/ai-review](https://github.com/moltenbits/ai-review) | Creates pending **draft** reviews (not posted until human submits from GitHub UI). Batches all comments. ` ```suggestion ` blocks for one-click fixes. 5 parallel agents: SOLID, Security, Performance, Error Handling, Boundaries. P0–P3 severity + 80% confidence threshold. `--offline` mode for local staging. v2.0+ |
 | `github-review-pr` | [feiskyer/claude-code-settings](https://github.com/feiskyer/claude-code-settings/blob/main/skills/github-review-pr/SKILL.md) | 5 parallel agents each reviewing from a different angle. Reads CLAUDE.md/AGENTS.md for project-standard compliance. Per-issue 0–100 confidence scoring with explicit rubric. Inline comments via `gh`. |
 | `multi-pr-review` | [dyad-sh/dyad](https://github.com/dyad-sh/dyad/blob/main/.claude/skills/multi-pr-review/SKILL.md) | 3 agents with **randomized file ordering** to reduce ordering bias. Merge verdict (YES / NOT SURE / NO). Deduplicates findings against existing PR comments automatically. Always posts a summary even with no new issues. |
 | `code-review` (GitHub Action) | [altinukshini/claude-code-pr-reviewer](https://github.com/altinukshini/claude-code-pr-reviewer) | Composite GitHub Action wrapping `anthropics/claude-code-action`. Supports Anthropic API, AWS Bedrock, and Vertex AI. `use_repo_skill: true` flag lets each repo supply its own `.claude/skills/code-review/SKILL.md`. Most complete drop-in reference architecture. |
 | `cycle-review` | [axisrow/claude-code-review-cycle-skill](https://github.com/axisrow/claude-code-review-cycle-skill) | Full automated **review loop**: post review → poll bot response by comment ID → triage comments → apply fixes → repeat until approval → squash-merge. Hallucination detection (verifies reviewer claims against actual codebase). Contradiction handling across cycles. |
 | `code-review-and-quality` | [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills) (20K ★) | 5-axis: correctness, readability, architecture, security, performance. Severity labels: Nit / Optional / FYI. Change sizing guidance (~100 lines). Companion skill: `security-and-hardening` (OWASP, three-tier boundary system). Most widely adopted reference set in the ecosystem. |
-| `create-claude-reviewer` | [jclfocused/claude-agents](https://github.com/jclfocused/claude-agents/blob/main/skills/create-claude-reviewer/SKILL.md) | Generates a complete `claude-code-review.yml` GitHub Actions workflow. Dual mode: GitHub inline comments or Linear issue creation. |
+| `create-ai-reviewer` | [jclfocused/claude-agents](https://github.com/jclfocused/claude-agents/blob/main/skills/create-ai-reviewer/SKILL.md) | Generates a complete `claude-code-review.yml` GitHub Actions workflow. Dual mode: GitHub inline comments or Linear issue creation. |
 | `code-reviewer` | [agentskills.me](https://agentskills.me/skill/code-reviewer) (obra/superpowers) | Handles both local diffs and remote PRs by number/URL. Correctness, maintainability, project-standard adherence. Clean integration point for interactive use. |
 | `code-review-excellence` | [wshobson/agents](https://github.com/wshobson/agents) (also installed locally via `developer-essentials`) | Review mindset, prioritization, constructive tone. No scripts — pure guidance for producing high-signal reviews without style-nit noise. |
 

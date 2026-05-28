@@ -8,7 +8,7 @@
 
 ## What Happened
 
-The bot was deployed to Vercel, configured, and triggered repeatedly via `/claude-review` comments on a test PR. Every GitHub delivery showed HTTP 202, so the bot appeared healthy. No reviews ever appeared on the PR.
+The bot was deployed to Vercel, configured, and triggered repeatedly via `/ai-review` comments on a test PR. Every GitHub delivery showed HTTP 202, so the bot appeared healthy. No reviews ever appeared on the PR.
 
 ## Timeline
 

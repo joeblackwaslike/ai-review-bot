@@ -3,8 +3,8 @@
 ## Setup
 
 ```bash
-git clone https://github.com/joeblackwaslike/claude-review-bot.git
-cd claude-review-bot
+git clone https://github.com/joeblackwaslike/ai-review-bot.git
+cd ai-review-bot
 npm install
 cp .env.example .env   # fill in your values
 ```
@@ -41,7 +41,7 @@ All three must pass before opening a PR. To auto-fix lint issues: `npm run lint 
 ## Docs
 
 ```bash
-npm run docs:dev      # live-reload docs at localhost:5173/claude-review-bot/
+npm run docs:dev      # live-reload docs at localhost:5173/ai-review-bot/
 npm run docs:build    # production build
 npm run docs:preview  # preview production build locally
 ```

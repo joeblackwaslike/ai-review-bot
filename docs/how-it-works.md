@@ -2,12 +2,12 @@
 
 ## Overview
 
-claude-review-bot is a GitHub App that posts structured code reviews in response to slash commands on pull requests. Unlike single-prompt review bots, it runs five specialized agents in parallel and merges their findings before posting.
+ai-review-bot is a GitHub App that posts structured code reviews in response to slash commands on pull requests. Unlike single-prompt review bots, it runs five specialized agents in parallel and merges their findings before posting.
 
 ## Request flow
 
 ```
-Comment /claude-review on a PR
+Comment /ai-review on a PR
   ↓
 GitHub fires issue_comment.created webhook
   ↓
@@ -89,13 +89,13 @@ Each review body includes a hidden marker:
 Reviewed commit: `<first 12 chars of head SHA>`
 ```
 
-Before running agents, the bot fetches existing reviews on the PR and checks whether any body contains this marker. If found, it returns `null` and skips submission. Pass `--force` to override: `/claude-review --force`.
+Before running agents, the bot fetches existing reviews on the PR and checks whether any body contains this marker. If found, it returns `null` and skips submission. Pass `--force` to override: `/ai-review --force`.
 
 ## Trigger modes
 
 The bot responds to two GitHub events:
 
-- **`issue_comment.created`** — slash command on a PR comment (`/claude-review`)
+- **`issue_comment.created`** — slash command on a PR comment (`/ai-review`)
 - **`pull_request.opened` / `pull_request.synchronize`** — automatic review on new PRs and new commits (only if `REVIEW_ENABLED=true`; draft PRs are always skipped)
 
 Only comments from `OWNER`, `MEMBER`, or `COLLABORATOR` author associations trigger a review from the slash command path.

@@ -73,6 +73,40 @@ export function buildUserMessage(context: PromptContext): string {
 	].join("\n");
 }
 
+export interface AuditContext {
+	owner: string;
+	repo: string;
+	ref: string;
+	extraInstructions: string;
+	files: Array<{ path: string; content: string }>;
+}
+
+export function buildAuditUserMessage(context: AuditContext): string {
+	const instructionsSection = context.extraInstructions
+		? ["", "Additional instructions:", context.extraInstructions]
+		: [];
+
+	const serialized = context.files
+		.map((f) => {
+			const content = trimPatch(f.content);
+			return `FILE: ${f.path}\nCONTENT:\n${content}`;
+		})
+		.join("\n\n---\n\n");
+
+	return [
+		"You are performing a full code audit of a repository.",
+		"",
+		"Repo context:",
+		`- Repository: ${context.owner}/${context.repo}`,
+		`- Ref: ${context.ref}`,
+		`- Files reviewed: ${context.files.length}`,
+		...instructionsSection,
+		"",
+		"Repository files:",
+		serialized,
+	].join("\n");
+}
+
 export function buildAgentSystemPrompt(
 	skillPath: string,
 	customPrompt: string,

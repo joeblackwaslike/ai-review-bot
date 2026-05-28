@@ -17,8 +17,8 @@ All configuration is via environment variables. Set them in Vercel's dashboard o
 | Variable | Default | Description |
 | --- | --- | --- |
 | `ANTHROPIC_MODEL` | `claude-sonnet-4-6` | Model used by all five agents. Use `claude-opus-4-7` for higher-stakes repos where review quality matters more than cost. |
-| `REVIEW_COMMAND` | `/claude-review` | Slash command that triggers a review. Change if you want a different command name. |
-| `REVIEW_COMMENT_PREFIX` | `claude-review-bot` | Heading in the posted review body (renders as `### claude-review-bot`). |
+| `REVIEW_COMMAND` | `/ai-review` | Slash command that triggers a review. Change if you want a different command name. |
+| `REVIEW_COMMENT_PREFIX` | `ai-review-bot` | Heading in the posted review body (renders as `### ai-review-bot`). |
 | `CUSTOM_REVIEW_PROMPT` | `Focus on correctness, security, regressions, and missing tests.` | Appended to every agent's system prompt. Use this to add repo-specific instructions (e.g. "This codebase uses snake_case for all Python identifiers."). |
 
 ## Private key formatting
@@ -70,7 +70,7 @@ Returns the current config state. API keys are masked — you can see whether th
 {
   "reviewEnabled": "true",
   "reviewEnabledBool": true,
-  "reviewCommand": "/claude-review",
+  "reviewCommand": "/ai-review",
   "anthropicModel": "claude-sonnet-4-6",
   "hasAppId": true,
   "hasPrivateKey": true,
@@ -99,7 +99,7 @@ ANTHROPIC_API_KEY=
 REVIEW_ENABLED=true
 # Default: claude-sonnet-4-6. Override with claude-opus-4-7 for high-stakes repos.
 ANTHROPIC_MODEL=claude-sonnet-4-6
-REVIEW_COMMAND=/claude-review
-REVIEW_COMMENT_PREFIX=claude-review-bot
+REVIEW_COMMAND=/ai-review
+REVIEW_COMMENT_PREFIX=ai-review-bot
 CUSTOM_REVIEW_PROMPT=
 ```

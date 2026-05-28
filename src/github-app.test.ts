@@ -10,8 +10,8 @@ vi.mock("./config.js", () => ({
 		privateKey: "pem",
 		webhookSecret: "secret",
 		reviewEnabled: true,
-		reviewCommentPrefix: "claude-review-bot",
-		reviewCommand: "/claude-review",
+		reviewCommentPrefix: "ai-review-bot",
+		reviewCommand: "/ai-review",
 		provider: "anthropic",
 	}),
 }));
@@ -45,8 +45,8 @@ const baseArgs = {
 		webhookSecret: "secret",
 		reviewEnabled: true,
 		reviewDelayMs: 0,
-		reviewCommentPrefix: "claude-review-bot",
-		reviewCommand: "/claude-review",
+		reviewCommentPrefix: "ai-review-bot",
+		reviewCommand: "/ai-review",
 		provider: "anthropic" as const,
 	},
 };

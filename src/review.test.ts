@@ -32,8 +32,8 @@ vi.mock("./config.js", () => ({
 		privateKey: "pem",
 		webhookSecret: "secret",
 		reviewEnabled: true,
-		reviewCommentPrefix: "claude-review-bot",
-		reviewCommand: "/claude-review",
+		reviewCommentPrefix: "ai-review-bot",
+		reviewCommand: "/ai-review",
 	}),
 }));
 
@@ -215,7 +215,7 @@ describe("buildReview", () => {
 
 	const baseContext = {
 		owner: "joeblackwaslike",
-		repo: "claude-review-bot",
+		repo: "ai-review-bot",
 		pullNumber: 1,
 		headSha: "1234567890abcdef",
 		title: "Test PR",
@@ -224,7 +224,7 @@ describe("buildReview", () => {
 		deletions: 0,
 		changedFiles: 1,
 		labels: [],
-		commentPrefix: "claude-review-bot",
+		commentPrefix: "ai-review-bot",
 		extraInstructions: "",
 		force: false,
 		provider: "anthropic" as const,
@@ -390,7 +390,7 @@ describe("buildReview", () => {
 
 		expect(review?.body).toContain("$");
 		expect(review?.body).toContain(
-			"github.com/joeblackwaslike/claude-review-bot",
+			"github.com/joeblackwaslike/ai-review-bot",
 		);
 	});
 });

@@ -11,7 +11,7 @@ Get your first parallel AI code review in under 10 minutes.
 ## Step 1 — Create a GitHub App
 
 1. Go to **Settings → Developer settings → GitHub Apps → New GitHub App**
-2. Set the app name (e.g. `my-claude-reviewer`)
+2. Set the app name (e.g. `my-ai-reviewer`)
 3. Set **Webhook URL** to a placeholder for now (`https://example.com`) — you'll update this after deploy
 4. Set **Webhook secret** to a random string — save it, you'll need it later
 5. Grant these permissions:
@@ -58,8 +58,8 @@ REVIEW_ENABLED=true
 **Option B — Vercel CLI:**
 
 ```bash
-git clone https://github.com/joeblackwaslike/claude-review-bot.git
-cd claude-review-bot
+git clone https://github.com/joeblackwaslike/ai-review-bot.git
+cd ai-review-bot
 vercel link
 vercel env add GITHUB_APP_ID
 vercel env add GITHUB_APP_PRIVATE_KEY
@@ -89,7 +89,7 @@ Save changes. GitHub will send a ping event — check your Vercel function logs 
 On any open pull request in an installed repo, comment:
 
 ```
-/claude-review
+/ai-review
 ```
 
 The bot will post a review within 15–60 seconds depending on PR size. Larger diffs (many changed files) take longer because five agents run in parallel, each processing the full diff.

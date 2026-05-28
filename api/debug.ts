@@ -4,7 +4,7 @@ export default function handler(_req: VercelRequest, res: VercelResponse) {
 	res.status(200).json({
 		reviewEnabled: process.env.REVIEW_ENABLED,
 		reviewEnabledBool: process.env.REVIEW_ENABLED === "true",
-		reviewCommand: process.env.REVIEW_COMMAND ?? "/claude-review (default)",
+		reviewCommand: process.env.REVIEW_COMMAND ?? "/ai-review (default)",
 		anthropicModel:
 			process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-6 (default)",
 		hasAppId: !!process.env.GITHUB_APP_ID,

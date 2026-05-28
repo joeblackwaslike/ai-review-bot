@@ -1,14 +1,21 @@
 {
-	"name": "claude-review-bot",
+	"name": "ai-review-bot",
 	"version": "0.1.0",
-	"private": true,
 	"type": "module",
+	"bin": {
+		"ai-review": "./dist/cli.js"
+	},
+	"files": [
+		"dist/",
+		"skills/"
+	],
 	"engines": {
 		"node": ">=20"
 	},
 	"scripts": {
 		"dev": "vercel dev",
-		"build": "tsc --noEmit",
+		"build": "tsc -p tsconfig.build.json",
+		"prepublishOnly": "npm run build && npm run typecheck && npm run test",
 		"typecheck": "tsc --noEmit",
 		"lint": "biome check .",
 		"test": "vitest run",
@@ -31,6 +38,7 @@
 		"@types/node": "^22.15.3",
 		"typescript": "^5.8.3",
 		"vitepress": "^1.6.4",
+		"tsx": "^4.19.4",
 		"vitest": "^3.2.4"
 	}
 }

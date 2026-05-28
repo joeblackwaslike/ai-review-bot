@@ -1,5 +1,5 @@
 /**
- * Reusable test fixtures and data factories for claude-review-bot.
+ * Reusable test fixtures and data factories for ai-review-bot.
  *
  * No vitest import — these are plain data builders. Use vi.fn() in your test file
  * and populate the mocks using these helpers.
@@ -130,7 +130,7 @@ export function buildIssueCommentPayload(
 ) {
 	const opts: IssueCommentPayloadOptions = {
 		action: "created",
-		body: "/claude-review",
+		body: "/ai-review",
 		authorAssociation: "OWNER",
 		isPR: true,
 		pullNumber: 1,

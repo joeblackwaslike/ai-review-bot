@@ -97,7 +97,7 @@ const SEVERITY_EMOJI: Record<"high" | "medium" | "low", string> = {
 };
 
 // The 5 agent skills run in parallel — one focused API call per framework.
-const AGENT_SKILLS = [
+export const AGENT_SKILLS = [
 	"code-reviewer.md",
 	"silent-failure-hunter.md",
 	"pr-test-analyzer.md",
@@ -105,7 +105,7 @@ const AGENT_SKILLS = [
 	"code-review-and-quality.md",
 ] as const;
 
-async function runAgent(
+export async function runAgent(
 	skillPath: string,
 	userMessage: string,
 	selection: ModelSelection,
@@ -135,7 +135,7 @@ async function runAgent(
 	}
 }
 
-function mergeReviews(agentResults: ModelReview[]): ModelReview {
+export function mergeReviews(agentResults: ModelReview[]): ModelReview {
 	const event: "COMMENT" | "REQUEST_CHANGES" = agentResults.some(
 		(r) => r.event === "REQUEST_CHANGES",
 	)
@@ -435,7 +435,7 @@ export async function buildReview(
 		reviewComments.length > 0
 			? `Inline comments: ${reviewComments.length}`
 			: "Inline comments: none";
-	const costFooter = `---\n*Model: ${selection.model} · ${AGENT_SKILLS.length} agents · $${cost.toFixed(6)} · [claude-review-bot](https://github.com/joeblackwaslike/claude-review-bot)*`;
+	const costFooter = `---\n*Model: ${selection.model} · ${AGENT_SKILLS.length} agents · $${cost.toFixed(6)} · [ai-review-bot](https://github.com/joeblackwaslike/ai-review-bot)*`;
 
 	const body = [
 		`### ${context.commentPrefix}`,

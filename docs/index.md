@@ -2,16 +2,16 @@
 layout: home
 
 hero:
-  name: "claude-review-bot"
+  name: "ai-review-bot"
   text: "Five-agent parallel code reviews"
-  tagline: "Comment /claude-review on any pull request. Five specialized Claude agents analyze your diff in parallel, merge their findings, and post a single deduplicated review — in seconds."
+  tagline: "Comment /ai-review on any pull request. Five specialized Claude agents analyze your diff in parallel, merge their findings, and post a single deduplicated review — in seconds."
   actions:
     - theme: brand
       text: Quick Start →
       link: /quick-start
     - theme: alt
       text: View on GitHub
-      link: https://github.com/joeblackwaslike/claude-review-bot
+      link: https://github.com/joeblackwaslike/ai-review-bot
 
 features:
   - icon: 🔀
@@ -28,7 +28,7 @@ features:
 
   - icon: 💬
     title: Slash-command triggered
-    details: Comment /claude-review on any PR. Pass inline instructions — "/claude-review focus on the auth flow" — for targeted deep-dives. Re-run with --force to re-review the same commit.
+    details: Comment /ai-review on any PR. Pass inline instructions — "/ai-review focus on the auth flow" — for targeted deep-dives. Re-run with --force to re-review the same commit.
 
   - icon: ⚡
     title: Deploy in minutes

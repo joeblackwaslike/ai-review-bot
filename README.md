@@ -1,19 +1,19 @@
-# claude-review-bot
+# ai-review-bot
 
-[![Docs](https://img.shields.io/badge/docs-online-blue)](https://joeblackwaslike.github.io/claude-review-bot/)
+[![Docs](https://img.shields.io/badge/docs-online-blue)](https://joeblackwaslike.github.io/ai-review-bot/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](package.json)
-[![Deploy](https://img.shields.io/badge/deploy-vercel-black?logo=vercel)](https://vercel.com/joe-blacks-projects/claude-review-bot)
+[![Deploy](https://img.shields.io/badge/deploy-vercel-black?logo=vercel)](https://vercel.com/joe-blacks-projects/ai-review-bot)
 
-**claude-review-bot** is a GitHub App that posts AI-powered code reviews when you comment `/claude-review` on a pull request. It runs on Vercel, uses Anthropic's Claude SDK, and submits structured reviews with inline comments anchored to the actual diff.
+**ai-review-bot** is a GitHub App that posts AI-powered code reviews when you comment `/ai-review` on a pull request. It runs on Vercel, uses Anthropic's Claude SDK, and submits structured reviews with inline comments anchored to the actual diff.
 
 Unlike single-prompt review bots, it runs **five specialized agents in parallel** — each focused on a different review framework — then merges their findings into a single deduplicated review.
 
-> **[Full documentation →](https://joeblackwaslike.github.io/claude-review-bot/)**
+> **[Full documentation →](https://joeblackwaslike.github.io/ai-review-bot/)**
 
 ## How it works
 
-1. Comment `/claude-review` on any pull request
+1. Comment `/ai-review` on any pull request
 2. The bot fetches the diff and PR metadata from GitHub
 3. **Five review agents run in parallel**, each applying one focused framework to the diff:
    - **Bug detection** (`pr-review-toolkit:code-reviewer`) — project-standard compliance, ≥80% confidence threshold
@@ -62,8 +62,8 @@ Each agent call uses prompt caching (`cache_control: ephemeral`) on its system p
 
 2. **Fork and deploy to Vercel**:
    ```bash
-   git clone https://github.com/joeblackwaslike/claude-review-bot.git
-   cd claude-review-bot
+   git clone https://github.com/joeblackwaslike/ai-review-bot.git
+   cd ai-review-bot
    vercel link
    vercel env add GITHUB_APP_ID
    vercel env add GITHUB_APP_PRIVATE_KEY
@@ -77,7 +77,7 @@ Each agent call uses prompt caching (`cache_control: ephemeral`) on its system p
 
 4. **Install the app** on the repos you want reviewed
 
-5. **Comment `/claude-review` on any PR**
+5. **Comment `/ai-review` on any PR**
 
 ### Private key formatting
 
@@ -92,10 +92,10 @@ The bot normalizes `\n` back to newlines at runtime.
 ## Commands
 
 ```text
-/claude-review                               # standard review
-/claude-review focus on security             # with extra instructions
-/claude-review --force                       # re-review same commit
-/claude-review --force check for regressions # force + extra instructions
+/ai-review                               # standard review
+/ai-review focus on security             # with extra instructions
+/ai-review --force                       # re-review same commit
+/ai-review --force check for regressions # force + extra instructions
 ```
 
 Only comments from `OWNER`, `MEMBER`, and `COLLABORATOR` author associations trigger a review. Draft PRs are skipped automatically. Reviews are idempotent — the bot won't re-review the same commit SHA unless you pass `--force`.
@@ -110,8 +110,8 @@ Only comments from `OWNER`, `MEMBER`, and `COLLABORATOR` author associations tri
 | `ANTHROPIC_API_KEY` | ✓ | — | Anthropic API key |
 | `REVIEW_ENABLED` | ✓ | `false` | Set to `true` to enable review submission |
 | `ANTHROPIC_MODEL` | — | `claude-sonnet-4-6` | Model for all agents. Use `claude-opus-4-7` for higher-stakes repos. |
-| `REVIEW_COMMAND` | — | `/claude-review` | Slash command that triggers reviews |
-| `REVIEW_COMMENT_PREFIX` | — | `claude-review-bot` | Heading in the posted review body |
+| `REVIEW_COMMAND` | — | `/ai-review` | Slash command that triggers reviews |
+| `REVIEW_COMMENT_PREFIX` | — | `ai-review-bot` | Heading in the posted review body |
 | `CUSTOM_REVIEW_PROMPT` | — | `Focus on correctness, security...` | Appended to every agent's system prompt |
 
 See [`.env.example`](.env.example) for a ready-to-copy template.
@@ -148,7 +148,7 @@ Point your GitHub App's Webhook URL at the smee channel URL during development.
 ```json
 {
   "reviewEnabled": "true",
-  "reviewCommand": "/claude-review",
+  "reviewCommand": "/ai-review",
   "anthropicModel": "claude-sonnet-4-6",
   "hasAnthropicKey": true
 }

@@ -42,8 +42,8 @@ export function getConfig(): AppConfig {
 		reviewEnabled: process.env.REVIEW_ENABLED !== "false",
 		reviewDelayMs: Number(process.env.REVIEW_DELAY_SECONDS ?? "450") * 1000,
 		reviewCommentPrefix:
-			process.env.REVIEW_COMMENT_PREFIX ?? "claude-review-bot",
-		reviewCommand: process.env.REVIEW_COMMAND ?? "/claude-review",
+			process.env.REVIEW_COMMENT_PREFIX ?? "ai-review-bot",
+		reviewCommand: process.env.REVIEW_COMMAND ?? "/ai-review",
 		provider: "anthropic",
 	};
 }
@@ -59,7 +59,7 @@ export function getOpenAIAppConfig(): AppConfig {
 		reviewDelayMs: Number(process.env.REVIEW_DELAY_SECONDS ?? "450") * 1000,
 		reviewCommentPrefix:
 			process.env.REVIEW_COMMENT_PREFIX ?? "codex-review-bot",
-		reviewCommand: process.env.REVIEW_COMMAND ?? "/claude-review",
+		reviewCommand: process.env.REVIEW_COMMAND ?? "/ai-review",
 		provider: "openai",
 	};
 }
