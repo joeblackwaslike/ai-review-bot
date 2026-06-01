@@ -42,6 +42,10 @@ features:
     title: Manual triggering
     details: Comment /ai-review on any PR to request a review on demand — useful for PRs opened before the apps were installed, or to re-run with extra instructions like "/ai-review focus on the auth flow". Pass --force to re-review the same commit.
 
+  - icon: 📦
+    title: CLI & npm package
+    details: "Also published to npm: `npx ai-review-bot owner/repo` audits an entire codebase — no PR, no webhook needed. Posts findings as a GitHub issue. Use it on demand, on a schedule, or as a GitHub Action step in any CI workflow."
+
   - icon: 🔧
     title: Pluggable skill frameworks
     details: Each agent's review framework is a vendored Markdown file in skills/. Add a new framework by dropping in a .md file and adding one line to AGENT_SKILLS in review.ts.

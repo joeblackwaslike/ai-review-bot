@@ -150,9 +150,26 @@ cp .env.example .env   # fill in your values
 npm run dev
 ```
 
+## CLI & npm package
+
+`ai-review-bot` is also published to npm as a standalone CLI that audits an entire repository — no PR, no webhook, no Vercel needed. It fetches all code files, runs the five agents in batches, and posts findings as a GitHub issue.
+
+```bash
+# one-off, no install required
+npx ai-review-bot@latest owner/repo
+
+# or install globally
+npm install -g ai-review-bot
+ai-review owner/repo --ref main --dry-run
+```
+
+**Required env vars:** `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `ANTHROPIC_API_KEY`
+
+> **[Full CLI documentation →](https://joeblackwaslike.github.io/ai-review-bot/cli-and-npm)**
+
 ## GitHub Action
 
-Run a full-repo audit (not a PR review) in any CI workflow:
+Run a full-repo audit in any CI workflow — useful for scheduled weekly audits or auditing a repo from another workflow:
 
 ```yaml
 - uses: joeblackwaslike/ai-review-bot@v0.1.0
@@ -160,7 +177,10 @@ Run a full-repo audit (not a PR review) in any CI workflow:
     github-app-id: ${{ secrets.GITHUB_APP_ID }}
     github-app-private-key: ${{ secrets.GITHUB_APP_PRIVATE_KEY }}
     anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+    # optional: repo, ref, dry-run, extra, version
 ```
+
+See **[CLI & npm →](https://joeblackwaslike.github.io/ai-review-bot/cli-and-npm)** for all action inputs, a scheduled audit example, and the difference between PR reviews and full audits.
 
 ## Project structure
 
