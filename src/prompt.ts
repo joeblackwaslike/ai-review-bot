@@ -21,6 +21,7 @@ export interface PromptContext {
 	additions: number;
 	deletions: number;
 	changedFiles: number;
+	labels: string[];
 	extraInstructions: string;
 	files: Array<{
 		filename: string;
@@ -74,6 +75,7 @@ export function buildUserMessage(context: PromptContext): string {
 		`- Head SHA: ${context.headSha}`,
 		`- Title: ${context.title}`,
 		`- Body: ${context.body ?? "[no description]"}`,
+		`- Labels: ${context.labels.length > 0 ? context.labels.join(", ") : "none"}`,
 		`- Changed files: ${context.changedFiles}`,
 		`- Added lines: ${context.additions}`,
 		`- Deleted lines: ${context.deletions}`,
@@ -142,5 +144,6 @@ export function buildAgentSystemPrompt(
 		"- Use `start_line` for multi-line ranges only, and only when `start_line` is less than `line`. Set `start_line` to `null` for single-line comments.",
 		"- Put unanchored concerns into `general_findings`, not `inline_comments`.",
 		"- Apply the severity label (Critical / Nit / Optional / FYI) in every inline comment title.",
+		"- When you can supply an exact code fix, set `suggestion` to the complete replacement text for the referenced line(s), matching the original indentation exactly. Set `suggestion` to null when the fix is not a clean line-for-line replacement.",
 	].join("\n");
 }

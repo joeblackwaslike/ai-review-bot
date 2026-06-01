@@ -4,6 +4,7 @@ import { computeCost, createAIModel } from "./models.js";
 import { buildAgentSystemPrompt, buildUserMessage } from "./prompt.js";
 import type { ModelSelection } from "./router.js";
 import { routeModel } from "./router.js";
+import { detectTier2Skills } from "./tier2.js";
 
 type OctokitLike = {
 	request: <T>(
@@ -41,7 +42,7 @@ interface ReviewContext {
 }
 
 export interface ReviewDecision {
-	event: "COMMENT" | "REQUEST_CHANGES";
+	event: "COMMENT" | "REQUEST_CHANGES" | "APPROVE";
 	body: string;
 	comments: ReviewComment[];
 }
@@ -81,6 +82,7 @@ const ModelReviewSchema = z.object({
 			path: z.string(),
 			line: z.number().int(),
 			start_line: z.number().int().nullable(),
+			suggestion: z.string().nullable().optional(),
 		}),
 	),
 });
@@ -96,14 +98,17 @@ const SEVERITY_EMOJI: Record<"high" | "medium" | "low", string> = {
 	low: "🟢",
 };
 
-// The 5 agent skills run in parallel — one focused API call per framework.
-export const AGENT_SKILLS = [
+// Tier 1: always runs on every PR.
+export const TIER1_SKILLS: readonly string[] = [
 	"code-reviewer.md",
 	"silent-failure-hunter.md",
 	"pr-test-analyzer.md",
 	"security-sast.md",
 	"code-review-and-quality.md",
-] as const;
+];
+
+/** @deprecated Use TIER1_SKILLS. Kept for backward-compat with audit.ts. */
+export const AGENT_SKILLS = TIER1_SKILLS;
 
 export async function runAgent(
 	skillPath: string,
@@ -228,7 +233,11 @@ export function collectRightSideLines(patch: string): Set<number> {
 }
 
 function buildCommentBody(comment: ModelInlineComment): string {
-	return `**${comment.title}**\n\n${comment.body}`;
+	const base = `**${comment.title}**\n\n${comment.body}`;
+	if (comment.suggestion) {
+		return `${base}\n\n\`\`\`suggestion\n${comment.suggestion}\n\`\`\``;
+	}
+	return base;
 }
 
 export function buildReviewComments(
@@ -389,12 +398,33 @@ export async function buildReview(
 		additions: context.additions,
 		deletions: context.deletions,
 		changedFiles: context.changedFiles,
+		labels: context.labels,
 		extraInstructions: context.extraInstructions,
 		files,
 		priorBotReviews,
 	});
 
-	const agentPromises = AGENT_SKILLS.map((skillPath) =>
+	// Detect Tier 2 skills relevant to this PR and run all agents together
+	const tier2Matches = detectTier2Skills({
+		filePaths: filePaths,
+		additions: context.additions,
+		deletions: context.deletions,
+		title: context.title,
+		body: context.body,
+		labels: context.labels,
+		patchContent: files.map((f) => f.patch ?? "").join("\n"),
+	});
+
+	const allSkills = [
+		...TIER1_SKILLS.map((skillPath) => ({ skillPath, tier: 1, reason: "" })),
+		...tier2Matches.map(({ skillPath, reason }) => ({
+			skillPath,
+			tier: 2,
+			reason,
+		})),
+	];
+
+	const agentPromises = allSkills.map(({ skillPath }) =>
 		runAgent(skillPath, userMessage, selection, customPrompt),
 	);
 
@@ -407,7 +437,7 @@ export async function buildReview(
 	for (const [i, result] of settled.entries()) {
 		if (result.status === "rejected") {
 			console.error("Agent failed", {
-				skillPath: AGENT_SKILLS[i],
+				skillPath: allSkills[i]?.skillPath,
 				error: result.reason,
 			});
 		} else if (result.value !== null) {
@@ -422,9 +452,11 @@ export async function buildReview(
 	}
 
 	console.log("agent results collected", {
-		total: AGENT_SKILLS.length,
+		total: allSkills.length,
+		tier1: TIER1_SKILLS.length,
+		tier2: tier2Matches.length,
 		succeeded: agentResults.length,
-		failed: AGENT_SKILLS.length - agentResults.length,
+		failed: allSkills.length - agentResults.length,
 	});
 
 	const modelReview = mergeReviews(agentResults);
@@ -453,19 +485,41 @@ export async function buildReview(
 		selection.model,
 	);
 
+	// Upgrade to APPROVE when all agents found nothing to flag
+	const finalEvent: ReviewDecision["event"] =
+		modelReview.event === "COMMENT" &&
+		modelReview.general_findings.length === 0 &&
+		reviewComments.length === 0
+			? "APPROVE"
+			: modelReview.event;
+
 	const findingsBlock = formatFindings(modelReview.general_findings);
 	const inlineSummary =
 		reviewComments.length > 0
 			? `Inline comments: ${reviewComments.length}`
 			: "Inline comments: none";
-	const costFooter = `---\n*Model: ${selection.model} · ${AGENT_SKILLS.length} agents · $${cost.toFixed(6)} · [ai-review-bot](https://github.com/joeblackwaslike/ai-review-bot)*`;
+
+	const tier2Notice =
+		tier2Matches.length > 0
+			? [
+					"",
+					"**Additional skills activated:**",
+					...tier2Matches.map(
+						({ skillPath, reason }) =>
+							`- \`${skillPath.replace(".md", "")}\` — ${reason}`,
+					),
+				]
+			: [];
+
+	const costFooter = `---\n*Model: ${selection.model} · ${allSkills.length} agents · $${cost.toFixed(6)} · [ai-review-bot](https://github.com/joeblackwaslike/ai-review-bot)*`;
 
 	const body = [
 		`### ${context.commentPrefix}`,
 		"",
-		modelReview.summary,
+		finalEvent === "APPROVE" ? "✅ No issues found." : modelReview.summary,
+		...tier2Notice,
 		"",
-		inlineSummary,
+		...(finalEvent === "APPROVE" ? [] : [inlineSummary]),
 		findingsBlock ? `\n${findingsBlock}\n` : "",
 		reviewMarker,
 		"",
@@ -475,7 +529,7 @@ export async function buildReview(
 		.join("\n");
 
 	return {
-		event: modelReview.event,
+		event: finalEvent,
 		body,
 		comments: reviewComments,
 	};

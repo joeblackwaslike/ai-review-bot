@@ -16,7 +16,7 @@ async function postReviewWithRetry(
 		repo: string;
 		pullNumber: number;
 		commitId: string;
-		event: "COMMENT" | "REQUEST_CHANGES";
+		event: "COMMENT" | "REQUEST_CHANGES" | "APPROVE";
 		body: string;
 		comments: ReviewDecision["comments"];
 	},
@@ -248,6 +248,7 @@ function registerHandlers(app: App, configFn: () => AppConfig) {
 			"pull_request.opened",
 			"pull_request.reopened",
 			"pull_request.synchronize",
+			"pull_request.ready_for_review",
 		],
 		async ({ payload }) => {
 			const prPayload = payload as PullRequestWebhookPayload;
