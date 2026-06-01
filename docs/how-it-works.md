@@ -80,13 +80,26 @@ After all agents settle, `mergeReviews()` combines their outputs:
 
 ## Diff anchor validation
 
-Before submission, every inline comment is validated against the set of valid right-side line numbers in the diff (`collectRightSideLines()`). Comments referencing a path not in the diff, a line not in the valid set, a backwards range (`start_line >= line`), or `start_line: 0` are dropped silently.
-
-Up to 10 inline comments are submitted per review.
+Before submission, every inline comment is validated against the set of valid right-side line numbers in the diff (`collectRightSideLines()`). Comments referencing a path not in the diff, a line not in the valid set, a backwards range (`start_line >= line`), or `start_line: 0` are dropped silently. All valid comments are submitted — there is no cap.
 
 ## Fallback retry
 
 If the GitHub Reviews API rejects the POST (status 422), the bot retries with an empty `comments` array. This ensures the review summary and general findings always reach the PR author even if every inline comment is rejected.
+
+## Cross-bot deduplication
+
+Before running agents, each bot fetches all existing reviews on the PR. It looks for reviews from the **other bot** on the same commit (identified by the SHA marker in the review body and a different comment prefix). Any such reviews are injected into the user message sent to every agent:
+
+```text
+Prior reviews by other AI reviewers on this commit — do not re-report any finding already mentioned below:
+
+### codex-review-bot
+...
+```
+
+This means if the Codex bot has already flagged a null-pointer dereference on line 42, the Claude bot's agents see that finding and skip it rather than duplicating it. The two reviews stay complementary rather than redundant.
+
+The idempotency check (skipping the same bot's own re-review of a commit) is scoped to that bot's own reviews only — it does not trigger on the other bot's reviews.
 
 ## Idempotency
 

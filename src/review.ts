@@ -311,24 +311,45 @@ export async function buildReview(
 	context: ReviewContext,
 ): Promise<ReviewDecision | null> {
 	const reviewMarker = `Reviewed commit: \`${context.headSha.slice(0, 12)}\``;
-	if (!context.force) {
-		const existing = await context.octokit.request<PullRequestReview[]>(
+
+	// Always fetch existing reviews — used for both idempotency check and
+	// cross-bot dedup (collecting what the other bot already reported).
+	const existingReviews = (
+		await context.octokit.request<PullRequestReview[]>(
 			"GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
 			{
 				owner: context.owner,
 				repo: context.repo,
 				pull_number: context.pullNumber,
 			},
-		);
+		)
+	).data;
 
-		const alreadyReviewed = existing.data.some((review) =>
-			(review.body ?? "").includes(reviewMarker),
-		);
+	if (!context.force) {
+		const alreadyReviewed = existingReviews.some((review) => {
+			const body = review.body ?? "";
+			return (
+				body.includes(reviewMarker) &&
+				body.includes(`### ${context.commentPrefix}`)
+			);
+		});
 
 		if (alreadyReviewed) {
 			return null;
 		}
 	}
+
+	// Collect reviews from OTHER bots on the same commit. These are passed into
+	// the prompt so agents avoid re-reporting findings already raised.
+	const priorBotReviews = existingReviews
+		.filter((review) => {
+			const body = review.body ?? "";
+			return (
+				body.includes(reviewMarker) &&
+				!body.includes(`### ${context.commentPrefix}`)
+			);
+		})
+		.map((review) => review.body as string);
 
 	const files = await context.octokit.paginate<PullFile>(
 		"GET /repos/{owner}/{repo}/pulls/{pull_number}/files",
@@ -366,6 +387,7 @@ export async function buildReview(
 		changedFiles: context.changedFiles,
 		extraInstructions: context.extraInstructions,
 		files,
+		priorBotReviews,
 	});
 
 	const agentPromises = AGENT_SKILLS.map((skillPath) =>
@@ -412,10 +434,7 @@ export async function buildReview(
 		),
 	});
 
-	const reviewComments = buildReviewComments(
-		files,
-		modelReview.inline_comments,
-	).slice(0, 10);
+	const reviewComments = buildReviewComments(files, modelReview.inline_comments);
 
 	console.log("inline comments after validation", {
 		submitted: reviewComments.length,

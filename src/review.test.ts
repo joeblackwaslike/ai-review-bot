@@ -16,6 +16,7 @@ import {
 } from "./testing.js";
 
 const mockGenerateObject = vi.hoisted(() => vi.fn());
+const mockBuildUserMessage = vi.hoisted(() => vi.fn().mockReturnValue("user"));
 
 vi.mock("ai", () => ({
 	generateObject: mockGenerateObject,
@@ -38,7 +39,7 @@ vi.mock("./config.js", () => ({
 }));
 
 vi.mock("./prompt.js", () => ({
-	buildUserMessage: () => "user",
+	buildUserMessage: mockBuildUserMessage,
 	buildAgentSystemPrompt: () => "system",
 }));
 
@@ -211,6 +212,8 @@ function buildOctokit(overrides?: {
 describe("buildReview", () => {
 	beforeEach(() => {
 		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
 	});
 
 	const baseContext = {
@@ -320,7 +323,11 @@ describe("buildReview", () => {
 	it("skips duplicate reviews on the same commit unless forced", async () => {
 		const headSha = "1234567890abcdef";
 		const octokit = buildOctokit({
-			existingReviews: [{ body: reviewedCommitMarker(headSha) }],
+			existingReviews: [
+				{
+					body: `### ai-review-bot\n\nPrior review.\n\n${reviewedCommitMarker(headSha)}`,
+				},
+			],
 		});
 
 		const review = await buildReview({
@@ -342,7 +349,11 @@ describe("buildReview", () => {
 		);
 
 		const octokit = buildOctokit({
-			existingReviews: [{ body: reviewedCommitMarker(headSha) }],
+			existingReviews: [
+				{
+					body: `### ai-review-bot\n\nPrior review.\n\n${reviewedCommitMarker(headSha)}`,
+				},
+			],
 		});
 
 		const review = await buildReview({
@@ -390,5 +401,63 @@ describe("buildReview", () => {
 
 		expect(review?.body).toContain("$");
 		expect(review?.body).toContain("github.com/joeblackwaslike/ai-review-bot");
+	});
+
+	it("passes prior bot reviews from other bots to buildUserMessage", async () => {
+		const headSha = "1234567890abcdef";
+		const otherBotBody = `### codex-review-bot\n\nFound a security issue.\n\n${reviewedCommitMarker(headSha)}`;
+
+		mockGenerateObject.mockResolvedValue(
+			buildGenerateObjectResponse(buildModelReview()),
+		);
+
+		await buildReview({
+			octokit: buildOctokit({ existingReviews: [{ body: otherBotBody }] }),
+			...baseContext,
+			headSha,
+		});
+
+		expect(mockBuildUserMessage).toHaveBeenCalledWith(
+			expect.objectContaining({ priorBotReviews: [otherBotBody] }),
+		);
+	});
+
+	it("does not include own review in priorBotReviews", async () => {
+		const headSha = "1234567890abcdef";
+		const ownBotBody = `### ai-review-bot\n\nFound issues.\n\n${reviewedCommitMarker(headSha)}`;
+
+		mockGenerateObject.mockResolvedValue(
+			buildGenerateObjectResponse(buildModelReview()),
+		);
+
+		await buildReview({
+			octokit: buildOctokit({ existingReviews: [{ body: ownBotBody }] }),
+			...baseContext,
+			headSha,
+			force: true,
+		});
+
+		expect(mockBuildUserMessage).toHaveBeenCalledWith(
+			expect.objectContaining({ priorBotReviews: [] }),
+		);
+	});
+
+	it("ignores prior bot reviews for a different commit SHA", async () => {
+		const headSha = "1234567890abcdef";
+		const staleBody = `### codex-review-bot\n\nOld finding.\n\n${reviewedCommitMarker("oldsha111222")}`;
+
+		mockGenerateObject.mockResolvedValue(
+			buildGenerateObjectResponse(buildModelReview()),
+		);
+
+		await buildReview({
+			octokit: buildOctokit({ existingReviews: [{ body: staleBody }] }),
+			...baseContext,
+			headSha,
+		});
+
+		expect(mockBuildUserMessage).toHaveBeenCalledWith(
+			expect.objectContaining({ priorBotReviews: [] }),
+		);
 	});
 });

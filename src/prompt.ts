@@ -27,6 +27,7 @@ export interface PromptContext {
 		status: string;
 		patch?: string;
 	}>;
+	priorBotReviews?: string[];
 }
 
 function trimPatch(patch: string, maxChars = 8000): string {
@@ -54,6 +55,16 @@ export function buildUserMessage(context: PromptContext): string {
 		? ["", "Command-specific instructions:", context.extraInstructions]
 		: [];
 
+	const priorReviewsSection =
+		context.priorBotReviews?.length
+			? [
+					"",
+					"Prior reviews by other AI reviewers on this commit — do not re-report any finding already mentioned below:",
+					"",
+					context.priorBotReviews.join("\n\n---\n\n"),
+				]
+			: [];
+
 	return [
 		"You are reviewing a GitHub pull request.",
 		"",
@@ -67,6 +78,7 @@ export function buildUserMessage(context: PromptContext): string {
 		`- Added lines: ${context.additions}`,
 		`- Deleted lines: ${context.deletions}`,
 		...commandInstructionsSection,
+		...priorReviewsSection,
 		"",
 		"Changed file diffs:",
 		serializeFiles(context.files),
