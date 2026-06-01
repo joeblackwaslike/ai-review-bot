@@ -2,7 +2,89 @@ import { App } from "octokit";
 import { isTrustedAuthorAssociation, parseReviewCommand } from "./commands.js";
 import type { AppConfig } from "./config.js";
 import { getConfig, getOpenAIAppConfig } from "./config.js";
+import type { ReviewDecision } from "./review.js";
 import { buildReview } from "./review.js";
+
+function sleep(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function postReviewWithRetry(
+	octokit: Awaited<ReturnType<App["getInstallationOctokit"]>>,
+	params: {
+		owner: string;
+		repo: string;
+		pullNumber: number;
+		commitId: string;
+		event: "COMMENT" | "REQUEST_CHANGES";
+		body: string;
+		comments: ReviewDecision["comments"];
+	},
+	maxAttempts = 3,
+): Promise<void> {
+	const delays = [3000, 6000];
+	let lastError: unknown;
+
+	for (let attempt = 0; attempt < maxAttempts; attempt++) {
+		try {
+			await octokit.request(
+				"POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
+				{
+					owner: params.owner,
+					repo: params.repo,
+					pull_number: params.pullNumber,
+					commit_id: params.commitId,
+					event: params.event,
+					body: params.body,
+					comments: params.comments,
+				},
+			);
+			return;
+		} catch (err) {
+			lastError = err;
+			console.error(
+				`review POST attempt ${attempt + 1}/${maxAttempts} failed`,
+				err,
+			);
+			if (attempt < maxAttempts - 1) {
+				await sleep(delays[attempt]);
+			}
+		}
+	}
+	throw lastError;
+}
+
+function buildFallbackCommentBody(
+	review: ReviewDecision,
+	err: unknown,
+	commentPrefix: string,
+): string {
+	const errorMessage = err instanceof Error ? err.message : String(err);
+
+	const inlineSection =
+		review.comments.length > 0
+			? [
+					"",
+					"**Inline comments** (could not be anchored — listed by location):",
+					"",
+					...review.comments.map(
+						(c) =>
+							`- \`${c.path}:${c.line}\` — ${c.body.replace(/\n+/g, " ").slice(0, 300)}`,
+					),
+				]
+			: [];
+
+	return [
+		`⚠️ **[${commentPrefix}] Review API error — findings preserved below**`,
+		"",
+		`The review could not be posted after 3 attempts. Last error: \`${errorMessage}\``,
+		"",
+		"---",
+		"",
+		review.body,
+		...inlineSection,
+	].join("\n");
+}
 
 type PullRequestWebhookPayload = {
 	action: string;
@@ -121,38 +203,42 @@ export async function maybeSubmitReview(args: {
 	});
 
 	try {
-		await octokit.request(
-			"POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
-			{
-				owner,
-				repo,
-				pull_number: pullNumber,
-				commit_id: headSha,
-				event: review.event,
-				body: review.body,
-				comments: review.comments,
-			},
-		);
+		await postReviewWithRetry(octokit, {
+			owner,
+			repo,
+			pullNumber,
+			commitId: headSha,
+			event: review.event,
+			body: review.body,
+			comments: review.comments,
+		});
 	} catch (err) {
-		if (review.comments.length === 0) {
-			throw err;
-		}
-		console.error(
-			"review POST with inline comments failed, retrying without comments",
+		console.error("review POST failed after all retries — posting fallback comment", {
+			owner,
+			repo,
+			pullNumber,
 			err,
+		});
+		const fallbackBody = buildFallbackCommentBody(
+			review,
+			err,
+			config.reviewCommentPrefix,
 		);
-		await octokit.request(
-			"POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
-			{
-				owner,
-				repo,
-				pull_number: pullNumber,
-				commit_id: headSha,
-				event: review.event,
-				body: review.body,
-				comments: [],
-			},
-		);
+		try {
+			await octokit.request(
+				"POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+				{
+					owner,
+					repo,
+					issue_number: pullNumber,
+					body: fallbackBody,
+				},
+			);
+			console.log("fallback comment posted — review findings preserved");
+		} catch (commentErr) {
+			console.error("failed to post fallback comment", commentErr);
+		}
+		throw err;
 	}
 }
 

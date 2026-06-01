@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { maybeSubmitReview } from "./github-app.js";
 import { buildPullRequestPayload } from "./testing.js";
 
@@ -52,6 +52,10 @@ const baseArgs = {
 };
 
 describe("maybeSubmitReview", () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	it("skips submission for draft PRs", async () => {
 		const { app, octokit } = buildMockApp();
 		mockBuildReview.mockReset();
@@ -102,54 +106,60 @@ describe("maybeSubmitReview", () => {
 		expect(params.event).toBe("REQUEST_CHANGES");
 	});
 
-	// Regression: if the GitHub API rejects the review POST (e.g. invalid comment
-	// anchors), the bot should retry without inline comments so the review body
-	// is never completely lost.
-	it("regression: retries body-only when POST fails with inline comments", async () => {
+	it("retries POST up to 3 times on failure before succeeding", async () => {
+		vi.useFakeTimers();
 		const { app, request } = buildMockApp();
+		// Fail twice, succeed on the third attempt
 		request
 			.mockRejectedValueOnce(new Error("422 Unprocessable Entity"))
-			.mockResolvedValueOnce({ data: {} });
-
-		const review = {
-			event: "COMMENT" as const,
-			body: "Review body.",
-			comments: [
-				{
-					path: "src/file.ts",
-					line: 2,
-					side: "RIGHT" as const,
-					body: "Comment.",
-				},
-			],
-		};
-		mockBuildReview.mockReset().mockResolvedValue(review);
-
-		await maybeSubmitReview({ app, ...baseArgs });
-
-		expect(request).toHaveBeenCalledTimes(2);
-
-		const [, firstParams] = request.mock.calls[0];
-		expect(firstParams.comments).toHaveLength(1);
-
-		const [, retryParams] = request.mock.calls[1];
-		expect(retryParams.comments).toEqual([]);
-		expect(retryParams.body).toBe("Review body.");
-	});
-
-	it("does not retry when POST fails with an empty comments array", async () => {
-		const { app, request } = buildMockApp();
-		request.mockRejectedValue(new Error("500 Server Error"));
+			.mockRejectedValueOnce(new Error("422 Unprocessable Entity"))
+			.mockResolvedValue({ data: {} });
 
 		mockBuildReview.mockReset().mockResolvedValue({
 			event: "COMMENT" as const,
 			body: "Review body.",
-			comments: [],
+			comments: [{ path: "src/file.ts", line: 2, side: "RIGHT" as const, body: "Comment." }],
 		});
 
-		await expect(maybeSubmitReview({ app, ...baseArgs })).rejects.toThrow(
-			"500 Server Error",
+		const promise = maybeSubmitReview({ app, ...baseArgs });
+		await vi.runAllTimersAsync();
+		await promise;
+
+		expect(request).toHaveBeenCalledTimes(3);
+		const routes = request.mock.calls.map(([route]) => route);
+		expect(routes.every((r) => r === "POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews")).toBe(true);
+	});
+
+	it("posts fallback comment with findings when all retries are exhausted", async () => {
+		vi.useFakeTimers();
+		const { app, request } = buildMockApp();
+		// All 3 review attempts fail; 4th call (fallback comment) succeeds
+		request
+			.mockRejectedValueOnce(new Error("422 Unprocessable Entity"))
+			.mockRejectedValueOnce(new Error("422 Unprocessable Entity"))
+			.mockRejectedValueOnce(new Error("422 Unprocessable Entity"))
+			.mockResolvedValue({ data: {} });
+
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "COMMENT" as const,
+			body: "Review body.",
+			comments: [{ path: "src/file.ts", line: 2, side: "RIGHT" as const, body: "Inline comment." }],
+		});
+
+		const promise = maybeSubmitReview({ app, ...baseArgs }).catch(() => {});
+		await vi.runAllTimersAsync();
+		await promise;
+
+		// 3 review attempts + 1 fallback comment
+		expect(request).toHaveBeenCalledTimes(4);
+
+		const [fallbackRoute, fallbackParams] = request.mock.calls[3];
+		expect(fallbackRoute).toBe(
+			"POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
 		);
-		expect(request).toHaveBeenCalledOnce();
+		expect(fallbackParams.body).toContain("⚠️");
+		expect(fallbackParams.body).toContain("422 Unprocessable Entity");
+		expect(fallbackParams.body).toContain("Review body.");
+		expect(fallbackParams.body).toContain("src/file.ts:2");
 	});
 });

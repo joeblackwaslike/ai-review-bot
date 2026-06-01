@@ -84,22 +84,30 @@ Before submission, every inline comment is validated against the set of valid ri
 
 ## Fallback retry
 
-If the GitHub Reviews API rejects the POST (status 422), the bot retries with an empty `comments` array. This ensures the review summary and general findings always reach the PR author even if every inline comment is rejected.
+If the GitHub Reviews API rejects the POST, the bot retries up to 3 times with exponential backoff (3s, 6s between attempts), each time with the full payload including inline comments.
+
+If all 3 attempts fail, the bot posts a regular PR comment instead of a formal review. The comment includes the error message, the full review body (summary and general findings), and every inline comment listed by `file:line` reference. This ensures findings are never silently lost. The original error is also thrown so it appears in Vercel logs.
 
 ## Cross-bot deduplication
 
-Before running agents, each bot fetches all existing reviews on the PR. It looks for reviews from the **other bot** on the same commit (identified by the SHA marker in the review body and a different comment prefix). Any such reviews are injected into the user message sent to every agent:
+Before running agents, each bot fetches all existing reviews on the PR and classifies them:
+
+- **Sister bot** (the other AI bot in this deployment — detected by its `Reviewed commit:` footer): included only if it reviewed the same commit SHA
+- **External bots** (Code Rabbit, Copilot, Sonar, etc.): always included — the 7.5-minute review delay is specifically to let these finish before our bots run
+- **This bot's own prior reviews**: excluded
+
+Collected reviews are injected into the user message sent to every agent:
 
 ```text
 Prior reviews by other AI reviewers on this commit — do not re-report any finding already mentioned below:
 
 ### codex-review-bot
 ...
+**CodeRabbit**
+...
 ```
 
-This means if the Codex bot has already flagged a null-pointer dereference on line 42, the Claude bot's agents see that finding and skip it rather than duplicating it. The two reviews stay complementary rather than redundant.
-
-The idempotency check (skipping the same bot's own re-review of a commit) is scoped to that bot's own reviews only — it does not trigger on the other bot's reviews.
+If Code Rabbit already flagged a SQL injection risk, our agents see it and focus on what hasn't been covered yet. The idempotency check (skipping a re-review of the same commit by this bot) is scoped to this bot's own reviews only and does not trigger on external bot reviews.
 
 ## Idempotency
 

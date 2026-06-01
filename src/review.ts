@@ -40,7 +40,7 @@ interface ReviewContext {
 	provider: "anthropic" | "openai";
 }
 
-interface ReviewDecision {
+export interface ReviewDecision {
 	event: "COMMENT" | "REQUEST_CHANGES";
 	body: string;
 	comments: ReviewComment[];
@@ -339,15 +339,19 @@ export async function buildReview(
 		}
 	}
 
-	// Collect reviews from OTHER bots on the same commit. These are passed into
-	// the prompt so agents avoid re-reporting findings already raised.
+	// Collect prior reviews for dedup injection into the prompt.
+	// Sister bot (has our "Reviewed commit:" marker): include only if same SHA.
+	// External bots (Code Rabbit, etc.): always include — the review delay ensures
+	// they've completed before we run.
 	const priorBotReviews = existingReviews
 		.filter((review) => {
 			const body = review.body ?? "";
-			return (
-				body.includes(reviewMarker) &&
-				!body.includes(`### ${context.commentPrefix}`)
-			);
+			if (!body) return false;
+			if (body.includes(`### ${context.commentPrefix}`)) return false;
+			if (body.includes("Reviewed commit: `")) {
+				return body.includes(reviewMarker);
+			}
+			return true;
 		})
 		.map((review) => review.body as string);
 

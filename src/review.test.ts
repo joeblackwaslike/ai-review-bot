@@ -442,7 +442,7 @@ describe("buildReview", () => {
 		);
 	});
 
-	it("ignores prior bot reviews for a different commit SHA", async () => {
+	it("ignores sister bot reviews for a different commit SHA", async () => {
 		const headSha = "1234567890abcdef";
 		const staleBody = `### codex-review-bot\n\nOld finding.\n\n${reviewedCommitMarker("oldsha111222")}`;
 
@@ -458,6 +458,26 @@ describe("buildReview", () => {
 
 		expect(mockBuildUserMessage).toHaveBeenCalledWith(
 			expect.objectContaining({ priorBotReviews: [] }),
+		);
+	});
+
+	it("includes external bot reviews regardless of SHA", async () => {
+		const headSha = "1234567890abcdef";
+		const externalBotBody =
+			"**CodeRabbit Review**\n\nFound a potential null dereference on line 42.";
+
+		mockGenerateObject.mockResolvedValue(
+			buildGenerateObjectResponse(buildModelReview()),
+		);
+
+		await buildReview({
+			octokit: buildOctokit({ existingReviews: [{ body: externalBotBody }] }),
+			...baseContext,
+			headSha,
+		});
+
+		expect(mockBuildUserMessage).toHaveBeenCalledWith(
+			expect.objectContaining({ priorBotReviews: [externalBotBody] }),
 		);
 	});
 });
