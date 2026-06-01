@@ -100,9 +100,26 @@ Before running agents, the bot checks existing reviews for this marker. If found
 
 ## Trigger modes
 
-Both bots respond to the same two GitHub events:
+### Automatic (default)
 
-- **`issue_comment.created`** — slash command on a PR comment (`/ai-review`)
-- **`pull_request.opened` / `pull_request.synchronize`** — automatic review on new PRs and new commits (only if `REVIEW_ENABLED=true`; draft PRs are always skipped)
+Once both apps are installed on a repo, reviews happen automatically — no slash command needed. Both bots post a review on every pull request the moment it is opened or a new commit is pushed to it. This is the normal operating mode.
 
-Only comments from `OWNER`, `MEMBER`, or `COLLABORATOR` author associations trigger a review from the slash command path.
+- **`pull_request.opened`** — fires when a PR is created; both bots review it automatically after a short delay (`REVIEW_DELAY_SECONDS`, default 7.5 min) to give CI a chance to run first
+- **`pull_request.synchronize`** — fires when a new commit is pushed to an open PR; both bots re-review the updated diff
+
+Draft PRs are always skipped. Reviews are idempotent per commit SHA — pushing the same commit twice won't produce duplicate reviews.
+
+To disable automatic reviews while keeping slash-command reviews active, set `REVIEW_ENABLED=false`.
+
+### Manual (slash command)
+
+The slash command is for cases outside the automatic flow: PRs that were already open when the apps were installed, re-reviewing after the auto-review failed, or requesting a fresh review with extra instructions.
+
+```text
+/ai-review                               # re-review current commit
+/ai-review focus on the auth layer       # with extra instructions
+/ai-review --force                       # re-review even if this SHA was already reviewed
+/ai-review --force check for regressions # force + extra instructions
+```
+
+Only comments from `OWNER`, `MEMBER`, or `COLLABORATOR` author associations trigger a slash-command review.
