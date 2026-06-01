@@ -123,15 +123,28 @@ For each GitHub App:
 1. In the app settings, click **Install App**
 2. Select the repositories you want reviewed
 
-## Step 7 — Trigger your first review
+That's it. Reviews are **automatic by default** — both bots will post a review on every pull request opened or pushed to in the installed repos. No further action needed; the next PR you open will receive two parallel reviews.
 
-On any open pull request in an installed repo, comment:
+## Triggering a review manually
+
+The slash command is for cases where the automatic review didn't run or you want to re-review:
+
+- The PR was already open before you installed the apps
+- The auto-review fired but you want a fresh look after more changes
+- You want to re-run with extra instructions
+
+Comment on any PR in an installed repo:
 
 ```text
 /ai-review
 ```
 
-You'll see two reviews appear — one from the Claude bot and one from the Codex bot, each with its own icon. Both run their five agents in parallel and post independently.
+Both bots respond to the same command. You'll see two reviews appear — one from the Claude bot and one from the Codex bot, each with its own icon.
+
+```text
+/ai-review focus on the auth layer    # with extra instructions
+/ai-review --force                    # re-review the same commit
+```
 
 ## Verification
 
