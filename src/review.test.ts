@@ -389,6 +389,34 @@ describe("buildReview", () => {
 		expect(review?.body).toContain("Minor style nit");
 	});
 
+	it("emits APPROVE when all agents find no issues", async () => {
+		mockGenerateObject.mockResolvedValue(
+			buildGenerateObjectResponse(
+				buildModelReview({ event: "COMMENT", summary: "No issues found.", general_findings: [], inline_comments: [] }),
+			),
+		);
+
+		const review = await buildReview({ octokit: buildOctokit(), ...baseContext });
+
+		expect(review?.event).toBe("APPROVE");
+		expect(review?.body).toContain("✅ No issues found.");
+	});
+
+	it("does not APPROVE when there are general findings", async () => {
+		mockGenerateObject.mockResolvedValue(
+			buildGenerateObjectResponse(
+				buildModelReview({
+					event: "COMMENT",
+					general_findings: [{ title: "Minor nit", body: "Fix this.", severity: "low" }],
+				}),
+			),
+		);
+
+		const review = await buildReview({ octokit: buildOctokit(), ...baseContext });
+
+		expect(review?.event).toBe("COMMENT");
+	});
+
 	it("includes cost footer with GitHub project link", async () => {
 		mockGenerateObject.mockResolvedValue(
 			buildGenerateObjectResponse(buildModelReview()),
