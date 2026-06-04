@@ -41,10 +41,20 @@ interface ReviewContext {
 	provider: "anthropic" | "openai";
 }
 
+export interface ReviewMetadata {
+	model: string;
+	tier1Count: number;
+	tier2Skills: string[];
+	generalFindings: number;
+	inlineComments: number;
+	cost: number;
+}
+
 export interface ReviewDecision {
 	event: "COMMENT" | "REQUEST_CHANGES" | "APPROVE";
 	body: string;
 	comments: ReviewComment[];
+	metadata: ReviewMetadata;
 }
 
 interface ReviewComment {
@@ -532,5 +542,15 @@ export async function buildReview(
 		event: finalEvent,
 		body,
 		comments: reviewComments,
+		metadata: {
+			model: selection.model,
+			tier1Count: TIER1_SKILLS.length,
+			tier2Skills: tier2Matches.map(({ skillPath }) =>
+				skillPath.replace(".md", ""),
+			),
+			generalFindings: modelReview.general_findings.length,
+			inlineComments: reviewComments.length,
+			cost,
+		},
 	};
 }

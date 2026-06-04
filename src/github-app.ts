@@ -2,7 +2,7 @@ import { App } from "octokit";
 import { isTrustedAuthorAssociation, parseReviewCommand } from "./commands.js";
 import type { AppConfig } from "./config.js";
 import { getConfig, getOpenAIAppConfig } from "./config.js";
-import type { ReviewDecision } from "./review.js";
+import type { ReviewDecision, ReviewMetadata } from "./review.js";
 import { buildReview } from "./review.js";
 
 function sleep(ms: number): Promise<void> {
@@ -84,6 +84,60 @@ function buildFallbackCommentBody(
 		review.body,
 		...inlineSection,
 	].join("\n");
+}
+
+const PR_SECTION_START = "<!-- ai-review-bot:start -->";
+const PR_SECTION_END = "<!-- ai-review-bot:end -->";
+
+export function buildPRSummarySection(
+	metadata: ReviewMetadata,
+	event: ReviewDecision["event"],
+	commentPrefix: string,
+): string {
+	const verdict =
+		event === "APPROVE"
+			? "✅ Approved"
+			: event === "REQUEST_CHANGES"
+				? "⚠️ Changes requested"
+				: "💬 Commented";
+
+	const tier2Line =
+		metadata.tier2Skills.length > 0
+			? `\n| Tier 2 skills | ${metadata.tier2Skills.map((s) => `\`${s}\``).join(", ")} |`
+			: "";
+
+	return [
+		PR_SECTION_START,
+		`#### ${commentPrefix}`,
+		"",
+		"| | |",
+		"|---|---|",
+		`| Verdict | ${verdict} |`,
+		`| Findings | ${metadata.generalFindings} general, ${metadata.inlineComments} inline |`,
+		`| Model | \`${metadata.model}\` |`,
+		`| Agents | ${metadata.tier1Count} Tier 1${metadata.tier2Skills.length > 0 ? ` + ${metadata.tier2Skills.length} Tier 2` : ""} |${tier2Line}`,
+		`| Cost | $${metadata.cost.toFixed(6)} |`,
+		PR_SECTION_END,
+	].join("\n");
+}
+
+export function injectPRSection(
+	existingBody: string | null,
+	section: string,
+): string {
+	const body = existingBody ?? "";
+	const startIdx = body.indexOf(PR_SECTION_START);
+	const endIdx = body.indexOf(PR_SECTION_END);
+
+	if (startIdx !== -1 && endIdx !== -1) {
+		return (
+			body.slice(0, startIdx) +
+			section +
+			body.slice(endIdx + PR_SECTION_END.length)
+		);
+	}
+
+	return body ? `${body}\n\n${section}` : section;
 }
 
 type PullRequestWebhookPayload = {
@@ -212,6 +266,23 @@ export async function maybeSubmitReview(args: {
 			body: review.body,
 			comments: review.comments,
 		});
+
+		const summarySection = buildPRSummarySection(
+			review.metadata,
+			review.event,
+			config.reviewCommentPrefix,
+		);
+		const updatedBody = injectPRSection(pullRequest.body, summarySection);
+		try {
+			await octokit.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", {
+				owner,
+				repo,
+				pull_number: pullNumber,
+				body: updatedBody,
+			});
+		} catch (patchErr) {
+			console.error("failed to update PR description", patchErr);
+		}
 	} catch (err) {
 		console.error(
 			"review POST failed after all retries — posting fallback comment",
