@@ -4,7 +4,7 @@
 
 ai-review-bot deploys two GitHub Apps from a single Vercel deployment — a **Claude bot** (Anthropic) and a **Codex bot** (OpenAI). Each has its own icon and posts reviews independently. Install both on a repo and you get two expert opinions side by side on every `/ai-review` comment.
 
-Both bots use the same five-agent review engine and the same merge logic. The only difference is which AI provider runs the agents and how model complexity is expressed (extended thinking vs. reasoning effort).
+Both bots use the same review engine and the same merge logic. The only difference is which AI provider runs the agents and how model complexity is expressed (extended thinking vs. reasoning effort).
 
 ## Request flow
 
@@ -43,9 +43,9 @@ Claude uses `thinkingBudget` (extended thinking tokens) for complex and deep tie
 
 ## The two-layer engine
 
-### Layer 1 — Five agents in parallel
+### Layer 1 — Tier 1 agents in parallel
 
-`buildReview()` fires five API calls simultaneously via `Promise.allSettled()`. Each call has:
+`buildReview()` fires five Tier 1 API calls simultaneously via `Promise.allSettled()`. Each call has:
 
 - A **focused system prompt** containing one review framework (`buildAgentSystemPrompt(skillPath, customPrompt)`)
 - The **same user message** containing PR metadata and the serialized diff (`buildUserMessage()`)
@@ -66,6 +66,19 @@ Claude uses `thinkingBudget` (extended thinking tokens) for complex and deep tie
 
 Each skill framework is a vendored Markdown file in `skills/`. The frontmatter is stripped at load time; only the framework content is injected into the agent's system prompt.
 
+### Tier 2 — Conditional skills
+
+In addition to the five Tier 1 agents, `detectTier2Skills()` in `src/tier2.ts` inspects the PR's file paths, diff content, labels, and size to decide whether additional specialized agents should run. Tier 2 agents fire alongside Tier 1 in the same `Promise.allSettled()` batch — there is no second pass.
+
+| Skill | Trigger |
+| --- | --- |
+| **type-design-analyzer** | PR changes `.ts`/`.tsx`/`.py`/`.pyi` files AND the diff contains type definitions (`interface`, `type =`, `class`, `enum`, `@dataclass`, `TypedDict`, `Protocol`, etc.) |
+| **comment-analyzer** | PR changes documentation files (`.md`, `.mdx`, `.rst`, `.txt`), OR adds ≥5 comment lines, OR contains substantial inline documentation changes in a small diff |
+| **security-auditor** | Any changed path matches security-sensitive patterns (`auth`, `token`, `jwt`, `payment`, `credential`, `secret`, etc.), OR the PR title/body mentions ≥2 security keywords, OR the diff contains crypto/token-handling code |
+| **architect-review** | PR is labelled `architecture` or `breaking-change`, OR ≥3 architectural boundary files change (routes, services, config, schema, migrations), OR the PR is ≥300 lines across ≥10 files |
+
+When Tier 2 skills activate, the review body includes an "Additional skills activated" section listing which skills ran and why.
+
 ### Layer 2 — Merge
 
 After all agents settle, `mergeReviews()` combines their outputs:
@@ -74,7 +87,11 @@ After all agents settle, `mergeReviews()` combines their outputs:
 
 **General findings** — deduplicated by title (case-insensitive).
 
-**Verdict** — `REQUEST_CHANGES` if any agent returned it, `COMMENT` otherwise. The bot never posts `APPROVE`.
+**Verdict** — three possible outcomes:
+
+- `REQUEST_CHANGES` — any agent returned it
+- `COMMENT` — no agent requested changes, but there are general findings or inline comments
+- `APPROVE` — all agents returned `COMMENT` AND the merged review has zero general findings AND zero valid inline comments. This signals a clean PR with nothing to flag.
 
 **Summary** — non-empty, non-trivial summaries from each agent are joined. "No issues found" summaries are filtered out.
 
