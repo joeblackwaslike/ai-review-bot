@@ -1,6 +1,6 @@
 {
 	"name": "ai-review-bot",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "GitHub App that runs parallel AI code review agents (Claude + Codex) on every pull request",
 	"type": "module",
 	"repository": {
