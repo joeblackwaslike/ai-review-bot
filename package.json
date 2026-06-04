@@ -1,7 +1,24 @@
 {
 	"name": "ai-review-bot",
 	"version": "0.1.0",
+	"description": "GitHub App that runs parallel AI code review agents (Claude + Codex) on every pull request",
 	"type": "module",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/joeblackwaslike/ai-review-bot.git"
+	},
+	"homepage": "https://joeblackwaslike.github.io/ai-review-bot/",
+	"license": "MIT",
+	"author": "Joe Black <joeblackwaslike@gmail.com>",
+	"keywords": [
+		"code-review",
+		"github-app",
+		"claude",
+		"openai",
+		"ai",
+		"pull-request",
+		"static-analysis"
+	],
 	"bin": {
 		"ai-review": "dist/cli.js"
 	},
