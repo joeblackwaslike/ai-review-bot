@@ -74,6 +74,8 @@ With `--dry-run`, the report is printed to stdout instead of posted as an issue.
 
 Use the published action to run a full-repo audit inside any CI workflow:
 
+::: v-pre
+
 ```yaml
 - uses: joeblackwaslike/ai-review-bot@v0.1.0
   with:
@@ -82,6 +84,8 @@ Use the published action to run a full-repo audit inside any CI workflow:
     anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
+:::
+
 ### Action inputs
 
 | Input | Required | Default | Description |
@@ -89,7 +93,7 @@ Use the published action to run a full-repo audit inside any CI workflow:
 | `github-app-id` | ✓ | — | GitHub App ID |
 | `github-app-private-key` | ✓ | — | PKCS#8 private key PEM (newlines as `\n`) |
 | `anthropic-api-key` | ✓ | — | Anthropic API key |
-| `repo` | — | `${{ github.repository }}` | Repository to audit (`owner/repo`) |
+| `repo` | — | current repository | Repository to audit (`owner/repo`) |
 | `ref` | — | repo default branch | Branch, tag, or SHA to audit |
 | `dry-run` | — | `false` | Set to `true` to print the report without creating an issue |
 | `extra` | — | — | Additional instructions for the review agents |
@@ -98,6 +102,8 @@ Use the published action to run a full-repo audit inside any CI workflow:
 ### Scheduled audit example
 
 Run a full codebase audit every Monday morning and post findings as a GitHub issue:
+
+::: v-pre
 
 ```yaml
 name: Weekly audit
@@ -118,7 +124,11 @@ jobs:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
+:::
+
 ### Audit a different repo
+
+::: v-pre
 
 ```yaml
 - uses: joeblackwaslike/ai-review-bot@v0.1.0
@@ -130,6 +140,8 @@ jobs:
     ref: main
     extra: "This codebase uses strict null checks. Flag any unsafe casts."
 ```
+
+:::
 
 ## Difference from PR reviews
 
