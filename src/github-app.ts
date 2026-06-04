@@ -2,6 +2,7 @@ import { App } from "octokit";
 import { isTrustedAuthorAssociation, parseReviewCommand } from "./commands.js";
 import type { AppConfig } from "./config.js";
 import { getConfig, getOpenAIAppConfig } from "./config.js";
+import { resolveStaleThreads } from "./resolve-threads.js";
 import type { ReviewDecision, ReviewMetadata } from "./review.js";
 import { buildReview } from "./review.js";
 
@@ -282,6 +283,19 @@ export async function maybeSubmitReview(args: {
 			});
 		} catch (patchErr) {
 			console.error("failed to update PR description", patchErr);
+		}
+
+		try {
+			await resolveStaleThreads(
+				octokit,
+				owner,
+				repo,
+				pullNumber,
+				config.reviewCommentPrefix,
+				review.validLinesByPath,
+			);
+		} catch (resolveErr) {
+			console.error("failed to resolve stale threads", resolveErr);
 		}
 	} catch (err) {
 		console.error(

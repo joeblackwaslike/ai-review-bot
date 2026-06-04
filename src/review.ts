@@ -55,6 +55,7 @@ export interface ReviewDecision {
 	body: string;
 	comments: ReviewComment[];
 	metadata: ReviewMetadata;
+	validLinesByPath: Map<string, Set<number>>;
 }
 
 interface ReviewComment {
@@ -247,18 +248,22 @@ function buildCommentBody(comment: ModelInlineComment): string {
 	return base;
 }
 
+export function buildValidLinesByPath(
+	files: PullFile[],
+): Map<string, Set<number>> {
+	const map = new Map<string, Set<number>>();
+	for (const file of files) {
+		if (!file.patch) continue;
+		map.set(file.filename, collectRightSideLines(file.patch));
+	}
+	return map;
+}
+
 export function buildReviewComments(
 	files: PullFile[],
 	inlineComments: ModelInlineComment[],
 ): ReviewComment[] {
-	const validLinesByPath = new Map<string, Set<number>>();
-
-	for (const file of files) {
-		if (!file.patch) {
-			continue;
-		}
-		validLinesByPath.set(file.filename, collectRightSideLines(file.patch));
-	}
+	const validLinesByPath = buildValidLinesByPath(files);
 
 	return inlineComments.flatMap((comment) => {
 		const validLines = validLinesByPath.get(comment.path);
@@ -477,6 +482,7 @@ export async function buildReview(
 		),
 	});
 
+	const validLines = buildValidLinesByPath(files);
 	const reviewComments = buildReviewComments(
 		files,
 		modelReview.inline_comments,
@@ -552,5 +558,6 @@ export async function buildReview(
 			inlineComments: reviewComments.length,
 			cost,
 		},
+		validLinesByPath: validLines,
 	};
 }
