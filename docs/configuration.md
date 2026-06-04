@@ -102,13 +102,13 @@ Returns the current config state. API keys are masked:
 
 ```json
 {
-  "reviewEnabled": "true",
+  "reviewEnabled": true,
   "reviewCommand": "/ai-review",
   "hasAnthropicKey": true,
-  "hasOpenAIKey": true,
   "hasAppId": true,
   "hasPrivateKey": true,
   "hasWebhookSecret": true,
+  "hasOpenAIKey": true,
   "hasOpenAIAppId": true,
   "hasOpenAIPrivateKey": true,
   "hasOpenAIWebhookSecret": true
