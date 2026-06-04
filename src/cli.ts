@@ -10,7 +10,7 @@ function fatal(msg: string): never {
 
 function usage(): never {
 	console.error(
-		"Usage: ai-review OWNER/REPO [--ref <branch>] [--dry-run] [--extra <instructions>]",
+		"Usage: ai-review OWNER/REPO [--ref <branch>] [--dry-run] [--extra <instructions>] [--provider <anthropic|openai>]",
 	);
 	console.error("");
 	console.error("Required env vars:");
@@ -18,7 +18,9 @@ function usage(): never {
 	console.error(
 		"  GITHUB_APP_PRIVATE_KEY — PKCS#8 private key (newlines as \\\\n)",
 	);
-	console.error("  ANTHROPIC_API_KEY      — Anthropic API key");
+	console.error(
+		"  ANTHROPIC_API_KEY      — Anthropic API key (or OPENAI_API_KEY for --provider openai)",
+	);
 	process.exit(1);
 }
 
@@ -45,6 +47,7 @@ async function main(): Promise<void> {
 	let ref: string | undefined;
 	let dryRun = false;
 	let extraInstructions = "";
+	let provider: "anthropic" | "openai" = "anthropic";
 
 	for (let i = 1; i < args.length; i++) {
 		if (args[i] === "--ref" && args[i + 1]) {
@@ -53,6 +56,11 @@ async function main(): Promise<void> {
 			dryRun = true;
 		} else if (args[i] === "--extra" && args[i + 1]) {
 			extraInstructions = args[++i];
+		} else if (args[i] === "--provider" && args[i + 1]) {
+			const val = args[++i];
+			if (val !== "anthropic" && val !== "openai")
+				fatal(`Invalid provider: ${val} (must be "anthropic" or "openai")`);
+			provider = val;
 		} else if (args[i].startsWith("--")) {
 			fatal(`Unknown flag: ${args[i]}`);
 		}
@@ -61,7 +69,15 @@ async function main(): Promise<void> {
 	if (!owner || !repo) usage();
 
 	const app = createApp();
-	await auditRepo({ app, owner, repo, ref, extraInstructions, dryRun });
+	await auditRepo({
+		app,
+		owner,
+		repo,
+		ref,
+		extraInstructions,
+		dryRun,
+		provider,
+	});
 }
 
 main().catch((err: unknown) => {

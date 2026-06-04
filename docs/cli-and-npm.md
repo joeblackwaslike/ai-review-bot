@@ -18,7 +18,7 @@ npx ai-review-bot@latest owner/repo # one-off, no install
 ## Usage
 
 ```bash
-ai-review OWNER/REPO [--ref <branch-or-sha>] [--dry-run] [--extra <instructions>]
+ai-review OWNER/REPO [--ref <branch-or-sha>] [--dry-run] [--extra <instructions>] [--provider <anthropic|openai>]
 ```
 
 ### Arguments
@@ -29,6 +29,7 @@ ai-review OWNER/REPO [--ref <branch-or-sha>] [--dry-run] [--extra <instructions>
 | `--ref <ref>` | Branch, tag, or SHA to audit. Defaults to the repo's default branch. |
 | `--dry-run` | Print the audit report to stdout instead of creating a GitHub issue. |
 | `--extra <text>` | Additional instructions passed to every review agent. |
+| `--provider <name>` | AI provider: `anthropic` (default) or `openai`. |
 
 ### Environment variables
 
@@ -36,7 +37,8 @@ ai-review OWNER/REPO [--ref <branch-or-sha>] [--dry-run] [--extra <instructions>
 | --- | --- | --- |
 | `GITHUB_APP_ID` | ✓ | Numeric GitHub App ID |
 | `GITHUB_APP_PRIVATE_KEY` | ✓ | PKCS#8 private key PEM (`\n` for newlines) |
-| `ANTHROPIC_API_KEY` | ✓ | Anthropic API key |
+| `ANTHROPIC_API_KEY` | ✓ (anthropic) | Anthropic API key (required when using `--provider anthropic`) |
+| `OPENAI_API_KEY` | ✓ (openai) | OpenAI API key (required when using `--provider openai`) |
 
 ### Examples
 
@@ -92,7 +94,9 @@ Use the published action to run a full-repo audit inside any CI workflow:
 | --- | --- | --- | --- |
 | `github-app-id` | ✓ | — | GitHub App ID |
 | `github-app-private-key` | ✓ | — | PKCS#8 private key PEM (newlines as `\n`) |
-| `anthropic-api-key` | ✓ | — | Anthropic API key |
+| `anthropic-api-key` | — | — | Anthropic API key (required when provider is `anthropic`) |
+| `openai-api-key` | — | — | OpenAI API key (required when provider is `openai`) |
+| `provider` | — | `anthropic` | AI provider: `anthropic` or `openai` |
 | `repo` | — | current repository | Repository to audit (`owner/repo`) |
 | `ref` | — | repo default branch | Branch, tag, or SHA to audit |
 | `dry-run` | — | `false` | Set to `true` to print the report without creating an issue |
@@ -150,7 +154,7 @@ jobs:
 | **Trigger** | PR opened, pushed, or `/ai-review` command | Manual, scheduled, or CI step |
 | **Input** | Unified diff of changed lines | All code files in the repo |
 | **Output** | GitHub Pull Request Review with inline comments | GitHub Issue with a structured report |
-| **Providers** | Claude + Codex in parallel | Claude only (Anthropic) |
+| **Providers** | Claude + Codex in parallel | Claude (default) or Codex (`--provider openai`) |
 | **Inline comments** | Yes — anchored to diff lines | No — whole-file findings only |
 
 ## Private key formatting

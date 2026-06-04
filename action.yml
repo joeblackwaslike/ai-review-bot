@@ -13,8 +13,17 @@ inputs:
     description: 'GitHub App private key in PKCS#8 format (newlines escaped as \\n)'
     required: true
   anthropic-api-key:
-    description: 'Anthropic API key'
-    required: true
+    description: 'Anthropic API key (required when provider is anthropic)'
+    required: false
+    default: ''
+  openai-api-key:
+    description: 'OpenAI API key (required when provider is openai)'
+    required: false
+    default: ''
+  provider:
+    description: 'AI provider: anthropic (default) or openai'
+    required: false
+    default: 'anthropic'
   repo:
     description: 'Repository to audit (owner/repo). Defaults to the current repository.'
     required: false
@@ -45,14 +54,17 @@ runs:
         GITHUB_APP_ID: ${{ inputs.github-app-id }}
         GITHUB_APP_PRIVATE_KEY: ${{ inputs.github-app-private-key }}
         ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
+        OPENAI_API_KEY: ${{ inputs.openai-api-key }}
         _AUDIT_REPO: ${{ inputs.repo || github.repository }}
         _AUDIT_REF: ${{ inputs.ref }}
         _AUDIT_EXTRA: ${{ inputs.extra }}
         _AUDIT_VERSION: ${{ inputs.version }}
         _AUDIT_DRY_RUN: ${{ inputs.dry-run }}
+        _AUDIT_PROVIDER: ${{ inputs.provider }}
       run: |
         ARGS=("$_AUDIT_REPO")
-        [[ -n "$_AUDIT_REF" ]]           && ARGS+=(--ref "$_AUDIT_REF")
-        [[ "$_AUDIT_DRY_RUN" == "true" ]] && ARGS+=(--dry-run)
-        [[ -n "$_AUDIT_EXTRA" ]]          && ARGS+=(--extra "$_AUDIT_EXTRA")
+        [[ -n "$_AUDIT_REF" ]]              && ARGS+=(--ref "$_AUDIT_REF")
+        [[ "$_AUDIT_DRY_RUN" == "true" ]]    && ARGS+=(--dry-run)
+        [[ -n "$_AUDIT_EXTRA" ]]             && ARGS+=(--extra "$_AUDIT_EXTRA")
+        [[ "$_AUDIT_PROVIDER" != "anthropic" ]] && ARGS+=(--provider "$_AUDIT_PROVIDER")
         npx --yes "ai-review-bot@${_AUDIT_VERSION}" "${ARGS[@]}"

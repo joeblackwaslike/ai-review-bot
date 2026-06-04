@@ -40,6 +40,7 @@ export interface AuditParams {
 	ref?: string;
 	extraInstructions?: string;
 	dryRun?: boolean;
+	provider?: "anthropic" | "openai";
 }
 
 export async function auditRepo({
@@ -49,6 +50,7 @@ export async function auditRepo({
 	ref: refParam,
 	extraInstructions = "",
 	dryRun = false,
+	provider = "anthropic",
 }: AuditParams): Promise<void> {
 	// Resolve installation and get per-installation octokit
 	const { data: installation } = await app.octokit.request(
@@ -144,7 +146,7 @@ export async function auditRepo({
 
 	const selection = routeModel(
 		{ additions: 0, deletions: 0, filePaths: blobPaths, labels: [] },
-		"anthropic",
+		provider,
 	);
 
 	// Run all 5 agents on each batch, collect ModelReview results
