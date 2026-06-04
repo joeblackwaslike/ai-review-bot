@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { detectTier2Skills } from "./tier2.js";
 import type { Tier2Context } from "./tier2.js";
+import { detectTier2Skills } from "./tier2.js";
 
 const base: Tier2Context = {
 	filePaths: [],
@@ -25,7 +25,9 @@ describe("detectTier2Skills", () => {
 			filePaths: ["src/models.ts"],
 			patchContent: "+interface User { id: string; }",
 		});
-		expect(matches.map((m) => m.skillPath)).toContain("type-design-analyzer.md");
+		expect(matches.map((m) => m.skillPath)).toContain(
+			"type-design-analyzer.md",
+		);
 	});
 
 	it("does not activate type-design-analyzer for TypeScript files with no type changes", () => {
@@ -34,7 +36,9 @@ describe("detectTier2Skills", () => {
 			filePaths: ["src/utils.ts"],
 			patchContent: "+const x = 1;",
 		});
-		expect(matches.map((m) => m.skillPath)).not.toContain("type-design-analyzer.md");
+		expect(matches.map((m) => m.skillPath)).not.toContain(
+			"type-design-analyzer.md",
+		);
 	});
 
 	it("does not activate type-design-analyzer for non-typed files", () => {
@@ -43,7 +47,9 @@ describe("detectTier2Skills", () => {
 			filePaths: ["src/utils.rb"],
 			patchContent: "+class User; end",
 		});
-		expect(matches.map((m) => m.skillPath)).not.toContain("type-design-analyzer.md");
+		expect(matches.map((m) => m.skillPath)).not.toContain(
+			"type-design-analyzer.md",
+		);
 	});
 
 	// ── Comment Analyzer ─────────────────────────────────────────────────────
@@ -57,7 +63,10 @@ describe("detectTier2Skills", () => {
 	});
 
 	it("activates comment-analyzer when many comment lines are added", () => {
-		const manyComments = Array.from({ length: 6 }, (_, i) => `+// line ${i}`).join("\n");
+		const manyComments = Array.from(
+			{ length: 6 },
+			(_, i) => `+// line ${i}`,
+		).join("\n");
 		const matches = detectTier2Skills({
 			...base,
 			filePaths: ["src/service.ts"],
@@ -138,7 +147,9 @@ describe("detectTier2Skills", () => {
 			additions: 20,
 			deletions: 5,
 		});
-		expect(matches.map((m) => m.skillPath)).not.toContain("architect-review.md");
+		expect(matches.map((m) => m.skillPath)).not.toContain(
+			"architect-review.md",
+		);
 	});
 
 	// ── Multiple activations ─────────────────────────────────────────────────
@@ -147,7 +158,12 @@ describe("detectTier2Skills", () => {
 		const matches = detectTier2Skills({
 			...base,
 			// auth → security-auditor; api/ + migration + service/ → architect-review; .ts + interface → type-design
-			filePaths: ["src/auth/token.ts", "database/migrations/001.sql", "src/api/routes.ts", "src/services/user.ts"],
+			filePaths: [
+				"src/auth/token.ts",
+				"database/migrations/001.sql",
+				"src/api/routes.ts",
+				"src/services/user.ts",
+			],
 			additions: 400,
 			deletions: 50,
 			patchContent: "+interface TokenPayload { sub: string; }",

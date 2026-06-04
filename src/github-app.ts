@@ -213,12 +213,15 @@ export async function maybeSubmitReview(args: {
 			comments: review.comments,
 		});
 	} catch (err) {
-		console.error("review POST failed after all retries — posting fallback comment", {
-			owner,
-			repo,
-			pullNumber,
-			err,
-		});
+		console.error(
+			"review POST failed after all retries — posting fallback comment",
+			{
+				owner,
+				repo,
+				pullNumber,
+				err,
+			},
+		);
 		const fallbackBody = buildFallbackCommentBody(
 			review,
 			err,

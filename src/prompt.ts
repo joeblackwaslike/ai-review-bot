@@ -56,15 +56,14 @@ export function buildUserMessage(context: PromptContext): string {
 		? ["", "Command-specific instructions:", context.extraInstructions]
 		: [];
 
-	const priorReviewsSection =
-		context.priorBotReviews?.length
-			? [
-					"",
-					"Prior reviews by other AI reviewers on this commit — do not re-report any finding already mentioned below:",
-					"",
-					context.priorBotReviews.join("\n\n---\n\n"),
-				]
-			: [];
+	const priorReviewsSection = context.priorBotReviews?.length
+		? [
+				"",
+				"Prior reviews by other AI reviewers on this commit — do not re-report any finding already mentioned below:",
+				"",
+				context.priorBotReviews.join("\n\n---\n\n"),
+			]
+		: [];
 
 	return [
 		"You are reviewing a GitHub pull request.",

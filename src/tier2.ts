@@ -74,8 +74,8 @@ function shouldRunCommentAnalyzer(ctx: Tier2Context): string | null {
 		return "documentation files changed";
 	}
 
-	const commentLineCount = (ctx.patchContent.match(/^\+.*(?:\/\/|#\s|\*\s)/gm)
-		?.length ?? 0);
+	const commentLineCount =
+		ctx.patchContent.match(/^\+.*(?:\/\/|#\s|\*\s)/gm)?.length ?? 0;
 	if (commentLineCount >= 5) {
 		return `${commentLineCount} comment lines added or modified`;
 	}
@@ -211,7 +211,10 @@ const LARGE_PR_THRESHOLD = 300;
 const MANY_FILES_THRESHOLD = 10;
 
 function shouldRunArchitectReview(ctx: Tier2Context): string | null {
-	if (ctx.labels.includes("architecture") || ctx.labels.includes("breaking-change")) {
+	if (
+		ctx.labels.includes("architecture") ||
+		ctx.labels.includes("breaking-change")
+	) {
 		return `PR labelled "${ctx.labels.find((l) => l === "architecture" || l === "breaking-change")}"`;
 	}
 
@@ -224,7 +227,10 @@ function shouldRunArchitectReview(ctx: Tier2Context): string | null {
 		return `${matchedPaths.length} architectural boundary files changed (routes, services, config, schema)`;
 	}
 
-	if (ctx.additions + ctx.deletions >= LARGE_PR_THRESHOLD && ctx.filePaths.length >= MANY_FILES_THRESHOLD) {
+	if (
+		ctx.additions + ctx.deletions >= LARGE_PR_THRESHOLD &&
+		ctx.filePaths.length >= MANY_FILES_THRESHOLD
+	) {
 		return `large PR: ${ctx.additions + ctx.deletions} lines across ${ctx.filePaths.length} files`;
 	}
 

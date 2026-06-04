@@ -392,11 +392,19 @@ describe("buildReview", () => {
 	it("emits APPROVE when all agents find no issues", async () => {
 		mockGenerateObject.mockResolvedValue(
 			buildGenerateObjectResponse(
-				buildModelReview({ event: "COMMENT", summary: "No issues found.", general_findings: [], inline_comments: [] }),
+				buildModelReview({
+					event: "COMMENT",
+					summary: "No issues found.",
+					general_findings: [],
+					inline_comments: [],
+				}),
 			),
 		);
 
-		const review = await buildReview({ octokit: buildOctokit(), ...baseContext });
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+		});
 
 		expect(review?.event).toBe("APPROVE");
 		expect(review?.body).toContain("✅ No issues found.");
@@ -407,12 +415,17 @@ describe("buildReview", () => {
 			buildGenerateObjectResponse(
 				buildModelReview({
 					event: "COMMENT",
-					general_findings: [{ title: "Minor nit", body: "Fix this.", severity: "low" }],
+					general_findings: [
+						{ title: "Minor nit", body: "Fix this.", severity: "low" },
+					],
 				}),
 			),
 		);
 
-		const review = await buildReview({ octokit: buildOctokit(), ...baseContext });
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+		});
 
 		expect(review?.event).toBe("COMMENT");
 	});

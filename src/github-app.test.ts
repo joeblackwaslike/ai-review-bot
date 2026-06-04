@@ -118,7 +118,14 @@ describe("maybeSubmitReview", () => {
 		mockBuildReview.mockReset().mockResolvedValue({
 			event: "COMMENT" as const,
 			body: "Review body.",
-			comments: [{ path: "src/file.ts", line: 2, side: "RIGHT" as const, body: "Comment." }],
+			comments: [
+				{
+					path: "src/file.ts",
+					line: 2,
+					side: "RIGHT" as const,
+					body: "Comment.",
+				},
+			],
 		});
 
 		const promise = maybeSubmitReview({ app, ...baseArgs });
@@ -127,7 +134,11 @@ describe("maybeSubmitReview", () => {
 
 		expect(request).toHaveBeenCalledTimes(3);
 		const routes = request.mock.calls.map(([route]) => route);
-		expect(routes.every((r) => r === "POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews")).toBe(true);
+		expect(
+			routes.every(
+				(r) => r === "POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
+			),
+		).toBe(true);
 	});
 
 	it("posts fallback comment with findings when all retries are exhausted", async () => {
@@ -143,7 +154,14 @@ describe("maybeSubmitReview", () => {
 		mockBuildReview.mockReset().mockResolvedValue({
 			event: "COMMENT" as const,
 			body: "Review body.",
-			comments: [{ path: "src/file.ts", line: 2, side: "RIGHT" as const, body: "Inline comment." }],
+			comments: [
+				{
+					path: "src/file.ts",
+					line: 2,
+					side: "RIGHT" as const,
+					body: "Inline comment.",
+				},
+			],
 		});
 
 		const promise = maybeSubmitReview({ app, ...baseArgs }).catch(() => {});
