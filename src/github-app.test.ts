@@ -124,6 +124,9 @@ describe("maybeSubmitReview", () => {
 
 		const [patchRoute] = octokit.request.mock.calls[1];
 		expect(patchRoute).toBe("PATCH /repos/{owner}/{repo}/pulls/{pull_number}");
+
+		const [checkRoute] = octokit.request.mock.calls[2];
+		expect(checkRoute).toBe("POST /repos/{owner}/{repo}/check-runs");
 	});
 
 	it("retries POST up to 3 times on failure before succeeding", async () => {
@@ -153,8 +156,8 @@ describe("maybeSubmitReview", () => {
 		await vi.runAllTimersAsync();
 		await promise;
 
-		// 3 review POST attempts + 1 PATCH for PR description
-		expect(request).toHaveBeenCalledTimes(4);
+		// 3 review POST attempts + 1 PATCH (PR desc) + 1 POST (check run)
+		expect(request).toHaveBeenCalledTimes(5);
 		const reviewRoutes = request.mock.calls.slice(0, 3).map(([route]) => route);
 		expect(
 			reviewRoutes.every(
@@ -163,6 +166,9 @@ describe("maybeSubmitReview", () => {
 		).toBe(true);
 		expect(request.mock.calls[3][0]).toBe(
 			"PATCH /repos/{owner}/{repo}/pulls/{pull_number}",
+		);
+		expect(request.mock.calls[4][0]).toBe(
+			"POST /repos/{owner}/{repo}/check-runs",
 		);
 	});
 

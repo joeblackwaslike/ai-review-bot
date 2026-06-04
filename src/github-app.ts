@@ -1,4 +1,5 @@
 import { App } from "octokit";
+import { createCheckRun } from "./check-run.js";
 import { isTrustedAuthorAssociation, parseReviewCommand } from "./commands.js";
 import type { AppConfig } from "./config.js";
 import { getConfig, getOpenAIAppConfig } from "./config.js";
@@ -283,6 +284,19 @@ export async function maybeSubmitReview(args: {
 			});
 		} catch (patchErr) {
 			console.error("failed to update PR description", patchErr);
+		}
+
+		try {
+			await createCheckRun(
+				octokit,
+				owner,
+				repo,
+				headSha,
+				review,
+				config.reviewCommentPrefix,
+			);
+		} catch (checkErr) {
+			console.error("failed to create check run", checkErr);
 		}
 
 		try {
