@@ -1,10 +1,10 @@
 import type { App } from "octokit";
 import { buildAuditUserMessage } from "./prompt.js";
 import {
-	AGENT_SKILLS,
 	type ModelReview,
 	mergeReviews,
 	runAgent,
+	TIER1_SKILLS,
 } from "./review.js";
 import { routeModel } from "./router.js";
 
@@ -165,7 +165,7 @@ export async function auditRepo({
 		});
 
 		const agentRuns = await Promise.allSettled(
-			AGENT_SKILLS.map((skill) =>
+			TIER1_SKILLS.map((skill) =>
 				runAgent(skill, userMessage, selection, extraInstructions),
 			),
 		);

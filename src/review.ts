@@ -107,9 +107,6 @@ export const TIER1_SKILLS: readonly string[] = [
 	"code-review-and-quality.md",
 ];
 
-/** @deprecated Use TIER1_SKILLS. Kept for backward-compat with audit.ts. */
-export const AGENT_SKILLS = TIER1_SKILLS;
-
 export async function runAgent(
 	skillPath: string,
 	userMessage: string,
@@ -470,7 +467,10 @@ export async function buildReview(
 		),
 	});
 
-	const reviewComments = buildReviewComments(files, modelReview.inline_comments);
+	const reviewComments = buildReviewComments(
+		files,
+		modelReview.inline_comments,
+	);
 
 	console.log("inline comments after validation", {
 		submitted: reviewComments.length,
