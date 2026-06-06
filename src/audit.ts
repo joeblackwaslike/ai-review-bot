@@ -231,10 +231,6 @@ function formatAuditIssue({
 		`**Repository:** ${owner}/${repo} &nbsp; **Ref:** ${ref} &nbsp; **Date:** ${date}`,
 	];
 
-	if (merged.summary) {
-		lines.push("", "### Summary", "", merged.summary);
-	}
-
 	if (merged.general_findings.length > 0) {
 		lines.push("", "### Findings");
 		const emoji: Record<string, string> = {

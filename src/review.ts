@@ -77,7 +77,6 @@ interface TokenUsage {
 }
 
 const ModelReviewSchema = z.object({
-	summary: z.string(),
 	event: z.enum(["COMMENT", "REQUEST_CHANGES"]),
 	general_findings: z.array(
 		z.object({
@@ -96,6 +95,10 @@ const ModelReviewSchema = z.object({
 			suggestion: z.string().nullable(),
 		}),
 	),
+});
+
+const SummarySchema = z.object({
+	summary: z.string(),
 });
 
 export type ModelReview = z.infer<typeof ModelReviewSchema>;
@@ -155,16 +158,6 @@ export function mergeReviews(agentResults: ModelReview[]): ModelReview {
 		? "REQUEST_CHANGES"
 		: "COMMENT";
 
-	const summaries = agentResults
-		.map((r) => r.summary.trim())
-		.filter(
-			(s) =>
-				s.length > 0 &&
-				!s.toLowerCase().startsWith("no issues") &&
-				!s.toLowerCase().startsWith("no material"),
-		);
-	const summary = summaries.length > 0 ? summaries.join("\n\n") : "";
-
 	const seenTitles = new Set<string>();
 	const general_findings = agentResults
 		.flatMap((r) => r.general_findings)
@@ -191,10 +184,80 @@ export function mergeReviews(agentResults: ModelReview[]): ModelReview {
 	}
 
 	return {
-		summary,
 		event,
 		general_findings,
 		inline_comments: Array.from(commentMap.values()).map((v) => v.comment),
+	};
+}
+
+export async function generateSummary(
+	merged: ModelReview,
+	selection: ModelSelection,
+	context: {
+		title: string;
+		body: string | null;
+		additions: number;
+		deletions: number;
+		changedFiles: number;
+	},
+	priorOwnReview: string | null,
+): Promise<{ summary: string; usage: TokenUsage }> {
+	const findingsList = merged.general_findings
+		.map((f) => `- [${f.severity}] ${f.title}: ${f.body}`)
+		.join("\n");
+	const inlineList = merged.inline_comments
+		.map((c) => `- ${c.path}:${c.line} — ${c.title}`)
+		.join("\n");
+
+	const priorSection = priorOwnReview
+		? [
+				"",
+				"This is a re-review after new commits were pushed. Here is the previous review summary:",
+				priorOwnReview,
+				"",
+				"Focus your summary on what changed since the last review. Be brief — do not restate the full PR description.",
+			].join("\n")
+		: "";
+
+	const prompt = [
+		`PR: ${context.title}`,
+		`Description: ${context.body ?? "[none]"}`,
+		`Stats: +${context.additions} -${context.deletions}, ${context.changedFiles} files`,
+		"",
+		`General findings (${merged.general_findings.length}):`,
+		findingsList || "(none)",
+		"",
+		`Inline comments (${merged.inline_comments.length}):`,
+		inlineList || "(none)",
+		priorSection,
+	].join("\n");
+
+	const system = [
+		"You are a senior code reviewer writing a concise review summary for a GitHub pull request.",
+		"Synthesize the findings into 1–3 sentences. Highlight the most important issues.",
+		"Do not list every finding — the findings table and inline comments already do that.",
+		"If there are no findings, say so briefly.",
+		priorOwnReview
+			? "This is a follow-up review. Summarize only what is new or changed since the last review. Be brief."
+			: "",
+	]
+		.filter(Boolean)
+		.join("\n");
+
+	const { object, usage } = await generateObject({
+		model: createAIModel(selection),
+		schema: SummarySchema,
+		maxOutputTokens: 256,
+		system,
+		messages: [{ role: "user", content: prompt }],
+	});
+
+	return {
+		summary: object.summary,
+		usage: {
+			promptTokens: usage.inputTokens ?? 0,
+			completionTokens: usage.outputTokens ?? 0,
+		},
 	};
 }
 
@@ -328,6 +391,56 @@ export function buildReviewComments(
 	});
 }
 
+interface CheckRun {
+	name: string;
+	status: string;
+	conclusion: string | null;
+}
+
+async function fetchOutstandingChecks(
+	octokit: OctokitLike,
+	owner: string,
+	repo: string,
+	headSha: string,
+	ownPrefix: string,
+): Promise<string[]> {
+	try {
+		const checkRuns = await octokit.request<{ check_runs: CheckRun[] }>(
+			"GET /repos/{owner}/{repo}/commits/{ref}/check-runs",
+			{ owner, repo, ref: headSha },
+		);
+		return checkRuns.data.check_runs
+			.filter(
+				(run) =>
+					!run.name.toLowerCase().includes(ownPrefix.toLowerCase()) &&
+					(run.status !== "completed" || run.conclusion === "failure"),
+			)
+			.map((run) =>
+				run.status !== "completed"
+					? `${run.name} (${run.status})`
+					: `${run.name} (failed)`,
+			);
+	} catch {
+		return [];
+	}
+}
+
+function buildApprovalMessage(
+	isReReview: boolean,
+	outstandingChecks: string[],
+): string {
+	const resolution = isReReview
+		? "All issues from the previous review have been resolved."
+		: "No issues found.";
+
+	const checksQualifier =
+		outstandingChecks.length > 0
+			? ` Note: ${outstandingChecks.length} CI check(s) still outstanding: ${outstandingChecks.join(", ")}.`
+			: "";
+
+	return `✅ ${resolution} PR approved for merge.${checksQualifier}`;
+}
+
 export async function buildReview(
 	context: ReviewContext,
 ): Promise<ReviewDecision | null> {
@@ -375,6 +488,19 @@ export async function buildReview(
 			return true;
 		})
 		.map((review) => review.body as string);
+
+	const priorOwnReview =
+		existingReviews
+			.filter((review) => {
+				const body = review.body ?? "";
+				return (
+					body.includes(`### ${context.commentPrefix}`) &&
+					body.includes("Reviewed commit: `") &&
+					!body.includes(reviewMarker)
+				);
+			})
+			.map((review) => review.body as string)
+			.at(-1) ?? null;
 
 	const files = await context.octokit.paginate<PullFile>(
 		"GET /repos/{owner}/{repo}/pulls/{pull_number}/files",
@@ -493,6 +619,33 @@ export async function buildReview(
 		dropped: modelReview.inline_comments.length - reviewComments.length,
 	});
 
+	// Upgrade to APPROVE when all agents found nothing to flag
+	const finalEvent: ReviewDecision["event"] =
+		modelReview.event === "COMMENT" &&
+		modelReview.general_findings.length === 0 &&
+		reviewComments.length === 0
+			? "APPROVE"
+			: modelReview.event;
+
+	let summary = "";
+	if (finalEvent !== "APPROVE") {
+		const summaryResult = await generateSummary(
+			modelReview,
+			selection,
+			{
+				title: context.title,
+				body: context.body,
+				additions: context.additions,
+				deletions: context.deletions,
+				changedFiles: context.changedFiles,
+			},
+			priorOwnReview,
+		);
+		summary = summaryResult.summary;
+		totalPromptTokens += summaryResult.usage.promptTokens;
+		totalCompletionTokens += summaryResult.usage.completionTokens;
+	}
+
 	const cost = computeCost(
 		{
 			promptTokens: totalPromptTokens,
@@ -501,13 +654,20 @@ export async function buildReview(
 		selection.model,
 	);
 
-	// Upgrade to APPROVE when all agents found nothing to flag
-	const finalEvent: ReviewDecision["event"] =
-		modelReview.event === "COMMENT" &&
-		modelReview.general_findings.length === 0 &&
-		reviewComments.length === 0
-			? "APPROVE"
-			: modelReview.event;
+	let approvalMessage = "";
+	if (finalEvent === "APPROVE") {
+		const outstandingChecks = await fetchOutstandingChecks(
+			context.octokit,
+			context.owner,
+			context.repo,
+			context.headSha,
+			context.commentPrefix,
+		);
+		approvalMessage = buildApprovalMessage(
+			priorOwnReview !== null,
+			outstandingChecks,
+		);
+	}
 
 	const findingsBlock = formatFindings(modelReview.general_findings);
 	const inlineSummary =
@@ -532,7 +692,7 @@ export async function buildReview(
 	const body = [
 		`### ${context.commentPrefix}`,
 		"",
-		finalEvent === "APPROVE" ? "✅ No issues found." : modelReview.summary,
+		finalEvent === "APPROVE" ? approvalMessage : summary,
 		...tier2Notice,
 		"",
 		...(finalEvent === "APPROVE" ? [] : [inlineSummary]),

@@ -90,7 +90,6 @@ export function buildInlineComment(
 // ---------------------------------------------------------------------------
 
 export interface ModelReviewFixture {
-	summary: string;
 	event: "COMMENT" | "REQUEST_CHANGES";
 	general_findings: Array<{
 		title: string;
@@ -104,7 +103,6 @@ export function buildModelReview(
 	overrides?: Partial<ModelReviewFixture>,
 ): ModelReviewFixture {
 	return {
-		summary: "No issues found.",
 		event: "COMMENT",
 		general_findings: [],
 		inline_comments: [],

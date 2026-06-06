@@ -196,11 +196,20 @@ describe("buildReviewComments", () => {
 function buildOctokit(overrides?: {
 	existingReviews?: Array<{ body: string }>;
 	files?: Array<{ filename: string; status: string; patch?: string }>;
+	checkRuns?: Array<{
+		name: string;
+		status: string;
+		conclusion: string | null;
+	}>;
 }) {
+	const requestMock = vi.fn().mockImplementation((route: string) => {
+		if (route.includes("/check-runs")) {
+			return { data: { check_runs: overrides?.checkRuns ?? [] } };
+		}
+		return reviewsResponse(overrides?.existingReviews);
+	});
 	return {
-		request: vi
-			.fn()
-			.mockResolvedValue(reviewsResponse(overrides?.existingReviews)),
+		request: requestMock,
 		paginate: vi
 			.fn()
 			.mockResolvedValue(
@@ -234,35 +243,43 @@ describe("buildReview", () => {
 	};
 
 	it("converts model output into a review with validated inline comments", async () => {
-		mockGenerateObject.mockResolvedValue(
-			buildGenerateObjectResponse(
-				buildModelReview({
-					summary: "Two issues found.",
-					event: "REQUEST_CHANGES",
-					general_findings: [
-						{
-							title: "Missing test coverage",
-							body: "This behavior change should be covered by a regression test.",
-							severity: "high",
-						},
-					],
-					inline_comments: [
-						buildInlineComment({
-							title: "Bad anchor",
-							body: "Should be dropped.",
-							path: "src/review.ts",
-							line: 99,
-						}),
-						buildInlineComment({
-							title: "Valid anchor",
-							body: "This is correctly anchored.",
-							path: "src/review.ts",
-							line: 2,
-						}),
-					],
-				}),
-			),
+		const agentResponse = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "REQUEST_CHANGES",
+				general_findings: [
+					{
+						title: "Missing test coverage",
+						body: "This behavior change should be covered by a regression test.",
+						severity: "high",
+					},
+				],
+				inline_comments: [
+					buildInlineComment({
+						title: "Bad anchor",
+						body: "Should be dropped.",
+						path: "src/review.ts",
+						line: 99,
+					}),
+					buildInlineComment({
+						title: "Valid anchor",
+						body: "This is correctly anchored.",
+						path: "src/review.ts",
+						line: 2,
+					}),
+				],
+			}),
 		);
+		const summaryResponse = {
+			object: { summary: "Two issues found." },
+			usage: { inputTokens: 50, outputTokens: 20 },
+		};
+		mockGenerateObject
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(summaryResponse);
 
 		const review = await buildReview({
 			octokit: buildOctokit(),
@@ -278,36 +295,43 @@ describe("buildReview", () => {
 		});
 		expect(review?.body).toContain("Missing test coverage");
 		expect(review?.body).toContain("Inline comments: 1");
+		expect(review?.body).toContain("Two issues found.");
 	});
 
 	// Regression: when ALL inline comments are dropped (e.g. model returned
 	// start_line: 0 instead of null), the review should still post body-only.
 	it("regression: posts body-only when all inline comments are filtered out", async () => {
-		mockGenerateObject.mockResolvedValue(
-			buildGenerateObjectResponse(
-				buildModelReview({
-					summary: "Found issues.",
-					event: "REQUEST_CHANGES",
-					general_findings: [
-						{ title: "Security risk", body: "Details here.", severity: "high" },
-					],
-					inline_comments: [
-						// start_line: 0 — the specific model bug, should be dropped
-						buildInlineComment({
-							path: "src/review.ts",
-							line: 2,
-							start_line: 0,
-						}),
-						// Wrong path — should be dropped
-						buildInlineComment({
-							path: "does/not/exist.ts",
-							line: 2,
-							start_line: null,
-						}),
-					],
-				}),
-			),
+		const agentResponse = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "REQUEST_CHANGES",
+				general_findings: [
+					{ title: "Security risk", body: "Details here.", severity: "high" },
+				],
+				inline_comments: [
+					buildInlineComment({
+						path: "src/review.ts",
+						line: 2,
+						start_line: 0,
+					}),
+					buildInlineComment({
+						path: "does/not/exist.ts",
+						line: 2,
+						start_line: null,
+					}),
+				],
+			}),
 		);
+		const summaryResponse = {
+			object: { summary: "Found issues." },
+			usage: { inputTokens: 50, outputTokens: 20 },
+		};
+		mockGenerateObject
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(summaryResponse);
 
 		const review = await buildReview({
 			octokit: buildOctokit(),
@@ -345,7 +369,7 @@ describe("buildReview", () => {
 		const headSha = "1234567890abcdef";
 
 		mockGenerateObject.mockResolvedValue(
-			buildGenerateObjectResponse(buildModelReview({ summary: "Re-review." })),
+			buildGenerateObjectResponse(buildModelReview()),
 		);
 
 		const octokit = buildOctokit({
@@ -368,16 +392,25 @@ describe("buildReview", () => {
 	});
 
 	it("renders severity emoji table for general findings", async () => {
-		mockGenerateObject.mockResolvedValue(
-			buildGenerateObjectResponse(
-				buildModelReview({
-					general_findings: [
-						{ title: "Critical bug", body: "Details.", severity: "high" },
-						{ title: "Minor style nit", body: "Details.", severity: "low" },
-					],
-				}),
-			),
+		const agentResponse = buildGenerateObjectResponse(
+			buildModelReview({
+				general_findings: [
+					{ title: "Critical bug", body: "Details.", severity: "high" },
+					{ title: "Minor style nit", body: "Details.", severity: "low" },
+				],
+			}),
 		);
+		const summaryResponse = {
+			object: { summary: "Found two issues." },
+			usage: { inputTokens: 50, outputTokens: 20 },
+		};
+		mockGenerateObject
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(summaryResponse);
 
 		const review = await buildReview({
 			octokit: buildOctokit(),
@@ -394,7 +427,6 @@ describe("buildReview", () => {
 			buildGenerateObjectResponse(
 				buildModelReview({
 					event: "COMMENT",
-					summary: "No issues found.",
 					general_findings: [],
 					inline_comments: [],
 				}),
@@ -407,20 +439,74 @@ describe("buildReview", () => {
 		});
 
 		expect(review?.event).toBe("APPROVE");
-		expect(review?.body).toContain("✅ No issues found.");
+		expect(review?.body).toContain("No issues found.");
+		expect(review?.body).toContain("PR approved for merge.");
+	});
+
+	it("APPROVE on re-review acknowledges resolved issues", async () => {
+		const headSha = "newcommit12345678";
+		const priorBody = `### ai-review-bot\n\nFound bugs.\n\nReviewed commit: \`oldsha1234567\``;
+
+		mockGenerateObject.mockResolvedValue(
+			buildGenerateObjectResponse(buildModelReview()),
+		);
+
+		const review = await buildReview({
+			octokit: buildOctokit({ existingReviews: [{ body: priorBody }] }),
+			...baseContext,
+			headSha,
+		});
+
+		expect(review?.event).toBe("APPROVE");
+		expect(review?.body).toContain(
+			"All issues from the previous review have been resolved.",
+		);
+		expect(review?.body).toContain("PR approved for merge.");
+	});
+
+	it("APPROVE mentions outstanding CI checks", async () => {
+		mockGenerateObject.mockResolvedValue(
+			buildGenerateObjectResponse(buildModelReview()),
+		);
+
+		const review = await buildReview({
+			octokit: buildOctokit({
+				checkRuns: [
+					{ name: "tests", status: "completed", conclusion: "success" },
+					{ name: "lint", status: "in_progress", conclusion: null },
+					{ name: "deploy", status: "completed", conclusion: "failure" },
+				],
+			}),
+			...baseContext,
+		});
+
+		expect(review?.event).toBe("APPROVE");
+		expect(review?.body).toContain("PR approved for merge.");
+		expect(review?.body).toContain("2 CI check(s) still outstanding");
+		expect(review?.body).toContain("lint (in_progress)");
+		expect(review?.body).toContain("deploy (failed)");
 	});
 
 	it("does not APPROVE when there are general findings", async () => {
-		mockGenerateObject.mockResolvedValue(
-			buildGenerateObjectResponse(
-				buildModelReview({
-					event: "COMMENT",
-					general_findings: [
-						{ title: "Minor nit", body: "Fix this.", severity: "low" },
-					],
-				}),
-			),
+		const agentResponse = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [
+					{ title: "Minor nit", body: "Fix this.", severity: "low" },
+				],
+			}),
 		);
+		const summaryResponse = {
+			object: { summary: "One minor nit." },
+			usage: { inputTokens: 50, outputTokens: 20 },
+		};
+		mockGenerateObject
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(summaryResponse);
 
 		const review = await buildReview({
 			octokit: buildOctokit(),
