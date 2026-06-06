@@ -68,6 +68,7 @@ export interface InlineCommentFixture {
 	path: string;
 	line: number;
 	start_line: number | null;
+	suggestion: string | null;
 }
 
 export function buildInlineComment(
@@ -79,6 +80,7 @@ export function buildInlineComment(
 		path: "src/file.ts",
 		line: 2,
 		start_line: null,
+		suggestion: null,
 		...overrides,
 	};
 }

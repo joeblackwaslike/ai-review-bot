@@ -93,7 +93,7 @@ const ModelReviewSchema = z.object({
 			path: z.string(),
 			line: z.number().int(),
 			start_line: z.number().int().nullable(),
-			suggestion: z.string().nullable().optional(),
+			suggestion: z.string().nullable(),
 		}),
 	),
 });
