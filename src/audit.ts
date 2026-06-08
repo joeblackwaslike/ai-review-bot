@@ -6,7 +6,7 @@ import {
 	runAgent,
 	TIER1_SKILLS,
 } from "./review.js";
-import { routeModel } from "./router.js";
+import { type ModelSelection, routeModel } from "./router.js";
 import { type AuditFile, hasCodeExtension } from "./sources.js";
 
 export interface AuditParams {
@@ -17,6 +17,59 @@ export interface AuditParams {
 	extraInstructions?: string;
 	dryRun?: boolean;
 	provider?: "anthropic" | "openai";
+}
+
+const BATCH_BYTES = 150 * 1024;
+
+function batchFiles(files: AuditFile[]): AuditFile[][] {
+	const batches: AuditFile[][] = [];
+	let current: AuditFile[] = [];
+	let bytes = 0;
+	for (const f of files) {
+		if (bytes + f.content.length > BATCH_BYTES && current.length > 0) {
+			batches.push(current);
+			current = [f];
+			bytes = f.content.length;
+		} else {
+			current.push(f);
+			bytes += f.content.length;
+		}
+	}
+	if (current.length > 0) batches.push(current);
+	return batches;
+}
+
+export async function runAuditPass(opts: {
+	files: AuditFile[];
+	selection: ModelSelection;
+	extraInstructions: string;
+	meta: { owner: string; repo: string; ref: string };
+}): Promise<ModelReview> {
+	const { files, selection, extraInstructions, meta } = opts;
+	const reviews: ModelReview[] = [];
+
+	for (const batch of batchFiles(files)) {
+		const userMessage = buildAuditUserMessage({
+			owner: meta.owner,
+			repo: meta.repo,
+			ref: meta.ref,
+			extraInstructions,
+			files: batch,
+		});
+		const settled = await Promise.allSettled(
+			TIER1_SKILLS.map((skill) =>
+				runAgent(skill, userMessage, selection, extraInstructions),
+			),
+		);
+		for (const r of settled) {
+			if (r.status === "fulfilled" && r.value) reviews.push(r.value.review);
+		}
+	}
+
+	if (reviews.length === 0) {
+		return { event: "COMMENT", general_findings: [], inline_comments: [] };
+	}
+	return mergeReviews(reviews);
 }
 
 export async function auditRepo({
@@ -97,70 +150,27 @@ export async function auditRepo({
 
 	console.log(`Fetched ${files.length} files`);
 
-	// Chunk files into content batches of ≤150 KB each
-	const BATCH_BYTES = 150 * 1024;
-	const batches: (typeof files)[] = [];
-	let currentBatch: typeof files = [];
-	let currentBytes = 0;
-
-	for (const f of files) {
-		if (
-			currentBytes + f.content.length > BATCH_BYTES &&
-			currentBatch.length > 0
-		) {
-			batches.push(currentBatch);
-			currentBatch = [f];
-			currentBytes = f.content.length;
-		} else {
-			currentBatch.push(f);
-			currentBytes += f.content.length;
-		}
-	}
-	if (currentBatch.length > 0) batches.push(currentBatch);
-
-	console.log(`Running agents over ${batches.length} batch(es)...`);
-
 	const selection = routeModel(
 		{ additions: 0, deletions: 0, filePaths: blobPaths, labels: [] },
 		provider,
 	);
 
-	// Run all 5 agents on each batch, collect ModelReview results
-	const allReviews: ModelReview[] = [];
+	console.log(`Running agents over ${files.length} file(s)...`);
 
-	for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
-		const batch = batches[batchIdx];
-		console.log(
-			`  Batch ${batchIdx + 1}/${batches.length}: ${batch.length} files`,
-		);
-
-		const userMessage = buildAuditUserMessage({
-			owner,
-			repo,
-			ref,
-			extraInstructions,
-			files: batch,
-		});
-
-		const agentRuns = await Promise.allSettled(
-			TIER1_SKILLS.map((skill) =>
-				runAgent(skill, userMessage, selection, extraInstructions),
-			),
-		);
-
-		for (const r of agentRuns) {
-			if (r.status === "fulfilled" && r.value) {
-				allReviews.push(r.value.review);
-			}
-		}
-	}
-
-	if (allReviews.length === 0) {
-		console.log("No findings — all agents returned null.");
+	const merged = await runAuditPass({
+		files,
+		selection,
+		extraInstructions,
+		meta: { owner, repo, ref },
+	});
+	if (
+		merged.general_findings.length === 0 &&
+		merged.inline_comments.length === 0
+	) {
+		console.log("No findings.");
 		return;
 	}
 
-	const merged = mergeReviews(allReviews);
 	const date = new Date().toISOString().slice(0, 10);
 	const body = formatAuditIssue({
 		merged,
