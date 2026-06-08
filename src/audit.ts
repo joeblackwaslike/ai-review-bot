@@ -1,3 +1,5 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
 import type { App } from "octokit";
 import { buildAuditUserMessage } from "./prompt.js";
 import {
@@ -263,4 +265,39 @@ function formatAuditIssue({
 	);
 
 	return lines.join("\n");
+}
+
+export interface AuditMeta {
+	owner: string;
+	repo: string;
+	ref: string;
+	provider: "anthropic" | "openai";
+	model: string;
+	fileCount: number;
+	pr?: number;
+}
+
+export function formatAuditJson(opts: {
+	review: ModelReview;
+	meta: AuditMeta;
+}): string {
+	return JSON.stringify({ meta: opts.meta, review: opts.review }, null, 2);
+}
+
+export async function writeArtifacts(opts: {
+	outDir: string;
+	perProvider: Array<{ review: ModelReview; meta: AuditMeta }>;
+	markdown: string;
+}): Promise<string[]> {
+	await mkdir(opts.outDir, { recursive: true });
+	const written: string[] = [];
+	for (const entry of opts.perProvider) {
+		const file = path.join(opts.outDir, `audit-${entry.meta.provider}.json`);
+		await writeFile(file, formatAuditJson(entry), "utf-8");
+		written.push(file);
+	}
+	const md = path.join(opts.outDir, "audit.md");
+	await writeFile(md, opts.markdown, "utf-8");
+	written.push(md);
+	return written;
 }

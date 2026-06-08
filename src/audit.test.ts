@@ -81,3 +81,39 @@ describe("runAuditPass", () => {
 		expect(runAgent).toHaveBeenCalledTimes(TIER1_SKILLS.length * 2);
 	});
 });
+
+describe("formatAuditJson", () => {
+	it("emits untruncated {meta, review} with full inline bodies", async () => {
+		const { formatAuditJson } = await import("./audit.js");
+		const longBody = "x".repeat(500);
+		const review = buildModelReview({
+			event: "REQUEST_CHANGES",
+			general_findings: [],
+			inline_comments: [
+				{
+					title: "T",
+					body: longBody,
+					path: "a.ts",
+					line: 3,
+					start_line: null,
+					suggestion: null,
+				},
+			],
+		});
+		const json = JSON.parse(
+			formatAuditJson({
+				review,
+				meta: {
+					owner: "o",
+					repo: "r",
+					ref: "local",
+					provider: "anthropic",
+					model: "m",
+					fileCount: 1,
+				},
+			}),
+		);
+		expect(json.meta.provider).toBe("anthropic");
+		expect(json.review.inline_comments[0].body).toHaveLength(500); // untruncated
+	});
+});
