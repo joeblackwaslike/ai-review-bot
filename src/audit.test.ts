@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./review.js", async (orig) => {
 	const actual = await orig<typeof import("./review.js")>();
@@ -21,6 +21,10 @@ const selection: ModelSelection = {
 };
 
 describe("runAuditPass", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
 	it("runs every Tier-1 skill and merges into one ModelReview", async () => {
 		(runAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
 			review: buildModelReview({
@@ -52,5 +56,28 @@ describe("runAuditPass", () => {
 		});
 		expect(merged.general_findings).toHaveLength(0);
 		expect(merged.inline_comments).toHaveLength(0);
+	});
+
+	it("splits files across batches when content exceeds BATCH_BYTES", async () => {
+		(runAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
+			review: buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+			usage: { promptTokens: 1, completionTokens: 1 },
+		});
+		const largeFiles = [
+			{ path: "huge1.ts", content: "x".repeat(100 * 1024) },
+			{ path: "huge2.ts", content: "y".repeat(100 * 1024) },
+		];
+		await runAuditPass({
+			files: largeFiles,
+			selection,
+			extraInstructions: "",
+			meta: { owner: "o", repo: "r", ref: "local" },
+		});
+		// 2 batches × TIER1_SKILLS agents each
+		expect(runAgent).toHaveBeenCalledTimes(TIER1_SKILLS.length * 2);
 	});
 });

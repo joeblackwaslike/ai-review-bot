@@ -48,7 +48,13 @@ export async function runAuditPass(opts: {
 	const { files, selection, extraInstructions, meta } = opts;
 	const reviews: ModelReview[] = [];
 
-	for (const batch of batchFiles(files)) {
+	const batches = batchFiles(files);
+
+	for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
+		const batch = batches[batchIdx];
+		console.log(
+			`  Batch ${batchIdx + 1}/${batches.length}: ${batch.length} files`,
+		);
 		const userMessage = buildAuditUserMessage({
 			owner: meta.owner,
 			repo: meta.repo,
