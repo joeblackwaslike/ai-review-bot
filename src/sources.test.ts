@@ -23,7 +23,7 @@ describe("collectFilesFromLocal", () => {
 			if (key.startsWith("diff --name-only"))
 				return "src/a.ts\nsrc/b.ts\ndocs/x.md";
 			if (key.startsWith("status --porcelain"))
-				return " M src/b.ts\n?? src/c.ts\n?? notes.txt";
+				return " M src/b.ts\n?? src/c.ts\n?? notes.txt\nR  src/old.ts -> src/new.ts";
 			return "";
 		};
 		const files = await collectFilesFromLocal({
@@ -36,6 +36,7 @@ describe("collectFilesFromLocal", () => {
 			"src/a.ts",
 			"src/b.ts",
 			"src/c.ts",
+			"src/new.ts",
 		]);
 		expect(files[0].content).toContain("content of");
 	});

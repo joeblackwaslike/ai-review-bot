@@ -57,7 +57,9 @@ export function getOpenAIAppConfig(): AppConfig {
 		reviewEnabled: process.env.REVIEW_ENABLED !== "false",
 		reviewDelayMs: Number(process.env.REVIEW_DELAY_SECONDS ?? "450") * 1000,
 		reviewCommentPrefix:
-			process.env.REVIEW_COMMENT_PREFIX ?? "codex-review-bot",
+			process.env.OPENAI_REVIEW_COMMENT_PREFIX ??
+			process.env.REVIEW_COMMENT_PREFIX ??
+			"codex-review-bot",
 		reviewCommand: process.env.REVIEW_COMMAND ?? "/ai-review",
 		provider: "openai",
 	};

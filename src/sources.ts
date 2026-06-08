@@ -66,10 +66,15 @@ function changedPaths(runGit: GitRunner): string[] {
 		.split("\n")
 		.map((l) => l.trim())
 		.filter(Boolean);
-	// porcelain lines look like " M path", "?? path", "A  path"
+	// porcelain lines look like " M path", "?? path", "A  path",
+	// or rename entries "R  old -> new" — take the new path after " -> "
 	const working = runGit(["status", "--porcelain"])
 		.split("\n")
-		.map((l) => l.slice(3).trim())
+		.map((l) => {
+			const rest = l.slice(3).trim();
+			const arrow = rest.indexOf(" -> ");
+			return arrow === -1 ? rest : rest.slice(arrow + 4).trim();
+		})
 		.filter(Boolean);
 	return [...committed, ...working];
 }

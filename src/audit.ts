@@ -406,6 +406,13 @@ export async function runLocalAudit(opts: {
 	const ctx = await opts.resolvePr();
 	const ORPHAN = "ai-review/empty";
 	const head = `ai-review/audit-${Date.now()}`;
+
+	let number: number;
+	let url: string;
+	let headSha: string;
+	// Only the branch/PR-creation calls are guarded by the 403 → issue fallback.
+	// A 403 here means contents:write was not granted, so no PR was created.
+	// Posting errors (after the PR exists) must propagate normally.
 	try {
 		await ensureOrphanBase(ctx.octokit, ctx.owner, ctx.repo, ORPHAN);
 		await createHeadBranch({
@@ -416,7 +423,7 @@ export async function runLocalAudit(opts: {
 			baseBranch: ctx.baseBranch,
 			files,
 		});
-		const { number, url } = await openDraftPr({
+		const opened = await openDraftPr({
 			octokit: ctx.octokit,
 			owner: ctx.owner,
 			repo: ctx.repo,
@@ -424,36 +431,9 @@ export async function runLocalAudit(opts: {
 			base: ORPHAN,
 			title: `AI audit — ${new Date().toISOString().slice(0, 10)}`,
 		});
-		const headSha = await headShaFor(ctx.octokit, ctx.owner, ctx.repo, head);
-		const pullFiles = files.map((f) => ({
-			filename: f.path,
-			status: "added",
-			patch: `@@ -0,0 +1,${f.content.split("\n").length} @@\n${f.content
-				.split("\n")
-				.map((l) => `+${l}`)
-				.join("\n")}`,
-		}));
-		for (const target of ctx.postAs) {
-			const review = providers.find(
-				(p) => p.provider === target.provider,
-			)?.review;
-			if (review) {
-				await postProviderReview({
-					octokit: target.octokit ?? ctx.octokit,
-					owner: ctx.owner,
-					repo: ctx.repo,
-					pullNumber: number,
-					headSha,
-					files: pullFiles,
-					review,
-					prefix: target.prefix,
-				});
-			}
-		}
-		// persist meta.pr into the JSON artifacts
-		for (const entry of perProvider) entry.meta.pr = number;
-		await writeArtifacts({ outDir: opts.outDir, perProvider, markdown });
-		return { providers, artifacts, pr: number, url };
+		number = opened.number;
+		url = opened.url;
+		headSha = await headShaFor(ctx.octokit, ctx.owner, ctx.repo, head);
 	} catch (err) {
 		if ((err as { status?: number }).status === 403) {
 			console.warn(
@@ -473,6 +453,36 @@ export async function runLocalAudit(opts: {
 		}
 		throw err;
 	}
+
+	const pullFiles = files.map((f) => ({
+		filename: f.path,
+		status: "added",
+		patch: `@@ -0,0 +1,${f.content.split("\n").length} @@\n${f.content
+			.split("\n")
+			.map((l) => `+${l}`)
+			.join("\n")}`,
+	}));
+	for (const target of ctx.postAs) {
+		const review = providers.find(
+			(p) => p.provider === target.provider,
+		)?.review;
+		if (review) {
+			await postProviderReview({
+				octokit: target.octokit ?? ctx.octokit,
+				owner: ctx.owner,
+				repo: ctx.repo,
+				pullNumber: number,
+				headSha,
+				files: pullFiles,
+				review,
+				prefix: target.prefix,
+			});
+		}
+	}
+	// persist meta.pr into the JSON artifacts
+	for (const entry of perProvider) entry.meta.pr = number;
+	await writeArtifacts({ outDir: opts.outDir, perProvider, markdown });
+	return { providers, artifacts, pr: number, url };
 }
 
 async function headShaFor(
