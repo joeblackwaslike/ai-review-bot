@@ -37,6 +37,7 @@ function createApp(): App {
 function originSlug(): { owner: string; repo: string } {
 	const url = execFileSync("git", ["remote", "get-url", "origin"], {
 		encoding: "utf-8",
+		timeout: 5000,
 	}).trim();
 	const m = /github\.com[:/]([^/]+)\/(.+?)(?:\.git)?$/.exec(url);
 	if (!m) fatal(`Cannot parse owner/repo from origin: ${url}`);
@@ -121,6 +122,17 @@ async function cmdAudit(args: string[]): Promise<void> {
 		else if (args[i].startsWith("--")) fatal(`Unknown flag: ${args[i]}`);
 	}
 
+	// Validate both apps' creds upfront so a non-dry-run doesn't burn two
+	// expensive provider passes only to fail at PR-post time.
+	if (!dryRun) {
+		try {
+			getConfig();
+			getOpenAIAppConfig();
+		} catch (err) {
+			fatal((err as Error).message);
+		}
+	}
+
 	const result = await runLocalAudit({
 		cwd: process.cwd(),
 		mode,
@@ -155,6 +167,8 @@ async function cmdReady(args: string[]): Promise<void> {
 		repo,
 	);
 
+	// `ready` always acts under the Claude identity; the PR number is
+	// provider-agnostic, so reading the anthropic artifact is sufficient.
 	let pr = positional ? Number(positional) : undefined;
 	if (!pr) {
 		try {
@@ -162,8 +176,12 @@ async function cmdReady(args: string[]): Promise<void> {
 				await readFile(".ai-review/audit-anthropic.json", "utf-8"),
 			);
 			pr = meta?.meta?.pr;
-		} catch {
-			/* no recorded PR */
+		} catch (err) {
+			if (err instanceof SyntaxError)
+				fatal(
+					"audit file .ai-review/audit-anthropic.json is corrupt: could not parse JSON",
+				);
+			// otherwise the file is absent — fall through to the "no PR" fatal below
 		}
 	}
 	if (!pr)
