@@ -228,6 +228,12 @@ describe("runLocalAudit (PR path)", () => {
 		});
 		expect(result.pr).toBe(7);
 		expect(result.url).toBe("U7");
+
+		const auditPr = await import("./audit-pr.js");
+		expect(auditPr.ensureOrphanBase).toHaveBeenCalled();
+		expect(auditPr.createHeadBranch).toHaveBeenCalled();
+		expect(auditPr.openDraftPr).toHaveBeenCalled();
+		expect(auditPr.postProviderReview).toHaveBeenCalledTimes(2); // one per provider in postAs
 	});
 
 	it("falls back to artifacts only when branch creation 403s", async () => {
@@ -272,5 +278,48 @@ describe("runLocalAudit (PR path)", () => {
 			}),
 		});
 		expect(result.pr).toBeUndefined(); // degraded; artifacts still written
+	});
+
+	it("propagates non-403 errors instead of falling back", async () => {
+		const auditPr = await import("./audit-pr.js");
+		(
+			auditPr.createHeadBranch as ReturnType<typeof vi.fn>
+		).mockRejectedValueOnce(Object.assign(new Error("boom"), { status: 500 }));
+		const { collectFilesFromLocal } = await import("./sources.js");
+		(collectFilesFromLocal as ReturnType<typeof vi.fn>).mockResolvedValue([
+			{ path: "a.ts", content: "x" },
+		]);
+		(runAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
+			review: buildModelReview({
+				event: "REQUEST_CHANGES",
+				general_findings: [{ title: "F", body: "b", severity: "high" }],
+				inline_comments: [],
+			}),
+			usage: { promptTokens: 1, completionTokens: 1 },
+		});
+		const fs = await import("node:fs/promises");
+		(fs.writeFile as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+		(fs.mkdir as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+
+		const octokit = {
+			request: vi.fn(async () => ({ data: [] })),
+		};
+
+		const { runLocalAudit } = await import("./audit.js");
+		await expect(
+			runLocalAudit({
+				cwd: "/repo",
+				mode: "changed",
+				outDir: ".ai-review",
+				dryRun: false,
+				resolvePr: async () => ({
+					octokit: octokit as never,
+					owner: "o",
+					repo: "r",
+					baseBranch: "main",
+					postAs: [],
+				}),
+			}),
+		).rejects.toThrow();
 	});
 });
