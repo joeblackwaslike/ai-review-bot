@@ -27,6 +27,7 @@ No branch/PR/commit-creation code exists in `src/` today; the only GitHub writes
 - Deliver findings into a coding agent's context via a **Claude Code slash command** for immediate action.
 - Persist findings as a **real GitHub PR review with inline comments**, drivable by `/pr-loop` and the existing re-review webhook, serving humans/CI as well as the agent.
 - Land fixes on `main` cleanly, with bounded review cost for the rest of the PR's life.
+- **Reduce GitHub API/GraphQL load.** The remote audit makes one API call *per file* to fetch blob contents ([src/audit.ts:96-120](../../../src/audit.ts#L96-L120)); the local-tree path reads from disk and makes **zero**. This directly cuts the call volume that currently triggers rate-limiting and stalls `/pr-loop`.
 
 ## Non-goals
 
@@ -55,14 +56,20 @@ Each unit has one purpose, a defined interface, and is independently testable.
 | **File sources** | `src/sources.ts` *(new)* | `collectFilesFromLocal({cwd, mode, base})` — `changed` (default) = `git diff --name-only <merge-base main>` ∪ `git status --porcelain` (uncommitted); `full` = `git ls-files`. Filters via `hasCodeExtension`. Reads via `node:fs/promises`. Also houses `collectFilesFromGitHub()` extracted from today's `auditRepo`. Git invoked through a small injectable runner so tests stub output. | `git`, `hasCodeExtension` |
 | **Audit core** | `src/audit.ts` *(refactor)* | `runAuditPass({files, provider, extraInstructions})` → `TIER1_SKILLS` via `runAgent` → `mergeReviews` → one `ModelReview`. Orchestrator runs it for **both** providers. `auditRepo()` stays as the thin remote entry. | `runAgent`, `mergeReviews`, `routeModel`, `TIER1_SKILLS` |
 | **Artifact writer** | `src/audit.ts` | Writes `.ai-review/audit-<provider>.json` (untruncated `{meta, review}`) + combined `audit.md` (task-list + `path:line` anchors). | `node:fs/promises` |
-| **Review-PR machinery** | `src/audit-pr.ts` *(new)* | `ensureOrphanBase()`, `createHeadBranch()`, `openDraftPr()`, `postProviderReview()` (×2 identities), `retargetToMain()`. | Octokit (both App identities), `buildReviewComments` |
-| **Slash command** | `.claude/commands/ai-audit.md` *(new)* | Runs `ai-review audit --local --changed`, injects findings into context, opens the draft PR, hands off to `/pr-loop`. | the CLI |
+| **Review-PR machinery** | `src/audit-pr.ts` *(new)* | `ensureOrphanBase()`, `createHeadBranch()`, `openDraftPr()`, `postProviderReview()` (×2 identities). Retarget+ready is **not** here — it's two `gh` calls in the slash command. | Octokit (both App identities), `buildReviewComments` |
+| **Slash command** | `.claude/commands/ai-audit.md` *(new)* | Orchestrates the full flow: runs `ai-review audit --local --changed --pr`, injects findings into context, drives the first-pass fixes against the draft PR's inline comments, runs the two `gh` finalize calls (retarget→main + ready), then hands off to `/pr-loop`. | the CLI, `gh` |
 
-### CLI surface (light subcommands, backward-compatible)
+### Terminology
+
+- **Base branch** — the branch a PR proposes to merge *into*. Our audit PR opens with base = `ai-review/empty` (the orphan trick); finalizing changes it to `main`.
+- **Retarget** — change a PR's base branch (here: `ai-review/empty` → `main`). Recomputes the diff to just the fixes.
+- **Draft / mark ready** — a draft PR is "not ready"; most bots (ours included) skip drafts. "Mark ready" flips Draft → Ready for review, which wakes the reviewers.
+
+### CLI surface (single subcommand, backward-compatible)
 
 - `ai-review audit [OWNER/REPO] [--local] [--changed | --full] [--out <dir>] [--pr | --no-pr]` — runs the audit; `--pr` opens the draft review PR.
-- `ai-review finalize <pr#>` — retargets base→`main` and marks the PR ready (post-fix step).
-- Existing `ai-review OWNER/REPO` remote behavior is preserved.
+- Existing `ai-review OWNER/REPO` remote behavior is preserved (and is expected to be deprecated once `audit --local` proves out).
+- **No `finalize` subcommand.** The post-fix transition (retarget base→`main` + mark ready) is just two `gh` calls — `gh pr edit <n> --base main` and `gh pr ready <n>` — that don't need any of the tool's machinery (no App identity, no model calls). They live in the `/ai-audit` slash-command orchestration (see Data flow), keeping the CLI to one command. Manual GitHub-UI finalize (change base dropdown + "Ready for review") is the always-available fallback.
 - **Lazy auth:** a pure local audit (`--no-pr`) needs only `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`; GitHub App credentials are resolved only when the PR path (or its issue fallback) runs.
 
 There is no separate `--issue` flag — the `Code Audit Report` issue exists only as the automatic fallback when the PR path can't run (see Error handling).
@@ -93,10 +100,16 @@ The **head branch must contain every file referenced by either pass**, or diff-a
 7. openDraftPr(base=ai-review/empty, head=ai-review/audit-<ts>)
 8. postProviderReview(claude) as ai-review-bot
    postProviderReview(codex)  as codex-review-bot   (both vs full-file orphan diff)
-9. → /pr-loop: agent reads both reviews, commits fixes to head
-10. ai-review finalize <pr#>: retargetToMain() + mark ready
-11. → ecosystem (CodeRabbit + webhook apps) re-review the small fixes-only diff
+9. DRAFT PHASE: agent reads the inline comments (gh api .../comments) and applies
+   first-pass fixes on the head branch. (No webhook re-reviews fire — the PR is a
+   draft, so the apps skip it. The agent works off the initial inline comments.)
+10. FINALIZE (two gh calls, run by the /ai-audit slash command):
+      gh pr edit <n> --base main   &&   gh pr ready <n>
+11. → /pr-loop <n>: now a normal ready, main-based PR. Webhook apps + external bots
+    re-review the small fixes-only diff and drive to approval.
 ```
+
+**Ordering note:** finalize happens *before* `/pr-loop`'s loop, not after. While the PR is a draft against the orphan base, the webhook apps skip it, so no automated re-reviews occur — the agent consumes the *initial* inline comments during the draft phase. Finalize is the gate that turns the PR live, after which `/pr-loop`'s normal re-review polling fires on every push.
 
 ### Bot-storm & cost control
 
@@ -140,7 +153,7 @@ Vitest, colocated, reusing `src/testing.ts` fixtures; no real skill files mocked
 |---|---|
 | `src/sources.test.ts` *(new)* | `--changed` = `git diff` ∪ uncommitted; code-extension filtering; `--full` = `git ls-files`. Git stubbed via the injectable runner. |
 | `src/audit.test.ts` *(new — none today)* | Both-provider orchestration (two `ModelReview`s); one-provider-fails-still-posts-other; empty-findings-skips-PR; untruncated artifact JSON shape. Uses `buildModelReview` / `buildGenerateObjectResponse`. |
-| `src/audit-pr.test.ts` *(new)* | Orphan-base diff → all lines valid for `buildReviewComments`; two-identity review posting; `retargetToMain` produces fixes-only diff; **403-on-write → fallback to artifact + issue**. Octokit stubbed via existing `OctokitLike` shape. |
+| `src/audit-pr.test.ts` *(new)* | Orphan-base diff → all lines valid for `buildReviewComments`; two-identity review posting; **403-on-write → fallback to artifact + issue**. Octokit stubbed via existing `OctokitLike` shape. (Retarget+ready is exercised manually in Verification, not unit-tested — it's a `gh` call in the slash command.) |
 
 Existing `github-app.test.ts` already covers the `synchronize` re-review that fires post-finalize.
 
@@ -152,8 +165,8 @@ Existing `github-app.test.ts` already covers the `synchronize` re-review that fi
 
 1. **Refactor** `audit.ts`: extract `collectFilesFromGitHub()` + `runAuditPass()`; no behavior change.
 2. **Local source + artifacts:** `src/sources.ts`, `formatAuditJson()`, artifact writer; CLI `audit` subcommand with `--local/--changed/--full/--out`; lazy auth; add `.ai-review/` to `.gitignore`.
-3. **Review-PR machinery:** `src/audit-pr.ts` (orphan base, head branch, draft PR, two-identity reviews, retarget); `ai-review finalize` subcommand; the 403 → issue fallback.
-4. **Slash command:** `.claude/commands/ai-audit.md`; optional marketplace publish.
+3. **Review-PR machinery:** `src/audit-pr.ts` (orphan base, head branch, draft PR, two-identity reviews); `--pr` flag on the `audit` subcommand; the 403 → issue fallback.
+4. **Slash command:** `.claude/commands/ai-audit.md` — orchestrates audit → first-pass fix → finalize (`gh pr edit --base main` + `gh pr ready`) → `/pr-loop`; optional marketplace publish.
 5. **Tests** across all three new test files; green quality gates.
 
 ### GitHub App permission setup (manual — Joe)
@@ -174,7 +187,7 @@ If the apps are defined by a manifest in this repo, bump `default_permissions.co
 
 - **Local artifact:** in a scratch repo with an uncommitted bug, `ai-review audit --local --changed --out /tmp/aud`; confirm `audit-*.json` is untruncated and reflects the uncommitted change; confirm `--changed` vs `--full` differ.
 - **No-auth path:** unset `GITHUB_APP_ID`; confirm `--local --no-pr` runs on the AI keys alone.
-- **Orphan-base PR:** on a throwaway repo, confirm the PR diff shows whole files as additions and inline comments post on arbitrary lines; `finalize` → confirm the diff collapses to fixes-only, stale comments mark outdated, and the PR merges with no synthetic content in `main`'s history.
+- **Orphan-base PR:** on a throwaway repo, confirm the PR diff shows whole files as additions and inline comments post on arbitrary lines; then finalize (`gh pr edit <n> --base main && gh pr ready <n>`) → confirm the diff collapses to fixes-only, stale comments mark outdated, and the PR merges with no synthetic content in `main`'s history.
 - **Fallback:** with `contents: write` absent, confirm the 403 is caught and the run degrades to artifact + idempotent issue.
 - **Re-review loop:** confirm the existing `synchronize` webhook posts a diff-scoped review after fixes.
 
