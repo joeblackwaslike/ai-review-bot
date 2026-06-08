@@ -340,7 +340,11 @@ export async function runLocalAudit(opts: {
 		owner: string;
 		repo: string;
 		baseBranch: string;
-		postAs: Array<{ provider: "anthropic" | "openai"; prefix: string }>;
+		postAs: Array<{
+			provider: "anthropic" | "openai";
+			prefix: string;
+			octokit?: OctokitLike;
+		}>;
 	}>;
 }): Promise<LocalAuditResult> {
 	const files = await collectFilesFromLocal({ cwd: opts.cwd, mode: opts.mode });
@@ -435,7 +439,7 @@ export async function runLocalAudit(opts: {
 			)?.review;
 			if (review) {
 				await postProviderReview({
-					octokit: ctx.octokit,
+					octokit: target.octokit ?? ctx.octokit,
 					owner: ctx.owner,
 					repo: ctx.repo,
 					pullNumber: number,
