@@ -1,3 +1,5 @@
+import type { ModelReview } from "./review.js";
+import { buildReviewComments } from "./review.js";
 import type { AuditFile } from "./sources.js";
 
 export type OctokitLike = {
@@ -98,4 +100,79 @@ export async function createHeadBranch(opts: {
 		ref: `refs/heads/${branch}`,
 		sha: commit.sha,
 	});
+}
+
+const AI_AUDIT_LABEL = "AI audit";
+
+export async function openDraftPr(opts: {
+	octokit: OctokitLike;
+	owner: string;
+	repo: string;
+	head: string;
+	base: string;
+	title: string;
+	body?: string;
+}): Promise<{ number: number; url: string }> {
+	const { octokit, owner, repo, head, base, title, body } = opts;
+	const { data: pr } = await octokit.request<{
+		number: number;
+		html_url: string;
+	}>("POST /repos/{owner}/{repo}/pulls", {
+		owner,
+		repo,
+		head,
+		base,
+		title,
+		body: body ?? "Automated AI audit.",
+		draft: true,
+	});
+	await octokit.request(
+		"POST /repos/{owner}/{repo}/issues/{issue_number}/labels",
+		{
+			owner,
+			repo,
+			issue_number: pr.number,
+			labels: [AI_AUDIT_LABEL],
+		},
+	);
+	return { number: pr.number, url: pr.html_url };
+}
+
+interface PullFileLike {
+	filename: string;
+	status: string;
+	patch?: string;
+}
+
+export async function postProviderReview(opts: {
+	octokit: OctokitLike;
+	owner: string;
+	repo: string;
+	pullNumber: number;
+	headSha: string;
+	files: PullFileLike[];
+	review: ModelReview;
+	prefix: string;
+}): Promise<void> {
+	const { octokit, owner, repo, pullNumber, headSha, files, review, prefix } =
+		opts;
+	const comments = buildReviewComments(files, review.inline_comments);
+	const event =
+		review.event === "REQUEST_CHANGES" ? "REQUEST_CHANGES" : "COMMENT";
+	const findingLines = review.general_findings.map(
+		(f) => `- **[${f.severity}] ${f.title}** — ${f.body}`,
+	);
+	const body = [`### ${prefix}`, "", ...findingLines].join("\n");
+	await octokit.request(
+		"POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
+		{
+			owner,
+			repo,
+			pull_number: pullNumber,
+			commit_id: headSha,
+			event,
+			body,
+			comments,
+		},
+	);
 }
