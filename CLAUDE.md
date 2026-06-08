@@ -59,6 +59,16 @@ POST /api/github/webhook-openai    (Codex bot)
 | `src/testing.ts` | Shared test fixtures (`buildModelReview`, `buildGenerateObjectResponse`, etc.) |
 | `skills/*.md` | Vendored skill frameworks loaded at runtime by `buildAgentSystemPrompt()` |
 
+### Local audit
+
+The CLI supports two subcommands for offline code review of the working tree:
+
+- `ai-review audit [--full] [--dry-run] [--out <dir>] [--extra <text>] [--json]` — Audits the local working tree (changed files by default; `--full` for the entire codebase). Runs both Claude and OpenAI provider passes in parallel, writes structured JSON + Markdown artifacts to `.ai-review/`, and (unless `--dry-run`) opens a draft synthetic-base review PR labeled `AI audit` for inline review. Optionally posts as a GitHub issue if the PR creation fails due to insufficient permissions.
+
+- `ai-review ready [pr#]` — Retargets the audit PR onto the default branch and marks it ready for review (defaults to the PR recorded in `.ai-review/audit-anthropic.json` from the last audit). Use after addressing findings to collapse the diff to fixes-only and merge cleanly.
+
+Reference: `docs/superpowers/specs/2026-06-08-local-audit-review-pr-design.md`
+
 ### Agent skills
 
 Each skill file is loaded by `buildAgentSystemPrompt(skillPath, ...)` in `src/prompt.ts`. YAML frontmatter is stripped at load time.
