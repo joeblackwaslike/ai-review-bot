@@ -7,31 +7,7 @@ import {
 	TIER1_SKILLS,
 } from "./review.js";
 import { routeModel } from "./router.js";
-
-const CODE_EXTENSIONS = new Set([
-	".ts",
-	".tsx",
-	".js",
-	".jsx",
-	".mjs",
-	".cjs",
-	".py",
-	".go",
-	".rs",
-	".rb",
-	".java",
-	".cs",
-	".cpp",
-	".c",
-	".h",
-	".swift",
-	".kt",
-]);
-
-function hasCodeExtension(path: string): boolean {
-	const dot = path.lastIndexOf(".");
-	return dot !== -1 && CODE_EXTENSIONS.has(path.slice(dot));
-}
+import { type AuditFile, hasCodeExtension } from "./sources.js";
 
 export interface AuditParams {
 	app: App;
@@ -91,7 +67,7 @@ export async function auditRepo({
 
 	// Fetch file contents in parallel batches of 20
 	const FETCH_BATCH_SIZE = 20;
-	const files: Array<{ path: string; content: string }> = [];
+	const files: AuditFile[] = [];
 
 	for (let i = 0; i < blobPaths.length; i += FETCH_BATCH_SIZE) {
 		const slice = blobPaths.slice(i, i + FETCH_BATCH_SIZE);
