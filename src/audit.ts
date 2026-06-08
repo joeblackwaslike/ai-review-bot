@@ -9,7 +9,12 @@ import {
 	TIER1_SKILLS,
 } from "./review.js";
 import { type ModelSelection, routeModel } from "./router.js";
-import { type AuditFile, hasCodeExtension } from "./sources.js";
+import {
+	type AuditFile,
+	collectFilesFromLocal,
+	type FileMode,
+	hasCodeExtension,
+} from "./sources.js";
 
 export interface AuditParams {
 	app: App;
@@ -306,4 +311,73 @@ export async function writeArtifacts(opts: {
 		);
 	}
 	return written;
+}
+
+const PROVIDERS = ["anthropic", "openai"] as const;
+
+export interface LocalAuditResult {
+	providers: Array<{ provider: "anthropic" | "openai"; review: ModelReview }>;
+	artifacts: string[];
+	pr?: number;
+	url?: string;
+}
+
+export async function runLocalAudit(opts: {
+	cwd: string;
+	mode: FileMode;
+	outDir: string;
+	dryRun: boolean;
+	extraInstructions?: string;
+}): Promise<LocalAuditResult> {
+	const files = await collectFilesFromLocal({ cwd: opts.cwd, mode: opts.mode });
+	const filePaths = files.map((f) => f.path);
+	const meta = { owner: "local", repo: "local", ref: "working-tree" };
+	const extraInstructions = opts.extraInstructions ?? "";
+
+	const providers: LocalAuditResult["providers"] = [];
+	const perProvider: Array<{ review: ModelReview; meta: AuditMeta }> = [];
+
+	for (const provider of PROVIDERS) {
+		const selection = routeModel(
+			{ additions: 0, deletions: 0, filePaths, labels: [] },
+			provider,
+		);
+		const review = await runAuditPass({
+			files,
+			selection,
+			extraInstructions,
+			meta,
+		});
+		providers.push({ provider, review });
+		perProvider.push({
+			review,
+			meta: {
+				...meta,
+				provider,
+				model: selection.model,
+				fileCount: files.length,
+			},
+		});
+	}
+
+	const combined = mergeReviews(providers.map((p) => p.review));
+	const markdown = formatAuditIssue({
+		merged: combined,
+		owner: meta.owner,
+		repo: meta.repo,
+		ref: meta.ref,
+		date: new Date().toISOString().slice(0, 10),
+		fileCount: files.length,
+	});
+	const artifacts = await writeArtifacts({
+		outDir: opts.outDir,
+		perProvider,
+		markdown,
+	});
+
+	if (opts.dryRun) {
+		return { providers, artifacts };
+	}
+	// PR path added in Task 8.
+	throw new Error("PR path not yet implemented");
 }
