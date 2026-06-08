@@ -291,13 +291,19 @@ export async function writeArtifacts(opts: {
 }): Promise<string[]> {
 	await mkdir(opts.outDir, { recursive: true });
 	const written: string[] = [];
-	for (const entry of opts.perProvider) {
-		const file = path.join(opts.outDir, `audit-${entry.meta.provider}.json`);
-		await writeFile(file, formatAuditJson(entry), "utf-8");
-		written.push(file);
+	try {
+		for (const entry of opts.perProvider) {
+			const file = path.join(opts.outDir, `audit-${entry.meta.provider}.json`);
+			await writeFile(file, formatAuditJson(entry), "utf-8");
+			written.push(file);
+		}
+		const md = path.join(opts.outDir, "audit.md");
+		await writeFile(md, opts.markdown, "utf-8");
+		written.push(md);
+	} catch (error) {
+		throw new Error(
+			`Failed to write audit artifacts to ${opts.outDir}: ${error instanceof Error ? error.message : String(error)}`,
+		);
 	}
-	const md = path.join(opts.outDir, "audit.md");
-	await writeFile(md, opts.markdown, "utf-8");
-	written.push(md);
 	return written;
 }
