@@ -1,6 +1,13 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { App } from "octokit";
+import {
+	createHeadBranch,
+	ensureOrphanBase,
+	type OctokitLike,
+	openDraftPr,
+	postProviderReview,
+} from "./audit-pr.js";
 import { buildAuditUserMessage } from "./prompt.js";
 import {
 	type ModelReview,
@@ -328,6 +335,13 @@ export async function runLocalAudit(opts: {
 	outDir: string;
 	dryRun: boolean;
 	extraInstructions?: string;
+	resolvePr?: () => Promise<{
+		octokit: OctokitLike;
+		owner: string;
+		repo: string;
+		baseBranch: string;
+		postAs: Array<{ provider: "anthropic" | "openai"; prefix: string }>;
+	}>;
 }): Promise<LocalAuditResult> {
 	const files = await collectFilesFromLocal({ cwd: opts.cwd, mode: opts.mode });
 	const filePaths = files.map((f) => f.path);
@@ -378,6 +392,130 @@ export async function runLocalAudit(opts: {
 	if (opts.dryRun) {
 		return { providers, artifacts };
 	}
-	// PR path added in Task 8.
-	throw new Error("PR path not yet implemented");
+
+	const hasFindings =
+		combined.general_findings.length > 0 || combined.inline_comments.length > 0;
+	if (!hasFindings || !opts.resolvePr) {
+		return { providers, artifacts };
+	}
+
+	const ctx = await opts.resolvePr();
+	const ORPHAN = "ai-review/empty";
+	const head = `ai-review/audit-${Date.now()}`;
+	try {
+		await ensureOrphanBase(ctx.octokit, ctx.owner, ctx.repo, ORPHAN);
+		await createHeadBranch({
+			octokit: ctx.octokit,
+			owner: ctx.owner,
+			repo: ctx.repo,
+			branch: head,
+			baseBranch: ctx.baseBranch,
+			files,
+		});
+		const { number, url } = await openDraftPr({
+			octokit: ctx.octokit,
+			owner: ctx.owner,
+			repo: ctx.repo,
+			head,
+			base: ORPHAN,
+			title: `AI audit — ${new Date().toISOString().slice(0, 10)}`,
+		});
+		const headSha = await headShaFor(ctx.octokit, ctx.owner, ctx.repo, head);
+		const pullFiles = files.map((f) => ({
+			filename: f.path,
+			status: "added",
+			patch: `@@ -0,0 +1,${f.content.split("\n").length} @@\n${f.content
+				.split("\n")
+				.map((l) => `+${l}`)
+				.join("\n")}`,
+		}));
+		for (const target of ctx.postAs) {
+			const review = providers.find(
+				(p) => p.provider === target.provider,
+			)?.review;
+			if (review) {
+				await postProviderReview({
+					octokit: ctx.octokit,
+					owner: ctx.owner,
+					repo: ctx.repo,
+					pullNumber: number,
+					headSha,
+					files: pullFiles,
+					review,
+					prefix: target.prefix,
+				});
+			}
+		}
+		// persist meta.pr into the JSON artifacts
+		for (const entry of perProvider) entry.meta.pr = number;
+		await writeArtifacts({ outDir: opts.outDir, perProvider, markdown });
+		return { providers, artifacts, pr: number, url };
+	} catch (err) {
+		if ((err as { status?: number }).status === 403) {
+			console.warn(
+				"contents:write not granted — PR path skipped; writing artifacts + issue fallback.",
+			);
+			try {
+				await createOrUpdateAuditIssue({
+					octokit: ctx.octokit,
+					owner: ctx.owner,
+					repo: ctx.repo,
+					body: markdown,
+				});
+			} catch {
+				// best-effort: artifacts are already written regardless
+			}
+			return { providers, artifacts };
+		}
+		throw err;
+	}
+}
+
+async function headShaFor(
+	octokit: OctokitLike,
+	owner: string,
+	repo: string,
+	branch: string,
+): Promise<string> {
+	const { data } = await octokit.request<{ object: { sha: string } }>(
+		"GET /repos/{owner}/{repo}/git/ref/{ref}",
+		{ owner, repo, ref: `heads/${branch}` },
+	);
+	return data.object.sha;
+}
+
+// Idempotent fallback: reuse the open "Code Audit Report" issue, else create one.
+async function createOrUpdateAuditIssue(opts: {
+	octokit: OctokitLike;
+	owner: string;
+	repo: string;
+	body: string;
+}): Promise<void> {
+	const { octokit, owner, repo, body } = opts;
+	const title = `Code Audit Report — ${new Date().toISOString().slice(0, 10)}`;
+	const { data: open } = await octokit.request<
+		Array<{ number: number; title: string }>
+	>("GET /repos/{owner}/{repo}/issues", {
+		owner,
+		repo,
+		state: "open",
+		labels: "AI audit",
+	});
+	const existing = open.find((i) => i.title.startsWith("Code Audit Report"));
+	if (existing) {
+		await octokit.request("PATCH /repos/{owner}/{repo}/issues/{issue_number}", {
+			owner,
+			repo,
+			issue_number: existing.number,
+			body,
+		});
+	} else {
+		await octokit.request("POST /repos/{owner}/{repo}/issues", {
+			owner,
+			repo,
+			title,
+			body,
+			labels: ["AI audit"],
+		});
+	}
 }
