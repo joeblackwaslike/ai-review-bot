@@ -176,3 +176,30 @@ export async function postProviderReview(opts: {
 		},
 	);
 }
+
+export async function makeReady(opts: {
+	octokit: OctokitLike;
+	owner: string;
+	repo: string;
+	pullNumber: number;
+	base: string;
+}): Promise<void> {
+	const { octokit, owner, repo, pullNumber, base } = opts;
+	// 1. Retarget base → default branch (collapses the diff to fixes-only).
+	await octokit.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", {
+		owner,
+		repo,
+		pull_number: pullNumber,
+		base,
+	});
+	// 2. Mark ready — REST has no draft toggle; use the GraphQL mutation.
+	const { data: pr } = await octokit.request<{ node_id: string }>(
+		"GET /repos/{owner}/{repo}/pulls/{pull_number}",
+		{ owner, repo, pull_number: pullNumber },
+	);
+	await octokit.request("POST /graphql", {
+		query:
+			"mutation($id:ID!){ markPullRequestReadyForReview(input:{pullRequestId:$id}){ clientMutationId } }",
+		variables: { id: pr.node_id },
+	});
+}

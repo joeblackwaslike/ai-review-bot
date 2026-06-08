@@ -152,3 +152,31 @@ describe("postProviderReview", () => {
 		expect(submitted?.comments).toHaveLength(1);
 	});
 });
+
+describe("makeReady", () => {
+	it("retargets base to the default branch and marks ready", async () => {
+		const calls: Array<{ route: string; params: Record<string, unknown> }> = [];
+		const octokit = {
+			request: vi.fn(async (route: string, params: Record<string, unknown>) => {
+				calls.push({ route, params });
+				if (route === "GET /repos/{owner}/{repo}/pulls/{pull_number}")
+					return { data: { node_id: "PR_NODE" } };
+				return { data: {} };
+			}),
+		};
+		const { makeReady } = await import("./audit-pr.js");
+		await makeReady({
+			octokit: octokit as never,
+			owner: "o",
+			repo: "r",
+			pullNumber: 42,
+			base: "main",
+		});
+		const edit = calls.find(
+			(c) => c.route === "PATCH /repos/{owner}/{repo}/pulls/{pull_number}",
+		);
+		expect(edit?.params.base).toBe("main");
+		// ready-for-review is a GraphQL mutation (REST has no toggle)
+		expect(calls.some((c) => c.route === "POST /graphql")).toBe(true);
+	});
+});
