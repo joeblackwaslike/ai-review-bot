@@ -17,3 +17,6 @@ docs/.vitepress/cache/
 
 # AI Review local audit artifacts
 .ai-review/
+
+# Beads task DB / exports (PII; shared via Dolt, not git)
+.beads/

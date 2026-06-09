@@ -40,13 +40,14 @@ function batchFiles(files: AuditFile[]): AuditFile[][] {
 	let current: AuditFile[] = [];
 	let bytes = 0;
 	for (const f of files) {
-		if (bytes + f.content.length > BATCH_BYTES && current.length > 0) {
+		const size = Buffer.byteLength(f.content, "utf8");
+		if (bytes + size > BATCH_BYTES && current.length > 0) {
 			batches.push(current);
 			current = [f];
-			bytes = f.content.length;
+			bytes = size;
 		} else {
 			current.push(f);
-			bytes += f.content.length;
+			bytes += size;
 		}
 	}
 	if (current.length > 0) batches.push(current);
@@ -66,7 +67,8 @@ export async function runAuditPass(opts: {
 
 	for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
 		const batch = batches[batchIdx];
-		console.log(
+		// stderr so machine-readable --json stdout stays clean.
+		console.error(
 			`  Batch ${batchIdx + 1}/${batches.length}: ${batch.length} files`,
 		);
 		const userMessage = buildAuditUserMessage({

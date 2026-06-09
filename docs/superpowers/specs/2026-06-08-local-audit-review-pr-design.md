@@ -99,7 +99,7 @@ The **head branch must contain every file referenced by either pass**, or diff-a
 
 ## Data flow
 
-```
+```text
 1. ai-review audit                  (the plugin command wraps this)
 2. collectFilesFromLocal()  → in-scope set (changed ∪ uncommitted, code only)
 3. For each provider [anthropic, openai]:

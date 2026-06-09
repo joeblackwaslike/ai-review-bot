@@ -17,9 +17,14 @@ describe("collectFilesFromLocal", () => {
 	const readFile = async (p: string) => `// content of ${p}`;
 
 	it("changed mode = diff names ∪ porcelain, code-filtered, deduped", async () => {
+		const mergeBaseArgs: string[][] = [];
 		const runGit: GitRunner = (args) => {
 			const key = args.join(" ");
-			if (key.startsWith("merge-base")) return "BASE_SHA";
+			if (key.startsWith("symbolic-ref")) return "refs/remotes/origin/main";
+			if (key.startsWith("merge-base")) {
+				mergeBaseArgs.push([...args]);
+				return "BASE_SHA";
+			}
 			if (key.startsWith("diff --name-only"))
 				return "src/a.ts\nsrc/b.ts\ndocs/x.md";
 			if (key.startsWith("status --porcelain"))
@@ -32,6 +37,8 @@ describe("collectFilesFromLocal", () => {
 			runGit,
 			readFile,
 		});
+		// merge-base is computed against the remote-tracking ref origin/main
+		expect(mergeBaseArgs).toEqual([["merge-base", "HEAD", "origin/main"]]);
 		expect(files.map((f) => f.path).sort()).toEqual([
 			"src/a.ts",
 			"src/b.ts",
@@ -65,6 +72,18 @@ describe("collectFilesFromLocal", () => {
 			mode: "full",
 			runGit,
 			readFile: failingRead,
+		});
+		expect(files.map((f) => f.path)).toEqual(["src/a.ts"]);
+	});
+
+	it("skips paths that resolve outside cwd (traversal guard)", async () => {
+		const runGit: GitRunner = (args) =>
+			args[0] === "ls-files" ? "src/a.ts\n../outside.ts" : "";
+		const files = await collectFilesFromLocal({
+			cwd: "/repo",
+			mode: "full",
+			runGit,
+			readFile,
 		});
 		expect(files.map((f) => f.path)).toEqual(["src/a.ts"]);
 	});

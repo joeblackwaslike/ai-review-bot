@@ -1295,7 +1295,7 @@ git commit -m "feat(cli): audit and ready subcommands with two-identity PR posti
 
 - [ ] **Step 1: Add `.ai-review/` to `.gitignore`**
 
-```
+```text
 # AI Review local audit artifacts
 .ai-review/
 ```

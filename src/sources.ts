@@ -44,7 +44,9 @@ function defaultGitRunner(cwd: string): GitRunner {
 }
 
 function defaultBranch(runGit: GitRunner): string {
-	// Resolve origin/HEAD → e.g. "origin/main"; fall back to "main".
+	// Resolve origin/HEAD → remote-tracking ref "origin/<name>"; this lets
+	// merge-base work without a local branch of the same name. Fall back to the
+	// bare "main" only when origin/HEAD is unset.
 	try {
 		const ref = runGit([
 			"symbolic-ref",
@@ -52,7 +54,7 @@ function defaultBranch(runGit: GitRunner): string {
 			"refs/remotes/origin/HEAD",
 		]).trim();
 		const name = ref.split("/").pop();
-		if (name) return name;
+		if (name) return `origin/${name}`;
 	} catch {
 		// origin/HEAD not set; fall through
 	}
@@ -101,8 +103,12 @@ export async function collectFilesFromLocal(opts: {
 		.filter(hasCodeExtension)
 		.sort();
 
+	const root = path.resolve(opts.cwd);
 	const files: AuditFile[] = [];
 	for (const p of unique) {
+		// Guard against path traversal: skip anything that resolves outside cwd.
+		const abs = path.resolve(opts.cwd, p);
+		if (abs !== root && !abs.startsWith(root + path.sep)) continue;
 		try {
 			files.push({ path: p, content: await readFile(p) });
 		} catch {

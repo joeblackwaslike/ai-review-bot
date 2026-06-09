@@ -157,6 +157,10 @@ export async function postProviderReview(opts: {
 	const { octokit, owner, repo, pullNumber, headSha, files, review, prefix } =
 		opts;
 	const comments = buildReviewComments(files, review.inline_comments);
+	if (comments.length === 0 && review.general_findings.length === 0) {
+		// Nothing to report — don't POST an empty-body review.
+		return;
+	}
 	const event =
 		review.event === "REQUEST_CHANGES" ? "REQUEST_CHANGES" : "COMMENT";
 	const findingLines = review.general_findings.map(
@@ -193,13 +197,21 @@ export async function makeReady(opts: {
 		base,
 	});
 	// 2. Mark ready — REST has no draft toggle; use the GraphQL mutation.
-	const { data: pr } = await octokit.request<{ node_id: string }>(
-		"GET /repos/{owner}/{repo}/pulls/{pull_number}",
-		{ owner, repo, pull_number: pullNumber },
-	);
-	await octokit.request("POST /graphql", {
-		query:
-			"mutation($id:ID!){ markPullRequestReadyForReview(input:{pullRequestId:$id}){ clientMutationId } }",
-		variables: { id: pr.node_id },
+	// Only run the mutation when the PR is actually a draft; the mutation throws
+	// "Pull request is not in draft state" otherwise.
+	const { data: pr } = await octokit.request<{
+		node_id: string;
+		draft: boolean;
+	}>("GET /repos/{owner}/{repo}/pulls/{pull_number}", {
+		owner,
+		repo,
+		pull_number: pullNumber,
 	});
+	if (pr.draft) {
+		await octokit.request("POST /graphql", {
+			query:
+				"mutation($id:ID!){ markPullRequestReadyForReview(input:{pullRequestId:$id}){ clientMutationId } }",
+			variables: { id: pr.node_id },
+		});
+	}
 }

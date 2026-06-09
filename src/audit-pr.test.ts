@@ -151,16 +151,41 @@ describe("postProviderReview", () => {
 		expect(submitted?.event).toBe("REQUEST_CHANGES");
 		expect(submitted?.comments).toHaveLength(1);
 	});
+
+	it("does NOT POST a review when there are no comments and no findings", async () => {
+		const octokit = octokitWith({
+			"POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews": () => ({
+				id: 1,
+			}),
+		});
+		const files = [buildPullFile("a.ts", "@@ -0,0 +1,3 @@\n+l1\n+l2\n+l3")];
+		const review = buildModelReview({
+			event: "COMMENT",
+			general_findings: [],
+			inline_comments: [],
+		});
+		await postProviderReview({
+			octokit: octokit as never,
+			owner: "o",
+			repo: "r",
+			pullNumber: 42,
+			headSha: "SHA",
+			files,
+			review,
+			prefix: "ai-review-bot",
+		});
+		expect(octokit.request).not.toHaveBeenCalled();
+	});
 });
 
 describe("makeReady", () => {
-	it("retargets base to the default branch and marks ready", async () => {
+	it("retargets base to the default branch and marks a draft PR ready", async () => {
 		const calls: Array<{ route: string; params: Record<string, unknown> }> = [];
 		const octokit = {
 			request: vi.fn(async (route: string, params: Record<string, unknown>) => {
 				calls.push({ route, params });
 				if (route === "GET /repos/{owner}/{repo}/pulls/{pull_number}")
-					return { data: { node_id: "PR_NODE" } };
+					return { data: { node_id: "PR_NODE", draft: true } };
 				return { data: {} };
 			}),
 		};
@@ -178,5 +203,33 @@ describe("makeReady", () => {
 		expect(edit?.params.base).toBe("main");
 		// ready-for-review is a GraphQL mutation (REST has no toggle)
 		expect(calls.some((c) => c.route === "POST /graphql")).toBe(true);
+	});
+
+	it("does NOT call the ready mutation when the PR is already ready", async () => {
+		const calls: Array<{ route: string; params: Record<string, unknown> }> = [];
+		const octokit = {
+			request: vi.fn(async (route: string, params: Record<string, unknown>) => {
+				calls.push({ route, params });
+				if (route === "GET /repos/{owner}/{repo}/pulls/{pull_number}")
+					return { data: { node_id: "PR_NODE", draft: false } };
+				return { data: {} };
+			}),
+		};
+		const { makeReady } = await import("./audit-pr.js");
+		await makeReady({
+			octokit: octokit as never,
+			owner: "o",
+			repo: "r",
+			pullNumber: 42,
+			base: "main",
+		});
+		// base PATCH still happens
+		expect(
+			calls.some(
+				(c) => c.route === "PATCH /repos/{owner}/{repo}/pulls/{pull_number}",
+			),
+		).toBe(true);
+		// but the ready mutation is skipped
+		expect(calls.some((c) => c.route === "POST /graphql")).toBe(false);
 	});
 });

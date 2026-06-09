@@ -99,4 +99,20 @@ describe("getOpenAIAppConfig reviewCommentPrefix", () => {
 		});
 		expect(getOpenAIAppConfig().reviewCommentPrefix).toBe("codex-only");
 	});
+
+	it("treats a blank OPENAI_REVIEW_COMMENT_PREFIX as unset → falls back to REVIEW_COMMENT_PREFIX", () => {
+		setOpenAIEnv({
+			OPENAI_REVIEW_COMMENT_PREFIX: "",
+			REVIEW_COMMENT_PREFIX: "shared-prefix",
+		});
+		expect(getOpenAIAppConfig().reviewCommentPrefix).toBe("shared-prefix");
+	});
+
+	it("treats blank OpenAI + shared prefixes as unset → falls back to codex-review-bot", () => {
+		setOpenAIEnv({
+			OPENAI_REVIEW_COMMENT_PREFIX: "   ",
+			REVIEW_COMMENT_PREFIX: "",
+		});
+		expect(getOpenAIAppConfig().reviewCommentPrefix).toBe("codex-review-bot");
+	});
 });

@@ -29,16 +29,23 @@ function createApp(): App {
 	const rawKey = process.env.GITHUB_APP_PRIVATE_KEY;
 	if (!appId) fatal("GITHUB_APP_ID environment variable is required");
 	if (!rawKey) fatal("GITHUB_APP_PRIVATE_KEY environment variable is required");
-	// Normalize escaped newlines stored as \\n in env vars
-	const privateKey = rawKey.replaceAll(String.raw`\n`, "\n");
-	return new App({ appId, privateKey });
+	return new App({
+		appId,
+		// Normalize escaped newlines stored as \n in env vars.
+		privateKey: rawKey.replaceAll(String.raw`\n`, "\n"),
+	});
 }
 
 function originSlug(): { owner: string; repo: string } {
-	const url = execFileSync("git", ["remote", "get-url", "origin"], {
-		encoding: "utf-8",
-		timeout: 5000,
-	}).trim();
+	let url: string;
+	try {
+		url = execFileSync("git", ["remote", "get-url", "origin"], {
+			encoding: "utf-8",
+			timeout: 5000,
+		}).trim();
+	} catch {
+		fatal("not inside a git repository with an 'origin' remote");
+	}
 	const m = /github\.com[:/]([^/]+)\/(.+?)(?:\.git)?$/.exec(url);
 	if (!m) fatal(`Cannot parse owner/repo from origin: ${url}`);
 	return { owner: m[1], repo: m[2] };
@@ -181,7 +188,9 @@ async function cmdReady(args: string[]): Promise<void> {
 				fatal(
 					"audit file .ai-review/audit-anthropic.json is corrupt: could not parse JSON",
 				);
-			// otherwise the file is absent — fall through to the "no PR" fatal below
+			// File absent (ENOENT) → fall through to the "no PR" fatal below.
+			// Any other error (e.g. EACCES) is unexpected — rethrow.
+			if ((err as { code?: string }).code !== "ENOENT") throw err;
 		}
 	}
 	if (!pr)
