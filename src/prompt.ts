@@ -101,8 +101,9 @@ export function buildAuditUserMessage(context: AuditContext): string {
 
 	const serialized = context.files
 		.map((f) => {
-			const content = trimPatch(f.content);
-			return `FILE: ${f.path}\nCONTENT:\n${content}`;
+			// Audited files are whole-file content (size-bounded by batching in
+			// runAuditPass), not diffs — do not run them through trimPatch.
+			return `FILE: ${f.path}\nCONTENT:\n${f.content}`;
 		})
 		.join("\n\n---\n\n");
 

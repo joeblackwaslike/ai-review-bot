@@ -1,7 +1,11 @@
 #!/usr/bin/env node
+import { execFileSync } from "node:child_process";
+import { readFile } from "node:fs/promises";
 import process from "node:process";
 import { App } from "octokit";
-import { auditRepo } from "./audit.js";
+import { auditRepo, runLocalAudit } from "./audit.js";
+import { makeReady, type OctokitLike } from "./audit-pr.js";
+import { getConfig, getOpenAIAppConfig } from "./config.js";
 
 function fatal(msg: string): never {
 	console.error(`Error: ${msg}`);
@@ -9,17 +13,13 @@ function fatal(msg: string): never {
 }
 
 function usage(): never {
+	console.error("Usage:");
 	console.error(
-		"Usage: ai-review OWNER/REPO [--ref <branch>] [--dry-run] [--extra <instructions>] [--provider <anthropic|openai>]",
+		"  ai-review audit [--full] [--dry-run] [--out <dir>] [--extra <text>] [--json]",
 	);
-	console.error("");
-	console.error("Required env vars:");
-	console.error("  GITHUB_APP_ID          — GitHub App ID");
+	console.error("  ai-review ready [pr#]");
 	console.error(
-		"  GITHUB_APP_PRIVATE_KEY — PKCS#8 private key (newlines as \\\\n)",
-	);
-	console.error(
-		"  ANTHROPIC_API_KEY      — Anthropic API key (or OPENAI_API_KEY for --provider openai)",
+		"  ai-review OWNER/REPO [...]      (legacy remote audit — deprecated)",
 	);
 	process.exit(1);
 }
@@ -29,15 +29,195 @@ function createApp(): App {
 	const rawKey = process.env.GITHUB_APP_PRIVATE_KEY;
 	if (!appId) fatal("GITHUB_APP_ID environment variable is required");
 	if (!rawKey) fatal("GITHUB_APP_PRIVATE_KEY environment variable is required");
-	// Normalize escaped newlines stored as \\n in env vars
-	const privateKey = rawKey.replaceAll(String.raw`\n`, "\n");
-	return new App({ appId, privateKey });
+	return new App({
+		appId,
+		// Normalize escaped newlines stored as \n in env vars.
+		privateKey: rawKey.replaceAll(String.raw`\n`, "\n"),
+	});
 }
 
-async function main(): Promise<void> {
-	const args = process.argv.slice(2);
-	if (args.length === 0) usage();
+function originSlug(): { owner: string; repo: string } {
+	let url: string;
+	try {
+		url = execFileSync("git", ["remote", "get-url", "origin"], {
+			encoding: "utf-8",
+			timeout: 5000,
+		}).trim();
+	} catch {
+		fatal("not inside a git repository with an 'origin' remote");
+	}
+	const m = /github\.com[:/]([^/]+)\/(.+?)(?:\.git)?$/.exec(url);
+	if (!m) fatal(`Cannot parse owner/repo from origin: ${url}`);
+	return { owner: m[1], repo: m[2] };
+}
 
+async function installationOctokit(
+	appId: string,
+	privateKey: string,
+	owner: string,
+	repo: string,
+) {
+	const app = new App({
+		appId,
+		privateKey: privateKey.replaceAll(String.raw`\n`, "\n"),
+	});
+	const { data: inst } = await app.octokit.request(
+		"GET /repos/{owner}/{repo}/installation",
+		{ owner, repo },
+	);
+	return app.getInstallationOctokit(inst.id);
+}
+
+async function buildResolvePr() {
+	const { owner, repo } = originSlug();
+	const claude = getConfig();
+	const codex = getOpenAIAppConfig();
+	const claudeKit = await installationOctokit(
+		claude.appId,
+		claude.privateKey,
+		owner,
+		repo,
+	);
+	const codexKit = await installationOctokit(
+		codex.appId,
+		codex.privateKey,
+		owner,
+		repo,
+	);
+	const { data: repoData } = await claudeKit.request(
+		"GET /repos/{owner}/{repo}",
+		{
+			owner,
+			repo,
+		},
+	);
+
+	// Each postProviderReview must run under the matching identity; runLocalAudit
+	// uses ctx.octokit for branch/PR ops and looks up per-provider kits via postAs.
+	return {
+		octokit: claudeKit as unknown as OctokitLike,
+		owner,
+		repo,
+		baseBranch: repoData.default_branch,
+		postAs: [
+			{
+				provider: "anthropic" as const,
+				prefix: claude.reviewCommentPrefix,
+				octokit: claudeKit as unknown as OctokitLike,
+			},
+			{
+				provider: "openai" as const,
+				prefix: codex.reviewCommentPrefix,
+				octokit: codexKit as unknown as OctokitLike,
+			},
+		],
+	};
+}
+
+async function cmdAudit(args: string[]): Promise<void> {
+	let mode: "changed" | "full" = "changed";
+	let dryRun = false;
+	let outDir = ".ai-review";
+	let extra = "";
+	let json = false;
+	for (let i = 0; i < args.length; i++) {
+		if (args[i] === "--full") mode = "full";
+		else if (args[i] === "--dry-run") dryRun = true;
+		else if (args[i] === "--out" && args[i + 1]) outDir = args[++i];
+		else if (args[i] === "--extra" && args[i + 1]) extra = args[++i];
+		else if (args[i] === "--json") json = true;
+		else if (args[i].startsWith("--")) fatal(`Unknown flag: ${args[i]}`);
+	}
+
+	// Validate both apps' creds upfront so a non-dry-run doesn't burn two
+	// expensive provider passes only to fail at PR-post time.
+	if (!dryRun) {
+		try {
+			getConfig();
+			getOpenAIAppConfig();
+		} catch (err) {
+			fatal((err as Error).message);
+		}
+	}
+
+	const result = await runLocalAudit({
+		cwd: process.cwd(),
+		mode,
+		outDir,
+		dryRun,
+		extraInstructions: extra,
+		resolvePr: dryRun ? undefined : buildResolvePr,
+	});
+
+	if (json) {
+		console.log(
+			JSON.stringify({
+				pr: result.pr,
+				url: result.url,
+				artifacts: result.artifacts,
+			}),
+		);
+	} else {
+		console.log(`Artifacts: ${result.artifacts.join(", ")}`);
+		if (result.url) console.log(`Review PR: ${result.url}`);
+	}
+}
+
+async function cmdReady(args: string[]): Promise<void> {
+	const positional = args.find((a) => !a.startsWith("--"));
+	const { owner, repo } = originSlug();
+	const claude = getConfig();
+	const octokit = await installationOctokit(
+		claude.appId,
+		claude.privateKey,
+		owner,
+		repo,
+	);
+
+	// `ready` always acts under the Claude identity; the PR number is
+	// provider-agnostic, so reading the anthropic artifact is sufficient.
+	let pr = positional ? Number(positional) : undefined;
+	if (!pr) {
+		try {
+			const meta = JSON.parse(
+				await readFile(".ai-review/audit-anthropic.json", "utf-8"),
+			);
+			pr = meta?.meta?.pr;
+		} catch (err) {
+			if (err instanceof SyntaxError)
+				fatal(
+					"audit file .ai-review/audit-anthropic.json is corrupt: could not parse JSON",
+				);
+			// File absent (ENOENT) → fall through to the "no PR" fatal below.
+			// Any other error (e.g. EACCES) is unexpected — rethrow.
+			if ((err as { code?: string }).code !== "ENOENT") throw err;
+		}
+	}
+	if (!pr)
+		fatal(
+			"No PR number given and none recorded in .ai-review/audit-anthropic.json",
+		);
+
+	const { data: repoData } = await octokit.request(
+		"GET /repos/{owner}/{repo}",
+		{
+			owner,
+			repo,
+		},
+	);
+	await makeReady({
+		octokit: octokit as unknown as OctokitLike,
+		owner,
+		repo,
+		pullNumber: pr,
+		base: repoData.default_branch,
+	});
+	console.log(
+		`PR #${pr} retargeted to ${repoData.default_branch} and marked ready.`,
+	);
+}
+
+async function cmdLegacyRemote(args: string[]): Promise<void> {
 	const repoArg = args[0];
 	if (!repoArg.includes("/")) usage();
 	const slashIdx = repoArg.indexOf("/");
@@ -78,6 +258,15 @@ async function main(): Promise<void> {
 		dryRun,
 		provider,
 	});
+}
+
+async function main(): Promise<void> {
+	const [sub, ...rest] = process.argv.slice(2);
+
+	if (sub === "audit") return cmdAudit(rest);
+	if (sub === "ready") return cmdReady(rest);
+	if (sub?.includes("/")) return cmdLegacyRemote([sub, ...rest]); // back-compat
+	usage();
 }
 
 main().catch((err: unknown) => {
