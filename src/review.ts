@@ -1,3 +1,4 @@
+import { APICallError } from "@ai-sdk/provider";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { computeCost, createAIModel } from "./models.js";
@@ -76,6 +77,67 @@ interface TokenUsage {
 	completionTokens: number;
 }
 
+export interface RateLimitInfo {
+	inputTokensRemaining?: number;
+	inputTokensResetAt?: string;
+	retryAfterSeconds?: number;
+}
+
+export type AgentOutcome =
+	| {
+			status: "ok";
+			review: ModelReview;
+			usage: TokenUsage;
+			rateLimit?: RateLimitInfo;
+	  }
+	| { status: "rate_limited"; rateLimit: RateLimitInfo }
+	| { status: "error" };
+
+function numOrUndef(v: string | undefined): number | undefined {
+	if (v === undefined) return undefined;
+	const n = Number(v);
+	return Number.isFinite(n) ? n : undefined;
+}
+
+function readRateLimitHeaders(
+	headers: Record<string, string> | undefined,
+): RateLimitInfo {
+	const h = headers ?? {};
+	const remaining =
+		h["anthropic-ratelimit-input-tokens-remaining"] ??
+		h["x-ratelimit-remaining-tokens"];
+	const reset =
+		h["anthropic-ratelimit-input-tokens-reset"] ??
+		h["x-ratelimit-reset-tokens"];
+	const retryAfter = h["retry-after"];
+	return {
+		inputTokensRemaining: numOrUndef(remaining),
+		inputTokensResetAt: reset,
+		retryAfterSeconds: numOrUndef(retryAfter),
+	};
+}
+
+/** Walk a thrown error (possibly a RetryError wrapping APICallError) for a 429. */
+function extractRateLimit(err: unknown): RateLimitInfo | null {
+	const candidates: unknown[] = [
+		err,
+		(err as { lastError?: unknown })?.lastError,
+		...((err as { errors?: unknown[] })?.errors ?? []),
+	];
+	for (const c of candidates) {
+		const status = (c as { statusCode?: number })?.statusCode;
+		if (
+			status === 429 ||
+			(APICallError.isInstance?.(c) && (c as APICallError).statusCode === 429)
+		) {
+			return readRateLimitHeaders(
+				(c as { responseHeaders?: Record<string, string> })?.responseHeaders,
+			);
+		}
+	}
+	return null;
+}
+
 const ModelReviewSchema = z.object({
 	event: z.enum(["COMMENT", "REQUEST_CHANGES"]),
 	general_findings: z.array(
@@ -123,31 +185,64 @@ export const TIER1_SKILLS: readonly string[] = [
 
 export async function runAgent(
 	skillPath: string,
-	userMessage: string,
+	sharedContext: string,
 	selection: ModelSelection,
 	customPrompt: string,
-): Promise<{ review: ModelReview; usage: TokenUsage } | null> {
-	const system = buildAgentSystemPrompt(skillPath, customPrompt);
+): Promise<AgentOutcome> {
+	const skillBlock = buildAgentSystemPrompt(skillPath, customPrompt);
 
 	try {
-		const { object, usage } = await generateObject({
+		const { object, usage, providerMetadata, response } = await generateObject({
 			model: createAIModel(selection),
 			schema: ModelReviewSchema,
 			maxOutputTokens: 4096,
-			system,
-			messages: [{ role: "user", content: userMessage }],
+			maxRetries: 4,
+			messages: [
+				{
+					role: "user",
+					content: [
+						{
+							type: "text",
+							text: sharedContext,
+							providerOptions: {
+								anthropic: { cacheControl: { type: "ephemeral" } },
+							},
+						},
+						{ type: "text", text: skillBlock },
+					],
+				},
+			],
+		});
+
+		const anthro = (providerMetadata?.anthropic ?? {}) as {
+			cacheReadInputTokens?: number;
+			cacheCreationInputTokens?: number;
+		};
+		console.log("agent ok", {
+			skillPath,
+			cacheRead: anthro.cacheReadInputTokens ?? 0,
+			cacheCreation: anthro.cacheCreationInputTokens ?? 0,
 		});
 
 		return {
+			status: "ok",
 			review: object,
 			usage: {
 				promptTokens: usage.inputTokens ?? 0,
 				completionTokens: usage.outputTokens ?? 0,
 			},
+			rateLimit: readRateLimitHeaders(
+				response?.headers as Record<string, string> | undefined,
+			),
 		};
 	} catch (err) {
+		const rl = extractRateLimit(err);
+		if (rl) {
+			console.warn("agent rate-limited", { skillPath, ...rl });
+			return { status: "rate_limited", rateLimit: rl };
+		}
 		console.error("Agent threw during generateObject", { skillPath, err });
-		return null;
+		return { status: "error" };
 	}
 }
 
@@ -562,26 +657,21 @@ export async function buildReview(
 		})),
 	];
 
-	const agentPromises = allSkills.map(({ skillPath }) =>
-		runAgent(skillPath, userMessage, selection, customPrompt),
+	const settled = await Promise.allSettled(
+		allSkills.map(({ skillPath }) =>
+			runAgent(skillPath, userMessage, selection, customPrompt),
+		),
 	);
-
-	const settled = await Promise.allSettled(agentPromises);
 
 	const agentResults: ModelReview[] = [];
 	let totalPromptTokens = 0;
 	let totalCompletionTokens = 0;
 
-	for (const [i, result] of settled.entries()) {
-		if (result.status === "rejected") {
-			console.error("Agent failed", {
-				skillPath: allSkills[i]?.skillPath,
-				error: result.reason,
-			});
-		} else if (result.value !== null) {
-			agentResults.push(result.value.review);
-			totalPromptTokens += result.value.usage.promptTokens;
-			totalCompletionTokens += result.value.usage.completionTokens;
+	for (const r of settled) {
+		if (r.status === "fulfilled" && r.value.status === "ok") {
+			agentResults.push(r.value.review);
+			totalPromptTokens += r.value.usage.promptTokens;
+			totalCompletionTokens += r.value.usage.completionTokens;
 		}
 	}
 
@@ -594,7 +684,7 @@ export async function buildReview(
 		tier1: TIER1_SKILLS.length,
 		tier2: tier2Matches.length,
 		succeeded: agentResults.length,
-		failed: allSkills.length - agentResults.length,
+		notOk: allSkills.length - agentResults.length,
 	});
 
 	const modelReview = mergeReviews(agentResults);

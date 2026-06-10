@@ -84,7 +84,8 @@ export async function runAuditPass(opts: {
 			),
 		);
 		for (const r of settled) {
-			if (r.status === "fulfilled" && r.value) reviews.push(r.value.review);
+			if (r.status === "fulfilled" && r.value.status === "ok")
+				reviews.push(r.value.review);
 		}
 	}
 

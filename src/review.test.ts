@@ -3,7 +3,9 @@ import {
 	buildReview,
 	buildReviewComments,
 	collectRightSideLines,
+	runAgent,
 } from "./review.js";
+import type { ModelSelection } from "./router.js";
 import {
 	buildGenerateObjectResponse,
 	buildInlineComment,
@@ -606,5 +608,74 @@ describe("buildReview", () => {
 		expect(mockBuildUserMessage).toHaveBeenCalledWith(
 			expect.objectContaining({ priorBotReviews: [externalBotBody] }),
 		);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// runAgent — caching + telemetry
+// ---------------------------------------------------------------------------
+
+const sel = {
+	provider: "anthropic",
+	model: "claude-sonnet-4-6",
+	tier: 1,
+} as ModelSelection;
+
+describe("runAgent caching + telemetry", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+	});
+
+	it("sends the shared block first with ephemeral cacheControl and the skill block second", async () => {
+		mockGenerateObject.mockResolvedValue({
+			object: buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+			usage: { inputTokens: 10, outputTokens: 5 },
+			providerMetadata: {
+				anthropic: { cacheCreationInputTokens: 2000, cacheReadInputTokens: 0 },
+			},
+			response: {
+				headers: { "anthropic-ratelimit-input-tokens-remaining": "28000" },
+			},
+		});
+
+		const out = await runAgent(
+			"code-reviewer.md",
+			"SHARED_DIFF_CONTEXT",
+			sel,
+			"custom",
+		);
+
+		const call = (mockGenerateObject as ReturnType<typeof vi.fn>).mock
+			.calls[0][0];
+		const parts = call.messages[0].content;
+		expect(call.messages[0].role).toBe("user");
+		expect(parts[0].text).toBe("SHARED_DIFF_CONTEXT");
+		expect(parts[0].providerOptions.anthropic.cacheControl).toEqual({
+			type: "ephemeral",
+		});
+		expect(parts[1].text).toBe("system"); // skill block from mocked buildAgentSystemPrompt
+		expect(out?.status).toBe("ok");
+	});
+
+	it("returns status rate_limited with retryAfter on a 429", async () => {
+		const err = Object.assign(new Error("429"), {
+			statusCode: 429,
+			responseHeaders: {
+				"retry-after": "42",
+				"anthropic-ratelimit-input-tokens-reset": "2026-06-09T07:21:30Z",
+			},
+		});
+		mockGenerateObject.mockRejectedValue(err);
+
+		const out = await runAgent("code-reviewer.md", "SHARED", sel, "");
+		expect(out?.status).toBe("rate_limited");
+		if (out?.status === "rate_limited") {
+			expect(out.rateLimit.retryAfterSeconds).toBe(42);
+			expect(out.rateLimit.inputTokensResetAt).toBe("2026-06-09T07:21:30Z");
+		}
 	});
 });
