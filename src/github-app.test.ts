@@ -174,6 +174,67 @@ describe("maybeSubmitReview", () => {
 		);
 	});
 
+	it("posts an actionable rate-limit comment and no review on RATE_LIMITED", async () => {
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "RATE_LIMITED",
+			body: "",
+			comments: [],
+			validLinesByPath: new Map(),
+			metadata: {
+				model: "claude-sonnet-4-6",
+				tier1Count: 5,
+				tier2Skills: [],
+				generalFindings: 0,
+				inlineComments: 0,
+				cost: 0,
+			},
+			rateLimitResetAt: "2026-06-09T07:21:30Z",
+		});
+		const requests: Array<{ route: string; params: Record<string, unknown> }> =
+			[];
+		const octokitLocal = {
+			request: vi.fn(async (route: string, params: Record<string, unknown>) => {
+				requests.push({ route, params });
+				return { data: {} };
+			}),
+		};
+		const appLocal = {
+			getInstallationOctokit: vi.fn(async () => octokitLocal),
+		} as never;
+
+		await maybeSubmitReview({
+			app: appLocal,
+			installationId: 1,
+			owner: "o",
+			repo: "r",
+			pullNumber: 7,
+			pullRequest: {
+				draft: false,
+				head: { sha: "sha" },
+				additions: 0,
+				deletions: 0,
+				changed_files: 0,
+				title: "t",
+				body: null,
+			},
+			extraInstructions: "",
+			force: true,
+			config: {
+				...baseArgs.config,
+				reviewEnabled: true,
+				reviewCommentPrefix: "ai-review-bot",
+			},
+		});
+
+		const comment = requests.find((r) =>
+			r.route.includes("/issues/{issue_number}/comments"),
+		);
+		expect(comment?.params.body).toContain("2026-06-09T07:21:30Z");
+		expect(
+			requests.some((r) => r.route.includes("/pulls/{pull_number}/reviews")),
+		).toBe(false);
+	});
+
 	it("posts fallback comment with findings when all retries are exhausted", async () => {
 		vi.useFakeTimers();
 		const { app, request } = buildMockApp();

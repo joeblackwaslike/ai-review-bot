@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	buildReview,
 	buildReviewComments,
@@ -679,6 +679,65 @@ describe("runAgent caching + telemetry", () => {
 			expect(out.rateLimit.retryAfterSeconds).toBe(42);
 			expect(out.rateLimit.inputTokensResetAt).toBe("2026-06-09T07:21:30Z");
 		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// buildReview rate-limit decision
+// ---------------------------------------------------------------------------
+
+describe("buildReview rate-limit decision", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("returns a RATE_LIMITED decision with the reset time when every agent 429s", async () => {
+		vi.useFakeTimers();
+		const err = Object.assign(new Error("429"), {
+			statusCode: 429,
+			responseHeaders: {
+				"retry-after": "42",
+				"anthropic-ratelimit-input-tokens-reset": "2026-06-09T07:21:30Z",
+			},
+		});
+		mockGenerateObject.mockRejectedValue(err);
+
+		const octokit = {
+			request: vi.fn(async (route: string) =>
+				route.includes("/reviews") ? { data: [] } : { data: {} },
+			),
+			paginate: vi.fn(async () => []),
+		};
+
+		const promise = buildReview({
+			octokit: octokit as never,
+			owner: "o",
+			repo: "r",
+			pullNumber: 1,
+			headSha: "sha",
+			title: "t",
+			body: null,
+			additions: 0,
+			deletions: 0,
+			changedFiles: 0,
+			labels: [],
+			commentPrefix: "ai-review-bot",
+			extraInstructions: "",
+			force: true,
+			provider: "anthropic",
+			agentConcurrency: 1,
+		});
+		await vi.runAllTimersAsync();
+		const decision = await promise;
+
+		expect(decision?.event).toBe("RATE_LIMITED");
+		expect(decision?.rateLimitResetAt).toBe("2026-06-09T07:21:30Z");
 	});
 });
 

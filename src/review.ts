@@ -54,11 +54,13 @@ export interface ReviewMetadata {
 }
 
 export interface ReviewDecision {
-	event: "COMMENT" | "REQUEST_CHANGES" | "APPROVE";
+	event: "COMMENT" | "REQUEST_CHANGES" | "APPROVE" | "RATE_LIMITED";
 	body: string;
 	comments: ReviewComment[];
 	metadata: ReviewMetadata;
 	validLinesByPath: Map<string, Set<number>>;
+	rateLimitResetAt?: string;
+	rateLimitRetryAfterSeconds?: number;
 }
 
 interface ReviewComment {
@@ -739,6 +741,31 @@ export async function buildReview(
 		} else if (o.status === "rate_limited") {
 			rateLimited.push(o.rateLimit);
 		}
+	}
+
+	if (agentResults.length === 0 && rateLimited.length > 0) {
+		// Pick the agent with the longest retry-after as "worst"; at concurrency 1
+		// against a single provider all rate-limited agents carry the same headers,
+		// so this is representative.
+		const worst = rateLimited.reduce((a, b) =>
+			(b.retryAfterSeconds ?? 0) > (a.retryAfterSeconds ?? 0) ? b : a,
+		);
+		return {
+			event: "RATE_LIMITED",
+			body: "",
+			comments: [],
+			metadata: {
+				model: selection.model,
+				tier1Count: TIER1_SKILLS.length,
+				tier2Skills: [],
+				generalFindings: 0,
+				inlineComments: 0,
+				cost: 0,
+			},
+			validLinesByPath: new Map(),
+			rateLimitResetAt: worst.inputTokensResetAt,
+			rateLimitRetryAfterSeconds: worst.retryAfterSeconds,
+		};
 	}
 
 	if (agentResults.length === 0) {
