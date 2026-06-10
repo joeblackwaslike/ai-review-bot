@@ -242,6 +242,7 @@ describe("buildReview", () => {
 		extraInstructions: "",
 		force: false,
 		provider: "anthropic" as const,
+		agentConcurrency: 1,
 	};
 
 	it("converts model output into a review with validated inline comments", async () => {

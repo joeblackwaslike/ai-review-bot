@@ -1,6 +1,7 @@
 import { APICallError } from "@ai-sdk/provider";
 import { generateObject } from "ai";
 import { z } from "zod";
+import { mapWithConcurrency } from "./concurrency.js";
 import { computeCost, createAIModel } from "./models.js";
 import { buildAgentSystemPrompt, buildUserMessage } from "./prompt.js";
 import type { ModelSelection } from "./router.js";
@@ -40,6 +41,7 @@ interface ReviewContext {
 	extraInstructions: string;
 	force: boolean;
 	provider: "anthropic" | "openai";
+	agentConcurrency: number;
 }
 
 export interface ReviewMetadata {
@@ -657,21 +659,40 @@ export async function buildReview(
 		})),
 	];
 
-	const settled = await Promise.allSettled(
-		allSkills.map(({ skillPath }) =>
-			runAgent(skillPath, userMessage, selection, customPrompt),
-		),
+	const outcomes = await mapWithConcurrency(
+		allSkills,
+		context.agentConcurrency,
+		async ({ skillPath }, i) => {
+			const t0 = Date.now();
+			const outcome = await runAgent(
+				skillPath,
+				userMessage,
+				selection,
+				customPrompt,
+			);
+			console.log("agent done", {
+				idx: i + 1,
+				total: allSkills.length,
+				skillPath,
+				status: outcome.status,
+				ms: Date.now() - t0,
+			});
+			return outcome;
+		},
 	);
 
 	const agentResults: ModelReview[] = [];
+	const rateLimited: RateLimitInfo[] = [];
 	let totalPromptTokens = 0;
 	let totalCompletionTokens = 0;
 
-	for (const r of settled) {
-		if (r.status === "fulfilled" && r.value.status === "ok") {
-			agentResults.push(r.value.review);
-			totalPromptTokens += r.value.usage.promptTokens;
-			totalCompletionTokens += r.value.usage.completionTokens;
+	for (const o of outcomes) {
+		if (o.status === "ok") {
+			agentResults.push(o.review);
+			totalPromptTokens += o.usage.promptTokens;
+			totalCompletionTokens += o.usage.completionTokens;
+		} else if (o.status === "rate_limited") {
+			rateLimited.push(o.rateLimit);
 		}
 	}
 
@@ -684,6 +705,7 @@ export async function buildReview(
 		tier1: TIER1_SKILLS.length,
 		tier2: tier2Matches.length,
 		succeeded: agentResults.length,
+		rateLimited: rateLimited.length,
 		notOk: allSkills.length - agentResults.length,
 	});
 

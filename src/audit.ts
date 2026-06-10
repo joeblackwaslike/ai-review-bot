@@ -8,6 +8,8 @@ import {
 	openDraftPr,
 	postProviderReview,
 } from "./audit-pr.js";
+import { mapWithConcurrency } from "./concurrency.js";
+import { parseAgentConcurrency } from "./config.js";
 import { buildAuditUserMessage } from "./prompt.js";
 import {
 	type ModelReview,
@@ -78,14 +80,14 @@ export async function runAuditPass(opts: {
 			extraInstructions,
 			files: batch,
 		});
-		const settled = await Promise.allSettled(
-			TIER1_SKILLS.map((skill) =>
-				runAgent(skill, userMessage, selection, extraInstructions),
-			),
+		const concurrency = parseAgentConcurrency();
+		const outcomes = await mapWithConcurrency(
+			TIER1_SKILLS,
+			concurrency,
+			(skill) => runAgent(skill, userMessage, selection, extraInstructions),
 		);
-		for (const r of settled) {
-			if (r.status === "fulfilled" && r.value.status === "ok")
-				reviews.push(r.value.review);
+		for (const o of outcomes) {
+			if (o.status === "ok") reviews.push(o.review);
 		}
 	}
 

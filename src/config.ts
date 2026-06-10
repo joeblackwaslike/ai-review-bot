@@ -44,6 +44,13 @@ function validatePrivateKey(key: string): string {
 	return key;
 }
 
+export function parseAgentConcurrency(): number {
+	return Math.max(
+		1,
+		Math.floor(Number(process.env.AGENT_CONCURRENCY ?? "1")) || 1,
+	);
+}
+
 export function getConfig(): AppConfig {
 	return {
 		appId: getRequiredEnv("GITHUB_APP_ID"),
@@ -59,10 +66,7 @@ export function getConfig(): AppConfig {
 		),
 		reviewCommand: process.env.REVIEW_COMMAND ?? "/ai-review",
 		provider: "anthropic",
-		agentConcurrency: Math.max(
-			1,
-			Math.floor(Number(process.env.AGENT_CONCURRENCY ?? "1")) || 1,
-		),
+		agentConcurrency: parseAgentConcurrency(),
 	};
 }
 
@@ -82,9 +86,6 @@ export function getOpenAIAppConfig(): AppConfig {
 		),
 		reviewCommand: process.env.REVIEW_COMMAND ?? "/ai-review",
 		provider: "openai",
-		agentConcurrency: Math.max(
-			1,
-			Math.floor(Number(process.env.AGENT_CONCURRENCY ?? "1")) || 1,
-		),
+		agentConcurrency: parseAgentConcurrency(),
 	};
 }
