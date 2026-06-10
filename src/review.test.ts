@@ -739,6 +739,72 @@ describe("buildReview rate-limit decision", () => {
 		expect(decision?.event).toBe("RATE_LIMITED");
 		expect(decision?.rateLimitResetAt).toBe("2026-06-09T07:21:30Z");
 	});
+
+	it("stays COMMENT (not APPROVE) when some agents succeed with zero findings but at least one is rate-limited", async () => {
+		vi.useFakeTimers();
+		// First agent call resolves ok with zero findings; the remaining 4
+		// Tier-1 agents get 429s with empty headers so computePaceDelayMs
+		// returns 0 and no real sleep occurs.
+		// The summary call (6th) also gets a mocked response so it doesn't throw.
+		const err = Object.assign(new Error("429"), {
+			statusCode: 429,
+			responseHeaders: {},
+		});
+		const summaryResponse = {
+			object: { summary: "Partial review — some agents were rate-limited." },
+			usage: { inputTokens: 10, outputTokens: 5 },
+		};
+		mockGenerateObject
+			.mockResolvedValueOnce(
+				buildGenerateObjectResponse(
+					buildModelReview({
+						event: "COMMENT",
+						general_findings: [],
+						inline_comments: [],
+					}),
+				),
+			)
+			// Agents 2–5 all 429
+			.mockRejectedValueOnce(err)
+			.mockRejectedValueOnce(err)
+			.mockRejectedValueOnce(err)
+			.mockRejectedValueOnce(err)
+			// Summary call
+			.mockResolvedValueOnce(summaryResponse);
+
+		const octokit = {
+			request: vi.fn(async (route: string) =>
+				route.includes("/reviews") ? { data: [] } : { data: {} },
+			),
+			paginate: vi.fn(async () => []),
+		};
+
+		const promise = buildReview({
+			octokit: octokit as never,
+			owner: "o",
+			repo: "r",
+			pullNumber: 1,
+			headSha: "sha",
+			title: "t",
+			body: null,
+			additions: 0,
+			deletions: 0,
+			changedFiles: 0,
+			labels: [],
+			commentPrefix: "ai-review-bot",
+			extraInstructions: "",
+			force: true,
+			provider: "anthropic",
+			agentConcurrency: 1,
+		});
+		await vi.runAllTimersAsync();
+		const decision = await promise;
+
+		// A partial review (some agents rate-limited) must NOT be APPROVE even if
+		// the succeeded agents found nothing.
+		expect(decision?.event).not.toBe("APPROVE");
+		expect(decision?.event).toBe("COMMENT");
+	});
 });
 
 describe("computePaceDelayMs", () => {

@@ -98,7 +98,7 @@ export type AgentOutcome =
 	| { status: "error" };
 
 function numOrUndef(v: string | undefined): number | undefined {
-	if (v === undefined) return undefined;
+	if (v === undefined || v.trim() === "") return undefined;
 	const n = Number(v);
 	return Number.isFinite(n) ? n : undefined;
 }
@@ -701,9 +701,9 @@ export async function buildReview(
 				selection,
 				customPrompt,
 			);
-			if (outcome.status === "ok") lastRateLimit = outcome.rateLimit;
-			else if (outcome.status === "rate_limited")
-				lastRateLimit = outcome.rateLimit;
+			// Sequential handoff at the default concurrency 1; at AGENT_CONCURRENCY>1 this is a
+			// benign best-effort race (pacing only needs an approximate recent signal).
+			if (outcome.status !== "error") lastRateLimit = outcome.rateLimit;
 			console.log("agent done", {
 				idx: i + 1,
 				total: allSkills.length,
@@ -803,8 +803,11 @@ export async function buildReview(
 		dropped: modelReview.inline_comments.length - reviewComments.length,
 	});
 
-	// Upgrade to APPROVE when all agents found nothing to flag
+	// Upgrade to APPROVE only when ALL agents succeeded AND none found anything to flag.
+	// If any agent was rate-limited or errored, the review is partial — keep COMMENT.
+	const allAgentsSucceeded = agentResults.length === allSkills.length;
 	const finalEvent: ReviewDecision["event"] =
+		allAgentsSucceeded &&
 		modelReview.event === "COMMENT" &&
 		modelReview.general_findings.length === 0 &&
 		reviewComments.length === 0
