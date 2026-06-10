@@ -26,6 +26,7 @@ vi.mock("./config.js", () => ({
 		reviewCommentPrefix: "ai-review-bot",
 		reviewCommand: "/ai-review",
 		provider: "anthropic",
+		agentConcurrency: 1,
 	}),
 }));
 
@@ -61,6 +62,7 @@ const baseArgs = {
 		reviewCommentPrefix: "ai-review-bot",
 		reviewCommand: "/ai-review",
 		provider: "anthropic" as const,
+		agentConcurrency: 1,
 	},
 };
 

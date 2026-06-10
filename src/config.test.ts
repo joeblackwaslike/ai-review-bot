@@ -116,3 +116,18 @@ describe("getOpenAIAppConfig reviewCommentPrefix", () => {
 		expect(getOpenAIAppConfig().reviewCommentPrefix).toBe("codex-review-bot");
 	});
 });
+
+describe("agentConcurrency", () => {
+	it("defaults to 1 and parses AGENT_CONCURRENCY", () => {
+		setRequiredEnv();
+		delete process.env.AGENT_CONCURRENCY;
+		expect(getConfig().agentConcurrency).toBe(1);
+		process.env.AGENT_CONCURRENCY = "3";
+		expect(getConfig().agentConcurrency).toBe(3);
+		process.env.AGENT_CONCURRENCY = "abc";
+		expect(getConfig().agentConcurrency).toBe(1);
+		process.env.AGENT_CONCURRENCY = "0";
+		expect(getConfig().agentConcurrency).toBe(1);
+		delete process.env.AGENT_CONCURRENCY;
+	});
+});

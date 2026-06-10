@@ -7,6 +7,7 @@ export interface AppConfig {
 	reviewCommentPrefix: string;
 	reviewCommand: string;
 	provider: "anthropic" | "openai";
+	agentConcurrency: number;
 }
 
 // Returns the first argument that is a non-blank string after trimming, else
@@ -58,6 +59,10 @@ export function getConfig(): AppConfig {
 		),
 		reviewCommand: process.env.REVIEW_COMMAND ?? "/ai-review",
 		provider: "anthropic",
+		agentConcurrency: Math.max(
+			1,
+			Math.floor(Number(process.env.AGENT_CONCURRENCY ?? "1")) || 1,
+		),
 	};
 }
 
@@ -77,5 +82,9 @@ export function getOpenAIAppConfig(): AppConfig {
 		),
 		reviewCommand: process.env.REVIEW_COMMAND ?? "/ai-review",
 		provider: "openai",
+		agentConcurrency: Math.max(
+			1,
+			Math.floor(Number(process.env.AGENT_CONCURRENCY ?? "1")) || 1,
+		),
 	};
 }
