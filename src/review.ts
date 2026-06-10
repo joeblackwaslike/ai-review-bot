@@ -185,6 +185,34 @@ export const TIER1_SKILLS: readonly string[] = [
 	"code-review-and-quality.md",
 ];
 
+const PACE_TOKEN_FLOOR = 5000; // below this many remaining input tokens, wait for reset
+const PACE_MAX_WAIT_MS = 60_000; // never sleep longer than this between agents
+
+export function computePaceDelayMs(
+	rl: RateLimitInfo | undefined,
+	nowMs: number,
+): number {
+	if (!rl) return 0;
+	if (rl.retryAfterSeconds && rl.retryAfterSeconds > 0) {
+		return Math.min(rl.retryAfterSeconds * 1000, PACE_MAX_WAIT_MS);
+	}
+	if (
+		rl.inputTokensRemaining !== undefined &&
+		rl.inputTokensRemaining < PACE_TOKEN_FLOOR
+	) {
+		const parsed = rl.inputTokensResetAt
+			? Date.parse(rl.inputTokensResetAt)
+			: Number.NaN;
+		const resetMs = Number.isFinite(parsed) ? parsed : nowMs + 1000;
+		return Math.min(Math.max(0, resetMs - nowMs), PACE_MAX_WAIT_MS);
+	}
+	return 0;
+}
+
+function sleep(ms: number): Promise<void> {
+	return new Promise((r) => setTimeout(r, ms));
+}
+
 export async function runAgent(
 	skillPath: string,
 	sharedContext: string,
@@ -659,6 +687,7 @@ export async function buildReview(
 		})),
 	];
 
+	let lastRateLimit: RateLimitInfo | undefined;
 	const outcomes = await mapWithConcurrency(
 		allSkills,
 		context.agentConcurrency,
@@ -670,6 +699,9 @@ export async function buildReview(
 				selection,
 				customPrompt,
 			);
+			if (outcome.status === "ok") lastRateLimit = outcome.rateLimit;
+			else if (outcome.status === "rate_limited")
+				lastRateLimit = outcome.rateLimit;
 			console.log("agent done", {
 				idx: i + 1,
 				total: allSkills.length,
@@ -678,6 +710,19 @@ export async function buildReview(
 				ms: Date.now() - t0,
 			});
 			return outcome;
+		},
+		{
+			onBeforeEach: async (i) => {
+				if (i === 0) return; // nothing learned yet
+				const delay = computePaceDelayMs(lastRateLimit, Date.now());
+				if (delay > 0) {
+					console.log("pacing before next agent", {
+						idx: i + 1,
+						delayMs: delay,
+					});
+					await sleep(delay);
+				}
+			},
 		},
 	);
 

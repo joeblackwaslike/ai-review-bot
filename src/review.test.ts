@@ -3,6 +3,7 @@ import {
 	buildReview,
 	buildReviewComments,
 	collectRightSideLines,
+	computePaceDelayMs,
 	runAgent,
 } from "./review.js";
 import type { ModelSelection } from "./router.js";
@@ -678,5 +679,45 @@ describe("runAgent caching + telemetry", () => {
 			expect(out.rateLimit.retryAfterSeconds).toBe(42);
 			expect(out.rateLimit.inputTokensResetAt).toBe("2026-06-09T07:21:30Z");
 		}
+	});
+});
+
+describe("computePaceDelayMs", () => {
+	const now = Date.parse("2026-06-09T07:20:00Z");
+	it("returns 0 when plenty of tokens remain", () => {
+		expect(computePaceDelayMs({ inputTokensRemaining: 25000 }, now)).toBe(0);
+	});
+	it("waits until reset when remaining is below the floor", () => {
+		const d = computePaceDelayMs(
+			{ inputTokensRemaining: 500, inputTokensResetAt: "2026-06-09T07:20:08Z" },
+			now,
+		);
+		expect(d).toBeGreaterThan(0);
+		expect(d).toBeLessThanOrEqual(8000);
+	});
+	it("honors retry-after and caps the wait", () => {
+		expect(computePaceDelayMs({ retryAfterSeconds: 9999 }, now)).toBe(60000); // capped
+	});
+	it("returns 0 for undefined info", () => {
+		expect(computePaceDelayMs(undefined, now)).toBe(0);
+	});
+	it("clamps to 0 when the reset time is in the past", () => {
+		expect(
+			computePaceDelayMs(
+				{
+					inputTokensRemaining: 500,
+					inputTokensResetAt: "2026-06-09T07:19:00Z",
+				},
+				now,
+			),
+		).toBe(0);
+	});
+	it("falls back (no NaN) when the reset timestamp is malformed", () => {
+		expect(
+			computePaceDelayMs(
+				{ inputTokensRemaining: 500, inputTokensResetAt: "not-a-date" },
+				now,
+			),
+		).toBe(1000);
 	});
 });
