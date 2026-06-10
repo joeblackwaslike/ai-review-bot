@@ -38,7 +38,9 @@ This is all in `src/review.ts` / `src/prompt.ts`, which are **provider-agnostic*
 
 ## Design
 
-### 1. Cache the shared diff as a prefix (primary lever)
+### 1. Fix + extend prompt caching (primary lever)
+
+**Caching is currently non-functional in production.** `CLAUDE.md` claims `cache_control: { type: "ephemeral" }` is set on every agent's system prompt, but the **Anthropic dashboard for the bot's API key reports 0% cache usage** — so the `cache_control` is not actually engaging (likely the Vercel AI SDK / `@ai-sdk/anthropic` `providerOptions` isn't wiring it through, and/or the per-agent system prompts never repeat or never reach the ~1024-token cache minimum). Part 1 therefore **fixes the wiring** *and* extends caching to the shared diff. Beyond rate limits, Anthropic reports orgs typically see **input costs drop 50–90%** with working caching ([prompt-caching docs](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)).
 
 Caching is **prefix-based** (`tools → system → messages`). Today the per-agent **system** varies (`buildAgentSystemPrompt(skill)`) and the shared **diff** is the user message — so the diff sits *after* the divergent prefix and can't be shared across agents.
 
@@ -51,6 +53,7 @@ Then agent 1 writes the diff to cache (`cache_creation`, counts toward ITPM once
 
 - Touches `src/prompt.ts` (compose a shared cached block + a per-skill block) and `src/review.ts` `runAgent` (pass `cache_control` via the AI SDK's Anthropic `providerOptions`).
 - Applies to both `buildUserMessage` (PR review) and `buildAuditUserMessage` (CLI audit).
+- **Prove it actually caches** (it doesn't today): a test asserting `usage.cache_read_input_tokens > 0` on a repeat agent, and a post-deploy check that the Anthropic dashboard cache rate goes from 0% to non-zero.
 - The shared block is normally ≫1024 tokens (caching's minimum); tiny diffs that don't cache also don't hit limits. Default 5-minute TTL; if sequential execution of many agents risks exceeding 5 min, use the 1-hour TTL knob.
 - **Exact AI SDK syntax** for `cacheControl` provider options, reading `response.headers`, and the typed rate-limit error is verified during planning via `agent-skills:web-research` / context7 (AI SDK v6 + `@ai-sdk/anthropic` docs).
 
@@ -120,5 +123,6 @@ Quality gates (CLAUDE.md): `npm run typecheck && npm run lint && npm run test` g
 ## Verification
 
 - Re-run a large PR through the bot (after the operational tier raise) and confirm via Vercel logs: one `cache_creation` diff write, subsequent agents showing `cache_read`, no 429 cascade, a posted review.
+- Confirm the **Anthropic dashboard cache rate moves from 0% to non-zero** for the bot's API key after deploy (the proof the wiring is finally working).
 - Force a rate limit (low `AGENT_CONCURRENCY` aside, or a tiny test tier) and confirm the **actionable fallback comment** with a real reset time appears instead of silence.
 - Confirm both `/api/github/webhook` and `/api/github/webhook-openai` paths behave identically (shared code).
