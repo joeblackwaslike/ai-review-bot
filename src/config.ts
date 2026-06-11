@@ -7,6 +7,7 @@ export interface AppConfig {
 	reviewCommentPrefix: string;
 	reviewCommand: string;
 	provider: "anthropic" | "openai";
+	feedbackEnabled: boolean;
 }
 
 // Returns the first argument that is a non-blank string after trimming, else
@@ -58,6 +59,7 @@ export function getConfig(): AppConfig {
 		),
 		reviewCommand: process.env.REVIEW_COMMAND ?? "/ai-review",
 		provider: "anthropic",
+		feedbackEnabled: process.env.FEEDBACK_ENABLED === "true",
 	};
 }
 
@@ -77,5 +79,6 @@ export function getOpenAIAppConfig(): AppConfig {
 		),
 		reviewCommand: process.env.REVIEW_COMMAND ?? "/ai-review",
 		provider: "openai",
+		feedbackEnabled: process.env.FEEDBACK_ENABLED === "true",
 	};
 }

@@ -61,6 +61,7 @@ const baseArgs = {
 		reviewCommentPrefix: "ai-review-bot",
 		reviewCommand: "/ai-review",
 		provider: "anthropic" as const,
+		feedbackEnabled: false,
 	},
 };
 
