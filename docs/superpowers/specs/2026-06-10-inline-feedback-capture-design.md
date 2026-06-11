@@ -63,8 +63,8 @@ Scheduled poll (NEW)
 | `src/feedback/poll.ts` | create | Orchestrates one poll pass: `listPollDue` → group by `(provider, installationId)` → resolve octokit via the right App → `diffReactions` → `appendFeedbackEvent` + `markPolled` → `prune`. Exports `runFeedbackPoll(deps)`. |
 | `api/cron/poll-feedback.ts` | create | Thin HTTP handler. Verifies `CRON_SECRET` (Vercel Cron sends it as a header/secret), then calls `runFeedbackPoll`. Returns a small JSON summary `{polled, events, pruned}`. |
 | `src/feedback/types.ts` | create | Shared types: `PostedCommentRecord`, `FeedbackEvent`, `Verdict = "up" \| "down"`. |
-| `src/review.ts` | modify | Thread skill provenance: each `ModelInlineComment` carries the skill(s) that raised it; `mergeReviews` keeps the **set** of source skills per `path:line` (not just the conservative winner). |
-| `src/github-app.ts` | modify | After a successful `POST /reviews`, map created comment IDs → provenance → `store.recordPostedComment(...)`. Gated by `FEEDBACK_ENABLED`. Add the invitation line to the summary body. |
+| `src/review.ts` | modify | Compute skill provenance in `buildReview` (no `mergeReviews` change): scan every successful agent's inline comments grouped by `path:line` → set of source skills; expose `commentProvenance` on `ReviewDecision`. Add `feedbackEnabled` to `ReviewContext` to gate provenance compute + the invitation line. |
+| `src/github-app.ts` | modify | `postReviewWithRetry` returns the created review id. After a successful post, list the review's comments, map each to provenance, and `store.recordPostedComment(...)`. Gated by `FEEDBACK_ENABLED`; best-effort (KV failure never breaks the review). Passes `feedbackEnabled` into the `buildReview` context. |
 | `src/config.ts` | modify | Parse `FEEDBACK_ENABLED` (default `false`), KV creds, `CRON_SECRET`. |
 | `vercel.json` | modify/create | Add the `crons` entry. |
 
@@ -89,7 +89,7 @@ Scheduled poll (NEW)
     "path": "src/review.ts",
     "line": 42,
     "skills": ["silent-failure-hunter.md"],  // provenance (≥1)
-    "severity": "high",
+    "title": "Possible null deref",          // inline comment title (inline comments carry no severity)
     "body": "…the inline comment text…",
     "postedAtMs": 1781070000000,
     "expiresAtMs": 1782279600000,   // postedAt + 14d
@@ -105,7 +105,7 @@ Scheduled poll (NEW)
     "provider": "anthropic",
     "owner": "joeblackwaslike", "repo": "ai-review-bot", "pr": 14,
     "path": "src/review.ts", "line": 42,
-    "skills": ["silent-failure-hunter.md"], "severity": "high",
+    "skills": ["silent-failure-hunter.md"], "title": "Possible null deref",
     "verdict": "down",
     "reactor": "octocat",
     "reactedAtMs": 1781071000000,    // reaction.created_at
@@ -113,18 +113,19 @@ Scheduled poll (NEW)
   }
   ```
 
-> Denormalizing `skills`/`path`/`severity` onto each event means the events list is
+> Denormalizing `skills`/`path`/`title` onto each event means the events list is
 > self-contained for analysis even after the `fb:cmt:*` context TTLs out.
 
 ## Provenance threading (detail)
 
-1. `runAgent` already knows its `skillPath`. Carry it onto the inline comments it returns
-   (attach `skill` to each `ModelInlineComment`, or return a parallel map). Keep the change
-   minimal and local.
-2. `mergeReviews` dedupes inline comments by `path:line`. Today the conservative
-   (`REQUEST_CHANGES`) comment wins and the loser's skill is dropped. Change: keep a
-   `skills: string[]` set accumulating **every** skill that flagged that `path:line`, while
-   still choosing one comment body to display (current rule unchanged).
+1. In `buildReview` the agent outcomes are collected alongside their `skillPath` (the fan-out
+   maps over `allSkills`). Build a `Map<"path:line", Set<skill>>` by scanning **every**
+   successful agent's `inline_comments` — this preserves the full set of skills that flagged
+   each location, independent of which comment body `mergeReviews` chose to display.
+   `mergeReviews` is **not** modified.
+2. Expose the result as `commentProvenance: Map<"path:line", { skills: string[]; title: string }>`
+   on `ReviewDecision` (computed only when `context.feedbackEnabled`). `title` comes from the
+   merged/displayed inline comment at that location.
 3. After `POST /reviews` succeeds, fetch the created comments:
    `GET /repos/{o}/{r}/pulls/{n}/comments` and filter to `pull_request_review_id === review.id`.
    Match each returned comment to our intended one by `(path, line)` (body as a tiebreak),
