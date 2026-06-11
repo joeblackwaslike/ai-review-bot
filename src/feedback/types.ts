@@ -16,6 +16,8 @@ export interface PostedCommentRecord {
 	skills: string[];
 	/** Title of the displayed inline comment. */
 	title: string;
+	/** `body`/`headSha`/`postedAtMs` are captured for the future refinement system's context;
+	 * they are stored but not read within this feature. */
 	body: string;
 	postedAtMs: number;
 	expiresAtMs: number;

@@ -59,6 +59,8 @@ export async function diffReactions(
 	record: PostedCommentRecord,
 	nowMs: number,
 ): Promise<{ events: FeedbackEvent[]; lastSeen: Record<string, Verdict> }> {
+	// Single page of up to 100 reactions — an inline review comment never realistically
+	// accrues more, so we deliberately skip pagination here (unlike the persist path).
 	const res = await octokit.request(
 		"GET /repos/{owner}/{repo}/pulls/comments/{comment_id}/reactions",
 		{
