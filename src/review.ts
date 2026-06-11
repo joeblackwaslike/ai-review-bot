@@ -39,6 +39,7 @@ interface ReviewContext {
 	extraInstructions: string;
 	force: boolean;
 	provider: "anthropic" | "openai";
+	feedbackEnabled: boolean;
 }
 
 export interface ReviewMetadata {
@@ -56,6 +57,8 @@ export interface ReviewDecision {
 	comments: ReviewComment[];
 	metadata: ReviewMetadata;
 	validLinesByPath: Map<string, Set<number>>;
+	/** path:line → skills that flagged it + the displayed title. Present only when feedbackEnabled. */
+	commentProvenance?: Map<string, { skills: string[]; title: string }>;
 }
 
 interface ReviewComment {
@@ -619,6 +622,36 @@ export async function buildReview(
 		dropped: modelReview.inline_comments.length - reviewComments.length,
 	});
 
+	let commentProvenance:
+		| Map<string, { skills: string[]; title: string }>
+		| undefined;
+	if (context.feedbackEnabled) {
+		const skillsByKey = new Map<string, Set<string>>();
+		settled.forEach((result, i) => {
+			if (result.status !== "fulfilled" || result.value === null) return;
+			const skillPath = allSkills[i]?.skillPath;
+			if (!skillPath) return;
+			for (const c of result.value.review.inline_comments) {
+				const key = `${c.path}:${c.line}`;
+				const set = skillsByKey.get(key) ?? new Set<string>();
+				set.add(skillPath);
+				skillsByKey.set(key, set);
+			}
+		});
+		const titleByKey = new Map<string, string>();
+		for (const c of modelReview.inline_comments) {
+			titleByKey.set(`${c.path}:${c.line}`, c.title);
+		}
+		commentProvenance = new Map();
+		for (const rc of reviewComments) {
+			const key = `${rc.path}:${rc.line}`;
+			commentProvenance.set(key, {
+				skills: [...(skillsByKey.get(key) ?? [])],
+				title: titleByKey.get(key) ?? "",
+			});
+		}
+	}
+
 	// Upgrade to APPROVE when all agents found nothing to flag
 	const finalEvent: ReviewDecision["event"] =
 		modelReview.event === "COMMENT" &&
@@ -675,6 +708,11 @@ export async function buildReview(
 			? `Inline comments: ${reviewComments.length}`
 			: "Inline comments: none";
 
+	const feedbackInvite =
+		context.feedbackEnabled && reviewComments.length > 0
+			? "💬 React 👍 / 👎 on any inline comment to tell us if it helped — it trains our reviewers."
+			: "";
+
 	const tier2Notice =
 		tier2Matches.length > 0
 			? [
@@ -696,6 +734,7 @@ export async function buildReview(
 		...tier2Notice,
 		"",
 		...(finalEvent === "APPROVE" ? [] : [inlineSummary]),
+		feedbackInvite,
 		findingsBlock ? `\n${findingsBlock}\n` : "",
 		reviewMarker,
 		"",
@@ -719,5 +758,6 @@ export async function buildReview(
 			cost,
 		},
 		validLinesByPath: validLines,
+		commentProvenance,
 	};
 }

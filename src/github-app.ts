@@ -244,6 +244,7 @@ export async function maybeSubmitReview(args: {
 		extraInstructions,
 		force,
 		provider: config.provider,
+		feedbackEnabled: config.feedbackEnabled,
 	});
 
 	if (!review) {
