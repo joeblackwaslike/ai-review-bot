@@ -40,7 +40,7 @@ export function computeReactionDelta(
 	return { changes, lastSeen: nextLastSeen };
 }
 
-interface OctokitLike {
+export interface OctokitLike {
 	request: (
 		route: string,
 		params: Record<string, unknown>,

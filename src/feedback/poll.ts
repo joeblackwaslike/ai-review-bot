@@ -1,5 +1,5 @@
 import type { KvClient } from "./kv.js";
-import { diffReactions } from "./reactions.js";
+import { diffReactions, type OctokitLike } from "./reactions.js";
 import {
 	appendFeedbackEvent,
 	listActiveComments,
@@ -7,13 +7,6 @@ import {
 	prune,
 } from "./store.js";
 import type { Provider } from "./types.js";
-
-interface OctokitLike {
-	request: (
-		route: string,
-		params: Record<string, unknown>,
-	) => Promise<{ data: unknown }>;
-}
 
 export interface PollDeps {
 	kv: KvClient;
