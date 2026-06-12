@@ -86,7 +86,8 @@ const AGENT_SKILLS = [
 
 const SUBMIT_REVIEW_TOOL = {
 	name: "submit_review",
-	description: "Submit the final code review with findings and inline comments.",
+	description:
+		"Submit the final code review with findings and inline comments.",
 	input_schema: {
 		type: "object" as const,
 		additionalProperties: false,
@@ -140,7 +141,9 @@ async function runAgent(
 	const response = await client.messages.create({
 		model,
 		max_tokens: 4096,
-		system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
+		system: [
+			{ type: "text", text: system, cache_control: { type: "ephemeral" } },
+		],
 		tool_choice: { type: "tool", name: "submit_review" },
 		tools: [SUBMIT_REVIEW_TOOL],
 		messages: [{ role: "user", content: userMessage }],
@@ -394,7 +397,13 @@ export async function buildReview(
 
 	// Agent layer: run all 5 skill frameworks in parallel.
 	const agentPromises = AGENT_SKILLS.map((skillPath) =>
-		runAgent(skillPath, userMessage, config.anthropicModel, client, customPrompt),
+		runAgent(
+			skillPath,
+			userMessage,
+			config.anthropicModel,
+			client,
+			customPrompt,
+		),
 	);
 
 	const settled = await Promise.allSettled(agentPromises);
@@ -402,7 +411,10 @@ export async function buildReview(
 	const agentResults: ModelReview[] = [];
 	for (const [i, result] of settled.entries()) {
 		if (result.status === "rejected") {
-			console.error("Agent failed", { skillPath: AGENT_SKILLS[i], error: result.reason });
+			console.error("Agent failed", {
+				skillPath: AGENT_SKILLS[i],
+				error: result.reason,
+			});
 		} else if (result.value !== null) {
 			agentResults.push(result.value);
 		}

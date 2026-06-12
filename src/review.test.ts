@@ -333,7 +333,9 @@ describe("buildReview", () => {
 		const headSha = "1234567890abcdef";
 
 		mockCreate.mockResolvedValue(
-			buildAnthropicToolUseResponse(buildModelReview({ summary: "Re-review." })),
+			buildAnthropicToolUseResponse(
+				buildModelReview({ summary: "Re-review." }),
+			),
 		);
 
 		const octokit = buildOctokit({

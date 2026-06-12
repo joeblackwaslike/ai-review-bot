@@ -34,9 +34,7 @@ describe("parseReviewCommand", () => {
 	});
 
 	it("returns null for unrelated comments", () => {
-		expect(
-			parseReviewCommand("looks good to me", "/claude-review"),
-		).toBeNull();
+		expect(parseReviewCommand("looks good to me", "/claude-review")).toBeNull();
 	});
 });
 
