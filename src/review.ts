@@ -1,5 +1,7 @@
+import { APICallError } from "@ai-sdk/provider";
 import { generateObject } from "ai";
 import { z } from "zod";
+import { mapWithConcurrency } from "./concurrency.js";
 import { computeCost, createAIModel } from "./models.js";
 import { buildAgentSystemPrompt, buildUserMessage } from "./prompt.js";
 import type { ModelSelection } from "./router.js";
@@ -40,6 +42,7 @@ interface ReviewContext {
 	force: boolean;
 	provider: "anthropic" | "openai";
 	feedbackEnabled: boolean;
+	agentConcurrency: number;
 }
 
 export interface ReviewMetadata {
@@ -52,13 +55,15 @@ export interface ReviewMetadata {
 }
 
 export interface ReviewDecision {
-	event: "COMMENT" | "REQUEST_CHANGES" | "APPROVE";
+	event: "COMMENT" | "REQUEST_CHANGES" | "APPROVE" | "RATE_LIMITED";
 	body: string;
 	comments: ReviewComment[];
 	metadata: ReviewMetadata;
 	validLinesByPath: Map<string, Set<number>>;
 	/** path:line → skills that flagged it + the displayed title. Present only when feedbackEnabled. */
 	commentProvenance?: Map<string, { skills: string[]; title: string }>;
+	rateLimitResetAt?: string;
+	rateLimitRetryAfterSeconds?: number;
 }
 
 interface ReviewComment {
@@ -77,6 +82,67 @@ interface PullRequestReview {
 interface TokenUsage {
 	promptTokens: number;
 	completionTokens: number;
+}
+
+export interface RateLimitInfo {
+	inputTokensRemaining?: number;
+	inputTokensResetAt?: string;
+	retryAfterSeconds?: number;
+}
+
+export type AgentOutcome =
+	| {
+			status: "ok";
+			review: ModelReview;
+			usage: TokenUsage;
+			rateLimit?: RateLimitInfo;
+	  }
+	| { status: "rate_limited"; rateLimit: RateLimitInfo }
+	| { status: "error" };
+
+function numOrUndef(v: string | undefined): number | undefined {
+	if (v === undefined || v.trim() === "") return undefined;
+	const n = Number(v);
+	return Number.isFinite(n) ? n : undefined;
+}
+
+function readRateLimitHeaders(
+	headers: Record<string, string> | undefined,
+): RateLimitInfo {
+	const h = headers ?? {};
+	const remaining =
+		h["anthropic-ratelimit-input-tokens-remaining"] ??
+		h["x-ratelimit-remaining-tokens"];
+	const reset =
+		h["anthropic-ratelimit-input-tokens-reset"] ??
+		h["x-ratelimit-reset-tokens"];
+	const retryAfter = h["retry-after"];
+	return {
+		inputTokensRemaining: numOrUndef(remaining),
+		inputTokensResetAt: reset,
+		retryAfterSeconds: numOrUndef(retryAfter),
+	};
+}
+
+/** Walk a thrown error (possibly a RetryError wrapping APICallError) for a 429. */
+function extractRateLimit(err: unknown): RateLimitInfo | null {
+	const candidates: unknown[] = [
+		err,
+		(err as { lastError?: unknown })?.lastError,
+		...((err as { errors?: unknown[] })?.errors ?? []),
+	];
+	for (const c of candidates) {
+		const status = (c as { statusCode?: number })?.statusCode;
+		if (
+			status === 429 ||
+			(APICallError.isInstance?.(c) && (c as APICallError).statusCode === 429)
+		) {
+			return readRateLimitHeaders(
+				(c as { responseHeaders?: Record<string, string> })?.responseHeaders,
+			);
+		}
+	}
+	return null;
 }
 
 const ModelReviewSchema = z.object({
@@ -124,33 +190,94 @@ export const TIER1_SKILLS: readonly string[] = [
 	"code-review-and-quality.md",
 ];
 
+const PACE_TOKEN_FLOOR = 5000; // below this many remaining input tokens, wait for reset
+const PACE_MAX_WAIT_MS = 60_000; // never sleep longer than this between agents
+
+export function computePaceDelayMs(
+	rl: RateLimitInfo | undefined,
+	nowMs: number,
+): number {
+	if (!rl) return 0;
+	if (rl.retryAfterSeconds && rl.retryAfterSeconds > 0) {
+		return Math.min(rl.retryAfterSeconds * 1000, PACE_MAX_WAIT_MS);
+	}
+	if (
+		rl.inputTokensRemaining !== undefined &&
+		rl.inputTokensRemaining < PACE_TOKEN_FLOOR
+	) {
+		const parsed = rl.inputTokensResetAt
+			? Date.parse(rl.inputTokensResetAt)
+			: Number.NaN;
+		const resetMs = Number.isFinite(parsed) ? parsed : nowMs + 1000;
+		return Math.min(Math.max(0, resetMs - nowMs), PACE_MAX_WAIT_MS);
+	}
+	return 0;
+}
+
+function sleep(ms: number): Promise<void> {
+	return new Promise((r) => setTimeout(r, ms));
+}
+
 export async function runAgent(
 	skillPath: string,
-	userMessage: string,
+	sharedContext: string,
 	selection: ModelSelection,
 	customPrompt: string,
-): Promise<{ review: ModelReview; usage: TokenUsage } | null> {
-	const system = buildAgentSystemPrompt(skillPath, customPrompt);
+): Promise<AgentOutcome> {
+	const skillBlock = buildAgentSystemPrompt(skillPath, customPrompt);
 
 	try {
-		const { object, usage } = await generateObject({
+		const { object, usage, providerMetadata, response } = await generateObject({
 			model: createAIModel(selection),
 			schema: ModelReviewSchema,
 			maxOutputTokens: 4096,
-			system,
-			messages: [{ role: "user", content: userMessage }],
+			maxRetries: 4,
+			messages: [
+				{
+					role: "user",
+					content: [
+						{
+							type: "text",
+							text: sharedContext,
+							providerOptions: {
+								anthropic: { cacheControl: { type: "ephemeral" } },
+							},
+						},
+						{ type: "text", text: skillBlock },
+					],
+				},
+			],
+		});
+
+		const anthro = (providerMetadata?.anthropic ?? {}) as {
+			cacheReadInputTokens?: number;
+			cacheCreationInputTokens?: number;
+		};
+		console.log("agent ok", {
+			skillPath,
+			cacheRead: anthro.cacheReadInputTokens ?? 0,
+			cacheCreation: anthro.cacheCreationInputTokens ?? 0,
 		});
 
 		return {
+			status: "ok",
 			review: object,
 			usage: {
 				promptTokens: usage.inputTokens ?? 0,
 				completionTokens: usage.outputTokens ?? 0,
 			},
+			rateLimit: readRateLimitHeaders(
+				response?.headers as Record<string, string> | undefined,
+			),
 		};
 	} catch (err) {
+		const rl = extractRateLimit(err);
+		if (rl) {
+			console.warn("agent rate-limited", { skillPath, ...rl });
+			return { status: "rate_limited", rateLimit: rl };
+		}
 		console.error("Agent threw during generateObject", { skillPath, err });
-		return null;
+		return { status: "error" };
 	}
 }
 
@@ -565,27 +692,83 @@ export async function buildReview(
 		})),
 	];
 
-	const agentPromises = allSkills.map(({ skillPath }) =>
-		runAgent(skillPath, userMessage, selection, customPrompt),
+	let lastRateLimit: RateLimitInfo | undefined;
+	const outcomes = await mapWithConcurrency(
+		allSkills,
+		context.agentConcurrency,
+		async ({ skillPath }, i) => {
+			const t0 = Date.now();
+			const outcome = await runAgent(
+				skillPath,
+				userMessage,
+				selection,
+				customPrompt,
+			);
+			// Sequential handoff at the default concurrency 1; at AGENT_CONCURRENCY>1 this is a
+			// benign best-effort race (pacing only needs an approximate recent signal).
+			if (outcome.status !== "error") lastRateLimit = outcome.rateLimit;
+			console.log("agent done", {
+				idx: i + 1,
+				total: allSkills.length,
+				skillPath,
+				status: outcome.status,
+				ms: Date.now() - t0,
+			});
+			return outcome;
+		},
+		{
+			onBeforeEach: async (i) => {
+				if (i === 0) return; // nothing learned yet
+				const delay = computePaceDelayMs(lastRateLimit, Date.now());
+				if (delay > 0) {
+					console.log("pacing before next agent", {
+						idx: i + 1,
+						delayMs: delay,
+					});
+					await sleep(delay);
+				}
+			},
+		},
 	);
 
-	const settled = await Promise.allSettled(agentPromises);
-
 	const agentResults: ModelReview[] = [];
+	const rateLimited: RateLimitInfo[] = [];
 	let totalPromptTokens = 0;
 	let totalCompletionTokens = 0;
 
-	for (const [i, result] of settled.entries()) {
-		if (result.status === "rejected") {
-			console.error("Agent failed", {
-				skillPath: allSkills[i]?.skillPath,
-				error: result.reason,
-			});
-		} else if (result.value !== null) {
-			agentResults.push(result.value.review);
-			totalPromptTokens += result.value.usage.promptTokens;
-			totalCompletionTokens += result.value.usage.completionTokens;
+	for (const o of outcomes) {
+		if (o.status === "ok") {
+			agentResults.push(o.review);
+			totalPromptTokens += o.usage.promptTokens;
+			totalCompletionTokens += o.usage.completionTokens;
+		} else if (o.status === "rate_limited") {
+			rateLimited.push(o.rateLimit);
 		}
+	}
+
+	if (agentResults.length === 0 && rateLimited.length > 0) {
+		// Pick the agent with the longest retry-after as "worst"; at concurrency 1
+		// against a single provider all rate-limited agents carry the same headers,
+		// so this is representative.
+		const worst = rateLimited.reduce((a, b) =>
+			(b.retryAfterSeconds ?? 0) > (a.retryAfterSeconds ?? 0) ? b : a,
+		);
+		return {
+			event: "RATE_LIMITED",
+			body: "",
+			comments: [],
+			metadata: {
+				model: selection.model,
+				tier1Count: TIER1_SKILLS.length,
+				tier2Skills: [],
+				generalFindings: 0,
+				inlineComments: 0,
+				cost: 0,
+			},
+			validLinesByPath: new Map(),
+			rateLimitResetAt: worst.inputTokensResetAt,
+			rateLimitRetryAfterSeconds: worst.retryAfterSeconds,
+		};
 	}
 
 	if (agentResults.length === 0) {
@@ -597,7 +780,8 @@ export async function buildReview(
 		tier1: TIER1_SKILLS.length,
 		tier2: tier2Matches.length,
 		succeeded: agentResults.length,
-		failed: allSkills.length - agentResults.length,
+		rateLimited: rateLimited.length,
+		notOk: allSkills.length - agentResults.length,
 	});
 
 	const modelReview = mergeReviews(agentResults);
@@ -627,11 +811,11 @@ export async function buildReview(
 		| undefined;
 	if (context.feedbackEnabled) {
 		const skillsByKey = new Map<string, Set<string>>();
-		settled.forEach((result, i) => {
-			if (result.status !== "fulfilled" || result.value === null) return;
+		outcomes.forEach((outcome, i) => {
+			if (outcome.status !== "ok") return;
 			const skillPath = allSkills[i]?.skillPath;
 			if (!skillPath) return;
-			for (const c of result.value.review.inline_comments) {
+			for (const c of outcome.review.inline_comments) {
 				const key = `${c.path}:${c.line}`;
 				const set = skillsByKey.get(key) ?? new Set<string>();
 				set.add(skillPath);
@@ -652,8 +836,11 @@ export async function buildReview(
 		}
 	}
 
-	// Upgrade to APPROVE when all agents found nothing to flag
+	// Upgrade to APPROVE only when ALL agents succeeded AND none found anything to flag.
+	// If any agent was rate-limited or errored, the review is partial — keep COMMENT.
+	const allAgentsSucceeded = agentResults.length === allSkills.length;
 	const finalEvent: ReviewDecision["event"] =
+		allAgentsSucceeded &&
 		modelReview.event === "COMMENT" &&
 		modelReview.general_findings.length === 0 &&
 		reviewComments.length === 0

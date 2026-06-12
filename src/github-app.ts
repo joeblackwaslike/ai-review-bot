@@ -99,7 +99,7 @@ const PR_SECTION_END = "<!-- ai-review-bot:end -->";
 
 export function buildPRSummarySection(
 	metadata: ReviewMetadata,
-	event: ReviewDecision["event"],
+	event: "COMMENT" | "REQUEST_CHANGES" | "APPROVE",
 	commentPrefix: string,
 ): string {
 	const verdict =
@@ -263,9 +263,47 @@ export async function maybeSubmitReview(args: {
 		force,
 		provider: config.provider,
 		feedbackEnabled: config.feedbackEnabled,
+		agentConcurrency: config.agentConcurrency,
 	});
 
 	if (!review) {
+		return;
+	}
+
+	if (review.event === "RATE_LIMITED") {
+		const when = review.rateLimitResetAt
+			? `resets at ${review.rateLimitResetAt}`
+			: review.rateLimitRetryAfterSeconds
+				? `retry in ~${review.rateLimitRetryAfterSeconds}s`
+				: "will reset shortly";
+		const body = `⚠️ **[${config.reviewCommentPrefix}]** Review couldn't run — the model is rate-limited (input-token budget). Budget ${when}. Push again after that, or it will auto-retry on your next commit.`;
+		await octokit.request(
+			"POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+			{
+				owner,
+				repo,
+				issue_number: pullNumber,
+				body,
+			},
+		);
+		console.log("posted rate-limit fallback comment", {
+			owner,
+			repo,
+			pullNumber,
+			when,
+		});
+		return;
+	}
+
+	if (
+		review.event !== "COMMENT" &&
+		review.event !== "REQUEST_CHANGES" &&
+		review.event !== "APPROVE"
+	) {
+		console.error(
+			"unexpected review event, skipping review POST",
+			review.event,
+		);
 		return;
 	}
 

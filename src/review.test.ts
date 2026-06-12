@@ -1,9 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	buildReview,
 	buildReviewComments,
 	collectRightSideLines,
+	computePaceDelayMs,
+	runAgent,
 } from "./review.js";
+import type { ModelSelection } from "./router.js";
 import {
 	buildGenerateObjectResponse,
 	buildInlineComment,
@@ -234,6 +237,7 @@ const baseContext = {
 	force: false,
 	provider: "anthropic" as const,
 	feedbackEnabled: false,
+	agentConcurrency: 1,
 };
 
 describe("buildReview", () => {
@@ -727,5 +731,241 @@ describe("buildReview comment provenance", () => {
 			feedbackEnabled: false,
 		});
 		expect(decision?.body ?? "").not.toContain("React 👍");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// runAgent — caching + telemetry
+// ---------------------------------------------------------------------------
+
+const sel = {
+	provider: "anthropic",
+	model: "claude-sonnet-4-6",
+	tier: 1,
+} as ModelSelection;
+
+describe("runAgent caching + telemetry", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+	});
+
+	it("sends the shared block first with ephemeral cacheControl and the skill block second", async () => {
+		mockGenerateObject.mockResolvedValue({
+			object: buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+			usage: { inputTokens: 10, outputTokens: 5 },
+			providerMetadata: {
+				anthropic: { cacheCreationInputTokens: 2000, cacheReadInputTokens: 0 },
+			},
+			response: {
+				headers: { "anthropic-ratelimit-input-tokens-remaining": "28000" },
+			},
+		});
+
+		const out = await runAgent(
+			"code-reviewer.md",
+			"SHARED_DIFF_CONTEXT",
+			sel,
+			"custom",
+		);
+
+		const call = (mockGenerateObject as ReturnType<typeof vi.fn>).mock
+			.calls[0][0];
+		const parts = call.messages[0].content;
+		expect(call.messages[0].role).toBe("user");
+		expect(parts[0].text).toBe("SHARED_DIFF_CONTEXT");
+		expect(parts[0].providerOptions.anthropic.cacheControl).toEqual({
+			type: "ephemeral",
+		});
+		expect(parts[1].text).toBe("system"); // skill block from mocked buildAgentSystemPrompt
+		expect(out?.status).toBe("ok");
+	});
+
+	it("returns status rate_limited with retryAfter on a 429", async () => {
+		const err = Object.assign(new Error("429"), {
+			statusCode: 429,
+			responseHeaders: {
+				"retry-after": "42",
+				"anthropic-ratelimit-input-tokens-reset": "2026-06-09T07:21:30Z",
+			},
+		});
+		mockGenerateObject.mockRejectedValue(err);
+
+		const out = await runAgent("code-reviewer.md", "SHARED", sel, "");
+		expect(out?.status).toBe("rate_limited");
+		if (out?.status === "rate_limited") {
+			expect(out.rateLimit.retryAfterSeconds).toBe(42);
+			expect(out.rateLimit.inputTokensResetAt).toBe("2026-06-09T07:21:30Z");
+		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// buildReview rate-limit decision
+// ---------------------------------------------------------------------------
+
+describe("buildReview rate-limit decision", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("returns a RATE_LIMITED decision with the reset time when every agent 429s", async () => {
+		vi.useFakeTimers();
+		const err = Object.assign(new Error("429"), {
+			statusCode: 429,
+			responseHeaders: {
+				"retry-after": "42",
+				"anthropic-ratelimit-input-tokens-reset": "2026-06-09T07:21:30Z",
+			},
+		});
+		mockGenerateObject.mockRejectedValue(err);
+
+		const octokit = {
+			request: vi.fn(async (route: string) =>
+				route.includes("/reviews") ? { data: [] } : { data: {} },
+			),
+			paginate: vi.fn(async () => []),
+		};
+
+		const promise = buildReview({
+			octokit: octokit as never,
+			owner: "o",
+			repo: "r",
+			pullNumber: 1,
+			headSha: "sha",
+			title: "t",
+			body: null,
+			additions: 0,
+			deletions: 0,
+			changedFiles: 0,
+			labels: [],
+			commentPrefix: "ai-review-bot",
+			extraInstructions: "",
+			force: true,
+			provider: "anthropic",
+			feedbackEnabled: false,
+			agentConcurrency: 1,
+		});
+		await vi.runAllTimersAsync();
+		const decision = await promise;
+
+		expect(decision?.event).toBe("RATE_LIMITED");
+		expect(decision?.rateLimitResetAt).toBe("2026-06-09T07:21:30Z");
+	});
+
+	it("stays COMMENT (not APPROVE) when some agents succeed with zero findings but at least one is rate-limited", async () => {
+		vi.useFakeTimers();
+		// First agent call resolves ok with zero findings; the remaining 4
+		// Tier-1 agents get 429s with empty headers so computePaceDelayMs
+		// returns 0 and no real sleep occurs.
+		// The summary call (6th) also gets a mocked response so it doesn't throw.
+		const err = Object.assign(new Error("429"), {
+			statusCode: 429,
+			responseHeaders: {},
+		});
+		const summaryResponse = {
+			object: { summary: "Partial review — some agents were rate-limited." },
+			usage: { inputTokens: 10, outputTokens: 5 },
+		};
+		mockGenerateObject
+			.mockResolvedValueOnce(
+				buildGenerateObjectResponse(
+					buildModelReview({
+						event: "COMMENT",
+						general_findings: [],
+						inline_comments: [],
+					}),
+				),
+			)
+			// Agents 2–5 all 429
+			.mockRejectedValueOnce(err)
+			.mockRejectedValueOnce(err)
+			.mockRejectedValueOnce(err)
+			.mockRejectedValueOnce(err)
+			// Summary call
+			.mockResolvedValueOnce(summaryResponse);
+
+		const octokit = {
+			request: vi.fn(async (route: string) =>
+				route.includes("/reviews") ? { data: [] } : { data: {} },
+			),
+			paginate: vi.fn(async () => []),
+		};
+
+		const promise = buildReview({
+			octokit: octokit as never,
+			owner: "o",
+			repo: "r",
+			pullNumber: 1,
+			headSha: "sha",
+			title: "t",
+			body: null,
+			additions: 0,
+			deletions: 0,
+			changedFiles: 0,
+			labels: [],
+			commentPrefix: "ai-review-bot",
+			extraInstructions: "",
+			force: true,
+			provider: "anthropic",
+			feedbackEnabled: false,
+			agentConcurrency: 1,
+		});
+		await vi.runAllTimersAsync();
+		const decision = await promise;
+
+		// A partial review (some agents rate-limited) must NOT be APPROVE even if
+		// the succeeded agents found nothing.
+		expect(decision?.event).not.toBe("APPROVE");
+		expect(decision?.event).toBe("COMMENT");
+	});
+});
+
+describe("computePaceDelayMs", () => {
+	const now = Date.parse("2026-06-09T07:20:00Z");
+	it("returns 0 when plenty of tokens remain", () => {
+		expect(computePaceDelayMs({ inputTokensRemaining: 25000 }, now)).toBe(0);
+	});
+	it("waits until reset when remaining is below the floor", () => {
+		const d = computePaceDelayMs(
+			{ inputTokensRemaining: 500, inputTokensResetAt: "2026-06-09T07:20:08Z" },
+			now,
+		);
+		expect(d).toBeGreaterThan(0);
+		expect(d).toBeLessThanOrEqual(8000);
+	});
+	it("honors retry-after and caps the wait", () => {
+		expect(computePaceDelayMs({ retryAfterSeconds: 9999 }, now)).toBe(60000); // capped
+	});
+	it("returns 0 for undefined info", () => {
+		expect(computePaceDelayMs(undefined, now)).toBe(0);
+	});
+	it("clamps to 0 when the reset time is in the past", () => {
+		expect(
+			computePaceDelayMs(
+				{
+					inputTokensRemaining: 500,
+					inputTokensResetAt: "2026-06-09T07:19:00Z",
+				},
+				now,
+			),
+		).toBe(0);
+	});
+	it("falls back (no NaN) when the reset timestamp is malformed", () => {
+		expect(
+			computePaceDelayMs(
+				{ inputTokensRemaining: 500, inputTokensResetAt: "not-a-date" },
+				now,
+			),
+		).toBe(1000);
 	});
 });

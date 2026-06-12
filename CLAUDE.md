@@ -124,4 +124,4 @@ See `.env.example` for all variables. Key groups:
 
 - **Claude bot:** `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET`, `ANTHROPIC_API_KEY`
 - **Codex bot:** `OPENAI_APP_ID`, `OPENAI_APP_PRIVATE_KEY`, `OPENAI_APP_WEBHOOK_SECRET`, `OPENAI_API_KEY`
-- **Shared behavior:** `REVIEW_ENABLED` (default `true`), `REVIEW_DELAY_SECONDS` (default `450`), `REVIEW_COMMAND`, `CUSTOM_REVIEW_PROMPT`
+- **Shared behavior:** `REVIEW_ENABLED` (default `true`), `REVIEW_DELAY_SECONDS` (default `450`), `REVIEW_COMMAND`, `CUSTOM_REVIEW_PROMPT`, `AGENT_CONCURRENCY` (default `1` — max review agents run in parallel per PR; kept sequential to stay under provider ITPM rate limits)

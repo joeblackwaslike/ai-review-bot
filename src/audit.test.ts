@@ -43,6 +43,7 @@ describe("runAuditPass", () => {
 
 	it("runs every Tier-1 skill and merges into one ModelReview", async () => {
 		(runAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
+			status: "ok",
 			review: buildModelReview({
 				event: "COMMENT",
 				general_findings: [{ title: "F", body: "b", severity: "low" }],
@@ -63,7 +64,9 @@ describe("runAuditPass", () => {
 	});
 
 	it("returns empty review when every agent fails", async () => {
-		(runAgent as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+		(runAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
+			status: "error",
+		});
 		const merged = await runAuditPass({
 			files: [{ path: "a.ts", content: "x" }],
 			selection,
@@ -76,6 +79,7 @@ describe("runAuditPass", () => {
 
 	it("splits files across batches when content exceeds BATCH_BYTES", async () => {
 		(runAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
+			status: "ok",
 			review: buildModelReview({
 				event: "COMMENT",
 				general_findings: [],
@@ -143,6 +147,7 @@ describe("runLocalAudit (dry-run)", () => {
 		]);
 
 		(runAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
+			status: "ok",
 			review: buildModelReview({
 				event: "COMMENT",
 				general_findings: [],
@@ -185,6 +190,7 @@ describe("runLocalAudit (PR path)", () => {
 			{ path: "a.ts", content: "x" },
 		]);
 		(runAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
+			status: "ok",
 			review: buildModelReview({
 				event: "REQUEST_CHANGES",
 				general_findings: [],
@@ -248,6 +254,7 @@ describe("runLocalAudit (PR path)", () => {
 			{ path: "a.ts", content: "x" },
 		]);
 		(runAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
+			status: "ok",
 			review: buildModelReview({
 				event: "REQUEST_CHANGES",
 				general_findings: [{ title: "F", body: "b", severity: "high" }],
@@ -290,6 +297,7 @@ describe("runLocalAudit (PR path)", () => {
 			{ path: "a.ts", content: "x" },
 		]);
 		(runAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
+			status: "ok",
 			review: buildModelReview({
 				event: "REQUEST_CHANGES",
 				general_findings: [{ title: "F", body: "b", severity: "high" }],
