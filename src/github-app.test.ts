@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { persistPostedComments } from "./feedback/persist.js";
 import {
 	buildPRSummarySection,
 	injectPRSection,
 	maybeSubmitReview,
 } from "./github-app.js";
+import { buildReview } from "./review.js";
 import { buildPullRequestPayload } from "./testing.js";
 
 const DEFAULT_METADATA = {
@@ -15,7 +17,7 @@ const DEFAULT_METADATA = {
 	cost: 0.001234,
 };
 
-const mockBuildReview = vi.fn();
+const mockBuildReview = vi.hoisted(() => vi.fn());
 
 vi.mock("./config.js", () => ({
 	getConfig: () => ({
@@ -31,8 +33,14 @@ vi.mock("./config.js", () => ({
 }));
 
 vi.mock("./review.js", () => ({
-	buildReview: (...args: unknown[]) => mockBuildReview(...args),
+	buildReview: mockBuildReview,
 }));
+
+vi.mock("./feedback/persist.js", () => ({
+	persistPostedComments: vi.fn(async () => 1),
+}));
+
+vi.mock("./feedback/kv.js", () => ({ createUpstashKv: vi.fn(() => ({})) }));
 
 function buildMockApp() {
 	const request = vi.fn().mockResolvedValue({ data: {} });
@@ -62,6 +70,7 @@ const baseArgs = {
 		reviewCommentPrefix: "ai-review-bot",
 		reviewCommand: "/ai-review",
 		provider: "anthropic" as const,
+		feedbackEnabled: false,
 		agentConcurrency: 1,
 	},
 };
@@ -274,6 +283,182 @@ describe("maybeSubmitReview", () => {
 		expect(fallbackParams.body).toContain("422 Unprocessable Entity");
 		expect(fallbackParams.body).toContain("Review body.");
 		expect(fallbackParams.body).toContain("src/file.ts:2");
+	});
+
+	it("persists posted comments when feedbackEnabled and a review with comments is posted", async () => {
+		(buildReview as ReturnType<typeof vi.fn>).mockResolvedValue({
+			event: "COMMENT",
+			body: "b",
+			comments: [{ path: "src/x.ts", line: 10, body: "c", side: "RIGHT" }],
+			validLinesByPath: new Map(),
+			metadata: {
+				model: "m",
+				tier1Count: 5,
+				tier2Skills: [],
+				generalFindings: 0,
+				inlineComments: 1,
+				cost: 0,
+			},
+			commentProvenance: new Map([
+				["src/x.ts:10", { skills: ["code-reviewer.md"], title: "Bug" }],
+			]),
+		});
+		const octokit = {
+			request: vi.fn(async (route: string) =>
+				route.includes("/reviews") ? { data: { id: 55 } } : { data: {} },
+			),
+			paginate: vi.fn(async () => []),
+		};
+		const app = { getInstallationOctokit: vi.fn(async () => octokit) } as never;
+
+		await maybeSubmitReview({
+			app,
+			installationId: 5,
+			owner: "o",
+			repo: "r",
+			pullNumber: 7,
+			pullRequest: {
+				draft: false,
+				head: { sha: "sha" },
+				additions: 0,
+				deletions: 0,
+				changed_files: 0,
+				title: "t",
+				body: null,
+			},
+			extraInstructions: "",
+			force: true,
+			config: {
+				reviewEnabled: true,
+				reviewCommentPrefix: "ai-review-bot",
+				provider: "anthropic",
+				feedbackEnabled: true,
+			} as never,
+		});
+
+		expect(persistPostedComments).toHaveBeenCalledWith(
+			expect.objectContaining({
+				owner: "o",
+				repo: "r",
+				pr: 7,
+				reviewId: 55,
+				installationId: 5,
+				provider: "anthropic",
+				headSha: "sha",
+				provenance: new Map([
+					["src/x.ts:10", { skills: ["code-reviewer.md"], title: "Bug" }],
+				]),
+			}),
+		);
+	});
+
+	it("does NOT persist when feedbackEnabled is false", async () => {
+		(persistPostedComments as ReturnType<typeof vi.fn>).mockClear();
+		(buildReview as ReturnType<typeof vi.fn>).mockResolvedValue({
+			event: "COMMENT",
+			body: "b",
+			comments: [{ path: "src/x.ts", line: 10, body: "c", side: "RIGHT" }],
+			validLinesByPath: new Map(),
+			metadata: {
+				model: "m",
+				tier1Count: 5,
+				tier2Skills: [],
+				generalFindings: 0,
+				inlineComments: 1,
+				cost: 0,
+			},
+			commentProvenance: new Map([
+				["src/x.ts:10", { skills: ["code-reviewer.md"], title: "Bug" }],
+			]),
+		});
+		const octokit = {
+			request: vi.fn(async (route: string) =>
+				route.includes("/reviews") ? { data: { id: 55 } } : { data: {} },
+			),
+			paginate: vi.fn(async () => []),
+		};
+		const app = { getInstallationOctokit: vi.fn(async () => octokit) } as never;
+		await maybeSubmitReview({
+			app,
+			installationId: 5,
+			owner: "o",
+			repo: "r",
+			pullNumber: 7,
+			pullRequest: {
+				draft: false,
+				head: { sha: "sha" },
+				additions: 0,
+				deletions: 0,
+				changed_files: 0,
+				title: "t",
+				body: null,
+			},
+			extraInstructions: "",
+			force: true,
+			config: {
+				reviewEnabled: true,
+				reviewCommentPrefix: "ai-review-bot",
+				provider: "anthropic",
+				feedbackEnabled: false,
+			} as never,
+		});
+		expect(persistPostedComments).not.toHaveBeenCalled();
+	});
+
+	it("a persistence failure does not fail the review", async () => {
+		(persistPostedComments as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+			new Error("kv down"),
+		);
+		(buildReview as ReturnType<typeof vi.fn>).mockResolvedValue({
+			event: "COMMENT",
+			body: "b",
+			comments: [{ path: "src/x.ts", line: 10, body: "c", side: "RIGHT" }],
+			validLinesByPath: new Map(),
+			metadata: {
+				model: "m",
+				tier1Count: 5,
+				tier2Skills: [],
+				generalFindings: 0,
+				inlineComments: 1,
+				cost: 0,
+			},
+			commentProvenance: new Map([
+				["src/x.ts:10", { skills: ["x"], title: "t" }],
+			]),
+		});
+		const octokit = {
+			request: vi.fn(async (route: string) =>
+				route.includes("/reviews") ? { data: { id: 55 } } : { data: {} },
+			),
+			paginate: vi.fn(async () => []),
+		};
+		const app = { getInstallationOctokit: vi.fn(async () => octokit) } as never;
+		await expect(
+			maybeSubmitReview({
+				app,
+				installationId: 5,
+				owner: "o",
+				repo: "r",
+				pullNumber: 7,
+				pullRequest: {
+					draft: false,
+					head: { sha: "sha" },
+					additions: 0,
+					deletions: 0,
+					changed_files: 0,
+					title: "t",
+					body: null,
+				},
+				extraInstructions: "",
+				force: true,
+				config: {
+					reviewEnabled: true,
+					reviewCommentPrefix: "ai-review-bot",
+					provider: "anthropic",
+					feedbackEnabled: true,
+				} as never,
+			}),
+		).resolves.not.toThrow();
 	});
 });
 

@@ -3,6 +3,9 @@ import { createCheckRun } from "./check-run.js";
 import { isTrustedAuthorAssociation, parseReviewCommand } from "./commands.js";
 import type { AppConfig } from "./config.js";
 import { getConfig, getOpenAIAppConfig } from "./config.js";
+import type { KvClient } from "./feedback/kv.js";
+import { createUpstashKv } from "./feedback/kv.js";
+import { persistPostedComments } from "./feedback/persist.js";
 import { resolveStaleThreads } from "./resolve-threads.js";
 import type { ReviewDecision, ReviewMetadata } from "./review.js";
 import { buildReview } from "./review.js";
@@ -23,13 +26,13 @@ async function postReviewWithRetry(
 		comments: ReviewDecision["comments"];
 	},
 	maxAttempts = 3,
-): Promise<void> {
+): Promise<number> {
 	const delays = [3000, 6000];
 	let lastError: unknown;
 
 	for (let attempt = 0; attempt < maxAttempts; attempt++) {
 		try {
-			await octokit.request(
+			const response = await octokit.request(
 				"POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
 				{
 					owner: params.owner,
@@ -41,7 +44,10 @@ async function postReviewWithRetry(
 					comments: params.comments,
 				},
 			);
-			return;
+			// GitHub returns the created review's id here. An unexpected shape would yield
+			// undefined, which downstream persist matches against pull_request_review_id —
+			// no comments match, so persistence is a safe no-op rather than mis-attributing.
+			return (response.data as { id: number }).id;
 		} catch (err) {
 			lastError = err;
 			console.error(
@@ -192,6 +198,18 @@ type PullRequestDetails = {
 let appSingleton: App | null = null;
 let openAIAppSingleton: App | null = null;
 
+let kvSingleton: KvClient | null = null;
+function getKv(): KvClient | null {
+	if (kvSingleton) return kvSingleton;
+	try {
+		kvSingleton = createUpstashKv();
+		return kvSingleton;
+	} catch (err) {
+		console.error("feedback: KV unavailable — skipping persistence", err);
+		return null;
+	}
+}
+
 /** @internal Exported for unit testing only. */
 export async function maybeSubmitReview(args: {
 	app: App;
@@ -244,6 +262,7 @@ export async function maybeSubmitReview(args: {
 		extraInstructions,
 		force,
 		provider: config.provider,
+		feedbackEnabled: config.feedbackEnabled,
 		agentConcurrency: config.agentConcurrency,
 	});
 
@@ -297,7 +316,7 @@ export async function maybeSubmitReview(args: {
 	});
 
 	try {
-		await postReviewWithRetry(octokit, {
+		const reviewId = await postReviewWithRetry(octokit, {
 			owner,
 			repo,
 			pullNumber,
@@ -348,6 +367,46 @@ export async function maybeSubmitReview(args: {
 			);
 		} catch (resolveErr) {
 			console.error("failed to resolve stale threads", resolveErr);
+		}
+
+		if (
+			config.feedbackEnabled &&
+			review.comments.length > 0 &&
+			review.commentProvenance &&
+			review.commentProvenance.size > 0
+		) {
+			try {
+				const kv = getKv();
+				if (kv) {
+					const stored = await persistPostedComments({
+						kv,
+						octokit,
+						owner,
+						repo,
+						pr: pullNumber,
+						reviewId,
+						headSha,
+						installationId,
+						provider: config.provider,
+						provenance: review.commentProvenance,
+						nowMs: Date.now(),
+					});
+					console.log("feedback: recorded posted comments", {
+						owner,
+						repo,
+						pullNumber,
+						stored,
+					});
+				}
+			} catch (feedbackErr) {
+				// Drop the cached client so a transient failure (network blip, expired
+				// token) doesn't poison the warm instance — the next review rebuilds it.
+				kvSingleton = null;
+				console.error(
+					"feedback: failed to record posted comments",
+					feedbackErr,
+				);
+			}
 		}
 	} catch (err) {
 		console.error(

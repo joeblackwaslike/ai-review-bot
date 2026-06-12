@@ -33,6 +33,7 @@ afterEach(() => {
 		"GITHUB_WEBHOOK_SECRET",
 		"ANTHROPIC_API_KEY",
 		"REVIEW_ENABLED",
+		"FEEDBACK_ENABLED",
 		"OPENAI_APP_ID",
 		"OPENAI_APP_PRIVATE_KEY",
 		"OPENAI_APP_WEBHOOK_SECRET",
@@ -78,6 +79,19 @@ describe("getConfig", () => {
 			setRequiredEnv({ GITHUB_APP_PRIVATE_KEY: escaped });
 			expect(getConfig().privateKey).toContain("\n");
 		});
+	});
+});
+
+describe("feedbackEnabled", () => {
+	it("defaults to false and is true only when FEEDBACK_ENABLED=true", () => {
+		setRequiredEnv();
+		delete process.env.FEEDBACK_ENABLED;
+		expect(getConfig().feedbackEnabled).toBe(false);
+		process.env.FEEDBACK_ENABLED = "true";
+		expect(getConfig().feedbackEnabled).toBe(true);
+		process.env.FEEDBACK_ENABLED = "1";
+		expect(getConfig().feedbackEnabled).toBe(false); // only exact "true" enables
+		delete process.env.FEEDBACK_ENABLED;
 	});
 });
 

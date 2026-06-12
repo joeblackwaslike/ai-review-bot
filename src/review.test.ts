@@ -221,30 +221,31 @@ function buildOctokit(overrides?: {
 	};
 }
 
+const baseContext = {
+	owner: "joeblackwaslike",
+	repo: "ai-review-bot",
+	pullNumber: 1,
+	headSha: "1234567890abcdef",
+	title: "Test PR",
+	body: "Example",
+	additions: 1,
+	deletions: 0,
+	changedFiles: 1,
+	labels: [],
+	commentPrefix: "ai-review-bot",
+	extraInstructions: "",
+	force: false,
+	provider: "anthropic" as const,
+	feedbackEnabled: false,
+	agentConcurrency: 1,
+};
+
 describe("buildReview", () => {
 	beforeEach(() => {
 		mockGenerateObject.mockReset();
 		mockBuildUserMessage.mockReset();
 		mockBuildUserMessage.mockReturnValue("user");
 	});
-
-	const baseContext = {
-		owner: "joeblackwaslike",
-		repo: "ai-review-bot",
-		pullNumber: 1,
-		headSha: "1234567890abcdef",
-		title: "Test PR",
-		body: "Example",
-		additions: 1,
-		deletions: 0,
-		changedFiles: 1,
-		labels: [],
-		commentPrefix: "ai-review-bot",
-		extraInstructions: "",
-		force: false,
-		provider: "anthropic" as const,
-		agentConcurrency: 1,
-	};
 
 	it("converts model output into a review with validated inline comments", async () => {
 		const agentResponse = buildGenerateObjectResponse(
@@ -614,6 +615,126 @@ describe("buildReview", () => {
 });
 
 // ---------------------------------------------------------------------------
+// buildReview — comment provenance
+// ---------------------------------------------------------------------------
+
+// Patch where lines 1..20 are all valid right-side lines.
+const TWENTY_LINE_PATCH = [
+	"@@ -0,0 +1,20 @@",
+	...Array.from({ length: 20 }, (_, i) => `+line${i + 1}`),
+].join("\n");
+
+async function buildReviewWithTwoAgentsFlagging(
+	path: string,
+	line: number,
+	options?: { feedbackEnabled?: boolean },
+) {
+	const feedbackEnabled = options?.feedbackEnabled ?? true;
+
+	// Agent 1 (code-reviewer.md): returns one inline comment at path:line
+	const agent1Response = buildGenerateObjectResponse(
+		buildModelReview({
+			event: "COMMENT",
+			general_findings: [],
+			inline_comments: [
+				buildInlineComment({
+					title: "Issue",
+					body: "b",
+					path,
+					line,
+					start_line: null,
+					suggestion: null,
+				}),
+			],
+		}),
+	);
+	// Agent 2 (silent-failure-hunter.md): returns one inline comment at the same path:line
+	const agent2Response = buildGenerateObjectResponse(
+		buildModelReview({
+			event: "COMMENT",
+			general_findings: [],
+			inline_comments: [
+				buildInlineComment({
+					title: "Issue",
+					body: "b",
+					path,
+					line,
+					start_line: null,
+					suggestion: null,
+				}),
+			],
+		}),
+	);
+	// Agents 3-5: no findings
+	const emptyAgentResponse = buildGenerateObjectResponse(
+		buildModelReview({
+			event: "COMMENT",
+			general_findings: [],
+			inline_comments: [],
+		}),
+	);
+	// Summary call
+	const summaryResponse = {
+		object: { summary: "Two agents flagged an issue." },
+		usage: { inputTokens: 50, outputTokens: 20 },
+	};
+
+	mockGenerateObject
+		.mockResolvedValueOnce(agent1Response)
+		.mockResolvedValueOnce(agent2Response)
+		.mockResolvedValueOnce(emptyAgentResponse)
+		.mockResolvedValueOnce(emptyAgentResponse)
+		.mockResolvedValueOnce(emptyAgentResponse)
+		.mockResolvedValueOnce(summaryResponse);
+
+	return buildReview({
+		octokit: buildOctokit({
+			files: [buildPullFile(path, TWENTY_LINE_PATCH)],
+		}),
+		...baseContext,
+		feedbackEnabled,
+	});
+}
+
+describe("buildReview comment provenance", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+	});
+
+	it("attaches the set of skills that flagged each posted inline comment", async () => {
+		const decision = await buildReviewWithTwoAgentsFlagging("src/x.ts", 10);
+		expect(decision?.commentProvenance).toBeDefined();
+		const prov = decision?.commentProvenance?.get("src/x.ts:10");
+		expect(prov?.skills.sort()).toEqual([
+			"code-reviewer.md",
+			"silent-failure-hunter.md",
+		]);
+		expect(prov?.title.length).toBeGreaterThan(0);
+	});
+
+	it("omits provenance when feedbackEnabled is false", async () => {
+		const decision = await buildReviewWithTwoAgentsFlagging("src/x.ts", 10, {
+			feedbackEnabled: false,
+		});
+		expect(decision?.commentProvenance).toBeUndefined();
+	});
+
+	it("includes the 👍/👎 invitation in the body when feedbackEnabled and there are inline comments", async () => {
+		const decision = await buildReviewWithTwoAgentsFlagging("src/x.ts", 10);
+		expect(decision?.body).toContain("React 👍");
+	});
+
+	it("omits the invitation when feedbackEnabled is false", async () => {
+		const decision = await buildReviewWithTwoAgentsFlagging("src/x.ts", 10, {
+			feedbackEnabled: false,
+		});
+		expect(decision?.body ?? "").not.toContain("React 👍");
+	});
+});
+
+// ---------------------------------------------------------------------------
 // runAgent — caching + telemetry
 // ---------------------------------------------------------------------------
 
@@ -731,6 +852,7 @@ describe("buildReview rate-limit decision", () => {
 			extraInstructions: "",
 			force: true,
 			provider: "anthropic",
+			feedbackEnabled: false,
 			agentConcurrency: 1,
 		});
 		await vi.runAllTimersAsync();
@@ -795,6 +917,7 @@ describe("buildReview rate-limit decision", () => {
 			extraInstructions: "",
 			force: true,
 			provider: "anthropic",
+			feedbackEnabled: false,
 			agentConcurrency: 1,
 		});
 		await vi.runAllTimersAsync();

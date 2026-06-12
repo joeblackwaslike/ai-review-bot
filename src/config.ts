@@ -7,6 +7,7 @@ export interface AppConfig {
 	reviewCommentPrefix: string;
 	reviewCommand: string;
 	provider: "anthropic" | "openai";
+	feedbackEnabled: boolean;
 	agentConcurrency: number;
 }
 
@@ -66,6 +67,7 @@ export function getConfig(): AppConfig {
 		),
 		reviewCommand: process.env.REVIEW_COMMAND ?? "/ai-review",
 		provider: "anthropic",
+		feedbackEnabled: process.env.FEEDBACK_ENABLED === "true",
 		agentConcurrency: parseAgentConcurrency(),
 	};
 }
@@ -86,6 +88,7 @@ export function getOpenAIAppConfig(): AppConfig {
 		),
 		reviewCommand: process.env.REVIEW_COMMAND ?? "/ai-review",
 		provider: "openai",
+		feedbackEnabled: process.env.FEEDBACK_ENABLED === "true",
 		agentConcurrency: parseAgentConcurrency(),
 	};
 }

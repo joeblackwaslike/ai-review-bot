@@ -6,6 +6,10 @@
 		},
 		"api/github/webhook-openai.ts": {
 			"maxDuration": 800
+		},
+		"api/cron/poll-feedback.ts": {
+			"maxDuration": 60
 		}
-	}
+	},
+	"crons": [{ "path": "/api/cron/poll-feedback", "schedule": "0 0 * * *" }]
 }
