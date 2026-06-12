@@ -21,12 +21,14 @@ export interface PromptContext {
 	additions: number;
 	deletions: number;
 	changedFiles: number;
+	labels: string[];
 	extraInstructions: string;
 	files: Array<{
 		filename: string;
 		status: string;
 		patch?: string;
 	}>;
+	priorBotReviews?: string[];
 }
 
 function trimPatch(patch: string, maxChars = 8000): string {
@@ -54,6 +56,15 @@ export function buildUserMessage(context: PromptContext): string {
 		? ["", "Command-specific instructions:", context.extraInstructions]
 		: [];
 
+	const priorReviewsSection = context.priorBotReviews?.length
+		? [
+				"",
+				"Prior reviews by other AI reviewers on this commit — do not re-report any finding already mentioned below:",
+				"",
+				context.priorBotReviews.join("\n\n---\n\n"),
+			]
+		: [];
+
 	return [
 		"You are reviewing a GitHub pull request.",
 		"",
@@ -63,13 +74,50 @@ export function buildUserMessage(context: PromptContext): string {
 		`- Head SHA: ${context.headSha}`,
 		`- Title: ${context.title}`,
 		`- Body: ${context.body ?? "[no description]"}`,
+		`- Labels: ${context.labels.length > 0 ? context.labels.join(", ") : "none"}`,
 		`- Changed files: ${context.changedFiles}`,
 		`- Added lines: ${context.additions}`,
 		`- Deleted lines: ${context.deletions}`,
 		...commandInstructionsSection,
+		...priorReviewsSection,
 		"",
 		"Changed file diffs:",
 		serializeFiles(context.files),
+	].join("\n");
+}
+
+export interface AuditContext {
+	owner: string;
+	repo: string;
+	ref: string;
+	extraInstructions: string;
+	files: Array<{ path: string; content: string }>;
+}
+
+export function buildAuditUserMessage(context: AuditContext): string {
+	const instructionsSection = context.extraInstructions
+		? ["", "Additional instructions:", context.extraInstructions]
+		: [];
+
+	const serialized = context.files
+		.map((f) => {
+			// Audited files are whole-file content (size-bounded by batching in
+			// runAuditPass), not diffs — do not run them through trimPatch.
+			return `FILE: ${f.path}\nCONTENT:\n${f.content}`;
+		})
+		.join("\n\n---\n\n");
+
+	return [
+		"You are performing a full code audit of a repository.",
+		"",
+		"Repo context:",
+		`- Repository: ${context.owner}/${context.repo}`,
+		`- Ref: ${context.ref}`,
+		`- Files reviewed: ${context.files.length}`,
+		...instructionsSection,
+		"",
+		"Repository files:",
+		serialized,
 	].join("\n");
 }
 
@@ -96,5 +144,6 @@ export function buildAgentSystemPrompt(
 		"- Use `start_line` for multi-line ranges only, and only when `start_line` is less than `line`. Set `start_line` to `null` for single-line comments.",
 		"- Put unanchored concerns into `general_findings`, not `inline_comments`.",
 		"- Apply the severity label (Critical / Nit / Optional / FYI) in every inline comment title.",
+		"- When you can supply an exact code fix, set `suggestion` to the complete replacement text for the referenced line(s), matching the original indentation exactly. Set `suggestion` to null when the fix is not a clean line-for-line replacement.",
 	].join("\n");
 }

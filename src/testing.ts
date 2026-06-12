@@ -1,5 +1,5 @@
 /**
- * Reusable test fixtures and data factories for claude-review-bot.
+ * Reusable test fixtures and data factories for ai-review-bot.
  *
  * No vitest import — these are plain data builders. Use vi.fn() in your test file
  * and populate the mocks using these helpers.
@@ -68,6 +68,7 @@ export interface InlineCommentFixture {
 	path: string;
 	line: number;
 	start_line: number | null;
+	suggestion: string | null;
 }
 
 export function buildInlineComment(
@@ -79,6 +80,7 @@ export function buildInlineComment(
 		path: "src/file.ts",
 		line: 2,
 		start_line: null,
+		suggestion: null,
 		...overrides,
 	};
 }
@@ -88,9 +90,12 @@ export function buildInlineComment(
 // ---------------------------------------------------------------------------
 
 export interface ModelReviewFixture {
-	summary: string;
 	event: "COMMENT" | "REQUEST_CHANGES";
-	general_findings: Array<{ title: string; body: string }>;
+	general_findings: Array<{
+		title: string;
+		body: string;
+		severity: "high" | "medium" | "low";
+	}>;
 	inline_comments: InlineCommentFixture[];
 }
 
@@ -98,7 +103,6 @@ export function buildModelReview(
 	overrides?: Partial<ModelReviewFixture>,
 ): ModelReviewFixture {
 	return {
-		summary: "No issues found.",
 		event: "COMMENT",
 		general_findings: [],
 		inline_comments: [],
@@ -126,7 +130,7 @@ export function buildIssueCommentPayload(
 ) {
 	const opts: IssueCommentPayloadOptions = {
 		action: "created",
-		body: "/claude-review",
+		body: "/ai-review",
 		authorAssociation: "OWNER",
 		isPR: true,
 		pullNumber: 1,
@@ -226,20 +230,13 @@ export function reviewedCommitMarker(headSha: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Anthropic response mock helpers
+// Vercel AI SDK response mock helpers
 // ---------------------------------------------------------------------------
 
-/** Wraps a ModelReviewFixture in the Anthropic tool_use content block shape. */
-export function buildAnthropicToolUseResponse(review: ModelReviewFixture) {
+/** Wraps a ModelReviewFixture in the generateObject() return shape. */
+export function buildGenerateObjectResponse(review: ModelReviewFixture) {
 	return {
-		content: [
-			{
-				type: "tool_use",
-				id: "tu_test",
-				name: "submit_review",
-				input: review,
-			},
-		],
-		stop_reason: "tool_use",
+		object: review,
+		usage: { promptTokens: 100, completionTokens: 50 },
 	};
 }

@@ -5,7 +5,7 @@ import {
 	collectRightSideLines,
 } from "./review.js";
 import {
-	buildAnthropicToolUseResponse,
+	buildGenerateObjectResponse,
 	buildInlineComment,
 	buildModelReview,
 	buildPullFile,
@@ -15,7 +15,17 @@ import {
 	TWO_HUNK_PATCH,
 } from "./testing.js";
 
-const mockCreate = vi.fn();
+const mockGenerateObject = vi.hoisted(() => vi.fn());
+const mockBuildUserMessage = vi.hoisted(() => vi.fn().mockReturnValue("user"));
+
+vi.mock("ai", () => ({
+	generateObject: mockGenerateObject,
+}));
+
+vi.mock("./models.js", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("./models.js")>();
+	return { ...actual, createAIModel: vi.fn().mockReturnValue("mocked-model") };
+});
 
 vi.mock("./config.js", () => ({
 	getConfig: () => ({
@@ -23,22 +33,13 @@ vi.mock("./config.js", () => ({
 		privateKey: "pem",
 		webhookSecret: "secret",
 		reviewEnabled: true,
-		reviewCommentPrefix: "claude-review-bot",
-		reviewCommand: "/claude-review",
-		anthropicModel: "claude-sonnet-4-6",
-	}),
-}));
-
-vi.mock("./anthropic.js", () => ({
-	getAnthropicClient: () => ({
-		messages: {
-			create: mockCreate,
-		},
+		reviewCommentPrefix: "ai-review-bot",
+		reviewCommand: "/ai-review",
 	}),
 }));
 
 vi.mock("./prompt.js", () => ({
-	buildUserMessage: () => "user",
+	buildUserMessage: mockBuildUserMessage,
 	buildAgentSystemPrompt: () => "system",
 }));
 
@@ -192,30 +193,41 @@ describe("buildReviewComments", () => {
 // buildReview — integration
 // ---------------------------------------------------------------------------
 
+function buildOctokit(overrides?: {
+	existingReviews?: Array<{ body: string }>;
+	files?: Array<{ filename: string; status: string; patch?: string }>;
+	checkRuns?: Array<{
+		name: string;
+		status: string;
+		conclusion: string | null;
+	}>;
+}) {
+	const requestMock = vi.fn().mockImplementation((route: string) => {
+		if (route.includes("/check-runs")) {
+			return { data: { check_runs: overrides?.checkRuns ?? [] } };
+		}
+		return reviewsResponse(overrides?.existingReviews);
+	});
+	return {
+		request: requestMock,
+		paginate: vi
+			.fn()
+			.mockResolvedValue(
+				overrides?.files ?? [buildPullFile("src/review.ts", SIMPLE_PATCH)],
+			),
+	};
+}
+
 describe("buildReview", () => {
 	beforeEach(() => {
-		mockCreate.mockReset();
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
 	});
-
-	function buildOctokit(overrides?: {
-		existingReviews?: Array<{ body: string }>;
-		files?: Array<{ filename: string; status: string; patch?: string }>;
-	}) {
-		return {
-			request: vi
-				.fn()
-				.mockResolvedValue(reviewsResponse(overrides?.existingReviews)),
-			paginate: vi
-				.fn()
-				.mockResolvedValue(
-					overrides?.files ?? [buildPullFile("src/review.ts", SIMPLE_PATCH)],
-				),
-		};
-	}
 
 	const baseContext = {
 		owner: "joeblackwaslike",
-		repo: "claude-review-bot",
+		repo: "ai-review-bot",
 		pullNumber: 1,
 		headSha: "1234567890abcdef",
 		title: "Test PR",
@@ -223,40 +235,51 @@ describe("buildReview", () => {
 		additions: 1,
 		deletions: 0,
 		changedFiles: 1,
-		commentPrefix: "claude-review-bot",
+		labels: [],
+		commentPrefix: "ai-review-bot",
 		extraInstructions: "",
 		force: false,
+		provider: "anthropic" as const,
 	};
 
 	it("converts model output into a review with validated inline comments", async () => {
-		mockCreate.mockResolvedValue(
-			buildAnthropicToolUseResponse(
-				buildModelReview({
-					summary: "Two issues found.",
-					event: "REQUEST_CHANGES",
-					general_findings: [
-						{
-							title: "Missing test coverage",
-							body: "This behavior change should be covered by a regression test.",
-						},
-					],
-					inline_comments: [
-						buildInlineComment({
-							title: "Bad anchor",
-							body: "Should be dropped.",
-							path: "src/review.ts",
-							line: 99,
-						}),
-						buildInlineComment({
-							title: "Valid anchor",
-							body: "This is correctly anchored.",
-							path: "src/review.ts",
-							line: 2,
-						}),
-					],
-				}),
-			),
+		const agentResponse = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "REQUEST_CHANGES",
+				general_findings: [
+					{
+						title: "Missing test coverage",
+						body: "This behavior change should be covered by a regression test.",
+						severity: "high",
+					},
+				],
+				inline_comments: [
+					buildInlineComment({
+						title: "Bad anchor",
+						body: "Should be dropped.",
+						path: "src/review.ts",
+						line: 99,
+					}),
+					buildInlineComment({
+						title: "Valid anchor",
+						body: "This is correctly anchored.",
+						path: "src/review.ts",
+						line: 2,
+					}),
+				],
+			}),
 		);
+		const summaryResponse = {
+			object: { summary: "Two issues found." },
+			usage: { inputTokens: 50, outputTokens: 20 },
+		};
+		mockGenerateObject
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(summaryResponse);
 
 		const review = await buildReview({
 			octokit: buildOctokit(),
@@ -272,34 +295,43 @@ describe("buildReview", () => {
 		});
 		expect(review?.body).toContain("Missing test coverage");
 		expect(review?.body).toContain("Inline comments: 1");
+		expect(review?.body).toContain("Two issues found.");
 	});
 
 	// Regression: when ALL inline comments are dropped (e.g. model returned
 	// start_line: 0 instead of null), the review should still post body-only.
 	it("regression: posts body-only when all inline comments are filtered out", async () => {
-		mockCreate.mockResolvedValue(
-			buildAnthropicToolUseResponse(
-				buildModelReview({
-					summary: "Found issues.",
-					event: "REQUEST_CHANGES",
-					general_findings: [{ title: "Security risk", body: "Details here." }],
-					inline_comments: [
-						// start_line: 0 — the specific model bug, should be dropped
-						buildInlineComment({
-							path: "src/review.ts",
-							line: 2,
-							start_line: 0,
-						}),
-						// Wrong path — should be dropped
-						buildInlineComment({
-							path: "does/not/exist.ts",
-							line: 2,
-							start_line: null,
-						}),
-					],
-				}),
-			),
+		const agentResponse = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "REQUEST_CHANGES",
+				general_findings: [
+					{ title: "Security risk", body: "Details here.", severity: "high" },
+				],
+				inline_comments: [
+					buildInlineComment({
+						path: "src/review.ts",
+						line: 2,
+						start_line: 0,
+					}),
+					buildInlineComment({
+						path: "does/not/exist.ts",
+						line: 2,
+						start_line: null,
+					}),
+				],
+			}),
 		);
+		const summaryResponse = {
+			object: { summary: "Found issues." },
+			usage: { inputTokens: 50, outputTokens: 20 },
+		};
+		mockGenerateObject
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(summaryResponse);
 
 		const review = await buildReview({
 			octokit: buildOctokit(),
@@ -315,7 +347,11 @@ describe("buildReview", () => {
 	it("skips duplicate reviews on the same commit unless forced", async () => {
 		const headSha = "1234567890abcdef";
 		const octokit = buildOctokit({
-			existingReviews: [{ body: reviewedCommitMarker(headSha) }],
+			existingReviews: [
+				{
+					body: `### ai-review-bot\n\nPrior review.\n\n${reviewedCommitMarker(headSha)}`,
+				},
+			],
 		});
 
 		const review = await buildReview({
@@ -332,14 +368,16 @@ describe("buildReview", () => {
 	it("resubmits when force is true even if already reviewed", async () => {
 		const headSha = "1234567890abcdef";
 
-		mockCreate.mockResolvedValue(
-			buildAnthropicToolUseResponse(
-				buildModelReview({ summary: "Re-review." }),
-			),
+		mockGenerateObject.mockResolvedValue(
+			buildGenerateObjectResponse(buildModelReview()),
 		);
 
 		const octokit = buildOctokit({
-			existingReviews: [{ body: reviewedCommitMarker(headSha) }],
+			existingReviews: [
+				{
+					body: `### ai-review-bot\n\nPrior review.\n\n${reviewedCommitMarker(headSha)}`,
+				},
+			],
 		});
 
 		const review = await buildReview({
@@ -351,5 +389,222 @@ describe("buildReview", () => {
 
 		expect(review).not.toBeNull();
 		expect(octokit.paginate).toHaveBeenCalled();
+	});
+
+	it("renders severity emoji table for general findings", async () => {
+		const agentResponse = buildGenerateObjectResponse(
+			buildModelReview({
+				general_findings: [
+					{ title: "Critical bug", body: "Details.", severity: "high" },
+					{ title: "Minor style nit", body: "Details.", severity: "low" },
+				],
+			}),
+		);
+		const summaryResponse = {
+			object: { summary: "Found two issues." },
+			usage: { inputTokens: 50, outputTokens: 20 },
+		};
+		mockGenerateObject
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(summaryResponse);
+
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+		});
+
+		expect(review?.body).toMatch(/🔴|🟡|🟢/);
+		expect(review?.body).toContain("Critical bug");
+		expect(review?.body).toContain("Minor style nit");
+	});
+
+	it("emits APPROVE when all agents find no issues", async () => {
+		mockGenerateObject.mockResolvedValue(
+			buildGenerateObjectResponse(
+				buildModelReview({
+					event: "COMMENT",
+					general_findings: [],
+					inline_comments: [],
+				}),
+			),
+		);
+
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+		});
+
+		expect(review?.event).toBe("APPROVE");
+		expect(review?.body).toContain("No issues found.");
+		expect(review?.body).toContain("PR approved for merge.");
+	});
+
+	it("APPROVE on re-review acknowledges resolved issues", async () => {
+		const headSha = "newcommit12345678";
+		const priorBody = `### ai-review-bot\n\nFound bugs.\n\nReviewed commit: \`oldsha1234567\``;
+
+		mockGenerateObject.mockResolvedValue(
+			buildGenerateObjectResponse(buildModelReview()),
+		);
+
+		const review = await buildReview({
+			octokit: buildOctokit({ existingReviews: [{ body: priorBody }] }),
+			...baseContext,
+			headSha,
+		});
+
+		expect(review?.event).toBe("APPROVE");
+		expect(review?.body).toContain(
+			"All issues from the previous review have been resolved.",
+		);
+		expect(review?.body).toContain("PR approved for merge.");
+	});
+
+	it("APPROVE mentions outstanding CI checks", async () => {
+		mockGenerateObject.mockResolvedValue(
+			buildGenerateObjectResponse(buildModelReview()),
+		);
+
+		const review = await buildReview({
+			octokit: buildOctokit({
+				checkRuns: [
+					{ name: "tests", status: "completed", conclusion: "success" },
+					{ name: "lint", status: "in_progress", conclusion: null },
+					{ name: "deploy", status: "completed", conclusion: "failure" },
+				],
+			}),
+			...baseContext,
+		});
+
+		expect(review?.event).toBe("APPROVE");
+		expect(review?.body).toContain("PR approved for merge.");
+		expect(review?.body).toContain("2 CI check(s) still outstanding");
+		expect(review?.body).toContain("lint (in_progress)");
+		expect(review?.body).toContain("deploy (failed)");
+	});
+
+	it("does not APPROVE when there are general findings", async () => {
+		const agentResponse = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [
+					{ title: "Minor nit", body: "Fix this.", severity: "low" },
+				],
+			}),
+		);
+		const summaryResponse = {
+			object: { summary: "One minor nit." },
+			usage: { inputTokens: 50, outputTokens: 20 },
+		};
+		mockGenerateObject
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(summaryResponse);
+
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+		});
+
+		expect(review?.event).toBe("COMMENT");
+	});
+
+	it("includes cost footer with GitHub project link", async () => {
+		mockGenerateObject.mockResolvedValue(
+			buildGenerateObjectResponse(buildModelReview()),
+		);
+
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+		});
+
+		expect(review?.body).toContain("$");
+		expect(review?.body).toContain("github.com/joeblackwaslike/ai-review-bot");
+	});
+
+	it("passes prior bot reviews from other bots to buildUserMessage", async () => {
+		const headSha = "1234567890abcdef";
+		const otherBotBody = `### codex-review-bot\n\nFound a security issue.\n\n${reviewedCommitMarker(headSha)}`;
+
+		mockGenerateObject.mockResolvedValue(
+			buildGenerateObjectResponse(buildModelReview()),
+		);
+
+		await buildReview({
+			octokit: buildOctokit({ existingReviews: [{ body: otherBotBody }] }),
+			...baseContext,
+			headSha,
+		});
+
+		expect(mockBuildUserMessage).toHaveBeenCalledWith(
+			expect.objectContaining({ priorBotReviews: [otherBotBody] }),
+		);
+	});
+
+	it("does not include own review in priorBotReviews", async () => {
+		const headSha = "1234567890abcdef";
+		const ownBotBody = `### ai-review-bot\n\nFound issues.\n\n${reviewedCommitMarker(headSha)}`;
+
+		mockGenerateObject.mockResolvedValue(
+			buildGenerateObjectResponse(buildModelReview()),
+		);
+
+		await buildReview({
+			octokit: buildOctokit({ existingReviews: [{ body: ownBotBody }] }),
+			...baseContext,
+			headSha,
+			force: true,
+		});
+
+		expect(mockBuildUserMessage).toHaveBeenCalledWith(
+			expect.objectContaining({ priorBotReviews: [] }),
+		);
+	});
+
+	it("ignores sister bot reviews for a different commit SHA", async () => {
+		const headSha = "1234567890abcdef";
+		const staleBody = `### codex-review-bot\n\nOld finding.\n\n${reviewedCommitMarker("oldsha111222")}`;
+
+		mockGenerateObject.mockResolvedValue(
+			buildGenerateObjectResponse(buildModelReview()),
+		);
+
+		await buildReview({
+			octokit: buildOctokit({ existingReviews: [{ body: staleBody }] }),
+			...baseContext,
+			headSha,
+		});
+
+		expect(mockBuildUserMessage).toHaveBeenCalledWith(
+			expect.objectContaining({ priorBotReviews: [] }),
+		);
+	});
+
+	it("includes external bot reviews regardless of SHA", async () => {
+		const headSha = "1234567890abcdef";
+		const externalBotBody =
+			"**CodeRabbit Review**\n\nFound a potential null dereference on line 42.";
+
+		mockGenerateObject.mockResolvedValue(
+			buildGenerateObjectResponse(buildModelReview()),
+		);
+
+		await buildReview({
+			octokit: buildOctokit({ existingReviews: [{ body: externalBotBody }] }),
+			...baseContext,
+			headSha,
+		});
+
+		expect(mockBuildUserMessage).toHaveBeenCalledWith(
+			expect.objectContaining({ priorBotReviews: [externalBotBody] }),
+		);
 	});
 });

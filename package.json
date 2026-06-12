@@ -1,14 +1,38 @@
 {
-	"name": "claude-review-bot",
-	"version": "0.1.0",
-	"private": true,
+	"name": "ai-review-bot",
+	"version": "0.2.0",
+	"description": "GitHub App that runs parallel AI code review agents (Claude + Codex) on every pull request",
 	"type": "module",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/joeblackwaslike/ai-review-bot.git"
+	},
+	"homepage": "https://joeblackwaslike.github.io/ai-review-bot/",
+	"license": "MIT",
+	"author": "Joe Black <joeblackwaslike@gmail.com>",
+	"keywords": [
+		"code-review",
+		"github-app",
+		"claude",
+		"openai",
+		"ai",
+		"pull-request",
+		"static-analysis"
+	],
+	"bin": {
+		"ai-review": "dist/cli.js"
+	},
+	"files": [
+		"dist/",
+		"skills/"
+	],
 	"engines": {
 		"node": ">=20"
 	},
 	"scripts": {
 		"dev": "vercel dev",
-		"build": "tsc --noEmit",
+		"build": "tsc -p tsconfig.build.json",
+		"prepublishOnly": "npm run build && npm run typecheck && npm run test",
 		"typecheck": "tsc --noEmit",
 		"lint": "biome check .",
 		"test": "vitest run",
@@ -17,15 +41,21 @@
 		"docs:preview": "vitepress preview docs"
 	},
 	"dependencies": {
+		"@ai-sdk/anthropic": "^3.0.78",
+		"@ai-sdk/openai": "^3.0.64",
 		"@anthropic-ai/sdk": "^0.39.0",
+		"@vercel/functions": "^3.4.4",
 		"@vercel/node": "^3.2.25",
-		"octokit": "^4.0.2"
+		"ai": "^6.0.188",
+		"octokit": "^4.0.2",
+		"zod": "^4.4.3"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.12",
 		"@types/node": "^22.15.3",
 		"typescript": "^5.8.3",
 		"vitepress": "^1.6.4",
+		"tsx": "^4.19.4",
 		"vitest": "^3.2.4"
 	}
 }

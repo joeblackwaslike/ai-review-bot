@@ -1,6 +1,19 @@
-import { describe, expect, it, vi } from "vitest";
-import { maybeSubmitReview } from "./github-app.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+	buildPRSummarySection,
+	injectPRSection,
+	maybeSubmitReview,
+} from "./github-app.js";
 import { buildPullRequestPayload } from "./testing.js";
+
+const DEFAULT_METADATA = {
+	model: "claude-sonnet-4-6",
+	tier1Count: 5,
+	tier2Skills: [] as string[],
+	generalFindings: 0,
+	inlineComments: 0,
+	cost: 0.001234,
+};
 
 const mockBuildReview = vi.fn();
 
@@ -10,9 +23,9 @@ vi.mock("./config.js", () => ({
 		privateKey: "pem",
 		webhookSecret: "secret",
 		reviewEnabled: true,
-		reviewCommentPrefix: "claude-review-bot",
-		reviewCommand: "/claude-review",
-		anthropicModel: "claude-sonnet-4-6",
+		reviewCommentPrefix: "ai-review-bot",
+		reviewCommand: "/ai-review",
+		provider: "anthropic",
 	}),
 }));
 
@@ -39,9 +52,23 @@ const baseArgs = {
 	pullRequest: pr,
 	extraInstructions: "",
 	force: false,
+	config: {
+		appId: "1",
+		privateKey: "pem",
+		webhookSecret: "secret",
+		reviewEnabled: true,
+		reviewDelayMs: 0,
+		reviewCommentPrefix: "ai-review-bot",
+		reviewCommand: "/ai-review",
+		provider: "anthropic" as const,
+	},
 };
 
 describe("maybeSubmitReview", () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	it("skips submission for draft PRs", async () => {
 		const { app, octokit } = buildMockApp();
 		mockBuildReview.mockReset();
@@ -78,30 +105,40 @@ describe("maybeSubmitReview", () => {
 					body: "Fix this.",
 				},
 			],
+			metadata: {
+				...DEFAULT_METADATA,
+				generalFindings: 1,
+				inlineComments: 1,
+			},
 		};
 		mockBuildReview.mockReset().mockResolvedValue(review);
 
 		await maybeSubmitReview({ app, ...baseArgs });
 
-		expect(octokit.request).toHaveBeenCalledOnce();
 		const [route, params] = octokit.request.mock.calls[0];
 		expect(route).toBe(
 			"POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
 		);
 		expect(params.comments).toEqual(review.comments);
 		expect(params.event).toBe("REQUEST_CHANGES");
+
+		const [patchRoute] = octokit.request.mock.calls[1];
+		expect(patchRoute).toBe("PATCH /repos/{owner}/{repo}/pulls/{pull_number}");
+
+		const [checkRoute] = octokit.request.mock.calls[2];
+		expect(checkRoute).toBe("POST /repos/{owner}/{repo}/check-runs");
 	});
 
-	// Regression: if the GitHub API rejects the review POST (e.g. invalid comment
-	// anchors), the bot should retry without inline comments so the review body
-	// is never completely lost.
-	it("regression: retries body-only when POST fails with inline comments", async () => {
+	it("retries POST up to 3 times on failure before succeeding", async () => {
+		vi.useFakeTimers();
 		const { app, request } = buildMockApp();
+		// Fail twice, succeed on the third attempt
 		request
 			.mockRejectedValueOnce(new Error("422 Unprocessable Entity"))
-			.mockResolvedValueOnce({ data: {} });
+			.mockRejectedValueOnce(new Error("422 Unprocessable Entity"))
+			.mockResolvedValue({ data: {} });
 
-		const review = {
+		mockBuildReview.mockReset().mockResolvedValue({
 			event: "COMMENT" as const,
 			body: "Review body.",
 			comments: [
@@ -112,34 +149,117 @@ describe("maybeSubmitReview", () => {
 					body: "Comment.",
 				},
 			],
-		};
-		mockBuildReview.mockReset().mockResolvedValue(review);
+			metadata: DEFAULT_METADATA,
+		});
 
-		await maybeSubmitReview({ app, ...baseArgs });
+		const promise = maybeSubmitReview({ app, ...baseArgs });
+		await vi.runAllTimersAsync();
+		await promise;
 
-		expect(request).toHaveBeenCalledTimes(2);
-
-		const [, firstParams] = request.mock.calls[0];
-		expect(firstParams.comments).toHaveLength(1);
-
-		const [, retryParams] = request.mock.calls[1];
-		expect(retryParams.comments).toEqual([]);
-		expect(retryParams.body).toBe("Review body.");
+		// 3 review POST attempts + 1 PATCH (PR desc) + 1 POST (check run)
+		expect(request).toHaveBeenCalledTimes(5);
+		const reviewRoutes = request.mock.calls.slice(0, 3).map(([route]) => route);
+		expect(
+			reviewRoutes.every(
+				(r) => r === "POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
+			),
+		).toBe(true);
+		expect(request.mock.calls[3][0]).toBe(
+			"PATCH /repos/{owner}/{repo}/pulls/{pull_number}",
+		);
+		expect(request.mock.calls[4][0]).toBe(
+			"POST /repos/{owner}/{repo}/check-runs",
+		);
 	});
 
-	it("does not retry when POST fails with an empty comments array", async () => {
+	it("posts fallback comment with findings when all retries are exhausted", async () => {
+		vi.useFakeTimers();
 		const { app, request } = buildMockApp();
-		request.mockRejectedValue(new Error("500 Server Error"));
+		// All 3 review attempts fail; 4th call (fallback comment) succeeds
+		request
+			.mockRejectedValueOnce(new Error("422 Unprocessable Entity"))
+			.mockRejectedValueOnce(new Error("422 Unprocessable Entity"))
+			.mockRejectedValueOnce(new Error("422 Unprocessable Entity"))
+			.mockResolvedValue({ data: {} });
 
 		mockBuildReview.mockReset().mockResolvedValue({
 			event: "COMMENT" as const,
 			body: "Review body.",
-			comments: [],
+			comments: [
+				{
+					path: "src/file.ts",
+					line: 2,
+					side: "RIGHT" as const,
+					body: "Inline comment.",
+				},
+			],
+			metadata: DEFAULT_METADATA,
 		});
 
-		await expect(maybeSubmitReview({ app, ...baseArgs })).rejects.toThrow(
-			"500 Server Error",
+		const promise = maybeSubmitReview({ app, ...baseArgs }).catch(() => {});
+		await vi.runAllTimersAsync();
+		await promise;
+
+		// 3 review attempts + 1 fallback comment (no PATCH — review failed)
+		expect(request).toHaveBeenCalledTimes(4);
+
+		const [fallbackRoute, fallbackParams] = request.mock.calls[3];
+		expect(fallbackRoute).toBe(
+			"POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
 		);
-		expect(request).toHaveBeenCalledOnce();
+		expect(fallbackParams.body).toContain("⚠️");
+		expect(fallbackParams.body).toContain("422 Unprocessable Entity");
+		expect(fallbackParams.body).toContain("Review body.");
+		expect(fallbackParams.body).toContain("src/file.ts:2");
+	});
+});
+
+describe("buildPRSummarySection", () => {
+	it("builds a summary section with verdict and metadata", () => {
+		const section = buildPRSummarySection(
+			{ ...DEFAULT_METADATA, generalFindings: 2, inlineComments: 1 },
+			"REQUEST_CHANGES",
+			"ai-review-bot",
+		);
+		expect(section).toContain("<!-- ai-review-bot:start -->");
+		expect(section).toContain("<!-- ai-review-bot:end -->");
+		expect(section).toContain("⚠️ Changes requested");
+		expect(section).toContain("2 general, 1 inline");
+	});
+
+	it("shows Tier 2 skills when present", () => {
+		const section = buildPRSummarySection(
+			{
+				...DEFAULT_METADATA,
+				tier2Skills: ["security-auditor", "type-design-analyzer"],
+			},
+			"COMMENT",
+			"ai-review-bot",
+		);
+		expect(section).toContain("5 Tier 1 + 2 Tier 2");
+		expect(section).toContain("`security-auditor`");
+	});
+});
+
+describe("injectPRSection", () => {
+	const section =
+		"<!-- ai-review-bot:start -->\ntest\n<!-- ai-review-bot:end -->";
+
+	it("appends section to existing body", () => {
+		const result = injectPRSection("Existing description.", section);
+		expect(result).toBe(`Existing description.\n\n${section}`);
+	});
+
+	it("replaces existing section", () => {
+		const body = `Intro\n\n${section}\n\nOutro`;
+		const newSection =
+			"<!-- ai-review-bot:start -->\nupdated\n<!-- ai-review-bot:end -->";
+		const result = injectPRSection(body, newSection);
+		expect(result).toBe(`Intro\n\n${newSection}\n\nOutro`);
+	});
+
+	it("handles null body", () => {
+		const result = injectPRSection(null, section);
+		expect(result).toBe(section);
 	});
 });

@@ -3,7 +3,7 @@ import { isTrustedAuthorAssociation, parseReviewCommand } from "./commands.js";
 
 describe("parseReviewCommand", () => {
 	it("parses the bare review command", () => {
-		expect(parseReviewCommand("/claude-review", "/claude-review")).toEqual({
+		expect(parseReviewCommand("/ai-review", "/ai-review")).toEqual({
 			force: false,
 			extraInstructions: "",
 		});
@@ -12,8 +12,8 @@ describe("parseReviewCommand", () => {
 	it("parses extra instructions", () => {
 		expect(
 			parseReviewCommand(
-				"/claude-review focus on packaging and release risk",
-				"/claude-review",
+				"/ai-review focus on packaging and release risk",
+				"/ai-review",
 			),
 		).toEqual({
 			force: false,
@@ -23,10 +23,7 @@ describe("parseReviewCommand", () => {
 
 	it("parses force and extra instructions together", () => {
 		expect(
-			parseReviewCommand(
-				"/claude-review --force security only",
-				"/claude-review",
-			),
+			parseReviewCommand("/ai-review --force security only", "/ai-review"),
 		).toEqual({
 			force: true,
 			extraInstructions: "security only",
@@ -34,7 +31,7 @@ describe("parseReviewCommand", () => {
 	});
 
 	it("returns null for unrelated comments", () => {
-		expect(parseReviewCommand("looks good to me", "/claude-review")).toBeNull();
+		expect(parseReviewCommand("looks good to me", "/ai-review")).toBeNull();
 	});
 });
 

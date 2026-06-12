@@ -1,6 +1,6 @@
 import { waitUntil } from "@vercel/functions";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getGitHubApp } from "../../src/github-app.js";
+import { getOpenAIGitHubApp } from "../../src/github-app.js";
 import { readRawBody } from "../../src/http.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -26,8 +26,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 	const body = await readRawBody(req);
 	const payload = body.toString("utf8");
 
-	// Verify signature before acknowledging so we don't ack forged requests.
-	const app = getGitHubApp();
+	const app = getOpenAIGitHubApp();
 	const valid = await app.webhooks
 		.verify(payload, signature)
 		.catch(() => false);
@@ -36,9 +35,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 		return;
 	}
 
-	// Acknowledge immediately — GitHub requires a response well before our
-	// 5-agent review completes. waitUntil() tells Vercel to keep the function
-	// alive until the processing promise resolves, even after the response is sent.
 	res.status(202).json({ ok: true });
 
 	waitUntil(

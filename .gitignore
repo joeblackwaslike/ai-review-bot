@@ -4,5 +4,19 @@ node_modules/
 .claude/
 .serena/
 dist/
+docs/_backlog.md
 docs/.vitepress/dist/
 docs/.vitepress/cache/
+.vitepress/
+.clawhip/
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+
+# AI Review local audit artifacts
+.ai-review/
+
+# Beads task DB / exports (PII; shared via Dolt, not git)
+.beads/

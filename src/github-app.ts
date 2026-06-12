@@ -1,7 +1,146 @@
 import { App } from "octokit";
+import { createCheckRun } from "./check-run.js";
 import { isTrustedAuthorAssociation, parseReviewCommand } from "./commands.js";
-import { getConfig } from "./config.js";
+import type { AppConfig } from "./config.js";
+import { getConfig, getOpenAIAppConfig } from "./config.js";
+import { resolveStaleThreads } from "./resolve-threads.js";
+import type { ReviewDecision, ReviewMetadata } from "./review.js";
 import { buildReview } from "./review.js";
+
+function sleep(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function postReviewWithRetry(
+	octokit: Awaited<ReturnType<App["getInstallationOctokit"]>>,
+	params: {
+		owner: string;
+		repo: string;
+		pullNumber: number;
+		commitId: string;
+		event: "COMMENT" | "REQUEST_CHANGES" | "APPROVE";
+		body: string;
+		comments: ReviewDecision["comments"];
+	},
+	maxAttempts = 3,
+): Promise<void> {
+	const delays = [3000, 6000];
+	let lastError: unknown;
+
+	for (let attempt = 0; attempt < maxAttempts; attempt++) {
+		try {
+			await octokit.request(
+				"POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
+				{
+					owner: params.owner,
+					repo: params.repo,
+					pull_number: params.pullNumber,
+					commit_id: params.commitId,
+					event: params.event,
+					body: params.body,
+					comments: params.comments,
+				},
+			);
+			return;
+		} catch (err) {
+			lastError = err;
+			console.error(
+				`review POST attempt ${attempt + 1}/${maxAttempts} failed`,
+				err,
+			);
+			if (attempt < maxAttempts - 1) {
+				await sleep(delays[attempt]);
+			}
+		}
+	}
+	throw lastError;
+}
+
+function buildFallbackCommentBody(
+	review: ReviewDecision,
+	err: unknown,
+	commentPrefix: string,
+): string {
+	const errorMessage = err instanceof Error ? err.message : String(err);
+
+	const inlineSection =
+		review.comments.length > 0
+			? [
+					"",
+					"**Inline comments** (could not be anchored — listed by location):",
+					"",
+					...review.comments.map(
+						(c) =>
+							`- \`${c.path}:${c.line}\` — ${c.body.replace(/\n+/g, " ").slice(0, 300)}`,
+					),
+				]
+			: [];
+
+	return [
+		`⚠️ **[${commentPrefix}] Review API error — findings preserved below**`,
+		"",
+		`The review could not be posted after 3 attempts. Last error: \`${errorMessage}\``,
+		"",
+		"---",
+		"",
+		review.body,
+		...inlineSection,
+	].join("\n");
+}
+
+const PR_SECTION_START = "<!-- ai-review-bot:start -->";
+const PR_SECTION_END = "<!-- ai-review-bot:end -->";
+
+export function buildPRSummarySection(
+	metadata: ReviewMetadata,
+	event: ReviewDecision["event"],
+	commentPrefix: string,
+): string {
+	const verdict =
+		event === "APPROVE"
+			? "✅ Approved"
+			: event === "REQUEST_CHANGES"
+				? "⚠️ Changes requested"
+				: "💬 Commented";
+
+	const tier2Line =
+		metadata.tier2Skills.length > 0
+			? `\n| Tier 2 skills | ${metadata.tier2Skills.map((s) => `\`${s}\``).join(", ")} |`
+			: "";
+
+	return [
+		PR_SECTION_START,
+		`#### ${commentPrefix}`,
+		"",
+		"| | |",
+		"|---|---|",
+		`| Verdict | ${verdict} |`,
+		`| Findings | ${metadata.generalFindings} general, ${metadata.inlineComments} inline |`,
+		`| Model | \`${metadata.model}\` |`,
+		`| Agents | ${metadata.tier1Count} Tier 1${metadata.tier2Skills.length > 0 ? ` + ${metadata.tier2Skills.length} Tier 2` : ""} |${tier2Line}`,
+		`| Cost | $${metadata.cost.toFixed(6)} |`,
+		PR_SECTION_END,
+	].join("\n");
+}
+
+export function injectPRSection(
+	existingBody: string | null,
+	section: string,
+): string {
+	const body = existingBody ?? "";
+	const startIdx = body.indexOf(PR_SECTION_START);
+	const endIdx = body.indexOf(PR_SECTION_END);
+
+	if (startIdx !== -1 && endIdx !== -1) {
+		return (
+			body.slice(0, startIdx) +
+			section +
+			body.slice(endIdx + PR_SECTION_END.length)
+		);
+	}
+
+	return body ? `${body}\n\n${section}` : section;
+}
 
 type PullRequestWebhookPayload = {
 	action: string;
@@ -47,9 +186,11 @@ type PullRequestDetails = {
 	changed_files: number;
 	title: string;
 	body: string | null;
+	labels?: Array<{ name: string }>;
 };
 
 let appSingleton: App | null = null;
+let openAIAppSingleton: App | null = null;
 
 /** @internal Exported for unit testing only. */
 export async function maybeSubmitReview(args: {
@@ -61,8 +202,8 @@ export async function maybeSubmitReview(args: {
 	pullRequest: PullRequestDetails;
 	extraInstructions: string;
 	force: boolean;
+	config: AppConfig;
 }) {
-	const config = getConfig();
 	const {
 		app,
 		installationId,
@@ -72,13 +213,16 @@ export async function maybeSubmitReview(args: {
 		pullRequest,
 		extraInstructions,
 		force,
+		config,
 	} = args;
 
 	if (!config.reviewEnabled) {
+		console.log("review skipped: REVIEW_ENABLED is not set to true");
 		return;
 	}
 
 	if (pullRequest.draft) {
+		console.log("review skipped: pull request is a draft");
 		return;
 	}
 
@@ -95,9 +239,11 @@ export async function maybeSubmitReview(args: {
 		additions: pullRequest.additions,
 		deletions: pullRequest.deletions,
 		changedFiles: pullRequest.changed_files,
+		labels: pullRequest.labels?.map((l) => l.name) ?? [],
 		commentPrefix: config.reviewCommentPrefix,
 		extraInstructions,
 		force,
+		provider: config.provider,
 	});
 
 	if (!review) {
@@ -113,47 +259,98 @@ export async function maybeSubmitReview(args: {
 	});
 
 	try {
-		await octokit.request(
-			"POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
-			{
+		await postReviewWithRetry(octokit, {
+			owner,
+			repo,
+			pullNumber,
+			commitId: headSha,
+			event: review.event,
+			body: review.body,
+			comments: review.comments,
+		});
+
+		const summarySection = buildPRSummarySection(
+			review.metadata,
+			review.event,
+			config.reviewCommentPrefix,
+		);
+		const updatedBody = injectPRSection(pullRequest.body, summarySection);
+		try {
+			await octokit.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", {
 				owner,
 				repo,
 				pull_number: pullNumber,
-				commit_id: headSha,
-				event: review.event,
-				body: review.body,
-				comments: review.comments,
-			},
-		);
-	} catch (err) {
-		if (review.comments.length === 0) {
-			throw err;
+				body: updatedBody,
+			});
+		} catch (patchErr) {
+			console.error("failed to update PR description", patchErr);
 		}
+
+		try {
+			await createCheckRun(
+				octokit,
+				owner,
+				repo,
+				headSha,
+				review,
+				config.reviewCommentPrefix,
+			);
+		} catch (checkErr) {
+			console.error("failed to create check run", checkErr);
+		}
+
+		try {
+			await resolveStaleThreads(
+				octokit,
+				owner,
+				repo,
+				pullNumber,
+				config.reviewCommentPrefix,
+				review.validLinesByPath,
+			);
+		} catch (resolveErr) {
+			console.error("failed to resolve stale threads", resolveErr);
+		}
+	} catch (err) {
 		console.error(
-			"review POST with inline comments failed, retrying without comments",
-			err,
-		);
-		await octokit.request(
-			"POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
+			"review POST failed after all retries — posting fallback comment",
 			{
 				owner,
 				repo,
-				pull_number: pullNumber,
-				commit_id: headSha,
-				event: review.event,
-				body: review.body,
-				comments: [],
+				pullNumber,
+				err,
 			},
 		);
+		const fallbackBody = buildFallbackCommentBody(
+			review,
+			err,
+			config.reviewCommentPrefix,
+		);
+		try {
+			await octokit.request(
+				"POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+				{
+					owner,
+					repo,
+					issue_number: pullNumber,
+					body: fallbackBody,
+				},
+			);
+			console.log("fallback comment posted — review findings preserved");
+		} catch (commentErr) {
+			console.error("failed to post fallback comment", commentErr);
+		}
+		throw err;
 	}
 }
 
-function registerHandlers(app: App) {
+function registerHandlers(app: App, configFn: () => AppConfig) {
 	app.webhooks.on(
 		[
 			"pull_request.opened",
 			"pull_request.reopened",
 			"pull_request.synchronize",
+			"pull_request.ready_for_review",
 		],
 		async ({ payload }) => {
 			const prPayload = payload as PullRequestWebhookPayload;
@@ -163,9 +360,20 @@ function registerHandlers(app: App) {
 				throw new Error("Webhook payload did not include an installation id");
 			}
 
+			const config = configFn();
 			const owner = prPayload.repository.owner.login;
 			const repo = prPayload.repository.name;
 			const pullNumber = prPayload.number;
+			if (config.reviewDelayMs > 0) {
+				console.log(`delaying review by ${config.reviewDelayMs / 1000}s`, {
+					owner,
+					repo,
+					pullNumber,
+				});
+				await new Promise((resolve) =>
+					setTimeout(resolve, config.reviewDelayMs),
+				);
+			}
 			await maybeSubmitReview({
 				app,
 				installationId,
@@ -175,12 +383,13 @@ function registerHandlers(app: App) {
 				pullRequest: prPayload.pull_request,
 				extraInstructions: "",
 				force: false,
+				config,
 			});
 		},
 	);
 
 	app.webhooks.on("issue_comment.created", async ({ payload }) => {
-		const config = getConfig();
+		const config = configFn();
 		const commentPayload = payload as IssueCommentWebhookPayload;
 
 		console.log("issue_comment.created received", {
@@ -247,6 +456,7 @@ function registerHandlers(app: App) {
 			pullRequest: pullResponse.data as PullRequestDetails,
 			extraInstructions: command.extraInstructions,
 			force: command.force,
+			config,
 		});
 	});
 
@@ -269,6 +479,24 @@ export function getGitHubApp(): App {
 		},
 	});
 
-	registerHandlers(appSingleton);
+	registerHandlers(appSingleton, getConfig);
 	return appSingleton;
+}
+
+export function getOpenAIGitHubApp(): App {
+	if (openAIAppSingleton) {
+		return openAIAppSingleton;
+	}
+
+	const config = getOpenAIAppConfig();
+	openAIAppSingleton = new App({
+		appId: config.appId,
+		privateKey: config.privateKey,
+		webhooks: {
+			secret: config.webhookSecret,
+		},
+	});
+
+	registerHandlers(openAIAppSingleton, getOpenAIAppConfig);
+	return openAIAppSingleton;
 }
