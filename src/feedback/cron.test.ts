@@ -40,6 +40,19 @@ describe("pollFeedbackRequest", () => {
 		expect(deps).not.toHaveBeenCalled();
 	});
 
+	it("skips (200) when disabled even with no secret configured, without building deps", async () => {
+		const deps = vi.fn(buildDeps);
+		const out = await pollFeedbackRequest({
+			authorization: undefined,
+			secret: undefined,
+			feedbackEnabled: false,
+			buildDeps: deps,
+		});
+		expect(out.status).toBe(200);
+		expect(out.body).toMatchObject({ skipped: expect.any(String) });
+		expect(deps).not.toHaveBeenCalled();
+	});
+
 	it("runs the poll (200) when authorized and enabled", async () => {
 		const out = await pollFeedbackRequest({
 			authorization: "Bearer s3cret",

@@ -399,6 +399,9 @@ export async function maybeSubmitReview(args: {
 					});
 				}
 			} catch (feedbackErr) {
+				// Drop the cached client so a transient failure (network blip, expired
+				// token) doesn't poison the warm instance — the next review rebuilds it.
+				kvSingleton = null;
 				console.error(
 					"feedback: failed to record posted comments",
 					feedbackErr,

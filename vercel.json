@@ -11,5 +11,5 @@
 			"maxDuration": 60
 		}
 	},
-	"crons": [{ "path": "/api/cron/poll-feedback", "schedule": "*/10 * * * *" }]
+	"crons": [{ "path": "/api/cron/poll-feedback", "schedule": "0 0 * * *" }]
 }
