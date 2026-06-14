@@ -143,6 +143,25 @@ describe("buildReviewComments", () => {
 		expect(comments[0].start_line).toBeUndefined();
 	});
 
+	it("prepends a severity badge to the comment body", () => {
+		const comments = buildReviewComments(files, [
+			buildInlineComment({ line: 2, severity: "high", title: "Race" }),
+		]);
+
+		expect(comments[0].body.startsWith("🔴 **High**\n\n")).toBe(true);
+		expect(comments[0].body).toContain("**Race**");
+	});
+
+	it("labels and separates the suggestion block", () => {
+		const comments = buildReviewComments(files, [
+			buildInlineComment({ line: 2, suggestion: "const x = 1;" }),
+		]);
+
+		expect(comments[0].body).toContain(
+			"*Suggested fix:*\n\n```suggestion\nconst x = 1;\n```",
+		);
+	});
+
 	it("drops comment when path is not in the diff", () => {
 		const comments = buildReviewComments(files, [
 			buildInlineComment({ path: "src/other.ts", line: 2 }),

@@ -69,6 +69,7 @@ export interface InlineCommentFixture {
 	line: number;
 	start_line: number | null;
 	suggestion: string | null;
+	severity: "high" | "medium" | "low";
 }
 
 export function buildInlineComment(
@@ -81,6 +82,7 @@ export function buildInlineComment(
 		line: 2,
 		start_line: null,
 		suggestion: null,
+		severity: "medium",
 		...overrides,
 	};
 }

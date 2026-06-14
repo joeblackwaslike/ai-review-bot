@@ -172,6 +172,7 @@ const ModelReviewSchema = z.object({
 			line: z.number().int(),
 			start_line: z.number().int().nullable(),
 			suggestion: z.string().nullable(),
+			severity: z.enum(["high", "medium", "low"]),
 		}),
 	),
 });
@@ -189,6 +190,12 @@ const SEVERITY_EMOJI: Record<"high" | "medium" | "low", string> = {
 	high: "🔴",
 	medium: "🟡",
 	low: "🟢",
+};
+
+const SEVERITY_LABEL: Record<"high" | "medium" | "low", string> = {
+	high: "High",
+	medium: "Medium",
+	low: "Low",
 };
 
 // Tier 1: always runs on every PR.
@@ -485,9 +492,10 @@ export function collectRightSideLines(patch: string): Set<number> {
 }
 
 function buildCommentBody(comment: ModelInlineComment): string {
-	const base = `**${comment.title}**\n\n${comment.body}`;
+	const badge = `${SEVERITY_EMOJI[comment.severity]} **${SEVERITY_LABEL[comment.severity]}**`;
+	const base = `${badge}\n\n**${comment.title}**\n\n${comment.body}`;
 	if (comment.suggestion) {
-		return `${base}\n\n\`\`\`suggestion\n${comment.suggestion}\n\`\`\``;
+		return `${base}\n\n*Suggested fix:*\n\n\`\`\`suggestion\n${comment.suggestion}\n\`\`\``;
 	}
 	return base;
 }
@@ -1066,7 +1074,13 @@ export async function buildReview(
 			},
 			priorOwnReview,
 		);
-		summary = summaryResult.summary;
+		summary = summaryResult.summary.trim();
+		if (summary.length === 0) {
+			summary =
+				finalEvent === "REQUEST_CHANGES"
+					? "Requesting changes — see the findings and inline comments below."
+					: "Review complete — see the findings and inline comments below.";
+		}
 		totalPromptTokens += summaryResult.usage.promptTokens;
 		totalCompletionTokens += summaryResult.usage.completionTokens;
 	}
@@ -1108,12 +1122,12 @@ export async function buildReview(
 	const tier2Notice =
 		tier2Matches.length > 0
 			? [
-					"",
-					"**Additional skills activated:**",
-					...tier2Matches.map(
-						({ skillPath, reason }) =>
-							`- \`${skillPath.replace(".md", "")}\` — ${reason}`,
-					),
+					`\n#### Additional skills activated\n\n${tier2Matches
+						.map(
+							({ skillPath, reason }) =>
+								`- \`${skillPath.replace(".md", "")}\` — ${reason}`,
+						)
+						.join("\n")}`,
 				]
 			: [];
 

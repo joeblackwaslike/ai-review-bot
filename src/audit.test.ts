@@ -117,6 +117,7 @@ describe("formatAuditJson", () => {
 					line: 3,
 					start_line: null,
 					suggestion: null,
+					severity: "medium",
 				},
 			],
 		});
@@ -202,6 +203,7 @@ describe("runLocalAudit (PR path)", () => {
 						line: 1,
 						start_line: null,
 						suggestion: null,
+						severity: "medium",
 					},
 				],
 			}),
