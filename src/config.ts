@@ -4,6 +4,7 @@ export interface AppConfig {
 	webhookSecret: string;
 	reviewEnabled: boolean;
 	reviewDelayMs: number;
+	reviewResyncDelayMs: number;
 	reviewCommentPrefix: string;
 	reviewCommand: string;
 	provider: "anthropic" | "openai";
@@ -60,7 +61,9 @@ export function getConfig(): AppConfig {
 		),
 		webhookSecret: getRequiredEnv("GITHUB_WEBHOOK_SECRET"),
 		reviewEnabled: process.env.REVIEW_ENABLED !== "false",
-		reviewDelayMs: Number(process.env.REVIEW_DELAY_SECONDS ?? "450") * 1000,
+		reviewDelayMs: Number(process.env.REVIEW_DELAY_SECONDS ?? "540") * 1000,
+		reviewResyncDelayMs:
+			Number(process.env.REVIEW_RESYNC_DELAY_SECONDS ?? "300") * 1000,
 		reviewCommentPrefix: firstNonBlank(
 			process.env.REVIEW_COMMENT_PREFIX,
 			"ai-review-bot",
@@ -80,7 +83,9 @@ export function getOpenAIAppConfig(): AppConfig {
 		),
 		webhookSecret: getRequiredEnv("OPENAI_APP_WEBHOOK_SECRET"),
 		reviewEnabled: process.env.REVIEW_ENABLED !== "false",
-		reviewDelayMs: Number(process.env.REVIEW_DELAY_SECONDS ?? "450") * 1000,
+		reviewDelayMs: Number(process.env.REVIEW_DELAY_SECONDS ?? "540") * 1000,
+		reviewResyncDelayMs:
+			Number(process.env.REVIEW_RESYNC_DELAY_SECONDS ?? "300") * 1000,
 		reviewCommentPrefix: firstNonBlank(
 			process.env.OPENAI_REVIEW_COMMENT_PREFIX,
 			process.env.REVIEW_COMMENT_PREFIX,

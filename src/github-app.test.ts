@@ -92,6 +92,7 @@ const baseArgs = {
 		webhookSecret: "secret",
 		reviewEnabled: true,
 		reviewDelayMs: 0,
+		reviewResyncDelayMs: 0,
 		reviewCommentPrefix: "ai-review-bot",
 		reviewCommand: "/ai-review",
 		provider: "anthropic" as const,

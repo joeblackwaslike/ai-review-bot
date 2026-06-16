@@ -557,15 +557,22 @@ function registerHandlers(app: App, configFn: () => AppConfig) {
 			const owner = prPayload.repository.owner.login;
 			const repo = prPayload.repository.name;
 			const pullNumber = prPayload.number;
-			if (config.reviewDelayMs > 0) {
-				console.log(`delaying review by ${config.reviewDelayMs / 1000}s`, {
+			// Re-reviews after a push (synchronize) use a shorter delay than the
+			// initial pass: external bots re-review incrementally in ~1-3 min, while
+			// an initial review (CodeRabbit especially) can take up to ~7.5 min. The
+			// delay exists so other bots post first and our review can dedupe them.
+			const delayMs =
+				prPayload.action === "synchronize"
+					? config.reviewResyncDelayMs
+					: config.reviewDelayMs;
+			if (delayMs > 0) {
+				console.log(`delaying review by ${delayMs / 1000}s`, {
 					owner,
 					repo,
 					pullNumber,
+					action: prPayload.action,
 				});
-				await new Promise((resolve) =>
-					setTimeout(resolve, config.reviewDelayMs),
-				);
+				await new Promise((resolve) => setTimeout(resolve, delayMs));
 			}
 			await maybeSubmitReview({
 				app,
