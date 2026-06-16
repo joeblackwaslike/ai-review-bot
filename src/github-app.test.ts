@@ -149,6 +149,12 @@ describe("maybeSubmitReview", () => {
 			"agent boom",
 		);
 
+		// Assert the claim was actually released by the finally block — not merely
+		// absent because beforeEach cleared the store. The throwing run above set
+		// the claim via setNx; the finally must have deleted it.
+		const claimKey = `review-claim:${baseArgs.config.provider}:${baseArgs.owner}/${baseArgs.repo}#${baseArgs.pullNumber}@${pr.head.sha}`;
+		expect(kvStore.has(claimKey)).toBe(false);
+
 		// The failed run must not lock the commit out of a retry.
 		mockBuildReview.mockResolvedValue({
 			event: "COMMENT" as const,

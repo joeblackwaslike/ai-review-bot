@@ -286,12 +286,24 @@ export async function maybeSubmitReview(args: {
 		}
 	}
 
-	// Everything below runs while holding the claim. The finally releases it on
-	// every path that does NOT post a review — a skip, a rate-limit, an invalid
-	// event, or ANY thrown error (e.g. buildReview failing) — so a transient
-	// failure can't lock this commit out of re-review until the TTL expires. On a
-	// successful post we keep the claim (reviewPosted) and let it expire via TTL;
-	// the posted "Reviewed commit:" marker then becomes the durable dedup.
+	// Releases the idempotency claim. Called from the finally below on every path
+	// that does NOT post a review — a skip, a rate-limit, an invalid event, or ANY
+	// thrown error (e.g. buildReview failing) — so a transient failure can't lock
+	// this commit out of re-review until the TTL expires. No-op when we never held
+	// the claim (KV absent, force=true, or setNx threw).
+	const releaseClaim = async () => {
+		if (kv && claimed) {
+			await kv.del(claimKey).catch((delErr) => {
+				// Non-fatal — the claim still auto-expires via TTL — but log it so a
+				// stuck claim from a KV outage is diagnosable rather than silent.
+				console.error("failed to release review claim", { claimKey, delErr });
+			});
+		}
+	};
+
+	// Everything below runs while holding the claim. On a successful post we keep
+	// the claim (reviewPosted) and let it expire via TTL; the posted "Reviewed
+	// commit:" marker then becomes the durable dedup.
 	let reviewPosted = false;
 	try {
 		const review = await buildReview({
@@ -495,14 +507,9 @@ export async function maybeSubmitReview(args: {
 		}
 	} finally {
 		// Release the claim unless we actually posted a review, so a skip,
-		// rate-limit, or thrown error leaves the commit free to be retried.
-		if (kv && claimed && !reviewPosted) {
-			await kv.del(claimKey).catch((delErr) => {
-				// Non-fatal — the claim still auto-expires via TTL — but log it so a
-				// stuck claim from a KV outage is diagnosable rather than silent.
-				console.error("failed to release review claim", { claimKey, delErr });
-			});
-		}
+		// rate-limit, or thrown error leaves the commit free to be retried. This
+		// runs on ANY exit from the try above — including a buildReview throw.
+		if (!reviewPosted) await releaseClaim();
 	}
 }
 
