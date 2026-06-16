@@ -96,35 +96,35 @@ describe("classifyTier", () => {
 // ---------------------------------------------------------------------------
 
 describe("routeModel — Anthropic", () => {
-	it("trivial tier → Haiku, no thinking budget", () => {
+	it("trivial tier → Haiku, no effort", () => {
 		const sel = routeModel(
 			{ ...base, additions: 8, deletions: 3, filePaths: ["README.md"] },
 			"anthropic",
 		);
 		expect(sel.provider).toBe("anthropic");
 		expect(sel.model).toBe("claude-haiku-4-5");
-		expect(sel.thinkingBudget).toBeUndefined();
+		expect(sel.effort).toBeUndefined();
 	});
 
-	it("normal tier → Sonnet, no thinking budget", () => {
+	it("normal tier → Sonnet, medium effort", () => {
 		const sel = routeModel(base, "anthropic");
 		expect(sel.model).toBe("claude-sonnet-4-6");
-		expect(sel.thinkingBudget).toBeUndefined();
+		expect(sel.effort).toBe("medium");
 	});
 
-	it("complex tier → Sonnet + thinking budget 8000", () => {
+	it("complex tier → Sonnet, high effort", () => {
 		const sel = routeModel(
 			{ ...base, additions: 400, deletions: 150 },
 			"anthropic",
 		);
 		expect(sel.model).toBe("claude-sonnet-4-6");
-		expect(sel.thinkingBudget).toBe(8000);
+		expect(sel.effort).toBe("high");
 	});
 
-	it("deep tier → Opus + thinking budget 16000", () => {
+	it("deep tier → Opus 4.8, xhigh effort", () => {
 		const sel = routeModel({ ...base, labels: ["deep-review"] }, "anthropic");
-		expect(sel.model).toBe("claude-opus-4-7");
-		expect(sel.thinkingBudget).toBe(16000);
+		expect(sel.model).toBe("claude-opus-4-8");
+		expect(sel.effort).toBe("xhigh");
 	});
 });
 
@@ -133,34 +133,34 @@ describe("routeModel — Anthropic", () => {
 // ---------------------------------------------------------------------------
 
 describe("routeModel — OpenAI", () => {
-	it("trivial tier → gpt-5, no reasoning effort", () => {
+	it("trivial tier → gpt-5.1, none effort", () => {
 		const sel = routeModel(
 			{ ...base, additions: 8, deletions: 3, filePaths: ["README.md"] },
 			"openai",
 		);
 		expect(sel.provider).toBe("openai");
-		expect(sel.model).toBe("gpt-5");
-		expect(sel.reasoningEffort).toBeUndefined();
+		expect(sel.model).toBe("gpt-5.1");
+		expect(sel.effort).toBe("none");
 	});
 
-	it("normal tier → gpt-5, no reasoning effort", () => {
+	it("normal tier → gpt-5.1, low effort", () => {
 		const sel = routeModel(base, "openai");
-		expect(sel.model).toBe("gpt-5");
-		expect(sel.reasoningEffort).toBeUndefined();
+		expect(sel.model).toBe("gpt-5.1");
+		expect(sel.effort).toBe("low");
 	});
 
-	it("complex tier → o4-mini + medium reasoning", () => {
+	it("complex tier → gpt-5.1, high effort", () => {
 		const sel = routeModel(
 			{ ...base, filePaths: ["src/auth/handler.ts"] },
 			"openai",
 		);
-		expect(sel.model).toBe("o4-mini");
-		expect(sel.reasoningEffort).toBe("medium");
+		expect(sel.model).toBe("gpt-5.1");
+		expect(sel.effort).toBe("high");
 	});
 
-	it("deep tier → o3 + high reasoning", () => {
+	it("deep tier → gpt-5.5, high effort", () => {
 		const sel = routeModel({ ...base, labels: ["deep-review"] }, "openai");
-		expect(sel.model).toBe("o3");
-		expect(sel.reasoningEffort).toBe("high");
+		expect(sel.model).toBe("gpt-5.5");
+		expect(sel.effort).toBe("high");
 	});
 });

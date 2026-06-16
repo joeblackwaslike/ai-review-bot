@@ -218,20 +218,25 @@ function sleep(ms: number): Promise<void> {
 	return new Promise((r) => setTimeout(r, ms));
 }
 
-// OpenAI reasoning models (gpt-5) spend reasoning tokens from the same
-// maxOutputTokens budget and default to the Responses API, so a tight cap leaves
-// nothing for the structured object → AI_NoObjectGeneratedError. Cap the reasoning
-// effort so it can't starve the output. Other providers read only their own
-// namespace and ignore this.
-const OPENAI_REASONING_PROVIDER_OPTIONS = {
-	openai: { reasoningEffort: "low" },
-} as const;
+/** Maps the tier's effort onto the active provider's reasoning knob:
+ *  OpenAI reads `reasoningEffort`, Anthropic reads `effort`. Returns undefined
+ *  when no effort is set (e.g. Haiku) so the provider default applies. */
+function reasoningProviderOptions(
+	selection: ModelSelection,
+): Record<string, Record<string, string>> | undefined {
+	if (!selection.effort) return undefined;
+	return selection.provider === "openai"
+		? { openai: { reasoningEffort: selection.effort } }
+		: { anthropic: { effort: selection.effort } };
+}
 
-/** Output-token budget for a generateObject call. Reasoning models need headroom
- * for reasoning + the structured object; non-reasoning providers only emit the
- * object, so the base cap is left untouched (you pay for actual tokens, not the cap). */
+/** Output-token budget for a generateObject call. Reasoning/thinking tokens are
+ * billed against this budget, so once an effort level is engaged the cap must
+ * cover reasoning + the structured object — too small and the model returns no
+ * object at all (AI_NoObjectGeneratedError). With no effort the base cap stands
+ * (you pay for actual tokens, not the cap). */
 function outputBudget(selection: ModelSelection, base: number): number {
-	return selection.provider === "openai" ? Math.max(base * 8, 8000) : base;
+	return selection.effort ? Math.max(base * 8, 16000) : base;
 }
 
 export async function runAgent(
@@ -248,7 +253,7 @@ export async function runAgent(
 			schema: ModelReviewSchema,
 			maxOutputTokens: outputBudget(selection, 4096),
 			maxRetries: 4,
-			providerOptions: OPENAI_REASONING_PROVIDER_OPTIONS,
+			providerOptions: reasoningProviderOptions(selection),
 			messages: [
 				{
 					role: "user",
@@ -395,7 +400,7 @@ export async function generateSummary(
 		model: createAIModel(selection),
 		schema: SummarySchema,
 		maxOutputTokens: outputBudget(selection, 256),
-		providerOptions: OPENAI_REASONING_PROVIDER_OPTIONS,
+		providerOptions: reasoningProviderOptions(selection),
 		system,
 		messages: [{ role: "user", content: prompt }],
 	});

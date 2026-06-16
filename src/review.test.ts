@@ -797,18 +797,45 @@ describe("runAgent caching + telemetry", () => {
 		});
 		const openaiSel = {
 			provider: "openai",
-			model: "gpt-5",
+			model: "gpt-5.1",
 			tier: 1,
+			effort: "low",
 		} as ModelSelection;
 
 		await runAgent("code-reviewer.md", "SHARED", openaiSel, "");
 
 		const call = (mockGenerateObject as ReturnType<typeof vi.fn>).mock
 			.calls[0][0];
-		// gpt-5 spends reasoning tokens from this budget — it must dwarf the 4096
-		// base, and reasoning effort is capped so it can't starve the output.
+		// gpt-5.1 spends reasoning tokens from this budget — it must dwarf the 4096
+		// base, and the tier's effort is forwarded so it can't starve the output.
 		expect(call.maxOutputTokens).toBe(32768);
 		expect(call.providerOptions.openai.reasoningEffort).toBe("low");
+	});
+
+	it("forwards effort and budget headroom for Anthropic reasoning tiers", async () => {
+		mockGenerateObject.mockResolvedValue({
+			object: buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+			usage: { inputTokens: 10, outputTokens: 5 },
+			providerMetadata: { anthropic: {} },
+			response: { headers: {} },
+		});
+		const opusSel = {
+			provider: "anthropic",
+			model: "claude-opus-4-8",
+			tier: 4,
+			effort: "xhigh",
+		} as ModelSelection;
+
+		await runAgent("code-reviewer.md", "SHARED", opusSel, "");
+
+		const call = (mockGenerateObject as ReturnType<typeof vi.fn>).mock
+			.calls[0][0];
+		expect(call.providerOptions.anthropic.effort).toBe("xhigh");
+		expect(call.maxOutputTokens).toBe(32768);
 	});
 
 	it("leaves the output budget at the base for non-reasoning providers", async () => {
