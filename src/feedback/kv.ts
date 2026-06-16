@@ -15,6 +15,9 @@ export interface KvClient {
 		max: number | string,
 	): Promise<number>;
 	set(key: string, value: string, ttlSeconds?: number): Promise<unknown>;
+	/** Atomic claim: set key to value only if it does not already exist, with a TTL.
+	 * Returns true if the key was set (claim acquired), false if it already existed. */
+	setNx(key: string, value: string, ttlSeconds: number): Promise<boolean>;
 	get(key: string): Promise<string | null>;
 	del(...keys: string[]): Promise<unknown>;
 	lpush(key: string, value: string): Promise<unknown>;
@@ -50,6 +53,17 @@ export function createUpstashKv(): KvClient {
 			ttlSeconds
 				? redis.set(key, value, { ex: ttlSeconds })
 				: redis.set(key, value),
+		setNx: async (key, value, ttlSeconds) => {
+			// Upstash returns "OK" when the key was set and null when NX failed
+			// (already exists). Anything else is unexpected (API/version drift); we
+			// still treat it as "not acquired" but log it so a silent block on a
+			// surprise value is diagnosable rather than mistaken for a normal claim.
+			const result = await redis.set(key, value, { nx: true, ex: ttlSeconds });
+			if (result !== "OK" && result !== null) {
+				console.warn("setNx: unexpected result from redis.set", { result });
+			}
+			return result === "OK";
+		},
 		get: (key) => redis.get<string>(key),
 		del: (...keys) => redis.del(...keys),
 		lpush: (key, value) => redis.lpush(key, value),

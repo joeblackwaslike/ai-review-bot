@@ -14,6 +14,12 @@ function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** TTL for the per-commit review idempotency claim. Comfortably longer than a
+ * full review run (which is bounded by the function's maxDuration) so the lock
+ * outlives the agents; it auto-expires as a backstop if a crash skips the
+ * explicit release. */
+const REVIEW_CLAIM_TTL_SECONDS = 1200;
+
 async function postReviewWithRetry(
 	octokit: Awaited<ReturnType<App["getInstallationOctokit"]>>,
 	params: {
@@ -246,198 +252,288 @@ export async function maybeSubmitReview(args: {
 
 	const headSha = pullRequest.head.sha;
 	const octokit = await app.getInstallationOctokit(installationId);
-	const review = await buildReview({
-		octokit,
-		owner,
-		repo,
-		pullNumber,
-		headSha,
-		title: pullRequest.title,
-		body: pullRequest.body,
-		additions: pullRequest.additions,
-		deletions: pullRequest.deletions,
-		changedFiles: pullRequest.changed_files,
-		labels: pullRequest.labels?.map((l) => l.name) ?? [],
-		commentPrefix: config.reviewCommentPrefix,
-		extraInstructions,
-		force,
-		provider: config.provider,
-		feedbackEnabled: config.feedbackEnabled,
-		agentConcurrency: config.agentConcurrency,
-	});
 
-	if (!review) {
-		return;
-	}
-
-	if (review.event === "RATE_LIMITED") {
-		const when = review.rateLimitResetAt
-			? `resets at ${review.rateLimitResetAt}`
-			: review.rateLimitRetryAfterSeconds
-				? `retry in ~${review.rateLimitRetryAfterSeconds}s`
-				: "will reset shortly";
-		const body = `⚠️ **[${config.reviewCommentPrefix}]** Review couldn't run — the model is rate-limited (input-token budget). Budget ${when}. Push again after that, or it will auto-retry on your next commit.`;
-		await octokit.request(
-			"POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
-			{
-				owner,
-				repo,
-				issue_number: pullNumber,
-				body,
-			},
-		);
-		console.log("posted rate-limit fallback comment", {
-			owner,
-			repo,
-			pullNumber,
-			when,
+	// Idempotency claim: take an atomic lock on this commit BEFORE running the
+	// (expensive) agents, so a duplicate, concurrent, or redelivered invocation
+	// can't run a second review and double-bill. Skipped when force=true (explicit
+	// re-review) and when KV is not configured — in which case we fall back to the
+	// marker check inside buildReview.
+	// headSha is the only claim-key component sourced loosely from the webhook
+	// payload; owner/repo are GitHub-validated names and provider is an internal
+	// enum. Redis keys are opaque binary-safe strings (no injection surface), but
+	// validate the SHA as defense-in-depth so a malformed value can't produce an
+	// odd or colliding claim key — fall back to the marker check if it fails.
+	const validSha = /^[0-9a-f]{7,40}$/.test(headSha);
+	if (!validSha) {
+		console.warn("idempotency claim skipped: headSha is not a valid git SHA", {
+			headSha,
 		});
-		return;
 	}
-
-	if (
-		review.event !== "COMMENT" &&
-		review.event !== "REQUEST_CHANGES" &&
-		review.event !== "APPROVE"
-	) {
-		console.error(
-			"unexpected review event, skipping review POST",
-			review.event,
-		);
-		return;
-	}
-
-	console.log("submitting review", {
-		owner,
-		repo,
-		pullNumber,
-		event: review.event,
-		inlineComments: review.comments.length,
-	});
-
-	try {
-		const reviewId = await postReviewWithRetry(octokit, {
-			owner,
-			repo,
-			pullNumber,
-			commitId: headSha,
-			event: review.event,
-			body: review.body,
-			comments: review.comments,
-		});
-
-		const summarySection = buildPRSummarySection(
-			review.metadata,
-			review.event,
-			config.reviewCommentPrefix,
-		);
-		const updatedBody = injectPRSection(pullRequest.body, summarySection);
+	const kv = force || !validSha ? null : getKv();
+	const claimKey = `review-claim:${config.provider}:${owner}/${repo}#${pullNumber}@${headSha}`;
+	let claimed = false;
+	if (kv) {
 		try {
-			await octokit.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", {
-				owner,
-				repo,
-				pull_number: pullNumber,
-				body: updatedBody,
-			});
-		} catch (patchErr) {
-			console.error("failed to update PR description", patchErr);
-		}
-
-		try {
-			await createCheckRun(
-				octokit,
-				owner,
-				repo,
-				headSha,
-				review,
-				config.reviewCommentPrefix,
+			claimed = await kv.setNx(
+				claimKey,
+				new Date().toISOString(),
+				REVIEW_CLAIM_TTL_SECONDS,
 			);
-		} catch (checkErr) {
-			console.error("failed to create check run", checkErr);
-		}
-
-		try {
-			await resolveStaleThreads(
-				octokit,
-				owner,
-				repo,
-				pullNumber,
-				config.reviewCommentPrefix,
-				review.validLinesByPath,
-			);
-		} catch (resolveErr) {
-			console.error("failed to resolve stale threads", resolveErr);
-		}
-
-		if (
-			config.feedbackEnabled &&
-			review.comments.length > 0 &&
-			review.commentProvenance &&
-			review.commentProvenance.size > 0
-		) {
-			try {
-				const kv = getKv();
-				if (kv) {
-					const stored = await persistPostedComments({
-						kv,
-						octokit,
-						owner,
-						repo,
-						pr: pullNumber,
-						reviewId,
-						headSha,
-						installationId,
-						provider: config.provider,
-						provenance: review.commentProvenance,
-						nowMs: Date.now(),
-					});
-					console.log("feedback: recorded posted comments", {
-						owner,
-						repo,
-						pullNumber,
-						stored,
-					});
-				}
-			} catch (feedbackErr) {
-				// Drop the cached client so a transient failure (network blip, expired
-				// token) doesn't poison the warm instance — the next review rebuilds it.
-				kvSingleton = null;
-				console.error(
-					"feedback: failed to record posted comments",
-					feedbackErr,
-				);
+			if (!claimed) {
+				console.log("review skipped: commit already claimed by another run", {
+					owner,
+					repo,
+					pullNumber,
+					headSha,
+				});
+				return;
 			}
+		} catch (claimErr) {
+			// A KV blip must not block reviews — fall back to the marker check.
+			console.error(
+				"idempotency claim failed — proceeding without lock",
+				claimErr,
+			);
 		}
-	} catch (err) {
-		console.error(
-			"review POST failed after all retries — posting fallback comment",
-			{
-				owner,
-				repo,
-				pullNumber,
-				err,
-			},
-		);
-		const fallbackBody = buildFallbackCommentBody(
-			review,
-			err,
-			config.reviewCommentPrefix,
-		);
-		try {
+	}
+
+	// Releases the idempotency claim. Called from the finally below on every path
+	// that does NOT post a review — a skip, a rate-limit, an invalid event, or ANY
+	// thrown error (e.g. buildReview failing) — so a transient failure can't lock
+	// this commit out of re-review until the TTL expires. No-op when we never held
+	// the claim (KV absent, force=true, or setNx threw).
+	const releaseClaim = async () => {
+		if (kv && claimed) {
+			await kv.del(claimKey).catch((delErr) => {
+				// Non-fatal — the claim still auto-expires via TTL — but log it so a
+				// stuck claim from a KV outage is diagnosable rather than silent.
+				console.error("failed to release review claim", { claimKey, delErr });
+			});
+		}
+	};
+
+	// Everything below runs while holding the claim. On a successful post we keep
+	// the claim (reviewPosted) and let it expire via TTL; the posted "Reviewed
+	// commit:" marker then becomes the durable dedup.
+	let reviewPosted = false;
+	try {
+		const review = await buildReview({
+			octokit,
+			owner,
+			repo,
+			pullNumber,
+			headSha,
+			title: pullRequest.title,
+			body: pullRequest.body,
+			additions: pullRequest.additions,
+			deletions: pullRequest.deletions,
+			changedFiles: pullRequest.changed_files,
+			labels: pullRequest.labels?.map((l) => l.name) ?? [],
+			commentPrefix: config.reviewCommentPrefix,
+			extraInstructions,
+			force,
+			provider: config.provider,
+			feedbackEnabled: config.feedbackEnabled,
+			agentConcurrency: config.agentConcurrency,
+		});
+
+		if (!review) {
+			return;
+		}
+
+		if (review.event === "RATE_LIMITED") {
+			const when = review.rateLimitResetAt
+				? `resets at ${review.rateLimitResetAt}`
+				: review.rateLimitRetryAfterSeconds
+					? `retry in ~${review.rateLimitRetryAfterSeconds}s`
+					: "will reset shortly";
+			const body = `⚠️ **[${config.reviewCommentPrefix}]** Review couldn't run — the model is rate-limited (input-token budget). Budget ${when}. Push again after that, or it will auto-retry on your next commit.`;
+			// A throw here propagates to the outer finally, which releases the
+			// claim. Intended: a rate-limited run spent no model budget, so the
+			// commit must stay eligible for retry on the next delivery.
 			await octokit.request(
 				"POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
 				{
 					owner,
 					repo,
 					issue_number: pullNumber,
-					body: fallbackBody,
+					body,
 				},
 			);
-			console.log("fallback comment posted — review findings preserved");
-		} catch (commentErr) {
-			console.error("failed to post fallback comment", commentErr);
+			console.log("posted rate-limit fallback comment", {
+				owner,
+				repo,
+				pullNumber,
+				when,
+			});
+			return;
 		}
-		throw err;
+
+		if (
+			review.event !== "COMMENT" &&
+			review.event !== "REQUEST_CHANGES" &&
+			review.event !== "APPROVE"
+		) {
+			console.error(
+				"unexpected review event, skipping review POST",
+				review.event,
+			);
+			return;
+		}
+
+		console.log("submitting review", {
+			owner,
+			repo,
+			pullNumber,
+			event: review.event,
+			inlineComments: review.comments.length,
+		});
+
+		try {
+			const reviewId = await postReviewWithRetry(octokit, {
+				owner,
+				repo,
+				pullNumber,
+				commitId: headSha,
+				event: review.event,
+				body: review.body,
+				comments: review.comments,
+			});
+			// Review is live on GitHub — keep the claim so a duplicate delivery
+			// can't post again; it expires via TTL and the marker takes over.
+			reviewPosted = true;
+
+			const summarySection = buildPRSummarySection(
+				review.metadata,
+				review.event,
+				config.reviewCommentPrefix,
+			);
+			const updatedBody = injectPRSection(pullRequest.body, summarySection);
+			try {
+				await octokit.request(
+					"PATCH /repos/{owner}/{repo}/pulls/{pull_number}",
+					{
+						owner,
+						repo,
+						pull_number: pullNumber,
+						body: updatedBody,
+					},
+				);
+			} catch (patchErr) {
+				console.error("failed to update PR description", patchErr);
+			}
+
+			try {
+				await createCheckRun(
+					octokit,
+					owner,
+					repo,
+					headSha,
+					review,
+					config.reviewCommentPrefix,
+				);
+			} catch (checkErr) {
+				console.error("failed to create check run", checkErr);
+			}
+
+			try {
+				await resolveStaleThreads(
+					octokit,
+					owner,
+					repo,
+					pullNumber,
+					config.reviewCommentPrefix,
+					review.validLinesByPath,
+				);
+			} catch (resolveErr) {
+				console.error("failed to resolve stale threads", resolveErr);
+			}
+
+			if (
+				config.feedbackEnabled &&
+				review.comments.length > 0 &&
+				review.commentProvenance &&
+				review.commentProvenance.size > 0
+			) {
+				try {
+					const fbKv = getKv();
+					if (fbKv) {
+						const stored = await persistPostedComments({
+							kv: fbKv,
+							octokit,
+							owner,
+							repo,
+							pr: pullNumber,
+							reviewId,
+							headSha,
+							installationId,
+							provider: config.provider,
+							provenance: review.commentProvenance,
+							nowMs: Date.now(),
+						});
+						console.log("feedback: recorded posted comments", {
+							owner,
+							repo,
+							pullNumber,
+							stored,
+						});
+					}
+				} catch (feedbackErr) {
+					// Drop the cached client so a transient failure (network blip, expired
+					// token) doesn't poison the warm instance — the next review rebuilds it.
+					kvSingleton = null;
+					console.error(
+						"feedback: failed to record posted comments",
+						feedbackErr,
+					);
+				}
+			}
+		} catch (err) {
+			console.error(
+				"review POST failed after all retries — posting fallback comment",
+				{
+					owner,
+					repo,
+					pullNumber,
+					err,
+				},
+			);
+			const fallbackBody = buildFallbackCommentBody(
+				review,
+				err,
+				config.reviewCommentPrefix,
+			);
+			try {
+				await octokit.request(
+					"POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+					{
+						owner,
+						repo,
+						issue_number: pullNumber,
+						body: fallbackBody,
+					},
+				);
+				console.log("fallback comment posted — review findings preserved");
+				// The findings were delivered (as a comment) and the model budget was
+				// already spent. Treat this as a posted review: keep the claim so a
+				// redelivery or re-trigger of this same commit can't re-run the agents
+				// and double-bill. A new commit gets a fresh claim key and re-reviews.
+				reviewPosted = true;
+			} catch (commentErr) {
+				// Nothing was delivered. Rethrow so the finally releases the claim and
+				// the commit stays eligible for a retry — and so the invocation is
+				// marked failed for observability.
+				console.error("failed to post fallback comment", commentErr);
+				throw err;
+			}
+		}
+	} finally {
+		// Single release point for every non-posting exit from the try above:
+		// a buildReview throw, the !review / RATE_LIMITED / unexpected-event
+		// returns, and a throw from either fallback-comment POST. reviewPosted is
+		// set true only once a review (or a findings-preserving fallback comment)
+		// is live on GitHub, so this never releases a claim that produced output.
+		if (!reviewPosted) await releaseClaim();
 	}
 }
 

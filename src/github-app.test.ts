@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { persistPostedComments } from "./feedback/persist.js";
 import {
 	buildPRSummarySection,
@@ -40,7 +40,32 @@ vi.mock("./feedback/persist.js", () => ({
 	persistPostedComments: vi.fn(async () => 1),
 }));
 
-vi.mock("./feedback/kv.js", () => ({ createUpstashKv: vi.fn(() => ({})) }));
+// Backing store for the fake KV so the idempotency claim is exercised for real.
+const kvStore = vi.hoisted(() => new Map<string, string>());
+vi.mock("./feedback/kv.js", () => ({
+	createUpstashKv: vi.fn(() => ({
+		setNx: async (key: string, value: string, ttlSeconds: number) => {
+			// Guard the TTL contract so a caller that forgets it (0/undefined) — which
+			// would set a never-expiring key in production Upstash — fails the test
+			// instead of silently diverging. Expiry itself is covered in kv.fake.test.ts.
+			if (!(ttlSeconds > 0)) {
+				throw new Error(
+					`setNx requires a positive ttlSeconds, got ${ttlSeconds}`,
+				);
+			}
+			if (kvStore.has(key)) return false;
+			kvStore.set(key, value);
+			return true;
+		},
+		del: async (...keys: string[]) => {
+			for (const key of keys) kvStore.delete(key);
+		},
+		get: async (key: string) => kvStore.get(key) ?? null,
+		set: async (key: string, value: string) => {
+			kvStore.set(key, value);
+		},
+	})),
+}));
 
 function buildMockApp() {
 	const request = vi.fn().mockResolvedValue({ data: {} });
@@ -76,8 +101,76 @@ const baseArgs = {
 };
 
 describe("maybeSubmitReview", () => {
+	beforeEach(() => {
+		kvStore.clear();
+	});
 	afterEach(() => {
 		vi.useRealTimers();
+	});
+
+	it("does not run a second review for the same commit (idempotency claim)", async () => {
+		const { app, octokit } = buildMockApp();
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "COMMENT" as const,
+			body: "Review body.",
+			comments: [],
+			metadata: DEFAULT_METADATA,
+		});
+
+		await maybeSubmitReview({ app, ...baseArgs });
+		await maybeSubmitReview({ app, ...baseArgs });
+
+		// The second invocation is blocked by the claim before the agents run.
+		expect(mockBuildReview).toHaveBeenCalledTimes(1);
+		const reviewPosts = octokit.request.mock.calls.filter(
+			([route]) =>
+				route === "POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
+		);
+		expect(reviewPosts).toHaveLength(1);
+	});
+
+	it("releases the claim when no review is posted so a retry can run", async () => {
+		const { app } = buildMockApp();
+		// First pass skips (already reviewed) — claim must be released.
+		mockBuildReview.mockReset().mockResolvedValue(null);
+		await maybeSubmitReview({ app, ...baseArgs });
+
+		// Second pass on the same commit should not be blocked by a stale claim.
+		mockBuildReview.mockResolvedValue({
+			event: "COMMENT" as const,
+			body: "Review body.",
+			comments: [],
+			metadata: DEFAULT_METADATA,
+		});
+		await maybeSubmitReview({ app, ...baseArgs });
+
+		expect(mockBuildReview).toHaveBeenCalledTimes(2);
+	});
+
+	it("releases the claim when buildReview throws, so a retry can run", async () => {
+		const { app } = buildMockApp();
+		mockBuildReview.mockReset().mockRejectedValueOnce(new Error("agent boom"));
+
+		await expect(maybeSubmitReview({ app, ...baseArgs })).rejects.toThrow(
+			"agent boom",
+		);
+
+		// Assert the claim was actually released by the finally block — not merely
+		// absent because beforeEach cleared the store. The throwing run above set
+		// the claim via setNx; the finally must have deleted it.
+		const claimKey = `review-claim:${baseArgs.config.provider}:${baseArgs.owner}/${baseArgs.repo}#${baseArgs.pullNumber}@${pr.head.sha}`;
+		expect(kvStore.has(claimKey)).toBe(false);
+
+		// The failed run must not lock the commit out of a retry.
+		mockBuildReview.mockResolvedValue({
+			event: "COMMENT" as const,
+			body: "Review body.",
+			comments: [],
+			metadata: DEFAULT_METADATA,
+		});
+		await maybeSubmitReview({ app, ...baseArgs });
+
+		expect(mockBuildReview).toHaveBeenCalledTimes(2);
 	});
 
 	it("skips submission for draft PRs", async () => {
@@ -283,6 +376,54 @@ describe("maybeSubmitReview", () => {
 		expect(fallbackParams.body).toContain("422 Unprocessable Entity");
 		expect(fallbackParams.body).toContain("Review body.");
 		expect(fallbackParams.body).toContain("src/file.ts:2");
+	});
+
+	it("keeps the claim after a successful fallback comment so the commit is not re-billed", async () => {
+		vi.useFakeTimers();
+		const { app, request } = buildMockApp();
+		// All 3 review POSTs fail; the 4th call (fallback comment) succeeds.
+		request
+			.mockRejectedValueOnce(new Error("422 Unprocessable Entity"))
+			.mockRejectedValueOnce(new Error("422 Unprocessable Entity"))
+			.mockRejectedValueOnce(new Error("422 Unprocessable Entity"))
+			.mockResolvedValue({ data: {} });
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "COMMENT" as const,
+			body: "Review body.",
+			comments: [],
+			metadata: DEFAULT_METADATA,
+		});
+
+		const promise = maybeSubmitReview({ app, ...baseArgs }).catch(() => {});
+		await vi.runAllTimersAsync();
+		await promise;
+
+		// Findings were delivered via the fallback comment, so the claim must be
+		// retained (TTL backstop only) — releasing it would let a redelivery re-run
+		// the agents and double-bill the same commit.
+		const claimKey = `review-claim:${baseArgs.config.provider}:${baseArgs.owner}/${baseArgs.repo}#${baseArgs.pullNumber}@${pr.head.sha}`;
+		expect(kvStore.has(claimKey)).toBe(true);
+	});
+
+	it("releases the claim when the RATE_LIMITED fallback comment POST throws", async () => {
+		const { app, request } = buildMockApp();
+		// The rate-limit fallback comment POST fails. Because a rate-limited run
+		// spends no model budget, the outer finally must still release the claim
+		// so the commit stays eligible for retry on the next delivery.
+		request.mockRejectedValue(new Error("503 Service Unavailable"));
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "RATE_LIMITED" as const,
+			body: "",
+			comments: [],
+			validLinesByPath: new Map(),
+			metadata: DEFAULT_METADATA,
+			rateLimitResetAt: "2026-06-09T07:21:30Z",
+		});
+
+		await maybeSubmitReview({ app, ...baseArgs }).catch(() => {});
+
+		const claimKey = `review-claim:${baseArgs.config.provider}:${baseArgs.owner}/${baseArgs.repo}#${baseArgs.pullNumber}@${pr.head.sha}`;
+		expect(kvStore.has(claimKey)).toBe(false);
 	});
 
 	it("persists posted comments when feedbackEnabled and a review with comments is posted", async () => {
