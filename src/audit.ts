@@ -8,9 +8,21 @@ import {
 	openDraftPr,
 	postProviderReview,
 } from "./audit-pr.js";
+import {
+	type Provider,
+	type ResolvedAuth,
+	resolveAnthropicAuth,
+	resolveOpenAIAuth,
+} from "./auth.js";
 import { mapWithConcurrency } from "./concurrency.js";
 import { parseAgentConcurrency } from "./config.js";
+import { computeCost } from "./models.js";
 import { buildAuditUserMessage } from "./prompt.js";
+import {
+	allocateReportPath,
+	formatReviewReport,
+	type ReviewReportMeta,
+} from "./report.js";
 import {
 	type ModelReview,
 	mergeReviews,
@@ -20,6 +32,7 @@ import {
 import { type ModelSelection, routeModel } from "./router.js";
 import {
 	type AuditFile,
+	collectFilesFromCommit,
 	collectFilesFromLocal,
 	type FileMode,
 	hasCodeExtension,
@@ -56,14 +69,21 @@ function batchFiles(files: AuditFile[]): AuditFile[][] {
 	return batches;
 }
 
+export interface PassUsage {
+	promptTokens: number;
+	completionTokens: number;
+}
+
 export async function runAuditPass(opts: {
 	files: AuditFile[];
 	selection: ModelSelection;
 	extraInstructions: string;
 	meta: { owner: string; repo: string; ref: string };
-}): Promise<ModelReview> {
-	const { files, selection, extraInstructions, meta } = opts;
+	auth?: ResolvedAuth;
+}): Promise<{ review: ModelReview; usage: PassUsage }> {
+	const { files, selection, extraInstructions, meta, auth } = opts;
 	const reviews: ModelReview[] = [];
+	const usage: PassUsage = { promptTokens: 0, completionTokens: 0 };
 
 	const batches = batchFiles(files);
 
@@ -84,17 +104,27 @@ export async function runAuditPass(opts: {
 		const outcomes = await mapWithConcurrency(
 			TIER1_SKILLS,
 			concurrency,
-			(skill) => runAgent(skill, userMessage, selection, extraInstructions),
+			(skill) =>
+				runAgent(skill, userMessage, selection, extraInstructions, auth),
 		);
 		for (const o of outcomes) {
-			if (o.status === "ok") reviews.push(o.review);
+			if (o.status === "ok") {
+				reviews.push(o.review);
+				usage.promptTokens += o.usage.promptTokens;
+				usage.completionTokens += o.usage.completionTokens;
+			}
 		}
 	}
 
-	if (reviews.length === 0) {
-		return { event: "COMMENT", general_findings: [], inline_comments: [] };
-	}
-	return mergeReviews(reviews);
+	const review =
+		reviews.length === 0
+			? {
+					event: "COMMENT" as const,
+					general_findings: [],
+					inline_comments: [],
+				}
+			: mergeReviews(reviews);
+	return { review, usage };
 }
 
 export async function auditRepo({
@@ -182,7 +212,7 @@ export async function auditRepo({
 
 	console.log(`Running agents over ${files.length} file(s)...`);
 
-	const merged = await runAuditPass({
+	const { review: merged } = await runAuditPass({
 		files,
 		selection,
 		extraInstructions,
@@ -365,7 +395,7 @@ export async function runLocalAudit(opts: {
 			{ additions: 0, deletions: 0, filePaths, labels: [] },
 			provider,
 		);
-		const review = await runAuditPass({
+		const { review } = await runAuditPass({
 			files,
 			selection,
 			extraInstructions,
@@ -488,6 +518,158 @@ export async function runLocalAudit(opts: {
 	for (const entry of perProvider) entry.meta.pr = number;
 	await writeArtifacts({ outDir: opts.outDir, perProvider, markdown });
 	return { providers, artifacts, pr: number, url };
+}
+
+export type ReviewScope =
+	| { kind: "changed" }
+	| { kind: "full" }
+	| { kind: "commit"; sha: string };
+
+export interface LocalReviewResult {
+	path: string;
+	durationSeconds: number;
+	costUsd: number;
+	filesReviewed: number;
+	providersRun: Provider[];
+	merged: ModelReview;
+}
+
+function scopeRef(scope: ReviewScope): string {
+	switch (scope.kind) {
+		case "changed":
+			return "working-tree";
+		case "full":
+			return "full-tree";
+		case "commit":
+			return scope.sha;
+	}
+}
+
+function scopeLabel(scope: ReviewScope): string {
+	switch (scope.kind) {
+		case "changed":
+			return "local-changes";
+		case "full":
+			return "full-tree";
+		case "commit":
+			return `commit:${scope.sha}`;
+	}
+}
+
+/**
+ * Run the full local review and write a Markdown report into `docsDir`. Reuses
+ * `runAuditPass` per provider, resolves subscription/API-key auth per provider,
+ * and records duration + cost in the report front-matter. Writes no PR.
+ */
+export async function runLocalReview(opts: {
+	cwd: string;
+	scope: ReviewScope;
+	docsDir: string;
+	slug: string;
+	title: string;
+	owner: string;
+	repo: string;
+	remote: string;
+	extraInstructions?: string;
+	now?: () => number;
+	resolveAuthFor?: (provider: Provider) => Promise<ResolvedAuth>;
+}): Promise<LocalReviewResult> {
+	const now = opts.now ?? Date.now;
+	const resolveAuthFor =
+		opts.resolveAuthFor ??
+		((provider: Provider) =>
+			provider === "anthropic" ? resolveAnthropicAuth() : resolveOpenAIAuth());
+	const extraInstructions = opts.extraInstructions ?? "";
+	const started = now();
+
+	const files =
+		opts.scope.kind === "commit"
+			? await collectFilesFromCommit({ cwd: opts.cwd, sha: opts.scope.sha })
+			: await collectFilesFromLocal({ cwd: opts.cwd, mode: opts.scope.kind });
+	const filePaths = files.map((f) => f.path);
+	const meta = {
+		owner: opts.owner,
+		repo: opts.repo,
+		ref: scopeRef(opts.scope),
+	};
+
+	const reviews: ModelReview[] = [];
+	const models: string[] = [];
+	const providersRun: Provider[] = [];
+	let costUsd = 0;
+
+	for (const provider of PROVIDERS) {
+		let auth: ResolvedAuth;
+		try {
+			auth = await resolveAuthFor(provider);
+		} catch (err) {
+			console.error(
+				`Skipping ${provider}: ${err instanceof Error ? err.message : String(err)}`,
+			);
+			continue;
+		}
+		const selection = routeModel(
+			{ additions: 0, deletions: 0, filePaths, labels: [] },
+			provider,
+		);
+		const { review, usage } = await runAuditPass({
+			files,
+			selection,
+			extraInstructions,
+			meta,
+			auth,
+		});
+		reviews.push(review);
+		models.push(selection.model);
+		providersRun.push(provider);
+		costUsd += computeCost(usage, selection.model);
+	}
+
+	if (providersRun.length === 0) {
+		throw new Error(
+			"No provider could be authenticated. Set OPENAI_API_KEY / ANTHROPIC_API_KEY, or log in with `codex` / `claude`.",
+		);
+	}
+
+	const merged = mergeReviews(reviews);
+	const durationSeconds = Math.round((now() - started) / 1000);
+	const date = new Date(now()).toISOString().slice(0, 10);
+
+	const reportMeta: ReviewReportMeta = {
+		title: opts.title,
+		date,
+		timestamp: new Date(now()).toISOString(),
+		status: "reviewed",
+		scope: scopeLabel(opts.scope),
+		remote: opts.remote,
+		durationSeconds,
+		costUsd,
+		providers: providersRun,
+		models,
+		skills: TIER1_SKILLS.map((s) => s.replace(/\.md$/, "")),
+		filesReviewed: files.length,
+	};
+
+	const outPath = await allocateReportPath({
+		docsDir: opts.docsDir,
+		date,
+		slug: opts.slug,
+	});
+	await mkdir(opts.docsDir, { recursive: true });
+	await writeFile(
+		outPath,
+		formatReviewReport({ merged, meta: reportMeta }),
+		"utf-8",
+	);
+
+	return {
+		path: outPath,
+		durationSeconds,
+		costUsd,
+		filesReviewed: files.length,
+		providersRun,
+		merged,
+	};
 }
 
 async function headShaFor(

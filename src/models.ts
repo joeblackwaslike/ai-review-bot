@@ -1,5 +1,6 @@
-import { anthropic } from "@ai-sdk/anthropic";
-import { openai } from "@ai-sdk/openai";
+import { createAnthropic } from "@ai-sdk/anthropic";
+import { createOpenAI } from "@ai-sdk/openai";
+import type { ResolvedAuth } from "./auth.js";
 import type { ModelSelection } from "./router.js";
 
 interface TokenUsage {
@@ -26,11 +27,46 @@ export function computeCost(usage: TokenUsage, model: string): number {
 	);
 }
 
-export function createAIModel(selection: ModelSelection) {
+/**
+ * Build a language model for a provider. When `auth` is omitted (the hosted
+ * webhook path), the providers read their API key from the environment exactly
+ * as before. When `auth` is supplied (local CLI), it carries either an explicit
+ * API key or an OAuth token + custom `fetch` for subscription billing.
+ */
+export function createAIModel(selection: ModelSelection, auth?: ResolvedAuth) {
 	switch (selection.provider) {
-		case "anthropic":
-			return anthropic(selection.model);
-		case "openai":
-			return openai(selection.model);
+		case "anthropic": {
+			if (!auth || auth.mode === "api-key") {
+				const provider = createAnthropic(
+					auth ? { apiKey: auth.apiKey, baseURL: auth.baseURL } : {},
+				);
+				return provider(selection.model);
+			}
+			// OAuth: token is asserted by the custom fetch; pass a placeholder key
+			// so the SDK initialises (the fetch deletes the resulting x-api-key).
+			const provider = createAnthropic({
+				apiKey: "oauth",
+				baseURL: auth.baseURL,
+				headers: auth.headers,
+				fetch: auth.fetch,
+			});
+			return provider(selection.model);
+		}
+		case "openai": {
+			if (!auth || auth.mode === "api-key") {
+				const provider = createOpenAI(
+					auth ? { apiKey: auth.apiKey, baseURL: auth.baseURL } : {},
+				);
+				return provider(selection.model);
+			}
+			// Codex subscription backend is Responses-API only.
+			const provider = createOpenAI({
+				apiKey: auth.token,
+				baseURL: auth.baseURL,
+				headers: auth.headers,
+				fetch: auth.fetch,
+			});
+			return provider.responses(selection.model);
+		}
 	}
 }

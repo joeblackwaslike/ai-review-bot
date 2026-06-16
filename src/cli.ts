@@ -3,9 +3,15 @@ import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import process from "node:process";
 import { App } from "octokit";
-import { auditRepo, runLocalAudit } from "./audit.js";
+import {
+	auditRepo,
+	type ReviewScope,
+	runLocalAudit,
+	runLocalReview,
+} from "./audit.js";
 import { makeReady, type OctokitLike } from "./audit-pr.js";
 import { getConfig, getOpenAIAppConfig } from "./config.js";
+import { slugify } from "./report.js";
 
 function fatal(msg: string): never {
 	console.error(`Error: ${msg}`);
@@ -14,6 +20,18 @@ function fatal(msg: string): never {
 
 function usage(): never {
 	console.error("Usage:");
+	console.error(
+		"  ai-review review [--full | --commit <sha>] [--slug <slug>] [--title <t>] [--out <dir>] [--extra <text>] [--json]",
+	);
+	console.error(
+		"      Local code review → Markdown report in docs/code-reviews/.",
+	);
+	console.error(
+		"      Auth: prefers OPENAI_API_KEY / ANTHROPIC_API_KEY, else falls back to your",
+	);
+	console.error(
+		"      logged-in `codex` / `claude` subscription (local, personal use only).",
+	);
 	console.error(
 		"  ai-review audit [--full] [--dry-run] [--out <dir>] [--extra <text>] [--json]",
 	);
@@ -112,6 +130,85 @@ async function buildResolvePr() {
 			},
 		],
 	};
+}
+
+function gitOut(args: string[]): string | null {
+	try {
+		return execFileSync("git", args, {
+			encoding: "utf-8",
+			timeout: 5000,
+		}).trim();
+	} catch {
+		return null;
+	}
+}
+
+function deriveSlug(scope: ReviewScope): string {
+	if (scope.kind === "commit") {
+		const subject = gitOut(["show", "-s", "--format=%s", scope.sha]);
+		return slugify(subject ?? scope.sha.slice(0, 7));
+	}
+	if (scope.kind === "full") return "full-audit";
+	const branch = gitOut(["rev-parse", "--abbrev-ref", "HEAD"]);
+	return slugify(branch && branch !== "HEAD" ? branch : "local-changes");
+}
+
+function deriveTitle(scope: ReviewScope): string {
+	if (scope.kind === "commit")
+		return `Code Review — commit ${scope.sha.slice(0, 7)}`;
+	if (scope.kind === "full") return "Code Review — full tree";
+	return "Code Review — local changes";
+}
+
+async function cmdReview(args: string[]): Promise<void> {
+	let scope: ReviewScope = { kind: "changed" };
+	let slug: string | undefined;
+	let title: string | undefined;
+	let extra = "";
+	let outDir = "docs/code-reviews";
+	let json = false;
+	for (let i = 0; i < args.length; i++) {
+		const a = args[i];
+		if (a === "--full") scope = { kind: "full" };
+		else if (a === "--commit" && args[i + 1])
+			scope = { kind: "commit", sha: args[++i] };
+		else if (a === "--slug" && args[i + 1]) slug = args[++i];
+		else if (a === "--title" && args[i + 1]) title = args[++i];
+		else if (a === "--extra" && args[i + 1]) extra = args[++i];
+		else if (a === "--out" && args[i + 1]) outDir = args[++i];
+		else if (a === "--json") json = true;
+		else if (a.startsWith("--")) fatal(`Unknown flag: ${a}`);
+	}
+
+	const { owner, repo } = originSlug();
+	const result = await runLocalReview({
+		cwd: process.cwd(),
+		scope,
+		docsDir: outDir,
+		slug: slug ?? deriveSlug(scope),
+		title: title ?? deriveTitle(scope),
+		owner,
+		repo,
+		remote: `https://github.com/${owner}/${repo}`,
+		extraInstructions: extra,
+	});
+
+	if (json) {
+		console.log(
+			JSON.stringify({
+				path: result.path,
+				durationSeconds: result.durationSeconds,
+				costUsd: result.costUsd,
+				filesReviewed: result.filesReviewed,
+				providers: result.providersRun,
+			}),
+		);
+	} else {
+		console.log(`Report: ${result.path}`);
+		console.log(
+			`${result.filesReviewed} file(s) · ${result.providersRun.join(" + ")} · ${result.durationSeconds}s · $${result.costUsd.toFixed(4)}`,
+		);
+	}
 }
 
 async function cmdAudit(args: string[]): Promise<void> {
@@ -263,6 +360,7 @@ async function cmdLegacyRemote(args: string[]): Promise<void> {
 async function main(): Promise<void> {
 	const [sub, ...rest] = process.argv.slice(2);
 
+	if (sub === "review") return cmdReview(rest);
 	if (sub === "audit") return cmdAudit(rest);
 	if (sub === "ready") return cmdReady(rest);
 	if (sub?.includes("/")) return cmdLegacyRemote([sub, ...rest]); // back-compat

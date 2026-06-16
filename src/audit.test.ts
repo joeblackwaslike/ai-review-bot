@@ -52,7 +52,7 @@ describe("runAuditPass", () => {
 			usage: { promptTokens: 1, completionTokens: 1 },
 		});
 
-		const merged = await runAuditPass({
+		const { review: merged } = await runAuditPass({
 			files: [{ path: "a.ts", content: "x" }],
 			selection,
 			extraInstructions: "",
@@ -67,7 +67,7 @@ describe("runAuditPass", () => {
 		(runAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
 			status: "error",
 		});
-		const merged = await runAuditPass({
+		const { review: merged } = await runAuditPass({
 			files: [{ path: "a.ts", content: "x" }],
 			selection,
 			extraInstructions: "",

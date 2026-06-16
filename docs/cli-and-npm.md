@@ -2,6 +2,37 @@
 
 In addition to the webhook-based GitHub App, `ai-review-bot` ships as an npm package with a CLI tool for running full-repository audits on demand — no PR, no webhook, no Vercel required.
 
+## Local review (`ai-review review`)
+
+Run the full multi-agent review against your **local** working copy and write a durable Markdown report into `docs/code-reviews/` — no GitHub PR, and it can bill your existing Codex / Claude subscription instead of API credits.
+
+```bash
+ai-review review [--full | --commit <sha>] [--slug <slug>] [--title <t>] [--out <dir>] [--extra <text>] [--json]
+```
+
+| Flag | Description |
+| --- | --- |
+| _(default)_ | Review **local changes** (committed + working-tree, vs the merge-base with the default branch). |
+| `--full` | Review the **entire tracked tree**. |
+| `--commit <sha>` | Review exactly the files touched by `<sha>`, read at that commit. |
+| `--slug <slug>` | Override the filename slug (default: branch / commit subject / `full-audit`). |
+| `--title <t>` | Override the report H1 / front-matter title. |
+| `--out <dir>` | Output directory (default `docs/code-reviews`). |
+| `--extra <text>` | Extra instructions passed to every review agent. |
+| `--json` | Print `{ path, durationSeconds, costUsd, filesReviewed, providers }` to stdout. |
+
+Reports are named `<YYYY-MM-DD>-<slug>-<NN>.md` with a per-day, per-slug round number, and carry YAML front-matter (`status`, `scope`, `remote`, `duration_seconds`, `cost_usd`, `providers`, `models`, `skills`, `findings`). Flip `status: reviewed → implemented` once findings are addressed.
+
+### Auth resolution (local, personal use only)
+
+Per provider, the CLI tries in order: **API key** (`OPENAI_API_KEY` / `ANTHROPIC_API_KEY`, or an explicit `ANTHROPIC_AUTH_TOKEN` / `CLAUDE_CODE_OAUTH_TOKEN`) → **subscription OAuth** from your logged-in `codex` (`~/.codex/auth.json`) and Claude Code (macOS Keychain). A provider that can't authenticate is skipped.
+
+> ⚠️ The OAuth fallback is for your own machine only. Anthropic's ToS (eff. 2026-02-20) prohibits using Claude *subscription* OAuth tokens in third-party tools outside Claude Code / Claude.ai, and refresh tokens are shared with the real CLIs. See [docs/code-reviews/README.md](./code-reviews/README.md). The hosted webhook bot is unaffected — it uses API keys only.
+
+### Fix workflow
+
+The `/code-review` slash command (in `.claude/commands/`) wraps this CLI with three modes: **doc-only** (default), **`--fix`** (auto-apply findings + run gates + flip status), and **`--propose`** (propose fixes, get sign-off, then apply).
+
 ## What the audit does
 
 The audit mode fetches every code file in a repository at a given ref, batches them into 150 KB chunks, and runs all five review agents on each batch. Findings are merged, deduplicated, and posted as a GitHub issue in the target repo. It runs against the entire codebase, not just a diff.
