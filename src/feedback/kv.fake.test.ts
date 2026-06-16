@@ -1,7 +1,31 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createFakeKv } from "./kv.fake.js";
 
 describe("createFakeKv", () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("setNx is atomic and honors ttlSeconds as a stale-lock backstop", async () => {
+		vi.useFakeTimers();
+		const kv = createFakeKv();
+
+		// First claim succeeds; a competing claim on the same key is rejected.
+		expect(await kv.setNx("claim", "first", 1200)).toBe(true);
+		expect(await kv.setNx("claim", "second", 1200)).toBe(false);
+		expect(await kv.get("claim")).toBe("first");
+
+		// Just before TTL the claim still holds.
+		vi.advanceTimersByTime(1199_000);
+		expect(await kv.setNx("claim", "third", 1200)).toBe(false);
+
+		// After TTL the claim auto-expires and a new claim can be acquired.
+		vi.advanceTimersByTime(2_000);
+		expect(await kv.get("claim")).toBeNull();
+		expect(await kv.setNx("claim", "fourth", 1200)).toBe(true);
+		expect(await kv.get("claim")).toBe("fourth");
+	});
+
 	it("stores and reads strings with del", async () => {
 		const kv = createFakeKv();
 		await kv.set("a", "1");

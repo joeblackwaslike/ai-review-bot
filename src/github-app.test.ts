@@ -44,9 +44,15 @@ vi.mock("./feedback/persist.js", () => ({
 const kvStore = vi.hoisted(() => new Map<string, string>());
 vi.mock("./feedback/kv.js", () => ({
 	createUpstashKv: vi.fn(() => ({
-		// ttlSeconds intentionally ignored — the fake has no expiry; tests cover the
-		// explicit-release path, and TTL is a production-only backstop.
-		setNx: async (key: string, value: string) => {
+		setNx: async (key: string, value: string, ttlSeconds: number) => {
+			// Guard the TTL contract so a caller that forgets it (0/undefined) — which
+			// would set a never-expiring key in production Upstash — fails the test
+			// instead of silently diverging. Expiry itself is covered in kv.fake.test.ts.
+			if (!(ttlSeconds > 0)) {
+				throw new Error(
+					`setNx requires a positive ttlSeconds, got ${ttlSeconds}`,
+				);
+			}
 			if (kvStore.has(key)) return false;
 			kvStore.set(key, value);
 			return true;

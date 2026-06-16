@@ -258,7 +258,18 @@ export async function maybeSubmitReview(args: {
 	// can't run a second review and double-bill. Skipped when force=true (explicit
 	// re-review) and when KV is not configured — in which case we fall back to the
 	// marker check inside buildReview.
-	const kv = force ? null : getKv();
+	// headSha is the only claim-key component sourced loosely from the webhook
+	// payload; owner/repo are GitHub-validated names and provider is an internal
+	// enum. Redis keys are opaque binary-safe strings (no injection surface), but
+	// validate the SHA as defense-in-depth so a malformed value can't produce an
+	// odd or colliding claim key — fall back to the marker check if it fails.
+	const validSha = /^[0-9a-f]{7,40}$/.test(headSha);
+	if (!validSha) {
+		console.warn("idempotency claim skipped: headSha is not a valid git SHA", {
+			headSha,
+		});
+	}
+	const kv = force || !validSha ? null : getKv();
 	const claimKey = `review-claim:${config.provider}:${owner}/${repo}#${pullNumber}@${headSha}`;
 	let claimed = false;
 	if (kv) {

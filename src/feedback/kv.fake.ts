@@ -23,6 +23,18 @@ export function createFakeKv(): FakeKv {
 	const strings = new Map<string, string>();
 	const zsets = new Map<string, Map<string, number>>();
 	const lists = new Map<string, string[]>();
+	// Per-key expiry (epoch ms) so the fake honors ttlSeconds the way Upstash's
+	// `ex` does — claims auto-expire as a stale-lock backstop. Lazily evaluated on
+	// access (no timers); tests drive it with vi.useFakeTimers + advanceTimersByTime.
+	const expiries = new Map<string, number>();
+
+	function purgeIfExpired(key: string): void {
+		const exp = expiries.get(key);
+		if (exp !== undefined && Date.now() >= exp) {
+			strings.delete(key);
+			expiries.delete(key);
+		}
+	}
 
 	function inRange(
 		score: number,
@@ -64,22 +76,29 @@ export function createFakeKv(): FakeKv {
 			}
 			return n;
 		},
-		async set(key, value) {
+		async set(key, value, ttlSeconds) {
 			strings.set(key, value);
+			if (ttlSeconds) expiries.set(key, Date.now() + ttlSeconds * 1000);
+			else expiries.delete(key);
 		},
-		async setNx(key, value) {
-			// The in-memory fake intentionally ignores ttlSeconds: there is no expiry,
-			// so claims are cleared only by explicit del() or resetting the Map. Tests
-			// exercise the explicit-release path; TTL expiry is a production backstop.
+		async setNx(key, value, ttlSeconds) {
+			// Mirror Upstash SET NX EX: only set when absent (or expired), and stamp
+			// the TTL so the claim auto-expires as a stale-lock backstop.
+			purgeIfExpired(key);
 			if (strings.has(key)) return false;
 			strings.set(key, value);
+			expiries.set(key, Date.now() + ttlSeconds * 1000);
 			return true;
 		},
 		async get(key) {
+			purgeIfExpired(key);
 			return strings.has(key) ? (strings.get(key) as string) : null;
 		},
 		async del(...keys) {
-			for (const k of keys) strings.delete(k);
+			for (const k of keys) {
+				strings.delete(k);
+				expiries.delete(k);
+			}
 		},
 		async lpush(key, value) {
 			const l = lists.get(key) ?? [];
