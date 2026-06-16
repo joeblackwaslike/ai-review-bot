@@ -218,6 +218,34 @@ function sleep(ms: number): Promise<void> {
 	return new Promise((r) => setTimeout(r, ms));
 }
 
+/** Maps the tier's effort onto the active provider's reasoning knob:
+ *  OpenAI reads `reasoningEffort`, Anthropic reads `effort`. Returns undefined
+ *  when no effort is set (e.g. Haiku) so the provider default applies. `"none"`
+ *  is a valid OpenAI `reasoningEffort` value (gpt-5.1's explicit non-reasoning
+ *  mode) and is forwarded as-is; the Anthropic tiers never emit it. */
+function reasoningProviderOptions(
+	selection: ModelSelection,
+): Record<string, Record<string, string>> | undefined {
+	if (!selection.effort) return undefined;
+	return selection.provider === "openai"
+		? { openai: { reasoningEffort: selection.effort } }
+		: { anthropic: { effort: selection.effort } };
+}
+
+/** Output-token budget for a generateObject call. Reasoning/thinking tokens are
+ * billed against this budget, so once a reasoning level is engaged the cap must
+ * cover reasoning + the structured object — too small and the model returns no
+ * object at all (AI_NoObjectGeneratedError). The base cap stands when reasoning
+ * is off: either no effort at all (e.g. Haiku) or an explicit `"none"` (gpt-5.1's
+ * non-reasoning mode), where no reasoning tokens are billed (you pay for actual
+ * tokens, not the cap). `"none"` is a truthy string, so it is excluded here
+ * explicitly rather than via a plain truthiness check. */
+function outputBudget(selection: ModelSelection, base: number): number {
+	const reasoning =
+		selection.effort !== undefined && selection.effort !== "none";
+	return reasoning ? Math.max(base * 8, 16000) : base;
+}
+
 export async function runAgent(
 	skillPath: string,
 	sharedContext: string,
@@ -230,8 +258,9 @@ export async function runAgent(
 		const { object, usage, providerMetadata, response } = await generateObject({
 			model: createAIModel(selection),
 			schema: ModelReviewSchema,
-			maxOutputTokens: 4096,
+			maxOutputTokens: outputBudget(selection, 4096),
 			maxRetries: 4,
+			providerOptions: reasoningProviderOptions(selection),
 			messages: [
 				{
 					role: "user",
@@ -377,7 +406,8 @@ export async function generateSummary(
 	const { object, usage } = await generateObject({
 		model: createAIModel(selection),
 		schema: SummarySchema,
-		maxOutputTokens: 256,
+		maxOutputTokens: outputBudget(selection, 256),
+		providerOptions: reasoningProviderOptions(selection),
 		system,
 		messages: [{ role: "user", content: prompt }],
 	});

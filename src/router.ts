@@ -10,8 +10,11 @@ export interface RouterContext {
 export interface ModelSelection {
 	provider: "anthropic" | "openai";
 	model: string;
-	thinkingBudget?: number;
-	reasoningEffort?: "low" | "medium" | "high";
+	/** Reasoning depth, applied per provider in review.ts:
+	 *  - OpenAI → `reasoningEffort` (none | low | medium | high | xhigh)
+	 *  - Anthropic → `effort` (low | medium | high | xhigh | max)
+	 *  Undefined means the provider default (e.g. Haiku, which has no effort knob). */
+	effort?: "none" | "low" | "medium" | "high" | "xhigh" | "max";
 }
 
 const SENSITIVE_PATH_PATTERNS = [
@@ -63,22 +66,25 @@ export function classifyTier(context: RouterContext): ReviewTier {
 
 const CLAUDE_TIER_MAP: Record<
 	ReviewTier,
-	Pick<ModelSelection, "model" | "thinkingBudget">
+	Pick<ModelSelection, "model" | "effort">
 > = {
-	trivial: { model: "claude-haiku-4-5" },
-	normal: { model: "claude-sonnet-4-6" },
-	complex: { model: "claude-sonnet-4-6", thinkingBudget: 8000 },
-	deep: { model: "claude-opus-4-7", thinkingBudget: 16000 },
+	trivial: { model: "claude-haiku-4-5" }, // Haiku has no effort control
+	normal: { model: "claude-sonnet-4-6", effort: "medium" },
+	complex: { model: "claude-sonnet-4-6", effort: "high" },
+	deep: { model: "claude-opus-4-8", effort: "xhigh" },
 };
 
 const OPENAI_TIER_MAP: Record<
 	ReviewTier,
-	Pick<ModelSelection, "model" | "reasoningEffort">
+	Pick<ModelSelection, "model" | "effort">
 > = {
-	trivial: { model: "gpt-5" },
-	normal: { model: "gpt-5" },
-	complex: { model: "o4-mini", reasoningEffort: "medium" },
-	deep: { model: "o3", reasoningEffort: "high" },
+	trivial: { model: "gpt-5.1", effort: "none" },
+	normal: { model: "gpt-5.1", effort: "low" },
+	complex: { model: "gpt-5.1", effort: "high" },
+	// gpt-5.5 caps reasoning at "high"; "xhigh" is unverified on the OpenAI API,
+	// so deep stays at "high" until support is confirmed. The model bump
+	// (gpt-5.1 → gpt-5.5) is what distinguishes deep from complex here.
+	deep: { model: "gpt-5.5", effort: "high" },
 };
 
 export function routeModel(

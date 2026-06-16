@@ -7,13 +7,14 @@ interface TokenUsage {
 	completionTokens: number;
 }
 
+// $/1M tokens. OpenAI rates confirmed from openai.com/api/pricing (Jun 2026);
+// Anthropic Opus rate is an estimate pending the published 4.8 price.
 const TOKEN_RATES: Record<string, { input: number; output: number }> = {
 	"claude-haiku-4-5": { input: 1.0, output: 5.0 },
 	"claude-sonnet-4-6": { input: 3.0, output: 15.0 },
-	"claude-opus-4-7": { input: 5.0, output: 25.0 },
-	"gpt-5": { input: 2.5, output: 15.0 },
-	"o4-mini": { input: 0.55, output: 2.2 },
-	o3: { input: 2.0, output: 8.0 },
+	"claude-opus-4-8": { input: 5.0, output: 25.0 },
+	"gpt-5.1": { input: 1.25, output: 10.0 },
+	"gpt-5.5": { input: 5.0, output: 30.0 },
 };
 
 export function computeCost(usage: TokenUsage, model: string): number {

@@ -18,36 +18,28 @@ describe("computeCost", () => {
 		expect(cost).toBeCloseTo(18.0); // $3 input + $15 output
 	});
 
-	it("computes cost for claude-opus-4-7 at 1M tokens each", () => {
+	it("computes cost for claude-opus-4-8 at 1M tokens each", () => {
 		const cost = computeCost(
 			{ promptTokens: 1_000_000, completionTokens: 1_000_000 },
-			"claude-opus-4-7",
+			"claude-opus-4-8",
 		);
 		expect(cost).toBeCloseTo(30.0); // $5 input + $25 output
 	});
 
-	it("computes cost for gpt-5 at 1M tokens each", () => {
+	it("computes cost for gpt-5.1 at 1M tokens each", () => {
 		const cost = computeCost(
 			{ promptTokens: 1_000_000, completionTokens: 1_000_000 },
-			"gpt-5",
+			"gpt-5.1",
 		);
-		expect(cost).toBeCloseTo(17.5); // $2.50 input + $15 output
+		expect(cost).toBeCloseTo(11.25); // $1.25 input + $10 output
 	});
 
-	it("computes cost for o4-mini at 1M tokens each", () => {
+	it("computes cost for gpt-5.5 at 1M tokens each", () => {
 		const cost = computeCost(
 			{ promptTokens: 1_000_000, completionTokens: 1_000_000 },
-			"o4-mini",
+			"gpt-5.5",
 		);
-		expect(cost).toBeCloseTo(2.75); // $0.55 input + $2.20 output
-	});
-
-	it("computes cost for o3 at 1M tokens each", () => {
-		const cost = computeCost(
-			{ promptTokens: 1_000_000, completionTokens: 1_000_000 },
-			"o3",
-		);
-		expect(cost).toBeCloseTo(10.0); // $2 input + $8 output
+		expect(cost).toBeCloseTo(35.0); // $5 input + $30 output
 	});
 
 	it("returns 0 for an unknown model", () => {
