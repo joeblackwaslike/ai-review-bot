@@ -139,6 +139,26 @@ describe("maybeSubmitReview", () => {
 		expect(mockBuildReview).toHaveBeenCalledTimes(2);
 	});
 
+	it("releases the claim when buildReview throws, so a retry can run", async () => {
+		const { app } = buildMockApp();
+		mockBuildReview.mockReset().mockRejectedValueOnce(new Error("agent boom"));
+
+		await expect(maybeSubmitReview({ app, ...baseArgs })).rejects.toThrow(
+			"agent boom",
+		);
+
+		// The failed run must not lock the commit out of a retry.
+		mockBuildReview.mockResolvedValue({
+			event: "COMMENT" as const,
+			body: "Review body.",
+			comments: [],
+			metadata: DEFAULT_METADATA,
+		});
+		await maybeSubmitReview({ app, ...baseArgs });
+
+		expect(mockBuildReview).toHaveBeenCalledTimes(2);
+	});
+
 	it("skips submission for draft PRs", async () => {
 		const { app, octokit } = buildMockApp();
 		mockBuildReview.mockReset();
