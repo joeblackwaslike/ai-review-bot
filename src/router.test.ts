@@ -158,9 +158,9 @@ describe("routeModel — OpenAI", () => {
 		expect(sel.effort).toBe("high");
 	});
 
-	it("deep tier → gpt-5.5, high effort", () => {
+	it("deep tier → gpt-5.5, xhigh effort (more than complex's high)", () => {
 		const sel = routeModel({ ...base, labels: ["deep-review"] }, "openai");
 		expect(sel.model).toBe("gpt-5.5");
-		expect(sel.effort).toBe("high");
+		expect(sel.effort).toBe("xhigh");
 	});
 });

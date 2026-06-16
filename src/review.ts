@@ -220,7 +220,9 @@ function sleep(ms: number): Promise<void> {
 
 /** Maps the tier's effort onto the active provider's reasoning knob:
  *  OpenAI reads `reasoningEffort`, Anthropic reads `effort`. Returns undefined
- *  when no effort is set (e.g. Haiku) so the provider default applies. */
+ *  when no effort is set (e.g. Haiku) so the provider default applies. `"none"`
+ *  is a valid OpenAI `reasoningEffort` value (gpt-5.1's explicit non-reasoning
+ *  mode) and is forwarded as-is; the Anthropic tiers never emit it. */
 function reasoningProviderOptions(
 	selection: ModelSelection,
 ): Record<string, Record<string, string>> | undefined {
@@ -231,12 +233,17 @@ function reasoningProviderOptions(
 }
 
 /** Output-token budget for a generateObject call. Reasoning/thinking tokens are
- * billed against this budget, so once an effort level is engaged the cap must
+ * billed against this budget, so once a reasoning level is engaged the cap must
  * cover reasoning + the structured object — too small and the model returns no
- * object at all (AI_NoObjectGeneratedError). With no effort the base cap stands
- * (you pay for actual tokens, not the cap). */
+ * object at all (AI_NoObjectGeneratedError). The base cap stands when reasoning
+ * is off: either no effort at all (e.g. Haiku) or an explicit `"none"` (gpt-5.1's
+ * non-reasoning mode), where no reasoning tokens are billed (you pay for actual
+ * tokens, not the cap). `"none"` is a truthy string, so it is excluded here
+ * explicitly rather than via a plain truthiness check. */
 function outputBudget(selection: ModelSelection, base: number): number {
-	return selection.effort ? Math.max(base * 8, 16000) : base;
+	const reasoning =
+		selection.effort !== undefined && selection.effort !== "none";
+	return reasoning ? Math.max(base * 8, 16000) : base;
 }
 
 export async function runAgent(

@@ -81,7 +81,7 @@ const OPENAI_TIER_MAP: Record<
 	trivial: { model: "gpt-5.1", effort: "none" },
 	normal: { model: "gpt-5.1", effort: "low" },
 	complex: { model: "gpt-5.1", effort: "high" },
-	deep: { model: "gpt-5.5", effort: "high" },
+	deep: { model: "gpt-5.5", effort: "xhigh" },
 };
 
 export function routeModel(

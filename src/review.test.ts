@@ -857,6 +857,35 @@ describe("runAgent caching + telemetry", () => {
 		expect(call.maxOutputTokens).toBe(4096);
 	});
 
+	it("keeps the base budget for the OpenAI trivial tier (effort 'none') and forwards reasoningEffort 'none'", async () => {
+		mockGenerateObject.mockResolvedValue({
+			object: buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+			usage: { inputTokens: 10, outputTokens: 5 },
+			providerMetadata: { openai: {} },
+			response: { headers: {} },
+		});
+		const trivialOpenAiSel = {
+			provider: "openai",
+			model: "gpt-5.1",
+			tier: 1,
+			effort: "none",
+		} as ModelSelection;
+
+		await runAgent("code-reviewer.md", "SHARED", trivialOpenAiSel, "");
+
+		const call = (mockGenerateObject as ReturnType<typeof vi.fn>).mock
+			.calls[0][0];
+		// "none" is a truthy string but disables reasoning — the budget must stay
+		// at the base (no inflation), and "none" is forwarded as a valid gpt-5.1
+		// non-reasoning value rather than being dropped.
+		expect(call.maxOutputTokens).toBe(4096);
+		expect(call.providerOptions.openai.reasoningEffort).toBe("none");
+	});
+
 	it("returns status rate_limited with retryAfter on a 429", async () => {
 		const err = Object.assign(new Error("429"), {
 			statusCode: 429,
