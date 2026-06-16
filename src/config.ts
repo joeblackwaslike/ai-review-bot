@@ -4,6 +4,7 @@ export interface AppConfig {
 	webhookSecret: string;
 	reviewEnabled: boolean;
 	reviewDelayMs: number;
+	reviewResyncDelayMs: number;
 	reviewCommentPrefix: string;
 	reviewCommand: string;
 	provider: "anthropic" | "openai";
@@ -52,6 +53,21 @@ export function parseAgentConcurrency(): number {
 	);
 }
 
+// Parse a delay env var expressed in seconds into milliseconds. A missing,
+// blank, non-numeric, or negative value falls back to the default: a bare
+// Number() would yield NaN (or a negative), and setTimeout(fn, NaN) fires
+// immediately — silently defeating the dedup wait this delay exists to provide.
+export function parseDelayMs(
+	envValue: string | undefined,
+	defaultSeconds: number,
+): number {
+	const seconds = Number(envValue);
+	if (envValue?.trim() && Number.isFinite(seconds) && seconds >= 0) {
+		return seconds * 1000;
+	}
+	return defaultSeconds * 1000;
+}
+
 export function getConfig(): AppConfig {
 	return {
 		appId: getRequiredEnv("GITHUB_APP_ID"),
@@ -60,7 +76,11 @@ export function getConfig(): AppConfig {
 		),
 		webhookSecret: getRequiredEnv("GITHUB_WEBHOOK_SECRET"),
 		reviewEnabled: process.env.REVIEW_ENABLED !== "false",
-		reviewDelayMs: Number(process.env.REVIEW_DELAY_SECONDS ?? "450") * 1000,
+		reviewDelayMs: parseDelayMs(process.env.REVIEW_DELAY_SECONDS, 540),
+		reviewResyncDelayMs: parseDelayMs(
+			process.env.REVIEW_RESYNC_DELAY_SECONDS,
+			300,
+		),
 		reviewCommentPrefix: firstNonBlank(
 			process.env.REVIEW_COMMENT_PREFIX,
 			"ai-review-bot",
@@ -80,7 +100,11 @@ export function getOpenAIAppConfig(): AppConfig {
 		),
 		webhookSecret: getRequiredEnv("OPENAI_APP_WEBHOOK_SECRET"),
 		reviewEnabled: process.env.REVIEW_ENABLED !== "false",
-		reviewDelayMs: Number(process.env.REVIEW_DELAY_SECONDS ?? "450") * 1000,
+		reviewDelayMs: parseDelayMs(process.env.REVIEW_DELAY_SECONDS, 540),
+		reviewResyncDelayMs: parseDelayMs(
+			process.env.REVIEW_RESYNC_DELAY_SECONDS,
+			300,
+		),
 		reviewCommentPrefix: firstNonBlank(
 			process.env.OPENAI_REVIEW_COMMENT_PREFIX,
 			process.env.REVIEW_COMMENT_PREFIX,

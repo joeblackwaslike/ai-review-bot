@@ -39,9 +39,45 @@ afterEach(() => {
 		"OPENAI_APP_WEBHOOK_SECRET",
 		"REVIEW_COMMENT_PREFIX",
 		"OPENAI_REVIEW_COMMENT_PREFIX",
+		"REVIEW_DELAY_SECONDS",
+		"REVIEW_RESYNC_DELAY_SECONDS",
+		"AGENT_CONCURRENCY",
 	]) {
 		delete process.env[key];
 	}
+});
+
+describe("review delay parsing", () => {
+	it("defaults to 540s initial / 300s resync when unset", () => {
+		setRequiredEnv();
+		const config = getConfig();
+		expect(config.reviewDelayMs).toBe(540_000);
+		expect(config.reviewResyncDelayMs).toBe(300_000);
+	});
+
+	it("parses valid numeric seconds into milliseconds", () => {
+		setRequiredEnv({
+			REVIEW_DELAY_SECONDS: "120",
+			REVIEW_RESYNC_DELAY_SECONDS: "60",
+		});
+		const config = getConfig();
+		expect(config.reviewDelayMs).toBe(120_000);
+		expect(config.reviewResyncDelayMs).toBe(60_000);
+	});
+
+	it("accepts 0 as an explicit no-delay value", () => {
+		setRequiredEnv({ REVIEW_DELAY_SECONDS: "0" });
+		expect(getConfig().reviewDelayMs).toBe(0);
+	});
+
+	it("falls back to the default for non-numeric, blank, or negative values", () => {
+		for (const bad of ["abc", "", "   ", "-30"]) {
+			setRequiredEnv({ REVIEW_DELAY_SECONDS: bad });
+			// A bare Number() would yield NaN/negative → setTimeout fires
+			// immediately and the dedup wait is silently lost.
+			expect(getConfig().reviewDelayMs).toBe(540_000);
+		}
+	});
 });
 
 describe("getConfig", () => {

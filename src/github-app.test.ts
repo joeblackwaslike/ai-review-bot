@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { AppConfig } from "./config.js";
 import { persistPostedComments } from "./feedback/persist.js";
 import {
 	buildPRSummarySection,
 	injectPRSection,
 	maybeSubmitReview,
+	selectReviewDelayMs,
 } from "./github-app.js";
 import { buildReview } from "./review.js";
 import { buildPullRequestPayload } from "./testing.js";
@@ -92,6 +94,7 @@ const baseArgs = {
 		webhookSecret: "secret",
 		reviewEnabled: true,
 		reviewDelayMs: 0,
+		reviewResyncDelayMs: 0,
 		reviewCommentPrefix: "ai-review-bot",
 		reviewCommand: "/ai-review",
 		provider: "anthropic" as const,
@@ -650,5 +653,22 @@ describe("injectPRSection", () => {
 	it("handles null body", () => {
 		const result = injectPRSection(null, section);
 		expect(result).toBe(section);
+	});
+});
+
+describe("selectReviewDelayMs", () => {
+	const config = {
+		reviewDelayMs: 540_000,
+		reviewResyncDelayMs: 300_000,
+	} as AppConfig;
+
+	it("uses the shorter resync delay for synchronize (push) events", () => {
+		expect(selectReviewDelayMs("synchronize", config)).toBe(300_000);
+	});
+
+	it("uses the full initial delay for opened/reopened/ready_for_review events", () => {
+		for (const action of ["opened", "reopened", "ready_for_review"]) {
+			expect(selectReviewDelayMs(action, config)).toBe(540_000);
+		}
 	});
 });
