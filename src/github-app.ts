@@ -14,6 +14,16 @@ function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Re-reviews after a push (synchronize) use a shorter delay than the initial
+// pass: external bots re-review incrementally in ~1-3 min, while an initial
+// review (CodeRabbit especially) can take up to ~7.5 min. The delay exists so
+// other bots post first and our review can dedupe them.
+export function selectReviewDelayMs(action: string, config: AppConfig): number {
+	return action === "synchronize"
+		? config.reviewResyncDelayMs
+		: config.reviewDelayMs;
+}
+
 /** TTL for the per-commit review idempotency claim. Comfortably longer than a
  * full review run (which is bounded by the function's maxDuration) so the lock
  * outlives the agents; it auto-expires as a backstop if a crash skips the
@@ -557,14 +567,7 @@ function registerHandlers(app: App, configFn: () => AppConfig) {
 			const owner = prPayload.repository.owner.login;
 			const repo = prPayload.repository.name;
 			const pullNumber = prPayload.number;
-			// Re-reviews after a push (synchronize) use a shorter delay than the
-			// initial pass: external bots re-review incrementally in ~1-3 min, while
-			// an initial review (CodeRabbit especially) can take up to ~7.5 min. The
-			// delay exists so other bots post first and our review can dedupe them.
-			const delayMs =
-				prPayload.action === "synchronize"
-					? config.reviewResyncDelayMs
-					: config.reviewDelayMs;
+			const delayMs = selectReviewDelayMs(prPayload.action, config);
 			if (delayMs > 0) {
 				console.log(`delaying review by ${delayMs / 1000}s`, {
 					owner,
