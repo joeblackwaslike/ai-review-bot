@@ -4,6 +4,7 @@ import {
 	buildReviewComments,
 	collectRightSideLines,
 	computePaceDelayMs,
+	generateSummary,
 	runAgent,
 } from "./review.js";
 import type { ModelSelection } from "./router.js";
@@ -884,6 +885,65 @@ describe("runAgent caching + telemetry", () => {
 		// non-reasoning value rather than being dropped.
 		expect(call.maxOutputTokens).toBe(4096);
 		expect(call.providerOptions.openai.reasoningEffort).toBe("none");
+	});
+
+	it("scales the generateSummary budget for reasoning tiers and forwards effort", async () => {
+		mockGenerateObject.mockResolvedValue({
+			object: { summary: "Looks good." },
+			usage: { inputTokens: 10, outputTokens: 5 },
+		});
+		const openaiReasoningSel = {
+			provider: "openai",
+			model: "gpt-5.1",
+			tier: 3,
+			effort: "high",
+		} as ModelSelection;
+
+		await generateSummary(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+			openaiReasoningSel,
+			{ title: "t", body: null, additions: 1, deletions: 0, changedFiles: 1 },
+			null,
+		);
+
+		const call = (mockGenerateObject as ReturnType<typeof vi.fn>).mock
+			.calls[0][0];
+		// Summary base is 256; a reasoning tier floors to 16000 so reasoning tokens
+		// can't starve the structured summary object (AI_NoObjectGeneratedError).
+		expect(call.maxOutputTokens).toBe(16000);
+		expect(call.providerOptions.openai.reasoningEffort).toBe("high");
+	});
+
+	it("keeps the generateSummary budget at the base and omits providerOptions for non-reasoning tiers", async () => {
+		mockGenerateObject.mockResolvedValue({
+			object: { summary: "No findings." },
+			usage: { inputTokens: 10, outputTokens: 5 },
+		});
+		const haikuSel = {
+			provider: "anthropic",
+			model: "claude-haiku-4-5",
+			tier: 1,
+		} as ModelSelection;
+
+		await generateSummary(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+			haikuSel,
+			{ title: "t", body: null, additions: 1, deletions: 0, changedFiles: 1 },
+			null,
+		);
+
+		const call = (mockGenerateObject as ReturnType<typeof vi.fn>).mock
+			.calls[0][0];
+		expect(call.maxOutputTokens).toBe(256);
+		expect(call.providerOptions).toBeUndefined();
 	});
 
 	it("returns status rate_limited with retryAfter on a 429", async () => {

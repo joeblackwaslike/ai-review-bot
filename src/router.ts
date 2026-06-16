@@ -81,7 +81,10 @@ const OPENAI_TIER_MAP: Record<
 	trivial: { model: "gpt-5.1", effort: "none" },
 	normal: { model: "gpt-5.1", effort: "low" },
 	complex: { model: "gpt-5.1", effort: "high" },
-	deep: { model: "gpt-5.5", effort: "xhigh" },
+	// gpt-5.5 caps reasoning at "high"; "xhigh" is unverified on the OpenAI API,
+	// so deep stays at "high" until support is confirmed. The model bump
+	// (gpt-5.1 → gpt-5.5) is what distinguishes deep from complex here.
+	deep: { model: "gpt-5.5", effort: "high" },
 };
 
 export function routeModel(
