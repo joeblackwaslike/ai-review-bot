@@ -348,6 +348,9 @@ export async function maybeSubmitReview(args: {
 					? `retry in ~${review.rateLimitRetryAfterSeconds}s`
 					: "will reset shortly";
 			const body = `⚠️ **[${config.reviewCommentPrefix}]** Review couldn't run — the model is rate-limited (input-token budget). Budget ${when}. Push again after that, or it will auto-retry on your next commit.`;
+			// A throw here propagates to the outer finally, which releases the
+			// claim. Intended: a rate-limited run spent no model budget, so the
+			// commit must stay eligible for retry on the next delivery.
 			await octokit.request(
 				"POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
 				{
@@ -525,9 +528,11 @@ export async function maybeSubmitReview(args: {
 			}
 		}
 	} finally {
-		// Release the claim unless we actually posted a review, so a skip,
-		// rate-limit, or thrown error leaves the commit free to be retried. This
-		// runs on ANY exit from the try above — including a buildReview throw.
+		// Single release point for every non-posting exit from the try above:
+		// a buildReview throw, the !review / RATE_LIMITED / unexpected-event
+		// returns, and a throw from either fallback-comment POST. reviewPosted is
+		// set true only once a review (or a findings-preserving fallback comment)
+		// is live on GitHub, so this never releases a claim that produced output.
 		if (!reviewPosted) await releaseClaim();
 	}
 }

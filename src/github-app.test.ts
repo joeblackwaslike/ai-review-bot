@@ -405,6 +405,27 @@ describe("maybeSubmitReview", () => {
 		expect(kvStore.has(claimKey)).toBe(true);
 	});
 
+	it("releases the claim when the RATE_LIMITED fallback comment POST throws", async () => {
+		const { app, request } = buildMockApp();
+		// The rate-limit fallback comment POST fails. Because a rate-limited run
+		// spends no model budget, the outer finally must still release the claim
+		// so the commit stays eligible for retry on the next delivery.
+		request.mockRejectedValue(new Error("503 Service Unavailable"));
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "RATE_LIMITED" as const,
+			body: "",
+			comments: [],
+			validLinesByPath: new Map(),
+			metadata: DEFAULT_METADATA,
+			rateLimitResetAt: "2026-06-09T07:21:30Z",
+		});
+
+		await maybeSubmitReview({ app, ...baseArgs }).catch(() => {});
+
+		const claimKey = `review-claim:${baseArgs.config.provider}:${baseArgs.owner}/${baseArgs.repo}#${baseArgs.pullNumber}@${pr.head.sha}`;
+		expect(kvStore.has(claimKey)).toBe(false);
+	});
+
 	it("persists posted comments when feedbackEnabled and a review with comments is posted", async () => {
 		(buildReview as ReturnType<typeof vi.fn>).mockResolvedValue({
 			event: "COMMENT",
