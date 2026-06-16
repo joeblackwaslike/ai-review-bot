@@ -218,6 +218,22 @@ function sleep(ms: number): Promise<void> {
 	return new Promise((r) => setTimeout(r, ms));
 }
 
+// OpenAI reasoning models (gpt-5) spend reasoning tokens from the same
+// maxOutputTokens budget and default to the Responses API, so a tight cap leaves
+// nothing for the structured object → AI_NoObjectGeneratedError. Cap the reasoning
+// effort so it can't starve the output. Other providers read only their own
+// namespace and ignore this.
+const OPENAI_REASONING_PROVIDER_OPTIONS = {
+	openai: { reasoningEffort: "low" },
+} as const;
+
+/** Output-token budget for a generateObject call. Reasoning models need headroom
+ * for reasoning + the structured object; non-reasoning providers only emit the
+ * object, so the base cap is left untouched (you pay for actual tokens, not the cap). */
+function outputBudget(selection: ModelSelection, base: number): number {
+	return selection.provider === "openai" ? Math.max(base * 8, 8000) : base;
+}
+
 export async function runAgent(
 	skillPath: string,
 	sharedContext: string,
@@ -230,8 +246,9 @@ export async function runAgent(
 		const { object, usage, providerMetadata, response } = await generateObject({
 			model: createAIModel(selection),
 			schema: ModelReviewSchema,
-			maxOutputTokens: 4096,
+			maxOutputTokens: outputBudget(selection, 4096),
 			maxRetries: 4,
+			providerOptions: OPENAI_REASONING_PROVIDER_OPTIONS,
 			messages: [
 				{
 					role: "user",
@@ -377,7 +394,8 @@ export async function generateSummary(
 	const { object, usage } = await generateObject({
 		model: createAIModel(selection),
 		schema: SummarySchema,
-		maxOutputTokens: 256,
+		maxOutputTokens: outputBudget(selection, 256),
+		providerOptions: OPENAI_REASONING_PROVIDER_OPTIONS,
 		system,
 		messages: [{ role: "user", content: prompt }],
 	});

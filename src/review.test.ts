@@ -784,6 +784,52 @@ describe("runAgent caching + telemetry", () => {
 		expect(out?.status).toBe("ok");
 	});
 
+	it("gives OpenAI reasoning models a large output budget and low reasoning effort", async () => {
+		mockGenerateObject.mockResolvedValue({
+			object: buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+			usage: { inputTokens: 10, outputTokens: 5 },
+			providerMetadata: {},
+			response: { headers: {} },
+		});
+		const openaiSel = {
+			provider: "openai",
+			model: "gpt-5",
+			tier: 1,
+		} as ModelSelection;
+
+		await runAgent("code-reviewer.md", "SHARED", openaiSel, "");
+
+		const call = (mockGenerateObject as ReturnType<typeof vi.fn>).mock
+			.calls[0][0];
+		// gpt-5 spends reasoning tokens from this budget — it must dwarf the 4096
+		// base, and reasoning effort is capped so it can't starve the output.
+		expect(call.maxOutputTokens).toBe(32768);
+		expect(call.providerOptions.openai.reasoningEffort).toBe("low");
+	});
+
+	it("leaves the output budget at the base for non-reasoning providers", async () => {
+		mockGenerateObject.mockResolvedValue({
+			object: buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+			usage: { inputTokens: 10, outputTokens: 5 },
+			providerMetadata: { anthropic: {} },
+			response: { headers: {} },
+		});
+
+		await runAgent("code-reviewer.md", "SHARED", sel, "");
+
+		const call = (mockGenerateObject as ReturnType<typeof vi.fn>).mock
+			.calls[0][0];
+		expect(call.maxOutputTokens).toBe(4096);
+	});
+
 	it("returns status rate_limited with retryAfter on a 429", async () => {
 		const err = Object.assign(new Error("429"), {
 			statusCode: 429,
