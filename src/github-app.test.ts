@@ -44,6 +44,8 @@ vi.mock("./feedback/persist.js", () => ({
 const kvStore = vi.hoisted(() => new Map<string, string>());
 vi.mock("./feedback/kv.js", () => ({
 	createUpstashKv: vi.fn(() => ({
+		// ttlSeconds intentionally ignored — the fake has no expiry; tests cover the
+		// explicit-release path, and TTL is a production-only backstop.
 		setNx: async (key: string, value: string) => {
 			if (kvStore.has(key)) return false;
 			kvStore.set(key, value);

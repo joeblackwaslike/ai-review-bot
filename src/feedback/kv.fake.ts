@@ -68,6 +68,9 @@ export function createFakeKv(): FakeKv {
 			strings.set(key, value);
 		},
 		async setNx(key, value) {
+			// The in-memory fake intentionally ignores ttlSeconds: there is no expiry,
+			// so claims are cleared only by explicit del() or resetting the Map. Tests
+			// exercise the explicit-release path; TTL expiry is a production backstop.
 			if (strings.has(key)) return false;
 			strings.set(key, value);
 			return true;

@@ -497,7 +497,11 @@ export async function maybeSubmitReview(args: {
 		// Release the claim unless we actually posted a review, so a skip,
 		// rate-limit, or thrown error leaves the commit free to be retried.
 		if (kv && claimed && !reviewPosted) {
-			await kv.del(claimKey).catch(() => {});
+			await kv.del(claimKey).catch((delErr) => {
+				// Non-fatal — the claim still auto-expires via TTL — but log it so a
+				// stuck claim from a KV outage is diagnosable rather than silent.
+				console.error("failed to release review claim", { claimKey, delErr });
+			});
 		}
 	}
 }
