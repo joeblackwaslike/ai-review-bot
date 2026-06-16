@@ -372,6 +372,33 @@ describe("maybeSubmitReview", () => {
 		expect(fallbackParams.body).toContain("src/file.ts:2");
 	});
 
+	it("keeps the claim after a successful fallback comment so the commit is not re-billed", async () => {
+		vi.useFakeTimers();
+		const { app, request } = buildMockApp();
+		// All 3 review POSTs fail; the 4th call (fallback comment) succeeds.
+		request
+			.mockRejectedValueOnce(new Error("422 Unprocessable Entity"))
+			.mockRejectedValueOnce(new Error("422 Unprocessable Entity"))
+			.mockRejectedValueOnce(new Error("422 Unprocessable Entity"))
+			.mockResolvedValue({ data: {} });
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "COMMENT" as const,
+			body: "Review body.",
+			comments: [],
+			metadata: DEFAULT_METADATA,
+		});
+
+		const promise = maybeSubmitReview({ app, ...baseArgs }).catch(() => {});
+		await vi.runAllTimersAsync();
+		await promise;
+
+		// Findings were delivered via the fallback comment, so the claim must be
+		// retained (TTL backstop only) — releasing it would let a redelivery re-run
+		// the agents and double-bill the same commit.
+		const claimKey = `review-claim:${baseArgs.config.provider}:${baseArgs.owner}/${baseArgs.repo}#${baseArgs.pullNumber}@${pr.head.sha}`;
+		expect(kvStore.has(claimKey)).toBe(true);
+	});
+
 	it("persists posted comments when feedbackEnabled and a review with comments is posted", async () => {
 		(buildReview as ReturnType<typeof vi.fn>).mockResolvedValue({
 			event: "COMMENT",

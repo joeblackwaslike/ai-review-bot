@@ -500,10 +500,18 @@ export async function maybeSubmitReview(args: {
 					},
 				);
 				console.log("fallback comment posted — review findings preserved");
+				// The findings were delivered (as a comment) and the model budget was
+				// already spent. Treat this as a posted review: keep the claim so a
+				// redelivery or re-trigger of this same commit can't re-run the agents
+				// and double-bill. A new commit gets a fresh claim key and re-reviews.
+				reviewPosted = true;
 			} catch (commentErr) {
+				// Nothing was delivered. Rethrow so the finally releases the claim and
+				// the commit stays eligible for a retry — and so the invocation is
+				// marked failed for observability.
 				console.error("failed to post fallback comment", commentErr);
+				throw err;
 			}
-			throw err;
 		}
 	} finally {
 		// Release the claim unless we actually posted a review, so a skip,
