@@ -15,6 +15,9 @@ export interface KvClient {
 		max: number | string,
 	): Promise<number>;
 	set(key: string, value: string, ttlSeconds?: number): Promise<unknown>;
+	/** Atomic claim: set key to value only if it does not already exist, with a TTL.
+	 * Returns true if the key was set (claim acquired), false if it already existed. */
+	setNx(key: string, value: string, ttlSeconds: number): Promise<boolean>;
 	get(key: string): Promise<string | null>;
 	del(...keys: string[]): Promise<unknown>;
 	lpush(key: string, value: string): Promise<unknown>;
@@ -50,6 +53,8 @@ export function createUpstashKv(): KvClient {
 			ttlSeconds
 				? redis.set(key, value, { ex: ttlSeconds })
 				: redis.set(key, value),
+		setNx: async (key, value, ttlSeconds) =>
+			(await redis.set(key, value, { nx: true, ex: ttlSeconds })) === "OK",
 		get: (key) => redis.get<string>(key),
 		del: (...keys) => redis.del(...keys),
 		lpush: (key, value) => redis.lpush(key, value),

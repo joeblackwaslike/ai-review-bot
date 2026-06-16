@@ -14,6 +14,12 @@ function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** TTL for the per-commit review idempotency claim. Comfortably longer than a
+ * full review run (which is bounded by the function's maxDuration) so the lock
+ * outlives the agents; it auto-expires as a backstop if a crash skips the
+ * explicit release. */
+const REVIEW_CLAIM_TTL_SECONDS = 1200;
+
 async function postReviewWithRetry(
 	octokit: Awaited<ReturnType<App["getInstallationOctokit"]>>,
 	params: {
@@ -246,6 +252,46 @@ export async function maybeSubmitReview(args: {
 
 	const headSha = pullRequest.head.sha;
 	const octokit = await app.getInstallationOctokit(installationId);
+
+	// Idempotency claim: take an atomic lock on this commit BEFORE running the
+	// (expensive) agents, so a duplicate, concurrent, or redelivered invocation
+	// can't run a second review and double-bill. The lock is held for the whole
+	// review and released only if we don't end up posting (so a legitimate retry
+	// can still run). On a successful post it is left to expire via TTL, and the
+	// posted "Reviewed commit:" marker becomes the durable dedup. Skipped when
+	// force=true (explicit re-review) and when KV is not configured — in which
+	// case we fall back to the marker check inside buildReview.
+	const kv = force ? null : getKv();
+	const claimKey = `review-claim:${config.provider}:${owner}/${repo}#${pullNumber}@${headSha}`;
+	let claimed = false;
+	if (kv) {
+		try {
+			claimed = await kv.setNx(
+				claimKey,
+				new Date().toISOString(),
+				REVIEW_CLAIM_TTL_SECONDS,
+			);
+			if (!claimed) {
+				console.log("review skipped: commit already claimed by another run", {
+					owner,
+					repo,
+					pullNumber,
+					headSha,
+				});
+				return;
+			}
+		} catch (claimErr) {
+			// A KV blip must not block reviews — fall back to the marker check.
+			console.error(
+				"idempotency claim failed — proceeding without lock",
+				claimErr,
+			);
+		}
+	}
+	const releaseClaim = async () => {
+		if (kv && claimed) await kv.del(claimKey).catch(() => {});
+	};
+
 	const review = await buildReview({
 		octokit,
 		owner,
@@ -267,6 +313,7 @@ export async function maybeSubmitReview(args: {
 	});
 
 	if (!review) {
+		await releaseClaim();
 		return;
 	}
 
@@ -292,6 +339,7 @@ export async function maybeSubmitReview(args: {
 			pullNumber,
 			when,
 		});
+		await releaseClaim();
 		return;
 	}
 
@@ -304,6 +352,7 @@ export async function maybeSubmitReview(args: {
 			"unexpected review event, skipping review POST",
 			review.event,
 		);
+		await releaseClaim();
 		return;
 	}
 
@@ -437,6 +486,8 @@ export async function maybeSubmitReview(args: {
 		} catch (commentErr) {
 			console.error("failed to post fallback comment", commentErr);
 		}
+		// Posting failed — release so the next delivery/commit can retry.
+		await releaseClaim();
 		throw err;
 	}
 }

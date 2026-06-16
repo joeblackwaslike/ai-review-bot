@@ -67,6 +67,11 @@ export function createFakeKv(): FakeKv {
 		async set(key, value) {
 			strings.set(key, value);
 		},
+		async setNx(key, value) {
+			if (strings.has(key)) return false;
+			strings.set(key, value);
+			return true;
+		},
 		async get(key) {
 			return strings.has(key) ? (strings.get(key) as string) : null;
 		},
