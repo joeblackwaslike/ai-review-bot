@@ -5,9 +5,11 @@ import {
 	buildPRSummarySection,
 	injectPRSection,
 	maybeSubmitReview,
+	runScheduledReview,
 	selectReviewDelayMs,
 } from "./github-app.js";
 import { buildReview } from "./review.js";
+import type { ReviewRunMessage } from "./scheduler.js";
 import { buildPullRequestPayload } from "./testing.js";
 
 const DEFAULT_METADATA = {
@@ -605,6 +607,84 @@ describe("maybeSubmitReview", () => {
 				} as never,
 			}),
 		).resolves.not.toThrow();
+	});
+});
+
+describe("runScheduledReview", () => {
+	beforeEach(() => {
+		kvStore.clear();
+	});
+
+	const message: ReviewRunMessage = {
+		provider: "anthropic",
+		owner: "owner",
+		repo: "repo",
+		pullNumber: 1,
+		headSha: "abc1234567890def",
+		action: "synchronize",
+		installationId: 123,
+	};
+
+	it("no-ops (superseded) when the PR head has moved past the scheduled SHA", async () => {
+		mockBuildReview.mockReset();
+		const octokit = {
+			request: vi.fn(async (_route: string) => ({
+				data: {
+					draft: false,
+					head: { sha: "NEWER" },
+					additions: 0,
+					deletions: 0,
+					changed_files: 0,
+					title: "t",
+					body: null,
+				},
+			})),
+		};
+		const app = { getInstallationOctokit: vi.fn(async () => octokit) } as never;
+
+		const result = await runScheduledReview(
+			{ ...message, headSha: "OLD" },
+			app,
+			baseArgs.config,
+		);
+
+		expect(result).toEqual({ status: "superseded" });
+		// Only the GET pulls call happened — no review work was attempted.
+		expect(mockBuildReview).not.toHaveBeenCalled();
+		expect(octokit.request).toHaveBeenCalledTimes(1);
+		expect(octokit.request.mock.calls[0][0]).toBe(
+			"GET /repos/{owner}/{repo}/pulls/{pull_number}",
+		);
+	});
+
+	it("runs the review (reviewed) when the PR head still matches the scheduled SHA", async () => {
+		mockBuildReview.mockReset();
+		const octokit = {
+			request: vi.fn(async (_route: string) => ({
+				data: {
+					draft: false,
+					head: { sha: "SAME" },
+					additions: 0,
+					deletions: 0,
+					changed_files: 0,
+					title: "t",
+					body: null,
+				},
+			})),
+		};
+		const app = { getInstallationOctokit: vi.fn(async () => octokit) } as never;
+
+		// reviewEnabled=false makes maybeSubmitReview a cheap early-return no-op.
+		const result = await runScheduledReview(
+			{ ...message, headSha: "SAME" },
+			app,
+			{
+				...baseArgs.config,
+				reviewEnabled: false,
+			},
+		);
+
+		expect(result).toEqual({ status: "reviewed" });
 	});
 });
 

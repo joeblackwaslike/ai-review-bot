@@ -9,6 +9,8 @@ import { persistPostedComments } from "./feedback/persist.js";
 import { resolveStaleThreads } from "./resolve-threads.js";
 import type { ReviewDecision, ReviewMetadata } from "./review.js";
 import { buildReview } from "./review.js";
+import type { ReviewRunMessage } from "./scheduler.js";
+import { scheduleReview } from "./scheduler.js";
 
 function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
@@ -562,6 +564,47 @@ export async function maybeSubmitReview(args: {
 	}
 }
 
+// Runs a review that was scheduled via QStash. Fetches the PR once, then
+// COALESCES concurrent pushes with a head-SHA staleness check: if the PR head
+// has moved past the SHA this message was published for, a newer push already
+// owns the review, so this one no-ops ("superseded"). deduplicationId can NOT
+// cancel an already-scheduled older-SHA message — this check is the coalescing.
+export async function runScheduledReview(
+	message: ReviewRunMessage,
+	app: App,
+	config: AppConfig,
+): Promise<{ status: "reviewed" | "superseded" }> {
+	const { owner, repo, pullNumber, headSha, installationId } = message;
+	const octokit = await app.getInstallationOctokit(installationId);
+	const pullResponse = await octokit.request(
+		"GET /repos/{owner}/{repo}/pulls/{pull_number}",
+		{ owner, repo, pull_number: pullNumber },
+	);
+	const pullRequest = pullResponse.data as PullRequestDetails;
+	if (pullRequest.head.sha !== headSha) {
+		console.log("skip scheduled review: head moved (superseded)", {
+			owner,
+			repo,
+			pullNumber,
+			scheduledSha: headSha,
+			currentSha: pullRequest.head.sha,
+		});
+		return { status: "superseded" };
+	}
+	await maybeSubmitReview({
+		app,
+		installationId,
+		owner,
+		repo,
+		pullNumber,
+		pullRequest,
+		extraInstructions: "",
+		force: false,
+		config,
+	});
+	return { status: "reviewed" };
+}
+
 function registerHandlers(app: App, configFn: () => AppConfig) {
 	app.webhooks.on(
 		[
@@ -583,14 +626,42 @@ function registerHandlers(app: App, configFn: () => AppConfig) {
 			const repo = prPayload.repository.name;
 			const pullNumber = prPayload.number;
 			const delayMs = selectReviewDelayMs(prPayload.action, config);
+
+			// Publish a delayed review-run callback to QStash and return immediately
+			// — don't burn the function's maxDuration budget sleeping in-process.
+			// The /api/github/review-run endpoint invokes runScheduledReview after
+			// the delay.
+			const message: ReviewRunMessage = {
+				provider: config.provider,
+				owner,
+				repo,
+				pullNumber,
+				headSha: prPayload.pull_request.head.sha,
+				action: prPayload.action,
+				installationId,
+			};
+			const scheduled = await scheduleReview(config, message, delayMs / 1000);
+			if (scheduled) {
+				console.log("scheduled review via QStash", {
+					messageId: scheduled.messageId,
+					owner,
+					repo,
+					pullNumber,
+					delaySeconds: delayMs / 1000,
+				});
+				return;
+			}
+
+			// QStash unconfigured → fall back to today's inline behavior so a review
+			// is never dropped.
 			if (delayMs > 0) {
-				console.log(`delaying review by ${delayMs / 1000}s`, {
+				console.log(`delaying review by ${delayMs / 1000}s (inline fallback)`, {
 					owner,
 					repo,
 					pullNumber,
 					action: prPayload.action,
 				});
-				await new Promise((resolve) => setTimeout(resolve, delayMs));
+				await sleep(delayMs);
 			}
 			await maybeSubmitReview({
 				app,
