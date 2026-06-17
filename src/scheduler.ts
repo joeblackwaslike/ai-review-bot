@@ -38,7 +38,15 @@ export async function scheduleReview(
 		!config.qstashNextSigningKey
 	)
 		return null;
-	const client = new Client({ token: config.qstashToken });
+	// QStash is region-specific. Pass the region endpoint explicitly so a
+	// US-region account isn't routed to the SDK's EU default (qstash.upstash.io),
+	// which fails publishing with "user not found in this region". Omitting
+	// baseUrl when unset lets the SDK fall back to its default + QSTASH_URL env.
+	const client = new Client(
+		config.qstashUrl
+			? { token: config.qstashToken, baseUrl: config.qstashUrl }
+			: { token: config.qstashToken },
+	);
 	try {
 		const res = await client.publishJSON({
 			url: reviewRunCallbackUrl(config),

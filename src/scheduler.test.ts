@@ -7,6 +7,7 @@ vi.mock("@upstash/qstash", () => ({
 	Receiver: vi.fn(() => ({ verify })),
 }));
 
+import { Client } from "@upstash/qstash";
 import type { AppConfig } from "./config.js";
 import { scheduleReview, verifyQStashSignature } from "./scheduler.js";
 
@@ -67,6 +68,23 @@ describe("scheduleReview", () => {
 		publishJSON.mockRejectedValueOnce(new Error("qstash down"));
 		const out = await scheduleReview(cfg, msg, 300);
 		expect(out).toBeNull();
+	});
+	it("passes the region baseUrl to the QStash Client when qstashUrl is set", async () => {
+		publishJSON.mockResolvedValueOnce({ messageId: "m1" });
+		await scheduleReview(
+			{ ...cfg, qstashUrl: "https://qstash-us-east-1.upstash.io" },
+			msg,
+			300,
+		);
+		expect(Client).toHaveBeenCalledWith({
+			token: "tok",
+			baseUrl: "https://qstash-us-east-1.upstash.io",
+		});
+	});
+	it("omits baseUrl when qstashUrl is unset (SDK default + QSTASH_URL env fallback)", async () => {
+		publishJSON.mockResolvedValueOnce({ messageId: "m1" });
+		await scheduleReview(cfg, msg, 300);
+		expect(Client).toHaveBeenCalledWith({ token: "tok" });
 	});
 	it("strips a trailing slash from publicUrl so publish/verify URLs match", async () => {
 		publishJSON.mockResolvedValueOnce({ messageId: "m1" });
