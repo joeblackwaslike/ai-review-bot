@@ -155,13 +155,18 @@ function extractRateLimit(err: unknown): RateLimitInfo | null {
 	return null;
 }
 
+// Single source of truth for the severity scale — the Zod schema, the emoji
+// map, the rendered label, and the test fixtures all derive from this tuple.
+export const SEVERITY_LEVELS = ["high", "medium", "low"] as const;
+export type Severity = (typeof SEVERITY_LEVELS)[number];
+
 const ModelReviewSchema = z.object({
 	event: z.enum(["COMMENT", "REQUEST_CHANGES"]),
 	general_findings: z.array(
 		z.object({
 			title: z.string(),
 			body: z.string(),
-			severity: z.enum(["high", "medium", "low"]),
+			severity: z.enum(SEVERITY_LEVELS),
 		}),
 	),
 	inline_comments: z.array(
@@ -172,7 +177,7 @@ const ModelReviewSchema = z.object({
 			line: z.number().int(),
 			start_line: z.number().int().nullable(),
 			suggestion: z.string().nullable(),
-			severity: z.enum(["high", "medium", "low"]),
+			severity: z.enum(SEVERITY_LEVELS),
 		}),
 	),
 });
@@ -186,17 +191,23 @@ export type ModelReview = z.infer<typeof ModelReviewSchema>;
 type ModelFinding = ModelReview["general_findings"][number];
 type ModelInlineComment = ModelReview["inline_comments"][number];
 
-const SEVERITY_EMOJI: Record<"high" | "medium" | "low", string> = {
+const SEVERITY_EMOJI: Record<Severity, string> = {
 	high: "🔴",
 	medium: "🟡",
 	low: "🟢",
 };
 
-const SEVERITY_LABEL: Record<"high" | "medium" | "low", string> = {
-	high: "High",
-	medium: "Medium",
-	low: "Low",
-};
+// Fallback badge for a severity that isn't a recognized level — only reachable
+// if Zod validation is ever bypassed, but renders something sane instead of
+// "undefined **undefined**".
+const UNKNOWN_SEVERITY_BADGE = "⚪ **Unknown**";
+
+function severityBadge(severity: string): string {
+	const emoji = SEVERITY_EMOJI[severity as Severity];
+	if (!emoji) return UNKNOWN_SEVERITY_BADGE;
+	const label = `${severity[0].toUpperCase()}${severity.slice(1)}`;
+	return `${emoji} **${label}**`;
+}
 
 // Tier 1: always runs on every PR.
 export const TIER1_SKILLS: readonly string[] = [
@@ -455,7 +466,7 @@ function formatFindings(findings: ModelFinding[]): string {
 	}
 
 	const rows = findings
-		.map((f) => `| ${SEVERITY_EMOJI[f.severity]} | **${f.title}** |`)
+		.map((f) => `| ${SEVERITY_EMOJI[f.severity] ?? "⚪"} | **${f.title}** |`)
 		.join("\n");
 
 	return `| Sev | Finding |\n|---|---|\n${rows}`;
@@ -492,7 +503,7 @@ export function collectRightSideLines(patch: string): Set<number> {
 }
 
 function buildCommentBody(comment: ModelInlineComment): string {
-	const badge = `${SEVERITY_EMOJI[comment.severity]} **${SEVERITY_LABEL[comment.severity]}**`;
+	const badge = severityBadge(comment.severity);
 	const base = `${badge}\n\n**${comment.title}**\n\n${comment.body}`;
 	if (comment.suggestion) {
 		return `${base}\n\n*Suggested fix:*\n\n\`\`\`suggestion\n${comment.suggestion}\n\`\`\``;
@@ -1076,6 +1087,11 @@ export async function buildReview(
 		);
 		summary = summaryResult.summary.trim();
 		if (summary.length === 0) {
+			// The summary model returned empty/whitespace — surface it (likely a
+			// model error or refusal) instead of silently papering over it.
+			console.warn("summary model returned an empty summary; using fallback", {
+				finalEvent,
+			});
 			summary =
 				finalEvent === "REQUEST_CHANGES"
 					? "Requesting changes — see the findings and inline comments below."

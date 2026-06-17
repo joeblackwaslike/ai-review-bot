@@ -7,6 +7,8 @@
  * Ported from codex-review-bot/src/testing.ts — ModelReview shape is identical.
  */
 
+import type { Severity } from "./review.js";
+
 // ---------------------------------------------------------------------------
 // Patch fixtures
 // ---------------------------------------------------------------------------
@@ -69,7 +71,7 @@ export interface InlineCommentFixture {
 	line: number;
 	start_line: number | null;
 	suggestion: string | null;
-	severity: "high" | "medium" | "low";
+	severity: Severity;
 }
 
 export function buildInlineComment(
@@ -96,7 +98,7 @@ export interface ModelReviewFixture {
 	general_findings: Array<{
 		title: string;
 		body: string;
-		severity: "high" | "medium" | "low";
+		severity: Severity;
 	}>;
 	inline_comments: InlineCommentFixture[];
 }
