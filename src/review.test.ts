@@ -143,6 +143,43 @@ describe("buildReviewComments", () => {
 		expect(comments[0].start_line).toBeUndefined();
 	});
 
+	it("prepends a severity badge to the comment body", () => {
+		const comments = buildReviewComments(files, [
+			buildInlineComment({ line: 2, severity: "high", title: "Race" }),
+		]);
+
+		expect(comments[0].body.startsWith("🔴 **High**\n\n")).toBe(true);
+		expect(comments[0].body).toContain("**Race**");
+	});
+
+	it("renders a low-severity badge for a comment without a suggestion", () => {
+		const comments = buildReviewComments(files, [
+			buildInlineComment({ line: 2, severity: "low", suggestion: null }),
+		]);
+
+		expect(comments[0].body.startsWith("🟢 **Low**\n\n")).toBe(true);
+		expect(comments[0].body).not.toContain("*Suggested fix:*");
+	});
+
+	it("falls back to an Unknown badge for an unrecognized severity (defensive — Zod bypassed)", () => {
+		const comments = buildReviewComments(files, [
+			buildInlineComment({ line: 2, severity: "critical" as never }),
+		]);
+
+		expect(comments[0].body.startsWith("⚪ **Unknown**\n\n")).toBe(true);
+		expect(comments[0].body).not.toContain("undefined");
+	});
+
+	it("labels and separates the suggestion block", () => {
+		const comments = buildReviewComments(files, [
+			buildInlineComment({ line: 2, suggestion: "const x = 1;" }),
+		]);
+
+		expect(comments[0].body).toContain(
+			"*Suggested fix:*\n\n```suggestion\nconst x = 1;\n```",
+		);
+	});
+
 	it("drops comment when path is not in the diff", () => {
 		const comments = buildReviewComments(files, [
 			buildInlineComment({ path: "src/other.ts", line: 2 }),
@@ -349,6 +386,44 @@ describe("buildReview", () => {
 		expect(review?.body).toContain("Missing test coverage");
 		expect(review?.body).toContain("Inline comments: 1");
 		expect(review?.body).toContain("Two issues found.");
+	});
+
+	it("falls back to a default summary (and logs) when the model returns an empty summary", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const agentResponse = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "REQUEST_CHANGES",
+				general_findings: [
+					{ title: "Something", body: "needs work", severity: "high" },
+				],
+				inline_comments: [],
+			}),
+		);
+		const emptySummaryResponse = {
+			object: { summary: "   " },
+			usage: { inputTokens: 50, outputTokens: 20 },
+		};
+		mockGenerateObject
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(emptySummaryResponse);
+
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+		});
+
+		expect(review?.body).toContain(
+			"Requesting changes — see the findings and inline comments below.",
+		);
+		expect(warn).toHaveBeenCalledWith(
+			"summary model returned an empty summary; using fallback",
+			expect.objectContaining({ finalEvent: "REQUEST_CHANGES" }),
+		);
+		warn.mockRestore();
 	});
 
 	// Regression: when ALL inline comments are dropped (e.g. model returned
@@ -1401,6 +1476,7 @@ describe("buildReview triage gate — end-to-end multi-bot flow", () => {
 						line: 5,
 						start_line: null,
 						suggestion: null,
+						severity: "high",
 					}),
 				],
 			}),
@@ -1434,6 +1510,9 @@ describe("buildReview triage gate — end-to-end multi-bot flow", () => {
 			(f) => f.status === "open",
 		);
 		expect(openAfterSha1?.some((f) => f.id === bugId)).toBe(true);
+		// Persisted inline finding keeps the model's severity (not a hardcoded
+		// "medium") so re-review triage sees the real priority.
+		expect(openAfterSha1?.find((f) => f.id === bugId)?.severity).toBe("high");
 
 		// --- sha2: another bot's fix; my Bug untouched → SKIP ----------------
 		mockGenerateObject.mockReset();

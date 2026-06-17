@@ -154,7 +154,7 @@ export function buildAgentSystemPrompt(
 		"- Only use inline comments for lines that appear in the provided diff.",
 		"- Use `start_line` for multi-line ranges only, and only when `start_line` is less than `line`. Set `start_line` to `null` for single-line comments.",
 		"- Put unanchored concerns into `general_findings`, not `inline_comments`.",
-		"- Apply the severity label (Critical / Nit / Optional / FYI) in every inline comment title.",
+		"- Set `severity` on every inline comment: `high` for correctness/security/blocking bugs, `medium` for significant concerns, `low` for nits, style, or optional improvements. Keep the title a plain description — do not prefix it with the severity.",
 		"- When you can supply an exact code fix, set `suggestion` to the complete replacement text for the referenced line(s), matching the original indentation exactly. Set `suggestion` to null when the fix is not a clean line-for-line replacement.",
 	].join("\n");
 }
