@@ -91,6 +91,16 @@ function parsePriorReview(body: string): ReviewState | null {
 	};
 }
 
+function isReviewState(v: unknown): v is ReviewState {
+	if (typeof v !== "object" || v === null) return false;
+	const s = v as Record<string, unknown>;
+	return (
+		typeof s.lastReviewedSha === "string" &&
+		typeof s.event === "string" &&
+		Array.isArray(s.findings)
+	);
+}
+
 export async function loadReviewState(
 	kv: KvClient,
 	provider: string,
@@ -102,9 +112,19 @@ export async function loadReviewState(
 	const raw = await kv.get(stateKey(provider, owner, repo, pullNumber));
 	if (raw) {
 		try {
-			return JSON.parse(raw) as ReviewState;
+			const parsed: unknown = JSON.parse(raw);
+			if (isReviewState(parsed)) return parsed;
+			console.warn(
+				"review-state: KV entry has unexpected shape; treating as cold",
+				{
+					provider,
+					owner,
+					repo,
+					pullNumber,
+				},
+			);
 		} catch {
-			// Corrupt entry — fall through to the GitHub re-parse fallback.
+			// Corrupt/malformed JSON — fall through to the GitHub re-parse fallback.
 		}
 	}
 	if (priorOwnReview) return parsePriorReview(priorOwnReview);

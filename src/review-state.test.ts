@@ -76,4 +76,43 @@ describe("review-state", () => {
 			true,
 		);
 	});
+
+	it("treats valid JSON of the wrong shape as cold (returns null when no priorOwnReview)", async () => {
+		const { client, store } = fakeKv();
+		store.set(
+			stateKey("anthropic", "o", "r", 7),
+			JSON.stringify({ wrong: "shape" }),
+		);
+		const result = await loadReviewState(
+			client,
+			"anthropic",
+			"o",
+			"r",
+			7,
+			null,
+		);
+		expect(result).toBeNull();
+	});
+
+	it("falls back to priorOwnReview when KV holds valid JSON of the wrong shape", async () => {
+		const { client, store } = fakeKv();
+		store.set(
+			stateKey("anthropic", "o", "r", 7),
+			JSON.stringify({ wrong: "shape" }),
+		);
+		const prior =
+			"### ai-review\nReviewed commit: `abc1234`\n\n| Sev | Finding |\n|---|---|\n| 🔴 | Null deref |";
+		const result = await loadReviewState(
+			client,
+			"anthropic",
+			"o",
+			"r",
+			7,
+			prior,
+		);
+		expect(result?.lastReviewedSha).toBe("abc1234");
+		expect(result?.findings.some((f) => f.title.includes("Null deref"))).toBe(
+			true,
+		);
+	});
 });

@@ -10,7 +10,7 @@ import { findingId, loadReviewState, saveReviewState } from "./review-state.js";
 import type { ModelSelection } from "./router.js";
 import { routeModel } from "./router.js";
 import { detectTier2Skills } from "./tier2.js";
-import { fetchDelta, fetchDeltaFiles, triageReReview } from "./triage.js";
+import { fetchDeltaMeta, triageReReview } from "./triage.js";
 
 type OctokitLike = {
 	request: <T>(
@@ -777,14 +777,22 @@ export async function buildReview(
 		state.lastReviewedSha !== context.headSha
 	) {
 		const openFindings = state.findings.filter((f) => f.status === "open");
-		const delta = await fetchDelta(
+		// Single compare-API call: diff string + delta files + truncation flag.
+		// The GitHub compare endpoint caps .files at 300 with no pagination and no
+		// explicit truncation indicator. When truncated, SKIP/INCREMENTAL would
+		// reason over partial data, so we force FULL in that case.
+		const deltaMeta = await fetchDeltaMeta(
 			context.octokit,
 			context.owner,
 			context.repo,
 			state.lastReviewedSha,
 			context.headSha,
 		);
-		const triage = await triageReReview(selection, delta, openFindings);
+		const triage = await triageReReview(
+			selection,
+			deltaMeta.diff,
+			openFindings,
+		);
 
 		for (const f of state.findings) {
 			if (triage.resolved.includes(f.id)) {
@@ -796,7 +804,7 @@ export async function buildReview(
 			}
 		}
 
-		if (triage.recommendation === "SKIP") {
+		if (triage.recommendation === "SKIP" && !deltaMeta.truncated) {
 			const stillOpen = state.findings.some((f) => f.status === "open");
 			state.event = stillOpen ? state.event : "APPROVE";
 			state.lastReviewedSha = context.headSha;
@@ -813,14 +821,8 @@ export async function buildReview(
 			return null; // nothing to post — the check-run carries the verdict
 		}
 
-		if (triage.recommendation === "INCREMENTAL") {
-			scopedFiles = await fetchDeltaFiles(
-				context.octokit,
-				context.owner,
-				context.repo,
-				state.lastReviewedSha,
-				context.headSha,
-			);
+		if (triage.recommendation === "INCREMENTAL" && !deltaMeta.truncated) {
+			scopedFiles = deltaMeta.files;
 			// The agents only review the delta, so prior findings on files outside
 			// it are never re-surfaced. Carry the still-open ones forward as
 			// blocking, and resolved ones as tombstones, into the persisted state.
@@ -829,7 +831,19 @@ export async function buildReview(
 				(f) => f.status === "resolved",
 			);
 		}
-		// FULL falls through with scopedFiles = files
+		// FULL falls through with scopedFiles = files.
+		// Truncated compare (>= 300 files): SKIP/INCREMENTAL are bypassed above,
+		// so execution always reaches here and reviews the full paginated file set.
+		if (deltaMeta.truncated) {
+			console.warn(
+				"triage gate: compare API truncated (>=300 files); forcing FULL review",
+				{
+					owner: context.owner,
+					repo: context.repo,
+					pullNumber: context.pullNumber,
+				},
+			);
+		}
 	}
 
 	const scopedFilePaths = scopedFiles.map((f) => f.filename);

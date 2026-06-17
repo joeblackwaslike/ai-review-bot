@@ -75,6 +75,23 @@ export interface DeltaFile {
 	patch?: string;
 }
 
+export interface DeltaMeta {
+	files: DeltaFile[];
+	diff: string;
+	truncated: boolean;
+}
+
+/** The GitHub compare API caps `.files` at this many entries with no pagination
+ * and no explicit truncation flag. When the array hits this length the response
+ * is silently incomplete — downstream triage/INCREMENTAL logic would reason over
+ * partial data. */
+export const COMPARE_FILE_CAP = 300;
+
+/** Returns true when the compare-API file list is likely truncated (hit the cap). */
+export function isLikelyTruncated(files: DeltaFile[]): boolean {
+	return files.length >= COMPARE_FILE_CAP;
+}
+
 async function fetchCompareFiles(
 	octokit: CompareOctokit,
 	owner: string,
@@ -88,6 +105,23 @@ async function fetchCompareFiles(
 	);
 	const data = res.data as { files?: DeltaFile[] };
 	return data.files ?? [];
+}
+
+/** Fetches the compare-API result and returns files, a unified diff string, and
+ * a truncation flag. Use this in the triage gate so both the delta diff and the
+ * truncation signal come from a single API call. */
+export async function fetchDeltaMeta(
+	octokit: CompareOctokit,
+	owner: string,
+	repo: string,
+	baseSha: string,
+	headSha: string,
+): Promise<DeltaMeta> {
+	const files = await fetchCompareFiles(octokit, owner, repo, baseSha, headSha);
+	const diff = files
+		.map((f) => `FILE: ${f.filename}\n${f.patch ?? "[no patch]"}`)
+		.join("\n\n---\n\n");
+	return { files, diff, truncated: isLikelyTruncated(files) };
 }
 
 export async function fetchDelta(

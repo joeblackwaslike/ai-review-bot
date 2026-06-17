@@ -4,7 +4,12 @@ const mockGenerateObject = vi.hoisted(() => vi.fn());
 vi.mock("ai", () => ({ generateObject: mockGenerateObject }));
 vi.mock("./models.js", () => ({ createAIModel: vi.fn(() => ({})) }));
 
-import { triageReReview } from "./triage.js";
+import type { DeltaFile } from "./triage.js";
+import {
+	COMPARE_FILE_CAP,
+	isLikelyTruncated,
+	triageReReview,
+} from "./triage.js";
 
 const openFindings = [
 	{
@@ -47,5 +52,30 @@ describe("triageReReview", () => {
 		);
 		expect(d.recommendation).toBe("INCREMENTAL");
 		expect(d.resolved).toEqual([]);
+	});
+});
+
+function makeFiles(n: number): DeltaFile[] {
+	return Array.from({ length: n }, (_, i) => ({
+		filename: `src/file${i}.ts`,
+		status: "modified",
+	}));
+}
+
+describe("isLikelyTruncated", () => {
+	it("returns false for an empty file list", () => {
+		expect(isLikelyTruncated([])).toBe(false);
+	});
+
+	it("returns false for fewer than COMPARE_FILE_CAP files", () => {
+		expect(isLikelyTruncated(makeFiles(COMPARE_FILE_CAP - 1))).toBe(false);
+	});
+
+	it("returns true at exactly COMPARE_FILE_CAP files", () => {
+		expect(isLikelyTruncated(makeFiles(COMPARE_FILE_CAP))).toBe(true);
+	});
+
+	it("returns true for more than COMPARE_FILE_CAP files", () => {
+		expect(isLikelyTruncated(makeFiles(COMPARE_FILE_CAP + 50))).toBe(true);
 	});
 });

@@ -51,8 +51,14 @@ vi.mock("./prompt.js", () => ({
 }));
 
 const mockTriageReReview = vi.hoisted(() => vi.fn());
+const mockFetchDeltaMeta = vi.hoisted(() =>
+	vi.fn(async () => ({ files: [], diff: "delta", truncated: false })),
+);
 vi.mock("./triage.js", () => ({
 	triageReReview: mockTriageReReview,
+	fetchDeltaMeta: mockFetchDeltaMeta,
+	// Legacy exports kept so any direct import of fetchDelta/fetchDeltaFiles in
+	// tests continues to resolve (unused by review.ts after the refactor).
 	fetchDelta: vi.fn(async () => "delta"),
 	fetchDeltaFiles: vi.fn(async () => []),
 }));
@@ -1497,6 +1503,144 @@ describe("buildReview triage gate — end-to-end multi-bot flow", () => {
 		expect(stateAfterSha3?.findings.every((f) => f.status !== "open")).toBe(
 			true,
 		);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// buildReview — truncated compare API (>= 300 files): gate must force FULL.
+// ---------------------------------------------------------------------------
+
+describe("buildReview triage gate — truncated compare forces FULL", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+		mockTriageReReview.mockReset();
+		mockFetchDeltaMeta.mockReset();
+	});
+
+	it("ignores SKIP from triage and runs a FULL review when compare is truncated", async () => {
+		const { client } = fakeKv();
+		const sha1 = "aaaaaaaaaaaa1111";
+		const sha2 = "bbbbbbbbbbbb2222";
+
+		await saveReviewState(
+			client,
+			"anthropic",
+			baseContext.owner,
+			baseContext.repo,
+			baseContext.pullNumber,
+			{
+				lastReviewedSha: sha1,
+				event: "REQUEST_CHANGES",
+				findings: [],
+				reviewedAt: "2026-06-17T00:00:00Z",
+			},
+		);
+
+		// Triage says SKIP but the compare result is truncated — gate must ignore SKIP and run FULL.
+		mockFetchDeltaMeta.mockResolvedValueOnce({
+			files: [],
+			diff: "big delta",
+			truncated: true,
+		});
+		mockTriageReReview.mockResolvedValueOnce({
+			recommendation: "SKIP",
+			resolved: [],
+			newRisk: false,
+		});
+
+		// Agents run (FULL review, not SKIP).
+		const agentResponse = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+		);
+		const summaryResponse = {
+			object: { summary: "Looks good." },
+			usage: { inputTokens: 10, outputTokens: 5 },
+		};
+		// 5 Tier 1 agents + 1 summary call
+		for (let i = 0; i < 5; i++)
+			mockGenerateObject.mockResolvedValueOnce(agentResponse);
+		mockGenerateObject.mockResolvedValueOnce(summaryResponse);
+
+		const result = await buildReview({
+			octokit: buildOctokit({
+				files: [buildPullFile("src/a.ts", SIMPLE_PATCH)],
+			}),
+			...baseContext,
+			headSha: sha2,
+			kv: client,
+		});
+
+		// Must NOT return null (which SKIP would cause); a full review was posted.
+		expect(result).not.toBeNull();
+	});
+
+	it("ignores INCREMENTAL from triage and runs a FULL review when compare is truncated", async () => {
+		const { client } = fakeKv();
+		const sha1 = "aaaaaaaaaaaa1111";
+		const sha2 = "bbbbbbbbbbbb2222";
+
+		await saveReviewState(
+			client,
+			"anthropic",
+			baseContext.owner,
+			baseContext.repo,
+			baseContext.pullNumber,
+			{
+				lastReviewedSha: sha1,
+				event: "REQUEST_CHANGES",
+				findings: [],
+				reviewedAt: "2026-06-17T00:00:00Z",
+			},
+		);
+
+		// Triage says INCREMENTAL but compare is truncated — gate must run FULL instead.
+		mockFetchDeltaMeta.mockResolvedValueOnce({
+			files: [], // truncated partial list — should NOT become scopedFiles
+			diff: "big delta",
+			truncated: true,
+		});
+		mockTriageReReview.mockResolvedValueOnce({
+			recommendation: "INCREMENTAL",
+			resolved: [],
+			newRisk: true,
+		});
+
+		const agentResponse = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+		);
+		const summaryResponse = {
+			object: { summary: "Looks good." },
+			usage: { inputTokens: 10, outputTokens: 5 },
+		};
+		for (let i = 0; i < 5; i++)
+			mockGenerateObject.mockResolvedValueOnce(agentResponse);
+		mockGenerateObject.mockResolvedValueOnce(summaryResponse);
+
+		// The octokit paginate returns the full file list (not the truncated delta).
+		const fullFile = buildPullFile("src/a.ts", SIMPLE_PATCH);
+		const result = await buildReview({
+			octokit: buildOctokit({ files: [fullFile] }),
+			...baseContext,
+			headSha: sha2,
+			kv: client,
+		});
+
+		// A real review (not null) was posted — INCREMENTAL was not taken.
+		expect(result).not.toBeNull();
+		// survivingPrior is empty (we didn't carry INCREMENTAL state), so APPROVE is possible.
+		// The agents returned no findings, so the final event should be APPROVE (not REQUEST_CHANGES
+		// that an INCREMENTAL carry-forward would force).
+		expect(result?.event).toBe("APPROVE");
 	});
 });
 
