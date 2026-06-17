@@ -197,3 +197,5 @@ awk 'NF {printf "%s\\n", $0}' your-private-key.pem
 ```
 
 Store the output as a GitHub Actions secret or shell environment variable. The CLI normalizes `\n` back to real newlines at runtime.
+
+<!-- qstash smoke test 9942161 -->
