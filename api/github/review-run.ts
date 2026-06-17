@@ -31,13 +31,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
 	// Parse before verifying ONLY to select the right provider's signing keys.
 	// Verification gates every side effect below — an unverified body is inert.
-	let message: ReviewRunMessage;
+	let parsed: unknown;
 	try {
-		message = JSON.parse(rawBody) as ReviewRunMessage;
+		parsed = JSON.parse(rawBody);
 	} catch {
 		res.status(400).json({ error: "Invalid JSON body" });
 		return;
 	}
+
+	// Validate shape + provider explicitly: a non-object body would crash on
+	// property access, and an unknown provider must not silently fall through to
+	// the wrong bot's credentials. (Both bots share QStash signing keys, so a
+	// corrupted provider field could otherwise pass verification on the wrong
+	// path.) Reject anything that isn't a known provider.
+	if (
+		typeof parsed !== "object" ||
+		parsed === null ||
+		((parsed as ReviewRunMessage).provider !== "openai" &&
+			(parsed as ReviewRunMessage).provider !== "anthropic")
+	) {
+		res.status(400).json({ error: "Invalid or missing provider" });
+		return;
+	}
+	const message = parsed as ReviewRunMessage;
 
 	const isOpenAI = message.provider === "openai";
 	const config = isOpenAI ? getOpenAIAppConfig() : getConfig();

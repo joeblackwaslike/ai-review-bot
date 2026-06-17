@@ -41,7 +41,7 @@ describe("scheduleReview", () => {
 				url: "https://example.test/api/github/review-run",
 				body: msg,
 				delay: 300,
-				deduplicationId: "anthropic:7:abc",
+				deduplicationId: "anthropic:o/r:7:abc",
 			}),
 		);
 	});
@@ -53,6 +53,19 @@ describe("scheduleReview", () => {
 		);
 		expect(out).toBeNull();
 		expect(publishJSON).not.toHaveBeenCalled();
+	});
+	it("strips a trailing slash from publicUrl so publish/verify URLs match", async () => {
+		publishJSON.mockResolvedValueOnce({ messageId: "m1" });
+		await scheduleReview(
+			{ ...cfg, publicUrl: "https://example.test/" },
+			msg,
+			300,
+		);
+		expect(publishJSON).toHaveBeenCalledWith(
+			expect.objectContaining({
+				url: "https://example.test/api/github/review-run",
+			}),
+		);
 	});
 });
 
@@ -69,5 +82,14 @@ describe("verifyQStashSignature", () => {
 	it("returns false when verify throws or rejects", async () => {
 		verify.mockRejectedValueOnce(new Error("bad"));
 		expect(await verifyQStashSignature(cfg, "raw-body", "sig")).toBe(false);
+	});
+	it("returns false (fails closed) when publicUrl is unconfigured", async () => {
+		const out = await verifyQStashSignature(
+			{ ...cfg, publicUrl: undefined },
+			"raw-body",
+			"sig",
+		);
+		expect(out).toBe(false);
+		expect(verify).not.toHaveBeenCalled();
 	});
 });

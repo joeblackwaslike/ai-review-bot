@@ -12,7 +12,11 @@ export interface ReviewRunMessage {
 }
 
 export function reviewRunCallbackUrl(config: AppConfig): string {
-	return `${config.publicUrl}/api/github/review-run`;
+	// Strip any trailing slash so the publish URL and the verify URL are
+	// byte-identical however PUBLIC_URL is written — QStash signs this exact
+	// string into the JWT, so a stray "//" would break Receiver.verify.
+	const origin = (config.publicUrl ?? "").replace(/\/+$/, "");
+	return `${origin}/api/github/review-run`;
 }
 
 // Publish a delayed review-run callback. Returns null when QStash isn't
@@ -32,7 +36,7 @@ export async function scheduleReview(
 		// Dedups GitHub webhook REDELIVERIES of the same push only. Cross-push
 		// coalescing is handled by the head-SHA staleness check in the callback —
 		// deduplicationId cannot cancel an already-scheduled older-SHA message.
-		deduplicationId: `${message.provider}:${message.pullNumber}:${message.headSha}`,
+		deduplicationId: `${message.provider}:${message.owner}/${message.repo}:${message.pullNumber}:${message.headSha}`,
 		// Cap retries: the callback returns 500 on a failed review so QStash
 		// retries, but a review releases its idempotency claim on failure, so each
 		// retry RE-RUNS the full agent suite (~8 with Tier 2 on). One retry covers
@@ -47,7 +51,11 @@ export async function verifyQStashSignature(
 	rawBody: string,
 	signature: string,
 ): Promise<boolean> {
-	if (!config.qstashCurrentSigningKey || !config.qstashNextSigningKey)
+	if (
+		!config.qstashCurrentSigningKey ||
+		!config.qstashNextSigningKey ||
+		!config.publicUrl
+	)
 		return false;
 	const receiver = new Receiver({
 		currentSigningKey: config.qstashCurrentSigningKey,
