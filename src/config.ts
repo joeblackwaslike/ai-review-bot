@@ -14,6 +14,10 @@ export interface AppConfig {
 	qstashToken?: string;
 	qstashCurrentSigningKey?: string;
 	qstashNextSigningKey?: string;
+	/** QStash region endpoint (e.g. https://qstash-us-east-1.upstash.io). QStash
+	 * is region-specific; the SDK default (qstash.upstash.io) routes to EU, so a
+	 * US-region account must set this or publishes fail with "user not found". */
+	qstashUrl?: string;
 	publicUrl?: string;
 }
 
@@ -98,6 +102,7 @@ export function getConfig(): AppConfig {
 		qstashToken: process.env.QSTASH_TOKEN,
 		qstashCurrentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY,
 		qstashNextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY,
+		qstashUrl: process.env.QSTASH_URL,
 		publicUrl: process.env.PUBLIC_URL,
 	};
 }
@@ -128,6 +133,7 @@ export function getOpenAIAppConfig(): AppConfig {
 		qstashToken: process.env.QSTASH_TOKEN,
 		qstashCurrentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY,
 		qstashNextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY,
+		qstashUrl: process.env.QSTASH_URL,
 		publicUrl: process.env.PUBLIC_URL,
 	};
 }

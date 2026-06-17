@@ -46,6 +46,7 @@ afterEach(() => {
 		"QSTASH_TOKEN",
 		"QSTASH_CURRENT_SIGNING_KEY",
 		"QSTASH_NEXT_SIGNING_KEY",
+		"QSTASH_URL",
 		"PUBLIC_URL",
 	]) {
 		delete process.env[key];
@@ -206,12 +207,14 @@ describe("qstash + publicUrl config", () => {
 			QSTASH_TOKEN: "qs-tok",
 			QSTASH_CURRENT_SIGNING_KEY: "cur",
 			QSTASH_NEXT_SIGNING_KEY: "nxt",
+			QSTASH_URL: "https://qstash-us-east-1.upstash.io",
 			PUBLIC_URL: "https://example.test",
 		});
 		const c = getConfig();
 		expect(c.qstashToken).toBe("qs-tok");
 		expect(c.qstashCurrentSigningKey).toBe("cur");
 		expect(c.qstashNextSigningKey).toBe("nxt");
+		expect(c.qstashUrl).toBe("https://qstash-us-east-1.upstash.io");
 		expect(c.publicUrl).toBe("https://example.test");
 	});
 
