@@ -751,19 +751,28 @@ export async function buildReview(
 	// skipped entirely and behavior is identical to before this feature.
 	const resolvedKeys = new Set<string>();
 	let scopedFiles = files; // FULL default
-	const state = context.kv
-		? await loadReviewState(
-				context.kv,
-				context.provider,
-				context.owner,
-				context.repo,
-				context.pullNumber,
-				priorOwnReview,
-			)
-		: null;
+	// Findings to carry into the next persisted state when this run reviews only
+	// the delta (INCREMENTAL): prior findings still open after triage (so a clean
+	// delta on an unrelated file can't false-APPROVE away a blocking finding the
+	// agents never saw) plus resolved tombstones (so future rounds can tell
+	// "resolved" from "never existed"). Both stay empty on the FULL/cold path.
+	let survivingPrior: PersistedFinding[] = [];
+	let resolvedTombstones: PersistedFinding[] = [];
+	const state =
+		context.kv && !context.force
+			? await loadReviewState(
+					context.kv,
+					context.provider,
+					context.owner,
+					context.repo,
+					context.pullNumber,
+					priorOwnReview,
+				)
+			: null;
 
 	if (
 		context.kv &&
+		!context.force &&
 		state?.lastReviewedSha &&
 		state.lastReviewedSha !== context.headSha
 	) {
@@ -811,6 +820,13 @@ export async function buildReview(
 				context.repo,
 				state.lastReviewedSha,
 				context.headSha,
+			);
+			// The agents only review the delta, so prior findings on files outside
+			// it are never re-surfaced. Carry the still-open ones forward as
+			// blocking, and resolved ones as tombstones, into the persisted state.
+			survivingPrior = state.findings.filter((f) => f.status === "open");
+			resolvedTombstones = state.findings.filter(
+				(f) => f.status === "resolved",
 			);
 		}
 		// FULL falls through with scopedFiles = files
@@ -1006,13 +1022,21 @@ export async function buildReview(
 	// Upgrade to APPROVE only when ALL agents succeeded AND none found anything to flag.
 	// If any agent was rate-limited or errored, the review is partial — keep COMMENT.
 	const allAgentsSucceeded = agentResults.length === allSkills.length;
-	const finalEvent: ReviewDecision["event"] =
+	const cleanDelta =
 		allAgentsSucceeded &&
 		modelReview.event === "COMMENT" &&
 		modelReview.general_findings.length === 0 &&
-		reviewComments.length === 0
-			? "APPROVE"
-			: modelReview.event;
+		reviewComments.length === 0;
+	// An INCREMENTAL pass that left prior findings unresolved still blocks even if
+	// the delta itself was clean — those findings live on files the agents never
+	// reviewed this round. Force REQUEST_CHANGES so a clean delta can't APPROVE
+	// away a still-open blocking finding (C1).
+	const finalEvent: ReviewDecision["event"] =
+		survivingPrior.length > 0
+			? "REQUEST_CHANGES"
+			: cleanDelta
+				? "APPROVE"
+				: modelReview.event;
 
 	let summary = "";
 	if (finalEvent !== "APPROVE") {
@@ -1104,7 +1128,10 @@ export async function buildReview(
 	// (general:<lowercased title>), inline comments off path:line — so findingId
 	// for each is computed from the same title/path/line the gate would match.
 	if (context.kv) {
-		const persistedFindings: PersistedFinding[] = [
+		// Findings raised this round (on whatever surface was reviewed). On an
+		// INCREMENTAL pass this is the delta only; the still-open and resolved
+		// prior findings are unioned in below so nothing is silently dropped.
+		const freshFindings: PersistedFinding[] = [
 			...modelReview.general_findings.map(
 				(f): PersistedFinding => ({
 					id: findingId(null, null, f.title),
@@ -1126,6 +1153,19 @@ export async function buildReview(
 				}),
 			),
 		];
+		// Union fresh ∪ surviving-open-prior ∪ resolved-tombstones, deduped by id.
+		// freshFindings win on collision (an agent re-raised a prior finding on the
+		// delta), so its current status/severity is authoritative. survivingPrior
+		// and resolvedTombstones are empty except on the INCREMENTAL path.
+		const byId = new Map<string, PersistedFinding>();
+		for (const f of [
+			...freshFindings,
+			...survivingPrior,
+			...resolvedTombstones,
+		]) {
+			if (!byId.has(f.id)) byId.set(f.id, f);
+		}
+		const persistedFindings = [...byId.values()];
 		// finalEvent is one of COMMENT/REQUEST_CHANGES/APPROVE here — the
 		// RATE_LIMITED path returned early above, before any state is built.
 		const persistedEvent: ReviewState["event"] =

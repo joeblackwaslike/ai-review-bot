@@ -1499,3 +1499,96 @@ describe("buildReview triage gate — end-to-end multi-bot flow", () => {
 		);
 	});
 });
+
+// ---------------------------------------------------------------------------
+// buildReview — C1 regression: INCREMENTAL must carry forward still-open prior
+// findings (a clean delta on an unrelated file must NOT false-APPROVE).
+// ---------------------------------------------------------------------------
+
+describe("buildReview triage gate — INCREMENTAL carries forward open prior findings", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+		mockTriageReReview.mockReset();
+	});
+
+	it("does NOT APPROVE and keeps F open when the delta touches an unrelated file and resolves nothing", async () => {
+		const { client } = fakeKv();
+		const provider = "anthropic";
+		const owner = baseContext.owner;
+		const repo = baseContext.repo;
+		const pull = baseContext.pullNumber;
+		const loadState = () =>
+			loadReviewState(client, provider, owner, repo, pull, null);
+
+		// Prior open finding F on file A, persisted at sha1.
+		const sha1 = "aaaaaaaaaaaa1111";
+		const fId = findingId("src/a.ts", 5, "Bug");
+		await saveReviewState(client, provider, owner, repo, pull, {
+			lastReviewedSha: sha1,
+			event: "REQUEST_CHANGES",
+			findings: [
+				{
+					id: fId,
+					path: "src/a.ts",
+					line: 5,
+					title: "Bug",
+					severity: "high",
+					status: "open",
+				},
+			],
+			reviewedAt: "2026-06-17T00:00:00Z",
+		});
+
+		// Push sha2: triage INCREMENTAL, resolves nothing; the delta is only file B.
+		const sha2 = "bbbbbbbbbbbb2222";
+		vi.mocked(mockTriageReReview).mockResolvedValueOnce({
+			recommendation: "INCREMENTAL",
+			resolved: [],
+			newRisk: false,
+		});
+		// fetchDeltaFiles is mocked (returns []) — so scopedFiles is empty and the
+		// agents never see file A. Agents return nothing new.
+		const emptyAgent = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+		);
+		// 5 agents return nothing; the forced REQUEST_CHANGES (survivingPrior) means
+		// generateSummary IS called (APPROVE is the only path that skips it).
+		const summaryResponse = {
+			object: { summary: "Prior unresolved findings remain." },
+			usage: { inputTokens: 10, outputTokens: 5 },
+		};
+		mockGenerateObject
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(summaryResponse);
+
+		const r2 = await buildReview({
+			octokit: buildOctokit({
+				files: [buildPullFile("src/b.ts", SIMPLE_PATCH)],
+			}),
+			...baseContext,
+			headSha: sha2,
+			kv: client,
+		});
+
+		// (a) An unresolved prior blocking finding remains → must NOT be APPROVE.
+		expect(r2?.event).not.toBe("APPROVE");
+		expect(r2?.event).toBe("REQUEST_CHANGES");
+
+		// (b) State still contains F (open) and the SHA advanced.
+		const stateAfterSha2 = await loadState();
+		expect(stateAfterSha2?.lastReviewedSha).toBe(sha2);
+		const carried = stateAfterSha2?.findings.find((f) => f.id === fId);
+		expect(carried?.status).toBe("open");
+		expect(stateAfterSha2?.event).toBe("REQUEST_CHANGES");
+	});
+});

@@ -55,6 +55,14 @@ export async function saveReviewState(
 // Best-effort parse of a prior posted review body into findings. The body format
 // is the markdown table produced by generateSummary; we only need titles +
 // severity for triage, so a loose parse is acceptable.
+//
+// NOTE: only GENERAL (table) findings are recoverable from the review body —
+// inline comments live on the diff, not in the body, so they cannot be parsed
+// back out here. After a cold-KV fallback the triage resolve path therefore
+// can't match inline findings that round; the gate simply won't mark them
+// resolved, which degrades toward MORE review (a re-review), never less. Once KV
+// is warm again, full state (incl. inline findings) is persisted directly and
+// this fallback is bypassed.
 function parsePriorReview(body: string): ReviewState | null {
 	const shaMatch = body.match(/Reviewed commit: `([0-9a-f]{7,40})`/);
 	if (!shaMatch) return null;
