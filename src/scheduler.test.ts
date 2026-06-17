@@ -1,0 +1,73 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const publishJSON = vi.hoisted(() => vi.fn());
+const verify = vi.hoisted(() => vi.fn());
+vi.mock("@upstash/qstash", () => ({
+	Client: vi.fn(() => ({ publishJSON })),
+	Receiver: vi.fn(() => ({ verify })),
+}));
+
+import type { AppConfig } from "./config.js";
+import { scheduleReview, verifyQStashSignature } from "./scheduler.js";
+
+beforeEach(() => {
+	vi.clearAllMocks();
+});
+
+const cfg = {
+	qstashToken: "tok",
+	qstashCurrentSigningKey: "cur",
+	qstashNextSigningKey: "nxt",
+	publicUrl: "https://example.test",
+} as unknown as AppConfig;
+
+const msg = {
+	provider: "anthropic" as const,
+	owner: "o",
+	repo: "r",
+	pullNumber: 7,
+	headSha: "abc",
+	action: "synchronize",
+	installationId: 1,
+};
+
+describe("scheduleReview", () => {
+	it("publishes a delayed JSON message to the review-run URL with a per-head dedup id", async () => {
+		publishJSON.mockResolvedValueOnce({ messageId: "m1" });
+		const out = await scheduleReview(cfg, msg, 300);
+		expect(out).toEqual({ messageId: "m1" });
+		expect(publishJSON).toHaveBeenCalledWith(
+			expect.objectContaining({
+				url: "https://example.test/api/github/review-run",
+				body: msg,
+				delay: 300,
+				deduplicationId: "anthropic:7:abc",
+			}),
+		);
+	});
+	it("returns null when QStash is unconfigured (caller falls back to inline)", async () => {
+		const out = await scheduleReview(
+			{ ...cfg, qstashToken: undefined },
+			msg,
+			300,
+		);
+		expect(out).toBeNull();
+		expect(publishJSON).not.toHaveBeenCalled();
+	});
+});
+
+describe("verifyQStashSignature", () => {
+	it("returns true on a valid signature", async () => {
+		verify.mockResolvedValueOnce(true);
+		expect(await verifyQStashSignature(cfg, "raw-body", "sig")).toBe(true);
+		expect(verify).toHaveBeenCalledWith({
+			body: "raw-body",
+			signature: "sig",
+			url: "https://example.test/api/github/review-run",
+		});
+	});
+	it("returns false when verify throws or rejects", async () => {
+		verify.mockRejectedValueOnce(new Error("bad"));
+		expect(await verifyQStashSignature(cfg, "raw-body", "sig")).toBe(false);
+	});
+});
