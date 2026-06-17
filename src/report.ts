@@ -98,7 +98,9 @@ function countSeverities(merged: ModelReview): {
 }
 
 function yamlList(items: string[]): string {
-	return `[${items.map((i) => i.replace(/[[\],]/g, "")).join(", ")}]`;
+	// JSON-quote each item so brackets/commas/colons stay intact and valid in the
+	// YAML flow sequence (JSON strings are valid YAML), instead of stripping them.
+	return `[${items.map((i) => JSON.stringify(i)).join(", ")}]`;
 }
 
 function frontMatter(meta: ReviewReportMeta, merged: ModelReview): string {

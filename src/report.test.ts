@@ -37,6 +37,7 @@ const review: ModelReview = {
 			line: 12,
 			start_line: null,
 			suggestion: null,
+			severity: "high",
 		},
 	],
 };
@@ -90,7 +91,7 @@ describe("formatReviewReport", () => {
 		);
 		expect(out).toContain("duration_seconds: 92");
 		expect(out).toContain("cost_usd: 0.012345");
-		expect(out).toContain("providers: [anthropic, openai]");
+		expect(out).toContain('providers: ["anthropic", "openai"]');
 		expect(out).toContain("files_reviewed: 14");
 		// severity counts: 1 high, 1 medium, 1 low
 		expect(out).toContain("high: 1");
