@@ -117,3 +117,45 @@ export async function collectFilesFromLocal(opts: {
 	}
 	return files;
 }
+
+/**
+ * Collect the code files touched by a single commit, reading each file's
+ * content **as of that commit** (`git show <sha>:<path>`) rather than the
+ * current working tree — the review must reflect the commit, not later edits.
+ *
+ * Renamed and deleted paths are handled implicitly: `diff-tree` lists the old
+ * path too, but `git show <sha>:<oldpath>` fails for a path that no longer
+ * exists at the commit, so it is skipped. Reads from the object DB (not the
+ * filesystem), so no path-traversal guard is required.
+ */
+export async function collectFilesFromCommit(opts: {
+	cwd: string;
+	sha: string;
+	runGit?: GitRunner;
+}): Promise<AuditFile[]> {
+	const runGit = opts.runGit ?? defaultGitRunner(opts.cwd);
+
+	const raw = runGit([
+		"diff-tree",
+		"--no-commit-id",
+		"--name-only",
+		"-r",
+		opts.sha,
+	])
+		.split("\n")
+		.map((l) => l.trim());
+
+	const unique = [...new Set(raw.filter(Boolean))]
+		.filter(hasCodeExtension)
+		.sort();
+
+	const files: AuditFile[] = [];
+	for (const p of unique) {
+		try {
+			files.push({ path: p, content: runGit(["show", `${opts.sha}:${p}`]) });
+		} catch {
+			// deleted in this commit (or the old side of a rename) — skip
+		}
+	}
+	return files;
+}

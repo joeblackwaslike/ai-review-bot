@@ -3,17 +3,47 @@ import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import process from "node:process";
 import { App } from "octokit";
-import { auditRepo, runLocalAudit } from "./audit.js";
+import {
+	auditRepo,
+	type ReviewScope,
+	runLocalAudit,
+	runLocalReview,
+} from "./audit.js";
 import { makeReady, type OctokitLike } from "./audit-pr.js";
 import { getConfig, getOpenAIAppConfig } from "./config.js";
+import { slugify } from "./report.js";
 
 function fatal(msg: string): never {
 	console.error(`Error: ${msg}`);
 	process.exit(1);
 }
 
+// Reads the value for a value-taking flag at args[i]. Errors clearly if the
+// value is missing (flag was last) or looks like another flag (e.g.
+// `--commit --slug x` would otherwise silently swallow `--slug` as the sha).
+// Pass `i++` so the consumed value is skipped by the loop.
+function requireValue(args: string[], i: number, flag: string): string {
+	const value = args[i + 1];
+	if (value === undefined || value.startsWith("--")) {
+		fatal(`Flag ${flag} requires a value`);
+	}
+	return value;
+}
+
 function usage(): never {
 	console.error("Usage:");
+	console.error(
+		"  ai-review review [--full | --commit <sha>] [--slug <slug>] [--title <t>] [--out <dir>] [--extra <text>] [--json]",
+	);
+	console.error(
+		"      Local code review → Markdown report in docs/code-reviews/.",
+	);
+	console.error(
+		"      Auth: prefers OPENAI_API_KEY / ANTHROPIC_API_KEY, else falls back to your",
+	);
+	console.error(
+		"      logged-in `codex` / `claude` subscription (local, personal use only).",
+	);
 	console.error(
 		"  ai-review audit [--full] [--dry-run] [--out <dir>] [--extra <text>] [--json]",
 	);
@@ -114,6 +144,85 @@ async function buildResolvePr() {
 	};
 }
 
+function gitOut(args: string[]): string | null {
+	try {
+		return execFileSync("git", args, {
+			encoding: "utf-8",
+			timeout: 5000,
+		}).trim();
+	} catch {
+		return null;
+	}
+}
+
+function deriveSlug(scope: ReviewScope): string {
+	if (scope.kind === "commit") {
+		const subject = gitOut(["show", "-s", "--format=%s", scope.sha]);
+		return slugify(subject ?? scope.sha.slice(0, 7));
+	}
+	if (scope.kind === "full") return "full-audit";
+	const branch = gitOut(["rev-parse", "--abbrev-ref", "HEAD"]);
+	return slugify(branch && branch !== "HEAD" ? branch : "local-changes");
+}
+
+function deriveTitle(scope: ReviewScope): string {
+	if (scope.kind === "commit")
+		return `Code Review — commit ${scope.sha.slice(0, 7)}`;
+	if (scope.kind === "full") return "Code Review — full tree";
+	return "Code Review — local changes";
+}
+
+async function cmdReview(args: string[]): Promise<void> {
+	let scope: ReviewScope = { kind: "changed" };
+	let slug: string | undefined;
+	let title: string | undefined;
+	let extra = "";
+	let outDir = "docs/code-reviews";
+	let json = false;
+	for (let i = 0; i < args.length; i++) {
+		const a = args[i];
+		if (a === "--full") scope = { kind: "full" };
+		else if (a === "--commit")
+			scope = { kind: "commit", sha: requireValue(args, i++, a) };
+		else if (a === "--slug") slug = requireValue(args, i++, a);
+		else if (a === "--title") title = requireValue(args, i++, a);
+		else if (a === "--extra") extra = requireValue(args, i++, a);
+		else if (a === "--out") outDir = requireValue(args, i++, a);
+		else if (a === "--json") json = true;
+		else if (a.startsWith("--")) fatal(`Unknown flag: ${a}`);
+	}
+
+	const { owner, repo } = originSlug();
+	const result = await runLocalReview({
+		cwd: process.cwd(),
+		scope,
+		docsDir: outDir,
+		slug: slug ?? deriveSlug(scope),
+		title: title ?? deriveTitle(scope),
+		owner,
+		repo,
+		remote: `https://github.com/${owner}/${repo}`,
+		extraInstructions: extra,
+	});
+
+	if (json) {
+		console.log(
+			JSON.stringify({
+				path: result.path,
+				durationSeconds: result.durationSeconds,
+				costUsd: result.costUsd,
+				filesReviewed: result.filesReviewed,
+				providers: result.providersRun,
+			}),
+		);
+	} else {
+		console.log(`Report: ${result.path}`);
+		console.log(
+			`${result.filesReviewed} file(s) · ${result.providersRun.join(" + ")} · ${result.durationSeconds}s · $${result.costUsd.toFixed(4)}`,
+		);
+	}
+}
+
 async function cmdAudit(args: string[]): Promise<void> {
 	let mode: "changed" | "full" = "changed";
 	let dryRun = false;
@@ -121,12 +230,13 @@ async function cmdAudit(args: string[]): Promise<void> {
 	let extra = "";
 	let json = false;
 	for (let i = 0; i < args.length; i++) {
-		if (args[i] === "--full") mode = "full";
-		else if (args[i] === "--dry-run") dryRun = true;
-		else if (args[i] === "--out" && args[i + 1]) outDir = args[++i];
-		else if (args[i] === "--extra" && args[i + 1]) extra = args[++i];
-		else if (args[i] === "--json") json = true;
-		else if (args[i].startsWith("--")) fatal(`Unknown flag: ${args[i]}`);
+		const a = args[i];
+		if (a === "--full") mode = "full";
+		else if (a === "--dry-run") dryRun = true;
+		else if (a === "--out") outDir = requireValue(args, i++, a);
+		else if (a === "--extra") extra = requireValue(args, i++, a);
+		else if (a === "--json") json = true;
+		else if (a.startsWith("--")) fatal(`Unknown flag: ${a}`);
 	}
 
 	// Validate both apps' creds upfront so a non-dry-run doesn't burn two
@@ -230,19 +340,20 @@ async function cmdLegacyRemote(args: string[]): Promise<void> {
 	let provider: "anthropic" | "openai" = "anthropic";
 
 	for (let i = 1; i < args.length; i++) {
-		if (args[i] === "--ref" && args[i + 1]) {
-			ref = args[++i];
-		} else if (args[i] === "--dry-run") {
+		const a = args[i];
+		if (a === "--ref") {
+			ref = requireValue(args, i++, a);
+		} else if (a === "--dry-run") {
 			dryRun = true;
-		} else if (args[i] === "--extra" && args[i + 1]) {
-			extraInstructions = args[++i];
-		} else if (args[i] === "--provider" && args[i + 1]) {
-			const val = args[++i];
+		} else if (a === "--extra") {
+			extraInstructions = requireValue(args, i++, a);
+		} else if (a === "--provider") {
+			const val = requireValue(args, i++, a);
 			if (val !== "anthropic" && val !== "openai")
 				fatal(`Invalid provider: ${val} (must be "anthropic" or "openai")`);
 			provider = val;
-		} else if (args[i].startsWith("--")) {
-			fatal(`Unknown flag: ${args[i]}`);
+		} else if (a.startsWith("--")) {
+			fatal(`Unknown flag: ${a}`);
 		}
 	}
 
@@ -263,6 +374,7 @@ async function cmdLegacyRemote(args: string[]): Promise<void> {
 async function main(): Promise<void> {
 	const [sub, ...rest] = process.argv.slice(2);
 
+	if (sub === "review") return cmdReview(rest);
 	if (sub === "audit") return cmdAudit(rest);
 	if (sub === "ready") return cmdReady(rest);
 	if (sub?.includes("/")) return cmdLegacyRemote([sub, ...rest]); // back-compat

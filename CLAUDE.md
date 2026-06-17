@@ -58,17 +58,21 @@ POST /api/github/review-run        (QStash delayed callback)
 | `src/scheduler.ts` | QStash transport: `scheduleReview()` (delayed publish), `verifyQStashSignature()`, `reviewRunCallbackUrl()` |
 | `src/prompt.ts` | `buildUserMessage()`, `buildAgentSystemPrompt(skillPath, customPrompt)` |
 | `src/review.ts` | `runAgent()`, `mergeReviews()`, `buildReviewComments()`, `buildReview()` |
-| `src/models.ts` | AI model creation (`createAIModel()`), token cost calculation |
+| `src/models.ts` | AI model creation (`createAIModel(selection, auth?)`), token cost calculation |
+| `src/auth.ts` | Local subscription/OAuth + API-key resolution (`resolveAnthropicAuth()`, `resolveOpenAIAuth()`); custom-fetch wrappers. **CLI-only — never import from webhook paths** |
 | `src/router.ts` | PR tier classification (`classifyTier()`), model selection (`routeModel()`) |
 | `src/tier2.ts` | Tier 2 skill detection (`detectTier2Skills()`) |
-| `src/audit.ts` | Full repository audit logic (`auditRepo()`) |
+| `src/audit.ts` | Full repository audit logic (`auditRepo()`), local audit (`runLocalAudit()`), local review (`runLocalReview()`) |
+| `src/report.ts` | `docs/code-reviews/` report writer (`formatReviewReport()`, `allocateReportPath()`) |
 | `src/cli.ts` | CLI entry point for `ai-review` command |
 | `src/testing.ts` | Shared test fixtures (`buildModelReview`, `buildGenerateObjectResponse`, etc.) |
 | `skills/*.md` | Vendored skill frameworks loaded at runtime by `buildAgentSystemPrompt()` |
 
-### Local audit
+### Local audit & review
 
-The CLI supports two subcommands for offline code review of the working tree:
+The CLI supports three subcommands for offline code review of the working tree:
+
+- `ai-review review [--full | --commit <sha>] [--slug <slug>] [--title <t>] [--out <dir>] [--extra <text>] [--json]` — Runs the full multi-agent review against local changes (default), the full tree (`--full`), or a specific commit (`--commit`), and writes a round-numbered Markdown report with YAML front-matter into `docs/code-reviews/` (no PR). Auth per provider: API key → explicit OAuth env token → logged-in `codex`/`claude` subscription (local, personal use only; never wired into webhook paths — see `src/auth.ts`). The `/code-review` slash command wraps it with doc-only / `--fix` / `--propose` modes.
 
 - `ai-review audit [--full] [--dry-run] [--out <dir>] [--extra <text>] [--json]` — Audits the local working tree (changed files by default; `--full` for the entire codebase). Runs both Claude and OpenAI provider passes in parallel, writes structured JSON + Markdown artifacts to `.ai-review/`, and (unless `--dry-run`) opens a draft synthetic-base review PR labeled `AI audit` for inline review. Optionally posts as a GitHub issue if the PR creation fails due to insufficient permissions.
 

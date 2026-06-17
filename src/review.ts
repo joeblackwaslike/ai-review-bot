@@ -1,6 +1,7 @@
 import { APICallError } from "@ai-sdk/provider";
 import { generateObject } from "ai";
 import { z } from "zod";
+import type { ResolvedAuth } from "./auth.js";
 import { mapWithConcurrency } from "./concurrency.js";
 import type { KvClient } from "./feedback/kv.js";
 import { computeCost, createAIModel } from "./models.js";
@@ -279,12 +280,13 @@ export async function runAgent(
 	sharedContext: string,
 	selection: ModelSelection,
 	customPrompt: string,
+	auth?: ResolvedAuth,
 ): Promise<AgentOutcome> {
 	const skillBlock = buildAgentSystemPrompt(skillPath, customPrompt);
 
 	try {
 		const { object, usage, providerMetadata, response } = await generateObject({
-			model: createAIModel(selection),
+			model: createAIModel(selection, auth),
 			schema: ModelReviewSchema,
 			maxOutputTokens: outputBudget(selection, 4096),
 			maxRetries: 4,
