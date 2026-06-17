@@ -1352,3 +1352,150 @@ describe("buildReview triage gate — SKIP", () => {
 		expect(store.size).toBeGreaterThan(0);
 	});
 });
+
+// ---------------------------------------------------------------------------
+// buildReview — end-to-end multi-bot flow: review@sha1 → SKIP@sha2 → INCREMENTAL→APPROVE@sha3
+// ---------------------------------------------------------------------------
+
+describe("buildReview triage gate — end-to-end multi-bot flow", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+		mockTriageReReview.mockReset();
+	});
+
+	it("review@sha1 (REQUEST_CHANGES) → push sha2 (SKIP) → push sha3 (INCREMENTAL → APPROVE) against one shared KV", async () => {
+		const { client } = fakeKv();
+		const provider = "anthropic";
+		const owner = baseContext.owner;
+		const repo = baseContext.repo;
+		const pull = baseContext.pullNumber;
+
+		// src/a.ts spans right-side lines 1..20, so the Bug at line 5 anchors.
+		const aFile = buildPullFile("src/a.ts", TWENTY_LINE_PATCH);
+		const loadState = () =>
+			loadReviewState(client, provider, owner, repo, pull, null);
+
+		// The exact id Task-7 persistence writes for an inline finding is
+		// findingId(path, line, title) with title = the model's inline title.
+		const bugId = findingId("src/a.ts", 5, "Bug");
+
+		// --- sha1: first review, cold KV ------------------------------------
+		const sha1 = "aaaaaaaaaaaa1111";
+		const bugAgent = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "REQUEST_CHANGES",
+				general_findings: [],
+				inline_comments: [
+					buildInlineComment({
+						title: "Bug",
+						body: "Off-by-one here.",
+						path: "src/a.ts",
+						line: 5,
+						start_line: null,
+						suggestion: null,
+					}),
+				],
+			}),
+		);
+		const summaryResponse = {
+			object: { summary: "One bug found." },
+			usage: { inputTokens: 50, outputTokens: 20 },
+		};
+		// 5 Tier-1 agents (all flag the same Bug; mergeReviews dedups to one) + summary.
+		mockGenerateObject
+			.mockResolvedValueOnce(bugAgent)
+			.mockResolvedValueOnce(bugAgent)
+			.mockResolvedValueOnce(bugAgent)
+			.mockResolvedValueOnce(bugAgent)
+			.mockResolvedValueOnce(bugAgent)
+			.mockResolvedValueOnce(summaryResponse);
+
+		const r1 = await buildReview({
+			octokit: buildOctokit({ files: [aFile] }),
+			...baseContext,
+			headSha: sha1,
+			kv: client,
+		});
+
+		expect(r1?.event).toBe("REQUEST_CHANGES");
+		// Triage is never consulted on the cold (no-prior-state) first review.
+		expect(mockTriageReReview).not.toHaveBeenCalled();
+		const stateAfterSha1 = await loadState();
+		expect(stateAfterSha1?.lastReviewedSha).toBe(sha1);
+		const openAfterSha1 = stateAfterSha1?.findings.filter(
+			(f) => f.status === "open",
+		);
+		expect(openAfterSha1?.some((f) => f.id === bugId)).toBe(true);
+
+		// --- sha2: another bot's fix; my Bug untouched → SKIP ----------------
+		mockGenerateObject.mockReset();
+		const sha2 = "bbbbbbbbbbbb2222";
+		vi.mocked(mockTriageReReview).mockResolvedValueOnce({
+			recommendation: "SKIP",
+			resolved: [],
+			newRisk: false,
+		});
+
+		const r2 = await buildReview({
+			octokit: buildOctokit({ files: [aFile] }),
+			...baseContext,
+			headSha: sha2,
+			kv: client,
+		});
+
+		// SKIP posts nothing and runs no agents.
+		expect(r2).toBeNull();
+		expect(mockGenerateObject).not.toHaveBeenCalled();
+		const stateAfterSha2 = await loadState();
+		expect(stateAfterSha2?.lastReviewedSha).toBe(sha2);
+		// My finding is still open (nothing resolved it), so the verdict stands.
+		expect(stateAfterSha2?.findings.find((f) => f.id === bugId)?.status).toBe(
+			"open",
+		);
+		expect(stateAfterSha2?.event).toBe("REQUEST_CHANGES");
+
+		// --- sha3: resolves my Bug, nothing new → INCREMENTAL → APPROVE ------
+		mockGenerateObject.mockReset();
+		const sha3 = "cccccccccccc3333";
+		vi.mocked(mockTriageReReview).mockResolvedValueOnce({
+			recommendation: "INCREMENTAL",
+			resolved: [bugId],
+			newRisk: false,
+		});
+		// Agents find nothing new on the delta.
+		const emptyAgent = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+		);
+		mockGenerateObject
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent);
+
+		const r3 = await buildReview({
+			octokit: buildOctokit({ files: [aFile] }),
+			...baseContext,
+			headSha: sha3,
+			kv: client,
+		});
+
+		// All prior findings resolved + nothing new → APPROVE on the posted path.
+		expect(r3?.event).toBe("APPROVE");
+		// APPROVE skips the summary call, so only the 5 agents ran.
+		expect(mockGenerateObject).toHaveBeenCalledTimes(5);
+		const stateAfterSha3 = await loadState();
+		expect(stateAfterSha3?.lastReviewedSha).toBe(sha3);
+		expect(stateAfterSha3?.event).toBe("APPROVE");
+		// No open findings remain after the resolving push.
+		expect(stateAfterSha3?.findings.every((f) => f.status !== "open")).toBe(
+			true,
+		);
+	});
+});
