@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { KvClient } from "./feedback/kv.js";
 import {
 	buildReview,
 	buildReviewComments,
@@ -8,6 +9,7 @@ import {
 	mergeReviews,
 	runAgent,
 } from "./review.js";
+import { findingId, loadReviewState, saveReviewState } from "./review-state.js";
 import type { ModelSelection } from "./router.js";
 import {
 	buildGenerateObjectResponse,
@@ -46,6 +48,13 @@ vi.mock("./config.js", () => ({
 vi.mock("./prompt.js", () => ({
 	buildUserMessage: mockBuildUserMessage,
 	buildAgentSystemPrompt: () => "system",
+}));
+
+const mockTriageReReview = vi.hoisted(() => vi.fn());
+vi.mock("./triage.js", () => ({
+	triageReReview: mockTriageReReview,
+	fetchDelta: vi.fn(async () => "delta"),
+	fetchDeltaFiles: vi.fn(async () => []),
 }));
 
 // ---------------------------------------------------------------------------
@@ -1245,5 +1254,101 @@ describe("computePaceDelayMs", () => {
 				now,
 			),
 		).toBe(1000);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// buildReview — triage gate (SKIP path)
+// ---------------------------------------------------------------------------
+
+function fakeKv() {
+	const store = new Map<string, string>();
+	return {
+		store,
+		client: {
+			get: async (k: string) => store.get(k) ?? null,
+			set: async (k: string, v: string) => void store.set(k, v),
+			setNx: async () => true,
+			del: async (...ks: string[]) => {
+				for (const k of ks) store.delete(k);
+			},
+		} as unknown as KvClient,
+	};
+}
+
+describe("buildReview triage gate — SKIP", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+		mockTriageReReview.mockReset();
+	});
+
+	it("posts nothing, resolves the matched finding, and APPROVEs when triage says SKIP", async () => {
+		// Triage forces SKIP and reports the seeded finding's id as resolved.
+		mockTriageReReview.mockResolvedValue({
+			recommendation: "SKIP",
+			resolved: ["src/a.ts:5:bug"],
+			newRisk: false,
+		});
+
+		const headSha = "newsha0987654321";
+		const { client, store } = fakeKv();
+
+		// Seed prior state with an open finding at an OLDER head SHA. id must equal
+		// findingId(path,line,title) so the gate's resolve-key derivation matches.
+		await saveReviewState(
+			client,
+			"anthropic",
+			"joeblackwaslike",
+			"ai-review-bot",
+			1,
+			{
+				lastReviewedSha: "oldsha1234567",
+				event: "REQUEST_CHANGES",
+				findings: [
+					{
+						id: findingId("src/a.ts", 5, "bug"),
+						path: "src/a.ts",
+						line: 5,
+						title: "bug",
+						severity: "high",
+						status: "open",
+					},
+				],
+				reviewedAt: "2026-06-16T00:00:00Z",
+			},
+		);
+
+		// A prior own review body so priorOwnReview is populated (the gate also
+		// works off KV state, but this mirrors a real re-review).
+		const priorOwnBody = `### ai-review-bot\n\nFound a bug.\n\nReviewed commit: \`oldsha1234567\``;
+
+		const decision = await buildReview({
+			octokit: buildOctokit({ existingReviews: [{ body: priorOwnBody }] }),
+			...baseContext,
+			headSha,
+			kv: client,
+		});
+
+		// SKIP posts nothing.
+		expect(decision).toBeNull();
+		// No agents ran — generateObject was never invoked.
+		expect(mockGenerateObject).not.toHaveBeenCalled();
+
+		// Persisted state: finding resolved, event upgraded to APPROVE, SHA advanced.
+		const persisted = await loadReviewState(
+			client,
+			"anthropic",
+			"joeblackwaslike",
+			"ai-review-bot",
+			1,
+			null,
+		);
+		expect(persisted?.lastReviewedSha).toBe(headSha);
+		expect(persisted?.event).toBe("APPROVE");
+		expect(persisted?.findings[0].status).toBe("resolved");
+		// The state KV entry exists.
+		expect(store.size).toBeGreaterThan(0);
 	});
 });

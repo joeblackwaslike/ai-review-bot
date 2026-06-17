@@ -346,6 +346,10 @@ export async function maybeSubmitReview(args: {
 			feedbackEnabled: config.feedbackEnabled,
 			agentConcurrency: config.agentConcurrency,
 			tier2Enabled: config.tier2Enabled,
+			// Reuse the idempotency-claim KV client for review-state + the triage
+			// gate; null on a forced re-review or when KV is unconfigured, which
+			// makes buildReview skip the gate and run a full review (legacy path).
+			kv,
 		});
 
 		if (!review) {

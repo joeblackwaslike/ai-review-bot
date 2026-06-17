@@ -2,11 +2,15 @@ import { APICallError } from "@ai-sdk/provider";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { mapWithConcurrency } from "./concurrency.js";
+import type { KvClient } from "./feedback/kv.js";
 import { computeCost, createAIModel } from "./models.js";
 import { buildAgentSystemPrompt, buildUserMessage } from "./prompt.js";
+import type { PersistedFinding, ReviewState } from "./review-state.js";
+import { findingId, loadReviewState, saveReviewState } from "./review-state.js";
 import type { ModelSelection } from "./router.js";
 import { routeModel } from "./router.js";
 import { detectTier2Skills } from "./tier2.js";
+import { fetchDelta, fetchDeltaFiles, triageReReview } from "./triage.js";
 
 type OctokitLike = {
 	request: <T>(
@@ -44,6 +48,11 @@ interface ReviewContext {
 	feedbackEnabled: boolean;
 	agentConcurrency: number;
 	tier2Enabled: boolean;
+	/** Upstash KV client for review-state persistence + the triage gate. Reuses
+	 * the client maybeSubmitReview already built for the idempotency claim; absent
+	 * (null/undefined) when KV is not configured or on a forced re-review, in
+	 * which case the gate is skipped and a full review runs (legacy behavior). */
+	kv?: KvClient | null;
 }
 
 export interface ReviewMetadata {
@@ -613,6 +622,40 @@ function buildApprovalMessage(
 	return `✅ ${resolution} PR approved for merge.${checksQualifier}`;
 }
 
+/** Re-stamp the bot's check-run onto the current head SHA carrying the prior
+ * verdict, for the SKIP path where no review is posted. createCheckRun (in
+ * check-run.ts) only stamps when there are inline annotations, so it can't serve
+ * a finding-less SKIP — this posts a minimal completed check-run directly so the
+ * PR's status surface still reflects the verdict on the new commit. Best-effort:
+ * a failure here must not turn a clean SKIP into an error. */
+async function restampCheckRun(
+	context: ReviewContext,
+	event: ReviewState["event"],
+): Promise<void> {
+	const conclusion =
+		event === "REQUEST_CHANGES"
+			? "action_required"
+			: event === "APPROVE"
+				? "success"
+				: "neutral";
+	try {
+		await context.octokit.request("POST /repos/{owner}/{repo}/check-runs", {
+			owner: context.owner,
+			repo: context.repo,
+			name: context.commentPrefix,
+			head_sha: context.headSha,
+			status: "completed",
+			conclusion,
+			output: {
+				title: "No re-review needed",
+				summary: `${context.commentPrefix}: the new commit doesn't change the review outcome; carrying forward the previous verdict.`,
+			},
+		} as unknown as Record<string, string | number>);
+	} catch (err) {
+		console.error("failed to re-stamp check-run on SKIP", { err });
+	}
+}
+
 export async function buildReview(
 	context: ReviewContext,
 ): Promise<ReviewDecision | null> {
@@ -698,6 +741,83 @@ export async function buildReview(
 		context.provider,
 	);
 
+	// --- Triage gate (re-review only) ---------------------------------------
+	// On a re-review (a prior review of this PR exists at an OLDER head SHA), a
+	// cheap triage call decides whether to SKIP (post nothing, just re-stamp the
+	// check-run), review only the delta (INCREMENTAL), or fall through to a FULL
+	// review. resolvedKeys feed mergeReviews so already-fixed findings stop
+	// blocking; scopedFiles is the surface the agents actually review.
+	// When KV is absent (not configured, or a forced re-review) the gate is
+	// skipped entirely and behavior is identical to before this feature.
+	const resolvedKeys = new Set<string>();
+	let scopedFiles = files; // FULL default
+	const state = context.kv
+		? await loadReviewState(
+				context.kv,
+				context.provider,
+				context.owner,
+				context.repo,
+				context.pullNumber,
+				priorOwnReview,
+			)
+		: null;
+
+	if (
+		context.kv &&
+		state?.lastReviewedSha &&
+		state.lastReviewedSha !== context.headSha
+	) {
+		const openFindings = state.findings.filter((f) => f.status === "open");
+		const delta = await fetchDelta(
+			context.octokit,
+			context.owner,
+			context.repo,
+			state.lastReviewedSha,
+			context.headSha,
+		);
+		const triage = await triageReReview(selection, delta, openFindings);
+
+		for (const f of state.findings) {
+			if (triage.resolved.includes(f.id)) {
+				f.status = "resolved";
+				if (f.path && f.line != null) {
+					resolvedKeys.add(`inline:${f.path}:${f.line}`);
+				}
+				resolvedKeys.add(`general:${f.title.toLowerCase().trim()}`);
+			}
+		}
+
+		if (triage.recommendation === "SKIP") {
+			const stillOpen = state.findings.some((f) => f.status === "open");
+			state.event = stillOpen ? state.event : "APPROVE";
+			state.lastReviewedSha = context.headSha;
+			state.reviewedAt = new Date().toISOString();
+			await saveReviewState(
+				context.kv,
+				context.provider,
+				context.owner,
+				context.repo,
+				context.pullNumber,
+				state,
+			);
+			await restampCheckRun(context, state.event);
+			return null; // nothing to post — the check-run carries the verdict
+		}
+
+		if (triage.recommendation === "INCREMENTAL") {
+			scopedFiles = await fetchDeltaFiles(
+				context.octokit,
+				context.owner,
+				context.repo,
+				state.lastReviewedSha,
+				context.headSha,
+			);
+		}
+		// FULL falls through with scopedFiles = files
+	}
+
+	const scopedFilePaths = scopedFiles.map((f) => f.filename);
+
 	const userMessage = buildUserMessage({
 		owner: context.owner,
 		repo: context.repo,
@@ -710,20 +830,23 @@ export async function buildReview(
 		changedFiles: context.changedFiles,
 		labels: context.labels,
 		extraInstructions: context.extraInstructions,
-		files,
+		files: scopedFiles,
 		priorBotReviews,
+		priorOwnReview,
 	});
 
-	// Detect Tier 2 skills relevant to this PR and run all agents together
+	// Detect Tier 2 skills relevant to this PR and run all agents together.
+	// Keyed off scopedFiles so an INCREMENTAL pass only activates Tier 2 skills
+	// for the surface actually under review.
 	const tier2Matches = context.tier2Enabled
 		? detectTier2Skills({
-				filePaths: filePaths,
+				filePaths: scopedFilePaths,
 				additions: context.additions,
 				deletions: context.deletions,
 				title: context.title,
 				body: context.body,
 				labels: context.labels,
-				patchContent: files.map((f) => f.patch ?? "").join("\n"),
+				patchContent: scopedFiles.map((f) => f.patch ?? "").join("\n"),
 			})
 		: [];
 
@@ -828,7 +951,7 @@ export async function buildReview(
 		notOk: allSkills.length - agentResults.length,
 	});
 
-	const modelReview = mergeReviews(agentResults);
+	const modelReview = mergeReviews(agentResults, resolvedKeys);
 
 	console.log("merged review", {
 		event: modelReview.event,
@@ -839,9 +962,9 @@ export async function buildReview(
 		),
 	});
 
-	const validLines = buildValidLinesByPath(files);
+	const validLines = buildValidLinesByPath(scopedFiles);
 	const reviewComments = buildReviewComments(
-		files,
+		scopedFiles,
 		modelReview.inline_comments,
 	);
 
@@ -973,6 +1096,59 @@ export async function buildReview(
 	]
 		.filter((part) => part.length > 0)
 		.join("\n");
+
+	// Persist the new review state so the NEXT push can triage against it. One
+	// PersistedFinding per general finding and per posted inline comment, all
+	// status "open". The keys written here must be re-derivable by the resolve
+	// logic in the triage gate above: general findings key off title
+	// (general:<lowercased title>), inline comments off path:line — so findingId
+	// for each is computed from the same title/path/line the gate would match.
+	if (context.kv) {
+		const persistedFindings: PersistedFinding[] = [
+			...modelReview.general_findings.map(
+				(f): PersistedFinding => ({
+					id: findingId(null, null, f.title),
+					path: null,
+					line: null,
+					title: f.title,
+					severity: f.severity,
+					status: "open",
+				}),
+			),
+			...modelReview.inline_comments.map(
+				(c): PersistedFinding => ({
+					id: findingId(c.path, c.line, c.title),
+					path: c.path,
+					line: c.line,
+					title: c.title,
+					severity: "medium",
+					status: "open",
+				}),
+			),
+		];
+		// finalEvent is one of COMMENT/REQUEST_CHANGES/APPROVE here — the
+		// RATE_LIMITED path returned early above, before any state is built.
+		const persistedEvent: ReviewState["event"] =
+			finalEvent === "COMMENT" ||
+			finalEvent === "REQUEST_CHANGES" ||
+			finalEvent === "APPROVE"
+				? finalEvent
+				: "COMMENT";
+		const newState: ReviewState = {
+			lastReviewedSha: context.headSha,
+			event: persistedEvent,
+			findings: persistedFindings,
+			reviewedAt: new Date().toISOString(),
+		};
+		await saveReviewState(
+			context.kv,
+			context.provider,
+			context.owner,
+			context.repo,
+			context.pullNumber,
+			newState,
+		);
+	}
 
 	return {
 		event: finalEvent,

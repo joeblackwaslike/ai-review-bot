@@ -62,26 +62,56 @@ export async function triageReReview(
 	}
 }
 
+interface CompareOctokit {
+	request: <T>(
+		route: string,
+		params: Record<string, string | number>,
+	) => Promise<{ data: T }>;
+}
+
+export interface DeltaFile {
+	filename: string;
+	status: string;
+	patch?: string;
+}
+
+async function fetchCompareFiles(
+	octokit: CompareOctokit,
+	owner: string,
+	repo: string,
+	baseSha: string,
+	headSha: string,
+): Promise<DeltaFile[]> {
+	const res = await octokit.request(
+		"GET /repos/{owner}/{repo}/compare/{basehead}",
+		{ owner, repo, basehead: `${baseSha}...${headSha}` },
+	);
+	const data = res.data as { files?: DeltaFile[] };
+	return data.files ?? [];
+}
+
 export async function fetchDelta(
-	octokit: {
-		request: (
-			route: string,
-			params: Record<string, unknown>,
-		) => Promise<{ data: unknown }>;
-	},
+	octokit: CompareOctokit,
 	owner: string,
 	repo: string,
 	baseSha: string,
 	headSha: string,
 ): Promise<string> {
-	const res = await octokit.request(
-		"GET /repos/{owner}/{repo}/compare/{basehead}",
-		{ owner, repo, basehead: `${baseSha}...${headSha}` },
-	);
-	const data = res.data as {
-		files?: Array<{ filename: string; patch?: string }>;
-	};
-	return (data.files ?? [])
+	const files = await fetchCompareFiles(octokit, owner, repo, baseSha, headSha);
+	return files
 		.map((f) => `FILE: ${f.filename}\n${f.patch ?? "[no patch]"}`)
 		.join("\n\n---\n\n");
+}
+
+/** Raw compare-API files for the delta — same shape as the PR `files` array
+ * buildReview consumes (filename/status/patch). Used for the INCREMENTAL path,
+ * where agents review only the files changed since the last review. */
+export async function fetchDeltaFiles(
+	octokit: CompareOctokit,
+	owner: string,
+	repo: string,
+	baseSha: string,
+	headSha: string,
+): Promise<DeltaFile[]> {
+	return fetchCompareFiles(octokit, owner, repo, baseSha, headSha);
 }
