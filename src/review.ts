@@ -43,6 +43,7 @@ interface ReviewContext {
 	provider: "anthropic" | "openai";
 	feedbackEnabled: boolean;
 	agentConcurrency: number;
+	tier2Enabled: boolean;
 }
 
 export interface ReviewMetadata {
@@ -703,15 +704,17 @@ export async function buildReview(
 	});
 
 	// Detect Tier 2 skills relevant to this PR and run all agents together
-	const tier2Matches = detectTier2Skills({
-		filePaths: filePaths,
-		additions: context.additions,
-		deletions: context.deletions,
-		title: context.title,
-		body: context.body,
-		labels: context.labels,
-		patchContent: files.map((f) => f.patch ?? "").join("\n"),
-	});
+	const tier2Matches = context.tier2Enabled
+		? detectTier2Skills({
+				filePaths: filePaths,
+				additions: context.additions,
+				deletions: context.deletions,
+				title: context.title,
+				body: context.body,
+				labels: context.labels,
+				patchContent: files.map((f) => f.patch ?? "").join("\n"),
+			})
+		: [];
 
 	const allSkills = [
 		...TIER1_SKILLS.map((skillPath) => ({ skillPath, tier: 1, reason: "" })),

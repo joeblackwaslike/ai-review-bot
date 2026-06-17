@@ -239,6 +239,7 @@ const baseContext = {
 	provider: "anthropic" as const,
 	feedbackEnabled: false,
 	agentConcurrency: 1,
+	tier2Enabled: false,
 };
 
 describe("buildReview", () => {
@@ -612,6 +613,88 @@ describe("buildReview", () => {
 		expect(mockBuildUserMessage).toHaveBeenCalledWith(
 			expect.objectContaining({ priorBotReviews: [externalBotBody] }),
 		);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// buildReview — Tier 2 gate
+// ---------------------------------------------------------------------------
+
+// A patch that introduces a TypeScript interface — triggers shouldRunTypeDesign
+const TYPE_DEFINITION_PATCH = [
+	"@@ -1,2 +1,4 @@",
+	" line1",
+	"+interface Foo {",
+	"+  bar: string;",
+	" line3",
+].join("\n");
+
+describe("buildReview Tier 2 gate", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+	});
+
+	it("runs only Tier 1 agents when tier2Enabled is false", async () => {
+		// 5 Tier 1 agents; summary is skipped because all agents return no findings (APPROVE path)
+		const emptyAgent = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+		);
+		mockGenerateObject
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent);
+
+		const decision = await buildReview({
+			octokit: buildOctokit({
+				files: [buildPullFile("src/types.ts", TYPE_DEFINITION_PATCH)],
+			}),
+			...baseContext,
+			tier2Enabled: false,
+		});
+
+		expect(decision?.metadata.tier2Skills).toEqual([]);
+		// Only 5 generateObject calls: 5 Tier 1 agents, no summary (APPROVE skips it), no Tier 2
+		expect(mockGenerateObject).toHaveBeenCalledTimes(5);
+	});
+
+	it("runs Tier 2 agents when tier2Enabled is true and the PR triggers them", async () => {
+		// With tier2Enabled: true and a .ts file containing an interface definition,
+		// shouldRunTypeDesign fires → 1 extra Tier 2 agent; all return no findings so
+		// APPROVE is emitted and the summary call is skipped (6 total calls).
+		const emptyAgent = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+		);
+		mockGenerateObject
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent); // Tier 2 agent
+
+		const decision = await buildReview({
+			octokit: buildOctokit({
+				files: [buildPullFile("src/types.ts", TYPE_DEFINITION_PATCH)],
+			}),
+			...baseContext,
+			tier2Enabled: true,
+		});
+
+		expect(decision?.metadata.tier2Skills.length).toBeGreaterThan(0);
+		// 5 Tier 1 + 1 Tier 2 agent, no summary (APPROVE skips it)
+		expect(mockGenerateObject).toHaveBeenCalledTimes(6);
 	});
 });
 
@@ -1016,6 +1099,7 @@ describe("buildReview rate-limit decision", () => {
 			provider: "anthropic",
 			feedbackEnabled: false,
 			agentConcurrency: 1,
+			tier2Enabled: false,
 		});
 		await vi.runAllTimersAsync();
 		const decision = await promise;
@@ -1081,6 +1165,7 @@ describe("buildReview rate-limit decision", () => {
 			provider: "anthropic",
 			feedbackEnabled: false,
 			agentConcurrency: 1,
+			tier2Enabled: false,
 		});
 		await vi.runAllTimersAsync();
 		const decision = await promise;

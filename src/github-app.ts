@@ -345,6 +345,7 @@ export async function maybeSubmitReview(args: {
 			provider: config.provider,
 			feedbackEnabled: config.feedbackEnabled,
 			agentConcurrency: config.agentConcurrency,
+			tier2Enabled: config.tier2Enabled,
 		});
 
 		if (!review) {
