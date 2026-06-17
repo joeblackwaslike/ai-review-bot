@@ -82,7 +82,7 @@ Fixes the stuck-loop **and** the expensive-re-review cost. No new vendor.
         "recommendation": "SKIP" }      // SKIP | INCREMENTAL | FULL
       ```
    c. Act on the recommendation:
-      - **SKIP** → mark `resolved` findings; recompute event (all resolved & none open ⇒ `APPROVE`); **post nothing new**; persist updated state. (Handles the unrelated-one-liner and another-bot's-fix cases.)
+      - **SKIP** → mark `resolved` findings; recompute event (all resolved & none open ⇒ `APPROVE`); **post nothing to the PR conversation**, but **re-stamp the check-run onto the new head SHA** carrying the prior conclusion, so the new commit shows the bot's existing verdict instead of appearing unreviewed; persist updated state. (Handles the unrelated-one-liner and another-bot's-fix cases.)
       - **INCREMENTAL** → run the agent fan-out with the **delta** as the diff payload + prior open findings injected as context ("verify whether these are resolved; re-raise only if still present"). Merge = new findings ∪ still-open prior − resolved. Persist + post.
       - **FULL** → full-diff fan-out (structural change, or triage low-confidence). Persist + post.
 
@@ -151,7 +151,7 @@ PR 2:
 - `src/config.ts`: QStash keys; flip `REVIEW_TIER2_ENABLED` default.
 - `.env.example`, `vercel.json` if needed.
 
-## Open questions (for spec review)
+## Resolved decisions
 
-- **SKIP visibility:** post truly nothing (chosen default) vs. silently update the prior review's "Reviewed commit" marker so GitHub shows it as current. Leaning: nothing, to honor "don't add noise."
-- **Resolved-thread source:** GraphQL `reviewThreads(isResolved)` adds a call per re-review; acceptable, or derive resolution from triage alone in v1?
+- **SKIP visibility:** post nothing to the PR conversation; re-stamp the check-run onto the new head SHA carrying the prior conclusion, so the new commit shows the bot's existing verdict without adding review noise.
+- **Resolved-thread source:** v1 relies on triage's delta-vs-findings reasoning to detect resolution; defer GitHub GraphQL `reviewThreads(isResolved)` integration to a later iteration if triage proves insufficient.
