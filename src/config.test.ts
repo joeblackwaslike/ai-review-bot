@@ -43,6 +43,10 @@ afterEach(() => {
 		"REVIEW_RESYNC_DELAY_SECONDS",
 		"AGENT_CONCURRENCY",
 		"REVIEW_TIER2_ENABLED",
+		"QSTASH_TOKEN",
+		"QSTASH_CURRENT_SIGNING_KEY",
+		"QSTASH_NEXT_SIGNING_KEY",
+		"PUBLIC_URL",
 	]) {
 		delete process.env[key];
 	}
@@ -183,17 +187,36 @@ describe("agentConcurrency", () => {
 	});
 });
 
-describe("tier2Enabled", () => {
-	it("defaults to false in PR1 (Tier 2 disabled until QStash lands)", () => {
+describe("tier2Enabled default (PR2 flips it ON)", () => {
+	it("defaults to TRUE now that QStash frees the budget", () => {
 		setRequiredEnv();
 		delete process.env.REVIEW_TIER2_ENABLED;
-		expect(getConfig().tier2Enabled).toBe(false);
+		expect(getConfig().tier2Enabled).toBe(true);
 	});
 
-	it("is true only when REVIEW_TIER2_ENABLED=true", () => {
-		setRequiredEnv({ REVIEW_TIER2_ENABLED: "true" });
-		expect(getConfig().tier2Enabled).toBe(true);
-		setRequiredEnv({ REVIEW_TIER2_ENABLED: "1" });
-		expect(getConfig().tier2Enabled).toBe(false); // only exact "true"
+	it("is false only when explicitly REVIEW_TIER2_ENABLED=false", () => {
+		setRequiredEnv({ REVIEW_TIER2_ENABLED: "false" });
+		expect(getConfig().tier2Enabled).toBe(false);
+	});
+});
+
+describe("qstash + publicUrl config", () => {
+	it("parses QStash keys and PUBLIC_URL", () => {
+		setRequiredEnv({
+			QSTASH_TOKEN: "qs-tok",
+			QSTASH_CURRENT_SIGNING_KEY: "cur",
+			QSTASH_NEXT_SIGNING_KEY: "nxt",
+			PUBLIC_URL: "https://example.test",
+		});
+		const c = getConfig();
+		expect(c.qstashToken).toBe("qs-tok");
+		expect(c.qstashCurrentSigningKey).toBe("cur");
+		expect(c.qstashNextSigningKey).toBe("nxt");
+		expect(c.publicUrl).toBe("https://example.test");
+	});
+
+	it("leaves QStash fields undefined when unset (graceful fallback)", () => {
+		setRequiredEnv();
+		expect(getConfig().qstashToken).toBeUndefined();
 	});
 });

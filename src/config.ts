@@ -11,6 +11,10 @@ export interface AppConfig {
 	feedbackEnabled: boolean;
 	agentConcurrency: number;
 	tier2Enabled: boolean;
+	qstashToken?: string;
+	qstashCurrentSigningKey?: string;
+	qstashNextSigningKey?: string;
+	publicUrl?: string;
 }
 
 // Returns the first argument that is a non-blank string after trimming, else
@@ -90,7 +94,11 @@ export function getConfig(): AppConfig {
 		provider: "anthropic",
 		feedbackEnabled: process.env.FEEDBACK_ENABLED === "true",
 		agentConcurrency: parseAgentConcurrency(),
-		tier2Enabled: process.env.REVIEW_TIER2_ENABLED === "true",
+		tier2Enabled: process.env.REVIEW_TIER2_ENABLED !== "false",
+		qstashToken: process.env.QSTASH_TOKEN,
+		qstashCurrentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY,
+		qstashNextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY,
+		publicUrl: process.env.PUBLIC_URL,
 	};
 }
 
@@ -116,6 +124,10 @@ export function getOpenAIAppConfig(): AppConfig {
 		provider: "openai",
 		feedbackEnabled: process.env.FEEDBACK_ENABLED === "true",
 		agentConcurrency: parseAgentConcurrency(),
-		tier2Enabled: process.env.REVIEW_TIER2_ENABLED === "true",
+		tier2Enabled: process.env.REVIEW_TIER2_ENABLED !== "false",
+		qstashToken: process.env.QSTASH_TOKEN,
+		qstashCurrentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY,
+		qstashNextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY,
+		publicUrl: process.env.PUBLIC_URL,
 	};
 }
