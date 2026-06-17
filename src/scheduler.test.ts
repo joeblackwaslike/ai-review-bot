@@ -54,6 +54,20 @@ describe("scheduleReview", () => {
 		expect(out).toBeNull();
 		expect(publishJSON).not.toHaveBeenCalled();
 	});
+	it("returns null on PARTIAL config (signing keys missing) so the review isn't published-then-401-dropped", async () => {
+		const out = await scheduleReview(
+			{ ...cfg, qstashCurrentSigningKey: undefined },
+			msg,
+			300,
+		);
+		expect(out).toBeNull();
+		expect(publishJSON).not.toHaveBeenCalled();
+	});
+	it("returns null when publish throws (QStash outage → inline fallback, never drops)", async () => {
+		publishJSON.mockRejectedValueOnce(new Error("qstash down"));
+		const out = await scheduleReview(cfg, msg, 300);
+		expect(out).toBeNull();
+	});
 	it("strips a trailing slash from publicUrl so publish/verify URLs match", async () => {
 		publishJSON.mockResolvedValueOnce({ messageId: "m1" });
 		await scheduleReview(
