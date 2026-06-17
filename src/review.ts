@@ -311,17 +311,20 @@ export async function runAgent(
 	}
 }
 
-export function mergeReviews(agentResults: ModelReview[]): ModelReview {
-	const event: "COMMENT" | "REQUEST_CHANGES" = agentResults.some(
-		(r) => r.event === "REQUEST_CHANGES",
-	)
-		? "REQUEST_CHANGES"
-		: "COMMENT";
+export function mergeReviews(
+	agentResults: ModelReview[],
+	resolved: Set<string> = new Set(),
+): ModelReview {
+	const isResolvedGeneral = (title: string) =>
+		resolved.has(`general:${title.toLowerCase().trim()}`);
+	const isResolvedInline = (path: string, line: number) =>
+		resolved.has(`inline:${path}:${line}`);
 
 	const seenTitles = new Set<string>();
 	const general_findings = agentResults
 		.flatMap((r) => r.general_findings)
 		.filter((f) => {
+			if (isResolvedGeneral(f.title)) return false;
 			const key = f.title.toLowerCase().trim();
 			if (seenTitles.has(key)) return false;
 			seenTitles.add(key);
@@ -335,6 +338,7 @@ export function mergeReviews(agentResults: ModelReview[]): ModelReview {
 	for (const review of agentResults) {
 		const priority = review.event === "REQUEST_CHANGES" ? 1 : 0;
 		for (const comment of review.inline_comments) {
+			if (isResolvedInline(comment.path, comment.line)) continue;
 			const key = `${comment.path}:${comment.line}`;
 			const existing = commentMap.get(key);
 			if (!existing || priority > existing.priority) {
@@ -343,11 +347,18 @@ export function mergeReviews(agentResults: ModelReview[]): ModelReview {
 		}
 	}
 
-	return {
-		event,
-		general_findings,
-		inline_comments: Array.from(commentMap.values()).map((v) => v.comment),
-	};
+	const inline_comments = Array.from(commentMap.values()).map((v) => v.comment);
+
+	// Event is REQUEST_CHANGES only if an UNRESOLVED finding survived the filters
+	// above — a lone re-raise of an already-addressed finding no longer blocks.
+	const event: "COMMENT" | "REQUEST_CHANGES" =
+		general_findings.length > 0 || inline_comments.length > 0
+			? agentResults.some((r) => r.event === "REQUEST_CHANGES")
+				? "REQUEST_CHANGES"
+				: "COMMENT"
+			: "COMMENT";
+
+	return { event, general_findings, inline_comments };
 }
 
 export async function generateSummary(

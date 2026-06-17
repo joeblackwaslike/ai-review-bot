@@ -5,6 +5,7 @@ import {
 	collectRightSideLines,
 	computePaceDelayMs,
 	generateSummary,
+	mergeReviews,
 	runAgent,
 } from "./review.js";
 import type { ModelSelection } from "./router.js";
@@ -46,6 +47,36 @@ vi.mock("./prompt.js", () => ({
 	buildUserMessage: mockBuildUserMessage,
 	buildAgentSystemPrompt: () => "system",
 }));
+
+// ---------------------------------------------------------------------------
+// mergeReviews resolved handling
+// ---------------------------------------------------------------------------
+
+describe("mergeReviews resolved handling", () => {
+	const reqChanges = {
+		event: "REQUEST_CHANGES" as const,
+		general_findings: [
+			{ title: "Unvalidated input", body: "x", severity: "high" as const },
+		],
+		inline_comments: [buildInlineComment({ path: "src/a.ts", line: 5 })],
+	};
+
+	it("drops a resolved finding and clears the event when nothing unresolved remains", () => {
+		const resolved = new Set([
+			"general:unvalidated input",
+			"inline:src/a.ts:5",
+		]);
+		const merged = mergeReviews([reqChanges], resolved);
+		expect(merged.general_findings).toHaveLength(0);
+		expect(merged.inline_comments).toHaveLength(0);
+		expect(merged.event).toBe("COMMENT");
+	});
+
+	it("keeps REQUEST_CHANGES when an unresolved finding remains", () => {
+		const merged = mergeReviews([reqChanges], new Set());
+		expect(merged.event).toBe("REQUEST_CHANGES");
+	});
+});
 
 // ---------------------------------------------------------------------------
 // collectRightSideLines
