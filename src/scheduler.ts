@@ -33,8 +33,13 @@ export async function scheduleReview(
 		// coalescing is handled by the head-SHA staleness check in the callback —
 		// deduplicationId cannot cancel an already-scheduled older-SHA message.
 		deduplicationId: `${message.provider}:${message.pullNumber}:${message.headSha}`,
+		// Cap retries: the callback returns 500 on a failed review so QStash
+		// retries, but a review releases its idempotency claim on failure, so each
+		// retry RE-RUNS the full agent suite (~8 with Tier 2 on). One retry covers
+		// a transient blip without fanning out model spend on a flapping provider.
+		retries: 1,
 	});
-	return { messageId: (res as { messageId: string }).messageId };
+	return { messageId: res.messageId };
 }
 
 export async function verifyQStashSignature(
