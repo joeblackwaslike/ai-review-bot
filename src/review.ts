@@ -1192,7 +1192,7 @@ export async function buildReview(
 					path: c.path,
 					line: c.line,
 					title: c.title,
-					severity: "medium",
+					severity: c.severity,
 					status: "open",
 				}),
 			),

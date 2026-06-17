@@ -1476,6 +1476,7 @@ describe("buildReview triage gate — end-to-end multi-bot flow", () => {
 						line: 5,
 						start_line: null,
 						suggestion: null,
+						severity: "high",
 					}),
 				],
 			}),
@@ -1509,6 +1510,9 @@ describe("buildReview triage gate — end-to-end multi-bot flow", () => {
 			(f) => f.status === "open",
 		);
 		expect(openAfterSha1?.some((f) => f.id === bugId)).toBe(true);
+		// Persisted inline finding keeps the model's severity (not a hardcoded
+		// "medium") so re-review triage sees the real priority.
+		expect(openAfterSha1?.find((f) => f.id === bugId)?.severity).toBe("high");
 
 		// --- sha2: another bot's fix; my Bug untouched → SKIP ----------------
 		mockGenerateObject.mockReset();
