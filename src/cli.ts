@@ -18,6 +18,18 @@ function fatal(msg: string): never {
 	process.exit(1);
 }
 
+// Reads the value for a value-taking flag at args[i]. Errors clearly if the
+// value is missing (flag was last) or looks like another flag (e.g.
+// `--commit --slug x` would otherwise silently swallow `--slug` as the sha).
+// Pass `i++` so the consumed value is skipped by the loop.
+function requireValue(args: string[], i: number, flag: string): string {
+	const value = args[i + 1];
+	if (value === undefined || value.startsWith("--")) {
+		fatal(`Flag ${flag} requires a value`);
+	}
+	return value;
+}
+
 function usage(): never {
 	console.error("Usage:");
 	console.error(
@@ -170,12 +182,12 @@ async function cmdReview(args: string[]): Promise<void> {
 	for (let i = 0; i < args.length; i++) {
 		const a = args[i];
 		if (a === "--full") scope = { kind: "full" };
-		else if (a === "--commit" && args[i + 1])
-			scope = { kind: "commit", sha: args[++i] };
-		else if (a === "--slug" && args[i + 1]) slug = args[++i];
-		else if (a === "--title" && args[i + 1]) title = args[++i];
-		else if (a === "--extra" && args[i + 1]) extra = args[++i];
-		else if (a === "--out" && args[i + 1]) outDir = args[++i];
+		else if (a === "--commit")
+			scope = { kind: "commit", sha: requireValue(args, i++, a) };
+		else if (a === "--slug") slug = requireValue(args, i++, a);
+		else if (a === "--title") title = requireValue(args, i++, a);
+		else if (a === "--extra") extra = requireValue(args, i++, a);
+		else if (a === "--out") outDir = requireValue(args, i++, a);
 		else if (a === "--json") json = true;
 		else if (a.startsWith("--")) fatal(`Unknown flag: ${a}`);
 	}
@@ -218,12 +230,13 @@ async function cmdAudit(args: string[]): Promise<void> {
 	let extra = "";
 	let json = false;
 	for (let i = 0; i < args.length; i++) {
-		if (args[i] === "--full") mode = "full";
-		else if (args[i] === "--dry-run") dryRun = true;
-		else if (args[i] === "--out" && args[i + 1]) outDir = args[++i];
-		else if (args[i] === "--extra" && args[i + 1]) extra = args[++i];
-		else if (args[i] === "--json") json = true;
-		else if (args[i].startsWith("--")) fatal(`Unknown flag: ${args[i]}`);
+		const a = args[i];
+		if (a === "--full") mode = "full";
+		else if (a === "--dry-run") dryRun = true;
+		else if (a === "--out") outDir = requireValue(args, i++, a);
+		else if (a === "--extra") extra = requireValue(args, i++, a);
+		else if (a === "--json") json = true;
+		else if (a.startsWith("--")) fatal(`Unknown flag: ${a}`);
 	}
 
 	// Validate both apps' creds upfront so a non-dry-run doesn't burn two
@@ -327,19 +340,20 @@ async function cmdLegacyRemote(args: string[]): Promise<void> {
 	let provider: "anthropic" | "openai" = "anthropic";
 
 	for (let i = 1; i < args.length; i++) {
-		if (args[i] === "--ref" && args[i + 1]) {
-			ref = args[++i];
-		} else if (args[i] === "--dry-run") {
+		const a = args[i];
+		if (a === "--ref") {
+			ref = requireValue(args, i++, a);
+		} else if (a === "--dry-run") {
 			dryRun = true;
-		} else if (args[i] === "--extra" && args[i + 1]) {
-			extraInstructions = args[++i];
-		} else if (args[i] === "--provider" && args[i + 1]) {
-			const val = args[++i];
+		} else if (a === "--extra") {
+			extraInstructions = requireValue(args, i++, a);
+		} else if (a === "--provider") {
+			const val = requireValue(args, i++, a);
 			if (val !== "anthropic" && val !== "openai")
 				fatal(`Invalid provider: ${val} (must be "anthropic" or "openai")`);
 			provider = val;
-		} else if (args[i].startsWith("--")) {
-			fatal(`Unknown flag: ${args[i]}`);
+		} else if (a.startsWith("--")) {
+			fatal(`Unknown flag: ${a}`);
 		}
 	}
 
