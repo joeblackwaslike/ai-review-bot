@@ -27,6 +27,7 @@ vi.mock("./audit-pr.js", () => ({
 }));
 
 import { runAuditPass } from "./audit.js";
+import type { Provider } from "./auth.js";
 import { runAgent, TIER1_SKILLS } from "./review.js";
 import type { ModelSelection } from "./router.js";
 import { buildModelReview } from "./testing.js";
@@ -331,5 +332,86 @@ describe("runLocalAudit (PR path)", () => {
 				}),
 			}),
 		).rejects.toThrow();
+	});
+});
+
+describe("runLocalReview", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	it("authenticates both providers, runs Tier-1, merges, and writes one report", async () => {
+		const { collectFilesFromLocal } = await import("./sources.js");
+		(collectFilesFromLocal as ReturnType<typeof vi.fn>).mockResolvedValue([
+			{ path: "a.ts", content: "x" },
+		]);
+		(runAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
+			status: "ok",
+			review: buildModelReview({
+				event: "REQUEST_CHANGES",
+				general_findings: [{ title: "Bug", body: "b", severity: "high" }],
+				inline_comments: [],
+			}),
+			usage: { promptTokens: 1, completionTokens: 1 },
+		});
+		const fs = await import("node:fs/promises");
+		const writeSpy = fs.writeFile as ReturnType<typeof vi.fn>;
+		(fs.mkdir as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+		writeSpy.mockResolvedValue(undefined);
+
+		const resolveAuthFor = vi.fn(async (provider: Provider) => ({
+			mode: "api-key" as const,
+			provider,
+			apiKey: "k",
+		}));
+
+		const { runLocalReview } = await import("./audit.js");
+		const result = await runLocalReview({
+			cwd: "/repo",
+			scope: { kind: "changed" },
+			docsDir: "docs/code-reviews",
+			slug: "my-review",
+			title: "My Review",
+			owner: "o",
+			repo: "r",
+			remote: "https://github.com/o/r",
+			now: () => 1_700_000_000_000,
+			resolveAuthFor,
+		});
+
+		expect([...result.providersRun].sort()).toEqual(["anthropic", "openai"]);
+		expect(result.filesReviewed).toBe(1);
+		expect(result.merged.event).toBe("REQUEST_CHANGES");
+		expect(resolveAuthFor).toHaveBeenCalledTimes(2);
+		// 2023-11-14 is the UTC date for the injected timestamp.
+		expect(result.path).toBe("docs/code-reviews/2023-11-14-my-review-01.md");
+		// The report is written exactly once (not once per provider).
+		expect(writeSpy).toHaveBeenCalledTimes(1);
+		expect(writeSpy.mock.calls[0][1]).toContain('title: "My Review"');
+	});
+
+	it("throws when no provider can be authenticated", async () => {
+		const { collectFilesFromLocal } = await import("./sources.js");
+		(collectFilesFromLocal as ReturnType<typeof vi.fn>).mockResolvedValue([
+			{ path: "a.ts", content: "x" },
+		]);
+
+		const { runLocalReview } = await import("./audit.js");
+		await expect(
+			runLocalReview({
+				cwd: "/repo",
+				scope: { kind: "changed" },
+				docsDir: "docs/code-reviews",
+				slug: "s",
+				title: "T",
+				owner: "o",
+				repo: "r",
+				remote: "https://github.com/o/r",
+				now: () => 1_700_000_000_000,
+				resolveAuthFor: async () => {
+					throw new Error("no creds");
+				},
+			}),
+		).rejects.toThrow(/No provider could be authenticated/);
 	});
 });

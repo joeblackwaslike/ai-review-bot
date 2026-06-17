@@ -13,10 +13,12 @@
 //     of logging the real CLI out (`refresh_token_reused`).
 
 import { execFile } from "node:child_process";
+import { unlinkSync } from "node:fs";
 import {
 	chmod,
 	open,
 	readFile,
+	rename,
 	stat,
 	unlink,
 	writeFile,
@@ -107,8 +109,13 @@ async function defaultReadCodexAuth(): Promise<string | null> {
 }
 
 async function defaultWriteCodexAuth(text: string): Promise<void> {
-	await writeFile(CODEX_AUTH_PATH, text, "utf-8");
-	await chmod(CODEX_AUTH_PATH, 0o600);
+	// Write-then-rename so a crash mid-write can't leave a truncated/corrupt
+	// auth file — rename is atomic on the same filesystem. Mode the temp file
+	// 0600 before the rename so the secret is never briefly world-readable.
+	const tmpPath = `${CODEX_AUTH_PATH}.${process.pid}.tmp`;
+	await writeFile(tmpPath, text, { encoding: "utf-8", mode: 0o600 });
+	await chmod(tmpPath, 0o600);
+	await rename(tmpPath, CODEX_AUTH_PATH);
 }
 
 async function defaultReadKeychain(): Promise<string | null> {
@@ -156,8 +163,12 @@ async function defaultWithLock<T>(
 	fn: () => Promise<T>,
 ): Promise<T> {
 	const lockPath = path.join(tmpdir(), `ai-review-auth-${name}.lock`);
-	const staleMs = 10_000;
-	const deadline = Date.now() + 15_000;
+	// The lock wraps a token-refresh network round-trip, which can be slow on a
+	// flaky connection. Keep staleMs comfortably above a realistic refresh so a
+	// waiter never steals a lock from a peer mid-refresh; allow up to staleMs to
+	// acquire so a waiter outlasts (and can then steal) a genuinely dead holder.
+	const staleMs = 60_000;
+	const deadline = Date.now() + staleMs;
 	for (;;) {
 		try {
 			const handle = await open(lockPath, "wx");
@@ -178,9 +189,26 @@ async function defaultWithLock<T>(
 			await new Promise((r) => setTimeout(r, 100));
 		}
 	}
+	// Remove our lock if the process is interrupted while holding it, so a
+	// Ctrl-C during refresh doesn't leave a stale lock that blocks peers until
+	// staleMs elapses. Sync unlink because signal/exit handlers can't await.
+	const releaseOnSignal = (signal: NodeJS.Signals) => {
+		try {
+			unlinkSync(lockPath);
+		} catch {
+			// already gone / never created — nothing to clean up
+		}
+		process.kill(process.pid, signal);
+	};
+	const onSigint = () => releaseOnSignal("SIGINT");
+	const onSigterm = () => releaseOnSignal("SIGTERM");
+	process.once("SIGINT", onSigint);
+	process.once("SIGTERM", onSigterm);
 	try {
 		return await fn();
 	} finally {
+		process.off("SIGINT", onSigint);
+		process.off("SIGTERM", onSigterm);
 		await unlink(lockPath).catch(() => {});
 	}
 }
