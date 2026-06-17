@@ -8,7 +8,7 @@ This file provides context and conventions for AI coding agents working on this 
 npm install
 npm run typecheck    # tsc --noEmit — must pass before any commit
 npm run lint         # biome check — must pass before any commit
-npm run test         # vitest run (85 tests) — must pass before any commit
+npm run test         # vitest run (216 tests) — must pass before any commit
 npm run dev          # vercel dev — local server on :3000
 ```
 
@@ -124,4 +124,4 @@ See `.env.example` for all variables. Key groups:
 
 - **Claude bot:** `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET`, `ANTHROPIC_API_KEY`
 - **Codex bot:** `OPENAI_APP_ID`, `OPENAI_APP_PRIVATE_KEY`, `OPENAI_APP_WEBHOOK_SECRET`, `OPENAI_API_KEY`
-- **Shared behavior:** `REVIEW_ENABLED` (default `true`), `REVIEW_DELAY_SECONDS` (default `450`), `REVIEW_COMMAND`, `CUSTOM_REVIEW_PROMPT`, `AGENT_CONCURRENCY` (default `1` — max review agents run in parallel per PR; kept sequential to stay under provider ITPM rate limits)
+- **Shared behavior:** `REVIEW_ENABLED` (default `true`), `REVIEW_DELAY_SECONDS` (default `540` — initial auto-review delay), `REVIEW_RESYNC_DELAY_SECONDS` (default `300` — re-review delay after a push), `REVIEW_COMMAND`, `CUSTOM_REVIEW_PROMPT`, `AGENT_CONCURRENCY` (default `1` — max review agents run in parallel per PR; kept sequential to stay under provider ITPM rate limits), `REVIEW_TIER2_ENABLED` (default `false` — Tier 2 review skills stay off until the QStash scheduler frees the full 800s budget; enabling runs ~8 agents and risks the maxDuration kill)
