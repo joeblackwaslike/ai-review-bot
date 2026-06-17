@@ -7,6 +7,9 @@
 		"api/github/webhook-openai.ts": {
 			"maxDuration": 800
 		},
+		"api/github/review-run.ts": {
+			"maxDuration": 800
+		},
 		"api/cron/poll-feedback.ts": {
 			"maxDuration": 60
 		}

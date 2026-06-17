@@ -24,9 +24,15 @@ This is a GitHub App that deploys two bots (Claude via Anthropic, Codex via Open
 POST /api/github/webhook           (Claude bot)
 POST /api/github/webhook-openai    (Codex bot)
   → signature verification (HMAC-SHA256)
-  → issue_comment.created → parseReviewCommand() → maybeSubmitReview()
-  → pull_request.opened/synchronize/ready_for_review → maybeSubmitReview() (if REVIEW_ENABLED)
+  → issue_comment.created → parseReviewCommand() → maybeSubmitReview()   (direct, no delay)
+  → pull_request.opened/synchronize/ready_for_review → scheduleReview() (QStash delayed callback, if REVIEW_ENABLED)
+
+POST /api/github/review-run        (QStash delayed callback)
+  → verify Upstash-Signature (Receiver.verify, URL-bound)
+  → runScheduledReview() → head-SHA staleness check (coalesce pushes) → maybeSubmitReview()
 ```
+
+**Why the QStash scheduler:** The review delay (let slower external bots post first so we can dedupe them) used to be an in-process `setTimeout`, which burned the 800s Vercel function budget doing nothing — killing large Tier 2 reviews mid-run. Now the `pull_request` handler publishes a delayed QStash message and returns immediately; QStash invokes `/api/github/review-run` after the delay, so the review runs fresh with the full budget. **Coalescing** concurrent pushes is done by a head-SHA staleness check in `runScheduledReview` (the message carries the SHA current at publish; if the PR head has moved past it, the run no-ops as `superseded`) — NOT by `deduplicationId`, which only dedups GitHub webhook redeliveries and cannot cancel an already-scheduled message. **Graceful fallback:** if QStash is unconfigured (`QSTASH_TOKEN`/`PUBLIC_URL` absent), `scheduleReview` returns `null` and the handler falls back to the legacy in-process delay + inline review — a review is never dropped. `PUBLIC_URL` must be the stable prod origin: QStash signs the destination URL into the JWT, so publish-URL and verify-URL must be byte-identical (see `src/scheduler.ts`).
 
 ### Two-layer review architecture
 
@@ -48,7 +54,8 @@ POST /api/github/webhook-openai    (Codex bot)
 | --- | --- |
 | `src/config.ts` | Environment variable parsing and defaults (both Claude and OpenAI configs) |
 | `src/commands.ts` | Slash command parsing, `isTrustedAuthorAssociation()` |
-| `src/github-app.ts` | Octokit setup, draft PR check, submit + fallback retry |
+| `src/github-app.ts` | Octokit setup, draft PR check, submit + fallback retry, `runScheduledReview()` |
+| `src/scheduler.ts` | QStash transport: `scheduleReview()` (delayed publish), `verifyQStashSignature()`, `reviewRunCallbackUrl()` |
 | `src/prompt.ts` | `buildUserMessage()`, `buildAgentSystemPrompt(skillPath, customPrompt)` |
 | `src/review.ts` | `runAgent()`, `mergeReviews()`, `buildReviewComments()`, `buildReview()` |
 | `src/models.ts` | AI model creation (`createAIModel()`), token cost calculation |
@@ -124,4 +131,5 @@ See `.env.example` for all variables. Key groups:
 
 - **Claude bot:** `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET`, `ANTHROPIC_API_KEY`
 - **Codex bot:** `OPENAI_APP_ID`, `OPENAI_APP_PRIVATE_KEY`, `OPENAI_APP_WEBHOOK_SECRET`, `OPENAI_API_KEY`
-- **Shared behavior:** `REVIEW_ENABLED` (default `true`), `REVIEW_DELAY_SECONDS` (default `540` — initial auto-review delay), `REVIEW_RESYNC_DELAY_SECONDS` (default `300` — re-review delay after a push), `REVIEW_COMMAND`, `CUSTOM_REVIEW_PROMPT`, `AGENT_CONCURRENCY` (default `1` — max review agents run in parallel per PR; kept sequential to stay under provider ITPM rate limits), `REVIEW_TIER2_ENABLED` (default `false` — Tier 2 review skills stay off until the QStash scheduler frees the full 800s budget; enabling runs ~8 agents and risks the maxDuration kill)
+- **Shared behavior:** `REVIEW_ENABLED` (default `true`), `REVIEW_DELAY_SECONDS` (default `540` — initial auto-review delay), `REVIEW_RESYNC_DELAY_SECONDS` (default `300` — re-review delay after a push), `REVIEW_COMMAND`, `CUSTOM_REVIEW_PROMPT`, `AGENT_CONCURRENCY` (default `1` — max review agents run in parallel per PR; kept sequential to stay under provider ITPM rate limits), `REVIEW_TIER2_ENABLED` (default `true` — Tier 2 review skills; the QStash scheduler now frees the full 800s budget so they're on by default. Set `false` to force off)
+- **QStash scheduler (optional, recommended):** `QSTASH_TOKEN`, `QSTASH_CURRENT_SIGNING_KEY`, `QSTASH_NEXT_SIGNING_KEY`, `PUBLIC_URL` (stable prod origin, no trailing slash). When set, the `pull_request` review delay runs as a delayed QStash callback to `/api/github/review-run` instead of an in-process `setTimeout` (which burned the function budget). Absent these, the bot falls back to the legacy in-process delay — never drops a review. `PUBLIC_URL` must be byte-identical at publish and verify (QStash signs the URL into the JWT).
