@@ -10,6 +10,7 @@ export interface AppConfig {
 	provider: "anthropic" | "openai";
 	feedbackEnabled: boolean;
 	agentConcurrency: number;
+	tier2Enabled: boolean;
 }
 
 // Returns the first argument that is a non-blank string after trimming, else
@@ -89,6 +90,7 @@ export function getConfig(): AppConfig {
 		provider: "anthropic",
 		feedbackEnabled: process.env.FEEDBACK_ENABLED === "true",
 		agentConcurrency: parseAgentConcurrency(),
+		tier2Enabled: process.env.REVIEW_TIER2_ENABLED === "true",
 	};
 }
 
@@ -114,5 +116,6 @@ export function getOpenAIAppConfig(): AppConfig {
 		provider: "openai",
 		feedbackEnabled: process.env.FEEDBACK_ENABLED === "true",
 		agentConcurrency: parseAgentConcurrency(),
+		tier2Enabled: process.env.REVIEW_TIER2_ENABLED === "true",
 	};
 }

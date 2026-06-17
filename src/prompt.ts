@@ -29,9 +29,10 @@ export interface PromptContext {
 		patch?: string;
 	}>;
 	priorBotReviews?: string[];
+	priorOwnReview?: string | null;
 }
 
-function trimPatch(patch: string, maxChars = 8000): string {
+function trimPatch(patch: string, maxChars = 24000): string {
 	if (patch.length <= maxChars) {
 		return patch;
 	}
@@ -65,6 +66,15 @@ export function buildUserMessage(context: PromptContext): string {
 			]
 		: [];
 
+	const priorOwnReviewSection = context.priorOwnReview
+		? [
+				"",
+				"You (this same reviewer) previously raised the findings below. Do NOT re-report a finding if the current diff or a maintainer reply already addresses or justifies it; only escalate if it is still genuinely unresolved in the code under review:",
+				"",
+				context.priorOwnReview,
+			]
+		: [];
+
 	return [
 		"You are reviewing a GitHub pull request.",
 		"",
@@ -80,6 +90,7 @@ export function buildUserMessage(context: PromptContext): string {
 		`- Deleted lines: ${context.deletions}`,
 		...commandInstructionsSection,
 		...priorReviewsSection,
+		...priorOwnReviewSection,
 		"",
 		"Changed file diffs:",
 		serializeFiles(context.files),

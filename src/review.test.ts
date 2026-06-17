@@ -1,12 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { KvClient } from "./feedback/kv.js";
 import {
 	buildReview,
 	buildReviewComments,
 	collectRightSideLines,
 	computePaceDelayMs,
 	generateSummary,
+	mergeReviews,
 	runAgent,
 } from "./review.js";
+import { findingId, loadReviewState, saveReviewState } from "./review-state.js";
 import type { ModelSelection } from "./router.js";
 import {
 	buildGenerateObjectResponse,
@@ -46,6 +49,49 @@ vi.mock("./prompt.js", () => ({
 	buildUserMessage: mockBuildUserMessage,
 	buildAgentSystemPrompt: () => "system",
 }));
+
+const mockTriageReReview = vi.hoisted(() => vi.fn());
+const mockFetchDeltaMeta = vi.hoisted(() =>
+	vi.fn(async () => ({ files: [], diff: "delta", truncated: false })),
+);
+vi.mock("./triage.js", () => ({
+	triageReReview: mockTriageReReview,
+	fetchDeltaMeta: mockFetchDeltaMeta,
+	// Legacy exports kept so any direct import of fetchDelta/fetchDeltaFiles in
+	// tests continues to resolve (unused by review.ts after the refactor).
+	fetchDelta: vi.fn(async () => "delta"),
+	fetchDeltaFiles: vi.fn(async () => []),
+}));
+
+// ---------------------------------------------------------------------------
+// mergeReviews resolved handling
+// ---------------------------------------------------------------------------
+
+describe("mergeReviews resolved handling", () => {
+	const reqChanges = {
+		event: "REQUEST_CHANGES" as const,
+		general_findings: [
+			{ title: "Unvalidated input", body: "x", severity: "high" as const },
+		],
+		inline_comments: [buildInlineComment({ path: "src/a.ts", line: 5 })],
+	};
+
+	it("drops a resolved finding and clears the event when nothing unresolved remains", () => {
+		const resolved = new Set([
+			"general:unvalidated input",
+			"inline:src/a.ts:5",
+		]);
+		const merged = mergeReviews([reqChanges], resolved);
+		expect(merged.general_findings).toHaveLength(0);
+		expect(merged.inline_comments).toHaveLength(0);
+		expect(merged.event).toBe("COMMENT");
+	});
+
+	it("keeps REQUEST_CHANGES when an unresolved finding remains", () => {
+		const merged = mergeReviews([reqChanges], new Set());
+		expect(merged.event).toBe("REQUEST_CHANGES");
+	});
+});
 
 // ---------------------------------------------------------------------------
 // collectRightSideLines
@@ -239,6 +285,7 @@ const baseContext = {
 	provider: "anthropic" as const,
 	feedbackEnabled: false,
 	agentConcurrency: 1,
+	tier2Enabled: false,
 };
 
 describe("buildReview", () => {
@@ -612,6 +659,88 @@ describe("buildReview", () => {
 		expect(mockBuildUserMessage).toHaveBeenCalledWith(
 			expect.objectContaining({ priorBotReviews: [externalBotBody] }),
 		);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// buildReview — Tier 2 gate
+// ---------------------------------------------------------------------------
+
+// A patch that introduces a TypeScript interface — triggers shouldRunTypeDesign
+const TYPE_DEFINITION_PATCH = [
+	"@@ -1,2 +1,4 @@",
+	" line1",
+	"+interface Foo {",
+	"+  bar: string;",
+	" line3",
+].join("\n");
+
+describe("buildReview Tier 2 gate", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+	});
+
+	it("runs only Tier 1 agents when tier2Enabled is false", async () => {
+		// 5 Tier 1 agents; summary is skipped because all agents return no findings (APPROVE path)
+		const emptyAgent = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+		);
+		mockGenerateObject
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent);
+
+		const decision = await buildReview({
+			octokit: buildOctokit({
+				files: [buildPullFile("src/types.ts", TYPE_DEFINITION_PATCH)],
+			}),
+			...baseContext,
+			tier2Enabled: false,
+		});
+
+		expect(decision?.metadata.tier2Skills).toEqual([]);
+		// Only 5 generateObject calls: 5 Tier 1 agents, no summary (APPROVE skips it), no Tier 2
+		expect(mockGenerateObject).toHaveBeenCalledTimes(5);
+	});
+
+	it("runs Tier 2 agents when tier2Enabled is true and the PR triggers them", async () => {
+		// With tier2Enabled: true and a .ts file containing an interface definition,
+		// shouldRunTypeDesign fires → 1 extra Tier 2 agent; all return no findings so
+		// APPROVE is emitted and the summary call is skipped (6 total calls).
+		const emptyAgent = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+		);
+		mockGenerateObject
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent); // Tier 2 agent
+
+		const decision = await buildReview({
+			octokit: buildOctokit({
+				files: [buildPullFile("src/types.ts", TYPE_DEFINITION_PATCH)],
+			}),
+			...baseContext,
+			tier2Enabled: true,
+		});
+
+		expect(decision?.metadata.tier2Skills.length).toBeGreaterThan(0);
+		// 5 Tier 1 + 1 Tier 2 agent, no summary (APPROVE skips it)
+		expect(mockGenerateObject).toHaveBeenCalledTimes(6);
 	});
 });
 
@@ -1016,6 +1145,7 @@ describe("buildReview rate-limit decision", () => {
 			provider: "anthropic",
 			feedbackEnabled: false,
 			agentConcurrency: 1,
+			tier2Enabled: false,
 		});
 		await vi.runAllTimersAsync();
 		const decision = await promise;
@@ -1081,6 +1211,7 @@ describe("buildReview rate-limit decision", () => {
 			provider: "anthropic",
 			feedbackEnabled: false,
 			agentConcurrency: 1,
+			tier2Enabled: false,
 		});
 		await vi.runAllTimersAsync();
 		const decision = await promise;
@@ -1129,5 +1260,479 @@ describe("computePaceDelayMs", () => {
 				now,
 			),
 		).toBe(1000);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// buildReview — triage gate (SKIP path)
+// ---------------------------------------------------------------------------
+
+function fakeKv() {
+	const store = new Map<string, string>();
+	return {
+		store,
+		client: {
+			get: async (k: string) => store.get(k) ?? null,
+			set: async (k: string, v: string) => void store.set(k, v),
+			setNx: async () => true,
+			del: async (...ks: string[]) => {
+				for (const k of ks) store.delete(k);
+			},
+		} as unknown as KvClient,
+	};
+}
+
+describe("buildReview triage gate — SKIP", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+		mockTriageReReview.mockReset();
+	});
+
+	it("posts nothing, resolves the matched finding, and APPROVEs when triage says SKIP", async () => {
+		// Triage forces SKIP and reports the seeded finding's id as resolved.
+		mockTriageReReview.mockResolvedValue({
+			recommendation: "SKIP",
+			resolved: ["src/a.ts:5:bug"],
+			newRisk: false,
+		});
+
+		const headSha = "newsha0987654321";
+		const { client, store } = fakeKv();
+
+		// Seed prior state with an open finding at an OLDER head SHA. id must equal
+		// findingId(path,line,title) so the gate's resolve-key derivation matches.
+		await saveReviewState(
+			client,
+			"anthropic",
+			"joeblackwaslike",
+			"ai-review-bot",
+			1,
+			{
+				lastReviewedSha: "oldsha1234567",
+				event: "REQUEST_CHANGES",
+				findings: [
+					{
+						id: findingId("src/a.ts", 5, "bug"),
+						path: "src/a.ts",
+						line: 5,
+						title: "bug",
+						severity: "high",
+						status: "open",
+					},
+				],
+				reviewedAt: "2026-06-16T00:00:00Z",
+			},
+		);
+
+		// A prior own review body so priorOwnReview is populated (the gate also
+		// works off KV state, but this mirrors a real re-review).
+		const priorOwnBody = `### ai-review-bot\n\nFound a bug.\n\nReviewed commit: \`oldsha1234567\``;
+
+		const decision = await buildReview({
+			octokit: buildOctokit({ existingReviews: [{ body: priorOwnBody }] }),
+			...baseContext,
+			headSha,
+			kv: client,
+		});
+
+		// SKIP posts nothing.
+		expect(decision).toBeNull();
+		// No agents ran — generateObject was never invoked.
+		expect(mockGenerateObject).not.toHaveBeenCalled();
+
+		// Persisted state: finding resolved, event upgraded to APPROVE, SHA advanced.
+		const persisted = await loadReviewState(
+			client,
+			"anthropic",
+			"joeblackwaslike",
+			"ai-review-bot",
+			1,
+			null,
+		);
+		expect(persisted?.lastReviewedSha).toBe(headSha);
+		expect(persisted?.event).toBe("APPROVE");
+		expect(persisted?.findings[0].status).toBe("resolved");
+		// The state KV entry exists.
+		expect(store.size).toBeGreaterThan(0);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// buildReview — end-to-end multi-bot flow: review@sha1 → SKIP@sha2 → INCREMENTAL→APPROVE@sha3
+// ---------------------------------------------------------------------------
+
+describe("buildReview triage gate — end-to-end multi-bot flow", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+		mockTriageReReview.mockReset();
+	});
+
+	it("review@sha1 (REQUEST_CHANGES) → push sha2 (SKIP) → push sha3 (INCREMENTAL → APPROVE) against one shared KV", async () => {
+		const { client } = fakeKv();
+		const provider = "anthropic";
+		const owner = baseContext.owner;
+		const repo = baseContext.repo;
+		const pull = baseContext.pullNumber;
+
+		// src/a.ts spans right-side lines 1..20, so the Bug at line 5 anchors.
+		const aFile = buildPullFile("src/a.ts", TWENTY_LINE_PATCH);
+		const loadState = () =>
+			loadReviewState(client, provider, owner, repo, pull, null);
+
+		// The exact id Task-7 persistence writes for an inline finding is
+		// findingId(path, line, title) with title = the model's inline title.
+		const bugId = findingId("src/a.ts", 5, "Bug");
+
+		// --- sha1: first review, cold KV ------------------------------------
+		const sha1 = "aaaaaaaaaaaa1111";
+		const bugAgent = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "REQUEST_CHANGES",
+				general_findings: [],
+				inline_comments: [
+					buildInlineComment({
+						title: "Bug",
+						body: "Off-by-one here.",
+						path: "src/a.ts",
+						line: 5,
+						start_line: null,
+						suggestion: null,
+					}),
+				],
+			}),
+		);
+		const summaryResponse = {
+			object: { summary: "One bug found." },
+			usage: { inputTokens: 50, outputTokens: 20 },
+		};
+		// 5 Tier-1 agents (all flag the same Bug; mergeReviews dedups to one) + summary.
+		mockGenerateObject
+			.mockResolvedValueOnce(bugAgent)
+			.mockResolvedValueOnce(bugAgent)
+			.mockResolvedValueOnce(bugAgent)
+			.mockResolvedValueOnce(bugAgent)
+			.mockResolvedValueOnce(bugAgent)
+			.mockResolvedValueOnce(summaryResponse);
+
+		const r1 = await buildReview({
+			octokit: buildOctokit({ files: [aFile] }),
+			...baseContext,
+			headSha: sha1,
+			kv: client,
+		});
+
+		expect(r1?.event).toBe("REQUEST_CHANGES");
+		// Triage is never consulted on the cold (no-prior-state) first review.
+		expect(mockTriageReReview).not.toHaveBeenCalled();
+		const stateAfterSha1 = await loadState();
+		expect(stateAfterSha1?.lastReviewedSha).toBe(sha1);
+		const openAfterSha1 = stateAfterSha1?.findings.filter(
+			(f) => f.status === "open",
+		);
+		expect(openAfterSha1?.some((f) => f.id === bugId)).toBe(true);
+
+		// --- sha2: another bot's fix; my Bug untouched → SKIP ----------------
+		mockGenerateObject.mockReset();
+		const sha2 = "bbbbbbbbbbbb2222";
+		vi.mocked(mockTriageReReview).mockResolvedValueOnce({
+			recommendation: "SKIP",
+			resolved: [],
+			newRisk: false,
+		});
+
+		const r2 = await buildReview({
+			octokit: buildOctokit({ files: [aFile] }),
+			...baseContext,
+			headSha: sha2,
+			kv: client,
+		});
+
+		// SKIP posts nothing and runs no agents.
+		expect(r2).toBeNull();
+		expect(mockGenerateObject).not.toHaveBeenCalled();
+		const stateAfterSha2 = await loadState();
+		expect(stateAfterSha2?.lastReviewedSha).toBe(sha2);
+		// My finding is still open (nothing resolved it), so the verdict stands.
+		expect(stateAfterSha2?.findings.find((f) => f.id === bugId)?.status).toBe(
+			"open",
+		);
+		expect(stateAfterSha2?.event).toBe("REQUEST_CHANGES");
+
+		// --- sha3: resolves my Bug, nothing new → INCREMENTAL → APPROVE ------
+		mockGenerateObject.mockReset();
+		const sha3 = "cccccccccccc3333";
+		vi.mocked(mockTriageReReview).mockResolvedValueOnce({
+			recommendation: "INCREMENTAL",
+			resolved: [bugId],
+			newRisk: false,
+		});
+		// Agents find nothing new on the delta.
+		const emptyAgent = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+		);
+		mockGenerateObject
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent);
+
+		const r3 = await buildReview({
+			octokit: buildOctokit({ files: [aFile] }),
+			...baseContext,
+			headSha: sha3,
+			kv: client,
+		});
+
+		// All prior findings resolved + nothing new → APPROVE on the posted path.
+		expect(r3?.event).toBe("APPROVE");
+		// APPROVE skips the summary call, so only the 5 agents ran.
+		expect(mockGenerateObject).toHaveBeenCalledTimes(5);
+		const stateAfterSha3 = await loadState();
+		expect(stateAfterSha3?.lastReviewedSha).toBe(sha3);
+		expect(stateAfterSha3?.event).toBe("APPROVE");
+		// No open findings remain after the resolving push.
+		expect(stateAfterSha3?.findings.every((f) => f.status !== "open")).toBe(
+			true,
+		);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// buildReview — truncated compare API (>= 300 files): gate must force FULL.
+// ---------------------------------------------------------------------------
+
+describe("buildReview triage gate — truncated compare forces FULL", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+		mockTriageReReview.mockReset();
+		mockFetchDeltaMeta.mockReset();
+	});
+
+	it("ignores SKIP from triage and runs a FULL review when compare is truncated", async () => {
+		const { client } = fakeKv();
+		const sha1 = "aaaaaaaaaaaa1111";
+		const sha2 = "bbbbbbbbbbbb2222";
+
+		await saveReviewState(
+			client,
+			"anthropic",
+			baseContext.owner,
+			baseContext.repo,
+			baseContext.pullNumber,
+			{
+				lastReviewedSha: sha1,
+				event: "REQUEST_CHANGES",
+				findings: [],
+				reviewedAt: "2026-06-17T00:00:00Z",
+			},
+		);
+
+		// Triage says SKIP but the compare result is truncated — gate must ignore SKIP and run FULL.
+		mockFetchDeltaMeta.mockResolvedValueOnce({
+			files: [],
+			diff: "big delta",
+			truncated: true,
+		});
+		mockTriageReReview.mockResolvedValueOnce({
+			recommendation: "SKIP",
+			resolved: [],
+			newRisk: false,
+		});
+
+		// Agents run (FULL review, not SKIP).
+		const agentResponse = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+		);
+		const summaryResponse = {
+			object: { summary: "Looks good." },
+			usage: { inputTokens: 10, outputTokens: 5 },
+		};
+		// 5 Tier 1 agents + 1 summary call
+		for (let i = 0; i < 5; i++)
+			mockGenerateObject.mockResolvedValueOnce(agentResponse);
+		mockGenerateObject.mockResolvedValueOnce(summaryResponse);
+
+		const result = await buildReview({
+			octokit: buildOctokit({
+				files: [buildPullFile("src/a.ts", SIMPLE_PATCH)],
+			}),
+			...baseContext,
+			headSha: sha2,
+			kv: client,
+		});
+
+		// Must NOT return null (which SKIP would cause); a full review was posted.
+		expect(result).not.toBeNull();
+	});
+
+	it("ignores INCREMENTAL from triage and runs a FULL review when compare is truncated", async () => {
+		const { client } = fakeKv();
+		const sha1 = "aaaaaaaaaaaa1111";
+		const sha2 = "bbbbbbbbbbbb2222";
+
+		await saveReviewState(
+			client,
+			"anthropic",
+			baseContext.owner,
+			baseContext.repo,
+			baseContext.pullNumber,
+			{
+				lastReviewedSha: sha1,
+				event: "REQUEST_CHANGES",
+				findings: [],
+				reviewedAt: "2026-06-17T00:00:00Z",
+			},
+		);
+
+		// Triage says INCREMENTAL but compare is truncated — gate must run FULL instead.
+		mockFetchDeltaMeta.mockResolvedValueOnce({
+			files: [], // truncated partial list — should NOT become scopedFiles
+			diff: "big delta",
+			truncated: true,
+		});
+		mockTriageReReview.mockResolvedValueOnce({
+			recommendation: "INCREMENTAL",
+			resolved: [],
+			newRisk: true,
+		});
+
+		const agentResponse = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+		);
+		const summaryResponse = {
+			object: { summary: "Looks good." },
+			usage: { inputTokens: 10, outputTokens: 5 },
+		};
+		for (let i = 0; i < 5; i++)
+			mockGenerateObject.mockResolvedValueOnce(agentResponse);
+		mockGenerateObject.mockResolvedValueOnce(summaryResponse);
+
+		// The octokit paginate returns the full file list (not the truncated delta).
+		const fullFile = buildPullFile("src/a.ts", SIMPLE_PATCH);
+		const result = await buildReview({
+			octokit: buildOctokit({ files: [fullFile] }),
+			...baseContext,
+			headSha: sha2,
+			kv: client,
+		});
+
+		// A real review (not null) was posted — INCREMENTAL was not taken.
+		expect(result).not.toBeNull();
+		// survivingPrior is empty (we didn't carry INCREMENTAL state), so APPROVE is possible.
+		// The agents returned no findings, so the final event should be APPROVE (not REQUEST_CHANGES
+		// that an INCREMENTAL carry-forward would force).
+		expect(result?.event).toBe("APPROVE");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// buildReview — C1 regression: INCREMENTAL must carry forward still-open prior
+// findings (a clean delta on an unrelated file must NOT false-APPROVE).
+// ---------------------------------------------------------------------------
+
+describe("buildReview triage gate — INCREMENTAL carries forward open prior findings", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+		mockTriageReReview.mockReset();
+	});
+
+	it("does NOT APPROVE and keeps F open when the delta touches an unrelated file and resolves nothing", async () => {
+		const { client } = fakeKv();
+		const provider = "anthropic";
+		const owner = baseContext.owner;
+		const repo = baseContext.repo;
+		const pull = baseContext.pullNumber;
+		const loadState = () =>
+			loadReviewState(client, provider, owner, repo, pull, null);
+
+		// Prior open finding F on file A, persisted at sha1.
+		const sha1 = "aaaaaaaaaaaa1111";
+		const fId = findingId("src/a.ts", 5, "Bug");
+		await saveReviewState(client, provider, owner, repo, pull, {
+			lastReviewedSha: sha1,
+			event: "REQUEST_CHANGES",
+			findings: [
+				{
+					id: fId,
+					path: "src/a.ts",
+					line: 5,
+					title: "Bug",
+					severity: "high",
+					status: "open",
+				},
+			],
+			reviewedAt: "2026-06-17T00:00:00Z",
+		});
+
+		// Push sha2: triage INCREMENTAL, resolves nothing; the delta is only file B.
+		const sha2 = "bbbbbbbbbbbb2222";
+		vi.mocked(mockTriageReReview).mockResolvedValueOnce({
+			recommendation: "INCREMENTAL",
+			resolved: [],
+			newRisk: false,
+		});
+		// fetchDeltaFiles is mocked (returns []) — so scopedFiles is empty and the
+		// agents never see file A. Agents return nothing new.
+		const emptyAgent = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+		);
+		// 5 agents return nothing; the forced REQUEST_CHANGES (survivingPrior) means
+		// generateSummary IS called (APPROVE is the only path that skips it).
+		const summaryResponse = {
+			object: { summary: "Prior unresolved findings remain." },
+			usage: { inputTokens: 10, outputTokens: 5 },
+		};
+		mockGenerateObject
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(summaryResponse);
+
+		const r2 = await buildReview({
+			octokit: buildOctokit({
+				files: [buildPullFile("src/b.ts", SIMPLE_PATCH)],
+			}),
+			...baseContext,
+			headSha: sha2,
+			kv: client,
+		});
+
+		// (a) An unresolved prior blocking finding remains → must NOT be APPROVE.
+		expect(r2?.event).not.toBe("APPROVE");
+		expect(r2?.event).toBe("REQUEST_CHANGES");
+
+		// (b) State still contains F (open) and the SHA advanced.
+		const stateAfterSha2 = await loadState();
+		expect(stateAfterSha2?.lastReviewedSha).toBe(sha2);
+		const carried = stateAfterSha2?.findings.find((f) => f.id === fId);
+		expect(carried?.status).toBe("open");
+		expect(stateAfterSha2?.event).toBe("REQUEST_CHANGES");
 	});
 });

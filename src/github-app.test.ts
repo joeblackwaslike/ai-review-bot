@@ -31,6 +31,7 @@ vi.mock("./config.js", () => ({
 		reviewCommand: "/ai-review",
 		provider: "anthropic",
 		agentConcurrency: 1,
+		tier2Enabled: false,
 	}),
 }));
 
@@ -100,6 +101,7 @@ const baseArgs = {
 		provider: "anthropic" as const,
 		feedbackEnabled: false,
 		agentConcurrency: 1,
+		tier2Enabled: false,
 	},
 };
 

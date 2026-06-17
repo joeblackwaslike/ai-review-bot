@@ -279,12 +279,21 @@ export async function maybeSubmitReview(args: {
 			headSha,
 		});
 	}
-	const kv = force || !validSha ? null : getKv();
+	// Two distinct uses of KV, decoupled on purpose:
+	//  - claimKv: the per-commit idempotency claim. Force-gated (a manual
+	//    /ai-review intentionally bypasses the claim) and SHA-gated.
+	//  - stateKv: review-state persistence + the triage gate. Unconditional when
+	//    KV is configured, so a forced review still persists fresh state (the gate
+	//    itself is force-gated inside buildReview, so force still runs FULL). If
+	//    these shared one var, a forced review would write no state and the next
+	//    synchronize would triage against a stale snapshot (I1).
+	const stateKv = getKv();
+	const claimKv = force || !validSha ? null : stateKv;
 	const claimKey = `review-claim:${config.provider}:${owner}/${repo}#${pullNumber}@${headSha}`;
 	let claimed = false;
-	if (kv) {
+	if (claimKv) {
 		try {
-			claimed = await kv.setNx(
+			claimed = await claimKv.setNx(
 				claimKey,
 				new Date().toISOString(),
 				REVIEW_CLAIM_TTL_SECONDS,
@@ -313,8 +322,8 @@ export async function maybeSubmitReview(args: {
 	// this commit out of re-review until the TTL expires. No-op when we never held
 	// the claim (KV absent, force=true, or setNx threw).
 	const releaseClaim = async () => {
-		if (kv && claimed) {
-			await kv.del(claimKey).catch((delErr) => {
+		if (claimKv && claimed) {
+			await claimKv.del(claimKey).catch((delErr) => {
 				// Non-fatal — the claim still auto-expires via TTL — but log it so a
 				// stuck claim from a KV outage is diagnosable rather than silent.
 				console.error("failed to release review claim", { claimKey, delErr });
@@ -345,6 +354,12 @@ export async function maybeSubmitReview(args: {
 			provider: config.provider,
 			feedbackEnabled: config.feedbackEnabled,
 			agentConcurrency: config.agentConcurrency,
+			tier2Enabled: config.tier2Enabled,
+			// Unconditional KV (not the force-gated claim client) for review-state
+			// persistence + the triage gate. Null only when KV is unconfigured. A
+			// forced review still persists fresh state here; buildReview force-gates
+			// the gate itself so force runs a FULL review but doesn't go stale (I1).
+			kv: stateKv,
 		});
 
 		if (!review) {

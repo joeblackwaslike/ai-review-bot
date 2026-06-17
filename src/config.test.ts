@@ -42,6 +42,7 @@ afterEach(() => {
 		"REVIEW_DELAY_SECONDS",
 		"REVIEW_RESYNC_DELAY_SECONDS",
 		"AGENT_CONCURRENCY",
+		"REVIEW_TIER2_ENABLED",
 	]) {
 		delete process.env[key];
 	}
@@ -179,5 +180,20 @@ describe("agentConcurrency", () => {
 		process.env.AGENT_CONCURRENCY = "0";
 		expect(getConfig().agentConcurrency).toBe(1);
 		delete process.env.AGENT_CONCURRENCY;
+	});
+});
+
+describe("tier2Enabled", () => {
+	it("defaults to false in PR1 (Tier 2 disabled until QStash lands)", () => {
+		setRequiredEnv();
+		delete process.env.REVIEW_TIER2_ENABLED;
+		expect(getConfig().tier2Enabled).toBe(false);
+	});
+
+	it("is true only when REVIEW_TIER2_ENABLED=true", () => {
+		setRequiredEnv({ REVIEW_TIER2_ENABLED: "true" });
+		expect(getConfig().tier2Enabled).toBe(true);
+		setRequiredEnv({ REVIEW_TIER2_ENABLED: "1" });
+		expect(getConfig().tier2Enabled).toBe(false); // only exact "true"
 	});
 });
