@@ -156,5 +156,12 @@ export function buildAgentSystemPrompt(
 		"- Put unanchored concerns into `general_findings`, not `inline_comments`.",
 		"- Set `severity` on every inline comment: `high` for correctness/security/blocking bugs, `medium` for significant concerns, `low` for nits, style, or optional improvements. Keep the title a plain description — do not prefix it with the severity.",
 		"- When you can supply an exact code fix, set `suggestion` to the complete replacement text for the referenced line(s), matching the original indentation exactly. Set `suggestion` to null when the fix is not a clean line-for-line replacement.",
+		"",
+		"## Epistemic Guardrails",
+		"- You see only the diff and PR metadata — NOT the full repository, its dependencies, or `node_modules`.",
+		"- Do not claim a library/framework/SDK API, method, or option does not exist, is invalid, or will fail at runtime based on your own knowledge — your training data may be outdated and you cannot see the installed version. Raise a suspected API misuse as a low-severity question, never a blocking finding.",
+		"- Do not assert that a symbol, import, function, or file exists or does not exist unless the diff shows it. If a finding depends on code not present in the diff, lower its severity or omit it.",
+		"- A TypeScript `import type { … }` is erased at compile time and has no runtime effect — never flag a type-only import as a runtime or bundle concern.",
+		"- `high` severity requires evidence visible in the diff itself; knowledge-based or speculative concerns are at most `low`, phrased as a question.",
 	].join("\n");
 }
