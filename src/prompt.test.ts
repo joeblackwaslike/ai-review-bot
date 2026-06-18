@@ -1,5 +1,28 @@
 import { describe, expect, it } from "vitest";
-import { buildAuditUserMessage, buildUserMessage } from "./prompt.js";
+import {
+	buildAgentSystemPrompt,
+	buildAuditUserMessage,
+	buildUserMessage,
+} from "./prompt.js";
+
+describe("buildAgentSystemPrompt epistemic guardrails", () => {
+	const prompt = buildAgentSystemPrompt("code-reviewer.md", "");
+
+	it("tells agents they cannot see deps/node_modules", () => {
+		expect(prompt).toContain("Epistemic Guardrails");
+		expect(prompt).toContain("node_modules");
+	});
+
+	it("forbids asserting a library API does not exist from training knowledge", () => {
+		expect(prompt).toContain("does not exist");
+		expect(prompt).toContain("low-severity question");
+	});
+
+	it("flags that type-only imports have no runtime effect", () => {
+		expect(prompt).toContain("import type");
+		expect(prompt).toContain("erased at compile time");
+	});
+});
 
 describe("buildUserMessage prior own review", () => {
 	const base = {
