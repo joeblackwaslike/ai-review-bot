@@ -80,6 +80,7 @@ function patchPool(pool: {
 		if (
 			wasArrayMode &&
 			returningCols &&
+			returningCols.length > 0 &&
 			result.rows.length > 0 &&
 			!Array.isArray(result.rows[0])
 		) {

@@ -24,7 +24,7 @@ export function getDb(): Db {
 /** Drop the cached client (call after a transient connection error so the next
  * call rebuilds it, and to isolate tests). */
 export function resetDbSingleton(): void {
-	pool?.end().catch(() => {});
+	pool?.end().catch((err) => console.error("db pool drain error:", err));
 	pool = null;
 	db = null;
 }

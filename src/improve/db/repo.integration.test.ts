@@ -17,18 +17,41 @@ import * as schema from "./schema.js";
 const url = process.env.DATABASE_URL_TEST;
 const TEST_SCHEMA = "ai_review_corpus_test";
 
+/** The seven enum types the migration declares. drizzle hard-codes
+ * `"public".` qualifiers on `CREATE TYPE`, so a connection-level search_path
+ * alone won't redirect them — we defensively drop them in `public` before each
+ * run so repeated runs against the same database don't fail with
+ * `type ... already exists`. */
+const ENUM_TYPES = [
+	"feedback_intent",
+	"feedback_source",
+	"proposal_kind",
+	"proposal_status",
+	"provider",
+	"qc_trigger",
+	"trend_kind",
+];
+
 describe.skipIf(!url)("repo (real postgres)", () => {
 	let pool: Pool;
 	let db: NodePgDatabase<typeof schema>;
 
 	beforeAll(async () => {
-		pool = new Pool({ connectionString: url });
+		// Pin search_path at the connection level (every pooled connection
+		// inherits it via the libpq `options` parameter) so the migration's
+		// unqualified table names land in the test schema regardless of which
+		// physical connection the pool hands out.
+		pool = new Pool({
+			connectionString: url,
+			options: `-c search_path=${TEST_SCHEMA}`,
+		});
 		await pool.query(`DROP SCHEMA IF EXISTS ${TEST_SCHEMA} CASCADE`);
+		// Belt-and-suspenders: the schema CASCADE drop won't remove the
+		// public-qualified enums drizzle creates, so drop those explicitly too.
+		for (const t of ENUM_TYPES) {
+			await pool.query(`DROP TYPE IF EXISTS public.${t} CASCADE`);
+		}
 		await pool.query(`CREATE SCHEMA ${TEST_SCHEMA}`);
-		// Route all DDL/DML at this connection into the test schema so the
-		// migration's unqualified table names land there and never collide with
-		// other objects in the database.
-		await pool.query(`SET search_path TO ${TEST_SCHEMA}`);
 		for (const stmt of loadMigrationStatements()) {
 			await pool.query(stmt);
 		}
@@ -38,6 +61,9 @@ describe.skipIf(!url)("repo (real postgres)", () => {
 	afterAll(async () => {
 		if (pool) {
 			await pool.query(`DROP SCHEMA IF EXISTS ${TEST_SCHEMA} CASCADE`);
+			for (const t of ENUM_TYPES) {
+				await pool.query(`DROP TYPE IF EXISTS public.${t} CASCADE`);
+			}
 			await pool.end();
 		}
 	});
