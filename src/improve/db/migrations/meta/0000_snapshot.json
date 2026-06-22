@@ -1,0 +1,974 @@
+{
+	"id": "b69557cf-6756-417c-8526-10b78bcb760b",
+	"prevId": "00000000-0000-0000-0000-000000000000",
+	"version": "7",
+	"dialect": "postgresql",
+	"tables": {
+		"public.classified_feedback": {
+			"name": "classified_feedback",
+			"schema": "",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "bigserial",
+					"primaryKey": true,
+					"notNull": true
+				},
+				"raw_feedback_id": {
+					"name": "raw_feedback_id",
+					"type": "bigint",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"intent": {
+					"name": "intent",
+					"type": "feedback_intent",
+					"typeSchema": "public",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"confidence": {
+					"name": "confidence",
+					"type": "numeric(3, 2)",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"is_bot_related": {
+					"name": "is_bot_related",
+					"type": "boolean",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"matched_finding_id": {
+					"name": "matched_finding_id",
+					"type": "bigint",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"fp_signature": {
+					"name": "fp_signature",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"model": {
+					"name": "model",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"classified_at": {
+					"name": "classified_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "now()"
+				}
+			},
+			"indexes": {
+				"classified_feedback_raw_uq": {
+					"name": "classified_feedback_raw_uq",
+					"columns": [
+						{
+							"expression": "raw_feedback_id",
+							"isExpression": false,
+							"asc": true,
+							"nulls": "last"
+						}
+					],
+					"isUnique": true,
+					"concurrently": false,
+					"method": "btree",
+					"with": {}
+				},
+				"classified_feedback_intent_idx": {
+					"name": "classified_feedback_intent_idx",
+					"columns": [
+						{
+							"expression": "intent",
+							"isExpression": false,
+							"asc": true,
+							"nulls": "last"
+						}
+					],
+					"isUnique": false,
+					"concurrently": false,
+					"method": "btree",
+					"with": {}
+				},
+				"classified_feedback_fp_sig_idx": {
+					"name": "classified_feedback_fp_sig_idx",
+					"columns": [
+						{
+							"expression": "fp_signature",
+							"isExpression": false,
+							"asc": true,
+							"nulls": "last"
+						}
+					],
+					"isUnique": false,
+					"concurrently": false,
+					"method": "btree",
+					"with": {}
+				}
+			},
+			"foreignKeys": {
+				"classified_feedback_raw_feedback_id_raw_feedback_id_fk": {
+					"name": "classified_feedback_raw_feedback_id_raw_feedback_id_fk",
+					"tableFrom": "classified_feedback",
+					"tableTo": "raw_feedback",
+					"columnsFrom": ["raw_feedback_id"],
+					"columnsTo": ["id"],
+					"onDelete": "no action",
+					"onUpdate": "no action"
+				},
+				"classified_feedback_matched_finding_id_finding_catalog_id_fk": {
+					"name": "classified_feedback_matched_finding_id_finding_catalog_id_fk",
+					"tableFrom": "classified_feedback",
+					"tableTo": "finding_catalog",
+					"columnsFrom": ["matched_finding_id"],
+					"columnsTo": ["id"],
+					"onDelete": "no action",
+					"onUpdate": "no action"
+				}
+			},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {},
+			"policies": {},
+			"checkConstraints": {},
+			"isRLSEnabled": false
+		},
+		"public.finding_catalog": {
+			"name": "finding_catalog",
+			"schema": "",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "bigserial",
+					"primaryKey": true,
+					"notNull": true
+				},
+				"provider": {
+					"name": "provider",
+					"type": "provider",
+					"typeSchema": "public",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"owner": {
+					"name": "owner",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"repo": {
+					"name": "repo",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"pr": {
+					"name": "pr",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"comment_id": {
+					"name": "comment_id",
+					"type": "bigint",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"review_id": {
+					"name": "review_id",
+					"type": "bigint",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"path": {
+					"name": "path",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"line": {
+					"name": "line",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"skills": {
+					"name": "skills",
+					"type": "text[]",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"title": {
+					"name": "title",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"severity": {
+					"name": "severity",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"head_sha": {
+					"name": "head_sha",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"posted_at": {
+					"name": "posted_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"natural_key": {
+					"name": "natural_key",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				}
+			},
+			"indexes": {
+				"finding_catalog_natural_key_uq": {
+					"name": "finding_catalog_natural_key_uq",
+					"columns": [
+						{
+							"expression": "natural_key",
+							"isExpression": false,
+							"asc": true,
+							"nulls": "last"
+						}
+					],
+					"isUnique": true,
+					"concurrently": false,
+					"method": "btree",
+					"with": {}
+				},
+				"finding_catalog_pr_idx": {
+					"name": "finding_catalog_pr_idx",
+					"columns": [
+						{
+							"expression": "provider",
+							"isExpression": false,
+							"asc": true,
+							"nulls": "last"
+						},
+						{
+							"expression": "owner",
+							"isExpression": false,
+							"asc": true,
+							"nulls": "last"
+						},
+						{
+							"expression": "repo",
+							"isExpression": false,
+							"asc": true,
+							"nulls": "last"
+						},
+						{
+							"expression": "pr",
+							"isExpression": false,
+							"asc": true,
+							"nulls": "last"
+						}
+					],
+					"isUnique": false,
+					"concurrently": false,
+					"method": "btree",
+					"with": {}
+				}
+			},
+			"foreignKeys": {},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {},
+			"policies": {},
+			"checkConstraints": {},
+			"isRLSEnabled": false
+		},
+		"public.proposals": {
+			"name": "proposals",
+			"schema": "",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "bigserial",
+					"primaryKey": true,
+					"notNull": true
+				},
+				"trend_id": {
+					"name": "trend_id",
+					"type": "bigint",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"kind": {
+					"name": "kind",
+					"type": "proposal_kind",
+					"typeSchema": "public",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"status": {
+					"name": "status",
+					"type": "proposal_status",
+					"typeSchema": "public",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "'open'"
+				},
+				"signature": {
+					"name": "signature",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"github_number": {
+					"name": "github_number",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"github_url": {
+					"name": "github_url",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"target_file": {
+					"name": "target_file",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"opened_at": {
+					"name": "opened_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "now()"
+				},
+				"dedup_key": {
+					"name": "dedup_key",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				}
+			},
+			"indexes": {
+				"proposals_dedup_key_uq": {
+					"name": "proposals_dedup_key_uq",
+					"columns": [
+						{
+							"expression": "dedup_key",
+							"isExpression": false,
+							"asc": true,
+							"nulls": "last"
+						}
+					],
+					"isUnique": true,
+					"concurrently": false,
+					"method": "btree",
+					"with": {}
+				}
+			},
+			"foreignKeys": {
+				"proposals_trend_id_trends_id_fk": {
+					"name": "proposals_trend_id_trends_id_fk",
+					"tableFrom": "proposals",
+					"tableTo": "trends",
+					"columnsFrom": ["trend_id"],
+					"columnsTo": ["id"],
+					"onDelete": "no action",
+					"onUpdate": "no action"
+				}
+			},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {},
+			"policies": {},
+			"checkConstraints": {},
+			"isRLSEnabled": false
+		},
+		"public.qc_runs": {
+			"name": "qc_runs",
+			"schema": "",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "bigserial",
+					"primaryKey": true,
+					"notNull": true
+				},
+				"owner": {
+					"name": "owner",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"repo": {
+					"name": "repo",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"pr": {
+					"name": "pr",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"trigger": {
+					"name": "trigger",
+					"type": "qc_trigger",
+					"typeSchema": "public",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"pr_comment_id": {
+					"name": "pr_comment_id",
+					"type": "bigint",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"findings_judged": {
+					"name": "findings_judged",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"false_positives": {
+					"name": "false_positives",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"ran_at": {
+					"name": "ran_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "now()"
+				},
+				"dedup_key": {
+					"name": "dedup_key",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				}
+			},
+			"indexes": {
+				"qc_runs_dedup_key_uq": {
+					"name": "qc_runs_dedup_key_uq",
+					"columns": [
+						{
+							"expression": "dedup_key",
+							"isExpression": false,
+							"asc": true,
+							"nulls": "last"
+						}
+					],
+					"isUnique": true,
+					"concurrently": false,
+					"method": "btree",
+					"with": {}
+				}
+			},
+			"foreignKeys": {},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {},
+			"policies": {},
+			"checkConstraints": {},
+			"isRLSEnabled": false
+		},
+		"public.qc_scores": {
+			"name": "qc_scores",
+			"schema": "",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "bigserial",
+					"primaryKey": true,
+					"notNull": true
+				},
+				"finding_id": {
+					"name": "finding_id",
+					"type": "bigint",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"provider": {
+					"name": "provider",
+					"type": "provider",
+					"typeSchema": "public",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"trigger": {
+					"name": "trigger",
+					"type": "qc_trigger",
+					"typeSchema": "public",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"is_false_positive": {
+					"name": "is_false_positive",
+					"type": "boolean",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"is_useful": {
+					"name": "is_useful",
+					"type": "boolean",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"severity_correct": {
+					"name": "severity_correct",
+					"type": "boolean",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"suggested_severity": {
+					"name": "suggested_severity",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"rationale": {
+					"name": "rationale",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"pr_comment_id": {
+					"name": "pr_comment_id",
+					"type": "bigint",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"model": {
+					"name": "model",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"judged_at": {
+					"name": "judged_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "now()"
+				},
+				"dedup_key": {
+					"name": "dedup_key",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				}
+			},
+			"indexes": {
+				"qc_scores_dedup_key_uq": {
+					"name": "qc_scores_dedup_key_uq",
+					"columns": [
+						{
+							"expression": "dedup_key",
+							"isExpression": false,
+							"asc": true,
+							"nulls": "last"
+						}
+					],
+					"isUnique": true,
+					"concurrently": false,
+					"method": "btree",
+					"with": {}
+				}
+			},
+			"foreignKeys": {
+				"qc_scores_finding_id_finding_catalog_id_fk": {
+					"name": "qc_scores_finding_id_finding_catalog_id_fk",
+					"tableFrom": "qc_scores",
+					"tableTo": "finding_catalog",
+					"columnsFrom": ["finding_id"],
+					"columnsTo": ["id"],
+					"onDelete": "no action",
+					"onUpdate": "no action"
+				}
+			},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {},
+			"policies": {},
+			"checkConstraints": {},
+			"isRLSEnabled": false
+		},
+		"public.raw_feedback": {
+			"name": "raw_feedback",
+			"schema": "",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "bigserial",
+					"primaryKey": true,
+					"notNull": true
+				},
+				"source": {
+					"name": "source",
+					"type": "feedback_source",
+					"typeSchema": "public",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"provider": {
+					"name": "provider",
+					"type": "provider",
+					"typeSchema": "public",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"owner": {
+					"name": "owner",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"repo": {
+					"name": "repo",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"pr": {
+					"name": "pr",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"comment_id": {
+					"name": "comment_id",
+					"type": "bigint",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"review_id": {
+					"name": "review_id",
+					"type": "bigint",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"in_reply_to_id": {
+					"name": "in_reply_to_id",
+					"type": "bigint",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"path": {
+					"name": "path",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"line": {
+					"name": "line",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"skills": {
+					"name": "skills",
+					"type": "text[]",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"title": {
+					"name": "title",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"verdict": {
+					"name": "verdict",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"actor": {
+					"name": "actor",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"body": {
+					"name": "body",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"event_at": {
+					"name": "event_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"captured_at": {
+					"name": "captured_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "now()"
+				},
+				"dedup_key": {
+					"name": "dedup_key",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				}
+			},
+			"indexes": {
+				"raw_feedback_dedup_key_uq": {
+					"name": "raw_feedback_dedup_key_uq",
+					"columns": [
+						{
+							"expression": "dedup_key",
+							"isExpression": false,
+							"asc": true,
+							"nulls": "last"
+						}
+					],
+					"isUnique": true,
+					"concurrently": false,
+					"method": "btree",
+					"with": {}
+				},
+				"raw_feedback_pr_idx": {
+					"name": "raw_feedback_pr_idx",
+					"columns": [
+						{
+							"expression": "provider",
+							"isExpression": false,
+							"asc": true,
+							"nulls": "last"
+						},
+						{
+							"expression": "owner",
+							"isExpression": false,
+							"asc": true,
+							"nulls": "last"
+						},
+						{
+							"expression": "repo",
+							"isExpression": false,
+							"asc": true,
+							"nulls": "last"
+						},
+						{
+							"expression": "pr",
+							"isExpression": false,
+							"asc": true,
+							"nulls": "last"
+						}
+					],
+					"isUnique": false,
+					"concurrently": false,
+					"method": "btree",
+					"with": {}
+				},
+				"raw_feedback_source_idx": {
+					"name": "raw_feedback_source_idx",
+					"columns": [
+						{
+							"expression": "source",
+							"isExpression": false,
+							"asc": true,
+							"nulls": "last"
+						}
+					],
+					"isUnique": false,
+					"concurrently": false,
+					"method": "btree",
+					"with": {}
+				},
+				"raw_feedback_captured_at_idx": {
+					"name": "raw_feedback_captured_at_idx",
+					"columns": [
+						{
+							"expression": "captured_at",
+							"isExpression": false,
+							"asc": true,
+							"nulls": "last"
+						}
+					],
+					"isUnique": false,
+					"concurrently": false,
+					"method": "btree",
+					"with": {}
+				}
+			},
+			"foreignKeys": {},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {},
+			"policies": {},
+			"checkConstraints": {},
+			"isRLSEnabled": false
+		},
+		"public.trends": {
+			"name": "trends",
+			"schema": "",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "bigserial",
+					"primaryKey": true,
+					"notNull": true
+				},
+				"kind": {
+					"name": "kind",
+					"type": "trend_kind",
+					"typeSchema": "public",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"signature": {
+					"name": "signature",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"window_start": {
+					"name": "window_start",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"window_end": {
+					"name": "window_end",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"metric_value": {
+					"name": "metric_value",
+					"type": "numeric",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"sample_size": {
+					"name": "sample_size",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"detail": {
+					"name": "detail",
+					"type": "jsonb",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"detected_at": {
+					"name": "detected_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "now()"
+				},
+				"dedup_key": {
+					"name": "dedup_key",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				}
+			},
+			"indexes": {
+				"trends_dedup_key_uq": {
+					"name": "trends_dedup_key_uq",
+					"columns": [
+						{
+							"expression": "dedup_key",
+							"isExpression": false,
+							"asc": true,
+							"nulls": "last"
+						}
+					],
+					"isUnique": true,
+					"concurrently": false,
+					"method": "btree",
+					"with": {}
+				}
+			},
+			"foreignKeys": {},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {},
+			"policies": {},
+			"checkConstraints": {},
+			"isRLSEnabled": false
+		}
+	},
+	"enums": {
+		"public.feedback_intent": {
+			"name": "feedback_intent",
+			"schema": "public",
+			"values": ["downvote", "upvote", "bug_report", "noise"]
+		},
+		"public.feedback_source": {
+			"name": "feedback_source",
+			"schema": "public",
+			"values": [
+				"inline_reaction",
+				"review_reaction",
+				"inline_reply",
+				"pr_comment"
+			]
+		},
+		"public.proposal_kind": {
+			"name": "proposal_kind",
+			"schema": "public",
+			"values": ["issue", "pr"]
+		},
+		"public.proposal_status": {
+			"name": "proposal_status",
+			"schema": "public",
+			"values": [
+				"open",
+				"spec_ready",
+				"approved",
+				"pr_open",
+				"closed_merged",
+				"closed_rejected"
+			]
+		},
+		"public.provider": {
+			"name": "provider",
+			"schema": "public",
+			"values": ["anthropic", "openai"]
+		},
+		"public.qc_trigger": {
+			"name": "qc_trigger",
+			"schema": "public",
+			"values": ["command", "sample"]
+		},
+		"public.trend_kind": {
+			"name": "trend_kind",
+			"schema": "public",
+			"values": [
+				"skill_downvote_ratio",
+				"skill_positive_signal",
+				"repeated_fp_signature",
+				"qc_disagreement",
+				"downvote_spike"
+			]
+		}
+	},
+	"schemas": {},
+	"sequences": {},
+	"roles": {},
+	"policies": {},
+	"views": {},
+	"_meta": {
+		"columns": {},
+		"schemas": {},
+		"tables": {}
+	}
+}
