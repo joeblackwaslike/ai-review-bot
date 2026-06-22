@@ -1,56 +1,19 @@
 import { describe, expect, it } from "vitest";
+import { baseFinding, baseRaw } from "./repo.fixtures.js";
 import { insertRawFeedback, upsertFinding } from "./repo.js";
 import { createTestDb } from "./testing.js";
 
-const baseRaw = {
-	source: "inline_reaction" as const,
-	provider: "anthropic" as const,
-	owner: "joeblackwaslike",
-	repo: "ai-review-bot",
-	pr: 7,
-	commentId: 111,
-	reviewId: null,
-	inReplyToId: null,
-	path: "src/a.ts",
-	line: 4,
-	skills: ["code-reviewer.md"],
-	title: "Null deref",
-	verdict: "down",
-	actor: "octocat",
-	body: null,
-	eventAt: new Date("2026-06-21T00:00:00Z"),
-	dedupKey: "react:inline_reaction:111:octocat:down",
-};
-
-const baseFinding = {
-	provider: "anthropic" as const,
-	owner: "joeblackwaslike",
-	repo: "ai-review-bot",
-	pr: 7,
-	commentId: 111,
-	reviewId: null,
-	path: "src/a.ts",
-	line: 4,
-	skills: ["code-reviewer.md"],
-	title: "Null deref",
-	severity: "high",
-	headSha: "abc123",
-	postedAt: new Date("2026-06-21T00:00:00Z"),
-	naturalKey: "anthropic:joeblackwaslike/ai-review-bot#7:src/a.ts:4:deadbeef",
-};
+// These assertions only cover behavior pg-mem reproduces faithfully. The
+// `insertRawFeedback` ON CONFLICT DO NOTHING idempotency path (returning 0 on a
+// duplicate dedup_key) is NOT asserted here because pg-mem returns the existing
+// row for `DO NOTHING ... RETURNING` instead of the empty set real Postgres
+// yields — it is covered against real Postgres in `repo.integration.test.ts`.
 
 describe("insertRawFeedback", () => {
 	it("inserts a row", async () => {
 		const db = await createTestDb();
 		const inserted = await insertRawFeedback(db, baseRaw);
 		expect(inserted).toBe(1);
-	});
-
-	it("is idempotent on dedup_key (ON CONFLICT DO NOTHING)", async () => {
-		const db = await createTestDb();
-		await insertRawFeedback(db, baseRaw);
-		const second = await insertRawFeedback(db, baseRaw);
-		expect(second).toBe(0);
 	});
 });
 

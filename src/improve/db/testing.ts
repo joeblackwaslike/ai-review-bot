@@ -1,16 +1,23 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { newDb } from "pg-mem";
 import type { Db } from "./client.js";
+import { loadMigrationStatements } from "./migrate.js";
 import * as schema from "./schema.js";
 
 /** Build an isolated in-memory Postgres (pg-mem) with the full corpus schema
  * applied, wrapped in the same node-postgres Drizzle driver used in production.
- * Each call returns a fresh, independent database. */
+ * Each call returns a fresh, independent database.
+ *
+ * NOTE: pg-mem is only used for tests that don't depend on Postgres semantics
+ * pg-mem gets wrong. In particular it returns the existing row (not the empty
+ * set real Postgres yields) for `ON CONFLICT DO NOTHING ... RETURNING`, so the
+ * DO-NOTHING idempotency path is covered by the real-Postgres integration test
+ * (`repo.integration.test.ts`), NOT here. */
 export async function createTestDb(): Promise<Db> {
 	const mem = newDb();
-	applySchema(mem);
+	for (const stmt of loadMigrationStatements()) {
+		mem.public.none(stmt);
+	}
 	const adapter = mem.adapters.createPg();
 	const pool = new adapter.Pool();
 	patchPool(pool);
@@ -18,30 +25,26 @@ export async function createTestDb(): Promise<Db> {
 	return db;
 }
 
-function applySchema(mem: ReturnType<typeof newDb>): void {
-	const dir = new URL("./migrations", import.meta.url).pathname;
-	const files = readdirSync(dir)
-		.filter((f) => f.endsWith(".sql"))
-		.sort();
-	for (const file of files) {
-		const raw = readFileSync(join(dir, file), "utf8");
-		for (const stmt of raw.split("--> statement-breakpoint")) {
-			const trimmed = stmt.trim();
-			if (trimmed) mem.public.none(trimmed);
-		}
-	}
+interface PgMemResult {
+	rows: unknown[];
+	rowCount: number;
+	command: string;
 }
 
-/** pg-mem compatibility shim for drizzle-orm/node-postgres queries.
+/** Minimal driver-plumbing shim so drizzle-orm/node-postgres can run on
+ * pg-mem at all. It does NOT reimplement any SQL/Postgres semantics — every
+ * transform here only translates the shapes drizzle's pg driver emits into the
+ * shapes pg-mem's adapter accepts, then translates the result rows back:
  *
- * Two pg-mem limitations to work around:
- * 1. `rowMode: "array"` is unsupported — drizzle uses it for field-mapped
- *    queries. We strip it and convert object rows → arrays using column names
- *    parsed from the RETURNING clause.
- * 2. `ON CONFLICT DO NOTHING RETURNING` returns the existing row instead of the
- *    empty set that real Postgres yields. We detect the conflict case by checking
- *    whether the table row-count changed after the INSERT and return [] if not.
- */
+ * 1. Strip `types` — drizzle always attaches a `types.getTypeParser`, which
+ *    pg-mem's adapter explicitly rejects with "getTypeParser is not supported".
+ * 2. Strip `rowMode: "array"` — pg-mem rejects it ("pg rowMode"); drizzle sets
+ *    it for field-mapped queries and then expects each row as a positional
+ *    array, so we (4) convert pg-mem's object rows back into arrays.
+ * 3. Move 2nd-arg `values` into `query.values` — drizzle passes bound params as
+ *    the second argument, but pg-mem only reads them off the query object.
+ * 4. Convert object rows → positional arrays for the queries that asked for
+ *    array mode, using the column order parsed from the RETURNING clause. */
 function patchPool(pool: {
 	query: (...args: unknown[]) => Promise<unknown>;
 }): void {
@@ -56,7 +59,6 @@ function patchPool(pool: {
 		}
 
 		const wasArrayMode = query.rowMode === "array";
-		const isDoNothing = /do nothing/i.test(String(query.text ?? ""));
 		const returningCols = wasArrayMode
 			? parseReturningCols(String(query.text ?? ""))
 			: null;
@@ -73,28 +75,6 @@ function patchPool(pool: {
 			values = undefined;
 		}
 
-		if (wasArrayMode && isDoNothing && returningCols) {
-			const tableMatch = String(query.text ?? "").match(
-				/insert into "([^"]+)"/i,
-			);
-			if (tableMatch) {
-				const tableName = tableMatch[1];
-				const before = await countRows(origQuery, tableName);
-				const result = await origQuery(cleanQuery);
-				const after = await countRows(origQuery, tableName);
-				if (after === before) {
-					result.rows = [];
-					return result;
-				}
-				if (result.rows.length > 0 && !Array.isArray(result.rows[0])) {
-					result.rows = result.rows.map((row) =>
-						returningCols.map((col) => (row as Record<string, unknown>)[col]),
-					);
-				}
-				return result;
-			}
-		}
-
 		const result = await origQuery(cleanQuery, values);
 
 		if (
@@ -109,20 +89,6 @@ function patchPool(pool: {
 		}
 		return result;
 	};
-}
-
-interface PgMemResult {
-	rows: unknown[];
-	rowCount: number;
-	command: string;
-}
-
-async function countRows(
-	query: (...args: unknown[]) => Promise<PgMemResult>,
-	tableName: string,
-): Promise<number> {
-	const r = await query({ text: `SELECT COUNT(*) as c FROM "${tableName}"` });
-	return Number((r.rows[0] as Record<string, unknown>).c);
 }
 
 function parseReturningCols(sql: string): string[] | null {
