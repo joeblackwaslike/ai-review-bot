@@ -48,8 +48,12 @@ describe.skipIf(!url)("repo (real postgres)", () => {
 		await pool.query(`DROP SCHEMA IF EXISTS ${TEST_SCHEMA} CASCADE`);
 		// Belt-and-suspenders: the schema CASCADE drop won't remove the
 		// public-qualified enums drizzle creates, so drop those explicitly too.
+		// No CASCADE here: the schema drop above already removed the dependent
+		// test tables, so the enums have no remaining dependents and a plain
+		// DROP TYPE succeeds — and we never risk CASCADE removing unrelated
+		// objects if DATABASE_URL_TEST ever points at a non-disposable DB.
 		for (const t of ENUM_TYPES) {
-			await pool.query(`DROP TYPE IF EXISTS public.${t} CASCADE`);
+			await pool.query(`DROP TYPE IF EXISTS public.${t}`);
 		}
 		await pool.query(`CREATE SCHEMA ${TEST_SCHEMA}`);
 		for (const stmt of loadMigrationStatements()) {
@@ -61,8 +65,9 @@ describe.skipIf(!url)("repo (real postgres)", () => {
 	afterAll(async () => {
 		if (pool) {
 			await pool.query(`DROP SCHEMA IF EXISTS ${TEST_SCHEMA} CASCADE`);
+			// Plain DROP TYPE (no CASCADE): dependents are gone with the schema.
 			for (const t of ENUM_TYPES) {
-				await pool.query(`DROP TYPE IF EXISTS public.${t} CASCADE`);
+				await pool.query(`DROP TYPE IF EXISTS public.${t}`);
 			}
 			await pool.end();
 		}
