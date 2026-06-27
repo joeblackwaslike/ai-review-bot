@@ -337,8 +337,9 @@ export async function maybeSubmitReview(args: {
 	// the claim (reviewPosted) and let it expire via TTL; the posted "Reviewed
 	// commit:" marker then becomes the durable dedup.
 	let reviewPosted = false;
+	let review: Awaited<ReturnType<typeof buildReview>> | null = null;
 	try {
-		const review = await buildReview({
+		review = await buildReview({
 			octokit,
 			owner,
 			repo,
@@ -554,6 +555,34 @@ export async function maybeSubmitReview(args: {
 				throw err;
 			}
 		}
+	} catch (err) {
+		// hs1: buildReview throws when EVERY agent fails (e.g. an invalid provider
+		// API key or an exhausted usage limit — see review.ts "All review agents
+		// failed"). GitHub already returned 202 for the webhook, so without surfacing
+		// this the run vanishes with zero signal on the PR — the silent failure that
+		// hid a multi-day provider outage. Post a best-effort comment when NO review
+		// was produced; the finally still releases the claim so the next push retries.
+		// A POST-path failure (review already built) was surfaced by the inner
+		// fallback above, so skip it here to avoid a double comment.
+		if (!review) {
+			console.error("buildReview failed — surfacing the failure on the PR", {
+				owner,
+				repo,
+				pullNumber,
+				err,
+			});
+			await octokit
+				.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", {
+					owner,
+					repo,
+					issue_number: pullNumber,
+					body: `⚠️ **[${config.reviewCommentPrefix}]** Review couldn't complete — an internal or model-provider error occurred (for example an API key or usage-limit problem). It will retry on your next commit; maintainers can check the function logs.`,
+				})
+				.catch((commentErr) =>
+					console.error("failed to post build-failure comment", commentErr),
+				);
+		}
+		throw err;
 	} finally {
 		// Single release point for every non-posting exit from the try above:
 		// a buildReview throw, the !review / RATE_LIMITED / unexpected-event
