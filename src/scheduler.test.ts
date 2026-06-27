@@ -42,9 +42,30 @@ describe("scheduleReview", () => {
 				url: "https://example.test/api/github/review-run",
 				body: msg,
 				delay: 300,
-				deduplicationId: "anthropic:o/r:7:abc",
+				deduplicationId: "anthropic-o-r-7-abc",
 			}),
 		);
+	});
+	it("builds a QStash-safe dedup id (no ':' or '/') even for realistic owner/repo/sha", async () => {
+		// QStash rejects ':' in deduplicationId — the original "provider:owner/repo:pr:sha"
+		// form failed every publish with `DeduplicationId cannot contain ':'`, silently
+		// forcing the inline fallback. The id must be [A-Za-z0-9_-] only.
+		publishJSON.mockResolvedValueOnce({ messageId: "m1" });
+		await scheduleReview(
+			cfg,
+			{
+				...msg,
+				owner: "joeblackwaslike",
+				repo: "ai.review.bot",
+				pullNumber: 28,
+				headSha: "f7633ba",
+			},
+			300,
+		);
+		const dedupId = publishJSON.mock.calls[0][0].deduplicationId as string;
+		expect(dedupId).toMatch(/^[A-Za-z0-9_-]+$/);
+		expect(dedupId).not.toContain(":");
+		expect(dedupId).toBe("anthropic-joeblackwaslike-ai-review-bot-28-f7633ba");
 	});
 	it("returns null when QStash is unconfigured (caller falls back to inline)", async () => {
 		const out = await scheduleReview(

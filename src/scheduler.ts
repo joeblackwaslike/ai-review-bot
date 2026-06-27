@@ -11,6 +11,18 @@ export interface ReviewRunMessage {
 	installationId: number;
 }
 
+// QStash rejects ':' (and other punctuation) in deduplicationId — the original
+// "provider:owner/repo:pr:sha" form failed EVERY publish with
+// `DeduplicationId cannot contain ':'`, silently forcing the inline fallback.
+// Build the id from QStash-safe chars only ([A-Za-z0-9_-]); it still uniquely
+// keys (provider, owner, repo, pr, headSha) to dedup webhook redeliveries.
+function dedupId(message: ReviewRunMessage): string {
+	return `${message.provider}-${message.owner}-${message.repo}-${message.pullNumber}-${message.headSha}`.replace(
+		/[^A-Za-z0-9_-]/g,
+		"-",
+	);
+}
+
 export function reviewRunCallbackUrl(config: AppConfig): string {
 	// Strip any trailing slash so the publish URL and the verify URL are
 	// byte-identical however PUBLIC_URL is written — QStash signs this exact
@@ -55,7 +67,7 @@ export async function scheduleReview(
 			// Dedups GitHub webhook REDELIVERIES of the same push only. Cross-push
 			// coalescing is handled by the head-SHA staleness check in the callback —
 			// deduplicationId cannot cancel an already-scheduled older-SHA message.
-			deduplicationId: `${message.provider}:${message.owner}/${message.repo}:${message.pullNumber}:${message.headSha}`,
+			deduplicationId: dedupId(message),
 			// Cap retries: the callback returns 500 on a failed review so QStash
 			// retries, but a review releases its idempotency claim on failure, so each
 			// retry RE-RUNS the full agent suite (~8 with Tier 2 on). One retry covers
