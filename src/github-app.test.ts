@@ -155,12 +155,23 @@ describe("maybeSubmitReview", () => {
 	});
 
 	it("releases the claim when buildReview throws, so a retry can run", async () => {
-		const { app } = buildMockApp();
+		const { app, octokit } = buildMockApp();
 		mockBuildReview.mockReset().mockRejectedValueOnce(new Error("agent boom"));
 
 		await expect(maybeSubmitReview({ app, ...baseArgs })).rejects.toThrow(
 			"agent boom",
 		);
+
+		// hs1: a total agent failure must NOT be silent. GitHub already received a
+		// 202 for the webhook, so a surfaced PR comment is the only signal — without
+		// it the run vanishes (the failure mode that hid a multi-day provider outage).
+		const failureComments = octokit.request.mock.calls.filter(
+			([route, params]) =>
+				route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments" &&
+				typeof params?.body === "string" &&
+				params.body.includes("couldn't complete"),
+		);
+		expect(failureComments).toHaveLength(1);
 
 		// Assert the claim was actually released by the finally block — not merely
 		// absent because beforeEach cleared the store. The throwing run above set
