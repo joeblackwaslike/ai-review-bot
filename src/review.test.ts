@@ -3,6 +3,7 @@ import type { KvClient } from "./feedback/kv.js";
 import {
 	buildReview,
 	buildReviewComments,
+	classifyRefusal,
 	collectRightSideLines,
 	computePaceDelayMs,
 	generateSummary,
@@ -1821,5 +1822,70 @@ describe("buildReview triage gate — INCREMENTAL carries forward open prior fin
 		const carried = stateAfterSha2?.findings.find((f) => f.id === fId);
 		expect(carried?.status).toBe("open");
 		expect(stateAfterSha2?.event).toBe("REQUEST_CHANGES");
+	});
+});
+
+describe("classifyRefusal", () => {
+	// Both conditions arrive as HTTP 429 and need opposite responses from a
+	// human, so quota must win over rate limit whenever both could match.
+	it("reads OpenAI's spent balance as quota, not a rate limit", () => {
+		expect(
+			classifyRefusal({
+				statusCode: 429,
+				message: "You have no credits remaining. Add credits to continue",
+			}),
+		).toBe("quota_exhausted");
+	});
+
+	it("reads OpenAI's insufficient_quota code as quota", () => {
+		expect(
+			classifyRefusal({
+				statusCode: 429,
+				responseBody: '{"code":"insufficient_quota"}',
+			}),
+		).toBe("quota_exhausted");
+	});
+
+	it("reads Anthropic's low balance as quota", () => {
+		expect(
+			classifyRefusal({
+				statusCode: 400,
+				message: "Your credit balance is too low to access the Claude API",
+			}),
+		).toBe("quota_exhausted");
+	});
+
+	it("still reads a genuine 429 as a rate limit", () => {
+		expect(
+			classifyRefusal({ statusCode: 429, message: "rate limit exceeded" }),
+		).toBe("rate_limit");
+	});
+
+	it("unwraps a RetryError to find the real cause", () => {
+		expect(
+			classifyRefusal({
+				name: "AI_RetryError",
+				lastError: {
+					statusCode: 429,
+					message: "You have no credits remaining",
+				},
+			}),
+		).toBe("quota_exhausted");
+	});
+
+	it("finds quota inside an errors array even when a sibling is a plain 429", () => {
+		expect(
+			classifyRefusal({
+				errors: [
+					{ statusCode: 429, message: "rate limit" },
+					{ statusCode: 429, message: "insufficient_quota" },
+				],
+			}),
+		).toBe("quota_exhausted");
+	});
+
+	it("returns null for an unrelated error", () => {
+		expect(classifyRefusal(new Error("socket hang up"))).toBeNull();
+		expect(classifyRefusal({ statusCode: 500 })).toBeNull();
 	});
 });

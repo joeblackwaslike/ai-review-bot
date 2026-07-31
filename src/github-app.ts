@@ -6,6 +6,7 @@ import { getConfig, getOpenAIAppConfig } from "./config.js";
 import type { KvClient } from "./feedback/kv.js";
 import { createUpstashKv } from "./feedback/kv.js";
 import { persistPostedComments } from "./feedback/persist.js";
+import { notifyQuotaExhausted } from "./notify.js";
 import { resolveStaleThreads } from "./resolve-threads.js";
 import type { ReviewDecision, ReviewMetadata } from "./review.js";
 import { buildReview } from "./review.js";
@@ -366,6 +367,45 @@ export async function maybeSubmitReview(args: {
 		});
 
 		if (!review) {
+			return;
+		}
+
+		if (review.event === "QUOTA_EXHAUSTED") {
+			const provider =
+				review.quotaProvider === "openai" ? "OpenAI" : "Anthropic";
+			const billing =
+				review.quotaProvider === "openai"
+					? "https://platform.openai.com/settings/organization/billing"
+					: "https://console.anthropic.com/settings/billing";
+			const body = [
+				`⛔ **[${config.reviewCommentPrefix}]** Review couldn't run — **the ${provider} account is out of credits.**`,
+				"",
+				"This will **not** clear on its own and pushing again will not help — it needs payment.",
+				"",
+				`→ ${billing}`,
+				"",
+				"The review will run normally on the next commit once the balance is topped up.",
+			].join("\n");
+			await octokit.request(
+				"POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+				{ owner, repo, issue_number: pullNumber, body },
+			);
+			console.error("PROVIDER BALANCE EXHAUSTED — payment required", {
+				provider: review.quotaProvider,
+				owner,
+				repo,
+				pullNumber,
+				billing,
+			});
+			await notifyQuotaExhausted({
+				octokit: octokit as never,
+				provider: review.quotaProvider ?? "unknown",
+				billing,
+				owner,
+				repo,
+				pullNumber,
+				assignee: owner,
+			});
 			return;
 		}
 
