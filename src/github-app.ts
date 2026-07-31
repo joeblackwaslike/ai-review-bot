@@ -6,6 +6,7 @@ import { getConfig, getOpenAIAppConfig } from "./config.js";
 import type { KvClient } from "./feedback/kv.js";
 import { createUpstashKv } from "./feedback/kv.js";
 import { persistPostedComments } from "./feedback/persist.js";
+import { recordPostedComment } from "./feedback/store.js";
 import { capturePostedReview } from "./improve/capture.js";
 import { getDb } from "./improve/db/client.js";
 import { billingUrl, notifyQuotaExhausted, providerLabel } from "./notify.js";
@@ -570,6 +571,35 @@ export async function maybeSubmitReview(args: {
 								summary: review.body,
 								commentPrefix: config.reviewCommentPrefix,
 								postCarrier: config.improveCarrierEnabled,
+								// Register the carrier for reaction polling; without
+								// this it invites ratings that nothing ever reads.
+								onCarrier: async (commentId) => {
+									const carrierKv = getKv();
+									if (!carrierKv) return;
+									const now = Date.now();
+									await recordPostedComment(
+										carrierKv,
+										{
+											commentId,
+											surface: "carrier",
+											provider: config.provider,
+											installationId,
+											owner,
+											repo,
+											pr: pullNumber,
+											headSha,
+											path: "",
+											line: 0,
+											skills: [],
+											title: "review summary",
+											body: "",
+											postedAtMs: now,
+											expiresAtMs: now + 14 * 24 * 60 * 60 * 1000,
+											lastSeenReactions: {},
+										},
+										now,
+									);
+								},
 							});
 							console.log("improve: captured posted review", {
 								owner,

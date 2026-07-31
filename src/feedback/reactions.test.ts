@@ -173,3 +173,73 @@ describe("diffReactions", () => {
 		expect(events[0]?.reactedAtMs).toBe(999);
 	});
 });
+
+describe("diffReactions route selection", () => {
+	const base = {
+		commentId: 5,
+		provider: "anthropic" as const,
+		installationId: 1,
+		owner: "o",
+		repo: "r",
+		pr: 7,
+		headSha: "sha",
+		path: "",
+		line: 0,
+		skills: [],
+		title: "t",
+		body: "",
+		postedAtMs: 0,
+		expiresAtMs: 0,
+		lastSeenReactions: {},
+	};
+
+	// The carrier is an ordinary issue comment. Asking pulls/comments for it
+	// 404s, which would silently drop every review-level rating.
+	it("reads the carrier from the issues route", async () => {
+		const octokit = { request: vi.fn(async () => ({ data: [] })) };
+		await diffReactions(octokit, { ...base, surface: "carrier" }, 1);
+		expect(octokit.request).toHaveBeenCalledWith(
+			"GET /repos/{owner}/{repo}/issues/comments/{comment_id}/reactions",
+			expect.anything(),
+		);
+	});
+
+	it("reads an inline comment from the pulls route", async () => {
+		const octokit = { request: vi.fn(async () => ({ data: [] })) };
+		await diffReactions(octokit, { ...base, surface: "inline" }, 1);
+		expect(octokit.request).toHaveBeenCalledWith(
+			"GET /repos/{owner}/{repo}/pulls/comments/{comment_id}/reactions",
+			expect.anything(),
+		);
+	});
+
+	// Records written before carriers existed have no surface; they were inline.
+	it("defaults a record with no surface to the pulls route", async () => {
+		const octokit = { request: vi.fn(async () => ({ data: [] })) };
+		await diffReactions(octokit, base, 1);
+		expect(octokit.request).toHaveBeenCalledWith(
+			"GET /repos/{owner}/{repo}/pulls/comments/{comment_id}/reactions",
+			expect.anything(),
+		);
+	});
+
+	it("tags emitted events with the surface they came from", async () => {
+		const octokit = {
+			request: vi.fn(async () => ({
+				data: [
+					{
+						user: { login: "m" },
+						content: "confused",
+						created_at: "2026-07-30T00:00:00Z",
+					},
+				],
+			})),
+		};
+		const { events } = await diffReactions(
+			octokit,
+			{ ...base, surface: "carrier" },
+			1,
+		);
+		expect(events[0].surface).toBe("carrier");
+	});
+});

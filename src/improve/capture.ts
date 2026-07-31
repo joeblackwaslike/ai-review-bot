@@ -90,6 +90,9 @@ export function carrierBody(prefix: string, summary: string): string {
 export async function capturePostedReview(deps: {
 	db: Db;
 	octokit: CaptureOctokit;
+	/** Called with the carrier's comment id so it can be registered for reaction
+	 * polling. Without this the carrier invites ratings that nothing ever reads. */
+	onCarrier?: (commentId: number) => Promise<void>;
 	owner: string;
 	repo: string;
 	pr: number;
@@ -136,6 +139,7 @@ export async function capturePostedReview(deps: {
 			);
 			carrierCommentId = (res.data as { id: number }).id;
 		}
+		if (deps.onCarrier) await deps.onCarrier(carrierCommentId);
 	}
 
 	for (const { comment, skills, title, severity } of pairWithProvenance(

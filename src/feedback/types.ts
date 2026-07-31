@@ -5,8 +5,16 @@ export type Provider = "anthropic" | "openai";
 export type Verdict = "up" | "down" | "confused";
 
 /** A posted inline comment we are tracking for reactions. */
+/** Which GitHub comment surface this record refers to. Reactions live at a
+ * different route for each, and PR *reviews* are not reactable at all — which
+ * is why the review-level verdict needs a carrier issue comment. */
+export type CommentSurface = "inline" | "carrier";
+
 export interface PostedCommentRecord {
 	commentId: number;
+	/** Absent on records written before carriers existed; treated as "inline",
+	 * which is what they were. */
+	surface?: CommentSurface;
 	provider: Provider;
 	installationId: number;
 	owner: string;
@@ -31,6 +39,8 @@ export interface PostedCommentRecord {
 /** An append-only verdict observation, denormalized so the events log is self-contained. */
 export interface FeedbackEvent {
 	commentId: number;
+	/** Which surface the reaction was left on; absent means inline. */
+	surface?: CommentSurface;
 	provider: Provider;
 	owner: string;
 	repo: string;
