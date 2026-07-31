@@ -62,6 +62,9 @@ export const findingCatalog = pgTable(
 		headSha: text("head_sha").notNull(),
 		postedAt: timestamp("posted_at", { withTimezone: true }).notNull(),
 		naturalKey: text("natural_key").notNull(),
+		// Reconstructed from GitHub rather than recorded at post time, so `skills`
+		// is empty and per-skill aggregations must exclude these rows.
+		backfilled: boolean("backfilled").notNull().default(false),
 	},
 	(t) => [
 		uniqueIndex("finding_catalog_natural_key_uq").on(t.naturalKey),

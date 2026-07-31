@@ -2,7 +2,7 @@
 import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import process from "node:process";
-import { App } from "octokit";
+import { App, Octokit } from "octokit";
 import {
 	auditRepo,
 	type ReviewScope,
@@ -11,6 +11,13 @@ import {
 } from "./audit.js";
 import { makeReady, type OctokitLike } from "./audit-pr.js";
 import { getConfig, getOpenAIAppConfig } from "./config.js";
+import {
+	type BackfillOctokit,
+	type BackfillResult,
+	backfillPr,
+	discoverReviewedPrs,
+} from "./improve/backfill.js";
+import { getDb } from "./improve/db/client.js";
 import { slugify } from "./report.js";
 
 function fatal(msg: string): never {
@@ -48,6 +55,13 @@ function usage(): never {
 		"  ai-review audit [--full] [--dry-run] [--out <dir>] [--extra <text>] [--json]",
 	);
 	console.error("  ai-review ready [pr#]");
+	console.error("  ai-review backfill --repo <owner/name> [--pr <n>] [--json]");
+	console.error(
+		"      Harvest already-posted findings, reactions and reply threads into the",
+	);
+	console.error(
+		"      Neon corpus. Requires DATABASE_URL. Idempotent — safe to re-run.",
+	);
 	console.error(
 		"  ai-review OWNER/REPO [...]      (legacy remote audit — deprecated)",
 	);
@@ -371,12 +385,87 @@ async function cmdLegacyRemote(args: string[]): Promise<void> {
 	});
 }
 
+async function cmdBackfill(args: string[]): Promise<void> {
+	let slug: string | undefined;
+	let pr: number | undefined;
+	let json = false;
+	for (let i = 0; i < args.length; i++) {
+		const a = args[i];
+		if (a === "--repo") slug = requireValue(args, i++, a);
+		else if (a === "--pr") {
+			const raw = requireValue(args, i++, a);
+			pr = Number(raw);
+			// Without this, `--pr 55x` yields NaN, which is falsy and silently
+			// falls through to repo-wide discovery — a typo would harvest every
+			// reviewed PR instead of failing.
+			if (!Number.isInteger(pr) || pr <= 0) {
+				fatal(`--pr must be a positive integer, got: ${raw}`);
+			}
+		} else if (a === "--json") json = true;
+		else if (a.startsWith("--")) fatal(`Unknown flag: ${a}`);
+	}
+
+	const [owner, repo] = (slug ?? "").split("/");
+	if (!owner || !repo) fatal("--repo <owner/name> is required");
+
+	// The backfill only reads (comments, reactions, threads) and posts nothing,
+	// so a personal token is sufficient and is preferred when present: it avoids
+	// needing the App's private key on a developer machine just to harvest.
+	const token = process.env.GITHUB_TOKEN;
+	const octokit = (token
+		? new Octokit({ auth: token })
+		: await (async () => {
+				const config = getConfig();
+				return installationOctokit(
+					config.appId,
+					config.privateKey,
+					owner,
+					repo,
+				);
+			})()) as unknown as BackfillOctokit;
+
+	const targets = pr ? [pr] : await discoverReviewedPrs(octokit, owner, repo);
+	if (!pr) {
+		console.error(`Discovered ${targets.length} reviewed PR(s) in ${slug}`);
+	}
+
+	const db = getDb();
+	const results: BackfillResult[] = [];
+	for (const number of targets) {
+		const result = await backfillPr(
+			{ db, octokit },
+			{ owner, repo, pr: number },
+		);
+		results.push(result);
+		if (!json) {
+			console.log(
+				`#${number}: ${result.findings} findings, ${result.reactions} reactions, ${result.replies} replies` +
+					(result.unparseable > 0 ? `, ${result.unparseable} unparseable` : ""),
+			);
+		}
+	}
+
+	const totals = results.reduce(
+		(acc, r) => ({
+			findings: acc.findings + r.findings,
+			reactions: acc.reactions + r.reactions,
+			replies: acc.replies + r.replies,
+			unparseable: acc.unparseable + r.unparseable,
+		}),
+		{ findings: 0, reactions: 0, replies: 0, unparseable: 0 },
+	);
+
+	if (json) console.log(JSON.stringify({ prs: results, totals }, null, 2));
+	else console.log(`\nTotals: ${JSON.stringify(totals)}`);
+}
+
 async function main(): Promise<void> {
 	const [sub, ...rest] = process.argv.slice(2);
 
 	if (sub === "review") return cmdReview(rest);
 	if (sub === "audit") return cmdAudit(rest);
 	if (sub === "ready") return cmdReady(rest);
+	if (sub === "backfill") return cmdBackfill(rest);
 	if (sub?.includes("/")) return cmdLegacyRemote([sub, ...rest]); // back-compat
 	usage();
 }

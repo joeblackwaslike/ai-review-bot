@@ -1,0 +1,89 @@
+import { describe, expect, it } from "vitest";
+import { findingNaturalKey, parseFindingComment } from "./findings.js";
+
+describe("parseFindingComment", () => {
+	it("splits a badged comment into severity, title and body", () => {
+		const parsed = parseFindingComment(
+			"🟡 **Medium**\n\n**directory fsync may fail silently**\n\nOn some platforms `fsyncSync` throws EINVAL.",
+		);
+		expect(parsed).toEqual({
+			severity: "medium",
+			title: "directory fsync may fail silently",
+			body: "On some platforms `fsyncSync` throws EINVAL.",
+		});
+	});
+
+	it("recognizes every severity badge the renderer emits", () => {
+		const cases: [string, string][] = [
+			["🔴 **High**", "high"],
+			["🟡 **Medium**", "medium"],
+			["🟢 **Low**", "low"],
+			["⚪ **Unknown**", "unknown"],
+		];
+		for (const [badge, severity] of cases) {
+			expect(parseFindingComment(`${badge}\n\n**t**\n\nb`)?.severity).toBe(
+				severity,
+			);
+		}
+	});
+
+	it("parses a comment posted before badges existed, leaving severity null", () => {
+		const parsed = parseFindingComment("**older finding**\n\nsome body");
+		expect(parsed).toEqual({
+			severity: null,
+			title: "older finding",
+			body: "some body",
+		});
+	});
+
+	it("keeps the suggestion block as part of the body", () => {
+		const parsed = parseFindingComment(
+			"🟢 **Low**\n\n**t**\n\nreason\n\n*Suggested fix:*\n\n```suggestion\nx\n```",
+		);
+		expect(parsed?.body).toContain("```suggestion");
+	});
+
+	it("returns null for a comment that is not in the bot's format", () => {
+		expect(parseFindingComment("just a plain reply, no title")).toBeNull();
+	});
+
+	it("returns null for a badge with no title, rather than inventing one", () => {
+		expect(parseFindingComment("🔴 **High**\n\nbody with no bold title")).toBe(
+			null,
+		);
+	});
+});
+
+describe("findingNaturalKey", () => {
+	const base = {
+		provider: "anthropic",
+		owner: "o",
+		repo: "r",
+		pr: 55,
+		path: "src/x.ts",
+		line: 42,
+		title: "a finding",
+	};
+
+	it("is stable for identical input", () => {
+		expect(findingNaturalKey(base)).toBe(findingNaturalKey(base));
+	});
+
+	it("differs when the title differs at the same location", () => {
+		expect(findingNaturalKey(base)).not.toBe(
+			findingNaturalKey({ ...base, title: "another finding" }),
+		);
+	});
+
+	it("differs across providers so both bots' findings coexist", () => {
+		expect(findingNaturalKey(base)).not.toBe(
+			findingNaturalKey({ ...base, provider: "openai" }),
+		);
+	});
+
+	it("encodes a file-level finding with null path and line", () => {
+		expect(findingNaturalKey({ ...base, path: null, line: null })).toContain(
+			"#55::",
+		);
+	});
+});
