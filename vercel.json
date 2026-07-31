@@ -12,7 +12,19 @@
 		},
 		"api/cron/poll-feedback.ts": {
 			"maxDuration": 60
+		},
+		"api/cron/improve.ts": {
+			"maxDuration": 300
 		}
 	},
-	"crons": [{ "path": "/api/cron/poll-feedback", "schedule": "0 0 * * *" }]
+	"crons": [
+		{
+			"path": "/api/cron/poll-feedback",
+			"schedule": "0 0 * * *"
+		},
+		{
+			"path": "/api/cron/improve",
+			"schedule": "0 6 * * 1"
+		}
+	]
 }
