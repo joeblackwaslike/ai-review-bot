@@ -33,6 +33,27 @@ describe("computeReactionDelta", () => {
 		]);
 	});
 
+	it("maps a confused reaction to its own verdict rather than dropping it", () => {
+		const out = computeReactionDelta(
+			[{ login: "octocat", content: "confused", createdAtMs: 100 }],
+			{},
+		);
+		expect(out.changes).toEqual([
+			{ reactor: "octocat", verdict: "confused", reactedAtMs: 100 },
+		]);
+		expect(out.lastSeen).toEqual({ octocat: "confused" });
+	});
+
+	it("emits a change when a reactor flips confused→down", () => {
+		const out = computeReactionDelta(
+			[{ login: "octocat", content: "-1", createdAtMs: 200 }],
+			{ octocat: "confused" },
+		);
+		expect(out.changes).toEqual([
+			{ reactor: "octocat", verdict: "down", reactedAtMs: 200 },
+		]);
+	});
+
 	it("ignores non-verdict reactions", () => {
 		const out = computeReactionDelta(
 			[{ login: "octocat", content: "heart", createdAtMs: 100 }],

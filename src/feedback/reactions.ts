@@ -12,17 +12,22 @@ interface VerdictChange {
 	reactedAtMs: number;
 }
 
-/** Pure: reduce current reactions to one verdict per reactor (latest +1/-1 wins), then diff
- * against the last-seen map. New/changed verdicts become changes; removals drop from the map
- * but emit no change. */
+const VERDICT_BY_REACTION: Record<string, Verdict> = {
+	"+1": "up",
+	"-1": "down",
+	confused: "confused",
+};
+
+/** Pure: reduce current reactions to one verdict per reactor (latest verdict-bearing reaction
+ * wins), then diff against the last-seen map. New/changed verdicts become changes; removals
+ * drop from the map but emit no change. */
 export function computeReactionDelta(
 	current: RawReaction[],
 	lastSeen: Record<string, Verdict>,
 ): { changes: VerdictChange[]; lastSeen: Record<string, Verdict> } {
 	const latest = new Map<string, { verdict: Verdict; reactedAtMs: number }>();
 	for (const r of current) {
-		const verdict: Verdict | null =
-			r.content === "+1" ? "up" : r.content === "-1" ? "down" : null;
+		const verdict = VERDICT_BY_REACTION[r.content];
 		if (!verdict) continue;
 		const prev = latest.get(r.login);
 		if (!prev || r.createdAtMs > prev.reactedAtMs) {

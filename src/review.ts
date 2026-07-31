@@ -1134,7 +1134,7 @@ export async function buildReview(
 
 	const feedbackInvite =
 		context.feedbackEnabled && reviewComments.length > 0
-			? "💬 React 👍 / 👎 on any inline comment to tell us if it helped — it trains our reviewers."
+			? "💬 React on any inline comment to train our reviewers: 👍 it helped, 👎 it was wrong, 😕 it didn't land. For 😕, please also reply saying why — the reply is what we learn from."
 			: "";
 
 	const tier2Notice =

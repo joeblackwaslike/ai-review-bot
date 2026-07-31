@@ -1,5 +1,8 @@
 export type Provider = "anthropic" | "openai";
-export type Verdict = "up" | "down";
+/** `confused` (😕) means the finding did not land — it is not a synonym for `down`. It always
+ * arrives with a reply on the same thread explaining why, and that reply is what carries the
+ * intent; a `confused` verdict read without its reply is not interpretable. */
+export type Verdict = "up" | "down" | "confused";
 
 /** A posted inline comment we are tracking for reactions. */
 export interface PostedCommentRecord {
