@@ -10,6 +10,7 @@ import {
 	runLocalReview,
 } from "./audit.js";
 import { makeReady, type OctokitLike } from "./audit-pr.js";
+import { resolveAnthropicAuth } from "./auth.js";
 import { getConfig, getOpenAIAppConfig } from "./config.js";
 import {
 	type BackfillOctokit,
@@ -17,7 +18,13 @@ import {
 	backfillPr,
 	discoverReviewedPrs,
 } from "./improve/backfill.js";
+import { classifyBundles } from "./improve/classify.js";
 import { getDb } from "./improve/db/client.js";
+import {
+	insertClassified,
+	listUnclassifiedBundles,
+} from "./improve/db/repo.js";
+import { fpSignature } from "./improve/match.js";
 import { slugify } from "./report.js";
 
 function fatal(msg: string): never {
@@ -61,6 +68,10 @@ function usage(): never {
 	);
 	console.error(
 		"      Neon corpus. Requires DATABASE_URL. Idempotent — safe to re-run.",
+	);
+	console.error("  ai-review classify [--limit <n>] [--dry-run] [--json]");
+	console.error(
+		"      Classify captured feedback into intents. Requires DATABASE_URL.",
 	);
 	console.error(
 		"  ai-review OWNER/REPO [...]      (legacy remote audit — deprecated)",
@@ -459,8 +470,108 @@ async function cmdBackfill(args: string[]): Promise<void> {
 	else console.log(`\nTotals: ${JSON.stringify(totals)}`);
 }
 
+async function cmdClassify(args: string[]): Promise<void> {
+	let limit = 500;
+	let json = false;
+	let dryRun = false;
+	for (let i = 0; i < args.length; i++) {
+		const a = args[i];
+		if (a === "--limit") {
+			const raw = requireValue(args, i++, a);
+			limit = Number(raw);
+			if (!Number.isInteger(limit) || limit <= 0) {
+				fatal(`--limit must be a positive integer, got: ${raw}`);
+			}
+		} else if (a === "--dry-run") dryRun = true;
+		else if (a === "--json") json = true;
+		else if (a.startsWith("--")) fatal(`Unknown flag: ${a}`);
+	}
+
+	const db = getDb();
+	const bundles = await listUnclassifiedBundles(db, limit);
+	if (bundles.length === 0) {
+		// Must respect --json like every other exit path; a caller parsing stdout
+		// should never get prose because the queue happened to be empty.
+		console.log(
+			json
+				? JSON.stringify(
+						{ considered: 0, classified: 0, written: 0, byIntent: {} },
+						null,
+						2,
+					)
+				: "Nothing to classify.",
+		);
+		return;
+	}
+
+	// Same auth posture as `ai-review review`: API key, else an explicit OAuth
+	// token, else the logged-in `claude` subscription. Local CLI only — never
+	// reachable from a webhook path (see src/auth.ts).
+	const auth = await resolveAnthropicAuth().catch((err: unknown) => {
+		// Falling back to ambient credentials is intended, but a network or
+		// keychain failure should not look like "no subscription configured".
+		console.error("classify: auth resolution failed; using ambient config", {
+			error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+		});
+		return undefined;
+	});
+	const run = await classifyBundles(
+		bundles,
+		{ provider: "anthropic", model: "claude-haiku-4-5" },
+		auth,
+	);
+	const classified = run.classified;
+
+	const byId = new Map(bundles.map((b) => [b.rawFeedbackId, b]));
+	let written = 0;
+	let orphaned = 0;
+	for (const c of classified) {
+		const bundle = byId.get(c.rawFeedbackId);
+		// Unreachable unless the query and the classifier disagree about which
+		// rows are in play. Counted and reported rather than dropped in silence,
+		// since a classification with nowhere to go means one of the two is wrong.
+		if (!bundle) {
+			orphaned++;
+			continue;
+		}
+		if (dryRun) continue;
+		written += await insertClassified(db, {
+			rawFeedbackId: c.rawFeedbackId,
+			intent: c.intent,
+			confidence: c.confidence.toFixed(2),
+			isBotRelated: c.isBotRelated,
+			matchedFindingId: bundle.findingId,
+			fpSignature: fpSignature(bundle.skills, bundle.findingTitle),
+			model: c.model,
+		});
+	}
+
+	const counts: Record<string, number> = {};
+	for (const c of classified) counts[c.intent] = (counts[c.intent] ?? 0) + 1;
+	const deterministic = classified.filter(
+		(c) => c.model === "deterministic",
+	).length;
+
+	const summary = {
+		considered: bundles.length,
+		classified: classified.length,
+		unresolved: bundles.length - classified.length,
+		orphaned,
+		failedBatches: run.failedBatches,
+		truncatedReplies: run.truncated,
+		deterministic,
+		viaModel: classified.length - deterministic,
+		written,
+		byIntent: counts,
+	};
+	console.log(
+		json ? JSON.stringify(summary, null, 2) : JSON.stringify(summary),
+	);
+}
+
 async function main(): Promise<void> {
 	const [sub, ...rest] = process.argv.slice(2);
+	if (sub === "classify") return cmdClassify(rest);
 
 	if (sub === "review") return cmdReview(rest);
 	if (sub === "audit") return cmdAudit(rest);

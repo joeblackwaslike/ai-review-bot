@@ -1,7 +1,9 @@
+import { sql } from "drizzle-orm";
 import {
 	bigint,
 	bigserial,
 	boolean,
+	check,
 	index,
 	integer,
 	jsonb,
@@ -125,6 +127,12 @@ export const classifiedFeedback = pgTable(
 			.defaultNow(),
 	},
 	(t) => [
+		// Confidence is a model-supplied probability; the column type alone would
+		// accept 9.99, which would silently skew any confidence-weighted metric.
+		check(
+			"classified_feedback_confidence_range",
+			sql`${t.confidence} between 0 and 1`,
+		),
 		uniqueIndex("classified_feedback_raw_uq").on(t.rawFeedbackId),
 		index("classified_feedback_intent_idx").on(t.intent),
 		index("classified_feedback_fp_sig_idx").on(t.fpSignature),

@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import type { Db } from "./client.js";
-import { findingCatalog, rawFeedback } from "./schema.js";
+import { classifiedFeedback, findingCatalog, rawFeedback } from "./schema.js";
 
 export type RawFeedbackInsert = typeof rawFeedback.$inferInsert;
 export type FindingInsert = typeof findingCatalog.$inferInsert;
@@ -54,4 +54,115 @@ export async function upsertFinding(
 		})
 		.returning({ id: findingCatalog.id });
 	return result[0].id;
+}
+
+export type ClassifiedInsert = typeof classifiedFeedback.$inferInsert;
+
+/** Feedback that has no classification yet, joined to the finding it concerns
+ * and to the reply on its thread. A reaction and its reply are returned as one
+ * row so the classifier always sees them together. */
+export async function listUnclassifiedBundles(
+	db: Db,
+	limit: number,
+): Promise<
+	{
+		rawFeedbackId: number;
+		findingId: number | null;
+		findingTitle: string;
+		skills: string[];
+		verdict: string | null;
+		replyBody: string | null;
+	}[]
+> {
+	const result = await db.execute(sql`
+		select rf.id as raw_feedback_id,
+		       f.id as finding_id,
+		       coalesce(f.title, rf.title, '') as finding_title,
+		       coalesce(f.skills, '{}') as skills,
+		       rf.verdict,
+		       reply.body as reply_body
+		from raw_feedback rf
+		left join finding_catalog f
+		       on f.comment_id = coalesce(rf.in_reply_to_id, rf.comment_id)
+		-- Aggregated, not joined: a thread is a conversation and can carry several
+		-- replies. A plain join would emit one bundle per reply, so the classifier
+		-- would be billed for the same reaction repeatedly and the work queue would
+		-- overstate what is left to do.
+		--
+		-- Keyed on the thread ROOT, not on rf's own id, so it behaves the same for a
+		-- reaction (root = the finding it sits on) and for a reply-only row (root =
+		-- in_reply_to_id) — the latter then picks up its own body plus any siblings
+		-- instead of only itself.
+		--
+		-- Ordered by id so the first reply — the direct answer to the finding, which
+		-- carries the verdict phrase — stays at the front where the deterministic
+		-- opener match can still see it.
+		left join lateral (
+		       select string_agg(r.body, E'\n\n---\n\n' order by r.id) as body
+		       from raw_feedback r
+		       where r.in_reply_to_id = coalesce(rf.in_reply_to_id, rf.comment_id)
+		         and r.source = 'inline_reply'
+		) reply on true
+		-- A maintainer who answers a finding without also reacting leaves only an
+		-- inline_reply row. Excluding replies outright dropped that free-text
+		-- signal entirely — 36% of replies in the corpus have no reaction on their
+		-- thread. Reply rows are admitted only when their thread carries no
+		-- reaction, so a reaction and its reply are still classified as one bundle
+		-- rather than counted twice.
+		where (
+		        rf.source <> 'inline_reply'
+		        or (
+		              not exists (
+		                select 1 from raw_feedback rx
+		                where rx.comment_id = rf.in_reply_to_id
+		                  and rx.source <> 'inline_reply'
+		              )
+		              -- One bundle per thread, not per reply: without this a
+		              -- reaction-less thread carrying three replies would be
+		              -- classified three times over, each pointing at the same
+		              -- finding. The lateral above already gathers the siblings.
+		              and rf.id = (
+		                select min(r2.id) from raw_feedback r2
+		                where r2.in_reply_to_id = rf.in_reply_to_id
+		                  and r2.source = 'inline_reply'
+		              )
+		            )
+		      )
+		  and not exists (
+		        select 1 from classified_feedback c where c.raw_feedback_id = rf.id
+		      )
+		order by rf.id
+		limit ${limit}
+	`);
+	return (
+		result.rows as unknown as {
+			raw_feedback_id: number;
+			finding_id: number | null;
+			finding_title: string;
+			skills: string[];
+			verdict: string | null;
+			reply_body: string | null;
+		}[]
+	).map((r) => ({
+		rawFeedbackId: Number(r.raw_feedback_id),
+		findingId: r.finding_id === null ? null : Number(r.finding_id),
+		findingTitle: r.finding_title,
+		skills: r.skills ?? [],
+		verdict: r.verdict,
+		replyBody: r.reply_body,
+	}));
+}
+
+/** Record one classification. A duplicate raw_feedback_id is a no-op, so a
+ * re-run after a partially failed batch cannot double-count a signal. */
+export async function insertClassified(
+	db: Db,
+	row: ClassifiedInsert,
+): Promise<number> {
+	const inserted = await db
+		.insert(classifiedFeedback)
+		.values(row)
+		.onConflictDoNothing({ target: classifiedFeedback.rawFeedbackId })
+		.returning({ id: classifiedFeedback.id });
+	return inserted.length;
 }

@@ -35,20 +35,39 @@ export function parseFindingComment(body: string): ParsedFinding | null {
 }
 
 /** Stable identity for a posted finding, shared by the live capture path and the
- * historical backfill so both converge on one row instead of duplicating. The
- * title is hashed to keep the key bounded regardless of title length. */
+ * historical backfill so both converge on one row instead of duplicating.
+ *
+ * A row in this table is one *posted comment*, so the comment id is the key
+ * whenever there is one. It is stable in both directions that matter: GitHub
+ * re-anchors a comment to a new `line` as later commits move the code around it
+ * (keying on `line` forked one finding into two rows sharing a comment_id, which
+ * fanned out every join), and two distinct comments in one file can carry the
+ * same title (keying on title alone collapsed them, so feedback on the second
+ * could not be matched).
+ *
+ * Recognising that the same claim recurs — across rounds, files or PRs — is a
+ * trend question, not an identity one, and belongs in the trend layer where it
+ * can be counted rather than silently merged away.
+ *
+ * Because the comment id alone determines the key, `path` and `title` are
+ * ignored on that branch — a comment keeps its identity when it is re-anchored
+ * or its text is edited, which is the point.
+ *
+ * General findings have no comment, so they fall back to path + hashed title. */
 export function findingNaturalKey(parts: {
 	provider: string;
 	owner: string;
 	repo: string;
 	pr: number;
+	commentId: number | null;
 	path: string | null;
-	line: number | null;
 	title: string;
 }): string {
+	const prefix = `${parts.provider}:${parts.owner}/${parts.repo}#${parts.pr}`;
+	if (parts.commentId !== null) return `${prefix}:comment:${parts.commentId}`;
 	const titleHash = createHash("sha256")
 		.update(parts.title)
 		.digest("hex")
 		.slice(0, 12);
-	return `${parts.provider}:${parts.owner}/${parts.repo}#${parts.pr}:${parts.path ?? ""}:${parts.line ?? ""}:${titleHash}`;
+	return `${prefix}:${parts.path ?? ""}:${titleHash}`;
 }

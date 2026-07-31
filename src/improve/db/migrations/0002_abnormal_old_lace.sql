@@ -1,0 +1,1 @@
+ALTER TABLE "classified_feedback" ADD CONSTRAINT "classified_feedback_confidence_range" CHECK ("classified_feedback"."confidence" between 0 and 1);
