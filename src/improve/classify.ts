@@ -44,6 +44,12 @@ export interface ClassifiedFeedback {
 	model: string;
 }
 
+/** Longest reply text sent to the classifier. Replies here are a few hundred
+ * characters; the cap exists so one pathological reply cannot crowd a whole
+ * batch out of the context window. Truncation is reported, not silent — see
+ * ClassifyRun.truncated. */
+export const REPLY_CHAR_LIMIT = 1200;
+
 // Replies in this corpus open with an explicit verdict phrase, which is a more
 // reliable signal than anything a model infers from the prose that follows.
 // Matching it costs nothing and removes the bulk of the work from the LLM.
@@ -136,12 +142,6 @@ function buildPrompt(bundles: FeedbackBundle[]): string {
 
 export const CLASSIFY_BATCH_SIZE = 20;
 
-/** Longest reply text sent to the classifier. Replies here are a few hundred
- * characters; the cap exists so one pathological reply cannot crowd a whole
- * batch out of the context window. Truncation is reported, not silent — see
- * ClassifyRun.truncated. */
-export const REPLY_CHAR_LIMIT = 1200;
-
 export interface ClassifyRun {
 	classified: ClassifiedFeedback[];
 	/** Batches whose model call failed. Their items stay unclassified for the
@@ -164,9 +164,7 @@ export async function classifyBundles(
 	const resolved: ClassifiedFeedback[] = [];
 	const needsModel: FeedbackBundle[] = [];
 	let failedBatches = 0;
-	const truncated = bundles.filter(
-		(b) => (b.replyBody?.length ?? 0) > REPLY_CHAR_LIMIT,
-	).length;
+	let truncated = 0;
 
 	for (const bundle of bundles) {
 		const deterministic =
@@ -184,6 +182,13 @@ export async function classifyBundles(
 			needsModel.push(bundle);
 		}
 	}
+
+	// Counted over what is actually sent, not over every candidate: a bundle
+	// resolved by its opener never reaches the model, so its long reply is never
+	// cut and reporting it as truncated would overstate lost context.
+	truncated = needsModel.filter(
+		(b) => (b.replyBody?.length ?? 0) > REPLY_CHAR_LIMIT,
+	).length;
 
 	for (let i = 0; i < needsModel.length; i += CLASSIFY_BATCH_SIZE) {
 		const batch = needsModel.slice(i, i + CLASSIFY_BATCH_SIZE);
@@ -205,7 +210,8 @@ export async function classifyBundles(
 			console.error("classify: batch failed; leaving it unclassified", {
 				batchStart: i,
 				size: batch.length,
-				err,
+				error:
+					err instanceof Error ? `${err.name}: ${err.message}` : String(err),
 			});
 		}
 	}

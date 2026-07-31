@@ -5,6 +5,7 @@ import {
 	classifyByVerdict,
 	type FeedbackBundle,
 	mapClassifierOutput,
+	REPLY_CHAR_LIMIT,
 } from "./classify.js";
 
 describe("classifyByOpener", () => {
@@ -169,19 +170,42 @@ describe("classifyBundles", () => {
 		expect(run.failedBatches).toBe(0);
 	});
 
-	it("counts an over-long reply as truncated", async () => {
+	// A bundle resolved by its opener never reaches the model, so its long reply
+	// is never actually cut — counting it would overstate lost context.
+	it("does not count a long reply as truncated when the opener resolves it", async () => {
 		const run = await classifyBundles(
 			[
 				{
 					rawFeedbackId: 1,
 					findingTitle: "t",
 					verdict: "confused",
-					replyBody: `**Fixed** ${"x".repeat(2000)}`,
+					replyBody: `**Fixed** ${"x".repeat(2 * REPLY_CHAR_LIMIT)}`,
 				},
 			],
 			selection,
 		);
-		expect(run.truncated).toBe(1);
+		expect(run.classified[0].model).toBe("deterministic");
+		expect(run.truncated).toBe(0);
+	});
+
+	it("counts a batch failure instead of reporting a clean run", async () => {
+		// No opener and a bare `confused` verdict, so this bundle must go to the
+		// model; with no provider reachable the batch fails.
+		const run = await classifyBundles(
+			[
+				{
+					rawFeedbackId: 1,
+					findingTitle: "t",
+					verdict: "confused",
+					replyBody: "no recognised verdict phrase here",
+				},
+			],
+			{ provider: "anthropic", model: "definitely-not-a-model" },
+		);
+		expect(run.failedBatches).toBe(1);
+		expect(run.classified).toEqual([]);
+		// The long reply still counts as truncated: it was sent, then the call failed.
+		expect(run.truncated).toBe(0);
 	});
 
 	it("returns nothing to classify for an empty batch", async () => {
