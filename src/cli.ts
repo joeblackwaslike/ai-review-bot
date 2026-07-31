@@ -22,9 +22,15 @@ import { classifyBundles } from "./improve/classify.js";
 import { getDb } from "./improve/db/client.js";
 import {
 	insertClassified,
+	listFindingOutcomes,
 	listUnclassifiedBundles,
 } from "./improve/db/repo.js";
 import { fpSignature } from "./improve/match.js";
+import {
+	computeSeverityReliability,
+	computeSkillSignals,
+	detectDuplicateClusters,
+} from "./improve/trends.js";
 import { slugify } from "./report.js";
 
 function fatal(msg: string): never {
@@ -72,6 +78,10 @@ function usage(): never {
 	console.error("  ai-review classify [--limit <n>] [--dry-run] [--json]");
 	console.error(
 		"      Classify captured feedback into intents. Requires DATABASE_URL.",
+	);
+	console.error("  ai-review trends [--json]");
+	console.error(
+		"      Report severity reliability, repeated claims and per-skill signal.",
 	);
 	console.error(
 		"  ai-review OWNER/REPO [...]      (legacy remote audit — deprecated)",
@@ -569,9 +579,66 @@ async function cmdClassify(args: string[]): Promise<void> {
 	);
 }
 
+async function cmdTrends(args: string[]): Promise<void> {
+	let json = false;
+	for (const a of args) {
+		if (a === "--json") json = true;
+		// Rejected rather than ignored: `ai-review trends myrepo` silently
+		// producing a full unfiltered report looks like it honoured the argument.
+		else fatal(`Unexpected argument: ${a}`);
+	}
+
+	const outcomes = await listFindingOutcomes(getDb()).catch((err: unknown) => {
+		fatal(
+			`could not read the corpus (is DATABASE_URL set?): ${
+				err instanceof Error ? err.message : String(err)
+			}`,
+		);
+	});
+	const severity = computeSeverityReliability(outcomes);
+	const duplicates = detectDuplicateClusters(outcomes);
+	const skills = computeSkillSignals(outcomes);
+
+	if (json) {
+		console.log(JSON.stringify({ severity, duplicates, skills }, null, 2));
+		return;
+	}
+
+	console.log(`Findings with feedback: ${outcomes.length}\n`);
+	console.log("Severity reliability (least reliable first):");
+	for (const s of severity) {
+		console.log(
+			`  ${s.severity.padEnd(7)} useful=${s.useful} low_value=${s.lowValue} wrong=${s.wrong}  (${Math.round(s.usefulRatio * 100)}% useful, n=${s.sampleSize})`,
+		);
+	}
+
+	console.log(`\nRepeated claims (${duplicates.length} cluster(s)):`);
+	for (const d of duplicates) {
+		console.log(
+			`  x${d.findingIds.length}  #${d.pr} ${d.path} — \`${d.identifier}\``,
+		);
+		for (const t of d.titles) console.log(`        ${t.slice(0, 76)}`);
+	}
+
+	console.log(
+		`\nPer-skill signal (${skills.length} skill(s) above min sample):`,
+	);
+	if (skills.length === 0) {
+		console.log(
+			"  none yet — backfilled findings carry no skills, so this fills in as live captures accumulate",
+		);
+	}
+	for (const s of skills) {
+		console.log(
+			`  ${s.skill.padEnd(28)} negative=${Math.round(s.negativeRatio * 100)}% (n=${s.sampleSize})`,
+		);
+	}
+}
+
 async function main(): Promise<void> {
 	const [sub, ...rest] = process.argv.slice(2);
 	if (sub === "classify") return cmdClassify(rest);
+	if (sub === "trends") return cmdTrends(rest);
 
 	if (sub === "review") return cmdReview(rest);
 	if (sub === "audit") return cmdAudit(rest);
