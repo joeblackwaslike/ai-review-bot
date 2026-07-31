@@ -139,7 +139,23 @@ export async function capturePostedReview(deps: {
 			);
 			carrierCommentId = (res.data as { id: number }).id;
 		}
-		if (deps.onCarrier) await deps.onCarrier(carrierCommentId);
+		if (deps.onCarrier) {
+			// Contained: registration is best-effort, and the finding catalog is
+			// built after this block. A KV blip must not cost every finding on the
+			// review — the carrier can be re-registered on the next round, but a
+			// finding that was never catalogued has no second chance.
+			try {
+				await deps.onCarrier(carrierCommentId);
+			} catch (err) {
+				console.error("improve: carrier registration failed", {
+					owner,
+					repo,
+					pr,
+					error:
+						err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+				});
+			}
+		}
 	}
 
 	for (const { comment, skills, title, severity } of pairWithProvenance(
