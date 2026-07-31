@@ -392,8 +392,16 @@ async function cmdBackfill(args: string[]): Promise<void> {
 	for (let i = 0; i < args.length; i++) {
 		const a = args[i];
 		if (a === "--repo") slug = requireValue(args, i++, a);
-		else if (a === "--pr") pr = Number(requireValue(args, i++, a));
-		else if (a === "--json") json = true;
+		else if (a === "--pr") {
+			const raw = requireValue(args, i++, a);
+			pr = Number(raw);
+			// Without this, `--pr 55x` yields NaN, which is falsy and silently
+			// falls through to repo-wide discovery — a typo would harvest every
+			// reviewed PR instead of failing.
+			if (!Number.isInteger(pr) || pr <= 0) {
+				fatal(`--pr must be a positive integer, got: ${raw}`);
+			}
+		} else if (a === "--json") json = true;
 		else if (a.startsWith("--")) fatal(`Unknown flag: ${a}`);
 	}
 

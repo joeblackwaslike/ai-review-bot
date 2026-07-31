@@ -52,6 +52,27 @@ describe("partitionComments", () => {
 		expect(replies).toEqual([]);
 	});
 
+	it("ignores a human reply on a third-party bot's thread", () => {
+		const { findings, replies } = partitionComments([
+			comment({ id: 1, user: { login: "coderabbitai[bot]" } }),
+			comment({
+				id: 2,
+				in_reply_to_id: 1,
+				user: { login: "joeblackwaslike" },
+				body: "answering coderabbit, not us",
+			}),
+		]);
+		expect(findings).toEqual([]);
+		expect(replies).toEqual([]);
+	});
+
+	it("ignores a reply whose thread root is absent from the payload", () => {
+		const { replies } = partitionComments([
+			comment({ id: 2, in_reply_to_id: 999, user: { login: "someone" } }),
+		]);
+		expect(replies).toEqual([]);
+	});
+
 	it("ignores third-party review bots entirely", () => {
 		const { findings, replies } = partitionComments([
 			comment({ id: 3, user: { login: "coderabbitai[bot]" } }),

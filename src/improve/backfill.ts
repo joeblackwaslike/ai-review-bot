@@ -79,19 +79,36 @@ export function commentDedupKey(source: string, commentId: number): string {
 }
 
 /** Pure: split a PR's review comments into the bot findings to catalog and the
- * human replies that explain them. A reply authored by one of our own bots is
- * not feedback, so it is excluded from both. */
+ * human replies that explain them.
+ *
+ * A reply only counts as feedback when it sits on one of OUR threads. PRs are
+ * reviewed by third-party bots too, and a human answering CodeRabbit or Sourcery
+ * is discussing their finding, not ours — importing those would attribute other
+ * reviewers' conversations to us. GitHub sets `in_reply_to_id` to the thread's
+ * root comment, so the root's author identifies whose thread it is.
+ *
+ * A reply authored by one of our own bots is not feedback either. */
 export function partitionComments(comments: ReviewCommentPayload[]): {
 	findings: ReviewCommentPayload[];
 	replies: ReviewCommentPayload[];
 } {
 	const findings: ReviewCommentPayload[] = [];
 	const replies: ReviewCommentPayload[] = [];
+	const authorByCommentId = new Map<number, string>();
+	for (const c of comments) authorByCommentId.set(c.id, c.user?.login ?? "");
+
 	for (const c of comments) {
 		const login = c.user?.login ?? "";
 		const isOurBot = login in BOT_PROVIDERS;
-		if (c.in_reply_to_id) {
-			if (!isOurBot) replies.push(c);
+		if (c.in_reply_to_id !== undefined) {
+			const rootAuthor = authorByCommentId.get(c.in_reply_to_id);
+			if (
+				!isOurBot &&
+				rootAuthor !== undefined &&
+				rootAuthor in BOT_PROVIDERS
+			) {
+				replies.push(c);
+			}
 		} else if (isOurBot) {
 			findings.push(c);
 		}
@@ -203,7 +220,12 @@ export async function backfillPr(
 
 	for (const reply of replies) {
 		const parent = comments.find((c) => c.id === reply.in_reply_to_id);
-		const provider = BOT_PROVIDERS[parent?.user?.login ?? ""] ?? "anthropic";
+		// partitionComments only admits replies whose thread root is one of our
+		// bots, so this lookup always resolves. Skipping on a miss rather than
+		// defaulting to a provider keeps a future change to that filter from
+		// silently misattributing another reviewer's thread to us.
+		const provider = BOT_PROVIDERS[parent?.user?.login ?? ""];
+		if (!provider) continue;
 		result.replies += await insertRawFeedback(deps.db, {
 			source: "inline_reply",
 			provider,
