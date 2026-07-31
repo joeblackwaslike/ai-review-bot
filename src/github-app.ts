@@ -6,6 +6,8 @@ import { getConfig, getOpenAIAppConfig } from "./config.js";
 import type { KvClient } from "./feedback/kv.js";
 import { createUpstashKv } from "./feedback/kv.js";
 import { persistPostedComments } from "./feedback/persist.js";
+import { capturePostedReview } from "./improve/capture.js";
+import { getDb } from "./improve/db/client.js";
 import { billingUrl, notifyQuotaExhausted, providerLabel } from "./notify.js";
 import { resolveStaleThreads } from "./resolve-threads.js";
 import type { ReviewDecision, ReviewMetadata } from "./review.js";
@@ -545,6 +547,47 @@ export async function maybeSubmitReview(args: {
 							pullNumber,
 							stored,
 						});
+					}
+					// Corpus capture is independent of the KV buffer: it writes the
+					// join target (finding_catalog) that feedback is later matched
+					// against, and posts the carrier comment that makes the
+					// top-level verdict ratable at all — reviews themselves are
+					// not reactable. Failing here must not fail a review that is
+					// already published, so it is caught separately from the KV
+					// path rather than sharing its catch.
+					if (config.improveEnabled) {
+						try {
+							const captured = await capturePostedReview({
+								db: getDb(),
+								octokit: octokit as never,
+								owner,
+								repo,
+								pr: pullNumber,
+								reviewId,
+								headSha,
+								provider: config.provider,
+								provenance: review.commentProvenance,
+								summary: review.body,
+								commentPrefix: config.reviewCommentPrefix,
+								postCarrier: config.improveCarrierEnabled,
+							});
+							console.log("improve: captured posted review", {
+								owner,
+								repo,
+								pullNumber,
+								...captured,
+							});
+						} catch (captureErr) {
+							console.error("improve: corpus capture failed", {
+								owner,
+								repo,
+								pullNumber,
+								error:
+									captureErr instanceof Error
+										? `${captureErr.name}: ${captureErr.message}`
+										: String(captureErr),
+							});
+						}
 					}
 				} catch (feedbackErr) {
 					// Drop the cached client so a transient failure (network blip, expired

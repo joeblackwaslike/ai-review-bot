@@ -105,6 +105,12 @@ export function createFakeKv(): FakeKv {
 			l.unshift(value);
 			lists.set(key, l);
 		},
+		async lrange(key, start, stop) {
+			const l = lists.get(key) ?? [];
+			// Redis `stop` is inclusive and may be negative (-1 = last element).
+			const end = stop < 0 ? l.length + stop + 1 : stop + 1;
+			return l.slice(start, end);
+		},
 		_dump() {
 			return { strings, zsets, lists };
 		},
