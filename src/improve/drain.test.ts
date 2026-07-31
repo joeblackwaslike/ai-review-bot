@@ -55,6 +55,29 @@ describe("mapKvEventToRaw", () => {
 	});
 });
 
+describe("drain limit", () => {
+	// Redis reads a negative stop index as counting back from the end, so an
+	// unclamped limit of 0 becomes lrange(key, 0, -1) — the entire list, the
+	// exact opposite of the intent.
+	it("clamps a zero or negative limit to a single element", async () => {
+		const seen: [number, number][] = [];
+		const kv = {
+			lrange: async (_k: string, start: number, stop: number) => {
+				seen.push([start, stop]);
+				return [];
+			},
+		} as never;
+		const { drainKvEvents } = await import("./drain.js");
+		for (const limit of [0, -5]) {
+			await drainKvEvents({ kv, db: {} as never, limit });
+		}
+		expect(seen).toEqual([
+			[0, 0],
+			[0, 0],
+		]);
+	});
+});
+
 describe("parseEvents", () => {
 	it("parses well-formed entries", () => {
 		const { events, malformed } = parseEvents([JSON.stringify(event())]);

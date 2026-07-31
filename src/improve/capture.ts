@@ -18,6 +18,18 @@ export interface PostedComment {
 	path: string | null;
 	line: number | null;
 	pull_request_review_id: number | null;
+	/** GitHub's creation timestamp. Preferred over the capture time so a retry
+	 * or a delayed capture does not shift when the finding appears to have been
+	 * raised — the corpus is time-series data and the ordering matters. */
+	created_at?: string;
+}
+
+/** GitHub's timestamp when present, else now. An unparseable value falls back
+ * rather than writing an Invalid Date into a NOT NULL column. */
+export function parsePostedAt(iso: string | undefined): Date {
+	if (!iso) return new Date();
+	const ms = Date.parse(iso);
+	return Number.isFinite(ms) ? new Date(ms) : new Date();
 }
 
 export type Provenance = Map<
@@ -122,7 +134,7 @@ export async function capturePostedReview(deps: {
 			title,
 			severity,
 			headSha: deps.headSha,
-			postedAt: new Date(),
+			postedAt: parsePostedAt(comment.created_at),
 			naturalKey: findingNaturalKey({
 				provider,
 				owner,

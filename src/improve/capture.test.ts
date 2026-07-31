@@ -4,6 +4,7 @@ import {
 	type PostedComment,
 	type Provenance,
 	pairWithProvenance,
+	parsePostedAt,
 } from "./capture.js";
 
 function comment(over: Partial<PostedComment> & { id: number }): PostedComment {
@@ -84,5 +85,23 @@ describe("carrierBody", () => {
 
 	it("degrades to a placeholder rather than rendering an empty section", () => {
 		expect(carrierBody("ai-review", "   ")).toContain("_(no summary)_");
+	});
+});
+
+describe("parsePostedAt", () => {
+	it("uses GitHub's timestamp when present", () => {
+		expect(parsePostedAt("2026-07-30T12:00:00Z")).toEqual(
+			new Date("2026-07-30T12:00:00Z"),
+		);
+	});
+
+	// A retry or a delayed capture must not shift when a finding appears to have
+	// been raised — the corpus is time-series data and the ordering matters.
+	it("falls back to now when the timestamp is absent", () => {
+		expect(parsePostedAt(undefined).getTime()).toBeGreaterThan(0);
+	});
+
+	it("falls back rather than writing an Invalid Date into a NOT NULL column", () => {
+		expect(Number.isNaN(parsePostedAt("not-a-date").getTime())).toBe(false);
 	});
 });

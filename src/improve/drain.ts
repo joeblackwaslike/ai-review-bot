@@ -66,7 +66,11 @@ export async function drainKvEvents(deps: {
 	db: Db;
 	limit?: number;
 }): Promise<{ read: number; inserted: number; malformed: number }> {
-	const raw = await deps.kv.lrange(EVENTS_LIST, 0, (deps.limit ?? 1000) - 1);
+	// Redis treats a negative stop index as counting back from the end, so a
+	// limit of 0 would become lrange(key, 0, -1) — the entire list, the exact
+	// opposite of the intent. Clamp to at least one element.
+	const limit = Math.max(1, Math.floor(deps.limit ?? 1000));
+	const raw = await deps.kv.lrange(EVENTS_LIST, 0, limit - 1);
 	const { events, malformed } = parseEvents(raw);
 	let inserted = 0;
 	for (const event of events) {
