@@ -61,7 +61,6 @@ describe("findingNaturalKey", () => {
 		repo: "r",
 		pr: 55,
 		path: "src/x.ts",
-		line: 42,
 		title: "a finding",
 	};
 
@@ -81,9 +80,13 @@ describe("findingNaturalKey", () => {
 		);
 	});
 
-	it("encodes a file-level finding with null path and line", () => {
-		expect(findingNaturalKey({ ...base, path: null, line: null })).toContain(
-			"#55::",
+	it("encodes a file-level finding with a null path", () => {
+		expect(findingNaturalKey({ ...base, path: null })).toContain("#55::");
+	});
+
+	it("still separates the same title in different files", () => {
+		expect(findingNaturalKey(base)).not.toBe(
+			findingNaturalKey({ ...base, path: "src/y.ts" }),
 		);
 	});
 });

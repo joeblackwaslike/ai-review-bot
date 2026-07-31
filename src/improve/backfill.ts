@@ -178,7 +178,6 @@ export async function backfillPr(
 				repo,
 				pr,
 				path: comment.path,
-				line: comment.line,
 				title: parsed.title,
 			}),
 			backfilled: true,
