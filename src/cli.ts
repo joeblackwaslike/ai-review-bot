@@ -500,9 +500,16 @@ async function cmdClassify(args: string[]): Promise<void> {
 
 	const byId = new Map(bundles.map((b) => [b.rawFeedbackId, b]));
 	let written = 0;
+	let orphaned = 0;
 	for (const c of classified) {
 		const bundle = byId.get(c.rawFeedbackId);
-		if (!bundle) continue;
+		// Unreachable unless the query and the classifier disagree about which
+		// rows are in play. Counted and reported rather than dropped in silence,
+		// since a classification with nowhere to go means one of the two is wrong.
+		if (!bundle) {
+			orphaned++;
+			continue;
+		}
 		if (dryRun) continue;
 		written += await insertClassified(db, {
 			rawFeedbackId: c.rawFeedbackId,
@@ -525,6 +532,7 @@ async function cmdClassify(args: string[]): Promise<void> {
 		considered: bundles.length,
 		classified: classified.length,
 		unresolved: bundles.length - classified.length,
+		orphaned,
 		deterministic,
 		viaModel: classified.length - deterministic,
 		written,

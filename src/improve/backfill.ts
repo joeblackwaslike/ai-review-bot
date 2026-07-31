@@ -177,6 +177,7 @@ export async function backfillPr(
 				owner,
 				repo,
 				pr,
+				commentId: comment.id,
 				path: comment.path,
 				title: parsed.title,
 			}),

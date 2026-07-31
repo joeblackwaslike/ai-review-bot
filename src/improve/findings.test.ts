@@ -60,6 +60,7 @@ describe("findingNaturalKey", () => {
 		owner: "o",
 		repo: "r",
 		pr: 55,
+		commentId: 3687330487,
 		path: "src/x.ts",
 		title: "a finding",
 	};
@@ -68,9 +69,24 @@ describe("findingNaturalKey", () => {
 		expect(findingNaturalKey(base)).toBe(findingNaturalKey(base));
 	});
 
-	it("differs when the title differs at the same location", () => {
+	// GitHub re-anchors a comment to a new line as later commits move the code
+	// around it; the identity must not move with it.
+	it("is unchanged by anything except the comment it was posted as", () => {
+		expect(findingNaturalKey(base)).toBe(
+			findingNaturalKey({ ...base, title: "reworded", path: "src/moved.ts" }),
+		);
+	});
+
+	it("separates two comments in one file that happen to share a title", () => {
 		expect(findingNaturalKey(base)).not.toBe(
-			findingNaturalKey({ ...base, title: "another finding" }),
+			findingNaturalKey({ ...base, commentId: 3687330488 }),
+		);
+	});
+
+	it("falls back to path and title for a general finding with no comment", () => {
+		const general = { ...base, commentId: null };
+		expect(findingNaturalKey(general)).not.toBe(
+			findingNaturalKey({ ...general, title: "another finding" }),
 		);
 	});
 
@@ -80,13 +96,16 @@ describe("findingNaturalKey", () => {
 		);
 	});
 
-	it("encodes a file-level finding with a null path", () => {
-		expect(findingNaturalKey({ ...base, path: null })).toContain("#55::");
+	it("encodes a file-level finding with neither comment nor path", () => {
+		expect(
+			findingNaturalKey({ ...base, commentId: null, path: null }),
+		).toContain("#55::");
 	});
 
-	it("still separates the same title in different files", () => {
-		expect(findingNaturalKey(base)).not.toBe(
-			findingNaturalKey({ ...base, path: "src/y.ts" }),
+	it("still separates a general finding by file", () => {
+		const general = { ...base, commentId: null };
+		expect(findingNaturalKey(general)).not.toBe(
+			findingNaturalKey({ ...general, path: "src/y.ts" }),
 		);
 	});
 });
