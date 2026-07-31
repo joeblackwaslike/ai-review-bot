@@ -926,16 +926,24 @@ describe("buildReview comment provenance", () => {
 		expect(decision?.commentProvenance).toBeUndefined();
 	});
 
-	it("includes the 👍/👎 invitation in the body when feedbackEnabled and there are inline comments", async () => {
+	it("invites all three reactions when feedbackEnabled and there are inline comments", async () => {
 		const decision = await buildReviewWithTwoAgentsFlagging("src/x.ts", 10);
-		expect(decision?.body).toContain("React 👍");
+		expect(decision?.body).toContain("💬 React");
+		for (const reaction of ["👍", "👎", "😕"]) {
+			expect(decision?.body).toContain(reaction);
+		}
+	});
+
+	it("asks for a written reason alongside 😕, since the reply carries the intent", async () => {
+		const decision = await buildReviewWithTwoAgentsFlagging("src/x.ts", 10);
+		expect(decision?.body).toContain("please also reply");
 	});
 
 	it("omits the invitation when feedbackEnabled is false", async () => {
 		const decision = await buildReviewWithTwoAgentsFlagging("src/x.ts", 10, {
 			feedbackEnabled: false,
 		});
-		expect(decision?.body ?? "").not.toContain("React 👍");
+		expect(decision?.body ?? "").not.toContain("💬 React");
 	});
 });
 
