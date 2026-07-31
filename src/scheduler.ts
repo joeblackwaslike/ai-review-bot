@@ -9,6 +9,10 @@ export interface ReviewRunMessage {
 	headSha: string;
 	action: string;
 	installationId: number;
+	/** Which peer-check pass this is. Absent means the first. Carried in the
+	 * message because the callback is stateless — QStash re-invokes a fresh
+	 * function, so the count has to travel with the work. */
+	attempt?: number;
 }
 
 // QStash rejects ':' (and other punctuation) in deduplicationId — the original
@@ -17,7 +21,10 @@ export interface ReviewRunMessage {
 // Build the id from QStash-safe chars only ([A-Za-z0-9_-]); it still uniquely
 // keys (provider, owner, repo, pr, headSha) to dedup webhook redeliveries.
 function dedupId(message: ReviewRunMessage): string {
-	return `${message.provider}-${message.owner}-${message.repo}-${message.pullNumber}-${message.headSha}`.replace(
+	// The attempt is part of the key: successive peer-check passes are distinct
+	// work on the same head, and without it QStash would dedupe every re-check
+	// after the first and the poll loop would silently stop.
+	return `${message.provider}-${message.owner}-${message.repo}-${message.pullNumber}-${message.headSha}-${message.attempt ?? 0}`.replace(
 		/[^A-Za-z0-9_-]/g,
 		"-",
 	);

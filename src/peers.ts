@@ -1,0 +1,130 @@
+/** Third-party review bots the delay exists to wait for. Our own bots are
+ * absent: waiting for ourselves would deadlock, and the point of the wait is to
+ * see what the others said so we can dedupe against it. */
+export const PEER_REVIEW_BOTS = [
+	"coderabbitai[bot]",
+	"sourcery-ai[bot]",
+	"gemini-code-assist[bot]",
+	"chatgpt-codex-connector[bot]",
+] as const;
+
+export interface PeerOctokit {
+	paginate: (
+		route: string,
+		params: Record<string, unknown>,
+	) => Promise<unknown[]>;
+}
+
+interface ReviewRow {
+	user: { login: string } | null;
+	commit_id: string;
+	submitted_at?: string;
+}
+
+export interface PeerStatus {
+	/** Peers that have reviewed the CURRENT head. */
+	arrived: string[];
+	/** Peers that have reviewed this PR at any point, current head or not. */
+	seenOnPr: string[];
+}
+
+/** Pure: which peers have weighed in, and on what.
+ *
+ * `arrived` is gated on the head SHA — a peer's review of an older commit says
+ * nothing about the diff we are about to review, so counting it would let a
+ * stale review satisfy the wait. */
+export function summarizePeers(
+	reviews: ReviewRow[],
+	headSha: string,
+): PeerStatus {
+	const peers = new Set<string>(PEER_REVIEW_BOTS);
+	const arrived = new Set<string>();
+	const seenOnPr = new Set<string>();
+	for (const review of reviews) {
+		const login = review.user?.login ?? "";
+		if (!peers.has(login)) continue;
+		seenOnPr.add(login);
+		if (review.commit_id === headSha) arrived.add(login);
+	}
+	return { arrived: [...arrived].sort(), seenOnPr: [...seenOnPr].sort() };
+}
+
+/** Pure: should the review run now rather than wait longer?
+ *
+ * Three ways to stop waiting, in order of confidence:
+ *   1. Every peer that has engaged with this PR has now reviewed the current
+ *      head — there is nothing left to wait for.
+ *   2. No peer has ever engaged with this PR and none is expected in this repo,
+ *      so the wait has no purpose at all.
+ *   3. The ceiling is reached — a peer that never arrives must not starve us,
+ *      which is exactly how our own Codex bot went unreviewed for a whole PR.
+ */
+export function shouldRunNow(opts: {
+	status: PeerStatus;
+	peersExpectedInRepo: boolean;
+	attempt: number;
+	maxAttempts: number;
+}): {
+	run: boolean;
+	reason: "peers-arrived" | "no-peers-expected" | "ceiling" | "wait";
+} {
+	const { status, peersExpectedInRepo, attempt, maxAttempts } = opts;
+
+	if (
+		status.seenOnPr.length > 0 &&
+		status.arrived.length >= status.seenOnPr.length
+	) {
+		return { run: true, reason: "peers-arrived" };
+	}
+	if (status.seenOnPr.length === 0 && !peersExpectedInRepo) {
+		return { run: true, reason: "no-peers-expected" };
+	}
+	if (attempt >= maxAttempts) {
+		return { run: true, reason: "ceiling" };
+	}
+	return { run: false, reason: "wait" };
+}
+
+/** Reviews on a PR, for peer inspection. */
+export async function fetchPrReviews(
+	octokit: PeerOctokit,
+	owner: string,
+	repo: string,
+	pr: number,
+): Promise<ReviewRow[]> {
+	return (await octokit.paginate(
+		"GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
+		{ owner, repo, pull_number: pr, per_page: 100 },
+	)) as ReviewRow[];
+}
+
+/** Has any peer bot ever reviewed in this repo? Answers "is waiting pointless
+ * here", which is the difference between a repo with review bots installed and
+ * one without. Searched rather than assumed, because assuming they exist is
+ * what makes every PR in a bot-free repo wait for nothing. */
+export async function peersExpectedInRepo(
+	octokit: PeerOctokit,
+	owner: string,
+	repo: string,
+): Promise<boolean> {
+	try {
+		for (const bot of PEER_REVIEW_BOTS) {
+			const items = (await octokit.paginate("GET /search/issues", {
+				q: `repo:${owner}/${repo} type:pr commenter:${bot}`,
+				per_page: 1,
+			})) as unknown[];
+			if (items.length > 0) return true;
+		}
+		return false;
+	} catch (err) {
+		// Search is rate-limited and flaky. Failing closed (assume peers exist)
+		// keeps the old waiting behaviour, which is the safe direction: waiting
+		// too long costs latency, running too early costs duplicate findings.
+		console.error("peers: repo expectation check failed; assuming peers", {
+			owner,
+			repo,
+			error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+		});
+		return true;
+	}
+}
