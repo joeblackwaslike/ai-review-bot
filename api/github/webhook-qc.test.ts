@@ -126,12 +126,22 @@ describe("QC webhook handler", () => {
 	});
 
 	// The ack is sent before processing, so a handler that throws must not turn
-	// into an unhandled rejection that fails the whole invocation.
-	it("swallows a processing failure after the ack", async () => {
-		verifyAndReceive.mockRejectedValue(new Error("handler exploded"));
+	// into an unhandled rejection. Asserting on the log rather than the status
+	// code: the handler does not await the dispatch, so the 202 stands whether
+	// or not the rejection is caught, and would prove nothing.
+	it("logs a processing failure after the ack instead of rejecting", async () => {
+		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+		const failure = new Error("handler exploded");
+		verifyAndReceive.mockRejectedValue(failure);
 
 		const res = await call(stubReq());
+		await new Promise((resolve) => setImmediate(resolve));
 
 		expect(res.statusCode).toBe(202);
+		expect(logged).toHaveBeenCalledWith(
+			"QC webhook processing failed",
+			expect.objectContaining({ deliveryId: "d1", error: failure }),
+		);
+		logged.mockRestore();
 	});
 });

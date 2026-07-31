@@ -276,13 +276,20 @@ export async function recordQcRun(
 /** Write the real counts onto a claimed run once it has been reported.
  *
  * The row is inserted with placeholder counts before any judging happens, so
- * without this the table records that a run occurred but never what it found. */
+ * without this the table records that a run occurred but never what it found.
+ *
+ * `prCommentId` doubles as the completion marker: it is null on a claim and set
+ * here, so a row that still has none is a run that never finished. */
 export async function finalizeQcRun(
 	db: Db,
 	dedupKey: string,
-	counts: { findingsJudged: number; falsePositives: number },
+	result: {
+		findingsJudged: number;
+		falsePositives: number;
+		prCommentId: number;
+	},
 ): Promise<void> {
-	await db.update(qcRuns).set(counts).where(eq(qcRuns.dedupKey, dedupKey));
+	await db.update(qcRuns).set(result).where(eq(qcRuns.dedupKey, dedupKey));
 }
 
 /** Release a claimed run so /qc can be retried against the same PR head.
@@ -292,4 +299,27 @@ export async function finalizeQcRun(
  * transient error into a permanent lockout. */
 export async function releaseQcRun(db: Db, dedupKey: string): Promise<void> {
 	await db.delete(qcRuns).where(eq(qcRuns.dedupKey, dedupKey));
+}
+
+/** Drop a claim left behind by a run that died without reporting, so the head
+ * becomes eligible for /qc again. Returns whether a row was actually removed.
+ *
+ * Releasing on error covers a throw, but not a hard function timeout or an
+ * instance being killed — no catch block runs in either case, and the claim
+ * would otherwise be held forever. An unfinished row (`pr_comment_id is null`)
+ * older than the function's own wall-clock limit cannot still be in flight, so
+ * it is safe to reclaim without racing a live run. */
+export async function reclaimStaleQcRun(
+	db: Db,
+	dedupKey: string,
+	staleAfterSeconds: number,
+): Promise<boolean> {
+	const deleted = await db.execute(sql`
+		delete from qc_runs
+		where dedup_key = ${dedupKey}
+		  and pr_comment_id is null
+		  and ran_at < now() - make_interval(secs => ${staleAfterSeconds})
+		returning id
+	`);
+	return deleted.rows.length > 0;
 }

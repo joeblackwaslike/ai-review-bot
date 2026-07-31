@@ -8,6 +8,7 @@ const listFindingsForPr = vi.fn();
 const recordQcRun = vi.fn();
 const finalizeQcRun = vi.fn();
 const releaseQcRun = vi.fn();
+const reclaimStaleQcRun = vi.fn();
 const judgeFinding = vi.fn();
 
 vi.mock("./improve/db/client.js", () => ({ getDb: () => db }));
@@ -17,6 +18,7 @@ vi.mock("./improve/db/repo.js", () => ({
 	recordQcRun: (...args: unknown[]) => recordQcRun(...args),
 	finalizeQcRun: (...args: unknown[]) => finalizeQcRun(...args),
 	releaseQcRun: (...args: unknown[]) => releaseQcRun(...args),
+	reclaimStaleQcRun: (...args: unknown[]) => reclaimStaleQcRun(...args),
 }));
 
 vi.mock("./improve/qc.js", async (importOriginal) => ({
@@ -78,7 +80,7 @@ function stubOctokit(over: Record<string, unknown> = {}) {
 			}
 			if (route.includes("/issues/{issue_number}/comments")) {
 				posted.push((params as { body: string }).body);
-				return { data: {} };
+				return { data: { id: 555 } };
 			}
 			throw new Error(`unexpected route ${route}`);
 		},
@@ -111,6 +113,7 @@ beforeEach(() => {
 	recordQcRun.mockResolvedValue(1);
 	releaseQcRun.mockResolvedValue(undefined);
 	finalizeQcRun.mockResolvedValue(undefined);
+	reclaimStaleQcRun.mockResolvedValue(false);
 	judgeFinding.mockResolvedValue(verdict());
 	listFindingsForPr.mockResolvedValue([catalogRow()]);
 });
@@ -160,7 +163,7 @@ describe("runPrQc dedup claim", () => {
 
 	// The row is claimed with placeholder counts, so without this the table
 	// records that a run happened but never what it found.
-	it("writes the real counts back after reporting", async () => {
+	it("writes the real counts and the comment id back after reporting", async () => {
 		judgeFinding.mockResolvedValue({ ...verdict(), isFalsePositive: true });
 
 		await run(stubOctokit());
@@ -168,8 +171,39 @@ describe("runPrQc dedup claim", () => {
 		expect(finalizeQcRun).toHaveBeenCalledWith(db, "qcrun:o/r#7:HEAD1", {
 			findingsJudged: 1,
 			falsePositives: 1,
+			prCommentId: 555,
 		});
 		expect(releaseQcRun).not.toHaveBeenCalled();
+	});
+
+	// A hard function timeout kills the instance, so no catch runs and the
+	// release path never fires. Reclaiming the abandoned row is what keeps that
+	// from being the same permanent lockout by another route.
+	it("takes over a claim left behind by a run that died without reporting", async () => {
+		recordQcRun.mockResolvedValueOnce(0).mockResolvedValueOnce(1);
+		reclaimStaleQcRun.mockResolvedValue(true);
+
+		const result = await run(stubOctokit());
+
+		expect(reclaimStaleQcRun).toHaveBeenCalledWith(
+			db,
+			"qcrun:o/r#7:HEAD1",
+			300,
+		);
+		expect(result.posted).toBe(true);
+	});
+
+	// A run still inside the function's window is genuinely in flight; taking
+	// its claim would let two runs judge and post the same head.
+	it("does not take over a claim that is still within its window", async () => {
+		recordQcRun.mockResolvedValue(0);
+		reclaimStaleQcRun.mockResolvedValue(false);
+
+		const result = await run(stubOctokit());
+
+		expect(result.reason).toBe("already-reported");
+		expect(recordQcRun).toHaveBeenCalledTimes(1);
+		expect(judgeFinding).not.toHaveBeenCalled();
 	});
 });
 

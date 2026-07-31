@@ -176,8 +176,26 @@ function location(finding: JudgeableFinding): string {
 /** Pure: the comment body. Leads with the count that matters and names the
  * specific findings, since a bare percentage is not actionable. */
 export function formatQcComment(prefix: string, report: QcReport): string {
-	if (report.judged === 0) {
+	// Gated on the total, not on `judged`: a provider outage makes every verdict
+	// null, which leaves judged at 0 with findings very much present. Reporting
+	// "nothing was posted" there would be flatly untrue.
+	if (report.judged === 0 && report.unjudgedItems.length === 0) {
 		return `### ${prefix}\n\nNothing to judge — no findings were posted on this PR.`;
+	}
+
+	if (report.judged === 0) {
+		return [
+			`### ${prefix}`,
+			"",
+			`None of the **${report.unjudgedItems.length}** finding(s) on this PR could be judged — every judge call failed. This is a QC outage, not a verdict on the findings.`,
+			"",
+			...report.unjudgedItems
+				.slice(0, 10)
+				.map((f) => `- \`${location(f)}\` ${f.title}`),
+			...(report.unjudgedItems.length > 10
+				? [`- _…and ${report.unjudgedItems.length - 10} more_`]
+				: []),
+		].join("\n");
 	}
 
 	const flagged = report.items.filter(

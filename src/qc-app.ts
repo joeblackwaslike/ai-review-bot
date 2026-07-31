@@ -5,6 +5,7 @@ import { getDb } from "./improve/db/client.js";
 import {
 	finalizeQcRun,
 	listFindingsForPr,
+	reclaimStaleQcRun,
 	recordQcRun,
 	releaseQcRun,
 } from "./improve/db/repo.js";
@@ -16,6 +17,11 @@ import {
 	selectQcSample,
 	summarize,
 } from "./improve/qc.js";
+
+/** How long a claim can go unfinished before another /qc may take it over.
+ * Matches the QC function's `maxDuration` in vercel.json: past that the
+ * instance is gone, so nothing can still be working under that claim. */
+const QC_CLAIM_TTL_S = 300;
 
 let qcAppSingleton: App | null = null;
 
@@ -108,15 +114,25 @@ export async function runPrQc(deps: {
 	// so two concurrent commands cannot both start; the catch below releases it
 	// again if this run never gets as far as posting.
 	const dedupKey = `qcrun:${owner}/${repo}#${pr}:${headSha}`;
-	const claimed = await recordQcRun(db, {
-		owner,
-		repo,
-		pr,
-		trigger: deps.trigger,
-		findingsJudged: 0,
-		falsePositives: 0,
-		dedupKey,
-	});
+	const claim = () =>
+		recordQcRun(db, {
+			owner,
+			repo,
+			pr,
+			trigger: deps.trigger,
+			findingsJudged: 0,
+			falsePositives: 0,
+			dedupKey,
+		});
+
+	let claimed = await claim();
+	if (
+		claimed === 0 &&
+		(await reclaimStaleQcRun(db, dedupKey, QC_CLAIM_TTL_S))
+	) {
+		console.log("qc: reclaiming a run that died without reporting", { pr });
+		claimed = await claim();
+	}
 	if (claimed === 0) {
 		console.log("qc skipped: already reported for this head", { pr, headSha });
 		return { judged: 0, posted: false, reason: "already-reported" };
@@ -153,7 +169,7 @@ export async function runPrQc(deps: {
 		}
 		const report = summarize(results);
 
-		await octokit.request(
+		const { data: comment } = await octokit.request(
 			"POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
 			{
 				owner,
@@ -166,6 +182,7 @@ export async function runPrQc(deps: {
 		await finalizeQcRun(db, dedupKey, {
 			findingsJudged: report.judged,
 			falsePositives: report.falsePositives,
+			prCommentId: comment.id,
 		});
 
 		console.log("qc reported", {

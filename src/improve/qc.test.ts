@@ -197,3 +197,27 @@ describe("formatQcComment", () => {
 		expect(body).toContain("not a human verdict");
 	});
 });
+
+describe("formatQcComment when nothing could be judged", () => {
+	// "No findings were posted" is flatly untrue during a provider outage: the
+	// findings are there, the judge is not.
+	it("names the findings and says it was an outage, not a verdict", () => {
+		const report = summarize([
+			{ finding: finding({ id: 1, title: "first" }), verdict: null },
+			{ finding: finding({ id: 2, title: "second" }), verdict: null },
+		]);
+
+		const body = formatQcComment("qc", report);
+
+		expect(body).not.toContain("no findings were posted");
+		expect(body).toContain("QC outage");
+		expect(body).toContain("first");
+		expect(body).toContain("second");
+	});
+
+	it("still reports an empty PR as having nothing to judge", () => {
+		expect(formatQcComment("qc", summarize([]))).toContain(
+			"no findings were posted",
+		);
+	});
+});
