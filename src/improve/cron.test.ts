@@ -64,3 +64,42 @@ describe("improveRequest", () => {
 		expect(res.body).toMatchObject({ message: "no database" });
 	});
 });
+
+describe("runImproveCycle stage containment", () => {
+	const base = {
+		db: {} as never,
+		octokit: { request: async () => ({ data: { items: [] } }) } as never,
+		owner: "o",
+		repo: "r",
+		selection: { provider: "anthropic", model: "m" } as const,
+	};
+
+	// A drain failure must not stop classification or proposals — the corpus is
+	// the source of truth and KV is only a buffer.
+	it("continues past a failing drain", async () => {
+		const { runImproveCycle } = await import("./run.js");
+		const kv = {
+			lrange: async () => {
+				throw new Error("kv down");
+			},
+		} as never;
+		const result = await runImproveCycle({ ...base, kv, dryRun: true });
+		expect(result.drained).toBeNull();
+		expect(result).toHaveProperty("proposals");
+	});
+
+	// A classifier outage must not stop proposals being filed from what is
+	// already classified.
+	it("still reports a result when classification throws", async () => {
+		const { runImproveCycle } = await import("./run.js");
+		const result = await runImproveCycle({ ...base, dryRun: true });
+		expect(result.classified).toBe(0);
+		expect(Array.isArray(result.proposals)).toBe(true);
+	});
+
+	it("skips the drain entirely when no KV client is supplied", async () => {
+		const { runImproveCycle } = await import("./run.js");
+		const result = await runImproveCycle({ ...base, kv: null, dryRun: true });
+		expect(result.drained).toBeNull();
+	});
+});
