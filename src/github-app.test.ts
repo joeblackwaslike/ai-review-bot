@@ -102,6 +102,8 @@ const baseArgs = {
 		reviewCommand: "/ai-review",
 		provider: "anthropic" as const,
 		feedbackEnabled: false,
+		improveEnabled: false,
+		improveCarrierEnabled: false,
 		agentConcurrency: 1,
 		tier2Enabled: false,
 	},
@@ -492,6 +494,8 @@ describe("maybeSubmitReview", () => {
 				reviewCommentPrefix: "ai-review-bot",
 				provider: "anthropic",
 				feedbackEnabled: true,
+				improveEnabled: false,
+				improveCarrierEnabled: false,
 			} as never,
 		});
 
@@ -559,6 +563,8 @@ describe("maybeSubmitReview", () => {
 				reviewCommentPrefix: "ai-review-bot",
 				provider: "anthropic",
 				feedbackEnabled: false,
+				improveEnabled: false,
+				improveCarrierEnabled: false,
 			} as never,
 		});
 		expect(persistPostedComments).not.toHaveBeenCalled();
@@ -615,6 +621,8 @@ describe("maybeSubmitReview", () => {
 					reviewCommentPrefix: "ai-review-bot",
 					provider: "anthropic",
 					feedbackEnabled: true,
+					improveEnabled: false,
+					improveCarrierEnabled: false,
 				} as never,
 			}),
 		).resolves.not.toThrow();

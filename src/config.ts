@@ -9,6 +9,13 @@ export interface AppConfig {
 	reviewCommand: string;
 	provider: "anthropic" | "openai";
 	feedbackEnabled: boolean;
+	/** Master switch for the improvement corpus. Off by default so a deployment
+	 * without DATABASE_URL behaves exactly as before. */
+	improveEnabled: boolean;
+	/** Post the carrier issue comment that lets the top-level review be rated.
+	 * Separate from improveEnabled because it adds a visible comment to every
+	 * PR, which is worth being able to turn off on its own. */
+	improveCarrierEnabled: boolean;
 	agentConcurrency: number;
 	tier2Enabled: boolean;
 	qstashToken?: string;
@@ -97,6 +104,8 @@ export function getConfig(): AppConfig {
 		reviewCommand: process.env.REVIEW_COMMAND ?? "/ai-review",
 		provider: "anthropic",
 		feedbackEnabled: process.env.FEEDBACK_ENABLED === "true",
+		improveEnabled: process.env.IMPROVE_ENABLED === "true",
+		improveCarrierEnabled: process.env.IMPROVE_CARRIER_ENABLED !== "false",
 		agentConcurrency: parseAgentConcurrency(),
 		tier2Enabled: process.env.REVIEW_TIER2_ENABLED !== "false",
 		qstashToken: process.env.QSTASH_TOKEN,
@@ -128,6 +137,8 @@ export function getOpenAIAppConfig(): AppConfig {
 		reviewCommand: process.env.REVIEW_COMMAND ?? "/ai-review",
 		provider: "openai",
 		feedbackEnabled: process.env.FEEDBACK_ENABLED === "true",
+		improveEnabled: process.env.IMPROVE_ENABLED === "true",
+		improveCarrierEnabled: process.env.IMPROVE_CARRIER_ENABLED !== "false",
 		agentConcurrency: parseAgentConcurrency(),
 		tier2Enabled: process.env.REVIEW_TIER2_ENABLED !== "false",
 		qstashToken: process.env.QSTASH_TOKEN,

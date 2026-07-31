@@ -77,7 +77,10 @@ export interface ReviewDecision {
 	metadata: ReviewMetadata;
 	validLinesByPath: Map<string, Set<number>>;
 	/** path:line → skills that flagged it + the displayed title. Present only when feedbackEnabled. */
-	commentProvenance?: Map<string, { skills: string[]; title: string }>;
+	commentProvenance?: Map<
+		string,
+		{ skills: string[]; title: string; severity: string | null }
+	>;
 	rateLimitResetAt?: string;
 	rateLimitRetryAfterSeconds?: number;
 	/** Provider whose balance is spent, for the QUOTA_EXHAUSTED event. Narrowed
@@ -1122,7 +1125,7 @@ export async function buildReview(
 	});
 
 	let commentProvenance:
-		| Map<string, { skills: string[]; title: string }>
+		| Map<string, { skills: string[]; title: string; severity: string | null }>
 		| undefined;
 	if (context.feedbackEnabled) {
 		const skillsByKey = new Map<string, Set<string>>();
@@ -1138,8 +1141,10 @@ export async function buildReview(
 			}
 		});
 		const titleByKey = new Map<string, string>();
+		const severityByKey = new Map<string, string>();
 		for (const c of modelReview.inline_comments) {
 			titleByKey.set(`${c.path}:${c.line}`, c.title);
+			severityByKey.set(`${c.path}:${c.line}`, c.severity);
 		}
 		commentProvenance = new Map();
 		for (const rc of reviewComments) {
@@ -1147,6 +1152,7 @@ export async function buildReview(
 			commentProvenance.set(key, {
 				skills: [...(skillsByKey.get(key) ?? [])],
 				title: titleByKey.get(key) ?? "",
+				severity: severityByKey.get(key) ?? null,
 			});
 		}
 	}

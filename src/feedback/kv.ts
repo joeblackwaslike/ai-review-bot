@@ -21,6 +21,11 @@ export interface KvClient {
 	get(key: string): Promise<string | null>;
 	del(...keys: string[]): Promise<unknown>;
 	lpush(key: string, value: string): Promise<unknown>;
+	/** Read a range of a list without consuming it. The corpus drain relies on
+	 * this being non-destructive: every corpus write is keyed, so re-reading the
+	 * same events is a no-op, whereas popping them would lose any event whose
+	 * insert failed. */
+	lrange(key: string, start: number, stop: number): Promise<string[]>;
 }
 
 export function createUpstashKv(): KvClient {
@@ -67,5 +72,14 @@ export function createUpstashKv(): KvClient {
 		get: (key) => redis.get<string>(key),
 		del: (...keys) => redis.del(...keys),
 		lpush: (key, value) => redis.lpush(key, value),
+		lrange: async (key, start, stop) => {
+			const items = await redis.lrange<unknown>(key, start, stop);
+			// Upstash deserializes JSON values automatically; callers here expect
+			// the raw string they wrote, so re-encode anything that came back as
+			// an object rather than letting a parse fail downstream.
+			return items.map((item) =>
+				typeof item === "string" ? item : JSON.stringify(item),
+			);
+		},
 	};
 }
