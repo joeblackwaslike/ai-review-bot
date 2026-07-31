@@ -1,8 +1,14 @@
-import { App } from "octokit";
+import { App, type Octokit } from "octokit";
 import { isTrustedAuthorAssociation, parseQcCommand } from "./commands.js";
 import { getQcAppConfig, type QcAppConfig } from "./config.js";
 import { getDb } from "./improve/db/client.js";
-import { listFindingsForPr, recordQcRun } from "./improve/db/repo.js";
+import {
+	finalizeQcRun,
+	listFindingsForPr,
+	recordQcRun,
+	releaseQcRun,
+} from "./improve/db/repo.js";
+import { parseFindingComment } from "./improve/findings.js";
 import {
 	formatQcComment,
 	type JudgeableFinding,
@@ -97,7 +103,11 @@ export async function runPrQc(deps: {
 	const headSha = (pull as { head: { sha: string } }).head.sha;
 
 	// One report per PR head. A second /qc on an unchanged PR would spend model
-	// budget re-deriving a verdict nobody asked to change.
+	// budget re-deriving a verdict nobody asked to change. Claimed before any
+	// work — the counts below are placeholders that finalizeQcRun overwrites —
+	// so two concurrent commands cannot both start; the catch below releases it
+	// again if this run never gets as far as posting.
+	const dedupKey = `qcrun:${owner}/${repo}#${pr}:${headSha}`;
 	const claimed = await recordQcRun(db, {
 		owner,
 		repo,
@@ -105,51 +115,113 @@ export async function runPrQc(deps: {
 		trigger: deps.trigger,
 		findingsJudged: 0,
 		falsePositives: 0,
-		dedupKey: `qcrun:${owner}/${repo}#${pr}:${headSha}`,
+		dedupKey,
 	});
 	if (claimed === 0) {
 		console.log("qc skipped: already reported for this head", { pr, headSha });
 		return { judged: 0, posted: false, reason: "already-reported" };
 	}
 
-	const findings = (await listFindingsForPr(db, owner, repo, pr)).map(
-		(f): JudgeableFinding => ({
-			id: f.id,
-			provider: f.provider,
-			path: f.path,
-			line: f.line,
-			title: f.title,
-			severity: f.severity,
-			body: f.title,
-		}),
-	);
+	try {
+		const catalog = await listFindingsForPr(db, owner, repo, pr);
+		const selected = deps.full
+			? catalog
+			: selectQcSample(
+					catalog,
+					deps.config.sampleRate,
+					deps.rng ?? Math.random,
+				);
 
-	const selected = deps.full
-		? findings
-		: selectQcSample(findings, deps.config.sampleRate, deps.rng ?? Math.random);
+		const results = [];
+		for (const row of selected) {
+			const { body, hunk } = await loadFindingContext(
+				octokit,
+				owner,
+				repo,
+				row,
+			);
+			const finding: JudgeableFinding = {
+				id: row.id,
+				provider: row.provider,
+				path: row.path,
+				line: row.line,
+				title: row.title,
+				severity: row.severity,
+				body,
+			};
+			results.push({ finding, verdict: await judgeFinding(finding, hunk) });
+		}
+		const report = summarize(results);
 
-	const results = [];
-	for (const finding of selected) {
-		results.push({ finding, verdict: await judgeFinding(finding, "") });
-	}
-	const report = summarize(results);
+		await octokit.request(
+			"POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+			{
+				owner,
+				repo,
+				issue_number: pr,
+				body: formatQcComment(deps.config.commentPrefix, report),
+			},
+		);
 
-	await octokit.request(
-		"POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
-		{
+		await finalizeQcRun(db, dedupKey, {
+			findingsJudged: report.judged,
+			falsePositives: report.falsePositives,
+		});
+
+		console.log("qc reported", {
 			owner,
 			repo,
-			issue_number: pr,
-			body: formatQcComment(deps.config.commentPrefix, report),
-		},
-	);
+			pr,
+			judged: report.judged,
+			falsePositives: report.falsePositives,
+		});
+		return { judged: report.judged, posted: true };
+	} catch (err) {
+		// The claim is taken up front so two concurrent /qc runs cannot both spend
+		// model budget on the same head. Holding it after a failure would turn one
+		// transient error into a permanent lockout: every later /qc on this head
+		// returns "already-reported" and no report is ever posted.
+		await releaseQcRun(db, dedupKey).catch((releaseErr) => {
+			console.error("qc: failed to release claim after error", {
+				dedupKey,
+				releaseErr,
+			});
+		});
+		throw err;
+	}
+}
 
-	console.log("qc reported", {
-		owner,
-		repo,
-		pr,
-		judged: report.judged,
-		falsePositives: report.falsePositives,
-	});
-	return { judged: report.judged, posted: true };
+/** The finding's own words and the code it was anchored to.
+ *
+ * `finding_catalog` stores the title only — the posted comment is the source of
+ * truth for the rest, and duplicating it into the table would let the two
+ * drift. Reading it back also yields `diff_hunk`, without which the judge is
+ * asked whether a claim about code holds while being shown no code.
+ *
+ * A comment that has since been deleted or edited beyond recognition degrades
+ * to empty context rather than failing the run: the prompt tells the judge to
+ * treat missing evidence as "not a false positive", so a lost hunk costs
+ * precision, not correctness. */
+async function loadFindingContext(
+	octokit: Octokit,
+	owner: string,
+	repo: string,
+	row: { id: number; commentId: number | null },
+): Promise<{ body: string; hunk: string }> {
+	if (row.commentId === null) return { body: "", hunk: "" };
+	try {
+		const { data } = await octokit.request(
+			"GET /repos/{owner}/{repo}/pulls/comments/{comment_id}",
+			{ owner, repo, comment_id: row.commentId },
+		);
+		const parsed = parseFindingComment(data.body);
+		return { body: parsed?.body ?? data.body, hunk: data.diff_hunk ?? "" };
+	} catch (err) {
+		console.error("qc: could not load finding comment; judging without it", {
+			findingId: row.id,
+			commentId: row.commentId,
+			err,
+		});
+		return { body: "", hunk: "" };
+	}
 }

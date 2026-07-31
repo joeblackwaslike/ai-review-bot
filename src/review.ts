@@ -317,7 +317,7 @@ function sleep(ms: number): Promise<void> {
  *  when no effort is set (e.g. Haiku) so the provider default applies. `"none"`
  *  is a valid OpenAI `reasoningEffort` value (gpt-5.1's explicit non-reasoning
  *  mode) and is forwarded as-is; the Anthropic tiers never emit it. */
-function reasoningProviderOptions(
+export function reasoningProviderOptions(
 	selection: ModelSelection,
 ): Record<string, Record<string, string>> | undefined {
 	if (!selection.effort) return undefined;
@@ -334,7 +334,7 @@ function reasoningProviderOptions(
  * non-reasoning mode), where no reasoning tokens are billed (you pay for actual
  * tokens, not the cap). `"none"` is a truthy string, so it is excluded here
  * explicitly rather than via a plain truthiness check. */
-function outputBudget(selection: ModelSelection, base: number): number {
+export function outputBudget(selection: ModelSelection, base: number): number {
 	const reasoning =
 		selection.effort !== undefined && selection.effort !== "none";
 	return reasoning ? Math.max(base * 8, 16000) : base;

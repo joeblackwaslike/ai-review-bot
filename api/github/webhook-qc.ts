@@ -3,6 +3,13 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { readRawBody } from "../../src/http.js";
 import { getQcApp } from "../../src/qc-app.js";
 
+/** The event names octokit will dispatch on, derived from the App rather than
+ * imported: `@octokit/webhooks` is a transitive dependency here, so naming it
+ * directly would couple this file to octokit's own dependency tree. */
+type WebhookEventName = Parameters<
+	ReturnType<typeof getQcApp>["webhooks"]["verifyAndReceive"]
+>[0]["name"];
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
 	if (req.method !== "POST") {
 		res.setHeader("Allow", "POST");
@@ -23,6 +30,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 		return;
 	}
 
+	// Reads the request stream directly, which only works because nothing has
+	// touched `req.body` first — Vercel's lazy getter consumes the stream, and a
+	// later middleware or log line that reads it would leave readRawBody with an
+	// empty buffer and fail signature verification on every delivery.
 	const body = await readRawBody(req);
 	const payload = body.toString("utf8");
 
@@ -44,7 +55,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 		app.webhooks
 			.verifyAndReceive({
 				id: deliveryId,
-				name: eventName as never,
+				name: eventName as WebhookEventName,
 				signature,
 				payload,
 			})

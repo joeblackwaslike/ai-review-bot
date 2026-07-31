@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { FindingOutcome } from "../trends.js";
 import type { Db } from "./client.js";
 import {
@@ -212,7 +212,11 @@ export async function listFindingOutcomes(db: Db): Promise<FindingOutcome[]> {
 	}));
 }
 
-/** Findings posted on one PR, for QC to judge. */
+/** Findings posted on one PR, for QC to judge.
+ *
+ * `comment_id` comes back because the catalog stores the title only: the judge
+ * needs the finding's full text and the code it was anchored to, and both are
+ * read back from the posted comment rather than duplicated into this table. */
 export async function listFindingsForPr(
 	db: Db,
 	owner: string,
@@ -222,6 +226,7 @@ export async function listFindingsForPr(
 	{
 		id: number;
 		provider: "anthropic" | "openai";
+		commentId: number | null;
 		path: string | null;
 		line: number | null;
 		title: string;
@@ -229,7 +234,7 @@ export async function listFindingsForPr(
 	}[]
 > {
 	const result = await db.execute(sql`
-		select id, provider, path, line, title, severity
+		select id, provider, comment_id, path, line, title, severity
 		from finding_catalog
 		where owner = ${owner} and repo = ${repo} and pr = ${pr}
 		order by id
@@ -238,24 +243,53 @@ export async function listFindingsForPr(
 		result.rows as unknown as {
 			id: string | number;
 			provider: "anthropic" | "openai";
+			comment_id: string | number | null;
 			path: string | null;
 			line: number | null;
 			title: string;
 			severity: string | null;
 		}[]
-	).map((r) => ({ ...r, id: Number(r.id) }));
+	).map(({ comment_id, ...r }) => ({
+		...r,
+		id: Number(r.id),
+		commentId: comment_id === null ? null : Number(comment_id),
+	}));
 }
 
-/** Claim a QC run for a PR head. Returns 0 when one already exists, which is
- * how a second /qc on an unchanged PR is prevented from re-spending budget. */
+/** Claim a QC run for a PR head. Returns the number of rows inserted, which the
+ * unique index on `dedup_key` pins to exactly 0 or 1: 0 means a run already
+ * exists, which is how a second /qc on an unchanged PR is prevented from
+ * re-spending budget. Callers depend on that 0/1 contract, so a change here
+ * that returns anything else silently breaks the dedup gate. */
 export async function recordQcRun(
 	db: Db,
 	row: typeof qcRuns.$inferInsert,
-): Promise<number> {
+): Promise<0 | 1> {
 	const inserted = await db
 		.insert(qcRuns)
 		.values(row)
 		.onConflictDoNothing({ target: qcRuns.dedupKey })
 		.returning({ id: qcRuns.id });
-	return inserted.length;
+	return inserted.length === 0 ? 0 : 1;
+}
+
+/** Write the real counts onto a claimed run once it has been reported.
+ *
+ * The row is inserted with placeholder counts before any judging happens, so
+ * without this the table records that a run occurred but never what it found. */
+export async function finalizeQcRun(
+	db: Db,
+	dedupKey: string,
+	counts: { findingsJudged: number; falsePositives: number },
+): Promise<void> {
+	await db.update(qcRuns).set(counts).where(eq(qcRuns.dedupKey, dedupKey));
+}
+
+/** Release a claimed run so /qc can be retried against the same PR head.
+ *
+ * The claim is taken before any work so two concurrent runs cannot both spend
+ * model budget; dropping it on failure is what keeps that from turning a
+ * transient error into a permanent lockout. */
+export async function releaseQcRun(db: Db, dedupKey: string): Promise<void> {
+	await db.delete(qcRuns).where(eq(qcRuns.dedupKey, dedupKey));
 }
