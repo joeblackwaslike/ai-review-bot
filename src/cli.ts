@@ -489,7 +489,17 @@ async function cmdClassify(args: string[]): Promise<void> {
 	const db = getDb();
 	const bundles = await listUnclassifiedBundles(db, limit);
 	if (bundles.length === 0) {
-		console.log("Nothing to classify.");
+		// Must respect --json like every other exit path; a caller parsing stdout
+		// should never get prose because the queue happened to be empty.
+		console.log(
+			json
+				? JSON.stringify(
+						{ considered: 0, classified: 0, written: 0, byIntent: {} },
+						null,
+						2,
+					)
+				: "Nothing to classify.",
+		);
 		return;
 	}
 

@@ -63,6 +63,16 @@ describe("matchToFinding", () => {
 		).toEqual({ findingId: 11, method: "hint" });
 	});
 
+	it("falls back to the hint when the location is ambiguous", () => {
+		expect(
+			matchToFinding(
+				{ id: 1, commentId: 900, inReplyToId: null, path: "src/b.ts", line: 7 },
+				catalog,
+				12,
+			),
+		).toEqual({ findingId: 12, method: "hint" });
+	});
+
 	it("ignores a hint naming a finding that does not exist", () => {
 		expect(
 			matchToFinding(

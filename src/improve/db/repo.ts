@@ -80,25 +80,27 @@ export async function listUnclassifiedBundles(
 		       coalesce(f.title, rf.title, '') as finding_title,
 		       coalesce(f.skills, '{}') as skills,
 		       rf.verdict,
-		       -- For a reply-only row the body IS the feedback; the lateral above
-		       -- looks for children of a reply and finds none.
-		       coalesce(
-		         reply.body,
-		         case when rf.source = 'inline_reply' then rf.body end
-		       ) as reply_body
+		       reply.body as reply_body
 		from raw_feedback rf
 		left join finding_catalog f
 		       on f.comment_id = coalesce(rf.in_reply_to_id, rf.comment_id)
 		-- Aggregated, not joined: a thread is a conversation and can carry several
 		-- replies. A plain join would emit one bundle per reply, so the classifier
 		-- would be billed for the same reaction repeatedly and the work queue would
-		-- overstate what is left to do. Ordered by id so the first reply — the
-		-- direct answer to the finding, which carries the verdict phrase — stays at
-		-- the front where the deterministic opener match can still see it.
+		-- overstate what is left to do.
+		--
+		-- Keyed on the thread ROOT, not on rf's own id, so it behaves the same for a
+		-- reaction (root = the finding it sits on) and for a reply-only row (root =
+		-- in_reply_to_id) — the latter then picks up its own body plus any siblings
+		-- instead of only itself.
+		--
+		-- Ordered by id so the first reply — the direct answer to the finding, which
+		-- carries the verdict phrase — stays at the front where the deterministic
+		-- opener match can still see it.
 		left join lateral (
 		       select string_agg(r.body, E'\n\n---\n\n' order by r.id) as body
 		       from raw_feedback r
-		       where r.in_reply_to_id = rf.comment_id
+		       where r.in_reply_to_id = coalesce(rf.in_reply_to_id, rf.comment_id)
 		         and r.source = 'inline_reply'
 		) reply on true
 		-- A maintainer who answers a finding without also reacting leaves only an
@@ -109,10 +111,21 @@ export async function listUnclassifiedBundles(
 		-- rather than counted twice.
 		where (
 		        rf.source <> 'inline_reply'
-		        or not exists (
-		              select 1 from raw_feedback rx
-		              where rx.comment_id = rf.in_reply_to_id
-		                and rx.source <> 'inline_reply'
+		        or (
+		              not exists (
+		                select 1 from raw_feedback rx
+		                where rx.comment_id = rf.in_reply_to_id
+		                  and rx.source <> 'inline_reply'
+		              )
+		              -- One bundle per thread, not per reply: without this a
+		              -- reaction-less thread carrying three replies would be
+		              -- classified three times over, each pointing at the same
+		              -- finding. The lateral above already gathers the siblings.
+		              and rf.id = (
+		                select min(r2.id) from raw_feedback r2
+		                where r2.in_reply_to_id = rf.in_reply_to_id
+		                  and r2.source = 'inline_reply'
+		              )
 		            )
 		      )
 		  and not exists (
