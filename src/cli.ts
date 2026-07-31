@@ -27,9 +27,8 @@ import {
 } from "./improve/db/repo.js";
 import {
 	openProposalIssue,
-	planDuplicateIssue,
-	planSeverityIssue,
-	planSkillIssue,
+	planProposals,
+	thresholdsFromEnv,
 } from "./improve/issues.js";
 import { fpSignature } from "./improve/match.js";
 import {
@@ -665,19 +664,10 @@ async function cmdPropose(args: string[]): Promise<void> {
 		);
 	});
 
-	const plans = [
-		planSeverityIssue(computeSeverityReliability(outcomes), {
-			minSample: Number(process.env.IMPROVE_MIN_SAMPLE ?? 8),
-			maxUsefulRatio: Number(process.env.IMPROVE_MAX_USEFUL_RATIO ?? 0.3),
-		}),
-		planDuplicateIssue(detectDuplicateClusters(outcomes), {
-			minClusters: Number(process.env.IMPROVE_MIN_CLUSTERS ?? 2),
-		}),
-		planSkillIssue(computeSkillSignals(outcomes), {
-			minSample: Number(process.env.IMPROVE_MIN_SAMPLE ?? 8),
-			minNegativeRatio: Number(process.env.IMPROVE_MIN_NEGATIVE_RATIO ?? 0.5),
-		}),
-	].filter((p) => p !== null);
+	// One parser for both the CLI and the cron: raw Number() yields NaN on a
+	// typo'd threshold, and a NaN comparison is always false — detection would
+	// silently switch off with nothing to say why.
+	const plans = planProposals(outcomes, thresholdsFromEnv(process.env));
 
 	if (plans.length === 0) {
 		console.log("No signal above threshold — nothing to propose.");
@@ -696,16 +686,14 @@ async function cmdPropose(args: string[]): Promise<void> {
 
 	for (const plan of plans) {
 		const result = await openProposalIssue({
-			octokit: octokit as never,
+			octokit,
 			owner,
 			repo,
 			plan,
 			dryRun,
 		});
 		console.log(
-			`${plan.kind}: ${dryRun ? "would file" : result.action}${
-				result.url ? ` — ${result.url}` : ""
-			}`,
+			`${plan.kind}: ${result.action}${result.url ? ` — ${result.url}` : ""}`,
 		);
 		if (dryRun) console.log(`  ${plan.title}`);
 	}

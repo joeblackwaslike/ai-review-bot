@@ -202,7 +202,43 @@ describe("openProposalIssue", () => {
 			plan,
 			dryRun: true,
 		});
-		expect(result.action).toBe("skipped");
+		// Distinct from would_comment: an operator needs to know whether this
+		// would open a new discussion or add to one already open.
+		expect(result.action).toBe("would_create");
 		expect(request.mock.calls.every((c) => c[0].startsWith("GET"))).toBe(true);
+	});
+
+	it("reports would_comment on a dry run when an issue is already open", async () => {
+		const request = vi.fn(
+			async (_route: string, _p?: Record<string, unknown>) => ({
+				data: { items: [{ number: 9, html_url: "u9" }] },
+			}),
+		);
+		const result = await openProposalIssue({
+			octokit: { request } as never,
+			owner: "o",
+			repo: "r",
+			plan,
+			dryRun: true,
+		});
+		expect(result).toEqual({ action: "would_comment", url: "u9" });
+	});
+
+	// One plan failing must not abandon the others in the same cycle; the cycle
+	// is idempotent, so a failed proposal is retried on the next run.
+	it("reports failure instead of throwing when GitHub is unreachable", async () => {
+		const request = vi.fn(
+			async (_route: string, _p?: Record<string, unknown>) => {
+				throw new Error("502");
+			},
+		);
+		await expect(
+			openProposalIssue({
+				octokit: { request } as never,
+				owner: "o",
+				repo: "r",
+				plan,
+			}),
+		).resolves.toEqual({ action: "failed" });
 	});
 });

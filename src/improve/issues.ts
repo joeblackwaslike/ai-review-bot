@@ -1,13 +1,67 @@
-import type {
-	DuplicateCluster,
-	SeverityReliability,
-	SkillSignal,
+import {
+	computeSeverityReliability,
+	computeSkillSignals,
+	type DuplicateCluster,
+	detectDuplicateClusters,
+	type FindingOutcome,
+	type SeverityReliability,
+	type SkillSignal,
 } from "./trends.js";
 
+export interface CycleThresholds {
+	minSample: number;
+	maxUsefulRatio: number;
+	minClusters: number;
+	minNegativeRatio: number;
+	classifyLimit: number;
+}
+
+export const DEFAULT_THRESHOLDS: CycleThresholds = {
+	minSample: 8,
+	maxUsefulRatio: 0.3,
+	minClusters: 2,
+	minNegativeRatio: 0.5,
+	classifyLimit: 500,
+};
+
+/** One parser for every caller. A raw Number() yields NaN on a typo'd
+ * threshold, and a NaN comparison is always false — detection would silently
+ * switch off with nothing to say why, which is worse than ignoring the value. */
+export function thresholdsFromEnv(
+	env: Record<string, string | undefined>,
+): CycleThresholds {
+	const num = (key: string, fallback: number): number => {
+		const raw = env[key];
+		if (raw === undefined || raw.trim() === "") return fallback;
+		const n = Number(raw);
+		return Number.isFinite(n) ? n : fallback;
+	};
+	return {
+		minSample: num("IMPROVE_MIN_SAMPLE", DEFAULT_THRESHOLDS.minSample),
+		maxUsefulRatio: num(
+			"IMPROVE_MAX_USEFUL_RATIO",
+			DEFAULT_THRESHOLDS.maxUsefulRatio,
+		),
+		minClusters: num("IMPROVE_MIN_CLUSTERS", DEFAULT_THRESHOLDS.minClusters),
+		minNegativeRatio: num(
+			"IMPROVE_MIN_NEGATIVE_RATIO",
+			DEFAULT_THRESHOLDS.minNegativeRatio,
+		),
+		classifyLimit: num(
+			"IMPROVE_CLASSIFY_LIMIT",
+			DEFAULT_THRESHOLDS.classifyLimit,
+		),
+	};
+}
+
 export interface IssueOctokit {
+	// `params` is optional so a real Octokit instance satisfies this structurally
+	// — its request signature declares the argument optional, and forcing it
+	// required here meant every call site needed an `as never` cast, which
+	// suppressed exactly the checking the interface exists to provide.
 	request: (
 		route: string,
-		params: Record<string, unknown>,
+		params?: Record<string, unknown>,
 	) => Promise<{ data: unknown }>;
 }
 
@@ -90,9 +144,13 @@ export function planDuplicateIssue(
 
 	return {
 		kind: "duplicate_claims",
+		// Capped: the signature is embedded in a marker that is searched for
+		// verbatim, and an unbounded list of identifiers would eventually exceed
+		// what the search API will match on.
 		signature: `duplicate_claims:${clusters
 			.map((c) => c.identifier)
 			.sort()
+			.slice(0, 5)
 			.join(",")}`,
 		title: `${clusters.length} rejected claims were each filed several times (${total} threads)`,
 		body: [
@@ -163,17 +221,51 @@ export async function openProposalIssue(deps: {
 	repo: string;
 	plan: ProposalPlan;
 	dryRun?: boolean;
-}): Promise<{ action: "created" | "commented" | "skipped"; url?: string }> {
-	const { octokit, owner, repo, plan } = deps;
-	const marker = proposalMarker(plan.signature);
+}): Promise<{
+	action: "created" | "commented" | "would_create" | "would_comment" | "failed";
+	url?: string;
+}> {
+	const marker = proposalMarker(deps.plan.signature);
 
+	try {
+		return await openOrComment(deps, marker);
+	} catch (err) {
+		// One plan failing must not abandon the others in the same cycle. The
+		// cycle is idempotent, so a failed proposal is simply retried next run.
+		console.error("proposal: could not reach GitHub", {
+			signature: deps.plan.signature,
+			error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+		});
+		return { action: "failed" };
+	}
+}
+
+async function openOrComment(
+	deps: {
+		octokit: IssueOctokit;
+		owner: string;
+		repo: string;
+		plan: ProposalPlan;
+		dryRun?: boolean;
+	},
+	marker: string,
+): Promise<{
+	action: "created" | "commented" | "would_create" | "would_comment";
+	url?: string;
+}> {
+	const { octokit, owner, repo, plan } = deps;
 	const existing = (await octokit.request("GET /search/issues", {
 		q: `repo:${owner}/${repo} is:issue is:open "${marker}"`,
 	})) as { data: { items?: { number: number; html_url: string }[] } };
 	const open = existing.data.items?.[0];
 
 	if (deps.dryRun) {
-		return { action: open ? "skipped" : "skipped", url: open?.html_url };
+		// Distinct outcomes: an operator needs to know whether this would open a
+		// new discussion or add to one already open.
+		return {
+			action: open ? "would_comment" : "would_create",
+			url: open?.html_url,
+		};
 	}
 
 	if (open) {
@@ -197,4 +289,25 @@ export async function openProposalIssue(deps: {
 		labels: ["ai-review-quality"],
 	})) as { data: { html_url: string } };
 	return { action: "created", url: created.data.html_url };
+}
+
+/** Pure: every proposal the current outcomes justify. Split from the I/O so the
+ * threshold logic is testable without a database or GitHub. */
+export function planProposals(
+	outcomes: FindingOutcome[],
+	t: CycleThresholds,
+): ProposalPlan[] {
+	return [
+		planSeverityIssue(computeSeverityReliability(outcomes), {
+			minSample: t.minSample,
+			maxUsefulRatio: t.maxUsefulRatio,
+		}),
+		planDuplicateIssue(detectDuplicateClusters(outcomes), {
+			minClusters: t.minClusters,
+		}),
+		planSkillIssue(computeSkillSignals(outcomes), {
+			minSample: t.minSample,
+			minNegativeRatio: t.minNegativeRatio,
+		}),
+	].filter((p): p is ProposalPlan => p !== null);
 }
