@@ -67,17 +67,22 @@ export async function diffReactions(
 	record: PostedCommentRecord,
 	nowMs: number,
 ): Promise<{ events: FeedbackEvent[]; lastSeen: Record<string, Verdict> }> {
-	// Single page of up to 100 reactions — an inline review comment never realistically
+	// Route depends on the surface: an inline review comment lives under
+	// pulls/comments, while the carrier is an ordinary issue comment. Asking the
+	// wrong endpoint 404s, which would silently drop every review-level rating.
+	const route =
+		record.surface === "carrier"
+			? "GET /repos/{owner}/{repo}/issues/comments/{comment_id}/reactions"
+			: "GET /repos/{owner}/{repo}/pulls/comments/{comment_id}/reactions";
+
+	// Single page of up to 100 reactions — a single comment never realistically
 	// accrues more, so we deliberately skip pagination here (unlike the persist path).
-	const res = await octokit.request(
-		"GET /repos/{owner}/{repo}/pulls/comments/{comment_id}/reactions",
-		{
-			owner: record.owner,
-			repo: record.repo,
-			comment_id: record.commentId,
-			per_page: 100,
-		},
-	);
+	const res = await octokit.request(route, {
+		owner: record.owner,
+		repo: record.repo,
+		comment_id: record.commentId,
+		per_page: 100,
+	});
 	const raw: RawReaction[] = (res.data as RawReactionResponse[]).map((x) => {
 		const ts = Date.parse(x.created_at);
 		return {
@@ -93,6 +98,7 @@ export async function diffReactions(
 	);
 	const events: FeedbackEvent[] = changes.map((c) => ({
 		commentId: record.commentId,
+		surface: record.surface,
 		provider: record.provider,
 		owner: record.owner,
 		repo: record.repo,

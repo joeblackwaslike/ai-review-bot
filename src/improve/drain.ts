@@ -9,8 +9,14 @@ const EVENTS_LIST = "fb:events";
  * backfill writes, so an event drained here and the same reaction harvested by a
  * backfill converge on a single row instead of double-counting. */
 export function mapKvEventToRaw(event: FeedbackEvent): RawFeedbackInsert {
+	// A reaction on the carrier rates the review as a whole; one on an inline
+	// comment rates a single finding. Recording both as inline_reaction would
+	// make a review-level verdict look like a verdict on whichever finding
+	// happened to share its comment id space.
+	const source =
+		event.surface === "carrier" ? "review_reaction" : "inline_reaction";
 	return {
-		source: "inline_reaction",
+		source,
 		provider: event.provider,
 		owner: event.owner,
 		repo: event.repo,
@@ -23,7 +29,7 @@ export function mapKvEventToRaw(event: FeedbackEvent): RawFeedbackInsert {
 		verdict: event.verdict,
 		actor: event.reactor,
 		eventAt: new Date(event.reactedAtMs),
-		dedupKey: `react:inline_reaction:${event.commentId}:${event.reactor}:${event.verdict}`,
+		dedupKey: `react:${source}:${event.commentId}:${event.reactor}:${event.verdict}`,
 	};
 }
 

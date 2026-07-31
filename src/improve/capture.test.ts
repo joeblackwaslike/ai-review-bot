@@ -169,6 +169,21 @@ describe("carrier comment reuse", () => {
 		expect(calls.some((c) => c.startsWith("POST"))).toBe(true);
 	});
 
+	// The finding catalog is built after the carrier block, and a finding that
+	// was never catalogued has no second chance — whereas the carrier can be
+	// re-registered on the next round.
+	it("still catalogues findings when carrier registration fails", async () => {
+		const { octokit } = deps([]);
+		const out = await capturePostedReview({
+			...base,
+			octokit: octokit as never,
+			onCarrier: async () => {
+				throw new Error("kv down");
+			},
+		});
+		expect(out.carrierCommentId).toBe(999);
+	});
+
 	it("posts nothing when the carrier is disabled", async () => {
 		const { calls, octokit } = deps([]);
 		const out = await capturePostedReview({

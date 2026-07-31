@@ -90,6 +90,9 @@ export function carrierBody(prefix: string, summary: string): string {
 export async function capturePostedReview(deps: {
 	db: Db;
 	octokit: CaptureOctokit;
+	/** Called with the carrier's comment id so it can be registered for reaction
+	 * polling. Without this the carrier invites ratings that nothing ever reads. */
+	onCarrier?: (commentId: number) => Promise<void>;
 	owner: string;
 	repo: string;
 	pr: number;
@@ -135,6 +138,23 @@ export async function capturePostedReview(deps: {
 				{ owner, repo, issue_number: pr, body },
 			);
 			carrierCommentId = (res.data as { id: number }).id;
+		}
+		if (deps.onCarrier) {
+			// Contained: registration is best-effort, and the finding catalog is
+			// built after this block. A KV blip must not cost every finding on the
+			// review — the carrier can be re-registered on the next round, but a
+			// finding that was never catalogued has no second chance.
+			try {
+				await deps.onCarrier(carrierCommentId);
+			} catch (err) {
+				console.error("improve: carrier registration failed", {
+					owner,
+					repo,
+					pr,
+					error:
+						err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+				});
+			}
 		}
 	}
 

@@ -101,3 +101,19 @@ describe("parseEvents", () => {
 		expect(malformed).toBe(1);
 	});
 });
+
+describe("carrier reactions", () => {
+	it("records a carrier reaction as a review-level verdict", () => {
+		const row = mapKvEventToRaw(event({ surface: "carrier" }));
+		expect(row.source).toBe("review_reaction");
+		expect(row.dedupKey).toContain("react:review_reaction:");
+	});
+
+	// Otherwise a review-level verdict would collide with a finding-level one
+	// that happened to share a comment id.
+	it("keys carrier and inline reactions separately", () => {
+		expect(mapKvEventToRaw(event({ surface: "carrier" })).dedupKey).not.toBe(
+			mapKvEventToRaw(event({ surface: "inline" })).dedupKey,
+		);
+	});
+});
