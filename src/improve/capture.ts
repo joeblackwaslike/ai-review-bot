@@ -61,11 +61,18 @@ export function pairWithProvenance(
 	return paired;
 }
 
+/** Marker identifying this bot's carrier comment on a PR. Kept in the body so
+ * the comment can be found again and updated rather than duplicated. */
+export function carrierMarker(prefix: string): string {
+	return `<!-- ai-review:carrier:${prefix} -->`;
+}
+
 /** The body of the carrier comment. PR *reviews* are not reactable, so the
  * top-level verdict needs a normal issue comment to carry reactions — its id is
  * what the daily poll reads from `issues/comments/{id}/reactions`. */
 export function carrierBody(prefix: string, summary: string): string {
 	return [
+		carrierMarker(prefix),
 		`### ${prefix} — review summary`,
 		"",
 		summary.trim() || "_(no summary)_",
@@ -104,16 +111,31 @@ export async function capturePostedReview(deps: {
 	)) as PostedComment[];
 
 	if (deps.postCarrier) {
-		const res = await octokit.request(
-			"POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
-			{
-				owner,
-				repo,
-				issue_number: pr,
-				body: carrierBody(deps.commentPrefix, deps.summary),
-			},
-		);
-		carrierCommentId = (res.data as { id: number }).id;
+		// One carrier per PR, updated in place. Posting a fresh one per review
+		// round would leave a PR with six rounds carrying six carriers, and would
+		// scatter the review-level reactions across all of them instead of
+		// accumulating them where they can be read.
+		const existing = (await octokit.paginate(
+			"GET /repos/{owner}/{repo}/issues/{issue_number}/comments",
+			{ owner, repo, issue_number: pr, per_page: 100 },
+		)) as { id: number; body?: string }[];
+		const marker = carrierMarker(deps.commentPrefix);
+		const mine = existing.find((c) => c.body?.includes(marker));
+		const body = carrierBody(deps.commentPrefix, deps.summary);
+
+		if (mine) {
+			await octokit.request(
+				"PATCH /repos/{owner}/{repo}/issues/comments/{comment_id}",
+				{ owner, repo, comment_id: mine.id, body },
+			);
+			carrierCommentId = mine.id;
+		} else {
+			const res = await octokit.request(
+				"POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+				{ owner, repo, issue_number: pr, body },
+			);
+			carrierCommentId = (res.data as { id: number }).id;
+		}
 	}
 
 	for (const { comment, skills, title, severity } of pairWithProvenance(
