@@ -1,0 +1,1 @@
+ALTER TABLE "finding_catalog" ADD COLUMN "backfilled" boolean DEFAULT false NOT NULL;
