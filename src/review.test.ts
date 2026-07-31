@@ -3,6 +3,7 @@ import type { KvClient } from "./feedback/kv.js";
 import {
 	buildReview,
 	buildReviewComments,
+	classifyRefusal,
 	collectRightSideLines,
 	computePaceDelayMs,
 	generateSummary,
@@ -1237,6 +1238,75 @@ describe("buildReview rate-limit decision", () => {
 		expect(decision?.rateLimitResetAt).toBe("2026-06-09T07:21:30Z");
 	});
 
+	function quotaContext(provider: "anthropic" | "openai") {
+		const octokit = {
+			request: vi.fn(async (route: string) =>
+				route.includes("/reviews") ? { data: [] } : { data: {} },
+			),
+			paginate: vi.fn(async () => []),
+		};
+		return {
+			octokit: octokit as never,
+			owner: "o",
+			repo: "r",
+			pullNumber: 1,
+			headSha: "sha",
+			title: "t",
+			body: null,
+			additions: 0,
+			deletions: 0,
+			changedFiles: 0,
+			labels: [],
+			commentPrefix: "ai-review-bot",
+			extraInstructions: "",
+			force: true,
+			provider,
+			feedbackEnabled: false,
+			agentConcurrency: 1,
+			tier2Enabled: false,
+		};
+	}
+
+	it("returns QUOTA_EXHAUSTED naming the provider when every agent is out of credits", async () => {
+		vi.useFakeTimers();
+		mockGenerateObject.mockRejectedValue(
+			Object.assign(new Error("You have no credits remaining"), {
+				statusCode: 429,
+			}),
+		);
+
+		const promise = buildReview(quotaContext("openai"));
+		await vi.runAllTimersAsync();
+		const decision = await promise;
+
+		expect(decision?.event).toBe("QUOTA_EXHAUSTED");
+		expect(decision?.quotaProvider).toBe("openai");
+	});
+
+	// Both conditions arrive as 429, so precedence is the whole point: reporting
+	// a spent balance as a rate limit tells someone to wait for something that
+	// will never happen.
+	it("prefers QUOTA_EXHAUSTED over RATE_LIMITED when both appear in one run", async () => {
+		vi.useFakeTimers();
+		mockGenerateObject
+			.mockRejectedValueOnce(
+				Object.assign(new Error("rate limit exceeded"), {
+					statusCode: 429,
+					responseHeaders: { "retry-after": "42" },
+				}),
+			)
+			.mockRejectedValue(
+				Object.assign(new Error("insufficient_quota"), { statusCode: 429 }),
+			);
+
+		const promise = buildReview(quotaContext("anthropic"));
+		await vi.runAllTimersAsync();
+		const decision = await promise;
+
+		expect(decision?.event).toBe("QUOTA_EXHAUSTED");
+		expect(decision?.quotaProvider).toBe("anthropic");
+	});
+
 	it("stays COMMENT (not APPROVE) when some agents succeed with zero findings but at least one is rate-limited", async () => {
 		vi.useFakeTimers();
 		// First agent call resolves ok with zero findings; the remaining 4
@@ -1821,5 +1891,70 @@ describe("buildReview triage gate — INCREMENTAL carries forward open prior fin
 		const carried = stateAfterSha2?.findings.find((f) => f.id === fId);
 		expect(carried?.status).toBe("open");
 		expect(stateAfterSha2?.event).toBe("REQUEST_CHANGES");
+	});
+});
+
+describe("classifyRefusal", () => {
+	// Both conditions arrive as HTTP 429 and need opposite responses from a
+	// human, so quota must win over rate limit whenever both could match.
+	it("reads OpenAI's spent balance as quota, not a rate limit", () => {
+		expect(
+			classifyRefusal({
+				statusCode: 429,
+				message: "You have no credits remaining. Add credits to continue",
+			}),
+		).toBe("quota_exhausted");
+	});
+
+	it("reads OpenAI's insufficient_quota code as quota", () => {
+		expect(
+			classifyRefusal({
+				statusCode: 429,
+				responseBody: '{"code":"insufficient_quota"}',
+			}),
+		).toBe("quota_exhausted");
+	});
+
+	it("reads Anthropic's low balance as quota", () => {
+		expect(
+			classifyRefusal({
+				statusCode: 400,
+				message: "Your credit balance is too low to access the Claude API",
+			}),
+		).toBe("quota_exhausted");
+	});
+
+	it("still reads a genuine 429 as a rate limit", () => {
+		expect(
+			classifyRefusal({ statusCode: 429, message: "rate limit exceeded" }),
+		).toBe("rate_limit");
+	});
+
+	it("unwraps a RetryError to find the real cause", () => {
+		expect(
+			classifyRefusal({
+				name: "AI_RetryError",
+				lastError: {
+					statusCode: 429,
+					message: "You have no credits remaining",
+				},
+			}),
+		).toBe("quota_exhausted");
+	});
+
+	it("finds quota inside an errors array even when a sibling is a plain 429", () => {
+		expect(
+			classifyRefusal({
+				errors: [
+					{ statusCode: 429, message: "rate limit" },
+					{ statusCode: 429, message: "insufficient_quota" },
+				],
+			}),
+		).toBe("quota_exhausted");
+	});
+
+	it("returns null for an unrelated error", () => {
+		expect(classifyRefusal(new Error("socket hang up"))).toBeNull();
+		expect(classifyRefusal({ statusCode: 500 })).toBeNull();
 	});
 });

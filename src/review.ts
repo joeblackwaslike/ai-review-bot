@@ -66,7 +66,12 @@ export interface ReviewMetadata {
 }
 
 export interface ReviewDecision {
-	event: "COMMENT" | "REQUEST_CHANGES" | "APPROVE" | "RATE_LIMITED";
+	event:
+		| "COMMENT"
+		| "REQUEST_CHANGES"
+		| "APPROVE"
+		| "RATE_LIMITED"
+		| "QUOTA_EXHAUSTED";
 	body: string;
 	comments: ReviewComment[];
 	metadata: ReviewMetadata;
@@ -75,6 +80,10 @@ export interface ReviewDecision {
 	commentProvenance?: Map<string, { skills: string[]; title: string }>;
 	rateLimitResetAt?: string;
 	rateLimitRetryAfterSeconds?: number;
+	/** Provider whose balance is spent, for the QUOTA_EXHAUSTED event. Narrowed
+	 * to the known providers so a caller cannot be handed a value the billing
+	 * lookup has no link for. */
+	quotaProvider?: ModelSelection["provider"];
 }
 
 interface ReviewComment {
@@ -109,7 +118,60 @@ export type AgentOutcome =
 			rateLimit?: RateLimitInfo;
 	  }
 	| { status: "rate_limited"; rateLimit: RateLimitInfo }
+	| { status: "quota_exhausted"; provider: ModelSelection["provider"] }
 	| { status: "error" };
+
+/** Why a provider refused the call. Both conditions arrive as HTTP 429, but they
+ * need opposite responses from a human: a rate limit clears on its own, an
+ * exhausted balance never does. Conflating them means telling someone to wait
+ * for something that will not happen. */
+export type ProviderRefusal = "rate_limit" | "quota_exhausted";
+
+// Substrings both providers use for a spent balance. Matched on the message
+// because neither exposes a machine-readable field the AI SDK preserves
+// consistently through its RetryError wrapper.
+const QUOTA_MARKERS = [
+	"insufficient_quota",
+	"no credits remaining",
+	"exceeded your current quota",
+	"credit balance is too low",
+	"billing_hard_limit_reached",
+];
+
+function messageOf(candidate: unknown): string {
+	const c = candidate as { message?: unknown; responseBody?: unknown };
+	return `${typeof c?.message === "string" ? c.message : ""} ${
+		typeof c?.responseBody === "string" ? c.responseBody : ""
+	}`.toLowerCase();
+}
+
+/** Pure: classify a 429 as a transient rate limit or a spent balance. Returns
+ * null when the error is neither. */
+export function classifyRefusal(err: unknown): ProviderRefusal | null {
+	const candidates: unknown[] = [
+		err,
+		(err as { lastError?: unknown })?.lastError,
+		...((err as { errors?: unknown[] })?.errors ?? []),
+	];
+	// Quota wins over rate limit: a spent balance also surfaces as 429, and
+	// reporting it as a rate limit is the failure this distinction exists to fix.
+	for (const c of candidates) {
+		const text = messageOf(c);
+		if (QUOTA_MARKERS.some((marker) => text.includes(marker))) {
+			return "quota_exhausted";
+		}
+	}
+	for (const c of candidates) {
+		const status = (c as { statusCode?: number })?.statusCode;
+		if (
+			status === 429 ||
+			(APICallError.isInstance?.(c) && (c as APICallError).statusCode === 429)
+		) {
+			return "rate_limit";
+		}
+	}
+	return null;
+}
 
 function numOrUndef(v: string | undefined): number | undefined {
 	if (v === undefined || v.trim() === "") return undefined;
@@ -330,8 +392,16 @@ export async function runAgent(
 			),
 		};
 	} catch (err) {
-		const rl = extractRateLimit(err);
-		if (rl) {
+		const refusal = classifyRefusal(err);
+		if (refusal === "quota_exhausted") {
+			console.error("agent refused: provider balance exhausted", {
+				skillPath,
+				provider: selection.provider,
+			});
+			return { status: "quota_exhausted", provider: selection.provider };
+		}
+		if (refusal === "rate_limit") {
+			const rl = extractRateLimit(err) ?? {};
 			console.warn("agent rate-limited", { skillPath, ...rl });
 			return { status: "rate_limited", rateLimit: rl };
 		}
@@ -924,7 +994,9 @@ export async function buildReview(
 			);
 			// Sequential handoff at the default concurrency 1; at AGENT_CONCURRENCY>1 this is a
 			// benign best-effort race (pacing only needs an approximate recent signal).
-			if (outcome.status !== "error") lastRateLimit = outcome.rateLimit;
+			if (outcome.status === "ok" || outcome.status === "rate_limited") {
+				lastRateLimit = outcome.rateLimit;
+			}
 			console.log("agent done", {
 				idx: i + 1,
 				total: allSkills.length,
@@ -951,6 +1023,7 @@ export async function buildReview(
 
 	const agentResults: ModelReview[] = [];
 	const rateLimited: RateLimitInfo[] = [];
+	const quotaExhausted: ModelSelection["provider"][] = [];
 	let totalPromptTokens = 0;
 	let totalCompletionTokens = 0;
 
@@ -961,7 +1034,31 @@ export async function buildReview(
 			totalCompletionTokens += o.usage.completionTokens;
 		} else if (o.status === "rate_limited") {
 			rateLimited.push(o.rateLimit);
+		} else if (o.status === "quota_exhausted") {
+			quotaExhausted.push(o.provider);
 		}
+	}
+
+	// Checked before the rate-limit branch: a spent balance also surfaces as 429,
+	// and the two need opposite responses from a human. Reporting "wait for the
+	// budget to reset" when the account is empty sends someone to wait for
+	// something that will never happen.
+	if (agentResults.length === 0 && quotaExhausted.length > 0) {
+		return {
+			event: "QUOTA_EXHAUSTED",
+			body: "",
+			comments: [],
+			metadata: {
+				model: selection.model,
+				tier1Count: TIER1_SKILLS.length,
+				tier2Skills: [],
+				generalFindings: 0,
+				inlineComments: 0,
+				cost: 0,
+			},
+			validLinesByPath: new Map(),
+			quotaProvider: quotaExhausted[0],
+		};
 	}
 
 	if (agentResults.length === 0 && rateLimited.length > 0) {

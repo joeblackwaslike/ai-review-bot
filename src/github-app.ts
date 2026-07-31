@@ -6,6 +6,7 @@ import { getConfig, getOpenAIAppConfig } from "./config.js";
 import type { KvClient } from "./feedback/kv.js";
 import { createUpstashKv } from "./feedback/kv.js";
 import { persistPostedComments } from "./feedback/persist.js";
+import { billingUrl, notifyQuotaExhausted, providerLabel } from "./notify.js";
 import { resolveStaleThreads } from "./resolve-threads.js";
 import type { ReviewDecision, ReviewMetadata } from "./review.js";
 import { buildReview } from "./review.js";
@@ -366,6 +367,45 @@ export async function maybeSubmitReview(args: {
 		});
 
 		if (!review) {
+			return;
+		}
+
+		if (review.event === "QUOTA_EXHAUSTED") {
+			const quotaProvider = review.quotaProvider ?? "unknown";
+			const billing = billingUrl(quotaProvider);
+			const body = [
+				`⛔ **[${config.reviewCommentPrefix}]** Review couldn't run — **the ${providerLabel(quotaProvider)} account is out of credits.**`,
+				"",
+				"This will **not** clear on its own and pushing again will not help — it needs payment.",
+				"",
+				billing
+					? `→ ${billing}`
+					: "→ Check that provider's billing page — no link is configured for it.",
+				"",
+				"The review will run normally on the next commit once the balance is topped up.",
+			].join("\n");
+			await octokit.request(
+				"POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+				{ owner, repo, issue_number: pullNumber, body },
+			);
+			console.error("PROVIDER BALANCE EXHAUSTED — payment required", {
+				provider: quotaProvider,
+				owner,
+				repo,
+				pullNumber,
+				billing,
+			});
+			await notifyQuotaExhausted({
+				octokit: octokit as never,
+				provider: quotaProvider,
+				owner,
+				repo,
+				pullNumber,
+				// Deliberately unset: `owner` is the org slug on an org-owned repo,
+				// not a user login, and the issues API 422s on that — which would
+				// lose the notification entirely. An unassigned issue still emails
+				// watchers, so the notification survives either way.
+			});
 			return;
 		}
 
