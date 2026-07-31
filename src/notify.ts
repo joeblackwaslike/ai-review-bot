@@ -17,28 +17,45 @@ export function quotaIssueMarker(provider: string): string {
 	return `<!-- ai-review:quota-exhausted:${provider} -->`;
 }
 
+/** Display name for a provider. Unknown values are surfaced as-is rather than
+ * folded into a default: this label appears in the message telling someone
+ * WHICH account to pay, so guessing wrong is worse than admitting ignorance. */
+export function providerLabel(provider: string): string {
+	if (provider === "openai") return "OpenAI";
+	if (provider === "anthropic") return "Anthropic";
+	return `provider "${provider}"`;
+}
+
+export function billingUrl(provider: string): string | null {
+	if (provider === "openai")
+		return "https://platform.openai.com/settings/organization/billing";
+	if (provider === "anthropic")
+		return "https://console.anthropic.com/settings/billing";
+	return null;
+}
+
 export function quotaIssueTitle(provider: string): string {
-	const label = provider === "openai" ? "OpenAI" : "Anthropic";
-	return `⛔ ${label} credits exhausted — AI review bot is down`;
+	return `⛔ ${providerLabel(provider)} credits exhausted — AI review bot is down`;
 }
 
 /** Pure: the issue body. Written for someone reading a notification email on a
  * phone — what broke, that waiting will not fix it, and the one link that will. */
 export function quotaIssueBody(opts: {
 	provider: string;
-	billing: string;
 	owner: string;
 	repo: string;
 	pullNumber: number;
 }): string {
-	const label = opts.provider === "openai" ? "OpenAI" : "Anthropic";
+	const billing = billingUrl(opts.provider);
 	return [
 		quotaIssueMarker(opts.provider),
-		`**The ${label} account has no credits left, so the AI review bot cannot review anything.**`,
+		`**The ${providerLabel(opts.provider)} account has no credits left, so the AI review bot cannot review anything.**`,
 		"",
 		"This does not clear on its own. Pushing again will not help. It needs payment.",
 		"",
-		`→ **${opts.billing}**`,
+		billing
+			? `→ **${billing}**`
+			: "→ Check the billing page for that provider — this bot does not have a link for it.",
 		"",
 		`First seen on ${opts.owner}/${opts.repo}#${opts.pullNumber}.`,
 		"",
@@ -56,10 +73,12 @@ export function quotaIssueBody(opts: {
 export async function notifyQuotaExhausted(opts: {
 	octokit: NotifyOctokit;
 	provider: string;
-	billing: string;
 	owner: string;
 	repo: string;
 	pullNumber: number;
+	/** Optional; omitted when unknown. Assigning the repo OWNER is wrong on an
+	 * org-owned repo — there `owner` is the org slug, not a user login, and the
+	 * issues API rejects it with a 422 that would lose the notification. */
 	assignee?: string;
 }): Promise<{ created: boolean; url?: string }> {
 	const { octokit, owner, repo, provider } = opts;

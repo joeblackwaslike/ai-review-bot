@@ -6,13 +6,7 @@ import {
 	quotaIssueTitle,
 } from "./notify.js";
 
-const base = {
-	provider: "openai",
-	billing: "https://platform.openai.com/settings/organization/billing",
-	owner: "o",
-	repo: "r",
-	pullNumber: 7,
-};
+const base = { provider: "openai", owner: "o", repo: "r", pullNumber: 7 };
 
 describe("quota issue content", () => {
 	it("names the provider in the title", () => {
@@ -26,8 +20,29 @@ describe("quota issue content", () => {
 		expect(body).toContain("needs payment");
 	});
 
-	it("carries the billing link", () => {
-		expect(quotaIssueBody(base)).toContain(base.billing);
+	it("carries the billing link for a known provider", () => {
+		expect(quotaIssueBody(base)).toContain(
+			"https://platform.openai.com/settings/organization/billing",
+		);
+		expect(quotaIssueBody({ ...base, provider: "anthropic" })).toContain(
+			"https://console.anthropic.com/settings/billing",
+		);
+	});
+
+	// This message exists to tell someone WHICH account to pay, so a wrong guess
+	// is worse than admitting ignorance — the old binary ternary reported any
+	// unrecognised provider (including the "unknown" fallback) as Anthropic.
+	it("does not present an unknown provider as Anthropic", () => {
+		const body = quotaIssueBody({ ...base, provider: "unknown" });
+		expect(body).not.toContain("Anthropic");
+		expect(body).toContain('provider "unknown"');
+		expect(quotaIssueTitle("unknown")).not.toContain("Anthropic");
+	});
+
+	it("omits a billing link it does not have rather than inventing one", () => {
+		const body = quotaIssueBody({ ...base, provider: "unknown" });
+		expect(body).not.toContain("https://");
+		expect(body).toContain("does not have a link");
 	});
 
 	it("embeds a per-provider marker so a repeat outage finds this issue", () => {
@@ -72,6 +87,20 @@ describe("notifyQuotaExhausted", () => {
 			url: "https://github.com/o/r/issues/4",
 		});
 		expect(request.mock.calls.some((c) => c[0].startsWith("POST"))).toBe(false);
+	});
+
+	// `owner` is the org slug on an org-owned repo, not a user login, and the
+	// issues API 422s on that — which would lose the notification entirely.
+	it("omits assignees when none is given", async () => {
+		const request = vi.fn(
+			async (route: string, _params?: Record<string, unknown>) =>
+				route.startsWith("GET")
+					? { data: { total_count: 0, items: [] } }
+					: { data: { html_url: "u" } },
+		);
+		await notifyQuotaExhausted({ ...base, octokit: { request } as never });
+		const post = request.mock.calls.find((c) => c[0].startsWith("POST"));
+		expect((post?.[1] as Record<string, unknown>).assignees).toBeUndefined();
 	});
 
 	it("assigns the issue when an assignee is given", async () => {
