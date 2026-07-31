@@ -684,6 +684,7 @@ async function cmdPropose(args: string[]): Promise<void> {
 				repo,
 			);
 
+	let failed = 0;
 	for (const plan of plans) {
 		const result = await openProposalIssue({
 			octokit,
@@ -692,10 +693,17 @@ async function cmdPropose(args: string[]): Promise<void> {
 			plan,
 			dryRun,
 		});
+		if (result.action === "failed") failed++;
 		console.log(
 			`${plan.kind}: ${result.action}${result.url ? ` — ${result.url}` : ""}`,
 		);
 		if (dryRun) console.log(`  ${plan.title}`);
+	}
+
+	// A run where every proposal failed to reach GitHub must not look like a
+	// successful run to a cron or a shell caller.
+	if (failed > 0 && failed === plans.length) {
+		fatal(`all ${failed} proposal(s) failed to reach GitHub`);
 	}
 }
 

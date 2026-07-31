@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+	DEFAULT_THRESHOLDS,
 	openProposalIssue,
 	planDuplicateIssue,
 	planSeverityIssue,
 	planSkillIssue,
 	proposalMarker,
+	thresholdsFromEnv,
 } from "./issues.js";
 import type { DuplicateCluster, SeverityReliability } from "./trends.js";
 
@@ -134,6 +136,36 @@ describe("planSkillIssue", () => {
 				minNegativeRatio: 0.5,
 			}),
 		).toBeNull();
+	});
+});
+
+describe("thresholdsFromEnv", () => {
+	it("uses defaults when unset and reads configured values", () => {
+		expect(thresholdsFromEnv({}).minSample).toBe(DEFAULT_THRESHOLDS.minSample);
+		expect(thresholdsFromEnv({ IMPROVE_MIN_SAMPLE: "20" }).minSample).toBe(20);
+	});
+
+	// A NaN comparison is always false, so propagating it would switch detection
+	// off silently — but the fallback must still be visible, or someone believes
+	// a threshold they set is in effect.
+	it("falls back on an unparseable value and says so", () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		expect(thresholdsFromEnv({ IMPROVE_MIN_SAMPLE: "eight" }).minSample).toBe(
+			DEFAULT_THRESHOLDS.minSample,
+		);
+		expect(warn).toHaveBeenCalledWith(
+			expect.stringContaining("IMPROVE_MIN_SAMPLE"),
+		);
+		warn.mockRestore();
+	});
+
+	it("treats an empty string as unset without warning", () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		expect(thresholdsFromEnv({ IMPROVE_MIN_CLUSTERS: "  " }).minClusters).toBe(
+			DEFAULT_THRESHOLDS.minClusters,
+		);
+		expect(warn).not.toHaveBeenCalled();
+		warn.mockRestore();
 	});
 });
 

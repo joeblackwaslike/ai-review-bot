@@ -34,7 +34,14 @@ export function thresholdsFromEnv(
 		const raw = env[key];
 		if (raw === undefined || raw.trim() === "") return fallback;
 		const n = Number(raw);
-		return Number.isFinite(n) ? n : fallback;
+		if (Number.isFinite(n)) return n;
+		// Falling back silently would leave someone believing a threshold they
+		// set is in effect. The fallback is still the right behaviour — a typo
+		// must not disable detection — but it has to be visible.
+		console.warn(
+			`improve: ${key}="${raw}" is not a number; using default ${fallback}`,
+		);
+		return fallback;
 	};
 	return {
 		minSample: num("IMPROVE_MIN_SAMPLE", DEFAULT_THRESHOLDS.minSample),
