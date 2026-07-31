@@ -25,6 +25,11 @@ import {
 	listFindingOutcomes,
 	listUnclassifiedBundles,
 } from "./improve/db/repo.js";
+import {
+	openProposalIssue,
+	planProposals,
+	thresholdsFromEnv,
+} from "./improve/issues.js";
 import { fpSignature } from "./improve/match.js";
 import {
 	computeSeverityReliability,
@@ -80,6 +85,10 @@ function usage(): never {
 		"      Classify captured feedback into intents. Requires DATABASE_URL.",
 	);
 	console.error("  ai-review trends [--json]");
+	console.error("  ai-review propose [--repo <owner/name>] [--dry-run]");
+	console.error(
+		"      File a GitHub issue for each quality signal above threshold.",
+	);
 	console.error(
 		"      Report severity reliability, repeated claims and per-skill signal.",
 	);
@@ -635,10 +644,74 @@ async function cmdTrends(args: string[]): Promise<void> {
 	}
 }
 
+async function cmdPropose(args: string[]): Promise<void> {
+	let dryRun = false;
+	let slug = process.env.IMPROVE_TARGET_REPO ?? "joeblackwaslike/ai-review-bot";
+	for (let i = 0; i < args.length; i++) {
+		const a = args[i];
+		if (a === "--dry-run") dryRun = true;
+		else if (a === "--repo") slug = requireValue(args, i++, a);
+		else fatal(`Unexpected argument: ${a}`);
+	}
+	const [owner, repo] = slug.split("/");
+	if (!owner || !repo) fatal("--repo must be <owner>/<name>");
+
+	const outcomes = await listFindingOutcomes(getDb()).catch((err: unknown) => {
+		fatal(
+			`could not read the corpus (is DATABASE_URL set?): ${
+				err instanceof Error ? err.message : String(err)
+			}`,
+		);
+	});
+
+	// One parser for both the CLI and the cron: raw Number() yields NaN on a
+	// typo'd threshold, and a NaN comparison is always false — detection would
+	// silently switch off with nothing to say why.
+	const plans = planProposals(outcomes, thresholdsFromEnv(process.env));
+
+	if (plans.length === 0) {
+		console.log("No signal above threshold — nothing to propose.");
+		return;
+	}
+
+	const token = process.env.GITHUB_TOKEN;
+	const octokit = token
+		? new Octokit({ auth: token })
+		: await installationOctokit(
+				getConfig().appId,
+				getConfig().privateKey,
+				owner,
+				repo,
+			);
+
+	let failed = 0;
+	for (const plan of plans) {
+		const result = await openProposalIssue({
+			octokit,
+			owner,
+			repo,
+			plan,
+			dryRun,
+		});
+		if (result.action === "failed") failed++;
+		console.log(
+			`${plan.kind}: ${result.action}${result.url ? ` — ${result.url}` : ""}`,
+		);
+		if (dryRun) console.log(`  ${plan.title}`);
+	}
+
+	// A run where every proposal failed to reach GitHub must not look like a
+	// successful run to a cron or a shell caller.
+	if (failed > 0 && failed === plans.length) {
+		fatal(`all ${failed} proposal(s) failed to reach GitHub`);
+	}
+}
+
 async function main(): Promise<void> {
 	const [sub, ...rest] = process.argv.slice(2);
 	if (sub === "classify") return cmdClassify(rest);
 	if (sub === "trends") return cmdTrends(rest);
+	if (sub === "propose") return cmdPropose(rest);
 
 	if (sub === "review") return cmdReview(rest);
 	if (sub === "audit") return cmdAudit(rest);
