@@ -52,6 +52,16 @@ describe("computeReactionDelta", () => {
 		expect(out.changes).toEqual([
 			{ reactor: "octocat", verdict: "down", reactedAtMs: 200 },
 		]);
+		expect(out.lastSeen).toEqual({ octocat: "down" });
+	});
+
+	it("does not treat an inherited Object property name as a verdict", () => {
+		const out = computeReactionDelta(
+			[{ login: "octocat", content: "toString", createdAtMs: 100 }],
+			{},
+		);
+		expect(out.changes).toEqual([]);
+		expect(out.lastSeen).toEqual({});
 	});
 
 	it("ignores non-verdict reactions", () => {
