@@ -1,5 +1,6 @@
 import { generateObject } from "ai";
 import { z } from "zod";
+import type { ResolvedAuth } from "../auth.js";
 import { createAIModel } from "../models.js";
 import type { ModelSelection } from "../router.js";
 
@@ -158,6 +159,7 @@ export interface ClassifyRun {
 export async function classifyBundles(
 	bundles: FeedbackBundle[],
 	selection: ModelSelection,
+	auth?: ResolvedAuth,
 ): Promise<ClassifyRun> {
 	const resolved: ClassifiedFeedback[] = [];
 	const needsModel: FeedbackBundle[] = [];
@@ -187,7 +189,7 @@ export async function classifyBundles(
 		const batch = needsModel.slice(i, i + CLASSIFY_BATCH_SIZE);
 		try {
 			const { object } = await generateObject({
-				model: createAIModel(selection),
+				model: createAIModel(selection, auth),
 				schema: ClassifySchema,
 				prompt: buildPrompt(batch),
 				maxOutputTokens: 4000,

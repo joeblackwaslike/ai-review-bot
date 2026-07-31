@@ -10,6 +10,7 @@ import {
 	runLocalReview,
 } from "./audit.js";
 import { makeReady, type OctokitLike } from "./audit-pr.js";
+import { resolveAnthropicAuth } from "./auth.js";
 import { getConfig, getOpenAIAppConfig } from "./config.js";
 import {
 	type BackfillOctokit,
@@ -503,10 +504,15 @@ async function cmdClassify(args: string[]): Promise<void> {
 		return;
 	}
 
-	const run = await classifyBundles(bundles, {
-		provider: "anthropic",
-		model: "claude-haiku-4-5",
-	});
+	// Same auth posture as `ai-review review`: API key, else an explicit OAuth
+	// token, else the logged-in `claude` subscription. Local CLI only — never
+	// reachable from a webhook path (see src/auth.ts).
+	const auth = await resolveAnthropicAuth().catch(() => undefined);
+	const run = await classifyBundles(
+		bundles,
+		{ provider: "anthropic", model: "claude-haiku-4-5" },
+		auth,
+	);
 	const classified = run.classified;
 
 	const byId = new Map(bundles.map((b) => [b.rawFeedbackId, b]));
