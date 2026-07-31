@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+	capturePostedReview,
 	carrierBody,
+	carrierMarker,
 	type PostedComment,
 	type Provenance,
 	pairWithProvenance,
@@ -103,5 +105,80 @@ describe("parsePostedAt", () => {
 
 	it("falls back rather than writing an Invalid Date into a NOT NULL column", () => {
 		expect(Number.isNaN(parsePostedAt("not-a-date").getTime())).toBe(false);
+	});
+});
+
+describe("carrier comment reuse", () => {
+	function deps(existing: { id: number; body?: string }[]) {
+		const calls: string[] = [];
+		const octokit = {
+			paginate: async (route: string) => {
+				calls.push(route);
+				return route.includes("/issues/") ? existing : [];
+			},
+			request: async (route: string) => {
+				calls.push(route);
+				return { data: { id: 999 } };
+			},
+		};
+		return { calls, octokit };
+	}
+
+	const base = {
+		db: {} as never,
+		owner: "o",
+		repo: "r",
+		pr: 1,
+		reviewId: 900,
+		headSha: "sha",
+		provider: "anthropic" as const,
+		provenance: new Map(),
+		summary: "s",
+		commentPrefix: "ai-review",
+		postCarrier: true,
+	};
+
+	it("creates a carrier when none exists", async () => {
+		const { calls, octokit } = deps([]);
+		const out = await capturePostedReview({
+			...base,
+			octokit: octokit as never,
+		});
+		expect(out.carrierCommentId).toBe(999);
+		expect(calls.some((c) => c.startsWith("POST"))).toBe(true);
+	});
+
+	// A PR with six review rounds would otherwise carry six carriers, scattering
+	// the review-level reactions across all of them.
+	it("updates the existing carrier instead of posting another", async () => {
+		const { calls, octokit } = deps([
+			{ id: 42, body: `${carrierMarker("ai-review")}\nold` },
+		]);
+		const out = await capturePostedReview({
+			...base,
+			octokit: octokit as never,
+		});
+		expect(out.carrierCommentId).toBe(42);
+		expect(calls.some((c) => c.startsWith("PATCH"))).toBe(true);
+		expect(calls.some((c) => c.startsWith("POST"))).toBe(false);
+	});
+
+	it("ignores another bot's comments when looking for its own carrier", async () => {
+		const { calls, octokit } = deps([{ id: 7, body: "coderabbit summary" }]);
+		await capturePostedReview({ ...base, octokit: octokit as never });
+		expect(calls.some((c) => c.startsWith("POST"))).toBe(true);
+	});
+
+	it("posts nothing when the carrier is disabled", async () => {
+		const { calls, octokit } = deps([]);
+		const out = await capturePostedReview({
+			...base,
+			postCarrier: false,
+			octokit: octokit as never,
+		});
+		expect(out.carrierCommentId).toBeNull();
+		expect(
+			calls.some((c) => c.startsWith("POST") || c.startsWith("PATCH")),
+		).toBe(false);
 	});
 });
