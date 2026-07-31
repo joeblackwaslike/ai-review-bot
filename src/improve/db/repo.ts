@@ -1,7 +1,12 @@
 import { sql } from "drizzle-orm";
 import type { FindingOutcome } from "../trends.js";
 import type { Db } from "./client.js";
-import { classifiedFeedback, findingCatalog, rawFeedback } from "./schema.js";
+import {
+	classifiedFeedback,
+	findingCatalog,
+	qcRuns,
+	rawFeedback,
+} from "./schema.js";
 
 export type RawFeedbackInsert = typeof rawFeedback.$inferInsert;
 export type FindingInsert = typeof findingCatalog.$inferInsert;
@@ -205,4 +210,52 @@ export async function listFindingOutcomes(db: Db): Promise<FindingOutcome[]> {
 		backfilled: r.backfilled,
 		intent: r.intent,
 	}));
+}
+
+/** Findings posted on one PR, for QC to judge. */
+export async function listFindingsForPr(
+	db: Db,
+	owner: string,
+	repo: string,
+	pr: number,
+): Promise<
+	{
+		id: number;
+		provider: "anthropic" | "openai";
+		path: string | null;
+		line: number | null;
+		title: string;
+		severity: string | null;
+	}[]
+> {
+	const result = await db.execute(sql`
+		select id, provider, path, line, title, severity
+		from finding_catalog
+		where owner = ${owner} and repo = ${repo} and pr = ${pr}
+		order by id
+	`);
+	return (
+		result.rows as unknown as {
+			id: string | number;
+			provider: "anthropic" | "openai";
+			path: string | null;
+			line: number | null;
+			title: string;
+			severity: string | null;
+		}[]
+	).map((r) => ({ ...r, id: Number(r.id) }));
+}
+
+/** Claim a QC run for a PR head. Returns 0 when one already exists, which is
+ * how a second /qc on an unchanged PR is prevented from re-spending budget. */
+export async function recordQcRun(
+	db: Db,
+	row: typeof qcRuns.$inferInsert,
+): Promise<number> {
+	const inserted = await db
+		.insert(qcRuns)
+		.values(row)
+		.onConflictDoNothing({ target: qcRuns.dedupKey })
+		.returning({ id: qcRuns.id });
+	return inserted.length;
 }

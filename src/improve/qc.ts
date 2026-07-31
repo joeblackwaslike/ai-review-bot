@@ -1,0 +1,175 @@
+import { generateObject } from "ai";
+import { z } from "zod";
+import { createAIModel } from "../models.js";
+import { SEVERITY_LEVELS } from "../review.js";
+
+export const QcVerdictSchema = z.object({
+	isFalsePositive: z
+		.boolean()
+		.describe("The claim does not hold against the code shown."),
+	isUseful: z.boolean().describe("Worth raising, assuming it is correct."),
+	severityCorrect: z.boolean(),
+	suggestedSeverity: z.enum(SEVERITY_LEVELS).nullable(),
+	rationale: z.string(),
+});
+
+export type QcVerdict = z.infer<typeof QcVerdictSchema>;
+
+export interface JudgeableFinding {
+	id: number;
+	provider: "anthropic" | "openai";
+	path: string | null;
+	line: number | null;
+	title: string;
+	severity: string | null;
+	body: string;
+}
+
+/** Pure, seedable: which findings to judge on a sampled run.
+ *
+ * Deterministic given the same rng so a run can be reproduced, and ordered by
+ * id so the sample does not depend on the order rows came back from the
+ * database. A rate of 1 judges everything; 0 judges nothing. */
+export function selectQcSample<T extends { id: number }>(
+	findings: T[],
+	rate: number,
+	rng: () => number,
+): T[] {
+	if (rate >= 1) return [...findings].sort((a, b) => a.id - b.id);
+	if (rate <= 0) return [];
+	return [...findings].sort((a, b) => a.id - b.id).filter(() => rng() < rate);
+}
+
+/** Pure: the model that judges a finding is the one that raised it.
+ *
+ * A cross-provider judge measures disagreement between two models, which is a
+ * different question from whether the finding holds — and it would let one
+ * provider's style systematically mark down the other's. */
+export function judgeSelection(provider: "anthropic" | "openai") {
+	return provider === "openai"
+		? ({ provider: "openai", model: "gpt-5.1", effort: "low" } as const)
+		: ({ provider: "anthropic", model: "claude-haiku-4-5" } as const);
+}
+
+function buildJudgePrompt(finding: JudgeableFinding, hunk: string): string {
+	return [
+		"You are auditing a single finding raised by an AI code reviewer. You are NOT reviewing the code.",
+		"",
+		"Decide only whether THIS finding holds up:",
+		"- isFalsePositive: true when the claim does not hold against the code shown. Reviewing a stale commit, misreading control flow, or asserting behaviour that the code contradicts all count.",
+		"- isUseful: true when it is worth raising, ASSUMING it is correct. A true but trivial or out-of-scope observation is not useful.",
+		"- severityCorrect / suggestedSeverity: whether the assigned severity matches the actual impact.",
+		"",
+		"If the code shown is insufficient to evaluate the claim, say so in the rationale and treat it as NOT a false positive — absence of evidence is not evidence the reviewer was wrong.",
+		"",
+		`Location: ${finding.path ?? "(general)"}${finding.line ? `:${finding.line}` : ""}`,
+		`Severity assigned: ${finding.severity ?? "(none)"}`,
+		`Finding: ${finding.title}`,
+		"",
+		finding.body,
+		"",
+		"Code:",
+		hunk || "(no diff hunk available)",
+	].join("\n");
+}
+
+/** Judge one finding with the model that raised it. Returns null when the call
+ * fails — an unjudged finding is recorded as unjudged rather than as a pass,
+ * which would quietly inflate the quality score. */
+export async function judgeFinding(
+	finding: JudgeableFinding,
+	hunk: string,
+): Promise<QcVerdict | null> {
+	try {
+		const { object } = await generateObject({
+			model: createAIModel(judgeSelection(finding.provider)),
+			schema: QcVerdictSchema,
+			prompt: buildJudgePrompt(finding, hunk),
+			maxOutputTokens: 1500,
+		});
+		return object;
+	} catch (err) {
+		console.error("qc: judge call failed", {
+			findingId: finding.id,
+			provider: finding.provider,
+			error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+		});
+		return null;
+	}
+}
+
+export interface QcReport {
+	judged: number;
+	falsePositives: number;
+	notUseful: number;
+	severityWrong: number;
+	unjudged: number;
+	items: { finding: JudgeableFinding; verdict: QcVerdict }[];
+}
+
+/** Pure: fold verdicts into a report. */
+export function summarize(
+	results: { finding: JudgeableFinding; verdict: QcVerdict | null }[],
+): QcReport {
+	const items = results.filter(
+		(r): r is { finding: JudgeableFinding; verdict: QcVerdict } =>
+			r.verdict !== null,
+	);
+	return {
+		judged: items.length,
+		falsePositives: items.filter((i) => i.verdict.isFalsePositive).length,
+		notUseful: items.filter((i) => !i.verdict.isUseful).length,
+		severityWrong: items.filter((i) => !i.verdict.severityCorrect).length,
+		unjudged: results.length - items.length,
+		items,
+	};
+}
+
+/** Pure: the comment body. Leads with the count that matters and names the
+ * specific findings, since a bare percentage is not actionable. */
+export function formatQcComment(prefix: string, report: QcReport): string {
+	if (report.judged === 0) {
+		return `### ${prefix}\n\nNothing to judge — no findings were posted on this PR.`;
+	}
+
+	const flagged = report.items.filter(
+		(i) => i.verdict.isFalsePositive || !i.verdict.isUseful,
+	);
+
+	const lines = [
+		`### ${prefix}`,
+		"",
+		`Judged **${report.judged}** finding(s) with the model that raised them.`,
+		"",
+		"| | |",
+		"|---|---|",
+		`| Likely false positives | ${report.falsePositives} |`,
+		`| Correct but not worth raising | ${report.notUseful} |`,
+		`| Severity mis-assigned | ${report.severityWrong} |`,
+	];
+	if (report.unjudged > 0) {
+		lines.push(`| Could not be judged | ${report.unjudged} |`);
+	}
+
+	if (flagged.length > 0) {
+		lines.push("", "#### Flagged", "");
+		for (const { finding, verdict } of flagged.slice(0, 10)) {
+			const label = verdict.isFalsePositive
+				? "false positive"
+				: "not worth raising";
+			lines.push(
+				`- **${label}** — \`${finding.path ?? "general"}${finding.line ? `:${finding.line}` : ""}\` ${finding.title}`,
+				`  > ${verdict.rationale.replace(/\n+/g, " ").slice(0, 260)}`,
+			);
+		}
+		if (flagged.length > 10) {
+			lines.push(`- _…and ${flagged.length - 10} more_`);
+		}
+	}
+
+	lines.push(
+		"",
+		"_This is a second model auditing the first, not a human verdict. Rate the findings themselves to correct it._",
+	);
+	return lines.join("\n");
+}
