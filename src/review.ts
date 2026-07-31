@@ -80,8 +80,10 @@ export interface ReviewDecision {
 	commentProvenance?: Map<string, { skills: string[]; title: string }>;
 	rateLimitResetAt?: string;
 	rateLimitRetryAfterSeconds?: number;
-	/** Provider whose balance is spent, for the QUOTA_EXHAUSTED event. */
-	quotaProvider?: string;
+	/** Provider whose balance is spent, for the QUOTA_EXHAUSTED event. Narrowed
+	 * to the known providers so a caller cannot be handed a value the billing
+	 * lookup has no link for. */
+	quotaProvider?: ModelSelection["provider"];
 }
 
 interface ReviewComment {
@@ -116,7 +118,7 @@ export type AgentOutcome =
 			rateLimit?: RateLimitInfo;
 	  }
 	| { status: "rate_limited"; rateLimit: RateLimitInfo }
-	| { status: "quota_exhausted"; provider: string }
+	| { status: "quota_exhausted"; provider: ModelSelection["provider"] }
 	| { status: "error" };
 
 /** Why a provider refused the call. Both conditions arrive as HTTP 429, but they
@@ -1021,7 +1023,7 @@ export async function buildReview(
 
 	const agentResults: ModelReview[] = [];
 	const rateLimited: RateLimitInfo[] = [];
-	const quotaExhausted: string[] = [];
+	const quotaExhausted: ModelSelection["provider"][] = [];
 	let totalPromptTokens = 0;
 	let totalCompletionTokens = 0;
 
