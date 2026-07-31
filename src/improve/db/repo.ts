@@ -166,3 +166,48 @@ export async function insertClassified(
 		.returning({ id: classifiedFeedback.id });
 	return inserted.length;
 }
+
+/** Every classified finding with the outcome its feedback implies, for the
+ * trend layer. A finding with several pieces of feedback appears once per
+ * piece, which is intended: three people calling one finding wrong is a
+ * stronger signal than one. */
+export async function listFindingOutcomes(db: Db): Promise<
+	{
+		findingId: number;
+		pr: number;
+		path: string | null;
+		title: string;
+		severity: string | null;
+		skills: string[];
+		backfilled: boolean;
+		intent: "upvote" | "downvote" | "bug_report" | "noise";
+	}[]
+> {
+	const result = await db.execute(sql`
+		select f.id, f.pr, f.path, f.title, f.severity, f.skills, f.backfilled,
+		       c.intent
+		from classified_feedback c
+		join finding_catalog f on f.id = c.matched_finding_id
+	`);
+	return (
+		result.rows as unknown as {
+			id: number;
+			pr: number;
+			path: string | null;
+			title: string;
+			severity: string | null;
+			skills: string[] | null;
+			backfilled: boolean;
+			intent: "upvote" | "downvote" | "bug_report" | "noise";
+		}[]
+	).map((r) => ({
+		findingId: Number(r.id),
+		pr: Number(r.pr),
+		path: r.path,
+		title: r.title,
+		severity: r.severity,
+		skills: r.skills ?? [],
+		backfilled: r.backfilled,
+		intent: r.intent,
+	}));
+}
