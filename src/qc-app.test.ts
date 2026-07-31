@@ -235,6 +235,35 @@ describe("runPrQc judge context", () => {
 		expect(result.posted).toBe(true);
 	});
 
+	// A rate limit or an expired token is not a deleted comment. Degrading there
+	// would judge every finding with no body and no code, and report the result
+	// as if it meant something.
+	it.each([
+		401, 403, 429, 500,
+	])("fails the run on a %s rather than judging without context", async (status) => {
+		const octokit = stubOctokit({
+			comment: () => {
+				throw Object.assign(new Error("api error"), { status });
+			},
+		});
+
+		await expect(run(octokit)).rejects.toThrow("api error");
+
+		expect(judgeFinding).not.toHaveBeenCalled();
+		expect(releaseQcRun).toHaveBeenCalledWith(db, "qcrun:o/r#7:HEAD1");
+	});
+
+	// The report is out; releasing the claim here would let the next /qc post a
+	// second one over the top of it.
+	it("keeps the claim when the report posts but the counts fail to record", async () => {
+		finalizeQcRun.mockRejectedValue(new Error("db connection dropped"));
+
+		const result = await run(stubOctokit());
+
+		expect(result.posted).toBe(true);
+		expect(releaseQcRun).not.toHaveBeenCalled();
+	});
+
 	it("skips the comment fetch for a general finding that has none", async () => {
 		listFindingsForPr.mockResolvedValue([catalogRow({ commentId: null })]);
 		const octokit = stubOctokit();

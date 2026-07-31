@@ -154,6 +154,7 @@ export async function runPrQc(deps: {
 				octokit,
 				owner,
 				repo,
+				pr,
 				row,
 			);
 			const finding: JudgeableFinding = {
@@ -179,10 +180,21 @@ export async function runPrQc(deps: {
 			},
 		);
 
+		// Deliberately not inside the try above. Once the report is posted the run
+		// has succeeded; letting a failure here reach the catch would release the
+		// claim on a head that already has a report, and the next /qc would post a
+		// second one. The row keeps its placeholder counts instead, which is a
+		// bookkeeping loss rather than a duplicate comment.
 		await finalizeQcRun(db, dedupKey, {
 			findingsJudged: report.judged,
 			falsePositives: report.falsePositives,
 			prCommentId: comment.id,
+		}).catch((finalizeErr) => {
+			console.error("qc: report posted but counts were not recorded", {
+				dedupKey,
+				prCommentId: comment.id,
+				finalizeErr,
+			});
 		});
 
 		console.log("qc reported", {
@@ -208,6 +220,17 @@ export async function runPrQc(deps: {
 	}
 }
 
+/** A comment that is genuinely gone, as opposed to one we failed to read.
+ *
+ * Only these degrade to empty context. An auth failure, a rate limit or a
+ * GitHub outage would otherwise be indistinguishable from deletion, and would
+ * silently judge every finding in the run with no body and no code — verdicts
+ * that look complete and mean nothing. */
+function isCommentGone(err: unknown): boolean {
+	const status = (err as { status?: number } | null)?.status;
+	return status === 404 || status === 410;
+}
+
 /** The finding's own words and the code it was anchored to.
  *
  * `finding_catalog` stores the title only — the posted comment is the source of
@@ -215,14 +238,13 @@ export async function runPrQc(deps: {
  * drift. Reading it back also yields `diff_hunk`, without which the judge is
  * asked whether a claim about code holds while being shown no code.
  *
- * A comment that has since been deleted or edited beyond recognition degrades
- * to empty context rather than failing the run: the prompt tells the judge to
- * treat missing evidence as "not a false positive", so a lost hunk costs
- * precision, not correctness. */
+ * Every catalogued comment id is a pull-request review comment: general
+ * findings have no comment at all and are stored with a null id. */
 async function loadFindingContext(
 	octokit: Octokit,
 	owner: string,
 	repo: string,
+	pr: number,
 	row: { id: number; commentId: number | null },
 ): Promise<{ body: string; hunk: string }> {
 	if (row.commentId === null) return { body: "", hunk: "" };
@@ -232,9 +254,20 @@ async function loadFindingContext(
 			{ owner, repo, comment_id: row.commentId },
 		);
 		const parsed = parseFindingComment(data.body);
-		return { body: parsed?.body ?? data.body, hunk: data.diff_hunk ?? "" };
+		// An empty parsed body is the honest answer, not a parse failure: the
+		// comment carried a title and nothing else. Falling back to the raw text
+		// there would hand the judge the title twice, which is the bug this
+		// function exists to remove.
+		return {
+			body: parsed ? parsed.body : data.body,
+			hunk: data.diff_hunk ?? "",
+		};
 	} catch (err) {
-		console.error("qc: could not load finding comment; judging without it", {
+		if (!isCommentGone(err)) throw err;
+		console.error("qc: finding comment is gone; judging without it", {
+			owner,
+			repo,
+			pr,
 			findingId: row.id,
 			commentId: row.commentId,
 			err,

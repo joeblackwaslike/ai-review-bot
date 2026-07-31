@@ -88,16 +88,17 @@ function buildJudgePrompt(finding: JudgeableFinding, hunk: string): string {
 	].join("\n");
 }
 
-/** A defect in our own code, as opposed to a provider or network failure. These
- * are never transient, so retrying or recording the finding as unjudged just
- * hides them — every finding in the run would fail the same way. */
+/** Errors that almost always mean a defect here rather than a provider or
+ * network failure — a bad property access or a name that does not resolve.
+ *
+ * Deliberately narrow. `SyntaxError` and `RangeError` are excluded because the
+ * AI SDK raises them for malformed provider responses and oversized payloads,
+ * which are exactly the transient failures that should be recorded as unjudged.
+ * A `TypeError` from the SDK is possible in principle; failing loudly on a
+ * whole run is still the better trade, because the alternative renders a real
+ * bug as "every provider call was flaky". */
 function isProgrammingError(err: unknown): boolean {
-	return (
-		err instanceof TypeError ||
-		err instanceof ReferenceError ||
-		err instanceof SyntaxError ||
-		err instanceof RangeError
-	);
+	return err instanceof TypeError || err instanceof ReferenceError;
 }
 
 /** Judge one finding with the same provider that raised it. Returns null when
