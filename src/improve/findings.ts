@@ -49,6 +49,10 @@ export function parseFindingComment(body: string): ParsedFinding | null {
  * trend question, not an identity one, and belongs in the trend layer where it
  * can be counted rather than silently merged away.
  *
+ * Because the comment id alone determines the key, `path` and `title` are
+ * ignored on that branch — a comment keeps its identity when it is re-anchored
+ * or its text is edited, which is the point.
+ *
  * General findings have no comment, so they fall back to path + hashed title. */
 export function findingNaturalKey(parts: {
 	provider: string;

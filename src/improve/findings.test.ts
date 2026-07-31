@@ -70,10 +70,17 @@ describe("findingNaturalKey", () => {
 	});
 
 	// GitHub re-anchors a comment to a new line as later commits move the code
-	// around it; the identity must not move with it.
-	it("is unchanged by anything except the comment it was posted as", () => {
+	// around it; the identity must not move with it. Asserted one field at a
+	// time so a failure names which field leaked into the key.
+	it("is unchanged when the comment is re-anchored to a different path", () => {
 		expect(findingNaturalKey(base)).toBe(
-			findingNaturalKey({ ...base, title: "reworded", path: "src/moved.ts" }),
+			findingNaturalKey({ ...base, path: "src/moved.ts" }),
+		);
+	});
+
+	it("is unchanged when the comment text is edited", () => {
+		expect(findingNaturalKey(base)).toBe(
+			findingNaturalKey({ ...base, title: "reworded" }),
 		);
 	});
 

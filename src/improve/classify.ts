@@ -68,9 +68,10 @@ export function classifyByOpener(
 	return null;
 }
 
-/** Pure: intent for a reaction carrying no reply at all. 👍/👎 are unambiguous
- * on their own; 😕 is not — it is left for the model rather than guessed, since
- * the whole point of the verdict is that the reason lives in the reply. */
+/** Pure: intent for a reaction carrying no reply at all. Operates on the stored
+ * verdict strings, not the emoji: `"up"`/`"down"` are unambiguous on their own,
+ * `"confused"` is not — it is left for the model rather than guessed, since the
+ * whole point of that verdict is that the reason lives in the reply. */
 export function classifyByVerdict(
 	verdict: string | null,
 	hasReply: boolean,
@@ -125,7 +126,7 @@ function buildPrompt(bundles: FeedbackBundle[]): string {
 				`id: ${b.rawFeedbackId}`,
 				`finding: ${b.findingTitle}`,
 				`reaction: ${b.verdict ?? "(none)"}`,
-				`reply: ${b.replyBody ? b.replyBody.slice(0, 1200) : "(none)"}`,
+				`reply: ${b.replyBody ? b.replyBody.slice(0, REPLY_CHAR_LIMIT) : "(none)"}`,
 				"---",
 			].join("\n"),
 		),
@@ -133,6 +134,21 @@ function buildPrompt(bundles: FeedbackBundle[]): string {
 }
 
 export const CLASSIFY_BATCH_SIZE = 20;
+
+/** Longest reply text sent to the classifier. Replies here are a few hundred
+ * characters; the cap exists so one pathological reply cannot crowd a whole
+ * batch out of the context window. Truncation is reported, not silent — see
+ * ClassifyRun.truncated. */
+export const REPLY_CHAR_LIMIT = 1200;
+
+export interface ClassifyRun {
+	classified: ClassifiedFeedback[];
+	/** Batches whose model call failed. Their items stay unclassified for the
+	 * next run; a non-zero count here means fewer results, not clean results. */
+	failedBatches: number;
+	/** Bundles whose reply was longer than REPLY_CHAR_LIMIT and was cut. */
+	truncated: number;
+}
 
 /** Classify a batch of bundles. Deterministic openers and bare 👍/👎 are resolved
  * without a model call; only what remains is sent. Returns classifications for
@@ -142,9 +158,13 @@ export const CLASSIFY_BATCH_SIZE = 20;
 export async function classifyBundles(
 	bundles: FeedbackBundle[],
 	selection: ModelSelection,
-): Promise<ClassifiedFeedback[]> {
+): Promise<ClassifyRun> {
 	const resolved: ClassifiedFeedback[] = [];
 	const needsModel: FeedbackBundle[] = [];
+	let failedBatches = 0;
+	const truncated = bundles.filter(
+		(b) => (b.replyBody?.length ?? 0) > REPLY_CHAR_LIMIT,
+	).length;
 
 	for (const bundle of bundles) {
 		const deterministic =
@@ -174,6 +194,12 @@ export async function classifyBundles(
 			});
 			resolved.push(...mapClassifierOutput(batch, object, selection.model));
 		} catch (err) {
+			// Deliberately broad: any throw here — provider error, schema mismatch,
+			// or a genuine bug in this file — must not abandon the remaining
+			// batches. It is counted rather than only logged so a run that
+			// classified nothing because every batch threw cannot be mistaken for
+			// a run that found nothing to do.
+			failedBatches++;
 			console.error("classify: batch failed; leaving it unclassified", {
 				batchStart: i,
 				size: batch.length,
@@ -182,5 +208,5 @@ export async function classifyBundles(
 		}
 	}
 
-	return resolved;
+	return { classified: resolved, failedBatches, truncated };
 }

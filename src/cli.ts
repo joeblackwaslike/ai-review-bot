@@ -493,10 +493,11 @@ async function cmdClassify(args: string[]): Promise<void> {
 		return;
 	}
 
-	const classified = await classifyBundles(bundles, {
+	const run = await classifyBundles(bundles, {
 		provider: "anthropic",
 		model: "claude-haiku-4-5",
 	});
+	const classified = run.classified;
 
 	const byId = new Map(bundles.map((b) => [b.rawFeedbackId, b]));
 	let written = 0;
@@ -533,6 +534,8 @@ async function cmdClassify(args: string[]): Promise<void> {
 		classified: classified.length,
 		unresolved: bundles.length - classified.length,
 		orphaned,
+		failedBatches: run.failedBatches,
+		truncatedReplies: run.truncated,
 		deterministic,
 		viaModel: classified.length - deterministic,
 		written,
