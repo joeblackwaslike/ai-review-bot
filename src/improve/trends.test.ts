@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import {
 	computeSeverityReliability,
 	computeSkillSignals,
@@ -8,7 +8,13 @@ import {
 	titleSimilarity,
 } from "./trends.js";
 
+// Reset per test rather than shared module state: a leaked counter makes ids
+// depend on execution order, so a failure in one suite renames rows in another.
 let nextId = 1;
+beforeEach(() => {
+	nextId = 1;
+});
+
 function outcome(over: Partial<FindingOutcome> = {}): FindingOutcome {
 	return {
 		findingId: nextId++,
@@ -126,6 +132,34 @@ describe("detectDuplicateClusters", () => {
 		).toEqual([]);
 	});
 
+	// Raising one real bug from several angles is thorough; restating a rejected
+	// claim is the noise this detects. A cluster must not be formed out of
+	// findings the maintainer agreed with, even when negatives sit beside them.
+	it("clusters only the negative members of a mixed-intent group", () => {
+		const clusters = detectDuplicateClusters([
+			...buildReviewTitles.map((title) =>
+				outcome({ title, pr: 18, intent: "downvote" }),
+			),
+			...buildReviewTitles.map((title) =>
+				outcome({ title, pr: 18, intent: "upvote" }),
+			),
+		]);
+		expect(clusters).toHaveLength(1);
+		expect(clusters[0].findingIds).toHaveLength(4);
+	});
+
+	it("does not cluster when negatives fall below the minimum after filtering", () => {
+		const clusters = detectDuplicateClusters([
+			...buildReviewTitles
+				.slice(0, 2)
+				.map((title) => outcome({ title, pr: 18, intent: "bug_report" })),
+			...buildReviewTitles
+				.slice(2)
+				.map((title) => outcome({ title, pr: 18, intent: "upvote" })),
+		]);
+		expect(clusters).toEqual([]);
+	});
+
 	it("places each finding in only one cluster", () => {
 		const clusters = detectDuplicateClusters(
 			buildReviewTitles.map((title) => outcome({ title, pr: 18 })),
@@ -204,6 +238,31 @@ describe("computeSkillSignals", () => {
 		expect(computeSkillSignals([outcome({ skills: ["rare.md"] })], 8)).toEqual(
 			[],
 		);
+	});
+
+	// `negative` is deliberately intent-agnostic across downvote and bug_report:
+	// a skill that is wrong and a skill that is unhelpful both fail the reader,
+	// and separating them is the severity/FP analysis, not this ratio.
+	it("counts bug_report and downvote alike as negative", () => {
+		const result = computeSkillSignals(
+			[
+				outcome({ skills: ["s.md"], intent: "bug_report" }),
+				outcome({ skills: ["s.md"], intent: "downvote" }),
+			],
+			1,
+		);
+		expect(result[0]).toMatchObject({ negative: 2, useful: 0, sampleSize: 2 });
+	});
+
+	it("excludes noise from both numerator and denominator", () => {
+		const result = computeSkillSignals(
+			[
+				outcome({ skills: ["s.md"], intent: "upvote" }),
+				outcome({ skills: ["s.md"], intent: "noise" }),
+			],
+			1,
+		);
+		expect(result[0]).toMatchObject({ useful: 1, negative: 0, sampleSize: 1 });
 	});
 
 	it("counts a finding once per skill that raised it", () => {

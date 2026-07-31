@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import type { FindingOutcome } from "../trends.js";
 import type { Db } from "./client.js";
 import { classifiedFeedback, findingCatalog, rawFeedback } from "./schema.js";
 
@@ -169,36 +170,30 @@ export async function insertClassified(
 
 /** Every classified finding with the outcome its feedback implies, for the
  * trend layer. A finding with several pieces of feedback appears once per
- * piece, which is intended: three people calling one finding wrong is a
- * stronger signal than one. */
-export async function listFindingOutcomes(db: Db): Promise<
-	{
-		findingId: number;
-		pr: number;
-		path: string | null;
-		title: string;
-		severity: string | null;
-		skills: string[];
-		backfilled: boolean;
-		intent: "upvote" | "downvote" | "bug_report" | "noise";
-	}[]
-> {
+ * piece, which is intended: several people reacting the same way to one finding
+ * is a stronger signal than one, whichever way they reacted. */
+export async function listFindingOutcomes(db: Db): Promise<FindingOutcome[]> {
 	const result = await db.execute(sql`
 		select f.id, f.pr, f.path, f.title, f.severity, f.skills, f.backfilled,
 		       c.intent
 		from classified_feedback c
 		join finding_catalog f on f.id = c.matched_finding_id
 	`);
+	// Raw SQL, so the row shape is asserted rather than inferred. `id` is a
+	// bigserial and the driver hands those back as strings to avoid precision
+	// loss, hence the explicit Number(); `backfilled` and `pr` are parsed to
+	// boolean/number by the driver's type handlers. Verified against the live
+	// database rather than assumed.
 	return (
 		result.rows as unknown as {
-			id: number;
+			id: string | number;
 			pr: number;
 			path: string | null;
 			title: string;
 			severity: string | null;
 			skills: string[] | null;
 			backfilled: boolean;
-			intent: "upvote" | "downvote" | "bug_report" | "noise";
+			intent: FindingOutcome["intent"];
 		}[]
 	).map((r) => ({
 		findingId: Number(r.id),

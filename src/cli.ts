@@ -583,10 +583,18 @@ async function cmdTrends(args: string[]): Promise<void> {
 	let json = false;
 	for (const a of args) {
 		if (a === "--json") json = true;
-		else if (a.startsWith("--")) fatal(`Unknown flag: ${a}`);
+		// Rejected rather than ignored: `ai-review trends myrepo` silently
+		// producing a full unfiltered report looks like it honoured the argument.
+		else fatal(`Unexpected argument: ${a}`);
 	}
 
-	const outcomes = await listFindingOutcomes(getDb());
+	const outcomes = await listFindingOutcomes(getDb()).catch((err: unknown) => {
+		fatal(
+			`could not read the corpus (is DATABASE_URL set?): ${
+				err instanceof Error ? err.message : String(err)
+			}`,
+		);
+	});
 	const severity = computeSeverityReliability(outcomes);
 	const duplicates = detectDuplicateClusters(outcomes);
 	const skills = computeSkillSignals(outcomes);
