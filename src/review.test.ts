@@ -1238,6 +1238,75 @@ describe("buildReview rate-limit decision", () => {
 		expect(decision?.rateLimitResetAt).toBe("2026-06-09T07:21:30Z");
 	});
 
+	function quotaContext(provider: "anthropic" | "openai") {
+		const octokit = {
+			request: vi.fn(async (route: string) =>
+				route.includes("/reviews") ? { data: [] } : { data: {} },
+			),
+			paginate: vi.fn(async () => []),
+		};
+		return {
+			octokit: octokit as never,
+			owner: "o",
+			repo: "r",
+			pullNumber: 1,
+			headSha: "sha",
+			title: "t",
+			body: null,
+			additions: 0,
+			deletions: 0,
+			changedFiles: 0,
+			labels: [],
+			commentPrefix: "ai-review-bot",
+			extraInstructions: "",
+			force: true,
+			provider,
+			feedbackEnabled: false,
+			agentConcurrency: 1,
+			tier2Enabled: false,
+		};
+	}
+
+	it("returns QUOTA_EXHAUSTED naming the provider when every agent is out of credits", async () => {
+		vi.useFakeTimers();
+		mockGenerateObject.mockRejectedValue(
+			Object.assign(new Error("You have no credits remaining"), {
+				statusCode: 429,
+			}),
+		);
+
+		const promise = buildReview(quotaContext("openai"));
+		await vi.runAllTimersAsync();
+		const decision = await promise;
+
+		expect(decision?.event).toBe("QUOTA_EXHAUSTED");
+		expect(decision?.quotaProvider).toBe("openai");
+	});
+
+	// Both conditions arrive as 429, so precedence is the whole point: reporting
+	// a spent balance as a rate limit tells someone to wait for something that
+	// will never happen.
+	it("prefers QUOTA_EXHAUSTED over RATE_LIMITED when both appear in one run", async () => {
+		vi.useFakeTimers();
+		mockGenerateObject
+			.mockRejectedValueOnce(
+				Object.assign(new Error("rate limit exceeded"), {
+					statusCode: 429,
+					responseHeaders: { "retry-after": "42" },
+				}),
+			)
+			.mockRejectedValue(
+				Object.assign(new Error("insufficient_quota"), { statusCode: 429 }),
+			);
+
+		const promise = buildReview(quotaContext("anthropic"));
+		await vi.runAllTimersAsync();
+		const decision = await promise;
+
+		expect(decision?.event).toBe("QUOTA_EXHAUSTED");
+		expect(decision?.quotaProvider).toBe("anthropic");
+	});
+
 	it("stays COMMENT (not APPROVE) when some agents succeed with zero findings but at least one is rate-limited", async () => {
 		vi.useFakeTimers();
 		// First agent call resolves ok with zero findings; the remaining 4
