@@ -2018,10 +2018,6 @@ describe("agent time budget", () => {
 			"review ran out of time budget",
 			expect.objectContaining({ completed: 2 }),
 		);
-		// A pass that never ran three of its agents has not established that the
-		// PR is clean, so the APPROVE upgrade must stay closed no matter what the
-		// agents that did run returned.
-		expect(review?.event).not.toBe("APPROVE");
 		warn.mockRestore();
 	});
 
@@ -2052,5 +2048,74 @@ describe("agent time budget", () => {
 
 		expect(mockGenerateObject).toHaveBeenCalledTimes(6);
 		expect(review?.body).not.toContain("Partial review");
+	});
+});
+
+describe("partial runs cannot approve", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+	});
+
+	// The agents that DO run return a clean COMMENT with nothing flagged — the
+	// one shape that is eligible for the APPROVE upgrade. Only `allAgentsSucceeded`
+	// stands between that and an approval, so this fails the moment a skipped
+	// agent is treated as neutral. Asserting on a REQUEST_CHANGES fixture would
+	// pass whether or not the gate exists.
+	it("stays at COMMENT when the completed agents found nothing but others were skipped", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const cleanAgent = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+		);
+		let now = 0;
+		const clock = vi.spyOn(Date, "now").mockImplementation(() => now);
+		let calls = 0;
+		mockGenerateObject.mockImplementation(async () => {
+			calls += 1;
+			if (calls > 2) {
+				return {
+					object: { summary: "Nothing found in what ran." },
+					usage: { inputTokens: 10, outputTokens: 5 },
+				};
+			}
+			now += 400_000;
+			return cleanAgent;
+		});
+
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			agentBudgetMs: 600_000,
+		});
+
+		clock.mockRestore();
+		warn.mockRestore();
+		expect(review?.event).not.toBe("APPROVE");
+		expect(review?.body).toContain("Partial review");
+	});
+
+	// The control: same clean agents, enough budget for all five. Without this,
+	// the test above could pass because the fixture never approves at all.
+	it("does approve the same clean result when every agent ran", async () => {
+		const cleanAgent = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+		);
+		mockGenerateObject.mockResolvedValue(cleanAgent);
+
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+		});
+
+		expect(review?.event).toBe("APPROVE");
 	});
 });

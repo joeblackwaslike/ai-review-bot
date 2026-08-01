@@ -1287,7 +1287,7 @@ export async function buildReview(
 					`\n#### Additional skills activated\n\n${tier2Matches
 						.map(
 							({ skillPath, reason }) =>
-								`- \`${skillPath.replace(".md", "")}\` — ${reason}`,
+								`- \`${skillPath.replace(/\.md$/, "")}\` — ${reason}`,
 						)
 						.join("\n")}`,
 				]
@@ -1389,7 +1389,7 @@ export async function buildReview(
 			model: selection.model,
 			tier1Count: TIER1_SKILLS.length,
 			tier2Skills: tier2Matches.map(({ skillPath }) =>
-				skillPath.replace(".md", ""),
+				skillPath.replace(/\.md$/, ""),
 			),
 			generalFindings: modelReview.general_findings.length,
 			inlineComments: reviewComments.length,

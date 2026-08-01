@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { getConfig, getOpenAIAppConfig, parseAgentBudgetMs } from "./config.js";
 
 const PKCS8_KEY =
@@ -225,7 +225,12 @@ describe("qstash + publicUrl config", () => {
 });
 
 describe("parseAgentBudgetMs", () => {
-	const original = process.env.REVIEW_AGENT_BUDGET_SECONDS;
+	// Captured per test, not once at module load: a value snapshotted at
+	// collection time restores whatever was set then, not what this test found.
+	let original: string | undefined;
+	beforeEach(() => {
+		original = process.env.REVIEW_AGENT_BUDGET_SECONDS;
+	});
 	afterEach(() => {
 		if (original === undefined) delete process.env.REVIEW_AGENT_BUDGET_SECONDS;
 		else process.env.REVIEW_AGENT_BUDGET_SECONDS = original;
@@ -238,15 +243,13 @@ describe("parseAgentBudgetMs", () => {
 
 	// Flooring seconds first turned these into a 0ms budget, which skips every
 	// agent and posts a review with no findings rather than failing loudly.
-	it("keeps sub-second budgets rather than collapsing them to zero", () => {
-		for (const [raw, ms] of [
-			["0.9", 900],
-			["0.5", 500],
-			["0.001", 1],
-		] as const) {
-			process.env.REVIEW_AGENT_BUDGET_SECONDS = raw;
-			expect(parseAgentBudgetMs()).toBe(ms);
-		}
+	it.each([
+		["0.9", 900],
+		["0.5", 500],
+		["0.001", 1],
+	])("keeps a sub-second budget of %s rather than collapsing it to zero", (raw, ms) => {
+		process.env.REVIEW_AGENT_BUDGET_SECONDS = raw;
+		expect(parseAgentBudgetMs()).toBe(ms);
 	});
 
 	// Never zero: a budget of 0 is indistinguishable from "skip everything".
