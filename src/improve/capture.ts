@@ -69,13 +69,22 @@ export function carrierMarker(prefix: string): string {
 
 /** The body of the carrier comment. PR *reviews* are not reactable, so the
  * top-level verdict needs a normal issue comment to carry reactions — its id is
- * what the daily poll reads from `issues/comments/{id}/reactions`. */
-export function carrierBody(prefix: string, summary: string): string {
+ * what the daily poll reads from `issues/comments/{id}/reactions`.
+ *
+ * Carries the review's prose and a link back to it, not the review body: this
+ * comment sits directly beneath the review it rates, and repeating that review
+ * in full made the bot look like it had posted twice. */
+export function carrierBody(
+	prefix: string,
+	summary: string,
+	reviewUrl?: string,
+): string {
 	return [
 		carrierMarker(prefix),
 		`### ${prefix} — review summary`,
 		"",
 		summary.trim() || "_(no summary)_",
+		...(reviewUrl ? ["", `[See the full review](${reviewUrl})`] : []),
 		"",
 		"---",
 		"React on **this comment** to rate the review as a whole: 👍 useful, 👎 wrong, 😕 it didn't land. For 😕, a reply saying why is what we actually learn from.",
@@ -124,7 +133,11 @@ export async function capturePostedReview(deps: {
 		)) as { id: number; body?: string }[];
 		const marker = carrierMarker(deps.commentPrefix);
 		const mine = existing.find((c) => c.body?.includes(marker));
-		const body = carrierBody(deps.commentPrefix, deps.summary);
+		const body = carrierBody(
+			deps.commentPrefix,
+			deps.summary,
+			`https://github.com/${owner}/${repo}/pull/${pr}#pullrequestreview-${deps.reviewId}`,
+		);
 
 		if (mine) {
 			await octokit.request(

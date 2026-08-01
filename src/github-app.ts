@@ -569,7 +569,7 @@ export async function maybeSubmitReview(args: {
 								headSha,
 								provider: config.provider,
 								provenance: review.commentProvenance,
-								summary: review.body,
+								summary: review.summary,
 								commentPrefix: config.reviewCommentPrefix,
 								postCarrier: config.improveCarrierEnabled,
 								// Register the carrier for reaction polling; without

@@ -2730,6 +2730,54 @@ describe("review body markdown", () => {
 		expect(review?.event).not.toBe("APPROVE");
 	});
 
+	// The carrier comment repeats this beneath the review, so whatever the review
+	// wraps around the prose must not come with it. Handing it the whole body
+	// gave the carrier two headings, a stray setext <h2>, and the reaction
+	// instructions twice (#47, issue comment 5151948120).
+	it("exposes the prose without the wrapper the body adds around it", async () => {
+		const agent = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "REQUEST_CHANGES",
+				general_findings: [
+					{ title: "Unvalidated input", body: "x", severity: "high" },
+				],
+				inline_comments: [
+					buildInlineComment({ path: "src/review.ts", line: 2 }),
+				],
+			}),
+		);
+		mockGenerateObject
+			.mockResolvedValue(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce({
+				object: { summary: "One issue worth a look." },
+				usage: { inputTokens: 10, outputTokens: 5 },
+			});
+
+		const decision = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			feedbackEnabled: true,
+		});
+
+		expect(decision?.summary).toBe("One issue worth a look.");
+		for (const wrapper of [
+			"###",
+			"*Model:",
+			"Reviewed commit:",
+			"React on any inline comment",
+			"| Sev | Finding |",
+		]) {
+			expect(decision?.summary).not.toContain(wrapper);
+		}
+		// The body still carries all of it — only the carrier's copy is trimmed.
+		expect(decision?.body).toContain("*Model:");
+	});
+
 	it("keeps the summary out of the heading when there is nothing to report", async () => {
 		const review = await incrementalWithOpenPrior();
 
