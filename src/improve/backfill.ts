@@ -126,6 +126,20 @@ export function partitionComments(comments: ReviewCommentPayload[]): {
 	return { findings, replies };
 }
 
+/** Pure: root comments that came back without a `reactions` field at all.
+ *
+ * `findUnratedFindings` reads a missing key as zero reactions, so a change in
+ * the API response shape would make every finding look unrated — the gate would
+ * be confidently wrong with nothing in its output to say why. Callers use this
+ * to refuse a verdict rather than report a plausible one. */
+export function findingsMissingReactions(
+	comments: ReviewCommentPayload[],
+): ReviewCommentPayload[] {
+	return partitionComments(comments).findings.filter(
+		(c) => c.reactions === undefined,
+	);
+}
+
 /** Pure: our findings that someone answered in a reply but never rated with a
  * reaction.
  *
