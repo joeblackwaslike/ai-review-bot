@@ -2645,6 +2645,47 @@ describe("review body markdown", () => {
 		expect(lines[lastBullet + 1]).toBe("");
 	});
 
+	// A count alone tells the author something was lost but not what, and an
+	// unanchorable comment can still be the thing holding the review at
+	// REQUEST_CHANGES. Naming the findings is the difference between a dead end
+	// and something actionable.
+	it("names the findings it could not anchor, not just how many", async () => {
+		const agent = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "REQUEST_CHANGES",
+				general_findings: [],
+				inline_comments: [
+					buildInlineComment({
+						title: "Unvalidated path segment",
+						path: "does/not/exist.ts",
+						line: 2,
+						start_line: null,
+					}),
+				],
+			}),
+		);
+		mockGenerateObject
+			.mockResolvedValue(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce({
+				object: { summary: "One issue." },
+				usage: { inputTokens: 10, outputTokens: 5 },
+			});
+
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+		});
+
+		expect(review?.comments).toHaveLength(0);
+		expect(review?.body).toContain("Unvalidated path segment");
+		expect(review?.body).toContain("does/not/exist.ts");
+	});
+
 	it("keeps the summary out of the heading when there is nothing to report", async () => {
 		const review = await incrementalWithOpenPrior();
 
