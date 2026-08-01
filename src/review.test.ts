@@ -2417,22 +2417,21 @@ describe("provenance across collapsed claims", () => {
 		// Routed by skill path, not by call order: which agent reported which line
 		// is the whole assertion, so a reordering of TIER1_SKILLS must not be able
 		// to quietly swap the two and leave the test green.
-		// Every Tier 1 skill is listed, so an unrecognised one is a routing failure
-		// rather than a silent fall-through to `empty` — which would leave the test
-		// green while exercising nothing.
-		const bySkill: Record<string, ReturnType<typeof at>> = {
-			"code-reviewer.md": at(
-				10,
-				"`body: f.title` duplicates the title instead of the finding body",
-			),
-			"silent-failure-hunter.md": at(
-				12,
-				"body field set to f.title — finding body duplicates the title",
-			),
-			"pr-test-analyzer.md": empty,
-			"security-sast.md": empty,
-			"code-review-and-quality.md": empty,
-		};
+		// Seeded from TIER1_SKILLS so the map cannot drift out of sync with the
+		// production list, and an unrecognised skill is a routing failure rather
+		// than a silent fall-through to `empty` — which would leave the test green
+		// while exercising nothing.
+		const bySkill: Record<string, ReturnType<typeof at>> = Object.fromEntries(
+			TIER1_SKILLS.map((skillPath) => [skillPath, empty]),
+		);
+		bySkill["code-reviewer.md"] = at(
+			10,
+			"`body: f.title` duplicates the title instead of the finding body",
+		);
+		bySkill["silent-failure-hunter.md"] = at(
+			12,
+			"body field set to f.title — finding body duplicates the title",
+		);
 		mockGenerateObject.mockImplementation(
 			async (call: {
 				system?: string;
