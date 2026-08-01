@@ -6,6 +6,7 @@ function buildReview(overrides?: Partial<ReviewDecision>): ReviewDecision {
 	return {
 		event: "COMMENT",
 		body: "Review body.",
+		summary: "Review summary.",
 		comments: [],
 		metadata: {
 			model: "claude-sonnet-4-6",

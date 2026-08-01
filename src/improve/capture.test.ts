@@ -88,6 +88,21 @@ describe("carrierBody", () => {
 	it("degrades to a placeholder rather than rendering an empty section", () => {
 		expect(carrierBody("ai-review", "   ")).toContain("_(no summary)_");
 	});
+
+	// The carrier sits directly under the review it rates. Repeating the review
+	// verbatim — findings table, activated skills, cost footer and all — reads as
+	// the bot having posted the same review twice.
+	it("carries the prose and a link, not a second copy of the review", () => {
+		const body = carrierBody(
+			"ai-review",
+			"One issue worth a look.",
+			"https://github.com/o/r/pull/1#pullrequestreview-42",
+		);
+		expect(body).toContain("One issue worth a look.");
+		expect(body).toContain("#pullrequestreview-42");
+		expect(body).not.toContain("| Sev | Finding |");
+		expect(body).not.toContain("*Model:");
+	});
 });
 
 describe("parsePostedAt", () => {

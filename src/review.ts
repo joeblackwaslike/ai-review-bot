@@ -83,6 +83,10 @@ export interface ReviewDecision {
 		| "RATE_LIMITED"
 		| "QUOTA_EXHAUSTED";
 	body: string;
+	/** The generated prose alone, without the findings table, notices or footer
+	 * the posted `body` wraps it in. The feedback carrier repeats this beneath
+	 * the review, where a second copy of the whole review reads as a duplicate. */
+	summary: string;
 	comments: ReviewComment[];
 	metadata: ReviewMetadata;
 	validLinesByPath: Map<string, Set<number>>;
@@ -1166,6 +1170,7 @@ export async function buildReview(
 		return {
 			event: "QUOTA_EXHAUSTED",
 			body: "",
+			summary: "",
 			comments: [],
 			metadata: {
 				model: selection.model,
@@ -1190,6 +1195,7 @@ export async function buildReview(
 		return {
 			event: "RATE_LIMITED",
 			body: "",
+			summary: "",
 			comments: [],
 			metadata: {
 				model: selection.model,
@@ -1532,6 +1538,7 @@ export async function buildReview(
 	return {
 		event: finalEvent,
 		body,
+		summary: finalEvent === "APPROVE" ? approvalMessage : summary,
 		comments: reviewComments,
 		metadata: {
 			model: selection.model,
