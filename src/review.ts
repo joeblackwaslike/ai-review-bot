@@ -2,12 +2,18 @@ import { APICallError } from "@ai-sdk/provider";
 import { generateObject } from "ai";
 import { z } from "zod";
 import type { ResolvedAuth } from "./auth.js";
+import { dedupeClaims } from "./claim-dedupe.js";
 import { mapWithConcurrency } from "./concurrency.js";
 import type { KvClient } from "./feedback/kv.js";
 import { computeCost, createAIModel } from "./models.js";
-import { buildAgentSystemPrompt, buildUserMessage } from "./prompt.js";
+import {
+	type AgentPromptOptions,
+	buildAgentSystemPrompt,
+	buildUserMessage,
+} from "./prompt.js";
 import type { PersistedFinding, ReviewState } from "./review-state.js";
 import { findingId, loadReviewState, saveReviewState } from "./review-state.js";
+import { type ReviewerTuning, tuningFor } from "./reviewer-tuning.js";
 import type { ModelSelection } from "./router.js";
 import { routeModel } from "./router.js";
 import { detectTier2Skills } from "./tier2.js";
@@ -352,8 +358,13 @@ export async function runAgent(
 	selection: ModelSelection,
 	customPrompt: string,
 	auth?: ResolvedAuth,
+	promptOptions: AgentPromptOptions = {},
 ): Promise<AgentOutcome> {
-	const skillBlock = buildAgentSystemPrompt(skillPath, customPrompt);
+	const skillBlock = buildAgentSystemPrompt(
+		skillPath,
+		customPrompt,
+		promptOptions,
+	);
 
 	try {
 		const { object, usage, providerMetadata, response } = await generateObject({
@@ -419,10 +430,32 @@ export async function runAgent(
 	}
 }
 
+export interface MergeOptions {
+	/** Collapse restatements of one claim across agents. Off preserves the
+	 * exact-key-only behaviour every reviewer had before this shipped. */
+	dedupeNearDuplicateClaims?: boolean;
+}
+
+export interface MergeOutcome {
+	review: ModelReview;
+	/** How many findings were folded into another as the same claim, so the
+	 * caller can log it instead of silently shrinking the review. */
+	collapsed: number;
+}
+
 export function mergeReviews(
 	agentResults: ModelReview[],
 	resolved: Set<string> = new Set(),
+	options: MergeOptions = {},
 ): ModelReview {
+	return mergeReviewsDetailed(agentResults, resolved, options).review;
+}
+
+export function mergeReviewsDetailed(
+	agentResults: ModelReview[],
+	resolved: Set<string> = new Set(),
+	options: MergeOptions = {},
+): MergeOutcome {
 	const isResolvedGeneral = (title: string) =>
 		resolved.has(`general:${title.toLowerCase().trim()}`);
 	const isResolvedInline = (path: string, line: number) =>
@@ -455,18 +488,40 @@ export function mergeReviews(
 		}
 	}
 
-	const inline_comments = Array.from(commentMap.values()).map((v) => v.comment);
+	const anchored = Array.from(commentMap.values()).map((v) => v.comment);
+
+	// The exact-key pass above only catches agents that anchored to the identical
+	// line, which they seldom do — one claim arrives on six adjacent lines of the
+	// same expression instead. Collapsing those is the difference between a
+	// review with six findings and a review with one.
+	let collapsed = 0;
+	let inline_comments = anchored;
+	let merged_general = general_findings;
+	if (options.dedupeNearDuplicateClaims) {
+		const inlineResult = dedupeClaims(anchored);
+		const generalResult = dedupeClaims(
+			general_findings.map((f) => ({ ...f, path: null, line: null })),
+		);
+		inline_comments = inlineResult.kept;
+		merged_general = generalResult.kept.map(
+			({ path: _p, line: _l, ...f }) => f,
+		);
+		collapsed = inlineResult.collapsed + generalResult.collapsed;
+	}
 
 	// Event is REQUEST_CHANGES only if an UNRESOLVED finding survived the filters
 	// above — a lone re-raise of an already-addressed finding no longer blocks.
 	const event: "COMMENT" | "REQUEST_CHANGES" =
-		general_findings.length > 0 || inline_comments.length > 0
+		merged_general.length > 0 || inline_comments.length > 0
 			? agentResults.some((r) => r.event === "REQUEST_CHANGES")
 				? "REQUEST_CHANGES"
 				: "COMMENT"
 			: "COMMENT";
 
-	return { event, general_findings, inline_comments };
+	return {
+		review: { event, general_findings: merged_general, inline_comments },
+		collapsed,
+	};
 }
 
 export async function generateSummary(
@@ -948,6 +1003,7 @@ export async function buildReview(
 
 	const scopedFilePaths = scopedFiles.map((f) => f.filename);
 
+	const tuning: ReviewerTuning = tuningFor(context.provider);
 	const userMessage = buildUserMessage({
 		owner: context.owner,
 		repo: context.repo,
@@ -963,6 +1019,15 @@ export async function buildReview(
 		files: scopedFiles,
 		priorBotReviews,
 		priorOwnReview,
+		priorOwnFindings: tuning.showPriorOwnFindings
+			? (state?.findings ?? []).map((f) => ({
+					path: f.path,
+					line: f.line,
+					title: f.title,
+					severity: f.severity,
+					status: f.status,
+				}))
+			: undefined,
 	});
 
 	// Detect Tier 2 skills relevant to this PR and run all agents together.
@@ -1013,6 +1078,8 @@ export async function buildReview(
 				userMessage,
 				selection,
 				customPrompt,
+				undefined,
+				{ strictEvidenceRules: tuning.strictEvidenceRules },
 			);
 			// Sequential handoff at the default concurrency 1; at AGENT_CONCURRENCY>1 this is a
 			// benign best-effort race (pacing only needs an approximate recent signal).
@@ -1131,7 +1198,18 @@ export async function buildReview(
 		notOk: allSkills.length - agentResults.length,
 	});
 
-	const modelReview = mergeReviews(agentResults, resolvedKeys);
+	const mergeOutcome = mergeReviewsDetailed(agentResults, resolvedKeys, {
+		dedupeNearDuplicateClaims: tuning.dedupeNearDuplicateClaims,
+	});
+	const modelReview = mergeOutcome.review;
+	if (mergeOutcome.collapsed > 0) {
+		console.log("collapsed restatements of the same claim", {
+			collapsed: mergeOutcome.collapsed,
+			remaining:
+				modelReview.general_findings.length +
+				modelReview.inline_comments.length,
+		});
+	}
 
 	console.log("merged review", {
 		event: modelReview.event,

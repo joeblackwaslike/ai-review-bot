@@ -1,0 +1,233 @@
+/** Collapsing several agents' restatements of one claim into a single finding.
+ *
+ * Every agent sees the same diff, so a real bug is often found by several of
+ * them at once. The existing merge keys on exact `path:line`, which only catches
+ * the case where two agents anchored to the identical line — and they rarely do.
+ * Observed on #43: `body: f.title` was reported eight times across six adjacent
+ * lines of one expression, the missing body column four times across four lines
+ * of one SQL query, and a double-verification concern twelve times across two
+ * statements. Each was one claim.
+ *
+ * The rule here is deliberately narrow: same file, nearby lines, and either a
+ * shared code identifier or substantial word overlap. Two genuinely different
+ * bugs in one file survive it — they name different things. */
+
+const STOPWORDS = new Set([
+	"the",
+	"and",
+	"for",
+	"not",
+	"but",
+	"with",
+	"this",
+	"that",
+	"then",
+	"than",
+	"from",
+	"into",
+	"when",
+	"will",
+	"would",
+	"should",
+	"could",
+	"can",
+	"may",
+	"are",
+	"was",
+	"were",
+	"been",
+	"being",
+	"has",
+	"have",
+	"had",
+	"its",
+	"it",
+	"instead",
+	"rather",
+	"still",
+	"also",
+	"only",
+	"even",
+	"does",
+	"did",
+	"doing",
+	"which",
+	"what",
+	"where",
+	"while",
+	"because",
+	"since",
+	"here",
+	"there",
+	"any",
+	"all",
+	"some",
+	"one",
+	"two",
+	"use",
+	"used",
+	"uses",
+	"using",
+	"via",
+]);
+
+/** Crude suffix stripping so "duplicates"/"duplicating"/"duplicated" collapse.
+ * Not linguistically correct and does not need to be — it only has to make two
+ * phrasings of the same claim compare equal more often than two different
+ * claims do. */
+function stem(word: string): string {
+	let root = word;
+	if (root.endsWith("ies") && root.length > 4) root = `${root.slice(0, -3)}y`;
+	else if (root.endsWith("ing") && root.length > 5) root = root.slice(0, -3);
+	else if (root.endsWith("ed") && root.length > 4) root = root.slice(0, -2);
+	else if (root.endsWith("s") && !root.endsWith("ss") && root.length > 3) {
+		root = root.slice(0, -1);
+	}
+	// Trailing "e" last, so duplicate/duplicates/duplicating all land on the
+	// same root rather than three near-misses.
+	if (root.endsWith("e") && root.length > 4) root = root.slice(0, -1);
+	return root;
+}
+
+/** Content words of a title, with code spans removed — those are compared
+ * separately and would otherwise dominate the overlap score. */
+export function claimTokens(title: string): Set<string> {
+	const tokens = title
+		.toLowerCase()
+		.replace(/`[^`]*`/g, " ")
+		.split(/[^a-z0-9]+/)
+		.filter((word) => word.length > 2 && !STOPWORDS.has(word))
+		.map(stem);
+	return new Set(tokens);
+}
+
+/** Code identifiers a title names, from backticked spans. Two findings that
+ * both name `listFindingsForPr` are talking about the same thing far more
+ * reliably than two that merely share adjectives. */
+export function claimIdentifiers(title: string): Set<string> {
+	const identifiers = new Set<string>();
+	const add = (raw: string) => {
+		for (const part of raw.split(/[^A-Za-z0-9_$]+/)) {
+			if (part.length > 2) identifiers.add(part.toLowerCase());
+		}
+	};
+
+	for (const match of title.matchAll(/`([^`]+)`/g)) add(match[1]);
+	// Reviewers backtick inconsistently — the same claim arrives as `f.title`
+	// once and as bare f.title the next time. Dotted paths and camelCase read as
+	// code either way, and missing them was enough to split one claim in two.
+	for (const match of title.matchAll(
+		/\b[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)+/g,
+	)) {
+		add(match[0]);
+	}
+	for (const match of title.matchAll(
+		/\b[a-z][a-z0-9]*(?:[A-Z][a-zA-Z0-9]*)+\b/g,
+	)) {
+		add(match[0]);
+	}
+	return identifiers;
+}
+
+function jaccard(a: Set<string>, b: Set<string>): number {
+	if (a.size === 0 || b.size === 0) return 0;
+	let shared = 0;
+	for (const item of a) if (b.has(item)) shared += 1;
+	return shared / (a.size + b.size - shared);
+}
+
+export interface ClaimLike {
+	path: string | null;
+	line: number | null;
+	title: string;
+	severity?: string | null;
+}
+
+export interface ClaimMatchOptions {
+	/** How far apart two anchors can be and still be the same claim. Sized for
+	 * "several lines of one expression", not "same function". */
+	lineWindow: number;
+	/** Word overlap required when the two titles name no identifier in common. */
+	titleSimilarity: number;
+	/** Lower bar when they do — a shared identifier is the stronger signal. */
+	identifierSimilarity: number;
+}
+
+export const DEFAULT_CLAIM_MATCH: ClaimMatchOptions = {
+	lineWindow: 30,
+	titleSimilarity: 0.5,
+	identifierSimilarity: 0.25,
+};
+
+/** Whether two findings are restatements of one claim.
+ *
+ * Requires the same file unconditionally: the same wording about two different
+ * files is two findings, and merging them would silently drop one. */
+export function isSameClaim(
+	a: ClaimLike,
+	b: ClaimLike,
+	options: ClaimMatchOptions = DEFAULT_CLAIM_MATCH,
+): boolean {
+	if ((a.path ?? "") !== (b.path ?? "")) return false;
+	if (
+		a.line !== null &&
+		b.line !== null &&
+		Math.abs(a.line - b.line) > options.lineWindow
+	) {
+		return false;
+	}
+
+	const identifiersA = claimIdentifiers(a.title);
+	const identifiersB = claimIdentifiers(b.title);
+	const sharesIdentifier = [...identifiersA].some((id) => identifiersB.has(id));
+
+	const similarity = jaccard(claimTokens(a.title), claimTokens(b.title));
+	return sharesIdentifier
+		? similarity >= options.identifierSimilarity
+		: similarity >= options.titleSimilarity;
+}
+
+const SEVERITY_RANK: Record<string, number> = { high: 3, medium: 2, low: 1 };
+
+/** The representative of a cluster: most severe first, then the longest body —
+ * the version that actually explains the problem rather than restating it. */
+function preferred<T extends ClaimLike & { body?: string }>(a: T, b: T): T {
+	const rankA = SEVERITY_RANK[a.severity ?? ""] ?? 0;
+	const rankB = SEVERITY_RANK[b.severity ?? ""] ?? 0;
+	if (rankA !== rankB) return rankA > rankB ? a : b;
+	return (b.body?.length ?? 0) > (a.body?.length ?? 0) ? b : a;
+}
+
+export interface DedupeResult<T> {
+	kept: T[];
+	/** Count per surviving finding, so the caller can report what it collapsed
+	 * rather than silently shrinking the review. */
+	collapsed: number;
+}
+
+/** Collapse restatements, keeping input order of the survivors.
+ *
+ * Greedy and O(n²), which is correct at this scale — a review carries tens of
+ * findings, not thousands — and keeps the result independent of sort order in a
+ * way clustering by centroid would not. */
+export function dedupeClaims<T extends ClaimLike & { body?: string }>(
+	findings: readonly T[],
+	options: ClaimMatchOptions = DEFAULT_CLAIM_MATCH,
+): DedupeResult<T> {
+	const kept: T[] = [];
+	let collapsed = 0;
+
+	for (const finding of findings) {
+		const index = kept.findIndex((existing) =>
+			isSameClaim(existing, finding, options),
+		);
+		if (index === -1) {
+			kept.push(finding);
+			continue;
+		}
+		kept[index] = preferred(kept[index], finding);
+		collapsed += 1;
+	}
+
+	return { kept, collapsed };
+}

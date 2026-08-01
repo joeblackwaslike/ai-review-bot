@@ -69,3 +69,90 @@ describe("buildAuditUserMessage", () => {
 		expect(msg).not.toContain("[patch truncated]");
 	});
 });
+
+const promptBase = {
+	owner: "o",
+	repo: "r",
+	pullNumber: 1,
+	headSha: "abc",
+	title: "t",
+	body: null,
+	additions: 1,
+	deletions: 0,
+	changedFiles: 1,
+	labels: [],
+	extraInstructions: "",
+	files: [{ filename: "a.ts", status: "modified", patch: "@@ -1 +1 @@\n+x" }],
+};
+
+describe("prior own findings", () => {
+	const findings = [
+		{
+			path: "src/qc-app.ts",
+			line: 123,
+			title: "body is set to f.title",
+			severity: "high",
+			status: "open",
+		},
+		{
+			path: null,
+			line: null,
+			title: "no tests for the handler",
+			severity: "low",
+			status: "resolved",
+		},
+	];
+
+	// The prior review *body* is a synthesised summary that never lists the
+	// inline comments, so agents could not see what they had already filed and
+	// refiled it round after round.
+	it("lists every prior finding with its status and anchor", () => {
+		const message = buildUserMessage({
+			...promptBase,
+			priorOwnFindings: findings,
+		});
+		expect(message).toContain(
+			"[open] high — src/qc-app.ts:123 — body is set to f.title",
+		);
+		expect(message).toContain(
+			"[resolved] low — general — no tests for the handler",
+		);
+		expect(message).toContain("Do not file any of these again");
+	});
+
+	it("says nothing about prior findings when there are none", () => {
+		const message = buildUserMessage({ ...promptBase, priorOwnFindings: [] });
+		expect(message).not.toContain("Do not file any of these again");
+	});
+});
+
+describe("strict evidence rules", () => {
+	it("are absent unless asked for, so an untuned reviewer is unchanged", () => {
+		const prompt = buildAgentSystemPrompt("code-reviewer.md", "");
+		expect(prompt).not.toContain("What Counts As A Finding");
+	});
+
+	// One rule per measured failure category from #43 and #45.
+	it.each([
+		["no-defect findings", "must name a defect"],
+		["verify-this findings", "asks the reader to verify"],
+		[
+			"speculation about unseen code",
+			"Do not speculate about code you cannot see",
+		],
+		[
+			"deletion read without the addition",
+			"not a removal until you have checked the additions",
+		],
+		[
+			"restating one claim many times",
+			"Report each distinct claim exactly once",
+		],
+		["severity inflation", "demonstrated data loss"],
+	])("ban %s", (_label, rule) => {
+		const prompt = buildAgentSystemPrompt("code-reviewer.md", "", {
+			strictEvidenceRules: true,
+		});
+		expect(prompt).toContain(rule);
+	});
+});

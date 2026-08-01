@@ -30,6 +30,17 @@ export interface PromptContext {
 	}>;
 	priorBotReviews?: string[];
 	priorOwnReview?: string | null;
+	/** Every finding this reviewer already filed on this PR, with its current
+	 * status. The prior review *body* alone is a synthesised summary and does not
+	 * list the inline comments, so agents could not see what they had already
+	 * said and refiled it round after round. */
+	priorOwnFindings?: Array<{
+		path: string | null;
+		line: number | null;
+		title: string;
+		severity: string;
+		status: string;
+	}>;
 }
 
 function trimPatch(patch: string, maxChars = 24000): string {
@@ -75,6 +86,22 @@ export function buildUserMessage(context: PromptContext): string {
 			]
 		: [];
 
+	const priorOwnFindingsSection = context.priorOwnFindings?.length
+		? [
+				"",
+				"Every finding you have already filed on this pull request is listed below, with its status. Treat this as your own memory of this review:",
+				"",
+				...context.priorOwnFindings.map(
+					(f) =>
+						`- [${f.status}] ${f.severity} — ${f.path ?? "general"}${
+							f.line === null ? "" : `:${f.line}`
+						} — ${f.title}`,
+				),
+				"",
+				"Do not file any of these again. A finding marked resolved was fixed; re-raising it is wrong. A finding still open is already on the record; restating it in different words adds nothing and buries the new material. Report only what is genuinely new since these were written.",
+			]
+		: [];
+
 	return [
 		"You are reviewing a GitHub pull request.",
 		"",
@@ -91,6 +118,7 @@ export function buildUserMessage(context: PromptContext): string {
 		...commandInstructionsSection,
 		...priorReviewsSection,
 		...priorOwnReviewSection,
+		...priorOwnFindingsSection,
 		"",
 		"Changed file diffs:",
 		serializeFiles(context.files),
@@ -132,11 +160,39 @@ export function buildAuditUserMessage(context: AuditContext): string {
 	].join("\n");
 }
 
+export interface AgentPromptOptions {
+	/** Require every finding to name a defect and rest on the visible diff. */
+	strictEvidenceRules?: boolean;
+}
+
 export function buildAgentSystemPrompt(
 	skillPath: string,
 	customPrompt: string,
+	options: AgentPromptOptions = {},
 ): string {
 	const skill = loadSkill(skillPath);
+
+	// Written against measured failure modes, not general advice. Each rule below
+	// corresponds to a category that showed up repeatedly across #43 and #45 and
+	// cost a maintainer a reaction, a reply and a resolve to dispose of.
+	const strictRules = options.strictEvidenceRules
+		? [
+				"",
+				"## What Counts As A Finding",
+				"- Every finding must name a defect: something that is wrong, will break, or will mislead a maintainer. If your body says the code is correct, well designed, or that no action is needed, do not file it. There is no such thing as a finding with nothing to fix.",
+				"- Do not file a finding that asks the reader to verify, confirm, or double-check something. If you cannot tell whether a problem exists, you have not found one. Either establish it from the diff or say nothing.",
+				'- Do not speculate about code you cannot see. Schemas, exports, call sites and configuration live in this repository; if your claim depends on one of them and it is not in the diff, you do not know it is wrong. "X may not exist", "ensure Y is updated" and "verify Z is indexed" are not findings.',
+				"- A deleted line in a diff is not a removal until you have checked the additions. Code frequently moves. Before reporting that something was deleted, weakened or lost, look for it elsewhere in the same diff.",
+				"- Report each distinct claim exactly once, at the single best location. If the same problem appears on several adjacent lines, that is one finding about one problem, not one per line. Restating a claim in different words is a duplicate.",
+				"- Do not re-report a finding that already appears in the prior-findings list in the user message, whatever its status.",
+				"",
+				"## Severity",
+				"- `high` means demonstrated data loss, a security impact, or a crash or incorrect result that you can trace in the diff. Name the input or state that triggers it. If you cannot, it is not `high`.",
+				"- `medium` means a real defect with a bounded consequence, established from the diff.",
+				"- `low` means a genuine but minor issue: a nit, a wording problem, an optional improvement.",
+				"- Reserve severity for the defect's impact, not your confidence or the effort to fix. A correct observation with no consequence does not get a severity — it does not get filed.",
+			]
+		: [];
 
 	return [
 		"You are a senior code reviewer. Apply the following review framework to this pull request.",
@@ -163,5 +219,6 @@ export function buildAgentSystemPrompt(
 		"- Do not assert that a symbol, import, function, or file exists or does not exist unless the diff shows it. If a finding depends on code not present in the diff, lower its severity or omit it.",
 		"- A TypeScript `import type { … }` is erased at compile time and has no runtime effect — never flag a type-only import as a runtime or bundle concern.",
 		"- `high` severity requires evidence visible in the diff itself; knowledge-based or speculative concerns are at most `low`, phrased as a question.",
+		...strictRules,
 	].join("\n");
 }
