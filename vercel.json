@@ -15,6 +15,9 @@
 		},
 		"api/cron/improve.ts": {
 			"maxDuration": 300
+		},
+		"api/github/webhook-qc.ts": {
+			"maxDuration": 300
 		}
 	},
 	"crons": [

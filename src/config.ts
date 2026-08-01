@@ -166,3 +166,44 @@ export function getOpenAIAppConfig(): AppConfig {
 		publicUrl: process.env.PUBLIC_URL,
 	};
 }
+
+export interface QcAppConfig {
+	appId: string;
+	privateKey: string;
+	webhookSecret: string;
+	command: string;
+	/** Distinct from the review bot's prefix so a QC report is visually
+	 * separable from the review it is judging. */
+	commentPrefix: string;
+	/** Share of posted findings judged on a sampled (non-command) run. */
+	sampleRate: number;
+	enabled: boolean;
+}
+
+export function getQcAppConfig(): QcAppConfig {
+	return {
+		appId: getRequiredEnv("QC_APP_ID"),
+		privateKey: validatePrivateKey(
+			normalizePrivateKey(getRequiredEnv("QC_APP_PRIVATE_KEY")),
+		),
+		webhookSecret: getRequiredEnv("QC_APP_WEBHOOK_SECRET"),
+		command: process.env.QC_COMMAND ?? "/qc",
+		commentPrefix: process.env.QC_COMMENT_PREFIX ?? "ai-review-qc",
+		sampleRate: parseSampleRate(process.env.IMPROVE_QC_SAMPLE_RATE),
+		enabled: process.env.IMPROVE_QC_ENABLED !== "false",
+	};
+}
+
+/** A rate outside 0..1 is a configuration mistake, not an instruction to judge
+ * every finding on every PR — clamp rather than let a typo multiply spend. */
+export function parseSampleRate(raw: string | undefined): number {
+	if (raw === undefined || raw.trim() === "") return 0.1;
+	const n = Number(raw);
+	if (!Number.isFinite(n)) {
+		console.warn(
+			`qc: IMPROVE_QC_SAMPLE_RATE="${raw}" is not a number; using 0.1`,
+		);
+		return 0.1;
+	}
+	return Math.min(1, Math.max(0, n));
+}

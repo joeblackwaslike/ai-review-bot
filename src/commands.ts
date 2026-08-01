@@ -38,3 +38,22 @@ export function parseReviewCommand(
 export function isTrustedAuthorAssociation(association: string): boolean {
 	return ["OWNER", "MEMBER", "COLLABORATOR"].includes(association);
 }
+
+export interface QcCommand {
+	/** Judge every posted finding rather than a sample. */
+	full: boolean;
+}
+
+/** Parse a `/qc` comment. Returns null when the body is not the command, so a
+ * comment merely *mentioning* /qc does not trigger a run. */
+export function parseQcCommand(
+	body: string,
+	commandName: string,
+): QcCommand | null {
+	const trimmed = body.trim();
+	if (trimmed !== commandName && !trimmed.startsWith(`${commandName} `)) {
+		return null;
+	}
+	const remainder = trimmed.slice(commandName.length).trim();
+	return { full: remainder === "--full" };
+}
