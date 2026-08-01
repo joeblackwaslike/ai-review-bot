@@ -2267,3 +2267,102 @@ describe("strict evidence rules propagation", () => {
 		expect(mockBuildAgentSystemPrompt).toHaveBeenCalled();
 	});
 });
+
+describe("prior own findings propagation", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildAgentSystemPrompt.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+	});
+
+	async function seededKv() {
+		// A FULL recommendation keeps the agents running so the prompt is built;
+		// the gate is not what this test is about.
+		mockTriageReReview.mockResolvedValue({
+			recommendation: "FULL",
+			resolved: [],
+			newRisk: true,
+		});
+		const { client } = fakeKv();
+		await saveReviewState(
+			client,
+			"anthropic",
+			"joeblackwaslike",
+			"ai-review-bot",
+			1,
+			{
+				lastReviewedSha: "oldsha1234567",
+				event: "REQUEST_CHANGES",
+				findings: [
+					{
+						id: findingId("src/a.ts", 5, "bug"),
+						path: "src/a.ts",
+						line: 5,
+						title: "bug",
+						severity: "high",
+						status: "open",
+					},
+				],
+				reviewedAt: "2026-06-16T00:00:00Z",
+			},
+		);
+		return client;
+	}
+
+	function cleanRun() {
+		mockGenerateObject.mockImplementation(async () =>
+			mockGenerateObject.mock.calls.length <= TIER1_SKILLS.length
+				? buildGenerateObjectResponse(
+						buildModelReview({
+							event: "COMMENT",
+							general_findings: [],
+							inline_comments: [],
+						}),
+					)
+				: {
+						object: { summary: "Nothing." },
+						usage: { inputTokens: 10, outputTokens: 5 },
+					},
+		);
+	}
+
+	// The third leg of the gate. Without this, the memory could be disconnected
+	// from buildReview and both the buildUserMessage unit test and tuningFor
+	// would still pass.
+	it("gives a tuned reviewer its own prior findings", async () => {
+		cleanRun();
+		const client = await seededKv();
+
+		await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			provider: "anthropic" as const,
+			kv: client,
+		});
+
+		expect(mockBuildUserMessage).toHaveBeenCalledWith(
+			expect.objectContaining({
+				priorOwnFindings: [
+					expect.objectContaining({ path: "src/a.ts", line: 5, title: "bug" }),
+				],
+			}),
+		);
+	});
+
+	it("withholds them from an untuned reviewer", async () => {
+		cleanRun();
+		const client = await seededKv();
+
+		await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			provider: "openai" as const,
+			kv: client,
+		});
+
+		expect(mockBuildUserMessage).toHaveBeenCalledWith(
+			expect.objectContaining({ priorOwnFindings: undefined }),
+		);
+	});
+});
