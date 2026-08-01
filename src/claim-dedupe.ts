@@ -12,6 +12,8 @@
  * shared code identifier or substantial word overlap. Two genuinely different
  * bugs in one file survive it — they name different things. */
 
+import type { Severity } from "./review.js";
+
 const STOPWORDS = new Set([
 	"the",
 	"and",
@@ -137,8 +139,9 @@ function jaccard(a: Set<string>, b: Set<string>): number {
 }
 
 export interface ClaimLike {
-	path: string | null;
-	line: number | null;
+	/** Absent on a general finding, which has no anchor at all. */
+	path?: string | null;
+	line?: number | null;
 	title: string;
 	severity?: string | null;
 }
@@ -151,12 +154,23 @@ export interface ClaimMatchOptions {
 	titleSimilarity: number;
 	/** Lower bar when they do — a shared identifier is the stronger signal. */
 	identifierSimilarity: number;
+	/** Bar for two findings with no anchor at all. Higher than the anchored case
+	 * because "same file, nearby lines" is doing none of the work: every general
+	 * finding compares against every other, so only the wording separates two
+	 * unrelated repo-wide concerns. */
+	unanchoredSimilarity: number;
+	/** Titles with fewer content words than this are not compared at all. Two
+	 * two-word titles sharing one word score a perfect 1.0, which says nothing
+	 * about whether they are the same claim. */
+	minTokens: number;
 }
 
 export const DEFAULT_CLAIM_MATCH: ClaimMatchOptions = {
 	lineWindow: 30,
 	titleSimilarity: 0.5,
 	identifierSimilarity: 0.25,
+	unanchoredSimilarity: 0.6,
+	minTokens: 3,
 };
 
 /** Whether two findings are restatements of one claim.
@@ -169,11 +183,19 @@ export function isSameClaim(
 	options: ClaimMatchOptions = DEFAULT_CLAIM_MATCH,
 ): boolean {
 	if ((a.path ?? "") !== (b.path ?? "")) return false;
-	if (
-		a.line !== null &&
-		b.line !== null &&
-		Math.abs(a.line - b.line) > options.lineWindow
-	) {
+
+	const lineA = a.line ?? null;
+	const lineB = b.line ?? null;
+	const bothAnchored = lineA !== null && lineB !== null;
+	if (bothAnchored && Math.abs(lineA - lineB) > options.lineWindow)
+		return false;
+	// Exactly one anchored: proximity cannot vouch for them, so they fall back to
+	// the unanchored bar rather than silently skipping the distance check.
+	const anchored = bothAnchored && a.path;
+
+	const tokensA = claimTokens(a.title);
+	const tokensB = claimTokens(b.title);
+	if (tokensA.size < options.minTokens || tokensB.size < options.minTokens) {
 		return false;
 	}
 
@@ -181,19 +203,28 @@ export function isSameClaim(
 	const identifiersB = claimIdentifiers(b.title);
 	const sharesIdentifier = [...identifiersA].some((id) => identifiersB.has(id));
 
-	const similarity = jaccard(claimTokens(a.title), claimTokens(b.title));
+	const similarity = jaccard(tokensA, tokensB);
+	if (!anchored) return similarity >= options.unanchoredSimilarity;
 	return sharesIdentifier
 		? similarity >= options.identifierSimilarity
 		: similarity >= options.titleSimilarity;
 }
 
-const SEVERITY_RANK: Record<string, number> = { high: 3, medium: 2, low: 1 };
+// Keyed on the shared severity scale so a typo is a compile error rather than a
+// silent rank of 0, which would make a high-severity member lose its cluster.
+const SEVERITY_RANK: Record<Severity, number> = { high: 3, medium: 2, low: 1 };
+
+function severityRank(severity: string | null | undefined): number {
+	return severity && severity in SEVERITY_RANK
+		? SEVERITY_RANK[severity as Severity]
+		: 0;
+}
 
 /** The representative of a cluster: most severe first, then the longest body —
  * the version that actually explains the problem rather than restating it. */
 function preferred<T extends ClaimLike & { body?: string }>(a: T, b: T): T {
-	const rankA = SEVERITY_RANK[a.severity ?? ""] ?? 0;
-	const rankB = SEVERITY_RANK[b.severity ?? ""] ?? 0;
+	const rankA = severityRank(a.severity);
+	const rankB = severityRank(b.severity);
 	if (rankA !== rankB) return rankA > rankB ? a : b;
 	return (b.body?.length ?? 0) > (a.body?.length ?? 0) ? b : a;
 }

@@ -105,7 +105,7 @@ export async function runAuditPass(opts: {
 			TIER1_SKILLS,
 			concurrency,
 			(skill) =>
-				runAgent(skill, userMessage, selection, extraInstructions, auth),
+				runAgent(skill, userMessage, selection, extraInstructions, { auth }),
 		);
 		for (const o of outcomes) {
 			if (o.status === "ok") {

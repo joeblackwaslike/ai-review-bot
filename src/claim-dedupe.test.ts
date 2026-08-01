@@ -207,9 +207,54 @@ describe("dedupeClaims", () => {
 	it("preserves input order of the survivors", () => {
 		const result = dedupeClaims([
 			claim({ line: 400, title: "`gamma` never awaits" }),
-			claim({ line: 10, title: "`alpha` is wrong and unchecked" }),
-			claim({ line: 12, title: "`alpha` is wrong, unchecked and stale" }),
+			claim({ line: 10, title: "`alpha` returns a wrong unchecked value" }),
+			claim({ line: 12, title: "`alpha` returns wrong unchecked values" }),
 		]);
 		expect(result.kept.map((c) => c.line)).toEqual([400, 10]);
+	});
+});
+
+describe("anchor handling", () => {
+	// Two general findings compare against every other general finding with no
+	// proximity to vouch for them, so only the wording separates two unrelated
+	// repo-wide concerns.
+	it("holds unanchored findings to a higher bar than anchored ones", () => {
+		// ~0.4 word overlap: enough for two anchored findings a few lines apart,
+		// deliberately not enough when nothing but the wording connects them.
+		const a = { title: "`cache` never releases entries and grows" };
+		const b = { title: "`cache` never releases memory" };
+
+		expect(
+			isSameClaim(
+				{ ...a, path: "src/cache.ts", line: 10 },
+				{ ...b, path: "src/cache.ts", line: 14 },
+			),
+		).toBe(true);
+		expect(
+			isSameClaim(
+				{ ...a, path: null, line: null },
+				{ ...b, path: null, line: null },
+			),
+		).toBe(false);
+	});
+
+	// Proximity cannot vouch for a pair where only one side has a line, so it
+	// must not skip the distance check and then merge on a weak title match.
+	it("holds a half-anchored pair to the unanchored bar", () => {
+		const a = { title: "`cache` never releases entries and grows" };
+		const b = { title: "`cache` never releases memory" };
+		expect(
+			isSameClaim(
+				{ ...a, path: "src/cache.ts", line: 10 },
+				{ ...b, path: "src/cache.ts", line: null },
+			),
+		).toBe(false);
+	});
+
+	// A single shared word between two two-word titles scores 1.0.
+	it("refuses to compare titles too short to carry signal", () => {
+		const a = { path: "src/a.ts", line: 10, title: "Missing test" };
+		const b = { path: "src/a.ts", line: 12, title: "Missing tests" };
+		expect(isSameClaim(a, b)).toBe(false);
 	});
 });

@@ -218,7 +218,14 @@ export function buildAgentSystemPrompt(
 		"- Do not claim a library/framework/SDK API, method, or option does not exist, is invalid, or will fail at runtime based on your own knowledge — your training data may be outdated and you cannot see the installed version. Raise a suspected API misuse as a low-severity question, never a blocking finding.",
 		"- Do not assert that a symbol, import, function, or file exists or does not exist unless the diff shows it. If a finding depends on code not present in the diff, lower its severity or omit it.",
 		"- A TypeScript `import type { … }` is erased at compile time and has no runtime effect — never flag a type-only import as a runtime or bundle concern.",
-		"- `high` severity requires evidence visible in the diff itself; knowledge-based or speculative concerns are at most `low`, phrased as a question.",
+		// Superseded by the Severity block below when strict rules are on, so the
+		// prompt never carries two definitions of `high` for the model to
+		// reconcile. Kept verbatim otherwise.
+		...(options.strictEvidenceRules
+			? []
+			: [
+					"- `high` severity requires evidence visible in the diff itself; knowledge-based or speculative concerns are at most `low`, phrased as a question.",
+				]),
 		...strictRules,
 	].join("\n");
 }

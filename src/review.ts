@@ -352,14 +352,19 @@ export function outputBudget(selection: ModelSelection, base: number): number {
 	return reasoning ? Math.max(base * 8, 16000) : base;
 }
 
+export interface RunAgentOptions {
+	auth?: ResolvedAuth;
+	prompt?: AgentPromptOptions;
+}
+
 export async function runAgent(
 	skillPath: string,
 	sharedContext: string,
 	selection: ModelSelection,
 	customPrompt: string,
-	auth?: ResolvedAuth,
-	promptOptions: AgentPromptOptions = {},
+	options: RunAgentOptions = {},
 ): Promise<AgentOutcome> {
+	const { auth, prompt: promptOptions = {} } = options;
 	const skillBlock = buildAgentSystemPrompt(
 		skillPath,
 		customPrompt,
@@ -499,13 +504,11 @@ export function mergeReviewsDetailed(
 	let merged_general = general_findings;
 	if (options.dedupeNearDuplicateClaims) {
 		const inlineResult = dedupeClaims(anchored);
-		const generalResult = dedupeClaims(
-			general_findings.map((f) => ({ ...f, path: null, line: null })),
-		);
+		// General findings carry no anchor, so they go in as-is — ClaimLike treats
+		// a missing path/line as unanchored and applies the stricter title bar.
+		const generalResult = dedupeClaims(general_findings);
 		inline_comments = inlineResult.kept;
-		merged_general = generalResult.kept.map(
-			({ path: _p, line: _l, ...f }) => f,
-		);
+		merged_general = generalResult.kept;
 		collapsed = inlineResult.collapsed + generalResult.collapsed;
 	}
 
@@ -1078,8 +1081,7 @@ export async function buildReview(
 				userMessage,
 				selection,
 				customPrompt,
-				undefined,
-				{ strictEvidenceRules: tuning.strictEvidenceRules },
+				{ prompt: { strictEvidenceRules: tuning.strictEvidenceRules } },
 			);
 			// Sequential handoff at the default concurrency 1; at AGENT_CONCURRENCY>1 this is a
 			// benign best-effort race (pacing only needs an approximate recent signal).
