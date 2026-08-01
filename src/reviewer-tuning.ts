@@ -33,7 +33,9 @@ const LEGACY: ReviewerTuning = {
 	strictEvidenceRules: false,
 };
 
-/** One switch. Flip `openai` to TUNED once the corpus replay covers its output
+/** Smoke test: verifying review rendering in production.
+ *
+ * One switch. Flip `openai` to TUNED once the corpus replay covers its output
  * too, rather than growing a second set of per-flag conditions. */
 export function tuningFor(
 	provider: ModelSelection["provider"],
