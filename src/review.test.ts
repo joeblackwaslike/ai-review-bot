@@ -2247,9 +2247,12 @@ describe("strict evidence rules propagation", () => {
 	// The gate is only worth having if it reaches the prompt builder. Asserting
 	// on tuningFor() alone would pass with the wiring cut.
 	it.each([
-		["anthropic", true],
-		["openai", false],
-	] as const)("passes strictEvidenceRules=%s for %s", async (provider, expected) => {
+		{ provider: "anthropic" as const, expected: true },
+		{ provider: "openai" as const, expected: false },
+	])("passes strictEvidenceRules=$expected for $provider", async ({
+		provider,
+		expected,
+	}) => {
 		cleanRun();
 
 		await buildReview({
