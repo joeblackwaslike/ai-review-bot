@@ -2374,3 +2374,77 @@ describe("prior own findings propagation", () => {
 		expect(arg.priorOwnFindings).toBeUndefined();
 	});
 });
+
+describe("provenance across collapsed claims", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+	});
+
+	// Two agents report one claim on different nearby lines. The dedupe keeps
+	// one, and the skill recorded against the collapsed anchor has to travel to
+	// the survivor — otherwise a bug found by two agents is credited to one, and
+	// the per-skill trends undercount exactly what they exist to measure.
+	it("credits every agent that found a claim to the surviving comment", async () => {
+		const at = (line: number, title: string) =>
+			buildGenerateObjectResponse(
+				buildModelReview({
+					event: "REQUEST_CHANGES",
+					general_findings: [],
+					inline_comments: [
+						buildInlineComment({
+							title,
+							body: "why it matters",
+							path: "src/x.ts",
+							line,
+						}),
+					],
+				}),
+			);
+		const empty = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+		);
+
+		mockGenerateObject
+			.mockResolvedValueOnce(
+				at(
+					10,
+					"`body: f.title` duplicates the title instead of the finding body",
+				),
+			)
+			.mockResolvedValueOnce(
+				at(12, "body field set to f.title — finding body duplicates the title"),
+			)
+			.mockResolvedValueOnce(empty)
+			.mockResolvedValueOnce(empty)
+			.mockResolvedValueOnce(empty)
+			.mockResolvedValueOnce({
+				object: { summary: "One issue." },
+				usage: { inputTokens: 10, outputTokens: 5 },
+			});
+
+		const decision = await buildReview({
+			octokit: buildOctokit({
+				files: [buildPullFile("src/x.ts", TWENTY_LINE_PATCH)],
+			}),
+			...baseContext,
+			provider: "anthropic" as const,
+			feedbackEnabled: true,
+		});
+
+		expect(decision?.comments).toHaveLength(1);
+		const survivor = decision?.comments[0];
+		const prov = decision?.commentProvenance?.get(
+			`${survivor?.path}:${survivor?.line}`,
+		);
+		expect(prov?.skills.sort()).toEqual([
+			"code-reviewer.md",
+			"silent-failure-hunter.md",
+		]);
+	});
+});

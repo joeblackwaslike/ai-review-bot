@@ -258,3 +258,59 @@ describe("anchor handling", () => {
 		expect(isSameClaim(a, b)).toBe(false);
 	});
 });
+
+describe("merge mapping", () => {
+	// Collapsing spans different nearby lines, so anything a caller recorded
+	// against the original anchor has to be moved to the survivor's.
+	it("reports each collapsed finding against the survivor representing it", () => {
+		const low = claim({
+			line: 116,
+			severity: "low",
+			title: "`body: f.title` duplicates the title instead of the finding body",
+		});
+		const high = claim({
+			line: 120,
+			severity: "high",
+			title: "body field set to f.title — finding body duplicates the title",
+		});
+
+		const result = dedupeClaims([low, high]);
+
+		expect(result.kept).toEqual([high]);
+		expect(result.merges).toEqual([{ from: low, into: high }]);
+	});
+
+	// The representative changes as a cluster grows, so the mapping is only
+	// correct if it is resolved after every finding has been placed.
+	it("points earlier members at the final survivor, not an interim one", () => {
+		const first = claim({
+			line: 10,
+			severity: "low",
+			title: "`alpha` returns a wrong unchecked value",
+		});
+		const second = claim({
+			line: 12,
+			severity: "medium",
+			title: "`alpha` returns wrong unchecked values",
+		});
+		const third = claim({
+			line: 14,
+			severity: "high",
+			title: "`alpha` returned a wrong unchecked value",
+		});
+
+		const result = dedupeClaims([first, second, third]);
+
+		expect(result.kept).toEqual([third]);
+		expect(result.merges.map((m) => m.into)).toEqual([third, third]);
+		expect(result.collapsed).toBe(2);
+	});
+
+	it("reports no merges when every finding is distinct", () => {
+		const result = dedupeClaims([
+			claim({ line: 10, title: "`alpha` is silently swallowed here" }),
+			claim({ line: 400, title: "`beta` leaks a file handle" }),
+		]);
+		expect(result.merges).toEqual([]);
+	});
+});
