@@ -17,6 +17,8 @@ import {
 	type BackfillResult,
 	backfillPr,
 	discoverReviewedPrs,
+	findUnratedFindings,
+	type ReviewCommentPayload,
 } from "./improve/backfill.js";
 import { classifyBundles } from "./improve/classify.js";
 import { getDb } from "./improve/db/client.js";
@@ -74,6 +76,7 @@ function usage(): never {
 	);
 	console.error("  ai-review ready [pr#]");
 	console.error("  ai-review backfill --repo <owner/name> [--pr <n>] [--json]");
+	console.error("  ai-review unrated --repo <owner/name> --pr <n> [--json]");
 	console.error(
 		"      Harvest already-posted findings, reactions and reply threads into the",
 	);
@@ -415,6 +418,81 @@ async function cmdLegacyRemote(args: string[]): Promise<void> {
 	});
 }
 
+/** Merge gate for the review loop: our findings that were answered in a reply
+ * but never rated with a reaction.
+ *
+ * Exits non-zero when any exist, so "I answered every thread" cannot be mistaken
+ * for "I fed the reviewer every verdict". On ai-review-bot#47 the two came apart
+ * for four rounds — twelve findings argued with in replies, none of them rated,
+ * and nothing anywhere reported it. */
+async function cmdUnrated(args: string[]): Promise<void> {
+	let slug: string | undefined;
+	let pr: number | undefined;
+	let json = false;
+	for (let i = 0; i < args.length; i++) {
+		const a = args[i];
+		if (a === "--repo") slug = args[++i];
+		else if (a === "--pr") {
+			const raw = args[++i];
+			pr = Number(raw);
+			if (!Number.isInteger(pr) || pr <= 0) {
+				fatal(`--pr must be a positive integer, got: ${raw}`);
+			}
+		} else if (a === "--json") json = true;
+		else if (a.startsWith("--")) fatal(`Unknown flag: ${a}`);
+	}
+
+	const [owner, repo] = (slug ?? "").split("/");
+	if (!owner || !repo) fatal("--repo <owner/name> is required");
+	if (!pr) fatal("--pr <n> is required");
+
+	const token = process.env.GITHUB_TOKEN;
+	const octokit = (token
+		? new Octokit({ auth: token })
+		: await (async () => {
+				const config = getConfig();
+				return installationOctokit(
+					config.appId,
+					config.privateKey,
+					owner,
+					repo,
+				);
+			})()) as unknown as BackfillOctokit;
+
+	const comments = (await octokit.paginate(
+		"GET /repos/{owner}/{repo}/pulls/{pull_number}/comments",
+		{ owner, repo, pull_number: pr, per_page: 100 },
+	)) as ReviewCommentPayload[];
+
+	const unrated = findUnratedFindings(comments);
+	if (json) {
+		console.log(
+			JSON.stringify(
+				unrated.map((c) => ({
+					id: c.id,
+					url: `https://github.com/${owner}/${repo}/pull/${pr}#discussion_r${c.id}`,
+					path: c.path,
+					line: c.line,
+				})),
+				null,
+				2,
+			),
+		);
+	} else if (unrated.length === 0) {
+		console.log(`#${pr}: every answered finding is rated`);
+	} else {
+		console.log(
+			`#${pr}: ${unrated.length} answered finding(s) with no reaction — rate each before merging`,
+		);
+		for (const c of unrated) {
+			console.log(
+				`  https://github.com/${owner}/${repo}/pull/${pr}#discussion_r${c.id}  ${c.path}:${c.line}`,
+			);
+		}
+	}
+	if (unrated.length > 0) process.exitCode = 1;
+}
+
 async function cmdBackfill(args: string[]): Promise<void> {
 	let slug: string | undefined;
 	let pr: number | undefined;
@@ -717,6 +795,7 @@ async function main(): Promise<void> {
 	if (sub === "audit") return cmdAudit(rest);
 	if (sub === "ready") return cmdReady(rest);
 	if (sub === "backfill") return cmdBackfill(rest);
+	if (sub === "unrated") return cmdUnrated(rest);
 	if (sub?.includes("/")) return cmdLegacyRemote([sub, ...rest]); // back-compat
 	usage();
 }

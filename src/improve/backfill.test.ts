@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
 	backfillPr,
 	commentDedupKey,
+	findUnratedFindings,
 	partitionComments,
 	type ReviewCommentPayload,
 	reactionDedupKey,
@@ -203,5 +204,60 @@ describe("backfillPr", () => {
 
 		await backfillPr({ db, octokit }, { owner: "o", repo: "r", pr: 1 });
 		expect(octokit.request).not.toHaveBeenCalled();
+	});
+});
+
+// A reply says what a reviewer got wrong; the reaction is what the corpus can
+// count. Answering a thread and leaving it unrated teaches the reviewer nothing,
+// and the loss is silent — the corpus is simply smaller than it should be.
+// Observed on ai-review-bot#47: twelve findings answered across four rounds, not
+// one of them rated.
+describe("findUnratedFindings", () => {
+	it("flags a finding a human answered but nobody rated", () => {
+		const unrated = findUnratedFindings([
+			comment({ id: 1, reactions: { total_count: 0 } }),
+			comment({
+				id: 2,
+				in_reply_to_id: 1,
+				user: { login: "joeblackwaslike" },
+				body: "false positive",
+			}),
+		]);
+		expect(unrated.map((c) => c.id)).toEqual([1]);
+	});
+
+	it("passes a finding that was answered and rated", () => {
+		const unrated = findUnratedFindings([
+			comment({ id: 1, reactions: { total_count: 1 } }),
+			comment({
+				id: 2,
+				in_reply_to_id: 1,
+				user: { login: "joeblackwaslike" },
+				body: "false positive",
+			}),
+		]);
+		expect(unrated).toEqual([]);
+	});
+
+	// An unanswered finding is a thread nobody has triaged yet, which the
+	// unresolved-thread gate already catches. Reporting it here would bury the
+	// findings that really were dispositioned without a rating.
+	it("ignores a finding nobody replied to", () => {
+		expect(findUnratedFindings([comment({ id: 1 })])).toEqual([]);
+	});
+
+	// A third-party reviewer's thread is not ours to rate — its reactions do not
+	// reach our corpus.
+	it("ignores a thread rooted on another reviewer's finding", () => {
+		const unrated = findUnratedFindings([
+			comment({ id: 1, user: { login: "coderabbitai[bot]" } }),
+			comment({
+				id: 2,
+				in_reply_to_id: 1,
+				user: { login: "joeblackwaslike" },
+				body: "agreed",
+			}),
+		]);
+		expect(unrated).toEqual([]);
 	});
 });

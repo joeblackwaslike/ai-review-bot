@@ -116,6 +116,25 @@ export function partitionComments(comments: ReviewCommentPayload[]): {
 	return { findings, replies };
 }
 
+/** Pure: our findings that someone answered in a reply but never rated with a
+ * reaction.
+ *
+ * The reply is the argument; the reaction is the graded signal, and only the
+ * reaction reaches the corpus as a verdict. Skipping it costs the reviewer the
+ * whole exchange, and costs it silently — there is no error, just a corpus
+ * smaller than the work that went into it. An unanswered finding is excluded:
+ * that is an untriaged thread, which the unresolved-thread gate already catches,
+ * and listing it here would bury the ones that were genuinely dispositioned. */
+export function findUnratedFindings(
+	comments: ReviewCommentPayload[],
+): ReviewCommentPayload[] {
+	const { findings, replies } = partitionComments(comments);
+	const answered = new Set(replies.map((r) => r.in_reply_to_id));
+	return findings.filter(
+		(f) => answered.has(f.id) && (f.reactions?.total_count ?? 0) === 0,
+	);
+}
+
 function parseTimestamp(iso: string): Date {
 	const ms = Date.parse(iso);
 	return new Date(Number.isFinite(ms) ? ms : Date.now());
