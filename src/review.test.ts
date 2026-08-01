@@ -9,6 +9,7 @@ import {
 	generateSummary,
 	mergeReviews,
 	runAgent,
+	TIER1_SKILLS,
 } from "./review.js";
 import { findingId, loadReviewState, saveReviewState } from "./review-state.js";
 import type { ModelSelection } from "./router.js";
@@ -25,6 +26,7 @@ import {
 
 const mockGenerateObject = vi.hoisted(() => vi.fn());
 const mockBuildUserMessage = vi.hoisted(() => vi.fn().mockReturnValue("user"));
+const mockBuildAgentSystemPrompt = vi.hoisted(() => vi.fn());
 
 vi.mock("ai", () => ({
 	generateObject: mockGenerateObject,
@@ -48,7 +50,10 @@ vi.mock("./config.js", () => ({
 
 vi.mock("./prompt.js", () => ({
 	buildUserMessage: mockBuildUserMessage,
-	buildAgentSystemPrompt: () => "system",
+	buildAgentSystemPrompt: (...args: unknown[]) => {
+		mockBuildAgentSystemPrompt(...args);
+		return "system";
+	},
 }));
 
 const mockTriageReReview = vi.hoisted(() => vi.fn());
@@ -2124,6 +2129,7 @@ describe("reviewer tuning wiring", () => {
 	beforeEach(() => {
 		mockGenerateObject.mockReset();
 		mockBuildUserMessage.mockReset();
+		mockBuildAgentSystemPrompt.mockReset();
 		mockBuildUserMessage.mockReturnValue("user");
 	});
 
@@ -2165,16 +2171,19 @@ describe("reviewer tuning wiring", () => {
 
 	it("collapses restatements for anthropic", async () => {
 		const { first, second } = restatementResponses();
-		mockGenerateObject
-			.mockResolvedValueOnce(first)
-			.mockResolvedValueOnce(second)
-			.mockResolvedValueOnce(second)
-			.mockResolvedValueOnce(second)
-			.mockResolvedValueOnce(second)
-			.mockResolvedValueOnce({
-				object: { summary: "One issue." },
-				usage: { inputTokens: 10, outputTokens: 5 },
-			});
+		// Keyed off the prompt rather than a fixed-length chain: a change to the
+		// tier-1 agent count would silently shift a chained mock onto the summary
+		// call and pass for the wrong reason.
+		mockGenerateObject.mockImplementation(async () =>
+			mockGenerateObject.mock.calls.length === 1
+				? first
+				: mockGenerateObject.mock.calls.length <= TIER1_SKILLS.length
+					? second
+					: {
+							object: { summary: "One issue." },
+							usage: { inputTokens: 10, outputTokens: 5 },
+						},
+		);
 
 		const review = await buildReview({
 			octokit: buildOctokit(),
@@ -2189,16 +2198,16 @@ describe("reviewer tuning wiring", () => {
 	// this pins that its behaviour is untouched until validated on its own output.
 	it("leaves openai's findings exactly as the agents reported them", async () => {
 		const { first, second } = restatementResponses();
-		mockGenerateObject
-			.mockResolvedValueOnce(first)
-			.mockResolvedValueOnce(second)
-			.mockResolvedValueOnce(second)
-			.mockResolvedValueOnce(second)
-			.mockResolvedValueOnce(second)
-			.mockResolvedValueOnce({
-				object: { summary: "Two issues." },
-				usage: { inputTokens: 10, outputTokens: 5 },
-			});
+		mockGenerateObject.mockImplementation(async () =>
+			mockGenerateObject.mock.calls.length === 1
+				? first
+				: mockGenerateObject.mock.calls.length <= TIER1_SKILLS.length
+					? second
+					: {
+							object: { summary: "Two issues." },
+							usage: { inputTokens: 10, outputTokens: 5 },
+						},
+		);
 
 		const review = await buildReview({
 			octokit: buildOctokit(),
@@ -2207,5 +2216,51 @@ describe("reviewer tuning wiring", () => {
 		});
 
 		expect(review?.comments).toHaveLength(2);
+	});
+});
+
+describe("strict evidence rules propagation", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildAgentSystemPrompt.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+	});
+
+	function cleanRun() {
+		mockGenerateObject.mockImplementation(async () =>
+			mockGenerateObject.mock.calls.length <= TIER1_SKILLS.length
+				? buildGenerateObjectResponse(
+						buildModelReview({
+							event: "COMMENT",
+							general_findings: [],
+							inline_comments: [],
+						}),
+					)
+				: {
+						object: { summary: "Nothing." },
+						usage: { inputTokens: 10, outputTokens: 5 },
+					},
+		);
+	}
+
+	// The gate is only worth having if it reaches the prompt builder. Asserting
+	// on tuningFor() alone would pass with the wiring cut.
+	it.each([
+		["anthropic", true],
+		["openai", false],
+	] as const)("passes strictEvidenceRules=%s for %s", async (provider, expected) => {
+		cleanRun();
+
+		await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			provider,
+		});
+
+		for (const call of mockBuildAgentSystemPrompt.mock.calls) {
+			expect(call[2]).toEqual({ strictEvidenceRules: expected });
+		}
+		expect(mockBuildAgentSystemPrompt).toHaveBeenCalled();
 	});
 });
