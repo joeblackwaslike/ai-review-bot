@@ -1,10 +1,12 @@
 # ai-review-bot
 
-[![Discord](https://img.shields.io/discord/1486035859747897414?logo=discord&label=Discord&color=5865F2)](https://discord.com/channels/1486035859747897414/1509515273076473975) [![Join Discord](https://img.shields.io/badge/Discord-Join%20Server-5865F2?logo=discord&logoColor=white)](https://discord.gg/Fjc9zYHZyV)
+[![CI](https://github.com/joeblackwaslike/ai-review-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/joeblackwaslike/ai-review-bot/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/ai-review-bot?color=3fb950&label=npm)](https://www.npmjs.com/package/ai-review-bot)
 [![Docs](https://img.shields.io/badge/docs-online-blue)](https://joeblackwaslike.github.io/ai-review-bot/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](package.json)
 [![Deploy](https://img.shields.io/badge/deploy-vercel-black?logo=vercel)](https://vercel.com/joe-blacks-projects/ai-review-bot)
+[![Discord](https://img.shields.io/discord/1486035859747897414?logo=discord&label=Discord&color=5865F2)](https://discord.gg/Fjc9zYHZyV)
 
 **ai-review-bot** ships two parallel AI code reviewers in one Vercel deployment — a **Claude bot** (Anthropic) and a **Codex bot** (OpenAI). Each runs as its own GitHub App with its own icon, so you can tell them apart in your PR timeline. Both post independently; you get two expert opinions side by side on every review.
 
