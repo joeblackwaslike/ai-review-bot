@@ -78,6 +78,16 @@ export function commentDedupKey(source: string, commentId: number): string {
 	return `cmt:${source}:${commentId}`;
 }
 
+/** GitHub Apps always post under a `name[bot]` login, so the suffix identifies
+ * a machine author without a second API call for `user.type`.
+ *
+ * Excluding only our own bots was not enough: a third-party reviewer answering
+ * one of our threads is two machines talking, and it was being filed as human
+ * feedback in the corpus. */
+function isBotLogin(login: string): boolean {
+	return login.endsWith("[bot]");
+}
+
 /** Pure: split a PR's review comments into the bot findings to catalog and the
  * human replies that explain them.
  *
@@ -87,7 +97,7 @@ export function commentDedupKey(source: string, commentId: number): string {
  * reviewers' conversations to us. GitHub sets `in_reply_to_id` to the thread's
  * root comment, so the root's author identifies whose thread it is.
  *
- * A reply authored by one of our own bots is not feedback either. */
+ * A reply authored by any bot is not feedback either — see isBotLogin. */
 export function partitionComments(comments: ReviewCommentPayload[]): {
 	findings: ReviewCommentPayload[];
 	replies: ReviewCommentPayload[];
@@ -103,7 +113,7 @@ export function partitionComments(comments: ReviewCommentPayload[]): {
 		if (c.in_reply_to_id !== undefined) {
 			const rootAuthor = authorByCommentId.get(c.in_reply_to_id);
 			if (
-				!isOurBot &&
+				!isBotLogin(login) &&
 				rootAuthor !== undefined &&
 				rootAuthor in BOT_PROVIDERS
 			) {
@@ -114,6 +124,39 @@ export function partitionComments(comments: ReviewCommentPayload[]): {
 		}
 	}
 	return { findings, replies };
+}
+
+/** Pure: root comments that came back without a `reactions` field at all.
+ *
+ * `findUnratedFindings` reads a missing key as zero reactions, so a change in
+ * the API response shape would make every finding look unrated — the gate would
+ * be confidently wrong with nothing in its output to say why. Callers use this
+ * to refuse a verdict rather than report a plausible one. */
+export function findingsMissingReactions(
+	comments: ReviewCommentPayload[],
+): ReviewCommentPayload[] {
+	return partitionComments(comments).findings.filter(
+		(c) => c.reactions === undefined,
+	);
+}
+
+/** Pure: our findings that someone answered in a reply but never rated with a
+ * reaction.
+ *
+ * The reply is the argument; the reaction is the graded signal, and only the
+ * reaction reaches the corpus as a verdict. Skipping it costs the reviewer the
+ * whole exchange, and costs it silently — there is no error, just a corpus
+ * smaller than the work that went into it. An unanswered finding is excluded:
+ * that is an untriaged thread, which the unresolved-thread gate already catches,
+ * and listing it here would bury the ones that were genuinely dispositioned. */
+export function findUnratedFindings(
+	comments: ReviewCommentPayload[],
+): ReviewCommentPayload[] {
+	const { findings, replies } = partitionComments(comments);
+	const answered = new Set(replies.map((r) => r.in_reply_to_id));
+	return findings.filter(
+		(f) => answered.has(f.id) && (f.reactions?.total_count ?? 0) === 0,
+	);
 }
 
 function parseTimestamp(iso: string): Date {

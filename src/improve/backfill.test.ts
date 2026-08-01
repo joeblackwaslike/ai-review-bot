@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import {
 	backfillPr,
 	commentDedupKey,
+	findingsMissingReactions,
+	findUnratedFindings,
 	partitionComments,
 	type ReviewCommentPayload,
 	reactionDedupKey,
@@ -42,6 +44,20 @@ describe("partitionComments", () => {
 		]);
 		expect(findings.map((c) => c.id)).toEqual([1]);
 		expect(replies.map((c) => c.id)).toEqual([2]);
+	});
+
+	it("excludes a third-party bot's reply from the feedback bucket", () => {
+		const { findings, replies } = partitionComments([
+			comment({ id: 1 }),
+			comment({
+				id: 2,
+				in_reply_to_id: 1,
+				user: { login: "sourcery-ai[bot]" },
+				body: "noted",
+			}),
+		]);
+		expect(findings.map((c) => c.id)).toEqual([1]);
+		expect(replies).toEqual([]);
 	});
 
 	it("excludes a bot's own reply from both buckets", () => {
@@ -203,5 +219,117 @@ describe("backfillPr", () => {
 
 		await backfillPr({ db, octokit }, { owner: "o", repo: "r", pr: 1 });
 		expect(octokit.request).not.toHaveBeenCalled();
+	});
+});
+
+// A reply says what a reviewer got wrong; the reaction is what the corpus can
+// count. Answering a thread and leaving it unrated teaches the reviewer nothing,
+// and the loss is silent — the corpus is simply smaller than it should be.
+// Observed on ai-review-bot#47: twelve findings answered across four rounds, not
+// one of them rated.
+describe("findUnratedFindings", () => {
+	it("flags a finding a human answered but nobody rated", () => {
+		const unrated = findUnratedFindings([
+			comment({ id: 1, reactions: { total_count: 0 } }),
+			comment({
+				id: 2,
+				in_reply_to_id: 1,
+				user: { login: "joeblackwaslike" },
+				body: "false positive",
+			}),
+		]);
+		expect(unrated.map((c) => c.id)).toEqual([1]);
+	});
+
+	it("passes a finding that was answered and rated", () => {
+		const unrated = findUnratedFindings([
+			comment({ id: 1, reactions: { total_count: 1 } }),
+			comment({
+				id: 2,
+				in_reply_to_id: 1,
+				user: { login: "joeblackwaslike" },
+				body: "false positive",
+			}),
+		]);
+		expect(unrated).toEqual([]);
+	});
+
+	// An unanswered finding is a thread nobody has triaged yet, which the
+	// unresolved-thread gate already catches. Reporting it here would bury the
+	// findings that really were dispositioned without a rating.
+	it("ignores a finding nobody replied to", () => {
+		expect(findUnratedFindings([comment({ id: 1 })])).toEqual([]);
+	});
+
+	// A third-party bot answering our finding is two machines talking, not a
+	// disposition. Counting it as answered would report a finding as unrated that
+	// no human has looked at, and — worse, on the backfill path that shares this
+	// partition — file the bot's prose as human feedback in the corpus.
+	it("does not treat another bot's reply as an answer", () => {
+		// Paired with a human-answered finding in the same batch so the empty
+		// result cannot be mistaken for the function simply returning nothing:
+		// id 3 must come back, id 1 must not.
+		const unrated = findUnratedFindings([
+			comment({ id: 1, reactions: { total_count: 0 } }),
+			comment({
+				id: 2,
+				in_reply_to_id: 1,
+				user: { login: "coderabbitai[bot]" },
+				body: "I agree with this finding.",
+			}),
+			comment({ id: 3, reactions: { total_count: 0 } }),
+			comment({
+				id: 4,
+				in_reply_to_id: 3,
+				user: { login: "joeblackwaslike" },
+				body: "false positive",
+			}),
+		]);
+		expect(unrated.map((c) => c.id)).toEqual([3]);
+	});
+
+	// A third-party reviewer's thread is not ours to rate — its reactions do not
+	// reach our corpus.
+	it("ignores a thread rooted on another reviewer's finding", () => {
+		const unrated = findUnratedFindings([
+			comment({ id: 1, user: { login: "coderabbitai[bot]" } }),
+			comment({
+				id: 2,
+				in_reply_to_id: 1,
+				user: { login: "joeblackwaslike" },
+				body: "agreed",
+			}),
+		]);
+		expect(unrated).toEqual([]);
+	});
+});
+
+// The guard exists because the alternative is a wrong answer with no error
+// attached: `?? 0` reads a missing key as "nobody rated it", so a response-shape
+// change would report every finding as unrated and the gate would block merges
+// for a reason that is not true.
+describe("findingsMissingReactions", () => {
+	it("reports our findings that came back without a reactions field", () => {
+		const missing = findingsMissingReactions([
+			comment({ id: 1, reactions: undefined }),
+			comment({ id: 2, reactions: { total_count: 0 } }),
+		]);
+		expect(missing.map((c) => c.id)).toEqual([1]);
+	});
+
+	// Replies are never rated, so they carry no reactions by design and must not
+	// trip a guard about response shape.
+	it("ignores replies, which are not rated in the first place", () => {
+		const missing = findingsMissingReactions([
+			comment({ id: 1, reactions: { total_count: 0 } }),
+			comment({
+				id: 2,
+				in_reply_to_id: 1,
+				reactions: undefined,
+				user: { login: "joeblackwaslike" },
+				body: "false positive",
+			}),
+		]);
+		expect(missing).toEqual([]);
 	});
 });
