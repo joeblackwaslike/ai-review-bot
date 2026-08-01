@@ -323,6 +323,7 @@ const baseContext = {
 	provider: "anthropic" as const,
 	feedbackEnabled: false,
 	agentConcurrency: 1,
+	agentBudgetMs: 600_000,
 	tier2Enabled: false,
 };
 
@@ -1229,6 +1230,7 @@ describe("buildReview rate-limit decision", () => {
 			provider: "anthropic",
 			feedbackEnabled: false,
 			agentConcurrency: 1,
+			agentBudgetMs: 600_000,
 			tier2Enabled: false,
 		});
 		await vi.runAllTimersAsync();
@@ -1263,6 +1265,7 @@ describe("buildReview rate-limit decision", () => {
 			provider,
 			feedbackEnabled: false,
 			agentConcurrency: 1,
+			agentBudgetMs: 600_000,
 			tier2Enabled: false,
 		};
 	}
@@ -1364,6 +1367,7 @@ describe("buildReview rate-limit decision", () => {
 			provider: "anthropic",
 			feedbackEnabled: false,
 			agentConcurrency: 1,
+			agentBudgetMs: 600_000,
 			tier2Enabled: false,
 		});
 		await vi.runAllTimersAsync();
@@ -1956,5 +1960,93 @@ describe("classifyRefusal", () => {
 	it("returns null for an unrelated error", () => {
 		expect(classifyRefusal(new Error("socket hang up"))).toBeNull();
 		expect(classifyRefusal({ statusCode: 500 })).toBeNull();
+	});
+});
+
+describe("agent time budget", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+	});
+
+	// The platform kills the function at maxDuration with nothing posted. Five
+	// agents' worth of findings beats a 504 that loses all of them.
+	it("submits what completed instead of losing the review to the timeout", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const agentResponse = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "REQUEST_CHANGES",
+				general_findings: [
+					{ title: "Found by agent one", body: "real", severity: "high" },
+				],
+				inline_comments: [],
+			}),
+		);
+		// Each agent burns 400s of the 600s budget, so the second one exhausts it
+		// and every agent after that is skipped without a model call.
+		let now = 0;
+		const clock = vi.spyOn(Date, "now").mockImplementation(() => now);
+		let calls = 0;
+		mockGenerateObject.mockImplementation(async () => {
+			calls += 1;
+			// Calls 1-2 are agents; the third is the summary, which must not
+			// advance the clock or return an agent-shaped object.
+			if (calls > 2) {
+				return {
+					object: { summary: "Partial pass." },
+					usage: { inputTokens: 10, outputTokens: 5 },
+				};
+			}
+			now += 400_000;
+			return agentResponse;
+		});
+
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			agentBudgetMs: 600_000,
+		});
+
+		clock.mockRestore();
+		expect(review).not.toBeNull();
+		// Two agents ran; the summary call is not one of the five agents.
+		expect(review?.body).toContain("Found by agent one");
+		expect(review?.body).toContain("Partial review");
+		expect(review?.body).toContain("3 of 5 agents did not run");
+		expect(warn).toHaveBeenCalledWith(
+			"review ran out of time budget",
+			expect.objectContaining({ completed: 2 }),
+		);
+		warn.mockRestore();
+	});
+
+	it("runs every agent and says nothing about the budget when there is room", async () => {
+		const agentResponse = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "REQUEST_CHANGES",
+				general_findings: [{ title: "Found", body: "real", severity: "high" }],
+				inline_comments: [],
+			}),
+		);
+		const summaryResponse = {
+			object: { summary: "One issue." },
+			usage: { inputTokens: 10, outputTokens: 5 },
+		};
+		mockGenerateObject
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(summaryResponse);
+
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+		});
+
+		expect(mockGenerateObject).toHaveBeenCalledTimes(6);
+		expect(review?.body).not.toContain("Partial review");
 	});
 });

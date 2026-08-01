@@ -17,6 +17,7 @@ export interface AppConfig {
 	 * PR, which is worth being able to turn off on its own. */
 	improveCarrierEnabled: boolean;
 	agentConcurrency: number;
+	agentBudgetMs: number;
 	tier2Enabled: boolean;
 	qstashToken?: string;
 	qstashCurrentSigningKey?: string;
@@ -60,6 +61,18 @@ function validatePrivateKey(key: string): string {
 		);
 	}
 	return key;
+}
+
+/** Wall-clock allowance for launching review agents, in ms.
+ *
+ * Sized under the Vercel function `maxDuration` for the review routes (800s) so
+ * the run can merge and submit what it has instead of being killed mid-flight
+ * with nothing posted. Deep-tier PRs run eight agents at 150-300s each, which
+ * does not fit; a partial review does. */
+export function parseAgentBudgetMs(): number {
+	const raw = Number(process.env.REVIEW_AGENT_BUDGET_SECONDS ?? "600");
+	const seconds = Number.isFinite(raw) && raw > 0 ? raw : 600;
+	return Math.floor(seconds) * 1000;
 }
 
 export function parseAgentConcurrency(): number {
@@ -107,6 +120,7 @@ export function getConfig(): AppConfig {
 		improveEnabled: process.env.IMPROVE_ENABLED === "true",
 		improveCarrierEnabled: process.env.IMPROVE_CARRIER_ENABLED !== "false",
 		agentConcurrency: parseAgentConcurrency(),
+		agentBudgetMs: parseAgentBudgetMs(),
 		tier2Enabled: process.env.REVIEW_TIER2_ENABLED !== "false",
 		qstashToken: process.env.QSTASH_TOKEN,
 		qstashCurrentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY,
@@ -140,6 +154,7 @@ export function getOpenAIAppConfig(): AppConfig {
 		improveEnabled: process.env.IMPROVE_ENABLED === "true",
 		improveCarrierEnabled: process.env.IMPROVE_CARRIER_ENABLED !== "false",
 		agentConcurrency: parseAgentConcurrency(),
+		agentBudgetMs: parseAgentBudgetMs(),
 		tier2Enabled: process.env.REVIEW_TIER2_ENABLED !== "false",
 		qstashToken: process.env.QSTASH_TOKEN,
 		qstashCurrentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY,
