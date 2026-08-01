@@ -464,6 +464,20 @@ async function cmdUnrated(args: string[]): Promise<void> {
 		{ owner, repo, pull_number: pr, per_page: 100 },
 	)) as ReviewCommentPayload[];
 
+	// `reactions` is what the whole check turns on, and `?? 0` would read a
+	// missing key as "nobody rated it" — every finding would look unrated and the
+	// gate would be confidently wrong with nothing in the output to say why.
+	const missingReactions = comments.filter(
+		(c) => c.in_reply_to_id === undefined && c.reactions === undefined,
+	).length;
+	if (missingReactions > 0) {
+		fatal(
+			`${missingReactions} comment(s) came back without a \`reactions\` field — ` +
+				"the API response shape is not what this check assumes, so its result " +
+				"would be meaningless. Refusing to report a verdict.",
+		);
+	}
+
 	const unrated = findUnratedFindings(comments);
 	if (json) {
 		console.log(

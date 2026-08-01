@@ -45,6 +45,20 @@ describe("partitionComments", () => {
 		expect(replies.map((c) => c.id)).toEqual([2]);
 	});
 
+	it("excludes a third-party bot's reply from the feedback bucket", () => {
+		const { findings, replies } = partitionComments([
+			comment({ id: 1 }),
+			comment({
+				id: 2,
+				in_reply_to_id: 1,
+				user: { login: "sourcery-ai[bot]" },
+				body: "noted",
+			}),
+		]);
+		expect(findings.map((c) => c.id)).toEqual([1]);
+		expect(replies).toEqual([]);
+	});
+
 	it("excludes a bot's own reply from both buckets", () => {
 		const { findings, replies } = partitionComments([
 			comment({ id: 2, in_reply_to_id: 1 }),
@@ -244,6 +258,23 @@ describe("findUnratedFindings", () => {
 	// findings that really were dispositioned without a rating.
 	it("ignores a finding nobody replied to", () => {
 		expect(findUnratedFindings([comment({ id: 1 })])).toEqual([]);
+	});
+
+	// A third-party bot answering our finding is two machines talking, not a
+	// disposition. Counting it as answered would report a finding as unrated that
+	// no human has looked at, and — worse, on the backfill path that shares this
+	// partition — file the bot's prose as human feedback in the corpus.
+	it("does not treat another bot's reply as an answer", () => {
+		const unrated = findUnratedFindings([
+			comment({ id: 1, reactions: { total_count: 0 } }),
+			comment({
+				id: 2,
+				in_reply_to_id: 1,
+				user: { login: "coderabbitai[bot]" },
+				body: "I agree with this finding.",
+			}),
+		]);
+		expect(unrated).toEqual([]);
 	});
 
 	// A third-party reviewer's thread is not ours to rate — its reactions do not
