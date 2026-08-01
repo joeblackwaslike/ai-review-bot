@@ -2119,3 +2119,93 @@ describe("partial runs cannot approve", () => {
 		expect(review?.event).toBe("APPROVE");
 	});
 });
+
+describe("reviewer tuning wiring", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+	});
+
+	// Two agents reporting one claim on adjacent lines of the same expression —
+	// the shape that arrived eight times on #43.
+	function restatementResponses() {
+		const first = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "REQUEST_CHANGES",
+				general_findings: [],
+				inline_comments: [
+					buildInlineComment({
+						title:
+							"`body: f.title` duplicates the title instead of the description",
+						body: "the fuller explanation",
+						path: "src/review.ts",
+						line: 2,
+					}),
+				],
+			}),
+		);
+		const second = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "REQUEST_CHANGES",
+				general_findings: [],
+				inline_comments: [
+					buildInlineComment({
+						title:
+							"body field set to f.title — finding body duplicates the title",
+						body: "short",
+						path: "src/review.ts",
+						line: 3,
+					}),
+				],
+			}),
+		);
+		return { first, second };
+	}
+
+	it("collapses restatements for anthropic", async () => {
+		const { first, second } = restatementResponses();
+		mockGenerateObject
+			.mockResolvedValueOnce(first)
+			.mockResolvedValueOnce(second)
+			.mockResolvedValueOnce(second)
+			.mockResolvedValueOnce(second)
+			.mockResolvedValueOnce(second)
+			.mockResolvedValueOnce({
+				object: { summary: "One issue." },
+				usage: { inputTokens: 10, outputTokens: 5 },
+			});
+
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			provider: "anthropic" as const,
+		});
+
+		expect(review?.comments).toHaveLength(1);
+	});
+
+	// codexreviewbot duplicated far less on the same PRs and approved cleanly;
+	// this pins that its behaviour is untouched until validated on its own output.
+	it("leaves openai's findings exactly as the agents reported them", async () => {
+		const { first, second } = restatementResponses();
+		mockGenerateObject
+			.mockResolvedValueOnce(first)
+			.mockResolvedValueOnce(second)
+			.mockResolvedValueOnce(second)
+			.mockResolvedValueOnce(second)
+			.mockResolvedValueOnce(second)
+			.mockResolvedValueOnce({
+				object: { summary: "Two issues." },
+				usage: { inputTokens: 10, outputTokens: 5 },
+			});
+
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			provider: "openai" as const,
+		});
+
+		expect(review?.comments).toHaveLength(2);
+	});
+});

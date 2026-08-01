@@ -191,7 +191,7 @@ export function isSameClaim(
 		return false;
 	// Exactly one anchored: proximity cannot vouch for them, so they fall back to
 	// the unanchored bar rather than silently skipping the distance check.
-	const anchored = bothAnchored && a.path;
+	const anchored = bothAnchored && Boolean(a.path);
 
 	const tokensA = claimTokens(a.title);
 	const tokensB = claimTokens(b.title);
