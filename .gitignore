@@ -1,4 +1,6 @@
-node_modules/
+# No trailing slash: a *symlink* named node_modules is a file, not a
+# directory, so `node_modules/` does not match it and one got committed.
+node_modules
 .vercel
 .env
 .claude/

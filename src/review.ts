@@ -48,6 +48,10 @@ interface ReviewContext {
 	provider: "anthropic" | "openai";
 	feedbackEnabled: boolean;
 	agentConcurrency: number;
+	/** Wall-clock allowance for launching agents. Past it the remaining agents are
+	 * skipped and the review is submitted with what completed — the platform's own
+	 * timeout would otherwise kill the run with nothing posted at all. */
+	agentBudgetMs: number;
 	tier2Enabled: boolean;
 	/** Upstash KV client for review-state persistence + the triage gate. Reuses
 	 * the client maybeSubmitReview already built for the idempotency claim; absent
@@ -122,7 +126,9 @@ export type AgentOutcome =
 	  }
 	| { status: "rate_limited"; rateLimit: RateLimitInfo }
 	| { status: "quota_exhausted"; provider: ModelSelection["provider"] }
-	| { status: "error" };
+	| { status: "error" }
+	/** Never started: the run was out of wall-clock before its turn came up. */
+	| { status: "skipped"; skillPath: string };
 
 /** Why a provider refused the call. Both conditions arrive as HTTP 429, but they
  * need opposite responses from a human: a rate limit clears on its own, an
@@ -984,10 +990,23 @@ export async function buildReview(
 	];
 
 	let lastRateLimit: RateLimitInfo | undefined;
+	const deadline = Date.now() + context.agentBudgetMs;
 	const outcomes = await mapWithConcurrency(
 		allSkills,
 		context.agentConcurrency,
 		async ({ skillPath }, i) => {
+			// Checked before dispatch, never mid-call: an agent already reasoning
+			// should finish and contribute. What this prevents is *starting* an
+			// agent whose run the platform would kill before anything is
+			// submitted, losing every finding the earlier agents produced.
+			if (Date.now() >= deadline) {
+				console.warn("agent skipped: review time budget exhausted", {
+					idx: i + 1,
+					total: allSkills.length,
+					skillPath,
+				});
+				return { status: "skipped", skillPath } as AgentOutcome;
+			}
 			const t0 = Date.now();
 			const outcome = await runAgent(
 				skillPath,
@@ -1027,6 +1046,7 @@ export async function buildReview(
 	const agentResults: ModelReview[] = [];
 	const rateLimited: RateLimitInfo[] = [];
 	const quotaExhausted: ModelSelection["provider"][] = [];
+	const skipped: string[] = [];
 	let totalPromptTokens = 0;
 	let totalCompletionTokens = 0;
 
@@ -1039,7 +1059,16 @@ export async function buildReview(
 			rateLimited.push(o.rateLimit);
 		} else if (o.status === "quota_exhausted") {
 			quotaExhausted.push(o.provider);
+		} else if (o.status === "skipped") {
+			skipped.push(o.skillPath);
 		}
+	}
+
+	if (skipped.length > 0) {
+		console.warn("review ran out of time budget", {
+			completed: agentResults.length,
+			skipped,
+		});
 	}
 
 	// Checked before the rate-limit branch: a spent balance also surfaces as 429,
@@ -1240,13 +1269,25 @@ export async function buildReview(
 			? "💬 React on any inline comment to train our reviewers: 👍 it helped, 👎 it was wrong, 😕 it didn't land. For 😕, please also reply saying why — the reply is what we learn from."
 			: "";
 
+	// Named on the review, not just in the logs. A partial review that reads as
+	// complete is worse than a late one: silence from the security agent looks
+	// like "nothing found" when that agent never ran.
+	const budgetNotice =
+		skipped.length > 0
+			? [
+					`\n> ⏱ **Partial review.** ${skipped.length} of ${allSkills.length} agents did not run — this pass hit its time budget before reaching ${skipped
+						.map((s) => `\`${s.replace(/\.md$/, "")}\``)
+						.join(", ")}. Re-run the review command for full coverage.`,
+				]
+			: [];
+
 	const tier2Notice =
 		tier2Matches.length > 0
 			? [
 					`\n#### Additional skills activated\n\n${tier2Matches
 						.map(
 							({ skillPath, reason }) =>
-								`- \`${skillPath.replace(".md", "")}\` — ${reason}`,
+								`- \`${skillPath.replace(/\.md$/, "")}\` — ${reason}`,
 						)
 						.join("\n")}`,
 				]
@@ -1259,6 +1300,7 @@ export async function buildReview(
 		"",
 		finalEvent === "APPROVE" ? approvalMessage : summary,
 		...tier2Notice,
+		...budgetNotice,
 		"",
 		...(finalEvent === "APPROVE" ? [] : [inlineSummary]),
 		feedbackInvite,
@@ -1347,7 +1389,7 @@ export async function buildReview(
 			model: selection.model,
 			tier1Count: TIER1_SKILLS.length,
 			tier2Skills: tier2Matches.map(({ skillPath }) =>
-				skillPath.replace(".md", ""),
+				skillPath.replace(/\.md$/, ""),
 			),
 			generalFindings: modelReview.general_findings.length,
 			inlineComments: reviewComments.length,

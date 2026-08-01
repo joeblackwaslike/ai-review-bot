@@ -323,6 +323,7 @@ const baseContext = {
 	provider: "anthropic" as const,
 	feedbackEnabled: false,
 	agentConcurrency: 1,
+	agentBudgetMs: 600_000,
 	tier2Enabled: false,
 };
 
@@ -1229,6 +1230,7 @@ describe("buildReview rate-limit decision", () => {
 			provider: "anthropic",
 			feedbackEnabled: false,
 			agentConcurrency: 1,
+			agentBudgetMs: 600_000,
 			tier2Enabled: false,
 		});
 		await vi.runAllTimersAsync();
@@ -1263,6 +1265,7 @@ describe("buildReview rate-limit decision", () => {
 			provider,
 			feedbackEnabled: false,
 			agentConcurrency: 1,
+			agentBudgetMs: 600_000,
 			tier2Enabled: false,
 		};
 	}
@@ -1364,6 +1367,7 @@ describe("buildReview rate-limit decision", () => {
 			provider: "anthropic",
 			feedbackEnabled: false,
 			agentConcurrency: 1,
+			agentBudgetMs: 600_000,
 			tier2Enabled: false,
 		});
 		await vi.runAllTimersAsync();
@@ -1956,5 +1960,162 @@ describe("classifyRefusal", () => {
 	it("returns null for an unrelated error", () => {
 		expect(classifyRefusal(new Error("socket hang up"))).toBeNull();
 		expect(classifyRefusal({ statusCode: 500 })).toBeNull();
+	});
+});
+
+describe("agent time budget", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+	});
+
+	// The platform kills the function at maxDuration with nothing posted. Five
+	// agents' worth of findings beats a 504 that loses all of them.
+	it("submits what completed instead of losing the review to the timeout", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const agentResponse = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "REQUEST_CHANGES",
+				general_findings: [
+					{ title: "Found by agent one", body: "real", severity: "high" },
+				],
+				inline_comments: [],
+			}),
+		);
+		// Each agent burns 400s of the 600s budget, so the second one exhausts it
+		// and every agent after that is skipped without a model call.
+		let now = 0;
+		const clock = vi.spyOn(Date, "now").mockImplementation(() => now);
+		let calls = 0;
+		mockGenerateObject.mockImplementation(async () => {
+			calls += 1;
+			// Calls 1-2 are agents; the third is the summary, which must not
+			// advance the clock or return an agent-shaped object.
+			if (calls > 2) {
+				return {
+					object: { summary: "Partial pass." },
+					usage: { inputTokens: 10, outputTokens: 5 },
+				};
+			}
+			now += 400_000;
+			return agentResponse;
+		});
+
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			agentBudgetMs: 600_000,
+		});
+
+		clock.mockRestore();
+		expect(review).not.toBeNull();
+		// Two agents ran; the summary call is not one of the five agents.
+		expect(review?.body).toContain("Found by agent one");
+		expect(review?.body).toContain("Partial review");
+		expect(review?.body).toContain("3 of 5 agents did not run");
+		expect(warn).toHaveBeenCalledWith(
+			"review ran out of time budget",
+			expect.objectContaining({ completed: 2 }),
+		);
+		warn.mockRestore();
+	});
+
+	it("runs every agent and says nothing about the budget when there is room", async () => {
+		const agentResponse = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "REQUEST_CHANGES",
+				general_findings: [{ title: "Found", body: "real", severity: "high" }],
+				inline_comments: [],
+			}),
+		);
+		const summaryResponse = {
+			object: { summary: "One issue." },
+			usage: { inputTokens: 10, outputTokens: 5 },
+		};
+		mockGenerateObject
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(summaryResponse);
+
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+		});
+
+		expect(mockGenerateObject).toHaveBeenCalledTimes(6);
+		expect(review?.body).not.toContain("Partial review");
+	});
+});
+
+describe("partial runs cannot approve", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+	});
+
+	// The agents that DO run return a clean COMMENT with nothing flagged — the
+	// one shape that is eligible for the APPROVE upgrade. Only `allAgentsSucceeded`
+	// stands between that and an approval, so this fails the moment a skipped
+	// agent is treated as neutral. Asserting on a REQUEST_CHANGES fixture would
+	// pass whether or not the gate exists.
+	it("stays at COMMENT when the completed agents found nothing but others were skipped", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const cleanAgent = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+		);
+		let now = 0;
+		const clock = vi.spyOn(Date, "now").mockImplementation(() => now);
+		let calls = 0;
+		mockGenerateObject.mockImplementation(async () => {
+			calls += 1;
+			if (calls > 2) {
+				return {
+					object: { summary: "Nothing found in what ran." },
+					usage: { inputTokens: 10, outputTokens: 5 },
+				};
+			}
+			now += 400_000;
+			return cleanAgent;
+		});
+
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			agentBudgetMs: 600_000,
+		});
+
+		clock.mockRestore();
+		warn.mockRestore();
+		expect(review?.event).not.toBe("APPROVE");
+		expect(review?.body).toContain("Partial review");
+	});
+
+	// The control: same clean agents, enough budget for all five. Without this,
+	// the test above could pass because the fixture never approves at all.
+	it("does approve the same clean result when every agent ran", async () => {
+		const cleanAgent = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+		);
+		mockGenerateObject.mockResolvedValue(cleanAgent);
+
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+		});
+
+		expect(review?.event).toBe("APPROVE");
 	});
 });
