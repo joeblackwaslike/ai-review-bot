@@ -927,9 +927,10 @@ export async function buildReview(
 	// agents never saw) plus resolved tombstones (so future rounds can tell
 	// "resolved" from "never existed"). Both stay empty on the FULL/cold path.
 	let survivingPrior: PersistedFinding[] = [];
-	/** SHA the surviving findings were last reviewed against. Set with
-	 * survivingPrior so the two cannot come apart — the review names it, and an
-	 * optional chain here would render the literal "undefined". */
+	/** SHA the surviving findings were last reviewed against. Set together with
+	 * survivingPrior, from the same state the INCREMENTAL guard already proved
+	 * has a non-empty lastReviewedSha, so the review can name it without an
+	 * optional chain whose undefined branch no test could reach. */
 	let priorSha = "";
 	let resolvedTombstones: PersistedFinding[] = [];
 	const state =
@@ -1296,7 +1297,10 @@ export async function buildReview(
 		allAgentsSucceeded &&
 		modelReview.event === "COMMENT" &&
 		modelReview.general_findings.length === 0 &&
-		reviewComments.length === 0;
+		// What the agents found, not what GitHub would accept. Measuring the
+		// posted comments meant a review whose only finding failed to anchor
+		// approved the PR while printing that finding in its own body.
+		modelReview.inline_comments.length === 0;
 	// An INCREMENTAL pass that left prior findings unresolved still blocks even if
 	// the delta itself was clean — those findings live on files the agents never
 	// reviewed this round. Force REQUEST_CHANGES so a clean delta can't APPROVE

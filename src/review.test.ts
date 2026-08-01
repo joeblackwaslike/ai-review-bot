@@ -2657,6 +2657,7 @@ describe("review body markdown", () => {
 				inline_comments: [
 					buildInlineComment({
 						title: "Unvalidated path segment",
+						severity: "high",
 						path: "does/not/exist.ts",
 						line: 2,
 						start_line: null,
@@ -2683,7 +2684,50 @@ describe("review body markdown", () => {
 
 		expect(review?.comments).toHaveLength(0);
 		expect(review?.body).toContain("Unvalidated path segment");
-		expect(review?.body).toContain("does/not/exist.ts");
+		expect(review?.body).toContain("`does/not/exist.ts:2`");
+		expect(review?.body).toContain("🔴");
+	});
+
+	// Dropping every inline finding used to leave reviewComments empty, which is
+	// what cleanDelta measured — so a COMMENT-level review whose only finding
+	// could not be anchored approved the PR while printing that finding in the
+	// body. What the agents found decides the verdict; what GitHub would accept
+	// decides only where it is shown.
+	it("does not approve when the only findings were the ones it could not anchor", async () => {
+		const agent = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [
+					buildInlineComment({
+						title: "Unvalidated path segment",
+						severity: "high",
+						path: "does/not/exist.ts",
+						line: 2,
+						start_line: null,
+					}),
+				],
+			}),
+		);
+		mockGenerateObject
+			.mockResolvedValue(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce({
+				object: { summary: "One issue." },
+				usage: { inputTokens: 10, outputTokens: 5 },
+			});
+
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+		});
+
+		expect(review?.comments).toHaveLength(0);
+		expect(review?.event).not.toBe("APPROVE");
 	});
 
 	it("keeps the summary out of the heading when there is nothing to report", async () => {
