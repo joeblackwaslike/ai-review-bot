@@ -50,9 +50,13 @@ vi.mock("./config.js", () => ({
 
 vi.mock("./prompt.js", () => ({
 	buildUserMessage: mockBuildUserMessage,
+	// Tagged with the skill path so a test can route a mocked model response to a
+	// specific agent by what it was asked to review, rather than by the position
+	// of the agent in TIER1_SKILLS. Ordering assumptions pass silently when the
+	// list is reordered, while attributing findings to the wrong skill.
 	buildAgentSystemPrompt: (...args: unknown[]) => {
 		mockBuildAgentSystemPrompt(...args);
-		return "system";
+		return `system:${args[0]}`;
 	},
 }));
 
@@ -1000,7 +1004,7 @@ describe("runAgent caching + telemetry", () => {
 		expect(parts[0].providerOptions.anthropic.cacheControl).toEqual({
 			type: "ephemeral",
 		});
-		expect(parts[1].text).toBe("system"); // skill block from mocked buildAgentSystemPrompt
+		expect(parts[1].text).toBe("system:code-reviewer.md"); // skill block from mocked buildAgentSystemPrompt
 		expect(out?.status).toBe("ok");
 	});
 
@@ -2372,5 +2376,109 @@ describe("prior own findings propagation", () => {
 		];
 		expect("priorOwnFindings" in arg).toBe(true);
 		expect(arg.priorOwnFindings).toBeUndefined();
+	});
+});
+
+describe("provenance across collapsed claims", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+	});
+
+	// Two agents report one claim on different nearby lines. The dedupe keeps
+	// one, and the skill recorded against the collapsed anchor has to travel to
+	// the survivor — otherwise a bug found by two agents is credited to one, and
+	// the per-skill trends undercount exactly what they exist to measure.
+	it("credits every agent that found a claim to the surviving comment", async () => {
+		const at = (line: number, title: string) =>
+			buildGenerateObjectResponse(
+				buildModelReview({
+					event: "REQUEST_CHANGES",
+					general_findings: [],
+					inline_comments: [
+						buildInlineComment({
+							title,
+							body: "why it matters",
+							path: "src/x.ts",
+							line,
+						}),
+					],
+				}),
+			);
+		const empty = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+		);
+
+		// Routed by skill path, not by call order: which agent reported which line
+		// is the whole assertion, so a reordering of TIER1_SKILLS must not be able
+		// to quietly swap the two and leave the test green.
+		// Seeded from TIER1_SKILLS so the map cannot drift out of sync with the
+		// production list, and an unrecognised skill is a routing failure rather
+		// than a silent fall-through to `empty` — which would leave the test green
+		// while exercising nothing.
+		const bySkill: Record<string, ReturnType<typeof at>> = Object.fromEntries(
+			TIER1_SKILLS.map((skillPath) => [skillPath, empty]),
+		);
+		bySkill["code-reviewer.md"] = at(
+			10,
+			"`body: f.title` duplicates the title instead of the finding body",
+		);
+		bySkill["silent-failure-hunter.md"] = at(
+			12,
+			"body field set to f.title — finding body duplicates the title",
+		);
+		mockGenerateObject.mockImplementation(
+			async (call: {
+				system?: string;
+				messages: [{ content: string | [unknown, { text: string }] }];
+			}) => {
+				// generateSummary is the only call passing a `system` string. An agent
+				// call instead carries the mocked buildAgentSystemPrompt return value
+				// — tagged `system:<skillPath>` — as the second part of its user
+				// message content (src/review.ts, runAgent).
+				if (typeof call.system === "string") {
+					return {
+						object: { summary: "One issue." },
+						usage: { inputTokens: 10, outputTokens: 5 },
+					};
+				}
+				const content = call.messages[0].content;
+				const skill =
+					typeof content === "string"
+						? content
+						: content[1].text.replace(/^system:/, "");
+				const response = bySkill[skill];
+				if (!response) {
+					throw new Error(
+						`agent call could not be routed to a skill: ${JSON.stringify(skill)}`,
+					);
+				}
+				return response;
+			},
+		);
+
+		const decision = await buildReview({
+			octokit: buildOctokit({
+				files: [buildPullFile("src/x.ts", TWENTY_LINE_PATCH)],
+			}),
+			...baseContext,
+			provider: "anthropic" as const,
+			feedbackEnabled: true,
+		});
+
+		expect(decision?.comments).toHaveLength(1);
+		const survivor = decision?.comments[0];
+		const prov = decision?.commentProvenance?.get(
+			`${survivor?.path}:${survivor?.line}`,
+		);
+		expect(prov?.skills.sort()).toEqual([
+			"code-reviewer.md",
+			"silent-failure-hunter.md",
+		]);
 	});
 });

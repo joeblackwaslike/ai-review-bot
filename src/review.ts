@@ -443,6 +443,10 @@ export interface MergeOptions {
 
 export interface MergeOutcome {
 	review: ModelReview;
+	/** `path:line` of each collapsed inline comment → the key of the survivor
+	 * now standing for it, so provenance recorded against the original anchor
+	 * can follow the finding it belongs to. */
+	inlineAliases: Map<string, string>;
 	/** How many findings were folded into another as the same claim, so the
 	 * caller can log it instead of silently shrinking the review. */
 	collapsed: number;
@@ -502,8 +506,15 @@ export function mergeReviewsDetailed(
 	let collapsed = 0;
 	let inline_comments = anchored;
 	let merged_general = general_findings;
+	const inlineAliases = new Map<string, string>();
 	if (options.dedupeNearDuplicateClaims) {
 		const inlineResult = dedupeClaims(anchored);
+		for (const { from, into } of inlineResult.merges) {
+			inlineAliases.set(
+				`${from.path}:${from.line}`,
+				`${into.path}:${into.line}`,
+			);
+		}
 		// General findings carry no anchor, so they go in as-is — ClaimLike treats
 		// a missing path/line as unanchored and applies the stricter title bar.
 		const generalResult = dedupeClaims(general_findings);
@@ -524,6 +535,7 @@ export function mergeReviewsDetailed(
 	return {
 		review: { event, general_findings: merged_general, inline_comments },
 		collapsed,
+		inlineAliases,
 	};
 }
 
@@ -1243,7 +1255,13 @@ export async function buildReview(
 			const skillPath = allSkills[i]?.skillPath;
 			if (!skillPath) return;
 			for (const c of outcome.review.inline_comments) {
-				const key = `${c.path}:${c.line}`;
+				// Record against the survivor's key when this finding was collapsed
+				// into another. Keying on the agent's own anchor would strand the
+				// attribution: near-duplicate collapsing spans different nearby
+				// lines, so nothing later looks the original key up again, and a
+				// bug found by five agents would be credited to one skill.
+				const own = `${c.path}:${c.line}`;
+				const key = mergeOutcome.inlineAliases.get(own) ?? own;
 				const set = skillsByKey.get(key) ?? new Set<string>();
 				set.add(skillPath);
 				skillsByKey.set(key, set);

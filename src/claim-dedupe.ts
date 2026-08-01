@@ -234,6 +234,13 @@ export interface DedupeResult<T> {
 	/** Count per surviving finding, so the caller can report what it collapsed
 	 * rather than silently shrinking the review. */
 	collapsed: number;
+	/** Each collapsed finding paired with the survivor now representing it.
+	 *
+	 * Callers that recorded anything against a finding's own anchor — provenance,
+	 * in particular — have to move it: collapsing deliberately spans different
+	 * nearby lines, so the survivor's key is not the collapsed finding's key and
+	 * whatever was filed under the latter is otherwise orphaned. */
+	merges: Array<{ from: T; into: T }>;
 }
 
 /** Collapse restatements, keeping input order of the survivors.
@@ -246,7 +253,7 @@ export function dedupeClaims<T extends ClaimLike & { body?: string }>(
 	options: ClaimMatchOptions = DEFAULT_CLAIM_MATCH,
 ): DedupeResult<T> {
 	const kept: T[] = [];
-	let collapsed = 0;
+	const members: T[][] = [];
 
 	for (const finding of findings) {
 		const index = kept.findIndex((existing) =>
@@ -254,11 +261,22 @@ export function dedupeClaims<T extends ClaimLike & { body?: string }>(
 		);
 		if (index === -1) {
 			kept.push(finding);
+			members.push([finding]);
 			continue;
 		}
+		members[index].push(finding);
+		// The representative can change as a cluster grows, so which member was
+		// absorbed is only knowable once every finding has been placed.
 		kept[index] = preferred(kept[index], finding);
-		collapsed += 1;
 	}
 
-	return { kept, collapsed };
+	const merges: Array<{ from: T; into: T }> = [];
+	members.forEach((group, index) => {
+		for (const member of group) {
+			if (member !== kept[index])
+				merges.push({ from: member, into: kept[index] });
+		}
+	});
+
+	return { kept, collapsed: merges.length, merges };
 }
