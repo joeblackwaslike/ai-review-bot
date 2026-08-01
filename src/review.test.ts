@@ -2598,6 +2598,53 @@ describe("review body markdown", () => {
 		});
 	}
 
+	// The activated-skills notice is a bullet list, and Markdown lazily continues
+	// a list item across a bare newline. Without a blank line after it, the inline
+	// count, the reaction instructions and the review marker were all absorbed
+	// into the bullet — GitHub rendered them <br>-separated inside one <li>,
+	// indented under "Additional skills activated" (ai-review-bot#47, reviews
+	// 4834930088 and 4834932040).
+	it("closes the activated-skills list before the sections that follow it", async () => {
+		const agent = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "REQUEST_CHANGES",
+				general_findings: [],
+				inline_comments: [
+					buildInlineComment({ path: "src/types.ts", line: 2 }),
+				],
+			}),
+		);
+		mockGenerateObject
+			.mockResolvedValue(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce({
+				object: { summary: "One issue." },
+				usage: { inputTokens: 10, outputTokens: 5 },
+			});
+
+		const decision = await buildReview({
+			octokit: buildOctokit({
+				files: [buildPullFile("src/types.ts", TYPE_DEFINITION_PATCH)],
+			}),
+			...baseContext,
+			tier2Enabled: true,
+		});
+
+		expect(decision?.metadata.tier2Skills.length).toBeGreaterThan(0);
+		const lines = (decision?.body ?? "").split("\n");
+		const lastBullet = lines.reduce(
+			(last, line, i) => (line.startsWith("- `") ? i : last),
+			-1,
+		);
+		expect(lastBullet).toBeGreaterThan(-1);
+		expect(lines[lastBullet + 1]).toBe("");
+	});
+
 	it("keeps the summary out of the heading when there is nothing to report", async () => {
 		const review = await incrementalWithOpenPrior();
 
