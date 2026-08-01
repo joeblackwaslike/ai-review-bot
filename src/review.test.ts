@@ -2361,8 +2361,13 @@ describe("prior own findings propagation", () => {
 			kv: client,
 		});
 
-		expect(mockBuildUserMessage).toHaveBeenCalledWith(
-			expect.objectContaining({ priorOwnFindings: undefined }),
-		);
+		// objectContaining({ priorOwnFindings: undefined }) would also pass if the
+		// key were absent, which is a different bug — the gate is supposed to set
+		// it explicitly, not forget it. Assert both the presence and the value.
+		const [arg] = mockBuildUserMessage.mock.calls.at(-1) as [
+			Record<string, unknown>,
+		];
+		expect("priorOwnFindings" in arg).toBe(true);
+		expect(arg.priorOwnFindings).toBeUndefined();
 	});
 });
