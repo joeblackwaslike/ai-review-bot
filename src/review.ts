@@ -927,6 +927,11 @@ export async function buildReview(
 	// agents never saw) plus resolved tombstones (so future rounds can tell
 	// "resolved" from "never existed"). Both stay empty on the FULL/cold path.
 	let survivingPrior: PersistedFinding[] = [];
+	/** SHA the surviving findings were last reviewed against. Set together with
+	 * survivingPrior, from the same state the INCREMENTAL guard already proved
+	 * has a non-empty lastReviewedSha, so the review can name it without an
+	 * optional chain whose undefined branch no test could reach. */
+	let priorSha = "";
 	let resolvedTombstones: PersistedFinding[] = [];
 	const state =
 		context.kv && !context.force
@@ -997,6 +1002,7 @@ export async function buildReview(
 			// it are never re-surfaced. Carry the still-open ones forward as
 			// blocking, and resolved ones as tombstones, into the persisted state.
 			survivingPrior = state.findings.filter((f) => f.status === "open");
+			priorSha = state.lastReviewedSha;
 			resolvedTombstones = state.findings.filter(
 				(f) => f.status === "resolved",
 			);
@@ -1291,7 +1297,10 @@ export async function buildReview(
 		allAgentsSucceeded &&
 		modelReview.event === "COMMENT" &&
 		modelReview.general_findings.length === 0 &&
-		reviewComments.length === 0;
+		// What the agents found, not what GitHub would accept. Measuring the
+		// posted comments meant a review whose only finding failed to anchor
+		// approved the PR while printing that finding in its own body.
+		modelReview.inline_comments.length === 0;
 	// An INCREMENTAL pass that left prior findings unresolved still blocks even if
 	// the delta itself was clean — those findings live on files the agents never
 	// reviewed this round. Force REQUEST_CHANGES so a clean delta can't APPROVE
@@ -1373,7 +1382,7 @@ export async function buildReview(
 	const budgetNotice =
 		skipped.length > 0
 			? [
-					`\n> ⏱ **Partial review.** ${skipped.length} of ${allSkills.length} agents did not run — this pass hit its time budget before reaching ${skipped
+					`> ⏱ **Partial review.** ${skipped.length} of ${allSkills.length} agents did not run — this pass hit its time budget before reaching ${skipped
 						.map((s) => `\`${s.replace(/\.md$/, "")}\``)
 						.join(", ")}. Re-run the review command for full coverage.`,
 				]
@@ -1382,7 +1391,7 @@ export async function buildReview(
 	const tier2Notice =
 		tier2Matches.length > 0
 			? [
-					`\n#### Additional skills activated\n\n${tier2Matches
+					`#### Additional skills activated\n\n${tier2Matches
 						.map(
 							({ skillPath, reason }) =>
 								`- \`${skillPath.replace(/\.md$/, "")}\` — ${reason}`,
@@ -1391,24 +1400,65 @@ export async function buildReview(
 				]
 			: [];
 
+	// The agents never saw these findings' files this pass, so they cannot
+	// re-raise them, yet they are the whole reason the review blocks. Without
+	// this the review reads "nothing new, no inline comments" over a
+	// REQUEST_CHANGES verdict — a bot shouting with nothing to point at.
+	// Same table shape as formatFindings on purpose: the cold-KV fallback in
+	// parsePriorReview recovers findings by that row format.
+	const priorBlock =
+		survivingPrior.length > 0
+			? `#### Still open from the previous review\n\nThis pass reviewed only what changed since \`${priorSha.slice(0, 12)}\`, so these were not re-checked.\n\n| Sev | Finding |\n|---|---|\n${survivingPrior
+					.map((f) => {
+						const where =
+							f.path && f.line != null ? ` (\`${f.path}:${f.line}\`)` : "";
+						return `| ${SEVERITY_EMOJI[f.severity as Severity] ?? UNKNOWN_SEVERITY_BADGE} | **${f.title}**${where} |`;
+					})
+					.join("\n")}`
+			: "";
+
+	// buildReviewComments drops comments that don't anchor to the diff. Staying
+	// quiet about it leaves a blocking review whose findings all vanished looking
+	// like a review that found nothing.
+	// Named, not counted: one of these can be the finding holding the review at
+	// REQUEST_CHANGES, and a bare count tells the author something was lost
+	// without telling them what to fix.
+	const postedKeys = new Set(reviewComments.map((c) => `${c.path}:${c.line}`));
+	const dropped = modelReview.inline_comments.filter(
+		(c) => !postedKeys.has(`${c.path}:${c.line}`),
+	);
+	const droppedNotice =
+		dropped.length > 0
+			? `> ⚠️ ${dropped.length} inline comment${dropped.length === 1 ? "" : "s"} could not be anchored to the diff and ${dropped.length === 1 ? "was" : "were"} posted here instead:\n${dropped
+					.map(
+						(c) =>
+							`> - ${SEVERITY_EMOJI[c.severity as Severity] ?? UNKNOWN_SEVERITY_BADGE} **${c.title}** (\`${c.path}:${c.line}\`)`,
+					)
+					.join("\n")}`
+			: "";
+
 	const costFooter = `---\n*Model: ${selection.model} · ${allSkills.length} agents · $${cost.toFixed(6)} · [ai-review-bot](https://github.com/joeblackwaslike/ai-review-bot)*`;
 
+	// Joined with a blank line between every section, not a single newline.
+	// GitHub reads a paragraph followed by `---` as a setext H2 underline rather
+	// than a horizontal rule, and the cost footer opens with `---`, so gluing
+	// sections together rendered the whole review — summary, inline count and
+	// review marker alike — at heading size.
 	const body = [
 		`### ${context.commentPrefix}`,
-		"",
 		finalEvent === "APPROVE" ? approvalMessage : summary,
 		...tier2Notice,
 		...budgetNotice,
-		"",
 		...(finalEvent === "APPROVE" ? [] : [inlineSummary]),
+		droppedNotice,
 		feedbackInvite,
-		findingsBlock ? `\n${findingsBlock}\n` : "",
+		findingsBlock,
+		priorBlock,
 		reviewMarker,
-		"",
 		costFooter,
 	]
 		.filter((part) => part.length > 0)
-		.join("\n");
+		.join("\n\n");
 
 	// Persist the new review state so the NEXT push can triage against it. One
 	// PersistedFinding per general finding and per posted inline comment, all

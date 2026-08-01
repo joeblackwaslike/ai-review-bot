@@ -2482,3 +2482,271 @@ describe("provenance across collapsed claims", () => {
 		]);
 	});
 });
+
+describe("review body markdown", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+		mockTriageReReview.mockReset();
+	});
+
+	// GitHub reads a paragraph followed by `---` as a setext H2 underline, not a
+	// horizontal rule. The cost footer opens with `---`, so any section glued to
+	// it renders the whole preceding paragraph at heading size — which is what
+	// the reviews were doing: every line from the summary down to the review
+	// marker was one <h2>.
+	function setextUnderlinedLines(body: string): string[] {
+		const lines = body.split("\n");
+		return lines.filter(
+			(line, i) => /^(-{3,}|={3,})\s*$/.test(lines[i + 1] ?? "") && line !== "",
+		);
+	}
+
+	const emptyAgent = () =>
+		buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+		);
+
+	it("separates every section with a blank line so nothing renders as a heading", async () => {
+		const agent = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "REQUEST_CHANGES",
+				general_findings: [
+					{ title: "Unvalidated input", body: "x", severity: "high" },
+				],
+				inline_comments: [
+					buildInlineComment({ path: "src/review.ts", line: 2 }),
+				],
+			}),
+		);
+		mockGenerateObject
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce({
+				object: { summary: "One issue." },
+				usage: { inputTokens: 10, outputTokens: 5 },
+			});
+
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+		});
+
+		expect(setextUnderlinedLines(review?.body ?? "")).toEqual([]);
+	});
+
+	// The regression case, and the only way to reach it: mergeReviews downgrades
+	// REQUEST_CHANGES to COMMENT when nothing survived, so a blocking review with
+	// an empty body comes solely from a prior finding carried across an
+	// INCREMENTAL pass. Nothing then sits between the summary and the cost
+	// footer, and the summary, inline count and review marker become one <h2>.
+	async function incrementalWithOpenPrior() {
+		const { client } = fakeKv();
+		await saveReviewState(
+			client,
+			baseContext.provider,
+			baseContext.owner,
+			baseContext.repo,
+			baseContext.pullNumber,
+			{
+				lastReviewedSha: "aaaaaaaaaaaa1111",
+				event: "REQUEST_CHANGES",
+				findings: [
+					{
+						id: findingId("src/a.ts", 5, "Unvalidated input"),
+						path: "src/a.ts",
+						line: 5,
+						title: "Unvalidated input",
+						severity: "high",
+						status: "open",
+					},
+				],
+				reviewedAt: "2026-06-17T00:00:00Z",
+			},
+		);
+		vi.mocked(mockTriageReReview).mockResolvedValueOnce({
+			recommendation: "INCREMENTAL",
+			resolved: [],
+			newRisk: false,
+		});
+		mockGenerateObject
+			.mockResolvedValueOnce(emptyAgent())
+			.mockResolvedValueOnce(emptyAgent())
+			.mockResolvedValueOnce(emptyAgent())
+			.mockResolvedValueOnce(emptyAgent())
+			.mockResolvedValueOnce(emptyAgent())
+			.mockResolvedValueOnce({
+				object: { summary: "Nothing new since the last review." },
+				usage: { inputTokens: 10, outputTokens: 5 },
+			});
+
+		return buildReview({
+			octokit: buildOctokit({
+				files: [buildPullFile("src/b.ts", SIMPLE_PATCH)],
+			}),
+			...baseContext,
+			headSha: "bbbbbbbbbbbb2222",
+			kv: client,
+		});
+	}
+
+	// The activated-skills notice is a bullet list, and Markdown lazily continues
+	// a list item across a bare newline. Without a blank line after it, the inline
+	// count, the reaction instructions and the review marker were all absorbed
+	// into the bullet — GitHub rendered them <br>-separated inside one <li>,
+	// indented under "Additional skills activated" (ai-review-bot#47, reviews
+	// 4834930088 and 4834932040).
+	it("closes the activated-skills list before the sections that follow it", async () => {
+		const agent = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "REQUEST_CHANGES",
+				general_findings: [],
+				inline_comments: [
+					buildInlineComment({ path: "src/types.ts", line: 2 }),
+				],
+			}),
+		);
+		mockGenerateObject
+			.mockResolvedValue(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce({
+				object: { summary: "One issue." },
+				usage: { inputTokens: 10, outputTokens: 5 },
+			});
+
+		const decision = await buildReview({
+			octokit: buildOctokit({
+				files: [buildPullFile("src/types.ts", TYPE_DEFINITION_PATCH)],
+			}),
+			...baseContext,
+			tier2Enabled: true,
+		});
+
+		expect(decision?.metadata.tier2Skills.length).toBeGreaterThan(0);
+		const lines = (decision?.body ?? "").split("\n");
+		const lastBullet = lines.reduce(
+			(last, line, i) => (line.startsWith("- `") ? i : last),
+			-1,
+		);
+		expect(lastBullet).toBeGreaterThan(-1);
+		expect(lines[lastBullet + 1]).toBe("");
+	});
+
+	// A count alone tells the author something was lost but not what, and an
+	// unanchorable comment can still be the thing holding the review at
+	// REQUEST_CHANGES. Naming the findings is the difference between a dead end
+	// and something actionable.
+	it("names the findings it could not anchor, not just how many", async () => {
+		const agent = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "REQUEST_CHANGES",
+				general_findings: [],
+				inline_comments: [
+					buildInlineComment({
+						title: "Unvalidated path segment",
+						severity: "high",
+						path: "does/not/exist.ts",
+						line: 2,
+						start_line: null,
+					}),
+				],
+			}),
+		);
+		mockGenerateObject
+			.mockResolvedValue(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce({
+				object: { summary: "One issue." },
+				usage: { inputTokens: 10, outputTokens: 5 },
+			});
+
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+		});
+
+		expect(review?.comments).toHaveLength(0);
+		expect(review?.body).toContain("Unvalidated path segment");
+		expect(review?.body).toContain("`does/not/exist.ts:2`");
+		expect(review?.body).toContain("🔴");
+	});
+
+	// Dropping every inline finding used to leave reviewComments empty, which is
+	// what cleanDelta measured — so a COMMENT-level review whose only finding
+	// could not be anchored approved the PR while printing that finding in the
+	// body. What the agents found decides the verdict; what GitHub would accept
+	// decides only where it is shown.
+	it("does not approve when the only findings were the ones it could not anchor", async () => {
+		const agent = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [
+					buildInlineComment({
+						title: "Unvalidated path segment",
+						severity: "high",
+						path: "does/not/exist.ts",
+						line: 2,
+						start_line: null,
+					}),
+				],
+			}),
+		);
+		mockGenerateObject
+			.mockResolvedValue(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce(agent)
+			.mockResolvedValueOnce({
+				object: { summary: "One issue." },
+				usage: { inputTokens: 10, outputTokens: 5 },
+			});
+
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+		});
+
+		expect(review?.comments).toHaveLength(0);
+		expect(review?.event).not.toBe("APPROVE");
+	});
+
+	it("keeps the summary out of the heading when there is nothing to report", async () => {
+		const review = await incrementalWithOpenPrior();
+
+		expect(review?.event).toBe("REQUEST_CHANGES");
+		expect(review?.body).toContain("Inline comments: none");
+		expect(setextUnderlinedLines(review?.body ?? "")).toEqual([]);
+	});
+
+	// Blocking with no stated reason reads as a bot shouting for nothing. The
+	// carried-over finding is why the review requests changes, so it has to be
+	// on the review — the agents never saw its file this pass, so nothing else
+	// puts it there.
+	it("names the prior findings it is blocking on", async () => {
+		const review = await incrementalWithOpenPrior();
+
+		expect(review?.event).toBe("REQUEST_CHANGES");
+		expect(review?.body).toContain("Unvalidated input");
+		expect(review?.body).toContain("src/a.ts");
+	});
+});
