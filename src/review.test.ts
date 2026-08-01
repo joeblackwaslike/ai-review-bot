@@ -2276,7 +2276,7 @@ describe("prior own findings propagation", () => {
 		mockBuildUserMessage.mockReturnValue("user");
 	});
 
-	async function seededKv() {
+	async function seededKv(provider: "anthropic" | "openai" = "anthropic") {
 		// A FULL recommendation keeps the agents running so the prompt is built;
 		// the gate is not what this test is about.
 		mockTriageReReview.mockResolvedValue({
@@ -2287,7 +2287,7 @@ describe("prior own findings propagation", () => {
 		const { client } = fakeKv();
 		await saveReviewState(
 			client,
-			"anthropic",
+			provider,
 			"joeblackwaslike",
 			"ai-review-bot",
 			1,
@@ -2350,9 +2350,12 @@ describe("prior own findings propagation", () => {
 		);
 	});
 
+	// Seeded under "openai" deliberately: review state is namespaced by provider,
+	// so seeding it under "anthropic" would leave this reviewer with no state at
+	// all and the assertion would hold whether or not the gate existed.
 	it("withholds them from an untuned reviewer", async () => {
 		cleanRun();
-		const client = await seededKv();
+		const client = await seededKv("openai");
 
 		await buildReview({
 			octokit: buildOctokit(),
