@@ -71,8 +71,11 @@ function validatePrivateKey(key: string): string {
  * does not fit; a partial review does. */
 export function parseAgentBudgetMs(): number {
 	const raw = Number(process.env.REVIEW_AGENT_BUDGET_SECONDS ?? "600");
-	const seconds = Number.isFinite(raw) && raw > 0 ? raw : 600;
-	return Math.floor(seconds) * 1000;
+	// Rounded in milliseconds, not seconds. Flooring seconds first turned any
+	// sub-second value into a 0ms budget, which passes the positive check above
+	// and then skips every agent — a review that silently does nothing.
+	const ms = Number.isFinite(raw) && raw > 0 ? Math.floor(raw * 1000) : 600_000;
+	return Math.max(1, ms);
 }
 
 export function parseAgentConcurrency(): number {

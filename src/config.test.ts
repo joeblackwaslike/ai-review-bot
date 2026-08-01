@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { getConfig, getOpenAIAppConfig } from "./config.js";
+import { getConfig, getOpenAIAppConfig, parseAgentBudgetMs } from "./config.js";
 
 const PKCS8_KEY =
 	"-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC7\n-----END PRIVATE KEY-----";
@@ -221,5 +221,42 @@ describe("qstash + publicUrl config", () => {
 	it("leaves QStash fields undefined when unset (graceful fallback)", () => {
 		setRequiredEnv();
 		expect(getConfig().qstashToken).toBeUndefined();
+	});
+});
+
+describe("parseAgentBudgetMs", () => {
+	const original = process.env.REVIEW_AGENT_BUDGET_SECONDS;
+	afterEach(() => {
+		if (original === undefined) delete process.env.REVIEW_AGENT_BUDGET_SECONDS;
+		else process.env.REVIEW_AGENT_BUDGET_SECONDS = original;
+	});
+
+	it("defaults to 600s", () => {
+		delete process.env.REVIEW_AGENT_BUDGET_SECONDS;
+		expect(parseAgentBudgetMs()).toBe(600_000);
+	});
+
+	// Flooring seconds first turned these into a 0ms budget, which skips every
+	// agent and posts a review with no findings rather than failing loudly.
+	it("keeps sub-second budgets rather than collapsing them to zero", () => {
+		for (const [raw, ms] of [
+			["0.9", 900],
+			["0.5", 500],
+			["0.001", 1],
+		] as const) {
+			process.env.REVIEW_AGENT_BUDGET_SECONDS = raw;
+			expect(parseAgentBudgetMs()).toBe(ms);
+		}
+	});
+
+	// Never zero: a budget of 0 is indistinguishable from "skip everything".
+	it("floors at 1ms for a positive value below one millisecond", () => {
+		process.env.REVIEW_AGENT_BUDGET_SECONDS = "0.0000001";
+		expect(parseAgentBudgetMs()).toBe(1);
+	});
+
+	it.each(["0", "-5", "abc", ""])("falls back to the default on %s", (raw) => {
+		process.env.REVIEW_AGENT_BUDGET_SECONDS = raw;
+		expect(parseAgentBudgetMs()).toBe(600_000);
 	});
 });

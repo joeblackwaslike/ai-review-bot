@@ -2018,6 +2018,10 @@ describe("agent time budget", () => {
 			"review ran out of time budget",
 			expect.objectContaining({ completed: 2 }),
 		);
+		// A pass that never ran three of its agents has not established that the
+		// PR is clean, so the APPROVE upgrade must stay closed no matter what the
+		// agents that did run returned.
+		expect(review?.event).not.toBe("APPROVE");
 		warn.mockRestore();
 	});
 

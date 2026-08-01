@@ -995,10 +995,10 @@ export async function buildReview(
 		allSkills,
 		context.agentConcurrency,
 		async ({ skillPath }, i) => {
-			// Checked before starting, never mid-call: an agent that has already
-			// spent two minutes reasoning should finish and contribute. What this
-			// prevents is starting a ninth minute of work that the platform will
-			// kill before anything is submitted.
+			// Checked before dispatch, never mid-call: an agent already reasoning
+			// should finish and contribute. What this prevents is *starting* an
+			// agent whose run the platform would kill before anything is
+			// submitted, losing every finding the earlier agents produced.
 			if (Date.now() >= deadline) {
 				console.warn("agent skipped: review time budget exhausted", {
 					idx: i + 1,
@@ -1276,7 +1276,7 @@ export async function buildReview(
 		skipped.length > 0
 			? [
 					`\n> ⏱ **Partial review.** ${skipped.length} of ${allSkills.length} agents did not run — this pass hit its time budget before reaching ${skipped
-						.map((s) => `\`${s.replace(".md", "")}\``)
+						.map((s) => `\`${s.replace(/\.md$/, "")}\``)
 						.join(", ")}. Re-run the review command for full coverage.`,
 				]
 			: [];
