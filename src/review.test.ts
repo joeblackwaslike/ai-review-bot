@@ -50,9 +50,13 @@ vi.mock("./config.js", () => ({
 
 vi.mock("./prompt.js", () => ({
 	buildUserMessage: mockBuildUserMessage,
+	// Tagged with the skill path so a test can route a mocked model response to a
+	// specific agent by what it was asked to review, rather than by the position
+	// of the agent in TIER1_SKILLS. Ordering assumptions pass silently when the
+	// list is reordered, while attributing findings to the wrong skill.
 	buildAgentSystemPrompt: (...args: unknown[]) => {
 		mockBuildAgentSystemPrompt(...args);
-		return "system";
+		return `system:${args[0]}`;
 	},
 }));
 
@@ -1000,7 +1004,7 @@ describe("runAgent caching + telemetry", () => {
 		expect(parts[0].providerOptions.anthropic.cacheControl).toEqual({
 			type: "ephemeral",
 		});
-		expect(parts[1].text).toBe("system"); // skill block from mocked buildAgentSystemPrompt
+		expect(parts[1].text).toBe("system:code-reviewer.md"); // skill block from mocked buildAgentSystemPrompt
 		expect(out?.status).toBe("ok");
 	});
 
@@ -2410,23 +2414,40 @@ describe("provenance across collapsed claims", () => {
 			}),
 		);
 
-		mockGenerateObject
-			.mockResolvedValueOnce(
-				at(
-					10,
-					"`body: f.title` duplicates the title instead of the finding body",
-				),
-			)
-			.mockResolvedValueOnce(
-				at(12, "body field set to f.title — finding body duplicates the title"),
-			)
-			.mockResolvedValueOnce(empty)
-			.mockResolvedValueOnce(empty)
-			.mockResolvedValueOnce(empty)
-			.mockResolvedValueOnce({
-				object: { summary: "One issue." },
-				usage: { inputTokens: 10, outputTokens: 5 },
-			});
+		// Routed by skill path, not by call order: which agent reported which line
+		// is the whole assertion, so a reordering of TIER1_SKILLS must not be able
+		// to quietly swap the two and leave the test green.
+		const bySkill: Record<string, ReturnType<typeof at>> = {
+			"code-reviewer.md": at(
+				10,
+				"`body: f.title` duplicates the title instead of the finding body",
+			),
+			"silent-failure-hunter.md": at(
+				12,
+				"body field set to f.title — finding body duplicates the title",
+			),
+		};
+		mockGenerateObject.mockImplementation(
+			async (call: {
+				system?: string;
+				messages: [{ content: string | [unknown, { text: string }] }];
+			}) => {
+				// generateSummary is the only call that passes a `system` string; the
+				// agents carry their skill block as the second user content part.
+				if (typeof call.system === "string") {
+					return {
+						object: { summary: "One issue." },
+						usage: { inputTokens: 10, outputTokens: 5 },
+					};
+				}
+				const content = call.messages[0].content;
+				const skill =
+					typeof content === "string"
+						? ""
+						: content[1].text.replace(/^system:/, "");
+				return bySkill[skill] ?? empty;
+			},
+		);
 
 		const decision = await buildReview({
 			octokit: buildOctokit({
