@@ -1373,7 +1373,7 @@ export async function buildReview(
 	const budgetNotice =
 		skipped.length > 0
 			? [
-					`\n> ⏱ **Partial review.** ${skipped.length} of ${allSkills.length} agents did not run — this pass hit its time budget before reaching ${skipped
+					`> ⏱ **Partial review.** ${skipped.length} of ${allSkills.length} agents did not run — this pass hit its time budget before reaching ${skipped
 						.map((s) => `\`${s.replace(/\.md$/, "")}\``)
 						.join(", ")}. Re-run the review command for full coverage.`,
 				]
@@ -1382,7 +1382,7 @@ export async function buildReview(
 	const tier2Notice =
 		tier2Matches.length > 0
 			? [
-					`\n#### Additional skills activated\n\n${tier2Matches
+					`#### Additional skills activated\n\n${tier2Matches
 						.map(
 							({ skillPath, reason }) =>
 								`- \`${skillPath.replace(/\.md$/, "")}\` — ${reason}`,
@@ -1391,24 +1391,55 @@ export async function buildReview(
 				]
 			: [];
 
+	// The agents never saw these findings' files this pass, so they cannot
+	// re-raise them, yet they are the whole reason the review blocks. Without
+	// this the review reads "nothing new, no inline comments" over a
+	// REQUEST_CHANGES verdict — a bot shouting with nothing to point at.
+	// Same table shape as formatFindings on purpose: the cold-KV fallback in
+	// parsePriorReview recovers findings by that row format.
+	const priorBlock =
+		survivingPrior.length > 0
+			? `#### Still open from the previous review\n\nThis pass reviewed only what changed since \`${state?.lastReviewedSha?.slice(0, 12)}\`, so these were not re-checked.\n\n| Sev | Finding |\n|---|---|\n${survivingPrior
+					.map((f) => {
+						const where =
+							f.path && f.line != null ? ` (\`${f.path}:${f.line}\`)` : "";
+						return `| ${SEVERITY_EMOJI[f.severity as Severity] ?? UNKNOWN_SEVERITY_BADGE} | **${f.title}**${where} |`;
+					})
+					.join("\n")}`
+			: "";
+
+	// buildReviewComments drops comments that don't anchor to the diff. Staying
+	// quiet about it leaves a blocking review whose findings all vanished looking
+	// like a review that found nothing.
+	const droppedInline =
+		modelReview.inline_comments.length - reviewComments.length;
+	const droppedNotice =
+		droppedInline > 0
+			? `> ⚠️ ${droppedInline} inline comment${droppedInline === 1 ? "" : "s"} could not be anchored to the diff and ${droppedInline === 1 ? "was" : "were"} dropped.`
+			: "";
+
 	const costFooter = `---\n*Model: ${selection.model} · ${allSkills.length} agents · $${cost.toFixed(6)} · [ai-review-bot](https://github.com/joeblackwaslike/ai-review-bot)*`;
 
+	// Joined with a blank line between every section, not a single newline.
+	// GitHub reads a paragraph followed by `---` as a setext H2 underline rather
+	// than a horizontal rule, and the cost footer opens with `---`, so gluing
+	// sections together rendered the whole review — summary, inline count and
+	// review marker alike — at heading size.
 	const body = [
 		`### ${context.commentPrefix}`,
-		"",
 		finalEvent === "APPROVE" ? approvalMessage : summary,
 		...tier2Notice,
 		...budgetNotice,
-		"",
 		...(finalEvent === "APPROVE" ? [] : [inlineSummary]),
+		droppedNotice,
 		feedbackInvite,
-		findingsBlock ? `\n${findingsBlock}\n` : "",
+		findingsBlock,
+		priorBlock,
 		reviewMarker,
-		"",
 		costFooter,
 	]
 		.filter((part) => part.length > 0)
-		.join("\n");
+		.join("\n\n");
 
 	// Persist the new review state so the NEXT push can triage against it. One
 	// PersistedFinding per general finding and per posted inline comment, all
