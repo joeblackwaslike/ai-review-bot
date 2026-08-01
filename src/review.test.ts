@@ -2417,6 +2417,9 @@ describe("provenance across collapsed claims", () => {
 		// Routed by skill path, not by call order: which agent reported which line
 		// is the whole assertion, so a reordering of TIER1_SKILLS must not be able
 		// to quietly swap the two and leave the test green.
+		// Every Tier 1 skill is listed, so an unrecognised one is a routing failure
+		// rather than a silent fall-through to `empty` — which would leave the test
+		// green while exercising nothing.
 		const bySkill: Record<string, ReturnType<typeof at>> = {
 			"code-reviewer.md": at(
 				10,
@@ -2426,14 +2429,19 @@ describe("provenance across collapsed claims", () => {
 				12,
 				"body field set to f.title — finding body duplicates the title",
 			),
+			"pr-test-analyzer.md": empty,
+			"security-sast.md": empty,
+			"code-review-and-quality.md": empty,
 		};
 		mockGenerateObject.mockImplementation(
 			async (call: {
 				system?: string;
 				messages: [{ content: string | [unknown, { text: string }] }];
 			}) => {
-				// generateSummary is the only call that passes a `system` string; the
-				// agents carry their skill block as the second user content part.
+				// generateSummary is the only call passing a `system` string. An agent
+				// call instead carries the mocked buildAgentSystemPrompt return value
+				// — tagged `system:<skillPath>` — as the second part of its user
+				// message content (src/review.ts, runAgent).
 				if (typeof call.system === "string") {
 					return {
 						object: { summary: "One issue." },
@@ -2443,9 +2451,15 @@ describe("provenance across collapsed claims", () => {
 				const content = call.messages[0].content;
 				const skill =
 					typeof content === "string"
-						? ""
+						? content
 						: content[1].text.replace(/^system:/, "");
-				return bySkill[skill] ?? empty;
+				const response = bySkill[skill];
+				if (!response) {
+					throw new Error(
+						`agent call could not be routed to a skill: ${JSON.stringify(skill)}`,
+					);
+				}
+				return response;
 			},
 		);
 
