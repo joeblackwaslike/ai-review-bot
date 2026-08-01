@@ -41,6 +41,7 @@ POST /api/github/review-run        (QStash delayed callback)
 **Merge layer** (`src/review.ts` → `mergeReviews()`): After all agents settle, findings are merged:
 
 - Inline comments deduplicated by `path:line` key; when two agents flag the same location, the one from a `REQUEST_CHANGES` agent wins (more conservative)
+- **Near-duplicate claim collapsing** (`src/claim-dedupe.ts`, tuned reviewers only): agents rarely anchor to the identical line, so the exact-key pass above misses one claim arriving on six adjacent lines. `dedupeClaims()` folds findings in the same file, within 30 lines, that share a code identifier or substantial title overlap. Measured on the live corpus: 403 of 1180 anthropic findings (34%) are restatements
 - General findings deduplicated by title (case-insensitive)
 - Final `event`: `REQUEST_CHANGES` if any agent returned it; `APPROVE` if all agents found zero issues; `COMMENT` otherwise
 
@@ -62,6 +63,8 @@ POST /api/github/review-run        (QStash delayed callback)
 | `src/auth.ts` | Local subscription/OAuth + API-key resolution (`resolveAnthropicAuth()`, `resolveOpenAIAuth()`); custom-fetch wrappers. **CLI-only — never import from webhook paths** |
 | `src/router.ts` | PR tier classification (`classifyTier()`), model selection (`routeModel()`) |
 | `src/tier2.ts` | Tier 2 skill detection (`detectTier2Skills()`) |
+| `src/claim-dedupe.ts` | Near-duplicate claim clustering (`dedupeClaims()`, `isSameClaim()`) |
+| `src/reviewer-tuning.ts` | Per-provider signal-quality switches (`tuningFor()`) — **anthropic only**; openai keeps pre-existing behaviour |
 | `src/audit.ts` | Full repository audit logic (`auditRepo()`), local audit (`runLocalAudit()`), local review (`runLocalReview()`) |
 | `src/report.ts` | `docs/code-reviews/` report writer (`formatReviewReport()`, `allocateReportPath()`) |
 | `src/cli.ts` | CLI entry point for `ai-review` command |

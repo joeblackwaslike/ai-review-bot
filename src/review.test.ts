@@ -9,6 +9,7 @@ import {
 	generateSummary,
 	mergeReviews,
 	runAgent,
+	TIER1_SKILLS,
 } from "./review.js";
 import { findingId, loadReviewState, saveReviewState } from "./review-state.js";
 import type { ModelSelection } from "./router.js";
@@ -25,6 +26,7 @@ import {
 
 const mockGenerateObject = vi.hoisted(() => vi.fn());
 const mockBuildUserMessage = vi.hoisted(() => vi.fn().mockReturnValue("user"));
+const mockBuildAgentSystemPrompt = vi.hoisted(() => vi.fn());
 
 vi.mock("ai", () => ({
 	generateObject: mockGenerateObject,
@@ -48,7 +50,10 @@ vi.mock("./config.js", () => ({
 
 vi.mock("./prompt.js", () => ({
 	buildUserMessage: mockBuildUserMessage,
-	buildAgentSystemPrompt: () => "system",
+	buildAgentSystemPrompt: (...args: unknown[]) => {
+		mockBuildAgentSystemPrompt(...args);
+		return "system";
+	},
 }));
 
 const mockTriageReReview = vi.hoisted(() => vi.fn());
@@ -2117,5 +2122,255 @@ describe("partial runs cannot approve", () => {
 		});
 
 		expect(review?.event).toBe("APPROVE");
+	});
+});
+
+describe("reviewer tuning wiring", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildAgentSystemPrompt.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+	});
+
+	// Two agents reporting one claim on adjacent lines of the same expression —
+	// the shape that arrived eight times on #43.
+	function restatementResponses() {
+		const first = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "REQUEST_CHANGES",
+				general_findings: [],
+				inline_comments: [
+					buildInlineComment({
+						title:
+							"`body: f.title` duplicates the title instead of the description",
+						body: "the fuller explanation",
+						path: "src/review.ts",
+						line: 2,
+					}),
+				],
+			}),
+		);
+		const second = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "REQUEST_CHANGES",
+				general_findings: [],
+				inline_comments: [
+					buildInlineComment({
+						title:
+							"body field set to f.title — finding body duplicates the title",
+						body: "short",
+						path: "src/review.ts",
+						line: 3,
+					}),
+				],
+			}),
+		);
+		return { first, second };
+	}
+
+	it("collapses restatements for anthropic", async () => {
+		const { first, second } = restatementResponses();
+		// Keyed off the prompt rather than a fixed-length chain: a change to the
+		// tier-1 agent count would silently shift a chained mock onto the summary
+		// call and pass for the wrong reason.
+		mockGenerateObject.mockImplementation(async () =>
+			mockGenerateObject.mock.calls.length === 1
+				? first
+				: mockGenerateObject.mock.calls.length <= TIER1_SKILLS.length
+					? second
+					: {
+							object: { summary: "One issue." },
+							usage: { inputTokens: 10, outputTokens: 5 },
+						},
+		);
+
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			provider: "anthropic" as const,
+		});
+
+		expect(review?.comments).toHaveLength(1);
+	});
+
+	// codexreviewbot duplicated far less on the same PRs and approved cleanly;
+	// this pins that its behaviour is untouched until validated on its own output.
+	it("leaves openai's findings exactly as the agents reported them", async () => {
+		const { first, second } = restatementResponses();
+		mockGenerateObject.mockImplementation(async () =>
+			mockGenerateObject.mock.calls.length === 1
+				? first
+				: mockGenerateObject.mock.calls.length <= TIER1_SKILLS.length
+					? second
+					: {
+							object: { summary: "Two issues." },
+							usage: { inputTokens: 10, outputTokens: 5 },
+						},
+		);
+
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			provider: "openai" as const,
+		});
+
+		expect(review?.comments).toHaveLength(2);
+	});
+});
+
+describe("strict evidence rules propagation", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildAgentSystemPrompt.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+	});
+
+	function cleanRun() {
+		mockGenerateObject.mockImplementation(async () =>
+			mockGenerateObject.mock.calls.length <= TIER1_SKILLS.length
+				? buildGenerateObjectResponse(
+						buildModelReview({
+							event: "COMMENT",
+							general_findings: [],
+							inline_comments: [],
+						}),
+					)
+				: {
+						object: { summary: "Nothing." },
+						usage: { inputTokens: 10, outputTokens: 5 },
+					},
+		);
+	}
+
+	// The gate is only worth having if it reaches the prompt builder. Asserting
+	// on tuningFor() alone would pass with the wiring cut.
+	it.each([
+		{ provider: "anthropic" as const, expected: true },
+		{ provider: "openai" as const, expected: false },
+	])("passes strictEvidenceRules=$expected for $provider", async ({
+		provider,
+		expected,
+	}) => {
+		cleanRun();
+
+		await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			provider,
+		});
+
+		for (const call of mockBuildAgentSystemPrompt.mock.calls) {
+			expect(call[2]).toEqual({ strictEvidenceRules: expected });
+		}
+		expect(mockBuildAgentSystemPrompt).toHaveBeenCalled();
+	});
+});
+
+describe("prior own findings propagation", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildAgentSystemPrompt.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+	});
+
+	async function seededKv(provider: "anthropic" | "openai" = "anthropic") {
+		// A FULL recommendation keeps the agents running so the prompt is built;
+		// the gate is not what this test is about.
+		mockTriageReReview.mockResolvedValue({
+			recommendation: "FULL",
+			resolved: [],
+			newRisk: true,
+		});
+		const { client } = fakeKv();
+		await saveReviewState(
+			client,
+			provider,
+			"joeblackwaslike",
+			"ai-review-bot",
+			1,
+			{
+				lastReviewedSha: "oldsha1234567",
+				event: "REQUEST_CHANGES",
+				findings: [
+					{
+						id: findingId("src/a.ts", 5, "bug"),
+						path: "src/a.ts",
+						line: 5,
+						title: "bug",
+						severity: "high",
+						status: "open",
+					},
+				],
+				reviewedAt: "2026-06-16T00:00:00Z",
+			},
+		);
+		return client;
+	}
+
+	function cleanRun() {
+		mockGenerateObject.mockImplementation(async () =>
+			mockGenerateObject.mock.calls.length <= TIER1_SKILLS.length
+				? buildGenerateObjectResponse(
+						buildModelReview({
+							event: "COMMENT",
+							general_findings: [],
+							inline_comments: [],
+						}),
+					)
+				: {
+						object: { summary: "Nothing." },
+						usage: { inputTokens: 10, outputTokens: 5 },
+					},
+		);
+	}
+
+	// The third leg of the gate. Without this, the memory could be disconnected
+	// from buildReview and both the buildUserMessage unit test and tuningFor
+	// would still pass.
+	it("gives a tuned reviewer its own prior findings", async () => {
+		cleanRun();
+		const client = await seededKv();
+
+		await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			provider: "anthropic" as const,
+			kv: client,
+		});
+
+		expect(mockBuildUserMessage).toHaveBeenCalledWith(
+			expect.objectContaining({
+				priorOwnFindings: [
+					expect.objectContaining({ path: "src/a.ts", line: 5, title: "bug" }),
+				],
+			}),
+		);
+	});
+
+	// Seeded under "openai" deliberately: review state is namespaced by provider,
+	// so seeding it under "anthropic" would leave this reviewer with no state at
+	// all and the assertion would hold whether or not the gate existed.
+	it("withholds them from an untuned reviewer", async () => {
+		cleanRun();
+		const client = await seededKv("openai");
+
+		await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			provider: "openai" as const,
+			kv: client,
+		});
+
+		// objectContaining({ priorOwnFindings: undefined }) would also pass if the
+		// key were absent, which is a different bug — the gate is supposed to set
+		// it explicitly, not forget it. Assert both the presence and the value.
+		const [arg] = mockBuildUserMessage.mock.calls.at(-1) as [
+			Record<string, unknown>,
+		];
+		expect("priorOwnFindings" in arg).toBe(true);
+		expect(arg.priorOwnFindings).toBeUndefined();
 	});
 });
