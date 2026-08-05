@@ -752,10 +752,22 @@ export async function runScheduledReview(
 	// starve the review entirely, and a repo with no peer bots waited for
 	// nothing at all.
 	const attempt = (message.attempt ?? 0) + 1;
-	const peers = summarizePeers(
-		await fetchPrReviews(octokit as never, owner, repo, pullNumber),
-		headSha,
-	);
+	let reviews: Awaited<ReturnType<typeof fetchPrReviews>> = [];
+	try {
+		reviews = await fetchPrReviews(octokit as never, owner, repo, pullNumber);
+	} catch (err) {
+		console.error(
+			"peers: failed to fetch PR reviews; proceeding without peer info",
+			{
+				owner,
+				repo,
+				pullNumber,
+				error:
+					err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+			},
+		);
+	}
+	const peers = summarizePeers(reviews, headSha);
 	const decision = shouldRunNow({
 		status: peers,
 		peersExpectedInRepo:

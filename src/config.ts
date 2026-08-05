@@ -9,8 +9,9 @@ export interface AppConfig {
 	reviewCommand: string;
 	provider: "anthropic" | "openai";
 	feedbackEnabled: boolean;
-	/** Seconds between peer-check passes. Short, because the point is to notice
-	 * peers arriving rather than to wait out a worst case. */
+	/** Milliseconds between peer-check passes (env var is in seconds, converted
+	 * at parse time). Short, because the point is to notice peers arriving
+	 * rather than to wait out a worst case. */
 	peerCheckIntervalMs: number;
 	/** How many passes before reviewing regardless. Bounds the wait so a peer
 	 * that never arrives cannot starve the review entirely. */

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { shouldRunNow, summarizePeers } from "./peers.js";
+import {
+	fetchPrReviews,
+	peersExpectedInRepo,
+	shouldRunNow,
+	summarizePeers,
+} from "./peers.js";
 
 const HEAD = "abc123";
 
@@ -114,5 +119,47 @@ describe("shouldRunNow", () => {
 				},
 			}).reason,
 		).toBe("peers-arrived");
+	});
+});
+
+describe("peersExpectedInRepo", () => {
+	it("returns true when a peer bot has commented on a PR in the repo", async () => {
+		const octokit = {
+			paginate: async () => [],
+			request: async () => ({ data: { total_count: 3 } }),
+		};
+		expect(await peersExpectedInRepo(octokit, "o", "r")).toBe(true);
+	});
+
+	it("returns false when no peer bot has ever commented", async () => {
+		const octokit = {
+			paginate: async () => [],
+			request: async () => ({ data: { total_count: 0 } }),
+		};
+		expect(await peersExpectedInRepo(octokit, "o", "r")).toBe(false);
+	});
+
+	it("falls back to true (fail closed) when the search API errors", async () => {
+		const octokit = {
+			paginate: async () => [],
+			request: async () => {
+				throw new Error("secondary rate limit");
+			},
+		};
+		expect(await peersExpectedInRepo(octokit, "o", "r")).toBe(true);
+	});
+});
+
+describe("fetchPrReviews", () => {
+	it("returns reviews from the paginated endpoint", async () => {
+		const reviews = [
+			{ user: { login: "coderabbitai[bot]" }, commit_id: "abc" },
+		];
+		const octokit = {
+			paginate: async () => reviews,
+			request: async () => ({ data: {} }),
+		};
+		const result = await fetchPrReviews(octokit, "o", "r", 1);
+		expect(result).toEqual(reviews);
 	});
 });

@@ -13,6 +13,10 @@ export interface PeerOctokit {
 		route: string,
 		params: Record<string, unknown>,
 	) => Promise<unknown[]>;
+	request: (
+		route: string,
+		params: Record<string, unknown>,
+	) => Promise<{ data: Record<string, unknown> }>;
 }
 
 interface ReviewRow {
@@ -109,11 +113,12 @@ export async function peersExpectedInRepo(
 ): Promise<boolean> {
 	try {
 		for (const bot of PEER_REVIEW_BOTS) {
-			const items = (await octokit.paginate("GET /search/issues", {
+			const resp = await octokit.request("GET /search/issues", {
 				q: `repo:${owner}/${repo} type:pr commenter:${bot}`,
 				per_page: 1,
-			})) as unknown[];
-			if (items.length > 0) return true;
+			});
+			const data = resp.data as { total_count?: number };
+			if ((data.total_count ?? 0) > 0) return true;
 		}
 		return false;
 	} catch (err) {
