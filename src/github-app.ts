@@ -768,7 +768,7 @@ export async function runScheduledReview(
 	}
 	const peers = summarizePeers(reviews, headSha);
 	const decision = peerFetchFailed
-		? { run: true as const, reason: "peers-arrived" as const }
+		? { run: true as const, reason: "peer-fetch-failed" as const }
 		: shouldRunNow({
 				status: peers,
 				peersExpectedInRepo:

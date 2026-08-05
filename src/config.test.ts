@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { getConfig, getOpenAIAppConfig, parseAgentBudgetMs } from "./config.js";
+import {
+	getConfig,
+	getOpenAIAppConfig,
+	parseAgentBudgetMs,
+	parsePositiveMs,
+} from "./config.js";
 
 const PKCS8_KEY =
 	"-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC7\n-----END PRIVATE KEY-----";
@@ -261,5 +266,28 @@ describe("parseAgentBudgetMs", () => {
 	it.each(["0", "-5", "abc", ""])("falls back to the default on %s", (raw) => {
 		process.env.REVIEW_AGENT_BUDGET_SECONDS = raw;
 		expect(parseAgentBudgetMs()).toBe(600_000);
+	});
+});
+
+describe("parsePositiveMs", () => {
+	it("converts seconds to milliseconds", () => {
+		expect(parsePositiveMs("90", 60_000)).toBe(90_000);
+	});
+
+	it("falls back on undefined", () => {
+		expect(parsePositiveMs(undefined, 60_000)).toBe(60_000);
+	});
+
+	it("falls back on blank string", () => {
+		expect(parsePositiveMs("  ", 60_000)).toBe(60_000);
+	});
+
+	it("falls back on non-positive values", () => {
+		expect(parsePositiveMs("0", 60_000)).toBe(60_000);
+		expect(parsePositiveMs("-1", 60_000)).toBe(60_000);
+	});
+
+	it("falls back when fractional value floors to zero ms", () => {
+		expect(parsePositiveMs("0.0001", 60_000)).toBe(60_000);
 	});
 });

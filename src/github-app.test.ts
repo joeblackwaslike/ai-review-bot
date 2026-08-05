@@ -826,17 +826,22 @@ describe("runScheduledReview", () => {
 			paginate: vi.fn(async () => {
 				throw new Error("GitHub API down");
 			}),
-			request: vi.fn(async () => ({
-				data: {
-					draft: false,
-					head: { sha: "SAME" },
-					additions: 0,
-					deletions: 0,
-					changed_files: 0,
-					title: "t",
-					body: null,
-				},
-			})),
+			request: vi.fn(async (route: string) => {
+				if (route.includes("/search/issues")) {
+					return { data: { total_count: 5 } };
+				}
+				return {
+					data: {
+						draft: false,
+						head: { sha: "SAME" },
+						additions: 0,
+						deletions: 0,
+						changed_files: 0,
+						title: "t",
+						body: null,
+					},
+				};
+			}),
 		};
 		const app = { getInstallationOctokit: vi.fn(async () => octokit) } as never;
 
@@ -844,9 +849,12 @@ describe("runScheduledReview", () => {
 			{ ...message, headSha: "SAME" },
 			app,
 			{
-				...baseArgs.config,
-				reviewEnabled: false,
-			},
+				reviewEnabled: true,
+				reviewCommentPrefix: "ai-review-bot",
+				provider: "anthropic",
+				peerCheckIntervalMs: 90_000,
+				peerMaxAttempts: 6,
+			} as never,
 		);
 
 		expect(result).toEqual({ status: "reviewed" });

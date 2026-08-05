@@ -25,6 +25,16 @@ interface ReviewRow {
 	submitted_at?: string;
 }
 
+export type PeerDecision = {
+	run: boolean;
+	reason:
+		| "peers-arrived"
+		| "no-peers-expected"
+		| "ceiling"
+		| "peer-fetch-failed"
+		| "wait";
+};
+
 export interface PeerStatus {
 	/** Peers that have reviewed the CURRENT head. */
 	arrived: string[];
@@ -68,10 +78,7 @@ export function shouldRunNow(opts: {
 	peersExpectedInRepo: boolean;
 	attempt: number;
 	maxAttempts: number;
-}): {
-	run: boolean;
-	reason: "peers-arrived" | "no-peers-expected" | "ceiling" | "wait";
-} {
+}): PeerDecision {
 	const { status, peersExpectedInRepo, attempt, maxAttempts } = opts;
 
 	if (
