@@ -752,30 +752,31 @@ export async function runScheduledReview(
 	// starve the review entirely, and a repo with no peer bots waited for
 	// nothing at all.
 	const attempt = (message.attempt ?? 0) + 1;
-	let reviews: Awaited<ReturnType<typeof fetchPrReviews>> = [];
+	let reviews: Awaited<ReturnType<typeof fetchPrReviews>>;
+	let peerFetchFailed = false;
 	try {
 		reviews = await fetchPrReviews(octokit as never, owner, repo, pullNumber);
 	} catch (err) {
-		console.error(
-			"peers: failed to fetch PR reviews; proceeding without peer info",
-			{
-				owner,
-				repo,
-				pullNumber,
-				error:
-					err instanceof Error ? `${err.name}: ${err.message}` : String(err),
-			},
-		);
+		reviews = [];
+		peerFetchFailed = true;
+		console.error("peers: failed to fetch PR reviews; skipping peer gate", {
+			owner,
+			repo,
+			pullNumber,
+			error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+		});
 	}
 	const peers = summarizePeers(reviews, headSha);
-	const decision = shouldRunNow({
-		status: peers,
-		peersExpectedInRepo:
-			peers.seenOnPr.length > 0 ||
-			(await peersExpectedInRepo(octokit as never, owner, repo)),
-		attempt,
-		maxAttempts: config.peerMaxAttempts,
-	});
+	const decision = peerFetchFailed
+		? { run: true as const, reason: "peers-arrived" as const }
+		: shouldRunNow({
+				status: peers,
+				peersExpectedInRepo:
+					peers.seenOnPr.length > 0 ||
+					(await peersExpectedInRepo(octokit as never, owner, repo)),
+				attempt,
+				maxAttempts: config.peerMaxAttempts,
+			});
 
 	if (!decision.run) {
 		const next = await scheduleReview(

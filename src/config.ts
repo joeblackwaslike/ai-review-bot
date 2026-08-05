@@ -237,7 +237,12 @@ export function parsePositiveMs(
 		console.warn(`config: invalid interval "${raw}"; using ${fallbackMs}ms`);
 		return fallbackMs;
 	}
-	return Math.floor(n * 1000);
+	const ms = Math.floor(n * 1000);
+	if (ms <= 0) {
+		console.warn(`config: invalid interval "${raw}"; using ${fallbackMs}ms`);
+		return fallbackMs;
+	}
+	return ms;
 }
 
 export function parsePositiveInt(

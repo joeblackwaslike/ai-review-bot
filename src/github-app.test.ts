@@ -818,6 +818,40 @@ describe("runScheduledReview", () => {
 
 		expect(result).toEqual({ status: "reviewed" });
 	});
+
+	it("skips peer gate and reviews immediately when fetchPrReviews fails", async () => {
+		mockBuildReview.mockReset();
+		mockScheduleReview.mockClear();
+		const octokit = {
+			paginate: vi.fn(async () => {
+				throw new Error("GitHub API down");
+			}),
+			request: vi.fn(async () => ({
+				data: {
+					draft: false,
+					head: { sha: "SAME" },
+					additions: 0,
+					deletions: 0,
+					changed_files: 0,
+					title: "t",
+					body: null,
+				},
+			})),
+		};
+		const app = { getInstallationOctokit: vi.fn(async () => octokit) } as never;
+
+		const result = await runScheduledReview(
+			{ ...message, headSha: "SAME" },
+			app,
+			{
+				...baseArgs.config,
+				reviewEnabled: false,
+			},
+		);
+
+		expect(result).toEqual({ status: "reviewed" });
+		expect(mockScheduleReview).not.toHaveBeenCalled();
+	});
 });
 
 describe("buildPRSummarySection", () => {
