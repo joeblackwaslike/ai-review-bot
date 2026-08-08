@@ -10,6 +10,7 @@ import { recordPostedComment } from "./feedback/store.js";
 import { capturePostedReview } from "./improve/capture.js";
 import { getDb } from "./improve/db/client.js";
 import { billingUrl, notifyQuotaExhausted, providerLabel } from "./notify.js";
+import type { PeerOctokit } from "./peers.js";
 import {
 	fetchPrReviews,
 	peersExpectedInRepo,
@@ -755,7 +756,12 @@ export async function runScheduledReview(
 	let reviews: Awaited<ReturnType<typeof fetchPrReviews>>;
 	let peerFetchFailed = false;
 	try {
-		reviews = await fetchPrReviews(octokit as never, owner, repo, pullNumber);
+		reviews = await fetchPrReviews(
+			octokit as unknown as PeerOctokit,
+			owner,
+			repo,
+			pullNumber,
+		);
 	} catch (err) {
 		reviews = [];
 		peerFetchFailed = true;
@@ -773,7 +779,11 @@ export async function runScheduledReview(
 				status: peers,
 				peersExpectedInRepo:
 					peers.seenOnPr.length > 0 ||
-					(await peersExpectedInRepo(octokit as never, owner, repo)),
+					(await peersExpectedInRepo(
+						octokit as unknown as PeerOctokit,
+						owner,
+						repo,
+					)),
 				attempt,
 				maxAttempts: config.peerMaxAttempts,
 			});

@@ -83,7 +83,7 @@ export function shouldRunNow(opts: {
 
 	if (
 		status.seenOnPr.length > 0 &&
-		status.arrived.length >= status.seenOnPr.length
+		status.arrived.length === status.seenOnPr.length
 	) {
 		return { run: true, reason: "peers-arrived" };
 	}
@@ -109,29 +109,61 @@ export async function fetchPrReviews(
 	)) as ReviewRow[];
 }
 
+// A scheduled review polls this every peerCheckIntervalMs (default 90s) up to
+// peerMaxAttempts times, so an unresolved wait re-derives this repo-level fact
+// on every pass. It changes only when a peer bot is installed/removed, so a
+// short TTL cache turns N sequential searches per poll into N once per TTL.
+const REPO_EXPECTATION_CACHE_TTL_MS = 15 * 60 * 1000;
+const repoExpectationCache = new Map<
+	string,
+	{ value: boolean; expiresAt: number }
+>();
+
+/** Test-only: clear the repo-expectation cache between test cases. */
+export function resetPeersExpectedCache(): void {
+	repoExpectationCache.clear();
+}
+
 /** Has any peer bot ever reviewed in this repo? Answers "is waiting pointless
  * here", which is the difference between a repo with review bots installed and
  * one without. Searched rather than assumed, because assuming they exist is
- * what makes every PR in a bot-free repo wait for nothing. */
+ * what makes every PR in a bot-free repo wait for nothing.
+ *
+ * Uses `reviewed-by:`, not `commenter:` — coderabbitai and sourcery-ai post
+ * their findings as formal PR reviews, not comments, so `commenter:` would
+ * find zero history for a peer bot that has only ever reviewed. */
 export async function peersExpectedInRepo(
 	octokit: PeerOctokit,
 	owner: string,
 	repo: string,
 ): Promise<boolean> {
+	const cacheKey = `${owner}/${repo}`;
+	const cached = repoExpectationCache.get(cacheKey);
+	if (cached && cached.expiresAt > Date.now()) return cached.value;
+
 	try {
+		let value = false;
 		for (const bot of PEER_REVIEW_BOTS) {
 			const resp = await octokit.request("GET /search/issues", {
-				q: `repo:${owner}/${repo} type:pr commenter:${bot}`,
+				q: `repo:${owner}/${repo} type:pr reviewed-by:${bot}`,
 				per_page: 1,
 			});
 			const data = resp.data as { total_count?: number };
-			if ((data.total_count ?? 0) > 0) return true;
+			if ((data.total_count ?? 0) > 0) {
+				value = true;
+				break;
+			}
 		}
-		return false;
+		repoExpectationCache.set(cacheKey, {
+			value,
+			expiresAt: Date.now() + REPO_EXPECTATION_CACHE_TTL_MS,
+		});
+		return value;
 	} catch (err) {
 		// Search is rate-limited and flaky. Failing closed (assume peers exist)
 		// keeps the old waiting behaviour, which is the safe direction: waiting
 		// too long costs latency, running too early costs duplicate findings.
+		// Not cached — a transient failure shouldn't pin the answer for the TTL.
 		console.error("peers: repo expectation check failed; assuming peers", {
 			owner,
 			repo,

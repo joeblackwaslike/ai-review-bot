@@ -1,7 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
 	fetchPrReviews,
+	PEER_REVIEW_BOTS,
 	peersExpectedInRepo,
+	resetPeersExpectedCache,
 	shouldRunNow,
 	summarizePeers,
 } from "./peers.js";
@@ -123,20 +125,24 @@ describe("shouldRunNow", () => {
 });
 
 describe("peersExpectedInRepo", () => {
-	it("returns true when a peer bot has commented on a PR in the repo", async () => {
+	afterEach(() => {
+		resetPeersExpectedCache();
+	});
+
+	it("returns true when a peer bot has reviewed a PR in the repo", async () => {
 		const octokit = {
 			paginate: async () => [],
 			request: async () => ({ data: { total_count: 3 } }),
 		};
-		expect(await peersExpectedInRepo(octokit, "o", "r")).toBe(true);
+		expect(await peersExpectedInRepo(octokit, "o", "r1")).toBe(true);
 	});
 
-	it("returns false when no peer bot has ever commented", async () => {
+	it("returns false when no peer bot has ever reviewed", async () => {
 		const octokit = {
 			paginate: async () => [],
 			request: async () => ({ data: { total_count: 0 } }),
 		};
-		expect(await peersExpectedInRepo(octokit, "o", "r")).toBe(false);
+		expect(await peersExpectedInRepo(octokit, "o", "r2")).toBe(false);
 	});
 
 	it("falls back to true (fail closed) when the search API errors", async () => {
@@ -146,7 +152,66 @@ describe("peersExpectedInRepo", () => {
 				throw new Error("secondary rate limit");
 			},
 		};
-		expect(await peersExpectedInRepo(octokit, "o", "r")).toBe(true);
+		expect(await peersExpectedInRepo(octokit, "o", "r3")).toBe(true);
+	});
+
+	// coderabbitai/sourcery-ai post their findings as formal reviews, not
+	// comments — `commenter:` would find no history for a peer that only reviews.
+	it("searches with reviewed-by:, not commenter:", async () => {
+		const queries: string[] = [];
+		const octokit = {
+			paginate: async () => [],
+			request: async (_route: string, params: Record<string, unknown>) => {
+				queries.push(params.q as string);
+				return { data: { total_count: 0 } };
+			},
+		};
+		await peersExpectedInRepo(octokit, "o", "r4");
+		expect(queries[0]).toContain("reviewed-by:coderabbitai[bot]");
+		expect(queries.join(" ")).not.toContain("commenter:");
+	});
+
+	it("caches a repo's result and skips a repeat search within the TTL", async () => {
+		let calls = 0;
+		const octokit = {
+			paginate: async () => [],
+			request: async () => {
+				calls++;
+				return { data: { total_count: 3 } };
+			},
+		};
+		expect(await peersExpectedInRepo(octokit, "o", "r5")).toBe(true);
+		expect(await peersExpectedInRepo(octokit, "o", "r5")).toBe(true);
+		expect(calls).toBe(1);
+	});
+
+	it("does not share a cache entry across different repos", async () => {
+		let calls = 0;
+		const octokit = {
+			paginate: async () => [],
+			request: async () => {
+				calls++;
+				return { data: { total_count: 0 } };
+			},
+		};
+		await peersExpectedInRepo(octokit, "o", "r6");
+		await peersExpectedInRepo(octokit, "o", "r7");
+		// 4 bots searched per repo (no cache hit, no early match) — 2 repos × 4.
+		expect(calls).toBe(PEER_REVIEW_BOTS.length * 2);
+	});
+
+	it("does not cache a failed lookup", async () => {
+		let calls = 0;
+		const octokit = {
+			paginate: async () => [],
+			request: async () => {
+				calls++;
+				throw new Error("secondary rate limit");
+			},
+		};
+		await peersExpectedInRepo(octokit, "o", "r8");
+		await peersExpectedInRepo(octokit, "o", "r8");
+		expect(calls).toBe(2);
 	});
 });
 
