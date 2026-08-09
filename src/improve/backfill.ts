@@ -176,7 +176,10 @@ export function findUnratedFindings(
  * (or both) is genuinely ambiguous — recording it under an invented provider
  * would corrupt the corpus, so it is left uncaptured rather than duplicated or
  * guessed. Matches only the bot's own account login (not a generic word like
- * "codex"), the one unambiguous identifier a human comment can use. */
+ * "codex"), the one unambiguous identifier a human comment can use. Also null
+ * when no provider is active at all (an empty set — no bot has reviewed this
+ * PR by any signal backfillPr collects), since there is nothing to attribute
+ * to either way. */
 export function attributeProviderForComment(
 	activeProviders: Set<"anthropic" | "openai">,
 	body: string,
