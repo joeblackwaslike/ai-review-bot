@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+	attributeProviderForComment,
 	backfillPr,
 	commentDedupKey,
 	findingsMissingReactions,
@@ -219,6 +220,238 @@ describe("backfillPr", () => {
 
 		await backfillPr({ db, octokit }, { owner: "o", repo: "r", pr: 1 });
 		expect(octokit.request).not.toHaveBeenCalled();
+	});
+
+	function buildRouteAwareDeps(
+		reviewComments: ReviewCommentPayload[],
+		issueComments: {
+			id: number;
+			user: { login: string } | null;
+			body: string;
+			created_at: string;
+		}[],
+	) {
+		const octokit = {
+			paginate: vi.fn(async (route: string) =>
+				route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments"
+					? issueComments
+					: reviewComments,
+			),
+			request: vi.fn(async () => ({ data: [] })),
+		};
+		const rawRows: Record<string, unknown>[] = [];
+		const db = {
+			insert: () => ({
+				values: (row: Record<string, unknown>) => {
+					rawRows.push(row);
+					return {
+						onConflictDoNothing: () => ({
+							returning: async () => [{ id: rawRows.length }],
+						}),
+						onConflictDoUpdate: () => ({
+							returning: async () => [{ id: rawRows.length }],
+						}),
+					};
+				},
+			}),
+		} as never;
+		return { octokit, db, rawRows };
+	}
+
+	it("captures a top-level comment as pr_comment when exactly one provider reviewed", async () => {
+		const { octokit, db, rawRows } = buildRouteAwareDeps(
+			[comment({ id: 1 })],
+			[
+				{
+					id: 200,
+					user: { login: "joeblackwaslike" },
+					body: "this looks wrong to me",
+					created_at: "2026-07-30T02:00:00Z",
+				},
+			],
+		);
+
+		const result = await backfillPr(
+			{ db, octokit },
+			{ owner: "o", repo: "r", pr: 55 },
+		);
+
+		expect(result.prComments).toBe(1);
+		const prCommentRow = rawRows.find((r) => r.source === "pr_comment");
+		expect(prCommentRow).toMatchObject({
+			source: "pr_comment",
+			provider: "anthropic",
+			commentId: 200,
+			actor: "joeblackwaslike",
+			body: "this looks wrong to me",
+			dedupKey: "cmt:pr_comment:200",
+		});
+	});
+
+	it("skips a top-level comment naming neither bot when both providers reviewed", async () => {
+		const { octokit, db, rawRows } = buildRouteAwareDeps(
+			[
+				comment({ id: 1, user: { login: "anthropicreviewbot[bot]" } }),
+				comment({ id: 2, user: { login: "codexreviewbot[bot]" } }),
+			],
+			[
+				{
+					id: 201,
+					user: { login: "joeblackwaslike" },
+					body: "thanks, looks good",
+					created_at: "2026-07-30T02:00:00Z",
+				},
+			],
+		);
+
+		const result = await backfillPr(
+			{ db, octokit },
+			{ owner: "o", repo: "r", pr: 55 },
+		);
+
+		expect(result.prComments).toBe(0);
+		expect(rawRows.some((r) => r.source === "pr_comment")).toBe(false);
+	});
+
+	it("attributes a top-level comment that names one bot when both providers reviewed", async () => {
+		const { octokit, db, rawRows } = buildRouteAwareDeps(
+			[
+				comment({ id: 1, user: { login: "anthropicreviewbot[bot]" } }),
+				comment({ id: 2, user: { login: "codexreviewbot[bot]" } }),
+			],
+			[
+				{
+					id: 202,
+					user: { login: "joeblackwaslike" },
+					body: "codexreviewbot got this one right",
+					created_at: "2026-07-30T02:00:00Z",
+				},
+			],
+		);
+
+		await backfillPr({ db, octokit }, { owner: "o", repo: "r", pr: 55 });
+
+		const prCommentRow = rawRows.find((r) => r.source === "pr_comment");
+		expect(prCommentRow).toMatchObject({ provider: "openai", commentId: 202 });
+	});
+
+	it("excludes bot-authored comments from pr_comment capture", async () => {
+		const { octokit, db, rawRows } = buildRouteAwareDeps(
+			[comment({ id: 1 })],
+			[
+				{
+					id: 203,
+					user: { login: "anthropicreviewbot[bot]" },
+					body: "### ai-review-bot — review summary\n<!-- ai-review:carrier:ai-review-bot -->",
+					created_at: "2026-07-30T02:00:00Z",
+				},
+			],
+		);
+
+		await backfillPr({ db, octokit }, { owner: "o", repo: "r", pr: 55 });
+		expect(rawRows.some((r) => r.source === "pr_comment")).toBe(false);
+	});
+
+	// Flagged independently by coderabbitai, chatgpt-codex-connector, and
+	// anthropicreviewbot: a provider that posted a clean review (only a carrier
+	// comment, zero inline findings) was invisible to activeProviders when it
+	// was derived from `findings` alone — every top-level comment on the PR was
+	// silently skipped even though the bot did review it.
+	it("attributes a top-level comment to a provider whose only comment was its carrier", async () => {
+		const { octokit, db, rawRows } = buildRouteAwareDeps(
+			[],
+			[
+				{
+					id: 204,
+					user: { login: "anthropicreviewbot[bot]" },
+					body: "### ai-review-bot — review summary\n<!-- ai-review:carrier:ai-review-bot -->",
+					created_at: "2026-07-30T01:00:00Z",
+				},
+				{
+					id: 205,
+					user: { login: "joeblackwaslike" },
+					body: "nice, clean review",
+					created_at: "2026-07-30T02:00:00Z",
+				},
+			],
+		);
+
+		const result = await backfillPr(
+			{ db, octokit },
+			{ owner: "o", repo: "r", pr: 55 },
+		);
+
+		expect(result.prComments).toBe(1);
+		const prCommentRow = rawRows.find((r) => r.source === "pr_comment");
+		expect(prCommentRow).toMatchObject({
+			provider: "anthropic",
+			commentId: 205,
+		});
+	});
+});
+
+describe("attributeProviderForComment", () => {
+	it("attributes directly when only one provider reviewed, regardless of body", () => {
+		expect(
+			attributeProviderForComment(new Set(["anthropic"]), "no mention here"),
+		).toBe("anthropic");
+	});
+
+	it("returns null when both providers are active and neither is named", () => {
+		expect(
+			attributeProviderForComment(
+				new Set(["anthropic", "openai"]),
+				"great work",
+			),
+		).toBeNull();
+	});
+
+	it("returns null when both providers are active and both are named (a tie)", () => {
+		expect(
+			attributeProviderForComment(
+				new Set(["anthropic", "openai"]),
+				"anthropicreviewbot and codexreviewbot both flagged this",
+			),
+		).toBeNull();
+	});
+
+	it("attributes to the one bot named when both providers are active", () => {
+		expect(
+			attributeProviderForComment(
+				new Set(["anthropic", "openai"]),
+				"@codexreviewbot nice catch",
+			),
+		).toBe("openai");
+	});
+
+	it("ignores a mention of a provider that isn't active", () => {
+		expect(
+			attributeProviderForComment(
+				new Set(["anthropic"]),
+				"codexreviewbot missed this",
+			),
+		).toBe("anthropic");
+	});
+
+	// Flagged independently by coderabbitai and anthropicreviewbot on this PR's
+	// own review: a substring match on "codexreviewbot" also matches inside an
+	// unrelated word or URL fragment, misattributing the comment.
+	it("does not match a bot login embedded in a longer word", () => {
+		expect(
+			attributeProviderForComment(
+				new Set(["anthropic", "openai"]),
+				"don't let notcodexreviewbot fool you",
+			),
+		).toBeNull();
+	});
+
+	it("does not match a bot login embedded in a URL fragment", () => {
+		expect(
+			attributeProviderForComment(
+				new Set(["anthropic", "openai"]),
+				"see https://example.com/codexreviewbot-docs for details",
+			),
+		).toBeNull();
 	});
 });
 

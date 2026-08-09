@@ -33,6 +33,13 @@ interface ReactionPayload {
 	created_at: string;
 }
 
+export interface IssueCommentPayload {
+	id: number;
+	user: { login: string } | null;
+	body: string;
+	created_at: string;
+}
+
 export interface BackfillResult {
 	owner: string;
 	repo: string;
@@ -43,6 +50,9 @@ export interface BackfillResult {
 	/** Bot comments whose body did not match the rendered finding format, so no
 	 * catalog row was written. Reported rather than swallowed. */
 	unparseable: number;
+	/** Top-level PR comments captured as free-text feedback. Excludes ones GitHub
+	 * couldn't attribute to a single provider — see attributeProviderForComment. */
+	prComments: number;
 }
 
 /** Our own review bots, mapped to the corpus provider. Third-party reviewers
@@ -159,6 +169,44 @@ export function findUnratedFindings(
 	);
 }
 
+/** Pure: attribute a free-standing PR comment to the one provider it is clearly
+ * about, or null when that can't be determined without guessing.
+ *
+ * Both bots review nearly every PR here by default, so a comment naming neither
+ * (or both) is genuinely ambiguous — recording it under an invented provider
+ * would corrupt the corpus, so it is left uncaptured rather than duplicated or
+ * guessed. Matches only the bot's own account login (not a generic word like
+ * "codex"), the one unambiguous identifier a human comment can use. Also null
+ * when no provider is active at all (an empty set — no bot has reviewed this
+ * PR by any signal backfillPr collects), since there is nothing to attribute
+ * to either way. */
+export function attributeProviderForComment(
+	activeProviders: Set<"anthropic" | "openai">,
+	body: string,
+): "anthropic" | "openai" | null {
+	if (activeProviders.size === 1) {
+		const [only] = activeProviders;
+		return only;
+	}
+
+	const mentioned = new Set<"anthropic" | "openai">();
+	if (
+		activeProviders.has("anthropic") &&
+		/(?:^|[^a-z0-9-])anthropicreviewbot(?![a-z0-9-])/i.test(body)
+	) {
+		mentioned.add("anthropic");
+	}
+	if (
+		activeProviders.has("openai") &&
+		/(?:^|[^a-z0-9-])codexreviewbot(?![a-z0-9-])/i.test(body)
+	) {
+		mentioned.add("openai");
+	}
+	if (mentioned.size !== 1) return null;
+	const [provider] = mentioned;
+	return provider;
+}
+
 function parseTimestamp(iso: string): Date {
 	const ms = Date.parse(iso);
 	return new Date(Number.isFinite(ms) ? ms : Date.now());
@@ -187,6 +235,7 @@ export async function backfillPr(
 		reactions: 0,
 		replies: 0,
 		unparseable: 0,
+		prComments: 0,
 	};
 
 	for (const comment of findings) {
@@ -284,6 +333,46 @@ export async function backfillPr(
 			body: reply.body,
 			eventAt: parseTimestamp(reply.created_at),
 			dedupKey: commentDedupKey("inline_reply", reply.id),
+		});
+	}
+
+	// Top-level issue comments are a separate endpoint from review comments
+	// (path/line-anchored) fetched above — a PR is also an issue in GitHub's
+	// model, and free-text feedback left there has no thread linkage at all.
+	const issueComments = (await deps.octokit.paginate(
+		"GET /repos/{owner}/{repo}/issues/{issue_number}/comments",
+		{ owner, repo, issue_number: pr, per_page: 100 },
+	)) as IssueCommentPayload[];
+
+	// Which providers actually reviewed this PR — from both endpoints, not just
+	// `findings`. A clean review with zero inline comments still posts a carrier
+	// (an issue comment); reading `findings` alone would show an empty set for
+	// that provider and silently skip every top-level comment on the PR. The
+	// carrier and any bot fallback comment are posted under one of these same
+	// bot logins, so isBotLogin below excludes them without a separate marker
+	// check.
+	const activeProviders = new Set(
+		[...comments, ...issueComments]
+			.map((c) => BOT_PROVIDERS[c.user?.login ?? ""])
+			.filter((p): p is "anthropic" | "openai" => p !== undefined),
+	);
+
+	for (const ic of issueComments) {
+		const login = ic.user?.login ?? "";
+		if (isBotLogin(login)) continue;
+		const provider = attributeProviderForComment(activeProviders, ic.body);
+		if (!provider) continue;
+		result.prComments += await insertRawFeedback(deps.db, {
+			source: "pr_comment",
+			provider,
+			owner,
+			repo,
+			pr,
+			commentId: ic.id,
+			actor: login || "unknown",
+			body: ic.body,
+			eventAt: parseTimestamp(ic.created_at),
+			dedupKey: commentDedupKey("pr_comment", ic.id),
 		});
 	}
 

@@ -560,7 +560,7 @@ async function cmdBackfill(args: string[]): Promise<void> {
 		results.push(result);
 		if (!json) {
 			console.log(
-				`#${number}: ${result.findings} findings, ${result.reactions} reactions, ${result.replies} replies` +
+				`#${number}: ${result.findings} findings, ${result.reactions} reactions, ${result.replies} replies, ${result.prComments} pr_comments` +
 					(result.unparseable > 0 ? `, ${result.unparseable} unparseable` : ""),
 			);
 		}
@@ -572,8 +572,9 @@ async function cmdBackfill(args: string[]): Promise<void> {
 			reactions: acc.reactions + r.reactions,
 			replies: acc.replies + r.replies,
 			unparseable: acc.unparseable + r.unparseable,
+			prComments: acc.prComments + r.prComments,
 		}),
-		{ findings: 0, reactions: 0, replies: 0, unparseable: 0 },
+		{ findings: 0, reactions: 0, replies: 0, unparseable: 0, prComments: 0 },
 	);
 
 	if (json) console.log(JSON.stringify({ prs: results, totals }, null, 2));
