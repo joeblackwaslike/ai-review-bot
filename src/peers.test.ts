@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	fetchPrReviews,
 	PEER_REVIEW_BOTS,
@@ -212,6 +212,27 @@ describe("peersExpectedInRepo", () => {
 		await peersExpectedInRepo(octokit, "o", "r8");
 		await peersExpectedInRepo(octokit, "o", "r8");
 		expect(calls).toBe(2);
+	});
+
+	it("re-queries once the cache entry expires", async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+		try {
+			let calls = 0;
+			const octokit = {
+				paginate: async () => [],
+				request: async () => {
+					calls++;
+					return { data: { total_count: 3 } };
+				},
+			};
+			expect(await peersExpectedInRepo(octokit, "o", "r9")).toBe(true);
+			vi.advanceTimersByTime(15 * 60 * 1000 + 1);
+			expect(await peersExpectedInRepo(octokit, "o", "r9")).toBe(true);
+			expect(calls).toBe(2);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });
 
