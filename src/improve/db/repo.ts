@@ -86,7 +86,10 @@ export async function listUnclassifiedBundles(
 		       coalesce(f.title, rf.title, '') as finding_title,
 		       coalesce(f.skills, '{}') as skills,
 		       rf.verdict,
-		       reply.body as reply_body
+		       -- pr_comment carries its own free text and has no reply thread to
+		       -- aggregate — fall back to rf.body so it reaches the classifier at
+		       -- all, instead of the empty prompt an unmatched left join leaves.
+		       coalesce(reply.body, case when rf.source = 'pr_comment' then rf.body end) as reply_body
 		from raw_feedback rf
 		left join finding_catalog f
 		       on f.comment_id = coalesce(rf.in_reply_to_id, rf.comment_id)

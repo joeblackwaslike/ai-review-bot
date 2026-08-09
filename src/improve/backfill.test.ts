@@ -233,7 +233,9 @@ describe("backfillPr", () => {
 	) {
 		const octokit = {
 			paginate: vi.fn(async (route: string) =>
-				route.includes("/issues/") ? issueComments : reviewComments,
+				route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments"
+					? issueComments
+					: reviewComments,
 			),
 			request: vi.fn(async () => ({ data: [] })),
 		};
@@ -349,6 +351,43 @@ describe("backfillPr", () => {
 		await backfillPr({ db, octokit }, { owner: "o", repo: "r", pr: 55 });
 		expect(rawRows.some((r) => r.source === "pr_comment")).toBe(false);
 	});
+
+	// Flagged independently by coderabbitai, chatgpt-codex-connector, and
+	// anthropicreviewbot: a provider that posted a clean review (only a carrier
+	// comment, zero inline findings) was invisible to activeProviders when it
+	// was derived from `findings` alone — every top-level comment on the PR was
+	// silently skipped even though the bot did review it.
+	it("attributes a top-level comment to a provider whose only comment was its carrier", async () => {
+		const { octokit, db, rawRows } = buildRouteAwareDeps(
+			[],
+			[
+				{
+					id: 204,
+					user: { login: "anthropicreviewbot[bot]" },
+					body: "### ai-review-bot — review summary\n<!-- ai-review:carrier:ai-review-bot -->",
+					created_at: "2026-07-30T01:00:00Z",
+				},
+				{
+					id: 205,
+					user: { login: "joeblackwaslike" },
+					body: "nice, clean review",
+					created_at: "2026-07-30T02:00:00Z",
+				},
+			],
+		);
+
+		const result = await backfillPr(
+			{ db, octokit },
+			{ owner: "o", repo: "r", pr: 55 },
+		);
+
+		expect(result.prComments).toBe(1);
+		const prCommentRow = rawRows.find((r) => r.source === "pr_comment");
+		expect(prCommentRow).toMatchObject({
+			provider: "anthropic",
+			commentId: 205,
+		});
+	});
 });
 
 describe("attributeProviderForComment", () => {
@@ -392,6 +431,27 @@ describe("attributeProviderForComment", () => {
 				"codexreviewbot missed this",
 			),
 		).toBe("anthropic");
+	});
+
+	// Flagged independently by coderabbitai and anthropicreviewbot on this PR's
+	// own review: a substring match on "codexreviewbot" also matches inside an
+	// unrelated word or URL fragment, misattributing the comment.
+	it("does not match a bot login embedded in a longer word", () => {
+		expect(
+			attributeProviderForComment(
+				new Set(["anthropic", "openai"]),
+				"don't let notcodexreviewbot fool you",
+			),
+		).toBeNull();
+	});
+
+	it("does not match a bot login embedded in a URL fragment", () => {
+		expect(
+			attributeProviderForComment(
+				new Set(["anthropic", "openai"]),
+				"see https://example.com/codexreviewbot-docs for details",
+			),
+		).toBeNull();
 	});
 });
 

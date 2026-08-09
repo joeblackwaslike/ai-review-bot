@@ -186,15 +186,17 @@ export function attributeProviderForComment(
 		return only;
 	}
 
-	const lower = body.toLowerCase();
 	const mentioned = new Set<"anthropic" | "openai">();
 	if (
 		activeProviders.has("anthropic") &&
-		lower.includes("anthropicreviewbot")
+		/(?:^|[^a-z0-9-])anthropicreviewbot(?![a-z0-9-])/i.test(body)
 	) {
 		mentioned.add("anthropic");
 	}
-	if (activeProviders.has("openai") && lower.includes("codexreviewbot")) {
+	if (
+		activeProviders.has("openai") &&
+		/(?:^|[^a-z0-9-])codexreviewbot(?![a-z0-9-])/i.test(body)
+	) {
 		mentioned.add("openai");
 	}
 	if (mentioned.size !== 1) return null;
@@ -339,11 +341,15 @@ export async function backfillPr(
 		{ owner, repo, issue_number: pr, per_page: 100 },
 	)) as IssueCommentPayload[];
 
-	// Which providers actually reviewed this PR — the carrier and any bot
-	// fallback comment are posted under one of these same bot logins, so
-	// isBotLogin below excludes them without a separate marker check.
+	// Which providers actually reviewed this PR — from both endpoints, not just
+	// `findings`. A clean review with zero inline comments still posts a carrier
+	// (an issue comment); reading `findings` alone would show an empty set for
+	// that provider and silently skip every top-level comment on the PR. The
+	// carrier and any bot fallback comment are posted under one of these same
+	// bot logins, so isBotLogin below excludes them without a separate marker
+	// check.
 	const activeProviders = new Set(
-		findings
+		[...comments, ...issueComments]
 			.map((c) => BOT_PROVIDERS[c.user?.login ?? ""])
 			.filter((p): p is "anthropic" | "openai" => p !== undefined),
 	);

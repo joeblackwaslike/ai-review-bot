@@ -3,7 +3,11 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadMigrationStatements } from "./migrate.js";
 import { baseFinding, baseRaw } from "./repo.fixtures.js";
-import { insertRawFeedback, upsertFinding } from "./repo.js";
+import {
+	insertRawFeedback,
+	listUnclassifiedBundles,
+	upsertFinding,
+} from "./repo.js";
 import * as schema from "./schema.js";
 
 /** Real-Postgres integration coverage for the idempotency guarantees pg-mem
@@ -64,5 +68,56 @@ describe.skipIf(!url)("repo (real postgres)", () => {
 		const id1 = await upsertFinding(db, baseFinding);
 		const id2 = await upsertFinding(db, { ...baseFinding, severity: "medium" });
 		expect(id2).toBe(id1);
+	});
+
+	// listUnclassifiedBundles's lateral-join query is not pg-mem compatible (a
+	// parser limitation, not a logic bug — same crash with or without this
+	// fix), so this pr_comment coverage lives here rather than in repo.test.ts.
+	// Flagged by chatgpt-codex-connector on this PR's own review: a pr_comment
+	// row has no reply thread to aggregate replyBody from, so without the
+	// COALESCE fallback in the query it reaches the classifier with an empty
+	// prompt — the captured free text is written but never actually read.
+	it("listUnclassifiedBundles surfaces a pr_comment's own body as replyBody", async () => {
+		await insertRawFeedback(db, {
+			...baseRaw,
+			source: "pr_comment",
+			commentId: 300,
+			inReplyToId: null,
+			path: null,
+			line: null,
+			verdict: null,
+			body: "this finding looks wrong to me",
+			dedupKey: "cmt:pr_comment:300",
+		});
+
+		const bundles = await listUnclassifiedBundles(db, 10);
+
+		const bundle = bundles.find((b) => b.replyBody !== null);
+		expect(bundle).toMatchObject({
+			replyBody: "this finding looks wrong to me",
+			findingId: null,
+		});
+	});
+
+	// inline_reply keeps its existing path — aggregated via the thread lateral,
+	// not the pr_comment fallback — so the fix must not change its behavior.
+	it("listUnclassifiedBundles still aggregates inline_reply bodies via the thread", async () => {
+		await upsertFinding(db, baseFinding);
+		await insertRawFeedback(db, {
+			...baseRaw,
+			source: "inline_reply",
+			commentId: 401,
+			inReplyToId: baseRaw.commentId,
+			verdict: null,
+			body: "false positive because X",
+			dedupKey: "cmt:inline_reply:401",
+		});
+
+		const bundles = await listUnclassifiedBundles(db, 10);
+
+		const bundle = bundles.find(
+			(b) => b.replyBody === "false positive because X",
+		);
+		expect(bundle).toBeDefined();
 	});
 });
