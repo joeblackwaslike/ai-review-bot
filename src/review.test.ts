@@ -1994,7 +1994,13 @@ describe("buildReview triage gate — FULL carries forward open prior findings",
 		expect(r2?.event).not.toBe("APPROVE");
 		expect(r2?.event).toBe("REQUEST_CHANGES");
 
-		// (b) State still contains F (open) and the SHA advanced.
+		// (b) The body uses the FULL-pass wording, not the INCREMENTAL one — proves
+		// this went through the "agents saw it and were told not to restate it"
+		// path, not a swapped/broken string that happened to still read fine.
+		expect(r2?.body).toContain("flagged in a previous review");
+		expect(r2?.body).not.toContain("reviewed only what changed since");
+
+		// (c) State still contains F (open) and the SHA advanced.
 		const stateAfterSha2 = await loadState();
 		expect(stateAfterSha2?.lastReviewedSha).toBe(sha2);
 		const carried = stateAfterSha2?.findings.find((f) => f.id === fId);
