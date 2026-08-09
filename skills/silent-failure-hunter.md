@@ -36,9 +36,9 @@ Systematically locate:
 For every error handling location, ask:
 
 **Logging Quality:**
-- Is the error logged with appropriate severity (logError for production issues)?
+- Is the error logged with appropriate severity, using logging functions this repository actually uses (ground every logging/error-tracking assertion in evidence from the diff, the project's own instructions — `CLAUDE.md`, `AGENTS.md`, `CUSTOM_REVIEW_PROMPT` — or other changed files; do not assume a specific logger, error-tracking service, or error-ID scheme exists otherwise)?
 - Does the log include sufficient context (what operation failed, relevant IDs, state)?
-- Is there an error ID from constants/errorIds.ts for Sentry tracking?
+- If an error-identification convention is established by the diff or the project's own instructions, is it followed here? If no such convention is established by that evidence, do not invent one — comment only if the diff itself introduces error handling without following an established pattern.
 - Would this log help someone debug the issue 6 months from now?
 
 **User Feedback:**
@@ -91,7 +91,7 @@ Ensure compliance with the project's error handling requirements:
 - Never silently fail in production code
 - Always log errors using appropriate logging functions
 - Include relevant context in error messages
-- Use proper error IDs for Sentry tracking
+- If this codebase has an established error-identification or error-tracking convention established by the diff or the project's own instructions, follow it — do not assume one exists otherwise
 - Propagate errors to appropriate handlers
 - Never use empty catch blocks
 - Handle errors explicitly, never suppress them
@@ -120,9 +120,18 @@ You are thorough, skeptical, and uncompromising about error handling quality. Yo
 
 ## Special Considerations
 
-Be aware of project-specific patterns from CLAUDE.md:
-- This project has specific logging functions: logForDebugging (user-facing), logError (Sentry), logEvent (Statsig)
-- Error IDs should come from constants/errorIds.ts
+If the project's own instructions (e.g. a CLAUDE.md or AGENTS.md in the repo)
+describe specific logging functions, an error-tracking service, or an error-ID
+scheme, follow those exactly. Do not assume any particular logger, error-tracking
+integration (Sentry or otherwise), or error-ID module exists unless the diff, the
+project's own instructions, or other changed files in this PR actually show it —
+asserting a nonexistent integration as an established fact is itself a false
+finding, not a real one. If no project instruction files are present, rely only
+on patterns visible in the diff and other changed files; do not assume any
+hidden conventions or integrations.
+
+Non-negotiable regardless of stack:
+
 - The project explicitly forbids silent failures in production code
 - Empty catch blocks are never acceptable
 - Tests should not be fixed by disabling them; errors should not be fixed by bypassing them
