@@ -1907,6 +1907,108 @@ describe("buildReview triage gate — INCREMENTAL carries forward open prior fin
 	});
 });
 
+// ---------------------------------------------------------------------------
+// buildReview — FULL must ALSO carry forward still-open prior findings.
+// showPriorOwnFindings (REVIEWER_TUNING, unified ai-review-bot-5zu) tells
+// agents on every pass, FULL included, not to re-file a finding already on
+// the record as open. Before this fix only INCREMENTAL fed that promise back
+// into survivingPrior/persisted state — a FULL pass silently dropped an
+// unfixed finding from tracked state and could false-APPROVE past it.
+// Flagged by chatgpt-codex-connector on PR #54.
+// ---------------------------------------------------------------------------
+
+describe("buildReview triage gate — FULL carries forward open prior findings", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+		mockTriageReReview.mockReset();
+	});
+
+	it("does NOT APPROVE and keeps F open when triage recommends FULL and resolves nothing", async () => {
+		const { client } = fakeKv();
+		const provider = "anthropic";
+		const owner = baseContext.owner;
+		const repo = baseContext.repo;
+		const pull = baseContext.pullNumber;
+		const loadState = () =>
+			loadReviewState(client, provider, owner, repo, pull, null);
+
+		// Prior open finding F, persisted at sha1.
+		const sha1 = "aaaaaaaaaaaa1111";
+		const fId = findingId("src/a.ts", 5, "Bug");
+		await saveReviewState(client, provider, owner, repo, pull, {
+			lastReviewedSha: sha1,
+			event: "REQUEST_CHANGES",
+			findings: [
+				{
+					id: fId,
+					path: "src/a.ts",
+					line: 5,
+					title: "Bug",
+					severity: "high",
+					status: "open",
+				},
+			],
+			reviewedAt: "2026-06-17T00:00:00Z",
+		});
+
+		// Push sha2: triage recommends FULL (a structural change), resolves nothing.
+		const sha2 = "bbbbbbbbbbbb2222";
+		vi.mocked(mockTriageReReview).mockResolvedValueOnce({
+			recommendation: "FULL",
+			resolved: [],
+			newRisk: true,
+		});
+		// FULL reviews the whole file set; agents are told (priorOwnFindings) not
+		// to re-file F, and — this is the bug — return nothing new either.
+		const emptyAgent = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+		);
+		const summaryResponse = {
+			object: { summary: "Prior unresolved findings remain." },
+			usage: { inputTokens: 10, outputTokens: 5 },
+		};
+		mockGenerateObject
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(summaryResponse);
+
+		const r2 = await buildReview({
+			octokit: buildOctokit({
+				files: [buildPullFile("src/a.ts", SIMPLE_PATCH)],
+			}),
+			...baseContext,
+			headSha: sha2,
+			kv: client,
+		});
+
+		// (a) An unresolved prior blocking finding remains → must NOT be APPROVE.
+		expect(r2?.event).not.toBe("APPROVE");
+		expect(r2?.event).toBe("REQUEST_CHANGES");
+
+		// (b) The body uses the FULL-pass wording, not the INCREMENTAL one — proves
+		// this went through the "agents saw it and were told not to restate it"
+		// path, not a swapped/broken string that happened to still read fine.
+		expect(r2?.body).toContain("flagged in a previous review");
+		expect(r2?.body).not.toContain("reviewed only what changed since");
+
+		// (c) State still contains F (open) and the SHA advanced.
+		const stateAfterSha2 = await loadState();
+		expect(stateAfterSha2?.lastReviewedSha).toBe(sha2);
+		const carried = stateAfterSha2?.findings.find((f) => f.id === fId);
+		expect(carried?.status).toBe("open");
+		expect(stateAfterSha2?.event).toBe("REQUEST_CHANGES");
+	});
+});
+
 describe("classifyRefusal", () => {
 	// Both conditions arrive as HTTP 429 and need opposite responses from a
 	// human, so quota must win over rate limit whenever both could match.
@@ -2198,9 +2300,11 @@ describe("reviewer tuning wiring", () => {
 		expect(review?.comments).toHaveLength(1);
 	});
 
-	// codexreviewbot duplicated far less on the same PRs and approved cleanly;
-	// this pins that its behaviour is untouched until validated on its own output.
-	it("leaves openai's findings exactly as the agents reported them", async () => {
+	// REVIEWER_TUNING is unified across providers (ai-review-bot-5zu, 2026-08-09
+	// — PR #44 showed codexreviewbot producing the same class of unfounded
+	// findings anthropicreviewbot was fixed for), so openai now collapses
+	// restated claims exactly like anthropic does above.
+	it("collapses openai's restated claims the same as anthropic's", async () => {
 		const { first, second } = restatementResponses();
 		mockGenerateObject.mockImplementation(async () =>
 			mockGenerateObject.mock.calls.length === 1
@@ -2208,7 +2312,7 @@ describe("reviewer tuning wiring", () => {
 				: mockGenerateObject.mock.calls.length <= TIER1_SKILLS.length
 					? second
 					: {
-							object: { summary: "Two issues." },
+							object: { summary: "One issue." },
 							usage: { inputTokens: 10, outputTokens: 5 },
 						},
 		);
@@ -2219,7 +2323,7 @@ describe("reviewer tuning wiring", () => {
 			provider: "openai" as const,
 		});
 
-		expect(review?.comments).toHaveLength(2);
+		expect(review?.comments).toHaveLength(1);
 	});
 });
 
@@ -2249,14 +2353,14 @@ describe("strict evidence rules propagation", () => {
 	}
 
 	// The gate is only worth having if it reaches the prompt builder. Asserting
-	// on tuningFor() alone would pass with the wiring cut.
+	// on REVIEWER_TUNING alone would pass with the wiring cut. Both providers
+	// get strictEvidenceRules=true since ai-review-bot-5zu unified the tuning
+	// (PR #44 showed codexreviewbot needs the same protection anthropicreviewbot
+	// does — see src/reviewer-tuning.ts).
 	it.each([
-		{ provider: "anthropic" as const, expected: true },
-		{ provider: "openai" as const, expected: false },
-	])("passes strictEvidenceRules=$expected for $provider", async ({
-		provider,
-		expected,
-	}) => {
+		{ provider: "anthropic" as const },
+		{ provider: "openai" as const },
+	])("passes strictEvidenceRules=true for $provider", async ({ provider }) => {
 		cleanRun();
 
 		await buildReview({
@@ -2266,7 +2370,7 @@ describe("strict evidence rules propagation", () => {
 		});
 
 		for (const call of mockBuildAgentSystemPrompt.mock.calls) {
-			expect(call[2]).toEqual({ strictEvidenceRules: expected });
+			expect(call[2]).toEqual({ strictEvidenceRules: true });
 		}
 		expect(mockBuildAgentSystemPrompt).toHaveBeenCalled();
 	});
@@ -2332,8 +2436,8 @@ describe("prior own findings propagation", () => {
 	}
 
 	// The third leg of the gate. Without this, the memory could be disconnected
-	// from buildReview and both the buildUserMessage unit test and tuningFor
-	// would still pass.
+	// from buildReview and both the buildUserMessage unit test and
+	// REVIEWER_TUNING would still pass.
 	it("gives a tuned reviewer its own prior findings", async () => {
 		cleanRun();
 		const client = await seededKv();
@@ -2356,8 +2460,10 @@ describe("prior own findings propagation", () => {
 
 	// Seeded under "openai" deliberately: review state is namespaced by provider,
 	// so seeding it under "anthropic" would leave this reviewer with no state at
-	// all and the assertion would hold whether or not the gate existed.
-	it("withholds them from an untuned reviewer", async () => {
+	// all and the assertion would hold whether or not the gate existed. Both
+	// providers get this now — REVIEWER_TUNING is unified (ai-review-bot-5zu) —
+	// so this mirrors the anthropic case above rather than asserting withholding.
+	it("gives openai the same treatment since tuning was unified", async () => {
 		cleanRun();
 		const client = await seededKv("openai");
 
@@ -2368,14 +2474,13 @@ describe("prior own findings propagation", () => {
 			kv: client,
 		});
 
-		// objectContaining({ priorOwnFindings: undefined }) would also pass if the
-		// key were absent, which is a different bug — the gate is supposed to set
-		// it explicitly, not forget it. Assert both the presence and the value.
-		const [arg] = mockBuildUserMessage.mock.calls.at(-1) as [
-			Record<string, unknown>,
-		];
-		expect("priorOwnFindings" in arg).toBe(true);
-		expect(arg.priorOwnFindings).toBeUndefined();
+		expect(mockBuildUserMessage).toHaveBeenCalledWith(
+			expect.objectContaining({
+				priorOwnFindings: [
+					expect.objectContaining({ path: "src/a.ts", line: 5, title: "bug" }),
+				],
+			}),
+		);
 	});
 });
 

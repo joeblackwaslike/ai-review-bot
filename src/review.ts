@@ -13,7 +13,7 @@ import {
 } from "./prompt.js";
 import type { PersistedFinding, ReviewState } from "./review-state.js";
 import { findingId, loadReviewState, saveReviewState } from "./review-state.js";
-import { type ReviewerTuning, tuningFor } from "./reviewer-tuning.js";
+import { REVIEWER_TUNING, type ReviewerTuning } from "./reviewer-tuning.js";
 import type { ModelSelection } from "./router.js";
 import { routeModel } from "./router.js";
 import { detectTier2Skills } from "./tier2.js";
@@ -925,18 +925,27 @@ export async function buildReview(
 	// skipped entirely and behavior is identical to before this feature.
 	const resolvedKeys = new Set<string>();
 	let scopedFiles = files; // FULL default
-	// Findings to carry into the next persisted state when this run reviews only
-	// the delta (INCREMENTAL): prior findings still open after triage (so a clean
-	// delta on an unrelated file can't false-APPROVE away a blocking finding the
-	// agents never saw) plus resolved tombstones (so future rounds can tell
-	// "resolved" from "never existed"). Both stay empty on the FULL/cold path.
+	// Findings to carry into the next persisted state on any re-review pass
+	// (INCREMENTAL or FULL): prior findings still open after triage, plus
+	// resolved tombstones (so future rounds can tell "resolved" from "never
+	// existed"). REVIEWER_TUNING's showPriorOwnFindings tells agents on every
+	// pass not to re-file a finding already on record as open, so this must
+	// run regardless of pass type — a FULL pass that doesn't re-raise a real,
+	// still-broken finding would otherwise silently drop it from tracked
+	// state and could false-APPROVE past it. Both stay empty on the cold
+	// (no-prior-state) path.
 	let survivingPrior: PersistedFinding[] = [];
 	/** SHA the surviving findings were last reviewed against. Set together with
-	 * survivingPrior, from the same state the INCREMENTAL guard already proved
+	 * survivingPrior, from the same state the re-review guard already proved
 	 * has a non-empty lastReviewedSha, so the review can name it without an
 	 * optional chain whose undefined branch no test could reach. */
 	let priorSha = "";
 	let resolvedTombstones: PersistedFinding[] = [];
+	/** Whether this pass reviewed only the delta (INCREMENTAL) rather than the
+	 * whole file set (FULL) — changes how the "still open" carry-forward is
+	 * explained, since a FULL pass did see these findings' files and chose not
+	 * to restate them, while an INCREMENTAL pass never saw them at all. */
+	let incrementalPass = false;
 	const state =
 		context.kv && !context.force
 			? await loadReviewState(
@@ -1000,16 +1009,16 @@ export async function buildReview(
 			return null; // nothing to post — the check-run carries the verdict
 		}
 
+		// Carry still-open findings forward as blocking, and resolved ones as
+		// tombstones, regardless of INCREMENTAL vs FULL — see the comment on
+		// survivingPrior's declaration for why FULL needs this too.
+		survivingPrior = state.findings.filter((f) => f.status === "open");
+		priorSha = state.lastReviewedSha;
+		resolvedTombstones = state.findings.filter((f) => f.status === "resolved");
+
 		if (triage.recommendation === "INCREMENTAL" && !deltaMeta.truncated) {
 			scopedFiles = deltaMeta.files;
-			// The agents only review the delta, so prior findings on files outside
-			// it are never re-surfaced. Carry the still-open ones forward as
-			// blocking, and resolved ones as tombstones, into the persisted state.
-			survivingPrior = state.findings.filter((f) => f.status === "open");
-			priorSha = state.lastReviewedSha;
-			resolvedTombstones = state.findings.filter(
-				(f) => f.status === "resolved",
-			);
+			incrementalPass = true;
 		}
 		// FULL falls through with scopedFiles = files.
 		// Truncated compare (>= 300 files): SKIP/INCREMENTAL are bypassed above,
@@ -1028,7 +1037,7 @@ export async function buildReview(
 
 	const scopedFilePaths = scopedFiles.map((f) => f.filename);
 
-	const tuning: ReviewerTuning = tuningFor(context.provider);
+	const tuning: ReviewerTuning = REVIEWER_TUNING;
 	const userMessage = buildUserMessage({
 		owner: context.owner,
 		repo: context.repo,
@@ -1406,15 +1415,20 @@ export async function buildReview(
 				]
 			: [];
 
-	// The agents never saw these findings' files this pass, so they cannot
-	// re-raise them, yet they are the whole reason the review blocks. Without
-	// this the review reads "nothing new, no inline comments" over a
-	// REQUEST_CHANGES verdict — a bot shouting with nothing to point at.
+	// On INCREMENTAL the agents never saw these findings' files this pass, so
+	// they cannot re-raise them; on FULL they saw them but were told
+	// (priorOwnFindings) not to restate them. Either way they are the whole
+	// reason the review blocks, and without this the review reads "nothing
+	// new, no inline comments" over a REQUEST_CHANGES verdict — a bot
+	// shouting with nothing to point at.
 	// Same table shape as formatFindings on purpose: the cold-KV fallback in
 	// parsePriorReview recovers findings by that row format.
+	const priorBlockExplanation = incrementalPass
+		? `This pass reviewed only what changed since \`${priorSha.slice(0, 12)}\`, so these were not re-checked.`
+		: "These were flagged in a previous review; the agents were instructed not to restate them, so they are carried forward as still open.";
 	const priorBlock =
 		survivingPrior.length > 0
-			? `#### Still open from the previous review\n\nThis pass reviewed only what changed since \`${priorSha.slice(0, 12)}\`, so these were not re-checked.\n\n| Sev | Finding |\n|---|---|\n${survivingPrior
+			? `#### Still open from the previous review\n\n${priorBlockExplanation}\n\n| Sev | Finding |\n|---|---|\n${survivingPrior
 					.map((f) => {
 						const where =
 							f.path && f.line != null ? ` (\`${f.path}:${f.line}\`)` : "";
