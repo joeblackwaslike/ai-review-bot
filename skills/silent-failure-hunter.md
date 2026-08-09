@@ -36,9 +36,9 @@ Systematically locate:
 For every error handling location, ask:
 
 **Logging Quality:**
-- Is the error logged with appropriate severity, using whatever logging function(s) this repository actually uses elsewhere (do not assume a specific logger, error-tracking service, or error-ID scheme exists unless the diff or other changed files demonstrate it)?
+- Is the error logged with appropriate severity, using logging functions this repository actually uses (ground every logging/error-tracking assertion in evidence from the diff, the project's own instructions — `CLAUDE.md`, `AGENTS.md`, `CUSTOM_REVIEW_PROMPT` — or other changed files; do not assume a specific logger, error-tracking service, or error-ID scheme exists otherwise)?
 - Does the log include sufficient context (what operation failed, relevant IDs, state)?
-- If this codebase has an established error-identification convention visible in the diff, is it followed here? If no such convention is visible, do not invent one.
+- If an error-identification convention is established by the diff or the project's own instructions, is it followed here? If no such convention is established by that evidence, do not invent one — comment only if the diff itself introduces error handling without following an established pattern.
 - Would this log help someone debug the issue 6 months from now?
 
 **User Feedback:**
@@ -91,7 +91,7 @@ Ensure compliance with the project's error handling requirements:
 - Never silently fail in production code
 - Always log errors using appropriate logging functions
 - Include relevant context in error messages
-- If this codebase has an established error-identification or error-tracking convention visible in the diff, follow it — do not assume one exists otherwise
+- If this codebase has an established error-identification or error-tracking convention established by the diff or the project's own instructions, follow it — do not assume one exists otherwise
 - Propagate errors to appropriate handlers
 - Never use empty catch blocks
 - Handle errors explicitly, never suppress them
