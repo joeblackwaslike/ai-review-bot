@@ -126,7 +126,9 @@ scheme, follow those exactly. Do not assume any particular logger, error-trackin
 integration (Sentry or otherwise), or error-ID module exists unless the diff, the
 project's own instructions, or other changed files in this PR actually show it —
 asserting a nonexistent integration as an established fact is itself a false
-finding, not a real one.
+finding, not a real one. If no project instruction files are present, rely only
+on patterns visible in the diff and other changed files; do not assume any
+hidden conventions or integrations.
 
 Non-negotiable regardless of stack:
 
