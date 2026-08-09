@@ -13,7 +13,7 @@ import {
 } from "./prompt.js";
 import type { PersistedFinding, ReviewState } from "./review-state.js";
 import { findingId, loadReviewState, saveReviewState } from "./review-state.js";
-import { type ReviewerTuning, tuningFor } from "./reviewer-tuning.js";
+import { REVIEWER_TUNING, type ReviewerTuning } from "./reviewer-tuning.js";
 import type { ModelSelection } from "./router.js";
 import { routeModel } from "./router.js";
 import { detectTier2Skills } from "./tier2.js";
@@ -1028,7 +1028,7 @@ export async function buildReview(
 
 	const scopedFilePaths = scopedFiles.map((f) => f.filename);
 
-	const tuning: ReviewerTuning = tuningFor(context.provider);
+	const tuning: ReviewerTuning = REVIEWER_TUNING;
 	const userMessage = buildUserMessage({
 		owner: context.owner,
 		repo: context.repo,

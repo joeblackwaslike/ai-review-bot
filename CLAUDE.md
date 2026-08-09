@@ -64,7 +64,7 @@ POST /api/github/review-run        (QStash delayed callback)
 | `src/router.ts` | PR tier classification (`classifyTier()`), model selection (`routeModel()`) |
 | `src/tier2.ts` | Tier 2 skill detection (`detectTier2Skills()`) |
 | `src/claim-dedupe.ts` | Near-duplicate claim clustering (`dedupeClaims()`, `isSameClaim()`) |
-| `src/reviewer-tuning.ts` | Per-provider signal-quality switches (`tuningFor()`) — **anthropic only**; openai keeps pre-existing behaviour |
+| `src/reviewer-tuning.ts` | Signal-quality switches (`REVIEWER_TUNING`) — unified across both providers since ai-review-bot-5zu; previously anthropic-only |
 | `src/audit.ts` | Full repository audit logic (`auditRepo()`), local audit (`runLocalAudit()`), local review (`runLocalReview()`) |
 | `src/report.ts` | `docs/code-reviews/` report writer (`formatReviewReport()`, `allocateReportPath()`) |
 | `src/cli.ts` | CLI entry point for `ai-review` command |

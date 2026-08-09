@@ -2198,9 +2198,11 @@ describe("reviewer tuning wiring", () => {
 		expect(review?.comments).toHaveLength(1);
 	});
 
-	// codexreviewbot duplicated far less on the same PRs and approved cleanly;
-	// this pins that its behaviour is untouched until validated on its own output.
-	it("leaves openai's findings exactly as the agents reported them", async () => {
+	// REVIEWER_TUNING is unified across providers (ai-review-bot-5zu, 2026-08-09
+	// — PR #44 showed codexreviewbot producing the same class of unfounded
+	// findings anthropicreviewbot was fixed for), so openai now collapses
+	// restated claims exactly like anthropic does above.
+	it("collapses openai's restated claims the same as anthropic's", async () => {
 		const { first, second } = restatementResponses();
 		mockGenerateObject.mockImplementation(async () =>
 			mockGenerateObject.mock.calls.length === 1
@@ -2208,7 +2210,7 @@ describe("reviewer tuning wiring", () => {
 				: mockGenerateObject.mock.calls.length <= TIER1_SKILLS.length
 					? second
 					: {
-							object: { summary: "Two issues." },
+							object: { summary: "One issue." },
 							usage: { inputTokens: 10, outputTokens: 5 },
 						},
 		);
@@ -2219,7 +2221,7 @@ describe("reviewer tuning wiring", () => {
 			provider: "openai" as const,
 		});
 
-		expect(review?.comments).toHaveLength(2);
+		expect(review?.comments).toHaveLength(1);
 	});
 });
 
@@ -2249,14 +2251,14 @@ describe("strict evidence rules propagation", () => {
 	}
 
 	// The gate is only worth having if it reaches the prompt builder. Asserting
-	// on tuningFor() alone would pass with the wiring cut.
+	// on REVIEWER_TUNING alone would pass with the wiring cut. Both providers
+	// get strictEvidenceRules=true since ai-review-bot-5zu unified the tuning
+	// (PR #44 showed codexreviewbot needs the same protection anthropicreviewbot
+	// does — see src/reviewer-tuning.ts).
 	it.each([
-		{ provider: "anthropic" as const, expected: true },
-		{ provider: "openai" as const, expected: false },
-	])("passes strictEvidenceRules=$expected for $provider", async ({
-		provider,
-		expected,
-	}) => {
+		{ provider: "anthropic" as const },
+		{ provider: "openai" as const },
+	])("passes strictEvidenceRules=true for $provider", async ({ provider }) => {
 		cleanRun();
 
 		await buildReview({
@@ -2266,7 +2268,7 @@ describe("strict evidence rules propagation", () => {
 		});
 
 		for (const call of mockBuildAgentSystemPrompt.mock.calls) {
-			expect(call[2]).toEqual({ strictEvidenceRules: expected });
+			expect(call[2]).toEqual({ strictEvidenceRules: true });
 		}
 		expect(mockBuildAgentSystemPrompt).toHaveBeenCalled();
 	});
@@ -2332,8 +2334,8 @@ describe("prior own findings propagation", () => {
 	}
 
 	// The third leg of the gate. Without this, the memory could be disconnected
-	// from buildReview and both the buildUserMessage unit test and tuningFor
-	// would still pass.
+	// from buildReview and both the buildUserMessage unit test and
+	// REVIEWER_TUNING would still pass.
 	it("gives a tuned reviewer its own prior findings", async () => {
 		cleanRun();
 		const client = await seededKv();
@@ -2356,8 +2358,10 @@ describe("prior own findings propagation", () => {
 
 	// Seeded under "openai" deliberately: review state is namespaced by provider,
 	// so seeding it under "anthropic" would leave this reviewer with no state at
-	// all and the assertion would hold whether or not the gate existed.
-	it("withholds them from an untuned reviewer", async () => {
+	// all and the assertion would hold whether or not the gate existed. Both
+	// providers get this now — REVIEWER_TUNING is unified (ai-review-bot-5zu) —
+	// so this mirrors the anthropic case above rather than asserting withholding.
+	it("gives openai the same treatment since tuning was unified", async () => {
 		cleanRun();
 		const client = await seededKv("openai");
 
@@ -2368,14 +2372,13 @@ describe("prior own findings propagation", () => {
 			kv: client,
 		});
 
-		// objectContaining({ priorOwnFindings: undefined }) would also pass if the
-		// key were absent, which is a different bug — the gate is supposed to set
-		// it explicitly, not forget it. Assert both the presence and the value.
-		const [arg] = mockBuildUserMessage.mock.calls.at(-1) as [
-			Record<string, unknown>,
-		];
-		expect("priorOwnFindings" in arg).toBe(true);
-		expect(arg.priorOwnFindings).toBeUndefined();
+		expect(mockBuildUserMessage).toHaveBeenCalledWith(
+			expect.objectContaining({
+				priorOwnFindings: [
+					expect.objectContaining({ path: "src/a.ts", line: 5, title: "bug" }),
+				],
+			}),
+		);
 	});
 });
 
