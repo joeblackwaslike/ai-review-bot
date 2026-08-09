@@ -42,6 +42,17 @@ vi.mock("./review.js", () => ({
 	buildReview: mockBuildReview,
 }));
 
+// The peer gate re-publishes a callback when it decides to wait; stubbing the
+// scheduler keeps that observable without reaching QStash.
+const mockScheduleReview = vi.hoisted(() =>
+	vi.fn(async (): Promise<{ messageId: string } | null> => null),
+);
+vi.mock("./scheduler.js", () => ({
+	scheduleReview: mockScheduleReview,
+	reviewRunCallbackUrl: () => "https://example.test/api/github/review-run",
+	verifyQStashSignature: vi.fn(async () => true),
+}));
+
 vi.mock("./feedback/persist.js", () => ({
 	persistPostedComments: vi.fn(async () => 1),
 }));
@@ -103,6 +114,8 @@ const baseArgs = {
 		reviewCommand: "/ai-review",
 		provider: "anthropic" as const,
 		feedbackEnabled: false,
+		peerCheckIntervalMs: 90_000,
+		peerMaxAttempts: 6,
 		improveEnabled: false,
 		improveCarrierEnabled: false,
 		agentConcurrency: 1,
@@ -496,6 +509,8 @@ describe("maybeSubmitReview", () => {
 				reviewCommentPrefix: "ai-review-bot",
 				provider: "anthropic",
 				feedbackEnabled: true,
+				peerCheckIntervalMs: 90_000,
+				peerMaxAttempts: 6,
 				improveEnabled: false,
 				improveCarrierEnabled: false,
 			} as never,
@@ -565,6 +580,8 @@ describe("maybeSubmitReview", () => {
 				reviewCommentPrefix: "ai-review-bot",
 				provider: "anthropic",
 				feedbackEnabled: false,
+				peerCheckIntervalMs: 90_000,
+				peerMaxAttempts: 6,
 				improveEnabled: false,
 				improveCarrierEnabled: false,
 			} as never,
@@ -623,6 +640,8 @@ describe("maybeSubmitReview", () => {
 					reviewCommentPrefix: "ai-review-bot",
 					provider: "anthropic",
 					feedbackEnabled: true,
+					peerCheckIntervalMs: 90_000,
+					peerMaxAttempts: 6,
 					improveEnabled: false,
 					improveCarrierEnabled: false,
 				} as never,
@@ -649,6 +668,7 @@ describe("runScheduledReview", () => {
 	it("no-ops (superseded) when the PR head has moved past the scheduled SHA", async () => {
 		mockBuildReview.mockReset();
 		const octokit = {
+			paginate: vi.fn(async () => []),
 			request: vi.fn(async (_route: string) => ({
 				data: {
 					draft: false,
@@ -678,9 +698,100 @@ describe("runScheduledReview", () => {
 		);
 	});
 
+	// The gate exists so peers post first; it must actually hold when one has
+	// engaged but not yet caught up to the current head.
+	it("waits and reschedules when an engaged peer has not reviewed the head", async () => {
+		mockBuildReview.mockReset();
+		mockScheduleReview.mockClear();
+		mockScheduleReview.mockResolvedValueOnce({ messageId: "next" });
+		const octokit = {
+			paginate: vi.fn(async (route: string) =>
+				route.includes("/reviews")
+					? [{ user: { login: "coderabbitai[bot]" }, commit_id: "OLDER" }]
+					: [],
+			),
+			request: vi.fn(async () => ({
+				data: {
+					draft: false,
+					head: { sha: "SAME" },
+					additions: 0,
+					deletions: 0,
+					changed_files: 0,
+					title: "t",
+					body: null,
+				},
+			})),
+		};
+		const app = { getInstallationOctokit: vi.fn(async () => octokit) } as never;
+
+		const result = await runScheduledReview(
+			{ ...message, headSha: "SAME" },
+			app,
+			{
+				reviewEnabled: true,
+				reviewCommentPrefix: "ai-review-bot",
+				provider: "anthropic",
+				peerCheckIntervalMs: 90_000,
+				peerMaxAttempts: 6,
+			} as never,
+		);
+
+		expect(result.status).toBe("waiting");
+		expect(mockScheduleReview).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ attempt: 1 }),
+			90,
+		);
+		expect(mockBuildReview).not.toHaveBeenCalled();
+	});
+
+	// A peer that never arrives must not starve the review — this is the
+	// failure that left our own Codex bot with zero reviews across a whole PR.
+	it("reviews at the ceiling even though the peer never arrived", async () => {
+		mockBuildReview.mockReset();
+		mockScheduleReview.mockClear();
+		const octokit = {
+			paginate: vi.fn(async (route: string) =>
+				route.includes("/reviews")
+					? [{ user: { login: "coderabbitai[bot]" }, commit_id: "OLDER" }]
+					: [],
+			),
+			request: vi.fn(async () => ({
+				data: {
+					draft: false,
+					head: { sha: "SAME" },
+					additions: 0,
+					deletions: 0,
+					changed_files: 0,
+					title: "t",
+					body: null,
+				},
+			})),
+		};
+		const app = { getInstallationOctokit: vi.fn(async () => octokit) } as never;
+
+		const result = await runScheduledReview(
+			{ ...message, headSha: "SAME", attempt: 5 },
+			app,
+			{
+				reviewEnabled: true,
+				reviewCommentPrefix: "ai-review-bot",
+				provider: "anthropic",
+				peerCheckIntervalMs: 90_000,
+				peerMaxAttempts: 6,
+			} as never,
+		);
+
+		expect(result.status).toBe("reviewed");
+		expect(mockScheduleReview).not.toHaveBeenCalled();
+	});
+
 	it("runs the review (reviewed) when the PR head still matches the scheduled SHA", async () => {
 		mockBuildReview.mockReset();
 		const octokit = {
+			// No peer reviews and none expected, so the peer gate resolves
+			// immediately and the review proceeds on this pass.
+			paginate: vi.fn(async () => []),
 			request: vi.fn(async (_route: string) => ({
 				data: {
 					draft: false,
@@ -706,6 +817,54 @@ describe("runScheduledReview", () => {
 		);
 
 		expect(result).toEqual({ status: "reviewed" });
+	});
+
+	it("skips peer gate and reviews immediately when fetchPrReviews fails", async () => {
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "COMMENT" as const,
+			body: "Review body.",
+			comments: [],
+			metadata: DEFAULT_METADATA,
+		});
+		mockScheduleReview.mockClear();
+		const octokit = {
+			paginate: vi.fn(async () => {
+				throw new Error("GitHub API down");
+			}),
+			request: vi.fn(async (route: string) => {
+				if (route.includes("/search/issues")) {
+					return { data: { total_count: 5 } };
+				}
+				return {
+					data: {
+						draft: false,
+						head: { sha: "SAME" },
+						additions: 0,
+						deletions: 0,
+						changed_files: 0,
+						title: "t",
+						body: null,
+					},
+				};
+			}),
+		};
+		const app = { getInstallationOctokit: vi.fn(async () => octokit) } as never;
+
+		const result = await runScheduledReview(
+			{ ...message, headSha: "SAME" },
+			app,
+			{
+				reviewEnabled: true,
+				reviewCommentPrefix: "ai-review-bot",
+				provider: "anthropic",
+				peerCheckIntervalMs: 90_000,
+				peerMaxAttempts: 6,
+			} as never,
+		);
+
+		expect(result).toEqual({ status: "reviewed" });
+		expect(mockScheduleReview).not.toHaveBeenCalled();
+		expect(mockBuildReview).toHaveBeenCalledTimes(1);
 	});
 });
 
@@ -763,15 +922,19 @@ describe("selectReviewDelayMs", () => {
 	const config = {
 		reviewDelayMs: 540_000,
 		reviewResyncDelayMs: 300_000,
+		peerCheckIntervalMs: 90_000,
 	} as AppConfig;
 
-	it("uses the shorter resync delay for synchronize (push) events", () => {
-		expect(selectReviewDelayMs("synchronize", config)).toBe(300_000);
-	});
-
-	it("uses the full initial delay for opened/reopened/ready_for_review events", () => {
+	// Both are now capped at the peer-check interval: the wait is a poll that
+	// ends when peers actually post, not a guess at how long they take.
+	it("caps both the resync and initial delays at the peer-check interval", () => {
+		expect(selectReviewDelayMs("synchronize", config)).toBe(
+			config.peerCheckIntervalMs,
+		);
 		for (const action of ["opened", "reopened", "ready_for_review"]) {
-			expect(selectReviewDelayMs(action, config)).toBe(540_000);
+			expect(selectReviewDelayMs(action, config)).toBe(
+				config.peerCheckIntervalMs,
+			);
 		}
 	});
 });

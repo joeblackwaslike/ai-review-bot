@@ -10,6 +10,13 @@ import { recordPostedComment } from "./feedback/store.js";
 import { capturePostedReview } from "./improve/capture.js";
 import { getDb } from "./improve/db/client.js";
 import { billingUrl, notifyQuotaExhausted, providerLabel } from "./notify.js";
+import type { PeerOctokit } from "./peers.js";
+import {
+	fetchPrReviews,
+	peersExpectedInRepo,
+	shouldRunNow,
+	summarizePeers,
+} from "./peers.js";
 import { resolveStaleThreads } from "./resolve-threads.js";
 import type { ReviewDecision, ReviewMetadata } from "./review.js";
 import { buildReview } from "./review.js";
@@ -20,14 +27,19 @@ function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Re-reviews after a push (synchronize) use a shorter delay than the initial
-// pass: external bots re-review incrementally in ~1-3 min, while an initial
-// review (CodeRabbit especially) can take up to ~7.5 min. The delay exists so
-// other bots post first and our review can dedupe them.
+// The FIRST delay before the first peer check. It is deliberately short now:
+// the wait is no longer a guess at how long peers take, it is a poll that ends
+// as soon as they have actually posted (see peers.ts). The old fixed delay of
+// 9 minutes could not tell "peers are slow" from "peers are never coming", and
+// on a fast-moving PR every scheduled run was superseded before it fired —
+// which starved our own Codex bot of an entire PR's reviews.
 export function selectReviewDelayMs(action: string, config: AppConfig): number {
-	return action === "synchronize"
-		? config.reviewResyncDelayMs
-		: config.reviewDelayMs;
+	return Math.min(
+		config.peerCheckIntervalMs,
+		action === "synchronize"
+			? config.reviewResyncDelayMs
+			: config.reviewDelayMs,
+	);
 }
 
 /** TTL for the per-commit review idempotency claim. Comfortably longer than a
@@ -716,7 +728,7 @@ export async function runScheduledReview(
 	message: ReviewRunMessage,
 	app: App,
 	config: AppConfig,
-): Promise<{ status: "reviewed" | "superseded" }> {
+): Promise<{ status: "reviewed" | "superseded" | "waiting" }> {
 	const { owner, repo, pullNumber, headSha, installationId } = message;
 	const octokit = await app.getInstallationOctokit(installationId);
 	const pullResponse = await octokit.request(
@@ -734,6 +746,78 @@ export async function runScheduledReview(
 		});
 		return { status: "superseded" };
 	}
+
+	// The delay exists so peer bots post first and we can dedupe against them.
+	// That condition is directly observable, so observe it rather than
+	// approximating it with a fixed timer — a peer that never arrives used to
+	// starve the review entirely, and a repo with no peer bots waited for
+	// nothing at all.
+	const attempt = (message.attempt ?? 0) + 1;
+	let reviews: Awaited<ReturnType<typeof fetchPrReviews>>;
+	let peerFetchFailed = false;
+	try {
+		reviews = await fetchPrReviews(
+			octokit as unknown as PeerOctokit,
+			owner,
+			repo,
+			pullNumber,
+		);
+	} catch (err) {
+		reviews = [];
+		peerFetchFailed = true;
+		console.error("peers: failed to fetch PR reviews; skipping peer gate", {
+			owner,
+			repo,
+			pullNumber,
+			error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+		});
+	}
+	const peers = summarizePeers(reviews, headSha);
+	const decision = peerFetchFailed
+		? { run: true as const, reason: "peer-fetch-failed" as const }
+		: shouldRunNow({
+				status: peers,
+				peersExpectedInRepo:
+					peers.seenOnPr.length > 0 ||
+					(await peersExpectedInRepo(
+						octokit as unknown as PeerOctokit,
+						owner,
+						repo,
+					)),
+				attempt,
+				maxAttempts: config.peerMaxAttempts,
+			});
+
+	if (!decision.run) {
+		const next = await scheduleReview(
+			config,
+			{ ...message, attempt },
+			config.peerCheckIntervalMs / 1000,
+		);
+		console.log("review waiting on peers", {
+			owner,
+			repo,
+			pullNumber,
+			attempt,
+			maxAttempts: config.peerMaxAttempts,
+			arrived: peers.arrived,
+			awaiting: peers.seenOnPr.filter((p) => !peers.arrived.includes(p)),
+			rescheduled: next !== null,
+		});
+		// A failed re-publish must not silently drop the review: fall through and
+		// review now rather than wait for a callback that will never come.
+		if (next !== null) return { status: "waiting" };
+	} else {
+		console.log("review proceeding", {
+			owner,
+			repo,
+			pullNumber,
+			attempt,
+			reason: decision.reason,
+			arrived: peers.arrived,
+		});
+	}
+
 	await maybeSubmitReview({
 		app,
 		installationId,
