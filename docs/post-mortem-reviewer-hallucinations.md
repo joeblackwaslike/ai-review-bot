@@ -31,9 +31,9 @@ earning its keep now that a root cause might be known.
 
 | Time | Event |
 | --- | --- |
+| 2026-06-17 | Tier 2 review skills go default-on (PR #22, `REVIEW_TIER2_ENABLED`), predating the gap below by 10 days. |
 | 2026-06-27 → 07-31 | A 34-day gap in PR activity on this repo. |
-| 2026-07-31 | Tier 2 review skills go default-on (PR #22, `REVIEW_TIER2_ENABLED`). |
-| ~early Aug | A 19-PR / 30-hour burst coincides with an already-fixed 800s Vercel timeout bug (PR #45) that, before the fix, silently dropped agents mid-run with no review posted at all. |
+| ~early Aug | A 19-PR / 30-hour burst, with Tier 2 already active throughout, coincides with an already-fixed 800s Vercel timeout bug (PR #45) that, before the fix, silently dropped agents mid-run with no review posted at all. |
 | 2026-08-08/09 | PR #44 review rounds: `anthropicreviewbot` repeats the Sentry/`logError` claim across all 6 rounds; `codexreviewbot` repeats it independently and separately fabricates a compilation-break claim on `peers.ts` and an invalid-JSON claim on `vercel.json`. |
 | 2026-08-09 01:16 UTC | Bead `ai-review-bot-5zu` opened: bisect and root-cause the degradation. |
 | 2026-08-09 | PR #53 opened, fixing the false Sentry/Statsig/`errorIds.ts` premise in `skills/silent-failure-hunter.md`. |
@@ -56,9 +56,15 @@ against an integration that was never built. This is the direct source of the
 PR #44 and independently repeated by `codexreviewbot`.
 
 **2. Quality was marginal from early development, not a clean "used to be fine, then
-broke" story.** There is a real, measured step-change after the 2026-06-27 → 07-31
-gap, once Tier 2 skills went default-on (PR #22) — average review rounds per PR
-roughly doubled. That compounded with a 19-PR/30-hour burst that coincided with the
+broke" story.** There is a real, measured step-change in the PR activity that resumed
+after the 2026-06-27 → 07-31 gap — average review rounds per PR roughly doubled.
+**Correction to an earlier draft of this doc** (caught by `chatgpt-codex-connector`
+review on this doc's own PR): Tier 2 going default-on (PR #22) did not happen at the
+gap's end — it merged 2026-06-17, ten days *before* the gap started, and was already
+active throughout it. The round-doubling is a real, dated observation about the
+post-gap PR burst; Tier 2 being on isn't a new variable introduced at that point, so
+it should be read as "already active during the burst that showed the step-change,"
+not "the burst's trigger." That burst — 19 PRs in ~30 hours — also coincided with the
 (at-the-time-unfixed) 800s Vercel function timeout, which silently dropped agents
 mid-run and produced no review at all rather than a degraded one.
 
@@ -152,8 +158,13 @@ false hardcoded assumptions... that caused hallucinations in prior reviews").
 One new false claim did surface during this window: `codexreviewbot` fabricated a
 "duplicated stale prompt block still asserts Sentry/Statsig" claim on PR #53 itself,
 refuted with `wc -l` + grep evidence (no such duplicate existed) and dismissed per
-this repo's standing `AGENTS.md` authorization for a stuck reviewer recycling a false
-finding. This is expected, not a fix failure — at the point that review ran,
+the standing dismiss-a-stuck-reviewer authorization in Joe's global
+`~/.claude/AGENTS.md` (**correction**, caught by `chatgpt-codex-connector` review on
+this doc's own PR: there is no `AGENTS.md` in this repo — the authorization is
+personal/global config, not a repo-local instruction file; the original draft's
+"this repo's standing AGENTS.md authorization" was itself a small instance of the
+exact false-repo-fact pattern this post-mortem is about). This is expected, not a fix
+failure — at the point that review ran,
 `codexreviewbot` was still on the pre-#54 anthropic-only tuning, so the general
 stuck-loop susceptibility this fix doesn't claim to eliminate was still present for
 it. It's evidence the two problems (false-premise hallucination, and the reviewer's
@@ -172,8 +183,12 @@ tech/file/function claim asserted as established fact about *this* codebase.
 `grep -rniE "this project|the project('|s)? (has|uses|is|contains)" skills/*.md` and
 `grep -rniE "our (codebase|project|system|application)|we use|the codebase
 (uses|has|is)" skills/*.md` found zero matches outside `silent-failure-hunter.md`'s
-already-fixed text. `git log --oneline -- skills/*.md` per file confirms
-`silent-failure-hunter.md` is the only skill with edit history beyond the initial
+already-fixed text. Running the history check once **per file** (not the aggregate
+`git log --oneline -- skills/*.md`, which reports commits touching *any* matching
+file without attributing them — flagged by `coderabbitai` review on this doc's own
+PR) confirms the per-file commit counts: `silent-failure-hunter.md` has 2 (the
+initial commit plus PR #53's fix), every other skill file has exactly 1. That makes
+`silent-failure-hunter.md` the only skill with edit history beyond its own creation
 commit — i.e. the only one that's ever needed a correction. The other 8 files are
 either generic review-rubric prose with no project-tech claims at all, or explicitly
 multi-language/multi-framework reference material (`security-sast.md` covers

@@ -42,6 +42,10 @@ export default defineConfig({
 						text: "Post-mortem: OpenSSL PKCS#1",
 						link: "/post-mortem-openssl-pkcs1",
 					},
+					{
+						text: "Post-mortem: Reviewer Hallucinations",
+						link: "/post-mortem-reviewer-hallucinations",
+					},
 				],
 			},
 		],
