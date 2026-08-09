@@ -196,7 +196,7 @@ describe("peersExpectedInRepo", () => {
 		};
 		await peersExpectedInRepo(octokit, "o", "r6");
 		await peersExpectedInRepo(octokit, "o", "r7");
-		// 4 bots searched per repo (no cache hit, no early match) — 2 repos × 4.
+		// Every bot searched per repo (no cache hit, no early match) — 2 repos.
 		expect(calls).toBe(PEER_REVIEW_BOTS.length * 2);
 	});
 

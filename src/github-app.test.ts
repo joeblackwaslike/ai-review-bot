@@ -820,7 +820,12 @@ describe("runScheduledReview", () => {
 	});
 
 	it("skips peer gate and reviews immediately when fetchPrReviews fails", async () => {
-		mockBuildReview.mockReset();
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "COMMENT" as const,
+			body: "Review body.",
+			comments: [],
+			metadata: DEFAULT_METADATA,
+		});
 		mockScheduleReview.mockClear();
 		const octokit = {
 			paginate: vi.fn(async () => {
@@ -859,6 +864,7 @@ describe("runScheduledReview", () => {
 
 		expect(result).toEqual({ status: "reviewed" });
 		expect(mockScheduleReview).not.toHaveBeenCalled();
+		expect(mockBuildReview).toHaveBeenCalledTimes(1);
 	});
 });
 
