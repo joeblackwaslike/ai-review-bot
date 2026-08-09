@@ -1907,6 +1907,102 @@ describe("buildReview triage gate — INCREMENTAL carries forward open prior fin
 	});
 });
 
+// ---------------------------------------------------------------------------
+// buildReview — FULL must ALSO carry forward still-open prior findings.
+// showPriorOwnFindings (REVIEWER_TUNING, unified ai-review-bot-5zu) tells
+// agents on every pass, FULL included, not to re-file a finding already on
+// the record as open. Before this fix only INCREMENTAL fed that promise back
+// into survivingPrior/persisted state — a FULL pass silently dropped an
+// unfixed finding from tracked state and could false-APPROVE past it.
+// Flagged by chatgpt-codex-connector on PR #54.
+// ---------------------------------------------------------------------------
+
+describe("buildReview triage gate — FULL carries forward open prior findings", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+		mockTriageReReview.mockReset();
+	});
+
+	it("does NOT APPROVE and keeps F open when triage recommends FULL and resolves nothing", async () => {
+		const { client } = fakeKv();
+		const provider = "anthropic";
+		const owner = baseContext.owner;
+		const repo = baseContext.repo;
+		const pull = baseContext.pullNumber;
+		const loadState = () =>
+			loadReviewState(client, provider, owner, repo, pull, null);
+
+		// Prior open finding F, persisted at sha1.
+		const sha1 = "aaaaaaaaaaaa1111";
+		const fId = findingId("src/a.ts", 5, "Bug");
+		await saveReviewState(client, provider, owner, repo, pull, {
+			lastReviewedSha: sha1,
+			event: "REQUEST_CHANGES",
+			findings: [
+				{
+					id: fId,
+					path: "src/a.ts",
+					line: 5,
+					title: "Bug",
+					severity: "high",
+					status: "open",
+				},
+			],
+			reviewedAt: "2026-06-17T00:00:00Z",
+		});
+
+		// Push sha2: triage recommends FULL (a structural change), resolves nothing.
+		const sha2 = "bbbbbbbbbbbb2222";
+		vi.mocked(mockTriageReReview).mockResolvedValueOnce({
+			recommendation: "FULL",
+			resolved: [],
+			newRisk: true,
+		});
+		// FULL reviews the whole file set; agents are told (priorOwnFindings) not
+		// to re-file F, and — this is the bug — return nothing new either.
+		const emptyAgent = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+		);
+		const summaryResponse = {
+			object: { summary: "Prior unresolved findings remain." },
+			usage: { inputTokens: 10, outputTokens: 5 },
+		};
+		mockGenerateObject
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(summaryResponse);
+
+		const r2 = await buildReview({
+			octokit: buildOctokit({
+				files: [buildPullFile("src/a.ts", SIMPLE_PATCH)],
+			}),
+			...baseContext,
+			headSha: sha2,
+			kv: client,
+		});
+
+		// (a) An unresolved prior blocking finding remains → must NOT be APPROVE.
+		expect(r2?.event).not.toBe("APPROVE");
+		expect(r2?.event).toBe("REQUEST_CHANGES");
+
+		// (b) State still contains F (open) and the SHA advanced.
+		const stateAfterSha2 = await loadState();
+		expect(stateAfterSha2?.lastReviewedSha).toBe(sha2);
+		const carried = stateAfterSha2?.findings.find((f) => f.id === fId);
+		expect(carried?.status).toBe("open");
+		expect(stateAfterSha2?.event).toBe("REQUEST_CHANGES");
+	});
+});
+
 describe("classifyRefusal", () => {
 	// Both conditions arrive as HTTP 429 and need opposite responses from a
 	// human, so quota must win over rate limit whenever both could match.
