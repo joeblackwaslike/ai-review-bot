@@ -22,6 +22,7 @@ export async function improveRequest<T>(opts: {
 		// Stage failures are already contained inside runImproveCycle; reaching
 		// here means something systemic (no database, bad credentials). Return the
 		// contract rather than letting the function 500 with a raw stack trace.
+		console.error("improve cron: cycle failed", { err });
 		return {
 			status: 500,
 			body: {

@@ -294,7 +294,7 @@ async function cmdAudit(args: string[]): Promise<void> {
 			getConfig();
 			getOpenAIAppConfig();
 		} catch (err) {
-			fatal((err as Error).message);
+			fatal(err instanceof Error ? err.message : String(err));
 		}
 	}
 

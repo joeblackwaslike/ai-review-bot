@@ -64,11 +64,19 @@ describe("runAuditPass", () => {
 		expect(merged.general_findings).toHaveLength(1); // deduped by title
 	});
 
-	it("returns empty review when every agent fails", async () => {
+	// Before this test, a batch where every agent threw returned the exact same
+	// shape as a batch that genuinely found nothing — callers had no way to
+	// tell "clean audit" from "the audit never ran" apart from re-reading logs.
+	it("returns empty review when every agent fails, and reports zero successes so callers can tell failure from a clean result", async () => {
+		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 		(runAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
 			status: "error",
 		});
-		const { review: merged } = await runAuditPass({
+		const {
+			review: merged,
+			agentsSucceeded,
+			agentsAttempted,
+		} = await runAuditPass({
 			files: [{ path: "a.ts", content: "x" }],
 			selection,
 			extraInstructions: "",
@@ -76,6 +84,12 @@ describe("runAuditPass", () => {
 		});
 		expect(merged.general_findings).toHaveLength(0);
 		expect(merged.inline_comments).toHaveLength(0);
+		expect(agentsSucceeded).toBe(0);
+		expect(agentsAttempted).toBe(TIER1_SKILLS.length);
+		expect(errorSpy).toHaveBeenCalledWith(
+			expect.stringContaining("every agent failed"),
+		);
+		errorSpy.mockRestore();
 	});
 
 	it("splits files across batches when content exceeds BATCH_BYTES", async () => {
@@ -100,6 +114,34 @@ describe("runAuditPass", () => {
 		});
 		// 2 batches × TIER1_SKILLS agents each
 		expect(runAgent).toHaveBeenCalledTimes(TIER1_SKILLS.length * 2);
+	});
+});
+
+describe("writeArtifacts", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	// The rethrow used to interpolate only `error.message`, discarding the
+	// original error's type/stack — a disk-full ENOSPC and a permissions
+	// EACCES both collapsed into an identical opaque string.
+	it("preserves the original error as `cause` when a write fails", async () => {
+		const fs = await import("node:fs/promises");
+		(fs.mkdir as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+		const original = Object.assign(new Error("ENOSPC"), { code: "ENOSPC" });
+		(fs.writeFile as ReturnType<typeof vi.fn>).mockRejectedValue(original);
+
+		const { writeArtifacts } = await import("./audit.js");
+		await expect(
+			writeArtifacts({
+				outDir: ".ai-review",
+				perProvider: [],
+				markdown: "# report",
+			}),
+		).rejects.toMatchObject({
+			message: expect.stringContaining("Failed to write audit artifacts"),
+			cause: original,
+		});
 	});
 });
 
@@ -178,6 +220,37 @@ describe("runLocalAudit (dry-run)", () => {
 		]);
 		expect(writeSpy).toHaveBeenCalled(); // audit-anthropic.json, audit-openai.json, audit.md
 		expect(result.pr).toBeUndefined();
+	});
+
+	// Before this test, an audit where every agent call failed (bad/expired
+	// API key, provider outage) still wrote clean-looking empty artifacts and
+	// returned normally — indistinguishable from "the codebase has zero
+	// findings". It must fail loudly instead of writing a false-clean result.
+	it("throws instead of writing a false-clean result when every agent fails across both providers", async () => {
+		const { collectFilesFromLocal } = await import("./sources.js");
+		(collectFilesFromLocal as ReturnType<typeof vi.fn>).mockResolvedValue([
+			{ path: "a.ts", content: "x" },
+		]);
+		(runAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
+			status: "error",
+		});
+
+		const fs = await import("node:fs/promises");
+		const writeSpy = fs.writeFile as ReturnType<typeof vi.fn>;
+		writeSpy.mockResolvedValue(undefined);
+		writeSpy.mockClear();
+		(fs.mkdir as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+
+		const { runLocalAudit } = await import("./audit.js");
+		await expect(
+			runLocalAudit({
+				cwd: "/repo",
+				mode: "changed",
+				outDir: ".ai-review",
+				dryRun: true,
+			}),
+		).rejects.toThrow(/No review agent completed successfully/);
+		expect(writeSpy).not.toHaveBeenCalled();
 	});
 });
 
@@ -413,5 +486,44 @@ describe("runLocalReview", () => {
 				},
 			}),
 		).rejects.toThrow(/No provider could be authenticated/);
+	});
+
+	// Distinct from the auth-failure case above: both providers authenticate
+	// fine, but every agent call itself fails (schema errors, provider
+	// outage). Before this test, that produced a "report" with zero findings
+	// and no signal that nothing actually ran.
+	it("throws when both providers authenticate but every agent call fails", async () => {
+		const { collectFilesFromLocal } = await import("./sources.js");
+		(collectFilesFromLocal as ReturnType<typeof vi.fn>).mockResolvedValue([
+			{ path: "a.ts", content: "x" },
+		]);
+		(runAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
+			status: "error",
+		});
+		const fs = await import("node:fs/promises");
+		(fs.writeFile as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+		(fs.mkdir as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+
+		const resolveAuthFor = vi.fn(async (provider: Provider) => ({
+			mode: "api-key" as const,
+			provider,
+			apiKey: "k",
+		}));
+
+		const { runLocalReview } = await import("./audit.js");
+		await expect(
+			runLocalReview({
+				cwd: "/repo",
+				scope: { kind: "changed" },
+				docsDir: "docs/code-reviews",
+				slug: "s",
+				title: "T",
+				owner: "o",
+				repo: "r",
+				remote: "https://github.com/o/r",
+				now: () => 1_700_000_000_000,
+				resolveAuthFor,
+			}),
+		).rejects.toThrow(/Every review agent failed/);
 	});
 });

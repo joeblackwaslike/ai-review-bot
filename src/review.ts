@@ -752,19 +752,28 @@ interface CheckRun {
 	conclusion: string | null;
 }
 
+/** `checks: []` means "fetched cleanly, nothing outstanding" — distinct from
+ * `fetchFailed: true`, which means the fetch itself failed and the approval
+ * message must say so rather than implying a clean bill of health it never
+ * confirmed. */
+interface OutstandingChecksResult {
+	checks: string[];
+	fetchFailed: boolean;
+}
+
 async function fetchOutstandingChecks(
 	octokit: OctokitLike,
 	owner: string,
 	repo: string,
 	headSha: string,
 	ownPrefix: string,
-): Promise<string[]> {
+): Promise<OutstandingChecksResult> {
 	try {
 		const checkRuns = await octokit.request<{ check_runs: CheckRun[] }>(
 			"GET /repos/{owner}/{repo}/commits/{ref}/check-runs",
 			{ owner, repo, ref: headSha },
 		);
-		return checkRuns.data.check_runs
+		const checks = checkRuns.data.check_runs
 			.filter(
 				(run) =>
 					!run.name.toLowerCase().includes(ownPrefix.toLowerCase()) &&
@@ -775,22 +784,25 @@ async function fetchOutstandingChecks(
 					? `${run.name} (${run.status})`
 					: `${run.name} (failed)`,
 			);
-	} catch {
-		return [];
+		return { checks, fetchFailed: false };
+	} catch (err) {
+		console.warn("failed to fetch outstanding checks", { headSha, err });
+		return { checks: [], fetchFailed: true };
 	}
 }
 
 function buildApprovalMessage(
 	isReReview: boolean,
-	outstandingChecks: string[],
+	outstandingChecks: OutstandingChecksResult,
 ): string {
 	const resolution = isReReview
 		? "All issues from the previous review have been resolved."
 		: "No issues found.";
 
-	const checksQualifier =
-		outstandingChecks.length > 0
-			? ` Note: ${outstandingChecks.length} CI check(s) still outstanding: ${outstandingChecks.join(", ")}.`
+	const checksQualifier = outstandingChecks.fetchFailed
+		? " Note: could not verify outstanding CI checks — check them manually before merging."
+		: outstandingChecks.checks.length > 0
+			? ` Note: ${outstandingChecks.checks.length} CI check(s) still outstanding: ${outstandingChecks.checks.join(", ")}.`
 			: "";
 
 	return `✅ ${resolution} PR approved for merge.${checksQualifier}`;
@@ -1147,10 +1159,11 @@ export async function buildReview(
 	const rateLimited: RateLimitInfo[] = [];
 	const quotaExhausted: ModelSelection["provider"][] = [];
 	const skipped: string[] = [];
+	const errored: string[] = [];
 	let totalPromptTokens = 0;
 	let totalCompletionTokens = 0;
 
-	for (const o of outcomes) {
+	outcomes.forEach((o, i) => {
 		if (o.status === "ok") {
 			agentResults.push(o.review);
 			totalPromptTokens += o.usage.promptTokens;
@@ -1161,13 +1174,25 @@ export async function buildReview(
 			quotaExhausted.push(o.provider);
 		} else if (o.status === "skipped") {
 			skipped.push(o.skillPath);
+		} else if (o.status === "error") {
+			// runAgent already logged the underlying error; what's missing here is
+			// attaching it to *this* skill and to the PR — without it a crashed
+			// agent reads identically to one that ran clean and found nothing.
+			errored.push(allSkills[i]?.skillPath ?? "unknown");
 		}
-	}
+	});
 
 	if (skipped.length > 0) {
 		console.warn("review ran out of time budget", {
 			completed: agentResults.length,
 			skipped,
+		});
+	}
+
+	if (errored.length > 0) {
+		console.warn("review agents failed and were excluded from this pass", {
+			completed: agentResults.length,
+			errored,
 		});
 	}
 
@@ -1393,15 +1418,22 @@ export async function buildReview(
 
 	// Named on the review, not just in the logs. A partial review that reads as
 	// complete is worse than a late one: silence from the security agent looks
-	// like "nothing found" when that agent never ran.
-	const budgetNotice =
-		skipped.length > 0
-			? [
-					`> ⏱ **Partial review.** ${skipped.length} of ${allSkills.length} agents did not run — this pass hit its time budget before reaching ${skipped
-						.map((s) => `\`${s.replace(/\.md$/, "")}\``)
-						.join(", ")}. Re-run the review command for full coverage.`,
-				]
-			: [];
+	// like "nothing found" when that agent never ran or crashed mid-run.
+	const budgetNotice: string[] = [];
+	if (skipped.length > 0) {
+		budgetNotice.push(
+			`> ⏱ **Partial review.** ${skipped.length} of ${allSkills.length} agents did not run — this pass hit its time budget before reaching ${skipped
+				.map((s) => `\`${s.replace(/\.md$/, "")}\``)
+				.join(", ")}. Re-run the review command for full coverage.`,
+		);
+	}
+	if (errored.length > 0) {
+		budgetNotice.push(
+			`> ⚠️ **Partial review.** ${errored.length} of ${allSkills.length} agent(s) failed to complete: ${errored
+				.map((s) => `\`${s.replace(/\.md$/, "")}\``)
+				.join(", ")}. Re-run the review command for full coverage.`,
+		);
+	}
 
 	const tier2Notice =
 		tier2Matches.length > 0

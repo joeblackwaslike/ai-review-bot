@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { KvClient } from "./feedback/kv.js";
 import {
 	findingId,
@@ -114,5 +114,31 @@ describe("review-state", () => {
 		expect(result?.findings.some((f) => f.title.includes("Null deref"))).toBe(
 			true,
 		);
+	});
+
+	// Its sibling (valid JSON, wrong shape) logs a console.warn above; this one
+	// hit a bare `catch {}` with no logging at all — an operator debugging a
+	// stuck triage gate would have zero trace that the KV entry was corrupt,
+	// not merely cold.
+	it("logs when the KV entry is corrupt JSON, same as it does for the wrong-shape case", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const { client, store } = fakeKv();
+		store.set(stateKey("anthropic", "o", "r", 7), "{not valid json");
+
+		const result = await loadReviewState(
+			client,
+			"anthropic",
+			"o",
+			"r",
+			7,
+			null,
+		);
+
+		expect(result).toBeNull();
+		expect(warn).toHaveBeenCalledWith(
+			"review-state: KV entry is corrupt JSON; treating as cold",
+			expect.objectContaining({ provider: "anthropic", owner: "o", repo: "r" }),
+		);
+		warn.mockRestore();
 	});
 });

@@ -80,10 +80,21 @@ export async function runAuditPass(opts: {
 	extraInstructions: string;
 	meta: { owner: string; repo: string; ref: string };
 	auth?: ResolvedAuth;
-}): Promise<{ review: ModelReview; usage: PassUsage }> {
+}): Promise<{
+	review: ModelReview;
+	usage: PassUsage;
+	/** How many agent calls actually returned findings, across every batch.
+	 * `review` being empty is ambiguous on its own — it means either "nothing
+	 * to flag" or "nothing ran successfully"; callers need this to tell them
+	 * apart instead of reporting a failed pass as a clean one. */
+	agentsSucceeded: number;
+	agentsAttempted: number;
+}> {
 	const { files, selection, extraInstructions, meta, auth } = opts;
 	const reviews: ModelReview[] = [];
 	const usage: PassUsage = { promptTokens: 0, completionTokens: 0 };
+	let agentsSucceeded = 0;
+	let agentsAttempted = 0;
 
 	const batches = batchFiles(files);
 
@@ -107,12 +118,21 @@ export async function runAuditPass(opts: {
 			(skill) =>
 				runAgent(skill, userMessage, selection, extraInstructions, { auth }),
 		);
+		agentsAttempted += outcomes.length;
+		let batchSucceeded = 0;
 		for (const o of outcomes) {
 			if (o.status === "ok") {
 				reviews.push(o.review);
 				usage.promptTokens += o.usage.promptTokens;
 				usage.completionTokens += o.usage.completionTokens;
+				batchSucceeded += 1;
 			}
+		}
+		agentsSucceeded += batchSucceeded;
+		if (batchSucceeded === 0) {
+			console.error(
+				`  Batch ${batchIdx + 1}/${batches.length}: every agent failed (0/${outcomes.length} succeeded) — its ${batch.length} file(s) got no real review coverage this batch.`,
+			);
 		}
 	}
 
@@ -124,7 +144,7 @@ export async function runAuditPass(opts: {
 					inline_comments: [],
 				}
 			: mergeReviews(reviews);
-	return { review, usage };
+	return { review, usage, agentsSucceeded, agentsAttempted };
 }
 
 export async function auditRepo({
@@ -212,12 +232,21 @@ export async function auditRepo({
 
 	console.log(`Running agents over ${files.length} file(s)...`);
 
-	const { review: merged } = await runAuditPass({
+	const {
+		review: merged,
+		agentsSucceeded,
+		agentsAttempted,
+	} = await runAuditPass({
 		files,
 		selection,
 		extraInstructions,
 		meta: { owner, repo, ref },
 	});
+	if (agentsAttempted > 0 && agentsSucceeded === 0) {
+		throw new Error(
+			`No review agent completed successfully (0/${agentsAttempted}) — refusing to report this as a clean audit. Check provider credentials/logs and retry.`,
+		);
+	}
 	if (
 		merged.general_findings.length === 0 &&
 		merged.inline_comments.length === 0
@@ -350,6 +379,7 @@ export async function writeArtifacts(opts: {
 	} catch (error) {
 		throw new Error(
 			`Failed to write audit artifacts to ${opts.outDir}: ${error instanceof Error ? error.message : String(error)}`,
+			{ cause: error },
 		);
 	}
 	return written;
@@ -389,18 +419,22 @@ export async function runLocalAudit(opts: {
 
 	const providers: LocalAuditResult["providers"] = [];
 	const perProvider: Array<{ review: ModelReview; meta: AuditMeta }> = [];
+	let totalAgentsSucceeded = 0;
+	let totalAgentsAttempted = 0;
 
 	for (const provider of PROVIDERS) {
 		const selection = routeModel(
 			{ additions: 0, deletions: 0, filePaths, labels: [] },
 			provider,
 		);
-		const { review } = await runAuditPass({
+		const { review, agentsSucceeded, agentsAttempted } = await runAuditPass({
 			files,
 			selection,
 			extraInstructions,
 			meta,
 		});
+		totalAgentsSucceeded += agentsSucceeded;
+		totalAgentsAttempted += agentsAttempted;
 		providers.push({ provider, review });
 		perProvider.push({
 			review,
@@ -411,6 +445,16 @@ export async function runLocalAudit(opts: {
 				fileCount: files.length,
 			},
 		});
+	}
+
+	// Every provider authenticated and ran, but not one agent call across
+	// either of them returned a result — a bad/expired key or provider outage
+	// that auth alone wouldn't catch. Refuse to write artifacts or open a PR
+	// that would otherwise read as "audited, nothing found".
+	if (totalAgentsAttempted > 0 && totalAgentsSucceeded === 0) {
+		throw new Error(
+			`No review agent completed successfully across ${PROVIDERS.length} provider(s) (0/${totalAgentsAttempted}) — refusing to write a clean-looking audit. Check provider credentials/logs and retry.`,
+		);
 	}
 
 	const combined = mergeReviews(providers.map((p) => p.review));
@@ -597,6 +641,8 @@ export async function runLocalReview(opts: {
 	const models: string[] = [];
 	const providersRun: Provider[] = [];
 	let costUsd = 0;
+	let totalAgentsSucceeded = 0;
+	let totalAgentsAttempted = 0;
 
 	for (const provider of PROVIDERS) {
 		let auth: ResolvedAuth;
@@ -612,22 +658,35 @@ export async function runLocalReview(opts: {
 			{ additions: 0, deletions: 0, filePaths, labels: [] },
 			provider,
 		);
-		const { review, usage } = await runAuditPass({
-			files,
-			selection,
-			extraInstructions,
-			meta,
-			auth,
-		});
+		const { review, usage, agentsSucceeded, agentsAttempted } =
+			await runAuditPass({
+				files,
+				selection,
+				extraInstructions,
+				meta,
+				auth,
+			});
 		reviews.push(review);
 		models.push(selection.model);
 		providersRun.push(provider);
 		costUsd += computeCost(usage, selection.model);
+		totalAgentsSucceeded += agentsSucceeded;
+		totalAgentsAttempted += agentsAttempted;
 	}
 
 	if (providersRun.length === 0) {
 		throw new Error(
 			"No provider could be authenticated. Set OPENAI_API_KEY / ANTHROPIC_API_KEY, or log in with `codex` / `claude`.",
+		);
+	}
+
+	// Distinct failure mode from the auth check above: every provider
+	// authenticated fine, but not one agent call across any of them
+	// succeeded — a bad/expired key or provider outage auth alone can't
+	// catch. Without this, that reads as "reviewed, nothing found".
+	if (totalAgentsSucceeded === 0) {
+		throw new Error(
+			`Every review agent failed across ${providersRun.length} authenticated provider(s) (0/${totalAgentsAttempted}) — refusing to write a report with no real signal. Check provider status/logs and retry.`,
 		);
 	}
 

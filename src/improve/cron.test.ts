@@ -63,6 +63,27 @@ describe("improveRequest", () => {
 		expect(res.status).toBe(500);
 		expect(res.body).toMatchObject({ message: "no database" });
 	});
+
+	// Same gap as feedback/cron.ts had: a systemic failure here (no database,
+	// bad credentials) is exactly the kind of outage nobody inspects the cron
+	// HTTP body for. Before this test, the 500 carried zero console output.
+	it("logs a systemic cycle failure, not just the 500 body", async () => {
+		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+		const res = await improveRequest({
+			authorization: "Bearer right",
+			secret: "right",
+			improveEnabled: true,
+			run: async () => {
+				throw new Error("no database");
+			},
+		});
+		expect(res.status).toBe(500);
+		expect(errorSpy).toHaveBeenCalledWith(
+			"improve cron: cycle failed",
+			expect.objectContaining({ err: expect.any(Error) }),
+		);
+		errorSpy.mockRestore();
+	});
 });
 
 describe("runImproveCycle stage containment", () => {
