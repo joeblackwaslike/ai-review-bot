@@ -18,15 +18,26 @@ fills, and the anchor for its first worked example. Per Joe's explicit steer dur
 brainstorming: the *autonomy scope* (how much gets done solo before a fork appears)
 should be loosely defined and extensible — expected to grow more sophisticated over
 time as more infrastructure and precedent accumulate — while a small *fixed contract*
-(upfront Q&A, decide-and-ticket on forks, end-of-run summary) stays constant
-regardless of scope.
+(upfront Q&A, decide-and-ticket on forks, end-of-run summary + recording an example)
+stays constant regardless of scope.
+
+**Revision note (2026-08-10):** Joe reviewed the first draft and left four rounds of
+inline comments, incorporated below: (1) the decision-log mechanism needed to be
+explained precisely rather than assumed-understood, plus a trigger to close the loop
+— a new `/autonomous:review` command; (2) the example log should be a directory of
+dated files with an index, not one growing file; (3) more real examples were wanted
+now, plus a mandatory rule that every autonomous run records one; (4) skill changes
+are load-bearing behavior, not docs, and need a real testing discipline. Each is
+addressed in its own section below with research behind it, not just restated.
 
 ## Approaches considered
 
-- **Standalone skill + thin command** (chosen) — mirrors the existing
-  `driving-a-pr-to-approval.md` ↔ `/pr-loop` split exactly: a skill holds the
-  contract and a growing example log, a thin command in `agent-harness` triggers it.
-  Consistent with established repo conventions and requires no new machinery.
+- **Standalone skill + thin command(s)** (chosen) — mirrors the existing
+  `driving-a-pr-to-approval.md` ↔ `/pr-loop` split, and (for the review loop)
+  `lessons:review`'s one-at-a-time interactive pattern. A skill holds the contract
+  and a growing example log; commands in `agent-harness` trigger the two distinct
+  operations (run a task, review judgment tickets). Consistent with established repo
+  conventions and requires no new machinery.
 - **Inline in `AGENTS.md`** (rejected) — breaks the existing pattern where
   `AGENTS.md` holds policy pointers and `agent-skills` holds mechanics (see "PR &
   Merge Autonomy", which points at `driving-a-pr-to-approval.md` rather than
@@ -41,13 +52,17 @@ regardless of scope.
 
 - `agent-skills/skills/autonomous-agent-operations/SKILL.md` — the fixed contract
   and the loose-autonomy framing.
-- `agent-skills/skills/autonomous-agent-operations/references/examples.md` — a
-  living, appendable log of worked scenarios at different autonomy levels.
-- `agent-harness/commands/autonomous.md` — thin command shim, invoked as
-  `/autonomous`. Single command for now; if related commands are needed later
-  (e.g. a ticket-review helper), move this into `agent-harness/commands/autonomous/`
-  so Claude Code's subdirectory namespacing gives them a shared `autonomous:` prefix
-  — don't build that structure for one command today.
+- `agent-skills/skills/autonomous-agent-operations/references/examples/` — one
+  dated file per worked scenario, plus `index.md` — see "Example log" below.
+- `agent-harness/commands/autonomous/start.md` — thin command shim, invoked as
+  `/autonomous:start`.
+- `agent-harness/commands/autonomous/review.md` — the ticket-review loop, invoked
+  as `/autonomous:review`.
+
+Both commands live under `commands/autonomous/` from the start now that there are
+two of them — Claude Code's subdirectory namespacing gives them the shared
+`autonomous:` prefix directly, which is exactly what was deferred as unnecessary
+for a single command in the first draft and is now needed.
 
 ### SKILL.md contents
 
@@ -64,58 +79,157 @@ regardless of scope.
      action, a real product/design call, or a factor no existing precedent (memory,
      backlog, prior ticket) covers — and the user might plausibly be reachable, ask
      live. When not, or when waiting would stall the run, use best judgment, then
-     immediately `bd create` a ticket capturing the question, the decision made, and
-     the rationale, labeled `autonomous-judgment` (`bd create --labels
-     autonomous-judgment ...`), and continue. This is the same fork logic already
-     documented for PR review autonomy in `AGENTS.md` ("Stop and hand off ... only
-     for: a genuinely hard-to-reverse action ... a real product/design decision ...")
-     — reused here rather than redefined, since it's the same judgment.
-   - **End of run.** One closing summary: what shipped, and every
-     `autonomous-judgment` ticket filed this run — pulled directly via `bd list
-     --labels autonomous-judgment`, not hand-tracked, so the summary can't drift
-     from the actual ticket state.
+     immediately file a ticket (see "Ticket mechanics" below) capturing the
+     question, the decision made, and the rationale, and continue. This is the same
+     fork logic already documented for PR review autonomy in `AGENTS.md` ("Stop and
+     hand off ... only for: a genuinely hard-to-reverse action ... a real
+     product/design decision ...") — reused here rather than redefined, since it's
+     the same judgment.
+   - **End of run.** One closing summary — what shipped, and every judgment ticket
+     filed this run, pulled directly from `bd` rather than hand-tracked — **and**
+     one new dated file appended to the example log (see "Example log" below). The
+     example-log entry is not optional or occasional; it is part of what "done"
+     means for a run under this contract.
 
-3. **Closing the loop.** Reviewing an `autonomous-judgment` ticket later (confirming
-   or correcting the call) promotes it into that project's `feedback_decision-log`
-   memory — the same mechanism a live `AskUserQuestion` answer already feeds, per
-   `AGENTS.md`'s Decision Log. One record, not two parallel ones. The memory entry
-   cites the ticket ID so the original question/rationale stays traceable.
+3. **Ticket mechanics and closing the loop.**
 
-4. **Pointer to `references/examples.md`** for worked scenarios, with an explicit
-   note that the list is meant to grow: add an entry whenever a run demonstrates a
-   materially different scenario than what's already documented (e.g. a longer
-   unattended stretch, a new class of fork, a new source of precedent to decide
-   against) — the existing entries are a starting point, not an exhaustive
-   taxonomy.
+   **What "the decision log" actually is, precisely** (this was underspecified in
+   the first draft): `AGENTS.md`'s Decision Log is a **per-project memory file**,
+   not a database or an automated pipeline. It lives at
+   `~/.claude/projects/<project-path>/memory/feedback_decision-log.md`, one file
+   per project, appended to over time, with a one-line pointer added to that same
+   directory's `MEMORY.md` index. `ai-review-bot`'s currently holds 11 dated
+   entries (oldest 2026-07-31, newest today), each shaped as: a bolded one-line
+   rule, the date, which options were offered and which was picked, and a short
+   interpretive gloss of the tradeoff — closing with an "Inferred pattern" section
+   synthesizing what the entries have in common. `[[wikilinks]]` cross-reference
+   related memory files.
 
-### references/examples.md
+   **The on-disk naming (`feedback_decision-log.md`) is the auto-memory system's
+   own convention, unrelated to any repo's code style.** The auto-memory system
+   (documented in this session's system prompt, not a file in either repo) names
+   every memory file `{type}_{slug}.md`, where `type` is one of `user` / `feedback`
+   / `project` / `reference` and `slug` is a kebab-case name — confirmed by
+   listing `ai-review-bot`'s memory directory: `feedback_decision-log.md`,
+   `feedback_confused-emoji-signal.md`, `reference_qstash-region-us-east.md`, etc.
+   all follow this exact pattern, and each file's own `name:` frontmatter field is
+   the filename itself, not a bare slug. This has nothing to do with `ai-review-bot`
+   TypeScript's kebab-case-only convention — it is a different, global system with
+   its own naming rule.
 
-Starts with one entry, format `Scenario / What stayed solo / What forked / Why`:
+   **There is no automated pipeline from `AskUserQuestion` to the decision log —
+   it is agent-driven, not hook-driven.** Checked `~/.claude/settings.json` for any
+   hook scoped to `AskUserQuestion` or the memory directory: none exists (the only
+   memory-adjacent hook is the unrelated Pieces OS `Stop` hook, a different
+   long-term-memory system entirely). The mechanism is that `AGENTS.md`'s Decision
+   Log section is a **standing instruction the agent follows itself**: "Whenever
+   you ask me to choose between options and I answer, record it ... log the date,
+   the options you offered, which I picked, and the shape of the tradeoff." The
+   agent reads that instruction and, after every `AskUserQuestion` resolution,
+   performs the Edit/Write itself — there is no technical enforcement, only the
+   documented convention (which this session followed multiple times as its own
+   evidence: seven new entries were added to `feedback_decision-log.md` today).
 
-> **2026-08-09, `ai-review-bot`.** A pre-approved multi-item plan (a root-cause
-> writeup, four small backlog items, this skill, a dashboard risk spike) executed
-> end to end across two repos, including driving three PRs through multi-round
-> review to merge. What stayed solo: all implementation, all review-thread triage
-> and replies, two dismiss-and-merge calls on stuck/silent reviewer bots (each
-> matching an existing `AGENTS.md`-documented pattern). What forked: whether to
-> pause before touching production infrastructure with a silent, wide blast radius
-> (the Dashboard's Next.js/webhook-coexistence risk) — paused even though every
-> other item in the same plan ran straight through; and how to treat a required
-> reviewer bot that was mechanically silent on a fresh commit rather than raising a
-> content objection. Why: both were live `AskUserQuestion` calls, not
-> decide-and-ticket, because the user was in fact reachable — the fixed contract's
-> "ask when reachable" branch, not its "ticket when not" branch. No
-> `autonomous-judgment` ticket was filed this run for that reason; the next entry
-> in this log should be a run where the ticket path is actually exercised.
+   **Ticket filing.** On a solo mid-run fork, `bd create --labels
+   autonomous-judgment ...` with the question, the decision, and the rationale in
+   the description — the same three fields a decision-log entry needs, so
+   promotion later is a copy, not a rewrite.
 
-### Command (`autonomous.md`)
+   **Closing the loop — `/autonomous:review`.** A new command, modeled directly on
+   the existing `/lessons:review` command (`lessons-learned/commands/review.md`),
+   which already solves "work through a queue of items one at a time, propose an
+   assessment, ask one decision question, apply immediately, summarize at the end"
+   for lesson candidates. The same shape applies here almost mechanically:
 
-Mirrors `pr-loop.md`'s shape exactly:
+   | `/lessons:review` phase | `/autonomous:review` equivalent |
+   | --- | --- |
+   | Scan + aggregate candidates from the DB | `bd list --labels autonomous-judgment --status open` |
+   | Pre-filter silently (dupes, hallucinated) | Skip tickets already closed/promoted |
+   | Prepare suggested edits per candidate | Prepare an assessment: does this decision still look right given anything learned since, is there a closer-matching existing decision-log entry, what would you recommend |
+   | Display candidate + "My take" | Display the ticket's question/decision/rationale + the assessment |
+   | Ask one `AskUserQuestion` (promote / archive / modify / skip) | Ask one `AskUserQuestion`: **Confirm as logged** (promote to decision-log verbatim) / **Correct it** (Joe supplies the real answer, that's what gets logged) / **Give me options** (offer 2-3 framings, let Joe pick or write his own) / **Skip** (leave the ticket open, revisit later) |
+   | Apply immediately, one-line status, next candidate | Append the (confirmed or corrected) entry to `feedback_decision-log.md`, update `MEMORY.md`'s pointer if this is that project's first entry, `bd close` the ticket citing the promoted entry, one-line status, next ticket |
+   | Session summary (promoted/archived/skipped/total) | Session summary (confirmed/corrected/skipped counts, decision-log entries added) |
+
+   This gives every `autonomous-judgment` ticket an actual review path, closing the
+   loop Joe asked for rather than leaving tickets to accumulate unreviewed.
+
+4. **Future direction, explicitly not in scope now.** Joe raised aggregating
+   decision-log data across projects into something that actively drives better
+   autonomy over time — possibly an "executive decision-maker" agent that
+   unblocks implementer agents, possibly notified through a chat channel (mechanism
+   still undecided). The one firm requirement stated: **this data must not just
+   accumulate — some system has to act on it to improve decisions, or collecting it
+   has no point.** Deliberately deferred rather than designed here, per Joe's own
+   "keep it simple in the beginning and add complexity later" — filed as
+   `ai-review-bot-l91` so the requirement isn't lost, not
+   designed inline in a spec that's already about the simpler, prerequisite piece
+   (getting judgment calls logged and reviewed at all). The existing "Inferred
+   pattern" section already in `feedback_decision-log.md` is the closest thing to
+   this that exists today — a manually-written synthesis, not an automated one —
+   and is the natural seed for whatever this becomes.
+
+5. **Pointer to `references/examples/`** for worked scenarios — see next section.
+
+### Example log
+
+**Restructured to a directory, not one file** (Joe's suggestion, adopted — it
+matches this repo's own `docs/superpowers/specs/YYYY-MM-DD-<topic>.md` convention,
+which is a good precedent for a log meant to accumulate substantial, individually
+addressable entries rather than grow as one file):
+
+- `references/examples/index.md` — one line per entry: date, project, one-sentence
+  scenario, link.
+- `references/examples/YYYY-MM-DD-<project>-<slug>.md` — one file per scenario, in
+  the same `Scenario / What stayed solo / What forked / Why` shape as the original
+  draft.
+
+**Populated with real, checked entries, not fabricated ones** — Joe asked for prior
+ai-review-bot autonomous/overnight work and similar cc-recall work to be added now.
+Both were investigated rather than assumed:
+
+- **`2026-08-09-ai-review-bot-multi-item-plan.md`** — this session (already
+  drafted in the first pass, unchanged): a pre-approved multi-item plan executed
+  end to end, forking twice via live `AskUserQuestion` (Dashboard infra risk;
+  mechanically-silent required reviewer bot) because the user was in fact
+  reachable — the contract's "ask when reachable" branch, not "ticket when not."
+- **`2026-07-29-cc-recall-quota-burn.md`** — a genuine unattended episode, but a
+  **cautionary one, not a demonstration of the contract working**: per
+  `postmortems/postmortems/001-cc-recall-quota-burn.md`, a `/recall:backfill` run
+  spawned ~2,825 headless sessions over ~43 hours, ran unattended 1am–9am with "no
+  rate limit, no session-count alarm, no cost ceiling, and no convergence check,"
+  and burned an estimated 69% of a weekly quota before anyone noticed. Root cause
+  was three compounding defects in `runClaudeHeadless`, fixed in cc-recall PR #54
+  and #55. Included as the motivating anti-pattern for why the fixed contract's
+  fork logic exists at all: unattended operation with *no* bounded decision/ticket
+  points and no cost ceiling is exactly the failure mode this skill is meant to
+  prevent, not merely one more example of successful autonomy.
+- **Checked and explicitly not included:** a commit-burst in `ai-review-bot` itself
+  (19 PRs over ~30 hours in late July, independently corroborated by this repo's
+  own `docs/post-mortem-reviewer-hallucinations.md` and the closed bead for
+  `ai-review-bot-5zu`). Investigated on the same pass as the cc-recall example, but
+  nothing in the repo states that burst ran *unattended* — it reads as supervised
+  late-night/early-morning work, and `docs/_backlog.md` itself states this
+  capability was "genuinely unbuilt" at the time. Recording it as an "autonomous
+  operation" example would be exactly the kind of unverified claim the project's
+  own "no hypothesis without data" convention exists to prevent — noted here
+  instead of silently dropped, so the gap is visible rather than papered over.
+
+**Mandatory recording, not occasional** (Joe's correction to the first draft, which
+only said "add an entry whenever a run demonstrates a materially different
+scenario"): folded into the fixed contract's "End of run" bullet above — every run
+under this contract appends one dated file and one `index.md` line, full stop. The
+"materially different scenario" framing from the first draft is demoted from a
+gate on *whether* to record to guidance on *what to emphasize* in the write-up.
+
+### Commands
+
+**`agent-harness/commands/autonomous/start.md`** — mirrors `pr-loop.md`'s shape:
 
 ```markdown
 ---
-name: autonomous
-description: Operate solo on a handed-off task per the autonomous-agent-operations contract — ask up front, decide and ticket on forks, summarize at the end
+name: autonomous:start
+description: Operate solo on a handed-off task per the autonomous-agent-operations contract — ask up front, decide and ticket on forks, summarize and record at the end
 argument-hint: "<task description>"
 ---
 
@@ -124,8 +238,8 @@ skill's fixed contract.
 
 **Load the `autonomous-agent-operations` skill before doing anything else.** It is
 the single source of truth for this workflow — the upfront-question pass, the
-decide-and-ticket fork logic, and the end-of-run summary. This file deliberately
-contains no rules of its own.
+decide-and-ticket fork logic, and the end-of-run summary + example recording. This
+file deliberately contains no rules of its own.
 
 ## Invocation contract
 
@@ -134,14 +248,51 @@ contains no rules of its own.
 - **Ask every clarifying question up front**, per the skill, before starting solo
   work.
 - **Runs to completion without check-ins** beyond the skill's fork logic.
-- **Reports:** what shipped, and every `autonomous-judgment` ticket filed.
+- **Reports:** what shipped, every `autonomous-judgment` ticket filed, and the new
+  example-log entry.
 ```
+
+**`agent-harness/commands/autonomous/review.md`** — mirrors `lessons:review`'s
+phase structure (Scan/Aggregate → one-at-a-time with a prepared assessment and one
+`AskUserQuestion` → apply immediately → session summary), adapted per the mapping
+table above. Full phase-by-phase text is an implementation detail for the plan, not
+this spec — the mapping table already fixes the behavior precisely enough to write
+from.
 
 ## Testing / verification
 
-Docs-only change — no code. Verification is: the spec reads coherently end to end
-(this self-review pass); the skill and command land in a follow-up implementation
-PR against `agent-skills` and `agent-harness` respectively, each getting the normal
-skill/command review (`plugin-dev:skill-development` conventions for the skill,
-matching `pr-loop.md`'s existing shape for the command); and the first real
-exercise of the decide-and-ticket path becomes `examples.md`'s second entry.
+**This is not a docs-only change, and treating it as one was the first draft's
+mistake** (Joe's correction). Skill files are load-bearing — they change agent
+behavior — and this repo's own `~/.claude/AGENTS.md` already says as much generally
+("Editing Skills, Runbooks and Instructions" requires RED-GREEN even for prose).
+What's specific to *skill* files (as opposed to a runbook edit) is more exacting,
+and — checked rather than assumed — **it already exists, this is not a gap to
+fill**:
+
+- `superpowers:writing-skills` states the discipline as an Iron Law: *"NO SKILL
+  WITHOUT A FAILING TEST FIRST ... This applies to NEW skills AND EDITS to
+  existing skills."* Its RED-GREEN-REFACTOR mapping for skills: RED = a pressure
+  scenario run against a subagent *without* the skill, demonstrating the bad
+  behavior the skill is meant to prevent; GREEN = the same scenario with the skill
+  present, agent complies; REFACTOR = close loopholes a variant scenario finds.
+- `agent-skills:best-practices-for-agentic-development` (`references/skill-
+  development.md`) independently documents the same discipline in more compact
+  form: define the target behavior, write a failing pressure scenario, add the
+  smallest skill text that changes it, re-test, refactor.
+- `skill-creator:skill-creator`'s "eval" mechanism was checked too and is a
+  **different thing** — parallel with-skill/without-skill subagent runs graded and
+  aggregated into a pass-rate/timing/token-cost benchmark with variance, useful for
+  comparing configurations, but it does not require observing a failure *before*
+  writing the skill, so it's a benchmark suite, not a red-green gate.
+
+**Verification for this spec's implementation, concretely:** writing
+`SKILL.md` and the two commands follows `superpowers:writing-skills`'
+RED-GREEN-REFACTOR process — a pressure scenario (e.g. "agent hits a mid-run
+ambiguity with no clarifying-question pass available") run against a subagent
+*without* the skill loaded first, to confirm the bad behavior (blocks entirely, or
+guesses silently with no ticket) actually happens baseline, then again with the
+skill loaded to confirm it now asks-up-front / decides-and-tickets / summarizes as
+specified. This becomes an explicit task in the implementation plan, not an
+afterthought — the plan-writing step (`superpowers:writing-plans`, next after this
+spec is approved) is where the concrete pressure scenarios get authored, since
+that's where implementation detail belongs, not this spec.
