@@ -154,7 +154,11 @@ for a single command in the first draft and is now needed.
    **Ticket filing.** On a solo mid-run fork, `bd create --labels
    autonomous-judgment ...` with the question, the decision, and the rationale in
    the description — the same three fields a decision-log entry needs, so
-   promotion later is a copy, not a rewrite.
+   promotion later is a copy, not a rewrite. That text can contain quotes,
+   `` ` ``, `$()`, or newlines from the task or repository content, so the
+   description is built in a shell-safe variable rather than interpolated
+   directly into the command line — the same rule applied to `bd close --reason`
+   in the "Apply immediately" row below.
 
    **Closing the loop — `/autonomous:review`.** A new command, modeled directly on
    the existing `/lessons:review` command (`lessons-learned/commands/review.md`),
