@@ -21,14 +21,28 @@ time as more infrastructure and precedent accumulate — while a small *fixed co
 (upfront Q&A, decide-and-ticket on forks, end-of-run summary + recording an example)
 stays constant regardless of scope.
 
-**Revision note (2026-08-10):** Joe reviewed the first draft and left four rounds of
-inline comments, incorporated below: (1) the decision-log mechanism needed to be
-explained precisely rather than assumed-understood, plus a trigger to close the loop
-— a new `/autonomous:review` command; (2) the example log should be a directory of
-dated files with an index, not one growing file; (3) more real examples were wanted
-now, plus a mandatory rule that every autonomous run records one; (4) skill changes
-are load-bearing behavior, not docs, and need a real testing discipline. Each is
-addressed in its own section below with research behind it, not just restated.
+**Revision note (2026-08-10, round 1):** Joe reviewed the first draft and left four
+rounds of inline comments, incorporated below: (1) the decision-log mechanism needed
+to be explained precisely rather than assumed-understood, plus a trigger to close the
+loop — a new `/autonomous:review` command; (2) the example log should be a directory
+of dated files with an index, not one growing file; (3) more real examples were
+wanted now, plus a mandatory rule that every autonomous run records one (where it
+adds new value); (4) skill changes are load-bearing behavior, not docs, and need a
+real testing discipline. Each is addressed in its own section below with research
+behind it, not just restated.
+
+**Revision note (2026-08-10, round 2):** Second review round, three more points: (1)
+whether the Decision Log instruction is global or project-scoped, whether this skill
+should own/dictate the whole system (hierarchy, maintenance, mining, applying it to
+real decisions, milestones) rather than just reference it, and whether the current
+architecture has actually been evaluated against alternatives for simplicity,
+effectiveness, and agent compliance — see "Ownership, hierarchy, and architecture
+evaluation" below; (3) the example log had the wrong ai-review-bot session — corrected
+using the real source Joe pointed at; (4) root-caused why
+`superpowers:writing-skills` didn't get invoked during brainstorming (a structural gap
+in `superpowers:brainstorming`'s own checklist, not a one-off miss) and fixed it —
+`agent-harness/dist/claude-extras.md` now cross-references it, committed and pushed
+separately from this spec (commit `9093892`).
 
 ## Approaches considered
 
@@ -171,6 +185,134 @@ for a single command in the first draft and is now needed.
 
 5. **Pointer to `references/examples/`** for worked scenarios — see next section.
 
+### Ownership, hierarchy, and architecture evaluation
+
+Joe asked, on review of the first draft, whether the Decision Log instruction is
+global or project-scoped, whether this skill should own and dictate the whole
+system rather than just reference it (runbooks, maintenance, mining, the
+user/project hierarchy, applying the corpus to actual autonomy decisions, future
+milestones), and whether the current architecture (memory files + `MEMORY.md`
+index + beads/labels) has actually been evaluated against alternatives for
+simplicity, effectiveness, and — specifically — **agent compliance**. Answered in
+order, with research behind each:
+
+**Scope: global, not per-project.** `AGENTS.md`'s Decision Log section lives in
+`~/.claude/AGENTS.md`, which is a symlink to `agent-harness/AGENTS.md` — the
+single global instructions file every project's `CLAUDE.md` imports via `@AGENTS.md`
+(confirmed directly: this is the exact file this session edited for the
+"Proactivity" backlog item, via its real symlink target). The section's own text
+already says so ("This applies to every project, not just the one where a given
+decision came up"). It is not duplicated per project; only the *log files it
+produces* are project-scoped.
+
+**Ownership: yes, the skill should be authoritative, not `AGENTS.md`.** This
+matches a pattern already established in this exact codebase: `AGENTS.md`'s "PR &
+Merge Autonomy" section is three paragraphs of policy that explicitly defers all
+mechanics to `driving-a-pr-to-approval.md` ("Load the working-with-github skill
+before acting on any PR ... it holds the facts this section deliberately does not
+restate"). The Decision Log section should get the same treatment: trimmed from
+its current ~15 lines of full mechanics to a short pointer once
+`autonomous-agent-operations`'s `SKILL.md` exists, e.g.:
+
+> ## Decision Log (log every judgment call I answer)
+>
+> Mechanics, format, hierarchy, and maintenance now live in the
+> `autonomous-agent-operations` skill (`agent-skills`) — load it before recording
+> or reviewing a judgment call. This section is the policy statement, not the
+> mechanics: every `AskUserQuestion` I answer and every reviewed
+> `autonomous-judgment` ticket gets logged; the point is autonomy — decide the
+> next similar call my way instead of re-asking.
+
+This is a real implementation task for the plan (edit `agent-harness/AGENTS.md`
+alongside creating the skill), not done in this pass — the current spec-writing
+session already made one unrelated, already-approved edit to that exact file today
+(the Proactivity addendum) and stacking an unreviewed second edit on top mid-spec
+risks conflating two changes; it belongs in the implementation plan's task list
+where it can be reviewed as one unit with the skill it depends on.
+
+**Hierarchy: three tiers, made explicit** (today this exists only as one gestural
+sentence — "if a decision is clearly cross-project ... say so ... it can be
+promoted here later" — with no actual promotion mechanism):
+
+1. **Project decision log** (`feedback_decision-log.md`) — the working tier,
+   high-volume, specific.
+2. **Cross-project candidates** — an entry in tier 1 flagged, at write time, as
+   likely applying beyond this project (already partially done today, e.g. this
+   session's own "Cross-project pattern, not `ai-review-bot` specific" note on the
+   worktree-isolation decision).
+3. **Global standing rules** (`AGENTS.md` itself) — rare, hand-authored, reserved
+   for patterns confirmed across enough tier-2 candidates to be worth a permanent
+   rule, not a log entry.
+
+The missing piece is a *mechanism* for tier 1 → tier 2 → tier 3, not just the
+concept. `/autonomous:review`'s decision options (Confirm / Correct / Give me
+options / Skip) gain a fifth: **Promote to global** — when a reviewed entry is
+confirmed as cross-project, this drafts the `AGENTS.md` addition as a proposed
+edit for Joe's approval (following `AGENTS.md`'s own RED-GREEN discipline for
+editing itself) rather than silently accumulating tier-2 flags nobody acts on.
+
+**Maintenance, mining, and milestones — staged, not built all at once now**
+(matching Joe's own "keep it simple, add complexity later" pattern already applied
+to the executive-decision-maker idea, extended here to the same class of ask):
+
+- **Phase 1 (this spec):** ticket → `/autonomous:review` → promote to project log
+  or global rule. This is the prerequisite everything else depends on — there is
+  no corpus to mine or maintain until judgment calls are actually being logged
+  and reviewed consistently.
+- **Phase 2 (near-term follow-up, not this spec):** a `lessons:doctor`-style audit
+  — mirroring that command's role for the lessons DB (dead entries, near-duplicates,
+  misclassified types) — applied to decision logs: stale entries whose precedent no
+  longer holds, near-duplicate rules that should merge, entries that were never
+  actually applied to a matching later call (a compliance signal in its own right).
+  Natural home: fold into `/autonomous:review`'s own closing phase, the same way
+  `lessons:review`'s Phase 5 auto-runs `/lessons:doctor`.
+- **Phase 3 (`ai-review-bot-l91`, already filed):** mining across projects into
+  something that actively drives decisions — the "executive decision-maker" idea.
+  Phase 1 and 2 are load-bearing prerequisites for this, not parallel work — an
+  executive-decision system trained on inconsistently-logged, unaudited data
+  would be worse than none.
+
+**Architecture evaluation — was this analyzed against alternatives, and is there
+room for improvement?** Yes, done here rather than assumed. Three shapes
+considered for where a judgment call's data actually lives:
+
+| Option | Pro | Con |
+| --- | --- | --- |
+| **A — everything in beads** (single system) | Unified; queryable; labels/priority/status for free; already Dolt-backed and cross-machine synced | Not auto-loaded into a session's context the way memory files are — the auto-memory system's entire value is that it's read automatically at session start; moving decisions into beads-only would need a *new* context-injection mechanism to replace that, which is more complexity, not less |
+| **B — everything in markdown memory** (no beads staging) | Simplest; one system; already auto-loaded | No structure for the review queue itself — no labels/status to drive `/autonomous:review`'s "what's pending" query, no way to distinguish reviewed from unreviewed entries in a flat prose file |
+| **C — current design: beads for staging, markdown for the curated/auto-loaded record** | Queryable intake (`bd list --labels autonomous-judgment`) feeding a curated, auto-loaded output; each system does the one job it's actually good at | Two systems instead of one — real complexity cost, justified below |
+
+**C is the right choice, and it's not a novel design** — it's the same two-tier
+shape `lessons-learned` already uses and has been running in production: a
+queryable DB of *candidates* (`lessons.mjs list`, filterable, reviewed one at a
+time via `/lessons:review`) promoted into a curated *manifest* that gets
+auto-injected at session start and periodically reinforced. Decision-log tickets
+→ project decision-log entries is the identical shape applied to judgment calls
+instead of behavioral lessons — strong existing precedent, not an unproven bet.
+
+**The real, correctly-identified gap is compliance, not architecture.** The
+decision-log write itself — after a live `AskUserQuestion`, today, with no
+`autonomous-judgment` ticket involved — has **no technical enforcement at all**:
+confirmed by checking `~/.claude/settings.json` for any hook scoped to
+`AskUserQuestion` or the memory directory (none exists). It is purely "the agent
+reads `AGENTS.md`'s instruction and remembers to do it," which is exactly the
+kind of instruction that degrades under long-context pressure — the same
+degradation problem `lessons-learned`'s own `posttooluse-directive-reinject.mjs`
+hook exists to solve for *its* directives (re-injecting standing instructions at
+30/52/70% context-usage thresholds, because "directives and protocols injected at
+session start lose Claude's attention as context fills").
+
+**Concrete, low-cost fix, not a new hook:** `lessons-learned` is already installed
+and already runs this reinjection machinery. Registering the decision-log
+obligation as a `directive`-type entry in its manifest (`type: "directive"`,
+`priority: 10`, no tool/path trigger needed — it's a standing reminder, not a
+guard) gets it the same periodic reinforcement every other standing directive in
+this environment already gets, for the cost of one manifest entry — no new hook
+code. This is a real recommendation, not decided here: **flagging for your call
+on the next review round** whether it belongs in this implementation's initial
+scope or as a fast-follow, since it's cheap enough that "add it now" and "add it
+after Phase 1 ships" are both reasonable.
+
 ### Example log
 
 **Restructured to a directory, not one file** (Joe's suggestion, adopted — it
@@ -193,6 +335,34 @@ Both were investigated rather than assumed:
   end to end, forking twice via live `AskUserQuestion` (Dashboard infra risk;
   mechanically-silent required reviewer bot) because the user was in fact
   reachable — the contract's "ask when reachable" branch, not "ticket when not."
+- **`2026-07-30-ai-review-bot-overnight-feedback-pipeline.md`** — corrected
+  entry: the first draft investigated a commit-burst pattern and, finding nothing
+  in the repo confirming it ran unattended, left it out. Joe pointed at the real
+  source — `agent-marketplace/private-content/drafts/articles/
+  2026-08-08-writing-the-plot.md`, a first-person **draft blog post (unpublished,
+  not an internal record — cite accordingly, see caveat below)** — which
+  describes this exact night directly. An agent built a ~6,500-line, nine-PR
+  feedback-capture pipeline in this repo unattended overnight; the merges land
+  between 3:41am–8:41am UTC, which converts exactly to the 23:41–04:41 EDT window
+  of PRs #32–#42 the first draft had already found by commit timestamp but
+  couldn't confirm as unattended — this article is that confirmation. The
+  handoff, quoted directly (given as the general template now used, not
+  necessarily verbatim that specific night): *"I won't be around. Work
+  autonomously and use your best judgement. If you hit a genuine blocker, pick
+  the most reasonable option, document the decision and your reasoning, and file
+  a beads issue for it. When I'm back, we'll review them one at a time. Hard stop
+  on anything involving permanent data loss."* — this is close to a plain-English
+  version of the fixed contract this spec formalizes. The fork that actually
+  happened: 8 of the 9 PRs merged with a standing `CHANGES_REQUESTED` from the
+  required reviewer still attached; the agent read the review bodies, judged the
+  reviewer stuck/recycling false positives, and invoked the pre-existing
+  dismiss-and-merge override policy (the same one this session invoked twice on
+  PR #55/#56) rather than waiting. **Caveat, stated as plainly as the article
+  itself states it:** the author's claim to have verified the merged work
+  afterward ("I've read the diffs since; the work is good") is self-reported in
+  an unpublished marketing/essay draft, not shown with diffs or PR links in the
+  source — recorded here as the account given, not as independently confirmed
+  fact, consistent with this project's own "no hypothesis without data" standard.
 - **`2026-07-29-cc-recall-quota-burn.md`** — a genuine unattended episode, but a
   **cautionary one, not a demonstration of the contract working**: per
   `postmortems/postmortems/001-cc-recall-quota-burn.md`, a `/recall:backfill` run
@@ -200,20 +370,12 @@ Both were investigated rather than assumed:
   rate limit, no session-count alarm, no cost ceiling, and no convergence check,"
   and burned an estimated 69% of a weekly quota before anyone noticed. Root cause
   was three compounding defects in `runClaudeHeadless`, fixed in cc-recall PR #54
-  and #55. Included as the motivating anti-pattern for why the fixed contract's
-  fork logic exists at all: unattended operation with *no* bounded decision/ticket
-  points and no cost ceiling is exactly the failure mode this skill is meant to
-  prevent, not merely one more example of successful autonomy.
-- **Checked and explicitly not included:** a commit-burst in `ai-review-bot` itself
-  (19 PRs over ~30 hours in late July, independently corroborated by this repo's
-  own `docs/post-mortem-reviewer-hallucinations.md` and the closed bead for
-  `ai-review-bot-5zu`). Investigated on the same pass as the cc-recall example, but
-  nothing in the repo states that burst ran *unattended* — it reads as supervised
-  late-night/early-morning work, and `docs/_backlog.md` itself states this
-  capability was "genuinely unbuilt" at the time. Recording it as an "autonomous
-  operation" example would be exactly the kind of unverified claim the project's
-  own "no hypothesis without data" convention exists to prevent — noted here
-  instead of silently dropped, so the gap is visible rather than papered over.
+  and #55 — the same night the overnight feedback-pipeline entry above describes,
+  in fact: per the same article, this incident is what the overnight run was
+  *cleaning up*, not an unrelated example. Included as the motivating anti-pattern
+  for why the fixed contract's fork logic exists at all: unattended operation with
+  *no* bounded decision/ticket points and no cost ceiling is exactly the failure
+  mode this skill is meant to prevent.
 
 **Mandatory recording, not occasional** (Joe's correction to the first draft, which
 only said "add an entry whenever a run demonstrates a materially different
