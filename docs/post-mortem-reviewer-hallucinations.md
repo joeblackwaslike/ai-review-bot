@@ -164,12 +164,11 @@ this doc's own PR: there is no `AGENTS.md` in this repo — the authorization is
 personal/global config, not a repo-local instruction file; the original draft's
 "this repo's standing AGENTS.md authorization" was itself a small instance of the
 exact false-repo-fact pattern this post-mortem is about). This is expected, not a fix
-failure — at the point that review ran,
-`codexreviewbot` was still on the pre-#54 anthropic-only tuning, so the general
-stuck-loop susceptibility this fix doesn't claim to eliminate was still present for
-it. It's evidence the two problems (false-premise hallucination, and the reviewer's
-tendency to recycle a claim once made) are distinct and only the first was targeted
-here.
+failure — at the point that review ran, `codexreviewbot` was still on the pre-#54
+anthropic-only tuning, so the general stuck-loop susceptibility this fix doesn't claim
+to eliminate was still present for it. It's evidence the two problems (false-premise
+hallucination, and the reviewer's tendency to recycle a claim once made) are distinct
+and only the first was targeted here.
 
 ## Blast-Radius Check
 
