@@ -98,7 +98,14 @@ for a single command in the first draft and is now needed.
      fork logic already documented for PR review autonomy in `AGENTS.md` ("Stop and
      hand off ... only for: a genuinely hard-to-reverse action ... a real
      product/design decision ...") — reused here rather than redefined, since it's
-     the same judgment.
+     the same judgment, **including its hard-stop carve-out**: a genuinely
+     destructive, hard-to-reverse action (force-push over a colleague's shared
+     branch, a production data change, a permanent deletion) is a stop-and-escalate,
+     not a decide-and-ticket. A ticket records a bounded, reversible judgment call —
+     it does not undo overwritten commits or deleted data, so it is never a
+     substitute for the stop. Take a reversible alternative when one exists (a new
+     branch instead of overwriting the shared one); where none exists, stop and
+     wait.
    - **End of run.** One closing summary — what shipped, and every judgment ticket
      filed this run, pulled directly from `bd` rather than hand-tracked — **and**
      one new dated file appended to the example log (see "Example log" below). The
@@ -157,16 +164,22 @@ for a single command in the first draft and is now needed.
 
    | `/lessons:review` phase | `/autonomous:review` equivalent |
    | --- | --- |
-   | Scan + aggregate candidates from the DB | `bd list --labels autonomous-judgment --status open` |
+   | Scan + aggregate candidates from the DB | `bd list --label autonomous-judgment --status open` (note: `bd list` takes `--label`, singular; `bd create` takes `--labels`, plural — verified against `bd <cmd> --help`, not interchangeable) |
    | Pre-filter silently (dupes, hallucinated) | Skip tickets already closed/promoted |
    | Prepare suggested edits per candidate | Prepare an assessment: does this decision still look right given anything learned since, is there a closer-matching existing decision-log entry, what would you recommend |
    | Display candidate + "My take" | Display the ticket's question/decision/rationale + the assessment |
-   | Ask one `AskUserQuestion` (promote / archive / modify / skip) | Ask one `AskUserQuestion`: **Confirm as logged** (promote to decision-log verbatim) / **Correct it** (Joe supplies the real answer, that's what gets logged) / **Give me options** (offer 2-3 framings, let Joe pick or write his own) / **Skip** (leave the ticket open, revisit later) |
-   | Apply immediately, one-line status, next candidate | Append the (confirmed or corrected) entry to `feedback_decision-log.md`, update `MEMORY.md`'s pointer if this is that project's first entry, `bd close` the ticket citing the promoted entry, one-line status, next ticket |
-   | Session summary (promoted/archived/skipped/total) | Session summary (confirmed/corrected/skipped counts, decision-log entries added) |
+   | Ask one `AskUserQuestion` (promote / archive / modify / skip) | `AskUserQuestion` allows 2–4 options, never 5 — a hard tool constraint. Ask a 4-option coarse question first: **Confirm as logged** / **Change it** / **Skip** / **Promote to global**; if "Change it," ask a *second*, separate `AskUserQuestion` (2 options: **I'll state the answer** / **Give me 2-3 framings**) — sequential calls are fine, only the options within one call are capped |
+   | Apply immediately, one-line status, next candidate | Append the (confirmed or corrected) entry to `feedback_decision-log.md`, **citing the ticket ID** (so a retried promotion detects the existing entry and skips re-appending rather than duplicating), update `MEMORY.md`'s pointer if this is that project's first entry, then `bd close` the ticket with a shell-safe (variable-built, not directly-interpolated) reason string — same for the `Promote to global` path once the `AGENTS.md` edit is presented and approved, so a promoted ticket actually leaves the open queue rather than re-presenting on every future run |
+   | Session summary (promoted/archived/skipped/total) | Session summary (confirmed/corrected/skipped/promoted-to-global counts, decision-log entries added) |
 
    This gives every `autonomous-judgment` ticket an actual review path, closing the
    loop Joe asked for rather than leaving tickets to accumulate unreviewed.
+
+   **"Every ticket filed this run" needs a real scope.** A bare label match pulls
+   every open ticket ever filed under it, including earlier or concurrent runs, not
+   this run's specifically. `/autonomous:start` generates a run ID and tags every
+   ticket it files with it as a second label; the end-of-run pull is `bd list --label
+   autonomous-judgment,run-<id>` (AND semantics), not the bare label.
 
 4. **Future direction, explicitly not in scope now.** Joe raised aggregating
    decision-log data across projects into something that actively drives better
@@ -245,11 +258,12 @@ promoted here later" — with no actual promotion mechanism):
    rule, not a log entry.
 
 The missing piece is a *mechanism* for tier 1 → tier 2 → tier 3, not just the
-concept. `/autonomous:review`'s decision options (Confirm / Correct / Give me
-options / Skip) gain a fifth: **Promote to global** — when a reviewed entry is
-confirmed as cross-project, this drafts the `AGENTS.md` addition as a proposed
-edit for Joe's approval (following `AGENTS.md`'s own RED-GREEN discipline for
-editing itself) rather than silently accumulating tier-2 flags nobody acts on.
+concept. `/autonomous:review`'s decision options (Confirm / Change it / Skip) get a
+fourth: **Promote to global** — when a reviewed entry is confirmed as cross-project,
+this drafts the `AGENTS.md` addition as a proposed edit for Joe's approval (following
+`AGENTS.md`'s own RED-GREEN discipline for editing itself), closing the ticket on
+approval the same as any other promotion, rather than silently accumulating tier-2
+flags nobody acts on or re-presenting an already-promoted ticket forever.
 
 **Maintenance, mining, and milestones — staged, not built all at once now**
 (matching Joe's own "keep it simple, add complexity later" pattern already applied
@@ -280,7 +294,7 @@ considered for where a judgment call's data actually lives:
 | --- | --- | --- |
 | **A — everything in beads** (single system) | Unified; queryable; labels/priority/status for free; already Dolt-backed and cross-machine synced | Not auto-loaded into a session's context the way memory files are — the auto-memory system's entire value is that it's read automatically at session start; moving decisions into beads-only would need a *new* context-injection mechanism to replace that, which is more complexity, not less |
 | **B — everything in markdown memory** (no beads staging) | Simplest; one system; already auto-loaded | No structure for the review queue itself — no labels/status to drive `/autonomous:review`'s "what's pending" query, no way to distinguish reviewed from unreviewed entries in a flat prose file |
-| **C — current design: beads for staging, markdown for the curated/auto-loaded record** | Queryable intake (`bd list --labels autonomous-judgment`) feeding a curated, auto-loaded output; each system does the one job it's actually good at | Two systems instead of one — real complexity cost, justified below |
+| **C — current design: beads for staging, markdown for the curated/auto-loaded record** | Queryable intake (`bd list --label autonomous-judgment`) feeding a curated, auto-loaded output; each system does the one job it's actually good at | Two systems instead of one — real complexity cost, justified below |
 
 **C is the right choice, and it's not a novel design** — it's the same two-tier
 shape `lessons-learned` already uses and has been running in production: a
