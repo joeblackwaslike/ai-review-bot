@@ -168,7 +168,7 @@ for a single command in the first draft and is now needed.
 
    | `/lessons:review` phase | `/autonomous:review` equivalent |
    | --- | --- |
-   | Scan + aggregate candidates from the DB | `bd list --label autonomous-judgment --status open` (note: `bd list` takes `--label`, singular; `bd create` takes `--labels`, plural — verified against `bd <cmd> --help`, not interchangeable) |
+   | Scan + aggregate candidates from the DB | `bd list --label autonomous-judgment --status open` — intentionally *not* run-scoped: a review pass works through the whole open backlog across every run, not one run's tickets (contrast with the end-of-run report below, which is run-scoped). (Note: `bd list` takes `--label`, singular; `bd create` takes `--labels`, plural — verified against `bd <cmd> --help`, not interchangeable) |
    | Pre-filter silently (dupes, hallucinated) | Skip tickets already closed/promoted |
    | Prepare suggested edits per candidate | Prepare an assessment: does this decision still look right given anything learned since, is there a closer-matching existing decision-log entry, what would you recommend |
    | Display candidate + "My take" | Display the ticket's question/decision/rationale + the assessment |
@@ -183,7 +183,11 @@ for a single command in the first draft and is now needed.
    every open ticket ever filed under it, including earlier or concurrent runs, not
    this run's specifically. `/autonomous:start` generates a run ID and tags every
    ticket it files with it as a second label; the end-of-run pull is `bd list --label
-   autonomous-judgment,run-<id>` (AND semantics), not the bare label.
+   autonomous-judgment,run-<id>` (AND semantics — confirmed directly against `bd list
+   --help`: "`-l, --label strings` Filter by labels (AND: must have ALL)", not just
+   assumed from the `--label`/`--labels` naming split), not the bare label. The query
+   carries no `--status` filter, so it returns the run's tickets regardless of
+   whether they're still open or were closed during the run.
 
 4. **Future direction, explicitly not in scope now.** Joe raised aggregating
    decision-log data across projects into something that actively drives better
