@@ -306,14 +306,18 @@ and the proposed fix.
 **Ticket filing.** On a solo mid-run fork:
 
 ```bash
-bd create --labels autonomous-judgment \
-  --title "<short description of the fork>" \
-  --description "Question: <what was ambiguous>
+description="Question: <what was ambiguous>
 Decision: <what was chosen>
 Rationale: <why>"
+bd create --labels "autonomous-judgment,run-${RUN_ID}" \
+  --title "<short description of the fork>" \
+  --description "$description"
 ```
 
-The same three fields (question, decision, rationale) a decision-log entry needs, so
+Building the description in a variable rather than interpolating it directly into the
+command line matters because that text can contain quotes, `` ` ``, `$()`, or newlines
+from the task or repository content, which the shell would otherwise reinterpret. The
+same three fields (question, decision, rationale) a decision-log entry needs, so
 promotion later is a copy, not a rewrite.
 ````
 
