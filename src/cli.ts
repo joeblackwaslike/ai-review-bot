@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
+import { realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 import { App, Octokit } from "octokit";
 import {
 	auditRepo,
@@ -271,7 +273,7 @@ async function cmdReview(args: string[]): Promise<void> {
 	}
 }
 
-async function cmdAudit(args: string[]): Promise<void> {
+export async function cmdAudit(args: string[]): Promise<void> {
 	let mode: "changed" | "full" = "changed";
 	let dryRun = false;
 	let outDir = ".ai-review";
@@ -814,7 +816,25 @@ async function main(): Promise<void> {
 	usage();
 }
 
-main().catch((err: unknown) => {
-	console.error("Fatal:", err instanceof Error ? err.message : err);
-	process.exit(1);
-});
+// Only run when this file is the actual entrypoint (`ai-review ...` / `node
+// dist/cli.js ...`), not when something imports a function from it (e.g.
+// tests) — importing used to unconditionally re-parse `process.argv` and
+// dispatch a real subcommand, which is why this file had zero test coverage.
+// `realpath` handles the npm-bin case, where `process.argv[1]` is the
+// `node_modules/.bin/ai-review` symlink rather than `dist/cli.js` itself.
+function isCliEntrypoint(): boolean {
+	const invoked = process.argv[1];
+	if (!invoked) return false;
+	try {
+		return realpathSync(invoked) === fileURLToPath(new URL(import.meta.url));
+	} catch {
+		return false;
+	}
+}
+
+if (isCliEntrypoint()) {
+	main().catch((err: unknown) => {
+		console.error("Fatal:", err instanceof Error ? err.message : err);
+		process.exit(1);
+	});
+}
