@@ -1,0 +1,48 @@
+{
+	"compilerOptions": {
+		"target": "ES2017",
+		"lib": ["dom", "dom.iterable", "esnext"],
+		"allowJs": true,
+		"skipLibCheck": true,
+		"strict": true,
+		"noEmit": true,
+		"esModuleInterop": true,
+		// Deliberately NOT Next's own default of "esnext"/"bundler". This repo's
+		// root src/ and api/ trees use .js-suffixed relative imports even for .ts
+		// source files, and dashboard/ imports across that boundary. Turbopack
+		// (the bundler behind next dev/build in this Next version) only maps a
+		// .js specifier to a same-tree .ts file when the governing tsconfig has
+		// moduleResolution: "nodenext" — under "bundler" it fails with
+		// "Module not found" for every .js import reaching outside dashboard/,
+		// even ones fully inside src/improve/ itself. Verified against
+		// Turbopack's own resolver source (enable_typescript_with_output_extension
+		// is set from is_module_resolution_nodenext), not guessed. See
+		// docs/superpowers/plans/2026-08-11-feedback-loop-phase8-dashboard.md
+		// (Task 6's post-implementation note) for the full investigation and the
+		// options considered. Do not revert this to "bundler" without re-reading
+		// that note first — it silently reintroduces the build failure.
+		"module": "nodenext",
+		"moduleResolution": "nodenext",
+		"resolveJsonModule": true,
+		"isolatedModules": true,
+		"jsx": "react-jsx",
+		"incremental": true,
+		"plugins": [
+			{
+				"name": "next"
+			}
+		],
+		"paths": {
+			"@/*": ["./*"]
+		}
+	},
+	"include": [
+		"next-env.d.ts",
+		"**/*.ts",
+		"**/*.tsx",
+		".next/types/**/*.ts",
+		".next/dev/types/**/*.ts",
+		"**/*.mts"
+	],
+	"exclude": ["node_modules"]
+}

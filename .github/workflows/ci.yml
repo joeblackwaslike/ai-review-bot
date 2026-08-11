@@ -27,3 +27,12 @@ jobs:
 
       - name: Test
         run: npm test
+
+      - name: Typecheck (dashboard)
+        run: npm run typecheck --workspace=dashboard
+
+      - name: Test (dashboard)
+        run: npm run test --workspace=dashboard
+
+      - name: Build (dashboard)
+        run: npm run build --workspace=dashboard

@@ -59,7 +59,13 @@ function normalizePrivateKey(raw: string): string {
 	return raw.replaceAll(String.raw`\n`, "\n");
 }
 
-function validatePrivateKey(key: string): string {
+/** Rejects a GitHub App private key in PKCS#1 format ("BEGIN RSA PRIVATE
+ * KEY") — the App-auth JWT library requires PKCS#8 ("BEGIN PRIVATE KEY") and
+ * fails on PKCS#1 with an error that doesn't point at the actual cause.
+ * Does not normalize `\n`-escaping; returns `key` unchanged if it passes.
+ * The error message text is asserted on in tests — treat it as part of this
+ * function's contract, not just a log line. */
+export function validatePrivateKey(key: string): string {
 	if (key.includes("BEGIN RSA PRIVATE KEY")) {
 		throw new Error(
 			"GITHUB_APP_PRIVATE_KEY is in PKCS#1 format (BEGIN RSA PRIVATE KEY). " +
