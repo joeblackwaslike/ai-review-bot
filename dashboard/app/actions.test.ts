@@ -98,6 +98,10 @@ describe("openIssueFromProposal", () => {
 	});
 
 	it("stays dry-run by default (DASHBOARD_DRY_RUN unset)", async () => {
+		// Explicit delete, not just relying on the ambient environment lacking
+		// it: vi.stubEnv only adds overrides, so if the runner's real env ever
+		// sets DASHBOARD_DRY_RUN this test would flake without this.
+		delete process.env.DASHBOARD_DRY_RUN;
 		authMock.mockResolvedValue({ user: { name: "Joe" } });
 		vi.stubEnv("GITHUB_APP_ID", "app-1");
 		vi.stubEnv("GITHUB_APP_PRIVATE_KEY", "key");

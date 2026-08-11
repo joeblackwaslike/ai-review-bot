@@ -1057,7 +1057,7 @@ git commit -m "feat(dashboard): wire open-issue button to the server action"
 
 Insert this new block after the existing `# --- QC app ...` section (after line 97, before the `# --- Peer-aware review delay ---` section):
 
-```
+```dotenv
 # --- Dashboard (Phase 8, dashboard/) — separate Vercel project ---
 # Reuses DATABASE_URL, GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY, IMPROVE_* above.
 # See docs/superpowers/specs/2026-08-11-feedback-loop-phase8-dashboard-design.md.

@@ -3,13 +3,19 @@ import { ProposalCard } from "./ProposalCard";
 
 export const runtime = "nodejs";
 
+// Default export, not named -- Next.js App Router requires it for page.tsx's
+// route component, overriding this repo's "no default exports" convention
+// for this one file class (page.tsx/layout.tsx only).
 export default async function DashboardPage() {
 	const { outcomes, severity, duplicates, skills, proposals } =
 		await loadDashboardData();
 
 	return (
 		<div>
-			<p>Findings with feedback: {outcomes.length}</p>
+			{/* One row per piece of feedback, not per unique finding -- a finding
+			rated by several people appears once per rating (see the docstring on
+			listFindingOutcomes). */}
+			<p>Feedback records: {outcomes.length}</p>
 
 			<section>
 				<h2>Severity reliability</h2>

@@ -194,8 +194,9 @@ export async function installationOctokit(appId: string, privateKey: string, own
 | `GITHUB_OAUTH_CLIENT_ID` / `_SECRET` | **net-new** | a fresh **GitHub OAuth App** (not the GitHub App used by the bots) |
 | `AUTH_SECRET` | **net-new** | `npx auth secret` |
 | `DASHBOARD_ALLOWED_LOGIN` | **net-new** | comma-separated GitHub logins |
+| `DASHBOARD_DRY_RUN` | **net-new** | gates the "open issue from metric" button; safe default is unset/anything but the literal `"false"` (see §3's dry-run gate) |
 
-Add the 4 net-new vars to root `.env.example`. Never prefix any of these with `NEXT_PUBLIC_` — that ships them to the client bundle.
+Add the 5 net-new vars to root `.env.example`. Never prefix any of these with `NEXT_PUBLIC_` — that ships them to the client bundle.
 
 ### 6. Testing
 

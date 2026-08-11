@@ -17,6 +17,9 @@ async function handleSignOut() {
 	await signOut();
 }
 
+// Default export, not named -- Next.js App Router requires it for
+// layout.tsx's route component, overriding this repo's "no default exports"
+// convention for this one file class (page.tsx/layout.tsx only).
 export default async function RootLayout({
 	children,
 }: {
