@@ -5,11 +5,16 @@ import { auth } from "./auth";
 const PUBLIC_PATH_PREFIXES = ["/api/auth"];
 
 export const proxy = auth((req) => {
-	// next-auth's NextAuthRequest (extends NextRequest) loses its inherited
-	// members under this project's moduleResolution: "nodenext" — a pre-existing
-	// duplicate react version between the repo root (vitepress) and dashboard/
-	// makes TS resolve next/server's types inconsistently there. The object is a
-	// real NextRequest at runtime regardless; only the inferred type is wrong.
+	// The inferred type of `req` loses its inherited NextRequest members
+	// (nextUrl, url, ...) under this project's moduleResolution: "nodenext" — a
+	// pre-existing duplicate react version between the repo root (vitepress) and
+	// dashboard/ makes TS resolve next/server's types inconsistently there. The
+	// object is a real NextRequest at runtime regardless; only the inferred type
+	// is wrong. Importing next-auth's own `NextAuthRequest` doesn't help — it's
+	// defined as `extends NextRequest` too, so it hits the identical broken
+	// extends-chain (confirmed: swapping to it reproduces the same TS2339s).
+	// Reconstructing the shape from `next/server`'s own NextRequest sidesteps
+	// next-auth's already-broken alias entirely.
 	const request = req as unknown as NextRequest & { auth: Session | null };
 	const isPublic = PUBLIC_PATH_PREFIXES.some(
 		(p) =>
