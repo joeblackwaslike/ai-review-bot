@@ -4,8 +4,9 @@ import { auth } from "./auth";
 const PUBLIC_PATH_PREFIXES = ["/api/auth"];
 
 export const proxy = auth((req) => {
-	const isPublic = PUBLIC_PATH_PREFIXES.some((p) =>
-		req.nextUrl.pathname.startsWith(p),
+	const isPublic = PUBLIC_PATH_PREFIXES.some(
+		(p) =>
+			req.nextUrl.pathname === p || req.nextUrl.pathname.startsWith(`${p}/`),
 	);
 	if (!req.auth && !isPublic) {
 		return NextResponse.redirect(
