@@ -1,8 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import type { Session } from "next-auth";
 import { auth } from "./auth";
-
-const PUBLIC_PATH_PREFIXES = ["/api/auth"];
+import { isPublicPath, PUBLIC_PATH_PREFIXES } from "./lib/route-guard";
 
 export const proxy = auth((req) => {
 	// The inferred type of `req` loses its inherited NextRequest members
@@ -16,11 +15,7 @@ export const proxy = auth((req) => {
 	// Reconstructing the shape from `next/server`'s own NextRequest sidesteps
 	// next-auth's already-broken alias entirely.
 	const request = req as unknown as NextRequest & { auth: Session | null };
-	const isPublic = PUBLIC_PATH_PREFIXES.some(
-		(p) =>
-			request.nextUrl.pathname === p ||
-			request.nextUrl.pathname.startsWith(`${p}/`),
-	);
+	const isPublic = isPublicPath(request.nextUrl.pathname, PUBLIC_PATH_PREFIXES);
 	if (!request.auth && !isPublic) {
 		return NextResponse.redirect(
 			new URL("/api/auth/signin", request.nextUrl.origin),

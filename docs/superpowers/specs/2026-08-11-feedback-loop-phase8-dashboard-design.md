@@ -5,6 +5,8 @@
 **Beads:** `ai-review-bot-vms` (Phase 8: build), `ai-review-bot-g8q` (coexistence spike — resolved by this spec), `ai-review-bot-x4c` (epic)
 **Builds on:** `docs/superpowers/specs/2026-06-21-feedback-improvement-loop-design.md` (Phases 1–7; the corpus, capture, classify+match, trends, QC app, issues, CLI+cron already built/partially built)
 
+**Implementation note (as-built):** every `middleware.ts` reference below is `dashboard/proxy.ts` in the actual implementation — Next.js 16 renamed the file convention after this spec was written. See `docs/superpowers/plans/2026-08-11-feedback-loop-phase8-dashboard.md` (Task 4's post-implementation note) for the full detail. Left uncorrected below since this is a point-in-time design record, not living documentation.
+
 ## Goal
 
 Ship the Phase 8 dashboard: a Joe-only, GitHub-OAuth-gated Next.js app that reads the Neon corpus built in Phases 1–7 and mirrors what `ai-review trends --json` / `ai-review propose --dry-run` already compute, with a button to open a GitHub issue from a metric ("open issue from metric"). This closes out the interim CLI-only mitigation the backlog has been running on (`docs/_backlog.md` → "Dashboard (Phase 8)").

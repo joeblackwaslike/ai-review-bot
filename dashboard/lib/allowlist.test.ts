@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isAllowedLogin, parseAllowlist } from "./allowlist.js";
+import { isAllowedLogin, parseAllowlist, reviewToken } from "./allowlist.js";
 
 describe("parseAllowlist", () => {
 	it("splits, trims, and lowercases comma-separated logins", () => {
@@ -30,5 +30,37 @@ describe("isAllowedLogin", () => {
 	it("rejects a null or undefined login", () => {
 		expect(isAllowedLogin(null, allowlist)).toBe(false);
 		expect(isAllowedLogin(undefined, allowlist)).toBe(false);
+	});
+});
+
+describe("reviewToken", () => {
+	const allowlist = ["joeblackwaslike"];
+
+	it("captures the profile login at sign-in and allows it", () => {
+		expect(reviewToken(undefined, "joeblackwaslike", allowlist)).toEqual({
+			login: "joeblackwaslike",
+			allowed: true,
+		});
+	});
+
+	it("keeps the token's existing login on a profile-less refresh", () => {
+		expect(reviewToken("joeblackwaslike", undefined, allowlist)).toEqual({
+			login: "joeblackwaslike",
+			allowed: true,
+		});
+	});
+
+	it("revokes access on refresh once the login is removed from the allowlist", () => {
+		expect(reviewToken("someone-else", undefined, allowlist)).toEqual({
+			login: "someone-else",
+			allowed: false,
+		});
+	});
+
+	it("rejects a token with no login at all", () => {
+		expect(reviewToken(undefined, undefined, allowlist)).toEqual({
+			login: undefined,
+			allowed: false,
+		});
 	});
 });
