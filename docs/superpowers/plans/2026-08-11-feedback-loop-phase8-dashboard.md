@@ -295,6 +295,26 @@ git commit -m "chore(dashboard): scaffold Next.js app as an npm workspace member
 - Create: `dashboard/lib/allowlist.test.ts`
 - Create: `dashboard/vitest.config.ts`
 - Modify: `dashboard/package.json` (scripts + `vitest` devDependency)
+- Modify: `.github/workflows/ci.yml` (add dashboard-scoped typecheck/test)
+
+**Added during execution (code review finding on Task 2):** CI (`.github/workflows/ci.yml`) runs root `npm run typecheck`/`npm test`, which are structurally scoped away from `dashboard/**` (root `tsconfig.json`'s `include` and `vitest.config.ts`'s `include` both exclude it). Once this task gives `dashboard/package.json` its own `typecheck`/`test` scripts (Step 1 below), CI must also run them — otherwise every later task (4 through 9) can ship type errors or failing tests in `dashboard/` that CI is structurally blind to. Add this as the task's final step, after Step 7:
+
+- [ ] **Step 8: Wire `dashboard/` into CI**
+
+Edit `.github/workflows/ci.yml`, adding two steps after the existing `Test` step:
+
+```yaml
+      - name: Test
+        run: npm test
+
+      - name: Typecheck (dashboard)
+        run: npm run typecheck --workspace=dashboard
+
+      - name: Test (dashboard)
+        run: npm run test --workspace=dashboard
+```
+
+Run `git diff .github/workflows/ci.yml` to confirm only these two steps were added, then commit this alongside the rest of Task 3 (fold into the same commit — don't create a separate one for a two-line CI change tied directly to this task's `package.json` edits).
 
 - [ ] **Step 1: Add the dashboard's own test/typecheck scripts and `vitest`**
 
@@ -497,6 +517,12 @@ git add dashboard/auth.ts "dashboard/app/api/auth/[...nextauth]/route.ts" dashbo
 git commit -m "feat(dashboard): GitHub OAuth via Auth.js v5 with login allowlist"
 ```
 
+**Post-implementation note (as actually built, verified against the installed `next@16.3.0`/`next-auth@5.0.0-beta.32` — this plan text was written before these were confirmed):**
+
+1. **`dashboard/middleware.ts` → `dashboard/proxy.ts`.** Next.js 16 renamed the middleware file convention to `proxy.ts` (`middleware.ts` still works but logs a deprecation warning; having both hard-errors). The file's content is the same logic, just the filename and export changed: `export const proxy = auth((req) => {...})` (named export, not `export default`, per this project's no-default-exports convention) instead of `export default auth(...)` in a file named `middleware.ts`.
+2. **Route handler export shape.** `dashboard/app/api/auth/[...nextauth]/route.ts` must be `import { handlers } from "../../../../auth"; export const { GET, POST } = handlers;` — not `export { GET, POST } from "..."`, since `auth.ts` exports a `handlers` object, not top-level `GET`/`POST`.
+3. **No `.js` suffix on relative imports inside `dashboard/`.** This plan's remaining task snippets (Tasks 5-8 below) were written using this repo's root convention of `.js`-suffixed relative imports even for `.ts` source (per root CLAUDE.md, correct for the plain-`tsc`-built `src/`/`api/` tree). That convention **breaks the dashboard's production build**: Turbopack (the bundler behind `next build`/`next dev`) cannot resolve a `.js`-suffixed relative import to a same-tree `.ts`/`.tsx` file across directory boundaries, even though `tsc --noEmit` (and Vitest) resolve it fine — so the failure is invisible to `npm run typecheck --workspace=dashboard` and only surfaces as a hard build error. This was caught during Task 4's review (`dashboard/auth.ts`, the route handler, and `proxy.ts` all had to drop the `.js` suffix — see commit `4d03016`), and `.github/workflows/ci.yml` now runs `npm run build --workspace=dashboard` specifically to catch this class of bug going forward. **Every remaining task below has already been corrected to use extensionless relative imports for anything under `dashboard/` that a Next.js route/component/action file imports** (test-only files run through Vitest, not Turbopack, so their import style doesn't matter either way, but they've been kept consistent with their corresponding source file for clarity).
+
 ---
 
 ### Task 5: Data layer — `loadDashboardData`
@@ -515,18 +541,18 @@ npm install server-only --workspace=dashboard
 ```ts
 // dashboard/lib/trends-data.ts
 import "server-only";
-import { getDb } from "../../src/improve/db/client.js";
-import { listFindingOutcomes } from "../../src/improve/db/repo.js";
+import { getDb } from "../../src/improve/db/client";
+import { listFindingOutcomes } from "../../src/improve/db/repo";
 import {
 	planProposals,
 	thresholdsFromEnv,
 	type ProposalPlan,
-} from "../../src/improve/issues.js";
+} from "../../src/improve/issues";
 import {
 	computeSeverityReliability,
 	computeSkillSignals,
 	detectDuplicateClusters,
-} from "../../src/improve/trends.js";
+} from "../../src/improve/trends";
 
 export interface DashboardData {
 	outcomes: Awaited<ReturnType<typeof listFindingOutcomes>>;
@@ -579,7 +605,7 @@ git commit -m "feat(dashboard): load trends + proposals from the feedback corpus
 // dashboard/app/layout.tsx
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { auth, signOut } from "../auth.js";
+import { auth, signOut } from "../auth";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -627,8 +653,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
 
 ```tsx
 // dashboard/app/page.tsx
-import { loadDashboardData } from "../lib/trends-data.js";
-import { ProposalCard } from "./ProposalCard.js";
+import { loadDashboardData } from "../lib/trends-data";
+import { ProposalCard } from "./ProposalCard";
 
 export const runtime = "nodejs";
 
@@ -728,7 +754,7 @@ export default async function DashboardPage() {
 
 ```tsx
 // dashboard/app/ProposalCard.tsx
-import type { ProposalPlan } from "../../src/improve/issues.js";
+import type { ProposalPlan } from "../../src/improve/issues";
 
 export function ProposalCard({ plan }: { plan: ProposalPlan }) {
 	return (
@@ -776,15 +802,15 @@ const authMock = vi.fn();
 const installationOctokitMock = vi.fn();
 const openProposalIssueMock = vi.fn();
 
-vi.mock("../auth.js", () => ({ auth: authMock }));
-vi.mock("../../src/improve/octokit.js", () => ({
+vi.mock("../auth", () => ({ auth: authMock }));
+vi.mock("../../src/improve/octokit", () => ({
 	installationOctokit: installationOctokitMock,
 }));
-vi.mock("../../src/improve/issues.js", () => ({
+vi.mock("../../src/improve/issues", () => ({
 	openProposalIssue: openProposalIssueMock,
 }));
 
-const { openIssueFromProposal } = await import("./actions.js");
+const { openIssueFromProposal } = await import("./actions");
 
 const plan = {
 	kind: "severity_reliability" as const,
@@ -887,9 +913,9 @@ import {
 	openProposalIssue,
 	type IssueOctokit,
 	type ProposalPlan,
-} from "../../src/improve/issues.js";
-import { installationOctokit } from "../../src/improve/octokit.js";
-import { auth } from "../auth.js";
+} from "../../src/improve/issues";
+import { installationOctokit } from "../../src/improve/octokit";
+import { auth } from "../auth";
 
 export interface OpenIssueResult {
 	action: "created" | "commented" | "would_create" | "would_comment" | "failed";
@@ -961,8 +987,8 @@ git commit -m "feat(dashboard): open-issue-from-metric server action, dry-run ga
 "use client";
 
 import { useState, useTransition } from "react";
-import type { ProposalPlan } from "../../src/improve/issues.js";
-import { openIssueFromProposal, type OpenIssueResult } from "./actions.js";
+import type { ProposalPlan } from "../../src/improve/issues";
+import { openIssueFromProposal, type OpenIssueResult } from "./actions";
 
 export function ProposalCard({ plan }: { plan: ProposalPlan }) {
 	const [isPending, startTransition] = useTransition();
@@ -1092,7 +1118,7 @@ These require access to GitHub App/OAuth settings and the Vercel dashboard, whic
 
 - **Neon connection limits:** the dashboard is a third concurrent consumer of the pooled `DATABASE_URL` (alongside the webhook project and the weekly cron). If connection exhaustion appears, confirm the pooled (PgBouncer-fronted) string is used here too, and consider capping `pg.Pool`'s `max` in `src/improve/db/client.ts` (currently unset → node-postgres default of 10).
 - **`GITHUB_APP_PRIVATE_KEY` format:** must be pasted into the new Vercel project with the same `\n`-escaping the existing project's value uses — a mismatch only surfaces at runtime (auth failure), not build time.
-- **Auth.js v5 beta churn:** re-verify `dashboard/auth.ts`/`middleware.ts`/`actions.ts`'s sign-out pattern against the installed version's current docs if you bump `next-auth` later; don't assume the shape in this plan is still current.
+- **Auth.js v5 beta churn:** re-verify `dashboard/auth.ts`/`proxy.ts`/`actions.ts`'s sign-out pattern against the installed version's current docs if you bump `next-auth` later; don't assume the shape in this plan is still current.
 - **`npm publish` sanity:** the root `package.json` is a published npm package (`ai-review-bot` CLI, via `files`/`bin`). Adding `"workspaces"` to it is harmless for consumers (npm ignores that field on install), but if you ever run `npm publish` for this package, a quick `npm publish --dry-run` first is cheap insurance that the `files` allowlist still excludes `dashboard/`.
 
 ## Self-review notes (from writing this plan)
