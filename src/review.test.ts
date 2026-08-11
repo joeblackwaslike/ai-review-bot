@@ -2109,15 +2109,111 @@ describe("buildReview triage gate — FULL carries forward open prior findings",
 		expect(carried?.status).toBe("open");
 		expect(stateAfterSha2?.event).toBe("REQUEST_CHANGES");
 
-		// (d) The summary-writing call (the last generateObject invocation) was
-		// grounded in the still-open finding F — reproduces the PR #57 round-2
-		// failure mode, where a summary model with no access to survivingPrior
-		// independently declared a still-open blocker "addressed" while the
-		// table right below it kept blocking on the same finding.
-		const summaryCall = (mockGenerateObject as ReturnType<typeof vi.fn>).mock
-			.calls[5][0];
+		// (d) The summary-writing call was grounded in the still-open finding F —
+		// reproduces the PR #57 round-2 failure mode, where a summary model with
+		// no access to survivingPrior independently declared a still-open
+		// blocker "addressed" while the table right below it kept blocking on
+		// the same finding. Found by system prompt content, not call index —
+		// an index breaks silently if an earlier generateObject call is added
+		// or removed.
+		const summaryCall = (
+			mockGenerateObject as ReturnType<typeof vi.fn>
+		).mock.calls.find((c) =>
+			(c[0].system as string | undefined)?.includes("ground truth"),
+		)?.[0];
+		expect(summaryCall).toBeDefined();
 		const summaryPrompt = summaryCall.messages[0].content as string;
+		expect(summaryPrompt).toContain("CONFIRMED still open");
 		expect(summaryPrompt).toContain("Bug");
+	});
+
+	// Flagged independently by chatgpt-codex-connector and coderabbitai on PR
+	// #61: resolvedTombstones (used for state persistence) accumulates every
+	// finding ever resolved across all past rounds, not just this round's. If
+	// that full list were fed to generateSummary as "confirmed resolved this
+	// round", a finding resolved two rounds ago and then reintroduced would be
+	// declared freshly fixed even while this round's own findings re-flag it.
+	it("excludes historical tombstones from THIS round's 'confirmed resolved' grounding", async () => {
+		const { client } = fakeKv();
+		const provider = "anthropic";
+		const owner = baseContext.owner;
+		const repo = baseContext.repo;
+		const pull = baseContext.pullNumber;
+
+		const sha1 = "cccccccccccc3333";
+		const openId = findingId("src/a.ts", 5, "Bug");
+		const historicalTombstoneId = findingId(
+			"src/a.ts",
+			9,
+			"Old bug fixed two rounds ago",
+		);
+		await saveReviewState(client, provider, owner, repo, pull, {
+			lastReviewedSha: sha1,
+			event: "REQUEST_CHANGES",
+			findings: [
+				{
+					id: openId,
+					path: "src/a.ts",
+					line: 5,
+					title: "Bug",
+					severity: "high",
+					status: "open",
+				},
+				{
+					id: historicalTombstoneId,
+					path: "src/a.ts",
+					line: 9,
+					title: "Old bug fixed two rounds ago",
+					severity: "medium",
+					status: "resolved",
+				},
+			],
+			reviewedAt: "2026-06-17T00:00:00Z",
+		});
+
+		const sha2 = "dddddddddddd4444";
+		vi.mocked(mockTriageReReview).mockResolvedValueOnce({
+			recommendation: "FULL",
+			resolved: [], // resolves nothing new this round
+			newRisk: true,
+		});
+		const emptyAgent = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+		);
+		const summaryResponse = {
+			object: { summary: "Prior unresolved findings remain." },
+			usage: { inputTokens: 10, outputTokens: 5 },
+		};
+		mockGenerateObject
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(emptyAgent)
+			.mockResolvedValueOnce(summaryResponse);
+
+		await buildReview({
+			octokit: buildOctokit({
+				files: [buildPullFile("src/a.ts", SIMPLE_PATCH)],
+			}),
+			...baseContext,
+			headSha: sha2,
+			kv: client,
+		});
+
+		const summaryCall = (
+			mockGenerateObject as ReturnType<typeof vi.fn>
+		).mock.calls.find((c) =>
+			(c[0].system as string | undefined)?.includes("ground truth"),
+		)?.[0];
+		expect(summaryCall).toBeDefined();
+		const summaryPrompt = summaryCall.messages[0].content as string;
+		expect(summaryPrompt).not.toContain("Old bug fixed two rounds ago");
+		expect(summaryPrompt).not.toContain("CONFIRMED resolved this round");
 	});
 });
 

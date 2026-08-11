@@ -555,7 +555,11 @@ export async function generateSummary(
 	},
 	priorOwnReview: string | null,
 	survivingPrior: PersistedFinding[] = [],
-	resolvedTombstones: PersistedFinding[] = [],
+	/** Findings resolved by the current triage pass specifically — not every
+	 * historical tombstone in persisted state. A finding resolved in an earlier
+	 * round but since reintroduced and re-flagged by this round's agents must
+	 * not appear here, or the summary would call a live blocker fixed. */
+	resolvedThisRound: PersistedFinding[] = [],
 ): Promise<{ summary: string; usage: TokenUsage }> {
 	const findingsList = merged.general_findings
 		.map((f) => `- [${f.severity}] ${f.title}: ${f.body}`)
@@ -591,11 +595,11 @@ export async function generateSummary(
 				].join("\n")
 			: "";
 	const resolvedSection =
-		resolvedTombstones.length > 0
+		resolvedThisRound.length > 0
 			? [
 					"",
 					"CONFIRMED resolved this round:",
-					...resolvedTombstones.map((f) => `- [${f.severity}] ${f.title}`),
+					...resolvedThisRound.map((f) => `- [${f.severity}] ${f.title}`),
 				].join("\n")
 			: "";
 
@@ -612,7 +616,9 @@ export async function generateSummary(
 		priorSection,
 		stillOpenSection,
 		resolvedSection,
-	].join("\n");
+	]
+		.filter(Boolean)
+		.join("\n");
 
 	const system = [
 		"You are a senior code reviewer writing a concise review summary for a GitHub pull request.",
@@ -622,7 +628,7 @@ export async function generateSummary(
 		priorOwnReview
 			? "This is a follow-up review. Summarize only what is new or changed since the last review. Be brief."
 			: "",
-		survivingPrior.length > 0 || resolvedTombstones.length > 0
+		survivingPrior.length > 0 || resolvedThisRound.length > 0
 			? "The CONFIRMED still-open and CONFIRMED resolved lists above are ground truth. Never state or imply that a CONFIRMED still-open finding was fixed, and never describe a finding as unresolved if it appears in CONFIRMED resolved."
 			: "",
 	]
@@ -985,6 +991,13 @@ export async function buildReview(
 	 * optional chain whose undefined branch no test could reach. */
 	let priorSha = "";
 	let resolvedTombstones: PersistedFinding[] = [];
+	/** Subset of resolvedTombstones resolved by THIS triage pass specifically —
+	 * not every historical tombstone in persisted state. Fed to generateSummary
+	 * as "confirmed resolved this round"; the full resolvedTombstones list also
+	 * includes findings resolved in an earlier round, which may have since been
+	 * reintroduced and re-flagged by this round's agents — labeling those as
+	 * newly resolved would tell the summary to call a live blocker fixed. */
+	let resolvedThisRound: PersistedFinding[] = [];
 	/** Whether this pass reviewed only the delta (INCREMENTAL) rather than the
 	 * whole file set (FULL) — changes how the "still open" carry-forward is
 	 * explained, since a FULL pass did see these findings' files and chose not
@@ -1059,6 +1072,9 @@ export async function buildReview(
 		survivingPrior = state.findings.filter((f) => f.status === "open");
 		priorSha = state.lastReviewedSha;
 		resolvedTombstones = state.findings.filter((f) => f.status === "resolved");
+		resolvedThisRound = state.findings.filter((f) =>
+			triage.resolved.includes(f.id),
+		);
 
 		if (triage.recommendation === "INCREMENTAL" && !deltaMeta.truncated) {
 			scopedFiles = deltaMeta.files;
@@ -1398,7 +1414,7 @@ export async function buildReview(
 			},
 			priorOwnReview,
 			survivingPrior,
-			resolvedTombstones,
+			resolvedThisRound,
 		);
 		summary = summaryResult.summary.trim();
 		if (summary.length === 0) {
