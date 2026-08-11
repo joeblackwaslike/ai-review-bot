@@ -1,63 +1,96 @@
-import Image from "next/image";
+import { loadDashboardData } from "../lib/trends-data";
+import { ProposalCard } from "./ProposalCard";
 
-export default function Home() {
+export const runtime = "nodejs";
+
+export default async function DashboardPage() {
+	const { outcomes, severity, duplicates, skills, proposals } =
+		await loadDashboardData();
+
 	return (
 		<div>
-			<main>
-				<Image
-					src="/next.svg"
-					alt="Next.js logo"
-					width={100}
-					height={20}
-					priority
-				/>
-				<div>
-					<h1>
-						To get started, edit the <code>page.tsx</code> file.
-					</h1>
-					<p>
-						Looking for a starting point or more instructions? Head over to{" "}
-						<a
-							href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-							target="_blank"
-							rel="noopener noreferrer"
-						>
-							Templates
-						</a>{" "}
-						or the{" "}
-						<a
-							href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-							target="_blank"
-							rel="noopener noreferrer"
-						>
-							Learning
-						</a>{" "}
-						center.
-					</p>
-				</div>
-				<div>
-					<a
-						href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-						target="_blank"
-						rel="noopener noreferrer"
-					>
-						<Image
-							src="/vercel.svg"
-							alt="Vercel logomark"
-							width={16}
-							height={14}
-						/>
-						Deploy Now
-					</a>
-					<a
-						href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-						target="_blank"
-						rel="noopener noreferrer"
-					>
-						Documentation
-					</a>
-				</div>
-			</main>
+			<p>Findings with feedback: {outcomes.length}</p>
+
+			<section>
+				<h2>Severity reliability</h2>
+				<table>
+					<thead>
+						<tr>
+							<th>Severity</th>
+							<th>Useful</th>
+							<th>Low value</th>
+							<th>Wrong</th>
+							<th>Sample</th>
+							<th>Useful %</th>
+						</tr>
+					</thead>
+					<tbody>
+						{severity.map((s) => (
+							<tr key={s.severity}>
+								<td>{s.severity}</td>
+								<td>{s.useful}</td>
+								<td>{s.lowValue}</td>
+								<td>{s.wrong}</td>
+								<td>{s.sampleSize}</td>
+								<td>{Math.round(s.usefulRatio * 100)}%</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</section>
+
+			<section>
+				<h2>Repeated claims ({duplicates.length} cluster(s))</h2>
+				<ul>
+					{duplicates.map((d) => (
+						<li key={`${d.pr}:${d.path}:${d.identifier}`}>
+							×{d.findingIds.length} #{d.pr} {d.path ?? "(no path)"} —{" "}
+							<code>{d.identifier}</code>
+							<ul>
+								{d.titles.map((t, i) => (
+									// biome-ignore lint/suspicious/noArrayIndexKey: titles within a cluster can repeat verbatim; index disambiguates duplicates
+									<li key={`${d.pr}:${d.identifier}:${i}`}>{t}</li>
+								))}
+							</ul>
+						</li>
+					))}
+				</ul>
+			</section>
+
+			<section>
+				<h2>Skill signals</h2>
+				<table>
+					<thead>
+						<tr>
+							<th>Skill</th>
+							<th>Useful</th>
+							<th>Negative</th>
+							<th>Sample</th>
+							<th>Negative %</th>
+						</tr>
+					</thead>
+					<tbody>
+						{skills.map((s) => (
+							<tr key={s.skill}>
+								<td>{s.skill}</td>
+								<td>{s.useful}</td>
+								<td>{s.negative}</td>
+								<td>{s.sampleSize}</td>
+								<td>{Math.round(s.negativeRatio * 100)}%</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</section>
+
+			<section>
+				<h2>Proposals</h2>
+				{proposals.length === 0 ? (
+					<p>No signal above threshold.</p>
+				) : (
+					proposals.map((p) => <ProposalCard key={p.signature} plan={p} />)
+				)}
+			</section>
 		</div>
 	);
 }
