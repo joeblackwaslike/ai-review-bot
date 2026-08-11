@@ -1,4 +1,4 @@
-import { type NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import type { Session } from "next-auth";
 import { auth } from "./auth";
 import { isPublicPath, PUBLIC_PATH_PREFIXES } from "./lib/route-guard";
@@ -12,9 +12,10 @@ export const proxy = auth((req) => {
 	// is wrong. Importing next-auth's own `NextAuthRequest` doesn't help — it's
 	// defined as `extends NextRequest` too, so it hits the identical broken
 	// extends-chain (confirmed: swapping to it reproduces the same TS2339s).
-	// Reconstructing the shape from `next/server`'s own NextRequest sidesteps
-	// next-auth's already-broken alias entirely.
-	const request = req as unknown as NextRequest & { auth: Session | null };
+	// Cast to only the two members actually used here, rather than the full
+	// NextRequest shape, so this workaround can't silently mask a real type
+	// error on some other property this file never touches.
+	const request = req as unknown as { nextUrl: URL; auth: Session | null };
 	const isPublic = isPublicPath(request.nextUrl.pathname, PUBLIC_PATH_PREFIXES);
 	if (!request.auth && !isPublic) {
 		return NextResponse.redirect(

@@ -5,6 +5,12 @@ export function parseAllowlist(raw: string | undefined): string[] {
 		.filter(Boolean);
 }
 
+/** Case-insensitive on both sides deliberately, not just on `login`: callers
+ * always pass an `allowlist` already lowercased by `parseAllowlist`, so the
+ * per-entry `.toLowerCase()` here is redundant today — but this function
+ * accepts an arbitrary `string[]`, not specifically `parseAllowlist`'s
+ * output, so it stays defensive against a future caller that builds one by
+ * hand and forgets to normalize it. */
 export function isAllowedLogin(
 	login: string | null | undefined,
 	allowlist: string[],
