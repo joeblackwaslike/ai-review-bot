@@ -298,10 +298,17 @@ function buildOctokit(overrides?: {
 		status: string;
 		conclusion: string | null;
 	}>;
+	checkRunsError?: Error;
 }) {
 	const requestMock = vi.fn().mockImplementation((route: string) => {
-		if (route.includes("/check-runs")) {
+		if (route.includes("GET") && route.includes("/check-runs")) {
+			if (overrides?.checkRunsError) {
+				throw overrides.checkRunsError;
+			}
 			return { data: { check_runs: overrides?.checkRuns ?? [] } };
+		}
+		if (route.includes("/check-runs")) {
+			return { data: {} };
 		}
 		return reviewsResponse(overrides?.existingReviews);
 	});
@@ -624,6 +631,34 @@ describe("buildReview", () => {
 		expect(review?.body).toContain("2 CI check(s) still outstanding");
 		expect(review?.body).toContain("lint (in_progress)");
 		expect(review?.body).toContain("deploy (failed)");
+	});
+
+	// Before this test, a failed check-runs fetch (auth blip, rate limit,
+	// network) rendered *identically* to "CI genuinely has nothing
+	// outstanding" — the approval message must say it couldn't verify, not
+	// silently claim a clean bill of health it never confirmed.
+	it("says checks could not be verified when the check-runs fetch fails, instead of claiming none are outstanding", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		mockGenerateObject.mockResolvedValue(
+			buildGenerateObjectResponse(buildModelReview()),
+		);
+
+		const review = await buildReview({
+			octokit: buildOctokit({
+				checkRunsError: new Error("GitHub API unavailable"),
+			}),
+			...baseContext,
+		});
+
+		expect(review?.event).toBe("APPROVE");
+		expect(review?.body).toContain("PR approved for merge.");
+		expect(review?.body).toContain("could not verify outstanding CI checks");
+		expect(review?.body).not.toContain("CI check(s) still outstanding");
+		expect(warn).toHaveBeenCalledWith(
+			"failed to fetch outstanding checks",
+			expect.objectContaining({ err: expect.any(Error) }),
+		);
+		warn.mockRestore();
 	});
 
 	it("does not APPROVE when there are general findings", async () => {
@@ -2228,6 +2263,57 @@ describe("partial runs cannot approve", () => {
 		});
 
 		expect(review?.event).toBe("APPROVE");
+	});
+});
+
+describe("agent errors surface on the review", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+	});
+
+	// A crashed agent (schema failure, transient network error — anything that
+	// isn't a 429) must not read as "nothing to say": before this test, only
+	// `skipped` (budget-exhausted) agents earned a body notice, so a thrown
+	// agent vanished with zero trace on the PR even though allAgentsSucceeded
+	// already (correctly) blocked APPROVE.
+	it("names the failed skill and stays partial when an agent throws a non-refusal error", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const cleanAgent = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+		);
+		const summaryResponse = {
+			object: { summary: "Nothing found in what ran." },
+			usage: { inputTokens: 10, outputTokens: 5 },
+		};
+		mockGenerateObject
+			.mockResolvedValueOnce(cleanAgent)
+			.mockRejectedValueOnce(new Error("schema validation failed"))
+			.mockResolvedValueOnce(cleanAgent)
+			.mockResolvedValueOnce(cleanAgent)
+			.mockResolvedValueOnce(cleanAgent)
+			.mockResolvedValueOnce(summaryResponse);
+
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+		});
+
+		expect(review?.event).not.toBe("APPROVE");
+		expect(review?.body).toContain("Partial review");
+		expect(review?.body).toContain(
+			(TIER1_SKILLS[1] ?? "").replace(/\.md$/, ""),
+		);
+		expect(warn).toHaveBeenCalledWith(
+			"review agents failed and were excluded from this pass",
+			expect.objectContaining({ errored: [TIER1_SKILLS[1]] }),
+		);
+		warn.mockRestore();
 	});
 });
 

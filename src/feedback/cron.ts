@@ -26,6 +26,7 @@ export async function pollFeedbackRequest(opts: {
 		const result = await runFeedbackPoll(opts.buildDeps());
 		return { status: 200, body: result };
 	} catch (err) {
+		console.error("feedback cron: poll failed", { err });
 		return {
 			status: 500,
 			body: { error: "poll failed", message: String(err) },

@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
+import { realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
+import { inspect } from "node:util";
 import { App, Octokit } from "octokit";
 import {
 	auditRepo,
@@ -271,7 +274,7 @@ async function cmdReview(args: string[]): Promise<void> {
 	}
 }
 
-async function cmdAudit(args: string[]): Promise<void> {
+export async function cmdAudit(args: string[]): Promise<void> {
 	let mode: "changed" | "full" = "changed";
 	let dryRun = false;
 	let outDir = ".ai-review";
@@ -294,7 +297,17 @@ async function cmdAudit(args: string[]): Promise<void> {
 			getConfig();
 			getOpenAIAppConfig();
 		} catch (err) {
-			fatal((err as Error).message);
+			// String(err) collapses a plain-object throw to "[object Object]"
+			// (and throws outright for a null-prototype one) — inspect() keeps
+			// whatever detail the thrown value actually carries. Strings pass
+			// through unchanged rather than getting quote-wrapped by inspect().
+			fatal(
+				err instanceof Error
+					? err.message
+					: typeof err === "string"
+						? err
+						: inspect(err, { customInspect: false }),
+			);
 		}
 	}
 
@@ -814,7 +827,38 @@ async function main(): Promise<void> {
 	usage();
 }
 
-main().catch((err: unknown) => {
-	console.error("Fatal:", err instanceof Error ? err.message : err);
-	process.exit(1);
-});
+// Only run when this file is the actual entrypoint (`ai-review ...` / `node
+// dist/cli.js ...`), not when something imports a function from it (e.g.
+// tests) — importing used to unconditionally re-parse `process.argv` and
+// dispatch a real subcommand, which is why this file had zero test coverage.
+// `realpath` handles the npm-bin case, where `process.argv[1]` is the
+// `node_modules/.bin/ai-review` symlink rather than `dist/cli.js` itself.
+function isCliEntrypoint(): boolean {
+	const invoked = process.argv[1];
+	if (!invoked) return false;
+	try {
+		return realpathSync(invoked) === fileURLToPath(new URL(import.meta.url));
+	} catch (err) {
+		// A missing symlink target (ENOENT) is the one case worth staying
+		// quiet about — it's indistinguishable from "not the entrypoint" from
+		// here. Anything else (EPERM, EIO, a malformed import.meta.url) means
+		// the CLI is about to silently no-op with zero output, which is worse
+		// than the unguarded behavior this check replaced — log it so that's
+		// visible instead of a mysterious empty invocation.
+		const code = (err as NodeJS.ErrnoException)?.code;
+		if (code !== "ENOENT") {
+			console.error(
+				"[cli] isCliEntrypoint: could not resolve invocation path",
+				err,
+			);
+		}
+		return false;
+	}
+}
+
+if (isCliEntrypoint()) {
+	main().catch((err: unknown) => {
+		console.error("Fatal:", err instanceof Error ? err.message : err);
+		process.exit(1);
+	});
+}

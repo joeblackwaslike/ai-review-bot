@@ -123,8 +123,14 @@ export async function loadReviewState(
 					pullNumber,
 				},
 			);
-		} catch {
-			// Corrupt/malformed JSON — fall through to the GitHub re-parse fallback.
+		} catch (err) {
+			console.warn("review-state: KV entry is corrupt JSON; treating as cold", {
+				provider,
+				owner,
+				repo,
+				pullNumber,
+				err,
+			});
 		}
 	}
 	if (priorOwnReview) return parsePriorReview(priorOwnReview);

@@ -76,4 +76,30 @@ describe("pollFeedbackRequest", () => {
 		expect(out.status).toBe(500);
 		expect(out.body).toMatchObject({ error: expect.any(String) });
 	});
+
+	// A systemic failure here (KV unreachable, missing env, bad installation
+	// auth) is the one thing Vercel Cron never surfaces on its own — nobody
+	// inspects the HTTP body of a scheduled invocation. Before this test, the
+	// 500 was constructed with zero console output, so an outage left no
+	// server-side trace at all.
+	it("logs a systemic poll failure, not just the 500 body", async () => {
+		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+		try {
+			const out = await pollFeedbackRequest({
+				authorization: "Bearer s3cret",
+				secret: "s3cret",
+				feedbackEnabled: true,
+				buildDeps: () => {
+					throw new Error("KV down");
+				},
+			});
+			expect(out.status).toBe(500);
+			expect(errorSpy).toHaveBeenCalledWith(
+				"feedback cron: poll failed",
+				expect.objectContaining({ err: expect.any(Error) }),
+			);
+		} finally {
+			errorSpy.mockRestore();
+		}
+	});
 });
