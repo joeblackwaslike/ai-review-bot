@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "./auth.js";
+import { auth } from "./auth";
 
 const PUBLIC_PATH_PREFIXES = ["/api/auth"];
 

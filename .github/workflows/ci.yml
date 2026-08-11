@@ -33,3 +33,6 @@ jobs:
 
       - name: Test (dashboard)
         run: npm run test --workspace=dashboard
+
+      - name: Build (dashboard)
+        run: npm run build --workspace=dashboard

@@ -1,6 +1,6 @@
 import NextAuth from "next-auth";
 import GitHub from "next-auth/providers/github";
-import { isAllowedLogin, parseAllowlist } from "./lib/allowlist.js";
+import { isAllowedLogin, parseAllowlist } from "./lib/allowlist";
 
 const allowlist = parseAllowlist(process.env.DASHBOARD_ALLOWED_LOGIN);
 
