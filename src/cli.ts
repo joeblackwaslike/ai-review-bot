@@ -37,6 +37,7 @@ import {
 	thresholdsFromEnv,
 } from "./improve/issues.js";
 import { fpSignature } from "./improve/match.js";
+import { installationOctokit } from "./improve/octokit.js";
 import {
 	computeSeverityReliability,
 	computeSkillSignals,
@@ -130,23 +131,6 @@ function originSlug(): { owner: string; repo: string } {
 	const m = /github\.com[:/]([^/]+)\/(.+?)(?:\.git)?$/.exec(url);
 	if (!m) fatal(`Cannot parse owner/repo from origin: ${url}`);
 	return { owner: m[1], repo: m[2] };
-}
-
-async function installationOctokit(
-	appId: string,
-	privateKey: string,
-	owner: string,
-	repo: string,
-) {
-	const app = new App({
-		appId,
-		privateKey: privateKey.replaceAll(String.raw`\n`, "\n"),
-	});
-	const { data: inst } = await app.octokit.request(
-		"GET /repos/{owner}/{repo}/installation",
-		{ owner, repo },
-	);
-	return app.getInstallationOctokit(inst.id);
 }
 
 async function buildResolvePr() {

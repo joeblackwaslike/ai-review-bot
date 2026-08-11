@@ -1,5 +1,4 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { App } from "octokit";
 import { getConfig } from "../../src/config.js";
 import type { KvClient } from "../../src/feedback/kv.js";
 import { createUpstashKv } from "../../src/feedback/kv.js";
@@ -7,6 +6,7 @@ import { improveRequest } from "../../src/improve/cron.js";
 import { getDb } from "../../src/improve/db/client.js";
 import type { IssueOctokit } from "../../src/improve/issues.js";
 import { thresholdsFromEnv } from "../../src/improve/issues.js";
+import { installationOctokit } from "../../src/improve/octokit.js";
 import { runImproveCycle } from "../../src/improve/run.js";
 
 function optionalKv(): KvClient | null {
@@ -30,16 +30,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 				process.env.IMPROVE_TARGET_REPO ?? "joeblackwaslike/ai-review-bot";
 			const [owner, repo] = slug.split("/");
 			const config = getConfig();
-			const app = new App({
-				appId: config.appId,
-				privateKey: config.privateKey.replaceAll(String.raw`\n`, "\n"),
-			});
-			const { data: inst } = await app.octokit.request(
-				"GET /repos/{owner}/{repo}/installation",
-				{ owner, repo },
-			);
-			const octokit = (await app.getInstallationOctokit(
-				inst.id,
+			const octokit = (await installationOctokit(
+				config.appId,
+				config.privateKey,
+				owner,
+				repo,
 			)) as unknown as IssueOctokit;
 
 			return runImproveCycle({
