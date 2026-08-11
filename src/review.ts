@@ -554,6 +554,8 @@ export async function generateSummary(
 		changedFiles: number;
 	},
 	priorOwnReview: string | null,
+	survivingPrior: PersistedFinding[] = [],
+	resolvedTombstones: PersistedFinding[] = [],
 ): Promise<{ summary: string; usage: TokenUsage }> {
 	const findingsList = merged.general_findings
 		.map((f) => `- [${f.severity}] ${f.title}: ${f.body}`)
@@ -572,6 +574,31 @@ export async function generateSummary(
 			].join("\n")
 		: "";
 
+	// Ground truth for what's actually resolved vs still open, computed by the
+	// triage gate against the delta diff — not this model's own read of
+	// priorOwnReview's free text. Without this, generateSummary independently
+	// guesses resolution status and can contradict the "Still open from the
+	// previous review" table rendered from survivingPrior right below it in
+	// the same posted review (observed live: cc-recall PR #57 round 2, where
+	// the summary declared a blocker "addressed" while the table still listed
+	// it as open).
+	const stillOpenSection =
+		survivingPrior.length > 0
+			? [
+					"",
+					"CONFIRMED still open — do not claim these are fixed, no matter what the diff appears to show:",
+					...survivingPrior.map((f) => `- [${f.severity}] ${f.title}`),
+				].join("\n")
+			: "";
+	const resolvedSection =
+		resolvedTombstones.length > 0
+			? [
+					"",
+					"CONFIRMED resolved this round:",
+					...resolvedTombstones.map((f) => `- [${f.severity}] ${f.title}`),
+				].join("\n")
+			: "";
+
 	const prompt = [
 		`PR: ${context.title}`,
 		`Description: ${context.body ?? "[none]"}`,
@@ -583,6 +610,8 @@ export async function generateSummary(
 		`Inline comments (${merged.inline_comments.length}):`,
 		inlineList || "(none)",
 		priorSection,
+		stillOpenSection,
+		resolvedSection,
 	].join("\n");
 
 	const system = [
@@ -592,6 +621,9 @@ export async function generateSummary(
 		"If there are no findings, say so briefly.",
 		priorOwnReview
 			? "This is a follow-up review. Summarize only what is new or changed since the last review. Be brief."
+			: "",
+		survivingPrior.length > 0 || resolvedTombstones.length > 0
+			? "The CONFIRMED still-open and CONFIRMED resolved lists above are ground truth. Never state or imply that a CONFIRMED still-open finding was fixed, and never describe a finding as unresolved if it appears in CONFIRMED resolved."
 			: "",
 	]
 		.filter(Boolean)
@@ -1365,6 +1397,8 @@ export async function buildReview(
 				changedFiles: context.changedFiles,
 			},
 			priorOwnReview,
+			survivingPrior,
+			resolvedTombstones,
 		);
 		summary = summaryResult.summary.trim();
 		if (summary.length === 0) {

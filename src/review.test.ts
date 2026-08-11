@@ -11,6 +11,7 @@ import {
 	runAgent,
 	TIER1_SKILLS,
 } from "./review.js";
+import type { PersistedFinding } from "./review-state.js";
 import { findingId, loadReviewState, saveReviewState } from "./review-state.js";
 import type { ModelSelection } from "./router.js";
 import {
@@ -1224,6 +1225,72 @@ describe("runAgent caching + telemetry", () => {
 });
 
 // ---------------------------------------------------------------------------
+// generateSummary carry-forward grounding
+// ---------------------------------------------------------------------------
+
+describe("generateSummary carry-forward grounding", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+	});
+
+	it("grounds the prompt in survivingPrior and resolvedTombstones instead of only free-text prior-review prose", async () => {
+		mockGenerateObject.mockResolvedValue({
+			object: { summary: "Summary." },
+			usage: { inputTokens: 10, outputTokens: 5 },
+		});
+		const sel = {
+			provider: "anthropic",
+			model: "claude-haiku-4-5",
+		} as ModelSelection;
+		const survivingPrior: PersistedFinding[] = [
+			{
+				id: "f1",
+				path: "hooks/ensure-built.sh",
+				line: 40,
+				title:
+					"pnpm build failure is silently swallowed, leaving a stale stamp",
+				severity: "critical",
+				status: "open",
+			},
+		];
+		const resolvedTombstones: PersistedFinding[] = [
+			{
+				id: "f2",
+				path: "hooks/ensure-built.sh",
+				line: 12,
+				title: "LOG_FILE referenced before assignment",
+				severity: "medium",
+				status: "resolved",
+			},
+		];
+
+		await generateSummary(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+			sel,
+			{ title: "t", body: null, additions: 1, deletions: 0, changedFiles: 1 },
+			"Some prior free-text review body.",
+			survivingPrior,
+			resolvedTombstones,
+		);
+
+		const call = (mockGenerateObject as ReturnType<typeof vi.fn>).mock
+			.calls[0][0];
+		const prompt = call.messages[0].content as string;
+		expect(prompt).toContain(
+			"pnpm build failure is silently swallowed, leaving a stale stamp",
+		);
+		expect(prompt).toContain("LOG_FILE referenced before assignment");
+		// The instruction telling the model these lists are ground truth belongs
+		// in the system prompt, not buried in free text it can rationalize past.
+		expect(call.system).toContain("ground truth");
+	});
+});
+
+// ---------------------------------------------------------------------------
 // buildReview rate-limit decision
 // ---------------------------------------------------------------------------
 
@@ -2041,6 +2108,16 @@ describe("buildReview triage gate — FULL carries forward open prior findings",
 		const carried = stateAfterSha2?.findings.find((f) => f.id === fId);
 		expect(carried?.status).toBe("open");
 		expect(stateAfterSha2?.event).toBe("REQUEST_CHANGES");
+
+		// (d) The summary-writing call (the last generateObject invocation) was
+		// grounded in the still-open finding F — reproduces the PR #57 round-2
+		// failure mode, where a summary model with no access to survivingPrior
+		// independently declared a still-open blocker "addressed" while the
+		// table right below it kept blocking on the same finding.
+		const summaryCall = (mockGenerateObject as ReturnType<typeof vi.fn>).mock
+			.calls[5][0];
+		const summaryPrompt = summaryCall.messages[0].content as string;
+		expect(summaryPrompt).toContain("Bug");
 	});
 });
 
