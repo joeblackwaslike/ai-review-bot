@@ -10,5 +10,6 @@ export function isAllowedLogin(
 	allowlist: string[],
 ): boolean {
 	if (!login) return false;
-	return allowlist.includes(login.toLowerCase());
+	const normalized = login.toLowerCase();
+	return allowlist.some((entry) => entry.toLowerCase() === normalized);
 }
