@@ -10,6 +10,9 @@
 	"homepage": "https://joeblackwaslike.github.io/ai-review-bot/",
 	"license": "MIT",
 	"author": "Joe Black <joeblackwaslike@gmail.com>",
+	"workspaces": [
+		"dashboard"
+	],
 	"keywords": [
 		"code-review",
 		"github-app",
