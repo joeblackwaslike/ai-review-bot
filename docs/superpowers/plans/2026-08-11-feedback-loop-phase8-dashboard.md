@@ -1107,6 +1107,8 @@ git add .env.example
 git commit -m "docs(env): document dashboard OAuth + allowlist + dry-run vars"
 ```
 
+**Post-implementation note:** Step 1's `.env.example` block was already added during Task 4's fix-up (commit `623c46b`, folded in when that task's code review flagged the missing env-var docs) — verified byte-identical to what this step specifies, nothing further to commit for it. Step 4 (all quality gates) was run and confirmed green: root `typecheck`/`lint`/`test` (625 passed, 4 skipped — pre-existing DB-integration skips) and dashboard `typecheck`/`test` (12 passed) /`build` (Turbopack, succeeds). **Steps 2-3 (local `.env.local` + `npm run dev` verification against a real GitHub OAuth App and real `DATABASE_URL`) and the entire "Manual steps only Joe can do" section below remain genuinely manual** — they require credentials and access (registering a GitHub OAuth App, a live pooled `DATABASE_URL`, a Vercel project) that don't exist in an agent's sandboxed worktree. An agent executing this plan should stop here and hand off to Joe rather than attempting to fabricate or skip these steps.
+
 ---
 
 ## Manual steps only Joe can do (not part of this plan's automated tasks)
