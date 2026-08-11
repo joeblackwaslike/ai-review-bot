@@ -554,6 +554,12 @@ export async function generateSummary(
 		changedFiles: number;
 	},
 	priorOwnReview: string | null,
+	survivingPrior: PersistedFinding[] = [],
+	/** Findings resolved by the current triage pass specifically — not every
+	 * historical tombstone in persisted state. A finding resolved in an earlier
+	 * round but since reintroduced and re-flagged by this round's agents must
+	 * not appear here, or the summary would call a live blocker fixed. */
+	resolvedThisRound: PersistedFinding[] = [],
 ): Promise<{ summary: string; usage: TokenUsage }> {
 	const findingsList = merged.general_findings
 		.map((f) => `- [${f.severity}] ${f.title}: ${f.body}`)
@@ -572,6 +578,31 @@ export async function generateSummary(
 			].join("\n")
 		: "";
 
+	// Ground truth for what's actually resolved vs still open, computed by the
+	// triage gate against the delta diff — not this model's own read of
+	// priorOwnReview's free text. Without this, generateSummary independently
+	// guesses resolution status and can contradict the "Still open from the
+	// previous review" table rendered from survivingPrior right below it in
+	// the same posted review (observed live: cc-recall PR #57 round 2, where
+	// the summary declared a blocker "addressed" while the table still listed
+	// it as open).
+	const stillOpenSection =
+		survivingPrior.length > 0
+			? [
+					"",
+					"CONFIRMED still open — do not claim these are fixed, no matter what the diff appears to show:",
+					...survivingPrior.map((f) => `- [${f.severity}] ${f.title}`),
+				].join("\n")
+			: "";
+	const resolvedSection =
+		resolvedThisRound.length > 0
+			? [
+					"",
+					"CONFIRMED resolved this round:",
+					...resolvedThisRound.map((f) => `- [${f.severity}] ${f.title}`),
+				].join("\n")
+			: "";
+
 	const prompt = [
 		`PR: ${context.title}`,
 		`Description: ${context.body ?? "[none]"}`,
@@ -583,7 +614,11 @@ export async function generateSummary(
 		`Inline comments (${merged.inline_comments.length}):`,
 		inlineList || "(none)",
 		priorSection,
-	].join("\n");
+		stillOpenSection,
+		resolvedSection,
+	]
+		.filter(Boolean)
+		.join("\n");
 
 	const system = [
 		"You are a senior code reviewer writing a concise review summary for a GitHub pull request.",
@@ -592,6 +627,9 @@ export async function generateSummary(
 		"If there are no findings, say so briefly.",
 		priorOwnReview
 			? "This is a follow-up review. Summarize only what is new or changed since the last review. Be brief."
+			: "",
+		survivingPrior.length > 0 || resolvedThisRound.length > 0
+			? "The CONFIRMED still-open and CONFIRMED resolved lists above are ground truth. Never state or imply that a CONFIRMED still-open finding was fixed, and never describe a finding as unresolved if it appears in CONFIRMED resolved."
 			: "",
 	]
 		.filter(Boolean)
@@ -953,6 +991,13 @@ export async function buildReview(
 	 * optional chain whose undefined branch no test could reach. */
 	let priorSha = "";
 	let resolvedTombstones: PersistedFinding[] = [];
+	/** Subset of resolvedTombstones resolved by THIS triage pass specifically —
+	 * not every historical tombstone in persisted state. Fed to generateSummary
+	 * as "confirmed resolved this round"; the full resolvedTombstones list also
+	 * includes findings resolved in an earlier round, which may have since been
+	 * reintroduced and re-flagged by this round's agents — labeling those as
+	 * newly resolved would tell the summary to call a live blocker fixed. */
+	let resolvedThisRound: PersistedFinding[] = [];
 	/** Whether this pass reviewed only the delta (INCREMENTAL) rather than the
 	 * whole file set (FULL) — changes how the "still open" carry-forward is
 	 * explained, since a FULL pass did see these findings' files and chose not
@@ -1027,6 +1072,9 @@ export async function buildReview(
 		survivingPrior = state.findings.filter((f) => f.status === "open");
 		priorSha = state.lastReviewedSha;
 		resolvedTombstones = state.findings.filter((f) => f.status === "resolved");
+		resolvedThisRound = state.findings.filter((f) =>
+			triage.resolved.includes(f.id),
+		);
 
 		if (triage.recommendation === "INCREMENTAL" && !deltaMeta.truncated) {
 			scopedFiles = deltaMeta.files;
@@ -1365,6 +1413,8 @@ export async function buildReview(
 				changedFiles: context.changedFiles,
 			},
 			priorOwnReview,
+			survivingPrior,
+			resolvedThisRound,
 		);
 		summary = summaryResult.summary.trim();
 		if (summary.length === 0) {
