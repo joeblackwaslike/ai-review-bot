@@ -34,7 +34,7 @@ export function ProposalCard({ plan }: { plan: ProposalPlan }) {
 			{result && (
 				<p>
 					{result.action === "failed"
-						? `Failed: ${result.error ?? "unknown error"}`
+						? `Failed: ${result.error}`
 						: `${result.action}${result.url ? ` — ${result.url}` : ""}`}
 				</p>
 			)}

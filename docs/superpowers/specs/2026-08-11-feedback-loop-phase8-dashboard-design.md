@@ -160,7 +160,7 @@ export async function openIssueFromProposal(plan: ProposalPlan): Promise<OpenIss
 }
 ```
 
-Gate the button behind a `DASHBOARD_DRY_RUN` env flag for the first deploy; flip off once the create/comment path is manually verified.
+Gate the button behind a `DASHBOARD_DRY_RUN` env flag for the first deploy; flip off once the create/comment path is manually verified. **Implementation note:** the illustrative snippet above omits passing `dryRun` to `openProposalIssue` — the actual implementation computes it from `DASHBOARD_DRY_RUN` and passes it explicitly (default-safe: anything other than the literal `"false"` stays dry-run), per this paragraph's own requirement. See `docs/superpowers/plans/2026-08-11-feedback-loop-phase8-dashboard.md`'s self-review notes.
 
 **Explicitly out of scope for this MVP:** QC scores / `qc_runs` views. Phase 5 (QC app, bead `ai-review-bot-8nq`) is still partial and the data is sparse — a fast-follow once that phase completes, not a stub route now.
 

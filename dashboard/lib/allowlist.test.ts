@@ -43,6 +43,13 @@ describe("reviewToken", () => {
 		});
 	});
 
+	it("denies sign-in when the profile login is not on the allowlist", () => {
+		expect(reviewToken(undefined, "not-on-list", allowlist)).toEqual({
+			login: "not-on-list",
+			allowed: false,
+		});
+	});
+
 	it("keeps the token's existing login on a profile-less refresh", () => {
 		expect(reviewToken("joeblackwaslike", undefined, allowlist)).toEqual({
 			login: "joeblackwaslike",

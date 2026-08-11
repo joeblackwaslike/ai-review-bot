@@ -64,6 +64,21 @@ describe("openIssueFromProposal", () => {
 		expect(installationOctokitMock).not.toHaveBeenCalled();
 	});
 
+	it("fails clearly when IMPROVE_TARGET_REPO has extra path segments instead of silently truncating", async () => {
+		authMock.mockResolvedValue({ user: { name: "Joe" } });
+		vi.stubEnv("GITHUB_APP_ID", "app-1");
+		vi.stubEnv("GITHUB_APP_PRIVATE_KEY", "key");
+		vi.stubEnv("IMPROVE_TARGET_REPO", "org/suborg/repo");
+
+		const result = await openIssueFromProposal(plan);
+
+		expect(result).toEqual({
+			action: "failed",
+			error: "IMPROVE_TARGET_REPO must be <owner>/<repo>",
+		});
+		expect(installationOctokitMock).not.toHaveBeenCalled();
+	});
+
 	it("rejects a PKCS#1-formatted private key before calling installationOctokit", async () => {
 		authMock.mockResolvedValue({ user: { name: "Joe" } });
 		vi.stubEnv("GITHUB_APP_ID", "app-1");
@@ -75,8 +90,10 @@ describe("openIssueFromProposal", () => {
 
 		const result = await openIssueFromProposal(plan);
 
-		expect(result.action).toBe("failed");
-		expect(result.error).toContain("PKCS#1 format");
+		expect(result).toEqual({
+			action: "failed",
+			error: expect.stringContaining("PKCS#1 format"),
+		});
 		expect(installationOctokitMock).not.toHaveBeenCalled();
 	});
 
@@ -85,6 +102,26 @@ describe("openIssueFromProposal", () => {
 		vi.stubEnv("GITHUB_APP_ID", "app-1");
 		vi.stubEnv("GITHUB_APP_PRIVATE_KEY", "key");
 		vi.stubEnv("IMPROVE_TARGET_REPO", "o/r");
+		installationOctokitMock.mockResolvedValue({ marker: "octokit" });
+		openProposalIssueMock.mockResolvedValue({ action: "would_create" });
+
+		await openIssueFromProposal(plan);
+
+		expect(openProposalIssueMock).toHaveBeenCalledWith({
+			octokit: { marker: "octokit" },
+			owner: "o",
+			repo: "r",
+			plan,
+			dryRun: true,
+		});
+	});
+
+	it("stays dry-run for any DASHBOARD_DRY_RUN value other than the literal 'false'", async () => {
+		authMock.mockResolvedValue({ user: { name: "Joe" } });
+		vi.stubEnv("GITHUB_APP_ID", "app-1");
+		vi.stubEnv("GITHUB_APP_PRIVATE_KEY", "key");
+		vi.stubEnv("IMPROVE_TARGET_REPO", "o/r");
+		vi.stubEnv("DASHBOARD_DRY_RUN", "true");
 		installationOctokitMock.mockResolvedValue({ marker: "octokit" });
 		openProposalIssueMock.mockResolvedValue({ action: "would_create" });
 

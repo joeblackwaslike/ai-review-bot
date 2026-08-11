@@ -23,4 +23,8 @@ describe("isPublicPath", () => {
 			false,
 		);
 	});
+
+	it("treats an empty pathname as non-public", () => {
+		expect(isPublicPath("", PUBLIC_PATH_PREFIXES)).toBe(false);
+	});
 });

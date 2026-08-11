@@ -15,11 +15,15 @@ export function isAllowedLogin(
 }
 
 /** Pure: the login to persist on a session token, and whether it's still
- * allowed. Called on every session read, not just initial sign-in, so
- * removing a login from the allowlist revokes access on the next token
- * refresh instead of waiting out the session's maxAge (up to 30 days by
- * default). `profileLogin` is only present at sign-in; a profile-less
- * refresh re-checks whatever login was already captured on the token. */
+ * allowed. The caller (auth.ts's jwt callback) invokes this on every session
+ * read, not just initial sign-in, so removing a login from the allowlist
+ * revokes access on the next token refresh instead of waiting out the
+ * session's maxAge (up to 30 days by default) — provided the caller's
+ * `allowlist` array reflects the change (it's a snapshot taken once at
+ * module load in auth.ts, so this takes effect after the next deploy/cold
+ * start, not instantly on env var change). `profileLogin` is only present at
+ * sign-in; a profile-less refresh re-checks whatever login was already
+ * captured on the token. */
 export function reviewToken(
 	currentLogin: string | undefined,
 	profileLogin: string | undefined,

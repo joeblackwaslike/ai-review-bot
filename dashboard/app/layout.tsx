@@ -8,6 +8,15 @@ export const metadata: Metadata = {
 	description: "Internal dashboard for the ai-review-bot feedback loop corpus",
 };
 
+// Named, module-scope server action instead of an inline closure in the JSX
+// below — an inline `action={async () => { "use server"; ... }}` gets a fresh
+// function reference on every render. `signOut` itself isn't directly usable
+// as a form action: its options parameter isn't FormData-compatible.
+async function handleSignOut() {
+	"use server";
+	await signOut();
+}
+
 export default async function RootLayout({
 	children,
 }: {
@@ -28,12 +37,7 @@ export default async function RootLayout({
 				>
 					<strong>Feedback Loop Dashboard</strong>
 					{session?.user && (
-						<form
-							action={async () => {
-								"use server";
-								await signOut();
-							}}
-						>
+						<form action={handleSignOut}>
 							<span style={{ marginRight: "1rem" }}>
 								{session.user.name ?? session.user.email}
 							</span>
