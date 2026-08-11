@@ -59,7 +59,7 @@ function normalizePrivateKey(raw: string): string {
 	return raw.replaceAll(String.raw`\n`, "\n");
 }
 
-function validatePrivateKey(key: string): string {
+export function validatePrivateKey(key: string): string {
 	if (key.includes("BEGIN RSA PRIVATE KEY")) {
 		throw new Error(
 			"GITHUB_APP_PRIVATE_KEY is in PKCS#1 format (BEGIN RSA PRIVATE KEY). " +

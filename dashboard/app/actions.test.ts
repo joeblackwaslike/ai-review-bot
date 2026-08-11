@@ -49,6 +49,37 @@ describe("openIssueFromProposal", () => {
 		expect(installationOctokitMock).not.toHaveBeenCalled();
 	});
 
+	it("fails clearly when IMPROVE_TARGET_REPO is malformed", async () => {
+		authMock.mockResolvedValue({ user: { name: "Joe" } });
+		vi.stubEnv("GITHUB_APP_ID", "app-1");
+		vi.stubEnv("GITHUB_APP_PRIVATE_KEY", "key");
+		vi.stubEnv("IMPROVE_TARGET_REPO", "just-a-name");
+
+		const result = await openIssueFromProposal(plan);
+
+		expect(result).toEqual({
+			action: "failed",
+			error: "IMPROVE_TARGET_REPO must be <owner>/<repo>",
+		});
+		expect(installationOctokitMock).not.toHaveBeenCalled();
+	});
+
+	it("rejects a PKCS#1-formatted private key before calling installationOctokit", async () => {
+		authMock.mockResolvedValue({ user: { name: "Joe" } });
+		vi.stubEnv("GITHUB_APP_ID", "app-1");
+		vi.stubEnv(
+			"GITHUB_APP_PRIVATE_KEY",
+			"-----BEGIN RSA PRIVATE KEY-----\nabc\n-----END RSA PRIVATE KEY-----",
+		);
+		vi.stubEnv("IMPROVE_TARGET_REPO", "o/r");
+
+		const result = await openIssueFromProposal(plan);
+
+		expect(result.action).toBe("failed");
+		expect(result.error).toContain("PKCS#1 format");
+		expect(installationOctokitMock).not.toHaveBeenCalled();
+	});
+
 	it("stays dry-run by default (DASHBOARD_DRY_RUN unset)", async () => {
 		authMock.mockResolvedValue({ user: { name: "Joe" } });
 		vi.stubEnv("GITHUB_APP_ID", "app-1");

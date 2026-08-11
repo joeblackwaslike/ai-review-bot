@@ -1,6 +1,7 @@
 "use server";
 
 import "server-only";
+import { validatePrivateKey } from "../../src/config";
 import {
 	type IssueOctokit,
 	openProposalIssue,
@@ -28,19 +29,34 @@ export async function openIssueFromProposal(
 	const slug =
 		process.env.IMPROVE_TARGET_REPO ?? "joeblackwaslike/ai-review-bot";
 	const [owner, repo] = slug.split("/");
-	const appId = process.env.GITHUB_APP_ID;
-	const privateKey = process.env.GITHUB_APP_PRIVATE_KEY;
-	if (!appId || !privateKey || !owner || !repo) {
+	if (!owner || !repo) {
 		return {
 			action: "failed",
-			error:
-				"GITHUB_APP_ID/GITHUB_APP_PRIVATE_KEY/IMPROVE_TARGET_REPO not configured",
+			error: "IMPROVE_TARGET_REPO must be <owner>/<repo>",
+		};
+	}
+	const appId = process.env.GITHUB_APP_ID;
+	const privateKey = process.env.GITHUB_APP_PRIVATE_KEY;
+	if (!appId || !privateKey) {
+		return {
+			action: "failed",
+			error: "GITHUB_APP_ID/GITHUB_APP_PRIVATE_KEY not configured",
+		};
+	}
+
+	let validatedPrivateKey: string;
+	try {
+		validatedPrivateKey = validatePrivateKey(privateKey);
+	} catch (err) {
+		return {
+			action: "failed",
+			error: err instanceof Error ? err.message : String(err),
 		};
 	}
 
 	const octokit = (await installationOctokit(
 		appId,
-		privateKey,
+		validatedPrivateKey,
 		owner,
 		repo,
 	)) as unknown as IssueOctokit;
