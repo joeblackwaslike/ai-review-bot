@@ -131,4 +131,22 @@ describe("openIssueFromProposal", () => {
 			url: "https://github.com/o/r/issues/1",
 		});
 	});
+
+	it("fails cleanly instead of throwing when installationOctokit rejects", async () => {
+		authMock.mockResolvedValue({ user: { name: "Joe" } });
+		vi.stubEnv("GITHUB_APP_ID", "app-1");
+		vi.stubEnv("GITHUB_APP_PRIVATE_KEY", "key");
+		vi.stubEnv("IMPROVE_TARGET_REPO", "o/r");
+		installationOctokitMock.mockRejectedValue(
+			new Error("installation not found"),
+		);
+
+		const result = await openIssueFromProposal(plan);
+
+		expect(result).toEqual({
+			action: "failed",
+			error: "installation not found",
+		});
+		expect(openProposalIssueMock).not.toHaveBeenCalled();
+	});
 });

@@ -54,12 +54,25 @@ export async function openIssueFromProposal(
 		};
 	}
 
-	const octokit = (await installationOctokit(
-		appId,
-		validatedPrivateKey,
-		owner,
-		repo,
-	)) as unknown as IssueOctokit;
+	let octokit: IssueOctokit;
+	try {
+		octokit = (await installationOctokit(
+			appId,
+			validatedPrivateKey,
+			owner,
+			repo,
+		)) as unknown as IssueOctokit;
+	} catch (err) {
+		// Unlike openProposalIssue (which already catches its own GitHub API
+		// errors internally), installationOctokit has no such guard — an
+		// uncaught rejection here would surface to the browser as an unhandled
+		// promise rejection instead of the clean {action:"failed"} shape the
+		// rest of this function returns.
+		return {
+			action: "failed",
+			error: err instanceof Error ? err.message : String(err),
+		};
+	}
 
 	const dryRun = process.env.DASHBOARD_DRY_RUN !== "false";
 	return openProposalIssue({ octokit, owner, repo, plan, dryRun });
