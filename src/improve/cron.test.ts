@@ -69,20 +69,23 @@ describe("improveRequest", () => {
 	// HTTP body for. Before this test, the 500 carried zero console output.
 	it("logs a systemic cycle failure, not just the 500 body", async () => {
 		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-		const res = await improveRequest({
-			authorization: "Bearer right",
-			secret: "right",
-			improveEnabled: true,
-			run: async () => {
-				throw new Error("no database");
-			},
-		});
-		expect(res.status).toBe(500);
-		expect(errorSpy).toHaveBeenCalledWith(
-			"improve cron: cycle failed",
-			expect.objectContaining({ err: expect.any(Error) }),
-		);
-		errorSpy.mockRestore();
+		try {
+			const res = await improveRequest({
+				authorization: "Bearer right",
+				secret: "right",
+				improveEnabled: true,
+				run: async () => {
+					throw new Error("no database");
+				},
+			});
+			expect(res.status).toBe(500);
+			expect(errorSpy).toHaveBeenCalledWith(
+				"improve cron: cycle failed",
+				expect.objectContaining({ err: expect.any(Error) }),
+			);
+		} finally {
+			errorSpy.mockRestore();
+		}
 	});
 });
 

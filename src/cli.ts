@@ -4,6 +4,7 @@ import { realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { inspect } from "node:util";
 import { App, Octokit } from "octokit";
 import {
 	auditRepo,
@@ -296,7 +297,17 @@ export async function cmdAudit(args: string[]): Promise<void> {
 			getConfig();
 			getOpenAIAppConfig();
 		} catch (err) {
-			fatal(err instanceof Error ? err.message : String(err));
+			// String(err) collapses a plain-object throw to "[object Object]"
+			// (and throws outright for a null-prototype one) — inspect() keeps
+			// whatever detail the thrown value actually carries. Strings pass
+			// through unchanged rather than getting quote-wrapped by inspect().
+			fatal(
+				err instanceof Error
+					? err.message
+					: typeof err === "string"
+						? err
+						: inspect(err, { customInspect: false }),
+			);
 		}
 	}
 
@@ -827,7 +838,20 @@ function isCliEntrypoint(): boolean {
 	if (!invoked) return false;
 	try {
 		return realpathSync(invoked) === fileURLToPath(new URL(import.meta.url));
-	} catch {
+	} catch (err) {
+		// A missing symlink target (ENOENT) is the one case worth staying
+		// quiet about — it's indistinguishable from "not the entrypoint" from
+		// here. Anything else (EPERM, EIO, a malformed import.meta.url) means
+		// the CLI is about to silently no-op with zero output, which is worse
+		// than the unguarded behavior this check replaced — log it so that's
+		// visible instead of a mysterious empty invocation.
+		const code = (err as NodeJS.ErrnoException)?.code;
+		if (code !== "ENOENT") {
+			console.error(
+				"[cli] isCliEntrypoint: could not resolve invocation path",
+				err,
+			);
+		}
 		return false;
 	}
 }

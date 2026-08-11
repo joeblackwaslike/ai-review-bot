@@ -122,23 +122,30 @@ describe("review-state", () => {
 	// not merely cold.
 	it("logs when the KV entry is corrupt JSON, same as it does for the wrong-shape case", async () => {
 		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-		const { client, store } = fakeKv();
-		store.set(stateKey("anthropic", "o", "r", 7), "{not valid json");
+		try {
+			const { client, store } = fakeKv();
+			store.set(stateKey("anthropic", "o", "r", 7), "{not valid json");
 
-		const result = await loadReviewState(
-			client,
-			"anthropic",
-			"o",
-			"r",
-			7,
-			null,
-		);
+			const result = await loadReviewState(
+				client,
+				"anthropic",
+				"o",
+				"r",
+				7,
+				null,
+			);
 
-		expect(result).toBeNull();
-		expect(warn).toHaveBeenCalledWith(
-			"review-state: KV entry is corrupt JSON; treating as cold",
-			expect.objectContaining({ provider: "anthropic", owner: "o", repo: "r" }),
-		);
-		warn.mockRestore();
+			expect(result).toBeNull();
+			expect(warn).toHaveBeenCalledWith(
+				"review-state: KV entry is corrupt JSON; treating as cold",
+				expect.objectContaining({
+					provider: "anthropic",
+					owner: "o",
+					repo: "r",
+				}),
+			);
+		} finally {
+			warn.mockRestore();
+		}
 	});
 });

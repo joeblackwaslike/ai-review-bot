@@ -88,6 +88,10 @@ export async function runAuditPass(opts: {
 	 * to flag" or "nothing ran successfully"; callers need this to tell them
 	 * apart instead of reporting a failed pass as a clean one. */
 	agentsSucceeded: number;
+	/** How many agent calls were dispatched, across every batch. Zero here
+	 * means a legitimate empty scope (no files matched) — callers must gate
+	 * an `agentsSucceeded === 0` failure check on this being nonzero first,
+	 * or an empty-but-valid pass misreports as "every agent failed". */
 	agentsAttempted: number;
 }> {
 	const { files, selection, extraInstructions, meta, auth } = opts;
@@ -684,7 +688,10 @@ export async function runLocalReview(opts: {
 	// authenticated fine, but not one agent call across any of them
 	// succeeded — a bad/expired key or provider outage auth alone can't
 	// catch. Without this, that reads as "reviewed, nothing found".
-	if (totalAgentsSucceeded === 0) {
+	// `totalAgentsAttempted > 0` matters here too: a legitimate empty scope
+	// (clean branch, doc-only change) attempts zero agents and must not be
+	// misreported as "every agent failed".
+	if (totalAgentsAttempted > 0 && totalAgentsSucceeded === 0) {
 		throw new Error(
 			`Every review agent failed across ${providersRun.length} authenticated provider(s) (0/${totalAgentsAttempted}) — refusing to write a report with no real signal. Check provider status/logs and retry.`,
 		);

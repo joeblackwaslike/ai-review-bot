@@ -526,4 +526,40 @@ describe("runLocalReview", () => {
 			}),
 		).rejects.toThrow(/Every review agent failed/);
 	});
+
+	// Distinct from the all-agents-failed case above: a legitimate empty
+	// scope (clean branch, doc-only change) authenticates fine and attempts
+	// zero agents — that must not be misreported as "every agent failed"
+	// (a 0/0 error), which is what an unguarded `totalAgentsSucceeded === 0`
+	// check would do.
+	it("does not throw when the scope has no files to review", async () => {
+		const { collectFilesFromLocal } = await import("./sources.js");
+		(collectFilesFromLocal as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+		const fs = await import("node:fs/promises");
+		(fs.writeFile as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+		(fs.mkdir as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+
+		const resolveAuthFor = vi.fn(async (provider: Provider) => ({
+			mode: "api-key" as const,
+			provider,
+			apiKey: "k",
+		}));
+
+		const { runLocalReview } = await import("./audit.js");
+		const result = await runLocalReview({
+			cwd: "/repo",
+			scope: { kind: "changed" },
+			docsDir: "docs/code-reviews",
+			slug: "s",
+			title: "T",
+			owner: "o",
+			repo: "r",
+			remote: "https://github.com/o/r",
+			now: () => 1_700_000_000_000,
+			resolveAuthFor,
+		});
+
+		expect(result.filesReviewed).toBe(0);
+		expect(runAgent).not.toHaveBeenCalled();
+	});
 });

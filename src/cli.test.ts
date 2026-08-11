@@ -52,6 +52,22 @@ describe("cmdAudit credential validation", () => {
 		expect(runLocalAudit).not.toHaveBeenCalled();
 	});
 
+	// String(err) on a plain object collapses it to "[object Object]",
+	// throwing away whatever detail it carried (and throws outright for a
+	// null-prototype object). inspect() preserves that detail instead.
+	it("preserves object detail instead of collapsing to [object Object]", async () => {
+		vi.mocked(getConfig).mockImplementation(() => {
+			// eslint-disable-next-line @typescript-eslint/no-throw-literal
+			throw { code: "GITHUB_APP_PRIVATE_KEY is not set" };
+		});
+
+		await expect(cmdAudit([])).rejects.toThrow(ProcessExitError);
+
+		const [message] = vi.mocked(console.error).mock.calls[0] as [string];
+		expect(message).toContain("GITHUB_APP_PRIVATE_KEY is not set");
+		expect(message).not.toContain("[object Object]");
+	});
+
 	it("still prints a real Error's message unchanged", async () => {
 		vi.mocked(getConfig).mockImplementation(() => {
 			throw new Error("OPENAI_APP_ID is not set");
