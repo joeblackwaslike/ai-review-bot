@@ -11,6 +11,7 @@ export default defineConfig({
 			{ text: "How it works", link: "/how-it-works" },
 			{ text: "Configuration", link: "/configuration" },
 			{ text: "CLI & npm", link: "/cli-and-npm" },
+			{ text: "Known Issues", link: "/known-issues" },
 			{
 				text: "GitHub",
 				link: "https://github.com/joeblackwaslike/ai-review-bot",
@@ -24,6 +25,7 @@ export default defineConfig({
 					{ text: "How it works", link: "/how-it-works" },
 					{ text: "Configuration", link: "/configuration" },
 					{ text: "CLI & npm", link: "/cli-and-npm" },
+					{ text: "Known Issues", link: "/known-issues" },
 				],
 			},
 			{
