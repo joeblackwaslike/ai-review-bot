@@ -661,6 +661,7 @@ export async function runLocalReview(opts: {
 		const selection = routeModel(
 			{ additions: 0, deletions: 0, filePaths, labels: [] },
 			provider,
+			auth.mode,
 		);
 		const { review, usage, agentsSucceeded, agentsAttempted } =
 			await runAuditPass({

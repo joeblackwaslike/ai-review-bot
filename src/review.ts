@@ -969,6 +969,7 @@ export async function buildReview(
 			labels: context.labels,
 		},
 		context.provider,
+		context.auth?.mode,
 	);
 
 	// --- Triage gate (re-review only) ---------------------------------------
@@ -1043,6 +1044,7 @@ export async function buildReview(
 			selection,
 			deltaMeta.diff,
 			openFindings,
+			context.auth?.mode,
 		);
 
 		for (const f of state.findings) {

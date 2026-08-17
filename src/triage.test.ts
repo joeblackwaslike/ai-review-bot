@@ -55,10 +55,11 @@ describe("triageReReview", () => {
 		expect(d.resolved).toEqual([]);
 	});
 
-	// The ChatGPT-account Codex backend rejects gpt-5.1 outright, and watch's
-	// re-review loop calls this triage gate on every push — a stale model name
-	// here breaks every re-review, not just the first one.
-	it("routes openai triage calls to gpt-5.4, not the retired gpt-5.1", async () => {
+	// The gpt-5.1 rejection was confirmed only against the ChatGPT/Codex-account
+	// subscription backend, not the raw API-key backend the hosted webhook bot
+	// runs under — so API-key/unspecified triage calls (no authMode, or
+	// "api-key") must keep gpt-5.1, the model known to work in production.
+	it("routes openai triage calls to gpt-5.1 by default (api-key backend)", async () => {
 		mockGenerateObject.mockResolvedValueOnce({
 			object: { recommendation: "SKIP", resolved: [], newRisk: false },
 		});
@@ -66,6 +67,27 @@ describe("triageReReview", () => {
 			{ provider: "openai", model: "gpt-5.4-codex" } as never,
 			"delta diff",
 			openFindings,
+		);
+		expect(mockCreateAIModel).toHaveBeenCalledWith({
+			provider: "openai",
+			model: "gpt-5.1",
+			effort: "low",
+		});
+	});
+
+	// The ChatGPT-account Codex backend rejects gpt-5.1 outright (confirmed
+	// live), and watch's re-review loop calls this triage gate on every push
+	// under that OAuth-authenticated backend — a stale model name here breaks
+	// every re-review, not just the first one.
+	it("routes openai triage calls to gpt-5.4 under oauth auth", async () => {
+		mockGenerateObject.mockResolvedValueOnce({
+			object: { recommendation: "SKIP", resolved: [], newRisk: false },
+		});
+		await triageReReview(
+			{ provider: "openai", model: "gpt-5.4-codex" } as never,
+			"delta diff",
+			openFindings,
+			"oauth",
 		);
 		expect(mockCreateAIModel).toHaveBeenCalledWith({
 			provider: "openai",

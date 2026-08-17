@@ -26,6 +26,14 @@ describe("computeCost", () => {
 		expect(cost).toBeCloseTo(30.0); // $5 input + $25 output
 	});
 
+	it("computes cost for gpt-5.1 at 1M tokens each", () => {
+		const cost = computeCost(
+			{ promptTokens: 1_000_000, completionTokens: 1_000_000 },
+			"gpt-5.1",
+		);
+		expect(cost).toBeCloseTo(11.25); // $1.25 input + $10 output
+	});
+
 	it("computes cost for gpt-5.4 at 1M tokens each", () => {
 		const cost = computeCost(
 			{ promptTokens: 1_000_000, completionTokens: 1_000_000 },
