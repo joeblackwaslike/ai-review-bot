@@ -2,7 +2,11 @@ import type { App } from "octokit";
 import type { OctokitLike } from "./audit-pr.js";
 import type { Provider, ResolvedAuth } from "./auth.js";
 import type { AppConfig } from "./config.js";
-import { maybeSubmitReview, type PullRequestDetails } from "./github-app.js";
+import {
+	maybeSubmitReview,
+	type PullRequestDetails,
+	type SubmitReviewOutcome,
+} from "./github-app.js";
 
 /** Enough of the GET /pulls/{n} response shape for watchPr's own merged/closed
  * check plus everything maybeSubmitReview's pullRequest param needs. */
@@ -47,6 +51,21 @@ function errMsg(err: unknown): string {
 	return err instanceof Error ? err.message : String(err);
 }
 
+/** Human-readable reason for every non-"posted" outcome, for the "skipped"
+ * log line. */
+function outcomeSkipReason(outcome: SubmitReviewOutcome): string {
+	switch (outcome.status) {
+		case "skipped":
+			return outcome.reason;
+		case "rate_limited":
+			return "rate limited";
+		case "quota_exhausted":
+			return "quota exhausted";
+		default:
+			return outcome.status;
+	}
+}
+
 /**
  * Polls an already-open PR and re-reviews it on every new push, posting
  * through the same GitHub App installation identities production uses —
@@ -71,6 +90,22 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 
 	let lastReviewedSha: string | null = null;
 	let cycles = 0;
+	// True once ANY target has posted a real review in this watch session.
+	// force is true only before that first post — matching production behavior
+	// (a fresh, unforced push-triggered review) on every cycle after, so the
+	// triage gate and reviewer memory in buildReview behave identically to
+	// production instead of being disabled on every cycle. See Bug A.
+	let hasPostedEver = false;
+
+	// Fail fast on missing/expired credentials for every selected provider
+	// BEFORE the first poll or post, so a PR watched across both providers
+	// never posts a real review for one and then crashes resolving auth for
+	// the other. auth.ts refreshes tokens internally, so resolving again
+	// per-cycle below is still correct — this is an additional up-front
+	// validation, not a replacement. See Bug D.
+	for (const target of targets) {
+		await resolveAuthFor(target.provider);
+	}
 
 	while (true) {
 		// Checked before incrementing so a maxCycles of N always means N
@@ -104,6 +139,11 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 		}
 
 		if (pr.head.sha !== lastReviewedSha) {
+			// Only advance lastReviewedSha when at least one target actually
+			// posted this cycle — a skip/rate-limit/quota-exhaustion must retry
+			// at the same SHA next cycle instead of being silently marked
+			// "handled". See Bug C.
+			let postedThisCycle = false;
 			for (const target of targets) {
 				// Not caught here: an auth-resolution failure (e.g. the local
 				// subscription session logged out mid-watch) propagates out of
@@ -111,7 +151,7 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 				// login`" error instead of retrying forever with no signal.
 				const auth = await resolveAuthFor(target.provider);
 				try {
-					await submitReview({
+					const outcome = await submitReview({
 						app: target.app,
 						installationId: target.installationId,
 						owner,
@@ -119,20 +159,30 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 						pullNumber,
 						pullRequest: pr,
 						extraInstructions: "",
-						force: true,
+						force: !hasPostedEver,
 						config: target.config,
 						auth,
 					});
-					log(
-						`ai-review watch: posted ${target.provider} review for ${pr.head.sha}`,
-					);
+					if (outcome.status === "posted") {
+						hasPostedEver = true;
+						postedThisCycle = true;
+						log(
+							`ai-review watch: posted ${target.provider} review for ${pr.head.sha}`,
+						);
+					} else {
+						log(
+							`ai-review watch: ${target.provider} review skipped for ${pr.head.sha}: ${outcomeSkipReason(outcome)}`,
+						);
+					}
 				} catch (err) {
 					log(
 						`ai-review watch: ${target.provider} review failed, continuing: ${errMsg(err)}`,
 					);
 				}
 			}
-			lastReviewedSha = pr.head.sha;
+			if (postedThisCycle) {
+				lastReviewedSha = pr.head.sha;
+			}
 		}
 
 		await sleep(intervalMs);
