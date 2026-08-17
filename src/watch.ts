@@ -2,21 +2,13 @@ import type { App } from "octokit";
 import type { OctokitLike } from "./audit-pr.js";
 import type { Provider, ResolvedAuth } from "./auth.js";
 import type { AppConfig } from "./config.js";
-import { maybeSubmitReview } from "./github-app.js";
+import { maybeSubmitReview, type PullRequestDetails } from "./github-app.js";
 
 /** Enough of the GET /pulls/{n} response shape for watchPr's own merged/closed
  * check plus everything maybeSubmitReview's pullRequest param needs. */
-interface PolledPullRequest {
+interface PolledPullRequest extends PullRequestDetails {
 	merged: boolean;
 	state: string;
-	draft: boolean;
-	head: { sha: string };
-	additions: number;
-	deletions: number;
-	changed_files: number;
-	title: string;
-	body: string | null;
-	labels?: Array<{ name: string }>;
 }
 
 export interface ProviderTarget {
@@ -60,7 +52,7 @@ function errMsg(err: unknown): string {
  * through the same GitHub App installation identities production uses —
  * driven by local subscription auth (resolveAuthFor) instead of API keys.
  * Exits once the PR merges or closes. See
- * docs/superpowers/specs/2026-08-16-local-pr-watch-subscription-auth-design.md.
+ * docs/superpowers/plans/2026-08-16-local-pr-watch-subscription-auth.md.
  */
 export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 	const {

@@ -219,7 +219,7 @@ type IssueCommentWebhookPayload = {
 	};
 };
 
-type PullRequestDetails = {
+export type PullRequestDetails = {
 	draft: boolean;
 	head: { sha: string };
 	additions: number;
