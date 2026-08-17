@@ -9,7 +9,7 @@ const AppCtor = vi.fn().mockImplementation(() => ({
 
 vi.mock("octokit", () => ({ App: AppCtor }));
 
-const { installationOctokit } = await import("./octokit.js");
+const { installationApp, installationOctokit } = await import("./octokit.js");
 
 describe("installationOctokit", () => {
 	it("resolves the installation id then returns its Octokit", async () => {
@@ -47,6 +47,29 @@ describe("installationOctokit", () => {
 		expect(AppCtor).toHaveBeenCalledWith({
 			appId: "app-1",
 			privateKey: "line1\nline2",
+		});
+	});
+});
+
+describe("installationApp", () => {
+	it("resolves the installation id and returns both the App and the id", async () => {
+		requestMock.mockResolvedValue({ data: { id: 99 } });
+
+		const result = await installationApp(
+			"app-1",
+			"-----BEGIN...",
+			"owner",
+			"repo",
+		);
+
+		expect(requestMock).toHaveBeenCalledWith(
+			"GET /repos/{owner}/{repo}/installation",
+			{ owner: "owner", repo: "repo" },
+		);
+		expect(result.installationId).toBe(99);
+		expect(AppCtor).toHaveBeenCalledWith({
+			appId: "app-1",
+			privateKey: "-----BEGIN...",
 		});
 	});
 });
