@@ -133,28 +133,28 @@ describe("routeModel — Anthropic", () => {
 // ---------------------------------------------------------------------------
 
 describe("routeModel — OpenAI", () => {
-	it("trivial tier → gpt-5.1, none effort", () => {
+	it("trivial tier → gpt-5.4, none effort", () => {
 		const sel = routeModel(
 			{ ...base, additions: 8, deletions: 3, filePaths: ["README.md"] },
 			"openai",
 		);
 		expect(sel.provider).toBe("openai");
-		expect(sel.model).toBe("gpt-5.1");
+		expect(sel.model).toBe("gpt-5.4");
 		expect(sel.effort).toBe("none");
 	});
 
-	it("normal tier → gpt-5.1, low effort", () => {
+	it("normal tier → gpt-5.4, low effort", () => {
 		const sel = routeModel(base, "openai");
-		expect(sel.model).toBe("gpt-5.1");
+		expect(sel.model).toBe("gpt-5.4");
 		expect(sel.effort).toBe("low");
 	});
 
-	it("complex tier → gpt-5.1, high effort", () => {
+	it("complex tier → gpt-5.4, high effort", () => {
 		const sel = routeModel(
 			{ ...base, filePaths: ["src/auth/handler.ts"] },
 			"openai",
 		);
-		expect(sel.model).toBe("gpt-5.1");
+		expect(sel.model).toBe("gpt-5.4");
 		expect(sel.effort).toBe("high");
 	});
 

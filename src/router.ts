@@ -78,12 +78,15 @@ const OPENAI_TIER_MAP: Record<
 	ReviewTier,
 	Pick<ModelSelection, "model" | "effort">
 > = {
-	trivial: { model: "gpt-5.1", effort: "none" },
-	normal: { model: "gpt-5.1", effort: "low" },
-	complex: { model: "gpt-5.1", effort: "high" },
+	// gpt-5.1 retired from the ChatGPT/Codex-account backend (confirmed live:
+	// "not supported when using Codex with a ChatGPT account") — moved to
+	// gpt-5.4, the next tier down from gpt-5.5 that's still served.
+	trivial: { model: "gpt-5.4", effort: "none" },
+	normal: { model: "gpt-5.4", effort: "low" },
+	complex: { model: "gpt-5.4", effort: "high" },
 	// gpt-5.5 caps reasoning at "high"; "xhigh" is unverified on the OpenAI API,
 	// so deep stays at "high" until support is confirmed. The model bump
-	// (gpt-5.1 → gpt-5.5) is what distinguishes deep from complex here.
+	// (gpt-5.4 → gpt-5.5) is what distinguishes deep from complex here.
 	deep: { model: "gpt-5.5", effort: "high" },
 };
 

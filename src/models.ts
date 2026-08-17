@@ -14,7 +14,9 @@ const TOKEN_RATES: Record<string, { input: number; output: number }> = {
 	"claude-haiku-4-5": { input: 1.0, output: 5.0 },
 	"claude-sonnet-4-6": { input: 3.0, output: 15.0 },
 	"claude-opus-4-8": { input: 5.0, output: 25.0 },
-	"gpt-5.1": { input: 1.25, output: 10.0 },
+	// gpt-5.1 rate retired below — the ChatGPT/Codex-account backend no longer
+	// serves gpt-5.1, and OPENAI_TIER_MAP no longer selects it either.
+	"gpt-5.4": { input: 1.25, output: 10.0 }, // carries gpt-5.1's rate as an estimate pending confirmed pricing
 	"gpt-5.5": { input: 5.0, output: 30.0 },
 };
 
