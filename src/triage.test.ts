@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
 const mockGenerateObject = vi.hoisted(() => vi.fn());
+const mockCreateAIModel = vi.hoisted(() => vi.fn(() => ({})));
 vi.mock("ai", () => ({ generateObject: mockGenerateObject }));
-vi.mock("./models.js", () => ({ createAIModel: vi.fn(() => ({})) }));
+vi.mock("./models.js", () => ({ createAIModel: mockCreateAIModel }));
 
 import type { DeltaFile } from "./triage.js";
 import {
@@ -52,6 +53,25 @@ describe("triageReReview", () => {
 		);
 		expect(d.recommendation).toBe("INCREMENTAL");
 		expect(d.resolved).toEqual([]);
+	});
+
+	// The ChatGPT-account Codex backend rejects gpt-5.1 outright, and watch's
+	// re-review loop calls this triage gate on every push — a stale model name
+	// here breaks every re-review, not just the first one.
+	it("routes openai triage calls to gpt-5.4, not the retired gpt-5.1", async () => {
+		mockGenerateObject.mockResolvedValueOnce({
+			object: { recommendation: "SKIP", resolved: [], newRisk: false },
+		});
+		await triageReReview(
+			{ provider: "openai", model: "gpt-5.4-codex" } as never,
+			"delta diff",
+			openFindings,
+		);
+		expect(mockCreateAIModel).toHaveBeenCalledWith({
+			provider: "openai",
+			model: "gpt-5.4",
+			effort: "low",
+		});
 	});
 });
 

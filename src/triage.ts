@@ -21,7 +21,7 @@ const FAIL_SAFE: TriageDecision = {
 // Cheap, fast triage tier. The call only classifies; it does not review.
 function triageSelection(base: ModelSelection): ModelSelection {
 	return base.provider === "openai"
-		? { provider: "openai", model: "gpt-5.1", effort: "low" }
+		? { provider: "openai", model: "gpt-5.4", effort: "low" }
 		: { provider: "anthropic", model: "claude-haiku-4-5" };
 }
 

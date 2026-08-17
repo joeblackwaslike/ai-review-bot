@@ -110,6 +110,12 @@ describe("judgeSelection", () => {
 		expect(judgeSelection("openai").provider).toBe("openai");
 		expect(judgeSelection("anthropic").provider).toBe("anthropic");
 	});
+
+	// The ChatGPT-account Codex backend rejects gpt-5.1 outright, and /qc's
+	// judging pass is one of the two call sites watch's re-review loop exercises.
+	it("judges openai findings with gpt-5.4, not the retired gpt-5.1", () => {
+		expect(judgeSelection("openai").model).toBe("gpt-5.4");
+	});
 });
 
 describe("summarize", () => {

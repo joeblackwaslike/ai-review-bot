@@ -49,7 +49,7 @@ export function selectQcSample<T extends { id: number }>(
 
 /** Judging is a cheap per-finding call, so both providers use their small model
  * rather than whichever one the review itself was routed to. */
-export const QC_OPENAI_MODEL = "gpt-5.1";
+export const QC_OPENAI_MODEL = "gpt-5.4";
 export const QC_ANTHROPIC_MODEL = "claude-haiku-4-5";
 
 /** Pure: a finding is judged by the same provider that raised it — not
