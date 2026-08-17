@@ -67,6 +67,7 @@ describe("installationApp", () => {
 			{ owner: "owner", repo: "repo" },
 		);
 		expect(result.installationId).toBe(99);
+		expect(result.app).toBeDefined();
 		expect(AppCtor).toHaveBeenCalledWith({
 			appId: "app-1",
 			privateKey: "-----BEGIN...",

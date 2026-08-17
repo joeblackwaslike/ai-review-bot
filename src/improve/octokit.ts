@@ -23,7 +23,7 @@ export async function installationApp(
 }
 
 /** Build an Octokit authenticated as one GitHub App's installation on a repo.
- * Shared by the CLI (`ai-review propose`/`ready`/`backfill`/`watch`), the
+ * Shared by the CLI (`ai-review propose`/`ready`/`backfill`), the
  * weekly cron (`api/cron/improve.ts`), and the dashboard's "open issue from
  * metric" action. */
 export async function installationOctokit(
