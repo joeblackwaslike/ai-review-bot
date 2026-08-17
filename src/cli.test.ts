@@ -202,6 +202,23 @@ describe("cmdWatch", () => {
 		expect(watchPr).not.toHaveBeenCalled();
 	});
 
+	it("rejects a --repo value with an extra slash instead of silently truncating", async () => {
+		await expect(cmdWatch(["--pr", "5", "--repo", "o/r/x"])).rejects.toThrow(
+			ProcessExitError,
+		);
+		expect(console.error).toHaveBeenCalledWith(
+			"Error: --repo must be <owner>/<name>, got: o/r/x",
+		);
+		expect(watchPr).not.toHaveBeenCalled();
+	});
+
+	it("rejects a --repo value with an empty owner or repo segment", async () => {
+		await expect(cmdWatch(["--pr", "5", "--repo", "/r"])).rejects.toThrow(
+			ProcessExitError,
+		);
+		expect(watchPr).not.toHaveBeenCalled();
+	});
+
 	it("defaults to both providers, 60s interval, and passes the resolved targets to watchPr", async () => {
 		await cmdWatch(["--pr", "5", "--repo", "o/r"]);
 

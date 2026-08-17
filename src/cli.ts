@@ -415,7 +415,7 @@ export async function cmdWatch(args: string[]): Promise<void> {
 	}
 	if (pr === undefined) fatal("--pr <n> is required");
 
-	if (repoArg && !repoArg.includes("/")) {
+	if (repoArg && !/^[^/\s]+\/[^/\s]+$/.test(repoArg)) {
 		fatal(`--repo must be <owner>/<name>, got: ${repoArg}`);
 	}
 	const { owner, repo } = repoArg
