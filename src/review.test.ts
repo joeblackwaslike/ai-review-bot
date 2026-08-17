@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { KvClient } from "./feedback/kv.js";
+import { createAIModel } from "./models.js";
 import {
 	buildReview,
 	buildReviewComments,
@@ -3160,5 +3161,57 @@ describe("review body markdown", () => {
 		expect(review?.event).toBe("REQUEST_CHANGES");
 		expect(review?.body).toContain("Unvalidated input");
 		expect(review?.body).toContain("src/a.ts");
+	});
+});
+
+describe("buildReview auth threading", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+		vi.mocked(createAIModel).mockClear();
+	});
+
+	it("threads context.auth through to createAIModel for every Tier 1 agent and the summary model", async () => {
+		const auth = {
+			mode: "oauth" as const,
+			provider: "anthropic" as const,
+			token: "tok",
+			baseURL: "https://api.example.test",
+			headers: {},
+			fetch: vi.fn() as unknown as typeof fetch,
+		};
+		const agentResponse = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "REQUEST_CHANGES",
+				general_findings: [
+					{ title: "Something", body: "needs work", severity: "high" },
+				],
+				inline_comments: [],
+			}),
+		);
+		const summaryResponse = {
+			object: { summary: "Found an issue." },
+			usage: { inputTokens: 50, outputTokens: 20 },
+		};
+		mockGenerateObject
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(summaryResponse);
+
+		await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			auth,
+		});
+
+		// 5 Tier 1 agent calls + 1 summary call, every one threaded with the same auth.
+		expect(createAIModel).toHaveBeenCalledTimes(6);
+		for (const call of vi.mocked(createAIModel).mock.calls) {
+			expect(call[1]).toBe(auth);
+		}
 	});
 });
