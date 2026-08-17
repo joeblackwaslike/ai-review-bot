@@ -1,4 +1,5 @@
 import { App } from "octokit";
+import type { ResolvedAuth } from "./auth.js";
 import { createCheckRun } from "./check-run.js";
 import { isTrustedAuthorAssociation, parseReviewCommand } from "./commands.js";
 import type { AppConfig } from "./config.js";
@@ -255,6 +256,7 @@ export async function maybeSubmitReview(args: {
 	extraInstructions: string;
 	force: boolean;
 	config: AppConfig;
+	auth?: ResolvedAuth;
 }) {
 	const {
 		app,
@@ -266,6 +268,7 @@ export async function maybeSubmitReview(args: {
 		extraInstructions,
 		force,
 		config,
+		auth,
 	} = args;
 
 	if (!config.reviewEnabled) {
@@ -380,6 +383,7 @@ export async function maybeSubmitReview(args: {
 			// forced review still persists fresh state here; buildReview force-gates
 			// the gate itself so force runs a FULL review but doesn't go stale (I1).
 			kv: stateKv,
+			auth,
 		});
 
 		if (!review) {

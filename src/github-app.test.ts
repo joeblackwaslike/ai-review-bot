@@ -648,6 +648,46 @@ describe("maybeSubmitReview", () => {
 			}),
 		).resolves.not.toThrow();
 	});
+
+	it("threads auth through to buildReview when provided", async () => {
+		const { app } = buildMockApp();
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "COMMENT" as const,
+			body: "Review body.",
+			comments: [],
+			metadata: DEFAULT_METADATA,
+		});
+		const auth = {
+			mode: "oauth" as const,
+			provider: "anthropic" as const,
+			token: "tok",
+			baseURL: "https://api.example.test",
+			headers: {},
+			fetch: vi.fn() as unknown as typeof fetch,
+		};
+
+		await maybeSubmitReview({ app, ...baseArgs, auth });
+
+		expect(mockBuildReview).toHaveBeenCalledWith(
+			expect.objectContaining({ auth }),
+		);
+	});
+
+	it("passes auth as undefined when not provided (unchanged webhook behavior)", async () => {
+		const { app } = buildMockApp();
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "COMMENT" as const,
+			body: "Review body.",
+			comments: [],
+			metadata: DEFAULT_METADATA,
+		});
+
+		await maybeSubmitReview({ app, ...baseArgs });
+
+		expect(mockBuildReview).toHaveBeenCalledWith(
+			expect.objectContaining({ auth: undefined }),
+		);
+	});
 });
 
 describe("runScheduledReview", () => {
