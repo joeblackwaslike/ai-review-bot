@@ -8,10 +8,24 @@ vi.mock("./audit.js", async (orig) => {
 	const actual = await orig<typeof import("./audit.js")>();
 	return { ...actual, runLocalAudit: vi.fn() };
 });
+vi.mock("./improve/octokit.js", async (orig) => {
+	const actual = await orig<typeof import("./improve/octokit.js")>();
+	return {
+		...actual,
+		installationApp: vi.fn(),
+		installationOctokit: vi.fn(),
+	};
+});
+vi.mock("./watch.js", async (orig) => {
+	const actual = await orig<typeof import("./watch.js")>();
+	return { ...actual, watchPr: vi.fn() };
+});
 
 import { runLocalAudit } from "./audit.js";
-import { cmdAudit } from "./cli.js";
+import { cmdAudit, cmdWatch } from "./cli.js";
 import { getConfig, getOpenAIAppConfig } from "./config.js";
+import { installationApp, installationOctokit } from "./improve/octokit.js";
+import { watchPr } from "./watch.js";
 
 class ProcessExitError extends Error {
 	constructor(readonly code: number) {
@@ -95,5 +109,87 @@ describe("cmdAudit credential validation", () => {
 
 		expect(getConfig).not.toHaveBeenCalled();
 		expect(process.exit).not.toHaveBeenCalled();
+	});
+});
+
+describe("cmdWatch", () => {
+	beforeEach(() => {
+		vi.mocked(getConfig)
+			.mockReset()
+			.mockReturnValue({
+				appId: "claude-app",
+				privateKey: "claude-pem",
+			} as unknown as ReturnType<typeof getConfig>);
+		vi.mocked(getOpenAIAppConfig)
+			.mockReset()
+			.mockReturnValue({
+				appId: "codex-app",
+				privateKey: "codex-pem",
+			} as unknown as ReturnType<typeof getOpenAIAppConfig>);
+		vi.mocked(installationApp)
+			.mockReset()
+			.mockImplementation(async (appId) => ({
+				app: { marker: appId } as never,
+				installationId: appId === "claude-app" ? 1 : 2,
+			}));
+		vi.mocked(installationOctokit)
+			.mockReset()
+			.mockResolvedValue({ request: vi.fn() } as never);
+		vi.mocked(watchPr)
+			.mockReset()
+			.mockResolvedValue({ cycles: 1, reason: "merged" });
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+			throw new ProcessExitError(code ?? 0);
+		}) as never);
+	});
+
+	it("requires --pr", async () => {
+		await expect(cmdWatch(["--repo", "o/r"])).rejects.toThrow(ProcessExitError);
+		expect(watchPr).not.toHaveBeenCalled();
+	});
+
+	it("rejects an invalid --provider value", async () => {
+		await expect(
+			cmdWatch(["--pr", "5", "--repo", "o/r", "--provider", "bogus"]),
+		).rejects.toThrow(ProcessExitError);
+		expect(watchPr).not.toHaveBeenCalled();
+	});
+
+	it("defaults to both providers, 60s interval, and passes the resolved targets to watchPr", async () => {
+		await cmdWatch(["--pr", "5", "--repo", "o/r"]);
+
+		expect(watchPr).toHaveBeenCalledTimes(1);
+		const call = vi.mocked(watchPr).mock.calls[0][0];
+		expect(call.owner).toBe("o");
+		expect(call.repo).toBe("r");
+		expect(call.pullNumber).toBe(5);
+		expect(call.intervalMs).toBe(60_000);
+		expect(call.targets.map((t) => t.provider)).toEqual([
+			"anthropic",
+			"openai",
+		]);
+		expect(installationOctokit).toHaveBeenCalledWith(
+			"claude-app",
+			"claude-pem",
+			"o",
+			"r",
+		);
+	});
+
+	it("--provider narrows to a single target", async () => {
+		await cmdWatch(["--pr", "5", "--repo", "o/r", "--provider", "anthropic"]);
+
+		const call = vi.mocked(watchPr).mock.calls[0][0];
+		expect(call.targets.map((t) => t.provider)).toEqual(["anthropic"]);
+		expect(getOpenAIAppConfig).not.toHaveBeenCalled();
+	});
+
+	it("--interval converts seconds to milliseconds", async () => {
+		await cmdWatch(["--pr", "5", "--repo", "o/r", "--interval", "15"]);
+
+		const call = vi.mocked(watchPr).mock.calls[0][0];
+		expect(call.intervalMs).toBe(15_000);
 	});
 });
