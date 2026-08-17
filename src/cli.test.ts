@@ -113,6 +113,9 @@ describe("cmdAudit credential validation", () => {
 });
 
 describe("cmdWatch", () => {
+	let claudeGetInstallationOctokit: ReturnType<typeof vi.fn>;
+	let codexGetInstallationOctokit: ReturnType<typeof vi.fn>;
+
 	beforeEach(() => {
 		vi.mocked(getConfig)
 			.mockReset()
@@ -126,10 +129,22 @@ describe("cmdWatch", () => {
 				appId: "codex-app",
 				privateKey: "codex-pem",
 			} as unknown as ReturnType<typeof getOpenAIAppConfig>);
+		claudeGetInstallationOctokit = vi
+			.fn()
+			.mockResolvedValue({ request: vi.fn() });
+		codexGetInstallationOctokit = vi
+			.fn()
+			.mockResolvedValue({ request: vi.fn() });
 		vi.mocked(installationApp)
 			.mockReset()
 			.mockImplementation(async (appId) => ({
-				app: { marker: appId } as never,
+				app: {
+					marker: appId,
+					getInstallationOctokit:
+						appId === "claude-app"
+							? claudeGetInstallationOctokit
+							: codexGetInstallationOctokit,
+				} as never,
 				installationId: appId === "claude-app" ? 1 : 2,
 			}));
 		vi.mocked(installationOctokit)
@@ -150,10 +165,40 @@ describe("cmdWatch", () => {
 		expect(watchPr).not.toHaveBeenCalled();
 	});
 
+	it("rejects a non-numeric --pr value", async () => {
+		await expect(cmdWatch(["--pr", "abc", "--repo", "o/r"])).rejects.toThrow(
+			ProcessExitError,
+		);
+		expect(console.error).toHaveBeenCalledWith(
+			"Error: --pr must be a positive integer, got: abc",
+		);
+		expect(watchPr).not.toHaveBeenCalled();
+	});
+
 	it("rejects an invalid --provider value", async () => {
 		await expect(
 			cmdWatch(["--pr", "5", "--repo", "o/r", "--provider", "bogus"]),
 		).rejects.toThrow(ProcessExitError);
+		expect(watchPr).not.toHaveBeenCalled();
+	});
+
+	it("rejects a non-positive --interval value", async () => {
+		await expect(
+			cmdWatch(["--pr", "5", "--repo", "o/r", "--interval", "0"]),
+		).rejects.toThrow(ProcessExitError);
+		expect(console.error).toHaveBeenCalledWith(
+			"Error: --interval must be a positive integer, got: 0",
+		);
+		expect(watchPr).not.toHaveBeenCalled();
+	});
+
+	it("rejects a --repo value with no slash", async () => {
+		await expect(cmdWatch(["--pr", "5", "--repo", "noSlash"])).rejects.toThrow(
+			ProcessExitError,
+		);
+		expect(console.error).toHaveBeenCalledWith(
+			"Error: --repo must be <owner>/<name>, got: noSlash",
+		);
 		expect(watchPr).not.toHaveBeenCalled();
 	});
 
@@ -170,12 +215,12 @@ describe("cmdWatch", () => {
 			"anthropic",
 			"openai",
 		]);
-		expect(installationOctokit).toHaveBeenCalledWith(
-			"claude-app",
-			"claude-pem",
-			"o",
-			"r",
-		);
+		// pollOctokit is built directly off the already-resolved claude
+		// installation (target[0].app.getInstallationOctokit), not by
+		// re-resolving the installation through a second installationOctokit()
+		// call — that would be a redundant GET /installation round trip.
+		expect(claudeGetInstallationOctokit).toHaveBeenCalledWith(1);
+		expect(installationOctokit).not.toHaveBeenCalled();
 	});
 
 	it("--provider narrows to a single target", async () => {

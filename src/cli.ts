@@ -392,8 +392,13 @@ export async function cmdWatch(args: string[]): Promise<void> {
 	let intervalSeconds = 60;
 	for (let i = 0; i < args.length; i++) {
 		const a = args[i];
-		if (a === "--pr") pr = Number(requireValue(args, i++, a));
-		else if (a === "--repo") repoArg = requireValue(args, i++, a);
+		if (a === "--pr") {
+			const raw = requireValue(args, i++, a);
+			pr = Number(raw);
+			if (!Number.isInteger(pr) || pr <= 0) {
+				fatal(`--pr must be a positive integer, got: ${raw}`);
+			}
+		} else if (a === "--repo") repoArg = requireValue(args, i++, a);
 		else if (a === "--provider") {
 			const v = requireValue(args, i++, a);
 			if (v !== "anthropic" && v !== "openai") {
@@ -401,11 +406,18 @@ export async function cmdWatch(args: string[]): Promise<void> {
 			}
 			providerArg = v;
 		} else if (a === "--interval") {
-			intervalSeconds = Number(requireValue(args, i++, a));
+			const raw = requireValue(args, i++, a);
+			intervalSeconds = Number(raw);
+			if (!Number.isInteger(intervalSeconds) || intervalSeconds <= 0) {
+				fatal(`--interval must be a positive integer, got: ${raw}`);
+			}
 		} else if (a.startsWith("--")) fatal(`Unknown flag: ${a}`);
 	}
-	if (!pr) fatal("--pr <n> is required");
+	if (pr === undefined) fatal("--pr <n> is required");
 
+	if (repoArg && !repoArg.includes("/")) {
+		fatal(`--repo must be <owner>/<name>, got: ${repoArg}`);
+	}
 	const { owner, repo } = repoArg
 		? { owner: repoArg.split("/")[0], repo: repoArg.split("/")[1] }
 		: originSlug();
@@ -427,11 +439,8 @@ export async function cmdWatch(args: string[]): Promise<void> {
 		targets.push({ provider, app, installationId, config });
 	}
 
-	const pollOctokit = await installationOctokit(
-		targets[0].config.appId,
-		targets[0].config.privateKey,
-		owner,
-		repo,
+	const pollOctokit = await targets[0].app.getInstallationOctokit(
+		targets[0].installationId,
 	);
 
 	console.log(
@@ -444,7 +453,7 @@ export async function cmdWatch(args: string[]): Promise<void> {
 		pullNumber: pr,
 		pollOctokit: pollOctokit as unknown as OctokitLike,
 		targets,
-		resolveAuthFor: (provider) => resolveAuth(provider),
+		resolveAuthFor: resolveAuth,
 		intervalMs: intervalSeconds * 1000,
 	});
 
