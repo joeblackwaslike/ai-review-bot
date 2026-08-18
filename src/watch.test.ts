@@ -17,6 +17,7 @@ function pollResponse(
 		merged: boolean;
 		state: string;
 		headSha: string;
+		body: string | null;
 	}> = {},
 ) {
 	return {
@@ -29,7 +30,7 @@ function pollResponse(
 			deletions: 0,
 			changed_files: 1,
 			title: "Test PR",
-			body: null,
+			body: overrides.body ?? null,
 		},
 	};
 }
@@ -482,5 +483,162 @@ describe("watchPr", () => {
 		// handled and don't call submitReview again — unlike the draft-PR skip
 		// above, which retries every cycle.
 		expect(submitReview).toHaveBeenCalledTimes(1);
+	});
+
+	// ai-review-bot-aou: a fresh process (restart, crash, sleep/wake) resets
+	// hasPostedEver/lastReviewedSha to their cold-start defaults, which forces
+	// force:true on cycle 1 (see Bug A above) — bypassing buildReview's triage
+	// gate entirely, even when the current head SHA was already fully reviewed
+	// by this same bot in a prior (killed) watch session. loadPersistedState
+	// lets watchPr consult that same server-side state before deciding force
+	// for cycle 1, so a restart doesn't repost a duplicate FULL review.
+	it("seeds force:false on cycle 1 when loadPersistedState reports this exact head SHA was already reviewed", async () => {
+		const request = vi
+			.fn()
+			.mockResolvedValue(pollResponse({ headSha: "sha1" }));
+		const submitReview = vi.fn().mockResolvedValue(noNewReview);
+		const loadPersistedState = vi
+			.fn()
+			.mockResolvedValue({ lastReviewedSha: "sha1" });
+
+		await watchPr({
+			owner: "o",
+			repo: "r",
+			pullNumber: 5,
+			pollOctokit: { request },
+			targets: [buildTarget("anthropic")],
+			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
+			sleep: vi.fn().mockResolvedValue(undefined),
+			log: () => {},
+			submitReview,
+			loadPersistedState,
+			maxCycles: 1,
+		});
+
+		expect(loadPersistedState).toHaveBeenCalledWith("anthropic");
+		expect(submitReview).toHaveBeenCalledTimes(1);
+		expect(submitReview.mock.calls[0][0]).toEqual(
+			expect.objectContaining({ force: false }),
+		);
+	});
+
+	// ai-review-bot-aou continued: a stale/mismatched persisted SHA (a real
+	// push happened while the watch process was down) must NOT suppress
+	// cycle 1's force:true — only an exact match is a "nothing changed, this
+	// was already reviewed" signal.
+	it("keeps force:true on cycle 1 when loadPersistedState's SHA does not match the current head", async () => {
+		const request = vi
+			.fn()
+			.mockResolvedValue(pollResponse({ headSha: "sha2" }));
+		const submitReview = vi.fn().mockResolvedValue(posted);
+		const loadPersistedState = vi
+			.fn()
+			.mockResolvedValue({ lastReviewedSha: "sha1" });
+
+		await watchPr({
+			owner: "o",
+			repo: "r",
+			pullNumber: 5,
+			pollOctokit: { request },
+			targets: [buildTarget("anthropic")],
+			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
+			sleep: vi.fn().mockResolvedValue(undefined),
+			log: () => {},
+			submitReview,
+			loadPersistedState,
+			maxCycles: 1,
+		});
+
+		expect(submitReview.mock.calls[0][0]).toEqual(
+			expect.objectContaining({ force: true }),
+		);
+	});
+
+	// ai-review-bot-aou continued: the default (no loadPersistedState passed,
+	// which is every test above this one, and production without KV) must
+	// behave exactly as before — force:true on cycle 1.
+	it("keeps force:true on cycle 1 when loadPersistedState is not provided at all", async () => {
+		const request = vi
+			.fn()
+			.mockResolvedValue(pollResponse({ headSha: "sha1" }));
+		const submitReview = vi.fn().mockResolvedValue(posted);
+
+		await watchPr({
+			owner: "o",
+			repo: "r",
+			pullNumber: 5,
+			pollOctokit: { request },
+			targets: [buildTarget("anthropic")],
+			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
+			sleep: vi.fn().mockResolvedValue(undefined),
+			log: () => {},
+			submitReview,
+			maxCycles: 1,
+		});
+
+		expect(submitReview.mock.calls[0][0]).toEqual(
+			expect.objectContaining({ force: true }),
+		);
+	});
+
+	// ai-review-bot-1f5: when two providers post in the same cycle, the second
+	// provider's maybeSubmitReview call must see a PR body that already
+	// includes the first provider's just-posted PR-summary section — not the
+	// stale pre-cycle snapshot. injectPRSection does a full-body marker splice
+	// on one shared start/end pair, so building the second PATCH from a stale
+	// body silently discards the first provider's section.
+	it("re-polls the PR before the next target's post in the same cycle, so the second provider sees the first provider's updated body", async () => {
+		const request = vi
+			.fn()
+			.mockResolvedValueOnce(pollResponse({ body: "stale" }))
+			.mockResolvedValueOnce(pollResponse({ body: "updated-by-anthropic" }));
+		const submitReview = vi.fn().mockResolvedValue(posted);
+
+		await watchPr({
+			owner: "o",
+			repo: "r",
+			pullNumber: 5,
+			pollOctokit: { request },
+			targets: [buildTarget("anthropic"), buildTarget("openai")],
+			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
+			sleep: vi.fn().mockResolvedValue(undefined),
+			log: () => {},
+			submitReview,
+			maxCycles: 1,
+		});
+
+		expect(request).toHaveBeenCalledTimes(2);
+		expect(submitReview).toHaveBeenCalledTimes(2);
+		const calls = submitReview.mock.calls as unknown as Array<
+			[{ config: { provider: string }; pullRequest: { body: string | null } }]
+		>;
+		const anthropicCall = calls.find(
+			([arg]) => arg.config.provider === "anthropic",
+		);
+		const openaiCall = calls.find(([arg]) => arg.config.provider === "openai");
+		expect(anthropicCall?.[0].pullRequest.body).toBe("stale");
+		expect(openaiCall?.[0].pullRequest.body).toBe("updated-by-anthropic");
+	});
+
+	// ai-review-bot-1f5 continued: no re-poll should happen after the LAST
+	// target in a cycle posts — there's no next target to benefit from it.
+	it("does not re-poll after the last target in a cycle posts", async () => {
+		const request = vi.fn().mockResolvedValue(pollResponse({ body: "x" }));
+		const submitReview = vi.fn().mockResolvedValue(posted);
+
+		await watchPr({
+			owner: "o",
+			repo: "r",
+			pullNumber: 5,
+			pollOctokit: { request },
+			targets: [buildTarget("anthropic")],
+			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
+			sleep: vi.fn().mockResolvedValue(undefined),
+			log: () => {},
+			submitReview,
+			maxCycles: 1,
+		});
+
+		expect(request).toHaveBeenCalledTimes(1);
 	});
 });

@@ -10,7 +10,13 @@ import { persistPostedComments } from "./feedback/persist.js";
 import { recordPostedComment } from "./feedback/store.js";
 import { capturePostedReview } from "./improve/capture.js";
 import { getDb } from "./improve/db/client.js";
-import { billingUrl, notifyQuotaExhausted, providerLabel } from "./notify.js";
+import {
+	billingUrl,
+	notifyQuotaExhausted,
+	providerLabel,
+	quotaCommentMarker,
+	rateLimitCommentMarker,
+} from "./notify.js";
 import type { PeerOctokit } from "./peers.js";
 import {
 	fetchPrReviews,
@@ -271,6 +277,31 @@ export type SubmitReviewOutcome =
  * decision rather than a retryable skip — see `SubmitReviewOutcome`'s doc. */
 export const NO_NEW_REVIEW_REASON = "no new review to post";
 
+/** True when a PR comment carrying `marker` already exists — used to dedupe
+ * the quota-exhausted/rate-limited warning comments so `watch`'s indefinite
+ * retry loop doesn't repost an identical comment every cycle. A malformed or
+ * unexpected (non-array) response is treated as "no existing comment" rather
+ * than thrown — this is a best-effort dedup check, not a hard dependency of
+ * the review itself. */
+async function hasExistingComment(
+	octokit: Awaited<ReturnType<App["getInstallationOctokit"]>>,
+	owner: string,
+	repo: string,
+	pullNumber: number,
+	marker: string,
+): Promise<boolean> {
+	const existing = await octokit.request(
+		"GET /repos/{owner}/{repo}/issues/{issue_number}/comments",
+		{ owner, repo, issue_number: pullNumber },
+	);
+	const comments = Array.isArray(existing.data)
+		? (existing.data as Array<{ body?: string | null }>)
+		: [];
+	return comments.some(
+		(c) => typeof c.body === "string" && c.body.includes(marker),
+	);
+}
+
 /** @internal Exported for unit testing only. */
 export async function maybeSubmitReview(args: {
 	app: App;
@@ -422,7 +453,9 @@ export async function maybeSubmitReview(args: {
 		if (review.event === "QUOTA_EXHAUSTED") {
 			const quotaProvider = review.quotaProvider ?? "unknown";
 			const billing = billingUrl(quotaProvider);
+			const marker = quotaCommentMarker(quotaProvider);
 			const body = [
+				marker,
 				`⛔ **[${config.reviewCommentPrefix}]** Review couldn't run — **the ${providerLabel(quotaProvider)} account is out of credits.**`,
 				"",
 				"This will **not** clear on its own and pushing again will not help — it needs payment.",
@@ -433,10 +466,18 @@ export async function maybeSubmitReview(args: {
 				"",
 				"The review will run normally on the next commit once the balance is topped up.",
 			].join("\n");
-			await octokit.request(
-				"POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
-				{ owner, repo, issue_number: pullNumber, body },
-			);
+			if (await hasExistingComment(octokit, owner, repo, pullNumber, marker)) {
+				console.log("quota-exhausted comment already posted; not duplicating", {
+					owner,
+					repo,
+					pullNumber,
+				});
+			} else {
+				await octokit.request(
+					"POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+					{ owner, repo, issue_number: pullNumber, body },
+				);
+			}
 			console.error("PROVIDER BALANCE EXHAUSTED — payment required", {
 				provider: quotaProvider,
 				owner,
@@ -464,25 +505,34 @@ export async function maybeSubmitReview(args: {
 				: review.rateLimitRetryAfterSeconds
 					? `retry in ~${review.rateLimitRetryAfterSeconds}s`
 					: "will reset shortly";
-			const body = `⚠️ **[${config.reviewCommentPrefix}]** Review couldn't run — the model is rate-limited (input-token budget). Budget ${when}. Push again after that, or it will auto-retry on your next commit.`;
+			const marker = rateLimitCommentMarker(config.provider);
+			const body = `${marker}\n⚠️ **[${config.reviewCommentPrefix}]** Review couldn't run — the model is rate-limited (input-token budget). Budget ${when}. Push again after that, or it will auto-retry on your next commit.`;
 			// A throw here propagates to the outer finally, which releases the
 			// claim. Intended: a rate-limited run spent no model budget, so the
 			// commit must stay eligible for retry on the next delivery.
-			await octokit.request(
-				"POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
-				{
+			if (await hasExistingComment(octokit, owner, repo, pullNumber, marker)) {
+				console.log("rate-limit comment already posted; not duplicating", {
 					owner,
 					repo,
-					issue_number: pullNumber,
-					body,
-				},
-			);
-			console.log("posted rate-limit fallback comment", {
-				owner,
-				repo,
-				pullNumber,
-				when,
-			});
+					pullNumber,
+				});
+			} else {
+				await octokit.request(
+					"POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+					{
+						owner,
+						repo,
+						issue_number: pullNumber,
+						body,
+					},
+				);
+				console.log("posted rate-limit fallback comment", {
+					owner,
+					repo,
+					pullNumber,
+					when,
+				});
+			}
 			return { status: "rate_limited" };
 		}
 

@@ -8,6 +8,7 @@ import {
 	runScheduledReview,
 	selectReviewDelayMs,
 } from "./github-app.js";
+import { quotaCommentMarker, rateLimitCommentMarker } from "./notify.js";
 import { buildReview } from "./review.js";
 import type { ReviewRunMessage } from "./scheduler.js";
 import { buildPullRequestPayload } from "./testing.js";
@@ -390,8 +391,9 @@ describe("maybeSubmitReview", () => {
 			},
 		});
 
-		const comment = requests.find((r) =>
-			r.route.includes("/issues/{issue_number}/comments"),
+		const comment = requests.find(
+			(r) =>
+				r.route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
 		);
 		expect(comment?.params.body).toContain("2026-06-09T07:21:30Z");
 		expect(
@@ -420,6 +422,114 @@ describe("maybeSubmitReview", () => {
 					route === "POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
 			),
 		).toBe(false);
+	});
+
+	// ai-review-bot-zm9: under watch's indefinite retry loop, a persistent
+	// quota/rate-limit condition must not repost an identical warning comment
+	// every cycle — mirror notifyQuotaExhausted's existing issue-path dedup for
+	// this PR-comment path too.
+	it("does not repost the quota-exhausted comment when one with the marker already exists", async () => {
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "QUOTA_EXHAUSTED" as const,
+			body: "",
+			comments: [],
+			validLinesByPath: new Map(),
+			metadata: DEFAULT_METADATA,
+			quotaProvider: "anthropic" as const,
+		});
+		const requests: Array<{ route: string; params: Record<string, unknown> }> =
+			[];
+		const octokitLocal = {
+			request: vi.fn(async (route: string, params: Record<string, unknown>) => {
+				requests.push({ route, params });
+				if (
+					route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					return {
+						data: [
+							{ body: `${quotaCommentMarker("anthropic")}\nalready warned` },
+						],
+					};
+				}
+				return { data: {} };
+			}),
+		};
+		const appLocal = {
+			getInstallationOctokit: vi.fn(async () => octokitLocal),
+		} as never;
+
+		const outcome = await maybeSubmitReview({ app: appLocal, ...baseArgs });
+
+		expect(outcome).toEqual({ status: "quota_exhausted" });
+		const posts = requests.filter(
+			(r) =>
+				r.route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+		);
+		expect(posts).toHaveLength(0);
+	});
+
+	it("does not repost the rate-limit comment when one with the marker already exists", async () => {
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "RATE_LIMITED",
+			body: "",
+			comments: [],
+			validLinesByPath: new Map(),
+			metadata: DEFAULT_METADATA,
+			rateLimitResetAt: "2026-06-09T07:21:30Z",
+		});
+		const requests: Array<{ route: string; params: Record<string, unknown> }> =
+			[];
+		const octokitLocal = {
+			request: vi.fn(async (route: string, params: Record<string, unknown>) => {
+				requests.push({ route, params });
+				if (
+					route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					return {
+						data: [
+							{
+								body: `${rateLimitCommentMarker("anthropic")}\nalready warned`,
+							},
+						],
+					};
+				}
+				return { data: {} };
+			}),
+		};
+		const appLocal = {
+			getInstallationOctokit: vi.fn(async () => octokitLocal),
+		} as never;
+
+		const outcome = await maybeSubmitReview({
+			app: appLocal,
+			installationId: 1,
+			owner: "o",
+			repo: "r",
+			pullNumber: 7,
+			pullRequest: {
+				draft: false,
+				head: { sha: "sha" },
+				additions: 0,
+				deletions: 0,
+				changed_files: 0,
+				title: "t",
+				body: null,
+			},
+			extraInstructions: "",
+			force: true,
+			config: {
+				...baseArgs.config,
+				reviewEnabled: true,
+				reviewCommentPrefix: "ai-review-bot",
+			},
+		});
+
+		expect(outcome).toEqual({ status: "rate_limited" });
+		const posts = requests.filter(
+			(r) =>
+				r.route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+		);
+		expect(posts).toHaveLength(0);
 	});
 
 	it("posts fallback comment with findings when all retries are exhausted", async () => {
