@@ -424,14 +424,15 @@ export function makeCodexFetch(
 				// message, which is indistinguishable from a genuine SSE-shape bug.
 				// `cause` preserves parseCodexSSEResponse's own error (and stack) so
 				// a genuine parser bug is still fully diagnosable from this
-				// wrapper's summary, not just from the message string. Normalized to
-				// an Error even if the parser ever threw a non-Error value, so
-				// `cause` stays consistently typed for callers that inspect it.
-				const cause =
-					parseErr instanceof Error ? parseErr : new Error(String(parseErr));
+				// wrapper's summary, not just from the message string. Set directly
+				// to `parseErr` (not wrapped) — Error.cause is typed `unknown`
+				// precisely so the original thrown value, whatever it was, survives
+				// intact for a caller that inspects `err.cause`.
 				throw new Error(
-					`Codex response (status ${res.status}) was neither valid JSON nor a parseable SSE stream: ${cause.message}. Body (first 500 chars): ${rawText.slice(0, 500)}`,
-					{ cause },
+					`Codex response (status ${res.status}) was neither valid JSON nor a parseable SSE stream: ${
+						parseErr instanceof Error ? parseErr.message : String(parseErr)
+					}. Body (first 500 chars): ${rawText.slice(0, 500)}`,
+					{ cause: parseErr },
 				);
 			}
 			// Only the framing headers change here — content-length/-encoding and

@@ -269,14 +269,17 @@ describe("makeCodexFetch", () => {
 	// than the original SSE wire payload — content-length/-encoding and
 	// transfer-encoding describe that old payload, not this one, and copying
 	// them verbatim would make a downstream consumer that re-serializes this
-	// Response see a stale/incorrect body-length signal.
+	// Response see a stale/incorrect body-length signal. The header value used
+	// here (`identity`) is arbitrary — this test only proves the stale header
+	// key is stripped, not any decompression behavior, since makeCodexFetch
+	// never decompresses anything itself.
 	it("strips body-specific headers that no longer describe the rewritten JSON body", async () => {
 		const base = (async () =>
 			new Response(CODEX_SSE_FIXTURE, {
 				headers: {
 					"x-request-id": "req-123",
 					"content-length": String(CODEX_SSE_FIXTURE.length),
-					"content-encoding": "gzip",
+					"content-encoding": "identity",
 					"transfer-encoding": "chunked",
 				},
 			})) as unknown as typeof fetch;
@@ -291,6 +294,7 @@ describe("makeCodexFetch", () => {
 		expect(res.headers.get("content-length")).toBeNull();
 		expect(res.headers.get("content-encoding")).toBeNull();
 		expect(res.headers.get("transfer-encoding")).toBeNull();
+		await expect(res.json()).resolves.toMatchObject({ id: "resp_1" });
 	});
 
 	// A response that is neither valid JSON nor a parseable SSE stream (e.g. a
@@ -317,12 +321,11 @@ describe("makeCodexFetch", () => {
 		expect((err as Error).cause).toBeInstanceOf(Error);
 	});
 
-	// Integration: SSE is a text framing detail, not a content
-	// difference — the reconstructed JSON response must be identical whether
-	// the upstream stream used LF or CRLF line endings, not just at the
-	// parseCodexSSEResponse layer but through the whole makeCodexFetch
-	// rewrite (mismatched normalization between the two would only surface
-	// here, not in a parseCodexSSEResponse-only unit test).
+	// SSE framing is transparent — CRLF and LF streams must produce identical
+	// JSON responses, not just at the parseCodexSSEResponse layer but through
+	// the whole makeCodexFetch rewrite (mismatched normalization between the
+	// two would only surface here, not in a parseCodexSSEResponse-only unit
+	// test).
 	it("converts a CRLF-framed SSE response body into the same plain JSON response as LF", async () => {
 		const crlfFixture = CODEX_SSE_FIXTURE.replace(/\n/g, "\r\n");
 		const base = (async () =>
