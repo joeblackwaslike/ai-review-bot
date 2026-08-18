@@ -7,7 +7,10 @@ import {
 	makeCodexFetch,
 	needsRefresh,
 	resolveAnthropicAuth,
+	resolveAnthropicSubscriptionAuth,
 	resolveOpenAIAuth,
+	resolveOpenAISubscriptionAuth,
+	resolveSubscriptionAuth,
 	withClaudeCodeIdentity,
 } from "./auth.js";
 
@@ -304,5 +307,113 @@ describe("resolveAnthropicAuth", () => {
 		expect(JSON.parse(writes[0]).claudeAiOauth.expiresAt).toBe(
 			1_000_000 + 3_600_000,
 		);
+	});
+});
+
+// A stray ANTHROPIC_API_KEY/OPENAI_API_KEY in the environment (e.g. the same
+// exhausted key the hosted webhook already failed on) must never silently
+// override `watch`'s subscription-auth intent. Confirmed live 2026-08-18: the
+// first `ai-review watch` dogfood run on PR #65 reused a dead
+// ANTHROPIC_API_KEY from .env instead of falling back to the logged-in
+// `claude` CLI session, because it was wired to the API-key-first
+// resolveAuth/resolveAnthropicAuth instead of a subscription-only resolver.
+describe("resolveAnthropicSubscriptionAuth", () => {
+	it("ignores ANTHROPIC_API_KEY and reads the keychain instead", async () => {
+		const auth = await resolveAnthropicSubscriptionAuth({
+			env: { ANTHROPIC_API_KEY: "sk-stray-exhausted-key" },
+			readClaudeKeychain: async () =>
+				JSON.stringify({
+					claudeAiOauth: {
+						accessToken: "at-fresh",
+						refreshToken: "rt",
+						expiresAt: Date.now() + 3_600_000,
+					},
+				}),
+		});
+		expect(auth.mode).toBe("oauth");
+		if (auth.mode === "oauth") expect(auth.token).toBe("at-fresh");
+	});
+
+	it("still honors an explicit OAuth env token (not an API key)", async () => {
+		const auth = await resolveAnthropicSubscriptionAuth({
+			env: {
+				ANTHROPIC_API_KEY: "sk-stray",
+				CLAUDE_CODE_OAUTH_TOKEN: "oat-123",
+			},
+		});
+		expect(auth.mode).toBe("oauth");
+		if (auth.mode === "oauth") expect(auth.token).toBe("oat-123");
+	});
+
+	it("throws a login prompt, not an API-key suggestion, when nothing is available", async () => {
+		await expect(
+			resolveAnthropicSubscriptionAuth({
+				env: { ANTHROPIC_API_KEY: "sk-stray" },
+				readClaudeKeychain: async () => null,
+			}),
+		).rejects.toThrow(/run `claude` to log in/);
+	});
+});
+
+describe("resolveOpenAISubscriptionAuth", () => {
+	it("ignores OPENAI_API_KEY (env) and reads ~/.codex/auth.json instead", async () => {
+		const auth = await resolveOpenAISubscriptionAuth({
+			env: { OPENAI_API_KEY: "sk-stray-exhausted-key" },
+			readCodexAuth: async () =>
+				JSON.stringify({
+					auth_mode: "chatgpt",
+					tokens: {
+						access_token: fakeJwt(Math.floor(Date.now() / 1000) + 3600),
+						refresh_token: "rt",
+						account_id: "a",
+					},
+				}),
+		});
+		expect(auth.mode).toBe("oauth");
+	});
+
+	it("ignores an OPENAI_API_KEY embedded in auth.json too, unlike resolveOpenAIAuth", async () => {
+		await expect(
+			resolveOpenAISubscriptionAuth({
+				env: {},
+				readCodexAuth: async () =>
+					JSON.stringify({ OPENAI_API_KEY: "sk-file" }),
+			}),
+		).rejects.toThrow(/ChatGPT mode/);
+	});
+});
+
+describe("resolveSubscriptionAuth", () => {
+	it("dispatches to the anthropic subscription-only resolver, ignoring a stray API key", async () => {
+		const auth = await resolveSubscriptionAuth("anthropic", {
+			env: { ANTHROPIC_API_KEY: "sk-stray" },
+			readClaudeKeychain: async () =>
+				JSON.stringify({
+					claudeAiOauth: {
+						accessToken: "at-fresh",
+						refreshToken: "rt",
+						expiresAt: Date.now() + 3_600_000,
+					},
+				}),
+		});
+		expect(auth.mode).toBe("oauth");
+		expect(auth.provider).toBe("anthropic");
+	});
+
+	it("dispatches to the openai subscription-only resolver, ignoring a stray API key", async () => {
+		const auth = await resolveSubscriptionAuth("openai", {
+			env: { OPENAI_API_KEY: "sk-stray" },
+			readCodexAuth: async () =>
+				JSON.stringify({
+					auth_mode: "chatgpt",
+					tokens: {
+						access_token: fakeJwt(Math.floor(Date.now() / 1000) + 3600),
+						refresh_token: "rt",
+						account_id: "a",
+					},
+				}),
+		});
+		expect(auth.mode).toBe("oauth");
+		expect(auth.provider).toBe("openai");
 	});
 });

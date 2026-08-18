@@ -22,6 +22,7 @@ vi.mock("./watch.js", async (orig) => {
 });
 
 import { runLocalAudit } from "./audit.js";
+import { resolveSubscriptionAuth } from "./auth.js";
 import { cmdAudit, cmdWatch } from "./cli.js";
 import { getConfig, getOpenAIAppConfig } from "./config.js";
 import { installationApp, installationOctokit } from "./improve/octokit.js";
@@ -238,6 +239,19 @@ describe("cmdWatch", () => {
 		// call — that would be a redundant GET /installation round trip.
 		expect(claudeGetInstallationOctokit).toHaveBeenCalledWith(1);
 		expect(installationOctokit).not.toHaveBeenCalled();
+	});
+
+	// A stray ANTHROPIC_API_KEY/OPENAI_API_KEY in the environment must never
+	// silently defeat watch's whole reason for existing (bypassing a funded
+	// API key via subscription auth) — confirmed live 2026-08-18 dogfooding
+	// this PR: resolveAuth (api-key-first) was wired in here and reused a
+	// dead ANTHROPIC_API_KEY from .env instead of falling back to the
+	// logged-in `claude` session.
+	it("wires the subscription-only auth resolver, not the api-key-first one", async () => {
+		await cmdWatch(["--pr", "5", "--repo", "o/r"]);
+
+		const call = vi.mocked(watchPr).mock.calls[0][0];
+		expect(call.resolveAuthFor).toBe(resolveSubscriptionAuth);
 	});
 
 	it("--provider narrows to a single target", async () => {

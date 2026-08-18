@@ -421,15 +421,46 @@ export async function resolveOpenAIAuth(
 			apiKey: d.env.OPENAI_API_KEY,
 		};
 
+	// An API key can also be embedded directly in ~/.codex/auth.json (not
+	// just the env var) — checked here, ahead of the subscription-only
+	// delegate below, so resolveOpenAIAuth's existing api-key-first contract
+	// (including this exact error message) is unchanged.
+	// resolveOpenAISubscriptionAuth deliberately does NOT honor this branch
+	// or fall back to it — see its own doc comment.
 	const raw = await d.readCodexAuth();
 	if (!raw)
 		throw new Error(
 			"No OPENAI_API_KEY and no ~/.codex/auth.json — run `codex login` or set OPENAI_API_KEY.",
 		);
-
 	const auth = JSON.parse(raw);
 	if (auth.OPENAI_API_KEY)
 		return { mode: "api-key", provider: "openai", apiKey: auth.OPENAI_API_KEY };
+
+	return resolveOpenAISubscriptionAuth(io);
+}
+
+/**
+ * Like `resolveOpenAIAuth`, but never falls back to `OPENAI_API_KEY` (env or
+ * ~/.codex/auth.json's own stored key) — only ChatGPT/Codex-subscription
+ * OAuth credentials. `watch`'s whole purpose is bypassing a funded API key
+ * via subscription auth; wiring the API-key-first `resolveOpenAIAuth` into
+ * it means a stray `OPENAI_API_KEY` in the environment (e.g. one left over
+ * from the hosted webhook's own `.env`, possibly exhausted) silently
+ * overrides subscription intent every time. Confirmed live 2026-08-18: the
+ * first `ai-review watch` dogfood run on PR #65 hit exactly this — an
+ * exhausted `ANTHROPIC_API_KEY` in `.env` made the run reuse the same dead
+ * credential the hosted bot was already failing on, requiring the operator
+ * to manually `unset` it before every invocation.
+ */
+export async function resolveOpenAISubscriptionAuth(
+	io: AuthIO = {},
+): Promise<ResolvedAuth> {
+	const d = withDefaults(io);
+
+	const raw = await d.readCodexAuth();
+	if (!raw) throw new Error("No ~/.codex/auth.json — run `codex login`.");
+
+	const auth = JSON.parse(raw);
 	if (auth.auth_mode !== "chatgpt" || !auth.tokens?.access_token)
 		throw new Error(
 			"~/.codex/auth.json is not in ChatGPT mode — run `codex login`.",
@@ -482,13 +513,35 @@ export async function resolveAnthropicAuth(
 			apiKey: d.env.ANTHROPIC_API_KEY,
 		};
 
+	return resolveAnthropicSubscriptionAuth(io);
+}
+
+/**
+ * Like `resolveAnthropicAuth`, but never falls back to `ANTHROPIC_API_KEY` —
+ * only an explicit OAuth token (`ANTHROPIC_AUTH_TOKEN`/
+ * `CLAUDE_CODE_OAUTH_TOKEN`) or stored Claude Code subscription credentials.
+ * `watch`'s whole purpose is bypassing a funded API key via subscription
+ * auth; wiring the API-key-first `resolveAnthropicAuth` into it means a
+ * stray `ANTHROPIC_API_KEY` in the environment (e.g. one left over from the
+ * hosted webhook's own `.env`, possibly exhausted) silently overrides
+ * subscription intent every time. Confirmed live 2026-08-18: the first
+ * `ai-review watch` dogfood run on PR #65 hit exactly this — an exhausted
+ * `ANTHROPIC_API_KEY` in `.env` made the run reuse the same dead credential
+ * the hosted bot was already failing on, requiring the operator to manually
+ * `unset` it before every invocation.
+ */
+export async function resolveAnthropicSubscriptionAuth(
+	io: AuthIO = {},
+): Promise<ResolvedAuth> {
+	const d = withDefaults(io);
+
 	const envToken = d.env.ANTHROPIC_AUTH_TOKEN || d.env.CLAUDE_CODE_OAUTH_TOKEN;
 	if (envToken) return anthropicOAuth(envToken, d.fetch);
 
 	const raw = await d.readClaudeKeychain();
 	if (!raw)
 		throw new Error(
-			"No ANTHROPIC_API_KEY / OAuth token and no stored Claude Code credentials — run `claude` to log in or set ANTHROPIC_API_KEY.",
+			"No OAuth token and no stored Claude Code credentials — run `claude` to log in.",
 		);
 
 	const store = JSON.parse(raw);
@@ -537,4 +590,21 @@ export async function resolveAuth(
 	return provider === "anthropic"
 		? resolveAnthropicAuth(io)
 		: resolveOpenAIAuth(io);
+}
+
+/**
+ * Like `resolveAuth`, but never falls back to a funded API key — only
+ * subscription/OAuth credentials. This is what `ai-review watch` must use
+ * (not `resolveAuth`): a stray `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` left in
+ * the environment would otherwise silently defeat the entire point of
+ * `watch`. See `resolveAnthropicSubscriptionAuth`/
+ * `resolveOpenAISubscriptionAuth`'s own doc comments.
+ */
+export async function resolveSubscriptionAuth(
+	provider: Provider,
+	io: AuthIO = {},
+): Promise<ResolvedAuth> {
+	return provider === "anthropic"
+		? resolveAnthropicSubscriptionAuth(io)
+		: resolveOpenAISubscriptionAuth(io);
 }

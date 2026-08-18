@@ -13,7 +13,7 @@ import {
 	runLocalReview,
 } from "./audit.js";
 import { makeReady, type OctokitLike } from "./audit-pr.js";
-import { resolveAnthropicAuth, resolveAuth } from "./auth.js";
+import { resolveAnthropicAuth, resolveSubscriptionAuth } from "./auth.js";
 import { getConfig, getOpenAIAppConfig } from "./config.js";
 import {
 	type BackfillOctokit,
@@ -453,7 +453,7 @@ export async function cmdWatch(args: string[]): Promise<void> {
 		pullNumber: pr,
 		pollOctokit: pollOctokit as unknown as OctokitLike,
 		targets,
-		resolveAuthFor: resolveAuth,
+		resolveAuthFor: resolveSubscriptionAuth,
 		intervalMs: intervalSeconds * 1000,
 	});
 
