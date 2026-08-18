@@ -310,7 +310,12 @@ describe("makeCodexFetch", () => {
 			new Response("<html>Bad Gateway</html>", {
 				status: 502,
 				statusText: "Bad Gateway",
-				headers: { "retry-after": "30" },
+				headers: {
+					"retry-after": "30",
+					"content-encoding": "gzip",
+					"content-length": "9999",
+					"transfer-encoding": "chunked",
+				},
 			})) as unknown as typeof fetch;
 		const f = makeCodexFetch("acct-1", base);
 
@@ -322,6 +327,13 @@ describe("makeCodexFetch", () => {
 		expect(res.status).toBe(502);
 		expect(res.statusText).toBe("Bad Gateway");
 		expect(res.headers.get("retry-after")).toBe("30");
+		// rawText is already decoded (fetch decompresses before .text() resolves)
+		// — the reconstructed Response's body is plain text, so wire-encoding
+		// headers describing the *original* compressed payload must not survive,
+		// or a consumer would try to decode already-decoded text.
+		expect(res.headers.get("content-encoding")).toBeNull();
+		expect(res.headers.get("content-length")).toBeNull();
+		expect(res.headers.get("transfer-encoding")).toBeNull();
 		await expect(res.text()).resolves.toBe("<html>Bad Gateway</html>");
 	});
 

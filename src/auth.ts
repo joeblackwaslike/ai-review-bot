@@ -420,15 +420,23 @@ export function makeCodexFetch(
 			} catch (parseErr) {
 				if (!res.ok) {
 					// An error-status response (e.g. an intermediary's 429/502 HTML
-					// page) that's neither JSON nor SSE — pass it through unchanged
-					// rather than throwing. Throwing here would discard res.status
-					// and res.headers, and the AI SDK's own HTTP-status-based
-					// rate-limit/quota classification can only see them on a real
-					// Response, not on a JS Error.
+					// page) that's neither JSON nor SSE — reconstruct it from
+					// rawText rather than throwing. Throwing here would discard
+					// res.status and res.headers, and the AI SDK's own
+					// HTTP-status-based rate-limit/quota classification can only see
+					// them on a real Response, not on a JS Error. rawText is already
+					// decoded (fetch decompresses before .text() resolves), so the
+					// wire-encoding headers describing the *original* payload must
+					// be stripped the same way the SSE-success path does below —
+					// otherwise a consumer would try to decode already-decoded text.
+					const passthroughHeaders = new Headers(res.headers);
+					passthroughHeaders.delete("content-length");
+					passthroughHeaders.delete("content-encoding");
+					passthroughHeaders.delete("transfer-encoding");
 					return new Response(rawText, {
 						status: res.status,
 						statusText: res.statusText,
-						headers: res.headers,
+						headers: passthroughHeaders,
 					});
 				}
 				// A *successful* response that's neither valid JSON nor parseable
