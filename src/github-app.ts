@@ -389,12 +389,31 @@ async function hasExistingComment(
 		} catch (err) {
 			// A network/Octokit failure here must not block the warning it's
 			// gating — this is a best-effort dedup check, not a hard dependency.
-			console.error("hasExistingComment: list request failed", err);
+			// Logs owner/repo/pullNumber/page so a grep for a specific PR's dedup
+			// failure actually finds it — found by anthropicreviewbot reviewing
+			// PR #67 (PRRT_kwDOSM5cU86Z_7q_).
+			console.error(
+				`hasExistingComment: list request failed for ${owner}/${repo}#${pullNumber} (page ${page})`,
+				err,
+			);
 			return false;
 		}
 		const comments = Array.isArray(existing.data)
 			? (existing.data as Array<{ body?: string | null }>)
 			: [];
+		if (!Array.isArray(existing.data)) {
+			// Doesn't change the fail-open behavior (still returns false below,
+			// same as always) — only makes an otherwise-silent malformed
+			// response observable. This is a deliberate best-effort tradeoff
+			// (see the function's docstring), raised repeatedly across review
+			// passes on this PR; the recurring complaint was specifically that
+			// it was silent, not that fail-open is the wrong default. Found by
+			// anthropicreviewbot reviewing PR #67 (PRRT_kwDOSM5cU86Z_7rG / _7rT,
+			// also PRRT_kwDOSM5cU86Z-uZB / _WHm / _WHr).
+			console.warn(
+				`hasExistingComment: non-array response for ${owner}/${repo}#${pullNumber} (page ${page}); treating as no comments on this page`,
+			);
+		}
 		if (comments.some((c) => c.body != null && matcher(c.body))) {
 			return true;
 		}

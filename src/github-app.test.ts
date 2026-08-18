@@ -690,11 +690,12 @@ describe("maybeSubmitReview", () => {
 
 	// codexreviewbot (PRRT_kwDOSM5cU86Z_cHu / ikk9l) reviewing PR #67: the
 	// try/catch above must absorb only the network/Octokit request failure —
-	// wrapping the whole pagination loop also downgrades a LOCAL bug in the
-	// scan logic itself to "no existing comment", which would silently start
-	// reposting duplicate warnings instead of surfacing the bug. A comment
-	// whose `.body` getter throws simulates a local scan-logic failure that
-	// has nothing to do with the network request and must propagate.
+	// wrapping the whole pagination loop also downgrades a bug in the
+	// per-comment `.body` access below (anthropicreviewbot,
+	// PRRT_kwDOSM5cU86Z_7r_) to "no existing comment", which would silently
+	// start reposting duplicate warnings instead of surfacing the bug. A
+	// comment whose `.body` getter throws simulates that failure and must
+	// propagate out of hasExistingComment entirely.
 	it("propagates a non-request error from the local scan instead of swallowing it as no-existing-comment", async () => {
 		mockBuildReview.mockReset().mockResolvedValue({
 			event: "QUOTA_EXHAUSTED" as const,
@@ -729,6 +730,15 @@ describe("maybeSubmitReview", () => {
 		await expect(
 			maybeSubmitReview({ app: appLocal, ...baseArgs }),
 		).rejects.toThrow("local scan bug");
+		// anthropicreviewbot (PRRT_kwDOSM5cU86Z_7rb): a future change that
+		// caught the scan error and posted anyway would still throw (since the
+		// throw happens inside the outer try in maybeSubmitReview) — assert no
+		// POST was made too, to rule that out explicitly.
+		const posts = octokitLocal.request.mock.calls.filter(
+			([route]) =>
+				route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+		);
+		expect(posts).toHaveLength(0);
 	});
 
 	// anthropicreviewbot (PRRT_kwDOSM5cU86Z_qoq) reviewing PR #67: the switch
@@ -1833,6 +1843,15 @@ describe("injectPRSection", () => {
 		const result = injectPRSection(malformed, newSection, "anthropic");
 
 		expect(result.split("middle")).toHaveLength(2);
+		// anthropicreviewbot (PRRT_kwDOSM5cU86Z_7q8 / _7rW / _7ru): the guard
+		// deliberately SKIPS stripping a malformed (reversed-order) body rather
+		// than guessing at its structure, so the legacy markers are left in
+		// place, not removed — assert that explicitly. This also distinguishes
+		// "the guard correctly detected reversed order and left it alone" from
+		// "legacy stripping never ran at all", which the split-count assertion
+		// alone can't tell apart (both leave "middle" appearing once).
+		expect(result).toContain("<!-- ai-review-bot:start -->");
+		expect(result).toContain("<!-- ai-review-bot:end -->");
 	});
 
 	// codexreviewbot (PRRT_kwDOSM5cU86Z_xF_) reviewing PR #67's own 2f66390

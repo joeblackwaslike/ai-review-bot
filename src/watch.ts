@@ -126,15 +126,17 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 				// and ai-review-bot-aou's fix quietly not engaging on a genuine KV
 				// outage is exactly the kind of failure this needs to be
 				// observable for, not silent about.
-				// No presumptive "(KV unconfigured)" label — createUpstashKv() only
-				// throws today for missing env vars, but labeling every throw as
-				// specifically "unconfigured" would misdiagnose a future, different
-				// failure. The real message is always appended, so the actual cause
-				// stays observable either way; this now matches getKv()'s neutral
-				// wording in github-app.ts. Found by codexreviewbot reviewing PR #67
-				// (PRRT_kwDOSM5cU86Z-0Ku).
+				// "(KV unavailable)" — not the earlier presumptive "(KV
+				// unconfigured)": createUpstashKv() only throws today for missing
+				// env vars, but labeling every throw as specifically
+				// "unconfigured" would misdiagnose a future, different failure.
+				// "unavailable" is accurate for both, matches getKv()'s existing
+				// wording in github-app.ts, and still gives a structured label
+				// rather than requiring a full error-string read. Found by
+				// codexreviewbot reviewing PR #67 (PRRT_kwDOSM5cU86Z-0Ku), reworded
+				// again per anthropicreviewbot (PRRT_kwDOSM5cU86Z_7rz).
 				log(
-					`ai-review watch: loadPersistedState unavailable for ${provider}: ${errMsg(err)}`,
+					`ai-review watch: loadPersistedState unavailable for ${provider} (KV unavailable): ${errMsg(err)}`,
 				);
 				return null;
 			}
