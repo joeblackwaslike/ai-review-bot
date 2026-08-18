@@ -328,9 +328,20 @@ export function makeAnthropicOAuthFetch(
  * content snapshot. This is what lets `makeCodexFetch` hand the AI SDK's
  * non-streaming `generateObject` a plain JSON body as if the backend had
  * never streamed at all.
+ *
+ * @param rawSSEText - the full raw SSE response body (`event: ...\ndata:
+ *   ...` blocks separated by blank lines).
+ * @returns the reconstructed Responses-API `response` object, with `output`
+ *   populated from the accumulated `response.output_item.done` events.
+ * @throws if the stream never reaches a `response.completed` event.
  */
 export function parseCodexSSEResponse(rawSSEText: string): unknown {
-	const blocks = rawSSEText.split("\n\n").filter((b) => b.trim());
+	// The real backend uses LF-only (confirmed live), but SSE permits CRLF —
+	// normalize first so a server that does isn't silently misparsed.
+	const blocks = rawSSEText
+		.replace(/\r\n/g, "\n")
+		.split("\n\n")
+		.filter((b) => b.trim());
 	const outputItems: unknown[] = [];
 	let finalResponse: Record<string, unknown> | null = null;
 	for (const block of blocks) {

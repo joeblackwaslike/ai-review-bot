@@ -317,6 +317,35 @@ describe("parseCodexSSEResponse", () => {
 		});
 	});
 
+	// Suggested by sourcery-ai reviewing PR #68: the real captured backend
+	// response uses LF-only line endings (confirmed live), but SSE
+	// implementations are permitted to use CRLF — normalize before splitting
+	// so a server that does isn't silently misparsed.
+	it("parses correctly when the stream uses CRLF line endings", () => {
+		const crlfFixture = CODEX_SSE_FIXTURE.replace(/\n/g, "\r\n");
+		expect(parseCodexSSEResponse(crlfFixture)).toEqual({
+			id: "resp_1",
+			object: "response",
+			status: "completed",
+			output: [
+				{
+					id: "rs_1",
+					type: "reasoning",
+					content: [],
+					encrypted_content: "abc",
+				},
+				{
+					id: "msg_1",
+					type: "message",
+					status: "completed",
+					content: [{ type: "output_text", annotations: [], text: "OK" }],
+					role: "assistant",
+				},
+			],
+			usage: { input_tokens: 23, output_tokens: 5, total_tokens: 28 },
+		});
+	});
+
 	it("throws a clear error when the stream never reaches response.completed", () => {
 		const truncated =
 			'event: response.created\ndata: {"type":"response.created","response":{"id":"resp_1"}}';
