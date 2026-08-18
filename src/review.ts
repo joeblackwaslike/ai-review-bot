@@ -64,6 +64,11 @@ interface ReviewContext {
 	 * (null/undefined) when KV is not configured or on a forced re-review, in
 	 * which case the gate is skipped and a full review runs (legacy behavior). */
 	kv?: KvClient | null;
+	/** Local subscription/OAuth or explicit API-key auth for this review's model
+	 * calls. Omitted on the hosted webhook path (env-var API keys apply via
+	 * createAIModel's own fallback); supplied by `ai-review watch` for local,
+	 * subscription-authenticated review of an already-open PR. */
+	auth?: ResolvedAuth;
 }
 
 export interface ReviewMetadata {
@@ -560,6 +565,7 @@ export async function generateSummary(
 	 * round but since reintroduced and re-flagged by this round's agents must
 	 * not appear here, or the summary would call a live blocker fixed. */
 	resolvedThisRound: PersistedFinding[] = [],
+	auth?: ResolvedAuth,
 ): Promise<{ summary: string; usage: TokenUsage }> {
 	const findingsList = merged.general_findings
 		.map((f) => `- [${f.severity}] ${f.title}: ${f.body}`)
@@ -636,7 +642,7 @@ export async function generateSummary(
 		.join("\n");
 
 	const { object, usage } = await generateObject({
-		model: createAIModel(selection),
+		model: createAIModel(selection, auth),
 		schema: SummarySchema,
 		maxOutputTokens: outputBudget(selection, 256),
 		providerOptions: reasoningProviderOptions(selection),
@@ -963,6 +969,7 @@ export async function buildReview(
 			labels: context.labels,
 		},
 		context.provider,
+		context.auth?.mode,
 	);
 
 	// --- Triage gate (re-review only) ---------------------------------------
@@ -1037,6 +1044,7 @@ export async function buildReview(
 			selection,
 			deltaMeta.diff,
 			openFindings,
+			context.auth,
 		);
 
 		for (const f of state.findings) {
@@ -1172,7 +1180,10 @@ export async function buildReview(
 				userMessage,
 				selection,
 				customPrompt,
-				{ prompt: { strictEvidenceRules: tuning.strictEvidenceRules } },
+				{
+					auth: context.auth,
+					prompt: { strictEvidenceRules: tuning.strictEvidenceRules },
+				},
 			);
 			// Sequential handoff at the default concurrency 1; at AGENT_CONCURRENCY>1 this is a
 			// benign best-effort race (pacing only needs an approximate recent signal).
@@ -1415,6 +1426,7 @@ export async function buildReview(
 			priorOwnReview,
 			survivingPrior,
 			resolvedThisRound,
+			context.auth,
 		);
 		summary = summaryResult.summary.trim();
 		if (summary.length === 0) {

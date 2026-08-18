@@ -14,7 +14,13 @@ const TOKEN_RATES: Record<string, { input: number; output: number }> = {
 	"claude-haiku-4-5": { input: 1.0, output: 5.0 },
 	"claude-sonnet-4-6": { input: 3.0, output: 15.0 },
 	"claude-opus-4-8": { input: 5.0, output: 25.0 },
+	// Both are live model choices depending on auth mode (see router.ts /
+	// triage.ts): gpt-5.1 on the API-key backend, gpt-5.4 on the OAuth/
+	// subscription backend that no longer serves gpt-5.1. Same rate for both —
+	// gpt-5.4's is carried over from gpt-5.1 as an estimate pending confirmed
+	// pricing.
 	"gpt-5.1": { input: 1.25, output: 10.0 },
+	"gpt-5.4": { input: 1.25, output: 10.0 },
 	"gpt-5.5": { input: 5.0, output: 30.0 },
 };
 

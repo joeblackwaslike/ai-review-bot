@@ -212,7 +212,7 @@ describe("maybeSubmitReview", () => {
 		const { app, octokit } = buildMockApp();
 		mockBuildReview.mockReset();
 
-		await maybeSubmitReview({
+		const outcome = await maybeSubmitReview({
 			app,
 			...baseArgs,
 			pullRequest: { ...pr, draft: true },
@@ -220,15 +220,41 @@ describe("maybeSubmitReview", () => {
 
 		expect(mockBuildReview).not.toHaveBeenCalled();
 		expect(octokit.request).not.toHaveBeenCalled();
+		expect(outcome).toEqual({
+			status: "skipped",
+			reason: "pull request is a draft",
+		});
 	});
 
 	it("skips submission when buildReview returns null (already reviewed)", async () => {
 		const { app, octokit } = buildMockApp();
 		mockBuildReview.mockReset().mockResolvedValue(null);
 
-		await maybeSubmitReview({ app, ...baseArgs });
+		const outcome = await maybeSubmitReview({ app, ...baseArgs });
 
 		expect(octokit.request).not.toHaveBeenCalled();
+		expect(outcome).toEqual({
+			status: "skipped",
+			reason: "no new review to post",
+		});
+	});
+
+	it("reports a distinct skip reason when the commit is already claimed", async () => {
+		const { app } = buildMockApp();
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "COMMENT" as const,
+			body: "Review body.",
+			comments: [],
+			metadata: DEFAULT_METADATA,
+		});
+
+		await maybeSubmitReview({ app, ...baseArgs });
+		const outcome = await maybeSubmitReview({ app, ...baseArgs });
+
+		expect(outcome).toEqual({
+			status: "skipped",
+			reason: "commit already claimed by another run",
+		});
 	});
 
 	it("posts review with inline comments on success", async () => {
@@ -252,7 +278,8 @@ describe("maybeSubmitReview", () => {
 		};
 		mockBuildReview.mockReset().mockResolvedValue(review);
 
-		await maybeSubmitReview({ app, ...baseArgs });
+		const outcome = await maybeSubmitReview({ app, ...baseArgs });
+		expect(outcome).toEqual({ status: "posted", event: "REQUEST_CHANGES" });
 
 		const [route, params] = octokit.request.mock.calls[0];
 		expect(route).toBe(
@@ -339,7 +366,7 @@ describe("maybeSubmitReview", () => {
 			getInstallationOctokit: vi.fn(async () => octokitLocal),
 		} as never;
 
-		await maybeSubmitReview({
+		const outcome = await maybeSubmitReview({
 			app: appLocal,
 			installationId: 1,
 			owner: "o",
@@ -370,6 +397,29 @@ describe("maybeSubmitReview", () => {
 		expect(
 			requests.some((r) => r.route.includes("/pulls/{pull_number}/reviews")),
 		).toBe(false);
+		expect(outcome).toEqual({ status: "rate_limited" });
+	});
+
+	it("reports quota_exhausted and posts no review on QUOTA_EXHAUSTED", async () => {
+		const { app, octokit } = buildMockApp();
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "QUOTA_EXHAUSTED" as const,
+			body: "",
+			comments: [],
+			validLinesByPath: new Map(),
+			metadata: DEFAULT_METADATA,
+			quotaProvider: "anthropic" as const,
+		});
+
+		const outcome = await maybeSubmitReview({ app, ...baseArgs });
+
+		expect(outcome).toEqual({ status: "quota_exhausted" });
+		expect(
+			octokit.request.mock.calls.some(
+				([route]) =>
+					route === "POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
+			),
+		).toBe(false);
 	});
 
 	it("posts fallback comment with findings when all retries are exhausted", async () => {
@@ -396,9 +446,9 @@ describe("maybeSubmitReview", () => {
 			metadata: DEFAULT_METADATA,
 		});
 
-		const promise = maybeSubmitReview({ app, ...baseArgs }).catch(() => {});
+		const promise = maybeSubmitReview({ app, ...baseArgs });
 		await vi.runAllTimersAsync();
-		await promise;
+		const outcome = await promise;
 
 		// 3 review attempts + 1 fallback comment (no PATCH — review failed)
 		expect(request).toHaveBeenCalledTimes(4);
@@ -411,6 +461,10 @@ describe("maybeSubmitReview", () => {
 		expect(fallbackParams.body).toContain("422 Unprocessable Entity");
 		expect(fallbackParams.body).toContain("Review body.");
 		expect(fallbackParams.body).toContain("src/file.ts:2");
+
+		// The fallback comment preserved the findings — from the caller's
+		// perspective that is a real post, not a skip.
+		expect(outcome).toEqual({ status: "posted", event: "COMMENT" });
 	});
 
 	it("keeps the claim after a successful fallback comment so the commit is not re-billed", async () => {
@@ -647,6 +701,46 @@ describe("maybeSubmitReview", () => {
 				} as never,
 			}),
 		).resolves.not.toThrow();
+	});
+
+	it("threads auth through to buildReview when provided", async () => {
+		const { app } = buildMockApp();
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "COMMENT" as const,
+			body: "Review body.",
+			comments: [],
+			metadata: DEFAULT_METADATA,
+		});
+		const auth = {
+			mode: "oauth" as const,
+			provider: "anthropic" as const,
+			token: "tok",
+			baseURL: "https://api.example.test",
+			headers: {},
+			fetch: vi.fn() as unknown as typeof fetch,
+		};
+
+		await maybeSubmitReview({ app, ...baseArgs, auth });
+
+		expect(mockBuildReview).toHaveBeenCalledWith(
+			expect.objectContaining({ auth }),
+		);
+	});
+
+	it("passes auth as undefined when not provided (unchanged webhook behavior)", async () => {
+		const { app } = buildMockApp();
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "COMMENT" as const,
+			body: "Review body.",
+			comments: [],
+			metadata: DEFAULT_METADATA,
+		});
+
+		await maybeSubmitReview({ app, ...baseArgs });
+
+		expect(mockBuildReview).toHaveBeenCalledWith(
+			expect.objectContaining({ auth: undefined }),
+		);
 	});
 });
 

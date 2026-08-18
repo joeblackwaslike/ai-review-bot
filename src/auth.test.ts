@@ -7,7 +7,10 @@ import {
 	makeCodexFetch,
 	needsRefresh,
 	resolveAnthropicAuth,
+	resolveAnthropicSubscriptionAuth,
 	resolveOpenAIAuth,
+	resolveOpenAISubscriptionAuth,
+	resolveSubscriptionAuth,
 	withClaudeCodeIdentity,
 } from "./auth.js";
 
@@ -119,6 +122,35 @@ describe("makeCodexFetch", () => {
 		// item_reference dropped; id stripped from the remaining item
 		expect(body.input).toHaveLength(1);
 		expect(body.input[0].id).toBeUndefined();
+	});
+
+	// Confirmed live 2026-08-18 dogfooding `ai-review watch --provider openai`
+	// on this PR: every review agent failed with the ChatGPT/Codex backend's
+	// raw `{"detail":"Unsupported parameter: max_output_tokens"}` — the AI
+	// SDK's `generateObject({ maxOutputTokens })` auto-translates to a
+	// `max_output_tokens` field in the Responses API request body, but this
+	// backend (unlike the standard OpenAI API) rejects it outright. The real
+	// `codex` CLI this fetch wrapper mimics never sends this field — it lets
+	// the reasoning model manage its own budget — so strip it the same way
+	// `store`/`stream`/`instructions`/item ids are already rewritten above.
+	it("strips max_output_tokens — the backend rejects it outright", async () => {
+		let capturedInit: RequestInit | undefined;
+		const base = (async (_url: unknown, init?: RequestInit) => {
+			capturedInit = init;
+			return new Response("{}");
+		}) as unknown as typeof fetch;
+
+		const f = makeCodexFetch("acct-1", base);
+		await f("https://chatgpt.com/backend-api/codex/responses", {
+			method: "POST",
+			body: JSON.stringify({
+				input: [],
+				max_output_tokens: 4096,
+			}),
+		});
+
+		const body = JSON.parse(capturedInit?.body as string);
+		expect(body).not.toHaveProperty("max_output_tokens");
 	});
 });
 
@@ -304,5 +336,113 @@ describe("resolveAnthropicAuth", () => {
 		expect(JSON.parse(writes[0]).claudeAiOauth.expiresAt).toBe(
 			1_000_000 + 3_600_000,
 		);
+	});
+});
+
+// A stray ANTHROPIC_API_KEY/OPENAI_API_KEY in the environment (e.g. the same
+// exhausted key the hosted webhook already failed on) must never silently
+// override `watch`'s subscription-auth intent. Confirmed live 2026-08-18: the
+// first `ai-review watch` dogfood run on PR #65 reused a dead
+// ANTHROPIC_API_KEY from .env instead of falling back to the logged-in
+// `claude` CLI session, because it was wired to the API-key-first
+// resolveAuth/resolveAnthropicAuth instead of a subscription-only resolver.
+describe("resolveAnthropicSubscriptionAuth", () => {
+	it("ignores ANTHROPIC_API_KEY and reads the keychain instead", async () => {
+		const auth = await resolveAnthropicSubscriptionAuth({
+			env: { ANTHROPIC_API_KEY: "sk-stray-exhausted-key" },
+			readClaudeKeychain: async () =>
+				JSON.stringify({
+					claudeAiOauth: {
+						accessToken: "at-fresh",
+						refreshToken: "rt",
+						expiresAt: Date.now() + 3_600_000,
+					},
+				}),
+		});
+		expect(auth.mode).toBe("oauth");
+		if (auth.mode === "oauth") expect(auth.token).toBe("at-fresh");
+	});
+
+	it("still honors an explicit OAuth env token (not an API key)", async () => {
+		const auth = await resolveAnthropicSubscriptionAuth({
+			env: {
+				ANTHROPIC_API_KEY: "sk-stray",
+				CLAUDE_CODE_OAUTH_TOKEN: "oat-123",
+			},
+		});
+		expect(auth.mode).toBe("oauth");
+		if (auth.mode === "oauth") expect(auth.token).toBe("oat-123");
+	});
+
+	it("throws a login prompt, not an API-key suggestion, when nothing is available", async () => {
+		await expect(
+			resolveAnthropicSubscriptionAuth({
+				env: { ANTHROPIC_API_KEY: "sk-stray" },
+				readClaudeKeychain: async () => null,
+			}),
+		).rejects.toThrow(/run `claude` to log in/);
+	});
+});
+
+describe("resolveOpenAISubscriptionAuth", () => {
+	it("ignores OPENAI_API_KEY (env) and reads ~/.codex/auth.json instead", async () => {
+		const auth = await resolveOpenAISubscriptionAuth({
+			env: { OPENAI_API_KEY: "sk-stray-exhausted-key" },
+			readCodexAuth: async () =>
+				JSON.stringify({
+					auth_mode: "chatgpt",
+					tokens: {
+						access_token: fakeJwt(Math.floor(Date.now() / 1000) + 3600),
+						refresh_token: "rt",
+						account_id: "a",
+					},
+				}),
+		});
+		expect(auth.mode).toBe("oauth");
+	});
+
+	it("ignores an OPENAI_API_KEY embedded in auth.json too, unlike resolveOpenAIAuth", async () => {
+		await expect(
+			resolveOpenAISubscriptionAuth({
+				env: {},
+				readCodexAuth: async () =>
+					JSON.stringify({ OPENAI_API_KEY: "sk-file" }),
+			}),
+		).rejects.toThrow(/ChatGPT mode/);
+	});
+});
+
+describe("resolveSubscriptionAuth", () => {
+	it("dispatches to the anthropic subscription-only resolver, ignoring a stray API key", async () => {
+		const auth = await resolveSubscriptionAuth("anthropic", {
+			env: { ANTHROPIC_API_KEY: "sk-stray" },
+			readClaudeKeychain: async () =>
+				JSON.stringify({
+					claudeAiOauth: {
+						accessToken: "at-fresh",
+						refreshToken: "rt",
+						expiresAt: Date.now() + 3_600_000,
+					},
+				}),
+		});
+		expect(auth.mode).toBe("oauth");
+		expect(auth.provider).toBe("anthropic");
+	});
+
+	it("dispatches to the openai subscription-only resolver, ignoring a stray API key", async () => {
+		const auth = await resolveSubscriptionAuth("openai", {
+			env: { OPENAI_API_KEY: "sk-stray" },
+			readCodexAuth: async () =>
+				JSON.stringify({
+					auth_mode: "chatgpt",
+					tokens: {
+						access_token: fakeJwt(Math.floor(Date.now() / 1000) + 3600),
+						refresh_token: "rt",
+						account_id: "a",
+					},
+				}),
+		});
+		expect(auth.mode).toBe("oauth");
+		expect(auth.provider).toBe("openai");
 	});
 });

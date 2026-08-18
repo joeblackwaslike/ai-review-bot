@@ -1,5 +1,6 @@
 import { generateObject } from "ai";
 import { z } from "zod";
+import type { ResolvedAuth } from "./auth.js";
 import { createAIModel } from "./models.js";
 import type { PersistedFinding } from "./review-state.js";
 import type { ModelSelection } from "./router.js";
@@ -19,9 +20,22 @@ const FAIL_SAFE: TriageDecision = {
 };
 
 // Cheap, fast triage tier. The call only classifies; it does not review.
-function triageSelection(base: ModelSelection): ModelSelection {
+//
+// The openai branch mirrors routeModel's auth-mode split: gpt-5.1's rejection
+// was confirmed only against the ChatGPT/Codex-account OAuth backend, not the
+// raw API-key backend the hosted webhook bot runs under, so API-key/unspecified
+// triage calls keep gpt-5.1 and only OAuth-authenticated calls (watch's
+// re-review loop) get gpt-5.4.
+function triageSelection(
+	base: ModelSelection,
+	authMode?: "api-key" | "oauth",
+): ModelSelection {
 	return base.provider === "openai"
-		? { provider: "openai", model: "gpt-5.1", effort: "low" }
+		? {
+				provider: "openai",
+				model: authMode === "oauth" ? "gpt-5.4" : "gpt-5.1",
+				effort: "low",
+			}
 		: { provider: "anthropic", model: "claude-haiku-4-5" };
 }
 
@@ -29,6 +43,7 @@ export async function triageReReview(
 	selection: ModelSelection,
 	deltaDiff: string,
 	openFindings: PersistedFinding[],
+	auth?: ResolvedAuth,
 ): Promise<TriageDecision> {
 	if (openFindings.length === 0 && deltaDiff.trim() === "") {
 		return { recommendation: "SKIP", resolved: [], newRisk: false };
@@ -50,7 +65,7 @@ export async function triageReReview(
 
 	try {
 		const { object } = await generateObject({
-			model: createAIModel(triageSelection(selection)),
+			model: createAIModel(triageSelection(selection, auth?.mode), auth),
 			schema: TriageSchema,
 			prompt,
 			maxOutputTokens: 2000,

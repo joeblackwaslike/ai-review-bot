@@ -13,7 +13,7 @@ import {
 	runLocalReview,
 } from "./audit.js";
 import { makeReady, type OctokitLike } from "./audit-pr.js";
-import { resolveAnthropicAuth } from "./auth.js";
+import { resolveAnthropicAuth, resolveSubscriptionAuth } from "./auth.js";
 import { getConfig, getOpenAIAppConfig } from "./config.js";
 import {
 	type BackfillOctokit,
@@ -37,13 +37,14 @@ import {
 	thresholdsFromEnv,
 } from "./improve/issues.js";
 import { fpSignature } from "./improve/match.js";
-import { installationOctokit } from "./improve/octokit.js";
+import { installationApp, installationOctokit } from "./improve/octokit.js";
 import {
 	computeSeverityReliability,
 	computeSkillSignals,
 	detectDuplicateClusters,
 } from "./improve/trends.js";
 import { slugify } from "./report.js";
+import { type ProviderTarget, watchPr } from "./watch.js";
 
 function fatal(msg: string): never {
 	console.error(`Error: ${msg}`);
@@ -80,6 +81,18 @@ function usage(): never {
 		"  ai-review audit [--full] [--dry-run] [--out <dir>] [--extra <text>] [--json]",
 	);
 	console.error("  ai-review ready [pr#]");
+	console.error(
+		"  ai-review watch --pr <n> [--repo <owner/name>] [--provider anthropic|openai] [--interval <seconds>]",
+	);
+	console.error(
+		"      Poll an open PR and re-review on every push using local subscription",
+	);
+	console.error(
+		"      auth, posting as the same GitHub App bot identities production uses.",
+	);
+	console.error(
+		"      Personal, local use only — exits when the PR merges or closes.",
+	);
 	console.error("  ai-review backfill --repo <owner/name> [--pr <n>] [--json]");
 	console.error("  ai-review unrated --repo <owner/name> --pr <n> [--json]");
 	console.error(
@@ -370,6 +383,81 @@ async function cmdReady(args: string[]): Promise<void> {
 	console.log(
 		`PR #${pr} retargeted to ${repoData.default_branch} and marked ready.`,
 	);
+}
+
+export async function cmdWatch(args: string[]): Promise<void> {
+	let pr: number | undefined;
+	let repoArg: string | undefined;
+	let providerArg: "anthropic" | "openai" | undefined;
+	let intervalSeconds = 60;
+	for (let i = 0; i < args.length; i++) {
+		const a = args[i];
+		if (a === "--pr") {
+			const raw = requireValue(args, i++, a);
+			pr = Number(raw);
+			if (!Number.isInteger(pr) || pr <= 0) {
+				fatal(`--pr must be a positive integer, got: ${raw}`);
+			}
+		} else if (a === "--repo") repoArg = requireValue(args, i++, a);
+		else if (a === "--provider") {
+			const v = requireValue(args, i++, a);
+			if (v !== "anthropic" && v !== "openai") {
+				fatal(`--provider must be anthropic or openai, got: ${v}`);
+			}
+			providerArg = v;
+		} else if (a === "--interval") {
+			const raw = requireValue(args, i++, a);
+			intervalSeconds = Number(raw);
+			if (!Number.isInteger(intervalSeconds) || intervalSeconds <= 0) {
+				fatal(`--interval must be a positive integer, got: ${raw}`);
+			}
+		} else if (a.startsWith("--")) fatal(`Unknown flag: ${a}`);
+	}
+	if (pr === undefined) fatal("--pr <n> is required");
+
+	if (repoArg && !/^[^/\s]+\/[^/\s]+$/.test(repoArg)) {
+		fatal(`--repo must be <owner>/<name>, got: ${repoArg}`);
+	}
+	const { owner, repo } = repoArg
+		? { owner: repoArg.split("/")[0], repo: repoArg.split("/")[1] }
+		: originSlug();
+
+	const providers: Array<"anthropic" | "openai"> = providerArg
+		? [providerArg]
+		: ["anthropic", "openai"];
+
+	const targets: ProviderTarget[] = [];
+	for (const provider of providers) {
+		const config =
+			provider === "anthropic" ? getConfig() : getOpenAIAppConfig();
+		const { app, installationId } = await installationApp(
+			config.appId,
+			config.privateKey,
+			owner,
+			repo,
+		);
+		targets.push({ provider, app, installationId, config });
+	}
+
+	const pollOctokit = await targets[0].app.getInstallationOctokit(
+		targets[0].installationId,
+	);
+
+	console.log(
+		`Watching ${owner}/${repo}#${pr} (${providers.join(", ")}) every ${intervalSeconds}s — Ctrl-C to stop early.`,
+	);
+
+	const result = await watchPr({
+		owner,
+		repo,
+		pullNumber: pr,
+		pollOctokit: pollOctokit as unknown as OctokitLike,
+		targets,
+		resolveAuthFor: resolveSubscriptionAuth,
+		intervalMs: intervalSeconds * 1000,
+	});
+
+	console.log(`Stopped: ${result.reason} after ${result.cycles} cycle(s).`);
 }
 
 async function cmdLegacyRemote(args: string[]): Promise<void> {
@@ -805,6 +893,7 @@ async function main(): Promise<void> {
 	if (sub === "review") return cmdReview(rest);
 	if (sub === "audit") return cmdAudit(rest);
 	if (sub === "ready") return cmdReady(rest);
+	if (sub === "watch") return cmdWatch(rest);
 	if (sub === "backfill") return cmdBackfill(rest);
 	if (sub === "unrated") return cmdUnrated(rest);
 	if (sub?.includes("/")) return cmdLegacyRemote([sub, ...rest]); // back-compat

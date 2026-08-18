@@ -1,4 +1,5 @@
 import { App } from "octokit";
+import type { ResolvedAuth } from "./auth.js";
 import { createCheckRun } from "./check-run.js";
 import { isTrustedAuthorAssociation, parseReviewCommand } from "./commands.js";
 import type { AppConfig } from "./config.js";
@@ -218,7 +219,7 @@ type IssueCommentWebhookPayload = {
 	};
 };
 
-type PullRequestDetails = {
+export type PullRequestDetails = {
 	draft: boolean;
 	head: { sha: string };
 	additions: number;
@@ -244,6 +245,32 @@ function getKv(): KvClient | null {
 	}
 }
 
+/**
+ * The observable outcome of a maybeSubmitReview call, distinguishing an
+ * actual GitHub post (a review, or a fallback comment that preserves
+ * findings) from every path that produced no review at all. Callers like
+ * `watchPr` need this to log accurately and to decide whether a commit was
+ * "handled" for retry purposes — almost everything except "posted" should be
+ * retried on the next cycle at the same SHA, with one deliberate exception:
+ * `{status: "skipped", reason: NO_NEW_REVIEW_REASON}` means the triage gate
+ * already decided (and persisted to KV) that this exact SHA needs no review,
+ * so it must be treated as handled too — retrying it would re-enter
+ * `buildReview` with `lastReviewedSha` already equal to `headSha`, skip the
+ * triage gate's guard, and post an unwanted full review. See Bug F.
+ *
+ * Note: if every retry and the fallback comment all fail, `maybeSubmitReview`
+ * throws rather than returning a "posted" outcome — callers must handle both.
+ */
+export type SubmitReviewOutcome =
+	| { status: "posted"; event: "COMMENT" | "REQUEST_CHANGES" | "APPROVE" }
+	| { status: "skipped"; reason: string }
+	| { status: "rate_limited" }
+	| { status: "quota_exhausted" };
+
+/** The one `"skipped"` reason that represents a terminal, already-persisted
+ * decision rather than a retryable skip — see `SubmitReviewOutcome`'s doc. */
+export const NO_NEW_REVIEW_REASON = "no new review to post";
+
 /** @internal Exported for unit testing only. */
 export async function maybeSubmitReview(args: {
 	app: App;
@@ -255,7 +282,8 @@ export async function maybeSubmitReview(args: {
 	extraInstructions: string;
 	force: boolean;
 	config: AppConfig;
-}) {
+	auth?: ResolvedAuth;
+}): Promise<SubmitReviewOutcome> {
 	const {
 		app,
 		installationId,
@@ -266,16 +294,17 @@ export async function maybeSubmitReview(args: {
 		extraInstructions,
 		force,
 		config,
+		auth,
 	} = args;
 
 	if (!config.reviewEnabled) {
 		console.log("review skipped: REVIEW_ENABLED is not set to true");
-		return;
+		return { status: "skipped", reason: "REVIEW_ENABLED is not set to true" };
 	}
 
 	if (pullRequest.draft) {
 		console.log("review skipped: pull request is a draft");
-		return;
+		return { status: "skipped", reason: "pull request is a draft" };
 	}
 
 	const headSha = pullRequest.head.sha;
@@ -323,7 +352,10 @@ export async function maybeSubmitReview(args: {
 					pullNumber,
 					headSha,
 				});
-				return;
+				return {
+					status: "skipped",
+					reason: "commit already claimed by another run",
+				};
 			}
 		} catch (claimErr) {
 			// A KV blip must not block reviews — fall back to the marker check.
@@ -380,10 +412,11 @@ export async function maybeSubmitReview(args: {
 			// forced review still persists fresh state here; buildReview force-gates
 			// the gate itself so force runs a FULL review but doesn't go stale (I1).
 			kv: stateKv,
+			auth,
 		});
 
 		if (!review) {
-			return;
+			return { status: "skipped", reason: NO_NEW_REVIEW_REASON };
 		}
 
 		if (review.event === "QUOTA_EXHAUSTED") {
@@ -422,7 +455,7 @@ export async function maybeSubmitReview(args: {
 				// lose the notification entirely. An unassigned issue still emails
 				// watchers, so the notification survives either way.
 			});
-			return;
+			return { status: "quota_exhausted" };
 		}
 
 		if (review.event === "RATE_LIMITED") {
@@ -450,7 +483,7 @@ export async function maybeSubmitReview(args: {
 				pullNumber,
 				when,
 			});
-			return;
+			return { status: "rate_limited" };
 		}
 
 		if (
@@ -462,7 +495,10 @@ export async function maybeSubmitReview(args: {
 				"unexpected review event, skipping review POST",
 				review.event,
 			);
-			return;
+			return {
+				status: "skipped",
+				reason: `unexpected review event: ${review.event}`,
+			};
 		}
 
 		console.log("submitting review", {
@@ -681,6 +717,11 @@ export async function maybeSubmitReview(args: {
 				throw err;
 			}
 		}
+
+		// Either the review POST succeeded, or it failed but the fallback comment
+		// preserved the findings (reviewPosted is true in both cases) — both are a
+		// real post to GitHub from the caller's perspective.
+		return { status: "posted", event: review.event };
 	} catch (err) {
 		// hs1: buildReview throws when EVERY agent fails (e.g. an invalid provider
 		// API key or an exhausted usage limit — see review.ts "All review agents

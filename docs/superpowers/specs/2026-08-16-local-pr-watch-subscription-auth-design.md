@@ -54,9 +54,9 @@ Separately, this session found `src/router.ts:81-83`'s `OPENAI_TIER_MAP` hardcod
 |---|---|---|---|
 | **Auth threading** | `src/review.ts`, `src/github-app.ts` *(modify)* | Add optional `auth?: ResolvedAuth` to `ReviewContext` ([src/review.ts:39-67](../../../src/review.ts#L39-L67)) and to `maybeSubmitReview`'s params ([src/github-app.ts:248](../../../src/github-app.ts#L248)); pass through to the existing `runAgent(..., { auth })` call site ([src/review.ts:1170](../../../src/review.ts#L1170)). Production webhook callers keep omitting it — unchanged behavior (still falls back to env-var API keys, [src/models.ts:36-44](../../../src/models.ts#L36-L44)). |  |
 | **Installation resolver** | `src/improve/octokit.ts` *(extend)* | Existing `installationOctokit(appId, privateKey, owner, repo)` ([src/improve/octokit.ts:6-21](../../../src/improve/octokit.ts#L6-L21)) returns only an installation-scoped Octokit. `maybeSubmitReview` needs `{app, installationId}`. Add a sibling helper (or an options flag) that also returns the `App` instance + resolved `installationId`, reusing the same `GET /repos/{owner}/{repo}/installation` lookup already used by `src/audit.ts:164-168` and `src/cli.ts`'s `buildResolvePr()`. | `App` (octokit), GitHub App creds |
-| **Watch driver** | `src/watch.ts` *(new)* | `watchPr({owner, repo, pullNumber, providers, intervalSeconds})`: polls `GET /repos/{o}/{r}/pulls/{n}`; exits when `merged`/`state === "closed"`; on first run or `head.sha` change, resolves subscription auth per selected provider and calls `maybeSubmitReview({..., auth, force: true})` once per provider; logs outcome; remembers last-reviewed SHA. | `resolveAnthropicAuth`, `resolveOpenAIAuth`, `maybeSubmitReview`, installation resolver |
-| **CLI surface** | `src/cli.ts` *(extend)* | New `ai-review watch --pr <n> [--repo <owner/name>] [--provider anthropic\|openai] [--interval <seconds>]` subcommand. Repo defaults from `originSlug()` ([src/cli.ts:121-134](../../../src/cli.ts#L121-L134)) same as `audit`/`ready`. | `watchPr`, `originSlug` |
-| **Model constant fix** | `src/router.ts` *(fix)*, `src/models.ts` *(fix)* | Swap the stale `gpt-5.1` entries in `OPENAI_TIER_MAP` ([src/router.ts:81-83](../../../src/router.ts#L81-L83)) for a model the ChatGPT/Codex-account backend currently accepts (e.g. `gpt-5.5`, already used by the `deep` tier and confirmed working), and the matching `TOKEN_RATES` entry ([src/models.ts:17](../../../src/models.ts#L17)). Applies to both API-key and OAuth callers — no auth-mode branch, since the model must exist on whichever backend serves the request. | — |
+| **Watch driver** | `src/watch.ts` *(new)* | `watchPr({owner, repo, pullNumber, providers, intervalSeconds})`: polls `GET /repos/{o}/{r}/pulls/{n}`; exits when `merged`/`state === "closed"`; per provider, on first run or `head.sha` change (relative to that provider's own last-reviewed SHA), resolves subscription auth and calls `maybeSubmitReview({..., auth, force})` (`force` is `true` only until *that provider's* first successful post — see Error handling below); logs outcome; only advances *that provider's* remembered last-reviewed SHA once it actually posted. State is per-provider throughout, not session-wide. | `resolveAnthropicSubscriptionAuth`, `resolveOpenAISubscriptionAuth`, `maybeSubmitReview`, installation resolver |
+| **CLI surface** | `src/cli.ts` *(extend)* | New `ai-review watch --pr <n> [--repo <owner/name>] [--provider anthropic\|openai] [--interval <seconds>]` subcommand. Repo defaults from `originSlug()` ([src/cli.ts:121-134](../../../src/cli.ts#L121-L134)) same as `audit`/`ready`. Wires `resolveSubscriptionAuth` (not the api-key-first `resolveAuth`) as `watchPr`'s `resolveAuthFor` — a stray `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` in the environment must never silently defeat watch's whole reason for existing. Found live 2026-08-18 dogfooding this PR: the first watch launch reused the hosted webhook's own exhausted `ANTHROPIC_API_KEY` from `.env` instead of falling back to the logged-in `claude` session. | `watchPr`, `originSlug`, `resolveSubscriptionAuth` |
+| **Model constant fix** | `src/router.ts` *(fix)*, `src/models.ts` *(fix)* | Swap the stale `gpt-5.1` entries in `OPENAI_TIER_MAP` for a model the ChatGPT/Codex-account backend currently accepts. As-built, this is auth-mode-branched, not universal: API-key callers keep `gpt-5.1` (confirmed working in production; the rejection was only ever observed against the OAuth/ChatGPT-account backend) via `OPENAI_TIER_MAP_API_KEY`, while OAuth/subscription callers move to `gpt-5.4` via a separate `OPENAI_TIER_MAP_OAUTH` ([src/router.ts:82-110](../../../src/router.ts#L82-L110)), selected by `routeModel`'s `authMode` param. `triageReReview`'s own model selection (`src/triage.ts`) mirrors the same branch. The matching `TOKEN_RATES` entries live in `src/models.ts`. | — |
 
 ### CLI surface
 
@@ -86,16 +86,19 @@ Auth is always resolved via `resolveAnthropicAuth()`/`resolveOpenAIAuth()` — n
 5. loop:
    a. GET /repos/{owner}/{repo}/pulls/{n}
    b. if merged || state === "closed": log + exit 0
-   c. if head.sha === lastReviewedSha: sleep(interval); continue
-   d. for each selected provider:
+   c. for each selected provider (state tracked per provider, not session-wide — see Error handling):
+        if head.sha === providerState[provider].lastReviewedSha: continue to next provider
         installation = resolve {app, installationId} for that provider's App
         maybeSubmitReview({ app, installationId, owner, repo, pullNumber: n,
-                             pullRequest: data, extraInstructions: "", force: true,
-                             config, auth })
+                             pullRequest: data, extraInstructions: "",
+                             force: !providerState[provider].hasPostedEver, config, auth })
         → buildReview() → runAgent(..., {auth}) per Tier1(+Tier2) skill
         → dedupeClaims / survivingPrior applied automatically inside buildReview
+          (only on cycles after that provider's first post — see Error handling)
         → posts review as {provider}reviewbot via the installation octokit
-   e. lastReviewedSha = data.head.sha; sleep(interval)
+        → if status "posted": providerState[provider].hasPostedEver = true;
+          providerState[provider].lastReviewedSha = data.head.sha
+   d. sleep(interval)
 ```
 
 ---
@@ -106,7 +109,8 @@ Auth is always resolved via `resolveAnthropicAuth()`/`resolveOpenAIAuth()` — n
 - **Subscription auth expired/logged out mid-watch** — surface `src/auth.ts`'s existing descriptive error (`"run `claude` to log in"` / `"run `codex login`"`) and exit non-zero. No silent hang, no fallback to API keys (there may be none funded).
 - **GitHub rate-limit response** — back off using the poll interval rather than hot-looping; log the reset time if present in headers.
 - **One provider fails, other succeeds** — same as production: `Promise.allSettled` inside `runAgent`/`buildReview` means a single agent dying never aborts the pass; if a whole provider's pass fails, log and continue watching (don't exit the loop over one bad cycle).
-- **`force: true` semantics** — confirmed this is the same flag the manual `/ai-review` slash command already uses to skip peer-bot wait; watch mode inherits that behavior deliberately (Approach A's whole point).
+- **`force` semantics** — `!providerState[provider].hasPostedEver` (see data flow), not unconditional `true`, and not a single session-wide flag shared across providers. The manual `/ai-review` slash command's `force: true` skips peer-bot wait *and* the reviewer-memory/triage gate on every invocation, which is correct for a one-shot manual re-review — but `watch` runs repeatedly and unattended, so unconditional `force` would disable the triage gate and reviewer-memory (`survivingPrior`) on every cycle and let each forced write overwrite persisted state. Only the very first post (no prior state to preserve, no existing marker to conflict with) needs `force`; every cycle after that behaves exactly like a normal push-triggered production review — the "indistinguishable from production" goal (Goals, above) depends on this, not just on the identity match. Found during a final whole-feature review after initial implementation with unconditional `force: true`; the code was fixed, this section originally wasn't.
+- **`hasPostedEver`/`lastReviewedSha` must be per-provider, not session-wide** — a single shared pair leaks across providers: provider B's genuinely-first post would inherit `force: false` merely because provider A posted first (same cycle or an earlier one), breaking the "first post is unforced-equivalent" parity above for B; and if A posts successfully while B fails/skips in the same cycle, a shared `lastReviewedSha` advances anyway, permanently denying B a retry on that commit (it only gets reviewed again if the PR receives a new push). Surfaced by anthropicreviewbot's own re-review while dogfooding `watch` on this PR; fixed by keying both fields per provider (a `Map<Provider, {hasPostedEver, lastReviewedSha}>`).
 
 ---
 

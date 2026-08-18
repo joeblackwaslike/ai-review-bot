@@ -463,6 +463,62 @@ describe("runLocalReview", () => {
 		expect(writeSpy.mock.calls[0][1]).toContain('title: "My Review"');
 	});
 
+	// `ai-review review` resolves real per-provider auth (API key or OAuth) via
+	// resolveAuthFor before routing; routeModel must see that mode so an
+	// OAuth-authenticated openai run gets gpt-5.4 (still served on the
+	// ChatGPT/Codex-account backend) while an API-key run keeps gpt-5.1.
+	it("routes openai to gpt-5.4 when resolveAuthFor resolves oauth, gpt-5.1 for api-key", async () => {
+		const { collectFilesFromLocal } = await import("./sources.js");
+		(collectFilesFromLocal as ReturnType<typeof vi.fn>).mockResolvedValue([
+			{ path: "a.ts", content: "x" },
+		]);
+		(runAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
+			status: "ok",
+			review: buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+			usage: { promptTokens: 1, completionTokens: 1 },
+		});
+		const fs = await import("node:fs/promises");
+		(fs.writeFile as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+		(fs.mkdir as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+
+		const resolveAuthFor = vi.fn(async (provider: Provider) =>
+			provider === "openai"
+				? {
+						mode: "oauth" as const,
+						provider,
+						token: "tok",
+						baseURL: "https://api.example.test",
+						headers: {},
+						fetch: vi.fn() as unknown as typeof fetch,
+					}
+				: { mode: "api-key" as const, provider, apiKey: "k" },
+		);
+
+		const fsWrite = fs.writeFile as ReturnType<typeof vi.fn>;
+		const { runLocalReview } = await import("./audit.js");
+		const result = await runLocalReview({
+			cwd: "/repo",
+			scope: { kind: "changed" },
+			docsDir: "docs/code-reviews",
+			slug: "s",
+			title: "T",
+			owner: "o",
+			repo: "r",
+			remote: "https://github.com/o/r",
+			now: () => 1_700_000_000_000,
+			resolveAuthFor,
+		});
+
+		expect([...result.providersRun].sort()).toEqual(["anthropic", "openai"]);
+		const reportBody = fsWrite.mock.calls[0][1] as string;
+		expect(reportBody).toContain("gpt-5.4");
+		expect(reportBody).not.toContain("gpt-5.1");
+	});
+
 	it("throws when no provider can be authenticated", async () => {
 		const { collectFilesFromLocal } = await import("./sources.js");
 		(collectFilesFromLocal as ReturnType<typeof vi.fn>).mockResolvedValue([

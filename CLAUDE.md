@@ -68,18 +68,21 @@ POST /api/github/review-run        (QStash delayed callback)
 | `src/audit.ts` | Full repository audit logic (`auditRepo()`), local audit (`runLocalAudit()`), local review (`runLocalReview()`) |
 | `src/report.ts` | `docs/code-reviews/` report writer (`formatReviewReport()`, `allocateReportPath()`) |
 | `src/cli.ts` | CLI entry point for `ai-review` command |
+| `src/watch.ts` | `watchPr()` — polls an already-open PR and re-reviews it on head-SHA change via `maybeSubmitReview`, using local subscription auth; backs `ai-review watch` |
 | `src/testing.ts` | Shared test fixtures (`buildModelReview`, `buildGenerateObjectResponse`, etc.) |
 | `skills/*.md` | Vendored skill frameworks loaded at runtime by `buildAgentSystemPrompt()` |
 
 ### Local audit & review
 
-The CLI supports three subcommands for offline code review of the working tree:
+The CLI supports four subcommands for offline code review of the working tree (plus `ai-review watch` for an already-open PR — see below):
 
 - `ai-review review [--full | --commit <sha>] [--slug <slug>] [--title <t>] [--out <dir>] [--extra <text>] [--json]` — Runs the full multi-agent review against local changes (default), the full tree (`--full`), or a specific commit (`--commit`), and writes a round-numbered Markdown report with YAML front-matter into `docs/code-reviews/` (no PR). Auth per provider: API key → explicit OAuth env token → logged-in `codex`/`claude` subscription (local, personal use only; never wired into webhook paths — see `src/auth.ts`). The `/code-review` slash command wraps it with doc-only / `--fix` / `--propose` modes.
 
 - `ai-review audit [--full] [--dry-run] [--out <dir>] [--extra <text>] [--json]` — Audits the local working tree (changed files by default; `--full` for the entire codebase). Runs both Claude and OpenAI provider passes in parallel, writes structured JSON + Markdown artifacts to `.ai-review/`, and (unless `--dry-run`) opens a draft synthetic-base review PR labeled `AI audit` for inline review. Optionally posts as a GitHub issue if the PR creation fails due to insufficient permissions.
 
 - `ai-review ready [pr#]` — Retargets the audit PR onto the default branch and marks it ready for review (defaults to the PR recorded in `.ai-review/audit-anthropic.json` from the last audit). Use after addressing findings to collapse the diff to fixes-only and merge cleanly.
+
+- `ai-review watch --pr <n> [--repo <owner/name>] [--provider anthropic|openai] [--interval <seconds>]` — Polls an already-open PR and re-reviews it on every push, posting through the same GitHub App bot identities production uses, driven by local subscription auth instead of a funded API key. Personal, local use only (same ToS boundary as `review`/`audit`); exits when the PR merges or closes. See `src/watch.ts` and `docs/superpowers/specs/2026-08-16-local-pr-watch-subscription-auth-design.md`. **`--provider openai` is not yet reliable** — the ChatGPT/Codex Responses-API backend returns an SSE-formatted response that the AI SDK's non-streaming `generateObject` (used via `createAIModel`'s `provider.responses(...)` branch, `src/models.ts:75`) fails to parse (`Invalid JSON response`); this branch has zero test coverage and was first exercised live in PR #65's dogfood session. `--provider anthropic` is the dogfoodable path today; the hosted webhook path (API-key only) is unaffected.
 
 Reference: `docs/superpowers/specs/2026-06-08-local-audit-review-pr-design.md`
 

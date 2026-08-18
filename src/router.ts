@@ -74,7 +74,12 @@ const CLAUDE_TIER_MAP: Record<
 	deep: { model: "claude-opus-4-8", effort: "xhigh" },
 };
 
-const OPENAI_TIER_MAP: Record<
+// API-key backend (hosted webhook bots, `ai-review audit`, and any caller with
+// no auth context). This is the model known to already be working in
+// production; the gpt-5.1 rejection below was confirmed only against the
+// ChatGPT/Codex-account subscription backend, not this one, so it must not
+// regress a path that was never shown to be broken.
+const OPENAI_TIER_MAP_API_KEY: Record<
 	ReviewTier,
 	Pick<ModelSelection, "model" | "effort">
 > = {
@@ -82,14 +87,33 @@ const OPENAI_TIER_MAP: Record<
 	normal: { model: "gpt-5.1", effort: "low" },
 	complex: { model: "gpt-5.1", effort: "high" },
 	// gpt-5.5 caps reasoning at "high"; "xhigh" is unverified on the OpenAI API,
+	// so deep stays at "high" until support is confirmed.
+	deep: { model: "gpt-5.5", effort: "high" },
+};
+
+// OAuth/subscription backend (`ai-review watch`, local CLI usage under a
+// logged-in codex session). gpt-5.1 retired from the ChatGPT/Codex-account
+// backend (confirmed live: "not supported when using Codex with a ChatGPT
+// account") — moved to gpt-5.4, the next tier down from gpt-5.5 that's still
+// served. This is scoped to OAuth only: the rejection was never confirmed
+// against the raw API-key backend.
+const OPENAI_TIER_MAP_OAUTH: Record<
+	ReviewTier,
+	Pick<ModelSelection, "model" | "effort">
+> = {
+	trivial: { model: "gpt-5.4", effort: "none" },
+	normal: { model: "gpt-5.4", effort: "low" },
+	complex: { model: "gpt-5.4", effort: "high" },
+	// gpt-5.5 caps reasoning at "high"; "xhigh" is unverified on the OpenAI API,
 	// so deep stays at "high" until support is confirmed. The model bump
-	// (gpt-5.1 → gpt-5.5) is what distinguishes deep from complex here.
+	// (gpt-5.4 → gpt-5.5) is what distinguishes deep from complex here.
 	deep: { model: "gpt-5.5", effort: "high" },
 };
 
 export function routeModel(
 	context: RouterContext,
 	provider: "anthropic" | "openai",
+	authMode?: "api-key" | "oauth",
 ): ModelSelection {
 	const tier = classifyTier(context);
 
@@ -97,5 +121,7 @@ export function routeModel(
 		return { provider, ...CLAUDE_TIER_MAP[tier] };
 	}
 
-	return { provider, ...OPENAI_TIER_MAP[tier] };
+	const map =
+		authMode === "oauth" ? OPENAI_TIER_MAP_OAUTH : OPENAI_TIER_MAP_API_KEY;
+	return { provider, ...map[tier] };
 }
