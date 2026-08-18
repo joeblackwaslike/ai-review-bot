@@ -389,7 +389,12 @@ export async function cmdWatch(args: string[]): Promise<void> {
 	let pr: number | undefined;
 	let repoArg: string | undefined;
 	let providerArg: "anthropic" | "openai" | undefined;
-	let intervalSeconds = 60;
+	// ai-review-bot-599 follow-up: the circuit breaker (watch.ts) caps how many
+	// reviews a session can post, not how eagerly it polls for a new push to
+	// review — the fast 60s cadence that produced the PR #67/#68 churn is a
+	// separate lever this needs its own conservative default for. Use
+	// --interval for a deliberately supervised fast pass.
+	let intervalSeconds = 300;
 	let noCircuitBreaker = false;
 	for (let i = 0; i < args.length; i++) {
 		const a = args[i];
