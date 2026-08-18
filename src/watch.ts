@@ -4,6 +4,7 @@ import type { Provider, ResolvedAuth } from "./auth.js";
 import type { AppConfig } from "./config.js";
 import {
 	maybeSubmitReview,
+	NO_NEW_REVIEW_REASON,
 	type PullRequestDetails,
 	type SubmitReviewOutcome,
 } from "./github-app.js";
@@ -49,6 +50,15 @@ function defaultSleep(ms: number): Promise<void> {
 
 function errMsg(err: unknown): string {
 	return err instanceof Error ? err.message : String(err);
+}
+
+/** True for the one "skipped" outcome that's a terminal, already-persisted
+ * decision (the triage gate found nothing to review at this SHA) rather than
+ * a retryable skip like a draft PR or a rate limit. See Bug F. */
+function isNoNewReview(outcome: SubmitReviewOutcome): boolean {
+	return (
+		outcome.status === "skipped" && outcome.reason === NO_NEW_REVIEW_REASON
+	);
 }
 
 /** Human-readable reason for every non-"posted" outcome, for the "skipped"
@@ -178,6 +188,16 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 					state.lastReviewedSha = pr.head.sha;
 					log(
 						`ai-review watch: posted ${target.provider} review for ${pr.head.sha}`,
+					);
+				} else if (isNoNewReview(outcome)) {
+					// The triage gate already decided (and persisted to KV) that
+					// this SHA needs no review — a terminal decision, not a
+					// transient skip. Retrying it would re-enter buildReview with
+					// lastReviewedSha already equal to headSha, bypass the triage
+					// guard, and post an unwanted full review. See Bug F.
+					state.lastReviewedSha = pr.head.sha;
+					log(
+						`ai-review watch: ${target.provider} has no new review to post for ${pr.head.sha}`,
 					);
 				} else {
 					log(

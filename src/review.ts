@@ -1044,7 +1044,7 @@ export async function buildReview(
 			selection,
 			deltaMeta.diff,
 			openFindings,
-			context.auth?.mode,
+			context.auth,
 		);
 
 		for (const f of state.findings) {

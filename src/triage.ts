@@ -1,5 +1,6 @@
 import { generateObject } from "ai";
 import { z } from "zod";
+import type { ResolvedAuth } from "./auth.js";
 import { createAIModel } from "./models.js";
 import type { PersistedFinding } from "./review-state.js";
 import type { ModelSelection } from "./router.js";
@@ -42,7 +43,7 @@ export async function triageReReview(
 	selection: ModelSelection,
 	deltaDiff: string,
 	openFindings: PersistedFinding[],
-	authMode?: "api-key" | "oauth",
+	auth?: ResolvedAuth,
 ): Promise<TriageDecision> {
 	if (openFindings.length === 0 && deltaDiff.trim() === "") {
 		return { recommendation: "SKIP", resolved: [], newRisk: false };
@@ -64,7 +65,7 @@ export async function triageReReview(
 
 	try {
 		const { object } = await generateObject({
-			model: createAIModel(triageSelection(selection, authMode)),
+			model: createAIModel(triageSelection(selection, auth?.mode), auth),
 			schema: TriageSchema,
 			prompt,
 			maxOutputTokens: 2000,

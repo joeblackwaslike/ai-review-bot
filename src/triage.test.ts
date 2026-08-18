@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
 const mockGenerateObject = vi.hoisted(() => vi.fn());
-const mockCreateAIModel = vi.hoisted(() => vi.fn(() => ({})));
+const mockCreateAIModel = vi.hoisted(() =>
+	vi.fn((_selection?: unknown, _auth?: unknown) => ({})),
+);
 vi.mock("ai", () => ({ generateObject: mockGenerateObject }));
 vi.mock("./models.js", () => ({ createAIModel: mockCreateAIModel }));
 
@@ -68,11 +70,14 @@ describe("triageReReview", () => {
 			"delta diff",
 			openFindings,
 		);
-		expect(mockCreateAIModel).toHaveBeenCalledWith({
-			provider: "openai",
-			model: "gpt-5.1",
-			effort: "low",
-		});
+		expect(mockCreateAIModel).toHaveBeenCalledWith(
+			{
+				provider: "openai",
+				model: "gpt-5.1",
+				effort: "low",
+			},
+			undefined,
+		);
 	});
 
 	// The ChatGPT-account Codex backend rejects gpt-5.1 outright (confirmed
@@ -83,17 +88,59 @@ describe("triageReReview", () => {
 		mockGenerateObject.mockResolvedValueOnce({
 			object: { recommendation: "SKIP", resolved: [], newRisk: false },
 		});
+		const auth = {
+			mode: "oauth" as const,
+			provider: "openai" as const,
+			token: "t",
+			baseURL: "https://example.test",
+			headers: {},
+			fetch: (async () => new Response()) as typeof fetch,
+		};
 		await triageReReview(
 			{ provider: "openai", model: "gpt-5.4-codex" } as never,
 			"delta diff",
 			openFindings,
-			"oauth",
+			auth,
 		);
-		expect(mockCreateAIModel).toHaveBeenCalledWith({
-			provider: "openai",
-			model: "gpt-5.4",
-			effort: "low",
+		expect(mockCreateAIModel).toHaveBeenCalledWith(
+			{
+				provider: "openai",
+				model: "gpt-5.4",
+				effort: "low",
+			},
+			auth,
+		);
+	});
+
+	// anthropicreviewbot/chatgpt-codex-connector finding on PR #65: watch's
+	// re-review loop runs under subscription auth with no funded
+	// ANTHROPIC_API_KEY/OPENAI_API_KEY. Before this fix, triageReReview only
+	// received the derived `authMode` string (for gpt-5.1 vs gpt-5.4 model
+	// selection) and never passed the resolved ResolvedAuth object itself to
+	// createAIModel — so createAIModel's `auth` param was always undefined
+	// here, and the triage request would attempt an unauthenticated model
+	// call, throw, and the catch in triageReReview silently converts that to
+	// a fail-safe INCREMENTAL — masking every triage call under watch as a
+	// (misleadingly "safe") failure instead of actually triaging.
+	it("passes the resolved auth object through to createAIModel, not just the derived mode", async () => {
+		mockGenerateObject.mockResolvedValueOnce({
+			object: { recommendation: "SKIP", resolved: [], newRisk: false },
 		});
+		const auth = {
+			mode: "oauth" as const,
+			provider: "anthropic" as const,
+			token: "t",
+			baseURL: "https://example.test",
+			headers: {},
+			fetch: (async () => new Response()) as typeof fetch,
+		};
+		await triageReReview(
+			{ provider: "anthropic", model: "claude-haiku-4-5-20251001" } as never,
+			"delta diff",
+			openFindings,
+			auth,
+		);
+		expect(mockCreateAIModel.mock.calls.at(-1)?.[1]).toBe(auth);
 	});
 });
 

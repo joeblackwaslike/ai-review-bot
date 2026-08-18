@@ -250,14 +250,26 @@ function getKv(): KvClient | null {
  * actual GitHub post (a review, or a fallback comment that preserves
  * findings) from every path that produced no review at all. Callers like
  * `watchPr` need this to log accurately and to decide whether a commit was
- * "handled" for retry purposes — everything except "posted" should be
- * retried on the next cycle at the same SHA.
+ * "handled" for retry purposes — almost everything except "posted" should be
+ * retried on the next cycle at the same SHA, with one deliberate exception:
+ * `{status: "skipped", reason: NO_NEW_REVIEW_REASON}` means the triage gate
+ * already decided (and persisted to KV) that this exact SHA needs no review,
+ * so it must be treated as handled too — retrying it would re-enter
+ * `buildReview` with `lastReviewedSha` already equal to `headSha`, skip the
+ * triage gate's guard, and post an unwanted full review. See Bug F.
+ *
+ * Note: if every retry and the fallback comment all fail, `maybeSubmitReview`
+ * throws rather than returning a "posted" outcome — callers must handle both.
  */
 export type SubmitReviewOutcome =
 	| { status: "posted"; event: "COMMENT" | "REQUEST_CHANGES" | "APPROVE" }
 	| { status: "skipped"; reason: string }
 	| { status: "rate_limited" }
 	| { status: "quota_exhausted" };
+
+/** The one `"skipped"` reason that represents a terminal, already-persisted
+ * decision rather than a retryable skip — see `SubmitReviewOutcome`'s doc. */
+export const NO_NEW_REVIEW_REASON = "no new review to post";
 
 /** @internal Exported for unit testing only. */
 export async function maybeSubmitReview(args: {
@@ -404,7 +416,7 @@ export async function maybeSubmitReview(args: {
 		});
 
 		if (!review) {
-			return { status: "skipped", reason: "no new review to post" };
+			return { status: "skipped", reason: NO_NEW_REVIEW_REASON };
 		}
 
 		if (review.event === "QUOTA_EXHAUSTED") {

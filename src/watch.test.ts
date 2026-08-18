@@ -45,6 +45,13 @@ const skipped: SubmitReviewOutcome = {
 	status: "skipped",
 	reason: "pull request is a draft",
 };
+// Distinct from `skipped` above: this is buildReview's triage gate concluding
+// (and persisting to KV) that this exact SHA needs no review at all — not a
+// transient/retryable skip like a draft PR or a rate limit.
+const noNewReview: SubmitReviewOutcome = {
+	status: "skipped",
+	reason: "no new review to post",
+};
 
 describe("watchPr", () => {
 	it("posts once per provider on the first cycle, then not again while the SHA is unchanged", async () => {
@@ -440,5 +447,40 @@ describe("watchPr", () => {
 		);
 		expect(anthropicCalls).toHaveLength(1);
 		expect(openaiCalls).toHaveLength(2);
+	});
+
+	// Bug F: a "no new review to post" skip is buildReview's triage gate
+	// concluding — and persisting to KV — that this exact SHA needs no
+	// review. Retrying it (like a genuinely transient skip) re-enters
+	// buildReview with lastReviewedSha already equal to headSha in the
+	// persisted state, so the triage gate's guard condition
+	// (`state.lastReviewedSha !== context.headSha`) no longer holds and
+	// execution falls through into posting a full, unwanted review —
+	// silently contradicting the triage decision that was just made.
+	// Surfaced by chatgpt-codex-connector's review of PR #65.
+	it("treats a 'no new review to post' skip as handled, not retryable, unlike other skips", async () => {
+		const request = vi
+			.fn()
+			.mockResolvedValue(pollResponse({ headSha: "sha1" }));
+		const submitReview = vi.fn().mockResolvedValue(noNewReview);
+
+		const result = await watchPr({
+			owner: "o",
+			repo: "r",
+			pullNumber: 5,
+			pollOctokit: { request },
+			targets: [buildTarget("anthropic")],
+			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
+			sleep: vi.fn().mockResolvedValue(undefined),
+			log: () => {},
+			submitReview,
+			maxCycles: 3,
+		});
+
+		expect(result).toEqual({ cycles: 3, reason: "max-cycles" });
+		// Called once on cycle 1; cycles 2-3 see the same SHA already marked
+		// handled and don't call submitReview again — unlike the draft-PR skip
+		// above, which retries every cycle.
+		expect(submitReview).toHaveBeenCalledTimes(1);
 	});
 });
