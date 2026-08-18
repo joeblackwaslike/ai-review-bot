@@ -182,13 +182,31 @@ export function buildPRSummarySection(
 	].join("\n");
 }
 
+/** The pre-ai-review-bot-1f5 unscoped marker pair. Only ever read, never
+ * written — kept so injectPRSection can migrate a PR body that still
+ * carries it (from before provider-scoped markers shipped) instead of
+ * leaving it as permanent orphaned content once a new provider-scoped
+ * section starts getting appended alongside it. Found independently by
+ * both anthropicreviewbot and codexreviewbot reviewing PR #67. */
+const LEGACY_PR_SECTION_START = "<!-- ai-review-bot:start -->";
+const LEGACY_PR_SECTION_END = "<!-- ai-review-bot:end -->";
+
 export function injectPRSection(
 	existingBody: string | null,
 	section: string,
 	provider: Provider,
 ): string {
+	let body = existingBody ?? "";
+	const legacyStartIdx = body.indexOf(LEGACY_PR_SECTION_START);
+	const legacyEndIdx = body.indexOf(LEGACY_PR_SECTION_END);
+	if (legacyStartIdx !== -1 && legacyEndIdx !== -1) {
+		body = (
+			body.slice(0, legacyStartIdx) +
+			body.slice(legacyEndIdx + LEGACY_PR_SECTION_END.length)
+		).trim();
+	}
+
 	const { start, end } = prSectionMarkers(provider);
-	const body = existingBody ?? "";
 	const startIdx = body.indexOf(start);
 	const endIdx = body.indexOf(end);
 
@@ -293,21 +311,26 @@ export const NO_NEW_REVIEW_REASON = "no new review to post";
 const HAS_EXISTING_COMMENT_MAX_PAGES = 10;
 const HAS_EXISTING_COMMENT_PER_PAGE = 100;
 
-/** True when a PR comment carrying `marker` already exists — used to dedupe
- * the quota-exhausted/rate-limited warning comments so `watch`'s indefinite
- * retry loop doesn't repost an identical comment every cycle. Paginates at
- * `per_page:100` until a page returns fewer than that (no more pages) or the
- * marker is found — a single unpaginated page (GitHub's default is only 30)
- * silently missed the marker on any busier PR, defeating the dedup exactly
- * on the threads it exists to protect. A malformed or unexpected (non-array)
- * response is treated as "no existing comment" rather than thrown — this is
- * a best-effort dedup check, not a hard dependency of the review itself. */
+/** True when a PR comment with this EXACT body already exists — used to
+ * dedupe the quota-exhausted/rate-limited warning comments so `watch`'s
+ * indefinite retry loop doesn't repost an identical comment every cycle.
+ * Matching the full body (not just the marker) is deliberate: the
+ * rate-limited message embeds a reset time that changes between distinct
+ * rate-limit windows, and marker-only matching would suppress a genuinely
+ * updated warning as a false duplicate, pinning a stale timestamp in the PR
+ * — found by codexreviewbot reviewing PR #67. Paginates at `per_page:100`
+ * until a page returns fewer than that (no more pages) or a match is found —
+ * a single unpaginated page (GitHub's default is only 30) silently missed
+ * the match on any busier PR, defeating the dedup exactly on the threads it
+ * exists to protect. A malformed or unexpected (non-array) response is
+ * treated as "no existing comment" rather than thrown — this is a
+ * best-effort dedup check, not a hard dependency of the review itself. */
 async function hasExistingComment(
 	octokit: Awaited<ReturnType<App["getInstallationOctokit"]>>,
 	owner: string,
 	repo: string,
 	pullNumber: number,
-	marker: string,
+	body: string,
 ): Promise<boolean> {
 	try {
 		for (let page = 1; page <= HAS_EXISTING_COMMENT_MAX_PAGES; page++) {
@@ -324,11 +347,7 @@ async function hasExistingComment(
 			const comments = Array.isArray(existing.data)
 				? (existing.data as Array<{ body?: string | null }>)
 				: [];
-			if (
-				comments.some(
-					(c) => typeof c.body === "string" && c.body.includes(marker),
-				)
-			) {
+			if (comments.some((c) => c.body === body)) {
 				return true;
 			}
 			if (comments.length < HAS_EXISTING_COMMENT_PER_PAGE) {
@@ -513,7 +532,7 @@ export async function maybeSubmitReview(args: {
 				"",
 				"The review will run normally on the next commit once the balance is topped up.",
 			].join("\n");
-			if (await hasExistingComment(octokit, owner, repo, pullNumber, marker)) {
+			if (await hasExistingComment(octokit, owner, repo, pullNumber, body)) {
 				console.log("quota-exhausted comment already posted; not duplicating", {
 					owner,
 					repo,
@@ -557,7 +576,7 @@ export async function maybeSubmitReview(args: {
 			// A throw here propagates to the outer finally, which releases the
 			// claim. Intended: a rate-limited run spent no model budget, so the
 			// commit must stay eligible for retry on the next delivery.
-			if (await hasExistingComment(octokit, owner, repo, pullNumber, marker)) {
+			if (await hasExistingComment(octokit, owner, repo, pullNumber, body)) {
 				console.log("rate-limit comment already posted; not duplicating", {
 					owner,
 					repo,
