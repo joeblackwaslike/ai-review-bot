@@ -220,12 +220,6 @@ describe("cmdWatch", () => {
 		expect(watchPr).not.toHaveBeenCalled();
 	});
 
-	// ai-review-bot-599 follow-up: the circuit breaker caps how many reviews a
-	// watch session can *post*, but never touched how eagerly it *polls* for
-	// something to review — the same 60s cadence that produced the PR #67/#68
-	// churn. Defaulting to a conservative interval means a future invocation
-	// doesn't have to remember to reason about supervision; --interval remains
-	// a full override for a deliberately supervised fast pass.
 	it("defaults to both providers, a conservative 5-minute interval, and passes the resolved targets to watchPr", async () => {
 		await cmdWatch(["--pr", "5", "--repo", "o/r"]);
 
