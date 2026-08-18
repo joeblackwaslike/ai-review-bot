@@ -785,6 +785,72 @@ describe("watchPr", () => {
 			expect(log).toHaveBeenCalledWith(
 				expect.stringContaining("circuit breaker"),
 			);
+			// anthropicreviewbot (PR #69): the trip log had no breadcrumb for how
+			// many cycles ran before firing — diagnosing "did it trip on cycle 2
+			// or cycle 10" required re-deriving it from submitReview's own call
+			// count instead of the log line itself.
+			expect(log).toHaveBeenCalledWith(expect.stringContaining("cycle 3"));
+		});
+
+		// anthropicreviewbot (PR #69, medium): `maxReviews: 0` (or a negative
+		// value) trips on the very first post with no signal that the config
+		// itself is nonsensical — silently defeating the feature it's meant to
+		// protect, which is worse than an obvious crash.
+		it("rejects a circuitBreaker config with maxReviews below 1", async () => {
+			await expect(
+				watchPr({
+					owner: "o",
+					repo: "r",
+					pullNumber: 5,
+					pollOctokit: { request: vi.fn() },
+					targets: [buildTarget("anthropic")],
+					resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
+					sleep: vi.fn().mockResolvedValue(undefined),
+					log: () => {},
+					submitReview: vi.fn(),
+					circuitBreaker: { maxReviews: 0, windowMs: 900_000 },
+					// Hang-guard for the pre-fix RED state: the validation must
+					// reject before the loop ever polls, so this should never
+					// actually be reached once implemented.
+					maxCycles: 1,
+				}),
+			).rejects.toThrow(/maxReviews/);
+		});
+
+		// anthropicreviewbot (PR #69): nothing exercised the *actual* default
+		// (3 reviews / 15 min) end-to-end — every other test in this block
+		// passes an explicit config that happens to match it, which would stay
+		// green even if a future edit silently changed DEFAULT_CIRCUIT_BREAKER
+		// or broke the CLI's "omit the option" path into watchPr's default.
+		it("trips on watch.ts's own default when the caller omits circuitBreaker entirely", async () => {
+			let call = 0;
+			const request = vi
+				.fn()
+				.mockImplementation(() =>
+					Promise.resolve(pollResponse({ headSha: `sha${++call}` })),
+				);
+			const submitReview = vi.fn().mockResolvedValue(posted);
+			let clock = 0;
+			const now = vi.fn(() => {
+				clock += 60_000;
+				return clock;
+			});
+
+			const result = await watchPr({
+				owner: "o",
+				repo: "r",
+				pullNumber: 5,
+				pollOctokit: { request },
+				targets: [buildTarget("anthropic")],
+				resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
+				sleep: vi.fn().mockResolvedValue(undefined),
+				log: () => {},
+				submitReview,
+				now,
+				maxCycles: 10,
+			});
+
+			expect(result).toEqual({ cycles: 3, reason: "circuit-breaker" });
 		});
 
 		it("does not trip when posts are spaced further apart than the window", async () => {

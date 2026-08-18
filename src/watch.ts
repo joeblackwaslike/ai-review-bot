@@ -187,6 +187,15 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 		circuitBreaker = DEFAULT_CIRCUIT_BREAKER,
 	} = opts;
 
+	// anthropicreviewbot (PR #69): maxReviews < 1 trips on the very first post
+	// with no signal the config is nonsensical, silently defeating the guard
+	// it's meant to provide instead of failing loudly.
+	if (circuitBreaker && circuitBreaker.maxReviews < 1) {
+		throw new Error(
+			`circuitBreaker.maxReviews must be at least 1, got: ${circuitBreaker.maxReviews}`,
+		);
+	}
+
 	let cycles = 0;
 	// ai-review-bot-aou: seeded once, on the very first cycle only — see the
 	// pre-loop-body seeding block below for why.
@@ -333,7 +342,7 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 						if (state.recentPosts.length >= circuitBreaker.maxReviews) {
 							const windowMin = Math.round(circuitBreaker.windowMs / 60_000);
 							log(
-								`ai-review watch: circuit breaker tripped — ${target.provider} posted ${state.recentPosts.length} reviews for ${owner}/${repo}#${pullNumber} within ${windowMin} min. This usually means fixes are being pushed faster than the reviewer can converge (see docs/post-mortem-review-loop-churn.md). Stopping — let the PR settle, then restart watch for a final confirmation pass.`,
+								`ai-review watch: circuit breaker tripped on cycle ${cycles} — ${target.provider} posted ${state.recentPosts.length} reviews for ${owner}/${repo}#${pullNumber} within ${windowMin} min. This usually means fixes are being pushed faster than the reviewer can converge (see docs/post-mortem-review-loop-churn.md). Stopping — let the PR settle, then restart watch for a final confirmation pass.`,
 							);
 							return { cycles, reason: "circuit-breaker" };
 						}
