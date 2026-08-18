@@ -27,9 +27,8 @@ const FAIL_SAFE: TriageDecision = {
  * exact-match lookup in the resolution loop below, keeping a
  * genuinely-resolved finding permanently marked open. */
 function buildTriageSchema(openFindings: PersistedFinding[]) {
-	// Deduplicated defensively: harmless either way (z.enum tolerates repeats
-	// on the installed zod version), but a unique id list is the honest
-	// invariant for an enum regardless of what the current version allows.
+	// Deduplicated: an enum should represent distinct choices regardless of
+	// what any particular zod version tolerates at runtime.
 	const ids = [...new Set(openFindings.map((f) => f.id))];
 	return z.object({
 		recommendation: z.enum(["SKIP", "INCREMENTAL", "FULL"]),
