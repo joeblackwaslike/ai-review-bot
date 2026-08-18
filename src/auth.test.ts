@@ -269,10 +269,11 @@ describe("makeCodexFetch", () => {
 	// than the original SSE wire payload — content-length/-encoding and
 	// transfer-encoding describe that old payload, not this one, and copying
 	// them verbatim would make a downstream consumer that re-serializes this
-	// Response see a stale/incorrect body-length signal. The header value used
-	// here (`identity`) is arbitrary — this test only proves the stale header
-	// key is stripped, not any decompression behavior, since makeCodexFetch
-	// never decompresses anything itself.
+	// Response see a stale/incorrect body-length signal. The fixture's body is
+	// plain text throughout (CODEX_SSE_FIXTURE is never actually compressed);
+	// the `identity` content-encoding value is arbitrary and only proves the
+	// stale header key is stripped, not any real decompression, since
+	// makeCodexFetch never decompresses anything itself.
 	it("strips body-specific headers that no longer describe the rewritten JSON body", async () => {
 		const base = (async () =>
 			new Response(CODEX_SSE_FIXTURE, {
@@ -294,6 +295,7 @@ describe("makeCodexFetch", () => {
 		expect(res.headers.get("content-length")).toBeNull();
 		expect(res.headers.get("content-encoding")).toBeNull();
 		expect(res.headers.get("transfer-encoding")).toBeNull();
+		expect(res.headers.get("content-type")).toBe("application/json");
 		await expect(res.json()).resolves.toMatchObject({ id: "resp_1" });
 	});
 
