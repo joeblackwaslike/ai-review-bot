@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { z } from "zod";
 
 const mockGenerateObject = vi.hoisted(() => vi.fn());
 const mockCreateAIModel = vi.hoisted(() =>
@@ -141,6 +142,72 @@ describe("triageReReview", () => {
 			auth,
 		);
 		expect(mockCreateAIModel.mock.calls.at(-1)?.[1]).toBe(auth);
+	});
+
+	// The schema must accept only bare open-finding ids and reject an echoed
+	// "id — title" line: the prompt shows each finding as "id — title", so a
+	// model that judges it resolved naturally echoes that whole line back
+	// instead of isolating the bare id.
+	it("constrains the resolved schema to the known open-finding ids, rejecting an id+title echo", async () => {
+		mockGenerateObject.mockResolvedValueOnce({
+			object: {
+				recommendation: "INCREMENTAL",
+				resolved: ["src/a.ts:5:bug"],
+				newRisk: false,
+			},
+		});
+		await triageReReview(
+			{ provider: "anthropic", model: "claude-haiku-4-5-20251001" } as never,
+			"delta diff",
+			openFindings,
+		);
+		const { schema } = mockGenerateObject.mock.calls.at(-1)?.[0] as {
+			schema: z.ZodTypeAny;
+		};
+
+		expect(
+			schema.safeParse({
+				recommendation: "INCREMENTAL",
+				resolved: ["src/a.ts:5:bug"],
+				newRisk: false,
+			}).success,
+		).toBe(true);
+		expect(
+			schema.safeParse({
+				recommendation: "INCREMENTAL",
+				resolved: ["src/a.ts:5:bug — Bug"],
+				newRisk: false,
+			}).success,
+		).toBe(false);
+	});
+
+	it("constrains resolved to an empty array when there are no open findings to resolve", async () => {
+		mockGenerateObject.mockResolvedValueOnce({
+			object: { recommendation: "INCREMENTAL", resolved: [], newRisk: true },
+		});
+		await triageReReview(
+			{ provider: "anthropic", model: "claude-haiku-4-5-20251001" } as never,
+			"some new diff with no prior findings",
+			[],
+		);
+		const { schema } = mockGenerateObject.mock.calls.at(-1)?.[0] as {
+			schema: z.ZodTypeAny;
+		};
+
+		expect(
+			schema.safeParse({
+				recommendation: "INCREMENTAL",
+				resolved: [],
+				newRisk: true,
+			}).success,
+		).toBe(true);
+		expect(
+			schema.safeParse({
+				recommendation: "INCREMENTAL",
+				resolved: ["anything"],
+				newRisk: true,
+			}).success,
+		).toBe(false);
 	});
 });
 

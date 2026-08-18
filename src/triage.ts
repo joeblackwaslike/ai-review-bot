@@ -19,6 +19,27 @@ const FAIL_SAFE: TriageDecision = {
 	newRisk: true,
 };
 
+/** Builds the per-call schema for the triage decision. `resolved` is
+ * constrained to an enum of the actual open-finding ids (or forced empty when
+ * there are none) instead of a free-form `z.array(z.string())`. The prompt
+ * shows each finding as `id — title`, so a model naturally echoes that whole
+ * line back; without this constraint the echoed string silently fails the
+ * exact-match lookup in the resolution loop below, keeping a
+ * genuinely-resolved finding permanently marked open. */
+function buildTriageSchema(openFindings: PersistedFinding[]) {
+	// Deduplicated: an enum should represent distinct choices regardless of
+	// what any particular zod version tolerates at runtime.
+	const ids = [...new Set(openFindings.map((f) => f.id))];
+	return z.object({
+		recommendation: z.enum(["SKIP", "INCREMENTAL", "FULL"]),
+		resolved:
+			ids.length > 0
+				? z.array(z.enum(ids as [string, ...string[]]))
+				: z.array(z.string()).length(0),
+		newRisk: z.boolean(),
+	});
+}
+
 // Cheap, fast triage tier. The call only classifies; it does not review.
 //
 // The openai branch mirrors routeModel's auth-mode split: gpt-5.1's rejection
@@ -66,7 +87,7 @@ export async function triageReReview(
 	try {
 		const { object } = await generateObject({
 			model: createAIModel(triageSelection(selection, auth?.mode), auth),
-			schema: TriageSchema,
+			schema: buildTriageSchema(openFindings),
 			prompt,
 			maxOutputTokens: 2000,
 		});
