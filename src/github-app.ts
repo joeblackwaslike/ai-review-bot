@@ -1,5 +1,5 @@
 import { App } from "octokit";
-import type { ResolvedAuth } from "./auth.js";
+import type { Provider, ResolvedAuth } from "./auth.js";
 import { createCheckRun } from "./check-run.js";
 import { isTrustedAuthorAssociation, parseReviewCommand } from "./commands.js";
 import type { AppConfig } from "./config.js";
@@ -10,7 +10,13 @@ import { persistPostedComments } from "./feedback/persist.js";
 import { recordPostedComment } from "./feedback/store.js";
 import { capturePostedReview } from "./improve/capture.js";
 import { getDb } from "./improve/db/client.js";
-import { billingUrl, notifyQuotaExhausted, providerLabel } from "./notify.js";
+import {
+	billingUrl,
+	notifyQuotaExhausted,
+	providerLabel,
+	quotaCommentMarker,
+	rateLimitCommentMarker,
+} from "./notify.js";
 import type { PeerOctokit } from "./peers.js";
 import {
 	fetchPrReviews,
@@ -129,13 +135,24 @@ function buildFallbackCommentBody(
 	].join("\n");
 }
 
-const PR_SECTION_START = "<!-- ai-review-bot:start -->";
-const PR_SECTION_END = "<!-- ai-review-bot:end -->";
+/** ai-review-bot-1f5: markers are scoped per provider, not shared, so each
+ * bot's section can be independently found/replaced by injectPRSection
+ * without touching the other's — a single shared marker pair meant the
+ * second provider's post always fully replaced the first's regardless of
+ * how fresh the body was, which re-polling alone (the original fix) did not
+ * solve. Confirmed by chatgpt-codex-connector reviewing PR #67. */
+function prSectionMarkers(provider: Provider): { start: string; end: string } {
+	return {
+		start: `<!-- ai-review-bot:${provider}:start -->`,
+		end: `<!-- ai-review-bot:${provider}:end -->`,
+	};
+}
 
 export function buildPRSummarySection(
 	metadata: ReviewMetadata,
 	event: "COMMENT" | "REQUEST_CHANGES" | "APPROVE",
 	commentPrefix: string,
+	provider: Provider,
 ): string {
 	const verdict =
 		event === "APPROVE"
@@ -149,8 +166,9 @@ export function buildPRSummarySection(
 			? `\n| Tier 2 skills | ${metadata.tier2Skills.map((s) => `\`${s}\``).join(", ")} |`
 			: "";
 
+	const { start, end } = prSectionMarkers(provider);
 	return [
-		PR_SECTION_START,
+		start,
 		`#### ${commentPrefix}`,
 		"",
 		"| | |",
@@ -160,24 +178,74 @@ export function buildPRSummarySection(
 		`| Model | \`${metadata.model}\` |`,
 		`| Agents | ${metadata.tier1Count} Tier 1${metadata.tier2Skills.length > 0 ? ` + ${metadata.tier2Skills.length} Tier 2` : ""} |${tier2Line}`,
 		`| Cost | $${metadata.cost.toFixed(6)} |`,
-		PR_SECTION_END,
+		end,
 	].join("\n");
 }
+
+/** The pre-ai-review-bot-1f5 unscoped marker pair. Only ever read, never
+ * written — kept so injectPRSection can migrate a PR body that still
+ * carries it (from before provider-scoped markers shipped) instead of
+ * leaving it as permanent orphaned content once a new provider-scoped
+ * section starts getting appended alongside it. Found independently by
+ * both anthropicreviewbot and codexreviewbot reviewing PR #67. */
+const LEGACY_PR_SECTION_START = "<!-- ai-review-bot:start -->";
+const LEGACY_PR_SECTION_END = "<!-- ai-review-bot:end -->";
 
 export function injectPRSection(
 	existingBody: string | null,
 	section: string,
+	provider: Provider,
 ): string {
-	const body = existingBody ?? "";
-	const startIdx = body.indexOf(PR_SECTION_START);
-	const endIdx = body.indexOf(PR_SECTION_END);
+	let body = existingBody ?? "";
+	const legacyStartIdx = body.indexOf(LEGACY_PR_SECTION_START);
+	// Search for the end marker starting AFTER the start marker, not from
+	// position 0 — an unqualified `body.indexOf(END)` finds the first
+	// occurrence anywhere, including a spurious one earlier in unrelated
+	// content before the real legacy block. That makes `legacyEndIdx <
+	// legacyStartIdx`, so the ordering guard below skips migration entirely.
+	// Starting the search after the start marker finds the real closing
+	// marker for that case.
+	//
+	// Known, deliberately unfixed gap: a spurious end-marker mention INSIDE
+	// the legacy section itself (after the start marker, before the real
+	// close) would still truncate the strip early. Not fixed because it isn't
+	// reachable through this function's own read-then-write flow: the legacy
+	// strip only ever runs ONCE per PR body — the first post-upgrade review
+	// migrates it away in the same call that appends the first provider-scoped
+	// section, so no later call ever sees a body containing both a legacy
+	// section AND that section quoting its own closing marker as example
+	// content. Producing it would require a human hand-editing the PR body to
+	// construct that exact shape, which is out of scope for a migration path
+	// that only runs once, automatically, right after this bot's own upgrade.
+	const legacyEndIdx =
+		legacyStartIdx === -1
+			? -1
+			: body.indexOf(
+					LEGACY_PR_SECTION_END,
+					legacyStartIdx + LEGACY_PR_SECTION_START.length,
+				);
+	// legacyStartIdx < legacyEndIdx guards a malformed body where the end
+	// marker appears before the start marker: without it, the slice below
+	// duplicates the text between the two markers and leaves both legacy
+	// markers behind instead of stripping them. Found by anthropicreviewbot
+	// reviewing PR #67 (PRRT_kwDOSM5cU86Z_qoy / _qpF).
+	if (
+		legacyStartIdx !== -1 &&
+		legacyEndIdx !== -1 &&
+		legacyStartIdx < legacyEndIdx
+	) {
+		body = (
+			body.slice(0, legacyStartIdx) +
+			body.slice(legacyEndIdx + LEGACY_PR_SECTION_END.length)
+		).trim();
+	}
+
+	const { start, end } = prSectionMarkers(provider);
+	const startIdx = body.indexOf(start);
+	const endIdx = body.indexOf(end);
 
 	if (startIdx !== -1 && endIdx !== -1) {
-		return (
-			body.slice(0, startIdx) +
-			section +
-			body.slice(endIdx + PR_SECTION_END.length)
-		);
+		return body.slice(0, startIdx) + section + body.slice(endIdx + end.length);
 	}
 
 	return body ? `${body}\n\n${section}` : section;
@@ -270,6 +338,102 @@ export type SubmitReviewOutcome =
 /** The one `"skipped"` reason that represents a terminal, already-persisted
  * decision rather than a retryable skip — see `SubmitReviewOutcome`'s doc. */
 export const NO_NEW_REVIEW_REASON = "no new review to post";
+
+/** Hard ceiling on pages scanned by {@link hasExistingComment}: scans up to
+ * {@link HAS_EXISTING_COMMENT_MAX_PAGES} × {@link HAS_EXISTING_COMMENT_PER_PAGE}
+ * = 5,000 comments. In practice the loop exits earlier, as soon as a page
+ * returns fewer than per_page items (no more pages) — this cap only exists to
+ * bound the loop if GitHub's pagination sentinel misbehaves. Originally 10
+ * pages (1,000 comments); codexreviewbot reviewing PR #67 found that on a
+ * busy, long-lived watched PR a marker comment could live past page 10, so
+ * the cap itself silently defeated the dedup it exists to provide — raised
+ * 5x for headroom while still bounding the loop. */
+const HAS_EXISTING_COMMENT_MAX_PAGES = 50;
+const HAS_EXISTING_COMMENT_PER_PAGE = 100;
+
+/** True when an existing PR comment matches `matcher` — used to dedupe the
+ * quota-exhausted/rate-limited warning comments so `watch`'s indefinite
+ * retry loop doesn't repost the same warning every cycle. Takes a matcher
+ * rather than a literal body because the two callers need different
+ * matching semantics: the rate-limited message embeds a reset time that
+ * changes between distinct rate-limit windows, so it matches the full body
+ * (marker-only matching would suppress a genuinely updated warning as a
+ * false duplicate, pinning a stale timestamp in the PR — found by
+ * codexreviewbot reviewing PR #67). The quota-exhausted message ALSO embeds
+ * `providerLabel(quotaProvider)`, whose value can drift between retries for
+ * the SAME underlying condition (e.g. "anthropic" then unset/"unknown") —
+ * exact-body matching there would miss the existing comment and repost on
+ * every drift, so it matches on the stable marker alone instead. Found by
+ * codexreviewbot reviewing PR #67 (PRRT_kwDOSM5cU86Z_xF1 / _xGF).
+ * Paginates at `per_page:100` until a page returns fewer than that (no more
+ * pages) or a match is found — a single unpaginated page (GitHub's default
+ * is only 30) silently missed the match on any busier PR, defeating the
+ * dedup exactly on the threads it exists to protect. A malformed or
+ * unexpected (non-array) response is treated as "no existing comment"
+ * rather than thrown — this is a best-effort dedup check, not a hard
+ * dependency of the review itself. */
+async function hasExistingComment(
+	octokit: Awaited<ReturnType<App["getInstallationOctokit"]>>,
+	owner: string,
+	repo: string,
+	pullNumber: number,
+	matcher: (existingBody: string) => boolean,
+): Promise<boolean> {
+	for (let page = 1; page <= HAS_EXISTING_COMMENT_MAX_PAGES; page++) {
+		// Only the request itself is best-effort — narrowed from wrapping the
+		// whole loop so a bug in the LOCAL scan logic below (not the network
+		// call) surfaces instead of being silently downgraded to "no existing
+		// comment". Found by codexreviewbot reviewing PR #67
+		// (PRRT_kwDOSM5cU86Z_cHu / ikk9l).
+		let existing: Awaited<ReturnType<typeof octokit.request>>;
+		try {
+			existing = await octokit.request(
+				"GET /repos/{owner}/{repo}/issues/{issue_number}/comments",
+				{
+					owner,
+					repo,
+					issue_number: pullNumber,
+					per_page: HAS_EXISTING_COMMENT_PER_PAGE,
+					page,
+				},
+			);
+		} catch (err) {
+			// A network/Octokit failure here must not block the warning it's
+			// gating — this is a best-effort dedup check, not a hard dependency.
+			// Logs owner/repo/pullNumber/page so a grep for a specific PR's dedup
+			// failure actually finds it — found by anthropicreviewbot reviewing
+			// PR #67 (PRRT_kwDOSM5cU86Z_7q_).
+			console.error(
+				`hasExistingComment: list request failed for ${owner}/${repo}#${pullNumber} (page ${page}); proceeding without comment dedup, a warning may be duplicated`,
+				err,
+			);
+			return false;
+		}
+		const comments = Array.isArray(existing.data)
+			? (existing.data as Array<{ body?: string | null }>)
+			: [];
+		if (!Array.isArray(existing.data)) {
+			// Doesn't change the fail-open behavior (still returns false below,
+			// same as always) — only makes an otherwise-silent malformed
+			// response observable. This is a deliberate best-effort tradeoff
+			// (see the function's docstring), raised repeatedly across review
+			// passes on this PR; the recurring complaint was specifically that
+			// it was silent, not that fail-open is the wrong default. Found by
+			// anthropicreviewbot reviewing PR #67 (PRRT_kwDOSM5cU86Z_7rG / _7rT,
+			// also PRRT_kwDOSM5cU86Z-uZB / _WHm / _WHr).
+			console.warn(
+				`hasExistingComment: non-array response for ${owner}/${repo}#${pullNumber} (page ${page}); treating as no comments on this page`,
+			);
+		}
+		if (comments.some((c) => c.body != null && matcher(c.body))) {
+			return true;
+		}
+		if (comments.length < HAS_EXISTING_COMMENT_PER_PAGE) {
+			return false;
+		}
+	}
+	return false;
+}
 
 /** @internal Exported for unit testing only. */
 export async function maybeSubmitReview(args: {
@@ -422,7 +586,16 @@ export async function maybeSubmitReview(args: {
 		if (review.event === "QUOTA_EXHAUSTED") {
 			const quotaProvider = review.quotaProvider ?? "unknown";
 			const billing = billingUrl(quotaProvider);
+			// Fixed: the marker was previously keyed off `review.quotaProvider`,
+			// which falls back to "unknown" when unset — a mismatch against any
+			// marker already stored under `config.provider` that silently defeated
+			// the dedup this PR exists to add. Always key off `config.provider` so
+			// the lookup and the stored marker agree; quotaProvider is still used
+			// for the human-readable message and billing link below. Reworded per
+			// anthropicreviewbot reviewing PR #67 (PRRT_kwDOSM5cU86Z-uZS).
+			const marker = quotaCommentMarker(config.provider);
 			const body = [
+				marker,
 				`⛔ **[${config.reviewCommentPrefix}]** Review couldn't run — **the ${providerLabel(quotaProvider)} account is out of credits.**`,
 				"",
 				"This will **not** clear on its own and pushing again will not help — it needs payment.",
@@ -433,10 +606,25 @@ export async function maybeSubmitReview(args: {
 				"",
 				"The review will run normally on the next commit once the balance is topped up.",
 			].join("\n");
-			await octokit.request(
-				"POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
-				{ owner, repo, issue_number: pullNumber, body },
-			);
+			// Marker-only match (not full-body) — see hasExistingComment's
+			// docstring for why: the quotaProvider-derived label text can drift
+			// between retries for the same underlying condition.
+			if (
+				await hasExistingComment(octokit, owner, repo, pullNumber, (b) =>
+					b.includes(marker),
+				)
+			) {
+				console.log("quota-exhausted comment already posted; not duplicating", {
+					owner,
+					repo,
+					pullNumber,
+				});
+			} else {
+				await octokit.request(
+					"POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+					{ owner, repo, issue_number: pullNumber, body },
+				);
+			}
 			console.error("PROVIDER BALANCE EXHAUSTED — payment required", {
 				provider: quotaProvider,
 				owner,
@@ -464,25 +652,50 @@ export async function maybeSubmitReview(args: {
 				: review.rateLimitRetryAfterSeconds
 					? `retry in ~${review.rateLimitRetryAfterSeconds}s`
 					: "will reset shortly";
-			const body = `⚠️ **[${config.reviewCommentPrefix}]** Review couldn't run — the model is rate-limited (input-token budget). Budget ${when}. Push again after that, or it will auto-retry on your next commit.`;
+			const marker = rateLimitCommentMarker(config.provider);
+			const body = `${marker}\n⚠️ **[${config.reviewCommentPrefix}]** Review couldn't run — the model is rate-limited (input-token budget). Budget ${when}. Push again after that, or it will auto-retry on your next commit.`;
 			// A throw here propagates to the outer finally, which releases the
 			// claim. Intended: a rate-limited run spent no model budget, so the
 			// commit must stay eligible for retry on the next delivery.
-			await octokit.request(
-				"POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
-				{
+			// Full-body match (not marker-only) — see hasExistingComment's
+			// docstring for why: the reset time embedded in this body IS the
+			// signal that a genuinely new warning exists. trimEnd() on both
+			// sides tolerates trailing-whitespace drift from GitHub's API
+			// without reintroducing the marker-only false-positive this
+			// replaced — found by anthropicreviewbot reviewing PR #67
+			// (PRRT_kwDOSM5cU86Z_qoq).
+			const normalizedBody = body.trimEnd();
+			if (
+				await hasExistingComment(
+					octokit,
 					owner,
 					repo,
-					issue_number: pullNumber,
-					body,
-				},
-			);
-			console.log("posted rate-limit fallback comment", {
-				owner,
-				repo,
-				pullNumber,
-				when,
-			});
+					pullNumber,
+					(b) => b.trimEnd() === normalizedBody,
+				)
+			) {
+				console.log("rate-limit comment already posted; not duplicating", {
+					owner,
+					repo,
+					pullNumber,
+				});
+			} else {
+				await octokit.request(
+					"POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+					{
+						owner,
+						repo,
+						issue_number: pullNumber,
+						body,
+					},
+				);
+				console.log("posted rate-limit fallback comment", {
+					owner,
+					repo,
+					pullNumber,
+					when,
+				});
+			}
 			return { status: "rate_limited" };
 		}
 
@@ -527,8 +740,13 @@ export async function maybeSubmitReview(args: {
 				review.metadata,
 				review.event,
 				config.reviewCommentPrefix,
+				config.provider,
 			);
-			const updatedBody = injectPRSection(pullRequest.body, summarySection);
+			const updatedBody = injectPRSection(
+				pullRequest.body,
+				summarySection,
+				config.provider,
+			);
 			try {
 				await octokit.request(
 					"PATCH /repos/{owner}/{repo}/pulls/{pull_number}",

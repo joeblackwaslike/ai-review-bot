@@ -3,6 +3,20 @@ import type { AppConfig } from "./config.js";
 import type { SubmitReviewOutcome } from "./github-app.js";
 import { watchPr } from "./watch.js";
 
+// codexreviewbot (PRRT_kwDOSM5cU86Z-0K0 / -0K4) reviewing PR #67: the default
+// loadPersistedState's KV-unavailable test relied on ambient env (no
+// KV_REST_API_URL/TOKEN configured) to make createUpstashKv() throw, which is
+// non-deterministic across environments where those happen to be set.
+// Stubbing the module makes the failure mode explicit and independent of the
+// environment.
+vi.mock("./feedback/kv.js", () => ({
+	createUpstashKv: () => {
+		throw new Error(
+			"KV_REST_API_URL and KV_REST_API_TOKEN are required when FEEDBACK_ENABLED=true",
+		);
+	},
+}));
+
 function buildTarget(provider: "anthropic" | "openai") {
 	return {
 		provider,
@@ -17,6 +31,7 @@ function pollResponse(
 		merged: boolean;
 		state: string;
 		headSha: string;
+		body: string | null;
 	}> = {},
 ) {
 	return {
@@ -29,7 +44,7 @@ function pollResponse(
 			deletions: 0,
 			changed_files: 1,
 			title: "Test PR",
-			body: null,
+			body: overrides.body ?? null,
 		},
 	};
 }
@@ -482,5 +497,249 @@ describe("watchPr", () => {
 		// handled and don't call submitReview again — unlike the draft-PR skip
 		// above, which retries every cycle.
 		expect(submitReview).toHaveBeenCalledTimes(1);
+	});
+
+	// ai-review-bot-aou: a fresh process (restart, crash, sleep/wake) resets
+	// hasPostedEver/lastReviewedSha to their cold-start defaults, which forces
+	// force:true on cycle 1 (see Bug A above) — bypassing buildReview's triage
+	// gate entirely, even when the current head SHA was already fully reviewed
+	// by this same bot in a prior (killed) watch session. loadPersistedState
+	// lets watchPr consult that same server-side state before deciding force
+	// for cycle 1, so a restart doesn't repost a duplicate FULL review.
+	it("seeds force:false on cycle 1 when loadPersistedState reports this exact head SHA was already reviewed", async () => {
+		const request = vi
+			.fn()
+			.mockResolvedValue(pollResponse({ headSha: "sha1" }));
+		const submitReview = vi.fn().mockResolvedValue(noNewReview);
+		const loadPersistedState = vi
+			.fn()
+			.mockResolvedValue({ lastReviewedSha: "sha1" });
+
+		await watchPr({
+			owner: "o",
+			repo: "r",
+			pullNumber: 5,
+			pollOctokit: { request },
+			targets: [buildTarget("anthropic")],
+			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
+			sleep: vi.fn().mockResolvedValue(undefined),
+			log: () => {},
+			submitReview,
+			loadPersistedState,
+			maxCycles: 1,
+		});
+
+		expect(loadPersistedState).toHaveBeenCalledWith("anthropic");
+		expect(submitReview).toHaveBeenCalledTimes(1);
+		expect(submitReview.mock.calls[0][0]).toEqual(
+			expect.objectContaining({ force: false }),
+		);
+	});
+
+	// ai-review-bot-aou continued: a stale/mismatched persisted SHA (a real
+	// push happened while the watch process was down) must NOT suppress
+	// cycle 1's force:true — only an exact match is a "nothing changed, this
+	// was already reviewed" signal.
+	it("keeps force:true on cycle 1 when loadPersistedState's SHA does not match the current head", async () => {
+		const request = vi
+			.fn()
+			.mockResolvedValue(pollResponse({ headSha: "sha2" }));
+		const submitReview = vi.fn().mockResolvedValue(posted);
+		const loadPersistedState = vi
+			.fn()
+			.mockResolvedValue({ lastReviewedSha: "sha1" });
+
+		await watchPr({
+			owner: "o",
+			repo: "r",
+			pullNumber: 5,
+			pollOctokit: { request },
+			targets: [buildTarget("anthropic")],
+			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
+			sleep: vi.fn().mockResolvedValue(undefined),
+			log: () => {},
+			submitReview,
+			loadPersistedState,
+			maxCycles: 1,
+		});
+
+		expect(submitReview.mock.calls[0][0]).toEqual(
+			expect.objectContaining({ force: true }),
+		);
+	});
+
+	// ai-review-bot-aou continued: the default (no loadPersistedState passed,
+	// which is every test above this one, and production without KV) must
+	// behave exactly as before — force:true on cycle 1.
+	it("keeps force:true on cycle 1 when loadPersistedState is not provided at all", async () => {
+		const request = vi
+			.fn()
+			.mockResolvedValue(pollResponse({ headSha: "sha1" }));
+		const submitReview = vi.fn().mockResolvedValue(posted);
+
+		await watchPr({
+			owner: "o",
+			repo: "r",
+			pullNumber: 5,
+			pollOctokit: { request },
+			targets: [buildTarget("anthropic")],
+			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
+			sleep: vi.fn().mockResolvedValue(undefined),
+			log: () => {},
+			submitReview,
+			maxCycles: 1,
+		});
+
+		expect(submitReview.mock.calls[0][0]).toEqual(
+			expect.objectContaining({ force: true }),
+		);
+	});
+
+	// Found by anthropicreviewbot/codexreviewbot on PR #67's own review: the
+	// default loadPersistedState swallowed a KV failure with no logging,
+	// making a restart that silently fails to seed indistinguishable from one
+	// that correctly found nothing to seed — exactly the kind of failure
+	// ai-review-bot-aou's own fix needs to be observable, not silent, when it
+	// doesn't engage.
+	it("logs when the default loadPersistedState can't reach KV, instead of failing silently", async () => {
+		const request = vi
+			.fn()
+			.mockResolvedValue(pollResponse({ headSha: "sha1" }));
+		const submitReview = vi.fn().mockResolvedValue(posted);
+		const log = vi.fn();
+
+		await watchPr({
+			owner: "o",
+			repo: "r",
+			pullNumber: 5,
+			pollOctokit: { request },
+			targets: [buildTarget("anthropic")],
+			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
+			sleep: vi.fn().mockResolvedValue(undefined),
+			log,
+			submitReview,
+			maxCycles: 1,
+		});
+
+		expect(log).toHaveBeenCalledWith(
+			expect.stringContaining("loadPersistedState unavailable"),
+		);
+	});
+
+	// ai-review-bot-1f5: when two providers post in the same cycle, the second
+	// provider's maybeSubmitReview call must see a PR body that already
+	// includes the first provider's just-posted PR-summary section — not the
+	// stale pre-cycle snapshot. injectPRSection does a full-body marker splice
+	// on one shared start/end pair, so building the second PATCH from a stale
+	// body silently discards the first provider's section.
+	it("re-polls the PR before the next target's post in the same cycle, so the second provider sees the first provider's updated body", async () => {
+		const request = vi
+			.fn()
+			.mockResolvedValueOnce(pollResponse({ body: "stale" }))
+			.mockResolvedValueOnce(pollResponse({ body: "updated-by-anthropic" }));
+		const submitReview = vi.fn().mockResolvedValue(posted);
+
+		await watchPr({
+			owner: "o",
+			repo: "r",
+			pullNumber: 5,
+			pollOctokit: { request },
+			targets: [buildTarget("anthropic"), buildTarget("openai")],
+			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
+			sleep: vi.fn().mockResolvedValue(undefined),
+			log: () => {},
+			submitReview,
+			maxCycles: 1,
+		});
+
+		expect(request).toHaveBeenCalledTimes(2);
+		// The re-poll must hit the PR endpoint itself, not any other route — a
+		// wrong endpoint would still satisfy the call-count assertion above.
+		expect(request.mock.calls[1][0]).toBe(
+			"GET /repos/{owner}/{repo}/pulls/{pull_number}",
+		);
+		expect(submitReview).toHaveBeenCalledTimes(2);
+		const calls = submitReview.mock.calls as unknown as Array<
+			[{ config: { provider: string }; pullRequest: { body: string | null } }]
+		>;
+		const anthropicCall = calls.find(
+			([arg]) => arg.config.provider === "anthropic",
+		);
+		const openaiCall = calls.find(([arg]) => arg.config.provider === "openai");
+		expect(anthropicCall?.[0].pullRequest.body).toBe("stale");
+		expect(openaiCall?.[0].pullRequest.body).toBe("updated-by-anthropic");
+	});
+
+	// ai-review-bot-1f5 continued: no re-poll should happen after the LAST
+	// target in a cycle posts — there's no next target to benefit from it.
+	it("does not re-poll after the last target in a cycle posts", async () => {
+		const request = vi.fn().mockResolvedValue(pollResponse({ body: "x" }));
+		const submitReview = vi.fn().mockResolvedValue(posted);
+
+		await watchPr({
+			owner: "o",
+			repo: "r",
+			pullNumber: 5,
+			pollOctokit: { request },
+			targets: [buildTarget("anthropic")],
+			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
+			sleep: vi.fn().mockResolvedValue(undefined),
+			log: () => {},
+			submitReview,
+			maxCycles: 1,
+		});
+
+		expect(request).toHaveBeenCalledTimes(1);
+	});
+
+	// Found by anthropicreviewbot reviewing PR #67: the re-poll's own catch
+	// branch (a transient poll failure between two providers' posts in the
+	// same cycle) had no test coverage — this covers it, including that the
+	// second target still gets attempted (with the stale `pr`) rather than
+	// the whole cycle aborting.
+	it("continues to the next target with the stale pr when the mid-cycle re-poll fails", async () => {
+		const request = vi
+			.fn()
+			.mockResolvedValueOnce(pollResponse({ body: "stale" }))
+			.mockRejectedValueOnce(new Error("ETIMEDOUT"));
+		const submitReview = vi.fn().mockResolvedValue(posted);
+		const log = vi.fn();
+
+		await watchPr({
+			owner: "o",
+			repo: "r",
+			pullNumber: 5,
+			pollOctokit: { request },
+			targets: [buildTarget("anthropic"), buildTarget("openai")],
+			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
+			sleep: vi.fn().mockResolvedValue(undefined),
+			log,
+			submitReview,
+			maxCycles: 1,
+		});
+
+		expect(submitReview).toHaveBeenCalledTimes(2);
+		const calls = submitReview.mock.calls as unknown as Array<
+			[
+				{
+					config: { provider: string };
+					pullRequest: { body: string | null };
+					force: boolean;
+				},
+			]
+		>;
+		const openaiCall = calls.find(([arg]) => arg.config.provider === "openai");
+		expect(openaiCall?.[0].pullRequest.body).toBe("stale");
+		// anthropicreviewbot (PRRT_kwDOSM5cU86Z_WHn): assert `force` on the
+		// openai call explicitly. This is openai's own FIRST-EVER post in this
+		// cycle, so `force` must be true — hasPostedEver is tracked per
+		// provider (see the providerState comment in watch.ts), not shared
+		// with anthropic's just-completed post. The finding's suggested
+		// expectation (false) was itself wrong about that; the assertion is
+		// still worth pinning explicitly.
+		expect(openaiCall?.[0].force).toBe(true);
+		expect(log).toHaveBeenCalledWith(
+			expect.stringContaining("re-poll after anthropic post failed"),
+		);
 	});
 });

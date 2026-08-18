@@ -8,6 +8,7 @@ import {
 	runScheduledReview,
 	selectReviewDelayMs,
 } from "./github-app.js";
+import { quotaCommentMarker, rateLimitCommentMarker } from "./notify.js";
 import { buildReview } from "./review.js";
 import type { ReviewRunMessage } from "./scheduler.js";
 import { buildPullRequestPayload } from "./testing.js";
@@ -390,8 +391,9 @@ describe("maybeSubmitReview", () => {
 			},
 		});
 
-		const comment = requests.find((r) =>
-			r.route.includes("/issues/{issue_number}/comments"),
+		const comment = requests.find(
+			(r) =>
+				r.route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
 		);
 		expect(comment?.params.body).toContain("2026-06-09T07:21:30Z");
 		expect(
@@ -420,6 +422,721 @@ describe("maybeSubmitReview", () => {
 					route === "POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
 			),
 		).toBe(false);
+	});
+
+	// ai-review-bot-zm9: under watch's indefinite retry loop, a persistent
+	// quota/rate-limit condition must not repost an identical warning comment
+	// every cycle — mirror notifyQuotaExhausted's existing issue-path dedup for
+	// this PR-comment path too.
+	// Dedup now matches the exact posted body, not just the marker (see the
+	// rate-limit test below for why) — captured from a real first post, then
+	// replayed as the "existing comment" for a second call, so this proves
+	// the actual production body round-trips through the dedup check rather
+	// than a hand-duplicated fixture string that could drift from it.
+	it("does not repost the quota-exhausted comment when one with the same content already exists", async () => {
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "QUOTA_EXHAUSTED" as const,
+			body: "",
+			comments: [],
+			validLinesByPath: new Map(),
+			metadata: DEFAULT_METADATA,
+			quotaProvider: "anthropic" as const,
+		});
+		let postedBody: string | undefined;
+		const octokitFirst = {
+			request: vi.fn(async (route: string, params: Record<string, unknown>) => {
+				if (
+					route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					return { data: [] };
+				}
+				if (
+					route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					postedBody = params.body as string;
+				}
+				return { data: {} };
+			}),
+		};
+		await maybeSubmitReview({
+			app: { getInstallationOctokit: vi.fn(async () => octokitFirst) } as never,
+			...baseArgs,
+		});
+		// anthropicreviewbot (PRRT_kwDOSM5cU86Z_qo0): make the fixture-setup
+		// failure loud rather than silent — if the POST branch above were never
+		// reached, postedBody would stay undefined and the second call's mock
+		// would trivially defeat dedup by construction.
+		expect(postedBody).toBeDefined();
+		expect(postedBody).toContain(quotaCommentMarker("anthropic"));
+
+		const requests: Array<{ route: string; params: Record<string, unknown> }> =
+			[];
+		const octokitSecond = {
+			request: vi.fn(async (route: string, params: Record<string, unknown>) => {
+				requests.push({ route, params });
+				if (
+					route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					return { data: [{ body: postedBody }] };
+				}
+				return { data: {} };
+			}),
+		};
+		const outcome = await maybeSubmitReview({
+			app: {
+				getInstallationOctokit: vi.fn(async () => octokitSecond),
+			} as never,
+			...baseArgs,
+		});
+
+		expect(outcome).toEqual({ status: "quota_exhausted" });
+		const posts = requests.filter(
+			(r) =>
+				r.route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+		);
+		expect(posts).toHaveLength(0);
+	});
+
+	// anthropicreviewbot (PRRT_kwDOSM5cU86Z_qo5) reviewing PR #67: the test
+	// above round-trips a real posted body through the dedup check, but since
+	// its fixture's quotaProvider ("anthropic") always matches config.provider
+	// ("anthropic"), it can't distinguish "keyed off config.provider" from
+	// "keyed off quotaProvider" — a regression that reverted the marker key to
+	// quotaProvider would still pass it. This is the invariant test that check
+	// was folded away from: quotaProvider is deliberately "unknown" (unset)
+	// while config.provider stays "anthropic", so only a key derived from
+	// config.provider can dedupe correctly.
+	it("keys the quota-exhausted marker off config.provider even when quotaProvider diverges", async () => {
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "QUOTA_EXHAUSTED" as const,
+			body: "",
+			comments: [],
+			validLinesByPath: new Map(),
+			metadata: DEFAULT_METADATA,
+			quotaProvider: undefined,
+		});
+		let postedBody: string | undefined;
+		const octokitFirst = {
+			request: vi.fn(async (route: string, params: Record<string, unknown>) => {
+				if (
+					route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					return { data: [] };
+				}
+				if (
+					route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					postedBody = params.body as string;
+				}
+				return { data: {} };
+			}),
+		};
+		await maybeSubmitReview({
+			app: { getInstallationOctokit: vi.fn(async () => octokitFirst) } as never,
+			...baseArgs,
+		});
+		expect(postedBody).toBeDefined();
+		expect(postedBody).toContain(quotaCommentMarker("anthropic"));
+		expect(postedBody).not.toContain(quotaCommentMarker("unknown"));
+
+		const requests: Array<{ route: string; params: Record<string, unknown> }> =
+			[];
+		const octokitSecond = {
+			request: vi.fn(async (route: string, params: Record<string, unknown>) => {
+				requests.push({ route, params });
+				if (
+					route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					return { data: [{ body: postedBody }] };
+				}
+				return { data: {} };
+			}),
+		};
+		const outcome = await maybeSubmitReview({
+			app: {
+				getInstallationOctokit: vi.fn(async () => octokitSecond),
+			} as never,
+			...baseArgs,
+		});
+
+		expect(outcome).toEqual({ status: "quota_exhausted" });
+		const posts = requests.filter(
+			(r) =>
+				r.route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+		);
+		expect(posts).toHaveLength(0);
+	});
+
+	// codexreviewbot (PRRT_kwDOSM5cU86Z_xF1 / _xGF) reviewing PR #67's own
+	// 2f66390 commit: the exact-body-match fix is correct for RATE_LIMITED
+	// (its variable text — reset time — IS the signal a new warning exists),
+	// but the quota-exhausted body ALSO embeds `providerLabel(quotaProvider)`,
+	// whose value can drift (e.g. "anthropic" on one cycle, unset/"unknown" on
+	// a retry for the same underlying condition) independent of the marker.
+	// Exact-body matching on that path would miss the existing comment and
+	// repost on every drift — reintroducing the very spam this dedup exists
+	// to stop, just on the quota path instead of the rate-limit path.
+	it("dedupes the quota-exhausted comment by marker even when the quotaProvider label text drifts between cycles", async () => {
+		mockBuildReview.mockReset().mockResolvedValueOnce({
+			event: "QUOTA_EXHAUSTED" as const,
+			body: "",
+			comments: [],
+			validLinesByPath: new Map(),
+			metadata: DEFAULT_METADATA,
+			quotaProvider: "anthropic",
+		});
+		let postedBody: string | undefined;
+		const octokitFirst = {
+			request: vi.fn(async (route: string, params: Record<string, unknown>) => {
+				if (
+					route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					return { data: [] };
+				}
+				if (
+					route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					postedBody = params.body as string;
+				}
+				return { data: {} };
+			}),
+		};
+		await maybeSubmitReview({
+			app: { getInstallationOctokit: vi.fn(async () => octokitFirst) } as never,
+			...baseArgs,
+		});
+		expect(postedBody).toBeDefined();
+		expect(postedBody).toContain("Anthropic");
+
+		// Same underlying condition, same config.provider, but this retry's
+		// quotaProvider is unset — the human-facing label text differs even
+		// though the marker (keyed off config.provider) does not.
+		mockBuildReview.mockReset().mockResolvedValueOnce({
+			event: "QUOTA_EXHAUSTED" as const,
+			body: "",
+			comments: [],
+			validLinesByPath: new Map(),
+			metadata: DEFAULT_METADATA,
+			quotaProvider: undefined,
+		});
+		const requests2: Array<{
+			route: string;
+			params: Record<string, unknown>;
+		}> = [];
+		const octokitSecond = {
+			request: vi.fn(async (route: string, params: Record<string, unknown>) => {
+				requests2.push({ route, params });
+				if (
+					route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					return { data: [{ body: postedBody }] };
+				}
+				return { data: {} };
+			}),
+		};
+		const outcome2 = await maybeSubmitReview({
+			app: {
+				getInstallationOctokit: vi.fn(async () => octokitSecond),
+			} as never,
+			...baseArgs,
+		});
+
+		expect(outcome2).toEqual({ status: "quota_exhausted" });
+		const posts2 = requests2.filter(
+			(r) =>
+				r.route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+		);
+		expect(posts2).toHaveLength(0);
+	});
+
+	// Found by sourcery-ai reviewing PR #67: hasExistingComment's own docstring
+	// says a malformed response is treated as "no existing comment", but a
+	// thrown network/Octokit error from the GET itself was never caught and
+	// would reject the whole maybeSubmitReview call — blocking the
+	// quota/rate-limit warning from posting at all on a transient API blip,
+	// worse than the duplicate-comment problem this dedup exists to fix.
+	it("treats a failed comment-list request as no existing comment, rather than rejecting the review", async () => {
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "QUOTA_EXHAUSTED" as const,
+			body: "",
+			comments: [],
+			validLinesByPath: new Map(),
+			metadata: DEFAULT_METADATA,
+			quotaProvider: "anthropic" as const,
+		});
+		const octokitLocal = {
+			request: vi.fn(async (route: string) => {
+				if (
+					route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					throw new Error("ETIMEDOUT");
+				}
+				return { data: {} };
+			}),
+		};
+		const appLocal = {
+			getInstallationOctokit: vi.fn(async () => octokitLocal),
+		} as never;
+
+		const outcome = await maybeSubmitReview({ app: appLocal, ...baseArgs });
+
+		expect(outcome).toEqual({ status: "quota_exhausted" });
+		const posts = octokitLocal.request.mock.calls.filter(
+			([route]) =>
+				route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+		);
+		expect(posts).toHaveLength(1);
+	});
+
+	// codexreviewbot (PRRT_kwDOSM5cU86Z_cHu / ikk9l) reviewing PR #67: the
+	// try/catch above must absorb only the network/Octokit request failure —
+	// wrapping the whole pagination loop also downgrades a bug in the
+	// per-comment `.body` access below (anthropicreviewbot,
+	// PRRT_kwDOSM5cU86Z_7r_) to "no existing comment", which would silently
+	// start reposting duplicate warnings instead of surfacing the bug. A
+	// comment whose `.body` getter throws simulates that failure and must
+	// propagate out of hasExistingComment entirely.
+	it("propagates a non-request error from the local scan instead of swallowing it as no-existing-comment", async () => {
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "QUOTA_EXHAUSTED" as const,
+			body: "",
+			comments: [],
+			validLinesByPath: new Map(),
+			metadata: DEFAULT_METADATA,
+			quotaProvider: "anthropic" as const,
+		});
+		const octokitLocal = {
+			request: vi.fn(async (route: string) => {
+				if (
+					route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					return {
+						data: [
+							{
+								get body(): string {
+									throw new Error("local scan bug");
+								},
+							},
+						],
+					};
+				}
+				return { data: {} };
+			}),
+		};
+		const appLocal = {
+			getInstallationOctokit: vi.fn(async () => octokitLocal),
+		} as never;
+
+		await expect(
+			maybeSubmitReview({ app: appLocal, ...baseArgs }),
+		).rejects.toThrow("local scan bug");
+		// anthropicreviewbot (PRRT_kwDOSM5cU86Z_7rb): a future change that
+		// caught the scan error and posted anyway would still throw (since the
+		// throw happens inside the outer try in maybeSubmitReview) — assert no
+		// POST was made too, to rule that out explicitly.
+		const posts = octokitLocal.request.mock.calls.filter(
+			([route]) =>
+				route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+		);
+		expect(posts).toHaveLength(0);
+	});
+
+	// anthropicreviewbot (PRRT_kwDOSM5cU86Z_qoq) reviewing PR #67: the switch
+	// from marker-substring to exact-body matching is more precise but also
+	// more brittle — a trailing-newline difference between the
+	// locally-constructed body and what GitHub's API echoes back would defeat
+	// the match entirely. trimEnd() on both sides tolerates that without
+	// reintroducing the marker-substring false-positive it replaced.
+	it("matches an existing comment despite trailing-whitespace drift from GitHub's API", async () => {
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "QUOTA_EXHAUSTED" as const,
+			body: "",
+			comments: [],
+			validLinesByPath: new Map(),
+			metadata: DEFAULT_METADATA,
+			quotaProvider: "anthropic" as const,
+		});
+		let postedBody: string | undefined;
+		const octokitFirst = {
+			request: vi.fn(async (route: string, params: Record<string, unknown>) => {
+				if (
+					route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					return { data: [] };
+				}
+				if (
+					route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					postedBody = params.body as string;
+				}
+				return { data: {} };
+			}),
+		};
+		await maybeSubmitReview({
+			app: { getInstallationOctokit: vi.fn(async () => octokitFirst) } as never,
+			...baseArgs,
+		});
+		expect(postedBody).toBeDefined();
+
+		const requests: Array<{ route: string; params: Record<string, unknown> }> =
+			[];
+		const octokitSecond = {
+			request: vi.fn(async (route: string, params: Record<string, unknown>) => {
+				requests.push({ route, params });
+				if (
+					route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					// GitHub echoes the body back with an added trailing newline.
+					return { data: [{ body: `${postedBody}\n` }] };
+				}
+				return { data: {} };
+			}),
+		};
+
+		const outcome = await maybeSubmitReview({
+			app: {
+				getInstallationOctokit: vi.fn(async () => octokitSecond),
+			} as never,
+			...baseArgs,
+		});
+
+		expect(outcome).toEqual({ status: "quota_exhausted" });
+		const posts = requests.filter(
+			(r) =>
+				r.route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+		);
+		expect(posts).toHaveLength(0);
+	});
+
+	const rateLimitedBaseArgs = {
+		installationId: 1,
+		owner: "o",
+		repo: "r",
+		pullNumber: 7,
+		pullRequest: {
+			draft: false,
+			head: { sha: "sha" },
+			additions: 0,
+			deletions: 0,
+			changed_files: 0,
+			title: "t",
+			body: null,
+		},
+		extraInstructions: "",
+		force: true,
+		config: {
+			...baseArgs.config,
+			reviewEnabled: true,
+			reviewCommentPrefix: "ai-review-bot",
+		},
+	};
+
+	it("does not repost the rate-limit comment when one with the same content already exists", async () => {
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "RATE_LIMITED",
+			body: "",
+			comments: [],
+			validLinesByPath: new Map(),
+			metadata: DEFAULT_METADATA,
+			rateLimitResetAt: "2026-06-09T07:21:30Z",
+		});
+		let postedBody: string | undefined;
+		const octokitFirst = {
+			request: vi.fn(async (route: string, params: Record<string, unknown>) => {
+				if (
+					route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					return { data: [] };
+				}
+				if (
+					route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					postedBody = params.body as string;
+				}
+				return { data: {} };
+			}),
+		};
+		await maybeSubmitReview({
+			app: { getInstallationOctokit: vi.fn(async () => octokitFirst) } as never,
+			...rateLimitedBaseArgs,
+		});
+		// anthropicreviewbot (PRRT_kwDOSM5cU86Z_qo3): same fixture-setup guard as
+		// the quota-exhausted test above.
+		expect(postedBody).toBeDefined();
+		expect(postedBody).toContain(rateLimitCommentMarker("anthropic"));
+		expect(postedBody).toContain("2026-06-09T07:21:30Z");
+
+		const requests: Array<{ route: string; params: Record<string, unknown> }> =
+			[];
+		const octokitSecond = {
+			request: vi.fn(async (route: string, params: Record<string, unknown>) => {
+				requests.push({ route, params });
+				if (
+					route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					return { data: [{ body: postedBody }] };
+				}
+				return { data: {} };
+			}),
+		};
+		const outcome = await maybeSubmitReview({
+			app: {
+				getInstallationOctokit: vi.fn(async () => octokitSecond),
+			} as never,
+			...rateLimitedBaseArgs,
+		});
+
+		expect(outcome).toEqual({ status: "rate_limited" });
+		const posts = requests.filter(
+			(r) =>
+				r.route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+		);
+		expect(posts).toHaveLength(0);
+	});
+
+	// Found by codexreviewbot reviewing PR #67: marker-only dedup would
+	// suppress a genuinely NEW rate-limit warning if the reset time changed
+	// between windows, pinning a stale timestamp in the PR indefinitely.
+	// Matching the full body means a changed reset time is correctly treated
+	// as new content and reposted.
+	it("reposts the rate-limit comment when the reset time has changed since the last warning", async () => {
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "RATE_LIMITED",
+			body: "",
+			comments: [],
+			validLinesByPath: new Map(),
+			metadata: DEFAULT_METADATA,
+			rateLimitResetAt: "2026-06-09T07:21:30Z",
+		});
+		const staleExisting = {
+			body: `${rateLimitCommentMarker("anthropic")}\n⚠️ **[ai-review-bot]** Review couldn't run — the model is rate-limited (input-token budget). Budget resets at 2026-06-09T05:00:00Z. Push again after that, or it will auto-retry on your next commit.`,
+		};
+		const requests: Array<{ route: string; params: Record<string, unknown> }> =
+			[];
+		const octokitLocal = {
+			request: vi.fn(async (route: string, params: Record<string, unknown>) => {
+				requests.push({ route, params });
+				if (
+					route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					return { data: [staleExisting] };
+				}
+				return { data: {} };
+			}),
+		};
+
+		const outcome = await maybeSubmitReview({
+			app: { getInstallationOctokit: vi.fn(async () => octokitLocal) } as never,
+			...rateLimitedBaseArgs,
+		});
+
+		expect(outcome).toEqual({ status: "rate_limited" });
+		const posts = requests.filter(
+			(r) =>
+				r.route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+		);
+		expect(posts).toHaveLength(1);
+		expect(posts[0].params.body).toContain("2026-06-09T07:21:30Z");
+		// anthropicreviewbot (PRRT_kwDOSM5cU86Z_qo_): a bug that posted a comment
+		// containing BOTH the old and new reset times would still pass the
+		// `.toContain` assertion above — assert the stale timestamp is gone too.
+		expect(posts[0].params.body).not.toContain("2026-06-09T05:00:00Z");
+	});
+
+	// Found by anthropicreviewbot/codexreviewbot/llamapreview on PR #67's own
+	// review: a single GET with no pagination means a match beyond GitHub's
+	// default page size (30) is never found, so the dedup silently fails on
+	// busy PRs — exactly the spam scenario ai-review-bot-zm9 was fixed to stop.
+	it("finds an existing matching comment on a later page, not just the first page", async () => {
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "QUOTA_EXHAUSTED" as const,
+			body: "",
+			comments: [],
+			validLinesByPath: new Map(),
+			metadata: DEFAULT_METADATA,
+			quotaProvider: "anthropic" as const,
+		});
+		let postedBody: string | undefined;
+		const octokitFirst = {
+			request: vi.fn(async (route: string, params: Record<string, unknown>) => {
+				if (
+					route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					return { data: [] };
+				}
+				if (
+					route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					postedBody = params.body as string;
+				}
+				return { data: {} };
+			}),
+		};
+		await maybeSubmitReview({
+			app: { getInstallationOctokit: vi.fn(async () => octokitFirst) } as never,
+			...baseArgs,
+		});
+		// anthropicreviewbot (PRRT_kwDOSM5cU86Z_qpK / codexreviewbot 0Kw): make
+		// the fixture-setup failure loud rather than silent — if the POST
+		// branch above were never reached, postedBody would stay undefined and
+		// page2 below would trivially defeat dedup by construction.
+		expect(postedBody).toBeDefined();
+
+		const requests: Array<{ route: string; params: Record<string, unknown> }> =
+			[];
+		const page1 = Array.from({ length: 100 }, (_, i) => ({
+			body: `unrelated comment ${i}`,
+		}));
+		const page2 = [{ body: postedBody }];
+		const octokitSecond = {
+			request: vi.fn(async (route: string, params: Record<string, unknown>) => {
+				requests.push({ route, params });
+				if (
+					route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					return { data: params.page === 2 ? page2 : page1 };
+				}
+				return { data: {} };
+			}),
+		};
+
+		const outcome = await maybeSubmitReview({
+			app: {
+				getInstallationOctokit: vi.fn(async () => octokitSecond),
+			} as never,
+			...baseArgs,
+		});
+
+		expect(outcome).toEqual({ status: "quota_exhausted" });
+		const posts = requests.filter(
+			(r) =>
+				r.route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+		);
+		expect(posts).toHaveLength(0);
+		const listCalls = requests.filter(
+			(r) =>
+				r.route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments",
+		);
+		expect(listCalls).toHaveLength(2);
+		// codexreviewbot (0Kw): pin the per_page/page contract itself, not just
+		// the call count — a regression that dropped per_page or reused page:1
+		// would still pass a bare-length assertion.
+		expect(listCalls[0]?.params).toMatchObject({ per_page: 100, page: 1 });
+		expect(listCalls[1]?.params).toMatchObject({ per_page: 100, page: 2 });
+	});
+
+	// codexreviewbot (PRRT_kwDOSM5cU86Z-0Kr / -0Kv) reviewing PR #67: the old
+	// fixed 10-page cap (1000 comments) meant hasExistingComment gave up before
+	// reaching a marker that existed on page 11+ of a busy, long-lived PR —
+	// exactly the watch-loop scenario this dedup exists to protect — and
+	// reposted the same quota/rate-limit warning. HAS_EXISTING_COMMENT_MAX_PAGES
+	// is now high enough that this passes.
+	it("finds a matching comment beyond the old 10-page cap on very busy PRs", async () => {
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "QUOTA_EXHAUSTED" as const,
+			body: "",
+			comments: [],
+			validLinesByPath: new Map(),
+			metadata: DEFAULT_METADATA,
+			quotaProvider: "anthropic" as const,
+		});
+		let postedBody: string | undefined;
+		const octokitFirst = {
+			request: vi.fn(async (route: string, params: Record<string, unknown>) => {
+				if (
+					route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					return { data: [] };
+				}
+				if (
+					route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					postedBody = params.body as string;
+				}
+				return { data: {} };
+			}),
+		};
+		await maybeSubmitReview({
+			app: { getInstallationOctokit: vi.fn(async () => octokitFirst) } as never,
+			...baseArgs,
+		});
+		expect(postedBody).toBeDefined();
+
+		const requests: Array<{ route: string; params: Record<string, unknown> }> =
+			[];
+		const fullPage = Array.from({ length: 100 }, (_, i) => ({
+			body: `unrelated comment ${i}`,
+		}));
+		const matchPage = [{ body: postedBody }];
+		const octokitSecond = {
+			request: vi.fn(async (route: string, params: Record<string, unknown>) => {
+				requests.push({ route, params });
+				if (
+					route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					return { data: params.page === 11 ? matchPage : fullPage };
+				}
+				return { data: {} };
+			}),
+		};
+
+		const outcome = await maybeSubmitReview({
+			app: {
+				getInstallationOctokit: vi.fn(async () => octokitSecond),
+			} as never,
+			...baseArgs,
+		});
+
+		expect(outcome).toEqual({ status: "quota_exhausted" });
+		const posts = requests.filter(
+			(r) =>
+				r.route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+		);
+		expect(posts).toHaveLength(0);
+		const listCalls = requests.filter(
+			(r) =>
+				r.route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments",
+		);
+		expect(listCalls).toHaveLength(11);
+	});
+
+	it("stops paginating once a page returns fewer than per_page comments", async () => {
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "QUOTA_EXHAUSTED" as const,
+			body: "",
+			comments: [],
+			validLinesByPath: new Map(),
+			metadata: DEFAULT_METADATA,
+			quotaProvider: "anthropic" as const,
+		});
+		const requests: Array<{ route: string; params: Record<string, unknown> }> =
+			[];
+		const page1 = Array.from({ length: 100 }, (_, i) => ({
+			body: `unrelated comment ${i}`,
+		}));
+		const page2 = [{ body: "unrelated last comment" }]; // < per_page(100) — no page 3
+		const octokitLocal = {
+			request: vi.fn(async (route: string, params: Record<string, unknown>) => {
+				requests.push({ route, params });
+				if (
+					route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					return { data: params.page === 2 ? page2 : page1 };
+				}
+				return { data: {} };
+			}),
+		};
+		const appLocal = {
+			getInstallationOctokit: vi.fn(async () => octokitLocal),
+		} as never;
+
+		await maybeSubmitReview({ app: appLocal, ...baseArgs });
+
+		const listCalls = requests.filter(
+			(r) =>
+				r.route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments",
+		);
+		expect(listCalls).toHaveLength(2);
 	});
 
 	it("posts fallback comment with findings when all retries are exhausted", async () => {
@@ -968,9 +1685,10 @@ describe("buildPRSummarySection", () => {
 			{ ...DEFAULT_METADATA, generalFindings: 2, inlineComments: 1 },
 			"REQUEST_CHANGES",
 			"ai-review-bot",
+			"anthropic",
 		);
-		expect(section).toContain("<!-- ai-review-bot:start -->");
-		expect(section).toContain("<!-- ai-review-bot:end -->");
+		expect(section).toContain("<!-- ai-review-bot:anthropic:start -->");
+		expect(section).toContain("<!-- ai-review-bot:anthropic:end -->");
 		expect(section).toContain("⚠️ Changes requested");
 		expect(section).toContain("2 general, 1 inline");
 	});
@@ -983,32 +1701,189 @@ describe("buildPRSummarySection", () => {
 			},
 			"COMMENT",
 			"ai-review-bot",
+			"anthropic",
 		);
 		expect(section).toContain("5 Tier 1 + 2 Tier 2");
 		expect(section).toContain("`security-auditor`");
+	});
+
+	// ai-review-bot-1f5: each provider's marker pair must be distinct so
+	// injectPRSection can address one without touching the other — see the
+	// injectPRSection tests below for the actual coexistence guarantee.
+	it("uses a provider-scoped marker pair, distinct per provider", () => {
+		const anthropicSection = buildPRSummarySection(
+			DEFAULT_METADATA,
+			"COMMENT",
+			"ai-review-bot",
+			"anthropic",
+		);
+		const openaiSection = buildPRSummarySection(
+			DEFAULT_METADATA,
+			"COMMENT",
+			"ai-review-bot",
+			"openai",
+		);
+		expect(anthropicSection).toContain(
+			"<!-- ai-review-bot:anthropic:start -->",
+		);
+		expect(openaiSection).toContain("<!-- ai-review-bot:openai:start -->");
+		expect(anthropicSection).not.toContain("ai-review-bot:openai:");
+		expect(openaiSection).not.toContain("ai-review-bot:anthropic:");
 	});
 });
 
 describe("injectPRSection", () => {
 	const section =
-		"<!-- ai-review-bot:start -->\ntest\n<!-- ai-review-bot:end -->";
+		"<!-- ai-review-bot:anthropic:start -->\ntest\n<!-- ai-review-bot:anthropic:end -->";
 
 	it("appends section to existing body", () => {
-		const result = injectPRSection("Existing description.", section);
+		const result = injectPRSection(
+			"Existing description.",
+			section,
+			"anthropic",
+		);
 		expect(result).toBe(`Existing description.\n\n${section}`);
 	});
 
-	it("replaces existing section", () => {
+	it("replaces existing section for the same provider", () => {
 		const body = `Intro\n\n${section}\n\nOutro`;
 		const newSection =
-			"<!-- ai-review-bot:start -->\nupdated\n<!-- ai-review-bot:end -->";
-		const result = injectPRSection(body, newSection);
+			"<!-- ai-review-bot:anthropic:start -->\nupdated\n<!-- ai-review-bot:anthropic:end -->";
+		const result = injectPRSection(body, newSection, "anthropic");
 		expect(result).toBe(`Intro\n\n${newSection}\n\nOutro`);
 	});
 
 	it("handles null body", () => {
-		const result = injectPRSection(null, section);
+		const result = injectPRSection(null, section, "anthropic");
 		expect(result).toBe(section);
+	});
+
+	// ai-review-bot-1f5: this is the real regression test for the bug —
+	// caught by chatgpt-codex-connector reviewing PR #67, the original fix
+	// (re-poll between providers) did NOT actually solve the two-provider
+	// overwrite, because injectPRSection always fully replaced ONE shared
+	// marker section regardless of how fresh the body was. Provider-scoped
+	// markers are what actually make the two sections coexist.
+	it("preserves the other provider's section when injecting a second provider's section", () => {
+		const anthropicSection =
+			"<!-- ai-review-bot:anthropic:start -->\nanthropic content\n<!-- ai-review-bot:anthropic:end -->";
+		const openaiSection =
+			"<!-- ai-review-bot:openai:start -->\nopenai content\n<!-- ai-review-bot:openai:end -->";
+
+		const afterFirst = injectPRSection(null, anthropicSection, "anthropic");
+		const afterSecond = injectPRSection(afterFirst, openaiSection, "openai");
+
+		expect(afterSecond).toContain("anthropic content");
+		expect(afterSecond).toContain("openai content");
+	});
+
+	it("replaces only the matching provider's section, leaving the other's untouched", () => {
+		const anthropicSection =
+			"<!-- ai-review-bot:anthropic:start -->\nanthropic v1\n<!-- ai-review-bot:anthropic:end -->";
+		const openaiSection =
+			"<!-- ai-review-bot:openai:start -->\nopenai v1\n<!-- ai-review-bot:openai:end -->";
+		const body = injectPRSection(
+			injectPRSection(null, anthropicSection, "anthropic"),
+			openaiSection,
+			"openai",
+		);
+
+		const anthropicV2 =
+			"<!-- ai-review-bot:anthropic:start -->\nanthropic v2\n<!-- ai-review-bot:anthropic:end -->";
+		const result = injectPRSection(body, anthropicV2, "anthropic");
+
+		expect(result).toContain("anthropic v2");
+		expect(result).not.toContain("anthropic v1");
+		expect(result).toContain("openai v1");
+	});
+
+	// Found by both anthropicreviewbot and codexreviewbot reviewing PR #67
+	// (independent convergence — treated as signal, not noise): a PR whose
+	// body already carries the OLD unscoped marker (from before this
+	// deploy) would never have it found/replaced by the new provider-scoped
+	// logic, leaving it as permanent orphaned stale content while new
+	// provider-scoped sections get appended alongside it.
+	it("migrates away the legacy unscoped marker section when injecting a new provider-scoped section", () => {
+		const legacyBody =
+			"Intro\n\n<!-- ai-review-bot:start -->\nold shared content\n<!-- ai-review-bot:end -->\n\nOutro";
+		const newSection =
+			"<!-- ai-review-bot:anthropic:start -->\nnew content\n<!-- ai-review-bot:anthropic:end -->";
+
+		const result = injectPRSection(legacyBody, newSection, "anthropic");
+
+		expect(result).not.toContain("ai-review-bot:start -->");
+		expect(result).not.toContain("old shared content");
+		expect(result).toContain("new content");
+		expect(result).toContain("Intro");
+		expect(result).toContain("Outro");
+		// anthropicreviewbot (PRRT_kwDOSM5cU86Z_qpC): the migrated body must be
+		// well-formed, not just missing the legacy markers and containing the
+		// new content somewhere. There's no existing provider-scoped section
+		// yet at migration time, so injectPRSection falls through to its
+		// normal "append to the end" behavior (same as the non-migration
+		// append case above) — assert that ordering rather than an
+		// "interleaved between Intro/Outro" shape it never produces.
+		expect(result.indexOf("Intro")).toBeLessThan(result.indexOf("Outro"));
+		expect(result.indexOf("Outro")).toBeLessThan(result.indexOf("new content"));
+	});
+
+	// anthropicreviewbot (PRRT_kwDOSM5cU86Z_qoy / _qpF) reviewing PR #67: the
+	// legacy strip only checked that both markers were present, not that they
+	// were in the right order. A malformed body with the end marker BEFORE the
+	// start marker sliced `[0, legacyStartIdx) + (legacyEndIdx + END.length, )`
+	// — since legacyEndIdx < legacyStartIdx here, that duplicates the text
+	// between the two markers and leaves both legacy markers behind instead of
+	// stripping them.
+	it("does not corrupt the body when legacy markers appear in reversed order", () => {
+		const malformed =
+			"Para1\n\n<!-- ai-review-bot:end -->\nmiddle\n<!-- ai-review-bot:start -->\n\nPara2";
+		const newSection =
+			"<!-- ai-review-bot:anthropic:start -->\nnew content\n<!-- ai-review-bot:anthropic:end -->";
+
+		const result = injectPRSection(malformed, newSection, "anthropic");
+
+		expect(result.split("middle")).toHaveLength(2);
+		// anthropicreviewbot (PRRT_kwDOSM5cU86Z_7q8 / _7rW / _7ru): the guard
+		// deliberately SKIPS stripping a malformed (reversed-order) body rather
+		// than guessing at its structure, so the legacy markers are left in
+		// place, not removed — assert that explicitly. This also distinguishes
+		// "the guard correctly detected reversed order and left it alone" from
+		// "legacy stripping never ran at all", which the split-count assertion
+		// alone can't tell apart (both leave "middle" appearing once).
+		expect(result).toContain("<!-- ai-review-bot:start -->");
+		expect(result).toContain("<!-- ai-review-bot:end -->");
+	});
+
+	// codexreviewbot (PRRT_kwDOSM5cU86Z_xF_) reviewing PR #67's own 2f66390
+	// commit: legacyEndIdx was found via `body.indexOf(END)` from position 0,
+	// not from just after legacyStartIdx — so if the literal end-marker text
+	// appears earlier in user-authored content within the legacy section
+	// (e.g. quoting the bot's own markers as an example), the strip stops at
+	// that spurious occurrence instead of the true closing marker, leaving
+	// the rest of the legacy section (including a dangling real end marker)
+	// in the migrated body.
+	// codexreviewbot (PRRT_kwDOSM5cU86Z_xF_) reviewing PR #67's own 2f66390
+	// commit: legacyEndIdx was found via `body.indexOf(END)` from position 0,
+	// so a literal mention of the end-marker text BEFORE the real legacy
+	// start marker (e.g. someone quoting the bot's own markers as an example
+	// earlier in the PR description) makes legacyEndIdx < legacyStartIdx.
+	// The `legacyStartIdx < legacyEndIdx` ordering guard added for
+	// PRRT_kwDOSM5cU86Z_qoy/_qpF already stops that from corrupting the body,
+	// but it does so by skipping the strip entirely — the genuine legacy
+	// section (start...end, further along) never gets migrated at all.
+	// Searching for the end marker starting after the start marker (instead
+	// of from position 0) finds the real closing marker and lets migration
+	// succeed instead of silently no-op'ing.
+	it("migrates the legacy section even when the end-marker text appears earlier in unrelated content", () => {
+		const body =
+			"Note: our bot posts <!-- ai-review-bot:end --> as an example.\n\n<!-- ai-review-bot:start -->\nold shared content\n<!-- ai-review-bot:end -->\n\nOutro";
+		const newSection =
+			"<!-- ai-review-bot:anthropic:start -->\nnew content\n<!-- ai-review-bot:anthropic:end -->";
+
+		const result = injectPRSection(body, newSection, "anthropic");
+
+		expect(result).not.toContain("old shared content");
+		expect(result).toContain("Outro");
 	});
 });
 
