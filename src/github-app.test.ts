@@ -468,6 +468,55 @@ describe("maybeSubmitReview", () => {
 		expect(posts).toHaveLength(0);
 	});
 
+	// Found by anthropicreviewbot: the dedup marker was keyed by
+	// review.quotaProvider (falls back to "unknown" when unset) while the
+	// rate-limit marker uses config.provider — a divergence between them (or
+	// quotaProvider going unset) means a marker posted under one key is never
+	// found by a lookup under the other, silently defeating the dedup this
+	// PR exists to add. The marker must key off config.provider consistently
+	// regardless of what the review payload reports.
+	it("keys the quota-exhausted marker off config.provider, not review.quotaProvider", async () => {
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "QUOTA_EXHAUSTED" as const,
+			body: "",
+			comments: [],
+			validLinesByPath: new Map(),
+			metadata: DEFAULT_METADATA,
+			quotaProvider: undefined,
+		});
+		const requests: Array<{ route: string; params: Record<string, unknown> }> =
+			[];
+		const octokitLocal = {
+			request: vi.fn(async (route: string, params: Record<string, unknown>) => {
+				requests.push({ route, params });
+				if (
+					route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					return {
+						// baseArgs.config.provider is "anthropic" — a marker already
+						// posted under that key must still be found even though
+						// review.quotaProvider is unset this time.
+						data: [
+							{ body: `${quotaCommentMarker("anthropic")}\nalready warned` },
+						],
+					};
+				}
+				return { data: {} };
+			}),
+		};
+		const appLocal = {
+			getInstallationOctokit: vi.fn(async () => octokitLocal),
+		} as never;
+
+		await maybeSubmitReview({ app: appLocal, ...baseArgs });
+
+		const posts = requests.filter(
+			(r) =>
+				r.route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+		);
+		expect(posts).toHaveLength(0);
+	});
+
 	it("does not repost the rate-limit comment when one with the marker already exists", async () => {
 		mockBuildReview.mockReset().mockResolvedValue({
 			event: "RATE_LIMITED",
@@ -530,6 +579,96 @@ describe("maybeSubmitReview", () => {
 				r.route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
 		);
 		expect(posts).toHaveLength(0);
+	});
+
+	// Found by anthropicreviewbot/codexreviewbot/llamapreview on PR #67's own
+	// review: a single GET with no pagination means a marker beyond GitHub's
+	// default page size (30) is never found, so the dedup silently fails on
+	// busy PRs — exactly the spam scenario ai-review-bot-zm9 was fixed to stop.
+	it("finds an existing marker comment on a later page, not just the first page", async () => {
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "QUOTA_EXHAUSTED" as const,
+			body: "",
+			comments: [],
+			validLinesByPath: new Map(),
+			metadata: DEFAULT_METADATA,
+			quotaProvider: "anthropic" as const,
+		});
+		const requests: Array<{ route: string; params: Record<string, unknown> }> =
+			[];
+		const page1 = Array.from({ length: 100 }, (_, i) => ({
+			body: `unrelated comment ${i}`,
+		}));
+		const page2 = [
+			{ body: `${quotaCommentMarker("anthropic")}\nalready warned` },
+		];
+		const octokitLocal = {
+			request: vi.fn(async (route: string, params: Record<string, unknown>) => {
+				requests.push({ route, params });
+				if (
+					route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					return { data: params.page === 2 ? page2 : page1 };
+				}
+				return { data: {} };
+			}),
+		};
+		const appLocal = {
+			getInstallationOctokit: vi.fn(async () => octokitLocal),
+		} as never;
+
+		const outcome = await maybeSubmitReview({ app: appLocal, ...baseArgs });
+
+		expect(outcome).toEqual({ status: "quota_exhausted" });
+		const posts = requests.filter(
+			(r) =>
+				r.route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+		);
+		expect(posts).toHaveLength(0);
+		const listCalls = requests.filter(
+			(r) =>
+				r.route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments",
+		);
+		expect(listCalls).toHaveLength(2);
+	});
+
+	it("stops paginating once a page returns fewer than per_page comments", async () => {
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "QUOTA_EXHAUSTED" as const,
+			body: "",
+			comments: [],
+			validLinesByPath: new Map(),
+			metadata: DEFAULT_METADATA,
+			quotaProvider: "anthropic" as const,
+		});
+		const requests: Array<{ route: string; params: Record<string, unknown> }> =
+			[];
+		const page1 = Array.from({ length: 100 }, (_, i) => ({
+			body: `unrelated comment ${i}`,
+		}));
+		const page2 = [{ body: "unrelated last comment" }]; // < per_page(100) — no page 3
+		const octokitLocal = {
+			request: vi.fn(async (route: string, params: Record<string, unknown>) => {
+				requests.push({ route, params });
+				if (
+					route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					return { data: params.page === 2 ? page2 : page1 };
+				}
+				return { data: {} };
+			}),
+		};
+		const appLocal = {
+			getInstallationOctokit: vi.fn(async () => octokitLocal),
+		} as never;
+
+		await maybeSubmitReview({ app: appLocal, ...baseArgs });
+
+		const listCalls = requests.filter(
+			(r) =>
+				r.route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments",
+		);
+		expect(listCalls).toHaveLength(2);
 	});
 
 	it("posts fallback comment with findings when all retries are exhausted", async () => {

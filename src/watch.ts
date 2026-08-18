@@ -116,7 +116,16 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 			let kv: ReturnType<typeof createUpstashKv>;
 			try {
 				kv = createUpstashKv();
-			} catch {
+			} catch (err) {
+				// KV being unconfigured is routine (matches getKv()'s own graceful
+				// degradation in github-app.ts) but still worth a log line — a
+				// silent failure here is indistinguishable from "nothing to seed",
+				// and ai-review-bot-aou's fix quietly not engaging on a genuine KV
+				// outage is exactly the kind of failure this needs to be
+				// observable for, not silent about.
+				log(
+					`ai-review watch: loadPersistedState unavailable for ${provider} (KV unconfigured): ${errMsg(err)}`,
+				);
 				return null;
 			}
 			try {
@@ -129,7 +138,10 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 					null,
 				);
 				return state ? { lastReviewedSha: state.lastReviewedSha } : null;
-			} catch {
+			} catch (err) {
+				log(
+					`ai-review watch: loadPersistedState failed for ${provider}, cycle 1 will not be seeded: ${errMsg(err)}`,
+				);
 				return null;
 			}
 		},

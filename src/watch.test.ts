@@ -581,6 +581,37 @@ describe("watchPr", () => {
 		);
 	});
 
+	// Found by anthropicreviewbot/codexreviewbot on PR #67's own review: the
+	// default loadPersistedState swallowed a KV failure with no logging,
+	// making a restart that silently fails to seed indistinguishable from one
+	// that correctly found nothing to seed — exactly the kind of failure
+	// ai-review-bot-aou's own fix needs to be observable, not silent, when it
+	// doesn't engage.
+	it("logs when the default loadPersistedState can't reach KV, instead of failing silently", async () => {
+		const request = vi
+			.fn()
+			.mockResolvedValue(pollResponse({ headSha: "sha1" }));
+		const submitReview = vi.fn().mockResolvedValue(posted);
+		const log = vi.fn();
+
+		await watchPr({
+			owner: "o",
+			repo: "r",
+			pullNumber: 5,
+			pollOctokit: { request },
+			targets: [buildTarget("anthropic")],
+			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
+			sleep: vi.fn().mockResolvedValue(undefined),
+			log,
+			submitReview,
+			maxCycles: 1,
+		});
+
+		expect(log).toHaveBeenCalledWith(
+			expect.stringContaining("loadPersistedState unavailable"),
+		);
+	});
+
 	// ai-review-bot-1f5: when two providers post in the same cycle, the second
 	// provider's maybeSubmitReview call must see a PR body that already
 	// includes the first provider's just-posted PR-summary section — not the

@@ -277,12 +277,21 @@ export type SubmitReviewOutcome =
  * decision rather than a retryable skip — see `SubmitReviewOutcome`'s doc. */
 export const NO_NEW_REVIEW_REASON = "no new review to post";
 
+/** Hard ceiling on pages scanned by {@link hasExistingComment} — 1000
+ * comments is far beyond any realistic PR, so this is a loop-termination
+ * backstop, not a limit expected to bind in practice. */
+const HAS_EXISTING_COMMENT_MAX_PAGES = 10;
+const HAS_EXISTING_COMMENT_PER_PAGE = 100;
+
 /** True when a PR comment carrying `marker` already exists — used to dedupe
  * the quota-exhausted/rate-limited warning comments so `watch`'s indefinite
- * retry loop doesn't repost an identical comment every cycle. A malformed or
- * unexpected (non-array) response is treated as "no existing comment" rather
- * than thrown — this is a best-effort dedup check, not a hard dependency of
- * the review itself. */
+ * retry loop doesn't repost an identical comment every cycle. Paginates at
+ * `per_page:100` until a page returns fewer than that (no more pages) or the
+ * marker is found — a single unpaginated page (GitHub's default is only 30)
+ * silently missed the marker on any busier PR, defeating the dedup exactly
+ * on the threads it exists to protect. A malformed or unexpected (non-array)
+ * response is treated as "no existing comment" rather than thrown — this is
+ * a best-effort dedup check, not a hard dependency of the review itself. */
 async function hasExistingComment(
 	octokit: Awaited<ReturnType<App["getInstallationOctokit"]>>,
 	owner: string,
@@ -290,16 +299,32 @@ async function hasExistingComment(
 	pullNumber: number,
 	marker: string,
 ): Promise<boolean> {
-	const existing = await octokit.request(
-		"GET /repos/{owner}/{repo}/issues/{issue_number}/comments",
-		{ owner, repo, issue_number: pullNumber },
-	);
-	const comments = Array.isArray(existing.data)
-		? (existing.data as Array<{ body?: string | null }>)
-		: [];
-	return comments.some(
-		(c) => typeof c.body === "string" && c.body.includes(marker),
-	);
+	for (let page = 1; page <= HAS_EXISTING_COMMENT_MAX_PAGES; page++) {
+		const existing = await octokit.request(
+			"GET /repos/{owner}/{repo}/issues/{issue_number}/comments",
+			{
+				owner,
+				repo,
+				issue_number: pullNumber,
+				per_page: HAS_EXISTING_COMMENT_PER_PAGE,
+				page,
+			},
+		);
+		const comments = Array.isArray(existing.data)
+			? (existing.data as Array<{ body?: string | null }>)
+			: [];
+		if (
+			comments.some(
+				(c) => typeof c.body === "string" && c.body.includes(marker),
+			)
+		) {
+			return true;
+		}
+		if (comments.length < HAS_EXISTING_COMMENT_PER_PAGE) {
+			return false;
+		}
+	}
+	return false;
 }
 
 /** @internal Exported for unit testing only. */
@@ -453,7 +478,12 @@ export async function maybeSubmitReview(args: {
 		if (review.event === "QUOTA_EXHAUSTED") {
 			const quotaProvider = review.quotaProvider ?? "unknown";
 			const billing = billingUrl(quotaProvider);
-			const marker = quotaCommentMarker(quotaProvider);
+			// Keyed off config.provider, not quotaProvider — the marker identifies
+			// which bot config posted the warning (for dedup), which must stay
+			// consistent even if quotaProvider is ever unset ("unknown") or
+			// diverges from config.provider; quotaProvider is still used above/
+			// below for the human-facing message and billing link.
+			const marker = quotaCommentMarker(config.provider);
 			const body = [
 				marker,
 				`⛔ **[${config.reviewCommentPrefix}]** Review couldn't run — **the ${providerLabel(quotaProvider)} account is out of credits.**`,
