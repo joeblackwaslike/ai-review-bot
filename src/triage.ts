@@ -19,6 +19,33 @@ const FAIL_SAFE: TriageDecision = {
 	newRisk: true,
 };
 
+/** Builds the per-call schema for the triage decision. `resolved` is
+ * constrained to an enum of the actual open-finding ids (or forced empty when
+ * there are none) instead of a free-form `z.array(z.string())`.
+ *
+ * Root cause of the "finding remains open" false claims recycled across
+ * PR #69's review rounds: the prompt below shows each finding as
+ * `${f.id} — ${f.title} [${f.severity}]`, and a model that correctly judges a
+ * finding resolved naturally echoes that whole "id — title" line back rather
+ * than isolating the bare id. The old free-form schema accepted that, and
+ * downstream's exact-match `triage.resolved.includes(f.id)` then silently
+ * never matched — reproduced live: the model correctly resolved a finding but
+ * returned "id — title", and it stayed marked "open" forever, which is what
+ * generateSummary's "CONFIRMED still open" ground truth was built from. This
+ * makes the malformed shape structurally unrepresentable instead of relying
+ * on prompt wording to keep the model on the bare id. */
+function buildTriageSchema(openFindings: PersistedFinding[]) {
+	const ids = openFindings.map((f) => f.id);
+	return z.object({
+		recommendation: z.enum(["SKIP", "INCREMENTAL", "FULL"]),
+		resolved:
+			ids.length > 0
+				? z.array(z.enum(ids as [string, ...string[]]))
+				: z.array(z.string()).length(0),
+		newRisk: z.boolean(),
+	});
+}
+
 // Cheap, fast triage tier. The call only classifies; it does not review.
 //
 // The openai branch mirrors routeModel's auth-mode split: gpt-5.1's rejection
@@ -66,7 +93,7 @@ export async function triageReReview(
 	try {
 		const { object } = await generateObject({
 			model: createAIModel(triageSelection(selection, auth?.mode), auth),
-			schema: TriageSchema,
+			schema: buildTriageSchema(openFindings),
 			prompt,
 			maxOutputTokens: 2000,
 		});

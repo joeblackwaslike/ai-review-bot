@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { z } from "zod";
 
 const mockGenerateObject = vi.hoisted(() => vi.fn());
 const mockCreateAIModel = vi.hoisted(() =>
@@ -141,6 +142,79 @@ describe("triageReReview", () => {
 			auth,
 		);
 		expect(mockCreateAIModel.mock.calls.at(-1)?.[1]).toBe(auth);
+	});
+
+	// Root cause of the "windowMs remains open" false claim on PR #69 round 4
+	// (docs/post-mortem-review-loop-churn.md follow-up): reproduced live against
+	// the real model — given a delta that unambiguously fixed a finding, the
+	// model correctly judged it resolved but returned "id — title" (the exact
+	// line format it was shown in the prompt, `${f.id} — ${f.title}`) instead of
+	// the bare id. The old plain `z.array(z.string())` schema accepted that, and
+	// the downstream `triage.resolved.includes(f.id)` exact-match check then
+	// silently never matched, so a genuinely-resolved finding stayed "open"
+	// forever. Constraining `resolved` to an enum of the actual known ids makes
+	// that malformed shape structurally unrepresentable instead of relying on
+	// prompt wording discipline.
+	it("constrains the resolved schema to the known open-finding ids, rejecting an id+title echo", async () => {
+		mockGenerateObject.mockResolvedValueOnce({
+			object: {
+				recommendation: "INCREMENTAL",
+				resolved: ["src/a.ts:5:bug"],
+				newRisk: false,
+			},
+		});
+		await triageReReview(
+			{ provider: "anthropic", model: "claude-haiku-4-5-20251001" } as never,
+			"delta diff",
+			openFindings,
+		);
+		const { schema } = mockGenerateObject.mock.calls.at(-1)?.[0] as {
+			schema: z.ZodTypeAny;
+		};
+
+		expect(
+			schema.safeParse({
+				recommendation: "INCREMENTAL",
+				resolved: ["src/a.ts:5:bug"],
+				newRisk: false,
+			}).success,
+		).toBe(true);
+		expect(
+			schema.safeParse({
+				recommendation: "INCREMENTAL",
+				resolved: ["src/a.ts:5:bug — Bug"],
+				newRisk: false,
+			}).success,
+		).toBe(false);
+	});
+
+	it("constrains resolved to an empty array when there are no open findings to resolve", async () => {
+		mockGenerateObject.mockResolvedValueOnce({
+			object: { recommendation: "INCREMENTAL", resolved: [], newRisk: true },
+		});
+		await triageReReview(
+			{ provider: "anthropic", model: "claude-haiku-4-5-20251001" } as never,
+			"some new diff with no prior findings",
+			[],
+		);
+		const { schema } = mockGenerateObject.mock.calls.at(-1)?.[0] as {
+			schema: z.ZodTypeAny;
+		};
+
+		expect(
+			schema.safeParse({
+				recommendation: "INCREMENTAL",
+				resolved: [],
+				newRisk: true,
+			}).success,
+		).toBe(true);
+		expect(
+			schema.safeParse({
+				recommendation: "INCREMENTAL",
+				resolved: ["anything"],
+				newRisk: true,
+			}).success,
+		).toBe(false);
 	});
 });
 
