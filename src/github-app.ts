@@ -204,12 +204,19 @@ export function injectPRSection(
 	// content before the real legacy block. That makes `legacyEndIdx <
 	// legacyStartIdx`, so the ordering guard below skips migration entirely.
 	// Starting the search after the start marker finds the real closing
-	// marker for that case. Found by codexreviewbot reviewing PR #67
-	// (PRRT_kwDOSM5cU86Z_xF_). This does NOT cover a spurious end-marker
-	// mention INSIDE the legacy section itself (after the start marker, before
-	// the real close) — that's a separate, narrower edge case; see the
-	// "unreachable via the bot's own call pattern" reasoning on
-	// PRRT_kwDOSM5cU86Z_qov / PRRT_kwDOSM5cU86aAB-g / PRRT_kwDOSM5cU86aAKZH.
+	// marker for that case.
+	//
+	// Known, deliberately unfixed gap: a spurious end-marker mention INSIDE
+	// the legacy section itself (after the start marker, before the real
+	// close) would still truncate the strip early. Not fixed because it isn't
+	// reachable through this function's own read-then-write flow: the legacy
+	// strip only ever runs ONCE per PR body — the first post-upgrade review
+	// migrates it away in the same call that appends the first provider-scoped
+	// section, so no later call ever sees a body containing both a legacy
+	// section AND that section quoting its own closing marker as example
+	// content. Producing it would require a human hand-editing the PR body to
+	// construct that exact shape, which is out of scope for a migration path
+	// that only runs once, automatically, right after this bot's own upgrade.
 	const legacyEndIdx =
 		legacyStartIdx === -1
 			? -1
