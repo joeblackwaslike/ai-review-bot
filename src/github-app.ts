@@ -393,7 +393,7 @@ async function hasExistingComment(
 			// failure actually finds it — found by anthropicreviewbot reviewing
 			// PR #67 (PRRT_kwDOSM5cU86Z_7q_).
 			console.error(
-				`hasExistingComment: list request failed for ${owner}/${repo}#${pullNumber} (page ${page})`,
+				`hasExistingComment: list request failed for ${owner}/${repo}#${pullNumber} (page ${page}); proceeding without comment dedup, a warning may be duplicated`,
 				err,
 			);
 			return false;

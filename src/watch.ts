@@ -134,9 +134,12 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 				// wording in github-app.ts, and still gives a structured label
 				// rather than requiring a full error-string read. Found by
 				// codexreviewbot reviewing PR #67 (PRRT_kwDOSM5cU86Z-0Ku), reworded
-				// again per anthropicreviewbot (PRRT_kwDOSM5cU86Z_7rz).
+				// again per anthropicreviewbot (PRRT_kwDOSM5cU86Z_7rz). owner/repo/
+				// pullNumber included so a process watching multiple PRs can tell
+				// which one dropped into cold-start mode — found by codexreviewbot
+				// (PRRT_kwDOSM5cU86aACcC).
 				log(
-					`ai-review watch: loadPersistedState unavailable for ${provider} (KV unavailable): ${errMsg(err)}`,
+					`ai-review watch: loadPersistedState unavailable for ${owner}/${repo}#${pullNumber} (${provider}) (KV unavailable); continuing without persisted seeding: ${errMsg(err)}`,
 				);
 				return null;
 			}
@@ -155,8 +158,10 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 				// only ever called on cycle 1 by construction today, but the message
 				// itself shouldn't assume that call site never moves. Found by
 				// anthropicreviewbot reviewing PR #67 (PRRT_kwDOSM5cU86Z-uZK).
+				// owner/repo/pullNumber included per codexreviewbot
+				// (PRRT_kwDOSM5cU86aACcC) — same rationale as the catch above.
 				log(
-					`ai-review watch: loadPersistedState failed for ${provider}, seeding will be skipped: ${errMsg(err)}`,
+					`ai-review watch: loadPersistedState failed for ${owner}/${repo}#${pullNumber} (${provider}), seeding will be skipped: ${errMsg(err)}`,
 				);
 				return null;
 			}
