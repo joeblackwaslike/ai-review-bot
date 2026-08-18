@@ -452,11 +452,12 @@ export async function resolveOpenAIAuth(
  * via subscription auth; wiring the API-key-first `resolveOpenAIAuth` into
  * it means a stray `OPENAI_API_KEY` in the environment (e.g. one left over
  * from the hosted webhook's own `.env`, possibly exhausted) silently
- * overrides subscription intent every time. Confirmed live 2026-08-18: the
- * first `ai-review watch` dogfood run on PR #65 hit exactly this — an
- * exhausted `ANTHROPIC_API_KEY` in `.env` made the run reuse the same dead
- * credential the hosted bot was already failing on, requiring the operator
- * to manually `unset` it before every invocation.
+ * overrides subscription intent every time. Fixed symmetrically with
+ * `resolveAnthropicSubscriptionAuth`, whose doc comment has the confirmed
+ * live incident this class of bug was caught from — the Codex GitHub App
+ * credentials this OpenAI side needs weren't available yet when that
+ * incident happened, so this side was fixed preventatively rather than
+ * independently reproduced.
  */
 export async function resolveOpenAISubscriptionAuth(
 	io: AuthIO = {},
