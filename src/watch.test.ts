@@ -857,6 +857,50 @@ describe("watchPr", () => {
 			).rejects.toThrow(/maxReviews/);
 		});
 
+		// anthropicreviewbot (PR #69, round 3): the same NaN/finite gap applies
+		// to windowMs — a non-finite window would make every recentPosts filter
+		// comparison false, pruning nothing and growing the array unbounded
+		// instead of tripping.
+		it("rejects a circuitBreaker config with a non-finite windowMs", async () => {
+			await expect(
+				watchPr({
+					owner: "o",
+					repo: "r",
+					pullNumber: 5,
+					pollOctokit: { request: vi.fn() },
+					targets: [buildTarget("anthropic")],
+					resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
+					sleep: vi.fn().mockResolvedValue(undefined),
+					log: () => {},
+					submitReview: vi.fn(),
+					circuitBreaker: { maxReviews: 3, windowMs: Number.NaN },
+					maxCycles: 1,
+				}),
+			).rejects.toThrow(/windowMs/);
+		});
+
+		// A windowMs of 0 (or negative) prunes every stored timestamp before
+		// each push (nowMs - t < 0 is never true for a non-decreasing clock),
+		// so recentPosts never grows past length 1 and the breaker can never
+		// reach maxReviews — silently defeated the same way maxReviews: 0 is.
+		it("rejects a circuitBreaker config with a non-positive windowMs", async () => {
+			await expect(
+				watchPr({
+					owner: "o",
+					repo: "r",
+					pullNumber: 5,
+					pollOctokit: { request: vi.fn() },
+					targets: [buildTarget("anthropic")],
+					resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
+					sleep: vi.fn().mockResolvedValue(undefined),
+					log: () => {},
+					submitReview: vi.fn(),
+					circuitBreaker: { maxReviews: 3, windowMs: 0 },
+					maxCycles: 1,
+				}),
+			).rejects.toThrow(/windowMs/);
+		});
+
 		// anthropicreviewbot (PR #69): nothing exercised the *actual* default
 		// (3 reviews / 15 min) end-to-end — every other test in this block
 		// passes an explicit config that happens to match it, which would stay

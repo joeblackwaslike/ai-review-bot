@@ -202,6 +202,18 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 			`circuitBreaker.maxReviews must be at least 1, got: ${circuitBreaker.maxReviews}`,
 		);
 	}
+	// anthropicreviewbot (PR #69, round 3): windowMs <= 0 (or non-finite)
+	// prunes every stored timestamp before each push, so recentPosts never
+	// grows past length 1 and the breaker can never reach maxReviews —
+	// silently defeated the same way an unvalidated maxReviews is.
+	if (
+		circuitBreaker &&
+		(!Number.isFinite(circuitBreaker.windowMs) || circuitBreaker.windowMs <= 0)
+	) {
+		throw new Error(
+			`circuitBreaker.windowMs must be positive, got: ${circuitBreaker.windowMs}`,
+		);
+	}
 
 	let cycles = 0;
 	// ai-review-bot-aou: seeded once, on the very first cycle only — see the
