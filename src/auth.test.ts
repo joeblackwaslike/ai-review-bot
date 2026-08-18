@@ -123,6 +123,35 @@ describe("makeCodexFetch", () => {
 		expect(body.input).toHaveLength(1);
 		expect(body.input[0].id).toBeUndefined();
 	});
+
+	// Confirmed live 2026-08-18 dogfooding `ai-review watch --provider openai`
+	// on this PR: every review agent failed with the ChatGPT/Codex backend's
+	// raw `{"detail":"Unsupported parameter: max_output_tokens"}` — the AI
+	// SDK's `generateObject({ maxOutputTokens })` auto-translates to a
+	// `max_output_tokens` field in the Responses API request body, but this
+	// backend (unlike the standard OpenAI API) rejects it outright. The real
+	// `codex` CLI this fetch wrapper mimics never sends this field — it lets
+	// the reasoning model manage its own budget — so strip it the same way
+	// `store`/`stream`/`instructions`/item ids are already rewritten above.
+	it("strips max_output_tokens — the backend rejects it outright", async () => {
+		let capturedInit: RequestInit | undefined;
+		const base = (async (_url: unknown, init?: RequestInit) => {
+			capturedInit = init;
+			return new Response("{}");
+		}) as unknown as typeof fetch;
+
+		const f = makeCodexFetch("acct-1", base);
+		await f("https://chatgpt.com/backend-api/codex/responses", {
+			method: "POST",
+			body: JSON.stringify({
+				input: [],
+				max_output_tokens: 4096,
+			}),
+		});
+
+		const body = JSON.parse(capturedInit?.body as string);
+		expect(body).not.toHaveProperty("max_output_tokens");
+	});
 });
 
 describe("resolveOpenAIAuth", () => {

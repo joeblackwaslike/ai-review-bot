@@ -326,6 +326,12 @@ export function makeCodexFetch(
 				json.store = false;
 				json.stream = true;
 				if (json.instructions == null) json.instructions = CODEX_INSTRUCTIONS;
+				// The backend rejects this field outright
+				// ({"detail":"Unsupported parameter: max_output_tokens"}) — the real
+				// `codex` CLI never sends it, letting the reasoning model manage its
+				// own budget. Confirmed live 2026-08-18: every review agent failed
+				// until this was stripped.
+				delete json.max_output_tokens;
 				stripItemIds(json.input);
 				json.include = [
 					...new Set([
