@@ -310,6 +310,47 @@ export function makeAnthropicOAuthFetch(
 	}) as typeof fetch;
 }
 
+/**
+ * Reconstruct a plain Responses-API `response` object from a raw
+ * Codex/ChatGPT SSE body — `event: <name>\ndata: <json>` blocks separated by
+ * blank lines. The backend rejects `stream:false` outright
+ * ({"detail":"Stream must be set to true"}, confirmed live researching
+ * ai-review-bot-wt8), so every OAuth-path response arrives in this framing
+ * regardless of what the caller asked for.
+ *
+ * `response.completed`'s embedded `response.output` is ALWAYS an empty
+ * array, even though the content was fully generated — confirmed live
+ * against the real backend. It expects the caller to have accumulated the
+ * actual output items (a `reasoning` item, then a `message` item, for a
+ * typical gpt-5.x turn) from the incremental `response.output_item.done`
+ * events as they streamed, the same way a real streaming client would;
+ * `response.completed` is only a "the whole thing is done" signal, not a
+ * content snapshot. This is what lets `makeCodexFetch` hand the AI SDK's
+ * non-streaming `generateObject` a plain JSON body as if the backend had
+ * never streamed at all.
+ */
+export function parseCodexSSEResponse(rawSSEText: string): unknown {
+	const blocks = rawSSEText.split("\n\n").filter((b) => b.trim());
+	const outputItems: unknown[] = [];
+	let finalResponse: Record<string, unknown> | null = null;
+	for (const block of blocks) {
+		const dataLine = block.split("\n").find((line) => line.startsWith("data:"));
+		if (!dataLine) continue;
+		const parsed = JSON.parse(dataLine.slice("data:".length).trim());
+		if (parsed.type === "response.output_item.done" && parsed.item) {
+			outputItems.push(parsed.item);
+		} else if (parsed.type === "response.completed" && parsed.response) {
+			finalResponse = parsed.response;
+		}
+	}
+	if (!finalResponse) {
+		throw new Error(
+			"Codex SSE stream ended without a response.completed event",
+		);
+	}
+	return { ...finalResponse, output: outputItems };
+}
+
 export function makeCodexFetch(
 	accountId: string,
 	baseFetch: typeof fetch = fetch,
@@ -344,7 +385,29 @@ export function makeCodexFetch(
 				// non-JSON body — leave untouched
 			}
 		}
-		return baseFetch(input, { ...init, headers, body });
+		const res = await baseFetch(input, { ...init, headers, body });
+		// ai-review-bot-wt8: since `stream:true` is now always forced above, a
+		// successful response is always SSE-framed — the AI SDK's non-streaming
+		// generateObject can't parse that directly ("Invalid JSON response").
+		// An error response is already plain JSON (confirmed: the backend's own
+		// 400s look like {"detail":"..."}), so only rewrite what actually fails
+		// to parse as JSON on its own — never misdetect a real error as SSE.
+		const rawText = await res.text();
+		try {
+			JSON.parse(rawText);
+			return new Response(rawText, {
+				status: res.status,
+				statusText: res.statusText,
+				headers: res.headers,
+			});
+		} catch {
+			const parsedResponse = parseCodexSSEResponse(rawText);
+			return new Response(JSON.stringify(parsedResponse), {
+				status: res.status,
+				statusText: res.statusText,
+				headers: { "content-type": "application/json" },
+			});
+		}
 	}) as typeof fetch;
 }
 
