@@ -517,6 +517,45 @@ describe("maybeSubmitReview", () => {
 		expect(posts).toHaveLength(0);
 	});
 
+	// Found by sourcery-ai reviewing PR #67: hasExistingComment's own docstring
+	// says a malformed response is treated as "no existing comment", but a
+	// thrown network/Octokit error from the GET itself was never caught and
+	// would reject the whole maybeSubmitReview call — blocking the
+	// quota/rate-limit warning from posting at all on a transient API blip,
+	// worse than the duplicate-comment problem this dedup exists to fix.
+	it("treats a failed comment-list request as no existing comment, rather than rejecting the review", async () => {
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "QUOTA_EXHAUSTED" as const,
+			body: "",
+			comments: [],
+			validLinesByPath: new Map(),
+			metadata: DEFAULT_METADATA,
+			quotaProvider: "anthropic" as const,
+		});
+		const octokitLocal = {
+			request: vi.fn(async (route: string) => {
+				if (
+					route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					throw new Error("ETIMEDOUT");
+				}
+				return { data: {} };
+			}),
+		};
+		const appLocal = {
+			getInstallationOctokit: vi.fn(async () => octokitLocal),
+		} as never;
+
+		const outcome = await maybeSubmitReview({ app: appLocal, ...baseArgs });
+
+		expect(outcome).toEqual({ status: "quota_exhausted" });
+		const posts = octokitLocal.request.mock.calls.filter(
+			([route]) =>
+				route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+		);
+		expect(posts).toHaveLength(1);
+	});
+
 	it("does not repost the rate-limit comment when one with the marker already exists", async () => {
 		mockBuildReview.mockReset().mockResolvedValue({
 			event: "RATE_LIMITED",
@@ -1217,9 +1256,10 @@ describe("buildPRSummarySection", () => {
 			{ ...DEFAULT_METADATA, generalFindings: 2, inlineComments: 1 },
 			"REQUEST_CHANGES",
 			"ai-review-bot",
+			"anthropic",
 		);
-		expect(section).toContain("<!-- ai-review-bot:start -->");
-		expect(section).toContain("<!-- ai-review-bot:end -->");
+		expect(section).toContain("<!-- ai-review-bot:anthropic:start -->");
+		expect(section).toContain("<!-- ai-review-bot:anthropic:end -->");
 		expect(section).toContain("⚠️ Changes requested");
 		expect(section).toContain("2 general, 1 inline");
 	});
@@ -1232,32 +1272,100 @@ describe("buildPRSummarySection", () => {
 			},
 			"COMMENT",
 			"ai-review-bot",
+			"anthropic",
 		);
 		expect(section).toContain("5 Tier 1 + 2 Tier 2");
 		expect(section).toContain("`security-auditor`");
+	});
+
+	// ai-review-bot-1f5: each provider's marker pair must be distinct so
+	// injectPRSection can address one without touching the other — see the
+	// injectPRSection tests below for the actual coexistence guarantee.
+	it("uses a provider-scoped marker pair, distinct per provider", () => {
+		const anthropicSection = buildPRSummarySection(
+			DEFAULT_METADATA,
+			"COMMENT",
+			"ai-review-bot",
+			"anthropic",
+		);
+		const openaiSection = buildPRSummarySection(
+			DEFAULT_METADATA,
+			"COMMENT",
+			"ai-review-bot",
+			"openai",
+		);
+		expect(anthropicSection).toContain(
+			"<!-- ai-review-bot:anthropic:start -->",
+		);
+		expect(openaiSection).toContain("<!-- ai-review-bot:openai:start -->");
+		expect(anthropicSection).not.toContain("ai-review-bot:openai:");
+		expect(openaiSection).not.toContain("ai-review-bot:anthropic:");
 	});
 });
 
 describe("injectPRSection", () => {
 	const section =
-		"<!-- ai-review-bot:start -->\ntest\n<!-- ai-review-bot:end -->";
+		"<!-- ai-review-bot:anthropic:start -->\ntest\n<!-- ai-review-bot:anthropic:end -->";
 
 	it("appends section to existing body", () => {
-		const result = injectPRSection("Existing description.", section);
+		const result = injectPRSection(
+			"Existing description.",
+			section,
+			"anthropic",
+		);
 		expect(result).toBe(`Existing description.\n\n${section}`);
 	});
 
-	it("replaces existing section", () => {
+	it("replaces existing section for the same provider", () => {
 		const body = `Intro\n\n${section}\n\nOutro`;
 		const newSection =
-			"<!-- ai-review-bot:start -->\nupdated\n<!-- ai-review-bot:end -->";
-		const result = injectPRSection(body, newSection);
+			"<!-- ai-review-bot:anthropic:start -->\nupdated\n<!-- ai-review-bot:anthropic:end -->";
+		const result = injectPRSection(body, newSection, "anthropic");
 		expect(result).toBe(`Intro\n\n${newSection}\n\nOutro`);
 	});
 
 	it("handles null body", () => {
-		const result = injectPRSection(null, section);
+		const result = injectPRSection(null, section, "anthropic");
 		expect(result).toBe(section);
+	});
+
+	// ai-review-bot-1f5: this is the real regression test for the bug —
+	// caught by chatgpt-codex-connector reviewing PR #67, the original fix
+	// (re-poll between providers) did NOT actually solve the two-provider
+	// overwrite, because injectPRSection always fully replaced ONE shared
+	// marker section regardless of how fresh the body was. Provider-scoped
+	// markers are what actually make the two sections coexist.
+	it("preserves the other provider's section when injecting a second provider's section", () => {
+		const anthropicSection =
+			"<!-- ai-review-bot:anthropic:start -->\nanthropic content\n<!-- ai-review-bot:anthropic:end -->";
+		const openaiSection =
+			"<!-- ai-review-bot:openai:start -->\nopenai content\n<!-- ai-review-bot:openai:end -->";
+
+		const afterFirst = injectPRSection(null, anthropicSection, "anthropic");
+		const afterSecond = injectPRSection(afterFirst, openaiSection, "openai");
+
+		expect(afterSecond).toContain("anthropic content");
+		expect(afterSecond).toContain("openai content");
+	});
+
+	it("replaces only the matching provider's section, leaving the other's untouched", () => {
+		const anthropicSection =
+			"<!-- ai-review-bot:anthropic:start -->\nanthropic v1\n<!-- ai-review-bot:anthropic:end -->";
+		const openaiSection =
+			"<!-- ai-review-bot:openai:start -->\nopenai v1\n<!-- ai-review-bot:openai:end -->";
+		const body = injectPRSection(
+			injectPRSection(null, anthropicSection, "anthropic"),
+			openaiSection,
+			"openai",
+		);
+
+		const anthropicV2 =
+			"<!-- ai-review-bot:anthropic:start -->\nanthropic v2\n<!-- ai-review-bot:anthropic:end -->";
+		const result = injectPRSection(body, anthropicV2, "anthropic");
+
+		expect(result).toContain("anthropic v2");
+		expect(result).not.toContain("anthropic v1");
+		expect(result).toContain("openai v1");
 	});
 });
 

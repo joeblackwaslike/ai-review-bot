@@ -672,4 +672,41 @@ describe("watchPr", () => {
 
 		expect(request).toHaveBeenCalledTimes(1);
 	});
+
+	// Found by anthropicreviewbot reviewing PR #67: the re-poll's own catch
+	// branch (a transient poll failure between two providers' posts in the
+	// same cycle) had no test coverage — this covers it, including that the
+	// second target still gets attempted (with the stale `pr`) rather than
+	// the whole cycle aborting.
+	it("continues to the next target with the stale pr when the mid-cycle re-poll fails", async () => {
+		const request = vi
+			.fn()
+			.mockResolvedValueOnce(pollResponse({ body: "stale" }))
+			.mockRejectedValueOnce(new Error("ETIMEDOUT"));
+		const submitReview = vi.fn().mockResolvedValue(posted);
+		const log = vi.fn();
+
+		await watchPr({
+			owner: "o",
+			repo: "r",
+			pullNumber: 5,
+			pollOctokit: { request },
+			targets: [buildTarget("anthropic"), buildTarget("openai")],
+			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
+			sleep: vi.fn().mockResolvedValue(undefined),
+			log,
+			submitReview,
+			maxCycles: 1,
+		});
+
+		expect(submitReview).toHaveBeenCalledTimes(2);
+		const calls = submitReview.mock.calls as unknown as Array<
+			[{ config: { provider: string }; pullRequest: { body: string | null } }]
+		>;
+		const openaiCall = calls.find(([arg]) => arg.config.provider === "openai");
+		expect(openaiCall?.[0].pullRequest.body).toBe("stale");
+		expect(log).toHaveBeenCalledWith(
+			expect.stringContaining("re-poll after anthropic post failed"),
+		);
+	});
 });

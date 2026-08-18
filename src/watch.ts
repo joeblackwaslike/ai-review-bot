@@ -12,7 +12,10 @@ import {
 import { loadReviewState } from "./review-state.js";
 
 /** The one field of buildReview's persisted review state that watchPr needs:
- * whether the current head SHA was already fully reviewed. */
+ * the SHA of the last review decision recorded for this provider/PR. This
+ * doesn't by itself prove a review was successfully posted to GitHub for
+ * that SHA — see the seeding comment below for what it's actually used for
+ * and why that distinction doesn't matter there. */
 export interface PersistedWatchState {
 	lastReviewedSha: string | null;
 }
@@ -230,8 +233,12 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 				if (persisted?.lastReviewedSha === pr.head.sha) {
 					// Only hasPostedEver — NOT lastReviewedSha. Setting the SHA here
 					// too would trip the per-target loop's own `pr.head.sha ===
-					// state.lastReviewedSha` skip guard below and silently skip
-					// calling submitReview at all. Leaving it unset instead lets
+					// state.lastReviewedSha` skip guard below and skip calling
+					// submitReview entirely on cycle 1, before buildReview's own
+					// idempotency check has had a chance to run — fine on a restart
+					// where that's genuinely correct, but wrong on a fresh session,
+					// which this same seeding code path can't tell apart from a
+					// restart by SHA match alone. Leaving it unset instead lets
 					// submitReview run with force:false as normal, so buildReview's
 					// own idempotency checks (the "Reviewed commit:" marker check
 					// and/or the KV triage gate) make the real determination and the
@@ -277,9 +284,14 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 					// ai-review-bot-1f5: re-poll before the NEXT target's post (if
 					// any) in this cycle, so its PR-body PATCH builds on this
 					// provider's just-posted summary section instead of the stale
-					// pre-cycle `pr` snapshot. injectPRSection splices one shared
-					// marker pair and fully replaces whatever's between it — a
-					// stale body would silently discard this provider's section.
+					// pre-cycle `pr` snapshot. injectPRSection now uses per-provider
+					// markers (each provider's section coexists independently), but
+					// a stale snapshot still risks the next provider's PATCH writing
+					// an outright older version of THIS provider's section, so the
+					// re-poll is still worth doing on top of that fix, not made
+					// redundant by it. `pr` is redeclared fresh at the top of every
+					// cycle (see the `let pr` above), so this reassignment cannot
+					// leak into a later cycle — only into later targets this cycle.
 					if (targetIndex < targets.length - 1) {
 						try {
 							const refreshed = await pollOctokit.request<PolledPullRequest>(
@@ -289,7 +301,7 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 							pr = refreshed.data;
 						} catch (pollErr) {
 							log(
-								`ai-review watch: re-poll after ${target.provider} post failed, next provider's PR-body PATCH may overwrite it: ${errMsg(pollErr)}`,
+								`ai-review watch: re-poll after ${target.provider} post failed; next provider's PR-body PATCH will likely overwrite the just-posted section: ${errMsg(pollErr)}`,
 							);
 						}
 					}

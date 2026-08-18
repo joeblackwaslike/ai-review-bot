@@ -1,5 +1,5 @@
 import { App } from "octokit";
-import type { ResolvedAuth } from "./auth.js";
+import type { Provider, ResolvedAuth } from "./auth.js";
 import { createCheckRun } from "./check-run.js";
 import { isTrustedAuthorAssociation, parseReviewCommand } from "./commands.js";
 import type { AppConfig } from "./config.js";
@@ -135,13 +135,24 @@ function buildFallbackCommentBody(
 	].join("\n");
 }
 
-const PR_SECTION_START = "<!-- ai-review-bot:start -->";
-const PR_SECTION_END = "<!-- ai-review-bot:end -->";
+/** ai-review-bot-1f5: markers are scoped per provider, not shared, so each
+ * bot's section can be independently found/replaced by injectPRSection
+ * without touching the other's — a single shared marker pair meant the
+ * second provider's post always fully replaced the first's regardless of
+ * how fresh the body was, which re-polling alone (the original fix) did not
+ * solve. Confirmed by chatgpt-codex-connector reviewing PR #67. */
+function prSectionMarkers(provider: Provider): { start: string; end: string } {
+	return {
+		start: `<!-- ai-review-bot:${provider}:start -->`,
+		end: `<!-- ai-review-bot:${provider}:end -->`,
+	};
+}
 
 export function buildPRSummarySection(
 	metadata: ReviewMetadata,
 	event: "COMMENT" | "REQUEST_CHANGES" | "APPROVE",
 	commentPrefix: string,
+	provider: Provider,
 ): string {
 	const verdict =
 		event === "APPROVE"
@@ -155,8 +166,9 @@ export function buildPRSummarySection(
 			? `\n| Tier 2 skills | ${metadata.tier2Skills.map((s) => `\`${s}\``).join(", ")} |`
 			: "";
 
+	const { start, end } = prSectionMarkers(provider);
 	return [
-		PR_SECTION_START,
+		start,
 		`#### ${commentPrefix}`,
 		"",
 		"| | |",
@@ -166,24 +178,22 @@ export function buildPRSummarySection(
 		`| Model | \`${metadata.model}\` |`,
 		`| Agents | ${metadata.tier1Count} Tier 1${metadata.tier2Skills.length > 0 ? ` + ${metadata.tier2Skills.length} Tier 2` : ""} |${tier2Line}`,
 		`| Cost | $${metadata.cost.toFixed(6)} |`,
-		PR_SECTION_END,
+		end,
 	].join("\n");
 }
 
 export function injectPRSection(
 	existingBody: string | null,
 	section: string,
+	provider: Provider,
 ): string {
+	const { start, end } = prSectionMarkers(provider);
 	const body = existingBody ?? "";
-	const startIdx = body.indexOf(PR_SECTION_START);
-	const endIdx = body.indexOf(PR_SECTION_END);
+	const startIdx = body.indexOf(start);
+	const endIdx = body.indexOf(end);
 
 	if (startIdx !== -1 && endIdx !== -1) {
-		return (
-			body.slice(0, startIdx) +
-			section +
-			body.slice(endIdx + PR_SECTION_END.length)
-		);
+		return body.slice(0, startIdx) + section + body.slice(endIdx + end.length);
 	}
 
 	return body ? `${body}\n\n${section}` : section;
@@ -299,32 +309,39 @@ async function hasExistingComment(
 	pullNumber: number,
 	marker: string,
 ): Promise<boolean> {
-	for (let page = 1; page <= HAS_EXISTING_COMMENT_MAX_PAGES; page++) {
-		const existing = await octokit.request(
-			"GET /repos/{owner}/{repo}/issues/{issue_number}/comments",
-			{
-				owner,
-				repo,
-				issue_number: pullNumber,
-				per_page: HAS_EXISTING_COMMENT_PER_PAGE,
-				page,
-			},
-		);
-		const comments = Array.isArray(existing.data)
-			? (existing.data as Array<{ body?: string | null }>)
-			: [];
-		if (
-			comments.some(
-				(c) => typeof c.body === "string" && c.body.includes(marker),
-			)
-		) {
-			return true;
+	try {
+		for (let page = 1; page <= HAS_EXISTING_COMMENT_MAX_PAGES; page++) {
+			const existing = await octokit.request(
+				"GET /repos/{owner}/{repo}/issues/{issue_number}/comments",
+				{
+					owner,
+					repo,
+					issue_number: pullNumber,
+					per_page: HAS_EXISTING_COMMENT_PER_PAGE,
+					page,
+				},
+			);
+			const comments = Array.isArray(existing.data)
+				? (existing.data as Array<{ body?: string | null }>)
+				: [];
+			if (
+				comments.some(
+					(c) => typeof c.body === "string" && c.body.includes(marker),
+				)
+			) {
+				return true;
+			}
+			if (comments.length < HAS_EXISTING_COMMENT_PER_PAGE) {
+				return false;
+			}
 		}
-		if (comments.length < HAS_EXISTING_COMMENT_PER_PAGE) {
-			return false;
-		}
+		return false;
+	} catch (err) {
+		// A network/Octokit failure here must not block the warning it's
+		// gating — this is a best-effort dedup check, not a hard dependency.
+		console.error("hasExistingComment: list request failed", err);
+		return false;
 	}
-	return false;
 }
 
 /** @internal Exported for unit testing only. */
@@ -607,8 +624,13 @@ export async function maybeSubmitReview(args: {
 				review.metadata,
 				review.event,
 				config.reviewCommentPrefix,
+				config.provider,
 			);
-			const updatedBody = injectPRSection(pullRequest.body, summarySection);
+			const updatedBody = injectPRSection(
+				pullRequest.body,
+				summarySection,
+				config.provider,
+			);
 			try {
 				await octokit.request(
 					"PATCH /repos/{owner}/{repo}/pulls/{pull_number}",
