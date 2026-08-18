@@ -189,8 +189,15 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 
 	// anthropicreviewbot (PR #69): maxReviews < 1 trips on the very first post
 	// with no signal the config is nonsensical, silently defeating the guard
-	// it's meant to provide instead of failing loudly.
-	if (circuitBreaker && circuitBreaker.maxReviews < 1) {
+	// it's meant to provide instead of failing loudly. Number.isFinite also
+	// catches NaN (round 2 of the same review): every `< 1` and `>= maxReviews`
+	// comparison against NaN is false, so an unvalidated NaN would disable the
+	// breaker just as silently as maxReviews: 0 does.
+	if (
+		circuitBreaker &&
+		(!Number.isFinite(circuitBreaker.maxReviews) ||
+			circuitBreaker.maxReviews < 1)
+	) {
 		throw new Error(
 			`circuitBreaker.maxReviews must be at least 1, got: ${circuitBreaker.maxReviews}`,
 		);

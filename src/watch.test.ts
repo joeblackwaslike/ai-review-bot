@@ -809,9 +809,49 @@ describe("watchPr", () => {
 					log: () => {},
 					submitReview: vi.fn(),
 					circuitBreaker: { maxReviews: 0, windowMs: 900_000 },
-					// Hang-guard for the pre-fix RED state: the validation must
-					// reject before the loop ever polls, so this should never
-					// actually be reached once implemented.
+					// Safety ceiling: validation must reject before the loop polls,
+					// so maxCycles: 1 is never actually reached.
+					maxCycles: 1,
+				}),
+			).rejects.toThrow(/maxReviews/);
+		});
+
+		it("rejects a circuitBreaker config with a negative maxReviews", async () => {
+			await expect(
+				watchPr({
+					owner: "o",
+					repo: "r",
+					pullNumber: 5,
+					pollOctokit: { request: vi.fn() },
+					targets: [buildTarget("anthropic")],
+					resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
+					sleep: vi.fn().mockResolvedValue(undefined),
+					log: () => {},
+					submitReview: vi.fn(),
+					circuitBreaker: { maxReviews: -1, windowMs: 900_000 },
+					maxCycles: 1,
+				}),
+			).rejects.toThrow(/maxReviews/);
+		});
+
+		// anthropicreviewbot (PR #69, round 2): `NaN < 1` is `false`, so the
+		// original `< 1` guard let a non-finite maxReviews silently through —
+		// and every `recentPosts.length >= NaN` comparison is also `false`, so
+		// the breaker would then never trip, defeating it just as silently as
+		// the maxReviews: 0 case this guard already covers.
+		it("rejects a circuitBreaker config with a non-finite maxReviews", async () => {
+			await expect(
+				watchPr({
+					owner: "o",
+					repo: "r",
+					pullNumber: 5,
+					pollOctokit: { request: vi.fn() },
+					targets: [buildTarget("anthropic")],
+					resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
+					sleep: vi.fn().mockResolvedValue(undefined),
+					log: () => {},
+					submitReview: vi.fn(),
+					circuitBreaker: { maxReviews: Number.NaN, windowMs: 900_000 },
 					maxCycles: 1,
 				}),
 			).rejects.toThrow(/maxReviews/);
@@ -831,6 +871,9 @@ describe("watchPr", () => {
 				);
 			const submitReview = vi.fn().mockResolvedValue(posted);
 			let clock = 0;
+			// 60s steps — all three posts land within DEFAULT_CIRCUIT_BREAKER's
+			// 15-min window regardless of what the concrete numbers are, since
+			// this test exists specifically to not hardcode them.
 			const now = vi.fn(() => {
 				clock += 60_000;
 				return clock;
