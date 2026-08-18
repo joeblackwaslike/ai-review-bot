@@ -21,7 +21,7 @@ Separately, this session found `src/router.ts:81-83`'s `OPENAI_TIER_MAP` hardcod
 
 ## Goals
 
-- A local CLI command that reviews an **already-open PR** (one Joe is actively driving), posts a real GitHub PR review using subscription auth for the model calls.
+- A local CLI command that reviews an **already-open PR** (one Joe or an implementer agent is actively driving), posts a real GitHub PR review using subscription auth for the model calls.
 - Reviews post under the **same GitHub App bot identities** production uses (`anthropicreviewbot`/`codexreviewbot`) — not Joe's personal account — so the existing reaction/reply-mining pipeline (`findUnratedFindings`, QC judging, reviewer-memory `survivingPrior`) keeps working unmodified, and comments don't read as the implementer talking to themselves.
 - Re-reviews automatically on new pushes (head-SHA change), polling — no webhook/QStash required.
 - Auto-exits when the PR merges or closes.
