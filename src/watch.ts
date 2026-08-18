@@ -126,8 +126,15 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 				// and ai-review-bot-aou's fix quietly not engaging on a genuine KV
 				// outage is exactly the kind of failure this needs to be
 				// observable for, not silent about.
+				// No presumptive "(KV unconfigured)" label — createUpstashKv() only
+				// throws today for missing env vars, but labeling every throw as
+				// specifically "unconfigured" would misdiagnose a future, different
+				// failure. The real message is always appended, so the actual cause
+				// stays observable either way; this now matches getKv()'s neutral
+				// wording in github-app.ts. Found by codexreviewbot reviewing PR #67
+				// (PRRT_kwDOSM5cU86Z-0Ku).
 				log(
-					`ai-review watch: loadPersistedState unavailable for ${provider} (KV unconfigured): ${errMsg(err)}`,
+					`ai-review watch: loadPersistedState unavailable for ${provider}: ${errMsg(err)}`,
 				);
 				return null;
 			}
@@ -142,8 +149,12 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 				);
 				return state ? { lastReviewedSha: state.lastReviewedSha } : null;
 			} catch (err) {
+				// "seeding" rather than a hardcoded "cycle 1" — loadPersistedState is
+				// only ever called on cycle 1 by construction today, but the message
+				// itself shouldn't assume that call site never moves. Found by
+				// anthropicreviewbot reviewing PR #67 (PRRT_kwDOSM5cU86Z-uZK).
 				log(
-					`ai-review watch: loadPersistedState failed for ${provider}, cycle 1 will not be seeded: ${errMsg(err)}`,
+					`ai-review watch: loadPersistedState failed for ${provider}, seeding will be skipped: ${errMsg(err)}`,
 				);
 				return null;
 			}

@@ -199,7 +199,16 @@ export function injectPRSection(
 	let body = existingBody ?? "";
 	const legacyStartIdx = body.indexOf(LEGACY_PR_SECTION_START);
 	const legacyEndIdx = body.indexOf(LEGACY_PR_SECTION_END);
-	if (legacyStartIdx !== -1 && legacyEndIdx !== -1) {
+	// legacyStartIdx < legacyEndIdx guards a malformed body where the end
+	// marker appears before the start marker: without it, the slice below
+	// duplicates the text between the two markers and leaves both legacy
+	// markers behind instead of stripping them. Found by anthropicreviewbot
+	// reviewing PR #67 (PRRT_kwDOSM5cU86Z_qoy / _qpF).
+	if (
+		legacyStartIdx !== -1 &&
+		legacyEndIdx !== -1 &&
+		legacyStartIdx < legacyEndIdx
+	) {
 		body = (
 			body.slice(0, legacyStartIdx) +
 			body.slice(legacyEndIdx + LEGACY_PR_SECTION_END.length)
@@ -305,10 +314,16 @@ export type SubmitReviewOutcome =
  * decision rather than a retryable skip — see `SubmitReviewOutcome`'s doc. */
 export const NO_NEW_REVIEW_REASON = "no new review to post";
 
-/** Hard ceiling on pages scanned by {@link hasExistingComment} — 1000
- * comments is far beyond any realistic PR, so this is a loop-termination
- * backstop, not a limit expected to bind in practice. */
-const HAS_EXISTING_COMMENT_MAX_PAGES = 10;
+/** Hard ceiling on pages scanned by {@link hasExistingComment}: scans up to
+ * {@link HAS_EXISTING_COMMENT_MAX_PAGES} × {@link HAS_EXISTING_COMMENT_PER_PAGE}
+ * = 5,000 comments. In practice the loop exits earlier, as soon as a page
+ * returns fewer than per_page items (no more pages) — this cap only exists to
+ * bound the loop if GitHub's pagination sentinel misbehaves. Originally 10
+ * pages (1,000 comments); codexreviewbot reviewing PR #67 found that on a
+ * busy, long-lived watched PR a marker comment could live past page 10, so
+ * the cap itself silently defeated the dedup it exists to provide — raised
+ * 5x for headroom while still bounding the loop. */
+const HAS_EXISTING_COMMENT_MAX_PAGES = 50;
 const HAS_EXISTING_COMMENT_PER_PAGE = 100;
 
 /** True when a PR comment with this EXACT body already exists — used to
@@ -332,9 +347,16 @@ async function hasExistingComment(
 	pullNumber: number,
 	body: string,
 ): Promise<boolean> {
-	try {
-		for (let page = 1; page <= HAS_EXISTING_COMMENT_MAX_PAGES; page++) {
-			const existing = await octokit.request(
+	const normalizedBody = body.trimEnd();
+	for (let page = 1; page <= HAS_EXISTING_COMMENT_MAX_PAGES; page++) {
+		// Only the request itself is best-effort — narrowed from wrapping the
+		// whole loop so a bug in the LOCAL scan logic below (not the network
+		// call) surfaces instead of being silently downgraded to "no existing
+		// comment". Found by codexreviewbot reviewing PR #67
+		// (PRRT_kwDOSM5cU86Z_cHu / ikk9l).
+		let existing: Awaited<ReturnType<typeof octokit.request>>;
+		try {
+			existing = await octokit.request(
 				"GET /repos/{owner}/{repo}/issues/{issue_number}/comments",
 				{
 					owner,
@@ -344,23 +366,27 @@ async function hasExistingComment(
 					page,
 				},
 			);
-			const comments = Array.isArray(existing.data)
-				? (existing.data as Array<{ body?: string | null }>)
-				: [];
-			if (comments.some((c) => c.body === body)) {
-				return true;
-			}
-			if (comments.length < HAS_EXISTING_COMMENT_PER_PAGE) {
-				return false;
-			}
+		} catch (err) {
+			// A network/Octokit failure here must not block the warning it's
+			// gating — this is a best-effort dedup check, not a hard dependency.
+			console.error("hasExistingComment: list request failed", err);
+			return false;
 		}
-		return false;
-	} catch (err) {
-		// A network/Octokit failure here must not block the warning it's
-		// gating — this is a best-effort dedup check, not a hard dependency.
-		console.error("hasExistingComment: list request failed", err);
-		return false;
+		const comments = Array.isArray(existing.data)
+			? (existing.data as Array<{ body?: string | null }>)
+			: [];
+		// trimEnd() tolerates trailing-whitespace/newline drift between the
+		// locally-constructed body and what GitHub's API echoes back, without
+		// reintroducing the marker-substring bug this exact-match replaced —
+		// found by anthropicreviewbot reviewing PR #67 (PRRT_kwDOSM5cU86Z_qoq).
+		if (comments.some((c) => c.body?.trimEnd() === normalizedBody)) {
+			return true;
+		}
+		if (comments.length < HAS_EXISTING_COMMENT_PER_PAGE) {
+			return false;
+		}
 	}
+	return false;
 }
 
 /** @internal Exported for unit testing only. */
@@ -514,11 +540,13 @@ export async function maybeSubmitReview(args: {
 		if (review.event === "QUOTA_EXHAUSTED") {
 			const quotaProvider = review.quotaProvider ?? "unknown";
 			const billing = billingUrl(quotaProvider);
-			// Keyed off config.provider, not quotaProvider — the marker identifies
-			// which bot config posted the warning (for dedup), which must stay
-			// consistent even if quotaProvider is ever unset ("unknown") or
-			// diverges from config.provider; quotaProvider is still used above/
-			// below for the human-facing message and billing link.
+			// Fixed: the marker was previously keyed off `review.quotaProvider`,
+			// which falls back to "unknown" when unset — a mismatch against any
+			// marker already stored under `config.provider` that silently defeated
+			// the dedup this PR exists to add. Always key off `config.provider` so
+			// the lookup and the stored marker agree; quotaProvider is still used
+			// for the human-readable message and billing link below. Reworded per
+			// anthropicreviewbot reviewing PR #67 (PRRT_kwDOSM5cU86Z-uZS).
 			const marker = quotaCommentMarker(config.provider);
 			const body = [
 				marker,

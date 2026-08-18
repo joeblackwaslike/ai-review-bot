@@ -3,6 +3,20 @@ import type { AppConfig } from "./config.js";
 import type { SubmitReviewOutcome } from "./github-app.js";
 import { watchPr } from "./watch.js";
 
+// codexreviewbot (PRRT_kwDOSM5cU86Z-0K0 / -0K4) reviewing PR #67: the default
+// loadPersistedState's KV-unavailable test relied on ambient env (no
+// KV_REST_API_URL/TOKEN configured) to make createUpstashKv() throw, which is
+// non-deterministic across environments where those happen to be set.
+// Stubbing the module makes the failure mode explicit and independent of the
+// environment.
+vi.mock("./feedback/kv.js", () => ({
+	createUpstashKv: () => {
+		throw new Error(
+			"KV_REST_API_URL and KV_REST_API_TOKEN are required when FEEDBACK_ENABLED=true",
+		);
+	},
+}));
+
 function buildTarget(provider: "anthropic" | "openai") {
 	return {
 		provider,
@@ -706,10 +720,24 @@ describe("watchPr", () => {
 
 		expect(submitReview).toHaveBeenCalledTimes(2);
 		const calls = submitReview.mock.calls as unknown as Array<
-			[{ config: { provider: string }; pullRequest: { body: string | null } }]
+			[
+				{
+					config: { provider: string };
+					pullRequest: { body: string | null };
+					force: boolean;
+				},
+			]
 		>;
 		const openaiCall = calls.find(([arg]) => arg.config.provider === "openai");
 		expect(openaiCall?.[0].pullRequest.body).toBe("stale");
+		// anthropicreviewbot (PRRT_kwDOSM5cU86Z_WHn): assert `force` on the
+		// openai call explicitly. This is openai's own FIRST-EVER post in this
+		// cycle, so `force` must be true — hasPostedEver is tracked per
+		// provider (see the providerState comment in watch.ts), not shared
+		// with anthropic's just-completed post. The finding's suggested
+		// expectation (false) was itself wrong about that; the assertion is
+		// still worth pinning explicitly.
+		expect(openaiCall?.[0].force).toBe(true);
 		expect(log).toHaveBeenCalledWith(
 			expect.stringContaining("re-poll after anthropic post failed"),
 		);
