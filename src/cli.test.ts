@@ -268,4 +268,22 @@ describe("cmdWatch", () => {
 		const call = vi.mocked(watchPr).mock.calls[0][0];
 		expect(call.intervalMs).toBe(15_000);
 	});
+
+	it("leaves the circuit breaker on watch.ts's own default by default", async () => {
+		await cmdWatch(["--pr", "5", "--repo", "o/r"]);
+
+		const call = vi.mocked(watchPr).mock.calls[0][0];
+		expect(call.circuitBreaker).toBeUndefined();
+	});
+
+	// ai-review-bot-599: the circuit breaker (watch.ts) is the mechanical
+	// default; --no-circuit-breaker is the deliberate, explicit escape hatch
+	// for e.g. a final confirmation pass the operator has already decided to
+	// run unthrottled.
+	it("--no-circuit-breaker disables the circuit breaker", async () => {
+		await cmdWatch(["--pr", "5", "--repo", "o/r", "--no-circuit-breaker"]);
+
+		const call = vi.mocked(watchPr).mock.calls[0][0];
+		expect(call.circuitBreaker).toBe(false);
+	});
 });
