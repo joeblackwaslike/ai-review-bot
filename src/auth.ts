@@ -334,7 +334,8 @@ export function makeAnthropicOAuthFetch(
  *   endings are normalized to LF before parsing).
  * @returns the reconstructed Responses-API `response` object, with `output`
  *   populated from the accumulated `response.output_item.done` events.
- * @throws if the stream never reaches a `response.completed` event.
+ * @throws if the stream is malformed (for example invalid event JSON) or
+ *   never reaches a `response.completed` event.
  */
 export function parseCodexSSEResponse(rawSSEText: string): unknown {
 	// The real backend uses LF-only (confirmed live), but SSE permits CRLF or bare CR —

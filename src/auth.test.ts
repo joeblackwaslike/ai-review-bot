@@ -329,7 +329,9 @@ describe("makeCodexFetch", () => {
 	it("converts a CRLF-framed SSE response body into the same plain JSON response as LF", async () => {
 		const crlfFixture = CODEX_SSE_FIXTURE.replace(/\n/g, "\r\n");
 		const base = (async () =>
-			new Response(crlfFixture)) as unknown as typeof fetch;
+			new Response(crlfFixture, {
+				headers: { "content-type": "text/event-stream" },
+			})) as unknown as typeof fetch;
 		const f = makeCodexFetch("acct-1", base);
 
 		const res = await f("https://chatgpt.com/backend-api/codex/responses", {
