@@ -199,13 +199,17 @@ export function injectPRSection(
 	let body = existingBody ?? "";
 	const legacyStartIdx = body.indexOf(LEGACY_PR_SECTION_START);
 	// Search for the end marker starting AFTER the start marker, not from
-	// position 0 — an unqualified `body.indexOf(END)` finds the FIRST
-	// occurrence anywhere, including a spurious one inside user-authored
-	// content within the legacy section itself (e.g. quoting the bot's own
-	// markers as an example), which truncates the strip early and leaves the
-	// rest of the legacy section — including a dangling real end marker — in
-	// the migrated body. Found by codexreviewbot reviewing PR #67
-	// (PRRT_kwDOSM5cU86Z_xF_).
+	// position 0 — an unqualified `body.indexOf(END)` finds the first
+	// occurrence anywhere, including a spurious one earlier in unrelated
+	// content before the real legacy block. That makes `legacyEndIdx <
+	// legacyStartIdx`, so the ordering guard below skips migration entirely.
+	// Starting the search after the start marker finds the real closing
+	// marker for that case. Found by codexreviewbot reviewing PR #67
+	// (PRRT_kwDOSM5cU86Z_xF_). This does NOT cover a spurious end-marker
+	// mention INSIDE the legacy section itself (after the start marker, before
+	// the real close) — that's a separate, narrower edge case; see the
+	// "unreachable via the bot's own call pattern" reasoning on
+	// PRRT_kwDOSM5cU86Z_qov / PRRT_kwDOSM5cU86aAB-g / PRRT_kwDOSM5cU86aAKZH.
 	const legacyEndIdx =
 		legacyStartIdx === -1
 			? -1
