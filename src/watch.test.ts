@@ -639,6 +639,11 @@ describe("watchPr", () => {
 		});
 
 		expect(request).toHaveBeenCalledTimes(2);
+		// The re-poll must hit the PR endpoint itself, not any other route — a
+		// wrong endpoint would still satisfy the call-count assertion above.
+		expect(request.mock.calls[1][0]).toBe(
+			"GET /repos/{owner}/{repo}/pulls/{pull_number}",
+		);
 		expect(submitReview).toHaveBeenCalledTimes(2);
 		const calls = submitReview.mock.calls as unknown as Array<
 			[{ config: { provider: string }; pullRequest: { body: string | null } }]
