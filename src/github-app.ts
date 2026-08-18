@@ -198,7 +198,21 @@ export function injectPRSection(
 ): string {
 	let body = existingBody ?? "";
 	const legacyStartIdx = body.indexOf(LEGACY_PR_SECTION_START);
-	const legacyEndIdx = body.indexOf(LEGACY_PR_SECTION_END);
+	// Search for the end marker starting AFTER the start marker, not from
+	// position 0 — an unqualified `body.indexOf(END)` finds the FIRST
+	// occurrence anywhere, including a spurious one inside user-authored
+	// content within the legacy section itself (e.g. quoting the bot's own
+	// markers as an example), which truncates the strip early and leaves the
+	// rest of the legacy section — including a dangling real end marker — in
+	// the migrated body. Found by codexreviewbot reviewing PR #67
+	// (PRRT_kwDOSM5cU86Z_xF_).
+	const legacyEndIdx =
+		legacyStartIdx === -1
+			? -1
+			: body.indexOf(
+					LEGACY_PR_SECTION_END,
+					legacyStartIdx + LEGACY_PR_SECTION_START.length,
+				);
 	// legacyStartIdx < legacyEndIdx guards a malformed body where the end
 	// marker appears before the start marker: without it, the slice below
 	// duplicates the text between the two markers and leaves both legacy
@@ -326,28 +340,34 @@ export const NO_NEW_REVIEW_REASON = "no new review to post";
 const HAS_EXISTING_COMMENT_MAX_PAGES = 50;
 const HAS_EXISTING_COMMENT_PER_PAGE = 100;
 
-/** True when a PR comment with this EXACT body already exists — used to
- * dedupe the quota-exhausted/rate-limited warning comments so `watch`'s
- * indefinite retry loop doesn't repost an identical comment every cycle.
- * Matching the full body (not just the marker) is deliberate: the
- * rate-limited message embeds a reset time that changes between distinct
- * rate-limit windows, and marker-only matching would suppress a genuinely
- * updated warning as a false duplicate, pinning a stale timestamp in the PR
- * — found by codexreviewbot reviewing PR #67. Paginates at `per_page:100`
- * until a page returns fewer than that (no more pages) or a match is found —
- * a single unpaginated page (GitHub's default is only 30) silently missed
- * the match on any busier PR, defeating the dedup exactly on the threads it
- * exists to protect. A malformed or unexpected (non-array) response is
- * treated as "no existing comment" rather than thrown — this is a
- * best-effort dedup check, not a hard dependency of the review itself. */
+/** True when an existing PR comment matches `matcher` — used to dedupe the
+ * quota-exhausted/rate-limited warning comments so `watch`'s indefinite
+ * retry loop doesn't repost the same warning every cycle. Takes a matcher
+ * rather than a literal body because the two callers need different
+ * matching semantics: the rate-limited message embeds a reset time that
+ * changes between distinct rate-limit windows, so it matches the full body
+ * (marker-only matching would suppress a genuinely updated warning as a
+ * false duplicate, pinning a stale timestamp in the PR — found by
+ * codexreviewbot reviewing PR #67). The quota-exhausted message ALSO embeds
+ * `providerLabel(quotaProvider)`, whose value can drift between retries for
+ * the SAME underlying condition (e.g. "anthropic" then unset/"unknown") —
+ * exact-body matching there would miss the existing comment and repost on
+ * every drift, so it matches on the stable marker alone instead. Found by
+ * codexreviewbot reviewing PR #67 (PRRT_kwDOSM5cU86Z_xF1 / _xGF).
+ * Paginates at `per_page:100` until a page returns fewer than that (no more
+ * pages) or a match is found — a single unpaginated page (GitHub's default
+ * is only 30) silently missed the match on any busier PR, defeating the
+ * dedup exactly on the threads it exists to protect. A malformed or
+ * unexpected (non-array) response is treated as "no existing comment"
+ * rather than thrown — this is a best-effort dedup check, not a hard
+ * dependency of the review itself. */
 async function hasExistingComment(
 	octokit: Awaited<ReturnType<App["getInstallationOctokit"]>>,
 	owner: string,
 	repo: string,
 	pullNumber: number,
-	body: string,
+	matcher: (existingBody: string) => boolean,
 ): Promise<boolean> {
-	const normalizedBody = body.trimEnd();
 	for (let page = 1; page <= HAS_EXISTING_COMMENT_MAX_PAGES; page++) {
 		// Only the request itself is best-effort — narrowed from wrapping the
 		// whole loop so a bug in the LOCAL scan logic below (not the network
@@ -375,11 +395,7 @@ async function hasExistingComment(
 		const comments = Array.isArray(existing.data)
 			? (existing.data as Array<{ body?: string | null }>)
 			: [];
-		// trimEnd() tolerates trailing-whitespace/newline drift between the
-		// locally-constructed body and what GitHub's API echoes back, without
-		// reintroducing the marker-substring bug this exact-match replaced —
-		// found by anthropicreviewbot reviewing PR #67 (PRRT_kwDOSM5cU86Z_qoq).
-		if (comments.some((c) => c.body?.trimEnd() === normalizedBody)) {
+		if (comments.some((c) => c.body != null && matcher(c.body))) {
 			return true;
 		}
 		if (comments.length < HAS_EXISTING_COMMENT_PER_PAGE) {
@@ -560,7 +576,14 @@ export async function maybeSubmitReview(args: {
 				"",
 				"The review will run normally on the next commit once the balance is topped up.",
 			].join("\n");
-			if (await hasExistingComment(octokit, owner, repo, pullNumber, body)) {
+			// Marker-only match (not full-body) — see hasExistingComment's
+			// docstring for why: the quotaProvider-derived label text can drift
+			// between retries for the same underlying condition.
+			if (
+				await hasExistingComment(octokit, owner, repo, pullNumber, (b) =>
+					b.includes(marker),
+				)
+			) {
 				console.log("quota-exhausted comment already posted; not duplicating", {
 					owner,
 					repo,
@@ -604,7 +627,23 @@ export async function maybeSubmitReview(args: {
 			// A throw here propagates to the outer finally, which releases the
 			// claim. Intended: a rate-limited run spent no model budget, so the
 			// commit must stay eligible for retry on the next delivery.
-			if (await hasExistingComment(octokit, owner, repo, pullNumber, body)) {
+			// Full-body match (not marker-only) — see hasExistingComment's
+			// docstring for why: the reset time embedded in this body IS the
+			// signal that a genuinely new warning exists. trimEnd() on both
+			// sides tolerates trailing-whitespace drift from GitHub's API
+			// without reintroducing the marker-only false-positive this
+			// replaced — found by anthropicreviewbot reviewing PR #67
+			// (PRRT_kwDOSM5cU86Z_qoq).
+			const normalizedBody = body.trimEnd();
+			if (
+				await hasExistingComment(
+					octokit,
+					owner,
+					repo,
+					pullNumber,
+					(b) => b.trimEnd() === normalizedBody,
+				)
+			) {
 				console.log("rate-limit comment already posted; not duplicating", {
 					owner,
 					repo,

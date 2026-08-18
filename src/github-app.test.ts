@@ -567,6 +567,88 @@ describe("maybeSubmitReview", () => {
 		expect(posts).toHaveLength(0);
 	});
 
+	// codexreviewbot (PRRT_kwDOSM5cU86Z_xF1 / _xGF) reviewing PR #67's own
+	// 2f66390 commit: the exact-body-match fix is correct for RATE_LIMITED
+	// (its variable text — reset time — IS the signal a new warning exists),
+	// but the quota-exhausted body ALSO embeds `providerLabel(quotaProvider)`,
+	// whose value can drift (e.g. "anthropic" on one cycle, unset/"unknown" on
+	// a retry for the same underlying condition) independent of the marker.
+	// Exact-body matching on that path would miss the existing comment and
+	// repost on every drift — reintroducing the very spam this dedup exists
+	// to stop, just on the quota path instead of the rate-limit path.
+	it("dedupes the quota-exhausted comment by marker even when the quotaProvider label text drifts between cycles", async () => {
+		mockBuildReview.mockReset().mockResolvedValueOnce({
+			event: "QUOTA_EXHAUSTED" as const,
+			body: "",
+			comments: [],
+			validLinesByPath: new Map(),
+			metadata: DEFAULT_METADATA,
+			quotaProvider: "anthropic",
+		});
+		let postedBody: string | undefined;
+		const octokitFirst = {
+			request: vi.fn(async (route: string, params: Record<string, unknown>) => {
+				if (
+					route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					return { data: [] };
+				}
+				if (
+					route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					postedBody = params.body as string;
+				}
+				return { data: {} };
+			}),
+		};
+		await maybeSubmitReview({
+			app: { getInstallationOctokit: vi.fn(async () => octokitFirst) } as never,
+			...baseArgs,
+		});
+		expect(postedBody).toBeDefined();
+		expect(postedBody).toContain("Anthropic");
+
+		// Same underlying condition, same config.provider, but this retry's
+		// quotaProvider is unset — the human-facing label text differs even
+		// though the marker (keyed off config.provider) does not.
+		mockBuildReview.mockReset().mockResolvedValueOnce({
+			event: "QUOTA_EXHAUSTED" as const,
+			body: "",
+			comments: [],
+			validLinesByPath: new Map(),
+			metadata: DEFAULT_METADATA,
+			quotaProvider: undefined,
+		});
+		const requests2: Array<{
+			route: string;
+			params: Record<string, unknown>;
+		}> = [];
+		const octokitSecond = {
+			request: vi.fn(async (route: string, params: Record<string, unknown>) => {
+				requests2.push({ route, params });
+				if (
+					route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					return { data: [{ body: postedBody }] };
+				}
+				return { data: {} };
+			}),
+		};
+		const outcome2 = await maybeSubmitReview({
+			app: {
+				getInstallationOctokit: vi.fn(async () => octokitSecond),
+			} as never,
+			...baseArgs,
+		});
+
+		expect(outcome2).toEqual({ status: "quota_exhausted" });
+		const posts2 = requests2.filter(
+			(r) =>
+				r.route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+		);
+		expect(posts2).toHaveLength(0);
+	});
+
 	// Found by sourcery-ai reviewing PR #67: hasExistingComment's own docstring
 	// says a malformed response is treated as "no existing comment", but a
 	// thrown network/Octokit error from the GET itself was never caught and
@@ -1751,6 +1833,38 @@ describe("injectPRSection", () => {
 		const result = injectPRSection(malformed, newSection, "anthropic");
 
 		expect(result.split("middle")).toHaveLength(2);
+	});
+
+	// codexreviewbot (PRRT_kwDOSM5cU86Z_xF_) reviewing PR #67's own 2f66390
+	// commit: legacyEndIdx was found via `body.indexOf(END)` from position 0,
+	// not from just after legacyStartIdx — so if the literal end-marker text
+	// appears earlier in user-authored content within the legacy section
+	// (e.g. quoting the bot's own markers as an example), the strip stops at
+	// that spurious occurrence instead of the true closing marker, leaving
+	// the rest of the legacy section (including a dangling real end marker)
+	// in the migrated body.
+	// codexreviewbot (PRRT_kwDOSM5cU86Z_xF_) reviewing PR #67's own 2f66390
+	// commit: legacyEndIdx was found via `body.indexOf(END)` from position 0,
+	// so a literal mention of the end-marker text BEFORE the real legacy
+	// start marker (e.g. someone quoting the bot's own markers as an example
+	// earlier in the PR description) makes legacyEndIdx < legacyStartIdx.
+	// The `legacyStartIdx < legacyEndIdx` ordering guard added for
+	// PRRT_kwDOSM5cU86Z_qoy/_qpF already stops that from corrupting the body,
+	// but it does so by skipping the strip entirely — the genuine legacy
+	// section (start...end, further along) never gets migrated at all.
+	// Searching for the end marker starting after the start marker (instead
+	// of from position 0) finds the real closing marker and lets migration
+	// succeed instead of silently no-op'ing.
+	it("migrates the legacy section even when the end-marker text appears earlier in unrelated content", () => {
+		const body =
+			"Note: our bot posts <!-- ai-review-bot:end --> as an example.\n\n<!-- ai-review-bot:start -->\nold shared content\n<!-- ai-review-bot:end -->\n\nOutro";
+		const newSection =
+			"<!-- ai-review-bot:anthropic:start -->\nnew content\n<!-- ai-review-bot:anthropic:end -->";
+
+		const result = injectPRSection(body, newSection, "anthropic");
+
+		expect(result).not.toContain("old shared content");
+		expect(result).toContain("Outro");
 	});
 });
 
