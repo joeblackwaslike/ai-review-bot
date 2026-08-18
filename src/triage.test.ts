@@ -145,8 +145,9 @@ describe("triageReReview", () => {
 	});
 
 	// The schema must accept only bare open-finding ids and reject an echoed
-	// "id — title" line (the format the prompt shows each finding in) — see
-	// ai-review-bot-49n for the incident this protects against.
+	// "id — title" line: the prompt shows each finding as "id — title", so a
+	// model that judges it resolved naturally echoes that whole line back
+	// instead of isolating the bare id.
 	it("constrains the resolved schema to the known open-finding ids, rejecting an id+title echo", async () => {
 		mockGenerateObject.mockResolvedValueOnce({
 			object: {

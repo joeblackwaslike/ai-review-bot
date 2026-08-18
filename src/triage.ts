@@ -21,13 +21,16 @@ const FAIL_SAFE: TriageDecision = {
 
 /** Builds the per-call schema for the triage decision. `resolved` is
  * constrained to an enum of the actual open-finding ids (or forced empty when
- * there are none) instead of a free-form `z.array(z.string())`, so a model
- * echoing the `id — title` line it was shown in the prompt (instead of the
- * bare id) can't parse — it's rejected at the schema level rather than
- * silently failing the exact-match lookup downstream. See git history /
- * ai-review-bot-49n for the incident this closes. */
+ * there are none) instead of a free-form `z.array(z.string())`. The prompt
+ * shows each finding as `id — title`, so a model naturally echoes that whole
+ * line back; without this constraint the echoed string silently fails the
+ * exact-match lookup in the resolution loop below, keeping a
+ * genuinely-resolved finding permanently marked open. */
 function buildTriageSchema(openFindings: PersistedFinding[]) {
-	const ids = openFindings.map((f) => f.id);
+	// Deduplicated defensively: harmless either way (z.enum tolerates repeats
+	// on the installed zod version), but a unique id list is the honest
+	// invariant for an enum regardless of what the current version allows.
+	const ids = [...new Set(openFindings.map((f) => f.id))];
 	return z.object({
 		recommendation: z.enum(["SKIP", "INCREMENTAL", "FULL"]),
 		resolved:
