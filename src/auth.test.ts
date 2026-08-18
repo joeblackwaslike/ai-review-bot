@@ -6,6 +6,7 @@ import {
 	makeAnthropicOAuthFetch,
 	makeCodexFetch,
 	needsRefresh,
+	parseCodexSSEResponse,
 	resolveAnthropicAuth,
 	resolveAnthropicSubscriptionAuth,
 	resolveOpenAIAuth,
@@ -13,6 +14,32 @@ import {
 	resolveSubscriptionAuth,
 	withClaudeCodeIdentity,
 } from "./auth.js";
+
+/** A trimmed but structurally faithful capture of a real ChatGPT/Codex
+ * Responses-API `stream:true` response — the backend rejects `stream:false`
+ * outright ({"detail":"Stream must be set to true"}, confirmed live
+ * 2026-08-18 researching ai-review-bot-wt8), so every OAuth-path response
+ * arrives in this SSE framing regardless of what the caller asked for.
+ *
+ * Critically, `response.completed`'s embedded `response.output` is ALWAYS an
+ * empty array — confirmed live against the real backend — even though the
+ * content was fully generated. The backend expects the caller to have
+ * accumulated the actual output items from the incremental
+ * `response.output_item.done` events as they streamed, the same way a real
+ * streaming client would; `response.completed` is only a "the whole thing is
+ * done" signal, not a content snapshot. This fixture includes a reasoning
+ * item (typical of gpt-5.x) and a message item, in the order the real API
+ * emits them, so the parser is tested against that reality rather than the
+ * wrong assumption that response.completed carries the content. */
+const CODEX_SSE_FIXTURE = [
+	'event: response.created\ndata: {"type":"response.created","response":{"id":"resp_1","status":"in_progress","output":[]}}',
+	'event: response.output_item.added\ndata: {"type":"response.output_item.added","item":{"id":"rs_1","type":"reasoning","content":[],"encrypted_content":"abc"},"output_index":0}',
+	'event: response.output_item.done\ndata: {"type":"response.output_item.done","item":{"id":"rs_1","type":"reasoning","content":[],"encrypted_content":"abc"},"output_index":0}',
+	'event: response.output_item.added\ndata: {"type":"response.output_item.added","item":{"id":"msg_1","type":"message","status":"in_progress","content":[],"role":"assistant"},"output_index":1}',
+	'event: response.output_text.delta\ndata: {"type":"response.output_text.delta","delta":"OK","output_index":1}',
+	'event: response.output_item.done\ndata: {"type":"response.output_item.done","item":{"id":"msg_1","type":"message","status":"completed","content":[{"type":"output_text","annotations":[],"text":"OK"}],"role":"assistant"},"output_index":1}',
+	'event: response.completed\ndata: {"type":"response.completed","response":{"id":"resp_1","object":"response","status":"completed","output":[],"usage":{"input_tokens":23,"output_tokens":5,"total_tokens":28}}}',
+].join("\n\n");
 
 /** Build a fake JWT whose `exp` claim is `expSec` seconds since epoch. */
 function fakeJwt(expSec: number): string {
@@ -151,6 +178,291 @@ describe("makeCodexFetch", () => {
 
 		const body = JSON.parse(capturedInit?.body as string);
 		expect(body).not.toHaveProperty("max_output_tokens");
+	});
+
+	// ai-review-bot-wt8: the AI SDK's non-streaming generateObject can't parse
+	// an SSE-formatted response body ("Invalid JSON response") — the fetch
+	// wrapper must consume the stream itself and hand back a plain JSON
+	// Response whose body is the response.completed event's `response` object,
+	// so generateObject downstream is unaffected and unaware streaming ever
+	// happened.
+	it("converts an SSE response body into a plain JSON response", async () => {
+		const base = (async () =>
+			new Response(CODEX_SSE_FIXTURE)) as unknown as typeof fetch;
+		const f = makeCodexFetch("acct-1", base);
+
+		const res = await f("https://chatgpt.com/backend-api/codex/responses", {
+			method: "POST",
+			body: JSON.stringify({ input: [] }),
+		});
+
+		expect(res.headers.get("content-type")).toContain("application/json");
+		const parsed = await res.json();
+		expect(parsed).toEqual({
+			id: "resp_1",
+			object: "response",
+			status: "completed",
+			output: [
+				{
+					id: "rs_1",
+					type: "reasoning",
+					content: [],
+					encrypted_content: "abc",
+				},
+				{
+					id: "msg_1",
+					type: "message",
+					status: "completed",
+					content: [{ type: "output_text", annotations: [], text: "OK" }],
+					role: "assistant",
+				},
+			],
+			usage: { input_tokens: 23, output_tokens: 5, total_tokens: 28 },
+		});
+	});
+
+	// An error response (e.g. the 400 "Stream must be set to true" this fetch
+	// itself can never trigger since it always forces stream:true, but other
+	// errors like auth/rate-limit failures) is already plain JSON — it must
+	// pass through unchanged, not be misdetected as SSE.
+	it("passes a plain JSON error response through unchanged", async () => {
+		const base = (async () =>
+			new Response('{"detail":"invalid_request"}', {
+				status: 400,
+			})) as unknown as typeof fetch;
+		const f = makeCodexFetch("acct-1", base);
+
+		const res = await f("https://chatgpt.com/backend-api/codex/responses", {
+			method: "POST",
+			body: JSON.stringify({ input: [] }),
+		});
+
+		expect(res.status).toBe(400);
+		expect(await res.json()).toEqual({ detail: "invalid_request" });
+	});
+
+	// Rewriting an SSE body to JSON must not drop backend response headers
+	// (e.g. rate-limit, trace-id headers) that downstream code or the AI SDK
+	// may inspect.
+	it("preserves the original response's other headers when rewriting an SSE body to JSON", async () => {
+		const base = (async () =>
+			new Response(CODEX_SSE_FIXTURE, {
+				headers: {
+					"x-request-id": "req-123",
+					"content-type": "text/event-stream",
+				},
+			})) as unknown as typeof fetch;
+		const f = makeCodexFetch("acct-1", base);
+
+		const res = await f("https://chatgpt.com/backend-api/codex/responses", {
+			method: "POST",
+			body: JSON.stringify({ input: [] }),
+		});
+
+		expect(res.headers.get("x-request-id")).toBe("req-123");
+		expect(res.headers.get("content-type")).toBe("application/json");
+		expect(res.headers.get("content-type")).not.toContain("text/event-stream");
+		await expect(res.json()).resolves.toMatchObject({ id: "resp_1" });
+	});
+
+	// The rewritten body is JSON.stringify(parsedResponse), a different length
+	// than the original SSE wire payload — content-length/-encoding and
+	// transfer-encoding describe that old payload, not this one, and copying
+	// them verbatim would make a downstream consumer that re-serializes this
+	// Response see a stale/incorrect body-length signal. The fixture's body is
+	// plain text throughout (CODEX_SSE_FIXTURE is never actually compressed);
+	// the `identity` content-encoding value is arbitrary and only proves the
+	// stale header key is stripped, not any real decompression, since
+	// makeCodexFetch never decompresses anything itself.
+	it("strips body-specific headers that no longer describe the rewritten JSON body", async () => {
+		const base = (async () =>
+			new Response(CODEX_SSE_FIXTURE, {
+				headers: {
+					"x-request-id": "req-123",
+					"content-length": String(CODEX_SSE_FIXTURE.length),
+					"content-encoding": "identity",
+					"transfer-encoding": "chunked",
+				},
+			})) as unknown as typeof fetch;
+		const f = makeCodexFetch("acct-1", base);
+
+		const res = await f("https://chatgpt.com/backend-api/codex/responses", {
+			method: "POST",
+			body: JSON.stringify({ input: [] }),
+		});
+
+		expect(res.headers.get("x-request-id")).toBe("req-123");
+		expect(res.headers.get("content-length")).toBeNull();
+		expect(res.headers.get("content-encoding")).toBeNull();
+		expect(res.headers.get("transfer-encoding")).toBeNull();
+		expect(res.headers.get("content-type")).toBe("application/json");
+		await expect(res.json()).resolves.toMatchObject({ id: "resp_1" });
+	});
+
+	// Found by greptile-apps on PR #68: an error-status response (e.g. an
+	// intermediary's 429/502 HTML page) that's neither valid JSON nor
+	// parseable SSE must NOT be thrown as a plain Error — that discards the
+	// original status/headers, and the AI SDK's own HTTP-status-based
+	// rate-limit/quota classification can only see them on a real Response.
+	// Pass the original response through unchanged instead.
+	it("passes an error-status response through unchanged when its body is neither JSON nor parseable SSE", async () => {
+		const base = (async () =>
+			new Response("<html>Bad Gateway</html>", {
+				status: 502,
+				statusText: "Bad Gateway",
+				headers: {
+					"retry-after": "30",
+					"content-encoding": "gzip",
+					"content-length": "9999",
+					"transfer-encoding": "chunked",
+				},
+			})) as unknown as typeof fetch;
+		const f = makeCodexFetch("acct-1", base);
+
+		const res = await f("https://chatgpt.com/backend-api/codex/responses", {
+			method: "POST",
+			body: JSON.stringify({ input: [] }),
+		});
+
+		expect(res.status).toBe(502);
+		expect(res.statusText).toBe("Bad Gateway");
+		expect(res.headers.get("retry-after")).toBe("30");
+		// rawText is already decoded (fetch decompresses before .text() resolves)
+		// — the reconstructed Response's body is plain text, so wire-encoding
+		// headers describing the *original* compressed payload must not survive,
+		// or a consumer would try to decode already-decoded text.
+		expect(res.headers.get("content-encoding")).toBeNull();
+		expect(res.headers.get("content-length")).toBeNull();
+		expect(res.headers.get("transfer-encoding")).toBeNull();
+		await expect(res.text()).resolves.toBe("<html>Bad Gateway</html>");
+	});
+
+	// A *successful*-status response that's neither valid JSON nor parseable
+	// SSE has no plausible upstream-error explanation — it means this code's
+	// own JSON/SSE detection is wrong, so it should still throw loudly with
+	// diagnostic context rather than silently pass through a 200 that isn't
+	// actually usable.
+	it("throws with the original status and a body snippet when a successful response is neither JSON nor parseable SSE", async () => {
+		const base = (async () =>
+			new Response("not json and not sse", {
+				status: 200,
+			})) as unknown as typeof fetch;
+		const f = makeCodexFetch("acct-1", base);
+
+		const err = await f("https://chatgpt.com/backend-api/codex/responses", {
+			method: "POST",
+			body: JSON.stringify({ input: [] }),
+		}).catch((e: unknown) => e);
+
+		expect(err).toBeInstanceOf(Error);
+		const message = (err as Error).message;
+		expect(message).toMatch(/200/);
+		expect(message).toMatch(/not json and not sse/);
+		expect((err as Error).cause).toBeInstanceOf(Error);
+	});
+
+	// SSE framing is transparent — CRLF and LF streams must produce identical
+	// JSON responses, not just at the parseCodexSSEResponse layer but through
+	// the whole makeCodexFetch rewrite (mismatched normalization between the
+	// two would only surface here, not in a parseCodexSSEResponse-only unit
+	// test).
+	it("converts a CRLF-framed SSE response body into the same plain JSON response as LF", async () => {
+		const crlfFixture = CODEX_SSE_FIXTURE.replace(/\n/g, "\r\n");
+		const base = (async () =>
+			new Response(crlfFixture, {
+				headers: { "content-type": "text/event-stream" },
+			})) as unknown as typeof fetch;
+		const f = makeCodexFetch("acct-1", base);
+
+		const res = await f("https://chatgpt.com/backend-api/codex/responses", {
+			method: "POST",
+			body: JSON.stringify({ input: [] }),
+		});
+
+		expect(res.headers.get("content-type")).toContain("application/json");
+		const parsed = await res.json();
+		expect(parsed).toEqual({
+			id: "resp_1",
+			object: "response",
+			status: "completed",
+			output: [
+				{
+					id: "rs_1",
+					type: "reasoning",
+					content: [],
+					encrypted_content: "abc",
+				},
+				{
+					id: "msg_1",
+					type: "message",
+					status: "completed",
+					content: [{ type: "output_text", annotations: [], text: "OK" }],
+					role: "assistant",
+				},
+			],
+			usage: { input_tokens: 23, output_tokens: 5, total_tokens: 28 },
+		});
+	});
+});
+
+describe("parseCodexSSEResponse", () => {
+	it("extracts the response.completed event's response object", () => {
+		expect(parseCodexSSEResponse(CODEX_SSE_FIXTURE)).toEqual({
+			id: "resp_1",
+			object: "response",
+			status: "completed",
+			output: [
+				{
+					id: "rs_1",
+					type: "reasoning",
+					content: [],
+					encrypted_content: "abc",
+				},
+				{
+					id: "msg_1",
+					type: "message",
+					status: "completed",
+					content: [{ type: "output_text", annotations: [], text: "OK" }],
+					role: "assistant",
+				},
+			],
+			usage: { input_tokens: 23, output_tokens: 5, total_tokens: 28 },
+		});
+	});
+
+	// SSE spec permits CRLF line endings; normalize before splitting so a
+	// CRLF-terminated stream is parsed identically to an LF-terminated one.
+	it("parses correctly when the stream uses CRLF line endings", () => {
+		const crlfFixture = CODEX_SSE_FIXTURE.replace(/\n/g, "\r\n");
+		expect(parseCodexSSEResponse(crlfFixture)).toEqual({
+			id: "resp_1",
+			object: "response",
+			status: "completed",
+			output: [
+				{
+					id: "rs_1",
+					type: "reasoning",
+					content: [],
+					encrypted_content: "abc",
+				},
+				{
+					id: "msg_1",
+					type: "message",
+					status: "completed",
+					content: [{ type: "output_text", annotations: [], text: "OK" }],
+					role: "assistant",
+				},
+			],
+			usage: { input_tokens: 23, output_tokens: 5, total_tokens: 28 },
+		});
+	});
+
+	it("throws a clear error when the stream never reaches response.completed", () => {
+		const truncated =
+			'event: response.created\ndata: {"type":"response.created","response":{"id":"resp_1"}}';
+		expect(() => parseCodexSSEResponse(truncated)).toThrow(
+			/response\.completed/,
+		);
 	});
 });
 

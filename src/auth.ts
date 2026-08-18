@@ -310,6 +310,60 @@ export function makeAnthropicOAuthFetch(
 	}) as typeof fetch;
 }
 
+/**
+ * Reconstruct a plain Responses-API `response` object from a raw
+ * Codex/ChatGPT SSE body — `event: <name>\ndata: <json>` blocks separated by
+ * blank lines. The backend rejects `stream:false` outright
+ * ({"detail":"Stream must be set to true"}, confirmed live researching
+ * ai-review-bot-wt8), so every OAuth-path response arrives in this framing
+ * regardless of what the caller asked for.
+ *
+ * `response.completed`'s embedded `response.output` is ALWAYS an empty
+ * array, even though the content was fully generated — confirmed live
+ * against the real backend. It expects the caller to have accumulated the
+ * actual output items (a `reasoning` item, then a `message` item, for a
+ * typical gpt-5.x turn) from the incremental `response.output_item.done`
+ * events as they streamed, the same way a real streaming client would;
+ * `response.completed` is only a "the whole thing is done" signal, not a
+ * content snapshot. This is what lets `makeCodexFetch` hand the AI SDK's
+ * non-streaming `generateObject` a plain JSON body as if the backend had
+ * never streamed at all.
+ *
+ * @param rawSSEText - the full raw SSE response body (lines of `event: ...` /
+ *   `data: ...` pairs separated by blank lines; CRLF and bare-CR line
+ *   endings are normalized to LF before parsing).
+ * @returns the reconstructed Responses-API `response` object, with `output`
+ *   populated from the accumulated `response.output_item.done` events.
+ * @throws if the stream is malformed (for example invalid event JSON) or
+ *   never reaches a `response.completed` event.
+ */
+export function parseCodexSSEResponse(rawSSEText: string): unknown {
+	// The real backend uses LF-only (confirmed live), but SSE permits CRLF or bare CR —
+	// normalize first so a server that does isn't silently misparsed.
+	const blocks = rawSSEText
+		.replace(/\r\n|\r/g, "\n")
+		.split("\n\n")
+		.filter((b) => b.trim());
+	const outputItems: unknown[] = [];
+	let finalResponse: Record<string, unknown> | null = null;
+	for (const block of blocks) {
+		const dataLine = block.split("\n").find((line) => line.startsWith("data:"));
+		if (!dataLine) continue;
+		const parsed = JSON.parse(dataLine.slice("data:".length).trim());
+		if (parsed.type === "response.output_item.done" && parsed.item) {
+			outputItems.push(parsed.item);
+		} else if (parsed.type === "response.completed" && parsed.response) {
+			finalResponse = parsed.response;
+		}
+	}
+	if (!finalResponse) {
+		throw new Error(
+			"Codex SSE stream ended without a response.completed event",
+		);
+	}
+	return { ...finalResponse, output: outputItems };
+}
+
 export function makeCodexFetch(
 	accountId: string,
 	baseFetch: typeof fetch = fetch,
@@ -344,7 +398,81 @@ export function makeCodexFetch(
 				// non-JSON body — leave untouched
 			}
 		}
-		return baseFetch(input, { ...init, headers, body });
+		const res = await baseFetch(input, { ...init, headers, body });
+		// ai-review-bot-wt8: since `stream:true` is now always forced above, a
+		// successful response is always SSE-framed — the AI SDK's non-streaming
+		// generateObject can't parse that directly ("Invalid JSON response").
+		// An error response is already plain JSON (confirmed: the backend's own
+		// 400s look like {"detail":"..."}), so only rewrite what actually fails
+		// to parse as JSON on its own — never misdetect a real error as SSE.
+		const rawText = await res.text();
+		try {
+			JSON.parse(rawText);
+			return new Response(rawText, {
+				status: res.status,
+				statusText: res.statusText,
+				headers: res.headers,
+			});
+		} catch {
+			let parsedResponse: unknown;
+			try {
+				parsedResponse = parseCodexSSEResponse(rawText);
+			} catch (parseErr) {
+				if (!res.ok) {
+					// An error-status response (e.g. an intermediary's 429/502 HTML
+					// page) that's neither JSON nor SSE — reconstruct it from
+					// rawText rather than throwing. Throwing here would discard
+					// res.status and res.headers, and the AI SDK's own
+					// HTTP-status-based rate-limit/quota classification can only see
+					// them on a real Response, not on a JS Error. rawText is already
+					// decoded (fetch decompresses before .text() resolves), so the
+					// wire-encoding headers describing the *original* payload must
+					// be stripped the same way the SSE-success path does below —
+					// otherwise a consumer would try to decode already-decoded text.
+					const passthroughHeaders = new Headers(res.headers);
+					passthroughHeaders.delete("content-length");
+					passthroughHeaders.delete("content-encoding");
+					passthroughHeaders.delete("transfer-encoding");
+					return new Response(rawText, {
+						status: res.status,
+						statusText: res.statusText,
+						headers: passthroughHeaders,
+					});
+				}
+				// A *successful* response that's neither valid JSON nor parseable
+				// SSE has no plausible upstream-error explanation — this code's own
+				// JSON/SSE detection is wrong. Surface the original status/body
+				// rather than losing them behind parseCodexSSEResponse's generic
+				// "no response.completed" message, which is indistinguishable from
+				// a genuine SSE-shape bug. `cause` preserves parseCodexSSEResponse's
+				// own error (and stack) so it's still fully diagnosable from this
+				// wrapper's summary, not just from the message string. Set directly
+				// to `parseErr` (not wrapped) — Error.cause is typed `unknown`
+				// precisely so the original thrown value, whatever it was, survives
+				// intact for a caller that inspects `err.cause`.
+				throw new Error(
+					`Codex response (status ${res.status}) was neither valid JSON nor a parseable SSE stream: ${
+						parseErr instanceof Error ? parseErr.message : String(parseErr)
+					}. Body (first 500 chars): ${rawText.slice(0, 500)}`,
+					{ cause: parseErr },
+				);
+			}
+			// Only the framing headers change here — content-length/-encoding and
+			// transfer-encoding described the original SSE wire payload, not the
+			// JSON.stringify(parsedResponse) body being returned, and a stale
+			// content-length in particular can make a downstream consumer that
+			// re-serializes this Response see a truncated/invalid body.
+			const headers = new Headers(res.headers);
+			headers.delete("content-length");
+			headers.delete("content-encoding");
+			headers.delete("transfer-encoding");
+			headers.set("content-type", "application/json");
+			return new Response(JSON.stringify(parsedResponse), {
+				status: res.status,
+				statusText: res.statusText,
+				headers,
+			});
+		}
 	}) as typeof fetch;
 }
 
