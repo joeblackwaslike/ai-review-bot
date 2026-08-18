@@ -21,19 +21,11 @@ const FAIL_SAFE: TriageDecision = {
 
 /** Builds the per-call schema for the triage decision. `resolved` is
  * constrained to an enum of the actual open-finding ids (or forced empty when
- * there are none) instead of a free-form `z.array(z.string())`.
- *
- * Root cause of the "finding remains open" false claims recycled across
- * PR #69's review rounds: the prompt below shows each finding as
- * `${f.id} — ${f.title} [${f.severity}]`, and a model that correctly judges a
- * finding resolved naturally echoes that whole "id — title" line back rather
- * than isolating the bare id. The old free-form schema accepted that, and
- * downstream's exact-match `triage.resolved.includes(f.id)` then silently
- * never matched — reproduced live: the model correctly resolved a finding but
- * returned "id — title", and it stayed marked "open" forever, which is what
- * generateSummary's "CONFIRMED still open" ground truth was built from. This
- * makes the malformed shape structurally unrepresentable instead of relying
- * on prompt wording to keep the model on the bare id. */
+ * there are none) instead of a free-form `z.array(z.string())`, so a model
+ * echoing the `id — title` line it was shown in the prompt (instead of the
+ * bare id) can't parse — it's rejected at the schema level rather than
+ * silently failing the exact-match lookup downstream. See git history /
+ * ai-review-bot-49n for the incident this closes. */
 function buildTriageSchema(openFindings: PersistedFinding[]) {
 	const ids = openFindings.map((f) => f.id);
 	return z.object({

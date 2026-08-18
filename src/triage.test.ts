@@ -144,17 +144,9 @@ describe("triageReReview", () => {
 		expect(mockCreateAIModel.mock.calls.at(-1)?.[1]).toBe(auth);
 	});
 
-	// Root cause of the "windowMs remains open" false claim on PR #69 round 4
-	// (docs/post-mortem-review-loop-churn.md follow-up): reproduced live against
-	// the real model — given a delta that unambiguously fixed a finding, the
-	// model correctly judged it resolved but returned "id — title" (the exact
-	// line format it was shown in the prompt, `${f.id} — ${f.title}`) instead of
-	// the bare id. The old plain `z.array(z.string())` schema accepted that, and
-	// the downstream `triage.resolved.includes(f.id)` exact-match check then
-	// silently never matched, so a genuinely-resolved finding stayed "open"
-	// forever. Constraining `resolved` to an enum of the actual known ids makes
-	// that malformed shape structurally unrepresentable instead of relying on
-	// prompt wording discipline.
+	// The schema must accept only bare open-finding ids and reject an echoed
+	// "id — title" line (the format the prompt shows each finding in) — see
+	// ai-review-bot-49n for the incident this protects against.
 	it("constrains the resolved schema to the known open-finding ids, rejecting an id+title echo", async () => {
 		mockGenerateObject.mockResolvedValueOnce({
 			object: {
