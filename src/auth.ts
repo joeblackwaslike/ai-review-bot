@@ -401,11 +401,27 @@ export function makeCodexFetch(
 				headers: res.headers,
 			});
 		} catch {
-			const parsedResponse = parseCodexSSEResponse(rawText);
+			let parsedResponse: unknown;
+			try {
+				parsedResponse = parseCodexSSEResponse(rawText);
+			} catch (parseErr) {
+				// Neither valid JSON nor parseable SSE — a real upstream failure
+				// (truncated response, HTML error page, etc.), not a bug in this
+				// parser. Surface the original status/body rather than losing them
+				// behind parseCodexSSEResponse's generic "no response.completed"
+				// message, which is indistinguishable from a genuine SSE-shape bug.
+				throw new Error(
+					`Codex response (status ${res.status}) was neither valid JSON nor a parseable SSE stream: ${
+						parseErr instanceof Error ? parseErr.message : String(parseErr)
+					}. Body (first 200 chars): ${rawText.slice(0, 200)}`,
+				);
+			}
+			const headers = new Headers(res.headers);
+			headers.set("content-type", "application/json");
 			return new Response(JSON.stringify(parsedResponse), {
 				status: res.status,
 				statusText: res.statusText,
-				headers: { "content-type": "application/json" },
+				headers,
 			});
 		}
 	}) as typeof fetch;

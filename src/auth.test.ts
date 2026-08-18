@@ -240,6 +240,56 @@ describe("makeCodexFetch", () => {
 		expect(res.status).toBe(400);
 		expect(await res.json()).toEqual({ detail: "invalid_request" });
 	});
+
+	// Found by chatgpt-codex-connector/anthropicreviewbot/greptile-apps
+	// reviewing PR #68: the rewritten Response only carried a fresh
+	// content-type header, dropping everything else the backend sent (e.g.
+	// rate-limit headers) that downstream code or the AI SDK might inspect.
+	it("preserves the original response's other headers when rewriting an SSE body to JSON", async () => {
+		const base = (async () =>
+			new Response(CODEX_SSE_FIXTURE, {
+				headers: {
+					"x-request-id": "req-123",
+					"content-type": "text/event-stream",
+				},
+			})) as unknown as typeof fetch;
+		const f = makeCodexFetch("acct-1", base);
+
+		const res = await f("https://chatgpt.com/backend-api/codex/responses", {
+			method: "POST",
+			body: JSON.stringify({ input: [] }),
+		});
+
+		expect(res.headers.get("x-request-id")).toBe("req-123");
+		expect(res.headers.get("content-type")).toContain("application/json");
+	});
+
+	// Found by anthropicreviewbot: a response that's neither valid JSON nor a
+	// parseable SSE stream (a real error case — truncated network response, an
+	// HTML error page, etc.) previously threw parseCodexSSEResponse's generic
+	// "ended without a response.completed event" with no trace of the actual
+	// status or body, making it indistinguishable from a genuine truncated-SSE
+	// bug in this code from an upstream failure that has nothing to do with it.
+	it("surfaces the original status and a body snippet when the response is neither JSON nor parseable SSE", async () => {
+		const base = (async () =>
+			new Response("<html>Bad Gateway</html>", {
+				status: 502,
+			})) as unknown as typeof fetch;
+		const f = makeCodexFetch("acct-1", base);
+
+		await expect(
+			f("https://chatgpt.com/backend-api/codex/responses", {
+				method: "POST",
+				body: JSON.stringify({ input: [] }),
+			}),
+		).rejects.toThrow(/502/);
+		await expect(
+			f("https://chatgpt.com/backend-api/codex/responses", {
+				method: "POST",
+				body: JSON.stringify({ input: [] }),
+			}),
+		).rejects.toThrow(/Bad Gateway/);
+	});
 });
 
 describe("parseCodexSSEResponse", () => {
