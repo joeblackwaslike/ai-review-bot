@@ -241,10 +241,9 @@ describe("makeCodexFetch", () => {
 		expect(await res.json()).toEqual({ detail: "invalid_request" });
 	});
 
-	// Found by chatgpt-codex-connector/anthropicreviewbot/greptile-apps
-	// reviewing PR #68: the rewritten Response only carried a fresh
-	// content-type header, dropping everything else the backend sent (e.g.
-	// rate-limit headers) that downstream code or the AI SDK might inspect.
+	// Rewriting an SSE body to JSON must not drop backend response headers
+	// (e.g. rate-limit, trace-id headers) that downstream code or the AI SDK
+	// may inspect.
 	it("preserves the original response's other headers when rewriting an SSE body to JSON", async () => {
 		const base = (async () =>
 			new Response(CODEX_SSE_FIXTURE, {
@@ -261,15 +260,16 @@ describe("makeCodexFetch", () => {
 		});
 
 		expect(res.headers.get("x-request-id")).toBe("req-123");
-		expect(res.headers.get("content-type")).toContain("application/json");
+		expect(res.headers.get("content-type")).toBe("application/json");
+		expect(res.headers.get("content-type")).not.toContain("text/event-stream");
+		await expect(res.json()).resolves.toMatchObject({ id: "resp_1" });
 	});
 
-	// Found by anthropicreviewbot: a response that's neither valid JSON nor a
-	// parseable SSE stream (a real error case — truncated network response, an
-	// HTML error page, etc.) previously threw parseCodexSSEResponse's generic
-	// "ended without a response.completed event" with no trace of the actual
-	// status or body, making it indistinguishable from a genuine truncated-SSE
-	// bug in this code from an upstream failure that has nothing to do with it.
+	// A response that is neither valid JSON nor a parseable SSE stream (e.g. a
+	// truncated network response or HTML error page) must surface the
+	// original HTTP status and body snippet rather than throwing
+	// parseCodexSSEResponse's generic "no response.completed" message, which
+	// would be indistinguishable from a genuine SSE-shape bug in this code.
 	it("surfaces the original status and a body snippet when the response is neither JSON nor parseable SSE", async () => {
 		const base = (async () =>
 			new Response("<html>Bad Gateway</html>", {
@@ -277,18 +277,58 @@ describe("makeCodexFetch", () => {
 			})) as unknown as typeof fetch;
 		const f = makeCodexFetch("acct-1", base);
 
-		await expect(
-			f("https://chatgpt.com/backend-api/codex/responses", {
-				method: "POST",
-				body: JSON.stringify({ input: [] }),
-			}),
-		).rejects.toThrow(/502/);
-		await expect(
-			f("https://chatgpt.com/backend-api/codex/responses", {
-				method: "POST",
-				body: JSON.stringify({ input: [] }),
-			}),
-		).rejects.toThrow(/Bad Gateway/);
+		const err = await f("https://chatgpt.com/backend-api/codex/responses", {
+			method: "POST",
+			body: JSON.stringify({ input: [] }),
+		}).catch((e: unknown) => e);
+
+		expect(err).toBeInstanceOf(Error);
+		const message = (err as Error).message;
+		expect(message).toMatch(/502/);
+		expect(message).toMatch(/Bad Gateway/);
+		expect((err as Error).cause).toBeInstanceOf(Error);
+	});
+
+	// ai-review-bot-wt8: SSE is a text framing detail, not a content
+	// difference — the reconstructed JSON response must be identical whether
+	// the upstream stream used LF or CRLF line endings, not just at the
+	// parseCodexSSEResponse layer but through the whole makeCodexFetch
+	// rewrite (mismatched normalization between the two would only surface
+	// here, not in a parseCodexSSEResponse-only unit test).
+	it("converts a CRLF-framed SSE response body into the same plain JSON response as LF", async () => {
+		const crlfFixture = CODEX_SSE_FIXTURE.replace(/\n/g, "\r\n");
+		const base = (async () =>
+			new Response(crlfFixture)) as unknown as typeof fetch;
+		const f = makeCodexFetch("acct-1", base);
+
+		const res = await f("https://chatgpt.com/backend-api/codex/responses", {
+			method: "POST",
+			body: JSON.stringify({ input: [] }),
+		});
+
+		expect(res.headers.get("content-type")).toContain("application/json");
+		const parsed = await res.json();
+		expect(parsed).toEqual({
+			id: "resp_1",
+			object: "response",
+			status: "completed",
+			output: [
+				{
+					id: "rs_1",
+					type: "reasoning",
+					content: [],
+					encrypted_content: "abc",
+				},
+				{
+					id: "msg_1",
+					type: "message",
+					status: "completed",
+					content: [{ type: "output_text", annotations: [], text: "OK" }],
+					role: "assistant",
+				},
+			],
+			usage: { input_tokens: 23, output_tokens: 5, total_tokens: 28 },
+		});
 	});
 });
 
@@ -317,10 +357,8 @@ describe("parseCodexSSEResponse", () => {
 		});
 	});
 
-	// Suggested by sourcery-ai reviewing PR #68: the real captured backend
-	// response uses LF-only line endings (confirmed live), but SSE
-	// implementations are permitted to use CRLF — normalize before splitting
-	// so a server that does isn't silently misparsed.
+	// SSE spec permits CRLF line endings; normalize before splitting so a
+	// CRLF-terminated stream is parsed identically to an LF-terminated one.
 	it("parses correctly when the stream uses CRLF line endings", () => {
 		const crlfFixture = CODEX_SSE_FIXTURE.replace(/\n/g, "\r\n");
 		expect(parseCodexSSEResponse(crlfFixture)).toEqual({

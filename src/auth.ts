@@ -329,17 +329,17 @@ export function makeAnthropicOAuthFetch(
  * non-streaming `generateObject` a plain JSON body as if the backend had
  * never streamed at all.
  *
- * @param rawSSEText - the full raw SSE response body (`event: ...\ndata:
- *   ...` blocks separated by blank lines).
+ * @param rawSSEText - the full raw SSE response body (lines of `event: ...` /
+ *   `data: ...` pairs separated by blank lines).
  * @returns the reconstructed Responses-API `response` object, with `output`
  *   populated from the accumulated `response.output_item.done` events.
  * @throws if the stream never reaches a `response.completed` event.
  */
 export function parseCodexSSEResponse(rawSSEText: string): unknown {
-	// The real backend uses LF-only (confirmed live), but SSE permits CRLF —
+	// The real backend uses LF-only (confirmed live), but SSE permits CRLF or bare CR —
 	// normalize first so a server that does isn't silently misparsed.
 	const blocks = rawSSEText
-		.replace(/\r\n/g, "\n")
+		.replace(/\r\n|\r/g, "\n")
 		.split("\n\n")
 		.filter((b) => b.trim());
 	const outputItems: unknown[] = [];
@@ -421,10 +421,14 @@ export function makeCodexFetch(
 				// parser. Surface the original status/body rather than losing them
 				// behind parseCodexSSEResponse's generic "no response.completed"
 				// message, which is indistinguishable from a genuine SSE-shape bug.
+				// `cause` preserves parseCodexSSEResponse's own error (and stack) so
+				// a genuine parser bug is still fully diagnosable from this
+				// wrapper's summary, not just from the message string.
 				throw new Error(
 					`Codex response (status ${res.status}) was neither valid JSON nor a parseable SSE stream: ${
 						parseErr instanceof Error ? parseErr.message : String(parseErr)
-					}. Body (first 200 chars): ${rawText.slice(0, 200)}`,
+					}. Body (first 500 chars): ${rawText.slice(0, 500)}`,
+					{ cause: parseErr },
 				);
 			}
 			const headers = new Headers(res.headers);
