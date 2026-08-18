@@ -389,7 +389,10 @@ export async function cmdWatch(args: string[]): Promise<void> {
 	let pr: number | undefined;
 	let repoArg: string | undefined;
 	let providerArg: "anthropic" | "openai" | undefined;
-	let intervalSeconds = 60;
+	// 5-min conservative default; see CLAUDE.md §watch and
+	// docs/post-mortem-review-loop-churn.md. --interval overrides for a
+	// supervised fast pass.
+	let intervalSeconds = 300;
 	let noCircuitBreaker = false;
 	for (let i = 0; i < args.length; i++) {
 		const a = args[i];

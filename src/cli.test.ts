@@ -220,7 +220,7 @@ describe("cmdWatch", () => {
 		expect(watchPr).not.toHaveBeenCalled();
 	});
 
-	it("defaults to both providers, 60s interval, and passes the resolved targets to watchPr", async () => {
+	it("defaults to both providers, a conservative 5-minute interval, and passes the resolved targets to watchPr", async () => {
 		await cmdWatch(["--pr", "5", "--repo", "o/r"]);
 
 		expect(watchPr).toHaveBeenCalledTimes(1);
@@ -228,7 +228,7 @@ describe("cmdWatch", () => {
 		expect(call.owner).toBe("o");
 		expect(call.repo).toBe("r");
 		expect(call.pullNumber).toBe(5);
-		expect(call.intervalMs).toBe(60_000);
+		expect(call.intervalMs).toBe(300_000);
 		expect(call.targets.map((t) => t.provider)).toEqual([
 			"anthropic",
 			"openai",

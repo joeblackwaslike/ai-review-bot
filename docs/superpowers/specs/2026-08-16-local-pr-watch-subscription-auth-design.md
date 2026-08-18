@@ -67,7 +67,7 @@ Separately, this session found `src/router.ts:81-83`'s `OPENAI_TIER_MAP` hardcod
 | `--pr <n>` | number | *(required)* | PR number to watch. |
 | `--repo <owner/name>` | string | from `git remote get-url origin` (`originSlug()`) | Target repo. |
 | `--provider <anthropic\|openai>` | string | both | Narrow to a single provider. |
-| `--interval <seconds>` | number | `60` | Poll interval. |
+| `--interval <seconds>` | number | `300` (5 min) | Poll interval. |
 | `--json` | boolean | `false` | Machine-readable per-cycle output, matching existing CLI convention. |
 
 Auth is always resolved via `resolveAnthropicAuth()`/`resolveOpenAIAuth()` — no API-key mode for this command; if someone wants API-key-funded automatic review, that's what the hosted webhook bots are for.
