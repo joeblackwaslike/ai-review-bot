@@ -330,7 +330,8 @@ export function makeAnthropicOAuthFetch(
  * never streamed at all.
  *
  * @param rawSSEText - the full raw SSE response body (lines of `event: ...` /
- *   `data: ...` pairs separated by blank lines).
+ *   `data: ...` pairs separated by blank lines; CRLF and bare-CR line
+ *   endings are normalized to LF before parsing).
  * @returns the reconstructed Responses-API `response` object, with `output`
  *   populated from the accumulated `response.output_item.done` events.
  * @throws if the stream never reaches a `response.completed` event.
@@ -423,15 +424,25 @@ export function makeCodexFetch(
 				// message, which is indistinguishable from a genuine SSE-shape bug.
 				// `cause` preserves parseCodexSSEResponse's own error (and stack) so
 				// a genuine parser bug is still fully diagnosable from this
-				// wrapper's summary, not just from the message string.
+				// wrapper's summary, not just from the message string. Normalized to
+				// an Error even if the parser ever threw a non-Error value, so
+				// `cause` stays consistently typed for callers that inspect it.
+				const cause =
+					parseErr instanceof Error ? parseErr : new Error(String(parseErr));
 				throw new Error(
-					`Codex response (status ${res.status}) was neither valid JSON nor a parseable SSE stream: ${
-						parseErr instanceof Error ? parseErr.message : String(parseErr)
-					}. Body (first 500 chars): ${rawText.slice(0, 500)}`,
-					{ cause: parseErr },
+					`Codex response (status ${res.status}) was neither valid JSON nor a parseable SSE stream: ${cause.message}. Body (first 500 chars): ${rawText.slice(0, 500)}`,
+					{ cause },
 				);
 			}
+			// Only the framing headers change here — content-length/-encoding and
+			// transfer-encoding described the original SSE wire payload, not the
+			// JSON.stringify(parsedResponse) body being returned, and a stale
+			// content-length in particular can make a downstream consumer that
+			// re-serializes this Response see a truncated/invalid body.
 			const headers = new Headers(res.headers);
+			headers.delete("content-length");
+			headers.delete("content-encoding");
+			headers.delete("transfer-encoding");
 			headers.set("content-type", "application/json");
 			return new Response(JSON.stringify(parsedResponse), {
 				status: res.status,

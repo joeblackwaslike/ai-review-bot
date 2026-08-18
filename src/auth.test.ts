@@ -265,6 +265,34 @@ describe("makeCodexFetch", () => {
 		await expect(res.json()).resolves.toMatchObject({ id: "resp_1" });
 	});
 
+	// The rewritten body is JSON.stringify(parsedResponse), a different length
+	// than the original SSE wire payload — content-length/-encoding and
+	// transfer-encoding describe that old payload, not this one, and copying
+	// them verbatim would make a downstream consumer that re-serializes this
+	// Response see a stale/incorrect body-length signal.
+	it("strips body-specific headers that no longer describe the rewritten JSON body", async () => {
+		const base = (async () =>
+			new Response(CODEX_SSE_FIXTURE, {
+				headers: {
+					"x-request-id": "req-123",
+					"content-length": String(CODEX_SSE_FIXTURE.length),
+					"content-encoding": "gzip",
+					"transfer-encoding": "chunked",
+				},
+			})) as unknown as typeof fetch;
+		const f = makeCodexFetch("acct-1", base);
+
+		const res = await f("https://chatgpt.com/backend-api/codex/responses", {
+			method: "POST",
+			body: JSON.stringify({ input: [] }),
+		});
+
+		expect(res.headers.get("x-request-id")).toBe("req-123");
+		expect(res.headers.get("content-length")).toBeNull();
+		expect(res.headers.get("content-encoding")).toBeNull();
+		expect(res.headers.get("transfer-encoding")).toBeNull();
+	});
+
 	// A response that is neither valid JSON nor a parseable SSE stream (e.g. a
 	// truncated network response or HTML error page) must surface the
 	// original HTTP status and body snippet rather than throwing
@@ -289,7 +317,7 @@ describe("makeCodexFetch", () => {
 		expect((err as Error).cause).toBeInstanceOf(Error);
 	});
 
-	// ai-review-bot-wt8: SSE is a text framing detail, not a content
+	// Integration: SSE is a text framing detail, not a content
 	// difference — the reconstructed JSON response must be identical whether
 	// the upstream stream used LF or CRLF line endings, not just at the
 	// parseCodexSSEResponse layer but through the whole makeCodexFetch
