@@ -57,12 +57,28 @@ export interface WatchPrOptions {
 	/** Test-only escape hatch: stop after this many poll cycles regardless of
 	 * PR state. Unset in production — the loop runs until merged/closed. */
 	maxCycles?: number;
+	/** Injectable clock for the circuit breaker's rolling window. Defaults to
+	 * `Date.now`. */
+	now?: () => number;
+	/** Mechanical guard against the fast-repush review-nitpick loop documented
+	 * in docs/post-mortem-review-loop-churn.md (ai-review-bot-599): a fast
+	 * local watcher re-reviewing every push from an agent that pushes every
+	 * 2-5 min raced its own fix-verify-push cadence and ran 8-10 review
+	 * rounds before a human caught it. Prose guidance to pause the watcher
+	 * already existed and was recognized-but-not-enforced in that incident,
+	 * so this stops the loop itself once a single provider posts `maxReviews`
+	 * reviews within `windowMs` — pass `false` to disable (e.g. a deliberate
+	 * final confirmation pass after the operator has already reviewed the
+	 * fix-verify-push cadence by hand). Defaults to 3 reviews / 15 min. */
+	circuitBreaker?: { maxReviews: number; windowMs: number } | false;
 }
 
 export interface WatchResult {
 	cycles: number;
-	reason: "merged" | "closed" | "max-cycles";
+	reason: "merged" | "closed" | "max-cycles" | "circuit-breaker";
 }
+
+const DEFAULT_CIRCUIT_BREAKER = { maxReviews: 3, windowMs: 15 * 60_000 };
 
 function defaultSleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
@@ -167,6 +183,8 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 			}
 		},
 		maxCycles,
+		now = Date.now,
+		circuitBreaker = DEFAULT_CIRCUIT_BREAKER,
 	} = opts;
 
 	let cycles = 0;
@@ -186,7 +204,13 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 	const providerState = new Map(
 		targets.map((target) => [
 			target.provider,
-			{ hasPostedEver: false, lastReviewedSha: null as string | null },
+			{
+				hasPostedEver: false,
+				lastReviewedSha: null as string | null,
+				// Timestamps of this provider's recent posts, for the circuit
+				// breaker's rolling window — see WatchPrOptions.circuitBreaker.
+				recentPosts: [] as number[],
+			},
 		]),
 	);
 
@@ -299,6 +323,22 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 					log(
 						`ai-review watch: posted ${target.provider} review for ${pr.head.sha}`,
 					);
+
+					if (circuitBreaker) {
+						const nowMs = now();
+						state.recentPosts = state.recentPosts.filter(
+							(t) => nowMs - t < circuitBreaker.windowMs,
+						);
+						state.recentPosts.push(nowMs);
+						if (state.recentPosts.length >= circuitBreaker.maxReviews) {
+							const windowMin = Math.round(circuitBreaker.windowMs / 60_000);
+							log(
+								`ai-review watch: circuit breaker tripped — ${target.provider} posted ${state.recentPosts.length} reviews for ${owner}/${repo}#${pullNumber} within ${windowMin} min. This usually means fixes are being pushed faster than the reviewer can converge (see docs/post-mortem-review-loop-churn.md). Stopping — let the PR settle, then restart watch for a final confirmation pass.`,
+							);
+							return { cycles, reason: "circuit-breaker" };
+						}
+					}
+
 					// ai-review-bot-1f5: re-poll before the NEXT target's post (if
 					// any) in this cycle, so its PR-body PATCH builds on this
 					// provider's just-posted summary section instead of the stale

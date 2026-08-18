@@ -82,7 +82,7 @@ function usage(): never {
 	);
 	console.error("  ai-review ready [pr#]");
 	console.error(
-		"  ai-review watch --pr <n> [--repo <owner/name>] [--provider anthropic|openai] [--interval <seconds>]",
+		"  ai-review watch --pr <n> [--repo <owner/name>] [--provider anthropic|openai] [--interval <seconds>] [--no-circuit-breaker]",
 	);
 	console.error(
 		"      Poll an open PR and re-review on every push using local subscription",
@@ -390,6 +390,7 @@ export async function cmdWatch(args: string[]): Promise<void> {
 	let repoArg: string | undefined;
 	let providerArg: "anthropic" | "openai" | undefined;
 	let intervalSeconds = 60;
+	let noCircuitBreaker = false;
 	for (let i = 0; i < args.length; i++) {
 		const a = args[i];
 		if (a === "--pr") {
@@ -411,7 +412,8 @@ export async function cmdWatch(args: string[]): Promise<void> {
 			if (!Number.isInteger(intervalSeconds) || intervalSeconds <= 0) {
 				fatal(`--interval must be a positive integer, got: ${raw}`);
 			}
-		} else if (a.startsWith("--")) fatal(`Unknown flag: ${a}`);
+		} else if (a === "--no-circuit-breaker") noCircuitBreaker = true;
+		else if (a.startsWith("--")) fatal(`Unknown flag: ${a}`);
 	}
 	if (pr === undefined) fatal("--pr <n> is required");
 
@@ -455,6 +457,7 @@ export async function cmdWatch(args: string[]): Promise<void> {
 		targets,
 		resolveAuthFor: resolveSubscriptionAuth,
 		intervalMs: intervalSeconds * 1000,
+		...(noCircuitBreaker ? { circuitBreaker: false as const } : {}),
 	});
 
 	console.log(`Stopped: ${result.reason} after ${result.cycles} cycle(s).`);

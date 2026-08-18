@@ -742,4 +742,152 @@ describe("watchPr", () => {
 			expect.stringContaining("re-poll after anthropic post failed"),
 		);
 	});
+
+	// ai-review-bot-599 / docs/post-mortem-review-loop-churn.md: a fast local
+	// watcher re-reviewing every push from an agent that pushes every 2-5 min
+	// produced 8-10 review rounds in ~2 hours before a human caught it. Prose
+	// guidance (state a round cap, pause the watcher) already existed and was
+	// recognized-but-not-enforced in that incident, so the mechanical guard
+	// lives here instead of relying on the operator remembering it.
+	describe("circuit breaker", () => {
+		it("trips and stops the loop after maxReviews posts land within the window", async () => {
+			let call = 0;
+			const request = vi
+				.fn()
+				.mockImplementation(() =>
+					Promise.resolve(pollResponse({ headSha: `sha${++call}` })),
+				);
+			const submitReview = vi.fn().mockResolvedValue(posted);
+			const log = vi.fn();
+			let clock = 0;
+			const now = vi.fn(() => {
+				clock += 60_000; // 1 min apart — well within the window
+				return clock;
+			});
+
+			const result = await watchPr({
+				owner: "o",
+				repo: "r",
+				pullNumber: 5,
+				pollOctokit: { request },
+				targets: [buildTarget("anthropic")],
+				resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
+				sleep: vi.fn().mockResolvedValue(undefined),
+				log,
+				submitReview,
+				now,
+				circuitBreaker: { maxReviews: 3, windowMs: 900_000 },
+				maxCycles: 10,
+			});
+
+			expect(result).toEqual({ cycles: 3, reason: "circuit-breaker" });
+			expect(submitReview).toHaveBeenCalledTimes(3);
+			expect(log).toHaveBeenCalledWith(
+				expect.stringContaining("circuit breaker"),
+			);
+		});
+
+		it("does not trip when posts are spaced further apart than the window", async () => {
+			let call = 0;
+			const request = vi
+				.fn()
+				.mockImplementation(() =>
+					Promise.resolve(pollResponse({ headSha: `sha${++call}` })),
+				);
+			const submitReview = vi.fn().mockResolvedValue(posted);
+			let clock = 0;
+			const now = vi.fn(() => {
+				clock += 1_000_000; // outside the 900_000ms window every time
+				return clock;
+			});
+
+			const result = await watchPr({
+				owner: "o",
+				repo: "r",
+				pullNumber: 5,
+				pollOctokit: { request },
+				targets: [buildTarget("anthropic")],
+				resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
+				sleep: vi.fn().mockResolvedValue(undefined),
+				log: () => {},
+				submitReview,
+				now,
+				circuitBreaker: { maxReviews: 3, windowMs: 900_000 },
+				maxCycles: 5,
+			});
+
+			expect(result).toEqual({ cycles: 5, reason: "max-cycles" });
+			expect(submitReview).toHaveBeenCalledTimes(5);
+		});
+
+		it("never trips when the circuit breaker is disabled", async () => {
+			let call = 0;
+			const request = vi
+				.fn()
+				.mockImplementation(() =>
+					Promise.resolve(pollResponse({ headSha: `sha${++call}` })),
+				);
+			const submitReview = vi.fn().mockResolvedValue(posted);
+			let clock = 0;
+			const now = vi.fn(() => {
+				clock += 60_000;
+				return clock;
+			});
+
+			const result = await watchPr({
+				owner: "o",
+				repo: "r",
+				pullNumber: 5,
+				pollOctokit: { request },
+				targets: [buildTarget("anthropic")],
+				resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
+				sleep: vi.fn().mockResolvedValue(undefined),
+				log: () => {},
+				submitReview,
+				now,
+				circuitBreaker: false,
+				maxCycles: 5,
+			});
+
+			expect(result).toEqual({ cycles: 5, reason: "max-cycles" });
+			expect(submitReview).toHaveBeenCalledTimes(5);
+		});
+
+		it("tracks each provider's window independently, tripping only the one that is rapid-posting", async () => {
+			let call = 0;
+			const request = vi
+				.fn()
+				.mockImplementation(() =>
+					Promise.resolve(pollResponse({ headSha: `sha${++call}` })),
+				);
+			// anthropic always posts; openai always reports no new review, so
+			// only anthropic's window ever accumulates posts.
+			const submitReview = vi.fn(
+				async ({ config }: { config: { provider: string } }) =>
+					config.provider === "anthropic" ? posted : noNewReview,
+			);
+			let clock = 0;
+			const now = vi.fn(() => {
+				clock += 60_000;
+				return clock;
+			});
+
+			const result = await watchPr({
+				owner: "o",
+				repo: "r",
+				pullNumber: 5,
+				pollOctokit: { request },
+				targets: [buildTarget("anthropic"), buildTarget("openai")],
+				resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
+				sleep: vi.fn().mockResolvedValue(undefined),
+				log: () => {},
+				submitReview,
+				now,
+				circuitBreaker: { maxReviews: 3, windowMs: 900_000 },
+				maxCycles: 10,
+			});
+
+			expect(result).toEqual({ cycles: 3, reason: "circuit-breaker" });
+		});
+	});
 });
