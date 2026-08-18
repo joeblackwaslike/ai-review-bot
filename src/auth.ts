@@ -418,13 +418,26 @@ export function makeCodexFetch(
 			try {
 				parsedResponse = parseCodexSSEResponse(rawText);
 			} catch (parseErr) {
-				// Neither valid JSON nor parseable SSE — a real upstream failure
-				// (truncated response, HTML error page, etc.), not a bug in this
-				// parser. Surface the original status/body rather than losing them
-				// behind parseCodexSSEResponse's generic "no response.completed"
-				// message, which is indistinguishable from a genuine SSE-shape bug.
-				// `cause` preserves parseCodexSSEResponse's own error (and stack) so
-				// a genuine parser bug is still fully diagnosable from this
+				if (!res.ok) {
+					// An error-status response (e.g. an intermediary's 429/502 HTML
+					// page) that's neither JSON nor SSE — pass it through unchanged
+					// rather than throwing. Throwing here would discard res.status
+					// and res.headers, and the AI SDK's own HTTP-status-based
+					// rate-limit/quota classification can only see them on a real
+					// Response, not on a JS Error.
+					return new Response(rawText, {
+						status: res.status,
+						statusText: res.statusText,
+						headers: res.headers,
+					});
+				}
+				// A *successful* response that's neither valid JSON nor parseable
+				// SSE has no plausible upstream-error explanation — this code's own
+				// JSON/SSE detection is wrong. Surface the original status/body
+				// rather than losing them behind parseCodexSSEResponse's generic
+				// "no response.completed" message, which is indistinguishable from
+				// a genuine SSE-shape bug. `cause` preserves parseCodexSSEResponse's
+				// own error (and stack) so it's still fully diagnosable from this
 				// wrapper's summary, not just from the message string. Set directly
 				// to `parseErr` (not wrapped) — Error.cause is typed `unknown`
 				// precisely so the original thrown value, whatever it was, survives

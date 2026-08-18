@@ -299,15 +299,41 @@ describe("makeCodexFetch", () => {
 		await expect(res.json()).resolves.toMatchObject({ id: "resp_1" });
 	});
 
-	// A response that is neither valid JSON nor a parseable SSE stream (e.g. a
-	// truncated network response or HTML error page) must surface the
-	// original HTTP status and body snippet rather than throwing
-	// parseCodexSSEResponse's generic "no response.completed" message, which
-	// would be indistinguishable from a genuine SSE-shape bug in this code.
-	it("surfaces the original status and a body snippet when the response is neither JSON nor parseable SSE", async () => {
+	// Found by greptile-apps on PR #68: an error-status response (e.g. an
+	// intermediary's 429/502 HTML page) that's neither valid JSON nor
+	// parseable SSE must NOT be thrown as a plain Error — that discards the
+	// original status/headers, and the AI SDK's own HTTP-status-based
+	// rate-limit/quota classification can only see them on a real Response.
+	// Pass the original response through unchanged instead.
+	it("passes an error-status response through unchanged when its body is neither JSON nor parseable SSE", async () => {
 		const base = (async () =>
 			new Response("<html>Bad Gateway</html>", {
 				status: 502,
+				statusText: "Bad Gateway",
+				headers: { "retry-after": "30" },
+			})) as unknown as typeof fetch;
+		const f = makeCodexFetch("acct-1", base);
+
+		const res = await f("https://chatgpt.com/backend-api/codex/responses", {
+			method: "POST",
+			body: JSON.stringify({ input: [] }),
+		});
+
+		expect(res.status).toBe(502);
+		expect(res.statusText).toBe("Bad Gateway");
+		expect(res.headers.get("retry-after")).toBe("30");
+		await expect(res.text()).resolves.toBe("<html>Bad Gateway</html>");
+	});
+
+	// A *successful*-status response that's neither valid JSON nor parseable
+	// SSE has no plausible upstream-error explanation — it means this code's
+	// own JSON/SSE detection is wrong, so it should still throw loudly with
+	// diagnostic context rather than silently pass through a 200 that isn't
+	// actually usable.
+	it("throws with the original status and a body snippet when a successful response is neither JSON nor parseable SSE", async () => {
+		const base = (async () =>
+			new Response("not json and not sse", {
+				status: 200,
 			})) as unknown as typeof fetch;
 		const f = makeCodexFetch("acct-1", base);
 
@@ -318,8 +344,8 @@ describe("makeCodexFetch", () => {
 
 		expect(err).toBeInstanceOf(Error);
 		const message = (err as Error).message;
-		expect(message).toMatch(/502/);
-		expect(message).toMatch(/Bad Gateway/);
+		expect(message).toMatch(/200/);
+		expect(message).toMatch(/not json and not sse/);
 		expect((err as Error).cause).toBeInstanceOf(Error);
 	});
 
