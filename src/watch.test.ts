@@ -360,4 +360,85 @@ describe("watchPr", () => {
 		expect(request).not.toHaveBeenCalled();
 		expect(submitReview).not.toHaveBeenCalled();
 	});
+
+	// Bug E: hasPostedEver/lastReviewedSha must be tracked per provider, not
+	// as a single session-wide flag/SHA shared across targets. Surfaced by
+	// anthropicreviewbot's own re-review of PR #65 (dogfooding this feature
+	// on itself): a shared `hasPostedEver` means provider B's true first-ever
+	// post gets force:false whenever provider A already posted first (in an
+	// earlier cycle, or earlier in the *same* cycle's target loop) — breaking
+	// the "first post is unforced-equivalent, matching production" parity
+	// this flag exists to preserve, per provider B.
+	it("computes force per provider, so provider B's first-ever post is still force:true even after provider A already posted", async () => {
+		const request = vi.fn().mockResolvedValue(pollResponse());
+		const submitReview = vi.fn().mockResolvedValue(posted);
+
+		await watchPr({
+			owner: "o",
+			repo: "r",
+			pullNumber: 5,
+			pollOctokit: { request },
+			targets: [buildTarget("anthropic"), buildTarget("openai")],
+			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
+			sleep: vi.fn().mockResolvedValue(undefined),
+			log: () => {},
+			submitReview,
+			maxCycles: 1,
+		});
+
+		expect(submitReview).toHaveBeenCalledTimes(2);
+		const calls = submitReview.mock.calls as unknown as Array<
+			[{ config: { provider: string }; force: boolean }]
+		>;
+		const anthropicCall = calls.find(
+			([arg]) => arg.config.provider === "anthropic",
+		);
+		const openaiCall = calls.find(([arg]) => arg.config.provider === "openai");
+		expect(anthropicCall?.[0].force).toBe(true);
+		expect(openaiCall?.[0].force).toBe(true);
+	});
+
+	// Bug E continued: a shared lastReviewedSha means that once ANY provider
+	// posts successfully for a SHA, the whole per-target loop is skipped on
+	// the next cycle — silently and permanently denying a retry to a provider
+	// that failed/skipped on that same SHA (it will never see that commit
+	// again unless the PR receives a new push).
+	it("keeps retrying a provider that failed this cycle on the same SHA, without re-posting the provider that already succeeded", async () => {
+		const request = vi
+			.fn()
+			.mockResolvedValue(pollResponse({ headSha: "sha1" }));
+		const submitReview = vi.fn((arg: { config: { provider: string } }) =>
+			arg.config.provider === "openai"
+				? Promise.reject(new Error("boom"))
+				: Promise.resolve(posted),
+		);
+
+		await watchPr({
+			owner: "o",
+			repo: "r",
+			pullNumber: 5,
+			pollOctokit: { request },
+			targets: [buildTarget("anthropic"), buildTarget("openai")],
+			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
+			sleep: vi.fn().mockResolvedValue(undefined),
+			log: () => {},
+			submitReview,
+			maxCycles: 2,
+		});
+
+		// Cycle 1: both targets attempted (anthropic posts, openai throws).
+		// Cycle 2, same SHA: anthropic must NOT be called again (it already
+		// posted for sha1), but openai must be retried (it never succeeded).
+		const calls = submitReview.mock.calls as unknown as Array<
+			[{ config: { provider: string } }]
+		>;
+		const anthropicCalls = calls.filter(
+			([arg]) => arg.config.provider === "anthropic",
+		);
+		const openaiCalls = calls.filter(
+			([arg]) => arg.config.provider === "openai",
+		);
+		expect(anthropicCalls).toHaveLength(1);
+		expect(openaiCalls).toHaveLength(2);
+	});
 });

@@ -88,14 +88,23 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 		maxCycles,
 	} = opts;
 
-	let lastReviewedSha: string | null = null;
 	let cycles = 0;
-	// True once ANY target has posted a real review in this watch session.
-	// force is true only before that first post — matching production behavior
-	// (a fresh, unforced push-triggered review) on every cycle after, so the
-	// triage gate and reviewer memory in buildReview behave identically to
-	// production instead of being disabled on every cycle. See Bug A.
-	let hasPostedEver = false;
+	// Per-provider, not session-wide: each provider has its own "have I ever
+	// posted" flag and "last SHA I successfully reviewed" marker. A single
+	// shared pair would leak across providers within one watch session — one
+	// provider posting first would (a) flip force:false for a co-target's
+	// still-genuinely-first post in the same cycle, breaking the "first post
+	// matches production" parity below the flag exists for, and (b) advance
+	// the shared SHA marker even for a provider that failed/skipped, silently
+	// and permanently denying it a retry on that commit. Surfaced by
+	// anthropicreviewbot's own re-review of this PR while dogfooding watch on
+	// itself. See Bug A / Bug C / Bug E.
+	const providerState = new Map(
+		targets.map((target) => [
+			target.provider,
+			{ hasPostedEver: false, lastReviewedSha: null as string | null },
+		]),
+	);
 
 	// Fail fast on missing/expired credentials for every selected provider
 	// BEFORE the first poll or post, so a PR watched across both providers
@@ -138,50 +147,47 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 			return { cycles, reason: pr.merged ? "merged" : "closed" };
 		}
 
-		if (pr.head.sha !== lastReviewedSha) {
-			// Only advance lastReviewedSha when at least one target actually
-			// posted this cycle — a skip/rate-limit/quota-exhaustion must retry
-			// at the same SHA next cycle instead of being silently marked
-			// "handled". See Bug C.
-			let postedThisCycle = false;
-			for (const target of targets) {
-				// Not caught here: an auth-resolution failure (e.g. the local
-				// subscription session logged out mid-watch) propagates out of
-				// watchPr entirely, surfacing auth.ts's own "run `claude`/`codex
-				// login`" error instead of retrying forever with no signal.
-				const auth = await resolveAuthFor(target.provider);
-				try {
-					const outcome = await submitReview({
-						app: target.app,
-						installationId: target.installationId,
-						owner,
-						repo,
-						pullNumber,
-						pullRequest: pr,
-						extraInstructions: "",
-						force: !hasPostedEver,
-						config: target.config,
-						auth,
-					});
-					if (outcome.status === "posted") {
-						hasPostedEver = true;
-						postedThisCycle = true;
-						log(
-							`ai-review watch: posted ${target.provider} review for ${pr.head.sha}`,
-						);
-					} else {
-						log(
-							`ai-review watch: ${target.provider} review skipped for ${pr.head.sha}: ${outcomeSkipReason(outcome)}`,
-						);
-					}
-				} catch (err) {
+		for (const target of targets) {
+			const state = providerState.get(target.provider);
+			if (!state || pr.head.sha === state.lastReviewedSha) continue;
+
+			// Not caught here: an auth-resolution failure (e.g. the local
+			// subscription session logged out mid-watch) propagates out of
+			// watchPr entirely, surfacing auth.ts's own "run `claude`/`codex
+			// login`" error instead of retrying forever with no signal.
+			const auth = await resolveAuthFor(target.provider);
+			try {
+				const outcome = await submitReview({
+					app: target.app,
+					installationId: target.installationId,
+					owner,
+					repo,
+					pullNumber,
+					pullRequest: pr,
+					extraInstructions: "",
+					force: !state.hasPostedEver,
+					config: target.config,
+					auth,
+				});
+				if (outcome.status === "posted") {
+					// Only advance this provider's lastReviewedSha on an actual
+					// post — a skip/rate-limit/quota-exhaustion must retry at the
+					// same SHA next cycle instead of being silently marked
+					// "handled". See Bug C.
+					state.hasPostedEver = true;
+					state.lastReviewedSha = pr.head.sha;
 					log(
-						`ai-review watch: ${target.provider} review failed, continuing: ${errMsg(err)}`,
+						`ai-review watch: posted ${target.provider} review for ${pr.head.sha}`,
+					);
+				} else {
+					log(
+						`ai-review watch: ${target.provider} review skipped for ${pr.head.sha}: ${outcomeSkipReason(outcome)}`,
 					);
 				}
-			}
-			if (postedThisCycle) {
-				lastReviewedSha = pr.head.sha;
+			} catch (err) {
+				log(
+					`ai-review watch: ${target.provider} review failed, continuing: ${errMsg(err)}`,
+				);
 			}
 		}
 

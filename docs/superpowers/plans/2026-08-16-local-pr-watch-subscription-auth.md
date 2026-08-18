@@ -4,7 +4,9 @@
 
 **Goal:** Add `ai-review watch --pr <n>`, a local CLI command that polls an already-open PR and re-reviews it on every push using local Claude Max/ChatGPT Pro subscription auth instead of funded API keys, posting through the same GitHub App bot identities production uses.
 
-**Architecture:** Thread an optional `auth` param through the existing `maybeSubmitReview()` → `buildReview()` → `runAgent()`/`generateSummary()` call chain (mirroring the pattern `audit.ts` already uses), add a small `watchPr()` polling driver that calls `maybeSubmitReview` directly with `force: true` (bypassing the QStash peer-wait logic, same as the manual `/ai-review` slash command), and wire a new CLI subcommand around it.
+**Architecture:** Thread an optional `auth` param through the existing `maybeSubmitReview()` → `buildReview()` → `runAgent()`/`generateSummary()` call chain (mirroring the pattern `audit.ts` already uses), add a small `watchPr()` polling driver that calls `maybeSubmitReview` directly (bypassing the QStash peer-wait logic, same as the manual `/ai-review` slash command) with `force` true only until each provider's own first successful post — see the spec's Error handling section for why unconditional `force: true` was wrong — and wire a new CLI subcommand around it.
+>
+> **Note (as-built, post-implementation):** the code blocks and draft commit messages in the task steps below are a historical record of this plan's step-by-step execution and were written before two rounds of post-implementation fixes (`force`/SHA/auth bugs, then per-provider state — see the spec doc, which stays current). They're left as originally executed rather than retroactively rewritten; `src/watch.ts` and `src/watch.test.ts` are the source of truth for current behavior.
 
 **Tech Stack:** TypeScript (ESM), Vitest, Octokit (`octokit` App SDK).
 
