@@ -266,9 +266,16 @@ export async function setCredential(
 }
 
 /** Names only — never values — of the known vars that have a Keychain entry. */
-export async function listCredentials(
+export type CredentialSource = "keychain" | "xdg" | "absent";
+
+/** Which store actually satisfies each credential var — not just whether one
+ * exists. `creds unset` only removes from the Keychain, so a var resolved
+ * purely from the XDG fallback file needs to be visibly distinguishable from
+ * one `unset` can actually clear; reporting both as an undifferentiated
+ * "present" is what made the plain ✓/✗ listing misleading. */
+export async function listCredentialSources(
 	io: Pick<CliCredsIO, "readKeychain" | "readXdgFile"> = {},
-): Promise<CliCredentialVar[]> {
+): Promise<Record<CliCredentialVar, CredentialSource>> {
 	const readKeychain = io.readKeychain ?? defaultReadKeychain;
 	const readXdgFile = io.readXdgFile ?? defaultReadXdgFile;
 
@@ -295,7 +302,7 @@ export async function listCredentials(
 		return xdgParsed ?? {};
 	};
 
-	const present: CliCredentialVar[] = [];
+	const sources = {} as Record<CliCredentialVar, CredentialSource>;
 	for (const v of CLI_CREDENTIAL_VARS) {
 		let value: string | null = null;
 		try {
@@ -311,16 +318,24 @@ export async function listCredentials(
 			);
 			value = null;
 		}
+		if (value) {
+			sources[v] = "keychain";
+			continue;
+		}
 		// Not in the Keychain doesn't mean not configured — resolveCliCredentials
 		// falls through to the XDG file, so `list` must check the same place or
 		// it reports ✗ for a var that actually resolves fine at CLI startup.
-		if (!value) {
-			const xdg = await loadXdgOnce();
-			value = xdg[v] ?? null;
-		}
-		if (value) present.push(v);
+		const xdg = await loadXdgOnce();
+		sources[v] = xdg[v] ? "xdg" : "absent";
 	}
-	return present;
+	return sources;
+}
+
+export async function listCredentials(
+	io: Pick<CliCredsIO, "readKeychain" | "readXdgFile"> = {},
+): Promise<CliCredentialVar[]> {
+	const sources = await listCredentialSources(io);
+	return CLI_CREDENTIAL_VARS.filter((v) => sources[v] !== "absent");
 }
 
 export async function unsetCredential(

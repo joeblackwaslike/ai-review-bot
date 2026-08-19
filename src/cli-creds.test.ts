@@ -5,6 +5,7 @@ import {
 	isItemNotFoundError,
 	isKeychainUnavailableError,
 	KEYCHAIN_SERVICE,
+	listCredentialSources,
 	listCredentials,
 	resolveCliCredentials,
 	setCredential,
@@ -130,6 +131,22 @@ describe("setCredential / listCredentials / unsetCredential", () => {
 		const readXdgFile = vi.fn(async () => "GITHUB_APP_ID=x\n");
 		await listCredentials({ readKeychain, readXdgFile });
 		expect(readXdgFile).toHaveBeenCalledTimes(1);
+	});
+
+	it("listCredentialSources reports which store satisfies each var — Keychain, XDG, or neither", async () => {
+		// `creds unset` only removes from the Keychain, so a var satisfied
+		// purely by the XDG file needs to be visibly distinguishable from one
+		// `unset` can actually clear — otherwise `list` says "present" and
+		// `unset` silently does nothing.
+		const readKeychain = vi.fn(async (account: string) =>
+			account === "GITHUB_APP_ID" ? "kc-value" : null,
+		);
+		const readXdgFile = vi.fn(async () => "OPENAI_APP_ID=from-file\n");
+		const sources = await listCredentialSources({ readKeychain, readXdgFile });
+		expect(sources.GITHUB_APP_ID).toBe("keychain");
+		expect(sources.OPENAI_APP_ID).toBe("xdg");
+		expect(sources.GITHUB_APP_PRIVATE_KEY).toBe("absent");
+		expect(sources.OPENAI_APP_PRIVATE_KEY).toBe("absent");
 	});
 
 	// `CliCredentialVar` on these signatures is a compile-time constraint

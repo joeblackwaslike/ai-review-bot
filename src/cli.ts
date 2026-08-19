@@ -18,7 +18,7 @@ import {
 	CLI_CREDENTIAL_VARS,
 	type CliCredentialVar,
 	KEYCHAIN_SERVICE,
-	listCredentials,
+	listCredentialSources,
 	resolveCliCredentials,
 	setCredential,
 	unsetCredential,
@@ -1107,9 +1107,17 @@ export async function cmdCreds(
 		return;
 	}
 	if (action === "list") {
-		const present = await listCredentials();
+		const sources = await listCredentialSources();
 		for (const v of CLI_CREDENTIAL_VARS) {
-			console.log(`${present.includes(v) ? "✓" : "✗"} ${v}`);
+			if (sources[v] === "keychain") console.log(`✓ ${v} (Keychain)`);
+			else if (sources[v] === "xdg") {
+				// `creds unset` only removes from the Keychain — flag this
+				// distinctly so it's never mistaken for something `unset` can
+				// clear. See docs/cli-and-npm.md's XDG fallback section.
+				console.log(
+					`✓ ${v} (~/.config/ai-review/.env — creds unset won't remove this; edit the file directly)`,
+				);
+			} else console.log(`✗ ${v}`);
 		}
 		return;
 	}
@@ -1123,7 +1131,7 @@ export async function cmdCreds(
 	fatal("Usage: ai-review creds set <VAR> [value] | list | unset <VAR>");
 }
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
 	const [sub, ...rest] = process.argv.slice(2);
 
 	// The `creds` subcommand manages the Keychain directly and never reads

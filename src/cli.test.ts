@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./config.js", async (orig) => {
 	const actual = await orig<typeof import("./config.js")>();
@@ -26,15 +26,17 @@ vi.mock("./cli-creds.js", async (orig) => {
 		...actual,
 		setCredential: vi.fn(),
 		unsetCredential: vi.fn(),
-		listCredentials: vi.fn(),
+		listCredentialSources: vi.fn(),
+		resolveCliCredentials: vi.fn(),
 	};
 });
 
 import { runLocalAudit } from "./audit.js";
 import { resolveSubscriptionAuth } from "./auth.js";
-import { cmdAudit, cmdCreds, cmdWatch } from "./cli.js";
+import { cmdAudit, cmdCreds, cmdWatch, main } from "./cli.js";
 import {
-	listCredentials,
+	listCredentialSources,
+	resolveCliCredentials,
 	setCredential,
 	unsetCredential,
 } from "./cli-creds.js";
@@ -302,11 +304,60 @@ describe("cmdWatch", () => {
 	});
 });
 
+describe("main credential-resolution dispatch", () => {
+	const originalArgv = process.argv;
+
+	beforeEach(() => {
+		vi.mocked(resolveCliCredentials).mockReset().mockResolvedValue(undefined);
+		vi.mocked(listCredentialSources).mockReset().mockResolvedValue({
+			GITHUB_APP_ID: "absent",
+			GITHUB_APP_PRIVATE_KEY: "absent",
+			OPENAI_APP_ID: "absent",
+			OPENAI_APP_PRIVATE_KEY: "absent",
+		});
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+			throw new ProcessExitError(code ?? 0);
+		}) as never);
+	});
+
+	afterEach(() => {
+		process.argv = originalArgv;
+	});
+
+	// This is the actual regression ai-review-bot-yyn fixes: the CLI must
+	// resolve credentials (Keychain/XDG) before any subcommand that needs
+	// them runs, so watch/review/audit work when the globally npm-linked
+	// binary is invoked from outside this repo. Locking the dispatch guard
+	// in main() under test — not just resolveCliCredentials()'s own
+	// internal logic — is what would actually catch a future regression
+	// where a new subcommand is added above the check, or the check is
+	// accidentally removed.
+	it("resolves credentials before dispatching a normal subcommand", async () => {
+		process.argv = ["node", "dist/cli.js", "unknown-subcommand"];
+		await expect(main()).rejects.toThrow(ProcessExitError);
+		expect(resolveCliCredentials).toHaveBeenCalled();
+	});
+
+	it("skips credential resolution for the creds subcommand itself", async () => {
+		process.argv = ["node", "dist/cli.js", "creds", "list"];
+		await main();
+		expect(resolveCliCredentials).not.toHaveBeenCalled();
+		expect(listCredentialSources).toHaveBeenCalled();
+	});
+});
+
 describe("cmdCreds", () => {
 	beforeEach(() => {
 		vi.mocked(setCredential).mockReset().mockResolvedValue(undefined);
 		vi.mocked(unsetCredential).mockReset().mockResolvedValue(undefined);
-		vi.mocked(listCredentials).mockReset().mockResolvedValue([]);
+		vi.mocked(listCredentialSources).mockReset().mockResolvedValue({
+			GITHUB_APP_ID: "absent",
+			GITHUB_APP_PRIVATE_KEY: "absent",
+			OPENAI_APP_ID: "absent",
+			OPENAI_APP_PRIVATE_KEY: "absent",
+		});
 		vi.spyOn(console, "error").mockImplementation(() => {});
 		vi.spyOn(console, "log").mockImplementation(() => {});
 		vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
@@ -353,19 +404,25 @@ describe("cmdCreds", () => {
 
 	// Only set/unset dispatch had coverage; a typo in the "list" branch would
 	// have gone uncaught.
-	it("dispatches list and prints presence for every known var", async () => {
-		vi.mocked(listCredentials).mockResolvedValue([
-			"GITHUB_APP_ID",
-			"OPENAI_APP_PRIVATE_KEY",
-		]);
+	it("dispatches list and prints presence + source for every known var", async () => {
+		vi.mocked(listCredentialSources).mockResolvedValue({
+			GITHUB_APP_ID: "keychain",
+			GITHUB_APP_PRIVATE_KEY: "absent",
+			OPENAI_APP_ID: "absent",
+			OPENAI_APP_PRIVATE_KEY: "xdg",
+		});
 
 		await cmdCreds(["list"]);
 
-		expect(listCredentials).toHaveBeenCalled();
-		expect(console.log).toHaveBeenCalledWith("✓ GITHUB_APP_ID");
+		expect(listCredentialSources).toHaveBeenCalled();
+		expect(console.log).toHaveBeenCalledWith("✓ GITHUB_APP_ID (Keychain)");
 		expect(console.log).toHaveBeenCalledWith("✗ GITHUB_APP_PRIVATE_KEY");
 		expect(console.log).toHaveBeenCalledWith("✗ OPENAI_APP_ID");
-		expect(console.log).toHaveBeenCalledWith("✓ OPENAI_APP_PRIVATE_KEY");
+		expect(console.log).toHaveBeenCalledWith(
+			expect.stringContaining(
+				"✓ OPENAI_APP_PRIVATE_KEY (~/.config/ai-review/.env",
+			),
+		);
 	});
 
 	// A value passed as `creds set <VAR> <value>` sits in argv (visible to
