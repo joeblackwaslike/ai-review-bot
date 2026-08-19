@@ -351,6 +351,23 @@ describe("cmdCreds", () => {
 		expect(unsetCredential).toHaveBeenCalledWith("GITHUB_APP_ID");
 	});
 
+	// Only set/unset dispatch had coverage; a typo in the "list" branch would
+	// have gone uncaught.
+	it("dispatches list and prints presence for every known var", async () => {
+		vi.mocked(listCredentials).mockResolvedValue([
+			"GITHUB_APP_ID",
+			"OPENAI_APP_PRIVATE_KEY",
+		]);
+
+		await cmdCreds(["list"]);
+
+		expect(listCredentials).toHaveBeenCalled();
+		expect(console.log).toHaveBeenCalledWith("✓ GITHUB_APP_ID");
+		expect(console.log).toHaveBeenCalledWith("✗ GITHUB_APP_PRIVATE_KEY");
+		expect(console.log).toHaveBeenCalledWith("✗ OPENAI_APP_ID");
+		expect(console.log).toHaveBeenCalledWith("✓ OPENAI_APP_PRIVATE_KEY");
+	});
+
 	// A value passed as `creds set <VAR> <value>` sits in argv (visible to
 	// `ps` for the life of the process) and typically lands in shell
 	// history. When the value is omitted, read it through an injectable,
