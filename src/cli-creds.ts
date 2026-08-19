@@ -98,10 +98,11 @@ async function defaultReadKeychain(account: string): Promise<string | null> {
 // `-w <value>` puts the credential in this `security` subprocess's own argv
 // for its (short) lifetime, regardless of how the caller obtained `value` —
 // piped stdin, a hidden prompt, or a positional CLI arg all funnel through
-// here identically. `security add-generic-password -h` documents the only
-// non-argv input mode as an interactive double-entry prompt read from the
-// controlling terminal (typed twice, not piped), which doesn't work for the
-// non-interactive/scripted flow this CLI targets — verified directly
+// here identically. `security add-generic-password --help` (or `man
+// security`) documents the only non-argv input mode as an interactive
+// double-entry prompt read from the controlling terminal (typed twice, not
+// piped), which doesn't work for the non-interactive/scripted flow this CLI
+// targets — verified directly
 // (`security add-generic-password -w` with piped stdin still prompts twice
 // via the tty rather than reading the pipe). `src/auth.ts`'s existing
 // Keychain writer for the Claude Code OAuth token has the identical
@@ -228,9 +229,10 @@ export async function resolveCliCredentials(
 	// `\n`-escaped one-liner form for exactly this reason.
 	const parsed = dotenv.parse(raw);
 	for (const v of stillMissing) {
-		// `stillMissing` was already filtered to `!env[v]` above, and nothing
-		// between that filter and here writes to `env` — the guard here was
-		// dead code, not a defense against a real interleaving.
+		// `stillMissing` is computed by filtering on `!env[v]` *after* the
+		// Keychain loop above has already made its writes, so every `v` here
+		// is guaranteed `!env[v]` at this point by construction — re-checking
+		// it was dead code, not a defense against a real interleaving.
 		if (parsed[v]) env[v] = parsed[v];
 	}
 }
@@ -243,7 +245,10 @@ export async function resolveCliCredentials(
 // an invalid var can't silently write/delete a Keychain entry regardless of
 // caller.
 function assertKnownCredentialVar(varName: CliCredentialVar): void {
-	if (!(CLI_CREDENTIAL_VARS as readonly string[]).includes(varName)) {
+	// No cast needed here (unlike cli.ts's ensureKnownCredentialVar, which
+	// checks a plain `string`): `varName` is already typed `CliCredentialVar`,
+	// the exact union `CLI_CREDENTIAL_VARS.includes` expects.
+	if (!CLI_CREDENTIAL_VARS.includes(varName)) {
 		throw new Error(
 			`Unknown credential variable "${varName}". Supported: ${CLI_CREDENTIAL_VARS.join(", ")}`,
 		);

@@ -941,7 +941,7 @@ async function cmdPropose(args: string[]): Promise<void> {
 // `defaultWriteKeychain` in cli-creds.ts, which mirrors `src/auth.ts`'s
 // existing OAuth-token Keychain writer for the same reason.
 export interface CmdCredsIO {
-	readSecret?: () => Promise<string>;
+	readSecret?: (varName: CliCredentialVar) => Promise<string>;
 }
 
 // Reads one line from the controlling terminal without echoing it (Ctrl-C
@@ -1005,7 +1005,10 @@ function readHiddenLine(promptText: string): Promise<string> {
 				value += char;
 			}
 		};
-		const onEnd = () => settleResolve(value);
+		const onEnd = () => {
+			process.stdout.write("\n");
+			settleResolve(value);
+		};
 		const onError = (err: Error) => settleReject(err);
 		stdin.on("data", onData);
 		stdin.once("end", onEnd);
@@ -1013,13 +1016,25 @@ function readHiddenLine(promptText: string): Promise<string> {
 	});
 }
 
-async function defaultReadSecret(): Promise<string> {
+async function defaultReadSecret(varName: CliCredentialVar): Promise<string> {
 	if (!process.stdin.isTTY) {
 		const chunks: Buffer[] = [];
 		for await (const chunk of process.stdin) {
 			chunks.push(chunk as Buffer);
 		}
 		return Buffer.concat(chunks).toString("utf-8").trim();
+	}
+	// readHiddenLine resolves on the first newline — pasting a multi-line PEM
+	// into it silently stores only the "-----BEGIN...-----" line and reports
+	// success, corrupting the credential with no error until a later `watch`
+	// run fails auth. Refuse interactive entry for the two `_PRIVATE_KEY`
+	// vars rather than attempt fragile multi-line paste detection; the pipe
+	// form (which this CLI documents as primary) never round-trips through a
+	// single-line reader in the first place.
+	if (varName.endsWith("_PRIVATE_KEY")) {
+		fatal(
+			`Interactive entry isn't supported for ${varName} — it's a multi-line PEM and the hidden prompt only reads one line. Pipe the value instead, e.g.: ... | ai-review creds set ${varName}`,
+		);
 	}
 	return readHiddenLine("Value (input hidden): ");
 }
@@ -1055,7 +1070,7 @@ export async function cmdCreds(
 			);
 		}
 		const resolvedValue =
-			value ?? (await (io.readSecret ?? defaultReadSecret)());
+			value ?? (await (io.readSecret ?? defaultReadSecret)(knownVar));
 		if (!resolvedValue) fatal("No value provided.");
 		await setCredential(knownVar, resolvedValue);
 		console.log(

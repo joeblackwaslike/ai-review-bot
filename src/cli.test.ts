@@ -377,7 +377,7 @@ describe("cmdCreds", () => {
 
 		await cmdCreds(["set", "GITHUB_APP_ID"], { readSecret });
 
-		expect(readSecret).toHaveBeenCalled();
+		expect(readSecret).toHaveBeenCalledWith("GITHUB_APP_ID");
 		expect(setCredential).toHaveBeenCalledWith("GITHUB_APP_ID", "from-reader");
 	});
 
