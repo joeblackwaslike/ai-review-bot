@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { App } from "octokit";
 import type { Provider, ResolvedAuth } from "./auth.js";
 import { createCheckRun } from "./check-run.js";
@@ -55,16 +56,11 @@ export function selectReviewDelayMs(action: string, config: AppConfig): number {
  * explicit release. */
 const REVIEW_CLAIM_TTL_SECONDS = 1200;
 
-/** Best-effort check for a review already matching this exact commit + body —
- * i.e. one this same retry loop (an earlier attempt of it) actually created
- * on GitHub even though the client saw that attempt as a failure. Returns
- * null on any lookup failure so a GET hiccup degrades to the normal
- * retry/fallback path rather than blocking a legitimate review. */
 /** `checked: false` means the lookup itself could not complete (a GET
  * failure, a malformed response, or the page cap below) — the caller must
  * treat this as "unknown", never as "confirmed absent". Only `checked: true`
  * with `reviewId: null` means every review on the PR was actually inspected
- * and none matched. */
+ * and none carried the marker. */
 type ReviewLookupResult =
 	| { checked: true; reviewId: number | null }
 	| { checked: false };
@@ -75,23 +71,34 @@ type ReviewLookupResult =
 // the same as any other lookup failure.
 const MAX_REVIEW_LOOKUP_PAGES = 50;
 
-/** Searches every review on the PR for one matching this exact commit +
- * body — i.e. one this same retry loop (an earlier attempt of it) actually
- * created on GitHub even though the client saw that attempt as a failure.
- * Paginates fully rather than checking only the first page: on a busy PR
- * (many prior review rounds — exactly the kind of PR most likely to trigger
- * the secondary rate limit this check exists to survive) the matching
- * review can land beyond an early page, and a partial check would wrongly
- * report "not found" and retry into a real duplicate. */
+/** Searches every review on the PR for one carrying this exact marker — an
+ * opaque, cryptographically random token generated once per logical
+ * submission attempt (see `postReviewWithRetry`), embedded as an invisible
+ * HTML comment at the top of the body actually sent to GitHub. Matching on
+ * the marker rather than the whole body is deliberate, not incidental:
+ *
+ *   - It is immune to GitHub normalising whitespace/line-endings on the
+ *     round-trip (a real risk with whole-body string equality — if GitHub
+ *     ever trims/reformats, an exact-body check would silently NEVER match
+ *     and reproduce the original bug while looking fixed).
+ *   - It cannot coincidentally match an unrelated review that happens to
+ *     share the same commit + generic body text (e.g. two separate
+ *     zero-finding "COMMENT" reviews) — a UUID has no collision risk, so a
+ *     match unambiguously means "this exact submission attempt landed",
+ *     with no need to also compare inline comments to rule out a false
+ *     positive.
+ *
+ * Same invisible-marker technique this codebase already uses for
+ * quota/rate-limit dedup (see `quotaCommentMarker`/`rateLimitCommentMarker`
+ * in notify.ts). Paginates fully rather than checking only the first page:
+ * on a busy PR (many prior review rounds — exactly the kind most likely to
+ * trigger the secondary rate limit this check exists to survive) the
+ * matching review can land beyond an early page, and a partial check would
+ * wrongly report "not found" and retry into a real duplicate. */
 async function findMatchingReview(
 	octokit: Awaited<ReturnType<App["getInstallationOctokit"]>>,
-	params: {
-		owner: string;
-		repo: string;
-		pullNumber: number;
-		commitId: string;
-		body: string;
-	},
+	params: { owner: string; repo: string; pullNumber: number },
+	marker: string,
 ): Promise<ReviewLookupResult> {
 	try {
 		for (let page = 1; page <= MAX_REVIEW_LOOKUP_PAGES; page++) {
@@ -106,17 +113,19 @@ async function findMatchingReview(
 				},
 			);
 			const reviews = response.data as
-				| Array<{ id: number; commit_id: string; body: string }>
+				| Array<{ id: number; body: string | null }>
 				| undefined;
 			if (!Array.isArray(reviews)) return { checked: false };
-			const match = reviews.find(
-				(r) => r.commit_id === params.commitId && r.body === params.body,
-			);
+			const match = reviews.find((r) => r.body?.includes(marker));
 			if (match) return { checked: true, reviewId: match.id };
 			if (reviews.length < 100) return { checked: true, reviewId: null };
 		}
 		return { checked: false };
-	} catch {
+	} catch (err) {
+		// A bare swallow here would hide a genuine regression in this path
+		// behind an innocuous-looking "couldn't verify, refusing to retry"
+		// — log it so that distinction is visible in production.
+		console.error("findMatchingReview lookup failed", err);
 		return { checked: false };
 	}
 }
@@ -137,6 +146,14 @@ async function postReviewWithRetry(
 	const delays = [3000, 6000];
 	let lastError: unknown;
 
+	// One marker per logical submission attempt, reused across every retry
+	// of it — never regenerated mid-loop, or a retry's own lookup would
+	// never find an earlier retry's marker. Prepended as an invisible HTML
+	// comment; the caller's `params.body` (used elsewhere for the fallback
+	// comment, PR summary, etc.) is never mutated.
+	const postMarker = `<!-- ai-review:post-attempt:${randomUUID()} -->`;
+	const wireBody = `${postMarker}\n${params.body}`;
+
 	for (let attempt = 0; attempt < maxAttempts; attempt++) {
 		try {
 			const response = await octokit.request(
@@ -147,7 +164,7 @@ async function postReviewWithRetry(
 					pull_number: params.pullNumber,
 					commit_id: params.commitId,
 					event: params.event,
-					body: params.body,
+					body: wireBody,
 					comments: params.comments,
 				},
 			);
@@ -178,11 +195,11 @@ async function postReviewWithRetry(
 			// rather than risk a duplicate; the outer catch in
 			// maybeSubmitReview still preserves the findings via a fallback
 			// comment, so nothing is silently lost.
-			const lookup = await findMatchingReview(octokit, params);
+			const lookup = await findMatchingReview(octokit, params, postMarker);
 			if (!lookup.checked) {
-				const msg = err instanceof Error ? err.message : String(err);
 				throw new Error(
-					`Cannot verify whether the review POST landed after this failure (${msg}); refusing to retry to avoid a possible duplicate.`,
+					`Cannot verify whether the review POST landed after this failure; refusing to retry to avoid a possible duplicate.`,
+					{ cause: err },
 				);
 			}
 			if (lookup.reviewId !== null) {

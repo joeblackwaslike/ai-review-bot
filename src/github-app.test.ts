@@ -348,24 +348,34 @@ describe("maybeSubmitReview", () => {
 		vi.useFakeTimers();
 		const { app, request } = buildMockApp();
 		let postAttempts = 0;
-		request.mockImplementation(async (route: string) => {
-			if (route === "POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews") {
-				postAttempts++;
-				// GitHub processes the write, but the client sees an error
-				// anyway (secondary rate limit, dropped connection after
-				// commit, timeout past the actual write) — exactly what was
-				// observed live: ai-review watch posted a byte-for-byte
-				// duplicate review 76s after a secondary-rate-limit error.
-				throw new Error("You have exceeded a secondary rate limit");
-			}
-			if (route === "GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews") {
-				// The "failed" POST above actually landed on GitHub.
-				return {
-					data: [{ id: 555, commit_id: pr.head.sha, body: "Review body." }],
-				};
-			}
-			return { data: {} };
-		});
+		// GitHub actually stores whatever body was sent (marker included) —
+		// simulate that by capturing it from the POST and echoing it back
+		// from the GET check, rather than hardcoding a body the test can't
+		// predict (the marker is a fresh randomUUID generated inside the
+		// function under test).
+		let landedBody: string | null = null;
+		request.mockImplementation(
+			async (route: string, opts: { body?: string } = {}) => {
+				if (
+					route === "POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews"
+				) {
+					postAttempts++;
+					// GitHub processes the write, but the client sees an error
+					// anyway (secondary rate limit, dropped connection after
+					// commit, timeout past the actual write) — exactly what was
+					// observed live: ai-review watch posted a byte-for-byte
+					// duplicate review 76s after a secondary-rate-limit error.
+					landedBody = opts.body ?? null;
+					throw new Error("You have exceeded a secondary rate limit");
+				}
+				if (route === "GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews") {
+					return {
+						data: landedBody ? [{ id: 555, body: landedBody }] : [],
+					};
+				}
+				return { data: {} };
+			},
+		);
 
 		mockBuildReview.mockReset().mockResolvedValue({
 			event: "COMMENT" as const,
@@ -379,8 +389,8 @@ describe("maybeSubmitReview", () => {
 		const outcome = await promise;
 
 		// Only one POST was attempted — the check after that "failure" found
-		// the review already existed on GitHub and returned it instead of
-		// retrying, so no duplicate was ever created.
+		// the review already existed on GitHub (carrying the same marker) and
+		// returned it instead of retrying, so no duplicate was ever created.
 		expect(postAttempts).toBe(1);
 		expect(outcome).toEqual({ status: "posted", event: "COMMENT" });
 	});
@@ -389,22 +399,18 @@ describe("maybeSubmitReview", () => {
 		vi.useFakeTimers();
 		const { app, request } = buildMockApp();
 		let postAttempts = 0;
+		let landedBody: string | null = null;
 		const page1 = Array.from({ length: 100 }, (_, i) => ({
 			id: i,
-			commit_id: "some-older-sha",
-			body: "An old review.",
+			body: "An unrelated older review.",
 		}));
-		const page2Match = {
-			id: 777,
-			commit_id: pr.head.sha,
-			body: "Review body.",
-		};
 		request.mockImplementation(
-			async (route: string, opts: { page?: number } = {}) => {
+			async (route: string, opts: { body?: string; page?: number } = {}) => {
 				if (
 					route === "POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews"
 				) {
 					postAttempts++;
+					landedBody = opts.body ?? null;
 					throw new Error("You have exceeded a secondary rate limit");
 				}
 				if (route === "GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews") {
@@ -412,7 +418,10 @@ describe("maybeSubmitReview", () => {
 					// wrongly conclude nothing exists and retry, creating a real
 					// duplicate on exactly the kind of busy PR most likely to hit
 					// a secondary rate limit in the first place.
-					return { data: opts.page === 2 ? [page2Match] : page1 };
+					if (opts.page === 2) {
+						return { data: landedBody ? [{ id: 777, body: landedBody }] : [] };
+					}
+					return { data: page1 };
 				}
 				return { data: {} };
 			},
@@ -469,6 +478,90 @@ describe("maybeSubmitReview", () => {
 		// comment path (maybeSubmitReview's outer catch), so nothing is lost;
 		// the guarantee is specifically "never post a second review when we
 		// can't prove the first didn't land."
+		expect(postAttempts).toBe(1);
+		expect(outcome).toEqual({ status: "posted", event: "COMMENT" });
+		const fallbackCall = request.mock.calls.find(
+			([route]) =>
+				route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+		);
+		expect(fallbackCall).toBeDefined();
+	});
+
+	it("matches despite whitespace drift on GitHub's round-trip, because the marker is a substring match, not a whole-body comparison", async () => {
+		vi.useFakeTimers();
+		const { app, request } = buildMockApp();
+		let postAttempts = 0;
+		let landedBody: string | null = null;
+		request.mockImplementation(
+			async (route: string, opts: { body?: string } = {}) => {
+				if (
+					route === "POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews"
+				) {
+					postAttempts++;
+					landedBody = opts.body ?? null;
+					throw new Error("You have exceeded a secondary rate limit");
+				}
+				if (route === "GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews") {
+					// GitHub trims trailing whitespace / normalises line endings on
+					// the round-trip — a whole-body `===` comparison would never
+					// match this and would silently reproduce the original bug
+					// while looking fixed. A substring match on the marker alone
+					// is unaffected by drift elsewhere in the body.
+					const drifted = landedBody?.trimEnd().replace(/\r\n/g, "\n");
+					return { data: drifted ? [{ id: 555, body: drifted }] : [] };
+				}
+				return { data: {} };
+			},
+		);
+
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "COMMENT" as const,
+			body: "Review body.\r\n\r\n",
+			comments: [],
+			metadata: DEFAULT_METADATA,
+		});
+
+		const promise = maybeSubmitReview({ app, ...baseArgs });
+		await vi.runAllTimersAsync();
+		const outcome = await promise;
+
+		expect(postAttempts).toBe(1);
+		expect(outcome).toEqual({ status: "posted", event: "COMMENT" });
+	});
+
+	it("refuses to retry once the page cap is reached, rather than assume absence on a pathologically large PR", async () => {
+		vi.useFakeTimers();
+		const { app, request } = buildMockApp();
+		let postAttempts = 0;
+		const fullPage = Array.from({ length: 100 }, (_, i) => ({
+			id: i,
+			body: "An unrelated older review.",
+		}));
+		request.mockImplementation(async (route: string) => {
+			if (route === "POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews") {
+				postAttempts++;
+				throw new Error("You have exceeded a secondary rate limit");
+			}
+			if (route === "GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews") {
+				// Every page is full (100 results, none matching) — the lookup
+				// never finds a short page to confirm exhaustion, so it hits the
+				// page cap and must report "unknown", not "confirmed absent".
+				return { data: fullPage };
+			}
+			return { data: {} };
+		});
+
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "COMMENT" as const,
+			body: "Review body.",
+			comments: [],
+			metadata: DEFAULT_METADATA,
+		});
+
+		const promise = maybeSubmitReview({ app, ...baseArgs });
+		await vi.runAllTimersAsync();
+		const outcome = await promise;
+
 		expect(postAttempts).toBe(1);
 		expect(outcome).toEqual({ status: "posted", event: "COMMENT" });
 		const fallbackCall = request.mock.calls.find(
