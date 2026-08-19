@@ -922,45 +922,80 @@ async function cmdPropose(args: string[]): Promise<void> {
 	}
 }
 
-// A value typed as the third positional arg to `creds set` sits in argv
-// (visible to `ps` for the life of the `security` subprocess, and typically
-// lands in shell history) — review feedback on PR #72 (chatgpt-codex-connector,
-// codexreviewbot, anthropicreviewbot) flagged this for the GitHub App private
-// keys specifically. When the value is omitted, read it through a channel
-// that never touches argv or history: piped stdin (the realistic flow —
+// A value typed as the third positional arg to `creds set` sits in *our own*
+// argv and typically lands in shell history. When the value is omitted, read
+// it through a channel that avoids both: piped stdin (the realistic flow —
 // `op read ... | ai-review creds set VAR`) or, for an interactive terminal, a
 // hidden prompt (raw mode, not `readline`'s default echo-on behavior — a
-// second review pass on this same PR pointed out that a visible interactive
-// prompt still exposes the value on-screen/in scrollback while typing).
-// The positional form still works for scripted callers that have already
-// accepted that trade-off; the docs lead with the safer form.
+// visible interactive prompt still exposes the value on-screen/in
+// scrollback while typing). The positional form still works for scripted
+// callers that have already accepted that trade-off; the docs lead with the
+// safer form.
+//
+// Neither form avoids the Keychain write's own residual exposure: it shells
+// out to `security add-generic-password ... -w <value>`, which briefly
+// holds the value in *that subprocess's* argv regardless of how this CLI
+// obtained it. `security`'s only non-argv input mode is an interactive
+// double-entry terminal prompt, incompatible with the piped/non-interactive
+// flow above — see `docs/cli-and-npm.md`'s "Residual exposure" note and
+// `defaultWriteKeychain` in cli-creds.ts, which mirrors `src/auth.ts`'s
+// existing OAuth-token Keychain writer for the same reason.
 export interface CmdCredsIO {
 	readSecret?: () => Promise<string>;
 }
 
+// Reads one line from the controlling terminal without echoing it (Ctrl-C
+// aborts, backspace edits). Registers `end`/`error` listeners alongside
+// `data` so the promise always settles even if stdin closes or errors
+// before a newline arrives (e.g. Ctrl-D on an empty prompt, a broken pipe,
+// or a CI pseudo-TTY) -- without them this could hang the process forever
+// with stdin stuck in raw mode and no way to interrupt it.
 function readHiddenLine(promptText: string): Promise<string> {
 	return new Promise((resolve, reject) => {
 		const stdin = process.stdin;
 		process.stdout.write(promptText);
 		const wasRaw = stdin.isRaw ?? false;
-		stdin.setRawMode?.(true);
+		try {
+			stdin.setRawMode?.(true);
+		} catch (err) {
+			reject(err instanceof Error ? err : new Error(String(err)));
+			return;
+		}
 		stdin.resume();
 		stdin.setEncoding("utf-8");
 
 		let value = "";
+		let settled = false;
+		const cleanup = () => {
+			stdin.removeListener("data", onData);
+			stdin.removeListener("end", onEnd);
+			stdin.removeListener("error", onError);
+			stdin.setRawMode?.(wasRaw);
+			stdin.pause();
+		};
+		const settleResolve = (result: string) => {
+			if (settled) return;
+			settled = true;
+			cleanup();
+			resolve(result);
+		};
+		const settleReject = (err: Error) => {
+			if (settled) return;
+			settled = true;
+			cleanup();
+			reject(err);
+		};
 		const onData = (chunk: string) => {
 			for (const char of chunk) {
 				if (char === "\r" || char === "\n") {
-					cleanup();
 					process.stdout.write("\n");
-					resolve(value);
+					settleResolve(value);
 					return;
 				}
 				if (char === "\u0003") {
 					// Ctrl-C
-					cleanup();
 					process.stdout.write("\n");
-					reject(new Error("Aborted."));
+					settleReject(new Error("Aborted."));
 					return;
 				}
 				if (char === "\u007f" || char === "\b") {
@@ -970,12 +1005,11 @@ function readHiddenLine(promptText: string): Promise<string> {
 				value += char;
 			}
 		};
-		const cleanup = () => {
-			stdin.removeListener("data", onData);
-			stdin.setRawMode?.(wasRaw);
-			stdin.pause();
-		};
+		const onEnd = () => settleResolve(value);
+		const onError = (err: Error) => settleReject(err);
 		stdin.on("data", onData);
+		stdin.once("end", onEnd);
+		stdin.once("error", onError);
 	});
 }
 
@@ -990,6 +1024,14 @@ async function defaultReadSecret(): Promise<string> {
 	return readHiddenLine("Value (input hidden): ");
 }
 
+// Intentionally duplicated with cli-creds.ts's assertKnownCredentialVar, not
+// a guard left behind by accident: this one is the CLI-layer fail-fast path
+// (fatal() + a clean usage message before anything touches the Keychain),
+// the other is the library-layer defense-in-depth backstop for a caller that
+// imports setCredential/unsetCredential directly and bypasses this file
+// entirely. Removing either changes a real behavioral guarantee — see the
+// cmdCreds/setCredential tests, which each assert their own layer's guard
+// fires independently.
 function ensureKnownCredentialVar(name: string | undefined): CliCredentialVar {
 	if (!name || !(CLI_CREDENTIAL_VARS as readonly string[]).includes(name)) {
 		fatal(

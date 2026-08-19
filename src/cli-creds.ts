@@ -95,6 +95,18 @@ async function defaultReadKeychain(account: string): Promise<string | null> {
 	}
 }
 
+// `-w <value>` puts the credential in this `security` subprocess's own argv
+// for its (short) lifetime, regardless of how the caller obtained `value` —
+// piped stdin, a hidden prompt, or a positional CLI arg all funnel through
+// here identically. `security add-generic-password -h` documents the only
+// non-argv input mode as an interactive double-entry prompt read from the
+// controlling terminal (typed twice, not piped), which doesn't work for the
+// non-interactive/scripted flow this CLI targets — verified directly
+// (`security add-generic-password -w` with piped stdin still prompts twice
+// via the tty rather than reading the pipe). `src/auth.ts`'s existing
+// Keychain writer for the Claude Code OAuth token has the identical
+// pattern for the same reason. See docs/cli-and-npm.md's "Residual
+// exposure" note.
 async function defaultWriteKeychain(
 	account: string,
 	value: string,
@@ -134,9 +146,10 @@ async function defaultDeleteKeychain(account: string): Promise<void> {
 	} catch (err) {
 		// Already absent — deleting a credential that isn't there is a no-op,
 		// not a failure. Anything else (locked keychain, permission denial,
-		// binary missing) must propagate — silently swallowing it here is what
-		// let `creds unset` previously report "Removed" when nothing was
-		// actually removed.
+		// binary missing) must not be swallowed — that's what let `creds unset`
+		// previously report "Removed" when nothing was actually removed. The
+		// binary-missing case below is translated into a friendlier message
+		// rather than rethrown as-is; everything else propagates unchanged.
 		if (isItemNotFoundError(err)) return;
 		if (isKeychainUnavailableError(err)) {
 			throw new Error(
@@ -254,7 +267,15 @@ export async function listCredentials(
 		let value: string | null = null;
 		try {
 			value = await readKeychain(v);
-		} catch {
+		} catch (err) {
+			// Same reasoning as the resolveCliCredentials loop above: an
+			// injected readKeychain that throws for a reason other than
+			// "item not found"/"Keychain unavailable" is worth a diagnostic —
+			// otherwise a locked Keychain reports as "nothing stored" with no
+			// indication `list` couldn't actually check.
+			process.stderr.write(
+				`ai-review: Keychain read failed for ${v}: ${errorMessage(err)}\n`,
+			);
 			value = null;
 		}
 		if (value) present.push(v);

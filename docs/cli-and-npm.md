@@ -213,7 +213,7 @@ Only the 4 identity vars used to post through the two GitHub App bots:
 
 ### Setting them — primary source: this repo's own `.env`
 
-The correct values already live in this repo's `.env` file. `creds set <VAR>` accepts the value on stdin — nothing sensitive touches argv or shell history:
+The correct values already live in this repo's `.env` file. `creds set <VAR>` accepts the value on stdin — it never touches *our own* argv or shell history:
 
 ```bash
 grep '^GITHUB_APP_ID=' .env | cut -d= -f2- | ai-review creds set GITHUB_APP_ID
@@ -222,9 +222,11 @@ grep '^OPENAI_APP_ID=' .env | cut -d= -f2- | ai-review creds set OPENAI_APP_ID
 grep '^OPENAI_APP_PRIVATE_KEY=' .env | cut -d= -f2- | ai-review creds set OPENAI_APP_PRIVATE_KEY
 ```
 
-With no pipe attached, `creds set <VAR>` prompts interactively instead. The private key values in `.env` are already single-line `\n`-escaped — no reformatting needed.
+With no pipe attached, `creds set <VAR>` prompts interactively (input hidden, not echoed) instead. The private key values in `.env` are already single-line `\n`-escaped — no reformatting needed.
 
-`creds set <VAR> <value>` (value as a third argument) still works for scripted callers that have already accepted the trade-off, but avoid it for anything sensitive: the value is visible via `ps` for the life of the `security` subprocess and typically lands in shell history. `<VAR>` must be one of the 4 vars above — an unrecognized name is rejected rather than silently creating an orphaned Keychain entry.
+`creds set <VAR> <value>` (value as a third argument) still works for scripted callers that have already accepted the trade-off, but avoid it for anything sensitive: the value additionally lands in *your* shell history. `<VAR>` must be one of the 4 vars above — an unrecognized name is rejected rather than silently creating an orphaned Keychain entry.
+
+**Residual exposure, either way:** the stdin/prompt form keeps the value out of `ai-review`'s own argv and your shell history, but the Keychain write itself shells out to macOS's `security add-generic-password ... -w <value>`, which briefly holds the value in *that subprocess's* argv (visible via `ps`/`/proc` for its short lifetime) regardless of how `ai-review` obtained it. This is a `security`-CLI limitation, not something this feature can route around: its only non-argv input mode is an interactive double-entry prompt (type it twice, no echo) that reads from the controlling terminal, not stdin — incompatible with the piped/non-interactive flow above, which is the primary intended use. `src/auth.ts`'s existing Keychain writer (the Claude Code OAuth token storage this feature mirrors) has the identical `-w <value>` pattern for the same reason.
 
 Check what's currently stored (names only, never values) with `ai-review creds list`, and remove an entry with `ai-review creds unset <VAR>`.
 
