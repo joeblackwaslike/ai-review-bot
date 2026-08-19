@@ -55,6 +55,44 @@ export function selectReviewDelayMs(action: string, config: AppConfig): number {
  * explicit release. */
 const REVIEW_CLAIM_TTL_SECONDS = 1200;
 
+/** Best-effort check for a review already matching this exact commit + body —
+ * i.e. one this same retry loop (an earlier attempt of it) actually created
+ * on GitHub even though the client saw that attempt as a failure. Returns
+ * null on any lookup failure so a GET hiccup degrades to the normal
+ * retry/fallback path rather than blocking a legitimate review. */
+async function findMatchingReview(
+	octokit: Awaited<ReturnType<App["getInstallationOctokit"]>>,
+	params: {
+		owner: string;
+		repo: string;
+		pullNumber: number;
+		commitId: string;
+		body: string;
+	},
+): Promise<number | null> {
+	try {
+		const response = await octokit.request(
+			"GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
+			{
+				owner: params.owner,
+				repo: params.repo,
+				pull_number: params.pullNumber,
+				per_page: 30,
+			},
+		);
+		const reviews = response.data as
+			| Array<{ id: number; commit_id: string; body: string }>
+			| undefined;
+		if (!Array.isArray(reviews)) return null;
+		const match = reviews.find(
+			(r) => r.commit_id === params.commitId && r.body === params.body,
+		);
+		return match?.id ?? null;
+	} catch {
+		return null;
+	}
+}
+
 async function postReviewWithRetry(
 	octokit: Awaited<ReturnType<App["getInstallationOctokit"]>>,
 	params: {
@@ -95,6 +133,26 @@ async function postReviewWithRetry(
 				`review POST attempt ${attempt + 1}/${maxAttempts} failed`,
 				err,
 			);
+
+			// GitHub can process the write and still hand the client an error —
+			// a secondary rate limit response, a dropped connection after
+			// commit, a timeout past the point the review was actually
+			// created. A blind retry then POSTs a second, fully duplicate
+			// review. Confirmed live: ai-review watch posted a byte-for-byte
+			// duplicate review 76s after a secondary-rate-limit error
+			// (2026-08-19 dogfood session, joeblackwaslike/ai-listings).
+			// Check server state before assuming nothing landed, on every
+			// failure — this is what makes a duplicate structurally
+			// unreachable rather than merely less likely.
+			const existingId = await findMatchingReview(octokit, params);
+			if (existingId !== null) {
+				console.log(
+					"review POST reported an error but the review already exists on GitHub — not retrying",
+					{ existingId },
+				);
+				return existingId;
+			}
+
 			if (attempt < maxAttempts - 1) {
 				await sleep(delays[attempt]);
 			}

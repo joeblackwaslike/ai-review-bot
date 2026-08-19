@@ -299,11 +299,21 @@ describe("maybeSubmitReview", () => {
 	it("retries POST up to 3 times on failure before succeeding", async () => {
 		vi.useFakeTimers();
 		const { app, request } = buildMockApp();
-		// Fail twice, succeed on the third attempt
-		request
-			.mockRejectedValueOnce(new Error("422 Unprocessable Entity"))
-			.mockRejectedValueOnce(new Error("422 Unprocessable Entity"))
-			.mockResolvedValue({ data: {} });
+		let postAttempts = 0;
+		// Fail twice, succeed on the third attempt. The existence check
+		// (GET .../reviews) run after each failure finds nothing — the
+		// failures were real, nothing landed on GitHub's side.
+		request.mockImplementation(async (route: string) => {
+			if (route === "POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews") {
+				postAttempts++;
+				if (postAttempts < 3) throw new Error("422 Unprocessable Entity");
+				return { data: { id: 999 } };
+			}
+			if (route === "GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews") {
+				return { data: [] };
+			}
+			return { data: {} };
+		});
 
 		mockBuildReview.mockReset().mockResolvedValue({
 			event: "COMMENT" as const,
@@ -323,20 +333,56 @@ describe("maybeSubmitReview", () => {
 		await vi.runAllTimersAsync();
 		await promise;
 
-		// 3 review POST attempts + 1 PATCH (PR desc) + 1 POST (check run)
-		expect(request).toHaveBeenCalledTimes(5);
-		const reviewRoutes = request.mock.calls.slice(0, 3).map(([route]) => route);
-		expect(
-			reviewRoutes.every(
-				(r) => r === "POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
-			),
-		).toBe(true);
-		expect(request.mock.calls[3][0]).toBe(
-			"PATCH /repos/{owner}/{repo}/pulls/{pull_number}",
+		expect(postAttempts).toBe(3);
+		const patchCall = request.mock.calls.find(
+			([route]) => route === "PATCH /repos/{owner}/{repo}/pulls/{pull_number}",
 		);
-		expect(request.mock.calls[4][0]).toBe(
-			"POST /repos/{owner}/{repo}/check-runs",
+		expect(patchCall).toBeDefined();
+		const checkRunCall = request.mock.calls.find(
+			([route]) => route === "POST /repos/{owner}/{repo}/check-runs",
 		);
+		expect(checkRunCall).toBeDefined();
+	});
+
+	it("does not repost a duplicate review when a prior attempt actually landed despite the client seeing an error", async () => {
+		vi.useFakeTimers();
+		const { app, request } = buildMockApp();
+		let postAttempts = 0;
+		request.mockImplementation(async (route: string) => {
+			if (route === "POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews") {
+				postAttempts++;
+				// GitHub processes the write, but the client sees an error
+				// anyway (secondary rate limit, dropped connection after
+				// commit, timeout past the actual write) — exactly what was
+				// observed live: ai-review watch posted a byte-for-byte
+				// duplicate review 76s after a secondary-rate-limit error.
+				throw new Error("You have exceeded a secondary rate limit");
+			}
+			if (route === "GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews") {
+				// The "failed" POST above actually landed on GitHub.
+				return {
+					data: [{ id: 555, commit_id: pr.head.sha, body: "Review body." }],
+				};
+			}
+			return { data: {} };
+		});
+
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "COMMENT" as const,
+			body: "Review body.",
+			comments: [],
+			metadata: DEFAULT_METADATA,
+		});
+
+		const promise = maybeSubmitReview({ app, ...baseArgs });
+		await vi.runAllTimersAsync();
+		const outcome = await promise;
+
+		// Only one POST was attempted — the check after that "failure" found
+		// the review already existed on GitHub and returned it instead of
+		// retrying, so no duplicate was ever created.
+		expect(postAttempts).toBe(1);
+		expect(outcome).toEqual({ status: "posted", event: "COMMENT" });
 	});
 
 	it("posts an actionable rate-limit comment and no review on RATE_LIMITED", async () => {
@@ -1142,12 +1188,19 @@ describe("maybeSubmitReview", () => {
 	it("posts fallback comment with findings when all retries are exhausted", async () => {
 		vi.useFakeTimers();
 		const { app, request } = buildMockApp();
-		// All 3 review attempts fail; 4th call (fallback comment) succeeds
-		request
-			.mockRejectedValueOnce(new Error("422 Unprocessable Entity"))
-			.mockRejectedValueOnce(new Error("422 Unprocessable Entity"))
-			.mockRejectedValueOnce(new Error("422 Unprocessable Entity"))
-			.mockResolvedValue({ data: {} });
+		let postAttempts = 0;
+		// All 3 review attempts genuinely fail (the existence check after each
+		// finds nothing on GitHub's side); the fallback comment then succeeds.
+		request.mockImplementation(async (route: string) => {
+			if (route === "POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews") {
+				postAttempts++;
+				throw new Error("422 Unprocessable Entity");
+			}
+			if (route === "GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews") {
+				return { data: [] };
+			}
+			return { data: {} };
+		});
 
 		mockBuildReview.mockReset().mockResolvedValue({
 			event: "COMMENT" as const,
@@ -1167,10 +1220,17 @@ describe("maybeSubmitReview", () => {
 		await vi.runAllTimersAsync();
 		const outcome = await promise;
 
-		// 3 review attempts + 1 fallback comment (no PATCH — review failed)
-		expect(request).toHaveBeenCalledTimes(4);
+		expect(postAttempts).toBe(3);
 
-		const [fallbackRoute, fallbackParams] = request.mock.calls[3];
+		const fallbackCall = request.mock.calls.find(
+			([route]) =>
+				route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+		);
+		expect(fallbackCall).toBeDefined();
+		const [fallbackRoute, fallbackParams] = fallbackCall as [
+			string,
+			{ body: string },
+		];
 		expect(fallbackRoute).toBe(
 			"POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
 		);
