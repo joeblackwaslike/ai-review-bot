@@ -14,6 +14,14 @@ import {
 } from "./audit.js";
 import { makeReady, type OctokitLike } from "./audit-pr.js";
 import { resolveAnthropicAuth, resolveSubscriptionAuth } from "./auth.js";
+import {
+	CLI_CREDENTIAL_VARS,
+	KEYCHAIN_SERVICE,
+	listCredentials,
+	resolveCliCredentials,
+	setCredential,
+	unsetCredential,
+} from "./cli-creds.js";
 import { getConfig, getOpenAIAppConfig } from "./config.js";
 import {
 	type BackfillOctokit,
@@ -93,6 +101,18 @@ function usage(): never {
 	console.error(
 		"      Personal, local use only — exits when the PR merges or closes.",
 	);
+	console.error("  ai-review creds set <VAR> <value>");
+	console.error("  ai-review creds list");
+	console.error("  ai-review creds unset <VAR>");
+	console.error(
+		`      Store/inspect/remove CLI credentials in the macOS Keychain (service`,
+	);
+	console.error(
+		`      "${KEYCHAIN_SERVICE}") so watch/review/audit work outside this repo —`,
+	);
+	console.error(
+		"      see docs/cli-and-npm.md for which vars are needed and where to find them.",
+	);
 	console.error("  ai-review backfill --repo <owner/name> [--pr <n>] [--json]");
 	console.error("  ai-review unrated --repo <owner/name> --pr <n> [--json]");
 	console.error(
@@ -148,8 +168,8 @@ function originSlug(): { owner: string; repo: string } {
 
 async function buildResolvePr() {
 	const { owner, repo } = originSlug();
-	const claude = getConfig();
-	const codex = getOpenAIAppConfig();
+	const claude = getConfig({ requireWebhookSecret: false });
+	const codex = getOpenAIAppConfig({ requireWebhookSecret: false });
 	const claudeKit = await installationOctokit(
 		claude.appId,
 		claude.privateKey,
@@ -291,8 +311,8 @@ export async function cmdAudit(args: string[]): Promise<void> {
 	// expensive provider passes only to fail at PR-post time.
 	if (!dryRun) {
 		try {
-			getConfig();
-			getOpenAIAppConfig();
+			getConfig({ requireWebhookSecret: false });
+			getOpenAIAppConfig({ requireWebhookSecret: false });
 		} catch (err) {
 			// String(err) collapses a plain-object throw to "[object Object]"
 			// (and throws outright for a null-prototype one) — inspect() keeps
@@ -334,7 +354,7 @@ export async function cmdAudit(args: string[]): Promise<void> {
 async function cmdReady(args: string[]): Promise<void> {
 	const positional = args.find((a) => !a.startsWith("--"));
 	const { owner, repo } = originSlug();
-	const claude = getConfig();
+	const claude = getConfig({ requireWebhookSecret: false });
 	const octokit = await installationOctokit(
 		claude.appId,
 		claude.privateKey,
@@ -434,7 +454,9 @@ export async function cmdWatch(args: string[]): Promise<void> {
 	const targets: ProviderTarget[] = [];
 	for (const provider of providers) {
 		const config =
-			provider === "anthropic" ? getConfig() : getOpenAIAppConfig();
+			provider === "anthropic"
+				? getConfig({ requireWebhookSecret: false })
+				: getOpenAIAppConfig({ requireWebhookSecret: false });
 		const { app, installationId } = await installationApp(
 			config.appId,
 			config.privateKey,
@@ -542,7 +564,7 @@ async function cmdUnrated(args: string[]): Promise<void> {
 	const octokit = (token
 		? new Octokit({ auth: token })
 		: await (async () => {
-				const config = getConfig();
+				const config = getConfig({ requireWebhookSecret: false });
 				return installationOctokit(
 					config.appId,
 					config.privateKey,
@@ -627,7 +649,7 @@ async function cmdBackfill(args: string[]): Promise<void> {
 	const octokit = (token
 		? new Octokit({ auth: token })
 		: await (async () => {
-				const config = getConfig();
+				const config = getConfig({ requireWebhookSecret: false });
 				return installationOctokit(
 					config.appId,
 					config.privateKey,
@@ -861,8 +883,8 @@ async function cmdPropose(args: string[]): Promise<void> {
 	const octokit = token
 		? new Octokit({ auth: token })
 		: await installationOctokit(
-				getConfig().appId,
-				getConfig().privateKey,
+				getConfig({ requireWebhookSecret: false }).appId,
+				getConfig({ requireWebhookSecret: false }).privateKey,
 				owner,
 				repo,
 			);
@@ -890,7 +912,40 @@ async function cmdPropose(args: string[]): Promise<void> {
 	}
 }
 
+export async function cmdCreds(args: string[]): Promise<void> {
+	const [action, varName, value] = args;
+	if (action === "set") {
+		if (!varName || value === undefined) {
+			fatal("Usage: ai-review creds set <VAR> <value>");
+		}
+		await setCredential(varName, value);
+		console.log(
+			`Set ${varName} in the Keychain (service: ${KEYCHAIN_SERVICE}).`,
+		);
+		return;
+	}
+	if (action === "list") {
+		const present = await listCredentials();
+		for (const v of CLI_CREDENTIAL_VARS) {
+			console.log(`${present.includes(v) ? "✓" : "✗"} ${v}`);
+		}
+		return;
+	}
+	if (action === "unset") {
+		if (!varName) fatal("Usage: ai-review creds unset <VAR>");
+		await unsetCredential(varName);
+		console.log(`Removed ${varName} from the Keychain (if it was set).`);
+		return;
+	}
+	fatal("Usage: ai-review creds set <VAR> <value> | list | unset <VAR>");
+}
+
 async function main(): Promise<void> {
+	// Populate process.env from the Keychain/XDG fallback before any
+	// subcommand runs, so createApp()/getConfig() see credentials even when
+	// the globally npm-linked binary is invoked from outside this repo.
+	await resolveCliCredentials();
+
 	const [sub, ...rest] = process.argv.slice(2);
 	if (sub === "classify") return cmdClassify(rest);
 	if (sub === "trends") return cmdTrends(rest);
@@ -900,6 +955,7 @@ async function main(): Promise<void> {
 	if (sub === "audit") return cmdAudit(rest);
 	if (sub === "ready") return cmdReady(rest);
 	if (sub === "watch") return cmdWatch(rest);
+	if (sub === "creds") return cmdCreds(rest);
 	if (sub === "backfill") return cmdBackfill(rest);
 	if (sub === "unrated") return cmdUnrated(rest);
 	if (sub?.includes("/")) return cmdLegacyRemote([sub, ...rest]); // back-compat

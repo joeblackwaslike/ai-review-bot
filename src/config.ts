@@ -113,13 +113,24 @@ export function parseDelayMs(
 	return defaultSeconds * 1000;
 }
 
-export function getConfig(): AppConfig {
+export interface GetConfigOptions {
+	/** CLI-only call sites (cli.ts, watch.ts) never verify inbound webhooks and
+	 * so never need this secret — requiring it there just forces a dev machine
+	 * to hold a credential it will never use. Webhook-serving code (github-app.ts)
+	 * must keep the default `true` unchanged. */
+	requireWebhookSecret?: boolean;
+}
+
+export function getConfig(opts: GetConfigOptions = {}): AppConfig {
+	const requireWebhookSecret = opts.requireWebhookSecret ?? true;
 	return {
 		appId: getRequiredEnv("GITHUB_APP_ID"),
 		privateKey: validatePrivateKey(
 			normalizePrivateKey(getRequiredEnv("GITHUB_APP_PRIVATE_KEY")),
 		),
-		webhookSecret: getRequiredEnv("GITHUB_WEBHOOK_SECRET"),
+		webhookSecret: requireWebhookSecret
+			? getRequiredEnv("GITHUB_WEBHOOK_SECRET")
+			: (process.env.GITHUB_WEBHOOK_SECRET ?? ""),
 		reviewEnabled: process.env.REVIEW_ENABLED !== "false",
 		reviewDelayMs: parseDelayMs(process.env.REVIEW_DELAY_SECONDS, 540),
 		reviewResyncDelayMs: parseDelayMs(
@@ -151,13 +162,16 @@ export function getConfig(): AppConfig {
 	};
 }
 
-export function getOpenAIAppConfig(): AppConfig {
+export function getOpenAIAppConfig(opts: GetConfigOptions = {}): AppConfig {
+	const requireWebhookSecret = opts.requireWebhookSecret ?? true;
 	return {
 		appId: getRequiredEnv("OPENAI_APP_ID"),
 		privateKey: validatePrivateKey(
 			normalizePrivateKey(getRequiredEnv("OPENAI_APP_PRIVATE_KEY")),
 		),
-		webhookSecret: getRequiredEnv("OPENAI_APP_WEBHOOK_SECRET"),
+		webhookSecret: requireWebhookSecret
+			? getRequiredEnv("OPENAI_APP_WEBHOOK_SECRET")
+			: (process.env.OPENAI_APP_WEBHOOK_SECRET ?? ""),
 		reviewEnabled: process.env.REVIEW_ENABLED !== "false",
 		reviewDelayMs: parseDelayMs(process.env.REVIEW_DELAY_SECONDS, 540),
 		reviewResyncDelayMs: parseDelayMs(
