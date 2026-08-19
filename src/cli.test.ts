@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./config.js", async (orig) => {
 	const actual = await orig<typeof import("./config.js")>();
@@ -20,10 +20,26 @@ vi.mock("./watch.js", async (orig) => {
 	const actual = await orig<typeof import("./watch.js")>();
 	return { ...actual, watchPr: vi.fn() };
 });
+vi.mock("./cli-creds.js", async (orig) => {
+	const actual = await orig<typeof import("./cli-creds.js")>();
+	return {
+		...actual,
+		setCredential: vi.fn(),
+		unsetCredential: vi.fn(),
+		listCredentialSources: vi.fn(),
+		resolveCliCredentials: vi.fn(),
+	};
+});
 
 import { runLocalAudit } from "./audit.js";
 import { resolveSubscriptionAuth } from "./auth.js";
-import { cmdAudit, cmdWatch } from "./cli.js";
+import { cmdAudit, cmdCreds, cmdWatch, main, readHiddenLine } from "./cli.js";
+import {
+	listCredentialSources,
+	resolveCliCredentials,
+	setCredential,
+	unsetCredential,
+} from "./cli-creds.js";
 import { getConfig, getOpenAIAppConfig } from "./config.js";
 import { installationApp, installationOctokit } from "./improve/octokit.js";
 import { watchPr } from "./watch.js";
@@ -285,5 +301,261 @@ describe("cmdWatch", () => {
 
 		const call = vi.mocked(watchPr).mock.calls[0][0];
 		expect(call.circuitBreaker).toBe(false);
+	});
+});
+
+describe("main credential-resolution dispatch", () => {
+	const originalArgv = process.argv;
+
+	beforeEach(() => {
+		vi.mocked(resolveCliCredentials).mockReset().mockResolvedValue(undefined);
+		vi.mocked(listCredentialSources).mockReset().mockResolvedValue({
+			GITHUB_APP_ID: "absent",
+			GITHUB_APP_PRIVATE_KEY: "absent",
+			OPENAI_APP_ID: "absent",
+			OPENAI_APP_PRIVATE_KEY: "absent",
+		});
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+			throw new ProcessExitError(code ?? 0);
+		}) as never);
+	});
+
+	afterEach(() => {
+		process.argv = originalArgv;
+	});
+
+	// This is the actual regression ai-review-bot-yyn fixes: the CLI must
+	// resolve credentials (Keychain/XDG) before any subcommand that needs
+	// them runs, so watch/review/audit work when the globally npm-linked
+	// binary is invoked from outside this repo. Locking the dispatch guard
+	// in main() under test — not just resolveCliCredentials()'s own
+	// internal logic — is what would actually catch a future regression
+	// where a new subcommand is added above the check, or the check is
+	// accidentally removed.
+	it("resolves credentials before dispatching a normal subcommand", async () => {
+		process.argv = ["node", "dist/cli.js", "unknown-subcommand"];
+		await expect(main()).rejects.toThrow(ProcessExitError);
+		expect(resolveCliCredentials).toHaveBeenCalled();
+	});
+
+	it("skips credential resolution for the creds subcommand itself", async () => {
+		process.argv = ["node", "dist/cli.js", "creds", "list"];
+		await main();
+		expect(resolveCliCredentials).not.toHaveBeenCalled();
+		expect(listCredentialSources).toHaveBeenCalled();
+	});
+});
+
+describe("cmdCreds", () => {
+	beforeEach(() => {
+		vi.mocked(setCredential).mockReset().mockResolvedValue(undefined);
+		vi.mocked(unsetCredential).mockReset().mockResolvedValue(undefined);
+		vi.mocked(listCredentialSources).mockReset().mockResolvedValue({
+			GITHUB_APP_ID: "absent",
+			GITHUB_APP_PRIVATE_KEY: "absent",
+			OPENAI_APP_ID: "absent",
+			OPENAI_APP_PRIVATE_KEY: "absent",
+		});
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+			throw new ProcessExitError(code ?? 0);
+		}) as never);
+	});
+
+	// Validates varName against CLI_CREDENTIAL_VARS before writing to the
+	// Keychain — an unrecognized <VAR> otherwise silently wrote an orphaned
+	// entry that `resolveCliCredentials`/`creds list` never look at again; a
+	// typo like `GITHUB_APPID` looked like it worked and failed only much
+	// later, in `watch`, with no link back to the typo.
+	it("rejects an unknown var name for set", async () => {
+		await expect(cmdCreds(["set", "NOT_A_REAL_VAR", "x"])).rejects.toThrow(
+			ProcessExitError,
+		);
+
+		expect(setCredential).not.toHaveBeenCalled();
+		expect(console.error).toHaveBeenCalledWith(
+			expect.stringMatching(/NOT_A_REAL_VAR.*GITHUB_APP_ID/),
+		);
+	});
+
+	it("rejects an unknown var name for unset", async () => {
+		await expect(cmdCreds(["unset", "NOT_A_REAL_VAR"])).rejects.toThrow(
+			ProcessExitError,
+		);
+
+		expect(unsetCredential).not.toHaveBeenCalled();
+	});
+
+	it("accepts a known var name with a positional value", async () => {
+		await cmdCreds(["set", "GITHUB_APP_ID", "the-value"]);
+
+		expect(setCredential).toHaveBeenCalledWith("GITHUB_APP_ID", "the-value");
+		expect(process.exit).not.toHaveBeenCalled();
+	});
+
+	it("accepts a known var name for unset", async () => {
+		await cmdCreds(["unset", "GITHUB_APP_ID"]);
+
+		expect(unsetCredential).toHaveBeenCalledWith("GITHUB_APP_ID");
+	});
+
+	// A value with unquoted spaces (`ai-review creds set VAR one two`) used to
+	// silently store "one" and drop "two" with no error — the same
+	// truncated-value failure mode the PEM shape check exists to catch, but
+	// for any var, not just private keys.
+	it("rejects extra positional arguments to set instead of silently dropping them", async () => {
+		await expect(
+			cmdCreds(["set", "GITHUB_APP_ID", "one", "two"]),
+		).rejects.toThrow(ProcessExitError);
+
+		expect(setCredential).not.toHaveBeenCalled();
+	});
+
+	it("rejects extra positional arguments to unset", async () => {
+		await expect(cmdCreds(["unset", "GITHUB_APP_ID", "extra"])).rejects.toThrow(
+			ProcessExitError,
+		);
+
+		expect(unsetCredential).not.toHaveBeenCalled();
+	});
+
+	// `unsetCredential` only ever deletes the Keychain entry — it has no path
+	// to edit ~/.config/ai-review/.env. A var satisfied purely by that file
+	// is untouched by `creds unset`, so the flat "Removed" message would be
+	// false for exactly the vars where the XDG fallback matters.
+	it("warns instead of claiming success when unset can't actually clear an XDG-only credential", async () => {
+		vi.mocked(listCredentialSources).mockResolvedValue({
+			GITHUB_APP_ID: "xdg",
+			GITHUB_APP_PRIVATE_KEY: "absent",
+			OPENAI_APP_ID: "absent",
+			OPENAI_APP_PRIVATE_KEY: "absent",
+		});
+
+		await cmdCreds(["unset", "GITHUB_APP_ID"]);
+
+		expect(unsetCredential).toHaveBeenCalledWith("GITHUB_APP_ID");
+		expect(console.log).toHaveBeenCalledWith(
+			expect.stringContaining("still set in ~/.config/ai-review/.env"),
+		);
+	});
+
+	it("reports plain success when unset actually cleared the only source (Keychain)", async () => {
+		vi.mocked(listCredentialSources).mockResolvedValue({
+			GITHUB_APP_ID: "absent",
+			GITHUB_APP_PRIVATE_KEY: "absent",
+			OPENAI_APP_ID: "absent",
+			OPENAI_APP_PRIVATE_KEY: "absent",
+		});
+
+		await cmdCreds(["unset", "GITHUB_APP_ID"]);
+
+		expect(console.log).toHaveBeenCalledWith(
+			"Removed GITHUB_APP_ID from the Keychain (if it was set).",
+		);
+	});
+
+	// Only set/unset dispatch had coverage; a typo in the "list" branch would
+	// have gone uncaught.
+	it("dispatches list and prints presence + source for every known var", async () => {
+		vi.mocked(listCredentialSources).mockResolvedValue({
+			GITHUB_APP_ID: "keychain",
+			GITHUB_APP_PRIVATE_KEY: "absent",
+			OPENAI_APP_ID: "absent",
+			OPENAI_APP_PRIVATE_KEY: "xdg",
+		});
+
+		await cmdCreds(["list"]);
+
+		expect(listCredentialSources).toHaveBeenCalled();
+		expect(console.log).toHaveBeenCalledWith("✓ GITHUB_APP_ID (Keychain)");
+		expect(console.log).toHaveBeenCalledWith("✗ GITHUB_APP_PRIVATE_KEY");
+		expect(console.log).toHaveBeenCalledWith("✗ OPENAI_APP_ID");
+		expect(console.log).toHaveBeenCalledWith(
+			expect.stringContaining(
+				"✓ OPENAI_APP_PRIVATE_KEY (~/.config/ai-review/.env",
+			),
+		);
+	});
+
+	// A value passed as `creds set <VAR> <value>` sits in argv (visible to
+	// `ps` for the life of the process) and typically lands in shell
+	// history. When the value is omitted, read it through an injectable,
+	// non-argv channel instead.
+	it("reads the value from the injected reader when omitted", async () => {
+		const readSecret = vi.fn().mockResolvedValue("from-reader");
+
+		await cmdCreds(["set", "GITHUB_APP_ID"], { readSecret });
+
+		expect(readSecret).toHaveBeenCalled();
+		expect(setCredential).toHaveBeenCalledWith("GITHUB_APP_ID", "from-reader");
+	});
+
+	it("fails clearly when the injected reader returns nothing", async () => {
+		const readSecret = vi.fn().mockResolvedValue("");
+
+		await expect(
+			cmdCreds(["set", "GITHUB_APP_ID"], { readSecret }),
+		).rejects.toThrow(ProcessExitError);
+
+		expect(setCredential).not.toHaveBeenCalled();
+	});
+
+	// Round 5 of PR #72 review (codexreviewbot): an earlier version of this
+	// code refused *all* interactive private-key entry, which also rejected
+	// the documented, correct single-line \n-escaped paste — not just the
+	// truncation-prone raw multi-line paste it was meant to catch. Replaced
+	// with a shape check on the resolved value instead of blocking the
+	// channel outright.
+	it("accepts a private-key value that looks like a complete single-line PEM", async () => {
+		await cmdCreds([
+			"set",
+			"GITHUB_APP_PRIVATE_KEY",
+			"-----BEGIN PRIVATE KEY-----\\nMIIEvQ\\n-----END PRIVATE KEY-----\\n",
+		]);
+
+		expect(setCredential).toHaveBeenCalledWith(
+			"GITHUB_APP_PRIVATE_KEY",
+			"-----BEGIN PRIVATE KEY-----\\nMIIEvQ\\n-----END PRIVATE KEY-----\\n",
+		);
+	});
+
+	it("rejects a private-key value truncated to just the BEGIN line (the raw multi-line-paste failure mode)", async () => {
+		await expect(
+			cmdCreds([
+				"set",
+				"GITHUB_APP_PRIVATE_KEY",
+				"-----BEGIN PRIVATE KEY-----",
+			]),
+		).rejects.toThrow(ProcessExitError);
+
+		expect(setCredential).not.toHaveBeenCalled();
+	});
+});
+
+describe("readHiddenLine", () => {
+	// A TTY without `setRawMode` (some CI pseudo-TTYs, certain terminal
+	// emulation layers) used to fall through silently to cooked mode, where
+	// the terminal echoes every typed character despite the "input hidden"
+	// prompt — a real secret-exposure regression in exactly the path meant
+	// to avoid it. This must fail closed instead.
+	it("rejects instead of silently echoing input when the terminal has no setRawMode support", async () => {
+		const fakeStdin = Object.create(process.stdin, {
+			setRawMode: { value: undefined, configurable: true },
+		});
+		const originalStdin = Object.getOwnPropertyDescriptor(process, "stdin");
+		Object.defineProperty(process, "stdin", {
+			value: fakeStdin,
+			configurable: true,
+		});
+		try {
+			await expect(readHiddenLine("Value: ")).rejects.toThrow(
+				/not available on this terminal/,
+			);
+		} finally {
+			if (originalStdin) Object.defineProperty(process, "stdin", originalStdin);
+		}
 	});
 });

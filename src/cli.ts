@@ -14,6 +14,16 @@ import {
 } from "./audit.js";
 import { makeReady, type OctokitLike } from "./audit-pr.js";
 import { resolveAnthropicAuth, resolveSubscriptionAuth } from "./auth.js";
+import {
+	CLI_CREDENTIAL_VARS,
+	type CliCredentialVar,
+	KEYCHAIN_SERVICE,
+	listCredentialSources,
+	looksLikeCompletePemOneLiner,
+	resolveCliCredentials,
+	setCredential,
+	unsetCredential,
+} from "./cli-creds.js";
 import { getConfig, getOpenAIAppConfig } from "./config.js";
 import {
 	type BackfillOctokit,
@@ -93,6 +103,18 @@ function usage(): never {
 	console.error(
 		"      Personal, local use only — exits when the PR merges or closes.",
 	);
+	console.error("  ai-review creds set <VAR> [value]");
+	console.error("  ai-review creds list");
+	console.error("  ai-review creds unset <VAR>");
+	console.error(
+		`      Store/inspect/remove CLI credentials in the macOS Keychain (service`,
+	);
+	console.error(
+		`      "${KEYCHAIN_SERVICE}") so watch/review/audit work outside this repo —`,
+	);
+	console.error(
+		"      see docs/cli-and-npm.md for which vars are needed and where to find them.",
+	);
 	console.error("  ai-review backfill --repo <owner/name> [--pr <n>] [--json]");
 	console.error("  ai-review unrated --repo <owner/name> --pr <n> [--json]");
 	console.error(
@@ -148,8 +170,8 @@ function originSlug(): { owner: string; repo: string } {
 
 async function buildResolvePr() {
 	const { owner, repo } = originSlug();
-	const claude = getConfig();
-	const codex = getOpenAIAppConfig();
+	const claude = getConfig({ requireWebhookSecret: false });
+	const codex = getOpenAIAppConfig({ requireWebhookSecret: false });
 	const claudeKit = await installationOctokit(
 		claude.appId,
 		claude.privateKey,
@@ -291,8 +313,8 @@ export async function cmdAudit(args: string[]): Promise<void> {
 	// expensive provider passes only to fail at PR-post time.
 	if (!dryRun) {
 		try {
-			getConfig();
-			getOpenAIAppConfig();
+			getConfig({ requireWebhookSecret: false });
+			getOpenAIAppConfig({ requireWebhookSecret: false });
 		} catch (err) {
 			// String(err) collapses a plain-object throw to "[object Object]"
 			// (and throws outright for a null-prototype one) — inspect() keeps
@@ -334,7 +356,7 @@ export async function cmdAudit(args: string[]): Promise<void> {
 async function cmdReady(args: string[]): Promise<void> {
 	const positional = args.find((a) => !a.startsWith("--"));
 	const { owner, repo } = originSlug();
-	const claude = getConfig();
+	const claude = getConfig({ requireWebhookSecret: false });
 	const octokit = await installationOctokit(
 		claude.appId,
 		claude.privateKey,
@@ -434,7 +456,9 @@ export async function cmdWatch(args: string[]): Promise<void> {
 	const targets: ProviderTarget[] = [];
 	for (const provider of providers) {
 		const config =
-			provider === "anthropic" ? getConfig() : getOpenAIAppConfig();
+			provider === "anthropic"
+				? getConfig({ requireWebhookSecret: false })
+				: getOpenAIAppConfig({ requireWebhookSecret: false });
 		const { app, installationId } = await installationApp(
 			config.appId,
 			config.privateKey,
@@ -542,7 +566,7 @@ async function cmdUnrated(args: string[]): Promise<void> {
 	const octokit = (token
 		? new Octokit({ auth: token })
 		: await (async () => {
-				const config = getConfig();
+				const config = getConfig({ requireWebhookSecret: false });
 				return installationOctokit(
 					config.appId,
 					config.privateKey,
@@ -627,7 +651,7 @@ async function cmdBackfill(args: string[]): Promise<void> {
 	const octokit = (token
 		? new Octokit({ auth: token })
 		: await (async () => {
-				const config = getConfig();
+				const config = getConfig({ requireWebhookSecret: false });
 				return installationOctokit(
 					config.appId,
 					config.privateKey,
@@ -858,14 +882,23 @@ async function cmdPropose(args: string[]): Promise<void> {
 	}
 
 	const token = process.env.GITHUB_TOKEN;
-	const octokit = token
-		? new Octokit({ auth: token })
-		: await installationOctokit(
-				getConfig().appId,
-				getConfig().privateKey,
-				owner,
-				repo,
-			);
+	// Two separate getConfig() calls here previously each re-parsed and
+	// re-validated the full env — and, worse, calling it unconditionally would
+	// require GITHUB_APP_ID/PRIVATE_KEY even for the GITHUB_TOKEN-only path
+	// below, which doesn't need them. Keep it inside the branch that actually
+	// needs it, but call it only once there.
+	let octokit: Octokit;
+	if (token) {
+		octokit = new Octokit({ auth: token });
+	} else {
+		const claudeConfig = getConfig({ requireWebhookSecret: false });
+		octokit = await installationOctokit(
+			claudeConfig.appId,
+			claudeConfig.privateKey,
+			owner,
+			repo,
+		);
+	}
 
 	let failed = 0;
 	for (const plan of plans) {
@@ -890,8 +923,275 @@ async function cmdPropose(args: string[]): Promise<void> {
 	}
 }
 
-async function main(): Promise<void> {
+// A value typed as the third positional arg to `creds set` sits in *our own*
+// argv and typically lands in shell history. When the value is omitted, read
+// it through a channel that avoids both: piped stdin (the realistic flow —
+// `op read ... | ai-review creds set VAR`) or, for an interactive terminal, a
+// hidden prompt (raw mode, not `readline`'s default echo-on behavior — a
+// visible interactive prompt still exposes the value on-screen/in
+// scrollback while typing). The positional form still works for scripted
+// callers that have already accepted that trade-off; the docs lead with the
+// safer form.
+//
+// Neither form avoids the Keychain write's own residual exposure: it shells
+// out to `security add-generic-password ... -w <value>`, which briefly
+// holds the value in *that subprocess's* argv regardless of how this CLI
+// obtained it. `security`'s only non-argv input mode is an interactive
+// double-entry terminal prompt, incompatible with the piped/non-interactive
+// flow above — see `docs/cli-and-npm.md`'s "Residual exposure" note and
+// `defaultWriteKeychain` in cli-creds.ts, which mirrors `src/auth.ts`'s
+// existing OAuth-token Keychain writer for the same reason.
+export interface CmdCredsIO {
+	readSecret?: () => Promise<string>;
+}
+
+// Reads one line from the controlling terminal without echoing it (Ctrl-C
+// aborts, backspace edits). Registers `end`/`error` listeners alongside
+// `data` so the promise always settles even if stdin closes or errors
+// before a newline arrives (e.g. Ctrl-D on an empty prompt, a broken pipe,
+// or a CI pseudo-TTY) -- without them this could hang the process forever
+// with stdin stuck in raw mode and no way to interrupt it.
+export function readHiddenLine(promptText: string): Promise<string> {
+	return new Promise((resolve, reject) => {
+		const stdin = process.stdin;
+		process.stdout.write(promptText);
+		// `setRawMode?.()` on its own silently no-ops when unavailable — a TTY
+		// without raw-mode support (some CI pseudo-TTYs, certain terminal
+		// emulation layers) would then fall through to cooked mode, where the
+		// terminal itself echoes every typed character to the screen and
+		// scrollback despite the "input hidden" prompt. Fail closed instead of
+		// silently downgrading a security-relevant guarantee.
+		if (!stdin.setRawMode) {
+			process.stdout.write("\n");
+			reject(
+				new Error(
+					"Interactive hidden input is not available on this terminal. Pipe the value on stdin instead.",
+				),
+			);
+			return;
+		}
+		const wasRaw = stdin.isRaw ?? false;
+		try {
+			stdin.setRawMode(true);
+		} catch (err) {
+			reject(err instanceof Error ? err : new Error(String(err)));
+			return;
+		}
+		try {
+			stdin.resume();
+			stdin.setEncoding("utf-8");
+		} catch (err) {
+			// Neither call is expected to throw in practice, but if one did, the
+			// event listeners below aren't attached yet — `cleanup()` (which
+			// removes them) can't run this early, so restore raw mode directly
+			// here instead of leaving the terminal stuck in raw mode.
+			stdin.setRawMode?.(wasRaw);
+			stdin.pause();
+			reject(err instanceof Error ? err : new Error(String(err)));
+			return;
+		}
+
+		let value = "";
+		let settled = false;
+		const cleanup = () => {
+			stdin.removeListener("data", onData);
+			stdin.removeListener("end", onEnd);
+			stdin.removeListener("error", onError);
+			stdin.setRawMode?.(wasRaw);
+			stdin.pause();
+		};
+		const settleResolve = (result: string) => {
+			if (settled) return;
+			settled = true;
+			cleanup();
+			resolve(result);
+		};
+		const settleReject = (err: Error) => {
+			if (settled) return;
+			settled = true;
+			cleanup();
+			reject(err);
+		};
+		const onData = (chunk: string) => {
+			for (const char of chunk) {
+				if (char === "\r" || char === "\n") {
+					process.stdout.write("\n");
+					settleResolve(value);
+					return;
+				}
+				if (char === "\u0003") {
+					// Ctrl-C
+					process.stdout.write("\n");
+					settleReject(new Error("Aborted."));
+					return;
+				}
+				if (char === "\u0004") {
+					// Ctrl-D / EOF. Raw mode disables the terminal's own canonical
+					// EOF handling, so this arrives as a literal data byte rather
+					// than a stream `end` event -- without this branch it would
+					// silently become part of the typed value instead of ending
+					// input, and the interactive prompt would have no way to
+					// submit an empty/EOF value at all.
+					process.stdout.write("\n");
+					settleResolve(value);
+					return;
+				}
+				if (char === "\u007f" || char === "\b") {
+					value = value.slice(0, -1);
+					continue;
+				}
+				value += char;
+			}
+		};
+		const onEnd = () => {
+			process.stdout.write("\n");
+			settleResolve(value);
+		};
+		const onError = (err: Error) => settleReject(err);
+		stdin.on("data", onData);
+		stdin.once("end", onEnd);
+		stdin.once("error", onError);
+	});
+}
+
+// Consumes `process.stdin` to EOF in the non-TTY branch — call at most once
+// per process invocation. Fine for `creds set`'s single-read use, but a
+// second read anywhere else in the same process would see an already-closed
+// stream.
+async function defaultReadSecret(): Promise<string> {
+	if (!process.stdin.isTTY) {
+		const chunks: Buffer[] = [];
+		for await (const chunk of process.stdin) {
+			chunks.push(chunk as Buffer);
+		}
+		return Buffer.concat(chunks).toString("utf-8").trim();
+	}
+	// Trimmed for the same reason the non-TTY branch above trims: a stray
+	// trailing `\r` (Windows-style paste) or leading/trailing space typed
+	// into the hidden prompt shouldn't be stored as part of the credential.
+	return (await readHiddenLine("Value (input hidden): ")).trim();
+}
+
+// `looksLikeCompletePemOneLiner` now lives in cli-creds.ts, imported above —
+// setCredential() there needs the same shape check as a defense-in-depth
+// backstop for callers that bypass this CLI layer (see the comment on
+// setCredential itself), so a single definition is shared by both call
+// sites instead of drifting as two copies.
+
+// Intentionally duplicated with cli-creds.ts's assertKnownCredentialVar, not
+// a guard left behind by accident: this one is the CLI-layer fail-fast path
+// (fatal() + a clean usage message before anything touches the Keychain),
+// the other is the library-layer defense-in-depth backstop for a caller that
+// imports setCredential/unsetCredential directly and bypasses this file
+// entirely. Removing either changes a real behavioral guarantee — see the
+// cmdCreds/setCredential tests, which each assert their own layer's guard
+// fires independently.
+// Both call sites already guard `!varName` (and `fatal()` there) before
+// calling this, so `name` is never actually undefined here — typed as
+// `string`, not `string | undefined`, so that stays true at the type level
+// instead of by convention.
+function ensureKnownCredentialVar(name: string): CliCredentialVar {
+	if (!CLI_CREDENTIAL_VARS.some((v) => v === name)) {
+		fatal(
+			`Unknown credential variable "${name}". Supported: ${CLI_CREDENTIAL_VARS.join(", ")}`,
+		);
+	}
+	return name as CliCredentialVar;
+}
+
+export async function cmdCreds(
+	args: string[],
+	io: CmdCredsIO = {},
+): Promise<void> {
+	const [action, varName, value, ...extra] = args;
+	if (action === "set") {
+		if (!varName) fatal("Usage: ai-review creds set <VAR> [value]");
+		// Extra positional args are most often an unquoted value with spaces
+		// (`ai-review creds set VAR one two` instead of `"one two"`) — silently
+		// dropping everything past the second arg would store `one` and lose
+		// the rest with no error, the same truncated-value failure mode the
+		// PEM shape check below exists to catch for a different cause.
+		if (extra.length > 0) {
+			fatal(
+				"Usage: ai-review creds set <VAR> [value] — unexpected extra arguments; did you forget to quote the value?",
+			);
+		}
+		const knownVar = ensureKnownCredentialVar(varName);
+		if (value !== undefined && knownVar.endsWith("_PRIVATE_KEY")) {
+			process.stderr.write(
+				"ai-review: tip — omit the value and pipe it on stdin instead; a positional value is visible via `ps` and typically lands in shell history.\n",
+			);
+		}
+		const resolvedValue =
+			value ?? (await (io.readSecret ?? defaultReadSecret)());
+		if (!resolvedValue) fatal("No value provided.");
+		if (
+			knownVar.endsWith("_PRIVATE_KEY") &&
+			!looksLikeCompletePemOneLiner(resolvedValue)
+		) {
+			fatal(
+				`${knownVar} doesn't look like a complete PEM (expected the single-line \\n-escaped form — see docs/cli-and-npm.md). A raw multi-line paste into an interactive prompt truncates after the first line; use the documented pipe form instead, e.g.: ... | ai-review creds set ${knownVar}`,
+			);
+		}
+		await setCredential(knownVar, resolvedValue);
+		console.log(
+			`Set ${knownVar} in the Keychain (service: ${KEYCHAIN_SERVICE}).`,
+		);
+		return;
+	}
+	if (action === "list") {
+		const sources = await listCredentialSources();
+		for (const v of CLI_CREDENTIAL_VARS) {
+			if (sources[v] === "keychain") console.log(`✓ ${v} (Keychain)`);
+			else if (sources[v] === "xdg") {
+				// `creds unset` only removes from the Keychain — flag this
+				// distinctly so it's never mistaken for something `unset` can
+				// clear. See docs/cli-and-npm.md's XDG fallback section.
+				console.log(
+					`✓ ${v} (~/.config/ai-review/.env — creds unset won't remove this; edit the file directly)`,
+				);
+			} else console.log(`✗ ${v}`);
+		}
+		return;
+	}
+	if (action === "unset") {
+		if (!varName) fatal("Usage: ai-review creds unset <VAR>");
+		if (value !== undefined || extra.length > 0) {
+			fatal("Usage: ai-review creds unset <VAR> — takes no value.");
+		}
+		const knownVar = ensureKnownCredentialVar(varName);
+		await unsetCredential(knownVar);
+		// `unsetCredential` only ever touches the Keychain — it has no path to
+		// edit ~/.config/ai-review/.env. A var satisfied purely by that file
+		// is untouched by this call and will keep resolving from it, so a flat
+		// "Removed" message would be a lie for exactly the vars where the XDG
+		// fallback actually matters. Check the post-delete source and say so.
+		const sources = await listCredentialSources();
+		if (sources[knownVar] === "xdg") {
+			console.log(
+				`Removed ${knownVar} from the Keychain (if it was set), but it is still set in ~/.config/ai-review/.env — creds unset does not edit that file. Remove it there manually to fully clear it.`,
+			);
+		} else {
+			console.log(`Removed ${knownVar} from the Keychain (if it was set).`);
+		}
+		return;
+	}
+	fatal("Usage: ai-review creds set <VAR> [value] | list | unset <VAR>");
+}
+
+export async function main(): Promise<void> {
 	const [sub, ...rest] = process.argv.slice(2);
+
+	// The `creds` subcommand manages the Keychain directly and never reads
+	// the vars resolveCliCredentials would populate — skip that round-trip
+	// entirely rather than resolving values `creds` won't use.
+	if (sub !== "creds") {
+		// Populate process.env from the Keychain/XDG fallback before any
+		// subcommand runs, so createApp()/getConfig() see credentials even when
+		// the globally npm-linked binary is invoked from outside this repo.
+		await resolveCliCredentials();
+	}
+
 	if (sub === "classify") return cmdClassify(rest);
 	if (sub === "trends") return cmdTrends(rest);
 	if (sub === "propose") return cmdPropose(rest);
@@ -900,6 +1200,7 @@ async function main(): Promise<void> {
 	if (sub === "audit") return cmdAudit(rest);
 	if (sub === "ready") return cmdReady(rest);
 	if (sub === "watch") return cmdWatch(rest);
+	if (sub === "creds") return cmdCreds(rest);
 	if (sub === "backfill") return cmdBackfill(rest);
 	if (sub === "unrated") return cmdUnrated(rest);
 	if (sub?.includes("/")) return cmdLegacyRemote([sub, ...rest]); // back-compat

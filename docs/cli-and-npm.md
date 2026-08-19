@@ -197,3 +197,56 @@ awk 'NF {printf "%s\\n", $0}' your-private-key.pem
 ```
 
 Store the output as a GitHub Actions secret or shell environment variable. The CLI normalizes `\n` back to real newlines at runtime.
+
+## Credentials for `ai-review watch` outside this repo
+
+The globally npm-linked `ai-review` binary has no autoload for this repo's `.env` — if you run `ai-review watch` from a *different* repo's directory with no matching environment already exported, it fails with `GITHUB_APP_ID environment variable is required`. `ai-review creds` fixes this by storing the credentials in the macOS Keychain, which the CLI checks automatically at startup before falling back to `~/.config/ai-review/.env` as a last resort.
+
+### Which vars `ai-review watch` needs
+
+Only the 4 identity vars used to post through the two GitHub App bots:
+
+- `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY` — the Claude bot's identity
+- `OPENAI_APP_ID`, `OPENAI_APP_PRIVATE_KEY` — the Codex bot's identity
+
+(Webhook secrets, `DATABASE_URL`, `QSTASH_*`, and `KV_REST_API_*` are server/webhook-only and not needed by the CLI.)
+
+### Setting them — primary source: this repo's own `.env`
+
+The correct values already live in this repo's `.env` file. `creds set <VAR>` accepts the value on stdin — it never touches *our own* argv or shell history:
+
+```bash
+grep '^GITHUB_APP_ID=' .env | cut -d= -f2- | ai-review creds set GITHUB_APP_ID
+grep '^GITHUB_APP_PRIVATE_KEY=' .env | cut -d= -f2- | ai-review creds set GITHUB_APP_PRIVATE_KEY
+grep '^OPENAI_APP_ID=' .env | cut -d= -f2- | ai-review creds set OPENAI_APP_ID
+grep '^OPENAI_APP_PRIVATE_KEY=' .env | cut -d= -f2- | ai-review creds set OPENAI_APP_PRIVATE_KEY
+```
+
+With no pipe attached, `creds set <VAR>` prompts interactively (input hidden, not echoed) instead. The private key values in `.env` are already single-line `\n`-escaped — no reformatting needed.
+
+`creds set <VAR> <value>` (value as a third argument) still works for scripted callers that have already accepted the trade-off, but avoid it for anything sensitive: the value additionally lands in *your* shell history. `<VAR>` must be one of the 4 vars above — an unrecognized name is rejected rather than silently creating an orphaned Keychain entry.
+
+For the two `_PRIVATE_KEY` vars specifically, `creds set` also checks the resolved value looks like a complete PEM (starts with `-----BEGIN`, contains a matching `-----END`) before writing it — this catches the one real failure mode of interactive entry: pasting a *raw*, un-escaped multi-line PEM into the hidden prompt, which reads only one line and would otherwise silently store a truncated key. Pasting the documented single-line `\n`-escaped form (the only form this CLI ever produces or expects) works fine either way, piped or interactive.
+
+**Residual exposure, either way:** the stdin/prompt form keeps the value out of `ai-review`'s own argv and your shell history, but the Keychain write itself shells out to macOS's `security add-generic-password ... -w <value>`, which briefly holds the value in *that subprocess's* argv (visible via `ps`/`/proc` for its short lifetime) regardless of how `ai-review` obtained it. This is a `security`-CLI limitation, not something this feature can route around: its only non-argv input mode is an interactive double-entry prompt (type it twice, no echo) that reads from the controlling terminal, not stdin — incompatible with the piped/non-interactive flow above, which is the primary intended use. `src/auth.ts`'s existing Keychain writer (the Claude Code OAuth token storage this feature mirrors) has the identical `-w <value>` pattern for the same reason.
+
+Check what's currently stored (names only, never values) with `ai-review creds list`, and remove an entry with `ai-review creds unset <VAR>`.
+
+### Recovery path if `.env` is ever lost
+
+1. Go to `github.com/settings/apps` and open the existing app (the Claude bot app for `GITHUB_APP_ID`, the Codex bot app for `OPENAI_APP_ID`).
+2. Read the **App ID** at the top of the settings page.
+3. Under **Private keys**, click **Generate a private key** to get a *new* PEM — the original can't be re-downloaded.
+4. Convert it to the `\n`-escaped one-liner the CLI expects (same command as [Private key formatting](#private-key-formatting) above):
+   ```bash
+   awk 'NF {printf "%s\\n", $0}' new-private-key.pem
+   ```
+5. Pipe the result to `ai-review creds set GITHUB_APP_PRIVATE_KEY` (or `OPENAI_APP_PRIVATE_KEY`):
+
+   ```bash
+   awk 'NF {printf "%s\\n", $0}' new-private-key.pem | ai-review creds set GITHUB_APP_PRIVATE_KEY
+   ```
+
+### `~/.config/ai-review/.env` fallback
+
+If the Keychain isn't usable (e.g. a headless/non-interactive context), the CLI falls back to a plain `KEY=VALUE` file at `~/.config/ai-review/.env` — the same format as this repo's own `.env.example`, so it's literally copyable from there. This file is **plaintext on disk**; the Keychain is preferred whenever it's available. If you use this fallback, `chmod 600 ~/.config/ai-review/.env`.

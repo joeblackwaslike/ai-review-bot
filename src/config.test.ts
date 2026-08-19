@@ -127,6 +127,49 @@ describe("getConfig", () => {
 			expect(getConfig().privateKey).toContain("\n");
 		});
 	});
+
+	describe("requireWebhookSecret option", () => {
+		it("throws on a missing webhook secret by default (webhook-serving behavior unchanged)", () => {
+			setRequiredEnv();
+			delete process.env.GITHUB_WEBHOOK_SECRET;
+			expect(() => getConfig()).toThrow(/GITHUB_WEBHOOK_SECRET/);
+		});
+
+		it("does not throw on a missing webhook secret when requireWebhookSecret is false", () => {
+			setRequiredEnv();
+			delete process.env.GITHUB_WEBHOOK_SECRET;
+			expect(() => getConfig({ requireWebhookSecret: false })).not.toThrow();
+		});
+
+		it("webhookSecret is an empty string when unset and not required", () => {
+			setRequiredEnv();
+			delete process.env.GITHUB_WEBHOOK_SECRET;
+			expect(getConfig({ requireWebhookSecret: false }).webhookSecret).toBe("");
+		});
+
+		it("still returns the real secret when present, even with requireWebhookSecret: false", () => {
+			setRequiredEnv({ GITHUB_WEBHOOK_SECRET: "real-secret" });
+			expect(getConfig({ requireWebhookSecret: false }).webhookSecret).toBe(
+				"real-secret",
+			);
+		});
+	});
+});
+
+describe("getOpenAIAppConfig requireWebhookSecret option", () => {
+	it("throws on a missing webhook secret by default", () => {
+		setOpenAIEnv();
+		delete process.env.OPENAI_APP_WEBHOOK_SECRET;
+		expect(() => getOpenAIAppConfig()).toThrow(/OPENAI_APP_WEBHOOK_SECRET/);
+	});
+
+	it("does not throw and returns an empty string when requireWebhookSecret is false", () => {
+		setOpenAIEnv();
+		delete process.env.OPENAI_APP_WEBHOOK_SECRET;
+		expect(
+			getOpenAIAppConfig({ requireWebhookSecret: false }).webhookSecret,
+		).toBe("");
+	});
 });
 
 describe("feedbackEnabled", () => {

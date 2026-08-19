@@ -54,6 +54,7 @@
 		"@vercel/functions": "^3.4.4",
 		"@vercel/node": "^3.2.25",
 		"ai": "^6.0.188",
+		"dotenv": "^17.4.2",
 		"drizzle-orm": "^0.45.2",
 		"octokit": "^4.0.2",
 		"pg": "^8.22.0",
