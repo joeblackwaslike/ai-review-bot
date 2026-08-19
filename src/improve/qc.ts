@@ -51,11 +51,12 @@ export function selectQcSample<T extends { id: number }>(
  * rather than whichever one the review itself was routed to.
  *
  * /qc (qc-app.ts) is webhook-only — GitHub App auth, no subscription/OAuth
- * concept anywhere in its call chain — so it stays on the API-key backend and
- * keeps gpt-5.1, the model already known to work there. The gpt-5.1 rejection
- * that motivated router.ts's and triage.ts's OAuth-only gpt-5.4 branch was
- * confirmed only against the ChatGPT/Codex-account subscription backend. */
-export const QC_OPENAI_MODEL = "gpt-5.1";
+ * concept anywhere in its call chain — so it stays on the API-key backend.
+ * gpt-5.6-luna (GPT-5.6's cheapest tier) is confirmed available there. It's
+ * also the model router.ts's trivial tier and triage.ts route to, and — since
+ * router.ts/triage.ts no longer split on auth mode — that holds for both the
+ * API-key and OAuth/subscription backends, not just the API-key one used here. */
+export const QC_OPENAI_MODEL = "gpt-5.6-luna";
 export const QC_ANTHROPIC_MODEL = "claude-haiku-4-5";
 
 /** Pure: a finding is judged by the same provider that raised it — not

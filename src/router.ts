@@ -69,51 +69,40 @@ const CLAUDE_TIER_MAP: Record<
 	Pick<ModelSelection, "model" | "effort">
 > = {
 	trivial: { model: "claude-haiku-4-5" }, // Haiku has no effort control
-	normal: { model: "claude-sonnet-4-6", effort: "medium" },
-	complex: { model: "claude-sonnet-4-6", effort: "high" },
-	deep: { model: "claude-opus-4-8", effort: "xhigh" },
+	normal: { model: "claude-sonnet-5", effort: "medium" },
+	complex: { model: "claude-sonnet-5", effort: "high" },
+	deep: { model: "claude-opus-5", effort: "xhigh" },
 };
 
-// API-key backend (hosted webhook bots, `ai-review audit`, and any caller with
-// no auth context). This is the model known to already be working in
-// production; the gpt-5.1 rejection below was confirmed only against the
-// ChatGPT/Codex-account subscription backend, not this one, so it must not
-// regress a path that was never shown to be broken.
-const OPENAI_TIER_MAP_API_KEY: Record<
+// GPT-5.6's three durable capability tiers (Sol/Terra/Luna) replace the old
+// single-model-plus-effort scheme, and are used identically across both the
+// API-key backend (hosted webhook bots, `ai-review audit`) and the
+// OAuth/subscription backend (`ai-review watch`, local CLI under a logged-in
+// codex session). Live-tested end-to-end on the OAuth backend on 2026-08-19:
+// gpt-5.6-terra (normal/complex) via `ai-review review`, and gpt-5.6-sol at
+// effort "xhigh" (deep) directly against createAIModel — the old tier map
+// capped deep-tier effort at "high" specifically because "xhigh" was
+// unverified; that caveat no longer applies. The API-key backend was down
+// during this change (see PR verification section) so all three tiers are
+// confirmed there via developers.openai.com/api/docs/models/gpt-5.6-{sol,terra,luna}
+// only, not a live run — re-verify live once the outage clears. This
+// collapses the previous api-key/oauth split, which existed only because
+// gpt-5.1 was rejected on the OAuth backend specifically; gpt-5.4 (its
+// replacement there) itself retires from the Codex/ChatGPT-OAuth backend on
+// 2026-08-31.
+const OPENAI_TIER_MAP: Record<
 	ReviewTier,
 	Pick<ModelSelection, "model" | "effort">
 > = {
-	trivial: { model: "gpt-5.1", effort: "none" },
-	normal: { model: "gpt-5.1", effort: "low" },
-	complex: { model: "gpt-5.1", effort: "high" },
-	// gpt-5.5 caps reasoning at "high"; "xhigh" is unverified on the OpenAI API,
-	// so deep stays at "high" until support is confirmed.
-	deep: { model: "gpt-5.5", effort: "high" },
-};
-
-// OAuth/subscription backend (`ai-review watch`, local CLI usage under a
-// logged-in codex session). gpt-5.1 retired from the ChatGPT/Codex-account
-// backend (confirmed live: "not supported when using Codex with a ChatGPT
-// account") — moved to gpt-5.4, the next tier down from gpt-5.5 that's still
-// served. This is scoped to OAuth only: the rejection was never confirmed
-// against the raw API-key backend.
-const OPENAI_TIER_MAP_OAUTH: Record<
-	ReviewTier,
-	Pick<ModelSelection, "model" | "effort">
-> = {
-	trivial: { model: "gpt-5.4", effort: "none" },
-	normal: { model: "gpt-5.4", effort: "low" },
-	complex: { model: "gpt-5.4", effort: "high" },
-	// gpt-5.5 caps reasoning at "high"; "xhigh" is unverified on the OpenAI API,
-	// so deep stays at "high" until support is confirmed. The model bump
-	// (gpt-5.4 → gpt-5.5) is what distinguishes deep from complex here.
-	deep: { model: "gpt-5.5", effort: "high" },
+	trivial: { model: "gpt-5.6-luna", effort: "none" },
+	normal: { model: "gpt-5.6-terra", effort: "low" },
+	complex: { model: "gpt-5.6-terra", effort: "high" },
+	deep: { model: "gpt-5.6-sol", effort: "xhigh" },
 };
 
 export function routeModel(
 	context: RouterContext,
 	provider: "anthropic" | "openai",
-	authMode?: "api-key" | "oauth",
 ): ModelSelection {
 	const tier = classifyTier(context);
 
@@ -121,7 +110,5 @@ export function routeModel(
 		return { provider, ...CLAUDE_TIER_MAP[tier] };
 	}
 
-	const map =
-		authMode === "oauth" ? OPENAI_TIER_MAP_OAUTH : OPENAI_TIER_MAP_API_KEY;
-	return { provider, ...map[tier] };
+	return { provider, ...OPENAI_TIER_MAP[tier] };
 }

@@ -17,7 +17,7 @@ const baseMeta: ReviewReportMeta = {
 	durationSeconds: 92,
 	costUsd: 0.012345,
 	providers: ["anthropic", "openai"],
-	models: ["claude-sonnet-4-6", "gpt-5"],
+	models: ["claude-sonnet-5", "gpt-5"],
 	skills: ["code-reviewer", "security-sast"],
 	filesReviewed: 14,
 };

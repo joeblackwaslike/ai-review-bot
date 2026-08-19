@@ -14,7 +14,7 @@ import type { ReviewRunMessage } from "./scheduler.js";
 import { buildPullRequestPayload } from "./testing.js";
 
 const DEFAULT_METADATA = {
-	model: "claude-sonnet-4-6",
+	model: "claude-sonnet-5",
 	tier1Count: 5,
 	tier2Skills: [] as string[],
 	generalFindings: 0,
@@ -578,7 +578,7 @@ describe("maybeSubmitReview", () => {
 			comments: [],
 			validLinesByPath: new Map(),
 			metadata: {
-				model: "claude-sonnet-4-6",
+				model: "claude-sonnet-5",
 				tier1Count: 5,
 				tier2Skills: [],
 				generalFindings: 0,

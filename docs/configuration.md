@@ -72,10 +72,10 @@ Neither bot uses a fixed model. The router (`src/router.ts`) classifies each PR 
 
 | Tier | Claude bot | Codex bot |
 | --- | --- | --- |
-| `trivial` | `claude-haiku-4-5` | `gpt-5` |
-| `normal` | `claude-sonnet-4-6` | `gpt-5` |
-| `complex` | `claude-sonnet-4-6` + 8K thinking budget | `o4-mini` reasoning medium |
-| `deep` | `claude-opus-4-7` + 16K thinking budget | `o3` reasoning high |
+| `trivial` | `claude-haiku-4-5` | `gpt-5.6-luna`, effort none |
+| `normal` | `claude-sonnet-5`, effort medium | `gpt-5.6-terra`, effort low |
+| `complex` | `claude-sonnet-5`, effort high | `gpt-5.6-terra`, effort high |
+| `deep` | `claude-opus-5`, effort xhigh | `gpt-5.6-sol`, effort xhigh |
 
 To force the deep tier on a PR without a label, add `deep-review` to the PR labels before triggering the review.
 
