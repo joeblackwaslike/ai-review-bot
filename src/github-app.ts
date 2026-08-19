@@ -60,6 +60,29 @@ const REVIEW_CLAIM_TTL_SECONDS = 1200;
  * on GitHub even though the client saw that attempt as a failure. Returns
  * null on any lookup failure so a GET hiccup degrades to the normal
  * retry/fallback path rather than blocking a legitimate review. */
+/** `checked: false` means the lookup itself could not complete (a GET
+ * failure, a malformed response, or the page cap below) — the caller must
+ * treat this as "unknown", never as "confirmed absent". Only `checked: true`
+ * with `reviewId: null` means every review on the PR was actually inspected
+ * and none matched. */
+type ReviewLookupResult =
+	| { checked: true; reviewId: number | null }
+	| { checked: false };
+
+// A page cap, not a real limit — this only fires on a pathologically
+// churned PR (5000+ reviews) and exists so a genuinely runaway loop can't
+// spin forever; hitting it degrades to "unknown" (see ReviewLookupResult),
+// the same as any other lookup failure.
+const MAX_REVIEW_LOOKUP_PAGES = 50;
+
+/** Searches every review on the PR for one matching this exact commit +
+ * body — i.e. one this same retry loop (an earlier attempt of it) actually
+ * created on GitHub even though the client saw that attempt as a failure.
+ * Paginates fully rather than checking only the first page: on a busy PR
+ * (many prior review rounds — exactly the kind of PR most likely to trigger
+ * the secondary rate limit this check exists to survive) the matching
+ * review can land beyond an early page, and a partial check would wrongly
+ * report "not found" and retry into a real duplicate. */
 async function findMatchingReview(
 	octokit: Awaited<ReturnType<App["getInstallationOctokit"]>>,
 	params: {
@@ -69,27 +92,32 @@ async function findMatchingReview(
 		commitId: string;
 		body: string;
 	},
-): Promise<number | null> {
+): Promise<ReviewLookupResult> {
 	try {
-		const response = await octokit.request(
-			"GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
-			{
-				owner: params.owner,
-				repo: params.repo,
-				pull_number: params.pullNumber,
-				per_page: 30,
-			},
-		);
-		const reviews = response.data as
-			| Array<{ id: number; commit_id: string; body: string }>
-			| undefined;
-		if (!Array.isArray(reviews)) return null;
-		const match = reviews.find(
-			(r) => r.commit_id === params.commitId && r.body === params.body,
-		);
-		return match?.id ?? null;
+		for (let page = 1; page <= MAX_REVIEW_LOOKUP_PAGES; page++) {
+			const response = await octokit.request(
+				"GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
+				{
+					owner: params.owner,
+					repo: params.repo,
+					pull_number: params.pullNumber,
+					per_page: 100,
+					page,
+				},
+			);
+			const reviews = response.data as
+				| Array<{ id: number; commit_id: string; body: string }>
+				| undefined;
+			if (!Array.isArray(reviews)) return { checked: false };
+			const match = reviews.find(
+				(r) => r.commit_id === params.commitId && r.body === params.body,
+			);
+			if (match) return { checked: true, reviewId: match.id };
+			if (reviews.length < 100) return { checked: true, reviewId: null };
+		}
+		return { checked: false };
 	} catch {
-		return null;
+		return { checked: false };
 	}
 }
 
@@ -142,15 +170,27 @@ async function postReviewWithRetry(
 			// duplicate review 76s after a secondary-rate-limit error
 			// (2026-08-19 dogfood session, joeblackwaslike/ai-listings).
 			// Check server state before assuming nothing landed, on every
-			// failure — this is what makes a duplicate structurally
-			// unreachable rather than merely less likely.
-			const existingId = await findMatchingReview(octokit, params);
-			if (existingId !== null) {
+			// failure. Only a *confirmed* absence (checked: true, reviewId:
+			// null) is safe to retry against — if the check itself couldn't
+			// complete, we genuinely don't know whether the POST above
+			// landed, and guessing "probably not" is exactly the assumption
+			// that caused the original bug. Refuse to retry in that case
+			// rather than risk a duplicate; the outer catch in
+			// maybeSubmitReview still preserves the findings via a fallback
+			// comment, so nothing is silently lost.
+			const lookup = await findMatchingReview(octokit, params);
+			if (!lookup.checked) {
+				const msg = err instanceof Error ? err.message : String(err);
+				throw new Error(
+					`Cannot verify whether the review POST landed after this failure (${msg}); refusing to retry to avoid a possible duplicate.`,
+				);
+			}
+			if (lookup.reviewId !== null) {
 				console.log(
 					"review POST reported an error but the review already exists on GitHub — not retrying",
-					{ existingId },
+					{ existingId: lookup.reviewId },
 				);
-				return existingId;
+				return lookup.reviewId;
 			}
 
 			if (attempt < maxAttempts - 1) {
