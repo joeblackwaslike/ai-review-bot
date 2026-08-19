@@ -326,7 +326,7 @@ describe("cmdCreds", () => {
 
 		expect(setCredential).not.toHaveBeenCalled();
 		expect(console.error).toHaveBeenCalledWith(
-			expect.stringContaining("NOT_A_REAL_VAR"),
+			expect.stringMatching(/NOT_A_REAL_VAR.*GITHUB_APP_ID/),
 		);
 	});
 

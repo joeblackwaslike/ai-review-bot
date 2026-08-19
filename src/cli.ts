@@ -1047,8 +1047,12 @@ async function defaultReadSecret(varName: CliCredentialVar): Promise<string> {
 // entirely. Removing either changes a real behavioral guarantee — see the
 // cmdCreds/setCredential tests, which each assert their own layer's guard
 // fires independently.
-function ensureKnownCredentialVar(name: string | undefined): CliCredentialVar {
-	if (!name || !(CLI_CREDENTIAL_VARS as readonly string[]).includes(name)) {
+// Both call sites already guard `!varName` (and `fatal()` there) before
+// calling this, so `name` is never actually undefined here — typed as
+// `string`, not `string | undefined`, so that stays true at the type level
+// instead of by convention.
+function ensureKnownCredentialVar(name: string): CliCredentialVar {
+	if (!(CLI_CREDENTIAL_VARS as readonly string[]).includes(name)) {
 		fatal(
 			`Unknown credential variable "${name}". Supported: ${CLI_CREDENTIAL_VARS.join(", ")}`,
 		);
