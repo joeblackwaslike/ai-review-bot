@@ -377,7 +377,7 @@ describe("cmdCreds", () => {
 
 		await cmdCreds(["set", "GITHUB_APP_ID"], { readSecret });
 
-		expect(readSecret).toHaveBeenCalledWith("GITHUB_APP_ID");
+		expect(readSecret).toHaveBeenCalled();
 		expect(setCredential).toHaveBeenCalledWith("GITHUB_APP_ID", "from-reader");
 	});
 
@@ -386,6 +386,37 @@ describe("cmdCreds", () => {
 
 		await expect(
 			cmdCreds(["set", "GITHUB_APP_ID"], { readSecret }),
+		).rejects.toThrow(ProcessExitError);
+
+		expect(setCredential).not.toHaveBeenCalled();
+	});
+
+	// Round 5 of PR #72 review (codexreviewbot): an earlier version of this
+	// code refused *all* interactive private-key entry, which also rejected
+	// the documented, correct single-line \n-escaped paste — not just the
+	// truncation-prone raw multi-line paste it was meant to catch. Replaced
+	// with a shape check on the resolved value instead of blocking the
+	// channel outright.
+	it("accepts a private-key value that looks like a complete single-line PEM", async () => {
+		await cmdCreds([
+			"set",
+			"GITHUB_APP_PRIVATE_KEY",
+			"-----BEGIN PRIVATE KEY-----\\nMIIEvQ\\n-----END PRIVATE KEY-----\\n",
+		]);
+
+		expect(setCredential).toHaveBeenCalledWith(
+			"GITHUB_APP_PRIVATE_KEY",
+			"-----BEGIN PRIVATE KEY-----\\nMIIEvQ\\n-----END PRIVATE KEY-----\\n",
+		);
+	});
+
+	it("rejects a private-key value truncated to just the BEGIN line (the raw multi-line-paste failure mode)", async () => {
+		await expect(
+			cmdCreds([
+				"set",
+				"GITHUB_APP_PRIVATE_KEY",
+				"-----BEGIN PRIVATE KEY-----",
+			]),
 		).rejects.toThrow(ProcessExitError);
 
 		expect(setCredential).not.toHaveBeenCalled();

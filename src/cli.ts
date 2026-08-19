@@ -941,7 +941,7 @@ async function cmdPropose(args: string[]): Promise<void> {
 // `defaultWriteKeychain` in cli-creds.ts, which mirrors `src/auth.ts`'s
 // existing OAuth-token Keychain writer for the same reason.
 export interface CmdCredsIO {
-	readSecret?: (varName: CliCredentialVar) => Promise<string>;
+	readSecret?: () => Promise<string>;
 }
 
 // Reads one line from the controlling terminal without echoing it (Ctrl-C
@@ -998,6 +998,17 @@ function readHiddenLine(promptText: string): Promise<string> {
 					settleReject(new Error("Aborted."));
 					return;
 				}
+				if (char === "\u0004") {
+					// Ctrl-D / EOF. Raw mode disables the terminal's own canonical
+					// EOF handling, so this arrives as a literal data byte rather
+					// than a stream `end` event -- without this branch it would
+					// silently become part of the typed value instead of ending
+					// input, and the interactive prompt would have no way to
+					// submit an empty/EOF value at all.
+					process.stdout.write("\n");
+					settleResolve(value);
+					return;
+				}
 				if (char === "\u007f" || char === "\b") {
 					value = value.slice(0, -1);
 					continue;
@@ -1016,7 +1027,7 @@ function readHiddenLine(promptText: string): Promise<string> {
 	});
 }
 
-async function defaultReadSecret(varName: CliCredentialVar): Promise<string> {
+async function defaultReadSecret(): Promise<string> {
 	if (!process.stdin.isTTY) {
 		const chunks: Buffer[] = [];
 		for await (const chunk of process.stdin) {
@@ -1024,19 +1035,24 @@ async function defaultReadSecret(varName: CliCredentialVar): Promise<string> {
 		}
 		return Buffer.concat(chunks).toString("utf-8").trim();
 	}
-	// readHiddenLine resolves on the first newline — pasting a multi-line PEM
-	// into it silently stores only the "-----BEGIN...-----" line and reports
-	// success, corrupting the credential with no error until a later `watch`
-	// run fails auth. Refuse interactive entry for the two `_PRIVATE_KEY`
-	// vars rather than attempt fragile multi-line paste detection; the pipe
-	// form (which this CLI documents as primary) never round-trips through a
-	// single-line reader in the first place.
-	if (varName.endsWith("_PRIVATE_KEY")) {
-		fatal(
-			`Interactive entry isn't supported for ${varName} — it's a multi-line PEM and the hidden prompt only reads one line. Pipe the value instead, e.g.: ... | ai-review creds set ${varName}`,
-		);
-	}
 	return readHiddenLine("Value (input hidden): ");
+}
+
+// The documented private-key value is already the single-line `\n`-escaped
+// form (what's in .env, and what the recovery command in the docs
+// produces) — pasting *that* into readHiddenLine works fine, since it has
+// no real newlines to resolve early on. What doesn't work is pasting a raw,
+// unescaped multi-line PEM: readHiddenLine resolves on the first embedded
+// newline and silently stores only the "-----BEGIN...-----" line, reporting
+// success on a corrupted credential that only fails later, opaquely, in
+// `watch`. A blanket "no interactive entry for private keys" block (an
+// earlier version of this function) was too broad — it also rejected the
+// correct, documented single-line paste. Validate the *shape* of the
+// resolved value instead: reject anything that doesn't look like a
+// complete PEM after un-escaping, whichever channel it came from.
+function looksLikeCompletePemOneLiner(value: string): boolean {
+	const unescaped = value.replaceAll(String.raw`\n`, "\n").trim();
+	return unescaped.startsWith("-----BEGIN") && unescaped.includes("-----END");
 }
 
 // Intentionally duplicated with cli-creds.ts's assertKnownCredentialVar, not
@@ -1074,8 +1090,16 @@ export async function cmdCreds(
 			);
 		}
 		const resolvedValue =
-			value ?? (await (io.readSecret ?? defaultReadSecret)(knownVar));
+			value ?? (await (io.readSecret ?? defaultReadSecret)());
 		if (!resolvedValue) fatal("No value provided.");
+		if (
+			knownVar.endsWith("_PRIVATE_KEY") &&
+			!looksLikeCompletePemOneLiner(resolvedValue)
+		) {
+			fatal(
+				`${knownVar} doesn't look like a complete PEM (expected the single-line \\n-escaped form — see docs/cli-and-npm.md). A raw multi-line paste into an interactive prompt truncates after the first line; use the documented pipe form instead, e.g.: ... | ai-review creds set ${knownVar}`,
+			);
+		}
 		await setCredential(knownVar, resolvedValue);
 		console.log(
 			`Set ${knownVar} in the Keychain (service: ${KEYCHAIN_SERVICE}).`,
