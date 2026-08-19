@@ -78,10 +78,18 @@ const CLAUDE_TIER_MAP: Record<
 // single-model-plus-effort scheme, and are used identically across both the
 // API-key backend (hosted webhook bots, `ai-review audit`) and the
 // OAuth/subscription backend (`ai-review watch`, local CLI under a logged-in
-// codex session) — confirmed live against both. This collapses the previous
-// api-key/oauth split, which existed only because gpt-5.1 was rejected on the
-// OAuth backend specifically; gpt-5.4 (its replacement there) itself retires
-// from the Codex/ChatGPT-OAuth backend on 2026-08-31.
+// codex session). Live-tested end-to-end on the OAuth backend on 2026-08-19:
+// gpt-5.6-terra (normal/complex) via `ai-review review`, and gpt-5.6-sol at
+// effort "xhigh" (deep) directly against createAIModel — the old tier map
+// capped deep-tier effort at "high" specifically because "xhigh" was
+// unverified; that caveat no longer applies. The API-key backend was down
+// during this change (see PR verification section) so all three tiers are
+// confirmed there via developers.openai.com/api/docs/models/gpt-5.6-{sol,terra,luna}
+// only, not a live run — re-verify live once the outage clears. This
+// collapses the previous api-key/oauth split, which existed only because
+// gpt-5.1 was rejected on the OAuth backend specifically; gpt-5.4 (its
+// replacement there) itself retires from the Codex/ChatGPT-OAuth backend on
+// 2026-08-31.
 const OPENAI_TIER_MAP: Record<
 	ReviewTier,
 	Pick<ModelSelection, "model" | "effort">

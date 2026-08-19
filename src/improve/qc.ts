@@ -52,8 +52,10 @@ export function selectQcSample<T extends { id: number }>(
  *
  * /qc (qc-app.ts) is webhook-only — GitHub App auth, no subscription/OAuth
  * concept anywhere in its call chain — so it stays on the API-key backend.
- * gpt-5.6-luna (GPT-5.6's cheapest tier) is confirmed available there and is
- * the same small model router.ts and triage.ts now use for every auth mode. */
+ * gpt-5.6-luna (GPT-5.6's cheapest tier) is confirmed available there. It's
+ * also the model router.ts's trivial tier and triage.ts route to, and — since
+ * router.ts/triage.ts no longer split on auth mode — that holds for both the
+ * API-key and OAuth/subscription backends, not just the API-key one used here. */
 export const QC_OPENAI_MODEL = "gpt-5.6-luna";
 export const QC_ANTHROPIC_MODEL = "claude-haiku-4-5";
 
