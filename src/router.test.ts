@@ -108,7 +108,7 @@ describe("routeModel — Anthropic", () => {
 
 	it("normal tier → Sonnet, medium effort", () => {
 		const sel = routeModel(base, "anthropic");
-		expect(sel.model).toBe("claude-sonnet-4-6");
+		expect(sel.model).toBe("claude-sonnet-5");
 		expect(sel.effort).toBe("medium");
 	});
 
@@ -117,13 +117,13 @@ describe("routeModel — Anthropic", () => {
 			{ ...base, additions: 400, deletions: 150 },
 			"anthropic",
 		);
-		expect(sel.model).toBe("claude-sonnet-4-6");
+		expect(sel.model).toBe("claude-sonnet-5");
 		expect(sel.effort).toBe("high");
 	});
 
-	it("deep tier → Opus 4.8, xhigh effort", () => {
+	it("deep tier → Opus 5, xhigh effort", () => {
 		const sel = routeModel({ ...base, labels: ["deep-review"] }, "anthropic");
-		expect(sel.model).toBe("claude-opus-4-8");
+		expect(sel.model).toBe("claude-opus-5");
 		expect(sel.effort).toBe("xhigh");
 	});
 });
@@ -132,89 +132,39 @@ describe("routeModel — Anthropic", () => {
 // routeModel — OpenAI
 // ---------------------------------------------------------------------------
 
-// The API-key backend (hosted webhook bots, `ai-review audit`) is a different
-// backend than the ChatGPT/Codex-account subscription backend that rejected
-// gpt-5.1 — that rejection was never confirmed against the API-key path, so
-// API-key runs must keep the model known to already be working in production.
-// No `authMode` arg and an explicit `"api-key"` must resolve identically.
-describe("routeModel — OpenAI (api-key, default)", () => {
-	it("trivial tier → gpt-5.1, none effort", () => {
+// GPT-5.6's Sol/Terra/Luna tiers are confirmed available on both the API-key
+// backend (hosted webhook bots, `ai-review audit`) and the OAuth/subscription
+// backend (`ai-review watch`) — unlike gpt-5.1, which the OAuth backend
+// rejected outright, so routeModel no longer takes an authMode parameter.
+describe("routeModel — OpenAI", () => {
+	it("trivial tier → gpt-5.6-luna, none effort", () => {
 		const sel = routeModel(
 			{ ...base, additions: 8, deletions: 3, filePaths: ["README.md"] },
 			"openai",
 		);
 		expect(sel.provider).toBe("openai");
-		expect(sel.model).toBe("gpt-5.1");
+		expect(sel.model).toBe("gpt-5.6-luna");
 		expect(sel.effort).toBe("none");
 	});
 
-	it("normal tier → gpt-5.1, low effort", () => {
+	it("normal tier → gpt-5.6-terra, low effort", () => {
 		const sel = routeModel(base, "openai");
-		expect(sel.model).toBe("gpt-5.1");
+		expect(sel.model).toBe("gpt-5.6-terra");
 		expect(sel.effort).toBe("low");
 	});
 
-	it("complex tier → gpt-5.1, high effort", () => {
+	it("complex tier → gpt-5.6-terra, high effort", () => {
 		const sel = routeModel(
 			{ ...base, filePaths: ["src/auth/handler.ts"] },
 			"openai",
 		);
-		expect(sel.model).toBe("gpt-5.1");
+		expect(sel.model).toBe("gpt-5.6-terra");
 		expect(sel.effort).toBe("high");
 	});
 
-	it("deep tier → gpt-5.5, high effort (distinguished by the model bump)", () => {
+	it("deep tier → gpt-5.6-sol, xhigh effort (distinguished by the model bump)", () => {
 		const sel = routeModel({ ...base, labels: ["deep-review"] }, "openai");
-		expect(sel.model).toBe("gpt-5.5");
-		expect(sel.effort).toBe("high");
-	});
-
-	it('explicit authMode: "api-key" resolves the same as the default', () => {
-		const sel = routeModel(base, "openai", "api-key");
-		expect(sel.model).toBe("gpt-5.1");
-		expect(sel.effort).toBe("low");
-	});
-});
-
-// OAuth/subscription-authenticated runs (`ai-review watch`, local CLI `review`
-// under a logged-in codex session) hit the ChatGPT/Codex-account backend,
-// which has confirmed (live) that it no longer serves gpt-5.1 — so only this
-// auth mode gets gpt-5.4.
-describe("routeModel — OpenAI (oauth)", () => {
-	it("trivial tier → gpt-5.4, none effort", () => {
-		const sel = routeModel(
-			{ ...base, additions: 8, deletions: 3, filePaths: ["README.md"] },
-			"openai",
-			"oauth",
-		);
-		expect(sel.provider).toBe("openai");
-		expect(sel.model).toBe("gpt-5.4");
-		expect(sel.effort).toBe("none");
-	});
-
-	it("normal tier → gpt-5.4, low effort", () => {
-		const sel = routeModel(base, "openai", "oauth");
-		expect(sel.model).toBe("gpt-5.4");
-		expect(sel.effort).toBe("low");
-	});
-
-	it("complex tier → gpt-5.4, high effort", () => {
-		const sel = routeModel(
-			{ ...base, filePaths: ["src/auth/handler.ts"] },
-			"openai",
-			"oauth",
-		);
-		expect(sel.model).toBe("gpt-5.4");
-		expect(sel.effort).toBe("high");
-	});
-
-	it("deep tier → gpt-5.5, high effort regardless of auth mode", () => {
-		const sel = routeModel(
-			{ ...base, labels: ["deep-review"] },
-			"openai",
-			"oauth",
-		);
-		expect(sel.model).toBe("gpt-5.5");
-		expect(sel.effort).toBe("high");
+		expect(sel.model).toBe("gpt-5.6-sol");
+		expect(sel.effort).toBe("xhigh");
 	});
 });

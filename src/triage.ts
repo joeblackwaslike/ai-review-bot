@@ -41,22 +41,12 @@ function buildTriageSchema(openFindings: PersistedFinding[]) {
 }
 
 // Cheap, fast triage tier. The call only classifies; it does not review.
-//
-// The openai branch mirrors routeModel's auth-mode split: gpt-5.1's rejection
-// was confirmed only against the ChatGPT/Codex-account OAuth backend, not the
-// raw API-key backend the hosted webhook bot runs under, so API-key/unspecified
-// triage calls keep gpt-5.1 and only OAuth-authenticated calls (watch's
-// re-review loop) get gpt-5.4.
-function triageSelection(
-	base: ModelSelection,
-	authMode?: "api-key" | "oauth",
-): ModelSelection {
+// gpt-5.6-luna (the cheapest GPT-5.6 tier) is confirmed available on both the
+// API-key and OAuth/subscription backends, so this no longer needs the
+// auth-mode split gpt-5.1/gpt-5.4 required.
+function triageSelection(base: ModelSelection): ModelSelection {
 	return base.provider === "openai"
-		? {
-				provider: "openai",
-				model: authMode === "oauth" ? "gpt-5.4" : "gpt-5.1",
-				effort: "low",
-			}
+		? { provider: "openai", model: "gpt-5.6-luna", effort: "low" }
 		: { provider: "anthropic", model: "claude-haiku-4-5" };
 }
 
@@ -86,7 +76,7 @@ export async function triageReReview(
 
 	try {
 		const { object } = await generateObject({
-			model: createAIModel(triageSelection(selection, auth?.mode), auth),
+			model: createAIModel(triageSelection(selection), auth),
 			schema: buildTriageSchema(openFindings),
 			prompt,
 			maxOutputTokens: 2000,

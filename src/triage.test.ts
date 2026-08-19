@@ -36,7 +36,7 @@ describe("triageReReview", () => {
 			},
 		});
 		const d = await triageReReview(
-			{ provider: "anthropic", model: "claude-haiku-4-5-20251001" } as never,
+			{ provider: "anthropic", model: "claude-haiku-4-5" } as never,
 			"delta diff",
 			openFindings,
 		);
@@ -50,7 +50,7 @@ describe("triageReReview", () => {
 	it("fails safe to INCREMENTAL (never SKIP) when the model call throws", async () => {
 		mockGenerateObject.mockRejectedValueOnce(new Error("boom"));
 		const d = await triageReReview(
-			{ provider: "anthropic", model: "claude-haiku-4-5-20251001" } as never,
+			{ provider: "anthropic", model: "claude-haiku-4-5" } as never,
 			"delta diff",
 			openFindings,
 		);
@@ -58,34 +58,32 @@ describe("triageReReview", () => {
 		expect(d.resolved).toEqual([]);
 	});
 
-	// The gpt-5.1 rejection was confirmed only against the ChatGPT/Codex-account
-	// subscription backend, not the raw API-key backend the hosted webhook bot
-	// runs under — so API-key/unspecified triage calls (no authMode, or
-	// "api-key") must keep gpt-5.1, the model known to work in production.
-	it("routes openai triage calls to gpt-5.1 by default (api-key backend)", async () => {
+	// gpt-5.6-luna is confirmed available on both the API-key and
+	// OAuth/subscription backends, so triage no longer needs an auth-mode
+	// split — no-auth and explicit-oauth calls must resolve identically.
+	it("routes openai triage calls to gpt-5.6-luna by default (api-key backend)", async () => {
 		mockGenerateObject.mockResolvedValueOnce({
 			object: { recommendation: "SKIP", resolved: [], newRisk: false },
 		});
 		await triageReReview(
-			{ provider: "openai", model: "gpt-5.4-codex" } as never,
+			{ provider: "openai", model: "gpt-5.6-terra" } as never,
 			"delta diff",
 			openFindings,
 		);
 		expect(mockCreateAIModel).toHaveBeenCalledWith(
 			{
 				provider: "openai",
-				model: "gpt-5.1",
+				model: "gpt-5.6-luna",
 				effort: "low",
 			},
 			undefined,
 		);
 	});
 
-	// The ChatGPT-account Codex backend rejects gpt-5.1 outright (confirmed
-	// live), and watch's re-review loop calls this triage gate on every push
-	// under that OAuth-authenticated backend — a stale model name here breaks
-	// every re-review, not just the first one.
-	it("routes openai triage calls to gpt-5.4 under oauth auth", async () => {
+	// watch's re-review loop calls this triage gate on every push under the
+	// OAuth-authenticated backend — a stale model name here breaks every
+	// re-review, not just the first one.
+	it("routes openai triage calls to gpt-5.6-luna under oauth auth too", async () => {
 		mockGenerateObject.mockResolvedValueOnce({
 			object: { recommendation: "SKIP", resolved: [], newRisk: false },
 		});
@@ -98,7 +96,7 @@ describe("triageReReview", () => {
 			fetch: (async () => new Response()) as typeof fetch,
 		};
 		await triageReReview(
-			{ provider: "openai", model: "gpt-5.4-codex" } as never,
+			{ provider: "openai", model: "gpt-5.6-terra" } as never,
 			"delta diff",
 			openFindings,
 			auth,
@@ -106,7 +104,7 @@ describe("triageReReview", () => {
 		expect(mockCreateAIModel).toHaveBeenCalledWith(
 			{
 				provider: "openai",
-				model: "gpt-5.4",
+				model: "gpt-5.6-luna",
 				effort: "low",
 			},
 			auth,
@@ -136,7 +134,7 @@ describe("triageReReview", () => {
 			fetch: (async () => new Response()) as typeof fetch,
 		};
 		await triageReReview(
-			{ provider: "anthropic", model: "claude-haiku-4-5-20251001" } as never,
+			{ provider: "anthropic", model: "claude-haiku-4-5" } as never,
 			"delta diff",
 			openFindings,
 			auth,
@@ -157,7 +155,7 @@ describe("triageReReview", () => {
 			},
 		});
 		await triageReReview(
-			{ provider: "anthropic", model: "claude-haiku-4-5-20251001" } as never,
+			{ provider: "anthropic", model: "claude-haiku-4-5" } as never,
 			"delta diff",
 			openFindings,
 		);
@@ -186,7 +184,7 @@ describe("triageReReview", () => {
 			object: { recommendation: "INCREMENTAL", resolved: [], newRisk: true },
 		});
 		await triageReReview(
-			{ provider: "anthropic", model: "claude-haiku-4-5-20251001" } as never,
+			{ provider: "anthropic", model: "claude-haiku-4-5" } as never,
 			"some new diff with no prior findings",
 			[],
 		);

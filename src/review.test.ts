@@ -1001,7 +1001,7 @@ describe("buildReview comment provenance", () => {
 
 const sel = {
 	provider: "anthropic",
-	model: "claude-sonnet-4-6",
+	model: "claude-sonnet-5",
 	tier: 1,
 } as ModelSelection;
 
@@ -1058,7 +1058,7 @@ describe("runAgent caching + telemetry", () => {
 		});
 		const openaiSel = {
 			provider: "openai",
-			model: "gpt-5.1",
+			model: "gpt-5.6-sol",
 			tier: 1,
 			effort: "low",
 		} as ModelSelection;
@@ -1067,7 +1067,7 @@ describe("runAgent caching + telemetry", () => {
 
 		const call = (mockGenerateObject as ReturnType<typeof vi.fn>).mock
 			.calls[0][0];
-		// gpt-5.1 spends reasoning tokens from this budget — it must dwarf the 4096
+		// gpt-5.6-sol spends reasoning tokens from this budget — it must dwarf the 4096
 		// base, and the tier's effort is forwarded so it can't starve the output.
 		expect(call.maxOutputTokens).toBe(32768);
 		expect(call.providerOptions.openai.reasoningEffort).toBe("low");
@@ -1086,7 +1086,7 @@ describe("runAgent caching + telemetry", () => {
 		});
 		const opusSel = {
 			provider: "anthropic",
-			model: "claude-opus-4-8",
+			model: "claude-opus-5",
 			tier: 4,
 			effort: "xhigh",
 		} as ModelSelection;
@@ -1131,7 +1131,7 @@ describe("runAgent caching + telemetry", () => {
 		});
 		const trivialOpenAiSel = {
 			provider: "openai",
-			model: "gpt-5.1",
+			model: "gpt-5.6-sol",
 			tier: 1,
 			effort: "none",
 		} as ModelSelection;
@@ -1141,7 +1141,7 @@ describe("runAgent caching + telemetry", () => {
 		const call = (mockGenerateObject as ReturnType<typeof vi.fn>).mock
 			.calls[0][0];
 		// "none" is a truthy string but disables reasoning — the budget must stay
-		// at the base (no inflation), and "none" is forwarded as a valid gpt-5.1
+		// at the base (no inflation), and "none" is forwarded as a valid gpt-5.6
 		// non-reasoning value rather than being dropped.
 		expect(call.maxOutputTokens).toBe(4096);
 		expect(call.providerOptions.openai.reasoningEffort).toBe("none");
@@ -1154,7 +1154,7 @@ describe("runAgent caching + telemetry", () => {
 		});
 		const openaiReasoningSel = {
 			provider: "openai",
-			model: "gpt-5.1",
+			model: "gpt-5.6-sol",
 			tier: 3,
 			effort: "high",
 		} as ModelSelection;
@@ -3216,11 +3216,11 @@ describe("buildReview auth threading", () => {
 	});
 
 	// ai-review watch resolves real OAuth auth and calls maybeSubmitReview with
-	// it, which flows into buildReview's context.auth — routeModel must see
-	// authMode: "oauth" derived from context.auth.mode so openai runs get
-	// gpt-5.4 (the model still served on the ChatGPT/Codex-account backend),
-	// not the retired-there gpt-5.1.
-	it("routes openai agent calls to gpt-5.4 when context.auth.mode is oauth", async () => {
+	// it, which flows into buildReview's context.auth. GPT-5.6 is confirmed
+	// available on both the OAuth/subscription and API-key backends, so this
+	// must resolve to the same model as the no-auth (hosted webhook) case
+	// below — unlike the retired gpt-5.1/gpt-5.4 split this replaced.
+	it("routes openai agent calls to gpt-5.6-terra when context.auth.mode is oauth", async () => {
 		const auth = {
 			mode: "oauth" as const,
 			provider: "openai" as const,
@@ -3260,15 +3260,15 @@ describe("buildReview auth threading", () => {
 			.mock.calls.filter((call) => call[0].provider === "openai");
 		expect(agentCalls.length).toBeGreaterThan(0);
 		for (const call of agentCalls) {
-			expect(call[0].model).toBe("gpt-5.4");
+			expect(call[0].model).toBe("gpt-5.6-terra");
 		}
 	});
 
 	// The hosted webhook path never sets context.auth, and `ai-review audit`'s
-	// runAuditPass callers likewise have no auth in scope — both must keep
-	// resolving to the API-key model (gpt-5.1) so this change cannot regress
-	// production reviews that were never shown to be broken.
-	it("routes openai agent calls to gpt-5.1 when context.auth is absent (hosted webhook default)", async () => {
+	// runAuditPass callers likewise have no auth in scope — both resolve to
+	// the same GPT-5.6 tier as the OAuth case above, since auth mode no longer
+	// changes model selection.
+	it("routes openai agent calls to gpt-5.6-terra when context.auth is absent (hosted webhook default)", async () => {
 		const agentResponse = buildGenerateObjectResponse(
 			buildModelReview({
 				event: "COMMENT",
@@ -3299,7 +3299,7 @@ describe("buildReview auth threading", () => {
 			.mock.calls.filter((call) => call[0].provider === "openai");
 		expect(agentCalls.length).toBeGreaterThan(0);
 		for (const call of agentCalls) {
-			expect(call[0].model).toBe("gpt-5.1");
+			expect(call[0].model).toBe("gpt-5.6-terra");
 		}
 	});
 });

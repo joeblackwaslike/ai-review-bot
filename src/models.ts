@@ -8,20 +8,19 @@ interface TokenUsage {
 	completionTokens: number;
 }
 
-// $/1M tokens. OpenAI rates confirmed from openai.com/api/pricing (Jun 2026);
-// Anthropic Opus rate is an estimate pending the published 4.8 price.
+// $/1M tokens. Anthropic rates confirmed from platform.claude.com/docs/en/about-claude/models/overview;
+// OpenAI rates confirmed from developers.openai.com/api/docs/models/gpt-5.6-{sol,terra,luna} (Aug 2026).
 const TOKEN_RATES: Record<string, { input: number; output: number }> = {
 	"claude-haiku-4-5": { input: 1.0, output: 5.0 },
-	"claude-sonnet-4-6": { input: 3.0, output: 15.0 },
-	"claude-opus-4-8": { input: 5.0, output: 25.0 },
-	// Both are live model choices depending on auth mode (see router.ts /
-	// triage.ts): gpt-5.1 on the API-key backend, gpt-5.4 on the OAuth/
-	// subscription backend that no longer serves gpt-5.1. Same rate for both —
-	// gpt-5.4's is carried over from gpt-5.1 as an estimate pending confirmed
-	// pricing.
-	"gpt-5.1": { input: 1.25, output: 10.0 },
-	"gpt-5.4": { input: 1.25, output: 10.0 },
-	"gpt-5.5": { input: 5.0, output: 30.0 },
+	"claude-sonnet-5": { input: 2.0, output: 10.0 },
+	"claude-opus-5": { input: 5.0, output: 25.0 },
+	// GPT-5.6's three durable capability tiers, used across both the API-key
+	// and OAuth/subscription backends (see router.ts / triage.ts) — gpt-5.4
+	// (the model that previously required an auth-mode split) retires from
+	// the Codex/ChatGPT-OAuth backend on 2026-08-31.
+	"gpt-5.6-luna": { input: 0.2, output: 1.2 },
+	"gpt-5.6-terra": { input: 2.0, output: 12.0 },
+	"gpt-5.6-sol": { input: 5.0, output: 30.0 },
 };
 
 export function computeCost(usage: TokenUsage, model: string): number {

@@ -9,7 +9,7 @@ function buildReview(overrides?: Partial<ReviewDecision>): ReviewDecision {
 		summary: "Review summary.",
 		comments: [],
 		metadata: {
-			model: "claude-sonnet-4-6",
+			model: "claude-sonnet-5",
 			tier1Count: 5,
 			tier2Skills: [],
 			generalFindings: 0,

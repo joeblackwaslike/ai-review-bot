@@ -112,12 +112,10 @@ describe("judgeSelection", () => {
 	});
 
 	// /qc is a webhook-only command (GitHub App auth via qc-app.ts) with no
-	// subscription/OAuth auth concept anywhere in its call chain — the
-	// gpt-5.1 rejection confirmed against the ChatGPT/Codex-account backend
-	// says nothing about this path, so it keeps the model already working in
-	// production via API keys.
-	it("judges openai findings with gpt-5.1 (api-key backend, no oauth path)", () => {
-		expect(judgeSelection("openai").model).toBe("gpt-5.1");
+	// subscription/OAuth auth concept anywhere in its call chain — it always
+	// runs on the API-key backend, where gpt-5.6-luna is confirmed available.
+	it("judges openai findings with gpt-5.6-luna (api-key backend, no oauth path)", () => {
+		expect(judgeSelection("openai").model).toBe("gpt-5.6-luna");
 	});
 });
 
