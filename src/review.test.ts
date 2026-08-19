@@ -1059,7 +1059,6 @@ describe("runAgent caching + telemetry", () => {
 		const openaiSel = {
 			provider: "openai",
 			model: "gpt-5.6-sol",
-			tier: 1,
 			effort: "low",
 		} as ModelSelection;
 
@@ -1132,7 +1131,6 @@ describe("runAgent caching + telemetry", () => {
 		const trivialOpenAiSel = {
 			provider: "openai",
 			model: "gpt-5.6-sol",
-			tier: 1,
 			effort: "none",
 		} as ModelSelection;
 
@@ -1155,7 +1153,6 @@ describe("runAgent caching + telemetry", () => {
 		const openaiReasoningSel = {
 			provider: "openai",
 			model: "gpt-5.6-sol",
-			tier: 3,
 			effort: "high",
 		} as ModelSelection;
 
