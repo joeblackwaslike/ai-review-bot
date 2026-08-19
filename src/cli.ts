@@ -962,8 +962,19 @@ function readHiddenLine(promptText: string): Promise<string> {
 			reject(err instanceof Error ? err : new Error(String(err)));
 			return;
 		}
-		stdin.resume();
-		stdin.setEncoding("utf-8");
+		try {
+			stdin.resume();
+			stdin.setEncoding("utf-8");
+		} catch (err) {
+			// Neither call is expected to throw in practice, but if one did, the
+			// event listeners below aren't attached yet — `cleanup()` (which
+			// removes them) can't run this early, so restore raw mode directly
+			// here instead of leaving the terminal stuck in raw mode.
+			stdin.setRawMode?.(wasRaw);
+			stdin.pause();
+			reject(err instanceof Error ? err : new Error(String(err)));
+			return;
+		}
 
 		let value = "";
 		let settled = false;
@@ -1040,7 +1051,10 @@ async function defaultReadSecret(): Promise<string> {
 		}
 		return Buffer.concat(chunks).toString("utf-8").trim();
 	}
-	return readHiddenLine("Value (input hidden): ");
+	// Trimmed for the same reason the non-TTY branch above trims: a stray
+	// trailing `\r` (Windows-style paste) or leading/trailing space typed
+	// into the hidden prompt shouldn't be stored as part of the credential.
+	return (await readHiddenLine("Value (input hidden): ")).trim();
 }
 
 // `looksLikeCompletePemOneLiner` now lives in cli-creds.ts, imported above —

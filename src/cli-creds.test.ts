@@ -154,6 +154,18 @@ describe("setCredential / listCredentials / unsetCredential", () => {
 		expect(readXdgFile).toHaveBeenCalledTimes(1);
 	});
 
+	// An empty-string Keychain value (however it got that way — only an
+	// injected reader can produce one; defaultReadKeychain folds "" to null)
+	// is genuinely stored, not absent. A truthy check would silently report
+	// it as "xdg" or "absent" instead of "keychain", diverging from what the
+	// var actually resolves to.
+	it("listCredentialSources reports an empty-string Keychain value as keychain-sourced, not absent", async () => {
+		const readKeychain = vi.fn(async () => "");
+		const readXdgFile = vi.fn(async () => null);
+		const sources = await listCredentialSources({ readKeychain, readXdgFile });
+		expect(sources.GITHUB_APP_ID).toBe("keychain");
+	});
+
 	it("listCredentialSources reports which store satisfies each var — Keychain, XDG, or neither", async () => {
 		// `creds unset` only removes from the Keychain, so a var satisfied
 		// purely by the XDG file needs to be visibly distinguishable from one

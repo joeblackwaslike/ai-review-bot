@@ -310,6 +310,10 @@ export async function setCredential(
 	io: Pick<CliCredsIO, "writeKeychain"> = {},
 ): Promise<void> {
 	assertKnownCredentialVar(varName);
+	// `_PRIVATE_KEY` suffix, not membership in some separate "these are PEMs"
+	// list — a future var added to CLI_CREDENTIAL_VARS that needs this same
+	// shape check must be named with that suffix, or it silently skips
+	// validation here and in cmdCreds's identical check (cli.ts).
 	if (
 		varName.endsWith("_PRIVATE_KEY") &&
 		!looksLikeCompletePemOneLiner(value)
@@ -375,7 +379,11 @@ export async function listCredentialSources(
 			);
 			value = null;
 		}
-		if (value) {
+		// `!== null` rather than a truthy check: a Keychain value that's
+		// genuinely stored but happens to be an empty string (only reachable
+		// via an injected reader — defaultReadKeychain folds "" to null) must
+		// report "keychain", not silently fall through to "xdg"/"absent".
+		if (value !== null) {
 			sources[v] = "keychain";
 			continue;
 		}
