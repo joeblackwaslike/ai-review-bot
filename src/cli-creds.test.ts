@@ -1,4 +1,11 @@
+import { execFile } from "node:child_process";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("node:child_process", async (orig) => {
+	const actual = await orig<typeof import("node:child_process")>();
+	return { ...actual, execFile: vi.fn() };
+});
+
 import {
 	CLI_CREDENTIAL_VARS,
 	type CliCredentialVar,
@@ -7,10 +14,24 @@ import {
 	KEYCHAIN_SERVICE,
 	listCredentialSources,
 	listCredentials,
+	looksLikeCompletePemOneLiner,
 	resolveCliCredentials,
 	setCredential,
 	unsetCredential,
 } from "./cli-creds.js";
+
+// Node-style (error, stdout, stderr) callback shape execFile actually uses —
+// promisify's generic wrapper (no [promisify.custom] on our mock) rejects
+// with exactly whatever `err` this passes, so a manually-attached `.stderr`
+// on `err` is enough to exercise the real rejection shape without needing
+// to replicate child_process's custom promisify behavior.
+function mockExecFileRejection(err: unknown): void {
+	vi.mocked(execFile).mockImplementation((..._args: unknown[]) => {
+		const cb = _args[_args.length - 1] as (e: unknown) => void;
+		cb(err);
+		return {} as ReturnType<typeof execFile>;
+	});
+}
 
 describe("resolveCliCredentials", () => {
 	afterEach(() => {
@@ -230,9 +251,117 @@ describe("isItemNotFoundError / isKeychainUnavailableError", () => {
 		expect(isKeychainUnavailableError({ code: "ENOENT" })).toBe(true);
 	});
 
+	// EACCES: the `security` binary is present but not executable by this
+	// process (e.g. a restrictive sandbox) — same practical outcome as
+	// ENOENT (Keychain can't be reached), so it degrades the same way.
+	it("isKeychainUnavailableError recognizes EACCES (security binary not executable)", () => {
+		expect(isKeychainUnavailableError({ code: "EACCES" })).toBe(true);
+	});
+
 	it("isKeychainUnavailableError rejects other error shapes", () => {
 		expect(isKeychainUnavailableError({ code: 44 })).toBe(false);
 		expect(isKeychainUnavailableError(new Error("boom"))).toBe(false);
 		expect(isKeychainUnavailableError(null)).toBe(false);
+	});
+});
+
+describe("looksLikeCompletePemOneLiner", () => {
+	it("accepts the documented single-line \\n-escaped form", () => {
+		expect(
+			looksLikeCompletePemOneLiner(
+				"-----BEGIN PRIVATE KEY-----\\nMIIEvQ\\n-----END PRIVATE KEY-----\\n",
+			),
+		).toBe(true);
+	});
+
+	it("rejects a value truncated to just the BEGIN line", () => {
+		expect(looksLikeCompletePemOneLiner("-----BEGIN PRIVATE KEY-----")).toBe(
+			false,
+		);
+	});
+});
+
+// setCredential's own PEM shape check for `_PRIVATE_KEY` vars is
+// defense-in-depth, mirroring the assertKnownCredentialVar pattern above: a
+// caller that imports setCredential directly (bypassing cmdCreds' identical
+// check) must not be able to silently store a truncated PEM.
+describe("setCredential PEM validation", () => {
+	it("rejects a truncated PEM for a _PRIVATE_KEY var even when called directly", async () => {
+		const writeKeychain = vi.fn(async () => {});
+		await expect(
+			setCredential("GITHUB_APP_PRIVATE_KEY", "-----BEGIN PRIVATE KEY-----", {
+				writeKeychain,
+			}),
+		).rejects.toThrow(/doesn't look like a complete PEM/);
+		expect(writeKeychain).not.toHaveBeenCalled();
+	});
+
+	it("accepts a complete single-line PEM for a _PRIVATE_KEY var", async () => {
+		const writeKeychain = vi.fn(async () => {});
+		const value =
+			"-----BEGIN PRIVATE KEY-----\\nMIIEvQ\\n-----END PRIVATE KEY-----\\n";
+		await setCredential("GITHUB_APP_PRIVATE_KEY", value, { writeKeychain });
+		expect(writeKeychain).toHaveBeenCalledWith("GITHUB_APP_PRIVATE_KEY", value);
+	});
+
+	it("does not apply the PEM shape check to non-private-key vars", async () => {
+		const writeKeychain = vi.fn(async () => {});
+		await setCredential("GITHUB_APP_ID", "12345", { writeKeychain });
+		expect(writeKeychain).toHaveBeenCalledWith("GITHUB_APP_ID", "12345");
+	});
+});
+
+// A locked/denied Keychain write's rejection from `execFile` embeds the
+// full command line it ran — including the `-w <value>` argument carrying
+// the secret that just failed to write. Only the default (non-injected)
+// writeKeychain goes through execFile at all, so these tests exercise
+// setCredential without an injected writer to cover that real path.
+describe("defaultWriteKeychain error sanitization (security-relevant)", () => {
+	afterEach(() => {
+		vi.mocked(execFile).mockReset();
+	});
+
+	it("never echoes the secret value into the thrown error when execFile's rejection has no stderr", async () => {
+		const secret =
+			"-----BEGIN PRIVATE KEY-----\\nTOTALLY-SECRET-VALUE\\n-----END PRIVATE KEY-----";
+		mockExecFileRejection(
+			new Error(
+				`Command failed: security add-generic-password -U -s ai-review-cli-credentials -a GITHUB_APP_PRIVATE_KEY -w ${secret}`,
+			),
+		);
+
+		let caught: unknown;
+		try {
+			await setCredential("GITHUB_APP_PRIVATE_KEY", secret);
+		} catch (err) {
+			caught = err;
+		}
+		expect(caught).toBeInstanceOf(Error);
+		expect(String(caught)).not.toContain("TOTALLY-SECRET-VALUE");
+	});
+
+	it("surfaces execFile's .stderr (the tool's own diagnostic, never the input value) when present", async () => {
+		const secret =
+			"-----BEGIN PRIVATE KEY-----\\nOTHER-SECRET-VALUE\\n-----END PRIVATE KEY-----";
+		mockExecFileRejection(
+			Object.assign(
+				new Error(
+					`Command failed: security add-generic-password ... -w ${secret}`,
+				),
+				{ stderr: "SecKeychainAddGenericPassword: -25293 (auth failed)" },
+			),
+		);
+
+		await expect(
+			setCredential("GITHUB_APP_PRIVATE_KEY", secret),
+		).rejects.toThrow(/SecKeychainAddGenericPassword: -25293/);
+
+		let caught: unknown;
+		try {
+			await setCredential("GITHUB_APP_PRIVATE_KEY", secret);
+		} catch (err) {
+			caught = err;
+		}
+		expect(String(caught)).not.toContain("OTHER-SECRET-VALUE");
 	});
 });

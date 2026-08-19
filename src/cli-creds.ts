@@ -63,15 +63,48 @@ export function isItemNotFoundError(err: unknown): boolean {
 }
 
 export function isKeychainUnavailableError(err: unknown): boolean {
-	return (
-		typeof err === "object" &&
-		err !== null &&
-		(err as { code?: unknown }).code === "ENOENT"
-	);
+	if (typeof err !== "object" || err === null) return false;
+	const code = (err as { code?: unknown }).code;
+	// ENOENT: the `security` binary itself isn't present (Linux, Windows,
+	// sandboxed CI). EACCES: it's present but not executable by this process
+	// (e.g. a restrictive sandbox) — same practical outcome, degrade to the
+	// XDG fallback rather than treating it as a real Keychain failure.
+	return code === "ENOENT" || code === "EACCES";
 }
 
 function errorMessage(err: unknown): string {
 	return err instanceof Error ? err.message : String(err);
+}
+
+/** Builds a safe error message for a failed Keychain *write*. `execFile`'s
+ * own rejection `.message` embeds the full command line it ran — including
+ * the `-w <value>` argument carrying the secret that just failed to write —
+ * so `errorMessage()` above must never be used for this path. Only
+ * `.stderr` (the `security` tool's own diagnostic output, which never
+ * echoes the input value back) is safe to surface. Falls back to a message
+ * that names the withholding rather than guessing at a cause. */
+function writeErrorMessage(err: unknown): string {
+	const stderr =
+		typeof err === "object" && err !== null
+			? (err as { stderr?: unknown }).stderr
+			: undefined;
+	if (typeof stderr === "string" && stderr.trim()) return stderr.trim();
+	return "no further diagnostic detail available (withheld because the underlying error may embed the secret value)";
+}
+
+// The documented private-key value is already the single-line `\n`-escaped
+// form (what's in .env, and what the recovery command in the docs
+// produces) — pasting *that* into an interactive hidden prompt works fine,
+// since it has no real newlines to resolve early on. What doesn't work is
+// pasting a raw, unescaped multi-line PEM there: the prompt resolves on the
+// first embedded newline and silently stores only the "-----BEGIN...-----"
+// line, reporting success on a corrupted credential that only fails later,
+// opaquely, in `watch`. Validate the *shape* of the resolved value instead
+// of blocking a whole input channel: reject anything that doesn't look like
+// a complete PEM after un-escaping, whichever channel it came from.
+export function looksLikeCompletePemOneLiner(value: string): boolean {
+	const unescaped = value.replaceAll(String.raw`\n`, "\n").trim();
+	return unescaped.startsWith("-----BEGIN") && unescaped.includes("-----END");
 }
 
 async function defaultReadKeychain(account: string): Promise<string | null> {
@@ -130,7 +163,7 @@ async function defaultWriteKeychain(
 			);
 		}
 		throw new Error(
-			`Failed to write "${account}" to the Keychain: ${errorMessage(err)}`,
+			`Failed to write "${account}" to the Keychain: ${writeErrorMessage(err)}`,
 		);
 	}
 }
@@ -255,12 +288,26 @@ function assertKnownCredentialVar(varName: CliCredentialVar): void {
 	}
 }
 
+// Intentionally duplicated with cli.ts's cmdCreds PEM shape check, for the
+// same reason assertKnownCredentialVar above is duplicated: cmdCreds is the
+// CLI-layer fail-fast path (a clean usage message before anything touches
+// the Keychain), this is the library-layer defense-in-depth backstop for a
+// caller that imports setCredential directly and bypasses that layer
+// entirely. Without it, such a caller can silently store a truncated PEM.
 export async function setCredential(
 	varName: CliCredentialVar,
 	value: string,
 	io: Pick<CliCredsIO, "writeKeychain"> = {},
 ): Promise<void> {
 	assertKnownCredentialVar(varName);
+	if (
+		varName.endsWith("_PRIVATE_KEY") &&
+		!looksLikeCompletePemOneLiner(value)
+	) {
+		throw new Error(
+			`${varName} doesn't look like a complete PEM (expected the single-line \\n-escaped form).`,
+		);
+	}
 	const writeKeychain = io.writeKeychain ?? defaultWriteKeychain;
 	await writeKeychain(varName, value);
 }

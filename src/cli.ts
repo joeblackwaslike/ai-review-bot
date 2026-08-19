@@ -19,6 +19,7 @@ import {
 	type CliCredentialVar,
 	KEYCHAIN_SERVICE,
 	listCredentialSources,
+	looksLikeCompletePemOneLiner,
 	resolveCliCredentials,
 	setCredential,
 	unsetCredential,
@@ -1038,22 +1039,11 @@ async function defaultReadSecret(): Promise<string> {
 	return readHiddenLine("Value (input hidden): ");
 }
 
-// The documented private-key value is already the single-line `\n`-escaped
-// form (what's in .env, and what the recovery command in the docs
-// produces) — pasting *that* into readHiddenLine works fine, since it has
-// no real newlines to resolve early on. What doesn't work is pasting a raw,
-// unescaped multi-line PEM: readHiddenLine resolves on the first embedded
-// newline and silently stores only the "-----BEGIN...-----" line, reporting
-// success on a corrupted credential that only fails later, opaquely, in
-// `watch`. A blanket "no interactive entry for private keys" block (an
-// earlier version of this function) was too broad — it also rejected the
-// correct, documented single-line paste. Validate the *shape* of the
-// resolved value instead: reject anything that doesn't look like a
-// complete PEM after un-escaping, whichever channel it came from.
-function looksLikeCompletePemOneLiner(value: string): boolean {
-	const unescaped = value.replaceAll(String.raw`\n`, "\n").trim();
-	return unescaped.startsWith("-----BEGIN") && unescaped.includes("-----END");
-}
+// `looksLikeCompletePemOneLiner` now lives in cli-creds.ts, imported above —
+// setCredential() there needs the same shape check as a defense-in-depth
+// backstop for callers that bypass this CLI layer (see the comment on
+// setCredential itself), so a single definition is shared by both call
+// sites instead of drifting as two copies.
 
 // Intentionally duplicated with cli-creds.ts's assertKnownCredentialVar, not
 // a guard left behind by accident: this one is the CLI-layer fail-fast path
@@ -1080,9 +1070,19 @@ export async function cmdCreds(
 	args: string[],
 	io: CmdCredsIO = {},
 ): Promise<void> {
-	const [action, varName, value] = args;
+	const [action, varName, value, ...extra] = args;
 	if (action === "set") {
 		if (!varName) fatal("Usage: ai-review creds set <VAR> [value]");
+		// Extra positional args are most often an unquoted value with spaces
+		// (`ai-review creds set VAR one two` instead of `"one two"`) — silently
+		// dropping everything past the second arg would store `one` and lose
+		// the rest with no error, the same truncated-value failure mode the
+		// PEM shape check below exists to catch for a different cause.
+		if (extra.length > 0) {
+			fatal(
+				"Usage: ai-review creds set <VAR> [value] — unexpected extra arguments; did you forget to quote the value?",
+			);
+		}
 		const knownVar = ensureKnownCredentialVar(varName);
 		if (value !== undefined && knownVar.endsWith("_PRIVATE_KEY")) {
 			process.stderr.write(
@@ -1123,9 +1123,24 @@ export async function cmdCreds(
 	}
 	if (action === "unset") {
 		if (!varName) fatal("Usage: ai-review creds unset <VAR>");
+		if (value !== undefined || extra.length > 0) {
+			fatal("Usage: ai-review creds unset <VAR> — takes no value.");
+		}
 		const knownVar = ensureKnownCredentialVar(varName);
 		await unsetCredential(knownVar);
-		console.log(`Removed ${knownVar} from the Keychain (if it was set).`);
+		// `unsetCredential` only ever touches the Keychain — it has no path to
+		// edit ~/.config/ai-review/.env. A var satisfied purely by that file
+		// is untouched by this call and will keep resolving from it, so a flat
+		// "Removed" message would be a lie for exactly the vars where the XDG
+		// fallback actually matters. Check the post-delete source and say so.
+		const sources = await listCredentialSources();
+		if (sources[knownVar] === "xdg") {
+			console.log(
+				`Removed ${knownVar} from the Keychain (if it was set), but it is still set in ~/.config/ai-review/.env — creds unset does not edit that file. Remove it there manually to fully clear it.`,
+			);
+		} else {
+			console.log(`Removed ${knownVar} from the Keychain (if it was set).`);
+		}
 		return;
 	}
 	fatal("Usage: ai-review creds set <VAR> [value] | list | unset <VAR>");

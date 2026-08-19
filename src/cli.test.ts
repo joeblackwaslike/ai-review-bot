@@ -402,6 +402,61 @@ describe("cmdCreds", () => {
 		expect(unsetCredential).toHaveBeenCalledWith("GITHUB_APP_ID");
 	});
 
+	// A value with unquoted spaces (`ai-review creds set VAR one two`) used to
+	// silently store "one" and drop "two" with no error — the same
+	// truncated-value failure mode the PEM shape check exists to catch, but
+	// for any var, not just private keys.
+	it("rejects extra positional arguments to set instead of silently dropping them", async () => {
+		await expect(
+			cmdCreds(["set", "GITHUB_APP_ID", "one", "two"]),
+		).rejects.toThrow(ProcessExitError);
+
+		expect(setCredential).not.toHaveBeenCalled();
+	});
+
+	it("rejects extra positional arguments to unset", async () => {
+		await expect(cmdCreds(["unset", "GITHUB_APP_ID", "extra"])).rejects.toThrow(
+			ProcessExitError,
+		);
+
+		expect(unsetCredential).not.toHaveBeenCalled();
+	});
+
+	// `unsetCredential` only ever deletes the Keychain entry — it has no path
+	// to edit ~/.config/ai-review/.env. A var satisfied purely by that file
+	// is untouched by `creds unset`, so the flat "Removed" message would be
+	// false for exactly the vars where the XDG fallback matters.
+	it("warns instead of claiming success when unset can't actually clear an XDG-only credential", async () => {
+		vi.mocked(listCredentialSources).mockResolvedValue({
+			GITHUB_APP_ID: "xdg",
+			GITHUB_APP_PRIVATE_KEY: "absent",
+			OPENAI_APP_ID: "absent",
+			OPENAI_APP_PRIVATE_KEY: "absent",
+		});
+
+		await cmdCreds(["unset", "GITHUB_APP_ID"]);
+
+		expect(unsetCredential).toHaveBeenCalledWith("GITHUB_APP_ID");
+		expect(console.log).toHaveBeenCalledWith(
+			expect.stringContaining("still set in ~/.config/ai-review/.env"),
+		);
+	});
+
+	it("reports plain success when unset actually cleared the only source (Keychain)", async () => {
+		vi.mocked(listCredentialSources).mockResolvedValue({
+			GITHUB_APP_ID: "absent",
+			GITHUB_APP_PRIVATE_KEY: "absent",
+			OPENAI_APP_ID: "absent",
+			OPENAI_APP_PRIVATE_KEY: "absent",
+		});
+
+		await cmdCreds(["unset", "GITHUB_APP_ID"]);
+
+		expect(console.log).toHaveBeenCalledWith(
+			"Removed GITHUB_APP_ID from the Keychain (if it was set).",
+		);
+	});
+
 	// Only set/unset dispatch had coverage; a typo in the "list" branch would
 	// have gone uncaught.
 	it("dispatches list and prints presence + source for every known var", async () => {
