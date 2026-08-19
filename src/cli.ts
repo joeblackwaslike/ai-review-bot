@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import process from "node:process";
+import readline from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { inspect } from "node:util";
 import { App, Octokit } from "octokit";
@@ -16,6 +17,7 @@ import { makeReady, type OctokitLike } from "./audit-pr.js";
 import { resolveAnthropicAuth, resolveSubscriptionAuth } from "./auth.js";
 import {
 	CLI_CREDENTIAL_VARS,
+	type CliCredentialVar,
 	KEYCHAIN_SERVICE,
 	listCredentials,
 	resolveCliCredentials,
@@ -101,7 +103,7 @@ function usage(): never {
 	console.error(
 		"      Personal, local use only — exits when the PR merges or closes.",
 	);
-	console.error("  ai-review creds set <VAR> <value>");
+	console.error("  ai-review creds set <VAR> [value]");
 	console.error("  ai-review creds list");
 	console.error("  ai-review creds unset <VAR>");
 	console.error(
@@ -880,14 +882,23 @@ async function cmdPropose(args: string[]): Promise<void> {
 	}
 
 	const token = process.env.GITHUB_TOKEN;
-	const octokit = token
-		? new Octokit({ auth: token })
-		: await installationOctokit(
-				getConfig({ requireWebhookSecret: false }).appId,
-				getConfig({ requireWebhookSecret: false }).privateKey,
-				owner,
-				repo,
-			);
+	// Two separate getConfig() calls here previously each re-parsed and
+	// re-validated the full env — and, worse, calling it unconditionally would
+	// require GITHUB_APP_ID/PRIVATE_KEY even for the GITHUB_TOKEN-only path
+	// below, which doesn't need them. Keep it inside the branch that actually
+	// needs it, but call it only once there.
+	let octokit: Octokit;
+	if (token) {
+		octokit = new Octokit({ auth: token });
+	} else {
+		const claudeConfig = getConfig({ requireWebhookSecret: false });
+		octokit = await installationOctokit(
+			claudeConfig.appId,
+			claudeConfig.privateKey,
+			owner,
+			repo,
+		);
+	}
 
 	let failed = 0;
 	for (const plan of plans) {
@@ -912,15 +923,64 @@ async function cmdPropose(args: string[]): Promise<void> {
 	}
 }
 
-export async function cmdCreds(args: string[]): Promise<void> {
+// A value typed as the third positional arg to `creds set` sits in argv
+// (visible to `ps` for the life of the `security` subprocess, and typically
+// lands in shell history) — review feedback on PR #72 (chatgpt-codex-connector,
+// codexreviewbot, anthropicreviewbot) flagged this for the GitHub App private
+// keys specifically. When the value is omitted, read it through a channel
+// that never touches argv or history: piped stdin (the realistic flow —
+// `op read ... | ai-review creds set VAR`) or, for an interactive terminal,
+// a `readline` prompt. The positional form still works for scripted callers
+// that have already accepted that trade-off; the docs lead with the safer
+// form.
+export interface CmdCredsIO {
+	readSecret?: () => Promise<string>;
+}
+
+async function defaultReadSecret(): Promise<string> {
+	if (!process.stdin.isTTY) {
+		const chunks: Buffer[] = [];
+		for await (const chunk of process.stdin) {
+			chunks.push(chunk as Buffer);
+		}
+		return Buffer.concat(chunks)
+			.toString("utf-8")
+			.replace(/\r?\n$/, "");
+	}
+	const rl = readline.createInterface({
+		input: process.stdin,
+		output: process.stdout,
+	});
+	try {
+		return await rl.question("Value: ");
+	} finally {
+		rl.close();
+	}
+}
+
+function ensureKnownCredentialVar(name: string | undefined): CliCredentialVar {
+	if (!name || !(CLI_CREDENTIAL_VARS as readonly string[]).includes(name)) {
+		fatal(
+			`Unknown credential variable "${name}". Supported: ${CLI_CREDENTIAL_VARS.join(", ")}`,
+		);
+	}
+	return name as CliCredentialVar;
+}
+
+export async function cmdCreds(
+	args: string[],
+	io: CmdCredsIO = {},
+): Promise<void> {
 	const [action, varName, value] = args;
 	if (action === "set") {
-		if (!varName || value === undefined) {
-			fatal("Usage: ai-review creds set <VAR> <value>");
-		}
-		await setCredential(varName, value);
+		if (!varName) fatal("Usage: ai-review creds set <VAR> [value]");
+		const knownVar = ensureKnownCredentialVar(varName);
+		const resolvedValue =
+			value ?? (await (io.readSecret ?? defaultReadSecret)());
+		if (!resolvedValue) fatal("No value provided.");
+		await setCredential(knownVar, resolvedValue);
 		console.log(
-			`Set ${varName} in the Keychain (service: ${KEYCHAIN_SERVICE}).`,
+			`Set ${knownVar} in the Keychain (service: ${KEYCHAIN_SERVICE}).`,
 		);
 		return;
 	}
@@ -933,20 +993,29 @@ export async function cmdCreds(args: string[]): Promise<void> {
 	}
 	if (action === "unset") {
 		if (!varName) fatal("Usage: ai-review creds unset <VAR>");
-		await unsetCredential(varName);
-		console.log(`Removed ${varName} from the Keychain (if it was set).`);
+		const knownVar = ensureKnownCredentialVar(varName);
+		await unsetCredential(knownVar);
+		console.log(`Removed ${knownVar} from the Keychain (if it was set).`);
 		return;
 	}
-	fatal("Usage: ai-review creds set <VAR> <value> | list | unset <VAR>");
+	fatal("Usage: ai-review creds set <VAR> [value] | list | unset <VAR>");
 }
 
 async function main(): Promise<void> {
-	// Populate process.env from the Keychain/XDG fallback before any
-	// subcommand runs, so createApp()/getConfig() see credentials even when
-	// the globally npm-linked binary is invoked from outside this repo.
-	await resolveCliCredentials();
-
 	const [sub, ...rest] = process.argv.slice(2);
+
+	// The `creds` subcommand manages the Keychain directly and doesn't
+	// consume any of the resolved env vars — skip the extra Keychain
+	// round-trip resolveCliCredentials would otherwise make before it (e.g.
+	// `creds list` would read every var twice: once here, once in
+	// listCredentials()).
+	if (sub !== "creds") {
+		// Populate process.env from the Keychain/XDG fallback before any
+		// subcommand runs, so createApp()/getConfig() see credentials even when
+		// the globally npm-linked binary is invoked from outside this repo.
+		await resolveCliCredentials();
+	}
+
 	if (sub === "classify") return cmdClassify(rest);
 	if (sub === "trends") return cmdTrends(rest);
 	if (sub === "propose") return cmdPropose(rest);

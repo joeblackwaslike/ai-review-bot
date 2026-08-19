@@ -20,10 +20,24 @@ vi.mock("./watch.js", async (orig) => {
 	const actual = await orig<typeof import("./watch.js")>();
 	return { ...actual, watchPr: vi.fn() };
 });
+vi.mock("./cli-creds.js", async (orig) => {
+	const actual = await orig<typeof import("./cli-creds.js")>();
+	return {
+		...actual,
+		setCredential: vi.fn(),
+		unsetCredential: vi.fn(),
+		listCredentials: vi.fn(),
+	};
+});
 
 import { runLocalAudit } from "./audit.js";
 import { resolveSubscriptionAuth } from "./auth.js";
-import { cmdAudit, cmdWatch } from "./cli.js";
+import { cmdAudit, cmdCreds, cmdWatch } from "./cli.js";
+import {
+	listCredentials,
+	setCredential,
+	unsetCredential,
+} from "./cli-creds.js";
 import { getConfig, getOpenAIAppConfig } from "./config.js";
 import { installationApp, installationOctokit } from "./improve/octokit.js";
 import { watchPr } from "./watch.js";
@@ -285,5 +299,79 @@ describe("cmdWatch", () => {
 
 		const call = vi.mocked(watchPr).mock.calls[0][0];
 		expect(call.circuitBreaker).toBe(false);
+	});
+});
+
+describe("cmdCreds", () => {
+	beforeEach(() => {
+		vi.mocked(setCredential).mockReset().mockResolvedValue(undefined);
+		vi.mocked(unsetCredential).mockReset().mockResolvedValue(undefined);
+		vi.mocked(listCredentials).mockReset().mockResolvedValue([]);
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+			throw new ProcessExitError(code ?? 0);
+		}) as never);
+	});
+
+	// Review feedback (sourcery-ai, anthropicreviewbot, chatgpt-codex-connector)
+	// on PR #72: an unknown <VAR> silently wrote a Keychain entry that
+	// `resolveCliCredentials`/`creds list` never look at again — a typo like
+	// `GITHUB_APPID` looked like it worked and failed only much later, in
+	// `watch`, with no link back to the typo.
+	it("rejects an unknown var name for set", async () => {
+		await expect(cmdCreds(["set", "NOT_A_REAL_VAR", "x"])).rejects.toThrow(
+			ProcessExitError,
+		);
+
+		expect(setCredential).not.toHaveBeenCalled();
+		expect(console.error).toHaveBeenCalledWith(
+			expect.stringContaining("NOT_A_REAL_VAR"),
+		);
+	});
+
+	it("rejects an unknown var name for unset", async () => {
+		await expect(cmdCreds(["unset", "NOT_A_REAL_VAR"])).rejects.toThrow(
+			ProcessExitError,
+		);
+
+		expect(unsetCredential).not.toHaveBeenCalled();
+	});
+
+	it("accepts a known var name with a positional value", async () => {
+		await cmdCreds(["set", "GITHUB_APP_ID", "the-value"]);
+
+		expect(setCredential).toHaveBeenCalledWith("GITHUB_APP_ID", "the-value");
+		expect(process.exit).not.toHaveBeenCalled();
+	});
+
+	it("accepts a known var name for unset", async () => {
+		await cmdCreds(["unset", "GITHUB_APP_ID"]);
+
+		expect(unsetCredential).toHaveBeenCalledWith("GITHUB_APP_ID");
+	});
+
+	// Review feedback (chatgpt-codex-connector, codexreviewbot,
+	// anthropicreviewbot) on PR #72: a value passed as `creds set <VAR>
+	// <value>` sits in argv (visible to `ps` for the life of the process) and
+	// typically lands in shell history. When the value is omitted, read it
+	// through an injectable, non-argv channel instead.
+	it("reads the value from the injected reader when omitted", async () => {
+		const readSecret = vi.fn().mockResolvedValue("from-reader");
+
+		await cmdCreds(["set", "GITHUB_APP_ID"], { readSecret });
+
+		expect(readSecret).toHaveBeenCalled();
+		expect(setCredential).toHaveBeenCalledWith("GITHUB_APP_ID", "from-reader");
+	});
+
+	it("fails clearly when the injected reader returns nothing", async () => {
+		const readSecret = vi.fn().mockResolvedValue("");
+
+		await expect(
+			cmdCreds(["set", "GITHUB_APP_ID"], { readSecret }),
+		).rejects.toThrow(ProcessExitError);
+
+		expect(setCredential).not.toHaveBeenCalled();
 	});
 });

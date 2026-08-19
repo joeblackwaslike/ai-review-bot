@@ -48,6 +48,32 @@ export interface CliCredsIO {
 	readXdgFile?: () => Promise<string | null>;
 }
 
+// `security` exits 44 with a stable stderr message for "item not found" and
+// rejects with a Node `ENOENT` when the binary itself isn't present (Linux,
+// Windows, sandboxed CI — degrade to the XDG fallback rather than erroring).
+// Both are expected, common outcomes; anything else is a real failure
+// (locked keychain, permission denial, corrupt keychain) that must not be
+// swallowed and reported as if it were a routine miss.
+export function isItemNotFoundError(err: unknown): boolean {
+	return (
+		typeof err === "object" &&
+		err !== null &&
+		(err as { code?: unknown }).code === 44
+	);
+}
+
+export function isKeychainUnavailableError(err: unknown): boolean {
+	return (
+		typeof err === "object" &&
+		err !== null &&
+		(err as { code?: unknown }).code === "ENOENT"
+	);
+}
+
+function errorMessage(err: unknown): string {
+	return err instanceof Error ? err.message : String(err);
+}
+
 async function defaultReadKeychain(account: string): Promise<string | null> {
 	try {
 		const { stdout } = await execFileAsync("security", [
@@ -59,7 +85,12 @@ async function defaultReadKeychain(account: string): Promise<string | null> {
 			"-w",
 		]);
 		return stdout.trim() || null;
-	} catch {
+	} catch (err) {
+		if (!isItemNotFoundError(err) && !isKeychainUnavailableError(err)) {
+			process.stderr.write(
+				`ai-review: Keychain read failed for ${account}: ${errorMessage(err)}\n`,
+			);
+		}
 		return null;
 	}
 }
@@ -68,16 +99,27 @@ async function defaultWriteKeychain(
 	account: string,
 	value: string,
 ): Promise<void> {
-	await execFileAsync("security", [
-		"add-generic-password",
-		"-U",
-		"-s",
-		KEYCHAIN_SERVICE,
-		"-a",
-		account,
-		"-w",
-		value,
-	]);
+	try {
+		await execFileAsync("security", [
+			"add-generic-password",
+			"-U",
+			"-s",
+			KEYCHAIN_SERVICE,
+			"-a",
+			account,
+			"-w",
+			value,
+		]);
+	} catch (err) {
+		if (isKeychainUnavailableError(err)) {
+			throw new Error(
+				"macOS Keychain is not available on this platform (the `security` binary was not found). Use ~/.config/ai-review/.env as a fallback instead.",
+			);
+		}
+		throw new Error(
+			`Failed to write "${account}" to the Keychain: ${errorMessage(err)}`,
+		);
+	}
 }
 
 async function defaultDeleteKeychain(account: string): Promise<void> {
@@ -89,16 +131,37 @@ async function defaultDeleteKeychain(account: string): Promise<void> {
 			"-a",
 			account,
 		]);
-	} catch {
+	} catch (err) {
 		// Already absent — deleting a credential that isn't there is a no-op,
-		// not a failure.
+		// not a failure. Anything else (locked keychain, permission denial,
+		// binary missing) must propagate — silently swallowing it here is what
+		// let `creds unset` previously report "Removed" when nothing was
+		// actually removed.
+		if (isItemNotFoundError(err)) return;
+		if (isKeychainUnavailableError(err)) {
+			throw new Error(
+				"macOS Keychain is not available on this platform (the `security` binary was not found).",
+			);
+		}
+		throw new Error(
+			`Failed to remove "${account}" from the Keychain: ${errorMessage(err)}`,
+		);
 	}
 }
 
 async function defaultReadXdgFile(): Promise<string | null> {
 	try {
 		return await readFile(XDG_ENV_PATH, "utf-8");
-	} catch {
+	} catch (err) {
+		// ENOENT (no fallback file configured) is the expected, common case.
+		// Anything else — e.g. a permissions error after the docs' recommended
+		// `chmod 600` went wrong — is worth a diagnostic rather than silently
+		// producing the same "nothing here" result.
+		if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+			process.stderr.write(
+				`ai-review: failed to read ${XDG_ENV_PATH}: ${errorMessage(err)}\n`,
+			);
+		}
 		return null;
 	}
 }
@@ -115,14 +178,18 @@ export async function resolveCliCredentials(
 
 	const readKeychain = io.readKeychain ?? defaultReadKeychain;
 	for (const v of missing) {
-		if (env[v]) continue;
 		let value: string | null = null;
 		try {
 			value = await readKeychain(v);
-		} catch {
+		} catch (err) {
 			// A missing item / `security` not signed in / not installed all
-			// degrade to the next tier rather than aborting resolution for
-			// every other var.
+			// degrade to the next tier rather than aborting resolution for every
+			// other var — but a genuinely unexpected failure here otherwise
+			// surfaces only as an opaque "GITHUB_APP_ID is required" much later,
+			// out of `getConfig()`, with no link back to the real cause.
+			process.stderr.write(
+				`ai-review: credential resolution failed for ${v}: ${errorMessage(err)}\n`,
+			);
 			value = null;
 		}
 		if (value) env[v] = value;
@@ -135,11 +202,17 @@ export async function resolveCliCredentials(
 	let raw: string | null;
 	try {
 		raw = await readXdgFile();
-	} catch {
+	} catch (err) {
+		process.stderr.write(
+			`ai-review: XDG fallback file read failed: ${errorMessage(err)}\n`,
+		);
 		raw = null;
 	}
 	if (!raw) return;
 
+	// dotenv parses line-by-line, so an unquoted multi-line PEM block would
+	// only capture its first line. docs/cli-and-npm.md requires the
+	// `\n`-escaped one-liner form for exactly this reason.
 	const parsed = dotenv.parse(raw);
 	for (const v of stillMissing) {
 		if (!env[v] && parsed[v]) env[v] = parsed[v];
@@ -147,7 +220,7 @@ export async function resolveCliCredentials(
 }
 
 export async function setCredential(
-	varName: string,
+	varName: CliCredentialVar,
 	value: string,
 	io: Pick<CliCredsIO, "writeKeychain"> = {},
 ): Promise<void> {
@@ -174,7 +247,7 @@ export async function listCredentials(
 }
 
 export async function unsetCredential(
-	varName: string,
+	varName: CliCredentialVar,
 	io: Pick<CliCredsIO, "deleteKeychain"> = {},
 ): Promise<void> {
 	const deleteKeychain = io.deleteKeychain ?? defaultDeleteKeychain;

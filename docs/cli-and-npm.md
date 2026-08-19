@@ -213,16 +213,18 @@ Only the 4 identity vars used to post through the two GitHub App bots:
 
 ### Setting them — primary source: this repo's own `.env`
 
-The correct values already live in this repo's `.env` file. Read them from there and run:
+The correct values already live in this repo's `.env` file. `creds set <VAR>` accepts the value on stdin — nothing sensitive touches argv or shell history:
 
 ```bash
-ai-review creds set GITHUB_APP_ID <value-from-.env>
-ai-review creds set GITHUB_APP_PRIVATE_KEY "<value-from-.env>"
-ai-review creds set OPENAI_APP_ID <value-from-.env>
-ai-review creds set OPENAI_APP_PRIVATE_KEY "<value-from-.env>"
+grep '^GITHUB_APP_ID=' .env | cut -d= -f2- | ai-review creds set GITHUB_APP_ID
+grep '^GITHUB_APP_PRIVATE_KEY=' .env | cut -d= -f2- | ai-review creds set GITHUB_APP_PRIVATE_KEY
+grep '^OPENAI_APP_ID=' .env | cut -d= -f2- | ai-review creds set OPENAI_APP_ID
+grep '^OPENAI_APP_PRIVATE_KEY=' .env | cut -d= -f2- | ai-review creds set OPENAI_APP_PRIVATE_KEY
 ```
 
-The private key values in `.env` are already single-line `\n`-escaped — no reformatting needed, just quote the value so the shell doesn't split on whitespace.
+With no pipe attached, `creds set <VAR>` prompts interactively instead. The private key values in `.env` are already single-line `\n`-escaped — no reformatting needed.
+
+`creds set <VAR> <value>` (value as a third argument) still works for scripted callers that have already accepted the trade-off, but avoid it for anything sensitive: the value is visible via `ps` for the life of the `security` subprocess and typically lands in shell history. `<VAR>` must be one of the 4 vars above — an unrecognized name is rejected rather than silently creating an orphaned Keychain entry.
 
 Check what's currently stored (names only, never values) with `ai-review creds list`, and remove an entry with `ai-review creds unset <VAR>`.
 
@@ -235,7 +237,11 @@ Check what's currently stored (names only, never values) with `ai-review creds l
    ```bash
    awk 'NF {printf "%s\\n", $0}' new-private-key.pem
    ```
-5. Pass the result to `ai-review creds set GITHUB_APP_PRIVATE_KEY "<output>"` (or `OPENAI_APP_PRIVATE_KEY`).
+5. Pipe the result to `ai-review creds set GITHUB_APP_PRIVATE_KEY` (or `OPENAI_APP_PRIVATE_KEY`):
+
+   ```bash
+   awk 'NF {printf "%s\\n", $0}' new-private-key.pem | ai-review creds set GITHUB_APP_PRIVATE_KEY
+   ```
 
 ### `~/.config/ai-review/.env` fallback
 

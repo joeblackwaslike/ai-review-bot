@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	CLI_CREDENTIAL_VARS,
+	isItemNotFoundError,
+	isKeychainUnavailableError,
 	KEYCHAIN_SERVICE,
 	listCredentials,
 	resolveCliCredentials,
@@ -126,5 +128,37 @@ describe("KEYCHAIN_SERVICE / CLI_CREDENTIAL_VARS", () => {
 			"OPENAI_APP_ID",
 			"OPENAI_APP_PRIVATE_KEY",
 		]);
+	});
+});
+
+// Review feedback (anthropicreviewbot, codexreviewbot) on PR #72:
+// `defaultDeleteKeychain`'s catch swallowed every `security` failure, not
+// just "item not found" — so `creds unset` reported success even when the
+// Keychain was locked or deletion otherwise failed. `security` distinguishes
+// this reliably: exit code 44 with a stable stderr message for "not found",
+// and `ENOENT` when the `security` binary itself isn't present (Linux,
+// Windows, sandboxed CI). These two classifiers are what the default
+// read/write/delete implementations key off to decide swallow-and-degrade
+// vs. surface-the-real-error.
+describe("isItemNotFoundError / isKeychainUnavailableError", () => {
+	it("isItemNotFoundError recognizes security's exit code for a missing item", () => {
+		expect(isItemNotFoundError({ code: 44 })).toBe(true);
+	});
+
+	it("isItemNotFoundError rejects other error shapes", () => {
+		expect(isItemNotFoundError({ code: 1 })).toBe(false);
+		expect(isItemNotFoundError(new Error("boom"))).toBe(false);
+		expect(isItemNotFoundError(null)).toBe(false);
+		expect(isItemNotFoundError(undefined)).toBe(false);
+	});
+
+	it("isKeychainUnavailableError recognizes ENOENT (security binary missing)", () => {
+		expect(isKeychainUnavailableError({ code: "ENOENT" })).toBe(true);
+	});
+
+	it("isKeychainUnavailableError rejects other error shapes", () => {
+		expect(isKeychainUnavailableError({ code: 44 })).toBe(false);
+		expect(isKeychainUnavailableError(new Error("boom"))).toBe(false);
+		expect(isKeychainUnavailableError(null)).toBe(false);
 	});
 });
