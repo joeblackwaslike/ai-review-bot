@@ -1028,6 +1028,10 @@ function readHiddenLine(promptText: string): Promise<string> {
 	});
 }
 
+// Consumes `process.stdin` to EOF in the non-TTY branch — call at most once
+// per process invocation. Fine for `creds set`'s single-read use, but a
+// second read anywhere else in the same process would see an already-closed
+// stream.
 async function defaultReadSecret(): Promise<string> {
 	if (!process.stdin.isTTY) {
 		const chunks: Buffer[] = [];
@@ -1058,7 +1062,7 @@ async function defaultReadSecret(): Promise<string> {
 // `string`, not `string | undefined`, so that stays true at the type level
 // instead of by convention.
 function ensureKnownCredentialVar(name: string): CliCredentialVar {
-	if (!(CLI_CREDENTIAL_VARS as readonly string[]).includes(name)) {
+	if (!CLI_CREDENTIAL_VARS.some((v) => v === name)) {
 		fatal(
 			`Unknown credential variable "${name}". Supported: ${CLI_CREDENTIAL_VARS.join(", ")}`,
 		);

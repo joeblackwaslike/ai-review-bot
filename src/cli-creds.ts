@@ -102,6 +102,13 @@ function writeErrorMessage(err: unknown): string {
 // opaquely, in `watch`. Validate the *shape* of the resolved value instead
 // of blocking a whole input channel: reject anything that doesn't look like
 // a complete PEM after un-escaping, whichever channel it came from.
+//
+// Heuristic only, not a structural PEM parse: it does not check marker
+// order, that BEGIN/END labels match, or that there's a non-empty body
+// between them. Its only job is catching the one documented, common failure
+// mode above (truncation after the first line) — a value that clears this
+// check but is otherwise malformed fails later, at JWT-signing time, with
+// its own clear error, not silently.
 export function looksLikeCompletePemOneLiner(value: string): boolean {
 	const unescaped = value.replaceAll(String.raw`\n`, "\n").trim();
 	return unescaped.startsWith("-----BEGIN") && unescaped.includes("-----END");
@@ -229,9 +236,12 @@ export async function resolveCliCredentials(
 		try {
 			value = await readKeychain(v);
 		} catch (err) {
-			// A missing item / `security` not signed in / not installed all
-			// degrade to the next tier rather than aborting resolution for every
-			// other var — but a genuinely unexpected failure here otherwise
+			// The default reader (defaultReadKeychain) never throws — it already
+			// catches every failure internally and returns null — so this catch
+			// is only ever reached by an *injected* readKeychain that throws
+			// instead. A missing item / `security` not signed in / not installed
+			// all degrade to the next tier rather than aborting resolution for
+			// every other var — but a genuinely unexpected failure here otherwise
 			// surfaces only as an opaque "GITHUB_APP_ID is required" much later,
 			// out of `getConfig()`, with no link back to the real cause.
 			process.stderr.write(
