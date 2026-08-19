@@ -33,7 +33,7 @@ vi.mock("./cli-creds.js", async (orig) => {
 
 import { runLocalAudit } from "./audit.js";
 import { resolveSubscriptionAuth } from "./auth.js";
-import { cmdAudit, cmdCreds, cmdWatch, main } from "./cli.js";
+import { cmdAudit, cmdCreds, cmdWatch, main, readHiddenLine } from "./cli.js";
 import {
 	listCredentialSources,
 	resolveCliCredentials,
@@ -532,5 +532,30 @@ describe("cmdCreds", () => {
 		).rejects.toThrow(ProcessExitError);
 
 		expect(setCredential).not.toHaveBeenCalled();
+	});
+});
+
+describe("readHiddenLine", () => {
+	// A TTY without `setRawMode` (some CI pseudo-TTYs, certain terminal
+	// emulation layers) used to fall through silently to cooked mode, where
+	// the terminal echoes every typed character despite the "input hidden"
+	// prompt — a real secret-exposure regression in exactly the path meant
+	// to avoid it. This must fail closed instead.
+	it("rejects instead of silently echoing input when the terminal has no setRawMode support", async () => {
+		const fakeStdin = Object.create(process.stdin, {
+			setRawMode: { value: undefined, configurable: true },
+		});
+		const originalStdin = Object.getOwnPropertyDescriptor(process, "stdin");
+		Object.defineProperty(process, "stdin", {
+			value: fakeStdin,
+			configurable: true,
+		});
+		try {
+			await expect(readHiddenLine("Value: ")).rejects.toThrow(
+				/not available on this terminal/,
+			);
+		} finally {
+			if (originalStdin) Object.defineProperty(process, "stdin", originalStdin);
+		}
 	});
 });

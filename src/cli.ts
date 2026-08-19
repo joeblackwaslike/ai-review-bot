@@ -951,13 +951,28 @@ export interface CmdCredsIO {
 // before a newline arrives (e.g. Ctrl-D on an empty prompt, a broken pipe,
 // or a CI pseudo-TTY) -- without them this could hang the process forever
 // with stdin stuck in raw mode and no way to interrupt it.
-function readHiddenLine(promptText: string): Promise<string> {
+export function readHiddenLine(promptText: string): Promise<string> {
 	return new Promise((resolve, reject) => {
 		const stdin = process.stdin;
 		process.stdout.write(promptText);
+		// `setRawMode?.()` on its own silently no-ops when unavailable — a TTY
+		// without raw-mode support (some CI pseudo-TTYs, certain terminal
+		// emulation layers) would then fall through to cooked mode, where the
+		// terminal itself echoes every typed character to the screen and
+		// scrollback despite the "input hidden" prompt. Fail closed instead of
+		// silently downgrading a security-relevant guarantee.
+		if (!stdin.setRawMode) {
+			process.stdout.write("\n");
+			reject(
+				new Error(
+					"Interactive hidden input is not available on this terminal. Pipe the value on stdin instead.",
+				),
+			);
+			return;
+		}
 		const wasRaw = stdin.isRaw ?? false;
 		try {
-			stdin.setRawMode?.(true);
+			stdin.setRawMode(true);
 		} catch (err) {
 			reject(err instanceof Error ? err : new Error(String(err)));
 			return;
