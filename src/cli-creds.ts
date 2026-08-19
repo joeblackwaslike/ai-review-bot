@@ -228,7 +228,10 @@ export async function resolveCliCredentials(
 	// `\n`-escaped one-liner form for exactly this reason.
 	const parsed = dotenv.parse(raw);
 	for (const v of stillMissing) {
-		if (!env[v] && parsed[v]) env[v] = parsed[v];
+		// `stillMissing` was already filtered to `!env[v]` above, and nothing
+		// between that filter and here writes to `env` — the guard here was
+		// dead code, not a defense against a real interleaving.
+		if (parsed[v]) env[v] = parsed[v];
 	}
 }
 
