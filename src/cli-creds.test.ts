@@ -106,8 +106,30 @@ describe("setCredential / listCredentials / unsetCredential", () => {
 		const readKeychain = vi.fn(async (account: string) =>
 			account === "GITHUB_APP_ID" ? "secret-value" : null,
 		);
-		const present = await listCredentials({ readKeychain });
+		const readXdgFile = vi.fn(async () => null);
+		const present = await listCredentials({ readKeychain, readXdgFile });
 		expect(present).toEqual(["GITHUB_APP_ID"]);
+	});
+
+	it("listCredentials also reports a var satisfied only by the XDG fallback file", async () => {
+		// Mirrors resolveCliCredentials's own fallback order — a var absent
+		// from the Keychain but present in ~/.config/ai-review/.env resolves
+		// fine at CLI startup, so `list` must not report it as ✗.
+		const readKeychain = vi.fn(async () => null);
+		const readXdgFile = vi.fn(
+			async () => "GITHUB_APP_ID=from-file\nOPENAI_APP_ID=also-from-file\n",
+		);
+		const present = await listCredentials({ readKeychain, readXdgFile });
+		expect(present).toEqual(
+			expect.arrayContaining(["GITHUB_APP_ID", "OPENAI_APP_ID"]),
+		);
+	});
+
+	it("listCredentials reads the XDG file at most once even when multiple vars fall through to it", async () => {
+		const readKeychain = vi.fn(async () => null);
+		const readXdgFile = vi.fn(async () => "GITHUB_APP_ID=x\n");
+		await listCredentials({ readKeychain, readXdgFile });
+		expect(readXdgFile).toHaveBeenCalledTimes(1);
 	});
 
 	// `CliCredentialVar` on these signatures is a compile-time constraint

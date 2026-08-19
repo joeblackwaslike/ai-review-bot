@@ -267,9 +267,34 @@ export async function setCredential(
 
 /** Names only — never values — of the known vars that have a Keychain entry. */
 export async function listCredentials(
-	io: Pick<CliCredsIO, "readKeychain"> = {},
+	io: Pick<CliCredsIO, "readKeychain" | "readXdgFile"> = {},
 ): Promise<CliCredentialVar[]> {
 	const readKeychain = io.readKeychain ?? defaultReadKeychain;
+	const readXdgFile = io.readXdgFile ?? defaultReadXdgFile;
+
+	// Mirror resolveCliCredentials's own fallback order — read the XDG file
+	// once, lazily, only if at least one var isn't in the Keychain. Vars
+	// satisfied entirely by the Keychain never need it. Read failures degrade
+	// to "nothing from this tier" rather than aborting the whole listing —
+	// same trade-off as resolveCliCredentials.
+	let xdgParsed: Record<string, string> | null = null;
+	let xdgLoadAttempted = false;
+	const loadXdgOnce = async (): Promise<Record<string, string>> => {
+		if (!xdgLoadAttempted) {
+			xdgLoadAttempted = true;
+			try {
+				const raw = await readXdgFile();
+				xdgParsed = raw ? dotenv.parse(raw) : {};
+			} catch (err) {
+				process.stderr.write(
+					`ai-review: XDG fallback file read failed: ${errorMessage(err)}\n`,
+				);
+				xdgParsed = {};
+			}
+		}
+		return xdgParsed ?? {};
+	};
+
 	const present: CliCredentialVar[] = [];
 	for (const v of CLI_CREDENTIAL_VARS) {
 		let value: string | null = null;
@@ -285,6 +310,13 @@ export async function listCredentials(
 				`ai-review: Keychain read failed for ${v}: ${errorMessage(err)}\n`,
 			);
 			value = null;
+		}
+		// Not in the Keychain doesn't mean not configured — resolveCliCredentials
+		// falls through to the XDG file, so `list` must check the same place or
+		// it reports ✗ for a var that actually resolves fine at CLI startup.
+		if (!value) {
+			const xdg = await loadXdgOnce();
+			value = xdg[v] ?? null;
 		}
 		if (value) present.push(v);
 	}
