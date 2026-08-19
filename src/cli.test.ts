@@ -314,11 +314,11 @@ describe("cmdCreds", () => {
 		}) as never);
 	});
 
-	// Review feedback (sourcery-ai, anthropicreviewbot, chatgpt-codex-connector)
-	// on PR #72: an unknown <VAR> silently wrote a Keychain entry that
-	// `resolveCliCredentials`/`creds list` never look at again — a typo like
-	// `GITHUB_APPID` looked like it worked and failed only much later, in
-	// `watch`, with no link back to the typo.
+	// Validates varName against CLI_CREDENTIAL_VARS before writing to the
+	// Keychain — an unrecognized <VAR> otherwise silently wrote an orphaned
+	// entry that `resolveCliCredentials`/`creds list` never look at again; a
+	// typo like `GITHUB_APPID` looked like it worked and failed only much
+	// later, in `watch`, with no link back to the typo.
 	it("rejects an unknown var name for set", async () => {
 		await expect(cmdCreds(["set", "NOT_A_REAL_VAR", "x"])).rejects.toThrow(
 			ProcessExitError,
@@ -351,11 +351,10 @@ describe("cmdCreds", () => {
 		expect(unsetCredential).toHaveBeenCalledWith("GITHUB_APP_ID");
 	});
 
-	// Review feedback (chatgpt-codex-connector, codexreviewbot,
-	// anthropicreviewbot) on PR #72: a value passed as `creds set <VAR>
-	// <value>` sits in argv (visible to `ps` for the life of the process) and
-	// typically lands in shell history. When the value is omitted, read it
-	// through an injectable, non-argv channel instead.
+	// A value passed as `creds set <VAR> <value>` sits in argv (visible to
+	// `ps` for the life of the process) and typically lands in shell
+	// history. When the value is omitted, read it through an injectable,
+	// non-argv channel instead.
 	it("reads the value from the injected reader when omitted", async () => {
 		const readSecret = vi.fn().mockResolvedValue("from-reader");
 

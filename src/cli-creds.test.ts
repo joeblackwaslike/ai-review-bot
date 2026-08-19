@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	CLI_CREDENTIAL_VARS,
+	type CliCredentialVar,
 	isItemNotFoundError,
 	isKeychainUnavailableError,
 	KEYCHAIN_SERVICE,
@@ -109,6 +110,31 @@ describe("setCredential / listCredentials / unsetCredential", () => {
 		expect(present).toEqual(["GITHUB_APP_ID"]);
 	});
 
+	// `CliCredentialVar` on these signatures is a compile-time constraint
+	// only — `cmdCreds` already validates before calling in, but this module
+	// is imported directly by tests and any future caller, so a bypass (e.g.
+	// a plain-JS caller, or `"X" as CliCredentialVar`) must still be rejected
+	// at runtime rather than writing/deleting an arbitrary Keychain entry.
+	it("setCredential rejects a var name outside CLI_CREDENTIAL_VARS even if the type system is bypassed", async () => {
+		const writeKeychain = vi.fn(async () => {});
+		await expect(
+			setCredential("NOT_A_REAL_VAR" as CliCredentialVar, "x", {
+				writeKeychain,
+			}),
+		).rejects.toThrow(/Unknown credential variable/);
+		expect(writeKeychain).not.toHaveBeenCalled();
+	});
+
+	it("unsetCredential rejects a var name outside CLI_CREDENTIAL_VARS even if the type system is bypassed", async () => {
+		const deleteKeychain = vi.fn(async () => {});
+		await expect(
+			unsetCredential("NOT_A_REAL_VAR" as CliCredentialVar, {
+				deleteKeychain,
+			}),
+		).rejects.toThrow(/Unknown credential variable/);
+		expect(deleteKeychain).not.toHaveBeenCalled();
+	});
+
 	it("unsetCredential calls through the injected deleter", async () => {
 		const deleteKeychain = vi.fn(async () => {});
 		await unsetCredential("GITHUB_APP_ID", { deleteKeychain });
@@ -131,9 +157,8 @@ describe("KEYCHAIN_SERVICE / CLI_CREDENTIAL_VARS", () => {
 	});
 });
 
-// Review feedback (anthropicreviewbot, codexreviewbot) on PR #72:
-// `defaultDeleteKeychain`'s catch swallowed every `security` failure, not
-// just "item not found" — so `creds unset` reported success even when the
+// `defaultDeleteKeychain`'s catch used to swallow every `security` failure,
+// not just "item not found" — so `creds unset` reported success even when the
 // Keychain was locked or deletion otherwise failed. `security` distinguishes
 // this reliably: exit code 44 with a stable stderr message for "not found",
 // and `ENOENT` when the `security` binary itself isn't present (Linux,
@@ -143,6 +168,16 @@ describe("KEYCHAIN_SERVICE / CLI_CREDENTIAL_VARS", () => {
 describe("isItemNotFoundError / isKeychainUnavailableError", () => {
 	it("isItemNotFoundError recognizes security's exit code for a missing item", () => {
 		expect(isItemNotFoundError({ code: 44 })).toBe(true);
+	});
+
+	// The real shape a rejected execFile() promise carries is an `Error`
+	// instance with a numeric `code` property, not a bare object — a test
+	// that only covers `{ code: 44 }` wouldn't catch a regression that
+	// narrowed the check to `err instanceof Error` in a way that dropped the
+	// `.code` read.
+	it("isItemNotFoundError recognizes the real execFile rejection shape (Error with a numeric code)", () => {
+		const nodeErr = Object.assign(new Error("exit 44"), { code: 44 });
+		expect(isItemNotFoundError(nodeErr)).toBe(true);
 	});
 
 	it("isItemNotFoundError rejects other error shapes", () => {

@@ -3,7 +3,6 @@ import { execFileSync } from "node:child_process";
 import { realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import process from "node:process";
-import readline from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { inspect } from "node:util";
 import { App, Octokit } from "octokit";
@@ -929,12 +928,55 @@ async function cmdPropose(args: string[]): Promise<void> {
 // codexreviewbot, anthropicreviewbot) flagged this for the GitHub App private
 // keys specifically. When the value is omitted, read it through a channel
 // that never touches argv or history: piped stdin (the realistic flow —
-// `op read ... | ai-review creds set VAR`) or, for an interactive terminal,
-// a `readline` prompt. The positional form still works for scripted callers
-// that have already accepted that trade-off; the docs lead with the safer
-// form.
+// `op read ... | ai-review creds set VAR`) or, for an interactive terminal, a
+// hidden prompt (raw mode, not `readline`'s default echo-on behavior — a
+// second review pass on this same PR pointed out that a visible interactive
+// prompt still exposes the value on-screen/in scrollback while typing).
+// The positional form still works for scripted callers that have already
+// accepted that trade-off; the docs lead with the safer form.
 export interface CmdCredsIO {
 	readSecret?: () => Promise<string>;
+}
+
+function readHiddenLine(promptText: string): Promise<string> {
+	return new Promise((resolve, reject) => {
+		const stdin = process.stdin;
+		process.stdout.write(promptText);
+		const wasRaw = stdin.isRaw ?? false;
+		stdin.setRawMode?.(true);
+		stdin.resume();
+		stdin.setEncoding("utf-8");
+
+		let value = "";
+		const onData = (chunk: string) => {
+			for (const char of chunk) {
+				if (char === "\r" || char === "\n") {
+					cleanup();
+					process.stdout.write("\n");
+					resolve(value);
+					return;
+				}
+				if (char === "\u0003") {
+					// Ctrl-C
+					cleanup();
+					process.stdout.write("\n");
+					reject(new Error("Aborted."));
+					return;
+				}
+				if (char === "\u007f" || char === "\b") {
+					value = value.slice(0, -1);
+					continue;
+				}
+				value += char;
+			}
+		};
+		const cleanup = () => {
+			stdin.removeListener("data", onData);
+			stdin.setRawMode?.(wasRaw);
+			stdin.pause();
+		};
+		stdin.on("data", onData);
+	});
 }
 
 async function defaultReadSecret(): Promise<string> {
@@ -943,19 +985,9 @@ async function defaultReadSecret(): Promise<string> {
 		for await (const chunk of process.stdin) {
 			chunks.push(chunk as Buffer);
 		}
-		return Buffer.concat(chunks)
-			.toString("utf-8")
-			.replace(/\r?\n$/, "");
+		return Buffer.concat(chunks).toString("utf-8").trim();
 	}
-	const rl = readline.createInterface({
-		input: process.stdin,
-		output: process.stdout,
-	});
-	try {
-		return await rl.question("Value: ");
-	} finally {
-		rl.close();
-	}
+	return readHiddenLine("Value (input hidden): ");
 }
 
 function ensureKnownCredentialVar(name: string | undefined): CliCredentialVar {
@@ -975,6 +1007,11 @@ export async function cmdCreds(
 	if (action === "set") {
 		if (!varName) fatal("Usage: ai-review creds set <VAR> [value]");
 		const knownVar = ensureKnownCredentialVar(varName);
+		if (value !== undefined && knownVar.endsWith("_PRIVATE_KEY")) {
+			process.stderr.write(
+				"ai-review: tip — omit the value and pipe it on stdin instead; a positional value is visible via `ps` and typically lands in shell history.\n",
+			);
+		}
 		const resolvedValue =
 			value ?? (await (io.readSecret ?? defaultReadSecret)());
 		if (!resolvedValue) fatal("No value provided.");
@@ -1004,11 +1041,9 @@ export async function cmdCreds(
 async function main(): Promise<void> {
 	const [sub, ...rest] = process.argv.slice(2);
 
-	// The `creds` subcommand manages the Keychain directly and doesn't
-	// consume any of the resolved env vars — skip the extra Keychain
-	// round-trip resolveCliCredentials would otherwise make before it (e.g.
-	// `creds list` would read every var twice: once here, once in
-	// listCredentials()).
+	// The `creds` subcommand manages the Keychain directly and never reads
+	// the vars resolveCliCredentials would populate — skip that round-trip
+	// entirely rather than resolving values `creds` won't use.
 	if (sub !== "creds") {
 		// Populate process.env from the Keychain/XDG fallback before any
 		// subcommand runs, so createApp()/getConfig() see credentials even when

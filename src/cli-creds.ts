@@ -219,11 +219,27 @@ export async function resolveCliCredentials(
 	}
 }
 
+// `cmdCreds` (cli.ts) already validates the CLI-argument path before calling
+// through to these, but this module is imported directly by tests and any
+// future caller — the `CliCredentialVar` parameter type is a compile-time
+// constraint only and does nothing against a caller that bypasses it (a
+// plain JS caller, or a `string as CliCredentialVar` cast). Guard here too so
+// an invalid var can't silently write/delete a Keychain entry regardless of
+// caller.
+function assertKnownCredentialVar(varName: CliCredentialVar): void {
+	if (!(CLI_CREDENTIAL_VARS as readonly string[]).includes(varName)) {
+		throw new Error(
+			`Unknown credential variable "${varName}". Supported: ${CLI_CREDENTIAL_VARS.join(", ")}`,
+		);
+	}
+}
+
 export async function setCredential(
 	varName: CliCredentialVar,
 	value: string,
 	io: Pick<CliCredsIO, "writeKeychain"> = {},
 ): Promise<void> {
+	assertKnownCredentialVar(varName);
 	const writeKeychain = io.writeKeychain ?? defaultWriteKeychain;
 	await writeKeychain(varName, value);
 }
@@ -250,6 +266,7 @@ export async function unsetCredential(
 	varName: CliCredentialVar,
 	io: Pick<CliCredsIO, "deleteKeychain"> = {},
 ): Promise<void> {
+	assertKnownCredentialVar(varName);
 	const deleteKeychain = io.deleteKeychain ?? defaultDeleteKeychain;
 	await deleteKeychain(varName);
 }
