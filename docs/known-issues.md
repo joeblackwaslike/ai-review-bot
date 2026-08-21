@@ -1,13 +1,8 @@
 # Known Issues in Published Releases
 
-**As of August 12, 2026, npm ships `0.2.0` (tagged 2026-06-04).** `main` is 48+ commits ahead of
-that tag, and includes fixes for several P0/P1 bugs that were present in the code shipped as
-`0.2.0` — some of them silent-failure bugs, meaning a `0.2.0` install can fail without any
-visible error. There is no newer tagged/published release yet.
-
-**If you're running `0.2.0` (or `0.1.0`):** build from `main` instead of `npm install
-ai-review-bot` until a new version is tagged, especially if you're seeing reviews go missing,
-duplicate, or render incorrectly — it's very likely one of the bugs below.
+**As of August 19, 2026, npm ships `0.3.0`**, which includes every fix listed below — this page
+is now a historical record, not an active caveat. If you're on `0.1.0` or `0.2.0`, upgrade
+(`npm install ai-review-bot@latest`) rather than building from `main`.
 
 ## Bugs present in the published releases, fixed on `main`
 

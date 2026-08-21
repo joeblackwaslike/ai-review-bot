@@ -8,12 +8,6 @@
 [![Deploy](https://img.shields.io/badge/deploy-vercel-black?logo=vercel)](https://vercel.com/joe-blacks-projects/ai-review-bot)
 [![Discord](https://img.shields.io/discord/1486035859747897414?logo=discord&label=Discord&color=5865F2)](https://discord.gg/Fjc9zYHZyV)
 
-> ⚠️ **The npm package (`0.2.0`, 2026-06-04) is behind `main` by 48+ commits and predates several
-> fixed P0/P1 bugs, including silent-failure ones (a review can fail with no visible error).**
-> Build from `main` instead of `npm install` until a new version is tagged. See
-> **[Known Issues](https://joeblackwaslike.github.io/ai-review-bot/known-issues)** for the full
-> list and what's fixed.
-
 **ai-review-bot** ships two parallel AI code reviewers in one Vercel deployment — a **Claude bot** (Anthropic) and a **Codex bot** (OpenAI). Each runs as its own GitHub App with its own icon, so you can tell them apart in your PR timeline. Both post independently; you get two expert opinions side by side on every review.
 
 Both bots run **five specialized agents in parallel** — each focused on a different review framework — then merge their findings into a single deduplicated review comment.
