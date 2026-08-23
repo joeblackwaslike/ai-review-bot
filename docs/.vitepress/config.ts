@@ -26,6 +26,7 @@ export default defineConfig({
 					{ text: "Configuration", link: "/configuration" },
 					{ text: "CLI & npm", link: "/cli-and-npm" },
 					{ text: "Known Issues", link: "/known-issues" },
+					{ text: "Greptile Parity Roadmap", link: "/greptile-parity-roadmap" },
 				],
 			},
 			{
