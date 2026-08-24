@@ -8,6 +8,13 @@
 [![Deploy](https://img.shields.io/badge/deploy-vercel-black?logo=vercel)](https://vercel.com/joe-blacks-projects/ai-review-bot)
 [![Discord](https://img.shields.io/discord/1486035859747897414?logo=discord&label=Discord&color=5865F2)](https://discord.gg/Fjc9zYHZyV)
 
+**Rigorous review for autonomous agents. $0.29 a review.**
+
+![ai-review-bot driving a real PR from open to merge](assets/demo.gif)
+
+*Real, not scripted — captured live from an actual autonomous Claude Code
+session driving a real PR to a real merge.*
+
 **ai-review-bot** ships two parallel AI code reviewers in one Vercel deployment — a **Claude bot** (Anthropic) and a **Codex bot** (OpenAI). Each runs as its own GitHub App with its own icon, so you can tell them apart in your PR timeline. Both post independently; you get two expert opinions side by side on every review.
 
 Both bots run **five specialized agents in parallel** — each focused on a different review framework — then merge their findings into a single deduplicated review comment.
