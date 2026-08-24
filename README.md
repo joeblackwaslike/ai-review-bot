@@ -12,8 +12,9 @@
 
 ![ai-review-bot driving a real PR from open to merge](assets/demo.gif)
 
-*Real, not scripted — captured live from an actual autonomous Claude Code
-session driving a real PR to a real merge.*
+*Captured live from an actual autonomous Claude Code session driving a real
+PR to a real merge — the actions are real, the narration wording was
+formatted for the recording.*
 
 **ai-review-bot** ships two parallel AI code reviewers in one Vercel deployment — a **Claude bot** (Anthropic) and a **Codex bot** (OpenAI). Each runs as its own GitHub App with its own icon, so you can tell them apart in your PR timeline. Both post independently; you get two expert opinions side by side on every review.
 
@@ -32,11 +33,11 @@ fatal once you're running more than one agent at a time.
 
 ## The new way
 
-Two reviewers read every prior thread on the PR before commenting, so they
-never repeat a finding you've already seen. They post only what's genuinely
-new, with a priority and a fix block, directly as structured PR comments.
-Your agent reads those comments itself and keeps going — no human nudge
-required.
+Two reviewers read every prior thread on the PR before commenting, to avoid
+repeating a finding you've already seen. They aim to post only what's
+genuinely new, with a priority and a fix block, directly as structured PR
+comments. Your agent reads those comments itself and keeps going — no human
+nudge required.
 
 ## Built for agents that ship PRs, not people who review them
 

@@ -18,6 +18,10 @@ while [ $# -gt 0 ]; do
       shift 2
       ;;
     *)
+      if [ -n "$REPO" ] || [[ "$1" == -* ]]; then
+        echo "Error: expected at most one owner/repo argument and --prs <spec>, got unexpected '$1'" >&2
+        exit 1
+      fi
       REPO="$1"
       shift
       ;;
@@ -49,16 +53,30 @@ expand_pr_spec() {
 
 if [ -n "$PR_SPEC" ]; then
   echo "Pulling reviews for $REPO PRs: $PR_SPEC..." >&2
-  pr_numbers=$(expand_pr_spec "$PR_SPEC")
+  pr_numbers=$(expand_pr_spec "$PR_SPEC" | sort -nu)
 else
   echo "Pulling merged PR reviews for $REPO (most recent 500)..." >&2
-  pr_numbers=$(gh pr list --repo "$REPO" --state merged --limit 500 --json number --jq '.[].number')
+  pr_numbers=$(gh pr list --repo "$REPO" --state merged --limit 500 --json number --jq '.[].number' | sort -nu)
 fi
 
-costs=$(echo "$pr_numbers" | while read -r pr; do
-    gh api "repos/$REPO/pulls/$pr/reviews" \
-      --jq '.[] | select(.user.login | contains("reviewbot")) | .body' 2>/dev/null || true
-  done | { grep -oE '\$[0-9]+\.[0-9]{6}' || true; } | tr -d '$')
+bodies=""
+failed=0
+while read -r pr; do
+  if body=$(gh api "repos/$REPO/pulls/$pr/reviews" \
+      --jq '.[] | select(.user.login | contains("reviewbot")) | .body' 2>/dev/null); then
+    bodies+="$body"$'\n'
+  else
+    failed=$((failed + 1))
+  fi
+done < <(echo "$pr_numbers")
+
+if [ "$failed" -gt 0 ]; then
+  echo "Warning: $failed PR lookup(s) failed (bad PR number, auth, or rate limit) — results may be incomplete." >&2
+fi
+
+# Match only the cost figure in the bots' own footer (`· $X.XXXXXX ·`), not any
+# six-decimal dollar amount that might appear elsewhere in a finding's body.
+costs=$(echo "$bodies" | { grep -oE '· \$[0-9]+\.[0-9]{6} ·' || true; } | tr -d '·$ ')
 
 if [ -z "$costs" ]; then
   echo "No ai-review-bot reviews found on $REPO." >&2
