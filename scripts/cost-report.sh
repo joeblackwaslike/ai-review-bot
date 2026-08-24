@@ -10,8 +10,8 @@ PR_SPEC=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --prs)
-      if [ $# -lt 2 ]; then
-        echo "Error: --prs requires a value, e.g. --prs 65,67-74" >&2
+      if [ $# -lt 2 ] || [ -z "$2" ]; then
+        echo "Error: --prs requires a non-empty value, e.g. --prs 65,67-74" >&2
         exit 1
       fi
       PR_SPEC="$2"

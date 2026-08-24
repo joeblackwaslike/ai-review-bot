@@ -176,7 +176,9 @@ Not a fake 5-minute benchmark — the number is whatever your repo's real
 history says.
 
 On this repo (39 reviews across a recent PR run): **median $0.29/review**
-($0.05–$1.64 range, pulled up by one legitimately large deep-tier PR).
+($0.05–$1.64 range, pulled up by one unusually large PR — not a "deep" tier
+sample in the classifier sense the chart below uses; that's a separate
+window with its own tier breakdown).
 
 Complexity tracks cost too — on a separate, broader sample (195 reviews
 across PRs #40–74, not the same 39-review window as the headline figure
