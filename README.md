@@ -177,8 +177,12 @@ history says.
 
 On this repo (39 reviews across a recent PR run): **median $0.29/review**
 ($0.05–$1.64 range, pulled up by one legitimately large deep-tier PR).
-Complexity tracks cost — normal-tier PRs median $0.15, complex-tier median
-$0.44.
+
+Complexity tracks cost too — on a separate, broader sample (195 reviews
+across PRs #40–74, not the same 39-review window as the headline figure
+above, since it's classifying by tier rather than reproducing one exact
+number): normal-tier PRs median $0.15 (n=78), complex-tier median $0.44
+(n=117).
 
 ![Review cost by PR complexity](assets/cost-by-tier.svg)
 
