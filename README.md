@@ -21,6 +21,66 @@ Both bots run **five specialized agents in parallel** — each focused on a diff
 
 > **[Full documentation →](https://joeblackwaslike.github.io/ai-review-bot/)**
 
+## The old way
+
+Your agent opens a PR, then goes idle. A human reviews it — 30 minutes,
+sometimes longer — then has to remember to go tell the agent a review
+landed, because the agent has no way to know on its own. The agent pushes a
+fix, goes idle again. The human re-reviews, approves, tells it to merge.
+Every round trip needs a human in the loop, and that's fine for one PR. It's
+fatal once you're running more than one agent at a time.
+
+## The new way
+
+Two reviewers read every prior thread on the PR before commenting, so they
+never repeat a finding you've already seen. They post only what's genuinely
+new, with a priority and a fix block, directly as structured PR comments.
+Your agent reads those comments itself and keeps going — no human nudge
+required.
+
+## Built for agents that ship PRs, not people who review them
+
+If you've ever pointed a review agent at another agent's PR, you know the
+quality bar is rough — real bugs, silently swallowed errors, missing test
+coverage, security gaps. That's the gap ai-review-bot closes: two independent
+reviewers (Claude + Codex) on every PR, so bad agent code gets caught before a
+human ever has to look at it.
+
+The real target isn't reviewing one PR faster — it's running a fleet of
+agents overnight. I've done 8 PRs back-to-back while asleep, each one
+driving itself through real review and real fixes, not a rubber-stamp.
+
+Here's what that loop looks like in practice — the shape is real (this is the
+exact narration format a driving agent uses), a representative run:
+
+```
+PR#812 opened, driving it to approval. Waiting for feedback.
+Feedback for PR#812 received from anthropicreviewbot, fetching... CHANGES_REQUESTED. Triaging 1 of 2 findings...
+Pushed commit #a3f9c21. Waiting for feedback.
+Feedback for PR#812 received from anthropicreviewbot, fetching... APPROVED.
+Feedback for PR#812 received from codexreviewbot, fetching... APPROVED.
+PR#812 is Merged.
+```
+
+The demo GIF above shows a real, even faster example of the same loop — the
+fix was clean enough that both bots approved on the first pass, no triage
+round needed.
+
+Run that loop N times in parallel, one per agent, one per PR — that's the
+actual overnight workflow: not a single hero PR, a fleet of them, each held to
+the same bar.
+
+*(Still merging things yourself? The bots review just as well on a single PR —
+install both GitHub Apps and every PR gets two independent opinions waiting
+for you, no extra setup.)*
+
+## Get started
+
+- **[Try it on your own code, right now →](#cli--npm-package)** — `npx ai-review-bot review`, no setup, uses your existing Claude/Codex login, real review in your terminal in under a minute
+- **[Install both GitHub Apps →](#quick-start)** — once you're sold, 2 minutes to get every PR reviewed automatically (works on public and private repos, see [Security](#security))
+- **[Read the full docs →](https://joeblackwaslike.github.io/ai-review-bot/)**
+- **[Join the Discord →](https://discord.gg/Fjc9zYHZyV)**
+
 ## Two bots, one deployment
 
 | | Claude bot | Codex bot |
