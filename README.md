@@ -328,6 +328,15 @@ skills/
   code-review-and-quality.md
 ```
 
+## Roadmap
+
+Fleet-scale autonomy raises the stakes on guardrails — some of that already
+ships: `ai-review watch`'s circuit breaker (stops itself after 3 reviews in 15
+minutes) and head-SHA staleness checks that no-op a superseded run. Coming
+next: a full merge-autonomy runbook for driving PRs to merge unattended, with
+a clear, documented stop condition for when a bot's findings genuinely can't
+be resolved automatically instead of looping forever.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
