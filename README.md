@@ -141,6 +141,56 @@ Model selection is automatic. The router classifies each PR into a tier based on
 | `complex` | >500 lines or auth/crypto/db paths | Sonnet + thinking | o4-mini medium |
 | `deep` | `deep-review` label | Opus + thinking | o3 high |
 
+## When not to use this
+
+- You need a single accountable human signoff for compliance/audit reasons —
+  two bots are advisory, not a replacement.
+- Your repo is sensitive and you're not comfortable sending diffs to
+  Anthropic's/OpenAI's APIs — check your data-handling requirements first.
+- You want zero false positives out of the box — LLM reviewers still restate
+  or misfire occasionally; budget a few minutes to dismiss noise early on.
+
+## Security
+
+- Both bots authenticate as GitHub Apps, not PATs — least-privilege, scoped
+  only to repos you install them on.
+- Webhook payloads are verified via HMAC-SHA256 signature before any
+  processing.
+- API keys and GitHub App private keys live in Vercel env vars, never in the
+  repo.
+- Local CLI auth (`ai-review watch`/`review`/`audit`) is opt-in, personal-use
+  only, and never wired into the webhook path (`src/auth.ts`).
+
+## What does review actually cost?
+
+Not a benchmark — run it on your own repo and get your own number:
+
+```bash
+./scripts/cost-report.sh owner/repo
+```
+
+It pulls every merged PR's bot reviews via `gh api`, parses the `$X.XX` each
+bot prints in its own footer, and reports your real total/mean/median/min/max.
+Not a fake 5-minute benchmark — the number is whatever your repo's real
+history says.
+
+On this repo (39 reviews across a recent PR run): **median $0.29/review**
+($0.05–$1.64 range, pulled up by one legitimately large deep-tier PR).
+Complexity tracks cost — normal-tier PRs median $0.15, complex-tier median
+$0.44.
+
+![Review cost by PR complexity](assets/cost-by-tier.svg)
+
+That's the trade being made:
+[Faros AI's 2026 AI Engineering Report](https://www.faros.ai/blog/ai-acceleration-whiplash-takeaways)
+found PRs merged with no review at all are up 31.3% and median time-in-review
+is up 441.5% — *"reviewers cannot keep pace with the volume of AI-generated
+code arriving for their attention."* Two bots at $0.29 a review is cheaper
+than the alternative most teams are already living with.
+
+Want the exact command that reproduces the $0.29 figure above?
+`./scripts/cost-report.sh joeblackwaslike/ai-review-bot --prs 65,67-74`
+
 ## Quick start
 
 See **[Quick Start →](https://joeblackwaslike.github.io/ai-review-bot/quick-start)** for the full setup guide. The short version:
