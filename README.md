@@ -271,7 +271,27 @@ npm run dev
 
 ## CLI & npm package
 
-`ai-review-bot` is also published to npm as a standalone CLI that audits an entire repository — no PR, no webhook, no Vercel needed. It fetches all code files, runs the five agents in batches, and posts findings as a GitHub issue.
+`ai-review-bot` is also published to npm as a standalone CLI.
+
+### Try it locally first
+
+No GitHub App, no webhook, no PR needed — review your current working tree
+with whatever `codex`/`claude` subscription or API key you already have:
+
+```bash
+npx ai-review-bot@latest review
+```
+
+Writes a Markdown report to `docs/code-reviews/` and prints a summary to your
+terminal. Auth resolves in order: API key → OAuth env token → your logged-in
+`codex`/`claude` CLI subscription (personal use only — see
+[`src/auth.ts`](src/auth.ts)).
+
+### Full-repo audit
+
+The CLI can also audit an entire repository — no PR, no webhook, no Vercel
+needed. It fetches all code files, runs the five agents in batches, and posts
+findings as a GitHub issue.
 
 ```bash
 # one-off, no install required
