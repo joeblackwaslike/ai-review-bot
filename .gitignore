@@ -25,3 +25,4 @@ docs/.vitepress/cache/
 
 # git worktrees for isolated feature/agent work
 .worktrees/
+.superpowers/

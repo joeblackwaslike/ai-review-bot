@@ -1146,14 +1146,24 @@ export async function buildReview(
 			})
 		: [];
 
-	const allSkills = [
-		...TIER1_SKILLS.map((skillPath) => ({ skillPath, tier: 1, reason: "" })),
-		...tier2Matches.map(({ skillPath, reason }) => ({
-			skillPath,
-			tier: 2,
-			reason,
-		})),
-	];
+	const tier1Items = TIER1_SKILLS.map((skillPath) => ({
+		skillPath,
+		tier: 1,
+		reason: "",
+	}));
+	const tier2Items = tier2Matches.map(({ skillPath, reason }) => ({
+		skillPath,
+		tier: 2,
+		reason,
+	}));
+	// Interleave Tier2 skills into the queue so budget exhaustion cuts proportionally
+	// across both tiers rather than always dropping all Tier2 agents.
+	const allSkills = tier1Items
+		.flatMap((t1, i) => {
+			const t2 = tier2Items[i];
+			return t2 !== undefined ? [t1, t2] : [t1];
+		})
+		.concat(tier2Items.slice(tier1Items.length));
 
 	let lastRateLimit: RateLimitInfo | undefined;
 	const deadline = Date.now() + context.agentBudgetMs;
