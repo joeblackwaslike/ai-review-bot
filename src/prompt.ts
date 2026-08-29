@@ -214,7 +214,7 @@ export function buildAgentSystemPrompt(
 		"- Do not invent files or line numbers.",
 		"- Keep the summary concise.",
 		"- Prefer `inline_comments` over `general_findings` whenever the finding targets a specific changed line. Use `general_findings` only for holistic observations that have no single code location (e.g. missing test coverage across the whole PR).",
-		"- Only use inline comments for lines that appear in the provided diff. The line number must be a RIGHT-SIDE (new file) line: count `+` and ` ` (context) lines after the `@@` hunk header — never `-` (deleted) lines.",
+		"- Only use inline comments for lines that appear in the provided diff. The line number must be a RIGHT-SIDE (new file) line: for each hunk, read the new-file start from the `+N` field in the `@@` hunk header, then count forward through `+` and ` ` (context) lines within that hunk — never `-` (deleted) lines.",
 		"- Use `start_line` for multi-line ranges only, and only when `start_line` is less than `line`. Set `start_line` to `null` for single-line comments.",
 		"- Put unanchored concerns into `general_findings`, not `inline_comments`.",
 		"- Set `severity` on every inline comment: `high` for correctness/security/blocking bugs, `medium` for significant concerns, `low` for nits, style, or optional improvements. Keep the title a plain description — do not prefix it with the severity.",

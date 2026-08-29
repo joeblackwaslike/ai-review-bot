@@ -1761,7 +1761,7 @@ export async function buildReview(
 			: "";
 	const overflowNotice =
 		overflowComments.length > 0
-			? `> ℹ️ ${overflowComments.length} low-priority inline comment${overflowComments.length === 1 ? "" : "s"} omitted (exceeded the ${MAX_INLINE_COMMENTS}-comment limit). Re-run with \`/ai-review\` for a targeted pass on a smaller diff.`
+			? `> ℹ️ ${overflowComments.length} inline comment${overflowComments.length === 1 ? "" : "s"} not posted (${MAX_INLINE_COMMENTS}-comment cap; lowest-severity findings dropped first). Re-run with \`/ai-review\` on a smaller diff for complete coverage.`
 			: "";
 
 	const costFooter = `---\n*Model: ${selection.model} · ${allSkills.length} agents · $${cost.toFixed(6)} · [ai-review-bot](https://github.com/joeblackwaslike/ai-review-bot)*`;
