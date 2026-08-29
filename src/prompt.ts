@@ -23,6 +23,10 @@ export interface PromptContext {
 	changedFiles: number;
 	labels: string[];
 	extraInstructions: string;
+	/** When set, replaces the generic "Changed file diffs:" label with a
+	 * scope-aware header — used on INCREMENTAL passes to tell agents they are
+	 * seeing only a subset of the PR's files. */
+	diffScope?: string;
 	files: Array<{
 		filename: string;
 		status: string;
@@ -120,7 +124,9 @@ export function buildUserMessage(context: PromptContext): string {
 		...priorOwnReviewSection,
 		...priorOwnFindingsSection,
 		"",
-		"Changed file diffs:",
+		context.diffScope
+			? `Changed file diffs (${context.diffScope}):`
+			: "Changed file diffs:",
 		serializeFiles(context.files),
 	].join("\n");
 }

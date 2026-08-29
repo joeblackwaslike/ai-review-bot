@@ -2,7 +2,7 @@ import { APICallError } from "@ai-sdk/provider";
 import { generateObject } from "ai";
 import { z } from "zod";
 import type { ResolvedAuth } from "./auth.js";
-import { dedupeClaims } from "./claim-dedupe.js";
+import { dedupeClaims, isSameClaim } from "./claim-dedupe.js";
 import { mapWithConcurrency } from "./concurrency.js";
 import type { KvClient } from "./feedback/kv.js";
 import { computeCost, createAIModel } from "./models.js";
@@ -20,9 +20,11 @@ import { detectTier2Skills } from "./tier2.js";
 import { fetchDeltaMeta, triageReReview } from "./triage.js";
 
 type OctokitLike = {
+	// params widened to Record<string, unknown> to allow passing nested `headers`
+	// objects (e.g. Accept: application/vnd.github.diff for raw-diff fetches).
 	request: <T>(
 		route: string,
-		params: Record<string, string | number>,
+		params: Record<string, unknown>,
 	) => Promise<{ data: T }>;
 	paginate: <T>(
 		route: string,
@@ -490,23 +492,43 @@ export function mergeReviewsDetailed(
 			return true;
 		});
 
-	const commentMap = new Map<
-		string,
-		{ comment: ModelInlineComment; priority: number }
-	>();
+	// Collect all findings per path:line so distinct bodies at the same anchor
+	// are preserved rather than silently dropped. Near-duplicates are filtered
+	// with isSameClaim — the only case where we do drop is when two agents said
+	// the same thing in different words at the exact same location.
+	const commentGroups = new Map<string, ModelInlineComment[]>();
 	for (const review of agentResults) {
-		const priority = review.event === "REQUEST_CHANGES" ? 1 : 0;
 		for (const comment of review.inline_comments) {
 			if (isResolvedInline(comment.path, comment.line)) continue;
 			const key = `${comment.path}:${comment.line}`;
-			const existing = commentMap.get(key);
-			if (!existing || priority > existing.priority) {
-				commentMap.set(key, { comment, priority });
+			const group = commentGroups.get(key);
+			if (!group) {
+				commentGroups.set(key, [comment]);
+			} else if (!group.some((c) => isSameClaim(c, comment))) {
+				group.push(comment);
 			}
 		}
 	}
 
-	const anchored = Array.from(commentMap.values()).map((v) => v.comment);
+	// Merge multiple distinct findings at the same location into one comment.
+	// The most severe finding leads; additional distinct bodies are appended
+	// with a separator so no information is silently dropped.
+	const INLINE_SEVERITY_RANK: Record<string, number> = {
+		high: 3,
+		medium: 2,
+		low: 1,
+	};
+	const anchored = Array.from(commentGroups.values()).map((comments) => {
+		if (comments.length === 1) return comments[0];
+		const sorted = [...comments].sort(
+			(a, b) =>
+				(INLINE_SEVERITY_RANK[b.severity] ?? 0) -
+				(INLINE_SEVERITY_RANK[a.severity] ?? 0),
+		);
+		const best = sorted[0];
+		const extra = sorted.slice(1).map((c) => c.body);
+		return { ...best, body: [best.body, ...extra].join("\n\n---\n\n") };
+	});
 
 	// The exact-key pass above only catches agents that anchored to the identical
 	// line, which they seldom do — one claim arrives on six adjacent lines of the
@@ -530,6 +552,21 @@ export function mergeReviewsDetailed(
 		inline_comments = inlineResult.kept;
 		merged_general = generalResult.kept;
 		collapsed = inlineResult.collapsed + generalResult.collapsed;
+
+		// Drop general findings that duplicate a surviving inline comment — the
+		// inline version is more actionable, and both in the same review force the
+		// author to resolve the same finding twice.
+		const beforeCross = merged_general.length;
+		merged_general = merged_general.filter(
+			// Strip path from both sides: general findings have no path, so the
+			// path check in isSameClaim would always short-circuit. Compare on
+			// title/body similarity alone — that's the whole-PR signal here.
+			(gf) =>
+				!inline_comments.some((ic) =>
+					isSameClaim({ ...gf, path: null }, { ...ic, path: null }),
+				),
+		);
+		collapsed += beforeCross - merged_general.length;
 	}
 
 	// Event is REQUEST_CHANGES only if an UNRESOLVED finding survived the filters
@@ -719,6 +756,91 @@ export function buildValidLinesByPath(
 		map.set(file.filename, collectRightSideLines(file.patch));
 	}
 	return map;
+}
+
+/** Parse a GitHub raw unified-diff response into a per-file patch map.
+ *
+ * Used to recover patches omitted from the /pulls/{n}/files API response for
+ * files larger than GitHub's inline-diff threshold. The patch starts at the
+ * first @@ hunk header and runs to the next `diff --git` block (or EOF). */
+export function parseRawDiff(rawDiff: string): Map<string, string> {
+	const result = new Map<string, string>();
+	const blocks = rawDiff.split(/^diff --git /m).slice(1);
+	for (const block of blocks) {
+		const bSide = block.match(/^\+\+\+ b\/(.+)$/m);
+		if (!bSide) continue;
+		const filename = bSide[1].trimEnd();
+		const patchStart = block.indexOf("\n@@");
+		if (patchStart === -1) continue;
+		result.set(filename, block.slice(patchStart + 1));
+	}
+	return result;
+}
+
+/** Find the nearest valid right-side line within ±window of target, checking
+ * alternately above and below. Returns null when nothing is in range. */
+function nearestValidLine(
+	target: number,
+	validLines: Set<number>,
+	window: number,
+): number | null {
+	for (let delta = 1; delta <= window; delta++) {
+		if (validLines.has(target + delta)) return target + delta;
+		if (validLines.has(target - delta)) return target - delta;
+	}
+	return null;
+}
+
+/** Correct mechanical anchor errors before diff validation.
+ *
+ * - Condition 2 (line not in valid set): adjust to nearest valid line ±5.
+ * - Condition 3 (start_line >= line): clear start_line.
+ * - Condition 4 (start_line not in valid set): clear start_line.
+ *
+ * Condition 1 (path not in diff) is recovered upstream by fetching the raw PR diff. */
+export function sanitizeInlineComments(
+	comments: ModelInlineComment[],
+	validLinesByPath: Map<string, Set<number>>,
+): ModelInlineComment[] {
+	return comments.map((c) => {
+		const validLines = validLinesByPath.get(c.path);
+		if (!validLines) return c;
+
+		let { line, start_line } = c;
+
+		if (!validLines.has(line)) {
+			const adjusted = nearestValidLine(line, validLines, 5);
+			if (adjusted !== null) {
+				console.log("inline comment anchor adjusted (fuzzy)", {
+					path: c.path,
+					original: c.line,
+					adjusted,
+				});
+				line = adjusted;
+			}
+		}
+
+		if (start_line !== null && start_line >= line) {
+			console.log("inline comment start_line cleared (backwards range)", {
+				path: c.path,
+				line,
+				start_line,
+			});
+			start_line = null;
+		}
+
+		if (start_line !== null && !validLines.has(start_line)) {
+			console.log("inline comment start_line cleared (invalid)", {
+				path: c.path,
+				line,
+				start_line,
+			});
+			start_line = null;
+		}
+
+		if (line === c.line && start_line === c.start_line) return c;
+		return { ...c, line, start_line };
+	});
 }
 
 export function buildReviewComments(
@@ -956,6 +1078,45 @@ export async function buildReview(
 		},
 	);
 
+	// Inject patches for files GitHub omitted from the files-list response
+	// (they exceed GitHub's inline-diff threshold). Fetching the full raw PR
+	// diff and parsing it recovers these patches so agents can see the code
+	// and inline comments anchor correctly.
+	const noPatchFiles = files.filter((f) => !f.patch);
+	if (noPatchFiles.length > 0) {
+		try {
+			const { data: rawDiff } = await context.octokit.request<string>(
+				"GET /repos/{owner}/{repo}/pulls/{pull_number}",
+				{
+					owner: context.owner,
+					repo: context.repo,
+					pull_number: context.pullNumber,
+					headers: { accept: "application/vnd.github.diff" },
+				},
+			);
+			const patchMap = parseRawDiff(rawDiff);
+			for (const file of noPatchFiles) {
+				const patch = patchMap.get(file.filename);
+				if (patch) {
+					file.patch = patch;
+					console.log("injected missing patch from raw diff", {
+						path: file.filename,
+						patchLength: patch.length,
+					});
+				} else {
+					console.warn("no patch found in raw diff for large file", {
+						path: file.filename,
+					});
+				}
+			}
+		} catch (err) {
+			console.warn(
+				"failed to fetch raw PR diff; inline comments for large files may be dropped",
+				err,
+			);
+		}
+	}
+
 	const customPrompt =
 		process.env.CUSTOM_REVIEW_PROMPT ??
 		"Focus on correctness, security, regressions, and missing tests.";
@@ -1118,6 +1279,9 @@ export async function buildReview(
 		labels: context.labels,
 		extraInstructions: context.extraInstructions,
 		files: scopedFiles,
+		diffScope: incrementalPass
+			? `INCREMENTAL — only files changed since ${priorSha.slice(0, 12)}. Continue any threads already open on other files; do not refile findings for files not shown in this diff.`
+			: undefined,
 		priorBotReviews,
 		priorOwnReview,
 		priorOwnFindings: tuning.showPriorOwnFindings
@@ -1349,14 +1513,50 @@ export async function buildReview(
 	});
 
 	const validLines = buildValidLinesByPath(scopedFiles);
+
+	// Fix mechanical anchor errors before diff validation so fewer comments are
+	// silently dropped: fuzzy-anchor ±5 for off-by-one lines, clear backwards
+	// or invalid start_line ranges.
+	const sanitizedComments = sanitizeInlineComments(
+		modelReview.inline_comments,
+		validLines,
+	);
+
+	// Cap at 50 inline comments, keeping the most severe. GitHub's review API
+	// rejects payloads over a certain size, and a wall of 80+ low-severity nits
+	// buries the high-severity findings that actually matter.
+	const MAX_INLINE_COMMENTS = 50;
+	const INLINE_OVERFLOW_RANK: Record<string, number> = {
+		high: 3,
+		medium: 2,
+		low: 1,
+	};
+	let effectiveInlineComments = sanitizedComments;
+	let overflowComments: ModelInlineComment[] = [];
+	if (sanitizedComments.length > MAX_INLINE_COMMENTS) {
+		const sorted = [...sanitizedComments].sort(
+			(a, b) =>
+				(INLINE_OVERFLOW_RANK[b.severity] ?? 0) -
+				(INLINE_OVERFLOW_RANK[a.severity] ?? 0),
+		);
+		effectiveInlineComments = sorted.slice(0, MAX_INLINE_COMMENTS);
+		overflowComments = sorted.slice(MAX_INLINE_COMMENTS);
+		console.warn("inline comment cap applied", {
+			total: sanitizedComments.length,
+			kept: MAX_INLINE_COMMENTS,
+			overflow: overflowComments.length,
+		});
+	}
+
 	const reviewComments = buildReviewComments(
 		scopedFiles,
-		modelReview.inline_comments,
+		effectiveInlineComments,
 	);
 
 	console.log("inline comments after validation", {
 		submitted: reviewComments.length,
-		dropped: modelReview.inline_comments.length - reviewComments.length,
+		dropped: effectiveInlineComments.length - reviewComments.length,
+		overflow: overflowComments.length,
 	});
 
 	let commentProvenance:
@@ -1547,7 +1747,7 @@ export async function buildReview(
 	// REQUEST_CHANGES, and a bare count tells the author something was lost
 	// without telling them what to fix.
 	const postedKeys = new Set(reviewComments.map((c) => `${c.path}:${c.line}`));
-	const dropped = modelReview.inline_comments.filter(
+	const dropped = effectiveInlineComments.filter(
 		(c) => !postedKeys.has(`${c.path}:${c.line}`),
 	);
 	const droppedNotice =
@@ -1558,6 +1758,10 @@ export async function buildReview(
 							`> - ${SEVERITY_EMOJI[c.severity as Severity] ?? UNKNOWN_SEVERITY_BADGE} **${c.title}** (\`${c.path}:${c.line}\`)`,
 					)
 					.join("\n")}`
+			: "";
+	const overflowNotice =
+		overflowComments.length > 0
+			? `> ℹ️ ${overflowComments.length} low-priority inline comment${overflowComments.length === 1 ? "" : "s"} omitted (exceeded the ${MAX_INLINE_COMMENTS}-comment limit). Re-run with \`/ai-review\` for a targeted pass on a smaller diff.`
 			: "";
 
 	const costFooter = `---\n*Model: ${selection.model} · ${allSkills.length} agents · $${cost.toFixed(6)} · [ai-review-bot](https://github.com/joeblackwaslike/ai-review-bot)*`;
@@ -1574,6 +1778,7 @@ export async function buildReview(
 		...budgetNotice,
 		...(finalEvent === "APPROVE" ? [] : [inlineSummary]),
 		droppedNotice,
+		overflowNotice,
 		feedbackInvite,
 		findingsBlock,
 		priorBlock,
@@ -1604,7 +1809,7 @@ export async function buildReview(
 					status: "open",
 				}),
 			),
-			...modelReview.inline_comments.map(
+			...effectiveInlineComments.map(
 				(c): PersistedFinding => ({
 					id: findingId(c.path, c.line, c.title),
 					path: c.path,
