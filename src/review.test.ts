@@ -4,12 +4,16 @@ import { createAIModel } from "./models.js";
 import {
 	buildReview,
 	buildReviewComments,
+	buildValidLinesByPath,
 	classifyRefusal,
 	collectRightSideLines,
 	computePaceDelayMs,
 	generateSummary,
 	mergeReviews,
+	mergeReviewsDetailed,
+	parseRawDiff,
 	runAgent,
+	sanitizeInlineComments,
 	TIER1_SKILLS,
 } from "./review.js";
 import type { PersistedFinding } from "./review-state.js";
@@ -446,9 +450,10 @@ describe("buildReview", () => {
 		warn.mockRestore();
 	});
 
-	// Regression: when ALL inline comments are dropped (e.g. model returned
-	// start_line: 0 instead of null), the review should still post body-only.
-	it("regression: posts body-only when all inline comments are filtered out", async () => {
+	// Regression: sanitizeInlineComments clears an invalid start_line (0 or any
+	// value not in the diff) and keeps the comment rather than dropping it.
+	// The comment on a path not in the diff (condition 1) is still dropped.
+	it("regression: salvages comment with bad start_line; drops comment on unknown path", async () => {
 		const agentResponse = buildGenerateObjectResponse(
 			buildModelReview({
 				event: "REQUEST_CHANGES",
@@ -459,12 +464,12 @@ describe("buildReview", () => {
 					buildInlineComment({
 						path: "src/review.ts",
 						line: 2,
-						start_line: 0,
+						start_line: 0, // sanitizer clears → null; comment is kept
 					}),
 					buildInlineComment({
 						path: "does/not/exist.ts",
 						line: 2,
-						start_line: null,
+						start_line: null, // path not in diff → still dropped
 					}),
 				],
 			}),
@@ -487,8 +492,9 @@ describe("buildReview", () => {
 		});
 
 		expect(review).not.toBeNull();
-		expect(review?.comments).toHaveLength(0);
-		expect(review?.body).toContain("Inline comments: none");
+		// src/review.ts:2 is valid; start_line:0 was sanitized away → 1 comment posted
+		expect(review?.comments).toHaveLength(1);
+		expect(review?.body).toContain("Inline comments: 1");
 		expect(review?.body).toContain("Security risk");
 	});
 
@@ -2212,6 +2218,270 @@ describe("buildReview triage gate — FULL carries forward open prior findings",
 		const summaryPrompt = summaryCall.messages[0].content as string;
 		expect(summaryPrompt).not.toContain("Old bug fixed two rounds ago");
 		expect(summaryPrompt).not.toContain("CONFIRMED resolved this round");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// parseRawDiff
+// ---------------------------------------------------------------------------
+
+describe("parseRawDiff", () => {
+	const RAW_DIFF = [
+		"diff --git a/src/foo.ts b/src/foo.ts",
+		"index abc..def 100644",
+		"--- a/src/foo.ts",
+		"+++ b/src/foo.ts",
+		"@@ -1,3 +1,4 @@",
+		" unchanged",
+		"+added",
+		" unchanged2",
+		"-removed",
+		"diff --git a/src/bar.ts b/src/bar.ts",
+		"index 111..222 100644",
+		"--- a/src/bar.ts",
+		"+++ b/src/bar.ts",
+		"@@ -5,2 +5,3 @@",
+		" context",
+		"+new line",
+	].join("\n");
+
+	it("parses patches for all files in a unified diff", () => {
+		const map = parseRawDiff(RAW_DIFF);
+		expect(map.size).toBe(2);
+		expect(map.has("src/foo.ts")).toBe(true);
+		expect(map.has("src/bar.ts")).toBe(true);
+	});
+
+	it("patch content starts at the first @@ hunk header", () => {
+		const map = parseRawDiff(RAW_DIFF);
+		const fooPatch = map.get("src/foo.ts");
+		expect(fooPatch).toBeDefined();
+		expect(fooPatch).toMatch(/^@@ -1,3/);
+		expect(fooPatch).not.toContain("diff --git");
+	});
+
+	it("returns an empty map for an empty string", () => {
+		expect(parseRawDiff("").size).toBe(0);
+	});
+
+	it("skips blocks with no @@ hunk (e.g. binary files)", () => {
+		const binaryDiff = [
+			"diff --git a/img.png b/img.png",
+			"index abc..def 100644",
+			"Binary files a/img.png and b/img.png differ",
+		].join("\n");
+		expect(parseRawDiff(binaryDiff).size).toBe(0);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// sanitizeInlineComments
+// ---------------------------------------------------------------------------
+
+describe("sanitizeInlineComments", () => {
+	const patch = SIMPLE_PATCH; // has valid lines 1, 2, 3, 4 (etc.)
+	const files = [buildPullFile("src/file.ts", patch)];
+
+	it("leaves a valid comment unchanged", () => {
+		const validLines = buildValidLinesByPath(files);
+		const comment = buildInlineComment({
+			path: "src/file.ts",
+			line: 2,
+			start_line: null,
+		});
+		const [out] = sanitizeInlineComments([comment], validLines);
+		expect(out).toBe(comment); // same reference — no copy made
+	});
+
+	it("fuzzy-adjusts line to nearest valid line within ±5", () => {
+		// Build a file where only line 3 is valid so we can test adjustment
+		const sparsePatch = "@@ -10,1 +3,1 @@\n+only this line\n";
+		const sparseFiles = [buildPullFile("src/file.ts", sparsePatch)];
+		const validLines = buildValidLinesByPath(sparseFiles);
+		const comment = buildInlineComment({
+			path: "src/file.ts",
+			line: 5,
+			start_line: null,
+		});
+		const [out] = sanitizeInlineComments([comment], validLines);
+		expect(out.line).toBe(3);
+	});
+
+	it("does not adjust line when the nearest valid line is beyond ±5", () => {
+		const sparsePatch = "@@ -100,1 +100,1 @@\n+far away\n";
+		const sparseFiles = [buildPullFile("src/file.ts", sparsePatch)];
+		const validLines = buildValidLinesByPath(sparseFiles);
+		const comment = buildInlineComment({
+			path: "src/file.ts",
+			line: 5,
+			start_line: null,
+		});
+		const [out] = sanitizeInlineComments([comment], validLines);
+		expect(out.line).toBe(5); // unchanged — no valid line within ±5
+	});
+
+	it("clears start_line when start_line >= line (backwards range)", () => {
+		const validLines = buildValidLinesByPath(files);
+		const comment = buildInlineComment({
+			path: "src/file.ts",
+			line: 2,
+			start_line: 3,
+		});
+		const [out] = sanitizeInlineComments([comment], validLines);
+		expect(out.start_line).toBeNull();
+		expect(out.line).toBe(2);
+	});
+
+	it("clears start_line: 0 (not in diff, also backwards)", () => {
+		const validLines = buildValidLinesByPath(files);
+		const comment = buildInlineComment({
+			path: "src/file.ts",
+			line: 2,
+			start_line: 0,
+		});
+		const [out] = sanitizeInlineComments([comment], validLines);
+		expect(out.start_line).toBeNull();
+		expect(out.line).toBe(2);
+	});
+
+	it("clears start_line when it is not in the valid set", () => {
+		const validLines = buildValidLinesByPath(files);
+		const comment = buildInlineComment({
+			path: "src/file.ts",
+			line: 3,
+			start_line: 99,
+		});
+		const [out] = sanitizeInlineComments([comment], validLines);
+		expect(out.start_line).toBeNull();
+	});
+
+	it("returns the original comment unchanged when the path is not in the diff", () => {
+		const validLines = buildValidLinesByPath(files);
+		const comment = buildInlineComment({
+			path: "src/unknown.ts",
+			line: 2,
+			start_line: null,
+		});
+		const [out] = sanitizeInlineComments([comment], validLines);
+		expect(out).toBe(comment);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// mergeReviewsDetailed — key collision and cross-category dedup
+// ---------------------------------------------------------------------------
+
+describe("mergeReviewsDetailed — key collision", () => {
+	it("concatenates distinct bodies from two agents at the same path:line", () => {
+		const r1 = buildModelReview({
+			event: "COMMENT",
+			inline_comments: [
+				buildInlineComment({
+					path: "src/a.ts",
+					line: 1,
+					title: "Bug A",
+					body: "First body.",
+				}),
+			],
+		});
+		const r2 = buildModelReview({
+			event: "REQUEST_CHANGES",
+			inline_comments: [
+				buildInlineComment({
+					path: "src/a.ts",
+					line: 1,
+					title: "Bug B",
+					body: "Second body.",
+				}),
+			],
+		});
+		const { review } = mergeReviewsDetailed([r1, r2]);
+		expect(review.inline_comments).toHaveLength(1);
+		expect(review.inline_comments[0].body).toContain("First body.");
+		expect(review.inline_comments[0].body).toContain("Second body.");
+	});
+
+	it("deduplicates near-duplicate bodies at the same path:line", () => {
+		const r1 = buildModelReview({
+			event: "COMMENT",
+			inline_comments: [
+				buildInlineComment({
+					path: "src/a.ts",
+					line: 1,
+					title: "Missing null check",
+					body: "Add null check.",
+				}),
+			],
+		});
+		const r2 = buildModelReview({
+			event: "COMMENT",
+			inline_comments: [
+				buildInlineComment({
+					path: "src/a.ts",
+					line: 1,
+					title: "Missing null check",
+					body: "Add null check.",
+				}),
+			],
+		});
+		const { review } = mergeReviewsDetailed([r1, r2]);
+		expect(review.inline_comments).toHaveLength(1);
+		// Body should not be duplicated
+		expect(review.inline_comments[0].body).not.toContain("---");
+	});
+});
+
+describe("mergeReviewsDetailed — cross-category dedup", () => {
+	it("drops a general_finding that is a near-duplicate of a surviving inline comment", () => {
+		const r1 = buildModelReview({
+			event: "REQUEST_CHANGES",
+			general_findings: [
+				{
+					title: "Missing null check in parseUser",
+					body: "Add null check.",
+					severity: "high",
+				},
+			],
+			inline_comments: [
+				buildInlineComment({
+					path: "src/a.ts",
+					line: 1,
+					title: "Missing null check in parseUser",
+					body: "Add null check.",
+				}),
+			],
+		});
+		const { review } = mergeReviewsDetailed([r1], new Set(), {
+			dedupeNearDuplicateClaims: true,
+		});
+		expect(review.inline_comments).toHaveLength(1);
+		expect(review.general_findings).toHaveLength(0);
+	});
+
+	it("keeps a general_finding that is genuinely different from the inline comments", () => {
+		const r1 = buildModelReview({
+			event: "REQUEST_CHANGES",
+			general_findings: [
+				{
+					title: "No integration tests for the auth flow",
+					body: "Add tests.",
+					severity: "medium",
+				},
+			],
+			inline_comments: [
+				buildInlineComment({
+					path: "src/a.ts",
+					line: 1,
+					title: "Missing null check",
+					body: "Null guard needed.",
+				}),
+			],
+		});
+		const { review } = mergeReviewsDetailed([r1], new Set(), {
+			dedupeNearDuplicateClaims: true,
+		});
+		expect(review.inline_comments).toHaveLength(1);
+		expect(review.general_findings).toHaveLength(1);
 	});
 });
 

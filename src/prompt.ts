@@ -23,6 +23,10 @@ export interface PromptContext {
 	changedFiles: number;
 	labels: string[];
 	extraInstructions: string;
+	/** When set, replaces the generic "Changed file diffs:" label with a
+	 * scope-aware header — used on INCREMENTAL passes to tell agents they are
+	 * seeing only a subset of the PR's files. */
+	diffScope?: string;
 	files: Array<{
 		filename: string;
 		status: string;
@@ -120,7 +124,9 @@ export function buildUserMessage(context: PromptContext): string {
 		...priorOwnReviewSection,
 		...priorOwnFindingsSection,
 		"",
-		"Changed file diffs:",
+		context.diffScope
+			? `Changed file diffs (${context.diffScope}):`
+			: "Changed file diffs:",
 		serializeFiles(context.files),
 	].join("\n");
 }
@@ -207,7 +213,8 @@ export function buildAgentSystemPrompt(
 		"- If there are no material issues, use event COMMENT and return empty arrays.",
 		"- Do not invent files or line numbers.",
 		"- Keep the summary concise.",
-		"- Only use inline comments for lines that appear in the provided diff.",
+		"- Prefer `inline_comments` over `general_findings` whenever the finding targets a specific changed line. Use `general_findings` only for holistic observations that have no single code location (e.g. missing test coverage across the whole PR).",
+		"- Only use inline comments for lines that appear in the provided diff. The line number must be a RIGHT-SIDE (new file) line: for each hunk, read the new-file start from the `+N` field in the `@@` hunk header, then count forward through `+` and ` ` (context) lines within that hunk — never `-` (deleted) lines.",
 		"- Use `start_line` for multi-line ranges only, and only when `start_line` is less than `line`. Set `start_line` to `null` for single-line comments.",
 		"- Put unanchored concerns into `general_findings`, not `inline_comments`.",
 		"- Set `severity` on every inline comment: `high` for correctness/security/blocking bugs, `medium` for significant concerns, `low` for nits, style, or optional improvements. Keep the title a plain description — do not prefix it with the severity.",
