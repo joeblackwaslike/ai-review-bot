@@ -13,7 +13,6 @@ import { capturePostedReview } from "./improve/capture.js";
 import { getDb } from "./improve/db/client.js";
 import {
 	billingUrl,
-	notifyQuotaExhausted,
 	providerLabel,
 	quotaCommentMarker,
 	rateLimitCommentMarker,
@@ -746,17 +745,6 @@ export async function maybeSubmitReview(args: {
 				repo,
 				pullNumber,
 				billing,
-			});
-			await notifyQuotaExhausted({
-				octokit: octokit as never,
-				provider: quotaProvider,
-				owner,
-				repo,
-				pullNumber,
-				// Deliberately unset: `owner` is the org slug on an org-owned repo,
-				// not a user login, and the issues API 422s on that — which would
-				// lose the notification entirely. An unassigned issue still emails
-				// watchers, so the notification survives either way.
 			});
 			return { status: "quota_exhausted" };
 		}
