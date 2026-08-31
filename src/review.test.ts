@@ -9,9 +9,9 @@ import {
 	collectRightSideLines,
 	computePaceDelayMs,
 	generateSummary,
+	ModelReviewSchema,
 	mergeReviews,
 	mergeReviewsDetailed,
-	ModelReviewSchema,
 	parseRawDiff,
 	runAgent,
 	SEVERITY_LEVELS,
@@ -491,7 +491,15 @@ describe("buildReview", () => {
 			buildModelReview({
 				event: "REQUEST_CHANGES",
 				general_findings: [
-					{ title: "Something", body: "needs work", severity: "P1", category: "style", confidence: 0.8, evidence: "See diff.", suppressible: true },
+					{
+						title: "Something",
+						body: "needs work",
+						severity: "P1",
+						category: "style",
+						confidence: 0.8,
+						evidence: "See diff.",
+						suppressible: true,
+					},
 				],
 				inline_comments: [],
 			}),
@@ -531,7 +539,15 @@ describe("buildReview", () => {
 			buildModelReview({
 				event: "REQUEST_CHANGES",
 				general_findings: [
-					{ title: "Security risk", body: "Details here.", severity: "P1", category: "style", confidence: 0.8, evidence: "See diff.", suppressible: true },
+					{
+						title: "Security risk",
+						body: "Details here.",
+						severity: "P1",
+						category: "style",
+						confidence: 0.8,
+						evidence: "See diff.",
+						suppressible: true,
+					},
 				],
 				inline_comments: [
 					buildInlineComment({
@@ -622,8 +638,24 @@ describe("buildReview", () => {
 		const agentResponse = buildGenerateObjectResponse(
 			buildModelReview({
 				general_findings: [
-					{ title: "Critical bug", body: "Details.", severity: "P1", category: "style", confidence: 0.8, evidence: "See diff.", suppressible: true },
-					{ title: "Minor style nit", body: "Details.", severity: "P3", category: "style", confidence: 0.8, evidence: "See diff.", suppressible: true },
+					{
+						title: "Critical bug",
+						body: "Details.",
+						severity: "P1",
+						category: "style",
+						confidence: 0.8,
+						evidence: "See diff.",
+						suppressible: true,
+					},
+					{
+						title: "Minor style nit",
+						body: "Details.",
+						severity: "P3",
+						category: "style",
+						confidence: 0.8,
+						evidence: "See diff.",
+						suppressible: true,
+					},
 				],
 			}),
 		);
@@ -747,7 +779,15 @@ describe("buildReview", () => {
 			buildModelReview({
 				event: "COMMENT",
 				general_findings: [
-					{ title: "Minor nit", body: "Fix this.", severity: "P3", category: "style", confidence: 0.8, evidence: "See diff.", suppressible: true },
+					{
+						title: "Minor nit",
+						body: "Fix this.",
+						severity: "P3",
+						category: "style",
+						confidence: 0.8,
+						evidence: "See diff.",
+						suppressible: true,
+					},
 				],
 			}),
 		);
@@ -2646,7 +2686,15 @@ describe("agent time budget", () => {
 			buildModelReview({
 				event: "REQUEST_CHANGES",
 				general_findings: [
-					{ title: "Found by agent one", body: "real", severity: "P1", category: "style", confidence: 0.8, evidence: "See diff.", suppressible: true },
+					{
+						title: "Found by agent one",
+						body: "real",
+						severity: "P1",
+						category: "style",
+						confidence: 0.8,
+						evidence: "See diff.",
+						suppressible: true,
+					},
 				],
 				inline_comments: [],
 			}),
@@ -2693,7 +2741,17 @@ describe("agent time budget", () => {
 		const agentResponse = buildGenerateObjectResponse(
 			buildModelReview({
 				event: "REQUEST_CHANGES",
-				general_findings: [{ title: "Found", body: "real", severity: "P1", category: "style", confidence: 0.8, evidence: "See diff.", suppressible: true }],
+				general_findings: [
+					{
+						title: "Found",
+						body: "real",
+						severity: "P1",
+						category: "style",
+						confidence: 0.8,
+						evidence: "See diff.",
+						suppressible: true,
+					},
+				],
 				inline_comments: [],
 			}),
 		);
@@ -3230,7 +3288,15 @@ describe("review body markdown", () => {
 			buildModelReview({
 				event: "REQUEST_CHANGES",
 				general_findings: [
-					{ title: "Unvalidated input", body: "x", severity: "P1", category: "style", confidence: 0.8, evidence: "See diff.", suppressible: true },
+					{
+						title: "Unvalidated input",
+						body: "x",
+						severity: "P1",
+						category: "style",
+						confidence: 0.8,
+						evidence: "See diff.",
+						suppressible: true,
+					},
 				],
 				inline_comments: [
 					buildInlineComment({ path: "src/review.ts", line: 2 }),
@@ -3452,7 +3518,15 @@ describe("review body markdown", () => {
 			buildModelReview({
 				event: "REQUEST_CHANGES",
 				general_findings: [
-					{ title: "Unvalidated input", body: "x", severity: "P1", category: "style", confidence: 0.8, evidence: "See diff.", suppressible: true },
+					{
+						title: "Unvalidated input",
+						body: "x",
+						severity: "P1",
+						category: "style",
+						confidence: 0.8,
+						evidence: "See diff.",
+						suppressible: true,
+					},
 				],
 				inline_comments: [
 					buildInlineComment({ path: "src/review.ts", line: 2 }),
@@ -3533,7 +3607,15 @@ describe("buildReview auth threading", () => {
 			buildModelReview({
 				event: "REQUEST_CHANGES",
 				general_findings: [
-					{ title: "Something", body: "needs work", severity: "P1", category: "style", confidence: 0.8, evidence: "See diff.", suppressible: true },
+					{
+						title: "Something",
+						body: "needs work",
+						severity: "P1",
+						category: "style",
+						confidence: 0.8,
+						evidence: "See diff.",
+						suppressible: true,
+					},
 				],
 				inline_comments: [],
 			}),

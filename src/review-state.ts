@@ -70,8 +70,8 @@ function parsePriorReview(body: string): ReviewState | null {
 	// Match P0 (🔴), P1 (🟠), P2 (🟡), P3 (🟢) — P0 maps to P1 from old reviews
 	// since pre-Phase-1 reviews had no P0; the highest badge was 🔴 meaning "high"→P1.
 	const BADGE_TO_SEVERITY: Record<string, string> = {
-		"🔴": "P1",  // legacy: old reviews used 🔴 for "high"; no P0 in old bodies
-		"🟠": "P1",  // P1 badge (only emitted after Phase 1 lands)
+		"🔴": "P1", // legacy: old reviews used 🔴 for "high"; no P0 in old bodies
+		"🟠": "P1", // P1 badge (only emitted after Phase 1 lands)
 		"🟡": "P2",
 		"🟢": "P3",
 	};

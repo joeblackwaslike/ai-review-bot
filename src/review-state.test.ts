@@ -154,11 +154,27 @@ describe("review-state", () => {
 		const state = {
 			lastReviewedSha: "abc123",
 			event: "REQUEST_CHANGES" as const,
-			findings: [{ id: "1", path: null, line: null, title: "Bug", severity: "high", status: "open" as const }],
+			findings: [
+				{
+					id: "1",
+					path: null,
+					line: null,
+					title: "Bug",
+					severity: "high",
+					status: "open" as const,
+				},
+			],
 			reviewedAt: new Date().toISOString(),
 		};
 		await saveReviewState(client, "anthropic", "o", "r", 1, state);
-		const loaded = await loadReviewState(client, "anthropic", "o", "r", 1, null);
+		const loaded = await loadReviewState(
+			client,
+			"anthropic",
+			"o",
+			"r",
+			1,
+			null,
+		);
 		expect(loaded?.findings[0].severity).toBe("P1");
 	});
 
@@ -167,11 +183,27 @@ describe("review-state", () => {
 		const state = {
 			lastReviewedSha: "abc123",
 			event: "COMMENT" as const,
-			findings: [{ id: "2", path: null, line: null, title: "Nit", severity: "medium", status: "open" as const }],
+			findings: [
+				{
+					id: "2",
+					path: null,
+					line: null,
+					title: "Nit",
+					severity: "medium",
+					status: "open" as const,
+				},
+			],
 			reviewedAt: new Date().toISOString(),
 		};
 		await saveReviewState(client, "anthropic", "o", "r", 2, state);
-		const loaded = await loadReviewState(client, "anthropic", "o", "r", 2, null);
+		const loaded = await loadReviewState(
+			client,
+			"anthropic",
+			"o",
+			"r",
+			2,
+			null,
+		);
 		expect(loaded?.findings[0].severity).toBe("P2");
 	});
 
@@ -180,11 +212,27 @@ describe("review-state", () => {
 		const state = {
 			lastReviewedSha: "abc123",
 			event: "COMMENT" as const,
-			findings: [{ id: "3", path: null, line: null, title: "Style", severity: "low", status: "open" as const }],
+			findings: [
+				{
+					id: "3",
+					path: null,
+					line: null,
+					title: "Style",
+					severity: "low",
+					status: "open" as const,
+				},
+			],
 			reviewedAt: new Date().toISOString(),
 		};
 		await saveReviewState(client, "anthropic", "o", "r", 3, state);
-		const loaded = await loadReviewState(client, "anthropic", "o", "r", 3, null);
+		const loaded = await loadReviewState(
+			client,
+			"anthropic",
+			"o",
+			"r",
+			3,
+			null,
+		);
 		expect(loaded?.findings[0].severity).toBe("P3");
 	});
 
@@ -193,11 +241,27 @@ describe("review-state", () => {
 		const state = {
 			lastReviewedSha: "abc123",
 			event: "REQUEST_CHANGES" as const,
-			findings: [{ id: "4", path: null, line: null, title: "Critical", severity: "P0", status: "open" as const }],
+			findings: [
+				{
+					id: "4",
+					path: null,
+					line: null,
+					title: "Critical",
+					severity: "P0",
+					status: "open" as const,
+				},
+			],
 			reviewedAt: new Date().toISOString(),
 		};
 		await saveReviewState(client, "anthropic", "o", "r", 4, state);
-		const loaded = await loadReviewState(client, "anthropic", "o", "r", 4, null);
+		const loaded = await loadReviewState(
+			client,
+			"anthropic",
+			"o",
+			"r",
+			4,
+			null,
+		);
 		expect(loaded?.findings[0].severity).toBe("P0");
 	});
 });
