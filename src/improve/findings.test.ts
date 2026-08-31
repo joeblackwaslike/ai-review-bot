@@ -27,6 +27,20 @@ describe("parseFindingComment", () => {
 		}
 	});
 
+	it("parseFindingComment recovers severity P1 from 🟠 badge", () => {
+		const body = "🟠 **P1**\n\n**Unsafe eval**\n\nDetails here.";
+		const result = parseFindingComment(body);
+		expect(result).not.toBeNull();
+		expect(result?.severity).toBe("P1");
+	});
+
+	it("parseFindingComment recovers severity P0 from 🔴 badge", () => {
+		const body = "🔴 **P0**\n\n**RCE**\n\nDetails.";
+		const result = parseFindingComment(body);
+		expect(result).not.toBeNull();
+		expect(result?.severity).toBe("P0");
+	});
+
 	it("parses a comment posted before badges existed, leaving severity null", () => {
 		const parsed = parseFindingComment("**older finding**\n\nsome body");
 		expect(parsed).toEqual({
