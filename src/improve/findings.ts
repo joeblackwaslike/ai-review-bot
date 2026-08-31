@@ -10,7 +10,7 @@ export interface ParsedFinding {
 
 // Mirrors buildCommentBody in review.ts: `{badge}\n\n**{title}**\n\n{body}`,
 // where the badge is optional because comments predating #16 have none.
-const BADGE_PATTERN = /^(?:🔴|🟡|🟢|⚪)\s+\*\*([A-Za-z]+)\*\*\s*\n+/;
+const BADGE_PATTERN = /^(?:🔴|🟠|🟡|🟢|⚪)\s+\*\*([A-Za-z0-9]+)\*\*\s*\n+/;
 const TITLE_PATTERN = /^\*\*(.+?)\*\*\s*\n+/s;
 
 /** Pure: recover the structured finding from a posted inline comment body.
@@ -21,7 +21,7 @@ export function parseFindingComment(body: string): ParsedFinding | null {
 	let rest = body.trimStart();
 
 	const badge = BADGE_PATTERN.exec(rest);
-	const severity = badge ? badge[1].toLowerCase() : null;
+	const severity = badge ? badge[1] : null;
 	if (badge) rest = rest.slice(badge[0].length);
 
 	const title = TITLE_PATTERN.exec(rest);

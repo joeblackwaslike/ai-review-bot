@@ -28,9 +28,10 @@ export interface ReviewReportMeta {
 }
 
 const SEVERITY_EMOJI: Record<string, string> = {
-	high: "🔴",
-	medium: "🟡",
-	low: "🟢",
+	P0: "🔴",
+	P1: "🟠",
+	P2: "🟡",
+	P3: "🟢",
 };
 
 export function slugify(input: string): string {
@@ -86,14 +87,16 @@ function escapeRe(s: string): string {
 }
 
 function countSeverities(merged: ModelReview): {
-	high: number;
-	medium: number;
-	low: number;
+	P0: number;
+	P1: number;
+	P2: number;
+	P3: number;
 } {
 	// Severity is carried on general findings only; inline comments have none.
-	const counts = { high: 0, medium: 0, low: 0 };
+	const counts = { P0: 0, P1: 0, P2: 0, P3: 0 };
 	for (const f of merged.general_findings)
-		counts[f.severity as keyof typeof counts]++;
+		counts[f.severity as keyof typeof counts] =
+			(counts[f.severity as keyof typeof counts] ?? 0) + 1;
 	return counts;
 }
 
@@ -120,9 +123,10 @@ function frontMatter(meta: ReviewReportMeta, merged: ModelReview): string {
 		`skills: ${yamlList(meta.skills)}`,
 		`files_reviewed: ${meta.filesReviewed}`,
 		"findings:",
-		`  high: ${c.high}`,
-		`  medium: ${c.medium}`,
-		`  low: ${c.low}`,
+		`  P0: ${c.P0}`,
+		`  P1: ${c.P1}`,
+		`  P2: ${c.P2}`,
+		`  P3: ${c.P3}`,
 		"---",
 	].join("\n");
 }
@@ -156,7 +160,7 @@ export function formatReviewReport(opts: {
 		"## Summary",
 		"",
 		`Reviewed **${meta.filesReviewed}** file(s) (${meta.scope}) with ${meta.providers.join(" + ")}. ` +
-			`Found **${total}** item(s): ${c.high} high · ${c.medium} medium · ${c.low} low. ` +
+			`Found **${total}** item(s): ${c.P0} critical · ${c.P1} high · ${c.P2} medium · ${c.P3} low. ` +
 			`Took ${meta.durationSeconds}s · $${meta.costUsd.toFixed(4)}.`,
 	];
 
@@ -165,7 +169,7 @@ export function formatReviewReport(opts: {
 		for (const [i, f] of merged.general_findings.entries()) {
 			body.push(
 				"",
-				`### ${i + 1}. ${SEVERITY_EMOJI[f.severity] ?? ""} [${f.severity.toUpperCase()}] ${f.title}`,
+				`### ${i + 1}. ${SEVERITY_EMOJI[f.severity] ?? ""} [${f.severity}] ${f.title}`,
 				"",
 				f.body,
 			);

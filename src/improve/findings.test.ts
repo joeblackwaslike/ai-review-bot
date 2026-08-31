@@ -4,10 +4,10 @@ import { findingNaturalKey, parseFindingComment } from "./findings.js";
 describe("parseFindingComment", () => {
 	it("splits a badged comment into severity, title and body", () => {
 		const parsed = parseFindingComment(
-			"🟡 **Medium**\n\n**directory fsync may fail silently**\n\nOn some platforms `fsyncSync` throws EINVAL.",
+			"🟡 **P2**\n\n**directory fsync may fail silently**\n\nOn some platforms `fsyncSync` throws EINVAL.",
 		);
 		expect(parsed).toEqual({
-			severity: "medium",
+			severity: "P2",
 			title: "directory fsync may fail silently",
 			body: "On some platforms `fsyncSync` throws EINVAL.",
 		});
@@ -15,16 +15,30 @@ describe("parseFindingComment", () => {
 
 	it("recognizes every severity badge the renderer emits", () => {
 		const cases: [string, string][] = [
-			["🔴 **High**", "high"],
-			["🟡 **Medium**", "medium"],
-			["🟢 **Low**", "low"],
-			["⚪ **Unknown**", "unknown"],
+			["🔴 **P0**", "P0"],
+			["🟡 **P2**", "P2"],
+			["🟢 **P3**", "P3"],
+			["⚪ **Unknown**", "Unknown"],
 		];
 		for (const [badge, severity] of cases) {
 			expect(parseFindingComment(`${badge}\n\n**t**\n\nb`)?.severity).toBe(
 				severity,
 			);
 		}
+	});
+
+	it("parseFindingComment recovers severity P1 from 🟠 badge", () => {
+		const body = "🟠 **P1**\n\n**Unsafe eval**\n\nDetails here.";
+		const result = parseFindingComment(body);
+		expect(result).not.toBeNull();
+		expect(result?.severity).toBe("P1");
+	});
+
+	it("parseFindingComment recovers severity P0 from 🔴 badge", () => {
+		const body = "🔴 **P0**\n\n**RCE**\n\nDetails.";
+		const result = parseFindingComment(body);
+		expect(result).not.toBeNull();
+		expect(result?.severity).toBe("P0");
 	});
 
 	it("parses a comment posted before badges existed, leaving severity null", () => {
@@ -38,7 +52,7 @@ describe("parseFindingComment", () => {
 
 	it("keeps the suggestion block as part of the body", () => {
 		const parsed = parseFindingComment(
-			"🟢 **Low**\n\n**t**\n\nreason\n\n*Suggested fix:*\n\n```suggestion\nx\n```",
+			"🟢 **P3**\n\n**t**\n\nreason\n\n*Suggested fix:*\n\n```suggestion\nx\n```",
 		);
 		expect(parsed?.body).toContain("```suggestion");
 	});
@@ -48,7 +62,7 @@ describe("parseFindingComment", () => {
 	});
 
 	it("returns null for a badge with no title, rather than inventing one", () => {
-		expect(parseFindingComment("🔴 **High**\n\nbody with no bold title")).toBe(
+		expect(parseFindingComment("🔴 **P0**\n\nbody with no bold title")).toBe(
 			null,
 		);
 	});
