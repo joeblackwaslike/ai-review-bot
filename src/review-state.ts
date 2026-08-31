@@ -16,6 +16,7 @@ export interface ReviewState {
 	event: "COMMENT" | "REQUEST_CHANGES" | "APPROVE";
 	findings: PersistedFinding[];
 	reviewedAt: string;
+	reviewCount?: number;
 }
 
 const STATE_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days, refreshed on each write
@@ -45,9 +46,13 @@ export async function saveReviewState(
 	pullNumber: number,
 	state: ReviewState,
 ): Promise<void> {
+	const toSave: ReviewState = {
+		...state,
+		reviewCount: (state.reviewCount ?? 0) + 1,
+	};
 	await kv.set(
 		stateKey(provider, owner, repo, pullNumber),
-		JSON.stringify(state),
+		JSON.stringify(toSave),
 		STATE_TTL_SECONDS,
 	);
 }
@@ -95,6 +100,7 @@ function parsePriorReview(body: string): ReviewState | null {
 		event: findings.length > 0 ? "REQUEST_CHANGES" : "COMMENT",
 		findings,
 		reviewedAt: new Date().toISOString(),
+		reviewCount: 0,
 	};
 }
 
@@ -135,6 +141,7 @@ export async function loadReviewState(
 				for (const f of parsed.findings) {
 					f.severity = migrateSeverity(f.severity);
 				}
+				if (parsed.reviewCount == null) parsed.reviewCount = 0;
 				return parsed;
 			}
 			console.warn(
