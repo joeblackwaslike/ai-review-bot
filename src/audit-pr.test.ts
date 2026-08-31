@@ -136,6 +136,10 @@ describe("postProviderReview", () => {
 					start_line: null,
 					suggestion: null,
 					severity: "P2",
+					category: "style",
+					confidence: 0.8,
+					evidence: "See diff.",
+					suppressible: true,
 				},
 			],
 		});

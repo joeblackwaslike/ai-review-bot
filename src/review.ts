@@ -249,13 +249,28 @@ function extractRateLimit(err: unknown): RateLimitInfo | null {
 export const SEVERITY_LEVELS = ["P0", "P1", "P2", "P3"] as const;
 export type Severity = (typeof SEVERITY_LEVELS)[number];
 
-const ModelReviewSchema = z.object({
+const CATEGORY_VALUES = [
+	"bug",
+	"security",
+	"performance",
+	"test-gap",
+	"architecture",
+	"style",
+	"nitpick",
+] as const;
+export type Category = (typeof CATEGORY_VALUES)[number];
+
+export const ModelReviewSchema = z.object({
 	event: z.enum(["COMMENT", "REQUEST_CHANGES"]),
 	general_findings: z.array(
 		z.object({
 			title: z.string(),
 			body: z.string(),
 			severity: z.enum(SEVERITY_LEVELS),
+			category: z.enum(CATEGORY_VALUES),
+			confidence: z.number().min(0).max(1),
+			evidence: z.string().min(1),
+			suppressible: z.boolean(),
 		}),
 	),
 	inline_comments: z.array(
@@ -267,6 +282,10 @@ const ModelReviewSchema = z.object({
 			start_line: z.number().int().nullable(),
 			suggestion: z.string().nullable(),
 			severity: z.enum(SEVERITY_LEVELS),
+			category: z.enum(CATEGORY_VALUES),
+			confidence: z.number().min(0).max(1),
+			evidence: z.string().min(1),
+			suppressible: z.boolean(),
 		}),
 	),
 });

@@ -25,9 +25,9 @@ const baseMeta: ReviewReportMeta = {
 const review: ModelReview = {
 	event: "REQUEST_CHANGES",
 	general_findings: [
-		{ title: "SQL injection", body: "raw query", severity: "P1" },
-		{ title: "Loose typing", body: "narrow it", severity: "P2" },
-		{ title: "Magic number", body: "extract const", severity: "P3" },
+		{ title: "SQL injection", body: "raw query", severity: "P1", category: "style", confidence: 0.8, evidence: "See diff.", suppressible: true },
+		{ title: "Loose typing", body: "narrow it", severity: "P2", category: "style", confidence: 0.8, evidence: "See diff.", suppressible: true },
+		{ title: "Magic number", body: "extract const", severity: "P3", category: "style", confidence: 0.8, evidence: "See diff.", suppressible: true },
 	],
 	inline_comments: [
 		{
@@ -38,6 +38,10 @@ const review: ModelReview = {
 			start_line: null,
 			suggestion: null,
 			severity: "P1",
+			category: "style",
+			confidence: 0.8,
+			evidence: "See diff.",
+			suppressible: true,
 		},
 	],
 };

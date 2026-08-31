@@ -47,7 +47,7 @@ describe("runAuditPass", () => {
 			status: "ok",
 			review: buildModelReview({
 				event: "COMMENT",
-				general_findings: [{ title: "F", body: "b", severity: "P3" }],
+				general_findings: [{ title: "F", body: "b", severity: "P3", category: "style", confidence: 0.8, evidence: "See diff.", suppressible: true }],
 				inline_comments: [],
 			}),
 			usage: { promptTokens: 1, completionTokens: 1 },
@@ -161,6 +161,10 @@ describe("formatAuditJson", () => {
 					start_line: null,
 					suggestion: null,
 					severity: "P2",
+					category: "style",
+					confidence: 0.8,
+					evidence: "See diff.",
+					suppressible: true,
 				},
 			],
 		});
@@ -278,6 +282,10 @@ describe("runLocalAudit (PR path)", () => {
 						start_line: null,
 						suggestion: null,
 						severity: "P2",
+						category: "style",
+						confidence: 0.8,
+						evidence: "See diff.",
+						suppressible: true,
 					},
 				],
 			}),
@@ -333,7 +341,7 @@ describe("runLocalAudit (PR path)", () => {
 			status: "ok",
 			review: buildModelReview({
 				event: "REQUEST_CHANGES",
-				general_findings: [{ title: "F", body: "b", severity: "P1" }],
+				general_findings: [{ title: "F", body: "b", severity: "P1", category: "style", confidence: 0.8, evidence: "See diff.", suppressible: true }],
 				inline_comments: [],
 			}),
 			usage: { promptTokens: 1, completionTokens: 1 },
@@ -376,7 +384,7 @@ describe("runLocalAudit (PR path)", () => {
 			status: "ok",
 			review: buildModelReview({
 				event: "REQUEST_CHANGES",
-				general_findings: [{ title: "F", body: "b", severity: "P1" }],
+				general_findings: [{ title: "F", body: "b", severity: "P1", category: "style", confidence: 0.8, evidence: "See diff.", suppressible: true }],
 				inline_comments: [],
 			}),
 			usage: { promptTokens: 1, completionTokens: 1 },
@@ -422,7 +430,7 @@ describe("runLocalReview", () => {
 			status: "ok",
 			review: buildModelReview({
 				event: "REQUEST_CHANGES",
-				general_findings: [{ title: "Bug", body: "b", severity: "P1" }],
+				general_findings: [{ title: "Bug", body: "b", severity: "P1", category: "style", confidence: 0.8, evidence: "See diff.", suppressible: true }],
 				inline_comments: [],
 			}),
 			usage: { promptTokens: 1, completionTokens: 1 },
