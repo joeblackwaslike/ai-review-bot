@@ -21,7 +21,7 @@ function outcome(over: Partial<FindingOutcome> = {}): FindingOutcome {
 		pr: 55,
 		path: "src/x.ts",
 		title: "a finding",
-		severity: "low",
+		severity: "P3",
 		skills: [],
 		backfilled: false,
 		intent: "downvote",
@@ -172,20 +172,20 @@ describe("detectDuplicateClusters", () => {
 describe("computeSeverityReliability", () => {
 	it("ranks the least reliable severity first", () => {
 		const result = computeSeverityReliability([
-			outcome({ severity: "high", intent: "bug_report" }),
-			outcome({ severity: "high", intent: "downvote" }),
-			outcome({ severity: "medium", intent: "upvote" }),
-			outcome({ severity: "medium", intent: "upvote" }),
+			outcome({ severity: "P1", intent: "bug_report" }),
+			outcome({ severity: "P1", intent: "downvote" }),
+			outcome({ severity: "P2", intent: "upvote" }),
+			outcome({ severity: "P2", intent: "upvote" }),
 		]);
-		expect(result[0].severity).toBe("high");
+		expect(result[0].severity).toBe("P1");
 		expect(result[0].usefulRatio).toBe(0);
 		expect(result[1].usefulRatio).toBe(1);
 	});
 
 	it("separates wrong from merely low-value", () => {
 		const [row] = computeSeverityReliability([
-			outcome({ severity: "high", intent: "bug_report" }),
-			outcome({ severity: "high", intent: "downvote" }),
+			outcome({ severity: "P1", intent: "bug_report" }),
+			outcome({ severity: "P1", intent: "downvote" }),
 		]);
 		expect(row).toMatchObject({ wrong: 1, lowValue: 1, useful: 0 });
 	});
@@ -199,8 +199,8 @@ describe("computeSeverityReliability", () => {
 	it("excludes noise from the denominator", () => {
 		expect(
 			computeSeverityReliability([
-				outcome({ severity: "low", intent: "upvote" }),
-				outcome({ severity: "low", intent: "noise" }),
+				outcome({ severity: "P3", intent: "upvote" }),
+				outcome({ severity: "P3", intent: "noise" }),
 			])[0].sampleSize,
 		).toBe(1);
 	});

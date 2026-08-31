@@ -25,9 +25,33 @@ const baseMeta: ReviewReportMeta = {
 const review: ModelReview = {
 	event: "REQUEST_CHANGES",
 	general_findings: [
-		{ title: "SQL injection", body: "raw query", severity: "high" },
-		{ title: "Loose typing", body: "narrow it", severity: "medium" },
-		{ title: "Magic number", body: "extract const", severity: "low" },
+		{
+			title: "SQL injection",
+			body: "raw query",
+			severity: "P1",
+			category: "style",
+			confidence: 0.8,
+			evidence: "See diff.",
+			suppressible: true,
+		},
+		{
+			title: "Loose typing",
+			body: "narrow it",
+			severity: "P2",
+			category: "style",
+			confidence: 0.8,
+			evidence: "See diff.",
+			suppressible: true,
+		},
+		{
+			title: "Magic number",
+			body: "extract const",
+			severity: "P3",
+			category: "style",
+			confidence: 0.8,
+			evidence: "See diff.",
+			suppressible: true,
+		},
 	],
 	inline_comments: [
 		{
@@ -37,7 +61,11 @@ const review: ModelReview = {
 			line: 12,
 			start_line: null,
 			suggestion: null,
-			severity: "high",
+			severity: "P1",
+			category: "style",
+			confidence: 0.8,
+			evidence: "See diff.",
+			suppressible: true,
 		},
 	],
 };
@@ -93,10 +121,10 @@ describe("formatReviewReport", () => {
 		expect(out).toContain("cost_usd: 0.012345");
 		expect(out).toContain('providers: ["anthropic", "openai"]');
 		expect(out).toContain("files_reviewed: 14");
-		// severity counts: 1 high, 1 medium, 1 low
-		expect(out).toContain("high: 1");
-		expect(out).toContain("medium: 1");
-		expect(out).toContain("low: 1");
+		// severity counts: 1 P1, 1 P2, 1 P3
+		expect(out).toContain("P1: 1");
+		expect(out).toContain("P2: 1");
+		expect(out).toContain("P3: 1");
 	});
 
 	it("includes a table of contents linking present sections", () => {
@@ -107,7 +135,7 @@ describe("formatReviewReport", () => {
 	});
 
 	it("renders findings and the inline notes table", () => {
-		expect(out).toContain("[HIGH] SQL injection");
+		expect(out).toContain("[P1] SQL injection");
 		expect(out).toContain("| `src/a.ts` | 12 |");
 		expect(out).toContain("Null deref");
 	});

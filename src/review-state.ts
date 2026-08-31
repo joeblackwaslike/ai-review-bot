@@ -67,11 +67,18 @@ function parsePriorReview(body: string): ReviewState | null {
 	const shaMatch = body.match(/Reviewed commit: `([0-9a-f]{7,40})`/);
 	if (!shaMatch) return null;
 	const findings: PersistedFinding[] = [];
+	// After Phase 1, 🔴 = P0 in new review bodies. Pre-Phase-1 reviews used 🔴 for
+	// "high" (→P1), but upgrading those to P0 on re-parse is conservative and acceptable.
+	const BADGE_TO_SEVERITY: Record<string, string> = {
+		"🔴": "P0", // P0 (critical); pre-Phase-1 "high" findings are conservatively upgraded
+		"🟠": "P1", // P1 badge (only emitted after Phase 1 lands)
+		"🟡": "P2",
+		"🟢": "P3",
+	};
 	for (const line of body.split("\n")) {
-		const row = line.match(/^\|\s*(🔴|🟡|🟢)\s*\|\s*(.+?)\s*\|$/);
+		const row = line.match(/^\|\s*(🔴|🟠|🟡|🟢)\s*\|\s*(.+?)\s*\|$/);
 		if (!row) continue;
-		const severity =
-			row[1] === "🔴" ? "high" : row[1] === "🟡" ? "medium" : "low";
+		const severity = BADGE_TO_SEVERITY[row[1]] ?? "P3";
 		const title = row[2].replace(/\*\*/g, "").trim();
 		if (!title || title.toLowerCase() === "finding") continue;
 		findings.push({
@@ -101,6 +108,16 @@ function isReviewState(v: unknown): v is ReviewState {
 	);
 }
 
+const SEVERITY_COMPAT: Record<string, string> = {
+	high: "P1",
+	medium: "P2",
+	low: "P3",
+};
+
+function migrateSeverity(s: string): string {
+	return SEVERITY_COMPAT[s] ?? s;
+}
+
 export async function loadReviewState(
 	kv: KvClient,
 	provider: string,
@@ -113,7 +130,13 @@ export async function loadReviewState(
 	if (raw) {
 		try {
 			const parsed: unknown = JSON.parse(raw);
-			if (isReviewState(parsed)) return parsed;
+			if (isReviewState(parsed)) {
+				// Migrate legacy severity strings from pre-Phase-1 KV records
+				for (const f of parsed.findings) {
+					f.severity = migrateSeverity(f.severity);
+				}
+				return parsed;
+			}
 			console.warn(
 				"review-state: KV entry has unexpected shape; treating as cold",
 				{

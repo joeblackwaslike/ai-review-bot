@@ -40,7 +40,7 @@ describe("review-state", () => {
 					path: "src/a.ts",
 					line: 5,
 					title: "Bug",
-					severity: "high",
+					severity: "P1",
 					status: "open" as const,
 				},
 			],
@@ -147,5 +147,121 @@ describe("review-state", () => {
 		} finally {
 			warn.mockRestore();
 		}
+	});
+
+	it("maps old 'high' to P1 on KV read", async () => {
+		const { client } = fakeKv();
+		const state = {
+			lastReviewedSha: "abc123",
+			event: "REQUEST_CHANGES" as const,
+			findings: [
+				{
+					id: "1",
+					path: null,
+					line: null,
+					title: "Bug",
+					severity: "high",
+					status: "open" as const,
+				},
+			],
+			reviewedAt: new Date().toISOString(),
+		};
+		await saveReviewState(client, "anthropic", "o", "r", 1, state);
+		const loaded = await loadReviewState(
+			client,
+			"anthropic",
+			"o",
+			"r",
+			1,
+			null,
+		);
+		expect(loaded?.findings[0].severity).toBe("P1");
+	});
+
+	it("maps old 'medium' to P2 on KV read", async () => {
+		const { client } = fakeKv();
+		const state = {
+			lastReviewedSha: "abc123",
+			event: "COMMENT" as const,
+			findings: [
+				{
+					id: "2",
+					path: null,
+					line: null,
+					title: "Nit",
+					severity: "medium",
+					status: "open" as const,
+				},
+			],
+			reviewedAt: new Date().toISOString(),
+		};
+		await saveReviewState(client, "anthropic", "o", "r", 2, state);
+		const loaded = await loadReviewState(
+			client,
+			"anthropic",
+			"o",
+			"r",
+			2,
+			null,
+		);
+		expect(loaded?.findings[0].severity).toBe("P2");
+	});
+
+	it("maps old 'low' to P3 on KV read", async () => {
+		const { client } = fakeKv();
+		const state = {
+			lastReviewedSha: "abc123",
+			event: "COMMENT" as const,
+			findings: [
+				{
+					id: "3",
+					path: null,
+					line: null,
+					title: "Style",
+					severity: "low",
+					status: "open" as const,
+				},
+			],
+			reviewedAt: new Date().toISOString(),
+		};
+		await saveReviewState(client, "anthropic", "o", "r", 3, state);
+		const loaded = await loadReviewState(
+			client,
+			"anthropic",
+			"o",
+			"r",
+			3,
+			null,
+		);
+		expect(loaded?.findings[0].severity).toBe("P3");
+	});
+
+	it("passes through P0–P3 values unchanged", async () => {
+		const { client } = fakeKv();
+		const state = {
+			lastReviewedSha: "abc123",
+			event: "REQUEST_CHANGES" as const,
+			findings: [
+				{
+					id: "4",
+					path: null,
+					line: null,
+					title: "Critical",
+					severity: "P0",
+					status: "open" as const,
+				},
+			],
+			reviewedAt: new Date().toISOString(),
+		};
+		await saveReviewState(client, "anthropic", "o", "r", 4, state);
+		const loaded = await loadReviewState(
+			client,
+			"anthropic",
+			"o",
+			"r",
+			4,
+			null,
+		);
+		expect(loaded?.findings[0].severity).toBe("P0");
 	});
 });
