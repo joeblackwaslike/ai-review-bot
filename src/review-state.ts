@@ -67,10 +67,10 @@ function parsePriorReview(body: string): ReviewState | null {
 	const shaMatch = body.match(/Reviewed commit: `([0-9a-f]{7,40})`/);
 	if (!shaMatch) return null;
 	const findings: PersistedFinding[] = [];
-	// Match P0 (🔴), P1 (🟠), P2 (🟡), P3 (🟢) — P0 maps to P1 from old reviews
-	// since pre-Phase-1 reviews had no P0; the highest badge was 🔴 meaning "high"→P1.
+	// After Phase 1, 🔴 = P0 in new review bodies. Pre-Phase-1 reviews used 🔴 for
+	// "high" (→P1), but upgrading those to P0 on re-parse is conservative and acceptable.
 	const BADGE_TO_SEVERITY: Record<string, string> = {
-		"🔴": "P1", // legacy: old reviews used 🔴 for "high"; no P0 in old bodies
+		"🔴": "P0", // P0 (critical); pre-Phase-1 "high" findings are conservatively upgraded
 		"🟠": "P1", // P1 badge (only emitted after Phase 1 lands)
 		"🟡": "P2",
 		"🟢": "P3",

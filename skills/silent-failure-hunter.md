@@ -136,7 +136,7 @@ Ensure compliance with the project's error handling requirements:
 For each issue you find, provide:
 
 1. **Location**: File path and line number(s)
-2. **Severity**: CRITICAL (silent failure, broad catch), HIGH (poor error message, unjustified fallback), MEDIUM (missing context, could be more specific)
+2. **Severity**: P0 (silent failure, broad catch — data loss risk), P1 (poor error message, unjustified fallback), P2 (missing context, could be more specific)
 3. **Issue Description**: What's wrong and why it's problematic
 4. **Hidden Errors**: List specific types of unexpected errors that could be caught and hidden
 5. **User Impact**: How this affects the user experience and debugging
