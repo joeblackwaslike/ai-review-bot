@@ -47,7 +47,7 @@ describe("runAuditPass", () => {
 			status: "ok",
 			review: buildModelReview({
 				event: "COMMENT",
-				general_findings: [{ title: "F", body: "b", severity: "low" }],
+				general_findings: [{ title: "F", body: "b", severity: "P3" }],
 				inline_comments: [],
 			}),
 			usage: { promptTokens: 1, completionTokens: 1 },
@@ -160,7 +160,7 @@ describe("formatAuditJson", () => {
 					line: 3,
 					start_line: null,
 					suggestion: null,
-					severity: "medium",
+					severity: "P2",
 				},
 			],
 		});
@@ -277,7 +277,7 @@ describe("runLocalAudit (PR path)", () => {
 						line: 1,
 						start_line: null,
 						suggestion: null,
-						severity: "medium",
+						severity: "P2",
 					},
 				],
 			}),
@@ -333,7 +333,7 @@ describe("runLocalAudit (PR path)", () => {
 			status: "ok",
 			review: buildModelReview({
 				event: "REQUEST_CHANGES",
-				general_findings: [{ title: "F", body: "b", severity: "high" }],
+				general_findings: [{ title: "F", body: "b", severity: "P1" }],
 				inline_comments: [],
 			}),
 			usage: { promptTokens: 1, completionTokens: 1 },
@@ -376,7 +376,7 @@ describe("runLocalAudit (PR path)", () => {
 			status: "ok",
 			review: buildModelReview({
 				event: "REQUEST_CHANGES",
-				general_findings: [{ title: "F", body: "b", severity: "high" }],
+				general_findings: [{ title: "F", body: "b", severity: "P1" }],
 				inline_comments: [],
 			}),
 			usage: { promptTokens: 1, completionTokens: 1 },
@@ -422,7 +422,7 @@ describe("runLocalReview", () => {
 			status: "ok",
 			review: buildModelReview({
 				event: "REQUEST_CHANGES",
-				general_findings: [{ title: "Bug", body: "b", severity: "high" }],
+				general_findings: [{ title: "Bug", body: "b", severity: "P1" }],
 				inline_comments: [],
 			}),
 			usage: { promptTokens: 1, completionTokens: 1 },

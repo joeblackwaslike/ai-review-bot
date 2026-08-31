@@ -40,7 +40,7 @@ describe("review-state", () => {
 					path: "src/a.ts",
 					line: 5,
 					title: "Bug",
-					severity: "high",
+					severity: "P1",
 					status: "open" as const,
 				},
 			],

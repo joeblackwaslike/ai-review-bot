@@ -84,7 +84,7 @@ export function buildInlineComment(
 		line: 2,
 		start_line: null,
 		suggestion: null,
-		severity: "medium",
+		severity: "P2",
 		...overrides,
 	};
 }

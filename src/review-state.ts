@@ -70,8 +70,8 @@ function parsePriorReview(body: string): ReviewState | null {
 	for (const line of body.split("\n")) {
 		const row = line.match(/^\|\s*(🔴|🟡|🟢)\s*\|\s*(.+?)\s*\|$/);
 		if (!row) continue;
-		const severity =
-			row[1] === "🔴" ? "high" : row[1] === "🟡" ? "medium" : "low";
+		// Task 3 will add 🟠 for P1 and remap 🔴 to P0 — interim mapping for now.
+		const severity = row[1] === "🔴" ? "P1" : row[1] === "🟡" ? "P2" : "P3";
 		const title = row[2].replace(/\*\*/g, "").trim();
 		if (!title || title.toLowerCase() === "finding") continue;
 		findings.push({

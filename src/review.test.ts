@@ -13,7 +13,9 @@ import {
 	mergeReviewsDetailed,
 	parseRawDiff,
 	runAgent,
+	SEVERITY_LEVELS,
 	sanitizeInlineComments,
+	severityBadge,
 	TIER1_SKILLS,
 } from "./review.js";
 import type { PersistedFinding } from "./review-state.js";
@@ -83,11 +85,29 @@ vi.mock("./triage.js", () => ({
 // mergeReviews resolved handling
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// SEVERITY_LEVELS / severityBadge
+// ---------------------------------------------------------------------------
+
+describe("severity scale", () => {
+	it("SEVERITY_LEVELS tuple is P0–P3", () => {
+		expect(SEVERITY_LEVELS).toEqual(["P0", "P1", "P2", "P3"]);
+	});
+
+	it("severityBadge maps P0 to 🔴 **P0**", () => {
+		expect(severityBadge("P0")).toBe("🔴 **P0**");
+	});
+
+	it("severityBadge maps P1 to 🟠 **P1**", () => {
+		expect(severityBadge("P1")).toBe("🟠 **P1**");
+	});
+});
+
 describe("mergeReviews resolved handling", () => {
 	const reqChanges = {
 		event: "REQUEST_CHANGES" as const,
 		general_findings: [
-			{ title: "Unvalidated input", body: "x", severity: "high" as const },
+			{ title: "Unvalidated input", body: "x", severity: "P1" as const },
 		],
 		inline_comments: [buildInlineComment({ path: "src/a.ts", line: 5 })],
 	};
@@ -161,19 +181,19 @@ describe("buildReviewComments", () => {
 
 	it("prepends a severity badge to the comment body", () => {
 		const comments = buildReviewComments(files, [
-			buildInlineComment({ line: 2, severity: "high", title: "Race" }),
+			buildInlineComment({ line: 2, severity: "P1", title: "Race" }),
 		]);
 
-		expect(comments[0].body.startsWith("🔴 **High**\n\n")).toBe(true);
+		expect(comments[0].body.startsWith("🟠 **P1**\n\n")).toBe(true);
 		expect(comments[0].body).toContain("**Race**");
 	});
 
 	it("renders a low-severity badge for a comment without a suggestion", () => {
 		const comments = buildReviewComments(files, [
-			buildInlineComment({ line: 2, severity: "low", suggestion: null }),
+			buildInlineComment({ line: 2, severity: "P3", suggestion: null }),
 		]);
 
-		expect(comments[0].body.startsWith("🟢 **Low**\n\n")).toBe(true);
+		expect(comments[0].body.startsWith("🟢 **P3**\n\n")).toBe(true);
 		expect(comments[0].body).not.toContain("*Suggested fix:*");
 	});
 
@@ -364,7 +384,7 @@ describe("buildReview", () => {
 					{
 						title: "Missing test coverage",
 						body: "This behavior change should be covered by a regression test.",
-						severity: "high",
+						severity: "P1",
 					},
 				],
 				inline_comments: [
@@ -418,7 +438,7 @@ describe("buildReview", () => {
 			buildModelReview({
 				event: "REQUEST_CHANGES",
 				general_findings: [
-					{ title: "Something", body: "needs work", severity: "high" },
+					{ title: "Something", body: "needs work", severity: "P1" },
 				],
 				inline_comments: [],
 			}),
@@ -458,7 +478,7 @@ describe("buildReview", () => {
 			buildModelReview({
 				event: "REQUEST_CHANGES",
 				general_findings: [
-					{ title: "Security risk", body: "Details here.", severity: "high" },
+					{ title: "Security risk", body: "Details here.", severity: "P1" },
 				],
 				inline_comments: [
 					buildInlineComment({
@@ -549,8 +569,8 @@ describe("buildReview", () => {
 		const agentResponse = buildGenerateObjectResponse(
 			buildModelReview({
 				general_findings: [
-					{ title: "Critical bug", body: "Details.", severity: "high" },
-					{ title: "Minor style nit", body: "Details.", severity: "low" },
+					{ title: "Critical bug", body: "Details.", severity: "P1" },
+					{ title: "Minor style nit", body: "Details.", severity: "P3" },
 				],
 			}),
 		);
@@ -674,7 +694,7 @@ describe("buildReview", () => {
 			buildModelReview({
 				event: "COMMENT",
 				general_findings: [
-					{ title: "Minor nit", body: "Fix this.", severity: "low" },
+					{ title: "Minor nit", body: "Fix this.", severity: "P3" },
 				],
 			}),
 		);
@@ -1263,7 +1283,7 @@ describe("generateSummary carry-forward grounding", () => {
 				path: "hooks/ensure-built.sh",
 				line: 12,
 				title: "LOG_FILE referenced before assignment",
-				severity: "medium",
+				severity: "P2",
 				status: "resolved",
 			},
 		];
@@ -1590,7 +1610,7 @@ describe("buildReview triage gate — SKIP", () => {
 						path: "src/a.ts",
 						line: 5,
 						title: "bug",
-						severity: "high",
+						severity: "P1",
 						status: "open",
 					},
 				],
@@ -1673,7 +1693,7 @@ describe("buildReview triage gate — end-to-end multi-bot flow", () => {
 						line: 5,
 						start_line: null,
 						suggestion: null,
-						severity: "high",
+						severity: "P1",
 					}),
 				],
 			}),
@@ -1708,8 +1728,8 @@ describe("buildReview triage gate — end-to-end multi-bot flow", () => {
 		);
 		expect(openAfterSha1?.some((f) => f.id === bugId)).toBe(true);
 		// Persisted inline finding keeps the model's severity (not a hardcoded
-		// "medium") so re-review triage sees the real priority.
-		expect(openAfterSha1?.find((f) => f.id === bugId)?.severity).toBe("high");
+		// "P2") so re-review triage sees the real priority.
+		expect(openAfterSha1?.find((f) => f.id === bugId)?.severity).toBe("P1");
 
 		// --- sha2: another bot's fix; my Bug untouched → SKIP ----------------
 		mockGenerateObject.mockReset();
@@ -1954,7 +1974,7 @@ describe("buildReview triage gate — INCREMENTAL carries forward open prior fin
 					path: "src/a.ts",
 					line: 5,
 					title: "Bug",
-					severity: "high",
+					severity: "P1",
 					status: "open",
 				},
 			],
@@ -2052,7 +2072,7 @@ describe("buildReview triage gate — FULL carries forward open prior findings",
 					path: "src/a.ts",
 					line: 5,
 					title: "Bug",
-					severity: "high",
+					severity: "P1",
 					status: "open",
 				},
 			],
@@ -2160,7 +2180,7 @@ describe("buildReview triage gate — FULL carries forward open prior findings",
 					path: "src/a.ts",
 					line: 5,
 					title: "Bug",
-					severity: "high",
+					severity: "P1",
 					status: "open",
 				},
 				{
@@ -2168,7 +2188,7 @@ describe("buildReview triage gate — FULL carries forward open prior findings",
 					path: "src/a.ts",
 					line: 9,
 					title: "Old bug fixed two rounds ago",
-					severity: "medium",
+					severity: "P2",
 					status: "resolved",
 				},
 			],
@@ -2439,7 +2459,7 @@ describe("mergeReviewsDetailed — cross-category dedup", () => {
 				{
 					title: "Missing null check in parseUser",
 					body: "Add null check.",
-					severity: "high",
+					severity: "P1",
 				},
 			],
 			inline_comments: [
@@ -2465,7 +2485,7 @@ describe("mergeReviewsDetailed — cross-category dedup", () => {
 				{
 					title: "No integration tests for the auth flow",
 					body: "Add tests.",
-					severity: "medium",
+					severity: "P2",
 				},
 			],
 			inline_comments: [
@@ -2565,7 +2585,7 @@ describe("agent time budget", () => {
 			buildModelReview({
 				event: "REQUEST_CHANGES",
 				general_findings: [
-					{ title: "Found by agent one", body: "real", severity: "high" },
+					{ title: "Found by agent one", body: "real", severity: "P1" },
 				],
 				inline_comments: [],
 			}),
@@ -2612,7 +2632,7 @@ describe("agent time budget", () => {
 		const agentResponse = buildGenerateObjectResponse(
 			buildModelReview({
 				event: "REQUEST_CHANGES",
-				general_findings: [{ title: "Found", body: "real", severity: "high" }],
+				general_findings: [{ title: "Found", body: "real", severity: "P1" }],
 				inline_comments: [],
 			}),
 		);
@@ -2935,7 +2955,7 @@ describe("prior own findings propagation", () => {
 						path: "src/a.ts",
 						line: 5,
 						title: "bug",
-						severity: "high",
+						severity: "P1",
 						status: "open",
 					},
 				],
@@ -3149,7 +3169,7 @@ describe("review body markdown", () => {
 			buildModelReview({
 				event: "REQUEST_CHANGES",
 				general_findings: [
-					{ title: "Unvalidated input", body: "x", severity: "high" },
+					{ title: "Unvalidated input", body: "x", severity: "P1" },
 				],
 				inline_comments: [
 					buildInlineComment({ path: "src/review.ts", line: 2 }),
@@ -3197,7 +3217,7 @@ describe("review body markdown", () => {
 						path: "src/a.ts",
 						line: 5,
 						title: "Unvalidated input",
-						severity: "high",
+						severity: "P1",
 						status: "open",
 					},
 				],
@@ -3289,7 +3309,7 @@ describe("review body markdown", () => {
 				inline_comments: [
 					buildInlineComment({
 						title: "Unvalidated path segment",
-						severity: "high",
+						severity: "P1",
 						path: "does/not/exist.ts",
 						line: 2,
 						start_line: null,
@@ -3317,7 +3337,7 @@ describe("review body markdown", () => {
 		expect(review?.comments).toHaveLength(0);
 		expect(review?.body).toContain("Unvalidated path segment");
 		expect(review?.body).toContain("`does/not/exist.ts:2`");
-		expect(review?.body).toContain("🔴");
+		expect(review?.body).toContain("🟠");
 	});
 
 	// Dropping every inline finding used to leave reviewComments empty, which is
@@ -3333,7 +3353,7 @@ describe("review body markdown", () => {
 				inline_comments: [
 					buildInlineComment({
 						title: "Unvalidated path segment",
-						severity: "high",
+						severity: "P1",
 						path: "does/not/exist.ts",
 						line: 2,
 						start_line: null,
@@ -3371,7 +3391,7 @@ describe("review body markdown", () => {
 			buildModelReview({
 				event: "REQUEST_CHANGES",
 				general_findings: [
-					{ title: "Unvalidated input", body: "x", severity: "high" },
+					{ title: "Unvalidated input", body: "x", severity: "P1" },
 				],
 				inline_comments: [
 					buildInlineComment({ path: "src/review.ts", line: 2 }),
@@ -3452,7 +3472,7 @@ describe("buildReview auth threading", () => {
 			buildModelReview({
 				event: "REQUEST_CHANGES",
 				general_findings: [
-					{ title: "Something", body: "needs work", severity: "high" },
+					{ title: "Something", body: "needs work", severity: "P1" },
 				],
 				inline_comments: [],
 			}),

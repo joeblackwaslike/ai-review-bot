@@ -212,7 +212,7 @@ export function isSameClaim(
 
 // Keyed on the shared severity scale so a typo is a compile error rather than a
 // silent rank of 0, which would make a high-severity member lose its cluster.
-const SEVERITY_RANK: Record<Severity, number> = { high: 3, medium: 2, low: 1 };
+const SEVERITY_RANK: Record<Severity, number> = { P0: 4, P1: 3, P2: 2, P3: 1 };
 
 function severityRank(severity: string | null | undefined): number {
 	return severity && severity in SEVERITY_RANK

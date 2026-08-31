@@ -246,7 +246,7 @@ function extractRateLimit(err: unknown): RateLimitInfo | null {
 
 // Single source of truth for the severity scale — the Zod schema, the emoji
 // map, the rendered label, and the test fixtures all derive from this tuple.
-export const SEVERITY_LEVELS = ["high", "medium", "low"] as const;
+export const SEVERITY_LEVELS = ["P0", "P1", "P2", "P3"] as const;
 export type Severity = (typeof SEVERITY_LEVELS)[number];
 
 const ModelReviewSchema = z.object({
@@ -281,9 +281,10 @@ type ModelFinding = ModelReview["general_findings"][number];
 type ModelInlineComment = ModelReview["inline_comments"][number];
 
 const SEVERITY_EMOJI: Record<Severity, string> = {
-	high: "🔴",
-	medium: "🟡",
-	low: "🟢",
+	P0: "🔴",
+	P1: "🟠",
+	P2: "🟡",
+	P3: "🟢",
 };
 
 // Fallback badge for a severity that isn't a recognized level — only reachable
@@ -291,11 +292,10 @@ const SEVERITY_EMOJI: Record<Severity, string> = {
 // "undefined **undefined**".
 const UNKNOWN_SEVERITY_BADGE = "⚪ **Unknown**";
 
-function severityBadge(severity: string): string {
+export function severityBadge(severity: string): string {
 	const emoji = SEVERITY_EMOJI[severity as Severity];
 	if (!emoji) return UNKNOWN_SEVERITY_BADGE;
-	const label = `${severity[0].toUpperCase()}${severity.slice(1)}`;
-	return `${emoji} **${label}**`;
+	return `${emoji} **${severity}**`;
 }
 
 // Tier 1: always runs on every PR.
@@ -514,9 +514,10 @@ export function mergeReviewsDetailed(
 	// The most severe finding leads; additional distinct bodies are appended
 	// with a separator so no information is silently dropped.
 	const INLINE_SEVERITY_RANK: Record<string, number> = {
-		high: 3,
-		medium: 2,
-		low: 1,
+		P0: 4,
+		P1: 3,
+		P2: 2,
+		P3: 1,
 	};
 	const anchored = Array.from(commentGroups.values()).map((comments) => {
 		if (comments.length === 1) return comments[0];
@@ -1527,9 +1528,10 @@ export async function buildReview(
 	// buries the high-severity findings that actually matter.
 	const MAX_INLINE_COMMENTS = 50;
 	const INLINE_OVERFLOW_RANK: Record<string, number> = {
-		high: 3,
-		medium: 2,
-		low: 1,
+		P0: 4,
+		P1: 3,
+		P2: 2,
+		P3: 1,
 	};
 	let effectiveInlineComments = sanitizedComments;
 	let overflowComments: ModelInlineComment[] = [];

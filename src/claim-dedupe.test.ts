@@ -19,7 +19,7 @@ function claim(
 		path: "src/qc-app.ts",
 		line: 120,
 		title: "a finding",
-		severity: "medium" as string | null,
+		severity: "P2" as string | null,
 		body: "",
 		...over,
 	};
@@ -173,21 +173,21 @@ describe("dedupeClaims", () => {
 		const result = dedupeClaims([
 			claim({
 				line: 116,
-				severity: "low",
+				severity: "P3",
 				title:
 					"`body: f.title` duplicates the title instead of passing the finding body",
 				body: "short",
 			}),
 			claim({
 				line: 120,
-				severity: "high",
+				severity: "P1",
 				title:
 					"body field set to f.title — finding body duplicates the title, no description",
 				body: "the long explanation of why this matters",
 			}),
 		]);
 		expect(result.kept).toHaveLength(1);
-		expect(result.kept[0].severity).toBe("high");
+		expect(result.kept[0].severity).toBe("P1");
 		expect(result.kept[0].body).toBe(
 			"the long explanation of why this matters",
 		);
@@ -265,12 +265,12 @@ describe("merge mapping", () => {
 	it("reports each collapsed finding against the survivor representing it", () => {
 		const low = claim({
 			line: 116,
-			severity: "low",
+			severity: "P3",
 			title: "`body: f.title` duplicates the title instead of the finding body",
 		});
 		const high = claim({
 			line: 120,
-			severity: "high",
+			severity: "P1",
 			title: "body field set to f.title — finding body duplicates the title",
 		});
 
@@ -285,17 +285,17 @@ describe("merge mapping", () => {
 	it("points earlier members at the final survivor, not an interim one", () => {
 		const first = claim({
 			line: 10,
-			severity: "low",
+			severity: "P3",
 			title: "`alpha` returns a wrong unchecked value",
 		});
 		const second = claim({
 			line: 12,
-			severity: "medium",
+			severity: "P2",
 			title: "`alpha` returns wrong unchecked values",
 		});
 		const third = claim({
 			line: 14,
-			severity: "high",
+			severity: "P1",
 			title: "`alpha` returned a wrong unchecked value",
 		});
 

@@ -15,7 +15,7 @@ function comment(
 ): ReviewCommentPayload {
 	return {
 		user: { login: "anthropicreviewbot[bot]" },
-		body: "🟡 **Medium**\n\n**a finding**\n\nwhy",
+		body: "🟡 **P2**\n\n**a finding**\n\nwhy",
 		path: "src/x.ts",
 		line: 10,
 		pull_request_review_id: 900,
@@ -188,7 +188,7 @@ describe("backfillPr", () => {
 		expect(findingRows[0]).toMatchObject({
 			provider: "anthropic",
 			title: "a finding",
-			severity: "medium",
+			severity: "p2",
 			headSha: "sha1",
 			skills: [],
 			backfilled: true,

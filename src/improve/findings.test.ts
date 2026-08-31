@@ -4,10 +4,10 @@ import { findingNaturalKey, parseFindingComment } from "./findings.js";
 describe("parseFindingComment", () => {
 	it("splits a badged comment into severity, title and body", () => {
 		const parsed = parseFindingComment(
-			"🟡 **Medium**\n\n**directory fsync may fail silently**\n\nOn some platforms `fsyncSync` throws EINVAL.",
+			"🟡 **P2**\n\n**directory fsync may fail silently**\n\nOn some platforms `fsyncSync` throws EINVAL.",
 		);
 		expect(parsed).toEqual({
-			severity: "medium",
+			severity: "p2",
 			title: "directory fsync may fail silently",
 			body: "On some platforms `fsyncSync` throws EINVAL.",
 		});
@@ -15,9 +15,9 @@ describe("parseFindingComment", () => {
 
 	it("recognizes every severity badge the renderer emits", () => {
 		const cases: [string, string][] = [
-			["🔴 **High**", "high"],
-			["🟡 **Medium**", "medium"],
-			["🟢 **Low**", "low"],
+			["🔴 **P0**", "p0"],
+			["🟡 **P2**", "p2"],
+			["🟢 **P3**", "p3"],
 			["⚪ **Unknown**", "unknown"],
 		];
 		for (const [badge, severity] of cases) {
@@ -38,7 +38,7 @@ describe("parseFindingComment", () => {
 
 	it("keeps the suggestion block as part of the body", () => {
 		const parsed = parseFindingComment(
-			"🟢 **Low**\n\n**t**\n\nreason\n\n*Suggested fix:*\n\n```suggestion\nx\n```",
+			"🟢 **P3**\n\n**t**\n\nreason\n\n*Suggested fix:*\n\n```suggestion\nx\n```",
 		);
 		expect(parsed?.body).toContain("```suggestion");
 	});
@@ -48,7 +48,7 @@ describe("parseFindingComment", () => {
 	});
 
 	it("returns null for a badge with no title, rather than inventing one", () => {
-		expect(parseFindingComment("🔴 **High**\n\nbody with no bold title")).toBe(
+		expect(parseFindingComment("🔴 **P0**\n\nbody with no bold title")).toBe(
 			null,
 		);
 	});

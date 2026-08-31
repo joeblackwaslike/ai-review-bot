@@ -44,7 +44,7 @@ function catalogRow(over: Record<string, unknown> = {}) {
 		path: "src/x.ts",
 		line: 10,
 		title: "a finding",
-		severity: "high",
+		severity: "P1",
 		...over,
 	};
 }

@@ -21,7 +21,7 @@ function comment(over: Partial<PostedComment> & { id: number }): PostedComment {
 const provenance: Provenance = new Map([
 	[
 		"src/x.ts:10",
-		{ skills: ["code-reviewer.md"], title: "a finding", severity: "medium" },
+		{ skills: ["code-reviewer.md"], title: "a finding", severity: "P2" },
 	],
 ]);
 
@@ -32,7 +32,7 @@ describe("pairWithProvenance", () => {
 		expect(paired[0]).toMatchObject({
 			skills: ["code-reviewer.md"],
 			title: "a finding",
-			severity: "medium",
+			severity: "P2",
 		});
 	});
 
@@ -60,8 +60,8 @@ describe("pairWithProvenance", () => {
 
 	it("keeps every comment that matches, not just the first", () => {
 		const multi: Provenance = new Map([
-			["src/x.ts:10", { skills: ["a.md"], title: "t1", severity: "low" }],
-			["src/x.ts:20", { skills: ["b.md"], title: "t2", severity: "high" }],
+			["src/x.ts:10", { skills: ["a.md"], title: "t1", severity: "P3" }],
+			["src/x.ts:20", { skills: ["b.md"], title: "t2", severity: "P1" }],
 		]);
 		const paired = pairWithProvenance(
 			[comment({ id: 1 }), comment({ id: 2, line: 20 })],

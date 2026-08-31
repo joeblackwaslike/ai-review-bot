@@ -91,14 +91,14 @@ describe("prior own findings", () => {
 			path: "src/qc-app.ts",
 			line: 123,
 			title: "body is set to f.title",
-			severity: "high",
+			severity: "P1",
 			status: "open",
 		},
 		{
 			path: null,
 			line: null,
 			title: "no tests for the handler",
-			severity: "low",
+			severity: "P3",
 			status: "resolved",
 		},
 	];
@@ -112,10 +112,10 @@ describe("prior own findings", () => {
 			priorOwnFindings: findings,
 		});
 		expect(message).toContain(
-			"[open] high — src/qc-app.ts:123 — body is set to f.title",
+			"[open] P1 — src/qc-app.ts:123 — body is set to f.title",
 		);
 		expect(message).toContain(
-			"[resolved] low — general — no tests for the handler",
+			"[resolved] P3 — general — no tests for the handler",
 		);
 		expect(message).toContain("Do not file any of these again");
 	});

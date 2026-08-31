@@ -12,7 +12,7 @@ import type { DuplicateCluster, SeverityReliability } from "./trends.js";
 
 function severity(over: Partial<SeverityReliability>): SeverityReliability {
 	return {
-		severity: "high",
+		severity: "P1",
 		useful: 1,
 		lowValue: 1,
 		wrong: 10,
@@ -27,7 +27,7 @@ const opts = { minSample: 8, maxUsefulRatio: 0.3 };
 describe("planSeverityIssue", () => {
 	it("files the worst qualifying band with its counts", () => {
 		const plan = planSeverityIssue([severity({})], opts);
-		expect(plan?.signature).toBe("severity_reliability:high");
+		expect(plan?.signature).toBe("severity_reliability:P1");
 		expect(plan?.title).toContain("8% useful");
 		expect(plan?.body).toContain("| **factually wrong** | **10** |");
 	});
@@ -58,12 +58,12 @@ describe("planSeverityIssue", () => {
 	it("picks the least reliable band when several qualify", () => {
 		const plan = planSeverityIssue(
 			[
-				severity({ severity: "low", usefulRatio: 0.25 }),
-				severity({ severity: "high", usefulRatio: 0.05 }),
+				severity({ severity: "P3", usefulRatio: 0.25 }),
+				severity({ severity: "P1", usefulRatio: 0.05 }),
 			],
 			opts,
 		);
-		expect(plan?.signature).toBe("severity_reliability:high");
+		expect(plan?.signature).toBe("severity_reliability:P1");
 	});
 
 	it("names a fix surface without prescribing the fix", () => {
@@ -172,7 +172,7 @@ describe("thresholdsFromEnv", () => {
 describe("openProposalIssue", () => {
 	const plan = {
 		kind: "severity_reliability" as const,
-		signature: "severity_reliability:high",
+		signature: "severity_reliability:P1",
 		title: "t",
 		body: "b",
 		targetFile: "src/prompt.ts",
