@@ -260,32 +260,28 @@ const CATEGORY_VALUES = [
 ] as const;
 export type Category = (typeof CATEGORY_VALUES)[number];
 
+const findingBase = z.object({
+	title: z.string(),
+	body: z.string(),
+	severity: z.enum(SEVERITY_LEVELS),
+	category: z.enum(CATEGORY_VALUES),
+	confidence: z.number().min(0).max(1),
+	evidence: z.string().trim().min(1),
+	suppressible: z.boolean(),
+}).refine((f) => !(f.severity === "P0" && f.suppressible), {
+	message: "P0 findings must not be marked suppressible",
+	path: ["suppressible"],
+});
+
 export const ModelReviewSchema = z.object({
 	event: z.enum(["COMMENT", "REQUEST_CHANGES"]),
-	general_findings: z.array(
-		z.object({
-			title: z.string(),
-			body: z.string(),
-			severity: z.enum(SEVERITY_LEVELS),
-			category: z.enum(CATEGORY_VALUES),
-			confidence: z.number().min(0).max(1),
-			evidence: z.string().min(1),
-			suppressible: z.boolean(),
-		}),
-	),
+	general_findings: z.array(findingBase),
 	inline_comments: z.array(
-		z.object({
-			title: z.string(),
-			body: z.string(),
+		findingBase.extend({
 			path: z.string(),
 			line: z.number().int(),
 			start_line: z.number().int().nullable(),
 			suggestion: z.string().nullable(),
-			severity: z.enum(SEVERITY_LEVELS),
-			category: z.enum(CATEGORY_VALUES),
-			confidence: z.number().min(0).max(1),
-			evidence: z.string().min(1),
-			suppressible: z.boolean(),
 		}),
 	),
 });
