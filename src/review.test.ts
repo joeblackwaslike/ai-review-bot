@@ -907,6 +907,31 @@ describe("buildReview", () => {
 			expect.objectContaining({ priorBotReviews: [externalBotBody] }),
 		);
 	});
+
+	it("buildReview body includes the metadata block with sha and readiness", async () => {
+		const agentResponse = buildGenerateObjectResponse(
+			buildModelReview({ event: "REQUEST_CHANGES" }),
+		);
+		const summaryResponse = {
+			object: { summary: "Two issues found." },
+			usage: { inputTokens: 50, outputTokens: 20 },
+		};
+		mockGenerateObject
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(summaryResponse);
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+		});
+		expect(review?.body).toContain("<!-- ai-review:sha=");
+		expect(review?.body).toContain("<!-- ai-review:readiness=");
+		expect(review?.body).toContain("> Re-run: `/ai-review`");
+		expect(review?.body).not.toContain("Reviewed commit: `");
+	});
 });
 
 // ---------------------------------------------------------------------------
