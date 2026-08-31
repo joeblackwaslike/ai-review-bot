@@ -260,18 +260,20 @@ const CATEGORY_VALUES = [
 ] as const;
 export type Category = (typeof CATEGORY_VALUES)[number];
 
-const findingBase = z.object({
-	title: z.string(),
-	body: z.string(),
-	severity: z.enum(SEVERITY_LEVELS),
-	category: z.enum(CATEGORY_VALUES),
-	confidence: z.number().min(0).max(1),
-	evidence: z.string().trim().min(1),
-	suppressible: z.boolean(),
-}).refine((f) => !(f.severity === "P0" && f.suppressible), {
-	message: "P0 findings must not be marked suppressible",
-	path: ["suppressible"],
-});
+const findingBase = z
+	.object({
+		title: z.string(),
+		body: z.string(),
+		severity: z.enum(SEVERITY_LEVELS),
+		category: z.enum(CATEGORY_VALUES),
+		confidence: z.number().min(0).max(1),
+		evidence: z.string().trim().min(1),
+		suppressible: z.boolean(),
+	})
+	.refine((f) => !(f.severity === "P0" && f.suppressible), {
+		message: "P0 findings must not be marked suppressible",
+		path: ["suppressible"],
+	});
 
 export const ModelReviewSchema = z.object({
 	event: z.enum(["COMMENT", "REQUEST_CHANGES"]),
@@ -712,16 +714,84 @@ export async function generateSummary(
 	};
 }
 
-function formatFindings(findings: ModelFinding[]): string {
+export function formatFindings(findings: ModelFinding[]): string {
 	if (findings.length === 0) {
 		return "";
 	}
 
 	const rows = findings
-		.map((f) => `| ${SEVERITY_EMOJI[f.severity] ?? "⚪"} | **${f.title}** |`)
+		.map(
+			(f) =>
+				`| ${SEVERITY_EMOJI[f.severity] ?? "⚪"} | ${f.category} | **${f.title}** |`,
+		)
 		.join("\n");
 
-	return `| Sev | Finding |\n|---|---|\n${rows}`;
+	return `| Sev | Category | Finding |\n|---|---|---|\n${rows}`;
+}
+
+export interface ReadinessScoreOptions {
+	event: "APPROVE" | "REQUEST_CHANGES" | "COMMENT";
+	hasP0: boolean;
+	survivingPrior: string[];
+	partial: boolean;
+}
+
+export function computeReadinessScore(opts: ReadinessScoreOptions): number {
+	if (opts.event === "APPROVE") return 5;
+	if (opts.hasP0) return 1;
+	if (opts.survivingPrior.length > 0) return 2;
+	if (opts.event === "REQUEST_CHANGES") return 3;
+	return opts.partial ? 3 : 4;
+}
+
+export function renderReadinessBar(score: number): string {
+	return `${"🟩".repeat(score)}${"⬜".repeat(5 - score)} **${score}/5**`;
+}
+
+export interface ReviewMetaParsed {
+	sha: string;
+	review: number;
+	readiness: number;
+	provider: string;
+	model: string;
+	findings: number;
+	cost: number;
+}
+
+export function parseReviewMetadata(body: string): ReviewMetaParsed | null {
+	const extract = (key: string): string | undefined => {
+		const m = body.match(
+			new RegExp(`<!--\\s*ai-review:${key}=([^\\s>]+)\\s*-->`),
+		);
+		return m?.[1];
+	};
+	const sha = extract("sha");
+	const reviewStr = extract("review");
+	const readinessStr = extract("readiness");
+	const provider = extract("provider");
+	const model = extract("model");
+	const findingsStr = extract("findings");
+	const costStr = extract("cost");
+	if (
+		sha == null ||
+		reviewStr == null ||
+		readinessStr == null ||
+		provider == null ||
+		model == null ||
+		findingsStr == null ||
+		costStr == null
+	) {
+		return null;
+	}
+	return {
+		sha,
+		review: Number(reviewStr),
+		readiness: Number(readinessStr),
+		provider,
+		model,
+		findings: Number(findingsStr),
+		cost: Number(costStr),
+	};
 }
 
 export function collectRightSideLines(patch: string): Set<number> {
