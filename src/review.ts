@@ -110,7 +110,7 @@ export interface ReviewDecision {
 	quotaProvider?: ModelSelection["provider"];
 }
 
-interface ReviewComment {
+export interface ReviewComment {
 	path: string;
 	body: string;
 	line: number;
@@ -294,8 +294,8 @@ const SummarySchema = z.object({
 
 export type ModelReview = z.infer<typeof ModelReviewSchema>;
 
-type ModelFinding = ModelReview["general_findings"][number];
-type ModelInlineComment = ModelReview["inline_comments"][number];
+export type ModelFinding = ModelReview["general_findings"][number];
+export type ModelInlineComment = ModelReview["inline_comments"][number];
 
 const SEVERITY_EMOJI: Record<Severity, string> = {
 	P0: "🔴",
@@ -792,6 +792,161 @@ export function parseReviewMetadata(body: string): ReviewMetaParsed | null {
 		findings: Number(findingsStr),
 		cost: Number(costStr),
 	};
+}
+
+export interface FormatReviewBodyOptions {
+	commentPrefix: string;
+	finalEvent: ReviewDecision["event"];
+	summary: string;
+	approvalMessage: string;
+	readiness: number;
+	tier2Matches: { skillPath: string; reason: string }[];
+	skipped: string[];
+	errored: string[];
+	allSkillsCount: number;
+	generalFindings: ModelFinding[];
+	reviewComments: ReviewComment[];
+	dropped: ModelInlineComment[];
+	overflowCount: number;
+	maxInlineComments: number;
+	feedbackEnabled: boolean;
+	survivingPrior: PersistedFinding[];
+	incrementalPass: boolean;
+	priorSha: string;
+	headSha: string;
+	reviewCount: number;
+	model: string;
+	cost: number;
+}
+
+export function formatReviewBody(opts: FormatReviewBodyOptions): string {
+	const {
+		commentPrefix,
+		finalEvent,
+		summary,
+		approvalMessage,
+		readiness,
+		tier2Matches,
+		skipped,
+		errored,
+		allSkillsCount,
+		generalFindings,
+		reviewComments,
+		dropped,
+		overflowCount,
+		maxInlineComments,
+		feedbackEnabled,
+		survivingPrior,
+		incrementalPass,
+		priorSha,
+		headSha,
+		reviewCount,
+		model,
+		cost,
+	} = opts;
+
+	const readinessBar = renderReadinessBar(readiness);
+
+	const tier2Notice =
+		tier2Matches.length > 0
+			? `#### Additional skills activated\n\n${tier2Matches
+					.map(
+						({ skillPath, reason }) =>
+							`- \`${skillPath.replace(/\.md$/, "")}\` — ${reason}`,
+					)
+					.join("\n")}`
+			: "";
+
+	const budgetNotices: string[] = [];
+	if (skipped.length > 0) {
+		budgetNotices.push(
+			`> ⏱ **Partial review.** ${skipped.length} of ${allSkillsCount} agents did not run — this pass hit its time budget before reaching ${skipped
+				.map((s) => `\`${s.replace(/\.md$/, "")}\``)
+				.join(", ")}. Re-run the review command for full coverage.`,
+		);
+	}
+	if (errored.length > 0) {
+		budgetNotices.push(
+			`> ⚠️ **Partial review.** ${errored.length} of ${allSkillsCount} agent(s) failed to complete: ${errored
+				.map((s) => `\`${s.replace(/\.md$/, "")}\``)
+				.join(", ")}. Re-run the review command for full coverage.`,
+		);
+	}
+
+	const findingsBlock = formatFindings(generalFindings);
+
+	const inlineSummary =
+		reviewComments.length > 0
+			? `Inline comments: ${reviewComments.length}`
+			: "Inline comments: none";
+
+	const priorBlockExplanation = incrementalPass
+		? `This pass reviewed only what changed since \`${priorSha.slice(0, 12)}\`, so these were not re-checked.`
+		: "These were flagged in a previous review; the agents were instructed not to restate them, so they are carried forward as still open.";
+	const priorBlock =
+		survivingPrior.length > 0
+			? `#### Still open from the previous review\n\n${priorBlockExplanation}\n\n| Sev | Finding |\n|---|---|\n${survivingPrior
+					.map((f) => {
+						const where =
+							f.path && f.line != null ? ` (\`${f.path}:${f.line}\`)` : "";
+						return `| ${SEVERITY_EMOJI[f.severity as Severity] ?? UNKNOWN_SEVERITY_BADGE} | **${f.title}**${where} |`;
+					})
+					.join("\n")}`
+			: "";
+
+	const droppedNotice =
+		dropped.length > 0
+			? `> ⚠️ ${dropped.length} inline comment${dropped.length === 1 ? "" : "s"} could not be anchored to the diff and ${dropped.length === 1 ? "was" : "were"} posted here instead:\n${dropped
+					.map(
+						(c) =>
+							`> - ${SEVERITY_EMOJI[c.severity as Severity] ?? UNKNOWN_SEVERITY_BADGE} **${c.title}** (\`${c.path}:${c.line}\`)`,
+					)
+					.join("\n")}`
+			: "";
+
+	const overflowNotice =
+		overflowCount > 0
+			? `> ℹ️ ${overflowCount} inline comment${overflowCount === 1 ? "" : "s"} not posted (${maxInlineComments}-comment cap; lowest-severity findings dropped first). Re-run with \`/ai-review\` on a smaller diff for complete coverage.`
+			: "";
+
+	const feedbackInvite =
+		feedbackEnabled && reviewComments.length > 0
+			? "💬 React on any inline comment to train our reviewers: 👍 it helped, 👎 it was wrong, 😕 it didn't land. For 😕, please also reply saying why — the reply is what we learn from."
+			: "";
+
+	const commandHints =
+		"> Re-run: `/ai-review` · Full diff: `/ai-review --full` · Skip: `/ai-review --skip`";
+
+	const metadataBlock = [
+		`<!-- ai-review:sha=${headSha} -->`,
+		`<!-- ai-review:review=${reviewCount} -->`,
+		`<!-- ai-review:readiness=${readiness} -->`,
+		`<!-- ai-review:provider=${model.includes("gpt") || model.includes("o4") ? "openai" : "anthropic"} -->`,
+		`<!-- ai-review:model=${model} -->`,
+		`<!-- ai-review:findings=${generalFindings.length} -->`,
+		`<!-- ai-review:cost=${cost.toFixed(6)} -->`,
+	].join("\n");
+
+	const costFooter = `---\n*Model: ${model} · ${allSkillsCount} agents · $${cost.toFixed(6)} · [ai-review-bot](https://github.com/joeblackwaslike/ai-review-bot)*`;
+
+	const parts = [
+		`### ${commentPrefix}`,
+		readinessBar,
+		finalEvent === "APPROVE" ? approvalMessage : summary,
+		tier2Notice,
+		...budgetNotices,
+		...(finalEvent === "APPROVE" ? [] : [inlineSummary]),
+		droppedNotice,
+		overflowNotice,
+		feedbackInvite,
+		findingsBlock,
+		priorBlock,
+		commandHints,
+		metadataBlock,
+		costFooter,
+	];
+
+	return parts.filter((part) => part.length > 0).join("\n\n");
 }
 
 export function collectRightSideLines(patch: string): Set<number> {

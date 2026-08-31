@@ -10,6 +10,7 @@ import {
 	computePaceDelayMs,
 	computeReadinessScore,
 	formatFindings,
+	formatReviewBody,
 	generateSummary,
 	ModelReviewSchema,
 	mergeReviews,
@@ -3894,5 +3895,90 @@ describe("parseReviewMetadata", () => {
 		expect(result?.model).toBe("claude-sonnet-4-6");
 		expect(result?.findings).toBe(5);
 		expect(result?.cost).toBeCloseTo(0.0123);
+	});
+});
+
+describe("formatReviewBody", () => {
+	const baseOpts = {
+		commentPrefix: "Claude Review",
+		finalEvent: "REQUEST_CHANGES" as const,
+		summary: "Two issues found.",
+		approvalMessage: "",
+		readiness: 3,
+		tier2Matches: [] as { skillPath: string; reason: string }[],
+		skipped: [] as string[],
+		errored: [] as string[],
+		allSkillsCount: 5,
+		generalFindings: [] as Parameters<
+			typeof formatReviewBody
+		>[0]["generalFindings"],
+		reviewComments: [] as Parameters<
+			typeof formatReviewBody
+		>[0]["reviewComments"],
+		dropped: [] as Parameters<typeof formatReviewBody>[0]["dropped"],
+		overflowCount: 0,
+		maxInlineComments: 50,
+		feedbackEnabled: false,
+		survivingPrior: [] as Parameters<
+			typeof formatReviewBody
+		>[0]["survivingPrior"],
+		incrementalPass: false,
+		priorSha: "",
+		headSha: "abc123def456",
+		reviewCount: 2,
+		model: "claude-sonnet-5",
+		cost: 0.000042,
+	};
+
+	it("starts with the commentPrefix heading", () => {
+		const body = formatReviewBody(baseOpts);
+		expect(body.startsWith("### Claude Review")).toBe(true);
+	});
+
+	it("includes the readiness bar", () => {
+		const body = formatReviewBody(baseOpts);
+		expect(body).toContain("🟩🟩🟩⬜⬜ **3/5**");
+	});
+
+	it("includes command hints", () => {
+		const body = formatReviewBody(baseOpts);
+		expect(body).toContain("/ai-review");
+		expect(body).toContain("/ai-review --full");
+	});
+
+	it("includes hidden metadata block with sha and reviewCount", () => {
+		const body = formatReviewBody(baseOpts);
+		expect(body).toContain("<!-- ai-review:sha=abc123def456 -->");
+		expect(body).toContain("<!-- ai-review:review=2 -->");
+		expect(body).toContain("<!-- ai-review:readiness=3 -->");
+	});
+
+	it("roundtrips through parseReviewMetadata", () => {
+		const body = formatReviewBody(baseOpts);
+		const meta = parseReviewMetadata(body);
+		expect(meta?.sha).toBe("abc123def456");
+		expect(meta?.review).toBe(2);
+		expect(meta?.readiness).toBe(3);
+		expect(meta?.model).toBe("claude-sonnet-5");
+	});
+
+	it("shows approvalMessage instead of summary on APPROVE", () => {
+		const body = formatReviewBody({
+			...baseOpts,
+			finalEvent: "APPROVE",
+			approvalMessage: "✅ No issues found. PR approved for merge.",
+			readiness: 5,
+		});
+		expect(body).toContain("✅ No issues found.");
+		expect(body).not.toContain("Two issues found.");
+	});
+
+	it("includes partial review notice when agents were skipped", () => {
+		const body = formatReviewBody({
+			...baseOpts,
+			skipped: ["security-sast.md"],
+		});
+		expect(body).toContain("Partial review");
+		expect(body).toContain("security-sast");
 	});
 });
