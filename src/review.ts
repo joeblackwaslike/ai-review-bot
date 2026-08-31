@@ -264,7 +264,11 @@ const findingBase = z
 	.object({
 		title: z.string(),
 		body: z.string(),
-		severity: z.enum(SEVERITY_LEVELS),
+		severity: z
+			.enum(SEVERITY_LEVELS)
+			.describe(
+				"Severity: P0 (critical/crash/auth-bypass), P1 (high/correctness bug), P2 (medium/important), P3 (low/nitpick). Use P0–P3 for BOTH general_findings and inline_comments — never 'high'/'medium'/'low'.",
+			),
 		category: z.enum(CATEGORY_VALUES),
 		confidence: z.number().min(0).max(1),
 		evidence: z.string().trim().min(1),
@@ -815,6 +819,7 @@ export interface FormatReviewBodyOptions {
 	priorSha: string;
 	headSha: string;
 	reviewCount: number;
+	provider: string;
 	model: string;
 	cost: number;
 }
@@ -841,6 +846,7 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		priorSha,
 		headSha,
 		reviewCount,
+		provider,
 		model,
 		cost,
 	} = opts;
@@ -921,7 +927,7 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		`<!-- ai-review:sha=${headSha} -->`,
 		`<!-- ai-review:review=${reviewCount} -->`,
 		`<!-- ai-review:readiness=${readiness} -->`,
-		`<!-- ai-review:provider=${model.includes("gpt") || model.includes("o4") ? "openai" : "anthropic"} -->`,
+		`<!-- ai-review:provider=${provider} -->`,
 		`<!-- ai-review:model=${model} -->`,
 		`<!-- ai-review:findings=${generalFindings.length} -->`,
 		`<!-- ai-review:cost=${cost.toFixed(6)} -->`,
@@ -1954,7 +1960,8 @@ export async function buildReview(
 		incrementalPass,
 		priorSha,
 		headSha: context.headSha,
-		reviewCount: state?.reviewCount ?? 0,
+		reviewCount: (state?.reviewCount ?? 0) + 1,
+		provider: selection.provider,
 		model: selection.model,
 		cost,
 	});

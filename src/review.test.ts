@@ -3951,6 +3951,7 @@ describe("formatReviewBody", () => {
 		priorSha: "",
 		headSha: "abc123def456",
 		reviewCount: 2,
+		provider: "anthropic",
 		model: "claude-sonnet-5",
 		cost: 0.000042,
 	};
@@ -3976,6 +3977,7 @@ describe("formatReviewBody", () => {
 		expect(body).toContain("<!-- ai-review:sha=abc123def456 -->");
 		expect(body).toContain("<!-- ai-review:review=2 -->");
 		expect(body).toContain("<!-- ai-review:readiness=3 -->");
+		expect(body).toContain("<!-- ai-review:provider=anthropic -->");
 	});
 
 	it("roundtrips through parseReviewMetadata", () => {
