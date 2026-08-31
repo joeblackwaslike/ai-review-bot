@@ -11,6 +11,7 @@ import {
 	generateSummary,
 	mergeReviews,
 	mergeReviewsDetailed,
+	ModelReviewSchema,
 	parseRawDiff,
 	runAgent,
 	SEVERITY_LEVELS,
@@ -100,6 +101,46 @@ describe("severity scale", () => {
 
 	it("severityBadge maps P1 to 🟠 **P1**", () => {
 		expect(severityBadge("P1")).toBe("🟠 **P1**");
+	});
+});
+
+describe("ModelReviewSchema validation", () => {
+	it("ModelReviewSchema requires evidence to be non-empty", () => {
+		const result = ModelReviewSchema.safeParse({
+			event: "COMMENT",
+			general_findings: [
+				{
+					title: "t",
+					body: "b",
+					severity: "P2",
+					category: "bug",
+					confidence: 0.9,
+					evidence: "",
+					suppressible: false,
+				},
+			],
+			inline_comments: [],
+		});
+		expect(result.success).toBe(false);
+	});
+
+	it("ModelReviewSchema accepts a valid P0 finding", () => {
+		const result = ModelReviewSchema.safeParse({
+			event: "REQUEST_CHANGES",
+			general_findings: [
+				{
+					title: "RCE",
+					body: "details",
+					severity: "P0",
+					category: "security",
+					confidence: 0.99,
+					evidence: "src/auth.ts:42 — unsanitized input passed to exec()",
+					suppressible: false,
+				},
+			],
+			inline_comments: [],
+		});
+		expect(result.success).toBe(true);
 	});
 });
 
