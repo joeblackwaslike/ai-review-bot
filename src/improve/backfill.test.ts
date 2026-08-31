@@ -188,7 +188,7 @@ describe("backfillPr", () => {
 		expect(findingRows[0]).toMatchObject({
 			provider: "anthropic",
 			title: "a finding",
-			severity: "p2",
+			severity: "P2",
 			headSha: "sha1",
 			skills: [],
 			backfilled: true,

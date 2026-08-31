@@ -7,7 +7,7 @@ describe("parseFindingComment", () => {
 			"🟡 **P2**\n\n**directory fsync may fail silently**\n\nOn some platforms `fsyncSync` throws EINVAL.",
 		);
 		expect(parsed).toEqual({
-			severity: "p2",
+			severity: "P2",
 			title: "directory fsync may fail silently",
 			body: "On some platforms `fsyncSync` throws EINVAL.",
 		});
@@ -15,10 +15,10 @@ describe("parseFindingComment", () => {
 
 	it("recognizes every severity badge the renderer emits", () => {
 		const cases: [string, string][] = [
-			["🔴 **P0**", "p0"],
-			["🟡 **P2**", "p2"],
-			["🟢 **P3**", "p3"],
-			["⚪ **Unknown**", "unknown"],
+			["🔴 **P0**", "P0"],
+			["🟡 **P2**", "P2"],
+			["🟢 **P3**", "P3"],
+			["⚪ **Unknown**", "Unknown"],
 		];
 		for (const [badge, severity] of cases) {
 			expect(parseFindingComment(`${badge}\n\n**t**\n\nb`)?.severity).toBe(

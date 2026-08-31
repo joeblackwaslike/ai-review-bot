@@ -21,7 +21,7 @@ export function parseFindingComment(body: string): ParsedFinding | null {
 	let rest = body.trimStart();
 
 	const badge = BADGE_PATTERN.exec(rest);
-	const severity = badge ? badge[1].toLowerCase() : null;
+	const severity = badge ? badge[1] : null;
 	if (badge) rest = rest.slice(badge[0].length);
 
 	const title = TITLE_PATTERN.exec(rest);
