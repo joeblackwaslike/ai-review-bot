@@ -8,11 +8,16 @@ import {
 	classifyRefusal,
 	collectRightSideLines,
 	computePaceDelayMs,
+	computeReadinessScore,
+	formatFindings,
+	formatReviewBody,
 	generateSummary,
 	ModelReviewSchema,
 	mergeReviews,
 	mergeReviewsDetailed,
 	parseRawDiff,
+	parseReviewMetadata,
+	renderReadinessBar,
 	runAgent,
 	SEVERITY_LEVELS,
 	sanitizeInlineComments,
@@ -901,6 +906,31 @@ describe("buildReview", () => {
 		expect(mockBuildUserMessage).toHaveBeenCalledWith(
 			expect.objectContaining({ priorBotReviews: [externalBotBody] }),
 		);
+	});
+
+	it("buildReview body includes the metadata block with sha and readiness", async () => {
+		const agentResponse = buildGenerateObjectResponse(
+			buildModelReview({ event: "REQUEST_CHANGES" }),
+		);
+		const summaryResponse = {
+			object: { summary: "Two issues found." },
+			usage: { inputTokens: 50, outputTokens: 20 },
+		};
+		mockGenerateObject
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(agentResponse)
+			.mockResolvedValueOnce(summaryResponse);
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+		});
+		expect(review?.body).toContain("<!-- ai-review:sha=");
+		expect(review?.body).toContain("<!-- ai-review:readiness=");
+		expect(review?.body).toContain("> Re-run: `/ai-review`");
+		expect(review?.body).not.toContain("Reviewed commit: `");
 	});
 });
 
@@ -3731,5 +3761,251 @@ describe("buildReview auth threading", () => {
 		for (const call of agentCalls) {
 			expect(call[0].model).toBe("gpt-5.6-terra");
 		}
+	});
+});
+
+describe("formatFindings", () => {
+	it("returns empty string when no findings", () => {
+		expect(formatFindings([])).toBe("");
+	});
+
+	it("renders a three-column table with Category column", () => {
+		const findings = [
+			{
+				title: "Unsanitized input",
+				body: "Details.",
+				severity: "P1" as const,
+				category: "security" as const,
+				confidence: 0.9,
+				evidence: "src/api.ts:5",
+				suppressible: false,
+			},
+			{
+				title: "Long variable name",
+				body: "Rename it.",
+				severity: "P3" as const,
+				category: "style" as const,
+				confidence: 0.7,
+				evidence: "src/utils.ts:10",
+				suppressible: true,
+			},
+		];
+		const result = formatFindings(findings);
+		expect(result).toContain("| Sev | Category | Finding |");
+		expect(result).toContain("|---|---|---|");
+		expect(result).toContain("security");
+		expect(result).toContain("style");
+		expect(result).toContain("🟠");
+		expect(result).toContain("🟢");
+		expect(result).toContain("**Unsanitized input**");
+		expect(result).toContain("**Long variable name**");
+	});
+});
+
+describe("computeReadinessScore", () => {
+	it("returns 5 for APPROVE event", () => {
+		expect(
+			computeReadinessScore({
+				event: "APPROVE",
+				hasP0: false,
+				survivingPrior: [],
+				partial: false,
+			}),
+		).toBe(5);
+	});
+
+	it("returns 1 when P0 finding present", () => {
+		expect(
+			computeReadinessScore({
+				event: "REQUEST_CHANGES",
+				hasP0: true,
+				survivingPrior: [],
+				partial: false,
+			}),
+		).toBe(1);
+	});
+
+	it("returns 2 when surviving prior findings exist", () => {
+		expect(
+			computeReadinessScore({
+				event: "REQUEST_CHANGES",
+				hasP0: false,
+				survivingPrior: ["finding-1"],
+				partial: false,
+			}),
+		).toBe(2);
+	});
+
+	it("returns 3 for REQUEST_CHANGES with no P0 and no prior", () => {
+		expect(
+			computeReadinessScore({
+				event: "REQUEST_CHANGES",
+				hasP0: false,
+				survivingPrior: [],
+				partial: false,
+			}),
+		).toBe(3);
+	});
+
+	it("returns 4 for COMMENT with all agents completing", () => {
+		expect(
+			computeReadinessScore({
+				event: "COMMENT",
+				hasP0: false,
+				survivingPrior: [],
+				partial: false,
+			}),
+		).toBe(4);
+	});
+
+	it("returns 3 for COMMENT with partial review", () => {
+		expect(
+			computeReadinessScore({
+				event: "COMMENT",
+				hasP0: false,
+				survivingPrior: [],
+				partial: true,
+			}),
+		).toBe(3);
+	});
+});
+
+describe("renderReadinessBar", () => {
+	it("renders 5 filled for score 5", () => {
+		expect(renderReadinessBar(5)).toBe("🟩🟩🟩🟩🟩 **5/5**");
+	});
+
+	it("renders 1 filled 4 empty for score 1", () => {
+		expect(renderReadinessBar(1)).toBe("🟩⬜⬜⬜⬜ **1/5**");
+	});
+
+	it("renders 3 filled 2 empty for score 3", () => {
+		expect(renderReadinessBar(3)).toBe("🟩🟩🟩⬜⬜ **3/5**");
+	});
+});
+
+describe("parseReviewMetadata", () => {
+	it("returns null for body with no metadata comment", () => {
+		expect(parseReviewMetadata("No metadata here")).toBeNull();
+	});
+
+	it("returns null if any required field is missing", () => {
+		const body = [
+			"<!-- ai-review:sha=abc123 -->",
+			"<!-- ai-review:review=1 -->",
+			"<!-- ai-review:readiness=4 -->",
+			"<!-- ai-review:provider=anthropic -->",
+			"<!-- ai-review:model=claude-sonnet-4-6 -->",
+			"<!-- ai-review:findings=3 -->",
+		].join("\n");
+		expect(parseReviewMetadata(body)).toBeNull();
+	});
+
+	it("parses all required fields when present", () => {
+		const body = [
+			"<!-- ai-review:sha=abc1234567890 -->",
+			"<!-- ai-review:review=2 -->",
+			"<!-- ai-review:readiness=4 -->",
+			"<!-- ai-review:provider=anthropic -->",
+			"<!-- ai-review:model=claude-sonnet-4-6 -->",
+			"<!-- ai-review:findings=5 -->",
+			"<!-- ai-review:cost=0.0123 -->",
+		].join("\n");
+		const result = parseReviewMetadata(body);
+		expect(result).not.toBeNull();
+		expect(result?.sha).toBe("abc1234567890");
+		expect(result?.review).toBe(2);
+		expect(result?.readiness).toBe(4);
+		expect(result?.provider).toBe("anthropic");
+		expect(result?.model).toBe("claude-sonnet-4-6");
+		expect(result?.findings).toBe(5);
+		expect(result?.cost).toBeCloseTo(0.0123);
+	});
+});
+
+describe("formatReviewBody", () => {
+	const baseOpts = {
+		commentPrefix: "Claude Review",
+		finalEvent: "REQUEST_CHANGES" as const,
+		summary: "Two issues found.",
+		approvalMessage: "",
+		readiness: 3,
+		tier2Matches: [] as { skillPath: string; reason: string }[],
+		skipped: [] as string[],
+		errored: [] as string[],
+		allSkillsCount: 5,
+		generalFindings: [] as Parameters<
+			typeof formatReviewBody
+		>[0]["generalFindings"],
+		reviewComments: [] as Parameters<
+			typeof formatReviewBody
+		>[0]["reviewComments"],
+		dropped: [] as Parameters<typeof formatReviewBody>[0]["dropped"],
+		overflowCount: 0,
+		maxInlineComments: 50,
+		feedbackEnabled: false,
+		survivingPrior: [] as Parameters<
+			typeof formatReviewBody
+		>[0]["survivingPrior"],
+		incrementalPass: false,
+		priorSha: "",
+		headSha: "abc123def456",
+		reviewCount: 2,
+		provider: "anthropic",
+		model: "claude-sonnet-5",
+		cost: 0.000042,
+	};
+
+	it("starts with the commentPrefix heading", () => {
+		const body = formatReviewBody(baseOpts);
+		expect(body.startsWith("### Claude Review")).toBe(true);
+	});
+
+	it("includes the readiness bar", () => {
+		const body = formatReviewBody(baseOpts);
+		expect(body).toContain("🟩🟩🟩⬜⬜ **3/5**");
+	});
+
+	it("includes command hints", () => {
+		const body = formatReviewBody(baseOpts);
+		expect(body).toContain("/ai-review");
+		expect(body).toContain("/ai-review --full");
+	});
+
+	it("includes hidden metadata block with sha and reviewCount", () => {
+		const body = formatReviewBody(baseOpts);
+		expect(body).toContain("<!-- ai-review:sha=abc123def456 -->");
+		expect(body).toContain("<!-- ai-review:review=2 -->");
+		expect(body).toContain("<!-- ai-review:readiness=3 -->");
+		expect(body).toContain("<!-- ai-review:provider=anthropic -->");
+	});
+
+	it("roundtrips through parseReviewMetadata", () => {
+		const body = formatReviewBody(baseOpts);
+		const meta = parseReviewMetadata(body);
+		expect(meta?.sha).toBe("abc123def456");
+		expect(meta?.review).toBe(2);
+		expect(meta?.readiness).toBe(3);
+		expect(meta?.model).toBe("claude-sonnet-5");
+	});
+
+	it("shows approvalMessage instead of summary on APPROVE", () => {
+		const body = formatReviewBody({
+			...baseOpts,
+			finalEvent: "APPROVE",
+			approvalMessage: "✅ No issues found. PR approved for merge.",
+			readiness: 5,
+		});
+		expect(body).toContain("✅ No issues found.");
+		expect(body).not.toContain("Two issues found.");
+	});
+
+	it("includes partial review notice when agents were skipped", () => {
+		const body = formatReviewBody({
+			...baseOpts,
+			skipped: ["security-sast.md"],
+		});
+		expect(body).toContain("Partial review");
+		expect(body).toContain("security-sast");
 	});
 });

@@ -45,11 +45,12 @@ describe("review-state", () => {
 				},
 			],
 			reviewedAt: "2026-06-17T00:00:00Z",
+			reviewCount: 0,
 		};
 		await saveReviewState(client, "anthropic", "o", "r", 7, state);
 		expect(
 			await loadReviewState(client, "anthropic", "o", "r", 7, null),
-		).toEqual(state);
+		).toEqual({ ...state, reviewCount: 1 });
 	});
 
 	it("returns null when KV is cold and no prior review is given", async () => {
@@ -263,5 +264,128 @@ describe("review-state", () => {
 			null,
 		);
 		expect(loaded?.findings[0].severity).toBe("P0");
+	});
+});
+
+describe("reviewCount", () => {
+	it("defaults to 0 for fresh state from parsePriorReview path", async () => {
+		const { client } = fakeKv();
+		const loaded = await loadReviewState(
+			client,
+			"anthropic",
+			"o",
+			"r",
+			1,
+			null,
+		);
+		expect(loaded).toBeNull();
+	});
+
+	it("starts at 0 and increments to 1 on first save", async () => {
+		const { client } = fakeKv();
+		const state = {
+			lastReviewedSha: "sha1",
+			event: "COMMENT" as const,
+			findings: [],
+			reviewedAt: new Date().toISOString(),
+			reviewCount: 0,
+		};
+		await saveReviewState(client, "anthropic", "o", "r", 5, state);
+		const loaded = await loadReviewState(
+			client,
+			"anthropic",
+			"o",
+			"r",
+			5,
+			null,
+		);
+		expect(loaded?.reviewCount).toBe(1);
+	});
+
+	it("increments reviewCount on each save", async () => {
+		const { client } = fakeKv();
+		const base = {
+			lastReviewedSha: "sha1",
+			event: "COMMENT" as const,
+			findings: [],
+			reviewedAt: new Date().toISOString(),
+			reviewCount: 0,
+		};
+		await saveReviewState(client, "anthropic", "o", "r", 6, base);
+		const after1 = await loadReviewState(
+			client,
+			"anthropic",
+			"o",
+			"r",
+			6,
+			null,
+		);
+		expect(after1?.reviewCount).toBe(1);
+
+		if (!after1) throw new Error("expected after1 to be non-null");
+		await saveReviewState(client, "anthropic", "o", "r", 6, after1);
+		const after2 = await loadReviewState(
+			client,
+			"anthropic",
+			"o",
+			"r",
+			6,
+			null,
+		);
+		expect(after2?.reviewCount).toBe(2);
+	});
+
+	it("parsePriorReview recovers SHA and reviewCount from new metadata block", async () => {
+		const { client } = fakeKv();
+		const prior = [
+			"### ai-review-bot",
+			"<!-- ai-review:sha=abc1234567890 -->",
+			"<!-- ai-review:review=3 -->",
+			"<!-- ai-review:readiness=4 -->",
+			"<!-- ai-review:provider=anthropic -->",
+			"<!-- ai-review:model=claude-sonnet-5 -->",
+			"<!-- ai-review:findings=2 -->",
+			"<!-- ai-review:cost=0.012345 -->",
+			"",
+			"| Sev | Category | Finding |",
+			"|---|---|---|",
+			"| 🟠 | bug | **Missing null check** |",
+			"| 🟡 | style | **Unused import** |",
+		].join("\n");
+		const state = await loadReviewState(
+			client,
+			"anthropic",
+			"o",
+			"r",
+			7,
+			prior,
+		);
+		expect(state?.lastReviewedSha).toBe("abc1234567890");
+		expect(state?.reviewCount).toBe(3);
+		expect(state?.findings.some((f) => f.title === "Missing null check")).toBe(
+			true,
+		);
+		expect(state?.findings.some((f) => f.title === "Unused import")).toBe(true);
+	});
+
+	it("tolerates old records missing reviewCount (defaults to 0 before increment)", async () => {
+		const { client, store } = fakeKv();
+		const key = stateKey("anthropic", "o", "r", 7);
+		const oldRecord = JSON.stringify({
+			lastReviewedSha: "sha1",
+			event: "COMMENT",
+			findings: [],
+			reviewedAt: new Date().toISOString(),
+		});
+		store.set(key, oldRecord);
+		const loaded = await loadReviewState(
+			client,
+			"anthropic",
+			"o",
+			"r",
+			7,
+			null,
+		);
+		expect(loaded?.reviewCount).toBe(0);
 	});
 });

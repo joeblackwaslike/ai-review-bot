@@ -110,7 +110,7 @@ export interface ReviewDecision {
 	quotaProvider?: ModelSelection["provider"];
 }
 
-interface ReviewComment {
+export interface ReviewComment {
 	path: string;
 	body: string;
 	line: number;
@@ -260,18 +260,24 @@ const CATEGORY_VALUES = [
 ] as const;
 export type Category = (typeof CATEGORY_VALUES)[number];
 
-const findingBase = z.object({
-	title: z.string(),
-	body: z.string(),
-	severity: z.enum(SEVERITY_LEVELS),
-	category: z.enum(CATEGORY_VALUES),
-	confidence: z.number().min(0).max(1),
-	evidence: z.string().trim().min(1),
-	suppressible: z.boolean(),
-}).refine((f) => !(f.severity === "P0" && f.suppressible), {
-	message: "P0 findings must not be marked suppressible",
-	path: ["suppressible"],
-});
+const findingBase = z
+	.object({
+		title: z.string(),
+		body: z.string(),
+		severity: z
+			.enum(SEVERITY_LEVELS)
+			.describe(
+				"Severity: P0 (critical/crash/auth-bypass), P1 (high/correctness bug), P2 (medium/important), P3 (low/nitpick). Use P0–P3 for BOTH general_findings and inline_comments — never 'high'/'medium'/'low'.",
+			),
+		category: z.enum(CATEGORY_VALUES),
+		confidence: z.number().min(0).max(1),
+		evidence: z.string().trim().min(1),
+		suppressible: z.boolean(),
+	})
+	.refine((f) => !(f.severity === "P0" && f.suppressible), {
+		message: "P0 findings must not be marked suppressible",
+		path: ["suppressible"],
+	});
 
 export const ModelReviewSchema = z.object({
 	event: z.enum(["COMMENT", "REQUEST_CHANGES"]),
@@ -292,8 +298,8 @@ const SummarySchema = z.object({
 
 export type ModelReview = z.infer<typeof ModelReviewSchema>;
 
-type ModelFinding = ModelReview["general_findings"][number];
-type ModelInlineComment = ModelReview["inline_comments"][number];
+export type ModelFinding = ModelReview["general_findings"][number];
+export type ModelInlineComment = ModelReview["inline_comments"][number];
 
 const SEVERITY_EMOJI: Record<Severity, string> = {
 	P0: "🔴",
@@ -712,16 +718,241 @@ export async function generateSummary(
 	};
 }
 
-function formatFindings(findings: ModelFinding[]): string {
+export function formatFindings(findings: ModelFinding[]): string {
 	if (findings.length === 0) {
 		return "";
 	}
 
 	const rows = findings
-		.map((f) => `| ${SEVERITY_EMOJI[f.severity] ?? "⚪"} | **${f.title}** |`)
+		.map(
+			(f) =>
+				`| ${SEVERITY_EMOJI[f.severity] ?? "⚪"} | ${f.category} | **${f.title}** |`,
+		)
 		.join("\n");
 
-	return `| Sev | Finding |\n|---|---|\n${rows}`;
+	return `| Sev | Category | Finding |\n|---|---|---|\n${rows}`;
+}
+
+export interface ReadinessScoreOptions {
+	event: "APPROVE" | "REQUEST_CHANGES" | "COMMENT";
+	hasP0: boolean;
+	survivingPrior: string[];
+	partial: boolean;
+}
+
+export function computeReadinessScore(opts: ReadinessScoreOptions): number {
+	if (opts.event === "APPROVE") return 5;
+	if (opts.hasP0) return 1;
+	if (opts.survivingPrior.length > 0) return 2;
+	if (opts.event === "REQUEST_CHANGES") return 3;
+	return opts.partial ? 3 : 4;
+}
+
+export function renderReadinessBar(score: number): string {
+	return `${"🟩".repeat(score)}${"⬜".repeat(5 - score)} **${score}/5**`;
+}
+
+export interface ReviewMetaParsed {
+	sha: string;
+	review: number;
+	readiness: number;
+	provider: string;
+	model: string;
+	findings: number;
+	cost: number;
+}
+
+export function parseReviewMetadata(body: string): ReviewMetaParsed | null {
+	const extract = (key: string): string | undefined => {
+		const m = body.match(
+			new RegExp(`<!--\\s*ai-review:${key}=([^\\s>]+)\\s*-->`),
+		);
+		return m?.[1];
+	};
+	const sha = extract("sha");
+	const reviewStr = extract("review");
+	const readinessStr = extract("readiness");
+	const provider = extract("provider");
+	const model = extract("model");
+	const findingsStr = extract("findings");
+	const costStr = extract("cost");
+	if (
+		sha == null ||
+		reviewStr == null ||
+		readinessStr == null ||
+		provider == null ||
+		model == null ||
+		findingsStr == null ||
+		costStr == null
+	) {
+		return null;
+	}
+	return {
+		sha,
+		review: Number(reviewStr),
+		readiness: Number(readinessStr),
+		provider,
+		model,
+		findings: Number(findingsStr),
+		cost: Number(costStr),
+	};
+}
+
+export interface FormatReviewBodyOptions {
+	commentPrefix: string;
+	finalEvent: ReviewDecision["event"];
+	summary: string;
+	approvalMessage: string;
+	readiness: number;
+	tier2Matches: { skillPath: string; reason: string }[];
+	skipped: string[];
+	errored: string[];
+	allSkillsCount: number;
+	generalFindings: ModelFinding[];
+	reviewComments: ReviewComment[];
+	dropped: ModelInlineComment[];
+	overflowCount: number;
+	maxInlineComments: number;
+	feedbackEnabled: boolean;
+	survivingPrior: PersistedFinding[];
+	incrementalPass: boolean;
+	priorSha: string;
+	headSha: string;
+	reviewCount: number;
+	provider: string;
+	model: string;
+	cost: number;
+}
+
+export function formatReviewBody(opts: FormatReviewBodyOptions): string {
+	const {
+		commentPrefix,
+		finalEvent,
+		summary,
+		approvalMessage,
+		readiness,
+		tier2Matches,
+		skipped,
+		errored,
+		allSkillsCount,
+		generalFindings,
+		reviewComments,
+		dropped,
+		overflowCount,
+		maxInlineComments,
+		feedbackEnabled,
+		survivingPrior,
+		incrementalPass,
+		priorSha,
+		headSha,
+		reviewCount,
+		provider,
+		model,
+		cost,
+	} = opts;
+
+	const readinessBar = renderReadinessBar(readiness);
+
+	const tier2Notice =
+		tier2Matches.length > 0
+			? `#### Additional skills activated\n\n${tier2Matches
+					.map(
+						({ skillPath, reason }) =>
+							`- \`${skillPath.replace(/\.md$/, "")}\` — ${reason}`,
+					)
+					.join("\n")}`
+			: "";
+
+	const budgetNotices: string[] = [];
+	if (skipped.length > 0) {
+		budgetNotices.push(
+			`> ⏱ **Partial review.** ${skipped.length} of ${allSkillsCount} agents did not run — this pass hit its time budget before reaching ${skipped
+				.map((s) => `\`${s.replace(/\.md$/, "")}\``)
+				.join(", ")}. Re-run the review command for full coverage.`,
+		);
+	}
+	if (errored.length > 0) {
+		budgetNotices.push(
+			`> ⚠️ **Partial review.** ${errored.length} of ${allSkillsCount} agent(s) failed to complete: ${errored
+				.map((s) => `\`${s.replace(/\.md$/, "")}\``)
+				.join(", ")}. Re-run the review command for full coverage.`,
+		);
+	}
+
+	const findingsBlock = formatFindings(generalFindings);
+
+	const inlineSummary =
+		reviewComments.length > 0
+			? `Inline comments: ${reviewComments.length}`
+			: "Inline comments: none";
+
+	const priorBlockExplanation = incrementalPass
+		? `This pass reviewed only what changed since \`${priorSha.slice(0, 12)}\`, so these were not re-checked.`
+		: "These were flagged in a previous review; the agents were instructed not to restate them, so they are carried forward as still open.";
+	const priorBlock =
+		survivingPrior.length > 0
+			? `#### Still open from the previous review\n\n${priorBlockExplanation}\n\n| Sev | Finding |\n|---|---|\n${survivingPrior
+					.map((f) => {
+						const where =
+							f.path && f.line != null ? ` (\`${f.path}:${f.line}\`)` : "";
+						return `| ${SEVERITY_EMOJI[f.severity as Severity] ?? UNKNOWN_SEVERITY_BADGE} | **${f.title}**${where} |`;
+					})
+					.join("\n")}`
+			: "";
+
+	const droppedNotice =
+		dropped.length > 0
+			? `> ⚠️ ${dropped.length} inline comment${dropped.length === 1 ? "" : "s"} could not be anchored to the diff and ${dropped.length === 1 ? "was" : "were"} posted here instead:\n${dropped
+					.map(
+						(c) =>
+							`> - ${SEVERITY_EMOJI[c.severity as Severity] ?? UNKNOWN_SEVERITY_BADGE} **${c.title}** (\`${c.path}:${c.line}\`)`,
+					)
+					.join("\n")}`
+			: "";
+
+	const overflowNotice =
+		overflowCount > 0
+			? `> ℹ️ ${overflowCount} inline comment${overflowCount === 1 ? "" : "s"} not posted (${maxInlineComments}-comment cap; lowest-severity findings dropped first). Re-run with \`/ai-review\` on a smaller diff for complete coverage.`
+			: "";
+
+	const feedbackInvite =
+		feedbackEnabled && reviewComments.length > 0
+			? "💬 React on any inline comment to train our reviewers: 👍 it helped, 👎 it was wrong, 😕 it didn't land. For 😕, please also reply saying why — the reply is what we learn from."
+			: "";
+
+	const commandHints =
+		"> Re-run: `/ai-review` · Full diff: `/ai-review --full` · Skip: `/ai-review --skip`";
+
+	const metadataBlock = [
+		`<!-- ai-review:sha=${headSha} -->`,
+		`<!-- ai-review:review=${reviewCount} -->`,
+		`<!-- ai-review:readiness=${readiness} -->`,
+		`<!-- ai-review:provider=${provider} -->`,
+		`<!-- ai-review:model=${model} -->`,
+		`<!-- ai-review:findings=${generalFindings.length} -->`,
+		`<!-- ai-review:cost=${cost.toFixed(6)} -->`,
+	].join("\n");
+
+	const costFooter = `---\n*Model: ${model} · ${allSkillsCount} agents · $${cost.toFixed(6)} · [ai-review-bot](https://github.com/joeblackwaslike/ai-review-bot)*`;
+
+	const parts = [
+		`### ${commentPrefix}`,
+		readinessBar,
+		finalEvent === "APPROVE" ? approvalMessage : summary,
+		tier2Notice,
+		...budgetNotices,
+		...(finalEvent === "APPROVE" ? [] : [inlineSummary]),
+		droppedNotice,
+		overflowNotice,
+		feedbackInvite,
+		findingsBlock,
+		priorBlock,
+		commandHints,
+		metadataBlock,
+		costFooter,
+	];
+
+	return parts.filter((part) => part.length > 0).join("\n\n");
 }
 
 export function collectRightSideLines(patch: string): Set<number> {
@@ -1027,8 +1258,6 @@ async function restampCheckRun(
 export async function buildReview(
 	context: ReviewContext,
 ): Promise<ReviewDecision | null> {
-	const reviewMarker = `Reviewed commit: \`${context.headSha.slice(0, 12)}\``;
-
 	// Always fetch existing reviews — used for both idempotency check and
 	// cross-bot dedup (collecting what the other bot already reported).
 	const existingReviews = (
@@ -1042,13 +1271,15 @@ export async function buildReview(
 		)
 	).data;
 
+	const legacyMarker = `Reviewed commit: \`${context.headSha.slice(0, 12)}\``;
+
 	if (!context.force) {
 		const alreadyReviewed = existingReviews.some((review) => {
 			const body = review.body ?? "";
-			return (
-				body.includes(reviewMarker) &&
-				body.includes(`### ${context.commentPrefix}`)
-			);
+			if (!body.includes(`### ${context.commentPrefix}`)) return false;
+			const meta = parseReviewMetadata(body);
+			if (meta) return meta.sha === context.headSha;
+			return body.includes(legacyMarker);
 		});
 
 		if (alreadyReviewed) {
@@ -1057,7 +1288,7 @@ export async function buildReview(
 	}
 
 	// Collect prior reviews for dedup injection into the prompt.
-	// Sister bot (has our "Reviewed commit:" marker): include only if same SHA.
+	// Sister bot (has our metadata block): include only if same SHA.
 	// External bots (Code Rabbit, etc.): always include — the review delay ensures
 	// they've completed before we run.
 	const priorBotReviews = existingReviews
@@ -1065,8 +1296,10 @@ export async function buildReview(
 			const body = review.body ?? "";
 			if (!body) return false;
 			if (body.includes(`### ${context.commentPrefix}`)) return false;
+			const meta = parseReviewMetadata(body);
+			if (meta) return meta.sha === context.headSha;
 			if (body.includes("Reviewed commit: `")) {
-				return body.includes(reviewMarker);
+				return body.includes(legacyMarker);
 			}
 			return true;
 		})
@@ -1076,10 +1309,11 @@ export async function buildReview(
 		existingReviews
 			.filter((review) => {
 				const body = review.body ?? "";
+				if (!body.includes(`### ${context.commentPrefix}`)) return false;
+				const meta = parseReviewMetadata(body);
+				if (meta) return meta.sha !== context.headSha;
 				return (
-					body.includes(`### ${context.commentPrefix}`) &&
-					body.includes("Reviewed commit: `") &&
-					!body.includes(reviewMarker)
+					body.includes("Reviewed commit: `") && !body.includes(legacyMarker)
 				);
 			})
 			.map((review) => review.body as string)
@@ -1693,117 +1927,46 @@ export async function buildReview(
 		);
 	}
 
-	const findingsBlock = formatFindings(modelReview.general_findings);
-	const inlineSummary =
-		reviewComments.length > 0
-			? `Inline comments: ${reviewComments.length}`
-			: "Inline comments: none";
-
-	const feedbackInvite =
-		context.feedbackEnabled && reviewComments.length > 0
-			? "💬 React on any inline comment to train our reviewers: 👍 it helped, 👎 it was wrong, 😕 it didn't land. For 😕, please also reply saying why — the reply is what we learn from."
-			: "";
-
-	// Named on the review, not just in the logs. A partial review that reads as
-	// complete is worse than a late one: silence from the security agent looks
-	// like "nothing found" when that agent never ran or crashed mid-run.
-	const budgetNotice: string[] = [];
-	if (skipped.length > 0) {
-		budgetNotice.push(
-			`> ⏱ **Partial review.** ${skipped.length} of ${allSkills.length} agents did not run — this pass hit its time budget before reaching ${skipped
-				.map((s) => `\`${s.replace(/\.md$/, "")}\``)
-				.join(", ")}. Re-run the review command for full coverage.`,
-		);
-	}
-	if (errored.length > 0) {
-		budgetNotice.push(
-			`> ⚠️ **Partial review.** ${errored.length} of ${allSkills.length} agent(s) failed to complete: ${errored
-				.map((s) => `\`${s.replace(/\.md$/, "")}\``)
-				.join(", ")}. Re-run the review command for full coverage.`,
-		);
-	}
-
-	const tier2Notice =
-		tier2Matches.length > 0
-			? [
-					`#### Additional skills activated\n\n${tier2Matches
-						.map(
-							({ skillPath, reason }) =>
-								`- \`${skillPath.replace(/\.md$/, "")}\` — ${reason}`,
-						)
-						.join("\n")}`,
-				]
-			: [];
-
-	// On INCREMENTAL the agents never saw these findings' files this pass, so
-	// they cannot re-raise them; on FULL they saw them but were told
-	// (priorOwnFindings) not to restate them. Either way they are the whole
-	// reason the review blocks, and without this the review reads "nothing
-	// new, no inline comments" over a REQUEST_CHANGES verdict — a bot
-	// shouting with nothing to point at.
-	// Same table shape as formatFindings on purpose: the cold-KV fallback in
-	// parsePriorReview recovers findings by that row format.
-	const priorBlockExplanation = incrementalPass
-		? `This pass reviewed only what changed since \`${priorSha.slice(0, 12)}\`, so these were not re-checked.`
-		: "These were flagged in a previous review; the agents were instructed not to restate them, so they are carried forward as still open.";
-	const priorBlock =
-		survivingPrior.length > 0
-			? `#### Still open from the previous review\n\n${priorBlockExplanation}\n\n| Sev | Finding |\n|---|---|\n${survivingPrior
-					.map((f) => {
-						const where =
-							f.path && f.line != null ? ` (\`${f.path}:${f.line}\`)` : "";
-						return `| ${SEVERITY_EMOJI[f.severity as Severity] ?? UNKNOWN_SEVERITY_BADGE} | **${f.title}**${where} |`;
-					})
-					.join("\n")}`
-			: "";
-
-	// buildReviewComments drops comments that don't anchor to the diff. Staying
-	// quiet about it leaves a blocking review whose findings all vanished looking
-	// like a review that found nothing.
-	// Named, not counted: one of these can be the finding holding the review at
-	// REQUEST_CHANGES, and a bare count tells the author something was lost
-	// without telling them what to fix.
 	const postedKeys = new Set(reviewComments.map((c) => `${c.path}:${c.line}`));
 	const dropped = effectiveInlineComments.filter(
 		(c) => !postedKeys.has(`${c.path}:${c.line}`),
 	);
-	const droppedNotice =
-		dropped.length > 0
-			? `> ⚠️ ${dropped.length} inline comment${dropped.length === 1 ? "" : "s"} could not be anchored to the diff and ${dropped.length === 1 ? "was" : "were"} posted here instead:\n${dropped
-					.map(
-						(c) =>
-							`> - ${SEVERITY_EMOJI[c.severity as Severity] ?? UNKNOWN_SEVERITY_BADGE} **${c.title}** (\`${c.path}:${c.line}\`)`,
-					)
-					.join("\n")}`
-			: "";
-	const overflowNotice =
-		overflowComments.length > 0
-			? `> ℹ️ ${overflowComments.length} inline comment${overflowComments.length === 1 ? "" : "s"} not posted (${MAX_INLINE_COMMENTS}-comment cap; lowest-severity findings dropped first). Re-run with \`/ai-review\` on a smaller diff for complete coverage.`
-			: "";
 
-	const costFooter = `---\n*Model: ${selection.model} · ${allSkills.length} agents · $${cost.toFixed(6)} · [ai-review-bot](https://github.com/joeblackwaslike/ai-review-bot)*`;
+	const hasP0 =
+		modelReview.general_findings.some((f) => f.severity === "P0") ||
+		modelReview.inline_comments.some((c) => c.severity === "P0");
+	const readiness = computeReadinessScore({
+		event: finalEvent,
+		hasP0,
+		survivingPrior: survivingPrior.map((f) => f.id),
+		partial: skipped.length > 0 || errored.length > 0,
+	});
 
-	// Joined with a blank line between every section, not a single newline.
-	// GitHub reads a paragraph followed by `---` as a setext H2 underline rather
-	// than a horizontal rule, and the cost footer opens with `---`, so gluing
-	// sections together rendered the whole review — summary, inline count and
-	// review marker alike — at heading size.
-	const body = [
-		`### ${context.commentPrefix}`,
-		finalEvent === "APPROVE" ? approvalMessage : summary,
-		...tier2Notice,
-		...budgetNotice,
-		...(finalEvent === "APPROVE" ? [] : [inlineSummary]),
-		droppedNotice,
-		overflowNotice,
-		feedbackInvite,
-		findingsBlock,
-		priorBlock,
-		reviewMarker,
-		costFooter,
-	]
-		.filter((part) => part.length > 0)
-		.join("\n\n");
+	const body = formatReviewBody({
+		commentPrefix: context.commentPrefix,
+		finalEvent,
+		summary,
+		approvalMessage,
+		readiness,
+		tier2Matches,
+		skipped,
+		errored,
+		allSkillsCount: allSkills.length,
+		generalFindings: modelReview.general_findings,
+		reviewComments,
+		dropped,
+		overflowCount: overflowComments.length,
+		maxInlineComments: MAX_INLINE_COMMENTS,
+		feedbackEnabled: context.feedbackEnabled,
+		survivingPrior,
+		incrementalPass,
+		priorSha,
+		headSha: context.headSha,
+		reviewCount: (state?.reviewCount ?? 0) + 1,
+		provider: selection.provider,
+		model: selection.model,
+		cost,
+	});
 
 	// Persist the new review state so the NEXT push can triage against it. One
 	// PersistedFinding per general finding and per posted inline comment, all
@@ -1863,6 +2026,7 @@ export async function buildReview(
 			event: persistedEvent,
 			findings: persistedFindings,
 			reviewedAt: new Date().toISOString(),
+			reviewCount: state?.reviewCount ?? 0,
 		};
 		await saveReviewState(
 			context.kv,
