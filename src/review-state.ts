@@ -69,8 +69,18 @@ export async function saveReviewState(
 // is warm again, full state (incl. inline findings) is persisted directly and
 // this fallback is bypassed.
 function parsePriorReview(body: string): ReviewState | null {
-	const shaMatch = body.match(/Reviewed commit: `([0-9a-f]{7,40})`/);
-	if (!shaMatch) return null;
+	// New format (Phase 1+): <!-- ai-review:sha=<sha> -->
+	// Legacy format: Reviewed commit: `<sha>`
+	const sha =
+		body.match(/<!--\s*ai-review:sha=([0-9a-f]{7,40})\s*-->/)?.[1] ??
+		body.match(/Reviewed commit: `([0-9a-f]{7,40})`/)?.[1];
+	if (!sha) return null;
+
+	// New format (Phase 1+): extract reviewCount from metadata block
+	const reviewCountRaw = body.match(/<!--\s*ai-review:review=(\d+)\s*-->/)?.[1];
+	const reviewCount =
+		reviewCountRaw !== undefined ? parseInt(reviewCountRaw, 10) : 0;
+
 	const findings: PersistedFinding[] = [];
 	// After Phase 1, 🔴 = P0 in new review bodies. Pre-Phase-1 reviews used 🔴 for
 	// "high" (→P1), but upgrading those to P0 on re-parse is conservative and acceptable.
@@ -81,7 +91,13 @@ function parsePriorReview(body: string): ReviewState | null {
 		"🟢": "P3",
 	};
 	for (const line of body.split("\n")) {
-		const row = line.match(/^\|\s*(🔴|🟠|🟡|🟢)\s*\|\s*(.+?)\s*\|$/);
+		// New 3-col format: | emoji | category | **title** |
+		const row3 = line.match(
+			/^\|\s*(🔴|🟠|🟡|🟢)\s*\|\s*[^|]+\s*\|\s*(.+?)\s*\|$/,
+		);
+		// Legacy 2-col format: | emoji | **title** |
+		const row2 = line.match(/^\|\s*(🔴|🟠|🟡|🟢)\s*\|\s*(.+?)\s*\|$/);
+		const row = row3 ?? row2;
 		if (!row) continue;
 		const severity = BADGE_TO_SEVERITY[row[1]] ?? "P3";
 		const title = row[2].replace(/\*\*/g, "").trim();
@@ -96,11 +112,11 @@ function parsePriorReview(body: string): ReviewState | null {
 		});
 	}
 	return {
-		lastReviewedSha: shaMatch[1],
+		lastReviewedSha: sha,
 		event: findings.length > 0 ? "REQUEST_CHANGES" : "COMMENT",
 		findings,
 		reviewedAt: new Date().toISOString(),
-		reviewCount: 0,
+		reviewCount,
 	};
 }
 

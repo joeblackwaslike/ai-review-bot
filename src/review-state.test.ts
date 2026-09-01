@@ -335,6 +335,39 @@ describe("reviewCount", () => {
 		expect(after2?.reviewCount).toBe(2);
 	});
 
+	it("parsePriorReview recovers SHA and reviewCount from new metadata block", async () => {
+		const { client } = fakeKv();
+		const prior = [
+			"### ai-review-bot",
+			"<!-- ai-review:sha=abc1234567890 -->",
+			"<!-- ai-review:review=3 -->",
+			"<!-- ai-review:readiness=4 -->",
+			"<!-- ai-review:provider=anthropic -->",
+			"<!-- ai-review:model=claude-sonnet-5 -->",
+			"<!-- ai-review:findings=2 -->",
+			"<!-- ai-review:cost=0.012345 -->",
+			"",
+			"| Sev | Category | Finding |",
+			"|---|---|---|",
+			"| 🟠 | bug | **Missing null check** |",
+			"| 🟡 | style | **Unused import** |",
+		].join("\n");
+		const state = await loadReviewState(
+			client,
+			"anthropic",
+			"o",
+			"r",
+			7,
+			prior,
+		);
+		expect(state?.lastReviewedSha).toBe("abc1234567890");
+		expect(state?.reviewCount).toBe(3);
+		expect(state?.findings.some((f) => f.title === "Missing null check")).toBe(
+			true,
+		);
+		expect(state?.findings.some((f) => f.title === "Unused import")).toBe(true);
+	});
+
 	it("tolerates old records missing reviewCount (defaults to 0 before increment)", async () => {
 		const { client, store } = fakeKv();
 		const key = stateKey("anthropic", "o", "r", 7);
