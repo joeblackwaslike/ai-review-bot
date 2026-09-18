@@ -932,6 +932,64 @@ describe("buildReview", () => {
 		expect(review?.body).toContain("> Re-run: `/ai-review`");
 		expect(review?.body).not.toContain("Reviewed commit: `");
 	});
+
+	it("readiness score is 1 when a prior P0 survives but no new P0 is emitted", async () => {
+		mockTriageReReview.mockResolvedValueOnce({
+			recommendation: "FULL",
+			resolved: [],
+			newRisk: false,
+		});
+		const { client } = fakeKv();
+		const oldSha = "oldsha111111";
+		const newSha = "newsha222222";
+
+		await saveReviewState(
+			client,
+			"anthropic",
+			baseContext.owner,
+			baseContext.repo,
+			baseContext.pullNumber,
+			{
+				lastReviewedSha: oldSha,
+				event: "REQUEST_CHANGES",
+				findings: [
+					{
+						id: findingId("src/a.ts", 10, "critical bug"),
+						path: "src/a.ts",
+						line: 10,
+						title: "critical bug",
+						severity: "P0",
+						status: "open",
+					},
+				],
+				reviewedAt: "2026-09-01T00:00:00Z",
+			},
+		);
+
+		const agentResponse = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "REQUEST_CHANGES",
+				general_findings: [],
+				inline_comments: [],
+			}),
+		);
+		const summaryResponse = {
+			object: { summary: "No new findings." },
+			usage: { inputTokens: 10, outputTokens: 5 },
+		};
+		for (let i = 0; i < 5; i++)
+			mockGenerateObject.mockResolvedValueOnce(agentResponse);
+		mockGenerateObject.mockResolvedValueOnce(summaryResponse);
+
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			headSha: newSha,
+			kv: client,
+		});
+
+		expect(review?.body).toContain("<!-- ai-review:readiness=1 -->");
+	});
 });
 
 // ---------------------------------------------------------------------------

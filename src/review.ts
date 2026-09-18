@@ -1934,7 +1934,8 @@ export async function buildReview(
 
 	const hasP0 =
 		modelReview.general_findings.some((f) => f.severity === "P0") ||
-		modelReview.inline_comments.some((c) => c.severity === "P0");
+		modelReview.inline_comments.some((c) => c.severity === "P0") ||
+		survivingPrior.some((f) => f.severity === "P0");
 	const readiness = computeReadinessScore({
 		event: finalEvent,
 		hasP0,
