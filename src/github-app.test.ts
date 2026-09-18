@@ -2,10 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppConfig } from "./config.js";
 import { persistPostedComments } from "./feedback/persist.js";
 import {
-	REVIEW_CLAIM_TTL_SECONDS,
 	buildPRSummarySection,
 	injectPRSection,
 	maybeSubmitReview,
+	REVIEW_CLAIM_TTL_SECONDS,
 	runScheduledReview,
 	selectReviewDelayMs,
 } from "./github-app.js";
