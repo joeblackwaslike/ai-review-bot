@@ -16,6 +16,7 @@ export interface ReviewState {
 	event: "COMMENT" | "REQUEST_CHANGES" | "APPROVE";
 	findings: PersistedFinding[];
 	reviewedAt: string;
+	reviewCount?: number;
 }
 
 const STATE_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days, refreshed on each write
@@ -45,9 +46,13 @@ export async function saveReviewState(
 	pullNumber: number,
 	state: ReviewState,
 ): Promise<void> {
+	const toSave: ReviewState = {
+		...state,
+		reviewCount: (state.reviewCount ?? 0) + 1,
+	};
 	await kv.set(
 		stateKey(provider, owner, repo, pullNumber),
-		JSON.stringify(state),
+		JSON.stringify(toSave),
 		STATE_TTL_SECONDS,
 	);
 }
@@ -64,8 +69,18 @@ export async function saveReviewState(
 // is warm again, full state (incl. inline findings) is persisted directly and
 // this fallback is bypassed.
 function parsePriorReview(body: string): ReviewState | null {
-	const shaMatch = body.match(/Reviewed commit: `([0-9a-f]{7,40})`/);
-	if (!shaMatch) return null;
+	// New format (Phase 1+): <!-- ai-review:sha=<sha> -->
+	// Legacy format: Reviewed commit: `<sha>`
+	const sha =
+		body.match(/<!--\s*ai-review:sha=([0-9a-f]{7,40})\s*-->/)?.[1] ??
+		body.match(/Reviewed commit: `([0-9a-f]{7,40})`/)?.[1];
+	if (!sha) return null;
+
+	// New format (Phase 1+): extract reviewCount from metadata block
+	const reviewCountRaw = body.match(/<!--\s*ai-review:review=(\d+)\s*-->/)?.[1];
+	const reviewCount =
+		reviewCountRaw !== undefined ? parseInt(reviewCountRaw, 10) : 0;
+
 	const findings: PersistedFinding[] = [];
 	// After Phase 1, 🔴 = P0 in new review bodies. Pre-Phase-1 reviews used 🔴 for
 	// "high" (→P1), but upgrading those to P0 on re-parse is conservative and acceptable.
@@ -76,7 +91,13 @@ function parsePriorReview(body: string): ReviewState | null {
 		"🟢": "P3",
 	};
 	for (const line of body.split("\n")) {
-		const row = line.match(/^\|\s*(🔴|🟠|🟡|🟢)\s*\|\s*(.+?)\s*\|$/);
+		// New 3-col format: | emoji | category | **title** |
+		const row3 = line.match(
+			/^\|\s*(🔴|🟠|🟡|🟢)\s*\|\s*[^|]+\s*\|\s*(.+?)\s*\|$/,
+		);
+		// Legacy 2-col format: | emoji | **title** |
+		const row2 = line.match(/^\|\s*(🔴|🟠|🟡|🟢)\s*\|\s*(.+?)\s*\|$/);
+		const row = row3 ?? row2;
 		if (!row) continue;
 		const severity = BADGE_TO_SEVERITY[row[1]] ?? "P3";
 		const title = row[2].replace(/\*\*/g, "").trim();
@@ -91,10 +112,11 @@ function parsePriorReview(body: string): ReviewState | null {
 		});
 	}
 	return {
-		lastReviewedSha: shaMatch[1],
+		lastReviewedSha: sha,
 		event: findings.length > 0 ? "REQUEST_CHANGES" : "COMMENT",
 		findings,
 		reviewedAt: new Date().toISOString(),
+		reviewCount,
 	};
 }
 
@@ -135,6 +157,7 @@ export async function loadReviewState(
 				for (const f of parsed.findings) {
 					f.severity = migrateSeverity(f.severity);
 				}
+				if (parsed.reviewCount == null) parsed.reviewCount = 0;
 				return parsed;
 			}
 			console.warn(
