@@ -53,7 +53,7 @@ export function selectReviewDelayMs(action: string, config: AppConfig): number {
  * full review run (which is bounded by the function's maxDuration) so the lock
  * outlives the agents; it auto-expires as a backstop if a crash skips the
  * explicit release. */
-const REVIEW_CLAIM_TTL_SECONDS = 1200;
+export const REVIEW_CLAIM_TTL_SECONDS = 1200;
 
 /** `checked: false` means the lookup itself could not complete (a GET
  * failure, a malformed response, or the page cap below) — the caller must
@@ -760,21 +760,23 @@ export async function maybeSubmitReview(args: {
 			// A throw here propagates to the outer finally, which releases the
 			// claim. Intended: a rate-limited run spent no model budget, so the
 			// commit must stay eligible for retry on the next delivery.
-			// Full-body match (not marker-only) — see hasExistingComment's
-			// docstring for why: the reset time embedded in this body IS the
-			// signal that a genuinely new warning exists. trimEnd() on both
-			// sides tolerates trailing-whitespace drift from GitHub's API
-			// without reintroducing the marker-only false-positive this
-			// replaced — found by anthropicreviewbot reviewing PR #67
-			// (PRRT_kwDOSM5cU86Z_qoq).
-			const normalizedBody = body.trimEnd();
+			// Matcher: when a stable reset-at timestamp is available, match on
+			// marker + that timestamp so a changed window (different resetAt)
+			// reposts while the same window always deduplicates.  When only
+			// retryAfterSeconds is present the count drifts between calls, so
+			// marker-only dedup is the right backstop — it prevents spam
+			// without pinning a stale timestamp (ai-review-bot-rg4).
+			const resetAt = review.rateLimitResetAt;
+			const rateLimitMatcher = resetAt
+				? (b: string) => b.includes(marker) && b.includes(resetAt)
+				: (b: string) => b.includes(marker);
 			if (
 				await hasExistingComment(
 					octokit,
 					owner,
 					repo,
 					pullNumber,
-					(b) => b.trimEnd() === normalizedBody,
+					rateLimitMatcher,
 				)
 			) {
 				console.log("rate-limit comment already posted; not duplicating", {

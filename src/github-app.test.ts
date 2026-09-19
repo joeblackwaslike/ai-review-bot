@@ -5,6 +5,7 @@ import {
 	buildPRSummarySection,
 	injectPRSection,
 	maybeSubmitReview,
+	REVIEW_CLAIM_TTL_SECONDS,
 	runScheduledReview,
 	selectReviewDelayMs,
 } from "./github-app.js";
@@ -60,23 +61,35 @@ vi.mock("./feedback/persist.js", () => ({
 
 // Backing store for the fake KV so the idempotency claim is exercised for real.
 const kvStore = vi.hoisted(() => new Map<string, string>());
+const kvExpiry = vi.hoisted(() => new Map<string, number>());
 vi.mock("./feedback/kv.js", () => ({
 	createUpstashKv: vi.fn(() => ({
 		setNx: async (key: string, value: string, ttlSeconds: number) => {
 			// Guard the TTL contract so a caller that forgets it (0/undefined) — which
 			// would set a never-expiring key in production Upstash — fails the test
-			// instead of silently diverging. Expiry itself is covered in kv.fake.test.ts.
+			// instead of silently diverging.
 			if (!(ttlSeconds > 0)) {
 				throw new Error(
 					`setNx requires a positive ttlSeconds, got ${ttlSeconds}`,
 				);
 			}
+			// Honour TTL expiry so the stale-lock recovery path is testable here
+			// (integration layer) in addition to createFakeKv's own unit coverage.
+			const exp = kvExpiry.get(key);
+			if (exp !== undefined && Date.now() >= exp) {
+				kvStore.delete(key);
+				kvExpiry.delete(key);
+			}
 			if (kvStore.has(key)) return false;
 			kvStore.set(key, value);
+			kvExpiry.set(key, Date.now() + ttlSeconds * 1000);
 			return true;
 		},
 		del: async (...keys: string[]) => {
-			for (const key of keys) kvStore.delete(key);
+			for (const key of keys) {
+				kvStore.delete(key);
+				kvExpiry.delete(key);
+			}
 		},
 		get: async (key: string) => kvStore.get(key) ?? null,
 		set: async (key: string, value: string) => {
@@ -128,6 +141,7 @@ const baseArgs = {
 describe("maybeSubmitReview", () => {
 	beforeEach(() => {
 		kvStore.clear();
+		kvExpiry.clear();
 	});
 	afterEach(() => {
 		vi.useRealTimers();
@@ -206,6 +220,34 @@ describe("maybeSubmitReview", () => {
 		});
 		await maybeSubmitReview({ app, ...baseArgs });
 
+		expect(mockBuildReview).toHaveBeenCalledTimes(2);
+	});
+
+	// 1rq: a stale claim left by a crashed run must auto-expire so the same
+	// commit is eligible for a legitimate retry after REVIEW_CLAIM_TTL_SECONDS.
+	it("proceeds after the idempotency claim expires (stale-lock recovery)", async () => {
+		vi.useFakeTimers();
+		const { app } = buildMockApp();
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "COMMENT" as const,
+			body: "Review body.",
+			comments: [],
+			metadata: DEFAULT_METADATA,
+		});
+
+		// First run posts and keeps the claim.
+		await maybeSubmitReview({ app, ...baseArgs });
+		expect(mockBuildReview).toHaveBeenCalledTimes(1);
+
+		// Second run on the same commit is blocked by the live claim.
+		await maybeSubmitReview({ app, ...baseArgs });
+		expect(mockBuildReview).toHaveBeenCalledTimes(1);
+
+		// Advance past the TTL — the claim is now stale.
+		vi.advanceTimersByTime(REVIEW_CLAIM_TTL_SECONDS * 1000 + 1);
+
+		// Third run must acquire a fresh claim and run the review.
+		await maybeSubmitReview({ app, ...baseArgs });
 		expect(mockBuildReview).toHaveBeenCalledTimes(2);
 	});
 
@@ -294,6 +336,39 @@ describe("maybeSubmitReview", () => {
 
 		const [checkRoute] = octokit.request.mock.calls[2];
 		expect(checkRoute).toBe("POST /repos/{owner}/{repo}/check-runs");
+	});
+
+	// 7k7: a 403 on check-run creation (e.g. missing checks:write scope) must
+	// not surface to the caller — the review already posted successfully and
+	// the check-run is best-effort observability only.
+	it("treats a 403 on check-run creation as non-fatal and still reports posted", async () => {
+		const request = vi.fn(async (route: string) => {
+			if (route === "POST /repos/{owner}/{repo}/check-runs") {
+				const err = Object.assign(new Error("Resource not accessible"), {
+					status: 403,
+				});
+				throw err;
+			}
+			return { data: {} };
+		});
+		const app = {
+			getInstallationOctokit: vi.fn().mockResolvedValue({ request }),
+		} as never;
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "COMMENT" as const,
+			body: "Review body.",
+			comments: [],
+			metadata: DEFAULT_METADATA,
+		});
+
+		const outcome = await maybeSubmitReview({ app, ...baseArgs });
+
+		expect(outcome).toEqual({ status: "posted", event: "COMMENT" });
+		const reviewPost = request.mock.calls.find(
+			([route]) =>
+				route === "POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
+		);
+		expect(reviewPost).toBeDefined();
 	});
 
 	it("retries POST up to 3 times on failure before succeeding", async () => {
@@ -1173,6 +1248,77 @@ describe("maybeSubmitReview", () => {
 		// containing BOTH the old and new reset times would still pass the
 		// `.toContain` assertion above — assert the stale timestamp is gone too.
 		expect(posts[0].params.body).not.toContain("2026-06-09T05:00:00Z");
+	});
+
+	// rg4: when the Anthropic API returns retryAfterSeconds instead of
+	// rateLimitResetAt, the relative countdown drifts between concurrent
+	// synchronize events ("retry in ~300s" vs "retry in ~270s"), so
+	// full-body equality would miss the existing comment and post a duplicate.
+	// Marker-only matching is the correct backstop when no stable reset time
+	// is available.
+	it("deduplicates the rate-limit comment when only retryAfterSeconds is present", async () => {
+		const makeReview = (retryAfterSeconds: number) => ({
+			event: "RATE_LIMITED" as const,
+			body: "",
+			comments: [],
+			validLinesByPath: new Map(),
+			metadata: DEFAULT_METADATA,
+			rateLimitResetAt: undefined,
+			rateLimitRetryAfterSeconds: retryAfterSeconds,
+		});
+
+		mockBuildReview.mockReset().mockResolvedValue(makeReview(300));
+		let postedBody: string | undefined;
+		const octokitFirst = {
+			request: vi.fn(async (route: string, params: Record<string, unknown>) => {
+				if (
+					route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					return { data: [] };
+				}
+				if (
+					route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					postedBody = params.body as string;
+				}
+				return { data: {} };
+			}),
+		};
+		await maybeSubmitReview({
+			app: { getInstallationOctokit: vi.fn(async () => octokitFirst) } as never,
+			...rateLimitedBaseArgs,
+		});
+		expect(postedBody).toBeDefined();
+		expect(postedBody).toContain("retry in ~300s");
+
+		// Second synchronize event 30 s later: retryAfterSeconds has drifted to
+		// 270 — the body differs, but the marker-only matcher must dedup it.
+		mockBuildReview.mockReset().mockResolvedValue(makeReview(270));
+		const requests: Array<{ route: string; params: Record<string, unknown> }> =
+			[];
+		const octokitSecond = {
+			request: vi.fn(async (route: string, params: Record<string, unknown>) => {
+				requests.push({ route, params });
+				if (
+					route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments"
+				) {
+					return { data: [{ body: postedBody }] };
+				}
+				return { data: {} };
+			}),
+		};
+		await maybeSubmitReview({
+			app: {
+				getInstallationOctokit: vi.fn(async () => octokitSecond),
+			} as never,
+			...rateLimitedBaseArgs,
+		});
+
+		const posts = requests.filter(
+			(r) =>
+				r.route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+		);
+		expect(posts).toHaveLength(0);
 	});
 
 	// Found by anthropicreviewbot/codexreviewbot/llamapreview on PR #67's own
