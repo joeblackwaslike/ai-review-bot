@@ -83,7 +83,8 @@ export async function diffReactions(
 		comment_id: record.commentId,
 		per_page: 100,
 	});
-	const raw: RawReaction[] = (res.data as RawReactionResponse[]).map((x) => {
+	const responses = (res.data as RawReactionResponse[] | null) ?? [];
+	const raw: RawReaction[] = responses.map((x) => {
 		const ts = Date.parse(x.created_at);
 		return {
 			login: x.user?.login ?? "unknown",
