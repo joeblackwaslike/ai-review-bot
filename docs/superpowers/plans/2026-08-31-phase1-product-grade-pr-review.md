@@ -1,5 +1,7 @@
 # Phase 1: Product-Grade PR Review Output — Implementation Plan
 
+> **Status:** Shipped in PRs #78–#80. Committed retroactively as the historical plan record; checkboxes reflect the plan as originally written, not current completion status.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Extend the review schema with P0–P3 severity, category, confidence, evidence, and suppressible fields; then replace ad-hoc body assembly with a deterministic `formatReviewBody()` + readiness score + hidden metadata block.
