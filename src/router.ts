@@ -72,7 +72,9 @@ const CLAUDE_TIER_MAP: Record<
 	trivial: { model: "claude-haiku-5-5", effort: "low" },
 	normal: { model: "claude-sonnet-5-5", effort: "medium" },
 	complex: { model: "claude-sonnet-5-5", effort: "high" },
-	deep: { model: "claude-opus-5-5", effort: "xhigh" },
+	// high, not xhigh: xhigh Opus can outlast the 210s agent deadline on Vercel
+	// Hobby, which would abort every deep-review agent and post nothing.
+	deep: { model: "claude-opus-5-5", effort: "high" },
 };
 
 // GPT-6.1 Sol ($2/$10) undercuts the old GPT-5.6 Terra and Sol tiers, so it
