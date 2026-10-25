@@ -1,6 +1,6 @@
 # Phase 1 Design Spec: Product-Grade PR Review Output
 
-**Status:** Draft  
+**Status:** Approved — adversarially hardened  
 **Date:** 2026-08-31  
 **Phase:** Greptile Parity Roadmap — Phase 1  
 **Roadmap ref:** [docs/greptile-parity-roadmap.md](../../greptile-parity-roadmap.md)
@@ -36,9 +36,9 @@ Both `general_findings` and `inline_comments` gain four fields:
 ```ts
 category:     z.enum(['bug', 'security', 'performance', 'test-gap',
                        'architecture', 'style', 'nitpick'])
-confidence:   z.number().min(0).max(1)   // agent self-assessment, 0.0–1.0
-evidence:     z.string()                 // code path, observable behavior, or reference
-suppressible: z.boolean()                // agent declares whether a team could mute this class
+confidence:   z.number().min(0).max(1)      // agent self-assessment, 0.0–1.0
+evidence:     z.string().min(1)             // code path, observable behavior, or reference
+suppressible: z.boolean()                   // agent declares whether a team could mute this class
 ```
 
 `evidence` is required and non-empty — agents must cite the specific code, call site, or observable behavior that supports the finding. A finding with no evidence is a guess; the schema enforces that agents commit to one.
@@ -153,7 +153,7 @@ Inline comments: {n}
 *Model: {model} · {n} agents · ${cost} · [ai-review-bot](...)*
 ```
 
-`findingsBlock` is the existing `formatFindings()` output — no change to its rendering, just its position is now guaranteed.
+`findingsBlock` is `formatFindings()` output with one change: the table gains a Category column — `| Sev | Category | Finding |`. The full enum value is used (longest: `performance`, 11 chars). Category applies to general findings only; inline comment bodies are width-constrained and unchanged.
 
 ### Why a pure function
 
@@ -172,7 +172,7 @@ export function computeReadinessScore(opts: {
   finalEvent: ReviewDecision["event"];
   mergedReview: ModelReview;
   survivingPrior: PersistedFinding[];
-  allAgentsSucceeded: boolean;
+  allAgentsSucceeded: boolean;  // results.every(r => r.status === "fulfilled") from Promise.allSettled()
 }): number
 ```
 
@@ -265,7 +265,7 @@ export interface ReviewMetaParsed {
 
 Returns `null` when the block is absent (pre-Phase-1 reviews). Callers already handle `null` for missing SHA — this is a narrowing, not a new nullable surface.
 
-All existing `body.includes("Reviewed commit:")` probes in `buildReview()` and `github-app.ts` switch to `parseReviewMetadata(body)?.sha`.
+All existing `body.includes("Reviewed commit:")` probes in `buildReview()` and `github-app.ts` switch to `parseReviewMetadata(body)?.sha`. When the block is absent (pre-Phase-1 reviews), `parseReviewMetadata()` returns `null`, the `?.sha` resolves to `undefined`, and the SHA check fails — triggering a fresh review on top of the old one. This is the intended migration path: the first post-Phase-1 review on any existing PR replaces the old format. Do NOT add a secondary fallback to `body.includes("Reviewed commit:")` — that would silently suppress the format upgrade.
 
 ### Command hints
 
@@ -309,14 +309,13 @@ Rendered as a blockquote so it is visually de-emphasized but always discoverable
 - [ ] `buildReview()` uses `formatReviewBody()` exclusively — no residual inline string assembly.
 - [ ] SHA idempotency check uses `parseReviewMetadata()`, not `body.includes("Reviewed commit:")`.
 - [ ] `ReviewState.reviewCount` increments correctly across multiple saves; defaults to `0` on old records.
+- [ ] `formatFindings()` renders a `| Sev | Category | Finding |` table for general findings; snapshot test asserts the column is present.
 - [ ] `npm run typecheck`, `npm run lint`, `npm run test` all pass green.
 
 ---
 
-## Open Questions
+## Resolved Decisions
 
-None blocking the implementation plan. Items to revisit during PR 2:
-
-1. **Readiness score display** — five filled/empty squares may be too much visual weight for a clean APPROVE. Consider hiding the bar on score 5 and showing only `✅ Approved` instead.
-2. **`confidence` in the body** — the schema captures confidence but the template spec does not render it. Decide during PR 2 whether confidence appears in inline comment bodies or only in the metadata block.
-3. **`category` in `findingsBlock`** — the existing `| Sev | Finding |` table could gain a Category column. Deferred to PR 2 design review.
+1. **Readiness score display** — always show the filled/empty square bar, including on score 5. No special-case hiding.
+2. **`confidence` in the body** — not rendered. Captured in schema for Phase 4 feedback loops; invisible to PR reviewers.
+3. **`category` in `findingsBlock`** — add a Category column to the findings table: `| Sev | Category | Finding |`. Use the full enum value (longest is `performance` — 11 chars, acceptable). Apply to general findings only; inline comment bodies are already width-constrained.
