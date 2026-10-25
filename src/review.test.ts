@@ -1396,7 +1396,7 @@ describe("runAgent caching + telemetry", () => {
 		});
 		const trivialOpenAiSel = {
 			provider: "openai",
-			model: "gpt-6.1-sol",
+			model: "gpt-6-luna",
 			effort: "none",
 		} as ModelSelection;
 
@@ -1405,7 +1405,7 @@ describe("runAgent caching + telemetry", () => {
 		const call = (mockGenerateObject as ReturnType<typeof vi.fn>).mock
 			.calls[0][0];
 		// "none" is a truthy string but disables reasoning — the budget must stay
-		// at the base (no inflation), and "none" is forwarded as a valid gpt-5.6
+		// at the base (no inflation), and "none" is forwarded as gpt-6-luna's
 		// non-reasoning value rather than being dropped.
 		expect(call.maxOutputTokens).toBe(4096);
 		expect(call.providerOptions.openai.reasoningEffort).toBe("none");

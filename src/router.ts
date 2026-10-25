@@ -10,7 +10,7 @@ export interface RouterContext {
 export interface ModelSelection {
 	provider: "anthropic" | "openai";
 	model: string;
-	/** Reasoning depth, applied per provider in review.ts:
+	/** Reasoning depth, applied per provider by reasoningProviderOptions below:
 	 *  - OpenAI → `reasoningEffort` (none | low | medium | high | xhigh)
 	 *  - Anthropic → `effort` (low | medium | high | xhigh | max)
 	 *  Undefined means the provider default — which still thinks on every current
