@@ -121,10 +121,10 @@ describe("routeModel — Anthropic", () => {
 		expect(sel.effort).toBe("high");
 	});
 
-	it("deep tier → Opus 5.5, xhigh effort", () => {
+	it("deep tier → Opus 5.5, high effort (xhigh can outlast the 210s agent deadline)", () => {
 		const sel = routeModel({ ...base, labels: ["deep-review"] }, "anthropic");
 		expect(sel.model).toBe("claude-opus-5-5");
-		expect(sel.effort).toBe("xhigh");
+		expect(sel.effort).toBe("high");
 	});
 });
 
