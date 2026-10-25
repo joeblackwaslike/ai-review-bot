@@ -335,6 +335,16 @@ export const TIER1_SKILLS: readonly string[] = [
 const PACE_TOKEN_FLOOR = 5000; // below this many remaining input tokens, wait for reset
 const PACE_MAX_WAIT_MS = 60_000; // never sleep longer than this between agents
 
+/** Clamp a pacing sleep to the time left before the run's deadline, so a late
+ * rate-limit reply cannot make the queue sleep through the function cap. */
+export function capPaceToDeadline(
+	delayMs: number,
+	nowMs: number,
+	deadlineMs: number,
+): number {
+	return Math.max(0, Math.min(delayMs, deadlineMs - nowMs));
+}
+
 export function computePaceDelayMs(
 	rl: RateLimitInfo | undefined,
 	nowMs: number,
@@ -1614,7 +1624,11 @@ export async function buildReview(
 			serialFirst: true,
 			onBeforeEach: async (i) => {
 				if (i === 0) return; // nothing learned yet
-				const delay = computePaceDelayMs(lastRateLimit, Date.now());
+				const delay = capPaceToDeadline(
+					computePaceDelayMs(lastRateLimit, Date.now()),
+					Date.now(),
+					deadline,
+				);
 				if (delay > 0) {
 					console.log("pacing before next agent", {
 						idx: i + 1,

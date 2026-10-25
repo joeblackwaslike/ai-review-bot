@@ -59,6 +59,7 @@ describe("mapWithConcurrency", () => {
 			{ serialFirst: true },
 		);
 		expect(events.indexOf("end0")).toBeLessThan(events.indexOf("start1"));
+		expect(events.indexOf("end0")).toBeLessThan(events.indexOf("start2"));
 		expect(events.indexOf("end0")).toBeLessThan(events.indexOf("start3"));
 	});
 

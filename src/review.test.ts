@@ -5,6 +5,7 @@ import {
 	buildReview,
 	buildReviewComments,
 	buildValidLinesByPath,
+	capPaceToDeadline,
 	classifyRefusal,
 	collectRightSideLines,
 	computePaceDelayMs,
@@ -1752,6 +1753,21 @@ describe("buildReview rate-limit decision", () => {
 		// the succeeded agents found nothing.
 		expect(decision?.event).not.toBe("APPROVE");
 		expect(decision?.event).toBe("COMMENT");
+	});
+});
+
+describe("capPaceToDeadline", () => {
+	it("leaves a delay that fits before the deadline alone", () => {
+		expect(capPaceToDeadline(30_000, 1_000, 100_000)).toBe(30_000);
+	});
+
+	it("shortens a delay that would run past the deadline", () => {
+		expect(capPaceToDeadline(60_000, 1_000, 21_000)).toBe(20_000);
+	});
+
+	it("returns 0 once the deadline has passed so no agent sleeps after it", () => {
+		expect(capPaceToDeadline(60_000, 50_000, 50_000)).toBe(0);
+		expect(capPaceToDeadline(60_000, 60_000, 50_000)).toBe(0);
 	});
 });
 

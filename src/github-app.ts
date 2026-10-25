@@ -40,6 +40,12 @@ function sleep(ms: number): Promise<void> {
 // 9 minutes could not tell "peers are slow" from "peers are never coming", and
 // on a fast-moving PR every scheduled run was superseded before it fired —
 // which starved our own Codex bot of an entire PR's reviews.
+/** The inline fallback sleeps inside the webhook's own function budget, so that
+ * sleep comes out of the agent budget. Never 0: a zero budget skips every agent. */
+export function budgetAfterDelay(budgetMs: number, delayMs: number): number {
+	return Math.max(1, budgetMs - delayMs);
+}
+
 export function selectReviewDelayMs(action: string, config: AppConfig): number {
 	return Math.min(
 		config.peerCheckIntervalMs,
@@ -1263,7 +1269,10 @@ function registerHandlers(app: App, configFn: () => AppConfig) {
 				pullRequest: prPayload.pull_request,
 				extraInstructions: "",
 				force: false,
-				config,
+				config: {
+					...config,
+					agentBudgetMs: budgetAfterDelay(config.agentBudgetMs, delayMs),
+				},
 			});
 		},
 	);
