@@ -1596,8 +1596,8 @@ export async function buildReview(
 					abortSignal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
 				},
 			);
-			// Sequential handoff at the default concurrency 1; at AGENT_CONCURRENCY>1 this is a
-			// benign best-effort race (pacing only needs an approximate recent signal).
+			// At the default concurrency 4 this is a benign best-effort race between
+			// concurrent agents (pacing only needs an approximate recent signal).
 			if (outcome.status === "ok" || outcome.status === "rate_limited") {
 				lastRateLimit = outcome.rateLimit;
 			}
