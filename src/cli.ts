@@ -743,7 +743,7 @@ async function cmdClassify(args: string[]): Promise<void> {
 	});
 	const run = await classifyBundles(
 		bundles,
-		{ provider: "anthropic", model: "claude-haiku-4-5" },
+		{ provider: "anthropic", model: "claude-haiku-5-5", effort: "low" },
 		auth,
 	);
 	const classified = run.classified;

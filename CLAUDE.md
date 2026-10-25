@@ -119,7 +119,7 @@ Each skill file is loaded by `buildAgentSystemPrompt(skillPath, ...)` in `src/pr
 - **Biome** for lint + format; run `npm run lint -- --write` to auto-fix
 - **Conventional commits** for commit messages (`feat:`, `fix:`, `refactor:`, etc.)
 - **No mocking of real skill files in tests** — `./prompt.js` is mocked wholesale in `review.test.ts`; the test mock exports `buildUserMessage` and `buildAgentSystemPrompt`
-- **Structured output via tool use** — the `submit_review` tool schema is the single source of truth for `ModelReview`; the model is forced to call it via `tool_choice: { type: "tool", name: "submit_review" }`
+- **Structured output via `generateObject`** — `ModelReviewSchema` (zod, `src/review.ts`) is the single source of truth for `ModelReview`. The AI SDK sends it as native structured output (`output_config.format`) on Claude 5.5. Never force a tool call instead: Opus/Sonnet 5.5 return a 400 on forced `tool_choice`, and `@ai-sdk/anthropic` < 3.0.135 fell back to exactly that for 5.5 model IDs it didn't recognize (ai-review-bot-j2j)
 - **Prompt caching** — `cache_control: { type: "ephemeral" }` on every agent's system prompt; the user message (diff) is not cached because it changes per PR
 
 ## Adding or replacing a skill

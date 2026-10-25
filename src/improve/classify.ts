@@ -2,7 +2,11 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import type { ResolvedAuth } from "../auth.js";
 import { createAIModel } from "../models.js";
-import type { ModelSelection } from "../router.js";
+import {
+	type ModelSelection,
+	outputBudget,
+	reasoningProviderOptions,
+} from "../router.js";
 
 export const FEEDBACK_INTENTS = [
 	"downvote",
@@ -197,7 +201,8 @@ export async function classifyBundles(
 				model: createAIModel(selection, auth),
 				schema: ClassifySchema,
 				prompt: buildPrompt(batch),
-				maxOutputTokens: 4000,
+				maxOutputTokens: outputBudget(selection, 4000),
+				providerOptions: reasoningProviderOptions(selection),
 			});
 			resolved.push(...mapClassifierOutput(batch, object, selection.model));
 		} catch (err) {

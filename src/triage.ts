@@ -3,7 +3,11 @@ import { z } from "zod";
 import type { ResolvedAuth } from "./auth.js";
 import { createAIModel } from "./models.js";
 import type { PersistedFinding } from "./review-state.js";
-import type { ModelSelection } from "./router.js";
+import {
+	type ModelSelection,
+	outputBudget,
+	reasoningProviderOptions,
+} from "./router.js";
 
 export const TriageSchema = z.object({
 	recommendation: z.enum(["SKIP", "INCREMENTAL", "FULL"]),
@@ -41,13 +45,11 @@ function buildTriageSchema(openFindings: PersistedFinding[]) {
 }
 
 // Cheap, fast triage tier. The call only classifies; it does not review.
-// gpt-5.6-luna (the cheapest GPT-5.6 tier) is confirmed available on both the
-// API-key and OAuth/subscription backends, so this no longer needs the
-// auth-mode split gpt-5.1/gpt-5.4 required.
+// Both models are confirmed on the API-key and OAuth/subscription backends.
 function triageSelection(base: ModelSelection): ModelSelection {
 	return base.provider === "openai"
-		? { provider: "openai", model: "gpt-5.6-luna", effort: "low" }
-		: { provider: "anthropic", model: "claude-haiku-4-5" };
+		? { provider: "openai", model: "gpt-6-luna", effort: "low" }
+		: { provider: "anthropic", model: "claude-haiku-5-5", effort: "low" };
 }
 
 export async function triageReReview(
@@ -75,11 +77,13 @@ export async function triageReReview(
 	].join("\n");
 
 	try {
+		const triage = triageSelection(selection);
 		const { object } = await generateObject({
-			model: createAIModel(triageSelection(selection), auth),
+			model: createAIModel(triage, auth),
 			schema: buildTriageSchema(openFindings),
 			prompt,
-			maxOutputTokens: 2000,
+			maxOutputTokens: outputBudget(triage, 2000),
+			providerOptions: reasoningProviderOptions(triage),
 		});
 		return object;
 	} catch (err) {

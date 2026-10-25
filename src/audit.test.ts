@@ -570,10 +570,10 @@ describe("runLocalReview", () => {
 		};
 
 		const oauthReport = await runWithOpenaiMode("oauth");
-		expect(oauthReport).toContain("gpt-5.6-terra");
+		expect(oauthReport).toContain("gpt-6.1-sol");
 
 		const apiKeyReport = await runWithOpenaiMode("api-key");
-		expect(apiKeyReport).toContain("gpt-5.6-terra");
+		expect(apiKeyReport).toContain("gpt-6.1-sol");
 	});
 
 	it("throws when no provider can be authenticated", async () => {

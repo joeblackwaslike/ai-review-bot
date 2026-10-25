@@ -15,7 +15,11 @@ import type { PersistedFinding, ReviewState } from "./review-state.js";
 import { findingId, loadReviewState, saveReviewState } from "./review-state.js";
 import { REVIEWER_TUNING, type ReviewerTuning } from "./reviewer-tuning.js";
 import type { ModelSelection } from "./router.js";
-import { routeModel } from "./router.js";
+import {
+	outputBudget,
+	reasoningProviderOptions,
+	routeModel,
+} from "./router.js";
 import { detectTier2Skills } from "./tier2.js";
 import { fetchDeltaMeta, triageReReview } from "./triage.js";
 
@@ -354,34 +358,6 @@ export function computePaceDelayMs(
 
 function sleep(ms: number): Promise<void> {
 	return new Promise((r) => setTimeout(r, ms));
-}
-
-/** Maps the tier's effort onto the active provider's reasoning knob:
- *  OpenAI reads `reasoningEffort`, Anthropic reads `effort`. Returns undefined
- *  when no effort is set (e.g. Haiku) so the provider default applies. `"none"`
- *  is a valid OpenAI `reasoningEffort` value (GPT-5.6's explicit non-reasoning
- *  mode) and is forwarded as-is; the Anthropic tiers never emit it. */
-export function reasoningProviderOptions(
-	selection: ModelSelection,
-): Record<string, Record<string, string>> | undefined {
-	if (!selection.effort) return undefined;
-	return selection.provider === "openai"
-		? { openai: { reasoningEffort: selection.effort } }
-		: { anthropic: { effort: selection.effort } };
-}
-
-/** Output-token budget for a generateObject call. Reasoning/thinking tokens are
- * billed against this budget, so once a reasoning level is engaged the cap must
- * cover reasoning + the structured object — too small and the model returns no
- * object at all (AI_NoObjectGeneratedError). The base cap stands when reasoning
- * is off: either no effort at all (e.g. Haiku) or an explicit `"none"` (GPT-5.6's
- * non-reasoning mode), where no reasoning tokens are billed (you pay for actual
- * tokens, not the cap). `"none"` is a truthy string, so it is excluded here
- * explicitly rather than via a plain truthiness check. */
-export function outputBudget(selection: ModelSelection, base: number): number {
-	const reasoning =
-		selection.effort !== undefined && selection.effort !== "none";
-	return reasoning ? Math.max(base * 8, 16000) : base;
 }
 
 export interface RunAgentOptions {
