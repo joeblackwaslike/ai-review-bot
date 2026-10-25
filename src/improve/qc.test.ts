@@ -113,9 +113,19 @@ describe("judgeSelection", () => {
 
 	// /qc is a webhook-only command (GitHub App auth via qc-app.ts) with no
 	// subscription/OAuth auth concept anywhere in its call chain — it always
-	// runs on the API-key backend, where gpt-5.6-luna is confirmed available.
-	it("judges openai findings with gpt-5.6-luna (api-key backend, no oauth path)", () => {
-		expect(judgeSelection("openai").model).toBe("gpt-5.6-luna");
+	// runs on the API-key backend, where gpt-6-luna is confirmed available.
+	it("judges openai findings with gpt-6-luna (api-key backend, no oauth path)", () => {
+		expect(judgeSelection("openai").model).toBe("gpt-6-luna");
+	});
+
+	// Haiku 5.5 thinks by default (effort defaults to medium); pin it low so the
+	// judge stays cheap and outputBudget sizes the cap for reasoning tokens.
+	it("judges anthropic findings with claude-haiku-5-5 at low effort", () => {
+		expect(judgeSelection("anthropic")).toEqual({
+			provider: "anthropic",
+			model: "claude-haiku-5-5",
+			effort: "low",
+		});
 	});
 });
 

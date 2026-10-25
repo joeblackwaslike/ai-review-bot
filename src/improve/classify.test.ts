@@ -1,4 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+const { mockGenerateObject } = vi.hoisted(() => ({
+	mockGenerateObject: vi.fn(),
+}));
+
+vi.mock("ai", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("ai")>();
+	mockGenerateObject.mockImplementation(actual.generateObject as never);
+	return { ...actual, generateObject: mockGenerateObject };
+});
+
 import {
 	classifyBundles,
 	classifyByOpener,
@@ -206,6 +217,33 @@ describe("classifyBundles", () => {
 		expect(run.classified).toEqual([]);
 		// The long reply still counts as truncated: it was sent, then the call failed.
 		expect(run.truncated).toBe(0);
+	});
+
+	it("sends the reasoning-sized output cap and effort on a successful call", async () => {
+		mockGenerateObject.mockResolvedValueOnce({
+			object: {
+				items: [
+					{ id: 1, intent: "noise", isBotRelated: false, confidence: 0.9 },
+				],
+			},
+		});
+
+		const run = await classifyBundles(
+			[
+				{
+					rawFeedbackId: 1,
+					findingTitle: "t",
+					verdict: "confused",
+					replyBody: "no recognised verdict phrase here",
+				},
+			],
+			{ provider: "anthropic", model: "claude-haiku-5-5", effort: "low" },
+		);
+
+		expect(run.failedBatches).toBe(0);
+		const call = mockGenerateObject.mock.calls.at(-1)?.[0];
+		expect(call.maxOutputTokens).toBe(32000);
+		expect(call.providerOptions).toEqual({ anthropic: { effort: "low" } });
 	});
 
 	it("returns nothing to classify for an empty batch", async () => {

@@ -45,6 +45,43 @@ describe("mapWithConcurrency", () => {
 		expect(fn).not.toHaveBeenCalled();
 	});
 
+	it("serialFirst finishes item 0 before any other item starts", async () => {
+		const events: string[] = [];
+		await mapWithConcurrency(
+			[0, 1, 2, 3],
+			3,
+			async (n) => {
+				events.push(`start${n}`);
+				await new Promise((r) => setTimeout(r, 5));
+				events.push(`end${n}`);
+				return n;
+			},
+			{ serialFirst: true },
+		);
+		expect(events.indexOf("end0")).toBeLessThan(events.indexOf("start1"));
+		expect(events.indexOf("end0")).toBeLessThan(events.indexOf("start2"));
+		expect(events.indexOf("end0")).toBeLessThan(events.indexOf("start3"));
+	});
+
+	it("serialFirst still reaches the full limit for the remainder and keeps order", async () => {
+		const active: number[] = [];
+		let peak = 0;
+		const out = await mapWithConcurrency(
+			[0, 1, 2, 3, 4],
+			3,
+			async (n) => {
+				active.push(n);
+				peak = Math.max(peak, active.length);
+				await new Promise((r) => setTimeout(r, 5));
+				active.pop();
+				return n * 2;
+			},
+			{ serialFirst: true },
+		);
+		expect(out).toEqual([0, 2, 4, 6, 8]);
+		expect(peak).toBe(3);
+	});
+
 	it("limit 2 actually reaches concurrency 2", async () => {
 		const active: number[] = [];
 		let peak = 0;

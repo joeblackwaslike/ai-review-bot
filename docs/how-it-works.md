@@ -34,10 +34,10 @@ Before firing agents, the router (`src/router.ts`) classifies the PR into a tier
 
 | Tier | Trigger | Claude | Codex |
 | --- | --- | --- | --- |
-| `trivial` | Doc-only files, <20 lines | `claude-haiku-4-5` | `gpt-5.6-luna`, effort none |
-| `normal` | Standard PR | `claude-sonnet-5`, effort medium | `gpt-5.6-terra`, effort low |
-| `complex` | >500 lines or sensitive paths (auth, crypto, db…) | `claude-sonnet-5`, effort high | `gpt-5.6-terra`, effort high |
-| `deep` | `deep-review` label | `claude-opus-5`, effort xhigh | `gpt-5.6-sol`, effort xhigh |
+| `trivial` | Doc-only files, <20 lines | `claude-haiku-5-5`, effort low | `gpt-6-luna`, effort none |
+| `normal` | Standard PR | `claude-sonnet-5-5`, effort medium | `gpt-6.1-sol`, effort low |
+| `complex` | >500 lines or sensitive paths (auth, crypto, db…) | `claude-sonnet-5-5`, effort high | `gpt-6.1-sol`, effort high |
+| `deep` | `deep-review` label | `claude-opus-5-5`, effort xhigh | `gpt-6.1-sol`, effort xhigh |
 
 Claude uses the `effort` parameter (low/medium/high/xhigh/max); Codex uses `reasoningEffort` on the same scale (none/low/medium/high/xhigh/max). Both are forwarded from the tier's `effort` value in `src/router.ts`.
 

@@ -36,7 +36,7 @@ describe("triageReReview", () => {
 			},
 		});
 		const d = await triageReReview(
-			{ provider: "anthropic", model: "claude-haiku-4-5" } as never,
+			{ provider: "anthropic", model: "claude-haiku-5-5" } as never,
 			"delta diff",
 			openFindings,
 		);
@@ -50,7 +50,7 @@ describe("triageReReview", () => {
 	it("fails safe to INCREMENTAL (never SKIP) when the model call throws", async () => {
 		mockGenerateObject.mockRejectedValueOnce(new Error("boom"));
 		const d = await triageReReview(
-			{ provider: "anthropic", model: "claude-haiku-4-5" } as never,
+			{ provider: "anthropic", model: "claude-haiku-5-5" } as never,
 			"delta diff",
 			openFindings,
 		);
@@ -58,32 +58,50 @@ describe("triageReReview", () => {
 		expect(d.resolved).toEqual([]);
 	});
 
-	// gpt-5.6-luna is confirmed available on both the API-key and
+	// gpt-6-luna is confirmed available on both the API-key and
 	// OAuth/subscription backends, so triage no longer needs an auth-mode
 	// split — no-auth and explicit-oauth calls must resolve identically.
-	it("routes openai triage calls to gpt-5.6-luna by default (api-key backend)", async () => {
+	it("routes openai triage calls to gpt-6-luna by default (api-key backend)", async () => {
 		mockGenerateObject.mockResolvedValueOnce({
 			object: { recommendation: "SKIP", resolved: [], newRisk: false },
 		});
 		await triageReReview(
-			{ provider: "openai", model: "gpt-5.6-terra" } as never,
+			{ provider: "openai", model: "gpt-6.1-sol" } as never,
 			"delta diff",
 			openFindings,
 		);
 		expect(mockCreateAIModel).toHaveBeenCalledWith(
 			{
 				provider: "openai",
-				model: "gpt-5.6-luna",
+				model: "gpt-6-luna",
 				effort: "low",
 			},
 			undefined,
 		);
 	});
 
+	it("routes anthropic triage calls to claude-haiku-5-5 at low effort with a reasoning-sized cap", async () => {
+		mockGenerateObject.mockResolvedValueOnce({
+			object: { recommendation: "SKIP", resolved: [], newRisk: false },
+		});
+		await triageReReview(
+			{ provider: "anthropic", model: "claude-sonnet-5-5" } as never,
+			"delta diff",
+			openFindings,
+		);
+		expect(mockCreateAIModel).toHaveBeenCalledWith(
+			{ provider: "anthropic", model: "claude-haiku-5-5", effort: "low" },
+			undefined,
+		);
+		// Haiku 5.5 bills thinking against maxOutputTokens; a 2000 cap can starve
+		// the structured object (AI_NoObjectGeneratedError).
+		expect(mockGenerateObject.mock.lastCall?.[0].maxOutputTokens).toBe(16000);
+	});
+
 	// watch's re-review loop calls this triage gate on every push under the
 	// OAuth-authenticated backend — a stale model name here breaks every
 	// re-review, not just the first one.
-	it("routes openai triage calls to gpt-5.6-luna under oauth auth too", async () => {
+	it("routes openai triage calls to gpt-6-luna under oauth auth too", async () => {
 		mockGenerateObject.mockResolvedValueOnce({
 			object: { recommendation: "SKIP", resolved: [], newRisk: false },
 		});
@@ -96,7 +114,7 @@ describe("triageReReview", () => {
 			fetch: (async () => new Response()) as typeof fetch,
 		};
 		await triageReReview(
-			{ provider: "openai", model: "gpt-5.6-terra" } as never,
+			{ provider: "openai", model: "gpt-6.1-sol" } as never,
 			"delta diff",
 			openFindings,
 			auth,
@@ -104,7 +122,7 @@ describe("triageReReview", () => {
 		expect(mockCreateAIModel).toHaveBeenCalledWith(
 			{
 				provider: "openai",
-				model: "gpt-5.6-luna",
+				model: "gpt-6-luna",
 				effort: "low",
 			},
 			auth,
@@ -134,7 +152,7 @@ describe("triageReReview", () => {
 			fetch: (async () => new Response()) as typeof fetch,
 		};
 		await triageReReview(
-			{ provider: "anthropic", model: "claude-haiku-4-5" } as never,
+			{ provider: "anthropic", model: "claude-haiku-5-5" } as never,
 			"delta diff",
 			openFindings,
 			auth,
@@ -155,7 +173,7 @@ describe("triageReReview", () => {
 			},
 		});
 		await triageReReview(
-			{ provider: "anthropic", model: "claude-haiku-4-5" } as never,
+			{ provider: "anthropic", model: "claude-haiku-5-5" } as never,
 			"delta diff",
 			openFindings,
 		);
@@ -184,7 +202,7 @@ describe("triageReReview", () => {
 			object: { recommendation: "INCREMENTAL", resolved: [], newRisk: true },
 		});
 		await triageReReview(
-			{ provider: "anthropic", model: "claude-haiku-4-5" } as never,
+			{ provider: "anthropic", model: "claude-haiku-5-5" } as never,
 			"some new diff with no prior findings",
 			[],
 		);

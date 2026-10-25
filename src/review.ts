@@ -15,7 +15,11 @@ import type { PersistedFinding, ReviewState } from "./review-state.js";
 import { findingId, loadReviewState, saveReviewState } from "./review-state.js";
 import { REVIEWER_TUNING, type ReviewerTuning } from "./reviewer-tuning.js";
 import type { ModelSelection } from "./router.js";
-import { routeModel } from "./router.js";
+import {
+	outputBudget,
+	reasoningProviderOptions,
+	routeModel,
+} from "./router.js";
 import { detectTier2Skills } from "./tier2.js";
 import { fetchDeltaMeta, triageReReview } from "./triage.js";
 
@@ -331,6 +335,16 @@ export const TIER1_SKILLS: readonly string[] = [
 const PACE_TOKEN_FLOOR = 5000; // below this many remaining input tokens, wait for reset
 const PACE_MAX_WAIT_MS = 60_000; // never sleep longer than this between agents
 
+/** Clamp a pacing sleep to the time left before the run's deadline, so a late
+ * rate-limit reply cannot make the queue sleep through the function cap. */
+export function capPaceToDeadline(
+	delayMs: number,
+	nowMs: number,
+	deadlineMs: number,
+): number {
+	return Math.max(0, Math.min(delayMs, deadlineMs - nowMs));
+}
+
 export function computePaceDelayMs(
 	rl: RateLimitInfo | undefined,
 	nowMs: number,
@@ -356,37 +370,13 @@ function sleep(ms: number): Promise<void> {
 	return new Promise((r) => setTimeout(r, ms));
 }
 
-/** Maps the tier's effort onto the active provider's reasoning knob:
- *  OpenAI reads `reasoningEffort`, Anthropic reads `effort`. Returns undefined
- *  when no effort is set (e.g. Haiku) so the provider default applies. `"none"`
- *  is a valid OpenAI `reasoningEffort` value (GPT-5.6's explicit non-reasoning
- *  mode) and is forwarded as-is; the Anthropic tiers never emit it. */
-export function reasoningProviderOptions(
-	selection: ModelSelection,
-): Record<string, Record<string, string>> | undefined {
-	if (!selection.effort) return undefined;
-	return selection.provider === "openai"
-		? { openai: { reasoningEffort: selection.effort } }
-		: { anthropic: { effort: selection.effort } };
-}
-
-/** Output-token budget for a generateObject call. Reasoning/thinking tokens are
- * billed against this budget, so once a reasoning level is engaged the cap must
- * cover reasoning + the structured object — too small and the model returns no
- * object at all (AI_NoObjectGeneratedError). The base cap stands when reasoning
- * is off: either no effort at all (e.g. Haiku) or an explicit `"none"` (GPT-5.6's
- * non-reasoning mode), where no reasoning tokens are billed (you pay for actual
- * tokens, not the cap). `"none"` is a truthy string, so it is excluded here
- * explicitly rather than via a plain truthiness check. */
-export function outputBudget(selection: ModelSelection, base: number): number {
-	const reasoning =
-		selection.effort !== undefined && selection.effort !== "none";
-	return reasoning ? Math.max(base * 8, 16000) : base;
-}
-
 export interface RunAgentOptions {
 	auth?: ResolvedAuth;
 	prompt?: AgentPromptOptions;
+	/** Cuts the call off at the run's wall-clock deadline; an aborted agent is
+	 * reported as skipped, since the platform would otherwise kill the whole
+	 * function with nothing posted. */
+	abortSignal?: AbortSignal;
 }
 
 export async function runAgent(
@@ -396,7 +386,7 @@ export async function runAgent(
 	customPrompt: string,
 	options: RunAgentOptions = {},
 ): Promise<AgentOutcome> {
-	const { auth, prompt: promptOptions = {} } = options;
+	const { auth, prompt: promptOptions = {}, abortSignal } = options;
 	const skillBlock = buildAgentSystemPrompt(
 		skillPath,
 		customPrompt,
@@ -409,6 +399,7 @@ export async function runAgent(
 			schema: ModelReviewSchema,
 			maxOutputTokens: outputBudget(selection, 4096),
 			maxRetries: 4,
+			abortSignal,
 			providerOptions: reasoningProviderOptions(selection),
 			messages: [
 				{
@@ -449,6 +440,12 @@ export async function runAgent(
 			),
 		};
 	} catch (err) {
+		if (abortSignal?.aborted) {
+			console.warn("agent aborted: review time budget exhausted", {
+				skillPath,
+			});
+			return { status: "skipped", skillPath };
+		}
 		const refusal = classifyRefusal(err);
 		if (refusal === "quota_exhausted") {
 			console.error("agent refused: provider balance exhausted", {
@@ -1606,10 +1603,11 @@ export async function buildReview(
 				{
 					auth: context.auth,
 					prompt: { strictEvidenceRules: tuning.strictEvidenceRules },
+					abortSignal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
 				},
 			);
-			// Sequential handoff at the default concurrency 1; at AGENT_CONCURRENCY>1 this is a
-			// benign best-effort race (pacing only needs an approximate recent signal).
+			// At the default concurrency 4 this is a benign best-effort race between
+			// concurrent agents (pacing only needs an approximate recent signal).
 			if (outcome.status === "ok" || outcome.status === "rate_limited") {
 				lastRateLimit = outcome.rateLimit;
 			}
@@ -1623,9 +1621,14 @@ export async function buildReview(
 			return outcome;
 		},
 		{
+			serialFirst: true,
 			onBeforeEach: async (i) => {
 				if (i === 0) return; // nothing learned yet
-				const delay = computePaceDelayMs(lastRateLimit, Date.now());
+				const delay = capPaceToDeadline(
+					computePaceDelayMs(lastRateLimit, Date.now()),
+					Date.now(),
+					deadline,
+				);
 				if (delay > 0) {
 					console.log("pacing before next agent", {
 						idx: i + 1,

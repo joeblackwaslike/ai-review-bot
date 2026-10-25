@@ -96,19 +96,19 @@ describe("classifyTier", () => {
 // ---------------------------------------------------------------------------
 
 describe("routeModel — Anthropic", () => {
-	it("trivial tier → Haiku, no effort", () => {
+	it("trivial tier → Haiku 5.5, low effort", () => {
 		const sel = routeModel(
 			{ ...base, additions: 8, deletions: 3, filePaths: ["README.md"] },
 			"anthropic",
 		);
 		expect(sel.provider).toBe("anthropic");
-		expect(sel.model).toBe("claude-haiku-4-5");
-		expect(sel.effort).toBeUndefined();
+		expect(sel.model).toBe("claude-haiku-5-5");
+		expect(sel.effort).toBe("low");
 	});
 
 	it("normal tier → Sonnet, medium effort", () => {
 		const sel = routeModel(base, "anthropic");
-		expect(sel.model).toBe("claude-sonnet-5");
+		expect(sel.model).toBe("claude-sonnet-5-5");
 		expect(sel.effort).toBe("medium");
 	});
 
@@ -117,13 +117,13 @@ describe("routeModel — Anthropic", () => {
 			{ ...base, additions: 400, deletions: 150 },
 			"anthropic",
 		);
-		expect(sel.model).toBe("claude-sonnet-5");
+		expect(sel.model).toBe("claude-sonnet-5-5");
 		expect(sel.effort).toBe("high");
 	});
 
-	it("deep tier → Opus 5, xhigh effort", () => {
+	it("deep tier → Opus 5.5, xhigh effort", () => {
 		const sel = routeModel({ ...base, labels: ["deep-review"] }, "anthropic");
-		expect(sel.model).toBe("claude-opus-5");
+		expect(sel.model).toBe("claude-opus-5-5");
 		expect(sel.effort).toBe("xhigh");
 	});
 });
@@ -132,39 +132,38 @@ describe("routeModel — Anthropic", () => {
 // routeModel — OpenAI
 // ---------------------------------------------------------------------------
 
-// GPT-5.6's Sol/Terra/Luna tiers are confirmed available on both the API-key
+// gpt-6-luna and gpt-6.1-sol are confirmed available on both the API-key
 // backend (hosted webhook bots, `ai-review audit`) and the OAuth/subscription
-// backend (`ai-review watch`) — unlike gpt-5.1, which the OAuth backend
-// rejected outright, so routeModel no longer takes an authMode parameter.
+// backend (`ai-review watch`), so routeModel takes no authMode parameter.
 describe("routeModel — OpenAI", () => {
-	it("trivial tier → gpt-5.6-luna, none effort", () => {
+	it("trivial tier → gpt-6-luna, none effort", () => {
 		const sel = routeModel(
 			{ ...base, additions: 8, deletions: 3, filePaths: ["README.md"] },
 			"openai",
 		);
 		expect(sel.provider).toBe("openai");
-		expect(sel.model).toBe("gpt-5.6-luna");
+		expect(sel.model).toBe("gpt-6-luna");
 		expect(sel.effort).toBe("none");
 	});
 
-	it("normal tier → gpt-5.6-terra, low effort", () => {
+	it("normal tier → gpt-6.1-sol, low effort", () => {
 		const sel = routeModel(base, "openai");
-		expect(sel.model).toBe("gpt-5.6-terra");
+		expect(sel.model).toBe("gpt-6.1-sol");
 		expect(sel.effort).toBe("low");
 	});
 
-	it("complex tier → gpt-5.6-terra, high effort", () => {
+	it("complex tier → gpt-6.1-sol, high effort", () => {
 		const sel = routeModel(
 			{ ...base, filePaths: ["src/auth/handler.ts"] },
 			"openai",
 		);
-		expect(sel.model).toBe("gpt-5.6-terra");
+		expect(sel.model).toBe("gpt-6.1-sol");
 		expect(sel.effort).toBe("high");
 	});
 
-	it("deep tier → gpt-5.6-sol, xhigh effort (distinguished by the model bump)", () => {
+	it("deep tier → gpt-6.1-sol, xhigh effort (distinguished by effort alone)", () => {
 		const sel = routeModel({ ...base, labels: ["deep-review"] }, "openai");
-		expect(sel.model).toBe("gpt-5.6-sol");
+		expect(sel.model).toBe("gpt-6.1-sol");
 		expect(sel.effort).toBe("xhigh");
 	});
 });

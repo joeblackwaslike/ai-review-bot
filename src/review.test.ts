@@ -5,6 +5,7 @@ import {
 	buildReview,
 	buildReviewComments,
 	buildValidLinesByPath,
+	capPaceToDeadline,
 	classifyRefusal,
 	collectRightSideLines,
 	computePaceDelayMs,
@@ -26,7 +27,7 @@ import {
 } from "./review.js";
 import type { PersistedFinding } from "./review-state.js";
 import { findingId, loadReviewState, saveReviewState } from "./review-state.js";
-import type { ModelSelection } from "./router.js";
+import { type ModelSelection, reasoningProviderOptions } from "./router.js";
 import {
 	buildGenerateObjectResponse,
 	buildInlineComment,
@@ -1208,7 +1209,7 @@ describe("buildReview comment provenance", () => {
 
 const sel = {
 	provider: "anthropic",
-	model: "claude-sonnet-5",
+	model: "claude-sonnet-5-5",
 	tier: 1,
 } as ModelSelection;
 
@@ -1252,6 +1253,40 @@ describe("runAgent caching + telemetry", () => {
 		expect(out?.status).toBe("ok");
 	});
 
+	it("forwards the abort signal to generateObject", async () => {
+		mockGenerateObject.mockResolvedValue({
+			object: buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+			usage: { inputTokens: 10, outputTokens: 5 },
+			providerMetadata: {},
+			response: { headers: {} },
+		});
+		const abortSignal = new AbortController().signal;
+
+		await runAgent("code-reviewer.md", "SHARED", sel, "", { abortSignal });
+
+		const call = (mockGenerateObject as ReturnType<typeof vi.fn>).mock
+			.calls[0][0];
+		expect(call.abortSignal).toBe(abortSignal);
+	});
+
+	it("reports an agent cut off by its abort signal as skipped, not errored", async () => {
+		const controller = new AbortController();
+		controller.abort();
+		mockGenerateObject.mockRejectedValue(
+			new DOMException("This operation was aborted", "AbortError"),
+		);
+
+		const out = await runAgent("code-reviewer.md", "SHARED", sel, "", {
+			abortSignal: controller.signal,
+		});
+
+		expect(out).toEqual({ status: "skipped", skillPath: "code-reviewer.md" });
+	});
+
 	it("gives OpenAI reasoning models a large output budget and low reasoning effort", async () => {
 		mockGenerateObject.mockResolvedValue({
 			object: buildModelReview({
@@ -1265,7 +1300,7 @@ describe("runAgent caching + telemetry", () => {
 		});
 		const openaiSel = {
 			provider: "openai",
-			model: "gpt-5.6-sol",
+			model: "gpt-6.1-sol",
 			effort: "low",
 		} as ModelSelection;
 
@@ -1273,7 +1308,7 @@ describe("runAgent caching + telemetry", () => {
 
 		const call = (mockGenerateObject as ReturnType<typeof vi.fn>).mock
 			.calls[0][0];
-		// gpt-5.6-sol spends reasoning tokens from this budget — it must dwarf the 4096
+		// gpt-6.1-sol spends reasoning tokens from this budget — it must dwarf the 4096
 		// base, and the tier's effort is forwarded so it can't starve the output.
 		expect(call.maxOutputTokens).toBe(32768);
 		expect(call.providerOptions.openai.reasoningEffort).toBe("low");
@@ -1292,7 +1327,7 @@ describe("runAgent caching + telemetry", () => {
 		});
 		const opusSel = {
 			provider: "anthropic",
-			model: "claude-opus-5",
+			model: "claude-opus-5-5",
 			tier: 4,
 			effort: "xhigh",
 		} as ModelSelection;
@@ -1301,11 +1336,36 @@ describe("runAgent caching + telemetry", () => {
 
 		const call = (mockGenerateObject as ReturnType<typeof vi.fn>).mock
 			.calls[0][0];
-		expect(call.providerOptions.anthropic.effort).toBe("xhigh");
+		expect(call.providerOptions.anthropic).toEqual({
+			effort: "xhigh",
+			fallbacks: "default",
+		});
 		expect(call.maxOutputTokens).toBe(32768);
 	});
 
-	it("leaves the output budget at the base for non-reasoning providers", async () => {
+	// Opus/Sonnet 5.5 safety classifiers can decline security-heavy diffs
+	// (`cyber`); server-side fallbacks rerun the request instead of losing the
+	// agent. Haiku 5.5 has no server-side fallback, so it must not send one.
+	it("requests refusal fallbacks for Sonnet 5.5 but not Haiku 5.5", () => {
+		expect(
+			reasoningProviderOptions({
+				provider: "anthropic",
+				model: "claude-sonnet-5-5",
+				effort: "medium",
+			}),
+		).toEqual({ anthropic: { effort: "medium", fallbacks: "default" } });
+		expect(
+			reasoningProviderOptions({
+				provider: "anthropic",
+				model: "claude-haiku-5-5",
+				effort: "low",
+			}),
+		).toEqual({ anthropic: { effort: "low" } });
+	});
+
+	// Every current Claude model thinks by default, so an unset effort still
+	// bills thinking tokens against the cap — only an explicit "none" is safe.
+	it("sizes the output budget for reasoning when effort is unset", async () => {
 		mockGenerateObject.mockResolvedValue({
 			object: buildModelReview({
 				event: "COMMENT",
@@ -1321,7 +1381,7 @@ describe("runAgent caching + telemetry", () => {
 
 		const call = (mockGenerateObject as ReturnType<typeof vi.fn>).mock
 			.calls[0][0];
-		expect(call.maxOutputTokens).toBe(4096);
+		expect(call.maxOutputTokens).toBe(32768);
 	});
 
 	it("keeps the base budget for the OpenAI trivial tier (effort 'none') and forwards reasoningEffort 'none'", async () => {
@@ -1337,7 +1397,7 @@ describe("runAgent caching + telemetry", () => {
 		});
 		const trivialOpenAiSel = {
 			provider: "openai",
-			model: "gpt-5.6-sol",
+			model: "gpt-6-luna",
 			effort: "none",
 		} as ModelSelection;
 
@@ -1346,7 +1406,7 @@ describe("runAgent caching + telemetry", () => {
 		const call = (mockGenerateObject as ReturnType<typeof vi.fn>).mock
 			.calls[0][0];
 		// "none" is a truthy string but disables reasoning — the budget must stay
-		// at the base (no inflation), and "none" is forwarded as a valid gpt-5.6
+		// at the base (no inflation), and "none" is forwarded as gpt-6-luna's
 		// non-reasoning value rather than being dropped.
 		expect(call.maxOutputTokens).toBe(4096);
 		expect(call.providerOptions.openai.reasoningEffort).toBe("none");
@@ -1359,7 +1419,7 @@ describe("runAgent caching + telemetry", () => {
 		});
 		const openaiReasoningSel = {
 			provider: "openai",
-			model: "gpt-5.6-sol",
+			model: "gpt-6.1-sol",
 			effort: "high",
 		} as ModelSelection;
 
@@ -1382,14 +1442,14 @@ describe("runAgent caching + telemetry", () => {
 		expect(call.providerOptions.openai.reasoningEffort).toBe("high");
 	});
 
-	it("keeps the generateSummary budget at the base and omits providerOptions for non-reasoning tiers", async () => {
+	it("floors the generateSummary budget for an unset effort and omits providerOptions for Haiku", async () => {
 		mockGenerateObject.mockResolvedValue({
 			object: { summary: "No findings." },
 			usage: { inputTokens: 10, outputTokens: 5 },
 		});
 		const haikuSel = {
 			provider: "anthropic",
-			model: "claude-haiku-4-5",
+			model: "claude-haiku-5-5",
 			tier: 1,
 		} as ModelSelection;
 
@@ -1406,7 +1466,7 @@ describe("runAgent caching + telemetry", () => {
 
 		const call = (mockGenerateObject as ReturnType<typeof vi.fn>).mock
 			.calls[0][0];
-		expect(call.maxOutputTokens).toBe(256);
+		expect(call.maxOutputTokens).toBe(16000);
 		expect(call.providerOptions).toBeUndefined();
 	});
 
@@ -1445,7 +1505,7 @@ describe("generateSummary carry-forward grounding", () => {
 		});
 		const sel = {
 			provider: "anthropic",
-			model: "claude-haiku-4-5",
+			model: "claude-haiku-5-5",
 		} as ModelSelection;
 		const survivingPrior: PersistedFinding[] = [
 			{
@@ -1693,6 +1753,21 @@ describe("buildReview rate-limit decision", () => {
 		// the succeeded agents found nothing.
 		expect(decision?.event).not.toBe("APPROVE");
 		expect(decision?.event).toBe("COMMENT");
+	});
+});
+
+describe("capPaceToDeadline", () => {
+	it("leaves a delay that fits before the deadline alone", () => {
+		expect(capPaceToDeadline(30_000, 1_000, 100_000)).toBe(30_000);
+	});
+
+	it("shortens a delay that would run past the deadline", () => {
+		expect(capPaceToDeadline(60_000, 1_000, 21_000)).toBe(20_000);
+	});
+
+	it("returns 0 once the deadline has passed so no agent sleeps after it", () => {
+		expect(capPaceToDeadline(60_000, 50_000, 50_000)).toBe(0);
+		expect(capPaceToDeadline(60_000, 60_000, 50_000)).toBe(0);
 	});
 });
 
@@ -3738,7 +3813,7 @@ describe("buildReview auth threading", () => {
 	// available on both the OAuth/subscription and API-key backends, so this
 	// must resolve to the same model as the no-auth (hosted webhook) case
 	// below — unlike the retired gpt-5.1/gpt-5.4 split this replaced.
-	it("routes openai agent calls to gpt-5.6-terra when context.auth.mode is oauth", async () => {
+	it("routes openai agent calls to gpt-6.1-sol when context.auth.mode is oauth", async () => {
 		const auth = {
 			mode: "oauth" as const,
 			provider: "openai" as const,
@@ -3778,7 +3853,7 @@ describe("buildReview auth threading", () => {
 			.mock.calls.filter((call) => call[0].provider === "openai");
 		expect(agentCalls.length).toBeGreaterThan(0);
 		for (const call of agentCalls) {
-			expect(call[0].model).toBe("gpt-5.6-terra");
+			expect(call[0].model).toBe("gpt-6.1-sol");
 		}
 	});
 
@@ -3786,7 +3861,7 @@ describe("buildReview auth threading", () => {
 	// runAuditPass callers likewise have no auth in scope — both resolve to
 	// the same GPT-5.6 tier as the OAuth case above, since auth mode no longer
 	// changes model selection.
-	it("routes openai agent calls to gpt-5.6-terra when context.auth is absent (hosted webhook default)", async () => {
+	it("routes openai agent calls to gpt-6.1-sol when context.auth is absent (hosted webhook default)", async () => {
 		const agentResponse = buildGenerateObjectResponse(
 			buildModelReview({
 				event: "COMMENT",
@@ -3817,7 +3892,7 @@ describe("buildReview auth threading", () => {
 			.mock.calls.filter((call) => call[0].provider === "openai");
 		expect(agentCalls.length).toBeGreaterThan(0);
 		for (const call of agentCalls) {
-			expect(call[0].model).toBe("gpt-5.6-terra");
+			expect(call[0].model).toBe("gpt-6.1-sol");
 		}
 	});
 });
@@ -4010,7 +4085,7 @@ describe("formatReviewBody", () => {
 		headSha: "abc123def456",
 		reviewCount: 2,
 		provider: "anthropic",
-		model: "claude-sonnet-5",
+		model: "claude-sonnet-5-5",
 		cost: 0.000042,
 	};
 
@@ -4044,7 +4119,7 @@ describe("formatReviewBody", () => {
 		expect(meta?.sha).toBe("abc123def456");
 		expect(meta?.review).toBe(2);
 		expect(meta?.readiness).toBe(3);
-		expect(meta?.model).toBe("claude-sonnet-5");
+		expect(meta?.model).toBe("claude-sonnet-5-5");
 	});
 
 	it("shows approvalMessage instead of summary on APPROVE", () => {

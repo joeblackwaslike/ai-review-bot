@@ -1,12 +1,12 @@
 import { generateObject } from "ai";
 import { z } from "zod";
 import { createAIModel } from "../models.js";
+import { SEVERITY_LEVELS } from "../review.js";
 import {
+	type ModelSelection,
 	outputBudget,
 	reasoningProviderOptions,
-	SEVERITY_LEVELS,
-} from "../review.js";
-import type { ModelSelection } from "../router.js";
+} from "../router.js";
 
 export const QcVerdictSchema = z.object({
 	isFalsePositive: z
@@ -52,12 +52,10 @@ export function selectQcSample<T extends { id: number }>(
  *
  * /qc (qc-app.ts) is webhook-only — GitHub App auth, no subscription/OAuth
  * concept anywhere in its call chain — so it stays on the API-key backend.
- * gpt-5.6-luna (GPT-5.6's cheapest tier) is confirmed available there. It's
- * also the model router.ts's trivial tier and triage.ts route to, and — since
- * router.ts/triage.ts no longer split on auth mode — that holds for both the
- * API-key and OAuth/subscription backends, not just the API-key one used here. */
-export const QC_OPENAI_MODEL = "gpt-5.6-luna";
-export const QC_ANTHROPIC_MODEL = "claude-haiku-4-5";
+ * These are the same models router.ts's trivial tier and triage.ts use. Haiku
+ * 5.5 thinks by default, so its judge pins effort "low" to stay cheap. */
+export const QC_OPENAI_MODEL = "gpt-6-luna";
+export const QC_ANTHROPIC_MODEL = "claude-haiku-5-5";
 
 /** Pure: a finding is judged by the same provider that raised it — not
  * necessarily the same model, since judging always uses the small model above.
@@ -70,7 +68,7 @@ export function judgeSelection(
 ): ModelSelection {
 	return provider === "openai"
 		? { provider: "openai", model: QC_OPENAI_MODEL, effort: "low" }
-		: { provider: "anthropic", model: QC_ANTHROPIC_MODEL };
+		: { provider: "anthropic", model: QC_ANTHROPIC_MODEL, effort: "low" };
 }
 
 function buildJudgePrompt(finding: JudgeableFinding, hunk: string): string {

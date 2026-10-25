@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppConfig } from "./config.js";
 import { persistPostedComments } from "./feedback/persist.js";
 import {
+	budgetAfterDelay,
 	buildPRSummarySection,
 	injectPRSection,
 	maybeSubmitReview,
@@ -2281,6 +2282,21 @@ describe("injectPRSection", () => {
 
 		expect(result).not.toContain("old shared content");
 		expect(result).toContain("Outro");
+	});
+});
+
+describe("budgetAfterDelay", () => {
+	it("takes the inline delay out of the agent budget", () => {
+		expect(budgetAfterDelay(210_000, 90_000)).toBe(120_000);
+	});
+
+	it("keeps the full budget when nothing was slept", () => {
+		expect(budgetAfterDelay(210_000, 0)).toBe(210_000);
+	});
+
+	it("keeps the configured budget when the delay would consume all of it, rather than skipping every agent", () => {
+		expect(budgetAfterDelay(60_000, 90_000)).toBe(60_000);
+		expect(budgetAfterDelay(90_000, 90_000)).toBe(90_000);
 	});
 });
 

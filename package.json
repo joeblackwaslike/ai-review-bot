@@ -46,14 +46,14 @@
 		"docs:preview": "vitepress preview docs"
 	},
 	"dependencies": {
-		"@ai-sdk/anthropic": "^3.0.78",
-		"@ai-sdk/openai": "^3.0.64",
+		"@ai-sdk/anthropic": "^3.0.135",
+		"@ai-sdk/openai": "^3.0.131",
 		"@anthropic-ai/sdk": "^0.39.0",
 		"@upstash/qstash": "^2.11.1",
 		"@upstash/redis": "^1.38.0",
 		"@vercel/functions": "^3.4.4",
 		"@vercel/node": "^3.2.25",
-		"ai": "^6.0.188",
+		"ai": "^6.0.315",
 		"dotenv": "^17.4.2",
 		"drizzle-orm": "^0.45.2",
 		"octokit": "^4.0.2",

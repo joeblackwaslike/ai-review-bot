@@ -537,8 +537,18 @@ describe("runLocalReview", () => {
 		const fsWrite = fs.writeFile as ReturnType<typeof vi.fn>;
 		const { runLocalReview } = await import("./audit.js");
 
+		const openaiModelsPassedToRunAgent = () => [
+			...new Set(
+				(runAgent as ReturnType<typeof vi.fn>).mock.calls
+					.map((call) => call[2] as { provider: string; model: string })
+					.filter((selection) => selection.provider === "openai")
+					.map((selection) => selection.model),
+			),
+		];
+
 		const runWithOpenaiMode = async (mode: "oauth" | "api-key") => {
 			fsWrite.mockClear();
+			(runAgent as ReturnType<typeof vi.fn>).mockClear();
 			const resolveAuthFor = vi.fn(async (provider: Provider) =>
 				provider === "openai"
 					? mode === "oauth"
@@ -570,10 +580,12 @@ describe("runLocalReview", () => {
 		};
 
 		const oauthReport = await runWithOpenaiMode("oauth");
-		expect(oauthReport).toContain("gpt-5.6-terra");
+		expect(oauthReport).toContain("gpt-6.1-sol");
+		expect(openaiModelsPassedToRunAgent()).toEqual(["gpt-6.1-sol"]);
 
 		const apiKeyReport = await runWithOpenaiMode("api-key");
-		expect(apiKeyReport).toContain("gpt-5.6-terra");
+		expect(apiKeyReport).toContain("gpt-6.1-sol");
+		expect(openaiModelsPassedToRunAgent()).toEqual(["gpt-6.1-sol"]);
 	});
 
 	it("throws when no provider can be authenticated", async () => {

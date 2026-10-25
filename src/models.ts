@@ -8,19 +8,16 @@ interface TokenUsage {
 	completionTokens: number;
 }
 
-// $/1M tokens. Anthropic rates confirmed from platform.claude.com/docs/en/about-claude/models/overview;
-// OpenAI rates confirmed from developers.openai.com/api/docs/models/gpt-5.6-{sol,terra,luna} (Aug 2026).
+// $/1M tokens. Anthropic rates from platform.claude.com/docs/en/about-claude/models/overview;
+// OpenAI rates from developers.openai.com/api/docs/models/gpt-6{-luna,.1-sol} (Oct 2026).
+// ponytail: flat rates — Haiku 5.5 bills $0.50/$2.50 above 100K prompt tokens,
+// so huge trivial-tier diffs are under-reported; add a tier split if that matters.
 const TOKEN_RATES: Record<string, { input: number; output: number }> = {
-	"claude-haiku-4-5": { input: 1.0, output: 5.0 },
-	"claude-sonnet-5": { input: 2.0, output: 10.0 },
-	"claude-opus-5": { input: 5.0, output: 25.0 },
-	// GPT-5.6's three durable capability tiers, used across both the API-key
-	// and OAuth/subscription backends (see router.ts / triage.ts) — gpt-5.4
-	// (the model that previously required an auth-mode split) retires from
-	// the Codex/ChatGPT-OAuth backend on 2026-08-31.
-	"gpt-5.6-luna": { input: 0.2, output: 1.2 },
-	"gpt-5.6-terra": { input: 2.0, output: 12.0 },
-	"gpt-5.6-sol": { input: 5.0, output: 30.0 },
+	"claude-haiku-5-5": { input: 0.1, output: 0.5 },
+	"claude-sonnet-5-5": { input: 2.0, output: 10.0 },
+	"claude-opus-5-5": { input: 4.0, output: 20.0 },
+	"gpt-6-luna": { input: 0.1, output: 0.5 },
+	"gpt-6.1-sol": { input: 2.0, output: 10.0 },
 };
 
 export function computeCost(usage: TokenUsage, model: string): number {

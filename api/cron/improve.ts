@@ -43,7 +43,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 				octokit,
 				owner,
 				repo,
-				selection: { provider: "anthropic", model: "claude-haiku-4-5" },
+				selection: {
+					provider: "anthropic",
+					model: "claude-haiku-5-5",
+					effort: "low",
+				},
 				thresholds: thresholdsFromEnv(process.env),
 			});
 		},
