@@ -363,6 +363,10 @@ function sleep(ms: number): Promise<void> {
 export interface RunAgentOptions {
 	auth?: ResolvedAuth;
 	prompt?: AgentPromptOptions;
+	/** Cuts the call off at the run's wall-clock deadline; an aborted agent is
+	 * reported as skipped, since the platform would otherwise kill the whole
+	 * function with nothing posted. */
+	abortSignal?: AbortSignal;
 }
 
 export async function runAgent(
@@ -372,7 +376,7 @@ export async function runAgent(
 	customPrompt: string,
 	options: RunAgentOptions = {},
 ): Promise<AgentOutcome> {
-	const { auth, prompt: promptOptions = {} } = options;
+	const { auth, prompt: promptOptions = {}, abortSignal } = options;
 	const skillBlock = buildAgentSystemPrompt(
 		skillPath,
 		customPrompt,
@@ -385,6 +389,7 @@ export async function runAgent(
 			schema: ModelReviewSchema,
 			maxOutputTokens: outputBudget(selection, 4096),
 			maxRetries: 4,
+			abortSignal,
 			providerOptions: reasoningProviderOptions(selection),
 			messages: [
 				{
@@ -425,6 +430,12 @@ export async function runAgent(
 			),
 		};
 	} catch (err) {
+		if (abortSignal?.aborted) {
+			console.warn("agent aborted: review time budget exhausted", {
+				skillPath,
+			});
+			return { status: "skipped", skillPath };
+		}
 		const refusal = classifyRefusal(err);
 		if (refusal === "quota_exhausted") {
 			console.error("agent refused: provider balance exhausted", {
@@ -1582,6 +1593,7 @@ export async function buildReview(
 				{
 					auth: context.auth,
 					prompt: { strictEvidenceRules: tuning.strictEvidenceRules },
+					abortSignal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
 				},
 			);
 			// Sequential handoff at the default concurrency 1; at AGENT_CONCURRENCY>1 this is a
@@ -1599,6 +1611,7 @@ export async function buildReview(
 			return outcome;
 		},
 		{
+			serialFirst: true,
 			onBeforeEach: async (i) => {
 				if (i === 0) return; // nothing learned yet
 				const delay = computePaceDelayMs(lastRateLimit, Date.now());

@@ -1252,6 +1252,40 @@ describe("runAgent caching + telemetry", () => {
 		expect(out?.status).toBe("ok");
 	});
 
+	it("forwards the abort signal to generateObject", async () => {
+		mockGenerateObject.mockResolvedValue({
+			object: buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+			usage: { inputTokens: 10, outputTokens: 5 },
+			providerMetadata: {},
+			response: { headers: {} },
+		});
+		const abortSignal = new AbortController().signal;
+
+		await runAgent("code-reviewer.md", "SHARED", sel, "", { abortSignal });
+
+		const call = (mockGenerateObject as ReturnType<typeof vi.fn>).mock
+			.calls[0][0];
+		expect(call.abortSignal).toBe(abortSignal);
+	});
+
+	it("reports an agent cut off by its abort signal as skipped, not errored", async () => {
+		const controller = new AbortController();
+		controller.abort();
+		mockGenerateObject.mockRejectedValue(
+			new DOMException("This operation was aborted", "AbortError"),
+		);
+
+		const out = await runAgent("code-reviewer.md", "SHARED", sel, "", {
+			abortSignal: controller.signal,
+		});
+
+		expect(out).toEqual({ status: "skipped", skillPath: "code-reviewer.md" });
+	});
+
 	it("gives OpenAI reasoning models a large output budget and low reasoning effort", async () => {
 		mockGenerateObject.mockResolvedValue({
 			object: buildModelReview({

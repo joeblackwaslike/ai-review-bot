@@ -222,16 +222,16 @@ describe("getOpenAIAppConfig reviewCommentPrefix", () => {
 });
 
 describe("agentConcurrency", () => {
-	it("defaults to 1 and parses AGENT_CONCURRENCY", () => {
+	it("defaults to 4 and parses AGENT_CONCURRENCY", () => {
 		setRequiredEnv();
 		delete process.env.AGENT_CONCURRENCY;
-		expect(getConfig().agentConcurrency).toBe(1);
+		expect(getConfig().agentConcurrency).toBe(4);
 		process.env.AGENT_CONCURRENCY = "3";
 		expect(getConfig().agentConcurrency).toBe(3);
 		process.env.AGENT_CONCURRENCY = "abc";
-		expect(getConfig().agentConcurrency).toBe(1);
+		expect(getConfig().agentConcurrency).toBe(4);
 		process.env.AGENT_CONCURRENCY = "0";
-		expect(getConfig().agentConcurrency).toBe(1);
+		expect(getConfig().agentConcurrency).toBe(4);
 		delete process.env.AGENT_CONCURRENCY;
 	});
 });
@@ -284,9 +284,9 @@ describe("parseAgentBudgetMs", () => {
 		else process.env.REVIEW_AGENT_BUDGET_SECONDS = original;
 	});
 
-	it("defaults to 600s", () => {
+	it("defaults to 210s, leaving room under the 300s Hobby cap", () => {
 		delete process.env.REVIEW_AGENT_BUDGET_SECONDS;
-		expect(parseAgentBudgetMs()).toBe(600_000);
+		expect(parseAgentBudgetMs()).toBe(210_000);
 	});
 
 	// Flooring seconds first turned these into a 0ms budget, which skips every
@@ -308,7 +308,7 @@ describe("parseAgentBudgetMs", () => {
 
 	it.each(["0", "-5", "abc", ""])("falls back to the default on %s", (raw) => {
 		process.env.REVIEW_AGENT_BUDGET_SECONDS = raw;
-		expect(parseAgentBudgetMs()).toBe(600_000);
+		expect(parseAgentBudgetMs()).toBe(210_000);
 	});
 });
 

@@ -78,23 +78,27 @@ export function validatePrivateKey(key: string): string {
 
 /** Wall-clock allowance for launching review agents, in ms.
  *
- * Sized under the Vercel function `maxDuration` for the review routes (800s) so
- * the run can merge and submit what it has instead of being killed mid-flight
- * with nothing posted. Deep-tier PRs run eight agents at 150-300s each, which
- * does not fit; a partial review does. */
+ * Sized under the Vercel Hobby `maxDuration` cap (300s) for the review routes,
+ * leaving ~90s for fetching, the summary call, and the review POST. It is also
+ * the hard deadline: an agent still running at the budget is aborted and
+ * counted as skipped, so the run submits what it has instead of being killed
+ * with nothing posted. */
 export function parseAgentBudgetMs(): number {
-	const raw = Number(process.env.REVIEW_AGENT_BUDGET_SECONDS ?? "600");
+	const raw = Number(process.env.REVIEW_AGENT_BUDGET_SECONDS ?? "210");
 	// Rounded in milliseconds, not seconds. Flooring seconds first turned any
 	// sub-second value into a 0ms budget, which passes the positive check above
 	// and then skips every agent — a review that silently does nothing.
-	const ms = Number.isFinite(raw) && raw > 0 ? Math.floor(raw * 1000) : 600_000;
+	const ms = Number.isFinite(raw) && raw > 0 ? Math.floor(raw * 1000) : 210_000;
 	return Math.max(1, ms);
 }
 
+/** Sequential agents cannot fit a review in the 300s Hobby cap (measured 212s at
+ * 1 vs 75s at 4 on a 14-file diff, same cost, no 429s). Lower it if a provider's
+ * input-tokens-per-minute limit starts rejecting the burst. */
 export function parseAgentConcurrency(): number {
 	return Math.max(
 		1,
-		Math.floor(Number(process.env.AGENT_CONCURRENCY ?? "1")) || 1,
+		Math.floor(Number(process.env.AGENT_CONCURRENCY ?? "4")) || 4,
 	);
 }
 
