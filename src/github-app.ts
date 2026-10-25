@@ -41,9 +41,11 @@ function sleep(ms: number): Promise<void> {
 // on a fast-moving PR every scheduled run was superseded before it fired —
 // which starved our own Codex bot of an entire PR's reviews.
 /** The inline fallback sleeps inside the webhook's own function budget, so that
- * sleep comes out of the agent budget. Never 0: a zero budget skips every agent. */
+ * sleep comes out of the agent budget. If the delay would consume all of it the
+ * configured budget is kept as is: a near-zero budget skips every agent and the
+ * PR gets no review at all. */
 export function budgetAfterDelay(budgetMs: number, delayMs: number): number {
-	return Math.max(1, budgetMs - delayMs);
+	return budgetMs > delayMs ? budgetMs - delayMs : budgetMs;
 }
 
 export function selectReviewDelayMs(action: string, config: AppConfig): number {

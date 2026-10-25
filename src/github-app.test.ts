@@ -2294,8 +2294,9 @@ describe("budgetAfterDelay", () => {
 		expect(budgetAfterDelay(210_000, 0)).toBe(210_000);
 	});
 
-	it("never goes to zero, which would skip every agent", () => {
-		expect(budgetAfterDelay(60_000, 90_000)).toBe(1);
+	it("keeps the configured budget when the delay would consume all of it, rather than skipping every agent", () => {
+		expect(budgetAfterDelay(60_000, 90_000)).toBe(60_000);
+		expect(budgetAfterDelay(90_000, 90_000)).toBe(90_000);
 	});
 });
 
