@@ -4,7 +4,7 @@
 **Duration:** About 10 hours of wall-clock driving three PRs concurrently to merge, with the author's Claude Max 5-hour quota depleted several times and hours of downtime waiting for resets.
 **Severity:** I found no evidence of incorrect code shipped, though I did not audit the merged diffs. The cost was time, quota, and roughly $10.76 of Claude-side review spend, most of it re-reviewing code the author had already answered. The review rounds stopped converging, and the author's merge comment on ai-listings#74 says so: "several were flaws in earlier fixes."
 **Tracking:** bead `ai-review-bot-mcs` (this document). Fix design is a separate follow-up.
-**Code references:** file and line citations are to `main` at `24ddef3`, the code live during the incident. PRs #82 and #83 landed afterward and moved some lines (for example the `reviewCount` assignment is now at `src/review.ts:2033`), so the source links below may be a few lines off on current `main`.
+**Code references:** file and line citations are to `main` at `24ddef3`, the code live during the incident. PRs #82 and #83 landed afterward and moved some lines (for example the `reviewCount` assignment is now at `src/review.ts:2033`), so the source links below are permalinks to `24ddef3`, so they show the incident-era code.
 
 ---
 
@@ -22,18 +22,18 @@ All times UTC, 2026-10-25. Cost is the figure in the review footer.
 
 ### stealth-browser#1, Claude bot
 
-| Round | Review | Time | Delta reviewed | Findings / inline | Agents failed | Cost |
+| Round | Review | Time | Delta reviewed | Body findings / inline comments | Agents failed | Cost |
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | 5642732822 | 10:26 | whole PR, 8,427 lines | 13 / 13 | 2 of 9 | $1.87 |
 | 2 | 5643315288 | 13:04 | 15 files, +204/-30 | 9 / 8 | 4 of 9 | $1.41 |
 | 3 | 5644281193 | 17:12 | 3 commits, 24 files, +284/-66 | 4 / 6 | 1 of 9 | $2.17 |
 | 4 | 5644679320 | 18:37 | 4 files, +27/-13 | 6 / 2 | 3 of 9 | $1.66 |
 
-Every round carried a "Partial review" notice and every body carried `ai-review:review=1`. Codex reviewed the same SHAs 12 to 14 minutes after each Claude round and requested changes every time. Rounds 3 and 4 report finding counts that do not match their inline counts (4 findings with 6 comments, 6 findings with 2 comments).
+Every round carried a "Partial review" notice and every body carried `ai-review:review=1`. Codex reviewed the same SHAs 12 to 14 minutes after each Claude round and requested changes every time.
 
 ### ai-listings#74, Claude bot
 
-| Round | Review | Time | Delta reviewed | Findings / inline | Cost |
+| Round | Review | Time | Delta reviewed | Body findings / inline comments | Cost |
 | --- | --- | --- | --- | --- | --- |
 | 1 | 5642460754 | 09:24 | whole PR | 5 / 1 | $0.374 |
 | 1b | 5643305588 | 13:01 | none (same SHA, manual re-run) | 8 / 0 | $0.426 |
@@ -43,7 +43,7 @@ Every round carried a "Partial review" notice and every body carried `ai-review:
 
 ### agent-skills#10, Claude bot
 
-| Round | Review | Time | Delta reviewed | Findings / inline | Cost |
+| Round | Review | Time | Delta reviewed | Body findings / inline comments | Cost |
 | --- | --- | --- | --- | --- | --- |
 | 1 | 5642460295 | 09:24 | whole PR | 6 / 2 | $0.300 |
 | 2 | 5642643009 | 10:02 | 2 files, +33/-43 | 4 / 0 | $0.259 |
@@ -67,23 +67,23 @@ Codex totals for the two smaller PRs were $1.50 (ai-listings#74) and $1.22 (agen
 
 Observed facts come first. Hypotheses are marked.
 
-**1. Author replies and resolved threads never reach the agents.** Review comments are fetched in `src/cli.ts`, `src/feedback/persist.ts`, and `src/improve/*`, and nowhere in the review path ([src/review.ts](../src/review.ts), [src/github-app.ts](../src/github-app.ts)). The re-review prompt tells the agent to skip a finding "a maintainer reply already addresses" ([src/prompt.ts:87](../src/prompt.ts#L87)), but no reply text is supplied, so the instruction has nothing to act on. Reactions, including the 😕 and 👎 that mark a finding as wrong or unclear, feed only the offline improvement loop.
+**1. Author replies and resolved threads never reach the agents.** Review comments are fetched in `src/cli.ts`, `src/feedback/persist.ts`, and `src/improve/*`, and nowhere in the review path ([src/review.ts](https://github.com/joeblackwaslike/ai-review-bot/blob/24ddef3/src/review.ts), [src/github-app.ts](https://github.com/joeblackwaslike/ai-review-bot/blob/24ddef3/src/github-app.ts)). The re-review prompt tells the agent to skip a finding "a maintainer reply already addresses" ([src/prompt.ts:87](https://github.com/joeblackwaslike/ai-review-bot/blob/24ddef3/src/prompt.ts#L87)), but no reply text is supplied, so the instruction has nothing to act on. Reactions, including the 😕 and 👎 that mark a finding as wrong or unclear, feed only the offline improvement loop.
 
-**2. Cross-round memory is a list of titles.** Agents get `[status] severity - path:line - title` for each prior finding from KV state ([src/review-state.ts:5-12](../src/review-state.ts#L5-L12), [src/prompt.ts:93-107](../src/prompt.ts#L93-L107)). There is no rationale and no author response. The only code-level suppression is an exact `path:line` or title match ([src/review.ts:500-523](../src/review.ts#L500-L523)), so a repeat that is reworded or lands on a different line passes. Everything else depends on the model obeying "do not file any of these again", which Claude did not do on any of the five examples above.
+**2. Cross-round memory is a list of titles.** Agents get `[status] severity - path:line - title` for each prior finding from KV state ([src/review-state.ts:5-12](https://github.com/joeblackwaslike/ai-review-bot/blob/24ddef3/src/review-state.ts#L5-L12), [src/prompt.ts:93-107](https://github.com/joeblackwaslike/ai-review-bot/blob/24ddef3/src/prompt.ts#L93-L107)). There is no rationale and no author response. The only code-level suppression applies to findings that triage marked resolved, matched by exact `path:line` or title ([src/review.ts:500-523](https://github.com/joeblackwaslike/ai-review-bot/blob/24ddef3/src/review.ts#L500-L523)). A finding that is still open, or that the author rejected, is never suppressed in code, even when an agent repeats it verbatim. Those repeats depend entirely on the model obeying "do not file any of these again", which Claude did not do on any of the five examples above.
 
-**3. Findings that contradict themselves are posted.** `confidence` is a required schema field and nothing filters on it ([src/review.ts:273](../src/review.ts#L273)). The only guard is prompt text ([src/prompt.ts:187-188](../src/prompt.ts#L187-L188)). Round 3 of stealth-browser#1 listed "README-only PR body matches the diff; nothing to flag" as a finding, and several inline comments in rounds 1 and 2 conclude the code is consistent or matches the design.
+**3. Findings that contradict themselves are posted.** `confidence` is a required schema field and nothing filters on it ([src/review.ts:273](https://github.com/joeblackwaslike/ai-review-bot/blob/24ddef3/src/review.ts#L273)). The only guard is prompt text ([src/prompt.ts:187-188](https://github.com/joeblackwaslike/ai-review-bot/blob/24ddef3/src/prompt.ts#L187-L188)). Round 3 of stealth-browser#1 listed "README-only PR body matches the diff; nothing to flag" as a finding, and several inline comments in rounds 1 and 2 conclude the code is consistent or matches the design.
 
-**4. The round counter never advances.** State is saved with `reviewCount: state?.reviewCount ?? 0` ([src/review.ts:2030](../src/review.ts#L2030)) while the body shows `reviewCount + 1`. Every review in this incident says `review=1`, including round 4. This removes the one visible signal that would show whether state was loaded.
+**4. Every review says `review=1`, which points at state not being loaded on re-review rounds.** The counter itself works: `buildReview` passes the previous count and `saveReviewState` adds one when it writes ([src/review-state.ts:49-52](https://github.com/joeblackwaslike/ai-review-bot/blob/24ddef3/src/review-state.ts#L49-L52)), and the body shows the loaded count plus one. A round that loaded state saved by an earlier round would therefore say `review=2` or higher. All 14 Claude reviews in this incident say `review=1`, including round 4 of stealth-browser#1. So on every re-review round the state lookup returned nothing and the bot started cold, or the deployed code predated the counter, or the reviews were forced with `--force` (which skips the state lookup). I could not tell which. If it is the first or third, the triage gate and the cross-round finding list never ran, which would explain both the full-codebase scans and the lack of memory. This is the most important open question below.
 
-**5. A partial review is recorded as a complete one.** In stealth-browser#1, one to four of nine agents failed or were skipped every round. The saved state still moves `lastReviewedSha` to the new head ([src/review.ts:2025-2039](../src/review.ts#L2025-L2039)), so the agents that never ran are treated as having reviewed that SHA.
+**5. A partial review is recorded as a complete one.** In stealth-browser#1, one to four of nine agents failed or were skipped every round. The saved state still moves `lastReviewedSha` to the new head ([src/review.ts:2025-2039](https://github.com/joeblackwaslike/ai-review-bot/blob/24ddef3/src/review.ts#L2025-L2039)), so the agents that never ran are treated as having reviewed that SHA.
 
 **6. Round 3 of stealth-browser#1 reviewed the wrong thing.** The last commit (`493a82d5`) touched only the README. The delta since the last reviewed SHA also held the author's "second round of review findings" commit, 24 files and +278/-64. The bot's summary called the change "a genuine docs-only README edit" with "nothing new was fixed", said the tooling was "diffing against the full codebase", and posted six inline comments, all on older code the author had already answered. The author's replies list about ten fixes in that commit.
 
-The agents see the PR title and body in every prompt ([src/prompt.ts:116-117](../src/prompt.ts#L116-L117)), and the implementer had just rewritten both to describe the README commit. Round 3's own headline findings quote the body's docs-only claim. That makes the rewritten title and body the likely reason for the "docs-only" framing. The triage call that picks the review scope never sees the title or body (it gets only the delta diff, [src/triage.ts:62-75](../src/triage.ts#L62-L75)), so the title does not explain why the round covered the full codebase. That part is unexplained, see Open Questions.
+The agents see the PR title and body in every prompt ([src/prompt.ts:116-117](https://github.com/joeblackwaslike/ai-review-bot/blob/24ddef3/src/prompt.ts#L116-L117)), and the implementer had just rewritten both to describe the README commit. Round 3's own headline findings quote the body's docs-only claim. That makes the rewritten title and body the likely reason for the "docs-only" framing. The triage call that picks the review scope never sees the title or body (it gets only the delta diff, [src/triage.ts:62-75](https://github.com/joeblackwaslike/ai-review-bot/blob/24ddef3/src/triage.ts#L62-L75)), so the title does not explain why the round covered the full codebase. That part is unexplained, see Open Questions.
 
-**7. Large PRs are partly invisible.** `trimPatch` cuts each file at 24,000 characters with a `[patch truncated]` marker and there is no cap on the whole PR ([src/prompt.ts:50-56](../src/prompt.ts#L50-L56)). The agent is not told which regions are missing, while inline anchors are validated against the full patch.
+**7. Large PRs are partly invisible.** `trimPatch` cuts each file at 24,000 characters with a `[patch truncated]` marker and there is no cap on the whole PR ([src/prompt.ts:50-56](https://github.com/joeblackwaslike/ai-review-bot/blob/24ddef3/src/prompt.ts#L50-L56)). The agent is not told which regions are missing, while inline anchors are validated against the full patch.
 
-**8. Hypothesis, not tested. The accuracy gap between providers may come from prompt compliance.** On adjudicated inline comments, Codex was right on 17 of 18 and Claude on 4 of 10. The samples are small and come from author replies, so treat the ratio as a direction. It matches the earlier corpus measurement (Anthropic findings right 9 of 42 times, OpenAI 39 of 47). The tuning flags are identical for both providers ([src/reviewer-tuning.ts:28-32](../src/reviewer-tuning.ts#L28-L32)), so the difference is in the models or how they follow the "do not re-file" instruction. I have not tested either explanation.
+**8. Hypothesis, not tested. The accuracy gap between providers may come from prompt compliance.** On adjudicated inline comments, Codex was right on 17 of 18 and Claude on 4 of 10. The samples are small and come from author replies, so treat the ratio as a direction. It matches the earlier corpus measurement (Anthropic findings right 9 of 42 times, OpenAI 39 of 47). The tuning flags are identical for both providers ([src/reviewer-tuning.ts:28-32](https://github.com/joeblackwaslike/ai-review-bot/blob/24ddef3/src/reviewer-tuning.ts#L28-L32)), so the difference is in the models or how they follow the "do not re-file" instruction. I have not tested either explanation.
 
 **9. Hypothesis, not tested. Eight or nine agents on one diff overlap.** Same-SHA re-runs produced near-duplicate rows (three shell-injection variants on agent-skills#10 round 2b, two token-rollout variants on ai-listings#74 round 1b), and a tiny delta still yielded many findings (ai-listings#74 round 3, +8/-3, gave 9). Cross-agent dedupe within a round exists but is weak against rewording.
 
@@ -99,7 +99,7 @@ The agents see the PR title and body in every prompt ([src/prompt.ts:116-117](..
 ## Open Questions
 
 - **Why did stealth-browser#1 round 3 review the whole codebase?** The candidates are a triage call that returned FULL, a state lookup that missed (key mismatch, forced review, or cold state), or the triage gate not running. Production logs for that run are not retained, and the KV entry (`review-state:anthropic:joeblackwaslike/stealth-browser#1`) needs the owner's credentials to read. Until someone reads that entry or reproduces the run, this stays unresolved.
-- **Is KV state being written and read for these repos at all?** The unadvanced round counter (cause 4) means the footer cannot answer this.
+- **Why did every round start cold (cause 4)?** Check the KV entries for these three PRs, whether the deployed build had the counter, and whether any round was triggered with `--force`. A cold start every round would explain the full scans and the missing memory better than anything else in this document.
 - **Do the agents emit filler under pressure to produce output?** Findings like "No new findings beyond prior reviews" and "No code changes this round" appear in agent-skills#10. I found no direct evidence of a minimum-output instruction.
 
 ## What This Does NOT Fix
@@ -111,9 +111,9 @@ Fixing memory and dedupe makes the reviewer stop repeating itself. It does not m
 These are candidate directions. None is designed or scoped yet.
 
 - Give agents the author's reply and the thread's resolved or outdated status for each prior finding, plus 😕 and 👎 reactions, as a per-finding record of why it was rejected.
-- Persist rejected and answered findings with a normalized claim key (the existing `isSameClaim` in [src/claim-dedupe.ts](../src/claim-dedupe.ts) is a starting point) and drop matches in code regardless of line or wording. Never raise severity on a repeat.
+- Persist rejected and answered findings with a normalized claim key (the existing `isSameClaim` in [src/claim-dedupe.ts](https://github.com/joeblackwaslike/ai-review-bot/blob/24ddef3/src/claim-dedupe.ts) is a starting point) and drop matches in code regardless of line or wording, including repeats of findings that are merely open. Never raise severity on a repeat.
 - Add a post-filter that drops findings whose own text says there is no defect, that the code matches the design, or that nothing needs to change.
-- Increment `reviewCount`, and stop advancing `lastReviewedSha` for agents that did not complete.
+- Find out why state was not loaded on re-review rounds (cause 4) and add a log line or footer field that shows whether a round started warm or cold. Separately, stop advancing `lastReviewedSha` past agents that did not complete.
 - On re-review rounds, scope strictly to the delta, and either stop passing the PR title and body or mark them as author-written and possibly stale.
 - Add a per-round dollar cap and a round cap, in the bot and in the pr-loop driver.
 - Driver side: stop the no-mistakes `pr` step from re-drafting titles on every run, and make the round cap part of the delegation prompt (tracked outside this repo).
