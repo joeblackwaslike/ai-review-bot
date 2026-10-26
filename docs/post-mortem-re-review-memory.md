@@ -4,6 +4,7 @@
 **Duration:** About 10 hours of wall-clock driving three PRs concurrently to merge, with the author's Claude Max 5-hour quota depleted several times and hours of downtime waiting for resets.
 **Severity:** I found no evidence of incorrect code shipped, though I did not audit the merged diffs. The cost was time, quota, and roughly $10.76 of Claude-side review spend, most of it re-reviewing code the author had already answered. The review rounds stopped converging, and the author's merge comment on ai-listings#74 says so: "several were flaws in earlier fixes."
 **Tracking:** bead `ai-review-bot-mcs` (this document). Fix design is a separate follow-up.
+**Code references:** file and line citations are to `main` at `24ddef3`, the code live during the incident. PRs #82 and #83 landed afterward and moved some lines (for example the `reviewCount` assignment is now at `src/review.ts:2033`), so the source links below may be a few lines off on current `main`.
 
 ---
 
