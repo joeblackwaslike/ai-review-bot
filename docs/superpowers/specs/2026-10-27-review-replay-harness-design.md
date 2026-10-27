@@ -14,7 +14,7 @@ Three measures, all computed per PR and per provider (Claude and Codex), with th
 
 - False-positive rate is rejected findings divided by fixed plus rejected findings. A finding is rejected when the author declined it, skipped it, replied that it is intentional or by design, or marked it wrong with a 😕 or 👎. A finding is fixed when the author fixed it in a later commit. Findings nobody responded to are left out of the rate. They are still counted and shown separately.
 - Recycling rate is the share of posted findings that repeat a claim already settled in an earlier round. A claim is settled when it was fixed, or when the author declined or skipped it, with or without a stated reason. The target is zero.
-- Convergence is the number of rounds until a round posts no new finding. On the three incident PRs the recorded value is "did not converge".
+- Convergence is the number of recorded rounds that still post at least one finding that does not repeat a settled claim, and whether the final round posts nothing new. On the three incident PRs the recorded value is "did not converge". The replay follows the recorded timeline and never simulates the pushes that would have happened if some findings had been suppressed, so offline it measures only what suppression removes.
 
 ## Goals
 
@@ -72,6 +72,15 @@ These are the pieces and how they connect. File and flag names are my calls and 
 
 For each chosen recorded round, fetch the PR diff at that round's SHA, run the real reviewer once, and compare its findings against the labels of the recorded findings: how many match a fixed claim, how many match a rejected claim, how many are new. It prints a spend total before it starts and stops at `--max-cost`. Results vary between runs, so it prints a range from repeated runs only if asked, and it never gates anything.
 
+## Settled after the builder check
+
+- "Today's code" has almost nothing to run on posted findings. The only existing cross-round suppression (`resolvedKeys`) needs triage state, and merging and anchor validation need raw agent output and diffs that were not recorded. So the v1 baseline for recycling is the recorded history, and the "today's code" pipeline is a thin wrapper that exists to prove the plug-in interface works. The Vitest test therefore asserts that the fixtures load, that labels and metrics are stable against a committed snapshot, and that the recall guard is zero. A "does not get worse than baseline" assertion starts when project 2 supplies a real pipeline.
+- Recycling is measured against repeat pairs that are labeled in the fixtures, not against the pipeline's own matcher. The labeler proposes pairs (same file, close lines, shared identifier or similar title, plus a quoted reply that settled the first one), and a person confirms them. A pipeline matcher that suppresses more than the labeled pairs does not lower the recycling number, and one that suppresses a labeled fixed finding trips the recall guard.
+- The recall guard applies to the first occurrence of a claim. A finding labeled fixed in round 1 must still be posted in round 1. The same claim re-raised in round 3 is a repeat, and suppressing it is correct.
+- To detect "fixed" offline, the recorder also stores, for each commit between rounds, the changed file paths and hunk line ranges. It does not store diff bodies. The labeler uses these with the reply text, and makes no network calls.
+- Fixtures are per provider. A reply is credited to the bot whose thread it is in. Third-party bots such as `chatgpt-codex-connector` are not counted as findings or as responders. "The author" is the PR author's account, which is also the account the implementer agent pushes and replies as.
+- The committed baseline starts from the automatic labels and is marked provisional. It becomes final after Joe's one-time spot-check of the labels and repeat pairs. The Vitest test passes either way.
+
 ## Left to the builder
 
 - The exact fixture schema and file layout.
@@ -84,5 +93,5 @@ For each chosen recorded round, fetch the PR diff at that round's SHA, run the r
 
 - Fixtures live in the repo and hold SHAs, not diffs.
 - The command is a subcommand of the existing `ai-review` CLI, not a separate binary.
-- Convergence is reported as the count of consecutive trailing rounds that post nothing new, and offline it can only measure what suppression removes, not whether the agents would stop finding new things.
+- Convergence follows the recorded timeline. Suppressing a round-2 finding does not change what was pushed before round 3.
 - The three incident PRs are the only fixtures for v1. Adding more is a recorder run.
