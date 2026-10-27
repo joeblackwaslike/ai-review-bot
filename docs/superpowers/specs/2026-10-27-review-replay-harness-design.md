@@ -25,7 +25,7 @@ Three measures, all computed per PR and per provider (Claude and Codex), with th
 
 - False-positive rate, precisely the author rejection rate, is rejected findings divided by fixed plus rejected findings. It measures what the author decided, not whether the claim was factually wrong, and the report says so. Findings the author deferred for scope or a follow-up are labeled deferred and shown separately, not counted as rejected. A finding is rejected when the author declined it, skipped it, replied that it is intentional or by design, or marked it wrong with a 😕 or 👎. A finding is fixed when the author fixed it in a later commit. Findings nobody responded to are left out of the rate. They are still counted and shown separately.
 - Recycling rate is the share of posted findings that repeat a claim already settled in an earlier round. A claim is settled when it was fixed, or when the author declined or skipped it, with or without a stated reason. The target is zero.
-- Convergence is the number of recorded rounds that still post at least one finding that does not repeat a settled claim, and whether the final round posts nothing new. On the three incident PRs the recorded value is "did not converge". The replay follows the recorded timeline and never simulates the pushes that would have happened if some findings had been suppressed, so offline it measures only what suppression removes.
+- Convergence is the number of recorded rounds that still post at least one first-seen claim, meaning a claim not previously posted in any earlier round, whether that earlier claim ended up open or settled, and whether the final round posts nothing new. On the three incident PRs the recorded value is "did not converge". The replay follows the recorded timeline and never simulates the pushes that would have happened if some findings had been suppressed, so offline it measures only what suppression removes.
 
 ## Goals
 
@@ -111,9 +111,9 @@ Time and evidence
 
 Metrics and guards
 
-- The recall guard has two parts. Every suppressed finding must be in an explicit, human-confirmed allowed-suppression set (labeled repeats of settled claims). Any other suppression is reported as unexpected and fails the check until a person adjudicates it. And a confirmed fixed claim must still be posted in its first round. The fixtures also hold negative pairs, which are similar findings that describe different defects and must both survive.
+- The recall guard has two parts. Every suppressed finding must be in an explicit, human-confirmed allowed-suppression set, which holds confirmed repeats of any previously posted claim, open or settled. Any other suppression is reported as unexpected and fails the check until a person adjudicates it. And a confirmed fixed claim must still be posted in its first round. The fixtures also hold negative pairs, which are similar findings that describe different defects and must both survive.
 - Labels that have not been confirmed by a person are provisional. A guard failure that rests on a provisional label is a warning. A failure on a confirmed label fails the test.
-- The report also counts restated open findings, meaning findings repeated while still open and unresolved. They are shown beside the recycling rate, because the "do not re-file" rule applies to them too.
+- The report counts two kinds of repeat separately and suppression of either is allowed. Recycling is a repeat of a settled claim and its target is zero. Restated open findings are repeats of a claim that is still open and unresolved. They are shown beside the recycling rate, because the "do not re-file" rule applies to them too, and neither kind counts toward convergence.
 - Samples are small (13 Claude inline findings on the three incident PRs). The report prints counts, such as 4 of 10, never a bare percentage. CI asserts on the guard and on label and metric stability against the snapshot. It does not assert thresholds on rates.
 
 Live tier
