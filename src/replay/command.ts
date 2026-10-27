@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fixtureId } from "./claims.js";
 import { type GhClient, ghCli } from "./gh.js";
@@ -34,6 +34,17 @@ const USAGE = [
 
 const PR_URL = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)\/?$/;
 const FIXTURE_FILE = /^(?!.*\.labels(\.proposed)?\.json$).+\.json$/;
+
+export function defaultFixturesDir(fromUrl: string): string {
+	let dir = dirname(fileURLToPath(fromUrl));
+	for (;;) {
+		if (existsSync(join(dir, "package.json")))
+			return join(dir, "src", "replay", "fixtures");
+		const parent = dirname(dir);
+		if (parent === dir) return join(process.cwd(), "src", "replay", "fixtures");
+		dir = parent;
+	}
+}
 
 function parseArgs(args: string[]): ParsedArgs | null {
 	const parsed: ParsedArgs = {};
@@ -78,20 +89,40 @@ async function record(
 		out(USAGE);
 		return 2;
 	}
+	try {
+		return await writeRecording(m, p, dir, client, out);
+	} catch (err) {
+		out(`record failed: ${err instanceof Error ? err.message : String(err)}`);
+		return 1;
+	}
+}
+
+async function writeRecording(
+	m: RegExpMatchArray,
+	p: ParsedArgs,
+	dir: string,
+	client: GhClient,
+	out: (s: string) => void,
+): Promise<number> {
 	const fixture = await recordPr(client, {
 		owner: m[1] as string,
 		repo: m[2] as string,
 		pull: Number(m[3]),
-		provider: p.provider,
-		botLogin: p.bot,
+		provider: p.provider as Provider,
+		botLogin: p.bot as string,
 	});
 	const id = fixtureId(fixture);
 	const labelsPath = join(dir, `${id}.labels.json`);
 	let target = labelsPath;
 	if (existsSync(labelsPath)) {
-		const existing = JSON.parse(
-			await readFile(labelsPath, "utf8"),
-		) as LabelFile;
+		let existing: LabelFile;
+		try {
+			existing = JSON.parse(await readFile(labelsPath, "utf8")) as LabelFile;
+		} catch (err) {
+			throw new Error(
+				`cannot read existing labels ${labelsPath}: ${err instanceof Error ? err.message : String(err)}`,
+			);
+		}
 		if (hasConfirmed(existing))
 			target = join(dir, `${id}.labels.proposed.json`);
 	}
@@ -116,6 +147,10 @@ async function replayAll(
 	const files = existsSync(dir)
 		? (await readdir(dir)).filter((n) => FIXTURE_FILE.test(n)).sort()
 		: [];
+	if (files.length === 0) {
+		out(`no fixtures found in ${dir}; record some with --record`);
+		return 1;
+	}
 	const metrics = [];
 	const ids: string[] = [];
 	let failed = false;
@@ -155,9 +190,7 @@ export async function runReplay(
 		return 2;
 	}
 	const dir =
-		parsed.fixtures ??
-		deps.fixturesDir ??
-		fileURLToPath(new URL("./fixtures/", import.meta.url));
+		parsed.fixtures ?? deps.fixturesDir ?? defaultFixturesDir(import.meta.url);
 	if (parsed.record !== undefined)
 		return record(parsed, dir, deps.client ?? ghCli(), out);
 	return replayAll(dir, deps.pipeline ?? todaysCodePipeline, out);

@@ -116,6 +116,16 @@ function usage(): never {
 	console.error(
 		"      see docs/cli-and-npm.md for which vars are needed and where to find them.",
 	);
+	console.error("  ai-review replay [--fixtures <dir>]");
+	console.error(
+		"  ai-review replay --record <pr-url> --provider anthropic|openai --bot <login> [--fixtures <dir>]",
+	);
+	console.error(
+		"      Offline replay of recorded review rounds (exit 1 on guard failure or no",
+	);
+	console.error(
+		"      fixtures); --record writes a fixture + proposed labels to src/replay/fixtures/.",
+	);
 	console.error("  ai-review backfill --repo <owner/name> [--pr <n>] [--json]");
 	console.error("  ai-review unrated --repo <owner/name> --pr <n> [--json]");
 	console.error(

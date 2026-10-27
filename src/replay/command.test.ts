@@ -1,9 +1,10 @@
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import { fixtureId } from "./claims.js";
-import { runReplay } from "./command.js";
+import { defaultFixturesDir, runReplay } from "./command.js";
 import type { GhClient } from "./gh.js";
 import type { ReplayPipeline } from "./pipeline.js";
 import { makeFixture, makeLabel, makeLabels } from "./testkit.js";
@@ -142,7 +143,11 @@ describe("runReplay", () => {
 		const { lines, out } = collect();
 		const code = await runReplay(["--bogus"], { fixturesDir: tmp(), out });
 		expect(code).toBe(2);
-		expect(lines.join("\n")).toContain("Usage");
+		const text = lines.join("\n");
+		expect(text).toContain("Usage");
+		expect(text).toContain("ai-review replay");
+		expect(text).toContain("--record");
+		expect(text).toContain("--fixtures");
 	});
 
 	it("--record without provider and bot exits 2", async () => {
@@ -153,5 +158,68 @@ describe("runReplay", () => {
 			out,
 		});
 		expect(code).toBe(2);
+	});
+
+	it("a fixture with no labels file exits 1", async () => {
+		const dir = tmp();
+		const f = makeFixture([["a"]]);
+		writeFileSync(join(dir, `${fixtureId(f)}.json`), JSON.stringify(f));
+		const { lines, out } = collect();
+		expect(await runReplay([], { fixturesDir: dir, out })).toBe(1);
+		expect(lines.join("\n")).toContain("missing");
+	});
+
+	it("an empty or missing fixtures dir exits 1 with a hint", async () => {
+		for (const dir of [tmp(), join(tmp(), "nope")]) {
+			const { lines, out } = collect();
+			expect(await runReplay([], { fixturesDir: dir, out })).toBe(1);
+			expect(lines.join("\n")).toContain(
+				`no fixtures found in ${dir}; record some with --record`,
+			);
+		}
+	});
+
+	it("--record reports a failing client without throwing", async () => {
+		const dir = tmp();
+		const { lines, out } = collect();
+		const client: GhClient = {
+			async rest() {
+				throw new Error("HTTP 502 boom");
+			},
+			async graphql() {
+				throw new Error("unused");
+			},
+		};
+		const code = await runReplay(recordArgs, { client, fixturesDir: dir, out });
+		expect(code).toBe(1);
+		expect(lines.join("\n")).toContain("record failed: HTTP 502 boom");
+	});
+
+	it("--record refuses to touch a corrupt existing labels file", async () => {
+		const dir = tmp();
+		const { lines, out } = collect();
+		const path = join(dir, "o__r__7__anthropic.labels.json");
+		writeFileSync(path, "{not json");
+		const code = await runReplay(recordArgs, {
+			client: fakeClient(),
+			fixturesDir: dir,
+			out,
+		});
+		expect(code).toBe(1);
+		expect(lines.join("\n")).toMatch(/record failed: .*labels\.json/);
+		expect(readFileSync(path, "utf8")).toBe("{not json");
+	});
+});
+
+describe("defaultFixturesDir", () => {
+	const root = join(import.meta.dirname, "..", "..");
+	const want = join(root, "src", "replay", "fixtures");
+	it("resolves to src/replay/fixtures from a src-style URL", () => {
+		const url = pathToFileURL(join(root, "src", "replay", "command.ts")).href;
+		expect(defaultFixturesDir(url)).toBe(want);
+	});
+	it("resolves to src/replay/fixtures from a dist-style URL", () => {
+		const url = pathToFileURL(join(root, "dist", "replay", "command.js")).href;
+		expect(defaultFixturesDir(url)).toBe(want);
 	});
 });
