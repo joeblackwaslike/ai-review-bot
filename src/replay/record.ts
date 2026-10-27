@@ -1,6 +1,6 @@
 import { parseBodyFindings } from "../review-state.js";
 import { splitInlineClaims } from "./claims.js";
-import type { GhClient } from "./gh.js";
+import { type GhClient, GhHttpError } from "./gh.js";
 import type {
 	CommitMeta,
 	PostedClaim,
@@ -49,6 +49,7 @@ interface ThreadNode {
 	isOutdated: boolean;
 	resolvedBy: { login: string } | null;
 	comments: {
+		pageInfo: { hasNextPage: boolean };
 		nodes: {
 			databaseId: number;
 			author: { login: string } | null;
@@ -81,6 +82,7 @@ const THREADS_QUERY = `
             isOutdated
             resolvedBy { login }
             comments(first: 100) {
+              pageInfo { hasNextPage }
               nodes { databaseId author { login } body createdAt lastEditedAt }
             }
           }
@@ -150,8 +152,13 @@ async function fetchCommitsSince(
 		cmp = await client.rest<ApiCompare>(
 			`${repoPath}/compare/${base}...${head}`,
 		);
-	} catch {
-		return miss;
+	} catch (err) {
+		if (
+			err instanceof GhHttpError &&
+			(err.status === 404 || err.status === 422)
+		)
+			return miss;
+		throw err;
 	}
 	const headCommit = cmp.commits.find((c) => c.sha.startsWith(head));
 	if (!headCommit)
@@ -264,6 +271,8 @@ export async function recordPr(
 
 	const threads: ThreadEvidence[] = [];
 	for (const t of await fetchThreads(client, o)) {
+		if (t.comments.pageInfo.hasNextPage)
+			throw new Error(`thread ${t.id} has more than 100 comments`);
 		const [first, ...rest] = t.comments.nodes;
 		if (!first || !botCommentIds.has(first.databaseId)) continue;
 		threads.push({

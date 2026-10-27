@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { GhClient } from "./gh.js";
+import { type GhClient, GhHttpError } from "./gh.js";
 import { recordPr } from "./record.js";
 
 const BOT = "anthropicreviewbot";
@@ -57,7 +57,8 @@ function fake(w: Partial<World> = {}): GhClient {
 			const cmp = route.match(/compare\/(.+)$/);
 			if (cmp) {
 				const r = world.compares[cmp[1]];
-				if (!r || r instanceof Error) throw r ?? new Error("404");
+				if (!r || r instanceof Error)
+					throw r ?? new GhHttpError(404, "not found");
 				return r as never;
 			}
 			const cm = route.match(/commits\/(\w+)$/);
@@ -192,6 +193,7 @@ describe("recordPr", () => {
 						merge_base_commit: { sha: "mb" },
 						commits: [{ sha: "other", commit: { committer: { date: "d" } } }],
 					},
+					"aaa1111...bbb2222": new GhHttpError(422, "no common ancestor"),
 				},
 			}),
 			opts,
@@ -199,6 +201,33 @@ describe("recordPr", () => {
 		expect(fx.rounds[0].approximate).toBe(true);
 		expect(fx.rounds[0].triggerAt).toBeNull();
 		expect(fx.rounds[1].approximate).toBe(true);
+	});
+
+	it("propagates compare errors other than 404 or 422", async () => {
+		await expect(
+			recordPr(
+				fake({
+					reviews: twoReviews,
+					compares: { "base0...aaa1111": new GhHttpError(403, "rate limited") },
+				}),
+				opts,
+			),
+		).rejects.toThrow("rate limited");
+	});
+
+	it("throws naming the thread when its comments are truncated", async () => {
+		const t = thread("T9", 10, [["bot", BOT, "x"]]);
+		t.comments.pageInfo.hasNextPage = true;
+		await expect(
+			recordPr(
+				fake({
+					reviews: twoReviews,
+					comments: [comment(10, 1, "**A**")],
+					threads: [t],
+				}),
+				opts,
+			),
+		).rejects.toThrow("T9");
 	});
 
 	it("records changed files and hunk line ranges per commit between rounds but no patch text", async () => {
@@ -275,6 +304,7 @@ function thread(id: string, firstId: number, cs: [string, string, string][]) {
 		isOutdated: false,
 		resolvedBy: null,
 		comments: {
+			pageInfo: { hasNextPage: false },
 			nodes: cs.map(([k, login, body], i) => ({
 				databaseId: i === 0 ? firstId : k === "r1" ? 98 : 97,
 				author: { login },
