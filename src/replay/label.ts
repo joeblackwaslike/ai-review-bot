@@ -1,4 +1,5 @@
 import { isSameClaim } from "../claim-dedupe.js";
+import { fixtureId } from "./claims.js";
 import type {
 	ClaimLabel,
 	LabelFile,
@@ -15,10 +16,6 @@ const REJECTED =
 const FIX_REF = /\bfixed in\b|\b[0-9a-f]{7,40}\b/i;
 const REJECTING_REACTIONS = new Set(["-1", "confused"]);
 const HUNK_SLACK = 3;
-
-function fixtureId(f: ReplayFixture): string {
-	return `${f.owner}-${f.repo}-${f.pull}-${f.provider}`;
-}
 
 function stamp(at: string | null | undefined, text: string): string {
 	return `${at || "unknown"}|${text}`;

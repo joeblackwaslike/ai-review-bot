@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { fixtureId } from "./claims.js";
 import { labelFixture, mergeConfirmations } from "./label.js";
 import type {
 	CommitMeta,
@@ -212,6 +213,20 @@ describe("labelFixture", () => {
 				expect(e).toMatch(/^(\d{4}-\d{2}-\d{2}T[^|]+|unknown)\|.+/);
 			}
 		}
+	});
+});
+
+describe("labelFixture fixtureId", () => {
+	it("uses the canonical fixtureId from claims.ts", () => {
+		const f = fixture({
+			owner: "joeblackwaslike",
+			repo: "stealth-browser",
+			pull: 1,
+		});
+		expect(labelFixture(f).fixtureId).toBe(fixtureId(f));
+		expect(labelFixture(f).fixtureId).toBe(
+			"joeblackwaslike__stealth-browser__1__anthropic",
+		);
 	});
 });
 
