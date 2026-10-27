@@ -4,6 +4,17 @@ Date: 2026-10-27
 Bead: `ai-review-bot-a6a`
 Context: project 1 of the review-accuracy effort. The incident is written up in [docs/post-mortem-re-review-memory.md](../../post-mortem-re-review-memory.md).
 
+## Where this fits
+
+This is project 1 of 6, in the order they will be built. Later sections refer to the others by number.
+
+1. Replay harness. This document.
+2. Ledger and repeat suppression. A platform-neutral record of findings and what happened to them, claim-level matching across rounds, and silence when a round has nothing new.
+3. Delta scoping and the cold-start fix. Each round reviews only what changed since the last reviewed commit, and a restarted `ai-review watch` stops forcing a full review.
+4. Claude's first-pass accuracy, aimed at whatever the harness shows is wrong most often.
+5. Vercel parity. The hosted deployment gets the same changes.
+6. A no-mistakes adapter, so this review style can run in the no-mistakes flow before a PR exists.
+
 ## Intent
 
 On 2026-10-25 the Claude reviewer re-raised findings the author had rejected or fixed, and three PRs took about 10 hours to merge because the review rounds never converged. Every fix we plan (review memory, repeat suppression, delta scoping, Claude accuracy work) needs to be judged on whether it makes that better. We cannot judge it with the reviewer itself, because the reviewer is the thing that is broken and it may not converge on its own fixes. We need a harness that replays real recorded review rounds and reports numbers.
