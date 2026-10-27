@@ -53,7 +53,7 @@ Three measures, all computed per PR and per provider (Claude and Codex), with th
 ## Constraints
 
 - TypeScript ESM, Vitest, Biome, named exports only, `.js` import suffixes, tests colocated with source. Match the rest of the repo.
-- The core types and the replay engine contain no GitHub types. Only the recorder knows about Octokit, threads, and reactions. The shapes should line up with the no-mistakes `Finding` (`id`, `severity`, `file`, `line`, `description`, `action`) plus disposition fields (`status`, `decided_by`, `reason`, `round`), because a later project will add a no-mistakes adapter.
+- The core types and the replay engine contain no GitHub types. Only the recorder knows about Octokit, threads, and reactions. The shapes should line up with the no-mistakes `Finding` (`id`, `severity`, `file`, `line`, `description`, `action`) plus disposition fields (`status`, `decided_by`, `reason`, `round`), because sprint 6 will add a no-mistakes adapter.
 - All four repos involved are public, so fixtures are committed to this repo. Fixtures hold review text, replies, reactions, and commit SHAs, not full diffs. The live tier fetches the diff for a SHA when it runs.
 - The offline replay is deterministic, makes no network calls, and runs in the normal `npm test`.
 - The live tier uses the local subscription auth that `ai-review review` already uses. It is never wired into the webhook path.
