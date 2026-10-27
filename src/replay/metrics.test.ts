@@ -68,6 +68,8 @@ describe("computeMetrics", () => {
 			makeResult([{ posted: ["a"] }, { posted: ["b"] }]),
 		);
 		expect(m.recycled).toEqual({ count: 0, posted: 2, proposedExtra: 1 });
+		expect(m.convergence.roundsWithFirstSeen).toBe(2);
+		expect(m.convergence.finalRoundQuiet).toBe(false);
 	});
 
 	it("neither repeat kind counts toward convergence", () => {
@@ -135,7 +137,7 @@ describe("formatReport", () => {
 		const out = formatReport([m], ["fx"]);
 		expect(out).toContain("fx");
 		expect(out).toContain("0 of 1");
-		expect(out).toContain("1 of 2");
+		expect(out).toContain("recycled: 1 of 2");
 		expect(out).not.toMatch(/%/);
 	});
 

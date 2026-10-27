@@ -20,6 +20,26 @@ export interface Metrics {
 	};
 }
 
+export function earlierRepeats(
+	f: ReplayFixture,
+	labels: LabelFile,
+	id: string,
+	confirmed: boolean,
+): string[] {
+	const roundOf = new Map(
+		f.rounds.flatMap((r) => r.claims.map((c) => [c.id, r.index] as const)),
+	);
+	const own = roundOf.get(id) ?? Number.NEGATIVE_INFINITY;
+	return labels.repeatPairs
+		.filter(
+			(p) =>
+				p.later === id &&
+				p.confirmed === confirmed &&
+				(roundOf.get(p.earlier) ?? Number.POSITIVE_INFINITY) < own,
+		)
+		.map((p) => p.earlier);
+}
+
 const SETTLED = new Set(["fixed", "rejected", "deferred"]);
 
 export function computeMetrics(
@@ -42,9 +62,6 @@ export function computeMetrics(
 		}
 	}
 
-	const claimRound = new Map(
-		f.rounds.flatMap((r) => r.claims.map((c) => [c.id, r] as const)),
-	);
 	const recycled: RepeatCount = { count: 0, posted: 0, proposedExtra: 0 };
 	const restatedOpen: RepeatCount = { count: 0, posted: 0, proposedExtra: 0 };
 	let roundsWithFirstSeen = 0;
@@ -63,14 +80,7 @@ export function computeMetrics(
 			recycled.posted++;
 			restatedOpen.posted++;
 			const earlier = (confirmed: boolean) =>
-				labels.repeatPairs
-					.filter(
-						(p) =>
-							p.later === id &&
-							p.confirmed === confirmed &&
-							(claimRound.get(p.earlier)?.index ?? Infinity) < round.index,
-					)
-					.map((p) => p.earlier);
+				earlierRepeats(f, labels, id, confirmed);
 			const confirmedEarlier = earlier(true);
 			if (confirmedEarlier.length === 0) firstSeen++;
 			const [target, bucket] =

@@ -1,3 +1,4 @@
+import { earlierRepeats } from "./metrics.js";
 import type { ReplayResult } from "./replay.js";
 import type { LabelFile, ReplayFixture } from "./types.js";
 
@@ -8,7 +9,7 @@ export interface GuardReport {
 }
 
 export function checkRecall(
-	_f: ReplayFixture,
+	f: ReplayFixture,
 	labels: LabelFile,
 	result: ReplayResult,
 ): GuardReport {
@@ -21,7 +22,7 @@ export function checkRecall(
 	const labelOf = new Map(labels.labels.map((l) => [l.claimId, l]));
 	const allowed = new Set(labels.allowedSuppression);
 	const isConfirmedRepeat = (id: string) =>
-		labels.repeatPairs.some((p) => p.later === id && p.confirmed);
+		earlierRepeats(f, labels, id, true).length > 0;
 
 	for (const id of suppressed) {
 		const label = labelOf.get(id);

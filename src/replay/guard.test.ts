@@ -12,7 +12,9 @@ describe("checkRecall", () => {
 			labels,
 			makeResult([{ posted: ["b"], suppressed: ["a"] }, { posted: ["c"] }]),
 		);
-		expect(r.failures.some((x) => x.includes("a"))).toBe(true);
+		expect(r.failures).toContain(
+			"confirmed fixed first-round claim a was suppressed",
+		);
 	});
 
 	it("passes when nothing is suppressed", () => {
@@ -117,5 +119,51 @@ describe("checkRecall", () => {
 			]),
 		);
 		expect(r.unexpectedSuppression.sort()).toEqual(["b", "c"]);
+	});
+
+	it("a confirmed fixed later-round repeat in allowedSuppression passes when suppressed", () => {
+		const labels = makeLabels({
+			labels: [makeLabel("c", "fixed")],
+			repeatPairs: [{ later: "c", earlier: "a", confirmed: true }],
+			allowedSuppression: ["c"],
+		});
+		const r = checkRecall(
+			f,
+			labels,
+			makeResult([{ posted: ["a", "b"] }, { posted: [], suppressed: ["c"] }]),
+		);
+		expect(r).toEqual({
+			failures: [],
+			warnings: [],
+			unexpectedSuppression: [],
+		});
+	});
+
+	it("a provisional fixed first-round claim being suppressed is only a warning", () => {
+		const labels = makeLabels({
+			labels: [makeLabel("a", "fixed", { confirmed: false })],
+		});
+		const r = checkRecall(
+			f,
+			labels,
+			makeResult([{ posted: ["b"], suppressed: ["a"] }, { posted: ["c"] }]),
+		);
+		expect(r.failures).toHaveLength(0);
+		expect(r.warnings).toHaveLength(1);
+	});
+
+	it("a confirmed pair whose earlier claim is in the same round does not make a claim a repeat", () => {
+		const labels = makeLabels({
+			labels: [makeLabel("b", "fixed")],
+			repeatPairs: [{ later: "b", earlier: "a", confirmed: true }],
+		});
+		const r = checkRecall(
+			f,
+			labels,
+			makeResult([{ posted: ["a"], suppressed: ["b"] }, { posted: ["c"] }]),
+		);
+		expect(r.failures).toContain(
+			"confirmed fixed first-round claim b was suppressed",
+		);
 	});
 });
