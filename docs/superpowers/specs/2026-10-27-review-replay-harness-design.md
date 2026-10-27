@@ -23,7 +23,7 @@ On 2026-10-25 the Claude reviewer re-raised findings the author had rejected or 
 
 Three measures, all computed per PR and per provider (Claude and Codex), with the sample size printed next to every rate.
 
-- False-positive rate is rejected findings divided by fixed plus rejected findings. A finding is rejected when the author declined it, skipped it, replied that it is intentional or by design, or marked it wrong with a 😕 or 👎. A finding is fixed when the author fixed it in a later commit. Findings nobody responded to are left out of the rate. They are still counted and shown separately.
+- False-positive rate, precisely the author rejection rate, is rejected findings divided by fixed plus rejected findings. It measures what the author decided, not whether the claim was factually wrong, and the report says so. Findings the author deferred for scope or a follow-up are labeled deferred and shown separately, not counted as rejected. A finding is rejected when the author declined it, skipped it, replied that it is intentional or by design, or marked it wrong with a 😕 or 👎. A finding is fixed when the author fixed it in a later commit. Findings nobody responded to are left out of the rate. They are still counted and shown separately.
 - Recycling rate is the share of posted findings that repeat a claim already settled in an earlier round. A claim is settled when it was fixed, or when the author declined or skipped it, with or without a stated reason. The target is zero.
 - Convergence is the number of recorded rounds that still post at least one finding that does not repeat a settled claim, and whether the final round posts nothing new. On the three incident PRs the recorded value is "did not converge". The replay follows the recorded timeline and never simulates the pushes that would have happened if some findings had been suppressed, so offline it measures only what suppression removes.
 
@@ -91,6 +91,39 @@ For each chosen recorded round, fetch the PR diff at that round's SHA, run the r
 - To detect "fixed" offline, the recorder also stores, for each commit between rounds, the changed file paths and hunk line ranges. It does not store diff bodies. The labeler uses these with the reply text, and makes no network calls.
 - Fixtures are per provider. A reply is credited to the bot whose thread it is in. Third-party bots such as `chatgpt-codex-connector` are not counted as findings or as responders. "The author" is the PR author's account, which is also the account the implementer agent pushes and replies as.
 - The committed baseline starts from the automatic labels and is marked provisional. It becomes final after Joe's one-time spot-check of the labels and repeat pairs. The Vitest test passes either way.
+
+## Hardening decisions
+
+These came from a self-critique and a cross-model critique of the approved spec. They refine the sections above and win where they conflict.
+
+Claims and labels
+
+- The unit of measurement is an atomic claim, not a posted comment. The merge step joins distinct findings at one anchor into a single comment, separated by `\n\n---\n\n` ([src/review.ts](../../../src/review.ts) `mergeReviewsDetailed`). The recorder splits on that separator as a first guess, and a person confirms the split. One comment can hold several claims, each with its own label and its own repeat pairs.
+- Repeat pairs may cross lines, files, and moved code. They are confirmed by a person and are not limited to what `isSameClaim` would match.
+- Findings in a review body's table have no reply thread. They are labeled from other evidence (PR-level comments naming them, a later review marking them resolved) or stay unadjudicated. The author rejection rate is dominated by inline findings and the report states the split.
+- A label of fixed needs more than a changed hunk near the line. The recorder captures each thread's `isOutdated` and `isResolved` state and `resolvedBy`, and the labeler combines them with the reply text and the changed hunk. A label that gates something (see the recall guard) must be confirmed by a person.
+- Reactions count only when they come from the PR author's account, are read per reaction with the actor and creation time, and not as aggregate counts.
+
+Time and evidence
+
+- Every piece of evidence is stored with its timestamp, and edited comments with a note that they were edited. The decision cutoff for a round is the time the reviewed head was pushed. If that is unknown, it is the review's submit time minus 15 minutes. Evidence after the cutoff is not visible to that round. Historical state GitHub does not expose (for example when a thread was resolved) is stored as unknown and treated as not visible.
+- Review dismissals, thread reopenings, deleted comments, and force pushes are recorded when seen. A round whose reviewed head no longer exists is marked approximate.
+
+Metrics and guards
+
+- The recall guard has two parts. Every suppressed finding must be in an explicit, human-confirmed allowed-suppression set (labeled repeats of settled claims). Any other suppression is reported as unexpected and fails the check until a person adjudicates it. And a confirmed fixed claim must still be posted in its first round. The fixtures also hold negative pairs, which are similar findings that describe different defects and must both survive.
+- Labels that have not been confirmed by a person are provisional. A guard failure that rests on a provisional label is a warning. A failure on a confirmed label fails the test.
+- The report also counts restated open findings, meaning findings repeated while still open and unresolved. They are shown beside the recycling rate, because the "do not re-file" rule applies to them too.
+- Samples are small (13 Claude inline findings on the three incident PRs). The report prints counts, such as 4 of 10, never a bare percentage. CI asserts on the guard and on label and metric stability against the snapshot. It does not assert thresholds on rates.
+
+Live tier
+
+- The recorder stores each round's base SHA and merge-base so the diff can be rebuilt. Where the history was rewritten, the round is marked approximate. From now on the recorder also preserves the exact review input where it is available.
+- Findings from a live run are matched to labeled claims only through confirmed pairs. Anything else is reported as new and unlabeled, and no accuracy figure is claimed for it until a person adjudicates a sample.
+
+What this harness does not verify
+
+- Delta scoping and the watch cold-start fix (sprint 3), anchor filtering, and merging of raw agent output cannot be tested from posted findings. Each of those sprints writes its own verification contract in its spec.
 
 ## Left to the builder
 
