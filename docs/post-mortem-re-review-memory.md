@@ -102,7 +102,6 @@ The agents see the PR title and body in every prompt ([src/prompt.ts:116-117](ht
 
 - **Were `KV_REST_API_URL` and `KV_REST_API_TOKEN` exported in the shells that launched the watchers (cause 4)?** The `review=1` footers show the state lookup never ran, which the restart-forces-cycle-1 behavior explains by itself. The empty shared KV additionally points to a missing client, but I did not see the watcher processes' environment. Either cause would also explain why stealth-browser#1 round 3 scanned the whole codebase. Production logs for that run are not retained.
 - **How many times was each watcher restarted?** The watchers' start times are not recorded in anything I read. Shell history or process logs would show whether each round came from a fresh process.
-- **Did the local reviews draw on the Max plan quota?** `ai-review watch` uses local subscription auth, so the review calls themselves, not only the implementer agent, likely counted against the 5-hour quota. I did not measure this.
 - **Do the agents emit filler under pressure to produce output?** Findings like "No new findings beyond prior reviews" and "No code changes this round" appear in agent-skills#10. I found no direct evidence of a minimum-output instruction.
 
 ## What This Does NOT Fix
@@ -116,8 +115,7 @@ These are candidate directions. None is designed or scoped yet.
 - Give agents the author's reply and the thread's resolved or outdated status for each prior finding, plus 😕 and 👎 reactions, as a per-finding record of why it was rejected.
 - Persist rejected and answered findings with a normalized claim key (the existing `isSameClaim` in [src/claim-dedupe.ts](https://github.com/joeblackwaslike/ai-review-bot/blob/24ddef3/src/claim-dedupe.ts) is a starting point) and drop matches in code regardless of line or wording, including repeats of findings that are merely open. Never raise severity on a repeat.
 - Add a post-filter that drops findings whose own text says there is no defect, that the code matches the design, or that nothing needs to change.
-- Stop `ai-review watch` from forcing the first cycle of a restarted process when a prior review of the PR exists on GitHub, so a restart is no longer a cold start.
-- Stop depending on KV for review memory in local runs. Either keep per-PR state in a local file keyed by repo and PR, or rebuild prior findings and the author's replies from GitHub itself (review comments, threads, reactions), which would fix cold starts and the invisible-replies problem together. Also log or show in the footer whether a round started warm or cold. Separately, stop advancing `lastReviewedSha` past agents that did not complete.
+- Stop `ai-review watch` from forcing the first cycle of a restarted process when a prior review of the PR exists on GitHub, so a restart is no longer a cold start. Also log or show in the footer whether a round started warm or cold. Separately, stop advancing `lastReviewedSha` past agents that did not complete.
 - On re-review rounds, scope strictly to the delta, and either stop passing the PR title and body or mark them as author-written and possibly stale.
 - Add a per-round dollar cap and a round cap, in the bot and in the pr-loop driver.
 - Driver side: stop the no-mistakes `pr` step from re-drafting titles on every run, and make the round cap part of the delegation prompt (tracked outside this repo).
