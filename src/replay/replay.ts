@@ -33,6 +33,25 @@ export function visibleLabels(
 	return out;
 }
 
+function assertValidOutput(
+	round: Round,
+	out: { posted: string[]; suppressed: string[] },
+): void {
+	const expected = new Set(round.claims.map((c) => c.id));
+	const seen = new Set<string>();
+	const bad = new Set<string>();
+	for (const id of [...out.posted, ...out.suppressed]) {
+		if (!expected.has(id) || seen.has(id)) bad.add(id);
+		seen.add(id);
+	}
+	for (const id of expected) if (!seen.has(id)) bad.add(id);
+	if (bad.size > 0) {
+		throw new Error(
+			`pipeline output invalid for round ${round.index}: ${[...bad].join(", ")}`,
+		);
+	}
+}
+
 export function replayFixture(
 	f: ReplayFixture,
 	labels: LabelFile,
@@ -50,6 +69,7 @@ export function replayFixture(
 			claims: round.claims,
 			ledger,
 		});
+		assertValidOutput(round, { posted, suppressed });
 		return { index: round.index, posted, suppressed };
 	});
 	return { fixtureId: labels.fixtureId, rounds };
