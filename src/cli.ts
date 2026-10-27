@@ -53,6 +53,7 @@ import {
 	computeSkillSignals,
 	detectDuplicateClusters,
 } from "./improve/trends.js";
+import { runReplay } from "./replay/command.js";
 import { slugify } from "./report.js";
 import { type ProviderTarget, watchPr } from "./watch.js";
 
@@ -1179,13 +1180,20 @@ export async function cmdCreds(
 	fatal("Usage: ai-review creds set <VAR> [value] | list | unset <VAR>");
 }
 
+async function cmdReplay(args: string[]): Promise<void> {
+	process.exitCode = await runReplay(args);
+}
+
 export async function main(): Promise<void> {
 	const [sub, ...rest] = process.argv.slice(2);
 
 	// The `creds` subcommand manages the Keychain directly and never reads
 	// the vars resolveCliCredentials would populate — skip that round-trip
 	// entirely rather than resolving values `creds` won't use.
-	if (sub !== "creds") {
+	// Offline `replay` needs no credentials either; only `--live` does.
+	const needsCreds =
+		sub !== "creds" && (sub !== "replay" || rest.includes("--live"));
+	if (needsCreds) {
 		// Populate process.env from the Keychain/XDG fallback before any
 		// subcommand runs, so createApp()/getConfig() see credentials even when
 		// the globally npm-linked binary is invoked from outside this repo.
@@ -1201,6 +1209,7 @@ export async function main(): Promise<void> {
 	if (sub === "ready") return cmdReady(rest);
 	if (sub === "watch") return cmdWatch(rest);
 	if (sub === "creds") return cmdCreds(rest);
+	if (sub === "replay") return cmdReplay(rest);
 	if (sub === "backfill") return cmdBackfill(rest);
 	if (sub === "unrated") return cmdUnrated(rest);
 	if (sub?.includes("/")) return cmdLegacyRemote([sub, ...rest]); // back-compat
