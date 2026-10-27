@@ -2,11 +2,11 @@
 
 Date: 2026-10-27
 Bead: `ai-review-bot-a6a`
-Context: project 1 of the review-accuracy effort. The incident is written up in [docs/post-mortem-re-review-memory.md](../../post-mortem-re-review-memory.md).
+Context: sprint 1 of the review-accuracy epic (`ai-review-bot-w9b`). Shared decisions are in the [epic spec](2026-10-27-review-accuracy-epic-design.md). The incident is written up in [docs/post-mortem-re-review-memory.md](../../post-mortem-re-review-memory.md).
 
 ## Where this fits
 
-This is project 1 of 6, in the order they will be built. Later sections refer to the others by number.
+This is sprint 1 of 6, in the order they will be built. Later sections refer to the others by number.
 
 1. Replay harness. This document.
 2. Ledger and repeat suppression. A platform-neutral record of findings and what happened to them, claim-level matching across rounds, and silence when a round has nothing new.
@@ -38,9 +38,9 @@ Three measures, all computed per PR and per provider (Claude and Codex), with th
 
 ## Non-goals
 
-- Building the ledger, claim matching across rounds, or suppression. That is project 2. The harness only needs a way to plug that logic in.
-- Fixing the cold start in `ai-review watch`, delta scoping, or Claude's first-pass accuracy (projects 3 and 4).
-- Changes to the Vercel deployment, or the no-mistakes adapter (projects 5 and 6).
+- Building the ledger, claim matching across rounds, or suppression. That is sprint 2. The harness only needs a way to plug that logic in.
+- Fixing the cold start in `ai-review watch`, delta scoping, or Claude's first-pass accuracy (sprints 3 and 4).
+- Changes to the Vercel deployment, or the no-mistakes adapter (sprints 5 and 6).
 - A dashboard, a trend database, or automatic labeling that needs no human check.
 
 ## Anti-goals
@@ -85,7 +85,7 @@ For each chosen recorded round, fetch the PR diff at that round's SHA, run the r
 
 ## Settled after the builder check
 
-- "Today's code" has almost nothing to run on posted findings. The only existing cross-round suppression (`resolvedKeys`) needs triage state, and merging and anchor validation need raw agent output and diffs that were not recorded. So the v1 baseline for recycling is the recorded history, and the "today's code" pipeline is a thin wrapper that exists to prove the plug-in interface works. The Vitest test therefore asserts that the fixtures load, that labels and metrics are stable against a committed snapshot, and that the recall guard is zero. A "does not get worse than baseline" assertion starts when project 2 supplies a real pipeline.
+- "Today's code" has almost nothing to run on posted findings. The only existing cross-round suppression (`resolvedKeys`) needs triage state, and merging and anchor validation need raw agent output and diffs that were not recorded. So the v1 baseline for recycling is the recorded history, and the "today's code" pipeline is a thin wrapper that exists to prove the plug-in interface works. The Vitest test therefore asserts that the fixtures load, that labels and metrics are stable against a committed snapshot, and that the recall guard is zero. A "does not get worse than baseline" assertion starts when sprint 2 supplies a real pipeline.
 - Recycling is measured against repeat pairs that are labeled in the fixtures, not against the pipeline's own matcher. The labeler proposes pairs (same file, close lines, shared identifier or similar title, plus a quoted reply that settled the first one), and a person confirms them. A pipeline matcher that suppresses more than the labeled pairs does not lower the recycling number, and one that suppresses a labeled fixed finding trips the recall guard.
 - The recall guard applies to the first occurrence of a claim. A finding labeled fixed in round 1 must still be posted in round 1. The same claim re-raised in round 3 is a repeat, and suppressing it is correct.
 - To detect "fixed" offline, the recorder also stores, for each commit between rounds, the changed file paths and hunk line ranges. It does not store diff bodies. The labeler uses these with the reply text, and makes no network calls.
@@ -96,7 +96,7 @@ For each chosen recorded round, fetch the PR diff at that round's SHA, run the r
 
 - The exact fixture schema and file layout.
 - The labeling rules in detail. Starting points from the incident: an author reply of "Intentional", "No change", "By design", or "Agreed there's no defect" means rejected. A reply or commit message saying "Fixed in <sha>" followed by a changed hunk means fixed. A 😕 or 👎 means rejected. A resolved thread with no reply is unadjudicated.
-- How claims are compared across rounds in the replay. `isSameClaim` in `src/claim-dedupe.ts` is the existing starting point, and project 2 owns the final matching.
+- How claims are compared across rounds in the replay. `isSameClaim` in `src/claim-dedupe.ts` is the existing starting point, and sprint 2 owns the final matching.
 - Report formatting and CLI flags.
 - Which rounds the live tier samples by default.
 
