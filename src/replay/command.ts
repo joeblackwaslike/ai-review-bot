@@ -6,6 +6,7 @@ import { fixtureId } from "./claims.js";
 import { type GhClient, ghCli } from "./gh.js";
 import { checkRecall } from "./guard.js";
 import { labelFixture } from "./label.js";
+import { runLiveTier } from "./live.js";
 import { computeMetrics, formatReport } from "./metrics.js";
 import { type ReplayPipeline, todaysCodePipeline } from "./pipeline.js";
 import { recordPr } from "./record.js";
@@ -24,6 +25,9 @@ interface ParsedArgs {
 	provider?: Provider;
 	bot?: string;
 	fixtures?: string;
+	live?: boolean;
+	rounds?: number;
+	maxCost?: number;
 }
 
 const USAGE = [
@@ -51,6 +55,18 @@ function parseArgs(args: string[]): ParsedArgs | null {
 	for (let i = 0; i < args.length; i++) {
 		const flag = args[i];
 		const value = args[i + 1];
+		if (flag === "--live") {
+			parsed.live = true;
+			continue;
+		}
+		if (flag === "--rounds" || flag === "--max-cost") {
+			const n = Number(value);
+			if (value === undefined || !Number.isFinite(n) || n <= 0) return null;
+			if (flag === "--rounds") parsed.rounds = Math.floor(n);
+			else parsed.maxCost = n;
+			i++;
+			continue;
+		}
 		if (
 			(flag === "--record" ||
 				flag === "--provider" ||
@@ -179,6 +195,48 @@ async function replayAll(
 	return failed ? 1 : 0;
 }
 
+async function liveAll(
+	dir: string,
+	p: ParsedArgs,
+	client: GhClient,
+	out: (s: string) => void,
+): Promise<number> {
+	const { buildLiveWiring } = await import("./live-wiring.js");
+	const files = existsSync(dir)
+		? (await readdir(dir)).filter((n) => FIXTURE_FILE.test(n)).sort()
+		: [];
+	if (files.length === 0) {
+		out(`no fixtures found in ${dir}; record some with --record`);
+		return 1;
+	}
+	let remaining = p.maxCost ?? 5;
+	for (const name of files) {
+		const f = JSON.parse(
+			await readFile(join(dir, name), "utf8"),
+		) as ReplayFixture;
+		const id = fixtureId(f);
+		const labelsPath = join(dir, `${id}.labels.json`);
+		if (!existsSync(labelsPath)) {
+			out(`${id}: missing ${id}.labels.json (run --record first)`);
+			continue;
+		}
+		const labels = JSON.parse(await readFile(labelsPath, "utf8")) as LabelFile;
+		const wiring = buildLiveWiring(f, client);
+		const rounds = f.rounds.slice(-(p.rounds ?? 2)).map((r) => r.index);
+		out(`live ${id}`);
+		const report = await runLiveTier({
+			fixture: f,
+			labels,
+			rounds,
+			maxCostUsd: remaining,
+			out,
+			...wiring,
+		});
+		remaining -= report.spentUsd;
+	}
+	return 0;
+}
+
 export async function runReplay(
 	args: string[],
 	deps: ReplayDeps = {},
@@ -193,5 +251,6 @@ export async function runReplay(
 		parsed.fixtures ?? deps.fixturesDir ?? defaultFixturesDir(import.meta.url);
 	if (parsed.record !== undefined)
 		return record(parsed, dir, deps.client ?? ghCli(), out);
+	if (parsed.live) return liveAll(dir, parsed, deps.client ?? ghCli(), out);
 	return replayAll(dir, deps.pipeline ?? todaysCodePipeline, out);
 }

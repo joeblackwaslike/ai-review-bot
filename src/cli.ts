@@ -126,6 +126,9 @@ function usage(): never {
 	console.error(
 		"      fixtures); --record writes a fixture + proposed labels to src/replay/fixtures/.",
 	);
+	console.error(
+		"  ai-review replay --live [--rounds <n>] [--max-cost <usd>]  (opt-in, spends tokens, never gates CI)",
+	);
 	console.error("  ai-review backfill --repo <owner/name> [--pr <n>] [--json]");
 	console.error("  ai-review unrated --repo <owner/name> --pr <n> [--json]");
 	console.error(
