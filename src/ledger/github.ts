@@ -226,10 +226,12 @@ export async function fetchLedgerEvidence(
 		const res: { data: GraphqlEnvelope } =
 			await octokit.request<GraphqlEnvelope>("POST /graphql", {
 				query: THREADS_QUERY,
-				owner: o.owner,
-				repo: o.repo,
-				pr: o.pull,
-				...(cursor ? { cursor } : {}),
+				variables: {
+					owner: o.owner,
+					repo: o.repo,
+					pr: o.pull,
+					...(cursor ? { cursor } : {}),
+				},
 			});
 		const pr = res.data.data?.repository?.pullRequest;
 		const errors = res.data.errors;

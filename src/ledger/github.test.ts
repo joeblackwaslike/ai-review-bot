@@ -175,10 +175,42 @@ const t = (id: number, comments = [node(id)]) => ({
 	comments: { pageInfo: { hasNextPage: false }, nodes: comments },
 });
 
+/** Rejects the request shape GitHub would answer with an errors array:
+ * request() sends top-level params as the JSON body, so the query's $owner,
+ * $repo, $pr and $cursor must travel inside `variables`. */
+function assertGraphqlVariables(
+	params: Record<string, unknown> | undefined,
+	expectedCursor: string | undefined,
+) {
+	if (params && ("owner" in params || "repo" in params || "pr" in params))
+		throw new Error("GraphQL variables sent as top-level params");
+	const v = params?.variables as Record<string, unknown> | undefined;
+	if (v?.owner !== "o" || v?.repo !== "r" || v?.pr !== 1)
+		throw new Error(`missing GraphQL variables: ${JSON.stringify(v)}`);
+	if (v.cursor !== expectedCursor)
+		throw new Error(`cursor ${String(v.cursor)} != ${String(expectedCursor)}`);
+}
+
 function fake(pages: unknown[]): RequestLike {
 	let g = 0;
+	let cursor: string | undefined;
 	const request = async (route: string, params?: Record<string, unknown>) => {
-		if (route === "POST /graphql") return { data: { data: pages[g++] } };
+		if (route === "POST /graphql") {
+			assertGraphqlVariables(params, cursor);
+			const p = pages[g++] as
+				| {
+						repository?: {
+							pullRequest?: {
+								reviewThreads?: { pageInfo: { endCursor: string | null } };
+							} | null;
+						};
+				  }
+				| undefined;
+			cursor =
+				p?.repository?.pullRequest?.reviewThreads?.pageInfo.endCursor ??
+				undefined;
+			return { data: { data: p } };
+		}
 		if (route.endsWith("/reviews"))
 			return { data: params?.page === 1 ? GH_REVIEWS : [] };
 		return { data: params?.page === 1 ? GH_COMMENTS : [] };

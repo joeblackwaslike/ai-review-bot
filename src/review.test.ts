@@ -4203,17 +4203,35 @@ describe("buildReview ledger suppression", () => {
 	function ledgerOctokit(
 		o: { graphqlError?: Error; reviews?: unknown[] } = {},
 	) {
-		const request = vi.fn().mockImplementation(async (route: string) => {
-			if (route === "POST /graphql") {
-				if (o.graphqlError) throw o.graphqlError;
-				return { data: threads };
-			}
-			if (route.endsWith("/reviews")) return { data: o.reviews ?? [ownReview] };
-			if (route.endsWith("/comments")) return { data: [ownComment] };
-			if (route.includes("GET") && route.includes("/check-runs"))
-				return { data: { check_runs: [] } };
-			return { data: {} };
-		});
+		const request = vi
+			.fn()
+			.mockImplementation(
+				async (route: string, params?: Record<string, unknown>) => {
+					if (route === "POST /graphql") {
+						if (o.graphqlError) throw o.graphqlError;
+						const v = params?.variables as Record<string, unknown> | undefined;
+						// GitHub answers a query whose $variables are missing with an
+						// errors array, not data.
+						if (
+							v?.owner !== baseContext.owner ||
+							v?.repo !== baseContext.repo ||
+							v?.pr !== baseContext.pullNumber
+						)
+							return {
+								data: {
+									errors: [{ message: "Variable $owner was not provided" }],
+								},
+							};
+						return { data: threads };
+					}
+					if (route.endsWith("/reviews"))
+						return { data: o.reviews ?? [ownReview] };
+					if (route.endsWith("/comments")) return { data: [ownComment] };
+					if (route.includes("GET") && route.includes("/check-runs"))
+						return { data: { check_runs: [] } };
+					return { data: {} };
+				},
+			);
 		return {
 			request,
 			paginate: vi
