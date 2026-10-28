@@ -98,10 +98,10 @@ These came from a self-critique and a cross-model critique of the approved spec.
 
 Claims and labels
 
-- The unit of measurement is an atomic claim, not a posted comment. The merge step joins distinct findings at one anchor into a single comment, separated by `\n\n---\n\n` ([src/review.ts](../../../src/review.ts) `mergeReviewsDetailed`). The recorder splits on that separator as a first guess, and a person confirms the split. One comment can hold several claims, each with its own label and its own repeat pairs.
-- Repeat pairs may cross lines, files, and moved code. They are confirmed by a person and are not limited to what `isSameClaim` would match.
+- The unit of measurement is an atomic claim, not a posted comment. The merge step joins distinct findings at one anchor into a single comment, separated by `\n\n---\n\n` ([src/review.ts](../../../src/review.ts) `mergeReviewsDetailed`). The recorder splits on that separator as a first guess, and an agent verifies the split against the PR threads, with Codex cross-checking. One comment can hold several claims, each with its own label and its own repeat pairs.
+- Repeat pairs may cross lines, files, and moved code. They are confirmed by agent verification plus Codex cross-check and are not limited to what `isSameClaim` would match.
 - Findings in a review body's table have no reply thread. They are labeled from other evidence (PR-level comments naming them, a later review marking them resolved) or stay unadjudicated. The author rejection rate is dominated by inline findings and the report states the split.
-- A label of fixed needs more than a changed hunk near the line. The recorder captures each thread's `isOutdated` and `isResolved` state and `resolvedBy`, and the labeler combines them with the reply text and the changed hunk. A label that gates something (see the recall guard) must be confirmed by a person.
+- A label of fixed needs more than a changed hunk near the line. The recorder captures each thread's `isOutdated` and `isResolved` state and `resolvedBy`, and the labeler combines them with the reply text and the changed hunk. A label that gates something (see the recall guard) must be confirmed by agent verification plus Codex cross-check; items the two disagree on stay unadjudicated.
 - Reactions count only when they come from the PR author's account, are read per reaction with the actor and creation time, and not as aggregate counts.
 
 Time and evidence

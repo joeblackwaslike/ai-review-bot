@@ -129,8 +129,7 @@ describe("labelFixture", () => {
 
 	it("does not read a plain decimal number as a commit reference", () => {
 		expect(
-			first(fixture({ threads: [thread("See comment 1234567 above")] }))
-				.label,
+			first(fixture({ threads: [thread("See comment 1234567 above")] })).label,
 		).toBe("unadjudicated");
 	});
 

@@ -174,5 +174,5 @@
 
 ## Self-review notes
 
-- Spec coverage: types and claims (Task 1), recorder with thread state, reactions, hunk ranges, cutoff data (Task 2), labels with evidence and pairs (Task 3), visibility cutoff and plug-in pipeline (Task 4), the three measures, restated open count, recall guard with allowed-suppression, negative pairs, provisional warnings (Task 5), CLI and snapshot (Task 6), incident fixtures and spot-check handoff (Task 7), live tier (Task 8). "What this harness does not verify" is documentation only.
+- Spec coverage: types and claims (Task 1), recorder with thread state, reactions, hunk ranges, cutoff data (Task 2), labels with evidence and pairs (Task 3), visibility cutoff and plug-in pipeline (Task 4), the three measures, restated open count, recall guard with allowed-suppression, negative pairs, provisional warnings (Task 5), CLI and snapshot (Task 6), incident fixtures and agent-verification handoff (Task 7), live tier (Task 8). "What this harness does not verify" is documentation only.
 - Type names match across tasks: `PostedClaim`, `Round`, `ReplayFixture`, `LabelFile`, `ReplayPipeline`, `ReplayResult`, `Metrics`, `GuardReport`.
