@@ -265,4 +265,82 @@ describe("findSettledMatch", () => {
 		expect(findSettledMatch(same, [e])).toBe(e);
 		expect(findSettledMatch(other, [e])).toBeNull();
 	});
+
+	it("does not let a product name like eBay lower the title bar", () => {
+		const e = entry({
+			path: "src/detect.ts",
+			line: 13,
+			title:
+				"classifyPage: EBAY_ERROR_TITLE regex matches any page whose title starts with 'Error Page', even for non-eBay profiles/hosts",
+		});
+		const f = {
+			path: "src/detect.ts",
+			line: 14,
+			title:
+				"eBay error-page title regex is broad and only anchored at the start",
+		};
+		expect(findSettledMatch(f, [e])).toBeNull();
+	});
+
+	it("never matches a missing-test finding to the defect it would test", () => {
+		const e = entry({
+			path: "src/throttle.ts",
+			line: 76,
+			title: "Scheduler.inFlight off-by-one allows 6 waiting tasks, not 5",
+			body: "`inFlight` is incremented for every call to `run`. The guard `if (this.inFlight > this.maxQueue)` rejects only once `inFlight` exceeds `maxQueue`, giving 6 waiting tasks, not 5 as documented. This was already flagged in a prior review round and remains unaddressed.",
+		});
+		const f = {
+			path: null,
+			title:
+				"No test for the Scheduler.inFlight off-by-one carried over from prior review rounds",
+		};
+		expect(findSettledMatch(f, [e])).toBeNull();
+	});
+
+	it("counts a shared identifier as one word, so a fix's opposite defect does not match", () => {
+		const restart = {
+			path: "deployment/scripts/deploy-app.sh",
+			line: 151,
+			title:
+				"`kubectl rollout restart deployment/ai-listings` is now called unconditionally",
+			body: "The restart runs after every `kubectl apply`, forcing a pod restart on every no-op deploy, where rollout used to happen only via spec changes. Gate it on an actual change, e.g. only restart when the STEALTH_BROWSER_TOKEN value changed.",
+		};
+		const opposite = entry({
+			path: null,
+			line: null,
+			title: "Rotated STEALTH_BROWSER_TOKEN requires manual pod rollout",
+		});
+		const same = entry({
+			path: null,
+			line: null,
+			title:
+				"Rotated STEALTH_BROWSER_TOKEN requires rollout-restart every deploy, including no-op deploys",
+		});
+		expect(findSettledMatch(restart, [opposite])).toBeNull();
+		expect(findSettledMatch(restart, [same])).toBe(same);
+	});
+
+	it("attributes a finding to the most similar of several matching settled entries", () => {
+		const healthCheck = entry({
+			id: "health",
+			line: 15,
+			title:
+				"Unset-credential check doesn't actually gate the health check/content request",
+			body: 'The doc shows the env-var presence check and the curl health check as two separate commands (`[ -n "$STEALTH_BROWSER_URL" ] && ... || echo "not configured"` followed by an unconditional `curl ...`). If the variables are unset, the second line still executes, sending a curl request with an empty URL/Authorization header. The two commands should be combined so the health check only runs when credentials are present.',
+		});
+		const fetch = entry({
+			id: "fetch",
+			line: 17,
+			title: "Credential check doesn't gate the subsequent fetch example",
+			body: 'The new unset-credential guard (`[ -n "$STEALTH_BROWSER_URL" ] ... || echo "not configured"`) is a standalone diagnostic snippet. It doesn\'t control whether the `curl ... /content` command below it runs; an agent could still execute the fetch command even when credentials are unset. The doc should make clear the agent must skip the whole step before attempting the fetch.',
+		});
+		const f = {
+			path: "src/a.ts",
+			line: 31,
+			title: "Credential check result not actually used to gate the fetch",
+			body: "The health-check snippet prints `200` or `not configured` but the doc doesn't show the result controlling whether the subsequent 'Fetching a page' curl call runs. An agent could run the health check, see non-200 output, and still proceed to the fetch snippet. This mirrors the previously-flagged 'credential-unset check doesn't gate subsequent curl calls' issue.",
+		};
+		expect(findSettledMatch(f, [healthCheck, fetch])).toBe(fetch);
+		expect(findSettledMatch(f, [fetch, healthCheck])).toBe(fetch);
+	});
 });

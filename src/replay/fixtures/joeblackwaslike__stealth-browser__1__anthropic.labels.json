@@ -658,7 +658,16 @@
 			"confirmed": true
 		}
 	],
-	"negativePairs": [],
+	"negativePairs": [
+		{
+			"a": "r0:c4370502167:0",
+			"b": "r2:c4371651731:0"
+		},
+		{
+			"a": "r2:c4371651762:0",
+			"b": "r3:body:4"
+		}
+	],
 	"allowedSuppression": [
 		"r2:body:1",
 		"r2:c4371651762:0",

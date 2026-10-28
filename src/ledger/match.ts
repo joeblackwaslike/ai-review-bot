@@ -36,16 +36,37 @@ function overlap(a: Set<string>, b: Set<string>): number {
 }
 
 const CODE_SHAPED = /[a-z]{2}[A-Z]|[A-Za-z]_[A-Za-z]|^\$/;
+const IDENTIFIER = /[A-Za-z_$][A-Za-z0-9_$]*/g;
+const PRODUCT_NAME = /\b[a-z][A-Z][a-z]+\b/g;
+const TEST_GAP =
+	/\b(?:no|missing|lacks?|without|never)\b[^.]{0,40}\b(?:tests?|test coverage)\b|\buntested\b|(?:\bnot|n't) (?:directly )?(?:cover(?:ed)?|tested|exercised)\b|\btest coverage\b|\bcovered by (?:\w+ )?tests?\b/i;
+
+/** eBay and iPhone read as camelCase to claimIdentifiers; they are names, not code. */
+const withoutProductNames = <T extends ClaimLike>(c: T): T => ({
+	...c,
+	title: c.title.replace(PRODUCT_NAME, (w) => w.toLowerCase()),
+});
+
+const isTestGap = (c: ClaimLike) => TEST_GAP.test(c.title);
 
 /** camelCase, snake_case and $-prefixed names. Plain words in backticks are left out: in a body they are prose far more often than code. */
 function codeIdentifiers(text: string): Set<string> {
 	const ids = new Set<string>();
-	for (const match of text.matchAll(/[A-Za-z_$][A-Za-z0-9_$]*/g)) {
+	for (const match of text.matchAll(IDENTIFIER)) {
 		const word = match[0];
 		if (word.length > 2 && CODE_SHAPED.test(word)) ids.add(word.toLowerCase());
 	}
 	return ids;
 }
+
+/** An identifier counts as one word, not one per underscore-separated part. */
+const proseOf = (c: ClaimLike) =>
+	fullText(c).replace(IDENTIFIER, (w) =>
+		CODE_SHAPED.test(w) ? w.replace(/[_$]/g, "") : w,
+	);
+
+const similarity = (f: ClaimLike, e: LedgerEntry) =>
+	jaccard(claimTokens(fullText(f)), claimTokens(fullText(e)));
 
 function isMovedFileRepeat(f: ClaimLike, e: LedgerEntry): boolean {
 	if (!f.path || !e.path || f.path === e.path) return false;
@@ -58,11 +79,7 @@ function isBodyRepeat(f: ClaimLike, e: LedgerEntry): boolean {
 	if (!f.body || !e.body || !f.path || f.path !== e.path) return false;
 	if (f.line == null || e.line == null) return false;
 	if (Math.abs(f.line - e.line) > BODY_MATCH.lineWindow) return false;
-	const similarity = jaccard(
-		claimTokens(fullText(f)),
-		claimTokens(fullText(e)),
-	);
-	return similarity >= BODY_MATCH.bodySimilarity;
+	return similarity(f, e) >= BODY_MATCH.bodySimilarity;
 }
 
 /** One side inline, the other a general finding: the path gate would always reject it. */
@@ -74,29 +91,48 @@ function isCrossSurfaceRepeat(f: ClaimLike, e: LedgerEntry): boolean {
 	const ids = codeIdentifiers(fullText(e));
 	if (![...codeIdentifiers(fullText(f))].some((id) => ids.has(id)))
 		return false;
-	const tokensF = claimTokens(fullText(f));
-	const tokensE = claimTokens(fullText(e));
+	const tokensF = claimTokens(proseOf(f));
+	const tokensE = claimTokens(proseOf(e));
 	if (Math.min(tokensF.size, tokensE.size) < DEFAULT_CLAIM_MATCH.minTokens) {
 		return false;
 	}
 	return overlap(tokensF, tokensE) >= BODY_MATCH.crossSurfaceOverlap;
 }
 
-/** First settled entry the finding restates, or null. Open entries never match. */
+type Rule = (f: ClaimLike, e: LedgerEntry) => boolean;
+
+const tierRule =
+	(options: ClaimMatchOptions): Rule =>
+	(f, e) =>
+		isSameClaim(f, e, options);
+
+const RULES: Rule[] = [
+	tierRule(DEFAULT_CLAIM_MATCH),
+	tierRule(CROSS_ROUND_MATCH),
+	isMovedFileRepeat,
+	isBodyRepeat,
+	isCrossSurfaceRepeat,
+];
+
+/** The settled entry the finding restates, or null. Open entries never match, a
+ * test-gap finding never matches a defect finding, and when several entries
+ * match at the first matching rule the most similar one wins. */
 export function findSettledMatch(
-	f: ClaimLike,
+	finding: ClaimLike,
 	ledger: Ledger,
 ): LedgerEntry | null {
-	const settled = ledger.filter(isSettled);
-	const tiers = [DEFAULT_CLAIM_MATCH, CROSS_ROUND_MATCH];
-	for (const options of tiers) {
-		const hit = settled.find((e) => isSameClaim(f, e, options));
-		if (hit) return hit;
-	}
-	const rules = [isMovedFileRepeat, isBodyRepeat, isCrossSurfaceRepeat];
-	for (const rule of rules) {
-		const hit = settled.find((e) => rule(f, e));
-		if (hit) return hit;
+	const f = withoutProductNames(finding);
+	const settled = ledger
+		.filter((e) => isSettled(e) && isTestGap(e) === isTestGap(f))
+		.map((entry) => ({ entry, e: withoutProductNames(entry) }));
+	for (const rule of RULES) {
+		const hits = settled.filter(({ e }) => rule(f, e));
+		if (hits.length === 0) continue;
+		let best = hits[0];
+		for (const hit of hits) {
+			if (similarity(f, hit.e) > similarity(f, best.e)) best = hit;
+		}
+		return best.entry;
 	}
 	return null;
 }
