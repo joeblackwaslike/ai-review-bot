@@ -313,5 +313,10 @@
 		}
 	],
 	"negativePairs": [],
-	"allowedSuppression": []
+	"allowedSuppression": [
+		"r2:c4371702251:0",
+		"r2:c4371702261:0",
+		"r2:c4371702259:0",
+		"r3:c4371972048:0"
+	]
 }

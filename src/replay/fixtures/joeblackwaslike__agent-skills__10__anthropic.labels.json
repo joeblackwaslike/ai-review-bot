@@ -334,5 +334,5 @@
 		}
 	],
 	"negativePairs": [],
-	"allowedSuppression": []
+	"allowedSuppression": ["r4:body:2", "r4:c4371931917:0", "r4:c4371931921:0"]
 }

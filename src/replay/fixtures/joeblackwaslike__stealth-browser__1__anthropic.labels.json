@@ -659,5 +659,13 @@
 		}
 	],
 	"negativePairs": [],
-	"allowedSuppression": []
+	"allowedSuppression": [
+		"r2:body:1",
+		"r2:c4371651762:0",
+		"r3:body:0",
+		"r3:body:2",
+		"r3:body:5",
+		"r2:c4371651759:0",
+		"r2:c4371651740:0"
+	]
 }
