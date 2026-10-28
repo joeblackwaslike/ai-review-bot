@@ -1,4 +1,5 @@
 import { isSameClaim } from "../claim-dedupe.js";
+import { classifyReplies } from "../ledger/disposition.js";
 import { fixtureId } from "./claims.js";
 import type {
 	ClaimLabel,
@@ -9,12 +10,6 @@ import type {
 	ThreadEvidence,
 } from "./types.js";
 
-const DEFERRED =
-	/follow-?up|out of scope|separate pr|later pr|will address (this )?later|tracked in/i;
-const REJECTED =
-	/\bintentional(ly)?\b|\bno change\b|\bby design\b|no defect|working as intended|won'?t fix|not a (bug|problem|issue)|\bkept (it |this )?as[- ]is\b|\balready done\b/i;
-const FIX_REF =
-	/\bfixed in\b|\b(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{7,40}\b/i;
 const REJECTING_REACTIONS = new Set(["-1", "confused"]);
 const HUNK_SLACK = 3;
 
@@ -62,16 +57,13 @@ function labelClaim(f: ReplayFixture, c: PostedClaim): ClaimLabel {
 		c.commentId === null
 			? undefined
 			: f.threads.find((t) => t.commentId === c.commentId);
-	const replies = (thread?.replies ?? []).filter((r) => r.author === f.author);
-	const quote = (r: (typeof replies)[number]) => stamp(r.createdAt, r.body);
-
-	const deferred = replies.filter((r) => DEFERRED.test(r.body));
-	if (deferred.length) return make("deferred", "high", deferred.map(quote));
-	const rejected = replies.filter((r) => REJECTED.test(r.body));
-	if (rejected.length) return make("rejected", "high", rejected.map(quote));
-
-	const fixes = replies.filter((r) => FIX_REF.test(r.body));
-	if (fixes.length) return make("fixed", "high", fixes.map(quote));
+	const disposition = classifyReplies(
+		thread?.replies ?? [],
+		(r) => r.author === f.author,
+	);
+	if (disposition) {
+		return make(disposition.status, "high", disposition.evidence);
+	}
 
 	const hunk = hunkEvidence(f, c);
 	if (hunk) return make("fixed", "low", [hunk]);
