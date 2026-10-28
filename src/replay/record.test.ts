@@ -104,6 +104,21 @@ describe("recordPr", () => {
 		expect(fx.author).toBe(AUTHOR);
 	});
 
+	it("matches the REST login of a GitHub App, which carries a [bot] suffix", async () => {
+		const fx = await recordPr(
+			fake({
+				reviews: [
+					review(1, "aaa1111", "2026-10-01T00:00:00Z", `${BOT}[bot]`),
+					review(2, "bbb2222", "2026-10-02T00:00:00Z", "other[bot]"),
+				],
+				comments: [comment(10, 1, "**A**", `${BOT}[bot]`)],
+			}),
+			opts,
+		);
+		expect(fx.rounds).toHaveLength(1);
+		expect(fx.rounds[0].claims).toHaveLength(1);
+	});
+
 	it("splits a three-claim inline comment into three claims with one commentId", async () => {
 		const body = ["**P1** **A**", "**B**", "**C**"].join("\n\n---\n\n");
 		const fx = await recordPr(

@@ -97,6 +97,9 @@ const SHA_MARKER = /<!--\s*ai-review:sha=([0-9a-f]{7,40})\s*-->/;
 const HUNK_HEADER = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/gm;
 const SEVERITY = /\bP[0-3]\b/;
 
+const isBot = (login: string | undefined, bot: string) =>
+	login?.replace(/\[bot\]$/, "") === bot.replace(/\[bot\]$/, "");
+
 export function hunkRanges(patch: string): [number, number][] {
 	const ranges: [number, number][] = [];
 	for (const m of patch.matchAll(HUNK_HEADER)) {
@@ -198,11 +201,11 @@ export async function recordPr(
 	const author = pr.user.login;
 
 	const reviews = (await client.rest<ApiReview[]>(`${prPath}/reviews`))
-		.filter((r) => r.user?.login === o.botLogin && r.submitted_at)
+		.filter((r) => isBot(r.user?.login, o.botLogin) && r.submitted_at)
 		.sort((a, b) => (a.submitted_at ?? "").localeCompare(b.submitted_at ?? ""));
 	const comments = (
 		await client.rest<ApiComment[]>(`${prPath}/comments`)
-	).filter((c) => c.user?.login === o.botLogin);
+	).filter((c) => isBot(c.user?.login, o.botLogin));
 
 	const rounds: Round[] = [];
 	let prevHead = pr.base.sha;
