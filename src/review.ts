@@ -1827,10 +1827,12 @@ export async function buildReview(
 	});
 
 	let suppressedCount = 0;
+	const suppressedEntryIds = new Set<string>();
 	const unsettledResults = agentResults.map((r) => {
 		const outcome = suppressInReview(r, ledger);
 		suppressedCount += outcome.suppressed.length;
-		for (const { finding, entry } of outcome.suppressed)
+		for (const { finding, entry } of outcome.suppressed) {
+			suppressedEntryIds.add(entry.id);
 			console.log("suppressed settled repeat", {
 				title: finding.title,
 				path: finding.path ?? null,
@@ -1839,6 +1841,7 @@ export async function buildReview(
 				entryId: entry.id,
 				entryStatus: entry.status,
 			});
+		}
 		return outcome.review;
 	});
 	if (loadedLedger) {
@@ -1846,6 +1849,7 @@ export async function buildReview(
 			warm: loadedLedger.warm,
 			entries: ledger.length,
 			suppressed: suppressedCount,
+			settledEntries: suppressedEntryIds.size,
 		});
 	}
 
@@ -2100,7 +2104,7 @@ export async function buildReview(
 		cost,
 		ledgerNote: loadedLedger
 			? loadedLedger.warm
-				? `ledger: warm, ${suppressedCount} suppressed`
+				? `ledger: warm, ${suppressedEntryIds.size} suppressed`
 				: "ledger: cold"
 			: undefined,
 	});

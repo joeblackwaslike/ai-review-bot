@@ -3,6 +3,7 @@ import {
 	buildAgentSystemPrompt,
 	buildAuditUserMessage,
 	buildUserMessage,
+	MAX_REASON_CHARS,
 } from "./prompt.js";
 
 describe("buildAgentSystemPrompt epistemic guardrails", () => {
@@ -162,6 +163,44 @@ describe("prior own findings", () => {
 		expect(message).toContain("[deferred] [deferred by author: follow-up PR]");
 		expect(message).toContain("[resolved] [resolved by author] P3");
 		expect(message).not.toContain("[declined");
+	});
+
+	describe("a decider's reason", () => {
+		const render = (reason: string) =>
+			buildUserMessage({
+				...promptBase,
+				priorOwnFindings: [
+					{
+						path: null,
+						line: null,
+						title: "t",
+						severity: "P3",
+						status: "rejected",
+						decidedBy: "author",
+						reason,
+					},
+				],
+			});
+		const reasonOf = (message: string) =>
+			message.match(/\[declined by author: (.*)\] P3/)?.[1];
+
+		it("is collapsed to one line and capped at MAX_REASON_CHARS", () => {
+			const long = Array.from({ length: 100 }, () => "x".repeat(49)).join("\n");
+			expect(long.length).toBeGreaterThan(4900);
+
+			const reason = reasonOf(render(long));
+
+			expect(MAX_REASON_CHARS).toBe(300);
+			expect(reason).not.toContain("\n");
+			expect(reason?.endsWith("…")).toBe(true);
+			expect(reason?.length).toBe(MAX_REASON_CHARS + 1);
+		});
+
+		it("is unchanged when short", () => {
+			expect(reasonOf(render("won't fix, by design"))).toBe(
+				"won't fix, by design",
+			);
+		});
 	});
 
 	it("names no decider when none is recorded", () => {

@@ -4213,7 +4213,12 @@ describe("buildReview ledger suppression", () => {
 	};
 
 	function ledgerOctokit(
-		o: { graphqlError?: Error; reviews?: unknown[] } = {},
+		o: {
+			graphqlError?: Error;
+			reviews?: unknown[];
+			comments?: unknown[];
+			threadNodes?: unknown[];
+		} = {},
 	) {
 		const request = vi
 			.fn()
@@ -4234,7 +4239,23 @@ describe("buildReview ledger suppression", () => {
 									errors: [{ message: "Variable $owner was not provided" }],
 								},
 							};
-						return { data: threads };
+						if (!o.threadNodes) return { data: threads };
+						const pr = threads.data.repository.pullRequest;
+						return {
+							data: {
+								data: {
+									repository: {
+										pullRequest: {
+											...pr,
+											reviewThreads: {
+												...pr.reviewThreads,
+												nodes: o.threadNodes,
+											},
+										},
+									},
+								},
+							},
+						};
 					}
 					if (route.endsWith("/reviews")) {
 						// One page at a time, as GitHub does: 30 per page by default.
@@ -4244,7 +4265,8 @@ describe("buildReview ledger suppression", () => {
 							data: allReviews.slice((page - 1) * perPage, page * perPage),
 						};
 					}
-					if (route.endsWith("/comments")) return { data: [ownComment] };
+					if (route.endsWith("/comments"))
+						return { data: o.comments ?? [ownComment] };
 					if (route.includes("GET") && route.includes("/check-runs"))
 						return { data: { check_runs: [] } };
 					return { data: {} };
@@ -4337,6 +4359,65 @@ describe("buildReview ledger suppression", () => {
 		log.mockRestore();
 	});
 
+	it("counts distinct settled entries, not per-agent hits, in the footer", async () => {
+		const SECOND_TITLE = "Retry loop never backs off on 429";
+		const SECOND_BODY =
+			"The `retryRequest` loop retries immediately with no delay.";
+		const secondComment = {
+			...ownComment,
+			id: 21,
+			line: 3,
+			body: `**P2** **${SECOND_TITLE}**\n\n${SECOND_BODY}`,
+		};
+		const [firstNode] = threads.data.repository.pullRequest.reviewThreads.nodes;
+		const secondNode = {
+			...firstNode,
+			comments: {
+				...firstNode.comments,
+				nodes: [
+					{ ...firstNode.comments.nodes[0], databaseId: 21 },
+					{ ...firstNode.comments.nodes[1], databaseId: 22, body: "won't fix" },
+				],
+			},
+		};
+		const second = buildInlineComment({
+			title: SECOND_TITLE,
+			body: SECOND_BODY,
+			path: "src/review.ts",
+			line: 3,
+		});
+		const only = (c: typeof repeat) =>
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [c],
+			});
+		routeAgents(
+			{
+				"code-reviewer.md": only(repeat),
+				"silent-failure-hunter.md": only(repeat),
+				"pr-test-analyzer.md": only(second),
+				"security-sast.md": only(second),
+			},
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [fresh],
+				inline_comments: [],
+			}),
+		);
+
+		const review = await buildReview({
+			octokit: ledgerOctokit({
+				comments: [ownComment, secondComment],
+				threadNodes: [firstNode, secondNode],
+			}),
+			...baseContext,
+		});
+
+		expect(review?.comments).toEqual([]);
+		expect(review?.body).toContain("ledger: warm, 2 suppressed");
+	});
+
 	it("drops a settled repeat from the posted review and tells the agents why", async () => {
 		routeAgents(
 			{},
@@ -4355,7 +4436,7 @@ describe("buildReview ledger suppression", () => {
 		expect(review?.comments).toEqual([]);
 		expect(review?.body).not.toContain(REPEAT_TITLE);
 		expect(review?.body).toContain(fresh.title);
-		expect(review?.body).toContain("ledger: warm, 5 suppressed");
+		expect(review?.body).toContain("ledger: warm, 1 suppressed");
 		expect(mockBuildUserMessage).toHaveBeenCalledWith(
 			expect.objectContaining({
 				priorOwnFindings: [

@@ -58,11 +58,21 @@ const DISPOSITION_LABEL: Record<string, string> = {
 	resolved: "resolved",
 };
 
+/** A reason is reply text from a person, so its size in the prompt is bounded. */
+export const MAX_REASON_CHARS = 300;
+
+function clipReason(reason: string): string {
+	const oneLine = reason.replace(/\s+/g, " ").trim();
+	return oneLine.length > MAX_REASON_CHARS
+		? `${oneLine.slice(0, MAX_REASON_CHARS)}…`
+		: oneLine;
+}
+
 function dispositionNote(f: PriorOwnFinding): string {
 	if (!f.decidedBy && !f.reason) return "";
 	const label = DISPOSITION_LABEL[f.status] ?? f.status;
 	const by = f.decidedBy ? ` by ${f.decidedBy}` : "";
-	const why = f.reason ? `: ${f.reason.replace(/\s+/g, " ").trim()}` : "";
+	const why = f.reason ? `: ${clipReason(f.reason)}` : "";
 	return ` [${label}${by}${why}]`;
 }
 
