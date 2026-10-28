@@ -8,7 +8,7 @@ This file provides context and conventions for AI coding agents working on this 
 npm install
 npm run typecheck    # tsc --noEmit — must pass before any commit
 npm run lint         # biome check — must pass before any commit
-npm run test         # vitest run (1043 tests) — must pass before any commit
+npm run test         # vitest run (1046 tests) — must pass before any commit
 npm run dev          # vercel dev — local server on :3000
 ```
 
