@@ -4420,4 +4420,113 @@ describe("buildReview ledger suppression", () => {
 		expect(review?.comments).toHaveLength(1);
 		expect(review?.body).not.toContain("ledger:");
 	});
+
+	describe("on a triage SKIP", () => {
+		async function seedKv(finding: PersistedFinding) {
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "SKIP",
+				resolved: [],
+				newRisk: false,
+			});
+			const { client } = fakeKv();
+			await saveReviewState(
+				client,
+				"anthropic",
+				baseContext.owner,
+				baseContext.repo,
+				baseContext.pullNumber,
+				{
+					lastReviewedSha: OLD_SHA,
+					event: "REQUEST_CHANGES",
+					findings: [finding],
+					reviewedAt: "2026-10-01T00:00:00Z",
+				},
+			);
+			return client;
+		}
+
+		const settledInKv: PersistedFinding = {
+			id: findingId("src/review.ts", 2, REPEAT_TITLE),
+			path: "src/review.ts",
+			line: 2,
+			title: REPEAT_TITLE,
+			severity: "P1",
+			status: "open",
+		};
+
+		function restampedConclusion(octokit: ReturnType<typeof ledgerOctokit>) {
+			const call = octokit.request.mock.calls.find(
+				([route]) => route === "POST /repos/{owner}/{repo}/check-runs",
+			);
+			return (call?.[1] as { conclusion?: string } | undefined)?.conclusion;
+		}
+
+		async function loadPersisted(client: KvClient) {
+			return loadReviewState(
+				client,
+				"anthropic",
+				baseContext.owner,
+				baseContext.repo,
+				baseContext.pullNumber,
+				null,
+			);
+		}
+
+		it("approves when the ledger settles every KV-open finding", async () => {
+			const client = await seedKv(settledInKv);
+			const octokit = ledgerOctokit();
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				kv: client,
+			});
+
+			expect(decision).toBeNull();
+			expect(restampedConclusion(octokit)).toBe("success");
+			expect((await loadPersisted(client))?.event).toBe("APPROVE");
+		});
+
+		it("still requests changes when the ledger does not settle the KV-open finding", async () => {
+			const client = await seedKv({
+				...settledInKv,
+				id: findingId("src/other.ts", 40, "Retry loop never backs off"),
+				path: "src/other.ts",
+				line: 40,
+				title: "Retry loop never backs off",
+			});
+			const octokit = ledgerOctokit();
+
+			await buildReview({ octokit, ...baseContext, kv: client });
+
+			expect(restampedConclusion(octokit)).toBe("action_required");
+		});
+
+		it("keeps the KV verdict when the ledger cannot be fetched", async () => {
+			const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+			const client = await seedKv(settledInKv);
+			const octokit = ledgerOctokit({
+				graphqlError: new Error("graphql down"),
+			});
+
+			await buildReview({ octokit, ...baseContext, kv: client });
+
+			expect(restampedConclusion(octokit)).toBe("action_required");
+			expect((await loadPersisted(client))?.event).toBe("REQUEST_CHANGES");
+			warn.mockRestore();
+		});
+
+		it("makes no ledger calls when nothing is open", async () => {
+			const client = await seedKv({ ...settledInKv, status: "resolved" });
+			const octokit = ledgerOctokit();
+
+			await buildReview({ octokit, ...baseContext, kv: client });
+
+			expect(octokit.request).not.toHaveBeenCalledWith(
+				"POST /graphql",
+				expect.anything(),
+			);
+			expect(restampedConclusion(octokit)).toBe("success");
+		});
+	});
 });

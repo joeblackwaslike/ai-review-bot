@@ -1424,6 +1424,16 @@ export async function buildReview(
 	 * explained, since a FULL pass did see these findings' files and chose not
 	 * to restate them, while an INCREMENTAL pass never saw them at all. */
 	let incrementalPass = false;
+	const hasOwnReview = existingReviews.some((review) =>
+		(review.body ?? "").includes(`### ${context.commentPrefix}`),
+	);
+	const fetchLedger = () =>
+		loadLedger(context.octokit, {
+			owner: context.owner,
+			repo: context.repo,
+			pull: context.pullNumber,
+			commentPrefix: context.commentPrefix,
+		});
 	const state =
 		context.kv && !context.force
 			? await loadReviewState(
@@ -1472,7 +1482,17 @@ export async function buildReview(
 		}
 
 		if (triage.recommendation === "SKIP" && !deltaMeta.truncated) {
-			const stillOpen = state.findings.some((f) => f.status === "open");
+			const isOpen = (f: PersistedFinding) => f.status === "open";
+			if (hasOwnReview && state.findings.some(isOpen)) {
+				const { ledger } = await fetchLedger();
+				const unsettled = new Set(
+					reconcileSurvivingPrior(state.findings.filter(isOpen), ledger),
+				);
+				state.findings = state.findings.filter(
+					(f) => !isOpen(f) || unsettled.has(f),
+				);
+			}
+			const stillOpen = state.findings.some(isOpen);
 			state.event = stillOpen ? state.event : "APPROVE";
 			state.lastReviewedSha = context.headSha;
 			state.reviewedAt = new Date().toISOString();
@@ -1517,17 +1537,7 @@ export async function buildReview(
 		}
 	}
 
-	const hasOwnReview = existingReviews.some((review) =>
-		(review.body ?? "").includes(`### ${context.commentPrefix}`),
-	);
-	const loadedLedger = hasOwnReview
-		? await loadLedger(context.octokit, {
-				owner: context.owner,
-				repo: context.repo,
-				pull: context.pullNumber,
-				commentPrefix: context.commentPrefix,
-			})
-		: null;
+	const loadedLedger = hasOwnReview ? await fetchLedger() : null;
 	const ledger = loadedLedger?.ledger ?? [];
 	survivingPrior = reconcileSurvivingPrior(survivingPrior, ledger);
 	const kvFindings = state?.findings ?? [];
@@ -1574,7 +1584,8 @@ export async function buildReview(
 						title: e.title,
 						severity: e.severity,
 						status: e.status,
-						reason: e.reason ?? undefined,
+						decidedBy: e.decidedBy,
+						reason: e.reason,
 					})),
 				]
 			: undefined,

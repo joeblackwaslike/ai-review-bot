@@ -130,6 +130,7 @@ describe("prior own findings", () => {
 					title: "retry has no backoff",
 					severity: "P2",
 					status: "rejected",
+					decidedBy: "author",
 					reason: "by design,\nthe caller backs off",
 				},
 			],
@@ -137,6 +138,57 @@ describe("prior own findings", () => {
 		expect(message).toContain(
 			"[rejected] [declined by author: by design, the caller backs off] P2 — src/a.ts:7 — retry has no backoff",
 		);
+	});
+
+	it("labels each settled status by what happened", () => {
+		const item = (status: string, reason: string | null) => ({
+			path: null,
+			line: null,
+			title: `t-${status}`,
+			severity: "P3",
+			status,
+			decidedBy: "author",
+			reason,
+		});
+		const message = buildUserMessage({
+			...promptBase,
+			priorOwnFindings: [
+				item("fixed", "fixed in abc1234"),
+				item("deferred", "follow-up PR"),
+				item("resolved", null),
+			],
+		});
+		expect(message).toContain("[fixed] [fixed by author: fixed in abc1234]");
+		expect(message).toContain("[deferred] [deferred by author: follow-up PR]");
+		expect(message).toContain("[resolved] [resolved by author] P3");
+		expect(message).not.toContain("[declined");
+	});
+
+	it("names no decider when none is recorded", () => {
+		const message = buildUserMessage({
+			...promptBase,
+			priorOwnFindings: [
+				{
+					path: null,
+					line: null,
+					title: "t",
+					severity: "P3",
+					status: "rejected",
+					decidedBy: null,
+					reason: "won't fix",
+				},
+			],
+		});
+		expect(message).toContain("[rejected] [declined: won't fix] P3");
+	});
+
+	it("explains every status in the closing guidance", () => {
+		const message = buildUserMessage({
+			...promptBase,
+			priorOwnFindings: findings,
+		});
+		for (const status of ["open", "fixed", "resolved", "rejected", "deferred"])
+			expect(message).toMatch(new RegExp(`^- ${status}: `, "m"));
 	});
 
 	it("says nothing about prior findings when there are none", () => {
