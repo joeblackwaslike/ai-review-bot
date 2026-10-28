@@ -12,6 +12,7 @@ export interface LedgerEntry {
 	line: number | null;
 	severity: string;
 	title: string;
+	body?: string | null;
 	action?: string;
 	status: LedgerStatus;
 	decidedBy: "author" | "reviewer" | null;

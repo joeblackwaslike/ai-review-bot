@@ -120,6 +120,134 @@ describe("findSettledMatch", () => {
 		expect(findSettledMatch(f, [e])).toBeNull();
 	});
 
+	it("matches a reworded inline repeat by its body when the titles diverge", () => {
+		const e = entry({
+			line: 96,
+			title: "Do not silently discard browser-context cleanup failures",
+			body: "When context.close() rejects after the page work finishes, the error is caught and dropped, so a leaked browser context is never reported and later requests run against a stale context.",
+		});
+		const f = {
+			path: "src/a.ts",
+			line: 111,
+			title: "Context cleanup failures are swallowed after a successful fetch",
+			body: "If closing the browser context rejects, the catch drops the error; the leaked context is never reported and later requests reuse a stale context.",
+		};
+		expect(findSettledMatch(f, [e])).toBe(e);
+	});
+
+	it("does not body-match two different defects in one function", () => {
+		const e = entry({
+			line: 96,
+			title: "Do not silently discard browser-context cleanup failures",
+			body: "When context.close() rejects after the page work finishes, the error is caught and dropped, so a leaked browser context is never reported.",
+		});
+		const f = {
+			path: "src/a.ts",
+			line: 104,
+			title:
+				"Do not release the scheduler while a timed-out navigation is still running",
+			body: "The timeout handler resolves the task and frees its scheduler slot while page.goto is still in flight, so the next queued task overlaps the old navigation.",
+		};
+		expect(findSettledMatch(f, [e])).toBeNull();
+	});
+
+	it("does not body-match findings without bodies on title words alone", () => {
+		const e = entry({
+			line: 96,
+			title: "Context cleanup errors dropped silently",
+		});
+		const f = {
+			path: "src/a.ts",
+			line: 100,
+			title: "Context cleanup ordering differs from setup ordering",
+		};
+		expect(findSettledMatch(f, [e])).toBeNull();
+	});
+
+	it("matches a general finding restating a settled inline entry by title, ignoring path", () => {
+		const e = entry({
+			title: "Capture file pruning can delete files out of chronological order",
+		});
+		const f = {
+			path: null,
+			title: "Capture file pruning can delete files out of chronological order",
+		};
+		expect(findSettledMatch(f, [e])).toBe(e);
+	});
+
+	it("matches an inline finding restating a settled general entry by title", () => {
+		const e = entry({
+			path: null,
+			line: null,
+			title:
+				"Shell injection risk from unsanitized URL interpolation in curl recipe",
+		});
+		const f = {
+			path: "docs/recipe.md",
+			line: 12,
+			title:
+				"Shell injection risk via unsanitized URL interpolation in the curl recipe",
+		};
+		expect(findSettledMatch(f, [e])).toBe(e);
+	});
+
+	it("does not cross-surface match two different test gaps with similar titles", () => {
+		const e = entry({
+			title: "Tests do not cover the retry backoff behaviour",
+		});
+		const f = {
+			path: null,
+			title: "Tests do not cover the retry jitter calculation",
+		};
+		expect(findSettledMatch(f, [e])).toBeNull();
+	});
+
+	it("matches a general finding naming a code identifier from a settled inline entry's body", () => {
+		const e = entry({
+			path: "src/throttle.ts",
+			line: 59,
+			title:
+				"Off-by-one in queue-full check lets 6 tasks wait instead of the documented 5",
+			body: "`run()` compares `this.inFlight > this.maxQueue` before incrementing, so the scheduler allows six tasks to wait before QueueFullError is thrown while the comment documents five waiting tasks.",
+		});
+		const f = {
+			path: null,
+			title:
+				"Scheduler.inFlight off-by-one still allows 6 waiting tasks instead of the documented 5",
+		};
+		expect(findSettledMatch(f, [e])).toBe(e);
+	});
+
+	it("does not cross-surface match a different defect that names the same identifier", () => {
+		const e = entry({
+			path: "src/throttle.ts",
+			line: 59,
+			title:
+				"Off-by-one in queue-full check lets 6 tasks wait instead of the documented 5",
+			body: "`run()` compares `this.inFlight > this.maxQueue` before incrementing, so six tasks can wait before QueueFullError is thrown.",
+		});
+		const f = {
+			path: null,
+			title:
+				"pause() does not stop inFlight work already holding a profile slot",
+		};
+		expect(findSettledMatch(f, [e])).toBeNull();
+	});
+
+	it("does not cross-surface match high word overlap with no shared identifier", () => {
+		const e = entry({
+			path: "src/gateway.ts",
+			line: 40,
+			title: "Stale console.warn comment still describes the old token flow",
+			body: "The comment above the warning says the gateway returns 423 or 429 when the token is missing, but the code now returns 401; tests cover neither status.",
+		});
+		const f = {
+			path: null,
+			title: "No test covers gateway 423/429 status when the token is missing",
+		};
+		expect(findSettledMatch(f, [e])).toBeNull();
+	});
+
 	it("matches a reworded general finding and not an unrelated one", () => {
 		const e = entry({
 			path: null,

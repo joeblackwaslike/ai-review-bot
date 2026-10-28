@@ -131,7 +131,7 @@ export function claimIdentifiers(title: string): Set<string> {
 	return identifiers;
 }
 
-function jaccard(a: Set<string>, b: Set<string>): number {
+export function jaccard(a: Set<string>, b: Set<string>): number {
 	if (a.size === 0 || b.size === 0) return 0;
 	let shared = 0;
 	for (const item of a) if (b.has(item)) shared += 1;
@@ -144,6 +144,7 @@ export interface ClaimLike {
 	line?: number | null;
 	title: string;
 	severity?: string | null;
+	body?: string | null;
 }
 
 export interface ClaimMatchOptions {

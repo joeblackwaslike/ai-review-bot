@@ -36,6 +36,7 @@ export function ledgerFromView(view: LedgerView): Ledger {
 				line: c.line,
 				severity: c.severity,
 				title: c.title,
+				body: c.text,
 				status: label.label as LedgerStatus,
 				decidedBy: "author",
 				reason: first === undefined ? null : evidenceText(first),
@@ -46,7 +47,11 @@ export function ledgerFromView(view: LedgerView): Ledger {
 }
 
 export const todaysCodePipeline: ReplayPipeline = ({ claims, ledger }) => {
-	const { kept, suppressed } = suppressSettled(claims, ledgerFromView(ledger));
+	const findings = claims.map((c) => ({ ...c, body: c.text }));
+	const { kept, suppressed } = suppressSettled(
+		findings,
+		ledgerFromView(ledger),
+	);
 	return {
 		posted: kept.map((c) => c.id),
 		suppressed: suppressed.map((s) => s.finding.id),
