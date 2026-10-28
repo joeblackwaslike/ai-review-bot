@@ -15,7 +15,7 @@ Spec: [docs/superpowers/specs/2026-10-28-ledger-repeat-suppression-design.md](..
 - The ledger is rebuilt from GitHub on every run. It does not read KV. KV stays an optional cache nothing depends on.
 - Only high-confidence decisions settle a claim: a reply that declines or defers it, a reply that cites a fixing commit, or a thread resolved by a decider. A later commit touching nearby lines does not settle it. Reactions never settle.
 - Deciders are the PR author and any non-bot account whose association is owner, member or collaborator. Other bots and drive-by accounts do not decide.
-- Matching has two tiers. Tier 1 is `isSameClaim` with default thresholds and the 30-line window. Tier 2 is same path at any distance with title similarity 0.7, or 0.5 when an identifier is shared.
+- Matching has two tiers. Tier 1 is `isSameClaim` with default thresholds and the 30-line window. Tier 2 is same path at any distance with title similarity at least 0.8, whether or not an identifier is shared (it catches repeats that moved but kept their wording; reworded repeats are tier 1's job).
 - Only settled entries suppress. Open entries do not.
 - Fail open: if the ledger cannot be built, nothing is suppressed, the error is logged, and the footer says `ledger: cold`.
 - The ledger outranks KV: prior open findings the ledger shows as settled are dropped from `survivingPrior` before the verdict.
@@ -82,7 +82,7 @@ Spec: [docs/superpowers/specs/2026-10-28-ledger-repeat-suppression-design.md](..
   export interface LedgerEntry { id: string; round: number; path: string | null; line: number | null; severity: string; title: string; action?: string; status: LedgerStatus; decidedBy: "author" | "reviewer" | null; reason: string | null; evidence: string[] }
   export type Ledger = LedgerEntry[]
   export const isSettled: (e: LedgerEntry) => boolean            // status !== "open"
-  export const CROSS_ROUND_MATCH: ClaimMatchOptions               // lineWindow Infinity, titleSimilarity 0.7, identifierSimilarity 0.5, unanchoredSimilarity 0.6, minTokens 3
+  export const CROSS_ROUND_MATCH: ClaimMatchOptions               // lineWindow Infinity, titleSimilarity 0.8, identifierSimilarity 0.8, unanchoredSimilarity 0.6, minTokens 3
   export function findSettledMatch(f: ClaimLike, ledger: Ledger): LedgerEntry | null
   export interface Suppressed<T> { finding: T; entry: LedgerEntry }
   export function suppressSettled<T extends ClaimLike>(findings: readonly T[], ledger: Ledger): { kept: T[]; suppressed: Suppressed<T>[] }
