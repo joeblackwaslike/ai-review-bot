@@ -73,7 +73,7 @@ These are the pieces and how they connect. File and flag names are my calls and 
 
 - Types in `src/replay/types.ts`. A `ReplayFixture` holds the PR identity, the provider, and an ordered list of rounds. Each round has a head SHA, the commits and size since the previous round, the posted findings, and the dispositions the author gave before the next round.
 - Recorder in `src/replay/record.ts`. Given a PR, it reads bot reviews, inline comments, replies, thread resolution, and reactions through `gh`, and writes a fixture under `test/fixtures/replay/`.
-- Labeler in `src/replay/label.ts`. It reads a recorded fixture and assigns each finding a label and a confidence, with the evidence quoted. Labels are saved beside the fixture so a person can read and correct them. Joe spot-checks them once.
+- Labeler in `src/replay/label.ts`. It reads a recorded fixture and assigns each finding a label and a confidence, with the evidence quoted. Labels are saved beside the fixture so they can be read and corrected. An agent verifies them against the PR threads and commits, and a different model (Codex) cross-checks the result.
 - Engine in `src/replay/replay.ts`. It takes a fixture and a pipeline under test, feeds each round's findings to the pipeline with the ledger of earlier rounds, and records what was posted and what was suppressed.
 - Pipeline interface. A function from `{round, findings, ledger}` to `{posted, suppressed}`. v1 ships two: "as recorded" (nothing suppressed, the real history) and "today's code" (the existing post-model stages). Project 2 adds a third.
 - Metrics in `src/replay/metrics.ts`, the report printer, and a `ai-review replay` command. Without flags it replays every fixture and prints the table. `--record <pr-url>` records a PR. `--live --rounds <n> --max-cost <usd>` runs the live tier.
@@ -90,7 +90,7 @@ For each chosen recorded round, fetch the PR diff at that round's SHA, run the r
 - The recall guard applies to the first occurrence of a claim. A finding labeled fixed in round 1 must still be posted in round 1. The same claim re-raised in round 3 is a repeat, and suppressing it is correct.
 - To detect "fixed" offline, the recorder also stores, for each commit between rounds, the changed file paths and hunk line ranges. It does not store diff bodies. The labeler uses these with the reply text, and makes no network calls.
 - Fixtures are per provider. A reply is credited to the bot whose thread it is in. Third-party bots such as `chatgpt-codex-connector` are not counted as findings or as responders. "The author" is the PR author's account, which is also the account the implementer agent pushes and replies as.
-- The committed baseline starts from the automatic labels and is marked provisional. It becomes final after Joe's one-time spot-check of the labels and repeat pairs. The Vitest test passes either way.
+- The committed baseline starts from the automatic labels and is marked provisional. It becomes final after agent verification and the Codex cross-check. Labels the two models still disagree on stay unadjudicated, and their count is recorded. The Vitest test passes either way.
 
 ## Hardening decisions
 
@@ -98,10 +98,10 @@ These came from a self-critique and a cross-model critique of the approved spec.
 
 Claims and labels
 
-- The unit of measurement is an atomic claim, not a posted comment. The merge step joins distinct findings at one anchor into a single comment, separated by `\n\n---\n\n` ([src/review.ts](../../../src/review.ts) `mergeReviewsDetailed`). The recorder splits on that separator as a first guess, and a person confirms the split. One comment can hold several claims, each with its own label and its own repeat pairs.
-- Repeat pairs may cross lines, files, and moved code. They are confirmed by a person and are not limited to what `isSameClaim` would match.
+- The unit of measurement is an atomic claim, not a posted comment. The merge step joins distinct findings at one anchor into a single comment, separated by `\n\n---\n\n` ([src/review.ts](../../../src/review.ts) `mergeReviewsDetailed`). The recorder splits on that separator as a first guess, and an agent verifies the split against the PR threads, with Codex cross-checking. One comment can hold several claims, each with its own label and its own repeat pairs.
+- Repeat pairs may cross lines, files, and moved code. They are confirmed by agent verification plus Codex cross-check and are not limited to what `isSameClaim` would match.
 - Findings in a review body's table have no reply thread. They are labeled from other evidence (PR-level comments naming them, a later review marking them resolved) or stay unadjudicated. The author rejection rate is dominated by inline findings and the report states the split.
-- A label of fixed needs more than a changed hunk near the line. The recorder captures each thread's `isOutdated` and `isResolved` state and `resolvedBy`, and the labeler combines them with the reply text and the changed hunk. A label that gates something (see the recall guard) must be confirmed by a person.
+- A label of fixed needs more than a changed hunk near the line. The recorder captures each thread's `isOutdated` and `isResolved` state and `resolvedBy`, and the labeler combines them with the reply text and the changed hunk. A label that gates something (see the recall guard) must be confirmed by agent verification plus Codex cross-check; items the two disagree on stay unadjudicated.
 - Reactions count only when they come from the PR author's account, are read per reaction with the actor and creation time, and not as aggregate counts.
 
 Time and evidence

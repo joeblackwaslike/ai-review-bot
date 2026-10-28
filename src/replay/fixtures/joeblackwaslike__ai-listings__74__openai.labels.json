@@ -1,6 +1,6 @@
 {
 	"fixtureId": "joeblackwaslike__ai-listings__74__openai",
-	"provisional": true,
+	"provisional": false,
 	"labels": [
 		{
 			"claimId": "r0:c4370336247:0",
@@ -9,37 +9,41 @@
 			"evidence": [
 				"2026-10-25T14:28:07Z|Fixed in 784a049f. A 401 with a plain-text body is now documented as a missing or wrong bearer token, so the operator checks `$STEALTH_BROWSER_TOKEN` first. Only a 401 with a `{\"session_expired\":true,...}` body sends Joe to `pnpm signin ebay`. That matches the two 401 rows in the gateway README and the `session_expired` responses in its `src/app.ts`."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:c4370336250:0",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T14:28:13Z|Fixed in 784a049f. `fetchViaGateway` now logs `STEALTH_BROWSER_TOKEN is not set; eBay comp verification is disabled` once per process and stays quiet after."
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:c4370336253:0",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T14:28:17Z|Fixed in 784a049f. The live `ai-listings-secret` does still hold `data.BROWSERLESS_TOKEN`. `deploy-app.sh` now removes it after applying the Secret."
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:body:0",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r1:c4370932715:0",
 			"label": "fixed",
-			"confidence": "low",
+			"confidence": "high",
 			"evidence": [
-				"2026-10-25T14:17:56Z|changed .claude/commands/reprice.md near line 44 in 784a049f8086fda27405e56abe6611920e7e73ea"
+				"2026-10-25T14:28:22Z|Fixed in 784a049f, same change as the other 401 thread. A plain-text 401 now points at `$STEALTH_BROWSER_TOKEN`, and only the `session_expired` JSON 401 sends to `pnpm signin ebay`."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r2:c4371188495:0",
@@ -48,7 +52,7 @@
 			"evidence": [
 				"2026-10-25T18:34:35Z|Fixed in ee21138, then tightened in 913125e after the pipeline's review caught that the `if` around the lookup still hid a failed `kubectl get`. The lookup now runs in its own statement, so `set -e` stops the script on a real failure."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r3:c4371941352:0",
@@ -57,54 +61,70 @@
 			"evidence": [
 				"2026-10-25T19:08:33Z|Correct, and confirmed against the live cluster: ai-listings-secret has BROWSERLESS_TOKEN with an empty value, so the non-empty check would have skipped it. Fixed in 8d94889: the script now tests whether the key exists in the Secret's data. Checked against the live secret (old test: no hit, new test: finds the key) and against a sample without the key (skips)."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r3:c4371941355:0",
-			"label": "fixed",
-			"confidence": "low",
+			"label": "rejected",
+			"confidence": "high",
 			"evidence": [
-				"2026-10-25T18:59:18Z|changed deployment/scripts/deploy-app.sh near line 133 in 8d94889885490c887c020b59b97bbce965130157"
+				"2026-10-25T19:08:41Z|Already done: the browserless Deployment, Service, Tailscale Ingress and both Secrets were deleted from the cluster before this PR (it had served 0 requests for weeks). No change needed."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r3:body:0",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T19:08:41Z|Same point as inline c4371941355: Browserless workload was already deleted from the cluster before this PR."
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r3:body:1",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T19:08:41Z|Same point as inline c4371941355: Browserless resources were already deleted from the cluster before this PR."
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r3:body:2",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T19:08:41Z|Same point as inline c4371941355: Browserless decommission was already completed before this PR."
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r4:c4372063415:0",
 			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"confidence": "high",
+			"evidence": [
+				"No reply. PR merged at 8d948898 without addressing this finding. No further commits after round 4."
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r4:c4372063420:0",
 			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"confidence": "high",
+			"evidence": [
+				"No reply. PR merged at 8d948898 without addressing this finding. No further commits after round 4."
+			],
+			"confirmed": true
 		}
 	],
-	"repeatPairs": [],
+	"repeatPairs": [
+		{
+			"earlier": "r0:c4370336247:0",
+			"later": "r1:c4370932715:0",
+			"confirmed": true
+		}
+	],
 	"negativePairs": [],
 	"allowedSuppression": []
 }

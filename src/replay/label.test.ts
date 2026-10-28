@@ -115,6 +115,42 @@ describe("labelFixture", () => {
 		expect(l.confidence).toBe("high");
 	});
 
+	it('labels a "Fixed in <sha>" reply as fixed with high confidence when the thread is not outdated', () => {
+		const l = first(fixture({ threads: [thread("Fixed in 1a90c7f")] }));
+		expect(l.label).toBe("fixed");
+		expect(l.confidence).toBe("high");
+	});
+
+	it("does not read an all-hex English word as a commit reference", () => {
+		expect(first(fixture({ threads: [thread("We acceded here")] })).label).toBe(
+			"unadjudicated",
+		);
+	});
+
+	it("does not read a plain decimal number as a commit reference", () => {
+		expect(
+			first(fixture({ threads: [thread("See comment 1234567 above")] })).label,
+		).toBe("unadjudicated");
+	});
+
+	it('labels "Kept as is" and "Already done" replies as rejected even when a later commit touched the flagged lines', () => {
+		const commit: CommitMeta = {
+			sha: "1a90c7f",
+			committedAt: "2026-01-01T12:00:00Z",
+			files: [{ path: "src/a.ts", ranges: [[8, 12]] }],
+		};
+		for (const body of ["Kept as is.", "Already done before this PR."]) {
+			const f = fixture({
+				rounds: [
+					round(0, [claim({ id: "r0:c100:0" })]),
+					round(1, [], [commit]),
+				],
+				threads: [thread(body)],
+			});
+			expect(first(f).label).toBe("rejected");
+		}
+	});
+
 	it("labels a changed hunk with no reply or outdated flag as fixed with low confidence", () => {
 		const commit: CommitMeta = {
 			sha: "deadbeef",

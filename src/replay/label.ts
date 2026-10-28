@@ -12,8 +12,9 @@ import type {
 const DEFERRED =
 	/follow-?up|out of scope|separate pr|later pr|will address (this )?later|tracked in/i;
 const REJECTED =
-	/\bintentional(ly)?\b|\bno change\b|\bby design\b|no defect|working as intended|won'?t fix|not a (bug|problem|issue)/i;
-const FIX_REF = /\bfixed in\b|\b[0-9a-f]{7,40}\b/i;
+	/\bintentional(ly)?\b|\bno change\b|\bby design\b|no defect|working as intended|won'?t fix|not a (bug|problem|issue)|\bkept (it |this )?as[- ]is\b|\balready done\b/i;
+const FIX_REF =
+	/\bfixed in\b|\b(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{7,40}\b/i;
 const REJECTING_REACTIONS = new Set(["-1", "confused"]);
 const HUNK_SLACK = 3;
 
@@ -69,10 +70,8 @@ function labelClaim(f: ReplayFixture, c: PostedClaim): ClaimLabel {
 	const rejected = replies.filter((r) => REJECTED.test(r.body));
 	if (rejected.length) return make("rejected", "high", rejected.map(quote));
 
-	if (thread?.isOutdated) {
-		const fixes = replies.filter((r) => FIX_REF.test(r.body));
-		if (fixes.length) return make("fixed", "high", fixes.map(quote));
-	}
+	const fixes = replies.filter((r) => FIX_REF.test(r.body));
+	if (fixes.length) return make("fixed", "high", fixes.map(quote));
 
 	const hunk = hunkEvidence(f, c);
 	if (hunk) return make("fixed", "low", [hunk]);
