@@ -8,7 +8,7 @@ This file provides context and conventions for AI coding agents working on this 
 npm install
 npm run typecheck    # tsc --noEmit — must pass before any commit
 npm run lint         # biome check — must pass before any commit
-npm run test         # vitest run (928 tests) — must pass before any commit
+npm run test         # vitest run (1046 tests) — must pass before any commit
 npm run dev          # vercel dev — local server on :3000
 ```
 
@@ -45,6 +45,8 @@ POST /api/github/review-run        (QStash delayed callback)
 - General findings deduplicated by title (case-insensitive)
 - Final `event`: `REQUEST_CHANGES` if any agent returned it; `APPROVE` if all agents found zero issues; `COMMENT` otherwise
 
+Settled repeats are dropped per agent before this merge, and a re-review round with nothing new posts nothing (see `src/ledger/` and `docs/superpowers/specs/2026-10-28-ledger-repeat-suppression-design.md`).
+
 **Diff anchor validation** (`buildReviewComments()`): Before submission, every inline comment is checked against the set of valid right-side line numbers extracted from the unified diff (`collectRightSideLines()`). Comments referencing lines not in the diff are dropped silently rather than erroring the review.
 
 **Fallback retry** (`src/github-app.ts` → `maybeSubmitReview()`): If the GitHub Reviews API rejects the POST, the bot retries up to 3 times with exponential backoff. If all retries fail, it posts a regular PR comment preserving the findings.
@@ -71,6 +73,7 @@ POST /api/github/review-run        (QStash delayed callback)
 | `src/watch.ts` | `watchPr()` — polls an already-open PR and re-reviews it on head-SHA change via `maybeSubmitReview`, using local subscription auth; backs `ai-review watch` |
 | `src/testing.ts` | Shared test fixtures (`buildModelReview`, `buildGenerateObjectResponse`, etc.) |
 | `src/replay/` | Offline replay harness — records, labels, and replays PR review rounds to measure false-positive rate, recycling, and convergence; backs `ai-review replay`. See `docs/superpowers/specs/2026-10-27-review-replay-harness-design.md` |
+| `src/ledger/` | Platform-neutral ledger of review findings and their dispositions rebuilt from GitHub threads, claim matching across rounds, suppression of settled repeats; see `docs/superpowers/specs/2026-10-28-ledger-repeat-suppression-design.md` |
 | `skills/*.md` | Vendored skill frameworks loaded at runtime by `buildAgentSystemPrompt()` |
 
 ### Local audit & review

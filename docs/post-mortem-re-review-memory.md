@@ -110,7 +110,7 @@ Fixing memory and dedupe makes the reviewer stop repeating itself. It does not m
 
 ## Prevention
 
-These are candidate directions. None is designed or scoped yet.
+These are candidate directions. The GitHub-thread ledger and per-agent suppression (bullets 2 and the KV-independent-memory bullet) shipped in `src/ledger/` — see [the ledger design spec](superpowers/specs/2026-10-28-ledger-repeat-suppression-design.md). The rest are not designed or scoped yet.
 
 - Give agents the author's reply and the thread's resolved or outdated status for each prior finding, plus 😕 and 👎 reactions, as a per-finding record of why it was rejected.
 - Persist rejected and answered findings with a normalized claim key (the existing `isSameClaim` in [src/claim-dedupe.ts](https://github.com/joeblackwaslike/ai-review-bot/blob/24ddef3/src/claim-dedupe.ts) is a starting point) and drop matches in code regardless of line or wording, including repeats of findings that are merely open. Never raise severity on a repeat.

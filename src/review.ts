@@ -5,6 +5,10 @@ import type { ResolvedAuth } from "./auth.js";
 import { dedupeClaims, isSameClaim } from "./claim-dedupe.js";
 import { mapWithConcurrency } from "./concurrency.js";
 import type { KvClient } from "./feedback/kv.js";
+import { loadLedger, reconcileSurvivingPrior } from "./ledger/live.js";
+import { findSettledMatch } from "./ledger/match.js";
+import { suppressInReview } from "./ledger/suppress.js";
+import { isSettled } from "./ledger/types.js";
 import { computeCost, createAIModel } from "./models.js";
 import {
 	type AgentPromptOptions,
@@ -125,7 +129,14 @@ export interface ReviewComment {
 
 interface PullRequestReview {
 	body?: string | null;
+	state?: string;
 }
+
+const STANDING_REVIEW_STATES = new Set([
+	"APPROVED",
+	"CHANGES_REQUESTED",
+	"DISMISSED",
+]);
 
 interface TokenUsage {
 	promptTokens: number;
@@ -819,6 +830,7 @@ export interface FormatReviewBodyOptions {
 	provider: string;
 	model: string;
 	cost: number;
+	ledgerNote?: string;
 }
 
 export function formatReviewBody(opts: FormatReviewBodyOptions): string {
@@ -846,6 +858,7 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		provider,
 		model,
 		cost,
+		ledgerNote,
 	} = opts;
 
 	const readinessBar = renderReadinessBar(readiness);
@@ -930,7 +943,7 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		`<!-- ai-review:cost=${cost.toFixed(6)} -->`,
 	].join("\n");
 
-	const costFooter = `---\n*Model: ${model} · ${allSkillsCount} agents · $${cost.toFixed(6)} · [ai-review-bot](https://github.com/joeblackwaslike/ai-review-bot)*`;
+	const costFooter = `---\n*Model: ${model} · ${allSkillsCount} agents · $${cost.toFixed(6)}${ledgerNote ? ` · ${ledgerNote}` : ""} · [ai-review-bot](https://github.com/joeblackwaslike/ai-review-bot)*`;
 
 	const parts = [
 		`### ${commentPrefix}`,
@@ -1257,16 +1270,14 @@ export async function buildReview(
 ): Promise<ReviewDecision | null> {
 	// Always fetch existing reviews — used for both idempotency check and
 	// cross-bot dedup (collecting what the other bot already reported).
-	const existingReviews = (
-		await context.octokit.request<PullRequestReview[]>(
-			"GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
-			{
-				owner: context.owner,
-				repo: context.repo,
-				pull_number: context.pullNumber,
-			},
-		)
-	).data;
+	const existingReviews = await context.octokit.paginate<PullRequestReview>(
+		"GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
+		{
+			owner: context.owner,
+			repo: context.repo,
+			pull_number: context.pullNumber,
+		},
+	);
 
 	const legacyMarker = `Reviewed commit: \`${context.headSha.slice(0, 12)}\``;
 
@@ -1417,6 +1428,27 @@ export async function buildReview(
 	 * explained, since a FULL pass did see these findings' files and chose not
 	 * to restate them, while an INCREMENTAL pass never saw them at all. */
 	let incrementalPass = false;
+	const ownReviews = existingReviews.filter((review) =>
+		(review.body ?? "").includes(`### ${context.commentPrefix}`),
+	);
+	const hasOwnReview = ownReviews.length > 0;
+	/** A COMMENTED review neither clears a change request nor grants approval,
+	 * and a DISMISSED one means the approval is gone. */
+	const standingVerdict = ownReviews
+		.filter((review) => STANDING_REVIEW_STATES.has(review.state ?? ""))
+		.at(-1)?.state;
+	const needsFreshApprove =
+		standingVerdict === "CHANGES_REQUESTED" || standingVerdict === "DISMISSED";
+	let ledgerLoad: ReturnType<typeof loadLedger> | undefined;
+	const fetchLedger = () => {
+		ledgerLoad ??= loadLedger(context.octokit, {
+			owner: context.owner,
+			repo: context.repo,
+			pull: context.pullNumber,
+			commentPrefix: context.commentPrefix,
+		});
+		return ledgerLoad;
+	};
 	const state =
 		context.kv && !context.force
 			? await loadReviewState(
@@ -1428,6 +1460,22 @@ export async function buildReview(
 					priorOwnReview,
 				)
 			: null;
+	const carryVerdictForward = async (event: ReviewState["event"]) => {
+		if (context.kv && state) {
+			state.event = event;
+			state.lastReviewedSha = context.headSha;
+			state.reviewedAt = new Date().toISOString();
+			await saveReviewState(
+				context.kv,
+				context.provider,
+				context.owner,
+				context.repo,
+				context.pullNumber,
+				state,
+			);
+		}
+		await restampCheckRun(context, event);
+	};
 
 	if (
 		context.kv &&
@@ -1464,21 +1512,26 @@ export async function buildReview(
 			}
 		}
 
+		let skipNeedsApprove = false;
 		if (triage.recommendation === "SKIP" && !deltaMeta.truncated) {
-			const stillOpen = state.findings.some((f) => f.status === "open");
-			state.event = stillOpen ? state.event : "APPROVE";
-			state.lastReviewedSha = context.headSha;
-			state.reviewedAt = new Date().toISOString();
-			await saveReviewState(
-				context.kv,
-				context.provider,
-				context.owner,
-				context.repo,
-				context.pullNumber,
-				state,
-			);
-			await restampCheckRun(context, state.event);
-			return null; // nothing to post — the check-run carries the verdict
+			const isOpen = (f: PersistedFinding) => f.status === "open";
+			if (hasOwnReview && state.findings.some(isOpen)) {
+				const { ledger } = await fetchLedger();
+				const unsettled = new Set(
+					reconcileSurvivingPrior(state.findings.filter(isOpen), ledger),
+				);
+				state.findings = state.findings.filter(
+					(f) => !isOpen(f) || unsettled.has(f),
+				);
+			}
+			const stillOpen = state.findings.some(isOpen);
+			// A re-stamped check-run does not supersede a standing CHANGES_REQUESTED
+			// review, so that case runs as INCREMENTAL and posts its APPROVE.
+			skipNeedsApprove = !stillOpen && needsFreshApprove;
+			if (!skipNeedsApprove) {
+				await carryVerdictForward(stillOpen ? state.event : "APPROVE");
+				return null; // nothing to post — the check-run carries the verdict
+			}
 		}
 
 		// Carry still-open findings forward as blocking, and resolved ones as
@@ -1491,7 +1544,10 @@ export async function buildReview(
 			triage.resolved.includes(f.id),
 		);
 
-		if (triage.recommendation === "INCREMENTAL" && !deltaMeta.truncated) {
+		if (
+			(triage.recommendation === "INCREMENTAL" || skipNeedsApprove) &&
+			!deltaMeta.truncated
+		) {
 			scopedFiles = deltaMeta.files;
 			incrementalPass = true;
 		}
@@ -1509,6 +1565,16 @@ export async function buildReview(
 			);
 		}
 	}
+
+	const loadedLedger = hasOwnReview ? await fetchLedger() : null;
+	const ledger = loadedLedger?.ledger ?? [];
+	survivingPrior = reconcileSurvivingPrior(survivingPrior, ledger);
+	const kvFindings = state?.findings ?? [];
+	const kvMatches = kvFindings.map((f) => findSettledMatch(f, ledger));
+	const kvMatchedIds = new Set(kvMatches.map((m) => m?.id));
+	const ledgerOnlySettled = ledger.filter(
+		(e) => isSettled(e) && !kvMatchedIds.has(e.id),
+	);
 
 	const scopedFilePaths = scopedFiles.map((f) => f.filename);
 
@@ -1532,13 +1598,30 @@ export async function buildReview(
 		priorBotReviews,
 		priorOwnReview,
 		priorOwnFindings: tuning.showPriorOwnFindings
-			? (state?.findings ?? []).map((f) => ({
-					path: f.path,
-					line: f.line,
-					title: f.title,
-					severity: f.severity,
-					status: f.status,
-				}))
+			? [
+					...kvFindings.map((f, i) => {
+						const settled = kvMatches[i];
+						return {
+							path: f.path,
+							line: f.line,
+							title: f.title,
+							severity: f.severity,
+							status: settled?.status ?? f.status,
+							...(settled
+								? { decidedBy: settled.decidedBy, reason: settled.reason }
+								: {}),
+						};
+					}),
+					...ledgerOnlySettled.map((e) => ({
+						path: e.path,
+						line: e.line,
+						title: e.title,
+						severity: e.severity,
+						status: e.status,
+						decidedBy: e.decidedBy,
+						reason: e.reason,
+					})),
+				]
 			: undefined,
 	});
 
@@ -1743,7 +1826,34 @@ export async function buildReview(
 		notOk: allSkills.length - agentResults.length,
 	});
 
-	const mergeOutcome = mergeReviewsDetailed(agentResults, resolvedKeys, {
+	let suppressedCount = 0;
+	const suppressedEntryIds = new Set<string>();
+	const unsettledResults = agentResults.map((r) => {
+		const outcome = suppressInReview(r, ledger);
+		suppressedCount += outcome.suppressed.length;
+		for (const { finding, entry } of outcome.suppressed) {
+			suppressedEntryIds.add(entry.id);
+			console.log("suppressed settled repeat", {
+				title: finding.title,
+				path: finding.path ?? null,
+				line: finding.line ?? null,
+				severity: finding.severity ?? null,
+				entryId: entry.id,
+				entryStatus: entry.status,
+			});
+		}
+		return outcome.review;
+	});
+	if (loadedLedger) {
+		console.log("ledger suppression", {
+			warm: loadedLedger.warm,
+			entries: ledger.length,
+			suppressed: suppressedCount,
+			settledEntries: suppressedEntryIds.size,
+		});
+	}
+
+	const mergeOutcome = mergeReviewsDetailed(unsettledResults, resolvedKeys, {
 		dedupeNearDuplicateClaims: tuning.dedupeNearDuplicateClaims,
 	});
 	const modelReview = mergeOutcome.review;
@@ -1874,6 +1984,28 @@ export async function buildReview(
 				? "APPROVE"
 				: modelReview.event;
 
+	if (
+		finalEvent === "APPROVE" &&
+		hasOwnReview &&
+		!needsFreshApprove &&
+		!context.force
+	) {
+		console.log("nothing new since the last review; posting nothing", {
+			suppressed: suppressedCount,
+			agents: agentResults.length,
+		});
+		// survivingPrior is empty here, so every open KV finding was settled by
+		// the ledger; saving them open would let a later cold-ledger run block.
+		if (state)
+			state.findings = state.findings.map((f) =>
+				f.status === "open" ? { ...f, status: "resolved" } : f,
+			);
+		await carryVerdictForward(
+			standingVerdict === "APPROVED" ? "APPROVE" : "COMMENT",
+		);
+		return null;
+	}
+
 	let summary = "";
 	if (finalEvent !== "APPROVE") {
 		const summaryResult = await generateSummary(
@@ -1970,6 +2102,11 @@ export async function buildReview(
 		provider: selection.provider,
 		model: selection.model,
 		cost,
+		ledgerNote: loadedLedger
+			? loadedLedger.warm
+				? `ledger: warm, ${suppressedEntryIds.size} suppressed`
+				: "ledger: cold"
+			: undefined,
 	});
 
 	// Persist the new review state so the NEXT push can triage against it. One

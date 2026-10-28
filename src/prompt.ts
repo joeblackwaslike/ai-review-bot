@@ -44,7 +44,36 @@ export interface PromptContext {
 		title: string;
 		severity: string;
 		status: string;
+		decidedBy?: string | null;
+		reason?: string | null;
 	}>;
+}
+
+type PriorOwnFinding = NonNullable<PromptContext["priorOwnFindings"]>[number];
+
+const DISPOSITION_LABEL: Record<string, string> = {
+	rejected: "declined",
+	deferred: "deferred",
+	fixed: "fixed",
+	resolved: "resolved",
+};
+
+/** A reason is reply text from a person, so its size in the prompt is bounded. */
+export const MAX_REASON_CHARS = 300;
+
+function clipReason(reason: string): string {
+	const oneLine = reason.replace(/\s+/g, " ").trim();
+	return oneLine.length > MAX_REASON_CHARS
+		? `${oneLine.slice(0, MAX_REASON_CHARS)}…`
+		: oneLine;
+}
+
+function dispositionNote(f: PriorOwnFinding): string {
+	if (!f.decidedBy && !f.reason) return "";
+	const label = DISPOSITION_LABEL[f.status] ?? f.status;
+	const by = f.decidedBy ? ` by ${f.decidedBy}` : "";
+	const why = f.reason ? `: ${clipReason(f.reason)}` : "";
+	return ` [${label}${by}${why}]`;
 }
 
 function trimPatch(patch: string, maxChars = 24000): string {
@@ -97,12 +126,18 @@ export function buildUserMessage(context: PromptContext): string {
 				"",
 				...context.priorOwnFindings.map(
 					(f) =>
-						`- [${f.status}] ${f.severity} — ${f.path ?? "general"}${
+						`- [${f.status}]${dispositionNote(f)} ${f.severity} — ${f.path ?? "general"}${
 							f.line === null ? "" : `:${f.line}`
 						} — ${f.title}`,
 				),
 				"",
-				"Do not file any of these again. A finding marked resolved was fixed; re-raising it is wrong. A finding still open is already on the record; restating it in different words adds nothing and buries the new material. Report only what is genuinely new since these were written.",
+				"Do not file any of these again. What each status means:",
+				"- open: already on the record; restating it in different words adds nothing and buries the new material.",
+				"- fixed: the author fixed it; re-raising it is wrong.",
+				"- resolved: it was fixed or the author closed the thread; do not reopen it.",
+				"- rejected: the author declined it as intended; do not argue it again.",
+				"- deferred: the author moved it to follow-up work; do not raise it in this pull request.",
+				"Report only what is genuinely new since these were written.",
 			]
 		: [];
 

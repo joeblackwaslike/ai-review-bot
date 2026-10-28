@@ -372,7 +372,7 @@ describe("buildReviewComments", () => {
 // ---------------------------------------------------------------------------
 
 function buildOctokit(overrides?: {
-	existingReviews?: Array<{ body: string }>;
+	existingReviews?: Array<{ body: string; state?: string }>;
 	files?: Array<{ filename: string; status: string; patch?: string }>;
 	checkRuns?: Array<{
 		name: string;
@@ -397,11 +397,17 @@ function buildOctokit(overrides?: {
 		request: requestMock,
 		paginate: vi
 			.fn()
-			.mockResolvedValue(
-				overrides?.files ?? [buildPullFile("src/review.ts", SIMPLE_PATCH)],
+			.mockImplementation(async (route: string) =>
+				route.endsWith("/reviews")
+					? (overrides?.existingReviews ?? [])
+					: (overrides?.files ?? [
+							buildPullFile("src/review.ts", SIMPLE_PATCH),
+						]),
 			),
 	};
 }
+
+const FILES_ROUTE = "GET /repos/{owner}/{repo}/pulls/{pull_number}/files";
 
 const baseContext = {
 	owner: "joeblackwaslike",
@@ -611,7 +617,10 @@ describe("buildReview", () => {
 		});
 
 		expect(review).toBeNull();
-		expect(octokit.paginate).not.toHaveBeenCalled();
+		expect(octokit.paginate).not.toHaveBeenCalledWith(
+			FILES_ROUTE,
+			expect.anything(),
+		);
 	});
 
 	it("resubmits when force is true even if already reviewed", async () => {
@@ -637,7 +646,10 @@ describe("buildReview", () => {
 		});
 
 		expect(review).not.toBeNull();
-		expect(octokit.paginate).toHaveBeenCalled();
+		expect(octokit.paginate).toHaveBeenCalledWith(
+			FILES_ROUTE,
+			expect.anything(),
+		);
 	});
 
 	it("renders severity emoji table for general findings", async () => {
@@ -717,7 +729,9 @@ describe("buildReview", () => {
 		);
 
 		const review = await buildReview({
-			octokit: buildOctokit({ existingReviews: [{ body: priorBody }] }),
+			octokit: buildOctokit({
+				existingReviews: [{ body: priorBody, state: "CHANGES_REQUESTED" }],
+			}),
 			...baseContext,
 			headSha,
 		});
@@ -4140,5 +4154,888 @@ describe("formatReviewBody", () => {
 		});
 		expect(body).toContain("Partial review");
 		expect(body).toContain("security-sast");
+	});
+});
+
+describe("buildReview ledger suppression", () => {
+	const OLD_SHA = "0000000000000000";
+	const REPEAT_TITLE = "Token cache never expires";
+	const DECLINE = "This is intentional, the token is short-lived";
+	const ownReview = {
+		id: 100,
+		state: "CHANGES_REQUESTED",
+		submitted_at: "2026-10-01T00:00:00Z",
+		body: `### ai-review-bot\n\nOne issue.\n\n${reviewedCommitMarker(OLD_SHA)}`,
+	};
+	const ownComment = {
+		id: 11,
+		pull_request_review_id: 100,
+		path: "src/review.ts",
+		line: 2,
+		body: `**P1** **${REPEAT_TITLE}**\n\nEntries in \`tokenCache\` are never evicted.`,
+	};
+	const threads = {
+		data: {
+			repository: {
+				pullRequest: {
+					author: { login: "joe" },
+					reviewThreads: {
+						nodes: [
+							{
+								isResolved: false,
+								resolvedBy: null,
+								comments: {
+									pageInfo: { hasNextPage: false },
+									nodes: [
+										{
+											databaseId: 11,
+											author: { login: "ai-review-bot", __typename: "Bot" },
+											authorAssociation: "NONE",
+											body: ownComment.body,
+											createdAt: "2026-10-01T00:00:00Z",
+										},
+										{
+											databaseId: 12,
+											author: { login: "joe", __typename: "User" },
+											authorAssociation: "OWNER",
+											body: DECLINE,
+											createdAt: "2026-10-02T00:00:00Z",
+										},
+									],
+								},
+							},
+						],
+						pageInfo: { hasNextPage: false, endCursor: null },
+					},
+				},
+			},
+		},
+	};
+
+	function ledgerOctokit(
+		o: {
+			graphqlError?: Error;
+			reviews?: unknown[];
+			comments?: unknown[];
+			threadNodes?: unknown[];
+		} = {},
+	) {
+		const request = vi
+			.fn()
+			.mockImplementation(
+				async (route: string, params?: Record<string, unknown>) => {
+					if (route === "POST /graphql") {
+						if (o.graphqlError) throw o.graphqlError;
+						const v = params?.variables as Record<string, unknown> | undefined;
+						// GitHub answers a query whose $variables are missing with an
+						// errors array, not data.
+						if (
+							v?.owner !== baseContext.owner ||
+							v?.repo !== baseContext.repo ||
+							v?.pr !== baseContext.pullNumber
+						)
+							return {
+								data: {
+									errors: [{ message: "Variable $owner was not provided" }],
+								},
+							};
+						if (!o.threadNodes) return { data: threads };
+						const pr = threads.data.repository.pullRequest;
+						return {
+							data: {
+								data: {
+									repository: {
+										pullRequest: {
+											...pr,
+											reviewThreads: {
+												...pr.reviewThreads,
+												nodes: o.threadNodes,
+											},
+										},
+									},
+								},
+							},
+						};
+					}
+					if (route.endsWith("/reviews")) {
+						// One page at a time, as GitHub does: 30 per page by default.
+						const perPage = Number(params?.per_page ?? 30);
+						const page = Number(params?.page ?? 1);
+						return {
+							data: allReviews.slice((page - 1) * perPage, page * perPage),
+						};
+					}
+					if (route.endsWith("/comments"))
+						return { data: o.comments ?? [ownComment] };
+					if (route.includes("GET") && route.includes("/check-runs"))
+						return { data: { check_runs: [] } };
+					return { data: {} };
+				},
+			);
+		const allReviews = o.reviews ?? [ownReview];
+		return {
+			request,
+			paginate: vi
+				.fn()
+				.mockImplementation(async (route: string) =>
+					route.endsWith("/reviews")
+						? allReviews
+						: [buildPullFile("src/review.ts", SIMPLE_PATCH)],
+				),
+		};
+	}
+
+	const repeat = buildInlineComment({
+		title: REPEAT_TITLE,
+		body: "Entries in `tokenCache` are never evicted.",
+		path: "src/review.ts",
+		line: 2,
+	});
+	const fresh = {
+		title: "Handler swallows parse errors",
+		body: "The catch block returns an empty object.",
+		severity: "P2" as const,
+		category: "bug" as const,
+		confidence: 0.9,
+		evidence: "See diff.",
+		suppressible: false,
+	};
+
+	type Fixture = ReturnType<typeof buildModelReview>;
+
+	function routeAgents(bySkill: Record<string, Fixture>, fallback: Fixture) {
+		mockGenerateObject.mockImplementation(
+			async (call: {
+				system?: string;
+				messages: [{ content: string | [unknown, { text: string }] }];
+			}) => {
+				if (typeof call.system === "string")
+					return {
+						object: { summary: "Summary." },
+						usage: { inputTokens: 10, outputTokens: 5 },
+					};
+				const content = call.messages[0].content;
+				const skill =
+					typeof content === "string"
+						? content
+						: content[1].text.replace(/^system:/, "");
+				return buildGenerateObjectResponse(bySkill[skill] ?? fallback);
+			},
+		);
+	}
+
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+		mockTriageReReview.mockReset();
+	});
+
+	it("logs one line per suppressed finding without its body", async () => {
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		routeAgents(
+			{},
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [fresh],
+				inline_comments: [repeat],
+			}),
+		);
+
+		await buildReview({ octokit: ledgerOctokit(), ...baseContext });
+
+		const lines = log.mock.calls.filter(
+			([msg]) => msg === "suppressed settled repeat",
+		);
+		expect(lines).toHaveLength(5);
+		expect(lines[0]?.[1]).toEqual({
+			title: REPEAT_TITLE,
+			path: "src/review.ts",
+			line: 2,
+			severity: repeat.severity,
+			entryId: "r0:c11:0",
+			entryStatus: "rejected",
+		});
+		log.mockRestore();
+	});
+
+	it("counts distinct settled entries, not per-agent hits, in the footer", async () => {
+		const SECOND_TITLE = "Retry loop never backs off on 429";
+		const SECOND_BODY =
+			"The `retryRequest` loop retries immediately with no delay.";
+		const secondComment = {
+			...ownComment,
+			id: 21,
+			line: 3,
+			body: `**P2** **${SECOND_TITLE}**\n\n${SECOND_BODY}`,
+		};
+		const [firstNode] = threads.data.repository.pullRequest.reviewThreads.nodes;
+		const secondNode = {
+			...firstNode,
+			comments: {
+				...firstNode.comments,
+				nodes: [
+					{ ...firstNode.comments.nodes[0], databaseId: 21 },
+					{ ...firstNode.comments.nodes[1], databaseId: 22, body: "won't fix" },
+				],
+			},
+		};
+		const second = buildInlineComment({
+			title: SECOND_TITLE,
+			body: SECOND_BODY,
+			path: "src/review.ts",
+			line: 3,
+		});
+		const only = (c: typeof repeat) =>
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [c],
+			});
+		routeAgents(
+			{
+				"code-reviewer.md": only(repeat),
+				"silent-failure-hunter.md": only(repeat),
+				"pr-test-analyzer.md": only(second),
+				"security-sast.md": only(second),
+			},
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [fresh],
+				inline_comments: [],
+			}),
+		);
+
+		const review = await buildReview({
+			octokit: ledgerOctokit({
+				comments: [ownComment, secondComment],
+				threadNodes: [firstNode, secondNode],
+			}),
+			...baseContext,
+		});
+
+		expect(review?.comments).toEqual([]);
+		expect(review?.body).toContain("ledger: warm, 2 suppressed");
+	});
+
+	it("drops a settled repeat from the posted review and tells the agents why", async () => {
+		routeAgents(
+			{},
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [fresh],
+				inline_comments: [repeat],
+			}),
+		);
+
+		const review = await buildReview({
+			octokit: ledgerOctokit(),
+			...baseContext,
+		});
+
+		expect(review?.comments).toEqual([]);
+		expect(review?.body).not.toContain(REPEAT_TITLE);
+		expect(review?.body).toContain(fresh.title);
+		expect(review?.body).toContain("ledger: warm, 1 suppressed");
+		expect(mockBuildUserMessage).toHaveBeenCalledWith(
+			expect.objectContaining({
+				priorOwnFindings: [
+					expect.objectContaining({
+						title: REPEAT_TITLE,
+						status: "rejected",
+						reason: DECLINE,
+					}),
+				],
+			}),
+		);
+	});
+
+	it("does not request changes when an agent's only findings were suppressed", async () => {
+		routeAgents(
+			{
+				"code-reviewer.md": buildModelReview({
+					event: "REQUEST_CHANGES",
+					general_findings: [],
+					inline_comments: [repeat],
+				}),
+			},
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [fresh],
+				inline_comments: [],
+			}),
+		);
+
+		const review = await buildReview({
+			octokit: ledgerOctokit(),
+			...baseContext,
+		});
+
+		expect(review?.event).toBe("COMMENT");
+	});
+
+	it("does not let a KV-open prior finding the ledger shows settled force REQUEST_CHANGES", async () => {
+		mockTriageReReview.mockResolvedValue({
+			recommendation: "FULL",
+			resolved: [],
+			newRisk: true,
+		});
+		const { client } = fakeKv();
+		await saveReviewState(
+			client,
+			"anthropic",
+			baseContext.owner,
+			baseContext.repo,
+			baseContext.pullNumber,
+			{
+				lastReviewedSha: OLD_SHA,
+				event: "REQUEST_CHANGES",
+				findings: [
+					{
+						id: findingId("src/review.ts", 2, REPEAT_TITLE),
+						path: "src/review.ts",
+						line: 2,
+						title: REPEAT_TITLE,
+						severity: "P1",
+						status: "open",
+					},
+				],
+				reviewedAt: "2026-10-01T00:00:00Z",
+			},
+		);
+		routeAgents(
+			{},
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+		);
+
+		const review = await buildReview({
+			octokit: ledgerOctokit(),
+			...baseContext,
+			kv: client,
+		});
+
+		expect(review?.event).toBe("APPROVE");
+		expect(review?.body).not.toContain("Still open from the previous review");
+		const prompt = mockBuildUserMessage.mock.calls[0]?.[0] as {
+			priorOwnFindings: unknown[];
+		};
+		expect(prompt.priorOwnFindings).toEqual([
+			expect.objectContaining({
+				title: REPEAT_TITLE,
+				status: "rejected",
+				decidedBy: "author",
+				reason: DECLINE,
+			}),
+		]);
+	});
+
+	it("keeps the review intact with a cold ledger when the GraphQL call fails", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		routeAgents(
+			{},
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [fresh],
+				inline_comments: [repeat],
+			}),
+		);
+
+		const review = await buildReview({
+			octokit: ledgerOctokit({ graphqlError: new Error("graphql down") }),
+			...baseContext,
+		});
+
+		expect(review?.comments).toEqual([
+			expect.objectContaining({ path: "src/review.ts", line: 2 }),
+		]);
+		expect(review?.body).toContain("ledger: cold");
+		warn.mockRestore();
+	});
+
+	it("makes no ledger calls and renders no ledger note on a first review", async () => {
+		routeAgents(
+			{},
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [fresh],
+				inline_comments: [repeat],
+			}),
+		);
+		const octokit = ledgerOctokit({ reviews: [] });
+
+		const review = await buildReview({ octokit, ...baseContext });
+
+		expect(octokit.request).not.toHaveBeenCalledWith(
+			"POST /graphql",
+			expect.anything(),
+		);
+		expect(review?.comments).toHaveLength(1);
+		expect(review?.body).not.toContain("ledger:");
+	});
+
+	const settledInKv: PersistedFinding = {
+		id: findingId("src/review.ts", 2, REPEAT_TITLE),
+		path: "src/review.ts",
+		line: 2,
+		title: REPEAT_TITLE,
+		severity: "P1",
+		status: "open",
+	};
+
+	function restampedConclusion(octokit: ReturnType<typeof ledgerOctokit>) {
+		const call = octokit.request.mock.calls.find(
+			([route]) => route === "POST /repos/{owner}/{repo}/check-runs",
+		);
+		return (call?.[1] as { conclusion?: string } | undefined)?.conclusion;
+	}
+
+	async function loadPersisted(client: KvClient) {
+		return loadReviewState(
+			client,
+			"anthropic",
+			baseContext.owner,
+			baseContext.repo,
+			baseContext.pullNumber,
+			null,
+		);
+	}
+
+	describe("on a triage SKIP", () => {
+		async function seedKv(finding: PersistedFinding) {
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "SKIP",
+				resolved: [],
+				newRisk: false,
+			});
+			const { client } = fakeKv();
+			await saveReviewState(
+				client,
+				"anthropic",
+				baseContext.owner,
+				baseContext.repo,
+				baseContext.pullNumber,
+				{
+					lastReviewedSha: OLD_SHA,
+					event: "REQUEST_CHANGES",
+					findings: [finding],
+					reviewedAt: "2026-10-01T00:00:00Z",
+				},
+			);
+			return client;
+		}
+
+		it("approves via the check-run when the ledger settles every KV-open finding after a COMMENTED review", async () => {
+			const client = await seedKv(settledInKv);
+			const octokit = ledgerOctokit({
+				reviews: [{ ...ownReview, state: "COMMENTED" }],
+			});
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				kv: client,
+			});
+
+			expect(decision).toBeNull();
+			expect(restampedConclusion(octokit)).toBe("success");
+			expect((await loadPersisted(client))?.event).toBe("APPROVE");
+		});
+
+		it("posts an APPROVE instead of skipping when the ledger settles everything and the latest own review requested changes", async () => {
+			const client = await seedKv(settledInKv);
+			routeAgents(
+				{},
+				buildModelReview({
+					event: "COMMENT",
+					general_findings: [],
+					inline_comments: [],
+				}),
+			);
+			const octokit = ledgerOctokit();
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				kv: client,
+			});
+
+			expect(decision?.event).toBe("APPROVE");
+			expect(restampedConclusion(octokit)).toBeUndefined();
+		});
+
+		it("still requests changes when the ledger does not settle the KV-open finding", async () => {
+			const client = await seedKv({
+				...settledInKv,
+				id: findingId("src/other.ts", 40, "Retry loop never backs off"),
+				path: "src/other.ts",
+				line: 40,
+				title: "Retry loop never backs off",
+			});
+			const octokit = ledgerOctokit();
+
+			await buildReview({ octokit, ...baseContext, kv: client });
+
+			expect(restampedConclusion(octokit)).toBe("action_required");
+		});
+
+		it("keeps the KV verdict when the ledger cannot be fetched", async () => {
+			const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+			const client = await seedKv(settledInKv);
+			const octokit = ledgerOctokit({
+				graphqlError: new Error("graphql down"),
+			});
+
+			await buildReview({ octokit, ...baseContext, kv: client });
+
+			expect(restampedConclusion(octokit)).toBe("action_required");
+			expect((await loadPersisted(client))?.event).toBe("REQUEST_CHANGES");
+			warn.mockRestore();
+		});
+
+		it("makes no ledger calls when nothing is open", async () => {
+			const client = await seedKv({ ...settledInKv, status: "resolved" });
+			const octokit = ledgerOctokit({
+				reviews: [{ ...ownReview, state: "COMMENTED" }],
+			});
+
+			await buildReview({ octokit, ...baseContext, kv: client });
+
+			expect(octokit.request).not.toHaveBeenCalledWith(
+				"POST /graphql",
+				expect.anything(),
+			);
+			expect(restampedConclusion(octokit)).toBe("success");
+		});
+
+		const cleanAgents = () =>
+			routeAgents(
+				{},
+				buildModelReview({
+					event: "COMMENT",
+					general_findings: [],
+					inline_comments: [],
+				}),
+			);
+
+		it("posts an APPROVE when a COMMENTED review followed the standing change request", async () => {
+			const client = await seedKv(settledInKv);
+			cleanAgents();
+			const octokit = ledgerOctokit({
+				reviews: [
+					{ ...ownReview, state: "CHANGES_REQUESTED" },
+					{ ...ownReview, id: 101, state: "COMMENTED" },
+				],
+			});
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				kv: client,
+			});
+
+			expect(decision?.event).toBe("APPROVE");
+		});
+
+		it("posts an APPROVE when the standing approval was dismissed", async () => {
+			const client = await seedKv(settledInKv);
+			cleanAgents();
+			const octokit = ledgerOctokit({
+				reviews: [{ ...ownReview, state: "DISMISSED" }],
+			});
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				kv: client,
+			});
+
+			expect(decision?.event).toBe("APPROVE");
+		});
+
+		it("re-stamps instead of posting when an approval stands under a later comment", async () => {
+			const client = await seedKv(settledInKv);
+			const octokit = ledgerOctokit({
+				reviews: [
+					{ ...ownReview, state: "APPROVED" },
+					{ ...ownReview, id: 101, state: "COMMENTED" },
+				],
+			});
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				kv: client,
+			});
+
+			expect(decision).toBeNull();
+			expect(restampedConclusion(octokit)).toBe("success");
+		});
+	});
+
+	describe("when a re-review round has nothing new", () => {
+		const onlyRepeat = buildModelReview({
+			event: "COMMENT",
+			general_findings: [],
+			inline_comments: [repeat],
+		});
+		const priorOwn = (state: string, id = ownReview.id) => ({
+			...ownReview,
+			id,
+			state,
+		});
+
+		it("posts nothing, re-stamps the check-run and advances KV state after a COMMENTED review", async () => {
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "FULL",
+				resolved: [],
+				newRisk: true,
+			});
+			const { client } = fakeKv();
+			await saveReviewState(
+				client,
+				"anthropic",
+				baseContext.owner,
+				baseContext.repo,
+				baseContext.pullNumber,
+				{
+					lastReviewedSha: OLD_SHA,
+					event: "COMMENT",
+					findings: [settledInKv],
+					reviewedAt: "2026-10-01T00:00:00Z",
+				},
+			);
+			routeAgents({}, onlyRepeat);
+			const octokit = ledgerOctokit({ reviews: [priorOwn("COMMENTED")] });
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				kv: client,
+			});
+
+			expect(decision).toBeNull();
+			expect(restampedConclusion(octokit)).toBe("neutral");
+			expect((await loadPersisted(client))?.lastReviewedSha).toBe(
+				baseContext.headSha,
+			);
+		});
+
+		it("saves settled findings as resolved so a later cold-ledger push cannot block on them", async () => {
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "FULL",
+				resolved: [],
+				newRisk: true,
+			});
+			const { client } = fakeKv();
+			await saveReviewState(
+				client,
+				"anthropic",
+				baseContext.owner,
+				baseContext.repo,
+				baseContext.pullNumber,
+				{
+					lastReviewedSha: OLD_SHA,
+					event: "COMMENT",
+					findings: [settledInKv],
+					reviewedAt: "2026-10-01T00:00:00Z",
+				},
+			);
+			routeAgents({}, onlyRepeat);
+
+			const silent = await buildReview({
+				octokit: ledgerOctokit({ reviews: [priorOwn("COMMENTED")] }),
+				...baseContext,
+				kv: client,
+			});
+
+			expect(silent).toBeNull();
+			const saved = await loadPersisted(client);
+			expect(saved?.findings.filter((f) => f.status === "open")).toEqual([]);
+
+			const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "INCREMENTAL",
+				resolved: [],
+				newRisk: false,
+			});
+			routeAgents(
+				{},
+				buildModelReview({
+					event: "COMMENT",
+					general_findings: [],
+					inline_comments: [],
+				}),
+			);
+			const later = ledgerOctokit({
+				reviews: [priorOwn("COMMENTED")],
+				graphqlError: new Error("graphql down"),
+			});
+
+			const next = await buildReview({
+				octokit: later,
+				...baseContext,
+				headSha: "fedcba0987654321",
+				kv: client,
+			});
+
+			expect(next?.event).not.toBe("REQUEST_CHANGES");
+			expect(restampedConclusion(later)).not.toBe("action_required");
+			warn.mockRestore();
+		});
+
+		it("posts the APPROVE when a COMMENTED review followed a change request", async () => {
+			routeAgents({}, onlyRepeat);
+			const octokit = ledgerOctokit({
+				reviews: [priorOwn("CHANGES_REQUESTED"), priorOwn("COMMENTED", 101)],
+			});
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(decision?.event).toBe("APPROVE");
+		});
+
+		it("posts the APPROVE when the last approval was dismissed", async () => {
+			routeAgents({}, onlyRepeat);
+			const octokit = ledgerOctokit({ reviews: [priorOwn("DISMISSED")] });
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(decision?.event).toBe("APPROVE");
+		});
+
+		it("stays silent when an approval stands under a later comment", async () => {
+			routeAgents({}, onlyRepeat);
+			const octokit = ledgerOctokit({
+				reviews: [priorOwn("APPROVED"), priorOwn("COMMENTED", 101)],
+			});
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(decision).toBeNull();
+			expect(restampedConclusion(octokit)).toBe("success");
+		});
+
+		it("stays silent when the history holds only comments", async () => {
+			routeAgents({}, onlyRepeat);
+			const octokit = ledgerOctokit({ reviews: [priorOwn("COMMENTED")] });
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(decision).toBeNull();
+			expect(restampedConclusion(octokit)).toBe("neutral");
+		});
+
+		it("re-stamps success when the latest own review approved", async () => {
+			routeAgents({}, onlyRepeat);
+			const octokit = ledgerOctokit({
+				reviews: [priorOwn("CHANGES_REQUESTED"), priorOwn("APPROVED", 101)],
+			});
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(decision).toBeNull();
+			expect(restampedConclusion(octokit)).toBe("success");
+		});
+
+		it("reads the latest own review from the last page of a long review list", async () => {
+			routeAgents({}, onlyRepeat);
+			const reviews = [
+				...Array.from({ length: 30 }, (_, i) => ({
+					...priorOwn("COMMENTED"),
+					id: 200 + i,
+				})),
+				priorOwn("CHANGES_REQUESTED"),
+			];
+			const octokit = ledgerOctokit({ reviews });
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(decision?.event).toBe("APPROVE");
+		});
+
+		it("posts the APPROVE when the latest own review requested changes", async () => {
+			routeAgents({}, onlyRepeat);
+			const octokit = ledgerOctokit({
+				reviews: [priorOwn("APPROVED"), priorOwn("CHANGES_REQUESTED", 101)],
+			});
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(decision?.event).toBe("APPROVE");
+			expect(restampedConclusion(octokit)).toBeUndefined();
+		});
+
+		it("still posts its APPROVE on a first review with zero findings", async () => {
+			routeAgents(
+				{},
+				buildModelReview({
+					event: "COMMENT",
+					general_findings: [],
+					inline_comments: [],
+				}),
+			);
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit({ reviews: [] }),
+				...baseContext,
+			});
+
+			expect(decision?.event).toBe("APPROVE");
+		});
+
+		it("posts when an agent errored, even with zero findings", async () => {
+			const error = vi.spyOn(console, "error").mockImplementation(() => {});
+			routeAgents({}, onlyRepeat);
+			const route = mockGenerateObject.getMockImplementation();
+			mockGenerateObject.mockImplementation(
+				async (call: { messages: [{ content: unknown }] }) => {
+					if (JSON.stringify(call.messages).includes("code-reviewer.md"))
+						throw new Error("agent crashed");
+					return route?.(call);
+				},
+			);
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit({ reviews: [priorOwn("COMMENTED")] }),
+				...baseContext,
+			});
+
+			expect(decision?.body).toContain("failed to complete");
+			error.mockRestore();
+		});
+
+		it("posts a fresh finding normally after an approved review", async () => {
+			routeAgents(
+				{},
+				buildModelReview({
+					event: "COMMENT",
+					general_findings: [fresh],
+					inline_comments: [repeat],
+				}),
+			);
+			const octokit = ledgerOctokit({ reviews: [priorOwn("APPROVED")] });
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(decision?.event).toBe("COMMENT");
+			expect(decision?.body).toContain(fresh.title);
+		});
+
+		it("posts when the review was explicitly forced", async () => {
+			routeAgents({}, onlyRepeat);
+			const octokit = ledgerOctokit({ reviews: [priorOwn("COMMENTED")] });
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				force: true,
+			});
+
+			expect(decision?.event).toBe("APPROVE");
+		});
 	});
 });

@@ -72,12 +72,17 @@ export const makeLabels = (over: Partial<LabelFile> = {}): LabelFile => ({
 });
 
 export const makeResult = (
-	rounds: { posted: string[]; suppressed?: string[] }[],
+	rounds: {
+		posted: string[];
+		suppressed?: string[];
+		matchedTo?: Record<string, string>;
+	}[],
 ): ReplayResult => ({
 	fixtureId: "fx",
 	rounds: rounds.map((r, index) => ({
 		index,
 		posted: r.posted,
 		suppressed: r.suppressed ?? [],
+		...(r.matchedTo ? { matchedTo: r.matchedTo } : {}),
 	})),
 });

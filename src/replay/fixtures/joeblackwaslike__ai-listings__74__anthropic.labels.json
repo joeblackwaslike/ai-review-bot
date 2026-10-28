@@ -329,6 +329,19 @@
 			"confirmed": true
 		}
 	],
-	"negativePairs": [],
+	"negativePairs": [
+		{
+			"a": "r0:body:1",
+			"b": "r4:c4372052080:1"
+		},
+		{
+			"a": "r1:body:5",
+			"b": "r4:c4372052080:1"
+		},
+		{
+			"a": "r1:body:6",
+			"b": "r4:c4372052080:1"
+		}
+	],
 	"allowedSuppression": []
 }
