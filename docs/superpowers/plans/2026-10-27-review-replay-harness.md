@@ -150,7 +150,7 @@
 
 - [ ] **Step 1: Record** each PR and provider: `npm run build >/dev/null; node dist/cli.js replay --record https://github.com/joeblackwaslike/stealth-browser/pull/1 --provider anthropic --bot anthropicreviewbot`, then the same for the other five combinations (Codex for the three PRs, Claude for the other two PRs).
 - [ ] **Step 2: Verify the incident numbers are reproduced**: `node dist/cli.js replay` shows, for stealth-browser#1 Claude, four rounds and the `throttle.ts` inFlight claim present in all four, and for ai-listings#74 Claude the rollout-restart claim in rounds 3 and 4. If a number is off, fix the recorder or labeler, not the expected values.
-- [ ] **Step 3: Hand-confirm the spot-check set**: for each fixture, edit the `.labels.json` so every fixed label, every repeat pair, and `allowedSuppression` has `confirmed: true`, then set `provisional: false`. Joe does the spot-check, so mark the committed labels `provisional: true` and list the open confirmations in the PR description.
+- [ ] **Step 3: Verify the labels**: an agent checks each label and repeat pair against the PR threads and commits and corrects it, then Codex cross-checks independently. Agreed items get `confirmed: true`; items the two models disagree on are set to `unadjudicated` and counted. Then set `provisional: false`.
 - [ ] **Step 4: Run** `npm run typecheck && npm run lint && npm test` and update the snapshot with `npx vitest run -u src/replay/snapshot.test.ts`. Expected: PASS.
 - [ ] **Step 5: Commit** `test(replay): record incident PR fixtures with provisional labels`.
 

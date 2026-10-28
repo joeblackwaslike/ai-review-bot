@@ -73,7 +73,7 @@ These are the pieces and how they connect. File and flag names are my calls and 
 
 - Types in `src/replay/types.ts`. A `ReplayFixture` holds the PR identity, the provider, and an ordered list of rounds. Each round has a head SHA, the commits and size since the previous round, the posted findings, and the dispositions the author gave before the next round.
 - Recorder in `src/replay/record.ts`. Given a PR, it reads bot reviews, inline comments, replies, thread resolution, and reactions through `gh`, and writes a fixture under `test/fixtures/replay/`.
-- Labeler in `src/replay/label.ts`. It reads a recorded fixture and assigns each finding a label and a confidence, with the evidence quoted. Labels are saved beside the fixture so a person can read and correct them. Joe spot-checks them once.
+- Labeler in `src/replay/label.ts`. It reads a recorded fixture and assigns each finding a label and a confidence, with the evidence quoted. Labels are saved beside the fixture so they can be read and corrected. An agent verifies them against the PR threads and commits, and a different model (Codex) cross-checks the result.
 - Engine in `src/replay/replay.ts`. It takes a fixture and a pipeline under test, feeds each round's findings to the pipeline with the ledger of earlier rounds, and records what was posted and what was suppressed.
 - Pipeline interface. A function from `{round, findings, ledger}` to `{posted, suppressed}`. v1 ships two: "as recorded" (nothing suppressed, the real history) and "today's code" (the existing post-model stages). Project 2 adds a third.
 - Metrics in `src/replay/metrics.ts`, the report printer, and a `ai-review replay` command. Without flags it replays every fixture and prints the table. `--record <pr-url>` records a PR. `--live --rounds <n> --max-cost <usd>` runs the live tier.
@@ -90,7 +90,7 @@ For each chosen recorded round, fetch the PR diff at that round's SHA, run the r
 - The recall guard applies to the first occurrence of a claim. A finding labeled fixed in round 1 must still be posted in round 1. The same claim re-raised in round 3 is a repeat, and suppressing it is correct.
 - To detect "fixed" offline, the recorder also stores, for each commit between rounds, the changed file paths and hunk line ranges. It does not store diff bodies. The labeler uses these with the reply text, and makes no network calls.
 - Fixtures are per provider. A reply is credited to the bot whose thread it is in. Third-party bots such as `chatgpt-codex-connector` are not counted as findings or as responders. "The author" is the PR author's account, which is also the account the implementer agent pushes and replies as.
-- The committed baseline starts from the automatic labels and is marked provisional. It becomes final after Joe's one-time spot-check of the labels and repeat pairs. The Vitest test passes either way.
+- The committed baseline starts from the automatic labels and is marked provisional. It becomes final after agent verification and the Codex cross-check. Labels the two models still disagree on stay unadjudicated, and their count is recorded. The Vitest test passes either way.
 
 ## Hardening decisions
 
