@@ -499,6 +499,35 @@ describe("watchPr", () => {
 		expect(submitReview).toHaveBeenCalledTimes(1);
 	});
 
+	it("does not re-review a head that buildReview went silent on, but reviews the next head", async () => {
+		const request = vi
+			.fn()
+			.mockResolvedValueOnce(pollResponse({ headSha: "sha1" }))
+			.mockResolvedValueOnce(pollResponse({ headSha: "sha1" }))
+			.mockResolvedValue(pollResponse({ headSha: "sha2" }));
+		const submitReview = vi
+			.fn()
+			.mockResolvedValueOnce(noNewReview)
+			.mockResolvedValue(posted);
+
+		await watchPr({
+			owner: "o",
+			repo: "r",
+			pullNumber: 5,
+			pollOctokit: { request },
+			targets: [buildTarget("anthropic")],
+			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
+			sleep: vi.fn().mockResolvedValue(undefined),
+			log: () => {},
+			submitReview,
+			maxCycles: 4,
+		});
+
+		expect(
+			submitReview.mock.calls.map(([args]) => args.pullRequest.head.sha),
+		).toEqual(["sha1", "sha2"]);
+	});
+
 	// ai-review-bot-aou: a fresh process (restart, crash, sleep/wake) resets
 	// hasPostedEver/lastReviewedSha to their cold-start defaults, which forces
 	// force:true on cycle 1 (see Bug A above) — bypassing buildReview's triage

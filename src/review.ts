@@ -1424,9 +1424,12 @@ export async function buildReview(
 	 * explained, since a FULL pass did see these findings' files and chose not
 	 * to restate them, while an INCREMENTAL pass never saw them at all. */
 	let incrementalPass = false;
-	const hasOwnReview = existingReviews.some((review) =>
-		(review.body ?? "").includes(`### ${context.commentPrefix}`),
-	);
+	const latestOwnReview = existingReviews
+		.filter((review) =>
+			(review.body ?? "").includes(`### ${context.commentPrefix}`),
+		)
+		.at(-1);
+	const hasOwnReview = latestOwnReview !== undefined;
 	const fetchLedger = () =>
 		loadLedger(context.octokit, {
 			owner: context.owner,
@@ -1445,6 +1448,22 @@ export async function buildReview(
 					priorOwnReview,
 				)
 			: null;
+	const carryVerdictForward = async (event: ReviewState["event"]) => {
+		if (context.kv && state) {
+			state.event = event;
+			state.lastReviewedSha = context.headSha;
+			state.reviewedAt = new Date().toISOString();
+			await saveReviewState(
+				context.kv,
+				context.provider,
+				context.owner,
+				context.repo,
+				context.pullNumber,
+				state,
+			);
+		}
+		await restampCheckRun(context, event);
+	};
 
 	if (
 		context.kv &&
@@ -1493,18 +1512,7 @@ export async function buildReview(
 				);
 			}
 			const stillOpen = state.findings.some(isOpen);
-			state.event = stillOpen ? state.event : "APPROVE";
-			state.lastReviewedSha = context.headSha;
-			state.reviewedAt = new Date().toISOString();
-			await saveReviewState(
-				context.kv,
-				context.provider,
-				context.owner,
-				context.repo,
-				context.pullNumber,
-				state,
-			);
-			await restampCheckRun(context, state.event);
+			await carryVerdictForward(stillOpen ? state.event : "APPROVE");
 			return null; // nothing to post — the check-run carries the verdict
 		}
 
@@ -1936,6 +1944,22 @@ export async function buildReview(
 			: cleanDelta
 				? "APPROVE"
 				: modelReview.event;
+
+	if (
+		finalEvent === "APPROVE" &&
+		latestOwnReview &&
+		latestOwnReview.state !== "CHANGES_REQUESTED" &&
+		!context.force
+	) {
+		console.log("nothing new since the last review; posting nothing", {
+			suppressed: suppressedCount,
+			agents: agentResults.length,
+		});
+		await carryVerdictForward(
+			latestOwnReview.state === "APPROVED" ? "APPROVE" : "COMMENT",
+		);
+		return null;
+	}
 
 	let summary = "";
 	if (finalEvent !== "APPROVE") {
