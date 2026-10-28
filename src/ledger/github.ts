@@ -31,10 +31,11 @@ const PER_PAGE = 100;
 export function buildLedger(e: LedgerEvidence): Ledger {
 	const isDecider = (r: DecisionReply): boolean =>
 		!r.isBot &&
+		r.author !== "" &&
 		(r.author === e.prAuthor ||
 			DECIDER_ASSOCIATIONS.has(r.authorAssociation ?? ""));
 
-	const deciderLogins = new Set([e.prAuthor]);
+	const deciderLogins = new Set<string>(e.prAuthor ? [e.prAuthor] : []);
 	for (const t of e.threads)
 		for (const r of t.replies) if (isDecider(r)) deciderLogins.add(r.author);
 
@@ -111,6 +112,11 @@ interface ThreadsResponse {
 			};
 		};
 	};
+}
+
+interface GraphqlEnvelope {
+	data?: ThreadsResponse | null;
+	errors?: { message?: string }[];
 }
 
 const THREADS_QUERY = `
@@ -217,16 +223,24 @@ export async function fetchLedgerEvidence(
 	let prAuthor = "";
 	let cursor: string | null = null;
 	for (;;) {
-		const res: { data: { data: ThreadsResponse } } = await octokit.request<{
-			data: ThreadsResponse;
-		}>("POST /graphql", {
-			query: THREADS_QUERY,
-			owner: o.owner,
-			repo: o.repo,
-			pr: o.pull,
-			...(cursor ? { cursor } : {}),
-		});
-		const pr = res.data.data.repository.pullRequest;
+		const res: { data: GraphqlEnvelope } =
+			await octokit.request<GraphqlEnvelope>("POST /graphql", {
+				query: THREADS_QUERY,
+				owner: o.owner,
+				repo: o.repo,
+				pr: o.pull,
+				...(cursor ? { cursor } : {}),
+			});
+		const pr = res.data.data?.repository?.pullRequest;
+		const errors = res.data.errors;
+		if (Array.isArray(errors) && errors.length > 0)
+			throw new Error(
+				`GraphQL review threads query failed: ${errors[0]?.message ?? "unknown error"}`,
+			);
+		if (!pr?.reviewThreads)
+			throw new Error(
+				`GraphQL review threads response has no pullRequest.reviewThreads for ${o.owner}/${o.repo}#${o.pull}`,
+			);
 		prAuthor = pr.author?.login ?? prAuthor;
 		for (const t of pr.reviewThreads.nodes) {
 			const [first, ...rest] = t.comments.nodes;

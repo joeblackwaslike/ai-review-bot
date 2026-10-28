@@ -103,6 +103,28 @@ describe("buildLedger", () => {
 		expect(e.decidedBy).toBeNull();
 	});
 
+	it("never lets a null-author reply settle when the PR author is also null", () => {
+		const [e] = buildLedger({
+			prAuthor: "",
+			claims: [claim(10)],
+			threads: [thread({ replies: [reply({ author: "" })] })],
+		});
+		expect(e.status).toBe("open");
+	});
+
+	it("never counts a null-author reply as a collaborator", () => {
+		const [e] = build([
+			thread({
+				isResolved: true,
+				resolvedBy: "",
+				replies: [
+					reply({ author: "", authorAssociation: "MEMBER", body: "hm" }),
+				],
+			}),
+		]);
+		expect(e.status).toBe("open");
+	});
+
 	it("leaves a claim with no thread open", () => {
 		expect(build([])[0].status).toBe("open");
 	});
@@ -193,6 +215,31 @@ describe("fetchLedgerEvidence", () => {
 			authorAssociation: "OWNER",
 			isBot: true,
 		});
+	});
+
+	it("throws on a GraphQL errors array even with partial data", async () => {
+		const good = fake([]);
+		const octokit: RequestLike = {
+			request: (async (route: string, params?: Record<string, unknown>) =>
+				route === "POST /graphql"
+					? {
+							data: {
+								data: page([t(10)], null),
+								errors: [{ message: "rate limited" }],
+							},
+						}
+					: good.request(route, params)) as RequestLike["request"],
+		};
+		await expect(fetchLedgerEvidence(octokit, opts)).rejects.toThrow(
+			/rate limited/,
+		);
+	});
+
+	it("throws a descriptive error for a null pullRequest", async () => {
+		const octokit = fake([{ repository: { pullRequest: null } }]);
+		await expect(fetchLedgerEvidence(octokit, opts)).rejects.toThrow(
+			/no pullRequest\.reviewThreads/,
+		);
 	});
 
 	it("throws when a thread has more comments than one page", async () => {
