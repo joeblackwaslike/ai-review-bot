@@ -13,7 +13,8 @@ const DEFERRED =
 	/follow-?up|out of scope|separate pr|later pr|will address (this )?later|tracked in/i;
 const REJECTED =
 	/\bintentional(ly)?\b|\bno change\b|\bby design\b|no defect|working as intended|won'?t fix|not a (bug|problem|issue)|\bkept (it |this )?as[- ]is\b|\balready done\b/i;
-const FIX_REF = /\bfixed in\b|\b(?=[0-9a-f]*\d)[0-9a-f]{7,40}\b/i;
+const FIX_REF =
+	/\bfixed in\b|\b(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{7,40}\b/i;
 const REJECTING_REACTIONS = new Set(["-1", "confused"]);
 const HUNK_SLACK = 3;
 

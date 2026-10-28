@@ -127,6 +127,13 @@ describe("labelFixture", () => {
 		);
 	});
 
+	it("does not read a plain decimal number as a commit reference", () => {
+		expect(
+			first(fixture({ threads: [thread("See comment 1234567 above")] }))
+				.label,
+		).toBe("unadjudicated");
+	});
+
 	it('labels "Kept as is" and "Already done" replies as rejected even when a later commit touched the flagged lines', () => {
 		const commit: CommitMeta = {
 			sha: "1a90c7f",
