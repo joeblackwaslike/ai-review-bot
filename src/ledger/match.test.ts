@@ -320,7 +320,7 @@ describe("findSettledMatch", () => {
 		expect(findSettledMatch(restart, [same])).toBe(same);
 	});
 
-	it("attributes a finding to the most similar of several matching settled entries", () => {
+	it("does not body-match a sibling defect in the same snippet, and attributes to the most similar entry", () => {
 		const healthCheck = entry({
 			id: "health",
 			line: 15,
@@ -340,7 +340,35 @@ describe("findSettledMatch", () => {
 			title: "Credential check result not actually used to gate the fetch",
 			body: "The health-check snippet prints `200` or `not configured` but the doc doesn't show the result controlling whether the subsequent 'Fetching a page' curl call runs. An agent could run the health check, see non-200 output, and still proceed to the fetch snippet. This mirrors the previously-flagged 'credential-unset check doesn't gate subsequent curl calls' issue.",
 		};
+		expect(findSettledMatch(f, [healthCheck])).toBeNull();
 		expect(findSettledMatch(f, [healthCheck, fetch])).toBe(fetch);
 		expect(findSettledMatch(f, [fetch, healthCheck])).toBe(fetch);
+	});
+
+	it("does not treat product names like GitHub or TypeScript as a shared code identifier", () => {
+		const e = entry({
+			path: ".github/workflows/ci.yml",
+			line: 12,
+			title: "Node version is not pinned in CI",
+			body: "The GitHub Actions workflow installs the latest TypeScript compiler and Node on every run, so the compiler version can change between runs. Pin the TypeScript version in the workflow.",
+		});
+		const f = {
+			path: null,
+			title:
+				"GitHub Actions workflow does not pin the TypeScript compiler version",
+		};
+		expect(findSettledMatch(f, [e])).toBeNull();
+	});
+
+	it("breaks an exact score tie by latest round, then lowest id, whatever the ledger order", () => {
+		const title = "`listFindings` drops the body column in the SQL query";
+		const older = entry({ id: "b", round: 1, title });
+		const newer = entry({ id: "c", round: 2, title });
+		const sameRound = entry({ id: "a", round: 2, title });
+		const f = { path: "src/a.ts", line: 10, title };
+		expect(findSettledMatch(f, [older, newer])).toBe(newer);
+		expect(findSettledMatch(f, [newer, older])).toBe(newer);
+		expect(findSettledMatch(f, [newer, sameRound])).toBe(sameRound);
+		expect(findSettledMatch(f, [sameRound, newer])).toBe(sameRound);
 	});
 });

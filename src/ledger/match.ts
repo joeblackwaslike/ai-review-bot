@@ -20,7 +20,7 @@ export const CROSS_ROUND_MATCH: ClaimMatchOptions = {
 /** Bars measured on the six replay fixtures; see the sprint 2 task 3 report. */
 export const BODY_MATCH = {
 	lineWindow: DEFAULT_CLAIM_MATCH.lineWindow,
-	bodySimilarity: 0.19,
+	bodySimilarity: 0.25,
 	crossSurfaceOverlap: 0.6,
 };
 
@@ -35,7 +35,9 @@ function overlap(a: Set<string>, b: Set<string>): number {
 	return shared / Math.min(a.size, b.size);
 }
 
-const CODE_SHAPED = /[a-z]{2}[A-Z]|[A-Za-z]_[A-Za-z]|^\$/;
+/** camelCase starting with two lowercase letters, snake_case or SCREAMING_CASE, or a $name. PascalCase (GitHub, TypeScript, OpenAI) and eBay-style names do not qualify. */
+const CODE_SHAPED =
+	/^[a-z]{2}[a-z0-9]*[A-Z]|[A-Za-z0-9]_[A-Za-z0-9]|^\$[A-Za-z_]/;
 const IDENTIFIER = /[A-Za-z_$][A-Za-z0-9_$]*/g;
 const PRODUCT_NAME = /\b[a-z][A-Z][a-z]+\b/g;
 const TEST_GAP =
@@ -49,7 +51,7 @@ const withoutProductNames = <T extends ClaimLike>(c: T): T => ({
 
 const isTestGap = (c: ClaimLike) => TEST_GAP.test(c.title);
 
-/** camelCase, snake_case and $-prefixed names. Plain words in backticks are left out: in a body they are prose far more often than code. */
+/** Plain words in backticks are left out: in a body they are prose far more often than code. */
 function codeIdentifiers(text: string): Set<string> {
 	const ids = new Set<string>();
 	for (const match of text.matchAll(IDENTIFIER)) {
@@ -116,7 +118,8 @@ const RULES: Rule[] = [
 
 /** The settled entry the finding restates, or null. Open entries never match, a
  * test-gap finding never matches a defect finding, and when several entries
- * match at the first matching rule the most similar one wins. */
+ * match at the first matching rule the most similar one wins (ties: latest round,
+ * then lowest id). */
 export function findSettledMatch(
 	finding: ClaimLike,
 	ledger: Ledger,
@@ -128,11 +131,15 @@ export function findSettledMatch(
 	for (const rule of RULES) {
 		const hits = settled.filter(({ e }) => rule(f, e));
 		if (hits.length === 0) continue;
-		let best = hits[0];
-		for (const hit of hits) {
-			if (similarity(f, hit.e) > similarity(f, best.e)) best = hit;
-		}
-		return best.entry;
+		const ranked = hits
+			.map((hit) => ({ ...hit, score: similarity(f, hit.e) }))
+			.sort(
+				(a, b) =>
+					b.score - a.score ||
+					b.entry.round - a.entry.round ||
+					(a.entry.id < b.entry.id ? -1 : a.entry.id > b.entry.id ? 1 : 0),
+			);
+		return ranked[0].entry;
 	}
 	return null;
 }
