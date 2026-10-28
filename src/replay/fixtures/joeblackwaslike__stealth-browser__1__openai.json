@@ -1,0 +1,1496 @@
+{
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "stealth-browser",
+	"pull": 1,
+	"provider": "openai",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-10-28T02:10:10.182Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 5642772185,
+			"provider": "openai",
+			"submittedAt": "2026-10-25T10:38:37Z",
+			"headSha": "de70f5e9961aa4a59d0f92c4189923bcbdf6ee00",
+			"baseSha": "1e49d776141cd71f4a9b3d62b82a329c9017b42b",
+			"mergeBase": "1e49d776141cd71f4a9b3d62b82a329c9017b42b",
+			"triggerAt": "2026-10-25T10:20:13Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "f60b224df448fe0edf892dec9db003f75fd39a86",
+					"committedAt": "2026-10-25T10:07:05Z",
+					"files": [
+						{
+							"path": ".dockerignore",
+							"ranges": [[1, 7]]
+						},
+						{
+							"path": ".gitignore",
+							"ranges": [[11, 15]]
+						},
+						{
+							"path": "Dockerfile",
+							"ranges": [[1, 19]]
+						},
+						{
+							"path": "LICENSE",
+							"ranges": [[1, 21]]
+						},
+						{
+							"path": "README.md",
+							"ranges": [[1, 218]]
+						},
+						{
+							"path": "biome.json",
+							"ranges": [[1, 23]]
+						},
+						{
+							"path": "camoufox/Dockerfile",
+							"ranges": [[1, 137]]
+						},
+						{
+							"path": "camoufox/NOTICE",
+							"ranges": [[1, 25]]
+						},
+						{
+							"path": "camoufox/launch_server.py",
+							"ranges": [[1, 92]]
+						},
+						{
+							"path": "deploy/deploy.sh",
+							"ranges": [[1, 28]]
+						},
+						{
+							"path": "deploy/k8s/camoufox-deployment.yaml",
+							"ranges": [[1, 60]]
+						},
+						{
+							"path": "deploy/k8s/camoufox-service.yaml",
+							"ranges": [[1, 11]]
+						},
+						{
+							"path": "deploy/k8s/gateway-deployment.yaml",
+							"ranges": [[1, 60]]
+						},
+						{
+							"path": "deploy/k8s/gateway-service.yaml",
+							"ranges": [[1, 11]]
+						},
+						{
+							"path": "deploy/k8s/ingress.yaml",
+							"ranges": [[1, 19]]
+						},
+						{
+							"path": "deploy/k8s/kustomization.yaml",
+							"ranges": [[1, 17]]
+						},
+						{
+							"path": "deploy/k8s/namespace.yaml",
+							"ranges": [[1, 4]]
+						},
+						{
+							"path": "deploy/k8s/pvc.yaml",
+							"ranges": [[1, 11]]
+						},
+						{
+							"path": "docs/superpowers/plans/2026-10-16-stealth-browser.md",
+							"ranges": [[1, 341]]
+						},
+						{
+							"path": "docs/superpowers/specs/2026-10-16-stealth-browser-design.md",
+							"ranges": [[1, 199]]
+						},
+						{
+							"path": "package.json",
+							"ranges": [[1, 34]]
+						},
+						{
+							"path": "pnpm-lock.yaml",
+							"ranges": [[1, 910]]
+						},
+						{
+							"path": "profiles/fingerprint.json",
+							"ranges": [[1, 668]]
+						},
+						{
+							"path": "scripts/build.sh",
+							"ranges": [[1, 18]]
+						},
+						{
+							"path": "scripts/gen_fingerprint.py",
+							"ranges": [[1, 58]]
+						},
+						{
+							"path": "scripts/login.py",
+							"ranges": [[1, 244]]
+						},
+						{
+							"path": "scripts/smoke.ts",
+							"ranges": [[1, 175]]
+						},
+						{
+							"path": "scripts/verify-fingerprint.ts",
+							"ranges": [[1, 41]]
+						},
+						{
+							"path": "src/app.ts",
+							"ranges": [[1, 194]]
+						},
+						{
+							"path": "src/browser.ts",
+							"ranges": [[1, 137]]
+						},
+						{
+							"path": "src/config.ts",
+							"ranges": [[1, 38]]
+						},
+						{
+							"path": "src/detect.ts",
+							"ranges": [[1, 69]]
+						},
+						{
+							"path": "src/profiles.ts",
+							"ranges": [[1, 61]]
+						},
+						{
+							"path": "src/server.ts",
+							"ranges": [[1, 41]]
+						},
+						{
+							"path": "src/state-store.ts",
+							"ranges": [[1, 159]]
+						},
+						{
+							"path": "src/throttle.ts",
+							"ranges": [[1, 102]]
+						},
+						{
+							"path": "src/url-guard.ts",
+							"ranges": [[1, 53]]
+						},
+						{
+							"path": "test/app.test.ts",
+							"ranges": [[1, 217]]
+						},
+						{
+							"path": "test/browser.test.ts",
+							"ranges": [[1, 37]]
+						},
+						{
+							"path": "test/config.test.ts",
+							"ranges": [[1, 27]]
+						},
+						{
+							"path": "test/detect.test.ts",
+							"ranges": [[1, 232]]
+						},
+						{
+							"path": "test/fingerprint.test.ts",
+							"ranges": [[1, 33]]
+						},
+						{
+							"path": "test/fixtures/amazon-search-ok.html",
+							"ranges": []
+						},
+						{
+							"path": "test/fixtures/ebay-challenge.html",
+							"ranges": [[1, 1]]
+						},
+						{
+							"path": "test/fixtures/ebay-error-page.html",
+							"ranges": [[1, 10]]
+						},
+						{
+							"path": "test/fixtures/ebay-sold-ok.html",
+							"ranges": [[1, 1]]
+						},
+						{
+							"path": "test/fixtures/reddit-login-wall.html",
+							"ranges": [[1, 1]]
+						},
+						{
+							"path": "test/fixtures/reddit-search-ok.html",
+							"ranges": []
+						},
+						{
+							"path": "test/integration/browser.test.ts",
+							"ranges": [[1, 47]]
+						},
+						{
+							"path": "test/profiles.test.ts",
+							"ranges": [[1, 47]]
+						},
+						{
+							"path": "test/state-store.test.ts",
+							"ranges": [[1, 115]]
+						},
+						{
+							"path": "test/throttle.test.ts",
+							"ranges": [[1, 122]]
+						},
+						{
+							"path": "test/url-guard.test.ts",
+							"ranges": [[1, 35]]
+						},
+						{
+							"path": "tsconfig.build.json",
+							"ranges": [[1, 4]]
+						},
+						{
+							"path": "tsconfig.json",
+							"ranges": [[1, 20]]
+						},
+						{
+							"path": "vitest.config.ts",
+							"ranges": [[1, 10]]
+						},
+						{
+							"path": "vitest.integration.config.ts",
+							"ranges": [[1, 10]]
+						}
+					]
+				},
+				{
+					"sha": "de70f5e9961aa4a59d0f92c4189923bcbdf6ee00",
+					"committedAt": "2026-10-25T10:20:13Z",
+					"files": [
+						{
+							"path": ".clawhip/state/prompt-submit.json",
+							"ranges": [[1, 8]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r0:c4370534282:0",
+					"roundIndex": 0,
+					"reviewId": 5642772185,
+					"source": "inline",
+					"commentId": 4370534282,
+					"path": "src/browser.ts",
+					"line": 88,
+					"severity": "P1",
+					"title": "Block internal redirect destinations, not only the submitted URL",
+					"text": "🟠 **P1**\n\n**Block internal redirect destinations, not only the submitted URL**\n\nThe URL guard only runs on the initial request in `app.ts`, while this route handler continues every non-image/media/font request. A public URL can therefore issue an HTTP redirect to `http://127.0.0.1`, a cluster Service, or a link-local address; `page.goto()` follows it, and the gateway returns the resulting internal response body. Apply the public-host policy to navigation/redirect requests (and reject an unsafe final URL) before allowing the browser to fetch them."
+				},
+				{
+					"id": "r0:c4370534285:0",
+					"roundIndex": 0,
+					"reviewId": 5642772185,
+					"source": "inline",
+					"commentId": 4370534285,
+					"path": "src/detect.ts",
+					"line": 57,
+					"severity": "P2",
+					"title": "Prioritize target 429 status over block-page markers",
+					"text": "🟡 **P2**\n\n**Prioritize target 429 status over block-page markers**\n\nThis returns a blocked verdict before examining `input.status`. Consequently, a target response with HTTP 429 and a CAPTCHA/\"verify you are human\"/interruption body becomes a 423 and `app.ts` pauses the profile for 30 minutes. That contradicts the stated 429 behavior: target 429 must return `rate_limited` and must not pause the profile. Check `status === 429` before running body-based block classification, and add a combined 429-plus-challenge-marker test."
+				},
+				{
+					"id": "r0:c4370534285:1",
+					"roundIndex": 0,
+					"reviewId": 5642772185,
+					"source": "inline",
+					"commentId": 4370534285,
+					"path": "src/detect.ts",
+					"line": 57,
+					"severity": "P3",
+					"title": "The stated behavior is that any target 429 returns `rate_limited` without pausing the profile, but block markers are evaluated first. A 429 response whose body/title also contains a CAPTCHA or eBay challenge marker is classified as `blocked`; `app.ts` then calls `scheduler.pause`, producing a 30-minute 423 pause instead of the required 429. Check the HTTP 429 status before inspecting block markup, and add a regression case combining status 429 with a challenge marker.",
+					"text": "The stated behavior is that any target 429 returns `rate_limited` without pausing the profile, but block markers are evaluated first. A 429 response whose body/title also contains a CAPTCHA or eBay challenge marker is classified as `blocked`; `app.ts` then calls `scheduler.pause`, producing a 30-minute 423 pause instead of the required 429. Check the HTTP 429 status before inspecting block markup, and add a regression case combining status 429 with a challenge marker."
+				},
+				{
+					"id": "r0:c4370534288:0",
+					"roundIndex": 0,
+					"reviewId": 5642772185,
+					"source": "inline",
+					"commentId": 4370534288,
+					"path": "src/detect.ts",
+					"line": 35,
+					"severity": "P2",
+					"title": "Scope the eBay error-page marker to eBay URLs",
+					"text": "🟡 **P2**\n\n**Scope the eBay error-page marker to eBay URLs**\n\n`/^Error Page/i` is a generic title matcher and is evaluated for every hostname and profile. For example, an anonymous request to `https://example.com/` returning `<title>Error Page</title>` is classified as `ebay_error_page`; `app.ts` then pauses the shared `anon` profile for 30 minutes, preventing subsequent Amazon requests. Restrict this marker to an eBay hostname (as the reason name and documented behavior imply)."
+				},
+				{
+					"id": "r0:c4370534293:0",
+					"roundIndex": 0,
+					"reviewId": 5642772185,
+					"source": "inline",
+					"commentId": 4370534293,
+					"path": "src/browser.ts",
+					"line": 119,
+					"severity": "P2",
+					"title": "Do not release the scheduler while a timed-out browser operation is still shutting down",
+					"text": "🟡 **P2**\n\n**Do not release the scheduler while a timed-out browser operation is still shutting down**\n\nWhen the deadline fires, the race rejects immediately, so the scheduler accepts the next request, but `run(req)` is still live and browser shutdown is merely started in the background. A hung navigation can therefore overlap a newly scheduled navigation (or race its new connection), violating the gateway's one-at-a-time browser guarantee and producing avoidable failures. Make timeout cleanup/settlement part of the fetch promise before it rejects to the scheduler, and cover a hung navigation rather than only a stalled connection handshake."
+				},
+				{
+					"id": "r0:c4370534295:0",
+					"roundIndex": 0,
+					"reviewId": 5642772185,
+					"source": "inline",
+					"commentId": 4370534295,
+					"path": "src/browser.ts",
+					"line": 96,
+					"severity": "P1",
+					"title": "Redirects bypass the SSRF guard",
+					"text": "🟠 **P1**\n\n**Redirects bypass the SSRF guard**\n\n`isPublicHttpUrl` is applied only to the caller-supplied URL in `src/app.ts`; `page.goto` will then follow redirects without revalidating each destination. An authenticated caller can therefore point the gateway at a public URL that redirects to `http://camoufox.stealth-browser.svc.cluster.local/...` (or another private address) and receive the internal page HTML. Enforce the URL policy for every navigation/redirect before it is requested, and add an integration test covering a public-to-private redirect."
+				},
+				{
+					"id": "r0:c4370534297:0",
+					"roundIndex": 0,
+					"reviewId": 5642772185,
+					"source": "inline",
+					"commentId": 4370534297,
+					"path": "src/detect.ts",
+					"line": 56,
+					"severity": "P2",
+					"title": "429 pages with a challenge marker incorrectly pause the profile",
+					"text": "🟡 **P2**\n\n**429 pages with a challenge marker incorrectly pause the profile**\n\nCriticality: 7/10. The stated contract is that a target 429 returns gateway 429 without a profile pause, but classification checks HTML/title block markers before checking `input.status === 429`. A rate-limited response that includes a CAPTCHA or interruption-page marker is therefore returned as 423 and pauses the profile for 30 minutes. Check status 429 before block-marker classification, and add a test for a 429 response containing a CAPTCHA/interruption marker that asserts `rate_limited` and no pause."
+				},
+				{
+					"id": "r0:c4370534298:0",
+					"roundIndex": 0,
+					"reviewId": 5642772185,
+					"source": "inline",
+					"commentId": 4370534298,
+					"path": "src/browser.ts",
+					"line": 90,
+					"severity": "P1",
+					"title": "Revalidate redirect destinations before navigating",
+					"text": "🟠 **P1**\n\n**Revalidate redirect destinations before navigating**\n\n`page.goto` follows redirects, but the URL guard is applied only to the caller-supplied initial URL. An authorized caller can submit a public attacker-controlled URL that responds with a redirect to `http://camoufox.stealth-browser.svc.cluster.local`, a private IP, or a cloud metadata endpoint; Camoufox will request it and the gateway can return the internal response body. This bypasses the SSRF boundary documented for `/content`.\n\n**Hidden path:** public URL → HTTP redirect (or client-side navigation) → internal cluster/private destination.\n\n**User impact:** a bearer-token holder can use the gateway as an internal-network request primitive.\n\n**Recommendation:** enforce `isPublicHttpUrl` for every navigation/request URL in the Playwright routing layer, including redirected navigation requests, and abort/reject disallowed destinations with a distinct invalid/blocked navigation error. Add an integration/unit test for a public URL redirecting to a blocked literal host."
+				},
+				{
+					"id": "r0:c4370534298:1",
+					"roundIndex": 0,
+					"reviewId": 5642772185,
+					"source": "inline",
+					"commentId": 4370534298,
+					"path": "src/browser.ts",
+					"line": 90,
+					"severity": "P3",
+					"title": "Only the caller-supplied URL is checked in `app.ts`; Playwright then follows redirects without validating each redirect target. An authenticated caller can use a public URL that redirects to `http://kubernetes.default.svc`, a `.cluster.local` service, or a link-local address, causing the Camoufox pod to fetch it and returning its rendered response. Enforce the same public-target policy for every navigation/redirect (and ideally resolve/check DNS targets) rather than validating only the initial URL.",
+					"text": "Only the caller-supplied URL is checked in `app.ts`; Playwright then follows redirects without validating each redirect target. An authenticated caller can use a public URL that redirects to `http://kubernetes.default.svc`, a `.cluster.local` service, or a link-local address, causing the Camoufox pod to fetch it and returning its rendered response. Enforce the same public-target policy for every navigation/redirect (and ideally resolve/check DNS targets) rather than validating only the initial URL."
+				},
+				{
+					"id": "r0:c4370534299:0",
+					"roundIndex": 0,
+					"reviewId": 5642772185,
+					"source": "inline",
+					"commentId": 4370534299,
+					"path": "src/app.ts",
+					"line": 129,
+					"severity": "P2",
+					"title": "Do not report state persistence failures as navigation failures",
+					"text": "🟡 **P2**\n\n**Do not report state persistence failures as navigation failures**\n\nIf the otherwise successful page fetch cannot write refreshed login state, this `writeIfUnchanged` rejection is caught by the broad `/content` catch and returned as `502 {\"error\":\"navigation_failed\"}`. Disk-full, permission, I/O, temp-file, or rename failures are neither logged with persistence context nor distinguishable to the caller from a Camoufox navigation error. Callers will retry or debug the browser while the actual issue is the PVC, and rolling session updates may be lost.\n\n**Recommendation:** handle state-store persistence errors separately around this write, log the error with `profile` and the persistence operation, and return a distinct server/persistence failure (or explicitly choose to return the successful content while reporting the failed write through observability). Add a test that makes `writeIfUnchanged` reject and verifies the response classification and log behavior."
+				},
+				{
+					"id": "r0:c4370534301:0",
+					"roundIndex": 0,
+					"reviewId": 5642772185,
+					"source": "inline",
+					"commentId": 4370534301,
+					"path": "src/state-store.ts",
+					"line": 148,
+					"severity": "P2",
+					"title": "Capture files are not written with session-safe permissions",
+					"text": "🟡 **P2**\n\n**Capture files are not written with session-safe permissions**\n\nThese captures can contain session tokens (as documented in the smoke-script warning), but unlike storage-state files this write supplies no restrictive mode. Node's default creation mode is subject to the process umask and commonly leaves captures readable by other users with filesystem access to the mounted volume. Write captures with mode `0o600` (and consider a restrictive captures-directory mode) to preserve the same confidentiality guarantee as `<profile>.json`."
+				},
+				{
+					"id": "r0:c4370534301:1",
+					"roundIndex": 0,
+					"reviewId": 5642772185,
+					"source": "inline",
+					"commentId": 4370534301,
+					"path": "src/state-store.ts",
+					"line": 148,
+					"severity": "P3",
+					"title": "Criticality: 6/10. Capture names begin with `<profile>-<kind>-`, but `TIMESTAMP_START` only matches a year at the start of the filename. It consequently falls back to comparing full filenames. With 20 older Reddit captures followed by a newer eBay capture, lexical sorting places the eBay file first and deletes that newest capture. Sort by the timestamp component (or file metadata) and add an interleaved multi-profile retention test.",
+					"text": "Criticality: 6/10. Capture names begin with `<profile>-<kind>-`, but `TIMESTAMP_START` only matches a year at the start of the filename. It consequently falls back to comparing full filenames. With 20 older Reddit captures followed by a newer eBay capture, lexical sorting places the eBay file first and deletes that newest capture. Sort by the timestamp component (or file metadata) and add an interleaved multi-profile retention test.\n\n*Suggested fix:*\n\n```suggestion\n\t\t\tawait writeFile(\n\t\t\t\tjoin(capturesDir, `${profile}-${kind}-${stamp}.html`),\n\t\t\t\thtml,\n\t\t\t\t{ mode: 0o600 },\n\t\t\t);\n```"
+				},
+				{
+					"id": "r0:c4370534310:0",
+					"roundIndex": 0,
+					"reviewId": 5642772185,
+					"source": "inline",
+					"commentId": 4370534310,
+					"path": "scripts/verify-fingerprint.ts",
+					"line": 35,
+					"severity": "P2",
+					"title": "Fingerprint smoke verification does not compare all sampled properties",
+					"text": "🟡 **P2**\n\n**Fingerprint smoke verification does not compare all sampled properties**\n\nThis script claims to verify that two connections have the same pinned fingerprint, but it compares only user agent and screen between probes. If a later Camoufox launch randomly changes timezone or `navigator.webdriver`, while the first probe remains `America/New_York`/`false`, this check still exits successfully. Compare both properties across probes in addition to checking their expected values.\n\n*Suggested fix:*\n\n```suggestion\n\tfirst.userAgent !== second.userAgent &&\n\t\t\"userAgent differs between connections\",\n\tfirst.screen !== second.screen && \"screen differs between connections\",\n\tfirst.timeZone !== second.timeZone &&\n\t\t\"timeZone differs between connections\",\n\tfirst.webdriver !== second.webdriver &&\n\t\t\"webdriver differs between connections\",\n\tfirst.timeZone !== EXPECTED_TIMEZONE && `timeZone is ${first.timeZone}`,\n\tfirst.webdriver !== false && `webdriver is ${first.webdriver}`, \n```"
+				},
+				{
+					"id": "r0:c4370534317:0",
+					"roundIndex": 0,
+					"reviewId": 5642772185,
+					"source": "inline",
+					"commentId": 4370534317,
+					"path": "src/app.ts",
+					"line": 82,
+					"severity": "P1",
+					"title": "Caller-controlled profile bypasses eBay and Reddit pacing and pauses",
+					"text": "🟠 **P1**\n\n**Caller-controlled profile bypasses eBay and Reddit pacing and pauses**\n\nA request for an eBay or Reddit URL can explicitly select `anon` (or the other login profile), so it uses that profile's shorter gap and independent pause state instead of the target site's enforced profile. For example, after eBay is blocked and paused, `{\"url\":\"https://www.ebay.com/...\",\"profile\":\"anon\"}` continues navigating eBay at the anon 3–8 second cadence. This defeats the domain-routing and block-pause safeguards intended to protect the home IP. Derive the profile for protected domains from the final requested host, or reject an override that disagrees with automatic routing."
+				}
+			]
+		},
+		{
+			"index": 1,
+			"reviewId": 5643346500,
+			"provider": "openai",
+			"submittedAt": "2026-10-25T13:14:42Z",
+			"headSha": "92cc73d69711031944afe8f96712679f159d8b80",
+			"baseSha": "de70f5e9961aa4a59d0f92c4189923bcbdf6ee00",
+			"mergeBase": "de70f5e9961aa4a59d0f92c4189923bcbdf6ee00",
+			"triggerAt": "2026-10-25T12:57:05Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "1a90c7f251427583249371c4f0acf7fab545d6b2",
+					"committedAt": "2026-10-25T12:44:37Z",
+					"files": [
+						{
+							"path": "README.md",
+							"ranges": [[52, 63]]
+						},
+						{
+							"path": "deploy/k8s/camoufox-networkpolicy.yaml",
+							"ranges": [[1, 39]]
+						},
+						{
+							"path": "deploy/k8s/gateway-deployment.yaml",
+							"ranges": [[21, 27]]
+						},
+						{
+							"path": "deploy/k8s/kustomization.yaml",
+							"ranges": [[6, 12]]
+						},
+						{
+							"path": "package.json",
+							"ranges": [[1, 6]]
+						},
+						{
+							"path": "scripts/verify-fingerprint.ts",
+							"ranges": [[26, 36]]
+						},
+						{
+							"path": "src/app.ts",
+							"ranges": [[20, 25], [78, 106], [129, 144]]
+						},
+						{
+							"path": "src/browser.ts",
+							"ranges": [[20, 28], [121, 144]]
+						},
+						{
+							"path": "src/detect.ts",
+							"ranges": [[1, 4], [32, 39], [49, 61]]
+						},
+						{
+							"path": "src/state-store.ts",
+							"ranges": [[140, 150]]
+						},
+						{
+							"path": "test/app.test.ts",
+							"ranges": [[142, 194]]
+						},
+						{
+							"path": "test/browser.test.ts",
+							"ranges": [[34, 55]]
+						},
+						{
+							"path": "test/detect.test.ts",
+							"ranges": [[181, 208]]
+						},
+						{
+							"path": "test/state-store.test.ts",
+							"ranges": [[106, 119]]
+						}
+					]
+				},
+				{
+					"sha": "92cc73d69711031944afe8f96712679f159d8b80",
+					"committedAt": "2026-10-25T12:57:05Z",
+					"files": [
+						{
+							"path": ".clawhip/state/prompt-submit.json",
+							"ranges": [[1, 8]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r1:c4370962618:0",
+					"roundIndex": 1,
+					"reviewId": 5643346500,
+					"source": "inline",
+					"commentId": 4370962618,
+					"path": "src/detect.ts",
+					"line": 13,
+					"severity": "P2",
+					"title": "Captcha class matching misses ordinary attribute forms",
+					"text": "🟡 **P2**\n\n**Captcha class matching misses ordinary attribute forms**\n\nThe expression only matches a `class` attribute whose entire value is exactly `g-recaptcha` or `h-captcha` and uses double quotes. A common widget such as `<div class=\"captcha-container g-recaptcha\">` or `<div class='h-captcha'>` therefore produces `ok`, so `/content` returns challenge HTML as 200 and does not pause the profile. Match the token within either quoted class value; add coverage for these forms.\n\n*Suggested fix:*\n\n```suggestion\nconst CAPTCHA_WIDGET =\n\t/class\\s*=\\s*[\"'][^\"']*\\b(?:g-recaptcha|h-captcha)\\b[^\"']*[\"']|id\\s*=\\s*[\"']captchacharacters[\"']/i;\n```"
+				},
+				{
+					"id": "r1:c4370962624:0",
+					"roundIndex": 1,
+					"reviewId": 5643346500,
+					"source": "inline",
+					"commentId": 4370962624,
+					"path": "src/app.ts",
+					"line": 108,
+					"severity": "P1",
+					"title": "Release the scheduler slot only after processing the fetch outcome",
+					"text": "🟠 **P1**\n\n**Release the scheduler slot only after processing the fetch outcome**\n\nThe scheduled closure ends as soon as `fetcher` returns, but `Scheduler.run` registers its `tail` continuation before this caller's `await` continuation. Consequently, when a request has run longer than its profile gap, the next queued request can start immediately and pass the pause check before the code below classifies the first response and calls `scheduler.pause`. It also reads the prior saved login before the preceding request's `writeIfUnchanged` runs. A detected block can therefore still produce an additional navigation, and queued work can miss a cookie refresh. Keep the scheduler task active through classification/pause and state write-back (or otherwise delay tail release until that bookkeeping completes), and add a queued long-running block/refresh regression test."
+				},
+				{
+					"id": "r1:c4370962625:0",
+					"roundIndex": 1,
+					"reviewId": 5643346500,
+					"source": "inline",
+					"commentId": 4370962625,
+					"path": "src/browser.ts",
+					"line": 125,
+					"severity": "P2",
+					"title": "Default request deadline excludes the allowed connection time",
+					"text": "🟡 **P2**\n\n**Default request deadline excludes the allowed connection time**\n\nThe deadline begins before `run()` obtains a browser, yet its default only budgets navigation, post-navigation wait, and a 15-second margin. Since `connectTimeoutMs` defaults to 30 seconds and navigation is allowed to take 30 seconds, a valid reconnect taking more than 15 seconds followed by a navigation that uses its configured timeout is forcibly rejected and closes the browser before navigation completes. This is especially likely around a Camoufox restart. Include `connectTimeoutMs` in the default deadline, or apply the deadline only after a browser connection is established."
+				},
+				{
+					"id": "r1:c4370962627:0",
+					"roundIndex": 1,
+					"reviewId": 5643346500,
+					"source": "inline",
+					"commentId": 4370962627,
+					"path": "src/app.ts",
+					"line": 86,
+					"severity": "P2",
+					"title": "Handle state-read failures before the scheduler",
+					"text": "🟡 **P2**\n\n**Handle state-read failures before the scheduler**\n\n`store.read()` can reject for a corrupt state file or filesystem failures (for example EACCES/EIO). This await is outside the route's `try` block and before `done()`, so the handler rejects without the request log and without a structured, actionable response. An affected eBay/Reddit request will look like an opaque server failure rather than explaining that its saved session state needs repair. Catch and log state-store read errors at this API boundary, return a distinct service/state-unavailable response, and add coverage for a corrupt or unreadable state file on `/content`."
+				},
+				{
+					"id": "r1:c4370962628:0",
+					"roundIndex": 1,
+					"reviewId": 5643346500,
+					"source": "inline",
+					"commentId": 4370962628,
+					"path": "src/app.ts",
+					"line": 200,
+					"severity": "P2",
+					"title": "Return a controlled error when session uploads cannot be persisted",
+					"text": "🟡 **P2**\n\n**Return a controlled error when session uploads cannot be persisted**\n\nA full or unavailable PVC, permission error, failed rename, or other `store.write()` failure rejects this route directly. No logger call runs and the client receives only the framework's generic error despite its session upload not having been saved. Catch the write failure, log it with the profile and error, and return an explicit retryable state-save error; add a test that forces `store.write` to reject."
+				},
+				{
+					"id": "r1:c4370962629:0",
+					"roundIndex": 1,
+					"reviewId": 5643346500,
+					"source": "inline",
+					"commentId": 4370962629,
+					"path": "src/browser.ts",
+					"line": 96,
+					"severity": "P2",
+					"title": "Do not silently discard browser-context cleanup failures",
+					"text": "🟡 **P2**\n\n**Do not silently discard browser-context cleanup failures**\n\nThis turns every context-close failure into a successful fetch response with no diagnostic. In particular, remote protocol/disconnect failures can leave browser contexts alive; repeated occurrences can exhaust the single Camoufox process while the gateway has reported successful requests. Preserve the original navigation error when one exists, but log cleanup failures with request/context context; on an otherwise successful fetch, surface an error or otherwise make the retained context observable and actionable."
+				},
+				{
+					"id": "r1:c4370962632:0",
+					"roundIndex": 1,
+					"reviewId": 5643346500,
+					"source": "inline",
+					"commentId": 4370962632,
+					"path": "scripts/login.py",
+					"line": 142,
+					"severity": "P2",
+					"title": "Report unexpected VNC shutdown failures",
+					"text": "🟡 **P2**\n\n**Report unexpected VNC shutdown failures**\n\n`pkill` returning 1 when no VNC server exists is an expected cleanup case, but `check: false` also suppresses Kubernetes connectivity, authorization, exec, and permission failures. The operator can therefore be told that login cleanup completed while x11vnc remains running in the Camoufox pod. Inspect the return code: accept the documented no-process status, but print/raise an actionable error including stderr for every other failure."
+				}
+			]
+		},
+		{
+			"index": 2,
+			"reviewId": 5644339610,
+			"provider": "openai",
+			"submittedAt": "2026-10-25T17:25:25Z",
+			"headSha": "493a82d5343bbd3b3a0152fdcb1565b73e5c5a0f",
+			"baseSha": "92cc73d69711031944afe8f96712679f159d8b80",
+			"mergeBase": "92cc73d69711031944afe8f96712679f159d8b80",
+			"triggerAt": "2026-10-25T15:04:35Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "07ab501c879cf96f9931038d7c487dbe0f597a88",
+					"committedAt": "2026-10-25T14:23:39Z",
+					"files": [
+						{
+							"path": ".clawhip/state/prompt-submit.json",
+							"ranges": []
+						},
+						{
+							"path": ".dockerignore",
+							"ranges": [[5, 10]]
+						},
+						{
+							"path": ".gitignore",
+							"ranges": [[13, 18]]
+						},
+						{
+							"path": "README.md",
+							"ranges": [[56, 65]]
+						},
+						{
+							"path": "deploy/deploy.sh",
+							"ranges": [[14, 27]]
+						},
+						{
+							"path": "deploy/k8s/camoufox-networkpolicy.yaml",
+							"ranges": [[2, 11], [15, 30]]
+						},
+						{
+							"path": "deploy/k8s/gateway-deployment.yaml",
+							"ranges": [[21, 27]]
+						},
+						{
+							"path": "docs/superpowers/plans/2026-10-16-stealth-browser.md",
+							"ranges": [[1, 11]]
+						},
+						{
+							"path": "docs/superpowers/specs/2026-10-16-stealth-browser-design.md",
+							"ranges": [[1, 11]]
+						},
+						{
+							"path": "package.json",
+							"ranges": [[1, 11]]
+						},
+						{
+							"path": "scripts/login.py",
+							"ranges": [[73, 80], [86, 96], [138, 155], [235, 250]]
+						},
+						{
+							"path": "scripts/smoke.ts",
+							"ranges": [[39, 49], [57, 77], [164, 170]]
+						},
+						{
+							"path": "scripts/verify-fingerprint.ts",
+							"ranges": [[8, 18]]
+						},
+						{
+							"path": "src/app.ts",
+							"ranges": [
+								[4, 15],
+								[36, 44],
+								[51, 60],
+								[95, 134],
+								[163, 178],
+								[223, 234]
+							]
+						},
+						{
+							"path": "src/browser.ts",
+							"ranges": [[100, 127]]
+						},
+						{
+							"path": "src/config.ts",
+							"ranges": [[22, 28]]
+						},
+						{
+							"path": "src/detect.ts",
+							"ranges": [[8, 20]]
+						},
+						{
+							"path": "src/profiles.ts",
+							"ranges": [[51, 58]]
+						},
+						{
+							"path": "src/throttle.ts",
+							"ranges": [[74, 84], [92, 102]]
+						},
+						{
+							"path": "test/app.test.ts",
+							"ranges": [[189, 251]]
+						},
+						{
+							"path": "test/config.test.ts",
+							"ranges": [[16, 31]]
+						},
+						{
+							"path": "test/detect.test.ts",
+							"ranges": [[192, 223], [243, 249]]
+						},
+						{
+							"path": "test/profiles.test.ts",
+							"ranges": [[17, 24]]
+						},
+						{
+							"path": "test/throttle.test.ts",
+							"ranges": [[110, 130]]
+						}
+					]
+				},
+				{
+					"sha": "20efc696a4a77df107a279890409a640fa784963",
+					"committedAt": "2026-10-25T14:53:55Z",
+					"files": [
+						{
+							"path": "README.md",
+							"ranges": [[90, 97]]
+						}
+					]
+				},
+				{
+					"sha": "493a82d5343bbd3b3a0152fdcb1565b73e5c5a0f",
+					"committedAt": "2026-10-25T15:04:35Z",
+					"files": [
+						{
+							"path": "README.md",
+							"ranges": [[176, 185]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r2:c4371702251:0",
+					"roundIndex": 2,
+					"reviewId": 5644339610,
+					"source": "inline",
+					"commentId": 4371702251,
+					"path": "src/browser.ts",
+					"line": 24,
+					"severity": "P1",
+					"title": "Timed-out navigation can still overlap the next task",
+					"text": "🟠 **P1**\n\n**Timed-out navigation can still overlap the next task**\n\nThe fixed 10-second grace period does not guarantee that `run(req)` has stopped before `fetch` rejects and the scheduler releases its single slot. If a remote browser operation or a stalled reconnect remains pending longer than this grace period, the next queued request begins while the earlier operation is still executing, violating the gateway's global-concurrency and pacing guarantees. The nearby comment explicitly acknowledges this possible overlap. Keep the slot until work is known to have terminated, or make termination of the remote browser/context definitive before returning the timeout error."
+				},
+				{
+					"id": "r2:c4371702252:0",
+					"roundIndex": 2,
+					"reviewId": 5644339610,
+					"source": "inline",
+					"commentId": 4371702252,
+					"path": "src/state-store.ts",
+					"line": 149,
+					"severity": "P2",
+					"title": "Capture retention does not sort by capture time",
+					"text": "🟡 **P2**\n\n**Capture retention does not sort by capture time**\n\n`TIMESTAMP_START` is anchored at the start of a string, but capture filenames begin with `<profile>-<kind>-` (for example, `ebay-blocked-2026-...`). Consequently every `match()` here fails and the fallback sorts by the entire filename. Once captures from multiple profiles or kinds exceed 20, pruning can delete newer captures solely because their profile/kind sorts earlier while retaining older ones, contrary to the stated newest-20 retention behavior. Extract the timestamp after the prefix (or retain/sort capture metadata) before pruning."
+				},
+				{
+					"id": "r2:c4371702256:0",
+					"roundIndex": 2,
+					"reviewId": 5644339610,
+					"source": "inline",
+					"commentId": 4371702256,
+					"path": "src/app.ts",
+					"line": 189,
+					"severity": "P2",
+					"title": "Navigation failure details are omitted from server logs",
+					"text": "🟡 **P2**\n\n**Navigation failure details are omitted from server logs**\n\nThe fallback error path returns the underlying error text to the caller, but `done()` only emits an `info` record containing `verdict: \"navigation_failed\"`, status, and timing—none of the exception details are logged. Failures from Camoufox connection, navigation, page reads, or unexpected classifier errors therefore cannot be diagnosed from gateway logs after the client has gone away. Log the caught error (at warn/error severity) with the resolved profile and host before returning the 502; continue returning a redacted client-safe message."
+				},
+				{
+					"id": "r2:c4371702259:0",
+					"roundIndex": 2,
+					"reviewId": 5644339610,
+					"source": "inline",
+					"commentId": 4371702259,
+					"path": "src/browser.ts",
+					"line": 116,
+					"severity": "P2",
+					"title": "Context cleanup failures are swallowed after a successful fetch",
+					"text": "🟡 **P2**\n\n**Context cleanup failures are swallowed after a successful fetch**\n\nIf `context.close()` fails, this handler discards that error, starts a browser close in the background, discards any error from that close too, and then allows the already-computed HTML result to be returned as HTTP 200. This catch block can hide Playwright transport disconnects and remote browser cleanup failures, leaving operators with neither a log nor an indication that contexts may be accumulating remotely. Ensure the recovery close is awaited and its failure is logged; if cleanup cannot be confirmed, propagate a redacted failure rather than reporting the request as fully successful. Add a test where `context.close()` rejects to establish the intended response and cleanup behavior."
+				},
+				{
+					"id": "r2:c4371702261:0",
+					"roundIndex": 2,
+					"reviewId": 5644339610,
+					"source": "inline",
+					"commentId": 4371702261,
+					"path": "src/browser.ts",
+					"line": 150,
+					"severity": "P1",
+					"title": "Do not release the scheduler slot while browser work may still be running",
+					"text": "🟠 **P1**\n\n**Do not release the scheduler slot while browser work may still be running**\n\nThis still releases `fetch()` after `ABANDONED_WORK_GRACE_MS` even when `settled` has not completed. The underlying `run(req)` is not cancellable here, and both calls to `stuck?.close()` are fire-and-forget, so a stuck navigation/context close can continue on the remote browser after the scheduler accepts the next task. That violates the service's single-browser concurrency and pacing guarantees precisely on timeout/disconnect paths. Keep the task pending until the operation is known stopped (or make cancellation/connection teardown awaitable and confirm it completes) rather than racing it against a fixed grace period."
+				}
+			]
+		},
+		{
+			"index": 3,
+			"reviewId": 5644719720,
+			"provider": "openai",
+			"submittedAt": "2026-10-25T18:50:36Z",
+			"headSha": "88edc5622b580ef14deea7ea03b25ad7edbf267b",
+			"baseSha": "493a82d5343bbd3b3a0152fdcb1565b73e5c5a0f",
+			"mergeBase": "493a82d5343bbd3b3a0152fdcb1565b73e5c5a0f",
+			"triggerAt": "2026-10-25T18:23:45Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "88edc5622b580ef14deea7ea03b25ad7edbf267b",
+					"committedAt": "2026-10-25T18:23:45Z",
+					"files": [
+						{
+							"path": "deploy/k8s/gateway-deployment.yaml",
+							"ranges": [[21, 27]]
+						},
+						{
+							"path": "package.json",
+							"ranges": [[1, 6]]
+						},
+						{
+							"path": "src/app.ts",
+							"ranges": [[187, 198]]
+						},
+						{
+							"path": "test/app.test.ts",
+							"ranges": [[3, 9], [57, 66], [75, 81], [249, 268]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r3:c4371972047:0",
+					"roundIndex": 3,
+					"reviewId": 5644719720,
+					"source": "inline",
+					"commentId": 4371972047,
+					"path": "src/server.ts",
+					"line": 38,
+					"severity": "P2",
+					"title": "Shutdown exits before in-flight responses can finish",
+					"text": "🟡 **P2**\n\n**Shutdown exits before in-flight responses can finish**\n\n`server.close()` only stops accepting new connections; this code does not wait for it to finish draining active requests before closing Camoufox and calling `process.exit(0)`. A routine SIGTERM during a navigation therefore terminates the active `/content` request (and any state write/capture) immediately rather than allowing Kubernetes' termination grace period to protect it. Await server drain (or explicitly track and drain active requests) before closing the fetcher and exiting, and add a shutdown test covering an in-flight request."
+				},
+				{
+					"id": "r3:c4371972048:0",
+					"roundIndex": 3,
+					"reviewId": 5644719720,
+					"source": "inline",
+					"commentId": 4371972048,
+					"path": "src/browser.ts",
+					"line": 111,
+					"severity": "P2",
+					"title": "Do not silently continue after context cleanup fails",
+					"text": "🟡 **P2**\n\n**Do not silently continue after context cleanup fails**\n\nIf `context.close()` rejects, this handler clears `browser` and starts `stuck.close()` without awaiting or logging either failure, then returns the already-fetched result. The scheduler can therefore release its single slot and start another browser task while the failed context/connection cleanup is still unresolved. Protocol errors, WebSocket disconnects, and remote-browser cleanup failures are all hidden from both the caller and operator. Await a bounded browser-disconnect/reset operation before releasing the fetch, and either surface the cleanup failure as a navigation failure or at minimum log it with the request context."
+				},
+				{
+					"id": "r3:c4371972053:0",
+					"roundIndex": 3,
+					"reviewId": 5644719720,
+					"source": "inline",
+					"commentId": 4371972053,
+					"path": "src/app.ts",
+					"line": 151,
+					"severity": "P2",
+					"title": "Surface failed login-state refreshes to the caller",
+					"text": "🟡 **P2**\n\n**Surface failed login-state refreshes to the caller**\n\nA storage failure after a successful Reddit/eBay navigation is reduced to a warning and the endpoint still returns `200` with the page. This masks `ENOSPC`, `EIO`, and permission failures that prevent rolling cookies from being persisted; the caller will believe the logged-in session was refreshed and may only discover the loss on a later `session_expired` response. Keep `false` from `writeIfUnchanged` as the expected concurrent-upload case, but make an exception from it an explicit, actionable response (or an explicitly documented degraded-success response visible to the client), rather than a silent successful scrape."
+				},
+				{
+					"id": "r3:c4371972057:0",
+					"roundIndex": 3,
+					"reviewId": 5644719720,
+					"source": "inline",
+					"commentId": 4371972057,
+					"path": "src/url-guard.ts",
+					"line": 11,
+					"severity": "P1",
+					"title": "Reserved IPv4 ranges bypass the public-URL guard",
+					"text": "🟠 **P1**\n\n**Reserved IPv4 ranges bypass the public-URL guard**\n\nThis only excludes a subset of non-public IPv4 space. For example, `http://198.18.0.1/` (the RFC 2544 benchmarking range) passes this function, and the Camoufox NetworkPolicy's `0.0.0.0/0` rule also permits it because that range is not in its `except` list. Consequently, a caller can make the browser reach services on any such internally routed special-purpose range; redirects to these targets are likewise not stopped by the NetworkPolicy. Treat all non-global-unicast/special-purpose ranges as disallowed in both the literal URL guard and the NetworkPolicy exceptions."
+				}
+			]
+		}
+	],
+	"threads": [
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wAhuO",
+			"commentId": 4370534282,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4370919001,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T12:58:42Z",
+					"editedAt": null,
+					"body": "Fixed in 1a90c7f with a NetworkPolicy that denies the Camoufox pod egress to private, CGNAT, loopback and link-local ranges. It isn't done in the route handler, because Playwright never routes redirect hops, and re-fetching through Playwright's HTTP client would send Node's TLS fingerprint instead of Firefox's. Verified live: a public URL redirecting to the gateway service now fails with `NS_ERROR_CONNECTION_REFUSED`."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wAhuQ",
+			"commentId": 4370534285,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4370919105,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T12:58:44Z",
+					"editedAt": null,
+					"body": "Fixed in 1a90c7f. The 429 check now runs before block markers."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wAhuR",
+			"commentId": 4370534288,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4370919226,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T12:58:47Z",
+					"editedAt": null,
+					"body": "Fixed in 1a90c7f. The `Error Page` title is scoped to eBay URLs."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wAhuV",
+			"commentId": 4370534293,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4370919326,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T12:58:49Z",
+					"editedAt": null,
+					"body": "Fixed in 1a90c7f. After the deadline fires, the request now waits for the abandoned work to unwind (capped at 10 s) before releasing the scheduler slot. Test: `holds a timed-out request until its abandoned work settles`."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wAhuW",
+			"commentId": 4370534295,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4370919491,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T12:58:51Z",
+					"editedAt": null,
+					"body": "Fixed in 1a90c7f with the Camoufox egress NetworkPolicy; see the thread on line 85 for why it lives at the network layer."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wAhuX",
+			"commentId": 4370534297,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4370919658,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T12:58:54Z",
+					"editedAt": null,
+					"body": "Fixed in 1a90c7f. A target 429 returns `rate_limited` and never pauses the profile, even with a challenge marker on the page."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wAhuY",
+			"commentId": 4370534298,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4370919767,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T12:58:56Z",
+					"editedAt": null,
+					"body": "Fixed in 1a90c7f with the Camoufox egress NetworkPolicy; see the thread on line 85."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wAhuZ",
+			"commentId": 4370534299,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4370919892,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T12:58:59Z",
+					"editedAt": null,
+					"body": "Fixed in 1a90c7f. A failed save of refreshed cookies is logged as `state_save_failed` and the page is still returned. Test: `still returns the page when saving the refreshed login fails`."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wAhub",
+			"commentId": 4370534301,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4370920014,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T12:59:01Z",
+					"editedAt": null,
+					"body": "Fixed in 1a90c7f. Captures are written with mode 0600. Test: `writes captures readable only by the owner`."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wAhuh",
+			"commentId": 4370534310,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4370920135,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T12:59:04Z",
+					"editedAt": null,
+					"body": "Fixed in 1a90c7f. The script now compares every sampled property between the two connections."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wAhuo",
+			"commentId": 4370534317,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4370920212,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T12:59:06Z",
+					"editedAt": null,
+					"body": "Fixed in 1a90c7f by removing the `profile` body field. The URL alone picks the profile, so an eBay URL always goes through eBay's queue, pacing and pauses."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wBjql",
+			"commentId": 4370962618,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371264919,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T15:00:10Z",
+					"editedAt": null,
+					"body": "Fixed in 07ab501: the captcha check matches g-recaptcha/h-captcha anywhere in a class list, with either quote style. Tests cover both."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wBjqm",
+			"commentId": 4370962624,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371265071,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T15:00:13Z",
+					"editedAt": null,
+					"body": "Real, thanks. The test I added first passed only by microtask order and failed once a related change shifted it. Fixed in 07ab501: the page is classified and the profile paused inside the scheduled task, before it frees its slot. Test: `pauses the profile before the next queued request can start`."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wBjqn",
+			"commentId": 4370962625,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371265188,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T15:00:16Z",
+					"editedAt": null,
+					"body": "Fixed in 07ab501: the default deadline now includes connectTimeoutMs."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wBjqp",
+			"commentId": 4370962627,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371265282,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T15:00:18Z",
+					"editedAt": null,
+					"body": "Fixed in 07ab501: an unreadable saved login returns a logged 500 {error: state_unavailable, profile}. Test added."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wBjqq",
+			"commentId": 4370962628,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371265405,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T15:00:21Z",
+					"editedAt": null,
+					"body": "Fixed in 07ab501: a failed upload save returns a logged 500 {error: state_write_failed, profile}. Test added."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wBjqr",
+			"commentId": 4370962629,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371265488,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T15:00:23Z",
+					"editedAt": null,
+					"body": "Fixed in 07ab501: if a context will not close, the fetcher drops the browser connection, so the server discards that client's contexts and the next request reconnects."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wBjqt",
+			"commentId": 4370962632,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371265615,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T15:00:26Z",
+					"editedAt": null,
+					"body": "Fixed in 07ab501: stop_vnc treats pkill exit 1 as nothing-to-stop and prints a warning for any other failure."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wDT4h",
+			"commentId": 4371702251,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371926896,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T18:35:06Z",
+					"editedAt": null,
+					"body": "Partly right, and a deliberate trade-off. When the deadline fires, the handler closes the browser connection (`browser = undefined; stuck.close()`), so abandoned work is on a closed connection and the next request opens a fresh one. The 10 s cap only bounds how long the scheduler slot is held; an unbounded wait would wedge the queue if a close hangs. Not changing this round."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wDT4i",
+			"commentId": 4371702252,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371926999,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T18:35:09Z",
+					"editedAt": null,
+					"body": "Same as the earlier pruning thread: the regex is unanchored and sorts by the extracted timestamp."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wDT4k",
+			"commentId": 4371702256,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371927093,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T18:35:11Z",
+					"editedAt": null,
+					"body": "Fixed in 88edc56. A failed navigation now logs `navigation_failed` with the profile, host and error. Test: `logs the underlying error when navigation fails`."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wDT4m",
+			"commentId": 4371702259,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371927238,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T18:35:14Z",
+					"editedAt": null,
+					"body": "The fetch result is still valid, and a failed close already drops the connection so the server discards the context. Logging it would need a logger passed into the fetcher; not changing it this round."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wDT4o",
+			"commentId": 4371702261,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371927361,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T18:35:16Z",
+					"editedAt": null,
+					"body": "See the thread on line 24: the connection is closed at the deadline, so abandoned work can't touch the next request's fresh connection. The 10 s cap exists so a hung close can't wedge the queue."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wD9lP",
+			"commentId": 4371972047,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4372098036,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T19:25:57Z",
+					"editedAt": null,
+					"body": "Agreed; graceful shutdown is tracked as stealth-browser-gtx and is out of scope for this PR."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wD9lQ",
+			"commentId": 4371972048,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4372098126,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T19:25:59Z",
+					"editedAt": null,
+					"body": "Not changing this now. A failed context close already drops the browser connection so the server discards the context, and the fetched page is still valid; logging it needs a logger passed into the fetcher."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wD9lT",
+			"commentId": 4371972053,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4372098243,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T19:26:02Z",
+					"editedAt": null,
+					"body": "By design. The page was fetched fine, so a failed cookie refresh is logged as state_save_failed and the response still returns; the next request reads the last saved login."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wD9lY",
+			"commentId": 4371972057,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4372098320,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T19:26:04Z",
+					"editedAt": null,
+					"body": "Fixed in dd37e93 and 0399f4c: the URL guard and the Camoufox NetworkPolicy now both cover 198.18.0.0/15, the documentation blocks, multicast and reserved space. Nine new test cases cover it, and gateway 0.1.6 is deployed."
+				}
+			]
+		}
+	],
+	"reactions": [
+		{
+			"commentId": 4370534282,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T12:58:43Z"
+		},
+		{
+			"commentId": 4370534285,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T12:58:46Z"
+		},
+		{
+			"commentId": 4370534288,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T12:58:48Z"
+		},
+		{
+			"commentId": 4370534293,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T12:58:50Z"
+		},
+		{
+			"commentId": 4370534295,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T12:58:53Z"
+		},
+		{
+			"commentId": 4370534297,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T12:58:55Z"
+		},
+		{
+			"commentId": 4370534298,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T12:58:58Z"
+		},
+		{
+			"commentId": 4370534299,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T12:59:00Z"
+		},
+		{
+			"commentId": 4370534301,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T12:59:03Z"
+		},
+		{
+			"commentId": 4370534310,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T12:59:05Z"
+		},
+		{
+			"commentId": 4370534317,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T12:59:07Z"
+		},
+		{
+			"commentId": 4370962618,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T15:00:12Z"
+		},
+		{
+			"commentId": 4370962624,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T15:00:14Z"
+		},
+		{
+			"commentId": 4370962625,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T15:00:17Z"
+		},
+		{
+			"commentId": 4370962627,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T15:00:20Z"
+		},
+		{
+			"commentId": 4370962628,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T15:00:22Z"
+		},
+		{
+			"commentId": 4370962629,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T15:00:24Z"
+		},
+		{
+			"commentId": 4370962632,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T15:00:27Z"
+		},
+		{
+			"commentId": 4371702251,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-10-25T18:35:08Z"
+		},
+		{
+			"commentId": 4371702252,
+			"user": "joeblackwaslike",
+			"content": "-1",
+			"createdAt": "2026-10-25T18:35:10Z"
+		},
+		{
+			"commentId": 4371702256,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T18:35:12Z"
+		},
+		{
+			"commentId": 4371702259,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-10-25T18:35:15Z"
+		},
+		{
+			"commentId": 4371702261,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-10-25T18:35:18Z"
+		},
+		{
+			"commentId": 4371972047,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T19:25:58Z"
+		},
+		{
+			"commentId": 4371972048,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-10-25T19:26:01Z"
+		},
+		{
+			"commentId": 4371972053,
+			"user": "joeblackwaslike",
+			"content": "-1",
+			"createdAt": "2026-10-25T19:26:03Z"
+		},
+		{
+			"commentId": 4371972057,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T19:26:05Z"
+		}
+	]
+}

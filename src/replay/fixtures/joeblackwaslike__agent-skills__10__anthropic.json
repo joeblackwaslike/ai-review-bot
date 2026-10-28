@@ -1,0 +1,755 @@
+{
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "agent-skills",
+	"pull": 10,
+	"provider": "anthropic",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-10-28T02:13:43.908Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 5642460295,
+			"provider": "anthropic",
+			"submittedAt": "2026-10-25T09:24:20Z",
+			"headSha": "33b0dc5735873a44a2c87e6b4314fd7229210843",
+			"baseSha": "1770803ba6e42708c96e267c31effebb37688aae",
+			"mergeBase": "1770803ba6e42708c96e267c31effebb37688aae",
+			"triggerAt": "2026-10-25T08:35:42Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "a4a9e3a70e9daa844f69cedb2fa42e6ad2527925",
+					"committedAt": "2026-10-25T07:09:05Z",
+					"files": [
+						{
+							"path": "skills/web-research/SKILL.md",
+							"ranges": [[4, 10], [60, 85], [109, 112]]
+						},
+						{
+							"path": "skills/web-research/references/browserless.md",
+							"ranges": []
+						},
+						{
+							"path": "skills/web-research/references/stealth-browser.md",
+							"ranges": [[1, 117]]
+						}
+					]
+				},
+				{
+					"sha": "33b0dc5735873a44a2c87e6b4314fd7229210843",
+					"committedAt": "2026-10-25T08:35:42Z",
+					"files": [
+						{
+							"path": "skills/web-research/SKILL.md",
+							"ranges": [[79, 85]]
+						},
+						{
+							"path": "skills/web-research/references/stealth-browser.md",
+							"ranges": [[5, 10]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r0:c4370326413:0",
+					"roundIndex": 0,
+					"reviewId": 5642460295,
+					"source": "inline",
+					"commentId": 4370326413,
+					"path": "skills/web-research/SKILL.md",
+					"line": 79,
+					"severity": "P2",
+					"title": "Shell injection risk from unsanitized URL interpolated into single-quoted curl -d body",
+					"text": "🟡 **P2**\n\n**Shell injection risk from unsanitized URL interpolated into single-quoted curl -d body**\n\nThe documented recipe tells the agent to literally substitute `<target-url>` into a single-quoted `-d` JSON string. If the target URL contains a single quote, the shell will terminate the quoted argument early and any trailing shell syntax in the URL could execute. This is a plausible attack vector since URLs are often derived from external/user-controlled input during research tasks. Consider instructing the agent to build the JSON body via `jq -n --arg url \"$URL\" '{url:$url}'` or write the URL to a variable and use `printf`/heredoc to avoid manual string interpolation into shell-quoted JSON."
+				},
+				{
+					"id": "r0:c4370326415:0",
+					"roundIndex": 0,
+					"reviewId": 5642460295,
+					"source": "inline",
+					"commentId": 4370326415,
+					"path": "skills/web-research/SKILL.md",
+					"line": 76,
+					"severity": "P2",
+					"title": "Fixed 120s curl timeout may be shorter than documented queue wait",
+					"text": "🟡 **P2**\n\n**Fixed 120s curl timeout may be shorter than documented queue wait**\n\nThe doc states requests can queue up to 5 deep with gaps of 20-40s for ebay (up to ~200s of pure queue wait before the request even starts, before counting the page's own load time), yet the curl recipe uses a fixed `-m 120`. This mismatch means legitimate eBay fetches can be aborted by curl before the gateway ever serves them, causing the agent to see a curl timeout and incorrectly treat it as a gateway failure."
+				},
+				{
+					"id": "r0:body:0",
+					"roundIndex": 0,
+					"reviewId": 5642460295,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Documentation-only change; no additional material issues beyond prior review",
+					"text": "Documentation-only change; no additional material issues beyond prior review"
+				},
+				{
+					"id": "r0:body:1",
+					"roundIndex": 0,
+					"reviewId": 5642460295,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Error table lacks logging/debugging guidance for agent",
+					"text": "Error table lacks logging/debugging guidance for agent"
+				},
+				{
+					"id": "r0:body:2",
+					"roundIndex": 0,
+					"reviewId": 5642460295,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Documented curl recipe strips response headers needed for X-Final-Url",
+					"text": "Documented curl recipe strips response headers needed for X-Final-Url"
+				},
+				{
+					"id": "r0:body:3",
+					"roundIndex": 0,
+					"reviewId": 5642460295,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Gateway trigger conditions don't account for login walls / redirects on HTTP 200",
+					"text": "Gateway trigger conditions don't account for login walls / redirects on HTTP 200"
+				},
+				{
+					"id": "r0:body:4",
+					"roundIndex": 0,
+					"reviewId": 5642460295,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "No test coverage possible for gateway error-handling behaviors",
+					"text": "No test coverage possible for gateway error-handling behaviors"
+				},
+				{
+					"id": "r0:body:5",
+					"roundIndex": 0,
+					"reviewId": 5642460295,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Docs-only PR, no executable tests applicable",
+					"text": "Docs-only PR, no executable tests applicable"
+				}
+			]
+		},
+		{
+			"index": 1,
+			"reviewId": 5642643009,
+			"provider": "anthropic",
+			"submittedAt": "2026-10-25T10:02:09Z",
+			"headSha": "bca22f10cc10b857782f0419f4baff66d6f0d851",
+			"baseSha": "33b0dc5735873a44a2c87e6b4314fd7229210843",
+			"mergeBase": "33b0dc5735873a44a2c87e6b4314fd7229210843",
+			"triggerAt": "2026-10-25T09:52:43Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "bca22f10cc10b857782f0419f4baff66d6f0d851",
+					"committedAt": "2026-10-25T09:52:43Z",
+					"files": [
+						{
+							"path": "skills/web-research/SKILL.md",
+							"ranges": [[67, 84]]
+						},
+						{
+							"path": "skills/web-research/references/stealth-browser.md",
+							"ranges": [[1, 40], [45, 58], [62, 78], [82, 99]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r1:body:0",
+					"roundIndex": 1,
+					"reviewId": 5642643009,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "No new findings beyond prior reviews",
+					"text": "No new findings beyond prior reviews"
+				},
+				{
+					"id": "r1:body:1",
+					"roundIndex": 1,
+					"reviewId": 5642643009,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "No new material comment-rot issues beyond prior reviewer coverage",
+					"text": "No new material comment-rot issues beyond prior reviewer coverage"
+				},
+				{
+					"id": "r1:body:2",
+					"roundIndex": 1,
+					"reviewId": 5642643009,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "No test coverage possible for docs-only change; acceptable given live-validation limitations",
+					"text": "No test coverage possible for docs-only change; acceptable given live-validation limitations"
+				},
+				{
+					"id": "r1:body:3",
+					"roundIndex": 1,
+					"reviewId": 5642643009,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "No test coverage for new docs beyond static diff/grep checks",
+					"text": "No test coverage for new docs beyond static diff/grep checks"
+				}
+			]
+		},
+		{
+			"index": 2,
+			"reviewId": 5643306370,
+			"provider": "anthropic",
+			"submittedAt": "2026-10-25T13:02:00Z",
+			"headSha": "bca22f10cc10b857782f0419f4baff66d6f0d851",
+			"baseSha": "bca22f10cc10b857782f0419f4baff66d6f0d851",
+			"mergeBase": "bca22f10cc10b857782f0419f4baff66d6f0d851",
+			"triggerAt": null,
+			"approximate": true,
+			"commitsSince": [],
+			"claims": [
+				{
+					"id": "r2:c4370928141:0",
+					"roundIndex": 2,
+					"reviewId": 5643306370,
+					"source": "inline",
+					"commentId": 4370928141,
+					"path": "skills/web-research/references/stealth-browser.md",
+					"line": 17,
+					"severity": "P2",
+					"title": "Credential check doesn't gate the subsequent fetch example",
+					"text": "🟡 **P2**\n\n**Credential check doesn't gate the subsequent fetch example**\n\nThe new unset-credential guard (`[ -n \"$STEALTH_BROWSER_URL\" ] ... || echo \"not configured\"`) is a standalone diagnostic snippet. It doesn't actually control whether the `curl ... /content` command below it runs — an agent reading this documentation could still execute the fetch command even when credentials are unset, since the guard and the fetch are separate code blocks with no explicit conditional linking them. The doc should make clear the agent must check this condition and skip the whole step before attempting the fetch, not just print a diagnostic."
+				},
+				{
+					"id": "r2:c4370928142:0",
+					"roundIndex": 2,
+					"reviewId": 5643306370,
+					"source": "inline",
+					"commentId": 4370928142,
+					"path": "skills/web-research/references/stealth-browser.md",
+					"line": 15,
+					"severity": "P2",
+					"title": "Unset-credential check doesn't actually gate the health check/content request",
+					"text": "🟡 **P2**\n\n**Unset-credential check doesn't actually gate the health check/content request**\n\nThe doc shows the env-var presence check and the curl health check as two separate commands run sequentially (`[ -n \"$STEALTH_BROWSER_URL\" ] && ... || echo \"not configured\"` followed by an unconditional `curl ...`). If the variables are unset, the first line just echoes \"not configured\" and the second line still executes, sending a curl request with an empty URL/Authorization header. The agent following this literally would not actually skip the gateway step on missing credentials, contradicting the stated intent ('If either is unset, skip the gateway and go to the next escalation step'). The two commands should be combined so the health check only runs when credentials are present (e.g., using `&&` to chain into the curl, or an explicit early-return/skip instruction)."
+				},
+				{
+					"id": "r2:body:0",
+					"roundIndex": 2,
+					"reviewId": 5643306370,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Shell injection risk via unsanitized URL interpolation into curl -d body",
+					"text": "Shell injection risk via unsanitized URL interpolation into curl -d body"
+				},
+				{
+					"id": "r2:body:1",
+					"roundIndex": 2,
+					"reviewId": 5643306370,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Missing explicit skip-on-unset-credentials gating in SKILL.md flow",
+					"text": "Missing explicit skip-on-unset-credentials gating in SKILL.md flow"
+				},
+				{
+					"id": "r2:body:2",
+					"roundIndex": 2,
+					"reviewId": 5643306370,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "No test coverage; all live validation scenarios untested",
+					"text": "No test coverage; all live validation scenarios untested"
+				},
+				{
+					"id": "r2:body:3",
+					"roundIndex": 2,
+					"reviewId": 5643306370,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Docs-only PR lacks any live/behavioral verification of gateway routing and error handling claims",
+					"text": "Docs-only PR lacks any live/behavioral verification of gateway routing and error handling claims"
+				},
+				{
+					"id": "r2:body:4",
+					"roundIndex": 2,
+					"reviewId": 5643306370,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Shell injection risk in documented curl recipe remains unaddressed",
+					"text": "Shell injection risk in documented curl recipe remains unaddressed"
+				},
+				{
+					"id": "r2:body:5",
+					"roundIndex": 2,
+					"reviewId": 5643306370,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Unsanitized URL interpolated into shell-quoted curl -d body",
+					"text": "Unsanitized URL interpolated into shell-quoted curl -d body"
+				},
+				{
+					"id": "r2:body:6",
+					"roundIndex": 2,
+					"reviewId": 5643306370,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "head -c 200000 truncates output before response headers can be captured",
+					"text": "head -c 200000 truncates output before response headers can be captured"
+				}
+			]
+		},
+		{
+			"index": 3,
+			"reviewId": 5644331647,
+			"provider": "anthropic",
+			"submittedAt": "2026-10-25T17:22:55Z",
+			"headSha": "4aab590075f0b71d1e05d62de60c3f086384cb0e",
+			"baseSha": "bca22f10cc10b857782f0419f4baff66d6f0d851",
+			"mergeBase": "bca22f10cc10b857782f0419f4baff66d6f0d851",
+			"triggerAt": "2026-10-25T17:15:28Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "af1a6173a854adfebb61ffcd46791a134c4fef36",
+					"committedAt": "2026-10-25T14:16:51Z",
+					"files": [
+						{
+							"path": "skills/web-research/SKILL.md",
+							"ranges": [[72, 87]]
+						},
+						{
+							"path": "skills/web-research/references/stealth-browser.md",
+							"ranges": [[11, 63], [70, 79], [100, 111]]
+						}
+					]
+				},
+				{
+					"sha": "7d167c72c0adf19fb67956c092262d65d7cd97dc",
+					"committedAt": "2026-10-25T14:42:54Z",
+					"files": [
+						{
+							"path": "skills/web-research/SKILL.md",
+							"ranges": [[71, 77]]
+						}
+					]
+				},
+				{
+					"sha": "33d9b893e610ac0cebfc3ac92e44fdbd1904bda8",
+					"committedAt": "2026-10-25T17:04:13Z",
+					"files": [
+						{
+							"path": "skills/web-research/references/stealth-browser.md",
+							"ranges": [[30, 56]]
+						}
+					]
+				},
+				{
+					"sha": "4aab590075f0b71d1e05d62de60c3f086384cb0e",
+					"committedAt": "2026-10-25T17:15:28Z",
+					"files": [
+						{
+							"path": "skills/web-research/references/stealth-browser.md",
+							"ranges": [[31, 37], [56, 62]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r3:body:0",
+					"roundIndex": 3,
+					"reviewId": 5644331647,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "No new unresolved issues beyond prior reviews",
+					"text": "No new unresolved issues beyond prior reviews"
+				},
+				{
+					"id": "r3:body:1",
+					"roundIndex": 3,
+					"reviewId": 5644331647,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Live validation remains entirely untested for this docs change",
+					"text": "Live validation remains entirely untested for this docs change"
+				},
+				{
+					"id": "r3:body:2",
+					"roundIndex": 3,
+					"reviewId": 5644331647,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "All substantive issues are docs-only and already extensively covered by prior reviewers",
+					"text": "All substantive issues are docs-only and already extensively covered by prior reviewers"
+				},
+				{
+					"id": "r3:body:3",
+					"roundIndex": 3,
+					"reviewId": 5644331647,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Docs-only change lacks any live verification of the new gateway routing/error-handling claims",
+					"text": "Docs-only change lacks any live verification of the new gateway routing/error-handling claims"
+				}
+			]
+		},
+		{
+			"index": 4,
+			"reviewId": 5644676294,
+			"provider": "anthropic",
+			"submittedAt": "2026-10-25T18:36:54Z",
+			"headSha": "ae4374e011f64311702ac3aabbf2654b0dfe0146",
+			"baseSha": "4aab590075f0b71d1e05d62de60c3f086384cb0e",
+			"mergeBase": "4aab590075f0b71d1e05d62de60c3f086384cb0e",
+			"triggerAt": "2026-10-25T18:21:31Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "ae4374e011f64311702ac3aabbf2654b0dfe0146",
+					"committedAt": "2026-10-25T18:21:31Z",
+					"files": [
+						{
+							"path": "skills/web-research/SKILL.md",
+							"ranges": [[69, 75]]
+						},
+						{
+							"path": "skills/web-research/references/stealth-browser.md",
+							"ranges": [[32, 38], [75, 83]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r4:c4371931917:0",
+					"roundIndex": 4,
+					"reviewId": 5644676294,
+					"source": "inline",
+					"commentId": 4371931917,
+					"path": "skills/web-research/references/stealth-browser.md",
+					"line": 31,
+					"severity": "P2",
+					"title": "Credential check result not actually used to gate the fetch",
+					"text": "🟡 **P2**\n\n**Credential check result not actually used to gate the fetch**\n\nThe health-check snippet prints `200` or `not configured`/error codes to stdout but the doc doesn't show the result being captured into a variable or conditional that controls whether the subsequent 'Fetching a page' curl call runs. An agent executing this literally as two separate shell snippets could run the health check, see non-200 output, and still proceed to the fetch snippet since there's no `if` wrapping it. This mirrors the previously-flagged 'credential-unset check doesn't gate subsequent curl calls' issue and remains unresolved in this diff."
+				},
+				{
+					"id": "r4:c4371931921:0",
+					"roundIndex": 4,
+					"reviewId": 5644676294,
+					"source": "inline",
+					"commentId": 4371931921,
+					"path": "skills/web-research/references/stealth-browser.md",
+					"line": 32,
+					"severity": "P2",
+					"title": "Credential-unset check doesn't gate the actual fetch recipe",
+					"text": "🟡 **P2**\n\n**Credential-unset check doesn't gate the actual fetch recipe**\n\nThe health-check snippet in the Credentials section correctly gates on `STEALTH_BROWSER_URL`/`STEALTH_BROWSER_TOKEN` being set, printing `not configured` and instructing to skip if unset. However, the separate 'Fetching a page' curl recipe below (and the equivalent in SKILL.md) does not itself check these variables before running — it relies on the agent having already performed the health check and remembered the outcome in a separate shell invocation. Since each bash block here is typically executed as an independent command, an agent that skips (or forgets) the health-check step could fire the fetch curl with empty `$STEALTH_BROWSER_URL`/`$STEALTH_BROWSER_TOKEN`, sending a malformed request to a blank URL (e.g. `curl ... -X POST \"/content\"`) instead of cleanly skipping as intended."
+				},
+				{
+					"id": "r4:c4371931925:0",
+					"roundIndex": 4,
+					"reviewId": 5644676294,
+					"source": "inline",
+					"commentId": 4371931925,
+					"path": "skills/web-research/SKILL.md",
+					"line": 71,
+					"severity": "P3",
+					"title": "Credential check in SKILL.md example is illustrative only and may not actually gate execution",
+					"text": "🟢 **P3**\n\n**Credential check in SKILL.md example is illustrative only and may not actually gate execution**\n\nThe SKILL.md text says \"if either is unset, skip to step 4 without hunting for credentials,\" but SKILL.md itself no longer shows the actual bash gating logic (it was moved to stealth-browser.md as `if [ -n \"$STEALTH_BROWSER_URL\" ] && [ -n \"$STEALTH_BROWSER_TOKEN\" ]; then ... fi`). Since SKILL.md only narrates the behavior rather than encoding it, an agent that doesn't fully read the referenced doc could still issue a curl call with empty env vars. This is a minor documentation-robustness gap (same class as the codex finding from the prior round), not a code defect, so it's low severity for a docs-only PR."
+				},
+				{
+					"id": "r4:body:0",
+					"roundIndex": 4,
+					"reviewId": 5644676294,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "No live/behavioral verification of new routing and gateway recipe",
+					"text": "No live/behavioral verification of new routing and gateway recipe"
+				},
+				{
+					"id": "r4:body:1",
+					"roundIndex": 4,
+					"reviewId": 5644676294,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Docs-only PR has no live validation of gateway routing/error-handling claims",
+					"text": "Docs-only PR has no live validation of gateway routing/error-handling claims"
+				},
+				{
+					"id": "r4:body:2",
+					"roundIndex": 4,
+					"reviewId": 5644676294,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Credential/health-check gate not enforced for the actual fetch call",
+					"text": "Credential/health-check gate not enforced for the actual fetch call"
+				},
+				{
+					"id": "r4:body:3",
+					"roundIndex": 4,
+					"reviewId": 5644676294,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "No live validation of docs-only change; prior rounds' concerns largely addressed",
+					"text": "No live validation of docs-only change; prior rounds' concerns largely addressed"
+				},
+				{
+					"id": "r4:body:4",
+					"roundIndex": 4,
+					"reviewId": 5644676294,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "No code changes this round; only doc/test-report narrative revised",
+					"text": "No code changes this round; only doc/test-report narrative revised"
+				},
+				{
+					"id": "r4:body:5",
+					"roundIndex": 4,
+					"reviewId": 5644676294,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "No live verification that -m 600 is sufficient against worst-case ~500s queue wait plus overhead",
+					"text": "No live verification that -m 600 is sufficient against worst-case ~500s queue wait plus overhead"
+				}
+			]
+		}
+	],
+	"threads": [
+		{
+			"threadId": "PRRT_kwDOR7Lu486wAB22",
+			"commentId": 4370326413,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371612377,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T17:00:20Z",
+					"editedAt": null,
+					"body": "Fixed in af1a6173 with your suggested approach: `jq -nc --arg url \"$url\" '{url:$url}'` builds the body, and the recipe tells the agent to write `'` as `%27` in the `url='...'` assignment. SKILL.md step 3 no longer carries its own copy of the recipe; 7d167c72 trimmed it to a pointer, so references/stealth-browser.md is the single source."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOR7Lu486wAB24",
+			"commentId": 4370326415,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371612655,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T17:00:24Z",
+					"editedAt": null,
+					"body": "Fixed in af1a6173. The recipe uses `-m 300`, and Pacing explains why: about five 50 s runs ahead of a request at the back of a full queue. SKILL.md step 3 no longer carries its own copy of the recipe; 7d167c72 trimmed it to a pointer, so references/stealth-browser.md is the single source."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOR7Lu486wBeUe",
+			"commentId": 4370928141,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371613947,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T17:00:49Z",
+					"editedAt": null,
+					"body": "Fixed in af1a6173. The prose under the health check now says to fetch only if it prints `200`, and to skip the gateway on `not configured`, a 401, or a DNS, connection, or timeout error."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOR7Lu486wBeUf",
+			"commentId": 4370928142,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371614237,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T17:00:54Z",
+					"editedAt": null,
+					"body": "Fixed in af1a6173. The env check and the probe are one `if`/`else`, so the probe never runs with empty credentials."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOR7Lu486wD3fx",
+			"commentId": 4371931917,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371998963,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T18:56:58Z",
+					"editedAt": null,
+					"body": "The recipe is instructions for an agent, not a script: the text says to fetch only if the check prints 200 and to skip the gateway otherwise. Wrapping it in one conditional would make the doc harder to read without changing what the agent does. No change."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOR7Lu486wD3f0",
+			"commentId": 4371931921,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371999226,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T18:57:01Z",
+					"editedAt": null,
+					"body": "Same as the thread on line 31: the doc tells the agent to fetch only on `200`. No change."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOR7Lu486wD3f3",
+			"commentId": 4371931925,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371999403,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T18:57:04Z",
+					"editedAt": null,
+					"body": "Intentional. SKILL.md carries only the routing trigger and the skip rule; the commands live in the reference, which is the single copy of the recipe."
+				}
+			]
+		}
+	],
+	"reactions": [
+		{
+			"commentId": 4370326413,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T17:00:21Z"
+		},
+		{
+			"commentId": 4370326415,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T17:00:26Z"
+		},
+		{
+			"commentId": 4370928141,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T17:00:51Z"
+		},
+		{
+			"commentId": 4370928142,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T17:00:55Z"
+		},
+		{
+			"commentId": 4371931917,
+			"user": "joeblackwaslike",
+			"content": "-1",
+			"createdAt": "2026-10-25T18:56:59Z"
+		},
+		{
+			"commentId": 4371931921,
+			"user": "joeblackwaslike",
+			"content": "-1",
+			"createdAt": "2026-10-25T18:57:03Z"
+		},
+		{
+			"commentId": 4371931925,
+			"user": "joeblackwaslike",
+			"content": "-1",
+			"createdAt": "2026-10-25T18:57:05Z"
+		}
+	]
+}

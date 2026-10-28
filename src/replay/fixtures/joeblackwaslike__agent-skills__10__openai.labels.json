@@ -1,0 +1,120 @@
+{
+	"fixtureId": "joeblackwaslike__agent-skills__10__openai",
+	"provisional": true,
+	"labels": [
+		{
+			"claimId": "r0:c4370333674:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T17:00:30Z|Fixed. bca22f10 already put the apex in the Profiles table (`ebay.com` or any subdomain), and af1a6173 makes the send-straight-here list say `ebay.com` and `reddit.com` and any subdomain, matching `profileForUrl` in the gateway's `profiles.ts` (`host === d || host.endsWith('.' + d)`)."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4370439994:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4370439994:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4370440004:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T17:00:39Z|Fixed in af1a6173. The curl sits inside the configured branch; the `else` branch prints `not configured` and the prose says to move to the next step on that."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4370440006:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T17:00:44Z|Fixed in af1a6173, close to your suggestion (plus a 10 s cap on the probe). Ran it with both vars unset: it prints `not configured` and makes no request."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c4370934035:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T17:00:59Z|Fixed in af1a6173. The probe now has `--connect-timeout 5 -m 10`."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c4371711212:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c4371711215:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-10-25T18:21:31Z|changed skills/web-research/references/stealth-browser.md near line 29 in ae4374e011f64311702ac3aabbf2654b0dfe0146"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c4371711215:1",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-10-25T18:21:31Z|changed skills/web-research/references/stealth-browser.md near line 29 in ae4374e011f64311702ac3aabbf2654b0dfe0146"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c4371711224:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T18:34:32Z|Fixed in ae4374e0: SKILL.md now lists login walls and redirects to a login page as reasons to use the gateway."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c4371711230:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-10-25T18:21:31Z|changed skills/web-research/references/stealth-browser.md near line 33 in ae4374e011f64311702ac3aabbf2654b0dfe0146"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c4371711234:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-10-25T18:21:31Z|changed skills/web-research/references/stealth-browser.md near line 73 in ae4374e011f64311702ac3aabbf2654b0dfe0146"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c4371711241:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-10-25T18:21:31Z|changed skills/web-research/references/stealth-browser.md near line 75 in ae4374e011f64311702ac3aabbf2654b0dfe0146"
+			],
+			"confirmed": false
+		}
+	],
+	"repeatPairs": [],
+	"negativePairs": [],
+	"allowedSuppression": []
+}

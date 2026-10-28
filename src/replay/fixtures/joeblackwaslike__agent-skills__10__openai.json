@@ -1,0 +1,590 @@
+{
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "agent-skills",
+	"pull": 10,
+	"provider": "openai",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-10-28T02:14:17.008Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 5642473177,
+			"provider": "openai",
+			"submittedAt": "2026-10-25T09:26:27Z",
+			"headSha": "33b0dc5735873a44a2c87e6b4314fd7229210843",
+			"baseSha": "1770803ba6e42708c96e267c31effebb37688aae",
+			"mergeBase": "1770803ba6e42708c96e267c31effebb37688aae",
+			"triggerAt": "2026-10-25T08:35:42Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "a4a9e3a70e9daa844f69cedb2fa42e6ad2527925",
+					"committedAt": "2026-10-25T07:09:05Z",
+					"files": [
+						{
+							"path": "skills/web-research/SKILL.md",
+							"ranges": [[4, 10], [60, 85], [109, 112]]
+						},
+						{
+							"path": "skills/web-research/references/browserless.md",
+							"ranges": []
+						},
+						{
+							"path": "skills/web-research/references/stealth-browser.md",
+							"ranges": [[1, 117]]
+						}
+					]
+				},
+				{
+					"sha": "33b0dc5735873a44a2c87e6b4314fd7229210843",
+					"committedAt": "2026-10-25T08:35:42Z",
+					"files": [
+						{
+							"path": "skills/web-research/SKILL.md",
+							"ranges": [[79, 85]]
+						},
+						{
+							"path": "skills/web-research/references/stealth-browser.md",
+							"ranges": [[5, 10]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r0:c4370333674:0",
+					"roundIndex": 0,
+					"reviewId": 5642473177,
+					"source": "inline",
+					"commentId": 4370333674,
+					"path": "skills/web-research/references/stealth-browser.md",
+					"line": 99,
+					"severity": "P2",
+					"title": "Include the eBay apex host in direct-routing guidance",
+					"text": "🟡 **P2**\n\n**Include the eBay apex host in direct-routing guidance**\n\n`ebay.com` is recognized by the gateway's profile-selection table as an `ebay`-profile host, but it is absent from the “send straight here” list that both this reference and `SKILL.md` use for routing. Consequently, an input such as `https://ebay.com/...` first goes through `webFetch` rather than the logged-in eBay gateway path; if that fetch returns a normal-sized login/block page, it need not meet the escalation criteria. Add `ebay.com` to the direct-routing list (and the corresponding list in `SKILL.md`) so the routing rule matches the supported exact-host profile mapping."
+				}
+			]
+		},
+		{
+			"index": 1,
+			"reviewId": 5642661349,
+			"provider": "openai",
+			"submittedAt": "2026-10-25T10:04:48Z",
+			"headSha": "bca22f10cc10b857782f0419f4baff66d6f0d851",
+			"baseSha": "33b0dc5735873a44a2c87e6b4314fd7229210843",
+			"mergeBase": "33b0dc5735873a44a2c87e6b4314fd7229210843",
+			"triggerAt": "2026-10-25T09:52:43Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "bca22f10cc10b857782f0419f4baff66d6f0d851",
+					"committedAt": "2026-10-25T09:52:43Z",
+					"files": [
+						{
+							"path": "skills/web-research/SKILL.md",
+							"ranges": [[67, 84]]
+						},
+						{
+							"path": "skills/web-research/references/stealth-browser.md",
+							"ranges": [[1, 40], [45, 58], [62, 78], [82, 99]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r1:c4370439994:0",
+					"roundIndex": 1,
+					"reviewId": 5642661349,
+					"source": "inline",
+					"commentId": 4370439994,
+					"path": "skills/web-research/references/stealth-browser.md",
+					"line": 16,
+					"severity": "P2",
+					"title": "Credential guard does not actually skip the gateway",
+					"text": "🟡 **P2**\n\n**Credential guard does not actually skip the gateway**\n\nThe guard only prints `not configured`; because it is followed by a separate command, `curl` still runs when either variable is unset. With only the token missing, this sends an unauthenticated request to the configured gateway; with the URL missing, it attempts to fetch `/healthz`. This contradicts the documented requirement to skip the gateway when either variable is unset. Make the guard terminate the snippet before the curl command."
+				},
+				{
+					"id": "r1:c4370439994:1",
+					"roundIndex": 1,
+					"reviewId": 5642661349,
+					"source": "inline",
+					"commentId": 4370439994,
+					"path": "skills/web-research/references/stealth-browser.md",
+					"line": 16,
+					"severity": "P3",
+					"title": "The `|| echo` only prints a message; it does not guard the following `curl`. When either variable is unset, this still invokes `curl` with `\"/healthz\"` (or a missing bearer token), emits a misleading URL/transfer error, and contradicts the instruction to skip the gateway. Make the health probe conditional and print an explicit skip outcome instead, so an unconfigured gateway does not look like a connectivity failure.",
+					"text": "The `|| echo` only prints a message; it does not guard the following `curl`. When either variable is unset, this still invokes `curl` with `\"/healthz\"` (or a missing bearer token), emits a misleading URL/transfer error, and contradicts the instruction to skip the gateway. Make the health probe conditional and print an explicit skip outcome instead, so an unconfigured gateway does not look like a connectivity failure.\n\n*Suggested fix:*\n\n```suggestion\n[ -n \"$STEALTH_BROWSER_URL\" ] && [ -n \"$STEALTH_BROWSER_TOKEN\" ] || { echo \"not configured\"; exit 0; }\n```"
+				},
+				{
+					"id": "r1:c4370440004:0",
+					"roundIndex": 1,
+					"reviewId": 5642661349,
+					"source": "inline",
+					"commentId": 4370440004,
+					"path": "skills/web-research/references/stealth-browser.md",
+					"line": 17,
+					"severity": "P2",
+					"title": "Do not run the health check when credentials are absent",
+					"text": "🟡 **P2**\n\n**Do not run the health check when credentials are absent**\n\nThe guard only prints `not configured`; it does not prevent the following `curl` command from running. With either variable unset, this produces a malformed/relative URL request (and, more importantly, contradicts the instruction to skip the gateway when it is not configured). Put the health-check curl inside the configured branch, with the fallback branch reporting `not configured` and moving on."
+				},
+				{
+					"id": "r1:c4370440006:0",
+					"roundIndex": 1,
+					"reviewId": 5642661349,
+					"source": "inline",
+					"commentId": 4370440006,
+					"path": "skills/web-research/references/stealth-browser.md",
+					"line": 19,
+					"severity": "P2",
+					"title": "Make the unset-credential check actually skip the health request",
+					"text": "🟡 **P2**\n\n**Make the unset-credential check actually skip the health request**\n\nThe first command only prints `not configured`; it does not prevent the following `curl` from running. With either variable unset, this recipe still attempts a request with an empty URL/token (and typically emits a curl URL error), contradicting the documented instruction to skip the gateway. Put the health request in the success branch so an unconfigured agent cleanly moves to the next escalation step.\n\n*Suggested fix:*\n\n```suggestion\nif [ -z \"$STEALTH_BROWSER_URL\" ] || [ -z \"$STEALTH_BROWSER_TOKEN\" ]; then\n  echo \"not configured\"\nelse\n  curl -sS -o /dev/null -w '%{http_code}\\n' \"$STEALTH_BROWSER_URL/healthz\" \\\n    -H \"Authorization: Bearer $STEALTH_BROWSER_TOKEN\"   # 200 = ok\nfi\n```"
+				}
+			]
+		},
+		{
+			"index": 2,
+			"reviewId": 5643315182,
+			"provider": "openai",
+			"submittedAt": "2026-10-25T13:04:09Z",
+			"headSha": "bca22f10cc10b857782f0419f4baff66d6f0d851",
+			"baseSha": "bca22f10cc10b857782f0419f4baff66d6f0d851",
+			"mergeBase": "bca22f10cc10b857782f0419f4baff66d6f0d851",
+			"triggerAt": null,
+			"approximate": true,
+			"commitsSince": [],
+			"claims": [
+				{
+					"id": "r2:c4370934035:0",
+					"roundIndex": 2,
+					"reviewId": 5643315182,
+					"source": "inline",
+					"commentId": 4370934035,
+					"path": "skills/web-research/references/stealth-browser.md",
+					"line": 17,
+					"severity": "P2",
+					"title": "Bound the health-check request",
+					"text": "🟡 **P2**\n\n**Bound the health-check request**\n\nThis reachability probe has no connection or total timeout. If the configured host accepts a TCP connection but does not return a response, `curl` can wait indefinitely and the agent never reaches the documented fallback to the next escalation step. Add an explicit bounded timeout (and optionally a connect timeout) to this health check; unlike `/content`, it should not need to wait for the browser queue."
+				}
+			]
+		},
+		{
+			"index": 3,
+			"reviewId": 5644349128,
+			"provider": "openai",
+			"submittedAt": "2026-10-25T17:28:30Z",
+			"headSha": "4aab590075f0b71d1e05d62de60c3f086384cb0e",
+			"baseSha": "bca22f10cc10b857782f0419f4baff66d6f0d851",
+			"mergeBase": "bca22f10cc10b857782f0419f4baff66d6f0d851",
+			"triggerAt": "2026-10-25T17:15:28Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "af1a6173a854adfebb61ffcd46791a134c4fef36",
+					"committedAt": "2026-10-25T14:16:51Z",
+					"files": [
+						{
+							"path": "skills/web-research/SKILL.md",
+							"ranges": [[72, 87]]
+						},
+						{
+							"path": "skills/web-research/references/stealth-browser.md",
+							"ranges": [[11, 63], [70, 79], [100, 111]]
+						}
+					]
+				},
+				{
+					"sha": "7d167c72c0adf19fb67956c092262d65d7cd97dc",
+					"committedAt": "2026-10-25T14:42:54Z",
+					"files": [
+						{
+							"path": "skills/web-research/SKILL.md",
+							"ranges": [[71, 77]]
+						}
+					]
+				},
+				{
+					"sha": "33d9b893e610ac0cebfc3ac92e44fdbd1904bda8",
+					"committedAt": "2026-10-25T17:04:13Z",
+					"files": [
+						{
+							"path": "skills/web-research/references/stealth-browser.md",
+							"ranges": [[30, 56]]
+						}
+					]
+				},
+				{
+					"sha": "4aab590075f0b71d1e05d62de60c3f086384cb0e",
+					"committedAt": "2026-10-25T17:15:28Z",
+					"files": [
+						{
+							"path": "skills/web-research/references/stealth-browser.md",
+							"ranges": [[31, 37], [56, 62]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r3:c4371711212:0",
+					"roundIndex": 3,
+					"reviewId": 5644349128,
+					"source": "inline",
+					"commentId": 4371711212,
+					"path": "skills/web-research/references/stealth-browser.md",
+					"line": 70,
+					"severity": "P2",
+					"title": "Queue timeout remains shorter than the documented worst case",
+					"text": "🟡 **P2**\n\n**Queue timeout remains shorter than the documented worst case**\n\n`-m 300` still expires for an accepted request at the back of the stated eBay queue. With one active run plus four queued ahead, each taking about 50 s, and up to five 40 s same-profile start gaps before this request begins, the wait can reach about 450 s. This causes the recipe to abort despite the gateway eventually serving the request. Increase the deadline to cover that bound (with margin), or revise the documented queue/pacing contract to match the chosen limit."
+				},
+				{
+					"id": "r3:c4371711215:0",
+					"roundIndex": 3,
+					"reviewId": 5644349128,
+					"source": "inline",
+					"commentId": 4371711215,
+					"path": "skills/web-research/references/stealth-browser.md",
+					"line": 29,
+					"severity": "P2",
+					"title": "Timeout remains shorter than the documented queue worst case",
+					"text": "🟡 **P2**\n\n**Timeout remains shorter than the documented queue worst case**\n\n`-m 300` can still expire for an accepted request under the pacing described below. The last request admitted behind a running request can wait for the running navigation plus several queued navigations and up-to-40-second eBay gaps; its own navigation time is also included in curl's total deadline. That exceeds 300 seconds, so the recipe can abort precisely in the queue scenario it says it supports. Increase the deadline to cover the stated maximum end-to-end queue time (with margin), or revise the queue/pacing contract and retry guidance to match the cap."
+				},
+				{
+					"id": "r3:c4371711215:1",
+					"roundIndex": 3,
+					"reviewId": 5644349128,
+					"source": "inline",
+					"commentId": 4371711215,
+					"path": "skills/web-research/references/stealth-browser.md",
+					"line": 29,
+					"severity": "P3",
+					"title": "`-m` covers the entire request, including time waiting in the FIFO queue and the target request's own navigation/render. The pacing section documents up to roughly five minutes for a request at the back of a full queue, while this limit is exactly 300 seconds; the request can therefore be cancelled at the boundary (and \"about 50 s\" is not a strict upper bound). This recreates the documented queued-fetch timeout failure under load. Use a timeout with meaningful headroom (and update the pacing guidance accordingly), or otherwise make the timeout exceed the queue-plus-render bound.",
+					"text": "`-m` covers the entire request, including time waiting in the FIFO queue and the target request's own navigation/render. The pacing section documents up to roughly five minutes for a request at the back of a full queue, while this limit is exactly 300 seconds; the request can therefore be cancelled at the boundary (and \"about 50 s\" is not a strict upper bound). This recreates the documented queued-fetch timeout failure under load. Use a timeout with meaningful headroom (and update the pacing guidance accordingly), or otherwise make the timeout exceed the queue-plus-render bound."
+				},
+				{
+					"id": "r3:c4371711224:0",
+					"roundIndex": 3,
+					"reviewId": 5644349128,
+					"source": "inline",
+					"commentId": 4371711224,
+					"path": "skills/web-research/SKILL.md",
+					"line": 72,
+					"severity": "P2",
+					"title": "Route login walls through the gateway",
+					"text": "🟡 **P2**\n\n**Route login walls through the gateway**\n\nThe routing rule in `SKILL.md` still omits login walls and redirects to login, even though the reference now identifies them as cases the gateway handles. Since agents consult this rule to decide whether to load the reference, a substantial HTTP 200 login page will not meet any listed escalation condition and can be returned as though it were the requested content. Add login walls and login redirects to this trigger.\n\n*Suggested fix:*\n\n```suggestion\n   - `webFetch` returned HTTP 403 / 429, a CAPTCHA page, a login wall or redirect to login, or near-empty content from a page that is clearly server-rendered (not an SPA)\n```"
+				},
+				{
+					"id": "r3:c4371711230:0",
+					"roundIndex": 3,
+					"reviewId": 5644349128,
+					"source": "inline",
+					"commentId": 4371711230,
+					"path": "skills/web-research/references/stealth-browser.md",
+					"line": 33,
+					"severity": "P2",
+					"title": "Make the timeout cover the documented full queue",
+					"text": "🟡 **P2**\n\n**Make the timeout cover the documented full queue**\n\n`-m 300` can expire before a request at the back of the documented queue is served. The pacing section permits a running request plus five waiters, with up to 50 seconds per run and 20–40 second eBay gaps; the final waiter can wait well over 300 seconds before its own navigation completes. This contradicts the recipe's purpose for queued gateway requests and causes a timeout/partial response. Use a deadline with enough headroom for the stated maximum queue, such as 600 seconds, or reduce the documented queue/pacing guarantee.\n\n*Suggested fix:*\n\n```suggestion\ncurl -sS -m 600 -X POST \"$STEALTH_BROWSER_URL/content\" \\\n```"
+				},
+				{
+					"id": "r3:c4371711234:0",
+					"roundIndex": 3,
+					"reviewId": 5644349128,
+					"source": "inline",
+					"commentId": 4371711234,
+					"path": "skills/web-research/references/stealth-browser.md",
+					"line": 73,
+					"severity": "P2",
+					"title": "Allow for the full documented queue wait",
+					"text": "🟡 **P2**\n\n**Allow for the full documented queue wait**\n\n`-m 300` still expires for an accepted request at the back of the documented queue. With one request running and five waiters allowed, the last waiter can wait for the remaining run plus four queued runs and the inter-request pacing before it starts; at the documented 50 s run and 40 s eBay gap this is roughly 450 s (and the fetch itself then still needs time). Increase the recipe deadline beyond this worst case, or reduce/correct the queue and pacing guarantees so agents do not abort and retry requests that the gateway has accepted."
+				},
+				{
+					"id": "r3:c4371711241:0",
+					"roundIndex": 3,
+					"reviewId": 5644349128,
+					"source": "inline",
+					"commentId": 4371711241,
+					"path": "skills/web-research/references/stealth-browser.md",
+					"line": 75,
+					"severity": "P2",
+					"title": "Timeout does not cover the documented queue wait",
+					"text": "🟡 **P2**\n\n**Timeout does not cover the documented queue wait**\n\n`-m 300` is a total curl deadline, but the preceding text says a request at the back of a full queue can wait close to five minutes *before* it is served. That leaves no time for the documented up-to-50-second navigation/rendering run, so the recipe can time out while a valid queued request is still in progress. Set the deadline above the queue-wait maximum plus render time (with margin), or revise the queue-bound guidance to an enforced lower bound."
+				}
+			]
+		},
+		{
+			"index": 4,
+			"reviewId": 5644682087,
+			"provider": "openai",
+			"submittedAt": "2026-10-25T18:38:47Z",
+			"headSha": "ae4374e011f64311702ac3aabbf2654b0dfe0146",
+			"baseSha": "4aab590075f0b71d1e05d62de60c3f086384cb0e",
+			"mergeBase": "4aab590075f0b71d1e05d62de60c3f086384cb0e",
+			"triggerAt": "2026-10-25T18:21:31Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "ae4374e011f64311702ac3aabbf2654b0dfe0146",
+					"committedAt": "2026-10-25T18:21:31Z",
+					"files": [
+						{
+							"path": "skills/web-research/SKILL.md",
+							"ranges": [[69, 75]]
+						},
+						{
+							"path": "skills/web-research/references/stealth-browser.md",
+							"ranges": [[32, 38], [75, 83]]
+						}
+					]
+				}
+			],
+			"claims": []
+		}
+	],
+	"threads": [
+		{
+			"threadId": "PRRT_kwDOR7Lu486wAC9R",
+			"commentId": 4370333674,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371612911,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T17:00:30Z",
+					"editedAt": null,
+					"body": "Fixed. bca22f10 already put the apex in the Profiles table (`ebay.com` or any subdomain), and af1a6173 makes the send-straight-here list say `ebay.com` and `reddit.com` and any subdomain, matching `profileForUrl` in the gateway's `profiles.ts` (`host === d || host.endsWith('.' + d)`)."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOR7Lu486wATHy",
+			"commentId": 4370439994,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371613198,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T17:00:35Z",
+					"editedAt": null,
+					"body": "Fixed in af1a6173. The health check is now an `if`/`else`: curl runs only when both vars are set, otherwise it prints `not configured`. I used the `if` form rather than `exit 0`, which would end the agent's shell."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOR7Lu486wATH5",
+			"commentId": 4370440004,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371613397,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T17:00:39Z",
+					"editedAt": null,
+					"body": "Fixed in af1a6173. The curl sits inside the configured branch; the `else` branch prints `not configured` and the prose says to move to the next step on that."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOR7Lu486wATH6",
+			"commentId": 4370440006,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371613658,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T17:00:44Z",
+					"editedAt": null,
+					"body": "Fixed in af1a6173, close to your suggestion (plus a 10 s cap on the probe). Ran it with both vars unset: it prints `not configured` and makes no request."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOR7Lu486wBfNu",
+			"commentId": 4370934035,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371614464,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T17:00:59Z",
+					"editedAt": null,
+					"body": "Fixed in af1a6173. The probe now has `--connect-timeout 5 -m 10`."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOR7Lu486wDVSC",
+			"commentId": 4371711212,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371924616,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T18:34:17Z",
+					"editedAt": null,
+					"body": "Fixed in ae4374e0: the recipe now uses `-m 600`, and the pacing text shows the worst case (five runs plus four 20-40 s gaps before the last request's own run, about 500 s on eBay)."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOR7Lu486wDVSF",
+			"commentId": 4371711215,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371924756,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T18:34:20Z",
+					"editedAt": null,
+					"body": "Fixed in ae4374e0 (`-m 600`; see the pacing arithmetic in the reference)."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOR7Lu486wDVSK",
+			"commentId": 4371711224,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371925296,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T18:34:32Z",
+					"editedAt": null,
+					"body": "Fixed in ae4374e0: SKILL.md now lists login walls and redirects to a login page as reasons to use the gateway."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOR7Lu486wDVSP",
+			"commentId": 4371711230,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371924856,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T18:34:22Z",
+					"editedAt": null,
+					"body": "Fixed in ae4374e0 (`-m 600`)."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOR7Lu486wDVST",
+			"commentId": 4371711234,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371924976,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T18:34:25Z",
+					"editedAt": null,
+					"body": "Fixed in ae4374e0 (`-m 600`)."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOR7Lu486wDVSZ",
+			"commentId": 4371711241,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371925131,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T18:34:29Z",
+					"editedAt": null,
+					"body": "Fixed in ae4374e0 (`-m 600`)."
+				}
+			]
+		}
+	],
+	"reactions": [
+		{
+			"commentId": 4370333674,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T17:00:31Z"
+		},
+		{
+			"commentId": 4370439994,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T17:00:36Z"
+		},
+		{
+			"commentId": 4370440004,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T17:00:40Z"
+		},
+		{
+			"commentId": 4370440006,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T17:00:46Z"
+		},
+		{
+			"commentId": 4370934035,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T17:01:00Z"
+		},
+		{
+			"commentId": 4371711212,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T18:34:18Z"
+		},
+		{
+			"commentId": 4371711215,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T18:34:21Z"
+		},
+		{
+			"commentId": 4371711224,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T18:34:33Z"
+		},
+		{
+			"commentId": 4371711230,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T18:34:24Z"
+		},
+		{
+			"commentId": 4371711234,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T18:34:26Z"
+		},
+		{
+			"commentId": 4371711241,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T18:34:30Z"
+		}
+	]
+}
