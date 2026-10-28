@@ -37,6 +37,7 @@ const USAGE = [
 ].join("\n");
 
 const PR_URL = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)\/?$/;
+const GH_NAME = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/;
 const FIXTURE_FILE = /^(?!.*\.labels(\.proposed)?\.json$).+\.json$/;
 
 export function defaultFixturesDir(fromUrl: string): string {
@@ -62,8 +63,10 @@ function parseArgs(args: string[]): ParsedArgs | null {
 		if (flag === "--rounds" || flag === "--max-cost") {
 			const n = Number(value);
 			if (value === undefined || !Number.isFinite(n) || n <= 0) return null;
-			if (flag === "--rounds") parsed.rounds = Math.floor(n);
-			else parsed.maxCost = n;
+			if (flag === "--rounds") {
+				if (!Number.isInteger(n)) return null;
+				parsed.rounds = n;
+			} else parsed.maxCost = n;
 			i++;
 			continue;
 		}
@@ -103,6 +106,10 @@ async function record(
 	const m = p.record?.match(PR_URL);
 	if (!m || !p.provider || !p.bot) {
 		out(USAGE);
+		return 2;
+	}
+	if (!GH_NAME.test(m[1] as string) || !GH_NAME.test(m[2] as string)) {
+		out("invalid owner or repo name in URL");
 		return 2;
 	}
 	try {

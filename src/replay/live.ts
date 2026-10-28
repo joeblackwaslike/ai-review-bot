@@ -54,7 +54,11 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 	const diffs = await Promise.all(
 		selected.map(async (r) => ({ round: r, ...(await opts.fetchDiff(r)) })),
 	);
-	const estimates = diffs.map((d) => opts.estimateCost(d.diff));
+	const estimates = diffs.map((d) => {
+		const e = opts.estimateCost(d.diff);
+		if (!Number.isFinite(e) || e < 0) return 0;
+		return e;
+	});
 	const total = estimates.reduce((a, b) => a + b, 0);
 	out(
 		`live: ${selected.length} round(s), estimated spend $${total.toFixed(2)} (cap $${opts.maxCostUsd.toFixed(2)})`,

@@ -105,7 +105,7 @@ export function hunkRanges(patch: string): [number, number][] {
 	for (const m of patch.matchAll(HUNK_HEADER)) {
 		const start = Number(m[1]);
 		const len = m[2] === undefined ? 1 : Number(m[2]);
-		if (len > 0) ranges.push([start, start + len - 1]);
+		ranges.push(len > 0 ? [start, start + len - 1] : [start, start]);
 	}
 	return ranges;
 }
@@ -274,10 +274,10 @@ export async function recordPr(
 
 	const threads: ThreadEvidence[] = [];
 	for (const t of await fetchThreads(client, o)) {
-		if (t.comments.pageInfo.hasNextPage)
-			throw new Error(`thread ${t.id} has more than 100 comments`);
 		const [first, ...rest] = t.comments.nodes;
 		if (!first || !botCommentIds.has(first.databaseId)) continue;
+		if (t.comments.pageInfo.hasNextPage)
+			throw new Error(`thread ${t.id} has more than 100 comments`);
 		threads.push({
 			threadId: t.id,
 			commentId: first.databaseId,

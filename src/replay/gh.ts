@@ -10,7 +10,9 @@ export interface GhClient {
 }
 
 function fieldArgs(params: Record<string, string | number> = {}): string[] {
-	return Object.entries(params).flatMap(([k, v]) => ["-F", `${k}=${v}`]);
+	return Object.entries(params).flatMap(([k, v]) =>
+		typeof v === "number" ? ["-F", `${k}=${v}`] : ["-f", `${k}=${v}`],
+	);
 }
 
 export class GhHttpError extends Error {
