@@ -135,6 +135,78 @@ describe("findSettledMatch", () => {
 		expect(findSettledMatch(f, [e])).toBe(e);
 	});
 
+	describe("a P0 finding", () => {
+		const bodyOnly = {
+			e: entry({
+				line: 96,
+				title: "Do not silently discard browser-context cleanup failures",
+				body: "When context.close() rejects after the page work finishes, the error is caught and dropped, so a leaked browser context is never reported and later requests run against a stale context.",
+			}),
+			f: {
+				path: "src/a.ts",
+				line: 111,
+				title:
+					"Context cleanup failures are swallowed after a successful fetch",
+				body: "If closing the browser context rejects, the catch drops the error; the leaked context is never reported and later requests reuse a stale context.",
+			},
+		};
+		const identifierOnly = {
+			e: entry({
+				path: "src/throttle.ts",
+				line: 59,
+				title:
+					"Off-by-one in queue-full check lets 6 tasks wait instead of the documented 5",
+				body: "`run()` compares `this.inFlight > this.maxQueue` before incrementing, so the scheduler allows six tasks to wait before QueueFullError is thrown while the comment documents five waiting tasks.",
+			}),
+			f: {
+				path: null,
+				title:
+					"Scheduler.inFlight off-by-one still allows 6 waiting tasks instead of the documented 5",
+			},
+		};
+		const sharedIdentifierTitle = {
+			e: entry({
+				title: "`refreshToken` is logged in plaintext on retry",
+			}),
+			f: {
+				path: "src/a.ts",
+				line: 14,
+				title: "`refreshToken` logged in plaintext when the request fails",
+			},
+		};
+
+		it("is not joined by the body rule alone", () => {
+			const { e, f } = bodyOnly;
+			expect(findSettledMatch({ ...f, severity: "P1" }, [e])).toBe(e);
+			expect(findSettledMatch({ ...f, severity: "P0" }, [e])).toBeNull();
+		});
+
+		it("is not joined by a cross-surface shared identifier alone", () => {
+			const { e, f } = identifierOnly;
+			expect(findSettledMatch({ ...f, severity: "P1" }, [e])).toBe(e);
+			expect(findSettledMatch({ ...f, severity: "P0" }, [e])).toBeNull();
+		});
+
+		it("needs the plain title bar even when a code identifier is shared", () => {
+			const { e, f } = sharedIdentifierTitle;
+			expect(findSettledMatch({ ...f, severity: "P1" }, [e])).toBe(e);
+			expect(findSettledMatch({ ...f, severity: "P0" }, [e])).toBeNull();
+		});
+
+		it("still matches a near-verbatim repeat", () => {
+			const e = entry({
+				title: "`listFindings` drops the body column in the SQL query",
+			});
+			const f = {
+				path: "src/a.ts",
+				line: 22,
+				severity: "P0",
+				title: "SQL query in `listFindings` omits the body column",
+			};
+			expect(findSettledMatch(f, [e])).toBe(e);
+		});
+	});
+
 	it("does not body-match two different defects in one function", () => {
 		const e = entry({
 			line: 96,

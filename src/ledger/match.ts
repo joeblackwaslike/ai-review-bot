@@ -84,12 +84,19 @@ function isBodyRepeat(f: ClaimLike, e: LedgerEntry): boolean {
 	return similarity(f, e) >= BODY_MATCH.bodySimilarity;
 }
 
+const isCrossSurface = (f: ClaimLike, e: LedgerEntry) => !f.path !== !e.path;
+
 /** One side inline, the other a general finding: the path gate would always reject it. */
-function isCrossSurfaceRepeat(f: ClaimLike, e: LedgerEntry): boolean {
-	if (!f.path === !e.path) return false;
+function isCrossSurfaceTitleRepeat(f: ClaimLike, e: LedgerEntry): boolean {
 	const unanchored = { path: null, line: null };
-	if (isSameClaim({ ...f, ...unanchored }, { ...e, ...unanchored }))
-		return true;
+	return (
+		isCrossSurface(f, e) &&
+		isSameClaim({ ...f, ...unanchored }, { ...e, ...unanchored })
+	);
+}
+
+function isCrossSurfaceIdentifierRepeat(f: ClaimLike, e: LedgerEntry): boolean {
+	if (!isCrossSurface(f, e)) return false;
 	const ids = codeIdentifiers(fullText(e));
 	if (![...codeIdentifiers(fullText(f))].some((id) => ids.has(id)))
 		return false;
@@ -108,6 +115,9 @@ const tierRule =
 	(f, e) =>
 		isSameClaim(f, e, options);
 
+const isCrossSurfaceRepeat: Rule = (f, e) =>
+	isCrossSurfaceTitleRepeat(f, e) || isCrossSurfaceIdentifierRepeat(f, e);
+
 const RULES: Rule[] = [
 	tierRule(DEFAULT_CLAIM_MATCH),
 	tierRule(CROSS_ROUND_MATCH),
@@ -116,8 +126,20 @@ const RULES: Rule[] = [
 	isCrossSurfaceRepeat,
 ];
 
+/** A wrongly suppressed P0 costs the most, so it gets only the title rules, and
+ * a shared identifier does not lower the tier 1 bar. */
+const P0_RULES: Rule[] = [
+	tierRule({
+		...DEFAULT_CLAIM_MATCH,
+		identifierSimilarity: DEFAULT_CLAIM_MATCH.titleSimilarity,
+	}),
+	tierRule(CROSS_ROUND_MATCH),
+	isMovedFileRepeat,
+	isCrossSurfaceTitleRepeat,
+];
+
 /** The settled entry the finding restates, or null. Open entries never match, a
- * test-gap finding never matches a defect finding, and when several entries
+ * test-gap finding never matches a defect finding, a P0 finding uses P0_RULES, and when several entries
  * match at the first matching rule the most similar one wins (ties: latest round,
  * then lowest id). */
 export function findSettledMatch(
@@ -128,7 +150,7 @@ export function findSettledMatch(
 	const settled = ledger
 		.filter((e) => isSettled(e) && isTestGap(e) === isTestGap(f))
 		.map((entry) => ({ entry, e: withoutProductNames(entry) }));
-	for (const rule of RULES) {
+	for (const rule of finding.severity === "P0" ? P0_RULES : RULES) {
 		const hits = settled.filter(({ e }) => rule(f, e));
 		if (hits.length === 0) continue;
 		const ranked = hits
