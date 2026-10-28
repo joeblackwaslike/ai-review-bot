@@ -1,7 +1,11 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PersistedFinding } from "../review-state.js";
 import type { RequestLike } from "./github.js";
-import { loadLedger, reconcileSurvivingPrior } from "./live.js";
+import {
+	LEDGER_TIMEOUT_MS,
+	loadLedger,
+	reconcileSurvivingPrior,
+} from "./live.js";
 import type { LedgerEntry } from "./types.js";
 
 const opts = { owner: "o", repo: "r", pull: 1, commentPrefix: "Bot" };
@@ -55,6 +59,26 @@ describe("loadLedger", () => {
 			ledger: [],
 			warm: false,
 		});
+		warn.mockRestore();
+	});
+});
+
+describe("loadLedger timeout", () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("returns cold when a request never settles", async () => {
+		vi.useFakeTimers();
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const octokit: RequestLike = {
+			request: (() => new Promise(() => {})) as RequestLike["request"],
+		};
+
+		const loaded = loadLedger(octokit, opts);
+		await vi.advanceTimersByTimeAsync(LEDGER_TIMEOUT_MS);
+
+		await expect(loaded).resolves.toEqual({ ledger: [], warm: false });
 		warn.mockRestore();
 	});
 });

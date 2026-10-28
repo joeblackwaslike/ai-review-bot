@@ -12,13 +12,28 @@ export interface LoadedLedger {
 	warm: boolean;
 }
 
-/** Never throws: a ledger that cannot be built suppresses nothing. */
+export const LEDGER_TIMEOUT_MS = 15_000;
+
+/** Never throws: a ledger that cannot be built within LEDGER_TIMEOUT_MS suppresses nothing. */
 export async function loadLedger(
 	octokit: RequestLike,
 	o: { owner: string; repo: string; pull: number; commentPrefix: string },
 ): Promise<LoadedLedger> {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const timeout = new Promise<never>((_, reject) => {
+		timer = setTimeout(
+			() =>
+				reject(
+					new Error(`ledger fetch timed out after ${LEDGER_TIMEOUT_MS}ms`),
+				),
+			LEDGER_TIMEOUT_MS,
+		);
+	});
 	try {
-		const evidence = await fetchLedgerEvidence(octokit, o);
+		const evidence = await Promise.race([
+			fetchLedgerEvidence(octokit, o),
+			timeout,
+		]);
 		return { ledger: buildLedger(evidence), warm: true };
 	} catch (err) {
 		console.warn("ledger unavailable; suppressing nothing this round", {
@@ -28,6 +43,8 @@ export async function loadLedger(
 			error: err instanceof Error ? err.message : String(err),
 		});
 		return { ledger: [], warm: false };
+	} finally {
+		clearTimeout(timer);
 	}
 }
 
