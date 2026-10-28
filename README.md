@@ -159,8 +159,9 @@ Model selection is automatic. The router classifies each PR into a tier based on
   processing.
 - API keys and GitHub App private keys live in Vercel env vars, never in the
   repo.
-- Local CLI auth (`ai-review watch`/`review`/`audit`) is opt-in, personal-use
-  only, and never wired into the webhook path (`src/auth.ts`).
+- Local CLI auth (`ai-review watch`/`review`/`audit`/`replay --live`) is
+  opt-in, personal-use only, and never wired into the webhook path
+  (`src/auth.ts`).
 
 ## What does review actually cost?
 

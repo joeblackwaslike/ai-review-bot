@@ -1,0 +1,1960 @@
+{
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "stealth-browser",
+	"pull": 1,
+	"provider": "anthropic",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-10-27T23:22:01.007Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 5642732822,
+			"provider": "anthropic",
+			"submittedAt": "2026-10-25T10:26:07Z",
+			"headSha": "de70f5e9961aa4a59d0f92c4189923bcbdf6ee00",
+			"baseSha": "1e49d776141cd71f4a9b3d62b82a329c9017b42b",
+			"mergeBase": "1e49d776141cd71f4a9b3d62b82a329c9017b42b",
+			"triggerAt": "2026-10-25T10:20:13Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "f60b224df448fe0edf892dec9db003f75fd39a86",
+					"committedAt": "2026-10-25T10:07:05Z",
+					"files": [
+						{
+							"path": ".dockerignore",
+							"ranges": [[1, 7]]
+						},
+						{
+							"path": ".gitignore",
+							"ranges": [[11, 15]]
+						},
+						{
+							"path": "Dockerfile",
+							"ranges": [[1, 19]]
+						},
+						{
+							"path": "LICENSE",
+							"ranges": [[1, 21]]
+						},
+						{
+							"path": "README.md",
+							"ranges": [[1, 218]]
+						},
+						{
+							"path": "biome.json",
+							"ranges": [[1, 23]]
+						},
+						{
+							"path": "camoufox/Dockerfile",
+							"ranges": [[1, 137]]
+						},
+						{
+							"path": "camoufox/NOTICE",
+							"ranges": [[1, 25]]
+						},
+						{
+							"path": "camoufox/launch_server.py",
+							"ranges": [[1, 92]]
+						},
+						{
+							"path": "deploy/deploy.sh",
+							"ranges": [[1, 28]]
+						},
+						{
+							"path": "deploy/k8s/camoufox-deployment.yaml",
+							"ranges": [[1, 60]]
+						},
+						{
+							"path": "deploy/k8s/camoufox-service.yaml",
+							"ranges": [[1, 11]]
+						},
+						{
+							"path": "deploy/k8s/gateway-deployment.yaml",
+							"ranges": [[1, 60]]
+						},
+						{
+							"path": "deploy/k8s/gateway-service.yaml",
+							"ranges": [[1, 11]]
+						},
+						{
+							"path": "deploy/k8s/ingress.yaml",
+							"ranges": [[1, 19]]
+						},
+						{
+							"path": "deploy/k8s/kustomization.yaml",
+							"ranges": [[1, 17]]
+						},
+						{
+							"path": "deploy/k8s/namespace.yaml",
+							"ranges": [[1, 4]]
+						},
+						{
+							"path": "deploy/k8s/pvc.yaml",
+							"ranges": [[1, 11]]
+						},
+						{
+							"path": "docs/superpowers/plans/2026-10-16-stealth-browser.md",
+							"ranges": [[1, 341]]
+						},
+						{
+							"path": "docs/superpowers/specs/2026-10-16-stealth-browser-design.md",
+							"ranges": [[1, 199]]
+						},
+						{
+							"path": "package.json",
+							"ranges": [[1, 34]]
+						},
+						{
+							"path": "pnpm-lock.yaml",
+							"ranges": [[1, 910]]
+						},
+						{
+							"path": "profiles/fingerprint.json",
+							"ranges": [[1, 668]]
+						},
+						{
+							"path": "scripts/build.sh",
+							"ranges": [[1, 18]]
+						},
+						{
+							"path": "scripts/gen_fingerprint.py",
+							"ranges": [[1, 58]]
+						},
+						{
+							"path": "scripts/login.py",
+							"ranges": [[1, 244]]
+						},
+						{
+							"path": "scripts/smoke.ts",
+							"ranges": [[1, 175]]
+						},
+						{
+							"path": "scripts/verify-fingerprint.ts",
+							"ranges": [[1, 41]]
+						},
+						{
+							"path": "src/app.ts",
+							"ranges": [[1, 194]]
+						},
+						{
+							"path": "src/browser.ts",
+							"ranges": [[1, 137]]
+						},
+						{
+							"path": "src/config.ts",
+							"ranges": [[1, 38]]
+						},
+						{
+							"path": "src/detect.ts",
+							"ranges": [[1, 69]]
+						},
+						{
+							"path": "src/profiles.ts",
+							"ranges": [[1, 61]]
+						},
+						{
+							"path": "src/server.ts",
+							"ranges": [[1, 41]]
+						},
+						{
+							"path": "src/state-store.ts",
+							"ranges": [[1, 159]]
+						},
+						{
+							"path": "src/throttle.ts",
+							"ranges": [[1, 102]]
+						},
+						{
+							"path": "src/url-guard.ts",
+							"ranges": [[1, 53]]
+						},
+						{
+							"path": "test/app.test.ts",
+							"ranges": [[1, 217]]
+						},
+						{
+							"path": "test/browser.test.ts",
+							"ranges": [[1, 37]]
+						},
+						{
+							"path": "test/config.test.ts",
+							"ranges": [[1, 27]]
+						},
+						{
+							"path": "test/detect.test.ts",
+							"ranges": [[1, 232]]
+						},
+						{
+							"path": "test/fingerprint.test.ts",
+							"ranges": [[1, 33]]
+						},
+						{
+							"path": "test/fixtures/amazon-search-ok.html",
+							"ranges": []
+						},
+						{
+							"path": "test/fixtures/ebay-challenge.html",
+							"ranges": [[1, 1]]
+						},
+						{
+							"path": "test/fixtures/ebay-error-page.html",
+							"ranges": [[1, 10]]
+						},
+						{
+							"path": "test/fixtures/ebay-sold-ok.html",
+							"ranges": [[1, 1]]
+						},
+						{
+							"path": "test/fixtures/reddit-login-wall.html",
+							"ranges": [[1, 1]]
+						},
+						{
+							"path": "test/fixtures/reddit-search-ok.html",
+							"ranges": []
+						},
+						{
+							"path": "test/integration/browser.test.ts",
+							"ranges": [[1, 47]]
+						},
+						{
+							"path": "test/profiles.test.ts",
+							"ranges": [[1, 47]]
+						},
+						{
+							"path": "test/state-store.test.ts",
+							"ranges": [[1, 115]]
+						},
+						{
+							"path": "test/throttle.test.ts",
+							"ranges": [[1, 122]]
+						},
+						{
+							"path": "test/url-guard.test.ts",
+							"ranges": [[1, 35]]
+						},
+						{
+							"path": "tsconfig.build.json",
+							"ranges": [[1, 4]]
+						},
+						{
+							"path": "tsconfig.json",
+							"ranges": [[1, 20]]
+						},
+						{
+							"path": "vitest.config.ts",
+							"ranges": [[1, 10]]
+						},
+						{
+							"path": "vitest.integration.config.ts",
+							"ranges": [[1, 10]]
+						}
+					]
+				},
+				{
+					"sha": "de70f5e9961aa4a59d0f92c4189923bcbdf6ee00",
+					"committedAt": "2026-10-25T10:20:13Z",
+					"files": [
+						{
+							"path": ".clawhip/state/prompt-submit.json",
+							"ranges": [[1, 8]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r0:c4370502157:0",
+					"roundIndex": 0,
+					"reviewId": 5642732822,
+					"source": "inline",
+					"commentId": 4370502157,
+					"path": "src/state-store.ts",
+					"line": 1,
+					"severity": "P3",
+					"title": "storageState cookies schema requires `expires` as a required number, but Playwright session cookies use expires: -1 which is fine — however schema marks several fields required (httpOnly, secure, sameSite) that Playwright's storageState cookies always include, so this looks consistent. No issue found here.",
+					"text": "🟢 **P3**\n\n**storageState cookies schema requires `expires` as a required number, but Playwright session cookies use expires: -1 which is fine — however schema marks several fields required (httpOnly, secure, sameSite) that Playwright's storageState cookies always include, so this looks consistent. No issue found here.**"
+				},
+				{
+					"id": "r0:c4370502157:1",
+					"roundIndex": 0,
+					"reviewId": 5642732822,
+					"source": "inline",
+					"commentId": 4370502157,
+					"path": "src/state-store.ts",
+					"line": 1,
+					"severity": "P3",
+					"title": "No actionable defect found; the generation-based guard and the `serial` queue in state-store.ts correctly handle the race described in the PR intent and is covered by test/app.test.ts 'keeps a login uploaded mid-scrape'.",
+					"text": "No actionable defect found; the generation-based guard and the `serial` queue in state-store.ts correctly handle the race described in the PR intent and is covered by test/app.test.ts 'keeps a login uploaded mid-scrape'."
+				},
+				{
+					"id": "r0:c4370502158:0",
+					"roundIndex": 0,
+					"reviewId": 5642732822,
+					"source": "inline",
+					"commentId": 4370502158,
+					"path": "src/throttle.ts",
+					"line": 66,
+					"severity": "P3",
+					"title": "Scheduler.run allows an extra task to slip past maxQueue under concurrent calls",
+					"text": "🟢 **P3**\n\n**Scheduler.run allows an extra task to slip past maxQueue under concurrent calls**"
+				},
+				{
+					"id": "r0:c4370502158:1",
+					"roundIndex": 0,
+					"reviewId": 5642732822,
+					"source": "inline",
+					"commentId": 4370502158,
+					"path": "src/throttle.ts",
+					"line": 66,
+					"severity": "P3",
+					"title": "In `run()`, `this.pausedUntil(profile)` is checked synchronously at call time, then again inside the `.then()` callback after `waitForGap`. Between enqueue and the `tail.then()` callback executing, other code may call `pause()` concurrently; this is handled. However `inFlight` is incremented before the `tail.then` chain is appended, and decremented only in the `finally` of the task — if the queued task is rejected because it was paused before starting (see test 'rejects a queued task when its profile is paused before it starts'), inFlight is still decremented via the same finally block. This looks internally consistent; no actionable defect found beyond the already-covered test, downgrading confidence.",
+					"text": "In `run()`, `this.pausedUntil(profile)` is checked synchronously at call time, then again inside the `.then()` callback after `waitForGap`. Between enqueue and the `tail.then()` callback executing, other code may call `pause()` concurrently; this is handled. However `inFlight` is incremented before the `tail.then` chain is appended, and decremented only in the `finally` of the task — if the queued task is rejected because it was paused before starting (see test 'rejects a queued task when its profile is paused before it starts'), inFlight is still decremented via the same finally block. This looks internally consistent; no actionable defect found beyond the already-covered test, downgrading confidence."
+				},
+				{
+					"id": "r0:c4370502158:2",
+					"roundIndex": 0,
+					"reviewId": 5642732822,
+					"source": "inline",
+					"commentId": 4370502158,
+					"path": "src/throttle.ts",
+					"line": 66,
+					"severity": "P3",
+					"title": "`run()` checks `this.inFlight > this.maxQueue` before incrementing, so it allows enqueuing while `inFlight` is at most `maxQueue + 1` already in flight (1 running + up to `maxQueue` waiting), then increments to `maxQueue + 2` momentarily before the new task's own `finally` runs — but more importantly, the existing test asserts exactly 5 may wait and the 6th is rejected, which does pass today. However, the queue count only decrements in each task's `finally`, which does not run until the task body itself finishes — including the time spent inside `waitForGap`. That means a request that is still waiting for its per-profile gap still occupies a queue slot, which is intended behavior, so this is not itself a bug; flagging only because the boundary condition (`>` instead of `>=`) is easy to misread when the code is next touched.",
+					"text": "`run()` checks `this.inFlight > this.maxQueue` before incrementing, so it allows enqueuing while `inFlight` is at most `maxQueue + 1` already in flight (1 running + up to `maxQueue` waiting), then increments to `maxQueue + 2` momentarily before the new task's own `finally` runs — but more importantly, the existing test asserts exactly 5 may wait and the 6th is rejected, which does pass today. However, the queue count only decrements in each task's `finally`, which does not run until the task body itself finishes — including the time spent inside `waitForGap`. That means a request that is still waiting for its per-profile gap still occupies a queue slot, which is intended behavior, so this is not itself a bug; flagging only because the boundary condition (`>` instead of `>=`) is easy to misread when the code is next touched."
+				},
+				{
+					"id": "r0:c4370502160:0",
+					"roundIndex": 0,
+					"reviewId": 5642732822,
+					"source": "inline",
+					"commentId": 4370502160,
+					"path": "src/detect.ts",
+					"line": 62,
+					"severity": "P2",
+					"title": "app.ts: classifyPage is passed result.status but blockReason/classifyPage never distinguishes 429 'rate_limited' from a true block when html also contains block markers",
+					"text": "🟡 **P2**\n\n**app.ts: classifyPage is passed result.status but blockReason/classifyPage never distinguishes 429 'rate_limited' from a true block when html also contains block markers**\n\nIn detect.ts, blockReason() (checked first) can match on captcha/challenge markers even when status is 429; since blockReason is checked before the status===429 rate_limited branch, a 429 response whose body happens to include a captcha-like marker will be classified 'blocked' (and trigger a 30-minute profile pause) rather than 'rate_limited' (no pause), contrary to the PR's stated design decision that 'a target 429 returns gateway 429 rate_limited with NO profile pause, while bot blocks return 423'. This is a plausible but unconfirmed edge case since real 429 pages rarely contain captcha markup."
+				},
+				{
+					"id": "r0:c4370502163:0",
+					"roundIndex": 0,
+					"reviewId": 5642732822,
+					"source": "inline",
+					"commentId": 4370502163,
+					"path": "src/url-guard.ts",
+					"line": 28,
+					"severity": "P2",
+					"title": "isPrivateIpv6 misses IPv4-mapped addresses without the ::ffff: prefix text match and doesn't cover all private ranges (e.g. unique-local fc00::/7 partially, but also misses 100.64.0.0/10 CGNAT reachability via IPv6-mapped, and NAT64 well-known prefix 64:ff9b::/96)",
+					"text": "🟡 **P2**\n\n**isPrivateIpv6 misses IPv4-mapped addresses without the ::ffff: prefix text match and doesn't cover all private ranges (e.g. unique-local fc00::/7 partially, but also misses 100.64.0.0/10 CGNAT reachability via IPv6-mapped, and NAT64 well-known prefix 64:ff9b::/96)**\n\n`isPrivateIpv6` only recognizes `::1`, `::`, and prefixes `fc`/`fd` (ULA) and `fe8`/`fe9`/`fea`/`feb` (link-local). It does not handle IPv4-mapped addresses written with mixed notation such as `::ffff:192.168.1.1` in dotted form (only the pure-hex form `::ffff:XXXX:XXXX` is matched by the regex), and does not reject `64:ff9b::<ipv4>` (NAT64) or IPv4-compatible `::<ipv4>` addresses, both of which Node's URL/isIP would normalize/accept and which can represent private IPv4 ranges. A URL like `http://[::ffff:192.168.1.1]/` would fail the regex (expects 2 hex groups, not dotted-quad) and fall through to the generic ULA/link-local checks, which don't match it, so it would incorrectly be treated as public."
+				},
+				{
+					"id": "r0:c4370502165:0",
+					"roundIndex": 0,
+					"reviewId": 5642732822,
+					"source": "inline",
+					"commentId": 4370502165,
+					"path": "src/url-guard.ts",
+					"line": 62,
+					"severity": "P2",
+					"title": "profileForUrl / isPublicHttpUrl operate on literal hostname only — documented but worth flagging as a real gap for a public gateway",
+					"text": "🟡 **P2**\n\n**profileForUrl / isPublicHttpUrl operate on literal hostname only — documented but worth flagging as a real gap for a public gateway**\n\nThe code comment acknowledges this is a literal-host check only and DNS rebinding to a private IP would pass. Given the PR body states Joe approved making the repo public and the gateway has no proxy/auth beyond a bearer token with no additional network isolation documented for the gateway pod's egress, this SSRF gap (DNS rebinding to internal services) is a real residual risk that should at least be tracked, not just left as an inline comment ponytail."
+				},
+				{
+					"id": "r0:c4370502167:0",
+					"roundIndex": 0,
+					"reviewId": 5642732822,
+					"source": "inline",
+					"commentId": 4370502167,
+					"path": "src/detect.ts",
+					"line": 13,
+					"severity": "P2",
+					"title": "classifyPage: EBAY_ERROR_TITLE regex matches any page whose title starts with 'Error Page', even for non-eBay profiles/hosts",
+					"text": "🟡 **P2**\n\n**classifyPage: EBAY_ERROR_TITLE regex matches any page whose title starts with 'Error Page', even for non-eBay profiles/hosts**\n\nblockReason() checks `EBAY_ERROR_TITLE.test(pageTitle(html))` unconditionally regardless of profile or the final URL's host. A non-eBay site that happens to render a title starting with 'Error Page' (e.g. a generic error page template used by many sites) would be classified as blocked with reason 'ebay_error_page', which is a misleading reason and could incorrectly trigger a profile pause for an unrelated site. The test 'blocks an eBay error page even for anon profile' confirms this is intentional but it conflates an eBay-specific heuristic with generic classification across all profiles/hosts."
+				},
+				{
+					"id": "r0:c4370502168:0",
+					"roundIndex": 0,
+					"reviewId": 5642732822,
+					"source": "inline",
+					"commentId": 4370502168,
+					"path": "src/app.ts",
+					"line": 199,
+					"severity": "P3",
+					"title": "saveCapture failures are swallowed with only a warn log, hiding capture loss from callers/metrics",
+					"text": "🟢 **P3**\n\n**saveCapture failures are swallowed with only a warn log, hiding capture loss from callers/metrics**\n\nWhen `store.saveCapture` throws (e.g., disk full, permission error on `/state/captures`), the error is caught and only logged at `warn` level; the gateway still returns the normal 423/401 response to the caller. This is a reasonable choice (a capture failure shouldn't fail the whole request), but note that `error: String(error)` loses the stack trace and any structured error info that `pino` would otherwise capture if passed as an `Error` object directly (pino supports an `err` serializer). Using `String(error)` flattens stack traces into a single string field, making 6-months-later debugging harder."
+				},
+				{
+					"id": "r0:c4370502170:0",
+					"roundIndex": 0,
+					"reviewId": 5642732822,
+					"source": "inline",
+					"commentId": 4370502170,
+					"path": "src/detect.ts",
+					"line": 47,
+					"severity": "P2",
+					"title": "classifyPage's rate_limited/http_block_status status checks only apply to non-reason paths but are checked before session_expired for ebay/reddit — confirm 403 on signin.ebay.com doesn't get misclassified",
+					"text": "🟡 **P2**\n\n**classifyPage's rate_limited/http_block_status status checks only apply to non-reason paths but are checked before session_expired for ebay/reddit — confirm 403 on signin.ebay.com doesn't get misclassified**\n\nWhen `status` is 403 and the finalUrl is `signin.ebay.com` (i.e., ebay session actually expired and the edge also returned 403 for that signin page), the function returns `blocked: http_block_status` instead of `session_expired`, because the status check runs before the session_expired check. This could mask a legitimate session expiry as a bot block, causing the gateway to pause the ebay profile for 30 minutes instead of simply reporting 401 session_expired (which has no pause). Since signin.ebay.com might plausibly return 403 to a stale/blocked session, this ordering could compound: a session that merely expired gets treated as a block and the profile gets paused unnecessarily."
+				},
+				{
+					"id": "r0:c4370502170:1",
+					"roundIndex": 0,
+					"reviewId": 5642732822,
+					"source": "inline",
+					"commentId": 4370502170,
+					"path": "src/detect.ts",
+					"line": 47,
+					"severity": "P3",
+					"title": "`classifyPage` receives only the final `status` (from `response?.status()` in src/browser.ts, which is the status of the final response object returned by `page.goto`). Since Playwright's `page.goto` response is the response for the final document after redirects in most cases, a transient 429 on an intermediate hop wouldn't be captured — only the last status matters. This is likely intended behavior (checking the final page status), but worth noting there's no handling for the case where `status` is null (e.g., due to a failed/aborted navigation that still returns HTML from cache) — then both the 429 and 403 checks are skipped and the page falls through to the ebay/reddit login-wall checks using only HTML/cookie heuristics. This is probably fine given the design intent but could silently miss blocks when the navigation response is null while HTML still contains block markers (those are still caught by blockReason). Not flagging as a defect given fallback coverage by blockReason.",
+					"text": "`classifyPage` receives only the final `status` (from `response?.status()` in src/browser.ts, which is the status of the final response object returned by `page.goto`). Since Playwright's `page.goto` response is the response for the final document after redirects in most cases, a transient 429 on an intermediate hop wouldn't be captured — only the last status matters. This is likely intended behavior (checking the final page status), but worth noting there's no handling for the case where `status` is null (e.g., due to a failed/aborted navigation that still returns HTML from cache) — then both the 429 and 403 checks are skipped and the page falls through to the ebay/reddit login-wall checks using only HTML/cookie heuristics. This is probably fine given the design intent but could silently miss blocks when the navigation response is null while HTML still contains block markers (those are still caught by blockReason). Not flagging as a defect given fallback coverage by blockReason."
+				},
+				{
+					"id": "r0:c4370502175:0",
+					"roundIndex": 0,
+					"reviewId": 5642732822,
+					"source": "inline",
+					"commentId": 4370502175,
+					"path": "scripts/login.py",
+					"line": 90,
+					"severity": "P3",
+					"title": "login.py's missing_cookie_error only validates reddit_session presence, not that the uploaded state actually matches the profile being signed into",
+					"text": "🟢 **P3**\n\n**login.py's missing_cookie_error only validates reddit_session presence, not that the uploaded state actually matches the profile being signed into**\n\nIf an operator runs `pnpm signin ebay` but accidentally navigates/logs into the wrong account or the wrong site tab is focused, there's no validation that the captured storageState's cookies/origins actually belong to the expected domain (ebay.com vs reddit.com) before uploading to `/profiles/<profile>/state`. A mis-click could silently overwrite the ebay session with reddit-domain cookies (or vice versa) if the operator confirms without checking. This is a minor operational-safety gap rather than a code defect, since the server-side schema validation only checks shape, not domain-profile correspondence."
+				},
+				{
+					"id": "r0:c4370502176:0",
+					"roundIndex": 0,
+					"reviewId": 5642732822,
+					"source": "inline",
+					"commentId": 4370502176,
+					"path": "src/throttle.ts",
+					"line": 59,
+					"severity": "P3",
+					"title": "Off-by-one in queue-full check lets 6 tasks wait instead of the documented 5",
+					"text": "🟢 **P3**\n\n**Off-by-one in queue-full check lets 6 tasks wait instead of the documented 5**\n\nThe plan's Task 4 spec says the scheduler should reject the 6th *waiting* task with QueueFullError, i.e. one running + 5 waiting = 6 total in-flight should be the max, and the 7th caller (the one attempting to become the 6th waiter) should be rejected. Here `inFlight` counts running+waiting together and the check is `this.inFlight > this.maxQueue` (i.e. rejects only when inFlight is already 6, meaning the 7th call sees inFlight=6 and is rejected, which actually matches the README's 'A request can wait... a seventh gets queue_full' and the test `rejects the sixth waiting task`). On closer reading this matches the test in test/throttle.test.ts (5 waiting + 1 blocker = 6, 7th rejected), so this is consistent — not a bug. Lowering confidence note: re-reviewed, no defect."
+				},
+				{
+					"id": "r0:c4370502179:0",
+					"roundIndex": 0,
+					"reviewId": 5642732822,
+					"source": "inline",
+					"commentId": 4370502179,
+					"path": "src/throttle.ts",
+					"line": 45,
+					"severity": "P3",
+					"title": "pause() takes effect immediately for in-flight running task but doesn't abort it",
+					"text": "🟢 **P3**\n\n**pause() takes effect immediately for in-flight running task but doesn't abort it**\n\nWhen `pause(profile)` is called while a task for that profile is currently running (not just waiting), the running task is not aborted — it continues to completion. This matches the design (abort isn't required, since the fetch already happened), but note that `scheduler.pause` is called from app.ts only after the fetch resolves and classification happens, so this isn't actually exercised mid-flight. No actionable defect; retracted."
+				},
+				{
+					"id": "r0:c4370502180:0",
+					"roundIndex": 0,
+					"reviewId": 5642732822,
+					"source": "inline",
+					"commentId": 4370502180,
+					"path": "src/app.ts",
+					"line": 103,
+					"severity": "P3",
+					"title": "finalUrl fallback to the original request URL on parse failure can mask a navigation to an unparseable/malicious URL",
+					"text": "🟢 **P3**\n\n**finalUrl fallback to the original request URL on parse failure can mask a navigation to an unparseable/malicious URL**\n\nIf `result.finalUrl` fails `new URL()` parsing (returns undefined from `parseUrl`), the code falls back to using the original request `url` for classification instead of surfacing an error. This means a genuinely malformed `finalUrl` returned by the browser (which should be rare, but could happen if the page did something unusual with history/location) is silently replaced by the original URL for classification purposes, potentially causing a bot-block or session-expiry redirect to go undetected because the classifier checks hostname/path of `finalUrl`. Given `page.url()` in Playwright almost always returns a valid absolute URL, this is a low-probability edge case, but it is a silent correctness gap with no logging of the mismatch."
+				},
+				{
+					"id": "r0:c4370502183:0",
+					"roundIndex": 0,
+					"reviewId": 5642732822,
+					"source": "inline",
+					"commentId": 4370502183,
+					"path": "src/state-store.ts",
+					"line": 74,
+					"severity": "P3",
+					"title": "writeIfUnchanged uses an in-memory generation counter that resets to 0 on every process restart, defeating the mid-scrape-login-race protection across deploys",
+					"text": "🟢 **P3**\n\n**writeIfUnchanged uses an in-memory generation counter that resets to 0 on every process restart, defeating the mid-scrape-login-race protection across deploys**\n\nThe code comment acknowledges this (`// ponytail: in-memory generation, fine for replicas: 1`), but the consequence is understated: on every pod restart (which happens on every deploy given `strategy: Recreate`), `generations` resets to an empty Map, so the first `read()` for a profile returns `generation: 0` even if the file was written many times before the restart. If a `/content` request is in flight across a restart boundary or a scrape started with generation 0 races a `PUT` that also resolves to writing generation 1 after a restart, the guard that's supposed to protect a manually uploaded login from being clobbered by a stale scrape write-back silently stops working immediately after every deploy, since any read immediately after restart reports generation 0 and any write (including a stale one from before restart, if such were possible) could match. In practice within a single process lifetime this is fine, but immediately after a rollout the protection window is effectively reset without notice, and a `PUT` that happens during the restart could be lost if a stale write-back request that was already in flight (and read generation 0 before the restart... not possible since read happens per-process). This is low real-world risk given restarts kill in-flight requests, but is worth flagging as the comment undersells the restart-reset behavior rather than the stated 'fine for replicas: 1' framing, which is about concurrent replicas, not restarts."
+				},
+				{
+					"id": "r0:body:0",
+					"roundIndex": 0,
+					"reviewId": 5642732822,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "isPublicHttpUrl uses bare 'kubernetes' and other single-label hostnames as blocklist, but does not block other internal-only single-label hosts generically",
+					"text": "isPublicHttpUrl uses bare 'kubernetes' and other single-label hostnames as blocklist, but does not block other internal-only single-label hosts generically"
+				},
+				{
+					"id": "r0:body:1",
+					"roundIndex": 0,
+					"reviewId": 5642732822,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Scheduler.run allows an off-by-one over the documented max queue of 5",
+					"text": "Scheduler.run allows an off-by-one over the documented max queue of 5"
+				},
+				{
+					"id": "r0:body:2",
+					"roundIndex": 0,
+					"reviewId": 5642732822,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Scheduler.run count-check lets a 7th waiting task through under concurrent calls",
+					"text": "Scheduler.run count-check lets a 7th waiting task through under concurrent calls"
+				},
+				{
+					"id": "r0:body:3",
+					"roundIndex": 0,
+					"reviewId": 5642732822,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "No unit test exercises the gateway reconnecting after a browser disconnect",
+					"text": "No unit test exercises the gateway reconnecting after a browser disconnect"
+				},
+				{
+					"id": "r0:body:4",
+					"roundIndex": 0,
+					"reviewId": 5642732822,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "No test for the request-deadline watchdog actually killing a hung browser",
+					"text": "No test for the request-deadline watchdog actually killing a hung browser"
+				},
+				{
+					"id": "r0:body:5",
+					"roundIndex": 0,
+					"reviewId": 5642732822,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "saveCapture failures are only caught, never asserted on in tests",
+					"text": "saveCapture failures are only caught, never asserted on in tests"
+				},
+				{
+					"id": "r0:body:6",
+					"roundIndex": 0,
+					"reviewId": 5642732822,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "URL-guard rejects dotless hostnames, blocking arbitrary internal single-label hosts but also legitimate local-network dotless hosts",
+					"text": "URL-guard rejects dotless hostnames, blocking arbitrary internal single-label hosts but also legitimate local-network dotless hosts"
+				},
+				{
+					"id": "r0:body:7",
+					"roundIndex": 0,
+					"reviewId": 5642732822,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "No test coverage for Scheduler behavior when a profile is paused while its task is already running (not just waiting)",
+					"text": "No test coverage for Scheduler behavior when a profile is paused while its task is already running (not just waiting)"
+				},
+				{
+					"id": "r0:body:8",
+					"roundIndex": 0,
+					"reviewId": 5642732822,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "gen_fingerprint.py's DROPPED_PREFIXES filtering may not strip geoip-dependent locale-adjacent keys consistently",
+					"text": "gen_fingerprint.py's DROPPED_PREFIXES filtering may not strip geoip-dependent locale-adjacent keys consistently"
+				},
+				{
+					"id": "r0:body:9",
+					"roundIndex": 0,
+					"reviewId": 5642732822,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "isPublicHttpUrl does not reject '.internal' or other arbitrary cluster-reserved suffixes added later, and 'local' bare host check uses endsWith('.local') which is correct, but the blocked-suffix bare-hostname check is fragile",
+					"text": "isPublicHttpUrl does not reject '.internal' or other arbitrary cluster-reserved suffixes added later, and 'local' bare host check uses endsWith('.local') which is correct, but the blocked-suffix bare-hostname check is fragile"
+				},
+				{
+					"id": "r0:body:10",
+					"roundIndex": 0,
+					"reviewId": 5642732822,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "No test coverage for ProfilePausedError thrown synchronously vs from inside scheduler.run for the queue-full + paused interaction ordering in app.ts",
+					"text": "No test coverage for ProfilePausedError thrown synchronously vs from inside scheduler.run for the queue-full + paused interaction ordering in app.ts"
+				},
+				{
+					"id": "r0:body:11",
+					"roundIndex": 0,
+					"reviewId": 5642732822,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Live validation inconclusive despite PR claiming everything is deployed and verified",
+					"text": "Live validation inconclusive despite PR claiming everything is deployed and verified"
+				},
+				{
+					"id": "r0:body:12",
+					"roundIndex": 0,
+					"reviewId": 5642732822,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "profileForUrl allows any domain ending in a profile's registrable domain as a label suffix only if dot-separated, but PROFILES.domains list includes bare apex without validating registrability",
+					"text": "profileForUrl allows any domain ending in a profile's registrable domain as a label suffix only if dot-separated, but PROFILES.domains list includes bare apex without validating registrability"
+				}
+			]
+		},
+		{
+			"index": 1,
+			"reviewId": 5643315288,
+			"provider": "anthropic",
+			"submittedAt": "2026-10-25T13:04:11Z",
+			"headSha": "92cc73d69711031944afe8f96712679f159d8b80",
+			"baseSha": "de70f5e9961aa4a59d0f92c4189923bcbdf6ee00",
+			"mergeBase": "de70f5e9961aa4a59d0f92c4189923bcbdf6ee00",
+			"triggerAt": "2026-10-25T12:57:05Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "1a90c7f251427583249371c4f0acf7fab545d6b2",
+					"committedAt": "2026-10-25T12:44:37Z",
+					"files": [
+						{
+							"path": "README.md",
+							"ranges": [[52, 63]]
+						},
+						{
+							"path": "deploy/k8s/camoufox-networkpolicy.yaml",
+							"ranges": [[1, 39]]
+						},
+						{
+							"path": "deploy/k8s/gateway-deployment.yaml",
+							"ranges": [[21, 27]]
+						},
+						{
+							"path": "deploy/k8s/kustomization.yaml",
+							"ranges": [[6, 12]]
+						},
+						{
+							"path": "package.json",
+							"ranges": [[1, 6]]
+						},
+						{
+							"path": "scripts/verify-fingerprint.ts",
+							"ranges": [[26, 36]]
+						},
+						{
+							"path": "src/app.ts",
+							"ranges": [[20, 25], [78, 106], [129, 144]]
+						},
+						{
+							"path": "src/browser.ts",
+							"ranges": [[20, 28], [121, 144]]
+						},
+						{
+							"path": "src/detect.ts",
+							"ranges": [[1, 4], [32, 39], [49, 61]]
+						},
+						{
+							"path": "src/state-store.ts",
+							"ranges": [[140, 150]]
+						},
+						{
+							"path": "test/app.test.ts",
+							"ranges": [[142, 194]]
+						},
+						{
+							"path": "test/browser.test.ts",
+							"ranges": [[34, 55]]
+						},
+						{
+							"path": "test/detect.test.ts",
+							"ranges": [[181, 208]]
+						},
+						{
+							"path": "test/state-store.test.ts",
+							"ranges": [[106, 119]]
+						}
+					]
+				},
+				{
+					"sha": "92cc73d69711031944afe8f96712679f159d8b80",
+					"committedAt": "2026-10-25T12:57:05Z",
+					"files": [
+						{
+							"path": ".clawhip/state/prompt-submit.json",
+							"ranges": [[1, 8]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r1:c4370934137:0",
+					"roundIndex": 1,
+					"reviewId": 5643315288,
+					"source": "inline",
+					"commentId": 4370934137,
+					"path": "src/profiles.ts",
+					"line": 59,
+					"severity": "P3",
+					"title": "profileForUrl allows IDN/trailing-dot host variants to bypass domain matching inconsistently with isPublicHttpUrl's normalization",
+					"text": "🟢 **P3**\n\n**profileForUrl allows IDN/trailing-dot host variants to bypass domain matching inconsistently with isPublicHttpUrl's normalization**\n\nprofileForUrl() matches on `url.hostname` directly (host === d || host.endsWith(`.${d}`)), but isPublicHttpUrl() in url-guard.ts explicitly strips a trailing dot and brackets before checking (`url.hostname.replace(/^\\[|\\]$/g, \"\").replace(/\\.$/, \"\")`). A URL like `https://ebay.com./itm/1` (trailing dot, a valid DNS syntax many resolvers normalize) would fail the `host === \"ebay.com\"` check here in profileForUrl, routing it to `anon` — bypassing eBay's login gate/pacing silently rather than erroring, since isPublicHttpUrl would also reject the trailing-dot variant as a non-public host (so in practice this specific vector is blocked upstream). This is a low-confidence edge case already mitigated by the URL guard; flagging because the inconsistent normalization between the two modules is fragile if isPublicHttpUrl's logic changes independently."
+				},
+				{
+					"id": "r1:c4370934140:0",
+					"roundIndex": 1,
+					"reviewId": 5643315288,
+					"source": "inline",
+					"commentId": 4370934140,
+					"path": "src/app.ts",
+					"line": 180,
+					"severity": "P3",
+					"title": "writeIfUnchanged failure path catches all errors, including schema/logic bugs, and only logs a warn",
+					"text": "🟢 **P3**\n\n**writeIfUnchanged failure path catches all errors, including schema/logic bugs, and only logs a warn**\n\nThe `.catch((error: unknown) => logger.warn(...))` here is deliberately broad per the PR's intent (any state-save failure should not turn a successful fetch into a 502). That's a reasonable product decision, but as written it also swallows bugs in `writeIfUnchanged` itself (e.g. a TypeError from a malformed `result.storageState`) with the same generic `state_save_failed` warning as a disk/permission error, making the two indistinguishable in logs. Since this is explicitly called out as intentional in the PR body (\"failed cookie save logs instead of 502\"), I'm not blocking on it, but consider including `error.name`/`error.constructor.name` in the logged fields so an operator can tell a transient I/O failure from a code defect without needing a stack trace dump."
+				},
+				{
+					"id": "r1:c4370934143:0",
+					"roundIndex": 1,
+					"reviewId": 5643315288,
+					"source": "inline",
+					"commentId": 4370934143,
+					"path": "src/detect.ts",
+					"line": 38,
+					"severity": "P3",
+					"title": "classifyPage silently assumes finalUrl is always a valid absolute URL",
+					"text": "🟢 **P3**\n\n**classifyPage silently assumes finalUrl is always a valid absolute URL**\n\n`classifyPage` does `new URL(input.finalUrl)` without a try/catch. In app.ts the caller does guard against an invalid `finalUrl` by falling back to the original request `url` (`const finalUrl = parseUrl(result.finalUrl) ? result.finalUrl : url;`), so in practice this is currently safe as long as the original `url` passed to `/content` is always a valid absolute URL (which is enforced by `isPublicHttpUrl`). However, this makes `classifyPage` fragile to any future caller (e.g. a unit test or another route) that doesn't pre-validate `finalUrl`, since a malformed string would throw an uncaught exception inside page classification rather than returning a typed verdict."
+				},
+				{
+					"id": "r1:c4370934147:0",
+					"roundIndex": 1,
+					"reviewId": 5643315288,
+					"source": "inline",
+					"commentId": 4370934147,
+					"path": "src/profiles.ts",
+					"line": 52,
+					"severity": "P3",
+					"title": "profileForUrl's domain-suffix matching permits any attacker-registered subdomain to assume ebay/reddit profile status",
+					"text": "🟢 **P3**\n\n**profileForUrl's domain-suffix matching permits any attacker-registered subdomain to assume ebay/reddit profile status**\n\n`profileForUrl` matches `host === d || host.endsWith(`.${d}`)`, so any hostname ending in `.ebay.com` or `.reddit.com` (e.g. an attacker-controlled DNS name like `evil.ebay.com` if such a subdomain could ever be provisioned by a third party, or more realistically a legitimately-issued subdomain the operator didn't anticipate) is treated as the `ebay`/`reddit` profile and gets the saved login session attached via `storageState`. This is an intentional design per the README ('A profile owns its domain and every subdomain of it'), but it does mean a successful subdomain takeover or any newly-added legitimate subdomain under ebay.com/reddit.com would automatically receive the saved session cookies without any additional review. This is a design tradeoff worth being aware of rather than a clear-cut bug, since it matches documented intent."
+				},
+				{
+					"id": "r1:c4370934151:0",
+					"roundIndex": 1,
+					"reviewId": 5643315288,
+					"source": "inline",
+					"commentId": 4370934151,
+					"path": "src/state-store.ts",
+					"line": 145,
+					"severity": "P3",
+					"title": "Capture cleanup sort is lexicographic on raw filenames, not strictly chronological across kind boundaries, but keeps newest 20 globally rather than per-profile/kind",
+					"text": "🟢 **P3**\n\n**Capture cleanup sort is lexicographic on raw filenames, not strictly chronological across kind boundaries, but keeps newest 20 globally rather than per-profile/kind**\n\nsaveCapture's cleanup lists all files in the captures directory (mixing profiles and kinds) and keeps only the newest 20 overall, deleting the oldest regardless of profile/kind. If eBay produces many blocks in a short window, Reddit's older-but-still-relevant captures could be evicted first (or vice versa) since the 20-item cap is global, not per-profile. This matches the stated design in the plan ('keeping the newest 20') but may surprise an operator expecting per-profile retention. Low confidence this is a bug vs. intended; flagging as a design note."
+				},
+				{
+					"id": "r1:c4370934156:0",
+					"roundIndex": 1,
+					"reviewId": 5643315288,
+					"source": "inline",
+					"commentId": 4370934156,
+					"path": "test/state-store.test.ts",
+					"line": 1,
+					"severity": "P3",
+					"title": "No test exercises writeIfUnchanged racing with a concurrent write() via the serial queue under real contention",
+					"text": "🟢 **P3**\n\n**No test exercises writeIfUnchanged racing with a concurrent write() via the serial queue under real contention**\n\nThe `serial` helper in state-store.ts chains all read/write/writeIfUnchanged calls through a single promise chain to avoid races, but there is no test that issues overlapping write() and writeIfUnchanged() calls (not just read-then-write sequential calls) to confirm the serialization actually prevents a lost update when both are fired concurrently (e.g., Promise.all([store.write(...), store.writeIfUnchanged(...)])). The existing tests call these sequentially with awaits, which doesn't test the actual concurrency-safety guarantee the `chain` mechanism exists for."
+				},
+				{
+					"id": "r1:c4370934160:0",
+					"roundIndex": 1,
+					"reviewId": 5643315288,
+					"source": "inline",
+					"commentId": 4370934160,
+					"path": "src/app.ts",
+					"line": 92,
+					"severity": "P3",
+					"title": "generation read only set for login profiles; writeIfUnchanged uses generation=0 default fine, but note ordering subtlety",
+					"text": "🟢 **P3**\n\n**generation read only set for login profiles; writeIfUnchanged uses generation=0 default fine, but note ordering subtlety**\n\n`generation` is captured from `scheduler.run`'s inner callback via closure, but if `scheduler.run` throws before the task body executes (e.g. ProfilePausedError at start-of-task re-check), `generation` stays at its initial 0. This is harmless today because the catch block for ProfilePausedError/QueueFullError returns before reaching the writeIfUnchanged call, so no functional bug — flagging only as a readability note, not a defect, so omitting from inline severity."
+				},
+				{
+					"id": "r1:c4370934163:0",
+					"roundIndex": 1,
+					"reviewId": 5643315288,
+					"source": "inline",
+					"commentId": 4370934163,
+					"path": "src/throttle.ts",
+					"line": 66,
+					"severity": "P3",
+					"title": "Off-by-one: queue cap allows 5 waiting tasks before rejecting, but the 6th (not 5th) waiting request is the one that actually throws QueueFullError, inconsistent with inline comment",
+					"text": "🟢 **P3**\n\n**Off-by-one: queue cap allows 5 waiting tasks before rejecting, but the 6th (not 5th) waiting request is the one that actually throws QueueFullError, inconsistent with inline comment**\n\nThe comment above states 'One in-flight task is running; maxQueue more may wait' but the guard `this.inFlight > this.maxQueue` combined with `this.inFlight++` happening after the check means: at call N, if inFlight (before increment) is already > maxQueue (5), reject. Walking through: calls 1-6 have inFlight values 0,1,2,3,4,5 before their checks (all <=5, so accepted), call 7 sees inFlight=6 > 5 and is rejected. That's 1 running + 5 waiting accepted, with the 7th rejected — matching the documented 5-waiting limit. This confirms the behavior is likely correct as implemented despite the prior review's claim of an off-by-one; however this makes the queue capacity include the currently-running task plus 5 waiting = 6 total in flight, which matches intent. No actionable bug found here on closer inspection — withdrawing this as a finding."
+				},
+				{
+					"id": "r1:body:0",
+					"roundIndex": 1,
+					"reviewId": 5643315288,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "ProfileName comparisons in profiles.ts rely on string equality rather than exhaustive checks",
+					"text": "ProfileName comparisons in profiles.ts rely on string equality rather than exhaustive checks"
+				},
+				{
+					"id": "r1:body:1",
+					"roundIndex": 1,
+					"reviewId": 5643315288,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "QueueFullError off-by-one already flagged by prior review; same pattern also affects ProfilePausedError check ordering",
+					"text": "QueueFullError off-by-one already flagged by prior review; same pattern also affects ProfilePausedError check ordering"
+				},
+				{
+					"id": "r1:body:2",
+					"roundIndex": 1,
+					"reviewId": 5643315288,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "saveCapture failures are silently swallowed with only a warn log, losing forensic evidence on the very path meant to capture it",
+					"text": "saveCapture failures are silently swallowed with only a warn log, losing forensic evidence on the very path meant to capture it"
+				},
+				{
+					"id": "r1:body:3",
+					"roundIndex": 1,
+					"reviewId": 5643315288,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "In-flight work counted toward queue capacity creates an off-by-one in the documented queue limit",
+					"text": "In-flight work counted toward queue capacity creates an off-by-one in the documented queue limit"
+				},
+				{
+					"id": "r1:body:4",
+					"roundIndex": 1,
+					"reviewId": 5643315288,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Capture file pruning can delete files out of chronological order when filenames lack a parseable timestamp",
+					"text": "Capture file pruning can delete files out of chronological order when filenames lack a parseable timestamp"
+				},
+				{
+					"id": "r1:body:5",
+					"roundIndex": 1,
+					"reviewId": 5643315288,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Scheduler.inFlight off-by-one still allows 6 waiting tasks (unaddressed from prior review)",
+					"text": "Scheduler.inFlight off-by-one still allows 6 waiting tasks (unaddressed from prior review)"
+				},
+				{
+					"id": "r1:body:6",
+					"roundIndex": 1,
+					"reviewId": 5643315288,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "No unit test asserts the 429-before-block precedence end-to-end through the scheduler/app for a paused profile receiving a 429",
+					"text": "No unit test asserts the 429-before-block precedence end-to-end through the scheduler/app for a paused profile receiving a 429"
+				},
+				{
+					"id": "r1:body:7",
+					"roundIndex": 1,
+					"reviewId": 5643315288,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "ebay error-page title match is too broad and anchored only at the start",
+					"text": "ebay error-page title match is too broad and anchored only at the start"
+				},
+				{
+					"id": "r1:body:8",
+					"roundIndex": 1,
+					"reviewId": 5643315288,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Scheduler.inFlight off-by-one allows 6 waiting tasks before QueueFullError, not 5 as documented",
+					"text": "Scheduler.inFlight off-by-one allows 6 waiting tasks before QueueFullError, not 5 as documented"
+				}
+			]
+		},
+		{
+			"index": 2,
+			"reviewId": 5644281193,
+			"provider": "anthropic",
+			"submittedAt": "2026-10-25T17:12:09Z",
+			"headSha": "493a82d5343bbd3b3a0152fdcb1565b73e5c5a0f",
+			"baseSha": "92cc73d69711031944afe8f96712679f159d8b80",
+			"mergeBase": "92cc73d69711031944afe8f96712679f159d8b80",
+			"triggerAt": "2026-10-25T15:04:35Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "07ab501c879cf96f9931038d7c487dbe0f597a88",
+					"committedAt": "2026-10-25T14:23:39Z",
+					"files": [
+						{
+							"path": ".clawhip/state/prompt-submit.json",
+							"ranges": []
+						},
+						{
+							"path": ".dockerignore",
+							"ranges": [[5, 10]]
+						},
+						{
+							"path": ".gitignore",
+							"ranges": [[13, 18]]
+						},
+						{
+							"path": "README.md",
+							"ranges": [[56, 65]]
+						},
+						{
+							"path": "deploy/deploy.sh",
+							"ranges": [[14, 27]]
+						},
+						{
+							"path": "deploy/k8s/camoufox-networkpolicy.yaml",
+							"ranges": [[2, 11], [15, 30]]
+						},
+						{
+							"path": "deploy/k8s/gateway-deployment.yaml",
+							"ranges": [[21, 27]]
+						},
+						{
+							"path": "docs/superpowers/plans/2026-10-16-stealth-browser.md",
+							"ranges": [[1, 11]]
+						},
+						{
+							"path": "docs/superpowers/specs/2026-10-16-stealth-browser-design.md",
+							"ranges": [[1, 11]]
+						},
+						{
+							"path": "package.json",
+							"ranges": [[1, 11]]
+						},
+						{
+							"path": "scripts/login.py",
+							"ranges": [[73, 80], [86, 96], [138, 155], [235, 250]]
+						},
+						{
+							"path": "scripts/smoke.ts",
+							"ranges": [[39, 49], [57, 77], [164, 170]]
+						},
+						{
+							"path": "scripts/verify-fingerprint.ts",
+							"ranges": [[8, 18]]
+						},
+						{
+							"path": "src/app.ts",
+							"ranges": [
+								[4, 15],
+								[36, 44],
+								[51, 60],
+								[95, 134],
+								[163, 178],
+								[223, 234]
+							]
+						},
+						{
+							"path": "src/browser.ts",
+							"ranges": [[100, 127]]
+						},
+						{
+							"path": "src/config.ts",
+							"ranges": [[22, 28]]
+						},
+						{
+							"path": "src/detect.ts",
+							"ranges": [[8, 20]]
+						},
+						{
+							"path": "src/profiles.ts",
+							"ranges": [[51, 58]]
+						},
+						{
+							"path": "src/throttle.ts",
+							"ranges": [[74, 84], [92, 102]]
+						},
+						{
+							"path": "test/app.test.ts",
+							"ranges": [[189, 251]]
+						},
+						{
+							"path": "test/config.test.ts",
+							"ranges": [[16, 31]]
+						},
+						{
+							"path": "test/detect.test.ts",
+							"ranges": [[192, 223], [243, 249]]
+						},
+						{
+							"path": "test/profiles.test.ts",
+							"ranges": [[17, 24]]
+						},
+						{
+							"path": "test/throttle.test.ts",
+							"ranges": [[110, 130]]
+						}
+					]
+				},
+				{
+					"sha": "20efc696a4a77df107a279890409a640fa784963",
+					"committedAt": "2026-10-25T14:53:55Z",
+					"files": [
+						{
+							"path": "README.md",
+							"ranges": [[90, 97]]
+						}
+					]
+				},
+				{
+					"sha": "493a82d5343bbd3b3a0152fdcb1565b73e5c5a0f",
+					"committedAt": "2026-10-25T15:04:35Z",
+					"files": [
+						{
+							"path": "README.md",
+							"ranges": [[176, 185]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r2:c4371651731:0",
+					"roundIndex": 2,
+					"reviewId": 5644281193,
+					"source": "inline",
+					"commentId": 4371651731,
+					"path": "src/detect.ts",
+					"line": 14,
+					"severity": "P3",
+					"title": "eBay error-page title regex is broad and only anchored at the start",
+					"text": "🟢 **P3**\n\n**eBay error-page title regex is broad and only anchored at the start**\n\n`EBAY_ERROR_TITLE = /^Error Page/i` will match any eBay page whose title happens to start with the literal words 'Error Page', even if that's a legitimate product/listing title (e.g. a seller selling a book titled 'Error Page...'). This was already flagged in a prior review round and remains unaddressed. Consider requiring the full title shape (e.g. `/^Error Page \\| eBay$/i`, matching the exact fixture `Error Page | eBay`) to reduce false positives against legitimate eBay listing titles."
+				},
+				{
+					"id": "r2:c4371651740:0",
+					"roundIndex": 2,
+					"reviewId": 5644281193,
+					"source": "inline",
+					"commentId": 4371651740,
+					"path": "src/app.ts",
+					"line": 208,
+					"severity": "P3",
+					"title": "saveCapture failures are only warn-logged, silently losing forensic evidence",
+					"text": "🟢 **P3**\n\n**saveCapture failures are only warn-logged, silently losing forensic evidence**\n\nWhen a block or session-expiry is detected, `saveCapture` is wrapped so any failure (e.g. disk full, permission error) is swallowed with just a `logger.warn`. This is the exact path meant to capture forensic evidence when something goes wrong (a block/challenge), so silently losing that evidence on write failure removes the primary debugging signal for exactly the failure mode operators care about most. This was flagged previously and remains as designed in this diff — acceptable if intentional, but worth confirming is still the desired tradeoff given captures are the main diagnostic artifact for blocks."
+				},
+				{
+					"id": "r2:c4371651746:0",
+					"roundIndex": 2,
+					"reviewId": 5644281193,
+					"source": "inline",
+					"commentId": 4371651746,
+					"path": "src/state-store.ts",
+					"line": 143,
+					"severity": "P3",
+					"title": "Capture file pruning can delete files out of chronological order when filenames lack a parseable timestamp",
+					"text": "🟢 **P3**\n\n**Capture file pruning can delete files out of chronological order when filenames lack a parseable timestamp**\n\nThe pruning sort uses `TIMESTAMP_START = /\\d{4}-.*$/` to extract a sortable suffix from each filename, falling back to the full filename `a`/`b` when the regex doesn't match. Since filenames are generated internally as `${profile}-${kind}-${stamp}.html` where `stamp` is an ISO string, this is unlikely to misfire for files this code itself creates, but if any other file ever lands in the captures directory (e.g. a partial write from an older code version, or an operator-dropped file) its sort key degrades to lexicographic ordering on the whole filename, which can interleave unpredictably with the timestamp-keyed entries and cause pruning to delete newer real captures while keeping the stray file. This was flagged in a prior review round."
+				},
+				{
+					"id": "r2:c4371651754:0",
+					"roundIndex": 2,
+					"reviewId": 5644281193,
+					"source": "inline",
+					"commentId": 4371651754,
+					"path": "deploy/k8s/gateway-deployment.yaml",
+					"line": 27,
+					"severity": "P3",
+					"title": "WS_PATH/ws path secret only guards the Camoufox endpoint by obscurity; combined with NetworkPolicy this is acceptable but the ws path is also embedded in CAMOUFOX_WS_URL env var which could leak via process listing or logs",
+					"text": "🟢 **P3**\n\n**WS_PATH/ws path secret only guards the Camoufox endpoint by obscurity; combined with NetworkPolicy this is acceptable but the ws path is also embedded in CAMOUFOX_WS_URL env var which could leak via process listing or logs**\n\ncamoufox-deployment.yaml passes WS_PATH via secretKeyRef, and gateway-deployment.yaml builds CAMOUFOX_WS_URL as `ws://camoufox.stealth-browser.svc.cluster.local:3000/$(WS_PATH)`. Kubernetes env var substitution with `$(WS_PATH)` exposes the fully-resolved URL (including the secret path) in `kubectl describe pod` output and in any sidecar/debug tooling that dumps the container's environment, somewhat weakening the 'ws path never appears in logs' design goal stated elsewhere (launch_server.py and login.py both go out of their way to redact it). This is a design tradeoff already partially mitigated by the NetworkPolicy restricting ingress to gateway pods, so it's informational rather than blocking."
+				},
+				{
+					"id": "r2:c4371651759:0",
+					"roundIndex": 2,
+					"reviewId": 5644281193,
+					"source": "inline",
+					"commentId": 4371651759,
+					"path": "src/url-guard.ts",
+					"line": 60,
+					"severity": "P3",
+					"title": "url-guard only validates the literal hostname; DNS-rebinding/redirect SSRF risk is mitigated by NetworkPolicy but gateway itself has no defense-in-depth here",
+					"text": "🟢 **P3**\n\n**url-guard only validates the literal hostname; DNS-rebinding/redirect SSRF risk is mitigated by NetworkPolicy but gateway itself has no defense-in-depth here**\n\nisPublicHttpUrl checks only the literal hostname of the request URL and explicitly documents (via the ponytail comment) that DNS names resolving to private IPs pass through. This is called out in the README and mitigated by a Kubernetes NetworkPolicy restricting the Camoufox pod's egress — but that mitigation only works on clusters whose CNI enforces NetworkPolicy, and the README itself notes this caveat. Since the gateway is the only HTTP-facing check, and it's bypassable by any attacker who controls DNS for a URL passed to /content (e.g., a short-lived DNS record pointing to an internal IP), this is a known, documented, and partially-mitigated gap rather than a newly discovered one. No action needed beyond what's already documented, but worth confirming the NetworkPolicy is always deployed in practice."
+				},
+				{
+					"id": "r2:c4371651762:0",
+					"roundIndex": 2,
+					"reviewId": 5644281193,
+					"source": "inline",
+					"commentId": 4371651762,
+					"path": "src/throttle.ts",
+					"line": 76,
+					"severity": "P2",
+					"title": "Scheduler.inFlight off-by-one allows 6 waiting tasks, not 5",
+					"text": "🟡 **P2**\n\n**Scheduler.inFlight off-by-one allows 6 waiting tasks, not 5**\n\n`inFlight` is incremented for every call to `run`, including the currently-running task. The guard `if (this.inFlight > this.maxQueue)` rejects only once `inFlight` exceeds `maxQueue` (5), meaning when `inFlight === 6` (1 running + 5 waiting) a 6th task is still accepted before the 7th is rejected at `inFlight === 7` — giving 6 waiting tasks, not 5 as documented in the README (\"One request runs and up to five wait; a seventh gets queue_full\") and in Global Constraints (\"Queue holds 5 waiting requests; the 6th gets 429\"). This was already flagged in a prior review round and remains unaddressed in this diff."
+				},
+				{
+					"id": "r2:body:0",
+					"roundIndex": 2,
+					"reviewId": 5644281193,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "This PR body claims a docs-only change, but the diff includes the entire codebase",
+					"text": "This PR body claims a docs-only change, but the diff includes the entire codebase"
+				},
+				{
+					"id": "r2:body:1",
+					"roundIndex": 2,
+					"reviewId": 5644281193,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Scheduler.inFlight off-by-one still allows 6 waiting tasks instead of the documented 5 (carried over from prior review, unaddressed)",
+					"text": "Scheduler.inFlight off-by-one still allows 6 waiting tasks instead of the documented 5 (carried over from prior review, unaddressed)"
+				},
+				{
+					"id": "r2:body:2",
+					"roundIndex": 2,
+					"reviewId": 5644281193,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "README-only PR body matches the diff; nothing to flag as a security regression",
+					"text": "README-only PR body matches the diff; nothing to flag as a security regression"
+				},
+				{
+					"id": "r2:body:3",
+					"roundIndex": 2,
+					"reviewId": 5644281193,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "README-only PR body vs actual large diff",
+					"text": "README-only PR body vs actual large diff"
+				}
+			]
+		},
+		{
+			"index": 3,
+			"reviewId": 5644679320,
+			"provider": "anthropic",
+			"submittedAt": "2026-10-25T18:37:53Z",
+			"headSha": "88edc5622b580ef14deea7ea03b25ad7edbf267b",
+			"baseSha": "493a82d5343bbd3b3a0152fdcb1565b73e5c5a0f",
+			"mergeBase": "493a82d5343bbd3b3a0152fdcb1565b73e5c5a0f",
+			"triggerAt": "2026-10-25T18:23:45Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "88edc5622b580ef14deea7ea03b25ad7edbf267b",
+					"committedAt": "2026-10-25T18:23:45Z",
+					"files": [
+						{
+							"path": "deploy/k8s/gateway-deployment.yaml",
+							"ranges": [[21, 27]]
+						},
+						{
+							"path": "package.json",
+							"ranges": [[1, 6]]
+						},
+						{
+							"path": "src/app.ts",
+							"ranges": [[187, 198]]
+						},
+						{
+							"path": "test/app.test.ts",
+							"ranges": [[3, 9], [57, 66], [75, 81], [249, 268]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r3:c4371934612:0",
+					"roundIndex": 3,
+					"reviewId": 5644679320,
+					"source": "inline",
+					"commentId": 4371934612,
+					"path": "src/app.ts",
+					"line": 177,
+					"severity": "P3",
+					"title": "navigation_failed log includes host even when host could be stale/empty for malformed early failures",
+					"text": "🟢 **P3**\n\n**navigation_failed log includes host even when host could be stale/empty for malformed early failures**\n\nThe newly added navigation_failed warn log captures `host` from the outer closure, which is set right after `isPublicHttpUrl` validation succeeds (`host = parsed.hostname`). This is fine for the documented navigation-failure path, but if `scheduler.run` throws before that assignment in some future refactor, `host` would silently default to `\"\"\" ` rather than surface an error. Low risk today since the code order guarantees `host` is set before `scheduler.run` is called, but worth a comment noting this invariant since the fix's entire value (per the PR description) depends on `host` being correctly populated."
+				},
+				{
+					"id": "r3:c4371934613:0",
+					"roundIndex": 3,
+					"reviewId": 5644679320,
+					"source": "inline",
+					"commentId": 4371934613,
+					"path": "src/app.ts",
+					"line": 198,
+					"severity": "P2",
+					"title": "navigation_failed log includes raw error message that may contain the Camoufox ws secret path",
+					"text": "🟡 **P2**\n\n**navigation_failed log includes raw error message that may contain the Camoufox ws secret path**\n\nIn `src/app.ts`, the catch-all branch logs `err: message` where `message = error instanceof Error ? error.message : String(error)`. The `createCamoufoxFetcher` in `src/browser.ts` does redact the ws endpoint and path from errors it throws via its own `redactor()`, so in the normal case this should already be clean. However, if `fetcher` is swapped (e.g. a different implementation, or an error thrown outside the `run()`/`fetch()` wrapper in browser.ts, such as a scheduler-level failure before `redact()` is applied) this code path logs and returns the raw message to the HTTP client as well (`c.json({ error: 'navigation_failed', message }, 502)`), with no redaction applied at the app layer itself. Since this is the exact code path the PR's headline fix touches, it's worth double-checking there is no scenario where an unredacted error (containing the ws path secret) could reach this logger/response — defense-in-depth redaction at the app layer (or a comment noting the invariant depends entirely on `browser.ts`'s redactor) would make this more robust."
+				},
+				{
+					"id": "r3:body:0",
+					"roundIndex": 3,
+					"reviewId": 5644679320,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Scheduler.inFlight off-by-one still allows 6 waiting tasks before QueueFullError (unaddressed)",
+					"text": "Scheduler.inFlight off-by-one still allows 6 waiting tasks before QueueFullError (unaddressed)"
+				},
+				{
+					"id": "r3:body:1",
+					"roundIndex": 3,
+					"reviewId": 5644679320,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "No test asserts the live-validation regression-guard scenario as actually RED without the fix",
+					"text": "No test asserts the live-validation regression-guard scenario as actually RED without the fix"
+				},
+				{
+					"id": "r3:body:2",
+					"roundIndex": 3,
+					"reviewId": 5644679320,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Scheduler.inFlight permits 6 waiting tasks, one more than documented",
+					"text": "Scheduler.inFlight permits 6 waiting tasks, one more than documented"
+				},
+				{
+					"id": "r3:body:3",
+					"roundIndex": 3,
+					"reviewId": 5644679320,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "No test proves the 10s abandoned-work grace actually prevents cross-request browser overlap",
+					"text": "No test proves the 10s abandoned-work grace actually prevents cross-request browser overlap"
+				},
+				{
+					"id": "r3:body:4",
+					"roundIndex": 3,
+					"reviewId": 5644679320,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "No test for the Scheduler.inFlight off-by-one carried over from prior review rounds",
+					"text": "No test for the Scheduler.inFlight off-by-one carried over from prior review rounds"
+				},
+				{
+					"id": "r3:body:5",
+					"roundIndex": 3,
+					"reviewId": 5644679320,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Scheduler.inFlight off-by-one allows 6 waiting tasks before QueueFullError (prior finding, still unresolved)",
+					"text": "Scheduler.inFlight off-by-one allows 6 waiting tasks before QueueFullError (prior finding, still unresolved)"
+				}
+			]
+		}
+	],
+	"threads": [
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wAc7G",
+			"commentId": 4370502157,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4370917686,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T12:58:12Z",
+					"editedAt": null,
+					"body": "Agreed there's no defect here; Playwright's `storageState()` always emits these fields. No change."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wAc7H",
+			"commentId": 4370502158,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4370917772,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T12:58:14Z",
+					"editedAt": null,
+					"body": "The counter doesn't leak. A task that finds its profile paused throws inside the `try`, so the `finally` still runs `this.inFlight--`. The test `rejects a queued task when its profile is paused before it starts` exercises that path. No change."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wAc7I",
+			"commentId": 4370502160,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4370917866,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T12:58:16Z",
+					"editedAt": null,
+					"body": "Fixed in 1a90c7f. A target 429 is now classified before block markers, so a 429 page that also carries a challenge returns `rate_limited` without pausing the profile."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wAc7K",
+			"commentId": 4370502163,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4370917976,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T12:58:18Z",
+					"editedAt": null,
+					"body": "The guard already covers `::`, `::1`, `fc00::/7` (`fc`/`fd`), `fe80::/10` and IPv4-mapped addresses, which the WHATWG URL parser normalizes to the `::ffff:hex:hex` form matched here. The cluster has no IPv6 egress route, and 1a90c7f adds a NetworkPolicy that blocks private ranges at the network level. No change."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wAc7L",
+			"commentId": 4370502165,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4370918065,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T12:58:21Z",
+					"editedAt": null,
+					"body": "Addressed in 1a90c7f, one layer down. A NetworkPolicy now denies the Camoufox pod egress to private, CGNAT, loopback and link-local ranges, so a DNS name that resolves privately can't be reached either. The README documents the literal-hostname check and the policy."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wAc7N",
+			"commentId": 4370502167,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4370918160,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T12:58:23Z",
+					"editedAt": null,
+					"body": "Fixed in 1a90c7f. The `Error Page` title only counts as a block on eBay URLs. Test: `ignores an 'Error Page' title outside eBay`."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wAc7O",
+			"commentId": 4370502168,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4370918296,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T12:58:26Z",
+					"editedAt": null,
+					"body": "Intentional. Captures are a debugging aid for blocked pages; losing one shouldn't fail the response the caller is waiting on, and the warning is logged. No change."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wAc7P",
+			"commentId": 4370502170,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4370918415,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T12:58:28Z",
+					"editedAt": null,
+					"body": "Kept as is. Session expiry on eBay shows up as a 200 sign-in page, which is classified `session_expired`. A 403 from eBay's edge, the sign-in page included, means the edge refused this client, so pausing the profile is the right response."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wAc7R",
+			"commentId": 4370502175,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4370918505,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T12:58:30Z",
+					"editedAt": null,
+					"body": "Not changing this. The sign-in tab opens on the target site's sign-in page in the cluster's own browser, and a wrong-site capture shows up as `session_expired` on the next fetch, which prompts a re-run of `pnpm signin`."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wAc7T",
+			"commentId": 4370502176,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4370918592,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T12:58:33Z",
+					"editedAt": null,
+					"body": "Not off by one. `inFlight` counts the running task plus waiting ones, and the check runs before the increment, so the limit is 1 running + 5 waiting, as the comment above it says. The app test `returns 429 when the queue is full` checks the 7th request gets 429."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wAc7V",
+			"commentId": 4370502179,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4370918714,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T12:58:35Z",
+					"editedAt": null,
+					"body": "By design. A pause blocks new work for the profile; the running request finishes and its own verdict is returned. Aborting it mid-navigation would gain nothing. No change."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wAc7W",
+			"commentId": 4370502180,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4370918803,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T12:58:38Z",
+					"editedAt": null,
+					"body": "Kept as is. `page.url()` always returns a parseable URL in practice; the fallback only guards an empty string. In that case the original URL is the best information available for classification."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wAc7X",
+			"commentId": 4370502183,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4370918932,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T12:58:40Z",
+					"editedAt": null,
+					"body": "Known and documented in the code (`ponytail: in-memory generation, fine for replicas: 1`). The gateway runs one replica with the Recreate strategy, so no request is in flight across a restart."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wBfOv",
+			"commentId": 4370934137,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371264038,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T14:59:51Z",
+					"editedAt": null,
+					"body": "Fixed in 07ab501: profileForUrl drops a trailing DNS dot before matching. Test: www.ebay.com./itm/1 routes to ebay."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wBfOx",
+			"commentId": 4370934140,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371264151,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T14:59:53Z",
+					"editedAt": null,
+					"body": "Intentional. A failed cookie refresh should not turn a fetched page into an error; the failure is logged as state_save_failed."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wBfOz",
+			"commentId": 4370934143,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371264249,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T14:59:55Z",
+					"editedAt": null,
+					"body": "The only caller guards this: app.ts passes the original request URL when the browser returns an unparseable finalUrl. No change."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wBfO1",
+			"commentId": 4370934147,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371264324,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T14:59:57Z",
+					"editedAt": null,
+					"body": "Every subdomain of ebay.com and reddit.com is controlled by eBay and Reddit, and matching is on label boundaries, so look-alikes such as notebay.com or ebay.com.evil.example stay anon (tested). No change."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wBfO4",
+			"commentId": 4370934151,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371264422,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T15:00:00Z",
+					"editedAt": null,
+					"body": "By design. Captures are a debugging aid; keeping the newest 20 overall is enough. No change."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wBfO7",
+			"commentId": 4370934156,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371264509,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T15:00:02Z",
+					"editedAt": null,
+					"body": "The serial queue is covered by the app test `keeps a login uploaded mid-scrape`, which uploads a new login while a fetch is in flight and checks it survives. No change."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wBfO_",
+			"commentId": 4370934160,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371264646,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T15:00:04Z",
+					"editedAt": null,
+					"body": "generation is only used after scheduler.run resolves. If run throws, the catch path returns before writeIfUnchanged. No change."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wBfPB",
+			"commentId": 4370934163,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371264806,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T15:00:08Z",
+					"editedAt": null,
+					"body": "Not off by one. inFlight counts the running task plus the waiting ones and is checked before the increment, so the limit is 1 running + 5 waiting, as the comment says; the app test expects the 7th request to get 429. No change."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wDMBn",
+			"commentId": 4371651731,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371926146,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T18:34:51Z",
+					"editedAt": null,
+					"body": "Already scoped: since 1a90c7f the `Error Page` title only counts as a block on eBay URLs, where it is eBay's block page. No change."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wDMBs",
+			"commentId": 4371651740,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371926249,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T18:34:53Z",
+					"editedAt": null,
+					"body": "Intentional, as answered earlier. A failed capture is logged and must not fail the response the caller is waiting on."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wDMBx",
+			"commentId": 4371651746,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371926345,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T18:34:55Z",
+					"editedAt": null,
+					"body": "`TIMESTAMP_START` is `/\\d{4}-.*$/`, unanchored, so it extracts the timestamp from names like `ebay-blocked-2026-...`. Pruning is chronological. No change."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wDMB2",
+			"commentId": 4371651754,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371926479,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T18:34:58Z",
+					"editedAt": null,
+					"body": "By design. Since 07ab501 the NetworkPolicy lets only gateway pods reach Camoufox, and reading the pod spec needs cluster access. No change."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wDMB6",
+			"commentId": 4371651759,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371926637,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T18:35:01Z",
+					"editedAt": null,
+					"body": "Accurate, and covered one layer down: the Camoufox NetworkPolicy denies private, CGNAT, loopback and link-local egress, and the README says so."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wDMB8",
+			"commentId": 4371651762,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371926757,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T18:35:03Z",
+					"editedAt": null,
+					"body": "Not off by one, as answered twice already. `inFlight` counts the running task plus waiters and is checked before the increment, so the limit is 1 running + 5 waiting; the app test `returns 429 when the queue is full` expects the 7th request to get 429."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wD36j",
+			"commentId": 4371934612,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4372097876,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T19:25:53Z",
+					"editedAt": null,
+					"body": "Not stale: host is set right after the URL passes validation and before any navigation, so the log always has it. No change."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6wD36k",
+			"commentId": 4371934613,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4372097957,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T19:25:55Z",
+					"editedAt": null,
+					"body": "The error text is already redacted before it reaches this log: the fetcher replaces the Camoufox ws URL and path in every error it throws (the test `never leaks the ws path in connect errors` covers it). No change."
+				}
+			]
+		}
+	],
+	"reactions": [
+		{
+			"commentId": 4370502157,
+			"user": "joeblackwaslike",
+			"content": "-1",
+			"createdAt": "2026-10-25T12:58:13Z"
+		},
+		{
+			"commentId": 4370502158,
+			"user": "joeblackwaslike",
+			"content": "-1",
+			"createdAt": "2026-10-25T12:58:15Z"
+		},
+		{
+			"commentId": 4370502160,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T12:58:17Z"
+		},
+		{
+			"commentId": 4370502163,
+			"user": "joeblackwaslike",
+			"content": "-1",
+			"createdAt": "2026-10-25T12:58:20Z"
+		},
+		{
+			"commentId": 4370502165,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T12:58:22Z"
+		},
+		{
+			"commentId": 4370502167,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T12:58:25Z"
+		},
+		{
+			"commentId": 4370502168,
+			"user": "joeblackwaslike",
+			"content": "-1",
+			"createdAt": "2026-10-25T12:58:27Z"
+		},
+		{
+			"commentId": 4370502170,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-10-25T12:58:29Z"
+		},
+		{
+			"commentId": 4370502175,
+			"user": "joeblackwaslike",
+			"content": "-1",
+			"createdAt": "2026-10-25T12:58:31Z"
+		},
+		{
+			"commentId": 4370502176,
+			"user": "joeblackwaslike",
+			"content": "-1",
+			"createdAt": "2026-10-25T12:58:34Z"
+		},
+		{
+			"commentId": 4370502179,
+			"user": "joeblackwaslike",
+			"content": "-1",
+			"createdAt": "2026-10-25T12:58:37Z"
+		},
+		{
+			"commentId": 4370502180,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-10-25T12:58:39Z"
+		},
+		{
+			"commentId": 4370502183,
+			"user": "joeblackwaslike",
+			"content": "-1",
+			"createdAt": "2026-10-25T12:58:41Z"
+		},
+		{
+			"commentId": 4370934137,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T14:59:52Z"
+		},
+		{
+			"commentId": 4370934140,
+			"user": "joeblackwaslike",
+			"content": "-1",
+			"createdAt": "2026-10-25T14:59:54Z"
+		},
+		{
+			"commentId": 4370934143,
+			"user": "joeblackwaslike",
+			"content": "-1",
+			"createdAt": "2026-10-25T14:59:56Z"
+		},
+		{
+			"commentId": 4370934147,
+			"user": "joeblackwaslike",
+			"content": "-1",
+			"createdAt": "2026-10-25T14:59:59Z"
+		},
+		{
+			"commentId": 4370934151,
+			"user": "joeblackwaslike",
+			"content": "-1",
+			"createdAt": "2026-10-25T15:00:01Z"
+		},
+		{
+			"commentId": 4370934156,
+			"user": "joeblackwaslike",
+			"content": "-1",
+			"createdAt": "2026-10-25T15:00:03Z"
+		},
+		{
+			"commentId": 4370934160,
+			"user": "joeblackwaslike",
+			"content": "-1",
+			"createdAt": "2026-10-25T15:00:06Z"
+		},
+		{
+			"commentId": 4370934163,
+			"user": "joeblackwaslike",
+			"content": "-1",
+			"createdAt": "2026-10-25T15:00:09Z"
+		},
+		{
+			"commentId": 4371651731,
+			"user": "joeblackwaslike",
+			"content": "-1",
+			"createdAt": "2026-10-25T18:34:52Z"
+		},
+		{
+			"commentId": 4371651740,
+			"user": "joeblackwaslike",
+			"content": "-1",
+			"createdAt": "2026-10-25T18:34:54Z"
+		},
+		{
+			"commentId": 4371651746,
+			"user": "joeblackwaslike",
+			"content": "-1",
+			"createdAt": "2026-10-25T18:34:57Z"
+		},
+		{
+			"commentId": 4371651754,
+			"user": "joeblackwaslike",
+			"content": "-1",
+			"createdAt": "2026-10-25T18:34:59Z"
+		},
+		{
+			"commentId": 4371651759,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T18:35:02Z"
+		},
+		{
+			"commentId": 4371651762,
+			"user": "joeblackwaslike",
+			"content": "-1",
+			"createdAt": "2026-10-25T18:35:05Z"
+		},
+		{
+			"commentId": 4371934612,
+			"user": "joeblackwaslike",
+			"content": "-1",
+			"createdAt": "2026-10-25T19:25:54Z"
+		},
+		{
+			"commentId": 4371934613,
+			"user": "joeblackwaslike",
+			"content": "-1",
+			"createdAt": "2026-10-25T19:25:57Z"
+		}
+	]
+}

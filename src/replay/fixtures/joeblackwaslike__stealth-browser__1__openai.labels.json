@@ -1,0 +1,257 @@
+{
+	"fixtureId": "joeblackwaslike__stealth-browser__1__openai",
+	"provisional": true,
+	"labels": [
+		{
+			"claimId": "r0:c4370534282:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4370534285:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-10-25T12:44:37Z|changed src/detect.ts near line 57 in 1a90c7f251427583249371c4f0acf7fab545d6b2"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4370534285:1",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-10-25T12:44:37Z|changed src/detect.ts near line 57 in 1a90c7f251427583249371c4f0acf7fab545d6b2"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4370534288:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T12:58:47Z|Fixed in 1a90c7f. The `Error Page` title is scoped to eBay URLs."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4370534293:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-10-25T12:44:37Z|changed src/browser.ts near line 119 in 1a90c7f251427583249371c4f0acf7fab545d6b2"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4370534295:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4370534297:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-10-25T12:44:37Z|changed src/detect.ts near line 56 in 1a90c7f251427583249371c4f0acf7fab545d6b2"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4370534298:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4370534298:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4370534299:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T12:58:59Z|Fixed in 1a90c7f. A failed save of refreshed cookies is logged as `state_save_failed` and the page is still returned. Test: `still returns the page when saving the refreshed login fails`."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4370534301:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-10-25T12:44:37Z|changed src/state-store.ts near line 148 in 1a90c7f251427583249371c4f0acf7fab545d6b2"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4370534301:1",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-10-25T12:44:37Z|changed src/state-store.ts near line 148 in 1a90c7f251427583249371c4f0acf7fab545d6b2"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4370534310:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T12:59:04Z|Fixed in 1a90c7f. The script now compares every sampled property between the two connections."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4370534317:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T12:59:06Z|Fixed in 1a90c7f by removing the `profile` body field. The URL alone picks the profile, so an eBay URL always goes through eBay's queue, pacing and pauses."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4370962618:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T15:00:10Z|Fixed in 07ab501: the captcha check matches g-recaptcha/h-captcha anywhere in a class list, with either quote style. Tests cover both."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4370962624:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-10-25T14:23:39Z|changed src/app.ts near line 108 in 07ab501c879cf96f9931038d7c487dbe0f597a88"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4370962625:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-10-25T14:23:39Z|changed src/browser.ts near line 125 in 07ab501c879cf96f9931038d7c487dbe0f597a88"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4370962627:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T15:00:18Z|Fixed in 07ab501: an unreadable saved login returns a logged 500 {error: state_unavailable, profile}. Test added."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4370962628:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T15:00:21Z|Fixed in 07ab501: a failed upload save returns a logged 500 {error: state_write_failed, profile}. Test added."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4370962629:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4370962632:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-10-25T14:23:39Z|changed scripts/login.py near line 142 in 07ab501c879cf96f9931038d7c487dbe0f597a88"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c4371702251:0",
+			"label": "rejected",
+			"confidence": "low",
+			"evidence": ["2026-10-25T18:35:08Z|reaction confused by joeblackwaslike"],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c4371702252:0",
+			"label": "rejected",
+			"confidence": "low",
+			"evidence": ["2026-10-25T18:35:10Z|reaction -1 by joeblackwaslike"],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c4371702256:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-10-25T18:23:45Z|changed src/app.ts near line 189 in 88edc5622b580ef14deea7ea03b25ad7edbf267b"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c4371702259:0",
+			"label": "rejected",
+			"confidence": "low",
+			"evidence": ["2026-10-25T18:35:15Z|reaction confused by joeblackwaslike"],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c4371702261:0",
+			"label": "rejected",
+			"confidence": "low",
+			"evidence": ["2026-10-25T18:35:18Z|reaction confused by joeblackwaslike"],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c4371972047:0",
+			"label": "deferred",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T19:25:57Z|Agreed; graceful shutdown is tracked as stealth-browser-gtx and is out of scope for this PR."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c4371972048:0",
+			"label": "rejected",
+			"confidence": "low",
+			"evidence": ["2026-10-25T19:26:01Z|reaction confused by joeblackwaslike"],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c4371972053:0",
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T19:26:02Z|By design. The page was fetched fine, so a failed cookie refresh is logged as state_save_failed and the response still returns; the next request reads the last saved login."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c4371972057:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		}
+	],
+	"repeatPairs": [],
+	"negativePairs": [],
+	"allowedSuppression": []
+}

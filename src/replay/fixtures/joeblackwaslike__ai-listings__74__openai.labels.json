@@ -1,0 +1,110 @@
+{
+	"fixtureId": "joeblackwaslike__ai-listings__74__openai",
+	"provisional": true,
+	"labels": [
+		{
+			"claimId": "r0:c4370336247:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T14:28:07Z|Fixed in 784a049f. A 401 with a plain-text body is now documented as a missing or wrong bearer token, so the operator checks `$STEALTH_BROWSER_TOKEN` first. Only a 401 with a `{\"session_expired\":true,...}` body sends Joe to `pnpm signin ebay`. That matches the two 401 rows in the gateway README and the `session_expired` responses in its `src/app.ts`."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4370336250:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4370336253:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4370932715:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-10-25T14:17:56Z|changed .claude/commands/reprice.md near line 44 in 784a049f8086fda27405e56abe6611920e7e73ea"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c4371188495:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T18:34:35Z|Fixed in ee21138, then tightened in 913125e after the pipeline's review caught that the `if` around the lookup still hid a failed `kubectl get`. The lookup now runs in its own statement, so `set -e` stops the script on a real failure."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c4371941352:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T19:08:33Z|Correct, and confirmed against the live cluster: ai-listings-secret has BROWSERLESS_TOKEN with an empty value, so the non-empty check would have skipped it. Fixed in 8d94889: the script now tests whether the key exists in the Secret's data. Checked against the live secret (old test: no hit, new test: finds the key) and against a sample without the key (skips)."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c4371941355:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-10-25T18:59:18Z|changed deployment/scripts/deploy-app.sh near line 133 in 8d94889885490c887c020b59b97bbce965130157"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:body:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:body:2",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:c4372063415:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:c4372063420:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		}
+	],
+	"repeatPairs": [],
+	"negativePairs": [],
+	"allowedSuppression": []
+}

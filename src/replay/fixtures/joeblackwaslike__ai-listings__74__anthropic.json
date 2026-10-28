@@ -1,0 +1,753 @@
+{
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "ai-listings",
+	"pull": 74,
+	"provider": "anthropic",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-10-28T02:11:41.107Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 5642460754,
+			"provider": "anthropic",
+			"submittedAt": "2026-10-25T09:24:25Z",
+			"headSha": "762abadfa2045a65b26b2afb8dad03b7bb42cd0c",
+			"baseSha": "903e6dd3659805fe88c68f621e3cfccfba74f6c3",
+			"mergeBase": "903e6dd3659805fe88c68f621e3cfccfba74f6c3",
+			"triggerAt": "2026-10-25T07:08:10Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "762abadfa2045a65b26b2afb8dad03b7bb42cd0c",
+					"committedAt": "2026-10-25T07:08:10Z",
+					"files": [
+						{
+							"path": ".claude/commands/reprice.md",
+							"ranges": [[29, 50]]
+						},
+						{
+							"path": ".gitignore",
+							"ranges": [[68, 73]]
+						},
+						{
+							"path": "deployment/kubernetes/browserless/deployment.yaml",
+							"ranges": []
+						},
+						{
+							"path": "deployment/kubernetes/browserless/ingress.yaml",
+							"ranges": []
+						},
+						{
+							"path": "deployment/kubernetes/browserless/service.yaml",
+							"ranges": []
+						},
+						{
+							"path": "deployment/scripts/deploy-app.sh",
+							"ranges": [[15, 22], [104, 110]]
+						},
+						{
+							"path": "deployment/scripts/deploy-browserless.sh",
+							"ranges": []
+						},
+						{
+							"path": "src/lib/pipeline/comps/url-verify.test.ts",
+							"ranges": [[20, 26], [33, 48], [51, 90], [93, 128]]
+						},
+						{
+							"path": "src/lib/pipeline/comps/url-verify.ts",
+							"ranges": [[36, 45], [114, 128], [132, 143], [153, 160]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r0:c4370326727:0",
+					"roundIndex": 0,
+					"reviewId": 5642460754,
+					"source": "inline",
+					"commentId": 4370326727,
+					"path": "src/lib/pipeline/comps/url-verify.ts",
+					"line": 144,
+					"severity": "P3",
+					"title": "Stale console.warn comment still describes old token check semantics",
+					"text": "🟢 **P3**\n\n**Stale console.warn comment still describes old token check semantics**\n\nThe warn message for non-OK gateway responses logs status and URL, which is reasonable, but note this branch does not distinguish 423/429 (expected, fail-soft) from other unexpected statuses like 500 — all are logged identically at warn level with no error code/context beyond status and URL. This is acceptable per PR intent (fail-soft, no retries) but worth confirming it's intentional that 423/429 produce the same warn-level noise as truly unexpected failures."
+				},
+				{
+					"id": "r0:body:0",
+					"roundIndex": 0,
+					"reviewId": 5642460754,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "No stream draining concern already raised by Sourcery; not re-reporting",
+					"text": "No stream draining concern already raised by Sourcery; not re-reporting"
+				},
+				{
+					"id": "r0:body:1",
+					"roundIndex": 0,
+					"reviewId": 5642460754,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "No test for deploy-app.sh secret rendering of STEALTH_BROWSER_TOKEN",
+					"text": "No test for deploy-app.sh secret rendering of STEALTH_BROWSER_TOKEN"
+				},
+				{
+					"id": "r0:body:2",
+					"roundIndex": 0,
+					"reviewId": 5642460754,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "No test for non-2xx gateway status codes beyond generic rejection",
+					"text": "No test for non-2xx gateway status codes beyond generic rejection"
+				},
+				{
+					"id": "r0:body:3",
+					"roundIndex": 0,
+					"reviewId": 5642460754,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "No explicit HTTPS/TLS consideration for in-cluster gateway traffic",
+					"text": "No explicit HTTPS/TLS consideration for in-cluster gateway traffic"
+				},
+				{
+					"id": "r0:body:4",
+					"roundIndex": 0,
+					"reviewId": 5642460754,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "No test coverage for deploy-app.sh and connectivity change",
+					"text": "No test coverage for deploy-app.sh and connectivity change"
+				}
+			]
+		},
+		{
+			"index": 1,
+			"reviewId": 5643305588,
+			"provider": "anthropic",
+			"submittedAt": "2026-10-25T13:01:48Z",
+			"headSha": "762abadfa2045a65b26b2afb8dad03b7bb42cd0c",
+			"baseSha": "762abadfa2045a65b26b2afb8dad03b7bb42cd0c",
+			"mergeBase": "762abadfa2045a65b26b2afb8dad03b7bb42cd0c",
+			"triggerAt": null,
+			"approximate": true,
+			"commitsSince": [],
+			"claims": [
+				{
+					"id": "r1:body:0",
+					"roundIndex": 1,
+					"reviewId": 5643305588,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "No test covers the non-OK (423/429) gateway fail-soft path directly",
+					"text": "No test covers the non-OK (423/429) gateway fail-soft path directly"
+				},
+				{
+					"id": "r1:body:1",
+					"roundIndex": 1,
+					"reviewId": 5643305588,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "No new type introduced in this diff for type-design review",
+					"text": "No new type introduced in this diff for type-design review"
+				},
+				{
+					"id": "r1:body:2",
+					"roundIndex": 1,
+					"reviewId": 5643305588,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Gateway non-OK response body not drained/cancelled",
+					"text": "Gateway non-OK response body not drained/cancelled"
+				},
+				{
+					"id": "r1:body:3",
+					"roundIndex": 1,
+					"reviewId": 5643305588,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Non-OK gateway status not covered by tests despite PR claims",
+					"text": "Non-OK gateway status not covered by tests despite PR claims"
+				},
+				{
+					"id": "r1:body:4",
+					"roundIndex": 1,
+					"reviewId": 5643305588,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Request body payload shape ({url, waitForTimeout}) is never asserted",
+					"text": "Request body payload shape ({url, waitForTimeout}) is never asserted"
+				},
+				{
+					"id": "r1:body:5",
+					"roundIndex": 1,
+					"reviewId": 5643305588,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Rotated STEALTH_BROWSER_TOKEN requires manual pod rollout",
+					"text": "Rotated STEALTH_BROWSER_TOKEN requires manual pod rollout"
+				},
+				{
+					"id": "r1:body:6",
+					"roundIndex": 1,
+					"reviewId": 5643305588,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Rotated STEALTH_BROWSER_TOKEN won't reach running pods without a rollout",
+					"text": "Rotated STEALTH_BROWSER_TOKEN won't reach running pods without a rollout"
+				},
+				{
+					"id": "r1:body:7",
+					"roundIndex": 1,
+					"reviewId": 5643305588,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "No test coverage for non-OK (423/429) gateway responses",
+					"text": "No test coverage for non-OK (423/429) gateway responses"
+				}
+			]
+		},
+		{
+			"index": 2,
+			"reviewId": 5643675168,
+			"provider": "anthropic",
+			"submittedAt": "2026-10-25T14:31:18Z",
+			"headSha": "784a049f8086fda27405e56abe6611920e7e73ea",
+			"baseSha": "762abadfa2045a65b26b2afb8dad03b7bb42cd0c",
+			"mergeBase": "762abadfa2045a65b26b2afb8dad03b7bb42cd0c",
+			"triggerAt": "2026-10-25T14:17:56Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "784a049f8086fda27405e56abe6611920e7e73ea",
+					"committedAt": "2026-10-25T14:17:56Z",
+					"files": [
+						{
+							"path": ".claude/commands/reprice.md",
+							"ranges": [[32, 38], [42, 51]]
+						},
+						{
+							"path": "deployment/scripts/deploy-app.sh",
+							"ranges": [[127, 136], [141, 149]]
+						},
+						{
+							"path": "src/lib/pipeline/comps/url-verify.test.ts",
+							"ranges": [[58, 83], [136, 153]]
+						},
+						{
+							"path": "src/lib/pipeline/comps/url-verify.ts",
+							"ranges": [[117, 133], [140, 146], [186, 192]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r2:body:0",
+					"roundIndex": 2,
+					"reviewId": 5643675168,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "No test exercises the fail-soft !res.ok branch with assertions beyond body cancellation",
+					"text": "No test exercises the fail-soft !res.ok branch with assertions beyond body cancellation"
+				},
+				{
+					"id": "r2:body:1",
+					"roundIndex": 2,
+					"reviewId": 5643675168,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "No test exercises the gateway non-OK path for status/body shape with the specific 423/429/401 contract",
+					"text": "No test exercises the gateway non-OK path for status/body shape with the specific 423/429/401 contract"
+				},
+				{
+					"id": "r2:body:2",
+					"roundIndex": 2,
+					"reviewId": 5643675168,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Test coverage still doesn't assert request body shape",
+					"text": "Test coverage still doesn't assert request body shape"
+				},
+				{
+					"id": "r2:body:3",
+					"roundIndex": 2,
+					"reviewId": 5643675168,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Rotated/newly-set STEALTH_BROWSER_TOKEN may not reach running pods without envFrom reload",
+					"text": "Rotated/newly-set STEALTH_BROWSER_TOKEN may not reach running pods without envFrom reload"
+				},
+				{
+					"id": "r2:body:4",
+					"roundIndex": 2,
+					"reviewId": 5643675168,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Gateway 423/429/401 fail-soft branch still lacks dedicated test coverage",
+					"text": "Gateway 423/429/401 fail-soft branch still lacks dedicated test coverage"
+				},
+				{
+					"id": "r2:body:5",
+					"roundIndex": 2,
+					"reviewId": 5643675168,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Non-OK gateway status (423/429/401) path not directly tested",
+					"text": "Non-OK gateway status (423/429/401) path not directly tested"
+				}
+			]
+		},
+		{
+			"index": 3,
+			"reviewId": 5644676595,
+			"provider": "anthropic",
+			"submittedAt": "2026-10-25T18:37:00Z",
+			"headSha": "913125e2a4b42c7d19322d6909c7cd160fe7108e",
+			"baseSha": "784a049f8086fda27405e56abe6611920e7e73ea",
+			"mergeBase": "784a049f8086fda27405e56abe6611920e7e73ea",
+			"triggerAt": "2026-10-25T18:27:58Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "ee211383661520849d441e1aa08c5d21b46cdc22",
+					"committedAt": "2026-10-25T18:20:43Z",
+					"files": [
+						{
+							"path": "deployment/scripts/deploy-app.sh",
+							"ranges": [[128, 140]]
+						}
+					]
+				},
+				{
+					"sha": "913125e2a4b42c7d19322d6909c7cd160fe7108e",
+					"committedAt": "2026-10-25T18:27:58Z",
+					"files": [
+						{
+							"path": "deployment/scripts/deploy-app.sh",
+							"ranges": [[130, 138]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r3:c4371932215:0",
+					"roundIndex": 3,
+					"reviewId": 5644676595,
+					"source": "inline",
+					"commentId": 4371932215,
+					"path": "deployment/scripts/deploy-app.sh",
+					"line": 152,
+					"severity": "P3",
+					"title": "kubectl rollout restart runs unconditionally, defeating the purpose of masking it to only-when-needed secret changes",
+					"text": "🟢 **P3**\n\n**kubectl rollout restart runs unconditionally, defeating the purpose of masking it to only-when-needed secret changes**\n\nThe new `kubectl rollout restart deployment/ai-listings` runs on every invocation of the script regardless of whether the Secret actually changed, which is functionally correct for ensuring new env vars are picked up, but it means every deploy now always triggers a full pod restart even when nothing changed (e.g., a no-op re-run). This isn't necessarily wrong but is worth a sanity check since it changes deploy semantics: previously a deploy with an unchanged image tag could be effectively a no-op; now it always restarts pods. If restarts are cheap and idempotent this is fine, but if the deployment has stateful init work or there are concerns about restart frequency, this should be called out."
+				},
+				{
+					"id": "r3:c4371932215:1",
+					"roundIndex": 3,
+					"reviewId": 5644676595,
+					"source": "inline",
+					"commentId": 4371932215,
+					"path": "deployment/scripts/deploy-app.sh",
+					"line": 152,
+					"severity": "P3",
+					"title": "kubectl apply updates the Secret's stringData, but if the Deployment pod template doesn't change (e.g. TAG stays 'latest' and no other env changes), the rollout-restart added here does fire unconditionally, which does address the stale-pod-env concern. This looks resolved by the explicit `kubectl rollout restart` call before `rollout status`.",
+					"text": "kubectl apply updates the Secret's stringData, but if the Deployment pod template doesn't change (e.g. TAG stays 'latest' and no other env changes), the rollout-restart added here does fire unconditionally, which does address the stale-pod-env concern. This looks resolved by the explicit `kubectl rollout restart` call before `rollout status`."
+				},
+				{
+					"id": "r3:c4371932219:0",
+					"roundIndex": 3,
+					"reviewId": 5644676595,
+					"source": "inline",
+					"commentId": 4371932219,
+					"path": "deployment/scripts/deploy-app.sh",
+					"line": 133,
+					"severity": "P3",
+					"title": "Error from kubectl get for BROWSERLESS_TOKEN jsonpath is swallowed when the key is simply absent, but also can't distinguish RBAC failure from absence",
+					"text": "🟢 **P3**\n\n**Error from kubectl get for BROWSERLESS_TOKEN jsonpath is swallowed when the key is simply absent, but also can't distinguish RBAC failure from absence**\n\nThe fix moves `kubectl get` outside the `if`, which correctly lets `set -e` catch a hard kubectl failure (RBAC denial, API server error) per the PR's stated intent. However, `-o jsonpath='{.data.BROWSERLESS_TOKEN}'` on a secret that doesn't have this key at all does not cause kubectl to fail — it exits 0 with empty stdout. That's the desired 'absent' path. But if the Secret `ai-listings-secret` itself doesn't exist yet (e.g. first-ever deploy before secret.yaml is applied with this key), `kubectl get secret` would fail and halt the script — but secret.yaml was just applied above so this should be fine in practice. No actionable defect here, flagging only for awareness that jsonpath on a missing key (not missing secret) silently yields empty string, which is intended behavorily correct."
+				},
+				{
+					"id": "r3:body:0",
+					"roundIndex": 3,
+					"reviewId": 5644676595,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "No test covers the gateway's specific 423/429/401 fail-soft contract beyond generic non-OK handling",
+					"text": "No test covers the gateway's specific 423/429/401 fail-soft contract beyond generic non-OK handling"
+				},
+				{
+					"id": "r3:body:1",
+					"roundIndex": 3,
+					"reviewId": 5644676595,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "rollout restart masks subsequent rollout-status failures from the real deployment issue",
+					"text": "rollout restart masks subsequent rollout-status failures from the real deployment issue"
+				},
+				{
+					"id": "r3:body:2",
+					"roundIndex": 3,
+					"reviewId": 5644676595,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "STEALTH_BROWSER_TOKEN missing-token warning uses module-level mutable state across invocations",
+					"text": "STEALTH_BROWSER_TOKEN missing-token warning uses module-level mutable state across invocations"
+				},
+				{
+					"id": "r3:body:3",
+					"roundIndex": 3,
+					"reviewId": 5644676595,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Rotated STEALTH_BROWSER_TOKEN requires rollout-restart every deploy, including no-op deploys",
+					"text": "Rotated STEALTH_BROWSER_TOKEN requires rollout-restart every deploy, including no-op deploys"
+				},
+				{
+					"id": "r3:body:4",
+					"roundIndex": 3,
+					"reviewId": 5644676595,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Rollout restart is unconditional, not Secret-change-aware",
+					"text": "Rollout restart is unconditional, not Secret-change-aware"
+				},
+				{
+					"id": "r3:body:5",
+					"roundIndex": 3,
+					"reviewId": 5644676595,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Gateway non-OK status (423/429/401) response not covered by behavioral tests",
+					"text": "Gateway non-OK status (423/429/401) response not covered by behavioral tests"
+				},
+				{
+					"id": "r3:body:6",
+					"roundIndex": 3,
+					"reviewId": 5644676595,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "No test verifies kubectl rollout restart ordering or secret removal logic in deploy-app.sh",
+					"text": "No test verifies kubectl rollout restart ordering or secret removal logic in deploy-app.sh"
+				},
+				{
+					"id": "r3:body:7",
+					"roundIndex": 3,
+					"reviewId": 5644676595,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "BROWSERLESS_TOKEN still deleted via kubectl patch even if secret.yaml no longer includes it — informational only",
+					"text": "BROWSERLESS_TOKEN still deleted via kubectl patch even if secret.yaml no longer includes it — informational only"
+				},
+				{
+					"id": "r3:body:8",
+					"roundIndex": 3,
+					"reviewId": 5644676595,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Non-OK gateway/direct-fetch paths lack dedicated test coverage for 423/429/401 contract",
+					"text": "Non-OK gateway/direct-fetch paths lack dedicated test coverage for 423/429/401 contract"
+				}
+			]
+		},
+		{
+			"index": 4,
+			"reviewId": 5644813649,
+			"provider": "anthropic",
+			"submittedAt": "2026-10-25T19:10:55Z",
+			"headSha": "8d94889885490c887c020b59b97bbce965130157",
+			"baseSha": "913125e2a4b42c7d19322d6909c7cd160fe7108e",
+			"mergeBase": "913125e2a4b42c7d19322d6909c7cd160fe7108e",
+			"triggerAt": "2026-10-25T18:59:18Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "8d94889885490c887c020b59b97bbce965130157",
+					"committedAt": "2026-10-25T18:59:18Z",
+					"files": [
+						{
+							"path": "deployment/scripts/deploy-app.sh",
+							"ranges": [[130, 140]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r4:c4372052080:0",
+					"roundIndex": 4,
+					"reviewId": 5644813649,
+					"source": "inline",
+					"commentId": 4372052080,
+					"path": "deployment/scripts/deploy-app.sh",
+					"line": 151,
+					"severity": "P2",
+					"title": "Unconditional rollout restart causes pod churn on every deploy",
+					"text": "🟡 **P2**\n\n**Unconditional rollout restart causes pod churn on every deploy**\n\n`kubectl rollout restart deployment/ai-listings` now runs unconditionally on every invocation of this script, even when neither the Secret nor the pod template changed (e.g. repeated deploys with the default `latest` tag and no secret value changes). This forces an unnecessary pod restart on every deploy, which is wasteful and increases risk of masking a genuinely failed rollout behind routine churn. This mirrors the already-flagged 'Rollout restart is unconditional, not Secret-change-aware' finding from a prior review round — restating here since it remains unresolved in this diff."
+				},
+				{
+					"id": "r4:c4372052080:1",
+					"roundIndex": 4,
+					"reviewId": 5644813649,
+					"source": "inline",
+					"commentId": 4372052080,
+					"path": "deployment/scripts/deploy-app.sh",
+					"line": 151,
+					"severity": "P3",
+					"title": "`kubectl rollout restart deployment/ai-listings` is now called unconditionally after every `kubectl apply`, even when neither the image tag nor the secret actually changed. This forces a pod restart (and attendant downtime/cold-start) on every no-op deploy, which is a behavior change from the prior script where rollout only happened implicitly via spec changes. Consider gating the restart on an actual diff (e.g. compare secret hash, or only restart when BROWSERLESS_TOKEN removal/STEALTH_BROWSER_TOKEN value actually changed) rather than running it every time.",
+					"text": "`kubectl rollout restart deployment/ai-listings` is now called unconditionally after every `kubectl apply`, even when neither the image tag nor the secret actually changed. This forces a pod restart (and attendant downtime/cold-start) on every no-op deploy, which is a behavior change from the prior script where rollout only happened implicitly via spec changes. Consider gating the restart on an actual diff (e.g. compare secret hash, or only restart when BROWSERLESS_TOKEN removal/STEALTH_BROWSER_TOKEN value actually changed) rather than running it every time."
+				},
+				{
+					"id": "r4:c4372052084:0",
+					"roundIndex": 4,
+					"reviewId": 5644813649,
+					"source": "inline",
+					"commentId": 4372052084,
+					"path": "deployment/scripts/deploy-app.sh",
+					"line": 18,
+					"severity": "P3",
+					"title": "Comment claims gateway token key lives in stealth-browser-secrets, unverifiable and could rot",
+					"text": "🟢 **P3**\n\n**Comment claims gateway token key lives in stealth-browser-secrets, unverifiable and could rot**\n\nThe header comment states STEALTH_BROWSER_TOKEN is \"the stealth-browser-secrets gatewayToken in the stealth-browser namespace\". This is a specific claim about an external resource (secret name, key name, namespace) that isn't verifiable from this diff and could silently drift out of sync if the stealth-browser repo renames that secret/key later, leaving a misleading comment for future maintainers."
+				},
+				{
+					"id": "r4:c4372052090:0",
+					"roundIndex": 4,
+					"reviewId": 5644813649,
+					"source": "inline",
+					"commentId": 4372052090,
+					"path": "src/lib/pipeline/comps/url-verify.ts",
+					"line": 122,
+					"severity": "P3",
+					"title": "Module-level warnedMissingToken flag persists across invocations within the process",
+					"text": "🟢 **P3**\n\n**Module-level warnedMissingToken flag persists across invocations within the process**\n\n`warnedMissingToken` is a module-level mutable flag, so once a missing-token warning fires, it never fires again for the remainder of the process lifetime, even if the token is later set and then unset again (e.g. hot env reload in long-running workers, or test isolation across files sharing the module). This is a minor logging/observability gap rather than a functional bug, but worth flagging since it could mask a later real misconfiguration."
+				},
+				{
+					"id": "r4:body:0",
+					"roundIndex": 4,
+					"reviewId": 5644813649,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "423/429 fail-soft path on the gateway still has no dedicated test",
+					"text": "423/429 fail-soft path on the gateway still has no dedicated test"
+				},
+				{
+					"id": "r4:body:1",
+					"roundIndex": 4,
+					"reviewId": 5644813649,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Rollout restart runs unconditionally, even if token unchanged",
+					"text": "Rollout restart runs unconditionally, even if token unchanged"
+				},
+				{
+					"id": "r4:body:2",
+					"roundIndex": 4,
+					"reviewId": 5644813649,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "No test covers gateway 423/429 fail-soft contract with real status codes",
+					"text": "No test covers gateway 423/429 fail-soft contract with real status codes"
+				},
+				{
+					"id": "r4:body:3",
+					"roundIndex": 4,
+					"reviewId": 5644813649,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Unconditional rollout restart added",
+					"text": "Unconditional rollout restart added"
+				}
+			]
+		}
+	],
+	"threads": [
+		{
+			"threadId": "PRRT_kwDOSSBjYs6wAB6N",
+			"commentId": 4370326727,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371171817,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T14:28:02Z",
+					"editedAt": null,
+					"body": "Intentional. A 423 or 429 is expected under normal pacing, but it still means this comp went unverified, so one warn line with status and URL is the right level for every non-OK answer. Per-status log levels would add branches with no behavior change, and the gateway's own request log already records the verdict (blocked, rate_limited, queue_full). The title mentions stale token-check semantics, but this line has no token check. The token check sits above it and now warns once when the token is missing (784a049f)."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6wD3jA",
+			"commentId": 4371932215,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4372044480,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T19:08:25Z",
+					"editedAt": null,
+					"body": "Intentional. The Secret is rewritten on every deploy and pods only read it at startup, so a restart is the only way a changed token reaches them; an unconditional restart is cheap and can't be skipped by mistake."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6wD3jD",
+			"commentId": 4371932219,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4372044750,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T19:08:29Z",
+					"editedAt": null,
+					"body": "A failed kubectl get does stop the script: the lookup runs in its own statement under set -e, and an absent key returns an empty result with exit 0, so the two cases are distinguishable. The check now tests for the key itself (see the empty-key thread)."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6wEKOF",
+			"commentId": 4372052080,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6wEKOI",
+			"commentId": 4372052084,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6wEKOM",
+			"commentId": 4372052090,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		}
+	],
+	"reactions": [
+		{
+			"commentId": 4370326727,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-10-25T14:28:03Z"
+		},
+		{
+			"commentId": 4371932215,
+			"user": "joeblackwaslike",
+			"content": "-1",
+			"createdAt": "2026-10-25T19:08:26Z"
+		},
+		{
+			"commentId": 4371932219,
+			"user": "joeblackwaslike",
+			"content": "-1",
+			"createdAt": "2026-10-25T19:08:30Z"
+		}
+	]
+}

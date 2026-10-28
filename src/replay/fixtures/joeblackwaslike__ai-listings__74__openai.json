@@ -1,0 +1,509 @@
+{
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "ai-listings",
+	"pull": 74,
+	"provider": "openai",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-10-28T02:12:53.311Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 5642477951,
+			"provider": "openai",
+			"submittedAt": "2026-10-25T09:27:24Z",
+			"headSha": "762abadfa2045a65b26b2afb8dad03b7bb42cd0c",
+			"baseSha": "903e6dd3659805fe88c68f621e3cfccfba74f6c3",
+			"mergeBase": "903e6dd3659805fe88c68f621e3cfccfba74f6c3",
+			"triggerAt": "2026-10-25T07:08:10Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "762abadfa2045a65b26b2afb8dad03b7bb42cd0c",
+					"committedAt": "2026-10-25T07:08:10Z",
+					"files": [
+						{
+							"path": ".claude/commands/reprice.md",
+							"ranges": [[29, 50]]
+						},
+						{
+							"path": ".gitignore",
+							"ranges": [[68, 73]]
+						},
+						{
+							"path": "deployment/kubernetes/browserless/deployment.yaml",
+							"ranges": []
+						},
+						{
+							"path": "deployment/kubernetes/browserless/ingress.yaml",
+							"ranges": []
+						},
+						{
+							"path": "deployment/kubernetes/browserless/service.yaml",
+							"ranges": []
+						},
+						{
+							"path": "deployment/scripts/deploy-app.sh",
+							"ranges": [[15, 22], [104, 110]]
+						},
+						{
+							"path": "deployment/scripts/deploy-browserless.sh",
+							"ranges": []
+						},
+						{
+							"path": "src/lib/pipeline/comps/url-verify.test.ts",
+							"ranges": [[20, 26], [33, 48], [51, 90], [93, 128]]
+						},
+						{
+							"path": "src/lib/pipeline/comps/url-verify.ts",
+							"ranges": [[36, 45], [114, 128], [132, 143], [153, 160]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r0:c4370336247:0",
+					"roundIndex": 0,
+					"reviewId": 5642477951,
+					"source": "inline",
+					"commentId": 4370336247,
+					"path": ".claude/commands/reprice.md",
+					"line": 45,
+					"severity": "P2",
+					"title": "Correct the documented 401 diagnosis",
+					"text": "🟡 **P2**\n\n**Correct the documented 401 diagnosis**\n\nA 401 from this endpoint is also the expected gateway authentication response when the bearer token is absent or invalid (the PR's connectivity check explicitly expects 401 without a token). Telling operators that it definitively means the eBay session expired and to run `pnpm signin ebay` sends them to the wrong remediation; they should first verify `STEALTH_BROWSER_TOKEN`/gateway credentials. Document any distinct downstream-session status separately if one exists."
+				},
+				{
+					"id": "r0:c4370336250:0",
+					"roundIndex": 0,
+					"reviewId": 5642477951,
+					"source": "inline",
+					"commentId": 4370336250,
+					"path": "src/lib/pipeline/comps/url-verify.ts",
+					"line": 131,
+					"severity": "P2",
+					"title": "Surface missing gateway credentials",
+					"text": "🟡 **P2**\n\n**Surface missing gateway credentials**\n\nWhen `STEALTH_BROWSER_TOKEN` is absent, every eBay verification silently becomes `UNCONFIRMED` without any diagnostic. This masks a deployment/configuration error—particularly during this credential migration—and produces results indistinguishable from genuinely unverifiable listings. The fetch failure path logs context, but this earlier return does not.\n\nLog this configuration failure in a non-spammy way (for example, once at initialization or via a rate-limited warning), including that eBay comp verification is disabled and that `STEALTH_BROWSER_TOKEN` must be configured. The hidden failure is an omitted/misnamed Secret key or a pod that has not received the rotated token; users and operators will otherwise only see degraded verification with no actionable cause."
+				},
+				{
+					"id": "r0:c4370336253:0",
+					"roundIndex": 0,
+					"reviewId": 5642477951,
+					"source": "inline",
+					"commentId": 4370336253,
+					"path": "deployment/scripts/deploy-app.sh",
+					"line": 107,
+					"severity": "P3",
+					"title": "Removed Browserless credential can remain in the application Secret",
+					"text": "🟢 **P3**\n\n**Removed Browserless credential can remain in the application Secret**\n\nRemoving this `stringData` entry from a client-side `kubectl apply` manifest does not remove the corresponding persisted `data.BROWSERLESS_TOKEN` key: `stringData` is write-only and is not present in the live object used for the merge. Deploying this change can therefore leave the retired Browserless credential in the app Secret indefinitely. Explicitly delete the old key (or recreate/replace the Secret safely) as part of this cutover."
+				},
+				{
+					"id": "r0:body:0",
+					"roundIndex": 0,
+					"reviewId": 5642477951,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Gateway request payload contract is not tested",
+					"text": "Gateway request payload contract is not tested"
+				}
+			]
+		},
+		{
+			"index": 1,
+			"reviewId": 5643313282,
+			"provider": "openai",
+			"submittedAt": "2026-10-25T13:03:41Z",
+			"headSha": "762abadfa2045a65b26b2afb8dad03b7bb42cd0c",
+			"baseSha": "762abadfa2045a65b26b2afb8dad03b7bb42cd0c",
+			"mergeBase": "762abadfa2045a65b26b2afb8dad03b7bb42cd0c",
+			"triggerAt": null,
+			"approximate": true,
+			"commitsSince": [],
+			"claims": [
+				{
+					"id": "r1:c4370932715:0",
+					"roundIndex": 1,
+					"reviewId": 5643313282,
+					"source": "inline",
+					"commentId": 4370932715,
+					"path": ".claude/commands/reprice.md",
+					"line": 44,
+					"severity": "P2",
+					"title": "401 guidance misdiagnoses gateway authentication failures",
+					"text": "🟡 **P2**\n\n**401 guidance misdiagnoses gateway authentication failures**\n\nA 401 from this endpoint is also the documented result when the bearer token is absent (and likewise occurs for an invalid/rotated token), so directing the operator to re-authenticate the eBay scraping account sends them to the wrong remediation. This can leave manual repricing unable to use the gateway after a token rotation. Document 401 as a gateway-token/configuration failure (with a separate instruction for an actual eBay-session failure if the gateway exposes one)."
+				}
+			]
+		},
+		{
+			"index": 2,
+			"reviewId": 5643683617,
+			"provider": "openai",
+			"submittedAt": "2026-10-25T14:34:04Z",
+			"headSha": "784a049f8086fda27405e56abe6611920e7e73ea",
+			"baseSha": "762abadfa2045a65b26b2afb8dad03b7bb42cd0c",
+			"mergeBase": "762abadfa2045a65b26b2afb8dad03b7bb42cd0c",
+			"triggerAt": "2026-10-25T14:17:56Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "784a049f8086fda27405e56abe6611920e7e73ea",
+					"committedAt": "2026-10-25T14:17:56Z",
+					"files": [
+						{
+							"path": ".claude/commands/reprice.md",
+							"ranges": [[32, 38], [42, 51]]
+						},
+						{
+							"path": "deployment/scripts/deploy-app.sh",
+							"ranges": [[127, 136], [141, 149]]
+						},
+						{
+							"path": "src/lib/pipeline/comps/url-verify.test.ts",
+							"ranges": [[58, 83], [136, 153]]
+						},
+						{
+							"path": "src/lib/pipeline/comps/url-verify.ts",
+							"ranges": [[117, 133], [140, 146], [186, 192]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r2:c4371188495:0",
+					"roundIndex": 2,
+					"reviewId": 5643683617,
+					"source": "inline",
+					"commentId": 4371188495,
+					"path": "deployment/scripts/deploy-app.sh",
+					"line": 133,
+					"severity": "P2",
+					"title": "Do not suppress failures while removing the retired credential",
+					"text": "🟡 **P2**\n\n**Do not suppress failures while removing the retired credential**\n\nThe JSON Patch correctly returns an error when `BROWSERLESS_TOKEN` is already absent, but `|| true` also hides real failures such as RBAC denial, an unavailable API server, or a malformed request. In those cases the deployment continues and restarts pods with the retired Browserless credential still present in `ai-listings-secret`, contrary to the migration's cleanup intent. Check whether the key exists first, then run the patch without suppressing errors (or only suppress the specific absent-key case)."
+				}
+			]
+		},
+		{
+			"index": 3,
+			"reviewId": 5644686933,
+			"provider": "openai",
+			"submittedAt": "2026-10-25T18:40:20Z",
+			"headSha": "913125e2a4b42c7d19322d6909c7cd160fe7108e",
+			"baseSha": "784a049f8086fda27405e56abe6611920e7e73ea",
+			"mergeBase": "784a049f8086fda27405e56abe6611920e7e73ea",
+			"triggerAt": "2026-10-25T18:27:58Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "ee211383661520849d441e1aa08c5d21b46cdc22",
+					"committedAt": "2026-10-25T18:20:43Z",
+					"files": [
+						{
+							"path": "deployment/scripts/deploy-app.sh",
+							"ranges": [[128, 140]]
+						}
+					]
+				},
+				{
+					"sha": "913125e2a4b42c7d19322d6909c7cd160fe7108e",
+					"committedAt": "2026-10-25T18:27:58Z",
+					"files": [
+						{
+							"path": "deployment/scripts/deploy-app.sh",
+							"ranges": [[130, 138]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r3:c4371941352:0",
+					"roundIndex": 3,
+					"reviewId": 5644686933,
+					"source": "inline",
+					"commentId": 4371941352,
+					"path": "deployment/scripts/deploy-app.sh",
+					"line": 134,
+					"severity": "P2",
+					"title": "Empty retired token keys are not removed",
+					"text": "🟡 **P2**\n\n**Empty retired token keys are not removed**\n\nThis checks whether the token value is non-empty, rather than whether the `.data.BROWSERLESS_TOKEN` key exists. The prior secret template populated `BROWSERLESS_TOKEN` with `${BROWSERLESS_TOKEN:-}`, so deployments made while that variable was unset can have an existing empty key. For that state, jsonpath emits an empty string, this branch is skipped, and the retired key remains despite the comment and PR intent. Capture the Secret representation outside the conditional (so `kubectl get` failures still stop the script), then test key membership rather than its value."
+				},
+				{
+					"id": "r3:c4371941355:0",
+					"roundIndex": 3,
+					"reviewId": 5644686933,
+					"source": "inline",
+					"commentId": 4371941355,
+					"path": "deployment/scripts/deploy-app.sh",
+					"line": 133,
+					"severity": "P2",
+					"title": "Decommission the existing Browserless workload",
+					"text": "🟡 **P2**\n\n**Decommission the existing Browserless workload**\n\nRemoving these manifests and the deployment script from Git does not remove the already-running `browserless` Deployment, Service, or Tailscale Ingress from the cluster. Since `deploy-app.sh` only patches the app Secret, a cluster that previously ran `deploy-browserless.sh` will continue serving the retired Browserless endpoint (with its separate `browserless-secret`) indefinitely. Add an explicit one-time/idempotent deletion migration for those three resources, or retain a dedicated teardown script and document that it must be run during this cutover."
+				},
+				{
+					"id": "r3:body:0",
+					"roundIndex": 3,
+					"reviewId": 5644686933,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Retired Browserless workload is not removed from existing clusters",
+					"text": "Retired Browserless workload is not removed from existing clusters"
+				},
+				{
+					"id": "r3:body:1",
+					"roundIndex": 3,
+					"reviewId": 5644686933,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Retired Browserless resources are not deleted from existing clusters",
+					"text": "Retired Browserless resources are not deleted from existing clusters"
+				},
+				{
+					"id": "r3:body:2",
+					"roundIndex": 3,
+					"reviewId": 5644686933,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Decommission the live Browserless resources",
+					"text": "Decommission the live Browserless resources"
+				}
+			]
+		},
+		{
+			"index": 4,
+			"reviewId": 5644827375,
+			"provider": "openai",
+			"submittedAt": "2026-10-25T19:14:04Z",
+			"headSha": "8d94889885490c887c020b59b97bbce965130157",
+			"baseSha": "913125e2a4b42c7d19322d6909c7cd160fe7108e",
+			"mergeBase": "913125e2a4b42c7d19322d6909c7cd160fe7108e",
+			"triggerAt": "2026-10-25T18:59:18Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "8d94889885490c887c020b59b97bbce965130157",
+					"committedAt": "2026-10-25T18:59:18Z",
+					"files": [
+						{
+							"path": "deployment/scripts/deploy-app.sh",
+							"ranges": [[130, 140]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r4:c4372063415:0",
+					"roundIndex": 4,
+					"reviewId": 5644827375,
+					"source": "inline",
+					"commentId": 4372063415,
+					"path": "deployment/scripts/deploy-app.sh",
+					"line": 138,
+					"severity": "P2",
+					"title": "Detect the retired key using actual kubectl output",
+					"text": "🟡 **P2**\n\n**Detect the retired key using actual kubectl output**\n\n`kubectl get ... -o jsonpath='{.data}'` renders a map value in kubectl's JSONPath output (for example, `map[BROWSERLESS_TOKEN: ...]`), not JSON object syntax. Consequently this quoted-key match is false even when the empty legacy key exists, so the patch is skipped and the old token remains in the app Secret. Fetch JSON explicitly (`-o json`) before performing this JSON-style match, or match the JSONPath map representation."
+				},
+				{
+					"id": "r4:c4372063420:0",
+					"roundIndex": 4,
+					"reviewId": 5644827375,
+					"source": "inline",
+					"commentId": 4372063420,
+					"path": "deployment/scripts/deploy-app.sh",
+					"line": 134,
+					"severity": "P2",
+					"title": "Key-presence test does not match kubectl JSONPath map output",
+					"text": "🟡 **P2**\n\n**Key-presence test does not match kubectl JSONPath map output**\n\n`kubectl ... -o jsonpath='{.data}'` renders the object in kubectl's map form (for example, `map[BROWSERLESS_TOKEN: ...]`), not as quoted JSON object keys. Consequently this quoted-key glob does not match the existing empty `BROWSERLESS_TOKEN`, so the explicit JSON patch is skipped and the retired credential remains in the live Secret. Use a presence check against structured JSON (or a map-format-aware key test) that distinguishes an absent key from a present empty value."
+				}
+			]
+		}
+	],
+	"threads": [
+		{
+			"threadId": "PRRT_kwDOSSBjYs6wADWu",
+			"commentId": 4370336247,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371172078,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T14:28:07Z",
+					"editedAt": null,
+					"body": "Fixed in 784a049f. A 401 with a plain-text body is now documented as a missing or wrong bearer token, so the operator checks `$STEALTH_BROWSER_TOKEN` first. Only a 401 with a `{\"session_expired\":true,...}` body sends Joe to `pnpm signin ebay`. That matches the two 401 rows in the gateway README and the `session_expired` responses in its `src/app.ts`."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6wADWw",
+			"commentId": 4370336250,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371172334,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T14:28:13Z",
+					"editedAt": null,
+					"body": "Fixed in 784a049f. `fetchViaGateway` now logs `STEALTH_BROWSER_TOKEN is not set; eBay comp verification is disabled` once per process and stays quiet after that. The missing-token test now calls `verifyComp` twice and asserts exactly one such warning; it failed with 0 before the change."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6wADWy",
+			"commentId": 4370336253,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371172535,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T14:28:17Z",
+					"editedAt": null,
+					"body": "Fixed in 784a049f. The live `ai-listings-secret` does still hold `data.BROWSERLESS_TOKEN`. `deploy-app.sh` now removes it after applying the Secret with a JSON-patch `remove`, guarded by `|| true` so it's a no-op once the key is gone. I didn't switch to `kubectl replace` because the live Secret also holds keys set outside this script, and replace would drop them. A server-side dry run confirmed the patch removes the key."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6wBfAt",
+			"commentId": 4370932715,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371172767,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T14:28:22Z",
+					"editedAt": null,
+					"body": "Fixed in 784a049f, same change as the other 401 thread. A plain-text 401 now points at `$STEALTH_BROWSER_TOKEN`, and only the `session_expired` JSON 401 points at `pnpm signin ebay`."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6wCFmi",
+			"commentId": 4371188495,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4371925458,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T18:34:35Z",
+					"editedAt": null,
+					"body": "Fixed in ee21138, then tightened in 913125e after the pipeline's review caught that the `if` around the lookup still hid a failed `kubectl get`. The lookup now runs in its own statement, so `set -e` stops the script on a real failure."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6wD47D",
+			"commentId": 4371941352,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4372045079,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T19:08:33Z",
+					"editedAt": null,
+					"body": "Correct, and confirmed against the live cluster: ai-listings-secret has BROWSERLESS_TOKEN with an empty value, so the non-empty check would have skipped it. Fixed in 8d94889: the script now tests whether the key exists in the Secret's data. Checked against the live secret (old test: no hit, new test: finds the key) and against a sample without the key (skips)."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6wD47G",
+			"commentId": 4371941355,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4372045662,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-25T19:08:41Z",
+					"editedAt": null,
+					"body": "Already done: the browserless Deployment, Service, Tailscale Ingress and both Secrets were deleted from the cluster before this PR (it had served 0 requests in the 7 days before). A cluster-wide search finds no browserless resources."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6wELzR",
+			"commentId": 4372063415,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6wELzS",
+			"commentId": 4372063420,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		}
+	],
+	"reactions": [
+		{
+			"commentId": 4370336247,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T14:28:09Z"
+		},
+		{
+			"commentId": 4370336250,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T14:28:14Z"
+		},
+		{
+			"commentId": 4370336253,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T14:28:19Z"
+		},
+		{
+			"commentId": 4370932715,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T14:28:23Z"
+		},
+		{
+			"commentId": 4371188495,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T18:34:36Z"
+		},
+		{
+			"commentId": 4371941352,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T19:08:37Z"
+		},
+		{
+			"commentId": 4371941355,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-25T19:08:43Z"
+		}
+	]
+}

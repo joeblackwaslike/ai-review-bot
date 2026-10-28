@@ -1,0 +1,39 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`committed replay fixtures > report matches the committed snapshot 1`] = `
+"joeblackwaslike__agent-skills__10__anthropic
+  rejected: 3 of 7 adjudicated (deferred 0, unadjudicated 27)
+  recycled: 0 of 34, +1 proposed
+  restated open: 0 of 34, +2 proposed
+  rounds with first-seen claims: 5 of 5, final round quiet: no
+
+joeblackwaslike__agent-skills__10__openai
+  rejected: 0 of 10 adjudicated (deferred 0, unadjudicated 3)
+  recycled: 0 of 13
+  restated open: 0 of 13
+  rounds with first-seen claims: 4 of 5, final round quiet: yes
+
+joeblackwaslike__ai-listings__74__anthropic
+  rejected: 3 of 4 adjudicated (deferred 0, unadjudicated 36)
+  recycled: 0 of 40
+  restated open: 0 of 40, +1 proposed
+  rounds with first-seen claims: 5 of 5, final round quiet: no
+
+joeblackwaslike__ai-listings__74__openai
+  rejected: 0 of 5 adjudicated (deferred 0, unadjudicated 8)
+  recycled: 0 of 13
+  restated open: 0 of 13
+  rounds with first-seen claims: 5 of 5, final round quiet: no
+
+joeblackwaslike__stealth-browser__1__anthropic
+  rejected: 25 of 30 adjudicated (deferred 0, unadjudicated 35)
+  recycled: 0 of 65
+  restated open: 0 of 65, +5 proposed
+  rounds with first-seen claims: 4 of 4, final round quiet: no
+
+joeblackwaslike__stealth-browser__1__openai
+  rejected: 6 of 23 adjudicated (deferred 1, unadjudicated 6)
+  recycled: 0 of 30
+  restated open: 0 of 30
+  rounds with first-seen claims: 4 of 4, final round quiet: no"
+`;
