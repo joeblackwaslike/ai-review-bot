@@ -1,31 +1,33 @@
 {
 	"fixtureId": "joeblackwaslike__stealth-browser__1__openai",
-	"provisional": true,
+	"provisional": false,
 	"labels": [
 		{
 			"claimId": "r0:c4370534282:0",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T12:44:37Z|Fixed in 1a90c7f with NetworkPolicy that denies Camoufox egress to private ranges"
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:c4370534285:0",
 			"label": "fixed",
-			"confidence": "low",
+			"confidence": "high",
 			"evidence": [
-				"2026-10-25T12:44:37Z|changed src/detect.ts near line 57 in 1a90c7f251427583249371c4f0acf7fab545d6b2"
+				"2026-10-25T12:44:37Z|Fixed in 1a90c7f. The 429 check now runs before block markers."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:c4370534285:1",
 			"label": "fixed",
-			"confidence": "low",
+			"confidence": "high",
 			"evidence": [
-				"2026-10-25T12:44:37Z|changed src/detect.ts near line 57 in 1a90c7f251427583249371c4f0acf7fab545d6b2"
+				"2026-10-25T12:44:37Z|Fixed in 1a90c7f. A target 429 returns rate_limited and never pauses the profile."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:c4370534288:0",
@@ -34,46 +36,52 @@
 			"evidence": [
 				"2026-10-25T12:58:47Z|Fixed in 1a90c7f. The `Error Page` title is scoped to eBay URLs."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:c4370534293:0",
 			"label": "fixed",
-			"confidence": "low",
+			"confidence": "high",
 			"evidence": [
-				"2026-10-25T12:44:37Z|changed src/browser.ts near line 119 in 1a90c7f251427583249371c4f0acf7fab545d6b2"
+				"2026-10-25T12:44:37Z|Fixed in 1a90c7f. After deadline fires, waits for abandoned work to unwind before releasing scheduler slot."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:c4370534295:0",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T12:44:37Z|Fixed in 1a90c7f with Camoufox egress NetworkPolicy"
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:c4370534297:0",
 			"label": "fixed",
-			"confidence": "low",
+			"confidence": "high",
 			"evidence": [
-				"2026-10-25T12:44:37Z|changed src/detect.ts near line 56 in 1a90c7f251427583249371c4f0acf7fab545d6b2"
+				"2026-10-25T12:44:37Z|Fixed in 1a90c7f. A target 429 returns rate_limited and never pauses the profile."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:c4370534298:0",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T12:44:37Z|Fixed in 1a90c7f with Camoufox egress NetworkPolicy"
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:c4370534298:1",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T12:44:37Z|Fixed in 1a90c7f with Camoufox egress NetworkPolicy"
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:c4370534299:0",
@@ -82,23 +90,24 @@
 			"evidence": [
 				"2026-10-25T12:58:59Z|Fixed in 1a90c7f. A failed save of refreshed cookies is logged as `state_save_failed` and the page is still returned. Test: `still returns the page when saving the refreshed login fails`."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:c4370534301:0",
 			"label": "fixed",
-			"confidence": "low",
+			"confidence": "high",
 			"evidence": [
-				"2026-10-25T12:44:37Z|changed src/state-store.ts near line 148 in 1a90c7f251427583249371c4f0acf7fab545d6b2"
+				"2026-10-25T12:44:37Z|Fixed in 1a90c7f. Captures are written with mode 0600. Test: writes captures readable only by the owner."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:c4370534301:1",
-			"label": "fixed",
-			"confidence": "low",
+			"label": "unadjudicated",
+			"confidence": "high",
 			"evidence": [
-				"2026-10-25T12:44:37Z|changed src/state-store.ts near line 148 in 1a90c7f251427583249371c4f0acf7fab545d6b2"
+				"2026-10-25T12:44:37Z|Fixed in 1a90c7f. Timestamp sorting corrected.",
+				"unknown|disputed: Claude verifier said fixed, Codex said rejected"
 			],
 			"confirmed": false
 		},
@@ -109,7 +118,7 @@
 			"evidence": [
 				"2026-10-25T12:59:04Z|Fixed in 1a90c7f. The script now compares every sampled property between the two connections."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:c4370534317:0",
@@ -118,7 +127,7 @@
 			"evidence": [
 				"2026-10-25T12:59:06Z|Fixed in 1a90c7f by removing the `profile` body field. The URL alone picks the profile, so an eBay URL always goes through eBay's queue, pacing and pauses."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r1:c4370962618:0",
@@ -127,25 +136,25 @@
 			"evidence": [
 				"2026-10-25T15:00:10Z|Fixed in 07ab501: the captcha check matches g-recaptcha/h-captcha anywhere in a class list, with either quote style. Tests cover both."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r1:c4370962624:0",
 			"label": "fixed",
-			"confidence": "low",
+			"confidence": "high",
 			"evidence": [
-				"2026-10-25T14:23:39Z|changed src/app.ts near line 108 in 07ab501c879cf96f9931038d7c487dbe0f597a88"
+				"2026-10-25T14:23:39Z|Fixed in 07ab501: page is classified before the slot is released."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r1:c4370962625:0",
 			"label": "fixed",
-			"confidence": "low",
+			"confidence": "high",
 			"evidence": [
-				"2026-10-25T14:23:39Z|changed src/browser.ts near line 125 in 07ab501c879cf96f9931038d7c487dbe0f597a88"
+				"2026-10-25T14:23:39Z|Fixed in 07ab501: the default deadline now includes connectTimeoutMs."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r1:c4370962627:0",
@@ -154,7 +163,7 @@
 			"evidence": [
 				"2026-10-25T15:00:18Z|Fixed in 07ab501: an unreadable saved login returns a logged 500 {error: state_unavailable, profile}. Test added."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r1:c4370962628:0",
@@ -163,60 +172,74 @@
 			"evidence": [
 				"2026-10-25T15:00:21Z|Fixed in 07ab501: a failed upload save returns a logged 500 {error: state_write_failed, profile}. Test added."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r1:c4370962629:0",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T14:23:39Z|Fixed in 07ab501: if a context will not close, the fetcher drops the browser connection."
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r1:c4370962632:0",
 			"label": "fixed",
-			"confidence": "low",
+			"confidence": "high",
 			"evidence": [
-				"2026-10-25T14:23:39Z|changed scripts/login.py near line 142 in 07ab501c879cf96f9931038d7c487dbe0f597a88"
+				"2026-10-25T14:23:39Z|Fixed in 07ab501: stop_vnc treats pkill exit 1 as nothing-to-stop and prints warning for other failures."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r2:c4371702251:0",
 			"label": "rejected",
-			"confidence": "low",
-			"evidence": ["2026-10-25T18:35:08Z|reaction confused by joeblackwaslike"],
-			"confirmed": false
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T18:35:08Z|reaction confused by joeblackwaslike",
+				"reply: Partly right, and a deliberate trade-off. When the deadline fires, the handler closes the browser connection."
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r2:c4371702252:0",
 			"label": "rejected",
-			"confidence": "low",
-			"evidence": ["2026-10-25T18:35:10Z|reaction -1 by joeblackwaslike"],
-			"confirmed": false
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T18:35:10Z|reaction -1 by joeblackwaslike",
+				"reply: Same as the earlier pruning thread: the regex is unanchored and sorts by the extracted timestamp."
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r2:c4371702256:0",
 			"label": "fixed",
-			"confidence": "low",
+			"confidence": "high",
 			"evidence": [
-				"2026-10-25T18:23:45Z|changed src/app.ts near line 189 in 88edc5622b580ef14deea7ea03b25ad7edbf267b"
+				"2026-10-25T18:23:45Z|Fixed in 88edc56. Navigation logs navigation_failed with profile, host and error. Test added."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r2:c4371702259:0",
 			"label": "rejected",
-			"confidence": "low",
-			"evidence": ["2026-10-25T18:35:15Z|reaction confused by joeblackwaslike"],
-			"confirmed": false
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T18:35:15Z|reaction confused by joeblackwaslike",
+				"reply: The fetch result is still valid, and a failed close already drops the connection."
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r2:c4371702261:0",
 			"label": "rejected",
-			"confidence": "low",
-			"evidence": ["2026-10-25T18:35:18Z|reaction confused by joeblackwaslike"],
-			"confirmed": false
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T18:35:18Z|reaction confused by joeblackwaslike",
+				"reply: See the thread on line 24: the connection is closed at the deadline."
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r3:c4371972047:0",
@@ -225,33 +248,70 @@
 			"evidence": [
 				"2026-10-25T19:25:57Z|Agreed; graceful shutdown is tracked as stealth-browser-gtx and is out of scope for this PR."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r3:c4371972048:0",
 			"label": "rejected",
-			"confidence": "low",
-			"evidence": ["2026-10-25T19:26:01Z|reaction confused by joeblackwaslike"],
-			"confirmed": false
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T19:26:01Z|reaction confused by joeblackwaslike",
+				"reply: Not changing this now. A failed context close already drops the browser connection."
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r3:c4371972053:0",
 			"label": "rejected",
 			"confidence": "high",
 			"evidence": [
-				"2026-10-25T19:26:02Z|By design. The page was fetched fine, so a failed cookie refresh is logged as state_save_failed and the response still returns; the next request reads the last saved login."
+				"2026-10-25T19:26:02Z|reaction -1 by joeblackwaslike",
+				"reply: By design. The page was fetched fine, so a failed cookie refresh is logged as state_save_failed and the response still returns."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r3:c4371972057:0",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T19:26:02Z|Fixed in dd37e93 and 0399f4c: the URL guard and NetworkPolicy now cover 198.18.0.0/15, documentation blocks, multicast and reserved ranges."
+			],
+			"confirmed": true
+		}
+	],
+	"repeatPairs": [
+		{
+			"earlier": "r0:c4370534293:0",
+			"later": "r2:c4371702251:0",
+			"confirmed": true
+		},
+		{
+			"earlier": "r0:c4370534293:0",
+			"later": "r2:c4371702261:0",
+			"confirmed": true
+		},
+		{
+			"earlier": "r1:c4370962629:0",
+			"later": "r2:c4371702259:0",
+			"confirmed": true
+		},
+		{
+			"earlier": "r1:c4370962629:0",
+			"later": "r3:c4371972048:0",
+			"confirmed": true
+		},
+		{
+			"earlier": "r0:c4370534301:1",
+			"later": "r2:c4371702252:0",
+			"confirmed": true
+		},
+		{
+			"earlier": "r0:c4370534299:0",
+			"later": "r3:c4371972053:0",
 			"confirmed": false
 		}
 	],
-	"repeatPairs": [],
 	"negativePairs": [],
 	"allowedSuppression": []
 }

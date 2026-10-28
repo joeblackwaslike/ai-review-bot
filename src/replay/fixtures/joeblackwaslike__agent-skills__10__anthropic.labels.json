@@ -1,6 +1,6 @@
 {
 	"fixtureId": "joeblackwaslike__agent-skills__10__anthropic",
-	"provisional": true,
+	"provisional": false,
 	"labels": [
 		{
 			"claimId": "r0:c4370326413:0",
@@ -9,7 +9,7 @@
 			"evidence": [
 				"2026-10-25T17:00:20Z|Fixed in af1a6173 with your suggested approach: `jq -nc --arg url \"$url\" '{url:$url}'` builds the body, and the recipe tells the agent to write `'` as `%27` in the `url='...'` assignment. SKILL.md step 3 no longer carries its own copy of the recipe; 7d167c72 trimmed it to a pointer, so references/stealth-browser.md is the single source."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:c4370326415:0",
@@ -18,77 +18,93 @@
 			"evidence": [
 				"2026-10-25T17:00:24Z|Fixed in af1a6173. The recipe uses `-m 300`, and Pacing explains why: about five 50 s runs ahead of a request at the back of a full queue. SKILL.md step 3 no longer carries its own copy of the recipe; 7d167c72 trimmed it to a pointer, so references/stealth-browser.md is the single source."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:body:0",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"spot-check|filler finding: 'no additional material issues beyond prior review' is not an actionable defect"
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:body:1",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:body:2",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"spot-check|fixed in af1a6173: reply to greptile comment 4370314335 confirms recipe now passes -D /tmp/sb-headers.txt so agent sees X-Final-Url"
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:body:3",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:body:4",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"spot-check|filler finding: 'no test coverage possible' is a statement about the PR type, not an actionable defect"
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:body:5",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"spot-check|filler finding: 'docs-only PR, no executable tests applicable' is a statement about the PR type, not an actionable defect"
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r1:body:0",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"spot-check|filler finding: 'no new findings beyond prior reviews' is not an actionable defect"
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r1:body:1",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"spot-check|filler finding: 'no new material comment-rot issues' is not an actionable defect"
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r1:body:2",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"spot-check|filler finding: 'no test coverage possible for docs-only change' is a statement about the PR type"
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r1:body:3",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"spot-check|filler finding: 'no test coverage for new docs' restates r1:body:2"
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r2:c4370928141:0",
@@ -97,93 +113,116 @@
 			"evidence": [
 				"2026-10-25T17:00:49Z|Fixed in af1a6173. The prose under the health check now says to fetch only if it prints `200`, and to skip the gateway on `not configured`, a 401, or a DNS, connection, or timeout error."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r2:c4370928142:0",
 			"label": "fixed",
-			"confidence": "low",
+			"confidence": "high",
 			"evidence": [
-				"2026-10-25T14:16:51Z|changed skills/web-research/references/stealth-browser.md near line 15 in af1a6173a854adfebb61ffcd46791a134c4fef36"
+				"2026-10-25T14:16:51Z|changed skills/web-research/references/stealth-browser.md near line 15 in af1a6173a854adfebb61ffcd46791a134c4fef36",
+				"spot-check|thread reply confirms: 'The env check and the probe are one if/else, so the probe never runs with empty credentials.' Resolved by joeblackwaslike, reaction +1"
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r2:body:0",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"spot-check|shell injection fixed in af1a6173: recipe now uses jq -nc --arg to build body safely; thread reply to comment 4370317728 confirms"
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r2:body:1",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"spot-check|credential gating fixed in af1a6173: env check and probe are one if/else per thread reply on comment 4370928142"
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r2:body:2",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"spot-check|filler finding: 'no test coverage; all live validation untested' is a statement about the PR type"
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r2:body:3",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"spot-check|filler finding: 'docs-only PR lacks live/behavioral verification' is a statement about the PR type"
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r2:body:4",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"spot-check|shell injection fixed in af1a6173 (same finding as r2:body:0)"
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r2:body:5",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"spot-check|shell injection fixed in af1a6173 (same finding as r2:body:0 and r2:body:4)"
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r2:body:6",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"spot-check|header truncation fixed in af1a6173: recipe now passes -D for headers separately; same fix as r0:body:2"
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r3:body:0",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"spot-check|filler finding: 'no new unresolved issues' is not an actionable defect"
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r3:body:1",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"spot-check|filler finding: 'live validation untested' is a statement about the PR type"
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r3:body:2",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"spot-check|filler finding: 'all issues already covered by prior reviewers' is not an actionable defect"
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r3:body:3",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"spot-check|filler finding: 'docs-only lacks live verification' restates r2:body:3"
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r4:c4371931917:0",
@@ -192,7 +231,7 @@
 			"evidence": [
 				"2026-10-25T18:56:58Z|The recipe is instructions for an agent, not a script: the text says to fetch only if the check prints 200 and to skip the gateway otherwise. Wrapping it in one conditional would make the doc harder to read without changing what the agent does. No change."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r4:c4371931921:0",
@@ -201,7 +240,7 @@
 			"evidence": [
 				"2026-10-25T18:57:01Z|Same as the thread on line 31: the doc tells the agent to fetch only on `200`. No change."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r4:c4371931925:0",
@@ -210,66 +249,88 @@
 			"evidence": [
 				"2026-10-25T18:57:04Z|Intentional. SKILL.md carries only the routing trigger and the skip rule; the commands live in the reference, which is the single copy of the recipe."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r4:body:0",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"spot-check|filler finding: 'no live/behavioral verification' is a statement about the PR type"
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r4:body:1",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"spot-check|filler finding: 'no live validation' restates r2:body:3 and r3:body:3"
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r4:body:2",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"spot-check|credential gating was already fixed in af1a6173 (round 3); r4 inline comments (c4371931917, c4371931921) rejected with 'No change' — the bot re-raised an already-fixed finding"
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r4:body:3",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"spot-check|filler finding: 'no live validation; prior rounds concerns addressed' is not an actionable defect"
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r4:body:4",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"spot-check|filler finding: 'no code changes this round' is not an actionable defect"
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r4:body:5",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"spot-check|finding references -m 600 but the actual fix used -m 300; the claim is factually wrong about the implemented value"
+			],
+			"confirmed": true
 		}
 	],
 	"repeatPairs": [
 		{
 			"later": "r3:body:3",
 			"earlier": "r2:body:3",
-			"confirmed": false
-		},
-		{
-			"later": "r4:c4371931921:0",
-			"earlier": "r2:c4370928141:0",
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"later": "r4:body:1",
 			"earlier": "r2:body:3",
-			"confirmed": false
+			"confirmed": true
+		},
+		{
+			"later": "r4:body:2",
+			"earlier": "r2:c4370928141:0",
+			"confirmed": true
+		},
+		{
+			"later": "r4:c4371931917:0",
+			"earlier": "r2:c4370928141:0",
+			"confirmed": true
+		},
+		{
+			"later": "r4:c4371931921:0",
+			"earlier": "r2:c4370928141:0",
+			"confirmed": true
 		}
 	],
 	"negativePairs": [],

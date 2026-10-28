@@ -1,6 +1,6 @@
 {
 	"fixtureId": "joeblackwaslike__stealth-browser__1__anthropic",
-	"provisional": true,
+	"provisional": false,
 	"labels": [
 		{
 			"claimId": "r0:c4370502157:0",
@@ -9,7 +9,7 @@
 			"evidence": [
 				"2026-10-25T12:58:12Z|Agreed there's no defect here; Playwright's `storageState()` always emits these fields. No change."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:c4370502157:1",
@@ -18,7 +18,7 @@
 			"evidence": [
 				"2026-10-25T12:58:12Z|Agreed there's no defect here; Playwright's `storageState()` always emits these fields. No change."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:c4370502158:0",
@@ -27,7 +27,7 @@
 			"evidence": [
 				"2026-10-25T12:58:14Z|The counter doesn't leak. A task that finds its profile paused throws inside the `try`, so the `finally` still runs `this.inFlight--`. The test `rejects a queued task when its profile is paused before it starts` exercises that path. No change."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:c4370502158:1",
@@ -36,7 +36,7 @@
 			"evidence": [
 				"2026-10-25T12:58:14Z|The counter doesn't leak. A task that finds its profile paused throws inside the `try`, so the `finally` still runs `this.inFlight--`. The test `rejects a queued task when its profile is paused before it starts` exercises that path. No change."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:c4370502158:2",
@@ -45,16 +45,16 @@
 			"evidence": [
 				"2026-10-25T12:58:14Z|The counter doesn't leak. A task that finds its profile paused throws inside the `try`, so the `finally` still runs `this.inFlight--`. The test `rejects a queued task when its profile is paused before it starts` exercises that path. No change."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:c4370502160:0",
 			"label": "fixed",
-			"confidence": "low",
+			"confidence": "high",
 			"evidence": [
 				"2026-10-25T12:44:37Z|changed src/detect.ts near line 62 in 1a90c7f251427583249371c4f0acf7fab545d6b2"
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:c4370502163:0",
@@ -63,21 +63,25 @@
 			"evidence": [
 				"2026-10-25T12:58:18Z|The guard already covers `::`, `::1`, `fc00::/7` (`fc`/`fd`), `fe80::/10` and IPv4-mapped addresses, which the WHATWG URL parser normalizes to the `::ffff:hex:hex` form matched here. The cluster has no IPv6 egress route, and 1a90c7f adds a NetworkPolicy that blocks private ranges at the network level. No change."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:c4370502165:0",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T12:44:37Z|Addressed in 1a90c7f, one layer down. A NetworkPolicy now denies the Camoufox pod egress to private, CGNAT, loopback and link-local ranges"
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:c4370502167:0",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T12:44:37Z|Fixed in 1a90c7f. The Error Page title only counts as a block on eBay URLs. Test: ignores an Error Page title outside eBay"
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:c4370502168:0",
@@ -86,39 +90,39 @@
 			"evidence": [
 				"2026-10-25T12:58:26Z|Intentional. Captures are a debugging aid for blocked pages; losing one shouldn't fail the response the caller is waiting on, and the warning is logged. No change."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:c4370502170:0",
-			"label": "fixed",
-			"confidence": "low",
+			"label": "rejected",
+			"confidence": "high",
 			"evidence": [
-				"2026-10-25T12:44:37Z|changed src/detect.ts near line 47 in 1a90c7f251427583249371c4f0acf7fab545d6b2"
+				"2026-10-25T12:58:00Z|Kept as is. Session expiry on eBay shows up as a 200 sign-in page, classified session_expired. No change."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:c4370502170:1",
-			"label": "fixed",
-			"confidence": "low",
+			"label": "rejected",
+			"confidence": "high",
 			"evidence": [
-				"2026-10-25T12:44:37Z|changed src/detect.ts near line 47 in 1a90c7f251427583249371c4f0acf7fab545d6b2"
+				"2026-10-25T12:58:00Z|Kept as is. Session expiry on eBay shows up as a 200 sign-in page, classified session_expired. No change."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:c4370502175:0",
 			"label": "rejected",
-			"confidence": "low",
+			"confidence": "high",
 			"evidence": ["2026-10-25T12:58:31Z|reaction -1 by joeblackwaslike"],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:c4370502176:0",
 			"label": "rejected",
-			"confidence": "low",
+			"confidence": "high",
 			"evidence": ["2026-10-25T12:58:34Z|reaction -1 by joeblackwaslike"],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:c4370502179:0",
@@ -127,123 +131,123 @@
 			"evidence": [
 				"2026-10-25T12:58:35Z|By design. A pause blocks new work for the profile; the running request finishes and its own verdict is returned. Aborting it mid-navigation would gain nothing. No change."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:c4370502180:0",
-			"label": "fixed",
-			"confidence": "low",
+			"label": "rejected",
+			"confidence": "high",
 			"evidence": [
-				"2026-10-25T12:44:37Z|changed src/app.ts near line 103 in 1a90c7f251427583249371c4f0acf7fab545d6b2"
+				"2026-10-25T12:58:36Z|Kept as is. page.url() always returns a parseable URL in practice; the fallback only guards an empty string. No change."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:c4370502183:0",
 			"label": "rejected",
-			"confidence": "low",
+			"confidence": "high",
 			"evidence": ["2026-10-25T12:58:41Z|reaction -1 by joeblackwaslike"],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:body:0",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:body:1",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:body:2",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:body:3",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:body:4",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:body:5",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:body:6",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:body:7",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:body:8",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:body:9",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:body:10",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:body:11",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r0:body:12",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r1:c4370934137:0",
 			"label": "fixed",
-			"confidence": "low",
+			"confidence": "high",
 			"evidence": [
 				"2026-10-25T14:23:39Z|changed src/profiles.ts near line 59 in 07ab501c879cf96f9931038d7c487dbe0f597a88"
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r1:c4370934140:0",
@@ -252,7 +256,7 @@
 			"evidence": [
 				"2026-10-25T14:59:53Z|Intentional. A failed cookie refresh should not turn a fetched page into an error; the failure is logged as state_save_failed."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r1:c4370934143:0",
@@ -261,7 +265,7 @@
 			"evidence": [
 				"2026-10-25T14:59:55Z|The only caller guards this: app.ts passes the original request URL when the browser returns an unparseable finalUrl. No change."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r1:c4370934147:0",
@@ -270,7 +274,7 @@
 			"evidence": [
 				"2026-10-25T14:59:57Z|Every subdomain of ebay.com and reddit.com is controlled by eBay and Reddit, and matching is on label boundaries, so look-alikes such as notebay.com or ebay.com.evil.example stay anon (tested). No change."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r1:c4370934151:0",
@@ -279,7 +283,7 @@
 			"evidence": [
 				"2026-10-25T15:00:00Z|By design. Captures are a debugging aid; keeping the newest 20 overall is enough. No change."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r1:c4370934156:0",
@@ -288,7 +292,7 @@
 			"evidence": [
 				"2026-10-25T15:00:02Z|The serial queue is covered by the app test `keeps a login uploaded mid-scrape`, which uploads a new login while a fetch is in flight and checks it survives. No change."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r1:c4370934160:0",
@@ -297,7 +301,7 @@
 			"evidence": [
 				"2026-10-25T15:00:04Z|generation is only used after scheduler.run resolves. If run throws, the catch path returns before writeIfUnchanged. No change."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r1:c4370934163:0",
@@ -306,70 +310,70 @@
 			"evidence": [
 				"2026-10-25T15:00:08Z|Not off by one. inFlight counts the running task plus the waiting ones and is checked before the increment, so the limit is 1 running + 5 waiting, as the comment says; the app test expects the 7th request to get 429. No change."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r1:body:0",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r1:body:1",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r1:body:2",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r1:body:3",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r1:body:4",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r1:body:5",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r1:body:6",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r1:body:7",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r1:body:8",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r2:c4371651731:0",
@@ -378,7 +382,7 @@
 			"evidence": [
 				"2026-10-25T18:34:51Z|Already scoped: since 1a90c7f the `Error Page` title only counts as a block on eBay URLs, where it is eBay's block page. No change."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r2:c4371651740:0",
@@ -387,7 +391,7 @@
 			"evidence": [
 				"2026-10-25T18:34:53Z|Intentional, as answered earlier. A failed capture is logged and must not fail the response the caller is waiting on."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r2:c4371651746:0",
@@ -396,7 +400,7 @@
 			"evidence": [
 				"2026-10-25T18:34:55Z|`TIMESTAMP_START` is `/\\d{4}-.*$/`, unanchored, so it extracts the timestamp from names like `ebay-blocked-2026-...`. Pruning is chronological. No change."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r2:c4371651754:0",
@@ -405,49 +409,51 @@
 			"evidence": [
 				"2026-10-25T18:34:58Z|By design. Since 07ab501 the NetworkPolicy lets only gateway pods reach Camoufox, and reading the pod spec needs cluster access. No change."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r2:c4371651759:0",
-			"label": "unadjudicated",
-			"confidence": "low",
-			"evidence": [],
-			"confirmed": false
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-25T18:35:02Z|Accurate, and covered one layer down: the Camoufox NetworkPolicy denies private, CGNAT, loopback and link-local egress. No code change needed."
+			],
+			"confirmed": true
 		},
 		{
 			"claimId": "r2:c4371651762:0",
 			"label": "rejected",
-			"confidence": "low",
+			"confidence": "high",
 			"evidence": ["2026-10-25T18:35:05Z|reaction -1 by joeblackwaslike"],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r2:body:0",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r2:body:1",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r2:body:2",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r2:body:3",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r3:c4371934612:0",
@@ -456,7 +462,7 @@
 			"evidence": [
 				"2026-10-25T19:25:53Z|Not stale: host is set right after the URL passes validation and before any navigation, so the log always has it. No change."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r3:c4371934613:0",
@@ -465,81 +471,191 @@
 			"evidence": [
 				"2026-10-25T19:25:55Z|The error text is already redacted before it reaches this log: the fetcher replaces the Camoufox ws URL and path in every error it throws (the test `never leaks the ws path in connect errors` covers it). No change."
 			],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r3:body:0",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r3:body:1",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r3:body:2",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r3:body:3",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r3:body:4",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"claimId": "r3:body:5",
 			"label": "unadjudicated",
 			"confidence": "low",
 			"evidence": [],
-			"confirmed": false
+			"confirmed": true
 		}
 	],
 	"repeatPairs": [
+		{
+			"later": "r2:body:1",
+			"earlier": "r0:c4370502158:0",
+			"confirmed": true
+		},
+		{
+			"later": "r2:c4371651762:0",
+			"earlier": "r0:c4370502158:0",
+			"confirmed": true
+		},
+		{
+			"later": "r3:body:0",
+			"earlier": "r0:c4370502158:0",
+			"confirmed": true
+		},
+		{
+			"later": "r3:body:2",
+			"earlier": "r0:c4370502158:0",
+			"confirmed": true
+		},
+		{
+			"later": "r3:body:5",
+			"earlier": "r0:c4370502158:0",
+			"confirmed": true
+		},
+		{
+			"later": "r2:body:1",
+			"earlier": "r0:c4370502158:2",
+			"confirmed": true
+		},
+		{
+			"later": "r2:c4371651762:0",
+			"earlier": "r0:c4370502158:2",
+			"confirmed": true
+		},
+		{
+			"later": "r3:body:0",
+			"earlier": "r0:c4370502158:2",
+			"confirmed": true
+		},
+		{
+			"later": "r3:body:2",
+			"earlier": "r0:c4370502158:2",
+			"confirmed": true
+		},
+		{
+			"later": "r3:body:5",
+			"earlier": "r0:c4370502158:2",
+			"confirmed": true
+		},
+		{
+			"later": "r2:c4371651759:0",
+			"earlier": "r0:c4370502165:0",
+			"confirmed": true
+		},
 		{
 			"later": "r2:c4371651731:0",
 			"earlier": "r0:c4370502167:0",
 			"confirmed": false
 		},
 		{
+			"later": "r2:c4371651740:0",
+			"earlier": "r0:c4370502168:0",
+			"confirmed": true
+		},
+		{
+			"later": "r2:body:1",
+			"earlier": "r0:c4370502176:0",
+			"confirmed": true
+		},
+		{
+			"later": "r2:c4371651762:0",
+			"earlier": "r0:c4370502176:0",
+			"confirmed": true
+		},
+		{
+			"later": "r3:body:0",
+			"earlier": "r0:c4370502176:0",
+			"confirmed": true
+		},
+		{
+			"later": "r3:body:2",
+			"earlier": "r0:c4370502176:0",
+			"confirmed": true
+		},
+		{
+			"later": "r3:body:5",
+			"earlier": "r0:c4370502176:0",
+			"confirmed": true
+		},
+		{
 			"later": "r2:c4371651746:0",
 			"earlier": "r1:body:4",
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"later": "r2:body:1",
 			"earlier": "r1:body:5",
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"later": "r3:body:0",
 			"earlier": "r1:body:5",
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"later": "r3:body:0",
 			"earlier": "r1:body:8",
-			"confirmed": false
+			"confirmed": true
 		},
 		{
 			"later": "r3:body:5",
 			"earlier": "r1:body:8",
-			"confirmed": false
+			"confirmed": true
+		},
+		{
+			"later": "r2:body:1",
+			"earlier": "r1:c4370934163:0",
+			"confirmed": true
+		},
+		{
+			"later": "r2:c4371651762:0",
+			"earlier": "r1:c4370934163:0",
+			"confirmed": true
+		},
+		{
+			"later": "r3:body:0",
+			"earlier": "r1:c4370934163:0",
+			"confirmed": true
+		},
+		{
+			"later": "r3:body:2",
+			"earlier": "r1:c4370934163:0",
+			"confirmed": true
+		},
+		{
+			"later": "r3:body:5",
+			"earlier": "r1:c4370934163:0",
+			"confirmed": true
 		}
 	],
 	"negativePairs": [],
