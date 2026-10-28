@@ -51,6 +51,44 @@ describe("buildLedger", () => {
 		expect(e.body).toBe("body text");
 	});
 
+	describe("a comment holding several claims", () => {
+		const twoClaims = [
+			{ ...claim(10), id: "r0:c10:0", title: "first issue" },
+			{ ...claim(10), id: "r0:c10:1", title: "second issue" },
+		];
+
+		it("is not settled by a reply, which cannot say which claim it means", () => {
+			const ledger = build(
+				[
+					thread({
+						replies: [
+							reply({
+								author: "joe",
+								body: "the first issue is intentional; the second still needs fixing",
+							}),
+						],
+					}),
+				],
+				twoClaims,
+			);
+			expect(ledger.map((e) => e.status)).toEqual(["open", "open"]);
+		});
+
+		it("settles every claim as resolved when a decider resolves the thread", () => {
+			const ledger = build(
+				[
+					thread({
+						isResolved: true,
+						resolvedBy: "joe",
+						replies: [reply({ author: "joe" })],
+					}),
+				],
+				twoClaims,
+			);
+			expect(ledger.map((e) => e.status)).toEqual(["resolved", "resolved"]);
+		});
+	});
+
 	it("settles on the PR author's reply", () => {
 		expect(
 			build([thread({ replies: [reply({ author: "joe" })] })])[0].status,

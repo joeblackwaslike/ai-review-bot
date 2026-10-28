@@ -40,6 +40,13 @@ export function buildLedger(e: LedgerEvidence): Ledger {
 		for (const r of t.replies) if (isDecider(r)) deciderLogins.add(r.author);
 
 	const byComment = new Map(e.threads.map((t) => [t.commentId, t]));
+	const claimsPerComment = new Map<number, number>();
+	for (const c of e.claims)
+		if (c.commentId !== null)
+			claimsPerComment.set(
+				c.commentId,
+				(claimsPerComment.get(c.commentId) ?? 0) + 1,
+			);
 
 	return e.claims.map((c): LedgerEntry => {
 		const base = {
@@ -52,7 +59,10 @@ export function buildLedger(e: LedgerEvidence): Ledger {
 			body: c.text,
 		};
 		const t = c.commentId === null ? undefined : byComment.get(c.commentId);
-		const d = t && classifyReplies(t.replies, isDecider);
+		// One reply cannot say which of several merged claims it settles.
+		const isSingleClaim =
+			c.commentId !== null && claimsPerComment.get(c.commentId) === 1;
+		const d = t && isSingleClaim && classifyReplies(t.replies, isDecider);
 		if (d) return { ...base, ...d, decidedBy: "author" };
 		if (t?.isResolved && t.resolvedBy && deciderLogins.has(t.resolvedBy))
 			return {
