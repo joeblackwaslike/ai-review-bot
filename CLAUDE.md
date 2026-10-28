@@ -8,7 +8,7 @@ This file provides context and conventions for AI coding agents working on this 
 npm install
 npm run typecheck    # tsc --noEmit — must pass before any commit
 npm run lint         # biome check — must pass before any commit
-npm run test         # vitest run (828 tests) — must pass before any commit
+npm run test         # vitest run (928 tests) — must pass before any commit
 npm run dev          # vercel dev — local server on :3000
 ```
 
@@ -70,11 +70,12 @@ POST /api/github/review-run        (QStash delayed callback)
 | `src/cli.ts` | CLI entry point for `ai-review` command |
 | `src/watch.ts` | `watchPr()` — polls an already-open PR and re-reviews it on head-SHA change via `maybeSubmitReview`, using local subscription auth; backs `ai-review watch` |
 | `src/testing.ts` | Shared test fixtures (`buildModelReview`, `buildGenerateObjectResponse`, etc.) |
+| `src/replay/` | Offline replay harness — records, labels, and replays PR review rounds to measure false-positive rate, recycling, and convergence; backs `ai-review replay`. See `docs/superpowers/specs/2026-10-27-review-replay-harness-design.md` |
 | `skills/*.md` | Vendored skill frameworks loaded at runtime by `buildAgentSystemPrompt()` |
 
 ### Local audit & review
 
-The CLI supports four subcommands for offline code review of the working tree (plus `ai-review watch` for an already-open PR — see below):
+The CLI supports four subcommands for offline code review of the working tree (plus `ai-review watch` for an already-open PR, and `ai-review replay` for offline review-accuracy measurement — see below):
 
 - `ai-review review [--full | --commit <sha>] [--slug <slug>] [--title <t>] [--out <dir>] [--extra <text>] [--json]` — Runs the full multi-agent review against local changes (default), the full tree (`--full`), or a specific commit (`--commit`), and writes a round-numbered Markdown report with YAML front-matter into `docs/code-reviews/` (no PR). Auth per provider: API key → explicit OAuth env token → logged-in `codex`/`claude` subscription (local, personal use only; never wired into webhook paths — see `src/auth.ts`). The `/code-review` slash command wraps it with doc-only / `--fix` / `--propose` modes.
 
@@ -85,6 +86,8 @@ The CLI supports four subcommands for offline code review of the working tree (p
 - `ai-review watch --pr <n> [--repo <owner/name>] [--provider anthropic|openai] [--interval <seconds>] [--no-circuit-breaker]` — Polls an already-open PR and re-reviews it on every push, posting through the same GitHub App bot identities production uses, driven by local subscription auth instead of a funded API key. Personal, local use only (same ToS boundary as `review`/`audit`); exits when the PR merges or closes. Defaults to a 300s (5 min) poll interval — see `ai-review-bot-599` follow-up below for why. See `src/watch.ts` and `docs/superpowers/specs/2026-08-16-local-pr-watch-subscription-auth-design.md`. Both `--provider anthropic` and `--provider openai` are dogfoodable — `--provider openai` was fixed in `ai-review-bot-wt8`: the ChatGPT/Codex Responses-API backend rejects `stream:false` outright for OAuth-authenticated requests, and its `response.completed` event's embedded `response.output` is always empty (content must be accumulated from the incremental `response.output_item.done` events, same as a real streaming client). `makeCodexFetch`'s `parseCodexSSEResponse` (`src/auth.ts`) reconstructs a plain JSON response from the SSE stream so `generateObject` is unaware streaming ever happened; verified live end-to-end against this repo's own PR #67. The hosted webhook path (API-key only) is unaffected either way. **Do not leave `watch` running unattended at a fast interval (`--interval 45`-`60`) while actively iterating on its own findings** — a push into a live watcher triggers a fresh review within minutes, and the fix-then-repush cycle can outrun a human/agent's ability to notice the reviewer has converged, producing an unbounded review-nitpick loop rather than a bounded review-fix loop. Pause or kill the watcher before pushing a batch of review-response fixes; restart it (with a fast `--interval` override if you're actively supervising it) only for a final confirmation pass. See `docs/post-mortem-review-loop-churn.md` — this exact pattern cost ~2.5 hours across PRs #67/#68 before being caught. **Mechanical circuit breaker (`ai-review-bot-599`):** the prose guidance above was already documented before that incident and was recognized-but-not-enforced mid-run, so `watchPr` (`src/watch.ts`) now stops itself once a single provider posts 3 reviews within a 15-minute rolling window, logging `circuit breaker tripped` and exiting with `reason: "circuit-breaker"` instead of relying on an operator or subagent to notice and self-limit. Pass `--no-circuit-breaker` only for a deliberate, already-supervised run (e.g. a final confirmation pass) — it disables the guard entirely for that session. **The circuit breaker is a separate lever from the poll interval** — it caps how many reviews a session can *post* regardless of cadence, but doesn't itself make fast polling safe; the 300s default interval is the first line of defense (avoids catching a mid-flight fix-and-repush cycle at all), the breaker is the backstop for whatever pushes through anyway. Override with `--interval` for a supervised fast pass (e.g. dogfooding a fix to `watch.ts` itself).
 
 Reference: `docs/superpowers/specs/2026-06-08-local-audit-review-pr-design.md`
+
+- `ai-review replay [--fixtures <dir>]` / `ai-review replay --record <pr-url> --provider anthropic|openai --bot <login>` / `ai-review replay --live [--rounds <n>] [--max-cost <usd>]` — Deterministic offline replay of recorded review rounds: measures false-positive rate, claim recycling, and convergence against auto-labeled fixtures (provisional until a manual spot-check confirms them). `--record` captures a real PR's rounds/threads/reactions via `gh` into `src/replay/fixtures/`; the default (no flags) replays existing fixtures and fails on confirmed-label guard violations (warns on provisional ones); `--live` is an opt-in, cost-capped tier that re-runs the audit pipeline against confirmed pairs only — it never gates CI. See `docs/superpowers/specs/2026-10-27-review-replay-harness-design.md` for the design and `src/replay/`.
 
 ### Agent skills
 
