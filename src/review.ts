@@ -132,6 +132,12 @@ interface PullRequestReview {
 	state?: string;
 }
 
+const STANDING_REVIEW_STATES = new Set([
+	"APPROVED",
+	"CHANGES_REQUESTED",
+	"DISMISSED",
+]);
+
 interface TokenUsage {
 	promptTokens: number;
 	completionTokens: number;
@@ -1422,12 +1428,17 @@ export async function buildReview(
 	 * explained, since a FULL pass did see these findings' files and chose not
 	 * to restate them, while an INCREMENTAL pass never saw them at all. */
 	let incrementalPass = false;
-	const latestOwnReview = existingReviews
-		.filter((review) =>
-			(review.body ?? "").includes(`### ${context.commentPrefix}`),
-		)
-		.at(-1);
-	const hasOwnReview = latestOwnReview !== undefined;
+	const ownReviews = existingReviews.filter((review) =>
+		(review.body ?? "").includes(`### ${context.commentPrefix}`),
+	);
+	const hasOwnReview = ownReviews.length > 0;
+	/** A COMMENTED review neither clears a change request nor grants approval,
+	 * and a DISMISSED one means the approval is gone. */
+	const standingVerdict = ownReviews
+		.filter((review) => STANDING_REVIEW_STATES.has(review.state ?? ""))
+		.at(-1)?.state;
+	const needsFreshApprove =
+		standingVerdict === "CHANGES_REQUESTED" || standingVerdict === "DISMISSED";
 	let ledgerLoad: ReturnType<typeof loadLedger> | undefined;
 	const fetchLedger = () => {
 		ledgerLoad ??= loadLedger(context.octokit, {
@@ -1516,8 +1527,7 @@ export async function buildReview(
 			const stillOpen = state.findings.some(isOpen);
 			// A re-stamped check-run does not supersede a standing CHANGES_REQUESTED
 			// review, so that case runs as INCREMENTAL and posts its APPROVE.
-			skipNeedsApprove =
-				!stillOpen && latestOwnReview?.state === "CHANGES_REQUESTED";
+			skipNeedsApprove = !stillOpen && needsFreshApprove;
 			if (!skipNeedsApprove) {
 				await carryVerdictForward(stillOpen ? state.event : "APPROVE");
 				return null; // nothing to post — the check-run carries the verdict
@@ -1560,9 +1570,8 @@ export async function buildReview(
 	const ledger = loadedLedger?.ledger ?? [];
 	survivingPrior = reconcileSurvivingPrior(survivingPrior, ledger);
 	const kvFindings = state?.findings ?? [];
-	const kvMatchedIds = new Set(
-		kvFindings.map((f) => findSettledMatch(f, ledger)?.id),
-	);
+	const kvMatches = kvFindings.map((f) => findSettledMatch(f, ledger));
+	const kvMatchedIds = new Set(kvMatches.map((m) => m?.id));
 	const ledgerOnlySettled = ledger.filter(
 		(e) => isSettled(e) && !kvMatchedIds.has(e.id),
 	);
@@ -1590,13 +1599,19 @@ export async function buildReview(
 		priorOwnReview,
 		priorOwnFindings: tuning.showPriorOwnFindings
 			? [
-					...kvFindings.map((f) => ({
-						path: f.path,
-						line: f.line,
-						title: f.title,
-						severity: f.severity,
-						status: f.status,
-					})),
+					...kvFindings.map((f, i) => {
+						const settled = kvMatches[i];
+						return {
+							path: f.path,
+							line: f.line,
+							title: f.title,
+							severity: f.severity,
+							status: settled?.status ?? f.status,
+							...(settled
+								? { decidedBy: settled.decidedBy, reason: settled.reason }
+								: {}),
+						};
+					}),
 					...ledgerOnlySettled.map((e) => ({
 						path: e.path,
 						line: e.line,
@@ -1967,16 +1982,22 @@ export async function buildReview(
 
 	if (
 		finalEvent === "APPROVE" &&
-		latestOwnReview &&
-		latestOwnReview.state !== "CHANGES_REQUESTED" &&
+		hasOwnReview &&
+		!needsFreshApprove &&
 		!context.force
 	) {
 		console.log("nothing new since the last review; posting nothing", {
 			suppressed: suppressedCount,
 			agents: agentResults.length,
 		});
+		// survivingPrior is empty here, so every open KV finding was settled by
+		// the ledger; saving them open would let a later cold-ledger run block.
+		if (state)
+			state.findings = state.findings.map((f) =>
+				f.status === "open" ? { ...f, status: "resolved" } : f,
+			);
 		await carryVerdictForward(
-			latestOwnReview.state === "APPROVED" ? "APPROVE" : "COMMENT",
+			standingVerdict === "APPROVED" ? "APPROVE" : "COMMENT",
 		);
 		return null;
 	}
