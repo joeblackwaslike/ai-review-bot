@@ -43,7 +43,26 @@ describe("findSettledMatch", () => {
 		expect(findSettledMatch(f, [e])).toBe(e);
 	});
 
-	it.fails("does not match credentials vs connections 490 lines apart (brief's exact titles: Jaccard 0.6 clears the 0.5 identifier bar)", () => {
+	it("matches a verbatim re-raise 400 lines later in the same file (tier 2)", () => {
+		const title = "`listFindings` drops the body column in the SQL query";
+		const e = entry({ title });
+		const f = { path: "src/a.ts", line: 410, title };
+		expect(findSettledMatch(f, [e])).toBe(e);
+	});
+
+	it("does not match a reworded repeat more than 30 lines away (accepted cost)", () => {
+		const e = entry({
+			title: "`listFindings` drops the body column in the SQL query",
+		});
+		const f = {
+			path: "src/a.ts",
+			line: 50,
+			title: "SQL query in `listFindings` omits the body column",
+		};
+		expect(findSettledMatch(f, [e])).toBeNull();
+	});
+
+	it("does not match credentials vs connections 490 lines apart", () => {
 		const e = entry({
 			line: 10,
 			title: "`loadUser` leaks credentials after timeout",

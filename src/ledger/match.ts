@@ -9,8 +9,8 @@ import { isSettled, type Ledger, type LedgerEntry } from "./types.js";
 
 export const CROSS_ROUND_MATCH: ClaimMatchOptions = {
 	lineWindow: Number.POSITIVE_INFINITY,
-	titleSimilarity: 0.7,
-	identifierSimilarity: 0.5,
+	titleSimilarity: 0.8,
+	identifierSimilarity: 0.8,
 	unanchoredSimilarity: 0.6,
 	minTokens: 3,
 };
