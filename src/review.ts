@@ -1264,16 +1264,14 @@ export async function buildReview(
 ): Promise<ReviewDecision | null> {
 	// Always fetch existing reviews — used for both idempotency check and
 	// cross-bot dedup (collecting what the other bot already reported).
-	const existingReviews = (
-		await context.octokit.request<PullRequestReview[]>(
-			"GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
-			{
-				owner: context.owner,
-				repo: context.repo,
-				pull_number: context.pullNumber,
-			},
-		)
-	).data;
+	const existingReviews = await context.octokit.paginate<PullRequestReview>(
+		"GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
+		{
+			owner: context.owner,
+			repo: context.repo,
+			pull_number: context.pullNumber,
+		},
+	);
 
 	const legacyMarker = `Reviewed commit: \`${context.headSha.slice(0, 12)}\``;
 
@@ -1430,13 +1428,16 @@ export async function buildReview(
 		)
 		.at(-1);
 	const hasOwnReview = latestOwnReview !== undefined;
-	const fetchLedger = () =>
-		loadLedger(context.octokit, {
+	let ledgerLoad: ReturnType<typeof loadLedger> | undefined;
+	const fetchLedger = () => {
+		ledgerLoad ??= loadLedger(context.octokit, {
 			owner: context.owner,
 			repo: context.repo,
 			pull: context.pullNumber,
 			commentPrefix: context.commentPrefix,
 		});
+		return ledgerLoad;
+	};
 	const state =
 		context.kv && !context.force
 			? await loadReviewState(
@@ -1500,6 +1501,7 @@ export async function buildReview(
 			}
 		}
 
+		let skipNeedsApprove = false;
 		if (triage.recommendation === "SKIP" && !deltaMeta.truncated) {
 			const isOpen = (f: PersistedFinding) => f.status === "open";
 			if (hasOwnReview && state.findings.some(isOpen)) {
@@ -1512,8 +1514,14 @@ export async function buildReview(
 				);
 			}
 			const stillOpen = state.findings.some(isOpen);
-			await carryVerdictForward(stillOpen ? state.event : "APPROVE");
-			return null; // nothing to post — the check-run carries the verdict
+			// A re-stamped check-run does not supersede a standing CHANGES_REQUESTED
+			// review, so that case runs as INCREMENTAL and posts its APPROVE.
+			skipNeedsApprove =
+				!stillOpen && latestOwnReview?.state === "CHANGES_REQUESTED";
+			if (!skipNeedsApprove) {
+				await carryVerdictForward(stillOpen ? state.event : "APPROVE");
+				return null; // nothing to post — the check-run carries the verdict
+			}
 		}
 
 		// Carry still-open findings forward as blocking, and resolved ones as
@@ -1526,7 +1534,10 @@ export async function buildReview(
 			triage.resolved.includes(f.id),
 		);
 
-		if (triage.recommendation === "INCREMENTAL" && !deltaMeta.truncated) {
+		if (
+			(triage.recommendation === "INCREMENTAL" || skipNeedsApprove) &&
+			!deltaMeta.truncated
+		) {
 			scopedFiles = deltaMeta.files;
 			incrementalPass = true;
 		}

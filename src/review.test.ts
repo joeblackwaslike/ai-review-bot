@@ -397,11 +397,17 @@ function buildOctokit(overrides?: {
 		request: requestMock,
 		paginate: vi
 			.fn()
-			.mockResolvedValue(
-				overrides?.files ?? [buildPullFile("src/review.ts", SIMPLE_PATCH)],
+			.mockImplementation(async (route: string) =>
+				route.endsWith("/reviews")
+					? (overrides?.existingReviews ?? [])
+					: (overrides?.files ?? [
+							buildPullFile("src/review.ts", SIMPLE_PATCH),
+						]),
 			),
 	};
 }
+
+const FILES_ROUTE = "GET /repos/{owner}/{repo}/pulls/{pull_number}/files";
 
 const baseContext = {
 	owner: "joeblackwaslike",
@@ -611,7 +617,10 @@ describe("buildReview", () => {
 		});
 
 		expect(review).toBeNull();
-		expect(octokit.paginate).not.toHaveBeenCalled();
+		expect(octokit.paginate).not.toHaveBeenCalledWith(
+			FILES_ROUTE,
+			expect.anything(),
+		);
 	});
 
 	it("resubmits when force is true even if already reviewed", async () => {
@@ -637,7 +646,10 @@ describe("buildReview", () => {
 		});
 
 		expect(review).not.toBeNull();
-		expect(octokit.paginate).toHaveBeenCalled();
+		expect(octokit.paginate).toHaveBeenCalledWith(
+			FILES_ROUTE,
+			expect.anything(),
+		);
 	});
 
 	it("renders severity emoji table for general findings", async () => {
@@ -4224,19 +4236,30 @@ describe("buildReview ledger suppression", () => {
 							};
 						return { data: threads };
 					}
-					if (route.endsWith("/reviews"))
-						return { data: o.reviews ?? [ownReview] };
+					if (route.endsWith("/reviews")) {
+						// One page at a time, as GitHub does: 30 per page by default.
+						const perPage = Number(params?.per_page ?? 30);
+						const page = Number(params?.page ?? 1);
+						return {
+							data: allReviews.slice((page - 1) * perPage, page * perPage),
+						};
+					}
 					if (route.endsWith("/comments")) return { data: [ownComment] };
 					if (route.includes("GET") && route.includes("/check-runs"))
 						return { data: { check_runs: [] } };
 					return { data: {} };
 				},
 			);
+		const allReviews = o.reviews ?? [ownReview];
 		return {
 			request,
 			paginate: vi
 				.fn()
-				.mockResolvedValue([buildPullFile("src/review.ts", SIMPLE_PATCH)]),
+				.mockImplementation(async (route: string) =>
+					route.endsWith("/reviews")
+						? allReviews
+						: [buildPullFile("src/review.ts", SIMPLE_PATCH)],
+				),
 		};
 	}
 
@@ -4492,9 +4515,11 @@ describe("buildReview ledger suppression", () => {
 			return client;
 		}
 
-		it("approves when the ledger settles every KV-open finding", async () => {
+		it("approves via the check-run when the ledger settles every KV-open finding after a COMMENTED review", async () => {
 			const client = await seedKv(settledInKv);
-			const octokit = ledgerOctokit();
+			const octokit = ledgerOctokit({
+				reviews: [{ ...ownReview, state: "COMMENTED" }],
+			});
 
 			const decision = await buildReview({
 				octokit,
@@ -4505,6 +4530,28 @@ describe("buildReview ledger suppression", () => {
 			expect(decision).toBeNull();
 			expect(restampedConclusion(octokit)).toBe("success");
 			expect((await loadPersisted(client))?.event).toBe("APPROVE");
+		});
+
+		it("posts an APPROVE instead of skipping when the ledger settles everything and the latest own review requested changes", async () => {
+			const client = await seedKv(settledInKv);
+			routeAgents(
+				{},
+				buildModelReview({
+					event: "COMMENT",
+					general_findings: [],
+					inline_comments: [],
+				}),
+			);
+			const octokit = ledgerOctokit();
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				kv: client,
+			});
+
+			expect(decision?.event).toBe("APPROVE");
+			expect(restampedConclusion(octokit)).toBeUndefined();
 		});
 
 		it("still requests changes when the ledger does not settle the KV-open finding", async () => {
@@ -4538,7 +4585,9 @@ describe("buildReview ledger suppression", () => {
 
 		it("makes no ledger calls when nothing is open", async () => {
 			const client = await seedKv({ ...settledInKv, status: "resolved" });
-			const octokit = ledgerOctokit();
+			const octokit = ledgerOctokit({
+				reviews: [{ ...ownReview, state: "COMMENTED" }],
+			});
 
 			await buildReview({ octokit, ...baseContext, kv: client });
 
@@ -4604,6 +4653,22 @@ describe("buildReview ledger suppression", () => {
 
 			expect(decision).toBeNull();
 			expect(restampedConclusion(octokit)).toBe("success");
+		});
+
+		it("reads the latest own review from the last page of a long review list", async () => {
+			routeAgents({}, onlyRepeat);
+			const reviews = [
+				...Array.from({ length: 30 }, (_, i) => ({
+					...priorOwn("COMMENTED"),
+					id: 200 + i,
+				})),
+				priorOwn("CHANGES_REQUESTED"),
+			];
+			const octokit = ledgerOctokit({ reviews });
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(decision?.event).toBe("APPROVE");
 		});
 
 		it("posts the APPROVE when the latest own review requested changes", async () => {
