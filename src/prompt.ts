@@ -44,6 +44,7 @@ export interface PromptContext {
 		title: string;
 		severity: string;
 		status: string;
+		reason?: string;
 	}>;
 }
 
@@ -97,7 +98,11 @@ export function buildUserMessage(context: PromptContext): string {
 				"",
 				...context.priorOwnFindings.map(
 					(f) =>
-						`- [${f.status}] ${f.severity} — ${f.path ?? "general"}${
+						`- [${f.status}]${
+							f.reason
+								? ` [declined by author: ${f.reason.replace(/\s+/g, " ").trim()}]`
+								: ""
+						} ${f.severity} — ${f.path ?? "general"}${
 							f.line === null ? "" : `:${f.line}`
 						} — ${f.title}`,
 				),

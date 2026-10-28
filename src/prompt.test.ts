@@ -120,6 +120,25 @@ describe("prior own findings", () => {
 		expect(message).toContain("Do not file any of these again");
 	});
 
+	it("shows the author's reason on a settled finding", () => {
+		const message = buildUserMessage({
+			...promptBase,
+			priorOwnFindings: [
+				{
+					path: "src/a.ts",
+					line: 7,
+					title: "retry has no backoff",
+					severity: "P2",
+					status: "rejected",
+					reason: "by design,\nthe caller backs off",
+				},
+			],
+		});
+		expect(message).toContain(
+			"[rejected] [declined by author: by design, the caller backs off] P2 — src/a.ts:7 — retry has no backoff",
+		);
+	});
+
 	it("says nothing about prior findings when there are none", () => {
 		const message = buildUserMessage({ ...promptBase, priorOwnFindings: [] });
 		expect(message).not.toContain("Do not file any of these again");

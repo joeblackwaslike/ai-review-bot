@@ -4142,3 +4142,282 @@ describe("formatReviewBody", () => {
 		expect(body).toContain("security-sast");
 	});
 });
+
+describe("buildReview ledger suppression", () => {
+	const OLD_SHA = "0000000000000000";
+	const REPEAT_TITLE = "Token cache never expires";
+	const DECLINE = "This is intentional, the token is short-lived";
+	const ownReview = {
+		id: 100,
+		state: "CHANGES_REQUESTED",
+		submitted_at: "2026-10-01T00:00:00Z",
+		body: `### ai-review-bot\n\nOne issue.\n\n${reviewedCommitMarker(OLD_SHA)}`,
+	};
+	const ownComment = {
+		id: 11,
+		pull_request_review_id: 100,
+		path: "src/review.ts",
+		line: 2,
+		body: `**P1** **${REPEAT_TITLE}**\n\nEntries in \`tokenCache\` are never evicted.`,
+	};
+	const threads = {
+		data: {
+			repository: {
+				pullRequest: {
+					author: { login: "joe" },
+					reviewThreads: {
+						nodes: [
+							{
+								isResolved: false,
+								resolvedBy: null,
+								comments: {
+									pageInfo: { hasNextPage: false },
+									nodes: [
+										{
+											databaseId: 11,
+											author: { login: "ai-review-bot", __typename: "Bot" },
+											authorAssociation: "NONE",
+											body: ownComment.body,
+											createdAt: "2026-10-01T00:00:00Z",
+										},
+										{
+											databaseId: 12,
+											author: { login: "joe", __typename: "User" },
+											authorAssociation: "OWNER",
+											body: DECLINE,
+											createdAt: "2026-10-02T00:00:00Z",
+										},
+									],
+								},
+							},
+						],
+						pageInfo: { hasNextPage: false, endCursor: null },
+					},
+				},
+			},
+		},
+	};
+
+	function ledgerOctokit(
+		o: { graphqlError?: Error; reviews?: unknown[] } = {},
+	) {
+		const request = vi.fn().mockImplementation(async (route: string) => {
+			if (route === "POST /graphql") {
+				if (o.graphqlError) throw o.graphqlError;
+				return { data: threads };
+			}
+			if (route.endsWith("/reviews")) return { data: o.reviews ?? [ownReview] };
+			if (route.endsWith("/comments")) return { data: [ownComment] };
+			if (route.includes("GET") && route.includes("/check-runs"))
+				return { data: { check_runs: [] } };
+			return { data: {} };
+		});
+		return {
+			request,
+			paginate: vi
+				.fn()
+				.mockResolvedValue([buildPullFile("src/review.ts", SIMPLE_PATCH)]),
+		};
+	}
+
+	const repeat = buildInlineComment({
+		title: REPEAT_TITLE,
+		body: "Entries in `tokenCache` are never evicted.",
+		path: "src/review.ts",
+		line: 2,
+	});
+	const fresh = {
+		title: "Handler swallows parse errors",
+		body: "The catch block returns an empty object.",
+		severity: "P2" as const,
+		category: "bug" as const,
+		confidence: 0.9,
+		evidence: "See diff.",
+		suppressible: false,
+	};
+
+	type Fixture = ReturnType<typeof buildModelReview>;
+
+	function routeAgents(bySkill: Record<string, Fixture>, fallback: Fixture) {
+		mockGenerateObject.mockImplementation(
+			async (call: {
+				system?: string;
+				messages: [{ content: string | [unknown, { text: string }] }];
+			}) => {
+				if (typeof call.system === "string")
+					return {
+						object: { summary: "Summary." },
+						usage: { inputTokens: 10, outputTokens: 5 },
+					};
+				const content = call.messages[0].content;
+				const skill =
+					typeof content === "string"
+						? content
+						: content[1].text.replace(/^system:/, "");
+				return buildGenerateObjectResponse(bySkill[skill] ?? fallback);
+			},
+		);
+	}
+
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+		mockTriageReReview.mockReset();
+	});
+
+	it("drops a settled repeat from the posted review and tells the agents why", async () => {
+		routeAgents(
+			{},
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [fresh],
+				inline_comments: [repeat],
+			}),
+		);
+
+		const review = await buildReview({
+			octokit: ledgerOctokit(),
+			...baseContext,
+		});
+
+		expect(review?.comments).toEqual([]);
+		expect(review?.body).not.toContain(REPEAT_TITLE);
+		expect(review?.body).toContain(fresh.title);
+		expect(review?.body).toContain("ledger: warm, 5 suppressed");
+		expect(mockBuildUserMessage).toHaveBeenCalledWith(
+			expect.objectContaining({
+				priorOwnFindings: [
+					expect.objectContaining({
+						title: REPEAT_TITLE,
+						status: "rejected",
+						reason: DECLINE,
+					}),
+				],
+			}),
+		);
+	});
+
+	it("does not request changes when an agent's only findings were suppressed", async () => {
+		routeAgents(
+			{
+				"code-reviewer.md": buildModelReview({
+					event: "REQUEST_CHANGES",
+					general_findings: [],
+					inline_comments: [repeat],
+				}),
+			},
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [fresh],
+				inline_comments: [],
+			}),
+		);
+
+		const review = await buildReview({
+			octokit: ledgerOctokit(),
+			...baseContext,
+		});
+
+		expect(review?.event).toBe("COMMENT");
+	});
+
+	it("does not let a KV-open prior finding the ledger shows settled force REQUEST_CHANGES", async () => {
+		mockTriageReReview.mockResolvedValue({
+			recommendation: "FULL",
+			resolved: [],
+			newRisk: true,
+		});
+		const { client } = fakeKv();
+		await saveReviewState(
+			client,
+			"anthropic",
+			baseContext.owner,
+			baseContext.repo,
+			baseContext.pullNumber,
+			{
+				lastReviewedSha: OLD_SHA,
+				event: "REQUEST_CHANGES",
+				findings: [
+					{
+						id: findingId("src/review.ts", 2, REPEAT_TITLE),
+						path: "src/review.ts",
+						line: 2,
+						title: REPEAT_TITLE,
+						severity: "P1",
+						status: "open",
+					},
+				],
+				reviewedAt: "2026-10-01T00:00:00Z",
+			},
+		);
+		routeAgents(
+			{},
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+		);
+
+		const review = await buildReview({
+			octokit: ledgerOctokit(),
+			...baseContext,
+			kv: client,
+		});
+
+		expect(review?.event).toBe("APPROVE");
+		expect(review?.body).not.toContain("Still open from the previous review");
+		const prompt = mockBuildUserMessage.mock.calls[0]?.[0] as {
+			priorOwnFindings: { title: string; reason?: string }[];
+		};
+		expect(prompt.priorOwnFindings).toEqual([
+			expect.objectContaining({ title: REPEAT_TITLE, status: "open" }),
+		]);
+		expect(prompt.priorOwnFindings[0]?.reason).toBeUndefined();
+	});
+
+	it("keeps the review intact with a cold ledger when the GraphQL call fails", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		routeAgents(
+			{},
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [fresh],
+				inline_comments: [repeat],
+			}),
+		);
+
+		const review = await buildReview({
+			octokit: ledgerOctokit({ graphqlError: new Error("graphql down") }),
+			...baseContext,
+		});
+
+		expect(review?.comments).toEqual([
+			expect.objectContaining({ path: "src/review.ts", line: 2 }),
+		]);
+		expect(review?.body).toContain("ledger: cold");
+		warn.mockRestore();
+	});
+
+	it("makes no ledger calls and renders no ledger note on a first review", async () => {
+		routeAgents(
+			{},
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [fresh],
+				inline_comments: [repeat],
+			}),
+		);
+		const octokit = ledgerOctokit({ reviews: [] });
+
+		const review = await buildReview({ octokit, ...baseContext });
+
+		expect(octokit.request).not.toHaveBeenCalledWith(
+			"POST /graphql",
+			expect.anything(),
+		);
+		expect(review?.comments).toHaveLength(1);
+		expect(review?.body).not.toContain("ledger:");
+	});
+});

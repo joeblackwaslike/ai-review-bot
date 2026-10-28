@@ -5,6 +5,10 @@ import type { ResolvedAuth } from "./auth.js";
 import { dedupeClaims, isSameClaim } from "./claim-dedupe.js";
 import { mapWithConcurrency } from "./concurrency.js";
 import type { KvClient } from "./feedback/kv.js";
+import { loadLedger, reconcileSurvivingPrior } from "./ledger/live.js";
+import { findSettledMatch } from "./ledger/match.js";
+import { suppressInReview } from "./ledger/suppress.js";
+import { isSettled } from "./ledger/types.js";
 import { computeCost, createAIModel } from "./models.js";
 import {
 	type AgentPromptOptions,
@@ -125,6 +129,7 @@ export interface ReviewComment {
 
 interface PullRequestReview {
 	body?: string | null;
+	state?: string;
 }
 
 interface TokenUsage {
@@ -819,6 +824,7 @@ export interface FormatReviewBodyOptions {
 	provider: string;
 	model: string;
 	cost: number;
+	ledgerNote?: string;
 }
 
 export function formatReviewBody(opts: FormatReviewBodyOptions): string {
@@ -846,6 +852,7 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		provider,
 		model,
 		cost,
+		ledgerNote,
 	} = opts;
 
 	const readinessBar = renderReadinessBar(readiness);
@@ -930,7 +937,7 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		`<!-- ai-review:cost=${cost.toFixed(6)} -->`,
 	].join("\n");
 
-	const costFooter = `---\n*Model: ${model} · ${allSkillsCount} agents · $${cost.toFixed(6)} · [ai-review-bot](https://github.com/joeblackwaslike/ai-review-bot)*`;
+	const costFooter = `---\n*Model: ${model} · ${allSkillsCount} agents · $${cost.toFixed(6)}${ledgerNote ? ` · ${ledgerNote}` : ""} · [ai-review-bot](https://github.com/joeblackwaslike/ai-review-bot)*`;
 
 	const parts = [
 		`### ${commentPrefix}`,
@@ -1510,6 +1517,27 @@ export async function buildReview(
 		}
 	}
 
+	const hasOwnReview = existingReviews.some((review) =>
+		(review.body ?? "").includes(`### ${context.commentPrefix}`),
+	);
+	const loadedLedger = hasOwnReview
+		? await loadLedger(context.octokit, {
+				owner: context.owner,
+				repo: context.repo,
+				pull: context.pullNumber,
+				commentPrefix: context.commentPrefix,
+			})
+		: null;
+	const ledger = loadedLedger?.ledger ?? [];
+	survivingPrior = reconcileSurvivingPrior(survivingPrior, ledger);
+	const kvFindings = state?.findings ?? [];
+	const kvMatchedIds = new Set(
+		kvFindings.map((f) => findSettledMatch(f, ledger)?.id),
+	);
+	const ledgerOnlySettled = ledger.filter(
+		(e) => isSettled(e) && !kvMatchedIds.has(e.id),
+	);
+
 	const scopedFilePaths = scopedFiles.map((f) => f.filename);
 
 	const tuning: ReviewerTuning = REVIEWER_TUNING;
@@ -1532,13 +1560,23 @@ export async function buildReview(
 		priorBotReviews,
 		priorOwnReview,
 		priorOwnFindings: tuning.showPriorOwnFindings
-			? (state?.findings ?? []).map((f) => ({
-					path: f.path,
-					line: f.line,
-					title: f.title,
-					severity: f.severity,
-					status: f.status,
-				}))
+			? [
+					...kvFindings.map((f) => ({
+						path: f.path,
+						line: f.line,
+						title: f.title,
+						severity: f.severity,
+						status: f.status,
+					})),
+					...ledgerOnlySettled.map((e) => ({
+						path: e.path,
+						line: e.line,
+						title: e.title,
+						severity: e.severity,
+						status: e.status,
+						reason: e.reason ?? undefined,
+					})),
+				]
 			: undefined,
 	});
 
@@ -1743,7 +1781,21 @@ export async function buildReview(
 		notOk: allSkills.length - agentResults.length,
 	});
 
-	const mergeOutcome = mergeReviewsDetailed(agentResults, resolvedKeys, {
+	let suppressedCount = 0;
+	const unsettledResults = agentResults.map((r) => {
+		const outcome = suppressInReview(r, ledger);
+		suppressedCount += outcome.suppressed.length;
+		return outcome.review;
+	});
+	if (loadedLedger) {
+		console.log("ledger suppression", {
+			warm: loadedLedger.warm,
+			entries: ledger.length,
+			suppressed: suppressedCount,
+		});
+	}
+
+	const mergeOutcome = mergeReviewsDetailed(unsettledResults, resolvedKeys, {
 		dedupeNearDuplicateClaims: tuning.dedupeNearDuplicateClaims,
 	});
 	const modelReview = mergeOutcome.review;
@@ -1970,6 +2022,11 @@ export async function buildReview(
 		provider: selection.provider,
 		model: selection.model,
 		cost,
+		ledgerNote: loadedLedger
+			? loadedLedger.warm
+				? `ledger: warm, ${suppressedCount} suppressed`
+				: "ledger: cold"
+			: undefined,
 	});
 
 	// Persist the new review state so the NEXT push can triage against it. One
