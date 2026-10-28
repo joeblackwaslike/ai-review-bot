@@ -4309,6 +4309,34 @@ describe("buildReview ledger suppression", () => {
 		mockTriageReReview.mockReset();
 	});
 
+	it("logs one line per suppressed finding without its body", async () => {
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		routeAgents(
+			{},
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [fresh],
+				inline_comments: [repeat],
+			}),
+		);
+
+		await buildReview({ octokit: ledgerOctokit(), ...baseContext });
+
+		const lines = log.mock.calls.filter(
+			([msg]) => msg === "suppressed settled repeat",
+		);
+		expect(lines).toHaveLength(5);
+		expect(lines[0]?.[1]).toEqual({
+			title: REPEAT_TITLE,
+			path: "src/review.ts",
+			line: 2,
+			severity: repeat.severity,
+			entryId: "r0:c11:0",
+			entryStatus: "rejected",
+		});
+		log.mockRestore();
+	});
+
 	it("drops a settled repeat from the posted review and tells the agents why", async () => {
 		routeAgents(
 			{},

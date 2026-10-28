@@ -1815,6 +1815,15 @@ export async function buildReview(
 	const unsettledResults = agentResults.map((r) => {
 		const outcome = suppressInReview(r, ledger);
 		suppressedCount += outcome.suppressed.length;
+		for (const { finding, entry } of outcome.suppressed)
+			console.log("suppressed settled repeat", {
+				title: finding.title,
+				path: finding.path ?? null,
+				line: finding.line ?? null,
+				severity: finding.severity ?? null,
+				entryId: entry.id,
+				entryStatus: entry.status,
+			});
 		return outcome.review;
 	});
 	if (loadedLedger) {
