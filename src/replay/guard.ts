@@ -19,6 +19,9 @@ export function checkRecall(
 		unexpectedSuppression: [],
 	};
 	const suppressed = new Set(result.rounds.flatMap((r) => r.suppressed));
+	const matchedTo = new Map(
+		result.rounds.flatMap((r) => Object.entries(r.matchedTo ?? {})),
+	);
 	const labelOf = new Map(labels.labels.map((l) => [l.claimId, l]));
 	const allowed = new Set(labels.allowedSuppression);
 	const isConfirmedRepeat = (id: string) =>
@@ -47,8 +50,12 @@ export function checkRecall(
 	}
 
 	for (const pair of labels.negativePairs) {
-		for (const id of [pair.a, pair.b]) {
-			if (suppressed.has(id)) {
+		for (const [id, other] of [
+			[pair.a, pair.b],
+			[pair.b, pair.a],
+		]) {
+			const by = matchedTo.get(id);
+			if (suppressed.has(id) && (by === undefined || by === other)) {
 				report.failures.push(
 					`negative pair (${pair.a}, ${pair.b}) lost ${id}: similar claims describing different defects must both survive`,
 				);

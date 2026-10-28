@@ -5,7 +5,12 @@ const FALLBACK_LEAD_MS = 15 * 60 * 1000;
 
 export interface ReplayResult {
 	fixtureId: string;
-	rounds: { index: number; posted: string[]; suppressed: string[] }[];
+	rounds: {
+		index: number;
+		posted: string[];
+		suppressed: string[];
+		matchedTo?: Record<string, string>;
+	}[];
 }
 
 export function roundCutoff(round: Round): Date {
@@ -64,13 +69,15 @@ export function replayFixture(
 				.flatMap((r) => r.claims),
 			labels: visibleLabels(f, labels, roundCutoff(round)),
 		};
-		const { posted, suppressed } = pipeline({
+		const { posted, suppressed, matchedTo } = pipeline({
 			round,
 			claims: round.claims,
 			ledger,
 		});
 		assertValidOutput(round, { posted, suppressed });
-		return { index: round.index, posted, suppressed };
+		return matchedTo
+			? { index: round.index, posted, suppressed, matchedTo }
+			: { index: round.index, posted, suppressed };
 	});
 	return { fixtureId: labels.fixtureId, rounds };
 }

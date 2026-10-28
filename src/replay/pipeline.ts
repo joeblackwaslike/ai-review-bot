@@ -11,7 +11,12 @@ export type ReplayPipeline = (input: {
 	round: Round;
 	claims: PostedClaim[];
 	ledger: LedgerView;
-}) => { posted: string[]; suppressed: string[] };
+}) => {
+	posted: string[];
+	suppressed: string[];
+	/** Suppressed claim id to the id of the prior claim it was matched to. */
+	matchedTo?: Record<string, string>;
+};
 
 export const asRecordedPipeline: ReplayPipeline = ({ claims }) => ({
 	posted: claims.map((c) => c.id),
@@ -55,5 +60,8 @@ export const todaysCodePipeline: ReplayPipeline = ({ claims, ledger }) => {
 	return {
 		posted: kept.map((c) => c.id),
 		suppressed: suppressed.map((s) => s.finding.id),
+		matchedTo: Object.fromEntries(
+			suppressed.map((s) => [s.finding.id, s.entry.id]),
+		),
 	};
 };

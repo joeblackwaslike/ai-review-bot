@@ -106,6 +106,27 @@ describe("checkRecall", () => {
 		expect(bad.failures.some((x) => x.includes("negative pair"))).toBe(true);
 	});
 
+	it("a negative-pair member suppressed as a repeat of a third claim passes only when attributed to it", () => {
+		const labels = makeLabels({
+			labels: [makeLabel("c", "rejected")],
+			repeatPairs: [{ later: "c", earlier: "a", confirmed: true }],
+			negativePairs: [{ a: "b", b: "c" }],
+			allowedSuppression: ["c"],
+		});
+		const run = (matchedTo?: Record<string, string>) =>
+			checkRecall(
+				f,
+				labels,
+				makeResult([
+					{ posted: ["a", "b"] },
+					{ posted: [], suppressed: ["c"], matchedTo },
+				]),
+			).failures;
+		expect(run({ c: "a" })).toEqual([]);
+		expect(run({ c: "b" }).some((x) => x.includes("negative pair"))).toBe(true);
+		expect(run().some((x) => x.includes("negative pair"))).toBe(true);
+	});
+
 	it("suppressing everything except confirmed fixed claims reports every other suppression as unexpected", () => {
 		const labels = makeLabels({
 			labels: [makeLabel("a", "fixed"), makeLabel("b", "rejected")],
