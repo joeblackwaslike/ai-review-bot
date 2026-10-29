@@ -282,7 +282,10 @@ describe("fetchDeltaMeta compare outcomes", () => {
 			},
 		});
 		expect(await fetchDeltaMeta(octokit, "o", "r", "old", "new")).toBeNull();
-		expect(warn).toHaveBeenCalled();
+		expect(warn).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({ reason: "404" }),
+		);
 		warn.mockRestore();
 	});
 
@@ -367,6 +370,9 @@ describe("revalidateFindings", () => {
 				?.join("").length ?? 0;
 		expect(patchChars).toBeLessThanOrEqual(60000);
 		expect(prompt).not.toContain("FILE: d.ts");
+		expect(prompt).not.toContain("- d.ts \u2014");
+		expect(prompt).not.toContain("- c.ts \u2014");
+		expect(prompt).toContain("- a.ts \u2014");
 		expect(prompt).toContain("FILE: a.ts");
 	});
 
