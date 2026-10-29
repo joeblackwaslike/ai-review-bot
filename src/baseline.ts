@@ -44,26 +44,21 @@ export function deriveBaseline(
 	const count = body.match(/<!--\s*ai-review:review=(\d+)\s*-->/)?.[1];
 
 	const round = ledger.reviewIds.indexOf(source.id);
-	const fromLedger: PersistedFinding[] =
-		round < 0
-			? []
-			: ledger.entries
-					.filter(
-						(e) =>
-							e.round === round &&
-							e.status === "open" &&
-							!e.id.includes(":body:"),
-					)
-					.map((e) =>
-						withRecoveredPath({
-							id: findingId(e.path, e.line, e.title),
-							path: e.path,
-							line: e.line,
-							title: e.title,
-							severity: e.severity,
-							status: "open",
-						}),
-					);
+	const fromLedger: PersistedFinding[] = ledger.entries
+		.filter(
+			(e) =>
+				e.round === round && e.status === "open" && !e.id.includes(":body:"),
+		)
+		.map((e) =>
+			withRecoveredPath({
+				id: findingId(e.path, e.line, e.title),
+				path: e.path,
+				line: e.line,
+				title: e.title,
+				severity: e.severity,
+				status: "open",
+			}),
+		);
 
 	const byId = new Map<string, PersistedFinding>();
 	for (const f of [...fromLedger, ...bodyFindings(body)]) {

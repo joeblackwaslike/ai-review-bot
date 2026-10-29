@@ -31,8 +31,8 @@ function body(parts: {
 	const lines = [
 		"### Review",
 		"",
-		"| Sev | Finding |",
-		"|---|---|",
+		"| Sev | Category | Finding |",
+		"|---|---|---|",
 		...(parts.rows ?? []),
 		"",
 	];
@@ -116,7 +116,7 @@ describe("deriveBaseline", () => {
 		expect(r?.state.findings.map((f) => f.title)).toEqual(["New"]);
 	});
 
-	it("deduplicates a ledger body entry against its body row", () => {
+	it("ignores body-sourced ledger entries in favor of the body row", () => {
 		const ledger: Ledger = [
 			entry({ id: "r1:body:0", round: 1, title: "Missing null check" }),
 			entry({
@@ -128,7 +128,7 @@ describe("deriveBaseline", () => {
 			}),
 		];
 		const b = body({
-			rows: ["| 🟠 | **Missing null check** |"],
+			rows: ["| 🟠 | bug | **Missing null check** |"],
 			inline: "Inline comments: 1",
 		});
 		const r = deriveBaseline({ id: 20, body: b }, warm(ledger));
@@ -136,6 +136,63 @@ describe("deriveBaseline", () => {
 			"Inline",
 			"Missing null check",
 		]);
+	});
+
+	it("deduplicates an inline ledger entry against the same carried row", () => {
+		const ledger: Ledger = [
+			entry({
+				id: "r1:c2:0",
+				round: 1,
+				path: "src/a.ts",
+				line: 42,
+				title: "Unchecked cast",
+			}),
+		];
+		const b = body({
+			carried: ["| 🟠 | **Unchecked cast** (`src/a.ts:42`) |"],
+			inline: "Inline comments: 1",
+		});
+		const r = deriveBaseline({ id: 20, body: b }, warm(ledger));
+		expect(r?.state.findings).toHaveLength(1);
+		expect(r?.state.findings[0].id).toBe(
+			findingId("src/a.ts", 42, "Unchecked cast"),
+		);
+	});
+
+	it("recovers a path suffix on a ledger entry with a null path", () => {
+		const ledger: Ledger = [
+			entry({ id: "r1:c2:0", round: 1, title: "Race (`src/q.ts:9`)" }),
+		];
+		const r = deriveBaseline(
+			{ id: 20, body: body({ inline: "Inline comments: 1" }) },
+			warm(ledger),
+		);
+		expect(r?.state.findings[0]).toMatchObject({
+			path: "src/q.ts",
+			line: 9,
+			title: "Race",
+		});
+	});
+
+	it("leaves a ledger entry with a path untouched even if the title ends in a suffix", () => {
+		const ledger: Ledger = [
+			entry({
+				id: "r1:c2:0",
+				round: 1,
+				path: "a.ts",
+				line: 3,
+				title: "Bad call (`x:1`)",
+			}),
+		];
+		const r = deriveBaseline(
+			{ id: 20, body: body({ inline: "Inline comments: 1" }) },
+			warm(ledger),
+		);
+		expect(r?.state.findings[0]).toMatchObject({
+			path: "a.ts",
+			line: 3,
+			title: "Bad call (`x:1`)",
+		});
 	});
 
 	it("a source with no findings gives an empty list", () => {
@@ -172,7 +229,7 @@ describe("deriveBaseline", () => {
 
 	it("cold ledger with Inline comments: none is complete", () => {
 		const r = deriveBaseline(
-			{ id: 20, body: body({ rows: ["| 🟡 | **Naming** |"] }) },
+			{ id: 20, body: body({ rows: ["| 🟡 | style | **Naming** |"] }) },
 			{ entries: [], reviewIds: [], warm: false },
 		);
 		expect(r?.complete).toBe(true);
@@ -185,7 +242,7 @@ describe("deriveBaseline", () => {
 	});
 
 	it("a title ending in parentheses without a path:line pair is untouched", () => {
-		const b = body({ rows: ["| 🟡 | **Retry loop (see docs)** |"] });
+		const b = body({ rows: ["| 🟡 | style | **Retry loop (see docs)** |"] });
 		const r = deriveBaseline({ id: 20, body: b }, warm([]));
 		expect(r?.state.findings[0]).toMatchObject({
 			path: null,
