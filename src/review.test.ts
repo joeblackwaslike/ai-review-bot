@@ -5792,6 +5792,31 @@ describe("delta scoping without KV", () => {
 		});
 	});
 
+	it("a carried finding whose file left the PR is resolved on a fallback round", async () => {
+		const prompts = routeModels({ agent: withFresh() });
+		const { octokit } = prOctokit({
+			reviews: [
+				{
+					id: 11,
+					body: ownBody({
+						sha: OLD,
+						count: 1,
+						rows: ["| 🟢 | **Stale nit** (`src/gone.ts:3`) |"],
+					}),
+				},
+			],
+			compare: () => {
+				throw new Error("gone");
+			},
+		});
+
+		const decision = await buildReview({ octokit, ...baseContext });
+
+		expect(prompts).toEqual([]);
+		expect(decision?.event).toBe("COMMENT");
+		expect(decision?.body).not.toContain("Stale nit");
+	});
+
 	it("a base-branch merge in the compare is not reviewed or anchored", async () => {
 		const mergedPatch = [
 			"@@ -40,2 +40,3 @@",

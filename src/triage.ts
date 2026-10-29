@@ -96,11 +96,14 @@ export async function triageReReview(
 const REVALIDATE_CHAR_CAP = 60000;
 
 /** Asks the triage model which carried findings the current patches fix.
- * A finding with a `path` whose file is in `files` is sent with that file's
- * patch. A finding with no path is sent with every PR patch in file order,
- * and only when all of them fit under the 60,000-character total; otherwise
- * it stays carried. Returns resolved ids; `[]` when nothing is sendable or
- * the model call fails. */
+ * `files` must be the PR's complete file list. A finding whose `path` is no
+ * longer in it is moot and resolved without a model call (unless the list is
+ * empty, which proves nothing). A finding with a `path` in the list is sent
+ * with that file's patch. A finding with no path is sent with every PR patch
+ * in file order, only when none was trimmed and all fit under the
+ * 60,000-character total; otherwise it stays carried. Returns resolved ids:
+ * the moot ones plus the model's, or only the moot ones when nothing else is
+ * sendable or the model call fails. */
 export async function revalidateFindings(
 	selection: ModelSelection,
 	carried: PersistedFinding[],
@@ -110,6 +113,16 @@ export async function revalidateFindings(
 	const blockOf = (file: DeltaFile) =>
 		`FILE: ${file.filename}\n${trimPatch(file.patch ?? "[no patch]")}`;
 	const byName = new Map(files.map((f) => [f.filename, f]));
+	const moot =
+		files.length > 0
+			? [
+					...new Set(
+						carried
+							.filter((f) => f.path && !byName.has(f.path))
+							.map((f) => f.id),
+					),
+				]
+			: [];
 	const sent = new Map<string, string>();
 	let used = 0;
 	for (const f of carried) {
@@ -123,15 +136,19 @@ export async function revalidateFindings(
 	}
 	const rest = files.filter((f) => !sent.has(f.filename));
 	const restChars = rest.reduce((n, f) => n + blockOf(f).length, 0);
+	const untrimmed = files.every((f) => {
+		const patch = f.patch ?? "[no patch]";
+		return trimPatch(patch) === patch;
+	});
 	const pathlessFits =
-		files.length > 0 && used + restChars <= REVALIDATE_CHAR_CAP;
+		files.length > 0 && untrimmed && used + restChars <= REVALIDATE_CHAR_CAP;
 	if (pathlessFits && carried.some((f) => !f.path)) {
 		for (const f of rest) sent.set(f.filename, blockOf(f));
 	}
 	const sendable = carried.filter((f) =>
 		f.path ? sent.has(f.path) : pathlessFits,
 	);
-	if (sendable.length === 0) return [];
+	if (sendable.length === 0) return moot;
 	// Path-bearing blocks were added first; re-emit every block in PR file
 	// order so a path-less finding reads the PR as it is laid out.
 	const blocks = files
@@ -160,10 +177,12 @@ export async function revalidateFindings(
 			maxOutputTokens: outputBudget(triage, 2000),
 			providerOptions: reasoningProviderOptions(triage),
 		});
-		return object.resolved;
+		return [...moot, ...object.resolved];
 	} catch (err) {
-		console.error("revalidation call failed; resolving nothing", { err });
-		return [];
+		console.error("revalidation call failed; resolving only moot findings", {
+			err,
+		});
+		return moot;
 	}
 }
 
@@ -238,9 +257,15 @@ export async function fetchDeltaMeta(
 		return null;
 	}
 	if (compare.status !== "ahead") {
-		console.warn("compare status is not ahead; delta unusable", {
-			status: compare.status,
-		});
+		console.warn(
+			"compare succeeded but was rejected as not ahead; delta unusable",
+			{
+				owner,
+				repo,
+				basehead: `${baseSha}...${headSha}`,
+				status: compare.status,
+			},
+		);
 		return null;
 	}
 	const { files, status } = compare;
