@@ -8,7 +8,7 @@ import {
 
 export type DerivedBaseline = { state: ReviewState; complete: boolean };
 
-const PATH_SUFFIX = /\s*\(`([^`\s]+):(\d+)`\)$/;
+const PATH_SUFFIX = /\s*\(`([^`]+):(\d+)`\)$/;
 const UNANCHORED_BULLET = /^>\s*-\s*(🔴|🟠|🟡|🟢)\s*(\*\*.+\*\*.*)$/;
 
 function withRecoveredPath(f: PersistedFinding): PersistedFinding {

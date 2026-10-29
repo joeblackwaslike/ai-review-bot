@@ -95,6 +95,23 @@ describe("deriveBaseline", () => {
 		]);
 	});
 
+	it("carried row whose path has a space keeps the whole path", () => {
+		const b = body({
+			carried: ["| 🟡 | **Broken link** (`docs/My File.md:12`) |"],
+		});
+		const r = deriveBaseline({ id: 20, body: b }, warm([]));
+		expect(r?.state.findings).toEqual([
+			{
+				id: findingId("docs/My File.md", 12, "Broken link"),
+				path: "docs/My File.md",
+				line: 12,
+				title: "Broken link",
+				severity: "P2",
+				status: "open",
+			},
+		]);
+	});
+
 	it("only the source review's round is read", () => {
 		const ledger: Ledger = [
 			entry({ id: "r0:c1:0", round: 0, path: "a.ts", line: 1, title: "Old" }),
