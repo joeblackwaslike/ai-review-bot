@@ -113,12 +113,17 @@ export async function revalidateFindings(
 	const blockOf = (file: DeltaFile) =>
 		`FILE: ${file.filename}\n${trimPatch(file.patch ?? "[no patch]")}`;
 	const byName = new Map(files.map((f) => [f.filename, f]));
+	const presentPaths = new Set(
+		files.flatMap((f) =>
+			f.previousFilename ? [f.filename, f.previousFilename] : [f.filename],
+		),
+	);
 	const moot =
 		files.length > 0
 			? [
 					...new Set(
 						carried
-							.filter((f) => f.path && !byName.has(f.path))
+							.filter((f) => f.path && !presentPaths.has(f.path))
 							.map((f) => f.id),
 					),
 				]
@@ -197,6 +202,8 @@ export interface DeltaFile {
 	filename: string;
 	status: string;
 	patch?: string;
+	/** Present when `status` is "renamed" — the file's path before this PR. */
+	previousFilename?: string;
 }
 
 export interface DeltaMeta {
@@ -228,8 +235,17 @@ async function fetchCompareFiles(
 		"GET /repos/{owner}/{repo}/compare/{basehead}",
 		{ owner, repo, basehead: `${baseSha}...${headSha}` },
 	);
-	const data = res.data as { files?: DeltaFile[]; status?: string };
-	return { files: data.files ?? [], status: data.status };
+	const data = res.data as {
+		files?: Array<DeltaFile & { previous_filename?: string }>;
+		status?: string;
+	};
+	const files = (data.files ?? []).map((f) => ({
+		filename: f.filename,
+		status: f.status,
+		patch: f.patch,
+		previousFilename: f.previous_filename,
+	}));
+	return { files, status: data.status };
 }
 
 /** Fetches the compare-API result and returns files, a unified diff string, and

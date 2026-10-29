@@ -340,6 +340,24 @@ describe("revalidateFindings", () => {
 		expect(prompt).not.toContain("c.ts");
 	});
 
+	it("does not treat a renamed file's old path as moot", async () => {
+		const out = await revalidateFindings(
+			SEL,
+			[f("a", "old.ts")],
+			[
+				{
+					filename: "new.ts",
+					status: "renamed",
+					patch: "PATCH_NEW",
+					previousFilename: "old.ts",
+				},
+			],
+		);
+		// old.ts is the pre-rename name of a file still in the PR, so it must
+		// not be auto-resolved; it stays carried.
+		expect(out).toEqual([]);
+	});
+
 	it("sends a path-less finding with the PR's patches in file order", async () => {
 		mockGenerateObject.mockResolvedValueOnce({
 			object: { resolved: ["nopath"] },
