@@ -1,4 +1,4 @@
-import { App } from "octokit";
+import { App, type Octokit } from "octokit";
 
 /** Build an App instance plus its resolved installation id for one GitHub App
  * on a repo. Base for installationOctokit() below and for any caller (e.g.
@@ -31,7 +31,7 @@ export async function installationOctokit(
 	privateKey: string,
 	owner: string,
 	repo: string,
-) {
+): Promise<Octokit> {
 	const { app, installationId } = await installationApp(
 		appId,
 		privateKey,
