@@ -6,6 +6,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { inspect } from "node:util";
 import { App, Octokit } from "octokit";
+import { enableAgentLogFile } from "./agent-log.js";
 import {
 	auditRepo,
 	type ReviewScope,
@@ -1217,10 +1218,19 @@ export async function main(): Promise<void> {
 	if (sub === "trends") return cmdTrends(rest);
 	if (sub === "propose") return cmdPropose(rest);
 
-	if (sub === "review") return cmdReview(rest);
-	if (sub === "audit") return cmdAudit(rest);
+	if (sub === "review") {
+		enableAgentLogFile();
+		return cmdReview(rest);
+	}
+	if (sub === "audit") {
+		enableAgentLogFile();
+		return cmdAudit(rest);
+	}
 	if (sub === "ready") return cmdReady(rest);
-	if (sub === "watch") return cmdWatch(rest);
+	if (sub === "watch") {
+		enableAgentLogFile();
+		return cmdWatch(rest);
+	}
 	if (sub === "creds") return cmdCreds(rest);
 	if (sub === "replay") return cmdReplay(rest);
 	if (sub === "backfill") return cmdBackfill(rest);
