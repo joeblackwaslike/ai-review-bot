@@ -1831,14 +1831,16 @@ export async function buildReview(
 		}
 		return outcome;
 	};
-	const paceNext = async (idx: number): Promise<void> => {
+	const paceNext = async (
+		next: { idx: number } | { skill: string },
+	): Promise<void> => {
 		const delay = capPaceToDeadline(
 			computePaceDelayMs(lastRateLimit, Date.now()),
 			Date.now(),
 			deadline,
 		);
 		if (delay > 0) {
-			console.log("pacing before next agent", { idx, delayMs: delay });
+			console.log("pacing before next agent", { ...next, delayMs: delay });
 			await sleep(delay);
 		}
 	};
@@ -1873,7 +1875,7 @@ export async function buildReview(
 			serialFirst: true,
 			onBeforeEach: async (i) => {
 				if (i === 0) return; // nothing learned yet
-				await paceNext(i + 1);
+				await paceNext({ idx: i + 1 });
 			},
 		},
 	);
@@ -1950,10 +1952,10 @@ export async function buildReview(
 			});
 			// Aborted at the deadline: the retry ran out of time, and the first
 			// attempt's failure stays the agent's result.
-			if (outcome.status === "skipped") retrySkipped.push(skill);
+			if (outcome.status === "skipped") skipRetry(skill);
 			return { skill, attempt: 2, outcome };
 		},
-		{ onBeforeEach: (n) => paceNext(n + 1) },
+		{ onBeforeEach: (n) => paceNext({ skill: attempts[toRetry[n]].skill }) },
 	);
 	const retryAttempts = retried.filter(
 		(a): a is AgentAttempt => a !== undefined,
@@ -2072,6 +2074,8 @@ export async function buildReview(
 		tier2: tier2Matches.length,
 		succeeded: agentResults.length,
 		rateLimited: rateLimited.length,
+		quotaExhausted: quotaExhausted.length,
+		errored: errored.length,
 		notOk: allSkills.length - agentResults.length,
 	});
 

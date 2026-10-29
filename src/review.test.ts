@@ -6576,4 +6576,162 @@ describe("agent retry", () => {
 		expect(calls["silent-failure-hunter.md"]).toBe(1);
 		expect(calls["pr-test-analyzer.md"]).toBe(1);
 	});
+
+	const collected = (log: { mock: { calls: unknown[][] } }) =>
+		log.mock.calls.find((c) => c[0] === "agent results collected")?.[1] as
+			| Record<string, number>
+			| undefined;
+	const retrySkipWarns = (
+		warn: { mock: { calls: unknown[][] } },
+		skill: string,
+	) =>
+		warn.mock.calls.filter(
+			(c) =>
+				c[0] === "agent retry skipped: out of time" &&
+				(c[1] as { skill?: string }).skill === skill,
+		).length;
+
+	it("keeps the first error when the retry is aborted at the deadline", async () => {
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const real = AbortSignal.timeout.bind(AbortSignal);
+		let signals = 0;
+		// The retry is the sixth dispatch; it gets an already-fired deadline.
+		vi.spyOn(AbortSignal, "timeout").mockImplementation((ms) =>
+			++signals === TIER1_SKILLS.length + 1 ? AbortSignal.abort() : real(ms),
+		);
+		route({
+			"code-reviewer.md": () => {
+				throw noOutput();
+			},
+		});
+		const decision = await buildReview(ctx());
+		const recs = recordsFor(log, "code-reviewer.md");
+		expect(recs.map((r) => [r.attempt, r.status, r.class])).toEqual([
+			[1, "error", "no_output"],
+			[2, "skipped", undefined],
+		]);
+		// Final result is the first attempt's error: in errored, not skipped.
+		expect(decision?.body).toContain("failed to complete: `code-reviewer`");
+		expect(decision?.body).not.toContain("did not run");
+		expect(collected(log)).toMatchObject({ errored: 1 });
+		// And in retrySkipped, with exactly one warning.
+		expect(retrySkipWarns(warn, "code-reviewer.md")).toBe(1);
+	});
+
+	it.each([
+		[
+			"rate limited",
+			() =>
+				Object.assign(new Error("429"), {
+					statusCode: 429,
+					responseHeaders: {},
+				}),
+			"rate_limited",
+			{ rateLimited: 1, quotaExhausted: 0, errored: 0 },
+		],
+		[
+			"quota exhausted",
+			() => Object.assign(new Error("insufficient_quota"), { statusCode: 429 }),
+			"quota_exhausted",
+			{ rateLimited: 0, quotaExhausted: 1, errored: 0 },
+		],
+	])("takes a %s retry as the final outcome and still bills attempt 1", async (_label, refusal, status, counts) => {
+		vi.useFakeTimers();
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		route({
+			"code-reviewer.md": (n) => {
+				throw n === 1 ? noOutput() : refusal();
+			},
+		});
+		const p = buildReview(ctx());
+		await vi.runAllTimersAsync();
+		const decision = await p;
+		const recs = recordsFor(log, "code-reviewer.md");
+		expect(recs.map((r) => [r.attempt, r.status])).toEqual([
+			[1, "error"],
+			[2, status],
+		]);
+		expect(collected(log)).toMatchObject(counts);
+		const expected = computeCost(
+			{
+				promptTokens: (TIER1_SKILLS.length - 1) * 1000 + 700,
+				completionTokens: (TIER1_SKILLS.length - 1) * 100 + 30,
+			},
+			decision?.metadata.model ?? "",
+		);
+		expect(decision?.metadata.cost).toBeCloseTo(expected, 10);
+	});
+
+	it("does not pace for a retry already ruled out at collection", async () => {
+		vi.useFakeTimers();
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const calls = route({
+			// Took 310s, leaving 290s: ineligible at collection.
+			"code-reviewer.md": () => {
+				vi.setSystemTime(Date.now() + 310_000);
+				throw noOutput();
+			},
+			"code-review-and-quality.md": () =>
+				okResponse([], { "retry-after": "50" }),
+		});
+		const p = buildReview(ctx());
+		await vi.runAllTimersAsync();
+		await p;
+		expect(calls["code-reviewer.md"]).toBe(1);
+		expect(retrySkipWarns(warn, "code-reviewer.md")).toBe(1);
+		expect(
+			log.mock.calls.some((c) => c[0] === "pacing before next agent"),
+		).toBe(false);
+	});
+
+	it.each([
+		["exactly the first attempt's duration left", 300_000, 0, 2],
+		["1ms under the first attempt's duration", 300_000, 1, 1],
+		["exactly 30s left", 0, 570_000, 2],
+		["1ms under 30s", 0, 570_001, 1],
+	])("retry window boundary: %s", async (_label, firstMs, burnMs, expectedCalls) => {
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		let now = 0;
+		vi.spyOn(Date, "now").mockImplementation(() => now);
+		const calls = route({
+			"code-reviewer.md": (n) => {
+				if (n > 1) return okResponse();
+				now += firstMs;
+				throw noOutput();
+			},
+			"code-review-and-quality.md": () => {
+				now += burnMs;
+				return okResponse();
+			},
+		});
+		await buildReview(ctx({ agentBudgetMs: firstMs * 2 || 600_000 }));
+		expect(calls["code-reviewer.md"]).toBe(expectedCalls);
+	});
+
+	it("logs the skill, not a restarted index, when pacing a retry", async () => {
+		vi.useFakeTimers();
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		route({
+			"code-reviewer.md": (n) => {
+				if (n === 1) throw noOutput();
+				return okResponse();
+			},
+			"code-review-and-quality.md": () =>
+				okResponse([], { "retry-after": "5" }),
+		});
+		const p = buildReview(ctx());
+		await vi.runAllTimersAsync();
+		await p;
+		const pacing = log.mock.calls.filter(
+			(c) => c[0] === "pacing before next agent",
+		);
+		expect(pacing.map((c) => c[1])).toEqual([
+			{ skill: "code-reviewer.md", delayMs: 5000 },
+		]);
+	});
 });
