@@ -73,6 +73,7 @@ Settled repeats are dropped per agent before this merge, and a re-review round w
 | `src/watch.ts` | `watchPr()` — polls an already-open PR and re-reviews it on head-SHA change via `maybeSubmitReview`, using local subscription auth; backs `ai-review watch` |
 | `src/testing.ts` | Shared test fixtures (`buildModelReview`, `buildGenerateObjectResponse`, etc.) |
 | `src/replay/` | Offline replay harness — records, labels, and replays PR review rounds to measure false-positive rate, recycling, and convergence; backs `ai-review replay`. See `docs/superpowers/specs/2026-10-27-review-replay-harness-design.md` |
+| `src/baseline.ts` | `deriveBaseline()` derives a review baseline from GitHub: the latest own review's markers (sha, review count) plus the ledger's open findings; replaces KV as the source of prior state on a cold start |
 | `src/ledger/` | Platform-neutral ledger of review findings and their dispositions rebuilt from GitHub threads, claim matching across rounds, suppression of settled repeats; see `docs/superpowers/specs/2026-10-28-ledger-repeat-suppression-design.md` |
 | `skills/*.md` | Vendored skill frameworks loaded at runtime by `buildAgentSystemPrompt()` |
 
