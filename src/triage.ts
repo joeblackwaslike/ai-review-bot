@@ -58,7 +58,6 @@ export async function triageReReview(
 	deltaDiff: string,
 	openFindings: PersistedFinding[],
 	auth?: ResolvedAuth,
-	mode: "delta" | "current" = "delta",
 ): Promise<TriageDecision> {
 	if (openFindings.length === 0 && deltaDiff.trim() === "") {
 		return { recommendation: "SKIP", resolved: [], newRisk: false };
@@ -69,9 +68,7 @@ export async function triageReReview(
 		"Your OPEN findings from the previous review (id — title):",
 		...openFindings.map((f) => `- ${f.id} — ${f.title} [${f.severity}]`),
 		"",
-		mode === "current"
-			? "The current patches of the files your open findings name:"
-			: "The diff added since your last review (delta only):",
+		"The diff added since your last review (delta only):",
 		deltaDiff || "[no code changes in the delta]",
 		"",
 		"Decide:",
@@ -230,7 +227,12 @@ export async function fetchDeltaMeta(
 	try {
 		compare = await fetchCompareFiles(octokit, owner, repo, baseSha, headSha);
 	} catch (err) {
+		const status = (err as { status?: unknown } | null)?.status;
 		console.warn("compare request failed; delta unusable", {
+			owner,
+			repo,
+			basehead: `${baseSha}...${headSha}`,
+			...(typeof status === "number" ? { status } : {}),
 			reason: err instanceof Error ? err.message : String(err),
 		});
 		return null;

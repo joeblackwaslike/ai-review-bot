@@ -5116,6 +5116,7 @@ describe("delta scoping without KV", () => {
 		files?: Array<{ filename: string; status: string; patch?: string }>;
 		compare?: (basehead: string) => unknown;
 		coldLedger?: boolean;
+		comments?: unknown[];
 	}) {
 		const compareCalls: string[] = [];
 		const checkRuns: Array<Record<string, unknown>> = [];
@@ -5141,7 +5142,7 @@ describe("delta scoping without KV", () => {
 			},
 			[COMMENTS_ROUTE]: (p) => {
 				expectPr(p);
-				return [];
+				return o.comments ?? [];
 			},
 			"POST /graphql": (p) => {
 				expect(p.variables).toMatchObject({
@@ -5265,6 +5266,7 @@ describe("delta scoping without KV", () => {
 		expect(compareCalls).toEqual([`${OLD}...${HEAD}`]);
 		expect(reviewedFiles()).toEqual(["src/b.ts"]);
 		expect(decision?.body).toContain("scope: delta from abcdef1 (github)");
+		expect(decision?.body).toContain("ledger: warm");
 		expect(decision?.body).toContain("<!-- ai-review:review=2 -->");
 	});
 
@@ -5705,5 +5707,216 @@ describe("delta scoping without KV", () => {
 		expect(mockGenerateObject).not.toHaveBeenCalled();
 		expect(checkRuns).toHaveLength(1);
 		expect(checkRuns[0]?.head_sha).toBe(HEAD);
+	});
+
+	describe("carried findings with no path", () => {
+		const p3Row = "| 🟢 | style | **Nit name** |";
+		const p1Row = "| 🟠 | correctness | **Real bug** |";
+		const failCompare = () => {
+			throw new Error("gone");
+		};
+
+		it("a path-less P3 does not decide the verdict but stays listed", async () => {
+			routeModels({});
+			const { octokit } = prOctokit({
+				reviews: [
+					{
+						id: 11,
+						state: "CHANGES_REQUESTED",
+						body: ownBody({ sha: OLD, count: 1, rows: [p3Row] }),
+					},
+				],
+				compare: failCompare,
+			});
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(decision?.event).toBe("APPROVE");
+			expect(decision?.body).toContain("**Nit name**");
+		});
+
+		it.each([
+			["path-less P3", p3Row, "APPROVE"],
+			["path-less P1", p1Row, "REQUEST_CHANGES"],
+			["path-bearing P3", "| 🟢 | **Nit** (`src/a.ts:3`) |", "REQUEST_CHANGES"],
+		])("forced run: a carried %s (row %s) gives %s on a clean result", async (_n, row, event) => {
+			routeModels({});
+			const { octokit } = prOctokit({
+				reviews: [
+					{ id: 11, body: ownBody({ sha: OLD, count: 1, rows: [row] }) },
+				],
+			});
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				force: true,
+			});
+
+			expect(decision?.event).toBe(event);
+		});
+
+		it("a path-less P1 blocks on a fallback round", async () => {
+			routeModels({});
+			const { octokit } = prOctokit({
+				reviews: [
+					{ id: 11, body: ownBody({ sha: OLD, count: 1, rows: [p1Row] }) },
+				],
+				compare: failCompare,
+			});
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(decision?.event).toBe("REQUEST_CHANGES");
+		});
+
+		it("SKIP with only a path-less P3 open stamps success", async () => {
+			routeModels({});
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "SKIP",
+				resolved: [],
+				newRisk: false,
+			});
+			const { octokit, checkRuns, compareCalls } = prOctokit({
+				reviews: [
+					{ id: 11, body: ownBody({ sha: OLD, count: 1, rows: [p3Row] }) },
+				],
+				compare: () => ({ status: "ahead", files: [bFile] }),
+			});
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(compareCalls).toEqual([`${OLD}...${HEAD}`]);
+			expect(decision).toBeNull();
+			expect(checkRuns[0]?.conclusion).toBe("success");
+		});
+	});
+
+	it("a base-branch merge in the compare is not reviewed or anchored", async () => {
+		const mergedPatch = [
+			"@@ -40,2 +40,3 @@",
+			" line40",
+			"+line41",
+			" line42",
+		].join("\n");
+		routeModels({
+			agent: buildModelReview({
+				event: "COMMENT",
+				inline_comments: [
+					buildInlineComment({
+						title: "Merged code issue",
+						path: "src/a.ts",
+						line: 41,
+						start_line: null,
+						severity: "P2",
+					}),
+				],
+			}),
+		});
+		mockTriageReReview.mockResolvedValue({
+			recommendation: "INCREMENTAL",
+			resolved: [],
+			newRisk: true,
+		});
+		const { octokit, compareCalls } = prOctokit({
+			reviews: [{ id: 11, body: ownBody({ sha: OLD, count: 1 }) }],
+			files: [aFile],
+			compare: () => ({
+				status: "ahead",
+				files: [
+					buildPullFile("src/a.ts", mergedPatch),
+					buildPullFile("src/main-only.ts", SIMPLE_PATCH),
+				],
+			}),
+		});
+
+		const decision = await buildReview({ octokit, ...baseContext });
+
+		expect(compareCalls).toEqual([`${OLD}...${HEAD}`]);
+		expect(reviewedFiles()).toEqual(["src/a.ts"]);
+		expect(decision?.comments).toEqual([]);
+		expect(decision?.body).toContain("could not be anchored");
+		expect(decision?.body).toContain("`src/a.ts:41`");
+	});
+
+	it("the source is the latest own review with a sha marker", async () => {
+		routeModels({});
+		const { octokit } = prOctokit({
+			reviews: [
+				{ id: 11, body: ownBody({ sha: OLD, count: 1, rows: [blockerRow] }) },
+				{ id: 12, body: "> ### ai-review-bot\n> quoted by a human" },
+			],
+			compare: () => {
+				throw new Error("gone");
+			},
+		});
+
+		const decision = await buildReview({ octokit, ...baseContext });
+
+		expect(decision?.event).toBe("REQUEST_CHANGES");
+		expect(decision?.body).toContain("**Blocker**");
+		expect(decision?.body).toContain("scope: full (compare failed)");
+	});
+
+	it("a forced run treats a KV read failure as no KV state", async () => {
+		const { client } = fakeKv();
+		const kvError = new Error("kv down");
+		const kv = {
+			...client,
+			get: async () => {
+				throw kvError;
+			},
+		} as unknown as KvClient;
+		routeModels({});
+		const { octokit } = prOctokit({
+			reviews: [
+				{ id: 11, body: ownBody({ sha: OLD, count: 1, rows: [blockerRow] }) },
+			],
+		});
+
+		const decision = await buildReview({
+			octokit,
+			...baseContext,
+			kv,
+			force: true,
+		});
+
+		expect(decision?.event).toBe("REQUEST_CHANGES");
+		expect(decision?.body).toContain("**Blocker**");
+		expect(decision?.body).toContain("<!-- ai-review:review=2 -->");
+		expect(console.warn).toHaveBeenCalledWith(
+			expect.stringContaining("KV"),
+			expect.objectContaining({ error: "kv down" }),
+		);
+	});
+
+	it("an open inline finding flows from the ledger into the still-open block", async () => {
+		routeModels({});
+		const { octokit } = prOctokit({
+			reviews: [
+				{
+					id: 11,
+					body: ownBody({ sha: OLD, count: 1, inline: "Inline comments: 1" }),
+				},
+			],
+			comments: [
+				{
+					id: 501,
+					pull_request_review_id: 11,
+					path: "src/a.ts",
+					line: 7,
+					body: "**P2** **Leaky handle**\n\nThe handle is never closed.",
+				},
+			],
+			compare: () => {
+				throw new Error("gone");
+			},
+		});
+
+		const decision = await buildReview({ octokit, ...baseContext });
+
+		expect(decision?.event).toBe("REQUEST_CHANGES");
+		expect(decision?.body).toContain("**Leaky handle** (`src/a.ts:7`)");
+		expect(decision?.body).toContain("ledger: warm");
 	});
 });

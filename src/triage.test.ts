@@ -278,14 +278,17 @@ describe("fetchDeltaMeta compare outcomes", () => {
 		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 		const octokit = buildStrictOctokit({
 			[COMPARE]: () => {
-				throw new Error("404");
+				throw Object.assign(new Error("Not Found"), { status: 404 });
 			},
 		});
 		expect(await fetchDeltaMeta(octokit, "o", "r", "old", "new")).toBeNull();
-		expect(warn).toHaveBeenCalledWith(
-			expect.any(String),
-			expect.objectContaining({ reason: "404" }),
-		);
+		expect(warn).toHaveBeenCalledWith(expect.any(String), {
+			owner: "o",
+			repo: "r",
+			basehead: "old...new",
+			status: 404,
+			reason: "Not Found",
+		});
 		warn.mockRestore();
 	});
 
@@ -294,22 +297,6 @@ describe("fetchDeltaMeta compare outcomes", () => {
 			[COMPARE]: () => ({ status: "diverged", files: [] }),
 		});
 		expect(await fetchDeltaMeta(octokit, "o", "r", "old", "new")).toBeNull();
-	});
-});
-
-describe("triageReReview mode", () => {
-	it("mode current uses the current-patches header", async () => {
-		mockGenerateObject.mockResolvedValueOnce({
-			object: { recommendation: "SKIP", resolved: [], newRisk: false },
-		});
-		await triageReReview(SEL, "patches", openFindings, undefined, "current");
-		const { prompt } = mockGenerateObject.mock.calls.at(-1)?.[0] as {
-			prompt: string;
-		};
-		expect(prompt).toContain(
-			"The current patches of the files your open findings name:",
-		);
-		expect(prompt).not.toContain("The diff added since your last review");
 	});
 });
 

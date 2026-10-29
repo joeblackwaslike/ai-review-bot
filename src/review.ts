@@ -1288,6 +1288,14 @@ async function restampCheckRun(
 	}
 }
 
+/** A carried finding with a path has a thread the author can settle through
+ * the ledger, so it blocks at every severity. A path-less (general) finding
+ * has no thread, so only P0 and P1 decide the verdict; P2 and P3 stay listed
+ * as still open. */
+function blocksVerdict(f: PersistedFinding): boolean {
+	return Boolean(f.path) || f.severity === "P0" || f.severity === "P1";
+}
+
 export async function buildReview(
 	context: ReviewContext,
 ): Promise<ReviewDecision | null> {
@@ -1473,21 +1481,41 @@ export async function buildReview(
 		pullNumber: context.pullNumber,
 	};
 
-	let state: ReviewState | null = context.kv
-		? await loadReviewState(
+	let state: ReviewState | null = null;
+	if (context.kv) {
+		try {
+			state = await loadReviewState(
 				context.kv,
 				context.provider,
 				context.owner,
 				context.repo,
 				context.pullNumber,
-			)
-		: null;
+			);
+		} catch (err) {
+			// Forced reviews used to skip KV entirely, so a KV outage must not
+			// start failing them now that they read it for carrying.
+			if (!context.force) throw err;
+			console.warn("KV state unavailable on a forced run; using none", {
+				...prLog,
+				error: err instanceof Error ? err.message : String(err),
+			});
+		}
+	}
 	const baselineSource: "kv" | "github" = state ? "kv" : "github";
 	let baselineComplete = true;
 	// The source is the latest own review at ANY head, unlike priorOwnReview
 	// (older heads only, for the agent prompt): a forced run right after a
-	// review at this head must still find that review's findings to carry.
-	const sourceReview = ownReviews.at(-1);
+	// review at this head must still find that review's findings to carry. It
+	// must carry a sha marker, so a human review quoting the heading is skipped.
+	const sourceReview = ownReviews
+		.filter((r) => {
+			const body = r.body ?? "";
+			return (
+				/<!--\s*ai-review:sha=/.test(body) ||
+				body.includes("Reviewed commit: `")
+			);
+		})
+		.at(-1);
 	if (!state && sourceReview) {
 		const loaded = await fetchLedger();
 		const derived = deriveBaseline(
@@ -1602,22 +1630,27 @@ export async function buildReview(
 						(f) => !isOpen(f) || unsettled.has(f),
 					);
 				}
-				const stillOpen = state.findings.some(isOpen);
+				const stillBlocking = state.findings.some(
+					(f) => isOpen(f) && blocksVerdict(f),
+				);
 				// A re-stamped check-run does not supersede a standing CHANGES_REQUESTED
 				// review, so that case runs as INCREMENTAL and posts its APPROVE.
-				skipNeedsApprove = !stillOpen && needsFreshApprove;
+				skipNeedsApprove = !stillBlocking && needsFreshApprove;
 				if (!skipNeedsApprove) {
 					console.log("review scope", {
 						scope: `scope: delta from ${state.lastReviewedSha.slice(0, 7)} (${baselineSource})`,
 						decision: "SKIP",
 					});
-					await carryVerdictForward(stillOpen ? state.event : "APPROVE");
+					await carryVerdictForward(stillBlocking ? state.event : "APPROVE");
 					return null; // nothing to post — the check-run carries the verdict
 				}
 			}
 
 			if (triage.recommendation === "INCREMENTAL" || skipNeedsApprove) {
-				scopedFiles = deltaMeta.files;
+				// A merge of the base branch puts files in the compare that the PR
+				// does not change; only the PR's own files are reviewed.
+				const prPaths = new Set(files.map((f) => f.filename));
+				scopedFiles = deltaMeta.files.filter((f) => prPaths.has(f.filename));
 				incrementalPass = true;
 				scope = `scope: delta from ${state.lastReviewedSha.slice(0, 7)} (${baselineSource})`;
 			} else {
@@ -1959,7 +1992,12 @@ export async function buildReview(
 		),
 	});
 
-	const validLines = buildValidLinesByPath(scopedFiles);
+	// Anchors come from the PR's own patches: a compare patch can hold lines
+	// from a base-branch merge that the PR diff does not have, and a comment
+	// on one of those would make GitHub reject the review.
+	const scopedPathSet = new Set(scopedFilePaths);
+	const anchorFiles = files.filter((f) => scopedPathSet.has(f.filename));
+	const validLines = buildValidLinesByPath(anchorFiles);
 
 	// Fix mechanical anchor errors before diff validation so fewer comments are
 	// silently dropped: fuzzy-anchor ±5 for off-by-one lines, clear backwards
@@ -1997,7 +2035,7 @@ export async function buildReview(
 	}
 
 	const reviewComments = buildReviewComments(
-		scopedFiles,
+		anchorFiles,
 		effectiveInlineComments,
 	);
 
@@ -2060,9 +2098,11 @@ export async function buildReview(
 	// An INCREMENTAL pass that left prior findings unresolved still blocks even if
 	// the delta itself was clean — those findings live on files the agents never
 	// reviewed this round. Force REQUEST_CHANGES so a clean delta can't APPROVE
-	// away a still-open blocking finding (C1).
+	// away a still-open blocking finding (C1). Path-less P2/P3 findings stay
+	// listed but do not block (see blocksVerdict).
+	const blockingPrior = survivingPrior.filter(blocksVerdict);
 	const finalEvent: ReviewDecision["event"] =
-		survivingPrior.length > 0
+		blockingPrior.length > 0
 			? "REQUEST_CHANGES"
 			: cleanDelta
 				? "APPROVE"
@@ -2078,11 +2118,15 @@ export async function buildReview(
 			suppressed: suppressedCount,
 			agents: agentResults.length,
 		});
-		// survivingPrior is empty here, so every open KV finding was settled by
-		// the ledger; saving them open would let a later cold-ledger run block.
+		// Only non-blocking findings can still be carried here; every other open
+		// KV finding was settled by the ledger, and saving those open would let
+		// a later cold-ledger run block.
+		const carriedIds = new Set(survivingPrior.map((f) => f.id));
 		if (state)
 			state.findings = state.findings.map((f) =>
-				f.status === "open" ? { ...f, status: "resolved" } : f,
+				f.status === "open" && !carriedIds.has(f.id)
+					? { ...f, status: "resolved" }
+					: f,
 			);
 		await carryVerdictForward(
 			standingVerdict === "APPROVED" ? "APPROVE" : "COMMENT",
@@ -2158,7 +2202,7 @@ export async function buildReview(
 	const readiness = computeReadinessScore({
 		event: finalEvent,
 		hasP0,
-		survivingPrior: survivingPrior.map((f) => f.id),
+		survivingPrior: blockingPrior.map((f) => f.id),
 		partial: skipped.length > 0 || errored.length > 0,
 	});
 
