@@ -56,10 +56,10 @@
 **Interfaces:**
 - Consumes: `PersistedFinding` from `src/review-state.ts`.
 - Produces: `DeltaMeta.status: string`; `fetchDeltaMeta(...)` now returns `Promise<DeltaMeta | null>`, `null` when the request throws (logged with `console.warn`, reason included) or `data.status !== "ahead"`.
-- Produces: `triageReReview(selection, deltaDiff, openFindings, auth?, mode: "delta" | "current" = "delta")`. `mode: "current"` changes only the prompt header line to "The current patches of the files your open findings name:".
+- `triageReReview(selection, deltaDiff, openFindings, auth?)` keeps its signature. Fallback rounds check carried findings against the current patches through `revalidateFindings` below, so triage needs no second prompt mode.
 - Produces: `revalidateFindings(selection: ModelSelection, carried: PersistedFinding[], files: DeltaFile[], auth?: ResolvedAuth): Promise<string[]>` returning resolved ids. Sends only carried findings whose `path` is set and whose file is in `files`, with those files' patches (each through the existing `trimPatch`-style cap, total 60,000 characters; findings whose file does not fit stay unsent). Returns `[]` with no model call when nothing is sendable, and `[]` on model error.
 
-- [ ] **Step 1: Write failing tests.** `fetchDeltaMeta returns null when the compare request throws`; `fetchDeltaMeta returns null when status is diverged`; `fetchDeltaMeta passes basehead old...new` (strict fake asserts the param string); `revalidateFindings sends only path-bearing findings and their file patches`; `revalidateFindings stays under the character cap`; `revalidateFindings returns [] on model error`; `triageReReview mode current uses the current-patches header`.
+- [ ] **Step 1: Write failing tests.** `fetchDeltaMeta returns null when the compare request throws`; `fetchDeltaMeta returns null when status is diverged`; `fetchDeltaMeta passes basehead old...new` (strict fake asserts the param string); `revalidateFindings sends only path-bearing findings and their file patches`; `revalidateFindings stays under the character cap`; `revalidateFindings returns [] on model error`.
 - [ ] **Step 2: Run** `npm run test -- src/triage.test.ts` — expect FAIL.
 - [ ] **Step 3: Implement** per the interfaces. Update the one existing caller type in `src/review.ts` only as far as typecheck requires; behavior changes land in Task 4.
 - [ ] **Step 4: Run** `npm run test -- src/triage.test.ts` — expect PASS.
