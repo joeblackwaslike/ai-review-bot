@@ -256,3 +256,28 @@ export function buildGenerateObjectResponse(review: ModelReviewFixture) {
 		usage: { promptTokens: 100, completionTokens: 50 },
 	};
 }
+
+type StrictRoute = (params: Record<string, unknown>) => unknown;
+
+/** Octokit fake that throws on any route not listed, so a call with a wrong or
+ * missing route or params cannot pass silently. Handlers receive the exact
+ * request params and return the response data. */
+export function buildStrictOctokit(routes: Record<string, StrictRoute>) {
+	const handler = (route: string): StrictRoute => {
+		const h = routes[route];
+		if (!h) throw new Error(`unexpected route: ${route}`);
+		return h;
+	};
+	return {
+		request: (async (route: string, params: Record<string, unknown> = {}) => ({
+			data: handler(route)(params),
+		})) as <T = unknown>(
+			route: string,
+			params?: Record<string, unknown>,
+		) => Promise<{ data: T }>,
+		paginate: async (route: string, params: Record<string, unknown> = {}) =>
+			handler(route)(params) as unknown[],
+		graphql: async (query: string, variables: Record<string, unknown> = {}) =>
+			handler("POST /graphql")({ query, variables }),
+	};
+}

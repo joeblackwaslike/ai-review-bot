@@ -76,7 +76,7 @@ function dispositionNote(f: PriorOwnFinding): string {
 	return ` [${label}${by}${why}]`;
 }
 
-function trimPatch(patch: string, maxChars = 24000): string {
+export function trimPatch(patch: string, maxChars = 24000): string {
 	if (patch.length <= maxChars) {
 		return patch;
 	}

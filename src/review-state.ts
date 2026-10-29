@@ -91,40 +91,6 @@ export function parseBodyFindings(body: string): PersistedFinding[] {
 	return findings;
 }
 
-// Best-effort parse of a prior posted review body into findings. The body format
-// is the markdown table produced by generateSummary; we only need titles +
-// severity for triage, so a loose parse is acceptable.
-//
-// NOTE: only GENERAL (table) findings are recoverable from the review body —
-// inline comments live on the diff, not in the body, so they cannot be parsed
-// back out here. After a cold-KV fallback the triage resolve path therefore
-// can't match inline findings that round; the gate simply won't mark them
-// resolved, which degrades toward MORE review (a re-review), never less. Once KV
-// is warm again, full state (incl. inline findings) is persisted directly and
-// this fallback is bypassed.
-function parsePriorReview(body: string): ReviewState | null {
-	// New format (Phase 1+): <!-- ai-review:sha=<sha> -->
-	// Legacy format: Reviewed commit: `<sha>`
-	const sha =
-		body.match(/<!--\s*ai-review:sha=([0-9a-f]{7,40})\s*-->/)?.[1] ??
-		body.match(/Reviewed commit: `([0-9a-f]{7,40})`/)?.[1];
-	if (!sha) return null;
-
-	// New format (Phase 1+): extract reviewCount from metadata block
-	const reviewCountRaw = body.match(/<!--\s*ai-review:review=(\d+)\s*-->/)?.[1];
-	const reviewCount =
-		reviewCountRaw !== undefined ? parseInt(reviewCountRaw, 10) : 0;
-
-	const findings = parseBodyFindings(body);
-	return {
-		lastReviewedSha: sha,
-		event: findings.length > 0 ? "REQUEST_CHANGES" : "COMMENT",
-		findings,
-		reviewedAt: new Date().toISOString(),
-		reviewCount,
-	};
-}
-
 function isReviewState(v: unknown): v is ReviewState {
 	if (typeof v !== "object" || v === null) return false;
 	const s = v as Record<string, unknown>;
@@ -151,7 +117,6 @@ export async function loadReviewState(
 	owner: string,
 	repo: string,
 	pullNumber: number,
-	priorOwnReview: string | null,
 ): Promise<ReviewState | null> {
 	const raw = await kv.get(stateKey(provider, owner, repo, pullNumber));
 	if (raw) {
@@ -184,6 +149,5 @@ export async function loadReviewState(
 			});
 		}
 	}
-	if (priorOwnReview) return parsePriorReview(priorOwnReview);
 	return null;
 }

@@ -2,6 +2,7 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import type { ResolvedAuth } from "./auth.js";
 import { createAIModel } from "./models.js";
+import { trimPatch } from "./prompt.js";
 import type { PersistedFinding } from "./review-state.js";
 import {
 	type ModelSelection,
@@ -92,6 +93,105 @@ export async function triageReReview(
 	}
 }
 
+const REVALIDATE_CHAR_CAP = 60000;
+
+/** Asks the triage model which carried findings the current patches fix.
+ * `files` must be the PR's complete file list. A finding whose `path` is
+ * neither a current filename nor a renamed file's previous name is moot and
+ * resolved without a model call (unless the list is empty, which proves
+ * nothing). A finding with a `path` in the list is sent with that file's
+ * patch, under its new name when the file was renamed. A finding with no path is sent with every PR patch
+ * in file order, only when none was trimmed and all fit under the
+ * 60,000-character total; otherwise it stays carried. Returns resolved ids:
+ * the moot ones plus the model's, or only the moot ones when nothing else is
+ * sendable or the model call fails. */
+export async function revalidateFindings(
+	selection: ModelSelection,
+	carried: PersistedFinding[],
+	files: DeltaFile[],
+	auth?: ResolvedAuth,
+): Promise<string[]> {
+	const blockOf = (file: DeltaFile) =>
+		`FILE: ${file.filename}${file.previous_filename ? ` (renamed from ${file.previous_filename})` : ""}\n${trimPatch(file.patch ?? "[no patch]")}`;
+	// Current names win over previous names if one file took another's path.
+	const byName = new Map<string, DeltaFile>([
+		...files.flatMap((f): [string, DeltaFile][] =>
+			f.previous_filename ? [[f.previous_filename, f]] : [],
+		),
+		...files.map((f): [string, DeltaFile] => [f.filename, f]),
+	]);
+	const moot =
+		files.length > 0
+			? [
+					...new Set(
+						carried
+							.filter((f) => f.path && !byName.has(f.path))
+							.map((f) => f.id),
+					),
+				]
+			: [];
+	const sent = new Map<string, string>();
+	let used = 0;
+	for (const f of carried) {
+		const file = f.path ? byName.get(f.path) : undefined;
+		if (!file || sent.has(file.filename)) continue;
+		const block = blockOf(file);
+		if (used + block.length > REVALIDATE_CHAR_CAP) continue;
+		sent.set(file.filename, block);
+		used += block.length;
+	}
+	const rest = files.filter((f) => !sent.has(f.filename));
+	const restChars = rest.reduce((n, f) => n + blockOf(f).length, 0);
+	const untrimmed = files.every((f) => {
+		const patch = f.patch ?? "[no patch]";
+		return trimPatch(patch) === patch;
+	});
+	const pathlessFits =
+		files.length > 0 && untrimmed && used + restChars <= REVALIDATE_CHAR_CAP;
+	if (pathlessFits && carried.some((f) => !f.path)) {
+		for (const f of rest) sent.set(f.filename, blockOf(f));
+	}
+	const sendable = carried.filter((f) =>
+		f.path ? sent.has(byName.get(f.path)?.filename ?? "") : pathlessFits,
+	);
+	if (sendable.length === 0) return moot;
+	// Path-bearing blocks were added first; re-emit every block in PR file
+	// order so a path-less finding reads the PR as it is laid out.
+	const blocks = files
+		.map((f) => sent.get(f.filename))
+		.filter((b) => b !== undefined);
+
+	const ids = [...new Set(sendable.map((f) => f.id))] as [string, ...string[]];
+	const prompt = [
+		"You are checking whether an AI code reviewer's earlier findings are fixed in the current code.",
+		"",
+		"Your carried findings (id — title):",
+		...sendable.map((f) => `- ${f.id} — ${f.title} [${f.severity}]`),
+		"",
+		"The current patches (a finding without a file refers to the whole pull request):",
+		...blocks,
+		"",
+		"resolved: ids of findings that these patches clearly fix. Leave out anything uncertain.",
+	].join("\n");
+
+	try {
+		const triage = triageSelection(selection);
+		const { object } = await generateObject({
+			model: createAIModel(triage, auth),
+			schema: z.object({ resolved: z.array(z.enum(ids)) }),
+			prompt,
+			maxOutputTokens: outputBudget(triage, 2000),
+			providerOptions: reasoningProviderOptions(triage),
+		});
+		return [...moot, ...object.resolved];
+	} catch (err) {
+		console.error("revalidation call failed; resolving only moot findings", {
+			err,
+		});
+		return moot;
+	}
+}
+
 interface CompareOctokit {
 	request: <T>(
 		route: string,
@@ -103,12 +203,15 @@ export interface DeltaFile {
 	filename: string;
 	status: string;
 	patch?: string;
+	/** Set by GitHub on a renamed file. */
+	previous_filename?: string;
 }
 
 export interface DeltaMeta {
 	files: DeltaFile[];
 	diff: string;
 	truncated: boolean;
+	status: string;
 }
 
 /** The GitHub compare API caps `.files` at this many entries with no pagination
@@ -128,13 +231,22 @@ async function fetchCompareFiles(
 	repo: string,
 	baseSha: string,
 	headSha: string,
-): Promise<DeltaFile[]> {
+): Promise<{ files: DeltaFile[]; status?: string }> {
 	const res = await octokit.request(
 		"GET /repos/{owner}/{repo}/compare/{basehead}",
 		{ owner, repo, basehead: `${baseSha}...${headSha}` },
 	);
-	const data = res.data as { files?: DeltaFile[] };
-	return data.files ?? [];
+	const data = res.data as {
+		files?: DeltaFile[];
+		status?: string;
+	};
+	const files = (data.files ?? []).map((f) => ({
+		filename: f.filename,
+		status: f.status,
+		patch: f.patch,
+		previous_filename: f.previous_filename,
+	}));
+	return { files, status: data.status };
 }
 
 /** Fetches the compare-API result and returns files, a unified diff string, and
@@ -146,12 +258,38 @@ export async function fetchDeltaMeta(
 	repo: string,
 	baseSha: string,
 	headSha: string,
-): Promise<DeltaMeta> {
-	const files = await fetchCompareFiles(octokit, owner, repo, baseSha, headSha);
+): Promise<DeltaMeta | null> {
+	let compare: Awaited<ReturnType<typeof fetchCompareFiles>>;
+	try {
+		compare = await fetchCompareFiles(octokit, owner, repo, baseSha, headSha);
+	} catch (err) {
+		const status = (err as { status?: unknown } | null)?.status;
+		console.warn("compare request failed; delta unusable", {
+			owner,
+			repo,
+			basehead: `${baseSha}...${headSha}`,
+			...(typeof status === "number" ? { status } : {}),
+			reason: err instanceof Error ? err.message : String(err),
+		});
+		return null;
+	}
+	if (compare.status !== "ahead") {
+		console.warn(
+			"compare succeeded but was rejected as not ahead; delta unusable",
+			{
+				owner,
+				repo,
+				basehead: `${baseSha}...${headSha}`,
+				status: compare.status,
+			},
+		);
+		return null;
+	}
+	const { files, status } = compare;
 	const diff = files
 		.map((f) => `FILE: ${f.filename}\n${f.patch ?? "[no patch]"}`)
 		.join("\n\n---\n\n");
-	return { files, diff, truncated: isLikelyTruncated(files) };
+	return { files, diff, truncated: isLikelyTruncated(files), status };
 }
 
 export async function fetchDelta(
@@ -161,7 +299,13 @@ export async function fetchDelta(
 	baseSha: string,
 	headSha: string,
 ): Promise<string> {
-	const files = await fetchCompareFiles(octokit, owner, repo, baseSha, headSha);
+	const { files } = await fetchCompareFiles(
+		octokit,
+		owner,
+		repo,
+		baseSha,
+		headSha,
+	);
 	return files
 		.map((f) => `FILE: ${f.filename}\n${f.patch ?? "[no patch]"}`)
 		.join("\n\n---\n\n");
@@ -177,5 +321,6 @@ export async function fetchDeltaFiles(
 	baseSha: string,
 	headSha: string,
 ): Promise<DeltaFile[]> {
-	return fetchCompareFiles(octokit, owner, repo, baseSha, headSha);
+	return (await fetchCompareFiles(octokit, owner, repo, baseSha, headSha))
+		.files;
 }

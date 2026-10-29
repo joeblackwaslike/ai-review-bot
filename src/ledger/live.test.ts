@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PersistedFinding } from "../review-state.js";
+import { buildStrictOctokit } from "../testing.js";
 import type { RequestLike } from "./github.js";
 import {
 	LEDGER_TIMEOUT_MS,
@@ -45,6 +46,7 @@ describe("loadLedger", () => {
 		await expect(loadLedger(octokit, opts)).resolves.toEqual({
 			ledger: [],
 			warm: false,
+			reviewIds: [],
 		});
 		expect(warn).toHaveBeenCalled();
 		warn.mockRestore();
@@ -58,7 +60,51 @@ describe("loadLedger", () => {
 		await expect(loadLedger(octokit, opts)).resolves.toEqual({
 			ledger: [],
 			warm: false,
+			reviewIds: [],
 		});
+		warn.mockRestore();
+	});
+
+	it("loadLedger returns reviewIds and an empty list when cold", async () => {
+		const graphql = vi.fn((_p: Record<string, unknown>) => ({
+			data: {
+				repository: {
+					pullRequest: {
+						author: { login: "joe" },
+						reviewThreads: {
+							nodes: [],
+							pageInfo: { hasNextPage: false, endCursor: null },
+						},
+					},
+				},
+			},
+		}));
+		const warm = await loadLedger(
+			buildStrictOctokit({
+				"GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews": (p) =>
+					p.page === 1
+						? [
+								{
+									id: 7,
+									body: "### Bot\nx",
+									submitted_at: "2026-01-01T00:00:00Z",
+								},
+							]
+						: [],
+				"GET /repos/{owner}/{repo}/pulls/{pull_number}/comments": () => [],
+				"POST /graphql": graphql,
+			}),
+			opts,
+		);
+		expect(warm.warm).toBe(true);
+		expect(warm.reviewIds).toEqual([7]);
+		expect(graphql.mock.calls[0]?.[0]).toMatchObject({
+			variables: { owner: "o", repo: "r", pr: 1 },
+		});
+
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const cold = await loadLedger(buildStrictOctokit({}), opts);
+		expect(cold).toEqual({ ledger: [], warm: false, reviewIds: [] });
 		warn.mockRestore();
 	});
 });
@@ -78,7 +124,11 @@ describe("loadLedger timeout", () => {
 		const loaded = loadLedger(octokit, opts);
 		await vi.advanceTimersByTimeAsync(LEDGER_TIMEOUT_MS);
 
-		await expect(loaded).resolves.toEqual({ ledger: [], warm: false });
+		await expect(loaded).resolves.toEqual({
+			ledger: [],
+			warm: false,
+			reviewIds: [],
+		});
 		warn.mockRestore();
 	});
 });

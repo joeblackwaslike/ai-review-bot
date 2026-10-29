@@ -110,13 +110,13 @@ Fixing memory and dedupe makes the reviewer stop repeating itself. It does not m
 
 ## Prevention
 
-These are candidate directions. The GitHub-thread ledger and per-agent suppression (bullets 2 and the KV-independent-memory bullet) shipped in `src/ledger/` — see [the ledger design spec](superpowers/specs/2026-10-28-ledger-repeat-suppression-design.md). The rest are not designed or scoped yet.
+These are candidate directions. The GitHub-thread ledger and per-agent suppression (bullets 2 and the KV-independent-memory bullet) shipped in `src/ledger/`, and the watch and KV items below shipped in sprint 3; see [the ledger design spec](superpowers/specs/2026-10-28-ledger-repeat-suppression-design.md). The rest are not designed or scoped yet.
 
 - Give agents the author's reply and the thread's resolved or outdated status for each prior finding, plus 😕 and 👎 reactions, as a per-finding record of why it was rejected.
 - Persist rejected and answered findings with a normalized claim key (the existing `isSameClaim` in [src/claim-dedupe.ts](https://github.com/joeblackwaslike/ai-review-bot/blob/24ddef3/src/claim-dedupe.ts) is a starting point) and drop matches in code regardless of line or wording, including repeats of findings that are merely open. Never raise severity on a repeat.
 - Add a post-filter that drops findings whose own text says there is no defect, that the code matches the design, or that nothing needs to change.
-- Stop `ai-review watch` from forcing the first cycle of a restarted process when a prior review of the PR exists on GitHub. This only helps when a KV client is available, because `buildReview` loads persisted or parsed review state only when one exists.
-- Stop depending on KV for review memory in local runs. Either keep per-PR state in a local file keyed by repo and PR, or rebuild prior findings and the author's replies from GitHub itself (review comments, threads, reactions), which would fix cold starts and the invisible-replies problem together. Also log or show in the footer whether a round started warm or cold.
+- Shipped in sprint 3: `ai-review watch` no longer forces a cold first cycle when the bot already reviewed the PR. A restarted process reads the latest own review's markers and the ledger from GitHub, reviews the delta since that sha, and skips a head it already reviewed. See [the delta scoping design](superpowers/specs/2026-10-29-delta-scoping-warm-start-design.md).
+- Shipped in sprint 3: review memory no longer depends on KV. `src/baseline.ts` rebuilds the prior sha, review count and open findings from GitHub. When KV holds a valid state, that state is used instead of the GitHub baseline, even if it is stale. The design lists the stale case as a known limit. The review footer now carries a scope line (for example `scope: delta from <sha7> (github)`, `scope: full (first review)` or `scope: full (compare failed)`) that says whether a round was a delta or a full scan and why.
 - Separately, stop advancing `lastReviewedSha` past agents that did not complete.
 - On re-review rounds, scope strictly to the delta, and either stop passing the PR title and body or mark them as author-written and possibly stale.
 - Add a per-round dollar cap and a round cap, in the bot and in the pr-loop driver.

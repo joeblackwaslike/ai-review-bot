@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { PostedClaim } from "../replay/types.js";
+import { buildStrictOctokit } from "../testing.js";
 import {
 	buildLedger,
 	type EvidenceThread,
@@ -36,7 +37,7 @@ const reply = (over: Record<string, unknown>) => ({
 });
 
 const build = (threads: EvidenceThread[], claims = [claim(10)]) =>
-	buildLedger({ prAuthor: "joe", claims, threads });
+	buildLedger({ prAuthor: "joe", claims, threads, reviewIds: [] });
 
 describe("buildLedger", () => {
 	it("settles on a collaborator's classifying reply and fills body", () => {
@@ -144,6 +145,7 @@ describe("buildLedger", () => {
 	it("never lets a null-author reply settle when the PR author is also null", () => {
 		const [e] = buildLedger({
 			prAuthor: "",
+			reviewIds: [],
 			claims: [claim(10)],
 			threads: [thread({ replies: [reply({ author: "" })] })],
 		});
@@ -317,5 +319,42 @@ describe("fetchLedgerEvidence", () => {
 		big.comments.pageInfo.hasNextPage = true;
 		const octokit = fake([page([big], null)]);
 		await expect(fetchLedgerEvidence(octokit, opts)).rejects.toThrow();
+	});
+
+	it("fetchLedgerEvidence returns own review ids in round order", async () => {
+		const graphql = vi.fn((_p: Record<string, unknown>) => ({
+			data: page([], null),
+		}));
+		const octokit = buildStrictOctokit({
+			"GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews": (p) =>
+				p.page === 1
+					? [
+							{
+								id: 5,
+								body: "### Bot\nb",
+								submitted_at: "2026-01-03T00:00:00Z",
+							},
+							{
+								id: 3,
+								body: "### Bot\na",
+								submitted_at: "2026-01-01T00:00:00Z",
+							},
+							{
+								id: 4,
+								body: "### Sister\nx",
+								submitted_at: "2026-01-02T00:00:00Z",
+							},
+							{ id: 6, body: "### Bot\npending", submitted_at: null },
+						]
+					: [],
+			"GET /repos/{owner}/{repo}/pulls/{pull_number}/comments": () => [],
+			"POST /graphql": graphql,
+		});
+		const ev = await fetchLedgerEvidence(octokit, opts);
+		expect(ev.reviewIds).toEqual([3, 5]);
+		expect(graphql).toHaveBeenCalledTimes(1);
+		expect(graphql.mock.calls[0]?.[0]).toMatchObject({
+			variables: { owner: "o", repo: "r", pr: 1 },
+		});
 	});
 });

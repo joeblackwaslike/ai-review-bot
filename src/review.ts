@@ -2,6 +2,7 @@ import { APICallError } from "@ai-sdk/provider";
 import { generateObject } from "ai";
 import { z } from "zod";
 import type { ResolvedAuth } from "./auth.js";
+import { deriveBaseline } from "./baseline.js";
 import { dedupeClaims, isSameClaim } from "./claim-dedupe.js";
 import { mapWithConcurrency } from "./concurrency.js";
 import type { KvClient } from "./feedback/kv.js";
@@ -25,7 +26,11 @@ import {
 	routeModel,
 } from "./router.js";
 import { detectTier2Skills } from "./tier2.js";
-import { fetchDeltaMeta, triageReReview } from "./triage.js";
+import {
+	fetchDeltaMeta,
+	revalidateFindings,
+	triageReReview,
+} from "./triage.js";
 
 type OctokitLike = {
 	// params widened to Record<string, unknown> to allow passing nested `headers`
@@ -44,6 +49,8 @@ interface PullFile {
 	filename: string;
 	status: string;
 	patch?: string;
+	/** Set by GitHub on a renamed file. */
+	previous_filename?: string;
 }
 
 interface ReviewContext {
@@ -128,6 +135,7 @@ export interface ReviewComment {
 }
 
 interface PullRequestReview {
+	id?: number;
 	body?: string | null;
 	state?: string;
 }
@@ -831,7 +839,23 @@ export interface FormatReviewBodyOptions {
 	model: string;
 	cost: number;
 	ledgerNote?: string;
+	scopeNote?: ScopeNote;
 }
+
+type ScopeReason =
+	| "first review"
+	| "forced"
+	| "triage"
+	| "compare failed"
+	| "compare truncated"
+	| "baseline incomplete"
+	| "same head";
+
+/** Footer note saying whether a review was scoped to a delta or ran in full,
+ * and why. */
+export type ScopeNote =
+	| `scope: delta from ${string} (${"kv" | "github"})`
+	| `scope: full (${ScopeReason})`;
 
 export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 	const {
@@ -859,6 +883,7 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		model,
 		cost,
 		ledgerNote,
+		scopeNote,
 	} = opts;
 
 	const readinessBar = renderReadinessBar(readiness);
@@ -943,7 +968,7 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		`<!-- ai-review:cost=${cost.toFixed(6)} -->`,
 	].join("\n");
 
-	const costFooter = `---\n*Model: ${model} · ${allSkillsCount} agents · $${cost.toFixed(6)}${ledgerNote ? ` · ${ledgerNote}` : ""} · [ai-review-bot](https://github.com/joeblackwaslike/ai-review-bot)*`;
+	const costFooter = `---\n*Model: ${model} · ${allSkillsCount} agents · $${cost.toFixed(6)}${ledgerNote ? ` · ${ledgerNote}` : ""}${scopeNote ? ` · ${scopeNote}` : ""} · [ai-review-bot](https://github.com/joeblackwaslike/ai-review-bot)*`;
 
 	const parts = [
 		`### ${commentPrefix}`,
@@ -1217,10 +1242,13 @@ async function fetchOutstandingChecks(
 function buildApprovalMessage(
 	isReReview: boolean,
 	outstandingChecks: OutstandingChecksResult,
+	hasCarriedOpen = false,
 ): string {
-	const resolution = isReReview
-		? "All issues from the previous review have been resolved."
-		: "No issues found.";
+	const resolution = hasCarriedOpen
+		? "No blocking issues. The findings listed below are still open but do not block."
+		: isReReview
+			? "All issues from the previous review have been resolved."
+			: "No issues found.";
 
 	const checksQualifier = outstandingChecks.fetchFailed
 		? " Note: could not verify outstanding CI checks — check them manually before merging."
@@ -1263,6 +1291,14 @@ async function restampCheckRun(
 	} catch (err) {
 		console.error("failed to re-stamp check-run on SKIP", { err });
 	}
+}
+
+/** A carried finding with a path has a thread the author can settle through
+ * the ledger, so it blocks at every severity. A path-less (general) finding
+ * has no thread, so only P0 and P1 decide the verdict; P2 and P3 stay listed
+ * as still open. */
+function blocksVerdict(f: PersistedFinding): boolean {
+	return Boolean(f.path) || f.severity === "P0" || f.severity === "P1";
 }
 
 export async function buildReview(
@@ -1390,39 +1426,34 @@ export async function buildReview(
 		context.provider,
 	);
 
-	// --- Triage gate (re-review only) ---------------------------------------
-	// On a re-review (a prior review of this PR exists at an OLDER head SHA), a
+	// Triage gate (re-review only). On a re-review against an OLDER head SHA, a
 	// cheap triage call decides whether to SKIP (post nothing, just re-stamp the
 	// check-run), review only the delta (INCREMENTAL), or fall through to a FULL
-	// review. resolvedKeys feed mergeReviews so already-fixed findings stop
-	// blocking; scopedFiles is the surface the agents actually review.
-	// When KV is absent (not configured, or a forced re-review) the gate is
-	// skipped entirely and behavior is identical to before this feature.
+	// review. The baseline comes from KV when it holds a state, else it is
+	// derived from the latest own review on GitHub (src/baseline.ts).
+	// resolvedKeys feed mergeReviews so already-fixed findings stop blocking;
+	// scopedFiles is the surface the agents actually review.
 	const resolvedKeys = new Set<string>();
 	let scopedFiles = files; // FULL default
-	// Findings to carry into the next persisted state on any re-review pass
-	// (INCREMENTAL or FULL): prior findings still open after triage, plus
-	// resolved tombstones (so future rounds can tell "resolved" from "never
-	// existed"). REVIEWER_TUNING's showPriorOwnFindings tells agents on every
-	// pass not to re-file a finding already on record as open, so this must
-	// run regardless of pass type — a FULL pass that doesn't re-raise a real,
-	// still-broken finding would otherwise silently drop it from tracked
-	// state and could false-APPROVE past it. Both stay empty on the cold
-	// (no-prior-state) path.
+	// Findings to carry into the next persisted state on any pass that has a
+	// baseline (INCREMENTAL or FULL, forced included): prior findings still
+	// open, plus resolved tombstones (so future rounds can tell "resolved" from
+	// "never existed"). REVIEWER_TUNING's showPriorOwnFindings tells agents on
+	// every pass not to re-file a finding already on record as open, so a FULL
+	// pass that doesn't re-raise a real, still-broken finding would otherwise
+	// silently drop it from tracked state and could false-APPROVE past it. Both
+	// stay empty on a first review.
 	let survivingPrior: PersistedFinding[] = [];
-	/** SHA the surviving findings were last reviewed against. Set together with
-	 * survivingPrior, from the same state the re-review guard already proved
-	 * has a non-empty lastReviewedSha, so the review can name it without an
-	 * optional chain whose undefined branch no test could reach. */
+	/** SHA the surviving findings were last reviewed against. */
 	let priorSha = "";
 	let resolvedTombstones: PersistedFinding[] = [];
-	/** Subset of resolvedTombstones resolved by THIS triage pass specifically —
-	 * not every historical tombstone in persisted state. Fed to generateSummary
-	 * as "confirmed resolved this round"; the full resolvedTombstones list also
-	 * includes findings resolved in an earlier round, which may have since been
-	 * reintroduced and re-flagged by this round's agents — labeling those as
-	 * newly resolved would tell the summary to call a live blocker fixed. */
+	/** Subset of resolvedTombstones resolved by THIS round (delta triage or
+	 * fallback revalidation) — not every historical tombstone. Fed to
+	 * generateSummary as "confirmed resolved this round"; the full tombstone
+	 * list also includes findings resolved in an earlier round, which may have
+	 * since been reintroduced and re-flagged by this round's agents. */
 	let resolvedThisRound: PersistedFinding[] = [];
+	const resolvedNowIds = new Set<string>();
 	/** Whether this pass reviewed only the delta (INCREMENTAL) rather than the
 	 * whole file set (FULL) — changes how the "still open" carry-forward is
 	 * explained, since a FULL pass did see these findings' files and chose not
@@ -1449,17 +1480,80 @@ export async function buildReview(
 		});
 		return ledgerLoad;
 	};
-	const state =
-		context.kv && !context.force
-			? await loadReviewState(
-					context.kv,
-					context.provider,
-					context.owner,
-					context.repo,
-					context.pullNumber,
-					priorOwnReview,
-				)
-			: null;
+	const prLog = {
+		owner: context.owner,
+		repo: context.repo,
+		pullNumber: context.pullNumber,
+	};
+
+	let state: ReviewState | null = null;
+	if (context.kv) {
+		try {
+			state = await loadReviewState(
+				context.kv,
+				context.provider,
+				context.owner,
+				context.repo,
+				context.pullNumber,
+			);
+		} catch (err) {
+			// Forced reviews used to skip KV entirely, so a KV outage must not
+			// start failing them now that they read it for carrying.
+			if (!context.force) throw err;
+			console.warn("KV state unavailable on a forced run; using none", {
+				...prLog,
+				error: err instanceof Error ? err.message : String(err),
+			});
+		}
+	}
+	const baselineSource: "kv" | "github" = state ? "kv" : "github";
+	let baselineComplete = true;
+	// The source is the latest own review at ANY head, unlike priorOwnReview
+	// (older heads only, for the agent prompt): a forced run right after a
+	// review at this head must still find that review's findings to carry. It
+	// must carry a sha marker, so a human review quoting the heading is skipped.
+	const sourceReview = ownReviews
+		.filter((r) => {
+			const body = r.body ?? "";
+			return (
+				/<!--\s*ai-review:sha=/.test(body) ||
+				body.includes("Reviewed commit: `")
+			);
+		})
+		.at(-1);
+	if (!state && sourceReview) {
+		const loaded = await fetchLedger();
+		const derived = deriveBaseline(
+			{ id: sourceReview.id ?? -1, body: sourceReview.body ?? "" },
+			{
+				entries: loaded.ledger,
+				reviewIds: loaded.reviewIds,
+				warm: loaded.warm,
+			},
+		);
+		if (derived) {
+			state = derived.state;
+			baselineComplete = derived.complete;
+			if (!derived.complete)
+				console.warn("derived baseline is incomplete", {
+					...prLog,
+					sourceReviewId: sourceReview.id ?? null,
+					why: loaded.warm
+						? "source review is not in the ledger's review list"
+						: "ledger is cold and the source review posted inline comments",
+				});
+		}
+	}
+	const reviewCountBase =
+		state?.reviewCount ??
+		Math.max(
+			0,
+			...ownReviews.map((r) =>
+				Number(
+					(r.body ?? "").match(/<!--\s*ai-review:review=(\d+)\s*-->/)?.[1] ?? 0,
+				),
+			),
+		);
 	const carryVerdictForward = async (event: ReviewState["event"]) => {
 		if (context.kv && state) {
 			state.event = event;
@@ -1476,18 +1570,41 @@ export async function buildReview(
 		}
 		await restampCheckRun(context, event);
 	};
+	const markResolved = (ids: readonly string[]) => {
+		for (const f of state?.findings ?? []) {
+			if (!ids.includes(f.id)) continue;
+			f.status = "resolved";
+			resolvedNowIds.add(f.id);
+			if (f.path && f.line != null) {
+				resolvedKeys.add(`inline:${f.path}:${f.line}`);
+			}
+			resolvedKeys.add(`general:${f.title.toLowerCase().trim()}`);
+		}
+	};
+	const fullScope = (reason: ScopeReason): ScopeNote => {
+		if (reason !== "forced" && reason !== "triage" && reason !== "first review")
+			console.warn("delta unusable; running a full review", {
+				...prLog,
+				reason,
+			});
+		return `scope: full (${reason})`;
+	};
 
-	if (
-		context.kv &&
-		!context.force &&
-		state?.lastReviewedSha &&
-		state.lastReviewedSha !== context.headSha
-	) {
-		const openFindings = state.findings.filter((f) => f.status === "open");
-		// Single compare-API call: diff string + delta files + truncation flag.
-		// The GitHub compare endpoint caps .files at 300 with no pagination and no
-		// explicit truncation indicator. When truncated, SKIP/INCREMENTAL would
-		// reason over partial data, so we force FULL in that case.
+	let scope: ScopeNote;
+	if (!state) {
+		scope = fullScope("first review");
+	} else if (context.force) {
+		scope = fullScope("forced");
+	} else if (context.headSha.startsWith(state.lastReviewedSha)) {
+		// KV saved this head but its review never posted, so there is no delta.
+		scope = fullScope("same head");
+	} else if (!baselineComplete) {
+		scope = fullScope("baseline incomplete");
+	} else {
+		// One compare call gives the delta diff, its files and a truncation flag.
+		// null means the delta is unusable (request threw, or history was
+		// rewritten); a truncated list (300-file cap) is unusable too. Neither
+		// reaches triage, so nothing is resolved on evidence declared incomplete.
 		const deltaMeta = await fetchDeltaMeta(
 			context.octokit,
 			context.owner,
@@ -1495,80 +1612,85 @@ export async function buildReview(
 			state.lastReviewedSha,
 			context.headSha,
 		);
-		const triage = await triageReReview(
-			selection,
-			deltaMeta.diff,
-			openFindings,
-			context.auth,
-		);
-
-		for (const f of state.findings) {
-			if (triage.resolved.includes(f.id)) {
-				f.status = "resolved";
-				if (f.path && f.line != null) {
-					resolvedKeys.add(`inline:${f.path}:${f.line}`);
-				}
-				resolvedKeys.add(`general:${f.title.toLowerCase().trim()}`);
-			}
-		}
-
-		let skipNeedsApprove = false;
-		if (triage.recommendation === "SKIP" && !deltaMeta.truncated) {
-			const isOpen = (f: PersistedFinding) => f.status === "open";
-			if (hasOwnReview && state.findings.some(isOpen)) {
-				const { ledger } = await fetchLedger();
-				const unsettled = new Set(
-					reconcileSurvivingPrior(state.findings.filter(isOpen), ledger),
-				);
-				state.findings = state.findings.filter(
-					(f) => !isOpen(f) || unsettled.has(f),
-				);
-			}
-			const stillOpen = state.findings.some(isOpen);
-			// A re-stamped check-run does not supersede a standing CHANGES_REQUESTED
-			// review, so that case runs as INCREMENTAL and posts its APPROVE.
-			skipNeedsApprove = !stillOpen && needsFreshApprove;
-			if (!skipNeedsApprove) {
-				await carryVerdictForward(stillOpen ? state.event : "APPROVE");
-				return null; // nothing to post — the check-run carries the verdict
-			}
-		}
-
-		// Carry still-open findings forward as blocking, and resolved ones as
-		// tombstones, regardless of INCREMENTAL vs FULL — see the comment on
-		// survivingPrior's declaration for why FULL needs this too.
-		survivingPrior = state.findings.filter((f) => f.status === "open");
-		priorSha = state.lastReviewedSha;
-		resolvedTombstones = state.findings.filter((f) => f.status === "resolved");
-		resolvedThisRound = state.findings.filter((f) =>
-			triage.resolved.includes(f.id),
-		);
-
-		if (
-			(triage.recommendation === "INCREMENTAL" || skipNeedsApprove) &&
-			!deltaMeta.truncated
-		) {
-			scopedFiles = deltaMeta.files;
-			incrementalPass = true;
-		}
-		// FULL falls through with scopedFiles = files.
-		// Truncated compare (>= 300 files): SKIP/INCREMENTAL are bypassed above,
-		// so execution always reaches here and reviews the full paginated file set.
-		if (deltaMeta.truncated) {
-			console.warn(
-				"triage gate: compare API truncated (>=300 files); forcing FULL review",
-				{
-					owner: context.owner,
-					repo: context.repo,
-					pullNumber: context.pullNumber,
-				},
+		if (!deltaMeta || deltaMeta.truncated) {
+			scope = fullScope(deltaMeta ? "compare truncated" : "compare failed");
+		} else {
+			const triage = await triageReReview(
+				selection,
+				deltaMeta.diff,
+				state.findings.filter((f) => f.status === "open"),
+				context.auth,
 			);
+			markResolved(triage.resolved);
+
+			let skipNeedsApprove = false;
+			if (triage.recommendation === "SKIP") {
+				const isOpen = (f: PersistedFinding) => f.status === "open";
+				if (hasOwnReview && state.findings.some(isOpen)) {
+					const { ledger } = await fetchLedger();
+					const unsettled = new Set(
+						reconcileSurvivingPrior(state.findings.filter(isOpen), ledger),
+					);
+					state.findings = state.findings.filter(
+						(f) => !isOpen(f) || unsettled.has(f),
+					);
+				}
+				const stillBlocking = state.findings.some(
+					(f) => isOpen(f) && blocksVerdict(f),
+				);
+				// A re-stamped check-run does not supersede a standing CHANGES_REQUESTED
+				// review, so that case runs as INCREMENTAL and posts its APPROVE.
+				skipNeedsApprove = !stillBlocking && needsFreshApprove;
+				if (!skipNeedsApprove) {
+					console.log("review scope", {
+						scope: `scope: delta from ${state.lastReviewedSha.slice(0, 7)} (${baselineSource})`,
+						decision: "SKIP",
+					});
+					await carryVerdictForward(stillBlocking ? state.event : "APPROVE");
+					return null; // nothing to post — the check-run carries the verdict
+				}
+			}
+
+			if (triage.recommendation === "INCREMENTAL" || skipNeedsApprove) {
+				// A merge of the base branch puts files in the compare that the PR
+				// does not change; only the PR's own files are reviewed.
+				const prPaths = new Set(files.map((f) => f.filename));
+				scopedFiles = deltaMeta.files.filter((f) => prPaths.has(f.filename));
+				incrementalPass = true;
+				scope = `scope: delta from ${state.lastReviewedSha.slice(0, 7)} (${baselineSource})`;
+			} else {
+				scope = fullScope("triage");
+			}
 		}
 	}
+	console.log("review scope", { scope });
 
 	const loadedLedger = hasOwnReview ? await fetchLedger() : null;
 	const ledger = loadedLedger?.ledger ?? [];
-	survivingPrior = reconcileSurvivingPrior(survivingPrior, ledger);
+	if (state) {
+		priorSha = state.lastReviewedSha;
+		survivingPrior = reconcileSurvivingPrior(
+			state.findings.filter((f) => f.status === "open"),
+			ledger,
+		);
+		// A FULL round with a baseline carries every open finding. If a carried
+		// finding's fix lands in such a round, no later delta contains it, so one
+		// revalidation call checks the carried findings against the current
+		// patches and resolves nothing on error.
+		if (!incrementalPass && survivingPrior.length > 0) {
+			markResolved(
+				await revalidateFindings(
+					selection,
+					survivingPrior,
+					files,
+					context.auth,
+				),
+			);
+			survivingPrior = survivingPrior.filter((f) => f.status === "open");
+		}
+		resolvedTombstones = state.findings.filter((f) => f.status === "resolved");
+		resolvedThisRound = state.findings.filter((f) => resolvedNowIds.has(f.id));
+	}
 	const kvFindings = state?.findings ?? [];
 	const kvMatches = kvFindings.map((f) => findSettledMatch(f, ledger));
 	const kvMatchedIds = new Set(kvMatches.map((m) => m?.id));
@@ -1875,7 +1997,12 @@ export async function buildReview(
 		),
 	});
 
-	const validLines = buildValidLinesByPath(scopedFiles);
+	// Anchors come from the PR's own patches: a compare patch can hold lines
+	// from a base-branch merge that the PR diff does not have, and a comment
+	// on one of those would make GitHub reject the review.
+	const scopedPathSet = new Set(scopedFilePaths);
+	const anchorFiles = files.filter((f) => scopedPathSet.has(f.filename));
+	const validLines = buildValidLinesByPath(anchorFiles);
 
 	// Fix mechanical anchor errors before diff validation so fewer comments are
 	// silently dropped: fuzzy-anchor ±5 for off-by-one lines, clear backwards
@@ -1913,7 +2040,7 @@ export async function buildReview(
 	}
 
 	const reviewComments = buildReviewComments(
-		scopedFiles,
+		anchorFiles,
 		effectiveInlineComments,
 	);
 
@@ -1976,9 +2103,11 @@ export async function buildReview(
 	// An INCREMENTAL pass that left prior findings unresolved still blocks even if
 	// the delta itself was clean — those findings live on files the agents never
 	// reviewed this round. Force REQUEST_CHANGES so a clean delta can't APPROVE
-	// away a still-open blocking finding (C1).
+	// away a still-open blocking finding (C1). Path-less P2/P3 findings stay
+	// listed but do not block (see blocksVerdict).
+	const blockingPrior = survivingPrior.filter(blocksVerdict);
 	const finalEvent: ReviewDecision["event"] =
-		survivingPrior.length > 0
+		blockingPrior.length > 0
 			? "REQUEST_CHANGES"
 			: cleanDelta
 				? "APPROVE"
@@ -1994,11 +2123,15 @@ export async function buildReview(
 			suppressed: suppressedCount,
 			agents: agentResults.length,
 		});
-		// survivingPrior is empty here, so every open KV finding was settled by
-		// the ledger; saving them open would let a later cold-ledger run block.
+		// Only non-blocking findings can still be carried here; every other open
+		// KV finding was settled by the ledger, and saving those open would let
+		// a later cold-ledger run block.
+		const carriedIds = new Set(survivingPrior.map((f) => f.id));
 		if (state)
 			state.findings = state.findings.map((f) =>
-				f.status === "open" ? { ...f, status: "resolved" } : f,
+				f.status === "open" && !carriedIds.has(f.id)
+					? { ...f, status: "resolved" }
+					: f,
 			);
 		await carryVerdictForward(
 			standingVerdict === "APPROVED" ? "APPROVE" : "COMMENT",
@@ -2059,6 +2192,7 @@ export async function buildReview(
 		approvalMessage = buildApprovalMessage(
 			priorOwnReview !== null,
 			outstandingChecks,
+			survivingPrior.length > 0,
 		);
 	}
 
@@ -2074,7 +2208,7 @@ export async function buildReview(
 	const readiness = computeReadinessScore({
 		event: finalEvent,
 		hasP0,
-		survivingPrior: survivingPrior.map((f) => f.id),
+		survivingPrior: blockingPrior.map((f) => f.id),
 		partial: skipped.length > 0 || errored.length > 0,
 	});
 
@@ -2098,7 +2232,7 @@ export async function buildReview(
 		incrementalPass,
 		priorSha,
 		headSha: context.headSha,
-		reviewCount: (state?.reviewCount ?? 0) + 1,
+		reviewCount: reviewCountBase + 1,
 		provider: selection.provider,
 		model: selection.model,
 		cost,
@@ -2107,6 +2241,7 @@ export async function buildReview(
 				? `ledger: warm, ${suppressedEntryIds.size} suppressed`
 				: "ledger: cold"
 			: undefined,
+		scopeNote: scope,
 	});
 
 	// Persist the new review state so the NEXT push can triage against it. One
@@ -2144,7 +2279,7 @@ export async function buildReview(
 		// Union fresh ∪ surviving-open-prior ∪ resolved-tombstones, deduped by id.
 		// freshFindings win on collision (an agent re-raised a prior finding on the
 		// delta), so its current status/severity is authoritative. survivingPrior
-		// and resolvedTombstones are empty except on the INCREMENTAL path.
+		// and resolvedTombstones are empty only when there was no baseline.
 		const byId = new Map<string, PersistedFinding>();
 		for (const f of [
 			...freshFindings,
@@ -2167,7 +2302,7 @@ export async function buildReview(
 			event: persistedEvent,
 			findings: persistedFindings,
 			reviewedAt: new Date().toISOString(),
-			reviewCount: state?.reviewCount ?? 0,
+			reviewCount: reviewCountBase,
 		};
 		await saveReviewState(
 			context.kv,
