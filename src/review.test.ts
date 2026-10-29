@@ -5817,6 +5817,95 @@ describe("delta scoping without KV", () => {
 		expect(decision?.body).not.toContain("Stale nit");
 	});
 
+	it("a carried finding on a renamed file is revalidated, not resolved as moot", async () => {
+		const prompts = routeModels({});
+		const { octokit } = prOctokit({
+			reviews: [
+				{
+					id: 11,
+					body: ownBody({
+						sha: OLD,
+						count: 1,
+						rows: ["| 🟠 | **Real bug** (`src/old.ts:3`) |"],
+					}),
+				},
+			],
+			files: [
+				{
+					filename: "src/new.ts",
+					previous_filename: "src/old.ts",
+					status: "renamed",
+					patch: SIMPLE_PATCH,
+				} as { filename: string; status: string; patch?: string },
+			],
+			compare: () => {
+				throw new Error("gone");
+			},
+		});
+
+		const decision = await buildReview({ octokit, ...baseContext });
+
+		expect(prompts).toHaveLength(1);
+		expect(prompts[0]).toContain("FILE: src/new.ts");
+		expect(decision?.event).toBe("REQUEST_CHANGES");
+		expect(decision?.body).toContain("**Real bug** (`src/old.ts:3`)");
+	});
+
+	it("approval text says carried non-blocking findings are still open", async () => {
+		routeModels({});
+		const { octokit } = prOctokit({
+			reviews: [
+				{
+					id: 11,
+					state: "CHANGES_REQUESTED",
+					body: ownBody({
+						sha: OLD,
+						count: 1,
+						rows: ["| 🟢 | style | **Nit name** |"],
+					}),
+				},
+			],
+			compare: () => {
+				throw new Error("gone");
+			},
+		});
+
+		const decision = await buildReview({ octokit, ...baseContext });
+
+		expect(decision?.event).toBe("APPROVE");
+		expect(decision?.body).toContain(
+			"No blocking issues. The findings listed below are still open but do not block.",
+		);
+		expect(decision?.body).not.toContain("have been resolved");
+		expect(decision?.body).toContain("**Nit name**");
+	});
+
+	it("approval text keeps the existing headline when nothing is carried", async () => {
+		routeModels({});
+		const { octokit } = prOctokit({
+			reviews: [
+				{
+					id: 11,
+					state: "CHANGES_REQUESTED",
+					body: ownBody({ sha: OLD, count: 1 }),
+				},
+			],
+			compare: () => {
+				throw new Error("gone");
+			},
+		});
+
+		const decision = await buildReview({ octokit, ...baseContext });
+
+		expect(decision?.event).toBe("APPROVE");
+		// ownBody has no full metadata block, so priorOwnReview is null and the
+		// existing first-review headline applies.
+		expect(decision?.body).toContain(
+			"✅ No issues found. PR approved for merge.",
+		);
+		expect(decision?.body).not.toContain("No blocking issues.");
+	});
+
 	it("a base-branch merge in the compare is not reviewed or anchored", async () => {
 		const mergedPatch = [
 			"@@ -40,2 +40,3 @@",

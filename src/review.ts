@@ -49,6 +49,8 @@ interface PullFile {
 	filename: string;
 	status: string;
 	patch?: string;
+	/** Set by GitHub on a renamed file. */
+	previous_filename?: string;
 }
 
 interface ReviewContext {
@@ -1240,10 +1242,13 @@ async function fetchOutstandingChecks(
 function buildApprovalMessage(
 	isReReview: boolean,
 	outstandingChecks: OutstandingChecksResult,
+	hasCarriedOpen = false,
 ): string {
-	const resolution = isReReview
-		? "All issues from the previous review have been resolved."
-		: "No issues found.";
+	const resolution = hasCarriedOpen
+		? "No blocking issues. The findings listed below are still open but do not block."
+		: isReReview
+			? "All issues from the previous review have been resolved."
+			: "No issues found.";
 
 	const checksQualifier = outstandingChecks.fetchFailed
 		? " Note: could not verify outstanding CI checks — check them manually before merging."
@@ -2187,6 +2192,7 @@ export async function buildReview(
 		approvalMessage = buildApprovalMessage(
 			priorOwnReview !== null,
 			outstandingChecks,
+			survivingPrior.length > 0,
 		);
 	}
 
