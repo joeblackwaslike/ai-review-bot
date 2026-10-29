@@ -2,6 +2,7 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import type { ResolvedAuth } from "./auth.js";
 import { createAIModel } from "./models.js";
+import { trimPatch } from "./prompt.js";
 import type { PersistedFinding } from "./review-state.js";
 import {
 	type ModelSelection,
@@ -57,6 +58,7 @@ export async function triageReReview(
 	deltaDiff: string,
 	openFindings: PersistedFinding[],
 	auth?: ResolvedAuth,
+	mode: "delta" | "current" = "delta",
 ): Promise<TriageDecision> {
 	if (openFindings.length === 0 && deltaDiff.trim() === "") {
 		return { recommendation: "SKIP", resolved: [], newRisk: false };
@@ -67,7 +69,9 @@ export async function triageReReview(
 		"Your OPEN findings from the previous review (id — title):",
 		...openFindings.map((f) => `- ${f.id} — ${f.title} [${f.severity}]`),
 		"",
-		"The diff added since your last review (delta only):",
+		mode === "current"
+			? "The current patches of the files your open findings name:"
+			: "The diff added since your last review (delta only):",
 		deltaDiff || "[no code changes in the delta]",
 		"",
 		"Decide:",
@@ -92,6 +96,62 @@ export async function triageReReview(
 	}
 }
 
+const REVALIDATE_CHAR_CAP = 60000;
+
+/** Asks the triage model which carried findings the current patches fix.
+ * Only findings with a `path` whose file is in `files` are sent, with those
+ * files' patches capped at 60,000 characters in total. Returns resolved ids;
+ * `[]` when nothing is sendable or the model call fails. */
+export async function revalidateFindings(
+	selection: ModelSelection,
+	carried: PersistedFinding[],
+	files: DeltaFile[],
+	auth?: ResolvedAuth,
+): Promise<string[]> {
+	const byName = new Map(files.map((f) => [f.filename, f]));
+	const sent = new Map<string, string>();
+	let used = 0;
+	for (const f of carried) {
+		if (!f.path || sent.has(f.path)) continue;
+		const file = byName.get(f.path);
+		if (!file) continue;
+		const block = `FILE: ${file.filename}\n${trimPatch(file.patch ?? "[no patch]")}`;
+		if (used + block.length > REVALIDATE_CHAR_CAP) continue;
+		sent.set(f.path, block);
+		used += block.length;
+	}
+	const sendable = carried.filter((f) => f.path && sent.has(f.path));
+	if (sendable.length === 0) return [];
+
+	const ids = [...new Set(sendable.map((f) => f.id))] as [string, ...string[]];
+	const prompt = [
+		"You are checking whether an AI code reviewer's earlier findings are fixed in the current code.",
+		"",
+		"Your carried findings (id — title):",
+		...sendable.map((f) => `- ${f.id} — ${f.title} [${f.severity}]`),
+		"",
+		"The current patches of the files your findings name:",
+		...sent.values(),
+		"",
+		"resolved: ids of findings that these patches clearly fix. Leave out anything uncertain.",
+	].join("\n");
+
+	try {
+		const triage = triageSelection(selection);
+		const { object } = await generateObject({
+			model: createAIModel(triage, auth),
+			schema: z.object({ resolved: z.array(z.enum(ids)) }),
+			prompt,
+			maxOutputTokens: outputBudget(triage, 2000),
+			providerOptions: reasoningProviderOptions(triage),
+		});
+		return object.resolved;
+	} catch (err) {
+		console.error("revalidation call failed; resolving nothing", { err });
+		return [];
+	}
+}
+
 interface CompareOctokit {
 	request: <T>(
 		route: string,
@@ -109,6 +169,7 @@ export interface DeltaMeta {
 	files: DeltaFile[];
 	diff: string;
 	truncated: boolean;
+	status: string;
 }
 
 /** The GitHub compare API caps `.files` at this many entries with no pagination
@@ -128,13 +189,13 @@ async function fetchCompareFiles(
 	repo: string,
 	baseSha: string,
 	headSha: string,
-): Promise<DeltaFile[]> {
+): Promise<{ files: DeltaFile[]; status?: string }> {
 	const res = await octokit.request(
 		"GET /repos/{owner}/{repo}/compare/{basehead}",
 		{ owner, repo, basehead: `${baseSha}...${headSha}` },
 	);
-	const data = res.data as { files?: DeltaFile[] };
-	return data.files ?? [];
+	const data = res.data as { files?: DeltaFile[]; status?: string };
+	return { files: data.files ?? [], status: data.status };
 }
 
 /** Fetches the compare-API result and returns files, a unified diff string, and
@@ -146,12 +207,27 @@ export async function fetchDeltaMeta(
 	repo: string,
 	baseSha: string,
 	headSha: string,
-): Promise<DeltaMeta> {
-	const files = await fetchCompareFiles(octokit, owner, repo, baseSha, headSha);
+): Promise<DeltaMeta | null> {
+	let compare: Awaited<ReturnType<typeof fetchCompareFiles>>;
+	try {
+		compare = await fetchCompareFiles(octokit, owner, repo, baseSha, headSha);
+	} catch (err) {
+		console.warn("compare request failed; delta unusable", {
+			reason: err instanceof Error ? err.message : String(err),
+		});
+		return null;
+	}
+	if (compare.status !== "ahead") {
+		console.warn("compare status is not ahead; delta unusable", {
+			status: compare.status,
+		});
+		return null;
+	}
+	const { files, status } = compare;
 	const diff = files
 		.map((f) => `FILE: ${f.filename}\n${f.patch ?? "[no patch]"}`)
 		.join("\n\n---\n\n");
-	return { files, diff, truncated: isLikelyTruncated(files) };
+	return { files, diff, truncated: isLikelyTruncated(files), status };
 }
 
 export async function fetchDelta(
@@ -161,7 +237,13 @@ export async function fetchDelta(
 	baseSha: string,
 	headSha: string,
 ): Promise<string> {
-	const files = await fetchCompareFiles(octokit, owner, repo, baseSha, headSha);
+	const { files } = await fetchCompareFiles(
+		octokit,
+		owner,
+		repo,
+		baseSha,
+		headSha,
+	);
 	return files
 		.map((f) => `FILE: ${f.filename}\n${f.patch ?? "[no patch]"}`)
 		.join("\n\n---\n\n");
@@ -177,5 +259,6 @@ export async function fetchDeltaFiles(
 	baseSha: string,
 	headSha: string,
 ): Promise<DeltaFile[]> {
-	return fetchCompareFiles(octokit, owner, repo, baseSha, headSha);
+	return (await fetchCompareFiles(octokit, owner, repo, baseSha, headSha))
+		.files;
 }

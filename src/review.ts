@@ -1488,13 +1488,13 @@ export async function buildReview(
 		// The GitHub compare endpoint caps .files at 300 with no pagination and no
 		// explicit truncation indicator. When truncated, SKIP/INCREMENTAL would
 		// reason over partial data, so we force FULL in that case.
-		const deltaMeta = await fetchDeltaMeta(
+		const deltaMeta = (await fetchDeltaMeta(
 			context.octokit,
 			context.owner,
 			context.repo,
 			state.lastReviewedSha,
 			context.headSha,
-		);
+		)) ?? { files: [], diff: "", truncated: true, status: "unusable" };
 		const triage = await triageReReview(
 			selection,
 			deltaMeta.diff,

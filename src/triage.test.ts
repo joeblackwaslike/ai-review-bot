@@ -8,10 +8,13 @@ const mockCreateAIModel = vi.hoisted(() =>
 vi.mock("ai", () => ({ generateObject: mockGenerateObject }));
 vi.mock("./models.js", () => ({ createAIModel: mockCreateAIModel }));
 
+import { buildStrictOctokit } from "./testing.js";
 import type { DeltaFile } from "./triage.js";
 import {
 	COMPARE_FILE_CAP,
+	fetchDeltaMeta,
 	isLikelyTruncated,
+	revalidateFindings,
 	triageReReview,
 } from "./triage.js";
 
@@ -249,5 +252,140 @@ describe("isLikelyTruncated", () => {
 
 	it("returns true for more than COMPARE_FILE_CAP files", () => {
 		expect(isLikelyTruncated(makeFiles(COMPARE_FILE_CAP + 50))).toBe(true);
+	});
+});
+
+const SEL = { provider: "anthropic", model: "claude-haiku-5-5" } as never;
+const COMPARE = "GET /repos/{owner}/{repo}/compare/{basehead}";
+
+describe("fetchDeltaMeta compare outcomes", () => {
+	it("passes basehead old...new and returns status", async () => {
+		const octokit = buildStrictOctokit({
+			[COMPARE]: (p) => {
+				expect(p).toEqual({ owner: "o", repo: "r", basehead: "old...new" });
+				return {
+					status: "ahead",
+					files: [{ filename: "a.ts", status: "modified", patch: "p" }],
+				};
+			},
+		});
+		const meta = await fetchDeltaMeta(octokit, "o", "r", "old", "new");
+		expect(meta).toMatchObject({ status: "ahead", truncated: false });
+		expect(meta?.diff).toContain("FILE: a.ts");
+	});
+
+	it("returns null when the compare request throws", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const octokit = buildStrictOctokit({
+			[COMPARE]: () => {
+				throw new Error("404");
+			},
+		});
+		expect(await fetchDeltaMeta(octokit, "o", "r", "old", "new")).toBeNull();
+		expect(warn).toHaveBeenCalled();
+		warn.mockRestore();
+	});
+
+	it("returns null when status is diverged", async () => {
+		const octokit = buildStrictOctokit({
+			[COMPARE]: () => ({ status: "diverged", files: [] }),
+		});
+		expect(await fetchDeltaMeta(octokit, "o", "r", "old", "new")).toBeNull();
+	});
+});
+
+describe("triageReReview mode", () => {
+	it("mode current uses the current-patches header", async () => {
+		mockGenerateObject.mockResolvedValueOnce({
+			object: { recommendation: "SKIP", resolved: [], newRisk: false },
+		});
+		await triageReReview(SEL, "patches", openFindings, undefined, "current");
+		const { prompt } = mockGenerateObject.mock.calls.at(-1)?.[0] as {
+			prompt: string;
+		};
+		expect(prompt).toContain(
+			"The current patches of the files your open findings name:",
+		);
+		expect(prompt).not.toContain("The diff added since your last review");
+	});
+});
+
+describe("revalidateFindings", () => {
+	const f = (id: string, path: string | null = null) => ({
+		id,
+		path,
+		line: 1,
+		title: id,
+		severity: "P1",
+		status: "open" as const,
+	});
+
+	it("sends only path-bearing findings and their file patches", async () => {
+		mockGenerateObject.mockResolvedValueOnce({
+			object: { recommendation: "SKIP", resolved: ["a"], newRisk: false },
+		});
+		const out = await revalidateFindings(
+			SEL,
+			[f("a", "a.ts"), f("nopath"), f("c", "c.ts")],
+			[
+				{ filename: "a.ts", status: "modified", patch: "PATCH_A" },
+				{ filename: "z.ts", status: "modified", patch: "PATCH_Z" },
+			],
+		);
+		expect(out).toEqual(["a"]);
+		const { prompt } = mockGenerateObject.mock.calls.at(-1)?.[0] as {
+			prompt: string;
+		};
+		expect(prompt).toContain("PATCH_A");
+		expect(prompt).not.toContain("PATCH_Z");
+		expect(prompt).not.toContain("nopath");
+		expect(prompt).not.toContain("c.ts");
+	});
+
+	it("stays under the character cap", async () => {
+		mockGenerateObject.mockResolvedValueOnce({
+			object: { recommendation: "SKIP", resolved: [], newRisk: false },
+		});
+		const files = ["a", "b", "c", "d"].map((n) => ({
+			filename: `${n}.ts`,
+			status: "modified",
+			patch: n.repeat(30000),
+		}));
+		await revalidateFindings(
+			SEL,
+			files.map((x) => f(x.filename, x.filename)),
+			files,
+		);
+		const { prompt } = mockGenerateObject.mock.calls.at(-1)?.[0] as {
+			prompt: string;
+		};
+		const patchChars =
+			prompt
+				.split("\n")
+				.join("")
+				.match(/[abcd]{1000,}/g)
+				?.join("").length ?? 0;
+		expect(patchChars).toBeLessThanOrEqual(60000);
+		expect(prompt).not.toContain("FILE: d.ts");
+		expect(prompt).toContain("FILE: a.ts");
+	});
+
+	it("makes no model call when nothing is sendable", async () => {
+		mockGenerateObject.mockClear();
+		expect(await revalidateFindings(SEL, [f("nopath")], [])).toEqual([]);
+		expect(mockGenerateObject).not.toHaveBeenCalled();
+	});
+
+	it("returns [] on model error", async () => {
+		const err = vi.spyOn(console, "error").mockImplementation(() => {});
+		mockGenerateObject.mockRejectedValueOnce(new Error("boom"));
+		expect(
+			await revalidateFindings(
+				SEL,
+				[f("a", "a.ts")],
+				[{ filename: "a.ts", status: "modified", patch: "p" }],
+			),
+		).toEqual([]);
+		err.mockRestore();
 	});
 });
