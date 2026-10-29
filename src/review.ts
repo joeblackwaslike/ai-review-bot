@@ -185,6 +185,13 @@ export type AgentOutcome =
 	/** Never started: the run was out of wall-clock before its turn came up. */
 	| { status: "skipped"; skillPath: string };
 
+/** One run of one agent; `attempt` 2 is the single retry. */
+export interface AgentAttempt {
+	skill: string;
+	attempt: 1 | 2;
+	outcome: AgentOutcome;
+}
+
 /** Why a provider refused the call. Both conditions arrive as HTTP 429, but they
  * need opposite responses from a human: a rate limit clears on its own, an
  * exhausted balance never does. Conflating them means telling someone to wait
@@ -368,6 +375,9 @@ export const TIER1_SKILLS: readonly string[] = [
 
 const PACE_TOKEN_FLOOR = 5000; // below this many remaining input tokens, wait for reset
 const PACE_MAX_WAIT_MS = 60_000; // never sleep longer than this between agents
+// A retry starts only with at least this long, or as long as the first attempt
+// took if that was longer, left before the agent deadline.
+const MIN_RETRY_WINDOW_MS = 30_000;
 
 /** Clamp a pacing sleep to the time left before the run's deadline, so a late
  * rate-limit reply cannot make the queue sleep through the function cap. */
@@ -1801,7 +1811,38 @@ export async function buildReview(
 
 	let lastRateLimit: RateLimitInfo | undefined;
 	const deadline = Date.now() + context.agentBudgetMs;
-	const outcomes = await mapWithConcurrency(
+	const skillName = (path: string) => path.split("/").pop() ?? path;
+	const dispatch = async (skillPath: string): Promise<AgentOutcome> => {
+		const outcome = await runAgent(
+			skillPath,
+			userMessage,
+			selection,
+			customPrompt,
+			{
+				auth: context.auth,
+				prompt: { strictEvidenceRules: tuning.strictEvidenceRules },
+				abortSignal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
+			},
+		);
+		// At the default concurrency 4 this is a benign best-effort race between
+		// concurrent agents (pacing only needs an approximate recent signal).
+		if (outcome.status === "ok" || outcome.status === "rate_limited") {
+			lastRateLimit = outcome.rateLimit;
+		}
+		return outcome;
+	};
+	const paceNext = async (idx: number): Promise<void> => {
+		const delay = capPaceToDeadline(
+			computePaceDelayMs(lastRateLimit, Date.now()),
+			Date.now(),
+			deadline,
+		);
+		if (delay > 0) {
+			console.log("pacing before next agent", { idx, delayMs: delay });
+			await sleep(delay);
+		}
+	};
+	const firstOutcomes = await mapWithConcurrency(
 		allSkills,
 		context.agentConcurrency,
 		async ({ skillPath }, i) => {
@@ -1818,22 +1859,7 @@ export async function buildReview(
 				return { status: "skipped", skillPath } as AgentOutcome;
 			}
 			const t0 = Date.now();
-			const outcome = await runAgent(
-				skillPath,
-				userMessage,
-				selection,
-				customPrompt,
-				{
-					auth: context.auth,
-					prompt: { strictEvidenceRules: tuning.strictEvidenceRules },
-					abortSignal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
-				},
-			);
-			// At the default concurrency 4 this is a benign best-effort race between
-			// concurrent agents (pacing only needs an approximate recent signal).
-			if (outcome.status === "ok" || outcome.status === "rate_limited") {
-				lastRateLimit = outcome.rateLimit;
-			}
+			const outcome = await dispatch(skillPath);
 			console.log("agent done", {
 				idx: i + 1,
 				total: allSkills.length,
@@ -1847,21 +1873,97 @@ export async function buildReview(
 			serialFirst: true,
 			onBeforeEach: async (i) => {
 				if (i === 0) return; // nothing learned yet
-				const delay = capPaceToDeadline(
-					computePaceDelayMs(lastRateLimit, Date.now()),
-					Date.now(),
-					deadline,
-				);
-				if (delay > 0) {
-					console.log("pacing before next agent", {
-						idx: i + 1,
-						delayMs: delay,
-					});
-					await sleep(delay);
-				}
+				await paceNext(i + 1);
 			},
 		},
 	);
+
+	const logAttempts = (batch: AgentAttempt[]) => {
+		const messages: Record<string, string> = {};
+		for (const { skill, outcome } of batch) {
+			if (outcome.status === "error" && outcome.message !== undefined) {
+				messages[skill] = outcome.message;
+			}
+		}
+		logAgentRecords(
+			batch.map((a) => toRecord(a.skill, a.attempt, a.outcome)),
+			{
+				owner: context.owner,
+				repo: context.repo,
+				pr: context.pullNumber,
+				sha: context.headSha,
+				provider: context.provider,
+				model: selection.model,
+				messages,
+			},
+		);
+	};
+	const attempts: AgentAttempt[] = firstOutcomes.map((outcome, i) => ({
+		skill: skillName(allSkills[i]?.skillPath ?? "unknown"),
+		attempt: 1,
+		outcome,
+	}));
+	logAttempts(attempts);
+
+	// One retry per retryable failure, only while enough of the original
+	// deadline is left: at least 30s, and at least as long as the first attempt
+	// took. Checked at collection and again right before dispatch, since pacing
+	// can use up the time in between.
+	const retrySkipped: string[] = [];
+	const hasRetryTime = (first: AgentOutcome) =>
+		deadline - Date.now() >=
+		Math.max(
+			MIN_RETRY_WINDOW_MS,
+			first.status === "error" ? first.durationMs : 0,
+		);
+	const skipRetry = (skill: string) => {
+		retrySkipped.push(skill);
+		console.warn("agent retry skipped: out of time", {
+			skill,
+			leftMs: deadline - Date.now(),
+		});
+	};
+	const toRetry = firstOutcomes.flatMap((o, i) => {
+		if (o.status !== "error" || !o.failure.retryable) return [];
+		if (hasRetryTime(o)) return [i];
+		skipRetry(attempts[i].skill);
+		return [];
+	});
+	// Paced from its first agent on, since the first pass already learned the
+	// provider's pressure. No serialFirst: one warm-up covers one shared prefix,
+	// and a transport failure says nothing about the cache.
+	const retried = await mapWithConcurrency(
+		toRetry,
+		Math.min(context.agentConcurrency, toRetry.length),
+		async (i): Promise<AgentAttempt | undefined> => {
+			const { skill } = attempts[i];
+			if (!hasRetryTime(firstOutcomes[i])) {
+				skipRetry(skill);
+				return undefined;
+			}
+			const t0 = Date.now();
+			const outcome = await dispatch(allSkills[i].skillPath);
+			console.log("agent retry done", {
+				skill,
+				status: outcome.status,
+				ms: Date.now() - t0,
+			});
+			// Aborted at the deadline: the retry ran out of time, and the first
+			// attempt's failure stays the agent's result.
+			if (outcome.status === "skipped") retrySkipped.push(skill);
+			return { skill, attempt: 2, outcome };
+		},
+		{ onBeforeEach: (n) => paceNext(n + 1) },
+	);
+	const retryAttempts = retried.filter(
+		(a): a is AgentAttempt => a !== undefined,
+	);
+	logAttempts(retryAttempts);
+	attempts.push(...retryAttempts);
+	const outcomes = firstOutcomes.map((first, i) => {
+		const retry = retried[toRetry.indexOf(i)]?.outcome;
+		return retry && retry.status !== "skipped" ? retry : first;
+	});
 
 	const agentResults: ModelReview[] = [];
 	const rateLimited: RateLimitInfo[] = [];
@@ -1871,30 +1973,18 @@ export async function buildReview(
 	let totalPromptTokens = 0;
 	let totalCompletionTokens = 0;
 
-	const skillName = (path: string) => path.split("/").pop() ?? path;
-	const messages: Record<string, string> = {};
-	const records = outcomes.map((o, i) => {
-		const name = skillName(allSkills[i]?.skillPath ?? "unknown");
-		if (o.status === "error" && o.message !== undefined) {
-			messages[name] = o.message;
+	// Every attempt is billed, including a failed first attempt whose retry
+	// then succeeded.
+	for (const { outcome: o } of attempts) {
+		if ((o.status === "ok" || o.status === "error") && o.usage) {
+			totalPromptTokens += o.usage.promptTokens;
+			totalCompletionTokens += o.usage.completionTokens;
 		}
-		return toRecord(name, 1, o);
-	});
-	logAgentRecords(records, {
-		owner: context.owner,
-		repo: context.repo,
-		pr: context.pullNumber,
-		sha: context.headSha,
-		provider: context.provider,
-		model: selection.model,
-		messages,
-	});
+	}
 
 	outcomes.forEach((o, i) => {
 		if (o.status === "ok") {
 			agentResults.push(o.review);
-			totalPromptTokens += o.usage.promptTokens;
-			totalCompletionTokens += o.usage.completionTokens;
 		} else if (o.status === "rate_limited") {
 			rateLimited.push(o.rateLimit);
 		} else if (o.status === "quota_exhausted") {
@@ -1902,14 +1992,10 @@ export async function buildReview(
 		} else if (o.status === "skipped") {
 			skipped.push(o.skillPath);
 		} else if (o.status === "error") {
-			// The outcome record was logged above; this attaches the failure to
+			// The outcome records were logged above; this attaches the failure to
 			// the review itself, so a crashed agent does not read the same as one
-			// that ran clean and found nothing. Failed attempts are still billed.
+			// that ran clean and found nothing.
 			errored.push(allSkills[i]?.skillPath ?? "unknown");
-			if (o.usage) {
-				totalPromptTokens += o.usage.promptTokens;
-				totalCompletionTokens += o.usage.completionTokens;
-			}
 		}
 	});
 

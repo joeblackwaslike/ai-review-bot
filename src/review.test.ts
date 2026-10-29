@@ -6241,3 +6241,339 @@ describe("classified agent failures with usage", () => {
 		expect(recs[0][1].status).toBe("quota_exhausted");
 	});
 });
+
+describe("agent retry", () => {
+	const noObject = (finishReason: string, text?: string) =>
+		new NoObjectGeneratedError({
+			message: "no object",
+			text,
+			response: {} as never,
+			usage: { inputTokens: 700, outputTokens: 30 } as never,
+			finishReason: finishReason as never,
+		});
+	// no_output and schema_mismatch are both sampled, so both are retryable.
+	const noOutput = () => noObject("stop", undefined);
+	const schemaMismatch = () => noObject("stop", "{not json");
+
+	const okResponse = (
+		titles: string[] = [],
+		headers: Record<string, string> = {},
+	) => ({
+		object: buildModelReview({
+			event: titles.length > 0 ? "REQUEST_CHANGES" : "COMMENT",
+			general_findings: titles.map((title) => ({
+				title,
+				body: "real",
+				severity: "P1",
+				category: "style",
+				confidence: 0.8,
+				evidence: "See diff.",
+				suppressible: true,
+			})),
+			inline_comments: [],
+		}),
+		usage: { inputTokens: 1000, outputTokens: 100 },
+		response: { headers },
+	});
+
+	type Handler = (call: number, args: Record<string, unknown>) => unknown;
+	const skillOf = (args: Record<string, unknown>): string => {
+		const msgs = args.messages as Array<{ content: unknown }> | undefined;
+		const content = msgs?.[0]?.content;
+		if (!Array.isArray(content)) return "summary";
+		return String((content[1] as { text: string }).text).replace(
+			/^system:/,
+			"",
+		);
+	};
+	function route(handlers: Record<string, Handler>) {
+		const calls: Record<string, number> = {};
+		mockGenerateObject.mockImplementation(
+			async (args: Record<string, unknown>) => {
+				const skill = skillOf(args);
+				if (skill === "summary") {
+					return {
+						object: { summary: "s" },
+						usage: { inputTokens: 0, outputTokens: 0 },
+					};
+				}
+				calls[skill] = (calls[skill] ?? 0) + 1;
+				const h = handlers[skill];
+				return h ? h(calls[skill], args) : okResponse();
+			},
+		);
+		return calls;
+	}
+
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+		vi.restoreAllMocks();
+	});
+
+	function ctx(overrides: Record<string, unknown> = {}) {
+		return {
+			octokit: {
+				request: vi.fn(async (r: string) =>
+					r.includes("/reviews") ? { data: [] } : { data: {} },
+				),
+				paginate: vi.fn(async () => []),
+			} as never,
+			owner: "o",
+			repo: "r",
+			pullNumber: 7,
+			headSha: "abc",
+			title: "t",
+			body: null,
+			additions: 0,
+			deletions: 0,
+			changedFiles: 0,
+			labels: [],
+			commentPrefix: "ai-review-bot",
+			extraInstructions: "",
+			force: true,
+			provider: "anthropic" as const,
+			feedbackEnabled: false,
+			agentConcurrency: 1,
+			agentBudgetMs: 600_000,
+			tier2Enabled: false,
+			...overrides,
+		};
+	}
+
+	const recordsFor = (log: { mock: { calls: unknown[][] } }, skill: string) =>
+		log.mock.calls
+			.filter((c) => c[0] === "agent outcome")
+			.map((c) => c[1] as Record<string, unknown>)
+			.filter((r) => r.skill === skill);
+
+	const retrySkippedWarned = (
+		warn: { mock: { calls: unknown[][] } },
+		skill: string,
+	) =>
+		warn.mock.calls.some(
+			(c) =>
+				c[0] === "agent retry skipped: out of time" &&
+				(c[1] as { skill?: string }).skill === skill,
+		);
+
+	it("merges a recovered agent's findings, logs both attempts and bills both", async () => {
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		const calls = route({
+			"code-reviewer.md": (n) => {
+				if (n === 1) throw noOutput();
+				return okResponse(["Recovered finding"]);
+			},
+		});
+		const decision = await buildReview(ctx());
+		expect(calls["code-reviewer.md"]).toBe(2);
+		expect(decision?.body).toContain("Recovered finding");
+		const recs = recordsFor(log, "code-reviewer.md");
+		expect(recs).toHaveLength(2);
+		expect(recs[0]).toMatchObject({
+			attempt: 1,
+			status: "error",
+			class: "no_output",
+		});
+		expect(recs[1]).toMatchObject({ attempt: 2, status: "ok" });
+		const expected = computeCost(
+			{
+				promptTokens: TIER1_SKILLS.length * 1000 + 700,
+				completionTokens: TIER1_SKILLS.length * 100 + 30,
+			},
+			decision?.metadata.model ?? "",
+		);
+		expect(decision?.metadata.cost).toBeCloseTo(expected, 10);
+	});
+
+	it("never reruns a non-retryable failure", async () => {
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		const calls = route({
+			"code-reviewer.md": () => {
+				throw noObject("length", "{");
+			},
+		});
+		await buildReview(ctx());
+		expect(calls["code-reviewer.md"]).toBe(1);
+	});
+
+	it("skips the retry at collection when less than 30s is left", async () => {
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		let now = 0;
+		vi.spyOn(Date, "now").mockImplementation(() => now);
+		// The failure is instant; the other four agents use up all but 20s.
+		const burn = () => {
+			now += 145_000;
+			return okResponse();
+		};
+		const calls = route({
+			"code-reviewer.md": () => {
+				throw noOutput();
+			},
+			"silent-failure-hunter.md": burn,
+			"pr-test-analyzer.md": burn,
+			"security-sast.md": burn,
+			"code-review-and-quality.md": burn,
+		});
+		await buildReview(ctx());
+		expect(calls["code-reviewer.md"]).toBe(1);
+		expect(retrySkippedWarned(warn, "code-reviewer.md")).toBe(true);
+	});
+
+	it("skips the retry when less time is left than the first attempt took", async () => {
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		let now = 0;
+		vi.spyOn(Date, "now").mockImplementation(() => now);
+		const calls = route({
+			"code-reviewer.md": () => {
+				now += 310_000;
+				throw noOutput();
+			},
+		});
+		await buildReview(ctx());
+		// 290s left is well over 30s, but under the 310s the first attempt took.
+		expect(calls["code-reviewer.md"]).toBe(1);
+		expect(retrySkippedWarned(warn, "code-reviewer.md")).toBe(true);
+	});
+
+	it("cancels the retry when pacing uses up the time that made it eligible", async () => {
+		vi.useFakeTimers();
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const calls = route({
+			"code-reviewer.md": () => {
+				throw noOutput();
+			},
+			// Last agent of the first pass: leaves 70s and asks for a 50s pause.
+			"code-review-and-quality.md": () => {
+				vi.setSystemTime(Date.now() + 530_000);
+				return okResponse([], { "retry-after": "50" });
+			},
+		});
+		const p = buildReview(ctx());
+		await vi.runAllTimersAsync();
+		await p;
+		expect(calls["code-reviewer.md"]).toBe(1);
+		expect(retrySkippedWarned(warn, "code-reviewer.md")).toBe(true);
+	});
+
+	it("paces the retry pass's first agent from the first pass's rate limit", async () => {
+		vi.useFakeTimers();
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		let firstPassEnd = 0;
+		let retryAt = 0;
+		const calls = route({
+			"code-reviewer.md": (n) => {
+				if (n === 1) throw noOutput();
+				retryAt = Date.now();
+				return okResponse();
+			},
+			"code-review-and-quality.md": () => {
+				firstPassEnd = Date.now();
+				return okResponse([], { "retry-after": "50" });
+			},
+		});
+		const p = buildReview(ctx());
+		await vi.runAllTimersAsync();
+		await p;
+		expect(calls["code-reviewer.md"]).toBe(2);
+		expect(retryAt - firstPassEnd).toBeGreaterThanOrEqual(50_000);
+	});
+
+	it("keeps the second attempt's class when the retry fails too", async () => {
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		route({
+			"code-reviewer.md": (n) => {
+				throw n === 1 ? noOutput() : schemaMismatch();
+			},
+		});
+		const decision = await buildReview(ctx());
+		const recs = recordsFor(log, "code-reviewer.md");
+		expect(recs.map((r) => [r.attempt, r.class])).toEqual([
+			[1, "no_output"],
+			[2, "schema_mismatch"],
+		]);
+		expect(decision?.body).toContain("failed to complete: `code-reviewer`");
+	});
+
+	it("builds the retry's abort signal from the original absolute deadline", async () => {
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		let now = 0;
+		vi.spyOn(Date, "now").mockImplementation(() => now);
+		const timeout = vi.spyOn(AbortSignal, "timeout");
+		route({
+			"code-reviewer.md": (n) => {
+				if (n === 1) {
+					now += 100_000;
+					throw noOutput();
+				}
+				return okResponse();
+			},
+		});
+		await buildReview(ctx({ agentBudgetMs: 600_000 }));
+		expect(timeout).toHaveBeenCalledTimes(TIER1_SKILLS.length + 1);
+		// Deadline is t=600s; the retry starts at t=100s, so 500s remain. A
+		// fresh budget would give 600s.
+		expect(timeout.mock.calls.at(-1)?.[0]).toBe(500_000);
+	});
+
+	it("does not run the retry pass's first agent alone", async () => {
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		const events: string[] = [];
+		route({
+			"code-reviewer.md": async (n) => {
+				if (n === 1) throw noOutput();
+				events.push("a-start");
+				await new Promise((r) => setTimeout(r, 20));
+				events.push("a-end");
+				return okResponse();
+			},
+			"silent-failure-hunter.md": (n) => {
+				if (n === 1) throw noOutput();
+				events.push("b-start");
+				return okResponse();
+			},
+		});
+		await buildReview(ctx({ agentConcurrency: 4 }));
+		expect(events).toEqual(["a-start", "b-start", "a-end"]);
+	});
+
+	it("does not retry rate-limited, quota-exhausted or deadline-aborted agents", async () => {
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const real = AbortSignal.timeout.bind(AbortSignal);
+		let signals = 0;
+		// The third agent's call gets an already-fired deadline signal.
+		vi.spyOn(AbortSignal, "timeout").mockImplementation((ms) =>
+			++signals === 3 ? AbortSignal.abort() : real(ms),
+		);
+		const calls = route({
+			"code-reviewer.md": () => {
+				throw Object.assign(new Error("429"), {
+					statusCode: 429,
+					responseHeaders: {},
+				});
+			},
+			"silent-failure-hunter.md": () => {
+				throw Object.assign(new Error("insufficient_quota"), {
+					statusCode: 429,
+				});
+			},
+			"pr-test-analyzer.md": () => {
+				throw noOutput();
+			},
+		});
+		await buildReview(ctx());
+		expect(calls["code-reviewer.md"]).toBe(1);
+		expect(calls["silent-failure-hunter.md"]).toBe(1);
+		expect(calls["pr-test-analyzer.md"]).toBe(1);
+	});
+});
