@@ -22,6 +22,7 @@ export interface LedgerEvidence {
 	prAuthor: string;
 	claims: PostedClaim[];
 	threads: EvidenceThread[];
+	reviewIds: number[];
 }
 
 const DECIDER_ASSOCIATIONS = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
@@ -279,5 +280,5 @@ export async function fetchLedgerEvidence(
 		cursor = endCursor;
 	}
 
-	return { prAuthor, claims, threads };
+	return { prAuthor, claims, threads, reviewIds: reviews.map((r) => r.id) };
 }

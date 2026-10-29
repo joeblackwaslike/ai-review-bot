@@ -10,6 +10,7 @@ import type { Ledger } from "./types.js";
 export interface LoadedLedger {
 	ledger: Ledger;
 	warm: boolean;
+	reviewIds: number[];
 }
 
 export const LEDGER_TIMEOUT_MS = 15_000;
@@ -34,7 +35,11 @@ export async function loadLedger(
 			fetchLedgerEvidence(octokit, o),
 			timeout,
 		]);
-		return { ledger: buildLedger(evidence), warm: true };
+		return {
+			ledger: buildLedger(evidence),
+			warm: true,
+			reviewIds: evidence.reviewIds,
+		};
 	} catch (err) {
 		console.warn("ledger unavailable; suppressing nothing this round", {
 			owner: o.owner,
@@ -42,7 +47,7 @@ export async function loadLedger(
 			pull: o.pull,
 			error: err instanceof Error ? err.message : String(err),
 		});
-		return { ledger: [], warm: false };
+		return { ledger: [], warm: false, reviewIds: [] };
 	} finally {
 		clearTimeout(timer);
 	}
