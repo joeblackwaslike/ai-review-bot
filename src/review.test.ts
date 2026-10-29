@@ -629,6 +629,38 @@ describe("buildReview", () => {
 		);
 	});
 
+	it("alreadyReviewed ignores a quoted sha and reads the real block", async () => {
+		const headSha = "1234567890abcdef";
+		const priorBody = [
+			"### ai-review-bot",
+			`> <!-- ai-review:sha=${headSha} -->`,
+			"",
+			"Prior review.",
+			"",
+			"<!-- ai-review:sha=ffffffffffff -->",
+			"<!-- ai-review:review=1 -->",
+			"<!-- ai-review:readiness=4 -->",
+			"<!-- ai-review:provider=anthropic -->",
+			"<!-- ai-review:model=m -->",
+			"<!-- ai-review:findings=0 -->",
+			"<!-- ai-review:cost=0.000100 -->",
+			"",
+			"---",
+			"*Model: m · 5 agents · $0.000100*",
+		].join("\n");
+		const octokit = buildOctokit({ existingReviews: [{ body: priorBody }] });
+
+		// Not skipped as already reviewed: it proceeds to the (unmocked) agents.
+		await expect(
+			buildReview({
+				octokit,
+				...baseContext,
+				headSha,
+				force: false,
+			}),
+		).rejects.toThrow("All review agents failed");
+	});
+
 	it("resubmits when force is true even if already reviewed", async () => {
 		const headSha = "1234567890abcdef";
 
@@ -5097,8 +5129,7 @@ describe("delta scoping without KV", () => {
 			o.rows?.length
 				? `| Sev | Category | Finding |\n|---|---|---|\n${o.rows.join("\n")}`
 				: "",
-			`<!-- ai-review:sha=${o.sha} -->`,
-			`<!-- ai-review:review=${o.count} -->`,
+			`<!-- ai-review:sha=${o.sha} -->\n<!-- ai-review:review=${o.count} -->`,
 		]
 			.filter(Boolean)
 			.join("\n\n");

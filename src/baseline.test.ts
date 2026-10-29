@@ -277,3 +277,16 @@ describe("deriveBaseline", () => {
 		expect(r?.state.findings[0].title).toBe("Unsafe eval");
 	});
 });
+
+describe("deriveBaseline metadata block", () => {
+	it("reads the real sha and count, not a quoted earlier review's", () => {
+		const quoted =
+			"> <!-- ai-review:sha=1111111111111111 -->\n> <!-- ai-review:review=9 -->\n\n";
+		const result = deriveBaseline(
+			{ id: 20, body: quoted + body({ count: 3 }) },
+			warm([]),
+		);
+		expect(result?.state.lastReviewedSha).toBe(SHA);
+		expect(result?.state.reviewCount).toBe(3);
+	});
+});

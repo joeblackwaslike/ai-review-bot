@@ -16,6 +16,7 @@ import {
 	buildAgentSystemPrompt,
 	buildUserMessage,
 } from "./prompt.js";
+import { readMetadataValue } from "./review-metadata.js";
 import type { PersistedFinding, ReviewState } from "./review-state.js";
 import { findingId, loadReviewState, saveReviewState } from "./review-state.js";
 import { REVIEWER_TUNING, type ReviewerTuning } from "./reviewer-tuning.js";
@@ -779,12 +780,7 @@ export interface ReviewMetaParsed {
 }
 
 export function parseReviewMetadata(body: string): ReviewMetaParsed | null {
-	const extract = (key: string): string | undefined => {
-		const m = body.match(
-			new RegExp(`<!--\\s*ai-review:${key}=([^\\s>]+)\\s*-->`),
-		);
-		return m?.[1];
-	};
+	const extract = (key: string) => readMetadataValue(body, key);
 	const sha = extract("sha");
 	const reviewStr = extract("review");
 	const readinessStr = extract("readiness");
@@ -1516,7 +1512,7 @@ export async function buildReview(
 		.filter((r) => {
 			const body = r.body ?? "";
 			return (
-				/<!--\s*ai-review:sha=/.test(body) ||
+				readMetadataValue(body, "sha") !== undefined ||
 				body.includes("Reviewed commit: `")
 			);
 		})
@@ -1550,7 +1546,7 @@ export async function buildReview(
 			0,
 			...ownReviews.map((r) =>
 				Number(
-					(r.body ?? "").match(/<!--\s*ai-review:review=(\d+)\s*-->/)?.[1] ?? 0,
+					readMetadataValue(r.body ?? "", "review")?.match(/^\d+$/)?.[0] ?? 0,
 				),
 			),
 		);
