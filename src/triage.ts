@@ -96,10 +96,11 @@ export async function triageReReview(
 const REVALIDATE_CHAR_CAP = 60000;
 
 /** Asks the triage model which carried findings the current patches fix.
- * `files` must be the PR's complete file list. A finding whose `path` is no
- * longer in it is moot and resolved without a model call (unless the list is
- * empty, which proves nothing). A finding with a `path` in the list is sent
- * with that file's patch. A finding with no path is sent with every PR patch
+ * `files` must be the PR's complete file list. A finding whose `path` is
+ * neither a current filename nor a renamed file's previous name is moot and
+ * resolved without a model call (unless the list is empty, which proves
+ * nothing). A finding with a `path` in the list is sent with that file's
+ * patch, under its new name when the file was renamed. A finding with no path is sent with every PR patch
  * in file order, only when none was trimmed and all fit under the
  * 60,000-character total; otherwise it stays carried. Returns resolved ids:
  * the moot ones plus the model's, or only the moot ones when nothing else is
@@ -111,19 +112,20 @@ export async function revalidateFindings(
 	auth?: ResolvedAuth,
 ): Promise<string[]> {
 	const blockOf = (file: DeltaFile) =>
-		`FILE: ${file.filename}\n${trimPatch(file.patch ?? "[no patch]")}`;
-	const byName = new Map(files.map((f) => [f.filename, f]));
-	const presentPaths = new Set(
-		files.flatMap((f) =>
-			f.previousFilename ? [f.filename, f.previousFilename] : [f.filename],
+		`FILE: ${file.filename}${file.previous_filename ? ` (renamed from ${file.previous_filename})` : ""}\n${trimPatch(file.patch ?? "[no patch]")}`;
+	// Current names win over previous names if one file took another's path.
+	const byName = new Map<string, DeltaFile>([
+		...files.flatMap((f): [string, DeltaFile][] =>
+			f.previous_filename ? [[f.previous_filename, f]] : [],
 		),
-	);
+		...files.map((f): [string, DeltaFile] => [f.filename, f]),
+	]);
 	const moot =
 		files.length > 0
 			? [
 					...new Set(
 						carried
-							.filter((f) => f.path && !presentPaths.has(f.path))
+							.filter((f) => f.path && !byName.has(f.path))
 							.map((f) => f.id),
 					),
 				]
@@ -131,12 +133,11 @@ export async function revalidateFindings(
 	const sent = new Map<string, string>();
 	let used = 0;
 	for (const f of carried) {
-		if (!f.path || sent.has(f.path)) continue;
-		const file = byName.get(f.path);
-		if (!file) continue;
+		const file = f.path ? byName.get(f.path) : undefined;
+		if (!file || sent.has(file.filename)) continue;
 		const block = blockOf(file);
 		if (used + block.length > REVALIDATE_CHAR_CAP) continue;
-		sent.set(f.path, block);
+		sent.set(file.filename, block);
 		used += block.length;
 	}
 	const rest = files.filter((f) => !sent.has(f.filename));
@@ -151,7 +152,7 @@ export async function revalidateFindings(
 		for (const f of rest) sent.set(f.filename, blockOf(f));
 	}
 	const sendable = carried.filter((f) =>
-		f.path ? sent.has(f.path) : pathlessFits,
+		f.path ? sent.has(byName.get(f.path)?.filename ?? "") : pathlessFits,
 	);
 	if (sendable.length === 0) return moot;
 	// Path-bearing blocks were added first; re-emit every block in PR file
@@ -202,8 +203,8 @@ export interface DeltaFile {
 	filename: string;
 	status: string;
 	patch?: string;
-	/** Present when `status` is "renamed" — the file's path before this PR. */
-	previousFilename?: string;
+	/** Set by GitHub on a renamed file. */
+	previous_filename?: string;
 }
 
 export interface DeltaMeta {
@@ -236,14 +237,14 @@ async function fetchCompareFiles(
 		{ owner, repo, basehead: `${baseSha}...${headSha}` },
 	);
 	const data = res.data as {
-		files?: Array<DeltaFile & { previous_filename?: string }>;
+		files?: DeltaFile[];
 		status?: string;
 	};
 	const files = (data.files ?? []).map((f) => ({
 		filename: f.filename,
 		status: f.status,
 		patch: f.patch,
-		previousFilename: f.previous_filename,
+		previous_filename: f.previous_filename,
 	}));
 	return { files, status: data.status };
 }

@@ -340,24 +340,6 @@ describe("revalidateFindings", () => {
 		expect(prompt).not.toContain("c.ts");
 	});
 
-	it("does not treat a renamed file's old path as moot", async () => {
-		const out = await revalidateFindings(
-			SEL,
-			[f("a", "old.ts")],
-			[
-				{
-					filename: "new.ts",
-					status: "renamed",
-					patch: "PATCH_NEW",
-					previousFilename: "old.ts",
-				},
-			],
-		);
-		// old.ts is the pre-rename name of a file still in the PR, so it must
-		// not be auto-resolved; it stays carried.
-		expect(out).toEqual([]);
-	});
-
 	it("sends a path-less finding with the PR's patches in file order", async () => {
 		mockGenerateObject.mockResolvedValueOnce({
 			object: { resolved: ["nopath"] },
@@ -460,6 +442,51 @@ describe("revalidateFindings", () => {
 		};
 		expect(prompt).not.toContain("gone");
 		expect(prompt).toContain("- a \u2014");
+	});
+
+	it("sends a finding on a renamed file with the new file's patch instead of resolving it as moot", async () => {
+		mockGenerateObject.mockClear();
+		mockGenerateObject.mockResolvedValueOnce({ object: { resolved: [] } });
+		const out = await revalidateFindings(
+			SEL,
+			[f("old", "old.ts")],
+			[
+				{
+					filename: "new.ts",
+					previous_filename: "old.ts",
+					status: "renamed",
+					patch: "PATCH_NEW",
+				},
+			],
+		);
+		expect(out).toEqual([]);
+		expect(mockGenerateObject).toHaveBeenCalledTimes(1);
+		const { prompt } = mockGenerateObject.mock.calls.at(-1)?.[0] as {
+			prompt: string;
+		};
+		expect(prompt).toContain("- old \u2014");
+		expect(prompt).toContain("FILE: new.ts");
+		expect(prompt).toContain("PATCH_NEW");
+	});
+
+	it("resolves nothing for a renamed file's finding when the model call fails", async () => {
+		const err = vi.spyOn(console, "error").mockImplementation(() => {});
+		mockGenerateObject.mockRejectedValueOnce(new Error("boom"));
+		expect(
+			await revalidateFindings(
+				SEL,
+				[f("old", "old.ts")],
+				[
+					{
+						filename: "new.ts",
+						previous_filename: "old.ts",
+						status: "renamed",
+						patch: "p",
+					},
+				],
+			),
+		).toEqual([]);
+		err.mockRestore();
 	});
 
 	it("keeps a moot resolution when the model call fails", async () => {
