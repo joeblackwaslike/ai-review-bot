@@ -846,7 +846,8 @@ type ScopeReason =
 	| "triage"
 	| "compare failed"
 	| "compare truncated"
-	| "baseline incomplete";
+	| "baseline incomplete"
+	| "same head";
 
 /** Footer note saying whether a review was scoped to a delta or ran in full,
  * and why. */
@@ -1561,10 +1562,10 @@ export async function buildReview(
 		scope = fullScope("first review");
 	} else if (context.force) {
 		scope = fullScope("forced");
-	} else if (
-		!baselineComplete ||
-		context.headSha.startsWith(state.lastReviewedSha)
-	) {
+	} else if (context.headSha.startsWith(state.lastReviewedSha)) {
+		// KV saved this head but its review never posted, so there is no delta.
+		scope = fullScope("same head");
+	} else if (!baselineComplete) {
 		scope = fullScope("baseline incomplete");
 	} else {
 		// One compare call gives the delta diff, its files and a truncation flag.
@@ -1606,6 +1607,10 @@ export async function buildReview(
 				// review, so that case runs as INCREMENTAL and posts its APPROVE.
 				skipNeedsApprove = !stillOpen && needsFreshApprove;
 				if (!skipNeedsApprove) {
+					console.log("review scope", {
+						scope: `scope: delta from ${state.lastReviewedSha.slice(0, 7)} (${baselineSource})`,
+						decision: "SKIP",
+					});
 					await carryVerdictForward(stillOpen ? state.event : "APPROVE");
 					return null; // nothing to post — the check-run carries the verdict
 				}
@@ -2224,7 +2229,7 @@ export async function buildReview(
 		// Union fresh ∪ surviving-open-prior ∪ resolved-tombstones, deduped by id.
 		// freshFindings win on collision (an agent re-raised a prior finding on the
 		// delta), so its current status/severity is authoritative. survivingPrior
-		// and resolvedTombstones are empty except on the INCREMENTAL path.
+		// and resolvedTombstones are empty only when there was no baseline.
 		const byId = new Map<string, PersistedFinding>();
 		for (const f of [
 			...freshFindings,

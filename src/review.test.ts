@@ -5337,7 +5337,7 @@ describe("delta scoping without KV", () => {
 		const many = Array.from({ length: 300 }, (_, i) =>
 			buildPullFile(`src/f${i}.ts`, SIMPLE_PATCH),
 		);
-		const { octokit } = prOctokit({
+		const { octokit, compareCalls } = prOctokit({
 			reviews: [
 				{ id: 11, body: ownBody({ sha: OLD, count: 1, rows: [blockerRow] }) },
 			],
@@ -5346,6 +5346,7 @@ describe("delta scoping without KV", () => {
 
 		const decision = await buildReview({ octokit, ...baseContext });
 
+		expect(compareCalls).toEqual([`${OLD}...${HEAD}`]);
 		expect(mockTriageReReview).not.toHaveBeenCalled();
 		expect(decision?.event).toBe("REQUEST_CHANGES");
 		expect(decision?.body).toContain("**Blocker**");
@@ -5355,7 +5356,7 @@ describe("delta scoping without KV", () => {
 	it("fallback revalidation resolves a fixed finding", async () => {
 		const fixedId = findingId("src/a.ts", 3, "Null deref");
 		const prompts = routeModels({ agent: withFresh(), resolved: [fixedId] });
-		const { octokit } = prOctokit({
+		const { octokit, compareCalls } = prOctokit({
 			reviews: [
 				{
 					id: 11,
@@ -5373,6 +5374,7 @@ describe("delta scoping without KV", () => {
 
 		const decision = await buildReview({ octokit, ...baseContext });
 
+		expect(compareCalls).toEqual([`${OLD}...${HEAD}`]);
 		expect(prompts).toHaveLength(1);
 		expect(prompts[0]).toContain(fixedId);
 		expect(prompts[0]).toContain("FILE: src/a.ts");
@@ -5381,29 +5383,124 @@ describe("delta scoping without KV", () => {
 		expect(decision?.body).not.toContain("Null deref");
 	});
 
-	it("title-only finding is not revalidated", async () => {
-		const prompts = routeModels({ agent: withFresh() });
-		const { octokit } = prOctokit({
-			reviews: [
-				{
-					id: 11,
-					body: ownBody({
-						sha: OLD,
-						count: 1,
-						rows: ["| 🟡 | tests | **Missing tests** |"],
-					}),
-				},
-			],
+	it("a fixed path-less finding is resolved by a fallback round and not carried by a later push", async () => {
+		const fixedId = findingId(null, null, "Missing tests");
+		const prompts = routeModels({ agent: withFresh(), resolved: [fixedId] });
+		const r1 = {
+			id: 11,
+			body: ownBody({
+				sha: OLD,
+				count: 1,
+				rows: ["| 🟡 | tests | **Missing tests** |"],
+			}),
+		};
+		const fallback = prOctokit({
+			reviews: [r1],
 			compare: () => {
 				throw new Error("gone");
 			},
 		});
 
-		const decision = await buildReview({ octokit, ...baseContext });
+		const decision = await buildReview({
+			octokit: fallback.octokit,
+			...baseContext,
+		});
 
-		expect(prompts).toHaveLength(0);
+		expect(fallback.compareCalls).toEqual([`${OLD}...${HEAD}`]);
+		expect(prompts).toHaveLength(1);
+		expect(prompts[0]).toContain(fixedId);
+		expect(prompts[0]).toContain("FILE: src/a.ts");
+		expect(prompts[0]).toContain("FILE: src/b.ts");
+		expect(decision?.event).toBe("COMMENT");
+		expect(decision?.body).not.toContain("Missing tests");
+
+		const NEXT = "fedcba0987654321";
+		routeModels({ agent: withFresh() });
+		mockTriageReReview.mockResolvedValue({
+			recommendation: "INCREMENTAL",
+			resolved: [],
+			newRisk: true,
+		});
+		const later = prOctokit({
+			reviews: [r1, { id: 12, body: decision?.body ?? "" }],
+			compare: () => ({ status: "ahead", files: [bFile] }),
+		});
+		await buildReview({
+			octokit: later.octokit,
+			...baseContext,
+			headSha: NEXT,
+		});
+
+		expect(later.compareCalls).toEqual([`${HEAD}...${NEXT}`]);
+		const open = mockTriageReReview.mock.calls[0]?.[2] as PersistedFinding[];
+		expect(open.map((f) => f.title)).toEqual(["Fresh issue"]);
+	});
+
+	it("KV state at the current head runs full with scope same head", async () => {
+		const { client } = fakeKv();
+		await saveReviewState(client, "anthropic", OWNER, REPO, 1, {
+			lastReviewedSha: HEAD,
+			event: "COMMENT",
+			findings: [],
+			reviewedAt: "2026-10-01T00:00:00Z",
+		});
+		routeModels({ agent: withFresh() });
+		const { octokit, compareCalls } = prOctokit({
+			reviews: [{ id: 11, body: ownBody({ sha: OLD, count: 1 }) }],
+		});
+
+		const decision = await buildReview({ octokit, ...baseContext, kv: client });
+
+		expect(compareCalls).toEqual([]);
+		expect(mockTriageReReview).not.toHaveBeenCalled();
+		expect(reviewedFiles()).toEqual(["src/a.ts", "src/b.ts"]);
+		expect(decision?.body).toContain("scope: full (same head)");
+		expect(console.warn).toHaveBeenCalledWith(
+			expect.stringContaining("full review"),
+			expect.objectContaining({ pullNumber: 1, reason: "same head" }),
+		);
+	});
+
+	it("forced run with KV carries its open findings and continues its count", async () => {
+		const { client } = fakeKv();
+		const kvBlocker = {
+			id: findingId(null, null, "Kv blocker"),
+			path: null,
+			line: null,
+			title: "Kv blocker",
+			severity: "P1",
+			status: "open" as const,
+		};
+		await saveReviewState(client, "anthropic", OWNER, REPO, 1, {
+			lastReviewedSha: OLD,
+			event: "REQUEST_CHANGES",
+			findings: [kvBlocker],
+			reviewedAt: "2026-10-01T00:00:00Z",
+			reviewCount: 4,
+		});
+		routeModels({});
+		const { octokit, compareCalls } = prOctokit({
+			reviews: [{ id: 11, body: ownBody({ sha: OLD, count: 5 }) }],
+		});
+
+		const decision = await buildReview({
+			octokit,
+			...baseContext,
+			kv: client,
+			force: true,
+		});
+
+		expect(compareCalls).toEqual([]);
 		expect(decision?.event).toBe("REQUEST_CHANGES");
-		expect(decision?.body).toContain("**Missing tests**");
+		expect(decision?.body).toContain("**Kv blocker**");
+		expect(decision?.body).toContain("scope: full (forced)");
+		expect(decision?.body).toContain("<!-- ai-review:review=6 -->");
+		const saved = await loadReviewState(client, "anthropic", OWNER, REPO, 1);
+		expect(saved?.reviewCount).toBe(6);
+		expect(saved?.lastReviewedSha).toBe(HEAD);
+		expect(saved?.findings.find((f) => f.id === kvBlocker.id)?.status).toBe(
+			"open",
+		);
 	});
 
 	it("forced run carries: round 3's baseline holds round 1's and round 2's findings", async () => {
@@ -5560,7 +5657,7 @@ describe("delta scoping without KV", () => {
 			resolved: [],
 			newRisk: true,
 		});
-		const { octokit } = prOctokit({
+		const { octokit, compareCalls } = prOctokit({
 			reviews: [
 				{
 					id: 11,
@@ -5576,6 +5673,7 @@ describe("delta scoping without KV", () => {
 
 		const decision = await buildReview({ octokit, ...baseContext });
 
+		expect(compareCalls).toEqual([`${OLD}...${HEAD}`]);
 		expect(reviewedFiles()).toEqual(["src/a.ts", "src/b.ts"]);
 		expect(prompts).toHaveLength(1);
 		expect(decision?.event).toBe("REQUEST_CHANGES");
@@ -5590,13 +5688,19 @@ describe("delta scoping without KV", () => {
 			resolved: [],
 			newRisk: false,
 		});
-		const { octokit, checkRuns } = prOctokit({
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		const { octokit, checkRuns, compareCalls } = prOctokit({
 			reviews: [{ id: 11, body: ownBody({ sha: OLD, count: 1 }) }],
 			compare: () => ({ status: "ahead", files: [bFile] }),
 		});
 
 		const decision = await buildReview({ octokit, ...baseContext });
 
+		expect(compareCalls).toEqual([`${OLD}...${HEAD}`]);
+		expect(log).toHaveBeenCalledWith("review scope", {
+			scope: "scope: delta from abcdef1 (github)",
+			decision: "SKIP",
+		});
 		expect(decision).toBeNull();
 		expect(mockGenerateObject).not.toHaveBeenCalled();
 		expect(checkRuns).toHaveLength(1);

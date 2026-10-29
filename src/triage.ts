@@ -99,15 +99,19 @@ export async function triageReReview(
 const REVALIDATE_CHAR_CAP = 60000;
 
 /** Asks the triage model which carried findings the current patches fix.
- * Only findings with a `path` whose file is in `files` are sent, with those
- * files' patches capped at 60,000 characters in total. Returns resolved ids;
- * `[]` when nothing is sendable or the model call fails. */
+ * A finding with a `path` whose file is in `files` is sent with that file's
+ * patch. A finding with no path is sent with every PR patch in file order,
+ * and only when all of them fit under the 60,000-character total; otherwise
+ * it stays carried. Returns resolved ids; `[]` when nothing is sendable or
+ * the model call fails. */
 export async function revalidateFindings(
 	selection: ModelSelection,
 	carried: PersistedFinding[],
 	files: DeltaFile[],
 	auth?: ResolvedAuth,
 ): Promise<string[]> {
+	const blockOf = (file: DeltaFile) =>
+		`FILE: ${file.filename}\n${trimPatch(file.patch ?? "[no patch]")}`;
 	const byName = new Map(files.map((f) => [f.filename, f]));
 	const sent = new Map<string, string>();
 	let used = 0;
@@ -115,13 +119,27 @@ export async function revalidateFindings(
 		if (!f.path || sent.has(f.path)) continue;
 		const file = byName.get(f.path);
 		if (!file) continue;
-		const block = `FILE: ${file.filename}\n${trimPatch(file.patch ?? "[no patch]")}`;
+		const block = blockOf(file);
 		if (used + block.length > REVALIDATE_CHAR_CAP) continue;
 		sent.set(f.path, block);
 		used += block.length;
 	}
-	const sendable = carried.filter((f) => f.path && sent.has(f.path));
+	const rest = files.filter((f) => !sent.has(f.filename));
+	const restChars = rest.reduce((n, f) => n + blockOf(f).length, 0);
+	const pathlessFits =
+		files.length > 0 && used + restChars <= REVALIDATE_CHAR_CAP;
+	if (pathlessFits && carried.some((f) => !f.path)) {
+		for (const f of rest) sent.set(f.filename, blockOf(f));
+	}
+	const sendable = carried.filter((f) =>
+		f.path ? sent.has(f.path) : pathlessFits,
+	);
 	if (sendable.length === 0) return [];
+	// Path-bearing blocks were added first; re-emit every block in PR file
+	// order so a path-less finding reads the PR as it is laid out.
+	const blocks = files
+		.map((f) => sent.get(f.filename))
+		.filter((b) => b !== undefined);
 
 	const ids = [...new Set(sendable.map((f) => f.id))] as [string, ...string[]];
 	const prompt = [
@@ -130,8 +148,8 @@ export async function revalidateFindings(
 		"Your carried findings (id — title):",
 		...sendable.map((f) => `- ${f.id} — ${f.title} [${f.severity}]`),
 		"",
-		"The current patches of the files your findings name:",
-		...sent.values(),
+		"The current patches (a finding without a file refers to the whole pull request):",
+		...blocks,
 		"",
 		"resolved: ids of findings that these patches clearly fix. Leave out anything uncertain.",
 	].join("\n");

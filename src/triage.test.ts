@@ -323,13 +323,13 @@ describe("revalidateFindings", () => {
 		status: "open" as const,
 	});
 
-	it("sends only path-bearing findings and their file patches", async () => {
+	it("sends a path-bearing finding with only its named file's patch", async () => {
 		mockGenerateObject.mockResolvedValueOnce({
 			object: { recommendation: "SKIP", resolved: ["a"], newRisk: false },
 		});
 		const out = await revalidateFindings(
 			SEL,
-			[f("a", "a.ts"), f("nopath"), f("c", "c.ts")],
+			[f("a", "a.ts"), f("c", "c.ts")],
 			[
 				{ filename: "a.ts", status: "modified", patch: "PATCH_A" },
 				{ filename: "z.ts", status: "modified", patch: "PATCH_Z" },
@@ -341,8 +341,63 @@ describe("revalidateFindings", () => {
 		};
 		expect(prompt).toContain("PATCH_A");
 		expect(prompt).not.toContain("PATCH_Z");
-		expect(prompt).not.toContain("nopath");
 		expect(prompt).not.toContain("c.ts");
+	});
+
+	it("sends a path-less finding with the PR's patches in file order", async () => {
+		mockGenerateObject.mockResolvedValueOnce({
+			object: { resolved: ["nopath"] },
+		});
+		const out = await revalidateFindings(
+			SEL,
+			[f("a", "a.ts"), f("nopath")],
+			[
+				{ filename: "z.ts", status: "modified", patch: "PATCH_Z" },
+				{ filename: "a.ts", status: "modified", patch: "PATCH_A" },
+				{ filename: "m.ts", status: "modified", patch: "PATCH_M" },
+			],
+		);
+		expect(out).toEqual(["nopath"]);
+		const { prompt } = mockGenerateObject.mock.calls.at(-1)?.[0] as {
+			prompt: string;
+		};
+		expect(prompt).toContain("- nopath \u2014");
+		expect(prompt.match(/PATCH_A/g)).toHaveLength(1);
+		expect(prompt.indexOf("PATCH_Z")).toBeLessThan(prompt.indexOf("PATCH_M"));
+	});
+
+	it("leaves a path-less finding carried when the PR's patches exceed the cap", async () => {
+		mockGenerateObject.mockResolvedValueOnce({
+			object: { resolved: [] },
+		});
+		const files = ["a", "b", "c"].map((n) => ({
+			filename: `${n}.ts`,
+			status: "modified",
+			patch: n.repeat(25000),
+		}));
+		await revalidateFindings(SEL, [f("a.ts", "a.ts"), f("nopath")], files);
+		const { prompt } = mockGenerateObject.mock.calls.at(-1)?.[0] as {
+			prompt: string;
+		};
+		const patchChars = prompt.match(/[abc]{1000,}/g)?.join("").length ?? 0;
+		expect(patchChars).toBeLessThanOrEqual(60000);
+		expect(prompt).toContain("FILE: a.ts");
+		expect(prompt).not.toContain("nopath");
+	});
+
+	it("returns [] on model error for a path-less finding", async () => {
+		const err = vi.spyOn(console, "error").mockImplementation(() => {});
+		mockGenerateObject.mockClear();
+		mockGenerateObject.mockRejectedValueOnce(new Error("boom"));
+		expect(
+			await revalidateFindings(
+				SEL,
+				[f("nopath")],
+				[{ filename: "a.ts", status: "modified", patch: "p" }],
+			),
+		).toEqual([]);
+		expect(mockGenerateObject).toHaveBeenCalledTimes(1);
+		err.mockRestore();
 	});
 
 	it("stays under the character cap", async () => {
