@@ -80,8 +80,10 @@ const ERROR_NAMES: readonly ErrorName[] = [
 
 const MARKER_PREFIX = "<!-- ai-review:agents=";
 const MARKER_SUFFIX = " -->";
-const MAX_RECORDS = 20;
-const MAX_MARKER_BYTES = 4096;
+const SOFT_MAX_RECORDS = 20;
+const SOFT_MAX_MARKER_BYTES = 4096;
+const MAX_RECORDS = 40;
+const MAX_MARKER_BYTES = 16384;
 const MAX_FINISH_REASON = 40;
 const MAX_MESSAGE = 300;
 const DEFAULT_LOG_PATH = ".ai-review/logs/agents.jsonl";
@@ -132,28 +134,31 @@ export function formatAgentsMarker(
 	pending: string[],
 	knownSkills: ReadonlySet<string>,
 ): string {
-	let kept = records.filter(
-		(r) =>
-			knownSkills.has(r.skill) && ERROR_NAMES.includes(r.errorName ?? "other"),
-	);
+	let kept = records
+		.map((r) => validRecord(r, knownSkills))
+		.filter((r): r is AgentRecord => r !== null);
 	const retried = new Set(
 		kept.filter((r) => r.attempt === 2).map((r) => r.skill),
 	);
+	const isRetriedFirst = (r: AgentRecord) =>
+		r.attempt === 1 && retried.has(r.skill);
 	const dropOrder = [
-		...kept.filter(
-			(r) => r.status === "ok" && r.attempt === 1 && retried.has(r.skill),
-		),
-		...kept.filter(
-			(r) => r.status === "ok" && !(r.attempt === 1 && retried.has(r.skill)),
-		),
+		...kept.filter((r) => r.status === "ok" && isRetriedFirst(r)),
+		...kept.filter((r) => r.status === "ok" && !isRetriedFirst(r)),
 	];
 	const pend = pending.filter((s) => knownSkills.has(s));
 	const tooBig = () =>
-		kept.length > MAX_RECORDS || render(kept, pend).length > MAX_MARKER_BYTES;
+		kept.length > SOFT_MAX_RECORDS ||
+		render(kept, pend).length > SOFT_MAX_MARKER_BYTES;
 	for (const victim of dropOrder) {
 		if (!tooBig()) break;
 		kept = kept.filter((r) => r !== victim);
 	}
+	for (const victim of kept.filter(isRetriedFirst)) {
+		if (kept.length <= MAX_RECORDS) break;
+		kept = kept.filter((r) => r !== victim);
+	}
+	if (kept.length > MAX_RECORDS) kept = kept.slice(-MAX_RECORDS);
 	return render(kept, pend);
 }
 

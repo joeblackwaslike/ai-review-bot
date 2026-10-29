@@ -1,3 +1,4 @@
+import * as fs from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,6 +12,15 @@ import {
 	parseAgentsMarker,
 	toRecord,
 } from "./agent-log.js";
+
+vi.mock("node:fs", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("node:fs")>();
+	return {
+		...actual,
+		mkdirSync: vi.fn(actual.mkdirSync),
+		appendFileSync: vi.fn(actual.appendFileSync),
+	};
+});
 
 const KNOWN = new Set(["code-reviewer.md", "security-sast.md", "a.md"]);
 const FOOTER = "\n\n---\n*Model: x*\n";
@@ -139,6 +149,69 @@ describe("agents marker", () => {
 	});
 });
 
+describe("marker bounds", () => {
+	const SKILLS = Array.from({ length: 9 }, (_, i) => `s${i}.md`);
+	const known = new Set(SKILLS);
+	const errAt = (skill: string, attempt: 1 | 2): AgentRecord => ({
+		...err(skill),
+		attempt,
+		httpStatus: 503,
+		finishReason: "length",
+		errorName: "AI_APICallError",
+	});
+
+	it("round-trips 18 non-ok records over 3 KB with pending intact", () => {
+		const recs = SKILLS.flatMap((s) => [errAt(s, 1), errAt(s, 2)]);
+		const line = formatAgentsMarker(recs, ["s0.md", "s1.md"], known);
+		expect(line.length).toBeGreaterThan(3000);
+		expect(parseAgentsMarker(body(line), known)).toEqual({
+			records: recs,
+			pending: ["s0.md", "s1.md"],
+		});
+	});
+
+	it("round-trips 30 non-ok records, some retried", () => {
+		const recs = [
+			...SKILLS.flatMap((s) => [errAt(s, 1), errAt(s, 2)]),
+			...SKILLS.slice(0, 6).map((s) => errAt(s, 2)),
+			...SKILLS.slice(0, 6).map((s) => errAt(s, 2)),
+		];
+		expect(recs).toHaveLength(30);
+		const line = formatAgentsMarker(recs, ["s2.md"], known);
+		expect(line.length).toBeGreaterThan(4096);
+		expect(parseAgentsMarker(body(line), known)).toEqual({
+			records: recs,
+			pending: ["s2.md"],
+		});
+	});
+
+	it("past 40 records drops first attempts of retried skills first", () => {
+		const retriedFirst = SKILLS.map((s) => errAt(s, 1));
+		const rest = Array.from({ length: 36 }, (_, i) =>
+			errAt(SKILLS[i % 9] as string, 2),
+		);
+		const parsed = parseAgentsMarker(
+			body(formatAgentsMarker([...retriedFirst, ...rest], ["s3.md"], known)),
+			known,
+		);
+		expect(parsed?.records).toEqual([...retriedFirst.slice(5), ...rest]);
+		expect(parsed?.pending).toEqual(["s3.md"]);
+	});
+
+	it("drops a record with an invalid validated field on write", () => {
+		const line = formatAgentsMarker(
+			[
+				{ ...err("a.md"), class: "bogus" as never },
+				{ ...err("a.md"), httpStatus: Number.NaN },
+				ok("a.md"),
+			],
+			[],
+			KNOWN,
+		);
+		expect(parseAgentsMarker(body(line), KNOWN)?.records).toEqual([ok("a.md")]);
+	});
+});
+
 describe("toRecord", () => {
 	it("maps usage names", () => {
 		expect(
@@ -215,6 +288,8 @@ describe("logAgentRecords", () => {
 		file = join(dir, "sub", "agents.jsonl");
 	});
 	afterEach(async () => {
+		vi.mocked(fs.mkdirSync).mockClear();
+		vi.mocked(fs.appendFileSync).mockClear();
 		disableAgentLogFile();
 		vi.restoreAllMocks();
 		await rm(dir, { recursive: true, force: true });
@@ -231,6 +306,8 @@ describe("logAgentRecords", () => {
 	it("writes nothing when disabled", async () => {
 		vi.spyOn(console, "log").mockImplementation(() => {});
 		logAgentRecords([ok("a.md")], ctx);
+		expect(fs.mkdirSync).not.toHaveBeenCalled();
+		expect(fs.appendFileSync).not.toHaveBeenCalled();
 		await expect(readFile(file)).rejects.toThrow();
 	});
 
@@ -259,7 +336,6 @@ describe("logAgentRecords", () => {
 	it("swallows write errors", () => {
 		vi.spyOn(console, "log").mockImplementation(() => {});
 		const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-		enableAgentLogFile(join(dir, "file-as-dir"));
 		enableAgentLogFile(join(dir, "\0bad"));
 		expect(() => logAgentRecords([ok("a.md")], ctx)).not.toThrow();
 		expect(errSpy).toHaveBeenCalled();
