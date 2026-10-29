@@ -156,6 +156,48 @@ describe("classifyAgentError", () => {
 		});
 	});
 
+	it("content-filter and length win over empty text", () => {
+		expect(classifyAgentError(noObject("content-filter", ""))).toMatchObject({
+			class: "content_refused",
+		});
+		expect(classifyAgentError(noObject("length", undefined))).toMatchObject({
+			class: "output_truncated",
+		});
+	});
+
+	it("a network-code cause does not override the HTTP status", () => {
+		const cause = Object.assign(new Error("x"), { code: "ECONNRESET" });
+		expect(classifyAgentError(api(500, cause))).toMatchObject({
+			class: "transient_http",
+			httpStatus: 500,
+		});
+		expect(classifyAgentError(api(429, cause))).toMatchObject({
+			class: "unknown",
+			httpStatus: 429,
+		});
+		expect(classifyAgentError(api(400, cause))).toMatchObject({
+			class: "invalid_request",
+			httpStatus: 400,
+		});
+	});
+
+	it("null and undefined are unknown/other", () => {
+		for (const v of [null, undefined]) {
+			expect(classifyAgentError(v)).toEqual({
+				class: "unknown",
+				retryable: false,
+				errorName: "other",
+			});
+		}
+	});
+
+	it("a circular cause chain terminates", () => {
+		const a = new Error("a");
+		const b = new Error("b", { cause: a });
+		(a as { cause?: unknown }).cause = b;
+		expect(classifyAgentError(a)).toMatchObject({ class: "unknown" });
+	});
+
 	it("thrown string is unknown/other", () => {
 		expect(classifyAgentError("boom")).toEqual({
 			class: "unknown",

@@ -99,22 +99,24 @@ export function classifyAgentError(err: unknown): AgentFailure {
 	const wasRetry = RetryError.isInstance(err);
 	const cur: unknown = wasRetry ? (err as RetryError).lastError : err;
 
-	let recognized: NoObjectGeneratedError | APICallError | undefined;
+	let noObject: NoObjectGeneratedError | undefined;
+	let apiCall: APICallError | undefined;
 	let probe = cur;
 	for (let i = 0; i <= MAX_CAUSE_DEPTH && probe != null; i++) {
-		if (
-			NoObjectGeneratedError.isInstance(probe) ||
-			APICallError.isInstance(probe)
-		) {
-			recognized = probe;
+		if (NoObjectGeneratedError.isInstance(probe)) {
+			noObject = probe;
+			break;
+		}
+		if (APICallError.isInstance(probe)) {
+			apiCall = probe;
 			break;
 		}
 		probe = causeOf(probe);
 	}
 
-	if (recognized && NoObjectGeneratedError.isInstance(recognized)) {
+	if (noObject) {
 		const name = "AI_NoObjectGeneratedError";
-		const finishReason = recognized.finishReason;
+		const finishReason = noObject.finishReason;
 		const extra = finishReason ? { finishReason } : {};
 		if (finishReason === "content-filter") {
 			return result("content_refused", false, name, extra);
@@ -122,19 +124,19 @@ export function classifyAgentError(err: unknown): AgentFailure {
 		if (finishReason === "length") {
 			return result("output_truncated", false, name, extra);
 		}
-		if (!recognized.text?.trim()) return result("no_output", true, name, extra);
+		if (!noObject.text?.trim()) return result("no_output", true, name, extra);
 		return result("schema_mismatch", true, name, extra);
 	}
 
-	if (recognized) {
-		const status = (recognized as APICallError).statusCode;
+	if (apiCall) {
+		const status = apiCall.statusCode;
 		const name = "AI_APICallError";
 		if (status !== undefined) {
 			const c = classifyApiStatus(status);
 			if (c) return result(c.cls, c.retryable, name, { httpStatus: status });
 			return result("unknown", false, name, { httpStatus: status });
 		}
-		if (hasNetworkCode(recognized)) return result("network", true, name);
+		if (hasNetworkCode(apiCall)) return result("network", true, name);
 		return result("unknown", false, name);
 	}
 
