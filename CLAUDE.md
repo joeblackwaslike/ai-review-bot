@@ -5,11 +5,11 @@ This file provides context and conventions for AI coding agents working on this 
 ## Build & Test
 
 ```bash
-npm install
-npm run typecheck    # tsc --noEmit — must pass before any commit
-npm run lint         # biome check — must pass before any commit
-npm run test         # vitest run (1046 tests) — must pass before any commit
-npm run dev          # vercel dev — local server on :3000
+pnpm install
+pnpm typecheck    # tsc --noEmit — must pass before any commit
+pnpm lint         # biome check — must pass before any commit
+pnpm test         # vitest run (1046 tests) — must pass before any commit
+pnpm dev          # vercel dev — local server on :3000
 ```
 
 All three quality gates must pass before opening a PR.
@@ -123,7 +123,7 @@ Each skill file is loaded by `buildAgentSystemPrompt(skillPath, ...)` in `src/pr
 - **TypeScript ESM** — `"type": "module"` in `package.json`; all imports use `.js` extensions even for `.ts` source files
 - **No default exports** — named exports only
 - **Vitest** for tests; test files colocated with source (`src/*.test.ts`)
-- **Biome** for lint + format; run `npm run lint -- --write` to auto-fix
+- **Biome** for lint + format; run `pnpm lint -- --write` to auto-fix
 - **Conventional commits** for commit messages (`feat:`, `fix:`, `refactor:`, etc.)
 - **No mocking of real skill files in tests** — `./prompt.js` is mocked wholesale in `review.test.ts`; the test mock exports `buildUserMessage` and `buildAgentSystemPrompt`
 - **Structured output via `generateObject`** — `ModelReviewSchema` (zod, `src/review.ts`) is the single source of truth for `ModelReview`. The AI SDK sends it as native structured output (`output_config.format`) on Claude 5.5. Never force a tool call instead: Opus/Sonnet 5.5 return a 400 on forced `tool_choice`, and `@ai-sdk/anthropic` < 3.0.135 fell back to exactly that for 5.5 model IDs it didn't recognize (ai-review-bot-j2j)
@@ -134,7 +134,7 @@ Each skill file is loaded by `buildAgentSystemPrompt(skillPath, ...)` in `src/pr
 **Tier 1 skill:**
 1. Add or update a `.md` file in `skills/`
 2. Add its path to the `TIER1_SKILLS` array in `src/review.ts`
-3. Run `npm test` — no test changes required unless the skill changes the output schema
+3. Run `pnpm test` — no test changes required unless the skill changes the output schema
 
 **Tier 2 skill:**
 1. Add a `.md` file in `skills/`

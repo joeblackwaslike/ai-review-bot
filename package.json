@@ -10,9 +10,6 @@
 	"homepage": "https://joeblackwaslike.github.io/ai-review-bot/",
 	"license": "MIT",
 	"author": "Joe Black <joeblackwaslike@gmail.com>",
-	"workspaces": [
-		"dashboard"
-	],
 	"keywords": [
 		"code-review",
 		"github-app",
@@ -35,7 +32,7 @@
 	"scripts": {
 		"dev": "vercel dev",
 		"build": "tsc -p tsconfig.build.json",
-		"prepublishOnly": "npm run build && npm run typecheck && npm run test",
+		"prepublishOnly": "pnpm build && pnpm typecheck && pnpm test",
 		"typecheck": "tsc --noEmit",
 		"lint": "biome check .",
 		"test": "vitest run",
@@ -48,6 +45,7 @@
 	"dependencies": {
 		"@ai-sdk/anthropic": "^3.0.135",
 		"@ai-sdk/openai": "^3.0.131",
+		"@ai-sdk/provider": "^3.0.19",
 		"@anthropic-ai/sdk": "^0.39.0",
 		"@upstash/qstash": "^2.11.1",
 		"@upstash/redis": "^1.38.0",
@@ -66,9 +64,9 @@
 		"@types/pg": "^8.20.0",
 		"drizzle-kit": "^0.31.10",
 		"pg-mem": "^3.0.14",
-		"tsx": "^4.19.4",
 		"typescript": "^5.8.3",
 		"vitepress": "^1.6.4",
 		"vitest": "^3.2.4"
-	}
+	},
+	"packageManager": "pnpm@11.0.8"
 }

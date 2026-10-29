@@ -12,27 +12,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: "npm"
+          cache: "pnpm"
 
-      - run: npm ci
+      - run: pnpm install --frozen-lockfile
 
       - name: Typecheck
-        run: npm run typecheck
+        run: pnpm typecheck
 
       - name: Lint
-        run: npm run lint
+        run: pnpm lint
 
       - name: Test
-        run: npm test
+        run: pnpm test
 
       - name: Typecheck (dashboard)
-        run: npm run typecheck --workspace=dashboard
+        run: pnpm --filter dashboard typecheck
 
       - name: Test (dashboard)
-        run: npm run test --workspace=dashboard
+        run: pnpm --filter dashboard test
 
       - name: Build (dashboard)
-        run: npm run build --workspace=dashboard
+        run: pnpm --filter dashboard build
