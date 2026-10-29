@@ -148,3 +148,26 @@ export function classifyAgentError(err: unknown): AgentFailure {
 	if (hasNetworkCode(cur)) return result("network", true, name);
 	return result("unknown", false, name);
 }
+
+/** Tokens the SDK attached to a failed generation, mapped to the app's names. */
+export function usageFromError(
+	err: unknown,
+): { promptTokens: number; completionTokens: number } | undefined {
+	let probe: unknown = RetryError.isInstance(err)
+		? (err as RetryError).lastError
+		: err;
+	for (let i = 0; i <= MAX_CAUSE_DEPTH && probe != null; i++) {
+		if (NoObjectGeneratedError.isInstance(probe)) {
+			const { inputTokens, outputTokens } = probe.usage ?? {};
+			if (inputTokens === undefined && outputTokens === undefined) {
+				return undefined;
+			}
+			return {
+				promptTokens: inputTokens ?? 0,
+				completionTokens: outputTokens ?? 0,
+			};
+		}
+		probe = causeOf(probe);
+	}
+	return undefined;
+}

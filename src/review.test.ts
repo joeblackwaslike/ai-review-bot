@@ -1,3 +1,4 @@
+import { NoObjectGeneratedError } from "ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { KvClient } from "./feedback/kv.js";
 import { createAIModel } from "./models.js";
@@ -44,7 +45,8 @@ const mockGenerateObject = vi.hoisted(() => vi.fn());
 const mockBuildUserMessage = vi.hoisted(() => vi.fn().mockReturnValue("user"));
 const mockBuildAgentSystemPrompt = vi.hoisted(() => vi.fn());
 
-vi.mock("ai", () => ({
+vi.mock("ai", async (importOriginal) => ({
+	...(await importOriginal<typeof import("ai")>()),
 	generateObject: mockGenerateObject,
 }));
 
@@ -6063,5 +6065,165 @@ describe("delta scoping without KV", () => {
 		expect(decision?.event).toBe("REQUEST_CHANGES");
 		expect(decision?.body).toContain("**Leaky handle** (`src/a.ts:7`)");
 		expect(decision?.body).toContain("ledger: warm");
+	});
+});
+
+describe("classified agent failures with usage", () => {
+	const noObject = (finishReason: string, text: string) =>
+		new NoObjectGeneratedError({
+			message: "no object",
+			text,
+			response: {} as never,
+			usage: { inputTokens: 700, outputTokens: 30 } as never,
+			finishReason: finishReason as never,
+		});
+
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+		vi.restoreAllMocks();
+	});
+
+	function ctx() {
+		return {
+			octokit: {
+				request: vi.fn(async (route: string) =>
+					route.includes("/reviews") ? { data: [] } : { data: {} },
+				),
+				paginate: vi.fn(async () => []),
+			} as never,
+			owner: "o",
+			repo: "r",
+			pullNumber: 7,
+			headSha: "abc",
+			title: "t",
+			body: null,
+			additions: 0,
+			deletions: 0,
+			changedFiles: 0,
+			labels: [],
+			commentPrefix: "ai-review-bot",
+			extraInstructions: "",
+			force: true,
+			provider: "anthropic" as const,
+			feedbackEnabled: false,
+			agentConcurrency: 1,
+			agentBudgetMs: 600_000,
+			tier2Enabled: false,
+		};
+	}
+
+	const outcomeLogs = (log: { mock: { calls: unknown[][] } }) =>
+		log.mock.calls
+			.filter((c) => c[0] === "agent outcome")
+			.map((c) => c as [string, Record<string, unknown>]);
+
+	it("returns an error outcome with class, usage and duration", async () => {
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		mockGenerateObject.mockRejectedValue(noObject("length", "{"));
+		const out = await runAgent("code-reviewer.md", "S", sel, "");
+		expect(out).toMatchObject({
+			status: "error",
+			failure: { class: "output_truncated", retryable: false },
+			usage: { promptTokens: 700, completionTokens: 30 },
+			message: "no object",
+		});
+		expect((out as { durationMs: number }).durationMs).toBeGreaterThanOrEqual(
+			0,
+		);
+	});
+
+	it("leaves usage undefined when the error carries none", async () => {
+		mockGenerateObject.mockRejectedValue(new Error("boom"));
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		const out = await runAgent("code-reviewer.md", "S", sel, "");
+		expect(out).toMatchObject({ status: "error" });
+		expect((out as { usage?: unknown }).usage).toBeUndefined();
+	});
+
+	it("keeps a deadline abort as skipped with no usage", async () => {
+		const c = new AbortController();
+		c.abort();
+		mockGenerateObject.mockRejectedValue(noObject("length", "{"));
+		const out = await runAgent("code-reviewer.md", "S", sel, "", {
+			abortSignal: c.signal,
+		});
+		expect(out).toEqual({ status: "skipped", skillPath: "code-reviewer.md" });
+	});
+
+	it("counts failed-attempt tokens in cost and logs one record per agent", async () => {
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		const base = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+		);
+		const ok = { ...base, object: { ...base.object, summary: "s" } };
+		mockGenerateObject
+			.mockRejectedValueOnce(noObject("length", "SECRET MODEL TEXT"))
+			.mockResolvedValue(ok);
+		await buildReview(ctx());
+		const recs = outcomeLogs(log);
+		expect(recs).toHaveLength(TIER1_SKILLS.length);
+		const failed = recs.find((c) => c[1].status === "error")?.[1];
+		expect(failed).toMatchObject({
+			owner: "o",
+			repo: "r",
+			pr: 7,
+			sha: "abc",
+			class: "output_truncated",
+			inputTokens: 700,
+			outputTokens: 30,
+		});
+		expect(JSON.stringify(recs)).not.toContain("SECRET MODEL TEXT");
+		expect(failed).not.toHaveProperty("message");
+		expect(failed).not.toHaveProperty("text");
+	});
+
+	it("logs every record before the all-agents-failed throw", async () => {
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		mockGenerateObject.mockRejectedValue(new Error("boom"));
+		await expect(buildReview(ctx())).rejects.toThrow(
+			"All review agents failed",
+		);
+		expect(outcomeLogs(log)).toHaveLength(TIER1_SKILLS.length);
+	});
+
+	it("logs records for an all-rate-limited round", async () => {
+		vi.useFakeTimers();
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		mockGenerateObject.mockRejectedValue(
+			Object.assign(new Error("429"), {
+				statusCode: 429,
+				responseHeaders: { "retry-after": "42" },
+			}),
+		);
+		const p = buildReview(ctx());
+		await vi.runAllTimersAsync();
+		expect((await p)?.event).toBe("RATE_LIMITED");
+		const recs = outcomeLogs(log);
+		expect(recs).toHaveLength(TIER1_SKILLS.length);
+		expect(recs[0][1].status).toBe("rate_limited");
+	});
+
+	it("logs records for an all-quota-exhausted round", async () => {
+		vi.useFakeTimers();
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		mockGenerateObject.mockRejectedValue(
+			Object.assign(new Error("insufficient_quota"), { statusCode: 429 }),
+		);
+		const p = buildReview(ctx());
+		await vi.runAllTimersAsync();
+		expect((await p)?.event).toBe("QUOTA_EXHAUSTED");
+		const recs = outcomeLogs(log);
+		expect(recs).toHaveLength(TIER1_SKILLS.length);
+		expect(recs[0][1].status).toBe("quota_exhausted");
 	});
 });

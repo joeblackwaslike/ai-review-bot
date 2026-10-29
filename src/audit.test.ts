@@ -37,6 +37,36 @@ const selection: ModelSelection = {
 	model: "test-model",
 };
 
+describe("runAuditPass failed-attempt cost", () => {
+	it("counts usage from error outcomes and logs one record per agent", async () => {
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		(runAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
+			status: "error",
+			failure: {
+				class: "output_truncated",
+				retryable: false,
+				errorName: "AI_NoObjectGeneratedError",
+			},
+			usage: { promptTokens: 100, completionTokens: 7 },
+			durationMs: 5,
+			message: "x",
+		});
+		const { usage } = await runAuditPass({
+			files: [{ path: "a.ts", content: "x" }],
+			selection,
+			extraInstructions: "",
+			meta: { owner: "o", repo: "r", ref: "local" },
+		});
+		expect(usage.promptTokens).toBe(100 * TIER1_SKILLS.length);
+		expect(usage.completionTokens).toBe(7 * TIER1_SKILLS.length);
+		expect(log.mock.calls.filter((c) => c[0] === "agent outcome")).toHaveLength(
+			TIER1_SKILLS.length,
+		);
+		log.mockRestore();
+	});
+});
+
 describe("runAuditPass", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -81,6 +111,8 @@ describe("runAuditPass", () => {
 		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 		(runAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
 			status: "error",
+			failure: { class: "unknown", retryable: false, errorName: "Error" },
+			durationMs: 1,
 		});
 		const {
 			review: merged,
@@ -247,6 +279,8 @@ describe("runLocalAudit (dry-run)", () => {
 		]);
 		(runAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
 			status: "error",
+			failure: { class: "unknown", retryable: false, errorName: "Error" },
+			durationMs: 1,
 		});
 
 		const fs = await import("node:fs/promises");
@@ -624,6 +658,8 @@ describe("runLocalReview", () => {
 		]);
 		(runAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
 			status: "error",
+			failure: { class: "unknown", retryable: false, errorName: "Error" },
+			durationMs: 1,
 		});
 		const fs = await import("node:fs/promises");
 		(fs.writeFile as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);

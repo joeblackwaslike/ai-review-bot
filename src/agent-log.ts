@@ -37,6 +37,7 @@ export type OutcomeLike =
 			failure: AgentFailure;
 			usage?: TokenUsage;
 			durationMs: number;
+			message?: string;
 	  }
 	| { status: "rate_limited" }
 	| { status: "quota_exhausted" }

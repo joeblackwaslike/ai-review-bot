@@ -1,6 +1,12 @@
 import { APICallError } from "@ai-sdk/provider";
 import { generateObject } from "ai";
 import { z } from "zod";
+import {
+	type AgentFailure,
+	classifyAgentError,
+	usageFromError,
+} from "./agent-failure.js";
+import { logAgentRecords, toRecord } from "./agent-log.js";
 import type { ResolvedAuth } from "./auth.js";
 import { deriveBaseline } from "./baseline.js";
 import { dedupeClaims, isSameClaim } from "./claim-dedupe.js";
@@ -163,11 +169,19 @@ export type AgentOutcome =
 			status: "ok";
 			review: ModelReview;
 			usage: TokenUsage;
+			durationMs: number;
 			rateLimit?: RateLimitInfo;
 	  }
 	| { status: "rate_limited"; rateLimit: RateLimitInfo }
 	| { status: "quota_exhausted"; provider: ModelSelection["provider"] }
-	| { status: "error" }
+	| {
+			status: "error";
+			failure: AgentFailure;
+			usage?: TokenUsage;
+			durationMs: number;
+			/** For the local log file only; never in records or the marker. */
+			message?: string;
+	  }
 	/** Never started: the run was out of wall-clock before its turn came up. */
 	| { status: "skipped"; skillPath: string };
 
@@ -413,6 +427,7 @@ export async function runAgent(
 		promptOptions,
 	);
 
+	const startedAt = Date.now();
 	try {
 		const { object, usage, providerMetadata, response } = await generateObject({
 			model: createAIModel(selection, auth),
@@ -455,6 +470,7 @@ export async function runAgent(
 				promptTokens: usage.inputTokens ?? 0,
 				completionTokens: usage.outputTokens ?? 0,
 			},
+			durationMs: Date.now() - startedAt,
 			rateLimit: readRateLimitHeaders(
 				response?.headers as Record<string, string> | undefined,
 			),
@@ -479,8 +495,14 @@ export async function runAgent(
 			console.warn("agent rate-limited", { skillPath, ...rl });
 			return { status: "rate_limited", rateLimit: rl };
 		}
-		console.error("Agent threw during generateObject", { skillPath, err });
-		return { status: "error" };
+		const usage = usageFromError(err);
+		return {
+			status: "error",
+			failure: classifyAgentError(err),
+			...(usage && { usage }),
+			durationMs: Date.now() - startedAt,
+			message: err instanceof Error ? err.message : String(err),
+		};
 	}
 }
 
@@ -1849,6 +1871,25 @@ export async function buildReview(
 	let totalPromptTokens = 0;
 	let totalCompletionTokens = 0;
 
+	const skillName = (path: string) => path.split("/").pop() ?? path;
+	const messages: Record<string, string> = {};
+	const records = outcomes.map((o, i) => {
+		const name = skillName(allSkills[i]?.skillPath ?? "unknown");
+		if (o.status === "error" && o.message !== undefined) {
+			messages[name] = o.message;
+		}
+		return toRecord(name, 1, o);
+	});
+	logAgentRecords(records, {
+		owner: context.owner,
+		repo: context.repo,
+		pr: context.pullNumber,
+		sha: context.headSha,
+		provider: context.provider,
+		model: selection.model,
+		messages,
+	});
+
 	outcomes.forEach((o, i) => {
 		if (o.status === "ok") {
 			agentResults.push(o.review);
@@ -1865,6 +1906,10 @@ export async function buildReview(
 			// attaching it to *this* skill and to the PR — without it a crashed
 			// agent reads identically to one that ran clean and found nothing.
 			errored.push(allSkills[i]?.skillPath ?? "unknown");
+			if (o.usage) {
+				totalPromptTokens += o.usage.promptTokens;
+				totalCompletionTokens += o.usage.completionTokens;
+			}
 		}
 	});
 
