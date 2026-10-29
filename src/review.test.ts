@@ -1911,7 +1911,6 @@ describe("buildReview triage gate — SKIP", () => {
 			"joeblackwaslike",
 			"ai-review-bot",
 			1,
-			null,
 		);
 		expect(persisted?.lastReviewedSha).toBe(headSha);
 		expect(persisted?.event).toBe("APPROVE");
@@ -1943,7 +1942,7 @@ describe("buildReview triage gate — end-to-end multi-bot flow", () => {
 		// src/a.ts spans right-side lines 1..20, so the Bug at line 5 anchors.
 		const aFile = buildPullFile("src/a.ts", TWENTY_LINE_PATCH);
 		const loadState = () =>
-			loadReviewState(client, provider, owner, repo, pull, null);
+			loadReviewState(client, provider, owner, repo, pull);
 
 		// The exact id Task-7 persistence writes for an inline finding is
 		// findingId(path, line, title) with title = the model's inline title.
@@ -2230,7 +2229,7 @@ describe("buildReview triage gate — INCREMENTAL carries forward open prior fin
 		const repo = baseContext.repo;
 		const pull = baseContext.pullNumber;
 		const loadState = () =>
-			loadReviewState(client, provider, owner, repo, pull, null);
+			loadReviewState(client, provider, owner, repo, pull);
 
 		// Prior open finding F on file A, persisted at sha1.
 		const sha1 = "aaaaaaaaaaaa1111";
@@ -2328,7 +2327,7 @@ describe("buildReview triage gate — FULL carries forward open prior findings",
 		const repo = baseContext.repo;
 		const pull = baseContext.pullNumber;
 		const loadState = () =>
-			loadReviewState(client, provider, owner, repo, pull, null);
+			loadReviewState(client, provider, owner, repo, pull);
 
 		// Prior open finding F, persisted at sha1.
 		const sha1 = "aaaaaaaaaaaa1111";
@@ -4600,7 +4599,6 @@ describe("buildReview ledger suppression", () => {
 			baseContext.owner,
 			baseContext.repo,
 			baseContext.pullNumber,
-			null,
 		);
 	}
 

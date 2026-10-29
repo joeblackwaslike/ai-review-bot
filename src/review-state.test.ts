@@ -49,73 +49,32 @@ describe("review-state", () => {
 			reviewCount: 0,
 		};
 		await saveReviewState(client, "anthropic", "o", "r", 7, state);
-		expect(
-			await loadReviewState(client, "anthropic", "o", "r", 7, null),
-		).toEqual({ ...state, reviewCount: 1 });
+		expect(await loadReviewState(client, "anthropic", "o", "r", 7)).toEqual({
+			...state,
+			reviewCount: 1,
+		});
 	});
 
 	it("returns null when KV is cold and no prior review is given", async () => {
 		const { client } = fakeKv();
-		expect(
-			await loadReviewState(client, "anthropic", "o", "r", 7, null),
-		).toBeNull();
+		expect(await loadReviewState(client, "anthropic", "o", "r", 7)).toBeNull();
 	});
 
-	it("falls back to a parsed prior GitHub review when KV is cold", async () => {
-		const { client } = fakeKv();
-		const prior =
-			"### ai-review\nReviewed commit: `deadbee`\n\n| Sev | Finding |\n|---|---|\n| 🔴 | Unsafe eval |";
-		const state = await loadReviewState(
-			client,
-			"anthropic",
-			"o",
-			"r",
-			7,
-			prior,
-		);
-		expect(state?.lastReviewedSha).toBe("deadbee");
-		expect(state?.findings.some((f) => f.title.includes("Unsafe eval"))).toBe(
-			true,
-		);
+	it("loadReviewState reads KV only", async () => {
+		const { client, store } = fakeKv();
+		expect(await loadReviewState(client, "anthropic", "o", "r", 7)).toBeNull();
+		store.set(stateKey("anthropic", "o", "r", 8), "{}");
+		expect(await loadReviewState(client, "anthropic", "o", "r", 7)).toBeNull();
 	});
 
-	it("treats valid JSON of the wrong shape as cold (returns null when no priorOwnReview)", async () => {
+	it("treats valid JSON of the wrong shape as cold (returns null)", async () => {
 		const { client, store } = fakeKv();
 		store.set(
 			stateKey("anthropic", "o", "r", 7),
 			JSON.stringify({ wrong: "shape" }),
 		);
-		const result = await loadReviewState(
-			client,
-			"anthropic",
-			"o",
-			"r",
-			7,
-			null,
-		);
+		const result = await loadReviewState(client, "anthropic", "o", "r", 7);
 		expect(result).toBeNull();
-	});
-
-	it("falls back to priorOwnReview when KV holds valid JSON of the wrong shape", async () => {
-		const { client, store } = fakeKv();
-		store.set(
-			stateKey("anthropic", "o", "r", 7),
-			JSON.stringify({ wrong: "shape" }),
-		);
-		const prior =
-			"### ai-review\nReviewed commit: `abc1234`\n\n| Sev | Finding |\n|---|---|\n| 🔴 | Null deref |";
-		const result = await loadReviewState(
-			client,
-			"anthropic",
-			"o",
-			"r",
-			7,
-			prior,
-		);
-		expect(result?.lastReviewedSha).toBe("abc1234");
-		expect(result?.findings.some((f) => f.title.includes("Null deref"))).toBe(
-			true,
-		);
 	});
 
 	// Its sibling (valid JSON, wrong shape) logs a console.warn above; this one
@@ -128,14 +87,7 @@ describe("review-state", () => {
 			const { client, store } = fakeKv();
 			store.set(stateKey("anthropic", "o", "r", 7), "{not valid json");
 
-			const result = await loadReviewState(
-				client,
-				"anthropic",
-				"o",
-				"r",
-				7,
-				null,
-			);
+			const result = await loadReviewState(client, "anthropic", "o", "r", 7);
 
 			expect(result).toBeNull();
 			expect(warn).toHaveBeenCalledWith(
@@ -169,14 +121,7 @@ describe("review-state", () => {
 			reviewedAt: new Date().toISOString(),
 		};
 		await saveReviewState(client, "anthropic", "o", "r", 1, state);
-		const loaded = await loadReviewState(
-			client,
-			"anthropic",
-			"o",
-			"r",
-			1,
-			null,
-		);
+		const loaded = await loadReviewState(client, "anthropic", "o", "r", 1);
 		expect(loaded?.findings[0].severity).toBe("P1");
 	});
 
@@ -198,14 +143,7 @@ describe("review-state", () => {
 			reviewedAt: new Date().toISOString(),
 		};
 		await saveReviewState(client, "anthropic", "o", "r", 2, state);
-		const loaded = await loadReviewState(
-			client,
-			"anthropic",
-			"o",
-			"r",
-			2,
-			null,
-		);
+		const loaded = await loadReviewState(client, "anthropic", "o", "r", 2);
 		expect(loaded?.findings[0].severity).toBe("P2");
 	});
 
@@ -227,14 +165,7 @@ describe("review-state", () => {
 			reviewedAt: new Date().toISOString(),
 		};
 		await saveReviewState(client, "anthropic", "o", "r", 3, state);
-		const loaded = await loadReviewState(
-			client,
-			"anthropic",
-			"o",
-			"r",
-			3,
-			null,
-		);
+		const loaded = await loadReviewState(client, "anthropic", "o", "r", 3);
 		expect(loaded?.findings[0].severity).toBe("P3");
 	});
 
@@ -256,29 +187,15 @@ describe("review-state", () => {
 			reviewedAt: new Date().toISOString(),
 		};
 		await saveReviewState(client, "anthropic", "o", "r", 4, state);
-		const loaded = await loadReviewState(
-			client,
-			"anthropic",
-			"o",
-			"r",
-			4,
-			null,
-		);
+		const loaded = await loadReviewState(client, "anthropic", "o", "r", 4);
 		expect(loaded?.findings[0].severity).toBe("P0");
 	});
 });
 
 describe("reviewCount", () => {
-	it("defaults to 0 for fresh state from parsePriorReview path", async () => {
+	it("defaults to 0 for a cold KV", async () => {
 		const { client } = fakeKv();
-		const loaded = await loadReviewState(
-			client,
-			"anthropic",
-			"o",
-			"r",
-			1,
-			null,
-		);
+		const loaded = await loadReviewState(client, "anthropic", "o", "r", 1);
 		expect(loaded).toBeNull();
 	});
 
@@ -292,14 +209,7 @@ describe("reviewCount", () => {
 			reviewCount: 0,
 		};
 		await saveReviewState(client, "anthropic", "o", "r", 5, state);
-		const loaded = await loadReviewState(
-			client,
-			"anthropic",
-			"o",
-			"r",
-			5,
-			null,
-		);
+		const loaded = await loadReviewState(client, "anthropic", "o", "r", 5);
 		expect(loaded?.reviewCount).toBe(1);
 	});
 
@@ -313,60 +223,13 @@ describe("reviewCount", () => {
 			reviewCount: 0,
 		};
 		await saveReviewState(client, "anthropic", "o", "r", 6, base);
-		const after1 = await loadReviewState(
-			client,
-			"anthropic",
-			"o",
-			"r",
-			6,
-			null,
-		);
+		const after1 = await loadReviewState(client, "anthropic", "o", "r", 6);
 		expect(after1?.reviewCount).toBe(1);
 
 		if (!after1) throw new Error("expected after1 to be non-null");
 		await saveReviewState(client, "anthropic", "o", "r", 6, after1);
-		const after2 = await loadReviewState(
-			client,
-			"anthropic",
-			"o",
-			"r",
-			6,
-			null,
-		);
+		const after2 = await loadReviewState(client, "anthropic", "o", "r", 6);
 		expect(after2?.reviewCount).toBe(2);
-	});
-
-	it("parsePriorReview recovers SHA and reviewCount from new metadata block", async () => {
-		const { client } = fakeKv();
-		const prior = [
-			"### ai-review-bot",
-			"<!-- ai-review:sha=abc1234567890 -->",
-			"<!-- ai-review:review=3 -->",
-			"<!-- ai-review:readiness=4 -->",
-			"<!-- ai-review:provider=anthropic -->",
-			"<!-- ai-review:model=claude-sonnet-5 -->",
-			"<!-- ai-review:findings=2 -->",
-			"<!-- ai-review:cost=0.012345 -->",
-			"",
-			"| Sev | Category | Finding |",
-			"|---|---|---|",
-			"| 🟠 | bug | **Missing null check** |",
-			"| 🟡 | style | **Unused import** |",
-		].join("\n");
-		const state = await loadReviewState(
-			client,
-			"anthropic",
-			"o",
-			"r",
-			7,
-			prior,
-		);
-		expect(state?.lastReviewedSha).toBe("abc1234567890");
-		expect(state?.reviewCount).toBe(3);
-		expect(state?.findings.some((f) => f.title === "Missing null check")).toBe(
-			true,
-		);
-		expect(state?.findings.some((f) => f.title === "Unused import")).toBe(true);
 	});
 
 	it("tolerates old records missing reviewCount (defaults to 0 before increment)", async () => {
@@ -379,18 +242,11 @@ describe("reviewCount", () => {
 			reviewedAt: new Date().toISOString(),
 		});
 		store.set(key, oldRecord);
-		const loaded = await loadReviewState(
-			client,
-			"anthropic",
-			"o",
-			"r",
-			7,
-			null,
-		);
+		const loaded = await loadReviewState(client, "anthropic", "o", "r", 7);
 		expect(loaded?.reviewCount).toBe(0);
 	});
 
-	it("parseBodyFindings returns the same rows parsePriorReview used", () => {
+	it("parseBodyFindings returns the rows of a review body", () => {
 		const body = [
 			"<!-- ai-review:sha=abc1234567890 -->",
 			"| Sev | Category | Finding |",

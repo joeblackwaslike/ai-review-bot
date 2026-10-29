@@ -166,7 +166,6 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 					owner,
 					repo,
 					pullNumber,
-					null,
 				);
 				return state ? { lastReviewedSha: state.lastReviewedSha } : null;
 			} catch (err) {

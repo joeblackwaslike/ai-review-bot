@@ -1457,7 +1457,6 @@ export async function buildReview(
 					context.owner,
 					context.repo,
 					context.pullNumber,
-					priorOwnReview,
 				)
 			: null;
 	const carryVerdictForward = async (event: ReviewState["event"]) => {
