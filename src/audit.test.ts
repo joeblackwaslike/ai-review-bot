@@ -40,7 +40,7 @@ const selection: ModelSelection = {
 describe("runAuditPass failed-attempt cost", () => {
 	it("counts usage from error outcomes and logs one record per agent", async () => {
 		const log = vi.spyOn(console, "log").mockImplementation(() => {});
-		vi.spyOn(console, "error").mockImplementation(() => {});
+		const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 		(runAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
 			status: "error",
 			failure: {
@@ -64,6 +64,7 @@ describe("runAuditPass failed-attempt cost", () => {
 			TIER1_SKILLS.length,
 		);
 		log.mockRestore();
+		errSpy.mockRestore();
 	});
 });
 

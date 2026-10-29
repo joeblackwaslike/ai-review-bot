@@ -252,7 +252,12 @@ export function logAgentRecords(
 ): void {
 	const { messages, ...ids } = ctx;
 	for (const record of records) {
-		console.log("agent outcome", { ...ids, ...record });
+		const message = messages?.[record.skill]?.slice(0, MAX_MESSAGE);
+		console.log("agent outcome", {
+			...ids,
+			...record,
+			...(message !== undefined && { message }),
+		});
 	}
 	if (!logFilePath) return;
 	try {

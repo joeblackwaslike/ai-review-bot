@@ -1,7 +1,7 @@
 import { NoObjectGeneratedError } from "ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { KvClient } from "./feedback/kv.js";
-import { createAIModel } from "./models.js";
+import { computeCost, createAIModel } from "./models.js";
 import {
 	buildReview,
 	buildReviewComments,
@@ -6165,11 +6165,25 @@ describe("classified agent failures with usage", () => {
 				inline_comments: [],
 			}),
 		);
-		const ok = { ...base, object: { ...base.object, summary: "s" } };
+		const ok = {
+			...base,
+			object: { ...base.object, summary: "s" },
+			usage: { inputTokens: 100_000, outputTokens: 10_000 },
+		};
 		mockGenerateObject
 			.mockRejectedValueOnce(noObject("length", "SECRET MODEL TEXT"))
 			.mockResolvedValue(ok);
-		await buildReview(ctx());
+		const decision = await buildReview(ctx());
+		const okCalls = mockGenerateObject.mock.calls.length - 1;
+		const expected = computeCost(
+			{
+				promptTokens: okCalls * 100_000 + 700,
+				completionTokens: okCalls * 10_000 + 30,
+			},
+			decision?.metadata.model ?? "",
+		);
+		expect(expected).toBeGreaterThan(0);
+		expect(decision?.metadata.cost).toBeCloseTo(expected, 10);
 		const recs = outcomeLogs(log);
 		expect(recs).toHaveLength(TIER1_SKILLS.length);
 		const failed = recs.find((c) => c[1].status === "error")?.[1];
@@ -6183,7 +6197,7 @@ describe("classified agent failures with usage", () => {
 			outputTokens: 30,
 		});
 		expect(JSON.stringify(recs)).not.toContain("SECRET MODEL TEXT");
-		expect(failed).not.toHaveProperty("message");
+		expect(failed).toMatchObject({ message: "no object" });
 		expect(failed).not.toHaveProperty("text");
 	});
 

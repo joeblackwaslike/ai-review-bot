@@ -1902,9 +1902,9 @@ export async function buildReview(
 		} else if (o.status === "skipped") {
 			skipped.push(o.skillPath);
 		} else if (o.status === "error") {
-			// runAgent already logged the underlying error; what's missing here is
-			// attaching it to *this* skill and to the PR — without it a crashed
-			// agent reads identically to one that ran clean and found nothing.
+			// The outcome record was logged above; this attaches the failure to
+			// the review itself, so a crashed agent does not read the same as one
+			// that ran clean and found nothing. Failed attempts are still billed.
 			errored.push(allSkills[i]?.skillPath ?? "unknown");
 			if (o.usage) {
 				totalPromptTokens += o.usage.promptTokens;

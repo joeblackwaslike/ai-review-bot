@@ -125,6 +125,7 @@ export async function runAuditPass(opts: {
 		);
 		agentsAttempted += outcomes.length;
 		const messages: Record<string, string> = {};
+		// mapWithConcurrency returns outcomes in input order, so index i is TIER1_SKILLS[i].
 		const records = outcomes.map((o, i) => {
 			const name = TIER1_SKILLS[i].split("/").pop() ?? TIER1_SKILLS[i];
 			if (o.status === "error" && o.message !== undefined) {

@@ -303,6 +303,18 @@ describe("logAgentRecords", () => {
 		expect(spy.mock.calls[0]?.[1]).toMatchObject({ skill: "a.md", pr: 4 });
 	});
 
+	it("adds the message, cut to 300 chars, to the console line only when present", () => {
+		const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+		logAgentRecords([err("a.md"), ok("code-reviewer.md")], {
+			...ctx,
+			messages: { "a.md": "x".repeat(500) },
+		});
+		expect(spy.mock.calls[0]?.[1]).toMatchObject({
+			message: "x".repeat(300),
+		});
+		expect(spy.mock.calls[1]?.[1]).not.toHaveProperty("message");
+	});
+
 	it("writes nothing when disabled", async () => {
 		vi.spyOn(console, "log").mockImplementation(() => {});
 		logAgentRecords([ok("a.md")], ctx);
