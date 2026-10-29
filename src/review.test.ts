@@ -33,6 +33,7 @@ import {
 	buildInlineComment,
 	buildModelReview,
 	buildPullFile,
+	buildStrictOctokit,
 	reviewedCommitMarker,
 	reviewsResponse,
 	SIMPLE_PATCH,
@@ -65,6 +66,7 @@ vi.mock("./config.js", () => ({
 
 vi.mock("./prompt.js", () => ({
 	buildUserMessage: mockBuildUserMessage,
+	trimPatch: (patch: string) => patch,
 	// Tagged with the skill path so a test can route a mocked model response to a
 	// specific agent by what it was asked to review, rather than by the position
 	// of the agent in TIER1_SKILLS. Ordering assumptions pass silently when the
@@ -79,9 +81,13 @@ const mockTriageReReview = vi.hoisted(() => vi.fn());
 const mockFetchDeltaMeta = vi.hoisted(() =>
 	vi.fn(async () => ({ files: [], diff: "delta", truncated: false })),
 );
+const mockRevalidateFindings = vi.hoisted(() =>
+	vi.fn(async () => [] as string[]),
+);
 vi.mock("./triage.js", () => ({
 	triageReReview: mockTriageReReview,
 	fetchDeltaMeta: mockFetchDeltaMeta,
+	revalidateFindings: mockRevalidateFindings,
 	// Legacy exports kept so any direct import of fetchDelta/fetchDeltaFiles in
 	// tests continues to resolve (unused by review.ts after the refactor).
 	fetchDelta: vi.fn(async () => "delta"),
@@ -4328,6 +4334,13 @@ describe("buildReview ledger suppression", () => {
 		mockBuildUserMessage.mockReset();
 		mockBuildUserMessage.mockReturnValue("user");
 		mockTriageReReview.mockReset();
+		// Own reviews at an older head now give a GitHub-derived baseline, so
+		// the gate runs without KV. FULL keeps these tests on the whole PR.
+		mockTriageReReview.mockResolvedValue({
+			recommendation: "FULL",
+			resolved: [],
+			newRisk: true,
+		});
 	});
 
 	it("logs one line per suppressed finding without its body", async () => {
@@ -5035,5 +5048,558 @@ describe("buildReview ledger suppression", () => {
 
 			expect(decision?.event).toBe("APPROVE");
 		});
+	});
+});
+
+describe("delta scoping without KV", () => {
+	const OWNER = baseContext.owner;
+	const REPO = baseContext.repo;
+	const HEAD = baseContext.headSha;
+	const OLD = "abcdef1234567890";
+	const REVIEWS_ROUTE = "GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews";
+	const COMMENTS_ROUTE =
+		"GET /repos/{owner}/{repo}/pulls/{pull_number}/comments";
+	const COMPARE_ROUTE = "GET /repos/{owner}/{repo}/compare/{basehead}";
+	const CHECK_RUNS_ROUTE = "POST /repos/{owner}/{repo}/check-runs";
+	const aFile = buildPullFile("src/a.ts", TWENTY_LINE_PATCH);
+	const bFile = buildPullFile("src/b.ts", SIMPLE_PATCH);
+	const fresh = buildModelReview({
+		general_findings: [
+			{
+				title: "Fresh issue",
+				body: "Something new.",
+				severity: "P2",
+				category: "bug",
+				confidence: 0.9,
+				evidence: "src/b.ts:1",
+				suppressible: false,
+			},
+		],
+	}).general_findings[0];
+
+	type OwnReview = {
+		id: number;
+		body: string;
+		state?: string;
+		submitted_at?: string;
+	};
+
+	function ownBody(o: {
+		sha: string;
+		count: number;
+		inline?: string;
+		rows?: string[];
+	}): string {
+		return [
+			"### ai-review-bot",
+			"Summary.",
+			o.inline ?? "Inline comments: none",
+			o.rows?.length
+				? `| Sev | Category | Finding |\n|---|---|---|\n${o.rows.join("\n")}`
+				: "",
+			`<!-- ai-review:sha=${o.sha} -->`,
+			`<!-- ai-review:review=${o.count} -->`,
+		]
+			.filter(Boolean)
+			.join("\n\n");
+	}
+
+	function expectPr(p: Record<string, unknown>) {
+		expect(p.owner).toBe(OWNER);
+		expect(p.repo).toBe(REPO);
+		expect(p.pull_number).toBe(baseContext.pullNumber);
+	}
+
+	function prOctokit(o: {
+		reviews?: OwnReview[];
+		ledgerReviews?: OwnReview[];
+		files?: Array<{ filename: string; status: string; patch?: string }>;
+		compare?: (basehead: string) => unknown;
+		coldLedger?: boolean;
+	}) {
+		const compareCalls: string[] = [];
+		const checkRuns: Array<Record<string, unknown>> = [];
+		const stamp = (rs: OwnReview[]) =>
+			rs.map((r, i) => ({
+				state: "COMMENTED",
+				submitted_at: `2026-10-0${i + 1}T00:00:00Z`,
+				...r,
+			}));
+		const octokit = buildStrictOctokit({
+			[REVIEWS_ROUTE]: (p) => {
+				expectPr(p);
+				// The ledger pages with `page`; buildReview's own fetch paginates.
+				return stamp(
+					p.page !== undefined
+						? (o.ledgerReviews ?? o.reviews ?? [])
+						: (o.reviews ?? []),
+				);
+			},
+			[FILES_ROUTE]: (p) => {
+				expectPr(p);
+				return o.files ?? [aFile, bFile];
+			},
+			[COMMENTS_ROUTE]: (p) => {
+				expectPr(p);
+				return [];
+			},
+			"POST /graphql": (p) => {
+				expect(p.variables).toMatchObject({
+					owner: OWNER,
+					repo: REPO,
+					pr: baseContext.pullNumber,
+				});
+				if (o.coldLedger) return { errors: [{ message: "boom" }] };
+				return {
+					data: {
+						repository: {
+							pullRequest: {
+								author: { login: "joe" },
+								reviewThreads: {
+									nodes: [],
+									pageInfo: { hasNextPage: false, endCursor: null },
+								},
+							},
+						},
+					},
+				};
+			},
+			[COMPARE_ROUTE]: (p) => {
+				expect(p.owner).toBe(OWNER);
+				expect(p.repo).toBe(REPO);
+				compareCalls.push(p.basehead as string);
+				if (!o.compare) throw new Error("compare not expected");
+				return o.compare(p.basehead as string);
+			},
+			[CHECK_RUNS_ROUTE]: (p) => {
+				expect(p.owner).toBe(OWNER);
+				expect(p.repo).toBe(REPO);
+				checkRuns.push(p);
+				return {};
+			},
+		});
+		return {
+			octokit: octokit as unknown as Parameters<
+				typeof buildReview
+			>[0]["octokit"],
+			compareCalls,
+			checkRuns,
+		};
+	}
+
+	/** Routes the mocked model by call shape: revalidation prompts, the summary
+	 * (the only call with a system prompt), and review agents. */
+	function routeModels(o: {
+		agent?: ReturnType<typeof buildModelReview>;
+		resolved?: string[];
+	}) {
+		const revalidatePrompts: string[] = [];
+		mockGenerateObject.mockImplementation(
+			async (args: { prompt?: unknown; system?: unknown }) => {
+				if (
+					typeof args.prompt === "string" &&
+					args.prompt.startsWith("You are checking")
+				) {
+					revalidatePrompts.push(args.prompt);
+					return { object: { resolved: o.resolved ?? [] } };
+				}
+				if (args.system !== undefined)
+					return {
+						object: { summary: "Summary." },
+						usage: { inputTokens: 1, outputTokens: 1 },
+					};
+				return buildGenerateObjectResponse(o.agent ?? buildModelReview());
+			},
+		);
+		return revalidatePrompts;
+	}
+
+	const withFresh = () =>
+		buildModelReview({ event: "COMMENT", general_findings: [fresh] });
+	const reviewedFiles = () =>
+		(
+			mockBuildUserMessage.mock.calls[0]?.[0] as {
+				files: Array<{ filename: string }>;
+			}
+		).files.map((f) => f.filename);
+
+	beforeEach(async () => {
+		const actual =
+			await vi.importActual<typeof import("./triage.js")>("./triage.js");
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+		mockTriageReReview.mockReset();
+		mockFetchDeltaMeta.mockReset();
+		mockFetchDeltaMeta.mockImplementation(
+			actual.fetchDeltaMeta as unknown as typeof mockFetchDeltaMeta,
+		);
+		mockRevalidateFindings.mockReset();
+		mockRevalidateFindings.mockImplementation(
+			actual.revalidateFindings as unknown as typeof mockRevalidateFindings,
+		);
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		vi.spyOn(console, "error").mockImplementation(() => {});
+	});
+
+	afterEach(() => {
+		mockFetchDeltaMeta.mockReset();
+		mockRevalidateFindings.mockReset();
+		vi.restoreAllMocks();
+	});
+
+	it("cold run scopes to the delta", async () => {
+		routeModels({ agent: withFresh() });
+		mockTriageReReview.mockResolvedValue({
+			recommendation: "INCREMENTAL",
+			resolved: [],
+			newRisk: true,
+		});
+		const { octokit, compareCalls } = prOctokit({
+			reviews: [{ id: 11, body: ownBody({ sha: OLD, count: 1 }) }],
+			compare: () => ({ status: "ahead", files: [bFile] }),
+		});
+
+		const decision = await buildReview({ octokit, ...baseContext });
+
+		expect(compareCalls).toEqual([`${OLD}...${HEAD}`]);
+		expect(reviewedFiles()).toEqual(["src/b.ts"]);
+		expect(decision?.body).toContain("scope: delta from abcdef1 (github)");
+		expect(decision?.body).toContain("<!-- ai-review:review=2 -->");
+	});
+
+	it("KV state still wins", async () => {
+		const KV_SHA = "fedcba9876543210";
+		const { client } = fakeKv();
+		await saveReviewState(client, "anthropic", OWNER, REPO, 1, {
+			lastReviewedSha: KV_SHA,
+			event: "COMMENT",
+			findings: [],
+			reviewedAt: "2026-10-01T00:00:00Z",
+		});
+		routeModels({ agent: withFresh() });
+		mockTriageReReview.mockResolvedValue({
+			recommendation: "INCREMENTAL",
+			resolved: [],
+			newRisk: true,
+		});
+		const { octokit, compareCalls } = prOctokit({
+			reviews: [{ id: 11, body: ownBody({ sha: OLD, count: 1 }) }],
+			compare: () => ({ status: "ahead", files: [bFile] }),
+		});
+
+		const decision = await buildReview({ octokit, ...baseContext, kv: client });
+
+		expect(compareCalls).toEqual([`${KV_SHA}...${HEAD}`]);
+		expect(decision?.body).toContain("scope: delta from fedcba9 (kv)");
+	});
+
+	const blockerRow = "| 🟠 | correctness | **Blocker** |";
+
+	it.each([
+		[
+			"compare throws",
+			() => {
+				throw Object.assign(new Error("Not Found"), { status: 404 });
+			},
+		],
+		["compare diverged", () => ({ status: "diverged", files: [bFile] })],
+	])("%s: runs FULL, skips triage, and keeps the baseline blocker", async (_name, compare) => {
+		routeModels({});
+		const { octokit, compareCalls } = prOctokit({
+			reviews: [
+				{ id: 11, body: ownBody({ sha: OLD, count: 1, rows: [blockerRow] }) },
+			],
+			compare,
+		});
+
+		const decision = await buildReview({ octokit, ...baseContext });
+
+		expect(compareCalls).toEqual([`${OLD}...${HEAD}`]);
+		expect(mockTriageReReview).not.toHaveBeenCalled();
+		expect(reviewedFiles()).toEqual(["src/a.ts", "src/b.ts"]);
+		expect(decision?.event).toBe("REQUEST_CHANGES");
+		expect(decision?.body).toContain("**Blocker**");
+		expect(decision?.body).toContain("scope: full (compare failed)");
+		expect(console.warn).toHaveBeenCalledWith(
+			expect.stringContaining("full review"),
+			expect.objectContaining({ pullNumber: 1, reason: "compare failed" }),
+		);
+	});
+
+	it("compare truncated: delta triage is never asked and no resolution applies", async () => {
+		routeModels({});
+		mockTriageReReview.mockResolvedValue({
+			recommendation: "SKIP",
+			resolved: [findingId(null, null, "Blocker")],
+			newRisk: false,
+		});
+		const many = Array.from({ length: 300 }, (_, i) =>
+			buildPullFile(`src/f${i}.ts`, SIMPLE_PATCH),
+		);
+		const { octokit } = prOctokit({
+			reviews: [
+				{ id: 11, body: ownBody({ sha: OLD, count: 1, rows: [blockerRow] }) },
+			],
+			compare: () => ({ status: "ahead", files: many }),
+		});
+
+		const decision = await buildReview({ octokit, ...baseContext });
+
+		expect(mockTriageReReview).not.toHaveBeenCalled();
+		expect(decision?.event).toBe("REQUEST_CHANGES");
+		expect(decision?.body).toContain("**Blocker**");
+		expect(decision?.body).toContain("scope: full (compare truncated)");
+	});
+
+	it("fallback revalidation resolves a fixed finding", async () => {
+		const fixedId = findingId("src/a.ts", 3, "Null deref");
+		const prompts = routeModels({ agent: withFresh(), resolved: [fixedId] });
+		const { octokit } = prOctokit({
+			reviews: [
+				{
+					id: 11,
+					body: ownBody({
+						sha: OLD,
+						count: 1,
+						rows: ["| 🟠 | **Null deref** (`src/a.ts:3`) |"],
+					}),
+				},
+			],
+			compare: () => {
+				throw new Error("gone");
+			},
+		});
+
+		const decision = await buildReview({ octokit, ...baseContext });
+
+		expect(prompts).toHaveLength(1);
+		expect(prompts[0]).toContain(fixedId);
+		expect(prompts[0]).toContain("FILE: src/a.ts");
+		expect(prompts[0]).not.toContain("FILE: src/b.ts");
+		expect(decision?.event).toBe("COMMENT");
+		expect(decision?.body).not.toContain("Null deref");
+	});
+
+	it("title-only finding is not revalidated", async () => {
+		const prompts = routeModels({ agent: withFresh() });
+		const { octokit } = prOctokit({
+			reviews: [
+				{
+					id: 11,
+					body: ownBody({
+						sha: OLD,
+						count: 1,
+						rows: ["| 🟡 | tests | **Missing tests** |"],
+					}),
+				},
+			],
+			compare: () => {
+				throw new Error("gone");
+			},
+		});
+
+		const decision = await buildReview({ octokit, ...baseContext });
+
+		expect(prompts).toHaveLength(0);
+		expect(decision?.event).toBe("REQUEST_CHANGES");
+		expect(decision?.body).toContain("**Missing tests**");
+	});
+
+	it("forced run carries: round 3's baseline holds round 1's and round 2's findings", async () => {
+		const A = { ...fresh, title: "Finding A" };
+		const B = { ...fresh, title: "Finding B" };
+		const R1 = "1111111aaaaaaaaa";
+		const R2 = "2222222bbbbbbbbb";
+
+		routeModels({ agent: buildModelReview({ general_findings: [A] }) });
+		const round1 = await buildReview({
+			octokit: prOctokit({}).octokit,
+			...baseContext,
+			headSha: R1,
+		});
+		expect(round1?.body).toContain("scope: full (first review)");
+
+		routeModels({ agent: buildModelReview({ general_findings: [B] }) });
+		const r1 = { id: 1, body: round1?.body ?? "" };
+		const forced = prOctokit({ reviews: [r1] });
+		const round2 = await buildReview({
+			octokit: forced.octokit,
+			...baseContext,
+			headSha: R2,
+			force: true,
+		});
+		expect(forced.compareCalls).toEqual([]);
+		expect(round2?.body).toContain("scope: full (forced)");
+		expect(round2?.body).toContain("<!-- ai-review:review=2 -->");
+
+		routeModels({ agent: withFresh() });
+		mockTriageReReview.mockResolvedValue({
+			recommendation: "INCREMENTAL",
+			resolved: [],
+			newRisk: true,
+		});
+		const { octokit } = prOctokit({
+			reviews: [r1, { id: 2, body: round2?.body ?? "" }],
+			compare: () => ({ status: "ahead", files: [bFile] }),
+		});
+		await buildReview({ octokit, ...baseContext });
+
+		const open = mockTriageReReview.mock.calls[0]?.[2] as PersistedFinding[];
+		expect(open.map((f) => f.title).sort()).toEqual(["Finding A", "Finding B"]);
+	});
+
+	it("same-head forced run with no KV carries the same-head review's findings and continues the count", async () => {
+		routeModels({});
+		const { octokit, compareCalls } = prOctokit({
+			reviews: [
+				{ id: 5, body: ownBody({ sha: HEAD, count: 3, rows: [blockerRow] }) },
+			],
+		});
+
+		const decision = await buildReview({
+			octokit,
+			...baseContext,
+			force: true,
+		});
+
+		expect(compareCalls).toEqual([]);
+		expect(decision?.event).toBe("REQUEST_CHANGES");
+		expect(decision?.body).toContain("**Blocker**");
+		expect(decision?.body).toContain("<!-- ai-review:review=4 -->");
+		expect(decision?.body).toContain("scope: full (forced)");
+	});
+
+	it("incomplete baseline runs full, carries what was recovered, footer says baseline incomplete", async () => {
+		routeModels({});
+		const { octokit, compareCalls } = prOctokit({
+			reviews: [
+				{
+					id: 11,
+					body: ownBody({
+						sha: OLD,
+						count: 1,
+						inline: "Inline comments: 3",
+						rows: [blockerRow],
+					}),
+				},
+			],
+			coldLedger: true,
+		});
+
+		const decision = await buildReview({ octokit, ...baseContext });
+
+		expect(compareCalls).toEqual([]);
+		expect(reviewedFiles()).toEqual(["src/a.ts", "src/b.ts"]);
+		expect(decision?.event).toBe("REQUEST_CHANGES");
+		expect(decision?.body).toContain("**Blocker**");
+		expect(decision?.body).toContain("scope: full (baseline incomplete)");
+	});
+
+	it("source review missing from the ledger's reviewIds is incomplete", async () => {
+		routeModels({ agent: withFresh() });
+		const older = {
+			id: 10,
+			body: ownBody({ sha: "9999999999999999", count: 1 }),
+		};
+		const { octokit, compareCalls } = prOctokit({
+			reviews: [older, { id: 11, body: ownBody({ sha: OLD, count: 2 }) }],
+			ledgerReviews: [older],
+		});
+
+		const decision = await buildReview({ octokit, ...baseContext });
+
+		expect(compareCalls).toEqual([]);
+		expect(decision?.body).toContain("scope: full (baseline incomplete)");
+	});
+
+	it("two own reviews at one older sha: the later one is the source", async () => {
+		routeModels({});
+		const { octokit } = prOctokit({
+			reviews: [
+				{
+					id: 10,
+					body: ownBody({
+						sha: OLD,
+						count: 1,
+						rows: ["| 🟠 | correctness | **Earlier only** |"],
+					}),
+				},
+				{ id: 11, body: ownBody({ sha: OLD, count: 2, rows: [blockerRow] }) },
+			],
+			compare: () => {
+				throw new Error("gone");
+			},
+		});
+
+		const decision = await buildReview({ octokit, ...baseContext });
+
+		expect(decision?.body).toContain("**Blocker**");
+		expect(decision?.body).not.toContain("Earlier only");
+		expect(decision?.body).toContain("<!-- ai-review:review=3 -->");
+	});
+
+	it("footer scope note: first review", async () => {
+		routeModels({ agent: withFresh() });
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		const { octokit } = prOctokit({});
+
+		const decision = await buildReview({ octokit, ...baseContext });
+
+		expect(decision?.body).toContain("scope: full (first review)");
+		expect(decision?.body).toContain("<!-- ai-review:review=1 -->");
+		expect(log).toHaveBeenCalledWith("review scope", {
+			scope: "scope: full (first review)",
+		});
+	});
+
+	it("footer scope note: triage chose FULL carries and revalidates", async () => {
+		const prompts = routeModels({ agent: withFresh() });
+		mockTriageReReview.mockResolvedValue({
+			recommendation: "FULL",
+			resolved: [],
+			newRisk: true,
+		});
+		const { octokit } = prOctokit({
+			reviews: [
+				{
+					id: 11,
+					body: ownBody({
+						sha: OLD,
+						count: 1,
+						rows: ["| 🟠 | **Null deref** (`src/a.ts:3`) |"],
+					}),
+				},
+			],
+			compare: () => ({ status: "ahead", files: [bFile] }),
+		});
+
+		const decision = await buildReview({ octokit, ...baseContext });
+
+		expect(reviewedFiles()).toEqual(["src/a.ts", "src/b.ts"]);
+		expect(prompts).toHaveLength(1);
+		expect(decision?.event).toBe("REQUEST_CHANGES");
+		expect(decision?.body).toContain("**Null deref**");
+		expect(decision?.body).toContain("scope: full (triage)");
+	});
+
+	it("SKIP with no KV posts nothing and re-stamps the check-run", async () => {
+		routeModels({});
+		mockTriageReReview.mockResolvedValue({
+			recommendation: "SKIP",
+			resolved: [],
+			newRisk: false,
+		});
+		const { octokit, checkRuns } = prOctokit({
+			reviews: [{ id: 11, body: ownBody({ sha: OLD, count: 1 }) }],
+			compare: () => ({ status: "ahead", files: [bFile] }),
+		});
+
+		const decision = await buildReview({ octokit, ...baseContext });
+
+		expect(decision).toBeNull();
+		expect(mockGenerateObject).not.toHaveBeenCalled();
+		expect(checkRuns).toHaveLength(1);
+		expect(checkRuns[0]?.head_sha).toBe(HEAD);
 	});
 });
