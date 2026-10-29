@@ -38,48 +38,56 @@ One record per agent attempt:
 
 | Field | Meaning |
 | --- | --- |
-| `skill` | skill file name without the directory, e.g. `security-sast.md` |
+| `skill` | skill file name without the directory, e.g. `security-sast.md`. Must be one of the known skill names, otherwise the record is dropped from the marker. |
 | `attempt` | 1, or 2 for the retry |
 | `status` | `ok`, `error`, `rate_limited`, `quota_exhausted` or `skipped` |
 | `class` | failure class, only when `status` is `error` |
 | `retryable` | boolean, only when `status` is `error` |
 | `httpStatus` | number, when the error carries one |
 | `finishReason` | the SDK's finish reason, when the error carries one |
-| `errorName` | the error's constructor name |
-| `durationMs`, `promptTokens`, `completionTokens` | for `ok` and for errors that carry usage |
+| `errorName` | one of `AI_NoObjectGeneratedError`, `AI_APICallError`, `AI_RetryError`, `Error` or `other`. The SDK sets these `name` values on its errors, which differ from the constructor names. |
+| `durationMs`, `inputTokens`, `outputTokens` | for `ok` and for errors that carry usage. The SDK calls them `inputTokens` and `outputTokens`; the record uses the same names, and the review's totals keep their existing `promptTokens` and `completionTokens`. |
 
-The record holds no model output and no free-text error message. Review bodies are public on public repositories, and a provider error body or partial model text can quote the diff. The local file adds one more field, `message`, the error message cut to 300 characters, because that file never leaves the machine.
+The record holds no model output and no free-text error message, and no field copies the SDK error's `text`, `response`, `cause` or body. Review bodies are public on public repositories, and a provider error body or partial model text can quote the diff. The local file adds one more field, `message`, the error message cut to 300 characters, because that file never leaves the machine.
 
 ### Where it is kept
 
-- **Review body.** A hidden metadata comment `<!-- ai-review:agents=<json> -->` next to the existing markers, holding the records of the final attempt per agent plus any first attempt that was retried. It is built only from enums and numbers, so it cannot contain `-->`. It is written on every posted review, approvals included. This is the durable copy for the hosted deployment, where the function's file system does not persist and Vercel logs are short lived, and it is readable later with `gh api`.
-- **Console.** One `console.log("agent outcome", record)` per record, replacing the scattered per-status lines that carry less detail.
+- **Review body.** A hidden metadata comment `<!-- ai-review:agents=<json> -->` in the existing marker block, holding the records of the final attempt per agent plus any first attempt that was retried. Every field is an enum from a closed list, a boolean or a number, so no value can contain `-->`; the writer still escapes `<`, `>` and `-->` defensively. It is written on every posted review, approvals included, and is bounded to 20 records and 4 KB; past that the writer keeps one record per class with a count. It is the durable copy for the hosted deployment, where the function's file system does not persist and Vercel logs are short lived, and it is readable later with `gh api`.
+- **Reading it back.** A review body can quote another review, and model-written summary text precedes the markers. The parser therefore reads only lines that start at column 0 with `<!-- ai-review:` inside the final metadata block (the lines just above the closing `---` footer), rejects a body in which a key appears twice, validates every record against the closed lists, and treats anything that fails as "no information", never as an error. Selecting the baseline source by review author, instead of by body content, is a separate existing gap and is not part of this change.
+- **Console.** One `console.log("agent outcome", record)` per record, replacing the scattered per-status lines that carry less detail. The records are logged straight after the agent passes finish, before any early return or throw, so a run in which every agent failed still leaves them.
 - **Local file.** `.ai-review/logs/agents.jsonl`, one JSON object per line: the record, plus `ts`, `owner`, `repo`, `pr`, `sha`, `provider`, `model` and `message`. It is written only when the CLI turns it on (`watch`, `review`, `audit`). The webhook paths never turn it on, so the hosted deployment makes no file writes. The directory is already gitignored. A write failure is logged and never fails a review.
+- **What is not durable on GitHub.** A round that posts no review (every agent rate limited or out of quota, every agent failed so the build throws, a silent round) leaves its records only in the console and, locally, the file. The hosted deployment keeps those in Vercel's short-lived logs. Posting a diagnostic comment for such rounds is out of scope.
 
 ### Failure classes
 
-`classifyAgentError(err)` is pure and lives in a new `src/agent-failure.ts`. It returns `{ class, retryable, httpStatus?, finishReason?, errorName }`. The classes and the rule for each follow what the AI SDK exposes, and the plan's first step is to confirm the field names against the installed package types and docs, because the classifier depends on them.
+`classifyAgentError(err)` is pure and lives in a new `src/agent-failure.ts`. It returns `{ class, retryable, httpStatus?, finishReason?, errorName }`. It reads the SDK error types by their `isInstance` helpers and `name` values, not by constructor name, and it unwraps first.
 
-| Class | When | Retryable |
-| --- | --- | --- |
-| `schema_mismatch` | `NoObjectGeneratedError` whose `finishReason` is not `length`: the output did not parse or did not match `ModelReviewSchema` | yes. The output is sampled, so a second attempt can pass. |
-| `output_truncated` | `NoObjectGeneratedError` with `finishReason` `length`: the output hit the cap | no. A second attempt with the same cap and prompt is likely to hit it again. |
-| `server_error` | `APICallError` with status 500 or above, including 529 overloaded, after the SDK's own retries | yes. The retry pass runs after the whole first pass, which gives the provider time. |
-| `network` | a transport failure with no HTTP status (connection reset, DNS, timeout that is not our own deadline) | yes |
-| `invalid_request` | `APICallError` with a 4xx status other than 401, 403, 408, 409 and 429 | no. The same request is rejected the same way. |
-| `auth` | 401 or 403 | no |
-| `content_refused` | `finishReason` `content-filter`, or a provider refusal | no |
-| `unknown` | anything else | no. It may be a programming error, which a rerun repeats. |
+Unwrapping. A `RetryError` (`AI_RetryError`) keeps its cause in `lastError` and `errors`, not in `cause`. The classifier unwraps `RetryError.lastError`, then follows `cause` up to three levels, and classifies the innermost error it recognizes.
 
-Rate limits (429), spent balances and our own deadline aborts keep the statuses they already have and are not classified here.
+Precedence, first match wins:
+
+| Order | Class | When | Retryable |
+| --- | --- | --- | --- |
+| 1 | `content_refused` | `finishReason` is `content-filter` on any recognized error | no |
+| 2 | `output_truncated` | `NoObjectGeneratedError` with `finishReason` `length` | no. The same cap and prompt are likely to hit it again. |
+| 3 | `no_output` | `NoObjectGeneratedError` where the model returned no text | yes. Sampled, so a second attempt can differ. |
+| 4 | `schema_mismatch` | any other `NoObjectGeneratedError`: the text did not parse or did not match `ModelReviewSchema` | yes. The output is sampled. |
+| 5 | `auth` | `APICallError` with status 401 or 403 | no |
+| 6 | `transient_http` | `APICallError` with status 408, 409 or 500 and above, including 529 overloaded, after the SDK's own retries | yes. The retry pass runs after the whole first pass, which gives the provider time. |
+| 7 | `invalid_request` | `APICallError` with any other 4xx status except 429 | no. The same request is rejected the same way. |
+| 8 | `network` | no HTTP status, and the error or its cause carries a Node system code in a fixed list (`ECONNRESET`, `ETIMEDOUT`, `ENOTFOUND`, `EAI_AGAIN`, `ECONNREFUSED`, `EPIPE`, or an `UND_ERR_` socket or connect code) | yes |
+| 9 | `unknown` | anything else, including a plain `TypeError` | no. It may be a programming error, which a rerun repeats. |
+
+Rate limits (429), spent balances and our own deadline aborts keep the statuses they already have and are not classified here. A generic provider "refusal" with no `content-filter` finish reason has no dedicated field in the SDK error types and lands in `unknown` until logs show how providers report it.
 
 ### Retry
 
 - After the first pass, collect the agents whose outcome is `error` with `retryable: true`.
-- A retry starts only if the time left before the agent deadline is at least `max(30 s, that agent's first attempt duration)`. Otherwise it is recorded as `retry skipped: out of time`.
-- Retries run with the same concurrency, the same abort signal and the same deadline as the first pass. The first agent is not run alone this time, because the prompt cache is already written.
+- Eligibility is checked twice. It is checked when the retries are collected, and again immediately before each retry is dispatched, after any pacing delay, because pacing can use up the time that made the retry eligible. A retry starts only if the time left before the agent deadline is at least `max(30 s, that agent's first attempt duration)`. Otherwise it is recorded as `retry skipped: out of time`.
+- The retry's abort timeout is built from the original absolute deadline, as for the first pass.
+- The retry pass keeps `lastRateLimit` from the first pass and paces its first agent too, since the first pass already learned the provider's pressure. It does not run its first agent alone: one serial warm-up covers one shared prefix, a transport failure proves nothing about the cache, and recovery rounds can have two prefixes. The accepted cost is some concurrent cold cache writes on a retry. It is bounded by the number of retried agents and is not measured.
 - At most one retry per agent. A successful retry replaces the failure. A failed retry keeps the second attempt's class.
-- Nothing else changes for an agent that succeeded on the retry; its findings merge with the rest.
+- An agent that succeeds on the retry merges its findings with the rest like any other.
 
 ### Reporting
 
@@ -94,15 +102,22 @@ The class names in the notice are the enum values, so a reader can search for th
 
 ### Per-agent baseline
 
-The `agents` marker names every agent that did not complete in the review (status other than `ok`, after any retry). When a later round resolves a baseline from GitHub, `deriveBaseline` returns those skill names as `incompleteSkills`. When the baseline came from KV, `ReviewState` carries the same list, saved when the state is written.
+The unit is pending coverage, a set of skills that owe the PR a full review. It is independent of which agents a round happens to select.
 
-On an INCREMENTAL round, each agent in `incompleteSkills` is given the PR's own files and patches, the same input a FULL round uses, instead of the delta. Every other agent keeps the delta. The shared user message therefore exists in two versions, and the second costs one more prompt-cache write for the incomplete agents. When the round completes those agents, the next review's marker lists none. A FULL round needs no change, because it already gives every agent the whole PR.
+- **Entering.** After any round's agent passes, a skill is added to pending if it ran (or was due to run) and ended in any status other than `ok`: `error` after retry, `skipped`, `rate_limited` or `quota_exhausted`. A skill that was not selected this round, for example a Tier 2 skill the delta did not trigger, is left as it was.
+- **Where it is stored.** In the `agents` marker (every skill whose last record is not `ok`, plus every skill carried as pending), and in `ReviewState.incompleteSkills` when KV is used. `deriveBaseline` returns it as `incompleteSkills`. A review with no marker means an empty set, which is the sprint 3 behavior.
+- **Scheduling.** On any round with a baseline, every pending skill that still exists is scheduled, whether or not this round's detection would have selected it. A pending Tier 2 skill therefore runs again even when the delta would not trigger it. A pending skill whose file no longer exists is dropped.
+- **Input.** A pending skill is given the PR's own files and patches, the same input a FULL round uses. Every other agent keeps the delta. The shared user message therefore exists in two versions, and the second costs one more prompt-cache write for the pending skills.
+- **Triage SKIP.** If triage says SKIP and pending is not empty, the round does not return early. It runs only the pending skills over the whole PR and nothing else.
+- **Clearing.** A pending skill is cleared only when it completes `ok` with whole-PR input, in a FULL round (forced or not) or in the pending-skill input above. A skill that completes `ok` on a delta only is not cleared.
+- **No silent recovery.** A round that clears a pending skill always posts a review, even when it would otherwise be silent, so that the new `agents` marker on GitHub no longer lists the skill. With KV the state is also updated, but GitHub is the record when KV is absent. If the round fails to clear a skill, it stays pending and the marker says so.
+- **Anchors.** Inline comments are validated against the PR's own patches, not the delta, so findings a pending skill raises outside the delta can still be anchored.
 
-This replaces the sprint 3 ruling that a partial prior review still counts as the whole baseline. The baseline sha still moves to the new head, since the agents that did complete did review the earlier code; only the agents that did not are re-pointed at it.
+This replaces the sprint 3 ruling that a partial prior review still counts as the whole baseline. The baseline sha still moves to the new head, since the agents that did complete did review the earlier code; only the pending skills are pointed back at it.
 
 ### Cost
 
-An `error` outcome that carries `usage` (the SDK attaches it to `NoObjectGeneratedError`) adds its tokens to the review's totals. A retry is billed like any other attempt. The footer cost therefore rises on rounds with failures, which is accurate.
+An `error` outcome that carries `usage` (the SDK attaches it to `NoObjectGeneratedError`) adds its tokens to the review's totals, mapped from `inputTokens` and `outputTokens`. A retry is billed like any other attempt. A deadline abort carries no usage and adds none. `audit.ts` has its own aggregation loop that counts usage only for `ok`; it is changed the same way. The footer cost therefore rises on rounds with failures, which is accurate.
 
 ## Design
 
@@ -112,16 +127,17 @@ An `error` outcome that carries `usage` (the SDK attaches it to `NoObjectGenerat
 | `src/agent-log.ts` (new) | `AgentRecord`, `toRecord(...)`, `formatAgentsMarker(records)`, `parseAgentsMarker(body)`, `logAgentRecords(records, ctx)`, `enableAgentLogFile(path)`. |
 | `src/review.ts` | `AgentOutcome` error variant carries `failure` and `usage`; `runAgent` classifies; the agent pass becomes first pass plus retry pass; notice grouping; marker in `formatReviewBody`; `incompleteSkills` use in the incremental user message; cost from failed attempts. |
 | `src/baseline.ts`, `src/review-state.ts` | `incompleteSkills` on the derived baseline and on `ReviewState`. |
-| `src/audit.ts` | Uses the record helper for its own `runAgent` calls. |
+| `src/audit.ts` | Uses the record helper for its own `runAgent` calls and counts usage from failed attempts. |
 | `src/cli.ts` | Turns the local file on for `watch`, `review` and `audit`. |
 
 ## Tests (each written to fail first)
 
-- `classifyAgentError`: built from the real SDK error classes (`NoObjectGeneratedError`, `APICallError`, `RetryError` wrapping them), one case per class including the `length` versus other finish reason split, and a plain `TypeError` giving `unknown`. A fake object with the right field names is not enough, because the field names are the risk.
-- Record and marker: round trip through `formatAgentsMarker` and `parseAgentsMarker`; a message containing `-->` or a newline cannot reach the marker; no model text is present.
-- Retry: a retryable failure then success yields the findings and a recovered note; a non-retryable failure is not run twice (the model stub is asserted to be called once for it); a retryable failure with too little time left is not retried and says so; two failures in a row keep the second class; usage from every attempt is summed into the cost.
+- `classifyAgentError`: built from the real SDK error classes (`NoObjectGeneratedError`, `APICallError`, `RetryError` wrapping them, and `TypeError('fetch failed')` with and without a system-code cause), one case per class, the precedence overlaps (`content-filter` on a `NoObjectGeneratedError`, a 429-adjacent 4xx, 408 and 409), a `RetryError` wrapping each recognized error, and a plain `TypeError` giving `unknown`. A fake object with the right field names is not enough, because the field names are the risk.
+- Record and marker: round trip through `formatAgentsMarker` and `parseAgentsMarker`; an unknown skill or error name is dropped; an oversized list is reduced to one record per class; a quoted marker (prefixed with `> `), a duplicated key and a marker in the middle of the summary text are all ignored; no model text, `text`, `response` or `cause` content is present even when the thrown error carries them.
+- Retry: a retryable failure then success yields the findings and a recovered note; a non-retryable failure is not run twice (the model stub is asserted to be called once for it); a retryable failure with too little time left is not retried and says so; a pacing delay that crosses the eligibility threshold cancels the retry; two failures in a row keep the second class; usage from every attempt is summed into the cost; every agent failing still logs its records before the build throws; all rate limited and all quota exhausted rounds log their records.
 - Notice: each group renders with the class names; an all-ok round has no notice.
-- Baseline: an `agents` marker with one failed skill gives `incompleteSkills`; an incremental round gives that skill the PR's files and the others the delta (assert the two user messages); a KV state round trips the list; a later round that completes the skill clears it.
+- Pending coverage: an `agents` marker with one failed skill gives `incompleteSkills`; an incremental round gives that skill the PR's files and the others the delta (assert the two user messages); a KV state round trips the list; a triage SKIP with a pending skill runs only that skill; a pending Tier 2 skill runs although the delta would not select it; a skill whose file is gone is dropped; a skill that completes only on a delta stays pending; a round that clears a skill posts although nothing else is new, and its marker no longer lists the skill, with and without KV; a forced FULL round clears by success; a recovery finding outside the delta keeps its inline anchor.
+- Audit: usage from failed attempts is counted.
 - Local file: written when enabled, not written when not, a write failure does not fail the review.
 - The real-GitHub check from sprint 3 is rerun after the change: `deriveBaseline` on the three incident PRs still derives the same baselines, and an old body with no `agents` marker gives an empty `incompleteSkills`.
 
@@ -129,6 +145,7 @@ An `error` outcome that carries `usage` (the SDK attaches it to `NoObjectGenerat
 
 - The class table was written from the SDK documentation and not from observed failures. The first real logs may show a class that belongs in `unknown`, or an `unknown` that deserves a class. The classifier is data, so it is cheap to change.
 - `schema_mismatch` is retried once. If the cause is a schema the model cannot satisfy, the retry fails the same way and costs one more attempt per affected agent per round.
-- The agents marker adds roughly 80 bytes per agent to every review body.
+- The agents marker is bounded at 20 records and 4 KB. A typical 8-agent round with one retry is a few hundred bytes.
+- Cache cost of the two user-message versions and of concurrent retry writes is not measured.
 - Reviews posted before this change have no `agents` marker. They are read as having no incomplete agents, which is the sprint 3 behavior.
 - The local file has no rotation.
