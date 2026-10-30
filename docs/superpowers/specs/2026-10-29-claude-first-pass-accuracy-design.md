@@ -149,7 +149,7 @@ What was measured:
 
 - Fixtures: 13 of 15 agreed-filler findings removed, 0 of 17 fixed, 0 other-rejected, 0 unadjudicated. This is a fit, because the phrases were written after reading all 15.
 - Same repo, 2,487 bot comments outside the fixtures: a first, broader version hit 52. Two blind judges agreed on 49 of them. 12 were actionable (nits and docs gaps that say "not a bug"), 37 were retractions, 3 were split. The broad phrases were removed. The current filter hits none of the 12 or the 3, and 15 of the 37. I tuned on this set, so it is no longer a held-out measure.
-- Fresh holdout, 467 bot comments from ai-listings and agent-skills on other PRs: the first narrowed version hit 5, with 4 judged retractions and 1 split. An "except" rule then removed the split one. The current filter hits 2, both read as retractions by the author of this spec. The final two hits were not sent to the blind judges, so the holdout precision is not confirmed.
+- Fresh holdout, 467 bot comments from ai-listings and agent-skills on other PRs: the first narrowed version hit 5, with 4 judged retractions and 1 split. An "except" rule then removed the split one. The current filter hits 2, and both blind judges called both of them retractions. That is 2 of 2 on a small holdout, so it is weak evidence of precision.
 - A review of the branch found real findings that the first narrowing still dropped. All of those shapes are now negative tests.
 - Live tier, 6 rounds, 10 raw findings, 0 self-retracted, 0 matched to a labeled claim. It says nothing about precision.
 
