@@ -36,6 +36,7 @@ export interface ClassSummary {
 	unadjudicated: number;
 	rejectedTotal: number;
 	unadjudicatedLabels: number;
+	repeats: number | null;
 	agreement: { agreed: number; of: number };
 	ruleAgreement: { agreed: number; of: number };
 }
@@ -136,6 +137,7 @@ export function summarizeClasses(
 	files: ClassFile[],
 	rejectedTotal: number,
 	unadjudicatedLabels: number,
+	repeats: number | null = null,
 ): ClassSummary {
 	const counts = Object.fromEntries(CLASSES.map((c) => [c, 0])) as Record<
 		FalsePositiveClass,
@@ -158,17 +160,22 @@ export function summarizeClasses(
 		unadjudicated,
 		rejectedTotal,
 		unadjudicatedLabels,
+		repeats,
 		agreement: { agreed, of },
 		ruleAgreement: ruleAgreement(files),
 	};
 }
 
 export function formatClassReport(s: ClassSummary): string {
-	const firstSeen = s.classified + s.unadjudicated;
+	const recorded = s.classified + s.unadjudicated;
+	const repeats = s.repeats ?? s.rejectedTotal - recorded;
+	const firstSeen = s.repeats === null ? recorded : s.rejectedTotal - s.repeats;
+	const unclassified = firstSeen - recorded;
 	return [
 		"false-positive classes (provisional)",
 		...CLASSES.map((c) => `  ${c.padEnd(13)} ${s.counts[c]}`),
-		`  classified ${s.classified} of ${firstSeen} first-seen rejected (${s.rejectedTotal} rejected labels, ${s.rejectedTotal - firstSeen} repeats excluded)`,
+		`  classified ${s.classified} of ${firstSeen} first-seen rejected (${s.rejectedTotal} rejected labels, ${repeats} repeats excluded)`,
+		...(unclassified > 0 ? [`  unclassified ${unclassified}`] : []),
 		`  agreement ${s.agreement.agreed} of ${s.agreement.of}`,
 		`  rules vs models: ${s.ruleAgreement.agreed} of ${s.ruleAgreement.of}`,
 		`  unadjudicated ${s.unadjudicated} (+${s.unadjudicatedLabels} unadjudicated labels)`,

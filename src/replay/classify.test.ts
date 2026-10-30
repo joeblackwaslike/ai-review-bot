@@ -321,6 +321,7 @@ describe("formatClassReport", () => {
 			unadjudicated: 2,
 			rejectedTotal: 8,
 			unadjudicatedLabels: 3,
+			repeats: 2,
 			agreement: { agreed: 5, of: 6 },
 			ruleAgreement: { agreed: 1, of: 2 },
 		};
@@ -355,5 +356,43 @@ describe("committed class files", () => {
 				throw new Error(`missing claim or label ${rec.claimId}`);
 			expect(rec.rules, rec.claimId).toBe(ruleClass(fixture, c, label));
 		}
+	});
+});
+
+describe("formatClassReport coverage", () => {
+	const file: ClassFile = {
+		fixtureId: "x",
+		provisional: true,
+		records: [
+			{
+				claimId: "a",
+				rules: null,
+				claude: "other",
+				codex: "other",
+				final: "other",
+				reactionOnly: false,
+			},
+		],
+	};
+
+	it("reports a rejected claim without a class record as unclassified, not a repeat", () => {
+		const text = formatClassReport(summarizeClasses([file], 2, 0, 0));
+		expect(text).toContain(
+			"classified 1 of 2 first-seen rejected (2 rejected labels, 0 repeats excluded)",
+		);
+		expect(text).toContain("unclassified 1");
+	});
+
+	it("excludes only the repeats it is told about", () => {
+		const text = formatClassReport(summarizeClasses([file], 3, 0, 1));
+		expect(text).toContain(
+			"classified 1 of 2 first-seen rejected (3 rejected labels, 1 repeats excluded)",
+		);
+		expect(text).toContain("unclassified 1");
+	});
+
+	it("prints no unclassified line when every first-seen claim has a record", () => {
+		const text = formatClassReport(summarizeClasses([file], 1, 0, 0));
+		expect(text).not.toContain("unclassified");
 	});
 });

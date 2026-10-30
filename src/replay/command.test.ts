@@ -87,7 +87,12 @@ describe("runReplay", () => {
 
 	it("prints the false-positive class report when a classes file exists", async () => {
 		const dir = tmp();
-		const id = seed(dir);
+		const id = seed(
+			dir,
+			makeLabels({
+				labels: [makeLabel("a", "rejected"), makeLabel("b", "rejected")],
+			}),
+		);
 		const rec = (
 			claimId: string,
 			c: "filler" | "stale",
@@ -121,6 +126,47 @@ describe("runReplay", () => {
 		expect(text).toMatch(
 			/self-retraction filter: removes 0 of \d+ filler, 0 other-rejected, 0 unadjudicated, 0 of \d+ fixed/,
 		);
+	});
+
+	it("skips a classes file with no labels file and keeps it out of the report", async () => {
+		const dir = tmp();
+		const id = seed(
+			dir,
+			makeLabels({
+				labels: [makeLabel("a", "rejected"), makeLabel("b", "rejected")],
+			}),
+		);
+		const rec = (claimId: string) => ({
+			claimId,
+			rules: null,
+			claude: "other",
+			codex: "other",
+			final: "other",
+			reactionOnly: false,
+		});
+		writeFileSync(
+			join(dir, `${id}.classes.json`),
+			JSON.stringify({
+				fixtureId: id,
+				provisional: true,
+				records: [rec("a"), rec("b")],
+			}),
+		);
+		writeFileSync(
+			join(dir, "ghost__r__9__anthropic.classes.json"),
+			JSON.stringify({
+				fixtureId: "ghost__r__9__anthropic",
+				provisional: true,
+				records: [rec("x"), rec("y"), rec("z")],
+			}),
+		);
+		const { lines, out } = collect();
+		expect(await runReplay([], { fixturesDir: dir, out })).toBe(0);
+		const text = lines.join("\n");
+		expect(text).toContain(
+			"ghost__r__9__anthropic.classes.json: skipped: no labels file",
+		);
+		expect(text).toContain("classified 2 of 2 first-seen rejected");
 	});
 
 	it("prints no filter margin when there are no classes files", async () => {

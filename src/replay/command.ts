@@ -177,22 +177,30 @@ async function printClassReport(
 	const files: ClassFile[] = [];
 	let rejectedTotal = 0;
 	let unadjudicatedLabels = 0;
+	let repeats = 0;
 	for (const name of names.sort()) {
 		const file = JSON.parse(
 			await readFile(join(dir, name), "utf8"),
 		) as ClassFile;
-		files.push(file);
 		const labelsPath = join(dir, `${file.fixtureId}.labels.json`);
-		if (!existsSync(labelsPath)) continue;
+		if (!existsSync(labelsPath)) {
+			out(`${name}: skipped: no labels file (${file.fixtureId}.labels.json)`);
+			continue;
+		}
+		files.push(file);
 		const labels = JSON.parse(await readFile(labelsPath, "utf8")) as LabelFile;
+		const later = new Set(labels.repeatPairs.map((p) => p.later));
 		for (const l of labels.labels) {
-			if (l.label === "rejected") rejectedTotal++;
-			else if (l.label === "unadjudicated") unadjudicatedLabels++;
+			if (l.label === "rejected") {
+				rejectedTotal++;
+				if (later.has(l.claimId)) repeats++;
+			} else if (l.label === "unadjudicated") unadjudicatedLabels++;
 		}
 	}
+	if (files.length === 0) return files;
 	out(
 		formatClassReport(
-			summarizeClasses(files, rejectedTotal, unadjudicatedLabels),
+			summarizeClasses(files, rejectedTotal, unadjudicatedLabels, repeats),
 		),
 	);
 	return files;
