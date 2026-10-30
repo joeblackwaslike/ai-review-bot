@@ -553,8 +553,10 @@ export interface MergeOptions {
 	/** Collapse restatements of one claim across agents. Off preserves the
 	 * exact-key-only behaviour every reviewer had before this shipped. */
 	dedupeNearDuplicateClaims?: boolean;
-	/** Drop non-P0 findings whose own title or closing sentences say there is
-	 * no defect. Runs before every other merge step. */
+	/** Drop P2 and P3 findings (never P0, P1 or suppressible:false) whose own
+	 * title or closing sentence says there is no defect. Runs before dedupe and
+	 * the event aggregation, and downgrades an agent's event only when every
+	 * finding it filed was dropped. */
 	dropSelfRetracted?: boolean;
 }
 
