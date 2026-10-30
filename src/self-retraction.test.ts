@@ -14,13 +14,7 @@ describe("isSelfRetracted positives, one per phrase family", () => {
 		).toBe(true);
 	});
 
-	it("not a bug or defect", () => {
-		expect(
-			retracted(
-				"Boundary comparison",
-				"The check uses `>` instead of `>=`, so this is not itself a bug; flagging only as a readability note.",
-			),
-		).toBe(true);
+	it("not flagging as a defect", () => {
 		expect(
 			retracted(
 				"Fallback",
@@ -138,6 +132,69 @@ describe("isSelfRetracted keeps real findings", () => {
 				"This is not a bug in the parser. The socket opened in start() is never closed on the error path. Wrap it in try/finally.",
 			),
 		).toBe(false);
+	});
+
+	it("keeps a nit that says it is not a bug", () => {
+		expect(
+			retracted(
+				"Low",
+				"The helper comment says chunks, but the real concern is line endings. This is not a bug, only a stale comment worth rewording.",
+			),
+		).toBe(false);
+		expect(
+			retracted(
+				"Low",
+				"The cast after the guard is safe but a little awkward. A low-risk nit, not a defect.",
+			),
+		).toBe(false);
+	});
+
+	it("keeps a docs gap that says there is no functional issue", () => {
+		expect(
+			retracted(
+				"Nit: test title is stale",
+				"The behaviour is correct, but the description still names the old value. Minor readability point, no functional issue.",
+			),
+		).toBe(false);
+		expect(
+			retracted(
+				"Low",
+				"The loop is correct but brittle and a reader may misjudge it. No actual bug given tests pass.",
+			),
+		).toBe(false);
+	});
+
+	it("keeps a real finding that mentions no new P0 findings mid-text", () => {
+		expect(
+			retracted(
+				"Count surviving P0s in readiness",
+				"Prior P0s are ignored when scoring. Add a regression test for a prior P0 alongside no new P0 findings.",
+			),
+		).toBe(false);
+	});
+
+	it("keeps a retraction-looking phrase that is followed by a request", () => {
+		expect(
+			retracted(
+				"Low",
+				"The default is shown as none. No bug here; just confirm the prompt still reads well.",
+			),
+		).toBe(false);
+	});
+
+	it("still catches literal retraction wording", () => {
+		expect(
+			retracted(
+				"Low",
+				"The guard holds. No issue here, withdrawing this observation.",
+			),
+		).toBe(true);
+		expect(
+			retracted(
+				"Low",
+				"On a second look the loop is right. No actionable defect found.",
+			),
+		).toBe(true);
 	});
 
 	it("handles empty input", () => {

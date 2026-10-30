@@ -7,20 +7,24 @@ interface PhraseFamily {
 	name: string;
 	pattern: RegExp;
 	lastSentenceOnly?: boolean;
+	wholeFindingOnly?: boolean;
 }
 
 const PHRASE_FAMILIES: PhraseFamily[] = [
 	{
 		name: "no-actionable-defect",
 		pattern:
-			/\bno (?:(?:actionable|functional|actual|real|material|substantive) (?:defects?|bugs?|issues?|problems?|findings?|concerns?)|(?:issues?|defects?|bugs?|problems?) (?:found|here|identified))\b/i,
+			/\bno (?:actionable (?:defects?|bugs?|issues?|problems?|findings?)|(?:issues?|defects?|bugs?|problems?) (?:found|here|identified))\b/i,
 	},
 	{
-		name: "not-a-bug",
-		pattern:
-			/\bnot (?:(?:itself |really |actually )?an? (?:bug|defect|issue|problem)|flagging (?:this )?as an? (?:defect|bug|issue))\b/i,
+		name: "not-flagging",
+		pattern: /\bnot flagging (?:this )?as an? (?:defect|bug|issue)\b/i,
 	},
 	{ name: "retracted", pattern: /\b(?:retracted|withdrawn)\W*$/i },
+	{
+		name: "withdrawing",
+		pattern: /\bwithdraw(?:ing|n)? (?:this|my|the) /i,
+	},
 	{
 		name: "looks-consistent-or-resolved",
 		pattern:
@@ -30,21 +34,25 @@ const PHRASE_FAMILIES: PhraseFamily[] = [
 	{
 		name: "no-new-findings",
 		pattern:
-			/\bno (?:new|additional|further) (?:[\w-]+ ){0,3}(?:findings?|issues?|concerns?|problems?)\b/i,
+			/(?:^|[;:,\u2014\u2013]\s)no (?:new|additional|further) (?:[\w-]+ ){0,3}(?:findings?|issues?|concerns?|problems?)\b/i,
+		wholeFindingOnly: true,
 	},
 	{
 		name: "covered-by-prior",
 		pattern:
 			/\balready (?:\w+ )?covered by (?:the )?(?:prior|previous|earlier)\b/i,
+		wholeFindingOnly: true,
 	},
 	{
 		name: "nothing-this-round",
 		pattern:
-			/\bno (?:[\w-]+ ){0,2}(?:changes?|tests?) (?:this round|applicable)\b/i,
+			/(?:^|[;:,\u2014\u2013]\s)no (?:[\w-]+ ){0,2}(?:changes?|tests?) (?:this round|applicable)\b/i,
+		wholeFindingOnly: true,
 	},
 ];
 
-const CONTRAST = /\b(?:but|however|although|though|unless|except|whereas)\b/i;
+const KEEP_AFTER_PHRASE =
+	/\b(?:but|however|although|though|unless|except|whereas|consider|should)\b|\b(?:just|only) (?:confirm|verify|check|make sure)\b|\bwould be (?:clearer|better|safer)\b|\bsuggest/i;
 
 function normalize(s: string): string {
 	return s
@@ -55,23 +63,22 @@ function normalize(s: string): string {
 		.trim();
 }
 
-function tailSentences(s: string, count: number): string[] {
-	return s
-		.split(/(?<=[.!?])\s+/)
-		.filter(Boolean)
-		.slice(-count);
-}
-
 function familiesInTail(text: string): string[] {
-	const tail = tailSentences(text, 2);
+	const sentences = text.split(/(?<=[.!?])\s+/).filter(Boolean);
+	const tail = sentences.slice(-2);
 	const last = tail[tail.length - 1];
 	const window = tail.join(" ");
-	return PHRASE_FAMILIES.filter(({ pattern, lastSentenceOnly }) => {
-		const scope = lastSentenceOnly ? last : window;
-		const match = scope ? pattern.exec(scope) : null;
-		if (!match) return false;
-		return !CONTRAST.test(scope.slice(match.index + match[0].length));
-	}).map((f) => f.name);
+	return PHRASE_FAMILIES.filter(
+		({ pattern, lastSentenceOnly, wholeFindingOnly }) => {
+			if (wholeFindingOnly && sentences.length !== 1) return false;
+			const scope = lastSentenceOnly ? last : window;
+			const match = scope ? pattern.exec(scope) : null;
+			if (!match) return false;
+			return !KEEP_AFTER_PHRASE.test(
+				scope.slice(match.index + match[0].length),
+			);
+		},
+	).map((f) => f.name);
 }
 
 export function retractionFamilies(f: RetractionCandidate): string[] {
