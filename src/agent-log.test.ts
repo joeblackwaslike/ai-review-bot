@@ -352,4 +352,84 @@ describe("logAgentRecords", () => {
 		expect(() => logAgentRecords([ok("a.md")], ctx)).not.toThrow();
 		expect(errSpy).toHaveBeenCalled();
 	});
+
+	it("adds a stack, cut to 1500 chars, to the console line only", async () => {
+		const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+		enableAgentLogFile(file);
+		logAgentRecords([err("a.md"), ok("code-reviewer.md")], {
+			...ctx,
+			stacks: { "a.md": "    at f (x.ts:1:1)\n".repeat(200) },
+		});
+		expect(String(spy.mock.calls[0]?.[1]?.stack)).toHaveLength(1500);
+		expect(spy.mock.calls[1]?.[1]).not.toHaveProperty("stack");
+		const lines = (await readFile(file, "utf8")).trim().split("\n");
+		for (const line of lines)
+			expect(JSON.parse(line)).not.toHaveProperty("stack");
+	});
+});
+
+describe("log file path", () => {
+	let dir: string;
+	const saved = {
+		HOME: process.env.HOME,
+		AI_REVIEW_LOG_FILE: process.env.AI_REVIEW_LOG_FILE,
+	};
+	const restore = (key: keyof typeof saved) => {
+		if (saved[key] === undefined) delete process.env[key];
+		else process.env[key] = saved[key];
+	};
+	const write = () => {
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		logAgentRecords([ok("a.md")], {
+			owner: "o",
+			repo: "r",
+			pr: 1,
+			sha: "s",
+			provider: "anthropic",
+			model: "m",
+		});
+	};
+
+	beforeEach(async () => {
+		dir = await mkdtemp(join(tmpdir(), "agent-log-home-"));
+		process.env.HOME = dir;
+		delete process.env.AI_REVIEW_LOG_FILE;
+	});
+	afterEach(async () => {
+		disableAgentLogFile();
+		restore("HOME");
+		restore("AI_REVIEW_LOG_FILE");
+		vi.restoreAllMocks();
+		await rm(dir, { recursive: true, force: true });
+	});
+
+	it("defaults to ~/.ai-review/logs/agents.jsonl", async () => {
+		enableAgentLogFile();
+		write();
+		const text = await readFile(
+			join(dir, ".ai-review", "logs", "agents.jsonl"),
+			"utf8",
+		);
+		expect(JSON.parse(text.trim()).skill).toBe("a.md");
+	});
+
+	it("AI_REVIEW_LOG_FILE overrides the default", async () => {
+		const target = join(dir, "env", "log.jsonl");
+		process.env.AI_REVIEW_LOG_FILE = target;
+		enableAgentLogFile();
+		write();
+		expect((await readFile(target, "utf8")).trim()).not.toBe("");
+		await expect(
+			readFile(join(dir, ".ai-review", "logs", "agents.jsonl")),
+		).rejects.toThrow();
+	});
+
+	it("an explicit path wins over AI_REVIEW_LOG_FILE", async () => {
+		const target = join(dir, "arg.jsonl");
+		process.env.AI_REVIEW_LOG_FILE = join(dir, "env.jsonl");
+		enableAgentLogFile(target);
+		write();
+		expect((await readFile(target, "utf8")).trim()).not.toBe("");
+		await expect(readFile(join(dir, "env.jsonl"))).rejects.toThrow();
+	});
 });

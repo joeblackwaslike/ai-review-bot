@@ -6335,8 +6335,8 @@ describe("delta scoping without KV", () => {
 			const decision = await buildReview({ octokit, ...baseContext });
 
 			expect(messagesBuilt()).toEqual([
-				{ files: ["src/a.ts", "src/b.ts"], incremental: false },
 				{ files: ["src/b.ts"], incremental: true },
+				{ files: ["src/a.ts", "src/b.ts"], incremental: false },
 			]);
 			expect(seen[SAST]).toEqual([WHOLE]);
 			for (const skill of TIER1_SKILLS.filter((s) => s !== SAST))
@@ -6531,20 +6531,54 @@ describe("delta scoping without KV", () => {
 			expect(checkRuns[0]?.conclusion).toBe("action_required");
 		});
 
-		it("pending skills are queued ahead of the other agents", async () => {
+		it("with both message versions, one delta agent warms the cache, then the pending skills, then the rest", async () => {
 			const seen = agents();
 			incremental();
+			// Marker order (sast, comment-analyzer) differs from queue order.
 			const { octokit } = prOctokit({
-				reviews: [{ id: 11, body: withPending([COMMENTS_SKILL, SAST]) }],
+				reviews: [{ id: 11, body: withPending([SAST, COMMENTS_SKILL]) }],
 				compare: deltaB,
 			});
 
-			await buildReview({ octokit, ...baseContext, tier2Enabled: true });
+			await buildReview({
+				octokit,
+				...baseContext,
+				tier2Enabled: true,
+				agentConcurrency: 2,
+			});
+
+			expect(Object.keys(seen)).toEqual([
+				"code-reviewer.md",
+				COMMENTS_SKILL,
+				SAST,
+				"silent-failure-hunter.md",
+				"pr-test-analyzer.md",
+				"code-review-and-quality.md",
+			]);
+			expect(seen["code-reviewer.md"]).toEqual([DELTA]);
+		});
+
+		it("with one message version, the pending skills go first", async () => {
+			const seen = agents();
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: withPending([SAST, COMMENTS_SKILL]) }],
+			});
+
+			await buildReview({
+				octokit,
+				...baseContext,
+				force: true,
+				tier2Enabled: true,
+				agentConcurrency: 2,
+			});
 
 			expect(Object.keys(seen)).toEqual([
 				COMMENTS_SKILL,
 				SAST,
-				...TIER1_SKILLS.filter((s) => s !== SAST),
+				"code-reviewer.md",
+				"silent-failure-hunter.md",
+				"pr-test-analyzer.md",
+				"code-review-and-quality.md",
 			]);
 		});
 
@@ -6719,7 +6753,6 @@ describe("delta scoping without KV", () => {
 			return pendingIn(decision?.body);
 		};
 		it.each<[string, PrInput]>([
-			["a trimmed patch", { files: [aFile, bFile, bigFile] }],
 			[
 				"a changed file without a patch",
 				{
@@ -6778,17 +6811,21 @@ describe("delta scoping without KV", () => {
 					rawDiff: "",
 				},
 			],
+			["a patch trimmed by the size limit", { files: [aFile, bFile, bigFile] }],
 			[
-				"a lockfile over the patch limit",
+				"a lockfile with changes but no patch",
 				{
 					files: [
 						aFile,
 						bFile,
-						buildPullFile(
-							"pnpm-lock.yaml",
-							`@@ -0,0 +1,1 @@\n+${"x".repeat(24_001)}`,
-						),
+						{
+							filename: "pnpm-lock.yaml",
+							status: "modified",
+							additions: 9000,
+							deletions: 4000,
+						},
 					],
+					rawDiff: "",
 				},
 			],
 		])("whole-PR input with %s still clears the pending skill", async (_name, pr) => {
@@ -7058,6 +7095,66 @@ describe("classified agent failures with usage", () => {
 		const recs = outcomeLogs(log);
 		expect(recs).toHaveLength(TIER1_SKILLS.length);
 		expect(recs[0][1].status).toBe("quota_exhausted");
+	});
+	/** A programming error whose message and attached request body stand in
+	 * for diff text that must never reach a log line or the review. */
+	const bugWithDiff = () => {
+		const bug = Object.assign(new TypeError("cannot read DIFF-IN-MESSAGE"), {
+			requestBodyValues: { messages: "DIFF-IN-BODY" },
+		});
+		bug.stack = `TypeError: cannot read DIFF-IN-MESSAGE\nDIFF-IN-MESSAGE continued\n${"    at frame (src/review.ts:1:1)\n".repeat(200)}`;
+		return bug;
+	};
+
+	it("an unknown failure carries a frames-only stack of at most 1500 characters", async () => {
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		mockGenerateObject.mockRejectedValueOnce(bugWithDiff());
+		const unknown = await runAgent("code-reviewer.md", "S", sel, "");
+		expect(unknown).toMatchObject({
+			status: "error",
+			failure: { class: "unknown" },
+		});
+		const stack = (unknown as { stack?: string }).stack ?? "";
+		expect(stack).toMatch(/^ {4}at frame/);
+		expect(stack.length).toBeGreaterThan(1000);
+		expect(stack.length).toBeLessThanOrEqual(1500);
+		expect(stack).not.toContain("DIFF-IN");
+
+		mockGenerateObject.mockRejectedValueOnce(noObject("stop", "{not json"));
+		const mismatch = await runAgent("code-reviewer.md", "S", sel, "");
+		expect(mismatch).toMatchObject({ failure: { class: "schema_mismatch" } });
+		expect(mismatch).not.toHaveProperty("stack");
+	});
+
+	it("the console record of an unknown failure has the stack; other records and the review do not", async () => {
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		mockGenerateObject.mockImplementation(
+			async (args: { system?: unknown; messages?: unknown }) => {
+				if (args.system !== undefined)
+					return {
+						object: { summary: "s" },
+						usage: { inputTokens: 0, outputTokens: 0 },
+					};
+				const content = (args.messages as Array<{ content: unknown }>)[0]
+					?.content as Array<{ text: string }>;
+				if (content[1]?.text === "system:security-sast.md") throw bugWithDiff();
+				return buildGenerateObjectResponse(buildModelReview());
+			},
+		);
+
+		const decision = await buildReview(ctx());
+
+		const records = outcomeLogs(log).map(([, r]) => r);
+		const sast = records.filter((r) => r.skill === "security-sast.md");
+		expect(sast).toHaveLength(1);
+		expect(String(sast[0]?.stack)).toMatch(/^ {4}at frame/);
+		for (const r of records.filter((r) => r.skill !== "security-sast.md"))
+			expect(r).not.toHaveProperty("stack");
+		const logged = JSON.stringify(log.mock.calls);
+		expect(logged).not.toContain("DIFF-IN-BODY");
+		expect(decision?.body).not.toContain("at frame");
+		expect(decision?.body).not.toContain("DIFF-IN");
 	});
 });
 

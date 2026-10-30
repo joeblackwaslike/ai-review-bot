@@ -189,6 +189,9 @@ export type AgentOutcome =
 			durationMs: number;
 			/** For the local log file only; never in records or the marker. */
 			message?: string;
+			/** Stack frames (no message) of an `unknown` failure, for the console
+			 * record only. */
+			stack?: string;
 	  }
 	/** Never started: the run was out of wall-clock before its turn came up. */
 	| { status: "skipped"; skillPath: string };
@@ -438,6 +441,17 @@ export interface RunAgentOptions {
 	abortSignal?: AbortSignal;
 }
 
+/** The `at` lines of an error's stack, at most 1500 characters. The header line
+ * holds the message, and with it possibly diff text, so it is left out. */
+function stackFrames(err: unknown): string | undefined {
+	if (!(err instanceof Error) || !err.stack) return undefined;
+	const frames = err.stack
+		.split("\n")
+		.filter((l) => /^\s+at /.test(l))
+		.join("\n");
+	return frames ? frames.slice(0, 1500) : undefined;
+}
+
 export async function runAgent(
 	skillPath: string,
 	sharedContext: string,
@@ -521,10 +535,13 @@ export async function runAgent(
 			return { status: "rate_limited", rateLimit: rl };
 		}
 		const usage = usageFromError(err);
+		const failure = classifyAgentError(err);
+		const stack = failure.class === "unknown" ? stackFrames(err) : undefined;
 		return {
 			status: "error",
-			failure: classifyAgentError(err),
+			failure,
 			...(usage && { usage }),
+			...(stack && { stack }),
 			durationMs: Date.now() - startedAt,
 			message: err instanceof Error ? err.message : String(err),
 		};
@@ -1924,7 +1941,10 @@ export async function buildReview(
 	}));
 	// Interleave Tier2 skills into the queue so budget exhaustion cuts proportionally
 	// across both tiers rather than always dropping all Tier2 agents. Pending
-	// skills go first, so the deadline cuts the other agents before them.
+	// skills go first, so the deadline cuts the other agents before them. When
+	// the pending skills get the whole PR and the rest the delta, one delta
+	// agent still goes first: the first agent runs alone to warm the cache, and
+	// a whole-PR warm-up would only help the pending skills.
 	const queue = tier1Items
 		.flatMap((t1, i) => {
 			const t2 = tier2Items[i];
@@ -1933,9 +1953,14 @@ export async function buildReview(
 		.concat(tier2Items.slice(tier1Items.length));
 	const isPending = (s: { skillPath: string }) =>
 		pendingSet.has(baseName(s.skillPath));
+	const pendingItems = queue.filter(isPending);
+	const otherItems = queue.filter((s) => !isPending(s));
+	const warmUp =
+		incrementalPass && pendingItems.length > 0 ? otherItems.slice(0, 1) : [];
 	const allSkills = [
-		...queue.filter(isPending),
-		...queue.filter((s) => !isPending(s)),
+		...warmUp,
+		...pendingItems,
+		...otherItems.slice(warmUp.length),
 	];
 
 	const skillName = (path: string) => path.split("/").pop() ?? path;
@@ -2031,9 +2056,13 @@ export async function buildReview(
 
 	const logAttempts = (batch: AgentAttempt[]) => {
 		const messages: Record<string, string> = {};
+		const stacks: Record<string, string> = {};
 		for (const { skill, outcome } of batch) {
 			if (outcome.status === "error" && outcome.message !== undefined) {
 				messages[skill] = outcome.message;
+			}
+			if (outcome.status === "error" && outcome.stack !== undefined) {
+				stacks[skill] = outcome.stack;
 			}
 		}
 		logAgentRecords(
@@ -2046,6 +2075,7 @@ export async function buildReview(
 				provider: context.provider,
 				model: selection.model,
 				messages,
+				stacks,
 			},
 		);
 	};

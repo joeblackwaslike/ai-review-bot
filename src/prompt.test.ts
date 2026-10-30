@@ -312,10 +312,10 @@ describe("wholePrInputComplete", () => {
 		expect(wholePrInputComplete([file("a.ts"), file("b.ts")], 2)).toBe(true);
 	});
 
-	it("a trimmed patch is incomplete", () => {
+	it("a patch trimmed by the size limit still counts as complete", () => {
 		expect(
 			wholePrInputComplete([file("a.ts", { patch: big, additions: 1 })], 1),
-		).toBe(false);
+		).toBe(true);
 	});
 
 	it("a file with no patch and no changes (binary, pure rename) is complete", () => {

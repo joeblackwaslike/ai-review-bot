@@ -125,12 +125,14 @@ export async function runAuditPass(opts: {
 		);
 		agentsAttempted += outcomes.length;
 		const messages: Record<string, string> = {};
+		const stacks: Record<string, string> = {};
 		// mapWithConcurrency returns outcomes in input order, so index i is TIER1_SKILLS[i].
 		const records = outcomes.map((o, i) => {
 			const name = TIER1_SKILLS[i].split("/").pop() ?? TIER1_SKILLS[i];
 			if (o.status === "error" && o.message !== undefined) {
 				messages[name] = o.message;
 			}
+			if (o.status === "error" && o.stack !== undefined) stacks[name] = o.stack;
 			return toRecord(name, 1, o);
 		});
 		logAgentRecords(records, {
@@ -141,6 +143,7 @@ export async function runAuditPass(opts: {
 			provider: selection.provider,
 			model: selection.model,
 			messages,
+			stacks,
 		});
 		let batchSucceeded = 0;
 		for (const o of outcomes) {

@@ -1,5 +1,6 @@
 import { appendFileSync, mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 import type { AgentFailure, ErrorName, FailureClass } from "./agent-failure.js";
 import { readMetadataBlock } from "./review-metadata.js";
 
@@ -51,6 +52,8 @@ export interface AgentLogContext {
 	provider: string;
 	model: string;
 	messages?: Record<string, string>;
+	/** Stack frames of `unknown` failures, for the console line only. */
+	stacks?: Record<string, string>;
 }
 
 const STATUSES: readonly AgentStatus[] = [
@@ -87,7 +90,7 @@ const MAX_RECORDS = 40;
 const MAX_MARKER_BYTES = 16384;
 const MAX_FINISH_REASON = 40;
 const MAX_MESSAGE = 300;
-const DEFAULT_LOG_PATH = ".ai-review/logs/agents.jsonl";
+const MAX_STACK = 1500;
 
 export function toRecord(
 	skill: string,
@@ -237,9 +240,14 @@ export function parseAgentsMarker(
 
 let logFilePath: string | null = null;
 
-/** Turns on the local JSONL sink. Only the CLI calls this, never webhook code. */
-export function enableAgentLogFile(path: string = DEFAULT_LOG_PATH): void {
-	logFilePath = path;
+/** Turns on the local JSONL sink. Only the CLI calls this, never webhook code.
+ * The path is the argument, else `AI_REVIEW_LOG_FILE`, else
+ * `~/.ai-review/logs/agents.jsonl`, outside any repository. */
+export function enableAgentLogFile(path?: string): void {
+	logFilePath =
+		path ||
+		process.env.AI_REVIEW_LOG_FILE ||
+		join(homedir(), ".ai-review", "logs", "agents.jsonl");
 }
 
 export function disableAgentLogFile(): void {
@@ -250,13 +258,15 @@ export function logAgentRecords(
 	records: AgentRecord[],
 	ctx: AgentLogContext,
 ): void {
-	const { messages, ...ids } = ctx;
+	const { messages, stacks, ...ids } = ctx;
 	for (const record of records) {
 		const message = messages?.[record.skill]?.slice(0, MAX_MESSAGE);
+		const stack = stacks?.[record.skill]?.slice(0, MAX_STACK);
 		console.log("agent outcome", {
 			...ids,
 			...record,
 			...(message !== undefined && { message }),
+			...(stack !== undefined && { stack }),
 		});
 	}
 	if (!logFilePath) return;

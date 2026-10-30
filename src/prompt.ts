@@ -107,10 +107,11 @@ export function isGeneratedFile(path: string): boolean {
 /** GitHub lists at most this many files for a pull request. */
 const PR_FILE_LIST_CAP = 3000;
 
-/** True when an agent given these files sees the whole PR: the list is not
- * cut short, and every file other than a generated one has an untrimmed
- * patch or has no changes to show (a binary file, a pure rename). Only such
- * input clears a pending skill. */
+/** True when these files are the whole PR as a FULL round sees it: the list
+ * is not cut short, and every file other than a generated one has a patch or
+ * has no changes to show (a binary file, a pure rename). A patch `trimPatch`
+ * cuts still counts, since every FULL round gives every agent the same cut.
+ * Only such input clears a pending skill. */
 export function wholePrInputComplete(
 	files: ReadonlyArray<{
 		filename: string;
@@ -122,11 +123,12 @@ export function wholePrInputComplete(
 ): boolean {
 	if (files.length < changedFiles || files.length >= PR_FILE_LIST_CAP)
 		return false;
-	return files.every((f) => {
-		if (isGeneratedFile(f.filename)) return true;
-		if (!f.patch) return f.additions === 0 && f.deletions === 0;
-		return trimPatch(f.patch) === f.patch;
-	});
+	return files.every(
+		(f) =>
+			isGeneratedFile(f.filename) ||
+			Boolean(f.patch) ||
+			(f.additions === 0 && f.deletions === 0),
+	);
 }
 
 function serializeFiles(files: PromptContext["files"]): string {
