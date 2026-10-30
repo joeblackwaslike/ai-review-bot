@@ -13,7 +13,7 @@ const dir = fileURLToPath(new URL("./fixtures/", import.meta.url));
 const names = existsSync(dir)
 	? readdirSync(dir)
 			.filter(
-				(n) => /\.json$/.test(n) && !/\.labels(\.proposed)?\.json$/.test(n),
+				(n) => /\.json$/.test(n) && !/\.(labels(\.proposed)?|classes)\.json$/.test(n),
 			)
 			.sort()
 	: [];

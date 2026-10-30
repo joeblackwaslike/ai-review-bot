@@ -65,7 +65,7 @@ const FIXTURE_RECYCLED: Record<string, number> = {
 
 describe("todaysCodePipeline on committed fixtures", () => {
 	const names = readdirSync(dir).filter(
-		(n) => n.endsWith(".json") && !n.includes(".labels"),
+		(n) => n.endsWith(".json") && !n.includes(".labels") && !n.includes(".classes"),
 	);
 
 	it("covers every committed fixture", () => {
