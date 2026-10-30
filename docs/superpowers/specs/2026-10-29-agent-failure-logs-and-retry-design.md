@@ -114,6 +114,7 @@ The unit is pending coverage, a set of skills that owe the PR a full review. It 
   - Generated and lock files (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `bun.lock`, `Cargo.lock`, `poetry.lock`, `go.sum`, `*.min.js`, `*.snap`) are left out of the check.
   - The PR file list must be whole: it is incomplete when shorter than the PR's reported `changed_files` or when it has reached GitHub's 3000-file listing cap.
 - **No silent recovery.** A round that clears a pending skill always posts a review, even when it would otherwise be silent, so that the new `agents` marker on GitHub no longer lists the skill. With KV the state is also updated, but GitHub is the record when KV is absent. If the round fails to clear a skill, it stays pending and the marker says so.
+- **Approval gate.** A round where every selected agent ends `ok` still cannot reach APPROVE while pending is non-empty: the event stays COMMENT, readiness counts the round as partial, and the body names the skills still owed a whole-PR review. A triage SKIP that leaves pending non-empty re-stamps the check-run `neutral`, not `success`.
 - **Anchors.** Inline comments are validated against the PR's own patches, not the delta, so findings a pending skill raises outside the delta can still be anchored.
 
 This replaces the sprint 3 ruling that a partial prior review still counts as the whole baseline. The baseline sha still moves to the new head, since the agents that did complete did review the earlier code; only the pending skills are pointed back at it.
