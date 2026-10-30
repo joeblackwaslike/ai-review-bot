@@ -182,6 +182,23 @@ describe("isSelfRetracted keeps real findings", () => {
 		).toBe(false);
 	});
 
+	it("keeps a no-actionable phrase that names an exception", () => {
+		for (const tail of [
+			"No actionable issue beyond the lost notes mentioned elsewhere.",
+			"No actionable defect found other than the missing timeout.",
+			"No actionable bug apart from the stale cache entry.",
+			"No actionable problem aside from the retry path.",
+			"No actionable finding except the unclosed handle.",
+		])
+			expect(
+				retracted("Low", `The update is atomic, so this is fine. ${tail}`),
+			).toBe(false);
+	});
+
+	it("still retracts no new findings beyond prior reviews", () => {
+		expect(retracted("No new findings beyond prior reviews", "")).toBe(true);
+	});
+
 	it("still catches literal retraction wording", () => {
 		expect(
 			retracted(

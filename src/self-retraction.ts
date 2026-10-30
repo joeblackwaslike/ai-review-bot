@@ -8,6 +8,7 @@ interface PhraseFamily {
 	pattern: RegExp;
 	lastSentenceOnly?: boolean;
 	wholeFindingOnly?: boolean;
+	keepIfExceptionFollows?: boolean;
 }
 
 const PHRASE_FAMILIES: PhraseFamily[] = [
@@ -15,6 +16,7 @@ const PHRASE_FAMILIES: PhraseFamily[] = [
 		name: "no-actionable-defect",
 		pattern:
 			/\bno (?:actionable (?:defects?|bugs?|issues?|problems?|findings?)|(?:issues?|defects?|bugs?|problems?) (?:found|here|identified))\b/i,
+		keepIfExceptionFollows: true,
 	},
 	{
 		name: "not-flagging",
@@ -51,6 +53,9 @@ const PHRASE_FAMILIES: PhraseFamily[] = [
 	},
 ];
 
+const EXCEPTION_FOLLOWS =
+	/^\s*(?:(?:found|identified|here|detected)\s+)?(?:beyond|other than|apart from|aside from|except)\b/i;
+
 const KEEP_AFTER_PHRASE =
 	/\b(?:but|however|although|though|unless|except|whereas|consider|should)\b|\b(?:just|only) (?:confirm|verify|check|make sure)\b|\bwould be (?:clearer|better|safer)\b|\bsuggest/i;
 
@@ -69,14 +74,19 @@ function familiesInTail(text: string): string[] {
 	const last = tail[tail.length - 1];
 	const window = tail.join(" ");
 	return PHRASE_FAMILIES.filter(
-		({ pattern, lastSentenceOnly, wholeFindingOnly }) => {
+		({
+			pattern,
+			lastSentenceOnly,
+			wholeFindingOnly,
+			keepIfExceptionFollows,
+		}) => {
 			if (wholeFindingOnly && sentences.length !== 1) return false;
 			const scope = lastSentenceOnly ? last : window;
 			const match = scope ? pattern.exec(scope) : null;
 			if (!match) return false;
-			return !KEEP_AFTER_PHRASE.test(
-				scope.slice(match.index + match[0].length),
-			);
+			const rest = scope.slice(match.index + match[0].length);
+			if (keepIfExceptionFollows && EXCEPTION_FOLLOWS.test(rest)) return false;
+			return !KEEP_AFTER_PHRASE.test(rest);
 		},
 	).map((f) => f.name);
 }
