@@ -1,5 +1,6 @@
 import { NoObjectGeneratedError } from "ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { type AgentRecord, parseAgentsMarker } from "./agent-log.js";
 import type { KvClient } from "./feedback/kv.js";
 import { computeCost, createAIModel } from "./models.js";
 import {
@@ -14,6 +15,7 @@ import {
 	formatFindings,
 	formatReviewBody,
 	generateSummary,
+	KNOWN_SKILLS,
 	ModelReviewSchema,
 	mergeReviews,
 	mergeReviewsDetailed,
@@ -4118,7 +4120,9 @@ describe("formatReviewBody", () => {
 		readiness: 3,
 		tier2Matches: [] as { skillPath: string; reason: string }[],
 		skipped: [] as string[],
-		errored: [] as string[],
+		agentRecords: [] as AgentRecord[],
+		pending: [] as string[],
+		retrySkipped: [] as string[],
 		allSkillsCount: 5,
 		generalFindings: [] as Parameters<
 			typeof formatReviewBody
@@ -4193,6 +4197,148 @@ describe("formatReviewBody", () => {
 		});
 		expect(body).toContain("Partial review");
 		expect(body).toContain("security-sast");
+	});
+
+	describe("failed-agent notice and agents marker", () => {
+		const ok = (skill: string, attempt: 1 | 2 = 1): AgentRecord => ({
+			skill,
+			attempt,
+			status: "ok",
+		});
+		const err = (
+			skill: string,
+			cls: NonNullable<AgentRecord["class"]>,
+			retryable: boolean,
+			attempt: 1 | 2 = 1,
+		): AgentRecord => ({
+			skill,
+			attempt,
+			status: "error",
+			class: cls,
+			retryable,
+		});
+		const groupsOf = (body: string, skill: string) =>
+			body
+				.split("\n")
+				.filter((l) => l.startsWith(">") && l.includes(`\`${skill}\``));
+
+		it("renders no notice for an all-ok round", () => {
+			const body = formatReviewBody({
+				...baseOpts,
+				agentRecords: [ok("code-reviewer.md"), ok("security-sast.md")],
+			});
+			expect(body).not.toMatch(/Partial review|recovered on retry/);
+		});
+
+		it("renders recovered agents as one informational line without a warning", () => {
+			const body = formatReviewBody({
+				...baseOpts,
+				agentRecords: [
+					err("code-reviewer.md", "no_output", true),
+					ok("code-reviewer.md", 2),
+				],
+			});
+			const lines = groupsOf(body, "code-reviewer");
+			expect(lines).toHaveLength(1);
+			expect(lines[0]).toContain("failed, then recovered on retry");
+			expect(lines[0]).not.toContain("⚠️");
+			expect(body).not.toContain("Partial review");
+		});
+
+		it("puts each skill in exactly one group with class names", () => {
+			const body = formatReviewBody({
+				...baseOpts,
+				skipped: ["pr-test-analyzer.md"],
+				retrySkipped: ["silent-failure-hunter.md"],
+				agentRecords: [
+					err("code-reviewer.md", "no_output", true),
+					err("code-reviewer.md", "schema_mismatch", true, 2),
+					err("security-sast.md", "output_truncated", false),
+					err("silent-failure-hunter.md", "transient_http", true),
+					{ skill: "pr-test-analyzer.md", attempt: 1, status: "skipped" },
+				],
+			});
+			const one = (skill: string, phrase: string, cls?: string) => {
+				const lines = groupsOf(body, skill);
+				expect(lines).toHaveLength(1);
+				expect(lines[0]).toContain(phrase);
+				if (cls) expect(lines[0]).toContain(cls);
+			};
+			one("code-reviewer", "failed after retry", "schema_mismatch");
+			one("security-sast", "failed, not retried", "output_truncated");
+			one(
+				"silent-failure-hunter",
+				"retry skipped, out of time",
+				"transient_http",
+			);
+			one("pr-test-analyzer", "did not run");
+		});
+
+		it.each([
+			["rate_limited", "rate limited"],
+			["quota_exhausted", "quota"],
+		] as const)("lists a %s final outcome in the notice", (status, phrase) => {
+			const body = formatReviewBody({
+				...baseOpts,
+				agentRecords: [
+					err("code-reviewer.md", "no_output", true),
+					{ skill: "code-reviewer.md", attempt: 2, status },
+				],
+			});
+			const lines = groupsOf(body, "code-reviewer");
+			expect(lines).toHaveLength(1);
+			expect(lines[0]).toContain("Partial review");
+			expect(lines[0]).toContain(phrase);
+		});
+
+		it("writes an agents marker inside the contiguous block above the footer", () => {
+			const records = [
+				err("code-reviewer.md", "no_output", true),
+				err("code-reviewer.md", "schema_mismatch", true, 2),
+				ok("security-sast.md"),
+			];
+			const body = formatReviewBody({
+				...baseOpts,
+				agentRecords: records,
+				pending: ["code-reviewer.md"],
+			});
+			expect(parseAgentsMarker(body, KNOWN_SKILLS)).toEqual({
+				records,
+				pending: ["code-reviewer.md"],
+			});
+			const lines = body.split("\n");
+			const i = lines.findIndex((l) => l.startsWith("<!-- ai-review:agents="));
+			expect(lines[i - 1]).toMatch(/^<!-- ai-review:cost=/);
+			expect(lines[i + 1]).toBe("");
+			expect(lines[i + 2]).toBe("---");
+			expect(parseReviewMetadata(body)?.sha).toBe("abc123def456");
+		});
+
+		it("carries the marker on an approval body too", () => {
+			const body = formatReviewBody({
+				...baseOpts,
+				finalEvent: "APPROVE",
+				approvalMessage: "ok",
+				readiness: 5,
+				agentRecords: [ok("code-reviewer.md")],
+			});
+			expect(parseAgentsMarker(body, KNOWN_SKILLS)?.records).toEqual([
+				ok("code-reviewer.md"),
+			]);
+		});
+
+		it("reads the real block, not markers quoted in the summary", () => {
+			const quoted = `<!-- ai-review:agents={"r":[],"p":["security-sast.md"]} -->`;
+			const body = formatReviewBody({
+				...baseOpts,
+				summary: `Earlier review said:\n${quoted}\nend`,
+				agentRecords: [ok("code-reviewer.md")],
+			});
+			expect(parseAgentsMarker(body, KNOWN_SKILLS)).toEqual({
+				records: [ok("code-reviewer.md")],
+				pending: [],
+			});
+		});
 	});
 });
 
@@ -5049,7 +5195,7 @@ describe("buildReview ledger suppression", () => {
 				...baseContext,
 			});
 
-			expect(decision?.body).toContain("failed to complete");
+			expect(decision?.body).toContain("failed, not retried");
 			error.mockRestore();
 		});
 
@@ -6373,6 +6519,20 @@ describe("agent retry", () => {
 		const decision = await buildReview(ctx());
 		expect(calls["code-reviewer.md"]).toBe(2);
 		expect(decision?.body).toContain("Recovered finding");
+		expect(decision?.body).toMatch(
+			/failed, then recovered on retry: `code-reviewer`/,
+		);
+		expect(decision?.body).not.toContain("Partial review");
+		const marker = parseAgentsMarker(decision?.body ?? "", KNOWN_SKILLS);
+		expect(marker?.pending).toEqual([]);
+		expect(
+			marker?.records
+				.filter((r) => r.skill === "code-reviewer.md")
+				.map((r) => [r.attempt, r.status]),
+		).toEqual([
+			[1, "error"],
+			[2, "ok"],
+		]);
 		const recs = recordsFor(log, "code-reviewer.md");
 		expect(recs).toHaveLength(2);
 		expect(recs[0]).toMatchObject({
@@ -6421,9 +6581,12 @@ describe("agent retry", () => {
 			"security-sast.md": burn,
 			"code-review-and-quality.md": burn,
 		});
-		await buildReview(ctx());
+		const decision = await buildReview(ctx());
 		expect(calls["code-reviewer.md"]).toBe(1);
 		expect(retrySkippedWarned(warn, "code-reviewer.md")).toBe(true);
+		expect(decision?.body).toMatch(
+			/retry skipped, out of time: `code-reviewer`/,
+		);
 	});
 
 	it("skips the retry when less time is left than the first attempt took", async () => {
@@ -6437,10 +6600,13 @@ describe("agent retry", () => {
 				throw noOutput();
 			},
 		});
-		await buildReview(ctx());
+		const decision = await buildReview(ctx());
 		// 290s left is well over 30s, but under the 310s the first attempt took.
 		expect(calls["code-reviewer.md"]).toBe(1);
 		expect(retrySkippedWarned(warn, "code-reviewer.md")).toBe(true);
+		expect(decision?.body).toMatch(
+			/retry skipped, out of time: `code-reviewer`/,
+		);
 	});
 
 	it("cancels the retry when pacing uses up the time that made it eligible", async () => {
@@ -6459,9 +6625,12 @@ describe("agent retry", () => {
 		});
 		const p = buildReview(ctx());
 		await vi.runAllTimersAsync();
-		await p;
+		const decision = await p;
 		expect(calls["code-reviewer.md"]).toBe(1);
 		expect(retrySkippedWarned(warn, "code-reviewer.md")).toBe(true);
+		expect(decision?.body).toMatch(
+			/retry skipped, out of time: `code-reviewer`/,
+		);
 	});
 
 	it("paces the retry pass's first agent from the first pass's rate limit", async () => {
@@ -6500,7 +6669,9 @@ describe("agent retry", () => {
 			[1, "no_output"],
 			[2, "schema_mismatch"],
 		]);
-		expect(decision?.body).toContain("failed to complete: `code-reviewer`");
+		expect(decision?.body).toMatch(
+			/failed after retry: `code-reviewer` \(schema_mismatch\)/,
+		);
 	});
 
 	it("builds the retry's abort signal from the original absolute deadline", async () => {
@@ -6612,8 +6783,19 @@ describe("agent retry", () => {
 			[2, "skipped", undefined],
 		]);
 		// Final result is the first attempt's error: in errored, not skipped.
-		expect(decision?.body).toContain("failed to complete: `code-reviewer`");
+		const lines = (decision?.body ?? "")
+			.split("\n")
+			.filter((l) => l.includes("`code-reviewer`") && l.startsWith(">"));
+		expect(lines).toHaveLength(1);
+		expect(lines[0]).toContain("retry skipped, out of time");
 		expect(decision?.body).not.toContain("did not run");
+		const marker = parseAgentsMarker(decision?.body ?? "", KNOWN_SKILLS);
+		expect(
+			marker?.records
+				.filter((r) => r.skill === "code-reviewer.md")
+				.map((r) => [r.attempt, r.status]),
+		).toEqual([[1, "error"]]);
+		expect(marker?.pending).toEqual(["code-reviewer.md"]);
 		expect(collected(log)).toMatchObject({ errored: 1 });
 		// And in retrySkipped, with exactly one warning.
 		expect(retrySkipWarns(warn, "code-reviewer.md")).toBe(1);
@@ -6655,6 +6837,9 @@ describe("agent retry", () => {
 			[2, status],
 		]);
 		expect(collected(log)).toMatchObject(counts);
+		expect(decision?.body).toMatch(/Partial review/);
+		expect(decision?.body).toContain(`\`code-reviewer\``);
+		expect(decision?.body).toContain("<!-- ai-review:readiness=3 -->");
 		const expected = computeCost(
 			{
 				promptTokens: (TIER1_SKILLS.length - 1) * 1000 + 700,

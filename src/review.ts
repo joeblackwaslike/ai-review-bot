@@ -6,7 +6,12 @@ import {
 	classifyAgentError,
 	usageFromError,
 } from "./agent-failure.js";
-import { logAgentRecords, toRecord } from "./agent-log.js";
+import {
+	type AgentRecord,
+	formatAgentsMarker,
+	logAgentRecords,
+	toRecord,
+} from "./agent-log.js";
 import type { ResolvedAuth } from "./auth.js";
 import { deriveBaseline } from "./baseline.js";
 import { dedupeClaims, isSameClaim } from "./claim-dedupe.js";
@@ -32,7 +37,7 @@ import {
 	reasoningProviderOptions,
 	routeModel,
 } from "./router.js";
-import { detectTier2Skills } from "./tier2.js";
+import { detectTier2Skills, TIER2_DETECTORS } from "./tier2.js";
 import {
 	fetchDeltaMeta,
 	revalidateFindings,
@@ -372,6 +377,13 @@ export const TIER1_SKILLS: readonly string[] = [
 	"security-sast.md",
 	"code-review-and-quality.md",
 ];
+
+const baseName = (path: string) => path.split("/").pop() ?? path;
+
+/** Every skill name an `agents` marker may mention. */
+export const KNOWN_SKILLS: ReadonlySet<string> = new Set(
+	[...TIER1_SKILLS, ...TIER2_DETECTORS.map((d) => d.skillPath)].map(baseName),
+);
 
 const PACE_TOKEN_FLOOR = 5000; // below this many remaining input tokens, wait for reset
 const PACE_MAX_WAIT_MS = 60_000; // never sleep longer than this between agents
@@ -850,7 +862,12 @@ export interface FormatReviewBodyOptions {
 	readiness: number;
 	tier2Matches: { skillPath: string; reason: string }[];
 	skipped: string[];
-	errored: string[];
+	/** Final attempt per skill, plus the first attempt when it was retried. */
+	agentRecords: AgentRecord[];
+	/** Skills whose last outcome was not ok. */
+	pending: string[];
+	/** Skills whose retry never started or was aborted for lack of time. */
+	retrySkipped: string[];
 	allSkillsCount: number;
 	generalFindings: ModelFinding[];
 	reviewComments: ReviewComment[];
@@ -885,6 +902,79 @@ export type ScopeNote =
 	| `scope: delta from ${string} (${"kv" | "github"})`
 	| `scope: full (${ScopeReason})`;
 
+const skillLabel = (skill: string) => `\`${skill.replace(/\.md$/, "")}\``;
+
+/**
+ * Groups failed agents for the review body. Each skill lands in exactly one
+ * group: retrySkipped wins over the error groups because a skipped retry leaves
+ * the skill in both lists by design.
+ */
+function formatAgentNotices(opts: {
+	skipped: string[];
+	agentRecords: AgentRecord[];
+	retrySkipped: string[];
+	allSkillsCount: number;
+}): string[] {
+	const { skipped, agentRecords, retrySkipped, allSkillsCount } = opts;
+	const first = new Map<string, AgentRecord>();
+	const last = new Map<string, AgentRecord>();
+	for (const r of agentRecords) {
+		if (r.attempt === 1) first.set(r.skill, r);
+		last.set(r.skill, r);
+	}
+	const recovered: string[] = [];
+	const afterRetry: string[] = [];
+	const notRetried: string[] = [];
+	const retryOutOfTime: string[] = [];
+	const rateLimited: string[] = [];
+	const quota: string[] = [];
+	const withClass = (r: AgentRecord) =>
+		`${skillLabel(r.skill)} (${r.class ?? "unknown"})`;
+	const skippedSet = new Set(skipped.map(baseName));
+	for (const [skill, r] of last) {
+		if (skippedSet.has(skill)) continue;
+		if (r.status === "ok") {
+			const f = first.get(skill);
+			if (r.attempt === 2 && f) recovered.push(withClass(f));
+		} else if (r.status === "rate_limited") rateLimited.push(skillLabel(skill));
+		else if (r.status === "quota_exhausted") quota.push(skillLabel(skill));
+		else if (r.status === "error") {
+			if (retrySkipped.map(baseName).includes(skill))
+				retryOutOfTime.push(withClass(r));
+			else if (r.attempt === 2) afterRetry.push(withClass(r));
+			else notRetried.push(withClass(r));
+		}
+	}
+	const rerun = "Re-run the review command for full coverage.";
+	const count = (n: number) => `${n} of ${allSkillsCount} agent(s)`;
+	const notices: string[] = [];
+	if (skipped.length > 0) {
+		notices.push(
+			`> ⏱ **Partial review.** ${skipped.length} of ${allSkillsCount} agents did not run — this pass hit its time budget before reaching ${skipped
+				.map(skillLabel)
+				.join(", ")}. ${rerun}`,
+		);
+	}
+	const warn = (icon: string, list: string[], what: string) => {
+		if (list.length > 0) {
+			notices.push(
+				`> ${icon} **Partial review.** ${count(list.length)} ${what}: ${list.join(", ")}. ${rerun}`,
+			);
+		}
+	};
+	warn("⚠️", afterRetry, "failed after retry");
+	warn("⚠️", notRetried, "failed, not retried");
+	warn("⏱", retryOutOfTime, "retry skipped, out of time");
+	warn("⚠️", rateLimited, "rate limited");
+	warn("⚠️", quota, "out of quota");
+	if (recovered.length > 0) {
+		notices.push(
+			`> ${count(recovered.length)} failed, then recovered on retry: ${recovered.join(", ")}.`,
+		);
+	}
+	return notices;
+}
+
 export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 	const {
 		commentPrefix,
@@ -894,7 +984,9 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		readiness,
 		tier2Matches,
 		skipped,
-		errored,
+		agentRecords,
+		pending,
+		retrySkipped,
 		allSkillsCount,
 		generalFindings,
 		reviewComments,
@@ -926,21 +1018,12 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 					.join("\n")}`
 			: "";
 
-	const budgetNotices: string[] = [];
-	if (skipped.length > 0) {
-		budgetNotices.push(
-			`> ⏱ **Partial review.** ${skipped.length} of ${allSkillsCount} agents did not run — this pass hit its time budget before reaching ${skipped
-				.map((s) => `\`${s.replace(/\.md$/, "")}\``)
-				.join(", ")}. Re-run the review command for full coverage.`,
-		);
-	}
-	if (errored.length > 0) {
-		budgetNotices.push(
-			`> ⚠️ **Partial review.** ${errored.length} of ${allSkillsCount} agent(s) failed to complete: ${errored
-				.map((s) => `\`${s.replace(/\.md$/, "")}\``)
-				.join(", ")}. Re-run the review command for full coverage.`,
-		);
-	}
+	const budgetNotices = formatAgentNotices({
+		skipped,
+		agentRecords,
+		retrySkipped,
+		allSkillsCount,
+	});
 
 	const findingsBlock = formatFindings(generalFindings);
 
@@ -994,6 +1077,7 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		`<!-- ai-review:model=${model} -->`,
 		`<!-- ai-review:findings=${generalFindings.length} -->`,
 		`<!-- ai-review:cost=${cost.toFixed(6)} -->`,
+		formatAgentsMarker(agentRecords, pending, KNOWN_SKILLS),
 	].join("\n");
 
 	const costFooter = `---\n*Model: ${model} · ${allSkillsCount} agents · $${cost.toFixed(6)}${ledgerNote ? ` · ${ledgerNote}` : ""}${scopeNote ? ` · ${scopeNote}` : ""} · [ai-review-bot](https://github.com/joeblackwaslike/ai-review-bot)*`;
@@ -2008,6 +2092,13 @@ export async function buildReview(
 		});
 	}
 
+	const agentRecords = attempts
+		.filter((a) => !(a.attempt === 2 && a.outcome.status === "skipped"))
+		.map((a) => toRecord(a.skill, a.attempt, a.outcome));
+	const pending = outcomes.flatMap((o, i) =>
+		o.status === "ok" ? [] : [skillName(allSkills[i]?.skillPath ?? "unknown")],
+	);
+
 	if (errored.length > 0) {
 		console.warn("review agents failed and were excluded from this pass", {
 			completed: agentResults.length,
@@ -2340,7 +2431,11 @@ export async function buildReview(
 		event: finalEvent,
 		hasP0,
 		survivingPrior: blockingPrior.map((f) => f.id),
-		partial: skipped.length > 0 || errored.length > 0,
+		partial:
+			skipped.length > 0 ||
+			errored.length > 0 ||
+			rateLimited.length > 0 ||
+			quotaExhausted.length > 0,
 	});
 
 	const body = formatReviewBody({
@@ -2351,7 +2446,9 @@ export async function buildReview(
 		readiness,
 		tier2Matches,
 		skipped,
-		errored,
+		agentRecords,
+		pending,
+		retrySkipped,
 		allSkillsCount: allSkills.length,
 		generalFindings: modelReview.general_findings,
 		reviewComments,
