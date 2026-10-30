@@ -84,7 +84,7 @@ Settled repeats are dropped per agent before this merge, and a re-review round w
 
 The CLI supports four subcommands for offline code review of the working tree (plus `ai-review watch` for an already-open PR, and `ai-review replay` for offline review-accuracy measurement — see below):
 
-`watch`, `review` and `audit` also append one JSON line per agent outcome to `.ai-review/logs/agents.jsonl`. The hosted webhook path does not write it.
+`watch`, `review` and `audit` also append one JSON line per agent outcome to `~/.ai-review/logs/agents.jsonl`, or to the path in `AI_REVIEW_LOG_FILE` when it is set. The hosted webhook path does not write it.
 
 - `ai-review review [--full | --commit <sha>] [--slug <slug>] [--title <t>] [--out <dir>] [--extra <text>] [--json]` — Runs the full multi-agent review against local changes (default), the full tree (`--full`), or a specific commit (`--commit`), and writes a round-numbered Markdown report with YAML front-matter into `docs/code-reviews/` (no PR). Auth per provider: API key → explicit OAuth env token → logged-in `codex`/`claude` subscription (local, personal use only; never wired into webhook paths — see `src/auth.ts`). The `/code-review` slash command wraps it with doc-only / `--fix` / `--propose` modes.
 
