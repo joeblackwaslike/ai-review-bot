@@ -234,6 +234,40 @@ describe("isSelfRetracted keeps real findings", () => {
 			expect(retracted(title, body)).toBe(false);
 	});
 
+	it("keeps a real defect followed by a scoped reassurance", () => {
+		const keep: [string, string][] = [
+			[
+				"Flush",
+				"The writer silently discards the last chunk on flush. No issues found by tests.",
+			],
+			[
+				"Retry",
+				"The socket leaks on retry. No issues found in the happy path.",
+			],
+			[
+				"Rate",
+				"The retry loop drops the token on 429. No issues found in tests.",
+			],
+			[
+				"Migration",
+				"The migration deletes rows without a backup. No issues found in this file.",
+			],
+			[
+				"Writer",
+				"The writer drops a chunk at close. No issues found in parsing.",
+			],
+			["Socket", "The socket leaks on retry. Otherwise this looks consistent."],
+			["Logs", "The log says 'No issues found' even when the scan fails."],
+		];
+		for (const [title, body] of keep)
+			expect(retracted(title, body)).toBe(false);
+	});
+
+	it("still retracts a bare closing no-issues statement", () => {
+		expect(retracted("Low", "The guard holds. No issues found.")).toBe(true);
+		expect(retracted("Low", "The guard holds. No issue here.")).toBe(true);
+	});
+
 	it("keeps findings that use withdraw or retract as domain words", () => {
 		for (const body of [
 			"Concurrent requests can withdraw the same balance twice.",

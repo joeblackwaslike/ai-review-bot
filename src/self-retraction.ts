@@ -69,7 +69,10 @@ const EXCEPTION_FOLLOWS =
 	/^\s*(?:(?:found|identified|here|detected)\s+)?(?:beyond|other than|apart from|aside from|except)\b/i;
 
 const CONTRAST =
-	/\b(?:but|however|although|though|unless|except|whereas|yet|while)\b/i;
+	/\b(?:but|however|although|though|unless|except|whereas|yet|while|otherwise)\b/i;
+
+const SCOPE_FOLLOWS =
+	/^\s*(?:(?:found|identified|detected|here)\s+)?(?:in|by|with|for|from|during|on|within|under|at|across|inside|via|after|before|when|if|as|per|of|using|through|among)\b/i;
 
 const KEEP_AFTER_PHRASE = new RegExp(
 	`${CONTRAST.source}|\\b(?:consider|should)\\b|\\b(?:just|only) (?:confirm|verify|check|make sure)\\b|\\bwould be (?:clearer|better|safer)\\b|\\bsuggest`,
@@ -109,6 +112,12 @@ function familiesInLastUnit(text: string): string[] {
 		if (family.keepIfExceptionFollows && EXCEPTION_FOLLOWS.test(rest))
 			return false;
 		const opensTheWholeFinding = all.length === 1 && match.index === 0;
+		if (
+			family.keepIfExceptionFollows &&
+			!opensTheWholeFinding &&
+			SCOPE_FOLLOWS.test(rest)
+		)
+			return false;
 		if (
 			family.maxWordsAfter !== undefined &&
 			!opensTheWholeFinding &&
