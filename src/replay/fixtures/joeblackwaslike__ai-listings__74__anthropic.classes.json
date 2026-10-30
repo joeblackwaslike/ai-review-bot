@@ -1,0 +1,46 @@
+{
+	"fixtureId": "joeblackwaslike__ai-listings__74__anthropic",
+	"provisional": true,
+	"records": [
+		{
+			"claimId": "r0:c4370326727:0",
+			"rules": null,
+			"claude": "contradicted",
+			"codex": "contradicted",
+			"reactionOnly": false,
+			"final": "contradicted"
+		},
+		{
+			"claimId": "r3:c4371932215:0",
+			"rules": null,
+			"claude": "contradicted",
+			"codex": "contradicted",
+			"reactionOnly": false,
+			"final": "contradicted"
+		},
+		{
+			"claimId": "r3:c4371932215:1",
+			"rules": null,
+			"claude": "filler",
+			"codex": "filler",
+			"reactionOnly": false,
+			"final": "filler"
+		},
+		{
+			"claimId": "r3:body:4",
+			"rules": null,
+			"claude": "other",
+			"codex": "contradicted",
+			"reactionOnly": false,
+			"final": "unadjudicated"
+		},
+		{
+			"claimId": "r4:c4372052080:1",
+			"rules": null,
+			"claude": "other",
+			"codex": "contradicted",
+			"reactionOnly": false,
+			"final": "unadjudicated"
+		}
+	]
+}

@@ -1,0 +1,142 @@
+{
+	"fixtureId": "joeblackwaslike__agent-skills__10__anthropic",
+	"provisional": true,
+	"records": [
+		{
+			"claimId": "r0:body:0",
+			"rules": null,
+			"claude": "filler",
+			"codex": "filler",
+			"reactionOnly": false,
+			"final": "filler"
+		},
+		{
+			"claimId": "r0:body:4",
+			"rules": null,
+			"claude": "other",
+			"codex": "other",
+			"reactionOnly": false,
+			"final": "other"
+		},
+		{
+			"claimId": "r0:body:5",
+			"rules": null,
+			"claude": "filler",
+			"codex": "filler",
+			"reactionOnly": false,
+			"final": "filler"
+		},
+		{
+			"claimId": "r1:body:0",
+			"rules": "filler",
+			"claude": "filler",
+			"codex": "filler",
+			"reactionOnly": false,
+			"final": "filler"
+		},
+		{
+			"claimId": "r1:body:1",
+			"rules": null,
+			"claude": "filler",
+			"codex": "filler",
+			"reactionOnly": false,
+			"final": "filler"
+		},
+		{
+			"claimId": "r1:body:2",
+			"rules": null,
+			"claude": "filler",
+			"codex": "other",
+			"reactionOnly": false,
+			"final": "unadjudicated"
+		},
+		{
+			"claimId": "r1:body:3",
+			"rules": null,
+			"claude": "other",
+			"codex": "other",
+			"reactionOnly": false,
+			"final": "other"
+		},
+		{
+			"claimId": "r2:body:2",
+			"rules": null,
+			"claude": "other",
+			"codex": "other",
+			"reactionOnly": false,
+			"final": "other"
+		},
+		{
+			"claimId": "r2:body:3",
+			"rules": null,
+			"claude": "other",
+			"codex": "other",
+			"reactionOnly": false,
+			"final": "other"
+		},
+		{
+			"claimId": "r3:body:0",
+			"rules": null,
+			"claude": "filler",
+			"codex": "filler",
+			"reactionOnly": false,
+			"final": "filler"
+		},
+		{
+			"claimId": "r3:body:1",
+			"rules": null,
+			"claude": "other",
+			"codex": "other",
+			"reactionOnly": false,
+			"final": "other"
+		},
+		{
+			"claimId": "r3:body:2",
+			"rules": null,
+			"claude": "filler",
+			"codex": "filler",
+			"reactionOnly": false,
+			"final": "filler"
+		},
+		{
+			"claimId": "r4:c4371931925:0",
+			"rules": null,
+			"claude": "contradicted",
+			"codex": "contradicted",
+			"reactionOnly": false,
+			"final": "contradicted"
+		},
+		{
+			"claimId": "r4:body:0",
+			"rules": null,
+			"claude": "other",
+			"codex": "other",
+			"reactionOnly": false,
+			"final": "other"
+		},
+		{
+			"claimId": "r4:body:3",
+			"rules": null,
+			"claude": "other",
+			"codex": "other",
+			"reactionOnly": false,
+			"final": "other"
+		},
+		{
+			"claimId": "r4:body:4",
+			"rules": "filler",
+			"claude": "filler",
+			"codex": "filler",
+			"reactionOnly": false,
+			"final": "filler"
+		},
+		{
+			"claimId": "r4:body:5",
+			"rules": null,
+			"claude": "other",
+			"codex": "other",
+			"reactionOnly": false,
+			"final": "other"
+		}
+	]
+}
