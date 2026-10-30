@@ -74,12 +74,17 @@ Settled repeats are dropped per agent before this merge, and a re-review round w
 | `src/testing.ts` | Shared test fixtures (`buildModelReview`, `buildGenerateObjectResponse`, etc.) |
 | `src/replay/` | Offline replay harness — records, labels, and replays PR review rounds to measure false-positive rate, recycling, and convergence; backs `ai-review replay`. See `docs/superpowers/specs/2026-10-27-review-replay-harness-design.md` |
 | `src/baseline.ts` | `deriveBaseline()` derives a review baseline from GitHub: the latest own review's markers (sha, review count) plus the ledger's open findings; replaces KV as the source of prior state on a cold start |
+| `src/agent-failure.ts` | Classifies a thrown agent error into a failure class and decides whether it is worth one retry |
+| `src/agent-log.ts` | Per-agent outcome records, the `agents` marker in the review body, and the local JSONL log sink |
+| `src/review-metadata.ts` | Reads the `ai-review:key=value` marker block above the review footer, ignoring quoted or duplicated markers |
 | `src/ledger/` | Platform-neutral ledger of review findings and their dispositions rebuilt from GitHub threads, claim matching across rounds, suppression of settled repeats; see `docs/superpowers/specs/2026-10-28-ledger-repeat-suppression-design.md` |
 | `skills/*.md` | Vendored skill frameworks loaded at runtime by `buildAgentSystemPrompt()` |
 
 ### Local audit & review
 
 The CLI supports four subcommands for offline code review of the working tree (plus `ai-review watch` for an already-open PR, and `ai-review replay` for offline review-accuracy measurement — see below):
+
+`watch`, `review` and `audit` also append one JSON line per agent outcome to `.ai-review/logs/agents.jsonl`. The hosted webhook path does not write it.
 
 - `ai-review review [--full | --commit <sha>] [--slug <slug>] [--title <t>] [--out <dir>] [--extra <text>] [--json]` — Runs the full multi-agent review against local changes (default), the full tree (`--full`), or a specific commit (`--commit`), and writes a round-numbered Markdown report with YAML front-matter into `docs/code-reviews/` (no PR). Auth per provider: API key → explicit OAuth env token → logged-in `codex`/`claude` subscription (local, personal use only; never wired into webhook paths — see `src/auth.ts`). The `/code-review` slash command wraps it with doc-only / `--fix` / `--propose` modes.
 
