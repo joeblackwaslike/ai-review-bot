@@ -1,0 +1,198 @@
+{
+	"fixtureId": "joeblackwaslike__stealth-browser__1__anthropic",
+	"provisional": true,
+	"records": [
+		{
+			"claimId": "r0:c4370502157:0",
+			"rules": "filler",
+			"claude": "filler",
+			"codex": "filler",
+			"reactionOnly": false,
+			"final": "filler"
+		},
+		{
+			"claimId": "r0:c4370502157:1",
+			"rules": "filler",
+			"claude": "filler",
+			"codex": "filler",
+			"reactionOnly": false,
+			"final": "filler"
+		},
+		{
+			"claimId": "r0:c4370502158:0",
+			"rules": null,
+			"claude": "contradicted",
+			"codex": "contradicted",
+			"reactionOnly": false,
+			"final": "contradicted"
+		},
+		{
+			"claimId": "r0:c4370502158:1",
+			"rules": "filler",
+			"claude": "filler",
+			"codex": "filler",
+			"reactionOnly": false,
+			"final": "filler"
+		},
+		{
+			"claimId": "r0:c4370502158:2",
+			"rules": null,
+			"claude": "filler",
+			"codex": "filler",
+			"reactionOnly": false,
+			"final": "filler"
+		},
+		{
+			"claimId": "r0:c4370502163:0",
+			"rules": null,
+			"claude": "contradicted",
+			"codex": "contradicted",
+			"reactionOnly": false,
+			"final": "contradicted"
+		},
+		{
+			"claimId": "r0:c4370502168:0",
+			"rules": null,
+			"claude": "contradicted",
+			"codex": "contradicted",
+			"reactionOnly": false,
+			"final": "contradicted"
+		},
+		{
+			"claimId": "r0:c4370502170:0",
+			"rules": null,
+			"claude": "contradicted",
+			"codex": "contradicted",
+			"reactionOnly": false,
+			"final": "contradicted"
+		},
+		{
+			"claimId": "r0:c4370502170:1",
+			"rules": "filler",
+			"claude": "filler",
+			"codex": "filler",
+			"reactionOnly": false,
+			"final": "filler"
+		},
+		{
+			"claimId": "r0:c4370502175:0",
+			"rules": null,
+			"claude": "contradicted",
+			"codex": "contradicted",
+			"reactionOnly": false,
+			"final": "contradicted"
+		},
+		{
+			"claimId": "r0:c4370502176:0",
+			"rules": null,
+			"claude": "contradicted",
+			"codex": "filler",
+			"reactionOnly": false,
+			"final": "unadjudicated"
+		},
+		{
+			"claimId": "r0:c4370502179:0",
+			"rules": "filler",
+			"claude": "filler",
+			"codex": "filler",
+			"reactionOnly": false,
+			"final": "filler"
+		},
+		{
+			"claimId": "r0:c4370502180:0",
+			"rules": null,
+			"claude": "contradicted",
+			"codex": "stale",
+			"reactionOnly": false,
+			"final": "unadjudicated"
+		},
+		{
+			"claimId": "r0:c4370502183:0",
+			"rules": null,
+			"claude": "contradicted",
+			"codex": "contradicted",
+			"reactionOnly": false,
+			"final": "contradicted"
+		},
+		{
+			"claimId": "r1:c4370934140:0",
+			"rules": null,
+			"claude": "contradicted",
+			"codex": "contradicted",
+			"reactionOnly": false,
+			"final": "contradicted"
+		},
+		{
+			"claimId": "r1:c4370934143:0",
+			"rules": null,
+			"claude": "contradicted",
+			"codex": "contradicted",
+			"reactionOnly": false,
+			"final": "contradicted"
+		},
+		{
+			"claimId": "r1:c4370934147:0",
+			"rules": null,
+			"claude": "contradicted",
+			"codex": "contradicted",
+			"reactionOnly": false,
+			"final": "contradicted"
+		},
+		{
+			"claimId": "r1:c4370934151:0",
+			"rules": null,
+			"claude": "contradicted",
+			"codex": "contradicted",
+			"reactionOnly": false,
+			"final": "contradicted"
+		},
+		{
+			"claimId": "r1:c4370934156:0",
+			"rules": null,
+			"claude": "contradicted",
+			"codex": "contradicted",
+			"reactionOnly": false,
+			"final": "contradicted"
+		},
+		{
+			"claimId": "r1:c4370934160:0",
+			"rules": null,
+			"claude": "filler",
+			"codex": "filler",
+			"reactionOnly": false,
+			"final": "filler"
+		},
+		{
+			"claimId": "r1:c4370934163:0",
+			"rules": null,
+			"claude": "contradicted",
+			"codex": "filler",
+			"reactionOnly": false,
+			"final": "unadjudicated"
+		},
+		{
+			"claimId": "r2:c4371651754:0",
+			"rules": null,
+			"claude": "stale",
+			"codex": "contradicted",
+			"reactionOnly": false,
+			"final": "unadjudicated"
+		},
+		{
+			"claimId": "r3:c4371934612:0",
+			"rules": null,
+			"claude": "contradicted",
+			"codex": "contradicted",
+			"reactionOnly": false,
+			"final": "contradicted"
+		},
+		{
+			"claimId": "r3:c4371934613:0",
+			"rules": null,
+			"claude": "contradicted",
+			"codex": "contradicted",
+			"reactionOnly": false,
+			"final": "contradicted"
+		}
+	]
+}

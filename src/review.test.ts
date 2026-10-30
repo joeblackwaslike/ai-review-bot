@@ -2829,6 +2829,51 @@ describe("mergeReviewsDetailed — cross-category dedup", () => {
 	});
 });
 
+describe("mergeReviewsDetailed — findings that say there is no defect", () => {
+	const finding = (title: string, body: string) => ({
+		title,
+		body,
+		severity: "P3" as const,
+		category: "style" as const,
+		confidence: 0.8,
+		evidence: "See diff.",
+		suppressible: true,
+	});
+	const RETRACT = "The slot is held while waiting. No actionable defect found.";
+
+	it("keeps a finding that ends with a retraction phrase and leaves the event alone", () => {
+		const review = buildModelReview({
+			event: "REQUEST_CHANGES",
+			general_findings: [finding("Slot accounting", RETRACT)],
+			inline_comments: [
+				buildInlineComment({ title: "Boundary", body: RETRACT }),
+			],
+		});
+		const out = mergeReviewsDetailed([review], new Set(), {
+			dedupeNearDuplicateClaims: true,
+		});
+		expect(out.review.event).toBe("REQUEST_CHANGES");
+		expect(out.review.general_findings.map((f) => f.title)).toEqual([
+			"Slot accounting",
+		]);
+		expect(out.review.inline_comments.map((c) => c.title)).toEqual([
+			"Boundary",
+		]);
+	});
+
+	it("keeps REQUEST_CHANGES from an agent that filed no findings", () => {
+		const blocker = buildModelReview({ event: "REQUEST_CHANGES" });
+		const other = buildModelReview({
+			event: "COMMENT",
+			general_findings: [
+				finding("Real general issue", "A 429 aborts the run."),
+			],
+		});
+		const out = mergeReviewsDetailed([blocker, other]);
+		expect(out.review.event).toBe("REQUEST_CHANGES");
+	});
+});
+
 describe("classifyRefusal", () => {
 	// Both conditions arrive as HTTP 429 and need opposite responses from a
 	// human, so quota must win over rate limit whenever both could match.
@@ -3262,6 +3307,50 @@ describe("strict evidence rules propagation", () => {
 			expect(call[2]).toEqual({ strictEvidenceRules: true });
 		}
 		expect(mockBuildAgentSystemPrompt).toHaveBeenCalled();
+	});
+});
+
+describe("retraction phrases are not filtered", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildAgentSystemPrompt.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+	});
+
+	it("posts a finding that ends with a retraction phrase through buildReview", async () => {
+		mockGenerateObject.mockImplementation(async () =>
+			mockGenerateObject.mock.calls.length <= TIER1_SKILLS.length
+				? buildGenerateObjectResponse(
+						buildModelReview({
+							event: "COMMENT",
+							general_findings: [
+								{
+									title: "Slot accounting",
+									body: "The slot is held while waiting. No actionable defect found.",
+									severity: "P3",
+									category: "style",
+									confidence: 0.8,
+									evidence: "See diff.",
+									suppressible: true,
+								},
+							],
+						}),
+					)
+				: {
+						object: { summary: "Nothing." },
+						usage: { inputTokens: 10, outputTokens: 5 },
+					},
+		);
+
+		const result = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			provider: "anthropic" as const,
+		});
+
+		expect(result?.event).toBe("COMMENT");
+		expect(result?.body ?? "").toContain("Slot accounting");
 	});
 });
 

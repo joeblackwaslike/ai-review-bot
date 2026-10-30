@@ -72,6 +72,111 @@ describe("runReplay", () => {
 		expect(text).toContain("replayed 1 fixture");
 	});
 
+	it("ignores .classes.json files in the fixtures directory", async () => {
+		const dir = tmp();
+		const id = seed(dir);
+		writeFileSync(
+			join(dir, `${id}.classes.json`),
+			JSON.stringify({ records: [] }),
+		);
+		const { lines, out } = collect();
+		const code = await runReplay([], { fixturesDir: dir, out });
+		expect(code).toBe(0);
+		expect(lines.join("\n")).toContain("replayed 1 fixture");
+	});
+
+	it("prints the false-positive class report when a classes file exists", async () => {
+		const dir = tmp();
+		const id = seed(
+			dir,
+			makeLabels({
+				labels: [makeLabel("a", "rejected"), makeLabel("b", "rejected")],
+			}),
+		);
+		const rec = (
+			claimId: string,
+			c: "filler" | "stale",
+			x: "filler" | "stale" | "other",
+		) => ({
+			claimId,
+			rules: c === "filler" ? ("filler" as const) : null,
+			claude: c,
+			codex: x,
+			final: c === x ? c : "unadjudicated",
+			reactionOnly: false,
+		});
+		writeFileSync(
+			join(dir, `${id}.classes.json`),
+			JSON.stringify({
+				fixtureId: id,
+				provisional: true,
+				records: [rec("a", "filler", "filler"), rec("b", "stale", "other")],
+			}),
+		);
+		const { lines, out } = collect();
+		expect(await runReplay([], { fixturesDir: dir, out })).toBe(0);
+		const text = lines.join("\n");
+		expect(text).toContain("classified 1 of 2 first-seen rejected");
+		expect(text).toMatch(/filler\s+1/);
+		expect(text).toMatch(/stale\s+0/);
+		expect(text).toContain("agreement 1 of 2");
+		expect(text).toContain("rules vs models: 1 of 1");
+		expect(text).toContain("unadjudicated 1");
+		expect(text).toContain("provisional");
+		expect(text).toMatch(
+			/candidate retraction rule would remove 0 of \d+ filler, 0 other-rejected, 0 unadjudicated, 0 of \d+ fixed/,
+		);
+	});
+
+	it("skips a classes file with no labels file and keeps it out of the report", async () => {
+		const dir = tmp();
+		const id = seed(
+			dir,
+			makeLabels({
+				labels: [makeLabel("a", "rejected"), makeLabel("b", "rejected")],
+			}),
+		);
+		const rec = (claimId: string) => ({
+			claimId,
+			rules: null,
+			claude: "other",
+			codex: "other",
+			final: "other",
+			reactionOnly: false,
+		});
+		writeFileSync(
+			join(dir, `${id}.classes.json`),
+			JSON.stringify({
+				fixtureId: id,
+				provisional: true,
+				records: [rec("a"), rec("b")],
+			}),
+		);
+		writeFileSync(
+			join(dir, "ghost__r__9__anthropic.classes.json"),
+			JSON.stringify({
+				fixtureId: "ghost__r__9__anthropic",
+				provisional: true,
+				records: [rec("x"), rec("y"), rec("z")],
+			}),
+		);
+		const { lines, out } = collect();
+		expect(await runReplay([], { fixturesDir: dir, out })).toBe(0);
+		const text = lines.join("\n");
+		expect(text).toContain(
+			"ghost__r__9__anthropic.classes.json: skipped: no labels file",
+		);
+		expect(text).toContain("classified 2 of 2 first-seen rejected");
+	});
+
+	it("prints no filter margin when there are no classes files", async () => {
+		const dir = tmp();
+		seed(dir);
+		const { lines, out } = collect();
+		expect(await runReplay([], { fixturesDir: dir, out })).toBe(0);
+		expect(lines.join("\n")).not.toContain("candidate retraction rule");
+	});
+
 	it("exits 1 when the guard has a failure and 0 when only warnings", async () => {
 		const suppressA: ReplayPipeline = ({ claims }) => ({
 			posted: claims.filter((c) => c.id !== "a").map((c) => c.id),

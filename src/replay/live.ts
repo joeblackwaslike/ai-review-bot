@@ -1,10 +1,14 @@
 import { isSameClaim } from "../claim-dedupe.js";
+import { candidateFamilies } from "./retraction-rule.js";
 import type { LabelFile, ReplayFixture, Round } from "./types.js";
 
 export interface LiveFinding {
 	title: string;
 	path: string | null;
 	line: number | null;
+	body?: string;
+	severity?: string;
+	suppressible?: boolean;
 }
 
 export interface LiveRoundReport {
@@ -12,6 +16,8 @@ export interface LiveRoundReport {
 	matchedFixed: number;
 	matchedRejected: number;
 	newUnlabeled: number;
+	raw: number;
+	retracted: number;
 	approximate: boolean;
 }
 
@@ -83,6 +89,10 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 			matchedFixed: 0,
 			matchedRejected: 0,
 			newUnlabeled: 0,
+			raw: findings.length,
+			retracted: findings.filter(
+				(f) => candidateFamilies({ ...f, body: f.body ?? "" }).length > 0,
+			).length,
 			approximate: d.approximate,
 		};
 		for (const f of findings) {
@@ -96,7 +106,7 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 		}
 		report.rounds.push(row);
 		out(
-			`round ${row.index}${row.approximate ? " (approximate diff)" : ""}: ${row.matchedFixed} of ${findings.length} matched fixed, ${row.matchedRejected} of ${findings.length} matched rejected, ${row.newUnlabeled} new unlabeled (no accuracy claimed)`,
+			`round ${row.index}${row.approximate ? " (approximate diff)" : ""}: ${row.matchedFixed} of ${findings.length} matched fixed, ${row.matchedRejected} of ${findings.length} matched rejected, ${row.newUnlabeled} new unlabeled (no accuracy claimed); ${row.raw} raw findings, ${row.retracted} candidate retractions`,
 		);
 	}
 	return report;
