@@ -5297,7 +5297,13 @@ describe("delta scoping without KV", () => {
 	function prOctokit(o: {
 		reviews?: OwnReview[];
 		ledgerReviews?: OwnReview[];
-		files?: Array<{ filename: string; status: string; patch?: string }>;
+		files?: Array<{
+			filename: string;
+			status: string;
+			patch?: string;
+			additions?: number;
+			deletions?: number;
+		}>;
 		compare?: (basehead: string) => unknown;
 		coldLedger?: boolean;
 		comments?: unknown[];
@@ -6329,8 +6335,8 @@ describe("delta scoping without KV", () => {
 			const decision = await buildReview({ octokit, ...baseContext });
 
 			expect(messagesBuilt()).toEqual([
-				{ files: ["src/b.ts"], incremental: true },
 				{ files: ["src/a.ts", "src/b.ts"], incremental: false },
+				{ files: ["src/b.ts"], incremental: true },
 			]);
 			expect(seen[SAST]).toEqual([WHOLE]);
 			for (const skill of TIER1_SKILLS.filter((s) => s !== SAST))
@@ -6504,7 +6510,16 @@ describe("delta scoping without KV", () => {
 			const { octokit, checkRuns } = prOctokit({
 				reviews: [{ id: 11, body }],
 				compare: deltaB,
-				files: [aFile, bFile, { filename: "logo.png", status: "added" }],
+				files: [
+					aFile,
+					bFile,
+					{
+						filename: "src/huge.ts",
+						status: "modified",
+						additions: 5000,
+						deletions: 0,
+					},
+				],
 				rawDiff: "",
 			});
 
@@ -6514,6 +6529,100 @@ describe("delta scoping without KV", () => {
 			expect(decision).toBeNull();
 			expect(checkRuns).toHaveLength(1);
 			expect(checkRuns[0]?.conclusion).toBe("action_required");
+		});
+
+		it("pending skills are queued ahead of the other agents", async () => {
+			const seen = agents();
+			incremental();
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: withPending([COMMENTS_SKILL, SAST]) }],
+				compare: deltaB,
+			});
+
+			await buildReview({ octokit, ...baseContext, tier2Enabled: true });
+
+			expect(Object.keys(seen)).toEqual([
+				COMMENTS_SKILL,
+				SAST,
+				...TIER1_SKILLS.filter((s) => s !== SAST),
+			]);
+		});
+
+		it("a pending Tier 2 skill is not run while Tier 2 is off, and stays pending", async () => {
+			const seen = agents({ "code-reviewer.md": finds() });
+			incremental();
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: withPending([COMMENTS_SKILL]) }],
+				compare: deltaB,
+			});
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				tier2Enabled: false,
+			});
+
+			expect(seen[COMMENTS_SKILL]).toBeUndefined();
+			expect(pendingIn(decision?.body)).toEqual([COMMENTS_SKILL]);
+		});
+
+		it("a triage SKIP that needs a fresh approval runs every agent, the pending one over the whole PR", async () => {
+			const seen = agents();
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "SKIP",
+				resolved: [],
+				newRisk: false,
+			});
+			const { octokit, checkRuns } = prOctokit({
+				reviews: [
+					{ id: 11, body: withPending([SAST]), state: "CHANGES_REQUESTED" },
+				],
+				compare: deltaB,
+			});
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(seen[SAST]).toEqual([WHOLE]);
+			for (const skill of TIER1_SKILLS.filter((s) => s !== SAST))
+				expect(seen[skill]).toEqual([DELTA]);
+			expect(decision?.event).toBe("APPROVE");
+			expect(pendingIn(decision?.body)).toEqual([]);
+			expect(checkRuns).toEqual([]);
+		});
+
+		it("a pending-only SKIP round whose skill finds something new posts, though it clears nothing", async () => {
+			const seen = agents({ [SAST]: finds() });
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "SKIP",
+				resolved: [],
+				newRisk: false,
+			});
+			const { octokit, checkRuns } = prOctokit({
+				reviews: [{ id: 11, body: withPending([SAST]) }],
+				compare: deltaB,
+				files: [
+					aFile,
+					bFile,
+					{
+						filename: "src/huge.ts",
+						status: "modified",
+						additions: 5000,
+						deletions: 0,
+					},
+				],
+				rawDiff: "",
+			});
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				changedFiles: 3,
+			});
+
+			expect(Object.keys(seen)).toEqual([SAST]);
+			expect(decision?.body).toContain("Fresh issue");
+			expect(pendingIn(decision?.body)).toEqual([SAST]);
+			expect(checkRuns).toEqual([]);
 		});
 
 		it("a pending Tier 2 skill runs although the delta would not select it", async () => {
@@ -6576,30 +6685,114 @@ describe("delta scoping without KV", () => {
 			"src/big.ts",
 			`@@ -0,0 +1,1 @@\n+${"x".repeat(24_001)}`,
 		);
-		it.each([
-			["a trimmed patch", { files: [aFile, bFile, bigFile] }],
-			[
-				"a missing patch",
-				{
-					files: [aFile, bFile, { filename: "logo.png", status: "added" }],
-					rawDiff: "",
-				},
-			],
-		])("success on whole-PR input with %s stays pending, and its findings still merge", async (_name, pr) => {
+		const many = Array.from({ length: 2998 }, (_, i) =>
+			buildPullFile(`src/f${i}.ts`, SIMPLE_PATCH),
+		);
+		type PrInput = {
+			files: Array<{
+				filename: string;
+				status: string;
+				patch?: string;
+				additions?: number;
+				deletions?: number;
+			}>;
+			rawDiff?: string;
+			changedFiles?: number;
+		};
+		const runWith = async (pr: PrInput) => {
 			const seen = agents({ [SAST]: finds() });
 			incremental();
+			const { changedFiles, ...rest } = pr;
 			const { octokit } = prOctokit({
 				reviews: [{ id: 11, body: withPending([SAST]) }],
 				compare: deltaB,
-				...pr,
+				...rest,
 			});
-
-			const decision = await buildReview({ octokit, ...baseContext });
-
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				changedFiles: changedFiles ?? pr.files.length,
+			});
 			expect(seen[SAST]).toHaveLength(1);
 			expect(seen[SAST]?.[0]).toContain("src/a.ts");
 			expect(decision?.body).toContain("Fresh issue");
-			expect(pendingIn(decision?.body)).toEqual([SAST]);
+			return pendingIn(decision?.body);
+		};
+		it.each<[string, PrInput]>([
+			["a trimmed patch", { files: [aFile, bFile, bigFile] }],
+			[
+				"a changed file without a patch",
+				{
+					files: [
+						aFile,
+						bFile,
+						{
+							filename: "src/huge.ts",
+							status: "modified",
+							additions: 5000,
+							deletions: 10,
+						},
+					],
+					rawDiff: "",
+				},
+			],
+			[
+				"a file list shorter than the PR's changed files",
+				{ files: [aFile, bFile], changedFiles: 3 },
+			],
+			["a file list at the 3000-file cap", { files: [aFile, bFile, ...many] }],
+		])("success on whole-PR input with %s stays pending, and its findings still merge", async (_name, pr) => {
+			expect(await runWith(pr)).toEqual([SAST]);
+		});
+
+		it.each<[string, PrInput]>([
+			[
+				"an image",
+				{
+					files: [
+						aFile,
+						bFile,
+						{
+							filename: "logo.png",
+							status: "added",
+							additions: 0,
+							deletions: 0,
+						},
+					],
+					rawDiff: "",
+				},
+			],
+			[
+				"a pure rename",
+				{
+					files: [
+						aFile,
+						bFile,
+						{
+							filename: "src/moved.ts",
+							status: "renamed",
+							additions: 0,
+							deletions: 0,
+						},
+					],
+					rawDiff: "",
+				},
+			],
+			[
+				"a lockfile over the patch limit",
+				{
+					files: [
+						aFile,
+						bFile,
+						buildPullFile(
+							"pnpm-lock.yaml",
+							`@@ -0,0 +1,1 @@\n+${"x".repeat(24_001)}`,
+						),
+					],
+				},
+			],
+		])("whole-PR input with %s still clears the pending skill", async (_name, pr) => {
+			expect(await runWith(pr)).toEqual([]);
 		});
 
 		it("a forced FULL round clears by success", async () => {

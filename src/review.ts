@@ -62,6 +62,8 @@ interface PullFile {
 	filename: string;
 	status: string;
 	patch?: string;
+	additions?: number;
+	deletions?: number;
 	/** Set by GitHub on a renamed file. */
 	previous_filename?: string;
 }
@@ -1921,13 +1923,20 @@ export async function buildReview(
 		reason,
 	}));
 	// Interleave Tier2 skills into the queue so budget exhaustion cuts proportionally
-	// across both tiers rather than always dropping all Tier2 agents.
-	const allSkills = tier1Items
+	// across both tiers rather than always dropping all Tier2 agents. Pending
+	// skills go first, so the deadline cuts the other agents before them.
+	const queue = tier1Items
 		.flatMap((t1, i) => {
 			const t2 = tier2Items[i];
 			return t2 !== undefined ? [t1, t2] : [t1];
 		})
 		.concat(tier2Items.slice(tier1Items.length));
+	const isPending = (s: { skillPath: string }) =>
+		pendingSet.has(baseName(s.skillPath));
+	const allSkills = [
+		...queue.filter(isPending),
+		...queue.filter((s) => !isPending(s)),
+	];
 
 	const skillName = (path: string) => path.split("/").pop() ?? path;
 	// A pending skill reviews the PR's own files, as on a FULL round; the rest
@@ -2154,7 +2163,7 @@ export async function buildReview(
 	// A pending skill clears only on an ok run over the whole PR with nothing
 	// missing or trimmed. Pending afterwards: what was pending and did not
 	// clear (run or not), plus every skill that ran this round and did not end ok.
-	const inputComplete = wholePrInputComplete(files);
+	const inputComplete = wholePrInputComplete(files, context.changedFiles);
 	const ranNames = allSkills.map((s) => skillName(s.skillPath));
 	const cleared = scheduledPending.filter((s) => {
 		const i = ranNames.indexOf(s);
