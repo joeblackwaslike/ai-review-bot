@@ -72,6 +72,19 @@ describe("runReplay", () => {
 		expect(text).toContain("replayed 1 fixture");
 	});
 
+	it("ignores .classes.json files in the fixtures directory", async () => {
+		const dir = tmp();
+		const id = seed(dir);
+		writeFileSync(
+			join(dir, `${id}.classes.json`),
+			JSON.stringify({ records: [] }),
+		);
+		const { lines, out } = collect();
+		const code = await runReplay([], { fixturesDir: dir, out });
+		expect(code).toBe(0);
+		expect(lines.join("\n")).toContain("replayed 1 fixture");
+	});
+
 	it("exits 1 when the guard has a failure and 0 when only warnings", async () => {
 		const suppressA: ReplayPipeline = ({ claims }) => ({
 			posted: claims.filter((c) => c.id !== "a").map((c) => c.id),

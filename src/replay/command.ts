@@ -38,7 +38,7 @@ const USAGE = [
 
 const PR_URL = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)\/?$/;
 const GH_NAME = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/;
-const FIXTURE_FILE = /^(?!.*\.labels(\.proposed)?\.json$).+\.json$/;
+const FIXTURE_FILE = /^(?!.*\.(labels(\.proposed)?|classes)\.json$).+\.json$/;
 
 export function defaultFixturesDir(fromUrl: string): string {
 	let dir = dirname(fileURLToPath(fromUrl));
