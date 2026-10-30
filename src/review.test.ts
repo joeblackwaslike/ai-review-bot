@@ -2985,6 +2985,28 @@ describe("mergeReviewsDetailed — self-retracted findings", () => {
 		]);
 	});
 
+	it("keeps REQUEST_CHANGES when a surviving finding from the same agent remains", () => {
+		const agent = buildModelReview({
+			event: "REQUEST_CHANGES",
+			general_findings: [
+				finding("Slot accounting", RETRACT, "P2" as "P3"),
+				finding(
+					"Real general issue",
+					"A 429 aborts the whole run.",
+					"P2" as "P3",
+				),
+			],
+		});
+		const out = mergeReviewsDetailed([agent], new Set(), {
+			dropSelfRetracted: true,
+		});
+		expect(out.retracted).toBe(1);
+		expect(out.review.general_findings.map((f) => f.title)).toEqual([
+			"Real general issue",
+		]);
+		expect(out.review.event).toBe("REQUEST_CHANGES");
+	});
+
 	it("never drops a P0, even with a retracting tail", () => {
 		const p0 = buildModelReview({
 			event: "REQUEST_CHANGES",
