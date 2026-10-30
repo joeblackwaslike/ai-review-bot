@@ -128,20 +128,17 @@ export function retractionFamilies(f: RetractionCandidate): string[] {
 	];
 }
 
-/** True when a finding's own title or closing sentence says nothing is wrong,
- * e.g. "No actionable defect found" or "this looks resolved by ...". Code
- * spans and quoted strings are ignored. A contrast word before or after
- * the phrase keeps the finding, and so does a request or an exception
- * after it — as does a scope word (e.g. "No issues found in the happy
- * path") when the phrase doesn't open the whole finding, since that
- * scopes the closer rather than retracting the defect stated earlier. */
-export function isSelfRetracted(f: RetractionCandidate): boolean {
+/** Measurement rule, not used in production. It labels findings whose own
+ * title or closing sentence says nothing is wrong, for the replay classifier
+ * and the filter-margin report. Reviewers kept finding real findings it would
+ * drop, so it is not wired into the merge. */
+export function isRetractionCandidate(f: RetractionCandidate): boolean {
 	return retractionFamilies(f).length > 0;
 }
 
-/** The merge and the margin report share this rule. P0 and P1 findings and
- * anything marked not suppressible are never dropped. */
-export function droppedFamilies(f: DroppableFinding): string[] {
+/** The families that would match a finding the rule is allowed to consider:
+ * P2 and P3 only, and never one marked not suppressible. */
+export function candidateFamilies(f: DroppableFinding): string[] {
 	if (f.severity !== "P2" && f.severity !== "P3") return [];
 	if (f.suppressible === false) return [];
 	return retractionFamilies(f);

@@ -38,7 +38,6 @@ import {
 	reasoningProviderOptions,
 	routeModel,
 } from "./router.js";
-import { droppedFamilies } from "./self-retraction.js";
 import { detectTier2Skills, TIER2_DETECTORS } from "./tier2.js";
 import {
 	fetchDeltaMeta,
@@ -553,11 +552,6 @@ export interface MergeOptions {
 	/** Collapse restatements of one claim across agents. Off preserves the
 	 * exact-key-only behaviour every reviewer had before this shipped. */
 	dedupeNearDuplicateClaims?: boolean;
-	/** Drop P2 and P3 findings (never P0, P1 or suppressible:false) whose own
-	 * title or closing sentence says there is no defect. Runs before dedupe and
-	 * the event aggregation, and downgrades an agent's event only when every
-	 * finding it filed was dropped. */
-	dropSelfRetracted?: boolean;
 }
 
 export interface MergeOutcome {
@@ -569,65 +563,6 @@ export interface MergeOutcome {
 	/** How many findings were folded into another as the same claim, so the
 	 * caller can log it instead of silently shrinking the review. */
 	collapsed: number;
-	/** How many findings were dropped because their own text retracts them. */
-	retracted: number;
-	/** Each dropped finding with the phrase families that matched, so the
-	 * caller can log exactly what left the review. */
-	retractedFindings: RetractedFinding[];
-}
-
-export interface RetractedFinding {
-	title: string;
-	path: string | null;
-	line: number | null;
-	severity: string;
-	families: string[];
-}
-
-function dropRetractedFindings(agentResults: ModelReview[]): {
-	results: ModelReview[];
-	retractedFindings: RetractedFinding[];
-} {
-	const retractedFindings: RetractedFinding[] = [];
-	const keeper =
-		(
-			location: (f: ModelFinding | ModelInlineComment) => {
-				path: string | null;
-				line: number | null;
-			},
-		) =>
-		(f: ModelFinding | ModelInlineComment) => {
-			const families = droppedFamilies(f);
-			if (families.length === 0) return true;
-			retractedFindings.push({
-				title: f.title,
-				...location(f),
-				severity: f.severity,
-				families,
-			});
-			return false;
-		};
-	const results = agentResults.map((r) => {
-		const general_findings = r.general_findings.filter(
-			keeper(() => ({ path: null, line: null })),
-		);
-		const inline_comments = r.inline_comments.filter(
-			keeper((f) => {
-				const c = f as ModelInlineComment;
-				return { path: c.path, line: c.line };
-			}),
-		);
-		const survivors = general_findings.length + inline_comments.length;
-		const droppedAny =
-			survivors < r.general_findings.length + r.inline_comments.length;
-		return {
-			...r,
-			event: droppedAny && survivors === 0 ? "COMMENT" : r.event,
-			general_findings,
-			inline_comments,
-		} as ModelReview;
-	});
-	return { results, retractedFindings };
 }
 
 export function mergeReviews(
@@ -643,12 +578,6 @@ export function mergeReviewsDetailed(
 	resolved: Set<string> = new Set(),
 	options: MergeOptions = {},
 ): MergeOutcome {
-	let retractedFindings: RetractedFinding[] = [];
-	if (options.dropSelfRetracted) {
-		const dropped = dropRetractedFindings(agentResults);
-		agentResults = dropped.results;
-		retractedFindings = dropped.retractedFindings;
-	}
 	const isResolvedGeneral = (title: string) =>
 		resolved.has(`general:${title.toLowerCase().trim()}`);
 	const isResolvedInline = (path: string, line: number) =>
@@ -755,8 +684,6 @@ export function mergeReviewsDetailed(
 	return {
 		review: { event, general_findings: merged_general, inline_comments },
 		collapsed,
-		retracted: retractedFindings.length,
-		retractedFindings,
 		inlineAliases,
 	};
 }
@@ -2420,20 +2347,8 @@ export async function buildReview(
 
 	const mergeOutcome = mergeReviewsDetailed(unsettledResults, resolvedKeys, {
 		dedupeNearDuplicateClaims: tuning.dedupeNearDuplicateClaims,
-		dropSelfRetracted: tuning.dropSelfRetracted,
 	});
 	const modelReview = mergeOutcome.review;
-	for (const dropped of mergeOutcome.retractedFindings) {
-		console.log("dropped self-retracted finding", dropped);
-	}
-	if (mergeOutcome.retracted > 0) {
-		console.log("dropped self-retracted findings", {
-			retracted: mergeOutcome.retracted,
-			remaining:
-				modelReview.general_findings.length +
-				modelReview.inline_comments.length,
-		});
-	}
 	if (mergeOutcome.collapsed > 0) {
 		console.log("collapsed restatements of the same claim", {
 			collapsed: mergeOutcome.collapsed,

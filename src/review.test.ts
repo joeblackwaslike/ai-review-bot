@@ -2829,144 +2829,39 @@ describe("mergeReviewsDetailed — cross-category dedup", () => {
 	});
 });
 
-describe("mergeReviewsDetailed — self-retracted findings", () => {
-	const finding = (
-		title: string,
-		body: string,
-		severity: "P0" | "P1" | "P3" = "P3",
-	) => ({
+describe("mergeReviewsDetailed — findings that say there is no defect", () => {
+	const finding = (title: string, body: string) => ({
 		title,
 		body,
-		severity,
+		severity: "P3" as const,
 		category: "style" as const,
 		confidence: 0.8,
 		evidence: "See diff.",
-		suppressible: severity !== "P0",
+		suppressible: true,
 	});
 	const RETRACT = "The slot is held while waiting. No actionable defect found.";
-	const review = () =>
-		buildModelReview({
-			event: "REQUEST_CHANGES",
-			general_findings: [
-				finding("Slot accounting", RETRACT),
-				finding("Real general issue", "A 429 aborts the whole run."),
-			],
-			inline_comments: [
-				buildInlineComment({
-					path: "src/a.ts",
-					line: 3,
-					title: "Boundary",
-					body: RETRACT,
-				}),
-				buildInlineComment({
-					path: "src/a.ts",
-					line: 30,
-					title: "Real inline issue",
-					body: "The socket is never closed on the error path.",
-				}),
-			],
-		});
 
-	it("drops retracted general and inline findings and counts them", () => {
-		const out = mergeReviewsDetailed([review()], new Set(), {
-			dropSelfRetracted: true,
-		});
-		expect(out.retracted).toBe(2);
-		expect(out.review.general_findings.map((f) => f.title)).toEqual([
-			"Real general issue",
-		]);
-		expect(out.review.inline_comments.map((c) => c.title)).toEqual([
-			"Real inline issue",
-		]);
-	});
-
-	it("keeps them when the option is off", () => {
-		const out = mergeReviewsDetailed([review()]);
-		expect(out.retracted).toBe(0);
-		expect(out.review.general_findings).toHaveLength(2);
-		expect(out.review.inline_comments).toHaveLength(2);
-	});
-
-	it("returns an empty COMMENT review when every finding is retracted", () => {
-		const only = buildModelReview({
+	it("keeps a finding that ends with a retraction phrase and leaves the event alone", () => {
+		const review = buildModelReview({
 			event: "REQUEST_CHANGES",
 			general_findings: [finding("Slot accounting", RETRACT)],
 			inline_comments: [
 				buildInlineComment({ title: "Boundary", body: RETRACT }),
 			],
 		});
-		const out = mergeReviewsDetailed([only], new Set(), {
-			dropSelfRetracted: true,
+		const out = mergeReviewsDetailed([review], new Set(), {
+			dedupeNearDuplicateClaims: true,
 		});
-		expect(out.retracted).toBe(2);
-		expect(out.review).toEqual({
-			event: "COMMENT",
-			general_findings: [],
-			inline_comments: [],
-		});
+		expect(out.review.event).toBe("REQUEST_CHANGES");
+		expect(out.review.general_findings.map((f) => f.title)).toEqual([
+			"Slot accounting",
+		]);
+		expect(out.review.inline_comments.map((c) => c.title)).toEqual([
+			"Boundary",
+		]);
 	});
 
-	it("does not let a retracted-only agent's REQUEST_CHANGES block the round", () => {
-		const blocker = buildModelReview({
-			event: "REQUEST_CHANGES",
-			general_findings: [finding("Slot accounting", RETRACT)],
-		});
-		const other = buildModelReview({
-			event: "COMMENT",
-			general_findings: [
-				finding("Real general issue", "A 429 aborts the run."),
-			],
-		});
-		const out = mergeReviewsDetailed([blocker, other], new Set(), {
-			dropSelfRetracted: true,
-		});
-		expect(out.review.event).toBe("COMMENT");
-	});
-
-	it("keeps a finding whose retraction-like phrase is quoted program output", () => {
-		const quoted = buildModelReview({
-			event: "REQUEST_CHANGES",
-			general_findings: [
-				finding(
-					"Handler output",
-					'The error handler reports "No issues found" even when validation fails.',
-				),
-			],
-		});
-		const out = mergeReviewsDetailed([quoted], new Set(), {
-			dropSelfRetracted: true,
-		});
-		expect(out.retracted).toBe(0);
-		expect(out.review.general_findings).toHaveLength(1);
-	});
-
-	it("never drops a P1 either", () => {
-		const p1 = buildModelReview({
-			event: "REQUEST_CHANGES",
-			general_findings: [finding("Lost write", RETRACT, "P1")],
-		});
-		const out = mergeReviewsDetailed([p1], new Set(), {
-			dropSelfRetracted: true,
-		});
-		expect(out.retracted).toBe(0);
-		expect(out.review.general_findings).toHaveLength(1);
-	});
-
-	it("keeps a finding marked not suppressible", () => {
-		const locked = buildModelReview({
-			event: "COMMENT",
-			general_findings: [
-				{ ...finding("Pinned", RETRACT), suppressible: false },
-			],
-		});
-		const out = mergeReviewsDetailed([locked], new Set(), {
-			dropSelfRetracted: true,
-		});
-		expect(out.retracted).toBe(0);
-		expect(out.review.general_findings).toHaveLength(1);
-	});
-
-	it("keeps REQUEST_CHANGES from an agent that had no findings to drop", () => {
+	it("keeps REQUEST_CHANGES from an agent that filed no findings", () => {
 		const blocker = buildModelReview({ event: "REQUEST_CHANGES" });
 		const other = buildModelReview({
 			event: "COMMENT",
@@ -2974,66 +2869,7 @@ describe("mergeReviewsDetailed — self-retracted findings", () => {
 				finding("Real general issue", "A 429 aborts the run."),
 			],
 		});
-		const out = mergeReviewsDetailed([blocker, other], new Set(), {
-			dropSelfRetracted: true,
-		});
-		expect(out.review.event).toBe("REQUEST_CHANGES");
-	});
-
-	it("reports the matched families for each dropped finding", () => {
-		const out = mergeReviewsDetailed([review()], new Set(), {
-			dropSelfRetracted: true,
-		});
-		expect(out.retractedFindings).toEqual([
-			{
-				title: "Slot accounting",
-				path: null,
-				line: null,
-				severity: "P3",
-				families: ["no-actionable-defect"],
-			},
-			{
-				title: "Boundary",
-				path: "src/a.ts",
-				line: 3,
-				severity: "P2",
-				families: ["no-actionable-defect"],
-			},
-		]);
-	});
-
-	it("keeps REQUEST_CHANGES when a surviving finding from the same agent remains", () => {
-		const agent = buildModelReview({
-			event: "REQUEST_CHANGES",
-			general_findings: [
-				finding("Slot accounting", RETRACT, "P2" as "P3"),
-				finding(
-					"Real general issue",
-					"A 429 aborts the whole run.",
-					"P2" as "P3",
-				),
-			],
-		});
-		const out = mergeReviewsDetailed([agent], new Set(), {
-			dropSelfRetracted: true,
-		});
-		expect(out.retracted).toBe(1);
-		expect(out.review.general_findings.map((f) => f.title)).toEqual([
-			"Real general issue",
-		]);
-		expect(out.review.event).toBe("REQUEST_CHANGES");
-	});
-
-	it("never drops a P0, even with a retracting tail", () => {
-		const p0 = buildModelReview({
-			event: "REQUEST_CHANGES",
-			general_findings: [finding("Auth bypass", RETRACT, "P0")],
-		});
-		const out = mergeReviewsDetailed([p0], new Set(), {
-			dropSelfRetracted: true,
-		});
-		expect(out.retracted).toBe(0);
-		expect(out.review.general_findings).toHaveLength(1);
+		const out = mergeReviewsDetailed([blocker, other]);
 		expect(out.review.event).toBe("REQUEST_CHANGES");
 	});
 });
@@ -3474,7 +3310,7 @@ describe("strict evidence rules propagation", () => {
 	});
 });
 
-describe("self-retraction propagation", () => {
+describe("retraction phrases are not filtered", () => {
 	beforeEach(() => {
 		mockGenerateObject.mockReset();
 		mockBuildUserMessage.mockReset();
@@ -3482,7 +3318,7 @@ describe("self-retraction propagation", () => {
 		mockBuildUserMessage.mockReturnValue("user");
 	});
 
-	it("drops a retracted finding through buildReview", async () => {
+	it("posts a finding that ends with a retraction phrase through buildReview", async () => {
 		mockGenerateObject.mockImplementation(async () =>
 			mockGenerateObject.mock.calls.length <= TIER1_SKILLS.length
 				? buildGenerateObjectResponse(
@@ -3513,8 +3349,8 @@ describe("self-retraction propagation", () => {
 			provider: "anthropic" as const,
 		});
 
-		expect(result?.event).toBe("APPROVE");
-		expect(result?.body ?? "").not.toContain("Slot accounting");
+		expect(result?.event).toBe("COMMENT");
+		expect(result?.body ?? "").toContain("Slot accounting");
 	});
 });
 

@@ -1,10 +1,12 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { isSelfRetracted } from "./self-retraction.js";
+import { isRetractionCandidate } from "./retraction-rule.js";
 
 const retracted = (title: string, body: string) =>
-	isSelfRetracted({ title, body });
+	isRetractionCandidate({ title, body });
 
-describe("isSelfRetracted positives, one per phrase family", () => {
+describe("isRetractionCandidate positives, one per phrase family", () => {
 	it("no actionable defect in the closing sentence", () => {
 		expect(
 			retracted(
@@ -85,7 +87,7 @@ describe("isSelfRetracted positives, one per phrase family", () => {
 	});
 });
 
-describe("isSelfRetracted keeps real findings", () => {
+describe("isRetractionCandidate keeps real findings", () => {
 	it("keeps a title that starts with No but names a defect", () => {
 		expect(
 			retracted("No test coverage for the new parser", "Add a test."),
@@ -350,5 +352,21 @@ describe("isSelfRetracted keeps real findings", () => {
 
 	it("handles empty input", () => {
 		expect(retracted("", "")).toBe(false);
+	});
+});
+
+describe("retraction rule boundary", () => {
+	it("is imported only from src/replay", () => {
+		const root = new URL("..", import.meta.url).pathname;
+		const outside = (dir: string): string[] =>
+			readdirSync(join(root, dir), { withFileTypes: true }).flatMap((e) => {
+				const rel = join(dir, e.name);
+				if (e.isDirectory()) return e.name === "replay" ? [] : outside(rel);
+				return rel.endsWith(".ts") ? [rel] : [];
+			});
+		const offenders = outside(".").filter((f) =>
+			readFileSync(join(root, f), "utf8").includes("retraction-rule"),
+		);
+		expect(offenders).toEqual([]);
 	});
 });

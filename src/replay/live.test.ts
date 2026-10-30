@@ -147,7 +147,7 @@ describe("runLiveTier", () => {
 		expect(text).not.toMatch(/\d%/);
 	});
 
-	it("counts raw and self-retracted findings per round without dropping them", async () => {
+	it("counts raw and candidate retraction findings per round without dropping them", async () => {
 		const { opts, lines } = base({
 			rounds: [0],
 			review: async () => [
@@ -171,7 +171,9 @@ describe("runLiveTier", () => {
 		});
 		const report = await runLiveTier(opts);
 		expect(report.rounds[0]).toMatchObject({ raw: 4, retracted: 1 });
-		expect(lines.join("\n")).toContain("4 raw findings, 1 self-retracted");
+		expect(lines.join("\n")).toContain(
+			"4 raw findings, 1 candidate retractions",
+		);
 		expect(report.rounds[0]?.newUnlabeled).toBe(4);
 	});
 

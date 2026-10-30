@@ -1,6 +1,6 @@
-import { droppedFamilies } from "../self-retraction.js";
 import { fixtureId } from "./claims.js";
 import type { ClassFile } from "./classify.js";
+import { candidateFamilies } from "./retraction-rule.js";
 import type { LabelFile, ReplayFixture } from "./types.js";
 
 export interface MarginCount {
@@ -94,7 +94,7 @@ function marginFor(
 	for (const c of f.rounds.flatMap((r) => r.claims)) {
 		const bucket = bucketOf(c.id, labels, classes);
 		m[bucket].of++;
-		const families = droppedFamilies({
+		const families = candidateFamilies({
 			title: c.title ?? "",
 			body: c.text ?? "",
 			severity: c.severity,
@@ -149,14 +149,15 @@ export function filterMargin(
 
 function line(label: string, m: FixtureMargin): string {
 	const unadj = m.unadjudicatedClass.hit + m.unadjudicatedLabel.hit;
-	return `${label}: removes ${m.filler.hit} of ${m.filler.of} filler, ${m.otherRejected.hit} other-rejected, ${unadj} unadjudicated, ${m.fixed.hit} of ${m.fixed.of} fixed`;
+	return `${label} would remove ${m.filler.hit} of ${m.filler.of} filler, ${m.otherRejected.hit} other-rejected, ${unadj} unadjudicated, ${m.fixed.hit} of ${m.fixed.of} fixed`;
 }
 
 export function formatMargin(m: Margin): string {
 	const t = m.total;
 	return [
-		line("self-retraction filter", t),
-		`  also removes ${t.repeats.hit} of ${t.repeats.of} repeat-rejected, ${t.unclassified.hit} of ${t.unclassified.of} unclassified, ${t.unlabeled.hit} of ${t.unlabeled.of} unlabeled`,
+		line("candidate retraction rule", t),
+		"  measurement only, not applied in production",
+		`  also would remove ${t.repeats.hit} of ${t.repeats.of} repeat-rejected, ${t.unclassified.hit} of ${t.unclassified.of} unclassified, ${t.unlabeled.hit} of ${t.unlabeled.of} unlabeled`,
 		`  unadjudicated split: ${t.unadjudicatedClass.hit} of ${t.unadjudicatedClass.of} in class, ${t.unadjudicatedLabel.hit} of ${t.unadjudicatedLabel.of} by label`,
 		...m.perFixture.map(
 			(p) =>

@@ -142,9 +142,13 @@ describe("filterMargin buckets", () => {
 		expect(formatMargin(m)).toContain("after reading all 2 filler claims");
 	});
 
+	it("says the rule is not applied in production", () => {
+		expect(formatMargin(m)).toContain("not applied in production");
+	});
+
 	it("prints the plan's margin line", () => {
 		expect(formatMargin(m)).toContain(
-			"self-retraction filter: removes 1 of 2 filler, 1 other-rejected, 2 unadjudicated, 1 of 1 fixed",
+			"candidate retraction rule would remove 1 of 2 filler, 1 other-rejected, 2 unadjudicated, 1 of 1 fixed",
 		);
 	});
 });

@@ -13,7 +13,6 @@ describe("REVIEWER_TUNING", () => {
 	it("turns the signal-quality changes on unconditionally", () => {
 		expect(REVIEWER_TUNING).toEqual({
 			dedupeNearDuplicateClaims: true,
-			dropSelfRetracted: true,
 			showPriorOwnFindings: true,
 			strictEvidenceRules: true,
 		});

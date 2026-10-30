@@ -1,5 +1,5 @@
 import { isSameClaim } from "../claim-dedupe.js";
-import { droppedFamilies } from "../self-retraction.js";
+import { candidateFamilies } from "./retraction-rule.js";
 import type { LabelFile, ReplayFixture, Round } from "./types.js";
 
 export interface LiveFinding {
@@ -91,7 +91,7 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 			newUnlabeled: 0,
 			raw: findings.length,
 			retracted: findings.filter(
-				(f) => droppedFamilies({ ...f, body: f.body ?? "" }).length > 0,
+				(f) => candidateFamilies({ ...f, body: f.body ?? "" }).length > 0,
 			).length,
 			approximate: d.approximate,
 		};
@@ -106,7 +106,7 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 		}
 		report.rounds.push(row);
 		out(
-			`round ${row.index}${row.approximate ? " (approximate diff)" : ""}: ${row.matchedFixed} of ${findings.length} matched fixed, ${row.matchedRejected} of ${findings.length} matched rejected, ${row.newUnlabeled} new unlabeled (no accuracy claimed); ${row.raw} raw findings, ${row.retracted} self-retracted`,
+			`round ${row.index}${row.approximate ? " (approximate diff)" : ""}: ${row.matchedFixed} of ${findings.length} matched fixed, ${row.matchedRejected} of ${findings.length} matched rejected, ${row.newUnlabeled} new unlabeled (no accuracy claimed); ${row.raw} raw findings, ${row.retracted} candidate retractions`,
 		);
 	}
 	return report;

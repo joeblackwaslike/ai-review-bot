@@ -59,7 +59,7 @@ describe("isFillerText", () => {
 		expect(isFillerText(title, text)).toBe(false);
 	});
 
-	it("shares the self-retraction definition, including closing sentences", () => {
+	it("shares the candidate retraction definition, including closing sentences", () => {
 		expect(
 			isFillerText(
 				"Queue slot",

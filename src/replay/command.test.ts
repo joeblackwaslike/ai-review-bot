@@ -124,7 +124,7 @@ describe("runReplay", () => {
 		expect(text).toContain("unadjudicated 1");
 		expect(text).toContain("provisional");
 		expect(text).toMatch(
-			/self-retraction filter: removes 0 of \d+ filler, 0 other-rejected, 0 unadjudicated, 0 of \d+ fixed/,
+			/candidate retraction rule would remove 0 of \d+ filler, 0 other-rejected, 0 unadjudicated, 0 of \d+ fixed/,
 		);
 	});
 
@@ -174,7 +174,7 @@ describe("runReplay", () => {
 		seed(dir);
 		const { lines, out } = collect();
 		expect(await runReplay([], { fixturesDir: dir, out })).toBe(0);
-		expect(lines.join("\n")).not.toContain("self-retraction filter");
+		expect(lines.join("\n")).not.toContain("candidate retraction rule");
 	});
 
 	it("exits 1 when the guard has a failure and 0 when only warnings", async () => {

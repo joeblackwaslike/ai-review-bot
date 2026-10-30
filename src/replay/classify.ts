@@ -1,4 +1,4 @@
-import { isSelfRetracted } from "../self-retraction.js";
+import { isRetractionCandidate } from "./retraction-rule.js";
 import type {
 	ClaimLabel,
 	LabelFile,
@@ -50,7 +50,7 @@ const CLASSES: FalsePositiveClass[] = [
 ];
 
 export function isFillerText(title: string, text: string): boolean {
-	return isSelfRetracted({ title, body: text });
+	return isRetractionCandidate({ title, body: text });
 }
 
 function findThread(f: ReplayFixture, c: PostedClaim) {
