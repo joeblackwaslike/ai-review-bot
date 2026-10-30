@@ -50,7 +50,7 @@ Agent logs: `~/.ai-review/logs/agents.jsonl` and the `ai-review:agents` marker s
 One class per claim. The first rule that matches wins, so counts add up to the number classified.
 
 1. Filler. The finding's own text says nothing is wrong or nothing was found: "no new findings", "nothing to flag", "matches the design", "no change this round". Decided from the finding text alone. No author reply is needed, so two labelers can agree without seeing the thread.
-2. Stale. The finding is about code that was already changed or fixed before the round's cutoff. Evidence is one of: the thread is outdated, a commit between the previous round and this one changed the anchored lines, or an author reply cites a fix that predates the round. The cutoff is the time the reviewed head was pushed, as the harness spec defines it.
+2. Stale. The finding is about code that was already changed or fixed before the round's cutoff. Evidence is one of: the thread was already outdated at the cutoff, or an author reply cites a fix whose commit predates the reviewed head. A commit that touches the anchored lines in the round's own delta is not evidence, because the reviewer is meant to review changed lines. Expect this class to be small, since a review runs against the head it names. The cutoff is the time the reviewed head was pushed, as the harness spec defines it.
 3. Contradicted. The code at the reviewed head or the author's reply shows the claim is wrong, with a stated reason: "intentional", "by design", "not off by one, the test expects the seventh request to get a 429". A bare "no change" with no reason is not enough, because it also covers deferrals.
 4. Speculative. The finding hedges ("may", "could", "might not") and names no concrete input, path, or line in the diff that fails. No stronger class applies.
 5. Other. Rejected, and none of the above. Reported as its own count and never folded into another class.
@@ -61,7 +61,10 @@ The classifier works on posted findings, so it can see the finding text, its anc
 
 ## Who classifies
 
+A rejected label is the author's verdict, not proof the finding was wrong. The classes describe why authors rejected findings, and the report says so.
+
 - Filler and stale get deterministic rules in `src/replay/classify.ts`. Filler is a phrase list checked against the claim title and text. Stale uses the thread's `isOutdated`, the hunk ranges, and reply text. These rules are tested, and their output is the first labeler.
+- The phrase list is tuned on two fixtures and scored on the third, rotating through all three, so the reported rule accuracy is not measured on the data it was fitted to.
 - A Claude subagent labels all five classes for every claim, reading the claim, its thread, and the commit metadata. It does not see the deterministic result.
 - `codex:codex-rescue` labels the same claims blind, from the same inputs.
 - Agreement is reported as k of n between the two model labelers, and separately between the deterministic rules and each model for the two classes the rules cover.
