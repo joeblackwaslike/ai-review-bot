@@ -8,7 +8,7 @@ This file provides context and conventions for AI coding agents working on this 
 pnpm install
 pnpm typecheck    # tsc --noEmit — must pass before any commit
 pnpm lint         # biome check — must pass before any commit
-pnpm test         # vitest run (1046 tests) — must pass before any commit
+pnpm test         # vitest run (1329 tests, 4 skipped) — must pass before any commit
 pnpm dev          # vercel dev — local server on :3000
 ```
 
@@ -42,6 +42,7 @@ POST /api/github/review-run        (QStash delayed callback)
 
 - Inline comments deduplicated by `path:line` key; when two agents flag the same location, the one from a `REQUEST_CHANGES` agent wins (more conservative)
 - **Near-duplicate claim collapsing** (`src/claim-dedupe.ts`, tuned reviewers only): agents rarely anchor to the identical line, so the exact-key pass above misses one claim arriving on six adjacent lines. `dedupeClaims()` folds findings in the same file, within 30 lines, that share a code identifier or substantial title overlap. Measured on the live corpus: 403 of 1180 anthropic findings (34%) are restatements
+- **Self-retraction drop** (`src/self-retraction.ts`, tuned reviewers only, runs first — before dedup): `droppedFamilies()` drops a P2/P3 finding whose own last sentence literally retracts it (e.g. "No actionable defect found"), unless a contrast or exception follows the phrase; P0/P1 and `suppressible: false` findings are never dropped. An agent's `event` is only downgraded to `COMMENT` when every one of its findings was dropped — a surviving finding, even unrelated, keeps `REQUEST_CHANGES`, since the merge can't tell which finding drove the verdict. It is a backstop, not an accuracy fix: measured at ~1% of hosted-bot comments; see `docs/superpowers/specs/2026-10-29-claude-first-pass-accuracy-design.md`
 - General findings deduplicated by title (case-insensitive)
 - Final `event`: `REQUEST_CHANGES` if any agent returned it; `APPROVE` if all agents found zero issues; `COMMENT` otherwise
 
@@ -66,6 +67,7 @@ Settled repeats are dropped per agent before this merge, and a re-review round w
 | `src/router.ts` | PR tier classification (`classifyTier()`), model selection (`routeModel()`) |
 | `src/tier2.ts` | Tier 2 skill detection (`detectTier2Skills()`) |
 | `src/claim-dedupe.ts` | Near-duplicate claim clustering (`dedupeClaims()`, `isSameClaim()`) |
+| `src/self-retraction.ts` | Self-retraction phrase matching (`isSelfRetracted()`, `droppedFamilies()`) |
 | `src/reviewer-tuning.ts` | Signal-quality switches (`REVIEWER_TUNING`) — unified across both providers since ai-review-bot-5zu; previously anthropic-only |
 | `src/audit.ts` | Full repository audit logic (`auditRepo()`), local audit (`runLocalAudit()`), local review (`runLocalReview()`) |
 | `src/report.ts` | `docs/code-reviews/` report writer (`formatReviewReport()`, `allocateReportPath()`) |
@@ -94,7 +96,7 @@ The CLI supports four subcommands for offline code review of the working tree (p
 
 Reference: `docs/superpowers/specs/2026-06-08-local-audit-review-pr-design.md`
 
-- `ai-review replay [--fixtures <dir>]` / `ai-review replay --record <pr-url> --provider anthropic|openai --bot <login>` / `ai-review replay --live [--rounds <n>] [--max-cost <usd>]` — Deterministic offline replay of recorded review rounds: measures false-positive rate, claim recycling, and convergence against auto-labeled fixtures (provisional until an agent verifies them against the PR threads and Codex cross-checks them; items the two models disagree on stay unadjudicated). `--record` captures a real PR's rounds/threads/reactions via `gh` into `src/replay/fixtures/`; the default (no flags) replays existing fixtures and fails on confirmed-label guard violations (warns on provisional ones); `--live` is an opt-in, cost-capped tier that re-runs the audit pipeline against confirmed pairs only — it never gates CI. See `docs/superpowers/specs/2026-10-27-review-replay-harness-design.md` for the design and `src/replay/`.
+- `ai-review replay [--fixtures <dir>]` / `ai-review replay --record <pr-url> --provider anthropic|openai --bot <login>` / `ai-review replay --live [--rounds <n>] [--max-cost <usd>]` — Deterministic offline replay of recorded review rounds: measures false-positive rate, claim recycling, and convergence against auto-labeled fixtures (provisional until an agent verifies them against the PR threads and Codex cross-checks them; items the two models disagree on stay unadjudicated). `--record` captures a real PR's rounds/threads/reactions via `gh` into `src/replay/fixtures/`; the default (no flags) replays existing fixtures and fails on confirmed-label guard violations (warns on provisional ones); `--live` is an opt-in, cost-capped tier that re-runs the audit pipeline against confirmed pairs only — it never gates CI. If any `*.classes.json` fixture is present, the default run also prints a classification report (`src/replay/classify.ts`, breaking rejected first-seen findings into filler/stale/contradicted/speculative/other, by rule and by model, provisional until adjudicated) and a filter-margin report (`src/replay/filter-margin.ts`, measuring what a given drop filter actually hits against those classes). See `docs/superpowers/specs/2026-10-27-review-replay-harness-design.md` and `docs/superpowers/specs/2026-10-29-claude-first-pass-accuracy-design.md` for the design and `src/replay/`.
 
 `watch`, `review` and `audit` also append one JSON line per agent outcome to `~/.ai-review/logs/agents.jsonl`, or to the path in `AI_REVIEW_LOG_FILE` when it is set. The hosted webhook path does not write it.
 
