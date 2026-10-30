@@ -26,6 +26,7 @@ import {
 	type AgentPromptOptions,
 	buildAgentSystemPrompt,
 	buildUserMessage,
+	wholePrInputComplete,
 } from "./prompt.js";
 import { readMetadataValue } from "./review-metadata.js";
 import type { PersistedFinding, ReviewState } from "./review-state.js";
@@ -864,7 +865,8 @@ export interface FormatReviewBodyOptions {
 	skipped: string[];
 	/** Final attempt per skill, plus the first attempt when it was retried. */
 	agentRecords: AgentRecord[];
-	/** Skills whose last outcome was not ok. */
+	/** Skills that owe the PR a whole-PR review: those that did not end ok this
+	 * round, plus earlier pending skills this round did not clear. */
 	pending: string[];
 	/** Skills whose retry never started or was aborted for lack of time. */
 	retrySkipped: string[];
@@ -1657,6 +1659,18 @@ export async function buildReview(
 				});
 		}
 	}
+	// Skills that still owe the PR a whole-PR review. One whose skill file is
+	// gone is dropped; a Tier 2 one waits while Tier 2 is switched off.
+	const priorPending = [...new Set(state?.incompleteSkills ?? [])].filter((s) =>
+		KNOWN_SKILLS.has(s),
+	);
+	const scheduledPending = priorPending.filter(
+		(s) => context.tier2Enabled || TIER1_SKILLS.includes(s),
+	);
+	const pendingSet = new Set(scheduledPending);
+	/** Triage said SKIP but skills are pending: only those run, over the whole PR. */
+	let pendingOnly = false;
+	let skipVerdict: ReviewState["event"] = "COMMENT";
 	const reviewCountBase =
 		state?.reviewCount ??
 		Math.max(
@@ -1754,7 +1768,14 @@ export async function buildReview(
 				// A re-stamped check-run does not supersede a standing CHANGES_REQUESTED
 				// review, so that case runs as INCREMENTAL and posts its APPROVE.
 				skipNeedsApprove = !stillBlocking && needsFreshApprove;
-				if (!skipNeedsApprove) {
+				if (!skipNeedsApprove && scheduledPending.length > 0) {
+					pendingOnly = true;
+					skipVerdict = stillBlocking ? state.event : "APPROVE";
+					console.log("triage SKIP; running only the pending skills", {
+						...prLog,
+						pending: scheduledPending,
+					});
+				} else if (!skipNeedsApprove) {
 					console.log("review scope", {
 						scope: `scope: delta from ${state.lastReviewedSha.slice(0, 7)} (${baselineSource})`,
 						decision: "SKIP",
@@ -1764,7 +1785,11 @@ export async function buildReview(
 				}
 			}
 
-			if (triage.recommendation === "INCREMENTAL" || skipNeedsApprove) {
+			if (
+				triage.recommendation === "INCREMENTAL" ||
+				skipNeedsApprove ||
+				pendingOnly
+			) {
 				// A merge of the base branch puts files in the compare that the PR
 				// does not change; only the PR's own files are reviewed.
 				const prPaths = new Set(files.map((f) => f.filename));
@@ -1814,7 +1839,7 @@ export async function buildReview(
 	const scopedFilePaths = scopedFiles.map((f) => f.filename);
 
 	const tuning: ReviewerTuning = REVIEWER_TUNING;
-	const userMessage = buildUserMessage({
+	const promptBase = {
 		owner: context.owner,
 		repo: context.repo,
 		pullNumber: context.pullNumber,
@@ -1826,10 +1851,6 @@ export async function buildReview(
 		changedFiles: context.changedFiles,
 		labels: context.labels,
 		extraInstructions: context.extraInstructions,
-		files: scopedFiles,
-		diffScope: incrementalPass
-			? `INCREMENTAL — only files changed since ${priorSha.slice(0, 12)}. Continue any threads already open on other files; do not refile findings for files not shown in this diff.`
-			: undefined,
 		priorBotReviews,
 		priorOwnReview,
 		priorOwnFindings: tuning.showPriorOwnFindings
@@ -1858,24 +1879,38 @@ export async function buildReview(
 					})),
 				]
 			: undefined,
-	});
+	};
 
 	// Detect Tier 2 skills relevant to this PR and run all agents together.
 	// Keyed off scopedFiles so an INCREMENTAL pass only activates Tier 2 skills
-	// for the surface actually under review.
-	const tier2Matches = context.tier2Enabled
-		? detectTier2Skills({
-				filePaths: scopedFilePaths,
-				additions: context.additions,
-				deletions: context.deletions,
-				title: context.title,
-				body: context.body,
-				labels: context.labels,
-				patchContent: scopedFiles.map((f) => f.patch ?? "").join("\n"),
-			})
-		: [];
+	// for the surface actually under review. Pending skills run whether or not
+	// detection selects them; a pending-only round runs nothing else.
+	const detectedTier2 =
+		context.tier2Enabled && !pendingOnly
+			? detectTier2Skills({
+					filePaths: scopedFilePaths,
+					additions: context.additions,
+					deletions: context.deletions,
+					title: context.title,
+					body: context.body,
+					labels: context.labels,
+					patchContent: scopedFiles.map((f) => f.patch ?? "").join("\n"),
+				})
+			: [];
+	const detectedPaths = new Set(detectedTier2.map((m) => m.skillPath));
+	const tier2Matches = [
+		...detectedTier2,
+		...scheduledPending
+			.filter((s) => !TIER1_SKILLS.includes(s) && !detectedPaths.has(s))
+			.map((skillPath) => ({
+				skillPath,
+				reason: "did not complete in an earlier review",
+			})),
+	];
 
-	const tier1Items = TIER1_SKILLS.map((skillPath) => ({
+	const tier1Items = TIER1_SKILLS.filter(
+		(s) => !pendingOnly || pendingSet.has(s),
+	).map((skillPath) => ({
 		skillPath,
 		tier: 1,
 		reason: "",
@@ -1894,13 +1929,33 @@ export async function buildReview(
 		})
 		.concat(tier2Items.slice(tier1Items.length));
 
+	const skillName = (path: string) => path.split("/").pop() ?? path;
+	// A pending skill reviews the PR's own files, as on a FULL round; the rest
+	// keep the delta. Each message version is built only if some agent uses it.
+	const wholePrFor = (skillPath: string) =>
+		!incrementalPass || pendingSet.has(skillName(skillPath));
+	const userMessages = new Map<boolean, string>();
+	for (const { skillPath } of allSkills) {
+		const wholePr = wholePrFor(skillPath);
+		if (userMessages.has(wholePr)) continue;
+		userMessages.set(
+			wholePr,
+			buildUserMessage({
+				...promptBase,
+				files: wholePr ? files : scopedFiles,
+				diffScope: wholePr
+					? undefined
+					: `INCREMENTAL — only files changed since ${priorSha.slice(0, 12)}. Continue any threads already open on other files; do not refile findings for files not shown in this diff.`,
+			}),
+		);
+	}
+
 	let lastRateLimit: RateLimitInfo | undefined;
 	const deadline = Date.now() + context.agentBudgetMs;
-	const skillName = (path: string) => path.split("/").pop() ?? path;
 	const dispatch = async (skillPath: string): Promise<AgentOutcome> => {
 		const outcome = await runAgent(
 			skillPath,
-			userMessage,
+			userMessages.get(wholePrFor(skillPath)) ?? "",
 			selection,
 			customPrompt,
 			{
@@ -2096,9 +2151,41 @@ export async function buildReview(
 	const agentRecords = attempts
 		.filter((a) => !(a.attempt === 2 && a.outcome.status === "skipped"))
 		.map((a) => toRecord(a.skill, a.attempt, a.outcome));
-	const pending = outcomes.flatMap((o, i) =>
-		o.status === "ok" ? [] : [skillName(allSkills[i]?.skillPath ?? "unknown")],
-	);
+	// A pending skill clears only on an ok run over the whole PR with nothing
+	// missing or trimmed. Pending afterwards: what was pending and did not
+	// clear (run or not), plus every skill that ran this round and did not end ok.
+	const inputComplete = wholePrInputComplete(files);
+	const ranNames = allSkills.map((s) => skillName(s.skillPath));
+	const cleared = scheduledPending.filter((s) => {
+		const i = ranNames.indexOf(s);
+		return i >= 0 && outcomes[i]?.status === "ok" && inputComplete;
+	});
+	const pending = [
+		...new Set([
+			...priorPending.filter((s) => !cleared.includes(s)),
+			...ranNames.filter((_, i) => outcomes[i]?.status !== "ok"),
+		]),
+	];
+	if (priorPending.length > 0 || pending.length > 0) {
+		console.log("pending coverage", {
+			...prLog,
+			prior: priorPending,
+			cleared,
+			pending,
+			inputComplete,
+		});
+	}
+	const skipFallback = async (): Promise<null> => {
+		console.log("pending skills changed nothing; keeping the SKIP verdict", {
+			...prLog,
+			cleared,
+			pending,
+		});
+		if (state) state.incompleteSkills = pending;
+		await carryVerdictForward(skipVerdict);
+		return null;
+	};
+	if (pendingOnly && agentResults.length === 0) return skipFallback();
 
 	if (errored.length > 0) {
 		console.warn("review agents failed and were excluded from this pass", {
@@ -2220,11 +2307,24 @@ export async function buildReview(
 		),
 	});
 
+	// A pending-only run on a triage SKIP that cleared nothing and found
+	// nothing new would only repost the previous review.
+	if (
+		pendingOnly &&
+		cleared.length === 0 &&
+		modelReview.general_findings.length === 0 &&
+		modelReview.inline_comments.length === 0
+	)
+		return skipFallback();
+
 	// Anchors come from the PR's own patches: a compare patch can hold lines
 	// from a base-branch merge that the PR diff does not have, and a comment
-	// on one of those would make GitHub reject the review.
+	// on one of those would make GitHub reject the review. A skill given the
+	// whole PR may anchor anywhere in it.
 	const scopedPathSet = new Set(scopedFilePaths);
-	const anchorFiles = files.filter((f) => scopedPathSet.has(f.filename));
+	const anchorFiles = allSkills.some((s) => wholePrFor(s.skillPath))
+		? files
+		: files.filter((f) => scopedPathSet.has(f.filename));
 	const validLines = buildValidLinesByPath(anchorFiles);
 
 	// Fix mechanical anchor errors before diff validation so fewer comments are
@@ -2336,11 +2436,14 @@ export async function buildReview(
 				? "APPROVE"
 				: modelReview.event;
 
+	// A round that cleared a pending skill always posts, so the agents marker
+	// on GitHub stops listing it.
 	if (
 		finalEvent === "APPROVE" &&
 		hasOwnReview &&
 		!needsFreshApprove &&
-		!context.force
+		!context.force &&
+		cleared.length === 0
 	) {
 		console.log("nothing new since the last review; posting nothing", {
 			suppressed: suppressedCount,
@@ -2350,12 +2453,14 @@ export async function buildReview(
 		// KV finding was settled by the ledger, and saving those open would let
 		// a later cold-ledger run block.
 		const carriedIds = new Set(survivingPrior.map((f) => f.id));
-		if (state)
+		if (state) {
 			state.findings = state.findings.map((f) =>
 				f.status === "open" && !carriedIds.has(f.id)
 					? { ...f, status: "resolved" }
 					: f,
 			);
+			state.incompleteSkills = pending;
+		}
 		await carryVerdictForward(
 			standingVerdict === "APPROVED" ? "APPROVE" : "COMMENT",
 		);

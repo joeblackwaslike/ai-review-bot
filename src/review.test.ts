@@ -1,6 +1,10 @@
 import { NoObjectGeneratedError } from "ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { type AgentRecord, parseAgentsMarker } from "./agent-log.js";
+import {
+	type AgentRecord,
+	formatAgentsMarker,
+	parseAgentsMarker,
+} from "./agent-log.js";
 import type { KvClient } from "./feedback/kv.js";
 import { computeCost, createAIModel } from "./models.js";
 import {
@@ -68,7 +72,8 @@ vi.mock("./config.js", () => ({
 	}),
 }));
 
-vi.mock("./prompt.js", () => ({
+vi.mock("./prompt.js", async (importOriginal) => ({
+	...(await importOriginal<typeof import("./prompt.js")>()),
 	buildUserMessage: mockBuildUserMessage,
 	trimPatch: (patch: string) => patch,
 	// Tagged with the skill path so a test can route a mocked model response to a
@@ -5296,6 +5301,7 @@ describe("delta scoping without KV", () => {
 		compare?: (basehead: string) => unknown;
 		coldLedger?: boolean;
 		comments?: unknown[];
+		rawDiff?: string;
 	}) {
 		const compareCalls: string[] = [];
 		const checkRuns: Array<Record<string, unknown>> = [];
@@ -5323,6 +5329,14 @@ describe("delta scoping without KV", () => {
 				expectPr(p);
 				return o.comments ?? [];
 			},
+			...(o.rawDiff !== undefined && {
+				"GET /repos/{owner}/{repo}/pulls/{pull_number}": (
+					p: Record<string, unknown>,
+				) => {
+					expectPr(p);
+					return o.rawDiff;
+				},
+			}),
 			"POST /graphql": (p) => {
 				expect(p.variables).toMatchObject({
 					owner: OWNER,
@@ -6211,6 +6225,472 @@ describe("delta scoping without KV", () => {
 		expect(decision?.event).toBe("REQUEST_CHANGES");
 		expect(decision?.body).toContain("**Leaky handle** (`src/a.ts:7`)");
 		expect(decision?.body).toContain("ledger: warm");
+	});
+
+	describe("pending coverage", () => {
+		const SAST = "security-sast.md";
+		const COMMENTS_SKILL = "comment-analyzer.md";
+		const NEW_HEAD = "fedcba0987654321";
+		const WHOLE = "files:src/a.ts,src/b.ts";
+		const DELTA = "files:src/b.ts";
+		const incremental = () =>
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "INCREMENTAL",
+				resolved: [],
+				newRisk: true,
+			});
+		const deltaB = () => ({ status: "ahead", files: [bFile] });
+		const schemaMismatch = () =>
+			new NoObjectGeneratedError({
+				message: "no object",
+				text: "{not json",
+				response: {} as never,
+				usage: { inputTokens: 7, outputTokens: 3 } as never,
+				finishReason: "stop" as never,
+			});
+		const withPending = (pending: string[], sha = OLD) =>
+			`${ownBody({ sha, count: 1 })}\n${formatAgentsMarker([], pending, KNOWN_SKILLS)}`;
+		const pendingIn = (body: string | undefined) =>
+			parseAgentsMarker(body ?? "", KNOWN_SKILLS)?.pending;
+		const kvState = (incompleteSkills?: string[]) => ({
+			lastReviewedSha: OLD,
+			event: "COMMENT" as const,
+			findings: [],
+			reviewedAt: "2026-10-01T00:00:00Z",
+			...(incompleteSkills && { incompleteSkills }),
+		});
+
+		/** Routes the mocked model by skill and records the user message each
+		 * agent call was given. */
+		function agents(replies: Record<string, (call: number) => unknown> = {}) {
+			const seen: Record<string, string[]> = {};
+			mockGenerateObject.mockImplementation(
+				async (args: {
+					prompt?: unknown;
+					system?: unknown;
+					messages?: Array<{ content: unknown }>;
+				}) => {
+					if (
+						typeof args.prompt === "string" &&
+						args.prompt.startsWith("You are checking")
+					)
+						return { object: { resolved: [] } };
+					if (args.system !== undefined)
+						return {
+							object: { summary: "Summary." },
+							usage: { inputTokens: 1, outputTokens: 1 },
+						};
+					const content = args.messages?.[0]?.content as Array<{
+						text: string;
+					}>;
+					const skill = content[1].text.replace(/^system:/, "");
+					const calls = seen[skill] ?? [];
+					calls.push(content[0].text);
+					seen[skill] = calls;
+					const reply = replies[skill];
+					return reply
+						? reply(calls.length)
+						: buildGenerateObjectResponse(buildModelReview());
+				},
+			);
+			return seen;
+		}
+		const fails = () => () => {
+			throw schemaMismatch();
+		};
+		const finds = () => () => buildGenerateObjectResponse(withFresh());
+		const messagesBuilt = () =>
+			mockBuildUserMessage.mock.calls.map((c) => {
+				const ctx = c[0] as {
+					files: Array<{ filename: string }>;
+					diffScope?: string;
+				};
+				return {
+					files: ctx.files.map((f) => f.filename),
+					incremental: ctx.diffScope?.startsWith("INCREMENTAL") ?? false,
+				};
+			});
+
+		beforeEach(() => {
+			mockBuildUserMessage.mockImplementation(
+				(ctx: { files: Array<{ filename: string }> }) =>
+					`files:${ctx.files.map((f) => f.filename).join(",")}`,
+			);
+		});
+
+		it("an incremental round gives the pending skill the PR's files and the others the delta", async () => {
+			const seen = agents({ [SAST]: finds() });
+			incremental();
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: withPending([SAST]) }],
+				compare: deltaB,
+			});
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(messagesBuilt()).toEqual([
+				{ files: ["src/b.ts"], incremental: true },
+				{ files: ["src/a.ts", "src/b.ts"], incremental: false },
+			]);
+			expect(seen[SAST]).toEqual([WHOLE]);
+			for (const skill of TIER1_SKILLS.filter((s) => s !== SAST))
+				expect(seen[skill]).toEqual([DELTA]);
+			expect(decision?.body).toContain("Fresh issue");
+			expect(pendingIn(decision?.body)).toEqual([]);
+		});
+
+		it("a pending skill gets the whole PR on its retry too; the delta never reaches it", async () => {
+			const seen = agents({
+				[SAST]: (n) =>
+					n === 1
+						? (() => {
+								throw schemaMismatch();
+							})()
+						: buildGenerateObjectResponse(withFresh()),
+			});
+			incremental();
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: withPending([SAST]) }],
+				compare: deltaB,
+			});
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(seen[SAST]).toEqual([WHOLE, WHOLE]);
+			expect(pendingIn(decision?.body)).toEqual([]);
+		});
+
+		it("a clearing round posts although nothing else is new, and its marker drops the skill (no KV)", async () => {
+			incremental();
+			agents();
+			const quiet = prOctokit({
+				reviews: [{ id: 11, body: ownBody({ sha: OLD, count: 1 }) }],
+				compare: deltaB,
+			});
+			expect(
+				await buildReview({ octokit: quiet.octokit, ...baseContext }),
+			).toBeNull();
+
+			agents();
+			const { octokit, checkRuns } = prOctokit({
+				reviews: [{ id: 11, body: withPending([SAST]) }],
+				compare: deltaB,
+			});
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(decision?.event).toBe("APPROVE");
+			expect(pendingIn(decision?.body)).toEqual([]);
+			expect(checkRuns).toEqual([]);
+		});
+
+		it("a clearing round posts and updates the KV state", async () => {
+			const { client } = fakeKv();
+			await saveReviewState(
+				client,
+				"anthropic",
+				OWNER,
+				REPO,
+				1,
+				kvState([SAST]),
+			);
+			const seen = agents();
+			incremental();
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: ownBody({ sha: OLD, count: 1 }) }],
+				compare: deltaB,
+			});
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				kv: client,
+			});
+
+			expect(seen[SAST]).toEqual([WHOLE]);
+			expect(decision?.event).toBe("APPROVE");
+			expect(pendingIn(decision?.body)).toEqual([]);
+			const saved = await loadReviewState(client, "anthropic", OWNER, REPO, 1);
+			expect(saved?.lastReviewedSha).toBe(HEAD);
+			expect(saved?.incompleteSkills).toEqual([]);
+		});
+
+		it("a KV state wins over the GitHub marker, and a legacy one means none pending", async () => {
+			const { client } = fakeKv();
+			await saveReviewState(client, "anthropic", OWNER, REPO, 1, kvState());
+			const seen = agents({ [SAST]: finds() });
+			incremental();
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: withPending([SAST]) }],
+				compare: deltaB,
+			});
+
+			await buildReview({ octokit, ...baseContext, kv: client });
+
+			expect(messagesBuilt()).toEqual([
+				{ files: ["src/b.ts"], incremental: true },
+			]);
+			expect(seen[SAST]).toEqual([DELTA]);
+		});
+
+		it("a triage SKIP with a pending skill runs only that skill, over the whole PR", async () => {
+			const seen = agents();
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "SKIP",
+				resolved: [],
+				newRisk: false,
+			});
+			const { octokit, checkRuns } = prOctokit({
+				reviews: [{ id: 11, body: withPending([SAST]) }],
+				compare: deltaB,
+			});
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(Object.keys(seen)).toEqual([SAST]);
+			expect(seen[SAST]).toEqual([WHOLE]);
+			expect(messagesBuilt()).toEqual([
+				{ files: ["src/a.ts", "src/b.ts"], incremental: false },
+			]);
+			expect(decision?.event).toBe("APPROVE");
+			expect(pendingIn(decision?.body)).toEqual([]);
+			expect(checkRuns).toEqual([]);
+		});
+
+		it("a triage SKIP whose pending skill fails again posts nothing, re-stamps, and keeps it pending", async () => {
+			const { client } = fakeKv();
+			await saveReviewState(
+				client,
+				"anthropic",
+				OWNER,
+				REPO,
+				1,
+				kvState([SAST]),
+			);
+			const seen = agents({ [SAST]: fails() });
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "SKIP",
+				resolved: [],
+				newRisk: false,
+			});
+			const { octokit, checkRuns } = prOctokit({
+				reviews: [{ id: 11, body: ownBody({ sha: OLD, count: 1 }) }],
+				compare: deltaB,
+			});
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				kv: client,
+			});
+
+			expect(decision).toBeNull();
+			expect(Object.keys(seen)).toEqual([SAST]);
+			expect(seen[SAST]).toHaveLength(2);
+			expect(checkRuns).toHaveLength(1);
+			expect(checkRuns[0]?.conclusion).toBe("success");
+			const saved = await loadReviewState(client, "anthropic", OWNER, REPO, 1);
+			expect(saved?.lastReviewedSha).toBe(HEAD);
+			expect(saved?.incompleteSkills).toEqual([SAST]);
+		});
+
+		it("a triage SKIP whose pending skill clears nothing and finds nothing keeps the SKIP verdict", async () => {
+			const seen = agents();
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "SKIP",
+				resolved: [],
+				newRisk: false,
+			});
+			const body = `${ownBody({ sha: OLD, count: 1, rows: [blockerRow] })}\n${formatAgentsMarker([], [SAST], KNOWN_SKILLS)}`;
+			const { octokit, checkRuns } = prOctokit({
+				reviews: [{ id: 11, body }],
+				compare: deltaB,
+				files: [aFile, bFile, { filename: "logo.png", status: "added" }],
+				rawDiff: "",
+			});
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(Object.keys(seen)).toEqual([SAST]);
+			expect(decision).toBeNull();
+			expect(checkRuns).toHaveLength(1);
+			expect(checkRuns[0]?.conclusion).toBe("action_required");
+		});
+
+		it("a pending Tier 2 skill runs although the delta would not select it", async () => {
+			const seen = agents();
+			incremental();
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: withPending([COMMENTS_SKILL]) }],
+				compare: deltaB,
+			});
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				tier2Enabled: true,
+			});
+
+			expect(Object.keys(seen).sort()).toEqual(
+				[...TIER1_SKILLS, COMMENTS_SKILL].sort(),
+			);
+			expect(seen[COMMENTS_SKILL]).toEqual([WHOLE]);
+			expect(seen[SAST]).toEqual([DELTA]);
+			expect(pendingIn(decision?.body)).toEqual([]);
+		});
+
+		it("a pending skill whose file is gone is dropped", async () => {
+			const { client } = fakeKv();
+			await saveReviewState(
+				client,
+				"anthropic",
+				OWNER,
+				REPO,
+				1,
+				kvState(["retired-skill.md", SAST]),
+			);
+			const seen = agents();
+			incremental();
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: ownBody({ sha: OLD, count: 1 }) }],
+				compare: deltaB,
+			});
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				kv: client,
+			});
+
+			expect(seen["retired-skill.md"]).toBeUndefined();
+			expect(mockBuildAgentSystemPrompt).not.toHaveBeenCalledWith(
+				"retired-skill.md",
+				expect.anything(),
+				expect.anything(),
+			);
+			expect(pendingIn(decision?.body)).toEqual([]);
+			const saved = await loadReviewState(client, "anthropic", OWNER, REPO, 1);
+			expect(saved?.incompleteSkills).toEqual([]);
+		});
+
+		const bigFile = buildPullFile(
+			"src/big.ts",
+			`@@ -0,0 +1,1 @@\n+${"x".repeat(24_001)}`,
+		);
+		it.each([
+			["a trimmed patch", { files: [aFile, bFile, bigFile] }],
+			[
+				"a missing patch",
+				{
+					files: [aFile, bFile, { filename: "logo.png", status: "added" }],
+					rawDiff: "",
+				},
+			],
+		])("success on whole-PR input with %s stays pending, and its findings still merge", async (_name, pr) => {
+			const seen = agents({ [SAST]: finds() });
+			incremental();
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: withPending([SAST]) }],
+				compare: deltaB,
+				...pr,
+			});
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(seen[SAST]).toHaveLength(1);
+			expect(seen[SAST]?.[0]).toContain("src/a.ts");
+			expect(decision?.body).toContain("Fresh issue");
+			expect(pendingIn(decision?.body)).toEqual([SAST]);
+		});
+
+		it("a forced FULL round clears by success", async () => {
+			const seen = agents();
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: withPending([SAST]) }],
+			});
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				force: true,
+			});
+
+			expect(messagesBuilt()).toEqual([
+				{ files: ["src/a.ts", "src/b.ts"], incremental: false },
+			]);
+			expect(seen[SAST]).toEqual([WHOLE]);
+			expect(decision?.body).toContain("scope: full (forced)");
+			expect(pendingIn(decision?.body)).toEqual([]);
+		});
+
+		it("a recovery finding outside the delta keeps its inline anchor", async () => {
+			agents({
+				[SAST]: () =>
+					buildGenerateObjectResponse(
+						buildModelReview({
+							event: "REQUEST_CHANGES",
+							inline_comments: [
+								buildInlineComment({
+									path: "src/a.ts",
+									line: 3,
+									title: "Unvalidated input",
+								}),
+							],
+						}),
+					),
+			});
+			incremental();
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: withPending([SAST]) }],
+				compare: deltaB,
+			});
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(decision?.comments).toEqual([
+				expect.objectContaining({ path: "src/a.ts", line: 3 }),
+			]);
+		});
+
+		it("a skill that fails again stays pending and is retried once per round, with no extra round", async () => {
+			const { client } = fakeKv();
+			await saveReviewState(
+				client,
+				"anthropic",
+				OWNER,
+				REPO,
+				1,
+				kvState([SAST]),
+			);
+			incremental();
+			const reviews = [{ id: 11, body: ownBody({ sha: OLD, count: 1 }) }];
+
+			const rounds: Array<{
+				seen: Record<string, string[]>;
+				decision: Awaited<ReturnType<typeof buildReview>>;
+			}> = [];
+			for (const headSha of [HEAD, NEW_HEAD]) {
+				const seen = agents({ [SAST]: fails() });
+				const { octokit } = prOctokit({ reviews, compare: deltaB });
+				const decision = await buildReview({
+					octokit,
+					...baseContext,
+					headSha,
+					kv: client,
+				});
+				rounds.push({ seen, decision });
+			}
+
+			for (const { seen, decision } of rounds) {
+				expect(seen[SAST]).toEqual([WHOLE, WHOLE]);
+				for (const skill of TIER1_SKILLS.filter((s) => s !== SAST))
+					expect(seen[skill]).toEqual([DELTA]);
+				expect(decision?.event).toBe("COMMENT");
+				expect(pendingIn(decision?.body)).toEqual([SAST]);
+			}
+			const saved = await loadReviewState(client, "anthropic", OWNER, REPO, 1);
+			expect(saved?.lastReviewedSha).toBe(NEW_HEAD);
+			expect(saved?.incompleteSkills).toEqual([SAST]);
+		});
 	});
 });
 
