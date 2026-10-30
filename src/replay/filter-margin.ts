@@ -15,6 +15,7 @@ export interface FixtureMargin {
 	unadjudicatedClass: MarginCount;
 	unadjudicatedLabel: MarginCount;
 	repeats: MarginCount;
+	unclassified: MarginCount;
 	fixed: MarginCount;
 	unlabeled: MarginCount;
 	hitIds: string[];
@@ -33,6 +34,7 @@ type Bucket =
 	| "unadjudicatedClass"
 	| "unadjudicatedLabel"
 	| "repeats"
+	| "unclassified"
 	| "fixed"
 	| "unlabeled";
 
@@ -45,6 +47,7 @@ function emptyMargin(id: string): FixtureMargin {
 		unadjudicatedClass: zero(),
 		unadjudicatedLabel: zero(),
 		repeats: zero(),
+		unclassified: zero(),
 		fixed: zero(),
 		unlabeled: zero(),
 		hitIds: [],
@@ -58,6 +61,7 @@ const BUCKETS: Bucket[] = [
 	"unadjudicatedClass",
 	"unadjudicatedLabel",
 	"repeats",
+	"unclassified",
 	"fixed",
 	"unlabeled",
 ];
@@ -72,7 +76,10 @@ function bucketOf(
 	if (label === "unadjudicated") return "unadjudicatedLabel";
 	if (label !== "rejected") return "unlabeled";
 	const rec = classes?.records.find((r) => r.claimId === claimId);
-	if (!rec) return "repeats";
+	if (!rec)
+		return labels.repeatPairs.some((p) => p.later === claimId)
+			? "repeats"
+			: "unclassified";
 	if (rec.final === "filler") return "filler";
 	if (rec.final === "unadjudicated") return "unadjudicatedClass";
 	return "otherRejected";
@@ -149,7 +156,7 @@ export function formatMargin(m: Margin): string {
 	const t = m.total;
 	return [
 		line("self-retraction filter", t),
-		`  also removes ${t.repeats.hit} of ${t.repeats.of} repeat-rejected, ${t.unlabeled.hit} of ${t.unlabeled.of} unlabeled`,
+		`  also removes ${t.repeats.hit} of ${t.repeats.of} repeat-rejected, ${t.unclassified.hit} of ${t.unclassified.of} unclassified, ${t.unlabeled.hit} of ${t.unlabeled.of} unlabeled`,
 		`  unadjudicated split: ${t.unadjudicatedClass.hit} of ${t.unadjudicatedClass.of} in class, ${t.unadjudicatedLabel.hit} of ${t.unadjudicatedLabel.of} by label`,
 		...m.perFixture.map(
 			(p) =>
@@ -161,6 +168,6 @@ export function formatMargin(m: Margin): string {
 				.join(", ") || "none"
 		}`,
 		`  families hitting only one fixture: ${m.singleFixtureFamilies.join(", ") || "none"}`,
-		"  recall is resubstitution: phrases were designed after reading all 15 filler claims",
+		`  recall is resubstitution: phrases were designed after reading all ${t.filler.of} filler claims`,
 	].join("\n");
 }

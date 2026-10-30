@@ -84,6 +84,7 @@ describe("filterMargin buckets", () => {
 		claim("repeat", "Repeat", retract),
 		claim("kept", "Kept", "A real defect."),
 		claim("p0", "P0", retract, "P0"),
+		claim("orphan", "Orphan", "A real defect."),
 	]);
 	const labels = labelsOf([
 		["filler", "rejected"],
@@ -94,7 +95,11 @@ describe("filterMargin buckets", () => {
 		["repeat", "rejected"],
 		["kept", "rejected"],
 		["p0", "rejected"],
+		["orphan", "rejected"],
 	]);
+	labels.repeatPairs = [
+		{ later: "repeat", earlier: "filler", confirmed: false },
+	];
 	const classes = classesOf([
 		["filler", "filler"],
 		["other", "contradicted"],
@@ -110,6 +115,7 @@ describe("filterMargin buckets", () => {
 		expect(m.total.unadjudicatedClass).toEqual({ hit: 1, of: 1 });
 		expect(m.total.unadjudicatedLabel).toEqual({ hit: 1, of: 1 });
 		expect(m.total.repeats).toEqual({ hit: 1, of: 1 });
+		expect(m.total.unclassified).toEqual({ hit: 0, of: 1 });
 		expect(m.total.fixed).toEqual({ hit: 1, of: 1 });
 	});
 
@@ -126,6 +132,14 @@ describe("filterMargin buckets", () => {
 			"ulabel",
 			"unadj",
 		]);
+	});
+
+	it("reports a first-seen rejected claim with no class record as unclassified", () => {
+		expect(formatMargin(m)).toContain("0 of 1 unclassified");
+	});
+
+	it("derives the resubstitution count from the data", () => {
+		expect(formatMargin(m)).toContain("after reading all 2 filler claims");
 	});
 
 	it("prints the plan's margin line", () => {
