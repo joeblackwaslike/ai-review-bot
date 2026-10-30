@@ -92,18 +92,35 @@
 - [ ] **Step 8: Check rule accuracy leave-one-fixture-out** (tune phrase list on two fixtures, score on the third, rotating). Record per-fold agreement between `rules` and the model labelers for filler and stale.
 - [ ] **Step 9: Commit** `feat(replay): add false-positive class files and report`.
 
-### Task 3: Fix the largest fixable class (gated by Task 2 data)
+### Task 3: Drop self-retracted findings (amended after Task 2 data)
 
-**Gate (the orchestrator decides after Task 2, and amends this task in writing before dispatch):**
-1. Rank the classes by count. Apply the spec's fixable rule.
-2. If the winning class has fewer than ten members, or any candidate rule would remove a `fixed` claim on the fixtures, ship no heuristic. Skip to Task 4 with a recommendation.
-3. Otherwise write the amended task with exact files and signatures.
+**Gate result.** First-seen rejected Claude findings, classified by Claude and Codex blind (agree on 39 of 46): contradicted 16, filler 15, other 8, unadjudicated 7, stale 0, speculative 0. Contradicted is the largest class but is author judgment, so no rule over the finding can detect it. Filler is the largest detectable class. It has two kinds: 7 short body-table findings ("No new findings beyond prior reviews") and 8 long inline findings that retract themselves in the last sentence ("No actionable defect found", "this is not itself a bug", "retracted"). Today's `isFillerText` reads only the title and first sentence and agrees with the models on 2 of 16.
 
-**Expected shape if filler wins** (a guess until the counts exist):
-- Create `src/filler-filter.ts` exporting `isFillerFinding(f: { title: string; text: string }): boolean`, reusing `isFillerText` from `src/replay/classify.ts` (move the phrase list to a shared module if the import direction is wrong; webhook code must not import from `src/replay/`).
-- Apply it in the merge path in `src/review.ts` (`mergeReviews`) before inline and general findings are deduplicated, so a dropped finding never affects event aggregation. An all-filler round returns `APPROVE` as today's zero-finding case does.
-- Tests, each written first: fixture filler claims are dropped; every `fixed` claim in the three Claude fixtures survives; "No test coverage for the new parser" survives; `REQUEST_CHANGES` is not produced from a lone filler finding.
-- Offline margin check as a test: run the filter over all 139 labeled Claude claims; assert zero removals among `fixed` claims, and print removals among rejected and unadjudicated claims.
+**Files:**
+- Create: `src/self-retraction.ts`, `src/self-retraction.test.ts`
+- Modify: `src/replay/classify.ts` (`isFillerText` delegates to the shared detector so the rule and the filter are one definition), `src/review.ts` (`MergeOptions`, `MergeOutcome`, `mergeReviewsDetailed`, the call site near line 2349), `src/reviewer-tuning.ts`, `src/replay/classify.test.ts`, `src/replay/command.ts` plus a new `src/replay/filter-margin.ts`
+
+**Interfaces:**
+- Produces: `isSelfRetracted(f: { title: string; body: string }): boolean`. It strips fenced and inline code and markdown emphasis, then checks the title, the first sentence and the last two sentences of the body against a tested phrase list. A final sentence that contains a contrast ("but", "however", "although", "unless", "except") after the phrase does not count.
+- Produces: `MergeOptions.dropSelfRetracted?: boolean`, `MergeOutcome.retracted: number`, `ReviewerTuning.dropSelfRetracted: boolean` (true).
+- Produces: `filterMargin(fixtures, labelFiles, classFiles)` returning, per fixture and total, hits among agreed-filler, hits among other classes, hits among unadjudicated labels, and hits among `fixed` claims.
+- Consumes: Task 1 and 2 outputs.
+
+**Rules:**
+- The filter never drops a P0 finding.
+- It runs before the same-claim dedupe, on both general findings and inline comments, so event aggregation sees only surviving findings. A round where every finding is dropped yields the zero-finding result the merge already handles.
+- The count is returned in `MergeOutcome.retracted` and logged where `collapsed` is logged; nothing is dropped silently.
+- Hard assertion in a test: zero hits among the 17 `fixed` Claude claims, over claim text (`PostedClaim.text` as body, `title` as title).
+- The test pins the exact list of hit claim IDs so any change is deliberate.
+- Margin report block printed by `replay`: `self-retraction filter: removes k of 15 filler, a other-rejected, u unadjudicated, 0 of 17 fixed`.
+- Report per-fixture hit counts, and flag phrases that match in only one fixture.
+- Real out-of-sample check is the live tier: the filter's `retracted` count and the raw finding count from the same live run give before and after at once. Live hits are then judged blind by Claude and Codex like the fixtures.
+
+**Steps (TDD):**
+- [ ] Write failing tests: positives from the fixture tails above (one per phrase family), negatives "No test coverage for the new parser", "No retry on 429", a finding whose last sentence is "no functional bug on the happy path, but a retry loses the token", a phrase only inside a code span, empty body, a P0 with a retracting tail (kept by the merge).
+- [ ] Failing merge tests: option on drops a retracted inline and general finding and sets `retracted`; option off keeps them; an all-retracted round gives no findings.
+- [ ] Failing margin test with the pinned hit IDs and the zero-fixed assertion.
+- [ ] Implement, run, commit `feat(review): drop findings that retract themselves`.
 
 ### Task 4: Before and after, and verification against real GitHub
 
