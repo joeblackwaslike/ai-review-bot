@@ -39,7 +39,7 @@ Counted from the committed Claude fixtures on `origin/main` (90b3aca).
 | stealth-browser#1 | 65 | 4 | 29 | 32 |
 | Total | 139 | 17 | 61 | 61 |
 
-Only 79 of the 139 labels have high confidence. Those 61 rejected claims include repeats of earlier claims. The classification covers first-seen rejected claims only, because repeats are already measured as recycling. The number of first-seen rejected claims is counted in the first task and printed in the report.
+Only 79 of the 139 labels have high confidence. Those 61 rejected labels include 15 claims that repeat an earlier claim. The classification covers the other 46 first-seen rejected claims (17 in agent-skills#10, 5 in ai-listings#74, 24 in stealth-browser#1), because repeats are already measured as recycling. 46 is a small sample, so counts are reported as k of 46 and never as bare percentages.
 
 The first look at the rejected claims shows many "body" findings from agent-skills#10 with titles like "No new findings beyond prior reviews" and "Docs-only PR, no executable tests applicable". That points to a large filler class, but I read titles and did not count. The classification decides.
 

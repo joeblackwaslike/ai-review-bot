@@ -65,7 +65,7 @@
   - `firstSeenRejected` excludes a claim that is the `later` side of a repeat pair.
   - `resolveFinal`: `{claude:"filler",codex:"filler"}` gives `filler`; `{claude:"filler",codex:"speculative"}` and any `null` give `unadjudicated`.
   - `summarizeClasses` counts add up: sum of class counts plus `unadjudicated` equals the number of records.
-  - A test that loads the three committed Claude label files and asserts `firstSeenRejected(...).length` totals at most 61 (the printed count becomes the figure for the report).
+  - A test that loads the three committed Claude label files and asserts `firstSeenRejected(...).length` totals 46 (22, 10 and 29 raw rejected labels, minus 15 repeats).
 - [ ] **Step 2: Run** `pnpm test src/replay/classify.test.ts`. Expected: FAIL, module not found.
 - [ ] **Step 3: Implement** the interfaces above in `classify.ts`. `isFillerText` is a tested phrase list applied to the title and to the first sentence of the text only, with fenced and inline code removed first. `ruleClass` uses `ThreadEvidence.isOutdated` and reply text containing a commit SHA found in `commitsSince` of rounds before `c.roundIndex`.
 - [ ] **Step 4: Failing test for hygiene.** In `command.test.ts`, add a `.classes.json` file to the temp fixtures dir and assert `runReplay` still replays the same fixture count and does not fail. Run, see it FAIL.
@@ -88,7 +88,7 @@
 - [ ] **Step 4: Write the `.classes.json` files** with `provisional: true`, `reactionOnly` set for low-confidence rejected labels, and `final` from `resolveFinal`.
 - [ ] **Step 5: Failing test** in `command.test.ts`: with a `.classes.json` present, `runReplay` output contains `classified`, a count per class, `agreement`, and `unadjudicated`. Run, see it FAIL.
 - [ ] **Step 6: Print the report** in `replayAll` via `formatClassReport`. Run `pnpm test src/replay`, PASS. Update the snapshot only if a snapshot test covers this output, and say why in the commit.
-- [ ] **Step 7: Run** `bun src/cli.ts replay`. Record the class table, `classified of 61`, agreement k of n, and the unadjudicated count.
+- [ ] **Step 7: Run** `bun src/cli.ts replay`. Record the class table, `classified of 46`, agreement k of n, and the unadjudicated count.
 - [ ] **Step 8: Check rule accuracy leave-one-fixture-out** (tune phrase list on two fixtures, score on the third, rotating). Record per-fold agreement between `rules` and the model labelers for filler and stale.
 - [ ] **Step 9: Commit** `feat(replay): add false-positive class files and report`.
 

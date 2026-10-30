@@ -226,10 +226,8 @@ describe("committed Claude label files", () => {
 				readFileSync(new URL(`${id}.labels.json`, dir), "utf8"),
 			) as LabelFile;
 			const n = firstSeenRejected(f, l).length;
-			console.log(`firstSeenRejected ${id} ${n}`);
 			total += n;
 		}
-		console.log(`firstSeenRejected total ${total}`);
-		expect(total).toBeLessThanOrEqual(61);
+		expect(total).toBe(46);
 	});
 });
