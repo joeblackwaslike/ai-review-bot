@@ -274,3 +274,39 @@ describe("reviewCount", () => {
 		]);
 	});
 });
+
+describe("incompleteSkills", () => {
+	const base = {
+		lastReviewedSha: "abc",
+		event: "COMMENT" as const,
+		findings: [],
+		reviewedAt: "2026-10-29T00:00:00Z",
+	};
+
+	it("round-trips the pending list through KV", async () => {
+		const { client } = fakeKv();
+		await saveReviewState(client, "anthropic", "o", "r", 7, {
+			...base,
+			incompleteSkills: ["security-sast.md"],
+		});
+		const loaded = await loadReviewState(client, "anthropic", "o", "r", 7);
+		expect(loaded?.incompleteSkills).toEqual(["security-sast.md"]);
+	});
+
+	it("a legacy state without the list reads as none pending", async () => {
+		const { client } = fakeKv();
+		await saveReviewState(client, "anthropic", "o", "r", 7, base);
+		const loaded = await loadReviewState(client, "anthropic", "o", "r", 7);
+		expect(loaded?.incompleteSkills ?? []).toEqual([]);
+	});
+
+	it("a malformed list is dropped, not trusted", async () => {
+		const { client, store } = fakeKv();
+		store.set(
+			stateKey("anthropic", "o", "r", 7),
+			JSON.stringify({ ...base, incompleteSkills: "security-sast.md" }),
+		);
+		const loaded = await loadReviewState(client, "anthropic", "o", "r", 7);
+		expect(loaded?.incompleteSkills).toBeUndefined();
+	});
+});

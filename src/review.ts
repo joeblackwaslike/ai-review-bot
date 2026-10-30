@@ -1642,6 +1642,7 @@ export async function buildReview(
 				reviewIds: loaded.reviewIds,
 				warm: loaded.warm,
 			},
+			KNOWN_SKILLS,
 		);
 		if (derived) {
 			state = derived.state;
@@ -2531,6 +2532,7 @@ export async function buildReview(
 			findings: persistedFindings,
 			reviewedAt: new Date().toISOString(),
 			reviewCount: reviewCountBase,
+			incompleteSkills: pending,
 		};
 		await saveReviewState(
 			context.kv,

@@ -17,6 +17,9 @@ export interface ReviewState {
 	findings: PersistedFinding[];
 	reviewedAt: string;
 	reviewCount?: number;
+	/** Skills that still owe this PR a whole-PR review (the agents marker's
+	 * `pending` list). Absent on states saved before it existed: none pending. */
+	incompleteSkills?: string[];
 }
 
 const STATE_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days, refreshed on each write
@@ -128,6 +131,14 @@ export async function loadReviewState(
 					f.severity = migrateSeverity(f.severity);
 				}
 				if (parsed.reviewCount == null) parsed.reviewCount = 0;
+				if (
+					parsed.incompleteSkills !== undefined &&
+					!(
+						Array.isArray(parsed.incompleteSkills) &&
+						parsed.incompleteSkills.every((s) => typeof s === "string")
+					)
+				)
+					parsed.incompleteSkills = undefined;
 				return parsed;
 			}
 			console.warn(

@@ -1,3 +1,4 @@
+import { parseAgentsMarker } from "./agent-log.js";
 import type { Ledger } from "./ledger/types.js";
 import { readMetadataValue } from "./review-metadata.js";
 import {
@@ -35,6 +36,7 @@ function bodyFindings(body: string): PersistedFinding[] {
 export function deriveBaseline(
 	source: { id: number; body: string } | null,
 	ledger: { entries: Ledger; reviewIds: number[]; warm: boolean },
+	knownSkills: ReadonlySet<string>,
 ): DerivedBaseline | null {
 	if (!source) return null;
 	const body = source.body;
@@ -79,6 +81,7 @@ export function deriveBaseline(
 			findings,
 			reviewedAt: new Date().toISOString(),
 			reviewCount: count !== undefined ? Number.parseInt(count, 10) : 0,
+			incompleteSkills: parseAgentsMarker(body, knownSkills)?.pending ?? [],
 		},
 		complete,
 	};

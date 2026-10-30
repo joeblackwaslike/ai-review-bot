@@ -84,6 +84,16 @@ export function trimPatch(patch: string, maxChars = 24000): string {
 	return `${patch.slice(0, maxChars)}\n\n[patch truncated]`;
 }
 
+/** True when an agent given these files sees all of them: every file has a
+ * patch and `trimPatch` cuts none. Only such input clears a pending skill. */
+export function wholePrInputComplete(
+	files: ReadonlyArray<{ patch?: string }>,
+): boolean {
+	return files.every(
+		(f) => Boolean(f.patch) && trimPatch(f.patch ?? "") === f.patch,
+	);
+}
+
 function serializeFiles(files: PromptContext["files"]): string {
 	return files
 		.map((file) => {

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { type AgentRecord, formatAgentsMarker } from "./agent-log.js";
 import { deriveBaseline } from "./baseline.js";
 import type { Ledger, LedgerEntry } from "./ledger/types.js";
+import { KNOWN_SKILLS } from "./review.js";
 import { findingId } from "./review-state.js";
 
 const SHA = "abc1234567890abc1234567890abc1234567890a";
@@ -71,15 +73,17 @@ const warm = (entries: Ledger, reviewIds = [10, 20]) => ({
 
 describe("deriveBaseline", () => {
 	it("returns null with no source or no sha marker", () => {
-		expect(deriveBaseline(null, warm([]))).toBeNull();
-		expect(deriveBaseline({ id: 20, body: "hello" }, warm([]))).toBeNull();
+		expect(deriveBaseline(null, warm([]), KNOWN_SKILLS)).toBeNull();
+		expect(
+			deriveBaseline({ id: 20, body: "hello" }, warm([]), KNOWN_SKILLS),
+		).toBeNull();
 	});
 
 	it("carried row with a path suffix gets path, line and a clean title", () => {
 		const b = body({
 			carried: ["| 🟠 | **Unchecked cast** (`src/a.ts:42`) |"],
 		});
-		const r = deriveBaseline({ id: 20, body: b }, warm([]));
+		const r = deriveBaseline({ id: 20, body: b }, warm([]), KNOWN_SKILLS);
 		expect(r?.state.lastReviewedSha).toBe(SHA);
 		expect(r?.state.reviewCount).toBe(2);
 		expect(r?.state.event).toBe("REQUEST_CHANGES");
@@ -99,7 +103,7 @@ describe("deriveBaseline", () => {
 		const b = body({
 			carried: ["| 🟡 | **Broken link** (`docs/My File.md:12`) |"],
 		});
-		const r = deriveBaseline({ id: 20, body: b }, warm([]));
+		const r = deriveBaseline({ id: 20, body: b }, warm([]), KNOWN_SKILLS);
 		expect(r?.state.findings).toEqual([
 			{
 				id: findingId("docs/My File.md", 12, "Broken link"),
@@ -128,6 +132,7 @@ describe("deriveBaseline", () => {
 		const r = deriveBaseline(
 			{ id: 20, body: body({ inline: "Inline comments: 2" }) },
 			warm(ledger),
+			KNOWN_SKILLS,
 		);
 		expect(r?.complete).toBe(true);
 		expect(r?.state.findings.map((f) => f.title)).toEqual(["New"]);
@@ -148,7 +153,7 @@ describe("deriveBaseline", () => {
 			rows: ["| 🟠 | bug | **Missing null check** |"],
 			inline: "Inline comments: 1",
 		});
-		const r = deriveBaseline({ id: 20, body: b }, warm(ledger));
+		const r = deriveBaseline({ id: 20, body: b }, warm(ledger), KNOWN_SKILLS);
 		expect(r?.state.findings.map((f) => f.title).sort()).toEqual([
 			"Inline",
 			"Missing null check",
@@ -169,7 +174,7 @@ describe("deriveBaseline", () => {
 			carried: ["| 🟠 | **Unchecked cast** (`src/a.ts:42`) |"],
 			inline: "Inline comments: 1",
 		});
-		const r = deriveBaseline({ id: 20, body: b }, warm(ledger));
+		const r = deriveBaseline({ id: 20, body: b }, warm(ledger), KNOWN_SKILLS);
 		expect(r?.state.findings).toHaveLength(1);
 		expect(r?.state.findings[0].id).toBe(
 			findingId("src/a.ts", 42, "Unchecked cast"),
@@ -183,6 +188,7 @@ describe("deriveBaseline", () => {
 		const r = deriveBaseline(
 			{ id: 20, body: body({ inline: "Inline comments: 1" }) },
 			warm(ledger),
+			KNOWN_SKILLS,
 		);
 		expect(r?.state.findings[0]).toMatchObject({
 			path: "src/q.ts",
@@ -204,6 +210,7 @@ describe("deriveBaseline", () => {
 		const r = deriveBaseline(
 			{ id: 20, body: body({ inline: "Inline comments: 1" }) },
 			warm(ledger),
+			KNOWN_SKILLS,
 		);
 		expect(r?.state.findings[0]).toMatchObject({
 			path: "a.ts",
@@ -213,7 +220,11 @@ describe("deriveBaseline", () => {
 	});
 
 	it("a source with no findings gives an empty list", () => {
-		const r = deriveBaseline({ id: 20, body: body({}) }, warm([]));
+		const r = deriveBaseline(
+			{ id: 20, body: body({}) },
+			warm([]),
+			KNOWN_SKILLS,
+		);
 		expect(r?.state.findings).toEqual([]);
 		expect(r?.state.event).toBe("COMMENT");
 		expect(r?.complete).toBe(true);
@@ -223,7 +234,7 @@ describe("deriveBaseline", () => {
 		const b = body({
 			bullets: ["> - 🔴 **SQL built from input** (`src/db.ts:17`)"],
 		});
-		const r = deriveBaseline({ id: 20, body: b }, warm([]));
+		const r = deriveBaseline({ id: 20, body: b }, warm([]), KNOWN_SKILLS);
 		expect(r?.state.findings).toEqual([
 			{
 				id: findingId("src/db.ts", 17, "SQL built from input"),
@@ -240,6 +251,7 @@ describe("deriveBaseline", () => {
 		const r = deriveBaseline(
 			{ id: 20, body: body({ inline: "Inline comments: 3" }) },
 			{ entries: [], reviewIds: [], warm: false },
+			KNOWN_SKILLS,
 		);
 		expect(r?.complete).toBe(false);
 	});
@@ -248,19 +260,24 @@ describe("deriveBaseline", () => {
 		const r = deriveBaseline(
 			{ id: 20, body: body({ rows: ["| 🟡 | style | **Naming** |"] }) },
 			{ entries: [], reviewIds: [], warm: false },
+			KNOWN_SKILLS,
 		);
 		expect(r?.complete).toBe(true);
 		expect(r?.state.findings).toHaveLength(1);
 	});
 
 	it("source id missing from reviewIds is incomplete", () => {
-		const r = deriveBaseline({ id: 99, body: body({}) }, warm([]));
+		const r = deriveBaseline(
+			{ id: 99, body: body({}) },
+			warm([]),
+			KNOWN_SKILLS,
+		);
 		expect(r?.complete).toBe(false);
 	});
 
 	it("a title ending in parentheses without a path:line pair is untouched", () => {
 		const b = body({ rows: ["| 🟡 | style | **Retry loop (see docs)** |"] });
-		const r = deriveBaseline({ id: 20, body: b }, warm([]));
+		const r = deriveBaseline({ id: 20, body: b }, warm([]), KNOWN_SKILLS);
 		expect(r?.state.findings[0]).toMatchObject({
 			path: null,
 			line: null,
@@ -271,7 +288,7 @@ describe("deriveBaseline", () => {
 	it("parses legacy Reviewed commit bodies", () => {
 		const b =
 			"### ai-review\nReviewed commit: `deadbee`\n\n| Sev | Finding |\n|---|---|\n| 🔴 | Unsafe eval |";
-		const r = deriveBaseline({ id: 20, body: b }, warm([]));
+		const r = deriveBaseline({ id: 20, body: b }, warm([]), KNOWN_SKILLS);
 		expect(r?.state.lastReviewedSha).toBe("deadbee");
 		expect(r?.state.reviewCount).toBe(0);
 		expect(r?.state.findings[0].title).toBe("Unsafe eval");
@@ -285,8 +302,69 @@ describe("deriveBaseline metadata block", () => {
 		const result = deriveBaseline(
 			{ id: 20, body: quoted + body({ count: 3 }) },
 			warm([]),
+			KNOWN_SKILLS,
 		);
 		expect(result?.state.lastReviewedSha).toBe(SHA);
 		expect(result?.state.reviewCount).toBe(3);
+	});
+});
+
+describe("deriveBaseline incompleteSkills", () => {
+	const failed: AgentRecord = {
+		skill: "security-sast.md",
+		attempt: 2,
+		status: "error",
+		class: "schema_mismatch",
+		retryable: true,
+		errorName: "AI_NoObjectGeneratedError",
+	};
+
+	it("reads the pending list from the agents marker", () => {
+		const marker = formatAgentsMarker(
+			[failed],
+			["security-sast.md", "comment-analyzer.md"],
+			KNOWN_SKILLS,
+		);
+		const r = deriveBaseline(
+			{ id: 20, body: `${body({})}\n${marker}` },
+			warm([]),
+			KNOWN_SKILLS,
+		);
+		expect(r?.state.incompleteSkills).toEqual([
+			"security-sast.md",
+			"comment-analyzer.md",
+		]);
+	});
+
+	it("drops a pending skill the caller does not know", () => {
+		const marker = formatAgentsMarker(
+			[failed],
+			["security-sast.md", "comment-analyzer.md"],
+			KNOWN_SKILLS,
+		);
+		const r = deriveBaseline(
+			{ id: 20, body: `${body({})}\n${marker}` },
+			warm([]),
+			new Set(["comment-analyzer.md"]),
+		);
+		expect(r?.state.incompleteSkills).toEqual(["comment-analyzer.md"]);
+	});
+
+	it("an old body with no agents marker gives an empty list", () => {
+		const r = deriveBaseline(
+			{ id: 20, body: body({}) },
+			warm([]),
+			KNOWN_SKILLS,
+		);
+		expect(r?.state.incompleteSkills).toEqual([]);
+	});
+
+	it("a marker that does not parse gives an empty list", () => {
+		const r = deriveBaseline(
+			{ id: 20, body: `${body({})}\n<!-- ai-review:agents=notjson -->` },
+			warm([]),
+			KNOWN_SKILLS,
+		);
+		expect(r?.state.incompleteSkills).toEqual([]);
 	});
 });
