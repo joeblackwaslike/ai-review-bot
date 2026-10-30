@@ -6493,7 +6493,7 @@ describe("delta scoping without KV", () => {
 			expect(Object.keys(seen)).toEqual([SAST]);
 			expect(seen[SAST]).toHaveLength(2);
 			expect(checkRuns).toHaveLength(1);
-			expect(checkRuns[0]?.conclusion).toBe("success");
+			expect(checkRuns[0]?.conclusion).toBe("neutral");
 			const saved = await loadReviewState(client, "anthropic", OWNER, REPO, 1);
 			expect(saved?.lastReviewedSha).toBe(HEAD);
 			expect(saved?.incompleteSkills).toEqual([SAST]);
@@ -6830,6 +6830,93 @@ describe("delta scoping without KV", () => {
 			],
 		])("whole-PR input with %s still clears the pending skill", async (_name, pr) => {
 			expect(await runWith(pr)).toEqual([]);
+		});
+
+		const readinessOf = (body: string | undefined) =>
+			Number(body?.match(/<!-- ai-review:readiness=(\d) -->/)?.[1]);
+		const incompleteInput = {
+			files: [
+				aFile,
+				bFile,
+				{
+					filename: "src/huge.ts",
+					status: "modified",
+					additions: 5000,
+					deletions: 0,
+				},
+			],
+			rawDiff: "",
+		};
+		const OWED_LINE = "`security-sast` still owes a review of the whole PR";
+
+		it.each([
+			["a forced run", { force: true }],
+			["an incremental round", {}],
+		])("%s with every agent ok but a pending skill left uncleared is partial, not an approval", async (_name, extra) => {
+			agents();
+			incremental();
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: withPending([SAST]) }],
+				compare: deltaB,
+				...incompleteInput,
+			});
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				changedFiles: 3,
+				...extra,
+			});
+
+			expect(decision?.event).toBe("COMMENT");
+			expect(readinessOf(decision?.body)).toBe(3);
+			expect(decision?.body).toContain(OWED_LINE);
+			expect(pendingIn(decision?.body)).toEqual([SAST]);
+		});
+
+		it.each([
+			["a forced run", { force: true }],
+			["an incremental round", {}],
+		])("%s with complete input clears the skill and approves", async (_name, extra) => {
+			agents();
+			incremental();
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: withPending([SAST]) }],
+				compare: deltaB,
+			});
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				...extra,
+			});
+
+			expect(decision?.event).toBe("APPROVE");
+			expect(readinessOf(decision?.body)).toBe(5);
+			expect(decision?.body).not.toContain("still owes");
+			expect(pendingIn(decision?.body)).toEqual([]);
+		});
+
+		it("a triage SKIP with only a waiting Tier 2 skill pending re-stamps neutral, not success", async () => {
+			agents();
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "SKIP",
+				resolved: [],
+				newRisk: false,
+			});
+			const { octokit, checkRuns } = prOctokit({
+				reviews: [{ id: 11, body: withPending([COMMENTS_SKILL]) }],
+				compare: deltaB,
+			});
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				tier2Enabled: false,
+			});
+
+			expect(decision).toBeNull();
+			expect(checkRuns.map((c) => c.conclusion)).toEqual(["neutral"]);
 		});
 
 		it("a forced FULL round clears by success", async () => {

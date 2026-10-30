@@ -889,6 +889,9 @@ export interface FormatReviewBodyOptions {
 	pending: string[];
 	/** Skills whose retry never started or was aborted for lack of time. */
 	retrySkipped: string[];
+	/** Pending skills that ended this round without a failure but still owe a
+	 * whole-PR review (their input was incomplete, or they did not run). */
+	owedCoverage?: string[];
 	allSkillsCount: number;
 	generalFindings: ModelFinding[];
 	reviewComments: ReviewComment[];
@@ -933,6 +936,7 @@ const skillLabel = (skill: string) => `\`${skill.replace(/\.md$/, "")}\``;
 function formatAgentNotices(opts: {
 	skipped: string[];
 	agentRecords: AgentRecord[];
+	owedCoverage?: string[];
 	retrySkipped: string[];
 	allSkillsCount: number;
 }): string[] {
@@ -988,6 +992,12 @@ function formatAgentNotices(opts: {
 	warn("⏱", retryOutOfTime, "retry skipped, out of time");
 	warn("⚠️", rateLimited, "rate limited");
 	warn("⚠️", quota, "out of quota");
+	const owed = (opts.owedCoverage ?? []).map(skillLabel);
+	if (owed.length > 0) {
+		notices.push(
+			`> ⚠️ **Partial review.** ${owed.join(", ")} still ${owed.length === 1 ? "owes" : "owe"} a review of the whole PR; ${owed.length === 1 ? "its" : "their"} input this round was incomplete or ${owed.length === 1 ? "it" : "they"} did not run.`,
+		);
+	}
 	if (recovered.length > 0) {
 		notices.push(
 			`> ${count(recovered.length)} failed, then recovered on retry: ${recovered.join(", ")}.`,
@@ -1042,6 +1052,7 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 	const budgetNotices = formatAgentNotices({
 		skipped,
 		agentRecords,
+		owedCoverage: opts.owedCoverage,
 		retrySkipped,
 		allSkillsCount,
 	});
@@ -1799,7 +1810,15 @@ export async function buildReview(
 						scope: `scope: delta from ${state.lastReviewedSha.slice(0, 7)} (${baselineSource})`,
 						decision: "SKIP",
 					});
-					await carryVerdictForward(stillBlocking ? state.event : "APPROVE");
+					// A skill still owing coverage (a Tier 2 one waiting while Tier 2 is
+					// off) keeps the verdict short of an approval.
+					await carryVerdictForward(
+						stillBlocking
+							? state.event
+							: priorPending.length > 0
+								? "COMMENT"
+								: "APPROVE",
+					);
 					return null; // nothing to post — the check-run carries the verdict
 				}
 			}
@@ -2221,7 +2240,9 @@ export async function buildReview(
 			pending,
 		});
 		if (state) state.incompleteSkills = pending;
-		await carryVerdictForward(skipVerdict);
+		await carryVerdictForward(
+			skipVerdict === "APPROVE" && pending.length > 0 ? "COMMENT" : skipVerdict,
+		);
 		return null;
 	};
 	if (pendingOnly && agentResults.length === 0) return skipFallback();
@@ -2453,9 +2474,11 @@ export async function buildReview(
 
 	// Upgrade to APPROVE only when ALL agents succeeded AND none found anything to flag.
 	// If any agent was rate-limited or errored, the review is partial — keep COMMENT.
+	// A skill that still owes the PR a whole-PR review makes the round partial too.
 	const allAgentsSucceeded = agentResults.length === allSkills.length;
 	const cleanDelta =
 		allAgentsSucceeded &&
+		pending.length === 0 &&
 		modelReview.event === "COMMENT" &&
 		modelReview.general_findings.length === 0 &&
 		// What the agents found, not what GitHub would accept. Measuring the
@@ -2580,7 +2603,8 @@ export async function buildReview(
 			skipped.length > 0 ||
 			errored.length > 0 ||
 			rateLimited.length > 0 ||
-			quotaExhausted.length > 0,
+			quotaExhausted.length > 0 ||
+			pending.length > 0,
 	});
 
 	const body = formatReviewBody({
@@ -2593,6 +2617,9 @@ export async function buildReview(
 		skipped,
 		agentRecords,
 		pending,
+		owedCoverage: pending.filter(
+			(s) => !ranNames.some((n, i) => n === s && outcomes[i]?.status !== "ok"),
+		),
 		retrySkipped,
 		allSkillsCount: allSkills.length,
 		generalFindings: modelReview.general_findings,
