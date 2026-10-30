@@ -74,6 +74,9 @@ Settled repeats are dropped per agent before this merge, and a re-review round w
 | `src/testing.ts` | Shared test fixtures (`buildModelReview`, `buildGenerateObjectResponse`, etc.) |
 | `src/replay/` | Offline replay harness — records, labels, and replays PR review rounds to measure false-positive rate, recycling, and convergence; backs `ai-review replay`. See `docs/superpowers/specs/2026-10-27-review-replay-harness-design.md` |
 | `src/baseline.ts` | `deriveBaseline()` derives a review baseline from GitHub: the latest own review's markers (sha, review count) plus the ledger's open findings; replaces KV as the source of prior state on a cold start |
+| `src/agent-failure.ts` | Classifies a thrown agent error into a failure class and decides whether it is worth one retry |
+| `src/agent-log.ts` | Per-agent outcome records, the `agents` marker in the review body, and the local JSONL log sink |
+| `src/review-metadata.ts` | Reads the `ai-review:key=value` marker block above the review footer, ignoring quoted or duplicated markers |
 | `src/ledger/` | Platform-neutral ledger of review findings and their dispositions rebuilt from GitHub threads, claim matching across rounds, suppression of settled repeats; see `docs/superpowers/specs/2026-10-28-ledger-repeat-suppression-design.md` |
 | `skills/*.md` | Vendored skill frameworks loaded at runtime by `buildAgentSystemPrompt()` |
 
@@ -92,6 +95,8 @@ The CLI supports four subcommands for offline code review of the working tree (p
 Reference: `docs/superpowers/specs/2026-06-08-local-audit-review-pr-design.md`
 
 - `ai-review replay [--fixtures <dir>]` / `ai-review replay --record <pr-url> --provider anthropic|openai --bot <login>` / `ai-review replay --live [--rounds <n>] [--max-cost <usd>]` — Deterministic offline replay of recorded review rounds: measures false-positive rate, claim recycling, and convergence against auto-labeled fixtures (provisional until an agent verifies them against the PR threads and Codex cross-checks them; items the two models disagree on stay unadjudicated). `--record` captures a real PR's rounds/threads/reactions via `gh` into `src/replay/fixtures/`; the default (no flags) replays existing fixtures and fails on confirmed-label guard violations (warns on provisional ones); `--live` is an opt-in, cost-capped tier that re-runs the audit pipeline against confirmed pairs only — it never gates CI. See `docs/superpowers/specs/2026-10-27-review-replay-harness-design.md` for the design and `src/replay/`.
+
+`watch`, `review` and `audit` also append one JSON line per agent outcome to `~/.ai-review/logs/agents.jsonl`, or to the path in `AI_REVIEW_LOG_FILE` when it is set. The hosted webhook path does not write it.
 
 ### Agent skills
 

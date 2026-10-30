@@ -84,6 +84,53 @@ export function trimPatch(patch: string, maxChars = 24000): string {
 	return `${patch.slice(0, maxChars)}\n\n[patch truncated]`;
 }
 
+const GENERATED_NAMES = new Set([
+	"package-lock.json",
+	"pnpm-lock.yaml",
+	"yarn.lock",
+	"bun.lock",
+	"Cargo.lock",
+	"poetry.lock",
+	"go.sum",
+]);
+
+/** Lock and generated files, which reviewers are not expected to read. */
+export function isGeneratedFile(path: string): boolean {
+	const name = path.split("/").pop() ?? path;
+	return (
+		GENERATED_NAMES.has(name) ||
+		name.endsWith(".min.js") ||
+		name.endsWith(".snap")
+	);
+}
+
+/** GitHub lists at most this many files for a pull request. */
+const PR_FILE_LIST_CAP = 3000;
+
+/** True when these files are the whole PR as a FULL round sees it: the list
+ * is not cut short, and every file other than a generated one has a patch or
+ * has no changes to show (a binary file, a pure rename). A patch `trimPatch`
+ * cuts still counts, since every FULL round gives every agent the same cut.
+ * Only such input clears a pending skill. */
+export function wholePrInputComplete(
+	files: ReadonlyArray<{
+		filename: string;
+		patch?: string;
+		additions?: number;
+		deletions?: number;
+	}>,
+	changedFiles: number,
+): boolean {
+	if (files.length < changedFiles || files.length >= PR_FILE_LIST_CAP)
+		return false;
+	return files.every(
+		(f) =>
+			isGeneratedFile(f.filename) ||
+			Boolean(f.patch) ||
+			(f.additions === 0 && f.deletions === 0),
+	);
+}
+
 function serializeFiles(files: PromptContext["files"]): string {
 	return files
 		.map((file) => {

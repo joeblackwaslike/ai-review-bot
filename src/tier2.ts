@@ -239,7 +239,7 @@ function shouldRunArchitectReview(ctx: Tier2Context): string | null {
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
-const TIER2_DETECTORS: Array<{
+export const TIER2_DETECTORS: Array<{
 	skillPath: string;
 	detect: (ctx: Tier2Context) => string | null;
 }> = [

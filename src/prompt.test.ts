@@ -3,7 +3,9 @@ import {
 	buildAgentSystemPrompt,
 	buildAuditUserMessage,
 	buildUserMessage,
+	isGeneratedFile,
 	MAX_REASON_CHARS,
+	wholePrInputComplete,
 } from "./prompt.js";
 
 describe("buildAgentSystemPrompt epistemic guardrails", () => {
@@ -264,5 +266,101 @@ describe("strict evidence rules", () => {
 			strictEvidenceRules: true,
 		});
 		expect(prompt).toContain(rule);
+	});
+});
+
+describe("isGeneratedFile", () => {
+	it.each([
+		"package-lock.json",
+		"pnpm-lock.yaml",
+		"yarn.lock",
+		"bun.lock",
+		"Cargo.lock",
+		"poetry.lock",
+		"go.sum",
+		"web/vendor/jquery.min.js",
+		"src/__snapshots__/review.test.ts.snap",
+		"apps/web/pnpm-lock.yaml",
+	])("%s is generated", (path) => {
+		expect(isGeneratedFile(path)).toBe(true);
+	});
+
+	it.each([
+		"src/review.ts",
+		"lock.yaml",
+		"package.json",
+		"docs/yarn.lock.md",
+		"src/min.js",
+		"go.sum.bak",
+	])("%s is not", (path) => {
+		expect(isGeneratedFile(path)).toBe(false);
+	});
+});
+
+describe("wholePrInputComplete", () => {
+	const file = (
+		filename: string,
+		o: { patch?: string; additions?: number; deletions?: number } = {
+			patch: "@@ -1 +1 @@\n+x",
+			additions: 1,
+			deletions: 0,
+		},
+	) => ({ filename, ...o });
+	const big = "x".repeat(24_001);
+
+	it("is complete when every file has an untrimmed patch", () => {
+		expect(wholePrInputComplete([file("a.ts"), file("b.ts")], 2)).toBe(true);
+	});
+
+	it("a patch trimmed by the size limit still counts as complete", () => {
+		expect(
+			wholePrInputComplete([file("a.ts", { patch: big, additions: 1 })], 1),
+		).toBe(true);
+	});
+
+	it("a file with no patch and no changes (binary, pure rename) is complete", () => {
+		expect(
+			wholePrInputComplete(
+				[
+					file("a.ts"),
+					file("logo.png", { additions: 0, deletions: 0 }),
+					file("moved.ts", { additions: 0, deletions: 0 }),
+				],
+				3,
+			),
+		).toBe(true);
+	});
+
+	it("a file with changes but no patch is incomplete", () => {
+		expect(
+			wholePrInputComplete([file("huge.ts", { additions: 5000 })], 1),
+		).toBe(false);
+	});
+
+	it("a file with no patch and unknown change counts is incomplete", () => {
+		expect(wholePrInputComplete([file("x.ts", {})], 1)).toBe(false);
+	});
+
+	it("a generated file does not block, even trimmed or without a patch", () => {
+		expect(
+			wholePrInputComplete(
+				[
+					file("a.ts"),
+					file("pnpm-lock.yaml", { patch: big, additions: 900 }),
+					file("dist/app.min.js", { additions: 40 }),
+				],
+				3,
+			),
+		).toBe(true);
+	});
+
+	it("a file list shorter than the PR's changed files is incomplete", () => {
+		expect(wholePrInputComplete([file("a.ts")], 2)).toBe(false);
+	});
+
+	it("a file list at GitHub's 3000-file cap is incomplete", () => {
+		const files = Array.from({ length: 3000 }, (_, i) => file(`f${i}.ts`));
+		expect(wholePrInputComplete(files, 3000)).toBe(false);
+		expect(wholePrInputComplete(files.slice(1), 2999)).toBe(true);
 	});
 });

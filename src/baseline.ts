@@ -1,4 +1,6 @@
+import { parseAgentsMarker } from "./agent-log.js";
 import type { Ledger } from "./ledger/types.js";
+import { readMetadataValue } from "./review-metadata.js";
 import {
 	findingId,
 	type PersistedFinding,
@@ -34,14 +36,17 @@ function bodyFindings(body: string): PersistedFinding[] {
 export function deriveBaseline(
 	source: { id: number; body: string } | null,
 	ledger: { entries: Ledger; reviewIds: number[]; warm: boolean },
+	knownSkills: ReadonlySet<string>,
 ): DerivedBaseline | null {
 	if (!source) return null;
 	const body = source.body;
+	const metaSha = readMetadataValue(body, "sha");
 	const sha =
-		body.match(/<!--\s*ai-review:sha=([0-9a-f]{7,40})\s*-->/)?.[1] ??
+		(metaSha && /^[0-9a-f]{7,40}$/.test(metaSha) ? metaSha : undefined) ??
 		body.match(/Reviewed commit: `([0-9a-f]{7,40})`/)?.[1];
 	if (!sha) return null;
-	const count = body.match(/<!--\s*ai-review:review=(\d+)\s*-->/)?.[1];
+	const metaCount = readMetadataValue(body, "review");
+	const count = metaCount && /^\d+$/.test(metaCount) ? metaCount : undefined;
 
 	const round = ledger.reviewIds.indexOf(source.id);
 	const fromLedger: PersistedFinding[] = ledger.entries
@@ -76,6 +81,7 @@ export function deriveBaseline(
 			findings,
 			reviewedAt: new Date().toISOString(),
 			reviewCount: count !== undefined ? Number.parseInt(count, 10) : 0,
+			incompleteSkills: parseAgentsMarker(body, knownSkills)?.pending ?? [],
 		},
 		complete,
 	};

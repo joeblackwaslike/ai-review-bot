@@ -1,6 +1,12 @@
+import { NoObjectGeneratedError } from "ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+	type AgentRecord,
+	formatAgentsMarker,
+	parseAgentsMarker,
+} from "./agent-log.js";
 import type { KvClient } from "./feedback/kv.js";
-import { createAIModel } from "./models.js";
+import { computeCost, createAIModel } from "./models.js";
 import {
 	buildReview,
 	buildReviewComments,
@@ -13,6 +19,7 @@ import {
 	formatFindings,
 	formatReviewBody,
 	generateSummary,
+	KNOWN_SKILLS,
 	ModelReviewSchema,
 	mergeReviews,
 	mergeReviewsDetailed,
@@ -44,7 +51,8 @@ const mockGenerateObject = vi.hoisted(() => vi.fn());
 const mockBuildUserMessage = vi.hoisted(() => vi.fn().mockReturnValue("user"));
 const mockBuildAgentSystemPrompt = vi.hoisted(() => vi.fn());
 
-vi.mock("ai", () => ({
+vi.mock("ai", async (importOriginal) => ({
+	...(await importOriginal<typeof import("ai")>()),
 	generateObject: mockGenerateObject,
 }));
 
@@ -64,7 +72,8 @@ vi.mock("./config.js", () => ({
 	}),
 }));
 
-vi.mock("./prompt.js", () => ({
+vi.mock("./prompt.js", async (importOriginal) => ({
+	...(await importOriginal<typeof import("./prompt.js")>()),
 	buildUserMessage: mockBuildUserMessage,
 	trimPatch: (patch: string) => patch,
 	// Tagged with the skill path so a test can route a mocked model response to a
@@ -627,6 +636,38 @@ describe("buildReview", () => {
 			FILES_ROUTE,
 			expect.anything(),
 		);
+	});
+
+	it("alreadyReviewed ignores a quoted sha and reads the real block", async () => {
+		const headSha = "1234567890abcdef";
+		const priorBody = [
+			"### ai-review-bot",
+			`> <!-- ai-review:sha=${headSha} -->`,
+			"",
+			"Prior review.",
+			"",
+			"<!-- ai-review:sha=ffffffffffff -->",
+			"<!-- ai-review:review=1 -->",
+			"<!-- ai-review:readiness=4 -->",
+			"<!-- ai-review:provider=anthropic -->",
+			"<!-- ai-review:model=m -->",
+			"<!-- ai-review:findings=0 -->",
+			"<!-- ai-review:cost=0.000100 -->",
+			"",
+			"---",
+			"*Model: m · 5 agents · $0.000100*",
+		].join("\n");
+		const octokit = buildOctokit({ existingReviews: [{ body: priorBody }] });
+
+		// Not skipped as already reviewed: it proceeds to the (unmocked) agents.
+		await expect(
+			buildReview({
+				octokit,
+				...baseContext,
+				headSha,
+				force: false,
+			}),
+		).rejects.toThrow("All review agents failed");
 	});
 
 	it("resubmits when force is true even if already reviewed", async () => {
@@ -4084,7 +4125,9 @@ describe("formatReviewBody", () => {
 		readiness: 3,
 		tier2Matches: [] as { skillPath: string; reason: string }[],
 		skipped: [] as string[],
-		errored: [] as string[],
+		agentRecords: [] as AgentRecord[],
+		pending: [] as string[],
+		retrySkipped: [] as string[],
 		allSkillsCount: 5,
 		generalFindings: [] as Parameters<
 			typeof formatReviewBody
@@ -4159,6 +4202,148 @@ describe("formatReviewBody", () => {
 		});
 		expect(body).toContain("Partial review");
 		expect(body).toContain("security-sast");
+	});
+
+	describe("failed-agent notice and agents marker", () => {
+		const ok = (skill: string, attempt: 1 | 2 = 1): AgentRecord => ({
+			skill,
+			attempt,
+			status: "ok",
+		});
+		const err = (
+			skill: string,
+			cls: NonNullable<AgentRecord["class"]>,
+			retryable: boolean,
+			attempt: 1 | 2 = 1,
+		): AgentRecord => ({
+			skill,
+			attempt,
+			status: "error",
+			class: cls,
+			retryable,
+		});
+		const groupsOf = (body: string, skill: string) =>
+			body
+				.split("\n")
+				.filter((l) => l.startsWith(">") && l.includes(`\`${skill}\``));
+
+		it("renders no notice for an all-ok round", () => {
+			const body = formatReviewBody({
+				...baseOpts,
+				agentRecords: [ok("code-reviewer.md"), ok("security-sast.md")],
+			});
+			expect(body).not.toMatch(/Partial review|recovered on retry/);
+		});
+
+		it("renders recovered agents as one informational line without a warning", () => {
+			const body = formatReviewBody({
+				...baseOpts,
+				agentRecords: [
+					err("code-reviewer.md", "no_output", true),
+					ok("code-reviewer.md", 2),
+				],
+			});
+			const lines = groupsOf(body, "code-reviewer");
+			expect(lines).toHaveLength(1);
+			expect(lines[0]).toContain("failed, then recovered on retry");
+			expect(lines[0]).not.toContain("⚠️");
+			expect(body).not.toContain("Partial review");
+		});
+
+		it("puts each skill in exactly one group with class names", () => {
+			const body = formatReviewBody({
+				...baseOpts,
+				skipped: ["pr-test-analyzer.md"],
+				retrySkipped: ["silent-failure-hunter.md"],
+				agentRecords: [
+					err("code-reviewer.md", "no_output", true),
+					err("code-reviewer.md", "schema_mismatch", true, 2),
+					err("security-sast.md", "output_truncated", false),
+					err("silent-failure-hunter.md", "transient_http", true),
+					{ skill: "pr-test-analyzer.md", attempt: 1, status: "skipped" },
+				],
+			});
+			const one = (skill: string, phrase: string, cls?: string) => {
+				const lines = groupsOf(body, skill);
+				expect(lines).toHaveLength(1);
+				expect(lines[0]).toContain(phrase);
+				if (cls) expect(lines[0]).toContain(cls);
+			};
+			one("code-reviewer", "failed after retry", "schema_mismatch");
+			one("security-sast", "failed, not retried", "output_truncated");
+			one(
+				"silent-failure-hunter",
+				"retry skipped, out of time",
+				"transient_http",
+			);
+			one("pr-test-analyzer", "did not run");
+		});
+
+		it.each([
+			["rate_limited", "rate limited"],
+			["quota_exhausted", "quota"],
+		] as const)("lists a %s final outcome in the notice", (status, phrase) => {
+			const body = formatReviewBody({
+				...baseOpts,
+				agentRecords: [
+					err("code-reviewer.md", "no_output", true),
+					{ skill: "code-reviewer.md", attempt: 2, status },
+				],
+			});
+			const lines = groupsOf(body, "code-reviewer");
+			expect(lines).toHaveLength(1);
+			expect(lines[0]).toContain("Partial review");
+			expect(lines[0]).toContain(phrase);
+		});
+
+		it("writes an agents marker inside the contiguous block above the footer", () => {
+			const records = [
+				err("code-reviewer.md", "no_output", true),
+				err("code-reviewer.md", "schema_mismatch", true, 2),
+				ok("security-sast.md"),
+			];
+			const body = formatReviewBody({
+				...baseOpts,
+				agentRecords: records,
+				pending: ["code-reviewer.md"],
+			});
+			expect(parseAgentsMarker(body, KNOWN_SKILLS)).toEqual({
+				records,
+				pending: ["code-reviewer.md"],
+			});
+			const lines = body.split("\n");
+			const i = lines.findIndex((l) => l.startsWith("<!-- ai-review:agents="));
+			expect(lines[i - 1]).toMatch(/^<!-- ai-review:cost=/);
+			expect(lines[i + 1]).toBe("");
+			expect(lines[i + 2]).toBe("---");
+			expect(parseReviewMetadata(body)?.sha).toBe("abc123def456");
+		});
+
+		it("carries the marker on an approval body too", () => {
+			const body = formatReviewBody({
+				...baseOpts,
+				finalEvent: "APPROVE",
+				approvalMessage: "ok",
+				readiness: 5,
+				agentRecords: [ok("code-reviewer.md")],
+			});
+			expect(parseAgentsMarker(body, KNOWN_SKILLS)?.records).toEqual([
+				ok("code-reviewer.md"),
+			]);
+		});
+
+		it("reads the real block, not markers quoted in the summary", () => {
+			const quoted = `<!-- ai-review:agents={"r":[],"p":["security-sast.md"]} -->`;
+			const body = formatReviewBody({
+				...baseOpts,
+				summary: `Earlier review said:\n${quoted}\nend`,
+				agentRecords: [ok("code-reviewer.md")],
+			});
+			expect(parseAgentsMarker(body, KNOWN_SKILLS)).toEqual({
+				records: [ok("code-reviewer.md")],
+				pending: [],
+			});
+		});
 	});
 });
 
@@ -5015,7 +5200,7 @@ describe("buildReview ledger suppression", () => {
 				...baseContext,
 			});
 
-			expect(decision?.body).toContain("failed to complete");
+			expect(decision?.body).toContain("failed, not retried");
 			error.mockRestore();
 		});
 
@@ -5097,8 +5282,7 @@ describe("delta scoping without KV", () => {
 			o.rows?.length
 				? `| Sev | Category | Finding |\n|---|---|---|\n${o.rows.join("\n")}`
 				: "",
-			`<!-- ai-review:sha=${o.sha} -->`,
-			`<!-- ai-review:review=${o.count} -->`,
+			`<!-- ai-review:sha=${o.sha} -->\n<!-- ai-review:review=${o.count} -->`,
 		]
 			.filter(Boolean)
 			.join("\n\n");
@@ -5113,10 +5297,17 @@ describe("delta scoping without KV", () => {
 	function prOctokit(o: {
 		reviews?: OwnReview[];
 		ledgerReviews?: OwnReview[];
-		files?: Array<{ filename: string; status: string; patch?: string }>;
+		files?: Array<{
+			filename: string;
+			status: string;
+			patch?: string;
+			additions?: number;
+			deletions?: number;
+		}>;
 		compare?: (basehead: string) => unknown;
 		coldLedger?: boolean;
 		comments?: unknown[];
+		rawDiff?: string;
 	}) {
 		const compareCalls: string[] = [];
 		const checkRuns: Array<Record<string, unknown>> = [];
@@ -5144,6 +5335,14 @@ describe("delta scoping without KV", () => {
 				expectPr(p);
 				return o.comments ?? [];
 			},
+			...(o.rawDiff !== undefined && {
+				"GET /repos/{owner}/{repo}/pulls/{pull_number}": (
+					p: Record<string, unknown>,
+				) => {
+					expectPr(p);
+					return o.rawDiff;
+				},
+			}),
 			"POST /graphql": (p) => {
 				expect(p.variables).toMatchObject({
 					owner: OWNER,
@@ -6032,5 +6231,1549 @@ describe("delta scoping without KV", () => {
 		expect(decision?.event).toBe("REQUEST_CHANGES");
 		expect(decision?.body).toContain("**Leaky handle** (`src/a.ts:7`)");
 		expect(decision?.body).toContain("ledger: warm");
+	});
+
+	describe("pending coverage", () => {
+		const SAST = "security-sast.md";
+		const COMMENTS_SKILL = "comment-analyzer.md";
+		const NEW_HEAD = "fedcba0987654321";
+		const WHOLE = "files:src/a.ts,src/b.ts";
+		const DELTA = "files:src/b.ts";
+		const incremental = () =>
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "INCREMENTAL",
+				resolved: [],
+				newRisk: true,
+			});
+		const deltaB = () => ({ status: "ahead", files: [bFile] });
+		const schemaMismatch = () =>
+			new NoObjectGeneratedError({
+				message: "no object",
+				text: "{not json",
+				response: {} as never,
+				usage: { inputTokens: 7, outputTokens: 3 } as never,
+				finishReason: "stop" as never,
+			});
+		const withPending = (pending: string[], sha = OLD) =>
+			`${ownBody({ sha, count: 1 })}\n${formatAgentsMarker([], pending, KNOWN_SKILLS)}`;
+		const pendingIn = (body: string | undefined) =>
+			parseAgentsMarker(body ?? "", KNOWN_SKILLS)?.pending;
+		const kvState = (incompleteSkills?: string[]) => ({
+			lastReviewedSha: OLD,
+			event: "COMMENT" as const,
+			findings: [],
+			reviewedAt: "2026-10-01T00:00:00Z",
+			...(incompleteSkills && { incompleteSkills }),
+		});
+
+		/** Routes the mocked model by skill and records the user message each
+		 * agent call was given. */
+		function agents(replies: Record<string, (call: number) => unknown> = {}) {
+			const seen: Record<string, string[]> = {};
+			mockGenerateObject.mockImplementation(
+				async (args: {
+					prompt?: unknown;
+					system?: unknown;
+					messages?: Array<{ content: unknown }>;
+				}) => {
+					if (
+						typeof args.prompt === "string" &&
+						args.prompt.startsWith("You are checking")
+					)
+						return { object: { resolved: [] } };
+					if (args.system !== undefined)
+						return {
+							object: { summary: "Summary." },
+							usage: { inputTokens: 1, outputTokens: 1 },
+						};
+					const content = args.messages?.[0]?.content as Array<{
+						text: string;
+					}>;
+					const skill = content[1].text.replace(/^system:/, "");
+					const calls = seen[skill] ?? [];
+					calls.push(content[0].text);
+					seen[skill] = calls;
+					const reply = replies[skill];
+					return reply
+						? reply(calls.length)
+						: buildGenerateObjectResponse(buildModelReview());
+				},
+			);
+			return seen;
+		}
+		const fails = () => () => {
+			throw schemaMismatch();
+		};
+		const finds = () => () => buildGenerateObjectResponse(withFresh());
+		const messagesBuilt = () =>
+			mockBuildUserMessage.mock.calls.map((c) => {
+				const ctx = c[0] as {
+					files: Array<{ filename: string }>;
+					diffScope?: string;
+				};
+				return {
+					files: ctx.files.map((f) => f.filename),
+					incremental: ctx.diffScope?.startsWith("INCREMENTAL") ?? false,
+				};
+			});
+
+		beforeEach(() => {
+			mockBuildUserMessage.mockImplementation(
+				(ctx: { files: Array<{ filename: string }> }) =>
+					`files:${ctx.files.map((f) => f.filename).join(",")}`,
+			);
+		});
+
+		it("an incremental round gives the pending skill the PR's files and the others the delta", async () => {
+			const seen = agents({ [SAST]: finds() });
+			incremental();
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: withPending([SAST]) }],
+				compare: deltaB,
+			});
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(messagesBuilt()).toEqual([
+				{ files: ["src/b.ts"], incremental: true },
+				{ files: ["src/a.ts", "src/b.ts"], incremental: false },
+			]);
+			expect(seen[SAST]).toEqual([WHOLE]);
+			for (const skill of TIER1_SKILLS.filter((s) => s !== SAST))
+				expect(seen[skill]).toEqual([DELTA]);
+			expect(decision?.body).toContain("Fresh issue");
+			expect(pendingIn(decision?.body)).toEqual([]);
+		});
+
+		it("a pending skill gets the whole PR on its retry too; the delta never reaches it", async () => {
+			const seen = agents({
+				[SAST]: (n) =>
+					n === 1
+						? (() => {
+								throw schemaMismatch();
+							})()
+						: buildGenerateObjectResponse(withFresh()),
+			});
+			incremental();
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: withPending([SAST]) }],
+				compare: deltaB,
+			});
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(seen[SAST]).toEqual([WHOLE, WHOLE]);
+			expect(pendingIn(decision?.body)).toEqual([]);
+		});
+
+		it("a clearing round posts although nothing else is new, and its marker drops the skill (no KV)", async () => {
+			incremental();
+			agents();
+			const quiet = prOctokit({
+				reviews: [{ id: 11, body: ownBody({ sha: OLD, count: 1 }) }],
+				compare: deltaB,
+			});
+			expect(
+				await buildReview({ octokit: quiet.octokit, ...baseContext }),
+			).toBeNull();
+
+			agents();
+			const { octokit, checkRuns } = prOctokit({
+				reviews: [{ id: 11, body: withPending([SAST]) }],
+				compare: deltaB,
+			});
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(decision?.event).toBe("APPROVE");
+			expect(pendingIn(decision?.body)).toEqual([]);
+			expect(checkRuns).toEqual([]);
+		});
+
+		it("a clearing round posts and updates the KV state", async () => {
+			const { client } = fakeKv();
+			await saveReviewState(
+				client,
+				"anthropic",
+				OWNER,
+				REPO,
+				1,
+				kvState([SAST]),
+			);
+			const seen = agents();
+			incremental();
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: ownBody({ sha: OLD, count: 1 }) }],
+				compare: deltaB,
+			});
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				kv: client,
+			});
+
+			expect(seen[SAST]).toEqual([WHOLE]);
+			expect(decision?.event).toBe("APPROVE");
+			expect(pendingIn(decision?.body)).toEqual([]);
+			const saved = await loadReviewState(client, "anthropic", OWNER, REPO, 1);
+			expect(saved?.lastReviewedSha).toBe(HEAD);
+			expect(saved?.incompleteSkills).toEqual([]);
+		});
+
+		it("a KV state wins over the GitHub marker, and a legacy one means none pending", async () => {
+			const { client } = fakeKv();
+			await saveReviewState(client, "anthropic", OWNER, REPO, 1, kvState());
+			const seen = agents({ [SAST]: finds() });
+			incremental();
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: withPending([SAST]) }],
+				compare: deltaB,
+			});
+
+			await buildReview({ octokit, ...baseContext, kv: client });
+
+			expect(messagesBuilt()).toEqual([
+				{ files: ["src/b.ts"], incremental: true },
+			]);
+			expect(seen[SAST]).toEqual([DELTA]);
+		});
+
+		it("a triage SKIP with a pending skill runs only that skill, over the whole PR", async () => {
+			const seen = agents();
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "SKIP",
+				resolved: [],
+				newRisk: false,
+			});
+			const { octokit, checkRuns } = prOctokit({
+				reviews: [{ id: 11, body: withPending([SAST]) }],
+				compare: deltaB,
+			});
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(Object.keys(seen)).toEqual([SAST]);
+			expect(seen[SAST]).toEqual([WHOLE]);
+			expect(messagesBuilt()).toEqual([
+				{ files: ["src/a.ts", "src/b.ts"], incremental: false },
+			]);
+			expect(decision?.event).toBe("APPROVE");
+			expect(pendingIn(decision?.body)).toEqual([]);
+			expect(checkRuns).toEqual([]);
+		});
+
+		it("a triage SKIP whose pending skill fails again posts nothing, re-stamps, and keeps it pending", async () => {
+			const { client } = fakeKv();
+			await saveReviewState(
+				client,
+				"anthropic",
+				OWNER,
+				REPO,
+				1,
+				kvState([SAST]),
+			);
+			const seen = agents({ [SAST]: fails() });
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "SKIP",
+				resolved: [],
+				newRisk: false,
+			});
+			const { octokit, checkRuns } = prOctokit({
+				reviews: [{ id: 11, body: ownBody({ sha: OLD, count: 1 }) }],
+				compare: deltaB,
+			});
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				kv: client,
+			});
+
+			expect(decision).toBeNull();
+			expect(Object.keys(seen)).toEqual([SAST]);
+			expect(seen[SAST]).toHaveLength(2);
+			expect(checkRuns).toHaveLength(1);
+			expect(checkRuns[0]?.conclusion).toBe("neutral");
+			const saved = await loadReviewState(client, "anthropic", OWNER, REPO, 1);
+			expect(saved?.lastReviewedSha).toBe(HEAD);
+			expect(saved?.incompleteSkills).toEqual([SAST]);
+		});
+
+		it("a triage SKIP whose pending skill clears nothing and finds nothing keeps the SKIP verdict", async () => {
+			const seen = agents();
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "SKIP",
+				resolved: [],
+				newRisk: false,
+			});
+			const body = `${ownBody({ sha: OLD, count: 1, rows: [blockerRow] })}\n${formatAgentsMarker([], [SAST], KNOWN_SKILLS)}`;
+			const { octokit, checkRuns } = prOctokit({
+				reviews: [{ id: 11, body }],
+				compare: deltaB,
+				files: [
+					aFile,
+					bFile,
+					{
+						filename: "src/huge.ts",
+						status: "modified",
+						additions: 5000,
+						deletions: 0,
+					},
+				],
+				rawDiff: "",
+			});
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(Object.keys(seen)).toEqual([SAST]);
+			expect(decision).toBeNull();
+			expect(checkRuns).toHaveLength(1);
+			expect(checkRuns[0]?.conclusion).toBe("action_required");
+		});
+
+		it("with both message versions, one delta agent warms the cache, then the pending skills, then the rest", async () => {
+			const seen = agents();
+			incremental();
+			// Marker order (sast, comment-analyzer) differs from queue order.
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: withPending([SAST, COMMENTS_SKILL]) }],
+				compare: deltaB,
+			});
+
+			await buildReview({
+				octokit,
+				...baseContext,
+				tier2Enabled: true,
+				agentConcurrency: 2,
+			});
+
+			expect(Object.keys(seen)).toEqual([
+				"code-reviewer.md",
+				COMMENTS_SKILL,
+				SAST,
+				"silent-failure-hunter.md",
+				"pr-test-analyzer.md",
+				"code-review-and-quality.md",
+			]);
+			expect(seen["code-reviewer.md"]).toEqual([DELTA]);
+		});
+
+		it("with one message version, the pending skills go first", async () => {
+			const seen = agents();
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: withPending([SAST, COMMENTS_SKILL]) }],
+			});
+
+			await buildReview({
+				octokit,
+				...baseContext,
+				force: true,
+				tier2Enabled: true,
+				agentConcurrency: 2,
+			});
+
+			expect(Object.keys(seen)).toEqual([
+				COMMENTS_SKILL,
+				SAST,
+				"code-reviewer.md",
+				"silent-failure-hunter.md",
+				"pr-test-analyzer.md",
+				"code-review-and-quality.md",
+			]);
+		});
+
+		it("a pending Tier 2 skill is not run while Tier 2 is off, and stays pending", async () => {
+			const seen = agents({ "code-reviewer.md": finds() });
+			incremental();
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: withPending([COMMENTS_SKILL]) }],
+				compare: deltaB,
+			});
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				tier2Enabled: false,
+			});
+
+			expect(seen[COMMENTS_SKILL]).toBeUndefined();
+			expect(pendingIn(decision?.body)).toEqual([COMMENTS_SKILL]);
+		});
+
+		it("a triage SKIP that needs a fresh approval runs every agent, the pending one over the whole PR", async () => {
+			const seen = agents();
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "SKIP",
+				resolved: [],
+				newRisk: false,
+			});
+			const { octokit, checkRuns } = prOctokit({
+				reviews: [
+					{ id: 11, body: withPending([SAST]), state: "CHANGES_REQUESTED" },
+				],
+				compare: deltaB,
+			});
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(seen[SAST]).toEqual([WHOLE]);
+			for (const skill of TIER1_SKILLS.filter((s) => s !== SAST))
+				expect(seen[skill]).toEqual([DELTA]);
+			expect(decision?.event).toBe("APPROVE");
+			expect(pendingIn(decision?.body)).toEqual([]);
+			expect(checkRuns).toEqual([]);
+		});
+
+		it("a pending-only SKIP round whose skill finds something new posts, though it clears nothing", async () => {
+			const seen = agents({ [SAST]: finds() });
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "SKIP",
+				resolved: [],
+				newRisk: false,
+			});
+			const { octokit, checkRuns } = prOctokit({
+				reviews: [{ id: 11, body: withPending([SAST]) }],
+				compare: deltaB,
+				files: [
+					aFile,
+					bFile,
+					{
+						filename: "src/huge.ts",
+						status: "modified",
+						additions: 5000,
+						deletions: 0,
+					},
+				],
+				rawDiff: "",
+			});
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				changedFiles: 3,
+			});
+
+			expect(Object.keys(seen)).toEqual([SAST]);
+			expect(decision?.body).toContain("Fresh issue");
+			expect(pendingIn(decision?.body)).toEqual([SAST]);
+			expect(checkRuns).toEqual([]);
+		});
+
+		it("a pending Tier 2 skill runs although the delta would not select it", async () => {
+			const seen = agents();
+			incremental();
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: withPending([COMMENTS_SKILL]) }],
+				compare: deltaB,
+			});
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				tier2Enabled: true,
+			});
+
+			expect(Object.keys(seen).sort()).toEqual(
+				[...TIER1_SKILLS, COMMENTS_SKILL].sort(),
+			);
+			expect(seen[COMMENTS_SKILL]).toEqual([WHOLE]);
+			expect(seen[SAST]).toEqual([DELTA]);
+			expect(pendingIn(decision?.body)).toEqual([]);
+		});
+
+		it("a pending skill whose file is gone is dropped", async () => {
+			const { client } = fakeKv();
+			await saveReviewState(
+				client,
+				"anthropic",
+				OWNER,
+				REPO,
+				1,
+				kvState(["retired-skill.md", SAST]),
+			);
+			const seen = agents();
+			incremental();
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: ownBody({ sha: OLD, count: 1 }) }],
+				compare: deltaB,
+			});
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				kv: client,
+			});
+
+			expect(seen["retired-skill.md"]).toBeUndefined();
+			expect(mockBuildAgentSystemPrompt).not.toHaveBeenCalledWith(
+				"retired-skill.md",
+				expect.anything(),
+				expect.anything(),
+			);
+			expect(pendingIn(decision?.body)).toEqual([]);
+			const saved = await loadReviewState(client, "anthropic", OWNER, REPO, 1);
+			expect(saved?.incompleteSkills).toEqual([]);
+		});
+
+		const bigFile = buildPullFile(
+			"src/big.ts",
+			`@@ -0,0 +1,1 @@\n+${"x".repeat(24_001)}`,
+		);
+		const many = Array.from({ length: 2998 }, (_, i) =>
+			buildPullFile(`src/f${i}.ts`, SIMPLE_PATCH),
+		);
+		type PrInput = {
+			files: Array<{
+				filename: string;
+				status: string;
+				patch?: string;
+				additions?: number;
+				deletions?: number;
+			}>;
+			rawDiff?: string;
+			changedFiles?: number;
+		};
+		const runWith = async (pr: PrInput) => {
+			const seen = agents({ [SAST]: finds() });
+			incremental();
+			const { changedFiles, ...rest } = pr;
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: withPending([SAST]) }],
+				compare: deltaB,
+				...rest,
+			});
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				changedFiles: changedFiles ?? pr.files.length,
+			});
+			expect(seen[SAST]).toHaveLength(1);
+			expect(seen[SAST]?.[0]).toContain("src/a.ts");
+			expect(decision?.body).toContain("Fresh issue");
+			return pendingIn(decision?.body);
+		};
+		it.each<[string, PrInput]>([
+			[
+				"a changed file without a patch",
+				{
+					files: [
+						aFile,
+						bFile,
+						{
+							filename: "src/huge.ts",
+							status: "modified",
+							additions: 5000,
+							deletions: 10,
+						},
+					],
+					rawDiff: "",
+				},
+			],
+			[
+				"a file list shorter than the PR's changed files",
+				{ files: [aFile, bFile], changedFiles: 3 },
+			],
+			["a file list at the 3000-file cap", { files: [aFile, bFile, ...many] }],
+		])("success on whole-PR input with %s stays pending, and its findings still merge", async (_name, pr) => {
+			expect(await runWith(pr)).toEqual([SAST]);
+		});
+
+		it.each<[string, PrInput]>([
+			[
+				"an image",
+				{
+					files: [
+						aFile,
+						bFile,
+						{
+							filename: "logo.png",
+							status: "added",
+							additions: 0,
+							deletions: 0,
+						},
+					],
+					rawDiff: "",
+				},
+			],
+			[
+				"a pure rename",
+				{
+					files: [
+						aFile,
+						bFile,
+						{
+							filename: "src/moved.ts",
+							status: "renamed",
+							additions: 0,
+							deletions: 0,
+						},
+					],
+					rawDiff: "",
+				},
+			],
+			["a patch trimmed by the size limit", { files: [aFile, bFile, bigFile] }],
+			[
+				"a lockfile with changes but no patch",
+				{
+					files: [
+						aFile,
+						bFile,
+						{
+							filename: "pnpm-lock.yaml",
+							status: "modified",
+							additions: 9000,
+							deletions: 4000,
+						},
+					],
+					rawDiff: "",
+				},
+			],
+		])("whole-PR input with %s still clears the pending skill", async (_name, pr) => {
+			expect(await runWith(pr)).toEqual([]);
+		});
+
+		const readinessOf = (body: string | undefined) =>
+			Number(body?.match(/<!-- ai-review:readiness=(\d) -->/)?.[1]);
+		const incompleteInput = {
+			files: [
+				aFile,
+				bFile,
+				{
+					filename: "src/huge.ts",
+					status: "modified",
+					additions: 5000,
+					deletions: 0,
+				},
+			],
+			rawDiff: "",
+		};
+		const OWED_LINE = "`security-sast` still owes a review of the whole PR";
+
+		it.each([
+			["a forced run", { force: true }],
+			["an incremental round", {}],
+		])("%s with every agent ok but a pending skill left uncleared is partial, not an approval", async (_name, extra) => {
+			agents();
+			incremental();
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: withPending([SAST]) }],
+				compare: deltaB,
+				...incompleteInput,
+			});
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				changedFiles: 3,
+				...extra,
+			});
+
+			expect(decision?.event).toBe("COMMENT");
+			expect(readinessOf(decision?.body)).toBe(3);
+			expect(decision?.body).toContain(OWED_LINE);
+			expect(pendingIn(decision?.body)).toEqual([SAST]);
+		});
+
+		it.each([
+			["a forced run", { force: true }],
+			["an incremental round", {}],
+		])("%s with complete input clears the skill and approves", async (_name, extra) => {
+			agents();
+			incremental();
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: withPending([SAST]) }],
+				compare: deltaB,
+			});
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				...extra,
+			});
+
+			expect(decision?.event).toBe("APPROVE");
+			expect(readinessOf(decision?.body)).toBe(5);
+			expect(decision?.body).not.toContain("still owes");
+			expect(pendingIn(decision?.body)).toEqual([]);
+		});
+
+		it("a triage SKIP with only a waiting Tier 2 skill pending re-stamps neutral, not success", async () => {
+			agents();
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "SKIP",
+				resolved: [],
+				newRisk: false,
+			});
+			const { octokit, checkRuns } = prOctokit({
+				reviews: [{ id: 11, body: withPending([COMMENTS_SKILL]) }],
+				compare: deltaB,
+			});
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				tier2Enabled: false,
+			});
+
+			expect(decision).toBeNull();
+			expect(checkRuns.map((c) => c.conclusion)).toEqual(["neutral"]);
+		});
+
+		it("a forced FULL round clears by success", async () => {
+			const seen = agents();
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: withPending([SAST]) }],
+			});
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				force: true,
+			});
+
+			expect(messagesBuilt()).toEqual([
+				{ files: ["src/a.ts", "src/b.ts"], incremental: false },
+			]);
+			expect(seen[SAST]).toEqual([WHOLE]);
+			expect(decision?.body).toContain("scope: full (forced)");
+			expect(pendingIn(decision?.body)).toEqual([]);
+		});
+
+		it("a recovery finding outside the delta keeps its inline anchor", async () => {
+			agents({
+				[SAST]: () =>
+					buildGenerateObjectResponse(
+						buildModelReview({
+							event: "REQUEST_CHANGES",
+							inline_comments: [
+								buildInlineComment({
+									path: "src/a.ts",
+									line: 3,
+									title: "Unvalidated input",
+								}),
+							],
+						}),
+					),
+			});
+			incremental();
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: withPending([SAST]) }],
+				compare: deltaB,
+			});
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(decision?.comments).toEqual([
+				expect.objectContaining({ path: "src/a.ts", line: 3 }),
+			]);
+		});
+
+		it("a skill that fails again stays pending and is retried once per round, with no extra round", async () => {
+			const { client } = fakeKv();
+			await saveReviewState(
+				client,
+				"anthropic",
+				OWNER,
+				REPO,
+				1,
+				kvState([SAST]),
+			);
+			incremental();
+			const reviews = [{ id: 11, body: ownBody({ sha: OLD, count: 1 }) }];
+
+			const rounds: Array<{
+				seen: Record<string, string[]>;
+				decision: Awaited<ReturnType<typeof buildReview>>;
+			}> = [];
+			for (const headSha of [HEAD, NEW_HEAD]) {
+				const seen = agents({ [SAST]: fails() });
+				const { octokit } = prOctokit({ reviews, compare: deltaB });
+				const decision = await buildReview({
+					octokit,
+					...baseContext,
+					headSha,
+					kv: client,
+				});
+				rounds.push({ seen, decision });
+			}
+
+			for (const { seen, decision } of rounds) {
+				expect(seen[SAST]).toEqual([WHOLE, WHOLE]);
+				for (const skill of TIER1_SKILLS.filter((s) => s !== SAST))
+					expect(seen[skill]).toEqual([DELTA]);
+				expect(decision?.event).toBe("COMMENT");
+				expect(pendingIn(decision?.body)).toEqual([SAST]);
+			}
+			const saved = await loadReviewState(client, "anthropic", OWNER, REPO, 1);
+			expect(saved?.lastReviewedSha).toBe(NEW_HEAD);
+			expect(saved?.incompleteSkills).toEqual([SAST]);
+		});
+	});
+});
+
+describe("classified agent failures with usage", () => {
+	const noObject = (finishReason: string, text: string) =>
+		new NoObjectGeneratedError({
+			message: "no object",
+			text,
+			response: {} as never,
+			usage: { inputTokens: 700, outputTokens: 30 } as never,
+			finishReason: finishReason as never,
+		});
+
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+		vi.restoreAllMocks();
+	});
+
+	function ctx() {
+		return {
+			octokit: {
+				request: vi.fn(async (route: string) =>
+					route.includes("/reviews") ? { data: [] } : { data: {} },
+				),
+				paginate: vi.fn(async () => []),
+			} as never,
+			owner: "o",
+			repo: "r",
+			pullNumber: 7,
+			headSha: "abc",
+			title: "t",
+			body: null,
+			additions: 0,
+			deletions: 0,
+			changedFiles: 0,
+			labels: [],
+			commentPrefix: "ai-review-bot",
+			extraInstructions: "",
+			force: true,
+			provider: "anthropic" as const,
+			feedbackEnabled: false,
+			agentConcurrency: 1,
+			agentBudgetMs: 600_000,
+			tier2Enabled: false,
+		};
+	}
+
+	const outcomeLogs = (log: { mock: { calls: unknown[][] } }) =>
+		log.mock.calls
+			.filter((c) => c[0] === "agent outcome")
+			.map((c) => c as [string, Record<string, unknown>]);
+
+	it("returns an error outcome with class, usage and duration", async () => {
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		mockGenerateObject.mockRejectedValue(noObject("length", "{"));
+		const out = await runAgent("code-reviewer.md", "S", sel, "");
+		expect(out).toMatchObject({
+			status: "error",
+			failure: { class: "output_truncated", retryable: false },
+			usage: { promptTokens: 700, completionTokens: 30 },
+			message: "no object",
+		});
+		expect((out as { durationMs: number }).durationMs).toBeGreaterThanOrEqual(
+			0,
+		);
+	});
+
+	it("leaves usage undefined when the error carries none", async () => {
+		mockGenerateObject.mockRejectedValue(new Error("boom"));
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		const out = await runAgent("code-reviewer.md", "S", sel, "");
+		expect(out).toMatchObject({ status: "error" });
+		expect((out as { usage?: unknown }).usage).toBeUndefined();
+	});
+
+	it("keeps a deadline abort as skipped with no usage", async () => {
+		const c = new AbortController();
+		c.abort();
+		mockGenerateObject.mockRejectedValue(noObject("length", "{"));
+		const out = await runAgent("code-reviewer.md", "S", sel, "", {
+			abortSignal: c.signal,
+		});
+		expect(out).toEqual({ status: "skipped", skillPath: "code-reviewer.md" });
+	});
+
+	it("counts failed-attempt tokens in cost and logs one record per agent", async () => {
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		const base = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+		);
+		const ok = {
+			...base,
+			object: { ...base.object, summary: "s" },
+			usage: { inputTokens: 100_000, outputTokens: 10_000 },
+		};
+		mockGenerateObject
+			.mockRejectedValueOnce(noObject("length", "SECRET MODEL TEXT"))
+			.mockResolvedValue(ok);
+		const decision = await buildReview(ctx());
+		const okCalls = mockGenerateObject.mock.calls.length - 1;
+		const expected = computeCost(
+			{
+				promptTokens: okCalls * 100_000 + 700,
+				completionTokens: okCalls * 10_000 + 30,
+			},
+			decision?.metadata.model ?? "",
+		);
+		expect(expected).toBeGreaterThan(0);
+		expect(decision?.metadata.cost).toBeCloseTo(expected, 10);
+		const recs = outcomeLogs(log);
+		expect(recs).toHaveLength(TIER1_SKILLS.length);
+		const failed = recs.find((c) => c[1].status === "error")?.[1];
+		expect(failed).toMatchObject({
+			owner: "o",
+			repo: "r",
+			pr: 7,
+			sha: "abc",
+			class: "output_truncated",
+			inputTokens: 700,
+			outputTokens: 30,
+		});
+		expect(JSON.stringify(recs)).not.toContain("SECRET MODEL TEXT");
+		expect(failed).toMatchObject({ message: "no object" });
+		expect(failed).not.toHaveProperty("text");
+	});
+
+	it("logs every record before the all-agents-failed throw", async () => {
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		mockGenerateObject.mockRejectedValue(new Error("boom"));
+		await expect(buildReview(ctx())).rejects.toThrow(
+			"All review agents failed",
+		);
+		expect(outcomeLogs(log)).toHaveLength(TIER1_SKILLS.length);
+	});
+
+	it("logs records for an all-rate-limited round", async () => {
+		vi.useFakeTimers();
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		mockGenerateObject.mockRejectedValue(
+			Object.assign(new Error("429"), {
+				statusCode: 429,
+				responseHeaders: { "retry-after": "42" },
+			}),
+		);
+		const p = buildReview(ctx());
+		await vi.runAllTimersAsync();
+		expect((await p)?.event).toBe("RATE_LIMITED");
+		const recs = outcomeLogs(log);
+		expect(recs).toHaveLength(TIER1_SKILLS.length);
+		expect(recs[0][1].status).toBe("rate_limited");
+	});
+
+	it("logs records for an all-quota-exhausted round", async () => {
+		vi.useFakeTimers();
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		mockGenerateObject.mockRejectedValue(
+			Object.assign(new Error("insufficient_quota"), { statusCode: 429 }),
+		);
+		const p = buildReview(ctx());
+		await vi.runAllTimersAsync();
+		expect((await p)?.event).toBe("QUOTA_EXHAUSTED");
+		const recs = outcomeLogs(log);
+		expect(recs).toHaveLength(TIER1_SKILLS.length);
+		expect(recs[0][1].status).toBe("quota_exhausted");
+	});
+	/** A programming error whose message and attached request body stand in
+	 * for diff text that must never reach a log line or the review. */
+	const bugWithDiff = () => {
+		const bug = Object.assign(new TypeError("cannot read DIFF-IN-MESSAGE"), {
+			requestBodyValues: { messages: "DIFF-IN-BODY" },
+		});
+		bug.stack = `TypeError: cannot read DIFF-IN-MESSAGE\nDIFF-IN-MESSAGE continued\n${"    at frame (src/review.ts:1:1)\n".repeat(200)}`;
+		return bug;
+	};
+
+	it("an unknown failure carries a frames-only stack of at most 1500 characters", async () => {
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		mockGenerateObject.mockRejectedValueOnce(bugWithDiff());
+		const unknown = await runAgent("code-reviewer.md", "S", sel, "");
+		expect(unknown).toMatchObject({
+			status: "error",
+			failure: { class: "unknown" },
+		});
+		const stack = (unknown as { stack?: string }).stack ?? "";
+		expect(stack).toMatch(/^ {4}at frame/);
+		expect(stack.length).toBeGreaterThan(1000);
+		expect(stack.length).toBeLessThanOrEqual(1500);
+		expect(stack).not.toContain("DIFF-IN");
+
+		mockGenerateObject.mockRejectedValueOnce(noObject("stop", "{not json"));
+		const mismatch = await runAgent("code-reviewer.md", "S", sel, "");
+		expect(mismatch).toMatchObject({ failure: { class: "schema_mismatch" } });
+		expect(mismatch).not.toHaveProperty("stack");
+	});
+
+	it("the console record of an unknown failure has the stack; other records and the review do not", async () => {
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		mockGenerateObject.mockImplementation(
+			async (args: { system?: unknown; messages?: unknown }) => {
+				if (args.system !== undefined)
+					return {
+						object: { summary: "s" },
+						usage: { inputTokens: 0, outputTokens: 0 },
+					};
+				const content = (args.messages as Array<{ content: unknown }>)[0]
+					?.content as Array<{ text: string }>;
+				if (content[1]?.text === "system:security-sast.md") throw bugWithDiff();
+				return buildGenerateObjectResponse(buildModelReview());
+			},
+		);
+
+		const decision = await buildReview(ctx());
+
+		const records = outcomeLogs(log).map(([, r]) => r);
+		const sast = records.filter((r) => r.skill === "security-sast.md");
+		expect(sast).toHaveLength(1);
+		expect(String(sast[0]?.stack)).toMatch(/^ {4}at frame/);
+		for (const r of records.filter((r) => r.skill !== "security-sast.md"))
+			expect(r).not.toHaveProperty("stack");
+		const logged = JSON.stringify(log.mock.calls);
+		expect(logged).not.toContain("DIFF-IN-BODY");
+		expect(decision?.body).not.toContain("at frame");
+		expect(decision?.body).not.toContain("DIFF-IN");
+	});
+});
+
+describe("agent retry", () => {
+	const noObject = (finishReason: string, text?: string) =>
+		new NoObjectGeneratedError({
+			message: "no object",
+			text,
+			response: {} as never,
+			usage: { inputTokens: 700, outputTokens: 30 } as never,
+			finishReason: finishReason as never,
+		});
+	// no_output and schema_mismatch are both sampled, so both are retryable.
+	const noOutput = () => noObject("stop", undefined);
+	const schemaMismatch = () => noObject("stop", "{not json");
+
+	const okResponse = (
+		titles: string[] = [],
+		headers: Record<string, string> = {},
+	) => ({
+		object: buildModelReview({
+			event: titles.length > 0 ? "REQUEST_CHANGES" : "COMMENT",
+			general_findings: titles.map((title) => ({
+				title,
+				body: "real",
+				severity: "P1",
+				category: "style",
+				confidence: 0.8,
+				evidence: "See diff.",
+				suppressible: true,
+			})),
+			inline_comments: [],
+		}),
+		usage: { inputTokens: 1000, outputTokens: 100 },
+		response: { headers },
+	});
+
+	type Handler = (call: number, args: Record<string, unknown>) => unknown;
+	const skillOf = (args: Record<string, unknown>): string => {
+		const msgs = args.messages as Array<{ content: unknown }> | undefined;
+		const content = msgs?.[0]?.content;
+		if (!Array.isArray(content)) return "summary";
+		return String((content[1] as { text: string }).text).replace(
+			/^system:/,
+			"",
+		);
+	};
+	function route(handlers: Record<string, Handler>) {
+		const calls: Record<string, number> = {};
+		mockGenerateObject.mockImplementation(
+			async (args: Record<string, unknown>) => {
+				const skill = skillOf(args);
+				if (skill === "summary") {
+					return {
+						object: { summary: "s" },
+						usage: { inputTokens: 0, outputTokens: 0 },
+					};
+				}
+				calls[skill] = (calls[skill] ?? 0) + 1;
+				const h = handlers[skill];
+				return h ? h(calls[skill], args) : okResponse();
+			},
+		);
+		return calls;
+	}
+
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+		vi.restoreAllMocks();
+	});
+
+	function ctx(overrides: Record<string, unknown> = {}) {
+		return {
+			octokit: {
+				request: vi.fn(async (r: string) =>
+					r.includes("/reviews") ? { data: [] } : { data: {} },
+				),
+				paginate: vi.fn(async () => []),
+			} as never,
+			owner: "o",
+			repo: "r",
+			pullNumber: 7,
+			headSha: "abc",
+			title: "t",
+			body: null,
+			additions: 0,
+			deletions: 0,
+			changedFiles: 0,
+			labels: [],
+			commentPrefix: "ai-review-bot",
+			extraInstructions: "",
+			force: true,
+			provider: "anthropic" as const,
+			feedbackEnabled: false,
+			agentConcurrency: 1,
+			agentBudgetMs: 600_000,
+			tier2Enabled: false,
+			...overrides,
+		};
+	}
+
+	const recordsFor = (log: { mock: { calls: unknown[][] } }, skill: string) =>
+		log.mock.calls
+			.filter((c) => c[0] === "agent outcome")
+			.map((c) => c[1] as Record<string, unknown>)
+			.filter((r) => r.skill === skill);
+
+	const retrySkippedWarned = (
+		warn: { mock: { calls: unknown[][] } },
+		skill: string,
+	) =>
+		warn.mock.calls.some(
+			(c) =>
+				c[0] === "agent retry skipped: out of time" &&
+				(c[1] as { skill?: string }).skill === skill,
+		);
+
+	it("merges a recovered agent's findings, logs both attempts and bills both", async () => {
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		const calls = route({
+			"code-reviewer.md": (n) => {
+				if (n === 1) throw noOutput();
+				return okResponse(["Recovered finding"]);
+			},
+		});
+		const decision = await buildReview(ctx());
+		expect(calls["code-reviewer.md"]).toBe(2);
+		expect(decision?.body).toContain("Recovered finding");
+		expect(decision?.body).toMatch(
+			/failed, then recovered on retry: `code-reviewer`/,
+		);
+		expect(decision?.body).not.toContain("Partial review");
+		const marker = parseAgentsMarker(decision?.body ?? "", KNOWN_SKILLS);
+		expect(marker?.pending).toEqual([]);
+		expect(
+			marker?.records
+				.filter((r) => r.skill === "code-reviewer.md")
+				.map((r) => [r.attempt, r.status]),
+		).toEqual([
+			[1, "error"],
+			[2, "ok"],
+		]);
+		const recs = recordsFor(log, "code-reviewer.md");
+		expect(recs).toHaveLength(2);
+		expect(recs[0]).toMatchObject({
+			attempt: 1,
+			status: "error",
+			class: "no_output",
+		});
+		expect(recs[1]).toMatchObject({ attempt: 2, status: "ok" });
+		const expected = computeCost(
+			{
+				promptTokens: TIER1_SKILLS.length * 1000 + 700,
+				completionTokens: TIER1_SKILLS.length * 100 + 30,
+			},
+			decision?.metadata.model ?? "",
+		);
+		expect(decision?.metadata.cost).toBeCloseTo(expected, 10);
+	});
+
+	it("never reruns a non-retryable failure", async () => {
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		const calls = route({
+			"code-reviewer.md": () => {
+				throw noObject("length", "{");
+			},
+		});
+		await buildReview(ctx());
+		expect(calls["code-reviewer.md"]).toBe(1);
+	});
+
+	it("skips the retry at collection when less than 30s is left", async () => {
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		let now = 0;
+		vi.spyOn(Date, "now").mockImplementation(() => now);
+		// The failure is instant; the other four agents use up all but 20s.
+		const burn = () => {
+			now += 145_000;
+			return okResponse();
+		};
+		const calls = route({
+			"code-reviewer.md": () => {
+				throw noOutput();
+			},
+			"silent-failure-hunter.md": burn,
+			"pr-test-analyzer.md": burn,
+			"security-sast.md": burn,
+			"code-review-and-quality.md": burn,
+		});
+		const decision = await buildReview(ctx());
+		expect(calls["code-reviewer.md"]).toBe(1);
+		expect(retrySkippedWarned(warn, "code-reviewer.md")).toBe(true);
+		expect(decision?.body).toMatch(
+			/retry skipped, out of time: `code-reviewer`/,
+		);
+	});
+
+	it("skips the retry when less time is left than the first attempt took", async () => {
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		let now = 0;
+		vi.spyOn(Date, "now").mockImplementation(() => now);
+		const calls = route({
+			"code-reviewer.md": () => {
+				now += 310_000;
+				throw noOutput();
+			},
+		});
+		const decision = await buildReview(ctx());
+		// 290s left is well over 30s, but under the 310s the first attempt took.
+		expect(calls["code-reviewer.md"]).toBe(1);
+		expect(retrySkippedWarned(warn, "code-reviewer.md")).toBe(true);
+		expect(decision?.body).toMatch(
+			/retry skipped, out of time: `code-reviewer`/,
+		);
+	});
+
+	it("cancels the retry when pacing uses up the time that made it eligible", async () => {
+		vi.useFakeTimers();
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const calls = route({
+			"code-reviewer.md": () => {
+				throw noOutput();
+			},
+			// Last agent of the first pass: leaves 70s and asks for a 50s pause.
+			"code-review-and-quality.md": () => {
+				vi.setSystemTime(Date.now() + 530_000);
+				return okResponse([], { "retry-after": "50" });
+			},
+		});
+		const p = buildReview(ctx());
+		await vi.runAllTimersAsync();
+		const decision = await p;
+		expect(calls["code-reviewer.md"]).toBe(1);
+		expect(retrySkippedWarned(warn, "code-reviewer.md")).toBe(true);
+		expect(decision?.body).toMatch(
+			/retry skipped, out of time: `code-reviewer`/,
+		);
+	});
+
+	it("paces the retry pass's first agent from the first pass's rate limit", async () => {
+		vi.useFakeTimers();
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		let firstPassEnd = 0;
+		let retryAt = 0;
+		const calls = route({
+			"code-reviewer.md": (n) => {
+				if (n === 1) throw noOutput();
+				retryAt = Date.now();
+				return okResponse();
+			},
+			"code-review-and-quality.md": () => {
+				firstPassEnd = Date.now();
+				return okResponse([], { "retry-after": "50" });
+			},
+		});
+		const p = buildReview(ctx());
+		await vi.runAllTimersAsync();
+		await p;
+		expect(calls["code-reviewer.md"]).toBe(2);
+		expect(retryAt - firstPassEnd).toBeGreaterThanOrEqual(50_000);
+	});
+
+	it("keeps the second attempt's class when the retry fails too", async () => {
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		route({
+			"code-reviewer.md": (n) => {
+				throw n === 1 ? noOutput() : schemaMismatch();
+			},
+		});
+		const decision = await buildReview(ctx());
+		const recs = recordsFor(log, "code-reviewer.md");
+		expect(recs.map((r) => [r.attempt, r.class])).toEqual([
+			[1, "no_output"],
+			[2, "schema_mismatch"],
+		]);
+		expect(decision?.body).toMatch(
+			/failed after retry: `code-reviewer` \(schema_mismatch\)/,
+		);
+	});
+
+	it("builds the retry's abort signal from the original absolute deadline", async () => {
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		let now = 0;
+		vi.spyOn(Date, "now").mockImplementation(() => now);
+		const timeout = vi.spyOn(AbortSignal, "timeout");
+		route({
+			"code-reviewer.md": (n) => {
+				if (n === 1) {
+					now += 100_000;
+					throw noOutput();
+				}
+				return okResponse();
+			},
+		});
+		await buildReview(ctx({ agentBudgetMs: 600_000 }));
+		expect(timeout).toHaveBeenCalledTimes(TIER1_SKILLS.length + 1);
+		// Deadline is t=600s; the retry starts at t=100s, so 500s remain. A
+		// fresh budget would give 600s.
+		expect(timeout.mock.calls.at(-1)?.[0]).toBe(500_000);
+	});
+
+	it("does not run the retry pass's first agent alone", async () => {
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		const events: string[] = [];
+		route({
+			"code-reviewer.md": async (n) => {
+				if (n === 1) throw noOutput();
+				events.push("a-start");
+				await new Promise((r) => setTimeout(r, 20));
+				events.push("a-end");
+				return okResponse();
+			},
+			"silent-failure-hunter.md": (n) => {
+				if (n === 1) throw noOutput();
+				events.push("b-start");
+				return okResponse();
+			},
+		});
+		await buildReview(ctx({ agentConcurrency: 4 }));
+		expect(events).toEqual(["a-start", "b-start", "a-end"]);
+	});
+
+	it("does not retry rate-limited, quota-exhausted or deadline-aborted agents", async () => {
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const real = AbortSignal.timeout.bind(AbortSignal);
+		let signals = 0;
+		// The third agent's call gets an already-fired deadline signal.
+		vi.spyOn(AbortSignal, "timeout").mockImplementation((ms) =>
+			++signals === 3 ? AbortSignal.abort() : real(ms),
+		);
+		const calls = route({
+			"code-reviewer.md": () => {
+				throw Object.assign(new Error("429"), {
+					statusCode: 429,
+					responseHeaders: {},
+				});
+			},
+			"silent-failure-hunter.md": () => {
+				throw Object.assign(new Error("insufficient_quota"), {
+					statusCode: 429,
+				});
+			},
+			"pr-test-analyzer.md": () => {
+				throw noOutput();
+			},
+		});
+		await buildReview(ctx());
+		expect(calls["code-reviewer.md"]).toBe(1);
+		expect(calls["silent-failure-hunter.md"]).toBe(1);
+		expect(calls["pr-test-analyzer.md"]).toBe(1);
+	});
+
+	const collected = (log: { mock: { calls: unknown[][] } }) =>
+		log.mock.calls.find((c) => c[0] === "agent results collected")?.[1] as
+			| Record<string, number>
+			| undefined;
+	const retrySkipWarns = (
+		warn: { mock: { calls: unknown[][] } },
+		skill: string,
+	) =>
+		warn.mock.calls.filter(
+			(c) =>
+				c[0] === "agent retry skipped: out of time" &&
+				(c[1] as { skill?: string }).skill === skill,
+		).length;
+
+	it("keeps the first error when the retry is aborted at the deadline", async () => {
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const real = AbortSignal.timeout.bind(AbortSignal);
+		let signals = 0;
+		// The retry is the sixth dispatch; it gets an already-fired deadline.
+		vi.spyOn(AbortSignal, "timeout").mockImplementation((ms) =>
+			++signals === TIER1_SKILLS.length + 1 ? AbortSignal.abort() : real(ms),
+		);
+		route({
+			"code-reviewer.md": () => {
+				throw noOutput();
+			},
+		});
+		const decision = await buildReview(ctx());
+		const recs = recordsFor(log, "code-reviewer.md");
+		expect(recs.map((r) => [r.attempt, r.status, r.class])).toEqual([
+			[1, "error", "no_output"],
+			[2, "skipped", undefined],
+		]);
+		// Final result is the first attempt's error: in errored, not skipped.
+		const lines = (decision?.body ?? "")
+			.split("\n")
+			.filter((l) => l.includes("`code-reviewer`") && l.startsWith(">"));
+		expect(lines).toHaveLength(1);
+		expect(lines[0]).toContain("retry skipped, out of time");
+		expect(decision?.body).not.toContain("did not run");
+		const marker = parseAgentsMarker(decision?.body ?? "", KNOWN_SKILLS);
+		expect(
+			marker?.records
+				.filter((r) => r.skill === "code-reviewer.md")
+				.map((r) => [r.attempt, r.status]),
+		).toEqual([[1, "error"]]);
+		expect(marker?.pending).toEqual(["code-reviewer.md"]);
+		expect(collected(log)).toMatchObject({ errored: 1 });
+		// And in retrySkipped, with exactly one warning.
+		expect(retrySkipWarns(warn, "code-reviewer.md")).toBe(1);
+	});
+
+	it.each([
+		[
+			"rate limited",
+			() =>
+				Object.assign(new Error("429"), {
+					statusCode: 429,
+					responseHeaders: {},
+				}),
+			"rate_limited",
+			{ rateLimited: 1, quotaExhausted: 0, errored: 0 },
+		],
+		[
+			"quota exhausted",
+			() => Object.assign(new Error("insufficient_quota"), { statusCode: 429 }),
+			"quota_exhausted",
+			{ rateLimited: 0, quotaExhausted: 1, errored: 0 },
+		],
+	])("takes a %s retry as the final outcome and still bills attempt 1", async (_label, refusal, status, counts) => {
+		vi.useFakeTimers();
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		route({
+			"code-reviewer.md": (n) => {
+				throw n === 1 ? noOutput() : refusal();
+			},
+		});
+		const p = buildReview(ctx());
+		await vi.runAllTimersAsync();
+		const decision = await p;
+		const recs = recordsFor(log, "code-reviewer.md");
+		expect(recs.map((r) => [r.attempt, r.status])).toEqual([
+			[1, "error"],
+			[2, status],
+		]);
+		expect(collected(log)).toMatchObject(counts);
+		expect(decision?.body).toMatch(/Partial review/);
+		expect(decision?.body).toContain(`\`code-reviewer\``);
+		expect(decision?.body).toContain("<!-- ai-review:readiness=3 -->");
+		const expected = computeCost(
+			{
+				promptTokens: (TIER1_SKILLS.length - 1) * 1000 + 700,
+				completionTokens: (TIER1_SKILLS.length - 1) * 100 + 30,
+			},
+			decision?.metadata.model ?? "",
+		);
+		expect(decision?.metadata.cost).toBeCloseTo(expected, 10);
+	});
+
+	it("does not pace for a retry already ruled out at collection", async () => {
+		vi.useFakeTimers();
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const calls = route({
+			// Took 310s, leaving 290s: ineligible at collection.
+			"code-reviewer.md": () => {
+				vi.setSystemTime(Date.now() + 310_000);
+				throw noOutput();
+			},
+			"code-review-and-quality.md": () =>
+				okResponse([], { "retry-after": "50" }),
+		});
+		const p = buildReview(ctx());
+		await vi.runAllTimersAsync();
+		await p;
+		expect(calls["code-reviewer.md"]).toBe(1);
+		expect(retrySkipWarns(warn, "code-reviewer.md")).toBe(1);
+		expect(
+			log.mock.calls.some((c) => c[0] === "pacing before next agent"),
+		).toBe(false);
+	});
+
+	it.each([
+		["exactly the first attempt's duration left", 300_000, 0, 2],
+		["1ms under the first attempt's duration", 300_000, 1, 1],
+		["exactly 30s left", 0, 570_000, 2],
+		["1ms under 30s", 0, 570_001, 1],
+	])("retry window boundary: %s", async (_label, firstMs, burnMs, expectedCalls) => {
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		let now = 0;
+		vi.spyOn(Date, "now").mockImplementation(() => now);
+		const calls = route({
+			"code-reviewer.md": (n) => {
+				if (n > 1) return okResponse();
+				now += firstMs;
+				throw noOutput();
+			},
+			"code-review-and-quality.md": () => {
+				now += burnMs;
+				return okResponse();
+			},
+		});
+		await buildReview(ctx({ agentBudgetMs: firstMs * 2 || 600_000 }));
+		expect(calls["code-reviewer.md"]).toBe(expectedCalls);
+	});
+
+	it("logs the skill, not a restarted index, when pacing a retry", async () => {
+		vi.useFakeTimers();
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		route({
+			"code-reviewer.md": (n) => {
+				if (n === 1) throw noOutput();
+				return okResponse();
+			},
+			"code-review-and-quality.md": () =>
+				okResponse([], { "retry-after": "5" }),
+		});
+		const p = buildReview(ctx());
+		await vi.runAllTimersAsync();
+		await p;
+		const pacing = log.mock.calls.filter(
+			(c) => c[0] === "pacing before next agent",
+		);
+		expect(pacing.map((c) => c[1])).toEqual([
+			{ skill: "code-reviewer.md", delayMs: 5000 },
+		]);
 	});
 });

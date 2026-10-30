@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { App } from "octokit";
+import { logAgentRecords, toRecord } from "./agent-log.js";
 import {
 	createHeadBranch,
 	ensureOrphanBase,
@@ -123,8 +124,33 @@ export async function runAuditPass(opts: {
 				runAgent(skill, userMessage, selection, extraInstructions, { auth }),
 		);
 		agentsAttempted += outcomes.length;
+		const messages: Record<string, string> = {};
+		const stacks: Record<string, string> = {};
+		// mapWithConcurrency returns outcomes in input order, so index i is TIER1_SKILLS[i].
+		const records = outcomes.map((o, i) => {
+			const name = TIER1_SKILLS[i].split("/").pop() ?? TIER1_SKILLS[i];
+			if (o.status === "error" && o.message !== undefined) {
+				messages[name] = o.message;
+			}
+			if (o.status === "error" && o.stack !== undefined) stacks[name] = o.stack;
+			return toRecord(name, 1, o);
+		});
+		logAgentRecords(records, {
+			owner: meta.owner,
+			repo: meta.repo,
+			pr: 0,
+			sha: meta.ref,
+			provider: selection.provider,
+			model: selection.model,
+			messages,
+			stacks,
+		});
 		let batchSucceeded = 0;
 		for (const o of outcomes) {
+			if (o.status === "error" && o.usage) {
+				usage.promptTokens += o.usage.promptTokens;
+				usage.completionTokens += o.usage.completionTokens;
+			}
 			if (o.status === "ok") {
 				reviews.push(o.review);
 				usage.promptTokens += o.usage.promptTokens;

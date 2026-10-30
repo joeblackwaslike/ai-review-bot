@@ -1,6 +1,17 @@
 import { APICallError } from "@ai-sdk/provider";
 import { generateObject } from "ai";
 import { z } from "zod";
+import {
+	type AgentFailure,
+	classifyAgentError,
+	usageFromError,
+} from "./agent-failure.js";
+import {
+	type AgentRecord,
+	formatAgentsMarker,
+	logAgentRecords,
+	toRecord,
+} from "./agent-log.js";
 import type { ResolvedAuth } from "./auth.js";
 import { deriveBaseline } from "./baseline.js";
 import { dedupeClaims, isSameClaim } from "./claim-dedupe.js";
@@ -15,7 +26,9 @@ import {
 	type AgentPromptOptions,
 	buildAgentSystemPrompt,
 	buildUserMessage,
+	wholePrInputComplete,
 } from "./prompt.js";
+import { readMetadataValue } from "./review-metadata.js";
 import type { PersistedFinding, ReviewState } from "./review-state.js";
 import { findingId, loadReviewState, saveReviewState } from "./review-state.js";
 import { REVIEWER_TUNING, type ReviewerTuning } from "./reviewer-tuning.js";
@@ -25,7 +38,7 @@ import {
 	reasoningProviderOptions,
 	routeModel,
 } from "./router.js";
-import { detectTier2Skills } from "./tier2.js";
+import { detectTier2Skills, TIER2_DETECTORS } from "./tier2.js";
 import {
 	fetchDeltaMeta,
 	revalidateFindings,
@@ -49,6 +62,8 @@ interface PullFile {
 	filename: string;
 	status: string;
 	patch?: string;
+	additions?: number;
+	deletions?: number;
 	/** Set by GitHub on a renamed file. */
 	previous_filename?: string;
 }
@@ -162,13 +177,31 @@ export type AgentOutcome =
 			status: "ok";
 			review: ModelReview;
 			usage: TokenUsage;
+			durationMs: number;
 			rateLimit?: RateLimitInfo;
 	  }
 	| { status: "rate_limited"; rateLimit: RateLimitInfo }
 	| { status: "quota_exhausted"; provider: ModelSelection["provider"] }
-	| { status: "error" }
+	| {
+			status: "error";
+			failure: AgentFailure;
+			usage?: TokenUsage;
+			durationMs: number;
+			/** For the local log file only; never in records or the marker. */
+			message?: string;
+			/** Stack frames (no message) of an `unknown` failure, for the console
+			 * record only. */
+			stack?: string;
+	  }
 	/** Never started: the run was out of wall-clock before its turn came up. */
 	| { status: "skipped"; skillPath: string };
+
+/** One run of one agent; `attempt` 2 is the single retry. */
+export interface AgentAttempt {
+	skill: string;
+	attempt: 1 | 2;
+	outcome: AgentOutcome;
+}
 
 /** Why a provider refused the call. Both conditions arrive as HTTP 429, but they
  * need opposite responses from a human: a rate limit clears on its own, an
@@ -351,8 +384,18 @@ export const TIER1_SKILLS: readonly string[] = [
 	"code-review-and-quality.md",
 ];
 
+const baseName = (path: string) => path.split("/").pop() ?? path;
+
+/** Every skill name an `agents` marker may mention. */
+export const KNOWN_SKILLS: ReadonlySet<string> = new Set(
+	[...TIER1_SKILLS, ...TIER2_DETECTORS.map((d) => d.skillPath)].map(baseName),
+);
+
 const PACE_TOKEN_FLOOR = 5000; // below this many remaining input tokens, wait for reset
 const PACE_MAX_WAIT_MS = 60_000; // never sleep longer than this between agents
+// A retry starts only with at least this long, or as long as the first attempt
+// took if that was longer, left before the agent deadline.
+const MIN_RETRY_WINDOW_MS = 30_000;
 
 /** Clamp a pacing sleep to the time left before the run's deadline, so a late
  * rate-limit reply cannot make the queue sleep through the function cap. */
@@ -398,6 +441,17 @@ export interface RunAgentOptions {
 	abortSignal?: AbortSignal;
 }
 
+/** The `at` lines of an error's stack, at most 1500 characters. The header line
+ * holds the message, and with it possibly diff text, so it is left out. */
+function stackFrames(err: unknown): string | undefined {
+	if (!(err instanceof Error) || !err.stack) return undefined;
+	const frames = err.stack
+		.split("\n")
+		.filter((l) => /^\s+at /.test(l))
+		.join("\n");
+	return frames ? frames.slice(0, 1500) : undefined;
+}
+
 export async function runAgent(
 	skillPath: string,
 	sharedContext: string,
@@ -412,6 +466,7 @@ export async function runAgent(
 		promptOptions,
 	);
 
+	const startedAt = Date.now();
 	try {
 		const { object, usage, providerMetadata, response } = await generateObject({
 			model: createAIModel(selection, auth),
@@ -454,6 +509,7 @@ export async function runAgent(
 				promptTokens: usage.inputTokens ?? 0,
 				completionTokens: usage.outputTokens ?? 0,
 			},
+			durationMs: Date.now() - startedAt,
 			rateLimit: readRateLimitHeaders(
 				response?.headers as Record<string, string> | undefined,
 			),
@@ -478,8 +534,17 @@ export async function runAgent(
 			console.warn("agent rate-limited", { skillPath, ...rl });
 			return { status: "rate_limited", rateLimit: rl };
 		}
-		console.error("Agent threw during generateObject", { skillPath, err });
-		return { status: "error" };
+		const usage = usageFromError(err);
+		const failure = classifyAgentError(err);
+		const stack = failure.class === "unknown" ? stackFrames(err) : undefined;
+		return {
+			status: "error",
+			failure,
+			...(usage && { usage }),
+			...(stack && { stack }),
+			durationMs: Date.now() - startedAt,
+			message: err instanceof Error ? err.message : String(err),
+		};
 	}
 }
 
@@ -779,12 +844,7 @@ export interface ReviewMetaParsed {
 }
 
 export function parseReviewMetadata(body: string): ReviewMetaParsed | null {
-	const extract = (key: string): string | undefined => {
-		const m = body.match(
-			new RegExp(`<!--\\s*ai-review:${key}=([^\\s>]+)\\s*-->`),
-		);
-		return m?.[1];
-	};
+	const extract = (key: string) => readMetadataValue(body, key);
 	const sha = extract("sha");
 	const reviewStr = extract("review");
 	const readinessStr = extract("readiness");
@@ -822,7 +882,16 @@ export interface FormatReviewBodyOptions {
 	readiness: number;
 	tier2Matches: { skillPath: string; reason: string }[];
 	skipped: string[];
-	errored: string[];
+	/** Final attempt per skill, plus the first attempt when it was retried. */
+	agentRecords: AgentRecord[];
+	/** Skills that owe the PR a whole-PR review: those that did not end ok this
+	 * round, plus earlier pending skills this round did not clear. */
+	pending: string[];
+	/** Skills whose retry never started or was aborted for lack of time. */
+	retrySkipped: string[];
+	/** Pending skills that ended this round without a failure but still owe a
+	 * whole-PR review (their input was incomplete, or they did not run). */
+	owedCoverage?: string[];
 	allSkillsCount: number;
 	generalFindings: ModelFinding[];
 	reviewComments: ReviewComment[];
@@ -857,6 +926,86 @@ export type ScopeNote =
 	| `scope: delta from ${string} (${"kv" | "github"})`
 	| `scope: full (${ScopeReason})`;
 
+const skillLabel = (skill: string) => `\`${skill.replace(/\.md$/, "")}\``;
+
+/**
+ * Groups failed agents for the review body. Each skill lands in exactly one
+ * group: retrySkipped wins over the error groups because a skipped retry leaves
+ * the skill in both lists by design.
+ */
+function formatAgentNotices(opts: {
+	skipped: string[];
+	agentRecords: AgentRecord[];
+	owedCoverage?: string[];
+	retrySkipped: string[];
+	allSkillsCount: number;
+}): string[] {
+	const { skipped, agentRecords, retrySkipped, allSkillsCount } = opts;
+	const first = new Map<string, AgentRecord>();
+	const last = new Map<string, AgentRecord>();
+	for (const r of agentRecords) {
+		if (r.attempt === 1) first.set(r.skill, r);
+		last.set(r.skill, r);
+	}
+	const recovered: string[] = [];
+	const afterRetry: string[] = [];
+	const notRetried: string[] = [];
+	const retryOutOfTime: string[] = [];
+	const rateLimited: string[] = [];
+	const quota: string[] = [];
+	const withClass = (r: AgentRecord) =>
+		`${skillLabel(r.skill)} (${r.class ?? "unknown"})`;
+	const skippedSet = new Set(skipped.map(baseName));
+	for (const [skill, r] of last) {
+		if (skippedSet.has(skill)) continue;
+		if (r.status === "ok") {
+			const f = first.get(skill);
+			if (r.attempt === 2 && f) recovered.push(withClass(f));
+		} else if (r.status === "rate_limited") rateLimited.push(skillLabel(skill));
+		else if (r.status === "quota_exhausted") quota.push(skillLabel(skill));
+		else if (r.status === "error") {
+			if (retrySkipped.map(baseName).includes(skill))
+				retryOutOfTime.push(withClass(r));
+			else if (r.attempt === 2) afterRetry.push(withClass(r));
+			else notRetried.push(withClass(r));
+		}
+	}
+	const rerun = "Re-run the review command for full coverage.";
+	const count = (n: number) => `${n} of ${allSkillsCount} agent(s)`;
+	const notices: string[] = [];
+	if (skipped.length > 0) {
+		notices.push(
+			`> ⏱ **Partial review.** ${skipped.length} of ${allSkillsCount} agents did not run — this pass hit its time budget before reaching ${skipped
+				.map(skillLabel)
+				.join(", ")}. ${rerun}`,
+		);
+	}
+	const warn = (icon: string, list: string[], what: string) => {
+		if (list.length > 0) {
+			notices.push(
+				`> ${icon} **Partial review.** ${count(list.length)} ${what}: ${list.join(", ")}. ${rerun}`,
+			);
+		}
+	};
+	warn("⚠️", afterRetry, "failed after retry");
+	warn("⚠️", notRetried, "failed, not retried");
+	warn("⏱", retryOutOfTime, "retry skipped, out of time");
+	warn("⚠️", rateLimited, "rate limited");
+	warn("⚠️", quota, "out of quota");
+	const owed = (opts.owedCoverage ?? []).map(skillLabel);
+	if (owed.length > 0) {
+		notices.push(
+			`> ⚠️ **Partial review.** ${owed.join(", ")} still ${owed.length === 1 ? "owes" : "owe"} a review of the whole PR; ${owed.length === 1 ? "its" : "their"} input this round was incomplete or ${owed.length === 1 ? "it" : "they"} did not run.`,
+		);
+	}
+	if (recovered.length > 0) {
+		notices.push(
+			`> ${count(recovered.length)} failed, then recovered on retry: ${recovered.join(", ")}.`,
+		);
+	}
+	return notices;
+}
+
 export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 	const {
 		commentPrefix,
@@ -866,7 +1015,9 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		readiness,
 		tier2Matches,
 		skipped,
-		errored,
+		agentRecords,
+		pending,
+		retrySkipped,
 		allSkillsCount,
 		generalFindings,
 		reviewComments,
@@ -898,21 +1049,13 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 					.join("\n")}`
 			: "";
 
-	const budgetNotices: string[] = [];
-	if (skipped.length > 0) {
-		budgetNotices.push(
-			`> ⏱ **Partial review.** ${skipped.length} of ${allSkillsCount} agents did not run — this pass hit its time budget before reaching ${skipped
-				.map((s) => `\`${s.replace(/\.md$/, "")}\``)
-				.join(", ")}. Re-run the review command for full coverage.`,
-		);
-	}
-	if (errored.length > 0) {
-		budgetNotices.push(
-			`> ⚠️ **Partial review.** ${errored.length} of ${allSkillsCount} agent(s) failed to complete: ${errored
-				.map((s) => `\`${s.replace(/\.md$/, "")}\``)
-				.join(", ")}. Re-run the review command for full coverage.`,
-		);
-	}
+	const budgetNotices = formatAgentNotices({
+		skipped,
+		agentRecords,
+		owedCoverage: opts.owedCoverage,
+		retrySkipped,
+		allSkillsCount,
+	});
 
 	const findingsBlock = formatFindings(generalFindings);
 
@@ -966,6 +1109,7 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		`<!-- ai-review:model=${model} -->`,
 		`<!-- ai-review:findings=${generalFindings.length} -->`,
 		`<!-- ai-review:cost=${cost.toFixed(6)} -->`,
+		formatAgentsMarker(agentRecords, pending, KNOWN_SKILLS),
 	].join("\n");
 
 	const costFooter = `---\n*Model: ${model} · ${allSkillsCount} agents · $${cost.toFixed(6)}${ledgerNote ? ` · ${ledgerNote}` : ""}${scopeNote ? ` · ${scopeNote}` : ""} · [ai-review-bot](https://github.com/joeblackwaslike/ai-review-bot)*`;
@@ -1516,7 +1660,7 @@ export async function buildReview(
 		.filter((r) => {
 			const body = r.body ?? "";
 			return (
-				/<!--\s*ai-review:sha=/.test(body) ||
+				readMetadataValue(body, "sha") !== undefined ||
 				body.includes("Reviewed commit: `")
 			);
 		})
@@ -1530,6 +1674,7 @@ export async function buildReview(
 				reviewIds: loaded.reviewIds,
 				warm: loaded.warm,
 			},
+			KNOWN_SKILLS,
 		);
 		if (derived) {
 			state = derived.state;
@@ -1544,13 +1689,25 @@ export async function buildReview(
 				});
 		}
 	}
+	// Skills that still owe the PR a whole-PR review. One whose skill file is
+	// gone is dropped; a Tier 2 one waits while Tier 2 is switched off.
+	const priorPending = [...new Set(state?.incompleteSkills ?? [])].filter((s) =>
+		KNOWN_SKILLS.has(s),
+	);
+	const scheduledPending = priorPending.filter(
+		(s) => context.tier2Enabled || TIER1_SKILLS.includes(s),
+	);
+	const pendingSet = new Set(scheduledPending);
+	/** Triage said SKIP but skills are pending: only those run, over the whole PR. */
+	let pendingOnly = false;
+	let skipVerdict: ReviewState["event"] = "COMMENT";
 	const reviewCountBase =
 		state?.reviewCount ??
 		Math.max(
 			0,
 			...ownReviews.map((r) =>
 				Number(
-					(r.body ?? "").match(/<!--\s*ai-review:review=(\d+)\s*-->/)?.[1] ?? 0,
+					readMetadataValue(r.body ?? "", "review")?.match(/^\d+$/)?.[0] ?? 0,
 				),
 			),
 		);
@@ -1641,17 +1798,36 @@ export async function buildReview(
 				// A re-stamped check-run does not supersede a standing CHANGES_REQUESTED
 				// review, so that case runs as INCREMENTAL and posts its APPROVE.
 				skipNeedsApprove = !stillBlocking && needsFreshApprove;
-				if (!skipNeedsApprove) {
+				if (!skipNeedsApprove && scheduledPending.length > 0) {
+					pendingOnly = true;
+					skipVerdict = stillBlocking ? state.event : "APPROVE";
+					console.log("triage SKIP; running only the pending skills", {
+						...prLog,
+						pending: scheduledPending,
+					});
+				} else if (!skipNeedsApprove) {
 					console.log("review scope", {
 						scope: `scope: delta from ${state.lastReviewedSha.slice(0, 7)} (${baselineSource})`,
 						decision: "SKIP",
 					});
-					await carryVerdictForward(stillBlocking ? state.event : "APPROVE");
+					// A skill still owing coverage (a Tier 2 one waiting while Tier 2 is
+					// off) keeps the verdict short of an approval.
+					await carryVerdictForward(
+						stillBlocking
+							? state.event
+							: priorPending.length > 0
+								? "COMMENT"
+								: "APPROVE",
+					);
 					return null; // nothing to post — the check-run carries the verdict
 				}
 			}
 
-			if (triage.recommendation === "INCREMENTAL" || skipNeedsApprove) {
+			if (
+				triage.recommendation === "INCREMENTAL" ||
+				skipNeedsApprove ||
+				pendingOnly
+			) {
 				// A merge of the base branch puts files in the compare that the PR
 				// does not change; only the PR's own files are reviewed.
 				const prPaths = new Set(files.map((f) => f.filename));
@@ -1701,7 +1877,7 @@ export async function buildReview(
 	const scopedFilePaths = scopedFiles.map((f) => f.filename);
 
 	const tuning: ReviewerTuning = REVIEWER_TUNING;
-	const userMessage = buildUserMessage({
+	const promptBase = {
 		owner: context.owner,
 		repo: context.repo,
 		pullNumber: context.pullNumber,
@@ -1713,10 +1889,6 @@ export async function buildReview(
 		changedFiles: context.changedFiles,
 		labels: context.labels,
 		extraInstructions: context.extraInstructions,
-		files: scopedFiles,
-		diffScope: incrementalPass
-			? `INCREMENTAL — only files changed since ${priorSha.slice(0, 12)}. Continue any threads already open on other files; do not refile findings for files not shown in this diff.`
-			: undefined,
 		priorBotReviews,
 		priorOwnReview,
 		priorOwnFindings: tuning.showPriorOwnFindings
@@ -1745,24 +1917,38 @@ export async function buildReview(
 					})),
 				]
 			: undefined,
-	});
+	};
 
 	// Detect Tier 2 skills relevant to this PR and run all agents together.
 	// Keyed off scopedFiles so an INCREMENTAL pass only activates Tier 2 skills
-	// for the surface actually under review.
-	const tier2Matches = context.tier2Enabled
-		? detectTier2Skills({
-				filePaths: scopedFilePaths,
-				additions: context.additions,
-				deletions: context.deletions,
-				title: context.title,
-				body: context.body,
-				labels: context.labels,
-				patchContent: scopedFiles.map((f) => f.patch ?? "").join("\n"),
-			})
-		: [];
+	// for the surface actually under review. Pending skills run whether or not
+	// detection selects them; a pending-only round runs nothing else.
+	const detectedTier2 =
+		context.tier2Enabled && !pendingOnly
+			? detectTier2Skills({
+					filePaths: scopedFilePaths,
+					additions: context.additions,
+					deletions: context.deletions,
+					title: context.title,
+					body: context.body,
+					labels: context.labels,
+					patchContent: scopedFiles.map((f) => f.patch ?? "").join("\n"),
+				})
+			: [];
+	const detectedPaths = new Set(detectedTier2.map((m) => m.skillPath));
+	const tier2Matches = [
+		...detectedTier2,
+		...scheduledPending
+			.filter((s) => !TIER1_SKILLS.includes(s) && !detectedPaths.has(s))
+			.map((skillPath) => ({
+				skillPath,
+				reason: "did not complete in an earlier review",
+			})),
+	];
 
-	const tier1Items = TIER1_SKILLS.map((skillPath) => ({
+	const tier1Items = TIER1_SKILLS.filter(
+		(s) => !pendingOnly || pendingSet.has(s),
+	).map((skillPath) => ({
 		skillPath,
 		tier: 1,
 		reason: "",
@@ -1773,17 +1959,85 @@ export async function buildReview(
 		reason,
 	}));
 	// Interleave Tier2 skills into the queue so budget exhaustion cuts proportionally
-	// across both tiers rather than always dropping all Tier2 agents.
-	const allSkills = tier1Items
+	// across both tiers rather than always dropping all Tier2 agents. Pending
+	// skills go first, so the deadline cuts the other agents before them. When
+	// the pending skills get the whole PR and the rest the delta, one delta
+	// agent still goes first: the first agent runs alone to warm the cache, and
+	// a whole-PR warm-up would only help the pending skills.
+	const queue = tier1Items
 		.flatMap((t1, i) => {
 			const t2 = tier2Items[i];
 			return t2 !== undefined ? [t1, t2] : [t1];
 		})
 		.concat(tier2Items.slice(tier1Items.length));
+	const isPending = (s: { skillPath: string }) =>
+		pendingSet.has(baseName(s.skillPath));
+	const pendingItems = queue.filter(isPending);
+	const otherItems = queue.filter((s) => !isPending(s));
+	const warmUp =
+		incrementalPass && pendingItems.length > 0 ? otherItems.slice(0, 1) : [];
+	const allSkills = [
+		...warmUp,
+		...pendingItems,
+		...otherItems.slice(warmUp.length),
+	];
+
+	const skillName = (path: string) => path.split("/").pop() ?? path;
+	// A pending skill reviews the PR's own files, as on a FULL round; the rest
+	// keep the delta. Each message version is built only if some agent uses it.
+	const wholePrFor = (skillPath: string) =>
+		!incrementalPass || pendingSet.has(skillName(skillPath));
+	const userMessages = new Map<boolean, string>();
+	for (const { skillPath } of allSkills) {
+		const wholePr = wholePrFor(skillPath);
+		if (userMessages.has(wholePr)) continue;
+		userMessages.set(
+			wholePr,
+			buildUserMessage({
+				...promptBase,
+				files: wholePr ? files : scopedFiles,
+				diffScope: wholePr
+					? undefined
+					: `INCREMENTAL — only files changed since ${priorSha.slice(0, 12)}. Continue any threads already open on other files; do not refile findings for files not shown in this diff.`,
+			}),
+		);
+	}
 
 	let lastRateLimit: RateLimitInfo | undefined;
 	const deadline = Date.now() + context.agentBudgetMs;
-	const outcomes = await mapWithConcurrency(
+	const dispatch = async (skillPath: string): Promise<AgentOutcome> => {
+		const outcome = await runAgent(
+			skillPath,
+			userMessages.get(wholePrFor(skillPath)) ?? "",
+			selection,
+			customPrompt,
+			{
+				auth: context.auth,
+				prompt: { strictEvidenceRules: tuning.strictEvidenceRules },
+				abortSignal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
+			},
+		);
+		// At the default concurrency 4 this is a benign best-effort race between
+		// concurrent agents (pacing only needs an approximate recent signal).
+		if (outcome.status === "ok" || outcome.status === "rate_limited") {
+			lastRateLimit = outcome.rateLimit;
+		}
+		return outcome;
+	};
+	const paceNext = async (
+		next: { idx: number } | { skill: string },
+	): Promise<void> => {
+		const delay = capPaceToDeadline(
+			computePaceDelayMs(lastRateLimit, Date.now()),
+			Date.now(),
+			deadline,
+		);
+		if (delay > 0) {
+			console.log("pacing before next agent", { ...next, delayMs: delay });
+			await sleep(delay);
+		}
+	};
+	const firstOutcomes = await mapWithConcurrency(
 		allSkills,
 		context.agentConcurrency,
 		async ({ skillPath }, i) => {
@@ -1800,22 +2054,7 @@ export async function buildReview(
 				return { status: "skipped", skillPath } as AgentOutcome;
 			}
 			const t0 = Date.now();
-			const outcome = await runAgent(
-				skillPath,
-				userMessage,
-				selection,
-				customPrompt,
-				{
-					auth: context.auth,
-					prompt: { strictEvidenceRules: tuning.strictEvidenceRules },
-					abortSignal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
-				},
-			);
-			// At the default concurrency 4 this is a benign best-effort race between
-			// concurrent agents (pacing only needs an approximate recent signal).
-			if (outcome.status === "ok" || outcome.status === "rate_limited") {
-				lastRateLimit = outcome.rateLimit;
-			}
+			const outcome = await dispatch(skillPath);
 			console.log("agent done", {
 				idx: i + 1,
 				total: allSkills.length,
@@ -1829,21 +2068,102 @@ export async function buildReview(
 			serialFirst: true,
 			onBeforeEach: async (i) => {
 				if (i === 0) return; // nothing learned yet
-				const delay = capPaceToDeadline(
-					computePaceDelayMs(lastRateLimit, Date.now()),
-					Date.now(),
-					deadline,
-				);
-				if (delay > 0) {
-					console.log("pacing before next agent", {
-						idx: i + 1,
-						delayMs: delay,
-					});
-					await sleep(delay);
-				}
+				await paceNext({ idx: i + 1 });
 			},
 		},
 	);
+
+	const logAttempts = (batch: AgentAttempt[]) => {
+		const messages: Record<string, string> = {};
+		const stacks: Record<string, string> = {};
+		for (const { skill, outcome } of batch) {
+			if (outcome.status === "error" && outcome.message !== undefined) {
+				messages[skill] = outcome.message;
+			}
+			if (outcome.status === "error" && outcome.stack !== undefined) {
+				stacks[skill] = outcome.stack;
+			}
+		}
+		logAgentRecords(
+			batch.map((a) => toRecord(a.skill, a.attempt, a.outcome)),
+			{
+				owner: context.owner,
+				repo: context.repo,
+				pr: context.pullNumber,
+				sha: context.headSha,
+				provider: context.provider,
+				model: selection.model,
+				messages,
+				stacks,
+			},
+		);
+	};
+	const attempts: AgentAttempt[] = firstOutcomes.map((outcome, i) => ({
+		skill: skillName(allSkills[i]?.skillPath ?? "unknown"),
+		attempt: 1,
+		outcome,
+	}));
+	logAttempts(attempts);
+
+	// One retry per retryable failure, only while enough of the original
+	// deadline is left: at least 30s, and at least as long as the first attempt
+	// took. Checked at collection and again right before dispatch, since pacing
+	// can use up the time in between.
+	const retrySkipped: string[] = [];
+	const hasRetryTime = (first: AgentOutcome) =>
+		deadline - Date.now() >=
+		Math.max(
+			MIN_RETRY_WINDOW_MS,
+			first.status === "error" ? first.durationMs : 0,
+		);
+	const skipRetry = (skill: string) => {
+		retrySkipped.push(skill);
+		console.warn("agent retry skipped: out of time", {
+			skill,
+			leftMs: deadline - Date.now(),
+		});
+	};
+	const toRetry = firstOutcomes.flatMap((o, i) => {
+		if (o.status !== "error" || !o.failure.retryable) return [];
+		if (hasRetryTime(o)) return [i];
+		skipRetry(attempts[i].skill);
+		return [];
+	});
+	// Paced from its first agent on, since the first pass already learned the
+	// provider's pressure. No serialFirst: one warm-up covers one shared prefix,
+	// and a transport failure says nothing about the cache.
+	const retried = await mapWithConcurrency(
+		toRetry,
+		Math.min(context.agentConcurrency, toRetry.length),
+		async (i): Promise<AgentAttempt | undefined> => {
+			const { skill } = attempts[i];
+			if (!hasRetryTime(firstOutcomes[i])) {
+				skipRetry(skill);
+				return undefined;
+			}
+			const t0 = Date.now();
+			const outcome = await dispatch(allSkills[i].skillPath);
+			console.log("agent retry done", {
+				skill,
+				status: outcome.status,
+				ms: Date.now() - t0,
+			});
+			// Aborted at the deadline: the retry ran out of time, and the first
+			// attempt's failure stays the agent's result.
+			if (outcome.status === "skipped") skipRetry(skill);
+			return { skill, attempt: 2, outcome };
+		},
+		{ onBeforeEach: (n) => paceNext({ skill: attempts[toRetry[n]].skill }) },
+	);
+	const retryAttempts = retried.filter(
+		(a): a is AgentAttempt => a !== undefined,
+	);
+	logAttempts(retryAttempts);
+	attempts.push(...retryAttempts);
+	const outcomes = firstOutcomes.map((first, i) => {
+		const retry = retried[toRetry.indexOf(i)]?.outcome;
+		return retry && retry.status !== "skipped" ? retry : first;
+	});
 
 	const agentResults: ModelReview[] = [];
 	const rateLimited: RateLimitInfo[] = [];
@@ -1853,11 +2173,18 @@ export async function buildReview(
 	let totalPromptTokens = 0;
 	let totalCompletionTokens = 0;
 
+	// Every attempt is billed, including a failed first attempt whose retry
+	// then succeeded.
+	for (const { outcome: o } of attempts) {
+		if ((o.status === "ok" || o.status === "error") && o.usage) {
+			totalPromptTokens += o.usage.promptTokens;
+			totalCompletionTokens += o.usage.completionTokens;
+		}
+	}
+
 	outcomes.forEach((o, i) => {
 		if (o.status === "ok") {
 			agentResults.push(o.review);
-			totalPromptTokens += o.usage.promptTokens;
-			totalCompletionTokens += o.usage.completionTokens;
 		} else if (o.status === "rate_limited") {
 			rateLimited.push(o.rateLimit);
 		} else if (o.status === "quota_exhausted") {
@@ -1865,9 +2192,9 @@ export async function buildReview(
 		} else if (o.status === "skipped") {
 			skipped.push(o.skillPath);
 		} else if (o.status === "error") {
-			// runAgent already logged the underlying error; what's missing here is
-			// attaching it to *this* skill and to the PR — without it a crashed
-			// agent reads identically to one that ran clean and found nothing.
+			// The outcome records were logged above; this attaches the failure to
+			// the review itself, so a crashed agent does not read the same as one
+			// that ran clean and found nothing.
 			errored.push(allSkills[i]?.skillPath ?? "unknown");
 		}
 	});
@@ -1878,6 +2205,47 @@ export async function buildReview(
 			skipped,
 		});
 	}
+
+	const agentRecords = attempts
+		.filter((a) => !(a.attempt === 2 && a.outcome.status === "skipped"))
+		.map((a) => toRecord(a.skill, a.attempt, a.outcome));
+	// A pending skill clears only on an ok run over the whole PR with nothing
+	// missing or trimmed. Pending afterwards: what was pending and did not
+	// clear (run or not), plus every skill that ran this round and did not end ok.
+	const inputComplete = wholePrInputComplete(files, context.changedFiles);
+	const ranNames = allSkills.map((s) => skillName(s.skillPath));
+	const cleared = scheduledPending.filter((s) => {
+		const i = ranNames.indexOf(s);
+		return i >= 0 && outcomes[i]?.status === "ok" && inputComplete;
+	});
+	const pending = [
+		...new Set([
+			...priorPending.filter((s) => !cleared.includes(s)),
+			...ranNames.filter((_, i) => outcomes[i]?.status !== "ok"),
+		]),
+	];
+	if (priorPending.length > 0 || pending.length > 0) {
+		console.log("pending coverage", {
+			...prLog,
+			prior: priorPending,
+			cleared,
+			pending,
+			inputComplete,
+		});
+	}
+	const skipFallback = async (): Promise<null> => {
+		console.log("pending skills changed nothing; keeping the SKIP verdict", {
+			...prLog,
+			cleared,
+			pending,
+		});
+		if (state) state.incompleteSkills = pending;
+		await carryVerdictForward(
+			skipVerdict === "APPROVE" && pending.length > 0 ? "COMMENT" : skipVerdict,
+		);
+		return null;
+	};
+	if (pendingOnly && agentResults.length === 0) return skipFallback();
 
 	if (errored.length > 0) {
 		console.warn("review agents failed and were excluded from this pass", {
@@ -1945,6 +2313,8 @@ export async function buildReview(
 		tier2: tier2Matches.length,
 		succeeded: agentResults.length,
 		rateLimited: rateLimited.length,
+		quotaExhausted: quotaExhausted.length,
+		errored: errored.length,
 		notOk: allSkills.length - agentResults.length,
 	});
 
@@ -1997,11 +2367,24 @@ export async function buildReview(
 		),
 	});
 
+	// A pending-only run on a triage SKIP that cleared nothing and found
+	// nothing new would only repost the previous review.
+	if (
+		pendingOnly &&
+		cleared.length === 0 &&
+		modelReview.general_findings.length === 0 &&
+		modelReview.inline_comments.length === 0
+	)
+		return skipFallback();
+
 	// Anchors come from the PR's own patches: a compare patch can hold lines
 	// from a base-branch merge that the PR diff does not have, and a comment
-	// on one of those would make GitHub reject the review.
+	// on one of those would make GitHub reject the review. A skill given the
+	// whole PR may anchor anywhere in it.
 	const scopedPathSet = new Set(scopedFilePaths);
-	const anchorFiles = files.filter((f) => scopedPathSet.has(f.filename));
+	const anchorFiles = allSkills.some((s) => wholePrFor(s.skillPath))
+		? files
+		: files.filter((f) => scopedPathSet.has(f.filename));
 	const validLines = buildValidLinesByPath(anchorFiles);
 
 	// Fix mechanical anchor errors before diff validation so fewer comments are
@@ -2091,9 +2474,11 @@ export async function buildReview(
 
 	// Upgrade to APPROVE only when ALL agents succeeded AND none found anything to flag.
 	// If any agent was rate-limited or errored, the review is partial — keep COMMENT.
+	// A skill that still owes the PR a whole-PR review makes the round partial too.
 	const allAgentsSucceeded = agentResults.length === allSkills.length;
 	const cleanDelta =
 		allAgentsSucceeded &&
+		pending.length === 0 &&
 		modelReview.event === "COMMENT" &&
 		modelReview.general_findings.length === 0 &&
 		// What the agents found, not what GitHub would accept. Measuring the
@@ -2113,11 +2498,14 @@ export async function buildReview(
 				? "APPROVE"
 				: modelReview.event;
 
+	// A round that cleared a pending skill always posts, so the agents marker
+	// on GitHub stops listing it.
 	if (
 		finalEvent === "APPROVE" &&
 		hasOwnReview &&
 		!needsFreshApprove &&
-		!context.force
+		!context.force &&
+		cleared.length === 0
 	) {
 		console.log("nothing new since the last review; posting nothing", {
 			suppressed: suppressedCount,
@@ -2127,12 +2515,14 @@ export async function buildReview(
 		// KV finding was settled by the ledger, and saving those open would let
 		// a later cold-ledger run block.
 		const carriedIds = new Set(survivingPrior.map((f) => f.id));
-		if (state)
+		if (state) {
 			state.findings = state.findings.map((f) =>
 				f.status === "open" && !carriedIds.has(f.id)
 					? { ...f, status: "resolved" }
 					: f,
 			);
+			state.incompleteSkills = pending;
+		}
 		await carryVerdictForward(
 			standingVerdict === "APPROVED" ? "APPROVE" : "COMMENT",
 		);
@@ -2209,7 +2599,12 @@ export async function buildReview(
 		event: finalEvent,
 		hasP0,
 		survivingPrior: blockingPrior.map((f) => f.id),
-		partial: skipped.length > 0 || errored.length > 0,
+		partial:
+			skipped.length > 0 ||
+			errored.length > 0 ||
+			rateLimited.length > 0 ||
+			quotaExhausted.length > 0 ||
+			pending.length > 0,
 	});
 
 	const body = formatReviewBody({
@@ -2220,7 +2615,12 @@ export async function buildReview(
 		readiness,
 		tier2Matches,
 		skipped,
-		errored,
+		agentRecords,
+		pending,
+		owedCoverage: pending.filter(
+			(s) => !ranNames.some((n, i) => n === s && outcomes[i]?.status !== "ok"),
+		),
+		retrySkipped,
 		allSkillsCount: allSkills.length,
 		generalFindings: modelReview.general_findings,
 		reviewComments,
@@ -2303,6 +2703,7 @@ export async function buildReview(
 			findings: persistedFindings,
 			reviewedAt: new Date().toISOString(),
 			reviewCount: reviewCountBase,
+			incompleteSkills: pending,
 		};
 		await saveReviewState(
 			context.kv,
