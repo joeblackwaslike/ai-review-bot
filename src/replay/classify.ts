@@ -60,7 +60,14 @@ function findThread(f: ReplayFixture, c: PostedClaim) {
 }
 
 const FIX_WORDING =
-	/\b(?:fix(?:ed|es)?|addressed|resolved|reverted|patched|handled|landed)\b/;
+	/\b(?:fix(?:ed|es)?|addressed|resolved|reverted|patched|handled|landed)\b/g;
+const NEGATION = /\b(?:not|never|no|without|still)\b|n't\b|\bun-$/;
+
+function affirmsFix(sentence: string): boolean {
+	return [...sentence.matchAll(FIX_WORDING)].some(
+		(m) => !NEGATION.test(sentence.slice(0, m.index)),
+	);
+}
 
 function citesEarlierCommit(f: ReplayFixture, c: PostedClaim): boolean {
 	const thread = findThread(f, c);
@@ -72,7 +79,7 @@ function citesEarlierCommit(f: ReplayFixture, c: PostedClaim): boolean {
 	return thread.replies
 		.filter((r) => r.author === f.author)
 		.flatMap((r) => r.body.toLowerCase().split(/(?<=[.!?;])\s+/))
-		.filter((sentence) => FIX_WORDING.test(sentence))
+		.filter(affirmsFix)
 		.some((sentence) =>
 			(sentence.match(/\b[0-9a-f]{7,40}\b/g) ?? []).some((tok) =>
 				shas.some((sha) => sha.startsWith(tok)),

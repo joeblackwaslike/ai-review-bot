@@ -112,7 +112,33 @@ describe("ruleClass", () => {
 		expect(ruleClass(f, c, makeLabel("c", "rejected"))).toBe("stale");
 	});
 
+	it("returns stale for a plain fixed in sha reply", () => {
+		const f = makeFixture([["a"], ["b"], ["c"]]);
+		f.rounds[1].commitsSince = [commit("abcdef1234567890")];
+		const c = f.rounds[2].claims[0];
+		c.commentId = 5;
+		f.threads = [
+			thread(5, {
+				replies: [
+					{
+						id: 1,
+						author: "me",
+						createdAt: "2026-01-02T00:00:00Z",
+						editedAt: null,
+						body: "fixed in abcdef1",
+					},
+				],
+			}),
+		];
+		expect(ruleClass(f, c, makeLabel("c", "rejected"))).toBe("stale");
+	});
+
 	it.each([
+		"This was not fixed in abcdef1; the behavior is intended",
+		"Not addressed in abcdef1 on purpose",
+		"abcdef1 never fixed it and there is no fix planned",
+		"It wasn't resolved in abcdef1",
+		"abcdef1 left it un-resolved",
 		"abcdef1 deliberately drops expired tokens; this is intended",
 		"This behavior was intentionally introduced in abcdef1; leave it unchanged",
 	])("does not call a sha citation stale without fix wording: %s", (body) => {
