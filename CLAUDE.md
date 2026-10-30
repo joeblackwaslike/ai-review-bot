@@ -84,8 +84,6 @@ Settled repeats are dropped per agent before this merge, and a re-review round w
 
 The CLI supports four subcommands for offline code review of the working tree (plus `ai-review watch` for an already-open PR, and `ai-review replay` for offline review-accuracy measurement — see below):
 
-`watch`, `review` and `audit` also append one JSON line per agent outcome to `~/.ai-review/logs/agents.jsonl`, or to the path in `AI_REVIEW_LOG_FILE` when it is set. The hosted webhook path does not write it.
-
 - `ai-review review [--full | --commit <sha>] [--slug <slug>] [--title <t>] [--out <dir>] [--extra <text>] [--json]` — Runs the full multi-agent review against local changes (default), the full tree (`--full`), or a specific commit (`--commit`), and writes a round-numbered Markdown report with YAML front-matter into `docs/code-reviews/` (no PR). Auth per provider: API key → explicit OAuth env token → logged-in `codex`/`claude` subscription (local, personal use only; never wired into webhook paths — see `src/auth.ts`). The `/code-review` slash command wraps it with doc-only / `--fix` / `--propose` modes.
 
 - `ai-review audit [--full] [--dry-run] [--out <dir>] [--extra <text>] [--json]` — Audits the local working tree (changed files by default; `--full` for the entire codebase). Runs both Claude and OpenAI provider passes in parallel, writes structured JSON + Markdown artifacts to `.ai-review/`, and (unless `--dry-run`) opens a draft synthetic-base review PR labeled `AI audit` for inline review. Optionally posts as a GitHub issue if the PR creation fails due to insufficient permissions.
@@ -97,6 +95,8 @@ The CLI supports four subcommands for offline code review of the working tree (p
 Reference: `docs/superpowers/specs/2026-06-08-local-audit-review-pr-design.md`
 
 - `ai-review replay [--fixtures <dir>]` / `ai-review replay --record <pr-url> --provider anthropic|openai --bot <login>` / `ai-review replay --live [--rounds <n>] [--max-cost <usd>]` — Deterministic offline replay of recorded review rounds: measures false-positive rate, claim recycling, and convergence against auto-labeled fixtures (provisional until an agent verifies them against the PR threads and Codex cross-checks them; items the two models disagree on stay unadjudicated). `--record` captures a real PR's rounds/threads/reactions via `gh` into `src/replay/fixtures/`; the default (no flags) replays existing fixtures and fails on confirmed-label guard violations (warns on provisional ones); `--live` is an opt-in, cost-capped tier that re-runs the audit pipeline against confirmed pairs only — it never gates CI. See `docs/superpowers/specs/2026-10-27-review-replay-harness-design.md` for the design and `src/replay/`.
+
+`watch`, `review` and `audit` also append one JSON line per agent outcome to `~/.ai-review/logs/agents.jsonl`, or to the path in `AI_REVIEW_LOG_FILE` when it is set. The hosted webhook path does not write it.
 
 ### Agent skills
 
