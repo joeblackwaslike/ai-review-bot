@@ -100,7 +100,7 @@
 		},
 		{
 			"claimId": "r0:c4370502180:0",
-			"rules": "stale",
+			"rules": null,
 			"claude": "contradicted",
 			"codex": "stale",
 			"reactionOnly": false,
@@ -156,7 +156,7 @@
 		},
 		{
 			"claimId": "r1:c4370934160:0",
-			"rules": "stale",
+			"rules": null,
 			"claude": "filler",
 			"codex": "filler",
 			"reactionOnly": false,

@@ -50,7 +50,7 @@ Agent logs: `~/.ai-review/logs/agents.jsonl` and the `ai-review:agents` marker s
 One class per claim. The first rule that matches wins, so counts add up to the number classified.
 
 1. Filler. The finding's own text says nothing is wrong or nothing was found: "no new findings", "nothing to flag", "matches the design", "no change this round". Decided from the finding text alone. No author reply is needed, so two labelers can agree without seeing the thread.
-2. Stale. The finding is about code that was already changed or fixed before the round's cutoff. Evidence is one of: the thread was already outdated at the cutoff, or an author reply cites a fix whose commit predates the reviewed head. A commit that touches the anchored lines in the round's own delta is not evidence, because the reviewer is meant to review changed lines. Expect this class to be small, since a review runs against the head it names. The cutoff is the time the reviewed head was pushed, as the harness spec defines it.
+2. Stale. The finding is about code that was already changed or fixed before the round's cutoff. Evidence is an author reply that cites a fix whose commit predates the reviewed head. The thread's `isOutdated` flag is not evidence, because the recorder copies the value as of recording time and it cannot be dated to the cutoff. A commit that touches the anchored lines in the round's own delta is not evidence, because the reviewer is meant to review changed lines. Expect this class to be small, since a review runs against the head it names. The cutoff is the time the reviewed head was pushed, as the harness spec defines it.
 3. Contradicted. The code at the reviewed head or the author's reply shows the claim is wrong, with a stated reason: "intentional", "by design", "not off by one, the test expects the seventh request to get a 429". A bare "no change" with no reason is not enough, because it also covers deferrals.
 4. Speculative. The finding hedges ("may", "could", "might not") and names no concrete input, path, or line in the diff that fails. No stronger class applies.
 5. Other. Rejected, and none of the above. Reported as its own count and never folded into another class.
@@ -63,7 +63,7 @@ The classifier works on posted findings, so it can see the finding text, its anc
 
 A rejected label is the author's verdict, not proof the finding was wrong. The classes describe why authors rejected findings, and the report says so.
 
-- Filler and stale get deterministic rules in `src/replay/classify.ts`. Filler is a phrase list checked against the claim title and text. Stale uses the thread's `isOutdated`, the hunk ranges, and reply text. These rules are tested, and their output is the first labeler.
+- Filler and stale get deterministic rules in `src/replay/classify.ts`. Filler is a phrase list checked against the claim title and text. Stale uses the author's reply text and the commits of earlier rounds. These rules are tested, and their output is the first labeler.
 - The phrase list is tuned on two fixtures and scored on the third, rotating through all three, so the reported rule accuracy is not measured on the data it was fitted to.
 - A Claude subagent labels all five classes for every claim, reading the claim, its thread, and the commit metadata. It does not see the deterministic result.
 - `codex:codex-rescue` labels the same claims blind, from the same inputs.
@@ -139,7 +139,7 @@ Classification of the 46 first-seen rejected Claude findings. Claude and Codex l
 | stale | 0 |
 | speculative | 0 |
 
-The deterministic rules agree with the two models on 13 of 16 where either side named filler or stale. The class files are provisional.
+The deterministic rules agree with the two models on 13 of 15 where either side named filler or stale. The class files are provisional.
 
 Contradicted is the largest class and depends on the author's judgment, so no rule over the finding can detect it. Filler is the largest detectable class, and it splits into 7 short body findings ("No new findings beyond prior reviews") and 8 long inline findings whose last sentence retracts them.
 
@@ -148,7 +148,7 @@ The fix is `isSelfRetracted` in `src/self-retraction.ts`, which drops P2 and P3 
 What was measured:
 
 - Fixtures: 13 of 15 agreed-filler findings removed, 0 of 17 fixed, 0 other-rejected, 0 unadjudicated. This is a fit, because the phrases were written after reading all 15.
-- Same repo, 2,487 bot comments outside the fixtures: a first, broader version hit 52. Two blind judges agreed on 49 of them. 12 were actionable (nits and docs gaps that say "not a bug"), 37 were retractions, 3 were split. The broad phrases were removed. The current filter hits none of the 12 or the 3, and 15 of the 37. I tuned on this set, so it is no longer a held-out measure.
+- Same repo, 2,487 bot comments outside the fixtures: a first, broader version hit 52. Two blind judges agreed on 49 of them. 12 were actionable (nits and docs gaps that say "not a bug"), 37 were retractions, 3 were split. The broad phrases were removed. The current filter hits none of the 12 or the 3, and 14 of the 37. I tuned on this set, so it is no longer a held-out measure.
 - Fresh holdout, 467 bot comments from ai-listings and agent-skills on other PRs: the first narrowed version hit 5, with 4 judged retractions and 1 split. An "except" rule then removed the split one. The current filter hits 2, and both blind judges called both of them retractions. That is 2 of 2 on a small holdout, so it is weak evidence of precision.
 - A review of the branch found real findings that the first narrowing still dropped. All of those shapes are now negative tests.
 - Live tier, 6 rounds, 10 raw findings, 0 self-retracted, 0 matched to a labeled claim. It says nothing about precision.

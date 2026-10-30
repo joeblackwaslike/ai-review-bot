@@ -81,7 +81,6 @@ export function ruleClass(
 ): "filler" | "stale" | null {
 	if (label.label === "fixed") return null;
 	if (isFillerText(c.title ?? "", c.text ?? "")) return "filler";
-	if (findThread(f, c)?.isOutdated) return "stale";
 	if (citesEarlierCommit(f, c)) return "stale";
 	return null;
 }

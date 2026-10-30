@@ -79,7 +79,7 @@ describe("isFillerText", () => {
 });
 
 describe("ruleClass", () => {
-	it("returns stale when the thread is outdated", () => {
+	it("does not call a claim stale from the recorded isOutdated flag", () => {
 		const f = makeFixture([["a"], ["b"]]);
 		f.rounds[0].claims[0].commentId = 1;
 		f.threads = [thread(1, { isOutdated: true })];
@@ -88,7 +88,7 @@ describe("ruleClass", () => {
 		).toBe(null);
 		expect(
 			ruleClass(f, f.rounds[0].claims[0], makeLabel("a", "rejected")),
-		).toBe("stale");
+		).toBe(null);
 	});
 
 	it("returns stale when an author reply cites a sha from an earlier round", () => {
