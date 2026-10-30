@@ -2923,6 +2923,23 @@ describe("mergeReviewsDetailed — self-retracted findings", () => {
 		expect(out.review.event).toBe("COMMENT");
 	});
 
+	it("keeps a finding whose retraction-like phrase is quoted program output", () => {
+		const quoted = buildModelReview({
+			event: "REQUEST_CHANGES",
+			general_findings: [
+				finding(
+					"Handler output",
+					'The error handler reports "No issues found" even when validation fails.',
+				),
+			],
+		});
+		const out = mergeReviewsDetailed([quoted], new Set(), {
+			dropSelfRetracted: true,
+		});
+		expect(out.retracted).toBe(0);
+		expect(out.review.general_findings).toHaveLength(1);
+	});
+
 	it("never drops a P1 either", () => {
 		const p1 = buildModelReview({
 			event: "REQUEST_CHANGES",

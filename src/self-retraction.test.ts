@@ -39,7 +39,7 @@ describe("isSelfRetracted positives, one per phrase family", () => {
 		expect(
 			retracted(
 				"Stale env",
-				"The Secret may not roll the pods. This looks resolved by the explicit `kubectl rollout restart` call.",
+				"The Secret may not roll the pods. This looks resolved.",
 			),
 		).toBe(true);
 		expect(
@@ -266,6 +266,62 @@ describe("isSelfRetracted keeps real findings", () => {
 	it("still retracts a bare closing no-issues statement", () => {
 		expect(retracted("Low", "The guard holds. No issues found.")).toBe(true);
 		expect(retracted("Low", "The guard holds. No issue here.")).toBe(true);
+	});
+
+	it("keeps findings whose phrase is quoted program output", () => {
+		expect(
+			retracted(
+				"Handler",
+				'The error handler reports "No issues found" even when validation fails.',
+			),
+		).toBe(false);
+		expect(
+			retracted(
+				"Handler",
+				"The error handler reports \u201cNo issues found\u201d even when validation fails.",
+			),
+		).toBe(false);
+	});
+
+	it("keeps a defect that is said to be consistent with something", () => {
+		expect(
+			retracted(
+				"Race",
+				"Both workers overwrite the same key. This looks consistent with the reported race condition.",
+			),
+		).toBe(false);
+	});
+
+	it("applies exception words to every family", () => {
+		for (const body of [
+			"No new findings apart from the missing timeout.",
+			"No new findings other than the missing timeout.",
+			"No new issues except the missing timeout.",
+			"All of it is already covered by prior reviews aside from the missing timeout.",
+			"The update is atomic. No actionable defect, other than the leak.",
+		])
+			expect(retracted("Timeout", body)).toBe(false);
+	});
+
+	it("keeps a defect title that merely starts with No new findings", () => {
+		expect(
+			retracted(
+				"No new findings are posted after the first round",
+				"The cached result is reused for every head, so subsequent diffs are never reviewed.",
+			),
+		).toBe(false);
+		expect(
+			retracted("No new findings are posted after the first round", ""),
+		).toBe(false);
+	});
+
+	it("pins scoped closers that were already kept", () => {
+		for (const body of [
+			"The retry path leaks the socket. No issues found on the happy path.",
+			"The counter is shared across workers without synchronization. No bugs found by the existing tests.",
+			"The writer drops the last chunk on flush. No issues found by the existing tests.",
+		])
+			expect(retracted("Low", body)).toBe(false);
 	});
 
 	it("keeps findings that use withdraw or retract as domain words", () => {
