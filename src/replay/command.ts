@@ -3,6 +3,11 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fixtureId } from "./claims.js";
+import {
+	type ClassFile,
+	formatClassReport,
+	summarizeClasses,
+} from "./classify.js";
 import { type GhClient, ghCli } from "./gh.js";
 import { checkRecall } from "./guard.js";
 import { labelFixture } from "./label.js";
@@ -162,6 +167,35 @@ async function writeRecording(
 	return 0;
 }
 
+async function printClassReport(
+	dir: string,
+	out: (s: string) => void,
+): Promise<void> {
+	const names = (await readdir(dir)).filter((n) => n.endsWith(".classes.json"));
+	if (names.length === 0) return;
+	const files: ClassFile[] = [];
+	let rejectedTotal = 0;
+	let unadjudicatedLabels = 0;
+	for (const name of names.sort()) {
+		const file = JSON.parse(
+			await readFile(join(dir, name), "utf8"),
+		) as ClassFile;
+		files.push(file);
+		const labelsPath = join(dir, `${file.fixtureId}.labels.json`);
+		if (!existsSync(labelsPath)) continue;
+		const labels = JSON.parse(await readFile(labelsPath, "utf8")) as LabelFile;
+		for (const l of labels.labels) {
+			if (l.label === "rejected") rejectedTotal++;
+			else if (l.label === "unadjudicated") unadjudicatedLabels++;
+		}
+	}
+	out(
+		formatClassReport(
+			summarizeClasses(files, rejectedTotal, unadjudicatedLabels),
+		),
+	);
+}
+
 async function replayAll(
 	dir: string,
 	pipeline: ReplayPipeline,
@@ -198,6 +232,7 @@ async function replayAll(
 		if (guard.failures.length > 0) failed = true;
 	}
 	if (metrics.length > 0) out(formatReport(metrics, ids));
+	await printClassReport(dir, out);
 	out(`replayed ${metrics.length} fixture${metrics.length === 1 ? "" : "s"}`);
 	return failed ? 1 : 0;
 }

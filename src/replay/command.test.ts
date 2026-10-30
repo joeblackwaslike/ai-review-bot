@@ -85,6 +85,41 @@ describe("runReplay", () => {
 		expect(lines.join("\n")).toContain("replayed 1 fixture");
 	});
 
+	it("prints the false-positive class report when a classes file exists", async () => {
+		const dir = tmp();
+		const id = seed(dir);
+		const rec = (
+			claimId: string,
+			c: "filler" | "stale",
+			x: "filler" | "stale" | "other",
+		) => ({
+			claimId,
+			rules: c === "filler" ? ("filler" as const) : null,
+			claude: c,
+			codex: x,
+			final: c === x ? c : "unadjudicated",
+			reactionOnly: false,
+		});
+		writeFileSync(
+			join(dir, `${id}.classes.json`),
+			JSON.stringify({
+				fixtureId: id,
+				provisional: true,
+				records: [rec("a", "filler", "filler"), rec("b", "stale", "other")],
+			}),
+		);
+		const { lines, out } = collect();
+		expect(await runReplay([], { fixturesDir: dir, out })).toBe(0);
+		const text = lines.join("\n");
+		expect(text).toContain("classified 1 of 2 first-seen rejected");
+		expect(text).toMatch(/filler\s+1/);
+		expect(text).toMatch(/stale\s+0/);
+		expect(text).toContain("agreement 1 of 2");
+		expect(text).toContain("rules vs models: 1 of 1");
+		expect(text).toContain("unadjudicated 1");
+		expect(text).toContain("provisional");
+	});
+
 	it("exits 1 when the guard has a failure and 0 when only warnings", async () => {
 		const suppressA: ReplayPipeline = ({ claims }) => ({
 			posted: claims.filter((c) => c.id !== "a").map((c) => c.id),

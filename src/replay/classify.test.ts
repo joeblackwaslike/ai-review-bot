@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
 	type ClassFile,
 	firstSeenRejected,
+	formatClassReport,
 	isFillerText,
 	resolveFinal,
+	ruleAgreement,
 	ruleClass,
 	summarizeClasses,
 } from "./classify.js";
@@ -229,5 +231,64 @@ describe("committed Claude label files", () => {
 			total += n;
 		}
 		expect(total).toBe(46);
+	});
+});
+
+describe("ruleAgreement", () => {
+	const r = (
+		rules: ClassFile["records"][number]["rules"],
+		claude: ClassFile["records"][number]["claude"],
+		codex: ClassFile["records"][number]["codex"],
+	) => ({
+		claimId: "x",
+		rules,
+		claude,
+		codex,
+		final: resolveFinal({ claude, codex }),
+		reactionOnly: false,
+	});
+
+	it("counts records the rules fire on or both models call filler or stale", () => {
+		const files: ClassFile[] = [
+			{
+				fixtureId: "x",
+				provisional: true,
+				records: [
+					r("filler", "filler", "filler"),
+					r("stale", "other", "contradicted"),
+					r(null, "stale", "stale"),
+					r(null, "filler", "other"),
+					r(null, "other", "other"),
+				],
+			},
+		];
+		expect(ruleAgreement(files)).toEqual({ agreed: 1, of: 3 });
+	});
+});
+
+describe("formatClassReport", () => {
+	it("prints the denominator, repeats excluded and rules-vs-models", () => {
+		const s = {
+			counts: {
+				filler: 2,
+				stale: 1,
+				contradicted: 0,
+				speculative: 0,
+				other: 1,
+			},
+			classified: 4,
+			unadjudicated: 2,
+			rejectedTotal: 8,
+			unadjudicatedLabels: 3,
+			agreement: { agreed: 5, of: 6 },
+			ruleAgreement: { agreed: 1, of: 2 },
+		};
+		const text = formatClassReport(s);
+		expect(text).toContain(
+			"classified 4 of 6 first-seen rejected (8 rejected labels, 2 repeats excluded)",
+		);
+		expect(text).toContain("rules vs models: 1 of 2");
+		expect(text).toContain("agreement 5 of 6");
+		expect(text).toContain("unadjudicated 2 (+3 unadjudicated labels)");
 	});
 });

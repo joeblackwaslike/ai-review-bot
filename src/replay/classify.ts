@@ -36,6 +36,7 @@ export interface ClassSummary {
 	rejectedTotal: number;
 	unadjudicatedLabels: number;
 	agreement: { agreed: number; of: number };
+	ruleAgreement: { agreed: number; of: number };
 }
 
 const CLASSES: FalsePositiveClass[] = [
@@ -121,6 +122,29 @@ export function resolveFinal(
 	return r.claude !== null && r.claude === r.codex ? r.claude : "unadjudicated";
 }
 
+export function ruleAgreement(files: ClassFile[]): {
+	agreed: number;
+	of: number;
+} {
+	let agreed = 0;
+	let of = 0;
+	for (const rec of files.flatMap((x) => x.records)) {
+		const modelsAgree =
+			rec.claude !== null &&
+			rec.claude === rec.codex &&
+			(rec.claude === "filler" || rec.claude === "stale");
+		if (rec.rules === null && !modelsAgree) continue;
+		of++;
+		if (
+			rec.rules !== null &&
+			rec.rules === rec.claude &&
+			rec.rules === rec.codex
+		)
+			agreed++;
+	}
+	return { agreed, of };
+}
+
 export function summarizeClasses(
 	files: ClassFile[],
 	rejectedTotal: number,
@@ -148,15 +172,18 @@ export function summarizeClasses(
 		rejectedTotal,
 		unadjudicatedLabels,
 		agreement: { agreed, of },
+		ruleAgreement: ruleAgreement(files),
 	};
 }
 
 export function formatClassReport(s: ClassSummary): string {
+	const firstSeen = s.classified + s.unadjudicated;
 	return [
 		"false-positive classes (provisional)",
 		...CLASSES.map((c) => `  ${c.padEnd(13)} ${s.counts[c]}`),
-		`  classified ${s.classified} of ${s.rejectedTotal}`,
+		`  classified ${s.classified} of ${firstSeen} first-seen rejected (${s.rejectedTotal} rejected labels, ${s.rejectedTotal - firstSeen} repeats excluded)`,
 		`  agreement ${s.agreement.agreed} of ${s.agreement.of}`,
+		`  rules vs models: ${s.ruleAgreement.agreed} of ${s.ruleAgreement.of}`,
 		`  unadjudicated ${s.unadjudicated} (+${s.unadjudicatedLabels} unadjudicated labels)`,
 	].join("\n");
 }
