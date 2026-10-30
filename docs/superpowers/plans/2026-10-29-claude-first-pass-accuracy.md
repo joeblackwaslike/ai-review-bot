@@ -94,6 +94,8 @@
 
 ### Task 3: Drop self-retracted findings (amended after Task 2 data)
 
+**Status.** Built and measured, then retired from the merge path because the margin stayed thin by the spec's rule. The rule now lives in `src/replay/retraction-rule.ts` as a measurement only, and the merge and tuning changes below were removed. The spec Results section has the numbers. The text below records the plan as it was written.
+
 **Gate result.** First-seen rejected Claude findings, classified by Claude and Codex blind (agree on 39 of 46): contradicted 16, filler 15, other 8, unadjudicated 7, stale 0, speculative 0. Contradicted is the largest class but is author judgment, so no rule over the finding can detect it. Filler is the largest detectable class. It has two kinds: 7 short body-table findings ("No new findings beyond prior reviews") and 8 long inline findings that retract themselves in the last sentence ("No actionable defect found", "this is not itself a bug", "retracted"). Today's `isFillerText` reads only the title and first sentence and agrees with the models on 2 of 16.
 
 **Files:**

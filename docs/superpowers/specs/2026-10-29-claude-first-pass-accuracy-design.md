@@ -6,13 +6,15 @@ Context: sprint 4 of the review-accuracy epic (`ai-review-bot-w9b`). Shared deci
 
 ## Intent
 
-Sprints 1 to 3 stopped the reviewer from repeating itself. On the six replay fixtures the remaining non-convergence is new findings every round, and most of the Claude findings the author answered were rejected. Before anything is tuned, we need to know what kind of wrong those findings are. Then we fix the biggest kind, and only if we can show the fix removes rejected findings without removing fixed ones.
+Sprints 1 to 3 stopped the reviewer from repeating itself. On the six replay fixtures the remaining non-convergence is new findings every round, and most of the Claude findings the author answered were rejected. Before anything is tuned, we need to know what kind of wrong those findings are. Then we build a fix for the biggest kind a heuristic can detect, and ship it only if we can show it removes rejected findings without removing fixed ones.
+
+Outcome. The classification is done. The filler fix was built and measured and was not shipped, because its margin was thin by the rule in Choosing the fix. The Results section has the numbers and a recommendation.
 
 ## Goals
 
 - Classify every first-seen Claude finding that the author rejected, into stale, speculative, contradicted, filler, or other, with counts per class and the number classified.
 - Report how often two independent labelers agree, and how many items they disagree on.
-- Fix the largest class that a heuristic can detect, with a before and after on the replay harness and on the capped live tier.
+- Build and measure a fix for the largest class that a heuristic can detect, with a before and after on the replay harness and on the capped live tier, and ship it only if the margin holds.
 - Say which parts were measured and which were not.
 
 ## Non-goals
@@ -20,7 +22,7 @@ Sprints 1 to 3 stopped the reviewer from repeating itself. On the six replay fix
 - Sprint 5 (Vercel parity), sprint 6 (no-mistakes adapter), and the pre-existing defects in `ai-review-bot-4ez`.
 - Changing the set of review agents or skills, except where the classification shows one is the cause.
 - Tuning prompts or thresholds before the classification exists.
-- Any change to Codex's reviewer, except that the self-retraction filter in the shared merge applies to both bots because `REVIEWER_TUNING` is unified. On the six committed fixtures it removes 0 of the 58 fixed claims (17 Claude, 41 OpenAI) and 0 of the 56 OpenAI claims.
+- Any change to Codex's reviewer.
 
 ## Anti-goals
 
@@ -91,7 +93,7 @@ The fix is chosen after the classification exists, by this rule.
 - The offline margin has two numbers. Removals that hit a rejected claim in the class. Removals that hit a fixed claim, which must be zero. A removal that hits an unadjudicated claim is reported and not counted as a win.
 - If the margin is thin (for example, fewer than ten class members, or any removal of a fixed claim), no heuristic ships. The sprint then ships the classification and a recommendation.
 
-If filler wins, the likely fix is a deterministic post-filter in the merge path that drops findings whose own text says there is no defect. This is the third prevention bullet in the post-mortem. It is a guess until the counts exist.
+Filler won the ranking among detectable classes, so the likely fix was a deterministic post-filter in the merge path that drops findings whose own text says there is no defect. It was built and then retired by the last rule above. The Results section says why.
 
 ## Constraints
 
@@ -99,7 +101,6 @@ If filler wins, the likely fix is a deterministic post-filter in the merge path 
 - pnpm and Bun only. Implementers run no installs and use scoped biome fixes.
 - Every behavior test is written first and seen failing. The red output is quoted in the task report.
 - The recall guard and `negativePairs` must keep passing. The replay stays green.
-- The local review and audit CLI (`src/audit.ts`) do not apply the self-retraction filter, as with near-duplicate dedupe today; only the webhook, `watch` and `scheduleReview` paths that go through `buildReview` do.
 - Anything that reads or writes GitHub review state is checked against stealth-browser#1, ai-listings#74, and agent-skills#10, and test fakes assert the request shape.
 - Classification files are committed beside the fixtures and state whether they are provisional.
 
@@ -107,7 +108,7 @@ If filler wins, the likely fix is a deterministic post-filter in the merge path 
 
 - A table of counts per class, the number classified out of the rejected total, the number left out and why.
 - Labeler agreement as k of n, and the unadjudicated count.
-- The fix's before and after on `ai-review replay` and on `ai-review replay --live --max-cost 6`.
+- The candidate rule's margin on `ai-review replay` and its counts on `ai-review replay --live --max-cost 6`.
 - `pnpm typecheck`, `pnpm lint`, `pnpm test`.
 - A statement of what was not measured: the 61 unadjudicated claims, rounds with approximate diffs, the small sample, and the live tier's inability to score new findings.
 
@@ -115,7 +116,6 @@ If filler wins, the likely fix is a deterministic post-filter in the merge path 
 
 - The phrase list and hedge list for the deterministic rules, tuned against the fixtures and tested.
 - The classification file schema and the report layout.
-- Where in the merge path a post-filter sits, if one ships.
 
 ## Calls I made, for review
 
@@ -143,19 +143,23 @@ The deterministic rules agree with the two models on 12 of 15 where either side 
 
 Contradicted is the largest class and depends on the author's judgment, so no rule over the finding can detect it. Filler is the largest detectable class, and it splits into 7 short body findings ("No new findings beyond prior reviews") and 8 long inline findings whose last sentence retracts them.
 
-The fix is `isSelfRetracted` in `src/self-retraction.ts`, which drops P2 and P3 findings whose own text retracts them. It never drops P0, P1, or a finding marked not suppressible.
+The filler fix was built and measured and was not shipped. The rule is kept as a measurement in `src/replay/retraction-rule.ts`. The merge and the rest of `src/` outside `src/replay/` do not import it, and a test checks that.
+
+Why it was not shipped. The rule in Choosing the fix says a thin margin means no heuristic ships. A rule that allows words after the retraction phrase, such as a short tail, a scope word or an exception, kept dropping real findings. Reviewers of the pull request left 16 comments on the rule's source file across two heads of the branch, 11 on e3d1812 and 5 on 712ebcf, and each described a real finding the rule would drop. Every allowance had a counterexample, so patching tails did not converge. A rule that allows no words after the phrase is safe but catches almost nothing.
 
 What was measured:
 
-- Fixtures: 12 of 15 agreed-filler findings removed, 0 of 17 fixed, 0 other-rejected, 0 unadjudicated. This is a fit, because the phrases were written after reading all 15.
-- Same repo, 2,487 bot comments outside the fixtures: a first, broader version hit 52. Two blind judges agreed on 49 of them. 12 were actionable (nits and docs gaps that say "not a bug"), 37 were retractions, 3 were split. The broad phrases were removed. The current filter hits none of the 12 or the 3, and 14 of the 37. I tuned on this set, so it is no longer a held-out measure.
-- Fresh holdout, 467 bot comments from ai-listings and agent-skills on other PRs: the first narrowed version hit 5, with 4 judged retractions and 1 split. An "except" rule then removed the split one. The current filter hits 2, and both blind judges called both of them retractions. That is 2 of 2 on a small holdout, so it is weak evidence of precision.
-- A review of the branch found real findings that the first narrowing still dropped. All of those shapes are now negative tests.
-- Live tier, 6 rounds, 10 raw findings, 0 self-retracted, 0 matched to a labeled claim. It says nothing about precision.
+- Tail-allowing rule, the last version before retirement. On the fixtures it removed 12 of 15 agreed-filler findings and 0 of 17 fixed claims. That recall is a fit, because the phrases were written after reading all 15.
+- The same rule on 2,487 bot comments from this repository's own pull requests hit 14 of the 37 comments that two blind judges both called retractions. It hit none of the 12 they both called actionable and none of the 3 on which they split. I tuned on this set, so it is no longer held out.
+- The same rule on a fresh holdout of 467 comments hit 2, and both blind judges called both retractions. That is weak evidence of precision, and the later review rounds show it was not enough.
+- Tail-free rule, where the last unit must be only the retraction phrase. With one body unit it removed 5 of 15 filler findings on the fixtures, 0 of 17 fixed claims, 0 of the 37 retractions and had 0 hits on the 2,487 and 0 on the 467. With no limit on body length it removed 6 of 15 and hit 4 of the 37 and 1 of the 467, but then a bare "No issues found." after a stated defect is dropped.
+- Live tier, 6 rounds, 10 raw findings, 0 candidate retractions, 0 matched to a labeled claim. It says nothing about precision.
+
+Recommendation. The remaining lever is the model, not a post-filter. Two changes are worth measuring with the live tier. One is a structured "no defect" outcome in the output schema, so a reviewer with nothing to report returns no finding. The other is a prompt change that forbids findings whose conclusion is that nothing is wrong. Contradicted is 16 of 46 and depends on the author's judgment, so no heuristic can fix it.
 
 What was not measured:
 
-- Precision on the final rule beyond the sets above. The 52-hit set and the fixtures are tuned on.
+- Precision of any candidate rule beyond the sets above. The 52-hit set and the fixtures are tuned on.
 - The 61 unadjudicated labels and the 7 unadjudicated first-seen claims.
-- Any effect on first-pass accuracy of new findings. The filter hits about 1 percent of hosted-bot comments, so it is a backstop and does not make the reviewer more accurate.
+- Any effect on first-pass accuracy of new findings. No change ships, so none is expected.
 - The partial-review causes. The agent logs and the `ai-review:agents` marker did not exist when the six fixtures were recorded, and no Claude review on the three incident PRs carries the marker.
