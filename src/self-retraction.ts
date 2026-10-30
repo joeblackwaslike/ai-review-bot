@@ -3,13 +3,20 @@ export interface RetractionCandidate {
 	body: string;
 }
 
+export interface DroppableFinding extends RetractionCandidate {
+	severity?: string;
+	suppressible?: boolean;
+}
+
 interface PhraseFamily {
 	name: string;
 	pattern: RegExp;
-	lastSentenceOnly?: boolean;
 	wholeFindingOnly?: boolean;
 	keepIfExceptionFollows?: boolean;
+	maxWordsAfter?: number;
 }
+
+const NO_ACTIONABLE_AFTER_WORDS = 4;
 
 const PHRASE_FAMILIES: PhraseFamily[] = [
 	{
@@ -17,26 +24,31 @@ const PHRASE_FAMILIES: PhraseFamily[] = [
 		pattern:
 			/\bno (?:actionable (?:defects?|bugs?|issues?|problems?|findings?)|(?:issues?|defects?|bugs?|problems?) (?:found|here|identified))\b/i,
 		keepIfExceptionFollows: true,
+		maxWordsAfter: NO_ACTIONABLE_AFTER_WORDS,
 	},
 	{
 		name: "not-flagging",
 		pattern: /\bnot flagging (?:this )?as an? (?:defect|bug|issue)\b/i,
 	},
-	{ name: "retracted", pattern: /\b(?:retracted|withdrawn)\W*$/i },
+	{
+		name: "not-a-finding",
+		pattern: /\b(?:this|it) is not a finding\b/i,
+	},
+	{ name: "retracted", pattern: /(?:^|[.;:]\s*)(?:retracted|withdrawn)\W*$/i },
 	{
 		name: "withdrawing",
-		pattern: /\bwithdraw(?:ing|n)? (?:this|my|the) /i,
+		pattern:
+			/\bwithdrawing (?:this|my) (?:observation|finding|comment|concern|note)\b/i,
 	},
 	{
 		name: "looks-consistent-or-resolved",
 		pattern:
 			/\b(?:this|it|that) (?:now )?(?:looks|appears|seems) (?:internally )?(?:consistent|resolved|addressed)\b/i,
-		lastSentenceOnly: true,
 	},
 	{
 		name: "no-new-findings",
 		pattern:
-			/(?:^|[;:,\u2014\u2013]\s)no (?:new|additional|further) (?:[\w-]+ ){0,3}(?:findings?|issues?|concerns?|problems?)\b/i,
+			/^no (?:new|additional|further) (?:[\w-]+ ){0,3}(?:findings?|issues?|concerns?|problems?)\b|(?:^|[;:,—–]\s)no (?:new|additional|further) (?:[\w-]+ ){0,3}(?:findings?|issues?|concerns?|problems?)\b[^.]{0,40}\bbeyond (?:the )?(?:prior|previous|earlier)\b/i,
 		wholeFindingOnly: true,
 	},
 	{
@@ -48,7 +60,7 @@ const PHRASE_FAMILIES: PhraseFamily[] = [
 	{
 		name: "nothing-this-round",
 		pattern:
-			/(?:^|[;:,\u2014\u2013]\s)no (?:[\w-]+ ){0,2}(?:changes?|tests?) (?:this round|applicable)\b/i,
+			/(?:^|[;:,—–]\s)no (?:[\w-]+ ){0,2}(?:changes?|tests?) (?:this round|applicable)\b/i,
 		wholeFindingOnly: true,
 	},
 ];
@@ -56,52 +68,75 @@ const PHRASE_FAMILIES: PhraseFamily[] = [
 const EXCEPTION_FOLLOWS =
 	/^\s*(?:(?:found|identified|here|detected)\s+)?(?:beyond|other than|apart from|aside from|except)\b/i;
 
-const KEEP_AFTER_PHRASE =
-	/\b(?:but|however|although|though|unless|except|whereas|consider|should)\b|\b(?:just|only) (?:confirm|verify|check|make sure)\b|\bwould be (?:clearer|better|safer)\b|\bsuggest/i;
+const CONTRAST =
+	/\b(?:but|however|although|though|unless|except|whereas|yet|while)\b/i;
 
-function normalize(s: string): string {
+const KEEP_AFTER_PHRASE = new RegExp(
+	`${CONTRAST.source}|\\b(?:consider|should)\\b|\\b(?:just|only) (?:confirm|verify|check|make sure)\\b|\\bwould be (?:clearer|better|safer)\\b|\\bsuggest`,
+	"i",
+);
+
+const LIST_MARKER = /^\s*(?:[-*+•]|\d+[.)])\s+/;
+
+function units(s: string): string[] {
 	return s
 		.replace(/```[\s\S]*?```/g, " ")
 		.replace(/`[^`]*`/g, " ")
-		.replace(/[*_]+/g, "")
-		.replace(/\s+/g, " ")
-		.trim();
+		.split("\n")
+		.map((line) =>
+			line
+				.replace(LIST_MARKER, "")
+				.replace(/[*_]+/g, "")
+				.replace(/\s+/g, " ")
+				.trim(),
+		)
+		.filter(Boolean)
+		.flatMap((line) => line.split(/(?<=[.!?])\s+/));
 }
 
-function familiesInTail(text: string): string[] {
-	const sentences = text.split(/(?<=[.!?])\s+/).filter(Boolean);
-	const tail = sentences.slice(-2);
-	const last = tail[tail.length - 1];
-	const window = tail.join(" ");
-	return PHRASE_FAMILIES.filter(
-		({
-			pattern,
-			lastSentenceOnly,
-			wholeFindingOnly,
-			keepIfExceptionFollows,
-		}) => {
-			if (wholeFindingOnly && sentences.length !== 1) return false;
-			const scope = lastSentenceOnly ? last : window;
-			const match = scope ? pattern.exec(scope) : null;
-			if (!match) return false;
-			const rest = scope.slice(match.index + match[0].length);
-			if (keepIfExceptionFollows && EXCEPTION_FOLLOWS.test(rest)) return false;
-			return !KEEP_AFTER_PHRASE.test(rest);
-		},
-	).map((f) => f.name);
+const wordCount = (s: string) => (s.match(/\b\w+\b/g) ?? []).length;
+
+function familiesInLastUnit(text: string): string[] {
+	const all = units(text);
+	const last = all[all.length - 1];
+	if (!last) return [];
+	return PHRASE_FAMILIES.filter((family) => {
+		if (family.wholeFindingOnly && all.length !== 1) return false;
+		const match = family.pattern.exec(last);
+		if (!match) return false;
+		const rest = last.slice(match.index + match[0].length);
+		if (CONTRAST.test(last.slice(0, match.index))) return false;
+		if (family.keepIfExceptionFollows && EXCEPTION_FOLLOWS.test(rest))
+			return false;
+		const opensTheWholeFinding = all.length === 1 && match.index === 0;
+		if (
+			family.maxWordsAfter !== undefined &&
+			!opensTheWholeFinding &&
+			wordCount(rest) > family.maxWordsAfter
+		)
+			return false;
+		return !KEEP_AFTER_PHRASE.test(rest);
+	}).map((f) => f.name);
 }
 
 export function retractionFamilies(f: RetractionCandidate): string[] {
 	return [
-		...new Set(
-			[f.title, f.body].flatMap((s) => familiesInTail(normalize(s ?? ""))),
-		),
+		...new Set([f.title, f.body].flatMap((s) => familiesInLastUnit(s ?? ""))),
 	];
 }
 
-/** True when a finding's own title or closing sentences say nothing is wrong,
+/** True when a finding's own title or closing sentence says nothing is wrong,
  * e.g. "No actionable defect found" or "this looks resolved by ...". Code
- * spans are ignored, and a contrast word after the phrase keeps the finding. */
+ * spans are ignored. A contrast word before or after the phrase keeps the
+ * finding, and so does a request or an exception after it. */
 export function isSelfRetracted(f: RetractionCandidate): boolean {
 	return retractionFamilies(f).length > 0;
+}
+
+/** The merge and the margin report share this rule. P0 and P1 findings and
+ * anything marked not suppressible are never dropped. */
+export function droppedFamilies(f: DroppableFinding): string[] {
+	if (f.severity !== "P2" && f.severity !== "P3") return [];
+	if (f.suppressible === false) return [];
+	return retractionFamilies(f);
 }

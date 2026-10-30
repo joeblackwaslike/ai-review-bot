@@ -182,14 +182,13 @@ describe("filterMargin on the committed Claude fixtures", () => {
 				"r3:body:2",
 				"r4:body:4",
 			],
-			"ai-listings": ["r3:c4371932215:1", "r3:c4371932219:0"],
+			"ai-listings": ["r3:c4371932215:1"],
 			"stealth-browser": [
 				"r0:c4370502157:0",
 				"r0:c4370502157:1",
 				"r0:c4370502158:1",
 				"r0:c4370502170:1",
 				"r0:c4370502179:0",
-				"r1:c4370934163:0",
 			],
 		});
 	});

@@ -199,6 +199,50 @@ describe("isSelfRetracted keeps real findings", () => {
 		expect(retracted("No new findings beyond prior reviews", "")).toBe(true);
 	});
 
+	it("keeps real findings whose retraction-like phrase is not the closing words", () => {
+		const keep: [string, string][] = [
+			[
+				"Writer",
+				"No issues here in the parser. The writer drops the last chunk on flush.",
+			],
+			[
+				"Dates",
+				"This misparses '08' and breaks dates. No issues found in the rest of the file.",
+			],
+			[
+				"Retry",
+				"Although the happy path has no issues here, a retry loses the token.",
+			],
+			[
+				"Review",
+				"- the lock is skipped on retry\n- no issues found in the happy path\n- the token is logged in plaintext",
+			],
+			[
+				"Cache",
+				"The token cache is keyed by user id only, so tenants share entries; no additional issues found.",
+			],
+			[
+				"Threads",
+				"The counter is shared across workers. No bugs found by the existing tests, since they are single-threaded.",
+			],
+			[
+				"Handler",
+				"This now looks addressed in the old handler, yet the new handler at line 40 still skips it.",
+			],
+		];
+		for (const [title, body] of keep)
+			expect(retracted(title, body)).toBe(false);
+	});
+
+	it("keeps findings that use withdraw or retract as domain words", () => {
+		for (const body of [
+			"Concurrent requests can withdraw the same balance twice.",
+			"Token still valid after consent is withdrawn.",
+			"A token keeps working after consent is retracted.",
+		])
+			expect(retracted("Low", body)).toBe(false);
+	});
+
 	it("still catches literal retraction wording", () => {
 		expect(
 			retracted(

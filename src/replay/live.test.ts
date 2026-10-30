@@ -162,12 +162,17 @@ describe("runLiveTier", () => {
 					severity: "P0",
 				},
 				{ ...finding("Real issue"), body: "The socket is never closed." },
+				{
+					...finding("Lost write"),
+					body: "No actionable defect found.",
+					severity: "P1",
+				},
 			],
 		});
 		const report = await runLiveTier(opts);
-		expect(report.rounds[0]).toMatchObject({ raw: 3, retracted: 1 });
-		expect(lines.join("\n")).toContain("3 raw findings, 1 self-retracted");
-		expect(report.rounds[0]?.newUnlabeled).toBe(3);
+		expect(report.rounds[0]).toMatchObject({ raw: 4, retracted: 1 });
+		expect(lines.join("\n")).toContain("4 raw findings, 1 self-retracted");
+		expect(report.rounds[0]?.newUnlabeled).toBe(4);
 	});
 
 	it("marks a round approximate when fetchDiff says the history was rewritten", async () => {

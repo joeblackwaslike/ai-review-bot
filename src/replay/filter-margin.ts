@@ -1,4 +1,4 @@
-import { retractionFamilies } from "../self-retraction.js";
+import { droppedFamilies } from "../self-retraction.js";
 import { fixtureId } from "./claims.js";
 import type { ClassFile } from "./classify.js";
 import type { LabelFile, ReplayFixture } from "./types.js";
@@ -87,10 +87,11 @@ function marginFor(
 	for (const c of f.rounds.flatMap((r) => r.claims)) {
 		const bucket = bucketOf(c.id, labels, classes);
 		m[bucket].of++;
-		const families =
-			c.severity === "P0"
-				? []
-				: retractionFamilies({ title: c.title ?? "", body: c.text ?? "" });
+		const families = droppedFamilies({
+			title: c.title ?? "",
+			body: c.text ?? "",
+			severity: c.severity,
+		});
 		if (families.length === 0) continue;
 		m[bucket].hit++;
 		m.hitIds.push(c.id);

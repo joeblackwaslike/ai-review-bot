@@ -101,13 +101,14 @@
 - Modify: `src/replay/classify.ts` (`isFillerText` delegates to the shared detector so the rule and the filter are one definition), `src/review.ts` (`MergeOptions`, `MergeOutcome`, `mergeReviewsDetailed`, the call site near line 2349), `src/reviewer-tuning.ts`, `src/replay/classify.test.ts`, `src/replay/command.ts` plus a new `src/replay/filter-margin.ts`
 
 **Interfaces:**
-- Produces: `isSelfRetracted(f: { title: string; body: string }): boolean`. It strips fenced and inline code and markdown emphasis, then checks the title, the first sentence and the last two sentences of the body against a tested phrase list. A final sentence that contains a contrast ("but", "however", "although", "unless", "except") after the phrase does not count.
+- Produces: `isSelfRetracted(f: { title: string; body: string }): boolean`. It strips fenced and inline code and markdown emphasis, splits the text into units (each line or list item, then each sentence), and checks the last unit of the title and of the body against a tested phrase list. A phrase family that needs the whole finding (for example "no new findings") applies only when the title or body is a single sentence. "No actionable defect" must be within four words of the end unless it opens a one-sentence finding. A contrast word before or after the phrase keeps the finding (but, however, although, though, unless, except, whereas, yet, while), as do a request after it (consider, should, just confirm) and an exception after it (beyond, other than, apart from, aside from, except).
+- Produces: `droppedFamilies(f)`, the shared drop rule: only P2 and P3 findings, and never one marked `suppressible: false`.
 - Produces: `MergeOptions.dropSelfRetracted?: boolean`, `MergeOutcome.retracted: number`, `ReviewerTuning.dropSelfRetracted: boolean` (true).
 - Produces: `filterMargin(fixtures, labelFiles, classFiles)` returning, per fixture and total, hits among agreed-filler, hits among other classes, hits among unadjudicated labels, and hits among `fixed` claims.
 - Consumes: Task 1 and 2 outputs.
 
 **Rules:**
-- The filter never drops a P0 finding.
+- The filter never drops a P0 or P1 finding, or one marked not suppressible.
 - It runs before the same-claim dedupe, on both general findings and inline comments, so event aggregation sees only surviving findings. A round where every finding is dropped yields the zero-finding result the merge already handles.
 - The count is returned in `MergeOutcome.retracted` and logged where `collapsed` is logged; nothing is dropped silently.
 - Hard assertion in a test: zero hits among the 17 `fixed` Claude claims, over claim text (`PostedClaim.text` as body, `title` as title).

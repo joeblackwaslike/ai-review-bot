@@ -11,7 +11,12 @@ import {
 	summarizeClasses,
 } from "./classify.js";
 import { claim, makeFixture, makeLabel, makeLabels } from "./testkit.js";
-import type { CommitMeta, LabelFile, ThreadEvidence } from "./types.js";
+import type {
+	CommitMeta,
+	LabelFile,
+	ReplayFixture,
+	ThreadEvidence,
+} from "./types.js";
 
 const commit = (sha: string, path = "a.ts", ranges: [number, number][] = []) =>
 	({
@@ -302,5 +307,29 @@ describe("formatClassReport", () => {
 		expect(text).toContain("rules vs models: 1 of 2");
 		expect(text).toContain("agreement 5 of 6");
 		expect(text).toContain("unadjudicated 2 (+3 unadjudicated labels)");
+	});
+});
+
+describe("committed class files", () => {
+	const dir = new URL("./fixtures/", import.meta.url);
+	const read = <T>(name: string): T =>
+		JSON.parse(readFileSync(new URL(name, dir), "utf8")) as T;
+
+	it.each([
+		"joeblackwaslike__agent-skills__10__anthropic",
+		"joeblackwaslike__ai-listings__74__anthropic",
+		"joeblackwaslike__stealth-browser__1__anthropic",
+	])("%s stores the rules result ruleClass gives today", (id) => {
+		const classes = read<ClassFile>(`${id}.classes.json`);
+		const fixture = read<ReplayFixture>(`${id}.json`);
+		const labels = read<LabelFile>(`${id}.labels.json`);
+		const claims = fixture.rounds.flatMap((r) => r.claims);
+		for (const rec of classes.records) {
+			const c = claims.find((x) => x.id === rec.claimId);
+			const label = labels.labels.find((l) => l.claimId === rec.claimId);
+			if (!c || !label)
+				throw new Error(`missing claim or label ${rec.claimId}`);
+			expect(rec.rules, rec.claimId).toBe(ruleClass(fixture, c, label));
+		}
 	});
 });

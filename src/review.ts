@@ -38,7 +38,7 @@ import {
 	reasoningProviderOptions,
 	routeModel,
 } from "./router.js";
-import { isSelfRetracted } from "./self-retraction.js";
+import { droppedFamilies } from "./self-retraction.js";
 import { detectTier2Skills, TIER2_DETECTORS } from "./tier2.js";
 import {
 	fetchDeltaMeta,
@@ -569,25 +569,55 @@ export interface MergeOutcome {
 	collapsed: number;
 	/** How many findings were dropped because their own text retracts them. */
 	retracted: number;
+	/** Each dropped finding with the phrase families that matched, so the
+	 * caller can log exactly what left the review. */
+	retractedFindings: RetractedFinding[];
+}
+
+export interface RetractedFinding {
+	title: string;
+	path: string | null;
+	line: number | null;
+	severity: string;
+	families: string[];
 }
 
 function dropRetractedFindings(agentResults: ModelReview[]): {
 	results: ModelReview[];
-	retracted: number;
+	retractedFindings: RetractedFinding[];
 } {
-	let retracted = 0;
-	const keep = (f: { title: string; body: string; severity: string }) => {
-		const drop = f.severity !== "P0" && isSelfRetracted(f);
-		if (drop) retracted++;
-		return !drop;
-	};
+	const retractedFindings: RetractedFinding[] = [];
+	const keeper =
+		(
+			location: (f: ModelFinding | ModelInlineComment) => {
+				path: string | null;
+				line: number | null;
+			},
+		) =>
+		(f: ModelFinding | ModelInlineComment) => {
+			const families = droppedFamilies(f);
+			if (families.length === 0) return true;
+			retractedFindings.push({
+				title: f.title,
+				...location(f),
+				severity: f.severity,
+				families,
+			});
+			return false;
+		};
 	const results = agentResults.map((r) => {
-		const general_findings = r.general_findings.filter(keep);
-		const inline_comments = r.inline_comments.filter(keep);
-		const droppedAny =
-			general_findings.length + inline_comments.length <
-			r.general_findings.length + r.inline_comments.length;
+		const general_findings = r.general_findings.filter(
+			keeper(() => ({ path: null, line: null })),
+		);
+		const inline_comments = r.inline_comments.filter(
+			keeper((f) => {
+				const c = f as ModelInlineComment;
+				return { path: c.path, line: c.line };
+			}),
+		);
 		const survivors = general_findings.length + inline_comments.length;
+		const droppedAny =
+			survivors < r.general_findings.length + r.inline_comments.length;
 		return {
 			...r,
 			event: droppedAny && survivors === 0 ? "COMMENT" : r.event,
@@ -595,7 +625,7 @@ function dropRetractedFindings(agentResults: ModelReview[]): {
 			inline_comments,
 		} as ModelReview;
 	});
-	return { results, retracted };
+	return { results, retractedFindings };
 }
 
 export function mergeReviews(
@@ -611,11 +641,11 @@ export function mergeReviewsDetailed(
 	resolved: Set<string> = new Set(),
 	options: MergeOptions = {},
 ): MergeOutcome {
-	let retracted = 0;
+	let retractedFindings: RetractedFinding[] = [];
 	if (options.dropSelfRetracted) {
 		const dropped = dropRetractedFindings(agentResults);
 		agentResults = dropped.results;
-		retracted = dropped.retracted;
+		retractedFindings = dropped.retractedFindings;
 	}
 	const isResolvedGeneral = (title: string) =>
 		resolved.has(`general:${title.toLowerCase().trim()}`);
@@ -723,7 +753,8 @@ export function mergeReviewsDetailed(
 	return {
 		review: { event, general_findings: merged_general, inline_comments },
 		collapsed,
-		retracted,
+		retracted: retractedFindings.length,
+		retractedFindings,
 		inlineAliases,
 	};
 }
@@ -2390,6 +2421,9 @@ export async function buildReview(
 		dropSelfRetracted: tuning.dropSelfRetracted,
 	});
 	const modelReview = mergeOutcome.review;
+	for (const dropped of mergeOutcome.retractedFindings) {
+		console.log("dropped self-retracted finding", dropped);
+	}
 	if (mergeOutcome.retracted > 0) {
 		console.log("dropped self-retracted findings", {
 			retracted: mergeOutcome.retracted,

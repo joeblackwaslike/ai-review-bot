@@ -20,7 +20,7 @@
 		},
 		{
 			"claimId": "r3:c4371932215:1",
-			"rules": null,
+			"rules": "filler",
 			"claude": "filler",
 			"codex": "filler",
 			"reactionOnly": false,

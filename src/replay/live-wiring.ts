@@ -1,6 +1,7 @@
 import { runAuditPass } from "../audit.js";
 import { resolveAnthropicAuth, resolveOpenAIAuth } from "../auth.js";
 import { computeCost } from "../models.js";
+import type { ModelReview } from "../review.js";
 import { routeModel } from "../router.js";
 import type { GhClient } from "./gh.js";
 import type { LiveFinding, LiveOptions } from "./live.js";
@@ -12,6 +13,27 @@ const EXPECTED_COMPLETION_TOKENS = 2000;
 
 interface CompareResponse {
 	files?: { filename: string; patch?: string }[];
+}
+
+export function toLiveFindings(review: ModelReview): LiveFinding[] {
+	return [
+		...review.inline_comments.map((c) => ({
+			title: c.title,
+			path: c.path,
+			line: c.line,
+			body: c.body,
+			severity: c.severity,
+			suppressible: c.suppressible,
+		})),
+		...review.general_findings.map((g) => ({
+			title: g.title,
+			path: null,
+			line: null,
+			body: g.body,
+			severity: g.severity,
+			suppressible: g.suppressible,
+		})),
+	];
 }
 
 type LiveWiring = Pick<LiveOptions, "review" | "estimateCost" | "fetchDiff">;
@@ -62,18 +84,7 @@ export function buildLiveWiring(
 				meta,
 				auth,
 			});
-			return [
-				...review.inline_comments.map((c) => ({
-					title: c.title,
-					path: c.path,
-					line: c.line,
-				})),
-				...review.general_findings.map((g) => ({
-					title: g.title,
-					path: null,
-					line: null,
-				})),
-			];
+			return toLiveFindings(review);
 		},
 	};
 }

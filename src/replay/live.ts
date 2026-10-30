@@ -1,5 +1,5 @@
 import { isSameClaim } from "../claim-dedupe.js";
-import { isSelfRetracted } from "../self-retraction.js";
+import { droppedFamilies } from "../self-retraction.js";
 import type { LabelFile, ReplayFixture, Round } from "./types.js";
 
 export interface LiveFinding {
@@ -8,6 +8,7 @@ export interface LiveFinding {
 	line: number | null;
 	body?: string;
 	severity?: string;
+	suppressible?: boolean;
 }
 
 export interface LiveRoundReport {
@@ -90,9 +91,7 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 			newUnlabeled: 0,
 			raw: findings.length,
 			retracted: findings.filter(
-				(f) =>
-					f.severity !== "P0" &&
-					isSelfRetracted({ title: f.title, body: f.body ?? "" }),
+				(f) => droppedFamilies({ ...f, body: f.body ?? "" }).length > 0,
 			).length,
 			approximate: d.approximate,
 		};

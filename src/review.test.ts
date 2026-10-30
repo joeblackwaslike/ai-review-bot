@@ -2833,7 +2833,7 @@ describe("mergeReviewsDetailed — self-retracted findings", () => {
 	const finding = (
 		title: string,
 		body: string,
-		severity: "P0" | "P3" = "P3",
+		severity: "P0" | "P1" | "P3" = "P3",
 	) => ({
 		title,
 		body,
@@ -2921,6 +2921,68 @@ describe("mergeReviewsDetailed — self-retracted findings", () => {
 			dropSelfRetracted: true,
 		});
 		expect(out.review.event).toBe("COMMENT");
+	});
+
+	it("never drops a P1 either", () => {
+		const p1 = buildModelReview({
+			event: "REQUEST_CHANGES",
+			general_findings: [finding("Lost write", RETRACT, "P1")],
+		});
+		const out = mergeReviewsDetailed([p1], new Set(), {
+			dropSelfRetracted: true,
+		});
+		expect(out.retracted).toBe(0);
+		expect(out.review.general_findings).toHaveLength(1);
+	});
+
+	it("keeps a finding marked not suppressible", () => {
+		const locked = buildModelReview({
+			event: "COMMENT",
+			general_findings: [
+				{ ...finding("Pinned", RETRACT), suppressible: false },
+			],
+		});
+		const out = mergeReviewsDetailed([locked], new Set(), {
+			dropSelfRetracted: true,
+		});
+		expect(out.retracted).toBe(0);
+		expect(out.review.general_findings).toHaveLength(1);
+	});
+
+	it("keeps REQUEST_CHANGES from an agent that had no findings to drop", () => {
+		const blocker = buildModelReview({ event: "REQUEST_CHANGES" });
+		const other = buildModelReview({
+			event: "COMMENT",
+			general_findings: [
+				finding("Real general issue", "A 429 aborts the run."),
+			],
+		});
+		const out = mergeReviewsDetailed([blocker, other], new Set(), {
+			dropSelfRetracted: true,
+		});
+		expect(out.review.event).toBe("REQUEST_CHANGES");
+	});
+
+	it("reports the matched families for each dropped finding", () => {
+		const out = mergeReviewsDetailed([review()], new Set(), {
+			dropSelfRetracted: true,
+		});
+		expect(out.retractedFindings).toEqual([
+			{
+				title: "Slot accounting",
+				path: null,
+				line: null,
+				severity: "P3",
+				families: ["no-actionable-defect"],
+			},
+			{
+				title: "Boundary",
+				path: "src/a.ts",
+				line: 3,
+				severity: "P2",
+				families: ["no-actionable-defect"],
+			},
+		]);
 	});
 
 	it("never drops a P0, even with a retracting tail", () => {
@@ -3370,6 +3432,50 @@ describe("strict evidence rules propagation", () => {
 			expect(call[2]).toEqual({ strictEvidenceRules: true });
 		}
 		expect(mockBuildAgentSystemPrompt).toHaveBeenCalled();
+	});
+});
+
+describe("self-retraction propagation", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildAgentSystemPrompt.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+	});
+
+	it("drops a retracted finding through buildReview", async () => {
+		mockGenerateObject.mockImplementation(async () =>
+			mockGenerateObject.mock.calls.length <= TIER1_SKILLS.length
+				? buildGenerateObjectResponse(
+						buildModelReview({
+							event: "COMMENT",
+							general_findings: [
+								{
+									title: "Slot accounting",
+									body: "The slot is held while waiting. No actionable defect found.",
+									severity: "P3",
+									category: "style",
+									confidence: 0.8,
+									evidence: "See diff.",
+									suppressible: true,
+								},
+							],
+						}),
+					)
+				: {
+						object: { summary: "Nothing." },
+						usage: { inputTokens: 10, outputTokens: 5 },
+					},
+		);
+
+		const result = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			provider: "anthropic" as const,
+		});
+
+		expect(result?.event).toBe("APPROVE");
+		expect(result?.body ?? "").not.toContain("Slot accounting");
 	});
 });
 

@@ -4,7 +4,7 @@
 	"records": [
 		{
 			"claimId": "r0:body:0",
-			"rules": null,
+			"rules": "filler",
 			"claude": "filler",
 			"codex": "filler",
 			"reactionOnly": false,
@@ -20,7 +20,7 @@
 		},
 		{
 			"claimId": "r0:body:5",
-			"rules": null,
+			"rules": "filler",
 			"claude": "filler",
 			"codex": "filler",
 			"reactionOnly": false,
@@ -36,7 +36,7 @@
 		},
 		{
 			"claimId": "r1:body:1",
-			"rules": null,
+			"rules": "filler",
 			"claude": "filler",
 			"codex": "filler",
 			"reactionOnly": false,
@@ -76,7 +76,7 @@
 		},
 		{
 			"claimId": "r3:body:0",
-			"rules": null,
+			"rules": "filler",
 			"claude": "filler",
 			"codex": "filler",
 			"reactionOnly": false,
@@ -92,7 +92,7 @@
 		},
 		{
 			"claimId": "r3:body:2",
-			"rules": null,
+			"rules": "filler",
 			"claude": "filler",
 			"codex": "filler",
 			"reactionOnly": false,

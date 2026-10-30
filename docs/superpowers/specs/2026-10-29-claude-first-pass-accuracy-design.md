@@ -20,7 +20,7 @@ Sprints 1 to 3 stopped the reviewer from repeating itself. On the six replay fix
 - Sprint 5 (Vercel parity), sprint 6 (no-mistakes adapter), and the pre-existing defects in `ai-review-bot-4ez`.
 - Changing the set of review agents or skills, except where the classification shows one is the cause.
 - Tuning prompts or thresholds before the classification exists.
-- Any change to Codex's reviewer.
+- Any change to Codex's reviewer, except that the self-retraction filter in the shared merge applies to both bots because `REVIEWER_TUNING` is unified. On the six committed fixtures it removes 0 of the 58 fixed claims (17 Claude, 41 OpenAI) and 0 of the 56 OpenAI claims.
 
 ## Anti-goals
 
@@ -99,6 +99,7 @@ If filler wins, the likely fix is a deterministic post-filter in the merge path 
 - pnpm and Bun only. Implementers run no installs and use scoped biome fixes.
 - Every behavior test is written first and seen failing. The red output is quoted in the task report.
 - The recall guard and `negativePairs` must keep passing. The replay stays green.
+- The local review and audit CLI (`src/audit.ts`) do not apply the self-retraction filter, as with near-duplicate dedupe today; only the webhook, `watch` and `scheduleReview` paths that go through `buildReview` do.
 - Anything that reads or writes GitHub review state is checked against stealth-browser#1, ai-listings#74, and agent-skills#10, and test fakes assert the request shape.
 - Classification files are committed beside the fixtures and state whether they are provisional.
 
