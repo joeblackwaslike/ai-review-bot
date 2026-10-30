@@ -2829,6 +2829,114 @@ describe("mergeReviewsDetailed — cross-category dedup", () => {
 	});
 });
 
+describe("mergeReviewsDetailed — self-retracted findings", () => {
+	const finding = (
+		title: string,
+		body: string,
+		severity: "P0" | "P3" = "P3",
+	) => ({
+		title,
+		body,
+		severity,
+		category: "style" as const,
+		confidence: 0.8,
+		evidence: "See diff.",
+		suppressible: severity !== "P0",
+	});
+	const RETRACT = "The slot is held while waiting. No actionable defect found.";
+	const review = () =>
+		buildModelReview({
+			event: "REQUEST_CHANGES",
+			general_findings: [
+				finding("Slot accounting", RETRACT),
+				finding("Real general issue", "A 429 aborts the whole run."),
+			],
+			inline_comments: [
+				buildInlineComment({
+					path: "src/a.ts",
+					line: 3,
+					title: "Boundary",
+					body: RETRACT,
+				}),
+				buildInlineComment({
+					path: "src/a.ts",
+					line: 30,
+					title: "Real inline issue",
+					body: "The socket is never closed on the error path.",
+				}),
+			],
+		});
+
+	it("drops retracted general and inline findings and counts them", () => {
+		const out = mergeReviewsDetailed([review()], new Set(), {
+			dropSelfRetracted: true,
+		});
+		expect(out.retracted).toBe(2);
+		expect(out.review.general_findings.map((f) => f.title)).toEqual([
+			"Real general issue",
+		]);
+		expect(out.review.inline_comments.map((c) => c.title)).toEqual([
+			"Real inline issue",
+		]);
+	});
+
+	it("keeps them when the option is off", () => {
+		const out = mergeReviewsDetailed([review()]);
+		expect(out.retracted).toBe(0);
+		expect(out.review.general_findings).toHaveLength(2);
+		expect(out.review.inline_comments).toHaveLength(2);
+	});
+
+	it("returns an empty COMMENT review when every finding is retracted", () => {
+		const only = buildModelReview({
+			event: "REQUEST_CHANGES",
+			general_findings: [finding("Slot accounting", RETRACT)],
+			inline_comments: [
+				buildInlineComment({ title: "Boundary", body: RETRACT }),
+			],
+		});
+		const out = mergeReviewsDetailed([only], new Set(), {
+			dropSelfRetracted: true,
+		});
+		expect(out.retracted).toBe(2);
+		expect(out.review).toEqual({
+			event: "COMMENT",
+			general_findings: [],
+			inline_comments: [],
+		});
+	});
+
+	it("does not let a retracted-only agent's REQUEST_CHANGES block the round", () => {
+		const blocker = buildModelReview({
+			event: "REQUEST_CHANGES",
+			general_findings: [finding("Slot accounting", RETRACT)],
+		});
+		const other = buildModelReview({
+			event: "COMMENT",
+			general_findings: [
+				finding("Real general issue", "A 429 aborts the run."),
+			],
+		});
+		const out = mergeReviewsDetailed([blocker, other], new Set(), {
+			dropSelfRetracted: true,
+		});
+		expect(out.review.event).toBe("COMMENT");
+	});
+
+	it("never drops a P0, even with a retracting tail", () => {
+		const p0 = buildModelReview({
+			event: "REQUEST_CHANGES",
+			general_findings: [finding("Auth bypass", RETRACT, "P0")],
+		});
+		const out = mergeReviewsDetailed([p0], new Set(), {
+			dropSelfRetracted: true,
+		});
+		expect(out.retracted).toBe(0);
+		expect(out.review.general_findings).toHaveLength(1);
+		expect(out.review.event).toBe("REQUEST_CHANGES");
+	});
+});
+
 describe("classifyRefusal", () => {
 	// Both conditions arrive as HTTP 429 and need opposite responses from a
 	// human, so quota must win over rate limit whenever both could match.

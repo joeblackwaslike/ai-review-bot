@@ -147,6 +147,29 @@ describe("runLiveTier", () => {
 		expect(text).not.toMatch(/\d%/);
 	});
 
+	it("counts raw and self-retracted findings per round without dropping them", async () => {
+		const { opts, lines } = base({
+			rounds: [0],
+			review: async () => [
+				{
+					...finding("Queue slot"),
+					body: "It is intended. No actionable defect found.",
+					severity: "P3",
+				},
+				{
+					...finding("Auth bypass"),
+					body: "No actionable defect found.",
+					severity: "P0",
+				},
+				{ ...finding("Real issue"), body: "The socket is never closed." },
+			],
+		});
+		const report = await runLiveTier(opts);
+		expect(report.rounds[0]).toMatchObject({ raw: 3, retracted: 1 });
+		expect(lines.join("\n")).toContain("3 raw findings, 1 self-retracted");
+		expect(report.rounds[0]?.newUnlabeled).toBe(3);
+	});
+
 	it("marks a round approximate when fetchDiff says the history was rewritten", async () => {
 		const { opts } = base({
 			rounds: [0],

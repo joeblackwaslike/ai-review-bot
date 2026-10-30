@@ -36,8 +36,8 @@ const thread = (
 describe("isFillerText", () => {
 	it.each([
 		["No new findings beyond prior reviews", ""],
-		["Nothing to flag", ""],
-		["Summary", "This matches the design. More text."],
+		["No actionable defect found", ""],
+		["Summary", "Reviewed the diff. No issue found here."],
 		["No code changes this round", ""],
 	])("is true for %s", (title, text) => {
 		expect(isFillerText(title, text)).toBe(true);
@@ -54,9 +54,21 @@ describe("isFillerText", () => {
 		expect(isFillerText(title, text)).toBe(false);
 	});
 
-	it("only looks at the first sentence of the text", () => {
+	it("shares the self-retraction definition, including closing sentences", () => {
 		expect(
-			isFillerText("Real", "Broken here. Nothing to flag elsewhere."),
+			isFillerText(
+				"Queue slot",
+				"A long analysis of the slot accounting. It is intended. No actionable defect found.",
+			),
+		).toBe(true);
+	});
+
+	it("does not read an opening phrase of a long text as a retraction", () => {
+		expect(
+			isFillerText(
+				"Real",
+				"No new findings in this file. The retry loses the token. Add a guard.",
+			),
 		).toBe(false);
 	});
 });
@@ -119,7 +131,7 @@ describe("ruleClass", () => {
 
 	it("returns filler for filler text and tolerates empty text and no thread", () => {
 		const f = makeFixture([["a"]]);
-		const c = { ...f.rounds[0].claims[0], title: "Nothing to flag", text: "" };
+		const c = { ...f.rounds[0].claims[0], title: "No new findings", text: "" };
 		expect(ruleClass(f, c, makeLabel("a", "rejected"))).toBe("filler");
 		const plain = { ...claim("p", 0), title: "Real", text: "" };
 		expect(ruleClass(f, plain, makeLabel("p", "rejected"))).toBe(null);
@@ -127,7 +139,7 @@ describe("ruleClass", () => {
 
 	it("never classifies a fixed claim", () => {
 		const f = makeFixture([["a"]]);
-		const c = { ...f.rounds[0].claims[0], title: "Nothing to flag", text: "" };
+		const c = { ...f.rounds[0].claims[0], title: "No new findings", text: "" };
 		expect(ruleClass(f, c, makeLabel("a", "fixed"))).toBe(null);
 	});
 });

@@ -1,3 +1,4 @@
+import { isSelfRetracted } from "../self-retraction.js";
 import type {
 	ClaimLabel,
 	LabelFile,
@@ -47,26 +48,8 @@ const CLASSES: FalsePositiveClass[] = [
 	"other",
 ];
 
-const FILLER_PATTERNS: RegExp[] = [
-	/^(?:there (?:are|is) )?no (?:new |further |additional |other |remaining )*(?:code )?(?:findings?|issues?|concerns?|problems?|changes?|bugs?)\b/i,
-	/^nothing (?:to (?:flag|report|add|fix|change|worry)|is wrong|else|new|found)\b/i,
-	/\b(?:matches|consistent with|aligns with|conforms to) the (?:design|spec|existing|intended|documented)\b/i,
-	/^(?:looks good|lgtm|all good|no action (?:needed|required))\b/i,
-];
-
-function stripCode(s: string): string {
-	return s.replace(/```[\s\S]*?```/g, " ").replace(/`[^`]*`/g, " ");
-}
-
-function firstSentence(s: string): string {
-	const clean = stripCode(s).trim();
-	return clean.split(/(?<=[.!?])\s/)[0] ?? "";
-}
-
 export function isFillerText(title: string, text: string): boolean {
-	return [firstSentence(title), firstSentence(text)].some((s) =>
-		FILLER_PATTERNS.some((p) => p.test(s.trim())),
-	);
+	return isSelfRetracted({ title, body: text });
 }
 
 function findThread(f: ReplayFixture, c: PostedClaim) {

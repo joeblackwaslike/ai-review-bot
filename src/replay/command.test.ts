@@ -118,6 +118,17 @@ describe("runReplay", () => {
 		expect(text).toContain("rules vs models: 1 of 1");
 		expect(text).toContain("unadjudicated 1");
 		expect(text).toContain("provisional");
+		expect(text).toMatch(
+			/self-retraction filter: removes 0 of \d+ filler, 0 other-rejected, 0 unadjudicated, 0 of \d+ fixed/,
+		);
+	});
+
+	it("prints no filter margin when there are no classes files", async () => {
+		const dir = tmp();
+		seed(dir);
+		const { lines, out } = collect();
+		expect(await runReplay([], { fixturesDir: dir, out })).toBe(0);
+		expect(lines.join("\n")).not.toContain("self-retraction filter");
 	});
 
 	it("exits 1 when the guard has a failure and 0 when only warnings", async () => {

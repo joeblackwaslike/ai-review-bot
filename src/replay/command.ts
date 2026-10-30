@@ -8,6 +8,7 @@ import {
 	formatClassReport,
 	summarizeClasses,
 } from "./classify.js";
+import { filterMargin, formatMargin } from "./filter-margin.js";
 import { type GhClient, ghCli } from "./gh.js";
 import { checkRecall } from "./guard.js";
 import { labelFixture } from "./label.js";
@@ -170,9 +171,9 @@ async function writeRecording(
 async function printClassReport(
 	dir: string,
 	out: (s: string) => void,
-): Promise<void> {
+): Promise<ClassFile[]> {
 	const names = (await readdir(dir)).filter((n) => n.endsWith(".classes.json"));
-	if (names.length === 0) return;
+	if (names.length === 0) return [];
 	const files: ClassFile[] = [];
 	let rejectedTotal = 0;
 	let unadjudicatedLabels = 0;
@@ -194,6 +195,7 @@ async function printClassReport(
 			summarizeClasses(files, rejectedTotal, unadjudicatedLabels),
 		),
 	);
+	return files;
 }
 
 async function replayAll(
@@ -210,6 +212,7 @@ async function replayAll(
 	}
 	const metrics = [];
 	const ids: string[] = [];
+	const loaded: { fixture: ReplayFixture; labels: LabelFile }[] = [];
 	let failed = false;
 	for (const name of files) {
 		const f = JSON.parse(
@@ -226,13 +229,28 @@ async function replayAll(
 		const result = replayFixture(f, labels, pipeline);
 		const guard = checkRecall(f, labels, result);
 		metrics.push(computeMetrics(f, labels, result));
+		loaded.push({ fixture: f, labels });
 		ids.push(id);
 		for (const w of guard.warnings) out(`warning ${id}: ${w}`);
 		for (const e of guard.failures) out(`FAIL ${id}: ${e}`);
 		if (guard.failures.length > 0) failed = true;
 	}
 	if (metrics.length > 0) out(formatReport(metrics, ids));
-	await printClassReport(dir, out);
+	const classFiles = await printClassReport(dir, out);
+	if (classFiles.length > 0) {
+		const covered = loaded.filter((l) =>
+			classFiles.some((c) => c.fixtureId === l.labels.fixtureId),
+		);
+		out(
+			formatMargin(
+				filterMargin(
+					covered.map((l) => l.fixture),
+					covered.map((l) => l.labels),
+					classFiles,
+				),
+			),
+		);
+	}
 	out(`replayed ${metrics.length} fixture${metrics.length === 1 ? "" : "s"}`);
 	return failed ? 1 : 0;
 }

@@ -19,6 +19,8 @@
 export interface ReviewerTuning {
 	/** Collapse several agents' restatements of one claim into a single finding. */
 	dedupeNearDuplicateClaims: boolean;
+	/** Drop findings whose own closing sentences say there is no defect. */
+	dropSelfRetracted: boolean;
 	/** Show each agent every finding this reviewer already filed on this PR. */
 	showPriorOwnFindings: boolean;
 	/** Require a finding to name a defect and rest on the diff. */
@@ -27,6 +29,7 @@ export interface ReviewerTuning {
 
 export const REVIEWER_TUNING: ReviewerTuning = {
 	dedupeNearDuplicateClaims: true,
+	dropSelfRetracted: true,
 	showPriorOwnFindings: true,
 	strictEvidenceRules: true,
 };
