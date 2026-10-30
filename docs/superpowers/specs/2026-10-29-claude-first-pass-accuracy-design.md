@@ -159,7 +159,7 @@ Recommendation. The remaining lever is the model, not a post-filter. Two changes
 
 What was not measured:
 
-- Precision of any candidate rule beyond the sets above. The 52-hit set and the fixtures are tuned on.
+- Precision of any candidate rule beyond the sets above. The 2,487 comment set and the fixtures are tuned on.
 - The 61 unadjudicated labels and the 7 unadjudicated first-seen claims.
 - Any effect on first-pass accuracy of new findings. No change ships, so none is expected.
 - The partial-review causes. The agent logs and the `ai-review:agents` marker did not exist when the six fixtures were recorded, and no Claude review on the three incident PRs carries the marker.
