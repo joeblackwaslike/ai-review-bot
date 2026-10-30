@@ -112,6 +112,30 @@ describe("ruleClass", () => {
 		expect(ruleClass(f, c, makeLabel("c", "rejected"))).toBe("stale");
 	});
 
+	it.each([
+		"abcdef1 deliberately drops expired tokens; this is intended",
+		"This behavior was intentionally introduced in abcdef1; leave it unchanged",
+	])("does not call a sha citation stale without fix wording: %s", (body) => {
+		const f = makeFixture([["a"], ["b"], ["c"]]);
+		f.rounds[1].commitsSince = [commit("abcdef1234567890")];
+		const c = f.rounds[2].claims[0];
+		c.commentId = 5;
+		f.threads = [
+			thread(5, {
+				replies: [
+					{
+						id: 1,
+						author: "me",
+						createdAt: "2026-01-02T00:00:00Z",
+						editedAt: null,
+						body,
+					},
+				],
+			}),
+		];
+		expect(ruleClass(f, c, makeLabel("c", "rejected"))).toBe(null);
+	});
+
 	it("returns null when only a hunk in the claim's own round delta touches the anchor", () => {
 		const f = makeFixture([["a"], ["b"]]);
 		const c = f.rounds[0].claims[0];
