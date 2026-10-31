@@ -1,3 +1,5 @@
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -69,6 +71,13 @@ function fakeGit(state: FakeRepo): GitRunner {
 					f.status === "R" ? `R100\t${f.oldPath}\t${p}` : `${f.status}\t${p}`,
 				)
 				.join("\n");
+		}
+		if (args[0] === "diff" && args[1] === "-M" && args[4] === "--") {
+			if (args[2] !== state.mergeBase || args[3] !== "HEAD")
+				throw new Error(`diff against the wrong base: ${a}`);
+			const f = state.files[args.at(-1) ?? ""];
+			if (!f) throw new Error(`no diff for ${args.at(-1)}`);
+			return f.diff;
 		}
 		if (args[0] === "diff" && args[3] === "--") {
 			if (args[1] !== state.mergeBase || args[2] !== "HEAD")
@@ -798,5 +807,54 @@ describe("gateRepoSlug", () => {
 			owner: "local",
 			repo: "my-repo",
 		});
+	});
+});
+
+describe("runGate against a real git repo", () => {
+	function makeRepo() {
+		const root = mkdtempSync(join(tmpdir(), "gate-git-"));
+		const git = (...args: string[]) =>
+			execFileSync("git", args, { cwd: root, encoding: "utf-8" });
+		git("init", "-q", "-b", "main");
+		git("config", "user.email", "t@example.com");
+		git("config", "user.name", "t");
+		mkdirSync(join(root, "src"));
+		writeFileSync(join(root, "src/a.ts"), "try {\n  run();\n} catch {}\n");
+		git("add", ".");
+		git("commit", "-q", "-m", "base");
+		git("checkout", "-q", "-b", "feat");
+		writeFileSync(
+			join(root, "src/a.ts"),
+			"try {\n  run();\n  more();\n} catch {}\n",
+		);
+		git("commit", "-qam", "edit");
+		return { root, git };
+	}
+
+	const realGate = (root: string, merged: ModelReview, cwd = root) =>
+		runGate({
+			cwd,
+			owner: "o",
+			repo: "r",
+			base: "main",
+			storeDir,
+			review: async () => passResult(merged),
+		});
+
+	it("a pure rename plus one model miss keeps the finding open", async () => {
+		const { root, git } = makeRepo();
+		const first = await realGate(
+			root,
+			buildModelReview({ inline_comments: [P1_ON_A] }),
+		);
+
+		git("mv", "src/a.ts", "src/b.ts");
+		git("commit", "-qm", "move");
+		const second = await realGate(root, buildModelReview());
+
+		expect(second.findings.map((f) => f.id)).toEqual(
+			first.findings.map((f) => f.id),
+		);
+		expect(second.findings[0]?.file).toBe("src/b.ts");
 	});
 });

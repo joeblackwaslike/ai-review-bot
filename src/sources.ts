@@ -227,14 +227,43 @@ export function listRangeChanges(
 	return { mergeBase, changes };
 }
 
+const PATH_HEADERS = [
+	"diff --git ",
+	"index ",
+	"--- ",
+	"+++ ",
+	"rename from ",
+	"rename to ",
+	"copy from ",
+	"copy to ",
+	"similarity index ",
+	"dissimilarity index ",
+];
+
+/** Drops the path-bearing header lines before each file's first hunk, so a pure rename hashes like the unrenamed diff. */
+function withoutPathHeaders(diff: string): string {
+	let inHeader = false;
+	return diff
+		.split("\n")
+		.filter((line) => {
+			if (line.startsWith("diff --git ")) inHeader = true;
+			else if (line.startsWith("@@")) inHeader = false;
+			return !(inHeader && PATH_HEADERS.some((h) => line.startsWith(h)));
+		})
+		.join("\n");
+}
+
+/** sha1 of the file's diff from the merge base to HEAD, ignoring path headers. Pass `oldPath` for a rename so the diff pairs both sides. */
 export function diffHash(
 	runGit: GitRunner,
 	mergeBase: string,
 	filePath: string,
+	oldPath?: string | null,
 ): string {
-	return createHash("sha1")
-		.update(runGit(["diff", mergeBase, "HEAD", "--", filePath]))
-		.digest("hex");
+	const diff = oldPath
+		? runGit(["diff", "-M", mergeBase, "HEAD", "--", oldPath, filePath])
+		: runGit(["diff", mergeBase, "HEAD", "--", filePath]);
+	return createHash("sha1").update(withoutPathHeaders(diff)).digest("hex");
 }
 
 /** Reads non-deleted changed files at HEAD from the object DB. */

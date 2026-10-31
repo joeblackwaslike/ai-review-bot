@@ -177,7 +177,10 @@ export async function runGate(opts: GateOptions): Promise<GateResult> {
 
 	const surviving = changes.filter((c) => c.status !== "D");
 	const hashes = new Map(
-		surviving.map((c) => [c.path, diffHash(runGit, mergeBase, c.path)]),
+		surviving.map((c) => [
+			c.path,
+			diffHash(runGit, mergeBase, c.path, c.oldPath),
+		]),
 	);
 	const rangeRenames = new Map(
 		changes.flatMap((c) =>

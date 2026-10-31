@@ -1,8 +1,13 @@
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
 	collectFilesFromCommit,
 	collectFilesFromLocal,
 	collectFilesFromRange,
+	defaultGitRunner,
 	diffHash,
 	type GitRunner,
 	hasCodeExtension,
@@ -261,5 +266,62 @@ describe("range scope", () => {
 			runGit,
 		});
 		expect(some.map((f) => f.path)).toEqual(["src/b.ts"]);
+	});
+});
+
+describe("range helpers against a real git repo", () => {
+	function makeRepo() {
+		const dir = mkdtempSync(join(tmpdir(), "sources-git-"));
+		const git = (...args: string[]) =>
+			execFileSync("git", args, { cwd: dir, encoding: "utf-8" });
+		git("init", "-q", "-b", "main");
+		git("config", "user.email", "t@example.com");
+		git("config", "user.name", "t");
+		writeFileSync(
+			join(dir, "a.ts"),
+			"export const a = 1;\nexport const keep = 0;\n",
+		);
+		git("add", ".");
+		git("commit", "-q", "-m", "base");
+		const mb = git("rev-parse", "HEAD").trim();
+		git("checkout", "-q", "-b", "feat");
+		return { dir, git, mb, runGit: defaultGitRunner(dir) };
+	}
+
+	it("diffHash is equal across a pure git mv and changes after an edit", () => {
+		const { dir, git, mb, runGit } = makeRepo();
+		writeFileSync(
+			join(dir, "a.ts"),
+			"export const a = 2;\nexport const keep = 0;\n",
+		);
+		git("commit", "-qam", "edit");
+		const before = diffHash(runGit, mb, "a.ts");
+
+		git("mv", "a.ts", "b.ts");
+		git("commit", "-qm", "move");
+		const moved = diffHash(runGit, mb, "b.ts", "a.ts");
+
+		writeFileSync(
+			join(dir, "b.ts"),
+			"export const a = 3;\nexport const keep = 0;\n",
+		);
+		git("commit", "-qam", "edit again");
+		const edited = diffHash(runGit, mb, "b.ts", "a.ts");
+
+		expect(moved).toBe(before);
+		expect(edited).not.toBe(before);
+	});
+
+	it("diffHash is equal across a git mv of a file the branch added", () => {
+		const { dir, git, mb, runGit } = makeRepo();
+		writeFileSync(join(dir, "n.ts"), "export const n = 1;\n");
+		git("add", ".");
+		git("commit", "-qm", "add");
+		const before = diffHash(runGit, mb, "n.ts");
+
+		git("mv", "n.ts", "m.ts");
+		git("commit", "-qm", "move");
+
+		expect(diffHash(runGit, mb, "m.ts")).toBe(before);
 	});
 });
