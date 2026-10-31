@@ -57,21 +57,32 @@ function isAncestor(runGit: GitRunner, sha: string): boolean {
 	}
 }
 
-/** Paths to re-review on a delta round: any path without an open entry, or whose open entries saw a different diff. */
+/** Paths to re-review on a delta round: range paths changed since the last head, plus paths whose open entries saw a different diff. */
 function deltaPaths(
+	runGit: GitRunner,
+	lastHead: string,
 	hashes: ReadonlyMap<string, string>,
 	renames: ReadonlyMap<string, string>,
 	entries: readonly LedgerEntry[],
 ): Set<string> {
-	const open = entries.filter((e) => !isSettled(e) && e.path !== null);
-	const only = new Set<string>();
-	for (const [path, hash] of hashes) {
-		const onPath = open.filter(
-			(e) => e.path === path || renames.get(e.path ?? "") === path,
-		);
-		if (onPath.length === 0 || onPath.some((e) => storedDiff(e) !== hash)) {
-			only.add(path);
-		}
+	const changedSince = runGit([
+		"-c",
+		"core.quotePath=false",
+		"diff",
+		"-M",
+		"--name-only",
+		lastHead,
+		"HEAD",
+	])
+		.split("\n")
+		.map((p) => p.trim())
+		.filter((p) => hashes.has(p));
+	const only = new Set(changedSince);
+	for (const e of entries) {
+		if (isSettled(e) || e.path === null) continue;
+		const path = renames.get(e.path) ?? e.path;
+		const hash = hashes.get(path);
+		if (hash !== undefined && storedDiff(e) !== hash) only.add(path);
 	}
 	return only;
 }
@@ -126,7 +137,7 @@ export async function runGate(opts: GateOptions): Promise<GateResult> {
 	const only =
 		store.lastHead === null || fullRescope
 			? undefined
-			: deltaPaths(hashes, renames, store.entries);
+			: deltaPaths(runGit, store.lastHead, hashes, renames, store.entries);
 	const files = await collectFilesFromRange({
 		cwd: opts.cwd,
 		changes,

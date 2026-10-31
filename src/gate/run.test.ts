@@ -22,6 +22,7 @@ type FakeRepo = {
 	mergeBase: string;
 	branch: string;
 	ancestors: Set<string>;
+	sinceLast: string[];
 	files: Record<string, FakeFile>;
 };
 
@@ -31,6 +32,7 @@ function repo(files: Record<string, FakeFile>, head = "head1"): FakeRepo {
 		mergeBase: "base0",
 		branch: "feat/x",
 		ancestors: new Set(),
+		sinceLast: [],
 		files,
 	};
 }
@@ -54,6 +56,7 @@ function fakeGit(state: FakeRepo): GitRunner {
 			if (state.ancestors.has(args[2] ?? "")) return "";
 			throw new Error("not an ancestor");
 		}
+		if (a.includes("--name-only")) return state.sinceLast.join("\n");
 		if (a.includes("--name-status")) {
 			return Object.entries(state.files)
 				.map(([p, f]) =>
@@ -192,6 +195,7 @@ describe("runGate", () => {
 		state.ancestors.add("head1");
 		state.head = "head2";
 		state.files["src/a.ts"] = modified("a2");
+		state.sinceLast = ["src/a.ts"];
 		const review = vi.fn(async (_files: AuditFile[]) =>
 			passResult(buildModelReview({ inline_comments: [P1_ON_A] })),
 		);
@@ -223,6 +227,78 @@ describe("runGate", () => {
 		expect(result.exitCode).toBe(1);
 	});
 
+	describe("delta round scope", () => {
+		async function roundOne(state: FakeRepo) {
+			await gate(state, async () =>
+				passResult(buildModelReview({ inline_comments: [P1_ON_A] })),
+			);
+			state.ancestors.add("head1");
+			state.head = "head2";
+		}
+
+		const reviewedIn = async (state: FakeRepo) => {
+			const review = vi.fn(async (_files: AuditFile[]) =>
+				passResult(buildModelReview()),
+			);
+			await gate(state, review);
+			return review.mock.calls.flatMap(([files]) => files.map((f) => f.path));
+		};
+
+		it("does not review an untouched file that has no entry", async () => {
+			const state = repo({
+				"src/a.ts": modified("a1"),
+				"src/c.ts": modified("c1"),
+			});
+			await roundOne(state);
+
+			expect(await reviewedIn(state)).toEqual([]);
+		});
+
+		it("reviews a file named by the diff since the last head", async () => {
+			const state = repo({
+				"src/a.ts": modified("a1"),
+				"src/c.ts": modified("c1"),
+			});
+			await roundOne(state);
+			state.files["src/d.ts"] = { ...modified("d1"), status: "A" };
+			state.sinceLast = ["src/d.ts", "README.md"];
+
+			expect(await reviewedIn(state)).toEqual(["src/d.ts"]);
+		});
+
+		it("reviews a renamed file under its new path", async () => {
+			const state = repo({
+				"src/a.ts": modified("a1"),
+				"src/c.ts": modified("c1"),
+			});
+			await roundOne(state);
+			state.files = {
+				"src/a.ts": modified("a1"),
+				"src/e.ts": {
+					status: "R",
+					oldPath: "src/c.ts",
+					diff: "e1",
+					content: "// e1\n",
+				},
+			};
+			state.sinceLast = ["src/e.ts"];
+
+			expect(await reviewedIn(state)).toEqual(["src/e.ts"]);
+		});
+
+		it("reviews a file holding an open entry whose diff changed without a commit touching it", async () => {
+			const state = repo({
+				"src/a.ts": modified("a1"),
+				"src/c.ts": modified("c1"),
+			});
+			await roundOne(state);
+			state.mergeBase = "base1";
+			state.files["src/a.ts"] = modified("a1-against-base1");
+
+			expect(await reviewedIn(state)).toEqual(["src/a.ts"]);
+		});
+	});
+
 	it("round 2 after a rebase that dropped the stored head reviews the full range and infers nothing", async () => {
 		const state = repo({
 			"src/a.ts": modified("a1"),
@@ -234,6 +310,7 @@ describe("runGate", () => {
 
 		state.head = "rebased";
 		state.files["src/a.ts"] = modified("a2");
+		state.sinceLast = ["src/a.ts"];
 		const review = vi.fn(async (_files: AuditFile[]) =>
 			passResult(buildModelReview()),
 		);
@@ -258,6 +335,7 @@ describe("runGate", () => {
 		state.ancestors.add("head1");
 		state.head = "head2";
 		state.files["src/a.ts"] = modified("a2");
+		state.sinceLast = ["src/a.ts"];
 		const result = await gate(state, async () =>
 			passResult(buildModelReview()),
 		);
@@ -329,6 +407,7 @@ describe("runGate", () => {
 		state.ancestors.add("head1");
 		state.head = "head2";
 		state.files["src/a.ts"] = modified("a2");
+		state.sinceLast = ["src/a.ts"];
 		const result = await gate(state, async () =>
 			passResult(buildModelReview(), { agentsSucceeded: 4 }),
 		);
@@ -355,6 +434,7 @@ describe("runGate", () => {
 		state.ancestors.add("head1");
 		state.head = "head2";
 		state.files["src/a.ts"] = modified("a2");
+		state.sinceLast = ["src/a.ts"];
 		const second = await gate(state, async () =>
 			passResult(buildModelReview()),
 		);
