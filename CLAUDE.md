@@ -8,7 +8,7 @@ This file provides context and conventions for AI coding agents working on this 
 pnpm install
 pnpm typecheck    # tsc --noEmit — must pass before any commit
 pnpm lint         # biome check — must pass before any commit
-pnpm test         # vitest run (1334 tests, 4 skipped) — must pass before any commit
+pnpm test         # vitest run (1326 tests, 4 skipped) — must pass before any commit
 pnpm dev          # vercel dev — local server on :3000
 ```
 
