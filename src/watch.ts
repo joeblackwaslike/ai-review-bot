@@ -262,11 +262,9 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 						}
 					}
 				} else if (isNoNewReview(outcome)) {
-					// The triage gate already decided (and persisted to KV) that
-					// this SHA needs no review — a terminal decision, not a
-					// transient skip. Retrying it would re-enter buildReview with
-					// lastReviewedSha already equal to headSha, bypass the triage
-					// guard, and post an unwanted full review. See Bug F.
+					// The triage gate already decided that this SHA needs no
+					// review — a terminal decision, not a transient skip, so
+					// retrying it would only repeat that decision. See Bug F.
 					state.lastReviewedSha = pr.head.sha;
 					log(
 						`ai-review watch: ${target.provider} has no new review to post for ${pr.head.sha}`,
