@@ -311,10 +311,8 @@ function getKv(): KvClient | null {
  * "handled" for retry purposes — almost everything except "posted" should be
  * retried on the next cycle at the same SHA, with one deliberate exception:
  * `{status: "skipped", reason: NO_NEW_REVIEW_REASON}` means the triage gate
- * already decided (and persisted to KV) that this exact SHA needs no review,
- * so it must be treated as handled too — retrying it would re-enter
- * `buildReview` with `lastReviewedSha` already equal to `headSha`, skip the
- * triage gate's guard, and post an unwanted full review. See Bug F.
+ * already decided that this exact SHA needs no review, so it must be treated
+ * as handled too — retrying it would only repeat that decision. See Bug F.
  *
  * Note: if every retry and the fallback comment all fail, `maybeSubmitReview`
  * throws rather than returning a "posted" outcome — callers must handle both.
@@ -480,16 +478,10 @@ export async function maybeSubmitReview(args: {
 			headSha,
 		});
 	}
-	// Two distinct uses of KV, decoupled on purpose:
-	//  - claimKv: the per-commit idempotency claim. Force-gated (a manual
-	//    /ai-review intentionally bypasses the claim) and SHA-gated.
-	//  - stateKv: review-state persistence + the triage gate. Unconditional when
-	//    KV is configured, so a forced review still persists fresh state (the gate
-	//    itself is force-gated inside buildReview, so force still runs FULL). If
-	//    these shared one var, a forced review would write no state and the next
-	//    synchronize would triage against a stale snapshot (I1).
-	const stateKv = getKv();
-	const claimKv = force || !validSha ? null : stateKv;
+	// The per-commit idempotency claim is force-gated (a manual /ai-review
+	// intentionally bypasses it) and SHA-gated. Review state comes from GitHub,
+	// so buildReview takes no KV client.
+	const claimKv = force || !validSha ? null : getKv();
 	const claimKey = `review-claim:${config.provider}:${owner}/${repo}#${pullNumber}@${headSha}`;
 	let claimed = false;
 	if (claimKv) {
@@ -561,11 +553,6 @@ export async function maybeSubmitReview(args: {
 			agentConcurrency: config.agentConcurrency,
 			agentBudgetMs: config.agentBudgetMs,
 			tier2Enabled: config.tier2Enabled,
-			// Unconditional KV (not the force-gated claim client) for review-state
-			// persistence + the triage gate. Null only when KV is unconfigured. A
-			// forced review still persists fresh state here; buildReview force-gates
-			// the gate itself so force runs a FULL review but doesn't go stale (I1).
-			kv: stateKv,
 			auth,
 		});
 

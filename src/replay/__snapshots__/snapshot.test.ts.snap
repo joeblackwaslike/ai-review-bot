@@ -25,6 +25,18 @@ joeblackwaslike__ai-listings__74__openai
   restated open: 1 of 13
   rounds with first-seen claims: 4 of 5, final round quiet: no
 
+joeblackwaslike__ai-review-bot__92__anthropic
+  rejected: 0 of 10 adjudicated (deferred 0, unadjudicated 8)
+  recycled: 0 of 18
+  restated open: 0 of 18, +4 proposed
+  rounds with first-seen claims: 5 of 5, final round quiet: no
+
+joeblackwaslike__ai-review-bot__92__openai
+  rejected: 0 of 14 adjudicated (deferred 0, unadjudicated 7)
+  recycled: 0 of 21
+  restated open: 0 of 21, +1 proposed
+  rounds with first-seen claims: 5 of 5, final round quiet: no
+
 joeblackwaslike__stealth-browser__1__anthropic
   rejected: 29 of 33 adjudicated (deferred 0, unadjudicated 32)
   recycled: 7 of 65, +1 proposed

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { readMetadataBlock, readMetadataValue } from "./review-metadata.js";
+import {
+	isOwnReview,
+	readMetadataBlock,
+	readMetadataValue,
+} from "./review-metadata.js";
 
 const block = [
 	"<!-- ai-review:sha=abc1234 -->",
@@ -40,6 +44,68 @@ describe("readMetadataBlock", () => {
 			readMetadataBlock("Reviewed commit: `abc1234`\n\n---\n*Model: m*"),
 		).toBeNull();
 		expect(readMetadataBlock("> <!-- ai-review:sha=abc1234 -->")).toBeNull();
+	});
+});
+
+describe("isOwnReview", () => {
+	const own = { commentPrefix: "ai-review", provider: "anthropic" };
+	const review = (provider?: string) =>
+		[
+			"<!-- ai-review:post-attempt:1a31033b -->",
+			"### ai-review",
+			"",
+			"Summary.",
+			"",
+			block,
+			...(provider ? [`<!-- ai-review:provider=${provider} -->`] : []),
+			"",
+			footer,
+		].join("\n");
+
+	it("counts a review under our heading from our provider", () => {
+		expect(isOwnReview(review("anthropic"), own)).toBe(true);
+	});
+
+	it("does not count the other provider's review under the same heading", () => {
+		expect(isOwnReview(review("openai"), own)).toBe(false);
+	});
+
+	it("counts a review with no provider marker as ours", () => {
+		expect(isOwnReview(review(), own)).toBe(true);
+	});
+
+	it("does not count a body without our heading", () => {
+		expect(
+			isOwnReview(review("anthropic").replace("### ai-review", ""), own),
+		).toBe(false);
+		expect(isOwnReview(null, own)).toBe(false);
+		expect(isOwnReview(undefined, own)).toBe(false);
+	});
+
+	it("does not count a heading that only starts with our prefix", () => {
+		expect(
+			isOwnReview(
+				review("anthropic").replace("### ai-review", "### ai-review-qc"),
+				own,
+			),
+		).toBe(false);
+	});
+
+	it("does not count a human review that quotes our review", () => {
+		const quoted = review("anthropic")
+			.split("\n")
+			.map((l) => `> ${l}`)
+			.join("\n");
+		expect(isOwnReview(`I disagree with this:\n\n${quoted}`, own)).toBe(false);
+	});
+
+	it("reads the provider from the block, not from a quoted marker in the summary", () => {
+		const body = review("anthropic").replace(
+			"Summary.",
+			"Summary.\n> <!-- ai-review:provider=openai -->",
+		);
+		expect(isOwnReview(body, own)).toBe(true);
+		expect(isOwnReview(body, { ...own, provider: "openai" })).toBe(false);
 	});
 });
 

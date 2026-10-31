@@ -1,0 +1,1121 @@
+{
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "ai-review-bot",
+	"pull": 92,
+	"provider": "anthropic",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-10-31T02:36:57.616Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 5708008976,
+			"provider": "anthropic",
+			"submittedAt": "2026-10-30T04:15:23Z",
+			"headSha": "e3d181256033d5f451935398add9ccf083ef30a4",
+			"baseSha": "90b3aca1e5afe6d340597e06cd9fc10c249e3c78",
+			"mergeBase": "90b3aca1e5afe6d340597e06cd9fc10c249e3c78",
+			"triggerAt": "2026-10-30T04:10:22Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "32d6be06e18ab7c5eac41a6bdff336a35adc8590",
+					"committedAt": "2026-10-30T03:18:05Z",
+					"files": [
+						{
+							"path": "docs/superpowers/specs/2026-10-29-claude-first-pass-accuracy-design.md",
+							"ranges": [[1, 121]]
+						}
+					]
+				},
+				{
+					"sha": "db4a917c5e9c0c586c68fd5e0daa8a22321cbddf",
+					"committedAt": "2026-10-30T03:18:17Z",
+					"files": [
+						{
+							"path": "docs/superpowers/specs/2026-10-29-claude-first-pass-accuracy-design.md",
+							"ranges": [[50, 56], [61, 70]]
+						}
+					]
+				},
+				{
+					"sha": "d92f5a95b3c9b2822a4d305890d54fa3311f3ff1",
+					"committedAt": "2026-10-30T03:19:19Z",
+					"files": [
+						{
+							"path": "docs/superpowers/plans/2026-10-29-claude-first-pass-accuracy.md",
+							"ranges": [[1, 116]]
+						}
+					]
+				},
+				{
+					"sha": "edb7672b4a3cb5f1de68f4f8513aaaca58a99862",
+					"committedAt": "2026-10-30T03:20:46Z",
+					"files": [
+						{
+							"path": "src/replay/classify.test.ts",
+							"ranges": [[1, 235]]
+						},
+						{
+							"path": "src/replay/classify.ts",
+							"ranges": [[1, 162]]
+						},
+						{
+							"path": "src/replay/command.test.ts",
+							"ranges": [[72, 90]]
+						},
+						{
+							"path": "src/replay/command.ts",
+							"ranges": [[38, 44]]
+						}
+					]
+				},
+				{
+					"sha": "802a40be23b28ce2a52b83cabca81b27a39334eb",
+					"committedAt": "2026-10-30T03:21:14Z",
+					"files": [
+						{
+							"path": "docs/superpowers/plans/2026-10-29-claude-first-pass-accuracy.md",
+							"ranges": [[65, 71], [88, 94]]
+						},
+						{
+							"path": "docs/superpowers/specs/2026-10-29-claude-first-pass-accuracy-design.md",
+							"ranges": [[39, 45]]
+						},
+						{
+							"path": "src/replay/classify.test.ts",
+							"ranges": [[226, 233]]
+						}
+					]
+				},
+				{
+					"sha": "21c7fe9316b4bbd7fb0819fb3b1a8da0f155eda7",
+					"committedAt": "2026-10-30T03:23:53Z",
+					"files": [
+						{
+							"path": "src/replay/fixtures/joeblackwaslike__agent-skills__10__anthropic.classes.json",
+							"ranges": [[1, 142]]
+						},
+						{
+							"path": "src/replay/fixtures/joeblackwaslike__ai-listings__74__anthropic.classes.json",
+							"ranges": [[1, 46]]
+						},
+						{
+							"path": "src/replay/fixtures/joeblackwaslike__stealth-browser__1__anthropic.classes.json",
+							"ranges": [[1, 198]]
+						}
+					]
+				},
+				{
+					"sha": "794c1b37d36216088dfa7dd2794eb02d0b636e9b",
+					"committedAt": "2026-10-30T03:24:21Z",
+					"files": [
+						{
+							"path": "src/replay/pipeline.test.ts",
+							"ranges": [[65, 71]]
+						},
+						{
+							"path": "src/replay/snapshot.test.ts",
+							"ranges": [[13, 19]]
+						}
+					]
+				},
+				{
+					"sha": "4954fb7be37ab999939aa0dc8522176913104be8",
+					"committedAt": "2026-10-30T03:25:01Z",
+					"files": [
+						{
+							"path": "src/replay/classify.test.ts",
+							"ranges": [[3, 12], [233, 294]]
+						},
+						{
+							"path": "src/replay/classify.ts",
+							"ranges": [[36, 42], [122, 150], [172, 189]]
+						},
+						{
+							"path": "src/replay/command.test.ts",
+							"ranges": [[85, 125]]
+						},
+						{
+							"path": "src/replay/command.ts",
+							"ranges": [[3, 13], [167, 201], [232, 238]]
+						}
+					]
+				},
+				{
+					"sha": "efc9a2eae9072a1ccc6f549fc0014378cde03e26",
+					"committedAt": "2026-10-30T03:25:16Z",
+					"files": [
+						{
+							"path": "src/replay/pipeline.test.ts",
+							"ranges": [[65, 72]]
+						},
+						{
+							"path": "src/replay/snapshot.test.ts",
+							"ranges": [[13, 21]]
+						}
+					]
+				},
+				{
+					"sha": "f860b5b877fa778bb2340a6dd424088897287d98",
+					"committedAt": "2026-10-30T03:25:58Z",
+					"files": [
+						{
+							"path": "docs/superpowers/plans/2026-10-29-claude-first-pass-accuracy.md",
+							"ranges": [[92, 126]]
+						}
+					]
+				},
+				{
+					"sha": "44ad3f11cf0ff30156c2e292ee037f3fc6fd4f74",
+					"committedAt": "2026-10-30T03:35:23Z",
+					"files": [
+						{
+							"path": "src/replay/classify.test.ts",
+							"ranges": [[36, 43], [54, 74], [131, 145]]
+						},
+						{
+							"path": "src/replay/classify.ts",
+							"ranges": [[1, 4], [48, 55]]
+						},
+						{
+							"path": "src/replay/command.test.ts",
+							"ranges": [[118, 134]]
+						},
+						{
+							"path": "src/replay/command.ts",
+							"ranges": [
+								[8, 14],
+								[171, 179],
+								[195, 201],
+								[212, 218],
+								[229, 256]
+							]
+						},
+						{
+							"path": "src/replay/filter-margin.test.ts",
+							"ranges": [[1, 205]]
+						},
+						{
+							"path": "src/replay/filter-margin.ts",
+							"ranges": [[1, 165]]
+						},
+						{
+							"path": "src/replay/live.test.ts",
+							"ranges": [[147, 175]]
+						},
+						{
+							"path": "src/replay/live.ts",
+							"ranges": [[1, 22], [88, 99], [107, 113]]
+						},
+						{
+							"path": "src/review.test.ts",
+							"ranges": [[2829, 2942]]
+						},
+						{
+							"path": "src/review.ts",
+							"ranges": [
+								[38, 44],
+								[553, 561],
+								[567, 601],
+								[611, 622],
+								[723, 729],
+								[2387, 2403]
+							]
+						},
+						{
+							"path": "src/reviewer-tuning.test.ts",
+							"ranges": [[13, 19]]
+						},
+						{
+							"path": "src/reviewer-tuning.ts",
+							"ranges": [[19, 26], [29, 35]]
+						},
+						{
+							"path": "src/self-retraction.test.ts",
+							"ranges": [[1, 146]]
+						},
+						{
+							"path": "src/self-retraction.ts",
+							"ranges": [[1, 90]]
+						}
+					]
+				},
+				{
+					"sha": "ccab2676ae1ca0341fe82fca62ecc5b31dca6fb1",
+					"committedAt": "2026-10-30T03:41:07Z",
+					"files": [
+						{
+							"path": "src/replay/filter-margin.test.ts",
+							"ranges": [[187, 201]]
+						},
+						{
+							"path": "src/self-retraction.test.ts",
+							"ranges": [[14, 20], [134, 202]]
+						},
+						{
+							"path": "src/self-retraction.ts",
+							"ranges": [[7, 30], [34, 58], [63, 84]]
+						}
+					]
+				},
+				{
+					"sha": "25acdb04c8fb7986067bffd97390a3f4671f7939",
+					"committedAt": "2026-10-30T03:43:30Z",
+					"files": [
+						{
+							"path": "src/self-retraction.test.ts",
+							"ranges": [[182, 204]]
+						},
+						{
+							"path": "src/self-retraction.ts",
+							"ranges": [[8, 22], [53, 61], [74, 92]]
+						}
+					]
+				},
+				{
+					"sha": "84bbe84f1499c8f7327ff61dde2864fa50a1a40d",
+					"committedAt": "2026-10-30T03:56:21Z",
+					"files": [
+						{
+							"path": "docs/superpowers/plans/2026-10-29-claude-first-pass-accuracy.md",
+							"ranges": [[101, 114]]
+						},
+						{
+							"path": "docs/superpowers/specs/2026-10-29-claude-first-pass-accuracy-design.md",
+							"ranges": [[20, 26], [99, 105]]
+						},
+						{
+							"path": "src/replay/classify.test.ts",
+							"ranges": [[11, 22], [309, 335]]
+						},
+						{
+							"path": "src/replay/filter-margin.test.ts",
+							"ranges": [[182, 194]]
+						},
+						{
+							"path": "src/replay/filter-margin.ts",
+							"ranges": [[1, 4], [87, 97]]
+						},
+						{
+							"path": "src/replay/fixtures/joeblackwaslike__agent-skills__10__anthropic.classes.json",
+							"ranges": [[4, 10], [20, 26], [36, 42], [76, 82], [92, 98]]
+						},
+						{
+							"path": "src/replay/fixtures/joeblackwaslike__ai-listings__74__anthropic.classes.json",
+							"ranges": [[20, 26]]
+						},
+						{
+							"path": "src/replay/fixtures/joeblackwaslike__stealth-browser__1__anthropic.classes.json",
+							"ranges": [[4, 18], [28, 34], [68, 74], [92, 98]]
+						},
+						{
+							"path": "src/replay/live-wiring.test.ts",
+							"ranges": [[1, 56]]
+						},
+						{
+							"path": "src/replay/live-wiring.ts",
+							"ranges": [[1, 7], [15, 41], [84, 90]]
+						},
+						{
+							"path": "src/replay/live.test.ts",
+							"ranges": [[162, 178]]
+						},
+						{
+							"path": "src/replay/live.ts",
+							"ranges": [[1, 5], [8, 14], [91, 97]]
+						},
+						{
+							"path": "src/review.test.ts",
+							"ranges": [[2833, 2839], [2923, 2990], [3435, 3484]]
+						},
+						{
+							"path": "src/review.ts",
+							"ranges": [
+								[38, 44],
+								[569, 631],
+								[641, 651],
+								[753, 760],
+								[2421, 2429]
+							]
+						},
+						{
+							"path": "src/self-retraction.test.ts",
+							"ranges": [[199, 248]]
+						},
+						{
+							"path": "src/self-retraction.ts",
+							"ranges": [[3, 54], [60, 142]]
+						}
+					]
+				},
+				{
+					"sha": "854dccfe23d4612fa410d3876e92991288613450",
+					"committedAt": "2026-10-30T03:58:13Z",
+					"files": [
+						{
+							"path": "docs/superpowers/specs/2026-10-29-claude-first-pass-accuracy-design.md",
+							"ranges": [[123, 161]]
+						}
+					]
+				},
+				{
+					"sha": "f90022a8ba3c2c56e347d878d79941a29210ab6f",
+					"committedAt": "2026-10-30T03:58:37Z",
+					"files": [
+						{
+							"path": "docs/superpowers/specs/2026-10-29-claude-first-pass-accuracy-design.md",
+							"ranges": [[149, 155]]
+						}
+					]
+				},
+				{
+					"sha": "cd42314937cd49c6a26869842819f061563d49ca",
+					"committedAt": "2026-10-30T04:02:19Z",
+					"files": [
+						{
+							"path": "src/review.test.ts",
+							"ranges": [[2985, 3012]]
+						}
+					]
+				},
+				{
+					"sha": "e3d181256033d5f451935398add9ccf083ef30a4",
+					"committedAt": "2026-10-30T04:10:22Z",
+					"files": [
+						{
+							"path": "CLAUDE.md",
+							"ranges": [[8, 14], [42, 48], [67, 73], [96, 102]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r0:c4420384379:0",
+					"roundIndex": 0,
+					"reviewId": 5708008976,
+					"source": "inline",
+					"commentId": 4420384379,
+					"path": "src/review.ts",
+					"line": 556,
+					"severity": "P3",
+					"title": "Doc comment says non-P0 but code only drops P2/P3",
+					"text": "🟢 **P3**\n\n**Doc comment says non-P0 but code only drops P2/P3**\n\nThe comment says the option drops \"non-P0 findings\". `droppedFamilies` returns `[]` for anything other than P2 or P3, so P1 findings are never dropped. The PR's own tests (\"never drops a P1 either\") and CLAUDE.md both say this. A maintainer reading the option doc would wrongly conclude P1 findings are eligible. The note that it \"runs before every other merge step\" is also looser than the code. Resolved-key filtering and dedup come after it, but the per-agent event downgrade happens inside it.\n\n*Suggested fix:*\n\n```suggestion\n\t/** Drop P2/P3 findings (never P0, P1 or suppressible:false) whose own title\n\t * or closing sentence says there is no defect. Runs before every other merge step. */\n```"
+				},
+				{
+					"id": "r0:c4420384396:0",
+					"roundIndex": 0,
+					"reviewId": 5708008976,
+					"source": "inline",
+					"commentId": 4420384396,
+					"path": "src/replay/filter-margin.ts",
+					"line": 173,
+					"severity": "P3",
+					"title": "Hard-coded \"all 15 filler claims\" in the margin report",
+					"text": "🟢 **P3**\n\n**Hard-coded \"all 15 filler claims\" in the margin report**\n\n`formatMargin` always prints \"phrases were designed after reading all 15 filler claims\", whatever fixtures and class files are passed in. The command test seeds a fixture with zero filler claims and the line still says 15. If the class files or fixtures are regenerated, or the report is run on a different corpus, the line becomes a false statement. Interpolate `m.total.filler.of`, or word it without a number.\n\n*Suggested fix:*\n\n```suggestion\n\t\t`  recall is resubstitution: phrases were designed after reading all ${t.filler.of} filler claims`,\n```"
+				},
+				{
+					"id": "r0:c4420384407:0",
+					"roundIndex": 0,
+					"reviewId": 5708008976,
+					"source": "inline",
+					"commentId": 4420384407,
+					"path": "src/replay/retraction-rule.ts",
+					"line": 18,
+					"severity": "P2",
+					"title": "Closing \"no issues found in <scope>\" can drop a finding that states a real defect earlier",
+					"text": "🟡 **P2**\n\n**Closing \"no issues found in <scope>\" can drop a finding that states a real defect earlier**\n\n`no-actionable-defect` only inspects the last sentence of the body. It tolerates up to 4 words after the phrase, so a scoped closer such as \"No issues found in the happy path.\" or \"No issues found in tests.\" matches. Neither contains a contrast word, an exception word or a request, so the finding is dropped even when the earlier sentences describe a concrete defect. Example: \"The retry loop drops the token on 429. No issues found in the happy path.\" as a P2/P3 finding. The negative tests only cover scopes of 6 or more words (\"in the rest of the file\"), so the 4-word boundary is the exact edge that leaks. Drops are only logged and are not surfaced in the review, so a lost real finding is invisible to the author. Consider requiring that the phrase is not followed by a locative qualifier (`in`/`on`/`for`/`within` ...). Alternatively, only apply this family when the earlier sentences are short or are themselves non-defect statements. Add negative tests for \"in the happy path\" and \"in tests\"."
+				},
+				{
+					"id": "r0:c4420384410:0",
+					"roundIndex": 0,
+					"reviewId": 5708008976,
+					"source": "inline",
+					"commentId": 4420384410,
+					"path": "src/replay/retraction-rule.ts",
+					"line": 118,
+					"severity": "P2",
+					"title": "Four-word scope tail after \"No issues found\" lets real findings be dropped",
+					"text": "🟡 **P2**\n\n**Four-word scope tail after \"No issues found\" lets real findings be dropped**\n\nThe `no-actionable-defect` family only keeps a finding when more than `NO_ACTIONABLE_AFTER_WORDS` (4) words follow the phrase. A real P2/P3 finding whose last sentence adds a short scope qualifier is therefore treated as a retraction. For example: \"The migration deletes rows without a backup. No issues found in this file.\" Here ` in this file` is 3 words, so `isSelfRetracted` returns true and the finding is silently dropped from the merged review. The same happens with `Logs say 'No issues found' even when the scan fails`, because only backtick spans are stripped, not quotes. The existing negative tests only cover tails of 5 or more words (\"in the rest of the file\"). The 4-word cutoff is fitted to those examples, and there is no test just below it. Consider requiring the phrase to end the sentence, or allowing only a small whitelist of tails such as `here`, `this round`, `in this file`, and add negative tests for 1 to 4-word tails that follow a real defect sentence. The drops are logged and limited to P2/P3, so impact is bounded, but a dropped finding never reaches the author."
+				},
+				{
+					"id": "r0:body:0",
+					"roundIndex": 0,
+					"reviewId": 5708008976,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Test name contradicts its assertion",
+					"text": "Test name contradicts its assertion"
+				}
+			]
+		},
+		{
+			"index": 1,
+			"reviewId": 5708868660,
+			"provider": "anthropic",
+			"submittedAt": "2026-10-30T06:35:57Z",
+			"headSha": "ee6aaf8cc0e03b2ba819299dedda5df2f38a9d5b",
+			"baseSha": "e3d181256033d5f451935398add9ccf083ef30a4",
+			"mergeBase": "e3d181256033d5f451935398add9ccf083ef30a4",
+			"triggerAt": "2026-10-30T06:26:05Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "a81831eeeb3e48eb2493db91308a2d654dfc3dbe",
+					"committedAt": "2026-10-30T04:17:15Z",
+					"files": [
+						{
+							"path": "src/self-retraction.test.ts",
+							"ranges": [[234, 273]]
+						},
+						{
+							"path": "src/self-retraction.ts",
+							"ranges": [[69, 78], [112, 123]]
+						}
+					]
+				},
+				{
+					"sha": "f60710c8b6a74ea11a751ede59bcb12a9e6aa14b",
+					"committedAt": "2026-10-30T04:17:45Z",
+					"files": [
+						{
+							"path": "docs/superpowers/specs/2026-10-29-claude-first-pass-accuracy-design.md",
+							"ranges": [[50, 56], [63, 69], [139, 145], [148, 154]]
+						},
+						{
+							"path": "src/replay/classify.test.ts",
+							"ranges": [[79, 85], [88, 94]]
+						},
+						{
+							"path": "src/replay/classify.ts",
+							"ranges": [[81, 86]]
+						},
+						{
+							"path": "src/replay/fixtures/joeblackwaslike__stealth-browser__1__anthropic.classes.json",
+							"ranges": [[100, 106], [156, 162]]
+						}
+					]
+				},
+				{
+					"sha": "30bcdbe79b204643a1c6bd682b922f579c1b13e3",
+					"committedAt": "2026-10-30T04:18:13Z",
+					"files": [
+						{
+							"path": "src/replay/filter-margin.test.ts",
+							"ranges": [[84, 90], [95, 105], [115, 121], [134, 147]]
+						},
+						{
+							"path": "src/replay/filter-margin.ts",
+							"ranges": [
+								[15, 21],
+								[34, 40],
+								[47, 53],
+								[61, 67],
+								[76, 85],
+								[156, 162],
+								[168, 173]
+							]
+						}
+					]
+				},
+				{
+					"sha": "b7f78ee872eca3c8b10f01bdd44226cd367ec896",
+					"committedAt": "2026-10-30T04:18:18Z",
+					"files": [
+						{
+							"path": "src/review.ts",
+							"ranges": [[553, 562]]
+						}
+					]
+				},
+				{
+					"sha": "ee6aaf8cc0e03b2ba819299dedda5df2f38a9d5b",
+					"committedAt": "2026-10-30T06:26:05Z",
+					"files": [
+						{
+							"path": "src/self-retraction.ts",
+							"ranges": [[137, 146]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r1:body:0",
+					"roundIndex": 1,
+					"reviewId": 5708868660,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Test name contradicts its assertion",
+					"text": "Test name contradicts its assertion"
+				}
+			]
+		},
+		{
+			"index": 2,
+			"reviewId": 5708986373,
+			"provider": "anthropic",
+			"submittedAt": "2026-10-30T06:52:07Z",
+			"headSha": "712ebcffcdf2b7660299bfe0c2ee9694bae54373",
+			"baseSha": "ee6aaf8cc0e03b2ba819299dedda5df2f38a9d5b",
+			"mergeBase": "ee6aaf8cc0e03b2ba819299dedda5df2f38a9d5b",
+			"triggerAt": "2026-10-30T06:41:30Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "f4fdf1cf016a85525f3e9cf06c23c1c831225c6c",
+					"committedAt": "2026-10-30T06:32:39Z",
+					"files": [
+						{
+							"path": "docs/superpowers/specs/2026-10-29-claude-first-pass-accuracy-design.md",
+							"ranges": [[139, 153]]
+						},
+						{
+							"path": "src/replay/filter-margin.test.ts",
+							"ranges": [[196, 202], [207, 214]]
+						},
+						{
+							"path": "src/replay/fixtures/joeblackwaslike__ai-listings__74__anthropic.classes.json",
+							"ranges": [[20, 26]]
+						},
+						{
+							"path": "src/review.test.ts",
+							"ranges": [[2923, 2945]]
+						},
+						{
+							"path": "src/self-retraction.test.ts",
+							"ranges": [[39, 45], [268, 329]]
+						},
+						{
+							"path": "src/self-retraction.ts",
+							"ranges": [
+								[12, 17],
+								[22, 27],
+								[41, 52],
+								[64, 79],
+								[83, 90],
+								[109, 117]
+							]
+						}
+					]
+				},
+				{
+					"sha": "712ebcffcdf2b7660299bfe0c2ee9694bae54373",
+					"committedAt": "2026-10-30T06:41:30Z",
+					"files": [
+						{
+							"path": "src/self-retraction.ts",
+							"ranges": [[130, 140]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r2:c4421152905:0",
+					"roundIndex": 2,
+					"reviewId": 5708986373,
+					"source": "inline",
+					"commentId": 4421152905,
+					"path": "src/self-retraction.ts",
+					"line": 132,
+					"severity": "P3",
+					"title": "Doc comment still gives \"looks resolved by ...\" as a retraction example",
+					"text": "🟢 **P3**\n\n**Doc comment still gives \"looks resolved by ...\" as a retraction example**\n\nThis doc comment still lists \"this looks resolved by ...\" as a retracted phrase. After this change that shape is kept: \"by\" is in `SCOPE_FOLLOWS`, which now applies to every family whenever the phrase doesn't open the whole finding. The test that used \"This looks resolved by the explicit `kubectl rollout restart` call.\" as a positive was rewritten to bare \"This looks resolved.\" for the same reason. Update the example so it matches the current behavior, e.g. \"this looks resolved\" with no trailing scope or with-clause."
+				},
+				{
+					"id": "r2:c4421152905:1",
+					"roundIndex": 2,
+					"reviewId": 5708986373,
+					"source": "inline",
+					"commentId": 4421152905,
+					"path": "src/self-retraction.ts",
+					"line": 132,
+					"severity": "P3",
+					"title": "The scope keep-rule now applies to every phrase family, and `by` is in `SCOPE_FOLLOWS`. When \"This looks resolved by the fix.\" closes a multi-sentence finding, the scope rule keeps the finding, because the phrase does not open the whole finding. Only a bare \"This looks resolved.\" still retracts. The positive test was edited from \"resolved by the explicit `kubectl rollout restart` call\" to the bare form, which fits this reading. The docstring example now overstates what the filter drops. Say that the closer must be bare, or that it is only dropped when it is the whole finding.",
+					"text": "The scope keep-rule now applies to every phrase family, and `by` is in `SCOPE_FOLLOWS`. When \"This looks resolved by the fix.\" closes a multi-sentence finding, the scope rule keeps the finding, because the phrase does not open the whole finding. Only a bare \"This looks resolved.\" still retracts. The positive test was edited from \"resolved by the explicit `kubectl rollout restart` call\" to the bare form, which fits this reading. The docstring example now overstates what the filter drops. Say that the closer must be bare, or that it is only dropped when it is the whole finding."
+				},
+				{
+					"id": "r2:c4421152905:2",
+					"roundIndex": 2,
+					"reviewId": 5708986373,
+					"source": "inline",
+					"commentId": 4421152905,
+					"path": "src/self-retraction.ts",
+					"line": 132,
+					"severity": "P3",
+					"title": "The docstring still gives \"this looks resolved by ...\" as an example of a retraction. The scope keep-rule now applies to every family, and the test was changed from \"This looks resolved by the explicit `kubectl rollout restart` call.\" to \"This looks resolved.\" to match. When that sentence closes a multi-sentence finding, \"by\" is a scope word, so the finding is now kept. Only a finding made of that single sentence is still dropped. Drop the \"by ...\" example, or say it applies only when the phrase opens the whole finding.",
+					"text": "The docstring still gives \"this looks resolved by ...\" as an example of a retraction. The scope keep-rule now applies to every family, and the test was changed from \"This looks resolved by the explicit `kubectl rollout restart` call.\" to \"This looks resolved.\" to match. When that sentence closes a multi-sentence finding, \"by\" is a scope word, so the finding is now kept. Only a finding made of that single sentence is still dropped. Drop the \"by ...\" example, or say it applies only when the phrase opens the whole finding."
+				},
+				{
+					"id": "r2:c4421152911:0",
+					"roundIndex": 2,
+					"reviewId": 5708986373,
+					"source": "inline",
+					"commentId": 4421152911,
+					"path": "src/replay/retraction-rule.ts",
+					"line": 49,
+					"severity": "P2",
+					"title": "Whole-title no-new-findings pattern swallows trailing contrast or exception text",
+					"text": "🟡 **P2**\n\n**Whole-title no-new-findings pattern swallows trailing contrast or exception text**\n\nThe first alternative now ends with `(?:\\s+beyond (?:the )?(?:prior|previous|earlier)\\b[^.]*)?\\W*$`. The greedy `[^.]*` consumes everything after `beyond the prior`, up to a period or the end of the text. A closer like `No new findings beyond the prior reviews, except the missing timeout` or `..., but the retry path leaks` therefore matches in full, and `rest` after the match is empty. That means `EXCEPTION_FOLLOWS`, `SCOPE_FOLLOWS` and any keep-rule that reads `rest` never see the exception or contrast clause. If those keep-rules do read `rest`, the finding is retracted anyway. The new 'applies exception words to every family' test only covers `apart from`, `other than` and `except` with no `beyond ... prior` prefix, so it misses this path. Restrict the tail so it cannot absorb contrast or exception words, for example by capping it at a few words with `[^.,;]*` or by rejecting the `CONTRAST` and `EXCEPTION_FOLLOWS` words inside it. Add a negative test for `No new findings beyond the prior reviews, except X`."
+				},
+				{
+					"id": "r2:c4421152916:0",
+					"roundIndex": 2,
+					"reviewId": 5708986373,
+					"source": "inline",
+					"commentId": 4421152916,
+					"path": "src/replay/retraction-rule.ts",
+					"line": 73,
+					"severity": "P3",
+					"title": "Comma-led scope words now keep plain closers like \"No issues found, as expected\"",
+					"text": "🟢 **P3**\n\n**Comma-led scope words now keep plain closers like \"No issues found, as expected\"**\n\n`SCOPE_FOLLOWS` now starts with `^[\\s,]*`, so a scope word after a comma counts as scoping the phrase. Words like `as`, `per`, `if`, `when` and `after` are common retraction tails, not scopes.\n\nTake a multi-sentence finding whose last sentence is `No issues found, as expected.` The phrase doesn't open the whole finding, and `, as` now matches `SCOPE_FOLLOWS`, so the finding is kept. Before this change it was dropped. The same applies to `No actionable defect, per the earlier review.`\n\nThe `ai-listings` fixture claim `r3:c4371932215:1` stopped being dropped in this same change (recall fell from 13 to 12). The PR attributes that drop to the quote and consistent/resolved fixes, but I can't tell from the diff which rule caused it. Only the 12-of-15 numbers changed. There is no test that pins comma-led scope words either way, so the behaviour change is unpinned.\n\nConsider limiting the comma allowance to the exception regex only, and pinning intended comma-scope cases with tests."
+				}
+			]
+		},
+		{
+			"index": 3,
+			"reviewId": 5719026463,
+			"provider": "anthropic",
+			"submittedAt": "2026-10-30T21:48:16Z",
+			"headSha": "4eb952dbbfb65d4162002ff2b29c49a438e18828",
+			"baseSha": "712ebcffcdf2b7660299bfe0c2ee9694bae54373",
+			"mergeBase": "712ebcffcdf2b7660299bfe0c2ee9694bae54373",
+			"triggerAt": "2026-10-30T21:30:43Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "5483eecb19af56f749dd8723ca0e769ba0c696c8",
+					"committedAt": "2026-10-30T21:25:29Z",
+					"files": [
+						{
+							"path": "src/replay/classify.test.ts",
+							"ranges": [[112, 141]]
+						},
+						{
+							"path": "src/replay/classify.ts",
+							"ranges": [[58, 66], [70, 79]]
+						}
+					]
+				},
+				{
+					"sha": "18e6aed1f94bd712751d108d431577312de15b86",
+					"committedAt": "2026-10-30T21:26:39Z",
+					"files": [
+						{
+							"path": "src/replay/classify.test.ts",
+							"ranges": [[321, 327], [358, 398]]
+						},
+						{
+							"path": "src/replay/classify.ts",
+							"ranges": [[36, 42], [137, 143], [160, 181]]
+						},
+						{
+							"path": "src/replay/command.test.ts",
+							"ranges": [[87, 98], [128, 174]]
+						},
+						{
+							"path": "src/replay/command.ts",
+							"ranges": [[177, 206]]
+						}
+					]
+				},
+				{
+					"sha": "0e2f1ae332ce1a9aa4c12556d1bd48ec8baca66a",
+					"committedAt": "2026-10-30T21:29:42Z",
+					"files": [
+						{
+							"path": "src/replay/classify.test.ts",
+							"ranges": [[59, 65]]
+						},
+						{
+							"path": "src/replay/classify.ts",
+							"ranges": [[1, 4], [50, 56]]
+						},
+						{
+							"path": "src/replay/command.test.ts",
+							"ranges": [[124, 130], [174, 180]]
+						},
+						{
+							"path": "src/replay/filter-margin.test.ts",
+							"ranges": [[142, 154]]
+						},
+						{
+							"path": "src/replay/filter-margin.ts",
+							"ranges": [[1, 6], [94, 100], [149, 163]]
+						},
+						{
+							"path": "src/replay/live.test.ts",
+							"ranges": [[147, 153], [171, 179]]
+						},
+						{
+							"path": "src/replay/live.ts",
+							"ranges": [[1, 5], [91, 97], [106, 112]]
+						},
+						{
+							"path": "src/replay/retraction-rule.test.ts",
+							"ranges": [[1, 12], [87, 93], [354, 372]]
+						},
+						{
+							"path": "src/replay/retraction-rule.ts",
+							"ranges": [[128, 144]]
+						},
+						{
+							"path": "src/review.test.ts",
+							"ranges": [[2829, 2875], [3310, 3324], [3349, 3356]]
+						},
+						{
+							"path": "src/review.ts",
+							"ranges": [
+								[38, 43],
+								[552, 557],
+								[563, 568],
+								[578, 583],
+								[684, 689],
+								[2347, 2354]
+							]
+						},
+						{
+							"path": "src/reviewer-tuning.test.ts",
+							"ranges": [[13, 18]]
+						},
+						{
+							"path": "src/reviewer-tuning.ts",
+							"ranges": [[19, 24], [27, 32]]
+						}
+					]
+				},
+				{
+					"sha": "4eb952dbbfb65d4162002ff2b29c49a438e18828",
+					"committedAt": "2026-10-30T21:30:43Z",
+					"files": [
+						{
+							"path": "CLAUDE.md",
+							"ranges": [[8, 14], [42, 47], [66, 71], [94, 100]]
+						},
+						{
+							"path": "docs/superpowers/plans/2026-10-29-claude-first-pass-accuracy.md",
+							"ranges": [[94, 101]]
+						},
+						{
+							"path": "docs/superpowers/specs/2026-10-29-claude-first-pass-accuracy-design.md",
+							"ranges": [[6, 28], [93, 121], [143, 165]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r3:c4428770971:0",
+					"roundIndex": 3,
+					"reviewId": 5719026463,
+					"source": "inline",
+					"commentId": 4428770971,
+					"path": "src/replay/classify.ts",
+					"line": 63,
+					"severity": "P3",
+					"title": "Fix-wording check also matches negated statements",
+					"text": "🟢 **P3**\n\n**Fix-wording check also matches negated statements**\n\n`FIX_WORDING` matches any sentence containing \"fixed\", \"resolved\", \"addressed\" and similar words, without checking for negation. A reply such as \"This was not fixed in abcdef1; the behavior is intended\" or \"Not addressed in abcdef1 on purpose\" still classifies the claim as `stale`, even though it is contradicted evidence. The new test only covers replies with no fix word at all. Either skip sentences where a negator (not, never, wasn't, isn't) precedes the fix word, or add a negative test and accept the limitation."
+				},
+				{
+					"id": "r3:body:0",
+					"roundIndex": 3,
+					"reviewId": 5719026463,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Spec refers to a \"52-hit set\" that the rewritten Results section no longer describes",
+					"text": "Spec refers to a \"52-hit set\" that the rewritten Results section no longer describes"
+				},
+				{
+					"id": "r3:body:1",
+					"roundIndex": 3,
+					"reviewId": 5719026463,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Whole-title no-new-findings pattern swallows trailing contrast or exception text (`src/self-retraction.ts:49`)",
+					"text": "Whole-title no-new-findings pattern swallows trailing contrast or exception text (`src/self-retraction.ts:49`)"
+				},
+				{
+					"id": "r3:body:2",
+					"roundIndex": 3,
+					"reviewId": 5719026463,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Comma-led scope words now keep plain closers like \"No issues found, as expected\" (`src/self-retraction.ts:73`)",
+					"text": "Comma-led scope words now keep plain closers like \"No issues found, as expected\" (`src/self-retraction.ts:73`)"
+				}
+			]
+		},
+		{
+			"index": 4,
+			"reviewId": 5719190216,
+			"provider": "anthropic",
+			"submittedAt": "2026-10-30T22:06:33Z",
+			"headSha": "92707c3468fd78b45faa9b09eabf5f2569350a33",
+			"baseSha": "4eb952dbbfb65d4162002ff2b29c49a438e18828",
+			"mergeBase": "4eb952dbbfb65d4162002ff2b29c49a438e18828",
+			"triggerAt": "2026-10-30T21:50:01Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "35a357e86c4f543cbcc064e0015270fca7f7b089",
+					"committedAt": "2026-10-30T21:50:00Z",
+					"files": [
+						{
+							"path": "src/replay/classify.test.ts",
+							"ranges": [[112, 144]]
+						},
+						{
+							"path": "src/replay/classify.ts",
+							"ranges": [[60, 73], [79, 85]]
+						}
+					]
+				},
+				{
+					"sha": "92707c3468fd78b45faa9b09eabf5f2569350a33",
+					"committedAt": "2026-10-30T21:50:01Z",
+					"files": [
+						{
+							"path": "docs/superpowers/specs/2026-10-29-claude-first-pass-accuracy-design.md",
+							"ranges": [[159, 165]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r4:body:0",
+					"roundIndex": 4,
+					"reviewId": 5719190216,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Spec refers to a \"52-hit set\" that the rewritten Results section no longer describes",
+					"text": "Spec refers to a \"52-hit set\" that the rewritten Results section no longer describes"
+				},
+				{
+					"id": "r4:body:1",
+					"roundIndex": 4,
+					"reviewId": 5719190216,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Whole-title no-new-findings pattern swallows trailing contrast or exception text (`src/self-retraction.ts:49`)",
+					"text": "Whole-title no-new-findings pattern swallows trailing contrast or exception text (`src/self-retraction.ts:49`)"
+				},
+				{
+					"id": "r4:body:2",
+					"roundIndex": 4,
+					"reviewId": 5719190216,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Comma-led scope words now keep plain closers like \"No issues found, as expected\" (`src/self-retraction.ts:73`)",
+					"text": "Comma-led scope words now keep plain closers like \"No issues found, as expected\" (`src/self-retraction.ts:73`)"
+				}
+			]
+		}
+	],
+	"threads": [
+		{
+			"threadId": "PRRT_kwDOSM5cU86x2ACx",
+			"commentId": 4420384379,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4421025018,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-30T06:29:24Z",
+					"editedAt": null,
+					"body": "Fixed in b7f78ee. The option doc now says P2 and P3."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86x2AC9",
+			"commentId": 4420384396,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4421025406,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-30T06:29:29Z",
+					"editedAt": null,
+					"body": "Fixed in 30bcdbe. The filler count comes from the data, and a test with a fixture holding a different count asserts the printed number."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86x2ADC",
+			"commentId": 4420384407,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4421023676,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-30T06:29:09Z",
+					"editedAt": null,
+					"body": "Fixed in a81831e. A scope word right after the phrase (in, by, with, for, from, during, on, within, and similar) now keeps the finding, so a real defect followed by \"No issues found by tests.\" or \"No issues found in the happy path.\" is no longer dropped. Your example is a negative test in src/self-retraction.test.ts. Fixture margin is unchanged (13 of 15 filler, 0 of 17 fixed) and none of the 12 comments two blind judges called actionable are hit."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86x2ADF",
+			"commentId": 4420384410,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4421023975,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-30T06:29:13Z",
+					"editedAt": null,
+					"body": "Fixed in a81831e. A scope word right after the phrase (in, by, with, for, from, during, on, within, and similar) now keeps the finding, so a real defect followed by \"No issues found by tests.\" or \"No issues found in the happy path.\" is no longer dropped. Your example is a negative test in src/self-retraction.test.ts. Fixture margin is unchanged (13 of 15 filler, 0 of 17 fixed) and none of the 12 comments two blind judges called actionable are hit."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86x30JX",
+			"commentId": 4421152905,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4428738000,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-30T21:43:01Z",
+					"editedAt": null,
+					"body": "The doc comment went with the code in 0e2f1ae. The rule now lives in src/replay/retraction-rule.ts as a measurement rule and its comment describes that."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86x30Jd",
+			"commentId": 4421152911,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4428736854,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-30T21:42:50Z",
+					"editedAt": null,
+					"body": "Retired in 0e2f1ae. The self-retraction filter no longer runs in the merge path: src/review.ts and src/reviewer-tuning.ts are identical to main. The detector now lives in src/replay/retraction-rule.ts as a measurement rule only, so a false drop here cannot affect a review. Reviewers kept finding new false-drop shapes in every round and a rule strict enough to avoid them removed almost nothing, so the spec records it as measured and not shipped."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86x30Jg",
+			"commentId": 4421152916,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4428737225,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-30T21:42:54Z",
+					"editedAt": null,
+					"body": "Retired in 0e2f1ae. The self-retraction filter no longer runs in the merge path: src/review.ts and src/reviewer-tuning.ts are identical to main. The detector now lives in src/replay/retraction-rule.ts as a measurement rule only, so a false drop here cannot affect a review. Reviewers kept finding new false-drop shapes in every round and a rule strict enough to avoid them removed almost nothing, so the spec records it as measured and not shipped."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86yJ2tT",
+			"commentId": 4428770971,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4428830523,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-30T21:57:25Z",
+					"editedAt": null,
+					"body": "Fixed in 35a357e. A fix word now counts only when no negation (not, never, no, without, still, n't, un-) precedes it in the same sentence. \"This was not fixed in abcdef1; the behavior is intended\" and \"Not addressed in abcdef1 on purpose\" are no longer stale, with tests. A negation earlier in a sentence can still hide a real fix citation; that returns null rather than a wrong stale label, which is the safe direction for this report."
+				}
+			]
+		}
+	],
+	"reactions": [
+		{
+			"commentId": 4420384379,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-30T06:29:26Z"
+		},
+		{
+			"commentId": 4420384396,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-30T06:29:30Z"
+		},
+		{
+			"commentId": 4420384407,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-30T06:29:10Z"
+		},
+		{
+			"commentId": 4420384410,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-30T06:29:14Z"
+		},
+		{
+			"commentId": 4421152905,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-30T21:43:03Z"
+		},
+		{
+			"commentId": 4421152911,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-30T21:42:51Z"
+		},
+		{
+			"commentId": 4421152916,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-30T21:42:55Z"
+		},
+		{
+			"commentId": 4428770971,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-30T21:57:26Z"
+		}
+	]
+}

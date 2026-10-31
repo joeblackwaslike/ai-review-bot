@@ -7,6 +7,7 @@
  * Ported from codex-review-bot/src/testing.ts — ModelReview shape is identical.
  */
 
+import { formatAgentsMarker } from "./agent-log.js";
 import type { Category, Severity } from "./review.js";
 
 // ---------------------------------------------------------------------------
@@ -243,6 +244,43 @@ export function reviewsResponse(reviews: Array<{ body: string }> = []) {
 /** A review body marker for a given head SHA (first 12 chars). */
 export function reviewedCommitMarker(headSha: string) {
 	return `Reviewed commit: \`${headSha.slice(0, 12)}\``;
+}
+
+/** A prior own review body laid out the way formatReviewBody writes it, so a
+ * test seeds the review state that deriveBaseline reads back: the inline count,
+ * an optional findings table (a row's `` (`path:line`) `` suffix carries the
+ * anchor, as the "Still open" table does), the sha, review and agents markers,
+ * and the model footer. It omits the readiness/provider/model/findings/cost
+ * markers, so a body at the current head does not count as already reviewed. */
+export function buildOwnReviewBody(o: {
+	sha: string;
+	count: number;
+	inline?: string;
+	rows?: string[];
+	pending?: string[];
+	prefix?: string;
+	provider?: string;
+}): string {
+	const markers = [
+		`<!-- ai-review:sha=${o.sha} -->`,
+		`<!-- ai-review:review=${o.count} -->`,
+		...(o.provider ? [`<!-- ai-review:provider=${o.provider} -->`] : []),
+		...(o.pending?.length
+			? [formatAgentsMarker([], o.pending, new Set(o.pending))]
+			: []),
+	];
+	return [
+		`### ${o.prefix ?? "ai-review-bot"}`,
+		"Summary.",
+		o.inline ?? "Inline comments: none",
+		o.rows?.length
+			? `| Sev | Category | Finding |\n|---|---|---|\n${o.rows.join("\n")}`
+			: "",
+		markers.join("\n"),
+		"---\n*Model: test-model · 5 agents · $0.000000 · [ai-review-bot](https://github.com/joeblackwaslike/ai-review-bot)*",
+	]
+		.filter(Boolean)
+		.join("\n\n");
 }
 
 // ---------------------------------------------------------------------------

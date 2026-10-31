@@ -1,0 +1,190 @@
+{
+	"fixtureId": "joeblackwaslike__ai-review-bot__92__openai",
+	"provisional": true,
+	"labels": [
+		{
+			"claimId": "r0:c4420395320:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-30T21:42:19Z|Retired in 0e2f1ae. The self-retraction filter no longer runs in the merge path: src/review.ts and src/reviewer-tuning.ts are identical to main. The detector now lives in src/replay/retraction-rule.ts as a measurement rule only, so a false drop here cannot affect a review. Reviewers kept finding new false-drop shapes in every round and a rule strict enough to avoid them removed almost nothing, so the spec records it as measured and not shipped."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4420395324:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-30T21:42:23Z|Retired in 0e2f1ae. The self-retraction filter no longer runs in the merge path: src/review.ts and src/reviewer-tuning.ts are identical to main. The detector now lives in src/replay/retraction-rule.ts as a measurement rule only, so a false drop here cannot affect a review. Reviewers kept finding new false-drop shapes in every round and a rule strict enough to avoid them removed almost nothing, so the spec records it as measured and not shipped."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4420395327:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-30T21:42:27Z|Retired in 0e2f1ae. The self-retraction filter no longer runs in the merge path: src/review.ts and src/reviewer-tuning.ts are identical to main. The detector now lives in src/replay/retraction-rule.ts as a measurement rule only, so a false drop here cannot affect a review. Reviewers kept finding new false-drop shapes in every round and a rule strict enough to avoid them removed almost nothing, so the spec records it as measured and not shipped."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4420395331:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-30T21:42:31Z|Retired in 0e2f1ae. The self-retraction filter no longer runs in the merge path: src/review.ts and src/reviewer-tuning.ts are identical to main. The detector now lives in src/replay/retraction-rule.ts as a measurement rule only, so a false drop here cannot affect a review. Reviewers kept finding new false-drop shapes in every round and a rule strict enough to avoid them removed almost nothing, so the spec records it as measured and not shipped."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4420395331:1",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-30T21:42:31Z|Retired in 0e2f1ae. The self-retraction filter no longer runs in the merge path: src/review.ts and src/reviewer-tuning.ts are identical to main. The detector now lives in src/replay/retraction-rule.ts as a measurement rule only, so a false drop here cannot affect a review. Reviewers kept finding new false-drop shapes in every round and a rule strict enough to avoid them removed almost nothing, so the spec records it as measured and not shipped."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4420395335:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-30T21:42:35Z|Retired in 0e2f1ae. The self-retraction filter no longer runs in the merge path: src/review.ts and src/reviewer-tuning.ts are identical to main. The detector now lives in src/replay/retraction-rule.ts as a measurement rule only, so a false drop here cannot affect a review. Reviewers kept finding new false-drop shapes in every round and a rule strict enough to avoid them removed almost nothing, so the spec records it as measured and not shipped."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4420395340:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-30T21:42:39Z|Retired in 0e2f1ae. The self-retraction filter no longer runs in the merge path: src/review.ts and src/reviewer-tuning.ts are identical to main. The detector now lives in src/replay/retraction-rule.ts as a measurement rule only, so a false drop here cannot affect a review. Reviewers kept finding new false-drop shapes in every round and a rule strict enough to avoid them removed almost nothing, so the spec records it as measured and not shipped."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4421076335:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-30T21:43:05Z|Fixed in 5483eec. A reply counts as stale only when the sentence that cites an earlier-round commit also has fix wording (fix, fixed, addressed, resolved, reverted, patched, handled, landed). Both examples, \"abcdef1 deliberately drops ...\" and \"intentionally introduced in abcdef1\", are now not stale, with tests."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4421076335:1",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-30T21:43:05Z|Fixed in 5483eec. A reply counts as stale only when the sentence that cites an earlier-round commit also has fix wording (fix, fixed, addressed, resolved, reverted, patched, handled, landed). Both examples, \"abcdef1 deliberately drops ...\" and \"intentionally introduced in abcdef1\", are now not stale, with tests."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4421076343:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-30T21:43:09Z|Fixed in 18e6aed. A .classes.json with no matching labels file is skipped and reported as \"skipped: no labels file\", so its classifications can no longer appear without their rejected-label denominator."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4421076350:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-30T21:43:13Z|Fixed in 18e6aed. Repeats now come from each labels file repeatPairs, not from class-record coverage. A first-seen rejected claim with no class record prints as \"unclassified\". Your example prints \"classified 1 of 2 first-seen rejected (2 rejected labels, 0 repeats excluded)\" and \"unclassified 1\"."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4421076350:1",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-30T21:43:13Z|Fixed in 18e6aed. Repeats now come from each labels file repeatPairs, not from class-record coverage. A first-seen rejected claim with no class record prints as \"unclassified\". Your example prints \"classified 1 of 2 first-seen rejected (2 rejected labels, 0 repeats excluded)\" and \"unclassified 1\"."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c4421161416:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-30T21:42:58Z|Retired in 0e2f1ae. The self-retraction filter no longer runs in the merge path: src/review.ts and src/reviewer-tuning.ts are identical to main. The detector now lives in src/replay/retraction-rule.ts as a measurement rule only, so a false drop here cannot affect a review. Reviewers kept finding new false-drop shapes in every round and a rule strict enough to avoid them removed almost nothing, so the spec records it as measured and not shipped."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c4421161416:1",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-30T21:42:58Z|Retired in 0e2f1ae. The self-retraction filter no longer runs in the merge path: src/review.ts and src/reviewer-tuning.ts are identical to main. The detector now lives in src/replay/retraction-rule.ts as a measurement rule only, so a false drop here cannot affect a review. Reviewers kept finding new false-drop shapes in every round and a rule strict enough to avoid them removed almost nothing, so the spec records it as measured and not shipped."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:body:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:body:2",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		}
+	],
+	"repeatPairs": [
+		{
+			"later": "r4:body:0",
+			"earlier": "r3:body:0",
+			"confirmed": false
+		}
+	],
+	"negativePairs": [],
+	"allowedSuppression": []
+}

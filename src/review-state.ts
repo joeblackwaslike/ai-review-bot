@@ -1,5 +1,3 @@
-import type { KvClient } from "./feedback/kv.js";
-
 export type FindingStatus = "open" | "resolved";
 
 export interface PersistedFinding {
@@ -18,19 +16,9 @@ export interface ReviewState {
 	reviewedAt: string;
 	reviewCount?: number;
 	/** Skills that still owe this PR a whole-PR review (the agents marker's
-	 * `pending` list). Absent on states saved before it existed: none pending. */
+	 * `pending` list). Absent or empty when the source review has no such
+	 * marker: none pending. */
 	incompleteSkills?: string[];
-}
-
-const STATE_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days, refreshed on each write
-
-export function stateKey(
-	provider: string,
-	owner: string,
-	repo: string,
-	pullNumber: number,
-): string {
-	return `review-state:${provider}:${owner}/${repo}#${pullNumber}`;
 }
 
 export function findingId(
@@ -39,25 +27,6 @@ export function findingId(
 	title: string,
 ): string {
 	return `${path ?? "-"}:${line ?? "-"}:${title.toLowerCase().trim()}`;
-}
-
-export async function saveReviewState(
-	kv: KvClient,
-	provider: string,
-	owner: string,
-	repo: string,
-	pullNumber: number,
-	state: ReviewState,
-): Promise<void> {
-	const toSave: ReviewState = {
-		...state,
-		reviewCount: (state.reviewCount ?? 0) + 1,
-	};
-	await kv.set(
-		stateKey(provider, owner, repo, pullNumber),
-		JSON.stringify(toSave),
-		STATE_TTL_SECONDS,
-	);
 }
 
 export function parseBodyFindings(body: string): PersistedFinding[] {
@@ -92,73 +61,4 @@ export function parseBodyFindings(body: string): PersistedFinding[] {
 		});
 	}
 	return findings;
-}
-
-function isReviewState(v: unknown): v is ReviewState {
-	if (typeof v !== "object" || v === null) return false;
-	const s = v as Record<string, unknown>;
-	return (
-		typeof s.lastReviewedSha === "string" &&
-		typeof s.event === "string" &&
-		Array.isArray(s.findings)
-	);
-}
-
-const SEVERITY_COMPAT: Record<string, string> = {
-	high: "P1",
-	medium: "P2",
-	low: "P3",
-};
-
-function migrateSeverity(s: string): string {
-	return SEVERITY_COMPAT[s] ?? s;
-}
-
-export async function loadReviewState(
-	kv: KvClient,
-	provider: string,
-	owner: string,
-	repo: string,
-	pullNumber: number,
-): Promise<ReviewState | null> {
-	const raw = await kv.get(stateKey(provider, owner, repo, pullNumber));
-	if (raw) {
-		try {
-			const parsed: unknown = JSON.parse(raw);
-			if (isReviewState(parsed)) {
-				// Migrate legacy severity strings from pre-Phase-1 KV records
-				for (const f of parsed.findings) {
-					f.severity = migrateSeverity(f.severity);
-				}
-				if (parsed.reviewCount == null) parsed.reviewCount = 0;
-				if (
-					parsed.incompleteSkills !== undefined &&
-					!(
-						Array.isArray(parsed.incompleteSkills) &&
-						parsed.incompleteSkills.every((s) => typeof s === "string")
-					)
-				)
-					parsed.incompleteSkills = undefined;
-				return parsed;
-			}
-			console.warn(
-				"review-state: KV entry has unexpected shape; treating as cold",
-				{
-					provider,
-					owner,
-					repo,
-					pullNumber,
-				},
-			);
-		} catch (err) {
-			console.warn("review-state: KV entry is corrupt JSON; treating as cold", {
-				provider,
-				owner,
-				repo,
-				pullNumber,
-				err,
-			});
-		}
-	}
-	return null;
 }

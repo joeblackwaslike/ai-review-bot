@@ -1,0 +1,1201 @@
+{
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "ai-review-bot",
+	"pull": 92,
+	"provider": "openai",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-10-31T02:37:25.428Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 5708023097,
+			"provider": "openai",
+			"submittedAt": "2026-10-30T04:17:39Z",
+			"headSha": "e3d181256033d5f451935398add9ccf083ef30a4",
+			"baseSha": "90b3aca1e5afe6d340597e06cd9fc10c249e3c78",
+			"mergeBase": "90b3aca1e5afe6d340597e06cd9fc10c249e3c78",
+			"triggerAt": "2026-10-30T04:10:22Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "32d6be06e18ab7c5eac41a6bdff336a35adc8590",
+					"committedAt": "2026-10-30T03:18:05Z",
+					"files": [
+						{
+							"path": "docs/superpowers/specs/2026-10-29-claude-first-pass-accuracy-design.md",
+							"ranges": [[1, 121]]
+						}
+					]
+				},
+				{
+					"sha": "db4a917c5e9c0c586c68fd5e0daa8a22321cbddf",
+					"committedAt": "2026-10-30T03:18:17Z",
+					"files": [
+						{
+							"path": "docs/superpowers/specs/2026-10-29-claude-first-pass-accuracy-design.md",
+							"ranges": [[50, 56], [61, 70]]
+						}
+					]
+				},
+				{
+					"sha": "d92f5a95b3c9b2822a4d305890d54fa3311f3ff1",
+					"committedAt": "2026-10-30T03:19:19Z",
+					"files": [
+						{
+							"path": "docs/superpowers/plans/2026-10-29-claude-first-pass-accuracy.md",
+							"ranges": [[1, 116]]
+						}
+					]
+				},
+				{
+					"sha": "edb7672b4a3cb5f1de68f4f8513aaaca58a99862",
+					"committedAt": "2026-10-30T03:20:46Z",
+					"files": [
+						{
+							"path": "src/replay/classify.test.ts",
+							"ranges": [[1, 235]]
+						},
+						{
+							"path": "src/replay/classify.ts",
+							"ranges": [[1, 162]]
+						},
+						{
+							"path": "src/replay/command.test.ts",
+							"ranges": [[72, 90]]
+						},
+						{
+							"path": "src/replay/command.ts",
+							"ranges": [[38, 44]]
+						}
+					]
+				},
+				{
+					"sha": "802a40be23b28ce2a52b83cabca81b27a39334eb",
+					"committedAt": "2026-10-30T03:21:14Z",
+					"files": [
+						{
+							"path": "docs/superpowers/plans/2026-10-29-claude-first-pass-accuracy.md",
+							"ranges": [[65, 71], [88, 94]]
+						},
+						{
+							"path": "docs/superpowers/specs/2026-10-29-claude-first-pass-accuracy-design.md",
+							"ranges": [[39, 45]]
+						},
+						{
+							"path": "src/replay/classify.test.ts",
+							"ranges": [[226, 233]]
+						}
+					]
+				},
+				{
+					"sha": "21c7fe9316b4bbd7fb0819fb3b1a8da0f155eda7",
+					"committedAt": "2026-10-30T03:23:53Z",
+					"files": [
+						{
+							"path": "src/replay/fixtures/joeblackwaslike__agent-skills__10__anthropic.classes.json",
+							"ranges": [[1, 142]]
+						},
+						{
+							"path": "src/replay/fixtures/joeblackwaslike__ai-listings__74__anthropic.classes.json",
+							"ranges": [[1, 46]]
+						},
+						{
+							"path": "src/replay/fixtures/joeblackwaslike__stealth-browser__1__anthropic.classes.json",
+							"ranges": [[1, 198]]
+						}
+					]
+				},
+				{
+					"sha": "794c1b37d36216088dfa7dd2794eb02d0b636e9b",
+					"committedAt": "2026-10-30T03:24:21Z",
+					"files": [
+						{
+							"path": "src/replay/pipeline.test.ts",
+							"ranges": [[65, 71]]
+						},
+						{
+							"path": "src/replay/snapshot.test.ts",
+							"ranges": [[13, 19]]
+						}
+					]
+				},
+				{
+					"sha": "4954fb7be37ab999939aa0dc8522176913104be8",
+					"committedAt": "2026-10-30T03:25:01Z",
+					"files": [
+						{
+							"path": "src/replay/classify.test.ts",
+							"ranges": [[3, 12], [233, 294]]
+						},
+						{
+							"path": "src/replay/classify.ts",
+							"ranges": [[36, 42], [122, 150], [172, 189]]
+						},
+						{
+							"path": "src/replay/command.test.ts",
+							"ranges": [[85, 125]]
+						},
+						{
+							"path": "src/replay/command.ts",
+							"ranges": [[3, 13], [167, 201], [232, 238]]
+						}
+					]
+				},
+				{
+					"sha": "efc9a2eae9072a1ccc6f549fc0014378cde03e26",
+					"committedAt": "2026-10-30T03:25:16Z",
+					"files": [
+						{
+							"path": "src/replay/pipeline.test.ts",
+							"ranges": [[65, 72]]
+						},
+						{
+							"path": "src/replay/snapshot.test.ts",
+							"ranges": [[13, 21]]
+						}
+					]
+				},
+				{
+					"sha": "f860b5b877fa778bb2340a6dd424088897287d98",
+					"committedAt": "2026-10-30T03:25:58Z",
+					"files": [
+						{
+							"path": "docs/superpowers/plans/2026-10-29-claude-first-pass-accuracy.md",
+							"ranges": [[92, 126]]
+						}
+					]
+				},
+				{
+					"sha": "44ad3f11cf0ff30156c2e292ee037f3fc6fd4f74",
+					"committedAt": "2026-10-30T03:35:23Z",
+					"files": [
+						{
+							"path": "src/replay/classify.test.ts",
+							"ranges": [[36, 43], [54, 74], [131, 145]]
+						},
+						{
+							"path": "src/replay/classify.ts",
+							"ranges": [[1, 4], [48, 55]]
+						},
+						{
+							"path": "src/replay/command.test.ts",
+							"ranges": [[118, 134]]
+						},
+						{
+							"path": "src/replay/command.ts",
+							"ranges": [
+								[8, 14],
+								[171, 179],
+								[195, 201],
+								[212, 218],
+								[229, 256]
+							]
+						},
+						{
+							"path": "src/replay/filter-margin.test.ts",
+							"ranges": [[1, 205]]
+						},
+						{
+							"path": "src/replay/filter-margin.ts",
+							"ranges": [[1, 165]]
+						},
+						{
+							"path": "src/replay/live.test.ts",
+							"ranges": [[147, 175]]
+						},
+						{
+							"path": "src/replay/live.ts",
+							"ranges": [[1, 22], [88, 99], [107, 113]]
+						},
+						{
+							"path": "src/review.test.ts",
+							"ranges": [[2829, 2942]]
+						},
+						{
+							"path": "src/review.ts",
+							"ranges": [
+								[38, 44],
+								[553, 561],
+								[567, 601],
+								[611, 622],
+								[723, 729],
+								[2387, 2403]
+							]
+						},
+						{
+							"path": "src/reviewer-tuning.test.ts",
+							"ranges": [[13, 19]]
+						},
+						{
+							"path": "src/reviewer-tuning.ts",
+							"ranges": [[19, 26], [29, 35]]
+						},
+						{
+							"path": "src/self-retraction.test.ts",
+							"ranges": [[1, 146]]
+						},
+						{
+							"path": "src/self-retraction.ts",
+							"ranges": [[1, 90]]
+						}
+					]
+				},
+				{
+					"sha": "ccab2676ae1ca0341fe82fca62ecc5b31dca6fb1",
+					"committedAt": "2026-10-30T03:41:07Z",
+					"files": [
+						{
+							"path": "src/replay/filter-margin.test.ts",
+							"ranges": [[187, 201]]
+						},
+						{
+							"path": "src/self-retraction.test.ts",
+							"ranges": [[14, 20], [134, 202]]
+						},
+						{
+							"path": "src/self-retraction.ts",
+							"ranges": [[7, 30], [34, 58], [63, 84]]
+						}
+					]
+				},
+				{
+					"sha": "25acdb04c8fb7986067bffd97390a3f4671f7939",
+					"committedAt": "2026-10-30T03:43:30Z",
+					"files": [
+						{
+							"path": "src/self-retraction.test.ts",
+							"ranges": [[182, 204]]
+						},
+						{
+							"path": "src/self-retraction.ts",
+							"ranges": [[8, 22], [53, 61], [74, 92]]
+						}
+					]
+				},
+				{
+					"sha": "84bbe84f1499c8f7327ff61dde2864fa50a1a40d",
+					"committedAt": "2026-10-30T03:56:21Z",
+					"files": [
+						{
+							"path": "docs/superpowers/plans/2026-10-29-claude-first-pass-accuracy.md",
+							"ranges": [[101, 114]]
+						},
+						{
+							"path": "docs/superpowers/specs/2026-10-29-claude-first-pass-accuracy-design.md",
+							"ranges": [[20, 26], [99, 105]]
+						},
+						{
+							"path": "src/replay/classify.test.ts",
+							"ranges": [[11, 22], [309, 335]]
+						},
+						{
+							"path": "src/replay/filter-margin.test.ts",
+							"ranges": [[182, 194]]
+						},
+						{
+							"path": "src/replay/filter-margin.ts",
+							"ranges": [[1, 4], [87, 97]]
+						},
+						{
+							"path": "src/replay/fixtures/joeblackwaslike__agent-skills__10__anthropic.classes.json",
+							"ranges": [[4, 10], [20, 26], [36, 42], [76, 82], [92, 98]]
+						},
+						{
+							"path": "src/replay/fixtures/joeblackwaslike__ai-listings__74__anthropic.classes.json",
+							"ranges": [[20, 26]]
+						},
+						{
+							"path": "src/replay/fixtures/joeblackwaslike__stealth-browser__1__anthropic.classes.json",
+							"ranges": [[4, 18], [28, 34], [68, 74], [92, 98]]
+						},
+						{
+							"path": "src/replay/live-wiring.test.ts",
+							"ranges": [[1, 56]]
+						},
+						{
+							"path": "src/replay/live-wiring.ts",
+							"ranges": [[1, 7], [15, 41], [84, 90]]
+						},
+						{
+							"path": "src/replay/live.test.ts",
+							"ranges": [[162, 178]]
+						},
+						{
+							"path": "src/replay/live.ts",
+							"ranges": [[1, 5], [8, 14], [91, 97]]
+						},
+						{
+							"path": "src/review.test.ts",
+							"ranges": [[2833, 2839], [2923, 2990], [3435, 3484]]
+						},
+						{
+							"path": "src/review.ts",
+							"ranges": [
+								[38, 44],
+								[569, 631],
+								[641, 651],
+								[753, 760],
+								[2421, 2429]
+							]
+						},
+						{
+							"path": "src/self-retraction.test.ts",
+							"ranges": [[199, 248]]
+						},
+						{
+							"path": "src/self-retraction.ts",
+							"ranges": [[3, 54], [60, 142]]
+						}
+					]
+				},
+				{
+					"sha": "854dccfe23d4612fa410d3876e92991288613450",
+					"committedAt": "2026-10-30T03:58:13Z",
+					"files": [
+						{
+							"path": "docs/superpowers/specs/2026-10-29-claude-first-pass-accuracy-design.md",
+							"ranges": [[123, 161]]
+						}
+					]
+				},
+				{
+					"sha": "f90022a8ba3c2c56e347d878d79941a29210ab6f",
+					"committedAt": "2026-10-30T03:58:37Z",
+					"files": [
+						{
+							"path": "docs/superpowers/specs/2026-10-29-claude-first-pass-accuracy-design.md",
+							"ranges": [[149, 155]]
+						}
+					]
+				},
+				{
+					"sha": "cd42314937cd49c6a26869842819f061563d49ca",
+					"committedAt": "2026-10-30T04:02:19Z",
+					"files": [
+						{
+							"path": "src/review.test.ts",
+							"ranges": [[2985, 3012]]
+						}
+					]
+				},
+				{
+					"sha": "e3d181256033d5f451935398add9ccf083ef30a4",
+					"committedAt": "2026-10-30T04:10:22Z",
+					"files": [
+						{
+							"path": "CLAUDE.md",
+							"ranges": [[8, 14], [42, 48], [67, 73], [96, 102]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r0:c4420395320:0",
+					"roundIndex": 0,
+					"reviewId": 5708023097,
+					"source": "inline",
+					"commentId": 4420395320,
+					"path": "src/replay/retraction-rule.ts",
+					"line": 85,
+					"severity": "P2",
+					"title": "Keep findings that quote a retraction-like status message",
+					"text": "🟡 **P2**\n\n**Keep findings that quote a retraction-like status message**\n\nFor a P2/P3 finding whose body is `The error handler reports \"No issues found\" even when validation fails.`, the quoted message survives normalization, matches `no-actionable-defect`, and passes the four-word tail limit. The merge therefore deletes an actionable error-handling finding rather than a self-retraction. Conservatively preserve findings when the matching phrase is quoted program output, and add a regression through `mergeReviewsDetailed`."
+				},
+				{
+					"id": "r0:c4420395324:0",
+					"roundIndex": 0,
+					"reviewId": 5708023097,
+					"source": "inline",
+					"commentId": 4420395324,
+					"path": "src/replay/retraction-rule.ts",
+					"line": 118,
+					"severity": "P2",
+					"title": "Do not treat test-scoped statements as global withdrawals",
+					"text": "🟡 **P2**\n\n**Do not treat test-scoped statements as global withdrawals**\n\nA P2/P3 body such as `The writer drops the last chunk on flush. No issues found by the existing tests.` is dropped: the closing sentence matches, and `by the existing tests` contains exactly four words. That sentence says the tests missed the defect; it does not withdraw the preceding finding. The existing longer test-scoped negative happens to survive only because its suffix exceeds this limit. Require an unqualified withdrawal rather than relying on suffix length, and pin this shorter case as a negative test."
+				},
+				{
+					"id": "r0:c4420395327:0",
+					"roundIndex": 0,
+					"reviewId": 5708023097,
+					"source": "inline",
+					"commentId": 4420395327,
+					"path": "src/self-retraction.ts",
+					"line": 46,
+					"severity": "P2",
+					"title": "Preserve findings where consistency describes a failure",
+					"text": "🟡 **P2**\n\n**Preserve findings where consistency describes a failure**\n\nThe `consistent` branch also matches agreement with a defect, not just a retraction. For example, a suppressible P2 finding with body `Both workers overwrite the same key. This looks consistent with the reported race condition.` matches this family and is removed by `droppedFamilies()`. Nothing in the trailing-clause checks preserves it. Exclude continuations such as `consistent with ...` unless they explicitly establish correctness, and add a negative regression test."
+				},
+				{
+					"id": "r0:c4420395331:0",
+					"roundIndex": 0,
+					"reviewId": 5708023097,
+					"source": "inline",
+					"commentId": 4420395331,
+					"path": "src/replay/retraction-rule.ts",
+					"line": 24,
+					"severity": "P2",
+					"title": "Keep findings whose closing no-issue statement is scoped",
+					"text": "🟡 **P2**\n\n**Keep findings whose closing no-issue statement is scoped**\n\nThis pattern and the four-word allowance still delete genuine findings when the closing sentence excludes only an unaffected path. For example, `The retry path leaks the socket. No issues found on the happy path.` matches `No issues found`; its remaining four words pass `maxWordsAfter`, and neither the exception nor contrast checks reject it. A suppressible P2 finding is therefore dropped despite explicitly reporting the retry leak. Reject scope-limiting continuations such as `on the happy path` rather than treating any short suffix as a whole-finding retraction."
+				},
+				{
+					"id": "r0:c4420395331:1",
+					"roundIndex": 0,
+					"reviewId": 5708023097,
+					"source": "inline",
+					"commentId": 4420395331,
+					"path": "src/replay/retraction-rule.ts",
+					"line": 24,
+					"severity": "P2",
+					"title": "The existing `Threads` negative case survives only because its qualifier exceeds four words. Shortening it to `The counter is shared across workers without synchronization. No bugs found by the existing tests.` makes the detector return true: the suffix `by the existing tests` passes the four-word allowance. This describes inadequate tests, not withdrawal of the preceding race finding, so a P2/P3 report is incorrectly removed. Add this shorter negative regression case and preserve test-scoped statements independently of their length. Coverage criticality: 7/10.",
+					"text": "The existing `Threads` negative case survives only because its qualifier exceeds four words. Shortening it to `The counter is shared across workers without synchronization. No bugs found by the existing tests.` makes the detector return true: the suffix `by the existing tests` passes the four-word allowance. This describes inadequate tests, not withdrawal of the preceding race finding, so a P2/P3 report is incorrectly removed. Add this shorter negative regression case and preserve test-scoped statements independently of their length. Coverage criticality: 7/10."
+				},
+				{
+					"id": "r0:c4420395335:0",
+					"roundIndex": 0,
+					"reviewId": 5708023097,
+					"source": "inline",
+					"commentId": 4420395335,
+					"path": "src/self-retraction.ts",
+					"line": 109,
+					"severity": "P2",
+					"title": "Apply the documented exception safeguard to other phrase families",
+					"text": "🟡 **P2**\n\n**Apply the documented exception safeguard to other phrase families**\n\nThe new documentation says an exception after a phrase keeps the finding, but this check only runs for `no-actionable-defect`. A suppressible P2 finding titled `Timeout` with body `No new findings apart from the missing timeout.` matches `no-new-findings` and is dropped despite retaining an actionable exception. `KEEP_AFTER_PHRASE` does not catch `apart from`, `aside from`, or `other than`. Extend exception protection to those families, preserving the intended `beyond prior reviews` exemption, and add a negative test so the documented safeguard holds."
+				},
+				{
+					"id": "r0:c4420395340:0",
+					"roundIndex": 0,
+					"reviewId": 5708023097,
+					"source": "inline",
+					"commentId": 4420395340,
+					"path": "src/self-retraction.ts",
+					"line": 51,
+					"severity": "P2",
+					"title": "Cover defect titles that begin with “No new findings”",
+					"text": "🟡 **P2**\n\n**Cover defect titles that begin with “No new findings”**\n\nThis prefix also matches an actual missing-output defect. For example, a P2 finding titled `No new findings are posted after the first round`, with body `The cached result is reused for every head, so subsequent diffs are never reviewed.`, is dropped. The title is one unit, the regex accepts everything after `findings`, and the substantive body cannot veto the title match. The current `No test coverage` and `No retry` negatives do not exercise this positive phrase family. Add this title/body regression case and distinguish an absence-of-output report from a literal retraction. Coverage criticality: 7/10."
+				}
+			]
+		},
+		{
+			"index": 1,
+			"reviewId": 5708882113,
+			"provider": "openai",
+			"submittedAt": "2026-10-30T06:37:59Z",
+			"headSha": "ee6aaf8cc0e03b2ba819299dedda5df2f38a9d5b",
+			"baseSha": "e3d181256033d5f451935398add9ccf083ef30a4",
+			"mergeBase": "e3d181256033d5f451935398add9ccf083ef30a4",
+			"triggerAt": "2026-10-30T06:26:05Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "a81831eeeb3e48eb2493db91308a2d654dfc3dbe",
+					"committedAt": "2026-10-30T04:17:15Z",
+					"files": [
+						{
+							"path": "src/self-retraction.test.ts",
+							"ranges": [[234, 273]]
+						},
+						{
+							"path": "src/self-retraction.ts",
+							"ranges": [[69, 78], [112, 123]]
+						}
+					]
+				},
+				{
+					"sha": "f60710c8b6a74ea11a751ede59bcb12a9e6aa14b",
+					"committedAt": "2026-10-30T04:17:45Z",
+					"files": [
+						{
+							"path": "docs/superpowers/specs/2026-10-29-claude-first-pass-accuracy-design.md",
+							"ranges": [[50, 56], [63, 69], [139, 145], [148, 154]]
+						},
+						{
+							"path": "src/replay/classify.test.ts",
+							"ranges": [[79, 85], [88, 94]]
+						},
+						{
+							"path": "src/replay/classify.ts",
+							"ranges": [[81, 86]]
+						},
+						{
+							"path": "src/replay/fixtures/joeblackwaslike__stealth-browser__1__anthropic.classes.json",
+							"ranges": [[100, 106], [156, 162]]
+						}
+					]
+				},
+				{
+					"sha": "30bcdbe79b204643a1c6bd682b922f579c1b13e3",
+					"committedAt": "2026-10-30T04:18:13Z",
+					"files": [
+						{
+							"path": "src/replay/filter-margin.test.ts",
+							"ranges": [[84, 90], [95, 105], [115, 121], [134, 147]]
+						},
+						{
+							"path": "src/replay/filter-margin.ts",
+							"ranges": [
+								[15, 21],
+								[34, 40],
+								[47, 53],
+								[61, 67],
+								[76, 85],
+								[156, 162],
+								[168, 173]
+							]
+						}
+					]
+				},
+				{
+					"sha": "b7f78ee872eca3c8b10f01bdd44226cd367ec896",
+					"committedAt": "2026-10-30T04:18:18Z",
+					"files": [
+						{
+							"path": "src/review.ts",
+							"ranges": [[553, 562]]
+						}
+					]
+				},
+				{
+					"sha": "ee6aaf8cc0e03b2ba819299dedda5df2f38a9d5b",
+					"committedAt": "2026-10-30T06:26:05Z",
+					"files": [
+						{
+							"path": "src/self-retraction.ts",
+							"ranges": [[137, 146]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r1:c4421076335:0",
+					"roundIndex": 1,
+					"reviewId": 5708882113,
+					"source": "inline",
+					"commentId": 4421076335,
+					"path": "src/replay/classify.ts",
+					"line": 72,
+					"severity": "P2",
+					"title": "Require fix evidence before classifying a commit citation as stale",
+					"text": "🟡 **P2**\n\n**Require fix evidence before classifying a commit citation as stale**\n\nAny earlier-commit citation in an author reply currently produces `stale`, even when the reply explains intentional behavior rather than an earlier fix. For example, “abcdef1 deliberately drops expired tokens; this is by design” makes a rejected token-loss claim stale if that SHA belongs to an earlier round. The spec defines this as contradicted, not stale. This contaminates the deterministic labels and rules-versus-models measurement. Require evidence that the cited commit already fixed or superseded the reported issue; leave a bare citation unclassified by this rule."
+				},
+				{
+					"id": "r1:c4421076335:1",
+					"roundIndex": 1,
+					"reviewId": 5708882113,
+					"source": "inline",
+					"commentId": 4421076335,
+					"path": "src/replay/classify.ts",
+					"line": 72,
+					"severity": "P3",
+					"title": "Any earlier-round SHA in an author reply currently produces a deterministic `stale` classification, even when the reply explicitly describes intentional behavior rather than a fix. For example, `This behavior was intentionally introduced in abcdef1; leave it unchanged` matches this branch. Under the spec, that is contradicted evidence, not evidence that the issue was already fixed. Require a fix-related statement associated with the citation, or leave the rule result null; otherwise the rules-versus-models measurement includes unsupported stale classifications.",
+					"text": "Any earlier-round SHA in an author reply currently produces a deterministic `stale` classification, even when the reply explicitly describes intentional behavior rather than a fix. For example, `This behavior was intentionally introduced in abcdef1; leave it unchanged` matches this branch. Under the spec, that is contradicted evidence, not evidence that the issue was already fixed. Require a fix-related statement associated with the citation, or leave the rule result null; otherwise the rules-versus-models measurement includes unsupported stale classifications."
+				},
+				{
+					"id": "r1:c4421076343:0",
+					"roundIndex": 1,
+					"reviewId": 5708882113,
+					"source": "inline",
+					"commentId": 4421076343,
+					"path": "src/replay/command.ts",
+					"line": 186,
+					"severity": "P2",
+					"title": "Do not silently include class files whose labels are missing",
+					"text": "🟡 **P2**\n\n**Do not silently include class files whose labels are missing**\n\nThe class file is added to `files` before this missing-label check, so `continue` retains its classifications while omitting their rejected-label denominator. If an orphan `.classes.json` remains alongside otherwise valid fixtures, replay can succeed with incorrect class totals and repeat counts; the margin report then excludes the orphan through `covered`, making the two reports describe different datasets. Surface the missing companion file explicitly and either fail or exclude that class file from both reports. For example, throw an error containing `name` and `labelsPath` instead of silently continuing."
+				},
+				{
+					"id": "r1:c4421076350:0",
+					"roundIndex": 1,
+					"reviewId": 5708882113,
+					"source": "inline",
+					"commentId": 4421076350,
+					"path": "src/replay/classify.ts",
+					"line": 162,
+					"severity": "P2",
+					"title": "Do not count missing class records as repeat findings",
+					"text": "🟡 **P2**\n\n**Do not count missing class records as repeat findings**\n\nThe report still assumes every rejected claim without a class record is a repeat. For example, with two first-seen rejected claims, no repeat pairs, and only one agreed class record, this prints `classified 1 of 1 ... (2 rejected labels, 1 repeats excluded)`. That falsely reports complete classification, even though the new margin report correctly puts the missing record in `unclassified`. Compute first-seen and repeat totals from the fixture and label file, independently of class-record coverage, and report missing classifications separately."
+				},
+				{
+					"id": "r1:c4421076350:1",
+					"roundIndex": 1,
+					"reviewId": 5708882113,
+					"source": "inline",
+					"commentId": 4421076350,
+					"path": "src/replay/classify.ts",
+					"line": 162,
+					"severity": "P3",
+					"title": "`firstSeen` counts class records rather than first-seen rejected claims. With three rejected labels, no repeat pairs, and two classified records, this reports `classified 2 of 2` and `1 repeats excluded`: the missing classification becomes a fictitious repeat, falsely showing complete coverage. Missing records are explicitly supported by the new margin report's `unclassified` bucket. Compute the first-seen and repeat counts from the fixture and labels in `printClassReport`, and report missing classifications separately.",
+					"text": "`firstSeen` counts class records rather than first-seen rejected claims. With three rejected labels, no repeat pairs, and two classified records, this reports `classified 2 of 2` and `1 repeats excluded`: the missing classification becomes a fictitious repeat, falsely showing complete coverage. Missing records are explicitly supported by the new margin report's `unclassified` bucket. Compute the first-seen and repeat counts from the fixture and labels in `printClassReport`, and report missing classifications separately."
+				},
+				{
+					"id": "r1:body:0",
+					"roundIndex": 1,
+					"reviewId": 5708882113,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Keep findings that quote a retraction-like status message (`src/self-retraction.ts:84`)",
+					"text": "Keep findings that quote a retraction-like status message (`src/self-retraction.ts:84`)"
+				},
+				{
+					"id": "r1:body:1",
+					"roundIndex": 1,
+					"reviewId": 5708882113,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Cover defect titles that begin with “No new findings” (`src/self-retraction.ts:51`)",
+					"text": "Cover defect titles that begin with “No new findings” (`src/self-retraction.ts:51`)"
+				}
+			]
+		},
+		{
+			"index": 2,
+			"reviewId": 5708997399,
+			"provider": "openai",
+			"submittedAt": "2026-10-30T06:53:41Z",
+			"headSha": "712ebcffcdf2b7660299bfe0c2ee9694bae54373",
+			"baseSha": "ee6aaf8cc0e03b2ba819299dedda5df2f38a9d5b",
+			"mergeBase": "ee6aaf8cc0e03b2ba819299dedda5df2f38a9d5b",
+			"triggerAt": "2026-10-30T06:41:30Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "f4fdf1cf016a85525f3e9cf06c23c1c831225c6c",
+					"committedAt": "2026-10-30T06:32:39Z",
+					"files": [
+						{
+							"path": "docs/superpowers/specs/2026-10-29-claude-first-pass-accuracy-design.md",
+							"ranges": [[139, 153]]
+						},
+						{
+							"path": "src/replay/filter-margin.test.ts",
+							"ranges": [[196, 202], [207, 214]]
+						},
+						{
+							"path": "src/replay/fixtures/joeblackwaslike__ai-listings__74__anthropic.classes.json",
+							"ranges": [[20, 26]]
+						},
+						{
+							"path": "src/review.test.ts",
+							"ranges": [[2923, 2945]]
+						},
+						{
+							"path": "src/self-retraction.test.ts",
+							"ranges": [[39, 45], [268, 329]]
+						},
+						{
+							"path": "src/self-retraction.ts",
+							"ranges": [
+								[12, 17],
+								[22, 27],
+								[41, 52],
+								[64, 79],
+								[83, 90],
+								[109, 117]
+							]
+						}
+					]
+				},
+				{
+					"sha": "712ebcffcdf2b7660299bfe0c2ee9694bae54373",
+					"committedAt": "2026-10-30T06:41:30Z",
+					"files": [
+						{
+							"path": "src/self-retraction.ts",
+							"ranges": [[130, 140]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r2:c4421161416:0",
+					"roundIndex": 2,
+					"reviewId": 5708997399,
+					"source": "inline",
+					"commentId": 4421161416,
+					"path": "src/replay/retraction-rule.ts",
+					"line": 49,
+					"severity": "P2",
+					"title": "Preserve contrast text when matching the prior-review suffix",
+					"text": "🟡 **P2**\n\n**Preserve contrast text when matching the prior-review suffix**\n\nFor a P2 finding whose body is `No new findings beyond prior reviews, but the upload path still leaks its socket.`, the new `[^.]*` suffix consumes the actionable contrast along with the retraction phrase. This leaves `rest` empty, so the keep-rules cannot see `but` and the finding is dropped. Previously, the match stopped at `findings`, leaving the contrast available to those guards. Preserve the whole-title requirement without consuming the tail inspected by the keep-rules, or apply those guards to a separately captured tail."
+				},
+				{
+					"id": "r2:c4421161416:1",
+					"roundIndex": 2,
+					"reviewId": 5708997399,
+					"source": "inline",
+					"commentId": 4421161416,
+					"path": "src/replay/retraction-rule.ts",
+					"line": 49,
+					"severity": "P2",
+					"title": "The new `[^.]*` suffix consumes exception and contrast clauses, hiding them from the keep-rules that inspect text before and after the match. For example, a suppressible P2 finding with body `No new findings beyond prior reviews except for the missing timeout.` now matches the entire first alternative, leaving `rest` empty and incorrectly dropping the finding. Previously, `except` remained outside the match and preserved it. Bound the matched suffix or inspect the consumed text for keep-rule clauses before dropping.",
+					"text": "The new `[^.]*` suffix consumes exception and contrast clauses, hiding them from the keep-rules that inspect text before and after the match. For example, a suppressible P2 finding with body `No new findings beyond prior reviews except for the missing timeout.` now matches the entire first alternative, leaving `rest` empty and incorrectly dropping the finding. Previously, `except` remained outside the match and preserved it. Bound the matched suffix or inspect the consumed text for keep-rule clauses before dropping."
+				},
+				{
+					"id": "r2:body:0",
+					"roundIndex": 2,
+					"reviewId": 5708997399,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Require fix evidence before classifying a commit citation as stale (`src/replay/classify.ts:72`)",
+					"text": "Require fix evidence before classifying a commit citation as stale (`src/replay/classify.ts:72`)"
+				},
+				{
+					"id": "r2:body:1",
+					"roundIndex": 2,
+					"reviewId": 5708997399,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Do not silently include class files whose labels are missing (`src/replay/command.ts:186`)",
+					"text": "Do not silently include class files whose labels are missing (`src/replay/command.ts:186`)"
+				},
+				{
+					"id": "r2:body:2",
+					"roundIndex": 2,
+					"reviewId": 5708997399,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Do not count missing class records as repeat findings (`src/replay/classify.ts:162`)",
+					"text": "Do not count missing class records as repeat findings (`src/replay/classify.ts:162`)"
+				}
+			]
+		},
+		{
+			"index": 3,
+			"reviewId": 5719022478,
+			"provider": "openai",
+			"submittedAt": "2026-10-30T21:47:53Z",
+			"headSha": "4eb952dbbfb65d4162002ff2b29c49a438e18828",
+			"baseSha": "712ebcffcdf2b7660299bfe0c2ee9694bae54373",
+			"mergeBase": "712ebcffcdf2b7660299bfe0c2ee9694bae54373",
+			"triggerAt": "2026-10-30T21:30:43Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "5483eecb19af56f749dd8723ca0e769ba0c696c8",
+					"committedAt": "2026-10-30T21:25:29Z",
+					"files": [
+						{
+							"path": "src/replay/classify.test.ts",
+							"ranges": [[112, 141]]
+						},
+						{
+							"path": "src/replay/classify.ts",
+							"ranges": [[58, 66], [70, 79]]
+						}
+					]
+				},
+				{
+					"sha": "18e6aed1f94bd712751d108d431577312de15b86",
+					"committedAt": "2026-10-30T21:26:39Z",
+					"files": [
+						{
+							"path": "src/replay/classify.test.ts",
+							"ranges": [[321, 327], [358, 398]]
+						},
+						{
+							"path": "src/replay/classify.ts",
+							"ranges": [[36, 42], [137, 143], [160, 181]]
+						},
+						{
+							"path": "src/replay/command.test.ts",
+							"ranges": [[87, 98], [128, 174]]
+						},
+						{
+							"path": "src/replay/command.ts",
+							"ranges": [[177, 206]]
+						}
+					]
+				},
+				{
+					"sha": "0e2f1ae332ce1a9aa4c12556d1bd48ec8baca66a",
+					"committedAt": "2026-10-30T21:29:42Z",
+					"files": [
+						{
+							"path": "src/replay/classify.test.ts",
+							"ranges": [[59, 65]]
+						},
+						{
+							"path": "src/replay/classify.ts",
+							"ranges": [[1, 4], [50, 56]]
+						},
+						{
+							"path": "src/replay/command.test.ts",
+							"ranges": [[124, 130], [174, 180]]
+						},
+						{
+							"path": "src/replay/filter-margin.test.ts",
+							"ranges": [[142, 154]]
+						},
+						{
+							"path": "src/replay/filter-margin.ts",
+							"ranges": [[1, 6], [94, 100], [149, 163]]
+						},
+						{
+							"path": "src/replay/live.test.ts",
+							"ranges": [[147, 153], [171, 179]]
+						},
+						{
+							"path": "src/replay/live.ts",
+							"ranges": [[1, 5], [91, 97], [106, 112]]
+						},
+						{
+							"path": "src/replay/retraction-rule.test.ts",
+							"ranges": [[1, 12], [87, 93], [354, 372]]
+						},
+						{
+							"path": "src/replay/retraction-rule.ts",
+							"ranges": [[128, 144]]
+						},
+						{
+							"path": "src/review.test.ts",
+							"ranges": [[2829, 2875], [3310, 3324], [3349, 3356]]
+						},
+						{
+							"path": "src/review.ts",
+							"ranges": [
+								[38, 43],
+								[552, 557],
+								[563, 568],
+								[578, 583],
+								[684, 689],
+								[2347, 2354]
+							]
+						},
+						{
+							"path": "src/reviewer-tuning.test.ts",
+							"ranges": [[13, 18]]
+						},
+						{
+							"path": "src/reviewer-tuning.ts",
+							"ranges": [[19, 24], [27, 32]]
+						}
+					]
+				},
+				{
+					"sha": "4eb952dbbfb65d4162002ff2b29c49a438e18828",
+					"committedAt": "2026-10-30T21:30:43Z",
+					"files": [
+						{
+							"path": "CLAUDE.md",
+							"ranges": [[8, 14], [42, 47], [66, 71], [94, 100]]
+						},
+						{
+							"path": "docs/superpowers/plans/2026-10-29-claude-first-pass-accuracy.md",
+							"ranges": [[94, 101]]
+						},
+						{
+							"path": "docs/superpowers/specs/2026-10-29-claude-first-pass-accuracy-design.md",
+							"ranges": [[6, 28], [93, 121], [143, 165]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r3:body:0",
+					"roundIndex": 3,
+					"reviewId": 5719022478,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Preserve contrast text when matching the prior-review suffix (`src/self-retraction.ts:49`)",
+					"text": "Preserve contrast text when matching the prior-review suffix (`src/self-retraction.ts:49`)"
+				}
+			]
+		},
+		{
+			"index": 4,
+			"reviewId": 5719191481,
+			"provider": "openai",
+			"submittedAt": "2026-10-30T22:06:44Z",
+			"headSha": "92707c3468fd78b45faa9b09eabf5f2569350a33",
+			"baseSha": "4eb952dbbfb65d4162002ff2b29c49a438e18828",
+			"mergeBase": "4eb952dbbfb65d4162002ff2b29c49a438e18828",
+			"triggerAt": "2026-10-30T21:50:01Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "35a357e86c4f543cbcc064e0015270fca7f7b089",
+					"committedAt": "2026-10-30T21:50:00Z",
+					"files": [
+						{
+							"path": "src/replay/classify.test.ts",
+							"ranges": [[112, 144]]
+						},
+						{
+							"path": "src/replay/classify.ts",
+							"ranges": [[60, 73], [79, 85]]
+						}
+					]
+				},
+				{
+					"sha": "92707c3468fd78b45faa9b09eabf5f2569350a33",
+					"committedAt": "2026-10-30T21:50:01Z",
+					"files": [
+						{
+							"path": "docs/superpowers/specs/2026-10-29-claude-first-pass-accuracy-design.md",
+							"ranges": [[159, 165]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r4:body:0",
+					"roundIndex": 4,
+					"reviewId": 5719191481,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Preserve contrast text when matching the prior-review suffix (`src/self-retraction.ts:49`)",
+					"text": "Preserve contrast text when matching the prior-review suffix (`src/self-retraction.ts:49`)"
+				}
+			]
+		}
+	],
+	"threads": [
+		{
+			"threadId": "PRRT_kwDOSM5cU86x2Bot",
+			"commentId": 4420395320,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4428733447,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-30T21:42:19Z",
+					"editedAt": null,
+					"body": "Retired in 0e2f1ae. The self-retraction filter no longer runs in the merge path: src/review.ts and src/reviewer-tuning.ts are identical to main. The detector now lives in src/replay/retraction-rule.ts as a measurement rule only, so a false drop here cannot affect a review. Reviewers kept finding new false-drop shapes in every round and a rule strict enough to avoid them removed almost nothing, so the spec records it as measured and not shipped."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86x2Bov",
+			"commentId": 4420395324,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4428733826,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-30T21:42:23Z",
+					"editedAt": null,
+					"body": "Retired in 0e2f1ae. The self-retraction filter no longer runs in the merge path: src/review.ts and src/reviewer-tuning.ts are identical to main. The detector now lives in src/replay/retraction-rule.ts as a measurement rule only, so a false drop here cannot affect a review. Reviewers kept finding new false-drop shapes in every round and a rule strict enough to avoid them removed almost nothing, so the spec records it as measured and not shipped."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86x2Bow",
+			"commentId": 4420395327,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4428734264,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-30T21:42:27Z",
+					"editedAt": null,
+					"body": "Retired in 0e2f1ae. The self-retraction filter no longer runs in the merge path: src/review.ts and src/reviewer-tuning.ts are identical to main. The detector now lives in src/replay/retraction-rule.ts as a measurement rule only, so a false drop here cannot affect a review. Reviewers kept finding new false-drop shapes in every round and a rule strict enough to avoid them removed almost nothing, so the spec records it as measured and not shipped."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86x2Bo1",
+			"commentId": 4420395331,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4428734668,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-30T21:42:31Z",
+					"editedAt": null,
+					"body": "Retired in 0e2f1ae. The self-retraction filter no longer runs in the merge path: src/review.ts and src/reviewer-tuning.ts are identical to main. The detector now lives in src/replay/retraction-rule.ts as a measurement rule only, so a false drop here cannot affect a review. Reviewers kept finding new false-drop shapes in every round and a rule strict enough to avoid them removed almost nothing, so the spec records it as measured and not shipped."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86x2Bo4",
+			"commentId": 4420395335,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4428735078,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-30T21:42:35Z",
+					"editedAt": null,
+					"body": "Retired in 0e2f1ae. The self-retraction filter no longer runs in the merge path: src/review.ts and src/reviewer-tuning.ts are identical to main. The detector now lives in src/replay/retraction-rule.ts as a measurement rule only, so a false drop here cannot affect a review. Reviewers kept finding new false-drop shapes in every round and a rule strict enough to avoid them removed almost nothing, so the spec records it as measured and not shipped."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86x2Bo7",
+			"commentId": 4420395340,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4428735510,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-30T21:42:39Z",
+					"editedAt": null,
+					"body": "Retired in 0e2f1ae. The self-retraction filter no longer runs in the merge path: src/review.ts and src/reviewer-tuning.ts are identical to main. The detector now lives in src/replay/retraction-rule.ts as a measurement rule only, so a false drop here cannot affect a review. Reviewers kept finding new false-drop shapes in every round and a rule strict enough to avoid them removed almost nothing, so the spec records it as measured and not shipped."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86x3oZ5",
+			"commentId": 4421076335,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4428738418,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-30T21:43:05Z",
+					"editedAt": null,
+					"body": "Fixed in 5483eec. A reply counts as stale only when the sentence that cites an earlier-round commit also has fix wording (fix, fixed, addressed, resolved, reverted, patched, handled, landed). Both examples, \"abcdef1 deliberately drops ...\" and \"intentionally introduced in abcdef1\", are now not stale, with tests."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86x3oZ-",
+			"commentId": 4421076343,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4428738874,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-30T21:43:09Z",
+					"editedAt": null,
+					"body": "Fixed in 18e6aed. A .classes.json with no matching labels file is skipped and reported as \"skipped: no labels file\", so its classifications can no longer appear without their rejected-label denominator."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86x3oaC",
+			"commentId": 4421076350,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4428739288,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-30T21:43:13Z",
+					"editedAt": null,
+					"body": "Fixed in 18e6aed. Repeats now come from each labels file repeatPairs, not from class-record coverage. A first-seen rejected claim with no class record prints as \"unclassified\". Your example prints \"classified 1 of 2 first-seen rejected (2 rejected labels, 0 repeats excluded)\" and \"unclassified 1\"."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86x31cC",
+			"commentId": 4421161416,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4428737629,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-30T21:42:58Z",
+					"editedAt": null,
+					"body": "Retired in 0e2f1ae. The self-retraction filter no longer runs in the merge path: src/review.ts and src/reviewer-tuning.ts are identical to main. The detector now lives in src/replay/retraction-rule.ts as a measurement rule only, so a false drop here cannot affect a review. Reviewers kept finding new false-drop shapes in every round and a rule strict enough to avoid them removed almost nothing, so the spec records it as measured and not shipped."
+				}
+			]
+		}
+	],
+	"reactions": [
+		{
+			"commentId": 4420395320,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-30T21:42:21Z"
+		},
+		{
+			"commentId": 4420395324,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-30T21:42:25Z"
+		},
+		{
+			"commentId": 4420395327,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-30T21:42:29Z"
+		},
+		{
+			"commentId": 4420395331,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-30T21:42:33Z"
+		},
+		{
+			"commentId": 4420395335,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-30T21:42:36Z"
+		},
+		{
+			"commentId": 4420395340,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-30T21:42:40Z"
+		},
+		{
+			"commentId": 4421076335,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-30T21:43:07Z"
+		},
+		{
+			"commentId": 4421076343,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-30T21:43:10Z"
+		},
+		{
+			"commentId": 4421076350,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-30T21:43:14Z"
+		},
+		{
+			"commentId": 4421161416,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-30T21:42:59Z"
+		}
+	]
+}
