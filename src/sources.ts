@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { readFile as fsReadFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -34,7 +35,7 @@ export function hasCodeExtension(p: string): boolean {
 	return dot !== -1 && CODE_EXTENSIONS.has(p.slice(dot));
 }
 
-function defaultGitRunner(cwd: string): GitRunner {
+export function defaultGitRunner(cwd: string): GitRunner {
 	return (args) =>
 		execFileSync("git", [...args], {
 			cwd,
@@ -155,6 +156,149 @@ export async function collectFilesFromCommit(opts: {
 			files.push({ path: p, content: runGit(["show", `${opts.sha}:${p}`]) });
 		} catch {
 			// deleted in this commit (or the old side of a rename) — skip
+		}
+	}
+	return files;
+}
+
+export type RangeChange = {
+	path: string;
+	oldPath: string | null;
+	status: "A" | "M" | "D" | "R";
+};
+
+function refExists(runGit: GitRunner, ref: string): boolean {
+	try {
+		runGit(["rev-parse", "--verify", "--quiet", ref]);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+/** Explicit ref, else origin/HEAD's target, else origin/main, else origin/master. */
+export function resolveBase(runGit: GitRunner, explicit?: string): string {
+	if (explicit) return explicit;
+	try {
+		const head = runGit([
+			"symbolic-ref",
+			"--quiet",
+			"refs/remotes/origin/HEAD",
+		]).trim();
+		const ref = head.replace(/^refs\/remotes\//, "");
+		if (ref && refExists(runGit, ref)) return ref;
+	} catch {
+		// no origin/HEAD; fall through
+	}
+	for (const ref of ["origin/main", "origin/master"]) {
+		if (refExists(runGit, ref)) return ref;
+	}
+	throw new Error("No base branch found");
+}
+
+export type NameStatus = { code: string; path: string; oldPath: string | null };
+
+/** `git diff -M --name-status -z <from> HEAD`, parsed from NUL-separated fields so no path is ever quoted. */
+export function nameStatusSince(runGit: GitRunner, from: string): NameStatus[] {
+	const fields = runGit([
+		"diff",
+		"-M",
+		"--name-status",
+		"-z",
+		from,
+		"HEAD",
+	]).split("\0");
+	const records: NameStatus[] = [];
+	for (let i = 0; i < fields.length; ) {
+		const code = fields[i++] ?? "";
+		if (!code) continue;
+		const first = fields[i++] ?? "";
+		const paired = code[0] === "R" || code[0] === "C";
+		const second = paired ? (fields[i++] ?? "") : "";
+		if (!first || (paired && !second)) continue;
+		records.push(
+			paired
+				? { code, path: second, oldPath: first }
+				: { code, path: first, oldPath: null },
+		);
+	}
+	return records;
+}
+
+/** Code-file changes between merge-base(base, HEAD) and HEAD. Unexpected statuses count as modified. */
+export function listRangeChanges(
+	runGit: GitRunner,
+	base: string,
+): { mergeBase: string; changes: RangeChange[] } {
+	const mergeBase = runGit(["merge-base", "HEAD", base]).trim();
+	const changes: RangeChange[] = [];
+	for (const { code, path: p, oldPath } of nameStatusSince(runGit, mergeBase)) {
+		if (!hasCodeExtension(p)) continue;
+		const kind = code[0];
+		if (kind === "R" && oldPath !== null) {
+			changes.push({ path: p, oldPath, status: "R" });
+		} else {
+			const status = kind === "A" ? "A" : kind === "D" ? "D" : "M";
+			changes.push({ path: p, oldPath: null, status });
+		}
+	}
+	return { mergeBase, changes };
+}
+
+const PATH_HEADERS = [
+	"diff --git ",
+	"index ",
+	"--- ",
+	"+++ ",
+	"rename from ",
+	"rename to ",
+	"copy from ",
+	"copy to ",
+	"similarity index ",
+	"dissimilarity index ",
+];
+
+/** Drops the path-bearing header lines before each file's first hunk, so a pure rename hashes like the unrenamed diff. */
+function withoutPathHeaders(diff: string): string {
+	let inHeader = false;
+	return diff
+		.split("\n")
+		.filter((line) => {
+			if (line.startsWith("diff --git ")) inHeader = true;
+			else if (line.startsWith("@@")) inHeader = false;
+			return !(inHeader && PATH_HEADERS.some((h) => line.startsWith(h)));
+		})
+		.join("\n");
+}
+
+/** sha1 of the file's diff from the merge base to HEAD, ignoring path headers. Pass `oldPath` for a rename so the diff pairs both sides. */
+export function diffHash(
+	runGit: GitRunner,
+	mergeBase: string,
+	filePath: string,
+	oldPath?: string | null,
+): string {
+	const diff = oldPath
+		? runGit(["diff", "-M", mergeBase, "HEAD", "--", oldPath, filePath])
+		: runGit(["diff", mergeBase, "HEAD", "--", filePath]);
+	return createHash("sha1").update(withoutPathHeaders(diff)).digest("hex");
+}
+
+/** Reads non-deleted changed files at HEAD from the object DB. A path absent at HEAD is skipped; any other read failure is rethrown. */
+export async function collectFilesFromRange(opts: {
+	cwd: string;
+	changes: RangeChange[];
+	only?: ReadonlySet<string>;
+	runGit?: GitRunner;
+}): Promise<AuditFile[]> {
+	const runGit = opts.runGit ?? defaultGitRunner(opts.cwd);
+	const files: AuditFile[] = [];
+	for (const c of opts.changes) {
+		if (c.status === "D" || (opts.only && !opts.only.has(c.path))) continue;
+		try {
+			files.push({ path: c.path, content: runGit(["show", `HEAD:${c.path}`]) });
+		} catch (err) {
+			if (runGit(["ls-tree", "-z", "HEAD", "--", c.path]) !== "") throw err;
 		}
 	}
 	return files;

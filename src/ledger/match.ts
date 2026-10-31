@@ -138,20 +138,21 @@ const P0_RULES: Rule[] = [
 	isCrossSurfaceTitleRepeat,
 ];
 
-/** The settled entry the finding restates, or null. Open entries never match, a
- * test-gap finding never matches a defect finding, a P0 finding uses P0_RULES, and when several entries
- * match at the first matching rule the most similar one wins (ties: latest round,
- * then lowest id). */
-export function findSettledMatch(
+/** The ledger entry the finding restates among those `pick` admits, or null. A
+ * test-gap finding never matches a defect entry, a P0 finding uses P0_RULES, and
+ * when several entries match at the first matching rule the most similar one wins
+ * (ties: latest round, then lowest id). */
+function findMatch(
 	finding: ClaimLike,
 	ledger: Ledger,
+	pick: (e: LedgerEntry) => boolean,
 ): LedgerEntry | null {
 	const f = withoutProductNames(finding);
-	const settled = ledger
-		.filter((e) => isSettled(e) && isTestGap(e) === isTestGap(f))
+	const candidates = ledger
+		.filter((e) => pick(e) && isTestGap(e) === isTestGap(f))
 		.map((entry) => ({ entry, e: withoutProductNames(entry) }));
 	for (const rule of finding.severity === "P0" ? P0_RULES : RULES) {
-		const hits = settled.filter(({ e }) => rule(f, e));
+		const hits = candidates.filter(({ e }) => rule(f, e));
 		if (hits.length === 0) continue;
 		const ranked = hits
 			.map((hit) => ({ ...hit, score: similarity(f, hit.e) }))
@@ -164,4 +165,20 @@ export function findSettledMatch(
 		return ranked[0].entry;
 	}
 	return null;
+}
+
+/** The settled entry the finding restates, or null. Open entries never match. */
+export function findSettledMatch(
+	finding: ClaimLike,
+	ledger: Ledger,
+): LedgerEntry | null {
+	return findMatch(finding, ledger, isSettled);
+}
+
+/** The open entry the finding restates, or null. Settled entries never match. */
+export function findOpenMatch(
+	finding: ClaimLike,
+	ledger: Ledger,
+): LedgerEntry | null {
+	return findMatch(finding, ledger, (e) => !isSettled(e));
 }

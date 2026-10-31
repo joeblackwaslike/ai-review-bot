@@ -314,6 +314,59 @@ ai-review owner/repo --ref main --dry-run
 
 > **[Full CLI documentation →](https://joeblackwaslike.github.io/ai-review-bot/cli-and-npm)**
 
+### Pre-PR gate for no-mistakes
+
+`ai-review gate` runs the same multi-agent review on a branch before it is
+pushed, as a custom gate in the
+[no-mistakes](https://kunchenguid.github.io/no-mistakes/) pipeline. Add it to
+`.no-mistakes.yaml`:
+
+```yaml
+gates:
+  - name: ai-review
+    after: review
+    command: ai-review gate
+
+auto_fix:
+  gates:
+    ai-review: 0
+```
+
+The gate reviews the code files that changed between the branch's merge base
+and `HEAD`. When no-mistakes sets `NO_MISTAKES_FINDINGS_FILE`, the gate writes
+its findings to that file as JSON and exits 0, and any `error` finding (P0 or
+P1) parks the run. When the variable is unset, as on no-mistakes v1.75.2, the
+gate prints the findings and exits 1 if any of them is an `error`. If no
+provider authenticates or every agent fails, it exits non-zero with a message
+and writes no findings file, so no-mistakes parks the gate with that output
+attached.
+If one agent fails in a provider whose other agents worked, the round still
+reports its findings but counts as incomplete, and no finding is inferred fixed
+in that round.
+
+A provider whose agents all fail, for example because it is out of credit, is
+treated as not run. The history file remembers every provider that has run on
+the branch. While one of them is not working and an open `error` finding
+exists, the gate stays red until that provider works again or you delete the
+file named in the warning. The warning lists each provider that logged in but
+had no successful agent, such as `openai 0/5`.
+
+Each branch keeps a history file under `~/.ai-review/gate/`. A re-check after a
+fix reviews only the files whose diff changed since the last round. Findings
+that are still open keep being reported, and a finding is dropped once its file
+changed and the model stopped raising it. After a rebase or force-push the next
+round reviews the whole range again.
+
+The gate cannot see the answers you give in no-mistakes. A finding you approve
+or skip there comes back under the same id on the next run if the model raises
+it again.
+
+Each run costs one full review per authenticated provider, the same as
+`ai-review review`, paid from your local subscription or API key. The command
+runs the `ai-review` on your PATH, so the installed version must include
+`gate`. no-mistakes reads gates only from the default branch's copy of
+`.no-mistakes.yaml`, so the gate starts running once the config is merged.
+
 ## GitHub Action
 
 Run a full-repo audit in any CI workflow — useful for scheduled weekly audits or auditing a repo from another workflow:

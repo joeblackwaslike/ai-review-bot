@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findSettledMatch } from "./match.js";
+import { findOpenMatch, findSettledMatch } from "./match.js";
 import type { LedgerEntry } from "./types.js";
 
 function entry(over: Partial<LedgerEntry>): LedgerEntry {
@@ -442,5 +442,33 @@ describe("findSettledMatch", () => {
 		expect(findSettledMatch(f, [newer, older])).toBe(newer);
 		expect(findSettledMatch(f, [newer, sameRound])).toBe(sameRound);
 		expect(findSettledMatch(f, [sameRound, newer])).toBe(sameRound);
+	});
+});
+
+describe("findOpenMatch", () => {
+	const title = "`listFindings` drops the body column in the SQL query";
+	const f = { path: "src/a.ts", line: 22, title };
+
+	it("returns an open entry that restates the finding", () => {
+		const e = entry({ title, status: "open", decidedBy: null });
+		expect(findOpenMatch(f, [e])).toBe(e);
+	});
+
+	it("ignores settled entries", () => {
+		expect(findOpenMatch(f, [entry({ title })])).toBeNull();
+	});
+
+	it("findSettledMatch ignores open entries", () => {
+		const e = entry({ title, status: "open", decidedBy: null });
+		expect(findSettledMatch(f, [e])).toBeNull();
+	});
+
+	it("a test-gap finding does not match an open defect entry", () => {
+		const e = entry({ title, status: "open", decidedBy: null });
+		const gap = {
+			...f,
+			title: "`listFindings` has no tests for the body column",
+		};
+		expect(findOpenMatch(gap, [e])).toBeNull();
 	});
 });
