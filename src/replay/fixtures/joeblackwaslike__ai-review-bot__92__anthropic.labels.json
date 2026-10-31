@@ -1,0 +1,176 @@
+{
+	"fixtureId": "joeblackwaslike__ai-review-bot__92__anthropic",
+	"provisional": true,
+	"labels": [
+		{
+			"claimId": "r0:c4420384379:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-30T06:29:24Z|Fixed in b7f78ee. The option doc now says P2 and P3."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4420384396:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-30T06:29:29Z|Fixed in 30bcdbe. The filler count comes from the data, and a test with a fixture holding a different count asserts the printed number."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4420384407:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-30T06:29:09Z|Fixed in a81831e. A scope word right after the phrase (in, by, with, for, from, during, on, within, and similar) now keeps the finding, so a real defect followed by \"No issues found by tests.\" or \"No issues found in the happy path.\" is no longer dropped. Your example is a negative test in src/self-retraction.test.ts. Fixture margin is unchanged (13 of 15 filler, 0 of 17 fixed) and none of the 12 comments two blind judges called actionable are hit."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4420384410:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-30T06:29:13Z|Fixed in a81831e. A scope word right after the phrase (in, by, with, for, from, during, on, within, and similar) now keeps the finding, so a real defect followed by \"No issues found by tests.\" or \"No issues found in the happy path.\" is no longer dropped. Your example is a negative test in src/self-retraction.test.ts. Fixture margin is unchanged (13 of 15 filler, 0 of 17 fixed) and none of the 12 comments two blind judges called actionable are hit."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c4421152905:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-30T21:43:01Z|The doc comment went with the code in 0e2f1ae. The rule now lives in src/replay/retraction-rule.ts as a measurement rule and its comment describes that."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c4421152905:1",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-30T21:43:01Z|The doc comment went with the code in 0e2f1ae. The rule now lives in src/replay/retraction-rule.ts as a measurement rule and its comment describes that."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c4421152905:2",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-30T21:43:01Z|The doc comment went with the code in 0e2f1ae. The rule now lives in src/replay/retraction-rule.ts as a measurement rule and its comment describes that."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c4421152911:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-30T21:42:50Z|Retired in 0e2f1ae. The self-retraction filter no longer runs in the merge path: src/review.ts and src/reviewer-tuning.ts are identical to main. The detector now lives in src/replay/retraction-rule.ts as a measurement rule only, so a false drop here cannot affect a review. Reviewers kept finding new false-drop shapes in every round and a rule strict enough to avoid them removed almost nothing, so the spec records it as measured and not shipped."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c4421152916:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-30T21:42:54Z|Retired in 0e2f1ae. The self-retraction filter no longer runs in the merge path: src/review.ts and src/reviewer-tuning.ts are identical to main. The detector now lives in src/replay/retraction-rule.ts as a measurement rule only, so a false drop here cannot affect a review. Reviewers kept finding new false-drop shapes in every round and a rule strict enough to avoid them removed almost nothing, so the spec records it as measured and not shipped."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c4428770971:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-30T21:57:25Z|Fixed in 35a357e. A fix word now counts only when no negation (not, never, no, without, still, n't, un-) precedes it in the same sentence. \"This was not fixed in abcdef1; the behavior is intended\" and \"Not addressed in abcdef1 on purpose\" are no longer stale, with tests. A negation earlier in a sentence can still hide a real fix citation; that returns null rather than a wrong stale label, which is the safe direction for this report."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:body:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:body:2",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:body:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:body:2",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		}
+	],
+	"repeatPairs": [
+		{
+			"later": "r1:body:0",
+			"earlier": "r0:body:0",
+			"confirmed": false
+		},
+		{
+			"later": "r4:body:0",
+			"earlier": "r3:body:0",
+			"confirmed": false
+		},
+		{
+			"later": "r4:body:1",
+			"earlier": "r3:body:1",
+			"confirmed": false
+		},
+		{
+			"later": "r4:body:2",
+			"earlier": "r3:body:2",
+			"confirmed": false
+		}
+	],
+	"negativePairs": [],
+	"allowedSuppression": []
+}
