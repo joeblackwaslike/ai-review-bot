@@ -872,6 +872,40 @@ describe("runGate against a real git repo", () => {
 		expect(gateRoot(outside)).toBe(outside);
 	});
 
+	it("a rebase onto a moved base keeps the file's diff hash, so a later round neither re-reviews nor fixes it", async () => {
+		const { root, git } = makeRepo();
+		const first = await realGate(
+			root,
+			buildModelReview({ inline_comments: [P1_ON_A] }),
+		);
+
+		git("checkout", "-q", "main");
+		writeFileSync(join(root, "src/c.ts"), "export const c = 1;\n");
+		git("add", ".");
+		git("commit", "-qm", "base moves");
+		git("checkout", "-q", "feat");
+		git("rebase", "-q", "main");
+		await realGate(root, buildModelReview());
+
+		git("commit", "-q", "--allow-empty", "-m", "noop");
+		const review = vi.fn(async (_files: AuditFile[]) =>
+			passResult(buildModelReview()),
+		);
+		const third = await runGate({
+			cwd: root,
+			owner: "o",
+			repo: "r",
+			base: "main",
+			storeDir,
+			review,
+		});
+
+		expect(review).not.toHaveBeenCalled();
+		expect(third.findings.map((f) => f.id)).toEqual(
+			first.findings.map((f) => f.id),
+		);
+	});
+
 	it("a pure rename plus one model miss keeps the finding open", async () => {
 		const { root, git } = makeRepo();
 		const first = await realGate(

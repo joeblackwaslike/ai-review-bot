@@ -199,15 +199,6 @@ describe("applyRound", () => {
 		expect(byId(result.store, old.id)).toEqual(old);
 	});
 
-	it("a rebase that moves the base but not the file's diff does not mark it fixed", () => {
-		const old = entry();
-		const result = applyRound(
-			input({ store: store([old]), head: "rebased-head" }),
-		);
-		expect(byId(result.store, old.id)?.status).toBe("open");
-		expect(result.store.lastHead).toBe("rebased-head");
-	});
-
 	it("a file that left the range is fixed", () => {
 		const old = entry({ path: "src/gone.ts" });
 		const result = applyRound(input({ store: store([old]) }));
