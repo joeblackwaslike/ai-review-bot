@@ -26,6 +26,7 @@ import {
 	unsetCredential,
 } from "./cli-creds.js";
 import { getConfig, getOpenAIAppConfig } from "./config.js";
+import { runGate } from "./gate/run.js";
 import {
 	type BackfillOctokit,
 	type BackfillResult,
@@ -93,6 +94,14 @@ function usage(): never {
 		"  ai-review audit [--full] [--dry-run] [--out <dir>] [--extra <text>] [--json]",
 	);
 	console.error("  ai-review ready [pr#]");
+	console.error("  ai-review gate [--base <ref>] [--extra <text>]");
+	console.error(
+		"      Review the branch against its base for the no-mistakes pipeline. Writes",
+	);
+	console.error(
+		"      findings to NO_MISTAKES_FINDINGS_FILE when set, else prints them and",
+	);
+	console.error("      exits 1 on an error finding.");
 	console.error(
 		"  ai-review watch --pr <n> [--repo <owner/name>] [--provider anthropic|openai] [--interval <seconds>] [--no-circuit-breaker]",
 	);
@@ -1194,6 +1203,28 @@ export async function cmdCreds(
 	fatal("Usage: ai-review creds set <VAR> [value] | list | unset <VAR>");
 }
 
+async function cmdGate(args: string[]): Promise<void> {
+	let base: string | undefined;
+	let extra: string | undefined;
+	for (let i = 0; i < args.length; i++) {
+		const a = args[i];
+		if (a === "--base") base = requireValue(args, i++, a);
+		else if (a === "--extra") extra = requireValue(args, i++, a);
+		else fatal(`Unknown argument: ${a}`);
+	}
+	const { owner, repo } = originSlug();
+	const result = await runGate({
+		cwd: process.cwd(),
+		owner,
+		repo,
+		base,
+		extra,
+		findingsFile: process.env.NO_MISTAKES_FINDINGS_FILE || undefined,
+	});
+	console.log(result.stdout);
+	process.exitCode = result.exitCode;
+}
+
 async function cmdReplay(args: string[]): Promise<void> {
 	process.exitCode = await runReplay(args);
 }
@@ -1227,6 +1258,10 @@ export async function main(): Promise<void> {
 		return cmdAudit(rest);
 	}
 	if (sub === "ready") return cmdReady(rest);
+	if (sub === "gate") {
+		enableAgentLogFile();
+		return cmdGate(rest);
+	}
 	if (sub === "watch") {
 		enableAgentLogFile();
 		return cmdWatch(rest);

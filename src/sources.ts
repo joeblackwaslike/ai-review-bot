@@ -35,7 +35,7 @@ export function hasCodeExtension(p: string): boolean {
 	return dot !== -1 && CODE_EXTENSIONS.has(p.slice(dot));
 }
 
-function defaultGitRunner(cwd: string): GitRunner {
+export function defaultGitRunner(cwd: string): GitRunner {
 	return (args) =>
 		execFileSync("git", [...args], {
 			cwd,
