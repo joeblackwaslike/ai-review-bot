@@ -15,10 +15,17 @@ export type GateStore = {
 	providers: Provider[];
 	lastHead: string | null;
 	entries: Ledger;
+	revision: number;
 };
 
 export function emptyStore(): GateStore {
-	return { version: 1, providers: [], lastHead: null, entries: [] };
+	return {
+		version: 1,
+		providers: [],
+		lastHead: null,
+		entries: [],
+		revision: 0,
+	};
 }
 
 function keyFor(owner: string, repo: string, identity: string): string {
@@ -84,7 +91,9 @@ export function gateStorePath(key: string, dir?: string): string {
 	return join(base, `${key}.json`);
 }
 
-const isStore = (v: unknown): v is GateStore => {
+type StoredGate = Omit<GateStore, "revision"> & { revision?: number };
+
+const isStore = (v: unknown): v is StoredGate => {
 	if (typeof v !== "object" || v === null) return false;
 	const s = v as Record<string, unknown>;
 	return (
@@ -93,9 +102,16 @@ const isStore = (v: unknown): v is GateStore => {
 		s.providers.every((p) => PROVIDERS.includes(p)) &&
 		(s.lastHead === null || typeof s.lastHead === "string") &&
 		Array.isArray(s.entries) &&
-		s.entries.every(isEntry)
+		s.entries.every(isEntry) &&
+		(s.revision === undefined ||
+			(Number.isSafeInteger(s.revision) && (s.revision as number) >= 0))
 	);
 };
+
+const withRevision = (s: StoredGate): GateStore => ({
+	...s,
+	revision: s.revision ?? 0,
+});
 
 export async function loadStore(
 	path: string,
@@ -109,7 +125,7 @@ export async function loadStore(
 		}
 		parsed = undefined;
 	}
-	if (isStore(parsed)) return { store: parsed, warning: null };
+	if (isStore(parsed)) return { store: withRevision(parsed), warning: null };
 	const aside = `${path}.corrupt-${Date.now()}-${randomBytes(3).toString("hex")}`;
 	try {
 		await rename(path, aside);
@@ -133,14 +149,63 @@ export async function loadStore(
 	};
 }
 
-export async function saveStore(path: string, store: GateStore): Promise<void> {
+async function readValid(path: string): Promise<GateStore | null> {
+	try {
+		const parsed: unknown = JSON.parse(await readFile(path, "utf8"));
+		return isStore(parsed) ? withRevision(parsed) : null;
+	} catch {
+		return null;
+	}
+}
+
+/** Union by id, keeping the higher round and the on-disk entry on a tie; the last head is cleared so the next round rescopes the full range. */
+function mergeStores(
+	onDisk: GateStore,
+	ours: GateStore,
+	loadedRevision: number,
+): GateStore {
+	const byId = new Map(onDisk.entries.map((e) => [e.id, e]));
+	for (const e of ours.entries) {
+		const theirs = byId.get(e.id);
+		if (!theirs || e.round > theirs.round) byId.set(e.id, e);
+	}
+	return {
+		...onDisk,
+		providers: [
+			...onDisk.providers,
+			...ours.providers.filter((p) => !onDisk.providers.includes(p)),
+		],
+		lastHead: null,
+		entries: [...byId.values()],
+		revision: Math.max(onDisk.revision, loadedRevision) + 1,
+	};
+}
+
+/**
+ * Writes the store through a unique temp file and an atomic rename. When the
+ * file on disk has moved past `loadedRevision` (another run saved since this
+ * one loaded), the two stores are merged instead of overwritten. The re-read
+ * and the rename are not one atomic step, so two saves landing within
+ * milliseconds of each other can still race; a lock file would close that.
+ */
+export async function saveStore(
+	path: string,
+	store: GateStore,
+	loadedRevision: number,
+): Promise<{ merged: boolean }> {
 	await mkdir(dirname(path), { recursive: true });
+	const onDisk = await readValid(path);
+	const merged = onDisk !== null && onDisk.revision !== loadedRevision;
+	const next = merged
+		? mergeStores(onDisk, store, loadedRevision)
+		: { ...store, revision: loadedRevision + 1 };
 	const tmp = `${path}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
 	try {
-		await writeFile(tmp, `${JSON.stringify(store, null, 2)}\n`);
+		await writeFile(tmp, `${JSON.stringify(next, null, 2)}\n`);
 		await rename(tmp, path);
 	} catch (err) {
 		await unlink(tmp).catch(() => undefined);
 		throw err;
 	}
+	return { merged };
 }

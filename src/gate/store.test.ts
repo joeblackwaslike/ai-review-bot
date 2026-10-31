@@ -10,6 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import type { LedgerEntry } from "../ledger/types.js";
 import type { GitRunner } from "../sources.js";
 import {
 	emptyStore,
@@ -241,7 +242,7 @@ describe("saveStore", () => {
 		const dir = await mkdtemp(join(tmpdir(), "gate-"));
 		const path = join(dir, "s.json");
 		await mkdir(path);
-		await expect(saveStore(path, emptyStore())).rejects.toThrow();
+		await expect(saveStore(path, emptyStore(), 0)).rejects.toThrow();
 		expect(await readdir(dir)).toEqual(["s.json"]);
 	});
 
@@ -249,9 +250,9 @@ describe("saveStore", () => {
 		const dir = await mkdtemp(join(tmpdir(), "gate-"));
 		const path = join(dir, "nested", "s.json");
 		const store = { ...emptyStore(), lastHead: "deadbeef" };
-		await saveStore(path, store);
+		await saveStore(path, store, 0);
 		const res = await loadStore(path);
-		expect(res.store).toEqual(store);
+		expect(res.store).toEqual({ ...store, revision: 1 });
 		expect(res.warning).toBeNull();
 	});
 
@@ -260,9 +261,112 @@ describe("saveStore", () => {
 		const path = join(dir, "s.json");
 		const a = { ...emptyStore(), lastHead: "a" };
 		const b = { ...emptyStore(), lastHead: "b" };
-		await Promise.all([saveStore(path, a), saveStore(path, b)]);
+		await Promise.all([saveStore(path, a, 0), saveStore(path, b, 0)]);
 		const parsed = JSON.parse(await readFile(path, "utf8"));
-		expect(["a", "b"]).toContain(parsed.lastHead);
+		expect(["a", "b", null]).toContain(parsed.lastHead);
 		expect(await readdir(dir)).toEqual(["s.json"]);
+	});
+});
+
+describe("saveStore revision check", () => {
+	const entry = (id: string, round = 1): LedgerEntry => ({
+		id,
+		round,
+		path: "src/a.ts",
+		line: 1,
+		severity: "P1",
+		title: `finding ${id}`,
+		body: "body",
+		status: "open",
+		decidedBy: null,
+		reason: null,
+		evidence: ["head:h1", "diff:d1"],
+	});
+
+	it("a legacy store without a revision loads as revision 0", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "gate-"));
+		const path = join(dir, "s.json");
+		const { revision: _drop, ...legacy } = emptyStore();
+		await writeFile(path, JSON.stringify({ ...legacy, lastHead: "h1" }));
+		const res = await loadStore(path);
+		expect(res.warning).toBeNull();
+		expect(res.store.revision).toBe(0);
+		expect(res.store.lastHead).toBe("h1");
+	});
+
+	it("sequential saves increment the revision and do not merge", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "gate-"));
+		const path = join(dir, "s.json");
+		const first = await loadStore(path);
+		const a = await saveStore(
+			path,
+			{ ...first.store, lastHead: "h1", entries: [entry("a")] },
+			first.store.revision,
+		);
+		const second = await loadStore(path);
+		const b = await saveStore(
+			path,
+			{ ...second.store, lastHead: "h2" },
+			second.store.revision,
+		);
+		const final = (await loadStore(path)).store;
+		expect([a.merged, b.merged]).toEqual([false, false]);
+		expect(final).toMatchObject({ revision: 2, lastHead: "h2" });
+		expect(final.entries.map((e) => e.id)).toEqual(["a"]);
+	});
+
+	it("interleaved runs keep both runs' entries and reset the last head", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "gate-"));
+		const path = join(dir, "s.json");
+		const runA = await loadStore(path);
+		const runB = await loadStore(path);
+		await saveStore(
+			path,
+			{
+				...runA.store,
+				providers: ["anthropic"],
+				lastHead: "h1",
+				entries: [entry("a"), entry("shared", 2)],
+			},
+			runA.store.revision,
+		);
+		const b = await saveStore(
+			path,
+			{
+				...runB.store,
+				providers: ["openai"],
+				lastHead: "h1",
+				entries: [entry("b"), { ...entry("shared", 2), title: "from B" }],
+			},
+			runB.store.revision,
+		);
+		const final = (await loadStore(path)).store;
+		expect(b.merged).toBe(true);
+		expect(final.lastHead).toBeNull();
+		expect(final.revision).toBe(2);
+		expect(final.providers.sort()).toEqual(["anthropic", "openai"]);
+		expect(final.entries.map((e) => e.id).sort()).toEqual(["a", "b", "shared"]);
+		expect(final.entries.find((e) => e.id === "shared")?.title).toBe(
+			"finding shared",
+		);
+	});
+
+	it("a merge keeps the entry with the higher round", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "gate-"));
+		const path = join(dir, "s.json");
+		const runA = await loadStore(path);
+		const runB = await loadStore(path);
+		await saveStore(
+			path,
+			{ ...runA.store, entries: [entry("x", 1)] },
+			runA.store.revision,
+		);
+		await saveStore(
+			path,
+			{ ...runB.store, entries: [{ ...entry("x", 3), title: "newer" }] },
+			runB.store.revision,
+		);
+		const final = (await loadStore(path)).store;
+		expect(final.entries.map((e) => e.title)).toEqual(["newer"]);
 	});
 });

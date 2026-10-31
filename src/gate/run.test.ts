@@ -764,6 +764,36 @@ describe("runGate", () => {
 		expect(later.exitCode).toBe(0);
 	});
 
+	it("a run that overlaps another keeps both runs' findings and warns", async () => {
+		const P2_ON_B = buildInlineComment({
+			path: "src/b.ts",
+			severity: "P2",
+			title: "Timeout constant is never read",
+		});
+		const state = repo({
+			"src/a.ts": modified("a1"),
+			"src/b.ts": modified("b1"),
+		});
+		const storePath = gateStorePath(
+			storeKey(fakeGit(state), "o", "r", state.mergeBase, storeDir),
+			storeDir,
+		);
+		await gate(state, async () => {
+			await gate(state, async () =>
+				passResult(buildModelReview({ inline_comments: [P1_ON_A] })),
+			);
+			return passResult(buildModelReview({ inline_comments: [P2_ON_B] }));
+		});
+
+		const saved = JSON.parse(await readFile(storePath, "utf8")) as GateStore;
+		expect(saved.entries.map((e) => e.path).sort()).toEqual([
+			"src/a.ts",
+			"src/b.ts",
+		]);
+		expect(saved.lastHead).toBeNull();
+		expect(errors.some((e) => /histories were merged/.test(e))).toBe(true);
+	});
+
 	it("a findings-file write failure does not save the round", async () => {
 		const state = repo({ "src/a.ts": modified("a1") });
 

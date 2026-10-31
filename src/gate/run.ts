@@ -266,11 +266,20 @@ export async function runGate(opts: GateOptions): Promise<GateResult> {
 	}
 
 	const save = () =>
-		saveStore(storePath, result.store).catch((err: unknown) => {
-			console.error(
-				`Could not save gate history to ${storePath}: ${err instanceof Error ? err.message : String(err)}`,
-			);
-		});
+		saveStore(storePath, result.store, store.revision).then(
+			({ merged }) => {
+				if (merged) {
+					console.error(
+						`Another gate run saved ${storePath} during this one; the two histories were merged and the next round reviews the full range.`,
+					);
+				}
+			},
+			(err: unknown) => {
+				console.error(
+					`Could not save gate history to ${storePath}: ${err instanceof Error ? err.message : String(err)}`,
+				);
+			},
+		);
 
 	if (opts.findingsFile) {
 		await writeFile(opts.findingsFile, json);
