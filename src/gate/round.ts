@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { Provider } from "../auth.js";
-import { findOpenMatch } from "../ledger/match.js";
+import { findOpenMatch, findSettledMatch } from "../ledger/match.js";
 import { suppressInReview } from "../ledger/suppress.js";
 import { isSettled, type LedgerEntry } from "../ledger/types.js";
 import type { ModelReview } from "../review.js";
@@ -37,6 +37,9 @@ type Finding = {
 };
 
 const FIXED_NOTE = "inferred: absent after diff changed";
+
+const isInferredFix = (e: LedgerEntry) =>
+	e.status === "fixed" && e.decidedBy === null;
 
 const sha1 = (s: string) => createHash("sha1").update(s).digest("hex");
 
@@ -101,7 +104,9 @@ function inferenceWarnings(input: RoundInput, hasOpen: boolean): string[] {
 	}
 	if (hasOpen && !sameSet(input.providers, input.store.providers)) {
 		warnings.push(
-			`Provider set changed (${input.store.providers.join(", ") || "none"} -> ${input.providers.join(", ")}), so no open finding was inferred fixed.`,
+			input.store.providers.length === 0
+				? "No complete round has recorded a provider set yet, so no open finding was inferred fixed."
+				: `Provider set (${input.providers.join(", ")}) differs from the last complete round (${input.store.providers.join(", ")}), so no open finding was inferred fixed.`,
 		);
 	}
 	if (input.fullRescope) {
@@ -112,11 +117,11 @@ function inferenceWarnings(input: RoundInput, hasOpen: boolean): string[] {
 	return warnings;
 }
 
-/** One gate round: renames, open-entry matching, suppression of the unmatched rest against entries settled before the round, id minting, then fixed inference. Pure. */
+/** One gate round: renames, open-entry matching, reopening of inferred fixes, suppression of the rest against entries a person settled before the round, id minting, then fixed inference. Pure. */
 export function applyRound(input: RoundInput): RoundResult {
 	const { store, head, round, hashes, reviewedPaths } = input;
-	const inScope = (path: string | null) =>
-		path === null || reviewedPaths === "all" || reviewedPaths.has(path);
+	const inScope = (path: string) =>
+		reviewedPaths === "all" || reviewedPaths.has(path);
 	const diffOf = (path: string | null) =>
 		path === null ? "none" : (hashes.get(path) ?? "none");
 	const freshFields = (f: Finding, prior?: LedgerEntry) => {
@@ -135,19 +140,24 @@ export function applyRound(input: RoundInput): RoundResult {
 	};
 
 	const entries = withRenames(store.entries, input.renames);
-	const settledBefore = entries.filter(isSettled);
+	const settledByPerson = entries.filter(
+		(e) => isSettled(e) && e.decidedBy !== null,
+	);
 
 	const claimed = new Map<string, LedgerEntry>();
 	const matched: Emitted[] = [];
 	const isUnclaimed = (f: Finding, suggestion: string | null) => {
-		const match = findOpenMatch(
-			f,
-			entries.filter(
-				(e) => !isSettled(e) && inScope(e.path) && !claimed.has(e.id),
-			),
-		);
+		const pool = entries.filter((e) => !claimed.has(e.id));
+		const match =
+			findOpenMatch(f, pool) ?? findSettledMatch(f, pool.filter(isInferredFix));
 		if (!match) return true;
-		const refreshed = { ...match, ...freshFields(f, match) };
+		const refreshed: LedgerEntry = {
+			...match,
+			...freshFields(f, match),
+			status: "open",
+			decidedBy: null,
+			reason: null,
+		};
 		claimed.set(match.id, refreshed);
 		matched.push({ entry: refreshed, suggestion });
 		return false;
@@ -162,7 +172,7 @@ export function applyRound(input: RoundInput): RoundResult {
 		),
 	};
 
-	const { review, suppressed } = suppressInReview(unclaimed, settledBefore);
+	const { review, suppressed } = suppressInReview(unclaimed, settledByPerson);
 	const fresh: { finding: Finding; suggestion: string | null }[] = [
 		...review.inline_comments.map((c) => ({
 			finding: c,
@@ -202,7 +212,7 @@ export function applyRound(input: RoundInput): RoundResult {
 			canInfer &&
 			!isSettled(e) &&
 			e.path !== null &&
-			inScope(e.path) &&
+			(inScope(e.path) || !hashes.has(e.path)) &&
 			diffChanged(e.path, e)
 		) {
 			return {

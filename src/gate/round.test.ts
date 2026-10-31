@@ -331,18 +331,192 @@ describe("applyRound", () => {
 
 	it("entries for files outside reviewedPaths are left alone", () => {
 		const old = entry({ path: "src/b.ts" });
-		const finding = paraphrase(old);
 		const result = applyRound(
 			input({
 				store: store([old]),
 				hashes: new Map([["src/b.ts", "h2"]]),
 				reviewedPaths: new Set(["src/a.ts"]),
-				merged: buildModelReview({ inline_comments: [finding] }),
 			}),
 		);
 		expect(byId(result.store, old.id)).toEqual(old);
-		expect(result.emitted).toHaveLength(1);
-		expect(result.emitted[0].entry.id).not.toBe(old.id);
+	});
+
+	it("a finding restating an entry in an unreviewed file keeps its id", () => {
+		const old = entry({ path: "src/b.ts" });
+		const result = applyRound(
+			input({
+				store: store([old]),
+				hashes: new Map([["src/b.ts", "h1"]]),
+				reviewedPaths: new Set(["src/a.ts"]),
+				merged: buildModelReview({ inline_comments: [paraphrase(old)] }),
+			}),
+		);
+		expect(result.emitted.map((e) => e.entry.id)).toEqual([old.id]);
+		expect(result.store.entries).toHaveLength(1);
+	});
+
+	it("a file that left the range is fixed even when no path was reviewed", () => {
+		const old = entry({ path: "src/gone.ts" });
+		const result = applyRound(
+			input({ store: store([old]), reviewedPaths: new Set() }),
+		);
+		expect(byId(result.store, old.id)?.status).toBe("fixed");
+	});
+
+	it("a finding re-raised after an inferred fix reopens the entry under its id", () => {
+		const raised = (line: number) =>
+			buildModelReview({
+				inline_comments: [
+					buildInlineComment({
+						path: "src/a.ts",
+						line,
+						severity: "P1",
+						title: "Retry loop swallows the fetch error",
+						body: "The catch block in fetchWithRetry discards the error and returns undefined.",
+					}),
+				],
+			});
+		const round1 = applyRound(
+			input({
+				store: emptyStore(),
+				head: "h1",
+				round: 1,
+				merged: raised(10),
+			}),
+		);
+		const id = round1.emitted[0].entry.id;
+		const round2 = applyRound(
+			input({
+				store: round1.store,
+				head: "h2",
+				round: 2,
+				hashes: new Map([["src/a.ts", "h2"]]),
+			}),
+		);
+		expect(byId(round2.store, id)?.status).toBe("fixed");
+
+		const round3 = applyRound(
+			input({
+				store: round2.store,
+				head: "h3",
+				round: 3,
+				hashes: new Map([["src/a.ts", "h3"]]),
+				merged: raised(30),
+			}),
+		);
+		expect(round3.suppressed).toBe(0);
+		expect(round3.emitted).toHaveLength(1);
+		expect(round3.emitted[0].entry).toMatchObject({
+			id,
+			status: "open",
+			decidedBy: null,
+			line: 30,
+			round: 3,
+			evidence: ["head:h3", "diff:h3"],
+		});
+		expect(byId(round3.store, id)).toEqual(round3.emitted[0].entry);
+		expect(round3.store.entries).toHaveLength(1);
+	});
+
+	it("a reopened entry is not inferred fixed in the same round", () => {
+		const inferred = entry({
+			status: "fixed",
+			evidence: [
+				"head:head1",
+				"diff:h1",
+				"inferred: absent after diff changed",
+			],
+		});
+		const result = applyRound(
+			input({
+				store: store([inferred]),
+				hashes: new Map([["src/a.ts", "h2"]]),
+				merged: buildModelReview({ inline_comments: [paraphrase(inferred)] }),
+			}),
+		);
+		expect(byId(result.store, inferred.id)).toMatchObject({
+			status: "open",
+			evidence: ["head:head2", "diff:h2"],
+		});
+	});
+
+	it("an entry an author settled still suppresses a re-raise", () => {
+		const settled = entry({ status: "fixed", decidedBy: "author" });
+		const result = applyRound(
+			input({
+				store: store([settled]),
+				merged: buildModelReview({ inline_comments: [paraphrase(settled)] }),
+			}),
+		);
+		expect(result.suppressed).toBe(1);
+		expect(result.emitted).toEqual([]);
+		expect(result.store.entries).toEqual([settled]);
+	});
+
+	it("a renamed entry a person settled suppresses a finding at the new path", () => {
+		const settled = entry({
+			path: "src/old.ts",
+			status: "rejected",
+			decidedBy: "reviewer",
+		});
+		const finding = paraphrase({ ...settled, path: "src/new.ts" });
+		const result = applyRound(
+			input({
+				store: store([settled]),
+				renames: new Map([["src/old.ts", "src/new.ts"]]),
+				hashes: new Map([["src/new.ts", "h1"]]),
+				merged: buildModelReview({ inline_comments: [finding] }),
+			}),
+		);
+		expect(result.suppressed).toBe(1);
+		expect(result.emitted).toEqual([]);
+	});
+
+	it("does not modify a frozen non-empty store", () => {
+		const deepFreeze = <T>(o: T): T => {
+			for (const v of Object.values(o as object)) {
+				if (v && typeof v === "object") deepFreeze(v);
+			}
+			return Object.freeze(o);
+		};
+		const open = entry();
+		const settled = entry({
+			id: "ai-review-ssssssssssss",
+			path: "src/old.ts",
+			status: "rejected",
+			decidedBy: "author",
+		});
+		const inferred = entry({
+			id: "ai-review-ffffffffffff",
+			path: "src/c.ts",
+			status: "fixed",
+		});
+		const frozen = deepFreeze(store([open, settled, inferred]));
+		const snapshot = structuredClone(frozen);
+		expect(() =>
+			applyRound(
+				input({
+					store: frozen,
+					renames: new Map([["src/old.ts", "src/new.ts"]]),
+					hashes: new Map([["src/a.ts", "h2"]]),
+					merged: buildModelReview({
+						inline_comments: [paraphrase(inferred), paraphrase(open)],
+					}),
+				}),
+			),
+		).not.toThrow();
+		expect(frozen).toEqual(snapshot);
+	});
+
+	it("the provider warning names the last complete round, not an empty set", () => {
+		const result = applyRound(
+			input({
+				store: { ...store([entry()]), providers: [], lastHead: null },
+			}),
+		);
+		expect(result.warnings).toHaveLength(1);
+		expect(result.warnings[0]).not.toMatch(/none ->/);
+		expect(result.warnings[0]).toMatch(/no complete round/i);
 	});
 
 	it("two findings with the same hash input get -2 in body-hash order regardless of input order", () => {
