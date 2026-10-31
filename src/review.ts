@@ -19,6 +19,7 @@ import { mapWithConcurrency } from "./concurrency.js";
 import type { KvClient } from "./feedback/kv.js";
 import { loadLedger, reconcileSurvivingPrior } from "./ledger/live.js";
 import { findSettledMatch } from "./ledger/match.js";
+import { retargetCarried } from "./ledger/retarget.js";
 import { suppressInReview } from "./ledger/suppress.js";
 import { isSettled } from "./ledger/types.js";
 import { computeCost, createAIModel } from "./models.js";
@@ -900,6 +901,8 @@ export interface FormatReviewBodyOptions {
 	maxInlineComments: number;
 	feedbackEnabled: boolean;
 	survivingPrior: PersistedFinding[];
+	/** Carried findings whose file is no longer in the PR; listed, never blocking. */
+	retiredPrior?: PersistedFinding[];
 	incrementalPass: boolean;
 	priorSha: string;
 	headSha: string;
@@ -1026,6 +1029,7 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		maxInlineComments,
 		feedbackEnabled,
 		survivingPrior,
+		retiredPrior = [],
 		incrementalPass,
 		priorSha,
 		headSha,
@@ -1077,6 +1081,17 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 					})
 					.join("\n")}`
 			: "";
+	// A bullet list, not a badge table: the next round's baseline reads badge
+	// rows back as open findings.
+	const retiredBlock =
+		retiredPrior.length > 0
+			? `#### Retired, file no longer in this PR\n\nThese were carried from an earlier review, but their file is no longer part of this PR, so they no longer block. Their threads are unchanged.\n\n${retiredPrior
+					.map(
+						(f) =>
+							`- ${f.severity} **${f.title}** (\`${f.path}${f.line != null ? `:${f.line}` : ""}\`)`,
+					)
+					.join("\n")}`
+			: "";
 
 	const droppedNotice =
 		dropped.length > 0
@@ -1126,6 +1141,7 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		feedbackInvite,
 		findingsBlock,
 		priorBlock,
+		retiredBlock,
 		commandHints,
 		metadataBlock,
 		costFooter,
@@ -1688,6 +1704,21 @@ export async function buildReview(
 						: "ledger is cold and the source review posted inline comments",
 				});
 		}
+	}
+	// Retargeted before the triage gate, so triage ids, markResolved, the SKIP
+	// blocking check and persistence all see one list. A finding whose file is
+	// not in the PR cannot anchor to the head and stops being carried.
+	let retiredPrior: PersistedFinding[] = [];
+	if (state) {
+		const { kept, retired } = retargetCarried(
+			state.findings.filter((f) => f.status === "open"),
+			files,
+		);
+		retiredPrior = retired;
+		state.findings = [
+			...kept,
+			...state.findings.filter((f) => f.status !== "open"),
+		];
 	}
 	// Skills that still owe the PR a whole-PR review. One whose skill file is
 	// gone is dropped; a Tier 2 one waits while Tier 2 is switched off.
@@ -2629,6 +2660,7 @@ export async function buildReview(
 		maxInlineComments: MAX_INLINE_COMMENTS,
 		feedbackEnabled: context.feedbackEnabled,
 		survivingPrior,
+		retiredPrior,
 		incrementalPass,
 		priorSha,
 		headSha: context.headSha,

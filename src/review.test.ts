@@ -33,7 +33,12 @@ import {
 	TIER1_SKILLS,
 } from "./review.js";
 import type { PersistedFinding } from "./review-state.js";
-import { findingId, loadReviewState, saveReviewState } from "./review-state.js";
+import {
+	findingId,
+	loadReviewState,
+	parseBodyFindings,
+	saveReviewState,
+} from "./review-state.js";
 import { type ModelSelection, reasoningProviderOptions } from "./router.js";
 import {
 	buildGenerateObjectResponse,
@@ -423,6 +428,13 @@ function buildOctokit(overrides?: {
 }
 
 const FILES_ROUTE = "GET /repos/{owner}/{repo}/pulls/{pull_number}/files";
+
+/** The default PR file list plus src/a.ts: a carried finding on a file the PR
+ * no longer contains is retired, so its file must be in the list. */
+const filesWithA = () => [
+	buildPullFile("src/review.ts", SIMPLE_PATCH),
+	buildPullFile("src/a.ts", SIMPLE_PATCH),
+];
 
 const baseContext = {
 	owner: "joeblackwaslike",
@@ -1044,7 +1056,7 @@ describe("buildReview", () => {
 		mockGenerateObject.mockResolvedValueOnce(summaryResponse);
 
 		const review = await buildReview({
-			octokit: buildOctokit(),
+			octokit: buildOctokit({ files: filesWithA() }),
 			...baseContext,
 			headSha: newSha,
 			kv: client,
@@ -1940,7 +1952,10 @@ describe("buildReview triage gate — SKIP", () => {
 		const priorOwnBody = `### ai-review-bot\n\nFound a bug.\n\nReviewed commit: \`oldsha1234567\``;
 
 		const decision = await buildReview({
-			octokit: buildOctokit({ existingReviews: [{ body: priorOwnBody }] }),
+			octokit: buildOctokit({
+				existingReviews: [{ body: priorOwnBody }],
+				files: filesWithA(),
+			}),
 			...baseContext,
 			headSha,
 			kv: client,
@@ -2329,7 +2344,10 @@ describe("buildReview triage gate — INCREMENTAL carries forward open prior fin
 
 		const r2 = await buildReview({
 			octokit: buildOctokit({
-				files: [buildPullFile("src/b.ts", SIMPLE_PATCH)],
+				files: [
+					buildPullFile("src/a.ts", SIMPLE_PATCH),
+					buildPullFile("src/b.ts", SIMPLE_PATCH),
+				],
 			}),
 			...baseContext,
 			headSha: sha2,
@@ -3421,7 +3439,7 @@ describe("prior own findings propagation", () => {
 		const client = await seededKv();
 
 		await buildReview({
-			octokit: buildOctokit(),
+			octokit: buildOctokit({ files: filesWithA() }),
 			...baseContext,
 			provider: "anthropic" as const,
 			kv: client,
@@ -3446,7 +3464,7 @@ describe("prior own findings propagation", () => {
 		const client = await seededKv("openai");
 
 		await buildReview({
-			octokit: buildOctokit(),
+			octokit: buildOctokit({ files: filesWithA() }),
 			...baseContext,
 			provider: "openai" as const,
 			kv: client,
@@ -3681,7 +3699,10 @@ describe("review body markdown", () => {
 
 		return buildReview({
 			octokit: buildOctokit({
-				files: [buildPullFile("src/b.ts", SIMPLE_PATCH)],
+				files: [
+					buildPullFile("src/a.ts", SIMPLE_PATCH),
+					buildPullFile("src/b.ts", SIMPLE_PATCH),
+				],
 			}),
 			...baseContext,
 			headSha: "bbbbbbbbbbbb2222",
@@ -4955,8 +4976,9 @@ describe("buildReview ledger suppression", () => {
 		it("still requests changes when the ledger does not settle the KV-open finding", async () => {
 			const client = await seedKv({
 				...settledInKv,
-				id: findingId("src/other.ts", 40, "Retry loop never backs off"),
-				path: "src/other.ts",
+				// On a PR file, or it would retire instead of blocking.
+				id: findingId("src/review.ts", 40, "Retry loop never backs off"),
+				path: "src/review.ts",
 				line: 40,
 				title: "Retry loop never backs off",
 			});
@@ -5396,6 +5418,7 @@ describe("delta scoping without KV", () => {
 		compare?: (basehead: string) => unknown;
 		coldLedger?: boolean;
 		comments?: unknown[];
+		threadNodes?: unknown[];
 		rawDiff?: string;
 	}) {
 		const compareCalls: string[] = [];
@@ -5445,7 +5468,7 @@ describe("delta scoping without KV", () => {
 							pullRequest: {
 								author: { login: "joe" },
 								reviewThreads: {
-									nodes: [],
+									nodes: o.threadNodes ?? [],
 									pageInfo: { hasNextPage: false, endCursor: null },
 								},
 							},
@@ -6080,7 +6103,7 @@ describe("delta scoping without KV", () => {
 		});
 	});
 
-	it("a carried finding whose file left the PR is resolved on a fallback round", async () => {
+	it("a carried finding whose file left the PR is retired on a fallback round", async () => {
 		const prompts = routeModels({ agent: withFresh() });
 		const { octokit } = prOctokit({
 			reviews: [
@@ -6102,7 +6125,9 @@ describe("delta scoping without KV", () => {
 
 		expect(prompts).toEqual([]);
 		expect(decision?.event).toBe("COMMENT");
-		expect(decision?.body).not.toContain("Stale nit");
+		expect(decision?.body).not.toContain("Still open from the previous review");
+		expect(decision?.body).toContain("#### Retired, file no longer in this PR");
+		expect(decision?.body).toContain("- P3 **Stale nit** (`src/gone.ts:3`)");
 	});
 
 	it("a carried finding on a renamed file is revalidated, not resolved as moot", async () => {
@@ -6136,7 +6161,183 @@ describe("delta scoping without KV", () => {
 		expect(prompts).toHaveLength(1);
 		expect(prompts[0]).toContain("FILE: src/new.ts");
 		expect(decision?.event).toBe("REQUEST_CHANGES");
-		expect(decision?.body).toContain("**Real bug** (`src/old.ts:3`)");
+		expect(decision?.body).toContain("**Real bug** (`src/new.ts:3`)");
+	});
+
+	describe("carried findings on a file that left the PR", () => {
+		const GONE = "src/self-retraction.ts";
+		const goneRows = [
+			`| 🟠 | **Retraction scan is unbounded** (\`${GONE}:49\`) |`,
+			`| 🟠 | **Negated phrases count as retractions** (\`${GONE}:73\`) |`,
+			`| 🟡 | **Threshold is a magic number** (\`${GONE}:12\`) |`,
+		];
+		const goneTitles = [
+			"Retraction scan is unbounded",
+			"Negated phrases count as retractions",
+			"Threshold is a magic number",
+		];
+		// PR #92 added the renamed file under src/replay/; the name differs so
+		// the replay boundary test's text scan does not flag this file.
+		const addedFile = buildPullFile(
+			"src/replay/renamed-rule.ts",
+			SIMPLE_PATCH,
+			"added",
+		);
+		const pr92 = () =>
+			prOctokit({
+				reviews: [
+					{
+						id: 11,
+						state: "CHANGES_REQUESTED",
+						body: ownBody({ sha: OLD, count: 1, rows: goneRows }),
+					},
+				],
+				files: [addedFile],
+				compare: () => ({ status: "ahead", files: [addedFile] }),
+			});
+
+		it("a prior REQUEST_CHANGES review whose carried findings are all on a file that left the PR posts a non-blocking review", async () => {
+			routeModels({});
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "INCREMENTAL",
+				resolved: [],
+				newRisk: false,
+			});
+			const { octokit, compareCalls } = pr92();
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(compareCalls).toEqual([`${OLD}...${HEAD}`]);
+			expect(decision).not.toBeNull();
+			expect(decision?.event).not.toBe("REQUEST_CHANGES");
+			expect(decision?.body).toContain("Retired, file no longer in this PR");
+			expect(decision?.body).not.toContain(
+				"Still open from the previous review",
+			);
+			for (const title of goneTitles) {
+				expect(decision?.body).toContain(title);
+			}
+			expect(decision?.body).toContain(`\`${GONE}:49\``);
+			// The next round derives its baseline from this body; a retired row
+			// read back as open would block again.
+			const reread = parseBodyFindings(decision?.body ?? "").map(
+				(f) => f.title,
+			);
+			for (const title of goneTitles) {
+				expect(reread.some((t) => t.includes(title))).toBe(false);
+			}
+		});
+
+		it("a triage SKIP does not hold the PR on findings whose file left the PR", async () => {
+			routeModels({});
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "SKIP",
+				resolved: [],
+				newRisk: false,
+			});
+			const { octokit, checkRuns } = pr92();
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(checkRuns.map((c) => c.conclusion)).not.toContain(
+				"action_required",
+			);
+			expect(decision).not.toBeNull();
+			expect(decision?.event).not.toBe("REQUEST_CHANGES");
+			expect(decision?.body).toContain("Retired, file no longer in this PR");
+		});
+
+		it("retargets through previous_filename so a settled thread still suppresses", async () => {
+			const TITLE = "Token cache never expires";
+			const routes = routeModels({});
+			const { client } = fakeKv();
+			await saveReviewState(client, "anthropic", OWNER, REPO, 1, {
+				lastReviewedSha: OLD,
+				event: "REQUEST_CHANGES",
+				findings: [
+					{
+						id: findingId("src/old.ts", 3, TITLE),
+						path: "src/old.ts",
+						line: 3,
+						title: TITLE,
+						severity: "P1",
+						status: "open",
+					},
+				],
+				reviewedAt: "2026-10-01T00:00:00Z",
+			});
+			const commentBody = `**P1** **${TITLE}**\n\nEntries in \`tokenCache\` are never evicted.`;
+			const { octokit } = prOctokit({
+				reviews: [
+					{
+						id: 11,
+						state: "CHANGES_REQUESTED",
+						body: ownBody({ sha: OLD, count: 1, inline: "Inline comments: 1" }),
+					},
+				],
+				comments: [
+					{
+						id: 501,
+						pull_request_review_id: 11,
+						path: "src/new.ts",
+						line: 3,
+						body: commentBody,
+					},
+				],
+				threadNodes: [
+					{
+						isResolved: false,
+						resolvedBy: null,
+						comments: {
+							pageInfo: { hasNextPage: false },
+							nodes: [
+								{
+									databaseId: 501,
+									author: { login: "ai-review-bot", __typename: "Bot" },
+									authorAssociation: "NONE",
+									body: commentBody,
+									createdAt: "2026-10-01T00:00:00Z",
+								},
+								{
+									databaseId: 502,
+									author: { login: "joe", __typename: "User" },
+									authorAssociation: "OWNER",
+									body: "This is intentional, the token is short-lived",
+									createdAt: "2026-10-02T00:00:00Z",
+								},
+							],
+						},
+					},
+				],
+				files: [
+					{
+						filename: "src/new.ts",
+						previous_filename: "src/old.ts",
+						status: "renamed",
+						patch: SIMPLE_PATCH,
+					} as { filename: string; status: string; patch?: string },
+				],
+				compare: () => {
+					throw new Error("gone");
+				},
+			});
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				kv: client,
+			});
+
+			expect(routes).toEqual([]);
+			expect(decision?.event).not.toBe("REQUEST_CHANGES");
+			expect(decision?.body).not.toContain(
+				"Still open from the previous review",
+			);
+			const saved = await loadReviewState(client, "anthropic", OWNER, REPO, 1);
+			expect(
+				saved?.findings.filter((f) => f.status === "open" && f.title === TITLE),
+			).toEqual([]);
+		});
 	});
 
 	it("approval text says carried non-blocking findings are still open", async () => {
