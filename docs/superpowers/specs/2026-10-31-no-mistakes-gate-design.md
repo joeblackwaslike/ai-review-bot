@@ -46,7 +46,7 @@ It cannot see the answers given through `axi respond`. They are not passed to th
 3. Take each remaining new finding. If it matches an entry the gate inferred as fixed, reopen that entry under its id with refreshed fields and emit it. Otherwise suppress it when it matches an entry a person settled before this round (`decidedBy` not null), using `suppressInReview` after `mergeReviews`. The gate records no person's decision today, so in practice nothing is suppressed; the rule stays so a later source of real decisions needs no change here.
 4. An open entry that no new finding matched becomes `fixed` only if its file's diff against the merge base changed since the entry was last seen, or the file left the range (its path is absent from the range even when the round skipped it for review), and only if the round was complete (see Partial rounds). Otherwise it stays `open`: the model may simply not have raised it again.
 
-Open entries on files a delta round did not review are reported again from the store, so a later round never goes green over a known defect. Entries without a file path are reported only in the round that raises them, because nothing can ever mark them fixed.
+Open entries on files a delta round did not review are reported again from the store, so a later round never goes green over a known defect. Entries without a file path are reported in the round that raises them, and again on any later round at the same `HEAD` (so re-running the pipeline without a code change cannot turn a parked gate green); nothing can ever mark them fixed, so they are not carried past a changed `HEAD`.
 
 An inferred fix is a guess, so it never suppresses anything. A model that misses a finding in one round and raises it again after an unrelated edit to the file would otherwise be silenced for good, with the gate exiting 0 over a real defect. Reopening costs a repeat when a fix was real and the model raises it again anyway, which is the cheaper error.
 
@@ -75,7 +75,7 @@ A branch with no code files in range writes `{"findings":[]}` and exits 0 withou
 
 ### Partial rounds
 
-Step 4 runs only when every attempted agent succeeded and the set of providers that ran equals the set stored for the previous round. Otherwise new findings are still emitted and matched, every unmatched entry stays `open`, and the gate prints a warning. A missing provider or a timed-out skill would otherwise read as "everything it found is fixed".
+Step 4 runs only when every attempted agent succeeded and the set of providers that ran equals the set stored for the previous round. Otherwise new findings are still emitted and matched, every unmatched entry stays `open`, and the gate prints a warning. The stored provider set and `lastHead` stay unchanged on a provider mismatch, so a provider that dropped out cannot cause its own findings to be inferred fixed two rounds later, once the remaining providers agree with each other. The cost is that after a permanent provider change the old findings stay open until the store file is deleted; the warning names that file. A missing provider or a timed-out skill would otherwise read as "everything it found is fixed".
 
 ### Fail open
 
