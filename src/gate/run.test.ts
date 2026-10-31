@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,7 +10,7 @@ import type { ModelReview } from "../review.js";
 import type { AuditFile, GitRunner } from "../sources.js";
 import { buildInlineComment, buildModelReview } from "../testing.js";
 import { validateReport } from "./report.js";
-import { gateRepoSlug, runGate } from "./run.js";
+import { gateRepoSlug, gateRoot, runGate } from "./run.js";
 import { type GateStore, gateStorePath, storeKey } from "./store.js";
 
 type FakeFile = {
@@ -844,6 +845,32 @@ describe("runGate against a real git repo", () => {
 			storeDir,
 			review: async () => passResult(merged),
 		});
+
+	it("gateRoot maps a subdirectory to the repo top level, so diff hashes are not empty", async () => {
+		const { root } = makeRepo();
+		const sub = join(root, "src");
+
+		expect(gateRoot(sub)).toBe(realpathSync(root));
+
+		await realGate(
+			root,
+			buildModelReview({ inline_comments: [P1_ON_A] }),
+			gateRoot(sub),
+		);
+		const store = JSON.parse(
+			await readFile(
+				join(storeDir, (await readdir(storeDir))[0] ?? ""),
+				"utf8",
+			),
+		) as GateStore;
+		const emptyDiff = createHash("sha1").update("").digest("hex");
+		expect(store.entries[0]?.evidence).not.toContain(`diff:${emptyDiff}`);
+	});
+
+	it("gateRoot falls back to the given directory outside a repo", () => {
+		const outside = mkdtempSync(join(tmpdir(), "gate-nogit-"));
+		expect(gateRoot(outside)).toBe(outside);
+	});
 
 	it("a pure rename plus one model miss keeps the finding open", async () => {
 		const { root, git } = makeRepo();

@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { writeFile } from "node:fs/promises";
 import { type ReviewPassResult, runReviewPasses } from "../audit.js";
 import { isSettled, type LedgerEntry } from "../ledger/types.js";
@@ -128,6 +129,20 @@ function formatText(findings: readonly GateFinding[]): string {
 		return `[${f.severity}] ${f.id}${where}\n  ${title}${body ? `\n  ${body.replaceAll("\n", "\n  ")}` : ""}`;
 	});
 	return `ai-review gate: ${findings.length} finding(s)\n\n${lines.join("\n\n")}`;
+}
+
+/** The repo top level for `cwd`, so cwd-relative git pathspecs match the repo-relative range paths; `cwd` itself outside a repo. */
+export function gateRoot(cwd: string): string {
+	try {
+		const top = execFileSync("git", ["rev-parse", "--show-toplevel"], {
+			cwd,
+			encoding: "utf-8",
+			stdio: ["ignore", "pipe", "ignore"],
+		}).trim();
+		return top || cwd;
+	} catch {
+		return cwd;
+	}
 }
 
 /** Owner and repo for the store key from any origin URL or path: its last two path segments, `local` as owner when fewer exist, and the top-level directory name when there is no origin. */

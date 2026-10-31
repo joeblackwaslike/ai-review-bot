@@ -26,7 +26,7 @@ import {
 	unsetCredential,
 } from "./cli-creds.js";
 import { getConfig, getOpenAIAppConfig } from "./config.js";
-import { gateRepoSlug, runGate } from "./gate/run.js";
+import { gateRepoSlug, gateRoot, runGate } from "./gate/run.js";
 import {
 	type BackfillOctokit,
 	type BackfillResult,
@@ -1212,12 +1212,13 @@ async function cmdGate(args: string[]): Promise<void> {
 		else if (a === "--extra") extra = requireValue(args, i++, a);
 		else fatal(`Unknown argument: ${a}`);
 	}
+	const root = gateRoot(process.cwd());
 	const { owner, repo } = gateRepoSlug(
 		gitOut(["remote", "get-url", "origin"]),
-		gitOut(["rev-parse", "--show-toplevel"]) ?? process.cwd(),
+		root,
 	);
 	const result = await runGate({
-		cwd: process.cwd(),
+		cwd: root,
 		owner,
 		repo,
 		base,
