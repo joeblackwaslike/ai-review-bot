@@ -8,7 +8,7 @@ This file provides context and conventions for AI coding agents working on this 
 pnpm install
 pnpm typecheck    # tsc --noEmit — must pass before any commit
 pnpm lint         # biome check — must pass before any commit
-pnpm test         # vitest run (1454 passed, 4 skipped) — must pass before any commit
+pnpm test         # vitest run (1466 passed, 4 skipped) — must pass before any commit
 pnpm dev          # vercel dev — local server on :3000
 ```
 
@@ -102,7 +102,7 @@ Reference: `docs/superpowers/specs/2026-06-08-local-audit-review-pr-design.md`
 
 - `ai-review replay [--fixtures <dir>]` / `ai-review replay --record <pr-url> --provider anthropic|openai --bot <login>` / `ai-review replay --live [--rounds <n>] [--max-cost <usd>]` — Deterministic offline replay of recorded review rounds: measures false-positive rate, claim recycling, and convergence against auto-labeled fixtures (provisional until an agent verifies them against the PR threads and Codex cross-checks them; items the two models disagree on stay unadjudicated). `--record` captures a real PR's rounds/threads/reactions via `gh` into `src/replay/fixtures/`; the default (no flags) replays existing fixtures and fails on confirmed-label guard violations (warns on provisional ones); `--live` is an opt-in, cost-capped tier that re-runs the audit pipeline against confirmed pairs only — it never gates CI. If any `*.classes.json` fixture is present, the default run also prints a classification report (`src/replay/classify.ts`, breaking rejected first-seen findings into filler/stale/contradicted/speculative/other, by rule and by model, provisional until adjudicated) and a filter-margin report (`src/replay/filter-margin.ts`, measuring what the candidate retraction rule in `src/replay/retraction-rule.ts` would remove against those classes; the rule is a measurement only and is not applied in the merge). See `docs/superpowers/specs/2026-10-27-review-replay-harness-design.md` and `docs/superpowers/specs/2026-10-29-claude-first-pass-accuracy-design.md` for the design and `src/replay/`.
 
-`watch`, `review` and `audit` also append one JSON line per agent outcome to `~/.ai-review/logs/agents.jsonl`, or to the path in `AI_REVIEW_LOG_FILE` when it is set. The hosted webhook path does not write it.
+`watch`, `review`, `audit` and `gate` also append one JSON line per agent outcome to `~/.ai-review/logs/agents.jsonl`, or to the path in `AI_REVIEW_LOG_FILE` when it is set. The hosted webhook path does not write it.
 
 ### Agent skills
 
