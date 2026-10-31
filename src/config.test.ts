@@ -40,6 +40,7 @@ afterEach(() => {
 		"REVIEW_COMMENT_PREFIX",
 		"OPENAI_REVIEW_COMMENT_PREFIX",
 		"REVIEW_DELAY_SECONDS",
+		"IMPROVE_CARRIER_ENABLED",
 		"REVIEW_RESYNC_DELAY_SECONDS",
 		"AGENT_CONCURRENCY",
 		"REVIEW_TIER2_ENABLED",
@@ -95,6 +96,26 @@ describe("review delay parsing", () => {
 		for (const bad of ["abc", "", "   ", "-30"]) {
 			setRequiredEnv({ REVIEW_DELAY_SECONDS: bad });
 			expect(getConfig().reviewDelayMs).toBe(0);
+		}
+	});
+});
+
+describe("IMPROVE_CARRIER_ENABLED", () => {
+	it("is off by default for both providers", () => {
+		setRequiredEnv();
+		setOpenAIEnv();
+		expect(getConfig().improveCarrierEnabled).toBe(false);
+		expect(getOpenAIAppConfig().improveCarrierEnabled).toBe(false);
+	});
+
+	it('is on only when the value is exactly "true"', () => {
+		setRequiredEnv({ IMPROVE_CARRIER_ENABLED: "true" });
+		setOpenAIEnv();
+		expect(getConfig().improveCarrierEnabled).toBe(true);
+		expect(getOpenAIAppConfig().improveCarrierEnabled).toBe(true);
+		for (const other of ["false", "1", "TRUE", "yes", ""]) {
+			process.env.IMPROVE_CARRIER_ENABLED = other;
+			expect(getConfig().improveCarrierEnabled).toBe(false);
 		}
 	});
 });

@@ -13,8 +13,8 @@ export interface AppConfig {
 	 * without DATABASE_URL behaves exactly as before. */
 	improveEnabled: boolean;
 	/** Post the carrier issue comment that lets the top-level review be rated.
-	 * Separate from improveEnabled because it adds a visible comment to every
-	 * PR, which is worth being able to turn off on its own. */
+	 * Opt-in: only the exact value IMPROVE_CARRIER_ENABLED=true enables it. It is
+	 * separate from improveEnabled because it adds a visible comment to every PR. */
 	improveCarrierEnabled: boolean;
 	agentConcurrency: number;
 	agentBudgetMs: number;
@@ -141,7 +141,7 @@ export function getConfig(opts: GetConfigOptions = {}): AppConfig {
 		provider: "anthropic",
 		feedbackEnabled: process.env.FEEDBACK_ENABLED === "true",
 		improveEnabled: process.env.IMPROVE_ENABLED === "true",
-		improveCarrierEnabled: process.env.IMPROVE_CARRIER_ENABLED !== "false",
+		improveCarrierEnabled: process.env.IMPROVE_CARRIER_ENABLED === "true",
 		agentConcurrency: parseAgentConcurrency(),
 		agentBudgetMs: parseAgentBudgetMs(),
 		tier2Enabled: process.env.REVIEW_TIER2_ENABLED !== "false",
@@ -178,7 +178,7 @@ export function getOpenAIAppConfig(opts: GetConfigOptions = {}): AppConfig {
 		provider: "openai",
 		feedbackEnabled: process.env.FEEDBACK_ENABLED === "true",
 		improveEnabled: process.env.IMPROVE_ENABLED === "true",
-		improveCarrierEnabled: process.env.IMPROVE_CARRIER_ENABLED !== "false",
+		improveCarrierEnabled: process.env.IMPROVE_CARRIER_ENABLED === "true",
 		agentConcurrency: parseAgentConcurrency(),
 		agentBudgetMs: parseAgentBudgetMs(),
 		tier2Enabled: process.env.REVIEW_TIER2_ENABLED !== "false",

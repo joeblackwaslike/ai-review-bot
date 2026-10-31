@@ -53,6 +53,12 @@ vi.mock("./scheduler.js", () => ({
 	verifyQStashSignature: vi.fn(async () => true),
 }));
 
+const mockCapturePostedReview = vi.hoisted(() => vi.fn());
+vi.mock("./improve/capture.js", () => ({
+	capturePostedReview: mockCapturePostedReview,
+}));
+vi.mock("./improve/db/client.js", () => ({ getDb: vi.fn(() => ({})) }));
+
 vi.mock("./feedback/persist.js", () => ({
 	persistPostedComments: vi.fn(async () => 1),
 }));
@@ -2072,5 +2078,86 @@ describe("selectReviewDelayMs", () => {
 		expect(selectReviewDelayMs("opened", config)).toBe(30_000);
 		expect(selectReviewDelayMs("ready_for_review", config)).toBe(30_000);
 		expect(selectReviewDelayMs("synchronize", config)).toBe(12_000);
+	});
+});
+
+describe("carrier comment wiring", () => {
+	const envKeys = [
+		"GITHUB_APP_ID",
+		"GITHUB_APP_PRIVATE_KEY",
+		"GITHUB_WEBHOOK_SECRET",
+		"IMPROVE_CARRIER_ENABLED",
+	];
+	const saved: Record<string, string | undefined> = {};
+	beforeEach(() => {
+		for (const k of envKeys) saved[k] = process.env[k];
+		process.env.GITHUB_APP_ID = "1";
+		process.env.GITHUB_APP_PRIVATE_KEY = "pem";
+		process.env.GITHUB_WEBHOOK_SECRET = "secret";
+		delete process.env.IMPROVE_CARRIER_ENABLED;
+		mockCapturePostedReview
+			.mockReset()
+			.mockResolvedValue({ findings: 1, carrierCommentId: null });
+		kvStore.clear();
+	});
+	afterEach(() => {
+		for (const k of envKeys) {
+			if (saved[k] === undefined) delete process.env[k];
+			else process.env[k] = saved[k];
+		}
+	});
+
+	async function submitWithRealCarrierConfig() {
+		const actual =
+			await vi.importActual<typeof import("./config.js")>("./config.js");
+		const config = {
+			...actual.getConfig(),
+			feedbackEnabled: true,
+			improveEnabled: true,
+		};
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "COMMENT" as const,
+			body: "b",
+			comments: [{ path: "src/x.ts", line: 10, body: "c", side: "RIGHT" }],
+			validLinesByPath: new Map(),
+			metadata: DEFAULT_METADATA,
+			summary: "s",
+			commentProvenance: new Map([
+				["src/x.ts:10", { skills: ["code-reviewer.md"], title: "Bug" }],
+			]),
+		});
+		const { app, request } = buildMockApp();
+		request.mockImplementation(async (route: string) =>
+			route.includes("/reviews") ? { data: { id: 55 } } : { data: {} },
+		);
+		await maybeSubmitReview({
+			app,
+			...baseArgs,
+			force: true,
+			pullNumber: 77,
+			config,
+		});
+		return request;
+	}
+
+	it("does not ask capture to post the carrier, and creates no issue comment, by default", async () => {
+		const request = await submitWithRealCarrierConfig();
+
+		expect(mockCapturePostedReview).toHaveBeenCalledTimes(1);
+		expect(mockCapturePostedReview.mock.calls[0][0].postCarrier).toBe(false);
+		const issueCommentPosts = request.mock.calls.filter(
+			([route]) =>
+				route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+		);
+		expect(issueCommentPosts).toEqual([]);
+	});
+
+	it("posts the carrier and registers it for reaction polling when IMPROVE_CARRIER_ENABLED=true", async () => {
+		process.env.IMPROVE_CARRIER_ENABLED = "true";
+		await submitWithRealCarrierConfig();
+
+		const arg = mockCapturePostedReview.mock.calls[0][0];
+		expect(arg.postCarrier).toBe(true);
+		expect(arg.onCarrier).toBeTypeOf("function");
 	});
 });
