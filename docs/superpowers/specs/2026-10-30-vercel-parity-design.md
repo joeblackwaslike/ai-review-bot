@@ -73,6 +73,8 @@ Letting `isMovedFileRepeat` match on equal titles alone would also suppress unre
 
 After mapping, a carried finding whose path is not in the PR file set cannot anchor to the head. It is retired: it leaves the carried list and no longer blocks, and the review body lists it under a short "Retired, file no longer in this PR" note. This is not a claim that the finding was fixed. The GitHub thread is untouched. This rule is what fixes PR #92.
 
+A file the PR deletes counts as not in the PR. GitHub still lists it under its old name with `status: "removed"`, so `retargetCarried` leaves removed files out of the set it checks against.
+
 The risk is a finding on a file renamed inside the PR whose thread is still unresolved. Retiring it stops the bot from blocking on it. It does not hide it, because the open thread stays on GitHub. We accept that.
 
 ### GitHub is the only source of review state
@@ -100,7 +102,7 @@ Offline:
 - Unit tests with fakes that assert the request shape (REST parameters, GraphQL variables). Sprint 2 shipped a GraphQL call with no variables because a mock hid it.
 - A new replay fixture recorded from PR #92. The default `ai-review replay` run must stay green, including the recall guard and the negative pairs. We record its numbers before and after.
 - A `buildReview` test for the #92 shape: three settled carried findings on a path that left the PR, a clean delta, expected event not REQUEST_CHANGES.
-- Tests with `kv` unset and with `kv` throwing.
+- A `maybeSubmitReview` test where the KV claim throws and the review still posts. `buildReview` takes no KV client, so it has nothing to test there.
 
 Against real GitHub, read only:
 
@@ -110,6 +112,12 @@ Against real GitHub, read only:
 We cannot measure the deployed bots before merge. We do not run `ai-review watch` next to the live bots, because both would post. After merge and deploy, the first new PR shows the behavior, and we record that review in the PR and the bead.
 
 We also do not measure how often a retired finding was still unresolved on its thread, or how often hosted runs hit the duplicate-delivery window. We have no count for either.
+
+## Known limits
+
+A SKIP round and a silent round post nothing. The next round derives its baseline from the last posted review, so its delta starts at that review's head and not at the skipped head. Triage then sees a larger delta than the last push. That costs tokens, and a delta past the 300-file compare cap forces a full review. It cannot miss a change, because the larger delta contains every change since the last posted review.
+
+The multi-round flow is covered by "forced run carries: round 3's baseline holds round 1's and round 2's findings" in `src/review.test.ts` (line 5510). It posts a full round, then a forced round, then an incremental round, and checks that the third round's baseline holds the findings from both earlier rounds.
 
 ## Other beads
 
