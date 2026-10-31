@@ -169,7 +169,7 @@ export async function runGate(opts: GateOptions): Promise<GateResult> {
 	const { mergeBase, changes } = listRangeChanges(runGit, base);
 	const head = runGit(["rev-parse", "HEAD"]).trim();
 	const storePath = gateStorePath(
-		storeKey(runGit, opts.owner, opts.repo, mergeBase),
+		storeKey(runGit, opts.owner, opts.repo, mergeBase, opts.storeDir),
 		opts.storeDir,
 	);
 	const { store, warning } = await loadStore(storePath);

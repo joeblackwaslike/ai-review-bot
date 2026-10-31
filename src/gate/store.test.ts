@@ -4,6 +4,7 @@ import {
 	mkdtemp,
 	readdir,
 	readFile,
+	utimes,
 	writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -49,6 +50,44 @@ describe("storeKey", () => {
 
 	const keyFor = (branch: string) =>
 		storeKey(gitReturning(`${branch}\n`), "o", "r", "abc123");
+
+	it("keeps an existing branch store when a second branch starts pointing at HEAD", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "gate-key-"));
+		await writeFile(gateStorePath(keyFor("feat/x"), dir), "{}");
+
+		const key = storeKey(
+			gitReturning("backup\nfeat/x\n"),
+			"o",
+			"r",
+			"abc123",
+			dir,
+		);
+
+		expect(key).toBe(keyFor("feat/x"));
+	});
+
+	it("prefers the most recently modified store when several candidates exist", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "gate-key-"));
+		const older = gateStorePath(
+			storeKey(gitReturning(""), "o", "r", "abc123"),
+			dir,
+		);
+		const newer = gateStorePath(keyFor("a"), dir);
+		await writeFile(older, "{}");
+		await writeFile(newer, "{}");
+		await utimes(older, new Date(1_000_000), new Date(1_000_000));
+
+		const key = storeKey(gitReturning("a\nb\n"), "o", "r", "abc123", dir);
+
+		expect(gateStorePath(key, dir)).toBe(newer);
+	});
+
+	it("uses the single-branch key when no candidate store exists", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "gate-key-"));
+		expect(storeKey(gitReturning("feat/x\n"), "o", "r", "abc123", dir)).toBe(
+			keyFor("feat/x"),
+		);
+	});
 
 	it("keeps Feat and feat apart", () => {
 		expect(keyFor("Feat")).not.toBe(keyFor("feat"));
