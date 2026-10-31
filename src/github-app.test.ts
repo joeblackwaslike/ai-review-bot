@@ -66,9 +66,11 @@ vi.mock("./feedback/persist.js", () => ({
 // Backing store for the fake KV so the idempotency claim is exercised for real.
 const kvStore = vi.hoisted(() => new Map<string, string>());
 const kvExpiry = vi.hoisted(() => new Map<string, number>());
+const kvDown = vi.hoisted(() => ({ on: false }));
 vi.mock("./feedback/kv.js", () => ({
 	createUpstashKv: vi.fn(() => ({
 		setNx: async (key: string, value: string, ttlSeconds: number) => {
+			if (kvDown.on) throw new Error("kv down");
 			// Guard the TTL contract so a caller that forgets it (0/undefined) — which
 			// would set a never-expiring key in production Upstash — fails the test
 			// instead of silently diverging.
@@ -144,9 +146,35 @@ describe("maybeSubmitReview", () => {
 	beforeEach(() => {
 		kvStore.clear();
 		kvExpiry.clear();
+		kvDown.on = false;
 	});
 	afterEach(() => {
 		vi.useRealTimers();
+	});
+
+	it("a throwing KV does not fail a review", async () => {
+		kvDown.on = true;
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const { app, octokit } = buildMockApp();
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "COMMENT" as const,
+			body: "Review body.",
+			comments: [],
+			metadata: DEFAULT_METADATA,
+		});
+
+		await maybeSubmitReview({ app, ...baseArgs });
+
+		expect(mockBuildReview).toHaveBeenCalledTimes(1);
+		const reviewPosts = octokit.request.mock.calls.filter(
+			([route]) =>
+				route === "POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
+		);
+		expect(reviewPosts).toHaveLength(1);
+		expect(console.error).toHaveBeenCalledWith(
+			"idempotency claim failed — proceeding without lock",
+			expect.any(Error),
+		);
 	});
 
 	it("does not run a second review for the same commit (idempotency claim)", async () => {

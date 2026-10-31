@@ -16,7 +16,6 @@ import type { ResolvedAuth } from "./auth.js";
 import { deriveBaseline } from "./baseline.js";
 import { dedupeClaims, isSameClaim } from "./claim-dedupe.js";
 import { mapWithConcurrency } from "./concurrency.js";
-import type { KvClient } from "./feedback/kv.js";
 import { loadLedger, reconcileSurvivingPrior } from "./ledger/live.js";
 import { findSettledMatch } from "./ledger/match.js";
 import { retargetCarried } from "./ledger/retarget.js";
@@ -92,10 +91,6 @@ interface ReviewContext {
 	 * timeout would otherwise kill the run with nothing posted at all. */
 	agentBudgetMs: number;
 	tier2Enabled: boolean;
-	/** Upstash KV client, or null when KV is not configured. buildReview never
-	 * reads or writes it: review state comes from GitHub (src/baseline.ts), and
-	 * KV serves only the idempotency claim and the feedback writes. */
-	kv?: KvClient | null;
 	/** Local subscription/OAuth or explicit API-key auth for this review's model
 	 * calls. Omitted on the hosted webhook path (env-var API keys apply via
 	 * createAIModel's own fallback); supplied by `ai-review watch` for local,

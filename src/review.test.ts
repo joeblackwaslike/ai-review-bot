@@ -2,7 +2,6 @@ import { NoObjectGeneratedError } from "ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type AgentRecord, parseAgentsMarker } from "./agent-log.js";
 import { deriveBaseline } from "./baseline.js";
-import type { KvClient } from "./feedback/kv.js";
 import { computeCost, createAIModel } from "./models.js";
 import {
 	buildReview,
@@ -5178,92 +5177,6 @@ describe("delta scoping without KV", () => {
 		expect(decision?.body).toContain("<!-- ai-review:review=2 -->");
 	});
 
-	const KV_METHODS = [
-		"zadd",
-		"zrangebyscore",
-		"zremrangebyscore",
-		"set",
-		"setNx",
-		"get",
-		"del",
-		"lpush",
-		"lrange",
-	] as const;
-	function spyKv(impl: () => Promise<unknown>) {
-		const spies = Object.fromEntries(
-			KV_METHODS.map((m) => [m, vi.fn(impl)]),
-		) as Record<(typeof KV_METHODS)[number], ReturnType<typeof vi.fn>>;
-		return { spies, client: spies as unknown as KvClient };
-	}
-	const staleKvState = JSON.stringify({
-		lastReviewedSha: "fedcba9876543210",
-		event: "REQUEST_CHANGES",
-		findings: [
-			{
-				id: findingId(null, null, "Kv only blocker"),
-				path: null,
-				line: null,
-				title: "Kv only blocker",
-				severity: "P1",
-				status: "open",
-			},
-		],
-		reviewedAt: "2026-10-01T00:00:00Z",
-		reviewCount: 7,
-	});
-	const deltaRound = () => {
-		routeModels({ agent: withFresh() });
-		mockTriageReReview.mockResolvedValue({
-			recommendation: "INCREMENTAL",
-			resolved: [],
-			newRisk: true,
-		});
-		return prOctokit({
-			reviews: [{ id: 11, body: buildOwnReviewBody({ sha: OLD, count: 1 }) }],
-			compare: () => ({ status: "ahead", files: [bFile] }),
-		});
-	};
-
-	it("a throwing kv does not fail a non-forced review", async () => {
-		const { client } = spyKv(async () => {
-			throw new Error("kv down");
-		});
-		const { octokit, compareCalls } = deltaRound();
-
-		const decision = await buildReview({ octokit, ...baseContext, kv: client });
-
-		expect(compareCalls).toEqual([`${OLD}...${HEAD}`]);
-		expect(decision?.body).toContain("Fresh issue");
-		expect(decision?.body).toContain("scope: delta from abcdef1 (github)");
-	});
-
-	it("kv set and kv null give the same event, body and scope note for the same prior review", async () => {
-		const { client } = spyKv(async () => staleKvState);
-		const withKv = deltaRound();
-		const a = await buildReview({
-			octokit: withKv.octokit,
-			...baseContext,
-			kv: client,
-		});
-		const withoutKv = deltaRound();
-		const b = await buildReview({
-			octokit: withoutKv.octokit,
-			...baseContext,
-			kv: null,
-		});
-
-		// The agents marker records each agent's measured durationMs, which
-		// differs between two real runs.
-		const stableBody = (body?: string) =>
-			body?.replace(/"durationMs":\d+/g, '"durationMs":0');
-		expect(withKv.compareCalls).toEqual(withoutKv.compareCalls);
-		expect(a?.event).toBe(b?.event);
-		expect(a?.body).toContain('"durationMs":');
-		expect(stableBody(a?.body)).toBe(stableBody(b?.body));
-		expect(a?.body).toContain("scope: delta from abcdef1 (github)");
-		expect(a?.body).not.toContain("Kv only blocker");
-	});
-
 	// Production runs both bots under one heading (REVIEW_COMMENT_PREFIX is set,
 	// OPENAI_REVIEW_COMMENT_PREFIX is not). On PR #92 reviews 5719190216 and
 	// 5719191481 differ only in the provider marker.
@@ -5397,37 +5310,6 @@ describe("delta scoping without KV", () => {
 		expect(decision?.body).toContain("Fresh issue");
 		expect(decision?.body).toContain("ledger: cold");
 		expect(decision?.body).toContain("scope: full (baseline incomplete)");
-	});
-
-	it("buildReview makes no kv calls", async () => {
-		const { spies, client } = spyKv(async () => null);
-		const posted = deltaRound();
-		expect(
-			await buildReview({
-				octokit: posted.octokit,
-				...baseContext,
-				kv: client,
-			}),
-		).not.toBeNull();
-		mockTriageReReview.mockResolvedValue({
-			recommendation: "SKIP",
-			resolved: [],
-			newRisk: false,
-		});
-		const skipped = prOctokit({
-			reviews: [{ id: 11, body: buildOwnReviewBody({ sha: OLD, count: 1 }) }],
-			compare: () => ({ status: "ahead", files: [bFile] }),
-		});
-		expect(
-			await buildReview({
-				octokit: skipped.octokit,
-				...baseContext,
-				kv: client,
-			}),
-		).toBeNull();
-		expect(skipped.checkRuns).toHaveLength(1);
-
-		for (const m of KV_METHODS) expect(spies[m], m).not.toHaveBeenCalled();
 	});
 
 	const blockerRow = "| 🟠 | correctness | **Blocker** |";
@@ -6457,10 +6339,7 @@ describe("delta scoping without KV", () => {
 		expect(decision?.body).toContain("scope: full (compare failed)");
 	});
 
-	it("a forced run ignores a throwing kv", async () => {
-		const { client: kv } = spyKv(async () => {
-			throw new Error("kv down");
-		});
+	it("a forced run keeps the carried blocker and bumps the review count", async () => {
 		routeModels({});
 		const { octokit } = prOctokit({
 			reviews: [
@@ -6474,17 +6353,12 @@ describe("delta scoping without KV", () => {
 		const decision = await buildReview({
 			octokit,
 			...baseContext,
-			kv,
 			force: true,
 		});
 
 		expect(decision?.event).toBe("REQUEST_CHANGES");
 		expect(decision?.body).toContain("**Blocker**");
 		expect(decision?.body).toContain("<!-- ai-review:review=2 -->");
-		expect(console.warn).not.toHaveBeenCalledWith(
-			expect.stringContaining("KV"),
-			expect.anything(),
-		);
 	});
 
 	it("an open inline finding flows from the ledger into the still-open block", async () => {

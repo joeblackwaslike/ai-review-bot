@@ -478,12 +478,10 @@ export async function maybeSubmitReview(args: {
 			headSha,
 		});
 	}
-	// claimKv is the per-commit idempotency claim: force-gated (a manual
-	// /ai-review intentionally bypasses the claim) and SHA-gated. stateKv is the
-	// unconditional client; buildReview takes no review state from it, since
-	// that comes from GitHub.
-	const stateKv = getKv();
-	const claimKv = force || !validSha ? null : stateKv;
+	// The per-commit idempotency claim is force-gated (a manual /ai-review
+	// intentionally bypasses it) and SHA-gated. Review state comes from GitHub,
+	// so buildReview takes no KV client.
+	const claimKv = force || !validSha ? null : getKv();
 	const claimKey = `review-claim:${config.provider}:${owner}/${repo}#${pullNumber}@${headSha}`;
 	let claimed = false;
 	if (claimKv) {
@@ -555,7 +553,6 @@ export async function maybeSubmitReview(args: {
 			agentConcurrency: config.agentConcurrency,
 			agentBudgetMs: config.agentBudgetMs,
 			tier2Enabled: config.tier2Enabled,
-			kv: stateKv,
 			auth,
 		});
 
