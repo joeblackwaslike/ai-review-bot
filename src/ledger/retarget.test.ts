@@ -34,11 +34,8 @@ describe("retargetCarried", () => {
 	});
 
 	it("retires a finding whose path is neither a filename nor a previous_filename", () => {
-		const f = finding("src/self-retraction.ts", 1, "Stale");
-		const r = retargetCarried(
-			[f],
-			[{ filename: "src/replay/retraction-rule.ts" }],
-		);
+		const f = finding("src/self-check.ts", 1, "Stale");
+		const r = retargetCarried([f], [{ filename: "src/replay/check-rule.ts" }]);
 		expect(r.kept).toEqual([]);
 		expect(r.retired).toEqual([f]);
 	});
@@ -64,5 +61,26 @@ describe("retargetCarried", () => {
 		);
 		expect(r.kept.map((x) => x.title)).toEqual(["A", "C", "E"]);
 		expect(r.retired.map((x) => x.title)).toEqual(["B", "D"]);
+	});
+
+	it("filename wins over previous_filename when a new file takes a renamed file's old path", () => {
+		const f = finding("src/a.ts", 4, "Bug");
+		const r = retargetCarried(
+			[f],
+			[
+				{ filename: "src/b.ts", previous_filename: "src/a.ts" },
+				{ filename: "src/a.ts" },
+			],
+		);
+		expect(r.kept).toEqual([f]);
+		expect(r.retired).toEqual([]);
+	});
+
+	it("empty files list retires every pathed finding", () => {
+		const pathed = finding("src/a.ts", 1, "A");
+		const general = finding(null, null, "G");
+		const r = retargetCarried([pathed, general], []);
+		expect(r.kept).toEqual([general]);
+		expect(r.retired).toEqual([pathed]);
 	});
 });

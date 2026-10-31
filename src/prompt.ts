@@ -105,7 +105,7 @@ export function isGeneratedFile(path: string): boolean {
 }
 
 /** GitHub lists at most this many files for a pull request. */
-const PR_FILE_LIST_CAP = 3000;
+export const PR_FILE_LIST_CAP = 3000;
 
 /** True when these files are the whole PR as a FULL round sees it: the list
  * is not cut short, and every file other than a generated one has a patch or

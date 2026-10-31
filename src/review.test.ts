@@ -5,6 +5,7 @@ import {
 	formatAgentsMarker,
 	parseAgentsMarker,
 } from "./agent-log.js";
+import { deriveBaseline } from "./baseline.js";
 import type { KvClient } from "./feedback/kv.js";
 import { computeCost, createAIModel } from "./models.js";
 import {
@@ -33,12 +34,7 @@ import {
 	TIER1_SKILLS,
 } from "./review.js";
 import type { PersistedFinding } from "./review-state.js";
-import {
-	findingId,
-	loadReviewState,
-	parseBodyFindings,
-	saveReviewState,
-} from "./review-state.js";
+import { findingId, loadReviewState, saveReviewState } from "./review-state.js";
 import { type ModelSelection, reasoningProviderOptions } from "./router.js";
 import {
 	buildGenerateObjectResponse,
@@ -6220,12 +6216,39 @@ describe("delta scoping without KV", () => {
 			expect(decision?.body).toContain(`\`${GONE}:49\``);
 			// The next round derives its baseline from this body; a retired row
 			// read back as open would block again.
-			const reread = parseBodyFindings(decision?.body ?? "").map(
-				(f) => f.title,
+			const derived = deriveBaseline(
+				{ id: 12, body: decision?.body ?? "" },
+				{ entries: [], reviewIds: [], warm: false },
+				new Set(),
 			);
+			expect(derived?.state.lastReviewedSha).toBe(HEAD);
+			const reread = derived?.state.findings.map((f) => f.title) ?? [];
 			for (const title of goneTitles) {
 				expect(reread.some((t) => t.includes(title))).toBe(false);
 			}
+		});
+
+		it("keeps carrying a finding when the PR file list is incomplete", async () => {
+			routeModels({});
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "INCREMENTAL",
+				resolved: [],
+				newRisk: false,
+			});
+			const { octokit } = pr92();
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				changedFiles: 2,
+			});
+
+			expect(decision?.event).toBe("REQUEST_CHANGES");
+			expect(decision?.body).toContain("Still open from the previous review");
+			expect(decision?.body).toContain(`\`${GONE}:49\``);
+			expect(decision?.body).not.toContain(
+				"Retired, file no longer in this PR",
+			);
 		});
 
 		it("a triage SKIP does not hold the PR on findings whose file left the PR", async () => {
@@ -6332,6 +6355,9 @@ describe("delta scoping without KV", () => {
 			expect(decision?.event).not.toBe("REQUEST_CHANGES");
 			expect(decision?.body).not.toContain(
 				"Still open from the previous review",
+			);
+			expect(decision?.body).not.toContain(
+				"Retired, file no longer in this PR",
 			);
 			const saved = await loadReviewState(client, "anthropic", OWNER, REPO, 1);
 			expect(

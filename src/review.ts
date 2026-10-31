@@ -27,6 +27,7 @@ import {
 	type AgentPromptOptions,
 	buildAgentSystemPrompt,
 	buildUserMessage,
+	PR_FILE_LIST_CAP,
 	wholePrInputComplete,
 } from "./prompt.js";
 import { readMetadataValue } from "./review-metadata.js";
@@ -1707,16 +1708,20 @@ export async function buildReview(
 	}
 	// Retargeted before the triage gate, so triage ids, markResolved, the SKIP
 	// blocking check and persistence all see one list. A finding whose file is
-	// not in the PR cannot anchor to the head and stops being carried.
+	// not in the PR cannot anchor to the head and stops being carried, unless
+	// the file list is cut short and absence proves nothing.
 	let retiredPrior: PersistedFinding[] = [];
 	if (state) {
 		const { kept, retired } = retargetCarried(
 			state.findings.filter((f) => f.status === "open"),
 			files,
 		);
-		retiredPrior = retired;
+		const fileListComplete =
+			files.length >= context.changedFiles && files.length < PR_FILE_LIST_CAP;
+		retiredPrior = fileListComplete ? retired : [];
 		state.findings = [
 			...kept,
+			...(fileListComplete ? [] : retired),
 			...state.findings.filter((f) => f.status !== "open"),
 		];
 	}
