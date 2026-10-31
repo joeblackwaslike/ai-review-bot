@@ -922,4 +922,85 @@ describe("runGate against a real git repo", () => {
 		);
 		expect(second.findings[0]?.file).toBe("src/b.ts");
 	});
+
+	describe("renames relative to each entry's own head", () => {
+		const raise = (path: string, title = P1_ON_A.title) =>
+			buildModelReview({ inline_comments: [{ ...P1_ON_A, path, title }] });
+
+		function branchRepo() {
+			const root = mkdtempSync(join(tmpdir(), "gate-git-"));
+			const git = (...args: string[]) =>
+				execFileSync("git", args, { cwd: root, encoding: "utf-8" });
+			git("init", "-q", "-b", "main");
+			git("config", "user.email", "t@example.com");
+			git("config", "user.name", "t");
+			mkdirSync(join(root, "src"));
+			writeFileSync(
+				join(root, "src/a.ts"),
+				Array.from({ length: 40 }, (_, i) => `export const a${i} = ${i};`).join(
+					"\n",
+				),
+			);
+			writeFileSync(
+				join(root, "src/b.ts"),
+				Array.from(
+					{ length: 40 },
+					(_, i) => `export function b${i}() { return "${i}"; }`,
+				).join("\n"),
+			);
+			git("add", ".");
+			git("commit", "-q", "-m", "base");
+			git("checkout", "-q", "-b", "feat");
+			return { root, git };
+		}
+
+		it("a rename chain does not move an entry stored on a path that still exists, over two runs at the same HEAD", async () => {
+			const { root, git } = branchRepo();
+			git("mv", "src/b.ts", "src/c.ts");
+			git("mv", "src/a.ts", "src/b.ts");
+			git("commit", "-qm", "chain");
+			const first = await realGate(root, raise("src/b.ts"));
+
+			const second = await realGate(root, buildModelReview());
+
+			expect(second.findings.map((f) => [f.id, f.file])).toEqual(
+				first.findings.map((f) => [f.id, "src/b.ts"]),
+			);
+		});
+
+		it("a rename in an incomplete round followed by a second rename keeps the entry on the final path under its id", async () => {
+			const { root, git } = branchRepo();
+			writeFileSync(join(root, "src/n.ts"), "try {\n  run();\n} catch {}\n");
+			git("add", ".");
+			git("commit", "-qm", "add n");
+			const first = await realGate(root, raise("src/n.ts"));
+
+			git("mv", "src/n.ts", "src/m.ts");
+			git("commit", "-qm", "n to m");
+			await runGate({
+				cwd: root,
+				owner: "o",
+				repo: "r",
+				base: "main",
+				storeDir,
+				review: async () =>
+					passResult(buildModelReview(), {
+						providerStats: [
+							{ provider: "anthropic", attempted: 5, succeeded: 4 },
+						],
+					}),
+			});
+
+			git("mv", "src/m.ts", "src/k.ts");
+			git("commit", "-qm", "m to k");
+			const third = await realGate(
+				root,
+				raise("src/k.ts", "Empty catch hides the run failure"),
+			);
+
+			expect(third.findings.map((f) => [f.id, f.file])).toEqual([
+				[first.findings[0]?.id, "src/k.ts"],
+			]);
+		});
+	});
 });

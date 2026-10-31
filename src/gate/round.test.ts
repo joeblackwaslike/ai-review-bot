@@ -60,7 +60,7 @@ function input(overrides: Partial<RoundInput> = {}): RoundInput {
 		head: HEAD,
 		round: 2,
 		hashes: new Map([["src/a.ts", "h1"]]),
-		renames: new Map(),
+		renamesByHead: new Map(),
 		reviewedPaths: "all",
 		complete: true,
 		providers: ["anthropic"],
@@ -210,7 +210,9 @@ describe("applyRound", () => {
 		const result = applyRound(
 			input({
 				store: store([old]),
-				renames: new Map([["src/old.ts", "src/new.ts"]]),
+				renamesByHead: new Map([
+					["head1", new Map([["src/old.ts", "src/new.ts"]])],
+				]),
 				hashes: new Map([["src/new.ts", "h1"]]),
 			}),
 		);
@@ -218,6 +220,30 @@ describe("applyRound", () => {
 		expect(byId(result.store, old.id)).toMatchObject({
 			path: "src/new.ts",
 			status: "open",
+		});
+	});
+
+	it("renames apply only from the entry's own head, and a moved entry is restamped with HEAD", () => {
+		const atHead = entry({ evidence: [`head:${HEAD}`, "diff:h1"] });
+		const older = entry({
+			id: "ai-review-bbbbbbbbbbbb",
+			path: "src/b.ts",
+			evidence: ["head:head0", "diff:h1"],
+		});
+		const result = applyRound(
+			input({
+				store: store([atHead, older]),
+				renamesByHead: new Map([
+					["head1", new Map([["src/a.ts", "src/z.ts"]])],
+					["head0", new Map([["src/b.ts", "src/a.ts"]])],
+				]),
+				hashes: new Map([["src/a.ts", "h1"]]),
+			}),
+		);
+		expect(byId(result.store, atHead.id)?.path).toBe("src/a.ts");
+		expect(byId(result.store, older.id)).toMatchObject({
+			path: "src/a.ts",
+			evidence: [`head:${HEAD}`, "diff:h1"],
 		});
 	});
 
@@ -593,7 +619,9 @@ describe("applyRound", () => {
 		const result = applyRound(
 			input({
 				store: store([settled]),
-				renames: new Map([["src/old.ts", "src/new.ts"]]),
+				renamesByHead: new Map([
+					["head1", new Map([["src/old.ts", "src/new.ts"]])],
+				]),
 				hashes: new Map([["src/new.ts", "h1"]]),
 				merged: buildModelReview({ inline_comments: [finding] }),
 			}),
@@ -627,7 +655,9 @@ describe("applyRound", () => {
 			applyRound(
 				input({
 					store: frozen,
-					renames: new Map([["src/old.ts", "src/new.ts"]]),
+					renamesByHead: new Map([
+						["head1", new Map([["src/old.ts", "src/new.ts"]])],
+					]),
 					hashes: new Map([["src/a.ts", "h2"]]),
 					merged: buildModelReview({
 						inline_comments: [paraphrase(inferred), paraphrase(open)],

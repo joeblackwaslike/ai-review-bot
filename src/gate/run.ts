@@ -19,7 +19,7 @@ import {
 	toGateFinding,
 	validateReport,
 } from "./report.js";
-import { applyRound } from "./round.js";
+import { applyRound, entryHead, withRenames } from "./round.js";
 import { gateStorePath, loadStore, saveStore, storeKey } from "./store.js";
 
 export type GateOptions = {
@@ -87,33 +87,36 @@ function changesSince(
 	return { paths, renames };
 }
 
-/** Merges renames since the last head into the merge-base renames, chaining an old path through both to its final path. */
-function composeRenames(
-	range: ReadonlyMap<string, string>,
-	since: ReadonlyMap<string, string>,
-): Map<string, string> {
-	const merged = new Map(range);
-	for (const [from, to] of merged) {
-		const next = since.get(to);
-		if (next !== undefined) merged.set(from, next);
+/** Renames from each path-bearing entry's head to HEAD, one diff per distinct head that is an ancestor of HEAD. */
+function renamesByEntryHead(
+	runGit: GitRunner,
+	entries: readonly LedgerEntry[],
+	head: string,
+): Map<string, ReadonlyMap<string, string>> {
+	const byHead = new Map<string, ReadonlyMap<string, string>>();
+	const checked = new Set<string>();
+	for (const e of entries) {
+		const from = entryHead(e);
+		if (e.path === null || from === undefined || checked.has(from)) continue;
+		checked.add(from);
+		if (from === head) byHead.set(from, new Map());
+		else if (isAncestor(runGit, from))
+			byHead.set(from, changesSince(runGit, from).renames);
 	}
-	for (const [from, to] of since) if (!merged.has(from)) merged.set(from, to);
-	return merged;
+	return byHead;
 }
 
-/** Paths to re-review on a delta round: range paths changed since the last head, plus paths whose open entries saw a different diff. */
+/** Paths to re-review on a delta round: range paths changed since the last head, plus paths whose open entries (already renamed to HEAD paths) saw a different diff. */
 function deltaPaths(
 	changedSince: readonly string[],
 	hashes: ReadonlyMap<string, string>,
-	renames: ReadonlyMap<string, string>,
 	entries: readonly LedgerEntry[],
 ): Set<string> {
 	const only = new Set(changedSince.filter((p) => hashes.has(p)));
 	for (const e of entries) {
 		if (isSettled(e) || e.path === null) continue;
-		const path = renames.get(e.path) ?? e.path;
-		const hash = hashes.get(path);
-		if (hash !== undefined && storedDiff(e) !== hash) only.add(path);
+		const hash = hashes.get(e.path);
+		if (hash !== undefined && storedDiff(e) !== hash) only.add(e.path);
 	}
 	return only;
 }
@@ -197,11 +200,7 @@ export async function runGate(opts: GateOptions): Promise<GateResult> {
 			diffHash(runGit, mergeBase, c.path, c.oldPath),
 		]),
 	);
-	const rangeRenames = new Map(
-		changes.flatMap((c) =>
-			c.status === "R" && c.oldPath ? [[c.oldPath, c.path] as const] : [],
-		),
-	);
+	const renamesByHead = renamesByEntryHead(runGit, store.entries, head);
 
 	const fullRescope =
 		store.lastHead !== null && !isAncestor(runGit, store.lastHead);
@@ -209,11 +208,12 @@ export async function runGate(opts: GateOptions): Promise<GateResult> {
 		store.lastHead === null || fullRescope
 			? null
 			: changesSince(runGit, store.lastHead);
-	const renames = since
-		? composeRenames(rangeRenames, since.renames)
-		: rangeRenames;
 	const only = since
-		? deltaPaths(since.paths, hashes, renames, store.entries)
+		? deltaPaths(
+				since.paths,
+				hashes,
+				withRenames(store.entries, renamesByHead, head),
+			)
 		: undefined;
 	const files = await collectFilesFromRange({
 		cwd: opts.cwd,
@@ -231,7 +231,7 @@ export async function runGate(opts: GateOptions): Promise<GateResult> {
 		head,
 		round,
 		hashes,
-		renames,
+		renamesByHead,
 		reviewedPaths: only ?? "all",
 		complete:
 			pass === null ||

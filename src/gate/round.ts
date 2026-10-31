@@ -12,7 +12,7 @@ export type RoundInput = {
 	head: string;
 	round: number;
 	hashes: ReadonlyMap<string, string>;
-	renames: ReadonlyMap<string, string>;
+	renamesByHead: ReadonlyMap<string, ReadonlyMap<string, string>>;
 	reviewedPaths: ReadonlySet<string> | "all";
 	complete: boolean;
 	providers: Provider[];
@@ -58,13 +58,32 @@ const storedDiff = (e: LedgerEntry) =>
 const includesAll = (ran: readonly string[], stored: readonly string[]) =>
 	stored.every((p) => ran.includes(p));
 
-function withRenames(
+/** The head at which the entry's path was last known valid, from its `head:<sha>` evidence. */
+export const entryHead = (e: LedgerEntry) =>
+	e.evidence.find((s) => s.startsWith("head:"))?.slice("head:".length);
+
+/**
+ * Maps each path-bearing entry through the renames from its own head to `head`.
+ * `renamesByHead` holds a map only for heads that are ancestors of `head`; an
+ * entry whose head has one is restamped with `head`, so a rename is never
+ * applied twice. Other entries keep their path and head.
+ */
+export function withRenames(
 	entries: readonly LedgerEntry[],
-	renames: ReadonlyMap<string, string>,
+	renamesByHead: ReadonlyMap<string, ReadonlyMap<string, string>>,
+	head: string,
 ): LedgerEntry[] {
 	return entries.map((e) => {
-		const to = e.path === null ? undefined : renames.get(e.path);
-		return to === undefined ? e : { ...e, path: to };
+		const from = entryHead(e);
+		const renames = from === undefined ? undefined : renamesByHead.get(from);
+		if (e.path === null || renames === undefined || from === head) return e;
+		return {
+			...e,
+			path: renames.get(e.path) ?? e.path,
+			evidence: e.evidence.map((s) =>
+				s.startsWith("head:") ? `head:${head}` : s,
+			),
+		};
 	});
 }
 
@@ -159,7 +178,7 @@ export function applyRound(input: RoundInput): RoundResult {
 		};
 	};
 
-	const entries = withRenames(store.entries, input.renames);
+	const entries = withRenames(store.entries, input.renamesByHead, head);
 	const settledByPerson = entries.filter(
 		(e) => isSettled(e) && e.decidedBy !== null,
 	);
