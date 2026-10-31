@@ -299,20 +299,67 @@ describe("applyRound", () => {
 		expect(result.store.providers).toEqual(["anthropic"]);
 	});
 
-	it("a provider-set change infers nothing and warns", () => {
+	it("a provider set missing a stored provider infers nothing and warns", () => {
 		const old = entry();
 		const result = applyRound(
 			input({
-				store: store([old]),
+				store: store([old], ["anthropic", "openai"]),
 				hashes: new Map([["src/a.ts", "h2"]]),
-				providers: ["anthropic", "openai"],
+				providers: ["openai"],
 			}),
 		);
 		expect(byId(result.store, old.id)?.status).toBe("open");
 		expect(result.warnings).toHaveLength(1);
 		expect(result.warnings[0]).toMatch(/provider/i);
-		expect(result.store.providers).toEqual(["anthropic"]);
+		expect(result.store.providers).toEqual(["anthropic", "openai"]);
 		expect(result.store.lastHead).toBe("head1");
+	});
+
+	it("a larger provider set infers fixes and replaces the stored set", () => {
+		const old = entry();
+		const result = applyRound(
+			input({
+				store: store([old], ["anthropic"]),
+				hashes: new Map([["src/a.ts", "h2"]]),
+				providers: ["openai", "anthropic"],
+			}),
+		);
+		expect(byId(result.store, old.id)?.status).toBe("fixed");
+		expect(result.warnings).toEqual([]);
+		expect(result.store.providers).toEqual(["openai", "anthropic"]);
+		expect(result.store.lastHead).toBe(HEAD);
+	});
+
+	it("a first round with one provider then a round with both infers the fix", () => {
+		const p1 = buildInlineComment({
+			path: "src/a.ts",
+			severity: "P1",
+			title: "Empty catch swallows the error",
+		});
+		const first = applyRound(
+			input({
+				store: { ...store([]), providers: [], lastHead: null },
+				merged: buildModelReview({ inline_comments: [p1] }),
+				head: "head1",
+				round: 1,
+				hashes: new Map([["src/a.ts", "h1"]]),
+				providers: ["anthropic"],
+			}),
+		);
+		const second = applyRound(
+			input({
+				store: first.store,
+				head: "head2",
+				round: 2,
+				hashes: new Map([["src/a.ts", "h2"]]),
+				providers: ["anthropic", "openai"],
+			}),
+		);
+		expect(first.store.providers).toEqual(["anthropic"]);
+		expect(second.store.entries.map((e) => e.status)).toEqual(["fixed"]);
+		expect(second.store.providers).toEqual(["anthropic", "openai"]);
+		expect(second.store.lastHead).toBe("head2");
+		expect(second.warnings).toEqual([]);
 	});
 
 	it("a provider-set change still matches and emits, and the warning names the store file", () => {

@@ -491,6 +491,44 @@ describe("runGate", () => {
 		expect(errors.join("\n")).toContain(storeDir);
 	});
 
+	it("a first round with one provider does not block fixes seen by a later round with both", async () => {
+		const state = repo({ "src/a.ts": modified("a1") });
+		const first = await gate(
+			state,
+			async () => passResult(buildModelReview({ inline_comments: [P1_ON_A] })),
+			null,
+		);
+
+		state.ancestors.add("head1");
+		state.since.head1 = ["src/a.ts"];
+		state.head = "head2";
+		state.files["src/a.ts"] = modified("a2");
+		const both: ReviewPassResult["providersRun"] = ["anthropic", "openai"];
+		const second = await gate(
+			state,
+			async () => passResult(buildModelReview(), { providersRun: both }),
+			null,
+		);
+
+		state.ancestors.add("head2");
+		state.since.head2 = [];
+		state.head = "head3";
+		const third = await gate(
+			state,
+			async () => passResult(buildModelReview(), { providersRun: both }),
+			null,
+		);
+
+		expect(first.exitCode).toBe(1);
+		expect(second.exitCode).toBe(0);
+		expect(second.findings).toEqual([]);
+		expect(third.exitCode).toBe(0);
+		const store = await readStore(state);
+		expect(store.providers).toEqual(["anthropic", "openai"]);
+		expect(store.lastHead).toBe("head3");
+		expect(store.entries.map((e) => e.status)).toEqual(["fixed"]);
+	});
+
 	it("a rename of a file the branch added keeps the finding's id and moves its path", async () => {
 		const added = (diff: string): FakeFile => ({
 			...modified(diff),

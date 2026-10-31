@@ -50,11 +50,8 @@ const actionFor = (severity: string) =>
 const storedDiff = (e: LedgerEntry) =>
 	e.evidence.find((s) => s.startsWith("diff:"))?.slice("diff:".length);
 
-function sameSet(a: readonly string[], b: readonly string[]): boolean {
-	const setA = new Set(a);
-	const setB = new Set(b);
-	return setA.size === setB.size && [...setA].every((p) => setB.has(p));
-}
+const includesAll = (ran: readonly string[], stored: readonly string[]) =>
+	stored.every((p) => ran.includes(p));
 
 function withRenames(
 	entries: readonly LedgerEntry[],
@@ -98,7 +95,7 @@ function mintIds(
 
 const providerMismatch = (input: RoundInput) =>
 	input.store.providers.length > 0 &&
-	!sameSet(input.providers, input.store.providers);
+	!includesAll(input.providers, input.store.providers);
 
 function inferenceWarnings(input: RoundInput, hasOpen: boolean): string[] {
 	const warnings: string[] = [];
@@ -109,7 +106,7 @@ function inferenceWarnings(input: RoundInput, hasOpen: boolean): string[] {
 	}
 	if (providerMismatch(input)) {
 		warnings.push(
-			`Provider set (${input.providers.join(", ")}) differs from the last complete round (${input.store.providers.join(", ")}), so no open finding was inferred fixed and the stored provider set and head were kept. After a permanent provider change, delete ${input.storePath ?? "the gate history file"} to start over.`,
+			`Providers that ran (${input.providers.join(", ") || "none"}) do not include every provider from the last complete round (${input.store.providers.join(", ")}), so no open finding was inferred fixed and the stored provider set and head were kept. After a permanent provider change, delete ${input.storePath ?? "the gate history file"} to start over.`,
 		);
 	} else if (hasOpen && input.store.providers.length === 0) {
 		warnings.push(
@@ -206,7 +203,9 @@ export function applyRound(input: RoundInput): RoundResult {
 	const canInfer =
 		input.complete &&
 		!input.fullRescope &&
-		sameSet(input.providers, store.providers);
+		(store.providers.length === 0
+			? input.providers.length === 0
+			: includesAll(input.providers, store.providers));
 	const diffChanged = (path: string, e: LedgerEntry) => {
 		const current = hashes.get(path);
 		return current === undefined || storedDiff(e) !== current;
