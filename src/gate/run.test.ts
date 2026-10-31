@@ -7,7 +7,7 @@ import type { ModelReview } from "../review.js";
 import type { AuditFile, GitRunner } from "../sources.js";
 import { buildInlineComment, buildModelReview } from "../testing.js";
 import { validateReport } from "./report.js";
-import { runGate } from "./run.js";
+import { gateRepoSlug, runGate } from "./run.js";
 import { type GateStore, gateStorePath, storeKey } from "./store.js";
 
 type FakeFile = {
@@ -630,5 +630,30 @@ describe("runGate", () => {
 			}),
 		).rejects.toThrow("No provider could be authenticated.");
 		await expect(readdir(storeDir)).rejects.toThrow();
+	});
+});
+
+describe("gateRepoSlug", () => {
+	it.each([
+		["https://github.com/o/r.git", "o", "r"],
+		["https://github.com/o/r", "o", "r"],
+		["git@github.com:o/r.git", "o", "r"],
+		["ssh://git@github.com/o/r.git", "o", "r"],
+		["https://gitlab.example.com/a/b/c.git", "b", "c"],
+		["git@gitlab.example.com:group/sub/proj.git", "sub", "proj"],
+		["/x/y/z.git", "y", "z"],
+		["/x/y/z.git/", "y", "z"],
+		["file:///x/y/z.git", "y", "z"],
+		["../z.git", "local", "z"],
+		["z", "local", "z"],
+	])("maps %s to %s/%s", (origin, owner, repo) => {
+		expect(gateRepoSlug(origin, "/work/top")).toEqual({ owner, repo });
+	});
+
+	it("uses the top-level directory name when there is no origin", () => {
+		expect(gateRepoSlug(null, "/work/my-repo")).toEqual({
+			owner: "local",
+			repo: "my-repo",
+		});
 	});
 });

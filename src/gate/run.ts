@@ -130,6 +130,29 @@ function formatText(findings: readonly GateFinding[]): string {
 	return `ai-review gate: ${findings.length} finding(s)\n\n${lines.join("\n\n")}`;
 }
 
+/** Owner and repo for the store key from any origin URL or path: its last two path segments, `local` as owner when fewer exist, and the top-level directory name when there is no origin. */
+export function gateRepoSlug(
+	origin: string | null,
+	topLevel: string,
+): { owner: string; repo: string } {
+	const fallback = topLevel.split("/").filter(Boolean).at(-1) ?? "repo";
+	if (!origin) return { owner: "local", repo: fallback };
+	const path =
+		/^[a-z][a-z0-9+.-]*:\/\/[^/]*\/(.*)$/i.exec(origin)?.[1] ??
+		/^[^/]+@[^:/]+:(.*)$/.exec(origin)?.[1] ??
+		origin;
+	const parts = path
+		.replace(/\/+$/, "")
+		.replace(/\.git$/, "")
+		.split("/")
+		.filter((p) => p !== "" && p !== "." && p !== "..");
+	const repo = parts.at(-1) ?? fallback;
+	return {
+		owner: parts.length >= 2 ? (parts.at(-2) ?? "local") : "local",
+		repo,
+	};
+}
+
 /** One gate round over the branch's range: review what changed since the last round, update the store, and write or print the report. */
 export async function runGate(opts: GateOptions): Promise<GateResult> {
 	const runGit = opts.runGit ?? defaultGitRunner(opts.cwd);
