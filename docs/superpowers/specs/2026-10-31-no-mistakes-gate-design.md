@@ -4,25 +4,26 @@ Sprint 6 of the review-accuracy epic (`ai-review-bot-w9b.7`). Parent design: `20
 
 ## Why
 
-The review only runs once a PR exists, so every finding costs a push, a bot round and a fix commit. The no-mistakes pipeline already sits in front of the push. Running this review as a custom gate there moves the same findings in front of the PR and keeps the epic's rules: settled findings are not repeated, a round reviews only what changed, and review memory does not depend on KV.
+The review only runs once a PR exists, so every finding costs a push, a bot round and a fix commit. The no-mistakes pipeline already sits in front of the push. Running this review as a custom gate there moves the same findings in front of the PR and keeps the epic's rules: settled findings are not repeated, a later round reviews only the files that changed since the last one, and review memory does not depend on KV.
 
 ## Goals
 
-- `ai-review gate` runs the full multi-agent review on the branch's changes against its base and writes findings in the no-mistakes custom-gate JSON format.
-- A re-check after a fix does not repeat findings that were fixed or that someone settled.
-- Works with the repo's own `.no-mistakes.yaml` (dogfood) and is documented well enough for another repo to copy.
+- `ai-review gate` runs the multi-agent review on the branch's changes against its base and writes findings in the no-mistakes custom-gate JSON format.
+- A re-check after a fix does not repeat findings that were fixed, and does not re-review files that did not change since the last round.
+- Works with this repo's own `.no-mistakes.yaml` (dogfood) and is documented well enough for another repo to copy.
 
 ## Non-goals
 
 - A reviewer withdrawing its own finding with a stated reason. The ledger spec deferred it here, but it needs a prompt change and a measurement we do not have. Filed as a follow-up on the bead.
-- Reading no-mistakes answers (`approve`, `skip`, `fix`). The gate cannot see them (see "What the gate can see").
+- Reading no-mistakes answers (`approve`, `skip`, `fix`). The gate cannot see them.
+- Hunk-level deltas. The delta is per file, because the audit path hands agents whole files.
 - Auto-fix. Every finding is reported as `ask-user` or `no-op`.
-- Any GitHub read or write. This sprint adds none.
+- Any GitHub read or write.
 - The parked beads: `ai-review-bot-4ez`, `ai-review-bot-w9b.11`, the model-side filler bead, and the three Sprint 5 P3 bugs.
 
 ## Anti-goals
 
-- Ids that change when an unrelated edit shifts a line number. no-mistakes treats a new id as a new finding.
+- A fixed finding that comes back under a new id, or a still-present defect marked fixed and then hidden. The second is worse: the gate would exit 0 over a real bug.
 - A gate that fails the pipeline because a provider was slow. Infrastructure failure is a non-zero exit with a message, and a clean review is exit 0.
 
 ## The no-mistakes contract
@@ -34,46 +35,58 @@ From the [repo config reference](https://kunchenguid.github.io/no-mistakes/refer
 - A finding has `id` (required, unique, stable across runs, no commas), `severity` (`error`, `warning`, `info`), `description` (required), `file`, `line` (not negative) and `action` (`auto-fix`, `ask-user`, `no-op`; default `ask-user`). Unknown fields are rejected. The caps are 1 MiB and 500 findings.
 - Exit 0 with no `error` finding passes. Any `error` parks the gate. A non-zero exit parks it with the output attached. An invalid file parks it with one `error`.
 
-On the installed v1.75.2 we ran a gate and saw that it runs after a skipped review, in a detached-HEAD worktree under `~/.no-mistakes/worktrees/`, where `origin/main` exists and `git merge-base HEAD origin/main` returns the fork point. We did not verify the findings-file protocol. v1.75.2 sets no `NO_MISTAKES_*` variable to the gate (the docs describe v1.84.0), and `no-mistakes update` refused because two other pipelines were running. The gate therefore degrades on purpose: with `NO_MISTAKES_FINDINGS_FILE` unset it prints the findings as text and exits 1 when any `error` finding exists, which is the pre-protocol behavior no-mistakes documents for a gate that ignores the file. The protocol path stays unverified live until no-mistakes is updated and a run is driven (a verification step below).
+On the installed v1.75.2 we ran a gate and saw that it runs after a skipped review, in a detached-HEAD worktree under `~/.no-mistakes/worktrees/`, where `origin/main` exists, the pushed branch exists as a local ref, and `git merge-base HEAD origin/main` returns the fork point. We did not verify the findings-file protocol. v1.75.2 sets no `NO_MISTAKES_*` variable to the gate (the docs describe v1.84.0), and `no-mistakes update` refused because two other pipelines were running. The gate therefore degrades on purpose: with `NO_MISTAKES_FINDINGS_FILE` unset it prints the findings as text and exits 1 when any `error` finding exists, which is the pre-protocol behavior no-mistakes documents for a gate that ignores the file. The protocol path stays unverified live until no-mistakes is updated and a run is driven (a verification step below).
 
 ## What the gate can see
 
-It cannot see the answers given through `axi respond`; they are not passed to the command, and the findings file starts empty on every run. The gate keeps its own record and infers outcomes:
+It cannot see the answers given through `axi respond`. They are not passed to the command, and the findings file starts empty on every run. The gate keeps its own record (the store, below) and infers outcomes, in this order each round:
 
-- A finding emitted last round and absent now, whose file changed since it was emitted, is `fixed`.
-- A finding absent now whose file did not change stays `open`. The model may simply not have raised it again, and calling that fixed would hide a real defect.
-- A finding present again keeps its id and stays `open`.
-- Fixed and otherwise settled entries suppress a later restatement through the existing `suppressInReview`.
+1. Review the files in scope (see Scope).
+2. Match each new finding against the store's open entries with the ledger's claim-matching rules, run over open entries instead of settled ones. A match keeps the entry's id and refreshes its title, line and body.
+3. Suppress each remaining new finding that matches an entry that was already settled before this round, using `suppressInReview` after `mergeReviews`.
+4. An open entry that no new finding matched becomes `fixed` only if its file's diff against the merge base changed since the entry was last seen, or the file left the range, and only if the round was complete (see Partial rounds). Otherwise it stays `open`: the model may simply not have raised it again.
 
-One limit we have not measured: a finding answered `approve` or `skip` in no-mistakes that the model raises again is emitted again under the same id every run. Whether no-mistakes carries its own decision across runs by id is unchecked.
+Entries inferred in step 4 never suppress anything in the same round. Only entries already settled when the round started do.
+
+Known limit, not measured: a finding answered `approve` or `skip` in no-mistakes that the model raises again is emitted again under the same id every run. Whether no-mistakes carries its own decision across runs by id is unchecked.
 
 ## Design
 
 | Piece | Decision |
 | --- | --- |
-| Command | `ai-review gate [--base <ref>] [--extra <text>]`. The base defaults to `origin/HEAD`'s target, then `origin/main`, then `origin/master`. The merge base with `HEAD` is the diff start. |
-| Scope | New `ReviewScope` kind `range`. `collectFilesFromRange` in `src/sources.ts` lists `git diff --name-only <merge-base> HEAD` and reads each file's content at `HEAD` with `git show`, the same shape as `collectFilesFromCommit`. |
-| Review | The provider loop in `runLocalReview` moves into an exported function that returns the merged review and usage without writing a report. `runLocalReview` calls it, so `ai-review review` output is unchanged. |
-| Store | `~/.ai-review/gate/<owner>__<repo>__<branch>.json`, written with `saveLedgerFile` (atomic). Outside the worktree, which is deleted with the run. `AI_REVIEW_GATE_DIR` overrides the directory for tests. |
-| Round | `max(round) + 1` over the stored ledger. |
-| Id | `ai-review-` plus the first 12 hex characters of sha1 of `path` and the lowercased, whitespace-collapsed title. No line number. General findings use path `-`. Collisions within one report get a `-2`, `-3` suffix. |
+| Command | `ai-review gate [--base <ref>] [--extra <text>]`. |
+| Base | `--base`, else a new exported resolver: `origin/HEAD`'s target, then `origin/main`, then `origin/master`. The existing private `defaultBranch` in `src/sources.ts` falls back to bare `main`, which does not exist in a run worktree, so the gate does not reuse it as is. The diff start is `git merge-base <base> HEAD`. |
+| Scope | New `ReviewScope` kind `range`. `collectFilesFromRange` in `src/sources.ts` lists `git diff -M --name-status <merge-base> HEAD`, reads each surviving file at `HEAD` with `git show`, and reports renames as old and new path. Round 1 reviews every file in range. A later round reviews only files whose diff hash differs from the stored one, provided the stored head is still an ancestor of `HEAD`. A force-push or rebase that breaks that gives a full-range round, and every entry stays `open` for it. |
+| Review | The provider loop in `runLocalReview` moves into an exported function that returns `{merged, costUsd, providersRun, agentsAttempted, agentsSucceeded}` and writes no report. `runLocalReview` calls it, so `ai-review review` output is unchanged. |
+| Store | One JSON file per repo and branch under `~/.ai-review/gate/` (`AI_REVIEW_GATE_DIR` overrides it for tests). The run worktree is detached, so the branch comes from `git for-each-ref --points-at HEAD refs/heads/`. If that gives zero or several branches, the key is the merge-base sha. The file name is the sha256 of `owner/repo` plus the percent-encoded branch or merge base, never raw branch text. It holds the entries, the provider set and the head of the last complete round. |
+| Concurrency | Writes use a unique temp name (pid plus random) and an atomic rename. If two runs overlap, the last writer wins and the loser's round is lost. That costs a repeat, never a hidden finding. |
+| Round | `max(round) + 1`. |
+| Id | Minted when a finding first appears: `ai-review-` plus 12 hex characters of sha1 over path, title and the head sha at first sight. After that the id belongs to the entry, not to the title, so a paraphrased title or a moved line keeps its id. A rename moves the entry to the new path and keeps the id. Two new findings with the same hash input get `-2`, `-3` in the order of their body hash, so the suffix does not depend on agent timing. |
 | Severity | P0 and P1 give `error` and `ask-user`. P2 gives `warning` and `ask-user`. P3 gives `info` and `no-op`. |
-| Description | Title, then body, then the suggestion text if present. |
-| Exit | 0 when the report is written, even with `error` findings, because the report is how no-mistakes learns about them. Non-zero only when no provider authenticates or every agent fails, as in `runLocalReview`. |
-| Fail open | An unreadable or malformed store is treated as empty, logged to stderr, and rewritten. A review is never dropped for it. |
+| Description | Title, then body, then the suggestion text for an inline comment that has one. General findings have no path, so `file` and `line` are omitted. |
+| Cap | Over 500 findings, drop lowest severity first, newest first, and print the dropped count to stderr. An `error` is dropped only after everything else is gone. |
+| Exit | 0 when the report is written, even with `error` findings, because the report is how no-mistakes learns about them. Non-zero when no provider authenticates or every agent fails, as in `runLocalReview`. |
 
-Each emitted finding is stored as a `LedgerEntry`: `status: open`, `decidedBy: null`, `reason: null`, `action` set, and `evidence` holding `head:<sha>` and `blob:<git id of the file at HEAD>`. An inferred fix sets `status: fixed` and appends `inferred: absent after file changed`.
+Each emitted finding is stored as a `LedgerEntry`: `status: open`, `decidedBy: null`, `reason: null`, `action` set, and `evidence` holding `head:<sha>` and `diff:<sha1 of git diff <merge-base> HEAD -- <path>>`. Comparing the diff against the merge base, not the whole file, keeps a rebase onto a moved base from looking like an edit. An inferred fix sets `status: fixed` and appends `inferred: absent after diff changed`.
 
 A branch with no code files in range writes `{"findings":[]}` and exits 0 without calling a provider.
 
+### Partial rounds
+
+Step 4 runs only when every attempted agent succeeded and the set of providers that ran equals the set stored for the previous round. Otherwise new findings are still emitted and matched, every unmatched entry stays `open`, and the gate prints a warning. A missing provider or a timed-out skill would otherwise read as "everything it found is fixed".
+
+### Fail open
+
+If the store is unreadable, malformed or has invalid entries, the gate moves it aside to `<name>.corrupt-<timestamp>`, starts from an empty store, and prints that history was reset. The cost is that findings silenced earlier can come back once, and an `error` among them parks the gate again. It never drops a review.
+
 ## Cost and wiring
 
-A gate run is one full multi-agent review per provider with local subscription auth, the same as `ai-review review`. This repo adds the gate to its own `.no-mistakes.yaml` with `auto_fix.gates.ai-review: 0`, so every no-mistakes run here pays that cost. It is local, personal use under the same ToS boundary as `review` and `audit`; the gate must never be imported from webhook paths.
+A gate run is one multi-agent review per authenticated provider with local subscription auth, the same as `ai-review review`. This repo adds the gate to its own `.no-mistakes.yaml` with `auto_fix.gates.ai-review: 0`, so every no-mistakes run here pays that cost. It is local, personal use under the same ToS boundary as `review` and `audit`. The gate must never be imported from webhook paths.
 
 ## Verification
 
 1. Replay harness before and after, recall guard and `negativePairs` green. The before output is saved from this branch's base.
-2. Unit tests, written first and seen failing: mapping, id stability and no commas, collision suffix, 500 cap, empty range, fixed inference with and without a changed file, suppression of a settled entry, schema validity against a validator written from the documented schema, and the fallback exit when the findings file is unset.
+2. Unit tests, written first and seen failing: mapping, lineage id stability across a paraphrased title and a rename, hash-input collision order, 500 cap order, empty range, step 2 matching against open entries, step 4 fixed inference with and without a changed diff, no same-round suppression by an inferred fix, partial-round guard, file-level delta selection and the non-ancestor fallback, store key under a detached HEAD, corrupt store moved aside, schema validity against a validator written from the documented schema, and the fallback exit when the findings file is unset.
 3. By hand in a scratch repo through `no-mistakes axi run`, two rounds: a finding is reported and parks the gate, a fix commit makes the next round report it fixed and pass. Run on v1.75.2 now (fallback path). Run again on the protocol path once no-mistakes can be updated, and say in the PR if that did not happen.
 4. After merge, one real run on a new branch of this repo showing the gate park and then pass, recorded on the PR and on the bead.
 
@@ -81,4 +94,4 @@ Not measured by this sprint: gate precision against real defects, wall-clock and
 
 ## Left to the builder
 
-File layout inside `src/`, test fixture shapes, and the wording of the stderr diagnostics.
+File layout inside `src/`, test fixture shapes, and the wording of stderr messages.
