@@ -6627,6 +6627,58 @@ describe("delta scoping without KV", () => {
 			}
 		});
 
+		it("a triage SKIP whose pending skill clears with nothing new posts the marker without it, so the next quiet push does not re-run it", async () => {
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "SKIP",
+				resolved: [],
+				newRisk: false,
+			});
+			const prior = buildOwnReviewBody({
+				sha: OLD,
+				count: 1,
+				rows: [blockerRow],
+				pending: [SAST],
+			});
+			const first = agents();
+			const round1 = prOctokit({
+				reviews: [{ id: 11, body: prior, state: "CHANGES_REQUESTED" }],
+				compare: deltaB,
+			});
+
+			const decision = await buildReview({
+				octokit: round1.octokit,
+				...baseContext,
+			});
+
+			expect(Object.keys(first)).toEqual([SAST]);
+			expect(first[SAST]).toEqual([WHOLE]);
+			expect(decision).not.toBeNull();
+			expect(decision?.event).toBe("REQUEST_CHANGES");
+			expect(decision?.body).toContain("**Blocker**");
+			expect(pendingIn(decision?.body)).toEqual([]);
+			expect(round1.checkRuns).toEqual([]);
+
+			const second = agents();
+			const round2 = prOctokit({
+				reviews: [
+					{ id: 11, body: prior, state: "CHANGES_REQUESTED" },
+					{ id: 12, body: decision?.body ?? "", state: "CHANGES_REQUESTED" },
+				],
+				compare: deltaB,
+			});
+
+			const next = await buildReview({
+				octokit: round2.octokit,
+				...baseContext,
+				headSha: NEW_HEAD,
+			});
+
+			expect(round2.compareCalls).toEqual([`${HEAD}...${NEW_HEAD}`]);
+			expect(second).toEqual({});
+			expect(next).toBeNull();
+			expect(round2.checkRuns).toHaveLength(1);
+		});
+
 		it("a triage SKIP whose pending skill clears nothing and finds nothing keeps the SKIP verdict", async () => {
 			const seen = agents();
 			mockTriageReReview.mockResolvedValue({
