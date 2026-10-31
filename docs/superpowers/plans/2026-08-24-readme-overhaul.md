@@ -216,7 +216,7 @@ Current (end of Architecture section):
 ```
 
 Replace with:
-```
+````
 | `deep` | `deep-review` label | Opus + thinking | o3 high |
 
 ## When not to use this
@@ -270,7 +270,7 @@ Want the exact command that reproduces the $0.29 figure above?
 `./scripts/cost-report.sh joeblackwaslike/ai-review-bot --prs 65,67-74`
 
 ## Quick start
-```
+````
 
 - [ ] **Step 2: Verify the reproducing command still works** (it was verified
   during spec-hardening, but re-check after the file move to this worktree):

@@ -128,7 +128,7 @@ What this harness does not verify
 ## Left to the builder
 
 - The exact fixture schema and file layout.
-- The labeling rules in detail. Starting points from the incident: an author reply of "Intentional", "No change", "By design", or "Agreed there's no defect" means rejected. A reply or commit message saying "Fixed in <sha>" followed by a changed hunk means fixed. A 😕 or 👎 means rejected. A resolved thread with no reply is unadjudicated.
+- The labeling rules in detail. Starting points from the incident: an author reply of "Intentional", "No change", "By design", or "Agreed there's no defect" means rejected. A reply or commit message saying `Fixed in <sha>` followed by a changed hunk means fixed. A 😕 or 👎 means rejected. A resolved thread with no reply is unadjudicated.
 - How claims are compared across rounds in the replay. `isSameClaim` in `src/claim-dedupe.ts` is the existing starting point, and sprint 2 owns the final matching.
 - Report formatting and CLI flags.
 - Which rounds the live tier samples by default.
