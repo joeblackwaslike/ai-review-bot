@@ -193,7 +193,7 @@ describe("range scope", () => {
 	it("listRangeChanges reports renames with the old path", () => {
 		const runGit: GitRunner = (args) => {
 			if (args[0] === "merge-base") return "mb1\n";
-			return "A\tsrc/a.ts\nM\tsrc/b.ts\nD\tsrc/c.ts\nR100\tsrc/old.ts\tsrc/new.ts\n";
+			return "A\0src/a.ts\0M\0src/b.ts\0D\0src/c.ts\0R100\0src/old.ts\0src/new.ts\0";
 		};
 		expect(listRangeChanges(runGit, "origin/main")).toEqual({
 			mergeBase: "mb1",
@@ -206,15 +206,22 @@ describe("range scope", () => {
 		});
 	});
 
-	it("listRangeChanges disables path quoting and keeps non-ASCII and spaced paths", () => {
+	it("listRangeChanges asks for NUL-separated output and keeps non-ASCII and spaced paths", () => {
 		const diffArgs: string[][] = [];
 		const runGit: GitRunner = (args) => {
 			if (args.includes("merge-base")) return "mb1";
 			diffArgs.push([...args]);
-			return "M\tsrc/caf\u00e9.ts\nR90\tsrc/my old.ts\tsrc/my new.ts\n";
+			return "M\0src/caf\u00e9.ts\0R90\0src/my old.ts\0src/my new.ts\0";
 		};
 		const { changes } = listRangeChanges(runGit, "origin/main");
-		expect(diffArgs[0].slice(0, 2)).toEqual(["-c", "core.quotePath=false"]);
+		expect(diffArgs[0]).toEqual([
+			"diff",
+			"-M",
+			"--name-status",
+			"-z",
+			"mb1",
+			"HEAD",
+		]);
 		expect(changes).toEqual([
 			{ path: "src/caf\u00e9.ts", oldPath: null, status: "M" },
 			{ path: "src/my new.ts", oldPath: "src/my old.ts", status: "R" },
@@ -223,7 +230,7 @@ describe("range scope", () => {
 
 	it("listRangeChanges drops non-code files", () => {
 		const runGit: GitRunner = (args) =>
-			args[0] === "merge-base" ? "mb1" : "M\tREADME.md\nM\tsrc/a.ts\n";
+			args[0] === "merge-base" ? "mb1" : "M\0README.md\0M\0src/a.ts\0";
 		expect(
 			listRangeChanges(runGit, "origin/main").changes.map((c) => c.path),
 		).toEqual(["src/a.ts"]);
@@ -353,5 +360,20 @@ describe("range helpers against a real git repo", () => {
 		git("commit", "-qm", "move");
 
 		expect(diffHash(runGit, mb, "m.ts")).toBe(before);
+	});
+
+	it("listRangeChanges keeps code files whose names hold a tab or a double quote", () => {
+		const { dir, git, runGit } = makeRepo();
+		writeFileSync(join(dir, "ta\tb.ts"), "export const t = 1;\n");
+		writeFileSync(join(dir, 'q"uote.ts'), "export const q = 1;\n");
+		git("add", ".");
+		git("commit", "-qm", "odd names");
+
+		const { changes } = listRangeChanges(runGit, "main");
+
+		expect(changes.map((c) => c.path).sort()).toEqual([
+			'q"uote.ts',
+			"ta\tb.ts",
+		]);
 	});
 });

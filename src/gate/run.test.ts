@@ -60,18 +60,19 @@ function fakeGit(state: FakeRepo): GitRunner {
 			throw new Error("not an ancestor");
 		}
 		if (args.includes("--name-status")) {
-			const ref = args[5] ?? "";
-			if (args[6] !== "HEAD") throw new Error(`unexpected range ${a}`);
-			if (ref !== state.mergeBase) {
-				const since = state.since[ref];
-				if (!since) throw new Error(`no history from ${ref}`);
-				return since.map((l) => (l.includes("\t") ? l : `M\t${l}`)).join("\n");
-			}
-			return Object.entries(state.files)
-				.map(([p, f]) =>
-					f.status === "R" ? `R100\t${f.oldPath}\t${p}` : `${f.status}\t${p}`,
-				)
-				.join("\n");
+			const ref = args[4] ?? "";
+			if (args[3] !== "-z" || args[5] !== "HEAD")
+				throw new Error(`unexpected range ${a}`);
+			const lines =
+				ref === state.mergeBase
+					? Object.entries(state.files).map(([p, f]) =>
+							f.status === "R"
+								? `R100\t${f.oldPath}\t${p}`
+								: `${f.status}\t${p}`,
+						)
+					: state.since[ref]?.map((l) => (l.includes("\t") ? l : `M\t${l}`));
+			if (!lines) throw new Error(`no history from ${ref}`);
+			return lines.map((l) => `${l.replaceAll("\t", "\0")}\0`).join("");
 		}
 		if (args[0] === "diff" && args[1] === "-M" && args[4] === "--") {
 			if (args[2] !== state.mergeBase || args[3] !== "HEAD")
@@ -951,6 +952,31 @@ describe("runGate against a real git repo", () => {
 			first.findings.map((f) => f.id),
 		);
 		expect(second.findings[0]?.file).toBe("src/b.ts");
+	});
+
+	it("a delta round reviews new code files whose names hold a tab or a double quote", async () => {
+		const { root, git } = makeRepo();
+		await realGate(root, buildModelReview());
+
+		writeFileSync(join(root, "src/ta\tb.ts"), "export const t = 1;\n");
+		writeFileSync(join(root, 'src/q"uote.ts'), "export const q = 1;\n");
+		git("add", ".");
+		git("commit", "-qm", "odd names");
+		const review = vi.fn(async (_files: AuditFile[]) =>
+			passResult(buildModelReview()),
+		);
+		await runGate({
+			cwd: root,
+			owner: "o",
+			repo: "r",
+			base: "main",
+			storeDir,
+			review,
+		});
+
+		expect(
+			review.mock.calls.flatMap(([f]) => f.map((x) => x.path)).sort(),
+		).toEqual(['src/q"uote.ts', "src/ta\tb.ts"]);
 	});
 
 	describe("renames relative to each entry's own head", () => {

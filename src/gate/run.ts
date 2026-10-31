@@ -10,6 +10,7 @@ import {
 	diffHash,
 	type GitRunner,
 	listRangeChanges,
+	nameStatusSince,
 	resolveBase,
 } from "../sources.js";
 import {
@@ -58,33 +59,17 @@ function isAncestor(runGit: GitRunner, sha: string): boolean {
 	}
 }
 
-/** Paths changed between `lastHead` and HEAD (new path for a rename), and the renames themselves. */
+/** Paths changed between `from` and HEAD (new path for a rename), and the renames themselves. */
 function changesSince(
 	runGit: GitRunner,
-	lastHead: string,
+	from: string,
 ): { paths: string[]; renames: Map<string, string> } {
-	const out = runGit([
-		"-c",
-		"core.quotePath=false",
-		"diff",
-		"-M",
-		"--name-status",
-		lastHead,
-		"HEAD",
-	]);
-	const paths: string[] = [];
+	const records = nameStatusSince(runGit, from);
 	const renames = new Map<string, string>();
-	for (const line of out.split("\n")) {
-		const [code, first, second] = line.split("\t");
-		if (!code || !first) continue;
-		if (code.startsWith("R") && second) {
-			paths.push(second);
-			renames.set(first, second);
-		} else {
-			paths.push(first);
-		}
+	for (const r of records) {
+		if (r.code[0] === "R" && r.oldPath !== null) renames.set(r.oldPath, r.path);
 	}
-	return { paths, renames };
+	return { paths: records.map((r) => r.path), renames };
 }
 
 /** Renames from each path-bearing entry's head to HEAD, one diff per distinct head that is an ancestor of HEAD. */

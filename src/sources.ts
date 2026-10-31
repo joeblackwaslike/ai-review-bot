@@ -196,32 +196,50 @@ export function resolveBase(runGit: GitRunner, explicit?: string): string {
 	throw new Error("No base branch found");
 }
 
+export type NameStatus = { code: string; path: string; oldPath: string | null };
+
+/** `git diff -M --name-status -z <from> HEAD`, parsed from NUL-separated fields so no path is ever quoted. */
+export function nameStatusSince(runGit: GitRunner, from: string): NameStatus[] {
+	const fields = runGit([
+		"diff",
+		"-M",
+		"--name-status",
+		"-z",
+		from,
+		"HEAD",
+	]).split("\0");
+	const records: NameStatus[] = [];
+	for (let i = 0; i < fields.length; ) {
+		const code = fields[i++] ?? "";
+		if (!code) continue;
+		const first = fields[i++] ?? "";
+		const paired = code[0] === "R" || code[0] === "C";
+		const second = paired ? (fields[i++] ?? "") : "";
+		if (!first || (paired && !second)) continue;
+		records.push(
+			paired
+				? { code, path: second, oldPath: first }
+				: { code, path: first, oldPath: null },
+		);
+	}
+	return records;
+}
+
 /** Code-file changes between merge-base(base, HEAD) and HEAD. Unexpected statuses count as modified. */
 export function listRangeChanges(
 	runGit: GitRunner,
 	base: string,
 ): { mergeBase: string; changes: RangeChange[] } {
 	const mergeBase = runGit(["merge-base", "HEAD", base]).trim();
-	const out = runGit([
-		"-c",
-		"core.quotePath=false",
-		"diff",
-		"-M",
-		"--name-status",
-		mergeBase,
-		"HEAD",
-	]);
 	const changes: RangeChange[] = [];
-	for (const line of out.split("\n")) {
-		const [code, first, second] = line.split("\t");
-		if (!code || !first) continue;
+	for (const { code, path: p, oldPath } of nameStatusSince(runGit, mergeBase)) {
+		if (!hasCodeExtension(p)) continue;
 		const kind = code[0];
-		if (kind === "R" && second) {
-			if (hasCodeExtension(second))
-				changes.push({ path: second, oldPath: first, status: "R" });
-		} else if (hasCodeExtension(first)) {
+		if (kind === "R" && oldPath !== null) {
+			changes.push({ path: p, oldPath, status: "R" });
+		} else {
 			const status = kind === "A" ? "A" : kind === "D" ? "D" : "M";
-			changes.push({ path: first, oldPath: null, status });
+			changes.push({ path: p, oldPath: null, status });
 		}
 	}
 	return { mergeBase, changes };
@@ -280,7 +298,7 @@ export async function collectFilesFromRange(opts: {
 		try {
 			files.push({ path: c.path, content: runGit(["show", `HEAD:${c.path}`]) });
 		} catch (err) {
-			if (runGit(["ls-tree", "HEAD", "--", c.path]).trim() !== "") throw err;
+			if (runGit(["ls-tree", "-z", "HEAD", "--", c.path]) !== "") throw err;
 		}
 	}
 	return files;
