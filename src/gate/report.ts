@@ -31,9 +31,10 @@ export function toGateFinding(
 ): GateFinding {
 	const info = entry.severity === "P3";
 	const warning = entry.severity === "P2";
-	const description = [entry.title, entry.body, suggestion]
-		.filter((p): p is string => typeof p === "string" && p.trim() !== "")
-		.join("\n\n");
+	const description =
+		[entry.title, entry.body, suggestion]
+			.filter((p): p is string => typeof p === "string" && p.trim() !== "")
+			.join("\n\n") || "(no description)";
 	return {
 		id: entry.id,
 		severity: info ? "info" : warning ? "warning" : "error",

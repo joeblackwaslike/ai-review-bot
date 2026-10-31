@@ -131,3 +131,78 @@ describe("validateReport", () => {
 		expect(validateReport(out)).toEqual([]);
 	});
 });
+
+describe("round 1 fixes", () => {
+	const MIB = 1024 * 1024;
+	const doc = (description: string) =>
+		JSON.stringify({ findings: [{ ...f("a", "info"), description }] });
+
+	it("validateReport rejects a multibyte report over 1 MiB in bytes but under in characters", () => {
+		const json = doc("é".repeat(600_000));
+		expect(json.length).toBeLessThan(MIB);
+		expect(Buffer.byteLength(json)).toBeGreaterThan(MIB);
+		expect(validateReport(json).length).toBeGreaterThan(0);
+	});
+	it("validateReport accepts a report of exactly 1 MiB and rejects one byte more", () => {
+		const base = Buffer.byteLength(doc(""));
+		const exact = doc("a".repeat(MIB - base));
+		expect(Buffer.byteLength(exact)).toBe(MIB);
+		expect(validateReport(exact)).toEqual([]);
+		expect(
+			validateReport(doc("a".repeat(MIB - base + 1))).length,
+		).toBeGreaterThan(0);
+	});
+	it("validateReport accepts exactly 500 findings and rejects 501", () => {
+		const mk = (n: number) =>
+			JSON.stringify({
+				findings: Array.from({ length: n }, (_, i) => f(`i${i}`, "info")),
+			});
+		expect(validateReport(mk(500))).toEqual([]);
+		expect(validateReport(mk(501)).length).toBeGreaterThan(0);
+	});
+	it("toGateFinding falls back to the title, then a placeholder, when the description would be empty", () => {
+		expect(toGateFinding(entry({ title: " ", body: "" })).description).toBe(
+			"(no description)",
+		);
+		expect(
+			validateReport(
+				formatReport([toGateFinding(entry({ title: "", body: null }))]),
+			),
+		).toEqual([]);
+	});
+	it("capFindings with the default max keeps 500 and drops the last lowest-severity item at 501", () => {
+		const base = Array.from({ length: 500 }, (_, i) => f(`e${i}`, "error"));
+		expect(capFindings(base).dropped).toBe(0);
+		const over = [...base, f("w", "warning"), f("i1", "info")];
+		const r = capFindings(over.slice(0, 500).concat(f("i1", "info")));
+		expect(r.dropped).toBe(1);
+		expect(r.kept.some((x) => x.id === "i1")).toBe(false);
+		const r2 = capFindings([
+			...base.slice(0, 499),
+			f("w", "warning"),
+			f("i1", "info"),
+		]);
+		expect(r2.dropped).toBe(1);
+		expect(r2.kept.map((x) => x.id)).toContain("w");
+	});
+	it("validateReport flags a non-integer line, non-object element, non-string file, unknown top-level field, non-array findings", () => {
+		const one = (x: unknown) => JSON.stringify({ findings: [x] });
+		expect(
+			validateReport(one({ ...f("a", "info"), line: 1.5 })).length,
+		).toBeGreaterThan(0);
+		expect(validateReport(one("str")).length).toBeGreaterThan(0);
+		expect(
+			validateReport(one({ ...f("a", "info"), file: 3 })).length,
+		).toBeGreaterThan(0);
+		expect(
+			validateReport(JSON.stringify({ findings: [], extra: 1 })).length,
+		).toBeGreaterThan(0);
+		expect(
+			validateReport(JSON.stringify({ findings: {} })).length,
+		).toBeGreaterThan(0);
+	});
+	it("toGateFinding treats an unknown severity like P4 as error ask-user (fail-safe)", () => {
+		const g = toGateFinding(entry({ severity: "P4" }));
+		expect([g.severity, g.action]).toEqual(["error", "ask-user"]);
+	});
+});
