@@ -2233,7 +2233,6 @@ export async function buildReview(
 			cleared,
 			pending,
 		});
-		if (state) state.incompleteSkills = pending;
 		await carryVerdictForward(
 			skipVerdict === "APPROVE" && pending.length > 0 ? "COMMENT" : skipVerdict,
 		);
