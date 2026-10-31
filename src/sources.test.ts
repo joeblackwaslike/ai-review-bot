@@ -185,6 +185,21 @@ describe("range scope", () => {
 		});
 	});
 
+	it("listRangeChanges disables path quoting and keeps non-ASCII and spaced paths", () => {
+		const diffArgs: string[][] = [];
+		const runGit: GitRunner = (args) => {
+			if (args.includes("merge-base")) return "mb1";
+			diffArgs.push([...args]);
+			return "M\tsrc/caf\u00e9.ts\nR90\tsrc/my old.ts\tsrc/my new.ts\n";
+		};
+		const { changes } = listRangeChanges(runGit, "origin/main");
+		expect(diffArgs[0].slice(0, 2)).toEqual(["-c", "core.quotePath=false"]);
+		expect(changes).toEqual([
+			{ path: "src/caf\u00e9.ts", oldPath: null, status: "M" },
+			{ path: "src/my new.ts", oldPath: "src/my old.ts", status: "R" },
+		]);
+	});
+
 	it("listRangeChanges drops non-code files", () => {
 		const runGit: GitRunner = (args) =>
 			args[0] === "merge-base" ? "mb1" : "M\tREADME.md\nM\tsrc/a.ts\n";
@@ -198,6 +213,13 @@ describe("range scope", () => {
 			(out: string): GitRunner =>
 			() =>
 				out;
+		const seen: string[][] = [];
+		const spy: GitRunner = (args) => {
+			seen.push([...args]);
+			return "x";
+		};
+		diffHash(spy, "mb", "a.ts");
+		expect(seen).toEqual([["diff", "mb", "HEAD", "--", "a.ts"]]);
 		expect(diffHash(mk("x"), "mb", "a.ts")).toBe(
 			diffHash(mk("x"), "mb", "a.ts"),
 		);

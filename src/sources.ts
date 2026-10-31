@@ -192,13 +192,21 @@ export function resolveBase(runGit: GitRunner, explicit?: string): string {
 	throw new Error("No base branch found");
 }
 
-/** Code-file changes between merge-base(base, HEAD) and HEAD. Copies count as added; other statuses as modified. */
+/** Code-file changes between merge-base(base, HEAD) and HEAD. Unexpected statuses count as modified. */
 export function listRangeChanges(
 	runGit: GitRunner,
 	base: string,
 ): { mergeBase: string; changes: RangeChange[] } {
 	const mergeBase = runGit(["merge-base", "HEAD", base]).trim();
-	const out = runGit(["diff", "-M", "--name-status", mergeBase, "HEAD"]);
+	const out = runGit([
+		"-c",
+		"core.quotePath=false",
+		"diff",
+		"-M",
+		"--name-status",
+		mergeBase,
+		"HEAD",
+	]);
 	const changes: RangeChange[] = [];
 	for (const line of out.split("\n")) {
 		const [code, first, second] = line.split("\t");
@@ -207,11 +215,9 @@ export function listRangeChanges(
 		if (kind === "R" && second) {
 			if (hasCodeExtension(second))
 				changes.push({ path: second, oldPath: first, status: "R" });
-		} else if (hasCodeExtension(kind === "C" && second ? second : first)) {
-			const p = kind === "C" && second ? second : first;
-			const status =
-				kind === "A" || kind === "C" ? "A" : kind === "D" ? "D" : "M";
-			changes.push({ path: p, oldPath: null, status });
+		} else if (hasCodeExtension(first)) {
+			const status = kind === "A" ? "A" : kind === "D" ? "D" : "M";
+			changes.push({ path: first, oldPath: null, status });
 		}
 	}
 	return { mergeBase, changes };
