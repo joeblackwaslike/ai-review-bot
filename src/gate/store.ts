@@ -42,11 +42,12 @@ const mtimeOf = (path: string) => {
 };
 
 /**
- * The store key for HEAD. Candidates are one key per branch pointing at HEAD
- * plus the merge-base key. An existing store wins, the most recently modified
- * one when several exist, so a second branch at HEAD (a backup, a stacked
- * branch) does not orphan the history. With none on disk: the branch key when
- * exactly one branch points at HEAD, else the merge-base key.
+ * The store key for HEAD. An existing store for a branch pointing at HEAD wins,
+ * the most recently modified one when several exist, so a second branch at HEAD
+ * (a backup, a stacked branch) does not orphan the history. The merge-base key
+ * is never adopted that way, because every branch forked from the same base
+ * shares it. With no branch store on disk: the branch key when exactly one
+ * branch points at HEAD, else the merge-base key.
  */
 export function storeKey(
 	runGit: GitRunner,
@@ -66,16 +67,13 @@ export function storeKey(
 		.map((b) => b.trim())
 		.filter(Boolean);
 	const baseKey = keyFor(owner, repo, `s:${mergeBase}`);
-	const candidates = [
-		...branches.map((b) => keyFor(owner, repo, `b:${b}`)),
-		baseKey,
-	];
-	const existing = candidates
+	const branchKeys = branches.map((b) => keyFor(owner, repo, `b:${b}`));
+	const existing = branchKeys
 		.map((key) => ({ key, mtime: mtimeOf(gateStorePath(key, dir)) }))
 		.filter((c): c is { key: string; mtime: number } => c.mtime !== null)
 		.sort((a, b) => b.mtime - a.mtime);
 	if (existing[0]) return existing[0].key;
-	return branches.length === 1 ? (candidates[0] ?? baseKey) : baseKey;
+	return branches.length === 1 ? (branchKeys[0] ?? baseKey) : baseKey;
 }
 
 export function gateStorePath(key: string, dir?: string): string {

@@ -82,6 +82,31 @@ describe("storeKey", () => {
 		expect(gateStorePath(key, dir)).toBe(newer);
 	});
 
+	it("a single branch ignores another branch's merge-base store", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "gate-key-"));
+		const baseKey = storeKey(gitReturning(""), "o", "r", "abc123");
+		await writeFile(gateStorePath(baseKey, dir), "{}");
+
+		expect(storeKey(gitReturning("feat/f\n"), "o", "r", "abc123", dir)).toBe(
+			keyFor("feat/f"),
+		);
+	});
+
+	it("several branches with no branch store use the merge-base key", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "gate-key-"));
+		expect(storeKey(gitReturning("a\nb\n"), "o", "r", "abc123", dir)).toBe(
+			storeKey(gitReturning(""), "o", "r", "abc123"),
+		);
+	});
+
+	it("a detached HEAD keeps using its merge-base store", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "gate-key-"));
+		const baseKey = storeKey(gitReturning(""), "o", "r", "abc123");
+		await writeFile(gateStorePath(baseKey, dir), "{}");
+
+		expect(storeKey(gitReturning(""), "o", "r", "abc123", dir)).toBe(baseKey);
+	});
+
 	it("uses the single-branch key when no candidate store exists", async () => {
 		const dir = await mkdtemp(join(tmpdir(), "gate-key-"));
 		expect(storeKey(gitReturning("feat/x\n"), "o", "r", "abc123", dir)).toBe(
