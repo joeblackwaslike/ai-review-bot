@@ -90,16 +90,29 @@ function passResult(
 	merged: ModelReview,
 	over: Partial<ReviewPassResult> = {},
 ): ReviewPassResult {
+	const providersRun = over.providersRun ?? ["anthropic"];
+	const providerStats =
+		over.providerStats ??
+		providersRun.map((provider) => ({ provider, attempted: 5, succeeded: 5 }));
 	return {
 		merged,
 		costUsd: 0,
-		providersRun: ["anthropic"],
 		models: ["m"],
-		agentsAttempted: 5,
-		agentsSucceeded: 5,
+		agentsAttempted: providerStats.reduce((n, s) => n + s.attempted, 0),
+		agentsSucceeded: providerStats.reduce((n, s) => n + s.succeeded, 0),
 		...over,
+		providersRun,
+		providerStats,
 	};
 }
+
+const stats = (anthropic: number, openai: number) => ({
+	providersRun: ["anthropic", "openai"] as ReviewPassResult["providersRun"],
+	providerStats: [
+		{ provider: "anthropic" as const, attempted: 5, succeeded: anthropic },
+		{ provider: "openai" as const, attempted: 5, succeeded: openai },
+	],
+});
 
 const P1_ON_A = buildInlineComment({
 	path: "src/a.ts",
@@ -422,7 +435,9 @@ describe("runGate", () => {
 		state.files["src/a.ts"] = modified("a2");
 		state.since.head1 = ["src/a.ts"];
 		const result = await gate(state, async () =>
-			passResult(buildModelReview(), { agentsSucceeded: 4 }),
+			passResult(buildModelReview(), {
+				providerStats: [{ provider: "anthropic", attempted: 5, succeeded: 4 }],
+			}),
 		);
 
 		expect(result.findings).toHaveLength(1);
@@ -527,6 +542,77 @@ describe("runGate", () => {
 		expect(store.providers).toEqual(["anthropic", "openai"]);
 		expect(store.lastHead).toBe("head3");
 		expect(store.entries.map((e) => e.status)).toEqual(["fixed"]);
+	});
+
+	describe("a provider whose every agent failed", () => {
+		async function roundTwo(state: FakeRepo, over: Partial<ReviewPassResult>) {
+			state.ancestors.add("head1");
+			state.since.head1 = ["src/a.ts"];
+			state.head = "head2";
+			state.files["src/a.ts"] = modified("a2");
+			return gate(
+				state,
+				async () => passResult(buildModelReview(), over),
+				null,
+			);
+		}
+
+		it("counts as not run, so a fresh store records the other provider and later infers fixes", async () => {
+			const state = repo({ "src/a.ts": modified("a1") });
+			const first = await gate(state, async () =>
+				passResult(
+					buildModelReview({ inline_comments: [P1_ON_A] }),
+					stats(5, 0),
+				),
+			);
+			expect(first.findings).toHaveLength(1);
+			expect((await readStore(state)).providers).toEqual(["anthropic"]);
+
+			const second = await roundTwo(state, stats(5, 0));
+
+			expect(second.exitCode).toBe(0);
+			expect(second.findings).toEqual([]);
+			const store = await readStore(state);
+			expect(store.entries.map((e) => e.status)).toEqual(["fixed"]);
+			expect(store.lastHead).toBe("head2");
+		});
+
+		it("is a mismatch when the stored set had it", async () => {
+			const state = repo({ "src/a.ts": modified("a1") });
+			await gate(state, async () =>
+				passResult(
+					buildModelReview({ inline_comments: [P1_ON_A] }),
+					stats(5, 5),
+				),
+			);
+
+			const second = await roundTwo(state, stats(5, 0));
+
+			expect(second.exitCode).toBe(1);
+			expect(second.findings).toHaveLength(1);
+			const store = await readStore(state);
+			expect(store.providers).toEqual(["anthropic", "openai"]);
+			expect(store.lastHead).toBe("head1");
+			expect(errors.join("\n")).toMatch(/do not include every provider/);
+		});
+
+		it("is different from a provider that partly failed, which leaves the round incomplete", async () => {
+			const state = repo({ "src/a.ts": modified("a1") });
+			await gate(state, async () =>
+				passResult(
+					buildModelReview({ inline_comments: [P1_ON_A] }),
+					stats(5, 5),
+				),
+			);
+
+			const second = await roundTwo(state, stats(5, 3));
+
+			expect(second.exitCode).toBe(1);
+			const store = await readStore(state);
+			expect(store.entries.map((e) => e.status)).toEqual(["open"]);
+			expect(store.lastHead).toBe("head1");
+			expect(errors.join("\n")).toMatch(/Round incomplete/);
+		});
 	});
 
 	it("a rename of a file the branch added keeps the finding's id and moves its path", async () => {

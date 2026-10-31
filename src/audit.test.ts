@@ -761,4 +761,52 @@ describe("runReviewPasses", () => {
 		expect(fs.writeFile).not.toHaveBeenCalled();
 		expect(fs.mkdir).not.toHaveBeenCalled();
 	});
+
+	it("runReviewPasses reports attempted and succeeded agents per provider", async () => {
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		(runAgent as ReturnType<typeof vi.fn>).mockImplementation(
+			async (
+				_skill: string,
+				_msg: string,
+				_selection: unknown,
+				_extra: string,
+				opts: { auth: { provider: Provider } },
+			) =>
+				opts.auth.provider === "openai"
+					? {
+							status: "error",
+							failure: {
+								class: "refused",
+								retryable: false,
+								errorName: "Refused",
+							},
+							usage: { promptTokens: 0, completionTokens: 0 },
+						}
+					: {
+							status: "ok",
+							review: buildModelReview(),
+							usage: { promptTokens: 1, completionTokens: 1 },
+						},
+		);
+		const { runReviewPasses } = await import("./audit.js");
+		const result = await runReviewPasses({
+			files: [{ path: "a.ts", content: "x" }],
+			meta: { owner: "o", repo: "r", ref: "range" },
+			resolveAuthFor: async (provider: Provider) => ({
+				mode: "api-key" as const,
+				provider,
+				apiKey: "k",
+			}),
+		});
+
+		const n = TIER1_SKILLS.length;
+		expect(result.providerStats).toEqual([
+			{ provider: "anthropic", attempted: n, succeeded: n },
+			{ provider: "openai", attempted: n, succeeded: 0 },
+		]);
+		expect(result.agentsAttempted).toBe(2 * n);
+		expect(result.agentsSucceeded).toBe(n);
+		expect([...result.providersRun].sort()).toEqual(["anthropic", "openai"]);
+	});
 });

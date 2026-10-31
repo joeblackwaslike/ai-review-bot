@@ -637,6 +637,7 @@ export interface ReviewPassResult {
 	models: string[];
 	agentsAttempted: number;
 	agentsSucceeded: number;
+	providerStats: { provider: Provider; attempted: number; succeeded: number }[];
 }
 
 /**
@@ -660,6 +661,7 @@ export async function runReviewPasses(opts: {
 	const reviews: ModelReview[] = [];
 	const models: string[] = [];
 	const providersRun: Provider[] = [];
+	const providerStats: ReviewPassResult["providerStats"] = [];
 	let costUsd = 0;
 	let agentsSucceeded = 0;
 	let agentsAttempted = 0;
@@ -691,6 +693,11 @@ export async function runReviewPasses(opts: {
 		costUsd += computeCost(pass.usage, selection.model);
 		agentsSucceeded += pass.agentsSucceeded;
 		agentsAttempted += pass.agentsAttempted;
+		providerStats.push({
+			provider,
+			attempted: pass.agentsAttempted,
+			succeeded: pass.agentsSucceeded,
+		});
 	}
 
 	if (providersRun.length === 0) {
@@ -719,6 +726,7 @@ export async function runReviewPasses(opts: {
 		models,
 		agentsAttempted,
 		agentsSucceeded,
+		providerStats,
 	};
 }
 

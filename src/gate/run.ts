@@ -204,6 +204,7 @@ export async function runGate(opts: GateOptions): Promise<GateResult> {
 		runGit,
 	});
 	const pass = files.length === 0 ? null : await review(files);
+	const ran = (pass?.providerStats ?? []).filter((s) => s.succeeded > 0);
 
 	const round = Math.max(0, ...store.entries.map((e) => e.round)) + 1;
 	const result = applyRound({
@@ -214,8 +215,8 @@ export async function runGate(opts: GateOptions): Promise<GateResult> {
 		hashes,
 		renames,
 		reviewedPaths: only ?? "all",
-		complete: pass === null || pass.agentsSucceeded === pass.agentsAttempted,
-		providers: pass?.providersRun ?? store.providers,
+		complete: ran.every((s) => s.attempted === s.succeeded),
+		providers: pass ? ran.map((s) => s.provider) : store.providers,
 		fullRescope,
 		storePath,
 	});
