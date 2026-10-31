@@ -1,10 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import {
-	getConfig,
-	getOpenAIAppConfig,
-	parseAgentBudgetMs,
-	parsePositiveMs,
-} from "./config.js";
+import { getConfig, getOpenAIAppConfig, parseAgentBudgetMs } from "./config.js";
 
 const PKCS8_KEY =
 	"-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC7\n-----END PRIVATE KEY-----";
@@ -45,6 +40,7 @@ afterEach(() => {
 		"REVIEW_COMMENT_PREFIX",
 		"OPENAI_REVIEW_COMMENT_PREFIX",
 		"REVIEW_DELAY_SECONDS",
+		"IMPROVE_CARRIER_ENABLED",
 		"REVIEW_RESYNC_DELAY_SECONDS",
 		"AGENT_CONCURRENCY",
 		"REVIEW_TIER2_ENABLED",
@@ -59,11 +55,14 @@ afterEach(() => {
 });
 
 describe("review delay parsing", () => {
-	it("defaults to 540s initial / 300s resync when unset", () => {
+	it("defaults to no delay for initial and resync when unset", () => {
 		setRequiredEnv();
+		setOpenAIEnv();
 		const config = getConfig();
-		expect(config.reviewDelayMs).toBe(540_000);
-		expect(config.reviewResyncDelayMs).toBe(300_000);
+		expect(config.reviewDelayMs).toBe(0);
+		expect(config.reviewResyncDelayMs).toBe(0);
+		expect(getOpenAIAppConfig().reviewDelayMs).toBe(0);
+		expect(getOpenAIAppConfig().reviewResyncDelayMs).toBe(0);
 	});
 
 	it("parses valid numeric seconds into milliseconds", () => {
@@ -76,6 +75,18 @@ describe("review delay parsing", () => {
 		expect(config.reviewResyncDelayMs).toBe(60_000);
 	});
 
+	it("keeps an env override of 30s as 30s", () => {
+		setRequiredEnv({
+			REVIEW_DELAY_SECONDS: "30",
+			REVIEW_RESYNC_DELAY_SECONDS: "30",
+		});
+		expect(getConfig().reviewDelayMs).toBe(30_000);
+		expect(getConfig().reviewResyncDelayMs).toBe(30_000);
+		setOpenAIEnv();
+		expect(getOpenAIAppConfig().reviewDelayMs).toBe(30_000);
+		expect(getOpenAIAppConfig().reviewResyncDelayMs).toBe(30_000);
+	});
+
 	it("accepts 0 as an explicit no-delay value", () => {
 		setRequiredEnv({ REVIEW_DELAY_SECONDS: "0" });
 		expect(getConfig().reviewDelayMs).toBe(0);
@@ -84,9 +95,27 @@ describe("review delay parsing", () => {
 	it("falls back to the default for non-numeric, blank, or negative values", () => {
 		for (const bad of ["abc", "", "   ", "-30"]) {
 			setRequiredEnv({ REVIEW_DELAY_SECONDS: bad });
-			// A bare Number() would yield NaN/negative → setTimeout fires
-			// immediately and the dedup wait is silently lost.
-			expect(getConfig().reviewDelayMs).toBe(540_000);
+			expect(getConfig().reviewDelayMs).toBe(0);
+		}
+	});
+});
+
+describe("IMPROVE_CARRIER_ENABLED", () => {
+	it("is off by default for both providers", () => {
+		setRequiredEnv();
+		setOpenAIEnv();
+		expect(getConfig().improveCarrierEnabled).toBe(false);
+		expect(getOpenAIAppConfig().improveCarrierEnabled).toBe(false);
+	});
+
+	it('is on only when the value is exactly "true"', () => {
+		setRequiredEnv({ IMPROVE_CARRIER_ENABLED: "true" });
+		setOpenAIEnv();
+		expect(getConfig().improveCarrierEnabled).toBe(true);
+		expect(getOpenAIAppConfig().improveCarrierEnabled).toBe(true);
+		for (const other of ["false", "1", "TRUE", "yes", ""]) {
+			process.env.IMPROVE_CARRIER_ENABLED = other;
+			expect(getConfig().improveCarrierEnabled).toBe(false);
 		}
 	});
 });
@@ -309,28 +338,5 @@ describe("parseAgentBudgetMs", () => {
 	it.each(["0", "-5", "abc", ""])("falls back to the default on %s", (raw) => {
 		process.env.REVIEW_AGENT_BUDGET_SECONDS = raw;
 		expect(parseAgentBudgetMs()).toBe(210_000);
-	});
-});
-
-describe("parsePositiveMs", () => {
-	it("converts seconds to milliseconds", () => {
-		expect(parsePositiveMs("90", 60_000)).toBe(90_000);
-	});
-
-	it("falls back on undefined", () => {
-		expect(parsePositiveMs(undefined, 60_000)).toBe(60_000);
-	});
-
-	it("falls back on blank string", () => {
-		expect(parsePositiveMs("  ", 60_000)).toBe(60_000);
-	});
-
-	it("falls back on non-positive values", () => {
-		expect(parsePositiveMs("0", 60_000)).toBe(60_000);
-		expect(parsePositiveMs("-1", 60_000)).toBe(60_000);
-	});
-
-	it("falls back when fractional value floors to zero ms", () => {
-		expect(parsePositiveMs("0.0001", 60_000)).toBe(60_000);
 	});
 });

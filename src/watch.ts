@@ -200,7 +200,7 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 			return { cycles, reason: pr.merged ? "merged" : "closed" };
 		}
 
-		for (const [targetIndex, target] of targets.entries()) {
+		for (const target of targets) {
 			const state = providerState.get(target.provider);
 			if (!state || pr.head.sha === state.lastReviewedSha) continue;
 
@@ -246,19 +246,9 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 							return { cycles, reason: "circuit-breaker" };
 						}
 					}
-
-					// ai-review-bot-1f5: re-poll before the NEXT target's post (if
-					// any) in this cycle, so its PR-body PATCH builds on this
-					// provider's just-posted summary section instead of the stale
-					// pre-cycle `pr` snapshot. injectPRSection now uses per-provider
-					// markers (each provider's section coexists independently), but
-					// a stale snapshot still risks the next provider's PATCH writing
-					// an outright older version of THIS provider's section, so the
-					// re-poll is still worth doing on top of that fix, not made
-					// redundant by it. `pr` is redeclared fresh at the top of every
-					// cycle (see the `let pr` above), so this reassignment cannot
-					// leak into a later cycle — only into later targets this cycle.
-					if (targetIndex < targets.length - 1) {
+					// A push can land while this provider reviews; refresh so the
+					// next provider reviews the current head, not the cycle-start one.
+					if (target !== targets[targets.length - 1]) {
 						try {
 							const refreshed = await pollOctokit.request<PolledPullRequest>(
 								"GET /repos/{owner}/{repo}/pulls/{pull_number}",
@@ -267,7 +257,7 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 							pr = refreshed.data;
 						} catch (pollErr) {
 							log(
-								`ai-review watch: re-poll after ${target.provider} post failed; next provider's PR-body PATCH will likely overwrite the just-posted section: ${errMsg(pollErr)}`,
+								`ai-review watch: re-poll after ${target.provider} post failed; the next provider will review the previous snapshot: ${errMsg(pollErr)}`,
 							);
 						}
 					}

@@ -110,7 +110,7 @@ If all 3 attempts fail, the bot posts a regular PR comment instead of a formal r
 Before running agents, each bot fetches all existing reviews on the PR and classifies them:
 
 - **Sister bot** (the other AI bot in this deployment — detected by its `Reviewed commit:` footer): included only if it reviewed the same commit SHA
-- **External bots** (Code Rabbit, Copilot, Sonar, etc.): always included — the 7.5-minute review delay is specifically to let these finish before our bots run
+- **External bots** (Code Rabbit, Copilot, Sonar, etc.): always included if they have already posted when our bots run (there is no wait for them)
 - **This bot's own prior reviews**: excluded
 
 Collected reviews are injected into the user message sent to every agent:
@@ -142,7 +142,7 @@ Before running agents, the bot checks existing reviews for this marker. If found
 
 Once both apps are installed on a repo, reviews happen automatically — no slash command needed. Both bots post a review on every pull request the moment it is opened or a new commit is pushed to it. This is the normal operating mode.
 
-- **`pull_request.opened`** — fires when a PR is created; both bots review it automatically after a short delay (`REVIEW_DELAY_SECONDS`, default 7.5 min) to give CI a chance to run first
+- **`pull_request.opened`** — fires when a PR is created; both bots review it automatically immediately by default (set `REVIEW_DELAY_SECONDS` to add a delay)
 - **`pull_request.synchronize`** — fires when a new commit is pushed to an open PR; both bots re-review the updated diff
 
 Draft PRs are always skipped. Reviews are idempotent per commit SHA — pushing the same commit twice won't produce duplicate reviews.

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { App } from "octokit";
-import type { Provider, ResolvedAuth } from "./auth.js";
+import type { ResolvedAuth } from "./auth.js";
 import { createCheckRun } from "./check-run.js";
 import { isTrustedAuthorAssociation, parseReviewCommand } from "./commands.js";
 import type { AppConfig } from "./config.js";
@@ -17,15 +17,8 @@ import {
 	quotaCommentMarker,
 	rateLimitCommentMarker,
 } from "./notify.js";
-import type { PeerOctokit } from "./peers.js";
-import {
-	fetchPrReviews,
-	peersExpectedInRepo,
-	shouldRunNow,
-	summarizePeers,
-} from "./peers.js";
 import { resolveStaleThreads } from "./resolve-threads.js";
-import type { ReviewDecision, ReviewMetadata } from "./review.js";
+import type { ReviewDecision } from "./review.js";
 import { buildReview } from "./review.js";
 import type { ReviewRunMessage } from "./scheduler.js";
 import { scheduleReview } from "./scheduler.js";
@@ -34,12 +27,6 @@ function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// The FIRST delay before the first peer check. It is deliberately short now:
-// the wait is no longer a guess at how long peers take, it is a poll that ends
-// as soon as they have actually posted (see peers.ts). The old fixed delay of
-// 9 minutes could not tell "peers are slow" from "peers are never coming", and
-// on a fast-moving PR every scheduled run was superseded before it fired —
-// which starved our own Codex bot of an entire PR's reviews.
 /** The inline fallback sleeps inside the webhook's own function budget, so that
  * sleep comes out of the agent budget. If the delay would consume all of it the
  * configured budget is kept as is: a near-zero budget skips every agent and the
@@ -49,12 +36,9 @@ export function budgetAfterDelay(budgetMs: number, delayMs: number): number {
 }
 
 export function selectReviewDelayMs(action: string, config: AppConfig): number {
-	return Math.min(
-		config.peerCheckIntervalMs,
-		action === "synchronize"
-			? config.reviewResyncDelayMs
-			: config.reviewDelayMs,
-	);
+	return action === "synchronize"
+		? config.reviewResyncDelayMs
+		: config.reviewDelayMs;
 }
 
 /** TTL for the per-commit review idempotency claim. Comfortably longer than a
@@ -255,122 +239,6 @@ function buildFallbackCommentBody(
 		review.body,
 		...inlineSection,
 	].join("\n");
-}
-
-/** ai-review-bot-1f5: markers are scoped per provider, not shared, so each
- * bot's section can be independently found/replaced by injectPRSection
- * without touching the other's — a single shared marker pair meant the
- * second provider's post always fully replaced the first's regardless of
- * how fresh the body was, which re-polling alone (the original fix) did not
- * solve. Confirmed by chatgpt-codex-connector reviewing PR #67. */
-function prSectionMarkers(provider: Provider): { start: string; end: string } {
-	return {
-		start: `<!-- ai-review-bot:${provider}:start -->`,
-		end: `<!-- ai-review-bot:${provider}:end -->`,
-	};
-}
-
-export function buildPRSummarySection(
-	metadata: ReviewMetadata,
-	event: "COMMENT" | "REQUEST_CHANGES" | "APPROVE",
-	commentPrefix: string,
-	provider: Provider,
-): string {
-	const verdict =
-		event === "APPROVE"
-			? "✅ Approved"
-			: event === "REQUEST_CHANGES"
-				? "⚠️ Changes requested"
-				: "💬 Commented";
-
-	const tier2Line =
-		metadata.tier2Skills.length > 0
-			? `\n| Tier 2 skills | ${metadata.tier2Skills.map((s) => `\`${s}\``).join(", ")} |`
-			: "";
-
-	const { start, end } = prSectionMarkers(provider);
-	return [
-		start,
-		`#### ${commentPrefix}`,
-		"",
-		"| | |",
-		"|---|---|",
-		`| Verdict | ${verdict} |`,
-		`| Findings | ${metadata.generalFindings} general, ${metadata.inlineComments} inline |`,
-		`| Model | \`${metadata.model}\` |`,
-		`| Agents | ${metadata.tier1Count} Tier 1${metadata.tier2Skills.length > 0 ? ` + ${metadata.tier2Skills.length} Tier 2` : ""} |${tier2Line}`,
-		`| Cost | $${metadata.cost.toFixed(6)} |`,
-		end,
-	].join("\n");
-}
-
-/** The pre-ai-review-bot-1f5 unscoped marker pair. Only ever read, never
- * written — kept so injectPRSection can migrate a PR body that still
- * carries it (from before provider-scoped markers shipped) instead of
- * leaving it as permanent orphaned content once a new provider-scoped
- * section starts getting appended alongside it. Found independently by
- * both anthropicreviewbot and codexreviewbot reviewing PR #67. */
-const LEGACY_PR_SECTION_START = "<!-- ai-review-bot:start -->";
-const LEGACY_PR_SECTION_END = "<!-- ai-review-bot:end -->";
-
-export function injectPRSection(
-	existingBody: string | null,
-	section: string,
-	provider: Provider,
-): string {
-	let body = existingBody ?? "";
-	const legacyStartIdx = body.indexOf(LEGACY_PR_SECTION_START);
-	// Search for the end marker starting AFTER the start marker, not from
-	// position 0 — an unqualified `body.indexOf(END)` finds the first
-	// occurrence anywhere, including a spurious one earlier in unrelated
-	// content before the real legacy block. That makes `legacyEndIdx <
-	// legacyStartIdx`, so the ordering guard below skips migration entirely.
-	// Starting the search after the start marker finds the real closing
-	// marker for that case.
-	//
-	// Known, deliberately unfixed gap: a spurious end-marker mention INSIDE
-	// the legacy section itself (after the start marker, before the real
-	// close) would still truncate the strip early. Not fixed because it isn't
-	// reachable through this function's own read-then-write flow: the legacy
-	// strip only ever runs ONCE per PR body — the first post-upgrade review
-	// migrates it away in the same call that appends the first provider-scoped
-	// section, so no later call ever sees a body containing both a legacy
-	// section AND that section quoting its own closing marker as example
-	// content. Producing it would require a human hand-editing the PR body to
-	// construct that exact shape, which is out of scope for a migration path
-	// that only runs once, automatically, right after this bot's own upgrade.
-	const legacyEndIdx =
-		legacyStartIdx === -1
-			? -1
-			: body.indexOf(
-					LEGACY_PR_SECTION_END,
-					legacyStartIdx + LEGACY_PR_SECTION_START.length,
-				);
-	// legacyStartIdx < legacyEndIdx guards a malformed body where the end
-	// marker appears before the start marker: without it, the slice below
-	// duplicates the text between the two markers and leaves both legacy
-	// markers behind instead of stripping them. Found by anthropicreviewbot
-	// reviewing PR #67 (PRRT_kwDOSM5cU86Z_qoy / _qpF).
-	if (
-		legacyStartIdx !== -1 &&
-		legacyEndIdx !== -1 &&
-		legacyStartIdx < legacyEndIdx
-	) {
-		body = (
-			body.slice(0, legacyStartIdx) +
-			body.slice(legacyEndIdx + LEGACY_PR_SECTION_END.length)
-		).trim();
-	}
-
-	const { start, end } = prSectionMarkers(provider);
-	const startIdx = body.indexOf(start);
-	const endIdx = body.indexOf(end);
-
-	if (startIdx !== -1 && endIdx !== -1) {
-		return body.slice(0, startIdx) + section + body.slice(endIdx + end.length);
-	}
-
-	return body ? `${body}\n\n${section}` : section;
 }
 
 type PullRequestWebhookPayload = {
@@ -849,31 +717,6 @@ export async function maybeSubmitReview(args: {
 			// can't post again; it expires via TTL and the marker takes over.
 			reviewPosted = true;
 
-			const summarySection = buildPRSummarySection(
-				review.metadata,
-				review.event,
-				config.reviewCommentPrefix,
-				config.provider,
-			);
-			const updatedBody = injectPRSection(
-				pullRequest.body,
-				summarySection,
-				config.provider,
-			);
-			try {
-				await octokit.request(
-					"PATCH /repos/{owner}/{repo}/pulls/{pull_number}",
-					{
-						owner,
-						repo,
-						pull_number: pullNumber,
-						body: updatedBody,
-					},
-				);
-			} catch (patchErr) {
-				console.error("failed to update PR description", patchErr);
-			}
-
 			try {
 				await createCheckRun(
 					octokit,
@@ -1100,7 +943,7 @@ export async function runScheduledReview(
 	message: ReviewRunMessage,
 	app: App,
 	config: AppConfig,
-): Promise<{ status: "reviewed" | "superseded" | "waiting" }> {
+): Promise<{ status: "reviewed" | "superseded" }> {
 	const { owner, repo, pullNumber, headSha, installationId } = message;
 	const octokit = await app.getInstallationOctokit(installationId);
 	const pullResponse = await octokit.request(
@@ -1117,77 +960,6 @@ export async function runScheduledReview(
 			currentSha: pullRequest.head.sha,
 		});
 		return { status: "superseded" };
-	}
-
-	// The delay exists so peer bots post first and we can dedupe against them.
-	// That condition is directly observable, so observe it rather than
-	// approximating it with a fixed timer — a peer that never arrives used to
-	// starve the review entirely, and a repo with no peer bots waited for
-	// nothing at all.
-	const attempt = (message.attempt ?? 0) + 1;
-	let reviews: Awaited<ReturnType<typeof fetchPrReviews>>;
-	let peerFetchFailed = false;
-	try {
-		reviews = await fetchPrReviews(
-			octokit as unknown as PeerOctokit,
-			owner,
-			repo,
-			pullNumber,
-		);
-	} catch (err) {
-		reviews = [];
-		peerFetchFailed = true;
-		console.error("peers: failed to fetch PR reviews; skipping peer gate", {
-			owner,
-			repo,
-			pullNumber,
-			error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
-		});
-	}
-	const peers = summarizePeers(reviews, headSha);
-	const decision = peerFetchFailed
-		? { run: true as const, reason: "peer-fetch-failed" as const }
-		: shouldRunNow({
-				status: peers,
-				peersExpectedInRepo:
-					peers.seenOnPr.length > 0 ||
-					(await peersExpectedInRepo(
-						octokit as unknown as PeerOctokit,
-						owner,
-						repo,
-					)),
-				attempt,
-				maxAttempts: config.peerMaxAttempts,
-			});
-
-	if (!decision.run) {
-		const next = await scheduleReview(
-			config,
-			{ ...message, attempt },
-			config.peerCheckIntervalMs / 1000,
-		);
-		console.log("review waiting on peers", {
-			owner,
-			repo,
-			pullNumber,
-			attempt,
-			maxAttempts: config.peerMaxAttempts,
-			arrived: peers.arrived,
-			awaiting: peers.seenOnPr.filter((p) => !peers.arrived.includes(p)),
-			rescheduled: next !== null,
-		});
-		// A failed re-publish must not silently drop the review: fall through and
-		// review now rather than wait for a callback that will never come.
-		if (next !== null) return { status: "waiting" };
-	} else {
-		console.log("review proceeding", {
-			owner,
-			repo,
-			pullNumber,
-			attempt,
-			reason: decision.reason,
-			arrived: peers.arrived,
-		});
 	}
 
 	await maybeSubmitReview({
