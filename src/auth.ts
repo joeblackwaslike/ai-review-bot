@@ -29,7 +29,9 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
-export type Provider = "anthropic" | "openai";
+export const PROVIDERS = ["anthropic", "openai"] as const;
+
+export type Provider = (typeof PROVIDERS)[number];
 
 export type ResolvedAuth =
 	| { mode: "api-key"; provider: Provider; apiKey: string; baseURL?: string }

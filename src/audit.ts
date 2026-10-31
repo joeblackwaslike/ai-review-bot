@@ -10,6 +10,7 @@ import {
 	postProviderReview,
 } from "./audit-pr.js";
 import {
+	PROVIDERS,
 	type Provider,
 	type ResolvedAuth,
 	resolveAnthropicAuth,
@@ -414,8 +415,6 @@ export async function writeArtifacts(opts: {
 	}
 	return written;
 }
-
-const PROVIDERS = ["anthropic", "openai"] as const;
 
 export interface LocalAuditResult {
 	providers: Array<{ provider: "anthropic" | "openai"; review: ModelReview }>;

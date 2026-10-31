@@ -3,7 +3,7 @@ import { statSync } from "node:fs";
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import type { Provider } from "../auth.js";
+import { PROVIDERS, type Provider } from "../auth.js";
 import { isEntry } from "../ledger/file.js";
 import type { Ledger } from "../ledger/types.js";
 import type { GitRunner } from "../sources.js";
@@ -90,6 +90,7 @@ const isStore = (v: unknown): v is GateStore => {
 	return (
 		s.version === 1 &&
 		Array.isArray(s.providers) &&
+		s.providers.every((p) => PROVIDERS.includes(p)) &&
 		(s.lastHead === null || typeof s.lastHead === "string") &&
 		Array.isArray(s.entries) &&
 		s.entries.every(isEntry)

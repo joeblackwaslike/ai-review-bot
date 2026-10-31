@@ -176,6 +176,8 @@ describe("loadStore", () => {
 	it.each([
 		["wrong version", { version: 2 }],
 		["providers not an array", { providers: "x" }],
+		["a null provider", { providers: ["anthropic", null] }],
+		["an unknown provider", { providers: ["anthropic", "gemini"] }],
 		["numeric lastHead", { lastHead: 5 }],
 		["entries not an array", { entries: {} }],
 	])("treats %s as corrupt", async (_name, patch) => {
