@@ -169,8 +169,7 @@ export function applyRound(input: RoundInput): RoundResult {
 	const isUnclaimed = (f: Finding, suggestion: string | null) => {
 		const pool = entries.filter(
 			(e) =>
-				!claimed.has(e.id) &&
-				(e.path === null || !f.path || e.path === f.path),
+				!claimed.has(e.id) && (e.path === null || !f.path || e.path === f.path),
 		);
 		const match =
 			findOpenMatch(f, pool) ?? findSettledMatch(f, pool.filter(isInferredFix));
