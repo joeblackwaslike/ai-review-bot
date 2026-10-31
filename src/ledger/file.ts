@@ -19,7 +19,7 @@ export function ledgerFilePath(
 	return join(root, ".ai-review", "ledger", `${owner}__${repo}__${pull}.json`);
 }
 
-const isEntry = (v: unknown): boolean => {
+export const isEntry = (v: unknown): boolean => {
 	if (typeof v !== "object" || v === null) return false;
 	const e = v as Record<string, unknown>;
 	return (
