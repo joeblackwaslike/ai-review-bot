@@ -630,6 +630,98 @@ function scopeLabel(scope: ReviewScope): string {
 	}
 }
 
+export interface ReviewPassResult {
+	merged: ModelReview;
+	costUsd: number;
+	providersRun: Provider[];
+	models: string[];
+	agentsAttempted: number;
+	agentsSucceeded: number;
+}
+
+/**
+ * Run every authenticated provider's Tier-1 pass over `files` and merge the
+ * results. Writes nothing; throws when no provider authenticates or every
+ * agent call fails.
+ */
+export async function runReviewPasses(opts: {
+	files: AuditFile[];
+	meta: { owner: string; repo: string; ref: string };
+	extraInstructions?: string;
+	resolveAuthFor?: (p: Provider) => Promise<ResolvedAuth>;
+}): Promise<ReviewPassResult> {
+	const { files, meta } = opts;
+	const extraInstructions = opts.extraInstructions ?? "";
+	const resolveAuthFor =
+		opts.resolveAuthFor ??
+		((provider: Provider) =>
+			provider === "anthropic" ? resolveAnthropicAuth() : resolveOpenAIAuth());
+	const filePaths = files.map((f) => f.path);
+	const reviews: ModelReview[] = [];
+	const models: string[] = [];
+	const providersRun: Provider[] = [];
+	let costUsd = 0;
+	let agentsSucceeded = 0;
+	let agentsAttempted = 0;
+
+	for (const provider of PROVIDERS) {
+		let auth: ResolvedAuth;
+		try {
+			auth = await resolveAuthFor(provider);
+		} catch (err) {
+			console.error(
+				`Skipping ${provider}: ${err instanceof Error ? err.message : String(err)}`,
+			);
+			continue;
+		}
+		const selection = routeModel(
+			{ additions: 0, deletions: 0, filePaths, labels: [] },
+			provider,
+		);
+		const pass = await runAuditPass({
+			files,
+			selection,
+			extraInstructions,
+			meta,
+			auth,
+		});
+		reviews.push(pass.review);
+		models.push(selection.model);
+		providersRun.push(provider);
+		costUsd += computeCost(pass.usage, selection.model);
+		agentsSucceeded += pass.agentsSucceeded;
+		agentsAttempted += pass.agentsAttempted;
+	}
+
+	if (providersRun.length === 0) {
+		throw new Error(
+			"No provider could be authenticated. Set OPENAI_API_KEY / ANTHROPIC_API_KEY, or log in with `codex` / `claude`.",
+		);
+	}
+
+	// Distinct failure mode from the auth check above: every provider
+	// authenticated fine, but not one agent call across any of them
+	// succeeded — a bad/expired key or provider outage auth alone can't
+	// catch. Without this, that reads as "reviewed, nothing found".
+	// `agentsAttempted > 0` matters here too: a legitimate empty scope
+	// (clean branch, doc-only change) attempts zero agents and must not be
+	// misreported as "every agent failed".
+	if (agentsAttempted > 0 && agentsSucceeded === 0) {
+		throw new Error(
+			`Every review agent failed across ${providersRun.length} authenticated provider(s) (0/${agentsAttempted}) — refusing to write a report with no real signal. Check provider status/logs and retry.`,
+		);
+	}
+
+	return {
+		merged: mergeReviews(reviews),
+		costUsd,
+		providersRun,
+		models,
+		agentsAttempted,
+		agentsSucceeded,
+	};
+}
+
 /**
  * Run the full local review and write a Markdown report into `docsDir`. Reuses
  * `runAuditPass` per provider, resolves subscription/API-key auth per provider,
@@ -660,70 +752,18 @@ export async function runLocalReview(opts: {
 		opts.scope.kind === "commit"
 			? await collectFilesFromCommit({ cwd: opts.cwd, sha: opts.scope.sha })
 			: await collectFilesFromLocal({ cwd: opts.cwd, mode: opts.scope.kind });
-	const filePaths = files.map((f) => f.path);
 	const meta = {
 		owner: opts.owner,
 		repo: opts.repo,
 		ref: scopeRef(opts.scope),
 	};
 
-	const reviews: ModelReview[] = [];
-	const models: string[] = [];
-	const providersRun: Provider[] = [];
-	let costUsd = 0;
-	let totalAgentsSucceeded = 0;
-	let totalAgentsAttempted = 0;
-
-	for (const provider of PROVIDERS) {
-		let auth: ResolvedAuth;
-		try {
-			auth = await resolveAuthFor(provider);
-		} catch (err) {
-			console.error(
-				`Skipping ${provider}: ${err instanceof Error ? err.message : String(err)}`,
-			);
-			continue;
-		}
-		const selection = routeModel(
-			{ additions: 0, deletions: 0, filePaths, labels: [] },
-			provider,
-		);
-		const { review, usage, agentsSucceeded, agentsAttempted } =
-			await runAuditPass({
-				files,
-				selection,
-				extraInstructions,
-				meta,
-				auth,
-			});
-		reviews.push(review);
-		models.push(selection.model);
-		providersRun.push(provider);
-		costUsd += computeCost(usage, selection.model);
-		totalAgentsSucceeded += agentsSucceeded;
-		totalAgentsAttempted += agentsAttempted;
-	}
-
-	if (providersRun.length === 0) {
-		throw new Error(
-			"No provider could be authenticated. Set OPENAI_API_KEY / ANTHROPIC_API_KEY, or log in with `codex` / `claude`.",
-		);
-	}
-
-	// Distinct failure mode from the auth check above: every provider
-	// authenticated fine, but not one agent call across any of them
-	// succeeded — a bad/expired key or provider outage auth alone can't
-	// catch. Without this, that reads as "reviewed, nothing found".
-	// `totalAgentsAttempted > 0` matters here too: a legitimate empty scope
-	// (clean branch, doc-only change) attempts zero agents and must not be
-	// misreported as "every agent failed".
-	if (totalAgentsAttempted > 0 && totalAgentsSucceeded === 0) {
-		throw new Error(
-			`Every review agent failed across ${providersRun.length} authenticated provider(s) (0/${totalAgentsAttempted}) — refusing to write a report with no real signal. Check provider status/logs and retry.`,
-		);
-	}
-
-	const merged = mergeReviews(reviews);
+	const { merged, costUsd, providersRun, models } = await runReviewPasses({
+		files,
+		meta,
+		extraInstructions,
+		resolveAuthFor,
+	});
 	const durationSeconds = Math.round((now() - started) / 1000);
 	const date = new Date(now()).toISOString().slice(0, 10);
 

@@ -725,3 +725,40 @@ describe("runLocalReview", () => {
 		expect(runAgent).not.toHaveBeenCalled();
 	});
 });
+
+describe("runReviewPasses", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	it("runReviewPasses returns the merged review and agent counts without writing a report", async () => {
+		(runAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
+			status: "ok",
+			review: buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+			usage: { promptTokens: 1, completionTokens: 1 },
+		});
+		const fs = await import("node:fs/promises");
+		const { runReviewPasses } = await import("./audit.js");
+		const result = await runReviewPasses({
+			files: [{ path: "a.ts", content: "x" }],
+			meta: { owner: "o", repo: "r", ref: "working-tree" },
+			resolveAuthFor: async (provider: Provider) => ({
+				mode: "api-key" as const,
+				provider,
+				apiKey: "k",
+			}),
+		});
+
+		expect(result.merged.event).toBe("COMMENT");
+		expect(result.agentsAttempted).toBeGreaterThan(0);
+		expect(result.agentsSucceeded).toBe(result.agentsAttempted);
+		expect([...result.providersRun].sort()).toEqual(["anthropic", "openai"]);
+		expect(result.models).toHaveLength(2);
+		expect(fs.writeFile).not.toHaveBeenCalled();
+		expect(fs.mkdir).not.toHaveBeenCalled();
+	});
+});
