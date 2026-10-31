@@ -18,6 +18,11 @@ export type RoundInput = {
 	providers: Provider[];
 	fullRescope: boolean;
 	storePath?: string;
+	idleProviders?: {
+		provider: Provider;
+		succeeded: number;
+		attempted: number;
+	}[];
 };
 
 export type Emitted = { entry: LedgerEntry; suggestion: string | null };
@@ -93,6 +98,14 @@ function mintIds(
 	return drafts.map((e, i) => ({ ...e, id: ids[i] }));
 }
 
+const unionProviders = (
+	stored: readonly Provider[],
+	ran: readonly Provider[],
+) => [
+	...stored,
+	...ran.filter((p, i) => !stored.includes(p) && ran.indexOf(p) === i),
+];
+
 const providerMismatch = (input: RoundInput) =>
 	input.store.providers.length > 0 &&
 	!includesAll(input.providers, input.store.providers);
@@ -105,12 +118,15 @@ function inferenceWarnings(input: RoundInput, hasOpen: boolean): string[] {
 		);
 	}
 	if (providerMismatch(input)) {
+		const idle = (input.idleProviders ?? [])
+			.map((s) => `${s.provider} ${s.succeeded}/${s.attempted}`)
+			.join(", ");
 		warnings.push(
-			`Providers that ran (${input.providers.join(", ") || "none"}) do not include every provider from the last complete round (${input.store.providers.join(", ")}), so no open finding was inferred fixed and the stored provider set and head were kept. After a permanent provider change, delete ${input.storePath ?? "the gate history file"} to start over.`,
+			`Providers that ran (${input.providers.join(", ") || "none"}) do not include every provider in the stored set (${input.store.providers.join(", ")}), so no open finding was inferred fixed and the last reviewed head was kept.${idle ? ` Authenticated with no successful agent: ${idle}.` : ""} After a permanent provider change, delete ${input.storePath ?? "the gate history file"} to start over.`,
 		);
 	} else if (hasOpen && input.store.providers.length === 0) {
 		warnings.push(
-			"No complete round has recorded a provider set yet, so no open finding was inferred fixed.",
+			"No provider has reviewed this branch yet, so no open finding was inferred fixed.",
 		);
 	}
 	if (input.fullRescope) {
@@ -241,9 +257,8 @@ export function applyRound(input: RoundInput): RoundResult {
 		store: {
 			...store,
 			entries: [...next, ...minted],
-			...(input.complete && !providerMismatch(input)
-				? { providers: [...input.providers], lastHead: head }
-				: {}),
+			providers: unionProviders(store.providers, input.providers),
+			...(input.complete && !providerMismatch(input) ? { lastHead: head } : {}),
 		},
 		emitted,
 		suppressed: suppressed.length,

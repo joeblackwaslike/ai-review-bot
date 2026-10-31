@@ -315,6 +315,54 @@ describe("applyRound", () => {
 		expect(result.store.lastHead).toBe("head1");
 	});
 
+	it("a mismatch round adds the providers that ran to the stored set and keeps lastHead", () => {
+		const result = applyRound(
+			input({
+				store: store([entry()], ["anthropic"]),
+				hashes: new Map([["src/a.ts", "h2"]]),
+				providers: ["openai"],
+			}),
+		);
+		expect(result.store.entries[0]?.status).toBe("open");
+		expect(result.store.providers).toEqual(["anthropic", "openai"]);
+		expect(result.store.lastHead).toBe("head1");
+		expect(result.warnings.join("\n")).toMatch(/do not include every provider/);
+	});
+
+	it("an incomplete round still adds the providers that ran", () => {
+		const result = applyRound(
+			input({
+				store: store([entry()], ["anthropic"]),
+				providers: ["anthropic", "openai"],
+				complete: false,
+			}),
+		);
+		expect(result.store.providers).toEqual(["anthropic", "openai"]);
+		expect(result.store.lastHead).toBe("head1");
+	});
+
+	it("an equal provider set leaves the stored set unchanged and advances lastHead", () => {
+		const result = applyRound(
+			input({
+				store: store([entry()], ["anthropic"]),
+				providers: ["anthropic"],
+			}),
+		);
+		expect(result.store.providers).toEqual(["anthropic"]);
+		expect(result.store.lastHead).toBe(HEAD);
+	});
+
+	it("the mismatch warning names providers that authenticated with no successful agent", () => {
+		const result = applyRound(
+			input({
+				store: store([entry()], ["anthropic", "openai"]),
+				providers: ["anthropic"],
+				idleProviders: [{ provider: "openai", succeeded: 0, attempted: 5 }],
+			}),
+		);
+		expect(result.warnings.join("\n")).toContain("openai 0/5");
+	});
+
 	it("a larger provider set infers fixes and replaces the stored set", () => {
 		const old = entry();
 		const result = applyRound(
@@ -326,7 +374,7 @@ describe("applyRound", () => {
 		);
 		expect(byId(result.store, old.id)?.status).toBe("fixed");
 		expect(result.warnings).toEqual([]);
-		expect(result.store.providers).toEqual(["openai", "anthropic"]);
+		expect(result.store.providers).toEqual(["anthropic", "openai"]);
 		expect(result.store.lastHead).toBe(HEAD);
 	});
 
@@ -607,7 +655,7 @@ describe("applyRound", () => {
 		);
 		expect(result.warnings).toHaveLength(1);
 		expect(result.warnings[0]).not.toMatch(/none ->/);
-		expect(result.warnings[0]).toMatch(/no complete round/i);
+		expect(result.warnings[0]).toMatch(/no provider has reviewed/i);
 	});
 
 	it("two findings with the same hash input get -2 in body-hash order regardless of input order", () => {

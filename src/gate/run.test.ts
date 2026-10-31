@@ -596,6 +596,63 @@ describe("runGate", () => {
 			expect(errors.join("\n")).toMatch(/do not include every provider/);
 		});
 
+		it("cannot get a finding it raised in a mismatch round inferred fixed once it drops out", async () => {
+			const state = repo({ "src/a.ts": modified("a1") });
+			await gate(state, async () =>
+				passResult(buildModelReview(), stats(5, 0)),
+			);
+
+			state.ancestors.add("head1");
+			state.since.head1 = ["src/a.ts"];
+			state.head = "head2";
+			state.files["src/a.ts"] = modified("a2");
+			const second = await gate(
+				state,
+				async () =>
+					passResult(
+						buildModelReview({ inline_comments: [P1_ON_A] }),
+						stats(0, 5),
+					),
+				null,
+			);
+
+			state.ancestors.add("head2");
+			state.since.head2 = ["src/a.ts"];
+			state.head = "head3";
+			state.files["src/a.ts"] = modified("a3");
+			const third = await gate(
+				state,
+				async () => passResult(buildModelReview(), stats(5, 0)),
+				null,
+			);
+
+			expect(second.findings).toHaveLength(1);
+			expect(third.exitCode).toBe(1);
+			expect(third.findings.map((f) => f.id)).toEqual(
+				second.findings.map((f) => f.id),
+			);
+			const store = await readStore(state);
+			expect(store.entries.map((e) => e.status)).toEqual(["open"]);
+			expect(store.providers).toEqual(["anthropic", "openai"]);
+			expect(store.lastHead).toBe("head1");
+			expect(errors.join("\n")).toContain("openai 0/5");
+		});
+
+		it("a review where no provider attempted an agent is not a complete round", async () => {
+			const state = repo({ "src/a.ts": modified("a1") });
+
+			await gate(state, async () =>
+				passResult(buildModelReview(), {
+					providerStats: [
+						{ provider: "anthropic", attempted: 0, succeeded: 0 },
+					],
+				}),
+			);
+
+			expect((await readStore(state)).lastHead).toBeNull();
+			expect(errors.join("\n")).toMatch(/Round incomplete/);
+		});
+
 		it("is different from a provider that partly failed, which leaves the round incomplete", async () => {
 			const state = repo({ "src/a.ts": modified("a1") });
 			await gate(state, async () =>

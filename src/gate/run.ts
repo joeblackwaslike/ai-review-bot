@@ -215,10 +215,13 @@ export async function runGate(opts: GateOptions): Promise<GateResult> {
 		hashes,
 		renames,
 		reviewedPaths: only ?? "all",
-		complete: ran.every((s) => s.attempted === s.succeeded),
+		complete:
+			pass === null ||
+			(ran.length > 0 && ran.every((s) => s.attempted === s.succeeded)),
 		providers: pass ? ran.map((s) => s.provider) : store.providers,
 		fullRescope,
 		storePath,
+		idleProviders: (pass?.providerStats ?? []).filter((s) => s.succeeded === 0),
 	});
 	for (const w of result.warnings) console.error(w);
 

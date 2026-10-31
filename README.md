@@ -339,8 +339,11 @@ P1) parks the run. When the variable is unset, as on no-mistakes v1.75.2, the
 gate prints the findings and exits 1 if any of them is an `error`. If no
 provider authenticates or every agent fails, it exits non-zero with a message.
 A provider whose agents all fail, for example because it is out of credit, is
-treated as not run. If the history file lists that provider, the gate stays red
-until the provider works again or you delete the file named in the warning.
+treated as not run. The history file remembers every provider that has run on
+the branch. While one of them is not working and an open `error` finding
+exists, the gate stays red until that provider works again or you delete the
+file named in the warning. The warning lists each provider that logged in but
+had no successful agent, such as `openai 0/5`.
 
 Each branch keeps a history file under `~/.ai-review/gate/`. A re-check after a
 fix reviews only the files whose diff changed since the last round. Findings
