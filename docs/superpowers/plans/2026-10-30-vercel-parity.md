@@ -117,6 +117,28 @@
 - [ ] **Step 4: Update docs** for the KV change and the retired-findings note. State that KV remains for the claim and feedback only.
 - [ ] **Step 5: Commit** `test(replay): record PR #92 and document GitHub-only review state`
 
+### Task 5: Scope own reviews to the bot's provider
+
+Found in Task 4 and confirmed on PR #92: production sets `REVIEW_COMMENT_PREFIX` and not `OPENAI_REVIEW_COMMENT_PREFIX`, so both bots post under `### ai-review`. The review filters match on the heading alone. Review 5719190216 (anthropicreviewbot) and 5719191481 (codexreviewbot) differ only in `ai-review:provider=anthropic|openai`. KV was keyed per provider and hid this; with GitHub as the only state source, the Claude bot would derive its baseline (carried findings, review count) from Codex's review.
+
+**Files:**
+- Modify: `src/review.ts` (the `ownReviews`, `sourceReview`, `priorOwnReview` and `alreadyReviewed` filters, ~1480-1660), `src/ledger/github.ts:189` (review filter in `fetchLedgerEvidence`), `src/ledger/live.ts` (pass the provider through), any other prefix-only own-review filter that `grep -n "commentPrefix"` shows in `src/`.
+- Test: `src/review.test.ts`, `src/ledger/github.test.ts`.
+
+**Interfaces:**
+- Consumes: `readMetadataValue(body, "provider")` from `src/review-metadata.ts`; `context.provider` on `ReviewContext`.
+- Produces: `export function isOwnReview(body: string | null | undefined, o: { commentPrefix: string; provider: string }): boolean` in `src/review-metadata.ts`. True when the body has the `### <prefix>` heading and its `provider` marker is absent (a legacy body) or equals `o.provider`. `fetchLedgerEvidence`/`loadLedger` options gain `provider: string`.
+
+- [ ] **Step 1: Write the failing tests.**
+  - `isOwnReview` unit tests: matching provider, other provider, no marker, no heading, marker only quoted in a human review (use the existing quote-safe reader).
+  - `review.test.ts`: two reviews at the same prefix and head, one `provider=openai`, one `provider=anthropic`; the anthropic run takes its baseline (sha, review count, carried findings) from the anthropic review, and a run whose only same-prefix review at this head is the openai one is not treated as already reviewed.
+  - `ledger/github.test.ts`: reviews from the other provider are not in `reviewIds`; the request shape (route, `pull_number`) is asserted.
+- [ ] **Step 2: Run** them. Expected: FAIL. Quote it.
+- [ ] **Step 3: Implement** `isOwnReview` and use it in every place the diff-of-prefix filter picks "our" review. Check the sister-bot dedup injection (`priorBotReviews`) still sees the other bot's review as a sister review, not as ours.
+- [ ] **Step 4: Run** `pnpm test`, `pnpm typecheck`, `pnpm lint`. Expected: PASS.
+- [ ] **Step 5: Add to the spec** one decision under "GitHub is the only source of review state": own reviews are identified by heading plus `ai-review:provider`; a body with no provider marker counts as ours.
+- [ ] **Step 6: Commit** `fix(review): identify a bot's own reviews by provider, not by heading alone`
+
 ## Self-review
 
 - Spec coverage: goal 1 and 2 (Tasks 1, 2), goal 3 (Task 2 test), goal 4 (Task 3), verification section (Task 4), `bne` closure and the post-deploy review happen outside code tasks at the finish.
