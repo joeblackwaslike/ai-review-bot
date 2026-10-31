@@ -79,7 +79,7 @@ Findings carried from the previous review appear in the body's "Still open from 
 | `src/ledger/retarget.ts` | `retargetCarried()` maps carried findings through PR renames and retires the ones whose file is no longer in the PR. Retired findings stop blocking and are listed in the review body under "Retired, file no longer in this PR" |
 | `src/agent-failure.ts` | Classifies a thrown agent error into a failure class and decides whether it is worth one retry |
 | `src/agent-log.ts` | Per-agent outcome records, the `agents` marker in the review body, and the local JSONL log sink |
-| `src/review-metadata.ts` | Reads the `ai-review:key=value` marker block above the review footer, ignoring quoted or duplicated markers |
+| `src/review-metadata.ts` | Reads the `ai-review:key=value` marker block above the review footer, ignoring quoted or duplicated markers. `isOwnReview()` counts a review as this bot's when it has the bot's heading and its `ai-review:provider` marker matches or is absent, since both production bots post under one heading |
 | `src/ledger/` | Platform-neutral ledger of review findings and their dispositions rebuilt from GitHub threads, claim matching across rounds, suppression of settled repeats; see `docs/superpowers/specs/2026-10-28-ledger-repeat-suppression-design.md` |
 | `skills/*.md` | Vendored skill frameworks loaded at runtime by `buildAgentSystemPrompt()` |
 

@@ -30,7 +30,7 @@ import {
 	PR_FILE_LIST_CAP,
 	wholePrInputComplete,
 } from "./prompt.js";
-import { readMetadataValue } from "./review-metadata.js";
+import { isOwnReview, readMetadataValue } from "./review-metadata.js";
 import type { PersistedFinding, ReviewState } from "./review-state.js";
 import { REVIEWER_TUNING, type ReviewerTuning } from "./reviewer-tuning.js";
 import type { ModelSelection } from "./router.js";
@@ -1475,11 +1475,16 @@ export async function buildReview(
 	);
 
 	const legacyMarker = `Reviewed commit: \`${context.headSha.slice(0, 12)}\``;
+	const ownReviewOf = (review: PullRequestReview) =>
+		isOwnReview(review.body, {
+			commentPrefix: context.commentPrefix,
+			provider: context.provider,
+		});
 
 	if (!context.force) {
 		const alreadyReviewed = existingReviews.some((review) => {
 			const body = review.body ?? "";
-			if (!body.includes(`### ${context.commentPrefix}`)) return false;
+			if (!ownReviewOf(review)) return false;
 			const meta = parseReviewMetadata(body);
 			if (meta) return meta.sha === context.headSha;
 			return body.includes(legacyMarker);
@@ -1491,14 +1496,15 @@ export async function buildReview(
 	}
 
 	// Collect prior reviews for dedup injection into the prompt.
-	// Sister bot (has our metadata block): include only if same SHA.
+	// Sister bot (has our metadata block, which also covers the other provider
+	// posting under our heading): include only if same SHA.
 	// External bots (Code Rabbit, etc.): always include — the review delay ensures
 	// they've completed before we run.
 	const priorBotReviews = existingReviews
 		.filter((review) => {
 			const body = review.body ?? "";
 			if (!body) return false;
-			if (body.includes(`### ${context.commentPrefix}`)) return false;
+			if (ownReviewOf(review)) return false;
 			const meta = parseReviewMetadata(body);
 			if (meta) return meta.sha === context.headSha;
 			if (body.includes("Reviewed commit: `")) {
@@ -1512,7 +1518,7 @@ export async function buildReview(
 		existingReviews
 			.filter((review) => {
 				const body = review.body ?? "";
-				if (!body.includes(`### ${context.commentPrefix}`)) return false;
+				if (!ownReviewOf(review)) return false;
 				const meta = parseReviewMetadata(body);
 				if (meta) return meta.sha !== context.headSha;
 				return (
@@ -1612,9 +1618,7 @@ export async function buildReview(
 	 * explained, since a FULL pass did see these findings' files and chose not
 	 * to restate them, while an INCREMENTAL pass never saw them at all. */
 	let incrementalPass = false;
-	const ownReviews = existingReviews.filter((review) =>
-		(review.body ?? "").includes(`### ${context.commentPrefix}`),
-	);
+	const ownReviews = existingReviews.filter(ownReviewOf);
 	const hasOwnReview = ownReviews.length > 0;
 	/** A COMMENTED review neither clears a change request nor grants approval,
 	 * and a DISMISSED one means the approval is gone. */
@@ -1630,6 +1634,7 @@ export async function buildReview(
 			repo: context.repo,
 			pull: context.pullNumber,
 			commentPrefix: context.commentPrefix,
+			provider: context.provider,
 		});
 		return ledgerLoad;
 	};

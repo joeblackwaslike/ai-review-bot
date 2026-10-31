@@ -18,7 +18,13 @@ export const LEDGER_TIMEOUT_MS = 15_000;
 /** Never throws: a ledger that cannot be built within LEDGER_TIMEOUT_MS suppresses nothing. */
 export async function loadLedger(
 	octokit: RequestLike,
-	o: { owner: string; repo: string; pull: number; commentPrefix: string },
+	o: {
+		owner: string;
+		repo: string;
+		pull: number;
+		commentPrefix: string;
+		provider: string;
+	},
 ): Promise<LoadedLedger> {
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	const timeout = new Promise<never>((_, reject) => {

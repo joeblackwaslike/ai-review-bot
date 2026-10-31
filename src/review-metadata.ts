@@ -35,6 +35,24 @@ export function readMetadataBlock(body: string): Map<string, string> | null {
 	return values;
 }
 
+/**
+ * Whether a review body is this bot's own review. Both production bots can
+ * post under the same `### <prefix>` heading, so the heading must sit on its
+ * own unquoted line and the `provider` marker must be absent (a legacy body)
+ * or equal `o.provider`.
+ */
+export function isOwnReview(
+	body: string | null | undefined,
+	o: { commentPrefix: string; provider: string },
+): boolean {
+	if (!body) return false;
+	const heading = `### ${o.commentPrefix}`;
+	if (!body.split("\n").some((line) => line.trimEnd() === heading))
+		return false;
+	const provider = readMetadataValue(body, "provider");
+	return provider === undefined || provider === o.provider;
+}
+
 /** One marker value: from the block, or by whole-body search for a legacy body. */
 export function readMetadataValue(
 	body: string,

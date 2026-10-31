@@ -83,6 +83,8 @@ Without KV, duplicate suppression falls back to the sha marker check. Two simult
 
 If `deriveBaseline` or the ledger fetch fails, the round degrades to a full review that suppresses nothing. It never degrades to a skipped review, and it never errors. Retirement is computed from GitHub on every round, so nothing about it needs storing. It applies only to carried findings, never to findings from the current round.
 
+A bot finds its own reviews by the `### <prefix>` heading on its own line plus an `ai-review:provider` marker that matches its provider. A body with no provider marker is a legacy review and counts as ours. The heading alone is not enough, because production sets `REVIEW_COMMENT_PREFIX` and leaves `OPENAI_REVIEW_COMMENT_PREFIX` unset, so both bots post under `### ai-review`. On PR #92 the two bots' reviews at one head differ only in that marker, and a heading match would give the Claude bot its baseline, review count and carried findings from the Codex review.
+
 The `ReviewState` type and `saveReviewState` stay if `watch` or another caller needs them. Removing them is cleanup for the plan to decide, not a goal.
 
 ### Redelivery and superseded heads

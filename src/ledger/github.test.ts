@@ -258,7 +258,13 @@ function fake(pages: unknown[]): RequestLike {
 	return { request: request as RequestLike["request"] };
 }
 
-const opts = { owner: "o", repo: "r", pull: 1, commentPrefix: "Bot" };
+const opts = {
+	owner: "o",
+	repo: "r",
+	pull: 1,
+	commentPrefix: "Bot",
+	provider: "anthropic",
+};
 
 describe("fetchLedgerEvidence", () => {
 	it("reads every GraphQL page and drops foreign threads", async () => {
@@ -355,6 +361,60 @@ describe("fetchLedgerEvidence", () => {
 		expect(graphql).toHaveBeenCalledTimes(1);
 		expect(graphql.mock.calls[0]?.[0]).toMatchObject({
 			variables: { owner: "o", repo: "r", pr: 1 },
+		});
+	});
+
+	// Production runs both bots under one heading; only the provider marker
+	// tells their reviews apart (PR #92 reviews 5719190216 and 5719191481).
+	it("leaves the other provider's reviews under the same heading out of reviewIds", async () => {
+		const marked = (provider: string) =>
+			`### Bot\nb\n\n<!-- ai-review:sha=abc -->\n<!-- ai-review:provider=${provider} -->\n\n---\n*Model: m*`;
+		const reviewParams: Array<Record<string, unknown>> = [];
+		const octokit = buildStrictOctokit({
+			"GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews": (p) => {
+				reviewParams.push(p);
+				return p.page === 1
+					? [
+							{
+								id: 7,
+								body: marked("anthropic"),
+								submitted_at: "2026-01-01T00:00:00Z",
+							},
+							{
+								id: 8,
+								body: marked("openai"),
+								submitted_at: "2026-01-01T00:00:01Z",
+							},
+							{
+								id: 9,
+								body: "### Bot\nlegacy, no markers",
+								submitted_at: "2026-01-01T00:00:02Z",
+							},
+						]
+					: [];
+			},
+			"GET /repos/{owner}/{repo}/pulls/{pull_number}/comments": () => [
+				{
+					id: 80,
+					pull_request_review_id: 8,
+					path: "a.ts",
+					line: 1,
+					body: "**P2** codex said",
+				},
+			],
+			"POST /graphql": () => ({ data: page([], null) }),
+		});
+		const ev = await fetchLedgerEvidence(octokit, {
+			...opts,
+			provider: "anthropic",
+		});
+		expect(ev.reviewIds).toEqual([7, 9]);
+		expect(ev.claims).toEqual([]);
+		expect(reviewParams[0]).toMatchObject({
+			owner: "o",
+			repo: "r",
+			pull_number: 1,
+			page: 1,
 		});
 	});
 });

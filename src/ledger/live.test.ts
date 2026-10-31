@@ -9,7 +9,13 @@ import {
 } from "./live.js";
 import type { LedgerEntry } from "./types.js";
 
-const opts = { owner: "o", repo: "r", pull: 1, commentPrefix: "Bot" };
+const opts = {
+	owner: "o",
+	repo: "r",
+	pull: 1,
+	commentPrefix: "Bot",
+	provider: "anthropic",
+};
 
 const entry = (over: Partial<LedgerEntry>): LedgerEntry => ({
 	id: "r0:c1:0",

@@ -259,10 +259,12 @@ export function buildOwnReviewBody(o: {
 	rows?: string[];
 	pending?: string[];
 	prefix?: string;
+	provider?: string;
 }): string {
 	const markers = [
 		`<!-- ai-review:sha=${o.sha} -->`,
 		`<!-- ai-review:review=${o.count} -->`,
+		...(o.provider ? [`<!-- ai-review:provider=${o.provider} -->`] : []),
 		...(o.pending?.length
 			? [formatAgentsMarker([], o.pending, new Set(o.pending))]
 			: []),

@@ -5252,11 +5252,126 @@ describe("delta scoping without KV", () => {
 			kv: null,
 		});
 
+		// The agents marker records each agent's measured durationMs, which
+		// differs between two real runs.
+		const stableBody = (body?: string) =>
+			body?.replace(/"durationMs":\d+/g, '"durationMs":0');
 		expect(withKv.compareCalls).toEqual(withoutKv.compareCalls);
 		expect(a?.event).toBe(b?.event);
-		expect(a?.body).toBe(b?.body);
+		expect(a?.body).toContain('"durationMs":');
+		expect(stableBody(a?.body)).toBe(stableBody(b?.body));
 		expect(a?.body).toContain("scope: delta from abcdef1 (github)");
 		expect(a?.body).not.toContain("Kv only blocker");
+	});
+
+	// Production runs both bots under one heading (REVIEW_COMMENT_PREFIX is set,
+	// OPENAI_REVIEW_COMMENT_PREFIX is not). On PR #92 reviews 5719190216 and
+	// 5719191481 differ only in the provider marker.
+	describe("own reviews when both bots share one heading", () => {
+		const OLDER = "0123456789abcdef";
+		const anthropicReview = (sha = OLD) => ({
+			id: 11,
+			body: buildOwnReviewBody({
+				sha,
+				count: 3,
+				provider: "anthropic",
+				rows: ["| 🟠 | **Anthropic carried bug** (`src/a.ts:5`) |"],
+			}),
+		});
+		const openaiReview = (sha = OLD) => ({
+			id: 12,
+			body: buildOwnReviewBody({
+				sha,
+				count: 8,
+				provider: "openai",
+				rows: ["| 🟠 | **Codex carried bug** (`src/a.ts:6`) |"],
+			}),
+		});
+		/** A posted body with the full marker block, as formatReviewBody writes it. */
+		const postedReview = (id: number, provider: string) => ({
+			id,
+			body: [
+				"<!-- ai-review:post-attempt:0000 -->",
+				"### ai-review-bot",
+				"",
+				"Summary.",
+				"",
+				[
+					`sha=${HEAD}`,
+					"review=1",
+					"readiness=4",
+					`provider=${provider}`,
+					"model=m",
+					"findings=0",
+					"cost=0.000100",
+				]
+					.map((m) => `<!-- ai-review:${m} -->`)
+					.join("\n"),
+				"",
+				"---",
+				"*Model: m · 5 agents · $0.000100*",
+			].join("\n"),
+		});
+		const incremental = () => {
+			routeModels({ agent: withFresh() });
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "INCREMENTAL",
+				resolved: [],
+				newRisk: true,
+			});
+		};
+
+		it("takes the review count and carried findings from this provider's review", async () => {
+			incremental();
+			const { octokit, compareCalls } = prOctokit({
+				reviews: [anthropicReview(), openaiReview()],
+				compare: () => ({ status: "ahead", files: [bFile] }),
+			});
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(compareCalls).toEqual([`${OLD}...${HEAD}`]);
+			expect(decision?.body).toContain("<!-- ai-review:review=4 -->");
+			expect(decision?.body).toContain("Anthropic carried bug");
+			expect(decision?.body).not.toContain("Codex carried bug");
+		});
+
+		it("takes the delta base sha from this provider's review", async () => {
+			incremental();
+			const { octokit, compareCalls } = prOctokit({
+				reviews: [anthropicReview(), openaiReview(OLDER)],
+				compare: () => ({ status: "ahead", files: [bFile] }),
+			});
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(compareCalls).toEqual([`${OLD}...${HEAD}`]);
+			expect(decision?.body).toContain("scope: delta from abcdef1 (github)");
+		});
+
+		it("reviews a head that only the other provider has reviewed, and shows that review as a sister review", async () => {
+			routeModels({ agent: withFresh() });
+			const sister = postedReview(12, "openai");
+			const { octokit, compareCalls } = prOctokit({ reviews: [sister] });
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(decision).not.toBeNull();
+			expect(compareCalls).toEqual([]);
+			expect(decision?.body).toContain("<!-- ai-review:review=1 -->");
+			expect(mockBuildUserMessage).toHaveBeenCalledWith(
+				expect.objectContaining({ priorBotReviews: [sister.body] }),
+			);
+		});
+
+		it("skips a head this provider has already reviewed", async () => {
+			routeModels({ agent: withFresh() });
+			const { octokit } = prOctokit({
+				reviews: [postedReview(12, "openai"), postedReview(11, "anthropic")],
+			});
+
+			expect(await buildReview({ octokit, ...baseContext })).toBeNull();
+		});
 	});
 
 	it("a failing baseline derivation falls back to a full review without error", async () => {
