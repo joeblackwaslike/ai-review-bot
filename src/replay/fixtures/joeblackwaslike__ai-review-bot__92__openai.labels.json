@@ -67,7 +67,7 @@
 		},
 		{
 			"claimId": "r1:c4421076335:0",
-			"label": "rejected",
+			"label": "fixed",
 			"confidence": "high",
 			"evidence": [
 				"2026-10-30T21:43:05Z|Fixed in 5483eec. A reply counts as stale only when the sentence that cites an earlier-round commit also has fix wording (fix, fixed, addressed, resolved, reverted, patched, handled, landed). Both examples, \"abcdef1 deliberately drops ...\" and \"intentionally introduced in abcdef1\", are now not stale, with tests."
@@ -76,7 +76,7 @@
 		},
 		{
 			"claimId": "r1:c4421076335:1",
-			"label": "rejected",
+			"label": "fixed",
 			"confidence": "high",
 			"evidence": [
 				"2026-10-30T21:43:05Z|Fixed in 5483eec. A reply counts as stale only when the sentence that cites an earlier-round commit also has fix wording (fix, fixed, addressed, resolved, reverted, patched, handled, landed). Both examples, \"abcdef1 deliberately drops ...\" and \"intentionally introduced in abcdef1\", are now not stale, with tests."
