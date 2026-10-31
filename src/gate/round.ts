@@ -112,7 +112,7 @@ function inferenceWarnings(input: RoundInput, hasOpen: boolean): string[] {
 	return warnings;
 }
 
-/** One gate round: renames, suppression against entries settled before the round, open-entry matching or id minting, then fixed inference. Pure. */
+/** One gate round: renames, open-entry matching, suppression of the unmatched rest against entries settled before the round, id minting, then fixed inference. Pure. */
 export function applyRound(input: RoundInput): RoundResult {
 	const { store, head, round, hashes, reviewedPaths } = input;
 	const inScope = (path: string | null) =>
@@ -135,43 +135,52 @@ export function applyRound(input: RoundInput): RoundResult {
 	};
 
 	const entries = withRenames(store.entries, input.renames);
-	const { review, suppressed } = suppressInReview(
-		input.merged,
-		entries.filter(isSettled),
-	);
+	const settledBefore = entries.filter(isSettled);
 
-	const findings: { finding: Finding; suggestion: string | null }[] = [
+	const claimed = new Map<string, LedgerEntry>();
+	const matched: Emitted[] = [];
+	const isUnclaimed = (f: Finding, suggestion: string | null) => {
+		const match = findOpenMatch(
+			f,
+			entries.filter(
+				(e) => !isSettled(e) && inScope(e.path) && !claimed.has(e.id),
+			),
+		);
+		if (!match) return true;
+		const refreshed = { ...match, ...freshFields(f, match) };
+		claimed.set(match.id, refreshed);
+		matched.push({ entry: refreshed, suggestion });
+		return false;
+	};
+	const unclaimed = {
+		...input.merged,
+		inline_comments: input.merged.inline_comments.filter((c) =>
+			isUnclaimed(c, c.suggestion),
+		),
+		general_findings: input.merged.general_findings.filter((g) =>
+			isUnclaimed(g, null),
+		),
+	};
+
+	const { review, suppressed } = suppressInReview(unclaimed, settledBefore);
+	const fresh: { finding: Finding; suggestion: string | null }[] = [
 		...review.inline_comments.map((c) => ({
 			finding: c,
 			suggestion: c.suggestion,
 		})),
 		...review.general_findings.map((g) => ({ finding: g, suggestion: null })),
 	];
-
-	const claimed = new Map<string, LedgerEntry>();
-	const drafts: LedgerEntry[] = [];
-	const slots: (LedgerEntry | number)[] = [];
-	for (const { finding } of findings) {
-		const candidates = entries.filter(
-			(e) => !isSettled(e) && inScope(e.path) && !claimed.has(e.id),
-		);
-		const match = findOpenMatch(finding, candidates);
-		if (match) {
-			const refreshed = { ...match, ...freshFields(finding, match) };
-			claimed.set(match.id, refreshed);
-			slots.push(refreshed);
-		} else {
-			drafts.push({
-				id: "",
-				...freshFields(finding),
-				status: "open",
-				decidedBy: null,
-				reason: null,
-			});
-			slots.push(drafts.length - 1);
-		}
-	}
-	const minted = mintIds(drafts, head, new Set(entries.map((e) => e.id)));
+	const minted = mintIds(
+		fresh.map(({ finding }) => ({
+			id: "",
+			...freshFields(finding),
+			status: "open",
+			decidedBy: null,
+			reason: null,
+		})),
+		head,
+		new Set(entries.map((e) => e.id)),
+	);
 
 	const warnings = inferenceWarnings(
 		input,
@@ -207,10 +216,10 @@ export function applyRound(input: RoundInput): RoundResult {
 		return e;
 	});
 
-	const emitted = slots.map((slot, i) => ({
-		entry: typeof slot === "number" ? minted[slot] : slot,
-		suggestion: findings[i].suggestion,
-	}));
+	const emitted = [
+		...matched,
+		...minted.map((entry, i) => ({ entry, suggestion: fresh[i].suggestion })),
+	];
 
 	return {
 		store: {

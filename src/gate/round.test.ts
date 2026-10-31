@@ -247,21 +247,23 @@ describe("applyRound", () => {
 		expect(result.store.entries).toEqual([settled]);
 	});
 
-	it("suppression runs before open matching when a finding matches both", () => {
+	it("a finding matching both an open and a settled entry is emitted under the open id and not inferred fixed", () => {
 		const settled = entry({ status: "rejected", decidedBy: "author" });
 		const open = entry({ id: "ai-review-oooooooooooo" });
 		const result = applyRound(
 			input({
 				store: store([settled, open]),
+				hashes: new Map([["src/a.ts", "h2"]]),
 				merged: buildModelReview({ inline_comments: [paraphrase(open)] }),
 			}),
 		);
-		expect(result.suppressed).toBe(1);
-		expect(result.emitted).toEqual([]);
-		expect(byId(result.store, open.id)).toEqual(open);
+		expect(result.suppressed).toBe(0);
+		expect(result.emitted.map((e) => e.entry.id)).toEqual([open.id]);
+		expect(byId(result.store, open.id)?.status).toBe("open");
+		expect(byId(result.store, settled.id)).toEqual(settled);
 	});
 
-	it("an entry inferred fixed this round does not suppress a paraphrase in the same round", () => {
+	it("the settled list is built before the round starts, so a matched open entry is emitted and only the unmatched one is fixed", () => {
 		const old = entry();
 		const other = entry({ id: "ai-review-bbbbbbbbbbbb", path: "src/b.ts" });
 		const finding = paraphrase(old);
