@@ -692,3 +692,57 @@ describe("applyRound", () => {
 		}
 	});
 });
+
+describe("cross-file matching", () => {
+	it("a same-title finding in another file mints a new entry and leaves the original in place", () => {
+		const old = entry({ title: "fetchWithRetry swallows the fetch error" });
+		const result = applyRound(
+			input({
+				store: store([old]),
+				merged: buildModelReview({
+					inline_comments: [
+						buildInlineComment({
+							path: "src/b.ts",
+							line: 10,
+							title: old.title,
+							body: old.body ?? "",
+						}),
+					],
+				}),
+				hashes: new Map([
+					["src/a.ts", "h1"],
+					["src/b.ts", "hb"],
+				]),
+				reviewedPaths: new Set(["src/b.ts"]),
+			}),
+		);
+		expect(byId(result.store, old.id)).toMatchObject({
+			path: "src/a.ts",
+			status: "open",
+		});
+		expect(result.emitted).toHaveLength(1);
+		expect(result.emitted[0]?.entry.id).not.toBe(old.id);
+		expect(result.emitted[0]?.entry.path).toBe("src/b.ts");
+	});
+
+	it("a general finding still matches a path-less entry", () => {
+		const gen = entry({
+			id: "ai-review-gggggggggggg",
+			path: null,
+			line: null,
+			title: "Retry policy is undocumented across the whole module",
+			body: "Nothing explains how many attempts the client makes before giving up.",
+		});
+		const result = applyRound(
+			input({
+				store: store([gen]),
+				merged: buildModelReview({
+					general_findings: [
+						general({ title: gen.title, body: gen.body ?? "" }),
+					],
+				}),
+			}),
+		);
+		expect(result.emitted.map((e) => e.entry.id)).toEqual([gen.id]);
+	});
+});
