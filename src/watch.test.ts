@@ -498,17 +498,8 @@ describe("watchPr", () => {
 		);
 	});
 
-	// ai-review-bot-1f5: when two providers post in the same cycle, the second
-	// provider's maybeSubmitReview call must see a PR body that already
-	// includes the first provider's just-posted PR-summary section — not the
-	// stale pre-cycle snapshot. injectPRSection does a full-body marker splice
-	// on one shared start/end pair, so building the second PATCH from a stale
-	// body silently discards the first provider's section.
-	it("re-polls the PR before the next target's post in the same cycle, so the second provider sees the first provider's updated body", async () => {
-		const request = vi
-			.fn()
-			.mockResolvedValueOnce(pollResponse({ body: "stale" }))
-			.mockResolvedValueOnce(pollResponse({ body: "updated-by-anthropic" }));
+	it("does not re-poll the PR or write to its description between targets", async () => {
+		const request = vi.fn().mockResolvedValue(pollResponse({ body: "orig" }));
 		const submitReview = vi.fn().mockResolvedValue(posted);
 
 		await watchPr({
@@ -524,88 +515,10 @@ describe("watchPr", () => {
 			maxCycles: 1,
 		});
 
-		expect(request).toHaveBeenCalledTimes(2);
-		// The re-poll must hit the PR endpoint itself, not any other route — a
-		// wrong endpoint would still satisfy the call-count assertion above.
-		expect(request.mock.calls[1][0]).toBe(
-			"GET /repos/{owner}/{repo}/pulls/{pull_number}",
-		);
 		expect(submitReview).toHaveBeenCalledTimes(2);
-		const calls = submitReview.mock.calls as unknown as Array<
-			[{ config: { provider: string }; pullRequest: { body: string | null } }]
-		>;
-		const anthropicCall = calls.find(
-			([arg]) => arg.config.provider === "anthropic",
-		);
-		const openaiCall = calls.find(([arg]) => arg.config.provider === "openai");
-		expect(anthropicCall?.[0].pullRequest.body).toBe("stale");
-		expect(openaiCall?.[0].pullRequest.body).toBe("updated-by-anthropic");
-	});
-
-	// ai-review-bot-1f5 continued: no re-poll should happen after the LAST
-	// target in a cycle posts — there's no next target to benefit from it.
-	it("does not re-poll after the last target in a cycle posts", async () => {
-		const request = vi.fn().mockResolvedValue(pollResponse({ body: "x" }));
-		const submitReview = vi.fn().mockResolvedValue(posted);
-
-		await watchPr({
-			owner: "o",
-			repo: "r",
-			pullNumber: 5,
-			pollOctokit: { request },
-			targets: [buildTarget("anthropic")],
-			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
-			sleep: vi.fn().mockResolvedValue(undefined),
-			log: () => {},
-			submitReview,
-			maxCycles: 1,
-		});
-
+		const routes = request.mock.calls.map(([route]) => route as string);
+		expect(routes.filter((r) => r.startsWith("PATCH "))).toEqual([]);
 		expect(request).toHaveBeenCalledTimes(1);
-	});
-
-	// Found by anthropicreviewbot reviewing PR #67: the re-poll's own catch
-	// branch (a transient poll failure between two providers' posts in the
-	// same cycle) had no test coverage — this covers it, including that the
-	// second target still gets attempted (with the stale `pr`) rather than
-	// the whole cycle aborting.
-	it("continues to the next target with the stale pr when the mid-cycle re-poll fails", async () => {
-		const request = vi
-			.fn()
-			.mockResolvedValueOnce(pollResponse({ body: "stale" }))
-			.mockRejectedValueOnce(new Error("ETIMEDOUT"));
-		const submitReview = vi.fn().mockResolvedValue(posted);
-		const log = vi.fn();
-
-		await watchPr({
-			owner: "o",
-			repo: "r",
-			pullNumber: 5,
-			pollOctokit: { request },
-			targets: [buildTarget("anthropic"), buildTarget("openai")],
-			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
-			sleep: vi.fn().mockResolvedValue(undefined),
-			log,
-			submitReview,
-			maxCycles: 1,
-		});
-
-		expect(submitReview).toHaveBeenCalledTimes(2);
-		const calls = submitReview.mock.calls as unknown as Array<
-			[
-				{
-					config: { provider: string };
-					pullRequest: { body: string | null };
-					force: boolean;
-				},
-			]
-		>;
-		const openaiCall = calls.find(([arg]) => arg.config.provider === "openai");
-		expect(openaiCall?.[0].pullRequest.body).toBe("stale");
-		expect(openaiCall?.[0].force).toBe(false);
-		expect(log).toHaveBeenCalledWith(
-			expect.stringContaining("re-poll after anthropic post failed"),
-		);
 	});
 
 	// ai-review-bot-599 / docs/post-mortem-review-loop-churn.md: a fast local

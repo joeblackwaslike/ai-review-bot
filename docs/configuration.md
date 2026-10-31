@@ -32,7 +32,8 @@ These variables apply to both bots:
 | --- | --- | --- |
 | `REVIEW_ENABLED` | `true` | Set to `false` to disable automatic reviews on PR open/push. Slash-command reviews still work. |
 | `REVIEW_COMMAND` | `/ai-review` | Slash command that triggers a review from either bot. |
-| `REVIEW_DELAY_SECONDS` | `450` | Seconds to wait before auto-review fires on PR open (7.5 min). Gives CI time to run first. |
+| `REVIEW_DELAY_SECONDS` | `0` | Seconds to wait before auto-review fires on PR open. Default is to start immediately. |
+| `REVIEW_RESYNC_DELAY_SECONDS` | `0` | Seconds to wait before re-reviewing after a push. Default is to start immediately. |
 | `CUSTOM_REVIEW_PROMPT` | — | Extra instructions appended to every agent's system prompt for both bots. |
 
 ## Private key formatting
@@ -137,6 +138,6 @@ OPENAI_API_KEY=
 # Shared behavior (all optional — defaults shown)
 # REVIEW_ENABLED=true
 # REVIEW_COMMAND=/ai-review
-# REVIEW_DELAY_SECONDS=450
+# REVIEW_DELAY_SECONDS=0
 # CUSTOM_REVIEW_PROMPT=
 ```

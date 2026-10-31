@@ -9,13 +9,6 @@ export interface AppConfig {
 	reviewCommand: string;
 	provider: "anthropic" | "openai";
 	feedbackEnabled: boolean;
-	/** Milliseconds between peer-check passes (env var is in seconds, converted
-	 * at parse time). Short, because the point is to notice peers arriving
-	 * rather than to wait out a worst case. */
-	peerCheckIntervalMs: number;
-	/** How many passes before reviewing regardless. Bounds the wait so a peer
-	 * that never arrives cannot starve the review entirely. */
-	peerMaxAttempts: number;
 	/** Master switch for the improvement corpus. Off by default so a deployment
 	 * without DATABASE_URL behaves exactly as before. */
 	improveEnabled: boolean;
@@ -103,9 +96,8 @@ export function parseAgentConcurrency(): number {
 }
 
 // Parse a delay env var expressed in seconds into milliseconds. A missing,
-// blank, non-numeric, or negative value falls back to the default: a bare
-// Number() would yield NaN (or a negative), and setTimeout(fn, NaN) fires
-// immediately — silently defeating the dedup wait this delay exists to provide.
+// blank, non-numeric, or negative value falls back to the default rather than
+// passing NaN or a negative number on to a timer or the scheduler.
 export function parseDelayMs(
 	envValue: string | undefined,
 	defaultSeconds: number,
@@ -136,10 +128,10 @@ export function getConfig(opts: GetConfigOptions = {}): AppConfig {
 			? getRequiredEnv("GITHUB_WEBHOOK_SECRET")
 			: (process.env.GITHUB_WEBHOOK_SECRET ?? ""),
 		reviewEnabled: process.env.REVIEW_ENABLED !== "false",
-		reviewDelayMs: parseDelayMs(process.env.REVIEW_DELAY_SECONDS, 540),
+		reviewDelayMs: parseDelayMs(process.env.REVIEW_DELAY_SECONDS, 0),
 		reviewResyncDelayMs: parseDelayMs(
 			process.env.REVIEW_RESYNC_DELAY_SECONDS,
-			300,
+			0,
 		),
 		reviewCommentPrefix: firstNonBlank(
 			process.env.REVIEW_COMMENT_PREFIX,
@@ -148,11 +140,6 @@ export function getConfig(opts: GetConfigOptions = {}): AppConfig {
 		reviewCommand: process.env.REVIEW_COMMAND ?? "/ai-review",
 		provider: "anthropic",
 		feedbackEnabled: process.env.FEEDBACK_ENABLED === "true",
-		peerCheckIntervalMs: parsePositiveMs(
-			process.env.PEER_CHECK_INTERVAL_SECONDS,
-			90_000,
-		),
-		peerMaxAttempts: parsePositiveInt(process.env.PEER_MAX_ATTEMPTS, 6),
 		improveEnabled: process.env.IMPROVE_ENABLED === "true",
 		improveCarrierEnabled: process.env.IMPROVE_CARRIER_ENABLED !== "false",
 		agentConcurrency: parseAgentConcurrency(),
@@ -177,10 +164,10 @@ export function getOpenAIAppConfig(opts: GetConfigOptions = {}): AppConfig {
 			? getRequiredEnv("OPENAI_APP_WEBHOOK_SECRET")
 			: (process.env.OPENAI_APP_WEBHOOK_SECRET ?? ""),
 		reviewEnabled: process.env.REVIEW_ENABLED !== "false",
-		reviewDelayMs: parseDelayMs(process.env.REVIEW_DELAY_SECONDS, 540),
+		reviewDelayMs: parseDelayMs(process.env.REVIEW_DELAY_SECONDS, 0),
 		reviewResyncDelayMs: parseDelayMs(
 			process.env.REVIEW_RESYNC_DELAY_SECONDS,
-			300,
+			0,
 		),
 		reviewCommentPrefix: firstNonBlank(
 			process.env.OPENAI_REVIEW_COMMENT_PREFIX,
@@ -190,11 +177,6 @@ export function getOpenAIAppConfig(opts: GetConfigOptions = {}): AppConfig {
 		reviewCommand: process.env.REVIEW_COMMAND ?? "/ai-review",
 		provider: "openai",
 		feedbackEnabled: process.env.FEEDBACK_ENABLED === "true",
-		peerCheckIntervalMs: parsePositiveMs(
-			process.env.PEER_CHECK_INTERVAL_SECONDS,
-			90_000,
-		),
-		peerMaxAttempts: parsePositiveInt(process.env.PEER_MAX_ATTEMPTS, 6),
 		improveEnabled: process.env.IMPROVE_ENABLED === "true",
 		improveCarrierEnabled: process.env.IMPROVE_CARRIER_ENABLED !== "false",
 		agentConcurrency: parseAgentConcurrency(),
@@ -247,37 +229,4 @@ export function parseSampleRate(raw: string | undefined): number {
 		return 0.1;
 	}
 	return Math.min(1, Math.max(0, n));
-}
-
-/** Seconds → ms, falling back on anything unparseable or non-positive. A zero
- * or negative interval would busy-loop the scheduler. */
-export function parsePositiveMs(
-	raw: string | undefined,
-	fallbackMs: number,
-): number {
-	if (raw === undefined || raw.trim() === "") return fallbackMs;
-	const n = Number(raw);
-	if (!Number.isFinite(n) || n <= 0) {
-		console.warn(`config: invalid interval "${raw}"; using ${fallbackMs}ms`);
-		return fallbackMs;
-	}
-	const ms = Math.floor(n * 1000);
-	if (ms <= 0) {
-		console.warn(`config: invalid interval "${raw}"; using ${fallbackMs}ms`);
-		return fallbackMs;
-	}
-	return ms;
-}
-
-export function parsePositiveInt(
-	raw: string | undefined,
-	fallback: number,
-): number {
-	if (raw === undefined || raw.trim() === "") return fallback;
-	const n = Number(raw);
-	if (!Number.isInteger(n) || n <= 0) {
-		console.warn(`config: invalid count "${raw}"; using ${fallback}`);
-		return fallback;
-	}
-	return n;
 }

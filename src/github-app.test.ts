@@ -1,10 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AppConfig } from "./config.js";
 import { persistPostedComments } from "./feedback/persist.js";
 import {
 	budgetAfterDelay,
-	buildPRSummarySection,
-	injectPRSection,
 	maybeSubmitReview,
 	REVIEW_CLAIM_TTL_SECONDS,
 	runScheduledReview,
@@ -129,8 +126,6 @@ const baseArgs = {
 		reviewCommand: "/ai-review",
 		provider: "anthropic" as const,
 		feedbackEnabled: false,
-		peerCheckIntervalMs: 90_000,
-		peerMaxAttempts: 6,
 		improveEnabled: false,
 		improveCarrierEnabled: false,
 		agentConcurrency: 1,
@@ -332,11 +327,41 @@ describe("maybeSubmitReview", () => {
 		expect(params.comments).toEqual(review.comments);
 		expect(params.event).toBe("REQUEST_CHANGES");
 
-		const [patchRoute] = octokit.request.mock.calls[1];
-		expect(patchRoute).toBe("PATCH /repos/{owner}/{repo}/pulls/{pull_number}");
-
-		const [checkRoute] = octokit.request.mock.calls[2];
+		const [checkRoute] = octokit.request.mock.calls[1];
 		expect(checkRoute).toBe("POST /repos/{owner}/{repo}/check-runs");
+	});
+
+	it("never PATCHes the PR description after posting a review", async () => {
+		const { app, request } = buildMockApp();
+		mockBuildReview.mockReset().mockResolvedValue({
+			event: "COMMENT" as const,
+			body: "Review body.",
+			comments: [],
+			metadata: DEFAULT_METADATA,
+		});
+
+		const outcome = await maybeSubmitReview({
+			app,
+			...baseArgs,
+			pullRequest: { ...baseArgs.pullRequest, body: "Original description" },
+		});
+
+		expect(outcome).toEqual({ status: "posted", event: "COMMENT" });
+		const patches = request.mock.calls.filter(
+			([route]) =>
+				typeof route === "string" &&
+				route.startsWith("PATCH ") &&
+				route.includes("/pulls/{pull_number}"),
+		);
+		expect(patches).toEqual([]);
+		const bodyWrites = request.mock.calls.filter(
+			([route, params]) =>
+				typeof route === "string" &&
+				/^(PATCH|PUT) /.test(route) &&
+				params &&
+				"body" in params,
+		);
+		expect(bodyWrites).toEqual([]);
 	});
 
 	// 7k7: a 403 on check-run creation (e.g. missing checks:write scope) must
@@ -413,7 +438,7 @@ describe("maybeSubmitReview", () => {
 		const patchCall = request.mock.calls.find(
 			([route]) => route === "PATCH /repos/{owner}/{repo}/pulls/{pull_number}",
 		);
-		expect(patchCall).toBeDefined();
+		expect(patchCall).toBeUndefined();
 		const checkRunCall = request.mock.calls.find(
 			([route]) => route === "POST /repos/{owner}/{repo}/check-runs",
 		);
@@ -1678,8 +1703,6 @@ describe("maybeSubmitReview", () => {
 				reviewCommentPrefix: "ai-review-bot",
 				provider: "anthropic",
 				feedbackEnabled: true,
-				peerCheckIntervalMs: 90_000,
-				peerMaxAttempts: 6,
 				improveEnabled: false,
 				improveCarrierEnabled: false,
 			} as never,
@@ -1749,8 +1772,6 @@ describe("maybeSubmitReview", () => {
 				reviewCommentPrefix: "ai-review-bot",
 				provider: "anthropic",
 				feedbackEnabled: false,
-				peerCheckIntervalMs: 90_000,
-				peerMaxAttempts: 6,
 				improveEnabled: false,
 				improveCarrierEnabled: false,
 			} as never,
@@ -1809,8 +1830,6 @@ describe("maybeSubmitReview", () => {
 					reviewCommentPrefix: "ai-review-bot",
 					provider: "anthropic",
 					feedbackEnabled: true,
-					peerCheckIntervalMs: 90_000,
-					peerMaxAttempts: 6,
 					improveEnabled: false,
 					improveCarrierEnabled: false,
 				} as never,
@@ -1907,94 +1926,6 @@ describe("runScheduledReview", () => {
 		);
 	});
 
-	// The gate exists so peers post first; it must actually hold when one has
-	// engaged but not yet caught up to the current head.
-	it("waits and reschedules when an engaged peer has not reviewed the head", async () => {
-		mockBuildReview.mockReset();
-		mockScheduleReview.mockClear();
-		mockScheduleReview.mockResolvedValueOnce({ messageId: "next" });
-		const octokit = {
-			paginate: vi.fn(async (route: string) =>
-				route.includes("/reviews")
-					? [{ user: { login: "coderabbitai[bot]" }, commit_id: "OLDER" }]
-					: [],
-			),
-			request: vi.fn(async () => ({
-				data: {
-					draft: false,
-					head: { sha: "SAME" },
-					additions: 0,
-					deletions: 0,
-					changed_files: 0,
-					title: "t",
-					body: null,
-				},
-			})),
-		};
-		const app = { getInstallationOctokit: vi.fn(async () => octokit) } as never;
-
-		const result = await runScheduledReview(
-			{ ...message, headSha: "SAME" },
-			app,
-			{
-				reviewEnabled: true,
-				reviewCommentPrefix: "ai-review-bot",
-				provider: "anthropic",
-				peerCheckIntervalMs: 90_000,
-				peerMaxAttempts: 6,
-			} as never,
-		);
-
-		expect(result.status).toBe("waiting");
-		expect(mockScheduleReview).toHaveBeenCalledWith(
-			expect.anything(),
-			expect.objectContaining({ attempt: 1 }),
-			90,
-		);
-		expect(mockBuildReview).not.toHaveBeenCalled();
-	});
-
-	// A peer that never arrives must not starve the review — this is the
-	// failure that left our own Codex bot with zero reviews across a whole PR.
-	it("reviews at the ceiling even though the peer never arrived", async () => {
-		mockBuildReview.mockReset();
-		mockScheduleReview.mockClear();
-		const octokit = {
-			paginate: vi.fn(async (route: string) =>
-				route.includes("/reviews")
-					? [{ user: { login: "coderabbitai[bot]" }, commit_id: "OLDER" }]
-					: [],
-			),
-			request: vi.fn(async () => ({
-				data: {
-					draft: false,
-					head: { sha: "SAME" },
-					additions: 0,
-					deletions: 0,
-					changed_files: 0,
-					title: "t",
-					body: null,
-				},
-			})),
-		};
-		const app = { getInstallationOctokit: vi.fn(async () => octokit) } as never;
-
-		const result = await runScheduledReview(
-			{ ...message, headSha: "SAME", attempt: 5 },
-			app,
-			{
-				reviewEnabled: true,
-				reviewCommentPrefix: "ai-review-bot",
-				provider: "anthropic",
-				peerCheckIntervalMs: 90_000,
-				peerMaxAttempts: 6,
-			} as never,
-		);
-
-		expect(result.status).toBe("reviewed");
-		expect(mockScheduleReview).not.toHaveBeenCalled();
-	});
-
 	it("runs the review (reviewed) when the PR head still matches the scheduled SHA", async () => {
 		mockBuildReview.mockReset();
 		const octokit = {
@@ -2028,7 +1959,7 @@ describe("runScheduledReview", () => {
 		expect(result).toEqual({ status: "reviewed" });
 	});
 
-	it("skips peer gate and reviews immediately when fetchPrReviews fails", async () => {
+	it("reviews immediately without polling reviews or searching for peer bots", async () => {
 		mockBuildReview.mockReset().mockResolvedValue({
 			event: "COMMENT" as const,
 			body: "Review body.",
@@ -2036,28 +1967,28 @@ describe("runScheduledReview", () => {
 			metadata: DEFAULT_METADATA,
 		});
 		mockScheduleReview.mockClear();
-		const octokit = {
-			paginate: vi.fn(async () => {
-				throw new Error("GitHub API down");
-			}),
-			request: vi.fn(async (route: string) => {
-				if (route.includes("/search/issues")) {
-					return { data: { total_count: 5 } };
-				}
-				return {
-					data: {
-						draft: false,
-						head: { sha: "SAME" },
-						additions: 0,
-						deletions: 0,
-						changed_files: 0,
-						title: "t",
-						body: null,
-					},
-				};
-			}),
-		};
-		const app = { getInstallationOctokit: vi.fn(async () => octokit) } as never;
+		const paginate = vi.fn(async () => [
+			{ user: { login: "coderabbitai[bot]" }, commit_id: "OLDER" },
+		]);
+		const request = vi.fn(async (route: string) => {
+			if (route.includes("/search/issues")) {
+				return { data: { total_count: 5 } };
+			}
+			return {
+				data: {
+					draft: false,
+					head: { sha: "SAME" },
+					additions: 0,
+					deletions: 0,
+					changed_files: 0,
+					title: "t",
+					body: null,
+				},
+			};
+		});
+		const app = {
+			getInstallationOctokit: vi.fn(async () => ({ paginate, request })),
+		} as never;
 
 		const result = await runScheduledReview(
 			{ ...message, headSha: "SAME" },
@@ -2066,222 +1997,16 @@ describe("runScheduledReview", () => {
 				reviewEnabled: true,
 				reviewCommentPrefix: "ai-review-bot",
 				provider: "anthropic",
-				peerCheckIntervalMs: 90_000,
-				peerMaxAttempts: 6,
 			} as never,
 		);
 
 		expect(result).toEqual({ status: "reviewed" });
+		expect(paginate).not.toHaveBeenCalled();
+		expect(
+			request.mock.calls.some(([route]) => route.includes("/search/issues")),
+		).toBe(false);
 		expect(mockScheduleReview).not.toHaveBeenCalled();
 		expect(mockBuildReview).toHaveBeenCalledTimes(1);
-	});
-});
-
-describe("buildPRSummarySection", () => {
-	it("builds a summary section with verdict and metadata", () => {
-		const section = buildPRSummarySection(
-			{ ...DEFAULT_METADATA, generalFindings: 2, inlineComments: 1 },
-			"REQUEST_CHANGES",
-			"ai-review-bot",
-			"anthropic",
-		);
-		expect(section).toContain("<!-- ai-review-bot:anthropic:start -->");
-		expect(section).toContain("<!-- ai-review-bot:anthropic:end -->");
-		expect(section).toContain("⚠️ Changes requested");
-		expect(section).toContain("2 general, 1 inline");
-	});
-
-	it("shows Tier 2 skills when present", () => {
-		const section = buildPRSummarySection(
-			{
-				...DEFAULT_METADATA,
-				tier2Skills: ["security-auditor", "type-design-analyzer"],
-			},
-			"COMMENT",
-			"ai-review-bot",
-			"anthropic",
-		);
-		expect(section).toContain("5 Tier 1 + 2 Tier 2");
-		expect(section).toContain("`security-auditor`");
-	});
-
-	// ai-review-bot-1f5: each provider's marker pair must be distinct so
-	// injectPRSection can address one without touching the other — see the
-	// injectPRSection tests below for the actual coexistence guarantee.
-	it("uses a provider-scoped marker pair, distinct per provider", () => {
-		const anthropicSection = buildPRSummarySection(
-			DEFAULT_METADATA,
-			"COMMENT",
-			"ai-review-bot",
-			"anthropic",
-		);
-		const openaiSection = buildPRSummarySection(
-			DEFAULT_METADATA,
-			"COMMENT",
-			"ai-review-bot",
-			"openai",
-		);
-		expect(anthropicSection).toContain(
-			"<!-- ai-review-bot:anthropic:start -->",
-		);
-		expect(openaiSection).toContain("<!-- ai-review-bot:openai:start -->");
-		expect(anthropicSection).not.toContain("ai-review-bot:openai:");
-		expect(openaiSection).not.toContain("ai-review-bot:anthropic:");
-	});
-});
-
-describe("injectPRSection", () => {
-	const section =
-		"<!-- ai-review-bot:anthropic:start -->\ntest\n<!-- ai-review-bot:anthropic:end -->";
-
-	it("appends section to existing body", () => {
-		const result = injectPRSection(
-			"Existing description.",
-			section,
-			"anthropic",
-		);
-		expect(result).toBe(`Existing description.\n\n${section}`);
-	});
-
-	it("replaces existing section for the same provider", () => {
-		const body = `Intro\n\n${section}\n\nOutro`;
-		const newSection =
-			"<!-- ai-review-bot:anthropic:start -->\nupdated\n<!-- ai-review-bot:anthropic:end -->";
-		const result = injectPRSection(body, newSection, "anthropic");
-		expect(result).toBe(`Intro\n\n${newSection}\n\nOutro`);
-	});
-
-	it("handles null body", () => {
-		const result = injectPRSection(null, section, "anthropic");
-		expect(result).toBe(section);
-	});
-
-	// ai-review-bot-1f5: this is the real regression test for the bug —
-	// caught by chatgpt-codex-connector reviewing PR #67, the original fix
-	// (re-poll between providers) did NOT actually solve the two-provider
-	// overwrite, because injectPRSection always fully replaced ONE shared
-	// marker section regardless of how fresh the body was. Provider-scoped
-	// markers are what actually make the two sections coexist.
-	it("preserves the other provider's section when injecting a second provider's section", () => {
-		const anthropicSection =
-			"<!-- ai-review-bot:anthropic:start -->\nanthropic content\n<!-- ai-review-bot:anthropic:end -->";
-		const openaiSection =
-			"<!-- ai-review-bot:openai:start -->\nopenai content\n<!-- ai-review-bot:openai:end -->";
-
-		const afterFirst = injectPRSection(null, anthropicSection, "anthropic");
-		const afterSecond = injectPRSection(afterFirst, openaiSection, "openai");
-
-		expect(afterSecond).toContain("anthropic content");
-		expect(afterSecond).toContain("openai content");
-	});
-
-	it("replaces only the matching provider's section, leaving the other's untouched", () => {
-		const anthropicSection =
-			"<!-- ai-review-bot:anthropic:start -->\nanthropic v1\n<!-- ai-review-bot:anthropic:end -->";
-		const openaiSection =
-			"<!-- ai-review-bot:openai:start -->\nopenai v1\n<!-- ai-review-bot:openai:end -->";
-		const body = injectPRSection(
-			injectPRSection(null, anthropicSection, "anthropic"),
-			openaiSection,
-			"openai",
-		);
-
-		const anthropicV2 =
-			"<!-- ai-review-bot:anthropic:start -->\nanthropic v2\n<!-- ai-review-bot:anthropic:end -->";
-		const result = injectPRSection(body, anthropicV2, "anthropic");
-
-		expect(result).toContain("anthropic v2");
-		expect(result).not.toContain("anthropic v1");
-		expect(result).toContain("openai v1");
-	});
-
-	// Found by both anthropicreviewbot and codexreviewbot reviewing PR #67
-	// (independent convergence — treated as signal, not noise): a PR whose
-	// body already carries the OLD unscoped marker (from before this
-	// deploy) would never have it found/replaced by the new provider-scoped
-	// logic, leaving it as permanent orphaned stale content while new
-	// provider-scoped sections get appended alongside it.
-	it("migrates away the legacy unscoped marker section when injecting a new provider-scoped section", () => {
-		const legacyBody =
-			"Intro\n\n<!-- ai-review-bot:start -->\nold shared content\n<!-- ai-review-bot:end -->\n\nOutro";
-		const newSection =
-			"<!-- ai-review-bot:anthropic:start -->\nnew content\n<!-- ai-review-bot:anthropic:end -->";
-
-		const result = injectPRSection(legacyBody, newSection, "anthropic");
-
-		expect(result).not.toContain("ai-review-bot:start -->");
-		expect(result).not.toContain("old shared content");
-		expect(result).toContain("new content");
-		expect(result).toContain("Intro");
-		expect(result).toContain("Outro");
-		// anthropicreviewbot (PRRT_kwDOSM5cU86Z_qpC): the migrated body must be
-		// well-formed, not just missing the legacy markers and containing the
-		// new content somewhere. There's no existing provider-scoped section
-		// yet at migration time, so injectPRSection falls through to its
-		// normal "append to the end" behavior (same as the non-migration
-		// append case above) — assert that ordering rather than an
-		// "interleaved between Intro/Outro" shape it never produces.
-		expect(result.indexOf("Intro")).toBeLessThan(result.indexOf("Outro"));
-		expect(result.indexOf("Outro")).toBeLessThan(result.indexOf("new content"));
-	});
-
-	// anthropicreviewbot (PRRT_kwDOSM5cU86Z_qoy / _qpF) reviewing PR #67: the
-	// legacy strip only checked that both markers were present, not that they
-	// were in the right order. A malformed body with the end marker BEFORE the
-	// start marker sliced `[0, legacyStartIdx) + (legacyEndIdx + END.length, )`
-	// — since legacyEndIdx < legacyStartIdx here, that duplicates the text
-	// between the two markers and leaves both legacy markers behind instead of
-	// stripping them.
-	it("does not corrupt the body when legacy markers appear in reversed order", () => {
-		const malformed =
-			"Para1\n\n<!-- ai-review-bot:end -->\nmiddle\n<!-- ai-review-bot:start -->\n\nPara2";
-		const newSection =
-			"<!-- ai-review-bot:anthropic:start -->\nnew content\n<!-- ai-review-bot:anthropic:end -->";
-
-		const result = injectPRSection(malformed, newSection, "anthropic");
-
-		expect(result.split("middle")).toHaveLength(2);
-		// anthropicreviewbot (PRRT_kwDOSM5cU86Z_7q8 / _7rW / _7ru): the guard
-		// deliberately SKIPS stripping a malformed (reversed-order) body rather
-		// than guessing at its structure, so the legacy markers are left in
-		// place, not removed — assert that explicitly. This also distinguishes
-		// "the guard correctly detected reversed order and left it alone" from
-		// "legacy stripping never ran at all", which the split-count assertion
-		// alone can't tell apart (both leave "middle" appearing once).
-		expect(result).toContain("<!-- ai-review-bot:start -->");
-		expect(result).toContain("<!-- ai-review-bot:end -->");
-	});
-
-	// codexreviewbot (PRRT_kwDOSM5cU86Z_xF_) reviewing PR #67's own 2f66390
-	// commit: legacyEndIdx was found via `body.indexOf(END)` from position 0,
-	// not from just after legacyStartIdx — so if the literal end-marker text
-	// appears earlier in user-authored content within the legacy section
-	// (e.g. quoting the bot's own markers as an example), the strip stops at
-	// that spurious occurrence instead of the true closing marker, leaving
-	// the rest of the legacy section (including a dangling real end marker)
-	// in the migrated body.
-	// codexreviewbot (PRRT_kwDOSM5cU86Z_xF_) reviewing PR #67's own 2f66390
-	// commit: legacyEndIdx was found via `body.indexOf(END)` from position 0,
-	// so a literal mention of the end-marker text BEFORE the real legacy
-	// start marker (e.g. someone quoting the bot's own markers as an example
-	// earlier in the PR description) makes legacyEndIdx < legacyStartIdx.
-	// The `legacyStartIdx < legacyEndIdx` ordering guard added for
-	// PRRT_kwDOSM5cU86Z_qoy/_qpF already stops that from corrupting the body,
-	// but it does so by skipping the strip entirely — the genuine legacy
-	// section (start...end, further along) never gets migrated at all.
-	// Searching for the end marker starting after the start marker (instead
-	// of from position 0) finds the real closing marker and lets migration
-	// succeed instead of silently no-op'ing.
-	it("migrates the legacy section even when the end-marker text appears earlier in unrelated content", () => {
-		const body =
-			"Note: our bot posts <!-- ai-review-bot:end --> as an example.\n\n<!-- ai-review-bot:start -->\nold shared content\n<!-- ai-review-bot:end -->\n\nOutro";
-		const newSection =
-			"<!-- ai-review-bot:anthropic:start -->\nnew content\n<!-- ai-review-bot:anthropic:end -->";
-
-		const result = injectPRSection(body, newSection, "anthropic");
-
-		expect(result).not.toContain("old shared content");
-		expect(result).toContain("Outro");
 	});
 });
 
@@ -2301,22 +2026,51 @@ describe("budgetAfterDelay", () => {
 });
 
 describe("selectReviewDelayMs", () => {
-	const config = {
-		reviewDelayMs: 540_000,
-		reviewResyncDelayMs: 300_000,
-		peerCheckIntervalMs: 90_000,
-	} as AppConfig;
-
-	// Both are now capped at the peer-check interval: the wait is a poll that
-	// ends when peers actually post, not a guess at how long they take.
-	it("caps both the resync and initial delays at the peer-check interval", () => {
-		expect(selectReviewDelayMs("synchronize", config)).toBe(
-			config.peerCheckIntervalMs,
-		);
-		for (const action of ["opened", "reopened", "ready_for_review"]) {
-			expect(selectReviewDelayMs(action, config)).toBe(
-				config.peerCheckIntervalMs,
-			);
+	const loadConfig = async () =>
+		(
+			await vi.importActual<typeof import("./config.js")>("./config.js")
+		).getConfig();
+	const envKeys = [
+		"GITHUB_APP_ID",
+		"GITHUB_APP_PRIVATE_KEY",
+		"GITHUB_WEBHOOK_SECRET",
+		"REVIEW_DELAY_SECONDS",
+		"REVIEW_RESYNC_DELAY_SECONDS",
+	];
+	const saved: Record<string, string | undefined> = {};
+	beforeEach(() => {
+		for (const k of envKeys) saved[k] = process.env[k];
+		process.env.GITHUB_APP_ID = "1";
+		process.env.GITHUB_APP_PRIVATE_KEY = "pem";
+		process.env.GITHUB_WEBHOOK_SECRET = "secret";
+		delete process.env.REVIEW_DELAY_SECONDS;
+		delete process.env.REVIEW_RESYNC_DELAY_SECONDS;
+	});
+	afterEach(() => {
+		for (const k of envKeys) {
+			if (saved[k] === undefined) delete process.env[k];
+			else process.env[k] = saved[k];
 		}
+	});
+
+	it("is 0 for every pull_request action with default config", async () => {
+		const config = await loadConfig();
+		for (const action of [
+			"opened",
+			"reopened",
+			"ready_for_review",
+			"synchronize",
+		]) {
+			expect(selectReviewDelayMs(action, config)).toBe(0);
+		}
+	});
+
+	it("honours REVIEW_DELAY_SECONDS=30 for opened and REVIEW_RESYNC_DELAY_SECONDS for synchronize", async () => {
+		process.env.REVIEW_DELAY_SECONDS = "30";
+		process.env.REVIEW_RESYNC_DELAY_SECONDS = "12";
+		const config = await loadConfig();
+		expect(selectReviewDelayMs("opened", config)).toBe(30_000);
+		expect(selectReviewDelayMs("ready_for_review", config)).toBe(30_000);
+		expect(selectReviewDelayMs("synchronize", config)).toBe(12_000);
 	});
 });

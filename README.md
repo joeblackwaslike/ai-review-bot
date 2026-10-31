@@ -246,7 +246,7 @@ Only comments from `OWNER`, `MEMBER`, and `COLLABORATOR` author associations tri
 |---|---|---|
 | `REVIEW_ENABLED` | `true` | Set to `false` to disable auto-review on PR open/push |
 | `REVIEW_COMMAND` | `/ai-review` | Slash command that triggers both bots |
-| `REVIEW_DELAY_SECONDS` | `450` | Seconds before auto-review fires on PR open (7.5 min) |
+| `REVIEW_DELAY_SECONDS` | `0` | Seconds before auto-review fires on PR open (default: immediately) |
 | `CUSTOM_REVIEW_PROMPT` | — | Extra instructions appended to every agent's system prompt |
 
 See [Configuration →](https://joeblackwaslike.github.io/ai-review-bot/configuration) and [`.env.example`](.env.example).

@@ -20,7 +20,7 @@ features:
 
   - icon: ⚡
     title: Automatic on every PR
-    details: Reviews fire automatically when a pull request is opened or a new commit is pushed — no slash command needed. Both bots post independently after a short delay (default 7.5 min) that lets other reviewers like Code Rabbit finish first.
+    details: Reviews fire automatically when a pull request is opened or a new commit is pushed — no slash command needed. Both bots post independently, starting immediately by default.
 
   - icon: 🔀
     title: Five agents, one review

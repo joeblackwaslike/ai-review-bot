@@ -42,19 +42,19 @@ describe("scheduleReview", () => {
 				url: "https://example.test/api/github/review-run",
 				body: msg,
 				delay: 300,
-				deduplicationId: "anthropic-o-r-7-abc-0",
+				deduplicationId: "anthropic-o-r-7-abc",
 			}),
 		);
 	});
-	// Successive peer-check passes are distinct work on the same head; without
-	// the attempt in the key QStash would dedupe every re-check after the first
-	// and the poll loop would silently stop.
-	it("keys each peer-check attempt separately", async () => {
-		publishJSON.mockResolvedValueOnce({ messageId: "m2" });
-		await scheduleReview(cfg, { ...msg, attempt: 3 }, 90);
-		expect(publishJSON).toHaveBeenCalledWith(
-			expect.objectContaining({ deduplicationId: "anthropic-o-r-7-abc-3" }),
-		);
+	it("publishes with no delay field at all when the delay is 0", async () => {
+		publishJSON.mockResolvedValue({ messageId: "m0" });
+		for (const zero of [0, 0.4, -5, Number.NaN]) {
+			publishJSON.mockClear();
+			await scheduleReview(cfg, msg, zero);
+			const arg = publishJSON.mock.calls[0][0];
+			expect(arg).not.toHaveProperty("delay");
+			expect(arg.url).toBe("https://example.test/api/github/review-run");
+		}
 	});
 
 	it("builds a QStash-safe dedup id (no ':' or '/') even for realistic owner/repo/sha", async () => {
@@ -76,9 +76,7 @@ describe("scheduleReview", () => {
 		const dedupId = publishJSON.mock.calls[0][0].deduplicationId as string;
 		expect(dedupId).toMatch(/^[A-Za-z0-9_-]+$/);
 		expect(dedupId).not.toContain(":");
-		expect(dedupId).toBe(
-			"anthropic-joeblackwaslike-ai-review-bot-28-f7633ba-0",
-		);
+		expect(dedupId).toBe("anthropic-joeblackwaslike-ai-review-bot-28-f7633ba");
 	});
 	it("returns null when QStash is unconfigured (caller falls back to inline)", async () => {
 		const out = await scheduleReview(
