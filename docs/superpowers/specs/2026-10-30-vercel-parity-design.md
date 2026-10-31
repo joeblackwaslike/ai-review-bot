@@ -85,6 +85,8 @@ If `deriveBaseline` or the ledger fetch fails, the round degrades to a full revi
 
 A bot finds its own reviews by the `### <prefix>` heading on its own line plus an `ai-review:provider` marker that matches its provider. A body with no provider marker is a legacy review and counts as ours. The heading alone is not enough, because production sets `REVIEW_COMMENT_PREFIX` and leaves `OPENAI_REVIEW_COMMENT_PREFIX` unset, so both bots post under `### ai-review`. On PR #92 the two bots' reviews at one head differ only in that marker, and a heading match would give the Claude bot its baseline, review count and carried findings from the Codex review.
 
+The same scoping applies to the ledger. A bot's ledger is built from its own reviews and their inline threads only. Before this change, a finding the author resolved or rejected on the other bot's review also suppressed this bot from raising the same claim, because both reviews matched the shared heading. That cross-bot suppression is gone. Keeping it would be a separate decision, and the replay fixtures do not measure it.
+
 The `ReviewState` type and `saveReviewState` stay if `watch` or another caller needs them. Removing them is cleanup for the plan to decide, not a goal.
 
 ### Redelivery and superseded heads
@@ -116,3 +118,5 @@ We also do not measure how often a retired finding was still unresolved on its t
 ## Result for PR #92
 
 After the change, the three self-retraction findings have a path that is not in PR #92, so they retire. The round has a clean delta and no live open findings, so it does not stay at CHANGES_REQUESTED. This is checked offline from a recorded fixture. It is confirmed live only after deploy.
+
+One ceiling remains. A round posts APPROVE only when every agent finished. If one agent is rate limited on the round that retires the findings, the round posts COMMENT, and a COMMENT does not clear a standing CHANGES_REQUESTED. The next fully successful round clears it.
