@@ -22,7 +22,7 @@ type FakeRepo = {
 	mergeBase: string;
 	branch: string;
 	ancestors: Set<string>;
-	sinceLast: string[];
+	since: Record<string, string[]>;
 	files: Record<string, FakeFile>;
 };
 
@@ -32,7 +32,7 @@ function repo(files: Record<string, FakeFile>, head = "head1"): FakeRepo {
 		mergeBase: "base0",
 		branch: "feat/x",
 		ancestors: new Set(),
-		sinceLast: [],
+		since: {},
 		files,
 	};
 }
@@ -46,18 +46,24 @@ const modified = (diff: string): FakeFile => ({
 function fakeGit(state: FakeRepo): GitRunner {
 	return (args) => {
 		const a = args.join(" ");
-		if (a === "symbolic-ref refs/remotes/origin/HEAD")
-			return "refs/remotes/origin/main\n";
+		if (a.startsWith("symbolic-ref")) return "refs/remotes/origin/main\n";
 		if (a === "rev-parse --verify --quiet origin/main") return "x\n";
 		if (a === "merge-base HEAD origin/main") return `${state.mergeBase}\n`;
 		if (a === "rev-parse HEAD") return `${state.head}\n`;
 		if (a.startsWith("for-each-ref")) return `${state.branch}\n`;
 		if (args[0] === "merge-base" && args[1] === "--is-ancestor") {
-			if (state.ancestors.has(args[2] ?? "")) return "";
+			const sha = args[2] ?? "";
+			if (sha === state.head || state.ancestors.has(sha)) return "";
 			throw new Error("not an ancestor");
 		}
-		if (a.includes("--name-only")) return state.sinceLast.join("\n");
-		if (a.includes("--name-status")) {
+		if (args.includes("--name-status")) {
+			const ref = args[5] ?? "";
+			if (args[6] !== "HEAD") throw new Error(`unexpected range ${a}`);
+			if (ref !== state.mergeBase) {
+				const since = state.since[ref];
+				if (!since) throw new Error(`no history from ${ref}`);
+				return since.map((l) => (l.includes("\t") ? l : `M\t${l}`)).join("\n");
+			}
 			return Object.entries(state.files)
 				.map(([p, f]) =>
 					f.status === "R" ? `R100\t${f.oldPath}\t${p}` : `${f.status}\t${p}`,
@@ -65,6 +71,8 @@ function fakeGit(state: FakeRepo): GitRunner {
 				.join("\n");
 		}
 		if (args[0] === "diff" && args[3] === "--") {
+			if (args[1] !== state.mergeBase || args[2] !== "HEAD")
+				throw new Error(`diff against the wrong base: ${a}`);
 			const f = state.files[args[4] ?? ""];
 			if (!f) throw new Error(`no diff for ${args[4]}`);
 			return f.diff;
@@ -193,9 +201,10 @@ describe("runGate", () => {
 		);
 
 		state.ancestors.add("head1");
+		state.since.head1 = [];
 		state.head = "head2";
 		state.files["src/a.ts"] = modified("a2");
-		state.sinceLast = ["src/a.ts"];
+		state.since.head1 = ["src/a.ts"];
 		const review = vi.fn(async (_files: AuditFile[]) =>
 			passResult(buildModelReview({ inline_comments: [P1_ON_A] })),
 		);
@@ -216,6 +225,7 @@ describe("runGate", () => {
 		);
 
 		state.ancestors.add("head1");
+		state.since.head1 = [];
 		state.head = "head2";
 		const review = vi.fn();
 		const result = await gate(state, review, null);
@@ -233,6 +243,7 @@ describe("runGate", () => {
 				passResult(buildModelReview({ inline_comments: [P1_ON_A] })),
 			);
 			state.ancestors.add("head1");
+			state.since.head1 = [];
 			state.head = "head2";
 		}
 
@@ -261,7 +272,7 @@ describe("runGate", () => {
 			});
 			await roundOne(state);
 			state.files["src/d.ts"] = { ...modified("d1"), status: "A" };
-			state.sinceLast = ["src/d.ts", "README.md"];
+			state.since.head1 = ["src/d.ts", "README.md"];
 
 			expect(await reviewedIn(state)).toEqual(["src/d.ts"]);
 		});
@@ -281,7 +292,7 @@ describe("runGate", () => {
 					content: "// e1\n",
 				},
 			};
-			state.sinceLast = ["src/e.ts"];
+			state.since.head1 = ["R100\tsrc/c.ts\tsrc/e.ts"];
 
 			expect(await reviewedIn(state)).toEqual(["src/e.ts"]);
 		});
@@ -310,7 +321,7 @@ describe("runGate", () => {
 
 		state.head = "rebased";
 		state.files["src/a.ts"] = modified("a2");
-		state.sinceLast = ["src/a.ts"];
+		state.since.head1 = ["src/a.ts"];
 		const review = vi.fn(async (_files: AuditFile[]) =>
 			passResult(buildModelReview()),
 		);
@@ -333,9 +344,10 @@ describe("runGate", () => {
 		);
 
 		state.ancestors.add("head1");
+		state.since.head1 = [];
 		state.head = "head2";
 		state.files["src/a.ts"] = modified("a2");
-		state.sinceLast = ["src/a.ts"];
+		state.since.head1 = ["src/a.ts"];
 		const result = await gate(state, async () =>
 			passResult(buildModelReview()),
 		);
@@ -405,9 +417,10 @@ describe("runGate", () => {
 		);
 
 		state.ancestors.add("head1");
+		state.since.head1 = [];
 		state.head = "head2";
 		state.files["src/a.ts"] = modified("a2");
-		state.sinceLast = ["src/a.ts"];
+		state.since.head1 = ["src/a.ts"];
 		const result = await gate(state, async () =>
 			passResult(buildModelReview(), { agentsSucceeded: 4 }),
 		);
@@ -432,15 +445,142 @@ describe("runGate", () => {
 		);
 
 		state.ancestors.add("head1");
+		state.since.head1 = [];
 		state.head = "head2";
 		state.files["src/a.ts"] = modified("a2");
-		state.sinceLast = ["src/a.ts"];
+		state.since.head1 = ["src/a.ts"];
 		const second = await gate(state, async () =>
 			passResult(buildModelReview()),
 		);
 
 		expect(first.findings).toHaveLength(1);
 		expect(second.findings).toEqual([]);
+	});
+
+	it("a provider that drops out cannot get its finding inferred fixed two rounds later", async () => {
+		const state = repo({ "src/a.ts": modified("a1") });
+		await gate(state, async () =>
+			passResult(buildModelReview({ inline_comments: [P1_ON_A] }), {
+				providersRun: ["anthropic", "openai"],
+			}),
+		);
+
+		state.ancestors.add("head1");
+		state.since.head1 = ["src/a.ts"];
+		state.head = "head2";
+		state.files["src/a.ts"] = modified("a2");
+		const second = await gate(state, async () =>
+			passResult(buildModelReview()),
+		);
+
+		state.ancestors.add("head2");
+		state.since.head2 = [];
+		state.head = "head3";
+		const third = await gate(
+			state,
+			async () => passResult(buildModelReview()),
+			null,
+		);
+
+		expect(second.findings).toHaveLength(1);
+		expect(third.findings).toHaveLength(1);
+		expect(third.exitCode).toBe(1);
+		const store = await readStore(state);
+		expect(store.providers).toEqual(["anthropic", "openai"]);
+		expect(store.lastHead).toBe("head1");
+		expect(errors.join("\n")).toContain(storeDir);
+	});
+
+	it("a rename of a file the branch added keeps the finding's id and moves its path", async () => {
+		const added = (diff: string): FakeFile => ({
+			...modified(diff),
+			status: "A",
+		});
+		const state = repo({ "src/a.ts": added("a1") });
+		const first = await gate(state, async () =>
+			passResult(
+				buildModelReview({
+					inline_comments: [
+						{ ...P1_ON_A, title: "Empty catch swallows the error" },
+					],
+				}),
+			),
+		);
+
+		state.ancestors.add("head1");
+		state.since.head1 = ["R100\tsrc/a.ts\tsrc/b.ts"];
+		state.head = "head2";
+		state.files = { "src/b.ts": added("b1") };
+		const second = await gate(state, async () =>
+			passResult(
+				buildModelReview({
+					inline_comments: [
+						{
+							...P1_ON_A,
+							path: "src/b.ts",
+							title: "Error is swallowed by the empty catch",
+						},
+					],
+				}),
+			),
+		);
+
+		expect(second.findings).toHaveLength(1);
+		expect(second.findings[0]?.id).toBe(first.findings[0]?.id);
+		expect(second.findings[0]?.file).toBe("src/b.ts");
+		const store = await readStore(state);
+		expect(store.entries.map((e) => e.path)).toEqual(["src/b.ts"]);
+	});
+
+	it("a path-less finding is carried at the same HEAD and dropped after a new commit", async () => {
+		const state = repo({ "src/a.ts": modified("a1") });
+		const general = {
+			title: "No tests cover the retry path",
+			body: "Nothing exercises the retry branch.",
+			severity: "P1" as const,
+			category: "test-gap" as const,
+			confidence: 0.9,
+			evidence: "See diff.",
+			suppressible: false,
+		};
+		const first = await gate(
+			state,
+			async () => passResult(buildModelReview({ general_findings: [general] })),
+			null,
+		);
+
+		state.ancestors.add("head1");
+		state.since.head1 = [];
+		const review = vi.fn(async (_files: AuditFile[]) =>
+			passResult(buildModelReview()),
+		);
+		const rerun = await gate(state, review, null);
+
+		state.head = "head2";
+		const later = await gate(state, review, null);
+
+		expect(first.exitCode).toBe(1);
+		expect(review).not.toHaveBeenCalled();
+		expect(rerun.findings.map((f) => f.id)).toEqual(
+			first.findings.map((f) => f.id),
+		);
+		expect(rerun.exitCode).toBe(1);
+		expect(later.findings).toEqual([]);
+		expect(later.exitCode).toBe(0);
+	});
+
+	it("a findings-file write failure does not save the round", async () => {
+		const state = repo({ "src/a.ts": modified("a1") });
+
+		await expect(
+			gate(
+				state,
+				async () =>
+					passResult(buildModelReview({ inline_comments: [P1_ON_A] })),
+				join(dir, "missing", "findings.json"),
+			),
+		).rejects.toThrow();
+		await expect(readdir(storeDir)).rejects.toThrow();
 	});
 
 	it("a review failure propagates and leaves the store untouched", async () => {

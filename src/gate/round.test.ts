@@ -311,8 +311,52 @@ describe("applyRound", () => {
 		expect(byId(result.store, old.id)?.status).toBe("open");
 		expect(result.warnings).toHaveLength(1);
 		expect(result.warnings[0]).toMatch(/provider/i);
+		expect(result.store.providers).toEqual(["anthropic"]);
+		expect(result.store.lastHead).toBe("head1");
+	});
+
+	it("a provider-set change still matches and emits, and the warning names the store file", () => {
+		const old = entry();
+		const fresh = buildInlineComment({
+			path: "src/b.ts",
+			title: "Unrelated new finding",
+		});
+		const result = applyRound(
+			input({
+				store: store([old], ["anthropic", "openai"]),
+				merged: buildModelReview({ inline_comments: [fresh] }),
+				providers: ["anthropic"],
+				storePath: "/tmp/gate/key.json",
+			}),
+		);
+		expect(result.emitted.map((e) => e.entry.path)).toEqual(["src/b.ts"]);
+		expect(result.store.entries).toHaveLength(2);
+		expect(result.store.providers).toEqual(["anthropic", "openai"]);
+		expect(result.store.lastHead).toBe("head1");
+		expect(result.warnings.join("\n")).toContain("/tmp/gate/key.json");
+	});
+
+	it("a provider-set change warns even with no open entry", () => {
+		const result = applyRound(
+			input({
+				store: store([], ["anthropic", "openai"]),
+				providers: ["anthropic"],
+			}),
+		);
+		expect(result.warnings.join("\n")).toMatch(/provider/i);
+		expect(result.store.lastHead).toBe("head1");
+	});
+
+	it("the first complete round records its provider set over an empty one", () => {
+		const result = applyRound(
+			input({
+				store: { ...store([]), providers: [], lastHead: null },
+				providers: ["anthropic", "openai"],
+			}),
+		);
 		expect(result.store.providers).toEqual(["anthropic", "openai"]);
 		expect(result.store.lastHead).toBe(HEAD);
+		expect(result.warnings).toEqual([]);
 	});
 
 	it("fullRescope infers nothing", () => {

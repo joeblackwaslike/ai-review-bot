@@ -169,6 +169,22 @@ describe("range scope", () => {
 		expect(resolveBase(runGit)).toBe("origin/trunk");
 	});
 
+	it("resolveBase asks symbolic-ref to stay quiet when origin/HEAD is unset", () => {
+		const calls: string[][] = [];
+		const runGit: GitRunner = (args) => {
+			calls.push([...args]);
+			if (args[0] === "symbolic-ref") throw new Error("no origin/HEAD");
+			if (args.at(-1) === "origin/main") return "sha";
+			throw new Error("bad ref");
+		};
+		expect(resolveBase(runGit)).toBe("origin/main");
+		expect(calls[0]).toEqual([
+			"symbolic-ref",
+			"--quiet",
+			"refs/remotes/origin/HEAD",
+		]);
+	});
+
 	it("listRangeChanges reports renames with the old path", () => {
 		const runGit: GitRunner = (args) => {
 			if (args[0] === "merge-base") return "mb1\n";

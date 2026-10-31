@@ -17,6 +17,7 @@ export type RoundInput = {
 	complete: boolean;
 	providers: Provider[];
 	fullRescope: boolean;
+	storePath?: string;
 };
 
 export type Emitted = { entry: LedgerEntry; suggestion: string | null };
@@ -95,6 +96,10 @@ function mintIds(
 	return drafts.map((e, i) => ({ ...e, id: ids[i] }));
 }
 
+const providerMismatch = (input: RoundInput) =>
+	input.store.providers.length > 0 &&
+	!sameSet(input.providers, input.store.providers);
+
 function inferenceWarnings(input: RoundInput, hasOpen: boolean): string[] {
 	const warnings: string[] = [];
 	if (!input.complete) {
@@ -102,11 +107,13 @@ function inferenceWarnings(input: RoundInput, hasOpen: boolean): string[] {
 			"Round incomplete: an agent failed or was skipped, so no open finding was inferred fixed.",
 		);
 	}
-	if (hasOpen && !sameSet(input.providers, input.store.providers)) {
+	if (providerMismatch(input)) {
 		warnings.push(
-			input.store.providers.length === 0
-				? "No complete round has recorded a provider set yet, so no open finding was inferred fixed."
-				: `Provider set (${input.providers.join(", ")}) differs from the last complete round (${input.store.providers.join(", ")}), so no open finding was inferred fixed.`,
+			`Provider set (${input.providers.join(", ")}) differs from the last complete round (${input.store.providers.join(", ")}), so no open finding was inferred fixed and the stored provider set and head were kept. After a permanent provider change, delete ${input.storePath ?? "the gate history file"} to start over.`,
+		);
+	} else if (hasOpen && input.store.providers.length === 0) {
+		warnings.push(
+			"No complete round has recorded a provider set yet, so no open finding was inferred fixed.",
 		);
 	}
 	if (input.fullRescope) {
@@ -235,7 +242,7 @@ export function applyRound(input: RoundInput): RoundResult {
 		store: {
 			...store,
 			entries: [...next, ...minted],
-			...(input.complete
+			...(input.complete && !providerMismatch(input)
 				? { providers: [...input.providers], lastHead: head }
 				: {}),
 		},

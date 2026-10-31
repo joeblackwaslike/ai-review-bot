@@ -51,6 +51,12 @@ describe("toGateFinding", () => {
 		expect("file" in g).toBe(false);
 		expect("line" in g).toBe(false);
 	});
+	it("omits a negative line and keeps the file", () => {
+		const g = toGateFinding(entry({ line: -1 }));
+		expect(g.file).toBe("src/a.ts");
+		expect("line" in g).toBe(false);
+		expect(validateReport(formatReport([g]))).toEqual([]);
+	});
 	it("joins title, body and suggestion, skipping empties", () => {
 		expect(toGateFinding(entry(), "Fix it").description).toBe(
 			"Title\n\nBody\n\nFix it",

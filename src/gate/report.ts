@@ -40,7 +40,9 @@ export function toGateFinding(
 		severity: info ? "info" : warning ? "warning" : "error",
 		description,
 		...(entry.path ? { file: entry.path } : {}),
-		...(entry.path && entry.line !== null ? { line: entry.line } : {}),
+		...(entry.path && entry.line !== null && entry.line >= 0
+			? { line: entry.line }
+			: {}),
 		action: info ? "no-op" : "ask-user",
 	};
 }

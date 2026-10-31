@@ -57,27 +57,57 @@ function isAncestor(runGit: GitRunner, sha: string): boolean {
 	}
 }
 
-/** Paths to re-review on a delta round: range paths changed since the last head, plus paths whose open entries saw a different diff. */
-function deltaPaths(
+/** Paths changed between `lastHead` and HEAD (new path for a rename), and the renames themselves. */
+function changesSince(
 	runGit: GitRunner,
 	lastHead: string,
-	hashes: ReadonlyMap<string, string>,
-	renames: ReadonlyMap<string, string>,
-	entries: readonly LedgerEntry[],
-): Set<string> {
-	const changedSince = runGit([
+): { paths: string[]; renames: Map<string, string> } {
+	const out = runGit([
 		"-c",
 		"core.quotePath=false",
 		"diff",
 		"-M",
-		"--name-only",
+		"--name-status",
 		lastHead,
 		"HEAD",
-	])
-		.split("\n")
-		.map((p) => p.trim())
-		.filter((p) => hashes.has(p));
-	const only = new Set(changedSince);
+	]);
+	const paths: string[] = [];
+	const renames = new Map<string, string>();
+	for (const line of out.split("\n")) {
+		const [code, first, second] = line.split("\t");
+		if (!code || !first) continue;
+		if (code.startsWith("R") && second) {
+			paths.push(second);
+			renames.set(first, second);
+		} else {
+			paths.push(first);
+		}
+	}
+	return { paths, renames };
+}
+
+/** Merges renames since the last head into the merge-base renames, chaining an old path through both to its final path. */
+function composeRenames(
+	range: ReadonlyMap<string, string>,
+	since: ReadonlyMap<string, string>,
+): Map<string, string> {
+	const merged = new Map(range);
+	for (const [from, to] of merged) {
+		const next = since.get(to);
+		if (next !== undefined) merged.set(from, next);
+	}
+	for (const [from, to] of since) if (!merged.has(from)) merged.set(from, to);
+	return merged;
+}
+
+/** Paths to re-review on a delta round: range paths changed since the last head, plus paths whose open entries saw a different diff. */
+function deltaPaths(
+	changedSince: readonly string[],
+	hashes: ReadonlyMap<string, string>,
+	renames: ReadonlyMap<string, string>,
+	entries: readonly LedgerEntry[],
+): Set<string> {
+	const only = new Set(changedSince.filter((p) => hashes.has(p)));
 	for (const e of entries) {
 		if (isSettled(e) || e.path === null) continue;
 		const path = renames.get(e.path) ?? e.path;
@@ -126,7 +156,7 @@ export async function runGate(opts: GateOptions): Promise<GateResult> {
 	const hashes = new Map(
 		surviving.map((c) => [c.path, diffHash(runGit, mergeBase, c.path)]),
 	);
-	const renames = new Map(
+	const rangeRenames = new Map(
 		changes.flatMap((c) =>
 			c.status === "R" && c.oldPath ? [[c.oldPath, c.path] as const] : [],
 		),
@@ -134,10 +164,16 @@ export async function runGate(opts: GateOptions): Promise<GateResult> {
 
 	const fullRescope =
 		store.lastHead !== null && !isAncestor(runGit, store.lastHead);
-	const only =
+	const since =
 		store.lastHead === null || fullRescope
-			? undefined
-			: deltaPaths(runGit, store.lastHead, hashes, renames, store.entries);
+			? null
+			: changesSince(runGit, store.lastHead);
+	const renames = since
+		? composeRenames(rangeRenames, since.renames)
+		: rangeRenames;
+	const only = since
+		? deltaPaths(since.paths, hashes, renames, store.entries)
+		: undefined;
 	const files = await collectFilesFromRange({
 		cwd: opts.cwd,
 		changes,
@@ -158,20 +194,19 @@ export async function runGate(opts: GateOptions): Promise<GateResult> {
 		complete: pass === null || pass.agentsSucceeded === pass.agentsAttempted,
 		providers: pass?.providersRun ?? store.providers,
 		fullRescope,
+		storePath,
 	});
 	for (const w of result.warnings) console.error(w);
-
-	await saveStore(storePath, result.store).catch((err: unknown) => {
-		console.error(
-			`Could not save gate history to ${storePath}: ${err instanceof Error ? err.message : String(err)}`,
-		);
-	});
 
 	const suggestions = new Map(
 		result.emitted.map(({ entry, suggestion }) => [entry.id, suggestion]),
 	);
 	const open = result.store.entries.filter(
-		(e) => !isSettled(e) && (e.path !== null || suggestions.has(e.id)),
+		(e) =>
+			!isSettled(e) &&
+			(e.path !== null ||
+				suggestions.has(e.id) ||
+				e.evidence.includes(`head:${head}`)),
 	);
 	const { kept, dropped } = capFindings(
 		open.map((e) => toGateFinding(e, suggestions.get(e.id))),
@@ -185,17 +220,27 @@ export async function runGate(opts: GateOptions): Promise<GateResult> {
 		throw new Error(`Gate report failed validation: ${problems.join("; ")}`);
 	}
 
+	const save = () =>
+		saveStore(storePath, result.store).catch((err: unknown) => {
+			console.error(
+				`Could not save gate history to ${storePath}: ${err instanceof Error ? err.message : String(err)}`,
+			);
+		});
+
 	if (opts.findingsFile) {
 		await writeFile(opts.findingsFile, json);
+		await save();
 		return {
 			exitCode: 0,
 			stdout: `ai-review gate: ${kept.length} finding(s) written to ${opts.findingsFile}`,
 			findings: kept,
 		};
 	}
+	const stdout = formatText(kept);
+	await save();
 	return {
 		exitCode: kept.some((f) => f.severity === "error") ? 1 : 0,
-		stdout: formatText(kept),
+		stdout,
 		findings: kept,
 	};
 }

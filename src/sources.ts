@@ -180,7 +180,11 @@ function refExists(runGit: GitRunner, ref: string): boolean {
 export function resolveBase(runGit: GitRunner, explicit?: string): string {
 	if (explicit) return explicit;
 	try {
-		const head = runGit(["symbolic-ref", "refs/remotes/origin/HEAD"]).trim();
+		const head = runGit([
+			"symbolic-ref",
+			"--quiet",
+			"refs/remotes/origin/HEAD",
+		]).trim();
 		const ref = head.replace(/^refs\/remotes\//, "");
 		if (ref && refExists(runGit, ref)) return ref;
 	} catch {
