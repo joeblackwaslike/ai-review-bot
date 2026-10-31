@@ -76,6 +76,16 @@ describe("retargetCarried", () => {
 		expect(r.retired).toEqual([]);
 	});
 
+	it("retires a finding on a file the PR deletes, which GitHub lists as removed under its old name", () => {
+		const f = finding("src/gone.ts", 2, "Bug");
+		const r = retargetCarried(
+			[f],
+			[{ filename: "src/gone.ts", status: "removed" }],
+		);
+		expect(r.kept).toEqual([]);
+		expect(r.retired).toEqual([f]);
+	});
+
 	it("empty files list retires every pathed finding", () => {
 		const pathed = finding("src/a.ts", 1, "A");
 		const general = finding(null, null, "G");

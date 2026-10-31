@@ -6173,6 +6173,45 @@ describe("delta scoping without KV", () => {
 			}
 		});
 
+		it("retires carried findings on a file the PR deletes, which GitHub still lists as removed", async () => {
+			routeModels({});
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "INCREMENTAL",
+				resolved: [],
+				newRisk: false,
+			});
+			const removedFile = buildPullFile(
+				GONE,
+				"@@ -1,2 +0,0 @@\n-export const a = 1;\n-export const b = 2;",
+				"removed",
+			);
+			const { octokit } = prOctokit({
+				reviews: [
+					{
+						id: 11,
+						state: "CHANGES_REQUESTED",
+						body: buildOwnReviewBody({ sha: OLD, count: 1, rows: goneRows }),
+					},
+				],
+				files: [addedFile, removedFile],
+				compare: () => ({ status: "ahead", files: [addedFile] }),
+			});
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				changedFiles: 2,
+			});
+
+			expect(decision).not.toBeNull();
+			expect(decision?.event).not.toBe("REQUEST_CHANGES");
+			expect(decision?.body).toContain("Retired, file no longer in this PR");
+			expect(decision?.body).not.toContain(
+				"Still open from the previous review",
+			);
+			expect(decision?.body).toContain(`\`${GONE}:49\``);
+		});
+
 		it("keeps carrying a finding when the PR file list is incomplete", async () => {
 			routeModels({});
 			mockTriageReReview.mockResolvedValue({
