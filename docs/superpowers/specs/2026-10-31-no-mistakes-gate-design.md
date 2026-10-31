@@ -9,7 +9,7 @@ The review only runs once a PR exists, so every finding costs a push, a bot roun
 ## Goals
 
 - `ai-review gate` runs the multi-agent review on the branch's changes against its base and writes findings in the no-mistakes custom-gate JSON format.
-- A re-check after a fix does not repeat findings that were fixed, and does not re-review files that did not change since the last round.
+- A re-check after a fix stops reporting the findings that were fixed, and does not re-review files that did not change since the last round.
 - Works with this repo's own `.no-mistakes.yaml` (dogfood) and is documented well enough for another repo to copy.
 
 ## Non-goals
@@ -43,10 +43,10 @@ It cannot see the answers given through `axi respond`. They are not passed to th
 
 1. Review the files in scope (see Scope).
 2. Match each new finding against the store's open entries with the ledger's claim-matching rules, run over open entries instead of settled ones. A match keeps the entry's id and refreshes its title, line and body.
-3. Suppress each remaining new finding that matches an entry that was already settled before this round, using `suppressInReview` after `mergeReviews`.
-4. An open entry that no new finding matched becomes `fixed` only if its file's diff against the merge base changed since the entry was last seen, or the file left the range, and only if the round was complete (see Partial rounds). Otherwise it stays `open`: the model may simply not have raised it again.
+3. Take each remaining new finding. If it matches an entry the gate inferred as fixed, reopen that entry under its id with refreshed fields and emit it. Otherwise suppress it when it matches an entry a person settled before this round (`decidedBy` not null), using `suppressInReview` after `mergeReviews`. The gate records no person's decision today, so in practice nothing is suppressed; the rule stays so a later source of real decisions needs no change here.
+4. An open entry that no new finding matched becomes `fixed` only if its file's diff against the merge base changed since the entry was last seen, or the file left the range (its path is absent from the range even when the round skipped it for review), and only if the round was complete (see Partial rounds). Otherwise it stays `open`: the model may simply not have raised it again.
 
-Entries inferred in step 4 never suppress anything in the same round. Only entries already settled when the round started do.
+An inferred fix is a guess, so it never suppresses anything. A model that misses a finding in one round and raises it again after an unrelated edit to the file would otherwise be silenced for good, with the gate exiting 0 over a real defect. Reopening costs a repeat when a fix was real and the model raises it again anyway, which is the cheaper error.
 
 Known limit, not measured: a finding answered `approve` or `skip` in no-mistakes that the model raises again is emitted again under the same id every run. Whether no-mistakes carries its own decision across runs by id is unchecked.
 
@@ -77,7 +77,7 @@ Step 4 runs only when every attempted agent succeeded and the set of providers t
 
 ### Fail open
 
-If the store is unreadable, malformed or has invalid entries, the gate moves it aside to `<name>.corrupt-<timestamp>`, starts from an empty store, and prints that history was reset. The cost is that findings silenced earlier can come back once, and an `error` among them parks the gate again. It never drops a review.
+If the store is unreadable, malformed or has invalid entries, the gate moves it aside to `<name>.corrupt-<timestamp>`, starts from an empty store, and prints that history was reset. The cost is that findings fixed earlier can come back as open, and an `error` among them parks the gate again. It never drops a review.
 
 ## Cost and wiring
 
