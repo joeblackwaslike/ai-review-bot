@@ -337,7 +337,9 @@ and `HEAD`. When no-mistakes sets `NO_MISTAKES_FINDINGS_FILE`, the gate writes
 its findings to that file as JSON and exits 0, and any `error` finding (P0 or
 P1) parks the run. When the variable is unset, as on no-mistakes v1.75.2, the
 gate prints the findings and exits 1 if any of them is an `error`. If no
-provider authenticates or every agent fails, it exits non-zero with a message.
+provider authenticates or every agent fails, it exits non-zero with a message
+and writes no findings file, so no-mistakes parks the gate with that output
+attached.
 If one agent fails in a provider whose other agents worked, the round still
 reports its findings but counts as incomplete, and no finding is inferred fixed
 in that round.
