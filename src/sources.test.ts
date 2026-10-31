@@ -2,8 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
 	collectFilesFromCommit,
 	collectFilesFromLocal,
+	collectFilesFromRange,
+	diffHash,
 	type GitRunner,
 	hasCodeExtension,
+	listRangeChanges,
+	resolveBase,
 } from "./sources.js";
 
 describe("hasCodeExtension", () => {
@@ -133,5 +137,91 @@ describe("collectFilesFromCommit", () => {
 			runGit,
 		});
 		expect(files.map((f) => f.path)).toEqual(["src/new.ts"]);
+	});
+});
+
+describe("range scope", () => {
+	it("resolveBase prefers an explicit ref", () => {
+		const runGit: GitRunner = () => {
+			throw new Error("should not be called");
+		};
+		expect(resolveBase(runGit, "origin/dev")).toBe("origin/dev");
+	});
+
+	it("resolveBase falls back to origin/main then origin/master", () => {
+		const only =
+			(ok: string): GitRunner =>
+			(args) => {
+				if (args[0] === "symbolic-ref") throw new Error("no origin/HEAD");
+				if (args[0] === "rev-parse" && args.at(-1) === ok) return "sha";
+				throw new Error("bad ref");
+			};
+		expect(resolveBase(only("origin/main"))).toBe("origin/main");
+		expect(resolveBase(only("origin/master"))).toBe("origin/master");
+		expect(() => resolveBase(only("none"))).toThrow("No base branch found");
+	});
+
+	it("resolveBase uses the origin/HEAD target when present", () => {
+		const runGit: GitRunner = (args) => {
+			if (args[0] === "symbolic-ref") return "refs/remotes/origin/trunk\n";
+			return "sha";
+		};
+		expect(resolveBase(runGit)).toBe("origin/trunk");
+	});
+
+	it("listRangeChanges reports renames with the old path", () => {
+		const runGit: GitRunner = (args) => {
+			if (args[0] === "merge-base") return "mb1\n";
+			return "A\tsrc/a.ts\nM\tsrc/b.ts\nD\tsrc/c.ts\nR100\tsrc/old.ts\tsrc/new.ts\n";
+		};
+		expect(listRangeChanges(runGit, "origin/main")).toEqual({
+			mergeBase: "mb1",
+			changes: [
+				{ path: "src/a.ts", oldPath: null, status: "A" },
+				{ path: "src/b.ts", oldPath: null, status: "M" },
+				{ path: "src/c.ts", oldPath: null, status: "D" },
+				{ path: "src/new.ts", oldPath: "src/old.ts", status: "R" },
+			],
+		});
+	});
+
+	it("listRangeChanges drops non-code files", () => {
+		const runGit: GitRunner = (args) =>
+			args[0] === "merge-base" ? "mb1" : "M\tREADME.md\nM\tsrc/a.ts\n";
+		expect(
+			listRangeChanges(runGit, "origin/main").changes.map((c) => c.path),
+		).toEqual(["src/a.ts"]);
+	});
+
+	it("diffHash is stable for equal diffs and differs when the diff changes", () => {
+		const mk =
+			(out: string): GitRunner =>
+			() =>
+				out;
+		expect(diffHash(mk("x"), "mb", "a.ts")).toBe(
+			diffHash(mk("x"), "mb", "a.ts"),
+		);
+		expect(diffHash(mk("x"), "mb", "a.ts")).not.toBe(
+			diffHash(mk("y"), "mb", "a.ts"),
+		);
+	});
+
+	it("collectFilesFromRange skips deleted files and honors only", async () => {
+		const runGit: GitRunner = (args) => `// ${args[1]}`;
+		const changes = [
+			{ path: "src/a.ts", oldPath: null, status: "A" as const },
+			{ path: "src/b.ts", oldPath: null, status: "M" as const },
+			{ path: "src/c.ts", oldPath: null, status: "D" as const },
+		];
+		const all = await collectFilesFromRange({ cwd: "/r", changes, runGit });
+		expect(all.map((f) => f.path)).toEqual(["src/a.ts", "src/b.ts"]);
+		expect(all[0].content).toBe("// HEAD:src/a.ts");
+		const some = await collectFilesFromRange({
+			cwd: "/r",
+			changes,
+			only: new Set(["src/b.ts"]),
+			runGit,
+		});
+		expect(some.map((f) => f.path)).toEqual(["src/b.ts"]);
 	});
 });

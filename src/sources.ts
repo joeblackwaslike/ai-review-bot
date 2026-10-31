@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { readFile as fsReadFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -155,6 +156,92 @@ export async function collectFilesFromCommit(opts: {
 			files.push({ path: p, content: runGit(["show", `${opts.sha}:${p}`]) });
 		} catch {
 			// deleted in this commit (or the old side of a rename) — skip
+		}
+	}
+	return files;
+}
+
+export type RangeChange = {
+	path: string;
+	oldPath: string | null;
+	status: "A" | "M" | "D" | "R";
+};
+
+function refExists(runGit: GitRunner, ref: string): boolean {
+	try {
+		runGit(["rev-parse", "--verify", "--quiet", ref]);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+/** Explicit ref, else origin/HEAD's target, else origin/main, else origin/master. */
+export function resolveBase(runGit: GitRunner, explicit?: string): string {
+	if (explicit) return explicit;
+	try {
+		const head = runGit(["symbolic-ref", "refs/remotes/origin/HEAD"]).trim();
+		const ref = head.replace(/^refs\/remotes\//, "");
+		if (ref && refExists(runGit, ref)) return ref;
+	} catch {
+		// no origin/HEAD; fall through
+	}
+	for (const ref of ["origin/main", "origin/master"]) {
+		if (refExists(runGit, ref)) return ref;
+	}
+	throw new Error("No base branch found");
+}
+
+/** Code-file changes between merge-base(base, HEAD) and HEAD. Copies count as added; other statuses as modified. */
+export function listRangeChanges(
+	runGit: GitRunner,
+	base: string,
+): { mergeBase: string; changes: RangeChange[] } {
+	const mergeBase = runGit(["merge-base", "HEAD", base]).trim();
+	const out = runGit(["diff", "-M", "--name-status", mergeBase, "HEAD"]);
+	const changes: RangeChange[] = [];
+	for (const line of out.split("\n")) {
+		const [code, first, second] = line.split("\t");
+		if (!code || !first) continue;
+		const kind = code[0];
+		if (kind === "R" && second) {
+			if (hasCodeExtension(second))
+				changes.push({ path: second, oldPath: first, status: "R" });
+		} else if (hasCodeExtension(kind === "C" && second ? second : first)) {
+			const p = kind === "C" && second ? second : first;
+			const status =
+				kind === "A" || kind === "C" ? "A" : kind === "D" ? "D" : "M";
+			changes.push({ path: p, oldPath: null, status });
+		}
+	}
+	return { mergeBase, changes };
+}
+
+export function diffHash(
+	runGit: GitRunner,
+	mergeBase: string,
+	filePath: string,
+): string {
+	return createHash("sha1")
+		.update(runGit(["diff", mergeBase, "HEAD", "--", filePath]))
+		.digest("hex");
+}
+
+/** Reads non-deleted changed files at HEAD from the object DB. */
+export async function collectFilesFromRange(opts: {
+	cwd: string;
+	changes: RangeChange[];
+	only?: ReadonlySet<string>;
+	runGit?: GitRunner;
+}): Promise<AuditFile[]> {
+	const runGit = opts.runGit ?? defaultGitRunner(opts.cwd);
+	const files: AuditFile[] = [];
+	for (const c of opts.changes) {
+		if (c.status === "D" || (opts.only && !opts.only.has(c.path))) continue;
+		try {
+			files.push({ path: c.path, content: runGit(["show", `HEAD:${c.path}`]) });
+		} catch {
+			// absent at HEAD; skip
 		}
 	}
 	return files;
