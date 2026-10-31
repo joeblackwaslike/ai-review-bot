@@ -266,7 +266,7 @@ export function diffHash(
 	return createHash("sha1").update(withoutPathHeaders(diff)).digest("hex");
 }
 
-/** Reads non-deleted changed files at HEAD from the object DB. */
+/** Reads non-deleted changed files at HEAD from the object DB. A path absent at HEAD is skipped; any other read failure is rethrown. */
 export async function collectFilesFromRange(opts: {
 	cwd: string;
 	changes: RangeChange[];
@@ -279,8 +279,8 @@ export async function collectFilesFromRange(opts: {
 		if (c.status === "D" || (opts.only && !opts.only.has(c.path))) continue;
 		try {
 			files.push({ path: c.path, content: runGit(["show", `HEAD:${c.path}`]) });
-		} catch {
-			// absent at HEAD; skip
+		} catch (err) {
+			if (runGit(["ls-tree", "HEAD", "--", c.path]).trim() !== "") throw err;
 		}
 	}
 	return files;

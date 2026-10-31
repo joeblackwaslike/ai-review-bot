@@ -86,6 +86,10 @@ function fakeGit(state: FakeRepo): GitRunner {
 			if (!f) throw new Error(`no diff for ${args[4]}`);
 			return f.diff;
 		}
+		if (args[0] === "ls-tree") {
+			const f = state.files[args.at(-1) ?? ""];
+			return f && f.status !== "D" ? `100644 blob x\t${args.at(-1)}\n` : "";
+		}
 		if (args[0] === "show" && args[1]?.startsWith("HEAD:")) {
 			const f = state.files[args[1].slice(5)];
 			if (!f || f.status === "D") throw new Error("absent");

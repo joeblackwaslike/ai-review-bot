@@ -249,6 +249,36 @@ describe("range scope", () => {
 		);
 	});
 
+	it("collectFilesFromRange rethrows a read failure for a path that exists at HEAD", async () => {
+		const runGit: GitRunner = (args) => {
+			if (args[0] === "show") throw new Error("fatal: unable to read blob");
+			if (args[0] === "ls-tree") return "100644 blob abc\ta.ts\n";
+			throw new Error(`unexpected ${args.join(" ")}`);
+		};
+		await expect(
+			collectFilesFromRange({
+				cwd: ".",
+				changes: [{ path: "a.ts", oldPath: null, status: "M" }],
+				runGit,
+			}),
+		).rejects.toThrow("unable to read blob");
+	});
+
+	it("collectFilesFromRange skips a path that is absent at HEAD", async () => {
+		const runGit: GitRunner = (args) => {
+			if (args[0] === "show") throw new Error("fatal: path does not exist");
+			if (args[0] === "ls-tree") return "";
+			throw new Error(`unexpected ${args.join(" ")}`);
+		};
+		expect(
+			await collectFilesFromRange({
+				cwd: ".",
+				changes: [{ path: "a.ts", oldPath: null, status: "M" }],
+				runGit,
+			}),
+		).toEqual([]);
+	});
+
 	it("collectFilesFromRange skips deleted files and honors only", async () => {
 		const runGit: GitRunner = (args) => `// ${args[1]}`;
 		const changes = [
