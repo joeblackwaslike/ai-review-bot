@@ -246,6 +246,21 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 							return { cycles, reason: "circuit-breaker" };
 						}
 					}
+					// A push can land while this provider reviews; refresh so the
+					// next provider reviews the current head, not the cycle-start one.
+					if (target !== targets[targets.length - 1]) {
+						try {
+							const refreshed = await pollOctokit.request<PolledPullRequest>(
+								"GET /repos/{owner}/{repo}/pulls/{pull_number}",
+								{ owner, repo, pull_number: pullNumber },
+							);
+							pr = refreshed.data;
+						} catch (pollErr) {
+							log(
+								`ai-review watch: re-poll after ${target.provider} post failed; the next provider will review the previous snapshot: ${errMsg(pollErr)}`,
+							);
+						}
+					}
 				} else if (isNoNewReview(outcome)) {
 					// The triage gate already decided (and persisted to KV) that
 					// this SHA needs no review — a terminal decision, not a

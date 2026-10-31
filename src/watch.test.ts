@@ -498,7 +498,93 @@ describe("watchPr", () => {
 		);
 	});
 
-	it("does not re-poll the PR or write to its description between targets", async () => {
+	const PR_ROUTE = "GET /repos/{owner}/{repo}/pulls/{pull_number}";
+
+	it("hands the next provider the current head when a push lands during the first provider's post", async () => {
+		const request = vi
+			.fn()
+			.mockResolvedValueOnce(pollResponse({ headSha: "old" }))
+			.mockResolvedValueOnce(pollResponse({ headSha: "new" }));
+		const submitReview = vi.fn().mockResolvedValue(posted);
+
+		await watchPr({
+			owner: "o",
+			repo: "r",
+			pullNumber: 5,
+			pollOctokit: { request },
+			targets: [buildTarget("anthropic"), buildTarget("openai")],
+			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
+			sleep: vi.fn().mockResolvedValue(undefined),
+			log: () => {},
+			submitReview,
+			maxCycles: 1,
+		});
+
+		expect(request).toHaveBeenCalledTimes(2);
+		expect(request.mock.calls[1][0]).toBe(PR_ROUTE);
+		const calls = submitReview.mock.calls as unknown as Array<
+			[{ config: { provider: string }; pullRequest: { head: { sha: string } } }]
+		>;
+		const shaFor = (provider: string) =>
+			calls.find(([arg]) => arg.config.provider === provider)?.[0].pullRequest
+				.head.sha;
+		expect(shaFor("anthropic")).toBe("old");
+		expect(shaFor("openai")).toBe("new");
+	});
+
+	it("does not re-poll after the last target in a cycle posts", async () => {
+		const request = vi.fn().mockResolvedValue(pollResponse());
+		const submitReview = vi.fn().mockResolvedValue(posted);
+
+		await watchPr({
+			owner: "o",
+			repo: "r",
+			pullNumber: 5,
+			pollOctokit: { request },
+			targets: [buildTarget("anthropic")],
+			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
+			sleep: vi.fn().mockResolvedValue(undefined),
+			log: () => {},
+			submitReview,
+			maxCycles: 1,
+		});
+
+		expect(request).toHaveBeenCalledTimes(1);
+	});
+
+	it("logs and continues to the next target with the old snapshot when the re-poll fails", async () => {
+		const request = vi
+			.fn()
+			.mockResolvedValueOnce(pollResponse({ headSha: "old" }))
+			.mockRejectedValueOnce(new Error("ETIMEDOUT"));
+		const submitReview = vi.fn().mockResolvedValue(posted);
+		const log = vi.fn();
+
+		await watchPr({
+			owner: "o",
+			repo: "r",
+			pullNumber: 5,
+			pollOctokit: { request },
+			targets: [buildTarget("anthropic"), buildTarget("openai")],
+			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
+			sleep: vi.fn().mockResolvedValue(undefined),
+			log,
+			submitReview,
+			maxCycles: 1,
+		});
+
+		expect(submitReview).toHaveBeenCalledTimes(2);
+		const calls = submitReview.mock.calls as unknown as Array<
+			[{ config: { provider: string }; pullRequest: { head: { sha: string } } }]
+		>;
+		const openaiCall = calls.find(([arg]) => arg.config.provider === "openai");
+		expect(openaiCall?.[0].pullRequest.head.sha).toBe("old");
+		expect(log).toHaveBeenCalledWith(
+			expect.stringContaining("re-poll after anthropic post failed"),
+		);
+	});
+
+	it("never writes to the PR description", async () => {
 		const request = vi.fn().mockResolvedValue(pollResponse({ body: "orig" }));
 		const submitReview = vi.fn().mockResolvedValue(posted);
 
@@ -515,10 +601,8 @@ describe("watchPr", () => {
 			maxCycles: 1,
 		});
 
-		expect(submitReview).toHaveBeenCalledTimes(2);
 		const routes = request.mock.calls.map(([route]) => route as string);
 		expect(routes.filter((r) => r.startsWith("PATCH "))).toEqual([]);
-		expect(request).toHaveBeenCalledTimes(1);
 	});
 
 	// ai-review-bot-599 / docs/post-mortem-review-loop-churn.md: a fast local
