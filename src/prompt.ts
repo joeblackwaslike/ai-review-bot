@@ -192,6 +192,7 @@ export function buildUserMessage(context: PromptContext): string {
 				"",
 				"Do not file any of these again. What each status means:",
 				"- open: already on the record; restating it in different words adds nothing and buries the new material.",
+				"- acknowledged: the author agreed; it is still open, do not argue it or restate it.",
 				"- fixed: the author fixed it; re-raising it is wrong.",
 				"- resolved: it was fixed or the author closed the thread; do not reopen it.",
 				"- rejected: the author declined it as intended; do not argue it again.",

@@ -5,7 +5,7 @@ import {
 	suppressOpenRestatements,
 	suppressSettled,
 } from "./suppress.js";
-import type { LedgerEntry } from "./types.js";
+import { isSettled, type LedgerEntry } from "./types.js";
 
 const settled: LedgerEntry = {
 	id: "e1",
@@ -234,5 +234,34 @@ describe("blocksVerdict advisory", () => {
 			blocksVerdict({ path: "a.ts", severity: "P2", advisory: true }),
 		).toBe(false);
 		expect(blocksVerdict({ path: "a.ts", severity: "P2" })).toBe(true);
+	});
+});
+
+describe("acknowledged entries", () => {
+	const acknowledged: LedgerEntry = {
+		...open,
+		id: "r0:c12:0",
+		status: "acknowledged",
+		decidedBy: "author",
+		reason: "good catch, will fix",
+	};
+
+	it("suppresses a restatement and still holds the verdict", () => {
+		expect(suppressSettled([repeat], [acknowledged]).kept).toEqual([repeat]);
+		const out = suppressInReview(
+			{
+				event: "REQUEST_CHANGES",
+				general_findings: [],
+				inline_comments: [repeat],
+			},
+			[acknowledged],
+		);
+		expect(out.review.inline_comments).toEqual([]);
+		expect(out.review.event).toBe("REQUEST_CHANGES");
+		expect(out.restatedOpen[0]?.entry.id).toBe("r0:c12:0");
+	});
+
+	it("is not settled", () => {
+		expect(isSettled(acknowledged)).toBe(false);
 	});
 });

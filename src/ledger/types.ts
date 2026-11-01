@@ -3,6 +3,7 @@ export type LedgerStatus =
 	| "fixed"
 	| "rejected"
 	| "deferred"
+	| "acknowledged"
 	| "resolved";
 
 export interface LedgerEntry {
@@ -26,4 +27,9 @@ export interface LedgerEntry {
 
 export type Ledger = LedgerEntry[];
 
-export const isSettled = (e: LedgerEntry): boolean => e.status !== "open";
+export const isAcknowledged = (e: LedgerEntry): boolean =>
+	e.status === "acknowledged";
+
+/** Closed by the author or the bot. An acknowledged entry is still open. */
+export const isSettled = (e: LedgerEntry): boolean =>
+	e.status !== "open" && e.status !== "acknowledged";

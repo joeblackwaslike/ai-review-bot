@@ -55,4 +55,45 @@ describe("classifyReplies", () => {
 	it("returns null when nothing matches", () => {
 		expect(classifyReplies([reply("thanks")], anyone)).toBeNull();
 	});
+
+	describe("acknowledged", () => {
+		const status = (body: string) =>
+			classifyReplies([reply(body)], anyone)?.status ?? null;
+
+		it("acknowledges an agreeing reply that promises a fix", () => {
+			expect(status("good catch, will fix")).toBe("acknowledged");
+			expect(status("You're right, I'll fix this")).toBe("acknowledged");
+			expect(status("agreed, fixing")).toBe("acknowledged");
+		});
+
+		it("lets a fix commit, a deferral or a rejection win", () => {
+			expect(status("good catch, fixed in abc1234")).toBe("fixed");
+			expect(status("good catch, will address later")).toBe("deferred");
+			expect(status("good catch, will fix later")).toBe("deferred");
+			expect(status("you're right but won't fix")).toBe("rejected");
+		});
+
+		it("turns fixed when a later reply cites the commit", () => {
+			const d = classifyReplies(
+				[reply("good catch, will fix"), reply("fixed in a1b2c3d4")],
+				anyone,
+			);
+			expect(d?.status).toBe("fixed");
+		});
+
+		it("does not acknowledge hedges, negations or a promise without agreement", () => {
+			expect(status("not sure this is right")).toBeNull();
+			expect(status("agreed, but not fixing this")).toBeNull();
+			expect(status("agreed, we won't be fixing it")).toBeNull();
+			expect(status("will fix")).toBeNull();
+		});
+
+		it("ignores a reply from a non-decider", () => {
+			const d = classifyReplies(
+				[reply("good catch, will fix", "bot")],
+				(r) => r.author !== "bot",
+			);
+			expect(d).toBeNull();
+		});
+	});
 });

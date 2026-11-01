@@ -7,7 +7,12 @@ import {
 	isSameClaim,
 	jaccard,
 } from "../claim-dedupe.js";
-import { isSettled, type Ledger, type LedgerEntry } from "./types.js";
+import {
+	isAcknowledged,
+	isSettled,
+	type Ledger,
+	type LedgerEntry,
+} from "./types.js";
 
 export const CROSS_ROUND_MATCH: ClaimMatchOptions = {
 	lineWindow: Number.POSITIVE_INFINITY,
@@ -190,6 +195,14 @@ export function findSettledMatch(
 	ledger: Ledger,
 ): LedgerEntry | null {
 	return findMatch(finding, ledger, isSettled);
+}
+
+/** The acknowledged entry the finding restates, or null. */
+export function findAcknowledgedMatch(
+	finding: ClaimLike,
+	ledger: Ledger,
+): LedgerEntry | null {
+	return findMatch(finding, ledger, isAcknowledged);
 }
 
 /** The open entry the finding restates, or null. Settled entries never match. */

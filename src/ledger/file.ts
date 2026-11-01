@@ -7,6 +7,7 @@ const STATUSES: readonly LedgerStatus[] = [
 	"fixed",
 	"rejected",
 	"deferred",
+	"acknowledged",
 	"resolved",
 ];
 

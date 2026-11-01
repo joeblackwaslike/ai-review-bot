@@ -188,6 +188,27 @@ describe("deriveBaseline", () => {
 			expect(r?.state.findings.map((f) => f.severity)).toEqual(["P0"]);
 		});
 
+		it("carries an acknowledged entry and holds REQUEST_CHANGES", () => {
+			const acked = entry({
+				id: "r0:c1:0",
+				round: 0,
+				path: "src/a.ts",
+				line: 42,
+				title: "Unchecked cast",
+				status: "acknowledged",
+				decidedBy: "author",
+			});
+			const r = deriveBaseline(
+				{ id: 20, body: body({ carry: "r0:c1:0" }) },
+				warm([acked]),
+				KNOWN_SKILLS,
+			);
+			expect(r?.state.findings.map((f) => f.id)).toEqual([
+				findingId("src/a.ts", 42, "Unchecked cast"),
+			]);
+			expect(r?.state.event).toBe("REQUEST_CHANGES");
+		});
+
 		it("does not carry a listed entry that is no longer open", () => {
 			const b = body({ carry: "r0:c1:0" });
 			const r = deriveBaseline(

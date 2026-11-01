@@ -31,14 +31,14 @@ import {
 	suggestionFingerprint,
 } from "./ledger/fingerprint.js";
 import { loadLedger, reconcileSurvivingPrior } from "./ledger/live.js";
-import { findSettledMatch } from "./ledger/match.js";
+import { findAcknowledgedMatch, findSettledMatch } from "./ledger/match.js";
 import { retargetCarried } from "./ledger/retarget.js";
 import {
 	blocksVerdict,
 	type Suppressed,
 	suppressInReview,
 } from "./ledger/suppress.js";
-import { isSettled, type LedgerEntry } from "./ledger/types.js";
+import { isAcknowledged, isSettled, type LedgerEntry } from "./ledger/types.js";
 import { computeCost, createAIModel } from "./models.js";
 import {
 	type AgentPromptOptions,
@@ -1631,7 +1631,8 @@ function addRestated(
 }
 
 /** The ledger open-restatement suppression may match: every settled entry, and
- * only the open entries behind a carried finding (so not one triage resolved
+ * the acknowledged entries still in the PR, and only the open entries behind a
+ * carried finding (so not one triage resolved
  * this round, one the bot resolved earlier, or one whose file left the PR).
  * A restatement of any other open entry posts fresh. `prPaths` is null when
  * the PR file list is cut short and a missing path proves nothing. */
@@ -1645,7 +1646,7 @@ function holdableLedger(
 		if (isSettled(e)) return true;
 		const f = ledgerEntryFinding(e);
 		const inPr = !prPaths || f.path === null || prPaths.has(f.path);
-		return inPr && carriedIds.has(f.id);
+		return inPr && (isAcknowledged(e) || carriedIds.has(f.id));
 	});
 }
 
@@ -2102,10 +2103,12 @@ export async function buildReview(
 		resolvedThisRound = state.findings.filter((f) => resolvedNowIds.has(f.id));
 	}
 	const priorFindings = state?.findings ?? [];
-	const priorMatches = priorFindings.map((f) => findSettledMatch(f, ledger));
+	const priorMatches = priorFindings.map(
+		(f) => findSettledMatch(f, ledger) ?? findAcknowledgedMatch(f, ledger),
+	);
 	const priorMatchedIds = new Set(priorMatches.map((m) => m?.id));
 	const ledgerOnlySettled = ledger.filter(
-		(e) => isSettled(e) && !priorMatchedIds.has(e.id),
+		(e) => (isSettled(e) || isAcknowledged(e)) && !priorMatchedIds.has(e.id),
 	);
 
 	const scopedFilePaths = scopedFiles.map((f) => f.filename);
