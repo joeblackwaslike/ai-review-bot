@@ -704,6 +704,30 @@ describe("buildReview", () => {
 			).rejects.toThrow("All review agents failed");
 		});
 
+		it("proceeds when an older complete review is followed by a newer partial one at the same sha", async () => {
+			const octokit = buildOctokit({
+				existingReviews: [
+					{ body: bodyWith('{"r":[],"p":[]}') },
+					{ body: bodyWith('{"r":[],"p":["code-reviewer.md"]}') },
+				],
+			});
+			await expect(
+				buildReview({ octokit, ...baseContext, headSha, force: false }),
+			).rejects.toThrow("All review agents failed");
+		});
+
+		it("skips when an older partial review is followed by a newer complete one", async () => {
+			const octokit = buildOctokit({
+				existingReviews: [
+					{ body: bodyWith('{"r":[],"p":["code-reviewer.md"]}') },
+					{ body: bodyWith('{"r":[],"p":[]}') },
+				],
+			});
+			expect(
+				await buildReview({ octokit, ...baseContext, headSha, force: false }),
+			).toBeNull();
+		});
+
 		it("still skips when the review at this sha completed", async () => {
 			const octokit = buildOctokit({
 				existingReviews: [{ body: bodyWith('{"r":[],"p":[]}') }],

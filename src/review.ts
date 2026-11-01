@@ -153,6 +153,7 @@ interface PullRequestReview {
 	id?: number;
 	body?: string | null;
 	state?: string;
+	submitted_at?: string | null;
 }
 
 const STANDING_REVIEW_STATES = new Set([
@@ -1483,16 +1484,32 @@ export async function buildReview(
 		});
 
 	if (!context.force) {
-		const alreadyReviewed = existingReviews.some((review) => {
-			const body = review.body ?? "";
-			if (!ownReviewOf(review)) return false;
-			const meta = parseReviewMetadata(body);
-			if (meta) {
-				if (meta.sha !== context.headSha) return false;
-				return !parseAgentsMarker(body, KNOWN_SKILLS)?.pending.length;
-			}
-			return body.includes(legacyMarker);
-		});
+		// The latest own review at this head decides: an older complete review
+		// must not hide a newer partial one. The API lists oldest first; a
+		// submitted_at, when present on both, wins over array order.
+		const atThisHead = existingReviews
+			.map((review, index) => ({ review, index }))
+			.filter(({ review }) => {
+				if (!ownReviewOf(review)) return false;
+				const body = review.body ?? "";
+				const meta = parseReviewMetadata(body);
+				return meta
+					? meta.sha === context.headSha
+					: body.includes(legacyMarker);
+			})
+			.sort((x, y) => {
+				const tx = Date.parse(x.review.submitted_at ?? "");
+				const ty = Date.parse(y.review.submitted_at ?? "");
+				return (
+					(Number.isNaN(tx) || Number.isNaN(ty) ? 0 : tx - ty) ||
+					x.index - y.index
+				);
+			});
+		const latest = atThisHead.at(-1)?.review;
+		const alreadyReviewed =
+			latest !== undefined &&
+			(!parseReviewMetadata(latest.body ?? "") ||
+				!parseAgentsMarker(latest.body ?? "", KNOWN_SKILLS)?.pending.length);
 
 		if (alreadyReviewed) {
 			return null;
