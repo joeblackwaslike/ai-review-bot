@@ -1,0 +1,4 @@
+pnpm lint
+pnpm typecheck
+pnpm --filter dashboard typecheck
+command -v bd >/dev/null 2>&1 && bd hooks run pre-push "$@" || true
