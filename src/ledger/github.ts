@@ -3,7 +3,7 @@ import type { PostedClaim } from "../replay/types.js";
 import { isOwnReview } from "../review-metadata.js";
 import { parseBodyFindings } from "../review-state.js";
 import { classifyReplies, type DecisionReply } from "./disposition.js";
-import { readFpMarkers } from "./fingerprint.js";
+import { readFpMarkers, stripFpMarkers } from "./fingerprint.js";
 import type { Ledger, LedgerEntry } from "./types.js";
 
 export interface RequestLike {
@@ -59,7 +59,7 @@ export function buildLedger(e: LedgerEvidence): Ledger {
 			line: c.line,
 			severity: c.severity,
 			title: c.title,
-			body: c.text,
+			body: stripFpMarkers(c.text),
 			...readFpMarkers(c.text),
 		};
 		const t = c.commentId === null ? undefined : byComment.get(c.commentId);

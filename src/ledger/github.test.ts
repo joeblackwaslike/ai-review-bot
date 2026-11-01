@@ -171,6 +171,7 @@ describe("buildLedger", () => {
 		const [e] = build([], [{ ...claim(10), text }]);
 		expect(e.fp).toBe("bug|a.ts|abc.0");
 		expect(e.sfp).toBe("def");
+		expect(e.body).toBe("**t**\n\nbody");
 	});
 
 	it("leaves a claim with no thread open", () => {

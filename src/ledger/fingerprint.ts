@@ -5,8 +5,8 @@ const WINDOW_CHARS = 100;
 const HASH_CHARS = 16;
 const MIN_ANCHOR_CHARS = 12;
 const MIN_SUGGESTION_CHARS = 24;
-const FP_MARKER = /<!--\s*ai-review:fp=(.+?)\s*-->/;
-const SFP_MARKER = /<!--\s*ai-review:sfp=(.+?)\s*-->/;
+const FP_LINE = /^<!--\s*ai-review:fp=(.+?)\s*-->$/;
+const SFP_LINE = /^<!--\s*ai-review:sfp=(.+?)\s*-->$/;
 
 const hash = (text: string) =>
 	createHash("sha256").update(text).digest("hex").slice(0, HASH_CHARS);
@@ -103,9 +103,40 @@ export function formatFpMarkers(markers: {
 		.join("\n");
 }
 
-/** Reads the markers back out of a posted comment's text. */
+function splitTrailingMarkers(text: string): { body: string; block: string[] } {
+	const lines = text.split("\n");
+	const block: string[] = [];
+	while (lines.length > 0) {
+		const line = lines[lines.length - 1].trim();
+		if (line === "") {
+			lines.pop();
+		} else if (FP_LINE.test(line) || SFP_LINE.test(line)) {
+			block.unshift(line);
+			lines.pop();
+		} else {
+			break;
+		}
+	}
+	return { body: lines.join("\n"), block };
+}
+
+/** Reads the markers back out of the trailing marker block of a posted
+ * comment's text. Only the block at the very end counts, so a marker written
+ * into the model's own text cannot stand in for the real one. */
 export function readFpMarkers(text: string): { fp?: string; sfp?: string } {
-	const fp = FP_MARKER.exec(text)?.[1];
-	const sfp = SFP_MARKER.exec(text)?.[1];
+	const { block } = splitTrailingMarkers(text);
+	const fp = block
+		.map((l) => FP_LINE.exec(l)?.[1])
+		.filter(Boolean)
+		.at(-1);
+	const sfp = block
+		.map((l) => SFP_LINE.exec(l)?.[1])
+		.filter(Boolean)
+		.at(-1);
 	return { ...(fp ? { fp } : {}), ...(sfp ? { sfp } : {}) };
+}
+
+/** The comment text without its trailing marker block. */
+export function stripFpMarkers(text: string): string {
+	return splitTrailingMarkers(text).body;
 }
