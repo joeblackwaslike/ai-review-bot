@@ -1,5 +1,5 @@
 const WINDOW = 3;
-const MIN_ANCHOR_LENGTH = 3;
+const MIN_ANCHOR_CHARS = 8;
 const FENCE = /^\s*```[\w-]*\s*$/;
 const NUMBER_PREFIX = /^\s*(\d+)\s*[|:]\s?/;
 
@@ -16,51 +16,61 @@ export interface RepairedSuggestion {
 	startLine: number | null;
 }
 
+type FileLines = Map<number, string>;
+
+function isFence(text: string | undefined): boolean {
+	return text !== undefined && FENCE.test(text);
+}
+
 function stripFence(lines: string[]): string[] {
-	if (
-		lines.length >= 2 &&
-		FENCE.test(lines[0]) &&
-		FENCE.test(lines[lines.length - 1])
-	) {
+	if (lines.length >= 2 && isFence(lines[0]) && isFence(lines.at(-1))) {
 		return lines.slice(1, -1);
 	}
 	return lines;
 }
 
-function stripNumberPrefixes(lines: string[]): string[] {
-	const numbers = lines.map((l) => NUMBER_PREFIX.exec(l)?.[1]);
-	if (lines.length === 0 || numbers.some((n) => n === undefined)) return lines;
+function stripNumberPrefixes(
+	lines: string[],
+	start: number,
+	end: number,
+): string[] {
+	const numbers = lines.map((l) => Number(NUMBER_PREFIX.exec(l)?.[1] ?? NaN));
+	if (lines.length === 0 || numbers.some(Number.isNaN)) return lines;
 	const consecutive = numbers.every(
-		(n, i) => i === 0 || Number(n) === Number(numbers[i - 1]) + 1,
+		(n, i) => i === 0 || n === numbers[i - 1] + 1,
 	);
-	if (!consecutive) return lines;
+	const first = numbers[0];
+	const last = numbers[numbers.length - 1];
+	const matchesSpan =
+		Math.abs(first - start) <= WINDOW && Math.abs(last - end) <= WINDOW;
+	if (!consecutive || !matchesSpan) return lines;
 	return lines.map((l) => l.replace(NUMBER_PREFIX, ""));
 }
 
-function indentOf(text: string): number {
-	return text.length - text.trimStart().length;
+function leadingWhitespace(text: string): string {
+	return text.slice(0, text.length - text.trimStart().length);
 }
 
-function tokens(text: string): Set<string> {
-	return new Set(text.toLowerCase().match(/[a-z_]\w*/g) ?? []);
+function nonWhitespaceChars(text: string): number {
+	return text.replace(/\s/g, "").length;
 }
 
-function isAnchor(text: string): boolean {
-	return text.trim().length >= MIN_ANCHOR_LENGTH;
+function sameLine(a: string | undefined, b: string | undefined): boolean {
+	return a !== undefined && b !== undefined && a.trim() === b.trim();
 }
 
-/** Nearest line within the window whose text equals `text` (trimmed). The
- * current position wins; a tie between two distances leaves it unmoved. */
+/** Position of the file line equal to `text` near `current`. The current line
+ * wins; a neighbour only counts when the text is distinctive and unambiguous. */
 function findMatch(
 	text: string,
 	current: number,
-	fileLines: Map<number, string>,
+	fileLines: FileLines,
 ): number | null {
-	const wanted = text.trim();
-	if (!isAnchor(wanted)) return null;
-	for (let d = 0; d <= WINDOW; d++) {
-		const hits = (d === 0 ? [current] : [current - d, current + d]).filter(
-			(n) => fileLines.get(n)?.trim() === wanted,
+	if (sameLine(fileLines.get(current), text)) return current;
+	if (nonWhitespaceChars(text) < MIN_ANCHOR_CHARS) return null;
+	for (let d = 1; d <= WINDOW; d++) {
+		const hits = [current - d, current + d].filter((n) =>
+			sameLine(fileLines.get(n), text),
 		);
 		if (hits.length === 1) return hits[0];
 		if (hits.length > 1) return null;
@@ -68,69 +78,99 @@ function findMatch(
 	return null;
 }
 
-function overlapsRange(
-	lines: string[],
-	start: number,
-	end: number,
-	fileLines: Map<number, string>,
-): boolean {
-	const own = tokens(lines.join("\n"));
-	if (own.size === 0) return true;
-	const original: string[] = [];
-	for (let n = start - WINDOW; n <= end + WINDOW; n++) {
-		const text = fileLines.get(n);
-		if (text !== undefined) original.push(text);
-	}
-	const known = tokens(original.join("\n"));
-	return [...own].some((t) => known.has(t));
+function covers(fileLines: FileLines, from: number, to: number): boolean {
+	for (let n = from; n <= to; n++) if (!fileLines.has(n)) return false;
+	return true;
 }
 
-function reindent(lines: string[], target: number): string[] {
-	const first = lines.find((l) => l.trim().length > 0);
-	if (first === undefined || indentOf(first) >= target) return lines;
-	const pad = " ".repeat(target - indentOf(first));
-	return lines.map((l) => (l.trim().length > 0 ? pad + l : l));
+function absentFrom(
+	lines: string[],
+	from: number,
+	to: number,
+	fileLines: FileLines,
+): boolean {
+	const present = new Set(lines.map((l) => l.trim()));
+	for (let n = from; n <= to; n++) {
+		const text = fileLines.get(n)?.trim();
+		if (text && present.has(text)) return false;
+	}
+	return true;
 }
 
 /** Cleans a model-written suggestion block: unwraps a code fence, drops
- * line-number prefixes, realigns the replaced range to the file lines the
- * suggestion actually starts and ends on (within 3 lines), and restores a lost
- * indentation. Never adds lines. Returns null when the suggestion cannot be
- * tied to the file, so the caller keeps the comment without the block. */
+ * line-number prefixes, restores a lost indentation, and realigns the replaced
+ * range when the suggestion repeats neighbouring file lines verbatim (widen) or
+ * leaves out unchanged edge lines (narrow). Never adds lines and never judges
+ * the content. Returns null only when the block cannot be placed on lines the
+ * diff shows, so the caller keeps the comment without it. */
 export function repairSuggestion(
 	input: RepairInput,
 ): RepairedSuggestion | null {
 	const { fileLines } = input;
+	const start = input.startLine ?? input.line;
+	const end = input.line;
+	if (!covers(fileLines, start, end)) return null;
 	if (input.suggestion.length === 0) {
 		return {
-			suggestion: input.suggestion,
-			line: input.line,
+			suggestion: "",
+			line: end,
 			startLine: input.startLine,
 		};
 	}
-	const lines = stripNumberPrefixes(stripFence(input.suggestion.split("\n")));
-	if (lines.length === 0 || lines.every((l) => l.trim() === "")) return null;
 
-	const start = input.startLine ?? input.line;
+	const keepFences =
+		isFence(fileLines.get(start)) || isFence(fileLines.get(end));
+	const raw = input.suggestion.split("\n");
+	const lines = stripNumberPrefixes(
+		keepFences ? raw : stripFence(raw),
+		start,
+		end,
+	);
+	if (lines.every((l) => l.trim() === "")) return null;
+
+	const s = findMatch(lines[0], start, fileLines);
+	const e = findMatch(lines[lines.length - 1], end, fileLines);
 	let newStart = start;
-	let newEnd = input.line;
-	const first = findMatch(lines[0], start, fileLines);
-	const last = findMatch(lines[lines.length - 1], input.line, fileLines);
-	if (first !== null) newStart = first;
-	if (last !== null) newEnd = last;
+	let newEnd = end;
+
+	if (s !== null && s < start) {
+		const width = start - s;
+		if (!covers(fileLines, s, start)) return null;
+		const verbatim = lines
+			.slice(0, width)
+			.every((l, i) => sameLine(l, fileLines.get(s + i)));
+		if (lines.length > width && verbatim) newStart = s;
+	} else if (s !== null && s > start && e !== null) {
+		if (absentFrom(lines, start, s - 1, fileLines)) newStart = s;
+	}
+
+	if (e !== null && e > end) {
+		const width = e - end;
+		if (!covers(fileLines, end, e)) return null;
+		const tail = lines.slice(lines.length - width);
+		const verbatim = tail.every((l, i) =>
+			sameLine(l, fileLines.get(end + 1 + i)),
+		);
+		if (lines.length > width && verbatim) newEnd = e;
+	} else if (e !== null && e < end && s !== null) {
+		if (absentFrom(lines, e + 1, end, fileLines)) newEnd = e;
+	}
+
 	if (newStart > newEnd) {
 		newStart = start;
-		newEnd = input.line;
+		newEnd = end;
 	}
+	if (!covers(fileLines, newStart, newEnd)) return null;
 
-	const rangeText = fileLines.get(newStart);
-	if (rangeText === undefined || !fileLines.has(newEnd)) return null;
-	if (first === null && last === null) {
-		if (!overlapsRange(lines, start, input.line, fileLines)) return null;
-	}
+	const target = leadingWhitespace(fileLines.get(newStart) ?? "");
+	const firstText = lines.find((l) => l.trim() !== "") ?? "";
+	const indented =
+		target !== "" && leadingWhitespace(firstText) === ""
+			? lines.map((l) => (l.trim() === "" ? l : target + l))
+			: lines;
 
 	return {
-		suggestion: reindent(lines, indentOf(rangeText)).join("\n"),
+		suggestion: indented.join("\n"),
 		line: newEnd,
 		startLine: newStart === newEnd ? null : newStart,
 	};

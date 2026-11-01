@@ -316,20 +316,53 @@ describe("buildReviewComments", () => {
 			expect(comment.line).toBe(2);
 		});
 
-		it("drops an unalignable suggestion block but keeps the comment", () => {
-			const [comment] = buildReviewComments(
+		it("recomputes the anchor fingerprint from the widened range end", () => {
+			const comment = buildInlineComment({
+				line: 1,
+				start_line: null,
+				suggestion:
+					"const firstValue = readConfiguration(options, true);\nconst secondValue = parseConfiguration(firstValue);",
+			});
+			const [posted] = buildReviewComments(
 				[buildPullFile("src/file.ts", patch)],
+				[comment],
+			);
+			expect(posted.line).toBe(2);
+			expect(posted.start_line).toBe(1);
+			expect(readFpMarkers(posted.body).fp).toBe(
+				anchorFingerprint({
+					category: comment.category,
+					path: "src/file.ts",
+					line: 2,
+					patch,
+				}),
+			);
+		});
+
+		it("drops the suggestion, not the comment, when widening would cross a hidden gap", () => {
+			const gapPatch = [
+				"@@ -1,3 +1,3 @@",
+				" const firstValue = readConfiguration(options);",
+				" const secondValue = parseConfiguration(firstValue);",
+				" const thirdValue = applyConfiguration(secondValue);",
+				"@@ -8,2 +6,2 @@",
+				" const sixthValue = readSixth();",
+				"+const seventhValue = parseSeventh(sixthValue);",
+			].join("\n");
+			const [posted] = buildReviewComments(
+				[buildPullFile("src/file.ts", gapPatch)],
 				[
 					buildInlineComment({
-						line: 2,
+						line: 6,
 						start_line: null,
-						suggestion: "zzz = qqq()",
+						suggestion:
+							"const thirdValue = applyConfiguration(secondValue);\nconst sixthValue = fixed();",
 					}),
 				],
 			);
-			expect(comment.line).toBe(2);
-			expect(comment.body).not.toContain("```suggestion");
-			expect(readFpMarkers(comment.body).sfp).toBeUndefined();
+			expect(posted.line).toBe(6);
+			expect(posted.start_line).toBeUndefined();
+			expect(posted.body).not.toContain("```suggestion");
 		});
 	});
 
@@ -352,7 +385,7 @@ describe("buildReviewComments", () => {
 	});
 
 	it("keeps a marker literal inside suggestion code verbatim and unreadable", () => {
-		const code = 'const line2 = "<!-- ai-review:fp=abc -->";';
+		const code = 'return "<!-- ai-review:fp=abc -->";';
 		const [comment] = buildReviewComments(
 			[buildPullFile("src/file.ts", SIMPLE_PATCH)],
 			[buildInlineComment({ line: 2, start_line: null, suggestion: code })],
@@ -443,11 +476,11 @@ describe("buildReviewComments", () => {
 
 	it("labels and separates the suggestion block", () => {
 		const comments = buildReviewComments(files, [
-			buildInlineComment({ line: 2, suggestion: "const line2 = 1;" }),
+			buildInlineComment({ line: 2, suggestion: "const x = 1;" }),
 		]);
 
 		expect(comments[0].body).toContain(
-			"*Suggested fix:*\n\n```suggestion\nconst line2 = 1;\n```",
+			"*Suggested fix:*\n\n```suggestion\nconst x = 1;\n```",
 		);
 	});
 

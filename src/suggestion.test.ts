@@ -1,21 +1,27 @@
 import { describe, expect, it } from "vitest";
 import { repairSuggestion } from "./suggestion.js";
 
-const file = new Map<number, string>([
-	[8, "function run() {"],
-	[9, "  const total = items.length;"],
-	[10, "  if (total > 0) {"],
-	[11, "    return total;"],
-	[12, "  }"],
-	[13, "  return 0;"],
-	[14, "}"],
-]);
+const toMap = (lines: Record<number, string>) =>
+	new Map<number, string>(
+		Object.entries(lines).map(([n, text]) => [Number(n), text]),
+	);
+
+const file = toMap({
+	8: "function run() {",
+	9: "  const total = items.length;",
+	10: "  if (total > 0) {",
+	11: "    return total;",
+	12: "  }",
+	13: "  return 0;",
+	14: "}",
+});
 
 const repair = (
 	suggestion: string,
 	line: number,
 	startLine: number | null = null,
-) => repairSuggestion({ suggestion, line, startLine, fileLines: file });
+	fileLines = file,
+) => repairSuggestion({ suggestion, line, startLine, fileLines });
 
 describe("repairSuggestion", () => {
 	it("leaves a suggestion that already fits untouched", () => {
@@ -33,6 +39,12 @@ describe("repairSuggestion", () => {
 		);
 	});
 
+	it("keeps fences when the replaced file lines are fences", () => {
+		const md = toMap({ 5: "```ts", 6: "old();", 7: "```" });
+		const s = "```ts\nnew();\n```";
+		expect(repair(s, 7, 5, md)?.suggestion).toBe(s);
+	});
+
 	it("strips pipe and colon line-number prefixes", () => {
 		expect(
 			repair("  11 |     return total + 1;\n  12 |   }", 12, 11)?.suggestion,
@@ -42,15 +54,28 @@ describe("repairSuggestion", () => {
 		);
 	});
 
-	it("keeps code that merely looks like a number label", () => {
-		const s = "    return total + 1;\n  42: 1";
-		expect(repair(s, 11)?.suggestion).toBe(s);
+	it("keeps a dict literal that looks like numbered lines", () => {
+		const s = '1: "one",\n2: "two",';
+		expect(repair(s, 11, 10)?.suggestion).toBe(`  ${s.replace("\n", "\n  ")}`);
+	});
+
+	it("keeps a single numeric label far from the anchored line", () => {
+		expect(repair("42: x", 10)?.suggestion).toBe("  42: x");
 	});
 
 	it("re-indents a suggestion that lost its indentation", () => {
 		expect(repair("return total + 1;", 11)?.suggestion).toBe(
 			"    return total + 1;",
 		);
+	});
+
+	it("copies tab indentation verbatim", () => {
+		const tabs = toMap({ 5: "\t\tfoo();" });
+		expect(repair("bar();", 5, null, tabs)?.suggestion).toBe("\t\tbar();");
+	});
+
+	it("leaves a deliberate dedent alone", () => {
+		expect(repair("  }", 11)?.suggestion).toBe("  }");
 	});
 
 	it("widens the range when the suggestion starts with the preceding line", () => {
@@ -62,13 +87,70 @@ describe("repairSuggestion", () => {
 		});
 	});
 
-	it("narrows the range when the suggestion drops the leading lines", () => {
-		const out = repair("    return total;\n  } // end", 12, 10);
-		expect(out?.startLine).toBe(11);
-		expect(out?.line).toBe(12);
+	it("does not widen when the intervening lines are not in the suggestion", () => {
+		const s = "    return total;\n  return 1;";
+		expect(repair(s, 13)).toEqual({ suggestion: s, line: 13, startLine: null });
 	});
 
-	it("returns null when nothing aligns with the file", () => {
-		expect(repair("zzz = qqq()", 11)).toBeNull();
+	it("narrows the range when the suggestion leaves out unchanged edge lines", () => {
+		const s = "    return total;\n  }\n  return 0;";
+		const out = repair(s, 13, 10);
+		expect(out?.startLine).toBe(11);
+		expect(out?.line).toBe(13);
+	});
+
+	it("keeps the range when the suggestion hoists a line out of it", () => {
+		const s = "    return total;\n  return 1;";
+		expect(repair(s, 12, 10)).toEqual({
+			suggestion: s,
+			line: 12,
+			startLine: 10,
+		});
+	});
+
+	it("does not move the range on generic lines", () => {
+		const generic = toMap({ 1: "foo();", 2: "break;", 3: "bar();" });
+		const s = "break;\nbaz();";
+		expect(repair(s, 3, null, generic)).toEqual({
+			suggestion: s,
+			line: 3,
+			startLine: null,
+		});
+		const brace = toMap({ 1: "}", 2: "foo();", 3: "bar();" });
+		const b = "}\nelse {";
+		expect(repair(b, 2, null, brace)).toEqual({
+			suggestion: b,
+			line: 2,
+			startLine: null,
+		});
+	});
+
+	it("keeps a suggestion whose content differs from the file", () => {
+		expect(repair("zzz = qqq()", 11)?.suggestion).toBe("    zzz = qqq()");
+	});
+
+	it("returns null when the anchored line is not in the file text", () => {
+		expect(repair("x = 1;", 99)).toBeNull();
+	});
+
+	it("returns null when the range crosses lines missing from the file text", () => {
+		const gap = toMap({ 3: "a();", 6: "b();" });
+		expect(repair("c();", 6, 3, gap)).toBeNull();
+	});
+
+	it("returns null instead of widening across a hidden gap", () => {
+		const hunks = toMap({
+			1: "const first = one();",
+			2: "const second = two();",
+			3: "const third = applyConfiguration(second);",
+			6: "const sixth = six();",
+			7: "const seventh = seven();",
+		});
+		const s = "const third = applyConfiguration(second);\nconst sixth = fix();";
+		expect(repair(s, 6, null, hunks)).toBeNull();
+	});
+
+	it("returns null for a suggestion that is empty once cleaned", () => {
+		expect(repair("```\n```", 11)).toBeNull();
 	});
 });
