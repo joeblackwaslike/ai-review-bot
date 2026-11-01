@@ -12,6 +12,7 @@ import { type AgentRecord, parseAgentsMarker } from "./agent-log.js";
 import { deriveBaseline } from "./baseline.js";
 import { commentKey } from "./comment-key.js";
 import { collectRightSideLines } from "./diff-lines.js";
+import { packDiff } from "./diff-pack.js";
 import {
 	anchorFingerprint,
 	readFpMarkers,
@@ -91,7 +92,6 @@ vi.mock("./config.js", () => ({
 vi.mock("./prompt.js", async (importOriginal) => ({
 	...(await importOriginal<typeof import("./prompt.js")>()),
 	buildUserMessage: mockBuildUserMessage,
-	trimPatch: (patch: string) => patch,
 	// Tagged with the skill path so a test can route a mocked model response to a
 	// specific agent by what it was asked to review, rather than by the position
 	// of the agent in TIER1_SKILLS. Ordering assumptions pass silently when the
@@ -330,6 +330,17 @@ describe("buildReviewComments", () => {
 		spy.mockRestore();
 		expect(out).toHaveLength(0);
 		expect(logged).toContainEqual(expect.objectContaining({ reason }));
+	});
+
+	it("anchors a comment on a line the diff packer cut, against the full patch", () => {
+		const patch = `@@ -1,0 +1,60 @@\n${Array.from({ length: 60 }, (_, i) => `+row${i}`).join("\n")}`;
+		const full = [buildPullFile("src/file.ts", patch)];
+		const [packed] = packDiff(full, { budgetChars: 200 }).files;
+		expect(collectRightSideLines(packed.patch ?? "").has(55)).toBe(false);
+		const out = buildReviewComments(full, [
+			buildInlineComment({ line: 55, start_line: null }),
+		]);
+		expect(out.map((c) => c.line)).toEqual([55]);
 	});
 
 	const files = [buildPullFile("src/file.ts", SIMPLE_PATCH)];

@@ -552,6 +552,7 @@ export async function maybeSubmitReview(args: {
 			feedbackEnabled: config.feedbackEnabled,
 			agentConcurrency: config.agentConcurrency,
 			agentBudgetMs: config.agentBudgetMs,
+			diffBudgetChars: config.diffBudgetChars,
 			tier2Enabled: config.tier2Enabled,
 			auth,
 		});

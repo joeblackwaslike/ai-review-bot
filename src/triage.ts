@@ -2,7 +2,6 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import type { ResolvedAuth } from "./auth.js";
 import { createAIModel } from "./models.js";
-import { trimPatch } from "./prompt.js";
 import type { PersistedFinding } from "./review-state.js";
 import {
 	type ModelSelection,
@@ -95,6 +94,15 @@ export async function triageReReview(
 
 const REVALIDATE_CHAR_CAP = 60000;
 
+const PATCH_CAP_CHARS = 24000;
+
+/** Per-file cap on a patch sent for revalidation. */
+function capPatch(patch: string): string {
+	return patch.length <= PATCH_CAP_CHARS
+		? patch
+		: `${patch.slice(0, PATCH_CAP_CHARS)}\n\n[patch truncated]`;
+}
+
 /** Asks the triage model which carried findings the current patches fix.
  * `files` must be the PR's complete file list. A finding whose `path` is
  * neither a current filename nor a renamed file's previous name is moot and
@@ -112,7 +120,7 @@ export async function revalidateFindings(
 	auth?: ResolvedAuth,
 ): Promise<string[]> {
 	const blockOf = (file: DeltaFile) =>
-		`FILE: ${file.filename}${file.previous_filename ? ` (renamed from ${file.previous_filename})` : ""}\n${trimPatch(file.patch ?? "[no patch]")}`;
+		`FILE: ${file.filename}${file.previous_filename ? ` (renamed from ${file.previous_filename})` : ""}\n${capPatch(file.patch ?? "[no patch]")}`;
 	// Current names win over previous names if one file took another's path.
 	const byName = new Map<string, DeltaFile>([
 		...files.flatMap((f): [string, DeltaFile][] =>
@@ -144,7 +152,7 @@ export async function revalidateFindings(
 	const restChars = rest.reduce((n, f) => n + blockOf(f).length, 0);
 	const untrimmed = files.every((f) => {
 		const patch = f.patch ?? "[no patch]";
-		return trimPatch(patch) === patch;
+		return capPatch(patch) === patch;
 	});
 	const pathlessFits =
 		files.length > 0 && untrimmed && used + restChars <= REVALIDATE_CHAR_CAP;

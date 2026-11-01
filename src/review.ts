@@ -125,6 +125,8 @@ interface ReviewContext {
 	 * skipped and the review is submitted with what completed — the platform's own
 	 * timeout would otherwise kill the run with nothing posted at all. */
 	agentBudgetMs: number;
+	/** PR-wide diff budget passed to `buildUserMessage`; absent means the default. */
+	diffBudgetChars?: number;
 	tier2Enabled: boolean;
 	/** Local subscription/OAuth or explicit API-key auth for this review's model
 	 * calls. Omitted on the hosted webhook path (env-var API keys apply via
@@ -2150,6 +2152,7 @@ export async function buildReview(
 		changedFiles: context.changedFiles,
 		labels: context.labels,
 		extraInstructions: context.extraInstructions,
+		diffBudgetChars: context.diffBudgetChars,
 		priorBotReviews,
 		priorOwnReview,
 		priorOwnFindings: tuning.showPriorOwnFindings
@@ -2480,9 +2483,13 @@ export async function buildReview(
 		.filter((a) => !(a.attempt === 2 && a.outcome.status === "skipped"))
 		.map((a) => toRecord(a.skill, a.attempt, a.outcome));
 	// A pending skill clears only on an ok run over the whole PR with nothing
-	// missing or trimmed. Pending afterwards: what was pending and did not
+	// missing, truncated or omitted by the diff packer. Pending afterwards: what was pending and did not
 	// clear (run or not), plus every skill that ran this round and did not end ok.
-	const inputComplete = wholePrInputComplete(files, context.changedFiles);
+	const inputComplete = wholePrInputComplete(
+		files,
+		context.changedFiles,
+		context.diffBudgetChars,
+	);
 	const ranNames = allSkills.map((s) => skillName(s.skillPath));
 	const cleared = scheduledPending.filter((s) => {
 		const i = ranNames.indexOf(s);

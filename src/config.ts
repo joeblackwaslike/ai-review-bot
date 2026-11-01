@@ -1,3 +1,5 @@
+import { DEFAULT_DIFF_BUDGET_CHARS } from "./diff-pack.js";
+
 export interface AppConfig {
 	appId: string;
 	privateKey: string;
@@ -18,6 +20,8 @@ export interface AppConfig {
 	improveCarrierEnabled: boolean;
 	agentConcurrency: number;
 	agentBudgetMs: number;
+	/** PR-wide character budget for the numbered diff shown to agents. */
+	diffBudgetChars: number;
 	tier2Enabled: boolean;
 	qstashToken?: string;
 	qstashCurrentSigningKey?: string;
@@ -85,6 +89,13 @@ export function parseAgentBudgetMs(): number {
 	return Math.max(1, ms);
 }
 
+/** `REVIEW_DIFF_BUDGET_CHARS` as a positive integer; anything else gives the
+ * default. */
+export function parseDiffBudgetChars(): number {
+	const raw = Number(process.env.REVIEW_DIFF_BUDGET_CHARS);
+	return Number.isInteger(raw) && raw > 0 ? raw : DEFAULT_DIFF_BUDGET_CHARS;
+}
+
 /** Sequential agents cannot fit a review in the 300s Hobby cap (measured 212s at
  * 1 vs 75s at 4 on a 14-file diff, same cost, no 429s). Lower it if a provider's
  * input-tokens-per-minute limit starts rejecting the burst. */
@@ -144,6 +155,7 @@ export function getConfig(opts: GetConfigOptions = {}): AppConfig {
 		improveCarrierEnabled: process.env.IMPROVE_CARRIER_ENABLED === "true",
 		agentConcurrency: parseAgentConcurrency(),
 		agentBudgetMs: parseAgentBudgetMs(),
+		diffBudgetChars: parseDiffBudgetChars(),
 		tier2Enabled: process.env.REVIEW_TIER2_ENABLED !== "false",
 		qstashToken: process.env.QSTASH_TOKEN,
 		qstashCurrentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY,
@@ -181,6 +193,7 @@ export function getOpenAIAppConfig(opts: GetConfigOptions = {}): AppConfig {
 		improveCarrierEnabled: process.env.IMPROVE_CARRIER_ENABLED === "true",
 		agentConcurrency: parseAgentConcurrency(),
 		agentBudgetMs: parseAgentBudgetMs(),
+		diffBudgetChars: parseDiffBudgetChars(),
 		tier2Enabled: process.env.REVIEW_TIER2_ENABLED !== "false",
 		qstashToken: process.env.QSTASH_TOKEN,
 		qstashCurrentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY,

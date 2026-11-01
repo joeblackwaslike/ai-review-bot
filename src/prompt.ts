@@ -2,6 +2,11 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { numberPatchLines } from "./diff-lines.js";
+import {
+	DEFAULT_DIFF_BUDGET_CHARS,
+	isGeneratedFile,
+	packDiff,
+} from "./diff-pack.js";
 
 const skillsDir = fileURLToPath(new URL("../skills", import.meta.url));
 
@@ -34,6 +39,9 @@ export interface PromptContext {
 		status: string;
 		patch?: string;
 	}>;
+	/** PR-wide budget for the numbered diff text (`packDiff`); defaults to
+	 * `DEFAULT_DIFF_BUDGET_CHARS`. */
+	diffBudgetChars?: number;
 	priorBotReviews?: string[];
 	priorOwnReview?: string | null;
 	/** Every finding this reviewer already filed on this PR, with its current
@@ -90,42 +98,14 @@ function dispositionNote(f: PriorOwnFinding): string {
 	return ` [${label}${by}${why}]`;
 }
 
-export function trimPatch(patch: string, maxChars = 24000): string {
-	if (patch.length <= maxChars) {
-		return patch;
-	}
-
-	return `${patch.slice(0, maxChars)}\n\n[patch truncated]`;
-}
-
-const GENERATED_NAMES = new Set([
-	"package-lock.json",
-	"pnpm-lock.yaml",
-	"yarn.lock",
-	"bun.lock",
-	"Cargo.lock",
-	"poetry.lock",
-	"go.sum",
-]);
-
-/** Lock and generated files, which reviewers are not expected to read. */
-export function isGeneratedFile(path: string): boolean {
-	const name = path.split("/").pop() ?? path;
-	return (
-		GENERATED_NAMES.has(name) ||
-		name.endsWith(".min.js") ||
-		name.endsWith(".snap")
-	);
-}
-
 /** GitHub lists at most this many files for a pull request. */
 export const PR_FILE_LIST_CAP = 3000;
 
 /** True when these files are the whole PR as a FULL round sees it: the list
  * is not cut short, and every file other than a generated one has a patch or
- * has no changes to show (a binary file, a pure rename). A patch `trimPatch`
- * cuts still counts, since every FULL round gives every agent the same cut.
- * Only such input clears a pending skill. */
+ * has no changes to show (a binary file, a pure rename), and `packDiff` under
+ * `budgetChars` neither truncates nor omits it. Only such input clears a
+ * pending skill. */
 export function wholePrInputComplete(
 	files: ReadonlyArray<{
 		filename: string;
@@ -134,27 +114,64 @@ export function wholePrInputComplete(
 		deletions?: number;
 	}>,
 	changedFiles: number,
+	budgetChars: number = DEFAULT_DIFF_BUDGET_CHARS,
 ): boolean {
 	if (files.length < changedFiles || files.length >= PR_FILE_LIST_CAP)
 		return false;
+	const packed = packDiff(
+		files.map((f) => ({ ...f, status: "" })),
+		{ budgetChars },
+	);
+	const cut = new Set([
+		...packed.omitted,
+		...packed.files.filter((f) => f.truncated).map((f) => f.filename),
+	]);
 	return files.every(
 		(f) =>
 			isGeneratedFile(f.filename) ||
-			Boolean(f.patch) ||
-			(f.additions === 0 && f.deletions === 0),
+			((Boolean(f.patch) || (f.additions === 0 && f.deletions === 0)) &&
+				!cut.has(f.filename)),
 	);
 }
 
-function serializeFiles(files: PromptContext["files"]): string {
-	return files
-		.map((file) => {
-			const header = `FILE: ${file.filename}\nSTATUS: ${file.status}`;
-			const patch = file.patch
-				? `PATCH:\n${numberPatchLines(trimPatch(file.patch))}`
-				: "PATCH: [not available]";
-			return `${header}\n${patch}`;
-		})
+/** Omitted names shown to the model before the rest are counted. */
+const MAX_OMITTED_NAMES = 100;
+
+function omittedLine(omitted: string[]): string[] {
+	if (omitted.length === 0) return [];
+	const shown = omitted.slice(0, MAX_OMITTED_NAMES);
+	const more = omitted.length - shown.length;
+	return [
+		`Files not shown (over the diff budget): ${shown.join(", ")}${more > 0 ? `, and ${more} more` : ""}`,
+		"",
+	];
+}
+
+function patchSection(file: {
+	patch?: string;
+	truncated: boolean;
+	deletionsOnly: boolean;
+}): string {
+	if (file.deletionsOnly) return "PATCH: [deletions only]";
+	if (!file.patch) return "PATCH: [not available]";
+	const label = file.truncated
+		? "PATCH (truncated at the diff budget, later hunks not shown):"
+		: "PATCH:";
+	return `${label}\n${numberPatchLines(file.patch)}`;
+}
+
+function serializeFiles(
+	files: PromptContext["files"],
+	budgetChars: number,
+): string {
+	const packed = packDiff(files, { budgetChars });
+	const body = packed.files
+		.map(
+			(file) =>
+				`FILE: ${file.filename}\nSTATUS: ${file.status}\n${patchSection(file)}`,
+		)
 		.join("\n\n---\n\n");
+	return [...omittedLine(packed.omitted), body].join("\n");
 }
 
 export function buildUserMessage(context: PromptContext): string {
@@ -226,7 +243,10 @@ export function buildUserMessage(context: PromptContext): string {
 		context.diffScope
 			? `Changed file diffs (${context.diffScope}):`
 			: "Changed file diffs:",
-		serializeFiles(context.files),
+		serializeFiles(
+			context.files,
+			context.diffBudgetChars ?? DEFAULT_DIFF_BUDGET_CHARS,
+		),
 	].join("\n");
 }
 
@@ -246,7 +266,7 @@ export function buildAuditUserMessage(context: AuditContext): string {
 	const serialized = context.files
 		.map((f) => {
 			// Audited files are whole-file content (size-bounded by batching in
-			// runAuditPass), not diffs — do not run them through trimPatch.
+			// runAuditPass), not diffs — do not run them through packDiff.
 			return `FILE: ${f.path}\nCONTENT:\n${f.content}`;
 		})
 		.join("\n\n---\n\n");

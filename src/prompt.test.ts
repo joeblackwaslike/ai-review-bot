@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { isGeneratedFile } from "./diff-pack.js";
 import {
 	buildAgentSystemPrompt,
 	buildAuditUserMessage,
 	buildUserMessage,
 	fenceUntrusted,
-	isGeneratedFile,
 	MAX_REASON_CHARS,
 	wholePrInputComplete,
 } from "./prompt.js";
@@ -25,6 +25,72 @@ describe("buildAgentSystemPrompt epistemic guardrails", () => {
 	it("flags that type-only imports have no runtime effect", () => {
 		expect(prompt).toContain("import type");
 		expect(prompt).toContain("erased at compile time");
+	});
+});
+
+describe("buildUserMessage diff packing", () => {
+	const rows = (n: number, tag: string) =>
+		`@@ -1,0 +1,${n} @@\n${Array.from({ length: n }, (_, i) => `+${tag}${i}`).join("\n")}`;
+	const base = {
+		owner: "o",
+		repo: "r",
+		pullNumber: 1,
+		headSha: "abc",
+		title: "t",
+		body: null,
+		additions: 1,
+		deletions: 0,
+		changedFiles: 1,
+		labels: [],
+		extraInstructions: "",
+	};
+
+	it("numbers the packed lines and names the files over the budget", () => {
+		const msg = buildUserMessage({
+			...base,
+			diffBudgetChars: 300,
+			files: [
+				{ filename: "big.ts", status: "modified", patch: rows(40, "big") },
+				{ filename: "a.ts", status: "added", patch: rows(5, "a") },
+				{ filename: "b.ts", status: "added", patch: rows(4, "b") },
+			],
+		});
+		expect(msg).toContain("   1|+big0");
+		expect(msg).toContain("FILE: big.ts\nSTATUS: modified\nPATCH (truncated");
+		expect(msg).toContain("[patch truncated]");
+		expect(msg).toContain("Files not shown (over the diff budget): a.ts, b.ts");
+		expect(msg).not.toContain("FILE: a.ts");
+	});
+
+	it("says a deletions-only file is there without showing its hunks", () => {
+		const msg = buildUserMessage({
+			...base,
+			files: [
+				{
+					filename: "gone.ts",
+					status: "modified",
+					patch: "@@ -1,2 +0,0 @@\n-a\n-b",
+				},
+			],
+		});
+		expect(msg).toContain(
+			"FILE: gone.ts\nSTATUS: modified\nPATCH: [deletions only]",
+		);
+		expect(msg).not.toContain("|-a");
+	});
+
+	it("caps the omitted list at 100 names", () => {
+		const files = [
+			{ filename: "big.ts", status: "modified", patch: rows(40, "big") },
+			...Array.from({ length: 105 }, (_, i) => ({
+				filename: `f${String(i).padStart(3, "0")}.ts`,
+				status: "added",
+				patch: rows(1, "x"),
+			})),
+		];
+		const msg = buildUserMessage({ ...base, diffBudgetChars: 300, files });
+		expect(msg).toContain("f099.ts, and 5 more");
+		expect(msg).not.toContain("f100.ts");
 	});
 });
 
@@ -351,10 +417,30 @@ describe("wholePrInputComplete", () => {
 		expect(wholePrInputComplete([file("a.ts"), file("b.ts")], 2)).toBe(true);
 	});
 
-	it("a patch trimmed by the size limit still counts as complete", () => {
+	it("a file the packer truncates is incomplete", () => {
+		const patch = `@@ -1,0 +1,40 @@\n${Array.from({ length: 40 }, (_, i) => `+row${i}`).join("\n")}`;
 		expect(
-			wholePrInputComplete([file("a.ts", { patch: big, additions: 1 })], 1),
-		).toBe(true);
+			wholePrInputComplete([file("a.ts", { patch, additions: 40 })], 1, 200),
+		).toBe(false);
+	});
+
+	it("a file the packer omits is incomplete", () => {
+		const patch = `@@ -1,0 +1,10 @@\n${Array.from({ length: 10 }, (_, i) => `+row${i}`).join("\n")}`;
+		const files = [
+			file("a.ts", { patch, additions: 10 }),
+			file("b.ts", { patch: "@@ -1 +1 @@\n+x", additions: 1 }),
+		];
+		expect(wholePrInputComplete(files, 2, 200_000)).toBe(true);
+		const fitsA = 140;
+		expect(wholePrInputComplete(files, 2, fitsA)).toBe(false);
+	});
+
+	it("a generated file the packer omits does not block", () => {
+		const files = [
+			file("a.ts"),
+			file("pnpm-lock.yaml", { patch: big, additions: 900 }),
+		];
+		expect(wholePrInputComplete(files, 2, 100)).toBe(true);
 	});
 
 	it("a file with no patch and no changes (binary, pure rename) is complete", () => {
