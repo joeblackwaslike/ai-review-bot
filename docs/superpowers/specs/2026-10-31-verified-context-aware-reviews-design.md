@@ -1,17 +1,17 @@
 ---
 epic: ai-review-bot-t0c
-status: approved; prose pass and Codex review pending
+status: approved; prose pass done, Codex review pending
 ---
 
 # Design: verified, context-aware reviews (precision + depth)
 
 ## Context
 
-A deep-research report compared PR-Agent, Kodus and Anthropic's Claude Code review stack with ai-review-bot. Its core argument is that every peer runs a refutation check between generating a finding and posting it, and ai-review-bot does not. That missing check explains much of the Claude bot's poor precision: 4/10 right against Codex's 17/18 in the 2026-10-25 incident.
+A deep-research report compared PR-Agent, Kodus and Anthropic's Claude Code review stack with ai-review-bot. Its core argument is that every peer runs a refutation check between generating a finding and posting it, and ai-review-bot does not. That gap likely explains much of the Claude bot's poor precision: 4 of 10 findings right, against Codex's 17 of 18, in the 2026-10-25 incident.
 
-I checked the report's code claims against HEAD `997063e` with two Explore passes and read the cited code myself. Its direction is right. Several specifics are stale or wrong, and it missed two false-positive sources and one real bug. This epic is **new and independent** of the closed `ai-review-bot-w9b` epic. The report's "sprint N" labels are not used.
+The report's code claims were checked against HEAD `997063e` by two read-only search passes, and the cited code was read directly. Its direction holds. Several specifics are stale or wrong, and it missed two false-positive sources and one real bug. This epic is independent of the closed `ai-review-bot-w9b` epic, and the report's "sprint N" labels are not used.
 
-**The goal:** posted findings are (1) checked by a model that didn't write them and can read the file, (2) produced by finders that can look beyond the diff, and (3) free of the deterministic false-positive sources in the merge and anchor layers. The current lens-agent shape is kept until measurement justifies changing it.
+Goal: posted findings are (1) checked by a model that didn't write them and can read the file, (2) produced by finders that can look beyond the diff, and (3) free of the deterministic false-positive sources in the merge and anchor layers. The lens-agent shape stays until measurement justifies changing it.
 
 ### Report claims, as verified
 
@@ -28,7 +28,7 @@ I checked the report's code claims against HEAD `997063e` with two Explore passe
 | (missed) Distinct findings at the same `path:line` are folded into one comment ([src/review.ts:619-629](src/review.ts#L619-L629)) | A false positive rides along with a real finding |
 | (missed) Strict-evidence prompt uses `high/medium/low` while the schema demands P0–P3 ([src/prompt.ts:266-282](src/prompt.ts#L266-L282) vs [src/review.ts:318](src/review.ts#L318)) | Contradictory instructions |
 
-### Decisions (owner, this session)
+### Decisions (made by the owner before approval)
 
 1. **Verifier is cross-vendor.** Codex checks Claude's findings and Claude checks Codex's. Verdict comes first, a finding is dropped only on refutation, and the verifier sees the full head file.
 2. **Agent restructure: measure, then decide.** A decision story is gated on per-skill data.
@@ -37,7 +37,7 @@ I checked the report's code claims against HEAD `997063e` with two Explore passe
 
 ## Disposition of every report recommendation
 
-Status key: **Planned** = already a story above; **Added** = new story added in this revision; **Modified** = adopted with a change (reason given); **Deferred** / **Rejected** = not in this epic (reason given).
+Status key: **Planned** = already a story above; **Added** = new story not in the report-derived first draft; **Modified** = adopted with a change (reason given); **Deferred** / **Rejected** = not in this epic (reason given).
 
 ### Priority list (report §"What to adopt")
 
@@ -123,14 +123,14 @@ Self-scored 1–10 gates, publishing unvetted suggestions on reflection failure,
 
 ## Owner-only action
 
-- **Upgrade the Vercel team to Pro.** This is a billing action only the account owner can take, needed before Phase E1 ships. Everything else is agent work.
+- Upgrade the Vercel team to Pro. Only the account owner can do this, and it must happen before E1 ships. All other work is agent work.
 
 ## Global constraints
 
 - `src/auth.ts` (subscription/OAuth) is never imported from webhook, verifier or tools modules. They take resolved auth from the caller, and hosted uses API keys only.
 - Budget split under 800s: about 80s for fetch, triage and sandbox boot in parallel; agents 500s; verifier 100s; summary and post 120s. Never let agent budget plus verifier exceed about 650s.
 - Every behavior change gets a failing test first (TDD). Every precision change gets a replay metric before/after. Fixture claims are small-sample (about 234 claims, about 71 rejected), so results are directional.
-- The two-independent-opinions pitch is kept: finders stay independent, and the verifier can only **drop**, never add or rewrite. The review body shows "N dropped by the <other vendor> verifier". `VERIFY_ENABLED` toggles it per bot.
+- The two-independent-opinions pitch holds: finders stay independent, and the verifier can only drop findings, never add or rewrite them. The review body shows "N dropped by the <other vendor> verifier". `VERIFY_ENABLED` toggles it per bot.
 
 ## Phases and stories
 
@@ -164,7 +164,7 @@ Sizes: S ≤ ½ day, M 1–2 days, L 3–5 days.
 
 ### Phase D: cross-vendor verifier
 
-- **Spike S3 first.** Run the verifier prompt offline over the labelled fixtures with cheap (haiku/luna) and mid tiers. Pick the tier by kept-real/dropped-real. This covers the Uber result that grader choice moves F1 by 4.5 points, and the warning in the `qc.ts` comment that one vendor's style may mark down the other's.
+- Spike S3 comes first. Run the verifier prompt offline over the labelled fixtures with cheap (haiku/luna) and mid tiers. Pick the tier by kept-real/dropped-real. This covers the Uber result that grader choice moves F1 by 4.5 points, and the warning in the `qc.ts` comment that one vendor's style may mark down the other's.
 - **D1. `src/verify.ts`** (L, after C1–C2 + S3).
   - Placement: after merge, dedupe and off-diff drop; before the 50-comment cap.
   - `generateObject` with schema `{ refuted: boolean, reason: enum, rationale }`. The verdict comes first. The reason enum is: wrong root cause, impossible path, pure style, generic "missing X", contradicts a settled ledger entry.
