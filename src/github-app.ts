@@ -718,14 +718,11 @@ export async function maybeSubmitReview(args: {
 			}
 
 			try {
-				await resolveStaleThreads(
-					octokit,
-					owner,
-					repo,
-					pullNumber,
-					config.reviewCommentPrefix,
-					review.validLinesByPath,
-				);
+				await resolveStaleThreads(octokit, owner, repo, pullNumber, {
+					commentPrefix: config.reviewCommentPrefix,
+					provider: config.provider,
+					resolved: review.resolvedFindings ?? [],
+				});
 			} catch (resolveErr) {
 				console.error("failed to resolve stale threads", resolveErr);
 			}

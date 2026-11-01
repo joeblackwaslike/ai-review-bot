@@ -8,7 +8,7 @@ This file provides context and conventions for AI coding agents working on this 
 pnpm install
 pnpm typecheck    # tsc --noEmit — must pass before any commit
 pnpm lint         # biome check — must pass before any commit
-pnpm test         # vitest run (1481 passed, 4 skipped) — must pass before any commit
+pnpm test         # vitest run (1510 passed, 4 skipped) — must pass before any commit
 pnpm dev          # vercel dev — local server on :3000
 ```
 
@@ -36,7 +36,7 @@ POST /api/github/review-run        (QStash delayed callback)
 
 ### Two-layer review architecture
 
-**Agent layer** (`src/review.ts` → `runAgent()`): Five Tier 1 agents (plus any activated Tier 2 agents) fire in parallel via `Promise.allSettled()`. Each call uses a focused system prompt (`buildAgentSystemPrompt(skillPath, customPrompt)` from `src/prompt.ts`) with prompt caching enabled. All agents share the same user message (`buildUserMessage()` — PR metadata + serialized diff). `Promise.allSettled` ensures one agent failure doesn't abort the whole review.
+**Agent layer** (`src/review.ts` → `runAgent()`): Five Tier 1 agents (plus any activated Tier 2 agents) run through `mapWithConcurrency()` (the first agent alone, then up to `AGENT_CONCURRENCY` at a time). Each call sends the shared PR metadata and serialized diff (`buildUserMessage()`) as the first, cached block of the user message, followed by that agent's focused skill text (`buildAgentSystemPrompt(skillPath, customPrompt)` from `src/prompt.ts`) as a second, uncached block. `runAgent()` catches each agent's failure itself, so one failure doesn't abort the whole review.
 
 **Merge layer** (`src/review.ts` → `mergeReviews()`): After all agents settle, findings are merged:
 
@@ -49,7 +49,7 @@ Settled repeats are dropped per agent before this merge, and a re-review round w
 
 Findings carried from the previous review appear in the body's "Still open from the previous review" table. A carried finding whose file has left the PR moves to a "Retired, file no longer in this PR" block and no longer holds the PR at `REQUEST_CHANGES`. When the PR file list is cut short, nothing is retired, because a missing path proves nothing (see `docs/superpowers/specs/2026-10-30-vercel-parity-design.md`).
 
-**Diff anchor validation** (`buildReviewComments()`): Before submission, every inline comment is checked against the set of valid right-side line numbers extracted from the unified diff (`collectRightSideLines()`). Comments referencing lines not in the diff are dropped silently rather than erroring the review.
+**Diff anchor validation** (`buildReviewComments()`): Before submission, every inline comment is checked against the set of valid right-side line numbers extracted from the unified diff (`collectRightSideLines()`). Comments referencing lines not in the diff are first moved to the nearest valid line within 5 lines by `sanitizeInlineComments`; any that still cannot be anchored are listed in the review body ("could not be anchored… posted here instead") rather than erroring the review.
 
 **Fallback retry** (`src/github-app.ts` → `maybeSubmitReview()`): If the GitHub Reviews API rejects the POST, the bot retries up to 3 times with exponential backoff. If all retries fail, it posts a regular PR comment preserving the findings.
 
@@ -138,7 +138,7 @@ Each skill file is loaded by `buildAgentSystemPrompt(skillPath, ...)` in `src/pr
 - **Conventional commits** for commit messages (`feat:`, `fix:`, `refactor:`, etc.)
 - **No mocking of real skill files in tests** — `./prompt.js` is mocked wholesale in `review.test.ts`; the test mock exports `buildUserMessage` and `buildAgentSystemPrompt`
 - **Structured output via `generateObject`** — `ModelReviewSchema` (zod, `src/review.ts`) is the single source of truth for `ModelReview`. The AI SDK sends it as native structured output (`output_config.format`) on Claude 5.5. Never force a tool call instead: Opus/Sonnet 5.5 return a 400 on forced `tool_choice`, and `@ai-sdk/anthropic` < 3.0.135 fell back to exactly that for 5.5 model IDs it didn't recognize (ai-review-bot-j2j)
-- **Prompt caching** — `cache_control: { type: "ephemeral" }` on every agent's system prompt; the user message (diff) is not cached because it changes per PR
+- **Prompt caching** — in `runAgent()` the first block of each agent's user message is the shared PR metadata and diff, marked `cacheControl: { type: "ephemeral" }` (Anthropic), and the per-skill text block follows it. The first agent runs alone (`serialFirst`) so its cache write is readable by the rest, which then run up to `AGENT_CONCURRENCY` at a time
 
 ## Adding or replacing a skill
 
