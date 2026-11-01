@@ -2,9 +2,8 @@ import { createHash } from "node:crypto";
 import { ledgerEntryFinding } from "./baseline.js";
 import { type ClaimLike, isSameClaim } from "./claim-dedupe.js";
 import {
-	CROSS_ROUND_MATCH,
+	DECLARED_P0_CLAIM_MATCH,
 	FINGERPRINT_CLAIM_MATCH,
-	P0_CLAIM_MATCH,
 } from "./ledger/match.js";
 import type { LedgerEntry } from "./ledger/types.js";
 import { recoverLocation } from "./review-state.js";
@@ -90,17 +89,17 @@ export function resolveRelations<T extends Related>(
 
 const SEVERITY_RANK: Record<string, number> = { P0: 3, P1: 2, P2: 1, P3: 0 };
 
-/** Whether a declared repeat is believable: the same claim on the same path at the relaxed fingerprint bar (the P0 bar for a P0), and not more severe than the entry. */
+/** Whether a declared repeat is believable: the same claim on the same path at the relaxed fingerprint bar (0.8 for a P0), and not more severe than the entry. */
 function plausibleRepeat(f: ClaimLike, entry: LedgerEntry): boolean {
 	const e = recoverLocation(entry);
 	if ((f.path ?? null) !== (e.path ?? null)) return false;
 	if ((SEVERITY_RANK[f.severity ?? ""] ?? 0) > (SEVERITY_RANK[e.severity] ?? 0))
 		return false;
-	if (f.severity === "P0")
-		return (
-			isSameClaim(f, e, P0_CLAIM_MATCH) || isSameClaim(f, e, CROSS_ROUND_MATCH)
-		);
-	return isSameClaim(f, e, FINGERPRINT_CLAIM_MATCH);
+	return isSameClaim(
+		f,
+		e,
+		f.severity === "P0" ? DECLARED_P0_CLAIM_MATCH : FINGERPRINT_CLAIM_MATCH,
+	);
 }
 
 /** Finds the entry a `repeats` finding declared, among the entries suppression may match. A declaration that fails the plausibility check is ignored. */

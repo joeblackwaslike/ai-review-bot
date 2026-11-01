@@ -131,7 +131,13 @@ describe("declaredRepeat at P0", () => {
 		},
 	});
 
-	it("refuses a related-but-different P0 at the relaxed bar", () => {
+	it("refuses a related-but-different P0 two lines away", () => {
+		expect(
+			declaredRepeat([p0])(declared("Token bypass in verify()", 12)),
+		).toBeUndefined();
+	});
+
+	it("refuses a related P0 far from the entry", () => {
 		expect(
 			declaredRepeat([p0])(
 				declared("Unvalidated token in verify() allows forgery", 200),

@@ -37,6 +37,13 @@ export const FINGERPRINT_CLAIM_MATCH: ClaimMatchOptions = {
 	identifierSimilarity: 0.5,
 };
 
+/** Bar for a declared `repeats` on a P0: a model's say-so suppresses it, so the title and a shared identifier both need 0.8 within the usual line window. */
+export const DECLARED_P0_CLAIM_MATCH: ClaimMatchOptions = {
+	...DEFAULT_CLAIM_MATCH,
+	titleSimilarity: 0.8,
+	identifierSimilarity: 0.8,
+};
+
 const normalizeTitle = (title: string) => title.trim().toLowerCase();
 
 const fullText = (c: ClaimLike) => (c.body ? `${c.title}\n${c.body}` : c.title);
@@ -148,16 +155,13 @@ const RULES: Rule[] = [
 	isCrossSurfaceRepeat,
 ];
 
-/** A shared identifier does not lower the tier 1 bar for a P0. */
-export const P0_CLAIM_MATCH: ClaimMatchOptions = {
-	...DEFAULT_CLAIM_MATCH,
-	identifierSimilarity: DEFAULT_CLAIM_MATCH.titleSimilarity,
-};
-
 /** A wrongly suppressed P0 costs the most, so it gets only the title rules, and
  * a shared identifier does not lower the tier 1 bar. */
 const P0_RULES: Rule[] = [
-	tierRule(P0_CLAIM_MATCH),
+	tierRule({
+		...DEFAULT_CLAIM_MATCH,
+		identifierSimilarity: DEFAULT_CLAIM_MATCH.titleSimilarity,
+	}),
 	tierRule(CROSS_ROUND_MATCH),
 	isMovedFileRepeat,
 	isCrossSurfaceTitleRepeat,
