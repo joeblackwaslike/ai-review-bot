@@ -2,9 +2,11 @@ import { NoObjectGeneratedError } from "ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type AgentRecord, parseAgentsMarker } from "./agent-log.js";
 import { deriveBaseline } from "./baseline.js";
+import { commentKey } from "./comment-key.js";
 import { collectRightSideLines } from "./diff-lines.js";
 import { anchorFingerprint } from "./ledger/fingerprint.js";
 import { computeCost, createAIModel } from "./models.js";
+import { claimTitle } from "./replay/claims.js";
 import {
 	buildReview,
 	buildReviewComments,
@@ -23,6 +25,7 @@ import {
 	parseRawDiff,
 	parseReviewMetadata,
 	renderReadinessBar,
+	routeDroppedComments,
 	runAgent,
 	SEVERITY_LEVELS,
 	sanitizeInlineComments,
@@ -1278,9 +1281,10 @@ const TWENTY_LINE_PATCH = [
 async function buildReviewWithTwoAgentsFlagging(
 	path: string,
 	line: number,
-	options?: { feedbackEnabled?: boolean },
+	options?: { feedbackEnabled?: boolean; titles?: [string, string] },
 ) {
 	const feedbackEnabled = options?.feedbackEnabled ?? true;
+	const [title1, title2] = options?.titles ?? ["Issue", "Issue"];
 
 	// Agent 1 (code-reviewer.md): returns one inline comment at path:line
 	const agent1Response = buildGenerateObjectResponse(
@@ -1289,7 +1293,7 @@ async function buildReviewWithTwoAgentsFlagging(
 			general_findings: [],
 			inline_comments: [
 				buildInlineComment({
-					title: "Issue",
+					title: title1,
 					body: "b",
 					path,
 					line,
@@ -1306,8 +1310,8 @@ async function buildReviewWithTwoAgentsFlagging(
 			general_findings: [],
 			inline_comments: [
 				buildInlineComment({
-					title: "Issue",
-					body: "b",
+					title: title2,
+					body: "b2",
 					path,
 					line,
 					start_line: null,
@@ -1357,12 +1361,34 @@ describe("buildReview comment provenance", () => {
 	it("attaches the set of skills that flagged each posted inline comment", async () => {
 		const decision = await buildReviewWithTwoAgentsFlagging("src/x.ts", 10);
 		expect(decision?.commentProvenance).toBeDefined();
-		const prov = decision?.commentProvenance?.get("src/x.ts:10");
+		const prov = decision?.commentProvenance?.get(
+			commentKey({ path: "src/x.ts", line: 10, title: "Issue" }),
+		);
 		expect(prov?.skills.sort()).toEqual([
 			"code-reviewer.md",
 			"silent-failure-hunter.md",
 		]);
 		expect(prov?.title.length).toBeGreaterThan(0);
+	});
+
+	it("keeps one provenance entry per distinct claim at a shared line", async () => {
+		const decision = await buildReviewWithTwoAgentsFlagging("src/x.ts", 10, {
+			titles: ["Unchecked null dereference", "Hardcoded credential"],
+		});
+		const prov = decision?.commentProvenance;
+		expect(prov?.size).toBe(2);
+		const first = prov?.get(
+			commentKey({
+				path: "src/x.ts",
+				line: 10,
+				title: "Unchecked null dereference",
+			}),
+		);
+		const second = prov?.get(
+			commentKey({ path: "src/x.ts", line: 10, title: "Hardcoded credential" }),
+		);
+		expect(first?.skills).toEqual(["code-reviewer.md"]);
+		expect(second?.skills).toEqual(["silent-failure-hunter.md"]);
 	});
 
 	it("omits provenance when feedbackEnabled is false", async () => {
@@ -2697,7 +2723,7 @@ describe("sanitizeInlineComments", () => {
 // ---------------------------------------------------------------------------
 
 describe("mergeReviewsDetailed — key collision", () => {
-	it("concatenates distinct bodies from two agents at the same path:line", () => {
+	it("keeps distinct claims at one path:line as separate comments, most severe first", () => {
 		const r1 = buildModelReview({
 			event: "COMMENT",
 			inline_comments: [
@@ -2706,6 +2732,7 @@ describe("mergeReviewsDetailed — key collision", () => {
 					line: 1,
 					title: "Bug A",
 					body: "First body.",
+					severity: "P3",
 				}),
 			],
 		});
@@ -2717,13 +2744,16 @@ describe("mergeReviewsDetailed — key collision", () => {
 					line: 1,
 					title: "Bug B",
 					body: "Second body.",
+					severity: "P1",
 				}),
 			],
 		});
 		const { review } = mergeReviewsDetailed([r1, r2]);
-		expect(review.inline_comments).toHaveLength(1);
-		expect(review.inline_comments[0].body).toContain("First body.");
-		expect(review.inline_comments[0].body).toContain("Second body.");
+		expect(review.inline_comments.map((c) => c.title)).toEqual([
+			"Bug B",
+			"Bug A",
+		]);
+		for (const c of review.inline_comments) expect(c.body).not.toContain("---");
 	});
 
 	it("deduplicates near-duplicate bodies at the same path:line", () => {
@@ -3537,7 +3567,11 @@ describe("provenance across collapsed claims", () => {
 		expect(decision?.comments).toHaveLength(1);
 		const survivor = decision?.comments[0];
 		const prov = decision?.commentProvenance?.get(
-			`${survivor?.path}:${survivor?.line}`,
+			commentKey({
+				path: survivor?.path ?? null,
+				line: survivor?.line ?? null,
+				title: claimTitle(survivor?.body ?? ""),
+			}),
 		);
 		expect(prov?.skills.sort()).toEqual([
 			"code-reviewer.md",
@@ -8354,5 +8388,41 @@ describe("agent retry", () => {
 		expect(pacing.map((c) => c[1])).toEqual([
 			{ skill: "code-reviewer.md", delayMs: 5000 },
 		]);
+	});
+});
+
+describe("routeDroppedComments keyed by claim", () => {
+	const posted = (title: string, line = 3) => ({
+		path: "src/f.ts",
+		line,
+		side: "RIGHT" as const,
+		body: `🟡 **P2**\n\n**${title}**\n\nbody`,
+	});
+
+	it("keeps a dropped comment when a sibling at the same line posted", () => {
+		const a = buildInlineComment({ path: "src/f.ts", line: 3, title: "Alpha" });
+		const b = buildInlineComment({ path: "src/f.ts", line: 3, title: "Beta" });
+		const out = routeDroppedComments([a, b], [posted("Alpha")]);
+		expect(out.dropped.map((c) => c.title)).toEqual(["Beta"]);
+	});
+
+	it("routes a dropped P0 without removing a P2 that shares its line", () => {
+		const p0 = buildInlineComment({
+			path: "src/f.ts",
+			line: 3,
+			title: "Race",
+			severity: "P0",
+		});
+		const p2 = buildInlineComment({
+			path: "src/f.ts",
+			line: 3,
+			title: "Nit",
+			severity: "P2",
+		});
+		const out = routeDroppedComments([p0, p2], []);
+		expect(out.routedKeys.has(commentKey(p0))).toBe(true);
+		expect(out.routedKeys.has(commentKey(p2))).toBe(false);
+		expect(out.routed.map((f) => f.title)).toEqual(["Race (`src/f.ts:3`)"]);
+		expect(out.dropped.map((c) => c.title)).toEqual(["Nit"]);
 	});
 });

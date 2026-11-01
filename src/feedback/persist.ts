@@ -1,3 +1,5 @@
+import { commentKey } from "../comment-key.js";
+import { claimTitle } from "../replay/claims.js";
 import type { KvClient } from "./kv.js";
 import { recordPostedComment } from "./store.js";
 import type { Provider } from "./types.js";
@@ -19,7 +21,7 @@ interface ReviewCommentResponse {
 	pull_request_review_id: number | null;
 }
 
-/** List a review's created comments, match each to its provenance by path:line, and persist
+/** List a review's created comments, match each to its provenance by path, line and claim title, and persist
  * the ones we recognize so the cron can later read their reactions. Returns the count stored. */
 export async function persistPostedComments(opts: {
 	kv: KvClient;
@@ -42,7 +44,9 @@ export async function persistPostedComments(opts: {
 	let count = 0;
 	for (const c of comments) {
 		if (c.pull_request_review_id !== opts.reviewId) continue;
-		const prov = opts.provenance.get(`${c.path}:${c.line}`);
+		const prov = opts.provenance.get(
+			commentKey({ path: c.path, line: c.line, title: claimTitle(c.body) }),
+		);
 		if (!prov) continue;
 		await recordPostedComment(
 			opts.kv,

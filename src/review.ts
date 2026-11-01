@@ -16,6 +16,7 @@ import {
 import type { ResolvedAuth } from "./auth.js";
 import { deriveBaseline } from "./baseline.js";
 import { dedupeClaims, isSameClaim } from "./claim-dedupe.js";
+import { commentKey } from "./comment-key.js";
 import { mapWithConcurrency } from "./concurrency.js";
 import { collectRightSideLines } from "./diff-lines.js";
 import {
@@ -37,6 +38,7 @@ import {
 	PR_FILE_LIST_CAP,
 	wholePrInputComplete,
 } from "./prompt.js";
+import { claimTitle } from "./replay/claims.js";
 import type { ResolvedFindingRef } from "./resolve-threads.js";
 import { candidateFamilies, dropRetractions } from "./retraction.js";
 import { isOwnReview, readMetadataValue } from "./review-metadata.js";
@@ -563,7 +565,7 @@ export interface MergeOptions {
 
 export interface MergeOutcome {
 	review: ModelReview;
-	/** `path:line` of each collapsed inline comment → the key of the survivor
+	/** `commentKey` of each collapsed inline comment → the key of the survivor
 	 * now standing for it, so provenance recorded against the original anchor
 	 * can follow the finding it belongs to. */
 	inlineAliases: Map<string, string>;
@@ -601,10 +603,14 @@ export function mergeReviewsDetailed(
 			return true;
 		});
 
-	// Collect all findings per path:line so distinct bodies at the same anchor
-	// are preserved rather than silently dropped. Near-duplicates are filtered
-	// with isSameClaim — the only case where we do drop is when two agents said
-	// the same thing in different words at the exact same location.
+	// Distinct claims at one path:line stay separate comments; only restatements
+	// (isSameClaim) at the exact same location fold into one.
+	const INLINE_SEVERITY_RANK: Record<string, number> = {
+		P0: 4,
+		P1: 3,
+		P2: 2,
+		P3: 1,
+	};
 	const commentGroups = new Map<string, ModelInlineComment[]>();
 	for (const review of agentResults) {
 		for (const comment of review.inline_comments) {
@@ -613,32 +619,23 @@ export function mergeReviewsDetailed(
 			const group = commentGroups.get(key);
 			if (!group) {
 				commentGroups.set(key, [comment]);
-			} else if (!group.some((c) => isSameClaim(c, comment))) {
+			} else if (
+				!group.some(
+					(c) =>
+						commentKey(c) === commentKey(comment) || isSameClaim(c, comment),
+				)
+			) {
 				group.push(comment);
 			}
 		}
 	}
-
-	// Merge multiple distinct findings at the same location into one comment.
-	// The most severe finding leads; additional distinct bodies are appended
-	// with a separator so no information is silently dropped.
-	const INLINE_SEVERITY_RANK: Record<string, number> = {
-		P0: 4,
-		P1: 3,
-		P2: 2,
-		P3: 1,
-	};
-	const anchored = Array.from(commentGroups.values()).map((comments) => {
-		if (comments.length === 1) return comments[0];
-		const sorted = [...comments].sort(
+	const anchored = Array.from(commentGroups.values()).flatMap((comments) =>
+		[...comments].sort(
 			(a, b) =>
 				(INLINE_SEVERITY_RANK[b.severity] ?? 0) -
 				(INLINE_SEVERITY_RANK[a.severity] ?? 0),
-		);
-		const best = sorted[0];
-		const extra = sorted.slice(1).map((c) => c.body);
-		return { ...best, body: [best.body, ...extra].join("\n\n---\n\n") };
-	});
+		),
+	);
 
 	// The exact-key pass above only catches agents that anchored to the identical
 	// line, which they seldom do — one claim arrives on six adjacent lines of the
@@ -651,10 +648,7 @@ export function mergeReviewsDetailed(
 	if (options.dedupeNearDuplicateClaims) {
 		const inlineResult = dedupeClaims(anchored);
 		for (const { from, into } of inlineResult.merges) {
-			inlineAliases.set(
-				`${from.path}:${from.line}`,
-				`${into.path}:${into.line}`,
-			);
+			inlineAliases.set(commentKey(from), commentKey(into));
 		}
 		// General findings carry no anchor, so they go in as-is — ClaimLike treats
 		// a missing path/line as unanchored and applies the stricter title bar.
@@ -1279,16 +1273,16 @@ export function routeDroppedComments(
 	routed: ModelReview["general_findings"];
 	routedKeys: Set<string>;
 } {
-	const postedKeys = new Set(posted.map((c) => `${c.path}:${c.line}`));
-	const notPosted = attempted.filter(
-		(c) => !postedKeys.has(`${c.path}:${c.line}`),
+	const postedKeys = new Set(
+		posted.map((c) =>
+			commentKey({ path: c.path, line: c.line, title: claimTitle(c.body) }),
+		),
 	);
+	const notPosted = attempted.filter((c) => !postedKeys.has(commentKey(c)));
 	const blocking = (c: ModelInlineComment) =>
 		c.severity === "P0" || c.severity === "P1";
 	return {
-		routedKeys: new Set(
-			notPosted.filter(blocking).map((c) => `${c.path}:${c.line}`),
-		),
+		routedKeys: new Set(notPosted.filter(blocking).map(commentKey)),
 		dropped: notPosted.filter((c) => !blocking(c)),
 		routed: notPosted.filter(blocking).map((c) => {
 			const { path, line, start_line: _start, suggestion: _s, ...finding } = c;
@@ -2472,7 +2466,7 @@ export async function buildReview(
 			event: "REQUEST_CHANGES",
 			general_findings: [...modelReview.general_findings, ...routed],
 			inline_comments: modelReview.inline_comments.filter(
-				(c) => !routedKeys.has(`${c.path}:${c.line}`),
+				(c) => !routedKeys.has(commentKey(c)),
 			),
 		};
 	}
@@ -2498,7 +2492,7 @@ export async function buildReview(
 				// attribution: near-duplicate collapsing spans different nearby
 				// lines, so nothing later looks the original key up again, and a
 				// bug found by five agents would be credited to one skill.
-				const own = `${c.path}:${c.line}`;
+				const own = commentKey(c);
 				const key = mergeOutcome.inlineAliases.get(own) ?? own;
 				const set = skillsByKey.get(key) ?? new Set<string>();
 				set.add(skillPath);
@@ -2508,12 +2502,16 @@ export async function buildReview(
 		const titleByKey = new Map<string, string>();
 		const severityByKey = new Map<string, string>();
 		for (const c of modelReview.inline_comments) {
-			titleByKey.set(`${c.path}:${c.line}`, c.title);
-			severityByKey.set(`${c.path}:${c.line}`, c.severity);
+			titleByKey.set(commentKey(c), c.title);
+			severityByKey.set(commentKey(c), c.severity);
 		}
 		commentProvenance = new Map();
 		for (const rc of reviewComments) {
-			const key = `${rc.path}:${rc.line}`;
+			const key = commentKey({
+				path: rc.path,
+				line: rc.line,
+				title: claimTitle(rc.body),
+			});
 			commentProvenance.set(key, {
 				skills: [...(skillsByKey.get(key) ?? [])],
 				title: titleByKey.get(key) ?? "",

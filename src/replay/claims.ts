@@ -3,7 +3,7 @@ import type { ReplayFixture } from "./types.js";
 const MERGE_SEPARATOR = "\n\n---\n\n";
 const SEVERITY_BADGE_TEXT = /^P\d$/;
 
-function claimTitle(part: string): string {
+export function claimTitle(part: string): string {
 	for (const m of part.matchAll(/\*\*(.+?)\*\*/g)) {
 		const span = m[1].trim();
 		if (span && !SEVERITY_BADGE_TEXT.test(span)) return span;

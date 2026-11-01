@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { commentKey } from "../comment-key.js";
 import {
 	capturePostedReview,
 	carrierBody,
@@ -13,6 +14,7 @@ function comment(over: Partial<PostedComment> & { id: number }): PostedComment {
 	return {
 		path: "src/x.ts",
 		line: 10,
+		body: "**a finding**\n\ntext",
 		pull_request_review_id: 900,
 		...over,
 	};
@@ -20,7 +22,7 @@ function comment(over: Partial<PostedComment> & { id: number }): PostedComment {
 
 const provenance: Provenance = new Map([
 	[
-		"src/x.ts:10",
+		commentKey({ path: "src/x.ts", line: 10, title: "a finding" }),
 		{ skills: ["code-reviewer.md"], title: "a finding", severity: "P2" },
 	],
 ]);
@@ -58,13 +60,47 @@ describe("pairWithProvenance", () => {
 		).toEqual([]);
 	});
 
-	it("keeps every comment that matches, not just the first", () => {
-		const multi: Provenance = new Map([
-			["src/x.ts:10", { skills: ["a.md"], title: "t1", severity: "P3" }],
-			["src/x.ts:20", { skills: ["b.md"], title: "t2", severity: "P1" }],
+	it("picks the entry for each comment when two share a line", () => {
+		const shared: Provenance = new Map([
+			[
+				commentKey({ path: "src/x.ts", line: 10, title: "first claim" }),
+				{ skills: ["a.md"], title: "first claim", severity: "P1" },
+			],
+			[
+				commentKey({ path: "src/x.ts", line: 10, title: "second claim" }),
+				{ skills: ["b.md"], title: "second claim", severity: "P3" },
+			],
 		]);
 		const paired = pairWithProvenance(
-			[comment({ id: 1 }), comment({ id: 2, line: 20 })],
+			[
+				comment({ id: 1, body: "🟡 **P2**\n\n**second claim**\n\nx" }),
+				comment({ id: 2, body: "🟡 **P2**\n\n**first claim**\n\nx" }),
+			],
+			900,
+			shared,
+		);
+		expect(paired.map((p) => [p.comment.id, p.skills])).toEqual([
+			[1, ["b.md"]],
+			[2, ["a.md"]],
+		]);
+	});
+
+	it("keeps every comment that matches, not just the first", () => {
+		const multi: Provenance = new Map([
+			[
+				commentKey({ path: "src/x.ts", line: 10, title: "t1" }),
+				{ skills: ["a.md"], title: "t1", severity: "P3" },
+			],
+			[
+				commentKey({ path: "src/x.ts", line: 20, title: "t2" }),
+				{ skills: ["b.md"], title: "t2", severity: "P1" },
+			],
+		]);
+		const paired = pairWithProvenance(
+			[
+				comment({ id: 1, body: "**t1**\n\nx" }),
+				comment({ id: 2, line: 20, body: "**t2**\n\nx" }),
+			],
 			900,
 			multi,
 		);
