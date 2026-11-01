@@ -1300,7 +1300,9 @@ function withFingerprints<T extends ModelInlineComment>(
 function buildCommentBody(comment: ModelInlineComment, patch?: string): string {
 	const badge = `${severityBadge(comment.severity)}${comment.advisory ? " · advisory" : ""}`;
 	const title = stripForgedFpMarkers(comment.title);
-	const linked = comment.causedBy ? `\n\n${comment.causedBy}` : "";
+	const linked = comment.causedBy
+		? `\n\n${stripForgedFpMarkers(comment.causedBy)}`
+		: "";
 	const base = `${badge}\n\n**${title}**\n\n${stripForgedFpMarkers(comment.body)}${linked}`;
 	const withFix = comment.suggestion
 		? `${base}\n\n*Suggested fix:*\n\n\`\`\`suggestion\n${comment.suggestion}\n\`\`\``
