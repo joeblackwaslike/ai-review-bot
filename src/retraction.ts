@@ -70,12 +70,16 @@ const CONTRAST =
 	/\b(?:but|however|although|though|unless|except|whereas|yet|while|otherwise)\b/i;
 
 const SCOPE_FOLLOWS =
-	/^[\s,]*(?:(?:found|identified|detected|here)[\s,]+)?(?:in|by|with|for|from|during|on|within|under|at|across|inside|via|after|before|when|if|as|per|of|using|through|among)\b/i;
+	/^[\s,]*(?:(?:found|identified|detected|here)[\s,]+)?(?:elsewhere|outside|in|by|with|for|from|during|on|within|under|at|across|inside|via|after|before|when|if|as|per|of|using|through|among)\b/i;
+
+const CONDITIONAL_QUALIFIER = /\b(?:until|only if|as long as|provided that)\b/i;
 
 const KEEP_AFTER_PHRASE = new RegExp(
-	`${CONTRAST.source}|\\b(?:apart from|other than|aside from)\\b|\\b(?:consider|should)\\b|\\b(?:just|only) (?:confirm|verify|check|make sure)\\b|\\bwould be (?:clearer|better|safer)\\b|\\bsuggest`,
+	`${CONTRAST.source}|${CONDITIONAL_QUALIFIER.source}|\\b(?:apart from|other than|aside from)\\b|\\b(?:consider|should)\\b|\\b(?:just|only) (?:confirm|verify|check|make sure)\\b|\\bwould be (?:clearer|better|safer)\\b|\\bsuggest`,
 	"i",
 );
+
+const NEGATES_PHRASE = /\b(?:not|n't|never|cannot|can't|unsure|may)\b/i;
 
 const LIST_MARKER = /^\s*(?:[-*+•]|\d+[.)])\s+/;
 
@@ -85,6 +89,7 @@ function units(s: string): string[] {
 		.replace(/`[^`]*`/g, " ")
 		.replace(/"[^"\n]*"/g, " ")
 		.replace(/\u201c[^\u201d\n]*\u201d/g, " ")
+		.replace(/(?<![a-zA-Z])'[^'\n]*'(?![a-zA-Z])/g, " ")
 		.split("\n")
 		.map((line) =>
 			line
@@ -108,7 +113,10 @@ function familiesInLastUnit(text: string): string[] {
 		const match = family.pattern.exec(last);
 		if (!match) return false;
 		const rest = last.slice(match.index + match[0].length);
-		if (CONTRAST.test(last.slice(0, match.index))) return false;
+		const before = last.slice(0, match.index);
+		const immediateClause = before.split(/[,;]/).pop() ?? "";
+		if (CONTRAST.test(before)) return false;
+		if (NEGATES_PHRASE.test(immediateClause)) return false;
 		if (EXCEPTION_FOLLOWS.test(rest)) return false;
 		if (SCOPE_FOLLOWS.test(rest)) return false;
 		if (

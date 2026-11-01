@@ -374,6 +374,66 @@ describe("isRetractionCandidate keeps real findings", () => {
 		expect(retracted("Low", "No issues found.")).toBe(true);
 	});
 
+	it("keeps findings whose phrase is single-quoted program output", () => {
+		expect(
+			retracted(
+				"Handler",
+				"The script exits successfully on validation failure and prints 'No issues found.'",
+			),
+		).toBe(false);
+		expect(
+			retracted(
+				"Handler",
+				"The script exits 0 on failure. The log prints 'No issues found.'",
+			),
+		).toBe(false);
+	});
+
+	it("does not treat an apostrophe in a contraction as a quote", () => {
+		expect(
+			retracted(
+				"Handler",
+				"It's fine, and I don't see a bug here, so no actionable defect found.",
+			),
+		).toBe(true);
+	});
+
+	it("keeps a conditional resolution instead of a real one", () => {
+		expect(
+			retracted(
+				"Cache fix does not survive restart",
+				"This looks resolved until the next restart.",
+			),
+		).toBe(false);
+		expect(
+			retracted("Low", "This looks resolved only if the flag stays off."),
+		).toBe(false);
+	});
+
+	it("keeps a defect with an unqualified short tail", () => {
+		expect(
+			retracted(
+				"Socket leak",
+				"The retry handler leaks sockets. No issues found elsewhere.",
+			),
+		).toBe(false);
+		expect(
+			retracted(
+				"Socket leak",
+				"The retry handler leaks sockets. No issues found outside the retry path.",
+			),
+		).toBe(false);
+	});
+
+	it("keeps a negated use of the retraction phrase", () => {
+		expect(
+			retracted(
+				"Race",
+				"The race remains reproducible. I do not think this looks resolved.",
+			),
+		).toBe(false);
+	});
+
 	it("keeps an actionable body even when the title alone looks retracted", () => {
 		expect(
 			retracted(
