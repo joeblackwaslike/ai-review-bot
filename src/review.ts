@@ -53,6 +53,7 @@ import {
 	RELATION_KINDS,
 	resolveRelations,
 	shortFindingId,
+	uniqueShortIds,
 } from "./relation.js";
 import { claimTitle } from "./replay/claims.js";
 import type { ResolvedFindingRef } from "./resolve-threads.js";
@@ -363,7 +364,6 @@ const findingBase = z
 		relation: z
 			.object({ kind: z.enum(RELATION_KINDS), entry_id: z.string() })
 			.nullable()
-			.default(null)
 			.describe(
 				"Set only when this finding restates (repeats) or is a consequence of fixing (caused_by) a finding listed under your prior findings; entry_id is that line's [#id] without the #. Otherwise null.",
 			),
@@ -2153,7 +2153,7 @@ export async function buildReview(
 		priorBotReviews,
 		priorOwnReview,
 		priorOwnFindings: tuning.showPriorOwnFindings
-			? [
+			? uniqueShortIds([
 					...priorFindings.map((f, i) => {
 						const settled = priorMatches[i];
 						return {
@@ -2178,12 +2178,12 @@ export async function buildReview(
 						decidedBy: e.decidedBy,
 						reason: e.reason,
 					})),
-				]
+				])
 			: undefined,
 	};
 
 	const shownIds = new Set(
-		(promptBase.priorOwnFindings ?? []).map((f) => f.shortId),
+		(promptBase.priorOwnFindings ?? []).flatMap((f) => f.shortId ?? []),
 	);
 
 	// Detect Tier 2 skills relevant to this PR and run all agents together.

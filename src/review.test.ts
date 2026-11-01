@@ -1,4 +1,4 @@
-import { NoObjectGeneratedError } from "ai";
+import { NoObjectGeneratedError, zodSchema } from "ai";
 import {
 	afterEach,
 	beforeEach,
@@ -173,6 +173,7 @@ describe("ModelReviewSchema validation", () => {
 					confidence: 0.99,
 					evidence: "src/auth.ts:42 — unsanitized input passed to exec()",
 					suppressible: false,
+					relation: null,
 				},
 			],
 			inline_comments: [],
@@ -182,6 +183,22 @@ describe("ModelReviewSchema validation", () => {
 });
 
 describe("ModelReviewSchema relation", () => {
+	it("is a required nullable field in the JSON schema the SDK sends", async () => {
+		const json = (await zodSchema(ModelReviewSchema).jsonSchema) as {
+			properties: Record<
+				string,
+				{ items: { required: string[]; properties: Record<string, unknown> } }
+			>;
+		};
+		for (const key of ["general_findings", "inline_comments"]) {
+			const items = json.properties[key]?.items;
+			expect(items?.required).toContain("relation");
+			expect(JSON.stringify(items?.properties.relation)).toContain(
+				'"type":"null"',
+			);
+		}
+	});
+
 	const finding = {
 		title: "t",
 		body: "b",
@@ -197,7 +214,7 @@ describe("ModelReviewSchema relation", () => {
 		inline_comments: [],
 	});
 
-	it("accepts a relation and defaults an omitted one to null", () => {
+	it("accepts a relation and a null one", () => {
 		const withRel = ModelReviewSchema.parse(
 			review({
 				...finding,
@@ -208,7 +225,9 @@ describe("ModelReviewSchema relation", () => {
 			kind: "caused_by",
 			entry_id: "a1b2c3",
 		});
-		const without = ModelReviewSchema.parse(review(finding));
+		const without = ModelReviewSchema.parse(
+			review({ ...finding, relation: null }),
+		);
 		expect(without.general_findings[0]?.relation).toBeNull();
 	});
 
@@ -5955,18 +5974,22 @@ describe("buildReview ledger suppression", () => {
 			const declared = (
 				kind: "repeats" | "caused_by",
 				entry_id: string,
-				severity: "P1" | "P2" = "P2",
+				o: {
+					severity?: "P0" | "P1" | "P2";
+					path?: string;
+					title?: string;
+				} = {},
 			) =>
 				buildModelReview({
 					event: "COMMENT",
 					general_findings: [],
 					inline_comments: [
 						buildInlineComment({
-							title: "Eviction is missing from the session store",
-							body: "Sessions are kept forever.",
-							path: "src/review.ts",
+							title: o.title ?? "Token cache entries never expire",
+							body: "Entries in `tokenCache` are kept forever.",
+							path: o.path ?? "src/review.ts",
 							line: 2,
-							severity,
+							severity: o.severity ?? "P1",
 							relation: { kind, entry_id },
 						}),
 					],
@@ -5991,8 +6014,42 @@ describe("buildReview ledger suppression", () => {
 				expect(decision?.body).toContain("<!-- ai-review:carry=r0:c11:0 -->");
 			});
 
+			it.each<[string, { path?: string; title?: string }]>([
+				["another path", { path: "src/other.ts" }],
+				["a different claim", { title: "Handler swallows parse errors" }],
+			])("posts a declared repeat on %s", async (_name, o) => {
+				routeAgents({}, declared("repeats", entryShortId, o));
+
+				const decision = await run();
+
+				const posted = [
+					decision?.body ?? "",
+					...(decision?.comments.map((c) => c.body) ?? []),
+				].join("\n");
+				expect(posted).toContain(o.title ?? "Token cache entries never expire");
+			});
+
+			it("lists exactly the shown ids in the prompt", async () => {
+				routeAgents({}, declared("repeats", entryShortId));
+
+				await run();
+
+				const shown = mockBuildUserMessage.mock.calls.flatMap(
+					(call) =>
+						(
+							call[0] as { priorOwnFindings?: { shortId?: string }[] }
+						).priorOwnFindings?.map((f) => f.shortId) ?? [],
+				);
+				expect(shown).toContain(entryShortId);
+			});
+
 			it("posts a repeat whose id was never shown", async () => {
-				routeAgents({}, declared("repeats", "ffffff"));
+				routeAgents(
+					{},
+					declared("repeats", "ffffff", {
+						title: "Handler swallows parse errors",
+					}),
+				);
 
 				const decision = await run();
 
@@ -6001,7 +6058,12 @@ describe("buildReview ledger suppression", () => {
 			});
 
 			it("posts a caused_by finding linked to the earlier thread", async () => {
-				routeAgents({}, declared("caused_by", entryShortId));
+				routeAgents(
+					{},
+					declared("caused_by", entryShortId, {
+						title: "Handler swallows parse errors",
+					}),
+				);
 
 				const decision = await run();
 

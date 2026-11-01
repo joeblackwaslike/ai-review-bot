@@ -1,6 +1,9 @@
 import { createHash } from "node:crypto";
 import { ledgerEntryFinding } from "./baseline.js";
+import { type ClaimLike, isSameClaim } from "./claim-dedupe.js";
+import { FINGERPRINT_CLAIM_MATCH } from "./ledger/match.js";
 import type { LedgerEntry } from "./ledger/types.js";
+import { recoverLocation } from "./review-state.js";
 
 export const RELATION_KINDS = ["repeats", "caused_by"] as const;
 
@@ -81,12 +84,38 @@ export function resolveRelations<T extends Related>(
 	});
 }
 
-/** Finds the entry a `repeats` finding declared, among the entries suppression may match. */
+const SEVERITY_RANK: Record<string, number> = { P0: 3, P1: 2, P2: 1, P3: 0 };
+
+/** Whether a declared repeat is believable: the same claim on the same path at the relaxed fingerprint bar, and not more severe than the entry. */
+function plausibleRepeat(f: ClaimLike, entry: LedgerEntry): boolean {
+	const e = recoverLocation(entry);
+	if ((f.path ?? null) !== (e.path ?? null)) return false;
+	if ((SEVERITY_RANK[f.severity ?? ""] ?? 0) > (SEVERITY_RANK[e.severity] ?? 0))
+		return false;
+	return isSameClaim(f, e, FINGERPRINT_CLAIM_MATCH);
+}
+
+/** Finds the entry a `repeats` finding declared, among the entries suppression may match. A declaration that fails the plausibility check is ignored. */
 export function declaredRepeat(
 	ledger: readonly LedgerEntry[],
-): (f: Related) => LedgerEntry | undefined {
-	return (f) =>
-		f.relation?.kind === "repeats"
-			? entryForShortId(ledger, f.relation.entry_id)
-			: undefined;
+): (f: Related & ClaimLike) => LedgerEntry | undefined {
+	return (f) => {
+		if (f.relation?.kind !== "repeats") return undefined;
+		const entry = entryForShortId(ledger, f.relation.entry_id);
+		return entry && plausibleRepeat(f, entry) ? entry : undefined;
+	};
+}
+
+/** Removes the short id from every item whose id another item shares, so a colliding id can never be declared. */
+export function uniqueShortIds<T extends { shortId?: string }>(
+	items: readonly T[],
+): T[] {
+	const counts = new Map<string, number>();
+	for (const { shortId } of items)
+		if (shortId) counts.set(shortId, (counts.get(shortId) ?? 0) + 1);
+	return items.map((item) =>
+		item.shortId && (counts.get(item.shortId) ?? 0) > 1
+			? { ...item, shortId: undefined }
+			: item,
+	);
 }
