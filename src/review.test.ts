@@ -143,22 +143,29 @@ describe("severity scale", () => {
 
 describe("ModelReviewSchema validation", () => {
 	it("ModelReviewSchema requires evidence to be non-empty", () => {
-		const result = ModelReviewSchema.safeParse({
-			event: "COMMENT",
-			general_findings: [
-				{
-					title: "t",
-					body: "b",
-					severity: "P2",
-					category: "bug",
-					confidence: 0.9,
-					evidence: "",
-					suppressible: false,
-				},
-			],
-			inline_comments: [],
-		});
+		const withEvidence = (evidence: string) =>
+			ModelReviewSchema.safeParse({
+				event: "COMMENT",
+				general_findings: [
+					{
+						title: "t",
+						body: "b",
+						severity: "P2",
+						category: "bug",
+						confidence: 0.9,
+						evidence,
+						suppressible: false,
+						relation: null,
+					},
+				],
+				inline_comments: [],
+			});
+		const result = withEvidence("");
 		expect(result.success).toBe(false);
+		expect(result.error?.issues.map((i) => i.path.at(-1))).toEqual([
+			"evidence",
+		]);
+		expect(withEvidence("src/a.ts:1 — reads it").success).toBe(true);
 	});
 
 	it("ModelReviewSchema accepts a valid P0 finding", () => {
