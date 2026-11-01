@@ -1,5 +1,13 @@
 import { NoObjectGeneratedError } from "ai";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+	afterEach,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	onTestFinished,
+	vi,
+} from "vitest";
 import { type AgentRecord, parseAgentsMarker } from "./agent-log.js";
 import { deriveBaseline } from "./baseline.js";
 import { commentKey } from "./comment-key.js";
@@ -34,6 +42,7 @@ import {
 } from "./review.js";
 import type { PersistedFinding } from "./review-state.js";
 import { findingId } from "./review-state.js";
+import { REVIEWER_TUNING } from "./reviewer-tuning.js";
 import { type ModelSelection, reasoningProviderOptions } from "./router.js";
 import {
 	buildGenerateObjectResponse,
@@ -3460,8 +3469,56 @@ describe("strict evidence rules propagation", () => {
 	});
 });
 
-describe("retraction phrases are filtered", () => {
+describe("the retraction filter is off by default", () => {
 	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildAgentSystemPrompt.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+	});
+
+	it("posts a finding that ends with a retraction phrase", async () => {
+		expect(REVIEWER_TUNING.dropRetractions).toBe(false);
+		mockGenerateObject.mockImplementation(async () =>
+			mockGenerateObject.mock.calls.length <= TIER1_SKILLS.length
+				? buildGenerateObjectResponse(
+						buildModelReview({
+							event: "COMMENT",
+							general_findings: [
+								{
+									title: "Slot accounting",
+									body: "The slot is held while waiting. No actionable defect found.",
+									severity: "P3",
+									category: "style",
+									confidence: 0.8,
+									evidence: "See diff.",
+									suppressible: true,
+								},
+							],
+						}),
+					)
+				: {
+						object: { summary: "Nothing." },
+						usage: { inputTokens: 10, outputTokens: 5 },
+					},
+		);
+		const result = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			provider: "anthropic" as const,
+		});
+		expect(result?.event).not.toBe("APPROVE");
+		expect(result?.body ?? "").toContain("Slot accounting");
+	});
+});
+
+describe("retraction phrases are filtered", () => {
+	afterEach(() => {
+		REVIEWER_TUNING.dropRetractions = false;
+	});
+
+	beforeEach(() => {
+		REVIEWER_TUNING.dropRetractions = true;
 		mockGenerateObject.mockReset();
 		mockBuildUserMessage.mockReset();
 		mockBuildAgentSystemPrompt.mockReset();
@@ -4979,6 +5036,10 @@ describe("buildReview ledger suppression", () => {
 	});
 
 	it("drops strict retraction filler in the posting path and logs title and family", async () => {
+		REVIEWER_TUNING.dropRetractions = true;
+		onTestFinished(() => {
+			REVIEWER_TUNING.dropRetractions = false;
+		});
 		const log = vi.spyOn(console, "log").mockImplementation(() => {});
 		const filler = {
 			...fresh,
@@ -5778,6 +5839,10 @@ describe("buildReview ledger suppression", () => {
 		});
 
 		it("lets the retraction filter drop a restatement of an open entry outside the baseline", async () => {
+			REVIEWER_TUNING.dropRetractions = true;
+			onTestFinished(() => {
+				REVIEWER_TUNING.dropRetractions = false;
+			});
 			routeAgents(
 				{},
 				buildModelReview({

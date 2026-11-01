@@ -19,7 +19,8 @@
 export interface ReviewerTuning {
 	/** Collapse several agents' restatements of one claim into a single finding. */
 	dedupeNearDuplicateClaims: boolean;
-	/** Drop P2/P3 suppressible findings whose own closing sentence retracts them. */
+	/** Drop P2/P3 suppressible findings whose own closing sentence retracts them.
+	 * Off by default: the phrase rule keeps meeting new false-drop shapes. */
 	dropRetractions: boolean;
 	/** Show each agent every finding this reviewer already filed on this PR. */
 	showPriorOwnFindings: boolean;
@@ -29,7 +30,7 @@ export interface ReviewerTuning {
 
 export const REVIEWER_TUNING: ReviewerTuning = {
 	dedupeNearDuplicateClaims: true,
-	dropRetractions: true,
+	dropRetractions: false,
 	showPriorOwnFindings: true,
 	strictEvidenceRules: true,
 };
