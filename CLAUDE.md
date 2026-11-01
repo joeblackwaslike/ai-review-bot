@@ -8,7 +8,7 @@ This file provides context and conventions for AI coding agents working on this 
 pnpm install
 pnpm typecheck    # tsc --noEmit — must pass before any commit
 pnpm lint         # biome check — must pass before any commit
-pnpm test         # vitest run (1510 passed, 4 skipped) — must pass before any commit
+pnpm test         # vitest run (1588 passed, 4 skipped) — must pass before any commit
 pnpm dev          # vercel dev — local server on :3000
 ```
 
@@ -40,16 +40,16 @@ POST /api/github/review-run        (QStash delayed callback)
 
 **Merge layer** (`src/review.ts` → `mergeReviews()`): After all agents settle, findings are merged:
 
-- Inline comments deduplicated by `path:line` key; when two agents flag the same location, the one from a `REQUEST_CHANGES` agent wins (more conservative)
+- Inline comments are keyed by `commentKey()` (path, line, normalized title). Restatements of one claim at a line collapse into one comment, the higher severity (then the longer body) surviving; distinct claims at the same line are posted as separate comments, never joined into one
 - **Near-duplicate claim collapsing** (`src/claim-dedupe.ts`, tuned reviewers only): agents rarely anchor to the identical line, so the exact-key pass above misses one claim arriving on six adjacent lines. `dedupeClaims()` folds findings in the same file, within 30 lines, that share a code identifier or substantial title overlap. Measured on the live corpus: 403 of 1180 anthropic findings (34%) are restatements
 - General findings deduplicated by title (case-insensitive)
 - Final `event`: `REQUEST_CHANGES` if any agent returned it; `APPROVE` if all agents found zero issues; `COMMENT` otherwise
 
-Settled repeats are dropped per agent before this merge, and a re-review round with nothing new posts nothing (see `src/ledger/` and `docs/superpowers/specs/2026-10-28-ledger-repeat-suppression-design.md`).
+Settled repeats are dropped per agent before this merge, and a re-review round with nothing new posts nothing (see `src/ledger/` and `docs/superpowers/specs/2026-10-28-ledger-repeat-suppression-design.md`). Restatements of an *open* entry that backs the current baseline are dropped too (`suppressOpenRestatements()`), but still hold the verdict: the matched entry ids go into the review body as `<!-- ai-review:carry=... -->` (capped at 50) and `deriveBaseline()` re-reads them. Matching tries an anchor-code fingerprint first (`src/ledger/fingerprint.ts`, `ai-review:fp`/`ai-review:sfp` markers in each inline comment): a fingerprint only nominates a candidate, and the claim must still be equivalent at a relaxed bar. After suppression, `dropRetractions()` (`src/retraction.ts`, behind `REVIEWER_TUNING.dropRetractions`) removes P2/P3 suppressible findings whose closing sentence retracts them.
 
 Findings carried from the previous review appear in the body's "Still open from the previous review" table. A carried finding whose file has left the PR moves to a "Retired, file no longer in this PR" block and no longer holds the PR at `REQUEST_CHANGES`. When the PR file list is cut short, nothing is retired, because a missing path proves nothing (see `docs/superpowers/specs/2026-10-30-vercel-parity-design.md`).
 
-**Diff anchor validation** (`buildReviewComments()`): Before submission, every inline comment is checked against the set of valid right-side line numbers extracted from the unified diff (`collectRightSideLines()`). Comments referencing lines not in the diff are first moved to the nearest valid line within 5 lines by `sanitizeInlineComments`; any that still cannot be anchored are listed in the review body ("could not be anchored… posted here instead") rather than erroring the review.
+**Diff anchor validation** (`buildReviewComments()`): Before submission, every inline comment is checked against the set of valid right-side line numbers extracted from the unified diff (`collectRightSideLines()`). The diff is shown to the agents with right-side line numbers (`numberPatchLines()` in `src/diff-lines.ts`), and a comment whose line is not in the diff is dropped, never moved. A dropped P0/P1 becomes a general finding and blocks; dropped P2/P3 are named in one plain sentence in the body that the next round's baseline does not read back as findings. Every drop is logged with a reason code (`OFF_DIFF_PATH`, `OFF_DIFF_LINE`, `BAD_RANGE`).
 
 **Fallback retry** (`src/github-app.ts` → `maybeSubmitReview()`): If the GitHub Reviews API rejects the POST, the bot retries up to 3 times with exponential backoff. If all retries fail, it posts a regular PR comment preserving the findings.
 
@@ -68,6 +68,9 @@ Findings carried from the previous review appear in the body's "Still open from 
 | `src/router.ts` | PR tier classification (`classifyTier()`), model selection (`routeModel()`) |
 | `src/tier2.ts` | Tier 2 skill detection (`detectTier2Skills()`) |
 | `src/claim-dedupe.ts` | Near-duplicate claim clustering (`dedupeClaims()`, `isSameClaim()`) |
+| `src/diff-lines.ts` | Right-side line walk of a unified patch: `collectRightSideLines()`, `rightSideText()`, `numberPatchLines()` |
+| `src/retraction.ts` | Strict self-retraction phrase rule and `dropRetractions()`, applied in the posting path to P2/P3 suppressible findings; the replay filter-margin report measures the same rule |
+| `src/ledger/fingerprint.ts` | Anchor-code and suggestion-code fingerprints and their `ai-review:fp`/`sfp` comment markers (match candidates only) |
 | `src/reviewer-tuning.ts` | Signal-quality switches (`REVIEWER_TUNING`) — unified across both providers since ai-review-bot-5zu; previously anthropic-only |
 | `src/audit.ts` | Full repository audit logic (`auditRepo()`), local audit (`runLocalAudit()`), local review (`runLocalReview()`) |
 | `src/report.ts` | `docs/code-reviews/` report writer (`formatReviewReport()`, `allocateReportPath()`) |
@@ -100,7 +103,7 @@ The CLI supports four subcommands for offline code review of the working tree (p
 
 Reference: `docs/superpowers/specs/2026-06-08-local-audit-review-pr-design.md`
 
-- `ai-review replay [--fixtures <dir>]` / `ai-review replay --record <pr-url> --provider anthropic|openai --bot <login>` / `ai-review replay --live [--rounds <n>] [--max-cost <usd>]` — Deterministic offline replay of recorded review rounds: measures false-positive rate, claim recycling, and convergence against auto-labeled fixtures (provisional until an agent verifies them against the PR threads and Codex cross-checks them; items the two models disagree on stay unadjudicated). `--record` captures a real PR's rounds/threads/reactions via `gh` into `src/replay/fixtures/`; the default (no flags) replays existing fixtures and fails on confirmed-label guard violations (warns on provisional ones); `--live` is an opt-in, cost-capped tier that re-runs the audit pipeline against confirmed pairs only — it never gates CI. If any `*.classes.json` fixture is present, the default run also prints a classification report (`src/replay/classify.ts`, breaking rejected first-seen findings into filler/stale/contradicted/speculative/other, by rule and by model, provisional until adjudicated) and a filter-margin report (`src/replay/filter-margin.ts`, measuring what the candidate retraction rule in `src/replay/retraction-rule.ts` would remove against those classes; the rule is a measurement only and is not applied in the merge). See `docs/superpowers/specs/2026-10-27-review-replay-harness-design.md` and `docs/superpowers/specs/2026-10-29-claude-first-pass-accuracy-design.md` for the design and `src/replay/`.
+- `ai-review replay [--fixtures <dir>]` / `ai-review replay --record <pr-url> --provider anthropic|openai --bot <login>` / `ai-review replay --live [--rounds <n>] [--max-cost <usd>]` — Deterministic offline replay of recorded review rounds: measures false-positive rate, claim recycling, and convergence against auto-labeled fixtures (provisional until an agent verifies them against the PR threads and Codex cross-checks them; items the two models disagree on stay unadjudicated). `--record` captures a real PR's rounds/threads/reactions via `gh` into `src/replay/fixtures/`; the default (no flags) replays existing fixtures and fails on confirmed-label guard violations (warns on provisional ones); `--live` is an opt-in, cost-capped tier that re-runs the audit pipeline against confirmed pairs only — it never gates CI. If any `*.classes.json` fixture is present, the default run also prints a classification report (`src/replay/classify.ts`, breaking rejected first-seen findings into filler/stale/contradicted/speculative/other, by rule and by model, provisional until adjudicated) and a filter-margin report (`src/replay/filter-margin.ts`, measuring what the retraction rule in `src/retraction.ts` removes against those classes; the same rule runs in the posting path). See `docs/superpowers/specs/2026-10-27-review-replay-harness-design.md` and `docs/superpowers/specs/2026-10-29-claude-first-pass-accuracy-design.md` for the design and `src/replay/`.
 
 `watch`, `review`, `audit` and `gate` also append one JSON line per agent outcome to `~/.ai-review/logs/agents.jsonl`, or to the path in `AI_REVIEW_LOG_FILE` when it is set. The hosted webhook path does not write it.
 
