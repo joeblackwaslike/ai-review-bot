@@ -318,7 +318,14 @@ describe("prior own findings", () => {
 			...promptBase,
 			priorOwnFindings: findings,
 		});
-		for (const status of ["open", "fixed", "resolved", "rejected", "deferred"])
+		for (const status of [
+			"open",
+			"fixed",
+			"resolved",
+			"rejected",
+			"deferred",
+			"acknowledged",
+		])
 			expect(message).toMatch(new RegExp(`^- ${status}: `, "m"));
 	});
 
