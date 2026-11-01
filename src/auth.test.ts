@@ -467,9 +467,77 @@ describe("parseCodexSSEResponse", () => {
 });
 
 describe("resolveOpenAIAuth", () => {
-	it("prefers OPENAI_API_KEY env", async () => {
-		const auth = await resolveOpenAIAuth({ env: { OPENAI_API_KEY: "sk-env" } });
+	const freshChatgptAuth = (extra: Record<string, unknown> = {}) =>
+		JSON.stringify({
+			auth_mode: "chatgpt",
+			tokens: {
+				access_token: fakeJwt(Math.floor(Date.now() / 1000) + 3600),
+				refresh_token: "rt",
+				account_id: "acct-1",
+			},
+			...extra,
+		});
+
+	it("falls back to OPENAI_API_KEY env when there are no subscription credentials", async () => {
+		const auth = await resolveOpenAIAuth({
+			env: { OPENAI_API_KEY: "sk-env" },
+			readCodexAuth: async () => null,
+		});
 		expect(auth).toMatchObject({ mode: "api-key", apiKey: "sk-env" });
+	});
+
+	it("prefers the ChatGPT subscription over OPENAI_API_KEY env", async () => {
+		const auth = await resolveOpenAIAuth({
+			env: { OPENAI_API_KEY: "sk-env" },
+			readCodexAuth: async () => freshChatgptAuth(),
+		});
+		expect(auth).toMatchObject({ mode: "oauth", provider: "openai" });
+	});
+
+	it("prefers the ChatGPT subscription over a key embedded in the same auth.json", async () => {
+		const auth = await resolveOpenAIAuth({
+			env: {},
+			readCodexAuth: async () =>
+				freshChatgptAuth({ OPENAI_API_KEY: "sk-file" }),
+		});
+		expect(auth).toMatchObject({ mode: "oauth", provider: "openai" });
+	});
+
+	it("throws instead of billing OPENAI_API_KEY when auth.json is unparseable", async () => {
+		await expect(
+			resolveOpenAIAuth({
+				env: { OPENAI_API_KEY: "sk-env" },
+				readCodexAuth: async () => "{not json",
+			}),
+		).rejects.toThrow(/not valid JSON/);
+	});
+
+	it("reports an unparseable auth.json as such when there is no API key", async () => {
+		await expect(
+			resolveOpenAIAuth({ env: {}, readCodexAuth: async () => "{not json" }),
+		).rejects.toThrow(/not valid JSON/);
+	});
+
+	it("does not fall back to the API key when the subscription refresh fails", async () => {
+		const past = Math.floor(Date.now() / 1000) - 10;
+		await expect(
+			resolveOpenAIAuth({
+				env: { OPENAI_API_KEY: "sk-env" },
+				fetch: (async () =>
+					new Response("bad", { status: 400 })) as unknown as typeof fetch,
+				withLock: passthroughLock,
+				readCodexAuth: async () =>
+					JSON.stringify({
+						auth_mode: "chatgpt",
+						tokens: {
+							access_token: fakeJwt(past),
+							refresh_token: "rt",
+							account_id: "a",
+						},
+					}),
+				writeCodexAuth: async () => {},
+			}),
+		).rejects.toThrow(/session expired|refresh failed/i);
 	});
 
 	it("uses an api key embedded in auth.json", async () => {
@@ -577,11 +645,81 @@ describe("resolveOpenAIAuth", () => {
 });
 
 describe("resolveAnthropicAuth", () => {
-	it("prefers ANTHROPIC_API_KEY env", async () => {
+	it("falls back to ANTHROPIC_API_KEY when there are no subscription credentials", async () => {
 		const auth = await resolveAnthropicAuth({
 			env: { ANTHROPIC_API_KEY: "sk-ant" },
+			readClaudeKeychain: async () => null,
 		});
 		expect(auth).toMatchObject({ mode: "api-key", apiKey: "sk-ant" });
+	});
+
+	it("prefers an explicit OAuth env token over ANTHROPIC_API_KEY", async () => {
+		const auth = await resolveAnthropicAuth({
+			env: { ANTHROPIC_API_KEY: "sk-ant", CLAUDE_CODE_OAUTH_TOKEN: "oat-1" },
+			readClaudeKeychain: async () => null,
+		});
+		expect(auth).toMatchObject({ mode: "oauth", provider: "anthropic" });
+	});
+
+	it("prefers ANTHROPIC_AUTH_TOKEN over ANTHROPIC_API_KEY", async () => {
+		const auth = await resolveAnthropicAuth({
+			env: { ANTHROPIC_API_KEY: "sk-ant", ANTHROPIC_AUTH_TOKEN: "oat-2" },
+			readClaudeKeychain: async () => null,
+		});
+		expect(auth).toMatchObject({ mode: "oauth", provider: "anthropic" });
+	});
+
+	it("falls back to ANTHROPIC_API_KEY when the keychain entry has no access token", async () => {
+		const auth = await resolveAnthropicAuth({
+			env: { ANTHROPIC_API_KEY: "sk-ant" },
+			readClaudeKeychain: async () => JSON.stringify({ claudeAiOauth: {} }),
+		});
+		expect(auth).toMatchObject({ mode: "api-key", apiKey: "sk-ant" });
+	});
+
+	it("throws instead of billing ANTHROPIC_API_KEY when the keychain entry is unparseable", async () => {
+		await expect(
+			resolveAnthropicAuth({
+				env: { ANTHROPIC_API_KEY: "sk-ant" },
+				readClaudeKeychain: async () => "{not json",
+			}),
+		).rejects.toThrow(/not valid JSON/);
+	});
+
+	it("does not fall back to ANTHROPIC_API_KEY when the subscription refresh fails", async () => {
+		await expect(
+			resolveAnthropicAuth({
+				env: { ANTHROPIC_API_KEY: "sk-ant" },
+				now: () => 1_000_000,
+				fetch: (async () =>
+					new Response("bad", { status: 400 })) as unknown as typeof fetch,
+				withLock: passthroughLock,
+				readClaudeKeychain: async () =>
+					JSON.stringify({
+						claudeAiOauth: {
+							accessToken: "at-OLD",
+							refreshToken: "rt-OLD",
+							expiresAt: 0,
+						},
+					}),
+				writeClaudeKeychain: async () => {},
+			}),
+		).rejects.toThrow(/session expired|refresh failed/i);
+	});
+
+	it("prefers stored Claude subscription credentials over ANTHROPIC_API_KEY", async () => {
+		const auth = await resolveAnthropicAuth({
+			env: { ANTHROPIC_API_KEY: "sk-ant" },
+			readClaudeKeychain: async () =>
+				JSON.stringify({
+					claudeAiOauth: {
+						accessToken: "at-fresh",
+						refreshToken: "rt",
+						expiresAt: Date.now() + 3_600_000,
+					},
+				}),
+		});
+		expect(auth).toMatchObject({ mode: "oauth", provider: "anthropic" });
 	});
 
 	it("uses an explicit OAuth env token without touching the keychain", async () => {

@@ -754,9 +754,9 @@ async function cmdClassify(args: string[]): Promise<void> {
 		return;
 	}
 
-	// Same auth posture as `ai-review review`: API key, else an explicit OAuth
-	// token, else the logged-in `claude` subscription. Local CLI only — never
-	// reachable from a webhook path (see src/auth.ts).
+	// Same auth posture as `ai-review review`: an explicit OAuth token or the
+	// logged-in `claude` subscription first, else the API key. Local CLI
+	// only — never reachable from a webhook path (see src/auth.ts).
 	const auth = await resolveAnthropicAuth().catch((err: unknown) => {
 		// Falling back to ambient credentials is intended, but a network or
 		// keychain failure should not look like "no subscription configured".

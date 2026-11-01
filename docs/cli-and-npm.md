@@ -25,7 +25,7 @@ Reports are named `<YYYY-MM-DD>-<slug>-<NN>.md` with a per-day, per-slug round n
 
 ### Auth resolution (local, personal use only)
 
-Per provider, the CLI tries in order: **API key** (`OPENAI_API_KEY` / `ANTHROPIC_API_KEY`, or an explicit `ANTHROPIC_AUTH_TOKEN` / `CLAUDE_CODE_OAUTH_TOKEN`) → **subscription OAuth** from your logged-in `codex` (`~/.codex/auth.json`) and Claude Code (macOS Keychain). A provider that can't authenticate is skipped.
+Per provider, the CLI tries in order: **subscription OAuth** (an explicit `ANTHROPIC_AUTH_TOKEN` / `CLAUDE_CODE_OAUTH_TOKEN`, or your logged-in `codex` (`~/.codex/auth.json`) / Claude Code (macOS Keychain) session) → **API key** (`OPENAI_API_KEY` / `ANTHROPIC_API_KEY`), used only when no subscription credentials exist — so a stray key in the shell never bills a funded account. A subscription that exists but is broken (expired refresh) throws rather than falling back to the key. A provider with neither is skipped.
 
 > ⚠️ The OAuth fallback is for your own machine only. Anthropic's ToS (eff. 2026-02-20) prohibits using Claude *subscription* OAuth tokens in third-party tools outside Claude Code / Claude.ai, and refresh tokens are shared with the real CLIs. See [docs/code-reviews/README.md](./code-reviews/README.md). The hosted webhook bot is unaffected — it uses API keys only.
 
