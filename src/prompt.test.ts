@@ -542,4 +542,13 @@ describe("numbered right-side diff lines", () => {
 		expect(prompt).toContain("number printed at the left of each line");
 		expect(prompt).not.toContain("count forward");
 	});
+
+	it("scopes the numbering rule to diffs and does not give backslash lines a margin", () => {
+		const prompt = buildAgentSystemPrompt("code-reviewer.md", "");
+		expect(prompt).toContain("In a diff, use the number printed");
+		expect(prompt).toContain("whole files shown without numbers");
+		expect(prompt).not.toMatch(
+			/blank margin \(deleted `-` lines, `\\` lines\)/,
+		);
+	});
 });
