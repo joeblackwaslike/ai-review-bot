@@ -71,6 +71,7 @@ export function deriveBaseline(
 		.filter(
 			(e) =>
 				e.status === "open" &&
+				!e.advisory &&
 				((e.round === round && !e.id.includes(":body:")) || carried.has(e.id)),
 		)
 		.map(ledgerEntryFinding);

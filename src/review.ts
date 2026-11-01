@@ -1,6 +1,7 @@
 import { APICallError } from "@ai-sdk/provider";
 import { generateObject } from "ai";
 import { z } from "zod";
+import { ADVISORY_SKILLS, capAdvisory } from "./advisory.js";
 import {
 	type AgentFailure,
 	classifyAgentError,
@@ -375,10 +376,22 @@ const SummarySchema = z.object({
 	summary: z.string(),
 });
 
-export type ModelReview = z.infer<typeof ModelReviewSchema>;
+type ParsedReview = z.infer<typeof ModelReviewSchema>;
 
-export type ModelFinding = ModelReview["general_findings"][number];
-export type ModelInlineComment = ModelReview["inline_comments"][number];
+/** Set after parsing, on findings from advisory skills; not in the schema. */
+export type ModelFinding = ParsedReview["general_findings"][number] & {
+	advisory?: true;
+};
+export type ModelInlineComment = ParsedReview["inline_comments"][number] & {
+	advisory?: true;
+};
+export type ModelReview = Omit<
+	ParsedReview,
+	"general_findings" | "inline_comments"
+> & {
+	general_findings: ModelFinding[];
+	inline_comments: ModelInlineComment[];
+};
 
 const SEVERITY_EMOJI: Record<Severity, string> = {
 	P0: "🔴",
@@ -731,7 +744,8 @@ export function mergeReviewsDetailed(
 	// Event is REQUEST_CHANGES only if an UNRESOLVED finding survived the filters
 	// above — a lone re-raise of an already-addressed finding no longer blocks.
 	const event: "COMMENT" | "REQUEST_CHANGES" =
-		merged_general.length > 0 || inline_comments.length > 0
+		merged_general.some((f) => !f.advisory) ||
+		inline_comments.some((c) => !c.advisory)
 			? agentResults.some((r) => r.event === "REQUEST_CHANGES")
 				? "REQUEST_CHANGES"
 				: "COMMENT"
@@ -1121,7 +1135,18 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		allSkillsCount,
 	});
 
-	const findingsBlock = formatFindings(generalFindings);
+	const findingsBlock = formatFindings(
+		generalFindings.filter((f) => !f.advisory),
+	);
+	// A bullet list, not a badge table: the next round's baseline reads badge
+	// rows back as open findings.
+	const advisoryNotes = generalFindings.filter((f) => f.advisory);
+	const advisoryBlock =
+		advisoryNotes.length > 0
+			? `#### Quality and architecture notes\n\nAdvisory only. These never block the PR.\n\n${advisoryNotes
+					.map((f) => `- ${f.severity} **${plainTitle(f.title)}**`)
+					.join("\n")}`
+			: "";
 
 	const inlineSummary =
 		reviewComments.length > 0
@@ -1200,6 +1225,7 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		overflowNotice,
 		feedbackInvite,
 		findingsBlock,
+		advisoryBlock,
 		priorBlock,
 		retiredBlock,
 		commandHints,
@@ -1242,13 +1268,16 @@ function withFingerprints<T extends ModelInlineComment>(
 }
 
 function buildCommentBody(comment: ModelInlineComment, patch?: string): string {
-	const badge = severityBadge(comment.severity);
+	const badge = `${severityBadge(comment.severity)}${comment.advisory ? " · advisory" : ""}`;
 	const title = stripForgedFpMarkers(comment.title);
 	const base = `${badge}\n\n**${title}**\n\n${stripForgedFpMarkers(comment.body)}`;
 	const withFix = comment.suggestion
 		? `${base}\n\n*Suggested fix:*\n\n\`\`\`suggestion\n${comment.suggestion}\n\`\`\``
 		: base;
-	const markers = formatFpMarkers(commentFingerprints(comment, patch));
+	const markers = formatFpMarkers({
+		...commentFingerprints(comment, patch),
+		advisory: comment.advisory === true,
+	});
 	return markers ? `${withFix}\n\n${markers}` : withFix;
 }
 
@@ -2190,6 +2219,9 @@ export async function buildReview(
 		// concurrent agents (pacing only needs an approximate recent signal).
 		if (outcome.status === "ok" || outcome.status === "rate_limited") {
 			lastRateLimit = outcome.rateLimit;
+		}
+		if (outcome.status === "ok" && ADVISORY_SKILLS.has(skillName(skillPath))) {
+			return { ...outcome, review: capAdvisory(outcome.review) };
 		}
 		return outcome;
 	};

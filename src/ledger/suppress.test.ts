@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	blocksVerdict,
 	suppressInReview,
 	suppressOpenRestatements,
 	suppressSettled,
@@ -224,5 +225,14 @@ describe("suppressInReview with open entries", () => {
 		);
 		expect(out.review.general_findings).toEqual([]);
 		expect(out.review.event).toBe("REQUEST_CHANGES");
+	});
+});
+
+describe("blocksVerdict advisory", () => {
+	it("never blocks an advisory finding, even with a path", () => {
+		expect(
+			blocksVerdict({ path: "a.ts", severity: "P2", advisory: true }),
+		).toBe(false);
+		expect(blocksVerdict({ path: "a.ts", severity: "P2" })).toBe(true);
 	});
 });

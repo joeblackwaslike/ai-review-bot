@@ -49,12 +49,14 @@ const isBlockingSeverity = (s: string | null | undefined) =>
 
 /** Whether an open finding or entry blocks the verdict. One with a path has a
  * thread the author can settle, so it blocks at every severity; a path-less
- * (general) one has no thread, so only P0 and P1 decide. */
+ * (general) one has no thread, so only P0 and P1 decide. An advisory one
+ * never blocks. */
 export function blocksVerdict(f: {
 	path?: string | null;
 	severity?: string | null;
+	advisory?: boolean;
 }): boolean {
-	return Boolean(f.path) || isBlockingSeverity(f.severity);
+	return (!f.advisory && Boolean(f.path)) || isBlockingSeverity(f.severity);
 }
 
 /** A restated open entry holds the verdict if the entry blocks, or the

@@ -9125,3 +9125,78 @@ describe("routeDroppedComments keyed by claim", () => {
 		expect(out.routed[0]).not.toHaveProperty("sfp");
 	});
 });
+
+describe("advisory skills cannot block", () => {
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildAgentSystemPrompt.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+	});
+
+	const p1Finding = {
+		title: "Layering violation",
+		body: "Handler reaches into the store directly.",
+		severity: "P1" as const,
+		category: "architecture" as const,
+		confidence: 0.8,
+		evidence: "See diff.",
+		suppressible: false,
+	};
+
+	const runWith = async (blockingSkill: string | null) => {
+		mockGenerateObject.mockImplementation(
+			async (args: { messages?: { content?: { text?: string }[] }[] }) => {
+				const system = args.messages?.[0]?.content?.[1]?.text ?? "";
+				if (!system.startsWith("system:"))
+					return {
+						object: { summary: "Summary." },
+						usage: { inputTokens: 1, outputTokens: 1 },
+					};
+				const skill = system.slice("system:".length);
+				const isAdvisory = skill === "code-review-and-quality.md";
+				const isBlocking = skill === blockingSkill;
+				return buildGenerateObjectResponse(
+					buildModelReview(
+						isAdvisory || isBlocking
+							? {
+									event: "REQUEST_CHANGES",
+									general_findings: [p1Finding],
+									inline_comments: isAdvisory
+										? [
+												buildInlineComment({
+													severity: "P1",
+													path: "src/review.ts",
+													title: "Advisory inline",
+												}),
+											]
+										: [],
+								}
+							: {},
+					),
+				);
+			},
+		);
+		return buildReview({ octokit: buildOctokit(), ...baseContext });
+	};
+
+	it("a lone quality-agent P1 yields COMMENT, not REQUEST_CHANGES", async () => {
+		const result = await runWith(null);
+		expect(result?.event).toBe("COMMENT");
+		expect(result?.body).toContain("Quality and architecture notes");
+	});
+
+	it("a P1 from code-reviewer still yields REQUEST_CHANGES", async () => {
+		const result = await runWith("code-reviewer.md");
+		expect(result?.event).toBe("REQUEST_CHANGES");
+	});
+
+	it("advisory findings are labelled and not carried as blockers", async () => {
+		const result = await runWith(null);
+		const advisoryComment = result?.comments.find((c) =>
+			c.body.includes("Advisory inline"),
+		);
+		expect(advisoryComment?.body).toContain("<!-- ai-review:advisory -->");
+		expect(result?.body).not.toMatch(/\| 🟡 \| architecture \| \*\*Layering/);
+	});
+});

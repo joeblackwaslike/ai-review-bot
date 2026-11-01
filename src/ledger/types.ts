@@ -16,6 +16,8 @@ export interface LedgerEntry {
 	action?: string;
 	fp?: string;
 	sfp?: string;
+	/** Posted by a quality or architecture agent; never blocks the verdict. */
+	advisory?: true;
 	status: LedgerStatus;
 	decidedBy: "author" | "reviewer" | null;
 	reason: string | null;

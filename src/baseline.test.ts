@@ -451,3 +451,24 @@ describe("deriveBaseline incompleteSkills", () => {
 		expect(r?.state.incompleteSkills).toEqual([]);
 	});
 });
+
+describe("deriveBaseline advisory entries", () => {
+	it("does not carry an open advisory inline entry as a finding", () => {
+		const e = entry({
+			id: "r1:c5:0",
+			round: 1,
+			path: "src/a.ts",
+			line: 3,
+			severity: "P2",
+			title: "Layering",
+			advisory: true,
+		});
+		const r = deriveBaseline(
+			{ id: 20, body: body({ count: 2 }) },
+			warm([e]),
+			KNOWN_SKILLS,
+		);
+		expect(r?.state.findings).toEqual([]);
+		expect(r?.state.event).toBe("COMMENT");
+	});
+});
