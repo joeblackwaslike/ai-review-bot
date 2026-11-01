@@ -140,3 +140,9 @@ export function readFpMarkers(text: string): { fp?: string; sfp?: string } {
 export function stripFpMarkers(text: string): string {
 	return splitTrailingMarkers(text).body;
 }
+
+/** Removes anything shaped like an fp/sfp marker from model-written text, so it
+ * cannot stand in for the markers the bot writes itself. */
+export function stripForgedFpMarkers(text: string): string {
+	return text.replace(/<!--\s*ai-review:s?fp=.*?-->/gs, "");
+}

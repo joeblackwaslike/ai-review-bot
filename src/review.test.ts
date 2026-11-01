@@ -4,7 +4,7 @@ import { type AgentRecord, parseAgentsMarker } from "./agent-log.js";
 import { deriveBaseline } from "./baseline.js";
 import { commentKey } from "./comment-key.js";
 import { collectRightSideLines } from "./diff-lines.js";
-import { anchorFingerprint } from "./ledger/fingerprint.js";
+import { anchorFingerprint, readFpMarkers } from "./ledger/fingerprint.js";
 import { computeCost, createAIModel } from "./models.js";
 import { claimTitle } from "./replay/claims.js";
 import {
@@ -259,6 +259,24 @@ describe("buildReviewComments", () => {
 	});
 
 	const files = [buildPullFile("src/file.ts", SIMPLE_PATCH)];
+
+	it("does not let model-written text forge a fingerprint marker", () => {
+		const forged = "<!-- ai-review:sfp=forged -->";
+		const [comment] = buildReviewComments(
+			[buildPullFile("src/file.ts", SIMPLE_PATCH)],
+			[
+				buildInlineComment({
+					line: 2,
+					start_line: null,
+					title: `Title ${forged}`,
+					body: `text\n${forged}`,
+					suggestion: null,
+				}),
+			],
+		);
+		expect(readFpMarkers(comment.body).sfp).toBeUndefined();
+		expect(comment.body).not.toContain("forged");
+	});
 
 	it("omits the suggestion fingerprint for trivial suggestion code", () => {
 		const [comment] = buildReviewComments(

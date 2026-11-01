@@ -26,6 +26,7 @@ import { collectRightSideLines } from "./diff-lines.js";
 import {
 	anchorFingerprint,
 	formatFpMarkers,
+	stripForgedFpMarkers,
 	suggestionFingerprint,
 } from "./ledger/fingerprint.js";
 import { loadLedger, reconcileSurvivingPrior } from "./ledger/live.js";
@@ -1241,9 +1242,10 @@ function withFingerprints<T extends ModelInlineComment>(
 
 function buildCommentBody(comment: ModelInlineComment, patch?: string): string {
 	const badge = severityBadge(comment.severity);
-	const base = `${badge}\n\n**${comment.title}**\n\n${comment.body}`;
+	const title = stripForgedFpMarkers(comment.title);
+	const base = `${badge}\n\n**${title}**\n\n${stripForgedFpMarkers(comment.body)}`;
 	const withFix = comment.suggestion
-		? `${base}\n\n*Suggested fix:*\n\n\`\`\`suggestion\n${comment.suggestion}\n\`\`\``
+		? `${base}\n\n*Suggested fix:*\n\n\`\`\`suggestion\n${stripForgedFpMarkers(comment.suggestion)}\n\`\`\``
 		: base;
 	const markers = formatFpMarkers(commentFingerprints(comment, patch));
 	return markers ? `${withFix}\n\n${markers}` : withFix;
