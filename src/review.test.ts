@@ -12,7 +12,11 @@ import { type AgentRecord, parseAgentsMarker } from "./agent-log.js";
 import { deriveBaseline } from "./baseline.js";
 import { commentKey } from "./comment-key.js";
 import { collectRightSideLines } from "./diff-lines.js";
-import { anchorFingerprint, readFpMarkers } from "./ledger/fingerprint.js";
+import {
+	anchorFingerprint,
+	readFpMarkers,
+	suggestionFingerprint,
+} from "./ledger/fingerprint.js";
 import { computeCost, createAIModel } from "./models.js";
 import { claimTitle } from "./replay/claims.js";
 import {
@@ -294,7 +298,9 @@ describe("buildReviewComments", () => {
 			[buildInlineComment({ line: 2, start_line: null, suggestion: code })],
 		);
 		expect(comment.body).toContain(code);
-		expect(readFpMarkers(comment.body)).toEqual({});
+		expect(readFpMarkers(comment.body)).toEqual({
+			sfp: suggestionFingerprint(code),
+		});
 	});
 
 	it("omits the suggestion fingerprint for trivial suggestion code", () => {
