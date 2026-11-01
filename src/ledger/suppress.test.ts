@@ -121,6 +121,58 @@ describe("suppressOpenRestatements", () => {
 	});
 });
 
+describe("suppressOpenRestatements and the verdict", () => {
+	const title = "Retry loop never backs off on rate limited responses";
+	const pathless = (severity: string): LedgerEntry => ({
+		id: "g1",
+		round: 1,
+		path: null,
+		line: null,
+		severity,
+		title,
+		status: "open",
+		decidedBy: null,
+		reason: null,
+		evidence: [],
+	});
+	const inlineRestatement = {
+		path: "src/a.ts",
+		line: 5,
+		severity: "P2",
+		title,
+	};
+
+	it("keeps an inline restatement of a pathless P2 entry, since the entry would not block", () => {
+		const out = suppressOpenRestatements([inlineRestatement], [pathless("P2")]);
+		expect(out.kept).toEqual([inlineRestatement]);
+		expect(out.suppressed).toEqual([]);
+	});
+
+	it("still suppresses it when the pathless entry is P1 and blocks", () => {
+		const out = suppressOpenRestatements([inlineRestatement], [pathless("P1")]);
+		expect(out.kept).toEqual([]);
+	});
+
+	it("still suppresses a pathed restatement of a pathed entry", () => {
+		const entry = { ...pathless("P2"), path: "src/a.ts", line: 5 };
+		const out = suppressOpenRestatements([inlineRestatement], [entry]);
+		expect(out.kept).toEqual([]);
+	});
+
+	it("does not downgrade the event when the inline restatement is kept", () => {
+		const out = suppressInReview(
+			{
+				event: "REQUEST_CHANGES",
+				general_findings: [],
+				inline_comments: [inlineRestatement],
+			},
+			[pathless("P2")],
+		);
+		expect(out.review.event).toBe("REQUEST_CHANGES");
+		expect(out.review.inline_comments).toHaveLength(1);
+	});
+});
+
 describe("suppressInReview with open entries", () => {
 	it("drops an open restatement and reports it as restatedOpen", () => {
 		const out = suppressInReview(

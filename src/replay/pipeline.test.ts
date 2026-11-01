@@ -89,7 +89,7 @@ const FIXTURE_RECYCLED: Record<string, number> = {
 	"joeblackwaslike__ai-listings__74__openai": 0,
 	"joeblackwaslike__ai-review-bot__92__anthropic": 0,
 	"joeblackwaslike__ai-review-bot__92__openai": 0,
-	"joeblackwaslike__stealth-browser__1__anthropic": 1,
+	"joeblackwaslike__stealth-browser__1__anthropic": 2,
 	"joeblackwaslike__stealth-browser__1__openai": 3,
 };
 

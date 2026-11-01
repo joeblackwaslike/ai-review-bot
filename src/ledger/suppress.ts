@@ -22,7 +22,8 @@ export function suppressSettled<T extends ClaimLike>(
 	return { kept, suppressed };
 }
 
-/** Drops findings that restate an open entry. Entries are matched, and returned,
+/** Drops findings that restate an open entry, except one that blocks the
+ * verdict where the entry would not. Entries are matched, and returned,
  * with the location a `` (`path:line`) `` title suffix carries. */
 export function suppressOpenRestatements<T extends ClaimLike>(
 	findings: readonly T[],
@@ -33,7 +34,11 @@ export function suppressOpenRestatements<T extends ClaimLike>(
 	const suppressed: Suppressed<T>[] = [];
 	for (const finding of findings) {
 		const entry = findOpenMatch(finding, open);
-		if (entry) suppressed.push({ finding, entry });
+		const wouldLoseBlock =
+			entry !== null &&
+			blocksVerdict(finding) &&
+			!holdsVerdict({ finding, entry });
+		if (entry && !wouldLoseBlock) suppressed.push({ finding, entry });
 		else kept.push(finding);
 	}
 	return { kept, suppressed };
@@ -42,14 +47,20 @@ export function suppressOpenRestatements<T extends ClaimLike>(
 const isBlockingSeverity = (s: string | null | undefined) =>
 	s === "P0" || s === "P1";
 
-/** A restated open entry holds the verdict the way a carried finding blocks it:
- * it is anchored to a path, or the entry or the restatement is P0/P1. */
+/** Whether an open finding or entry blocks the verdict. One with a path has a
+ * thread the author can settle, so it blocks at every severity; a path-less
+ * (general) one has no thread, so only P0 and P1 decide. */
+export function blocksVerdict(f: {
+	path?: string | null;
+	severity?: string | null;
+}): boolean {
+	return Boolean(f.path) || isBlockingSeverity(f.severity);
+}
+
+/** A restated open entry holds the verdict if the entry blocks, or the
+ * restatement is P0/P1. */
 function holdsVerdict(s: Suppressed<ClaimLike>): boolean {
-	return (
-		Boolean(s.entry.path) ||
-		isBlockingSeverity(s.entry.severity) ||
-		isBlockingSeverity(s.finding.severity)
-	);
+	return blocksVerdict(s.entry) || isBlockingSeverity(s.finding.severity);
 }
 
 /** Returns a copy without settled repeats or restatements of open entries.

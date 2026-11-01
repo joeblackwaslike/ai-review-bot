@@ -31,7 +31,11 @@ import {
 import { loadLedger, reconcileSurvivingPrior } from "./ledger/live.js";
 import { findSettledMatch } from "./ledger/match.js";
 import { retargetCarried } from "./ledger/retarget.js";
-import { type Suppressed, suppressInReview } from "./ledger/suppress.js";
+import {
+	blocksVerdict,
+	type Suppressed,
+	suppressInReview,
+} from "./ledger/suppress.js";
 import { isSettled, type LedgerEntry } from "./ledger/types.js";
 import { computeCost, createAIModel } from "./models.js";
 import {
@@ -1539,9 +1543,6 @@ async function restampCheckRun(
  * the ledger, so it blocks at every severity. A path-less (general) finding
  * has no thread, so only P0 and P1 decide the verdict; P2 and P3 stay listed
  * as still open. */
-function blocksVerdict(f: PersistedFinding): boolean {
-	return Boolean(f.path) || f.severity === "P0" || f.severity === "P1";
-}
 
 /** Records one restatement of an open entry as the finding it holds, keyed by
  * finding id, keeping the most severe of the entry and its restatements. */
