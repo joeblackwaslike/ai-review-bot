@@ -83,25 +83,11 @@ function covers(fileLines: FileLines, from: number, to: number): boolean {
 	return true;
 }
 
-function absentFrom(
-	lines: string[],
-	from: number,
-	to: number,
-	fileLines: FileLines,
-): boolean {
-	const present = new Set(lines.map((l) => l.trim()));
-	for (let n = from; n <= to; n++) {
-		const text = fileLines.get(n)?.trim();
-		if (text && present.has(text)) return false;
-	}
-	return true;
-}
-
 /** Cleans a model-written suggestion block: unwraps a code fence, drops
- * line-number prefixes, restores a lost indentation, and realigns the replaced
- * range when the suggestion repeats neighbouring file lines verbatim (widen) or
- * leaves out unchanged edge lines (narrow). Never adds lines and never judges
- * the content. Returns null only when the block cannot be placed on lines the
+ * line-number prefixes, restores a lost indentation, and widens the replaced
+ * range when the suggestion repeats neighbouring file lines verbatim. It never
+ * narrows the range, since an edge line the suggestion leaves out may be an
+ * intended deletion. Never adds lines and never judges the content. Returns null only when the block cannot be placed on lines the
  * diff shows, so the caller keeps the comment without it. */
 export function repairSuggestion(
 	input: RepairInput,
@@ -140,8 +126,6 @@ export function repairSuggestion(
 			.slice(0, width)
 			.every((l, i) => sameLine(l, fileLines.get(s + i)));
 		if (lines.length > width && verbatim) newStart = s;
-	} else if (s !== null && s > start && e !== null) {
-		if (absentFrom(lines, start, s - 1, fileLines)) newStart = s;
 	}
 
 	if (e !== null && e > end) {
@@ -152,14 +136,8 @@ export function repairSuggestion(
 			sameLine(l, fileLines.get(end + 1 + i)),
 		);
 		if (lines.length > width && verbatim) newEnd = e;
-	} else if (e !== null && e < end && s !== null) {
-		if (absentFrom(lines, e + 1, end, fileLines)) newEnd = e;
 	}
 
-	if (newStart > newEnd) {
-		newStart = start;
-		newEnd = end;
-	}
 	if (!covers(fileLines, newStart, newEnd)) return null;
 
 	const target = leadingWhitespace(fileLines.get(newStart) ?? "");

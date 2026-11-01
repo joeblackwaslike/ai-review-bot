@@ -92,11 +92,44 @@ describe("repairSuggestion", () => {
 		expect(repair(s, 13)).toEqual({ suggestion: s, line: 13, startLine: null });
 	});
 
-	it("narrows the range when the suggestion leaves out unchanged edge lines", () => {
-		const s = "    return total;\n  }\n  return 0;";
-		const out = repair(s, 13, 10);
-		expect(out?.startLine).toBe(11);
-		expect(out?.line).toBe(13);
+	it("keeps the range when the suggestion deletes its first line", () => {
+		const del = toMap({
+			10: "const obsolete = load();",
+			11: "const retained = read();",
+		});
+		const s = "const retained = read();";
+		expect(repair(s, 11, 10, del)).toEqual({
+			suggestion: s,
+			line: 11,
+			startLine: 10,
+		});
+	});
+
+	it("keeps the range when the suggestion deletes its last line", () => {
+		const del = toMap({
+			10: "const retained = read();",
+			11: "logSensitiveData(retained);",
+		});
+		const s = "const retained = read();";
+		expect(repair(s, 11, 10, del)).toEqual({
+			suggestion: s,
+			line: 11,
+			startLine: 10,
+		});
+	});
+
+	it("keeps the range when the suggestion deletes an edge line of three", () => {
+		const del = toMap({
+			10: "logSensitiveData();",
+			11: "const result = compute();",
+			12: "return result;",
+		});
+		const s = "const result = compute();\nreturn result;";
+		expect(repair(s, 12, 10, del)).toEqual({
+			suggestion: s,
+			line: 12,
+			startLine: 10,
+		});
 	});
 
 	it("keeps the range when the suggestion hoists a line out of it", () => {

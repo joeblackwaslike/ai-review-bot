@@ -54,7 +54,7 @@
 
 **Interfaces:** `repairSuggestion(input: { suggestion: string; line: number; startLine: number | null; fileLines: Map<number, string> }): { suggestion: string; line: number; startLine: number | null } | null` in new `src/suggestion.ts`; `null` means drop the suggestion block, keep the comment.
 
-- [ ] RED unit tests: strips a leading/trailing code fence; strips `  42 | ` style line-number prefixes; re-indents to the original line's indentation; widens or narrows the range when the suggestion's first/last lines match file lines elsewhere in a ±3 window; returns null when no alignment is found.
+- [ ] RED unit tests: strips a leading/trailing code fence; strips `  42 | ` style line-number prefixes; re-indents to the original line's indentation; widens the range when the suggestion's first/last lines match file lines elsewhere in a ±3 window (narrowing was removed after the gate: an edge line the suggestion leaves out may be an intended deletion); returns null when no alignment is found.
 - [ ] Use `rightSideText(patch)` from `src/diff-lines.ts` for the file lines; call from `buildReviewComments` before `buildCommentBody`; recompute fingerprints after repair.
 - [ ] Commit `feat(review): repair suggestion blocks before posting`.
 
