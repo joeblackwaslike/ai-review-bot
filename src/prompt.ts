@@ -66,7 +66,7 @@ export function fenceUntrusted(text: string): string {
 	let safe = text;
 	for (let prev = ""; prev !== safe; ) {
 		prev = safe;
-		safe = safe.replace(/<\/untrusted_pr_text>/gi, "[removed]");
+		safe = safe.replace(/<\s*\/\s*untrusted_pr_text\s*>/gi, "[removed]");
 	}
 	return `<untrusted_pr_text>${safe}</untrusted_pr_text>`;
 }
