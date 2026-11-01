@@ -1240,6 +1240,7 @@ export function routeDroppedComments(
 ): {
 	dropped: ModelInlineComment[];
 	routed: ModelReview["general_findings"];
+	routedKeys: Set<string>;
 } {
 	const postedKeys = new Set(posted.map((c) => `${c.path}:${c.line}`));
 	const notPosted = attempted.filter(
@@ -1248,6 +1249,9 @@ export function routeDroppedComments(
 	const blocking = (c: ModelInlineComment) =>
 		c.severity === "P0" || c.severity === "P1";
 	return {
+		routedKeys: new Set(
+			notPosted.filter(blocking).map((c) => `${c.path}:${c.line}`),
+		),
 		dropped: notPosted.filter((c) => !blocking(c)),
 		routed: notPosted.filter(blocking).map((c) => {
 			const { path, line, start_line: _start, suggestion: _s, ...finding } = c;
@@ -1291,6 +1295,7 @@ export function buildReviewComments(
 			console.log(
 				"inline comment dropped: start_line >= line (backwards range)",
 				{
+					reason: "BAD_RANGE",
 					path: comment.path,
 					line: comment.line,
 					start_line: comment.start_line,
@@ -1305,6 +1310,7 @@ export function buildReviewComments(
 			console.log(
 				"inline comment dropped: start_line not in valid right-side lines",
 				{
+					reason: "BAD_RANGE",
 					path: comment.path,
 					line: comment.line,
 					start_line: startLine,
@@ -2412,7 +2418,7 @@ export async function buildReview(
 		effectiveInlineComments,
 	);
 
-	const { dropped, routed } = routeDroppedComments(
+	const { dropped, routed, routedKeys } = routeDroppedComments(
 		effectiveInlineComments,
 		reviewComments,
 	);
@@ -2421,6 +2427,9 @@ export async function buildReview(
 			...modelReview,
 			event: "REQUEST_CHANGES",
 			general_findings: [...modelReview.general_findings, ...routed],
+			inline_comments: modelReview.inline_comments.filter(
+				(c) => !routedKeys.has(`${c.path}:${c.line}`),
+			),
 		};
 	}
 

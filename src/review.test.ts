@@ -230,6 +230,23 @@ describe("collectRightSideLines", () => {
 // ---------------------------------------------------------------------------
 
 describe("buildReviewComments", () => {
+	it.each([
+		["OFF_DIFF_PATH", { path: "src/unknown.ts", line: 2, start_line: null }],
+		["OFF_DIFF_LINE", { path: "src/file.ts", line: 999, start_line: null }],
+		["BAD_RANGE", { path: "src/file.ts", line: 2, start_line: 3 }],
+		["BAD_RANGE", { path: "src/file.ts", line: 3, start_line: 99 }],
+	])("logs reason %s when dropping a comment", (reason, overrides) => {
+		const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+		const out = buildReviewComments(
+			[buildPullFile("src/file.ts", SIMPLE_PATCH)],
+			[buildInlineComment(overrides)],
+		);
+		const logged = spy.mock.calls.map((c) => c[1]);
+		spy.mockRestore();
+		expect(out).toHaveLength(0);
+		expect(logged).toContainEqual(expect.objectContaining({ reason }));
+	});
+
 	const files = [buildPullFile("src/file.ts", SIMPLE_PATCH)];
 
 	it("keeps a single-line comment with start_line: null", () => {
@@ -3781,6 +3798,12 @@ describe("review body markdown", () => {
 				new Set(),
 			);
 			expect(derived?.state.findings ?? []).toEqual([]);
+		});
+
+		it("lists a routed off-diff P0 once in the summary input", async () => {
+			await reviewWith("P0");
+			const summaryCall = JSON.stringify(mockGenerateObject.mock.calls.at(-1));
+			expect(summaryCall.split("Off by two").length - 1).toBe(1);
 		});
 
 		it("turns an off-diff P0 into a general finding and requests changes", async () => {
