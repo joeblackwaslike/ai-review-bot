@@ -482,6 +482,51 @@ describe("isRetractionCandidate keeps real findings", () => {
 		).toBe(false);
 	});
 
+	it("keeps a reported defect described right before a no-issues phrase", () => {
+		expect(
+			retracted(
+				"Validator misses invalid input",
+				"The validator accepts malformed input and reports no issues found.",
+			),
+		).toBe(false);
+	});
+
+	it("keeps a security finding stated before a semicolon no-new-findings clause", () => {
+		expect(
+			retracted(
+				"Token exposure",
+				"The access token is logged in plaintext; no additional findings.",
+			),
+		).toBe(false);
+	});
+
+	it("keeps a defect stated before a semicolon covered-by-prior clause", () => {
+		expect(
+			retracted(
+				"Socket leak",
+				"The retry handler still leaks sockets; all other issues are already covered by prior reviewers.",
+			),
+		).toBe(false);
+	});
+
+	it("keeps a defect stated before a semicolon no-new-findings clause", () => {
+		expect(
+			retracted(
+				"Socket leak",
+				"The retry handler leaks sockets; no new findings beyond prior reviews.",
+			),
+		).toBe(false);
+	});
+
+	it("keeps a reproducible finding negated across an intervening comma clause", () => {
+		expect(
+			retracted(
+				"Race",
+				"The race remains reproducible. I cannot say, based on this trace, that this looks resolved.",
+			),
+		).toBe(false);
+	});
+
 	it("keeps an actionable body even when the title alone looks retracted", () => {
 		expect(
 			retracted(
