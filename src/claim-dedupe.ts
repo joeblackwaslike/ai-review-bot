@@ -145,6 +145,8 @@ export interface ClaimLike {
 	title: string;
 	severity?: string | null;
 	body?: string | null;
+	/** From an advisory agent; never replaces a non-advisory restatement. */
+	advisory?: boolean;
 	/** Anchor-code fingerprint; see `ledger/fingerprint.ts`. */
 	fp?: string;
 	/** Suggestion-code fingerprint. */
@@ -225,9 +227,10 @@ function severityRank(severity: string | null | undefined): number {
 		: 0;
 }
 
-/** The representative of a cluster: most severe first, then the longest body —
+/** The representative of a cluster: non-advisory first, then most severe, then the longest body —
  * the version that actually explains the problem rather than restating it. */
 function preferred<T extends ClaimLike & { body?: string }>(a: T, b: T): T {
+	if (Boolean(a.advisory) !== Boolean(b.advisory)) return a.advisory ? b : a;
 	const rankA = severityRank(a.severity);
 	const rankB = severityRank(b.severity);
 	if (rankA !== rankB) return rankA > rankB ? a : b;

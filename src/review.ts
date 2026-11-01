@@ -622,9 +622,10 @@ function flattenAliases(aliases: Map<string, string>): void {
 	}
 }
 
-/** Whether `a` should replace `b` as the representative of one claim: higher
- * severity first, then the longer body. */
+/** Whether `a` should replace `b` as the representative of one claim:
+ * non-advisory first, then higher severity, then the longer body. */
 function outranks(a: ModelInlineComment, b: ModelInlineComment): boolean {
+	if (Boolean(a.advisory) !== Boolean(b.advisory)) return !a.advisory;
 	const diff =
 		(INLINE_SEVERITY_RANK[a.severity] ?? 0) -
 		(INLINE_SEVERITY_RANK[b.severity] ?? 0);
@@ -652,8 +653,9 @@ export function mergeReviewsDetailed(
 	const seenTitles = new Set<string>();
 	const general_findings = agentResults
 		.flatMap((r) => r.general_findings)
+		.filter((f) => !isResolvedGeneral(f.title))
+		.sort((a, b) => Number(Boolean(a.advisory)) - Number(Boolean(b.advisory)))
 		.filter((f) => {
-			if (isResolvedGeneral(f.title)) return false;
 			const key = f.title.toLowerCase().trim();
 			if (seenTitles.has(key)) return false;
 			seenTitles.add(key);
@@ -734,8 +736,10 @@ export function mergeReviewsDetailed(
 			// path check in isSameClaim would always short-circuit. Compare on
 			// title/body similarity alone — that's the whole-PR signal here.
 			(gf) =>
-				!inline_comments.some((ic) =>
-					isSameClaim({ ...gf, path: null }, { ...ic, path: null }),
+				!inline_comments.some(
+					(ic) =>
+						(gf.advisory || !ic.advisory) &&
+						isSameClaim({ ...gf, path: null }, { ...ic, path: null }),
 				),
 		);
 		collapsed += beforeCross - merged_general.length;

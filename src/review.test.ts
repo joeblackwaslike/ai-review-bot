@@ -17,8 +17,9 @@ import {
 	readFpMarkers,
 	suggestionFingerprint,
 } from "./ledger/fingerprint.js";
+import { buildLedger } from "./ledger/github.js";
 import { computeCost, createAIModel } from "./models.js";
-import { claimTitle } from "./replay/claims.js";
+import { claimTitle, splitInlineClaims } from "./replay/claims.js";
 import {
 	buildReview,
 	buildReviewComments,
@@ -9197,6 +9198,167 @@ describe("advisory skills cannot block", () => {
 			c.body.includes("Advisory inline"),
 		);
 		expect(advisoryComment?.body).toContain("<!-- ai-review:advisory -->");
-		expect(result?.body).not.toMatch(/\| 🟡 \| architecture \| \*\*Layering/);
+		const body = result?.body ?? "";
+		const heading = body.indexOf("#### Quality and architecture notes");
+		const bulletAt = body.indexOf("- P2 **Layering violation**");
+		expect(heading).toBeGreaterThanOrEqual(0);
+		expect(bulletAt).toBeGreaterThan(heading);
+		expect(
+			body
+				.split("\n")
+				.filter((l) => l.startsWith("|") && l.includes("Layering")),
+		).toEqual([]);
+	});
+
+	it("the posted marker reads back as an advisory ledger entry the baseline skips", async () => {
+		const result = await runWith(null);
+		const posted = result?.comments.find((c) =>
+			c.body.includes("Advisory inline"),
+		);
+		const [part] = splitInlineClaims(posted?.body ?? "");
+		const [entry] = buildLedger({
+			prAuthor: "joe",
+			reviewIds: [20],
+			threads: [],
+			claims: [
+				{
+					id: "r0:c1:0",
+					roundIndex: 0,
+					reviewId: 20,
+					source: "inline",
+					commentId: 1,
+					path: posted?.path ?? "",
+					line: posted?.line ?? null,
+					severity: "P2",
+					title: part.title,
+					text: part.text,
+				},
+			],
+		});
+		expect(entry.advisory).toBe(true);
+		const baseline = deriveBaseline(
+			{
+				id: 20,
+				body: "<!-- ai-review:sha=1234567890abcdef -->\n<!-- ai-review:review=1 -->",
+			},
+			{ entries: [entry], reviewIds: [20], warm: true },
+			KNOWN_SKILLS,
+		);
+		expect(baseline?.state.findings).toEqual([]);
+	});
+});
+
+describe("mergeReviewsDetailed — advisory never displaces a blocking finding", () => {
+	const generalBase = {
+		body: "Details.",
+		category: "bug" as const,
+		confidence: 0.8,
+		evidence: "See diff.",
+		suppressible: false,
+	};
+
+	it("keeps the non-advisory inline comment on an exact-location tie", () => {
+		const blocking = buildInlineComment({
+			path: "a.ts",
+			line: 10,
+			severity: "P2",
+			title: "Null deref",
+			body: "short",
+		});
+		const advisory = {
+			...blocking,
+			body: "a much longer restatement of the same claim",
+			advisory: true as const,
+		};
+		for (const order of [
+			[blocking, advisory],
+			[advisory, blocking],
+		]) {
+			const { review } = mergeReviewsDetailed(
+				order.map((c) => buildModelReview({ inline_comments: [c] })),
+			);
+			expect(review.inline_comments).toHaveLength(1);
+			expect(review.inline_comments[0].advisory).toBeUndefined();
+		}
+	});
+
+	it("keeps the non-advisory general finding when titles collide", () => {
+		const advisory = {
+			...generalBase,
+			title: "Shared title",
+			severity: "P2" as const,
+			advisory: true as const,
+		};
+		const blocking = {
+			...generalBase,
+			title: "Shared title",
+			severity: "P0" as const,
+		};
+		const { review } = mergeReviewsDetailed([
+			buildModelReview({ general_findings: [advisory] }),
+			buildModelReview({
+				event: "REQUEST_CHANGES",
+				general_findings: [blocking],
+			}),
+		]);
+		expect(review.general_findings).toHaveLength(1);
+		expect(review.general_findings[0].severity).toBe("P0");
+		expect(review.event).toBe("REQUEST_CHANGES");
+	});
+
+	it("near-duplicate collapsing keeps the non-advisory member", () => {
+		const blocking = buildInlineComment({
+			path: "a.ts",
+			line: 10,
+			severity: "P2",
+			title: "Unchecked cast in parse",
+			body: "short",
+		});
+		const advisory = {
+			...blocking,
+			line: 12,
+			body: "a much longer restatement of the same unchecked cast claim",
+			advisory: true as const,
+		};
+		const { review } = mergeReviewsDetailed(
+			[advisory, blocking].map((c) =>
+				buildModelReview({ inline_comments: [c] }),
+			),
+			new Set(),
+			{ dedupeNearDuplicateClaims: true },
+		);
+		expect(review.inline_comments).toHaveLength(1);
+		expect(review.inline_comments[0].advisory).toBeUndefined();
+	});
+
+	it("an advisory inline does not remove a similar non-advisory general finding", () => {
+		const advisoryInline = {
+			...buildInlineComment({
+				path: "a.ts",
+				line: 10,
+				severity: "P2",
+				title: "Unchecked cast in parse",
+			}),
+			advisory: true as const,
+		};
+		const general = {
+			...generalBase,
+			title: "Unchecked cast in parse",
+			body: "Details.",
+			severity: "P1" as const,
+		};
+		const { review } = mergeReviewsDetailed(
+			[
+				buildModelReview({ inline_comments: [advisoryInline] }),
+				buildModelReview({
+					event: "REQUEST_CHANGES",
+					general_findings: [general],
+				}),
+			],
+			new Set(),
+			{ dedupeNearDuplicateClaims: true },
+		);
+		expect(review.general_findings).toHaveLength(1);
+		expect(review.event).toBe("REQUEST_CHANGES");
 	});
 });
