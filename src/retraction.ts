@@ -128,10 +128,9 @@ export function retractionFamilies(f: RetractionCandidate): string[] {
 	];
 }
 
-/** Measurement rule, not used in production. It labels findings whose own
- * title or closing sentence says nothing is wrong, for the replay classifier
- * and the filter-margin report. Reviewers kept finding real findings it would
- * drop, so it is not wired into the merge. */
+/** Labels findings whose own title or closing sentence says nothing is wrong.
+ * The replay classifier uses it unfiltered; the posting path only acts on
+ * `candidateFamilies`, which adds the severity and suppressible guards. */
 export function isRetractionCandidate(f: RetractionCandidate): boolean {
 	return retractionFamilies(f).length > 0;
 }
@@ -142,4 +141,39 @@ export function candidateFamilies(f: DroppableFinding): string[] {
 	if (f.severity !== "P2" && f.severity !== "P3") return [];
 	if (f.suppressible === false) return [];
 	return retractionFamilies(f);
+}
+
+const keepsFinding = (f: DroppableFinding) => candidateFamilies(f).length === 0;
+
+/** Removes strict retraction filler from a review: P2 and P3 findings that are
+ * suppressible and whose own title or closing sentence says nothing is wrong.
+ * REQUEST_CHANGES becomes COMMENT only when this removed every finding. */
+export function dropRetractions<
+	R extends {
+		event: string;
+		general_findings: DroppableFinding[];
+		inline_comments: DroppableFinding[];
+	},
+>(review: R): { review: R; dropped: DroppableFinding[] } {
+	const general = review.general_findings.filter(keepsFinding);
+	const inline = review.inline_comments.filter(keepsFinding);
+	const hadFindings =
+		review.general_findings.length + review.inline_comments.length > 0;
+	const hasFindings = general.length + inline.length > 0;
+	const event =
+		review.event === "REQUEST_CHANGES" && hadFindings && !hasFindings
+			? "COMMENT"
+			: review.event;
+	return {
+		review: {
+			...review,
+			event,
+			general_findings: general,
+			inline_comments: inline,
+		},
+		dropped: [
+			...review.general_findings.filter((f) => !keepsFinding(f)),
+			...review.inline_comments.filter((f) => !keepsFinding(f)),
+		],
+	};
 }

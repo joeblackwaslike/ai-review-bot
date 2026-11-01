@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isRetractionCandidate } from "./retraction.js";
+import { dropRetractions, isRetractionCandidate } from "./retraction.js";
 
 const retracted = (title: string, body: string) =>
 	isRetractionCandidate({ title, body });
@@ -350,5 +350,62 @@ describe("isRetractionCandidate keeps real findings", () => {
 
 	it("handles empty input", () => {
 		expect(retracted("", "")).toBe(false);
+	});
+});
+
+describe("dropRetractions", () => {
+	const filler = {
+		title: "Stale comment",
+		body: "The comment mentions the old name. No issues found.",
+		severity: "P3",
+		suppressible: true,
+	};
+	const review = (
+		event: string,
+		general: (typeof filler)[],
+		inline: (typeof filler)[] = [],
+	) => ({ event, general_findings: general, inline_comments: inline });
+
+	it("drops a P3 whose last unit is a retraction", () => {
+		const out = dropRetractions(review("COMMENT", [filler]));
+		expect(out.review.general_findings).toEqual([]);
+		expect(out.dropped).toEqual([filler]);
+	});
+
+	it("drops from inline comments too", () => {
+		const out = dropRetractions(review("COMMENT", [], [filler]));
+		expect(out.review.inline_comments).toEqual([]);
+	});
+
+	it("keeps a P1 with the same text", () => {
+		const p1 = { ...filler, severity: "P1" };
+		const out = dropRetractions(review("COMMENT", [p1]));
+		expect(out.review.general_findings).toEqual([p1]);
+		expect(out.dropped).toEqual([]);
+	});
+
+	it("keeps a suppressible:false P2", () => {
+		const f = { ...filler, severity: "P2", suppressible: false };
+		const out = dropRetractions(review("COMMENT", [f]));
+		expect(out.review.general_findings).toEqual([f]);
+	});
+
+	it("keeps a finding whose closing sentence quotes program output", () => {
+		const f = {
+			...filler,
+			severity: "P2",
+			body: 'The script exits 0 on failure. The log then prints "No issues found."',
+		};
+		const out = dropRetractions(review("COMMENT", [f]));
+		expect(out.review.general_findings).toEqual([f]);
+	});
+
+	it("downgrades REQUEST_CHANGES only when every finding was dropped", () => {
+		const all = dropRetractions(review("REQUEST_CHANGES", [filler]));
+		expect(all.review.event).toBe("COMMENT");
+		const keep = { ...filler, severity: "P1", title: "Real" };
+		const some = dropRetractions(review("REQUEST_CHANGES", [filler, keep]));
+		expect(some.review.event).toBe("REQUEST_CHANGES");
+		expect(some.review.general_findings).toEqual([keep]);
 	});
 });

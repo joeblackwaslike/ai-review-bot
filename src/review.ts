@@ -32,6 +32,7 @@ import {
 	wholePrInputComplete,
 } from "./prompt.js";
 import type { ResolvedFindingRef } from "./resolve-threads.js";
+import { candidateFamilies, dropRetractions } from "./retraction.js";
 import { isOwnReview, readMetadataValue } from "./review-metadata.js";
 import type { PersistedFinding, ReviewState } from "./review-state.js";
 import { REVIEWER_TUNING, type ReviewerTuning } from "./reviewer-tuning.js";
@@ -2339,7 +2340,16 @@ export async function buildReview(
 				entryStatus: entry.status,
 			});
 		}
-		return outcome.review;
+		if (!tuning.dropRetractions) return outcome.review;
+		const retractions = dropRetractions(outcome.review);
+		for (const finding of retractions.dropped) {
+			console.log("dropped retraction filler", {
+				title: finding.title,
+				severity: finding.severity ?? null,
+				families: candidateFamilies(finding),
+			});
+		}
+		return retractions.review;
 	});
 	if (loadedLedger) {
 		console.log("ledger suppression", {

@@ -3251,7 +3251,7 @@ describe("strict evidence rules propagation", () => {
 	});
 });
 
-describe("retraction phrases are not filtered", () => {
+describe("retraction phrases are filtered", () => {
 	beforeEach(() => {
 		mockGenerateObject.mockReset();
 		mockBuildUserMessage.mockReset();
@@ -3259,7 +3259,7 @@ describe("retraction phrases are not filtered", () => {
 		mockBuildUserMessage.mockReturnValue("user");
 	});
 
-	it("posts a finding that ends with a retraction phrase through buildReview", async () => {
+	it("drops a P3 that ends with a retraction phrase through buildReview", async () => {
 		mockGenerateObject.mockImplementation(async () =>
 			mockGenerateObject.mock.calls.length <= TIER1_SKILLS.length
 				? buildGenerateObjectResponse(
@@ -3290,8 +3290,8 @@ describe("retraction phrases are not filtered", () => {
 			provider: "anthropic" as const,
 		});
 
-		expect(result?.event).toBe("COMMENT");
-		expect(result?.body ?? "").toContain("Slot accounting");
+		expect(result?.event).toBe("APPROVE");
+		expect(result?.body ?? "").not.toContain("Slot accounting");
 	});
 });
 
@@ -4574,6 +4574,42 @@ describe("buildReview ledger suppression", () => {
 			severity: repeat.severity,
 			entryId: "r0:c11:0",
 			entryStatus: "rejected",
+		});
+		log.mockRestore();
+	});
+
+	it("drops strict retraction filler in the posting path and logs title and family", async () => {
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		const filler = {
+			...fresh,
+			title: "Stale comment",
+			body: "The comment mentions the old name. No issues found.",
+			severity: "P3" as const,
+			suppressible: true,
+		};
+		routeAgents(
+			{},
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [filler],
+				inline_comments: [],
+			}),
+		);
+
+		const result = await buildReview({
+			octokit: ledgerOctokit(),
+			...baseContext,
+		});
+
+		expect(result?.metadata.generalFindings).toBe(0);
+		const lines = log.mock.calls.filter(
+			([msg]) => msg === "dropped retraction filler",
+		);
+		expect(lines.length).toBeGreaterThan(0);
+		expect(lines[0]?.[1]).toEqual({
+			title: "Stale comment",
+			severity: "P3",
+			families: ["no-actionable-defect"],
 		});
 		log.mockRestore();
 	});

@@ -142,8 +142,8 @@ describe("filterMargin buckets", () => {
 		expect(formatMargin(m)).toContain("after reading all 2 filler claims");
 	});
 
-	it("says the rule is not applied in production", () => {
-		expect(formatMargin(m)).toContain("not applied in production");
+	it("says the rule is applied in the posting path", () => {
+		expect(formatMargin(m)).toContain("applied in the posting path");
 	});
 
 	it("prints the plan's margin line", () => {
