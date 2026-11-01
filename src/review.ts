@@ -1550,11 +1550,6 @@ async function restampCheckRun(
 	}
 }
 
-/** A carried finding with a path has a thread the author can settle through
- * the ledger, so it blocks at every severity. A path-less (general) finding
- * has no thread, so only P0 and P1 decide the verdict; P2 and P3 stay listed
- * as still open. */
-
 /** Records one restatement of an open entry as the finding it holds, keyed by
  * finding id, keeping the most severe of the entry and its restatements. */
 function addRestated(
