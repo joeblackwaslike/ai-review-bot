@@ -21,12 +21,20 @@ export interface ReviewState {
 	incompleteSkills?: string[];
 }
 
+/** A model title flattened to one plain line, so it cannot open a table row,
+ * a bullet or a code span in text that later rounds parse. Finding ids are
+ * computed over this form, so a title that was flattened for display still
+ * matches the same finding arriving from the ledger. */
+export function plainTitle(title: string): string {
+	return title.replace(/[`|]/g, "").replace(/\s+/g, " ").trim();
+}
+
 export function findingId(
 	path: string | null,
 	line: number | null,
 	title: string,
 ): string {
-	return `${path ?? "-"}:${line ?? "-"}:${title.toLowerCase().trim()}`;
+	return `${path ?? "-"}:${line ?? "-"}:${plainTitle(title).toLowerCase()}`;
 }
 
 const LOCATION_SUFFIX = /\s*\(`([^`]+):(\d+)`\)$/;

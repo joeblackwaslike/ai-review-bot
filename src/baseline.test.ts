@@ -149,6 +149,26 @@ describe("deriveBaseline", () => {
 			expect(r?.state.event).toBe("REQUEST_CHANGES");
 		});
 
+		it("counts a backtick title once when it arrives as a body row and as a listed entry", () => {
+			const ticked = entry({
+				id: "r0:c1:0",
+				round: 0,
+				path: "src/a.ts",
+				line: 42,
+				title: "`foo` returns null",
+			});
+			const b = body({
+				carried: ["| 🟠 | **foo returns null** (`src/a.ts:42`) |"],
+				carry: "r0:c1:0",
+			});
+			const r = deriveBaseline(
+				{ id: 20, body: b },
+				warm([ticked]),
+				KNOWN_SKILLS,
+			);
+			expect(r?.state.findings).toHaveLength(1);
+		});
+
 		it("keeps the body row's higher severity over the listed entry's", () => {
 			const general = entry({
 				id: "r0:body:0",

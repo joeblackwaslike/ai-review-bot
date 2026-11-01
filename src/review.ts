@@ -54,6 +54,7 @@ import { isOwnReview, readMetadataValue } from "./review-metadata.js";
 import {
 	moreSevere,
 	type PersistedFinding,
+	plainTitle,
 	type ReviewState,
 } from "./review-state.js";
 import { REVIEWER_TUNING, type ReviewerTuning } from "./reviewer-tuning.js";
@@ -1238,12 +1239,6 @@ function withFingerprints<T extends ModelInlineComment>(
 		...c,
 		...commentFingerprints(c, patches.get(c.path)),
 	}));
-}
-
-/** A model title flattened to one plain line, so it cannot open a table row,
- * a bullet or a code span in text that later rounds parse. */
-function plainTitle(title: string): string {
-	return title.replace(/[`|]/g, "").replace(/\s+/g, " ").trim();
 }
 
 function buildCommentBody(comment: ModelInlineComment, patch?: string): string {
