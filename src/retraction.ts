@@ -110,11 +110,9 @@ function familiesInLastUnit(text: string): string[] {
 		const rest = last.slice(match.index + match[0].length);
 		if (CONTRAST.test(last.slice(0, match.index))) return false;
 		if (EXCEPTION_FOLLOWS.test(rest)) return false;
-		const opensTheWholeFinding = all.length === 1 && match.index === 0;
-		if (!opensTheWholeFinding && SCOPE_FOLLOWS.test(rest)) return false;
+		if (SCOPE_FOLLOWS.test(rest)) return false;
 		if (
 			family.maxWordsAfter !== undefined &&
-			!opensTheWholeFinding &&
 			wordCount(rest) > family.maxWordsAfter
 		)
 			return false;
@@ -123,9 +121,12 @@ function familiesInLastUnit(text: string): string[] {
 }
 
 export function retractionFamilies(f: RetractionCandidate): string[] {
-	return [
-		...new Set([f.title, f.body].flatMap((s) => familiesInLastUnit(s ?? ""))),
-	];
+	const bodyFamilies = familiesInLastUnit(f.body ?? "");
+	const titleFamilies = familiesInLastUnit(f.title ?? "");
+	const bodyIsEmpty = !(f.body ?? "").trim();
+	const titleFamiliesAllowed =
+		bodyIsEmpty || bodyFamilies.length > 0 ? titleFamilies : [];
+	return [...new Set([...bodyFamilies, ...titleFamiliesAllowed])];
 }
 
 /** Labels findings whose own title or closing sentence says nothing is wrong.

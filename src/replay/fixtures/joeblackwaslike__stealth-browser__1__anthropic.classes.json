@@ -12,7 +12,7 @@
 		},
 		{
 			"claimId": "r0:c4370502157:1",
-			"rules": "filler",
+			"rules": null,
 			"claude": "filler",
 			"codex": "filler",
 			"reactionOnly": false,

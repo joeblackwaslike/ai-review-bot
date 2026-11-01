@@ -351,6 +351,37 @@ describe("isRetractionCandidate keeps real findings", () => {
 	it("handles empty input", () => {
 		expect(retracted("", "")).toBe(false);
 	});
+
+	it("keeps a scoped reassurance that opens a single-unit body", () => {
+		expect(
+			retracted(
+				"Writer loses data",
+				"No issues found in parsing; the writer silently drops the final chunk on flush.",
+			),
+		).toBe(false);
+		expect(
+			retracted(
+				"Socket leaks on retry",
+				"No issues found by the existing tests.",
+			),
+		).toBe(false);
+		expect(
+			retracted(
+				"Socket leak",
+				"No issues found in tests because they never exercise the leaking retry path.",
+			),
+		).toBe(false);
+		expect(retracted("Low", "No issues found.")).toBe(true);
+	});
+
+	it("keeps an actionable body even when the title alone looks retracted", () => {
+		expect(
+			retracted(
+				"No new findings beyond prior reviews",
+				"The retry handler logs the access token in plaintext. Remove the token from the log.",
+			),
+		).toBe(false);
+	});
 });
 
 describe("dropRetractions", () => {

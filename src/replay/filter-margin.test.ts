@@ -203,7 +203,6 @@ describe("filterMargin on the committed Claude fixtures", () => {
 			"ai-listings": [],
 			"stealth-browser": [
 				"r0:c4370502157:0",
-				"r0:c4370502157:1",
 				"r0:c4370502158:1",
 				"r0:c4370502170:1",
 				"r0:c4370502179:0",
@@ -211,8 +210,8 @@ describe("filterMargin on the committed Claude fixtures", () => {
 		});
 	});
 
-	it("hits 12 of 15 agreed-filler claims and nothing from the other classes", () => {
-		expect(m.total.filler).toEqual({ hit: 12, of: 15 });
+	it("hits 11 of 15 agreed-filler claims and nothing from the other classes", () => {
+		expect(m.total.filler).toEqual({ hit: 11, of: 15 });
 		expect(m.total.otherRejected.hit).toBe(0);
 		expect(m.total.repeats.hit).toBe(0);
 	});
