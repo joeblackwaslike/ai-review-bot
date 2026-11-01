@@ -1,5 +1,5 @@
 import { isSameClaim } from "../claim-dedupe.js";
-import { candidateFamilies } from "./retraction-rule.js";
+import { candidateFamilies } from "../retraction.js";
 import type { LabelFile, ReplayFixture, Round } from "./types.js";
 
 export interface LiveFinding {

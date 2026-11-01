@@ -1,7 +1,5 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { isRetractionCandidate } from "./retraction-rule.js";
+import { isRetractionCandidate } from "./retraction.js";
 
 const retracted = (title: string, body: string) =>
 	isRetractionCandidate({ title, body });
@@ -352,21 +350,5 @@ describe("isRetractionCandidate keeps real findings", () => {
 
 	it("handles empty input", () => {
 		expect(retracted("", "")).toBe(false);
-	});
-});
-
-describe("retraction rule boundary", () => {
-	it("is imported only from src/replay", () => {
-		const root = new URL("..", import.meta.url).pathname;
-		const outside = (dir: string): string[] =>
-			readdirSync(join(root, dir), { withFileTypes: true }).flatMap((e) => {
-				const rel = join(dir, e.name);
-				if (e.isDirectory()) return e.name === "replay" ? [] : outside(rel);
-				return rel.endsWith(".ts") ? [rel] : [];
-			});
-		const offenders = outside(".").filter((f) =>
-			readFileSync(join(root, f), "utf8").includes("retraction-rule"),
-		);
-		expect(offenders).toEqual([]);
 	});
 });

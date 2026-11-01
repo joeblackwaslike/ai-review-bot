@@ -1,6 +1,6 @@
+import { candidateFamilies } from "../retraction.js";
 import { fixtureId } from "./claims.js";
 import type { ClassFile } from "./classify.js";
-import { candidateFamilies } from "./retraction-rule.js";
 import type { LabelFile, ReplayFixture } from "./types.js";
 
 export interface MarginCount {
