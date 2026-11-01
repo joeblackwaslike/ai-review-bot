@@ -77,6 +77,7 @@ export interface InlineCommentFixture {
 	confidence: number;
 	evidence: string;
 	suppressible: boolean;
+	relation?: { kind: "repeats" | "caused_by"; entry_id: string } | null;
 }
 
 export function buildInlineComment(

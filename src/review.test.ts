@@ -19,6 +19,7 @@ import {
 } from "./ledger/fingerprint.js";
 import { buildLedger } from "./ledger/github.js";
 import { computeCost, createAIModel } from "./models.js";
+import { shortFindingId } from "./relation.js";
 import { claimTitle, splitInlineClaims } from "./replay/claims.js";
 import {
 	buildReview,
@@ -177,6 +178,46 @@ describe("ModelReviewSchema validation", () => {
 			inline_comments: [],
 		});
 		expect(result.success).toBe(true);
+	});
+});
+
+describe("ModelReviewSchema relation", () => {
+	const finding = {
+		title: "t",
+		body: "b",
+		severity: "P2",
+		category: "bug",
+		confidence: 0.9,
+		evidence: "src/a.ts:1",
+		suppressible: false,
+	};
+	const review = (f: object) => ({
+		event: "COMMENT",
+		general_findings: [f],
+		inline_comments: [],
+	});
+
+	it("accepts a relation and defaults an omitted one to null", () => {
+		const withRel = ModelReviewSchema.parse(
+			review({
+				...finding,
+				relation: { kind: "caused_by", entry_id: "a1b2c3" },
+			}),
+		);
+		expect(withRel.general_findings[0]?.relation).toEqual({
+			kind: "caused_by",
+			entry_id: "a1b2c3",
+		});
+		const without = ModelReviewSchema.parse(review(finding));
+		expect(without.general_findings[0]?.relation).toBeNull();
+	});
+
+	it("rejects an unknown relation kind", () => {
+		expect(
+			ModelReviewSchema.safeParse(
+				review({ ...finding, relation: { kind: "other", entry_id: "x" } }),
+			).success,
+		).toBe(false);
 	});
 });
 
@@ -5905,6 +5946,72 @@ describe("buildReview ledger suppression", () => {
 				entryId: "r0:c11:0",
 			});
 			log.mockRestore();
+		});
+
+		describe("finder-declared relations", () => {
+			const entryShortId = shortFindingId(
+				findingId("src/review.ts", 2, REPEAT_TITLE),
+			);
+			const declared = (
+				kind: "repeats" | "caused_by",
+				entry_id: string,
+				severity: "P1" | "P2" = "P2",
+			) =>
+				buildModelReview({
+					event: "COMMENT",
+					general_findings: [],
+					inline_comments: [
+						buildInlineComment({
+							title: "Eviction is missing from the session store",
+							body: "Sessions are kept forever.",
+							path: "src/review.ts",
+							line: 2,
+							severity,
+							relation: { kind, entry_id },
+						}),
+					],
+				});
+			const run = () =>
+				buildReview({
+					octokit: ledgerOctokit({
+						reviews: [round0],
+						comments: [ownComment],
+						threadNodes: [threadOn(ownComment)],
+					}),
+					...baseContext,
+				});
+
+			it("suppresses a declared repeat that text matching misses and still holds the verdict", async () => {
+				routeAgents({}, declared("repeats", entryShortId));
+
+				const decision = await run();
+
+				expect(decision?.comments).toEqual([]);
+				expect(decision?.event).toBe("REQUEST_CHANGES");
+				expect(decision?.body).toContain("<!-- ai-review:carry=r0:c11:0 -->");
+			});
+
+			it("posts a repeat whose id was never shown", async () => {
+				routeAgents({}, declared("repeats", "ffffff"));
+
+				const decision = await run();
+
+				expect(decision?.comments).toHaveLength(1);
+				expect(decision?.comments[0]?.body).not.toContain("Caused by");
+			});
+
+			it("posts a caused_by finding linked to the earlier thread", async () => {
+				routeAgents({}, declared("caused_by", entryShortId));
+
+				const decision = await run();
+
+				expect(decision?.comments).toHaveLength(1);
+				expect(decision?.comments[0]?.body).toContain(
+					"Caused by an earlier finding: https://github.com/",
+				);
+				expect(decision?.comments[0]?.body).toContain("#discussion_r11");
+				expect(decision?.comments[0]?.body).not.toContain("entry_id");
+			});
 		});
 
 		it("posts a restatement of an open entry the carried list lacks", async () => {

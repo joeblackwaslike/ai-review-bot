@@ -124,6 +124,16 @@ describe("prior own findings", () => {
 		expect(message).toContain("Do not file any of these again");
 	});
 
+	it("lists each prior finding under its short id and explains relations", () => {
+		const message = buildUserMessage({
+			...promptBase,
+			priorOwnFindings: [{ ...findings[0], shortId: "a1b2c3" }],
+		});
+		expect(message).toContain("- [#a1b2c3] [open]");
+		expect(message).toContain('kind: "repeats"');
+		expect(message).toContain('kind: "caused_by"');
+	});
+
 	it("shows the author's reason on a settled finding", () => {
 		const message = buildUserMessage({
 			...promptBase,

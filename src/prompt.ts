@@ -41,6 +41,8 @@ export interface PromptContext {
 	 * list the inline comments, so agents could not see what they had already
 	 * said and refiled it round after round. */
 	priorOwnFindings?: Array<{
+		/** Stable short id the finder may cite in a `relation`. */
+		shortId?: string;
 		path: string | null;
 		line: number | null;
 		title: string;
@@ -185,7 +187,7 @@ export function buildUserMessage(context: PromptContext): string {
 				"",
 				...context.priorOwnFindings.map(
 					(f) =>
-						`- [${f.status}]${dispositionNote(f)} ${f.severity} — ${f.path ?? "general"}${
+						`- ${f.shortId ? `[#${f.shortId}] ` : ""}[${f.status}]${dispositionNote(f)} ${f.severity} — ${f.path ?? "general"}${
 							f.line === null ? "" : `:${f.line}`
 						} — ${f.title}`,
 				),
@@ -198,6 +200,8 @@ export function buildUserMessage(context: PromptContext): string {
 				"- rejected: the author declined it as intended; do not argue it again.",
 				"- deferred: the author moved it to follow-up work; do not raise it in this pull request.",
 				"Report only what is genuinely new since these were written.",
+				"",
+				'Each line starts with an id like [#a1b2c3]. If a finding you are about to file restates a listed entry, set its relation to {kind: "repeats", entry_id} with that id instead of filing a duplicate; it is then matched to that entry. If it is a consequence of fixing a listed entry (the earlier fix caused this problem), set {kind: "caused_by", entry_id}; it is posted linked to the earlier thread. Use only ids shown above, and leave relation null otherwise.',
 			]
 		: [];
 

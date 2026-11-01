@@ -48,6 +48,12 @@ import {
 	PR_FILE_LIST_CAP,
 	wholePrInputComplete,
 } from "./prompt.js";
+import {
+	declaredRepeat,
+	RELATION_KINDS,
+	resolveRelations,
+	shortFindingId,
+} from "./relation.js";
 import { claimTitle } from "./replay/claims.js";
 import type { ResolvedFindingRef } from "./resolve-threads.js";
 import { candidateFamilies, dropRetractions } from "./retraction.js";
@@ -354,6 +360,13 @@ const findingBase = z
 		confidence: z.number().min(0).max(1),
 		evidence: z.string().trim().min(1),
 		suppressible: z.boolean(),
+		relation: z
+			.object({ kind: z.enum(RELATION_KINDS), entry_id: z.string() })
+			.nullable()
+			.default(null)
+			.describe(
+				"Set only when this finding restates (repeats) or is a consequence of fixing (caused_by) a finding listed under your prior findings; entry_id is that line's [#id] without the #. Otherwise null.",
+			),
 	})
 	.refine((f) => !(f.severity === "P0" && f.suppressible), {
 		message: "P0 findings must not be marked suppressible",
@@ -380,11 +393,21 @@ const SummarySchema = z.object({
 type ParsedReview = z.infer<typeof ModelReviewSchema>;
 
 /** Set after parsing, on findings from advisory skills; not in the schema. */
-export type ModelFinding = ParsedReview["general_findings"][number] & {
+export type ModelFinding = Omit<
+	ParsedReview["general_findings"][number],
+	"relation"
+> & {
+	relation?: ParsedReview["general_findings"][number]["relation"];
 	advisory?: true;
+	causedBy?: string;
 };
-export type ModelInlineComment = ParsedReview["inline_comments"][number] & {
+export type ModelInlineComment = Omit<
+	ParsedReview["inline_comments"][number],
+	"relation"
+> & {
+	relation?: ParsedReview["inline_comments"][number]["relation"];
 	advisory?: true;
+	causedBy?: string;
 };
 export type ModelReview = Omit<
 	ParsedReview,
@@ -1275,7 +1298,8 @@ function withFingerprints<T extends ModelInlineComment>(
 function buildCommentBody(comment: ModelInlineComment, patch?: string): string {
 	const badge = `${severityBadge(comment.severity)}${comment.advisory ? " · advisory" : ""}`;
 	const title = stripForgedFpMarkers(comment.title);
-	const base = `${badge}\n\n**${title}**\n\n${stripForgedFpMarkers(comment.body)}`;
+	const linked = comment.causedBy ? `\n\n${comment.causedBy}` : "";
+	const base = `${badge}\n\n**${title}**\n\n${stripForgedFpMarkers(comment.body)}${linked}`;
 	const withFix = comment.suggestion
 		? `${base}\n\n*Suggested fix:*\n\n\`\`\`suggestion\n${comment.suggestion}\n\`\`\``
 		: base;
@@ -2133,6 +2157,7 @@ export async function buildReview(
 					...priorFindings.map((f, i) => {
 						const settled = priorMatches[i];
 						return {
+							shortId: shortFindingId(f.id),
 							path: f.path,
 							line: f.line,
 							title: f.title,
@@ -2144,6 +2169,7 @@ export async function buildReview(
 						};
 					}),
 					...ledgerOnlySettled.map((e) => ({
+						shortId: shortFindingId(ledgerEntryFinding(e).id),
 						path: e.path,
 						line: e.line,
 						title: e.title,
@@ -2155,6 +2181,10 @@ export async function buildReview(
 				]
 			: undefined,
 	};
+
+	const shownIds = new Set(
+		(promptBase.priorOwnFindings ?? []).map((f) => f.shortId),
+	);
 
 	// Detect Tier 2 skills relevant to this PR and run all agents together.
 	// Keyed off scopedFiles so an INCREMENTAL pass only activates Tier 2 skills
@@ -2566,11 +2596,29 @@ export async function buildReview(
 	);
 	const restated = new Map<string, PersistedFinding>();
 	const unsettledResults = agentResults.map((agentResult) => {
+		const pr = {
+			owner: context.owner,
+			repo: context.repo,
+			pullNumber: context.pullNumber,
+		};
 		const r = {
 			...agentResult,
-			inline_comments: withFingerprints(agentResult.inline_comments, files),
+			general_findings: resolveRelations(
+				agentResult.general_findings,
+				shownIds,
+				ledger,
+				pr,
+			),
+			inline_comments: withFingerprints(
+				resolveRelations(agentResult.inline_comments, shownIds, ledger, pr),
+				files,
+			),
 		};
-		const outcome = suppressInReview(r, suppressionLedger);
+		const outcome = suppressInReview(
+			r,
+			suppressionLedger,
+			declaredRepeat(suppressionLedger),
+		);
 		suppressedCount += outcome.suppressed.length;
 		for (const s of outcome.restatedOpen) {
 			console.log("suppressed open restatement", {

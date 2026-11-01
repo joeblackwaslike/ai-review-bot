@@ -265,3 +265,52 @@ describe("acknowledged entries", () => {
 		expect(isSettled(acknowledged)).toBe(false);
 	});
 });
+
+describe("declared repeats", () => {
+	const declaredTo = (entry: LedgerEntry) => () => entry;
+	const unrelated = { ...fresh, severity: "P2" };
+
+	it("suppresses a declared repeat of an open entry that would not match by text and still holds the verdict", () => {
+		const out = suppressInReview(
+			{
+				event: "REQUEST_CHANGES",
+				general_findings: [],
+				inline_comments: [unrelated],
+			},
+			[open],
+			declaredTo(open),
+		);
+		expect(out.review.inline_comments).toEqual([]);
+		expect(out.restatedOpen).toEqual([{ finding: unrelated, entry: open }]);
+		expect(out.review.event).toBe("REQUEST_CHANGES");
+	});
+
+	it("drops a declared repeat of a settled entry without holding", () => {
+		const out = suppressInReview(
+			{
+				event: "REQUEST_CHANGES",
+				general_findings: [],
+				inline_comments: [unrelated],
+			},
+			[settled],
+			declaredTo(settled),
+		);
+		expect(out.review.inline_comments).toEqual([]);
+		expect(out.suppressed).toEqual([{ finding: unrelated, entry: settled }]);
+		expect(out.restatedOpen).toEqual([]);
+		expect(out.review.event).toBe("COMMENT");
+	});
+
+	it("does not suppress a finding whose declared entry does not resolve", () => {
+		const out = suppressInReview(
+			{
+				event: "REQUEST_CHANGES",
+				general_findings: [],
+				inline_comments: [unrelated],
+			},
+			[open],
+			() => undefined,
+		);
+		expect(out.review.inline_comments).toEqual([unrelated]);
+	});
+});

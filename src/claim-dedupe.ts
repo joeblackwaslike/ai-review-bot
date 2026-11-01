@@ -147,6 +147,8 @@ export interface ClaimLike {
 	body?: string | null;
 	/** From an advisory agent; never replaces a non-advisory restatement. */
 	advisory?: boolean;
+	/** The prior entry the finder declared this finding repeats or follows from. */
+	relation?: { kind: string; entry_id: string } | null;
 	/** Anchor-code fingerprint; see `ledger/fingerprint.ts`. */
 	fp?: string;
 	/** Suggestion-code fingerprint. */
