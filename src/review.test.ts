@@ -674,6 +674,46 @@ describe("buildReview", () => {
 		).rejects.toThrow("All review agents failed");
 	});
 
+	describe("alreadyReviewed with a partial review at this sha", () => {
+		const headSha = "1234567890abcdef";
+		const bodyWith = (agents: string) =>
+			[
+				"### ai-review-bot",
+				"",
+				"Prior review.",
+				"",
+				`<!-- ai-review:sha=${headSha} -->`,
+				"<!-- ai-review:review=1 -->",
+				"<!-- ai-review:readiness=4 -->",
+				"<!-- ai-review:provider=anthropic -->",
+				"<!-- ai-review:model=m -->",
+				"<!-- ai-review:findings=0 -->",
+				"<!-- ai-review:cost=0.000100 -->",
+				`<!-- ai-review:agents=${agents} -->`,
+			].join("\n");
+
+		it("re-runs when the review at this sha left skills pending", async () => {
+			const octokit = buildOctokit({
+				existingReviews: [
+					{ body: bodyWith('{"r":[],"p":["code-reviewer.md"]}') },
+				],
+			});
+			// Not skipped as already reviewed: it proceeds to the (unmocked) agents.
+			await expect(
+				buildReview({ octokit, ...baseContext, headSha, force: false }),
+			).rejects.toThrow("All review agents failed");
+		});
+
+		it("still skips when the review at this sha completed", async () => {
+			const octokit = buildOctokit({
+				existingReviews: [{ body: bodyWith('{"r":[],"p":[]}') }],
+			});
+			expect(
+				await buildReview({ octokit, ...baseContext, headSha, force: false }),
+			).toBeNull();
+		});
+	});
+
 	it("resubmits when force is true even if already reviewed", async () => {
 		const headSha = "1234567890abcdef";
 

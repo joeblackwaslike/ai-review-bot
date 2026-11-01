@@ -10,6 +10,7 @@ import {
 	type AgentRecord,
 	formatAgentsMarker,
 	logAgentRecords,
+	parseAgentsMarker,
 	toRecord,
 } from "./agent-log.js";
 import type { ResolvedAuth } from "./auth.js";
@@ -1484,7 +1485,10 @@ export async function buildReview(
 			const body = review.body ?? "";
 			if (!ownReviewOf(review)) return false;
 			const meta = parseReviewMetadata(body);
-			if (meta) return meta.sha === context.headSha;
+			if (meta) {
+				if (meta.sha !== context.headSha) return false;
+				return !parseAgentsMarker(body, KNOWN_SKILLS)?.pending.length;
+			}
 			return body.includes(legacyMarker);
 		});
 
