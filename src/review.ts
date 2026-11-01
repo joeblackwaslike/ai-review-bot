@@ -1317,6 +1317,23 @@ export function sanitizeInlineComments(
 	});
 }
 
+const sourceKeys = new WeakMap<ReviewComment, string>();
+
+/** The `commentKey` of the model comment a posted comment was built from. Read
+ * from the build step, because the rendered body does not round-trip a title
+ * containing `**` or a newline; a comment without a recorded key falls back to
+ * parsing its body. */
+export function postedCommentKey(posted: ReviewComment): string {
+	return (
+		sourceKeys.get(posted) ??
+		commentKey({
+			path: posted.path,
+			line: posted.line,
+			title: claimTitle(posted.body),
+		})
+	);
+}
+
 /** Split the comments that did not post. P0 and P1 become general findings
  * titled with a `(path:line)` suffix, which the next round's baseline reads back
  * with its path so they keep blocking. P2 and P3 stay as plain text in the body:
@@ -1329,11 +1346,7 @@ export function routeDroppedComments(
 	routed: ModelReview["general_findings"];
 	routedKeys: Set<string>;
 } {
-	const postedKeys = new Set(
-		posted.map((c) =>
-			commentKey({ path: c.path, line: c.line, title: claimTitle(c.body) }),
-		),
-	);
+	const postedKeys = new Set(posted.map(postedCommentKey));
 	const notPosted = attempted.filter((c) => !postedKeys.has(commentKey(c)));
 	const blocking = (c: ModelInlineComment) =>
 		c.severity === "P0" || c.severity === "P1";
@@ -1406,20 +1419,20 @@ export function buildReviewComments(
 			return [];
 		}
 
-		return [
-			{
-				path: comment.path,
-				body: buildCommentBody(
-					comment,
-					files.find((f) => f.filename === comment.path)?.patch,
-				),
-				line: comment.line,
-				side: "RIGHT" as const,
-				...(startLine !== undefined
-					? { start_line: startLine, start_side: "RIGHT" as const }
-					: {}),
-			},
-		];
+		const built: ReviewComment = {
+			path: comment.path,
+			body: buildCommentBody(
+				comment,
+				files.find((f) => f.filename === comment.path)?.patch,
+			),
+			line: comment.line,
+			side: "RIGHT" as const,
+			...(startLine !== undefined
+				? { start_line: startLine, start_side: "RIGHT" as const }
+				: {}),
+		};
+		sourceKeys.set(built, commentKey(comment));
+		return [built];
 	});
 }
 
@@ -2657,16 +2670,12 @@ export async function buildReview(
 		}
 		commentProvenance = new Map();
 		for (const rc of reviewComments) {
-			const key = commentKey({
-				path: rc.path,
-				line: rc.line,
-				title: claimTitle(rc.body),
-			});
+			const key = postedCommentKey(rc);
 			if (!skillsByKey.has(key)) {
 				console.warn("posted comment has no provenance entry", {
 					path: rc.path,
 					line: rc.line,
-					title: claimTitle(rc.body),
+					key,
 				});
 			}
 			commentProvenance.set(key, {

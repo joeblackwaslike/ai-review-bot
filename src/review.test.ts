@@ -8898,6 +8898,28 @@ describe("routeDroppedComments keyed by claim", () => {
 		body: `🟡 **P2**\n\n**${title}**\n\nbody`,
 	});
 
+	it.each([
+		"`**kwargs` silently swallowed by g",
+		"glob src/**/*.ts is not matched",
+		"multi\nline title",
+	])("does not route a posted P1 whose title does not round-trip: %s", (title) => {
+		const attempted = [
+			buildInlineComment({
+				path: "src/f.ts",
+				line: 2,
+				title,
+				severity: "P1",
+				start_line: null,
+			}),
+		];
+		const files = [buildPullFile("src/f.ts", SIMPLE_PATCH)];
+		const postedComments = buildReviewComments(files, attempted);
+		expect(postedComments).toHaveLength(1);
+		const out = routeDroppedComments(attempted, postedComments);
+		expect(out.routed).toEqual([]);
+		expect(out.routedKeys.size).toBe(0);
+	});
+
 	it("keeps a dropped comment when a sibling at the same line posted", () => {
 		const a = buildInlineComment({ path: "src/f.ts", line: 3, title: "Alpha" });
 		const b = buildInlineComment({ path: "src/f.ts", line: 3, title: "Beta" });
