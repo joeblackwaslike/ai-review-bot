@@ -36,7 +36,7 @@ POST /api/github/review-run        (QStash delayed callback)
 
 ### Two-layer review architecture
 
-**Agent layer** (`src/review.ts` → `runAgent()`): Five Tier 1 agents (plus any activated Tier 2 agents) fire in parallel via `Promise.allSettled()`. Each call uses a focused system prompt (`buildAgentSystemPrompt(skillPath, customPrompt)` from `src/prompt.ts`) with prompt caching enabled. All agents share the same user message (`buildUserMessage()` — PR metadata + serialized diff). `Promise.allSettled` ensures one agent failure doesn't abort the whole review.
+**Agent layer** (`src/review.ts` → `runAgent()`): Five Tier 1 agents (plus any activated Tier 2 agents) fire in parallel via `Promise.allSettled()`. Each call sends the shared PR metadata and serialized diff (`buildUserMessage()`) as the first, cached block of the user message, followed by that agent's focused skill text (`buildAgentSystemPrompt(skillPath, customPrompt)` from `src/prompt.ts`) as a second, uncached block. `Promise.allSettled` ensures one agent failure doesn't abort the whole review.
 
 **Merge layer** (`src/review.ts` → `mergeReviews()`): After all agents settle, findings are merged:
 
