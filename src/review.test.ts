@@ -287,6 +287,16 @@ describe("buildReviewComments", () => {
 		expect(comment.body).not.toContain("forged");
 	});
 
+	it("keeps a marker literal inside suggestion code verbatim and unreadable", () => {
+		const code = 'return "<!-- ai-review:fp=abc -->";';
+		const [comment] = buildReviewComments(
+			[buildPullFile("src/file.ts", SIMPLE_PATCH)],
+			[buildInlineComment({ line: 2, start_line: null, suggestion: code })],
+		);
+		expect(comment.body).toContain(code);
+		expect(readFpMarkers(comment.body)).toEqual({});
+	});
+
 	it("omits the suggestion fingerprint for trivial suggestion code", () => {
 		const [comment] = buildReviewComments(
 			[buildPullFile("src/file.ts", LONG_PATCH)],

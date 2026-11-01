@@ -1246,7 +1246,7 @@ function buildCommentBody(comment: ModelInlineComment, patch?: string): string {
 	const title = stripForgedFpMarkers(comment.title);
 	const base = `${badge}\n\n**${title}**\n\n${stripForgedFpMarkers(comment.body)}`;
 	const withFix = comment.suggestion
-		? `${base}\n\n*Suggested fix:*\n\n\`\`\`suggestion\n${stripForgedFpMarkers(comment.suggestion)}\n\`\`\``
+		? `${base}\n\n*Suggested fix:*\n\n\`\`\`suggestion\n${comment.suggestion}\n\`\`\``
 		: base;
 	const markers = formatFpMarkers(commentFingerprints(comment, patch));
 	return markers ? `${withFix}\n\n${markers}` : withFix;
