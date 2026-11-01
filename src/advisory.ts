@@ -27,3 +27,13 @@ export function capAdvisory(review: ModelReview): ModelReview {
 		inline_comments: review.inline_comments.map(cap),
 	};
 }
+
+/** Applies `capAdvisory` to a successful outcome of an advisory skill; every other outcome passes through. One helper so the PR and CLI paths cannot drift. */
+export function capAdvisoryOutcome<
+	O extends { status: string; review?: ModelReview },
+>(skillPath: string, outcome: O): O {
+	const name = skillPath.split("/").pop() ?? skillPath;
+	if (outcome.status !== "ok" || !outcome.review || !ADVISORY_SKILLS.has(name))
+		return outcome;
+	return { ...outcome, review: capAdvisory(outcome.review) };
+}

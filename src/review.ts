@@ -1,7 +1,7 @@
 import { APICallError } from "@ai-sdk/provider";
 import { generateObject } from "ai";
 import { z } from "zod";
-import { ADVISORY_SKILLS, capAdvisory } from "./advisory.js";
+import { capAdvisoryOutcome } from "./advisory.js";
 import {
 	type AgentFailure,
 	classifyAgentError,
@@ -2292,10 +2292,7 @@ export async function buildReview(
 		if (outcome.status === "ok" || outcome.status === "rate_limited") {
 			lastRateLimit = outcome.rateLimit;
 		}
-		if (outcome.status === "ok" && ADVISORY_SKILLS.has(skillName(skillPath))) {
-			return { ...outcome, review: capAdvisory(outcome.review) };
-		}
-		return outcome;
+		return capAdvisoryOutcome(skillPath, outcome);
 	};
 	const paceNext = async (
 		next: { idx: number } | { skill: string },

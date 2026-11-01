@@ -28,6 +28,7 @@ vi.mock("./audit-pr.js", () => ({
 
 import { runAuditPass } from "./audit.js";
 import type { Provider } from "./auth.js";
+import { toGateFinding } from "./gate/report.js";
 import { runAgent, TIER1_SKILLS } from "./review.js";
 import type { ModelSelection } from "./router.js";
 import { buildModelReview } from "./testing.js";
@@ -808,5 +809,61 @@ describe("runReviewPasses", () => {
 		expect(result.agentsAttempted).toBe(2 * n);
 		expect(result.agentsSucceeded).toBe(n);
 		expect([...result.providersRun].sort()).toEqual(["anthropic", "openai"]);
+	});
+});
+
+describe("runAuditPass advisory skills", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	it("caps a quality-skill P1 to an advisory P2 that is not a gate error", async () => {
+		const finding = {
+			title: "Module mixes concerns",
+			body: "b",
+			severity: "P1" as const,
+			category: "architecture" as const,
+			confidence: 0.9,
+			evidence: "See diff.",
+			suppressible: false,
+		};
+		(runAgent as ReturnType<typeof vi.fn>).mockImplementation(
+			async (skill: string) => ({
+				status: "ok",
+				review: buildModelReview(
+					skill.endsWith("code-review-and-quality.md")
+						? {
+								event: "REQUEST_CHANGES",
+								general_findings: [finding],
+								inline_comments: [],
+							}
+						: { event: "COMMENT", general_findings: [], inline_comments: [] },
+				),
+				usage: { promptTokens: 1, completionTokens: 1 },
+			}),
+		);
+		const { review } = await runAuditPass({
+			files: [{ path: "a.ts", content: "x" }],
+			selection,
+			extraInstructions: "",
+			meta: { owner: "o", repo: "r", ref: "local" },
+		});
+		const [f] = review.general_findings;
+		expect(f.severity).toBe("P2");
+		expect((f as { advisory?: true }).advisory).toBe(true);
+		expect(review.event).toBe("COMMENT");
+		const gate = toGateFinding({
+			id: "x",
+			round: 0,
+			path: null,
+			line: null,
+			severity: f.severity,
+			title: f.title,
+			status: "open",
+			decidedBy: null,
+			reason: null,
+			evidence: [],
+		});
+		expect(gate.severity).not.toBe("error");
 	});
 });
