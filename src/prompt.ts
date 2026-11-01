@@ -6,6 +6,8 @@ import {
 	formatPackedDiff,
 	isDeletionOnlyPatch,
 	isGeneratedFile,
+	type PackedDiff,
+	type PackInputFile,
 	packDiff,
 } from "./diff-pack.js";
 
@@ -99,6 +101,14 @@ function dispositionNote(f: PriorOwnFinding): string {
 	return ` [${label}${by}${why}]`;
 }
 
+/** The packing both the prompt and `wholePrInputComplete` use. */
+function packPromptFiles(
+	files: readonly PackInputFile[],
+	budgetChars: number,
+): PackedDiff {
+	return packDiff(files, { budgetChars });
+}
+
 /** GitHub lists at most this many files for a pull request. */
 export const PR_FILE_LIST_CAP = 3000;
 
@@ -107,10 +117,13 @@ export const PR_FILE_LIST_CAP = 3000;
  * has no changes to show (a binary file, a pure rename), and `packDiff` under
  * `budgetChars` neither truncates nor omits it. A cut file whose patch is
  * deletion-only still counts, since the model would not see its hunks anyway.
- * Only such input clears a pending skill. */
+ * The files are packed exactly as `buildUserMessage` packs them, status
+ * included, so a PR at the budget edge is judged by the prompt it gets. Only
+ * such input clears a pending skill. */
 export function wholePrInputComplete(
 	files: ReadonlyArray<{
 		filename: string;
+		status: string;
 		patch?: string;
 		additions?: number;
 		deletions?: number;
@@ -120,10 +133,7 @@ export function wholePrInputComplete(
 ): boolean {
 	if (files.length < changedFiles || files.length >= PR_FILE_LIST_CAP)
 		return false;
-	const packed = packDiff(
-		files.map((f) => ({ ...f, status: "" })),
-		{ budgetChars },
-	);
+	const packed = packPromptFiles(files, budgetChars);
 	const cut = new Set([
 		...packed.omitted,
 		...packed.files.filter((f) => f.truncated).map((f) => f.filename),
@@ -140,7 +150,7 @@ function serializeFiles(
 	files: PromptContext["files"],
 	budgetChars: number,
 ): string {
-	return formatPackedDiff(packDiff(files, { budgetChars }));
+	return formatPackedDiff(packPromptFiles(files, budgetChars));
 }
 
 export function buildUserMessage(context: PromptContext): string {
