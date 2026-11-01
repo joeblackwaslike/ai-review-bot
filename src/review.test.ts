@@ -4512,9 +4512,7 @@ describe("formatReviewBody", () => {
 			] as NonNullable<Parameters<typeof formatReviewBody>[0]["retiredPrior"]>,
 		});
 		expect(body).toContain("Retired, file no longer in this PR");
-		const bullets = body
-			.split("\n")
-			.filter((l) => l.trim().startsWith("- P2"));
+		const bullets = body.split("\n").filter((l) => l.trim().startsWith("- P2"));
 		expect(bullets).toHaveLength(1);
 	});
 

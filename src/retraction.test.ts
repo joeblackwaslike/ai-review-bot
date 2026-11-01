@@ -70,12 +70,15 @@ describe("isRetractionCandidate positives, one per phrase family", () => {
 	});
 
 	it("nothing to do this round", () => {
-		expect(
-			retracted("No code changes this round; only doc narrative revised", ""),
-		).toBe(true);
 		expect(retracted("Docs-only PR, no executable tests applicable", "")).toBe(
 			true,
 		);
+	});
+
+	it("keeps a nothing-this-round phrase followed by real detail", () => {
+		expect(
+			retracted("No code changes this round; only doc narrative revised", ""),
+		).toBe(false);
 	});
 
 	it("ignores markdown emphasis around the phrase", () => {
@@ -434,6 +437,51 @@ describe("isRetractionCandidate keeps real findings", () => {
 		).toBe(false);
 	});
 
+	it("keeps a no-new-findings phrase that names an exception", () => {
+		expect(
+			retracted(
+				"Timeout",
+				"No new findings beyond prior reviews except the missing timeout.",
+			),
+		).toBe(false);
+	});
+
+	it("keeps a conditional resolution using once/when/only when", () => {
+		expect(
+			retracted(
+				"Retry still leaks sockets",
+				"This looks resolved once the retry handler closes the socket.",
+			),
+		).toBe(false);
+		expect(
+			retracted(
+				"Retry still leaks sockets",
+				"This looks resolved when the missing guard is added.",
+			),
+		).toBe(false);
+		expect(
+			retracted(
+				"Retry still leaks sockets",
+				"This looks resolved only when retries are disabled.",
+			),
+		).toBe(false);
+	});
+
+	it("keeps a contracted negation of the retraction phrase", () => {
+		expect(
+			retracted(
+				"Race",
+				"The race remains reproducible. I don't think this looks resolved.",
+			),
+		).toBe(false);
+		expect(
+			retracted(
+				"Race",
+				"The race remains reproducible. I doesn't think this looks resolved.",
+			),
+		).toBe(false);
+	});
+
 	it("keeps an actionable body even when the title alone looks retracted", () => {
 		expect(
 			retracted(
@@ -477,6 +525,17 @@ describe("dropRetractions", () => {
 
 	it("keeps a suppressible:false P2", () => {
 		const f = { ...filler, severity: "P2", suppressible: false };
+		const out = dropRetractions(review("COMMENT", [f]));
+		expect(out.review.general_findings).toEqual([f]);
+	});
+
+	it("keeps a suppressible P2 whose resolution is conditional", () => {
+		const f = {
+			...filler,
+			severity: "P2",
+			title: "Retry still leaks sockets",
+			body: "This looks resolved only when retries are disabled.",
+		};
 		const out = dropRetractions(review("COMMENT", [f]));
 		expect(out.review.general_findings).toEqual([f]);
 	});

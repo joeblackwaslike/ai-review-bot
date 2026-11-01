@@ -12,74 +12,62 @@ interface PhraseFamily {
 	name: string;
 	pattern: RegExp;
 	wholeFindingOnly?: boolean;
-	maxWordsAfter?: number;
 }
 
-const NO_ACTIONABLE_AFTER_WORDS = 4;
-
+/**
+ * Every pattern is end-anchored (optionally through a trailing `.`): a family
+ * matches only when the retraction phrase is the end of the unit, with
+ * nothing actionable trailing it. This makes qualifier tails (exceptions,
+ * conditions, scope, elsewhere/outside) structurally impossible to match
+ * instead of requiring a dedicated guard per qualifier shape.
+ */
 const PHRASE_FAMILIES: PhraseFamily[] = [
 	{
 		name: "no-actionable-defect",
 		pattern:
-			/\bno (?:actionable (?:defects?|bugs?|issues?|problems?|findings?)|(?:issues?|defects?|bugs?|problems?) (?:found|here|identified))\b/i,
-		maxWordsAfter: NO_ACTIONABLE_AFTER_WORDS,
+			/\bno (?:actionable (?:defects?|bugs?|issues?|problems?|findings?)(?:\s+(?:found\s+here|found|here|identified))?|(?:issues?|defects?|bugs?|problems?)\s+(?:found\s+here|found|here|identified))\.?$/i,
 	},
 	{
 		name: "not-flagging",
-		pattern: /\bnot flagging (?:this )?as an? (?:defect|bug|issue)\b/i,
+		pattern: /\bnot flagging (?:this )?as an? (?:defect|bug|issue)\.?$/i,
 	},
 	{
 		name: "not-a-finding",
-		pattern: /\b(?:this|it) is not a finding\b/i,
+		pattern: /\b(?:this|it) is not a finding\.?$/i,
 	},
-	{ name: "retracted", pattern: /(?:^|[.;:]\s*)(?:retracted|withdrawn)\W*$/i },
+	{ name: "retracted", pattern: /(?:^|[.;:]\s*)(?:retracted|withdrawn)\.?$/i },
 	{
 		name: "withdrawing",
 		pattern:
-			/\bwithdrawing (?:this|my) (?:observation|finding|comment|concern|note)\b/i,
+			/\bwithdrawing (?:this|my) (?:observation|finding|comment|concern|note)\.?$/i,
 	},
 	{
 		name: "looks-consistent-or-resolved",
 		pattern:
-			/\b(?:this|it|that) (?:now )?(?:looks|appears|seems) (?:internally )?(?:consistent|resolved|addressed)\b(?!\s+with\b)/i,
+			/\b(?:this|it|that) (?:now )?(?:looks|appears|seems) (?:internally )?(?:consistent|resolved|addressed)\.?$/i,
 	},
 	{
 		name: "no-new-findings",
 		pattern:
-			/^no (?:new|additional|further) (?:[\w-]+ ){0,3}(?:findings?|issues?|concerns?|problems?)(?:\s+beyond (?:the )?(?:prior|previous|earlier)\b[^.]*)?\W*$|(?:^|[;:,—–]\s)no (?:new|additional|further) (?:[\w-]+ ){0,3}(?:findings?|issues?|concerns?|problems?)\s+beyond (?:the )?(?:prior|previous|earlier)\b/i,
+			/\bno (?:new|additional|further) (?:[\w-]+ ){0,3}(?:findings?|issues?|concerns?|problems?)(?:\s+beyond (?:the )?(?:prior|previous|earlier)(?:\s+reviews?)?)?\.?$/i,
 		wholeFindingOnly: true,
 	},
 	{
 		name: "covered-by-prior",
 		pattern:
-			/\balready (?:\w+ )?covered by (?:the )?(?:prior|previous|earlier)\b/i,
+			/\balready (?:\w+ )?covered by (?:the )?(?:prior|previous|earlier)(?:\s+review(?:s|ers)?)?\.?$/i,
 		wholeFindingOnly: true,
 	},
 	{
 		name: "nothing-this-round",
 		pattern:
-			/(?:^|[;:,—–]\s)no (?:[\w-]+ ){0,2}(?:changes?|tests?) (?:this round|applicable)\b/i,
+			/\bno (?:[\w-]+ ){0,2}(?:changes?|tests?)\s+(?:this round|applicable)\.?$/i,
 		wholeFindingOnly: true,
 	},
 ];
 
-const EXCEPTION_FOLLOWS =
-	/^[\s,;:—–-]*(?:(?:found|identified|here|detected)[\s,;:—–-]+)?(?:beyond|other than|apart from|aside from|except)\b/i;
-
-const CONTRAST =
-	/\b(?:but|however|although|though|unless|except|whereas|yet|while|otherwise)\b/i;
-
-const SCOPE_FOLLOWS =
-	/^[\s,]*(?:(?:found|identified|detected|here)[\s,]+)?(?:elsewhere|outside|in|by|with|for|from|during|on|within|under|at|across|inside|via|after|before|when|if|as|per|of|using|through|among)\b/i;
-
-const CONDITIONAL_QUALIFIER = /\b(?:until|only if|as long as|provided that)\b/i;
-
-const KEEP_AFTER_PHRASE = new RegExp(
-	`${CONTRAST.source}|${CONDITIONAL_QUALIFIER.source}|\\b(?:apart from|other than|aside from)\\b|\\b(?:consider|should)\\b|\\b(?:just|only) (?:confirm|verify|check|make sure)\\b|\\bwould be (?:clearer|better|safer)\\b|\\bsuggest`,
-	"i",
-);
-
-const NEGATES_PHRASE = /\b(?:not|n't|never|cannot|can't|unsure|may)\b/i;
+const NEGATES_PHRASE =
+	/\b(?:not|never|cannot|can't|unsure|may|however|although|though|otherwise|but|yet|while)\b|n't\b/i;
 
 const LIST_MARKER = /^\s*(?:[-*+•]|\d+[.)])\s+/;
 
@@ -102,8 +90,6 @@ function units(s: string): string[] {
 		.flatMap((line) => line.split(/(?<=[.!?])\s+/));
 }
 
-const wordCount = (s: string) => (s.match(/\b\w+\b/g) ?? []).length;
-
 function familiesInLastUnit(text: string): string[] {
 	const all = units(text);
 	const last = all[all.length - 1];
@@ -112,19 +98,9 @@ function familiesInLastUnit(text: string): string[] {
 		if (family.wholeFindingOnly && all.length !== 1) return false;
 		const match = family.pattern.exec(last);
 		if (!match) return false;
-		const rest = last.slice(match.index + match[0].length);
 		const before = last.slice(0, match.index);
 		const immediateClause = before.split(/[,;]/).pop() ?? "";
-		if (CONTRAST.test(before)) return false;
-		if (NEGATES_PHRASE.test(immediateClause)) return false;
-		if (EXCEPTION_FOLLOWS.test(rest)) return false;
-		if (SCOPE_FOLLOWS.test(rest)) return false;
-		if (
-			family.maxWordsAfter !== undefined &&
-			wordCount(rest) > family.maxWordsAfter
-		)
-			return false;
-		return !KEEP_AFTER_PHRASE.test(rest);
+		return !NEGATES_PHRASE.test(immediateClause);
 	}).map((f) => f.name);
 }
 
