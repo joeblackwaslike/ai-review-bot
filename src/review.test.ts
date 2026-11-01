@@ -335,7 +335,7 @@ describe("buildReviewComments", () => {
 	it("anchors a comment on a line the diff packer cut, against the full patch", () => {
 		const patch = `@@ -1,0 +1,60 @@\n${Array.from({ length: 60 }, (_, i) => `+row${i}`).join("\n")}`;
 		const full = [buildPullFile("src/file.ts", patch)];
-		const [packed] = packDiff(full, { budgetChars: 200 }).files;
+		const [packed] = packDiff(full, { budgetChars: 300 }).files;
 		expect(collectRightSideLines(packed.patch ?? "").has(55)).toBe(false);
 		const out = buildReviewComments(full, [
 			buildInlineComment({ line: 55, start_line: null }),
@@ -7940,6 +7940,26 @@ describe("delta scoping without KV", () => {
 			expect(decision?.event).toBe("APPROVE");
 			expect(pendingIn(decision?.body)).toEqual([]);
 			expect(decision?.body).toContain(`<!-- ai-review:sha=${HEAD} -->`);
+		});
+
+		it.each([
+			["stays pending when the PR is over the diff budget", 1, [SAST]],
+			["clears when the PR fits the diff budget", 200_000, []],
+		])("a pending skill that runs ok %s", async (_, diffBudgetChars, after) => {
+			agents();
+			incremental();
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: withPending([SAST]) }],
+				compare: deltaB,
+			});
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				diffBudgetChars,
+			});
+
+			expect(pendingIn(decision?.body)).toEqual(after);
 		});
 
 		it("a legacy own review with no agents marker means none pending", async () => {

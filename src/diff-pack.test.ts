@@ -6,8 +6,9 @@ import {
 } from "./diff-lines.js";
 import {
 	DEFAULT_DIFF_BUDGET_CHARS,
+	formatPackedDiff,
+	isDeletionOnlyPatch,
 	packDiff,
-	widenHunks,
 } from "./diff-pack.js";
 
 const added = (start: number, count: number, tag = "line") =>
@@ -22,11 +23,17 @@ const file = (filename: string, patch?: string) => ({
 	patch,
 });
 
-const packedChars = (files: ReturnType<typeof packDiff>["files"]) =>
-	files.reduce(
-		(n, f) => n + (f.patch ? numberPatchLines(f.patch).length : 0),
-		0,
-	);
+const SEP = "\n\n---\n\n";
+const TRUNCATED_LABEL =
+	"PATCH (truncated at the diff budget, later hunks not shown):";
+const block = (name: string, patch: string) =>
+	`FILE: ${name}\nSTATUS: modified\nPATCH:\n${numberPatchLines(patch)}`;
+const truncatedBlock = (name: string, kept: string) =>
+	`FILE: ${name}\nSTATUS: modified\n${TRUNCATED_LABEL}\n${numberPatchLines(kept)}\n\n[patch truncated]`;
+const serialized = (
+	files: Parameters<typeof packDiff>[0],
+	budgetChars: number,
+) => formatPackedDiff(packDiff(files, { budgetChars }));
 
 describe("packDiff ordering", () => {
 	it("puts the main language first, larger patches first within a language, generated files last", () => {
@@ -48,6 +55,24 @@ describe("packDiff ordering", () => {
 			"pnpm-lock.yaml",
 		]);
 	});
+
+	it("serializes the same files identically whatever order they arrive in", () => {
+		const files = [
+			file("b.ts", added(1, 3, "b")),
+			file("a.ts", added(1, 3, "a")),
+			file("Z.ts", added(1, 3, "z")),
+			file("logo.png"),
+			file("c.py", added(1, 9, "c")),
+			file("yarn.lock", added(1, 4, "y")),
+		];
+		const reference = serialized(files, 400);
+		for (const order of [
+			[...files].reverse(),
+			[...files.slice(2), ...files.slice(0, 2)],
+			[files[3], files[5], files[0], files[4], files[2], files[1]],
+		])
+			expect(serialized(order, 400)).toBe(reference);
+	});
 });
 
 describe("packDiff budget", () => {
@@ -59,38 +84,60 @@ describe("packDiff budget", () => {
 	);
 
 	it.each([
-		1, 50, 300, 1000, 4000, 20_000,
-	])("never exceeds a budget of %i numbered characters", (budgetChars) => {
-		const { files } = packDiff(many, { budgetChars });
-		expect(packedChars(files)).toBeLessThanOrEqual(budgetChars);
+		200, 300, 1000, 4000, 20_000,
+	])("keeps the whole serialized diff section within a budget of %i characters", (budgetChars) => {
+		expect(serialized(many, budgetChars).length).toBeLessThanOrEqual(
+			budgetChars,
+		);
 	});
 
-	it("names every file that is neither packed in full nor truncated", () => {
-		const first = numberPatchLines(added(1, 10, "big")).length;
-		const midFirstHunk = numberPatchLines(added(1, 4, "m")).length;
-		const { files, omitted } = packDiff(
+	it.each([
+		5000, 20_000, 100_000,
+	])("keeps a PR of many patchless files within %i characters and names every file", (budgetChars) => {
+		const files = [
+			file("src/a.ts", added(1, 5)),
+			...Array.from({ length: 300 }, (_, i) => file(`img/p${i}.png`)),
+		];
+		const packed = packDiff(files, { budgetChars });
+		expect(formatPackedDiff(packed).length).toBeLessThanOrEqual(budgetChars);
+		expect(
+			[...packed.files.map((f) => f.filename), ...packed.omitted].sort(),
+		).toEqual(files.map((f) => f.filename).sort());
+	});
+
+	it("names every file and shows none when the budget cannot hold the omitted list", () => {
+		const packed = packDiff(many, { budgetChars: 1 });
+		expect(packed.files).toEqual([]);
+		expect(packed.omitted).toHaveLength(12);
+		expect(formatPackedDiff(packed)).toMatch(
+			/^Files not shown \(over the diff budget\): /,
+		);
+	});
+
+	it("counts file framing and the omitted line: the cut file is truncated at a hunk boundary and the rest are named", () => {
+		const big = added(1, 40, "big");
+		const mid = [added(1, 4, "m"), added(50, 20, "n")].join("\n");
+		const expected = [
+			"Files not shown (over the diff budget): small.ts, tiny.ts\n\n",
+			block("big.ts", big),
+			SEP,
+			truncatedBlock("mid.ts", added(1, 4, "m")),
+		].join("");
+		const packed = packDiff(
 			[
-				file("big.ts", added(1, 10, "big")),
-				file("mid.ts", [added(1, 4, "m"), added(50, 4, "n")].join("\n")),
+				file("big.ts", big),
+				file("mid.ts", mid),
 				file("small.ts", added(1, 3, "s")),
 				file("tiny.ts", added(1, 2, "t")),
 			],
-			{
-				budgetChars: first + midFirstHunk + "\n\n[patch truncated]".length,
-			},
+			{ budgetChars: expected.length },
 		);
-		const shown = files.map((f) => f.filename);
-		expect([...shown, ...omitted].sort()).toEqual(
-			["big.ts", "mid.ts", "small.ts", "tiny.ts"].sort(),
-		);
-		expect(shown).toEqual(["big.ts", "mid.ts"]);
-		expect(omitted).toEqual(["small.ts", "tiny.ts"]);
-		expect(files.find((f) => f.filename === "big.ts")?.truncated).toBe(false);
-		const mid = files.find((f) => f.filename === "mid.ts");
-		expect(mid?.truncated).toBe(true);
-		expect(mid?.patch).toContain("@@ -1,0 +1,4 @@");
-		expect(mid?.patch).not.toContain("@@ -50,0 +50,4 @@");
-		expect(mid?.patch?.endsWith("[patch truncated]")).toBe(true);
+		expect(packed.omitted).toEqual(["small.ts", "tiny.ts"]);
+		expect(packed.files.map((f) => [f.filename, f.truncated])).toEqual([
+			["big.ts", false],
+			["mid.ts", true],
+		]);
+		expect(formatPackedDiff(packed)).toBe(expected);
 	});
 
 	it("cuts mid-hunk with a marker when the first hunk alone is over the budget, keeping right-side numbers", () => {
@@ -99,77 +146,118 @@ describe("packDiff budget", () => {
 			" ctx",
 			...Array.from({ length: 29 }, (_, i) => `+row${i}`),
 		].join("\n");
-		const { files, omitted } = packDiff([file("a.ts", full)], {
-			budgetChars: 200,
-		});
-		expect(omitted).toEqual([]);
-		const [packed] = files;
-		expect(packed.truncated).toBe(true);
-		expect(packed.patch?.endsWith("[patch truncated]")).toBe(true);
+		const packed = packDiff([file("a.ts", full)], { budgetChars: 300 });
+		expect(packed.omitted).toEqual([]);
+		const [cut] = packed.files;
+		expect(cut.truncated).toBe(true);
+		expect(cut.patch?.endsWith("[patch truncated]")).toBe(true);
 		const fullText = rightSideText(full);
-		const shown = rightSideText(packed.patch ?? "");
+		const shown = rightSideText(cut.patch ?? "");
 		expect(shown.size).toBeGreaterThan(0);
 		expect(shown.size).toBeLessThan(fullText.size);
 		for (const [line, text] of shown) expect(fullText.get(line)).toBe(text);
-		expect(numberPatchLines(packed.patch ?? "").length).toBeLessThanOrEqual(
-			200,
-		);
+		expect(formatPackedDiff(packed).length).toBeLessThanOrEqual(300);
 	});
 
-	it("lists a file whose first line does not fit as omitted, not as an empty truncation", () => {
-		const { files, omitted } = packDiff(
+	it("never cuts at a boundary whose prefix has no right-side line", () => {
+		const patch = ["-stray preamble", added(1, 30, "r")].join("\n");
+		const [cut] = packDiff([file("a.ts", patch)], { budgetChars: 220 }).files;
+		expect(cut.truncated).toBe(true);
+		expect(collectRightSideLines(cut.patch ?? "").size).toBeGreaterThan(0);
+	});
+
+	it("omits a file of which nothing fits, then truncates a later one and omits the rest", () => {
+		const packed = packDiff(
 			[
-				file("a.ts", added(1, 1)),
-				file("b.ts", `@@ -1 +1 @@\n+${"x".repeat(500)}`),
+				file("huge.ts", `@@ -1 +1 @@\n+${"x".repeat(2000)}`),
+				file("a.ts", added(1, 80, "a")),
+				file("b.ts", added(1, 2, "b")),
 			],
-			{ budgetChars: numberPatchLines(added(1, 1)).length + 30 },
+			{ budgetChars: 600 },
 		);
-		expect(files.map((f) => f.filename)).toEqual(["a.ts"]);
-		expect(omitted).toEqual(["b.ts"]);
+		expect(packed.files.map((f) => [f.filename, f.truncated])).toEqual([
+			["a.ts", true],
+		]);
+		expect(packed.omitted).toEqual(["huge.ts", "b.ts"]);
+		expect(formatPackedDiff(packed).length).toBeLessThanOrEqual(600);
 	});
 
-	it("keeps files with no patch, which cost nothing, even past the cut", () => {
+	it("charges patchless files their framing and omits them after the cut", () => {
 		const { files, omitted } = packDiff(
 			[
 				file("a.ts", added(1, 40)),
 				file("b.ts", added(1, 40)),
 				file("logo.png"),
 			],
-			{ budgetChars: 300 },
+			{ budgetChars: 400 },
 		);
-		expect(files.map((f) => f.filename)).toContain("logo.png");
-		expect(omitted).toEqual(["b.ts"]);
+		expect(files.map((f) => f.filename)).toEqual(["a.ts"]);
+		expect(omitted).toEqual(["b.ts", "logo.png"]);
+	});
+
+	it("keeps a \\ No newline line with its hunk when cutting at the boundary after it", () => {
+		const first =
+			"@@ -1,1 +1,1 @@\n-a\n\\ No newline at end of file\n+b\n\\ No newline at end of file";
+		const patch = [first, added(10, 40, "z")].join("\n");
+		const budget = truncatedBlock("a.ts", first).length;
+		const [cut] = packDiff([file("a.ts", patch)], {
+			budgetChars: budget,
+		}).files;
+		expect(cut.patch).toBe(`${first}\n\n[patch truncated]`);
 	});
 });
 
 describe("packDiff deletion-only hunks", () => {
-	const deletion = "@@ -5,2 +4,0 @@\n-gone1\n-gone2";
+	const deletion =
+		"@@ -5,2 +4,0 @@\n-gone1\n-gone2\n\\ No newline at end of file";
+	const keep = "@@ -20,1 +18,2 @@\n ctx\n+new";
 
-	it("drops a hunk with no added lines and keeps the other hunks' headers", () => {
-		const keep = "@@ -20,1 +18,2 @@\n ctx\n+new";
-		const full = `${deletion}\n${keep}`;
-		const [packed] = packDiff([file("a.ts", full)], {
+	it("drops a hunk with no added lines, with its \\ No newline line, and keeps the other hunks' headers", () => {
+		const [packed] = packDiff([file("a.ts", `${keep}\n${deletion}`)], {
 			budgetChars: DEFAULT_DIFF_BUDGET_CHARS,
 		}).files;
 		expect(packed.patch).toBe(keep);
-		expect(packed.truncated).toBe(false);
+		expect(packed.droppedDeletionHunks).toBe(1);
 		expect(rightSideText(packed.patch ?? "")).toEqual(rightSideText(keep));
 	});
 
+	it("notes dropped deletion-only hunks under the file header and counts the note in the budget", () => {
+		const files = [file("a.ts", `${deletion}\n${keep}\n${deletion}`)];
+		const full = serialized(files, DEFAULT_DIFF_BUDGET_CHARS);
+		expect(full).toBe(
+			`FILE: a.ts\nSTATUS: modified\n(2 deletion-only hunks not shown)\nPATCH:\n${numberPatchLines(keep)}`,
+		);
+		expect(
+			packDiff(files, { budgetChars: full.length }).files[0].truncated,
+		).toBe(false);
+		const short = packDiff(files, { budgetChars: full.length - 1 });
+		expect(short.files[0]?.truncated ?? true).toBe(true);
+	});
+
 	it("marks a file left with no hunks as deletions only instead of dropping it", () => {
-		const { files, omitted } = packDiff([file("a.ts", deletion)], {
+		const packed = packDiff([file("a.ts", deletion)], {
 			budgetChars: DEFAULT_DIFF_BUDGET_CHARS,
 		});
-		expect(omitted).toEqual([]);
-		expect(files).toEqual([
+		expect(packed.omitted).toEqual([]);
+		expect(packed.files).toEqual([
 			{
 				filename: "a.ts",
 				status: "modified",
 				patch: undefined,
 				truncated: false,
 				deletionsOnly: true,
+				droppedDeletionHunks: 1,
 			},
 		]);
+		expect(formatPackedDiff(packed)).toBe(
+			"FILE: a.ts\nSTATUS: modified\nPATCH: [deletions only]",
+		);
+	});
+
+	it("isDeletionOnlyPatch is true only for a patch whose every hunk only deletes", () => {
+		expect(isDeletionOnlyPatch(deletion)).toBe(true);
+		expect(isDeletionOnlyPatch(`${deletion}\n${keep}`)).toBe(false);
+		expect(isDeletionOnlyPatch(undefined)).toBe(false);
 	});
 });
 
@@ -182,41 +270,5 @@ describe("packDiff and anchor validation", () => {
 		expect(packed[0].truncated).toBe(true);
 		expect(files[0].patch).toBe(full);
 		expect(collectRightSideLines(files[0].patch ?? "")).toEqual(before);
-	});
-});
-
-describe("widenHunks", () => {
-	const text = Array.from({ length: 30 }, (_, i) => `L${i + 1}`);
-	text[2] = "function outer() {";
-	const fileText = text.join("\n");
-
-	it("adds context to reach 5 lines before the first change and up to the enclosing function", () => {
-		const patch = "@@ -11,2 +11,3 @@\n L11\n+new\n L12";
-		const widened = widenHunks(patch, fileText);
-		const lines = rightSideText(widened);
-		expect(lines.get(3)).toBe("function outer() {");
-		expect(lines.get(10)).toBe("L10");
-		expect(widened.split("\n")[0]).toBe("@@ -3,10 +3,11 @@");
-		expect(lines.get(12)).toBe("new");
-	});
-
-	it("stops at the previous hunk and adds one line after when the hunk has none", () => {
-		const patch = "@@ -1,1 +1,2 @@\n L1\n+a\n@@ -7,0 +9,1 @@\n+b";
-		const widened = widenHunks(patch, fileText);
-		const headers = widened.split("\n").filter((l) => l.startsWith("@@"));
-		expect(headers).toEqual(["@@ -1,2 +1,3 @@", "@@ -3,6 +4,7 @@"]);
-		expect(rightSideText(widened).get(10)).toBe("L10");
-	});
-
-	it("packDiff widens only the files whose text is given", () => {
-		const patch = "@@ -11,1 +11,1 @@\n+changed";
-		const { files } = packDiff([file("a.ts", patch), file("b.ts", patch)], {
-			budgetChars: DEFAULT_DIFF_BUDGET_CHARS,
-			fileText: new Map([["a.ts", fileText]]),
-		});
-		const a = files.find((f) => f.filename === "a.ts");
-		const b = files.find((f) => f.filename === "b.ts");
-		expect(collectRightSideLines(a?.patch ?? "").has(3)).toBe(true);
-		expect(b?.patch).toBe(patch);
 	});
 });

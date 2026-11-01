@@ -8,7 +8,7 @@ This file provides context and conventions for AI coding agents working on this 
 pnpm install
 pnpm typecheck    # tsc --noEmit — must pass before any commit
 pnpm lint         # biome check — must pass before any commit
-pnpm test         # vitest run (1746 passed, 4 skipped) — must pass before any commit
+pnpm test         # vitest run (1755 passed, 4 skipped) — must pass before any commit
 pnpm dev          # vercel dev — local server on :3000
 ```
 
@@ -36,7 +36,7 @@ POST /api/github/review-run        (QStash delayed callback)
 
 ### Two-layer review architecture
 
-**Agent layer** (`src/review.ts` → `runAgent()`): Five Tier 1 agents (plus any activated Tier 2 agents) run through `mapWithConcurrency()` (the first agent alone, then up to `AGENT_CONCURRENCY` at a time). Each call sends the shared PR metadata and serialized diff (`buildUserMessage()`) as the first, cached block of the user message, followed by that agent's focused skill text (`buildAgentSystemPrompt(skillPath, customPrompt)` from `src/prompt.ts`) as a second, uncached block. `runAgent()` catches each agent's failure itself, so one failure doesn't abort the whole review. `buildUserMessage()` packs the diff with `packDiff()` (`src/diff-pack.ts`) into one PR-wide budget (`REVIEW_DIFF_BUDGET_CHARS`, counted on the numbered text): main language first, larger patches first, generated files last, deletion-only hunks dropped. The file that crosses the budget is marked truncated and every file after it is named in a "Files not shown" line, so no file vanishes from the prompt. A FULL round with a truncated or omitted file does not clear pending skills.
+**Agent layer** (`src/review.ts` → `runAgent()`): Five Tier 1 agents (plus any activated Tier 2 agents) run through `mapWithConcurrency()` (the first agent alone, then up to `AGENT_CONCURRENCY` at a time). Each call sends the shared PR metadata and serialized diff (`buildUserMessage()`) as the first, cached block of the user message, followed by that agent's focused skill text (`buildAgentSystemPrompt(skillPath, customPrompt)` from `src/prompt.ts`) as a second, uncached block. `runAgent()` catches each agent's failure itself, so one failure doesn't abort the whole review. `buildUserMessage()` packs the diff with `packDiff()` (`src/diff-pack.ts`) into one PR-wide budget (`REVIEW_DIFF_BUDGET_CHARS`) that covers the whole serialized diff section, file headers and the omitted-files line included: main language first, larger patches first, generated files last, deletion-only hunks dropped and counted in a note under the file header. The file that crosses the budget is marked truncated and every file after it is named in a "Files not shown" line, so no file vanishes from the prompt. A FULL round with a truncated or omitted file does not clear pending skills, unless that file is generated or its patch only deletes.
 
 **Merge layer** (`src/review.ts` → `mergeReviews()`): After all agents settle, findings are merged:
 
@@ -70,7 +70,7 @@ Findings carried from the previous review appear in the body's "Still open from 
 | `src/router.ts` | PR tier classification (`classifyTier()`), model selection (`routeModel()`) |
 | `src/tier2.ts` | Tier 2 skill detection (`detectTier2Skills()`) |
 | `src/claim-dedupe.ts` | Near-duplicate claim clustering (`dedupeClaims()`, `isSameClaim()`) |
-| `src/diff-pack.ts` | `packDiff()`: PR-wide diff budget, file ordering, deletion-only hunk dropping, truncated and omitted files; `widenHunks()` for hunk context when file text is available (no caller has it yet); `isGeneratedFile()` |
+| `src/diff-pack.ts` | `packDiff()` and `formatPackedDiff()`: PR-wide diff budget, file ordering, deletion-only hunk dropping, truncated and omitted files; `isGeneratedFile()`, `isDeletionOnlyPatch()` |
 | `src/suggestion.ts` | `repairSuggestion()`: cleans a model's suggestion block (fence, line-number prefixes, indentation, replaced range) before it is posted; never adds lines |
 | `src/diff-lines.ts` | Right-side line walk of a unified patch: `collectRightSideLines()`, `rightSideText()`, `numberPatchLines()` |
 | `src/retraction.ts` | Strict self-retraction phrase rule and `dropRetractions()`, applied in the posting path to P2/P3 suppressible findings only when `REVIEWER_TUNING.dropRetractions` is on (default off); the replay filter-margin report measures the same rule |

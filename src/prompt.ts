@@ -1,9 +1,10 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { numberPatchLines } from "./diff-lines.js";
 import {
 	DEFAULT_DIFF_BUDGET_CHARS,
+	formatPackedDiff,
+	isDeletionOnlyPatch,
 	isGeneratedFile,
 	packDiff,
 } from "./diff-pack.js";
@@ -104,8 +105,9 @@ export const PR_FILE_LIST_CAP = 3000;
 /** True when these files are the whole PR as a FULL round sees it: the list
  * is not cut short, and every file other than a generated one has a patch or
  * has no changes to show (a binary file, a pure rename), and `packDiff` under
- * `budgetChars` neither truncates nor omits it. Only such input clears a
- * pending skill. */
+ * `budgetChars` neither truncates nor omits it. A cut file whose patch is
+ * deletion-only still counts, since the model would not see its hunks anyway.
+ * Only such input clears a pending skill. */
 export function wholePrInputComplete(
 	files: ReadonlyArray<{
 		filename: string;
@@ -130,48 +132,15 @@ export function wholePrInputComplete(
 		(f) =>
 			isGeneratedFile(f.filename) ||
 			((Boolean(f.patch) || (f.additions === 0 && f.deletions === 0)) &&
-				!cut.has(f.filename)),
+				(!cut.has(f.filename) || isDeletionOnlyPatch(f.patch))),
 	);
-}
-
-/** Omitted names shown to the model before the rest are counted. */
-const MAX_OMITTED_NAMES = 100;
-
-function omittedLine(omitted: string[]): string[] {
-	if (omitted.length === 0) return [];
-	const shown = omitted.slice(0, MAX_OMITTED_NAMES);
-	const more = omitted.length - shown.length;
-	return [
-		`Files not shown (over the diff budget): ${shown.join(", ")}${more > 0 ? `, and ${more} more` : ""}`,
-		"",
-	];
-}
-
-function patchSection(file: {
-	patch?: string;
-	truncated: boolean;
-	deletionsOnly: boolean;
-}): string {
-	if (file.deletionsOnly) return "PATCH: [deletions only]";
-	if (!file.patch) return "PATCH: [not available]";
-	const label = file.truncated
-		? "PATCH (truncated at the diff budget, later hunks not shown):"
-		: "PATCH:";
-	return `${label}\n${numberPatchLines(file.patch)}`;
 }
 
 function serializeFiles(
 	files: PromptContext["files"],
 	budgetChars: number,
 ): string {
-	const packed = packDiff(files, { budgetChars });
-	const body = packed.files
-		.map(
-			(file) =>
-				`FILE: ${file.filename}\nSTATUS: ${file.status}\n${patchSection(file)}`,
-		)
-		.join("\n\n---\n\n");
-	return [...omittedLine(packed.omitted), body].join("\n");
+	return formatPackedDiff(packDiff(files, { budgetChars }));
 }
 
 export function buildUserMessage(context: PromptContext): string {

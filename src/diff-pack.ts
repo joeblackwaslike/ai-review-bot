@@ -20,18 +20,14 @@ export function isGeneratedFile(path: string): boolean {
 	);
 }
 
-/** PR-wide diff budget, in characters of numbered patch text. */
+/** PR-wide diff budget, in characters of the serialized diff section. */
 export const DEFAULT_DIFF_BUDGET_CHARS = 200_000;
 
 const TRUNCATION_MARKER = "[patch truncated]";
 const MARKER_COST = `\n\n${TRUNCATION_MARKER}`.length;
-const CONTEXT_BEFORE = 5;
-const CONTEXT_AFTER = 1;
-const FUNCTION_REACH = 20;
-// ponytail: keyword heuristic, a per-language parser if it misses too often
-const FUNCTION_START =
-	/^\s*(?:export\s+)?(?:default\s+)?(?:pub\s+)?(?:async\s+)?(?:function|class|def|fn|func|interface)\b|=>\s*\{\s*$/;
-const HUNK_RANGE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$/;
+const FILE_SEPARATOR = "\n\n---\n\n";
+const OMITTED_PREFIX = "Files not shown (over the diff budget): ";
+const MAX_OMITTED_NAMES = 100;
 
 /** A PR file as GitHub lists it. */
 export interface PackInputFile {
@@ -41,22 +37,22 @@ export interface PackInputFile {
 }
 
 /** A file as the model sees it after packing. `patch` holds whole hunks of the
- * GitHub patch (deletion-only hunks dropped), ending in `[patch truncated]` when
- * the budget cut it; it is undefined for a file with no patch or no hunk left. */
+ * GitHub patch (deletion-only hunks dropped and counted in
+ * `droppedDeletionHunks`), ending in `[patch truncated]` when the budget cut
+ * it; it is undefined for a file with no patch or no hunk left. */
 export interface PackedFile {
 	filename: string;
 	status: string;
 	patch?: string;
 	truncated: boolean;
 	deletionsOnly: boolean;
+	droppedDeletionHunks: number;
 }
 
-/** `budgetChars` caps the numbered patch text across the whole PR. */
-export interface PackOptions {
-	budgetChars: number;
-	/** Full new-side text by filename. When present, that file's hunks get
-	 * asymmetric context (see `widenHunks`). */
-	fileText?: ReadonlyMap<string, string>;
+/** Files shown, in prompt order, and the names of the files left out. */
+export interface PackedDiff {
+	files: PackedFile[];
+	omitted: string[];
 }
 
 interface Split {
@@ -75,6 +71,15 @@ function splitHunks(patch: string): Split {
 
 const hasAddition = (hunk: string[]) =>
 	hunk.some((line, i) => i > 0 && line.startsWith("+"));
+
+/** True when the patch has hunks and none of them adds a line. */
+export function isDeletionOnlyPatch(patch: string | undefined): boolean {
+	if (!patch) return false;
+	const { hunks } = splitHunks(patch);
+	return hunks.length > 0 && !hunks.some(hasAddition);
+}
+
+const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
 const extensionOf = (filename: string) => {
 	const base = filename.split("/").pop() ?? filename;
@@ -98,78 +103,78 @@ function orderFiles<T extends PackInputFile>(files: readonly T[]): T[] {
 			Number(isGeneratedFile(a.filename)) -
 				Number(isGeneratedFile(b.filename)) ||
 			rank(b) - rank(a) ||
-			extensionOf(a.filename).localeCompare(extensionOf(b.filename)) ||
+			cmp(extensionOf(a.filename), extensionOf(b.filename)) ||
 			(b.patch?.length ?? 0) - (a.patch?.length ?? 0) ||
-			a.filename.localeCompare(b.filename),
+			cmp(a.filename, b.filename),
 	);
 }
 
-/** Widen each hunk with new-side context from `fileText`: at least 5 lines
- * before the first change, reaching back to an enclosing function start within
- * 20 lines, and at least 1 line after. Never overlaps a neighbouring hunk. */
-export function widenHunks(patch: string, fileText: string): string {
-	const text = fileText.split("\n");
-	const { preamble, hunks } = splitHunks(patch);
-	let prevEnd = 0;
-	const widened = hunks.map((hunk, h) => {
-		const m = HUNK_RANGE.exec(hunk[0]);
-		if (!m) return hunk;
-		const oldCount = m[2] === undefined ? 1 : Number(m[2]);
-		const newCount = m[4] === undefined ? 1 : Number(m[4]);
-		const oldFirst = Number(m[1]) + (oldCount === 0 ? 1 : 0);
-		const newFirst = Number(m[3]) + (newCount === 0 ? 1 : 0);
-		const body = hunk.slice(1);
-		const leading = body.findIndex((l) => !l.startsWith(" "));
-		const lead = leading === -1 ? body.length : leading;
-		const nextMatch = hunks[h + 1] ? HUNK_RANGE.exec(hunks[h + 1][0]) : null;
-		const nextFirst = nextMatch ? Number(nextMatch[3]) : text.length + 1;
-		const floor = prevEnd + 1;
-		let start = Math.max(floor, newFirst - Math.max(0, CONTEXT_BEFORE - lead));
-		for (
-			let n = newFirst - 1;
-			n >= Math.max(floor, newFirst - FUNCTION_REACH);
-			n--
-		) {
-			if (FUNCTION_START.test(text[n - 1] ?? "")) {
-				start = Math.min(start, n);
-				break;
-			}
-		}
-		const before = text.slice(start - 1, newFirst - 1).map((l) => ` ${l}`);
-		const trailing = [...body].reverse().findIndex((l) => !l.startsWith(" "));
-		const trail = trailing === -1 ? body.length : trailing;
-		const newEnd = newFirst + newCount - 1;
-		const afterCount = Math.max(
-			0,
-			Math.min(
-				CONTEXT_AFTER - trail,
-				nextFirst - 1 - newEnd,
-				text.length - newEnd,
-			),
-		);
-		const after = text.slice(newEnd, newEnd + afterCount).map((l) => ` ${l}`);
-		prevEnd = newEnd + afterCount;
-		const added = before.length + after.length;
-		if (added === 0) return hunk;
-		const header = `@@ -${oldFirst - before.length},${oldCount + added} +${newFirst - before.length},${newCount + added} @@${m[5]}`;
-		return [header, ...before, ...body, ...after];
-	});
-	return [...preamble, ...widened.flat()].join("\n");
+function patchLabel(file: PackedFile): string {
+	if (file.deletionsOnly) return "PATCH: [deletions only]";
+	if (!file.patch) return "PATCH: [not available]";
+	return file.truncated
+		? "PATCH (truncated at the diff budget, later hunks not shown):\n"
+		: "PATCH:\n";
+}
+
+/** Everything in a file's block except the numbered patch text. */
+function fileFrame(file: PackedFile): string {
+	const n = file.patch ? file.droppedDeletionHunks : 0;
+	const note =
+		n > 0
+			? `(${n} deletion-only ${n === 1 ? "hunk" : "hunks"} not shown)\n`
+			: "";
+	return `FILE: ${file.filename}\nSTATUS: ${file.status}\n${note}${patchLabel(file)}`;
+}
+
+function formatFile(file: PackedFile): string {
+	return `${fileFrame(file)}${file.patch ? numberPatchLines(file.patch) : ""}`;
+}
+
+function omittedSection(names: readonly string[]): string {
+	if (names.length === 0) return "";
+	const shown = names.slice(0, MAX_OMITTED_NAMES);
+	const more = names.length - shown.length;
+	return `${OMITTED_PREFIX}${shown.join(", ")}${more > 0 ? `, and ${more} more` : ""}\n\n`;
+}
+
+/** The longest omitted section any subset of these names can produce. */
+function omittedUpperBound(names: readonly string[]): number {
+	const longest = names
+		.map((n) => n.length)
+		.sort((a, b) => b - a)
+		.slice(0, MAX_OMITTED_NAMES);
+	const more =
+		names.length > MAX_OMITTED_NAMES ? `, and ${names.length} more`.length : 0;
+	return (
+		OMITTED_PREFIX.length + longest.reduce((n, l) => n + l + 2, 0) + more + 2
+	);
+}
+
+/** The diff section of the prompt: the omitted-files line, then each file's
+ * block. `packDiff` keeps its length within the budget. */
+export function formatPackedDiff(diff: PackedDiff): string {
+	return `${omittedSection(diff.omitted)}${diff.files.map(formatFile).join(FILE_SEPARATOR)}`;
 }
 
 interface Prepared {
+	input: PackInputFile;
 	lines: string[];
 	/** `cost[k]`: chars of the first k numbered lines joined by newlines. */
 	cost: number[];
 	boundaries: number[];
+	/** Fewest leading lines that include a right-side (`+` or context) line. */
+	minCut: number;
 	deletionsOnly: boolean;
+	dropped: number;
 }
 
-function prepare(patch: string): Prepared {
-	const { preamble, hunks } = splitHunks(patch);
+function prepare(input: PackInputFile): Prepared {
+	const { preamble, hunks } = splitHunks(input.patch ?? "");
 	const kept = hunks.filter(hasAddition);
 	const deletionsOnly = hunks.length > 0 && kept.length === 0;
-	const lines = deletionsOnly ? [] : [...preamble, ...kept.flat()];
+	const lines =
+		!input.patch || deletionsOnly ? [] : [...preamble, ...kept.flat()];
 	const boundaries: number[] = [];
 	let at = preamble.length;
 	if (at > 0) boundaries.push(at);
@@ -182,88 +187,96 @@ function prepare(patch: string): Prepared {
 	const cost = [0];
 	for (const [i, line] of numbered.entries())
 		cost.push(cost[i] + line.length + (i > 0 ? 1 : 0));
-	return { lines, cost, boundaries, deletionsOnly };
+	const firstRight = lines.findIndex(
+		(l) => l.startsWith("+") || l.startsWith(" "),
+	);
+	return {
+		input,
+		lines,
+		cost,
+		boundaries,
+		minCut: firstRight === -1 ? Number.POSITIVE_INFINITY : firstRight + 1,
+		deletionsOnly,
+		dropped: hunks.length - kept.length,
+	};
 }
 
 function cutPoint(p: Prepared, avail: number): number {
-	const atBoundary = p.boundaries.filter((b) => p.cost[b] <= avail).at(-1);
+	const atBoundary = p.boundaries
+		.filter((b) => b >= p.minCut && p.cost[b] <= avail)
+		.at(-1);
 	if (atBoundary !== undefined) return atBoundary;
 	let count = 0;
 	while (count < p.lines.length && p.cost[count + 1] <= avail) count++;
-	return p.lines
-		.slice(0, count)
-		.some((l) => l.startsWith("+") || l.startsWith(" "))
-		? count
-		: 0;
+	return count >= p.minCut ? count : 0;
 }
 
-/** Pack a PR's patches into one character budget, measured on the numbered
- * text `numberPatchLines` produces. Files go main language first (the
- * extension with the most added lines), larger patches first within a
- * language, generated files last. Deletion-only hunks are dropped. Whole files
- * fit until one would cross the budget; that one is cut at a hunk boundary (or
- * mid-hunk, by whole lines, when its first hunk alone is too big) and every
- * later file with content is listed in `omitted`. A file of which nothing fits
- * is omitted and packing goes on. */
-export function packDiff(
-	files: readonly PackInputFile[],
-	opts: PackOptions,
-): { files: PackedFile[]; omitted: string[] } {
-	let remaining = opts.budgetChars;
+function packWithin(items: readonly Prepared[], budget: number): PackedDiff {
+	let remaining = budget;
 	let cut = false;
-	const packed: PackedFile[] = [];
+	const files: PackedFile[] = [];
 	const omitted: string[] = [];
-	for (const file of orderFiles(files)) {
-		const base = { filename: file.filename, status: file.status };
-		if (!file.patch) {
-			packed.push({
-				...base,
-				patch: undefined,
-				truncated: false,
-				deletionsOnly: false,
-			});
-			continue;
-		}
-		const text = opts.fileText?.get(file.filename);
-		const p = prepare(
-			text === undefined ? file.patch : widenHunks(file.patch, text),
-		);
-		if (p.deletionsOnly) {
-			packed.push({
-				...base,
-				patch: undefined,
-				truncated: false,
-				deletionsOnly: true,
-			});
-			continue;
-		}
+	for (const p of items) {
 		if (cut) {
-			omitted.push(file.filename);
+			omitted.push(p.input.filename);
 			continue;
 		}
-		const cost = p.cost[p.lines.length];
+		const sep = files.length > 0 ? FILE_SEPARATOR.length : 0;
+		const whole: PackedFile = {
+			filename: p.input.filename,
+			status: p.input.status,
+			patch: p.lines.length > 0 ? p.lines.join("\n") : undefined,
+			truncated: false,
+			deletionsOnly: p.deletionsOnly,
+			droppedDeletionHunks: p.dropped,
+		};
+		const cost = sep + fileFrame(whole).length + p.cost[p.lines.length];
 		if (cost <= remaining) {
-			packed.push({
-				...base,
-				patch: p.lines.join("\n"),
-				truncated: false,
-				deletionsOnly: false,
-			});
+			files.push(whole);
 			remaining -= cost;
 			continue;
 		}
-		const count = cutPoint(p, remaining - MARKER_COST);
+		const partial = { ...whole, truncated: true };
+		const frame = fileFrame({ ...partial, patch: "x" }).length;
+		const count =
+			p.lines.length > 0
+				? cutPoint(p, remaining - sep - frame - MARKER_COST)
+				: 0;
 		if (count === 0) {
-			omitted.push(file.filename);
+			omitted.push(p.input.filename);
 			continue;
 		}
-		packed.push({
-			...base,
+		files.push({
+			...partial,
 			patch: `${p.lines.slice(0, count).join("\n")}\n\n${TRUNCATION_MARKER}`,
-			truncated: true,
-			deletionsOnly: false,
 		});
 		cut = true;
 	}
-	return { files: packed, omitted };
+	return { files, omitted };
+}
+
+/** Pack a PR's patches into one budget for the whole serialized diff section
+ * (`formatPackedDiff`): file framing, numbered patch text and the
+ * omitted-files line all count. Files go main language first (the extension
+ * with the most added lines), larger patches first within a language,
+ * generated files last. Deletion-only hunks are dropped and counted in a note.
+ * Whole files fit until one would cross the budget; that one is cut at a hunk
+ * boundary (or mid-hunk, by whole lines, when its first hunk alone is too big)
+ * and every later file is named in `omitted`. A file of which nothing fits is
+ * omitted and packing goes on. When the budget cannot hold even the omitted
+ * list, every file is omitted: the output is only that list, never silent. */
+export function packDiff(
+	files: readonly PackInputFile[],
+	opts: { budgetChars: number },
+): PackedDiff {
+	const items = orderFiles(files).map(prepare);
+	const first = packWithin(items, opts.budgetChars);
+	const need = omittedSection(first.omitted).length;
+	if (need === 0) return first;
+	const second = packWithin(items, opts.budgetChars - need);
+	if (omittedSection(second.omitted).length <= need) return second;
+	return packWithin(
+		items,
+		opts.budgetChars - omittedUpperBound(files.map((f) => f.filename)),
+	);
 }

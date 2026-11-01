@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isGeneratedFile } from "./diff-pack.js";
+import { isGeneratedFile, packDiff } from "./diff-pack.js";
 import {
 	buildAgentSystemPrompt,
 	buildAuditUserMessage,
@@ -81,14 +81,14 @@ describe("buildUserMessage diff packing", () => {
 
 	it("caps the omitted list at 100 names", () => {
 		const files = [
-			{ filename: "big.ts", status: "modified", patch: rows(40, "big") },
+			{ filename: "big.ts", status: "modified", patch: rows(200, "big") },
 			...Array.from({ length: 105 }, (_, i) => ({
 				filename: `f${String(i).padStart(3, "0")}.ts`,
 				status: "added",
-				patch: rows(1, "x"),
+				patch: rows(40, "x"),
 			})),
 		];
-		const msg = buildUserMessage({ ...base, diffBudgetChars: 300, files });
+		const msg = buildUserMessage({ ...base, diffBudgetChars: 2000, files });
 		expect(msg).toContain("f099.ts, and 5 more");
 		expect(msg).not.toContain("f100.ts");
 	});
@@ -431,8 +431,7 @@ describe("wholePrInputComplete", () => {
 			file("b.ts", { patch: "@@ -1 +1 @@\n+x", additions: 1 }),
 		];
 		expect(wholePrInputComplete(files, 2, 200_000)).toBe(true);
-		const fitsA = 140;
-		expect(wholePrInputComplete(files, 2, fitsA)).toBe(false);
+		expect(wholePrInputComplete(files, 2, 140)).toBe(false);
 	});
 
 	it("a generated file the packer omits does not block", () => {
@@ -440,7 +439,35 @@ describe("wholePrInputComplete", () => {
 			file("a.ts"),
 			file("pnpm-lock.yaml", { patch: big, additions: 900 }),
 		];
-		expect(wholePrInputComplete(files, 2, 100)).toBe(true);
+		expect(wholePrInputComplete(files, 2, 300)).toBe(true);
+	});
+
+	it("an omitted file whose patch only deletes still counts as complete", () => {
+		const kept = "@@ -1 +1 @@\n+x";
+		const gone = "@@ -1,2 +0,0 @@\n-a\n-b";
+		const files = [
+			file("a.ts", { patch: kept, additions: 1 }),
+			file("gone.md", { patch: gone, deletions: 2 }),
+		];
+		const budget =
+			`FILE: a.ts\nSTATUS: \nPATCH:\n${kept.replace("+x", "   1|+x")}`.length +
+			52;
+		expect(
+			packDiff(
+				files.map((f) => ({ ...f, status: "" })),
+				{ budgetChars: budget },
+			).omitted,
+		).toEqual(["gone.md"]);
+		expect(wholePrInputComplete(files, 2, budget)).toBe(true);
+	});
+
+	it("an omitted binary file is incomplete input", () => {
+		const files = [
+			file("a.ts", { patch: "@@ -1 +1 @@\n+x", additions: 1 }),
+			file("logo.png", { additions: 0, deletions: 0 }),
+		];
+		expect(wholePrInputComplete(files, 2, 200_000)).toBe(true);
+		expect(wholePrInputComplete(files, 2, 1)).toBe(false);
 	});
 
 	it("a file with no patch and no changes (binary, pure rename) is complete", () => {
