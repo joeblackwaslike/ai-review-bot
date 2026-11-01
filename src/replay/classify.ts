@@ -1,4 +1,4 @@
-import { isRetractionCandidate } from "./retraction-rule.js";
+import { isRetractionCandidate } from "../retraction.js";
 import type {
 	ClaimLabel,
 	LabelFile,

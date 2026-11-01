@@ -21,13 +21,45 @@ export interface ReviewState {
 	incompleteSkills?: string[];
 }
 
+/** A model title flattened to one plain line, so it cannot open a table row,
+ * a bullet or a code span in text that later rounds parse. Finding ids are
+ * computed over this form, so a title that was flattened for display still
+ * matches the same finding arriving from the ledger. */
+export function plainTitle(title: string): string {
+	return title.replace(/[`|]/g, "").replace(/\s+/g, " ").trim();
+}
+
 export function findingId(
 	path: string | null,
 	line: number | null,
 	title: string,
 ): string {
-	return `${path ?? "-"}:${line ?? "-"}:${title.toLowerCase().trim()}`;
+	return `${path ?? "-"}:${line ?? "-"}:${plainTitle(title).toLowerCase()}`;
 }
+
+const LOCATION_SUFFIX = /\s*\(`([^`]+):(\d+)`\)$/;
+
+/** A path-less finding whose title ends in `` (`path:line`) ``, the form carried
+ * and off-diff findings are listed in, gets that path and line and a clean title. */
+export function recoverLocation<
+	T extends { path: string | null; line: number | null; title: string },
+>(f: T): T {
+	if (f.path !== null) return f;
+	const m = f.title.match(LOCATION_SUFFIX);
+	if (!m) return f;
+	return {
+		...f,
+		path: m[1],
+		line: Number(m[2]),
+		title: f.title.replace(LOCATION_SUFFIX, "").trim(),
+	};
+}
+
+const SEVERITY_RANK: Record<string, number> = { P0: 4, P1: 3, P2: 2, P3: 1 };
+
+/** The more severe of two severities; unknown values rank below P3. */
+export const moreSevere = (a: string, b: string): string =>
+	(SEVERITY_RANK[b] ?? 0) > (SEVERITY_RANK[a] ?? 0) ? b : a;
 
 export function parseBodyFindings(body: string): PersistedFinding[] {
 	const findings: PersistedFinding[] = [];

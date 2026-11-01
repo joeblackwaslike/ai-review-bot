@@ -145,6 +145,10 @@ export interface ClaimLike {
 	title: string;
 	severity?: string | null;
 	body?: string | null;
+	/** Anchor-code fingerprint; see `ledger/fingerprint.ts`. */
+	fp?: string;
+	/** Suggestion-code fingerprint. */
+	sfp?: string;
 }
 
 export interface ClaimMatchOptions {

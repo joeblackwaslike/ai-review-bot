@@ -1,5 +1,15 @@
-import { suppressSettled } from "../ledger/suppress.js";
-import type { Ledger, LedgerEntry, LedgerStatus } from "../ledger/types.js";
+import { ledgerEntryFinding } from "../baseline.js";
+import { reconcileSurvivingPrior } from "../ledger/live.js";
+import {
+	suppressOpenRestatements,
+	suppressSettled,
+} from "../ledger/suppress.js";
+import {
+	isSettled,
+	type Ledger,
+	type LedgerEntry,
+	type LedgerStatus,
+} from "../ledger/types.js";
 import type { ClaimLabel, PostedClaim, Round } from "./types.js";
 
 export interface LedgerView {
@@ -14,6 +24,8 @@ export type ReplayPipeline = (input: {
 }) => {
 	posted: string[];
 	suppressed: string[];
+	/** Restatements of a prior claim that is still open. */
+	held?: string[];
 	/** Suppressed claim id to the id of the prior claim it was matched to. */
 	matchedTo?: Record<string, string>;
 };
@@ -27,41 +39,72 @@ const SETTLED_LABELS = new Set<string>(["fixed", "rejected", "deferred"]);
 
 const evidenceText = (entry: string) => entry.slice(entry.indexOf("|") + 1);
 
+/** Every prior claim as a ledger entry: settled when a visible high-confidence
+ * label settles it, open otherwise, as an unanswered thread is. */
 export function ledgerFromView(view: LedgerView): Ledger {
-	return view.priorClaims.flatMap((c): LedgerEntry[] => {
+	return view.priorClaims.map((c): LedgerEntry => {
+		const base = {
+			id: c.id,
+			round: c.roundIndex,
+			path: c.path,
+			line: c.line,
+			severity: c.severity,
+			title: c.title,
+			body: c.text,
+		};
 		const label = view.labels.get(c.id);
-		if (!label || label.confidence !== "high") return [];
-		if (!SETTLED_LABELS.has(label.label)) return [];
+		if (
+			!label ||
+			label.confidence !== "high" ||
+			!SETTLED_LABELS.has(label.label)
+		)
+			return {
+				...base,
+				status: "open",
+				decidedBy: null,
+				reason: null,
+				evidence: [],
+			};
 		const first = label.evidence[0];
-		return [
-			{
-				id: c.id,
-				round: c.roundIndex,
-				path: c.path,
-				line: c.line,
-				severity: c.severity,
-				title: c.title,
-				body: c.text,
-				status: label.label as LedgerStatus,
-				decidedBy: "author",
-				reason: first === undefined ? null : evidenceText(first),
-				evidence: label.evidence,
-			},
-		];
+		return {
+			...base,
+			status: label.label as LedgerStatus,
+			decidedBy: "author",
+			reason: first === undefined ? null : evidenceText(first),
+			evidence: label.evidence,
+		};
 	});
+}
+
+/** Settled entries, and the open ones behind the baseline: the latest prior
+ * round's open claims that no settled entry matches, as `deriveBaseline` and
+ * `reconcileSurvivingPrior` carry them. */
+function holdable(entries: Ledger): Ledger {
+	const source = Math.max(-1, ...entries.map((e) => e.round));
+	const carried = reconcileSurvivingPrior(
+		entries
+			.filter((e) => e.round === source && !isSettled(e))
+			.map(ledgerEntryFinding),
+		entries,
+	);
+	const ids = new Set(carried.map((f) => f.id));
+	return entries.filter(
+		(e) => isSettled(e) || ids.has(ledgerEntryFinding(e).id),
+	);
 }
 
 export const todaysCodePipeline: ReplayPipeline = ({ claims, ledger }) => {
 	const findings = claims.map((c) => ({ ...c, body: c.text }));
-	const { kept, suppressed } = suppressSettled(
-		findings,
-		ledgerFromView(ledger),
-	);
+	const entries = ledgerFromView(ledger);
+	const settled = suppressSettled(findings, entries);
+	const open = suppressOpenRestatements(settled.kept, holdable(entries));
+	const matched = [...settled.suppressed, ...open.suppressed];
 	return {
-		posted: kept.map((c) => c.id),
-		suppressed: suppressed.map((s) => s.finding.id),
+		posted: open.kept.map((c) => c.id),
+		suppressed: settled.suppressed.map((s) => s.finding.id),
+		held: open.suppressed.map((s) => s.finding.id),
 		matchedTo: Object.fromEntries(
-			suppressed.map((s) => [s.finding.id, s.entry.id]),
+			matched.map((s) => [s.finding.id, s.entry.id]),
 		),
 	};
 };

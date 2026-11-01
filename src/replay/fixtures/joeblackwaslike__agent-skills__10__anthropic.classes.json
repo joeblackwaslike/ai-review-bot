@@ -36,7 +36,7 @@
 		},
 		{
 			"claimId": "r1:body:1",
-			"rules": "filler",
+			"rules": null,
 			"claude": "filler",
 			"codex": "filler",
 			"reactionOnly": false,
@@ -124,7 +124,7 @@
 		},
 		{
 			"claimId": "r4:body:4",
-			"rules": "filler",
+			"rules": null,
 			"claude": "filler",
 			"codex": "filler",
 			"reactionOnly": false,

@@ -14,14 +14,30 @@ import {
 	toRecord,
 } from "./agent-log.js";
 import type { ResolvedAuth } from "./auth.js";
-import { deriveBaseline } from "./baseline.js";
+import {
+	deriveBaseline,
+	ledgerEntryFinding,
+	MAX_CARRY_IDS,
+} from "./baseline.js";
 import { dedupeClaims, isSameClaim } from "./claim-dedupe.js";
+import { commentKey } from "./comment-key.js";
 import { mapWithConcurrency } from "./concurrency.js";
+import { collectRightSideLines } from "./diff-lines.js";
+import {
+	anchorFingerprint,
+	formatFpMarkers,
+	stripForgedFpMarkers,
+	suggestionFingerprint,
+} from "./ledger/fingerprint.js";
 import { loadLedger, reconcileSurvivingPrior } from "./ledger/live.js";
 import { findSettledMatch } from "./ledger/match.js";
 import { retargetCarried } from "./ledger/retarget.js";
-import { suppressInReview } from "./ledger/suppress.js";
-import { isSettled } from "./ledger/types.js";
+import {
+	blocksVerdict,
+	type Suppressed,
+	suppressInReview,
+} from "./ledger/suppress.js";
+import { isSettled, type LedgerEntry } from "./ledger/types.js";
 import { computeCost, createAIModel } from "./models.js";
 import {
 	type AgentPromptOptions,
@@ -31,9 +47,16 @@ import {
 	PR_FILE_LIST_CAP,
 	wholePrInputComplete,
 } from "./prompt.js";
+import { claimTitle } from "./replay/claims.js";
 import type { ResolvedFindingRef } from "./resolve-threads.js";
+import { candidateFamilies, dropRetractions } from "./retraction.js";
 import { isOwnReview, readMetadataValue } from "./review-metadata.js";
-import type { PersistedFinding, ReviewState } from "./review-state.js";
+import {
+	moreSevere,
+	type PersistedFinding,
+	plainTitle,
+	type ReviewState,
+} from "./review-state.js";
 import { REVIEWER_TUNING, type ReviewerTuning } from "./reviewer-tuning.js";
 import type { ModelSelection } from "./router.js";
 import {
@@ -556,13 +579,43 @@ export interface MergeOptions {
 
 export interface MergeOutcome {
 	review: ModelReview;
-	/** `path:line` of each collapsed inline comment → the key of the survivor
+	/** `commentKey` of each collapsed inline comment → the key of the survivor
 	 * now standing for it, so provenance recorded against the original anchor
 	 * can follow the finding it belongs to. */
 	inlineAliases: Map<string, string>;
 	/** How many findings were folded into another as the same claim, so the
 	 * caller can log it instead of silently shrinking the review. */
 	collapsed: number;
+}
+
+const INLINE_SEVERITY_RANK: Record<string, number> = {
+	P0: 4,
+	P1: 3,
+	P2: 2,
+	P3: 1,
+};
+
+/** Rewrites each alias to its terminal key so a single lookup resolves a
+ * chain. A cycle stops at the first repeated key instead of looping. */
+function flattenAliases(aliases: Map<string, string>): void {
+	for (const from of [...aliases.keys()]) {
+		const seen = new Set([from]);
+		let cur = aliases.get(from) as string;
+		while (aliases.has(cur) && !seen.has(cur)) {
+			seen.add(cur);
+			cur = aliases.get(cur) as string;
+		}
+		if (cur !== from) aliases.set(from, cur);
+	}
+}
+
+/** Whether `a` should replace `b` as the representative of one claim: higher
+ * severity first, then the longer body. */
+function outranks(a: ModelInlineComment, b: ModelInlineComment): boolean {
+	const diff =
+		(INLINE_SEVERITY_RANK[a.severity] ?? 0) -
+		(INLINE_SEVERITY_RANK[b.severity] ?? 0);
+	return diff !== 0 ? diff > 0 : a.body.length > b.body.length;
 }
 
 export function mergeReviews(
@@ -594,10 +647,9 @@ export function mergeReviewsDetailed(
 			return true;
 		});
 
-	// Collect all findings per path:line so distinct bodies at the same anchor
-	// are preserved rather than silently dropped. Near-duplicates are filtered
-	// with isSameClaim — the only case where we do drop is when two agents said
-	// the same thing in different words at the exact same location.
+	// Distinct claims at one path:line stay separate comments; only restatements
+	// (isSameClaim) at the exact same location fold into one.
+	const inlineAliases = new Map<string, string>();
 	const commentGroups = new Map<string, ModelInlineComment[]>();
 	for (const review of agentResults) {
 		for (const comment of review.inline_comments) {
@@ -606,32 +658,39 @@ export function mergeReviewsDetailed(
 			const group = commentGroups.get(key);
 			if (!group) {
 				commentGroups.set(key, [comment]);
-			} else if (!group.some((c) => isSameClaim(c, comment))) {
+				continue;
+			}
+			const index = group.findIndex(
+				(c) => commentKey(c) === commentKey(comment) || isSameClaim(c, comment),
+			);
+			if (index === -1) {
 				group.push(comment);
+				continue;
+			}
+			const existing = group[index];
+			const incomingWins = outranks(comment, existing);
+			const survivor = incomingWins ? comment : existing;
+			const loser = incomingWins ? existing : comment;
+			group[index] = survivor;
+			if (commentKey(loser) !== commentKey(survivor)) {
+				const survivorKey = commentKey(survivor);
+				for (const [from, into] of inlineAliases) {
+					if (into === commentKey(loser) && from !== survivorKey) {
+						inlineAliases.set(from, survivorKey);
+					}
+				}
+				inlineAliases.delete(survivorKey);
+				inlineAliases.set(commentKey(loser), survivorKey);
 			}
 		}
 	}
-
-	// Merge multiple distinct findings at the same location into one comment.
-	// The most severe finding leads; additional distinct bodies are appended
-	// with a separator so no information is silently dropped.
-	const INLINE_SEVERITY_RANK: Record<string, number> = {
-		P0: 4,
-		P1: 3,
-		P2: 2,
-		P3: 1,
-	};
-	const anchored = Array.from(commentGroups.values()).map((comments) => {
-		if (comments.length === 1) return comments[0];
-		const sorted = [...comments].sort(
+	const anchored = Array.from(commentGroups.values()).flatMap((comments) =>
+		[...comments].sort(
 			(a, b) =>
 				(INLINE_SEVERITY_RANK[b.severity] ?? 0) -
 				(INLINE_SEVERITY_RANK[a.severity] ?? 0),
-		);
-		const best = sorted[0];
-		const extra = sorted.slice(1).map((c) => c.body);
-		return { ...best, body: [best.body, ...extra].join("\n\n---\n\n") };
-	});
+		),
+	);
 
 	// The exact-key pass above only catches agents that anchored to the identical
 	// line, which they seldom do — one claim arrives on six adjacent lines of the
@@ -640,15 +699,12 @@ export function mergeReviewsDetailed(
 	let collapsed = 0;
 	let inline_comments = anchored;
 	let merged_general = general_findings;
-	const inlineAliases = new Map<string, string>();
 	if (options.dedupeNearDuplicateClaims) {
 		const inlineResult = dedupeClaims(anchored);
 		for (const { from, into } of inlineResult.merges) {
-			inlineAliases.set(
-				`${from.path}:${from.line}`,
-				`${into.path}:${into.line}`,
-			);
+			inlineAliases.set(commentKey(from), commentKey(into));
 		}
+		flattenAliases(inlineAliases);
 		// General findings carry no anchor, so they go in as-is — ClaimLike treats
 		// a missing path/line as unanchored and applies the stricter title bar.
 		const generalResult = dedupeClaims(general_findings);
@@ -911,6 +967,9 @@ export interface FormatReviewBodyOptions {
 	model: string;
 	cost: number;
 	ledgerNote?: string;
+	/** Open ledger entry ids behind the carried findings, written as the
+	 * `ai-review:carry` marker that `deriveBaseline` reads. */
+	carryIds?: string[];
 	scopeNote?: ScopeNote;
 }
 
@@ -1039,6 +1098,7 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		cost,
 		ledgerNote,
 		scopeNote,
+		carryIds = [],
 	} = opts;
 
 	const readinessBar = renderReadinessBar(readiness);
@@ -1077,7 +1137,7 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 					.map((f) => {
 						const where =
 							f.path && f.line != null ? ` (\`${f.path}:${f.line}\`)` : "";
-						return `| ${SEVERITY_EMOJI[f.severity as Severity] ?? UNKNOWN_SEVERITY_BADGE} | **${f.title}**${where} |`;
+						return `| ${SEVERITY_EMOJI[f.severity as Severity] ?? UNKNOWN_SEVERITY_BADGE} | **${plainTitle(f.title)}**${where} |`;
 					})
 					.join("\n")}`
 			: "";
@@ -1088,19 +1148,16 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 			? `#### Retired, file no longer in this PR\n\nThese were carried from an earlier review, but their file is no longer part of this PR, so they no longer block. Their threads are unchanged.\n\n${retiredPrior
 					.map(
 						(f) =>
-							`- ${f.severity} **${f.title}** (\`${f.path}${f.line != null ? `:${f.line}` : ""}\`)`,
+							`- ${f.severity} **${plainTitle(f.title)}** (\`${f.path}${f.line != null ? `:${f.line}` : ""}\`)`,
 					)
 					.join("\n")}`
 			: "";
 
 	const droppedNotice =
 		dropped.length > 0
-			? `> ⚠️ ${dropped.length} inline comment${dropped.length === 1 ? "" : "s"} could not be anchored to the diff and ${dropped.length === 1 ? "was" : "were"} posted here instead:\n${dropped
-					.map(
-						(c) =>
-							`> - ${SEVERITY_EMOJI[c.severity as Severity] ?? UNKNOWN_SEVERITY_BADGE} **${c.title}** (\`${c.path}:${c.line}\`)`,
-					)
-					.join("\n")}`
+			? `> ℹ️ ${dropped.length} inline comment${dropped.length === 1 ? "" : "s"} could not be anchored to the diff and ${dropped.length === 1 ? "was" : "were"} not posted: ${dropped
+					.map((c) => `${plainTitle(c.title)} (${c.path}:${c.line})`)
+					.join("; ")}.`
 			: "";
 
 	const overflowNotice =
@@ -1124,6 +1181,9 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		`<!-- ai-review:model=${model} -->`,
 		`<!-- ai-review:findings=${generalFindings.length} -->`,
 		`<!-- ai-review:cost=${cost.toFixed(6)} -->`,
+		...(carryIds.length > 0
+			? [`<!-- ai-review:carry=${carryIds.join(",")} -->`]
+			: []),
 		formatAgentsMarker(agentRecords, pending, KNOWN_SKILLS),
 	].join("\n");
 
@@ -1150,43 +1210,46 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 	return parts.filter((part) => part.length > 0).join("\n\n");
 }
 
-export function collectRightSideLines(patch: string): Set<number> {
-	const lines = new Set<number>();
-	const patchLines = patch.split("\n");
-	let nextRightLine = 0;
-
-	for (const line of patchLines) {
-		if (line.startsWith("@@")) {
-			const match = /@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(line);
-			if (!match) {
-				continue;
-			}
-			nextRightLine = Number(match[1]);
-			continue;
-		}
-
-		if (line.startsWith("+")) {
-			lines.add(nextRightLine);
-			nextRightLine += 1;
-			continue;
-		}
-
-		if (line.startsWith(" ")) {
-			lines.add(nextRightLine);
-			nextRightLine += 1;
-		}
-	}
-
-	return lines;
+/** Anchor and suggestion fingerprints of one inline comment; empty fields when the line is off the patch. */
+function commentFingerprints(
+	comment: ModelInlineComment,
+	patch: string | undefined,
+): { fp?: string; sfp?: string } {
+	const fp = patch
+		? anchorFingerprint({
+				category: comment.category,
+				path: comment.path,
+				line: comment.line,
+				patch,
+			})
+		: null;
+	const sfp = comment.suggestion
+		? suggestionFingerprint(comment.suggestion)
+		: null;
+	return { ...(fp ? { fp } : {}), ...(sfp ? { sfp } : {}) };
 }
 
-function buildCommentBody(comment: ModelInlineComment): string {
+/** Tags each comment with its fingerprints, computed against the full PR patch. */
+function withFingerprints<T extends ModelInlineComment>(
+	comments: T[],
+	files: PullFile[],
+): (T & { fp?: string; sfp?: string })[] {
+	const patches = new Map(files.map((f) => [f.filename, f.patch]));
+	return comments.map((c) => ({
+		...c,
+		...commentFingerprints(c, patches.get(c.path)),
+	}));
+}
+
+function buildCommentBody(comment: ModelInlineComment, patch?: string): string {
 	const badge = severityBadge(comment.severity);
-	const base = `${badge}\n\n**${comment.title}**\n\n${comment.body}`;
-	if (comment.suggestion) {
-		return `${base}\n\n*Suggested fix:*\n\n\`\`\`suggestion\n${comment.suggestion}\n\`\`\``;
-	}
-	return base;
+	const title = stripForgedFpMarkers(comment.title);
+	const base = `${badge}\n\n**${title}**\n\n${stripForgedFpMarkers(comment.body)}`;
+	const withFix = comment.suggestion
+		? `${base}\n\n*Suggested fix:*\n\n\`\`\`suggestion\n${comment.suggestion}\n\`\`\``
+		: base;
+	const markers = formatFpMarkers(commentFingerprints(comment, patch));
+	return markers ? `${withFix}\n\n${markers}` : withFix;
 }
 
 export function buildValidLinesByPath(
@@ -1219,23 +1282,10 @@ export function parseRawDiff(rawDiff: string): Map<string, string> {
 	return result;
 }
 
-/** Find the nearest valid right-side line within ±window of target, checking
- * alternately above and below. Returns null when nothing is in range. */
-function nearestValidLine(
-	target: number,
-	validLines: Set<number>,
-	window: number,
-): number | null {
-	for (let delta = 1; delta <= window; delta++) {
-		if (validLines.has(target + delta)) return target + delta;
-		if (validLines.has(target - delta)) return target - delta;
-	}
-	return null;
-}
-
 /** Correct mechanical anchor errors before diff validation.
  *
- * - Condition 2 (line not in valid set): adjust to nearest valid line ±5.
+ * A line outside the diff is left as is: the comment is dropped later, never
+ * moved to a neighbouring line it was not written about.
  * - Condition 3 (start_line >= line): clear start_line.
  * - Condition 4 (start_line not in valid set): clear start_line.
  *
@@ -1248,19 +1298,8 @@ export function sanitizeInlineComments(
 		const validLines = validLinesByPath.get(c.path);
 		if (!validLines) return c;
 
-		let { line, start_line } = c;
-
-		if (!validLines.has(line)) {
-			const adjusted = nearestValidLine(line, validLines, 5);
-			if (adjusted !== null) {
-				console.log("inline comment anchor adjusted (fuzzy)", {
-					path: c.path,
-					original: c.line,
-					adjusted,
-				});
-				line = adjusted;
-			}
-		}
+		const { line } = c;
+		let { start_line } = c;
 
 		if (start_line !== null && start_line >= line) {
 			console.log("inline comment start_line cleared (backwards range)", {
@@ -1285,6 +1324,57 @@ export function sanitizeInlineComments(
 	});
 }
 
+const sourceKeys = new WeakMap<ReviewComment, string>();
+
+/** The `commentKey` of the model comment a posted comment was built from. Read
+ * from the build step, because the rendered body does not round-trip a title
+ * containing `**` or a newline; a comment without a recorded key falls back to
+ * parsing its body. */
+export function postedCommentKey(posted: ReviewComment): string {
+	return (
+		sourceKeys.get(posted) ??
+		commentKey({
+			path: posted.path,
+			line: posted.line,
+			title: claimTitle(posted.body),
+		})
+	);
+}
+
+/** Split the comments that did not post. P0 and P1 become general findings
+ * titled with a `(path:line)` suffix, which the next round's baseline reads back
+ * with its path so they keep blocking. P2 and P3 stay as plain text in the body:
+ * they have no thread to settle, so nothing may carry them forward. */
+export function routeDroppedComments(
+	attempted: ModelInlineComment[],
+	posted: ReviewComment[],
+): {
+	dropped: ModelInlineComment[];
+	routed: ModelReview["general_findings"];
+	routedKeys: Set<string>;
+} {
+	const postedKeys = new Set(posted.map(postedCommentKey));
+	const notPosted = attempted.filter((c) => !postedKeys.has(commentKey(c)));
+	const blocking = (c: ModelInlineComment) =>
+		c.severity === "P0" || c.severity === "P1";
+	return {
+		routedKeys: new Set(notPosted.filter(blocking).map(commentKey)),
+		dropped: notPosted.filter((c) => !blocking(c)),
+		routed: notPosted.filter(blocking).map((c) => {
+			const {
+				path,
+				line,
+				start_line: _start,
+				suggestion: _s,
+				fp: _fp,
+				sfp: _sfp,
+				...finding
+			} = c as ModelInlineComment & { fp?: string; sfp?: string };
+			return { ...finding, title: `${c.title} (\`${path}:${line}\`)` };
+		}),
+	};
+}
+
 export function buildReviewComments(
 	files: PullFile[],
 	inlineComments: ModelInlineComment[],
@@ -1295,6 +1385,7 @@ export function buildReviewComments(
 		const validLines = validLinesByPath.get(comment.path);
 		if (!validLines) {
 			console.log("inline comment dropped: path not in diff", {
+				reason: "OFF_DIFF_PATH",
 				path: comment.path,
 				line: comment.line,
 				knownPaths: Array.from(validLinesByPath.keys()),
@@ -1306,6 +1397,7 @@ export function buildReviewComments(
 			console.log(
 				"inline comment dropped: line not in valid right-side lines",
 				{
+					reason: "OFF_DIFF_LINE",
 					path: comment.path,
 					line: comment.line,
 					validLines: Array.from(validLines).sort((a, b) => a - b),
@@ -1318,6 +1410,7 @@ export function buildReviewComments(
 			console.log(
 				"inline comment dropped: start_line >= line (backwards range)",
 				{
+					reason: "BAD_RANGE",
 					path: comment.path,
 					line: comment.line,
 					start_line: comment.start_line,
@@ -1332,6 +1425,7 @@ export function buildReviewComments(
 			console.log(
 				"inline comment dropped: start_line not in valid right-side lines",
 				{
+					reason: "BAD_RANGE",
 					path: comment.path,
 					line: comment.line,
 					start_line: startLine,
@@ -1340,17 +1434,20 @@ export function buildReviewComments(
 			return [];
 		}
 
-		return [
-			{
-				path: comment.path,
-				body: buildCommentBody(comment),
-				line: comment.line,
-				side: "RIGHT" as const,
-				...(startLine !== undefined
-					? { start_line: startLine, start_side: "RIGHT" as const }
-					: {}),
-			},
-		];
+		const built: ReviewComment = {
+			path: comment.path,
+			body: buildCommentBody(
+				comment,
+				files.find((f) => f.filename === comment.path)?.patch,
+			),
+			line: comment.line,
+			side: "RIGHT" as const,
+			...(startLine !== undefined
+				? { start_line: startLine, start_side: "RIGHT" as const }
+				: {}),
+		};
+		sourceKeys.set(built, commentKey(comment));
+		return [built];
 	});
 }
 
@@ -1453,12 +1550,78 @@ async function restampCheckRun(
 	}
 }
 
-/** A carried finding with a path has a thread the author can settle through
- * the ledger, so it blocks at every severity. A path-less (general) finding
- * has no thread, so only P0 and P1 decide the verdict; P2 and P3 stay listed
- * as still open. */
-function blocksVerdict(f: PersistedFinding): boolean {
-	return Boolean(f.path) || f.severity === "P0" || f.severity === "P1";
+/** Records one restatement of an open entry as the finding it holds, keyed by
+ * finding id, keeping the most severe of the entry and its restatements. */
+function addRestated(
+	restated: Map<string, PersistedFinding>,
+	s: Suppressed<{ severity?: string | null }>,
+): void {
+	const f = ledgerEntryFinding(s.entry);
+	const prev = restated.get(f.id);
+	const severity = moreSevere(
+		prev?.severity ?? f.severity,
+		s.finding.severity ?? "",
+	);
+	restated.set(f.id, { ...f, severity });
+}
+
+/** The ledger open-restatement suppression may match: every settled entry, and
+ * only the open entries behind a carried finding (so not one triage resolved
+ * this round, one the bot resolved earlier, or one whose file left the PR).
+ * A restatement of any other open entry posts fresh. `prPaths` is null when
+ * the PR file list is cut short and a missing path proves nothing. */
+function holdableLedger(
+	ledger: LedgerEntry[],
+	carried: PersistedFinding[],
+	prPaths: ReadonlySet<string> | null,
+): LedgerEntry[] {
+	const carriedIds = new Set(carried.map((f) => f.id));
+	return ledger.filter((e) => {
+		if (isSettled(e)) return true;
+		const f = ledgerEntryFinding(e);
+		const inPr = !prPaths || f.path === null || prPaths.has(f.path);
+		return inPr && carriedIds.has(f.id);
+	});
+}
+
+/** The carried list with each held finding's severity raised to its most
+ * severe restatement. */
+function withHeld(
+	prior: PersistedFinding[],
+	held: PersistedFinding[],
+): PersistedFinding[] {
+	const severityOf = new Map(held.map((f) => [f.id, f.severity]));
+	return prior.map((f) => {
+		const s = severityOf.get(f.id);
+		return s ? { ...f, severity: moreSevere(f.severity, s) } : f;
+	});
+}
+
+/** The open ledger entry ids behind the carried findings, for the
+ * `ai-review:carry` marker: an inline entry over a body row, then the latest. */
+function carryEntryIds(
+	prior: PersistedFinding[],
+	ledger: LedgerEntry[],
+): string[] {
+	const isBody = (e: LedgerEntry) => e.id.includes(":body:");
+	const entryFor = new Map<string, LedgerEntry>();
+	for (const e of ledger) {
+		if (isSettled(e)) continue;
+		const id = ledgerEntryFinding(e).id;
+		const seen = entryFor.get(id);
+		const better =
+			!seen ||
+			(isBody(seen) && !isBody(e)) ||
+			(isBody(seen) === isBody(e) && e.round > seen.round);
+		if (better) entryFor.set(id, e);
+	}
+	const ids = [...new Set(prior.flatMap((f) => entryFor.get(f.id)?.id ?? []))];
+	if (ids.length > MAX_CARRY_IDS)
+		console.warn("carry marker truncated", {
+			ids: ids.length,
+			kept: MAX_CARRY_IDS,
+		});
+	return ids.slice(0, MAX_CARRY_IDS);
 }
 
 export async function buildReview(
@@ -1695,13 +1858,13 @@ export async function buildReview(
 	// not in the PR cannot anchor to the head and stops being carried, unless
 	// the file list is cut short and absence proves nothing.
 	let retiredPrior: PersistedFinding[] = [];
+	const fileListComplete =
+		files.length >= context.changedFiles && files.length < PR_FILE_LIST_CAP;
 	if (state) {
 		const { kept, retired } = retargetCarried(
 			state.findings.filter((f) => f.status === "open"),
 			files,
 		);
-		const fileListComplete =
-			files.length >= context.changedFiles && files.length < PR_FILE_LIST_CAP;
 		retiredPrior = fileListComplete ? retired : [];
 		state.findings = [
 			...kept,
@@ -2325,9 +2488,28 @@ export async function buildReview(
 
 	let suppressedCount = 0;
 	const suppressedEntryIds = new Set<string>();
-	const unsettledResults = agentResults.map((r) => {
-		const outcome = suppressInReview(r, ledger);
+	const suppressionLedger = holdableLedger(
+		ledger,
+		survivingPrior,
+		fileListComplete ? new Set(files.map((f) => f.filename)) : null,
+	);
+	const restated = new Map<string, PersistedFinding>();
+	const unsettledResults = agentResults.map((agentResult) => {
+		const r = {
+			...agentResult,
+			inline_comments: withFingerprints(agentResult.inline_comments, files),
+		};
+		const outcome = suppressInReview(r, suppressionLedger);
 		suppressedCount += outcome.suppressed.length;
+		for (const s of outcome.restatedOpen) {
+			console.log("suppressed open restatement", {
+				title: s.finding.title,
+				path: s.finding.path ?? null,
+				line: s.finding.line ?? null,
+				entryId: s.entry.id,
+			});
+			addRestated(restated, s);
+		}
 		for (const { finding, entry } of outcome.suppressed) {
 			suppressedEntryIds.add(entry.id);
 			console.log("suppressed settled repeat", {
@@ -2339,21 +2521,34 @@ export async function buildReview(
 				entryStatus: entry.status,
 			});
 		}
-		return outcome.review;
+		if (!tuning.dropRetractions) return outcome.review;
+		const retractions = dropRetractions(outcome.review);
+		for (const finding of retractions.dropped) {
+			console.log("dropped retraction filler", {
+				title: finding.title,
+				severity: finding.severity ?? null,
+				families: candidateFamilies(finding),
+			});
+		}
+		return retractions.review;
 	});
+	const held = [...restated.values()];
+	survivingPrior = withHeld(survivingPrior, held);
+	const heldCount = held.filter(blocksVerdict).length;
 	if (loadedLedger) {
 		console.log("ledger suppression", {
 			warm: loadedLedger.warm,
 			entries: ledger.length,
 			suppressed: suppressedCount,
 			settledEntries: suppressedEntryIds.size,
+			openHeld: heldCount,
 		});
 	}
 
 	const mergeOutcome = mergeReviewsDetailed(unsettledResults, resolvedKeys, {
 		dedupeNearDuplicateClaims: tuning.dedupeNearDuplicateClaims,
 	});
-	const modelReview = mergeOutcome.review;
+	let modelReview = mergeOutcome.review;
 	if (mergeOutcome.collapsed > 0) {
 		console.log("collapsed restatements of the same claim", {
 			collapsed: mergeOutcome.collapsed,
@@ -2377,6 +2572,7 @@ export async function buildReview(
 	if (
 		pendingOnly &&
 		cleared.length === 0 &&
+		heldCount === 0 &&
 		modelReview.general_findings.length === 0 &&
 		modelReview.inline_comments.length === 0
 	)
@@ -2392,9 +2588,7 @@ export async function buildReview(
 		: files.filter((f) => scopedPathSet.has(f.filename));
 	const validLines = buildValidLinesByPath(anchorFiles);
 
-	// Fix mechanical anchor errors before diff validation so fewer comments are
-	// silently dropped: fuzzy-anchor ±5 for off-by-one lines, clear backwards
-	// or invalid start_line ranges.
+	// Clear backwards or invalid start_line ranges before diff validation.
 	const sanitizedComments = sanitizeInlineComments(
 		modelReview.inline_comments,
 		validLines,
@@ -2432,6 +2626,21 @@ export async function buildReview(
 		effectiveInlineComments,
 	);
 
+	const { dropped, routed, routedKeys } = routeDroppedComments(
+		effectiveInlineComments,
+		reviewComments,
+	);
+	if (routed.length > 0) {
+		modelReview = {
+			...modelReview,
+			event: "REQUEST_CHANGES",
+			general_findings: [...modelReview.general_findings, ...routed],
+			inline_comments: modelReview.inline_comments.filter(
+				(c) => !routedKeys.has(commentKey(c)),
+			),
+		};
+	}
+
 	console.log("inline comments after validation", {
 		submitted: reviewComments.length,
 		dropped: effectiveInlineComments.length - reviewComments.length,
@@ -2453,7 +2662,7 @@ export async function buildReview(
 				// attribution: near-duplicate collapsing spans different nearby
 				// lines, so nothing later looks the original key up again, and a
 				// bug found by five agents would be credited to one skill.
-				const own = `${c.path}:${c.line}`;
+				const own = commentKey(c);
 				const key = mergeOutcome.inlineAliases.get(own) ?? own;
 				const set = skillsByKey.get(key) ?? new Set<string>();
 				set.add(skillPath);
@@ -2463,12 +2672,19 @@ export async function buildReview(
 		const titleByKey = new Map<string, string>();
 		const severityByKey = new Map<string, string>();
 		for (const c of modelReview.inline_comments) {
-			titleByKey.set(`${c.path}:${c.line}`, c.title);
-			severityByKey.set(`${c.path}:${c.line}`, c.severity);
+			titleByKey.set(commentKey(c), c.title);
+			severityByKey.set(commentKey(c), c.severity);
 		}
 		commentProvenance = new Map();
 		for (const rc of reviewComments) {
-			const key = `${rc.path}:${rc.line}`;
+			const key = postedCommentKey(rc);
+			if (!skillsByKey.has(key)) {
+				console.warn("posted comment has no provenance entry", {
+					path: rc.path,
+					line: rc.line,
+					key,
+				});
+			}
 			commentProvenance.set(key, {
 				skills: [...(skillsByKey.get(key) ?? [])],
 				title: titleByKey.get(key) ?? "",
@@ -2579,11 +2795,6 @@ export async function buildReview(
 		);
 	}
 
-	const postedKeys = new Set(reviewComments.map((c) => `${c.path}:${c.line}`));
-	const dropped = effectiveInlineComments.filter(
-		(c) => !postedKeys.has(`${c.path}:${c.line}`),
-	);
-
 	const hasP0 =
 		modelReview.general_findings.some((f) => f.severity === "P0") ||
 		modelReview.inline_comments.some((c) => c.severity === "P0") ||
@@ -2632,9 +2843,10 @@ export async function buildReview(
 		cost,
 		ledgerNote: loadedLedger
 			? loadedLedger.warm
-				? `ledger: warm, ${suppressedEntryIds.size} suppressed`
+				? `ledger: warm, ${suppressedEntryIds.size} suppressed${heldCount > 0 ? `, ${heldCount} open held` : ""}`
 				: "ledger: cold"
 			: undefined,
+		carryIds: carryEntryIds(survivingPrior, ledger),
 		scopeNote: scope,
 	});
 

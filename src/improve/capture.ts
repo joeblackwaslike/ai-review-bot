@@ -1,3 +1,5 @@
+import { findProvenance } from "../comment-key.js";
+import { claimTitle } from "../replay/claims.js";
 import type { Db } from "./db/client.js";
 import { upsertFinding } from "./db/repo.js";
 import { findingNaturalKey } from "./findings.js";
@@ -17,6 +19,7 @@ export interface PostedComment {
 	id: number;
 	path: string | null;
 	line: number | null;
+	body?: string;
 	pull_request_review_id: number | null;
 	/** GitHub's creation timestamp. Preferred over the capture time so a retry
 	 * or a delayed capture does not shift when the finding appears to have been
@@ -54,8 +57,20 @@ export function pairWithProvenance(
 	const paired = [];
 	for (const comment of comments) {
 		if (comment.pull_request_review_id !== reviewId) continue;
-		const prov = provenance.get(`${comment.path}:${comment.line}`);
-		if (!prov) continue;
+		const title = claimTitle(comment.body ?? "");
+		const prov = findProvenance(
+			provenance,
+			{ path: comment.path, line: comment.line, body: comment.body ?? "" },
+			title,
+		);
+		if (!prov) {
+			console.warn("posted comment has no provenance entry", {
+				path: comment.path,
+				line: comment.line,
+				title,
+			});
+			continue;
+		}
 		paired.push({ comment, ...prov });
 	}
 	return paired;

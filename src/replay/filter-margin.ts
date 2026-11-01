@@ -1,6 +1,6 @@
+import { candidateFamilies } from "../retraction.js";
 import { fixtureId } from "./claims.js";
 import type { ClassFile } from "./classify.js";
-import { candidateFamilies } from "./retraction-rule.js";
 import type { LabelFile, ReplayFixture } from "./types.js";
 
 export interface MarginCount {
@@ -156,7 +156,7 @@ export function formatMargin(m: Margin): string {
 	const t = m.total;
 	return [
 		line("candidate retraction rule", t),
-		"  measurement only, not applied in production",
+		"  applied in the posting path (REVIEWER_TUNING.dropRetractions)",
 		`  also would remove ${t.repeats.hit} of ${t.repeats.of} repeat-rejected, ${t.unclassified.hit} of ${t.unclassified.of} unclassified, ${t.unlabeled.hit} of ${t.unlabeled.of} unlabeled`,
 		`  unadjudicated split: ${t.unadjudicatedClass.hit} of ${t.unadjudicatedClass.of} in class, ${t.unadjudicatedLabel.hit} of ${t.unadjudicatedLabel.of} by label`,
 		...m.perFixture.map(

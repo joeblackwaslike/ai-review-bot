@@ -1,25 +1,37 @@
 import { parseAgentsMarker } from "./agent-log.js";
-import type { Ledger } from "./ledger/types.js";
+import type { Ledger, LedgerEntry } from "./ledger/types.js";
 import { readMetadataValue } from "./review-metadata.js";
 import {
 	findingId,
+	moreSevere,
 	type PersistedFinding,
 	parseBodyFindings,
 	type ReviewState,
+	recoverLocation,
 } from "./review-state.js";
 
 export type DerivedBaseline = { state: ReviewState; complete: boolean };
 
-const PATH_SUFFIX = /\s*\(`([^`]+):(\d+)`\)$/;
 const UNANCHORED_BULLET = /^>\s*-\s*(🔴|🟠|🟡|🟢)\s*(\*\*.+\*\*.*)$/;
 
+/** Most ids the `ai-review:carry` marker lists. */
+export const MAX_CARRY_IDS = 50;
+
 function withRecoveredPath(f: PersistedFinding): PersistedFinding {
-	if (f.path !== null) return f;
-	const m = f.title.match(PATH_SUFFIX);
-	if (!m) return f;
-	const title = f.title.replace(PATH_SUFFIX, "").trim();
-	const line = Number(m[2]);
-	return { ...f, id: findingId(m[1], line, title), path: m[1], line, title };
+	const r = recoverLocation(f);
+	return r === f ? f : { ...r, id: findingId(r.path, r.line, r.title) };
+}
+
+/** A ledger entry as the open finding a baseline carries. */
+export function ledgerEntryFinding(e: LedgerEntry): PersistedFinding {
+	return withRecoveredPath({
+		id: findingId(e.path, e.line, e.title),
+		path: e.path,
+		line: e.line,
+		title: e.title,
+		severity: e.severity,
+		status: "open",
+	});
 }
 
 function bodyFindings(body: string): PersistedFinding[] {
@@ -49,25 +61,27 @@ export function deriveBaseline(
 	const count = metaCount && /^\d+$/.test(metaCount) ? metaCount : undefined;
 
 	const round = ledger.reviewIds.indexOf(source.id);
+	const carried = new Set(
+		(readMetadataValue(body, "carry") ?? "")
+			.split(",")
+			.filter(Boolean)
+			.slice(0, MAX_CARRY_IDS),
+	);
 	const fromLedger: PersistedFinding[] = ledger.entries
 		.filter(
 			(e) =>
-				e.round === round && e.status === "open" && !e.id.includes(":body:"),
+				e.status === "open" &&
+				((e.round === round && !e.id.includes(":body:")) || carried.has(e.id)),
 		)
-		.map((e) =>
-			withRecoveredPath({
-				id: findingId(e.path, e.line, e.title),
-				path: e.path,
-				line: e.line,
-				title: e.title,
-				severity: e.severity,
-				status: "open",
-			}),
-		);
+		.map(ledgerEntryFinding);
 
 	const byId = new Map<string, PersistedFinding>();
 	for (const f of [...fromLedger, ...bodyFindings(body)]) {
-		if (!byId.has(f.id)) byId.set(f.id, f);
+		const seen = byId.get(f.id);
+		byId.set(
+			f.id,
+			seen ? { ...seen, severity: moreSevere(seen.severity, f.severity) } : f,
+		);
 	}
 	const findings = [...byId.values()];
 

@@ -167,6 +167,22 @@ describe("resolveStaleThreads", () => {
 		expect(f.mutations).toEqual(["t1"]);
 	});
 
+	it("leaves a legacy merged thread open when its claims resolve in different rounds", async () => {
+		const merged = `${botBody}\n\n---\n\n🟡 **P2**\n\n**Missing await**\n\nmore`;
+		const f = fakeOctokit([
+			{
+				id: "t1",
+				path: "a.ts",
+				body: merged,
+				typename: "Bot",
+				reviewBody: ownBody("anthropic"),
+			},
+		]);
+		await run(f.octokit, [{ path: "a.ts", title: "Null deref" }]);
+		await run(f.octokit, [{ path: "a.ts", title: "Missing await" }]);
+		expect(f.mutations).toEqual([]);
+	});
+
 	it("resolves a bot thread whose body has no prefix text", async () => {
 		const f = fakeOctokit([
 			{

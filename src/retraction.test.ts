@@ -1,7 +1,5 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { isRetractionCandidate } from "./retraction-rule.js";
+import { dropRetractions, isRetractionCandidate } from "./retraction.js";
 
 const retracted = (title: string, body: string) =>
 	isRetractionCandidate({ title, body });
@@ -72,12 +70,15 @@ describe("isRetractionCandidate positives, one per phrase family", () => {
 	});
 
 	it("nothing to do this round", () => {
-		expect(
-			retracted("No code changes this round; only doc narrative revised", ""),
-		).toBe(true);
 		expect(retracted("Docs-only PR, no executable tests applicable", "")).toBe(
 			true,
 		);
+	});
+
+	it("keeps a nothing-this-round phrase followed by real detail", () => {
+		expect(
+			retracted("No code changes this round; only doc narrative revised", ""),
+		).toBe(false);
 	});
 
 	it("ignores markdown emphasis around the phrase", () => {
@@ -353,20 +354,253 @@ describe("isRetractionCandidate keeps real findings", () => {
 	it("handles empty input", () => {
 		expect(retracted("", "")).toBe(false);
 	});
+
+	it("keeps a scoped reassurance that opens a single-unit body", () => {
+		expect(
+			retracted(
+				"Writer loses data",
+				"No issues found in parsing; the writer silently drops the final chunk on flush.",
+			),
+		).toBe(false);
+		expect(
+			retracted(
+				"Socket leaks on retry",
+				"No issues found by the existing tests.",
+			),
+		).toBe(false);
+		expect(
+			retracted(
+				"Socket leak",
+				"No issues found in tests because they never exercise the leaking retry path.",
+			),
+		).toBe(false);
+		expect(retracted("Low", "No issues found.")).toBe(true);
+	});
+
+	it("keeps findings whose phrase is single-quoted program output", () => {
+		expect(
+			retracted(
+				"Handler",
+				"The script exits successfully on validation failure and prints 'No issues found.'",
+			),
+		).toBe(false);
+		expect(
+			retracted(
+				"Handler",
+				"The script exits 0 on failure. The log prints 'No issues found.'",
+			),
+		).toBe(false);
+	});
+
+	it("does not treat an apostrophe in a contraction as a quote", () => {
+		expect(
+			retracted(
+				"Handler",
+				"It's fine, and I don't see a bug here, so no actionable defect found.",
+			),
+		).toBe(true);
+	});
+
+	it("keeps a conditional resolution instead of a real one", () => {
+		expect(
+			retracted(
+				"Cache fix does not survive restart",
+				"This looks resolved until the next restart.",
+			),
+		).toBe(false);
+		expect(
+			retracted("Low", "This looks resolved only if the flag stays off."),
+		).toBe(false);
+	});
+
+	it("keeps a defect with an unqualified short tail", () => {
+		expect(
+			retracted(
+				"Socket leak",
+				"The retry handler leaks sockets. No issues found elsewhere.",
+			),
+		).toBe(false);
+		expect(
+			retracted(
+				"Socket leak",
+				"The retry handler leaks sockets. No issues found outside the retry path.",
+			),
+		).toBe(false);
+	});
+
+	it("keeps a negated use of the retraction phrase", () => {
+		expect(
+			retracted(
+				"Race",
+				"The race remains reproducible. I do not think this looks resolved.",
+			),
+		).toBe(false);
+	});
+
+	it("keeps a no-new-findings phrase that names an exception", () => {
+		expect(
+			retracted(
+				"Timeout",
+				"No new findings beyond prior reviews except the missing timeout.",
+			),
+		).toBe(false);
+	});
+
+	it("keeps a conditional resolution using once/when/only when", () => {
+		expect(
+			retracted(
+				"Retry still leaks sockets",
+				"This looks resolved once the retry handler closes the socket.",
+			),
+		).toBe(false);
+		expect(
+			retracted(
+				"Retry still leaks sockets",
+				"This looks resolved when the missing guard is added.",
+			),
+		).toBe(false);
+		expect(
+			retracted(
+				"Retry still leaks sockets",
+				"This looks resolved only when retries are disabled.",
+			),
+		).toBe(false);
+	});
+
+	it("keeps a contracted negation of the retraction phrase", () => {
+		expect(
+			retracted(
+				"Race",
+				"The race remains reproducible. I don't think this looks resolved.",
+			),
+		).toBe(false);
+		expect(
+			retracted(
+				"Race",
+				"The race remains reproducible. I doesn't think this looks resolved.",
+			),
+		).toBe(false);
+	});
+
+	it("keeps a reported defect described right before a no-issues phrase", () => {
+		expect(
+			retracted(
+				"Validator misses invalid input",
+				"The validator accepts malformed input and reports no issues found.",
+			),
+		).toBe(false);
+	});
+
+	it("keeps a security finding stated before a semicolon no-new-findings clause", () => {
+		expect(
+			retracted(
+				"Token exposure",
+				"The access token is logged in plaintext; no additional findings.",
+			),
+		).toBe(false);
+	});
+
+	it("keeps a defect stated before a semicolon covered-by-prior clause", () => {
+		expect(
+			retracted(
+				"Socket leak",
+				"The retry handler still leaks sockets; all other issues are already covered by prior reviewers.",
+			),
+		).toBe(false);
+	});
+
+	it("keeps a defect stated before a semicolon no-new-findings clause", () => {
+		expect(
+			retracted(
+				"Socket leak",
+				"The retry handler leaks sockets; no new findings beyond prior reviews.",
+			),
+		).toBe(false);
+	});
+
+	it("keeps a reproducible finding negated across an intervening comma clause", () => {
+		expect(
+			retracted(
+				"Race",
+				"The race remains reproducible. I cannot say, based on this trace, that this looks resolved.",
+			),
+		).toBe(false);
+	});
+
+	it("keeps an actionable body even when the title alone looks retracted", () => {
+		expect(
+			retracted(
+				"No new findings beyond prior reviews",
+				"The retry handler logs the access token in plaintext. Remove the token from the log.",
+			),
+		).toBe(false);
+	});
 });
 
-describe("retraction rule boundary", () => {
-	it("is imported only from src/replay", () => {
-		const root = new URL("..", import.meta.url).pathname;
-		const outside = (dir: string): string[] =>
-			readdirSync(join(root, dir), { withFileTypes: true }).flatMap((e) => {
-				const rel = join(dir, e.name);
-				if (e.isDirectory()) return e.name === "replay" ? [] : outside(rel);
-				return rel.endsWith(".ts") ? [rel] : [];
-			});
-		const offenders = outside(".").filter((f) =>
-			readFileSync(join(root, f), "utf8").includes("retraction-rule"),
-		);
-		expect(offenders).toEqual([]);
+describe("dropRetractions", () => {
+	const filler = {
+		title: "Stale comment",
+		body: "The comment mentions the old name. No issues found.",
+		severity: "P3",
+		suppressible: true,
+	};
+	const review = (
+		event: string,
+		general: (typeof filler)[],
+		inline: (typeof filler)[] = [],
+	) => ({ event, general_findings: general, inline_comments: inline });
+
+	it("drops a P3 whose last unit is a retraction", () => {
+		const out = dropRetractions(review("COMMENT", [filler]));
+		expect(out.review.general_findings).toEqual([]);
+		expect(out.dropped).toEqual([filler]);
+	});
+
+	it("drops from inline comments too", () => {
+		const out = dropRetractions(review("COMMENT", [], [filler]));
+		expect(out.review.inline_comments).toEqual([]);
+	});
+
+	it("keeps a P1 with the same text", () => {
+		const p1 = { ...filler, severity: "P1" };
+		const out = dropRetractions(review("COMMENT", [p1]));
+		expect(out.review.general_findings).toEqual([p1]);
+		expect(out.dropped).toEqual([]);
+	});
+
+	it("keeps a suppressible:false P2", () => {
+		const f = { ...filler, severity: "P2", suppressible: false };
+		const out = dropRetractions(review("COMMENT", [f]));
+		expect(out.review.general_findings).toEqual([f]);
+	});
+
+	it("keeps a suppressible P2 whose resolution is conditional", () => {
+		const f = {
+			...filler,
+			severity: "P2",
+			title: "Retry still leaks sockets",
+			body: "This looks resolved only when retries are disabled.",
+		};
+		const out = dropRetractions(review("COMMENT", [f]));
+		expect(out.review.general_findings).toEqual([f]);
+	});
+
+	it("keeps a finding whose closing sentence quotes program output", () => {
+		const f = {
+			...filler,
+			severity: "P2",
+			body: 'The script exits 0 on failure. The log then prints "No issues found."',
+		};
+		const out = dropRetractions(review("COMMENT", [f]));
+		expect(out.review.general_findings).toEqual([f]);
+	});
+
+	it("downgrades REQUEST_CHANGES only when every finding was dropped", () => {
+		const all = dropRetractions(review("REQUEST_CHANGES", [filler]));
+		expect(all.review.event).toBe("COMMENT");
+		const keep = { ...filler, severity: "P1", title: "Real" };
+		const some = dropRetractions(review("REQUEST_CHANGES", [filler, keep]));
+		expect(some.review.event).toBe("REQUEST_CHANGES");
+		expect(some.review.general_findings).toEqual([keep]);
 	});
 });

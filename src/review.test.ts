@@ -1,15 +1,30 @@
 import { NoObjectGeneratedError } from "ai";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+	afterEach,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	onTestFinished,
+	vi,
+} from "vitest";
 import { type AgentRecord, parseAgentsMarker } from "./agent-log.js";
 import { deriveBaseline } from "./baseline.js";
+import { commentKey } from "./comment-key.js";
+import { collectRightSideLines } from "./diff-lines.js";
+import {
+	anchorFingerprint,
+	readFpMarkers,
+	suggestionFingerprint,
+} from "./ledger/fingerprint.js";
 import { computeCost, createAIModel } from "./models.js";
+import { claimTitle } from "./replay/claims.js";
 import {
 	buildReview,
 	buildReviewComments,
 	buildValidLinesByPath,
 	capPaceToDeadline,
 	classifyRefusal,
-	collectRightSideLines,
 	computePaceDelayMs,
 	computeReadinessScore,
 	formatFindings,
@@ -22,6 +37,7 @@ import {
 	parseRawDiff,
 	parseReviewMetadata,
 	renderReadinessBar,
+	routeDroppedComments,
 	runAgent,
 	SEVERITY_LEVELS,
 	sanitizeInlineComments,
@@ -30,6 +46,7 @@ import {
 } from "./review.js";
 import type { PersistedFinding } from "./review-state.js";
 import { findingId } from "./review-state.js";
+import { REVIEWER_TUNING } from "./reviewer-tuning.js";
 import { type ModelSelection, reasoningProviderOptions } from "./router.js";
 import {
 	buildGenerateObjectResponse,
@@ -229,8 +246,99 @@ describe("collectRightSideLines", () => {
 // buildReviewComments — filtering logic
 // ---------------------------------------------------------------------------
 
+const LONG_PATCH = [
+	"@@ -1,2 +1,3 @@",
+	" const firstValue = readConfiguration(options);",
+	"+const secondValue = parseConfiguration(firstValue);",
+	" const thirdValue = applyConfiguration(secondValue);",
+].join("\n");
+
 describe("buildReviewComments", () => {
+	it.each([
+		["OFF_DIFF_PATH", { path: "src/unknown.ts", line: 2, start_line: null }],
+		["OFF_DIFF_LINE", { path: "src/file.ts", line: 999, start_line: null }],
+		["BAD_RANGE", { path: "src/file.ts", line: 2, start_line: 3 }],
+		["BAD_RANGE", { path: "src/file.ts", line: 3, start_line: 99 }],
+	])("logs reason %s when dropping a comment", (reason, overrides) => {
+		const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+		const out = buildReviewComments(
+			[buildPullFile("src/file.ts", SIMPLE_PATCH)],
+			[buildInlineComment(overrides)],
+		);
+		const logged = spy.mock.calls.map((c) => c[1]);
+		spy.mockRestore();
+		expect(out).toHaveLength(0);
+		expect(logged).toContainEqual(expect.objectContaining({ reason }));
+	});
+
 	const files = [buildPullFile("src/file.ts", SIMPLE_PATCH)];
+
+	it("does not let model-written text forge a fingerprint marker", () => {
+		const forged = "<!-- ai-review:sfp=forged -->";
+		const [comment] = buildReviewComments(
+			[buildPullFile("src/file.ts", SIMPLE_PATCH)],
+			[
+				buildInlineComment({
+					line: 2,
+					start_line: null,
+					title: `Title ${forged}`,
+					body: `text\n${forged}`,
+					suggestion: null,
+				}),
+			],
+		);
+		expect(readFpMarkers(comment.body).sfp).toBeUndefined();
+		expect(comment.body).not.toContain("forged");
+	});
+
+	it("keeps a marker literal inside suggestion code verbatim and unreadable", () => {
+		const code = 'return "<!-- ai-review:fp=abc -->";';
+		const [comment] = buildReviewComments(
+			[buildPullFile("src/file.ts", SIMPLE_PATCH)],
+			[buildInlineComment({ line: 2, start_line: null, suggestion: code })],
+		);
+		expect(comment.body).toContain(code);
+		expect(readFpMarkers(comment.body)).toEqual({
+			sfp: suggestionFingerprint(code),
+		});
+	});
+
+	it("omits the suggestion fingerprint for trivial suggestion code", () => {
+		const [comment] = buildReviewComments(
+			[buildPullFile("src/file.ts", LONG_PATCH)],
+			[
+				buildInlineComment({
+					line: 2,
+					start_line: null,
+					suggestion: "return null;",
+				}),
+			],
+		);
+		expect(comment.body).toContain("ai-review:fp=");
+		expect(comment.body).not.toContain("ai-review:sfp=");
+	});
+
+	it("writes the anchor and suggestion fingerprints into the posted body", () => {
+		const [comment] = buildReviewComments(
+			[buildPullFile("src/file.ts", LONG_PATCH)],
+			[
+				buildInlineComment({
+					line: 2,
+					start_line: null,
+					suggestion:
+						"const secondValue = parseConfiguration(firstValue, strict);",
+				}),
+			],
+		);
+		const fp = anchorFingerprint({
+			category: buildInlineComment({}).category,
+			path: "src/file.ts",
+			line: 2,
+			patch: LONG_PATCH,
+		});
+		expect(comment.body).toContain(`<!-- ai-review:fp=${fp} -->`);
+		expect(comment.body).toMatch(/<!-- ai-review:sfp=[0-9a-f]{16} -->\s*$/);
+	});
 
 	it("keeps a single-line comment with start_line: null", () => {
 		const comments = buildReviewComments(files, [
@@ -1216,9 +1324,10 @@ const TWENTY_LINE_PATCH = [
 async function buildReviewWithTwoAgentsFlagging(
 	path: string,
 	line: number,
-	options?: { feedbackEnabled?: boolean },
+	options?: { feedbackEnabled?: boolean; titles?: [string, string] },
 ) {
 	const feedbackEnabled = options?.feedbackEnabled ?? true;
+	const [title1, title2] = options?.titles ?? ["Issue", "Issue"];
 
 	// Agent 1 (code-reviewer.md): returns one inline comment at path:line
 	const agent1Response = buildGenerateObjectResponse(
@@ -1227,7 +1336,7 @@ async function buildReviewWithTwoAgentsFlagging(
 			general_findings: [],
 			inline_comments: [
 				buildInlineComment({
-					title: "Issue",
+					title: title1,
 					body: "b",
 					path,
 					line,
@@ -1244,8 +1353,8 @@ async function buildReviewWithTwoAgentsFlagging(
 			general_findings: [],
 			inline_comments: [
 				buildInlineComment({
-					title: "Issue",
-					body: "b",
+					title: title2,
+					body: "b2",
 					path,
 					line,
 					start_line: null,
@@ -1295,12 +1404,49 @@ describe("buildReview comment provenance", () => {
 	it("attaches the set of skills that flagged each posted inline comment", async () => {
 		const decision = await buildReviewWithTwoAgentsFlagging("src/x.ts", 10);
 		expect(decision?.commentProvenance).toBeDefined();
-		const prov = decision?.commentProvenance?.get("src/x.ts:10");
+		const prov = decision?.commentProvenance?.get(
+			commentKey({ path: "src/x.ts", line: 10, title: "Issue" }),
+		);
 		expect(prov?.skills.sort()).toEqual([
 			"code-reviewer.md",
 			"silent-failure-hunter.md",
 		]);
 		expect(prov?.title.length).toBeGreaterThan(0);
+	});
+
+	it("keeps one provenance entry per distinct claim at a shared line", async () => {
+		const decision = await buildReviewWithTwoAgentsFlagging("src/x.ts", 10, {
+			titles: ["Unchecked null dereference", "Hardcoded credential"],
+		});
+		const prov = decision?.commentProvenance;
+		expect(prov?.size).toBe(2);
+		const first = prov?.get(
+			commentKey({
+				path: "src/x.ts",
+				line: 10,
+				title: "Unchecked null dereference",
+			}),
+		);
+		const second = prov?.get(
+			commentKey({ path: "src/x.ts", line: 10, title: "Hardcoded credential" }),
+		);
+		expect(first?.skills).toEqual(["code-reviewer.md"]);
+		expect(second?.skills).toEqual(["silent-failure-hunter.md"]);
+	});
+
+	it("credits both skills when same-line restatements with different titles collapse", async () => {
+		const decision = await buildReviewWithTwoAgentsFlagging("src/x.ts", 10, {
+			titles: [
+				"Missing null check on user input",
+				"Missing null check on user input value",
+			],
+		});
+		const prov = [...(decision?.commentProvenance?.values() ?? [])];
+		expect(prov).toHaveLength(1);
+		expect(prov[0].skills.sort()).toEqual([
+			"code-reviewer.md",
+			"silent-failure-hunter.md",
+		]);
 	});
 
 	it("omits provenance when feedbackEnabled is false", async () => {
@@ -2570,8 +2716,7 @@ describe("sanitizeInlineComments", () => {
 		expect(out).toBe(comment); // same reference — no copy made
 	});
 
-	it("fuzzy-adjusts line to nearest valid line within ±5", () => {
-		// Build a file where only line 3 is valid so we can test adjustment
+	it("leaves a line outside the diff where it is, however near a valid line", () => {
 		const sparsePatch = "@@ -10,1 +3,1 @@\n+only this line\n";
 		const sparseFiles = [buildPullFile("src/file.ts", sparsePatch)];
 		const validLines = buildValidLinesByPath(sparseFiles);
@@ -2581,20 +2726,7 @@ describe("sanitizeInlineComments", () => {
 			start_line: null,
 		});
 		const [out] = sanitizeInlineComments([comment], validLines);
-		expect(out.line).toBe(3);
-	});
-
-	it("does not adjust line when the nearest valid line is beyond ±5", () => {
-		const sparsePatch = "@@ -100,1 +100,1 @@\n+far away\n";
-		const sparseFiles = [buildPullFile("src/file.ts", sparsePatch)];
-		const validLines = buildValidLinesByPath(sparseFiles);
-		const comment = buildInlineComment({
-			path: "src/file.ts",
-			line: 5,
-			start_line: null,
-		});
-		const [out] = sanitizeInlineComments([comment], validLines);
-		expect(out.line).toBe(5); // unchanged — no valid line within ±5
+		expect(out.line).toBe(5);
 	});
 
 	it("clears start_line when start_line >= line (backwards range)", () => {
@@ -2649,7 +2781,7 @@ describe("sanitizeInlineComments", () => {
 // ---------------------------------------------------------------------------
 
 describe("mergeReviewsDetailed — key collision", () => {
-	it("concatenates distinct bodies from two agents at the same path:line", () => {
+	it("keeps distinct claims at one path:line as separate comments, most severe first", () => {
 		const r1 = buildModelReview({
 			event: "COMMENT",
 			inline_comments: [
@@ -2658,6 +2790,7 @@ describe("mergeReviewsDetailed — key collision", () => {
 					line: 1,
 					title: "Bug A",
 					body: "First body.",
+					severity: "P3",
 				}),
 			],
 		});
@@ -2669,13 +2802,114 @@ describe("mergeReviewsDetailed — key collision", () => {
 					line: 1,
 					title: "Bug B",
 					body: "Second body.",
+					severity: "P1",
 				}),
 			],
 		});
 		const { review } = mergeReviewsDetailed([r1, r2]);
+		expect(review.inline_comments.map((c) => c.title)).toEqual([
+			"Bug B",
+			"Bug A",
+		]);
+		for (const c of review.inline_comments) expect(c.body).not.toContain("---");
+	});
+
+	it.each([
+		["P3 then P1", "P3", "P1"],
+		["P1 then P3", "P1", "P1"],
+	])("keeps the higher severity when the same claim collapses (%s)", (_n, first, _second) => {
+		const order = first === "P3" ? ["P3", "P1"] : ["P1", "P3"];
+		const reviews = order.map((severity) =>
+			buildModelReview({
+				event: "COMMENT",
+				inline_comments: [
+					buildInlineComment({
+						path: "src/a.ts",
+						line: 1,
+						title: "Same title",
+						severity: severity as "P1" | "P3",
+					}),
+				],
+			}),
+		);
+		const { review } = mergeReviewsDetailed(reviews);
+		expect(review.inline_comments.map((c) => c.severity)).toEqual(["P1"]);
+	});
+
+	it("aliases a restatement with a different title to its survivor", () => {
+		const mk = (title: string, body: string) =>
+			buildModelReview({
+				event: "COMMENT",
+				inline_comments: [
+					buildInlineComment({ path: "src/a.ts", line: 1, title, body }),
+				],
+			});
+		const a = mk("Missing null check on user input", "short");
+		const b = mk("Missing null check on user input value", "a longer body");
+		const { review, inlineAliases } = mergeReviewsDetailed([a, b]);
 		expect(review.inline_comments).toHaveLength(1);
-		expect(review.inline_comments[0].body).toContain("First body.");
-		expect(review.inline_comments[0].body).toContain("Second body.");
+		expect(inlineAliases.get(commentKey(a.inline_comments[0]))).toBe(
+			commentKey(b.inline_comments[0]),
+		);
+	});
+
+	describe("inline alias chains", () => {
+		const T1 = "Missing null check on user input";
+		const T2 = "Missing null check on user input value";
+		const T3 = "Missing null check on user input values";
+		const mk = (title: string, severity: "P1" | "P2" | "P3", line = 1) =>
+			buildModelReview({
+				event: "COMMENT",
+				inline_comments: [
+					buildInlineComment({ path: "src/a.ts", line, title, severity }),
+				],
+			});
+		const keyOf = (title: string, line = 1) =>
+			commentKey({ path: "src/a.ts", line, title });
+		const terminal = (aliases: Map<string, string>, start: string) => {
+			let cur = start;
+			for (let i = 0; i <= aliases.size; i++) {
+				const next = aliases.get(cur);
+				if (next === undefined) return cur;
+				cur = next;
+			}
+			throw new Error(`alias cycle from ${start}`);
+		};
+
+		it("never aliases a key to itself when a loser's key returns as the survivor", () => {
+			const { review, inlineAliases } = mergeReviewsDetailed([
+				mk(T1, "P3"),
+				mk(T2, "P2"),
+				mk(T1, "P1"),
+			]);
+			expect(review.inline_comments).toHaveLength(1);
+			for (const [from, into] of inlineAliases) expect(from).not.toBe(into);
+			const present = new Set(review.inline_comments.map((c) => commentKey(c)));
+			for (const from of inlineAliases.keys())
+				expect(present.has(terminal(inlineAliases, from))).toBe(true);
+			expect(inlineAliases.get(keyOf(T1))).toBeUndefined();
+		});
+
+		it("points every non-survivor key at the final survivor in a three-comment chain", () => {
+			const { review, inlineAliases } = mergeReviewsDetailed([
+				mk(T1, "P3"),
+				mk(T2, "P2"),
+				mk(T3, "P1"),
+			]);
+			expect(review.inline_comments.map((c) => c.title)).toEqual([T3]);
+			expect(inlineAliases.get(keyOf(T1))).toBe(keyOf(T3));
+			expect(inlineAliases.get(keyOf(T2))).toBe(keyOf(T3));
+		});
+
+		it("flattens a two-deep chain after near-duplicate collapsing", () => {
+			const { inlineAliases } = mergeReviewsDetailed(
+				[mk(T1, "P3"), mk(T2, "P2"), mk(T3, "P1", 20)],
+				new Set(),
+				{ dedupeNearDuplicateClaims: true },
+			);
+			expect(inlineAliases.get(keyOf(T1))).toBe(keyOf(T3, 20));
+			expect(inlineAliases.get(keyOf(T2))).toBe(keyOf(T3, 20));
+		});
 	});
 
 	it("deduplicates near-duplicate bodies at the same path:line", () => {
@@ -3251,7 +3485,7 @@ describe("strict evidence rules propagation", () => {
 	});
 });
 
-describe("retraction phrases are not filtered", () => {
+describe("the retraction filter is off by default", () => {
 	beforeEach(() => {
 		mockGenerateObject.mockReset();
 		mockBuildUserMessage.mockReset();
@@ -3259,7 +3493,55 @@ describe("retraction phrases are not filtered", () => {
 		mockBuildUserMessage.mockReturnValue("user");
 	});
 
-	it("posts a finding that ends with a retraction phrase through buildReview", async () => {
+	it("posts a finding that ends with a retraction phrase", async () => {
+		expect(REVIEWER_TUNING.dropRetractions).toBe(false);
+		mockGenerateObject.mockImplementation(async () =>
+			mockGenerateObject.mock.calls.length <= TIER1_SKILLS.length
+				? buildGenerateObjectResponse(
+						buildModelReview({
+							event: "COMMENT",
+							general_findings: [
+								{
+									title: "Slot accounting",
+									body: "The slot is held while waiting. No actionable defect found.",
+									severity: "P3",
+									category: "style",
+									confidence: 0.8,
+									evidence: "See diff.",
+									suppressible: true,
+								},
+							],
+						}),
+					)
+				: {
+						object: { summary: "Nothing." },
+						usage: { inputTokens: 10, outputTokens: 5 },
+					},
+		);
+		const result = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			provider: "anthropic" as const,
+		});
+		expect(result?.event).not.toBe("APPROVE");
+		expect(result?.body ?? "").toContain("Slot accounting");
+	});
+});
+
+describe("retraction phrases are filtered", () => {
+	afterEach(() => {
+		REVIEWER_TUNING.dropRetractions = false;
+	});
+
+	beforeEach(() => {
+		REVIEWER_TUNING.dropRetractions = true;
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildAgentSystemPrompt.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+	});
+
+	it("drops a P3 that ends with a retraction phrase through buildReview", async () => {
 		mockGenerateObject.mockImplementation(async () =>
 			mockGenerateObject.mock.calls.length <= TIER1_SKILLS.length
 				? buildGenerateObjectResponse(
@@ -3290,8 +3572,8 @@ describe("retraction phrases are not filtered", () => {
 			provider: "anthropic" as const,
 		});
 
-		expect(result?.event).toBe("COMMENT");
-		expect(result?.body ?? "").toContain("Slot accounting");
+		expect(result?.event).toBe("APPROVE");
+		expect(result?.body ?? "").not.toContain("Slot accounting");
 	});
 });
 
@@ -3489,7 +3771,11 @@ describe("provenance across collapsed claims", () => {
 		expect(decision?.comments).toHaveLength(1);
 		const survivor = decision?.comments[0];
 		const prov = decision?.commentProvenance?.get(
-			`${survivor?.path}:${survivor?.line}`,
+			commentKey({
+				path: survivor?.path ?? null,
+				line: survivor?.line ?? null,
+				title: claimTitle(survivor?.body ?? ""),
+			}),
 		);
 		expect(prov?.skills.sort()).toEqual([
 			"code-reviewer.md",
@@ -3736,6 +4022,80 @@ describe("review body markdown", () => {
 
 		expect(review?.comments).toHaveLength(0);
 		expect(review?.event).not.toBe("APPROVE");
+	});
+
+	describe("off-diff comments are dropped, not moved", () => {
+		const SPARSE = "@@ -1,1 +10,3 @@\n+a\n+b\n+c\n";
+		async function reviewWith(severity: "P0" | "P2") {
+			const agent = buildGenerateObjectResponse(
+				buildModelReview({
+					event: "COMMENT",
+					general_findings: [],
+					inline_comments: [
+						buildInlineComment({
+							title: "Off by two",
+							severity,
+							path: "src/review.ts",
+							line: 14,
+							start_line: null,
+						}),
+					],
+				}),
+			);
+			mockGenerateObject
+				.mockResolvedValue(agent)
+				.mockResolvedValueOnce(agent)
+				.mockResolvedValueOnce(agent)
+				.mockResolvedValueOnce(agent)
+				.mockResolvedValueOnce(agent)
+				.mockResolvedValueOnce(agent)
+				.mockResolvedValueOnce({
+					object: { summary: "One issue." },
+					usage: { inputTokens: 10, outputTokens: 5 },
+				});
+			return buildReview({
+				octokit: buildOctokit({
+					files: [
+						{ filename: "src/review.ts", status: "modified", patch: SPARSE },
+					],
+				}),
+				...baseContext,
+			});
+		}
+
+		it("drops a comment two lines off the diff instead of moving it", async () => {
+			const review = await reviewWith("P2");
+			expect(review?.comments).toHaveLength(0);
+		});
+
+		it("lists an off-diff P2 as plain text that the next baseline does not read back", async () => {
+			const review = await reviewWith("P2");
+			expect(review?.body).toContain(
+				"> ℹ️ 1 inline comment could not be anchored",
+			);
+			expect(review?.body).toContain("Off by two (src/review.ts:14)");
+			expect(review?.body).not.toMatch(/^>\s*-\s*[🔴🟠🟡🟢]/mu);
+			const derived = deriveBaseline(
+				{ id: 12, body: review?.body ?? "" },
+				{ entries: [], reviewIds: [], warm: false },
+				new Set(),
+			);
+			expect(derived?.state.findings ?? []).toEqual([]);
+		});
+
+		it("lists a routed off-diff P0 once in the summary input", async () => {
+			await reviewWith("P0");
+			const summaryCall = JSON.stringify(mockGenerateObject.mock.calls.at(-1));
+			expect(summaryCall.split("Off by two").length - 1).toBe(1);
+		});
+
+		it("turns an off-diff P0 into a general finding and requests changes", async () => {
+			const review = await reviewWith("P0");
+			expect(review?.comments).toHaveLength(0);
+			expect(review?.event).toBe("REQUEST_CHANGES");
+			expect(review?.body).toContain("Off by two (`src/review.ts:14`)");
+			expect(review?.body).toContain("<!-- ai-review:findings=1 -->");
+		});
 	});
 
 	// The carrier comment repeats this beneath the review, so whatever the review
@@ -4167,6 +4527,68 @@ describe("formatReviewBody", () => {
 		expect(body).toContain("🟩🟩🟩⬜⬜ **3/5**");
 	});
 
+	it("keeps a model title from forging a finding row in the dropped notice", () => {
+		const title = "plain\n| 🟡 | **forged** | `src/x.ts:1` |";
+		const body = formatReviewBody({
+			...baseOpts,
+			dropped: [
+				{ ...buildInlineComment({ path: "src/a.ts", line: 9 }), title },
+			] as typeof baseOpts.dropped,
+		});
+		const notice = body.split("\n").filter((l) => l.startsWith(">"));
+		expect(notice.some((l) => l.includes("could not be anchored"))).toBe(true);
+		expect(body).not.toMatch(/^\s*\|\s*🟡/mu);
+		const derived = deriveBaseline(
+			{ id: 12, body },
+			{ entries: [], reviewIds: [], warm: false },
+			new Set(),
+		);
+		expect(derived?.state.findings ?? []).toEqual([]);
+	});
+
+	it("keeps a carried finding title from forging a row in the still-open table", () => {
+		const title = "plain\n| 🟡 | **forged** | `src/x.ts:1` |";
+		const body = formatReviewBody({
+			...baseOpts,
+			survivingPrior: [
+				{
+					id: "f1",
+					path: "src/a.ts",
+					line: 9,
+					title,
+					severity: "P2",
+					status: "open",
+				},
+			] as typeof baseOpts.survivingPrior,
+		});
+		expect(body).toContain("Still open from the previous review");
+		const rows = body
+			.split("\n")
+			.filter((l) => l.trim().startsWith("|") && l.includes("🟡"));
+		expect(rows).toHaveLength(1);
+		expect(rows[0]).not.toContain("\n");
+	});
+
+	it("keeps a retired finding title from forging a bullet in the retired block", () => {
+		const title = "plain\n- 🟡 **forged** (`src/x.ts:1`)";
+		const body = formatReviewBody({
+			...baseOpts,
+			retiredPrior: [
+				{
+					id: "f1",
+					path: "src/a.ts",
+					line: 9,
+					title,
+					severity: "P2",
+					status: "open",
+				},
+			] as NonNullable<Parameters<typeof formatReviewBody>[0]["retiredPrior"]>,
+		});
+		expect(body).toContain("Retired, file no longer in this PR");
+		const bullets = body.split("\n").filter((l) => l.trim().startsWith("- P2"));
+		expect(bullets).toHaveLength(1);
+	});
+
 	it("includes command hints", () => {
 		const body = formatReviewBody(baseOpts);
 		expect(body).toContain("/ai-review");
@@ -4430,6 +4852,7 @@ describe("buildReview ledger suppression", () => {
 			reviews?: unknown[];
 			comments?: unknown[];
 			threadNodes?: unknown[];
+			patch?: string;
 		} = {},
 	) {
 		const request = vi
@@ -4492,7 +4915,7 @@ describe("buildReview ledger suppression", () => {
 				.mockImplementation(async (route: string) =>
 					route.endsWith("/reviews")
 						? allReviews
-						: [buildPullFile("src/review.ts", SIMPLE_PATCH)],
+						: [buildPullFile("src/review.ts", o.patch ?? SIMPLE_PATCH)],
 				),
 		};
 	}
@@ -4574,6 +4997,96 @@ describe("buildReview ledger suppression", () => {
 			severity: repeat.severity,
 			entryId: "r0:c11:0",
 			entryStatus: "rejected",
+		});
+		log.mockRestore();
+	});
+
+	it("suppresses a reworded repeat 98 lines from the settled entry by its anchor fingerprint", async () => {
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		const fp = anchorFingerprint({
+			category: repeat.category,
+			path: "src/review.ts",
+			line: 2,
+			patch: LONG_PATCH,
+		});
+		const body = `**P1** **Cache entries never expire after the session ends**\n\nDetails.\n\n<!-- ai-review:fp=${fp} -->`;
+		const farComment = { ...ownComment, line: 100, body };
+		const node = threads.data.repository.pullRequest.reviewThreads.nodes[0];
+		const threadNodes = [
+			{
+				...node,
+				comments: {
+					...node.comments,
+					nodes: [{ ...node.comments.nodes[0], body }, node.comments.nodes[1]],
+				},
+			},
+		];
+		const reworded = {
+			...repeat,
+			title: "Stale cache entries linger past session end and never expire",
+			body: "Nothing evicts them.",
+		};
+		routeAgents(
+			{},
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [reworded],
+			}),
+		);
+
+		const result = await buildReview({
+			octokit: ledgerOctokit({
+				comments: [farComment],
+				threadNodes,
+				patch: LONG_PATCH,
+			}),
+			...baseContext,
+		});
+
+		expect(result?.metadata.inlineComments).toBe(0);
+		expect(
+			log.mock.calls.filter(([m]) => m === "suppressed settled repeat"),
+		).toHaveLength(5);
+		log.mockRestore();
+	});
+
+	it("drops strict retraction filler in the posting path and logs title and family", async () => {
+		REVIEWER_TUNING.dropRetractions = true;
+		onTestFinished(() => {
+			REVIEWER_TUNING.dropRetractions = false;
+		});
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		const filler = {
+			...fresh,
+			title: "Stale comment",
+			body: "The comment mentions the old name. No issues found.",
+			severity: "P3" as const,
+			suppressible: true,
+		};
+		routeAgents(
+			{},
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [filler],
+				inline_comments: [],
+			}),
+		);
+
+		const result = await buildReview({
+			octokit: ledgerOctokit(),
+			...baseContext,
+		});
+
+		expect(result?.metadata.generalFindings).toBe(0);
+		const lines = log.mock.calls.filter(
+			([msg]) => msg === "dropped retraction filler",
+		);
+		expect(lines.length).toBeGreaterThan(0);
+		expect(lines[0]?.[1]).toEqual({
+			title: "Stale comment",
+			severity: "P3",
+			families: ["no-actionable-defect"],
 		});
 		log.mockRestore();
 	});
@@ -5165,6 +5678,396 @@ describe("buildReview ledger suppression", () => {
 			});
 
 			expect(decision?.event).toBe("APPROVE");
+		});
+	});
+
+	describe("restatements of open entries across rounds", () => {
+		const MID_SHA = "1111111111111111";
+		const NEXT_SHA = "fedcba0987654321";
+		const CARRIED = `**${REPEAT_TITLE}** (\`src/review.ts:2\`)`;
+		const botComment =
+			threads.data.repository.pullRequest.reviewThreads.nodes[0].comments
+				.nodes[0];
+		const threadOn = (
+			comment: { id: number; body: string },
+			o: { resolvedBy?: string } = {},
+		) => ({
+			isResolved: o.resolvedBy !== undefined,
+			resolvedBy: o.resolvedBy ? { login: o.resolvedBy } : null,
+			comments: {
+				pageInfo: { hasNextPage: false },
+				nodes: [{ ...botComment, databaseId: comment.id, body: comment.body }],
+			},
+		});
+		const round0 = {
+			id: 100,
+			state: "CHANGES_REQUESTED",
+			submitted_at: "2026-10-01T00:00:00Z",
+			body: buildOwnReviewBody({
+				sha: OLD_SHA,
+				count: 1,
+				inline: "Inline comments: 1",
+			}),
+		};
+		/** A later own review that no longer lists the finding, the way a round
+		 * whose triage marked it resolved posts. The bot resolving the thread
+		 * leaves the ledger entry open. */
+		const round1 = {
+			id: 101,
+			state: "COMMENTED",
+			submitted_at: "2026-10-02T00:00:00Z",
+			body: buildOwnReviewBody({ sha: MID_SHA, count: 2 }),
+		};
+		const onlyRepeat = (event: "COMMENT" | "REQUEST_CHANGES" = "COMMENT") =>
+			buildModelReview({
+				event,
+				general_findings: [],
+				inline_comments: [repeat],
+			});
+		const nothing = buildModelReview({
+			event: "COMMENT",
+			general_findings: [],
+			inline_comments: [],
+		});
+		type Decision = NonNullable<Awaited<ReturnType<typeof buildReview>>>;
+		const STATE: Record<string, string> = {
+			REQUEST_CHANGES: "CHANGES_REQUESTED",
+			APPROVE: "APPROVED",
+			COMMENT: "COMMENTED",
+		};
+		/** The decision as GitHub lists it on the next round: the review and its
+		 * inline comments, each with an open thread. */
+		function posted(decision: Decision, id: number) {
+			const comments = decision.comments.map((c, i) => ({
+				id: 500 + i,
+				pull_request_review_id: id,
+				path: c.path,
+				line: c.line,
+				body: c.body,
+			}));
+			return {
+				review: {
+					id,
+					state: STATE[decision.event],
+					submitted_at: "2026-10-03T00:00:00Z",
+					body: decision.body,
+				},
+				comments,
+				threads: comments.map((c) => threadOn(c)),
+			};
+		}
+
+		async function holdingRound(): Promise<Decision> {
+			routeAgents(
+				{ "code-reviewer.md": onlyRepeat("REQUEST_CHANGES") },
+				onlyRepeat(),
+			);
+			const decision = await buildReview({
+				octokit: ledgerOctokit({
+					reviews: [round0],
+					comments: [ownComment],
+					threadNodes: [threadOn(ownComment)],
+				}),
+				...baseContext,
+			});
+			if (!decision) throw new Error("expected a posted review");
+			return decision;
+		}
+
+		it("a repeat-only round posts nothing new and still requests changes", async () => {
+			routeAgents({}, onlyRepeat());
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit({
+					reviews: [round0],
+					threadNodes: [threadOn(ownComment)],
+				}),
+				...baseContext,
+			});
+
+			expect(decision?.comments).toEqual([]);
+			expect(decision?.event).toBe("REQUEST_CHANGES");
+			expect(decision?.body).toContain(CARRIED);
+			expect(decision?.body).toContain("<!-- ai-review:carry=r0:c11:0 -->");
+		});
+
+		it("holds a restatement of a carried entry, and logs it", async () => {
+			const log = vi.spyOn(console, "log").mockImplementation(() => {});
+
+			const decision = await holdingRound();
+
+			expect(decision.comments).toEqual([]);
+			expect(decision.event).toBe("REQUEST_CHANGES");
+			expect(decision.body).toContain(
+				"ledger: warm, 0 suppressed, 1 open held",
+			);
+			expect(
+				log.mock.calls.filter(
+					([m]) => m === "suppressed open restatement",
+				)[0]?.[1],
+			).toEqual({
+				title: REPEAT_TITLE,
+				path: "src/review.ts",
+				line: 2,
+				entryId: "r0:c11:0",
+			});
+			log.mockRestore();
+		});
+
+		it("posts a restatement of an open entry the carried list lacks", async () => {
+			routeAgents(
+				{ "code-reviewer.md": onlyRepeat("REQUEST_CHANGES") },
+				onlyRepeat(),
+			);
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit({
+					reviews: [round0, round1],
+					comments: [ownComment],
+					threadNodes: [threadOn(ownComment)],
+				}),
+				...baseContext,
+			});
+
+			expect(decision?.comments).toEqual([
+				expect.objectContaining({ path: "src/review.ts", line: 2 }),
+			]);
+			expect(decision?.body ?? "").not.toContain("ai-review:carry=");
+			expect(decision?.body ?? "").not.toContain("open held");
+		});
+
+		it("posts a restatement of a finding the bot resolved in an earlier round", async () => {
+			routeAgents({}, onlyRepeat());
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit({
+					reviews: [round0, round1],
+					comments: [ownComment],
+					threadNodes: [threadOn(ownComment, { resolvedBy: "ai-review-bot" })],
+				}),
+				...baseContext,
+			});
+
+			expect(decision?.comments).toEqual([
+				expect.objectContaining({ path: "src/review.ts", line: 2 }),
+			]);
+			expect(decision?.body ?? "").not.toContain("ai-review:carry=");
+		});
+
+		it("lets the retraction filter drop a restatement of an open entry outside the baseline", async () => {
+			REVIEWER_TUNING.dropRetractions = true;
+			onTestFinished(() => {
+				REVIEWER_TUNING.dropRetractions = false;
+			});
+			routeAgents(
+				{},
+				buildModelReview({
+					event: "COMMENT",
+					general_findings: [],
+					inline_comments: [
+						{
+							...repeat,
+							body: "Entries in `tokenCache` are never evicted. This now looks resolved.",
+						},
+					],
+				}),
+			);
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit({
+					reviews: [round0, round1],
+					comments: [ownComment],
+					threadNodes: [threadOn(ownComment)],
+				}),
+				...baseContext,
+			});
+
+			expect(decision?.event).toBe("APPROVE");
+			expect(decision?.body ?? "").not.toContain("ai-review:carry=");
+			expect(decision?.body ?? "").not.toContain(CARRIED);
+		});
+
+		it("posts a restatement of an entry whose file left the PR", async () => {
+			const GONE = "Gone module leaks its file handle";
+			const goneComment = {
+				...ownComment,
+				path: "src/gone.ts",
+				body: `**P1** **${GONE}**\n\nThe handle is never closed.`,
+			};
+			routeAgents(
+				{},
+				buildModelReview({
+					event: "COMMENT",
+					general_findings: [{ ...fresh, title: GONE }],
+					inline_comments: [],
+				}),
+			);
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit({
+					reviews: [round0],
+					comments: [goneComment],
+					threadNodes: [threadOn(goneComment)],
+				}),
+				...baseContext,
+			});
+
+			expect(decision?.event).toBe("COMMENT");
+			expect(decision?.body).toContain(`**${GONE}**`);
+			expect(decision?.body ?? "").not.toContain("ai-review:carry=");
+		});
+
+		it("still holds after a restart that derives the baseline from the posted body", async () => {
+			const held = posted(await holdingRound(), 102);
+
+			const fresh = deriveBaseline(
+				{ id: 102, body: held.review.body },
+				{
+					entries: [
+						{
+							id: "r0:c11:0",
+							round: 0,
+							path: "src/review.ts",
+							line: 2,
+							severity: "P1",
+							title: REPEAT_TITLE,
+							status: "open",
+							decidedBy: null,
+							reason: null,
+							evidence: [],
+						},
+					],
+					reviewIds: [100, 102],
+					warm: true,
+				},
+				KNOWN_SKILLS,
+			);
+			expect(fresh?.state.findings.map((f) => f.id)).toEqual([
+				findingId("src/review.ts", 2, REPEAT_TITLE),
+			]);
+
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "INCREMENTAL",
+				resolved: [],
+				newRisk: false,
+			});
+			routeAgents({}, nothing);
+			const next = await buildReview({
+				octokit: ledgerOctokit({
+					reviews: [round0, held.review],
+					comments: [ownComment, ...held.comments],
+					threadNodes: [threadOn(ownComment), ...held.threads],
+				}),
+				...baseContext,
+				headSha: NEXT_SHA,
+			});
+
+			expect(next?.event).toBe("REQUEST_CHANGES");
+			expect(next?.body).toContain(CARRIED);
+			expect(next?.body).toContain("<!-- ai-review:carry=r0:c11:0 -->");
+		});
+
+		it("releases the hold once the author resolves the thread", async () => {
+			const held = posted(await holdingRound(), 102);
+
+			routeAgents({}, onlyRepeat());
+			const next = await buildReview({
+				octokit: ledgerOctokit({
+					reviews: [round0, held.review],
+					comments: [ownComment, ...held.comments],
+					threadNodes: [
+						threadOn(ownComment, { resolvedBy: "joe" }),
+						...held.threads,
+					],
+				}),
+				...baseContext,
+				headSha: NEXT_SHA,
+			});
+
+			expect(next?.event).toBe("APPROVE");
+			expect(next?.body ?? "").not.toContain("ai-review:carry=");
+		});
+
+		it("approves a later clean round once triage resolves the held finding", async () => {
+			const held = posted(await holdingRound(), 102);
+
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "INCREMENTAL",
+				resolved: [findingId("src/review.ts", 2, REPEAT_TITLE)],
+				newRisk: false,
+			});
+			routeAgents({}, nothing);
+			const next = await buildReview({
+				octokit: ledgerOctokit({
+					reviews: [round0, held.review],
+					comments: [ownComment, ...held.comments],
+					threadNodes: [threadOn(ownComment), ...held.threads],
+				}),
+				...baseContext,
+				headSha: NEXT_SHA,
+			});
+
+			expect(next?.event).toBe("APPROVE");
+		});
+
+		it("does not hold a restatement of a finding triage resolved this round", async () => {
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "INCREMENTAL",
+				resolved: [findingId("src/review.ts", 2, REPEAT_TITLE)],
+				newRisk: false,
+			});
+			routeAgents({}, onlyRepeat());
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit({
+					reviews: [round0],
+					threadNodes: [threadOn(ownComment)],
+				}),
+				...baseContext,
+			});
+
+			expect(decision?.event).toBe("APPROVE");
+		});
+
+		it("lists a restated off-diff P1 once, as the carried finding", async () => {
+			const ROUTED = "Retry loop never backs off on 429";
+			const prior = {
+				...round0,
+				body: buildOwnReviewBody({
+					sha: OLD_SHA,
+					count: 1,
+					rows: [`| 🟠 | bug | **${ROUTED} (\`src/review.ts:40\`)** |`],
+				}),
+			};
+			routeAgents(
+				{},
+				buildModelReview({
+					event: "COMMENT",
+					general_findings: [],
+					inline_comments: [
+						buildInlineComment({
+							title: ROUTED,
+							body: "The `retryRequest` loop retries immediately.",
+							path: "src/review.ts",
+							line: 40,
+							severity: "P1",
+						}),
+					],
+				}),
+			);
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit({
+					reviews: [prior],
+					comments: [],
+					threadNodes: [],
+				}),
+				...baseContext,
+			});
+
+			expect(decision?.event).toBe("REQUEST_CHANGES");
+			expect(decision?.body.split(ROUTED)).toHaveLength(2);
+			expect(decision?.body).toContain("<!-- ai-review:carry=r0:body:0 -->");
 		});
 	});
 });
@@ -6521,7 +7424,7 @@ describe("delta scoping without KV", () => {
 		expect(reviewedFiles()).toEqual(["src/a.ts"]);
 		expect(decision?.comments).toEqual([]);
 		expect(decision?.body).toContain("could not be anchored");
-		expect(decision?.body).toContain("`src/a.ts:41`");
+		expect(decision?.body).toContain("(src/a.ts:41)");
 	});
 
 	it("the source is the latest own review with a sha marker", async () => {
@@ -8145,5 +9048,80 @@ describe("agent retry", () => {
 		expect(pacing.map((c) => c[1])).toEqual([
 			{ skill: "code-reviewer.md", delayMs: 5000 },
 		]);
+	});
+});
+
+describe("routeDroppedComments keyed by claim", () => {
+	const posted = (title: string, line = 3) => ({
+		path: "src/f.ts",
+		line,
+		side: "RIGHT" as const,
+		body: `🟡 **P2**\n\n**${title}**\n\nbody`,
+	});
+
+	it.each([
+		"`**kwargs` silently swallowed by g",
+		"glob src/**/*.ts is not matched",
+		"multi\nline title",
+	])("does not route a posted P1 whose title does not round-trip: %s", (title) => {
+		const attempted = [
+			buildInlineComment({
+				path: "src/f.ts",
+				line: 2,
+				title,
+				severity: "P1",
+				start_line: null,
+			}),
+		];
+		const files = [buildPullFile("src/f.ts", SIMPLE_PATCH)];
+		const postedComments = buildReviewComments(files, attempted);
+		expect(postedComments).toHaveLength(1);
+		const out = routeDroppedComments(attempted, postedComments);
+		expect(out.routed).toEqual([]);
+		expect(out.routedKeys.size).toBe(0);
+	});
+
+	it("keeps a dropped comment when a sibling at the same line posted", () => {
+		const a = buildInlineComment({ path: "src/f.ts", line: 3, title: "Alpha" });
+		const b = buildInlineComment({ path: "src/f.ts", line: 3, title: "Beta" });
+		const out = routeDroppedComments([a, b], [posted("Alpha")]);
+		expect(out.dropped.map((c) => c.title)).toEqual(["Beta"]);
+	});
+
+	it("routes a dropped P0 without removing a P2 that shares its line", () => {
+		const p0 = buildInlineComment({
+			path: "src/f.ts",
+			line: 3,
+			title: "Race",
+			severity: "P0",
+		});
+		const p2 = buildInlineComment({
+			path: "src/f.ts",
+			line: 3,
+			title: "Nit",
+			severity: "P2",
+		});
+		const out = routeDroppedComments([p0, p2], []);
+		expect(out.routedKeys.has(commentKey(p0))).toBe(true);
+		expect(out.routedKeys.has(commentKey(p2))).toBe(false);
+		expect(out.routed.map((f) => f.title)).toEqual(["Race (`src/f.ts:3`)"]);
+		expect(out.dropped.map((c) => c.title)).toEqual(["Nit"]);
+	});
+
+	it("drops fp/sfp fingerprint tags when routing a comment to a general finding", () => {
+		const tagged = {
+			...buildInlineComment({
+				path: "src/f.ts",
+				line: 3,
+				title: "Race",
+				severity: "P0",
+			}),
+			fp: "anchor-fp",
+			sfp: "suggestion-fp",
+		};
+		const out = routeDroppedComments([tagged], []);
+		expect(out.routed).toHaveLength(1);
+		expect(out.routed[0]).not.toHaveProperty("fp");
+		expect(out.routed[0]).not.toHaveProperty("sfp");
 	});
 });

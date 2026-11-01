@@ -472,3 +472,58 @@ describe("findOpenMatch", () => {
 		expect(findOpenMatch(gap, [e])).toBeNull();
 	});
 });
+
+describe("fingerprint rule", () => {
+	const fp = "bug|src/a.ts|0123456789abcdef.0";
+	const e = entry({
+		title: "Cache entries never expire after the session ends",
+		fp,
+	});
+	const reworded = {
+		path: "src/a.ts",
+		line: 410,
+		title: "Stale cache entries linger past session end and never expire",
+	};
+
+	it("does not match a reworded repeat 400 lines away without a fingerprint", () => {
+		expect(findSettledMatch(reworded, [e])).toBeNull();
+	});
+
+	it("matches the same reworded claim when the anchor fingerprint is equal", () => {
+		expect(findSettledMatch({ ...reworded, fp }, [e])).toBe(e);
+	});
+
+	it("matches on an equal suggestion fingerprint with the same claim", () => {
+		const withSfp = entry({ title: e.title, sfp: "abc" });
+		expect(findSettledMatch({ ...reworded, sfp: "abc" }, [withSfp])).toBe(
+			withSfp,
+		);
+	});
+
+	it("does not match two different defects at the same anchor", () => {
+		const other = {
+			path: "src/a.ts",
+			line: 410,
+			fp,
+			title: "Retry loop swallows the network timeout error",
+		};
+		expect(findSettledMatch(other, [e])).toBeNull();
+	});
+
+	it("does not match different claims that share suggestion code", () => {
+		const withSfp = entry({ title: e.title, sfp: "abc" });
+		const other = {
+			path: "src/a.ts",
+			line: 410,
+			sfp: "abc",
+			title: "Retry loop swallows the network timeout error",
+		};
+		expect(findSettledMatch(other, [withSfp])).toBeNull();
+	});
+
+	it("does not apply to a P0 finding", () => {
+		expect(
+			findSettledMatch({ ...reworded, fp, severity: "P0" }, [e]),
+		).toBeNull();
+	});
+});
