@@ -5607,7 +5607,7 @@ describe("buildReview ledger suppression", () => {
 			);
 			const decision = await buildReview({
 				octokit: ledgerOctokit({
-					reviews: [round0, round1],
+					reviews: [round0],
 					comments: [ownComment],
 					threadNodes: [threadOn(ownComment)],
 				}),
@@ -5634,15 +5634,13 @@ describe("buildReview ledger suppression", () => {
 			expect(decision?.body).toContain("<!-- ai-review:carry=r0:c11:0 -->");
 		});
 
-		it("holds a restated open entry the carried list lacks, and logs it", async () => {
+		it("holds a restatement of a carried entry, and logs it", async () => {
 			const log = vi.spyOn(console, "log").mockImplementation(() => {});
 
 			const decision = await holdingRound();
 
 			expect(decision.comments).toEqual([]);
 			expect(decision.event).toBe("REQUEST_CHANGES");
-			expect(decision.body).toContain(CARRIED);
-			expect(decision.body).toContain("<!-- ai-review:carry=r0:c11:0 -->");
 			expect(decision.body).toContain(
 				"ledger: warm, 0 suppressed, 1 open held",
 			);
@@ -5657,6 +5655,105 @@ describe("buildReview ledger suppression", () => {
 				entryId: "r0:c11:0",
 			});
 			log.mockRestore();
+		});
+
+		it("posts a restatement of an open entry the carried list lacks", async () => {
+			routeAgents(
+				{ "code-reviewer.md": onlyRepeat("REQUEST_CHANGES") },
+				onlyRepeat(),
+			);
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit({
+					reviews: [round0, round1],
+					comments: [ownComment],
+					threadNodes: [threadOn(ownComment)],
+				}),
+				...baseContext,
+			});
+
+			expect(decision?.comments).toEqual([
+				expect.objectContaining({ path: "src/review.ts", line: 2 }),
+			]);
+			expect(decision?.body ?? "").not.toContain("ai-review:carry=");
+			expect(decision?.body ?? "").not.toContain("open held");
+		});
+
+		it("posts a restatement of a finding the bot resolved in an earlier round", async () => {
+			routeAgents({}, onlyRepeat());
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit({
+					reviews: [round0, round1],
+					comments: [ownComment],
+					threadNodes: [threadOn(ownComment, { resolvedBy: "ai-review-bot" })],
+				}),
+				...baseContext,
+			});
+
+			expect(decision?.comments).toEqual([
+				expect.objectContaining({ path: "src/review.ts", line: 2 }),
+			]);
+			expect(decision?.body ?? "").not.toContain("ai-review:carry=");
+		});
+
+		it("lets the retraction filter drop a restatement of an open entry outside the baseline", async () => {
+			routeAgents(
+				{},
+				buildModelReview({
+					event: "COMMENT",
+					general_findings: [],
+					inline_comments: [
+						{
+							...repeat,
+							body: "Entries in `tokenCache` are never evicted. This now looks resolved.",
+						},
+					],
+				}),
+			);
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit({
+					reviews: [round0, round1],
+					comments: [ownComment],
+					threadNodes: [threadOn(ownComment)],
+				}),
+				...baseContext,
+			});
+
+			expect(decision?.event).toBe("APPROVE");
+			expect(decision?.body ?? "").not.toContain("ai-review:carry=");
+			expect(decision?.body ?? "").not.toContain(CARRIED);
+		});
+
+		it("posts a restatement of an entry whose file left the PR", async () => {
+			const GONE = "Gone module leaks its file handle";
+			const goneComment = {
+				...ownComment,
+				path: "src/gone.ts",
+				body: `**P1** **${GONE}**\n\nThe handle is never closed.`,
+			};
+			routeAgents(
+				{},
+				buildModelReview({
+					event: "COMMENT",
+					general_findings: [{ ...fresh, title: GONE }],
+					inline_comments: [],
+				}),
+			);
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit({
+					reviews: [round0],
+					comments: [goneComment],
+					threadNodes: [threadOn(goneComment)],
+				}),
+				...baseContext,
+			});
+
+			expect(decision?.event).toBe("COMMENT");
+			expect(decision?.body).toContain(`**${GONE}**`);
+			expect(decision?.body ?? "").not.toContain("ai-review:carry=");
 		});
 
 		it("still holds after a restart that derives the baseline from the posted body", async () => {
@@ -5679,7 +5776,7 @@ describe("buildReview ledger suppression", () => {
 							evidence: [],
 						},
 					],
-					reviewIds: [100, 101, 102],
+					reviewIds: [100, 102],
 					warm: true,
 				},
 				KNOWN_SKILLS,
@@ -5696,7 +5793,7 @@ describe("buildReview ledger suppression", () => {
 			routeAgents({}, nothing);
 			const next = await buildReview({
 				octokit: ledgerOctokit({
-					reviews: [round0, round1, held.review],
+					reviews: [round0, held.review],
 					comments: [ownComment, ...held.comments],
 					threadNodes: [threadOn(ownComment), ...held.threads],
 				}),
@@ -5715,7 +5812,7 @@ describe("buildReview ledger suppression", () => {
 			routeAgents({}, onlyRepeat());
 			const next = await buildReview({
 				octokit: ledgerOctokit({
-					reviews: [round0, round1, held.review],
+					reviews: [round0, held.review],
 					comments: [ownComment, ...held.comments],
 					threadNodes: [
 						threadOn(ownComment, { resolvedBy: "joe" }),
@@ -5741,7 +5838,7 @@ describe("buildReview ledger suppression", () => {
 			routeAgents({}, nothing);
 			const next = await buildReview({
 				octokit: ledgerOctokit({
-					reviews: [round0, round1, held.review],
+					reviews: [round0, held.review],
 					comments: [ownComment, ...held.comments],
 					threadNodes: [threadOn(ownComment), ...held.threads],
 				}),

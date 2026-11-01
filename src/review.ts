@@ -1545,19 +1545,36 @@ function addRestated(
 	restated.set(f.id, { ...f, severity });
 }
 
-/** The carried list with restated open entries added, or their severity raised
- * when already carried. */
+/** The ledger open-restatement suppression may match: every settled entry, and
+ * only the open entries behind a carried finding (so not one triage resolved
+ * this round, one the bot resolved earlier, or one whose file left the PR).
+ * A restatement of any other open entry posts fresh. `prPaths` is null when
+ * the PR file list is cut short and a missing path proves nothing. */
+function holdableLedger(
+	ledger: LedgerEntry[],
+	carried: PersistedFinding[],
+	prPaths: ReadonlySet<string> | null,
+): LedgerEntry[] {
+	const carriedIds = new Set(carried.map((f) => f.id));
+	return ledger.filter((e) => {
+		if (isSettled(e)) return true;
+		const f = ledgerEntryFinding(e);
+		const inPr = !prPaths || f.path === null || prPaths.has(f.path);
+		return inPr && carriedIds.has(f.id);
+	});
+}
+
+/** The carried list with each held finding's severity raised to its most
+ * severe restatement. */
 function withHeld(
 	prior: PersistedFinding[],
 	held: PersistedFinding[],
 ): PersistedFinding[] {
-	const byId = new Map(held.map((f) => [f.id, f]));
-	const raised = prior.map((f) => {
-		const h = byId.get(f.id);
-		byId.delete(f.id);
-		return h ? { ...f, severity: moreSevere(f.severity, h.severity) } : f;
+	const severityOf = new Map(held.map((f) => [f.id, f.severity]));
+	return prior.map((f) => {
+		const s = severityOf.get(f.id);
+		return s ? { ...f, severity: moreSevere(f.severity, s) } : f;
 	});
-	return [...raised, ...byId.values()];
 }
 
 /** The open ledger entry ids behind the carried findings, for the
@@ -1578,8 +1595,13 @@ function carryEntryIds(
 			(isBody(seen) === isBody(e) && e.round > seen.round);
 		if (better) entryFor.set(id, e);
 	}
-	const ids = prior.flatMap((f) => entryFor.get(f.id)?.id ?? []);
-	return [...new Set(ids)].slice(0, MAX_CARRY_IDS);
+	const ids = [...new Set(prior.flatMap((f) => entryFor.get(f.id)?.id ?? []))];
+	if (ids.length > MAX_CARRY_IDS)
+		console.warn("carry marker truncated", {
+			ids: ids.length,
+			kept: MAX_CARRY_IDS,
+		});
+	return ids.slice(0, MAX_CARRY_IDS);
 }
 
 export async function buildReview(
@@ -2446,10 +2468,10 @@ export async function buildReview(
 
 	let suppressedCount = 0;
 	const suppressedEntryIds = new Set<string>();
-	// Triage's word on a finding resolved this round stands, as in the merge:
-	// its open entry is not a hold.
-	const suppressionLedger = ledger.filter(
-		(e) => isSettled(e) || !resolvedNowIds.has(ledgerEntryFinding(e).id),
+	const suppressionLedger = holdableLedger(
+		ledger,
+		survivingPrior,
+		fileListComplete ? new Set(files.map((f) => f.filename)) : null,
 	);
 	const restated = new Map<string, PersistedFinding>();
 	const unsettledResults = agentResults.map((agentResult) => {
@@ -2490,10 +2512,7 @@ export async function buildReview(
 		}
 		return retractions.review;
 	});
-	const prPaths = new Set(files.map((f) => f.filename));
-	const held = [...restated.values()].filter(
-		(f) => !fileListComplete || f.path === null || prPaths.has(f.path),
-	);
+	const held = [...restated.values()];
 	survivingPrior = withHeld(survivingPrior, held);
 	const heldCount = held.filter(blocksVerdict).length;
 	if (loadedLedger) {

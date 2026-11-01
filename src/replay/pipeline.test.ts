@@ -57,6 +57,20 @@ describe("todaysCodePipeline", () => {
 		});
 	});
 
+	it("posts a repeat of an open claim the latest round no longer carries", () => {
+		const f = makeFixture([["a"], ["x"], ["b"]]);
+		for (const c of f.rounds.flatMap((r) => r.claims))
+			c.title =
+				c.id === "x" ? "Unrelated race condition in cache invalidation" : TITLE;
+		const result = replayFixture(
+			f,
+			makeLabels({ labels: [] }),
+			todaysCodePipeline,
+		);
+		expect(result.rounds[2]).toMatchObject({ posted: ["b"], suppressed: [] });
+		expect(result.rounds[2]?.held).toBeUndefined();
+	});
+
 	it("never suppresses round-0 claims", () => {
 		const f = repeatFixture([["a", "b"]]);
 		const labels = [

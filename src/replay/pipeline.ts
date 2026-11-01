@@ -1,8 +1,15 @@
+import { ledgerEntryFinding } from "../baseline.js";
+import { reconcileSurvivingPrior } from "../ledger/live.js";
 import {
 	suppressOpenRestatements,
 	suppressSettled,
 } from "../ledger/suppress.js";
-import type { Ledger, LedgerEntry, LedgerStatus } from "../ledger/types.js";
+import {
+	isSettled,
+	type Ledger,
+	type LedgerEntry,
+	type LedgerStatus,
+} from "../ledger/types.js";
 import type { ClaimLabel, PostedClaim, Round } from "./types.js";
 
 export interface LedgerView {
@@ -69,11 +76,28 @@ export function ledgerFromView(view: LedgerView): Ledger {
 	});
 }
 
+/** Settled entries, and the open ones behind the baseline: the latest prior
+ * round's open claims that no settled entry matches, as `deriveBaseline` and
+ * `reconcileSurvivingPrior` carry them. */
+function holdable(entries: Ledger): Ledger {
+	const source = Math.max(-1, ...entries.map((e) => e.round));
+	const carried = reconcileSurvivingPrior(
+		entries
+			.filter((e) => e.round === source && !isSettled(e))
+			.map(ledgerEntryFinding),
+		entries,
+	);
+	const ids = new Set(carried.map((f) => f.id));
+	return entries.filter(
+		(e) => isSettled(e) || ids.has(ledgerEntryFinding(e).id),
+	);
+}
+
 export const todaysCodePipeline: ReplayPipeline = ({ claims, ledger }) => {
 	const findings = claims.map((c) => ({ ...c, body: c.text }));
 	const entries = ledgerFromView(ledger);
 	const settled = suppressSettled(findings, entries);
-	const open = suppressOpenRestatements(settled.kept, entries);
+	const open = suppressOpenRestatements(settled.kept, holdable(entries));
 	const matched = [...settled.suppressed, ...open.suppressed];
 	return {
 		posted: open.kept.map((c) => c.id),
