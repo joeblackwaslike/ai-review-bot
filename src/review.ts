@@ -29,6 +29,7 @@ import {
 	PR_FILE_LIST_CAP,
 	wholePrInputComplete,
 } from "./prompt.js";
+import type { ResolvedFindingRef } from "./resolve-threads.js";
 import { isOwnReview, readMetadataValue } from "./review-metadata.js";
 import type { PersistedFinding, ReviewState } from "./review-state.js";
 import { REVIEWER_TUNING, type ReviewerTuning } from "./reviewer-tuning.js";
@@ -122,6 +123,8 @@ export interface ReviewDecision {
 	comments: ReviewComment[];
 	metadata: ReviewMetadata;
 	validLinesByPath: Map<string, Set<number>>;
+	/** Findings the round resolved; the thread resolver closes only matching threads. */
+	resolvedFindings?: ResolvedFindingRef[];
 	/** path:line → skills that flagged it + the displayed title. Present only when feedbackEnabled. */
 	commentProvenance?: Map<
 		string,
@@ -2642,6 +2645,10 @@ export async function buildReview(
 			cost,
 		},
 		validLinesByPath: validLines,
+		resolvedFindings: resolvedThisRound.map(({ path, title }) => ({
+			path,
+			title,
+		})),
 		commentProvenance,
 	};
 }

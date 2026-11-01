@@ -1,9 +1,14 @@
+import { isOwnReview } from "./review-metadata.js";
+
+export interface ResolvedFindingRef {
+	path: string | null;
+	title: string;
+}
+
 interface ReviewThread {
 	id: string;
-	isResolved: boolean;
 	path: string;
-	line: number | null;
-	comments: Array<{ body: string }>;
+	body: string;
 }
 
 interface GraphQLOctokit {
@@ -18,9 +23,12 @@ interface ThreadsQueryResponse {
 					id: string;
 					isResolved: boolean;
 					path: string;
-					line: number | null;
 					comments: {
-						nodes: Array<{ body: string }>;
+						nodes: Array<{
+							body: string;
+							author: { __typename: string } | null;
+							pullRequestReview: { body: string } | null;
+						}>;
 					};
 				}>;
 				pageInfo: { hasNextPage: boolean; endCursor: string | null };
@@ -38,9 +46,12 @@ const THREADS_QUERY = `
             id
             isResolved
             path
-            line
             comments(first: 1) {
-              nodes { body }
+              nodes {
+                body
+                author { __typename }
+                pullRequestReview { body }
+              }
             }
           }
           pageInfo { hasNextPage endCursor }
@@ -50,12 +61,12 @@ const THREADS_QUERY = `
   }
 `;
 
-async function fetchBotThreads(
+async function fetchOwnOpenThreads(
 	octokit: GraphQLOctokit,
 	owner: string,
 	repo: string,
 	pullNumber: number,
-	commentPrefix: string,
+	own: { commentPrefix: string; provider: string },
 ): Promise<ReviewThread[]> {
 	const threads: ReviewThread[] = [];
 	let cursor: string | null = null;
@@ -72,22 +83,11 @@ async function fetchBotThreads(
 		const page: ThreadsQueryResponse["repository"]["pullRequest"]["reviewThreads"] =
 			result.repository.pullRequest.reviewThreads;
 		for (const node of page.nodes) {
-			const firstComment = node.comments.nodes[0];
-			if (!firstComment) continue;
-			if (!firstComment.body.includes(`**`) || !node.line) continue;
-
-			if (
-				firstComment.body.includes(commentPrefix) ||
-				firstComment.body.startsWith("**")
-			) {
-				threads.push({
-					id: node.id,
-					isResolved: node.isResolved,
-					path: node.path,
-					line: node.line,
-					comments: node.comments.nodes,
-				});
-			}
+			const first = node.comments.nodes[0];
+			if (!first || node.isResolved) continue;
+			if (first.author?.__typename !== "Bot") continue;
+			if (!isOwnReview(first.pullRequestReview?.body, own)) continue;
+			threads.push({ id: node.id, path: node.path, body: first.body });
 		}
 
 		cursor = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
@@ -104,45 +104,53 @@ const RESOLVE_MUTATION = `
   }
 `;
 
+/**
+ * Resolves this bot's own open threads for findings the current round
+ * resolved. A thread matches when its path equals the finding's path and its
+ * first comment contains the finding's bolded title.
+ */
 export async function resolveStaleThreads(
 	octokit: GraphQLOctokit,
 	owner: string,
 	repo: string,
 	pullNumber: number,
-	commentPrefix: string,
-	validLinesByPath: Map<string, Set<number>>,
+	options: {
+		commentPrefix: string;
+		provider: "anthropic" | "openai";
+		resolved: readonly ResolvedFindingRef[];
+	},
 ): Promise<number> {
-	const threads = await fetchBotThreads(
+	if (options.resolved.length === 0) return 0;
+
+	const threads = await fetchOwnOpenThreads(
 		octokit,
 		owner,
 		repo,
 		pullNumber,
-		commentPrefix,
+		options,
 	);
+	let count = 0;
 
-	const unresolvedThreads = threads.filter((t) => !t.isResolved);
-	let resolved = 0;
-
-	for (const thread of unresolvedThreads) {
-		const validLines = validLinesByPath.get(thread.path);
-		if (!validLines || (thread.line !== null && !validLines.has(thread.line))) {
-			try {
-				await octokit.graphql(RESOLVE_MUTATION, { threadId: thread.id });
-				resolved++;
-			} catch (err) {
-				console.error("failed to resolve thread", {
-					threadId: thread.id,
-					path: thread.path,
-					line: thread.line,
-					err,
-				});
-			}
+	for (const thread of threads) {
+		const matches = options.resolved.some(
+			(r) => r.path === thread.path && thread.body.includes(`**${r.title}**`),
+		);
+		if (!matches) continue;
+		try {
+			await octokit.graphql(RESOLVE_MUTATION, { threadId: thread.id });
+			count++;
+		} catch (err) {
+			console.error("failed to resolve thread", {
+				threadId: thread.id,
+				path: thread.path,
+				err,
+			});
 		}
 	}
 
-	if (resolved > 0) {
-		console.log(`resolved ${resolved} stale review thread(s)`);
+	if (count > 0) {
+		console.log(`resolved ${count} stale review thread(s)`);
 	}
 
-	return resolved;
+	return count;
 }
