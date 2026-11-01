@@ -18,6 +18,11 @@ import { deriveBaseline } from "./baseline.js";
 import { dedupeClaims, isSameClaim } from "./claim-dedupe.js";
 import { mapWithConcurrency } from "./concurrency.js";
 import { collectRightSideLines } from "./diff-lines.js";
+import {
+	anchorFingerprint,
+	formatFpMarkers,
+	suggestionFingerprint,
+} from "./ledger/fingerprint.js";
 import { loadLedger, reconcileSurvivingPrior } from "./ledger/live.js";
 import { findSettledMatch } from "./ledger/match.js";
 import { retargetCarried } from "./ledger/retarget.js";
@@ -1149,13 +1154,47 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 	return parts.filter((part) => part.length > 0).join("\n\n");
 }
 
-function buildCommentBody(comment: ModelInlineComment): string {
+/** Anchor and suggestion fingerprints of one inline comment; empty fields when the line is off the patch. */
+function commentFingerprints(
+	comment: ModelInlineComment,
+	patch: string | undefined,
+): { fp?: string; sfp?: string } {
+	const fp = patch
+		? anchorFingerprint({
+				category: comment.category,
+				path: comment.path,
+				line: comment.line,
+				patch,
+			})
+		: null;
+	return {
+		...(fp ? { fp } : {}),
+		...(comment.suggestion
+			? { sfp: suggestionFingerprint(comment.suggestion) }
+			: {}),
+	};
+}
+
+/** Tags each comment with its fingerprints, computed against the full PR patch. */
+function withFingerprints<T extends ModelInlineComment>(
+	comments: T[],
+	files: PullFile[],
+): (T & { fp?: string; sfp?: string })[] {
+	const patches = new Map(files.map((f) => [f.filename, f.patch]));
+	return comments.map((c) => ({
+		...c,
+		...commentFingerprints(c, patches.get(c.path)),
+	}));
+}
+
+function buildCommentBody(comment: ModelInlineComment, patch?: string): string {
 	const badge = severityBadge(comment.severity);
 	const base = `${badge}\n\n**${comment.title}**\n\n${comment.body}`;
-	if (comment.suggestion) {
-		return `${base}\n\n*Suggested fix:*\n\n\`\`\`suggestion\n${comment.suggestion}\n\`\`\``;
-	}
-	return base;
+	const withFix = comment.suggestion
+		? `${base}\n\n*Suggested fix:*\n\n\`\`\`suggestion\n${comment.suggestion}\n\`\`\``
+		: base;
+	const markers = formatFpMarkers(commentFingerprints(comment, patch));
+	return markers ? `${withFix}\n\n${markers}` : withFix;
 }
 
 export function buildValidLinesByPath(
@@ -1322,7 +1361,10 @@ export function buildReviewComments(
 		return [
 			{
 				path: comment.path,
-				body: buildCommentBody(comment),
+				body: buildCommentBody(
+					comment,
+					files.find((f) => f.filename === comment.path)?.patch,
+				),
 				line: comment.line,
 				side: "RIGHT" as const,
 				...(startLine !== undefined
@@ -2304,7 +2346,11 @@ export async function buildReview(
 
 	let suppressedCount = 0;
 	const suppressedEntryIds = new Set<string>();
-	const unsettledResults = agentResults.map((r) => {
+	const unsettledResults = agentResults.map((agentResult) => {
+		const r = {
+			...agentResult,
+			inline_comments: withFingerprints(agentResult.inline_comments, files),
+		};
 		const outcome = suppressInReview(r, ledger);
 		suppressedCount += outcome.suppressed.length;
 		for (const { finding, entry } of outcome.suppressed) {

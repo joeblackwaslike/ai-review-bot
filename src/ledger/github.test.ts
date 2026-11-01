@@ -165,6 +165,14 @@ describe("buildLedger", () => {
 		expect(e.status).toBe("open");
 	});
 
+	it("carries the fingerprints written into the posted comment", () => {
+		const text =
+			"**t**\n\nbody\n\n<!-- ai-review:fp=bug|a.ts|abc.0 -->\n<!-- ai-review:sfp=def -->";
+		const [e] = build([], [{ ...claim(10), text }]);
+		expect(e.fp).toBe("bug|a.ts|abc.0");
+		expect(e.sfp).toBe("def");
+	});
+
 	it("leaves a claim with no thread open", () => {
 		expect(build([])[0].status).toBe("open");
 	});

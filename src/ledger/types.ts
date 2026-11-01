@@ -14,6 +14,8 @@ export interface LedgerEntry {
 	title: string;
 	body?: string | null;
 	action?: string;
+	fp?: string;
+	sfp?: string;
 	status: LedgerStatus;
 	decidedBy: "author" | "reviewer" | null;
 	reason: string | null;

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type AgentRecord, parseAgentsMarker } from "./agent-log.js";
 import { deriveBaseline } from "./baseline.js";
 import { collectRightSideLines } from "./diff-lines.js";
+import { anchorFingerprint } from "./ledger/fingerprint.js";
 import { computeCost, createAIModel } from "./models.js";
 import {
 	buildReview,
@@ -248,6 +249,20 @@ describe("buildReviewComments", () => {
 	});
 
 	const files = [buildPullFile("src/file.ts", SIMPLE_PATCH)];
+
+	it("writes the anchor and suggestion fingerprints into the posted body", () => {
+		const [comment] = buildReviewComments(files, [
+			buildInlineComment({ line: 2, start_line: null, suggestion: "fixed();" }),
+		]);
+		const fp = anchorFingerprint({
+			category: buildInlineComment({}).category,
+			path: "src/file.ts",
+			line: 2,
+			patch: SIMPLE_PATCH,
+		});
+		expect(comment.body).toContain(`<!-- ai-review:fp=${fp} -->`);
+		expect(comment.body).toMatch(/<!-- ai-review:sfp=[0-9a-f]{16} -->\s*$/);
+	});
 
 	it("keeps a single-line comment with start_line: null", () => {
 		const comments = buildReviewComments(files, [
@@ -4652,6 +4667,52 @@ describe("buildReview ledger suppression", () => {
 			entryId: "r0:c11:0",
 			entryStatus: "rejected",
 		});
+		log.mockRestore();
+	});
+
+	it("suppresses a reworded repeat 98 lines from the settled entry by its anchor fingerprint", async () => {
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		const fp = anchorFingerprint({
+			category: repeat.category,
+			path: "src/review.ts",
+			line: 2,
+			patch: SIMPLE_PATCH,
+		});
+		const body = `**P1** **Cache entries never expire after the session ends**\n\nDetails.\n\n<!-- ai-review:fp=${fp} -->`;
+		const farComment = { ...ownComment, line: 100, body };
+		const node = threads.data.repository.pullRequest.reviewThreads.nodes[0];
+		const threadNodes = [
+			{
+				...node,
+				comments: {
+					...node.comments,
+					nodes: [{ ...node.comments.nodes[0], body }, node.comments.nodes[1]],
+				},
+			},
+		];
+		const reworded = {
+			...repeat,
+			title: "Stale cache entries linger past session end and never expire",
+			body: "Nothing evicts them.",
+		};
+		routeAgents(
+			{},
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [reworded],
+			}),
+		);
+
+		const result = await buildReview({
+			octokit: ledgerOctokit({ comments: [farComment], threadNodes }),
+			...baseContext,
+		});
+
+		expect(result?.metadata.inlineComments).toBe(0);
+		expect(
+			log.mock.calls.filter(([m]) => m === "suppressed settled repeat"),
+		).toHaveLength(5);
 		log.mockRestore();
 	});
 

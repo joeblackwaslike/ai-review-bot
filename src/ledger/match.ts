@@ -24,6 +24,14 @@ export const BODY_MATCH = {
 	crossSurfaceOverlap: 0.6,
 };
 
+/** Bar for two findings that share an anchor or suggestion fingerprint. Provisional:
+ * replay fixtures hold no anchor code, so it cannot be calibrated there. */
+export const FINGERPRINT_CLAIM_MATCH: ClaimMatchOptions = {
+	...CROSS_ROUND_MATCH,
+	titleSimilarity: 0.5,
+	identifierSimilarity: 0.5,
+};
+
 const normalizeTitle = (title: string) => title.trim().toLowerCase();
 
 const fullText = (c: ClaimLike) => (c.body ? `${c.title}\n${c.body}` : c.title);
@@ -118,7 +126,16 @@ const tierRule =
 const isCrossSurfaceRepeat: Rule = (f, e) =>
 	isCrossSurfaceTitleRepeat(f, e) || isCrossSurfaceIdentifierRepeat(f, e);
 
+const sharesFingerprint: Rule = (f, e) =>
+	(f.fp !== undefined && f.fp === e.fp) ||
+	(f.sfp !== undefined && f.sfp === e.sfp);
+
+/** The fingerprint only nominates a candidate; the claim must still be the same. */
+const fingerprintRule: Rule = (f, e) =>
+	sharesFingerprint(f, e) && isSameClaim(f, e, FINGERPRINT_CLAIM_MATCH);
+
 const RULES: Rule[] = [
+	fingerprintRule,
 	tierRule(DEFAULT_CLAIM_MATCH),
 	tierRule(CROSS_ROUND_MATCH),
 	isMovedFileRepeat,

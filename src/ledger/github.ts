@@ -3,6 +3,7 @@ import type { PostedClaim } from "../replay/types.js";
 import { isOwnReview } from "../review-metadata.js";
 import { parseBodyFindings } from "../review-state.js";
 import { classifyReplies, type DecisionReply } from "./disposition.js";
+import { readFpMarkers } from "./fingerprint.js";
 import type { Ledger, LedgerEntry } from "./types.js";
 
 export interface RequestLike {
@@ -59,6 +60,7 @@ export function buildLedger(e: LedgerEvidence): Ledger {
 			severity: c.severity,
 			title: c.title,
 			body: c.text,
+			...readFpMarkers(c.text),
 		};
 		const t = c.commentId === null ? undefined : byComment.get(c.commentId);
 		// One reply cannot say which of several merged claims it settles.
