@@ -2570,8 +2570,7 @@ describe("sanitizeInlineComments", () => {
 		expect(out).toBe(comment); // same reference — no copy made
 	});
 
-	it("fuzzy-adjusts line to nearest valid line within ±5", () => {
-		// Build a file where only line 3 is valid so we can test adjustment
+	it("leaves a line outside the diff where it is, however near a valid line", () => {
 		const sparsePatch = "@@ -10,1 +3,1 @@\n+only this line\n";
 		const sparseFiles = [buildPullFile("src/file.ts", sparsePatch)];
 		const validLines = buildValidLinesByPath(sparseFiles);
@@ -2581,20 +2580,7 @@ describe("sanitizeInlineComments", () => {
 			start_line: null,
 		});
 		const [out] = sanitizeInlineComments([comment], validLines);
-		expect(out.line).toBe(3);
-	});
-
-	it("does not adjust line when the nearest valid line is beyond ±5", () => {
-		const sparsePatch = "@@ -100,1 +100,1 @@\n+far away\n";
-		const sparseFiles = [buildPullFile("src/file.ts", sparsePatch)];
-		const validLines = buildValidLinesByPath(sparseFiles);
-		const comment = buildInlineComment({
-			path: "src/file.ts",
-			line: 5,
-			start_line: null,
-		});
-		const [out] = sanitizeInlineComments([comment], validLines);
-		expect(out.line).toBe(5); // unchanged — no valid line within ±5
+		expect(out.line).toBe(5);
 	});
 
 	it("clears start_line when start_line >= line (backwards range)", () => {
@@ -3736,6 +3722,74 @@ describe("review body markdown", () => {
 
 		expect(review?.comments).toHaveLength(0);
 		expect(review?.event).not.toBe("APPROVE");
+	});
+
+	describe("off-diff comments are dropped, not moved", () => {
+		const SPARSE = "@@ -1,1 +10,3 @@\n+a\n+b\n+c\n";
+		async function reviewWith(severity: "P0" | "P2") {
+			const agent = buildGenerateObjectResponse(
+				buildModelReview({
+					event: "COMMENT",
+					general_findings: [],
+					inline_comments: [
+						buildInlineComment({
+							title: "Off by two",
+							severity,
+							path: "src/review.ts",
+							line: 14,
+							start_line: null,
+						}),
+					],
+				}),
+			);
+			mockGenerateObject
+				.mockResolvedValue(agent)
+				.mockResolvedValueOnce(agent)
+				.mockResolvedValueOnce(agent)
+				.mockResolvedValueOnce(agent)
+				.mockResolvedValueOnce(agent)
+				.mockResolvedValueOnce(agent)
+				.mockResolvedValueOnce({
+					object: { summary: "One issue." },
+					usage: { inputTokens: 10, outputTokens: 5 },
+				});
+			return buildReview({
+				octokit: buildOctokit({
+					files: [
+						{ filename: "src/review.ts", status: "modified", patch: SPARSE },
+					],
+				}),
+				...baseContext,
+			});
+		}
+
+		it("drops a comment two lines off the diff instead of moving it", async () => {
+			const review = await reviewWith("P2");
+			expect(review?.comments).toHaveLength(0);
+		});
+
+		it("lists an off-diff P2 as plain text that the next baseline does not read back", async () => {
+			const review = await reviewWith("P2");
+			expect(review?.body).toContain(
+				"> ℹ️ 1 inline comment could not be anchored",
+			);
+			expect(review?.body).toContain("Off by two (src/review.ts:14)");
+			expect(review?.body).not.toMatch(/^>\s*-\s*[🔴🟠🟡🟢]/mu);
+			const derived = deriveBaseline(
+				{ id: 12, body: review?.body ?? "" },
+				{ entries: [], reviewIds: [], warm: false },
+				new Set(),
+			);
+			expect(derived?.state.findings ?? []).toEqual([]);
+		});
+
+		it("turns an off-diff P0 into a general finding and requests changes", async () => {
+			const review = await reviewWith("P0");
+			expect(review?.comments).toHaveLength(0);
+			expect(review?.event).toBe("REQUEST_CHANGES");
+			expect(review?.body).toContain("Off by two (`src/review.ts:14`)");
+			expect(review?.body).toContain("<!-- ai-review:findings=1 -->");
+		});
 	});
 
 	// The carrier comment repeats this beneath the review, so whatever the review
@@ -6557,7 +6611,7 @@ describe("delta scoping without KV", () => {
 		expect(reviewedFiles()).toEqual(["src/a.ts"]);
 		expect(decision?.comments).toEqual([]);
 		expect(decision?.body).toContain("could not be anchored");
-		expect(decision?.body).toContain("`src/a.ts:41`");
+		expect(decision?.body).toContain("(src/a.ts:41)");
 	});
 
 	it("the source is the latest own review with a sha marker", async () => {

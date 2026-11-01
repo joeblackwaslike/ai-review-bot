@@ -1097,12 +1097,9 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 
 	const droppedNotice =
 		dropped.length > 0
-			? `> ⚠️ ${dropped.length} inline comment${dropped.length === 1 ? "" : "s"} could not be anchored to the diff and ${dropped.length === 1 ? "was" : "were"} posted here instead:\n${dropped
-					.map(
-						(c) =>
-							`> - ${SEVERITY_EMOJI[c.severity as Severity] ?? UNKNOWN_SEVERITY_BADGE} **${c.title}** (\`${c.path}:${c.line}\`)`,
-					)
-					.join("\n")}`
+			? `> ℹ️ ${dropped.length} inline comment${dropped.length === 1 ? "" : "s"} could not be anchored to the diff and ${dropped.length === 1 ? "was" : "were"} not posted: ${dropped
+					.map((c) => `${c.title} (${c.path}:${c.line})`)
+					.join("; ")}.`
 			: "";
 
 	const overflowNotice =
@@ -1191,23 +1188,10 @@ export function parseRawDiff(rawDiff: string): Map<string, string> {
 	return result;
 }
 
-/** Find the nearest valid right-side line within ±window of target, checking
- * alternately above and below. Returns null when nothing is in range. */
-function nearestValidLine(
-	target: number,
-	validLines: Set<number>,
-	window: number,
-): number | null {
-	for (let delta = 1; delta <= window; delta++) {
-		if (validLines.has(target + delta)) return target + delta;
-		if (validLines.has(target - delta)) return target - delta;
-	}
-	return null;
-}
-
 /** Correct mechanical anchor errors before diff validation.
  *
- * - Condition 2 (line not in valid set): adjust to nearest valid line ±5.
+ * A line outside the diff is left as is: the comment is dropped later, never
+ * moved to a neighbouring line it was not written about.
  * - Condition 3 (start_line >= line): clear start_line.
  * - Condition 4 (start_line not in valid set): clear start_line.
  *
@@ -1220,19 +1204,8 @@ export function sanitizeInlineComments(
 		const validLines = validLinesByPath.get(c.path);
 		if (!validLines) return c;
 
-		let { line, start_line } = c;
-
-		if (!validLines.has(line)) {
-			const adjusted = nearestValidLine(line, validLines, 5);
-			if (adjusted !== null) {
-				console.log("inline comment anchor adjusted (fuzzy)", {
-					path: c.path,
-					original: c.line,
-					adjusted,
-				});
-				line = adjusted;
-			}
-		}
+		const { line } = c;
+		let { start_line } = c;
 
 		if (start_line !== null && start_line >= line) {
 			console.log("inline comment start_line cleared (backwards range)", {
@@ -1257,6 +1230,32 @@ export function sanitizeInlineComments(
 	});
 }
 
+/** Split the comments that did not post. P0 and P1 become general findings
+ * titled with a `(path:line)` suffix, which the next round's baseline reads back
+ * with its path so they keep blocking. P2 and P3 stay as plain text in the body:
+ * they have no thread to settle, so nothing may carry them forward. */
+export function routeDroppedComments(
+	attempted: ModelInlineComment[],
+	posted: ReviewComment[],
+): {
+	dropped: ModelInlineComment[];
+	routed: ModelReview["general_findings"];
+} {
+	const postedKeys = new Set(posted.map((c) => `${c.path}:${c.line}`));
+	const notPosted = attempted.filter(
+		(c) => !postedKeys.has(`${c.path}:${c.line}`),
+	);
+	const blocking = (c: ModelInlineComment) =>
+		c.severity === "P0" || c.severity === "P1";
+	return {
+		dropped: notPosted.filter((c) => !blocking(c)),
+		routed: notPosted.filter(blocking).map((c) => {
+			const { path, line, start_line: _start, suggestion: _s, ...finding } = c;
+			return { ...finding, title: `${c.title} (\`${path}:${line}\`)` };
+		}),
+	};
+}
+
 export function buildReviewComments(
 	files: PullFile[],
 	inlineComments: ModelInlineComment[],
@@ -1267,6 +1266,7 @@ export function buildReviewComments(
 		const validLines = validLinesByPath.get(comment.path);
 		if (!validLines) {
 			console.log("inline comment dropped: path not in diff", {
+				reason: "OFF_DIFF_PATH",
 				path: comment.path,
 				line: comment.line,
 				knownPaths: Array.from(validLinesByPath.keys()),
@@ -1278,6 +1278,7 @@ export function buildReviewComments(
 			console.log(
 				"inline comment dropped: line not in valid right-side lines",
 				{
+					reason: "OFF_DIFF_LINE",
 					path: comment.path,
 					line: comment.line,
 					validLines: Array.from(validLines).sort((a, b) => a - b),
@@ -2334,7 +2335,7 @@ export async function buildReview(
 	const mergeOutcome = mergeReviewsDetailed(unsettledResults, resolvedKeys, {
 		dedupeNearDuplicateClaims: tuning.dedupeNearDuplicateClaims,
 	});
-	const modelReview = mergeOutcome.review;
+	let modelReview = mergeOutcome.review;
 	if (mergeOutcome.collapsed > 0) {
 		console.log("collapsed restatements of the same claim", {
 			collapsed: mergeOutcome.collapsed,
@@ -2373,9 +2374,7 @@ export async function buildReview(
 		: files.filter((f) => scopedPathSet.has(f.filename));
 	const validLines = buildValidLinesByPath(anchorFiles);
 
-	// Fix mechanical anchor errors before diff validation so fewer comments are
-	// silently dropped: fuzzy-anchor ±5 for off-by-one lines, clear backwards
-	// or invalid start_line ranges.
+	// Clear backwards or invalid start_line ranges before diff validation.
 	const sanitizedComments = sanitizeInlineComments(
 		modelReview.inline_comments,
 		validLines,
@@ -2412,6 +2411,18 @@ export async function buildReview(
 		anchorFiles,
 		effectiveInlineComments,
 	);
+
+	const { dropped, routed } = routeDroppedComments(
+		effectiveInlineComments,
+		reviewComments,
+	);
+	if (routed.length > 0) {
+		modelReview = {
+			...modelReview,
+			event: "REQUEST_CHANGES",
+			general_findings: [...modelReview.general_findings, ...routed],
+		};
+	}
 
 	console.log("inline comments after validation", {
 		submitted: reviewComments.length,
@@ -2559,11 +2570,6 @@ export async function buildReview(
 			survivingPrior.length > 0,
 		);
 	}
-
-	const postedKeys = new Set(reviewComments.map((c) => `${c.path}:${c.line}`));
-	const dropped = effectiveInlineComments.filter(
-		(c) => !postedKeys.has(`${c.path}:${c.line}`),
-	);
 
 	const hasP0 =
 		modelReview.general_findings.some((f) => f.severity === "P0") ||
