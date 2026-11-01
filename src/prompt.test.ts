@@ -507,3 +507,39 @@ describe("fenceUntrusted closing-tag variants", () => {
 		expect(fenced.endsWith("</untrusted_pr_text>")).toBe(true);
 	});
 });
+
+describe("numbered right-side diff lines", () => {
+	const context = {
+		owner: "o",
+		repo: "r",
+		pullNumber: 1,
+		headSha: "abc",
+		title: "t",
+		body: null,
+		additions: 1,
+		deletions: 1,
+		changedFiles: 1,
+		labels: [],
+		extraInstructions: "",
+		files: [
+			{
+				filename: "a.ts",
+				status: "modified",
+				patch: "@@ -40,2 +40,2 @@\n ctx\n-old\n+new",
+			},
+		],
+	};
+
+	it("prints the right-side number beside each line in the user message", () => {
+		const msg = buildUserMessage(context);
+		expect(msg).toContain("   40 |  ctx");
+		expect(msg).toContain("      | -old");
+		expect(msg).toContain("   41 | +new");
+	});
+
+	it("tells the agent to use the printed number, not to count from @@", () => {
+		const prompt = buildAgentSystemPrompt("code-reviewer.md", "");
+		expect(prompt).toContain("number printed at the left of each line");
+		expect(prompt).not.toContain("count forward");
+	});
+});

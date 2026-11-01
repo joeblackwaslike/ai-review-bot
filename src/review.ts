@@ -17,6 +17,7 @@ import type { ResolvedAuth } from "./auth.js";
 import { deriveBaseline } from "./baseline.js";
 import { dedupeClaims, isSameClaim } from "./claim-dedupe.js";
 import { mapWithConcurrency } from "./concurrency.js";
+import { collectRightSideLines } from "./diff-lines.js";
 import { loadLedger, reconcileSurvivingPrior } from "./ledger/live.js";
 import { findSettledMatch } from "./ledger/match.js";
 import { retargetCarried } from "./ledger/retarget.js";
@@ -1149,36 +1150,6 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 	];
 
 	return parts.filter((part) => part.length > 0).join("\n\n");
-}
-
-export function collectRightSideLines(patch: string): Set<number> {
-	const lines = new Set<number>();
-	const patchLines = patch.split("\n");
-	let nextRightLine = 0;
-
-	for (const line of patchLines) {
-		if (line.startsWith("@@")) {
-			const match = /@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(line);
-			if (!match) {
-				continue;
-			}
-			nextRightLine = Number(match[1]);
-			continue;
-		}
-
-		if (line.startsWith("+")) {
-			lines.add(nextRightLine);
-			nextRightLine += 1;
-			continue;
-		}
-
-		if (line.startsWith(" ")) {
-			lines.add(nextRightLine);
-			nextRightLine += 1;
-		}
-	}
-
-	return lines;
 }
 
 function buildCommentBody(comment: ModelInlineComment): string {

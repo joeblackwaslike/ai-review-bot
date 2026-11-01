@@ -2,6 +2,7 @@ import { NoObjectGeneratedError } from "ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type AgentRecord, parseAgentsMarker } from "./agent-log.js";
 import { deriveBaseline } from "./baseline.js";
+import { collectRightSideLines } from "./diff-lines.js";
 import { computeCost, createAIModel } from "./models.js";
 import {
 	buildReview,
@@ -9,7 +10,6 @@ import {
 	buildValidLinesByPath,
 	capPaceToDeadline,
 	classifyRefusal,
-	collectRightSideLines,
 	computePaceDelayMs,
 	computeReadinessScore,
 	formatFindings,
