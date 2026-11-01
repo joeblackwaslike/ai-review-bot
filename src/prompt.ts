@@ -63,7 +63,12 @@ export const MAX_REASON_CHARS = 300;
 
 /** Wraps text a person wrote (PR title, body, maintainer replies) so the model treats it as data. A literal closing tag inside the text is removed so it cannot end the fence early. */
 export function fenceUntrusted(text: string): string {
-	return `<untrusted_pr_text>${text.replace(/<\/untrusted_pr_text>/gi, "[removed]")}</untrusted_pr_text>`;
+	let safe = text;
+	for (let prev = ""; prev !== safe; ) {
+		prev = safe;
+		safe = safe.replace(/<\/untrusted_pr_text>/gi, "[removed]");
+	}
+	return `<untrusted_pr_text>${safe}</untrusted_pr_text>`;
 }
 
 function clipReason(reason: string): string {
@@ -158,7 +163,7 @@ export function buildUserMessage(context: PromptContext): string {
 				"",
 				"Prior reviews by other AI reviewers on this commit — do not re-report any finding already mentioned below:",
 				"",
-				context.priorBotReviews.join("\n\n---\n\n"),
+				context.priorBotReviews.map(fenceUntrusted).join("\n\n---\n\n"),
 			]
 		: [];
 
