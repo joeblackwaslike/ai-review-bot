@@ -1,6 +1,6 @@
 ---
 epic: ai-review-bot-t0c
-status: approved-plan, pending hardening
+status: approved; prose pass and Codex review pending
 ---
 
 # Design: verified, context-aware reviews (precision + depth)
@@ -209,3 +209,50 @@ Sizes: S ≤ ½ day, M 1–2 days, L 3–5 days.
 ## Critical files
 
 [src/review.ts](src/review.ts), [src/prompt.ts](src/prompt.ts), [src/resolve-threads.ts](src/resolve-threads.ts), [src/ledger/match.ts](src/ledger/match.ts), [src/ledger/suppress.ts](src/ledger/suppress.ts), [src/baseline.ts](src/baseline.ts), [src/improve/qc.ts](src/improve/qc.ts), [src/replay/metrics.ts](src/replay/metrics.ts), [src/router.ts](src/router.ts), `vercel.json`. New: `src/verify.ts`, `src/retraction.ts`, `src/tools/`.
+
+## Tracking
+
+Epic bead: `ai-review-bot-t0c`. Each story below is a child bead; its description points back to this file.
+
+| Story | Bead |
+|---|---|
+| A1 | `ai-review-bot-t0c.1` |
+| A2 | `ai-review-bot-t0c.2` |
+| A3 | `ai-review-bot-t0c.3` |
+| A4 | `ai-review-bot-t0c.4` |
+| A5 | `ai-review-bot-t0c.5` |
+| A6 | `ai-review-bot-t0c.28` |
+| B1 | `ai-review-bot-t0c.6` |
+| B2 | `ai-review-bot-t0c.7` |
+| B3 | `ai-review-bot-t0c.8` |
+| B4 | `ai-review-bot-t0c.9` |
+| B5 | `ai-review-bot-t0c.10` |
+| B6 | `ai-review-bot-t0c.11` |
+| B7 | `ai-review-bot-t0c.29` |
+| B9 | `ai-review-bot-t0c.30` |
+| B10 | `ai-review-bot-t0c.31` |
+| B11 | `ai-review-bot-t0c.32` |
+| B12 | `ai-review-bot-t0c.33` |
+| B13 | `ai-review-bot-t0c.34` |
+| C1 | `ai-review-bot-t0c.12` |
+| C2 | `ai-review-bot-t0c.13` |
+| C3 | `ai-review-bot-t0c.14` |
+| C4 | `ai-review-bot-t0c.35` |
+| C5 | `ai-review-bot-t0c.36` |
+| D1 | `ai-review-bot-t0c.16` |
+| D2 | `ai-review-bot-t0c.37` |
+| D3 | `ai-review-bot-t0c.38` |
+| E1 | `ai-review-bot-t0c.17` |
+| E2 | `ai-review-bot-t0c.20` |
+| E3 | `ai-review-bot-t0c.21` |
+| E4 | `ai-review-bot-t0c.22` |
+| E5 | `ai-review-bot-t0c.24` |
+| E6 | `ai-review-bot-t0c.25` |
+| E7 | `ai-review-bot-t0c.39` |
+| F1 | `ai-review-bot-t0c.26` |
+| F2 | `ai-review-bot-t0c.27` |
+| F3 | `ai-review-bot-t0c.40` |
+| S1 spike | `ai-review-bot-t0c.18` |
+| S2 spike | `ai-review-bot-t0c.23` |
+| S3 spike | `ai-review-bot-t0c.15` |
+| S4 spike | `ai-review-bot-t0c.19` |
