@@ -7976,6 +7976,49 @@ describe("delta scoping without KV", () => {
 			expect(pendingIn(decision?.body)).toEqual(after);
 		});
 
+		it("a first review on input the packer cut does not approve and records every skill pending", async () => {
+			agents();
+			const { octokit } = prOctokit({ reviews: [] });
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				diffBudgetChars: 1,
+			});
+
+			expect(decision?.event).toBe("COMMENT");
+			expect(pendingIn(decision?.body)).toEqual(
+				expect.arrayContaining([...TIER1_SKILLS]),
+			);
+			expect(decision?.body).toContain("Partial review.");
+		});
+
+		it("a first review on complete input still approves with nothing pending", async () => {
+			agents();
+			const { octokit } = prOctokit({ reviews: [] });
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(decision?.event).toBe("APPROVE");
+			expect(pendingIn(decision?.body)).toEqual([]);
+		});
+
+		it("a same-head retry reruns the skills a cut first review left pending", async () => {
+			const seen = agents();
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: withPending([...TIER1_SKILLS], HEAD) }],
+			});
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(decision).not.toBeNull();
+			expect(Object.keys(seen)).toEqual(
+				expect.arrayContaining([...TIER1_SKILLS]),
+			);
+			expect(decision?.event).toBe("APPROVE");
+			expect(pendingIn(decision?.body)).toEqual([]);
+		});
+
 		it("a legacy own review with no agents marker means none pending", async () => {
 			const seen = agents({ [SAST]: finds() });
 			incremental();
@@ -8438,9 +8481,11 @@ describe("delta scoping without KV", () => {
 		const OWED_LINE = "`security-sast` still owes a review of the whole PR";
 
 		it.each([
-			["a forced run", { force: true }],
-			["an incremental round", {}],
-		])("%s with every agent ok but a pending skill left uncleared is partial, not an approval", async (_name, extra) => {
+			// A forced run reviews the whole PR with every skill, so on cut input
+			// every skill stays owed, not only the one already pending.
+			["a forced run", { force: true }, TIER1_SKILLS],
+			["an incremental round", {}, [SAST]],
+		])("%s with every agent ok but a pending skill left uncleared is partial, not an approval", async (_name, extra, owed) => {
 			agents();
 			incremental();
 			const { octokit } = prOctokit({
@@ -8458,8 +8503,12 @@ describe("delta scoping without KV", () => {
 
 			expect(decision?.event).toBe("COMMENT");
 			expect(readinessOf(decision?.body)).toBe(3);
-			expect(decision?.body).toContain(OWED_LINE);
-			expect(pendingIn(decision?.body)).toEqual([SAST]);
+			expect(decision?.body).toContain(
+				owed.length === 1 ? OWED_LINE : "still owe a review of the whole PR",
+			);
+			expect([...(pendingIn(decision?.body) ?? [])].sort()).toEqual(
+				[...owed].sort(),
+			);
 		});
 
 		it.each([

@@ -2483,7 +2483,9 @@ export async function buildReview(
 		.map((a) => toRecord(a.skill, a.attempt, a.outcome));
 	// A pending skill clears only on an ok run over the whole PR with nothing
 	// missing, truncated or omitted by the diff packer. Pending afterwards: what was pending and did not
-	// clear (run or not), plus every skill that ran this round and did not end ok.
+	// clear (run or not), plus every skill that ran this round and did not end
+	// ok, plus every whole-PR skill that ran ok on cut input, so the round
+	// cannot approve and the next push or same-head retry reruns it.
 	const inputComplete = wholePrInputComplete(
 		files,
 		context.changedFiles,
@@ -2498,6 +2500,7 @@ export async function buildReview(
 		...new Set([
 			...priorPending.filter((s) => !cleared.includes(s)),
 			...ranNames.filter((_, i) => outcomes[i]?.status !== "ok"),
+			...(inputComplete ? [] : ranNames.filter((n) => wholePrFor(n))),
 		]),
 	];
 	if (priorPending.length > 0 || pending.length > 0) {
