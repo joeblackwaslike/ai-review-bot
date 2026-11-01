@@ -63,7 +63,8 @@ describe("classifyReplies", () => {
 		it("acknowledges an agreeing reply that promises a fix", () => {
 			expect(status("good catch, will fix")).toBe("acknowledged");
 			expect(status("You're right, I'll fix this")).toBe("acknowledged");
-			expect(status("agreed, fixing")).toBe("acknowledged");
+			expect(status("agreed \u2014 will address")).toBe("acknowledged");
+			expect(status("You're right, I'll fix this.")).toBe("acknowledged");
 		});
 
 		it("lets a fix commit, a deferral or a rejection win", () => {
@@ -86,6 +87,16 @@ describe("classifyReplies", () => {
 			expect(status("agreed, but not fixing this")).toBeNull();
 			expect(status("agreed, we won't be fixing it")).toBeNull();
 			expect(status("will fix")).toBeNull();
+		});
+
+		it("does not acknowledge a disagreement that borrows agreeing words", () => {
+			expect(status("makes sense, but fixing this would break X")).toBeNull();
+			expect(status("agreed, we depend on it")).toBeNull();
+			expect(status("fair point, I don't think I'll fix it")).toBeNull();
+			expect(status("we agreed earlier that I'll fix the rest")).toBeNull();
+			expect(
+				status("> good catch, will fix\n\nThat is not a regression"),
+			).toBeNull();
 		});
 
 		it("ignores a reply from a non-decider", () => {
