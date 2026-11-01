@@ -1,5 +1,5 @@
 const HUNK_HEADER = /@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
-const NUMBER_WIDTH = 5;
+const NUMBER_WIDTH = 4;
 
 interface WalkedLine {
 	raw: string;
@@ -41,14 +41,16 @@ export function rightSideText(patch: string): Map<number, string> {
 	return text;
 }
 
-/** Prefix each patch line with its right-side number; deletions, `\` lines
- * and any trailing marker get a blank margin, and `@@` headers are unchanged. */
+/** Prefix each patch line with its right-side number and `|`. Deletions get a
+ * blank margin; `@@` headers, `\` lines and the truncation marker stay
+ * unprefixed, which no numbered line can be confused with. */
 export function numberPatchLines(patch: string): string {
 	return walkPatch(patch)
 		.map(({ raw, right }) => {
-			if (raw.startsWith("@@")) return raw;
-			const margin = right === null ? "" : String(right);
-			return `${margin.padStart(NUMBER_WIDTH)} | ${raw}`;
+			if (right !== null)
+				return `${String(right).padStart(NUMBER_WIDTH)}|${raw}`;
+			if (raw.startsWith("-")) return `${"".padStart(NUMBER_WIDTH)}|${raw}`;
+			return raw;
 		})
 		.join("\n");
 }

@@ -532,9 +532,9 @@ describe("numbered right-side diff lines", () => {
 
 	it("prints the right-side number beside each line in the user message", () => {
 		const msg = buildUserMessage(context);
-		expect(msg).toContain("   40 |  ctx");
-		expect(msg).toContain("      | -old");
-		expect(msg).toContain("   41 | +new");
+		expect(msg).toContain("  40| ctx");
+		expect(msg).toContain("    |-old");
+		expect(msg).toContain("  41|+new");
 	});
 
 	it("tells the agent to use the printed number, not to count from @@", () => {

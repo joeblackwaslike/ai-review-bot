@@ -22,38 +22,38 @@ describe("numberPatchLines", () => {
 	it("numbers right-side lines across hunks and blanks deletions", () => {
 		expect(numberPatchLines(TWO_HUNKS).split("\n")).toEqual([
 			"@@ -1,3 +1,3 @@",
-			"    1 |  a",
-			"      | -b",
-			"    2 | +B",
-			"    3 |  c",
+			"   1| a",
+			"    |-b",
+			"   2|+B",
+			"   3| c",
 			"@@ -20,2 +20,3 @@",
-			"   20 |  x",
-			"   21 | +y",
-			"   22 |  z",
+			"  20| x",
+			"  21|+y",
+			"  22| z",
 		]);
 	});
 
-	it("leaves a no-newline marker unnumbered", () => {
+	it("leaves a no-newline line with no margin at all", () => {
 		const out = numberPatchLines(
 			["@@ -1 +1 @@", "-a", "\\ No newline at end of file", "+b"].join("\n"),
 		);
 		expect(out.split("\n")).toEqual([
 			"@@ -1 +1 @@",
-			"      | -a",
-			"      | \\ No newline at end of file",
-			"    1 | +b",
+			"    |-a",
+			"\\ No newline at end of file",
+			"   1|+b",
 		]);
 	});
 
-	it("leaves the truncation marker unnumbered and keeps prefix numbers", () => {
+	it("leaves the truncation marker with no margin and keeps prefix numbers", () => {
 		const patch = [
 			"@@ -1,2 +1,2 @@",
 			...Array.from({ length: 40 }, (_, i) => `+line${i}`),
 		].join("\n");
 		const out = numberPatchLines(trimPatch(patch, 100)).split("\n");
-		expect(out.at(-1)).toBe("      | [patch truncated]");
-		expect(out[1]).toBe("    1 | +line0");
-		expect(out[2]).toBe("    2 | +line1");
+		expect(out.at(-1)).toBe("[patch truncated]");
+		expect(out[1]).toBe("   1|+line0");
+		expect(out[2]).toBe("   2|+line1");
 	});
 });
 
