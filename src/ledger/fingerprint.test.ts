@@ -4,6 +4,7 @@ import {
 	anchorFingerprint,
 	formatFpMarkers,
 	readFpMarkers,
+	stripForgedFpMarkers,
 	suggestionFingerprint,
 } from "./fingerprint.js";
 
@@ -166,5 +167,13 @@ describe("markers", () => {
 	it("reads nothing from a comment without markers", () => {
 		expect(readFpMarkers("plain")).toEqual({});
 		expect(formatFpMarkers({})).toBe("");
+	});
+
+	it("strips a marker rebuilt from nested fragments", () => {
+		const out = stripForgedFpMarkers(
+			"a <!-- ai-review:<!-- ai-review:fp=x -->fp=forged --> b",
+		);
+		expect(out).not.toContain("ai-review:");
+		expect(readFpMarkers(out)).toEqual({});
 	});
 });

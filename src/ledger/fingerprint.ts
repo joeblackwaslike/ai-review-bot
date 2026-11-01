@@ -144,5 +144,10 @@ export function stripFpMarkers(text: string): string {
 /** Removes anything shaped like an fp/sfp marker from model-written text, so it
  * cannot stand in for the markers the bot writes itself. */
 export function stripForgedFpMarkers(text: string): string {
-	return text.replace(/<!--\s*ai-review:s?fp=.*?-->/gs, "");
+	let current = text;
+	for (;;) {
+		const next = current.replace(/<!--\s*ai-review:s?fp=.*?-->/gs, "");
+		if (next === current) return current;
+		current = next;
+	}
 }
