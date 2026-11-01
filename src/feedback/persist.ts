@@ -44,10 +44,18 @@ export async function persistPostedComments(opts: {
 	let count = 0;
 	for (const c of comments) {
 		if (c.pull_request_review_id !== opts.reviewId) continue;
+		const title = claimTitle(c.body);
 		const prov = opts.provenance.get(
-			commentKey({ path: c.path, line: c.line, title: claimTitle(c.body) }),
+			commentKey({ path: c.path, line: c.line, title }),
 		);
-		if (!prov) continue;
+		if (!prov) {
+			console.warn("posted comment has no provenance entry", {
+				path: c.path,
+				line: c.line,
+				title,
+			});
+			continue;
+		}
 		await recordPostedComment(
 			opts.kv,
 			{

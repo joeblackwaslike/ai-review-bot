@@ -1391,6 +1391,21 @@ describe("buildReview comment provenance", () => {
 		expect(second?.skills).toEqual(["silent-failure-hunter.md"]);
 	});
 
+	it("credits both skills when same-line restatements with different titles collapse", async () => {
+		const decision = await buildReviewWithTwoAgentsFlagging("src/x.ts", 10, {
+			titles: [
+				"Missing null check on user input",
+				"Missing null check on user input value",
+			],
+		});
+		const prov = [...(decision?.commentProvenance?.values() ?? [])];
+		expect(prov).toHaveLength(1);
+		expect(prov[0].skills.sort()).toEqual([
+			"code-reviewer.md",
+			"silent-failure-hunter.md",
+		]);
+	});
+
 	it("omits provenance when feedbackEnabled is false", async () => {
 		const decision = await buildReviewWithTwoAgentsFlagging("src/x.ts", 10, {
 			feedbackEnabled: false,
@@ -2754,6 +2769,45 @@ describe("mergeReviewsDetailed — key collision", () => {
 			"Bug A",
 		]);
 		for (const c of review.inline_comments) expect(c.body).not.toContain("---");
+	});
+
+	it.each([
+		["P3 then P1", "P3", "P1"],
+		["P1 then P3", "P1", "P1"],
+	])("keeps the higher severity when the same claim collapses (%s)", (_n, first, _second) => {
+		const order = first === "P3" ? ["P3", "P1"] : ["P1", "P3"];
+		const reviews = order.map((severity) =>
+			buildModelReview({
+				event: "COMMENT",
+				inline_comments: [
+					buildInlineComment({
+						path: "src/a.ts",
+						line: 1,
+						title: "Same title",
+						severity: severity as "P1" | "P3",
+					}),
+				],
+			}),
+		);
+		const { review } = mergeReviewsDetailed(reviews);
+		expect(review.inline_comments.map((c) => c.severity)).toEqual(["P1"]);
+	});
+
+	it("aliases a restatement with a different title to its survivor", () => {
+		const mk = (title: string, body: string) =>
+			buildModelReview({
+				event: "COMMENT",
+				inline_comments: [
+					buildInlineComment({ path: "src/a.ts", line: 1, title, body }),
+				],
+			});
+		const a = mk("Missing null check on user input", "short");
+		const b = mk("Missing null check on user input value", "a longer body");
+		const { review, inlineAliases } = mergeReviewsDetailed([a, b]);
+		expect(review.inline_comments).toHaveLength(1);
+		expect(inlineAliases.get(commentKey(a.inline_comments[0]))).toBe(
+			commentKey(b.inline_comments[0]),
+		);
 	});
 
 	it("deduplicates near-duplicate bodies at the same path:line", () => {

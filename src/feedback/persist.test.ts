@@ -117,4 +117,37 @@ describe("persistPostedComments", () => {
 		expect(byId[200]?.skills).toEqual(["b.md"]);
 		expect(byId[201]?.skills).toEqual(["a.md"]);
 	});
+
+	it("warns with path, line and title for a comment that has no provenance", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const octokit = {
+			paginate: vi.fn(async () => [
+				{
+					id: 300,
+					path: "src/q.ts",
+					line: 4,
+					body: "**Orphan**\n\nb",
+					pull_request_review_id: 55,
+				},
+			]),
+		};
+		await persistPostedComments({
+			kv: createFakeKv(),
+			octokit,
+			owner: "o",
+			repo: "r",
+			pr: 7,
+			reviewId: 55,
+			headSha: "sha",
+			installationId: 5,
+			provider: "anthropic",
+			provenance: new Map(),
+			nowMs: NOW,
+		});
+		expect(warn).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({ path: "src/q.ts", line: 4, title: "Orphan" }),
+		);
+		warn.mockRestore();
+	});
 });

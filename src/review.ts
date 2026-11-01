@@ -574,6 +574,22 @@ export interface MergeOutcome {
 	collapsed: number;
 }
 
+const INLINE_SEVERITY_RANK: Record<string, number> = {
+	P0: 4,
+	P1: 3,
+	P2: 2,
+	P3: 1,
+};
+
+/** Whether `a` should replace `b` as the representative of one claim: higher
+ * severity first, then the longer body. */
+function outranks(a: ModelInlineComment, b: ModelInlineComment): boolean {
+	const diff =
+		(INLINE_SEVERITY_RANK[a.severity] ?? 0) -
+		(INLINE_SEVERITY_RANK[b.severity] ?? 0);
+	return diff !== 0 ? diff > 0 : a.body.length > b.body.length;
+}
+
 export function mergeReviews(
 	agentResults: ModelReview[],
 	resolved: Set<string> = new Set(),
@@ -605,12 +621,7 @@ export function mergeReviewsDetailed(
 
 	// Distinct claims at one path:line stay separate comments; only restatements
 	// (isSameClaim) at the exact same location fold into one.
-	const INLINE_SEVERITY_RANK: Record<string, number> = {
-		P0: 4,
-		P1: 3,
-		P2: 2,
-		P3: 1,
-	};
+	const inlineAliases = new Map<string, string>();
 	const commentGroups = new Map<string, ModelInlineComment[]>();
 	for (const review of agentResults) {
 		for (const comment of review.inline_comments) {
@@ -619,13 +630,26 @@ export function mergeReviewsDetailed(
 			const group = commentGroups.get(key);
 			if (!group) {
 				commentGroups.set(key, [comment]);
-			} else if (
-				!group.some(
-					(c) =>
-						commentKey(c) === commentKey(comment) || isSameClaim(c, comment),
-				)
-			) {
+				continue;
+			}
+			const index = group.findIndex(
+				(c) => commentKey(c) === commentKey(comment) || isSameClaim(c, comment),
+			);
+			if (index === -1) {
 				group.push(comment);
+				continue;
+			}
+			const existing = group[index];
+			const incomingWins = outranks(comment, existing);
+			const survivor = incomingWins ? comment : existing;
+			const loser = incomingWins ? existing : comment;
+			group[index] = survivor;
+			if (commentKey(loser) !== commentKey(survivor)) {
+				const survivorKey = commentKey(survivor);
+				for (const [from, into] of inlineAliases) {
+					if (into === commentKey(loser)) inlineAliases.set(from, survivorKey);
+				}
+				inlineAliases.set(commentKey(loser), survivorKey);
 			}
 		}
 	}
@@ -644,7 +668,6 @@ export function mergeReviewsDetailed(
 	let collapsed = 0;
 	let inline_comments = anchored;
 	let merged_general = general_findings;
-	const inlineAliases = new Map<string, string>();
 	if (options.dedupeNearDuplicateClaims) {
 		const inlineResult = dedupeClaims(anchored);
 		for (const { from, into } of inlineResult.merges) {
@@ -2512,6 +2535,13 @@ export async function buildReview(
 				line: rc.line,
 				title: claimTitle(rc.body),
 			});
+			if (!skillsByKey.has(key)) {
+				console.warn("posted comment has no provenance entry", {
+					path: rc.path,
+					line: rc.line,
+					title: claimTitle(rc.body),
+				});
+			}
 			commentProvenance.set(key, {
 				skills: [...(skillsByKey.get(key) ?? [])],
 				title: titleByKey.get(key) ?? "",

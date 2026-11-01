@@ -57,14 +57,18 @@ export function pairWithProvenance(
 	const paired = [];
 	for (const comment of comments) {
 		if (comment.pull_request_review_id !== reviewId) continue;
+		const title = claimTitle(comment.body ?? "");
 		const prov = provenance.get(
-			commentKey({
+			commentKey({ path: comment.path, line: comment.line, title }),
+		);
+		if (!prov) {
+			console.warn("posted comment has no provenance entry", {
 				path: comment.path,
 				line: comment.line,
-				title: claimTitle(comment.body ?? ""),
-			}),
-		);
-		if (!prov) continue;
+				title,
+			});
+			continue;
+		}
 		paired.push({ comment, ...prov });
 	}
 	return paired;
