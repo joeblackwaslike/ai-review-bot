@@ -230,6 +230,13 @@ describe("collectRightSideLines", () => {
 // buildReviewComments — filtering logic
 // ---------------------------------------------------------------------------
 
+const LONG_PATCH = [
+	"@@ -1,2 +1,3 @@",
+	" const firstValue = readConfiguration(options);",
+	"+const secondValue = parseConfiguration(firstValue);",
+	" const thirdValue = applyConfiguration(secondValue);",
+].join("\n");
+
 describe("buildReviewComments", () => {
 	it.each([
 		["OFF_DIFF_PATH", { path: "src/unknown.ts", line: 2, start_line: null }],
@@ -250,15 +257,38 @@ describe("buildReviewComments", () => {
 
 	const files = [buildPullFile("src/file.ts", SIMPLE_PATCH)];
 
+	it("omits the suggestion fingerprint for trivial suggestion code", () => {
+		const [comment] = buildReviewComments(
+			[buildPullFile("src/file.ts", LONG_PATCH)],
+			[
+				buildInlineComment({
+					line: 2,
+					start_line: null,
+					suggestion: "return null;",
+				}),
+			],
+		);
+		expect(comment.body).toContain("ai-review:fp=");
+		expect(comment.body).not.toContain("ai-review:sfp=");
+	});
+
 	it("writes the anchor and suggestion fingerprints into the posted body", () => {
-		const [comment] = buildReviewComments(files, [
-			buildInlineComment({ line: 2, start_line: null, suggestion: "fixed();" }),
-		]);
+		const [comment] = buildReviewComments(
+			[buildPullFile("src/file.ts", LONG_PATCH)],
+			[
+				buildInlineComment({
+					line: 2,
+					start_line: null,
+					suggestion:
+						"const secondValue = parseConfiguration(firstValue, strict);",
+				}),
+			],
+		);
 		const fp = anchorFingerprint({
 			category: buildInlineComment({}).category,
 			path: "src/file.ts",
 			line: 2,
-			patch: SIMPLE_PATCH,
+			patch: LONG_PATCH,
 		});
 		expect(comment.body).toContain(`<!-- ai-review:fp=${fp} -->`);
 		expect(comment.body).toMatch(/<!-- ai-review:sfp=[0-9a-f]{16} -->\s*$/);
@@ -4522,6 +4552,7 @@ describe("buildReview ledger suppression", () => {
 			reviews?: unknown[];
 			comments?: unknown[];
 			threadNodes?: unknown[];
+			patch?: string;
 		} = {},
 	) {
 		const request = vi
@@ -4584,7 +4615,7 @@ describe("buildReview ledger suppression", () => {
 				.mockImplementation(async (route: string) =>
 					route.endsWith("/reviews")
 						? allReviews
-						: [buildPullFile("src/review.ts", SIMPLE_PATCH)],
+						: [buildPullFile("src/review.ts", o.patch ?? SIMPLE_PATCH)],
 				),
 		};
 	}
@@ -4676,7 +4707,7 @@ describe("buildReview ledger suppression", () => {
 			category: repeat.category,
 			path: "src/review.ts",
 			line: 2,
-			patch: SIMPLE_PATCH,
+			patch: LONG_PATCH,
 		});
 		const body = `**P1** **Cache entries never expire after the session ends**\n\nDetails.\n\n<!-- ai-review:fp=${fp} -->`;
 		const farComment = { ...ownComment, line: 100, body };
@@ -4705,7 +4736,11 @@ describe("buildReview ledger suppression", () => {
 		);
 
 		const result = await buildReview({
-			octokit: ledgerOctokit({ comments: [farComment], threadNodes }),
+			octokit: ledgerOctokit({
+				comments: [farComment],
+				threadNodes,
+				patch: LONG_PATCH,
+			}),
 			...baseContext,
 		});
 

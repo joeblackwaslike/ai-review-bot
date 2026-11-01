@@ -1167,12 +1167,10 @@ function commentFingerprints(
 				patch,
 			})
 		: null;
-	return {
-		...(fp ? { fp } : {}),
-		...(comment.suggestion
-			? { sfp: suggestionFingerprint(comment.suggestion) }
-			: {}),
-	};
+	const sfp = comment.suggestion
+		? suggestionFingerprint(comment.suggestion)
+		: null;
+	return { ...(fp ? { fp } : {}), ...(sfp ? { sfp } : {}) };
 }
 
 /** Tags each comment with its fingerprints, computed against the full PR patch. */

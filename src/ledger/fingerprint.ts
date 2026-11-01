@@ -3,6 +3,8 @@ import { rightSideText } from "../diff-lines.js";
 
 const WINDOW_CHARS = 100;
 const HASH_CHARS = 16;
+const MIN_ANCHOR_CHARS = 12;
+const MIN_SUGGESTION_CHARS = 24;
 const FP_MARKER = /<!--\s*ai-review:fp=(.+?)\s*-->/;
 const SFP_MARKER = /<!--\s*ai-review:sfp=(.+?)\s*-->/;
 
@@ -37,7 +39,9 @@ export function anchorFingerprint(input: {
 	const text = rightSideText(input.patch);
 	if (!text.has(input.line)) return null;
 	const lines = [...text.keys()].sort((a, b) => a - b);
-	const target = hash(windowAt(text, lines, lines.indexOf(input.line)));
+	const window = windowAt(text, lines, lines.indexOf(input.line));
+	if (window.length < MIN_ANCHOR_CHARS) return null;
+	const target = hash(window);
 	let n = 0;
 	for (let i = 0; i < lines.length && lines[i] < input.line; i++) {
 		if (hash(windowAt(text, lines, i)) === target) n += 1;
@@ -45,9 +49,11 @@ export function anchorFingerprint(input: {
 	return `${input.category}|${input.path}|${target}.${n}`;
 }
 
-/** Hash of a suggestion's whitespace-stripped replacement code. */
-export function suggestionFingerprint(code: string): string {
-	return hash(stripWhitespace(code));
+/** Hash of a suggestion's whitespace-stripped replacement code; null under 24
+ * characters, where equal code (`return null;`) says nothing about the claim. */
+export function suggestionFingerprint(code: string): string | null {
+	const stripped = stripWhitespace(code);
+	return stripped.length < MIN_SUGGESTION_CHARS ? null : hash(stripped);
 }
 
 /** HTML-comment marker lines for a posted inline comment; empty when neither is set. */

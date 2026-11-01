@@ -16,12 +16,12 @@ describe("anchorFingerprint", () => {
 	it("is stable under reformatting and a line-number shift", () => {
 		const a = anchorFingerprint({
 			...base,
-			line: 12,
+			line: 11,
 			patch: patch(10, ["x();", "const total = items.map(i => i.n);", "y();"]),
 		});
 		const b = anchorFingerprint({
 			...base,
-			line: 52,
+			line: 51,
 			patch: patch(50, [
 				"x();",
 				"  const  total = items.map( i => i.n );",
@@ -36,18 +36,18 @@ describe("anchorFingerprint", () => {
 		const a = anchorFingerprint({
 			...base,
 			line: 1,
-			patch: patch(1, ["foo();"]),
+			patch: patch(1, ["foo(argument);"]),
 		});
 		const b = anchorFingerprint({
 			...base,
 			line: 1,
-			patch: patch(1, ["bar();"]),
+			patch: patch(1, ["bar(argument);"]),
 		});
 		expect(a).not.toBe(b);
 	});
 
 	it("separates two identical lines with an occurrence suffix", () => {
-		const p = `${patch(1, ["dup();"])}\n${patch(20, ["dup();"])}`;
+		const p = `${patch(1, ["duplicate(argument);"])}\n${patch(20, ["duplicate(argument);"])}`;
 		const first = anchorFingerprint({ ...base, line: 1, patch: p });
 		const second = anchorFingerprint({ ...base, line: 20, patch: p });
 		expect(first).toMatch(/\.0$/);
@@ -56,7 +56,11 @@ describe("anchorFingerprint", () => {
 
 	it("is null for a line not on the right side", () => {
 		expect(
-			anchorFingerprint({ ...base, line: 99, patch: patch(1, ["a();"]) }),
+			anchorFingerprint({
+				...base,
+				line: 99,
+				patch: patch(1, ["callSomething();"]),
+			}),
 		).toBeNull();
 	});
 
@@ -64,19 +68,36 @@ describe("anchorFingerprint", () => {
 		const fp = anchorFingerprint({
 			...base,
 			line: 1,
-			patch: patch(1, ["a();"]),
+			patch: patch(1, ["callSomething();"]),
 		});
 		expect(fp?.startsWith("bug|src/a.ts|")).toBe(true);
 	});
 });
 
+describe("trivial code", () => {
+	it("gives an anchor window under 12 characters no fingerprint", () => {
+		expect(
+			anchorFingerprint({
+				...base,
+				line: 1,
+				patch: patch(1, ["}", "return;"]),
+			}),
+		).toBeNull();
+	});
+
+	it("gives a suggestion under 24 characters no fingerprint", () => {
+		expect(suggestionFingerprint("return null;")).toBeNull();
+		expect(suggestionFingerprint("await x();")).toBeNull();
+	});
+});
+
 describe("suggestionFingerprint", () => {
 	it("ignores whitespace and differs for different code", () => {
-		expect(suggestionFingerprint("a  = 1;")).toBe(
-			suggestionFingerprint("a=1;\n"),
+		expect(suggestionFingerprint("const total  = compute(items);")).toBe(
+			suggestionFingerprint("const total=compute(items);\n"),
 		);
-		expect(suggestionFingerprint("a = 1;")).not.toBe(
-			suggestionFingerprint("a = 2;"),
+		expect(suggestionFingerprint("const total = compute(items);")).not.toBe(
+			suggestionFingerprint("const total = compute(other);"),
 		);
 	});
 });
