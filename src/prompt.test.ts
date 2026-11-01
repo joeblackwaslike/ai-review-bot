@@ -269,6 +269,22 @@ describe("strict evidence rules", () => {
 	});
 });
 
+describe("agent system prompt severity vocabulary", () => {
+	it.each([
+		true,
+		false,
+	])("names only P0-P3 severities (strictEvidenceRules=%s)", (strictEvidenceRules) => {
+		const prompt = buildAgentSystemPrompt("code-reviewer.md", "", {
+			strictEvidenceRules,
+		});
+		for (const word of ["high", "medium", "low"]) {
+			expect(prompt).not.toContain(`\`${word}\``);
+		}
+		expect(prompt).toContain("P0");
+		expect(prompt).toContain("P3");
+	});
+});
+
 describe("isGeneratedFile", () => {
 	it.each([
 		"package-lock.json",
