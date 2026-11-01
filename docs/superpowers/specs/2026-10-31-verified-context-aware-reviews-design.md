@@ -1,6 +1,6 @@
 ---
 epic: ai-review-bot-t0c
-status: approved; prose pass done, Codex review pending
+status: approved; prose pass and Codex review done, Phase A plan pending
 ---
 
 # Design: verified, context-aware reviews (precision + depth)
@@ -128,7 +128,7 @@ Self-scored 1–10 gates, publishing unvetted suggestions on reflection failure,
 ## Global constraints
 
 - `src/auth.ts` (subscription/OAuth) is never imported from webhook, verifier or tools modules. They take resolved auth from the caller, and hosted uses API keys only.
-- Budget split under 800s: about 80s for fetch, triage and sandbox boot in parallel; agents 500s; verifier 100s; summary and post 120s. Never let agent budget plus verifier exceed about 650s.
+- Budget under 800s: one invocation deadline with a reserve. About 60s for fetch, triage and sandbox boot in parallel; agents 450s; verifier 90s with bounded concurrency; summary and post 100s including posting retries; 100s reserve. E1 ships before any hosted verification.
 - Every behavior change gets a failing test first (TDD). Every precision change gets a replay metric before/after. Fixture claims are small-sample (about 234 claims, about 71 rejected), so results are directional.
 - The two-independent-opinions pitch holds: finders stay independent, and the verifier can only drop findings, never add or rewrite them. The review body shows "N dropped by the <other vendor> verifier". `VERIFY_ENABLED` toggles it per bot.
 
@@ -142,24 +142,24 @@ Sizes: S ≤ ½ day, M 1–2 days, L 3–5 days.
   - Test first, in a new `src/resolve-threads.test.ts`: a human `**nit:**` thread gets resolved today, and so does a qualifying thread in an untouched file on a delta round.
   - Fix: add `author { login }` and `databaseId` to `THREADS_QUERY`, and require the author to be the bot's login. Resolve only threads whose comment id is in the ids triage/`revalidateFindings` marked resolved ([src/triage.ts](src/triage.ts)). Delete the `validLinesByPath` heuristic.
   - AC: human threads are never resolved; untouched files are never resolved; only triage-resolved ids are resolved.
-- **A2. Severity wording** (S). Replace `high/medium/low` in the strict-evidence block with P0–P3. AC: a snapshot test shows no `high`/`medium`/`low` as severity words.
+- **A2. Severity wording** (S). Replace `high/medium/low` with P0–P3 in both places: the strict-evidence block and the Output Rules line at [src/prompt.ts:302](src/prompt.ts#L302). AC: a snapshot test of the full agent prompt, with strict evidence on and off, has no `high`/`medium`/`low` as severity words.
 - **A3. Fence untrusted text** (S). In `buildUserMessage` ([src/prompt.ts:198](src/prompt.ts#L198)) and the prior-reply text ([src/prompt.ts:62](src/prompt.ts#L62)), wrap the content in `<untrusted_pr_text>` and add a system rule telling the model to treat it as data. AC: an injection-string test.
-- **A4. Partial rounds don't advance the sha** (M). Add an `ai-review:complete=0` marker in `formatReviewBody` ([src/review.ts:1114](src/review.ts#L1114)), honored by `deriveBaseline` ([src/baseline.ts](src/baseline.ts)). Truncated input marks the skill pending. Mirrors [src/gate/round.ts:283](src/gate/round.ts#L283). AC: a deadline abort makes the next round re-review the full range, with no double posting (the ledger catches it).
+- **A4. Partial rounds don't advance the sha** (M). Add an `ai-review:complete=0` marker in `formatReviewBody` ([src/review.ts:1114](src/review.ts#L1114)), honored by `deriveBaseline` ([src/baseline.ts](src/baseline.ts)). Truncated input marks the skill pending. Mirrors [src/gate/round.ts:283](src/gate/round.ts#L283). The duplicate-run check at [src/review.ts:1479](src/review.ts#L1479) currently treats any own review naming the head sha as done, so it must become completeness-aware, and the story defines when a retry is scheduled, how the claim is released, and which complete review supplies the baseline. AC: a deadline abort makes the next round re-review the full range at the same sha, with no double posting (the ledger catches it).
 - **A5. Doc fix** (S). Correct the CLAUDE.md line "user message (diff) is not cached".
 
 ### Phase B: deterministic precision
 
-- **B1. Per-finding fingerprint** (M). Add a hidden `ai-review:fp=<category|path|rolling hash of the whitespace-stripped ~100-char anchor-code window, with an occurrence suffix (CodeQL primaryLocationLineHash style)>` in `buildCommentBody`, plus a second marker hashing the suggestion code (OR-match). Make an exact-fingerprint match rule 0 in `findSettledMatch`/`findOpenMatch` ([src/ledger/match.ts](src/ledger/match.ts)). AC: a reworded finding with the same fingerprint matches, and the existing ledger tests still pass.
+- **B1. Per-finding fingerprint** (M). Add a hidden `ai-review:fp=<category|path|rolling hash of the whitespace-stripped ~100-char anchor-code window, with an occurrence suffix (CodeQL primaryLocationLineHash style)>` in `buildCommentBody`, plus a second marker hashing the suggestion code (OR-match). The fingerprint identifies a location, not a defect, so it only generates match candidates in `findSettledMatch`/`findOpenMatch` ([src/ledger/match.ts](src/ledger/match.ts)); suppression still requires claim equivalence. AC: a reworded finding with the same fingerprint and the same claim matches; negative tests show two different defects at one anchor, and two findings with identical suggestion code, do not match; existing ledger tests pass.
 - **B2. Stop folding at the same path:line** (S, after B1). `mergeReviewsDetailed` posts distinct claims separately; `isSameClaim` still collapses restatements. AC: two claims produce two comments with two provenance entries.
 - **B3. Numbered diff lines** (M). `serializeFiles` prints right-side numbers, reusing the `collectRightSideLines` walk, and the "count from @@" rule ([src/prompt.ts:299](src/prompt.ts#L299)) is replaced. AC: anchor-adjust log rate drops by 80% or more on `replay --live`, with token growth of 15% or less.
 - **B4. Drop instead of re-anchoring** (S, after B3). Delete `nearestValidLine` and the ±5 branch in `sanitizeInlineComments`. AC: an off-diff comment is dropped and logged with a reason.
 - **B5. Retraction filter in the posting path** (S). Move the strict families from [src/replay/retraction-rule.ts](src/replay/retraction-rule.ts) to `src/retraction.ts`, applied to P2/P3 suppressible findings after suppression. AC: the filter-margin report still shows 5/15 removed with 0 false drops.
-- **B6. Suppress restatements of open entries** (M, after B1). `suppressOpenRestatements` sits beside `suppressSettled` ([src/ledger/suppress.ts](src/ledger/suppress.ts)) and reuses `findOpenMatch`. Suppressed findings **still count toward the verdict**. AC: replay `restated-open` drops to about 0, and a verdict test passes.
+- **B6. Suppress restatements of open entries** (M, after B1). `suppressOpenRestatements` sits beside `suppressSettled` ([src/ledger/suppress.ts](src/ledger/suppress.ts)) and reuses `findOpenMatch`. Suppressed findings **still count toward the verdict**, which needs a durable link: the matched ledger entry ids are persisted in carry metadata, because baseline reconstruction only reads inline entries from the source review's round ([src/baseline.ts:54](src/baseline.ts#L54)). AC: replay `restated-open` drops to about 0; tests cover a repeat-only round, a restart, a later resolution, and a later clean approval.
 
 ### Phase C: measurement (before the expensive work)
 
 - **C1. Persist discard reasons** (M). `SUPPRESSED_SETTLED | SUPPRESSED_OPEN | RETRACTION | OFF_DIFF | CAP | DISCARDED_BY_VERIFY` go to [src/agent-log.ts](src/agent-log.ts) and a nullable column in [src/improve/db/schema.ts](src/improve/db/schema.ts). AC: a migration and a repo test.
-- **C2. Replay additions** (M). A join-rate metric in [src/replay/metrics.ts](src/replay/metrics.ts); 2 or more held-out PRs and 2 or more clean-PR fixtures recorded with `--record`; verifier kept-real/dropped-real per vendor pair. AC: `computeMetrics` reports them, and clean fixtures expect 0 posted findings.
+- **C2. Replay additions** (M). First extend the harness to record candidate and post-filter traces, token usage, skill attribution, and adjudicated new findings, because today's live output holds only matched historical claims and unlabeled new ones, so B3, C3 and E2 criteria can't be measured without it. A join-rate metric in [src/replay/metrics.ts](src/replay/metrics.ts); 2 or more held-out PRs and 2 or more clean-PR fixtures recorded with `--record`; verifier kept-real/dropped-real per vendor pair. AC: `computeMetrics` reports them, and clean fixtures expect 0 posted findings.
 - **C3. Per-skill rates and leave-one-lens-out** (M, after B1–B2). Corpus rows written after B2 only (backfilled `skills` is empty). Leave-one-lens-out runs through cost-capped `replay --live`. Output: a table per skill of rejected, restated and fixed counts.
 
 ### Phase D: cross-vendor verifier
@@ -170,9 +170,10 @@ Sizes: S ≤ ½ day, M 1–2 days, L 3–5 days.
   - `generateObject` with schema `{ refuted: boolean, reason: enum, rationale }`. The verdict comes first. The reason enum is: wrong root cause, impossible path, pure style, generic "missing X", contradicts a settled ledger entry.
   - Input: the full head file (contents API, or the checkout locally) plus related ledger entries.
   - `confidence` decides how deep to verify.
-  - Fail open for P0/P1 and closed for P2/P3. A verifier outage marks the round partial (A4) and adds a body notice.
+  - Three outcomes: `refuted`, `verified`, `unverified`. Only `refuted` drops a finding. An outage or missing context yields `unverified`: P0/P1 are posted flagged unverified, P2/P3 are deferred to the next round, the round counts as partial (A4), the body says so, and a clean approval is blocked while any finding is unverified.
+  - Cross-file claims get bounded related-file reads (the E3 tools) and must cite counter-evidence to be refuted; otherwise they stay `unverified`.
   - Rewrite the `judgeSelection` comment in [src/improve/qc.ts](src/improve/qc.ts): QC stays same-provider as a measurement, the verifier is cross-vendor as a filter.
-  - AC (offline): drops at least 40% of confirmed-rejected; 0 confirmed-fixed P0/P1 dropped; at most 5% of fixed P2/P3 dropped.
+  - AC (offline): drops at least 40% of confirmed-rejected; 0 confirmed-fixed P0/P1 dropped; at most 5% of fixed P2/P3 dropped. Order: D1 ships after E1 and E3.
 
 ### Phase E: context (Pro needed for E1)
 
@@ -183,7 +184,7 @@ Sizes: S ≤ ½ day, M 1–2 days, L 3–5 days.
 - **E3. GitHub lexical backend** (M). Contents API plus code search at the head SHA. It doubles as the fallback, so build it first.
 - **E4. Local Serena backend** (M). Add `@ai-sdk/mcp`; stdio `serena start-mcp-server --project <checkout>` in a read-only mode. `watch` creates a worktree at the PR head.
 - **Spike S2.** Time snapshot boot plus shallow clone plus Serena/LSP indexing on two real repos. Target: under 60s.
-- **E5. Hosted Sandbox Serena** (L, after S2 + Pro). Add `@vercel/sandbox`. Boot from a pre-baked snapshot (Serena + language servers), clone with a read-only installation token, start the boot in parallel with the PR fetch, fall back to E3 on any failure. Add a privacy line to the docs: repo code is processed in Vercel compute.
+- **E5. Hosted Sandbox Serena** (L, after S2 + Pro). Add `@vercel/sandbox`. Boot from a pre-baked snapshot (Serena + language servers), clone with a read-only installation token, start the boot in parallel with the PR fetch, fall back to E3 on any failure. Spike S2 also settles the transport and lifecycle (authenticated MCP bridge, teardown), the clone token is removed before indexing, egress is restricted, and repository-controlled LSP and build hooks are disabled. Add a privacy line to the docs: repo code is processed in Vercel compute.
 - **E6. Repo-rules check** (M). Load AGENTS.md/CLAUDE.md from the default branch, fenced. A finding that cites a rule must quote it, and the quote is checked as a substring. AC: a fabricated quote gets the finding dropped.
 
 ### Phase F: decision gates
@@ -191,7 +192,7 @@ Sizes: S ≤ ½ day, M 1–2 days, L 3–5 days.
 - **F1. Restructure decision** (S). Restructure into one defect finder plus non-blocking lenses capped at P2 only if C3 shows lens agents produce at least 50% of rejected findings while contributing less than 20% of fixed ones. Per-role routing in `routeModel` ([src/router.ts:95](src/router.ts#L95)) gets stronger models for the defect and security agents either way, if C3 supports it.
 - **F2. Conditional reworded-repeat adjudicator.** Only if recycling is above 5% after B1 and B6.
 
-**Order:** A (A1–A6) → B (B1–B13) → C (C1–C5) → (S3 → D1–D3) ∥ (S1, S4 → E3 → E2 → E4; S2 + Pro → E5) → E6, E7 → F1–F3. Full story list with dispositions is in "Disposition of every report recommendation" above.
+**Order:** A (A1–A6) → B (B1–B13) → C (C1–C5) → E1, E3 → S3 → D1–D3, in parallel with (S1, S4 → E2 → E4; S2 + Pro → E5) → E6, E7 → F1–F3. Full story list with dispositions is in "Disposition of every report recommendation" above.
 
 ## Execution workflow
 
