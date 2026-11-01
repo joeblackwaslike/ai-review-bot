@@ -2810,6 +2810,65 @@ describe("mergeReviewsDetailed — key collision", () => {
 		);
 	});
 
+	describe("inline alias chains", () => {
+		const T1 = "Missing null check on user input";
+		const T2 = "Missing null check on user input value";
+		const T3 = "Missing null check on user input values";
+		const mk = (title: string, severity: "P1" | "P2" | "P3", line = 1) =>
+			buildModelReview({
+				event: "COMMENT",
+				inline_comments: [
+					buildInlineComment({ path: "src/a.ts", line, title, severity }),
+				],
+			});
+		const keyOf = (title: string, line = 1) =>
+			commentKey({ path: "src/a.ts", line, title });
+		const terminal = (aliases: Map<string, string>, start: string) => {
+			let cur = start;
+			for (let i = 0; i <= aliases.size; i++) {
+				const next = aliases.get(cur);
+				if (next === undefined) return cur;
+				cur = next;
+			}
+			throw new Error(`alias cycle from ${start}`);
+		};
+
+		it("never aliases a key to itself when a loser's key returns as the survivor", () => {
+			const { review, inlineAliases } = mergeReviewsDetailed([
+				mk(T1, "P3"),
+				mk(T2, "P2"),
+				mk(T1, "P1"),
+			]);
+			expect(review.inline_comments).toHaveLength(1);
+			for (const [from, into] of inlineAliases) expect(from).not.toBe(into);
+			const present = new Set(review.inline_comments.map((c) => commentKey(c)));
+			for (const from of inlineAliases.keys())
+				expect(present.has(terminal(inlineAliases, from))).toBe(true);
+			expect(inlineAliases.get(keyOf(T1))).toBeUndefined();
+		});
+
+		it("points every non-survivor key at the final survivor in a three-comment chain", () => {
+			const { review, inlineAliases } = mergeReviewsDetailed([
+				mk(T1, "P3"),
+				mk(T2, "P2"),
+				mk(T3, "P1"),
+			]);
+			expect(review.inline_comments.map((c) => c.title)).toEqual([T3]);
+			expect(inlineAliases.get(keyOf(T1))).toBe(keyOf(T3));
+			expect(inlineAliases.get(keyOf(T2))).toBe(keyOf(T3));
+		});
+
+		it("flattens a two-deep chain after near-duplicate collapsing", () => {
+			const { inlineAliases } = mergeReviewsDetailed(
+				[mk(T1, "P3"), mk(T2, "P2"), mk(T3, "P1", 20)],
+				new Set(),
+				{ dedupeNearDuplicateClaims: true },
+			);
+			expect(inlineAliases.get(keyOf(T1))).toBe(keyOf(T3, 20));
+			expect(inlineAliases.get(keyOf(T2))).toBe(keyOf(T3, 20));
+		});
+	});
+
 	it("deduplicates near-duplicate bodies at the same path:line", () => {
 		const r1 = buildModelReview({
 			event: "COMMENT",

@@ -581,6 +581,20 @@ const INLINE_SEVERITY_RANK: Record<string, number> = {
 	P3: 1,
 };
 
+/** Rewrites each alias to its terminal key so a single lookup resolves a
+ * chain. A cycle stops at the first repeated key instead of looping. */
+function flattenAliases(aliases: Map<string, string>): void {
+	for (const from of [...aliases.keys()]) {
+		const seen = new Set([from]);
+		let cur = aliases.get(from) as string;
+		while (aliases.has(cur) && !seen.has(cur)) {
+			seen.add(cur);
+			cur = aliases.get(cur) as string;
+		}
+		if (cur !== from) aliases.set(from, cur);
+	}
+}
+
 /** Whether `a` should replace `b` as the representative of one claim: higher
  * severity first, then the longer body. */
 function outranks(a: ModelInlineComment, b: ModelInlineComment): boolean {
@@ -647,8 +661,11 @@ export function mergeReviewsDetailed(
 			if (commentKey(loser) !== commentKey(survivor)) {
 				const survivorKey = commentKey(survivor);
 				for (const [from, into] of inlineAliases) {
-					if (into === commentKey(loser)) inlineAliases.set(from, survivorKey);
+					if (into === commentKey(loser) && from !== survivorKey) {
+						inlineAliases.set(from, survivorKey);
+					}
 				}
+				inlineAliases.delete(survivorKey);
 				inlineAliases.set(commentKey(loser), survivorKey);
 			}
 		}
@@ -673,6 +690,7 @@ export function mergeReviewsDetailed(
 		for (const { from, into } of inlineResult.merges) {
 			inlineAliases.set(commentKey(from), commentKey(into));
 		}
+		flattenAliases(inlineAliases);
 		// General findings carry no anchor, so they go in as-is — ClaimLike treats
 		// a missing path/line as unanchored and applies the stricter title bar.
 		const generalResult = dedupeClaims(general_findings);
