@@ -85,6 +85,25 @@ describe("pairWithProvenance", () => {
 		]);
 	});
 
+	it.each([
+		"Preserve **raw** bytes",
+		"Unpacking `**kwargs`",
+		"multi\nline title",
+	])("pairs a comment whose title does not survive parsing: %s", (title) => {
+		const prov: Provenance = new Map([
+			[
+				commentKey({ path: "src/x.ts", line: 10, title }),
+				{ skills: ["a.md"], title, severity: "P2" },
+			],
+		]);
+		const paired = pairWithProvenance(
+			[comment({ id: 1, body: `🟡 **P2**\n\n**${title}**\n\ntext` })],
+			900,
+			prov,
+		);
+		expect(paired.map((p) => p.title)).toEqual([title]);
+	});
+
 	it("keeps every comment that matches, not just the first", () => {
 		const multi: Provenance = new Map([
 			[

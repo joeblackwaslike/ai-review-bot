@@ -1,4 +1,4 @@
-import { commentKey } from "../comment-key.js";
+import { findProvenance } from "../comment-key.js";
 import { claimTitle } from "../replay/claims.js";
 import type { KvClient } from "./kv.js";
 import { recordPostedComment } from "./store.js";
@@ -45,8 +45,10 @@ export async function persistPostedComments(opts: {
 	for (const c of comments) {
 		if (c.pull_request_review_id !== opts.reviewId) continue;
 		const title = claimTitle(c.body);
-		const prov = opts.provenance.get(
-			commentKey({ path: c.path, line: c.line, title }),
+		const prov = findProvenance(
+			opts.provenance,
+			{ path: c.path, line: c.line, body: c.body },
+			title,
 		);
 		if (!prov) {
 			console.warn("posted comment has no provenance entry", {

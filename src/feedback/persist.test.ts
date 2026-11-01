@@ -150,4 +150,42 @@ describe("persistPostedComments", () => {
 		);
 		warn.mockRestore();
 	});
+
+	it.each([
+		"Preserve **raw** bytes",
+		"Unpacking `**kwargs`",
+		"multi\nline title",
+	])("records a comment whose title does not survive parsing: %s", async (title) => {
+		const kv = createFakeKv();
+		const octokit = {
+			paginate: vi.fn(async () => [
+				{
+					id: 400,
+					path: "src/x.ts",
+					line: 10,
+					body: `🟡 **P2**\n\n**${title}**\n\ntext`,
+					pull_request_review_id: 55,
+				},
+			]),
+		};
+		const count = await persistPostedComments({
+			kv,
+			octokit,
+			owner: "o",
+			repo: "r",
+			pr: 7,
+			reviewId: 55,
+			headSha: "sha",
+			installationId: 5,
+			provider: "anthropic",
+			provenance: new Map([
+				[
+					commentKey({ path: "src/x.ts", line: 10, title }),
+					{ skills: ["a.md"], title },
+				],
+			]),
+			nowMs: NOW,
+		});
+		expect(count).toBe(1);
+	});
 });

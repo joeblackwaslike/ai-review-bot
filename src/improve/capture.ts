@@ -1,4 +1,4 @@
-import { commentKey } from "../comment-key.js";
+import { findProvenance } from "../comment-key.js";
 import { claimTitle } from "../replay/claims.js";
 import type { Db } from "./db/client.js";
 import { upsertFinding } from "./db/repo.js";
@@ -58,8 +58,10 @@ export function pairWithProvenance(
 	for (const comment of comments) {
 		if (comment.pull_request_review_id !== reviewId) continue;
 		const title = claimTitle(comment.body ?? "");
-		const prov = provenance.get(
-			commentKey({ path: comment.path, line: comment.line, title }),
+		const prov = findProvenance(
+			provenance,
+			{ path: comment.path, line: comment.line, body: comment.body ?? "" },
+			title,
 		);
 		if (!prov) {
 			console.warn("posted comment has no provenance entry", {
