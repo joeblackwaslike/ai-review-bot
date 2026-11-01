@@ -1,6 +1,6 @@
 ---
 epic: ai-review-bot-t0c
-status: approved; prose pass and Codex review done, Phase A plan pending
+status: Phase A implemented in PR #100; Phase B pending
 ---
 
 # Design: verified, context-aware reviews (precision + depth)
@@ -140,9 +140,9 @@ Sizes: S ≤ ½ day, M 1–2 days, L 3–5 days.
 
 - **A1. Fix `resolveStaleThreads`** (M). [src/resolve-threads.ts](src/resolve-threads.ts), callsite [src/github-app.ts:721](src/github-app.ts#L721).
   - Test first, in a new `src/resolve-threads.test.ts`: a human `**nit:**` thread gets resolved today, and so does a qualifying thread in an untouched file on a delta round.
-  - Fix: add `author { login }` and `databaseId` to `THREADS_QUERY`, and require the author to be the bot's login. Resolve only threads whose comment id is in the ids triage/`revalidateFindings` marked resolved ([src/triage.ts](src/triage.ts)). Delete the `validLinesByPath` heuristic.
+  - Fix as shipped: a thread is matched by Bot author, `isOwnReview` on the parent review, path, and exact title, not by comment id. Every claim in a merged thread must be resolved before the thread closes, and a ref is dropped when a different finding with the same path and title is still open. The `validLinesByPath` heuristic is deleted.
   - AC: human threads are never resolved; untouched files are never resolved; only triage-resolved ids are resolved.
-- **A2. Severity wording** (S). Replace `high/medium/low` with P0–P3 in both places: the strict-evidence block and the Output Rules line at [src/prompt.ts:302](src/prompt.ts#L302). AC: a snapshot test of the full agent prompt, with strict evidence on and off, has no `high`/`medium`/`low` as severity words.
+- **A2. Severity wording** (S). Replace `high/medium/low` with P0–P3 in the strict-evidence block and the Output Rules line at [src/prompt.ts:302](src/prompt.ts#L302). The `generateSummary` prompt fence belongs to A3, not A2. AC: a snapshot test of the full agent prompt, with strict evidence on and off, has no `high`/`medium`/`low` as severity words.
 - **A3. Fence untrusted text** (S). In `buildUserMessage` ([src/prompt.ts:198](src/prompt.ts#L198)) and the prior-reply text ([src/prompt.ts:62](src/prompt.ts#L62)), wrap the content in `<untrusted_pr_text>` and add a system rule telling the model to treat it as data. AC: an injection-string test.
 - **A4. A partial review at a sha must not block a re-run** (S). The agents marker already records pending skills and pending skills re-run over the whole PR; the defect is that the duplicate-run check at [src/review.ts:1479](src/review.ts#L1479) treats any own review naming the head sha as done. Make it ignore reviews whose agents marker lists pending skills. No new marker; truncated input is not marked pending because every FULL round gives every agent the same cut. AC: a re-run proceeds after a partial review and still skips after a complete one.
 - **A5. Doc fix** (S). Correct the CLAUDE.md line "user message (diff) is not cached".
