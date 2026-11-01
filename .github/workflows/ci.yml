@@ -31,12 +31,15 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
 
       - name: Test
-        run: pnpm test
+        run: pnpm test --shard=${{ matrix.shard }}/2
 
   dashboard:
     runs-on: ubuntu-latest
