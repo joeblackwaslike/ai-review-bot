@@ -235,6 +235,37 @@ describe("blocksVerdict advisory", () => {
 		).toBe(false);
 		expect(blocksVerdict({ path: "a.ts", severity: "P2" })).toBe(true);
 	});
+
+	it.each([
+		"P0",
+		"P1",
+		"P2",
+	])("never blocks an advisory %s finding, with or without a path", (severity) => {
+		expect(blocksVerdict({ path: "a.ts", severity, advisory: true })).toBe(
+			false,
+		);
+		expect(blocksVerdict({ path: null, severity, advisory: true })).toBe(false);
+	});
+
+	it("still blocks a non-advisory P0/P1 general finding", () => {
+		expect(blocksVerdict({ path: null, severity: "P0" })).toBe(true);
+		expect(blocksVerdict({ path: null, severity: "P1" })).toBe(true);
+	});
+
+	it("does not hold REQUEST_CHANGES for an advisory open restatement", () => {
+		const advisoryOpen: LedgerEntry = { ...open, advisory: true };
+		const out = suppressInReview(
+			{
+				event: "REQUEST_CHANGES",
+				general_findings: [],
+				inline_comments: [{ ...repeat, severity: "P1", advisory: true }],
+			},
+			[advisoryOpen],
+		);
+		expect(out.review.inline_comments).toEqual([]);
+		expect(out.restatedOpen).toHaveLength(1);
+		expect(out.review.event).toBe("COMMENT");
+	});
 });
 
 describe("acknowledged entries", () => {

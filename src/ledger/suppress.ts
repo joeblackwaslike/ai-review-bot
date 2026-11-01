@@ -67,13 +67,16 @@ export function blocksVerdict(f: {
 	severity?: string | null;
 	advisory?: boolean;
 }): boolean {
-	return (!f.advisory && Boolean(f.path)) || isBlockingSeverity(f.severity);
+	return !f.advisory && (Boolean(f.path) || isBlockingSeverity(f.severity));
 }
 
 /** A restated open entry holds the verdict if the entry blocks, or the
- * restatement is P0/P1. */
+ * restatement is a non-advisory P0/P1. */
 function holdsVerdict(s: Suppressed<ClaimLike>): boolean {
-	return blocksVerdict(s.entry) || isBlockingSeverity(s.finding.severity);
+	return (
+		blocksVerdict(s.entry) ||
+		(!s.finding.advisory && isBlockingSeverity(s.finding.severity))
+	);
 }
 
 /** Returns a copy without settled repeats or restatements of open entries.
