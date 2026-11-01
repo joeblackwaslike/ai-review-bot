@@ -603,7 +603,7 @@ export async function resolveOpenAIAuth(
  * Like `resolveOpenAIAuth`, but never falls back to `OPENAI_API_KEY` (env or
  * ~/.codex/auth.json's own stored key) — only ChatGPT/Codex-subscription
  * OAuth credentials. `watch`'s whole purpose is bypassing a funded API key
- * via subscription auth; wiring the API-key-first `resolveOpenAIAuth` into
+ * via subscription auth; wiring the API-key-fallback `resolveOpenAIAuth` into
  * it means a stray `OPENAI_API_KEY` in the environment (e.g. one left over
  * from the hosted webhook's own `.env`, possibly exhausted) silently
  * overrides subscription intent every time. Fixed symmetrically with
@@ -705,7 +705,7 @@ export async function resolveAnthropicAuth(
  * only an explicit OAuth token (`ANTHROPIC_AUTH_TOKEN`/
  * `CLAUDE_CODE_OAUTH_TOKEN`) or stored Claude Code subscription credentials.
  * `watch`'s whole purpose is bypassing a funded API key via subscription
- * auth; wiring the API-key-first `resolveAnthropicAuth` into it means a
+ * auth; wiring the API-key-fallback `resolveAnthropicAuth` into it means a
  * stray `ANTHROPIC_API_KEY` in the environment (e.g. one left over from the
  * hosted webhook's own `.env`, possibly exhausted) silently overrides
  * subscription intent every time. Confirmed live 2026-08-18: the first
