@@ -282,6 +282,10 @@ describe("agent system prompt severity vocabulary", () => {
 		}
 		expect(prompt).toContain("P0");
 		expect(prompt).toContain("P3");
+		expect(prompt).toContain("trigger with a named input or state");
+		if (strictEvidenceRules) {
+			expect(prompt).toContain("If you cannot, it is not `P0`.");
+		}
 	});
 });
 
