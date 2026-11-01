@@ -74,6 +74,14 @@ describe("classifyReplies", () => {
 			expect(status("you're right but won't fix")).toBe("rejected");
 		});
 
+		it("treats every spelling of follow-up as deferred", () => {
+			expect(status("Good catch! I'll fix this in a follow up")).toBe(
+				"deferred",
+			);
+			expect(status("will do in a follow-up")).toBe("deferred");
+			expect(status("will do in a followup")).toBe("deferred");
+		});
+
 		it("turns fixed when a later reply cites the commit", () => {
 			const d = classifyReplies(
 				[reply("good catch, will fix"), reply("fixed in a1b2c3d4")],
