@@ -12,6 +12,7 @@ interface FakeThread {
 	typename: string;
 	reviewBody: string;
 	isResolved?: boolean;
+	line?: number | null;
 }
 
 function fakeOctokit(threads: FakeThread[]) {
@@ -31,7 +32,7 @@ function fakeOctokit(threads: FakeThread[]) {
 							id: t.id,
 							isResolved: t.isResolved ?? false,
 							path: t.path,
-							line: null,
+							line: t.line === undefined ? 7 : t.line,
 							comments: {
 								nodes: [
 									{
@@ -55,7 +56,7 @@ function fakeOctokit(threads: FakeThread[]) {
 	};
 }
 
-const botBody = "🟡 **P2**\n\n**Null deref**\n\ndetails";
+const botBody = `[${PREFIX}] 🟡 **P2**\n\n**Null deref**\n\ndetails`;
 const resolved = [{ path: "a.ts", title: "Null deref" }];
 const run = (
 	octokit: Parameters<typeof resolveStaleThreads>[0],
@@ -125,6 +126,21 @@ describe("resolveStaleThreads", () => {
 				body: "🟡 **P2**\n\n**Other**\n\nx",
 				typename: "Bot",
 				reviewBody: ownBody("anthropic"),
+			},
+		]);
+		await run(f.octokit);
+		expect(f.mutations).toEqual(["t1"]);
+	});
+
+	it("resolves an outdated bot thread (null line) that matches", async () => {
+		const f = fakeOctokit([
+			{
+				id: "t1",
+				path: "a.ts",
+				body: botBody,
+				typename: "Bot",
+				reviewBody: ownBody("anthropic"),
+				line: null,
 			},
 		]);
 		await run(f.octokit);
