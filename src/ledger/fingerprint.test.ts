@@ -74,6 +74,39 @@ describe("anchorFingerprint", () => {
 	});
 });
 
+describe("anchorFingerprint cost", () => {
+	const fingerprintMany = (lines: string[], comments: number) => {
+		const p = patch(1, lines);
+		const start = performance.now();
+		const out = Array.from({ length: comments }, (_, i) =>
+			anchorFingerprint({
+				...base,
+				line: lines.length - i,
+				patch: p,
+			}),
+		);
+		return { out, ms: performance.now() - start };
+	};
+
+	it("stays fast on a patch of 20,000 mostly whitespace-only lines", () => {
+		const lines = Array.from({ length: 20_000 }, (_, i) =>
+			i < 19_995 ? "   " : `const value${i} = computeSomething(${i}, "x");`,
+		);
+		const { ms } = fingerprintMany(lines, 5);
+		expect(ms).toBeLessThan(500);
+	});
+
+	it("stays fast on a patch of 20,000 code lines and keeps occurrence indexes", () => {
+		const lines = Array.from(
+			{ length: 20_000 },
+			(_, i) => `const value${i % 7} = computeSomething(${i % 7}, "x");`,
+		);
+		const { out, ms } = fingerprintMany(lines, 50);
+		expect(ms).toBeLessThan(500);
+		expect(new Set(out).size).toBe(out.length);
+	});
+});
+
 describe("trivial code", () => {
 	it("gives an anchor window under 12 characters no fingerprint", () => {
 		expect(

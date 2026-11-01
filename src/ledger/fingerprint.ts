@@ -13,17 +13,56 @@ const hash = (text: string) =>
 
 const stripWhitespace = (text: string) => text.replace(/\s+/g, "");
 
-function windowAt(
-	text: Map<number, string>,
-	lines: number[],
-	index: number,
-): string {
-	let out = "";
-	for (let i = index; i < lines.length && out.length < WINDOW_CHARS; i++) {
-		if (i > index && lines[i] !== lines[i - 1] + 1) break;
-		out += stripWhitespace(text.get(lines[i]) ?? "");
+const MAX_WINDOW_LINES = 20;
+const MAX_CACHED_PATCHES = 16;
+
+interface PatchIndex {
+	positionOf: Map<number, number>;
+	windows: string[];
+	occurrence: number[];
+}
+
+const indexCache = new Map<string, PatchIndex>();
+
+/** Window text and occurrence index of every right-side line of a patch, built
+ * in one pass. The window runs from a line over consecutive lines to about 100
+ * characters and never past MAX_WINDOW_LINES, so a long run of blank lines
+ * cannot make each lookup walk the whole patch. */
+function indexPatch(patch: string): PatchIndex {
+	const cached = indexCache.get(patch);
+	if (cached) return cached;
+	const text = rightSideText(patch);
+	const lines = [...text.keys()].sort((a, b) => a - b);
+	const stripped = lines.map((line) => stripWhitespace(text.get(line) ?? ""));
+	const positionOf = new Map(lines.map((line, i) => [line, i]));
+	const windows: string[] = [];
+	const occurrence: number[] = [];
+	const seen = new Map<string, number>();
+	for (let index = 0; index < lines.length; index++) {
+		let out = "";
+		for (
+			let i = index;
+			i < lines.length &&
+			i - index < MAX_WINDOW_LINES &&
+			out.length < WINDOW_CHARS;
+			i++
+		) {
+			if (i > index && lines[i] !== lines[i - 1] + 1) break;
+			out += stripped[i];
+		}
+		windows.push(out);
+		if (out.length >= MIN_ANCHOR_CHARS) {
+			const key = hash(out);
+			occurrence.push(seen.get(key) ?? 0);
+			seen.set(key, (seen.get(key) ?? 0) + 1);
+		} else {
+			occurrence.push(0);
+		}
 	}
-	return out;
+	if (indexCache.size >= MAX_CACHED_PATCHES) indexCache.clear();
+	const built = { positionOf, windows, occurrence };
+	indexCache.set(patch, built);
+	return built;
 }
 
 /** `category|path|hash.n`: the whitespace-stripped right-side code from the
@@ -36,17 +75,12 @@ export function anchorFingerprint(input: {
 	line: number;
 	patch: string;
 }): string | null {
-	const text = rightSideText(input.patch);
-	if (!text.has(input.line)) return null;
-	const lines = [...text.keys()].sort((a, b) => a - b);
-	const window = windowAt(text, lines, lines.indexOf(input.line));
+	const { positionOf, windows, occurrence } = indexPatch(input.patch);
+	const position = positionOf.get(input.line);
+	if (position === undefined) return null;
+	const window = windows[position];
 	if (window.length < MIN_ANCHOR_CHARS) return null;
-	const target = hash(window);
-	let n = 0;
-	for (let i = 0; i < lines.length && lines[i] < input.line; i++) {
-		if (hash(windowAt(text, lines, i)) === target) n += 1;
-	}
-	return `${input.category}|${input.path}|${target}.${n}`;
+	return `${input.category}|${input.path}|${hash(window)}.${occurrence[position]}`;
 }
 
 /** Hash of a suggestion's whitespace-stripped replacement code; null under 24
