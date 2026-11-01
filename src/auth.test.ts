@@ -503,6 +503,14 @@ describe("resolveOpenAIAuth", () => {
 		expect(auth).toMatchObject({ mode: "oauth", provider: "openai" });
 	});
 
+	it("ignores an unparseable auth.json when OPENAI_API_KEY is set", async () => {
+		const auth = await resolveOpenAIAuth({
+			env: { OPENAI_API_KEY: "sk-env" },
+			readCodexAuth: async () => "{not json",
+		});
+		expect(auth).toMatchObject({ mode: "api-key", apiKey: "sk-env" });
+	});
+
 	it("does not fall back to the API key when the subscription refresh fails", async () => {
 		const past = Math.floor(Date.now() / 1000) - 10;
 		await expect(

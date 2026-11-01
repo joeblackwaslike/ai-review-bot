@@ -545,6 +545,20 @@ async function refreshAnthropic(
 
 // --- Resolution ---
 
+interface StoredCodexAuth {
+	auth_mode?: string;
+	OPENAI_API_KEY?: string;
+	tokens?: { access_token?: string };
+}
+
+function parseJsonOrNull(raw: string): StoredCodexAuth | null {
+	try {
+		return JSON.parse(raw);
+	} catch {
+		return null;
+	}
+}
+
 /**
  * Subscription first, API key second. A logged-in ChatGPT/Codex session wins
  * over `OPENAI_API_KEY` (env or embedded in ~/.codex/auth.json), so a key left
@@ -559,7 +573,7 @@ export async function resolveOpenAIAuth(
 	const d = withDefaults(io);
 
 	const raw = await d.readCodexAuth();
-	const stored = raw ? JSON.parse(raw) : null;
+	const stored = raw ? parseJsonOrNull(raw) : null;
 	if (stored?.auth_mode === "chatgpt" && stored.tokens?.access_token)
 		return resolveOpenAISubscriptionAuth(io);
 
