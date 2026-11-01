@@ -669,15 +669,21 @@ describe("resolveAnthropicAuth", () => {
 		expect(auth).toMatchObject({ mode: "oauth", provider: "anthropic" });
 	});
 
-	it.each([
-		["unparseable", "{not json"],
-		["without an access token", JSON.stringify({ claudeAiOauth: {} })],
-	])("falls back to ANTHROPIC_API_KEY when the keychain entry is %s", async (_label, blob) => {
+	it("falls back to ANTHROPIC_API_KEY when the keychain entry has no access token", async () => {
 		const auth = await resolveAnthropicAuth({
 			env: { ANTHROPIC_API_KEY: "sk-ant" },
-			readClaudeKeychain: async () => blob,
+			readClaudeKeychain: async () => JSON.stringify({ claudeAiOauth: {} }),
 		});
 		expect(auth).toMatchObject({ mode: "api-key", apiKey: "sk-ant" });
+	});
+
+	it("throws instead of billing ANTHROPIC_API_KEY when the keychain entry is unparseable", async () => {
+		await expect(
+			resolveAnthropicAuth({
+				env: { ANTHROPIC_API_KEY: "sk-ant" },
+				readClaudeKeychain: async () => "{not json",
+			}),
+		).rejects.toThrow(/not valid JSON/);
 	});
 
 	it("does not fall back to ANTHROPIC_API_KEY when the subscription refresh fails", async () => {

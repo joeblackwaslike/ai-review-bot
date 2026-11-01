@@ -664,12 +664,15 @@ export async function resolveOpenAISubscriptionAuth(
 
 function hasClaudeAccessToken(raw: string | null): boolean {
 	if (!raw) return false;
+	let store: { claudeAiOauth?: { accessToken?: string }; accessToken?: string };
 	try {
-		const store = JSON.parse(raw);
-		return Boolean((store.claudeAiOauth ?? store)?.accessToken);
+		store = JSON.parse(raw);
 	} catch {
-		return false;
+		throw new Error(
+			"Claude keychain entry is not valid JSON — run `claude` to log in again.",
+		);
 	}
+	return Boolean((store?.claudeAiOauth ?? store)?.accessToken);
 }
 
 /**
