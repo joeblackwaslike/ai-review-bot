@@ -112,6 +112,40 @@ describe("declaredRepeat", () => {
 	});
 });
 
+describe("declaredRepeat at P0", () => {
+	const p0 = {
+		...entry,
+		severity: "P0" as const,
+		title: "Unvalidated token in verify()",
+	};
+	const declared = (title: string, line = 12) => ({
+		path: "src/a.ts",
+		line,
+		title,
+		severity: "P0",
+		relation: {
+			kind: "repeats",
+			entry_id: shortFindingId(
+				findingId("src/a.ts", 10, "Unvalidated token in verify()"),
+			),
+		},
+	});
+
+	it("refuses a related-but-different P0 at the relaxed bar", () => {
+		expect(
+			declaredRepeat([p0])(
+				declared("Unvalidated token in verify() allows forgery", 200),
+			),
+		).toBeUndefined();
+	});
+
+	it("still accepts a true P0 restatement", () => {
+		expect(
+			declaredRepeat([p0])(declared("Unvalidated token in verify()")),
+		).toBe(p0);
+	});
+});
+
 describe("uniqueShortIds", () => {
 	it("drops the id from both items of a collision and keeps the rest", () => {
 		const out = uniqueShortIds([

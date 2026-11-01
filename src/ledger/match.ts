@@ -148,13 +148,16 @@ const RULES: Rule[] = [
 	isCrossSurfaceRepeat,
 ];
 
+/** A shared identifier does not lower the tier 1 bar for a P0. */
+export const P0_CLAIM_MATCH: ClaimMatchOptions = {
+	...DEFAULT_CLAIM_MATCH,
+	identifierSimilarity: DEFAULT_CLAIM_MATCH.titleSimilarity,
+};
+
 /** A wrongly suppressed P0 costs the most, so it gets only the title rules, and
  * a shared identifier does not lower the tier 1 bar. */
 const P0_RULES: Rule[] = [
-	tierRule({
-		...DEFAULT_CLAIM_MATCH,
-		identifierSimilarity: DEFAULT_CLAIM_MATCH.titleSimilarity,
-	}),
+	tierRule(P0_CLAIM_MATCH),
 	tierRule(CROSS_ROUND_MATCH),
 	isMovedFileRepeat,
 	isCrossSurfaceTitleRepeat,
