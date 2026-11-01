@@ -1155,7 +1155,7 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 	const droppedNotice =
 		dropped.length > 0
 			? `> ℹ️ ${dropped.length} inline comment${dropped.length === 1 ? "" : "s"} could not be anchored to the diff and ${dropped.length === 1 ? "was" : "were"} not posted: ${dropped
-					.map((c) => `${c.title} (${c.path}:${c.line})`)
+					.map((c) => `${plainTitle(c.title)} (${c.path}:${c.line})`)
 					.join("; ")}.`
 			: "";
 
@@ -1238,6 +1238,12 @@ function withFingerprints<T extends ModelInlineComment>(
 		...c,
 		...commentFingerprints(c, patches.get(c.path)),
 	}));
+}
+
+/** A model title flattened to one plain line, so it cannot open a table row,
+ * a bullet or a code span in text that later rounds parse. */
+function plainTitle(title: string): string {
+	return title.replace(/[`|]/g, "").replace(/\s+/g, " ").trim();
 }
 
 function buildCommentBody(comment: ModelInlineComment, patch?: string): string {

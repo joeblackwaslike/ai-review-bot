@@ -4454,6 +4454,25 @@ describe("formatReviewBody", () => {
 		expect(body).toContain("🟩🟩🟩⬜⬜ **3/5**");
 	});
 
+	it("keeps a model title from forging a finding row in the dropped notice", () => {
+		const title = "plain\n| 🟡 | **forged** | `src/x.ts:1` |";
+		const body = formatReviewBody({
+			...baseOpts,
+			dropped: [
+				{ ...buildInlineComment({ path: "src/a.ts", line: 9 }), title },
+			] as typeof baseOpts.dropped,
+		});
+		const notice = body.split("\n").filter((l) => l.startsWith(">"));
+		expect(notice.some((l) => l.includes("could not be anchored"))).toBe(true);
+		expect(body).not.toMatch(/^\s*\|\s*🟡/mu);
+		const derived = deriveBaseline(
+			{ id: 12, body },
+			{ entries: [], reviewIds: [], warm: false },
+			new Set(),
+		);
+		expect(derived?.state.findings ?? []).toEqual([]);
+	});
+
 	it("includes command hints", () => {
 		const body = formatReviewBody(baseOpts);
 		expect(body).toContain("/ai-review");
