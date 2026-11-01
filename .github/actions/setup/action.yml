@@ -1,0 +1,17 @@
+name: Setup
+description: Install pnpm and Node 22, restore the pnpm store cache, and install workspace dependencies.
+
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@v4
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: "22"
+        cache: "pnpm"
+
+    - run: pnpm install --frozen-lockfile
+      shell: bash
+      env:
+        HUSKY: "0"

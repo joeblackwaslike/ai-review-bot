@@ -33,6 +33,7 @@
 		"dev": "vercel dev",
 		"build": "tsc -p tsconfig.build.json",
 		"prepublishOnly": "pnpm build && pnpm typecheck && pnpm test",
+		"prepare": "husky",
 		"typecheck": "tsc --noEmit",
 		"lint": "biome check .",
 		"test": "vitest run",
@@ -63,8 +64,9 @@
 		"@types/node": "^22.15.3",
 		"@types/pg": "^8.20.0",
 		"drizzle-kit": "^0.31.10",
+		"husky": "^9.1.7",
 		"pg-mem": "^3.0.14",
-		"typescript": "^5.8.3",
+		"typescript": "^7.0.2",
 		"vitepress": "^1.6.4",
 		"vitest": "^3.2.4"
 	},
