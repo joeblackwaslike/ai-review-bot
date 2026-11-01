@@ -23,7 +23,7 @@ import {
 import { dedupeClaims, isSameClaim } from "./claim-dedupe.js";
 import { commentKey } from "./comment-key.js";
 import { mapWithConcurrency } from "./concurrency.js";
-import { collectRightSideLines } from "./diff-lines.js";
+import { collectRightSideLines, rightSideText } from "./diff-lines.js";
 import {
 	anchorFingerprint,
 	formatFpMarkers,
@@ -65,6 +65,7 @@ import {
 	reasoningProviderOptions,
 	routeModel,
 } from "./router.js";
+import { repairSuggestion } from "./suggestion.js";
 import { detectTier2Skills, TIER2_DETECTORS } from "./tier2.js";
 import {
 	fetchDeltaMeta,
@@ -1408,6 +1409,36 @@ export function routeDroppedComments(
 	};
 }
 
+/** Applies `repairSuggestion` to a comment already validated against the diff.
+ * A suggestion that cannot be repaired, or whose repaired range leaves the
+ * valid lines, is dropped and the comment keeps its original anchor. */
+function withRepairedSuggestion(
+	comment: ModelInlineComment,
+	patch: string | undefined,
+	validLines: Set<number>,
+): ModelInlineComment {
+	if (!comment.suggestion || !patch) return comment;
+	const repaired = repairSuggestion({
+		suggestion: comment.suggestion,
+		line: comment.line,
+		startLine: comment.start_line,
+		fileLines: rightSideText(patch),
+	});
+	const inRange =
+		repaired !== null &&
+		validLines.has(repaired.line) &&
+		(repaired.startLine === null ||
+			(validLines.has(repaired.startLine) &&
+				repaired.startLine < repaired.line));
+	if (!repaired || !inRange) return { ...comment, suggestion: null };
+	return {
+		...comment,
+		suggestion: repaired.suggestion,
+		line: repaired.line,
+		start_line: repaired.startLine,
+	};
+}
+
 export function buildReviewComments(
 	files: PullFile[],
 	inlineComments: ModelInlineComment[],
@@ -1467,16 +1498,17 @@ export function buildReviewComments(
 			return [];
 		}
 
+		const patch = files.find((f) => f.filename === comment.path)?.patch;
+		const posted = withRepairedSuggestion(comment, patch, validLines);
+		const postedStart = posted.start_line ?? undefined;
+
 		const built: ReviewComment = {
-			path: comment.path,
-			body: buildCommentBody(
-				comment,
-				files.find((f) => f.filename === comment.path)?.patch,
-			),
-			line: comment.line,
+			path: posted.path,
+			body: buildCommentBody(posted, patch),
+			line: posted.line,
 			side: "RIGHT" as const,
-			...(startLine !== undefined
-				? { start_line: startLine, start_side: "RIGHT" as const }
+			...(postedStart !== undefined
+				? { start_line: postedStart, start_side: "RIGHT" as const }
 				: {}),
 		};
 		sourceKeys.set(built, commentKey(comment));
