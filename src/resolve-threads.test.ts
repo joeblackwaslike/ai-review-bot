@@ -147,6 +147,40 @@ describe("resolveStaleThreads", () => {
 		expect(f.mutations).toEqual(["t1"]);
 	});
 
+	it("keeps a merged thread open when only its lead finding is resolved", async () => {
+		const merged = `${botBody}\n\n---\n\n🟡 **P2**\n\n**Missing await**\n\nmore`;
+		const f = fakeOctokit([
+			{
+				id: "t1",
+				path: "a.ts",
+				body: merged,
+				typename: "Bot",
+				reviewBody: ownBody("anthropic"),
+			},
+		]);
+		await run(f.octokit);
+		expect(f.mutations).toEqual([]);
+		await run(f.octokit, [
+			...resolved,
+			{ path: "a.ts", title: "Missing await" },
+		]);
+		expect(f.mutations).toEqual(["t1"]);
+	});
+
+	it("resolves a bot thread whose body has no prefix text", async () => {
+		const f = fakeOctokit([
+			{
+				id: "t1",
+				path: "a.ts",
+				body: "🟡 **P2**\n\n**Null deref**\n\ndetails",
+				typename: "Bot",
+				reviewBody: `### ${PREFIX}\n\nsummary\n\n<!-- ai-review:provider=anthropic -->`,
+			},
+		]);
+		await run(f.octokit);
+		expect(f.mutations).toEqual(["t1"]);
+	});
+
 	it("does nothing when resolved is empty", async () => {
 		const f = fakeOctokit([]);
 		await run(f.octokit, []);

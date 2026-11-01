@@ -2649,10 +2649,15 @@ export async function buildReview(
 			cost,
 		},
 		validLinesByPath: validLines,
-		resolvedFindings: resolvedThisRound.map(({ path, title }) => ({
-			path,
-			title,
-		})),
+		resolvedFindings: resolvedThisRound
+			.filter(
+				(r) =>
+					!(state?.findings ?? []).some(
+						(f) =>
+							f.status === "open" && f.path === r.path && f.title === r.title,
+					),
+			)
+			.map(({ path, title }) => ({ path, title })),
 		commentProvenance,
 	};
 }

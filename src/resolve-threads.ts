@@ -1,3 +1,4 @@
+import { splitInlineClaims } from "./replay/claims.js";
 import { isOwnReview } from "./review-metadata.js";
 
 export interface ResolvedFindingRef {
@@ -106,8 +107,8 @@ const RESOLVE_MUTATION = `
 
 /**
  * Resolves this bot's own open threads for findings the current round
- * resolved. A thread matches when its path equals the finding's path and its
- * first comment contains the finding's bolded title.
+ * resolved. A thread closes only when every finding in its first comment
+ * (merged comments hold several) is resolved, matched by path and exact title.
  */
 export async function resolveStaleThreads(
 	octokit: GraphQLOctokit,
@@ -132,10 +133,15 @@ export async function resolveStaleThreads(
 	let count = 0;
 
 	for (const thread of threads) {
-		const matches = options.resolved.some(
-			(r) => r.path === thread.path && thread.body.includes(`**${r.title}**`),
-		);
-		if (!matches) continue;
+		const claims = splitInlineClaims(thread.body);
+		const allResolved =
+			claims.length > 0 &&
+			claims.every((c) =>
+				options.resolved.some(
+					(r) => r.path === thread.path && r.title === c.title,
+				),
+			);
+		if (!allResolved) continue;
 		try {
 			await octokit.graphql(RESOLVE_MUTATION, { threadId: thread.id });
 			count++;
