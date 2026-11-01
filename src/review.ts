@@ -1136,7 +1136,7 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 					.map((f) => {
 						const where =
 							f.path && f.line != null ? ` (\`${f.path}:${f.line}\`)` : "";
-						return `| ${SEVERITY_EMOJI[f.severity as Severity] ?? UNKNOWN_SEVERITY_BADGE} | **${f.title}**${where} |`;
+						return `| ${SEVERITY_EMOJI[f.severity as Severity] ?? UNKNOWN_SEVERITY_BADGE} | **${plainTitle(f.title)}**${where} |`;
 					})
 					.join("\n")}`
 			: "";
@@ -1147,7 +1147,7 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 			? `#### Retired, file no longer in this PR\n\nThese were carried from an earlier review, but their file is no longer part of this PR, so they no longer block. Their threads are unchanged.\n\n${retiredPrior
 					.map(
 						(f) =>
-							`- ${f.severity} **${f.title}** (\`${f.path}${f.line != null ? `:${f.line}` : ""}\`)`,
+							`- ${f.severity} **${plainTitle(f.title)}** (\`${f.path}${f.line != null ? `:${f.line}` : ""}\`)`,
 					)
 					.join("\n")}`
 			: "";
@@ -1366,7 +1366,15 @@ export function routeDroppedComments(
 		routedKeys: new Set(notPosted.filter(blocking).map(commentKey)),
 		dropped: notPosted.filter((c) => !blocking(c)),
 		routed: notPosted.filter(blocking).map((c) => {
-			const { path, line, start_line: _start, suggestion: _s, ...finding } = c;
+			const {
+				path,
+				line,
+				start_line: _start,
+				suggestion: _s,
+				fp: _fp,
+				sfp: _sfp,
+				...finding
+			} = c as ModelInlineComment & { fp?: string; sfp?: string };
 			return { ...finding, title: `${c.title} (\`${path}:${line}\`)` };
 		}),
 	};

@@ -28,10 +28,15 @@ export function findProvenance<T extends { title: string }>(
 	);
 	if (direct) return direct;
 	const prefix = `${comment.path}:${comment.line}:`;
+	let best: T | undefined;
 	for (const [key, entry] of provenance) {
-		if (key.startsWith(prefix) && comment.body.includes(`**${entry.title}**`)) {
-			return entry;
+		if (
+			key.startsWith(prefix) &&
+			comment.body.includes(`**${entry.title}**`) &&
+			(!best || entry.title.length > best.title.length)
+		) {
+			best = entry;
 		}
 	}
-	return undefined;
+	return best;
 }

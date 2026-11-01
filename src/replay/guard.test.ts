@@ -143,6 +143,17 @@ describe("checkRecall", () => {
 		expect(r.failures.some((x) => x.includes("negative pair"))).toBe(true);
 	});
 
+	it("fails on a held claim with a confirmed label that is not a confirmed repeat", () => {
+		const labels = makeLabels({ labels: [makeLabel("c", "rejected")] });
+		const r = checkRecall(
+			f,
+			labels,
+			makeResult([{ posted: ["a", "b"] }, { posted: [], held: ["c"] }]),
+		);
+		expect(r.failures).toEqual(["held c is not a confirmed repeat"]);
+		expect(r.warnings).toEqual([]);
+	});
+
 	it("warns on a held claim that is not a confirmed repeat", () => {
 		const r = checkRecall(
 			f,

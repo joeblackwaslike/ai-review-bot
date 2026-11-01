@@ -51,8 +51,11 @@ export function checkRecall(
 	}
 
 	for (const id of held) {
-		if (!isConfirmedRepeat(id))
-			report.warnings.push(`held ${id} is not a confirmed repeat`);
+		if (isConfirmedRepeat(id)) continue;
+		const label = labelOf.get(id);
+		const message = `held ${id} is not a confirmed repeat`;
+		if (label?.confirmed) report.failures.push(message);
+		else report.warnings.push(message);
 	}
 
 	const lost = (id: string) => suppressed.has(id) || held.has(id);

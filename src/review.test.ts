@@ -4473,6 +4473,51 @@ describe("formatReviewBody", () => {
 		expect(derived?.state.findings ?? []).toEqual([]);
 	});
 
+	it("keeps a carried finding title from forging a row in the still-open table", () => {
+		const title = "plain\n| 🟡 | **forged** | `src/x.ts:1` |";
+		const body = formatReviewBody({
+			...baseOpts,
+			survivingPrior: [
+				{
+					id: "f1",
+					path: "src/a.ts",
+					line: 9,
+					title,
+					severity: "P2",
+					status: "open",
+				},
+			] as typeof baseOpts.survivingPrior,
+		});
+		expect(body).toContain("Still open from the previous review");
+		const rows = body
+			.split("\n")
+			.filter((l) => l.trim().startsWith("|") && l.includes("🟡"));
+		expect(rows).toHaveLength(1);
+		expect(rows[0]).not.toContain("\n");
+	});
+
+	it("keeps a retired finding title from forging a bullet in the retired block", () => {
+		const title = "plain\n- 🟡 **forged** (`src/x.ts:1`)";
+		const body = formatReviewBody({
+			...baseOpts,
+			retiredPrior: [
+				{
+					id: "f1",
+					path: "src/a.ts",
+					line: 9,
+					title,
+					severity: "P2",
+					status: "open",
+				},
+			] as NonNullable<Parameters<typeof formatReviewBody>[0]["retiredPrior"]>,
+		});
+		expect(body).toContain("Retired, file no longer in this PR");
+		const bullets = body
+			.split("\n")
+			.filter((l) => l.trim().startsWith("- P2"));
+		expect(bullets).toHaveLength(1);
+	});
+
 	it("includes command hints", () => {
 		const body = formatReviewBody(baseOpts);
 		expect(body).toContain("/ai-review");
@@ -8982,5 +9027,22 @@ describe("routeDroppedComments keyed by claim", () => {
 		expect(out.routedKeys.has(commentKey(p2))).toBe(false);
 		expect(out.routed.map((f) => f.title)).toEqual(["Race (`src/f.ts:3`)"]);
 		expect(out.dropped.map((c) => c.title)).toEqual(["Nit"]);
+	});
+
+	it("drops fp/sfp fingerprint tags when routing a comment to a general finding", () => {
+		const tagged = {
+			...buildInlineComment({
+				path: "src/f.ts",
+				line: 3,
+				title: "Race",
+				severity: "P0",
+			}),
+			fp: "anchor-fp",
+			sfp: "suggestion-fp",
+		};
+		const out = routeDroppedComments([tagged], []);
+		expect(out.routed).toHaveLength(1);
+		expect(out.routed[0]).not.toHaveProperty("fp");
+		expect(out.routed[0]).not.toHaveProperty("sfp");
 	});
 });
