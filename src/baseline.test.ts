@@ -29,6 +29,7 @@ function body(parts: {
 	bullets?: string[];
 	inline?: string;
 	count?: number;
+	carry?: string;
 }): string {
 	const lines = [
 		"### Review",
@@ -61,6 +62,7 @@ function body(parts: {
 		parts.inline ?? "Inline comments: none",
 		`<!-- ai-review:sha=${SHA} -->`,
 		`<!-- ai-review:review=${parts.count ?? 2} -->`,
+		...(parts.carry ? [`<!-- ai-review:carry=${parts.carry} -->`] : []),
 	);
 	return lines.join("\n");
 }
@@ -114,6 +116,67 @@ describe("deriveBaseline", () => {
 				status: "open",
 			},
 		]);
+	});
+
+	describe("carry marker", () => {
+		const held = entry({
+			id: "r0:c1:0",
+			round: 0,
+			path: "src/a.ts",
+			line: 42,
+			title: "Unchecked cast",
+		});
+		const routed = entry({
+			id: "r0:body:2",
+			round: 0,
+			title: "Retry loop never backs off (`src/b.ts:7`)",
+		});
+
+		it("carries listed open entries from earlier rounds, deduped against the body table", () => {
+			const b = body({
+				carried: ["| 🟠 | **Unchecked cast** (`src/a.ts:42`) |"],
+				carry: "r0:c1:0,r0:body:2",
+			});
+			const r = deriveBaseline(
+				{ id: 20, body: b },
+				warm([held, routed]),
+				KNOWN_SKILLS,
+			);
+			expect(r?.state.findings.map((f) => f.id).sort()).toEqual([
+				findingId("src/a.ts", 42, "Unchecked cast"),
+				findingId("src/b.ts", 7, "Retry loop never backs off"),
+			]);
+			expect(r?.state.event).toBe("REQUEST_CHANGES");
+		});
+
+		it("keeps the body row's higher severity over the listed entry's", () => {
+			const general = entry({
+				id: "r0:body:0",
+				round: 0,
+				severity: "P3",
+				title: "Session token is logged",
+			});
+			const b = body({
+				carried: ["| 🔴 | **Session token is logged** |"],
+				carry: "r0:body:0",
+			});
+			const r = deriveBaseline(
+				{ id: 20, body: b },
+				warm([general]),
+				KNOWN_SKILLS,
+			);
+			expect(r?.state.findings.map((f) => f.severity)).toEqual(["P0"]);
+		});
+
+		it("does not carry a listed entry that is no longer open", () => {
+			const b = body({ carry: "r0:c1:0" });
+			const r = deriveBaseline(
+				{ id: 20, body: b },
+				warm([{ ...held, status: "fixed" }]),
+				KNOWN_SKILLS,
+			);
+			expect(r?.state.findings).toEqual([]);
+		});
 	});
 
 	it("only the source review's round is read", () => {

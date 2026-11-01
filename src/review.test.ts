@@ -5523,6 +5523,295 @@ describe("buildReview ledger suppression", () => {
 			expect(decision?.event).toBe("APPROVE");
 		});
 	});
+
+	describe("restatements of open entries across rounds", () => {
+		const MID_SHA = "1111111111111111";
+		const NEXT_SHA = "fedcba0987654321";
+		const CARRIED = `**${REPEAT_TITLE}** (\`src/review.ts:2\`)`;
+		const botComment =
+			threads.data.repository.pullRequest.reviewThreads.nodes[0].comments
+				.nodes[0];
+		const threadOn = (
+			comment: { id: number; body: string },
+			o: { resolvedBy?: string } = {},
+		) => ({
+			isResolved: o.resolvedBy !== undefined,
+			resolvedBy: o.resolvedBy ? { login: o.resolvedBy } : null,
+			comments: {
+				pageInfo: { hasNextPage: false },
+				nodes: [{ ...botComment, databaseId: comment.id, body: comment.body }],
+			},
+		});
+		const round0 = {
+			id: 100,
+			state: "CHANGES_REQUESTED",
+			submitted_at: "2026-10-01T00:00:00Z",
+			body: buildOwnReviewBody({
+				sha: OLD_SHA,
+				count: 1,
+				inline: "Inline comments: 1",
+			}),
+		};
+		/** A later own review that no longer lists the finding, the way a round
+		 * whose triage marked it resolved posts. The bot resolving the thread
+		 * leaves the ledger entry open. */
+		const round1 = {
+			id: 101,
+			state: "COMMENTED",
+			submitted_at: "2026-10-02T00:00:00Z",
+			body: buildOwnReviewBody({ sha: MID_SHA, count: 2 }),
+		};
+		const onlyRepeat = (event: "COMMENT" | "REQUEST_CHANGES" = "COMMENT") =>
+			buildModelReview({
+				event,
+				general_findings: [],
+				inline_comments: [repeat],
+			});
+		const nothing = buildModelReview({
+			event: "COMMENT",
+			general_findings: [],
+			inline_comments: [],
+		});
+		type Decision = NonNullable<Awaited<ReturnType<typeof buildReview>>>;
+		const STATE: Record<string, string> = {
+			REQUEST_CHANGES: "CHANGES_REQUESTED",
+			APPROVE: "APPROVED",
+			COMMENT: "COMMENTED",
+		};
+		/** The decision as GitHub lists it on the next round: the review and its
+		 * inline comments, each with an open thread. */
+		function posted(decision: Decision, id: number) {
+			const comments = decision.comments.map((c, i) => ({
+				id: 500 + i,
+				pull_request_review_id: id,
+				path: c.path,
+				line: c.line,
+				body: c.body,
+			}));
+			return {
+				review: {
+					id,
+					state: STATE[decision.event],
+					submitted_at: "2026-10-03T00:00:00Z",
+					body: decision.body,
+				},
+				comments,
+				threads: comments.map((c) => threadOn(c)),
+			};
+		}
+
+		async function holdingRound(): Promise<Decision> {
+			routeAgents(
+				{ "code-reviewer.md": onlyRepeat("REQUEST_CHANGES") },
+				onlyRepeat(),
+			);
+			const decision = await buildReview({
+				octokit: ledgerOctokit({
+					reviews: [round0, round1],
+					comments: [ownComment],
+					threadNodes: [threadOn(ownComment)],
+				}),
+				...baseContext,
+			});
+			if (!decision) throw new Error("expected a posted review");
+			return decision;
+		}
+
+		it("a repeat-only round posts nothing new and still requests changes", async () => {
+			routeAgents({}, onlyRepeat());
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit({
+					reviews: [round0],
+					threadNodes: [threadOn(ownComment)],
+				}),
+				...baseContext,
+			});
+
+			expect(decision?.comments).toEqual([]);
+			expect(decision?.event).toBe("REQUEST_CHANGES");
+			expect(decision?.body).toContain(CARRIED);
+			expect(decision?.body).toContain("<!-- ai-review:carry=r0:c11:0 -->");
+		});
+
+		it("holds a restated open entry the carried list lacks, and logs it", async () => {
+			const log = vi.spyOn(console, "log").mockImplementation(() => {});
+
+			const decision = await holdingRound();
+
+			expect(decision.comments).toEqual([]);
+			expect(decision.event).toBe("REQUEST_CHANGES");
+			expect(decision.body).toContain(CARRIED);
+			expect(decision.body).toContain("<!-- ai-review:carry=r0:c11:0 -->");
+			expect(decision.body).toContain(
+				"ledger: warm, 0 suppressed, 1 open held",
+			);
+			expect(
+				log.mock.calls.filter(
+					([m]) => m === "suppressed open restatement",
+				)[0]?.[1],
+			).toEqual({
+				title: REPEAT_TITLE,
+				path: "src/review.ts",
+				line: 2,
+				entryId: "r0:c11:0",
+			});
+			log.mockRestore();
+		});
+
+		it("still holds after a restart that derives the baseline from the posted body", async () => {
+			const held = posted(await holdingRound(), 102);
+
+			const fresh = deriveBaseline(
+				{ id: 102, body: held.review.body },
+				{
+					entries: [
+						{
+							id: "r0:c11:0",
+							round: 0,
+							path: "src/review.ts",
+							line: 2,
+							severity: "P1",
+							title: REPEAT_TITLE,
+							status: "open",
+							decidedBy: null,
+							reason: null,
+							evidence: [],
+						},
+					],
+					reviewIds: [100, 101, 102],
+					warm: true,
+				},
+				KNOWN_SKILLS,
+			);
+			expect(fresh?.state.findings.map((f) => f.id)).toEqual([
+				findingId("src/review.ts", 2, REPEAT_TITLE),
+			]);
+
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "INCREMENTAL",
+				resolved: [],
+				newRisk: false,
+			});
+			routeAgents({}, nothing);
+			const next = await buildReview({
+				octokit: ledgerOctokit({
+					reviews: [round0, round1, held.review],
+					comments: [ownComment, ...held.comments],
+					threadNodes: [threadOn(ownComment), ...held.threads],
+				}),
+				...baseContext,
+				headSha: NEXT_SHA,
+			});
+
+			expect(next?.event).toBe("REQUEST_CHANGES");
+			expect(next?.body).toContain(CARRIED);
+			expect(next?.body).toContain("<!-- ai-review:carry=r0:c11:0 -->");
+		});
+
+		it("releases the hold once the author resolves the thread", async () => {
+			const held = posted(await holdingRound(), 102);
+
+			routeAgents({}, onlyRepeat());
+			const next = await buildReview({
+				octokit: ledgerOctokit({
+					reviews: [round0, round1, held.review],
+					comments: [ownComment, ...held.comments],
+					threadNodes: [
+						threadOn(ownComment, { resolvedBy: "joe" }),
+						...held.threads,
+					],
+				}),
+				...baseContext,
+				headSha: NEXT_SHA,
+			});
+
+			expect(next?.event).toBe("APPROVE");
+			expect(next?.body ?? "").not.toContain("ai-review:carry=");
+		});
+
+		it("approves a later clean round once triage resolves the held finding", async () => {
+			const held = posted(await holdingRound(), 102);
+
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "INCREMENTAL",
+				resolved: [findingId("src/review.ts", 2, REPEAT_TITLE)],
+				newRisk: false,
+			});
+			routeAgents({}, nothing);
+			const next = await buildReview({
+				octokit: ledgerOctokit({
+					reviews: [round0, round1, held.review],
+					comments: [ownComment, ...held.comments],
+					threadNodes: [threadOn(ownComment), ...held.threads],
+				}),
+				...baseContext,
+				headSha: NEXT_SHA,
+			});
+
+			expect(next?.event).toBe("APPROVE");
+		});
+
+		it("does not hold a restatement of a finding triage resolved this round", async () => {
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "INCREMENTAL",
+				resolved: [findingId("src/review.ts", 2, REPEAT_TITLE)],
+				newRisk: false,
+			});
+			routeAgents({}, onlyRepeat());
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit({
+					reviews: [round0],
+					threadNodes: [threadOn(ownComment)],
+				}),
+				...baseContext,
+			});
+
+			expect(decision?.event).toBe("APPROVE");
+		});
+
+		it("lists a restated off-diff P1 once, as the carried finding", async () => {
+			const ROUTED = "Retry loop never backs off on 429";
+			const prior = {
+				...round0,
+				body: buildOwnReviewBody({
+					sha: OLD_SHA,
+					count: 1,
+					rows: [`| 🟠 | bug | **${ROUTED} (\`src/review.ts:40\`)** |`],
+				}),
+			};
+			routeAgents(
+				{},
+				buildModelReview({
+					event: "COMMENT",
+					general_findings: [],
+					inline_comments: [
+						buildInlineComment({
+							title: ROUTED,
+							body: "The `retryRequest` loop retries immediately.",
+							path: "src/review.ts",
+							line: 40,
+							severity: "P1",
+						}),
+					],
+				}),
+			);
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit({
+					reviews: [prior],
+					comments: [],
+					threadNodes: [],
+				}),
+				...baseContext,
+			});
+
+			expect(decision?.event).toBe("REQUEST_CHANGES");
+			expect(decision?.body.split(ROUTED)).toHaveLength(2);
+			expect(decision?.body).toContain("<!-- ai-review:carry=r0:body:0 -->");
+		});
+	});
 });
 
 describe("delta scoping without KV", () => {

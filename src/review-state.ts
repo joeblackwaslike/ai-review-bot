@@ -29,6 +29,30 @@ export function findingId(
 	return `${path ?? "-"}:${line ?? "-"}:${title.toLowerCase().trim()}`;
 }
 
+const LOCATION_SUFFIX = /\s*\(`([^`]+):(\d+)`\)$/;
+
+/** A path-less finding whose title ends in `` (`path:line`) ``, the form carried
+ * and off-diff findings are listed in, gets that path and line and a clean title. */
+export function recoverLocation<
+	T extends { path: string | null; line: number | null; title: string },
+>(f: T): T {
+	if (f.path !== null) return f;
+	const m = f.title.match(LOCATION_SUFFIX);
+	if (!m) return f;
+	return {
+		...f,
+		path: m[1],
+		line: Number(m[2]),
+		title: f.title.replace(LOCATION_SUFFIX, "").trim(),
+	};
+}
+
+const SEVERITY_RANK: Record<string, number> = { P0: 4, P1: 3, P2: 2, P3: 1 };
+
+/** The more severe of two severities; unknown values rank below P3. */
+export const moreSevere = (a: string, b: string): string =>
+	(SEVERITY_RANK[b] ?? 0) > (SEVERITY_RANK[a] ?? 0) ? b : a;
+
 export function parseBodyFindings(body: string): PersistedFinding[] {
 	const findings: PersistedFinding[] = [];
 	// After Phase 1, 🔴 = P0 in new review bodies. Pre-Phase-1 reviews used 🔴 for

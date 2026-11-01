@@ -29,7 +29,7 @@ describe("todaysCodePipeline", () => {
 		expect(suppressedIds(f, [makeLabel("a", "rejected")])).toEqual(["b"]);
 	});
 
-	it("posts a repeat when the earlier label is low confidence", () => {
+	it("does not suppress a repeat as settled when the earlier label is low confidence", () => {
 		const f = repeatFixture([["a"], ["b"]]);
 		const labels = [makeLabel("a", "rejected", { confidence: "low" })];
 		expect(suppressedIds(f, labels)).toEqual([]);
@@ -41,6 +41,20 @@ describe("todaysCodePipeline", () => {
 			makeLabel("a", "rejected", { evidence: ["2026-01-02T11:00:00Z|later"] }),
 		];
 		expect(suppressedIds(f, labels)).toEqual([]);
+	});
+
+	it("holds a repeat of a claim still open instead of posting it", () => {
+		const f = repeatFixture([["a"], ["b"]]);
+		const result = replayFixture(
+			f,
+			makeLabels({ labels: [] }),
+			todaysCodePipeline,
+		);
+		expect(result.rounds[1]).toMatchObject({
+			posted: [],
+			suppressed: [],
+			held: ["b"],
+		});
 	});
 
 	it("never suppresses round-0 claims", () => {
@@ -61,8 +75,8 @@ const FIXTURE_RECYCLED: Record<string, number> = {
 	"joeblackwaslike__ai-listings__74__openai": 0,
 	"joeblackwaslike__ai-review-bot__92__anthropic": 0,
 	"joeblackwaslike__ai-review-bot__92__openai": 0,
-	"joeblackwaslike__stealth-browser__1__anthropic": 2,
-	"joeblackwaslike__stealth-browser__1__openai": 4,
+	"joeblackwaslike__stealth-browser__1__anthropic": 1,
+	"joeblackwaslike__stealth-browser__1__openai": 3,
 };
 
 describe("todaysCodePipeline on committed fixtures", () => {

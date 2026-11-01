@@ -19,6 +19,7 @@ export function checkRecall(
 		unexpectedSuppression: [],
 	};
 	const suppressed = new Set(result.rounds.flatMap((r) => r.suppressed));
+	const held = new Set(result.rounds.flatMap((r) => r.held ?? []));
 	const matchedTo = new Map(
 		result.rounds.flatMap((r) => Object.entries(r.matchedTo ?? {})),
 	);
@@ -49,13 +50,19 @@ export function checkRecall(
 		else report.warnings.push(message);
 	}
 
+	for (const id of held) {
+		if (!isConfirmedRepeat(id))
+			report.warnings.push(`held ${id} is not a confirmed repeat`);
+	}
+
+	const lost = (id: string) => suppressed.has(id) || held.has(id);
 	for (const pair of labels.negativePairs) {
 		for (const [id, other] of [
 			[pair.a, pair.b],
 			[pair.b, pair.a],
 		]) {
 			const by = matchedTo.get(id);
-			if (suppressed.has(id) && (by === undefined || by === other)) {
+			if (lost(id) && (by === undefined || by === other)) {
 				report.failures.push(
 					`negative pair (${pair.a}, ${pair.b}) lost ${id}: similar claims describing different defects must both survive`,
 				);

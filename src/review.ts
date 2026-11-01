@@ -14,7 +14,11 @@ import {
 	toRecord,
 } from "./agent-log.js";
 import type { ResolvedAuth } from "./auth.js";
-import { deriveBaseline } from "./baseline.js";
+import {
+	deriveBaseline,
+	ledgerEntryFinding,
+	MAX_CARRY_IDS,
+} from "./baseline.js";
 import { dedupeClaims, isSameClaim } from "./claim-dedupe.js";
 import { commentKey } from "./comment-key.js";
 import { mapWithConcurrency } from "./concurrency.js";
@@ -27,8 +31,8 @@ import {
 import { loadLedger, reconcileSurvivingPrior } from "./ledger/live.js";
 import { findSettledMatch } from "./ledger/match.js";
 import { retargetCarried } from "./ledger/retarget.js";
-import { suppressInReview } from "./ledger/suppress.js";
-import { isSettled } from "./ledger/types.js";
+import { type Suppressed, suppressInReview } from "./ledger/suppress.js";
+import { isSettled, type LedgerEntry } from "./ledger/types.js";
 import { computeCost, createAIModel } from "./models.js";
 import {
 	type AgentPromptOptions,
@@ -42,7 +46,11 @@ import { claimTitle } from "./replay/claims.js";
 import type { ResolvedFindingRef } from "./resolve-threads.js";
 import { candidateFamilies, dropRetractions } from "./retraction.js";
 import { isOwnReview, readMetadataValue } from "./review-metadata.js";
-import type { PersistedFinding, ReviewState } from "./review-state.js";
+import {
+	moreSevere,
+	type PersistedFinding,
+	type ReviewState,
+} from "./review-state.js";
 import { REVIEWER_TUNING, type ReviewerTuning } from "./reviewer-tuning.js";
 import type { ModelSelection } from "./router.js";
 import {
@@ -953,6 +961,9 @@ export interface FormatReviewBodyOptions {
 	model: string;
 	cost: number;
 	ledgerNote?: string;
+	/** Open ledger entry ids behind the carried findings, written as the
+	 * `ai-review:carry` marker that `deriveBaseline` reads. */
+	carryIds?: string[];
 	scopeNote?: ScopeNote;
 }
 
@@ -1081,6 +1092,7 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		cost,
 		ledgerNote,
 		scopeNote,
+		carryIds = [],
 	} = opts;
 
 	const readinessBar = renderReadinessBar(readiness);
@@ -1163,6 +1175,9 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		`<!-- ai-review:model=${model} -->`,
 		`<!-- ai-review:findings=${generalFindings.length} -->`,
 		`<!-- ai-review:cost=${cost.toFixed(6)} -->`,
+		...(carryIds.length > 0
+			? [`<!-- ai-review:carry=${carryIds.join(",")} -->`]
+			: []),
 		formatAgentsMarker(agentRecords, pending, KNOWN_SKILLS),
 	].join("\n");
 
@@ -1515,6 +1530,58 @@ function blocksVerdict(f: PersistedFinding): boolean {
 	return Boolean(f.path) || f.severity === "P0" || f.severity === "P1";
 }
 
+/** Records one restatement of an open entry as the finding it holds, keyed by
+ * finding id, keeping the most severe of the entry and its restatements. */
+function addRestated(
+	restated: Map<string, PersistedFinding>,
+	s: Suppressed<{ severity?: string | null }>,
+): void {
+	const f = ledgerEntryFinding(s.entry);
+	const prev = restated.get(f.id);
+	const severity = moreSevere(
+		prev?.severity ?? f.severity,
+		s.finding.severity ?? "",
+	);
+	restated.set(f.id, { ...f, severity });
+}
+
+/** The carried list with restated open entries added, or their severity raised
+ * when already carried. */
+function withHeld(
+	prior: PersistedFinding[],
+	held: PersistedFinding[],
+): PersistedFinding[] {
+	const byId = new Map(held.map((f) => [f.id, f]));
+	const raised = prior.map((f) => {
+		const h = byId.get(f.id);
+		byId.delete(f.id);
+		return h ? { ...f, severity: moreSevere(f.severity, h.severity) } : f;
+	});
+	return [...raised, ...byId.values()];
+}
+
+/** The open ledger entry ids behind the carried findings, for the
+ * `ai-review:carry` marker: an inline entry over a body row, then the latest. */
+function carryEntryIds(
+	prior: PersistedFinding[],
+	ledger: LedgerEntry[],
+): string[] {
+	const isBody = (e: LedgerEntry) => e.id.includes(":body:");
+	const entryFor = new Map<string, LedgerEntry>();
+	for (const e of ledger) {
+		if (isSettled(e)) continue;
+		const id = ledgerEntryFinding(e).id;
+		const seen = entryFor.get(id);
+		const better =
+			!seen ||
+			(isBody(seen) && !isBody(e)) ||
+			(isBody(seen) === isBody(e) && e.round > seen.round);
+		if (better) entryFor.set(id, e);
+	}
+	const ids = prior.flatMap((f) => entryFor.get(f.id)?.id ?? []);
+	return [...new Set(ids)].slice(0, MAX_CARRY_IDS);
+}
+
 export async function buildReview(
 	context: ReviewContext,
 ): Promise<ReviewDecision | null> {
@@ -1749,13 +1816,13 @@ export async function buildReview(
 	// not in the PR cannot anchor to the head and stops being carried, unless
 	// the file list is cut short and absence proves nothing.
 	let retiredPrior: PersistedFinding[] = [];
+	const fileListComplete =
+		files.length >= context.changedFiles && files.length < PR_FILE_LIST_CAP;
 	if (state) {
 		const { kept, retired } = retargetCarried(
 			state.findings.filter((f) => f.status === "open"),
 			files,
 		);
-		const fileListComplete =
-			files.length >= context.changedFiles && files.length < PR_FILE_LIST_CAP;
 		retiredPrior = fileListComplete ? retired : [];
 		state.findings = [
 			...kept,
@@ -2379,13 +2446,28 @@ export async function buildReview(
 
 	let suppressedCount = 0;
 	const suppressedEntryIds = new Set<string>();
+	// Triage's word on a finding resolved this round stands, as in the merge:
+	// its open entry is not a hold.
+	const suppressionLedger = ledger.filter(
+		(e) => isSettled(e) || !resolvedNowIds.has(ledgerEntryFinding(e).id),
+	);
+	const restated = new Map<string, PersistedFinding>();
 	const unsettledResults = agentResults.map((agentResult) => {
 		const r = {
 			...agentResult,
 			inline_comments: withFingerprints(agentResult.inline_comments, files),
 		};
-		const outcome = suppressInReview(r, ledger);
+		const outcome = suppressInReview(r, suppressionLedger);
 		suppressedCount += outcome.suppressed.length;
+		for (const s of outcome.restatedOpen) {
+			console.log("suppressed open restatement", {
+				title: s.finding.title,
+				path: s.finding.path ?? null,
+				line: s.finding.line ?? null,
+				entryId: s.entry.id,
+			});
+			addRestated(restated, s);
+		}
 		for (const { finding, entry } of outcome.suppressed) {
 			suppressedEntryIds.add(entry.id);
 			console.log("suppressed settled repeat", {
@@ -2408,12 +2490,19 @@ export async function buildReview(
 		}
 		return retractions.review;
 	});
+	const prPaths = new Set(files.map((f) => f.filename));
+	const held = [...restated.values()].filter(
+		(f) => !fileListComplete || f.path === null || prPaths.has(f.path),
+	);
+	survivingPrior = withHeld(survivingPrior, held);
+	const heldCount = held.filter(blocksVerdict).length;
 	if (loadedLedger) {
 		console.log("ledger suppression", {
 			warm: loadedLedger.warm,
 			entries: ledger.length,
 			suppressed: suppressedCount,
 			settledEntries: suppressedEntryIds.size,
+			openHeld: heldCount,
 		});
 	}
 
@@ -2444,6 +2533,7 @@ export async function buildReview(
 	if (
 		pendingOnly &&
 		cleared.length === 0 &&
+		heldCount === 0 &&
 		modelReview.general_findings.length === 0 &&
 		modelReview.inline_comments.length === 0
 	)
@@ -2718,9 +2808,10 @@ export async function buildReview(
 		cost,
 		ledgerNote: loadedLedger
 			? loadedLedger.warm
-				? `ledger: warm, ${suppressedEntryIds.size} suppressed`
+				? `ledger: warm, ${suppressedEntryIds.size} suppressed${heldCount > 0 ? `, ${heldCount} open held` : ""}`
 				: "ledger: cold"
 			: undefined,
+		carryIds: carryEntryIds(survivingPrior, ledger),
 		scopeNote: scope,
 	});
 

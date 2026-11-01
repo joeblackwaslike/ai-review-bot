@@ -75,6 +75,7 @@ export const makeResult = (
 	rounds: {
 		posted: string[];
 		suppressed?: string[];
+		held?: string[];
 		matchedTo?: Record<string, string>;
 	}[],
 ): ReplayResult => ({
@@ -83,6 +84,7 @@ export const makeResult = (
 		index,
 		posted: r.posted,
 		suppressed: r.suppressed ?? [],
+		...(r.held ? { held: r.held } : {}),
 		...(r.matchedTo ? { matchedTo: r.matchedTo } : {}),
 	})),
 });

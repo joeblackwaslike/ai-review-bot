@@ -9,6 +9,8 @@ export interface ReplayResult {
 		index: number;
 		posted: string[];
 		suppressed: string[];
+		/** Restatements of a still-open claim: not posted, still counted toward the verdict. */
+		held?: string[];
 		matchedTo?: Record<string, string>;
 	}[];
 }
@@ -40,12 +42,12 @@ export function visibleLabels(
 
 function assertValidOutput(
 	round: Round,
-	out: { posted: string[]; suppressed: string[] },
+	out: { posted: string[]; suppressed: string[]; held: string[] },
 ): void {
 	const expected = new Set(round.claims.map((c) => c.id));
 	const seen = new Set<string>();
 	const bad = new Set<string>();
-	for (const id of [...out.posted, ...out.suppressed]) {
+	for (const id of [...out.posted, ...out.suppressed, ...out.held]) {
 		if (!expected.has(id) || seen.has(id)) bad.add(id);
 		seen.add(id);
 	}
@@ -69,15 +71,24 @@ export function replayFixture(
 				.flatMap((r) => r.claims),
 			labels: visibleLabels(f, labels, roundCutoff(round)),
 		};
-		const { posted, suppressed, matchedTo } = pipeline({
+		const {
+			posted,
+			suppressed,
+			held = [],
+			matchedTo,
+		} = pipeline({
 			round,
 			claims: round.claims,
 			ledger,
 		});
-		assertValidOutput(round, { posted, suppressed });
-		return matchedTo
-			? { index: round.index, posted, suppressed, matchedTo }
-			: { index: round.index, posted, suppressed };
+		assertValidOutput(round, { posted, suppressed, held });
+		return {
+			index: round.index,
+			posted,
+			suppressed,
+			...(held.length > 0 ? { held } : {}),
+			...(matchedTo ? { matchedTo } : {}),
+		};
 	});
 	return { fixtureId: labels.fixtureId, rounds };
 }

@@ -127,6 +127,32 @@ describe("checkRecall", () => {
 		expect(run().some((x) => x.includes("negative pair"))).toBe(true);
 	});
 
+	it("a negative-pair member held as a restatement of its partner fails", () => {
+		const labels = makeLabels({
+			repeatPairs: [{ later: "c", earlier: "a", confirmed: true }],
+			negativePairs: [{ a: "b", b: "c" }],
+		});
+		const r = checkRecall(
+			f,
+			labels,
+			makeResult([
+				{ posted: ["a", "b"] },
+				{ posted: [], held: ["c"], matchedTo: { c: "b" } },
+			]),
+		);
+		expect(r.failures.some((x) => x.includes("negative pair"))).toBe(true);
+	});
+
+	it("warns on a held claim that is not a confirmed repeat", () => {
+		const r = checkRecall(
+			f,
+			makeLabels({}),
+			makeResult([{ posted: ["a", "b"] }, { posted: [], held: ["c"] }]),
+		);
+		expect(r.failures).toEqual([]);
+		expect(r.warnings).toEqual(["held c is not a confirmed repeat"]);
+	});
+
 	it("suppressing everything except confirmed fixed claims reports every other suppression as unexpected", () => {
 		const labels = makeLabels({
 			labels: [makeLabel("a", "fixed"), makeLabel("b", "rejected")],
