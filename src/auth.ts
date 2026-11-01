@@ -551,11 +551,13 @@ interface StoredCodexAuth {
 	tokens?: { access_token?: string };
 }
 
-function parseJsonOrNull(raw: string): StoredCodexAuth | null {
+function parseCodexAuth(raw: string): StoredCodexAuth {
 	try {
 		return JSON.parse(raw);
 	} catch {
-		return null;
+		throw new Error(
+			"~/.codex/auth.json is not valid JSON — fix or remove it, then run `codex login`.",
+		);
 	}
 }
 
@@ -564,8 +566,8 @@ function parseJsonOrNull(raw: string): StoredCodexAuth | null {
  * over `OPENAI_API_KEY` (env or embedded in ~/.codex/auth.json), so a key left
  * in the shell never bills a funded account while a subscription is available.
  * The key is used only when no ChatGPT credentials exist; a broken
- * subscription (expired refresh token) still throws instead of silently
- * falling back to the key.
+ * subscription (expired refresh token) or an unparseable auth.json still
+ * throws instead of silently falling back to the key.
  */
 export async function resolveOpenAIAuth(
 	io: AuthIO = {},
@@ -573,7 +575,7 @@ export async function resolveOpenAIAuth(
 	const d = withDefaults(io);
 
 	const raw = await d.readCodexAuth();
-	const stored = raw ? parseJsonOrNull(raw) : null;
+	const stored = raw ? parseCodexAuth(raw) : null;
 	if (stored?.auth_mode === "chatgpt" && stored.tokens?.access_token)
 		return resolveOpenAISubscriptionAuth(io);
 
@@ -660,6 +662,16 @@ export async function resolveOpenAISubscriptionAuth(
 	};
 }
 
+function hasClaudeAccessToken(raw: string | null): boolean {
+	if (!raw) return false;
+	try {
+		const store = JSON.parse(raw);
+		return Boolean((store.claudeAiOauth ?? store)?.accessToken);
+	} catch {
+		return false;
+	}
+}
+
 /**
  * Subscription first, API key second. An explicit OAuth env token or stored
  * Claude Code credentials win over `ANTHROPIC_API_KEY`, so a key left in the
@@ -674,7 +686,7 @@ export async function resolveAnthropicAuth(
 	const hasSubscription =
 		d.env.ANTHROPIC_AUTH_TOKEN ||
 		d.env.CLAUDE_CODE_OAUTH_TOKEN ||
-		(await d.readClaudeKeychain());
+		hasClaudeAccessToken(await d.readClaudeKeychain());
 	if (!hasSubscription && d.env.ANTHROPIC_API_KEY)
 		return {
 			mode: "api-key",
