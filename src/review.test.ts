@@ -2426,6 +2426,52 @@ describe("buildReview triage gate — FULL carries forward open prior findings",
 
 		expect(review?.resolvedFindings).toEqual([]);
 	});
+
+	it("offers a resolved finding's thread for closing when no other finding shares its path and title", async () => {
+		const sha0 = "bbbbbbbbbbbb2222";
+		const sha1 = "dddddddddddd4444";
+		mockTriageReReview.mockResolvedValueOnce({
+			recommendation: "FULL",
+			resolved: ["src/a.ts:5:bug"],
+			newRisk: true,
+		});
+		const emptyAgent = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "REQUEST_CHANGES",
+				general_findings: [],
+				inline_comments: [
+					buildInlineComment({ path: "src/a.ts", line: 6, title: "other" }),
+				],
+			}),
+		);
+		for (let i = 0; i < 5; i++)
+			mockGenerateObject.mockResolvedValueOnce(emptyAgent);
+		mockGenerateObject.mockResolvedValueOnce({
+			object: { summary: "s" },
+			usage: { inputTokens: 10, outputTokens: 5 },
+		});
+
+		const review = await buildReview({
+			octokit: buildOctokit({
+				existingReviews: [
+					{
+						body: buildOwnReviewBody({
+							sha: sha0,
+							count: 1,
+							rows: ["| 🟠 | **bug** (`src/a.ts:5`) |"],
+						}),
+					},
+				],
+				files: [buildPullFile("src/a.ts", SIMPLE_PATCH)],
+			}),
+			...baseContext,
+			headSha: sha1,
+		});
+
+		expect(review?.resolvedFindings).toEqual([
+			{ path: "src/a.ts", title: "bug" },
+		]);
+	});
 });
 
 // ---------------------------------------------------------------------------

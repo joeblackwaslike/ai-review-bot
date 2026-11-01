@@ -2656,7 +2656,10 @@ export async function buildReview(
 				(r) =>
 					!(state?.findings ?? []).some(
 						(f) =>
-							f.status === "open" && f.path === r.path && f.title === r.title,
+							f.id !== r.id &&
+							f.status === "open" &&
+							f.path === r.path &&
+							f.title === r.title,
 					),
 			)
 			.map(({ path, title }) => ({ path, title })),
