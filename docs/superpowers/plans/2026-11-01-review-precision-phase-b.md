@@ -70,7 +70,7 @@
 
 ### Task 2: Numbered diff lines (B3, `.8`)
 
-**Interfaces:** Produces in `src/diff-lines.ts`: `collectRightSideLines(patch): Set<number>` (moved), `rightSideText(patch): Map<number, string>`, `numberPatchLines(patch): string`. Format per line: right-side number right-aligned in 5 columns, ` | `, then the original line; deletions and `\` lines get blank margin; `@@` headers unchanged.
+**Interfaces:** Produces in `src/diff-lines.ts`: `collectRightSideLines(patch): Set<number>` (moved), `rightSideText(patch): Map<number, string>`, `numberPatchLines(patch): string`. Format per line: the right-side number right-aligned in 4 columns (`%4d`), then `|`, then the original line; deletions get a blank 4-column margin before the `|`; `@@` headers and `\` lines are unprefixed.
 
 - [ ] Move the walk; update importers (`review.ts`, `review.test.ts`) and refactor `collectRightSideLines` onto one shared walk.
 - [ ] RED: `diff-lines.test.ts` for numbering across two hunks, deletions, `\ No newline`, and a patch ending in `[patch truncated]` (marker unnumbered). `prompt.test.ts`: `buildUserMessage` output contains numbered lines and no longer says to count from `@@`.
