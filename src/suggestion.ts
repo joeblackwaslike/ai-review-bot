@@ -4,7 +4,6 @@ const FENCE = /^\s*```[\w-]*\s*$/;
 const NUMBER_PREFIX = /^\s*(\d+)\s*[|:]\s?/;
 const PIPE_NUMBER_PREFIX = /^\s*(\d+)\s*\|\s?/;
 const NUMERIC_KEY = /^\s*\d+\s*:/;
-const DICT_VALUE_LINE = /^\s*\d+\s*:\s*\S.*[,{]\s*$/;
 
 interface RepairInput {
 	suggestion: string;
@@ -32,9 +31,12 @@ function stripFence(lines: string[]): string[] {
 	return lines;
 }
 
-/** Drops `N |` and `N:` display prefixes. When a replaced file line, or the
- * suggestion's own line, looks like a numeric map key (`1: "one",`), `N:` is
- * source syntax and only the pipe form is stripped. */
+/** Drops `N |` and `N:` display prefixes. When a replaced file line itself
+ * starts with a numeric key (`1: "one",`), `N:` is source syntax and only the
+ * pipe form is stripped, with its usual +-WINDOW tolerance. Otherwise the
+ * colon form strips only when its numbers land on the replaced range
+ * exactly, so a suggestion that introduces its own numeric keys near the
+ * range (rather than echoing real line numbers) is left alone. */
 function stripNumberPrefixes(
 	lines: string[],
 	start: number,
@@ -42,10 +44,8 @@ function stripNumberPrefixes(
 	fileLines: FileLines,
 ): string[] {
 	const range = rangeLines(fileLines, start, end);
-	const looksLikeNumericKeys =
-		range.some((l) => NUMERIC_KEY.test(l)) ||
-		lines.some((l) => DICT_VALUE_LINE.test(l));
-	const prefix = looksLikeNumericKeys ? PIPE_NUMBER_PREFIX : NUMBER_PREFIX;
+	const usesPipeForm = range.some((l) => NUMERIC_KEY.test(l));
+	const prefix = usesPipeForm ? PIPE_NUMBER_PREFIX : NUMBER_PREFIX;
 	const numbers = lines.map((l) => Number(prefix.exec(l)?.[1] ?? NaN));
 	if (lines.length === 0 || numbers.some(Number.isNaN)) return lines;
 	const consecutive = numbers.every(
@@ -53,8 +53,9 @@ function stripNumberPrefixes(
 	);
 	const first = numbers[0];
 	const last = numbers[numbers.length - 1];
-	const matchesSpan =
-		Math.abs(first - start) <= WINDOW && Math.abs(last - end) <= WINDOW;
+	const matchesSpan = usesPipeForm
+		? Math.abs(first - start) <= WINDOW && Math.abs(last - end) <= WINDOW
+		: first === start && last === end;
 	if (!consecutive || !matchesSpan) return lines;
 	return lines.map((l) => l.replace(prefix, ""));
 }

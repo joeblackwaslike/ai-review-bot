@@ -83,6 +83,18 @@ describe("repairSuggestion", () => {
 		expect(repair(s, 1, null, top)?.suggestion).toBe(s);
 	});
 
+	it("still strips colon prefixes on numbered lines ending in , or {", () => {
+		const sig = toMap({
+			40: "function foo(",
+			41: "  a,",
+			42: ") {",
+		});
+		const s = "40: function foo(\n41:   a,\n42: ) {";
+		expect(repair(s, 42, 40, sig)?.suggestion).toBe(
+			"function foo(\n  a,\n) {",
+		);
+	});
+
 	it("keeps a single numeric label far from the anchored line", () => {
 		expect(repair("42: x", 10)?.suggestion).toBe("  42: x");
 	});
