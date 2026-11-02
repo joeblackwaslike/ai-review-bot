@@ -13,6 +13,7 @@ function claim(
 		title: string;
 		severity: string | null;
 		body: string;
+		advisory: boolean;
 	}> = {},
 ) {
 	return {
@@ -211,6 +212,31 @@ describe("dedupeClaims", () => {
 			claim({ line: 12, title: "`alpha` returns wrong unchecked values" }),
 		]);
 		expect(result.kept.map((c) => c.line)).toEqual([400, 10]);
+	});
+
+	it("keeps the non-advisory finding over an advisory one, even with lower severity and a shorter body", () => {
+		const nonAdvisory = claim({
+			line: 116,
+			severity: "P3",
+			body: "short",
+			title:
+				"`body: f.title` duplicates the title instead of passing the finding body",
+		});
+		const advisory = claim({
+			line: 120,
+			severity: "P1",
+			body: "the long explanation of why this matters",
+			advisory: true,
+			title:
+				"body field set to f.title — finding body duplicates the title, no description",
+		});
+		const forward = dedupeClaims([nonAdvisory, advisory]);
+		expect(forward.kept).toEqual([nonAdvisory]);
+		expect(forward.merges).toEqual([{ from: advisory, into: nonAdvisory }]);
+
+		const backward = dedupeClaims([advisory, nonAdvisory]);
+		expect(backward.kept).toEqual([nonAdvisory]);
+		expect(backward.merges).toEqual([{ from: advisory, into: nonAdvisory }]);
 	});
 });
 

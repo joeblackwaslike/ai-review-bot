@@ -20,8 +20,11 @@ export function suppressSettled<T extends ClaimLike>(
 	const suppressed: Suppressed<T>[] = [];
 	for (const finding of findings) {
 		const named = declared?.(finding);
-		const entry =
-			named && isSettled(named) ? named : findSettledMatch(finding, ledger);
+		const entry = named
+			? isSettled(named)
+				? named
+				: null
+			: findSettledMatch(finding, ledger);
 		if (entry) suppressed.push({ finding, entry });
 		else kept.push(finding);
 	}

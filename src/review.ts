@@ -1328,9 +1328,10 @@ function buildCommentBody(comment: ModelInlineComment, patch?: string): string {
 		? `\n\n${stripForgedFpMarkers(comment.causedBy)}`
 		: "";
 	const base = `${badge}\n\n**${title}**\n\n${stripForgedFpMarkers(comment.body)}${linked}`;
-	const withFix = comment.suggestion
-		? `${base}\n\n*Suggested fix:*\n\n\`\`\`suggestion\n${comment.suggestion}\n\`\`\``
-		: base;
+	const withFix =
+		comment.suggestion !== null
+			? `${base}\n\n*Suggested fix:*\n\n\`\`\`suggestion\n${comment.suggestion}\n\`\`\``
+			: base;
 	const markers = formatFpMarkers({
 		...commentFingerprints(comment, patch),
 		advisory: comment.advisory === true,
@@ -1470,7 +1471,7 @@ function withRepairedSuggestion(
 	patch: string | undefined,
 	validLines: Set<number>,
 ): ModelInlineComment {
-	if (!comment.suggestion || !patch) return comment;
+	if (comment.suggestion === null || !patch) return comment;
 	const repaired = repairSuggestion({
 		suggestion: comment.suggestion,
 		line: comment.line,
