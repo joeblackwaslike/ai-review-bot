@@ -102,6 +102,7 @@ describe("decisionsFor", () => {
 		expect(decisions).toEqual([
 			{
 				findingId: "f1",
+				step: "gate.review.ai-review",
 				status: "approved",
 				note: "selected-for-fix",
 				atHead: "aaaa",
@@ -111,6 +112,7 @@ describe("decisionsFor", () => {
 			},
 			{
 				findingId: "r1",
+				step: "review",
 				status: "skipped",
 				note: "user_declined",
 				atHead: "aaaa",
@@ -120,6 +122,7 @@ describe("decisionsFor", () => {
 			},
 			{
 				findingId: "r2",
+				step: "review",
 				status: "approved",
 				note: "auto-fix",
 				atHead: "cccc",
@@ -129,6 +132,7 @@ describe("decisionsFor", () => {
 			},
 			{
 				findingId: "t1",
+				step: "test",
 				status: "skipped",
 				note: "step-skipped",
 				atHead: "aaaa",
@@ -138,5 +142,27 @@ describe("decisionsFor", () => {
 			},
 		]);
 		expect(skipped).toBe(2);
+	});
+
+	it("dates a skipped step's findings at its last round head, else the run head", () => {
+		const base: NoMistakesRound = {
+			stepName: "test",
+			stepStatus: "skipped",
+			stepFindingsJson: JSON.stringify({
+				findings: [{ id: "t1", severity: "warning", description: "Flaky" }],
+			}),
+			round: null,
+			findingsJson: null,
+			selectedFindingIds: null,
+			selectionSource: null,
+			reviewedHeadSha: null,
+		};
+		const withRounds = decisionsFor(run, [
+			{ ...base, round: 1, reviewedHeadSha: "bbbb" },
+			{ ...base, round: 2, reviewedHeadSha: "dddd" },
+		]);
+		expect(withRounds.decisions.map((d) => d.atHead)).toEqual(["dddd"]);
+		const noRounds = decisionsFor(run, [base]);
+		expect(noRounds.decisions.map((d) => d.atHead)).toEqual(["aaaa"]);
 	});
 });

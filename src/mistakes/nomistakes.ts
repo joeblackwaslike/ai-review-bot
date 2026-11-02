@@ -29,6 +29,7 @@ export interface NoMistakesSource {
 export interface Decision {
 	findingId: string;
 	status: "approved" | "skipped";
+	step: string;
 	note: "selected-for-fix" | "user_declined" | "auto-fix" | "step-skipped";
 	atHead: string | null;
 	path: string | null;
@@ -198,16 +199,24 @@ export function decisionsFor(
 	const decisions: Decision[] = [];
 	let skipped = 0;
 	const skippedSteps = new Set<string>();
+	const lastRoundHead = (stepName: string): string => {
+		const last = rounds
+			.filter((r) => r.stepName === stepName && r.round !== null)
+			.at(-1);
+		return last?.reviewedHeadSha ?? run.headSha;
+	};
 	const add = (
 		findings: z.infer<typeof Finding>[],
 		status: Decision["status"],
 		note: Decision["note"],
 		atHead: string | null,
+		step: string,
 	) => {
 		for (const f of findings) {
 			decisions.push({
 				findingId: f.id,
 				status,
+				step,
 				note,
 				atHead,
 				path: f.file ?? null,
@@ -221,7 +230,13 @@ export function decisionsFor(
 			skippedSteps.add(r.stepName);
 			const step = parseFindings(r.stepFindingsJson);
 			skipped += step.skipped;
-			add(step.findings, "skipped", "step-skipped", run.headSha);
+			add(
+				step.findings,
+				"skipped",
+				"step-skipped",
+				lastRoundHead(r.stepName),
+				r.stepName,
+			);
 		}
 		if (r.round === null) continue;
 		const round = parseFindings(r.findingsJson);
@@ -230,12 +245,12 @@ export function decisionsFor(
 		const chosen = round.findings.filter((f) => selected.has(f.id));
 		const head = r.reviewedHeadSha;
 		if (r.selectionSource === "user") {
-			add(chosen, "approved", "selected-for-fix", head);
+			add(chosen, "approved", "selected-for-fix", head, r.stepName);
 		} else if (r.selectionSource === "auto_fix") {
-			add(chosen, "approved", "auto-fix", head);
+			add(chosen, "approved", "auto-fix", head, r.stepName);
 		} else if (r.selectionSource === "user_declined") {
 			const declined = round.findings.filter((f) => !selected.has(f.id));
-			add(declined, "skipped", "user_declined", head);
+			add(declined, "skipped", "user_declined", head, r.stepName);
 		}
 	}
 	return { decisions, skipped };

@@ -48,8 +48,8 @@ interface LogState {
 const warn = (msg: string) => console.error(`mistakes ingest: ${msg}`);
 
 const eventKey = (
-	e: Pick<EventRecord, "findingId" | "status" | "atHead" | "by">,
-) => JSON.stringify([e.findingId, e.status, e.atHead, e.by]);
+	e: Pick<EventRecord, "findingId" | "status" | "atHead" | "by" | "step">,
+) => JSON.stringify([e.findingId, e.status, e.atHead, e.by, e.step ?? null]);
 
 /** `owner/name` of the checkout at `cwd`, from its origin remote or its top-level directory name. */
 export function currentRepoSlug(cwd = process.cwd()): string {
@@ -174,6 +174,7 @@ async function noMistakesEvents(opts: {
 				findingId: d.findingId,
 				status: d.status,
 				by: "no-mistakes",
+				step: d.step,
 				atHead: d.atHead,
 				fixCommit: null,
 				path: d.path,
@@ -190,6 +191,24 @@ async function noMistakesEvents(opts: {
 	if (skipped > 0)
 		warn(`skipped ${skipped} unrecognized no-mistakes finding(s)`);
 	return events;
+}
+
+const MAX_WRITE_ATTEMPTS = 10;
+
+function writeExclusive(dir: string, stem: string, data: string): string {
+	for (let attempt = 1; ; attempt++) {
+		const file = join(
+			dir,
+			`${stem}${attempt === 1 ? "" : `-${attempt}`}.jsonl`,
+		);
+		try {
+			writeFileSync(file, data, { flag: "wx" });
+			return file;
+		} catch (error) {
+			const taken = (error as NodeJS.ErrnoException).code === "EEXIST";
+			if (!taken || attempt >= MAX_WRITE_ATTEMPTS) throw error;
+		}
+	}
 }
 
 /** Resolves gate runs with no implementer to a Claude Code session and records no-mistakes decisions for captured branches and heads, appending both to a new `ingest-<stamp>.jsonl` beside the capture files. Capture files are only read. Annotations and events already written by an earlier ingest are not repeated. */
@@ -293,10 +312,10 @@ export async function ingest(opts: IngestOptions): Promise<IngestResult> {
 	lines.push(...events);
 
 	if (lines.length === 0) return result;
-	const file = join(dir, `ingest-${fileStamp(started)}.jsonl`);
-	writeFileSync(file, lines.map((l) => `${JSON.stringify(l)}\n`).join(""), {
-		flag: "wx",
-	});
-	result.file = file;
+	result.file = writeExclusive(
+		dir,
+		`ingest-${fileStamp(started)}`,
+		lines.map((l) => `${JSON.stringify(l)}\n`).join(""),
+	);
 	return result;
 }

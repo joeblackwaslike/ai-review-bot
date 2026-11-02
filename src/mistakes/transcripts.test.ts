@@ -22,6 +22,15 @@ describe("scanTranscripts", () => {
 		expect(skipped).toBe(1);
 	});
 
+	it("does not count a malformed line that cannot mention the branch", async () => {
+		const { skipped } = await scanTranscripts({
+			dir: DIR,
+			repoName: "ai-review-bot",
+			branch: "feat/never",
+		});
+		expect(skipped).toBe(0);
+	});
+
 	it("merges duplicate session ids from several files into one candidate", async () => {
 		const { sessions } = await scanTranscripts({
 			dir: DIR,

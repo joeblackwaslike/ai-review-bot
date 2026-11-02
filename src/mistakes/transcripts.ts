@@ -68,13 +68,14 @@ export async function scanTranscripts(opts: {
 }): Promise<{ sessions: SessionActivity[]; skipped: number }> {
 	const sessions = new Map<string, SessionActivity>();
 	let skipped = 0;
+	const needle = JSON.stringify(opts.branch).slice(1, -1);
 	for (const file of await projectFiles(opts.dir, opts.repoName)) {
 		const lines = createInterface({
 			input: createReadStream(file, { encoding: "utf-8" }),
 			crlfDelay: Number.POSITIVE_INFINITY,
 		});
 		for await (const raw of lines) {
-			if (!raw.trim()) continue;
+			if (!raw.trim() || !raw.includes(needle)) continue;
 			let line: TranscriptLine;
 			try {
 				line = JSON.parse(raw);

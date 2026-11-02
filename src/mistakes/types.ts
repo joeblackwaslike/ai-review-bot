@@ -21,7 +21,7 @@ const common = {
 	v: z.literal(1),
 	ts: z.string(),
 	runId: z.string(),
-	source: z.enum(["review", "gate", "ingest"]),
+	source: z.enum(["review", "gate"]),
 	repo: z.string(),
 	branch: z.string().nullable(),
 };
@@ -69,6 +69,7 @@ export type FindingRecord = z.infer<typeof FindingRecord>;
 
 export const EventRecord = z.object({
 	...common,
+	source: z.enum(["review", "gate", "ingest"]),
 	type: z.literal("event"),
 	findingId: z.string(),
 	status: z.enum([
@@ -80,6 +81,7 @@ export const EventRecord = z.object({
 		"rejected",
 	]),
 	by: z.enum(["gate-inferred", "no-mistakes", "agent"]),
+	step: z.string().nullable().optional(),
 	atHead: z.string().nullable(),
 	fixCommit: z.string().nullable(),
 	path: z.string().nullable(),

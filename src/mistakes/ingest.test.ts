@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ingest } from "./ingest.js";
-import { openMistakeLog } from "./log.js";
+import { fileStamp, openMistakeLog } from "./log.js";
 import type { NoMistakesRound, NoMistakesSource } from "./nomistakes.js";
 import { type Implementer, MistakeRecord } from "./types.js";
 
@@ -193,6 +193,7 @@ describe("ingest", () => {
 
 	it("falls back to the transcript scan with medium confidence", async () => {
 		const root = tempDir();
+		const warn = vi.spyOn(console, "error").mockImplementation(() => {});
 		const gateId = capture(root, {
 			source: "gate",
 			branch: "feat/x",
@@ -202,6 +203,9 @@ describe("ingest", () => {
 		const res = await run(root, { transcriptsDir: TRANSCRIPTS });
 
 		expect(res.resolved).toEqual({ byReviewRow: 0, byTranscript: 1 });
+		expect(warn).toHaveBeenCalledWith(
+			"mistakes ingest: skipped 1 malformed transcript line(s)",
+		);
 		const [ann] = readOutput(res.file);
 		expect(ann).toMatchObject({
 			type: "annotation",
@@ -217,6 +221,7 @@ describe("ingest", () => {
 
 	it("leaves an unmatched gate run unresolved and writes no file", async () => {
 		const root = tempDir();
+		vi.spyOn(console, "error").mockImplementation(() => {});
 		capture(root, {
 			source: "gate",
 			branch: "feat/none",
@@ -292,6 +297,7 @@ describe("ingest", () => {
 				findingId: "f1",
 				status: "approved",
 				by: "no-mistakes",
+				step: "gate.review.ai-review",
 				atHead: "aaaa",
 				fixCommit: null,
 				path: "src/a.ts",
@@ -426,6 +432,58 @@ describe("ingest", () => {
 			(f) => f.startsWith("ingest-"),
 		);
 		expect(ingestFiles).toHaveLength(1);
+	});
+
+	it("keeps decisions that differ only by step and dedupes each on re-run", async () => {
+		const root = tempDir();
+		capture(root, {
+			source: "gate",
+			branch: "feat/x",
+			at: "2026-11-01T12:00:00.000Z",
+			implementer: claude("s-env"),
+		});
+		const nm = () =>
+			fakeNoMistakes(
+				[{ id: "NMRUN1", branch: "feat/x", headSha: "aaaa", createdAt: 1 }],
+				{
+					NMRUN1: [DECIDED_ROUND, { ...DECIDED_ROUND, stepName: "review" }],
+				},
+			);
+
+		const first = await run(root, { noMistakes: nm() });
+		const second = await run(root, { noMistakes: nm() });
+
+		expect(first.events).toBe(2);
+		expect(
+			readOutput(first.file).map((r) => r.type === "event" && r.step),
+		).toEqual(["gate.review.ai-review", "review"]);
+		expect(second.events).toBe(0);
+	});
+
+	it("retries with a numbered suffix when the ingest file name is taken", async () => {
+		const root = tempDir();
+		capture(root, {
+			source: "gate",
+			branch: "feat/x",
+			at: "2026-11-01T12:00:00.000Z",
+			implementer: claude("s-env"),
+		});
+		const now = new Date("2026-11-02T00:00:00.000Z");
+		const dir = join(root, `${OWNER}__${REPO}`);
+		const taken = `ingest-${fileStamp(now)}`;
+		writeFileSync(join(dir, `${taken}.jsonl`), "");
+		writeFileSync(join(dir, `${taken}-2.jsonl`), "");
+
+		const res = await run(root, {
+			now: () => now,
+			noMistakes: fakeNoMistakes(
+				[{ id: "NMRUN1", branch: "feat/x", headSha: "aaaa", createdAt: 1 }],
+				{ NMRUN1: [DECIDED_ROUND] },
+			),
+		});
+
+		expect(res.file).toBe(join(dir, `${taken}-3.jsonl`));
+		expect(readOutput(res.file)).toHaveLength(1);
 	});
 
 	it("returns an empty result when the repo has no capture dir", async () => {

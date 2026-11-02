@@ -236,3 +236,65 @@ describe("MistakeRecord annotation", () => {
 		expect(rec.success).toBe(true);
 	});
 });
+
+describe("MistakeRecord source and step", () => {
+	const run = {
+		v: 1,
+		type: "run",
+		ts: "t",
+		runId: "r1",
+		source: "ingest",
+		repo: "o/r",
+		branch: "b",
+		headSha: "aaaa",
+		mergeBase: null,
+		scope: "range",
+		round: 1,
+		costUsd: 0,
+		durationSeconds: 1,
+		providers: [],
+		models: [],
+		agentsAttempted: 0,
+		agentsSucceeded: 0,
+		partial: false,
+		reportPath: null,
+		implementer: {
+			agent: null,
+			sessionId: null,
+			source: null,
+			confidence: null,
+		},
+	};
+	const event = {
+		v: 1,
+		type: "event",
+		ts: "t",
+		runId: "nm",
+		source: "ingest",
+		repo: "o/r",
+		branch: "b",
+		findingId: "f1",
+		status: "approved",
+		by: "no-mistakes",
+		atHead: "aaaa",
+		fixCommit: null,
+		path: null,
+		title: "x",
+		severity: "error",
+		note: null,
+	};
+
+	it("rejects ingest as a run source and accepts review", () => {
+		expect(MistakeRecord.safeParse(run).success).toBe(false);
+		expect(MistakeRecord.safeParse({ ...run, source: "review" }).success).toBe(
+			true,
+		);
+	});
+
+	it("accepts an event with source ingest, with or without a step", () => {
+		const parsed = MistakeRecord.parse(event);
+		expect(parsed.type === "event" && parsed.step).toBeUndefined();
+		const withStep = MistakeRecord.parse({ ...event, step: "review" });
+		expect(withStep.type === "event" && withStep.step).toBe("review");
+	});
+});
