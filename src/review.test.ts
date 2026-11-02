@@ -77,7 +77,11 @@ vi.mock("ai", async (importOriginal) => ({
 
 vi.mock("./models.js", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("./models.js")>();
-	return { ...actual, createAIModel: vi.fn().mockReturnValue("mocked-model") };
+	return {
+		...actual,
+		createAIModel: vi.fn().mockReturnValue("mocked-model"),
+		computeCost: vi.fn(actual.computeCost),
+	};
 });
 
 vi.mock("./config.js", () => ({
@@ -6853,6 +6857,93 @@ describe("buildReview ledger suppression", () => {
 
 		const noPrior = () =>
 			ledgerOctokit({ reviews: [], comments: [], threadNodes: [] });
+
+		it("flushes the collected discards and rethrows the original error when the round throws", async () => {
+			const boom = new Error("cost table missing");
+			vi.mocked(computeCost).mockImplementationOnce(() => {
+				throw boom;
+			});
+			routeAgents(
+				{
+					"code-reviewer.md": withInline(repeat),
+					"silent-failure-hunter.md": buildModelReview({
+						event: "COMMENT",
+						general_findings: [fresh],
+						inline_comments: [],
+					}),
+				},
+				empty,
+			);
+			const recordDiscards = spy();
+
+			await expect(
+				buildReview({
+					octokit: ledgerOctokit(),
+					...baseContext,
+					recordDiscards,
+				}),
+			).rejects.toBe(boom);
+
+			expect(recordsOf(recordDiscards)).toEqual([
+				expect.objectContaining({
+					reason: "SUPPRESSED_SETTLED",
+					skill: "code-reviewer.md",
+				}),
+			]);
+		});
+
+		it("attributes a late drop only to skills whose own copy survived suppression", async () => {
+			const claim = buildInlineComment({
+				title: "Token cache entries never expire or shrink",
+				body: "Entries in `tokenCache` are kept forever.",
+				path: "src/review.ts",
+				line: 40,
+				severity: "P2",
+			});
+			const entryShortId = shortFindingId(
+				findingId("src/review.ts", 2, REPEAT_TITLE),
+			);
+			routeAgents(
+				{
+					"code-reviewer.md": withInline({
+						...claim,
+						relation: { kind: "repeats", entry_id: entryShortId },
+					}),
+					"silent-failure-hunter.md": withInline(claim),
+				},
+				empty,
+			);
+			const recordDiscards = spy();
+
+			await buildReview({
+				octokit: ledgerOctokit({
+					reviews: [openRound],
+					threadNodes: [openThread],
+				}),
+				...baseContext,
+				recordDiscards,
+			});
+
+			const records = recordsOf(recordDiscards);
+			expect(
+				records
+					.filter((d) => d.skill === "code-reviewer.md")
+					.map((d) => d.reason),
+			).toEqual([expect.stringMatching(/^SUPPRESSED_/)]);
+			expect(records.filter((d) => d.reason === "OFF_DIFF")).toEqual([
+				{
+					reason: "OFF_DIFF",
+					code: "OFF_DIFF_LINE",
+					disposition: "dropped",
+					title: claim.title,
+					path: "src/review.ts",
+					line: 40,
+					severity: "P2",
+					skill: "silent-failure-hunter.md",
+					provider: "anthropic",
+				},
+			]);
+		});
 
 		it("records an off-diff P2 with its sub-code and the skill that reported it", async () => {
 			const offLine = buildInlineComment({

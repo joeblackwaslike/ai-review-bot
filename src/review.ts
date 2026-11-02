@@ -2589,7 +2589,7 @@ async function buildReviewInner(
 
 	const agentResults: ModelReview[] = [];
 	/** Skill path of each entry in `agentResults`, which holds ok outcomes only. */
-	const agentSkills: string[] = [];
+	const agentSkills: (string | null)[] = [];
 	const rateLimited: RateLimitInfo[] = [];
 	const quotaExhausted: ModelSelection["provider"][] = [];
 	const skipped: string[] = [];
@@ -2609,7 +2609,7 @@ async function buildReviewInner(
 	outcomes.forEach((o, i) => {
 		if (o.status === "ok") {
 			agentResults.push(o.review);
-			agentSkills.push(allSkills[i]?.skillPath ?? "unknown");
+			agentSkills.push(allSkills[i]?.skillPath ?? null);
 		} else if (o.status === "rate_limited") {
 			rateLimited.push(o.rateLimit);
 		} else if (o.status === "quota_exhausted") {
@@ -2851,7 +2851,7 @@ async function buildReviewInner(
 	const mergeOutcome = mergeReviewsDetailed(unsettledResults, resolvedKeys, {
 		dedupeNearDuplicateClaims: tuning.dedupeNearDuplicateClaims,
 	});
-	const skillOf = new Map<object, string>();
+	const skillOf = new Map<object, string | null>();
 	unsettledResults.forEach((r, i) => {
 		for (const f of [...r.general_findings, ...r.inline_comments])
 			skillOf.set(f, agentSkills[i]);
@@ -2952,12 +2952,22 @@ async function buildReviewInner(
 			skillsByKey.set(key, set);
 		}
 	});
+	const discardSkillsByKey = new Map<string, Set<string | null>>();
+	unsettledResults.forEach((r, i) => {
+		for (const c of r.inline_comments) {
+			const own = commentKey(c);
+			const key = mergeOutcome.inlineAliases.get(own) ?? own;
+			const set = discardSkillsByKey.get(key) ?? new Set<string | null>();
+			set.add(agentSkills[i]);
+			discardSkillsByKey.set(key, set);
+		}
+	});
 	const lateDiscard = (
 		c: ModelInlineComment,
 		reason: DiscardReason,
 		code: OffDiffCode | null = null,
 	) => {
-		const skills = [...(skillsByKey.get(commentKey(c)) ?? [])];
+		const skills = [...(discardSkillsByKey.get(commentKey(c)) ?? [])];
 		for (const skill of skills.length ? skills : [null])
 			discards.push({ ...toDiscard(c, reason, skill, context.provider), code });
 	};
