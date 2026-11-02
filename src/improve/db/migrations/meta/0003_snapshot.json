@@ -1,5 +1,5 @@
 {
-	"id": "5042de37-e081-4e88-8ae7-df8d57f01319",
+	"id": "c63bdbe8-d99e-4fd6-90d6-1ec3cd7baafa",
 	"prevId": "758895e9-331f-4303-927c-a415f6ceda73",
 	"version": "7",
 	"dialect": "postgresql",
@@ -457,6 +457,12 @@
 						},
 						{
 							"expression": "coalesce(\"skill\", '')",
+							"asc": true,
+							"isExpression": true,
+							"nulls": "last"
+						},
+						{
+							"expression": "coalesce(\"line\", -1)",
 							"asc": true,
 							"isExpression": true,
 							"nulls": "last"

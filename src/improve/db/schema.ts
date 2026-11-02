@@ -259,6 +259,7 @@ export const findingDiscards = pgTable(
 			t.reason,
 			t.naturalKey,
 			sql`coalesce(${t.skill}, '')`,
+			sql`coalesce(${t.line}, -1)`,
 		),
 		index("finding_discards_pr_idx").on(t.provider, t.owner, t.repo, t.pr),
 	],

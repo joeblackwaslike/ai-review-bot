@@ -112,6 +112,29 @@ describe.skipIf(!url)("repo (real postgres)", () => {
 		expect(await insertDiscards(db, [{ ...row, skill: null }])).toBe(0);
 	});
 
+	it("insertDiscards inserts one row per line and none for a repeat", async () => {
+		const row = {
+			provider: "anthropic" as const,
+			owner: "o",
+			repo: "r",
+			pr: 3,
+			reviewSha: "fed",
+			reason: "OFF_DIFF" as const,
+			code: "OFF_DIFF_LINE" as const,
+			disposition: "dropped" as const,
+			naturalKey: "k3",
+			path: "src/x.ts",
+			line: 20,
+			severity: "P2",
+			title: "Missing error handling",
+			skill: "a.md",
+		};
+		const rows = [20, 200, null].map((line) => ({ ...row, line }));
+		expect(await insertDiscards(db, rows)).toBe(3);
+		expect(await insertDiscards(db, [row])).toBe(0);
+		expect(await insertDiscards(db, [{ ...row, line: null }])).toBe(0);
+	});
+
 	it("upsertFinding keeps a stable id on natural_key conflict", async () => {
 		const id1 = await upsertFinding(db, baseFinding);
 		const id2 = await upsertFinding(db, { ...baseFinding, severity: "medium" });

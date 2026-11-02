@@ -177,6 +177,18 @@ describe("insertDiscards", () => {
 		expect(r.rows).toEqual([{ n: 5 }]);
 	});
 
+	it("keeps rows that differ only in line, with a null line colliding with itself", async () => {
+		const db = await createTestDb();
+		await insertDiscards(
+			db,
+			[20, 200, null].map((line) => ({ ...baseDiscard, line })),
+		);
+		const r = await db.execute(
+			sql`select count(*)::int as n from finding_discards`,
+		);
+		expect(r.rows).toEqual([{ n: 3 }]);
+	});
+
 	it("returns 0 for an empty batch", async () => {
 		const db = await createTestDb();
 		expect(await insertDiscards(db, [])).toBe(0);
