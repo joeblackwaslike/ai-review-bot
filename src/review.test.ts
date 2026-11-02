@@ -4322,6 +4322,47 @@ describe("review body markdown", () => {
 			expect(review?.body).toContain("Off by two (`src/review.ts:14`)");
 			expect(review?.body).toContain("<!-- ai-review:findings=1 -->");
 		});
+
+		it("routing an advisory off-diff P1 does not request changes", async () => {
+			const advisoryComment = {
+				...buildInlineComment({
+					title: "Off by two",
+					severity: "P1" as const,
+					path: "src/review.ts",
+					line: 14,
+					start_line: null,
+				}),
+				advisory: true as const,
+			};
+			const agent = buildGenerateObjectResponse(
+				buildModelReview({
+					event: "COMMENT",
+					general_findings: [],
+					inline_comments: [advisoryComment],
+				}),
+			);
+			mockGenerateObject
+				.mockResolvedValue(agent)
+				.mockResolvedValueOnce(agent)
+				.mockResolvedValueOnce(agent)
+				.mockResolvedValueOnce(agent)
+				.mockResolvedValueOnce(agent)
+				.mockResolvedValueOnce(agent)
+				.mockResolvedValueOnce({
+					object: { summary: "One issue." },
+					usage: { inputTokens: 10, outputTokens: 5 },
+				});
+			const review = await buildReview({
+				octokit: buildOctokit({
+					files: [
+						{ filename: "src/review.ts", status: "modified", patch: SPARSE },
+					],
+				}),
+				...baseContext,
+			});
+			expect(review?.comments).toHaveLength(0);
+			expect(review?.event).toBe("COMMENT");
+		});
 	});
 
 	// The carrier comment repeats this beneath the review, so whatever the review
@@ -9860,6 +9901,31 @@ describe("mergeReviewsDetailed — advisory never displaces a blocking finding",
 		expect(review.general_findings).toHaveLength(1);
 		expect(review.general_findings[0].severity).toBe("P0");
 		expect(review.event).toBe("REQUEST_CHANGES");
+	});
+
+	it("keeps the more severe general finding when non-advisory titles collide", () => {
+		const low = {
+			...generalBase,
+			title: "Shared title",
+			body: "short",
+			severity: "P3" as const,
+		};
+		const high = {
+			...generalBase,
+			title: "Shared title",
+			body: "a much longer explanation of the same claim",
+			severity: "P1" as const,
+		};
+		for (const order of [
+			[low, high],
+			[high, low],
+		]) {
+			const { review } = mergeReviewsDetailed(
+				order.map((f) => buildModelReview({ general_findings: [f] })),
+			);
+			expect(review.general_findings).toHaveLength(1);
+			expect(review.general_findings[0].severity).toBe("P1");
+		}
 	});
 
 	it("near-duplicate collapsing keeps the non-advisory member", () => {

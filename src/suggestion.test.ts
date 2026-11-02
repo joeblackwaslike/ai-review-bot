@@ -90,9 +90,7 @@ describe("repairSuggestion", () => {
 			42: ") {",
 		});
 		const s = "40: function foo(\n41:   a,\n42: ) {";
-		expect(repair(s, 42, 40, sig)?.suggestion).toBe(
-			"function foo(\n  a,\n) {",
-		);
+		expect(repair(s, 42, 40, sig)?.suggestion).toBe("function foo(\n  a,\n) {");
 	});
 
 	it("keeps a single numeric label far from the anchored line", () => {

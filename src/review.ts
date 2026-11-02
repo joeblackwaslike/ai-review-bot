@@ -650,7 +650,10 @@ function flattenAliases(aliases: Map<string, string>): void {
 
 /** Whether `a` should replace `b` as the representative of one claim:
  * non-advisory first, then higher severity, then the longer body. */
-function outranks(a: ModelInlineComment, b: ModelInlineComment): boolean {
+function outranks(
+	a: { severity: string; body: string; advisory?: true },
+	b: { severity: string; body: string; advisory?: true },
+): boolean {
 	if (Boolean(a.advisory) !== Boolean(b.advisory)) return !a.advisory;
 	const diff =
 		(INLINE_SEVERITY_RANK[a.severity] ?? 0) -
@@ -676,17 +679,22 @@ export function mergeReviewsDetailed(
 	const isResolvedInline = (path: string, line: number) =>
 		resolved.has(`inline:${path}:${line}`);
 
-	const seenTitles = new Set<string>();
-	const general_findings = agentResults
+	const byTitle = new Map<string, ModelFinding>();
+	for (const f of agentResults
 		.flatMap((r) => r.general_findings)
-		.filter((f) => !isResolvedGeneral(f.title))
-		.sort((a, b) => Number(Boolean(a.advisory)) - Number(Boolean(b.advisory)))
-		.filter((f) => {
-			const key = f.title.toLowerCase().trim();
-			if (seenTitles.has(key)) return false;
-			seenTitles.add(key);
-			return true;
-		});
+		.filter((finding) => !isResolvedGeneral(finding.title))) {
+		const key = f.title.toLowerCase().trim();
+		const existing = byTitle.get(key);
+		byTitle.set(
+			key,
+			existing
+				? withAbsorbedLink(outranks(f, existing) ? f : existing, [
+						outranks(f, existing) ? existing : f,
+					])
+				: f,
+		);
+	}
+	const general_findings = Array.from(byTitle.values());
 
 	// Distinct claims at one path:line stay separate comments; only restatements
 	// (isSameClaim) at the exact same location fold into one.
@@ -2812,7 +2820,9 @@ export async function buildReview(
 	if (routed.length > 0) {
 		modelReview = {
 			...modelReview,
-			event: "REQUEST_CHANGES",
+			event: routed.some((f) => !f.advisory)
+				? "REQUEST_CHANGES"
+				: modelReview.event,
 			general_findings: [...modelReview.general_findings, ...routed],
 			inline_comments: modelReview.inline_comments.filter(
 				(c) => !routedKeys.has(commentKey(c)),
