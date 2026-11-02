@@ -2,6 +2,8 @@ const WINDOW = 3;
 const MIN_ANCHOR_CHARS = 8;
 const FENCE = /^\s*```[\w-]*\s*$/;
 const NUMBER_PREFIX = /^\s*(\d+)\s*[|:]\s?/;
+const PIPE_NUMBER_PREFIX = /^\s*(\d+)\s*\|\s?/;
+const NUMERIC_KEY = /^\s*\d+\s*:/;
 
 interface RepairInput {
 	suggestion: string;
@@ -29,12 +31,20 @@ function stripFence(lines: string[]): string[] {
 	return lines;
 }
 
+/** Drops `N |` and `N:` display prefixes. When a replaced file line itself
+ * starts with a numeric key (`1: "one",`), `N:` is source syntax and only the
+ * pipe form is stripped. */
 function stripNumberPrefixes(
 	lines: string[],
 	start: number,
 	end: number,
+	fileLines: FileLines,
 ): string[] {
-	const numbers = lines.map((l) => Number(NUMBER_PREFIX.exec(l)?.[1] ?? NaN));
+	const range = rangeLines(fileLines, start, end);
+	const prefix = range.some((l) => NUMERIC_KEY.test(l))
+		? PIPE_NUMBER_PREFIX
+		: NUMBER_PREFIX;
+	const numbers = lines.map((l) => Number(prefix.exec(l)?.[1] ?? NaN));
 	if (lines.length === 0 || numbers.some(Number.isNaN)) return lines;
 	const consecutive = numbers.every(
 		(n, i) => i === 0 || n === numbers[i - 1] + 1,
@@ -44,7 +54,13 @@ function stripNumberPrefixes(
 	const matchesSpan =
 		Math.abs(first - start) <= WINDOW && Math.abs(last - end) <= WINDOW;
 	if (!consecutive || !matchesSpan) return lines;
-	return lines.map((l) => l.replace(NUMBER_PREFIX, ""));
+	return lines.map((l) => l.replace(prefix, ""));
+}
+
+function rangeLines(fileLines: FileLines, from: number, to: number): string[] {
+	const out: string[] = [];
+	for (let n = from; n <= to; n++) out.push(fileLines.get(n) ?? "");
+	return out;
 }
 
 function leadingWhitespace(text: string): string {
@@ -83,12 +99,40 @@ function covers(fileLines: FileLines, from: number, to: number): boolean {
 	return true;
 }
 
+/** The block with the target line's indentation restored, when it looks lost:
+ * the first text line is at column 0 under an indented target, no line the
+ * block copies from the replaced range keeps that line's own indentation (a
+ * verbatim copy means the block was written at file indentation, so its
+ * column-0 lines are a deliberate dedent), and the result is not just the
+ * replaced lines again (then the indentation change is the whole fix). */
+function restoreIndentation(lines: string[], range: string[]): string[] {
+	const target = leadingWhitespace(range[0] ?? "");
+	const firstText = lines.find((l) => l.trim() !== "") ?? "";
+	if (target === "" || leadingWhitespace(firstText) !== "") return lines;
+	const keepsVerbatim = lines.some(
+		(l) =>
+			l.trim() !== "" &&
+			range.some(
+				(r) =>
+					r.trim() === l.trim() &&
+					leadingWhitespace(r) === leadingWhitespace(l),
+			),
+	);
+	if (keepsVerbatim) return lines;
+	const indented = lines.map((l) => (l.trim() === "" ? l : target + l));
+	return indented.join("\n") === range.join("\n") ? lines : indented;
+}
+
 /** Cleans a model-written suggestion block: unwraps a code fence, drops
  * line-number prefixes, restores a lost indentation, and widens the replaced
  * range when the suggestion repeats neighbouring file lines verbatim. It never
  * narrows the range, since an edge line the suggestion leaves out may be an
- * intended deletion. Never adds lines and never judges the content. Returns null only when the block cannot be placed on lines the
- * diff shows, so the caller keeps the comment without it. */
+ * intended deletion. Never adds lines and never judges the content. A block
+ * that is empty or only blank lines once cleaned is posted as is on the
+ * original range (a deletion or a blank-line replacement).
+ *
+ * Returns null only when the replaced range, or the range widened to, crosses
+ * lines the diff does not show, so the caller keeps the comment without it. */
 export function repairSuggestion(
 	input: RepairInput,
 ): RepairedSuggestion | null {
@@ -96,13 +140,6 @@ export function repairSuggestion(
 	const start = input.startLine ?? input.line;
 	const end = input.line;
 	if (!covers(fileLines, start, end)) return null;
-	if (input.suggestion.length === 0) {
-		return {
-			suggestion: "",
-			line: end,
-			startLine: input.startLine,
-		};
-	}
 
 	const keepFences =
 		isFence(fileLines.get(start)) || isFence(fileLines.get(end));
@@ -111,8 +148,15 @@ export function repairSuggestion(
 		keepFences ? raw : stripFence(raw),
 		start,
 		end,
+		fileLines,
 	);
-	if (lines.every((l) => l.trim() === "")) return null;
+	if (lines.every((l) => l.trim() === "")) {
+		return {
+			suggestion: lines.join("\n"),
+			line: end,
+			startLine: input.startLine,
+		};
+	}
 
 	const s = findMatch(lines[0], start, fileLines);
 	const e = findMatch(lines[lines.length - 1], end, fileLines);
@@ -140,12 +184,10 @@ export function repairSuggestion(
 
 	if (!covers(fileLines, newStart, newEnd)) return null;
 
-	const target = leadingWhitespace(fileLines.get(newStart) ?? "");
-	const firstText = lines.find((l) => l.trim() !== "") ?? "";
-	const indented =
-		target !== "" && leadingWhitespace(firstText) === ""
-			? lines.map((l) => (l.trim() === "" ? l : target + l))
-			: lines;
+	const indented = restoreIndentation(
+		lines,
+		rangeLines(fileLines, newStart, newEnd),
+	);
 
 	return {
 		suggestion: indented.join("\n"),

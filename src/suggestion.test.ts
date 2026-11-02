@@ -59,6 +59,24 @@ describe("repairSuggestion", () => {
 		expect(repair(s, 11, 10)?.suggestion).toBe(`  ${s.replace("\n", "\n  ")}`);
 	});
 
+	it("keeps numeric mapping keys near the anchored lines when the file uses them", () => {
+		const dict = toMap({
+			1: "NUMBERS = {",
+			2: '    1: "one",',
+			3: '    2: "two",',
+			4: "}",
+		});
+		const s = '    1: "uno",\n    2: "dos",';
+		expect(repair(s, 3, 2, dict)?.suggestion).toBe(s);
+	});
+
+	it("still strips pipe prefixes in a file with numeric keys", () => {
+		const dict = toMap({ 2: '    1: "one",' });
+		expect(repair('2 |     1: "uno",', 2, null, dict)?.suggestion).toBe(
+			'    1: "uno",',
+		);
+	});
+
 	it("keeps a single numeric label far from the anchored line", () => {
 		expect(repair("42: x", 10)?.suggestion).toBe("  42: x");
 	});
@@ -76,6 +94,25 @@ describe("repairSuggestion", () => {
 
 	it("leaves a deliberate dedent alone", () => {
 		expect(repair("  }", 11)?.suggestion).toBe("  }");
+	});
+
+	it("re-indents a multi-line block that lost its indentation", () => {
+		const s = "if (total > 1) {\n  return total;\n}";
+		expect(repair(s, 12, 10)?.suggestion).toBe(
+			"  if (total > 1) {\n    return total;\n  }",
+		);
+	});
+
+	it("leaves a column-0 line alone when the block keeps a replaced line verbatim", () => {
+		const s = "export const MIN = 0;\n  if (total > MIN) {\n    return total;";
+		expect(repair(s, 11, 10)?.suggestion).toBe(s);
+	});
+
+	it("leaves a dedent to column 0 that only changes indentation", () => {
+		const py = toMap({ 4: "    retry = False" });
+		expect(repair("retry = False", 4, null, py)?.suggestion).toBe(
+			"retry = False",
+		);
 	});
 
 	it("widens the range when the suggestion starts with the preceding line", () => {
@@ -183,7 +220,19 @@ describe("repairSuggestion", () => {
 		expect(repair(s, 6, null, hunks)).toBeNull();
 	});
 
-	it("returns null for a suggestion that is empty once cleaned", () => {
-		expect(repair("```\n```", 11)).toBeNull();
+	it("posts an empty fence as a deletion of the range", () => {
+		expect(repair("```\n```", 12, 11)).toEqual({
+			suggestion: "",
+			line: 12,
+			startLine: 11,
+		});
+	});
+
+	it("posts a whitespace-only block as is, on the original range", () => {
+		expect(repair("\n", 12, 11)).toEqual({
+			suggestion: "\n",
+			line: 12,
+			startLine: 11,
+		});
 	});
 });

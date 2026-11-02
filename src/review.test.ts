@@ -441,6 +441,7 @@ describe("buildReviewComments", () => {
 				" const sixthValue = readSixth();",
 				"+const seventhValue = parseSeventh(sixthValue);",
 			].join("\n");
+			const spy = vi.spyOn(console, "log").mockImplementation(() => {});
 			const [posted] = buildReviewComments(
 				[buildPullFile("src/file.ts", gapPatch)],
 				[
@@ -451,6 +452,15 @@ describe("buildReviewComments", () => {
 							"const thirdValue = applyConfiguration(secondValue);\nconst sixthValue = fixed();",
 					}),
 				],
+			);
+			const logged = spy.mock.calls.map((c) => c[1]);
+			spy.mockRestore();
+			expect(logged).toContainEqual(
+				expect.objectContaining({
+					reason: "SUGGESTION_UNPLACEABLE",
+					path: "src/file.ts",
+					line: 6,
+				}),
 			);
 			expect(posted.line).toBe(6);
 			expect(posted.start_line).toBeUndefined();

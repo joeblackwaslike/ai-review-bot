@@ -1439,7 +1439,8 @@ export function routeDroppedComments(
 
 /** Applies `repairSuggestion` to a comment already validated against the diff.
  * A suggestion that cannot be repaired, or whose repaired range leaves the
- * valid lines, is dropped and the comment keeps its original anchor. */
+ * valid lines, is dropped and logged, and the comment keeps its original
+ * anchor. */
 function withRepairedSuggestion(
 	comment: ModelInlineComment,
 	patch: string | undefined,
@@ -1458,7 +1459,15 @@ function withRepairedSuggestion(
 		(repaired.startLine === null ||
 			(validLines.has(repaired.startLine) &&
 				repaired.startLine < repaired.line));
-	if (!repaired || !inRange) return { ...comment, suggestion: null };
+	if (!repaired || !inRange) {
+		console.log("suggestion dropped: cannot be placed on the diff", {
+			reason: repaired ? "SUGGESTION_RANGE_OFF_DIFF" : "SUGGESTION_UNPLACEABLE",
+			path: comment.path,
+			line: comment.line,
+			start_line: comment.start_line,
+		});
+		return { ...comment, suggestion: null };
+	}
 	return {
 		...comment,
 		suggestion: repaired.suggestion,
