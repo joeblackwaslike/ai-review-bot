@@ -1,0 +1,2 @@
+{"type":"user","sessionId":"sess-plain","cwd":"/Users/x/ai-review-bot","gitBranch":"feat/x","timestamp":"2026-11-01T09:00:00.000Z","isSidechain":false,"message":{"role":"user","content":"synthetic"}}
+{"type":"assistant","sessionId":"sess-plain","cwd":"/Users/x/ai-review-bot","gitBranch":"feat/x","timestamp":"2026-11-01T11:30:00.000Z","isSidechain":false,"message":{"role":"assistant","content":[{"type":"tool_use","id":"t2","name":"Bash","input":{"command":"git log --oneline -5"}}]}}

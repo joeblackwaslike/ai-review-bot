@@ -187,3 +187,52 @@ describe("findingRecords", () => {
 		expect(rows[0]?.path).toBeNull();
 	});
 });
+
+describe("MistakeRecord annotation", () => {
+	const annotation = {
+		v: 1,
+		type: "annotation",
+		ts: "2026-11-02T00:00:00.000Z",
+		runId: "r1",
+		repo: "o/r",
+		branch: "b",
+		implementer: {
+			agent: "claude-code",
+			sessionId: "s1",
+			source: "resolved",
+			confidence: "medium",
+		},
+	};
+
+	it("round-trips an annotation line", () => {
+		const rec = MistakeRecord.parse(JSON.parse(JSON.stringify(annotation)));
+		expect(rec).toEqual(annotation);
+	});
+
+	it("rejects an annotation without an implementer", () => {
+		const { implementer: _, ...rest } = annotation;
+		expect(MistakeRecord.safeParse(rest).success).toBe(false);
+	});
+
+	it("accepts ingest as an event source", () => {
+		const rec = MistakeRecord.safeParse({
+			v: 1,
+			type: "event",
+			ts: "t",
+			runId: "nm",
+			source: "ingest",
+			repo: "o/r",
+			branch: "b",
+			findingId: "f1",
+			status: "approved",
+			by: "no-mistakes",
+			atHead: "aaaa",
+			fixCommit: null,
+			path: null,
+			title: "x",
+			severity: "error",
+			note: "selected-for-fix",
+		});
+		expect(rec.success).toBe(true);
+	});
+});

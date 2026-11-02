@@ -1,0 +1,52 @@
+[
+	{
+		"step_name": "gate.review.ai-review",
+		"step_status": "completed",
+		"step_findings_json": null,
+		"round": 1,
+		"findings_json": "{\"findings\":[{\"id\":\"f1\",\"severity\":\"error\",\"action\":\"fix\",\"file\":\"src/a.ts\",\"line\":3,\"description\":\"Null deref\\nmore detail\"},{\"id\":\"f2\",\"severity\":\"warning\",\"file\":\"src/b.ts\",\"description\":\"Unused var\"}],\"summary\":\"s\"}",
+		"selected_finding_ids": "[\"f1\"]",
+		"selection_source": "user",
+		"reviewed_head_sha": "aaaa"
+	},
+	{
+		"step_name": "review",
+		"step_status": "completed",
+		"step_findings_json": null,
+		"round": 1,
+		"findings_json": "{\"findings\":[{\"id\":\"r1\",\"severity\":\"info\",\"description\":\"Nit\"},{\"severity\":\"info\"}]}",
+		"selected_finding_ids": "[]",
+		"selection_source": "user_declined",
+		"reviewed_head_sha": "aaaa"
+	},
+	{
+		"step_name": "review",
+		"step_status": "completed",
+		"step_findings_json": null,
+		"round": 2,
+		"findings_json": "{\"findings\":[{\"id\":\"r2\",\"severity\":\"error\",\"file\":\"src/c.ts\",\"description\":\"Race\"}]}",
+		"selected_finding_ids": "[\"r2\"]",
+		"selection_source": "auto_fix",
+		"reviewed_head_sha": "cccc"
+	},
+	{
+		"step_name": "test",
+		"step_status": "skipped",
+		"step_findings_json": "{\"findings\":[{\"id\":\"t1\",\"severity\":\"warning\",\"description\":\"Flaky\"}]}",
+		"round": null,
+		"findings_json": null,
+		"selected_finding_ids": null,
+		"selection_source": null,
+		"reviewed_head_sha": null
+	},
+	{
+		"step_name": "lint",
+		"step_status": "completed",
+		"step_findings_json": null,
+		"round": 1,
+		"findings_json": "not json",
+		"selected_finding_ids": null,
+		"selection_source": "user",
+		"reviewed_head_sha": "aaaa"
+	}
+]

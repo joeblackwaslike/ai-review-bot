@@ -43,14 +43,23 @@ export function findingKey(f: { path: string | null; title: string }): string {
 		.slice(0, 12);
 }
 
+/** Mistake log root: `AI_REVIEW_MISTAKES_DIR`, else `~/.ai-review/mistakes`. */
+export function mistakesRoot(): string {
+	return (
+		process.env.AI_REVIEW_MISTAKES_DIR ??
+		join(homedir(), ".ai-review", "mistakes")
+	);
+}
+
+export function fileStamp(at: Date): string {
+	return at.toISOString().replace(/[:.]/g, "-");
+}
+
 export function openMistakeLog(opts: OpenMistakeLogOptions): MistakeLog {
 	const now = opts.now ?? (() => new Date());
 	const runId = opts.runId ?? randomUUID();
-	const root =
-		opts.root ??
-		process.env.AI_REVIEW_MISTAKES_DIR ??
-		join(homedir(), ".ai-review", "mistakes");
-	const stamp = now().toISOString().replace(/[:.]/g, "-");
+	const root = opts.root ?? mistakesRoot();
+	const stamp = fileStamp(now());
 	const path = join(
 		root,
 		`${opts.owner}__${opts.repo}`,

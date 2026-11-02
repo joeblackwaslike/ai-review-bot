@@ -21,7 +21,7 @@ const common = {
 	v: z.literal(1),
 	ts: z.string(),
 	runId: z.string(),
-	source: z.enum(["review", "gate"]),
+	source: z.enum(["review", "gate", "ingest"]),
 	repo: z.string(),
 	branch: z.string().nullable(),
 };
@@ -89,9 +89,21 @@ export const EventRecord = z.object({
 });
 export type EventRecord = z.infer<typeof EventRecord>;
 
+export const AnnotationRecord = z.object({
+	v: z.literal(1),
+	type: z.literal("annotation"),
+	ts: z.string(),
+	runId: z.string(),
+	repo: z.string(),
+	branch: z.string().nullable(),
+	implementer: Implementer,
+});
+export type AnnotationRecord = z.infer<typeof AnnotationRecord>;
+
 export const MistakeRecord = z.discriminatedUnion("type", [
 	RunRecord,
 	FindingRecord,
 	EventRecord,
+	AnnotationRecord,
 ]);
 export type MistakeRecord = z.infer<typeof MistakeRecord>;

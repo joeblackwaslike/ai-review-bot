@@ -1,0 +1,1 @@
+{"type":"assistant","sessionId":"sess-nm","cwd":"/Users/x/.no-mistakes/worktrees/ai-review-bot/01ABC","gitBranch":"feat/x","timestamp":"2026-11-01T11:50:00.000Z","isSidechain":false,"message":{"role":"assistant","content":[{"type":"tool_use","id":"t5","name":"Bash","input":{"command":"git commit -m 'synthetic'"}}]}}

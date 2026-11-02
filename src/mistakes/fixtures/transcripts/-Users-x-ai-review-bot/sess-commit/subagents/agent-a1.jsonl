@@ -1,0 +1,1 @@
+{"type":"assistant","sessionId":"sess-subagent","agentId":"a1","cwd":"/Users/x/ai-review-bot","gitBranch":"feat/x","timestamp":"2026-11-01T11:55:00.000Z","isSidechain":true,"message":{"role":"assistant","content":[{"type":"tool_use","id":"t4","name":"Bash","input":{"command":"git commit -m 'synthetic'"}}]}}
