@@ -47,8 +47,8 @@ Local runs keep little today.
 Every line has `v: 1`, `type`, `ts`, `runId`, `source` (`review` or `gate`), `repo` and `branch`.
 
 - `run` holds `headSha`, `baseSha` or `mergeBase`, `scope` (`local-changes`, `full-tree`, `commit:<sha>` or `range`), `round`, `costUsd`, `durationSeconds`, `providers`, `models`, `agentsAttempted`, `agentsSucceeded`, `partial`, `reportPath` for `review`, and `implementer`.
-- `finding` holds `findingId`, `title`, `body`, `severity`, `category`, `confidence`, `evidence`, `suppressible`, `path`, `line`, `startLine`, `suggestion`, `skills[]`, `provider` and `model`. `findingId` is the ledger id for `gate` and a stable hash of path, title and head sha for `review`.
-- `event` holds `findingId`, `status` (`fixed`, `open`, `reopened`, `approved`, `skipped`, `rejected`), `by` (`gate-inferred`, `no-mistakes`, `agent`), `atHead`, `fixCommit` and `note`. The gate writes inferred `fixed` and `reopened` events. Ingest adds no-mistakes decisions.
+- `finding` is one row per agent finding, logged before the merge so it keeps its skill. It holds `findingKey`, `skill`, `provider`, `model`, `title`, `body`, `severity`, `category`, `confidence`, `evidence`, `suppressible`, `path`, `line`, `startLine`, `suggestion` and `survived`. `findingKey` is a stable hash of path and normalized title. `survived` says whether that key is present in the merged review.
+- `event` holds `findingId` (the ledger id for gate events), `status` (`fixed`, `open`, `reopened`, `approved`, `skipped`, `rejected`), `by` (`gate-inferred`, `no-mistakes`, `agent`), `atHead`, `fixCommit`, `note`, and `path`, `title` and `severity` copied from the ledger entry so analysis can join to findings by `findingKey`. The gate writes inferred `fixed` and `reopened` events. Ingest adds no-mistakes decisions.
 
 `implementer` is `{agent: "claude-code" | "codex" | null, sessionId, source: "env" | "resolved" | null, confidence}`.
 
