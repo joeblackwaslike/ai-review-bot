@@ -8,7 +8,7 @@ This file provides context and conventions for AI coding agents working on this 
 pnpm install
 pnpm typecheck    # tsc --noEmit — must pass before any commit
 pnpm lint         # biome check — must pass before any commit
-pnpm test         # vitest run (1772 passed, 4 skipped) — must pass before any commit
+pnpm test         # vitest run (1796 passed, 4 skipped) — must pass before any commit
 pnpm dev          # vercel dev — local server on :3000
 ```
 
@@ -43,7 +43,7 @@ POST /api/github/review-run        (QStash delayed callback)
 - Inline comments are keyed by `commentKey()` (path, line, normalized title). Restatements of one claim at a line collapse into one comment, the higher severity (then the longer body) surviving; distinct claims at the same line are posted as separate comments, never joined into one
 - **Near-duplicate claim collapsing** (`src/claim-dedupe.ts`, tuned reviewers only): agents rarely anchor to the identical line, so the exact-key pass above misses one claim arriving on six adjacent lines. `dedupeClaims()` folds findings in the same file, within 30 lines, that share a code identifier or substantial title overlap. Measured on the live corpus: 403 of 1180 anthropic findings (34%) are restatements
 - General findings deduplicated by title (case-insensitive)
-- Findings from `code-review-and-quality.md` and `architect-review.md` are advisory (`src/advisory.ts`): `dispatch` and `runAuditPass` (so `ai-review review`, `audit` and `gate`) cap P0/P1 to P2 through `capAdvisoryOutcome`, forces that agent's event to COMMENT and tags them `advisory`. They render under "Quality and architecture notes", inline comments carry an `ai-review:advisory` marker, and neither the merged event nor the next round's baseline treats them as blockers
+- Findings from `code-review-and-quality.md` and `architect-review.md` are advisory (`src/advisory.ts`): `dispatch` and `runAuditPass` (so `ai-review review`, `audit` and `gate`) cap P0/P1 to P2 through `capAdvisoryOutcome`, forces that agent's event to COMMENT and tags them `advisory`. They render under "Quality and architecture notes" (a general note as a bullet with its body on one indented line, comments stripped and capped at 300 characters, so the baseline cannot read it back as a finding), inline comments carry an `ai-review:advisory` marker, and neither the merged event nor the next round's baseline treats them as blockers
 - A finder can declare `relation: {kind, entry_id}` against a short id shown in the prompt (`src/relation.ts`). An id that was not shown, or a `repeats` that fails the plausibility check (a P0 needs 0.8 title and identifier similarity within the line window), is ignored; a `repeats` is matched like a restatement, and a `caused_by` comment opens with a link to the earlier thread
 - Final `event`: `REQUEST_CHANGES` if any agent returned it; `APPROVE` if all agents found zero issues; `COMMENT` otherwise
 

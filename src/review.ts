@@ -902,6 +902,25 @@ export async function generateSummary(
 	};
 }
 
+const MAX_ADVISORY_NOTE_CHARS = 300;
+
+/** An advisory note's body as one indented line under its bullet: HTML
+ * comments (forged markers) removed, whitespace collapsed so no line can start
+ * a badge row or a quoted bullet the baseline reads back, and capped. */
+function advisoryNoteLine(body: string): string {
+	const text = body
+		.replace(/<!--[\s\S]*?-->/g, "")
+		.replace(/<!--/g, "")
+		.replace(/\s+/g, " ")
+		.trim();
+	if (!text) return "";
+	const capped =
+		text.length > MAX_ADVISORY_NOTE_CHARS
+			? `${text.slice(0, MAX_ADVISORY_NOTE_CHARS).trimEnd()}…`
+			: text;
+	return `\n  ${capped}`;
+}
+
 export function formatFindings(findings: ModelFinding[]): string {
 	if (findings.length === 0) {
 		return "";
@@ -1176,7 +1195,10 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 	const advisoryBlock =
 		advisoryNotes.length > 0
 			? `#### Quality and architecture notes\n\nAdvisory only. These never block the PR.\n\n${advisoryNotes
-					.map((f) => `- ${f.severity} **${plainTitle(f.title)}**`)
+					.map(
+						(f) =>
+							`- ${f.severity} **${plainTitle(f.title)}**${advisoryNoteLine(f.body)}`,
+					)
 					.join("\n")}`
 			: "";
 
