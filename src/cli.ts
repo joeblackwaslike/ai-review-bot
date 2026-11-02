@@ -55,8 +55,12 @@ import {
 	computeSkillSignals,
 	detectDuplicateClusters,
 } from "./improve/trends.js";
+import { ingest } from "./mistakes/ingest.js";
+import { mistakesRoot, openMistakeLog } from "./mistakes/log.js";
+import { branchForHead, headShaFor } from "./mistakes/session.js";
 import { runReplay } from "./replay/command.js";
 import { slugify } from "./report.js";
+import { defaultGitRunner } from "./sources.js";
 import { type ProviderTarget, watchPr } from "./watch.js";
 
 function fatal(msg: string): never {
@@ -94,6 +98,12 @@ function usage(): never {
 		"  ai-review audit [--full] [--dry-run] [--out <dir>] [--extra <text>] [--json]",
 	);
 	console.error("  ai-review ready [pr#]");
+	console.error(
+		"  ai-review mistakes ingest [--repo <owner/name>] [--root <dir>]",
+	);
+	console.error(
+		"      Resolve gate runs to Claude Code sessions and record no-mistakes decisions.",
+	);
 	console.error("  ai-review gate [--base <ref>] [--extra <text>]");
 	console.error(
 		"      Review the branch against its base for the no-mistakes pipeline. Writes",
@@ -287,7 +297,15 @@ async function cmdReview(args: string[]): Promise<void> {
 	}
 
 	const { owner, repo } = originSlug();
+	const mistakes = openMistakeLog({
+		owner,
+		repo,
+		source: "review",
+		branch: branchForHead(defaultGitRunner(process.cwd())),
+	});
 	const result = await runLocalReview({
+		mistakes,
+		headSha: headShaFor(scope, gitOut(["rev-parse", "HEAD"])),
 		cwd: process.cwd(),
 		scope,
 		docsDir: outDir,
@@ -1217,16 +1235,50 @@ async function cmdGate(args: string[]): Promise<void> {
 		gitOut(["remote", "get-url", "origin"]),
 		root,
 	);
+	const runGit = defaultGitRunner(root);
 	const result = await runGate({
 		cwd: root,
 		owner,
 		repo,
 		base,
 		extra,
+		runGit,
+		mistakes: openMistakeLog({
+			owner,
+			repo,
+			source: "gate",
+			branch: branchForHead(runGit),
+		}),
 		findingsFile: process.env.NO_MISTAKES_FINDINGS_FILE || undefined,
 	});
 	console.log(result.stdout);
 	process.exitCode = result.exitCode;
+}
+
+async function cmdMistakes(args: string[]): Promise<void> {
+	const [action, ...rest] = args;
+	if (action !== "ingest") usage();
+	let repo: string | undefined;
+	let root: string | undefined;
+	for (let i = 0; i < rest.length; i++) {
+		const a = rest[i];
+		if (a === "--repo") repo = requireValue(rest, i++, a);
+		else if (a === "--root") root = requireValue(rest, i++, a);
+		else fatal(`Unknown argument: ${a}`);
+	}
+	if (repo !== undefined && !/^[^/\s]+\/[^/\s]+$/.test(repo)) {
+		fatal(`--repo must be <owner>/<name>, got: ${repo}`);
+	}
+	const result = await ingest({ root: root ?? mistakesRoot(), repo });
+	console.log(
+		[
+			`resolved by review row: ${result.resolved.byReviewRow}`,
+			`resolved by transcript: ${result.resolved.byTranscript}`,
+			`unresolved: ${result.unresolved}`,
+			`no-mistakes events: ${result.events}`,
+			`file: ${result.file ?? "(nothing new)"}`,
+		].join("\n"),
+	);
 }
 
 async function cmdReplay(args: string[]): Promise<void> {
@@ -1241,7 +1293,9 @@ export async function main(): Promise<void> {
 	// entirely rather than resolving values `creds` won't use.
 	// Offline `replay` needs no credentials either; only `--live` does.
 	const needsCreds =
-		sub !== "creds" && (sub !== "replay" || rest.includes("--live"));
+		sub !== "creds" &&
+		sub !== "mistakes" &&
+		(sub !== "replay" || rest.includes("--live"));
 	if (needsCreds) {
 		// Populate process.env from the Keychain/XDG fallback before any
 		// subcommand runs, so createApp()/getConfig() see credentials even when
@@ -1272,6 +1326,7 @@ export async function main(): Promise<void> {
 	}
 	if (sub === "creds") return cmdCreds(rest);
 	if (sub === "replay") return cmdReplay(rest);
+	if (sub === "mistakes") return cmdMistakes(rest);
 	if (sub === "backfill") return cmdBackfill(rest);
 	if (sub === "unrated") return cmdUnrated(rest);
 	if (sub?.includes("/")) return cmdLegacyRemote([sub, ...rest]); // back-compat

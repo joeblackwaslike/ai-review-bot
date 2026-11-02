@@ -1,0 +1,1 @@
+{"type":"assistant","sessionId":"sess-other","cwd":"/Users/x/other-repo","gitBranch":"feat/x","timestamp":"2026-11-01T11:58:00.000Z","isSidechain":false,"message":{"role":"assistant","content":[{"type":"tool_use","id":"t6","name":"Bash","input":{"command":"git commit -m 'synthetic'"}}]}}

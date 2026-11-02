@@ -19,6 +19,9 @@ import {
 } from "./auth.js";
 import { mapWithConcurrency } from "./concurrency.js";
 import { parseAgentConcurrency } from "./config.js";
+import { logReviewRun } from "./mistakes/capture.js";
+import type { MistakeLog } from "./mistakes/log.js";
+import type { AgentReview } from "./mistakes/types.js";
 import { computeCost } from "./models.js";
 import { buildAuditUserMessage } from "./prompt.js";
 import {
@@ -96,9 +99,11 @@ export async function runAuditPass(opts: {
 	 * an `agentsSucceeded === 0` failure check on this being nonzero first,
 	 * or an empty-but-valid pass misreports as "every agent failed". */
 	agentsAttempted: number;
+	agentReviews: { skill: string; review: ModelReview }[];
 }> {
 	const { files, selection, extraInstructions, meta, auth } = opts;
 	const reviews: ModelReview[] = [];
+	const agentReviews: { skill: string; review: ModelReview }[] = [];
 	const usage: PassUsage = { promptTokens: 0, completionTokens: 0 };
 	let agentsSucceeded = 0;
 	let agentsAttempted = 0;
@@ -153,13 +158,18 @@ export async function runAuditPass(opts: {
 			stacks,
 		});
 		let batchSucceeded = 0;
-		for (const o of outcomes) {
+		for (const [i, o] of outcomes.entries()) {
 			if (o.status === "error" && o.usage) {
 				usage.promptTokens += o.usage.promptTokens;
 				usage.completionTokens += o.usage.completionTokens;
 			}
 			if (o.status === "ok") {
 				reviews.push(o.review);
+				const file = TIER1_SKILLS[i].split("/").pop() ?? TIER1_SKILLS[i];
+				agentReviews.push({
+					skill: file.replace(/\.md$/, ""),
+					review: o.review,
+				});
 				usage.promptTokens += o.usage.promptTokens;
 				usage.completionTokens += o.usage.completionTokens;
 				batchSucceeded += 1;
@@ -181,7 +191,7 @@ export async function runAuditPass(opts: {
 					inline_comments: [],
 				}
 			: mergeReviews(reviews);
-	return { review, usage, agentsSucceeded, agentsAttempted };
+	return { review, usage, agentsSucceeded, agentsAttempted, agentReviews };
 }
 
 export async function auditRepo({
@@ -643,6 +653,7 @@ export interface ReviewPassResult {
 	agentsAttempted: number;
 	agentsSucceeded: number;
 	providerStats: { provider: Provider; attempted: number; succeeded: number }[];
+	agentReviews?: AgentReview[];
 }
 
 /**
@@ -664,6 +675,7 @@ export async function runReviewPasses(opts: {
 			provider === "anthropic" ? resolveAnthropicAuth() : resolveOpenAIAuth());
 	const filePaths = files.map((f) => f.path);
 	const reviews: ModelReview[] = [];
+	const agentReviews: AgentReview[] = [];
 	const models: string[] = [];
 	const providersRun: Provider[] = [];
 	const providerStats: ReviewPassResult["providerStats"] = [];
@@ -693,6 +705,9 @@ export async function runReviewPasses(opts: {
 			auth,
 		});
 		reviews.push(pass.review);
+		for (const a of pass.agentReviews) {
+			agentReviews.push({ provider, model: selection.model, ...a });
+		}
 		models.push(selection.model);
 		providersRun.push(provider);
 		costUsd += computeCost(pass.usage, selection.model);
@@ -732,6 +747,7 @@ export async function runReviewPasses(opts: {
 		agentsAttempted,
 		agentsSucceeded,
 		providerStats,
+		agentReviews,
 	};
 }
 
@@ -752,6 +768,8 @@ export async function runLocalReview(opts: {
 	extraInstructions?: string;
 	now?: () => number;
 	resolveAuthFor?: (provider: Provider) => Promise<ResolvedAuth>;
+	mistakes?: MistakeLog;
+	headSha?: string;
 }): Promise<LocalReviewResult> {
 	const now = opts.now ?? Date.now;
 	const resolveAuthFor =
@@ -771,7 +789,15 @@ export async function runLocalReview(opts: {
 		ref: scopeRef(opts.scope),
 	};
 
-	const { merged, costUsd, providersRun, models } = await runReviewPasses({
+	const {
+		merged,
+		costUsd,
+		providersRun,
+		models,
+		agentsAttempted,
+		agentsSucceeded,
+		agentReviews,
+	} = await runReviewPasses({
 		files,
 		meta,
 		extraInstructions,
@@ -806,6 +832,30 @@ export async function runLocalReview(opts: {
 		formatReviewReport({ merged, meta: reportMeta }),
 		"utf-8",
 	);
+
+	if (opts.mistakes) {
+		try {
+			logReviewRun({
+				log: opts.mistakes,
+				headSha: opts.headSha ?? "unknown",
+				scope: scopeLabel(opts.scope),
+				costUsd,
+				durationSeconds,
+				providers: providersRun,
+				models,
+				agentsAttempted,
+				agentsSucceeded,
+				reportPath: outPath,
+				agentReviews: agentReviews ?? [],
+				merged,
+				env: process.env,
+			});
+		} catch (error) {
+			console.error(
+				`mistake log capture failed: ${error instanceof Error ? error.message : String(error)}`,
+			);
+		}
+	}
 
 	return {
 		path: outPath,

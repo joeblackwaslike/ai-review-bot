@@ -1,0 +1,7 @@
+{"type":"user","sessionId":"sess-commit","cwd":"/Users/x/ai-review-bot","gitBranch":"feat/x","timestamp":"2026-11-01T10:00:00.000Z","isSidechain":false,"message":{"role":"user","content":"synthetic"}}
+{"type":"ai-title","sessionId":"sess-commit"}
+not json at all feat/x
+not json at all
+{"type":"assistant","sessionId":"sess-commit","cwd":"/Users/x/ai-review-bot","gitBranch":"feat/x","timestamp":"2026-11-01T10:30:00.000Z","isSidechain":false,"message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"git add -A && git commit -m 'synthetic'","description":"commit"}}]}}
+{"type":"user","sessionId":"sess-commit","cwd":"/Users/x/ai-review-bot","gitBranch":"main","timestamp":"2026-11-01T11:30:00.000Z","isSidechain":false,"message":{"role":"user","content":"synthetic"}}
+{"type":"user","sessionId":"sess-commit","cwd":"/Users/x/ai-review-bot","gitBranch":"feat/x","timestamp":"2026-11-01T11:00:00.000Z","isSidechain":false,"message":{"role":"user","content":"synthetic"}}

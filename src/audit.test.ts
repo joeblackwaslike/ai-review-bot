@@ -136,6 +136,94 @@ describe("runAuditPass", () => {
 		errorSpy.mockRestore();
 	});
 
+	it("returns one agentReviews entry per successful agent keyed by skill basename", async () => {
+		const failing = TIER1_SKILLS[1];
+		(runAgent as ReturnType<typeof vi.fn>).mockImplementation(
+			async (skill: string) =>
+				skill === failing
+					? {
+							status: "error",
+							failure: { class: "unknown", retryable: false, errorName: "E" },
+							durationMs: 1,
+						}
+					: {
+							status: "ok",
+							review: buildModelReview({
+								event: "COMMENT",
+								general_findings: [
+									{
+										title: `from ${skill}`,
+										body: "b",
+										severity: "P3",
+										category: "style",
+										confidence: 0.8,
+										evidence: "e",
+										suppressible: true,
+									},
+								],
+								inline_comments: [],
+							}),
+							usage: { promptTokens: 1, completionTokens: 1 },
+						},
+		);
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const { agentReviews } = await runAuditPass({
+			files: [{ path: "a.ts", content: "x" }],
+			selection,
+			extraInstructions: "",
+			meta: { owner: "o", repo: "r", ref: "local" },
+		});
+		const base = (p: string) => (p.split("/").pop() ?? p).replace(/\.md$/, "");
+		expect(agentReviews.map((a) => a.skill)).toEqual(
+			TIER1_SKILLS.filter((s) => s !== failing).map(base),
+		);
+		for (const a of agentReviews) {
+			const full = TIER1_SKILLS.find((t) => base(t) === a.skill);
+			expect(a.review.general_findings[0]?.title).toBe(`from ${full}`);
+		}
+	});
+
+	it("accumulates agentReviews across batches without duplicates", async () => {
+		(runAgent as ReturnType<typeof vi.fn>).mockImplementation(
+			async (skill: string) => ({
+				status: "ok",
+				review: buildModelReview({
+					event: "COMMENT",
+					general_findings: [
+						{
+							title: `from ${skill}`,
+							body: "b",
+							severity: "P3",
+							category: "style",
+							confidence: 0.8,
+							evidence: "e",
+							suppressible: true,
+						},
+					],
+					inline_comments: [],
+				}),
+				usage: { promptTokens: 1, completionTokens: 1 },
+			}),
+		);
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const { agentReviews } = await runAuditPass({
+			files: [
+				{ path: "huge1.ts", content: "x".repeat(100 * 1024) },
+				{ path: "huge2.ts", content: "y".repeat(100 * 1024) },
+			],
+			selection,
+			extraInstructions: "",
+			meta: { owner: "o", repo: "r", ref: "local" },
+		});
+		expect(agentReviews).toHaveLength(TIER1_SKILLS.length * 2);
+		const perSkill = new Map<string, number>();
+		for (const a of agentReviews) {
+			perSkill.set(a.skill, (perSkill.get(a.skill) ?? 0) + 1);
+			expect(a.review.general_findings[0]?.title).toMatch(/^from /);
+		}
+		expect([...perSkill.values()].every((n) => n === 2)).toBe(true);
+	});
+
 	it("splits files across batches when content exceeds BATCH_BYTES", async () => {
 		(runAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
 			status: "ok",
@@ -547,6 +635,103 @@ describe("runLocalReview", () => {
 		expect(writeSpy.mock.calls[0][1]).toContain('title: "My Review"');
 	});
 
+	it("logs the run once with the report path when a mistake log is injected", async () => {
+		const { collectFilesFromLocal } = await import("./sources.js");
+		(collectFilesFromLocal as ReturnType<typeof vi.fn>).mockResolvedValue([
+			{ path: "a.ts", content: "x" },
+		]);
+		(runAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
+			status: "ok",
+			review: buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+			usage: { promptTokens: 1, completionTokens: 1 },
+		});
+		const fs = await import("node:fs/promises");
+		(fs.writeFile as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+		(fs.mkdir as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+		const append = vi.fn();
+		const mistakes = { runId: "r1", path: "/nowhere", append };
+		const { runLocalReview } = await import("./audit.js");
+		const result = await runLocalReview({
+			cwd: "/repo",
+			scope: { kind: "changed" },
+			docsDir: "docs/code-reviews",
+			slug: "s",
+			title: "T",
+			owner: "o",
+			repo: "r",
+			remote: "https://github.com/o/r",
+			now: () => 1_700_000_000_000,
+			resolveAuthFor: async (provider: Provider) => ({
+				mode: "api-key" as const,
+				provider,
+				apiKey: "k",
+			}),
+			mistakes,
+			headSha: "deadbeef",
+		});
+		const runs = append.mock.calls
+			.map((c) => c[0])
+			.filter((r) => r.type === "run");
+		expect(runs).toHaveLength(1);
+		expect(runs[0]).toMatchObject({
+			headSha: "deadbeef",
+			reportPath: result.path,
+		});
+	});
+
+	it("does not fail the review when the mistake log throws", async () => {
+		const { collectFilesFromLocal } = await import("./sources.js");
+		(collectFilesFromLocal as ReturnType<typeof vi.fn>).mockResolvedValue([
+			{ path: "a.ts", content: "x" },
+		]);
+		(runAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
+			status: "ok",
+			review: buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+			usage: { promptTokens: 1, completionTokens: 1 },
+		});
+		const fs = await import("node:fs/promises");
+		(fs.writeFile as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+		(fs.mkdir as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+		const warn = vi.spyOn(console, "error").mockImplementation(() => {});
+		const mistakes = {
+			runId: "r1",
+			path: "/nowhere",
+			append: () => {
+				throw new Error("boom");
+			},
+		};
+		const { runLocalReview } = await import("./audit.js");
+		await expect(
+			runLocalReview({
+				cwd: "/repo",
+				scope: { kind: "changed" },
+				docsDir: "docs/code-reviews",
+				slug: "s",
+				title: "T",
+				owner: "o",
+				repo: "r",
+				remote: "https://github.com/o/r",
+				resolveAuthFor: async (provider: Provider) => ({
+					mode: "api-key" as const,
+					provider,
+					apiKey: "k",
+				}),
+				mistakes,
+				headSha: "x",
+			}),
+		).resolves.toMatchObject({ filesReviewed: 1 });
+		expect(warn).toHaveBeenCalledWith(expect.stringContaining("boom"));
+		warn.mockRestore();
+	});
+
 	// `ai-review review` resolves real per-provider auth (API key or OAuth) via
 	// resolveAuthFor before routing. GPT-5.6 is confirmed available on both
 	// backends, so an OAuth-authenticated openai run must resolve to the same
@@ -809,6 +994,34 @@ describe("runReviewPasses", () => {
 		expect(result.agentsAttempted).toBe(2 * n);
 		expect(result.agentsSucceeded).toBe(n);
 		expect([...result.providersRun].sort()).toEqual(["anthropic", "openai"]);
+	});
+
+	it("returns agentReviews tagged with provider and model across both providers", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		(runAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
+			status: "ok",
+			review: buildModelReview(),
+			usage: { promptTokens: 1, completionTokens: 1 },
+		});
+		const { runReviewPasses } = await import("./audit.js");
+		const result = await runReviewPasses({
+			files: [{ path: "a.ts", content: "x" }],
+			meta: { owner: "o", repo: "r", ref: "range" },
+			resolveAuthFor: async (provider: Provider) => ({
+				mode: "api-key" as const,
+				provider,
+				apiKey: "k",
+			}),
+		});
+		const got = result.agentReviews ?? [];
+		expect(got).toHaveLength(2 * TIER1_SKILLS.length);
+		for (const [i, provider] of result.providersRun.entries()) {
+			const mine = got.filter((a) => a.provider === provider);
+			expect(mine).toHaveLength(TIER1_SKILLS.length);
+			expect(new Set(mine.map((a) => a.model))).toEqual(
+				new Set([result.models[i]]),
+			);
+		}
 	});
 });
 

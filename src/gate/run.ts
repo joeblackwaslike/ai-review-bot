@@ -2,6 +2,8 @@ import { execFileSync } from "node:child_process";
 import { writeFile } from "node:fs/promises";
 import { type ReviewPassResult, runReviewPasses } from "../audit.js";
 import { isSettled, type LedgerEntry } from "../ledger/types.js";
+import { logGateRun } from "../mistakes/gate-events.js";
+import type { MistakeLog } from "../mistakes/log.js";
 import type { ModelReview } from "../review.js";
 import {
 	type AuditFile,
@@ -33,6 +35,7 @@ export type GateOptions = {
 	storeDir?: string;
 	runGit?: GitRunner;
 	review?: (files: AuditFile[]) => Promise<ReviewPassResult>;
+	mistakes?: MistakeLog;
 };
 
 export type GateResult = {
@@ -158,6 +161,7 @@ export function gateRepoSlug(
 
 /** One gate round over the branch's range: review what changed since the last round, update the store, and write or print the report. */
 export async function runGate(opts: GateOptions): Promise<GateResult> {
+	const startedAt = Date.now();
 	const runGit = opts.runGit ?? defaultGitRunner(opts.cwd);
 	const review =
 		opts.review ??
@@ -228,6 +232,26 @@ export async function runGate(opts: GateOptions): Promise<GateResult> {
 	});
 	for (const w of result.warnings) console.error(w);
 
+	const logMistakes = () => {
+		if (!opts.mistakes) return;
+		try {
+			logGateRun({
+				log: opts.mistakes,
+				pass,
+				round,
+				mergeBase,
+				headSha: head,
+				durationSeconds: (Date.now() - startedAt) / 1000,
+				before: store.entries,
+				after: result.store.entries,
+			});
+		} catch (err) {
+			console.error(
+				`mistake log write failed: ${err instanceof Error ? err.message : String(err)}`,
+			);
+		}
+	};
+
 	const suggestions = new Map(
 		result.emitted.map(({ entry, suggestion }) => [entry.id, suggestion]),
 	);
@@ -250,7 +274,7 @@ export async function runGate(opts: GateOptions): Promise<GateResult> {
 		throw new Error(`Gate report failed validation: ${problems.join("; ")}`);
 	}
 
-	const save = () =>
+	const save = (): Promise<boolean> =>
 		saveStore(storePath, result.store, store.revision).then(
 			({ merged }) => {
 				if (merged) {
@@ -258,17 +282,19 @@ export async function runGate(opts: GateOptions): Promise<GateResult> {
 						`Another gate run saved ${storePath} during this one; the two histories were merged and the next round reviews the full range.`,
 					);
 				}
+				return true;
 			},
 			(err: unknown) => {
 				console.error(
 					`Could not save gate history to ${storePath}: ${err instanceof Error ? err.message : String(err)}`,
 				);
+				return false;
 			},
 		);
 
 	if (opts.findingsFile) {
 		await writeFile(opts.findingsFile, json);
-		await save();
+		if (await save()) logMistakes();
 		return {
 			exitCode: 0,
 			stdout: `ai-review gate: ${kept.length} finding(s) written to ${opts.findingsFile}`,
@@ -276,7 +302,7 @@ export async function runGate(opts: GateOptions): Promise<GateResult> {
 		};
 	}
 	const stdout = formatText(kept);
-	await save();
+	if (await save()) logMistakes();
 	return {
 		exitCode: kept.some((f) => f.severity === "error") ? 1 : 0,
 		stdout,

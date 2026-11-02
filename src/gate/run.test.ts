@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReviewPassResult } from "../audit.js";
+import { openMistakeLog } from "../mistakes/log.js";
 import type { ModelReview } from "../review.js";
 import type { AuditFile, GitRunner } from "../sources.js";
 import { buildInlineComment, buildModelReview } from "../testing.js";
@@ -136,6 +137,9 @@ const P1_ON_A = buildInlineComment({
 	title: "Retry loop swallows the fetch error",
 	body: "The catch block discards the error and returns undefined after the last attempt.",
 });
+
+type GateReview = (files: AuditFile[]) => Promise<ReviewPassResult>;
+type GateMistakes = NonNullable<Parameters<typeof runGate>[0]["mistakes"]>;
 
 let dir: string;
 let storeDir: string;
@@ -1058,5 +1062,158 @@ describe("runGate against a real git repo", () => {
 				[first.findings[0]?.id, "src/k.ts"],
 			]);
 		});
+	});
+});
+
+describe("runGate mistake log", () => {
+	const logRows = async (log: { path: string }) =>
+		(await readFile(log.path, "utf8"))
+			.trim()
+			.split("\n")
+			.map((l) => JSON.parse(l));
+	const newLog = () =>
+		openMistakeLog({
+			root: join(dir, "mistakes"),
+			owner: "o",
+			repo: "r",
+			source: "gate",
+			branch: "feat/x",
+		});
+	const agentPass = (
+		inline: ReturnType<typeof buildInlineComment>[],
+		over: Partial<ReviewPassResult> = {},
+	) => {
+		const merged = buildModelReview({ inline_comments: inline });
+		return passResult(merged, {
+			agentReviews: [
+				{ provider: "anthropic", model: "m", skill: "s.md", review: merged },
+			],
+			...over,
+		});
+	};
+	const run = (
+		state: FakeRepo,
+		review: GateReview,
+		mistakes: GateMistakes,
+		findingsFilePath?: string,
+	) =>
+		runGate({
+			cwd: dir,
+			owner: "o",
+			repo: "r",
+			storeDir,
+			runGit: fakeGit(state),
+			review,
+			mistakes,
+			findingsFile: findingsFilePath,
+		});
+
+	it("logs run and findings in round 1 and a fixed event in round 2", async () => {
+		const state = repo({ "src/a.ts": modified("d1") });
+		const log1 = newLog();
+		await run(state, async () => agentPass([P1_ON_A]), log1);
+		const rows1 = await logRows(log1);
+		expect(rows1[0]).toMatchObject({
+			type: "run",
+			source: "gate",
+			round: 1,
+			mergeBase: "base0",
+			headSha: "head1",
+			scope: "range",
+			partial: false,
+			reportPath: null,
+			implementer: { agent: null, sessionId: null },
+		});
+		expect(rows1.filter((r) => r.type === "finding")).toHaveLength(1);
+
+		state.ancestors.add("head1");
+		state.head = "head2";
+		state.files["src/a.ts"] = modified("d2");
+		state.since.head1 = ["src/a.ts"];
+		const log2 = newLog();
+		await run(state, async () => agentPass([]), log2);
+		const rows2 = await logRows(log2);
+		expect(rows2[0]).toMatchObject({ type: "run", round: 2 });
+		expect(rows2.filter((r) => r.type === "event")).toMatchObject([
+			{
+				status: "fixed",
+				by: "gate-inferred",
+				atHead: "head2",
+				path: "src/a.ts",
+			},
+		]);
+	});
+
+	it("marks partial when a provider fully failed", async () => {
+		const log = newLog();
+		await run(
+			repo({ "src/a.ts": modified("d1") }),
+			async () => agentPass([], stats(5, 0)),
+			log,
+		);
+		expect((await logRows(log))[0]).toMatchObject({ partial: true });
+	});
+
+	it("writes only a run record when the range has no code files", async () => {
+		const log = newLog();
+		await run(repo({}), vi.fn(), log);
+		const rows = await logRows(log);
+		expect(rows).toHaveLength(1);
+		expect(rows[0]).toMatchObject({ type: "run", agentsAttempted: 0 });
+	});
+
+	it("never fails the gate when logging throws", async () => {
+		const result = await run(
+			repo({ "src/a.ts": modified("d1") }),
+			async () => agentPass([P1_ON_A]),
+			{
+				runId: "x",
+				path: "x",
+				append() {
+					throw new Error("disk full");
+				},
+			},
+		);
+		expect(result.findings).toHaveLength(1);
+		expect(errors.filter((e) => e.includes("mistake log"))).toHaveLength(1);
+	});
+
+	it("does not log a fixed event when the findings-file write fails", async () => {
+		const state = repo({ "src/a.ts": modified("d1") });
+		const log1 = newLog();
+		await run(state, async () => agentPass([P1_ON_A]), log1);
+		expect(
+			(await logRows(log1)).filter((r) => r.type === "event"),
+		).toHaveLength(0);
+
+		state.ancestors.add("head1");
+		state.head = "head2";
+		state.files["src/a.ts"] = modified("d2");
+		state.since.head1 = ["src/a.ts"];
+		const log2 = newLog();
+		await expect(
+			run(
+				state,
+				async () => agentPass([]),
+				log2,
+				join(dir, "missing", "findings.json"),
+			),
+		).rejects.toThrow();
+		await expect(readFile(log2.path, "utf8")).rejects.toThrow();
+	});
+
+	it("does not log a run when saving the gate history fails", async () => {
+		writeFileSync(storeDir, "not a directory");
+		const log = newLog();
+		const result = await run(
+			repo({ "src/a.ts": modified("d1") }),
+			async () => agentPass([P1_ON_A]),
+			log,
+		);
+		expect(result.findings).toHaveLength(1);
+		expect(errors.some((e) => e.includes("Could not save gate history"))).toBe(
+			true,
+		);
+		await expect(readFile(log.path, "utf8")).rejects.toThrow();
 	});
 });

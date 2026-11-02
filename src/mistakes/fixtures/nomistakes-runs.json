@@ -1,0 +1,22 @@
+[
+	{
+		"id": "01RUNMATCH0000000000000000",
+		"branch": "feat/x",
+		"head_sha": "aaaa",
+		"created_at": 1793534400,
+		"upstream_url": "git@github.com:o/r.git",
+		"working_path": "/Users/x/r"
+	},
+	{
+		"id": "01RUNOTHER0000000000000000",
+		"branch": "feat/x",
+		"head_sha": "bbbb",
+		"created_at": 1793534400,
+		"upstream_url": "https://github.com/o/r-other.git",
+		"working_path": "/Users/x/r-other"
+	},
+	{
+		"id": 42,
+		"branch": "feat/x"
+	}
+]

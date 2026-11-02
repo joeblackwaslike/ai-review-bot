@@ -1,0 +1,1 @@
+{"type":"assistant","sessionId":"sess-late","cwd":"/Users/x/ai-review-bot","gitBranch":"feat/x","timestamp":"2026-11-01T13:00:00.000Z","isSidechain":false,"message":{"role":"assistant","content":[{"type":"tool_use","id":"t3","name":"Bash","input":{"command":"git push origin feat/x"}}]}}
