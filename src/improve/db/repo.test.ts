@@ -162,7 +162,7 @@ describe("insertDiscards", () => {
 		expect(r.rows).toEqual([{ skill: null, path: null, line: null }]);
 	});
 
-	it("keeps one row per skill for the same finding, with a null skill colliding with itself", async () => {
+	it("inserts 5 rows for 5 distinct skills, including one null skill", async () => {
 		const db = await createTestDb();
 		await insertDiscards(
 			db,
@@ -177,7 +177,7 @@ describe("insertDiscards", () => {
 		expect(r.rows).toEqual([{ n: 5 }]);
 	});
 
-	it("keeps rows that differ only in line, including a null line", async () => {
+	it("inserts 3 rows for rows differing only in line, including a null line", async () => {
 		const db = await createTestDb();
 		await insertDiscards(
 			db,
