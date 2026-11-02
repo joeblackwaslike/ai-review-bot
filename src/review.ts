@@ -209,6 +209,7 @@ const STANDING_REVIEW_STATES = new Set([
 
 interface TokenUsage {
 	promptTokens: number;
+	cachedPromptTokens?: number;
 	completionTokens: number;
 }
 
@@ -581,6 +582,7 @@ export async function runAgent(
 			review: object,
 			usage: {
 				promptTokens: usage.inputTokens ?? 0,
+				cachedPromptTokens: usage.inputTokenDetails?.cacheReadTokens ?? 0,
 				completionTokens: usage.outputTokens ?? 0,
 			},
 			durationMs: Date.now() - startedAt,
@@ -934,6 +936,7 @@ export async function generateSummary(
 		summary: object.summary,
 		usage: {
 			promptTokens: usage.inputTokens ?? 0,
+			cachedPromptTokens: usage.inputTokenDetails?.cacheReadTokens ?? 0,
 			completionTokens: usage.outputTokens ?? 0,
 		},
 	};
@@ -2616,6 +2619,7 @@ async function buildReviewInner(
 	const skipped: string[] = [];
 	const errored: string[] = [];
 	let totalPromptTokens = 0;
+	let totalCachedPromptTokens = 0;
 	let totalCompletionTokens = 0;
 
 	// Every attempt is billed, including a failed first attempt whose retry
@@ -2623,6 +2627,7 @@ async function buildReviewInner(
 	for (const { outcome: o } of attempts) {
 		if ((o.status === "ok" || o.status === "error") && o.usage) {
 			totalPromptTokens += o.usage.promptTokens;
+			totalCachedPromptTokens += o.usage.cachedPromptTokens ?? 0;
 			totalCompletionTokens += o.usage.completionTokens;
 		}
 	}
@@ -3143,6 +3148,7 @@ async function buildReviewInner(
 				summary = fallbackSummary;
 			}
 			totalPromptTokens += summaryResult.usage.promptTokens;
+			totalCachedPromptTokens += summaryResult.usage.cachedPromptTokens ?? 0;
 			totalCompletionTokens += summaryResult.usage.completionTokens;
 		} catch (error) {
 			// The summary is prose over findings the agents already produced; losing
@@ -3158,6 +3164,7 @@ async function buildReviewInner(
 	const cost = computeCost(
 		{
 			promptTokens: totalPromptTokens,
+			cachedPromptTokens: totalCachedPromptTokens,
 			completionTokens: totalCompletionTokens,
 		},
 		selection.model,

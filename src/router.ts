@@ -1,3 +1,8 @@
+import { getConfigTree } from "./config/load.js";
+import type { Config } from "./config/schema.js";
+
+type Effort = NonNullable<ModelSelection["effort"]>;
+
 export type ReviewTier = "trivial" | "normal" | "complex" | "deep";
 
 export interface RouterContext {
@@ -18,104 +23,83 @@ export interface ModelSelection {
 	effort?: "none" | "low" | "medium" | "high" | "xhigh" | "max";
 }
 
-const SENSITIVE_PATH_PATTERNS = [
-	"auth",
-	"crypto",
-	"jwt",
-	"password",
-	"secret",
-	"/db/",
-	"database",
-	"migration",
-	"schema",
-];
-
-const DOC_EXTENSIONS = new Set([".md", ".txt", ".rst", ".mdx"]);
-
-function isSensitivePath(path: string): boolean {
+function isSensitivePath(path: string, patterns: readonly string[]): boolean {
 	const lower = path.toLowerCase();
-	return SENSITIVE_PATH_PATTERNS.some((pattern) => lower.includes(pattern));
+	return patterns.some((pattern) => lower.includes(pattern));
 }
 
-function isDocFile(path: string): boolean {
-	const ext = path.slice(path.lastIndexOf("."));
-	return DOC_EXTENSIONS.has(ext);
+function isDocFile(path: string, extensions: readonly string[]): boolean {
+	return extensions.includes(path.slice(path.lastIndexOf(".")));
 }
 
-export function classifyTier(context: RouterContext): ReviewTier {
+export function classifyTier(
+	context: RouterContext,
+	routing: Config["routing"] = getConfigTree().routing,
+): ReviewTier {
 	const { additions, deletions, filePaths, labels } = context;
 
-	if (labels.includes("deep-review")) {
+	if (labels.includes(routing.deepLabel)) {
 		return "deep";
 	}
 
-	if (filePaths.some(isSensitivePath)) {
-		return "complex";
-	}
-
-	if (additions + deletions > 500) {
+	if (
+		filePaths.some((p) => isSensitivePath(p, routing.sensitivePathPatterns))
+	) {
 		return "complex";
 	}
 
 	const totalLines = additions + deletions;
-	if (totalLines < 20 && filePaths.every(isDocFile)) {
+	if (totalLines > routing.complexLines) {
+		return "complex";
+	}
+
+	if (
+		totalLines < routing.trivialDocLines &&
+		filePaths.every((p) => isDocFile(p, routing.docExtensions))
+	) {
 		return "trivial";
 	}
 
 	return "normal";
 }
 
-const CLAUDE_TIER_MAP: Record<
-	ReviewTier,
-	Pick<ModelSelection, "model" | "effort">
-> = {
-	trivial: { model: "claude-haiku-5-5", effort: "low" },
-	normal: { model: "claude-sonnet-5-5", effort: "medium" },
-	complex: { model: "claude-sonnet-5-5", effort: "high" },
-	// high, not xhigh: xhigh Opus can outlast the 210s agent deadline on Vercel
-	// Hobby, which would abort every deep-review agent and post nothing.
-	deep: { model: "claude-opus-5-5", effort: "high" },
-};
+export function resolveFinderModel(
+	config: Config,
+	reviewerId: string,
+	tier: ReviewTier,
+): { provider: string; model: string; effort?: Effort } {
+	const choice = config.reviewers[reviewerId]?.tiers[tier];
+	if (!choice) throw new Error(`unknown reviewer "${reviewerId}"`);
+	const slash = choice.model.indexOf("/");
+	return {
+		provider: choice.model.slice(0, slash),
+		model: choice.model.slice(slash + 1),
+		...(choice.effort ? { effort: choice.effort } : {}),
+	};
+}
 
-// GPT-6.1 Sol ($2/$10) undercuts the old GPT-5.6 Terra and Sol tiers, so it
-// covers normal through deep, separated by effort alone. GPT-6 Astra
-// ($10/$50) is deliberately unused. Luna is the only GPT-6 tier that accepts
-// effort "none". All IDs verified live on both the API-key and the
-// Codex/ChatGPT-OAuth backends on 2026-10-25, so there is no auth-mode split.
-const OPENAI_TIER_MAP: Record<
-	ReviewTier,
-	Pick<ModelSelection, "model" | "effort">
-> = {
-	trivial: { model: "gpt-6-luna", effort: "none" },
-	normal: { model: "gpt-6.1-sol", effort: "low" },
-	complex: { model: "gpt-6.1-sol", effort: "high" },
-	deep: { model: "gpt-6.1-sol", effort: "xhigh" },
-};
+const REVIEWER_ID_BY_PROVIDER = {
+	anthropic: "claude",
+	openai: "codex",
+} as const;
 
 export function routeModel(
 	context: RouterContext,
 	provider: "anthropic" | "openai",
 ): ModelSelection {
-	const tier = classifyTier(context);
-
-	if (provider === "anthropic") {
-		return { provider, ...CLAUDE_TIER_MAP[tier] };
-	}
-
-	return { provider, ...OPENAI_TIER_MAP[tier] };
+	const config = getConfigTree();
+	const resolved = resolveFinderModel(
+		config,
+		REVIEWER_ID_BY_PROVIDER[provider],
+		classifyTier(context, config.routing),
+	);
+	return { provider, model: resolved.model, effort: resolved.effort };
 }
 
-/** Models whose safety classifiers can decline security-heavy diffs and that
- * support server-side refusal fallbacks (`fallbacks: "default"` reruns the
- * request on a model chosen by refusal category). Haiku 5.5 has no fallback. */
-const REFUSAL_FALLBACK_MODELS = new Set([
-	"claude-opus-5-5",
-	"claude-sonnet-5-5",
-]);
-
 /** Maps the tier's effort onto the active provider's reasoning knob:
- *  OpenAI reads `reasoningEffort`, Anthropic reads `effort`, and Anthropic
- *  models in REFUSAL_FALLBACK_MODELS also get `fallbacks: "default"`. Returns
+ *  OpenAI reads `reasoningEffort`, Anthropic reads `effort`, and models whose
+ *  config sets `refusalFallback` (server-side reruns on a model chosen by
+ *  refusal category) also get `fallbacks: "default"`. Returns
  *  undefined when there is nothing to send, so the provider default applies.
  *  `"none"` is a valid OpenAI `reasoningEffort` value (gpt-6-luna's explicit
  *  non-reasoning mode) and is forwarded as-is; the Anthropic tiers never emit it. */
@@ -129,8 +113,9 @@ export function reasoningProviderOptions(
 	}
 	const anthropic: Record<string, string> = {};
 	if (selection.effort) anthropic.effort = selection.effort;
-	if (REFUSAL_FALLBACK_MODELS.has(selection.model))
-		anthropic.fallbacks = "default";
+	const entry =
+		getConfigTree().models[`${selection.provider}/${selection.model}`];
+	if (entry?.refusalFallback) anthropic.fallbacks = "default";
 	return Object.keys(anthropic).length > 0 ? { anthropic } : undefined;
 }
 

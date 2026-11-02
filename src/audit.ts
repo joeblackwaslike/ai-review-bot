@@ -77,6 +77,7 @@ function batchFiles(files: AuditFile[]): AuditFile[][] {
 
 export interface PassUsage {
 	promptTokens: number;
+	cachedPromptTokens?: number;
 	completionTokens: number;
 }
 
@@ -104,7 +105,11 @@ export async function runAuditPass(opts: {
 	const { files, selection, extraInstructions, meta, auth } = opts;
 	const reviews: ModelReview[] = [];
 	const agentReviews: { skill: string; review: ModelReview }[] = [];
-	const usage: PassUsage = { promptTokens: 0, completionTokens: 0 };
+	const usage: PassUsage = {
+		promptTokens: 0,
+		cachedPromptTokens: 0,
+		completionTokens: 0,
+	};
 	let agentsSucceeded = 0;
 	let agentsAttempted = 0;
 
@@ -161,6 +166,8 @@ export async function runAuditPass(opts: {
 		for (const [i, o] of outcomes.entries()) {
 			if (o.status === "error" && o.usage) {
 				usage.promptTokens += o.usage.promptTokens;
+				usage.cachedPromptTokens =
+					(usage.cachedPromptTokens ?? 0) + (o.usage.cachedPromptTokens ?? 0);
 				usage.completionTokens += o.usage.completionTokens;
 			}
 			if (o.status === "ok") {
@@ -171,6 +178,8 @@ export async function runAuditPass(opts: {
 					review: o.review,
 				});
 				usage.promptTokens += o.usage.promptTokens;
+				usage.cachedPromptTokens =
+					(usage.cachedPromptTokens ?? 0) + (o.usage.cachedPromptTokens ?? 0);
 				usage.completionTokens += o.usage.completionTokens;
 				batchSucceeded += 1;
 			}

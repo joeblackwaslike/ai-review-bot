@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { getConfigTree } from "./config/load.js";
 import type { RouterContext } from "./router.js";
-import { classifyTier, routeModel } from "./router.js";
+import {
+	classifyTier,
+	reasoningProviderOptions,
+	routeModel,
+} from "./router.js";
 
 const base: RouterContext = {
 	additions: 10,
@@ -165,5 +170,97 @@ describe("routeModel — OpenAI", () => {
 		const sel = routeModel({ ...base, labels: ["deep-review"] }, "openai");
 		expect(sel.model).toBe("gpt-6.1-sol");
 		expect(sel.effort).toBe("xhigh");
+	});
+});
+
+describe("routeModel matches the pre-config tier maps", () => {
+	const contexts: Record<string, RouterContext> = {
+		trivial: {
+			...base,
+			additions: 8,
+			deletions: 3,
+			filePaths: ["README.md"],
+		},
+		normal: base,
+		complex: { ...base, additions: 400, deletions: 150 },
+		deep: { ...base, labels: ["deep-review"] },
+	};
+	const claude = {
+		trivial: ["claude-haiku-5-5", "low"],
+		normal: ["claude-sonnet-5-5", "medium"],
+		complex: ["claude-sonnet-5-5", "high"],
+		deep: ["claude-opus-5-5", "high"],
+	};
+	const codex = {
+		trivial: ["gpt-6-luna", "none"],
+		normal: ["gpt-6.1-sol", "low"],
+		complex: ["gpt-6.1-sol", "high"],
+		deep: ["gpt-6.1-sol", "xhigh"],
+	};
+
+	it.each(Object.keys(contexts))("%s tier, both providers", (tier) => {
+		const ctx = contexts[tier];
+		const [cm, ce] = claude[tier as keyof typeof claude];
+		const [xm, xe] = codex[tier as keyof typeof codex];
+		expect(routeModel(ctx, "anthropic")).toEqual({
+			provider: "anthropic",
+			model: cm,
+			effort: ce,
+		});
+		expect(routeModel(ctx, "openai")).toEqual({
+			provider: "openai",
+			model: xm,
+			effort: xe,
+		});
+	});
+
+	it("a sensitive path routes to complex", () => {
+		expect(
+			routeModel({ ...base, filePaths: ["src/auth/x.ts"] }, "anthropic").effort,
+		).toBe("high");
+	});
+});
+
+describe("classifyTier handles empty sensitivePathPatterns and docExtensions", () => {
+	const routing = {
+		...getConfigTree().routing,
+		sensitivePathPatterns: [],
+		docExtensions: [],
+	};
+
+	it("no pattern marks a path sensitive", () => {
+		expect(
+			classifyTier({ ...base, filePaths: ["src/auth/handler.ts"] }, routing),
+		).toBe("normal");
+	});
+
+	it("no extension counts as docs", () => {
+		expect(classifyTier({ ...base, filePaths: ["README.md"] }, routing)).toBe(
+			"normal",
+		);
+	});
+});
+
+describe("reasoningProviderOptions adds fallbacks only for refusalFallback models", () => {
+	it("opus and sonnet get fallbacks", () => {
+		for (const model of ["claude-opus-5-5", "claude-sonnet-5-5"]) {
+			expect(
+				reasoningProviderOptions({
+					provider: "anthropic",
+					model,
+					effort: "high",
+				}),
+			).toEqual({ anthropic: { effort: "high", fallbacks: "default" } });
+		}
+	});
+
+	it("haiku does not", () => {
+		expect(
+			reasoningProviderOptions({
+				provider: "anthropic",
+				model: "claude-haiku-5-5",
+				effort: "low",
+			}),
+		).toEqual({ anthropic: { effort: "low" } });
 	});
 });

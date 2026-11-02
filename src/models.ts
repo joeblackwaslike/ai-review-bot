@@ -1,31 +1,27 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import type { ResolvedAuth } from "./auth.js";
+import { getConfigTree } from "./config/load.js";
 import type { ModelSelection } from "./router.js";
 
 interface TokenUsage {
 	promptTokens: number;
+	cachedPromptTokens?: number;
 	completionTokens: number;
 }
 
-// $/1M tokens. Anthropic rates from platform.claude.com/docs/en/about-claude/models/overview;
-// OpenAI rates from developers.openai.com/api/docs/models/gpt-6{-luna,.1-sol} (Oct 2026).
-// ponytail: flat rates — Haiku 5.5 bills $0.50/$2.50 above 100K prompt tokens,
-// so huge trivial-tier diffs are under-reported; add a tier split if that matters.
-const TOKEN_RATES: Record<string, { input: number; output: number }> = {
-	"claude-haiku-5-5": { input: 0.1, output: 0.5 },
-	"claude-sonnet-5-5": { input: 2.0, output: 10.0 },
-	"claude-opus-5-5": { input: 4.0, output: 20.0 },
-	"gpt-6-luna": { input: 0.1, output: 0.5 },
-	"gpt-6.1-sol": { input: 2.0, output: 10.0 },
-};
-
 export function computeCost(usage: TokenUsage, model: string): number {
-	const rates = TOKEN_RATES[model];
-	if (!rates) return 0;
+	const models = getConfigTree().models;
+	const entry = Object.entries(models).find(
+		([key]) => key === model || key.endsWith(`/${model}`),
+	)?.[1];
+	if (!entry) return 0;
+	const { input, cachedInput, output } = entry.pricing;
+	const cached = Math.min(usage.cachedPromptTokens ?? 0, usage.promptTokens);
 	return (
-		(usage.promptTokens / 1_000_000) * rates.input +
-		(usage.completionTokens / 1_000_000) * rates.output
+		((usage.promptTokens - cached) / 1_000_000) * input +
+		(cached / 1_000_000) * cachedInput +
+		(usage.completionTokens / 1_000_000) * output
 	);
 }
 

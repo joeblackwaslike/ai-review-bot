@@ -69,3 +69,53 @@ describe("computeCost", () => {
 		expect(cost).toBe(0);
 	});
 });
+
+describe("computeCost with config pricing", () => {
+	it("computeCost matches the old rates for all five models", () => {
+		const expected: Record<string, number> = {
+			"claude-haiku-5-5": 0.6,
+			"claude-sonnet-5-5": 12,
+			"claude-opus-5-5": 24,
+			"gpt-6-luna": 0.6,
+			"gpt-6.1-sol": 12,
+		};
+		for (const [model, cost] of Object.entries(expected)) {
+			expect(
+				computeCost(
+					{ promptTokens: 1_000_000, completionTokens: 1_000_000 },
+					model,
+				),
+			).toBeCloseTo(cost);
+		}
+	});
+
+	it("returns 0 for an unknown model", () => {
+		expect(
+			computeCost({ promptTokens: 1000, completionTokens: 1000 }, "nope"),
+		).toBe(0);
+	});
+
+	it("computeCost bills cached tokens at cachedInput", () => {
+		const cost = computeCost(
+			{
+				promptTokens: 1_000_000,
+				cachedPromptTokens: 500_000,
+				completionTokens: 0,
+			},
+			"claude-sonnet-5-5",
+		);
+		expect(cost).toBeCloseTo(0.5 * 2.0 + 0.5 * 0.2);
+	});
+
+	it("clamps cached tokens to the prompt size", () => {
+		const cost = computeCost(
+			{
+				promptTokens: 1_000_000,
+				cachedPromptTokens: 2_000_000,
+				completionTokens: 0,
+			},
+			"claude-sonnet-5-5",
+		);
+		expect(cost).toBeCloseTo(0.2);
+	});
+});
