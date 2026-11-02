@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeCost } from "./models.js";
+import { computeCost, createAIModel } from "./models.js";
 
 describe("computeCost", () => {
 	it("computes cost for claude-haiku-5-5 at 1M tokens each", () => {
@@ -117,5 +117,33 @@ describe("computeCost with config pricing", () => {
 			"claude-sonnet-5-5",
 		);
 		expect(cost).toBeCloseTo(0.2);
+	});
+});
+
+describe("createAIModel auth binding", () => {
+	const anthropic = {
+		provider: "anthropic",
+		model: "claude-haiku-5-5",
+		effort: "low",
+	} as const;
+
+	it("createAIModel rejects a credential for a different provider", () => {
+		expect(() =>
+			createAIModel(anthropic, {
+				mode: "api-key",
+				provider: "openai",
+				apiKey: "k",
+			}),
+		).toThrow("auth for openai cannot be used with a anthropic model");
+	});
+
+	it("createAIModel accepts matching provider auth", () => {
+		expect(() =>
+			createAIModel(anthropic, {
+				mode: "api-key",
+				provider: "anthropic",
+				apiKey: "k",
+			}),
+		).not.toThrow();
 	});
 });

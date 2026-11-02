@@ -32,6 +32,11 @@ export function computeCost(usage: TokenUsage, model: string): number {
  * API key or an OAuth token + custom `fetch` for subscription billing.
  */
 export function createAIModel(selection: ModelSelection, auth?: ResolvedAuth) {
+	if (auth && auth.provider !== selection.provider) {
+		throw new Error(
+			`auth for ${auth.provider} cannot be used with a ${selection.provider} model`,
+		);
+	}
 	switch (selection.provider) {
 		case "anthropic": {
 			if (!auth || auth.mode === "api-key") {
