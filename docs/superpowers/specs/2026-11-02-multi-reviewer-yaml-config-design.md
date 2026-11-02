@@ -47,6 +47,8 @@ This design supersedes an earlier proposal ("multi-provider reviewer config and 
   5. Per-repo override files.
 
   Each slice ships and verifies alone.
+
+  Slice 1 as built moved three items out, because nothing in slice 1 can reach them: the `skills:` overrides, the provider registry and effort/thinking capability validation now land in slice 2, and the per-reviewer and judge `roles:` land in slice 3. Secret env names for reviewers (`AI_REVIEW_REVIEWERS__<ID>__PRIVATE_KEY`) also land in slice 2; slice 1 builds the overlay and uses it for non-secret keys. See the slice 1 plan for the full list.
 - B. Reviewers first. A third bot lands sooner, but Gemini still needs hard-coded tier maps and the model plumbing gets written twice.
 - C. One change. No intermediate state to verify, and it touches about 22 files plus the DB.
 
