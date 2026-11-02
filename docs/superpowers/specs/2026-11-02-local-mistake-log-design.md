@@ -50,6 +50,8 @@ Every line has `v: 1`, `type`, `ts`, `runId`, `source` (`review` or `gate`), `re
 - `finding` is one row per agent finding, logged before the merge so it keeps its skill. It holds `findingKey`, `skill`, `provider`, `model`, `title`, `body`, `severity`, `category`, `confidence`, `evidence`, `suppressible`, `path`, `line`, `startLine`, `suggestion` and `survived`. `findingKey` is a stable hash of path and normalized title. `survived` says whether that key is present in the merged review.
 - `event` holds `findingId` (the ledger id for gate events), `status` (`fixed`, `open`, `reopened`, `approved`, `skipped`, `rejected`), `by` (`gate-inferred`, `no-mistakes`, `agent`), `atHead`, `fixCommit`, `note`, and `path`, `title` and `severity` copied from the ledger entry so analysis can join to findings by `findingKey`. The gate writes inferred `fixed` and `reopened` events. Ingest adds no-mistakes decisions.
 
+On ingest `event` records, `runId` is the no-mistakes run id; every other record carries the capture run id. `finding.survived` means the finding survived the agent merge, not the gate ledger's suppression of settled repeats. Gate-inferred `fixed` events carry `fixCommit: null` because the fix commit is derivable from the gap between consecutive gate `run` rows' `headSha` values; `atHead` is the head the gate saw it fixed at.
+
 `implementer` is `{agent: "claude-code" | "codex" | null, sessionId, source: "env" | "resolved" | null, confidence}`.
 
 - `review` reads `CLAUDE_CODE_SESSION_ID` from the environment, which is set in a Claude Code session. The Codex equivalent, and whether a subagent sees its own id or its parent's, are not verified. The builder checks both and records `source: null` where unsure.

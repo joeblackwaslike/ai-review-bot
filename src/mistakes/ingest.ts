@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { gateRepoSlug, gateRoot } from "../gate/run.js";
@@ -48,8 +48,19 @@ interface LogState {
 const warn = (msg: string) => console.error(`mistakes ingest: ${msg}`);
 
 const eventKey = (
-	e: Pick<EventRecord, "findingId" | "status" | "atHead" | "by" | "step">,
-) => JSON.stringify([e.findingId, e.status, e.atHead, e.by, e.step ?? null]);
+	e: Pick<
+		EventRecord,
+		"runId" | "findingId" | "status" | "atHead" | "by" | "step"
+	>,
+) =>
+	JSON.stringify([
+		e.runId,
+		e.findingId,
+		e.status,
+		e.atHead,
+		e.by,
+		e.step ?? null,
+	]);
 
 /** `owner/name` of the checkout at `cwd`, from its origin remote or its top-level directory name. */
 export function currentRepoSlug(cwd = process.cwd()): string {
@@ -202,7 +213,7 @@ function writeExclusive(dir: string, stem: string, data: string): string {
 			`${stem}${attempt === 1 ? "" : `-${attempt}`}.jsonl`,
 		);
 		try {
-			writeFileSync(file, data, { flag: "wx" });
+			writeFileSync(file, data, { flag: "wx", mode: 0o600 });
 			return file;
 		} catch (error) {
 			const taken = (error as NodeJS.ErrnoException).code === "EEXIST";
@@ -312,6 +323,7 @@ export async function ingest(opts: IngestOptions): Promise<IngestResult> {
 	lines.push(...events);
 
 	if (lines.length === 0) return result;
+	mkdirSync(dir, { recursive: true, mode: 0o700 });
 	result.file = writeExclusive(
 		dir,
 		`ingest-${fileStamp(started)}`,

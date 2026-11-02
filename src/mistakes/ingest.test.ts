@@ -4,6 +4,7 @@ import {
 	readdirSync,
 	readFileSync,
 	rmSync,
+	statSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -269,9 +270,9 @@ describe("ingest", () => {
 		});
 		const noMistakes = fakeNoMistakes(
 			[
-				{ id: "NMRUN1", branch: "feat/x", headSha: "aaaa", createdAt: 1 },
-				{ id: "NMRUN2", branch: "feat/x", headSha: "zzzz", createdAt: 1 },
-				{ id: "NMRUN3", branch: "feat/y", headSha: "aaaa", createdAt: 1 },
+				{ id: "NMRUN1", branch: "feat/x", headSha: "aaaa" },
+				{ id: "NMRUN2", branch: "feat/x", headSha: "zzzz" },
+				{ id: "NMRUN3", branch: "feat/y", headSha: "aaaa" },
 			],
 			{
 				NMRUN1: [DECIDED_ROUND],
@@ -319,7 +320,7 @@ describe("ingest", () => {
 		});
 		const res = await run(root, {
 			noMistakes: fakeNoMistakes(
-				[{ id: "NMRUN1", branch: "feat/x", headSha: "0000", createdAt: 1 }],
+				[{ id: "NMRUN1", branch: "feat/x", headSha: "0000" }],
 				{ NMRUN1: [DECIDED_ROUND] },
 			),
 		});
@@ -387,7 +388,7 @@ describe("ingest", () => {
 		await run(root, {
 			transcriptsDir: TRANSCRIPTS,
 			noMistakes: fakeNoMistakes(
-				[{ id: "NMRUN1", branch: "feat/x", headSha: "aaaa", createdAt: 1 }],
+				[{ id: "NMRUN1", branch: "feat/x", headSha: "aaaa" }],
 				{ NMRUN1: [DECIDED_ROUND] },
 			),
 		});
@@ -409,10 +410,9 @@ describe("ingest", () => {
 			at: "2026-11-01T12:00:00.000Z",
 		});
 		const nm = () =>
-			fakeNoMistakes(
-				[{ id: "NMRUN1", branch: "feat/x", headSha: "aaaa", createdAt: 1 }],
-				{ NMRUN1: [DECIDED_ROUND] },
-			);
+			fakeNoMistakes([{ id: "NMRUN1", branch: "feat/x", headSha: "aaaa" }], {
+				NMRUN1: [DECIDED_ROUND],
+			});
 
 		const first = await run(root, { noMistakes: nm() });
 		const second = await run(root, {
@@ -443,12 +443,9 @@ describe("ingest", () => {
 			implementer: claude("s-env"),
 		});
 		const nm = () =>
-			fakeNoMistakes(
-				[{ id: "NMRUN1", branch: "feat/x", headSha: "aaaa", createdAt: 1 }],
-				{
-					NMRUN1: [DECIDED_ROUND, { ...DECIDED_ROUND, stepName: "review" }],
-				},
-			);
+			fakeNoMistakes([{ id: "NMRUN1", branch: "feat/x", headSha: "aaaa" }], {
+				NMRUN1: [DECIDED_ROUND, { ...DECIDED_ROUND, stepName: "review" }],
+			});
 
 		const first = await run(root, { noMistakes: nm() });
 		const second = await run(root, { noMistakes: nm() });
@@ -459,6 +456,54 @@ describe("ingest", () => {
 		).toEqual(["gate.review.ai-review", "review"]);
 		expect(second.events).toBe(0);
 	});
+
+	it("keeps identical decisions from different no-mistakes runs at the same head", async () => {
+		const root = tempDir();
+		capture(root, {
+			source: "gate",
+			branch: "feat/x",
+			at: "2026-11-01T12:00:00.000Z",
+			implementer: claude("s-env"),
+		});
+		const nm = () =>
+			fakeNoMistakes(
+				[
+					{ id: "NMRUN1", branch: "feat/x", headSha: "aaaa" },
+					{ id: "NMRUN2", branch: "feat/x", headSha: "aaaa" },
+				],
+				{ NMRUN1: [DECIDED_ROUND], NMRUN2: [DECIDED_ROUND] },
+			);
+
+		const first = await run(root, { noMistakes: nm() });
+		const second = await run(root, { noMistakes: nm() });
+
+		expect(first.events).toBe(2);
+		expect(readOutput(first.file).map((r) => r.runId)).toEqual([
+			"NMRUN1",
+			"NMRUN2",
+		]);
+		expect(second.events).toBe(0);
+	});
+
+	it.skipIf(process.platform === "win32")(
+		"writes the ingest file and directory without group or other access",
+		async () => {
+			const root = tempDir();
+			capture(root, {
+				source: "gate",
+				branch: "feat/x",
+				at: "2026-11-01T12:00:00.000Z",
+				implementer: claude("s-env"),
+			});
+			const res = await run(root, {
+				noMistakes: fakeNoMistakes(
+					[{ id: "NMRUN1", branch: "feat/x", headSha: "aaaa" }],
+					{ NMRUN1: [DECIDED_ROUND] },
+				),
+			});
+			expect(statSync(res.file as string).mode & 0o077).toBe(0);
+		},
+	);
 
 	it("retries with a numbered suffix when the ingest file name is taken", async () => {
 		const root = tempDir();
@@ -477,7 +522,7 @@ describe("ingest", () => {
 		const res = await run(root, {
 			now: () => now,
 			noMistakes: fakeNoMistakes(
-				[{ id: "NMRUN1", branch: "feat/x", headSha: "aaaa", createdAt: 1 }],
+				[{ id: "NMRUN1", branch: "feat/x", headSha: "aaaa" }],
 				{ NMRUN1: [DECIDED_ROUND] },
 			),
 		});

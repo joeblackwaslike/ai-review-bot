@@ -1,6 +1,12 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	statSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ModelReview } from "../review.js";
 import { findingKey, findingRecords, openMistakeLog } from "./log.js";
@@ -297,4 +303,16 @@ describe("MistakeRecord source and step", () => {
 		const withStep = MistakeRecord.parse({ ...event, step: "review" });
 		expect(withStep.type === "event" && withStep.step).toBe("review");
 	});
+});
+
+describe("log permissions", () => {
+	it.skipIf(process.platform === "win32")(
+		"creates the log directory and file without group or other access",
+		() => {
+			const root = tempRoot();
+			const log = run(join(root, "fresh"), "n");
+			expect(statSync(log.path).mode & 0o077).toBe(0);
+			expect(statSync(dirname(log.path)).mode & 0o077).toBe(0);
+		},
+	);
 });

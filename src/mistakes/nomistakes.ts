@@ -7,7 +7,6 @@ export interface NoMistakesRun {
 	id: string;
 	branch: string;
 	headSha: string;
-	createdAt: number;
 }
 
 export interface NoMistakesRound {
@@ -46,7 +45,6 @@ const RunRow = z.object({
 	id: z.string(),
 	branch: z.string(),
 	head_sha: z.string(),
-	created_at: z.number(),
 	upstream_url: z.string().nullable(),
 	working_path: z.string(),
 });
@@ -69,7 +67,7 @@ const Finding = z.object({
 	description: z.string().default(""),
 });
 
-const RUNS_SQL = `SELECT r.id, r.branch, r.head_sha, r.created_at, p.upstream_url, p.working_path
+const RUNS_SQL = `SELECT r.id, r.branch, r.head_sha, p.upstream_url, p.working_path
 FROM runs r JOIN repos p ON p.id = r.repo_id
 ORDER BY r.created_at`;
 
@@ -135,7 +133,6 @@ export function sqliteNoMistakesSource(opts: {
 					id: r.id,
 					branch: r.branch,
 					headSha: r.head_sha,
-					createdAt: r.created_at,
 				}));
 		},
 		async rounds(runId) {

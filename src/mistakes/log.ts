@@ -71,7 +71,7 @@ export function openMistakeLog(opts: OpenMistakeLogOptions): MistakeLog {
 		path,
 		append(rec) {
 			try {
-				mkdirSync(dirname(path), { recursive: true });
+				mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
 				const line = {
 					v: 1,
 					ts: now().toISOString(),
@@ -81,7 +81,7 @@ export function openMistakeLog(opts: OpenMistakeLogOptions): MistakeLog {
 					branch: opts.branch,
 					...rec,
 				};
-				appendFileSync(path, `${JSON.stringify(line)}\n`);
+				appendFileSync(path, `${JSON.stringify(line)}\n`, { mode: 0o600 });
 			} catch (error) {
 				if (warned) return;
 				warned = true;

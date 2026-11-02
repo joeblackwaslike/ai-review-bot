@@ -41,7 +41,6 @@ describe("sqliteNoMistakesSource", () => {
 				id: "01RUNMATCH0000000000000000",
 				branch: "feat/x",
 				headSha: "aaaa",
-				createdAt: 1793534400,
 			},
 		]);
 		expect(warn).toHaveBeenCalledWith(
@@ -90,7 +89,6 @@ describe("decisionsFor", () => {
 		id: "01RUNMATCH0000000000000000",
 		branch: "feat/x",
 		headSha: "aaaa",
-		createdAt: 1793534400,
 	};
 
 	async function rounds(): Promise<NoMistakesRound[]> {
