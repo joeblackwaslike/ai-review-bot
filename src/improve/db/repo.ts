@@ -332,6 +332,8 @@ export async function reclaimStaleQcRun(
 }
 
 /** Insert discard rows; rows whose unique key already exists are skipped.
+ * The key includes the skill so five agents restating one finding stay five
+ * rows; coalesce makes a null skill collide with itself.
  * Returns the number of rows actually inserted. */
 export async function insertDiscards(
 	db: Db,

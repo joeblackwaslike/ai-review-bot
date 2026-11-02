@@ -7143,7 +7143,6 @@ describe("buildReview ledger suppression", () => {
 				},
 			});
 
-			// Agent timings in the body's agents marker differ between runs.
 			const untimed = (d: typeof decision) => ({
 				...d,
 				body: d?.body.replace(/durationMs\\?":\d+/g, ""),

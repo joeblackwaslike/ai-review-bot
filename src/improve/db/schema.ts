@@ -14,7 +14,11 @@ import {
 	timestamp,
 	uniqueIndex,
 } from "drizzle-orm/pg-core";
-import { DISCARD_REASONS, OFF_DIFF_CODES } from "../../discards.js";
+import {
+	DISCARD_REASONS,
+	DISPOSITIONS,
+	OFF_DIFF_CODES,
+} from "../../discards.js";
 
 export const provider = pgEnum("provider", ["anthropic", "openai"]);
 export const feedbackSource = pgEnum("feedback_source", [
@@ -49,10 +53,7 @@ export const proposalStatus = pgEnum("proposal_status", [
 
 export const discardReason = pgEnum("discard_reason", DISCARD_REASONS);
 export const discardCode = pgEnum("discard_code", OFF_DIFF_CODES);
-export const discardDisposition = pgEnum("discard_disposition", [
-	"dropped",
-	"held",
-]);
+export const discardDisposition = pgEnum("discard_disposition", DISPOSITIONS);
 
 export const findingCatalog = pgTable(
 	"finding_catalog",
@@ -249,8 +250,6 @@ export const findingDiscards = pgTable(
 			.defaultNow(),
 	},
 	(t) => [
-		// Skill is in the key so five agents restating one finding stay five
-		// rows; coalesce makes a null skill collide with itself.
 		uniqueIndex("finding_discards_uq").on(
 			t.provider,
 			t.owner,

@@ -162,9 +162,7 @@ describe("insertDiscards", () => {
 		expect(r.rows).toEqual([{ skill: null, path: null, line: null }]);
 	});
 
-	// C3 counts discards per skill, so five agents restating one settled
-	// finding must stay five rows.
-	it("keeps rows that differ only in skill", async () => {
+	it("keeps one row per skill for the same finding, with a null skill colliding with itself", async () => {
 		const db = await createTestDb();
 		await insertDiscards(
 			db,

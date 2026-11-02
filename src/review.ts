@@ -140,7 +140,9 @@ interface ReviewContext {
 	 * subscription-authenticated review of an already-open PR. */
 	auth?: ResolvedAuth;
 	/** Receives every finding the run dropped or held back, once, after the run
-	 * ends however it ends. A rejection is logged and never changes the review. */
+	 * ends however it ends. A rejection is logged and never changes the review.
+	 * Callers open the corpus inside it, so a connection failure rejects here
+	 * instead of failing the review before any agent runs. */
 	recordDiscards?: (discards: Discard[]) => Promise<void>;
 }
 
@@ -629,7 +631,9 @@ export interface MergeOutcome {
 	review: ModelReview;
 	/** `commentKey` of each collapsed inline comment → the key of the survivor
 	 * now standing for it, so provenance recorded against the original anchor
-	 * can follow the finding it belongs to. */
+	 * can follow the finding it belongs to. Discard attribution looks the
+	 * survivor up here: collapsing spans nearby lines, so a finding found by
+	 * five agents would otherwise be credited to one skill. */
 	inlineAliases: Map<string, string>;
 	/** How many findings were folded into another as the same claim, so the
 	 * caller can log it instead of silently shrinking the review. */
@@ -2941,11 +2945,6 @@ async function buildReviewInner(
 		const skillPath = allSkills[i]?.skillPath;
 		if (!skillPath) return;
 		for (const c of outcome.review.inline_comments) {
-			// Record against the survivor's key when this finding was collapsed
-			// into another. Keying on the agent's own anchor would strand the
-			// attribution: near-duplicate collapsing spans different nearby
-			// lines, so nothing later looks the original key up again, and a
-			// bug found by five agents would be credited to one skill.
 			const own = commentKey(c);
 			const key = mergeOutcome.inlineAliases.get(own) ?? own;
 			const set = skillsByKey.get(key) ?? new Set<string>();
@@ -2975,7 +2974,6 @@ async function buildReviewInner(
 		effectiveInlineComments,
 		reviewComments,
 	);
-	// Routed P0/P1 comments post as general findings, so only P2/P3 are discards.
 	for (const c of dropped)
 		lateDiscard(c, "OFF_DIFF", offDiffCodes.get(commentKey(c)) ?? null);
 	if (routed.length > 0) {

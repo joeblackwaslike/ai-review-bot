@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 
+/** Why the pipeline dropped or held back a finding. */
 export const DISCARD_REASONS = [
 	"SUPPRESSED_SETTLED",
 	"SUPPRESSED_OPEN",
@@ -9,8 +10,13 @@ export const DISCARD_REASONS = [
 	"DISCARDED_BY_VERIFY",
 	"RESOLVED_LOCATION",
 ] as const;
+/** Whether a discarded finding was removed outright or still holds the verdict. */
+export const DISPOSITIONS = ["dropped", "held"] as const;
+export type Disposition = (typeof DISPOSITIONS)[number];
+
 export type DiscardReason = (typeof DISCARD_REASONS)[number];
 
+/** The anchor-validation failure behind an `OFF_DIFF` discard. */
 export const OFF_DIFF_CODES = [
 	"OFF_DIFF_PATH",
 	"OFF_DIFF_LINE",
@@ -22,7 +28,7 @@ export type OffDiffCode = (typeof OFF_DIFF_CODES)[number];
 export interface Discard {
 	reason: DiscardReason;
 	code: OffDiffCode | null;
-	disposition: "dropped" | "held";
+	disposition: Disposition;
 	title: string;
 	path: string | null;
 	line: number | null;

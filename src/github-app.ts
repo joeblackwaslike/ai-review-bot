@@ -555,8 +555,6 @@ export async function maybeSubmitReview(args: {
 			diffBudgetChars: config.diffBudgetChars,
 			tier2Enabled: config.tier2Enabled,
 			auth,
-			// getDb() runs inside the callback, so a missing or broken corpus
-			// connection becomes a rejection buildReview catches, never a failed review.
 			recordDiscards: config.improveEnabled
 				? async (discards) =>
 						persistDiscards({

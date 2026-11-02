@@ -2178,9 +2178,7 @@ describe("discard recording wiring", () => {
 		]);
 	});
 
-	// buildReview catches a rejected recordDiscards; a getDb throw at call time
-	// would instead fail the review before any agent ran.
-	it("opens the corpus only when recording, and rejects rather than throws", async () => {
+	it("opens the corpus inside recordDiscards so a getDb throw rejects instead of failing the review", async () => {
 		vi.mocked(getDb).mockImplementation(() => {
 			throw new Error("DATABASE_URL is required");
 		});
