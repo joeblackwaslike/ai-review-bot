@@ -1091,7 +1091,12 @@ describe("runGate mistake log", () => {
 			...over,
 		});
 	};
-	const run = (state: FakeRepo, review: GateReview, mistakes: GateMistakes) =>
+	const run = (
+		state: FakeRepo,
+		review: GateReview,
+		mistakes: GateMistakes,
+		findingsFilePath?: string,
+	) =>
 		runGate({
 			cwd: dir,
 			owner: "o",
@@ -1100,6 +1105,7 @@ describe("runGate mistake log", () => {
 			runGit: fakeGit(state),
 			review,
 			mistakes,
+			findingsFile: findingsFilePath,
 		});
 
 	it("logs run and findings in round 1 and a fixed event in round 2", async () => {
@@ -1170,5 +1176,29 @@ describe("runGate mistake log", () => {
 		);
 		expect(result.findings).toHaveLength(1);
 		expect(errors.filter((e) => e.includes("mistake log"))).toHaveLength(1);
+	});
+
+	it("does not log a fixed event when the findings-file write fails", async () => {
+		const state = repo({ "src/a.ts": modified("d1") });
+		const log1 = newLog();
+		await run(state, async () => agentPass([P1_ON_A]), log1);
+		expect(
+			(await logRows(log1)).filter((r) => r.type === "event"),
+		).toHaveLength(0);
+
+		state.ancestors.add("head1");
+		state.head = "head2";
+		state.files["src/a.ts"] = modified("d2");
+		state.since.head1 = ["src/a.ts"];
+		const log2 = newLog();
+		await expect(
+			run(
+				state,
+				async () => agentPass([]),
+				log2,
+				join(dir, "missing", "findings.json"),
+			),
+		).rejects.toThrow();
+		await expect(readFile(log2.path, "utf8")).rejects.toThrow();
 	});
 });

@@ -176,16 +176,18 @@ function parseFindings(json: string | null): {
 	};
 }
 
-function parseIds(json: string | null): Set<string> {
+/** Parses a `selected_finding_ids` column into a set of ids. Returns `null` for invalid JSON, non-array JSON, or an array with a non-string entry — distinct from a genuinely empty `[]`, which is a valid, deliberate selection. */
+function parseIds(json: string | null): Set<string> | null {
 	if (json === null) return new Set();
+	let raw: unknown;
 	try {
-		const raw: unknown = JSON.parse(json);
-		return new Set(
-			Array.isArray(raw) ? raw.filter((x) => typeof x === "string") : [],
-		);
+		raw = JSON.parse(json);
 	} catch {
-		return new Set();
+		return null;
 	}
+	if (!Array.isArray(raw) || !raw.every((x) => typeof x === "string"))
+		return null;
+	return new Set(raw);
 }
 
 /** Maps a no-mistakes run's rounds to per-finding decisions: a finding chosen for fixing is `approved`, one declined by the user or in a skipped step is `skipped`. Unrecognized finding shapes are counted in `skipped`, never thrown. */
@@ -239,6 +241,10 @@ export function decisionsFor(
 		const round = parseFindings(r.findingsJson);
 		skipped += round.skipped;
 		const selected = parseIds(r.selectedFindingIds);
+		if (selected === null) {
+			skipped++;
+			continue;
+		}
 		const chosen = round.findings.filter((f) => selected.has(f.id));
 		const head = r.reviewedHeadSha;
 		if (r.selectionSource === "user") {

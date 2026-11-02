@@ -38,22 +38,33 @@ function isGitCommitOrPush(line: TranscriptLine): boolean {
 	);
 }
 
-async function listDir(dir: string): Promise<string[]> {
+async function listDir(dir: string, warnings: string[]): Promise<string[]> {
 	try {
 		return await readdir(dir);
-	} catch {
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+			warnings.push(
+				`could not list ${dir}: ${error instanceof Error ? error.message : String(error)}`,
+			);
+		}
 		return [];
 	}
 }
 
-async function projectFiles(dir: string, repoName: string): Promise<string[]> {
+/** A project dir belongs to `repoName` when its name ends with `-<repoName>` (a plain checkout) or contains `-<repoName>--worktrees-` (a worktree under it) — never by bare substring, so `ai-review-bot-demo` does not match `ai-review-bot`. */
+async function projectFiles(
+	dir: string,
+	repoName: string,
+	warnings: string[],
+): Promise<string[]> {
 	const needle = repoName.replace(/[^a-zA-Z0-9]/g, "-");
-	const projects = (await listDir(dir)).filter(
-		(name) => name.includes(needle) && !name.includes("--no-mistakes-"),
+	const projects = (await listDir(dir, warnings)).filter(
+		(name) =>
+			name.endsWith(`-${needle}`) || name.includes(`-${needle}--worktrees-`),
 	);
 	const files: string[] = [];
 	for (const project of projects) {
-		for (const name of await listDir(join(dir, project))) {
+		for (const name of await listDir(join(dir, project), warnings)) {
 			if (name.endsWith(".jsonl")) files.push(join(dir, project, name));
 		}
 	}
@@ -65,44 +76,55 @@ export async function scanTranscripts(opts: {
 	dir: string;
 	repoName: string;
 	branch: string;
-}): Promise<{ sessions: SessionActivity[]; skipped: number }> {
+}): Promise<{
+	sessions: SessionActivity[];
+	skipped: number;
+	warnings: string[];
+}> {
 	const sessions = new Map<string, SessionActivity>();
 	let skipped = 0;
+	const warnings: string[] = [];
 	const needle = JSON.stringify(opts.branch).slice(1, -1);
-	for (const file of await projectFiles(opts.dir, opts.repoName)) {
-		const lines = createInterface({
-			input: createReadStream(file, { encoding: "utf-8" }),
-			crlfDelay: Number.POSITIVE_INFINITY,
-		});
-		for await (const raw of lines) {
-			if (!raw.trim() || !raw.includes(needle)) continue;
-			let line: TranscriptLine;
-			try {
-				line = JSON.parse(raw);
-			} catch {
-				skipped++;
-				continue;
+	for (const file of await projectFiles(opts.dir, opts.repoName, warnings)) {
+		try {
+			const lines = createInterface({
+				input: createReadStream(file, { encoding: "utf-8" }),
+				crlfDelay: Number.POSITIVE_INFINITY,
+			});
+			for await (const raw of lines) {
+				if (!raw.trim() || !raw.includes(needle)) continue;
+				let line: TranscriptLine;
+				try {
+					line = JSON.parse(raw);
+				} catch {
+					skipped++;
+					continue;
+				}
+				if (line?.gitBranch !== opts.branch) continue;
+				if (typeof line.sessionId !== "string") continue;
+				const at =
+					typeof line.timestamp === "string" ? Date.parse(line.timestamp) : NaN;
+				if (Number.isNaN(at)) continue;
+				const session = sessions.get(line.sessionId) ?? {
+					sessionId: line.sessionId,
+					times: [],
+					commitTimes: [],
+				};
+				sessions.set(line.sessionId, session);
+				session.times.push(at);
+				if (isGitCommitOrPush(line)) session.commitTimes.push(at);
 			}
-			if (line?.gitBranch !== opts.branch) continue;
-			if (typeof line.sessionId !== "string") continue;
-			const at =
-				typeof line.timestamp === "string" ? Date.parse(line.timestamp) : NaN;
-			if (Number.isNaN(at)) continue;
-			const session = sessions.get(line.sessionId) ?? {
-				sessionId: line.sessionId,
-				times: [],
-				commitTimes: [],
-			};
-			sessions.set(line.sessionId, session);
-			session.times.push(at);
-			if (isGitCommitOrPush(line)) session.commitTimes.push(at);
+		} catch (error) {
+			warnings.push(
+				`could not read ${file}: ${error instanceof Error ? error.message : String(error)}`,
+			);
 		}
 	}
 	for (const s of sessions.values()) {
 		s.times.sort((a, b) => a - b);
 		s.commitTimes.sort((a, b) => a - b);
 	}
-	return { sessions: [...sessions.values()], skipped };
+	return { sessions: [...sessions.values()], skipped, warnings };
 }
 
 /** Picks the implementer session for a run at `runTime`: sessions active on the branch before the run, a commit or push before the run first, then the latest activity up to six hours after it. One session in the top tier is `medium`, a shared tier is `low`. */

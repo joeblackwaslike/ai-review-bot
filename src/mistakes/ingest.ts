@@ -90,12 +90,27 @@ function readLog(dir: string): LogState {
 	let files: string[];
 	try {
 		files = readdirSync(dir).filter((f) => f.endsWith(".jsonl"));
-	} catch {
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+			warn(
+				`could not list ${dir}: ${error instanceof Error ? error.message : String(error)}`,
+			);
+		}
 		return state;
 	}
 	for (const file of files) {
+		const path = join(dir, file);
+		let content: string;
+		try {
+			content = readFileSync(path, "utf-8");
+		} catch (error) {
+			warn(
+				`could not read ${path}: ${error instanceof Error ? error.message : String(error)}`,
+			);
+			continue;
+		}
 		const isIngest = file.startsWith("ingest-");
-		for (const line of readFileSync(join(dir, file), "utf-8").split("\n")) {
+		for (const line of content.split("\n")) {
 			if (!line.trim()) continue;
 			let rec: MistakeRecord;
 			try {
@@ -117,16 +132,20 @@ function latestReviewSession(
 	runs: readonly RunRecord[],
 	branch: string,
 	before: number,
-): string | null {
-	let best: { at: number; sessionId: string } | null = null;
+): { sessionId: string; agent: Implementer["agent"] } | null {
+	let best: {
+		at: number;
+		sessionId: string;
+		agent: Implementer["agent"];
+	} | null = null;
 	for (const r of runs) {
 		const at = Date.parse(r.ts);
 		const sessionId = r.implementer.sessionId;
 		if (r.source !== "review" || r.branch !== branch || !sessionId) continue;
 		if (!(at < before) || (best && best.at >= at)) continue;
-		best = { at, sessionId };
+		best = { at, sessionId, agent: r.implementer.agent };
 	}
-	return best?.sessionId ?? null;
+	return best ? { sessionId: best.sessionId, agent: best.agent } : null;
 }
 
 async function noMistakesEvents(opts: {
@@ -248,20 +267,27 @@ export async function ingest(opts: IngestOptions): Promise<IngestResult> {
 			dir: opts.transcriptsDir ?? join(homedir(), ".claude", "projects"),
 			repoName: name ?? repo,
 			branch,
-		}).then(({ sessions, skipped }) => {
+		}).then(({ sessions, skipped, warnings }) => {
 			if (skipped > 0) warn(`skipped ${skipped} malformed transcript line(s)`);
+			for (const w of warnings) warn(w);
 			return sessions;
 		});
 		scans.set(branch, pending);
 		return pending;
 	};
 
-	const gates = state.runs.filter(
-		(r) =>
-			r.source === "gate" &&
-			r.implementer.sessionId === null &&
-			!state.annotated.has(r.runId),
-	);
+	const seenRunIds = new Set<string>();
+	const gates = state.runs.filter((r) => {
+		if (
+			r.source !== "gate" ||
+			r.implementer.sessionId !== null ||
+			state.annotated.has(r.runId) ||
+			seenRunIds.has(r.runId)
+		)
+			return false;
+		seenRunIds.add(r.runId);
+		return true;
+	});
 	for (const gate of gates) {
 		if (!gate.branch) {
 			result.unresolved++;
@@ -272,8 +298,8 @@ export async function ingest(opts: IngestOptions): Promise<IngestResult> {
 		const fromReview = latestReviewSession(state.runs, gate.branch, at);
 		if (fromReview) {
 			implementer = {
-				agent: "claude-code",
-				sessionId: fromReview,
+				agent: fromReview.agent,
+				sessionId: fromReview.sessionId,
 				source: "resolved",
 				confidence: "high",
 			};

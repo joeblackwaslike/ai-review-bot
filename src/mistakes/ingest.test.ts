@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import {
+	chmodSync,
 	mkdtempSync,
 	readdirSync,
 	readFileSync,
@@ -530,6 +531,117 @@ describe("ingest", () => {
 		expect(res.file).toBe(join(dir, `${taken}-3.jsonl`));
 		expect(readOutput(res.file)).toHaveLength(1);
 	});
+
+	it("preserves the review's implementer agent when resolving a gate run", async () => {
+		const root = tempDir();
+		const codex: Implementer = {
+			agent: "codex",
+			sessionId: "s-codex",
+			source: "env",
+			confidence: "high",
+		};
+		capture(root, {
+			source: "review",
+			branch: "feat/x",
+			at: "2026-11-01T10:00:00.000Z",
+			implementer: codex,
+		});
+		const gateId = capture(root, {
+			source: "gate",
+			branch: "feat/x",
+			at: "2026-11-01T12:00:00.000Z",
+		});
+
+		const res = await run(root);
+
+		const [ann] = readOutput(res.file);
+		expect(ann).toMatchObject({
+			type: "annotation",
+			runId: gateId,
+			implementer: {
+				agent: "codex",
+				sessionId: "s-codex",
+				source: "resolved",
+				confidence: "high",
+			},
+		});
+	});
+
+	it("produces one annotation and one resolved count for two gate run records sharing a runId", async () => {
+		const root = tempDir();
+		capture(root, {
+			source: "review",
+			branch: "feat/x",
+			at: "2026-11-01T10:00:00.000Z",
+			implementer: claude("s1"),
+		});
+		const log = openMistakeLog({
+			root,
+			owner: OWNER,
+			repo: REPO,
+			source: "gate",
+			branch: "feat/x",
+			now: () => new Date("2026-11-01T12:00:00.000Z"),
+		});
+		const appendRound = (round: number) =>
+			log.append({
+				type: "run",
+				headSha: "aaaa",
+				mergeBase: null,
+				scope: "range",
+				round,
+				costUsd: 0,
+				durationSeconds: 1,
+				providers: [],
+				models: [],
+				agentsAttempted: 0,
+				agentsSucceeded: 0,
+				partial: false,
+				reportPath: null,
+				implementer: NONE,
+			});
+		appendRound(1);
+		appendRound(2);
+
+		const res = await run(root);
+
+		expect(res.resolved).toEqual({ byReviewRow: 1, byTranscript: 0 });
+		expect(
+			readOutput(res.file).filter((r) => r.type === "annotation"),
+		).toHaveLength(1);
+	});
+
+	it.skipIf(process.platform === "win32")(
+		"warns and skips an unreadable capture file instead of aborting",
+		async () => {
+			const root = tempDir();
+			const gateId = capture(root, {
+				source: "gate",
+				branch: "feat/x",
+				at: "2026-11-01T12:00:00.000Z",
+				implementer: claude("s-env"),
+			});
+			const dir = join(root, `${OWNER}__${REPO}`);
+			const badFile = join(dir, "2026-11-01T00-00-00-000Z-unreadable.jsonl");
+			writeFileSync(badFile, '{"type":"run"}\n');
+			chmodSync(badFile, 0o000);
+			const warn = vi.spyOn(console, "error").mockImplementation(() => {});
+
+			try {
+				const res = await run(root);
+				expect(warn).toHaveBeenCalledWith(expect.stringContaining(badFile));
+				expect(res).toEqual({
+					resolved: { byReviewRow: 0, byTranscript: 0 },
+					unresolved: 0,
+					events: 0,
+					file: null,
+				});
+			} finally {
+				chmodSync(badFile, 0o600);
+			}
+			expect(gateId).toBeTruthy();
+		},
+	);
 
 	it("returns an empty result when the repo has no capture dir", async () => {
 		const res = await run(tempDir());

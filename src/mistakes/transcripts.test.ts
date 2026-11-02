@@ -1,3 +1,7 @@
+import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
@@ -65,8 +69,77 @@ describe("scanTranscripts", () => {
 			repoName: "ai-review-bot",
 			branch: "feat/x",
 		});
-		expect(res).toEqual({ sessions: [], skipped: 0 });
+		expect(res).toEqual({ sessions: [], skipped: 0, warnings: [] });
 	});
+
+	it("does not match a project dir by bare substring, so a similarly-named repo is excluded", async () => {
+		const root = await mkdtemp(join(tmpdir(), "transcripts-"));
+		mkdirSync(join(root, "-Users-x-ai-review-bot"), { recursive: true });
+		writeFileSync(
+			join(root, "-Users-x-ai-review-bot", "sess-real.jsonl"),
+			`${JSON.stringify({ sessionId: "sess-real", gitBranch: "feat/x", timestamp: "2026-11-01T10:00:00.000Z" })}\n`,
+		);
+		mkdirSync(join(root, "-Users-x-ai-review-bot-demo"), { recursive: true });
+		writeFileSync(
+			join(root, "-Users-x-ai-review-bot-demo", "sess-demo.jsonl"),
+			`${JSON.stringify({ sessionId: "sess-demo", gitBranch: "feat/x", timestamp: "2026-11-01T10:00:00.000Z" })}\n`,
+		);
+
+		const { sessions } = await scanTranscripts({
+			dir: root,
+			repoName: "ai-review-bot",
+			branch: "feat/x",
+		});
+
+		expect(sessions.map((s) => s.sessionId)).toEqual(["sess-real"]);
+	});
+
+	it.skipIf(process.platform === "win32")(
+		"warns with the directory path on a non-ENOENT listing failure",
+		async () => {
+			const root = await mkdtemp(join(tmpdir(), "transcripts-"));
+			chmodSync(root, 0o000);
+			try {
+				const { sessions, warnings } = await scanTranscripts({
+					dir: root,
+					repoName: "ai-review-bot",
+					branch: "feat/x",
+				});
+				expect(sessions).toEqual([]);
+				expect(warnings).toEqual([expect.stringContaining(root)]);
+			} finally {
+				chmodSync(root, 0o700);
+			}
+		},
+	);
+
+	it.skipIf(process.platform === "win32")(
+		"warns and continues when a transcript file cannot be read",
+		async () => {
+			const root = await mkdtemp(join(tmpdir(), "transcripts-"));
+			const project = join(root, "-Users-x-ai-review-bot");
+			mkdirSync(project, { recursive: true });
+			const good = join(project, "sess-good.jsonl");
+			const bad = join(project, "sess-bad.jsonl");
+			writeFileSync(
+				good,
+				`${JSON.stringify({ sessionId: "sess-good", gitBranch: "feat/x", timestamp: "2026-11-01T10:00:00.000Z" })}\n`,
+			);
+			writeFileSync(bad, "unreadable\n");
+			chmodSync(bad, 0o000);
+			try {
+				const { sessions, warnings } = await scanTranscripts({
+					dir: root,
+					repoName: "ai-review-bot",
+					branch: "feat/x",
+				});
+				expect(sessions.map((s) => s.sessionId)).toEqual(["sess-good"]);
+				expect(warnings).toEqual([expect.stringContaining(bad)]);
+			} finally {
+				chmodSync(bad, 0o600);
+			}
+		},
+	);
 });
 
 describe("pickSession", () => {

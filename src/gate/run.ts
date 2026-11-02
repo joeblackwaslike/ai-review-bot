@@ -231,7 +231,9 @@ export async function runGate(opts: GateOptions): Promise<GateResult> {
 		idleProviders: (pass?.providerStats ?? []).filter((s) => s.succeeded === 0),
 	});
 	for (const w of result.warnings) console.error(w);
-	if (opts.mistakes) {
+
+	const logMistakes = () => {
+		if (!opts.mistakes) return;
 		try {
 			logGateRun({
 				log: opts.mistakes,
@@ -248,7 +250,7 @@ export async function runGate(opts: GateOptions): Promise<GateResult> {
 				`mistake log write failed: ${err instanceof Error ? err.message : String(err)}`,
 			);
 		}
-	}
+	};
 
 	const suggestions = new Map(
 		result.emitted.map(({ entry, suggestion }) => [entry.id, suggestion]),
@@ -290,6 +292,7 @@ export async function runGate(opts: GateOptions): Promise<GateResult> {
 
 	if (opts.findingsFile) {
 		await writeFile(opts.findingsFile, json);
+		logMistakes();
 		await save();
 		return {
 			exitCode: 0,
@@ -298,6 +301,7 @@ export async function runGate(opts: GateOptions): Promise<GateResult> {
 		};
 	}
 	const stdout = formatText(kept);
+	logMistakes();
 	await save();
 	return {
 		exitCode: kept.some((f) => f.severity === "error") ? 1 : 0,

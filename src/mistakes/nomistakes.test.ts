@@ -163,4 +163,51 @@ describe("decisionsFor", () => {
 		const noRounds = decisionsFor(run, [base]);
 		expect(noRounds.decisions.map((d) => d.atHead)).toEqual(["aaaa"]);
 	});
+
+	it("skips decision generation for a round with corrupt selection data instead of declining everything", () => {
+		const round: NoMistakesRound = {
+			stepName: "gate.review.ai-review",
+			stepStatus: "completed",
+			stepFindingsJson: null,
+			round: 1,
+			findingsJson: JSON.stringify({
+				findings: [{ id: "f1", severity: "error", description: "Bug" }],
+			}),
+			selectedFindingIds: "[",
+			selectionSource: "user_declined",
+			reviewedHeadSha: "aaaa",
+		};
+		const { decisions, skipped } = decisionsFor(run, [round]);
+		expect(decisions).toEqual([]);
+		expect(skipped).toBe(1);
+	});
+
+	it("keeps a genuinely empty selection distinct from corrupt data", () => {
+		const round: NoMistakesRound = {
+			stepName: "gate.review.ai-review",
+			stepStatus: "completed",
+			stepFindingsJson: null,
+			round: 1,
+			findingsJson: JSON.stringify({
+				findings: [{ id: "f1", severity: "error", description: "Bug" }],
+			}),
+			selectedFindingIds: "[]",
+			selectionSource: "user_declined",
+			reviewedHeadSha: "aaaa",
+		};
+		const { decisions, skipped } = decisionsFor(run, [round]);
+		expect(decisions).toEqual([
+			{
+				findingId: "f1",
+				step: "gate.review.ai-review",
+				status: "skipped",
+				note: "user_declined",
+				atHead: "aaaa",
+				path: null,
+				title: "Bug",
+				severity: "error",
+			},
+		]);
+		expect(skipped).toBe(0);
+	});
 });
