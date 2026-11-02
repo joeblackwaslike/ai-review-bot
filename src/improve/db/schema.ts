@@ -14,6 +14,7 @@ import {
 	timestamp,
 	uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { DISCARD_REASONS, OFF_DIFF_CODES } from "../../discards.js";
 
 export const provider = pgEnum("provider", ["anthropic", "openai"]);
 export const feedbackSource = pgEnum("feedback_source", [
@@ -44,6 +45,13 @@ export const proposalStatus = pgEnum("proposal_status", [
 	"pr_open",
 	"closed_merged",
 	"closed_rejected",
+]);
+
+export const discardReason = pgEnum("discard_reason", DISCARD_REASONS);
+export const discardCode = pgEnum("discard_code", OFF_DIFF_CODES);
+export const discardDisposition = pgEnum("discard_disposition", [
+	"dropped",
+	"held",
 ]);
 
 export const findingCatalog = pgTable(
@@ -216,4 +224,40 @@ export const proposals = pgTable(
 		dedupKey: text("dedup_key").notNull(),
 	},
 	(t) => [uniqueIndex("proposals_dedup_key_uq").on(t.dedupKey)],
+);
+
+export const findingDiscards = pgTable(
+	"finding_discards",
+	{
+		id: bigserial("id", { mode: "number" }).primaryKey(),
+		provider: provider("provider").notNull(),
+		owner: text("owner").notNull(),
+		repo: text("repo").notNull(),
+		pr: integer("pr").notNull(),
+		reviewSha: text("review_sha").notNull(),
+		reason: discardReason("reason").notNull(),
+		code: discardCode("code"),
+		disposition: discardDisposition("disposition").notNull(),
+		naturalKey: text("natural_key").notNull(),
+		path: text("path"),
+		line: integer("line"),
+		severity: text("severity"),
+		title: text("title").notNull(),
+		skill: text("skill"),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.notNull()
+			.defaultNow(),
+	},
+	(t) => [
+		uniqueIndex("finding_discards_uq").on(
+			t.provider,
+			t.owner,
+			t.repo,
+			t.pr,
+			t.reviewSha,
+			t.reason,
+			t.naturalKey,
+		),
+		index("finding_discards_pr_idx").on(t.provider, t.owner, t.repo, t.pr),
+	],
 );

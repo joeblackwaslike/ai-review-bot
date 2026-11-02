@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadMigrationStatements } from "./migrate.js";
 import { baseFinding, baseRaw } from "./repo.fixtures.js";
 import {
+	insertDiscards,
 	insertRawFeedback,
 	listUnclassifiedBundles,
 	upsertFinding,
@@ -62,6 +63,27 @@ describe.skipIf(!url)("repo (real postgres)", () => {
 		expect(first).toBe(1);
 		const second = await insertRawFeedback(db, baseRaw);
 		expect(second).toBe(0);
+	});
+
+	it("insertDiscards inserts 0 rows on a duplicate unique key", async () => {
+		const row = {
+			provider: "anthropic" as const,
+			owner: "o",
+			repo: "r",
+			pr: 1,
+			reviewSha: "abc",
+			reason: "CAP" as const,
+			code: null,
+			disposition: "dropped" as const,
+			naturalKey: "k1",
+			path: null,
+			line: null,
+			severity: null,
+			title: "t",
+			skill: null,
+		};
+		expect(await insertDiscards(db, [row])).toBe(1);
+		expect(await insertDiscards(db, [row])).toBe(0);
 	});
 
 	it("upsertFinding keeps a stable id on natural_key conflict", async () => {

@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { DISCARD_REASONS } from "../../discards.js";
 import {
 	classifiedFeedback,
+	discardReason,
 	feedbackIntent,
 	findingCatalog,
+	findingDiscards,
 	proposals,
 	qcRuns,
 	qcScores,
@@ -32,5 +35,10 @@ describe("corpus schema", () => {
 			"bug_report",
 			"noise",
 		]);
+	});
+
+	it("defines finding_discards with a reason enum matching DISCARD_REASONS", () => {
+		expect(findingDiscards).toBeDefined();
+		expect(discardReason.enumValues).toEqual([...DISCARD_REASONS]);
 	});
 });
