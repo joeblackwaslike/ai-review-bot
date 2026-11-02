@@ -23,6 +23,7 @@
 		"ai-review": "dist/cli.js"
 	},
 	"files": [
+		"config/",
 		"dist/",
 		"skills/"
 	],

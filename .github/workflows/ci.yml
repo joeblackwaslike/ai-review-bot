@@ -26,6 +26,9 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Pack smoke
+        run: bash scripts/pack-smoke.sh
+
       - name: Typecheck (dashboard)
         run: pnpm --filter dashboard typecheck
 

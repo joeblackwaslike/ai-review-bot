@@ -1,0 +1,75 @@
+version: 1
+
+review:
+  enabled: true
+  delaySeconds: 0
+  resyncDelaySeconds: 0
+  command: /ai-review
+  agentConcurrency: 4
+  agentBudgetSeconds: 210
+  diffBudgetChars: 200000
+  tier2Enabled: true
+  feedbackEnabled: false
+
+improve:
+  enabled: false
+  carrierEnabled: false
+
+infra: {}
+
+cli: {}
+
+routing:
+  sensitivePathPatterns:
+    - auth
+    - crypto
+    - jwt
+    - password
+    - secret
+    - /db/
+    - database
+    - migration
+    - schema
+  docExtensions: [.md, .txt, .rst, .mdx]
+  deepLabel: deep-review
+  complexLines: 500
+  trivialDocLines: 20
+
+# cachedInput rates unverified; confirm against provider pricing
+# Haiku 5.5 bills $0.50/$2.50 above 100K prompt tokens, so huge trivial-tier
+# diffs are under-reported by these flat rates.
+models:
+  anthropic/claude-haiku-5-5:
+    pricing: { input: 0.1, cachedInput: 0.01, output: 0.5 }
+  anthropic/claude-sonnet-5-5:
+    pricing: { input: 2.0, cachedInput: 0.2, output: 10.0 }
+    refusalFallback: true
+  anthropic/claude-opus-5-5:
+    pricing: { input: 4.0, cachedInput: 0.4, output: 20.0 }
+    refusalFallback: true
+  # GPT-6.1 Sol ($2/$10) undercuts the old GPT-5.6 Terra and Sol tiers, so it
+  # covers normal through deep, separated by effort alone. GPT-6 Astra
+  # ($10/$50) is deliberately unused. Luna is the only GPT-6 tier that accepts
+  # effort "none".
+  openai/gpt-6-luna:
+    pricing: { input: 0.1, cachedInput: 0.005, output: 0.5 }
+  openai/gpt-6.1-sol:
+    pricing: { input: 2.0, cachedInput: 0.1, output: 10.0 }
+
+reviewers:
+  claude:
+    enabled: true
+    tiers:
+      trivial: { model: anthropic/claude-haiku-5-5, effort: low }
+      normal: { model: anthropic/claude-sonnet-5-5, effort: medium }
+      complex: { model: anthropic/claude-sonnet-5-5, effort: high }
+      # high, not xhigh: xhigh Opus can outlast the 210s agent deadline on
+      # Vercel Hobby, which would abort every deep-review agent and post nothing.
+      deep: { model: anthropic/claude-opus-5-5, effort: high }
+  codex:
+    enabled: true
+    tiers:
+      trivial: { model: openai/gpt-6-luna, effort: none }
+      normal: { model: openai/gpt-6.1-sol, effort: low }
+      complex: { model: openai/gpt-6.1-sol, effort: high }
+      deep: { model: openai/gpt-6.1-sol, effort: xhigh }
