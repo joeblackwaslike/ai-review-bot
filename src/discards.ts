@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
-/** Why the pipeline dropped or held back a finding. */
+/** Why the pipeline dropped or held back a finding. `DISCARDED_BY_VERIFY` is
+ * reserved for the D1 verifier and has no producer yet. */
 export const DISCARD_REASONS = [
 	"SUPPRESSED_SETTLED",
 	"SUPPRESSED_OPEN",
@@ -24,11 +25,8 @@ export const OFF_DIFF_CODES = [
 ] as const;
 export type OffDiffCode = (typeof OFF_DIFF_CODES)[number];
 
-/** A finding the review pipeline dropped or held back, with why. */
-export interface Discard {
-	reason: DiscardReason;
-	code: OffDiffCode | null;
-	disposition: Disposition;
+/** The finding a discard describes and who reported it. */
+export interface DiscardFields {
 	title: string;
 	path: string | null;
 	line: number | null;
@@ -36,6 +34,19 @@ export interface Discard {
 	skill: string | null;
 	provider: "anthropic" | "openai";
 }
+
+/** A finding the review pipeline dropped or held back, with why. Only an
+ * `OFF_DIFF` discard carries a code, and only an open restatement is held. */
+export type Discard = DiscardFields &
+	(
+		| { reason: "OFF_DIFF"; code: OffDiffCode; disposition: "dropped" }
+		| { reason: "SUPPRESSED_OPEN"; code: null; disposition: "held" }
+		| {
+				reason: Exclude<DiscardReason, "OFF_DIFF" | "SUPPRESSED_OPEN">;
+				code: null;
+				disposition: "dropped";
+		  }
+	);
 
 /** Stable 12-hex key for a finding: sha1 of `path|lowercased trimmed title`.
  * Same formula as the mistake log's `findingKey`, copied because

@@ -6630,6 +6630,12 @@ describe("buildReview ledger suppression", () => {
 			}),
 		};
 		const spy = () => vi.fn(async (_discards: Discard[]) => {});
+		const prContext = {
+			owner: baseContext.owner,
+			repo: baseContext.repo,
+			pullNumber: baseContext.pullNumber,
+			headSha: baseContext.headSha,
+		};
 		const recordsOf = (record: ReturnType<typeof spy>) => {
 			expect(record).toHaveBeenCalledTimes(1);
 			return record.mock.calls[0]?.[0] ?? [];
@@ -6851,7 +6857,7 @@ describe("buildReview ledger suppression", () => {
 			expect(decision?.comments).toEqual(baseline?.comments);
 			expect(
 				warn.mock.calls.filter(([m]) => m === "discard recording failed"),
-			).toEqual([["discard recording failed", { error }]]);
+			).toEqual([["discard recording failed", { ...prContext, error }]]);
 			warn.mockRestore();
 		});
 
@@ -7186,6 +7192,36 @@ describe("buildReview ledger suppression", () => {
 			expect(recordsOf(recordDiscards)).toEqual([]);
 		});
 
+		it("records the folded skill too when a deduped survivor goes off-diff", async () => {
+			const claim = buildInlineComment({
+				title: "Pagination loop skips the final page entirely",
+				body: "The `page` counter stops one short.",
+				path: "src/review.ts",
+				line: 9,
+				severity: "P2",
+			});
+			routeAgents(
+				{
+					"code-reviewer.md": withInline(claim),
+					"silent-failure-hunter.md": withInline({ ...claim, line: 10 }),
+				},
+				empty,
+			);
+			const recordDiscards = spy();
+
+			await buildReview({
+				octokit: noPrior(),
+				...baseContext,
+				recordDiscards,
+			});
+
+			const records = recordsOf(recordDiscards);
+			expect(records.map((d) => [d.skill, d.reason, d.code]).sort()).toEqual([
+				["code-reviewer.md", "OFF_DIFF", "OFF_DIFF_LINE"],
+				["silent-failure-hunter.md", "OFF_DIFF", "OFF_DIFF_LINE"],
+			]);
+		});
+
 		it("records no retraction when the filter is off", async () => {
 			expect(REVIEWER_TUNING.dropRetractions).toBe(false);
 			const filler = {
@@ -7241,7 +7277,7 @@ describe("buildReview ledger suppression", () => {
 			expect(untimed(decision)).toEqual(untimed(baseline));
 			expect(
 				warn.mock.calls.filter(([m]) => m === "discard recording failed"),
-			).toEqual([["discard recording failed", { error }]]);
+			).toEqual([["discard recording failed", { ...prContext, error }]]);
 			warn.mockRestore();
 		});
 
@@ -7274,7 +7310,48 @@ describe("buildReview ledger suppression", () => {
 			expect(vi.getTimerCount()).toBe(0);
 			expect(
 				warn.mock.calls.filter(([m]) => m === "discard recording timed out"),
-			).toEqual([["discard recording timed out"]]);
+			).toEqual([["discard recording timed out", prContext]]);
+		});
+
+		it("logs a recorder rejection that arrives after the time bound", async () => {
+			const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+			onTestFinished(() => {
+				vi.useRealTimers();
+				warn.mockRestore();
+			});
+			vi.useFakeTimers();
+			routeAgents({ "code-reviewer.md": withInline(repeat) }, empty);
+			const error = new Error("db down late");
+			let fail: (e: Error) => void = () => {};
+			let reached: () => void = () => {};
+			const called = new Promise<void>((resolve) => {
+				reached = resolve;
+			});
+
+			const pending = buildReview({
+				octokit: ledgerOctokit(),
+				...baseContext,
+				recordDiscards: () => {
+					reached();
+					return new Promise<void>((_, reject) => {
+						fail = reject;
+					});
+				},
+			});
+			await called;
+			await vi.advanceTimersByTimeAsync(DISCARD_RECORD_TIMEOUT_MS);
+			await pending;
+			fail(error);
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(
+				warn.mock.calls.filter(([m]) =>
+					String(m).startsWith("discard recording"),
+				),
+			).toEqual([
+				["discard recording timed out", prContext],
+				["discard recording failed after timing out", { ...prContext, error }],
+			]);
 		});
 
 		it("clears the time bound when the recorder settles", async () => {

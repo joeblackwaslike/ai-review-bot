@@ -26,6 +26,7 @@ import { mapWithConcurrency } from "./concurrency.js";
 import { collectRightSideLines, rightSideText } from "./diff-lines.js";
 import {
 	type Discard,
+	type DiscardFields,
 	type DiscardReason,
 	logDiscards,
 	type OffDiffCode,
@@ -1801,21 +1802,19 @@ function carryEntryIds(
 	return ids.slice(0, MAX_CARRY_IDS);
 }
 
-function toDiscard(
-	finding: {
-		title: string;
-		path?: string | null;
-		line?: number | null;
-		severity?: string | null;
-	},
-	reason: DiscardReason,
+interface DiscardedFinding {
+	title: string;
+	path?: string | null;
+	line?: number | null;
+	severity?: string | null;
+}
+
+function discardFields(
+	finding: DiscardedFinding,
 	skill: string | null,
 	provider: Discard["provider"],
-): Discard {
+): DiscardFields {
 	return {
-		reason,
-		code: null,
-		disposition: reason === "SUPPRESSED_OPEN" ? "held" : "dropped",
 		title: finding.title,
 		path: finding.path ?? null,
 		line: finding.line ?? null,
@@ -1825,6 +1824,18 @@ function toDiscard(
 	};
 }
 
+function toDiscard(
+	finding: DiscardedFinding,
+	reason: Exclude<DiscardReason, "OFF_DIFF">,
+	skill: string | null,
+	provider: Discard["provider"],
+): Discard {
+	const fields = discardFields(finding, skill, provider);
+	return reason === "SUPPRESSED_OPEN"
+		? { ...fields, reason, code: null, disposition: "held" }
+		: { ...fields, reason, code: null, disposition: "dropped" };
+}
+
 /** How long `buildReview` waits for `recordDiscards` before returning without it. */
 export const DISCARD_RECORD_TIMEOUT_MS = 5_000;
 
@@ -1832,13 +1843,15 @@ async function flushDiscards(
 	discards: Discard[],
 	context: ReviewContext,
 ): Promise<void> {
-	const { owner, repo, pullNumber } = context;
+	const { owner, repo, pullNumber, headSha } = context;
 	logDiscards(discards, { owner, repo, pullNumber });
 	if (!context.recordDiscards) return;
+	const pr = { owner, repo, pullNumber, headSha };
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	try {
+		const recording = context.recordDiscards(discards);
 		const outcome = await Promise.race([
-			context.recordDiscards(discards).then(() => "recorded" as const),
+			recording.then(() => "recorded" as const),
 			new Promise<"timed out">((resolve) => {
 				timer = setTimeout(
 					() => resolve("timed out"),
@@ -1846,9 +1859,17 @@ async function flushDiscards(
 				);
 			}),
 		]);
-		if (outcome === "timed out") console.warn("discard recording timed out");
+		if (outcome === "timed out") {
+			console.warn("discard recording timed out", pr);
+			recording.catch((error: unknown) =>
+				console.warn("discard recording failed after timing out", {
+					...pr,
+					error,
+				}),
+			);
+		}
 	} catch (error) {
-		console.warn("discard recording failed", { error });
+		console.warn("discard recording failed", { ...pr, error });
 	} finally {
 		clearTimeout(timer);
 	}
@@ -2771,8 +2792,8 @@ async function buildReviewInner(
 	const restated = new Map<string, PersistedFinding>();
 	const unsettledResults = agentResults.map((agentResult, index) => {
 		const discard = (
-			finding: Parameters<typeof toDiscard>[0],
-			reason: DiscardReason,
+			finding: DiscardedFinding,
+			reason: Exclude<DiscardReason, "OFF_DIFF">,
 		) =>
 			discards.push(
 				toDiscard(finding, reason, agentSkills[index], context.provider),
@@ -2964,14 +2985,20 @@ async function buildReviewInner(
 	});
 	const lateDiscard = (
 		c: ModelInlineComment,
-		reason: DiscardReason,
-		code: OffDiffCode | null = null,
+		kind:
+			| { reason: "CAP"; code: null }
+			| { reason: "OFF_DIFF"; code: OffDiffCode },
 	) => {
 		const skills = [...(discardSkillsByKey.get(commentKey(c)) ?? [])];
 		for (const skill of skills.length ? skills : [null])
-			discards.push({ ...toDiscard(c, reason, skill, context.provider), code });
+			discards.push({
+				...discardFields(c, skill, context.provider),
+				...kind,
+				disposition: "dropped",
+			});
 	};
-	for (const c of overflowComments) lateDiscard(c, "CAP");
+	for (const c of overflowComments)
+		lateDiscard(c, { reason: "CAP", code: null });
 
 	const offDiffCodes = new Map<string, OffDiffCode>();
 	const reviewComments = buildReviewComments(
@@ -2984,8 +3011,10 @@ async function buildReviewInner(
 		effectiveInlineComments,
 		reviewComments,
 	);
-	for (const c of dropped)
-		lateDiscard(c, "OFF_DIFF", offDiffCodes.get(commentKey(c)) ?? null);
+	for (const c of dropped) {
+		const code = offDiffCodes.get(commentKey(c));
+		if (code) lateDiscard(c, { reason: "OFF_DIFF", code });
+	}
 	if (routed.length > 0) {
 		modelReview = {
 			...modelReview,

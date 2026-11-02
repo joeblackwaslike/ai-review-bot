@@ -55,3 +55,27 @@ describe("logDiscards", () => {
 		});
 	});
 });
+
+/** The reason, code and disposition of each `Discard` variant. */
+type Kind<T> = T extends Discard
+	? Pick<T, "reason" | "code" | "disposition">
+	: never;
+const kind = (k: Kind<Discard>) => k;
+
+describe("Discard", () => {
+	it("rejects contradictory reason, code and disposition combinations", () => {
+		const rejected = [
+			// @ts-expect-error a CAP discard has no off-diff code
+			kind({ reason: "CAP", code: "BAD_RANGE", disposition: "dropped" }),
+			// @ts-expect-error an OFF_DIFF discard needs its code
+			kind({ reason: "OFF_DIFF", code: null, disposition: "dropped" }),
+			// @ts-expect-error an OFF_DIFF discard is dropped, not held
+			kind({ reason: "OFF_DIFF", code: "BAD_RANGE", disposition: "held" }),
+			// @ts-expect-error an open restatement is held, not dropped
+			kind({ reason: "SUPPRESSED_OPEN", code: null, disposition: "dropped" }),
+			// @ts-expect-error only an open restatement is held
+			kind({ reason: "SUPPRESSED_SETTLED", code: null, disposition: "held" }),
+		];
+		expect(rejected).toHaveLength(5);
+	});
+});

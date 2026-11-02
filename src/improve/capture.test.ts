@@ -273,10 +273,10 @@ describe("carrier comment reuse", () => {
 });
 
 describe("persistDiscards", () => {
-	const settled: Discard = {
-		reason: "SUPPRESSED_SETTLED",
+	const open: Discard = {
+		reason: "SUPPRESSED_OPEN",
 		code: null,
-		disposition: "dropped",
+		disposition: "held",
 		title: "Missing null check",
 		path: "src/a.ts",
 		line: 12,
@@ -287,7 +287,7 @@ describe("persistDiscards", () => {
 	const offDiff: Discard = {
 		reason: "OFF_DIFF",
 		code: "OFF_DIFF_PATH",
-		disposition: "held",
+		disposition: "dropped",
 		title: "Unanchored claim",
 		path: null,
 		line: null,
@@ -304,7 +304,7 @@ describe("persistDiscards", () => {
 			repo: "r",
 			pr: 7,
 			headSha: "abc123",
-		})([settled, offDiff]);
+		})([open, offDiff]);
 
 		const r = await db.execute(
 			sql`select provider, owner, repo, pr, review_sha, reason, code, disposition,
@@ -318,10 +318,10 @@ describe("persistDiscards", () => {
 				repo: "r",
 				pr: 7,
 				review_sha: "abc123",
-				reason: "SUPPRESSED_SETTLED",
+				reason: "SUPPRESSED_OPEN",
 				code: null,
-				disposition: "dropped",
-				natural_key: discardKey(settled),
+				disposition: "held",
+				natural_key: discardKey(open),
 				path: "src/a.ts",
 				line: 12,
 				severity: "P2",
@@ -336,7 +336,7 @@ describe("persistDiscards", () => {
 				review_sha: "abc123",
 				reason: "OFF_DIFF",
 				code: "OFF_DIFF_PATH",
-				disposition: "held",
+				disposition: "dropped",
 				natural_key: discardKey(offDiff),
 				path: null,
 				line: null,
