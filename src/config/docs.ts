@@ -1,5 +1,9 @@
-import { z } from "zod";
-import { ENV_ALIASES, envNameForPath, unwrap, type ZodNode } from "./env.js";
+import {
+	ENV_ALIASES,
+	envNameForPath,
+	listSchemaLeaves,
+	type ZodNode,
+} from "./env.js";
 import { ConfigSchema } from "./schema.js";
 
 export const DOCS_START = "<!-- config-reference:start -->";
@@ -14,57 +18,6 @@ export interface DocRow {
 	description: string;
 }
 
-interface Def {
-	type: string;
-	innerType?: ZodNode;
-	valueType?: ZodNode;
-	element?: ZodNode;
-	entries?: Record<string, unknown>;
-	values?: unknown[];
-	defaultValue?: unknown;
-}
-
-const defOf = (node: ZodNode): Def => node._zod.def as Def;
-
-const MAP_KEYS: Record<string, string> = {
-	models: "<provider/model>",
-	reviewers: "<id>",
-};
-
-function wrapperChain(node: ZodNode): ZodNode[] {
-	const chain = [node];
-	let current = node;
-	while (defOf(current).innerType) {
-		current = defOf(current).innerType as ZodNode;
-		chain.push(current);
-	}
-	return chain;
-}
-
-function describeOf(node: ZodNode): string {
-	for (const n of wrapperChain(node)) {
-		const text = z.globalRegistry.get(n as never)?.description;
-		if (text) return text;
-	}
-	return "";
-}
-
-function typeOf(node: ZodNode): string {
-	const def = defOf(unwrap(node));
-	if (def.type === "enum")
-		return `one of ${Object.keys(def.entries ?? {}).join(", ")}`;
-	if (def.type === "array") return `${typeOf(def.element as ZodNode)}[]`;
-	return def.type;
-}
-
-function defaultOf(node: ZodNode): string {
-	const wrapper = wrapperChain(node).find((n) => defOf(n).type === "default");
-	if (wrapper) return JSON.stringify(defOf(wrapper).defaultValue);
-	return wrapperChain(node).some((n) => defOf(n).type === "optional")
-		? "unset"
-		: "required";
-}
-
 const aliasByPath = new Map(
 	Object.entries(ENV_ALIASES).map(([name, entry]) => [
 		entry.path.join("."),
@@ -72,41 +25,21 @@ const aliasByPath = new Map(
 	]),
 );
 
-function walk(node: ZodNode, path: string[], out: DocRow[]): void {
-	const inner = unwrap(node);
-	const def = defOf(inner);
-	if (def.type === "object" && inner.shape) {
-		for (const [key, child] of Object.entries(inner.shape)) {
-			walk(child, [...path, key], out);
-		}
-		return;
-	}
-	if (def.type === "record") {
-		walk(
-			def.valueType as ZodNode,
-			[...path, MAP_KEYS[path[0] as string] ?? "<key>"],
-			out,
-		);
-		return;
-	}
-	const dotted = path.join(".");
-	out.push({
-		path: dotted,
-		env:
-			path[0] === "models" || typeOf(node) === "literal"
-				? "none"
-				: envNameForPath(path),
-		alias: aliasByPath.get(dotted) ?? "none",
-		type: typeOf(node),
-		default: defaultOf(node),
-		description: describeOf(node),
-	});
-}
-
 export function buildConfigRows(): DocRow[] {
-	const rows: DocRow[] = [];
-	walk(ConfigSchema as unknown as ZodNode, [], rows);
-	return rows;
+	return listSchemaLeaves(ConfigSchema as unknown as ZodNode).map((leaf) => {
+		const dotted = leaf.path.join(".");
+		return {
+			path: dotted,
+			env:
+				leaf.path[0] === "models" || leaf.kind === undefined
+					? "none"
+					: envNameForPath(leaf.path),
+			alias: aliasByPath.get(dotted) ?? "none",
+			type: leaf.type,
+			default: leaf.default,
+			description: leaf.description,
+		};
+	});
 }
 
 const cell = (text: string): string => text.replaceAll("|", "\\|");
@@ -146,6 +79,11 @@ export function renderConfigSection(): string {
 export function injectConfigSection(doc: string, section: string): string {
 	const start = doc.indexOf(DOCS_START);
 	const end = doc.indexOf(DOCS_END);
-	if (start === -1 || end === -1) return `${doc.trimEnd()}\n\n${section}\n`;
+	if (start === -1 && end === -1) return `${doc.trimEnd()}\n\n${section}\n`;
+	if (start === -1 || end === -1 || start > end) {
+		throw new Error(
+			`docs/configuration.md must contain ${DOCS_START} before ${DOCS_END}, or neither`,
+		);
+	}
 	return doc.slice(0, start) + section + doc.slice(end + DOCS_END.length);
 }

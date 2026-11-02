@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { ConfigSchema } from "./schema.js";
 
 export const ENV_PREFIX = "AI_REVIEW_";
@@ -53,9 +54,13 @@ export class UnknownConfigEnvError extends Error {
 
 type Kind = "boolean" | "number" | "string" | "json";
 
-interface Leaf {
+export interface SchemaLeaf {
 	path: string[];
-	kind: Kind;
+	mapIndexes: number[];
+	kind: Kind | undefined;
+	type: string;
+	default: string;
+	description: string;
 }
 
 type Env = Readonly<Record<string, string | undefined>>;
@@ -116,28 +121,101 @@ const KIND_BY_TYPE: Record<string, Kind> = {
 	array: "json",
 };
 
-function collectLeaves(
-	node: ZodNode,
-	path: string[],
-	raw: unknown,
-	out: Leaf[],
-): void {
-	const inner = unwrap(node);
-	const type = inner._zod.def.type;
-	if (type === "object" && inner.shape) {
-		for (const [key, child] of Object.entries(inner.shape)) {
-			collectLeaves(child, [...path, key], getAt(raw, [key]), out);
-		}
-	} else if (type === "record") {
-		if (path[0] === "models") return;
-		const valueType = inner._zod.def.valueType as ZodNode;
-		if (!isRecord(raw)) return;
-		for (const id of Object.keys(raw)) {
-			collectLeaves(valueType, [...path, id], raw[id], out);
-		}
-	} else if (KIND_BY_TYPE[type]) {
-		out.push({ path, kind: KIND_BY_TYPE[type] as Kind });
+const MAP_KEYS: Record<string, string> = {
+	models: "<provider/model>",
+	reviewers: "<id>",
+};
+
+interface Def {
+	type: string;
+	innerType?: ZodNode;
+	valueType?: ZodNode;
+	element?: ZodNode;
+	entries?: Record<string, unknown>;
+	defaultValue?: unknown;
+}
+
+const defOf = (node: ZodNode): Def => node._zod.def as Def;
+
+function wrapperChain(node: ZodNode): ZodNode[] {
+	const chain = [node];
+	let current = node;
+	while (defOf(current).innerType) {
+		current = defOf(current).innerType as ZodNode;
+		chain.push(current);
 	}
+	return chain;
+}
+
+function describeOf(node: ZodNode): string {
+	for (const n of wrapperChain(node)) {
+		const text = z.globalRegistry.get(n as never)?.description;
+		if (text) return text;
+	}
+	return "";
+}
+
+function typeOf(node: ZodNode): string {
+	const def = defOf(unwrap(node));
+	if (def.type === "enum") {
+		return `one of ${Object.keys(def.entries ?? {}).join(", ")}`;
+	}
+	if (def.type === "array") return `${typeOf(def.element as ZodNode)}[]`;
+	return def.type;
+}
+
+function defaultOf(node: ZodNode): string {
+	const wrapper = wrapperChain(node).find((n) => defOf(n).type === "default");
+	if (wrapper) return JSON.stringify(defOf(wrapper).defaultValue);
+	return wrapperChain(node).some((n) => defOf(n).type === "optional")
+		? "unset"
+		: "required";
+}
+
+export function listSchemaLeaves(
+	node: ZodNode,
+	path: string[] = [],
+	mapIndexes: number[] = [],
+	out: SchemaLeaf[] = [],
+): SchemaLeaf[] {
+	const inner = unwrap(node);
+	const def = defOf(inner);
+	if (def.type === "object" && inner.shape) {
+		for (const [key, child] of Object.entries(inner.shape)) {
+			listSchemaLeaves(child, [...path, key], mapIndexes, out);
+		}
+	} else if (def.type === "record") {
+		listSchemaLeaves(
+			def.valueType as ZodNode,
+			[...path, MAP_KEYS[path[0] as string] ?? "<key>"],
+			[...mapIndexes, path.length],
+			out,
+		);
+	} else {
+		out.push({
+			path,
+			mapIndexes,
+			kind: KIND_BY_TYPE[def.type],
+			type: typeOf(node),
+			default: defaultOf(node),
+			description: describeOf(node),
+		});
+	}
+	return out;
+}
+
+function expandLeaves(leaves: SchemaLeaf[], raw: unknown): SchemaLeaf[] {
+	return leaves.flatMap((leaf) => {
+		const go = (prefix: string[], from: number): string[][] => {
+			const m = leaf.mapIndexes.find((i) => i >= from);
+			if (m === undefined) return [[...prefix, ...leaf.path.slice(from)]];
+			const base = [...prefix, ...leaf.path.slice(from, m)];
+			const obj = getAt(raw, base);
+			if (!isRecord(obj)) return [];
+			return Object.keys(obj).flatMap((key) => go([...base, key], m + 1));
+		};
+		return go([], 0).map((path) => ({ ...leaf, path, mapIndexes: [] }));
+	});
 }
 
 function coerce(name: string, text: string, kind: Kind): unknown {
@@ -192,8 +270,10 @@ export function applyEnvOverlay(raw: unknown, env: Env): OverlayResult {
 	const value: Record<string, unknown> = isRecord(raw)
 		? structuredClone(raw)
 		: {};
-	const leaves: Leaf[] = [];
-	collectLeaves(ConfigSchema as unknown as ZodNode, [], value, leaves);
+	const leaves = expandLeaves(
+		listSchemaLeaves(ConfigSchema as unknown as ZodNode),
+		value,
+	).filter((l) => l.kind !== undefined && l.path[0] !== "models");
 
 	const derived = new Map(leaves.map((l) => [envNameForPath(l.path), l]));
 	const valid = [
@@ -227,7 +307,11 @@ export function applyEnvOverlay(raw: unknown, env: Env): OverlayResult {
 			getAt(value, leaf.path) === undefined ? "default" : "yaml";
 
 		if (isSet(derivedText)) {
-			setAt(value, leaf.path, coerce(derivedName, derivedText, leaf.kind));
+			setAt(
+				value,
+				leaf.path,
+				coerce(derivedName, derivedText, leaf.kind as Kind),
+			);
 			source = "env";
 			if (alias && isSet(aliasText)) {
 				warnings.push(
@@ -235,7 +319,7 @@ export function applyEnvOverlay(raw: unknown, env: Env): OverlayResult {
 				);
 			}
 		} else if (alias && isSet(aliasText)) {
-			setAt(value, leaf.path, coerce(alias[0], aliasText, leaf.kind));
+			setAt(value, leaf.path, coerce(alias[0], aliasText, leaf.kind as Kind));
 			source = "alias";
 			if (alias[1].deprecated) {
 				warnings.push(`${alias[0]} is deprecated; use ${derivedName}`);

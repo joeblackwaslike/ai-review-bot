@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildConfigRows, renderConfigSection } from "./docs.js";
+import {
+	buildConfigRows,
+	DOCS_END,
+	DOCS_START,
+	injectConfigSection,
+	renderConfigSection,
+} from "./docs.js";
+import { applyEnvOverlay } from "./env.js";
 
 describe("buildConfigRows", () => {
 	const rows = buildConfigRows();
@@ -45,5 +52,78 @@ describe("buildConfigRows", () => {
 describe("renderConfigSection", () => {
 	it("is deterministic", () => {
 		expect(renderConfigSection()).toBe(renderConfigSection());
+	});
+});
+
+describe("documented env vars", () => {
+	const sampleFor = (type: string): { text: string; value: unknown } => {
+		if (type === "boolean") return { text: "true", value: true };
+		if (type === "number") return { text: "3", value: 3 };
+		if (type.endsWith("[]")) return { text: '["x"]', value: ["x"] };
+		if (type.startsWith("one of ")) {
+			const first = type.slice("one of ".length).split(", ")[0] as string;
+			return { text: first, value: first };
+		}
+		return { text: "x", value: "x" };
+	};
+
+	it("every documented non-models env var is accepted by applyEnvOverlay and lands in its path", () => {
+		const documented = buildConfigRows().filter((r) => r.env !== "none");
+		expect(documented.length).toBeGreaterThan(20);
+		for (const row of documented) {
+			const name = row.env.replace("<ID>", "CLAUDE");
+			const path = row.path.replace("<id>", "claude").split(".");
+			const sample = sampleFor(row.type);
+			const { value, sources } = applyEnvOverlay(
+				{ reviewers: { claude: {} } },
+				{ [name]: sample.text },
+			);
+			expect(sources[path.join(".")], name).toBe("env");
+			expect(
+				path.reduce<unknown>(
+					(cur, key) => (cur as Record<string, unknown>)[key],
+					value,
+				),
+				name,
+			).toEqual(sample.value);
+		}
+	});
+});
+
+describe("injectConfigSection", () => {
+	const section = `${DOCS_START}\nBODY\n${DOCS_END}`;
+
+	it("appends the block on a first run", () => {
+		expect(injectConfigSection("hand written\n", section)).toBe(
+			`hand written\n\n${section}\n`,
+		);
+	});
+
+	it("replaces idempotently and keeps hand-written text around the block", () => {
+		const first = injectConfigSection("before\n", section);
+		const edited = `${first.trimEnd()}\n\nafter\n`;
+		const once = injectConfigSection(edited, section);
+		expect(injectConfigSection(once, section)).toBe(once);
+		expect(once.startsWith("before\n")).toBe(true);
+		expect(once.endsWith("after\n")).toBe(true);
+		expect(once.split(DOCS_START)).toHaveLength(2);
+	});
+
+	it("throws when the end marker is missing", () => {
+		expect(() => injectConfigSection(`a\n${DOCS_START}\nb`, section)).toThrow(
+			/before/,
+		);
+	});
+
+	it("throws when only the end marker exists", () => {
+		expect(() => injectConfigSection(`a\n${DOCS_END}\nb`, section)).toThrow(
+			/before/,
+		);
+	});
+
+	it("throws when the markers are reversed", () => {
+		expect(() =>
+			injectConfigSection(`${DOCS_END}\nx\n${DOCS_START}`, section),
+		).toThrow(/before/);
 	});
 });
