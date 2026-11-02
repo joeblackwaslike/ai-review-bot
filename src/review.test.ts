@@ -13,6 +13,7 @@ import { deriveBaseline } from "./baseline.js";
 import { commentKey } from "./comment-key.js";
 import { collectRightSideLines } from "./diff-lines.js";
 import { packDiff } from "./diff-pack.js";
+import type { Discard } from "./discards.js";
 import {
 	anchorFingerprint,
 	readFpMarkers,
@@ -6590,6 +6591,263 @@ describe("buildReview ledger suppression", () => {
 			expect(decision?.event).toBe("REQUEST_CHANGES");
 			expect(decision?.body.split(ROUTED)).toHaveLength(2);
 			expect(decision?.body).toContain("<!-- ai-review:carry=r0:body:0 -->");
+		});
+	});
+
+	describe("discard records", () => {
+		const empty = buildModelReview({
+			event: "COMMENT",
+			general_findings: [],
+			inline_comments: [],
+		});
+		const withInline = (...inline_comments: (typeof repeat)[]) =>
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments,
+			});
+		const [declinedNode] =
+			threads.data.repository.pullRequest.reviewThreads.nodes;
+		/** The bot's thread with no reply: its entry stays open. */
+		const openThread = {
+			...declinedNode,
+			comments: {
+				...declinedNode.comments,
+				nodes: [declinedNode.comments.nodes[0]],
+			},
+		};
+		const openRound = {
+			...ownReview,
+			body: buildOwnReviewBody({
+				sha: OLD_SHA,
+				count: 1,
+				inline: "Inline comments: 1",
+			}),
+		};
+		const spy = () => vi.fn(async (_discards: Discard[]) => {});
+		const recordsOf = (record: ReturnType<typeof spy>) => {
+			expect(record).toHaveBeenCalledTimes(1);
+			return record.mock.calls[0]?.[0] ?? [];
+		};
+
+		it("records a settled repeat as dropped, with its skill and provider, and logs it", async () => {
+			const log = vi.spyOn(console, "log").mockImplementation(() => {});
+			routeAgents({ "code-reviewer.md": withInline(repeat) }, empty);
+			const recordDiscards = spy();
+
+			await buildReview({
+				octokit: ledgerOctokit(),
+				...baseContext,
+				recordDiscards,
+			});
+
+			const expected: Discard = {
+				reason: "SUPPRESSED_SETTLED",
+				code: null,
+				disposition: "dropped",
+				title: REPEAT_TITLE,
+				path: "src/review.ts",
+				line: 2,
+				severity: repeat.severity,
+				skill: "code-reviewer.md",
+				provider: "anthropic",
+			};
+			expect(recordsOf(recordDiscards)).toEqual([expected]);
+			expect(log.mock.calls.filter(([m]) => m === "finding discarded")).toEqual(
+				[
+					[
+						"finding discarded",
+						{
+							owner: baseContext.owner,
+							repo: baseContext.repo,
+							pullNumber: baseContext.pullNumber,
+							...expected,
+						},
+					],
+				],
+			);
+			log.mockRestore();
+		});
+
+		it("records an open restatement as held", async () => {
+			routeAgents({ "code-reviewer.md": withInline(repeat) }, empty);
+			const recordDiscards = spy();
+
+			await buildReview({
+				octokit: ledgerOctokit({
+					reviews: [openRound],
+					threadNodes: [openThread],
+				}),
+				...baseContext,
+				recordDiscards,
+			});
+
+			expect(recordsOf(recordDiscards)).toEqual([
+				expect.objectContaining({
+					reason: "SUPPRESSED_OPEN",
+					disposition: "held",
+					title: REPEAT_TITLE,
+					skill: "code-reviewer.md",
+				}),
+			]);
+		});
+
+		it("records retraction filler when the filter is on", async () => {
+			REVIEWER_TUNING.dropRetractions = true;
+			onTestFinished(() => {
+				REVIEWER_TUNING.dropRetractions = false;
+			});
+			const filler = {
+				...fresh,
+				title: "Stale comment",
+				body: "The comment mentions the old name. No issues found.",
+				severity: "P3" as const,
+				suppressible: true,
+			};
+			routeAgents(
+				{
+					"code-reviewer.md": buildModelReview({
+						event: "COMMENT",
+						general_findings: [filler],
+						inline_comments: [],
+					}),
+				},
+				empty,
+			);
+			const recordDiscards = spy();
+
+			await buildReview({
+				octokit: ledgerOctokit(),
+				...baseContext,
+				recordDiscards,
+			});
+
+			expect(recordsOf(recordDiscards)).toEqual([
+				{
+					reason: "RETRACTION",
+					code: null,
+					disposition: "dropped",
+					title: "Stale comment",
+					path: null,
+					line: null,
+					severity: "P3",
+					skill: "code-reviewer.md",
+					provider: "anthropic",
+				},
+			]);
+		});
+
+		it("records a new finding at a location triage resolved", async () => {
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "INCREMENTAL",
+				resolved: [findingId("src/review.ts", 2, REPEAT_TITLE)],
+				newRisk: false,
+			});
+			const atResolved = buildInlineComment({
+				title: "Off-by-one in the pagination loop",
+				body: "The `page` counter starts at zero.",
+				path: "src/review.ts",
+				line: 2,
+			});
+			routeAgents({ "code-reviewer.md": withInline(atResolved) }, empty);
+			const recordDiscards = spy();
+
+			await buildReview({
+				octokit: ledgerOctokit({
+					reviews: [openRound],
+					threadNodes: [openThread],
+				}),
+				...baseContext,
+				recordDiscards,
+			});
+
+			expect(recordsOf(recordDiscards)).toEqual([
+				expect.objectContaining({
+					reason: "RESOLVED_LOCATION",
+					disposition: "dropped",
+					title: atResolved.title,
+					path: "src/review.ts",
+					line: 2,
+					skill: "code-reviewer.md",
+				}),
+			]);
+		});
+
+		it("records nothing for a restatement collapsed into another agent's claim", async () => {
+			const claim = buildInlineComment({
+				title: "Off-by-one in the pagination loop",
+				body: "The `page` counter starts at zero.",
+				path: "src/review.ts",
+				line: 2,
+			});
+			routeAgents(
+				{
+					"code-reviewer.md": withInline(claim),
+					"silent-failure-hunter.md": withInline(claim),
+				},
+				empty,
+			);
+			const recordDiscards = spy();
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit({ reviews: [], comments: [], threadNodes: [] }),
+				...baseContext,
+				recordDiscards,
+			});
+
+			expect(decision?.comments).toHaveLength(1);
+			expect(recordsOf(recordDiscards)).toEqual([]);
+		});
+
+		it("still records when a nothing-new round returns null", async () => {
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "FULL",
+				resolved: [],
+				newRisk: true,
+			});
+			routeAgents({}, withInline(repeat));
+			const recordDiscards = spy();
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit({
+					reviews: [carrying(carriedRow, { state: "COMMENTED" })],
+				}),
+				...baseContext,
+				recordDiscards,
+			});
+
+			expect(decision).toBeNull();
+			const records = recordsOf(recordDiscards);
+			expect(records).toHaveLength(TIER1_SKILLS.length);
+			expect(records.map((d) => d.reason)).toEqual(
+				TIER1_SKILLS.map(() => "SUPPRESSED_SETTLED"),
+			);
+		});
+
+		it("a failing recorder warns once and leaves the review unchanged", async () => {
+			const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+			const error = new Error("db down");
+			routeAgents({ "code-reviewer.md": withInline(repeat) }, empty);
+			const baseline = await buildReview({
+				octokit: ledgerOctokit(),
+				...baseContext,
+			});
+			routeAgents({ "code-reviewer.md": withInline(repeat) }, empty);
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit(),
+				...baseContext,
+				recordDiscards: async () => {
+					throw error;
+				},
+			});
+
+			expect(decision?.event).toBe(baseline?.event);
+			expect(decision?.comments).toEqual(baseline?.comments);
+			expect(
+				warn.mock.calls.filter(([m]) => m === "discard recording failed"),
+			).toEqual([["discard recording failed", { error }]]);
+			warn.mockRestore();
 		});
 	});
 });

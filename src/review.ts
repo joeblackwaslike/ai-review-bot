@@ -24,6 +24,7 @@ import { dedupeClaims, isSameClaim, withAbsorbedLink } from "./claim-dedupe.js";
 import { commentKey } from "./comment-key.js";
 import { mapWithConcurrency } from "./concurrency.js";
 import { collectRightSideLines, rightSideText } from "./diff-lines.js";
+import { type Discard, type DiscardReason, logDiscards } from "./discards.js";
 import {
 	anchorFingerprint,
 	formatFpMarkers,
@@ -133,6 +134,9 @@ interface ReviewContext {
 	 * createAIModel's own fallback); supplied by `ai-review watch` for local,
 	 * subscription-authenticated review of an already-open PR. */
 	auth?: ResolvedAuth;
+	/** Receives every finding the run dropped or held back, once, after the run
+	 * ends however it ends. A rejection is logged and never changes the review. */
+	recordDiscards?: (discards: Discard[]) => Promise<void>;
 }
 
 export interface ReviewMetadata {
@@ -625,6 +629,8 @@ export interface MergeOutcome {
 	/** How many findings were folded into another as the same claim, so the
 	 * caller can log it instead of silently shrinking the review. */
 	collapsed: number;
+	/** Findings skipped because their location or title was resolved. */
+	resolvedSkipped: Array<ModelInlineComment | ModelFinding>;
 }
 
 const INLINE_SEVERITY_RANK: Record<string, number> = {
@@ -679,10 +685,13 @@ export function mergeReviewsDetailed(
 	const isResolvedInline = (path: string, line: number) =>
 		resolved.has(`inline:${path}:${line}`);
 
+	const resolvedSkipped: Array<ModelInlineComment | ModelFinding> = [];
 	const byTitle = new Map<string, ModelFinding>();
-	for (const f of agentResults
-		.flatMap((r) => r.general_findings)
-		.filter((finding) => !isResolvedGeneral(finding.title))) {
+	for (const f of agentResults.flatMap((r) => r.general_findings)) {
+		if (isResolvedGeneral(f.title)) {
+			resolvedSkipped.push(f);
+			continue;
+		}
 		const key = f.title.toLowerCase().trim();
 		const existing = byTitle.get(key);
 		byTitle.set(
@@ -702,7 +711,10 @@ export function mergeReviewsDetailed(
 	const commentGroups = new Map<string, ModelInlineComment[]>();
 	for (const review of agentResults) {
 		for (const comment of review.inline_comments) {
-			if (isResolvedInline(comment.path, comment.line)) continue;
+			if (isResolvedInline(comment.path, comment.line)) {
+				resolvedSkipped.push(comment);
+				continue;
+			}
 			const key = `${comment.path}:${comment.line}`;
 			const group = commentGroups.get(key);
 			if (!group) {
@@ -795,6 +807,7 @@ export function mergeReviewsDetailed(
 		review: { event, general_findings: merged_general, inline_comments },
 		collapsed,
 		inlineAliases,
+		resolvedSkipped,
 	};
 }
 
@@ -1771,8 +1784,59 @@ function carryEntryIds(
 	return ids.slice(0, MAX_CARRY_IDS);
 }
 
+function toDiscard(
+	finding: {
+		title: string;
+		path?: string | null;
+		line?: number | null;
+		severity?: string | null;
+	},
+	reason: DiscardReason,
+	skill: string | null,
+	provider: Discard["provider"],
+): Discard {
+	return {
+		reason,
+		code: null,
+		disposition: reason === "SUPPRESSED_OPEN" ? "held" : "dropped",
+		title: finding.title,
+		path: finding.path ?? null,
+		line: finding.line ?? null,
+		severity: finding.severity ?? null,
+		skill,
+		provider,
+	};
+}
+
+async function flushDiscards(
+	discards: Discard[],
+	context: ReviewContext,
+): Promise<void> {
+	const { owner, repo, pullNumber } = context;
+	logDiscards(discards, { owner, repo, pullNumber });
+	try {
+		await context.recordDiscards?.(discards);
+	} catch (error) {
+		console.warn("discard recording failed", { error });
+	}
+}
+
+/** Runs one review round and hands every discarded finding to
+ * `context.recordDiscards`, whether the round posts, returns null or throws. */
 export async function buildReview(
 	context: ReviewContext,
+): Promise<ReviewDecision | null> {
+	const discards: Discard[] = [];
+	try {
+		return await buildReviewInner(context, discards);
+	} finally {
+		await flushDiscards(discards, context);
+	}
+}
+
+async function buildReviewInner(
+	context: ReviewContext,
+	discards: Discard[],
 ): Promise<ReviewDecision | null> {
 	// Always fetch existing reviews — used for both idempotency check and
 	// cross-bot dedup (collecting what the other bot already reported).
@@ -2491,6 +2555,8 @@ export async function buildReview(
 	});
 
 	const agentResults: ModelReview[] = [];
+	/** Skill path of each entry in `agentResults`, which holds ok outcomes only. */
+	const agentSkills: string[] = [];
 	const rateLimited: RateLimitInfo[] = [];
 	const quotaExhausted: ModelSelection["provider"][] = [];
 	const skipped: string[] = [];
@@ -2510,6 +2576,7 @@ export async function buildReview(
 	outcomes.forEach((o, i) => {
 		if (o.status === "ok") {
 			agentResults.push(o.review);
+			agentSkills.push(allSkills[i]?.skillPath ?? "unknown");
 		} else if (o.status === "rate_limited") {
 			rateLimited.push(o.rateLimit);
 		} else if (o.status === "quota_exhausted") {
@@ -2669,7 +2736,14 @@ export async function buildReview(
 		fileListComplete ? new Set(files.map((f) => f.filename)) : null,
 	);
 	const restated = new Map<string, PersistedFinding>();
-	const unsettledResults = agentResults.map((agentResult) => {
+	const unsettledResults = agentResults.map((agentResult, index) => {
+		const discard = (
+			finding: Parameters<typeof toDiscard>[0],
+			reason: DiscardReason,
+		) =>
+			discards.push(
+				toDiscard(finding, reason, agentSkills[index], context.provider),
+			);
 		const pr = {
 			owner: context.owner,
 			repo: context.repo,
@@ -2701,9 +2775,11 @@ export async function buildReview(
 				line: s.finding.line ?? null,
 				entryId: s.entry.id,
 			});
+			discard(s.finding, "SUPPRESSED_OPEN");
 			addRestated(restated, s);
 		}
 		for (const { finding, entry } of outcome.suppressed) {
+			discard(finding, "SUPPRESSED_SETTLED");
 			suppressedEntryIds.add(entry.id);
 			console.log("suppressed settled repeat", {
 				title: finding.title,
@@ -2717,6 +2793,7 @@ export async function buildReview(
 		if (!tuning.dropRetractions) return outcome.review;
 		const retractions = dropRetractions(outcome.review);
 		for (const finding of retractions.dropped) {
+			discard(finding, "RETRACTION");
 			console.log("dropped retraction filler", {
 				title: finding.title,
 				severity: finding.severity ?? null,
@@ -2741,6 +2818,21 @@ export async function buildReview(
 	const mergeOutcome = mergeReviewsDetailed(unsettledResults, resolvedKeys, {
 		dedupeNearDuplicateClaims: tuning.dedupeNearDuplicateClaims,
 	});
+	const skillOf = new Map<object, string>();
+	unsettledResults.forEach((r, i) => {
+		for (const f of [...r.general_findings, ...r.inline_comments])
+			skillOf.set(f, agentSkills[i]);
+	});
+	for (const f of mergeOutcome.resolvedSkipped) {
+		discards.push(
+			toDiscard(
+				f,
+				"RESOLVED_LOCATION",
+				skillOf.get(f) ?? null,
+				context.provider,
+			),
+		);
+	}
 	let modelReview = mergeOutcome.review;
 	if (mergeOutcome.collapsed > 0) {
 		console.log("collapsed restatements of the same claim", {
