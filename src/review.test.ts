@@ -6118,6 +6118,79 @@ describe("buildReview ledger suppression", () => {
 			});
 		});
 
+		describe("acknowledged entries", () => {
+			const ackThread = (comment: { id: number; body: string }) => {
+				const t = threadOn(comment);
+				return {
+					...t,
+					comments: {
+						...t.comments,
+						nodes: [
+							...t.comments.nodes,
+							{
+								databaseId: comment.id + 1,
+								author: { login: "joe", __typename: "User" },
+								authorAssociation: "OWNER",
+								body: "Good catch, will fix.",
+								createdAt: "2026-10-02T00:00:00Z",
+							},
+						],
+					},
+				};
+			};
+
+			it("posts a restatement of an acknowledged entry the carried list lacks", async () => {
+				routeAgents(
+					{ "code-reviewer.md": onlyRepeat("REQUEST_CHANGES") },
+					onlyRepeat(),
+				);
+
+				const decision = await buildReview({
+					octokit: ledgerOctokit({
+						reviews: [round0, round1],
+						comments: [ownComment],
+						threadNodes: [ackThread(ownComment)],
+					}),
+					...baseContext,
+				});
+
+				expect(decision?.comments).toEqual([
+					expect.objectContaining({ path: "src/review.ts", line: 2 }),
+				]);
+				expect(decision?.body ?? "").not.toContain("open held");
+			});
+
+			it("keeps an acknowledged advisory note advisory when an advisory agent restates it", async () => {
+				const advisoryComment = {
+					...ownComment,
+					body: `${ownComment.body}\n\n<!-- ai-review:advisory -->`,
+				};
+				routeAgents(
+					{
+						"code-review-and-quality.md": buildModelReview({
+							event: "COMMENT",
+							general_findings: [],
+							inline_comments: [repeat],
+						}),
+					},
+					nothing,
+				);
+
+				const decision = await buildReview({
+					octokit: ledgerOctokit({
+						reviews: [round0],
+						comments: [advisoryComment],
+						threadNodes: [ackThread(advisoryComment)],
+					}),
+					...baseContext,
+				});
+
+				expect(decision?.comments ?? []).toEqual([]);
+				expect(decision?.event).not.toBe("REQUEST_CHANGES");
+				expect(decision?.body ?? "").not.toContain("open held");
+			});
+		});
+
 		it("posts a restatement of an open entry the carried list lacks", async () => {
 			routeAgents(
 				{ "code-reviewer.md": onlyRepeat("REQUEST_CHANGES") },

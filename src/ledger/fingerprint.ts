@@ -91,7 +91,8 @@ export function suggestionFingerprint(code: string): string | null {
 	return stripped.length < MIN_SUGGESTION_CHARS ? null : hash(stripped);
 }
 
-/** HTML-comment marker lines for a posted inline comment; empty when neither is set. */
+/** HTML-comment marker lines (fp, sfp, advisory) for a posted inline comment;
+ * empty when none is set. */
 export function formatFpMarkers(markers: {
 	fp?: string;
 	sfp?: string;

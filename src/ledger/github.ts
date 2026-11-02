@@ -67,8 +67,14 @@ export function buildLedger(e: LedgerEvidence): Ledger {
 		const isSingleClaim =
 			c.commentId !== null && claimsPerComment.get(c.commentId) === 1;
 		const d = t && isSingleClaim && classifyReplies(t.replies, isDecider);
-		if (d) return { ...base, ...d, decidedBy: "author" };
-		if (t?.isResolved && t.resolvedBy && deciderLogins.has(t.resolvedBy))
+		const resolvedByDecider = Boolean(
+			t?.isResolved && t.resolvedBy && deciderLogins.has(t.resolvedBy),
+		);
+		// "Will fix" then an explicit resolution: the resolution is the later,
+		// final word. A deferral, rejection or fix reference still wins.
+		if (d && !(d.status === "acknowledged" && resolvedByDecider))
+			return { ...base, ...d, decidedBy: "author" };
+		if (resolvedByDecider)
 			return {
 				...base,
 				status: "resolved",

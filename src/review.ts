@@ -1653,11 +1653,14 @@ async function restampCheckRun(
 }
 
 /** Records one restatement of an open entry as the finding it holds, keyed by
- * finding id, keeping the most severe of the entry and its restatements. */
+ * finding id, keeping the most severe of the entry and its restatements. An
+ * advisory restatement of an advisory entry holds nothing: it was advice and
+ * stays advice. */
 function addRestated(
 	restated: Map<string, PersistedFinding>,
-	s: Suppressed<{ severity?: string | null }>,
+	s: Suppressed<{ severity?: string | null; advisory?: boolean }>,
 ): void {
+	if (s.entry.advisory && s.finding.advisory) return;
 	const f = ledgerEntryFinding(s.entry);
 	const prev = restated.get(f.id);
 	const severity = moreSevere(
@@ -1667,12 +1670,14 @@ function addRestated(
 	restated.set(f.id, { ...f, severity });
 }
 
-/** The ledger open-restatement suppression may match: every settled entry, and
- * the acknowledged entries still in the PR, and only the open entries behind a
- * carried finding (so not one triage resolved
- * this round, one the bot resolved earlier, or one whose file left the PR).
- * A restatement of any other open entry posts fresh. `prPaths` is null when
- * the PR file list is cut short and a missing path proves nothing. */
+/** The ledger open-restatement suppression may match: every settled entry,
+ * and the open or acknowledged entries behind a carried finding (so not one
+ * triage resolved this round, one the bot resolved earlier, or one whose file
+ * left the PR). An acknowledged advisory entry is never carried, so it is
+ * matched whenever its file is in the PR, and its advisory repeat is dropped
+ * without holding the verdict. A restatement of any other entry posts fresh.
+ * `prPaths` is null when the PR file list is cut short and a missing path
+ * proves nothing. */
 function holdableLedger(
 	ledger: LedgerEntry[],
 	carried: PersistedFinding[],
@@ -1683,7 +1688,7 @@ function holdableLedger(
 		if (isSettled(e)) return true;
 		const f = ledgerEntryFinding(e);
 		const inPr = !prPaths || f.path === null || prPaths.has(f.path);
-		return inPr && (isAcknowledged(e) || carriedIds.has(f.id));
+		return inPr && (carriedIds.has(f.id) || (isAcknowledged(e) && e.advisory));
 	});
 }
 
