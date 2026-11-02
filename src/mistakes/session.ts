@@ -16,6 +16,8 @@ export function implementerFromEnv(env: NodeJS.ProcessEnv): Implementer {
 
 export function branchForHead(runGit: GitRunner): string | null {
 	try {
+		const current = runGit(["rev-parse", "--abbrev-ref", "HEAD"]).trim();
+		if (current && current !== "HEAD") return current;
 		const listed = runGit([
 			"for-each-ref",
 			"--points-at",
@@ -26,9 +28,7 @@ export function branchForHead(runGit: GitRunner): string | null {
 			.split("\n")
 			.map((l) => l.trim())
 			.find(Boolean);
-		if (listed) return listed;
-		const name = runGit(["rev-parse", "--abbrev-ref", "HEAD"]).trim();
-		return name && name !== "HEAD" ? name : null;
+		return listed ?? null;
 	} catch {
 		return null;
 	}

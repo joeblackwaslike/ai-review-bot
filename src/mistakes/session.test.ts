@@ -22,20 +22,21 @@ describe("implementerFromEnv", () => {
 });
 
 describe("branchForHead", () => {
-	it("returns the first branch pointing at HEAD", () => {
-		const runGit = () => "feat/a\nfeat/b\n";
+	it("prefers the current branch over other branches at HEAD", () => {
+		const runGit = (args: readonly string[]) =>
+			args[0] === "rev-parse" ? "feature\n" : "main\nfeature\n";
+		expect(branchForHead(runGit)).toBe("feature");
+	});
+
+	it("falls back to the first branch pointing at HEAD when detached", () => {
+		const runGit = (args: readonly string[]) =>
+			args[0] === "rev-parse" ? "HEAD\n" : "feat/a\nfeat/b\n";
 		expect(branchForHead(runGit)).toBe("feat/a");
 	});
 
-	it("falls back to rev-parse", () => {
+	it("returns null on a detached HEAD with no branch", () => {
 		const runGit = (args: readonly string[]) =>
-			args[0] === "for-each-ref" ? "" : "main\n";
-		expect(branchForHead(runGit)).toBe("main");
-	});
-
-	it("returns null on a detached HEAD", () => {
-		const runGit = (args: readonly string[]) =>
-			args[0] === "for-each-ref" ? "" : "HEAD\n";
+			args[0] === "rev-parse" ? "HEAD\n" : "";
 		expect(branchForHead(runGit)).toBeNull();
 	});
 

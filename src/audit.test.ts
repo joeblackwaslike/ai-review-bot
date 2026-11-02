@@ -148,7 +148,21 @@ describe("runAuditPass", () => {
 						}
 					: {
 							status: "ok",
-							review: buildModelReview(),
+							review: buildModelReview({
+								event: "COMMENT",
+								general_findings: [
+									{
+										title: `from ${skill}`,
+										body: "b",
+										severity: "P3",
+										category: "style",
+										confidence: 0.8,
+										evidence: "e",
+										suppressible: true,
+									},
+								],
+								inline_comments: [],
+							}),
 							usage: { promptTokens: 1, completionTokens: 1 },
 						},
 		);
@@ -163,7 +177,51 @@ describe("runAuditPass", () => {
 		expect(agentReviews.map((a) => a.skill)).toEqual(
 			TIER1_SKILLS.filter((s) => s !== failing).map(base),
 		);
-		expect(agentReviews[0].review).toBeDefined();
+		for (const a of agentReviews) {
+			const full = TIER1_SKILLS.find((t) => base(t) === a.skill);
+			expect(a.review.general_findings[0]?.title).toBe(`from ${full}`);
+		}
+	});
+
+	it("accumulates agentReviews across batches without duplicates", async () => {
+		(runAgent as ReturnType<typeof vi.fn>).mockImplementation(
+			async (skill: string) => ({
+				status: "ok",
+				review: buildModelReview({
+					event: "COMMENT",
+					general_findings: [
+						{
+							title: `from ${skill}`,
+							body: "b",
+							severity: "P3",
+							category: "style",
+							confidence: 0.8,
+							evidence: "e",
+							suppressible: true,
+						},
+					],
+					inline_comments: [],
+				}),
+				usage: { promptTokens: 1, completionTokens: 1 },
+			}),
+		);
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const { agentReviews } = await runAuditPass({
+			files: [
+				{ path: "huge1.ts", content: "x".repeat(100 * 1024) },
+				{ path: "huge2.ts", content: "y".repeat(100 * 1024) },
+			],
+			selection,
+			extraInstructions: "",
+			meta: { owner: "o", repo: "r", ref: "local" },
+		});
+		expect(agentReviews).toHaveLength(TIER1_SKILLS.length * 2);
+		const perSkill = new Map<string, number>();
+		for (const a of agentReviews) {
+			perSkill.set(a.skill, (perSkill.get(a.skill) ?? 0) + 1);
+			expect(a.review.general_findings[0]?.title).toMatch(/^from /);
+		}
+		expect([...perSkill.values()].every((n) => n === 2)).toBe(true);
 	});
 
 	it("splits files across batches when content exceeds BATCH_BYTES", async () => {

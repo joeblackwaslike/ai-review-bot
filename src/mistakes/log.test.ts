@@ -1,6 +1,6 @@
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ModelReview } from "../review.js";
 import { findingKey, findingRecords, openMistakeLog } from "./log.js";
@@ -60,7 +60,21 @@ function run(
 	return log;
 }
 
-afterEach(() => vi.restoreAllMocks());
+const tempDirs: string[] = [];
+
+function tempRoot(): string {
+	const dir = mkdtempSync(join(tmpdir(), "ml-"));
+	tempDirs.push(dir);
+	return dir;
+}
+
+afterEach(() => {
+	vi.restoreAllMocks();
+	vi.unstubAllEnvs();
+	for (const dir of tempDirs.splice(0)) {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
 
 describe("findingKey", () => {
 	it("is stable and insensitive to title case and whitespace", () => {
@@ -79,7 +93,7 @@ describe("findingKey", () => {
 
 describe("openMistakeLog", () => {
 	it("writes v1 lines that parse as MistakeRecord", () => {
-		const root = mkdtempSync(join(tmpdir(), "ml-"));
+		const root = tempRoot();
 		const log = run(root, "hello");
 		const line = readFileSync(log.path, "utf-8").trim();
 		const rec = MistakeRecord.parse(JSON.parse(line));
@@ -89,7 +103,7 @@ describe("openMistakeLog", () => {
 	});
 
 	it("keeps newlines, quotes, unicode and 100 KB on one line", () => {
-		const root = mkdtempSync(join(tmpdir(), "ml-"));
+		const root = tempRoot();
 		const note = `a\n"q"☃${"x".repeat(100_000)}`;
 		const log = run(root, note);
 		const lines = readFileSync(log.path, "utf-8").split("\n").filter(Boolean);
@@ -97,13 +111,29 @@ describe("openMistakeLog", () => {
 		expect(JSON.parse(lines[0] as string).note).toBe(note);
 	});
 
+	it("honors AI_REVIEW_MISTAKES_DIR and lays out owner__repo/stamp-runId.jsonl", () => {
+		const root = tempRoot();
+		vi.stubEnv("AI_REVIEW_MISTAKES_DIR", root);
+		const log = openMistakeLog({
+			owner: "o",
+			repo: "r",
+			source: "review",
+			branch: null,
+			runId: "rid",
+			now: () => new Date("2026-11-02T00:00:00.000Z"),
+		});
+		expect(relative(root, log.path)).toBe(
+			join("o__r", "2026-11-02T00-00-00-000Z-rid.jsonl"),
+		);
+	});
+
 	it("uses different files for two logs with the same now", () => {
-		const root = mkdtempSync(join(tmpdir(), "ml-"));
+		const root = tempRoot();
 		expect(run(root, "a").path).not.toBe(run(root, "b").path);
 	});
 
 	it("does not throw and warns once when the root is unwritable", () => {
-		const dir = mkdtempSync(join(tmpdir(), "ml-"));
+		const dir = tempRoot();
 		const file = join(dir, "file");
 		writeFileSync(file, "x");
 		const err = vi.spyOn(console, "error").mockImplementation(() => {});
