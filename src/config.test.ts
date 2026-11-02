@@ -41,6 +41,8 @@ afterEach(() => {
 		"GITHUB_WEBHOOK_SECRET",
 		"ANTHROPIC_API_KEY",
 		"REVIEW_ENABLED",
+		"AI_REVIEW_REVIEWERS__CODEX__ENABLED",
+		"AI_REVIEW_REVIEWERS__CLAUDE__ENABLED",
 		"FEEDBACK_ENABLED",
 		"OPENAI_APP_ID",
 		"OPENAI_APP_PRIVATE_KEY",
@@ -166,6 +168,31 @@ describe("getConfig", () => {
 		it("is true when REVIEW_ENABLED=true", () => {
 			setRequiredEnv({ REVIEW_ENABLED: "true" });
 			expect(getConfig().reviewEnabled).toBe(true);
+		});
+	});
+
+	describe("reviewers.<id>.enabled", () => {
+		it("disables only the Codex config when reviewers.codex.enabled is false", () => {
+			setRequiredEnv();
+			setOpenAIEnv();
+			process.env.AI_REVIEW_REVIEWERS__CODEX__ENABLED = "false";
+			expect(getOpenAIAppConfig().reviewEnabled).toBe(false);
+			expect(getConfig().reviewEnabled).toBe(true);
+		});
+
+		it("disables only the Claude config when reviewers.claude.enabled is false", () => {
+			setRequiredEnv();
+			setOpenAIEnv();
+			process.env.AI_REVIEW_REVIEWERS__CLAUDE__ENABLED = "false";
+			expect(getConfig().reviewEnabled).toBe(false);
+			expect(getOpenAIAppConfig().reviewEnabled).toBe(true);
+		});
+
+		it("review.enabled=false still disables both", () => {
+			setRequiredEnv({ REVIEW_ENABLED: "false" });
+			setOpenAIEnv();
+			expect(getConfig().reviewEnabled).toBe(false);
+			expect(getOpenAIAppConfig().reviewEnabled).toBe(false);
 		});
 	});
 

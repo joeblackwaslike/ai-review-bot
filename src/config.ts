@@ -134,7 +134,7 @@ export function getConfig(opts: GetConfigOptions = {}): AppConfig {
 		webhookSecret: requireWebhookSecret
 			? getRequiredEnv("GITHUB_WEBHOOK_SECRET")
 			: (process.env.GITHUB_WEBHOOK_SECRET ?? ""),
-		reviewEnabled: review.enabled,
+		reviewEnabled: review.enabled && tree.reviewers.claude?.enabled !== false,
 		reviewDelayMs: review.delaySeconds * 1000,
 		reviewResyncDelayMs: review.resyncDelaySeconds * 1000,
 		reviewCommentPrefix: firstNonBlank(
@@ -170,7 +170,7 @@ export function getOpenAIAppConfig(opts: GetConfigOptions = {}): AppConfig {
 		webhookSecret: requireWebhookSecret
 			? getRequiredEnv("OPENAI_APP_WEBHOOK_SECRET")
 			: (process.env.OPENAI_APP_WEBHOOK_SECRET ?? ""),
-		reviewEnabled: review.enabled,
+		reviewEnabled: review.enabled && tree.reviewers.codex?.enabled !== false,
 		reviewDelayMs: review.delaySeconds * 1000,
 		reviewResyncDelayMs: review.resyncDelaySeconds * 1000,
 		reviewCommentPrefix: firstNonBlank(

@@ -53,4 +53,14 @@ describe("GET /api/debug", () => {
 		});
 		expect(JSON.stringify(body)).not.toContain("TOP-SECRET-PROMPT");
 	});
+
+	it("returns 200 with configError and the has* fields when config loading throws", () => {
+		vi.stubEnv("AI_REVIEW_TYPO", "1");
+		vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-secret");
+		const body = call();
+		expect(String(body.configError)).toContain("AI_REVIEW_TYPO");
+		expect(body.hasAnthropicKey).toBe(true);
+		expect(body.config).toBeUndefined();
+		expect(JSON.stringify(body)).not.toContain("sk-ant-secret");
+	});
 });

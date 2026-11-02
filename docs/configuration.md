@@ -26,15 +26,15 @@ The Codex bot webhook is at `/api/github/webhook-openai`.
 
 ## Shared behavior
 
-These variables apply to both bots:
+These settings apply to both bots. Set them in `config/ai-review.yaml` or with the env vars below. The old names (`REVIEW_ENABLED`, `REVIEW_COMMAND`, `REVIEW_DELAY_SECONDS`, `REVIEW_RESYNC_DELAY_SECONDS`, `CUSTOM_REVIEW_PROMPT`) still work as deprecated aliases and log a warning.
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `REVIEW_ENABLED` | `true` | Set to `false` to disable automatic reviews on PR open/push. Slash-command reviews still work. |
-| `REVIEW_COMMAND` | `/ai-review` | Slash command that triggers a review from either bot. |
-| `REVIEW_DELAY_SECONDS` | `0` | Seconds to wait before auto-review fires on PR open. Default is to start immediately. |
-| `REVIEW_RESYNC_DELAY_SECONDS` | `0` | Seconds to wait before re-reviewing after a push. Default is to start immediately. |
-| `CUSTOM_REVIEW_PROMPT` | — | Extra instructions appended to every agent's system prompt for both bots. |
+| `AI_REVIEW_REVIEW__ENABLED` | `true` | Set to `false` to disable automatic reviews on PR open/push. Slash-command reviews still work. |
+| `AI_REVIEW_REVIEW__COMMAND` | `/ai-review` | Slash command that triggers a review from either bot. |
+| `AI_REVIEW_REVIEW__DELAY_SECONDS` | `0` | Seconds to wait before auto-review fires on PR open. Default is to start immediately. |
+| `AI_REVIEW_REVIEW__RESYNC_DELAY_SECONDS` | `0` | Seconds to wait before re-reviewing after a push. Default is to start immediately. |
+| `AI_REVIEW_REVIEW__CUSTOM_PROMPT` | unset | Extra instructions appended to every agent's system prompt for both bots. |
 
 ## Private key formatting
 
@@ -60,29 +60,13 @@ The bot normalizes `\n` back to actual newlines at startup. The stored string lo
 
 Neither bot uses a fixed model. The router (`src/router.ts`) classifies each PR into one of four tiers based on the diff, file paths, and labels, then selects the appropriate model automatically.
 
-### Tier classification
-
-| Tier | Conditions |
-| --- | --- |
-| `trivial` | All changed files are docs (`.md`, `.txt`, etc.) and total diff < 20 lines |
-| `normal` | Everything else |
-| `complex` | Diff > 500 lines, **or** any changed path contains `auth`, `crypto`, `jwt`, `password`, `secret`, `/db/`, `database`, `migration`, or `schema` |
-| `deep` | PR has the `deep-review` label |
-
-### Model selection per tier
-
-| Tier | Claude bot | Codex bot |
-| --- | --- | --- |
-| `trivial` | `claude-haiku-5-5`, effort low | `gpt-6-luna`, effort none |
-| `normal` | `claude-sonnet-5-5`, effort medium | `gpt-6.1-sol`, effort low |
-| `complex` | `claude-sonnet-5-5`, effort high | `gpt-6.1-sol`, effort high |
-| `deep` | `claude-opus-5-5`, effort high | `gpt-6.1-sol`, effort xhigh |
+Tier thresholds, path patterns and the model and effort chosen for each tier are defined in [config/ai-review.yaml](../config/ai-review.yaml). Edit that file rather than a copy of it here.
 
 To force the deep tier on a PR without a label, add `deep-review` to the PR labels before triggering the review.
 
 ## Custom review prompt
 
-`CUSTOM_REVIEW_PROMPT` is injected into every agent's system prompt under `## Custom Instructions`. Both bots use the same value. Use it for:
+`review.customPrompt` (`AI_REVIEW_REVIEW__CUSTOM_PROMPT`) is injected into every agent's system prompt under `## Custom Instructions`. Both bots use the same value. Use it for:
 
 - Repo-specific coding standards (`"Always use our internal logger, not console.log"`)
 - Language-specific rules (`"This is a Python 3.12 codebase — flag any use of Optional or Union"`)
@@ -99,10 +83,16 @@ Returns `200 OK` with `{ "status": "ok" }`. Use this as your uptime check.
 
 ### `GET /api/debug`
 
-Returns the current config state. API keys are masked:
+Returns the resolved config and which credentials are present. API keys are never returned, and `review.customPrompt` is shown as `[set]` when set:
 
 ```json
 {
+  "config": [
+    { "path": "review.enabled", "value": true, "source": "default" },
+    { "path": "review.command", "value": "/ai-review", "source": "default" },
+    { "path": "review.customPrompt", "value": "[set]", "source": "env" }
+  ],
+  "warnings": [],
   "reviewEnabled": true,
   "reviewCommand": "/ai-review",
   "hasAnthropicKey": true,
@@ -115,6 +105,8 @@ Returns the current config state. API keys are masked:
   "hasOpenAIWebhookSecret": true
 }
 ```
+
+`config` lists every setting with its source (`env`, `alias`, `yaml` or `default`). If the config fails to load, the response is `{ "configError": "<message>", ...has* fields }` instead.
 
 If any `has*` field is `false`, that variable is missing.
 
@@ -136,10 +128,10 @@ OPENAI_APP_WEBHOOK_SECRET=
 OPENAI_API_KEY=
 
 # Shared behavior (all optional — defaults shown)
-# REVIEW_ENABLED=true
-# REVIEW_COMMAND=/ai-review
-# REVIEW_DELAY_SECONDS=0
-# CUSTOM_REVIEW_PROMPT=
+# AI_REVIEW_REVIEW__ENABLED=true
+# AI_REVIEW_REVIEW__COMMAND=/ai-review
+# AI_REVIEW_REVIEW__DELAY_SECONDS=0
+# AI_REVIEW_REVIEW__CUSTOM_PROMPT=
 ```
 
 <!-- config-reference:start -->
@@ -180,7 +172,7 @@ Env overrides apply only to `reviewers.<id>` entries already present in the YAML
 | `models.<provider/model>.pricing.cachedInput` | none | none | number | required | Cached input token price, USD per million tokens. |
 | `models.<provider/model>.pricing.output` | none | none | number | required | Output token price, USD per million tokens. |
 | `models.<provider/model>.refusalFallback` | none | none | boolean | `false` | Retry once with a fallback when the model refuses. |
-| `models.<provider/model>.structuredOutput` | none | none | one of native, json | `"native"` | How structured output is requested from this model. |
+| `models.<provider/model>.structuredOutput` | none | none | one of native, json | `"native"` | Reserved. Not read yet; a later slice will use it to pick the structured output mode. |
 | `reviewers.<id>.enabled` | `AI_REVIEW_REVIEWERS__<ID>__ENABLED` | none | boolean | `true` | Run this reviewer. |
 | `reviewers.<id>.tiers.trivial.model` | `AI_REVIEW_REVIEWERS__<ID>__TIERS__TRIVIAL__MODEL` | none | string | required | Model for this tier; must exist in models. |
 | `reviewers.<id>.tiers.trivial.effort` | `AI_REVIEW_REVIEWERS__<ID>__TIERS__TRIVIAL__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |

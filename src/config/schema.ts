@@ -35,7 +35,9 @@ const ModelSchema = z
 		structuredOutput: z
 			.enum(["native", "json"])
 			.default("native")
-			.describe("How structured output is requested from this model."),
+			.describe(
+				"Reserved. Not read yet; a later slice will use it to pick the structured output mode.",
+			),
 	})
 	.strict();
 
