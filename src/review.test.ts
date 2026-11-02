@@ -865,6 +865,79 @@ describe("buildReview", () => {
 		warn.mockRestore();
 	});
 
+	describe("summary generation is best-effort", () => {
+		const findingReview = () =>
+			buildGenerateObjectResponse(
+				buildModelReview({
+					event: "REQUEST_CHANGES",
+					general_findings: [
+						{
+							title: "Something",
+							body: "needs work",
+							severity: "P1",
+							category: "style",
+							confidence: 0.8,
+							evidence: "See diff.",
+							suppressible: true,
+						},
+					],
+					inline_comments: [],
+				}),
+			);
+
+		const queueAgentsThenSummary = (
+			summary: ReturnType<typeof vi.fn> | Error | object,
+		) => {
+			const agentResponse = findingReview();
+			for (let i = 0; i < 5; i++) {
+				mockGenerateObject.mockResolvedValueOnce(agentResponse);
+			}
+			if (summary instanceof Error) {
+				mockGenerateObject.mockRejectedValueOnce(summary);
+			} else {
+				mockGenerateObject.mockResolvedValueOnce(summary);
+			}
+		};
+
+		it("keeps the findings and the verdict when the summary call throws", async () => {
+			const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+			queueAgentsThenSummary(new Error("429 rate limited"));
+
+			const review = await buildReview({
+				octokit: buildOctokit(),
+				...baseContext,
+			});
+
+			expect(review).not.toBeNull();
+			expect(review?.event).toBe("REQUEST_CHANGES");
+			expect(review?.body).toContain("Something");
+			expect(review?.body).toContain(
+				"Requesting changes — see the findings and inline comments below.",
+			);
+			expect(warn).toHaveBeenCalledWith(
+				"summary generation failed; using fallback",
+				expect.objectContaining({
+					finalEvent: "REQUEST_CHANGES",
+					error: expect.stringContaining("429 rate limited"),
+				}),
+			);
+			warn.mockRestore();
+		});
+
+		it("bounds the summary call with an abort signal", async () => {
+			queueAgentsThenSummary({
+				object: { summary: "Two issues found." },
+				usage: { inputTokens: 50, outputTokens: 20 },
+			});
+
+			await buildReview({ octokit: buildOctokit(), ...baseContext });
+
+			const summaryCall = mockGenerateObject.mock.calls.at(-1)?.[0];
+			expect(summaryCall.abortSignal).toBeInstanceOf(AbortSignal);
+			expect(summaryCall.abortSignal.aborted).toBe(false);
+		});
+	});
+
 	// Regression: sanitizeInlineComments clears an invalid start_line (0 or any
 	// value not in the diff) and keeps the comment rather than dropping it.
 	// The comment on a path not in the diff (condition 1) is still dropped.

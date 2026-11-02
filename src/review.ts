@@ -798,6 +798,10 @@ export function mergeReviewsDetailed(
 	};
 }
 
+/** Cap on the summary call. The agent deadline leaves about 90s of the 300s
+ * function budget for the summary, the review POST and the feedback writes. */
+const SUMMARY_TIMEOUT_MS = 30_000;
+
 export async function generateSummary(
 	merged: ModelReview,
 	selection: ModelSelection,
@@ -816,6 +820,7 @@ export async function generateSummary(
 	 * not appear here, or the summary would call a live blocker fixed. */
 	resolvedThisRound: PersistedFinding[] = [],
 	auth?: ResolvedAuth,
+	abortSignal?: AbortSignal,
 ): Promise<{ summary: string; usage: TokenUsage }> {
 	const findingsList = merged.general_findings
 		.map((f) => `- [${f.severity}] ${f.title}: ${f.body}`)
@@ -899,6 +904,7 @@ export async function generateSummary(
 		providerOptions: reasoningProviderOptions(selection),
 		system,
 		messages: [{ role: "user", content: prompt }],
+		abortSignal,
 	});
 
 	return {
@@ -2929,35 +2935,50 @@ export async function buildReview(
 
 	let summary = "";
 	if (finalEvent !== "APPROVE") {
-		const summaryResult = await generateSummary(
-			modelReview,
-			selection,
-			{
-				title: context.title,
-				body: context.body,
-				additions: context.additions,
-				deletions: context.deletions,
-				changedFiles: context.changedFiles,
-			},
-			priorOwnReview,
-			survivingPrior,
-			resolvedThisRound,
-			context.auth,
-		);
-		summary = summaryResult.summary.trim();
-		if (summary.length === 0) {
-			// The summary model returned empty/whitespace — surface it (likely a
-			// model error or refusal) instead of silently papering over it.
-			console.warn("summary model returned an empty summary; using fallback", {
+		const fallbackSummary =
+			finalEvent === "REQUEST_CHANGES"
+				? "Requesting changes — see the findings and inline comments below."
+				: "Review complete — see the findings and inline comments below.";
+		try {
+			const summaryResult = await generateSummary(
+				modelReview,
+				selection,
+				{
+					title: context.title,
+					body: context.body,
+					additions: context.additions,
+					deletions: context.deletions,
+					changedFiles: context.changedFiles,
+				},
+				priorOwnReview,
+				survivingPrior,
+				resolvedThisRound,
+				context.auth,
+				AbortSignal.timeout(SUMMARY_TIMEOUT_MS),
+			);
+			summary = summaryResult.summary.trim();
+			if (summary.length === 0) {
+				// The summary model returned empty/whitespace — surface it (likely a
+				// model error or refusal) instead of silently papering over it.
+				console.warn(
+					"summary model returned an empty summary; using fallback",
+					{
+						finalEvent,
+					},
+				);
+				summary = fallbackSummary;
+			}
+			totalPromptTokens += summaryResult.usage.promptTokens;
+			totalCompletionTokens += summaryResult.usage.completionTokens;
+		} catch (error) {
+			// The summary is prose over findings the agents already produced; losing
+			// the whole review to a rate limit or timeout here would be worse.
+			console.warn("summary generation failed; using fallback", {
 				finalEvent,
+				error: error instanceof Error ? error.message : String(error),
 			});
-			summary =
-				finalEvent === "REQUEST_CHANGES"
-					? "Requesting changes — see the findings and inline comments below."
-					: "Review complete — see the findings and inline comments below.";
+			summary = fallbackSummary;
 		}
-		totalPromptTokens += summaryResult.usage.promptTokens;
-		totalCompletionTokens += summaryResult.usage.completionTokens;
 	}
 
 	const cost = computeCost(
