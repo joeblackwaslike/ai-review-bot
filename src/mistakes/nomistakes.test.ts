@@ -85,6 +85,15 @@ describe("sqliteNoMistakesSource", () => {
 		});
 	});
 
+	it("names the label and db path when sqlite3 output is valid JSON but not an array", async () => {
+		const { src } = source("null");
+		await expect(src.runs("o/r")).rejects.toThrow(/run.*\/db\/state\.sqlite/s);
+		const { src: src2 } = source('{"error":"unexpected response"}');
+		await expect(src2.rounds("01RUN")).rejects.toThrow(
+			/round.*\/db\/state\.sqlite/s,
+		);
+	});
+
 	it("refuses a run id that is not a plain identifier", async () => {
 		const { exec, src } = source("[]");
 		expect(await src.rounds("x'; DROP TABLE runs; --")).toEqual([]);

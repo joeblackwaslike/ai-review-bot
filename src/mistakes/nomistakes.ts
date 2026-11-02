@@ -106,7 +106,12 @@ function parseRows<T>(
 			{ cause: error },
 		);
 	}
-	const rows = Array.isArray(raw) ? raw : [];
+	if (!Array.isArray(raw)) {
+		throw new Error(
+			`mistakes ingest: sqlite3 ${what} output from ${dbPath} was not a JSON array`,
+		);
+	}
+	const rows = raw;
 	const parsed = rows.map((r) => schema.safeParse(r));
 	const skipped = parsed.filter((p) => !p.success).length;
 	if (skipped > 0) {

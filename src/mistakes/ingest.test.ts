@@ -194,6 +194,40 @@ describe("ingest", () => {
 		]);
 	});
 
+	it("reads the same sanitized directory capture wrote for a repo needing sanitizing", async () => {
+		const root = tempDir();
+		const log = openMistakeLog({
+			root,
+			owner: "o",
+			repo: "weird repo",
+			source: "gate",
+			branch: "feat/x",
+			now: () => new Date("2026-11-01T12:00:00.000Z"),
+		});
+		log.append({
+			type: "run",
+			headSha: "aaaa",
+			mergeBase: null,
+			scope: "range",
+			round: 1,
+			costUsd: 0,
+			durationSeconds: 1,
+			providers: [],
+			models: [],
+			agentsAttempted: 0,
+			agentsSucceeded: 0,
+			partial: false,
+			reportPath: null,
+			implementer: NONE,
+		});
+
+		const res = await run(root, { repo: "o/weird repo" });
+
+		expect(res.resolved).toEqual({ byReviewRow: 0, byTranscript: 0 });
+		expect(res.unresolved).toBe(1);
+		expect(res.file).toBeNull();
+	});
+
 	it("falls back to the transcript scan with medium confidence", async () => {
 		const root = tempDir();
 		const warn = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -433,7 +467,8 @@ describe("ingest", () => {
 			at: "2026-11-01T12:00:00.000Z",
 		});
 		const dir = join(root, `${OWNER}__${REPO}`);
-		writeFileSync(join(dir, "2026-11-01T00-00-00-000Z-bad.jsonl"), "{oops\n");
+		const badFile = join(dir, "2026-11-01T00-00-00-000Z-bad.jsonl");
+		writeFileSync(badFile, "{oops\n");
 		const hashes = () =>
 			Object.fromEntries(
 				readdirSync(dir)
@@ -446,7 +481,7 @@ describe("ingest", () => {
 					]),
 			);
 		const before = hashes();
-		vi.spyOn(console, "error").mockImplementation(() => {});
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
 
 		await run(root, {
 			transcriptsDir: TRANSCRIPTS,
@@ -457,6 +492,8 @@ describe("ingest", () => {
 		});
 
 		expect(hashes()).toEqual(before);
+		expect(error).toHaveBeenCalledWith(expect.stringContaining(badFile));
+		expect(error).toHaveBeenCalledWith(expect.stringContaining(":1"));
 	});
 
 	it("is idempotent: a second run with nothing new writes no file", async () => {

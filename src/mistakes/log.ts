@@ -55,7 +55,7 @@ export function fileStamp(at: Date): string {
 	return at.toISOString().replace(/[:.]/g, "-");
 }
 
-function safeSegment(value: string): string {
+export function safeSegment(value: string): string {
 	const cleaned = value.replace(/[^A-Za-z0-9._-]/g, "_");
 	return cleaned === "" || cleaned === "." || cleaned === ".." ? "_" : cleaned;
 }

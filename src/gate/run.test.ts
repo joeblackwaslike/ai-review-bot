@@ -1201,4 +1201,19 @@ describe("runGate mistake log", () => {
 		).rejects.toThrow();
 		await expect(readFile(log2.path, "utf8")).rejects.toThrow();
 	});
+
+	it("does not log a run when saving the gate history fails", async () => {
+		writeFileSync(storeDir, "not a directory");
+		const log = newLog();
+		const result = await run(
+			repo({ "src/a.ts": modified("d1") }),
+			async () => agentPass([P1_ON_A]),
+			log,
+		);
+		expect(result.findings).toHaveLength(1);
+		expect(errors.some((e) => e.includes("Could not save gate history"))).toBe(
+			true,
+		);
+		await expect(readFile(log.path, "utf8")).rejects.toThrow();
+	});
 });

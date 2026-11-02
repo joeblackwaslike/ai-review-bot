@@ -274,7 +274,7 @@ export async function runGate(opts: GateOptions): Promise<GateResult> {
 		throw new Error(`Gate report failed validation: ${problems.join("; ")}`);
 	}
 
-	const save = () =>
+	const save = (): Promise<boolean> =>
 		saveStore(storePath, result.store, store.revision).then(
 			({ merged }) => {
 				if (merged) {
@@ -282,18 +282,19 @@ export async function runGate(opts: GateOptions): Promise<GateResult> {
 						`Another gate run saved ${storePath} during this one; the two histories were merged and the next round reviews the full range.`,
 					);
 				}
+				return true;
 			},
 			(err: unknown) => {
 				console.error(
 					`Could not save gate history to ${storePath}: ${err instanceof Error ? err.message : String(err)}`,
 				);
+				return false;
 			},
 		);
 
 	if (opts.findingsFile) {
 		await writeFile(opts.findingsFile, json);
-		logMistakes();
-		await save();
+		if (await save()) logMistakes();
 		return {
 			exitCode: 0,
 			stdout: `ai-review gate: ${kept.length} finding(s) written to ${opts.findingsFile}`,
@@ -301,8 +302,7 @@ export async function runGate(opts: GateOptions): Promise<GateResult> {
 		};
 	}
 	const stdout = formatText(kept);
-	logMistakes();
-	await save();
+	if (await save()) logMistakes();
 	return {
 		exitCode: kept.some((f) => f.severity === "error") ? 1 : 0,
 		stdout,

@@ -3,7 +3,7 @@ import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { gateRepoSlug, gateRoot } from "../gate/run.js";
-import { fileStamp } from "./log.js";
+import { fileStamp, safeSegment } from "./log.js";
 import {
 	decisionsFor,
 	type NoMistakesSource,
@@ -42,7 +42,6 @@ interface LogState {
 	runs: RunRecord[];
 	annotated: Set<string>;
 	eventKeys: Set<string>;
-	malformed: number;
 }
 
 const warn = (msg: string) => console.error(`mistakes ingest: ${msg}`);
@@ -85,7 +84,6 @@ function readLog(dir: string): LogState {
 		runs: [],
 		annotated: new Set(),
 		eventKeys: new Set(),
-		malformed: 0,
 	};
 	let files: string[];
 	try {
@@ -108,13 +106,15 @@ function readLog(dir: string): LogState {
 			warn(message);
 			continue;
 		}
-		for (const line of content.split("\n")) {
+		const lines = content.split("\n");
+		for (let i = 0; i < lines.length; i++) {
+			const line = lines[i] ?? "";
 			if (!line.trim()) continue;
 			let rec: MistakeRecord;
 			try {
 				rec = MistakeRecord.parse(JSON.parse(line));
 			} catch {
-				state.malformed++;
+				warn(`skipped malformed log line at ${path}:${i + 1}`);
 				continue;
 			}
 			if (isIngest && rec.type === "annotation") state.annotated.add(rec.runId);
@@ -246,10 +246,8 @@ export async function ingest(opts: IngestOptions): Promise<IngestResult> {
 	const now = opts.now ?? (() => new Date());
 	const repo = opts.repo ?? currentRepoSlug();
 	const [owner, name] = repo.split("/");
-	const dir = join(opts.root, `${owner}__${name}`);
+	const dir = join(opts.root, `${safeSegment(owner)}__${safeSegment(name)}`);
 	const state = readLog(dir);
-	if (state.malformed > 0)
-		warn(`skipped ${state.malformed} malformed log line(s)`);
 	const started = now();
 	const ts = started.toISOString();
 	const result: IngestResult = {
