@@ -36,11 +36,11 @@ The verifier (D1) and the tool-using agents (E2) are the expensive work, and the
 
 **Reasons.** `SUPPRESSED_SETTLED`, `SUPPRESSED_OPEN`, `RETRACTION`, `OFF_DIFF` (with sub-codes `OFF_DIFF_PATH`, `OFF_DIFF_LINE`, `BAD_RANGE`), `CAP`, `DISCARDED_BY_VERIFY` (reserved, no source until D1), and `RESOLVED_LOCATION` for the resolved-key skip in `mergeReviewsDetailed`. The last is an addition to the parent spec's list: that skip silently drops findings today (bead `ai-review-bot-etv`) and measuring it is the cheapest way to size the bug.
 
-`SUPPRESSED_OPEN` findings are held, not lost: they still count toward the verdict. They get a record with `disposition: "held"`; every other reason is `"dropped"`.
+`SUPPRESSED_OPEN` findings are held, not lost: the entry they restate stays open and carried, so they are not re-posted. They get a record with `disposition: "held"`; every other reason is `"dropped"`. `held` means "restated an open entry". It does not promise the entry blocks the verdict: an advisory or pathless P2/P3 restatement is also `held`.
 
 **Not recorded.** Dedupe and merge collapses (restatements, not discards), the advisory severity cap, and suggestion-block drops (the comment still posts).
 
-**Collection.** A small `Discard` value (`reason`, `disposition`, `title`, `path`, `line`, `severity`, `skill` or null, `provider`) pushed at each drop site inside `buildReview`. Per-agent drops (settled, open, retraction) have the agent index, so they carry the skill. Later drops (off-diff, cap, resolved location) get the skill from the existing provenance map when the finding's key is found there, else null. `buildReview` returns the list on its result.
+**Collection.** A small `Discard` value (`reason`, `code` for `OFF_DIFF` and null otherwise, `disposition`, `title`, `path`, `line`, `severity`, `skill` or null, `provider`) pushed at each drop site inside `buildReview`. The repo owner and PR come from the review context when the record is written. Per-agent drops (settled, open, retraction) have the agent index, so they carry the skill. Later drops (off-diff, cap, resolved location) get the skill from the existing provenance map when the finding's key is found there, else null. `buildReview` still returns `ReviewDecision | null`; it flushes the list in a `finally` through an optional `recordDiscards` callback on its context, so a run that posts nothing or throws still records.
 
 **Sinks.**
 
@@ -50,7 +50,7 @@ The verifier (D1) and the tool-using agents (E2) are the expensive work, and the
 
 **Deviation from the parent spec.** The spec asks for a nullable column on the corpus. `finding_catalog` holds posted comments only: `posted_at` and `natural_key` are not null and a discard has no comment id. A nullable column would force dropped findings into rows that read as posted. A separate table is the call. The acceptance criterion (a migration and a repo test) is unchanged.
 
-**Table.** `finding_discards(id, repo, pr_number, review_sha, provider, reason, disposition, natural_key, path, line, severity, title, skill nullable, created_at)`. Migration through `pnpm db:generate`, checked in under `src/improve/db/migrations/`. Repo test follows `repo.test.ts` (`createTestDb()` on pg-mem, raw `db.execute` readback).
+**Table.** `finding_discards(id, provider, owner, repo, pr, review_sha, reason, code nullable, disposition, natural_key, path nullable, line nullable, severity nullable, title, skill nullable, created_at)`, with a unique index over provider, owner, repo, pr, review sha, reason, natural key, `coalesce(skill, '')` and `coalesce(line, -1)`. The skill is in the key so five skills restating one finding stay five rows, which C3 needs; the line is in the key because the natural key hashes only path and title. Migration through `pnpm db:generate`, checked in under `src/improve/db/migrations/`. Repo test follows `repo.test.ts` (`createTestDb()` on pg-mem, raw `db.execute` readback).
 
 **Acceptance.** Each reason has a test that triggers its drop site and sees one record. A recording error is caught, logged once, and the review still posts. Migration applies on a clean test DB.
 
@@ -64,7 +64,7 @@ The verifier (D1) and the tool-using agents (E2) are the expensive work, and the
 
 **Fixtures to record.** At least 2 held-out PRs, chosen from merged PRs with both bots' reviews that were not used to design B1 to B6, and marked `heldOut: true`. At least 2 clean PRs: first-round approvals with no posted findings. The builder picks them with `gh` and records them with `ai-review replay --record`.
 
-**Acceptance.** `computeMetrics` reports join rate; a clean fixture fails the run if the live pipeline posts anything; candidate and post-filter counts and token usage per skill appear in the live report; `pnpm test` covers the new fixture fields.
+**Acceptance.** `computeMetrics` reports join rate; a clean fixture fails the run if the post-filter trace shows anything posted (when the post-filter trace is only the approximate, candidates-only fallback, the clean check is reported as skipped, not passed); candidate and post-filter counts and token usage per skill appear in the live report; `pnpm test` covers the new fixture fields.
 
 ### C3 timing
 
