@@ -1,5 +1,5 @@
 {
-	"id": "4a6b7bd4-a3be-4a21-9f5c-732f47268a13",
+	"id": "5042de37-e081-4e88-8ae7-df8d57f01319",
 	"prevId": "758895e9-331f-4303-927c-a415f6ceda73",
 	"version": "7",
 	"dialect": "postgresql",
@@ -453,6 +453,12 @@
 							"expression": "natural_key",
 							"isExpression": false,
 							"asc": true,
+							"nulls": "last"
+						},
+						{
+							"expression": "coalesce(\"skill\", '')",
+							"asc": true,
+							"isExpression": true,
 							"nulls": "last"
 						}
 					],

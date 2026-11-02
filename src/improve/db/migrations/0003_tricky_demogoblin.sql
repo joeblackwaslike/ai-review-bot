@@ -20,5 +20,5 @@ CREATE TABLE "finding_discards" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX "finding_discards_uq" ON "finding_discards" USING btree ("provider","owner","repo","pr","review_sha","reason","natural_key");--> statement-breakpoint
+CREATE UNIQUE INDEX "finding_discards_uq" ON "finding_discards" USING btree ("provider","owner","repo","pr","review_sha","reason","natural_key",coalesce("skill", ''));--> statement-breakpoint
 CREATE INDEX "finding_discards_pr_idx" ON "finding_discards" USING btree ("provider","owner","repo","pr");

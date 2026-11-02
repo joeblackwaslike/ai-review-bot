@@ -249,6 +249,8 @@ export const findingDiscards = pgTable(
 			.defaultNow(),
 	},
 	(t) => [
+		// Skill is in the key so five agents restating one finding stay five
+		// rows; coalesce makes a null skill collide with itself.
 		uniqueIndex("finding_discards_uq").on(
 			t.provider,
 			t.owner,
@@ -257,6 +259,7 @@ export const findingDiscards = pgTable(
 			t.reviewSha,
 			t.reason,
 			t.naturalKey,
+			sql`coalesce(${t.skill}, '')`,
 		),
 		index("finding_discards_pr_idx").on(t.provider, t.owner, t.repo, t.pr),
 	],

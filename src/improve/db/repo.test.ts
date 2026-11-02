@@ -162,6 +162,23 @@ describe("insertDiscards", () => {
 		expect(r.rows).toEqual([{ skill: null, path: null, line: null }]);
 	});
 
+	// C3 counts discards per skill, so five agents restating one settled
+	// finding must stay five rows.
+	it("keeps rows that differ only in skill", async () => {
+		const db = await createTestDb();
+		await insertDiscards(
+			db,
+			["a.md", "b.md", "c.md", "d.md", null].map((skill) => ({
+				...baseDiscard,
+				skill,
+			})),
+		);
+		const r = await db.execute(
+			sql`select count(*)::int as n from finding_discards`,
+		);
+		expect(r.rows).toEqual([{ n: 5 }]);
+	});
+
 	it("returns 0 for an empty batch", async () => {
 		const db = await createTestDb();
 		expect(await insertDiscards(db, [])).toBe(0);

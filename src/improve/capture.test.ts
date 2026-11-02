@@ -1,5 +1,7 @@
+import { sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { commentKey } from "../comment-key.js";
+import { type Discard, discardKey } from "../discards.js";
 import {
 	capturePostedReview,
 	carrierBody,
@@ -8,7 +10,9 @@ import {
 	type Provenance,
 	pairWithProvenance,
 	parsePostedAt,
+	persistDiscards,
 } from "./capture.js";
+import { createTestDb } from "./db/testing.js";
 
 function comment(over: Partial<PostedComment> & { id: number }): PostedComment {
 	return {
@@ -265,5 +269,92 @@ describe("carrier comment reuse", () => {
 		expect(
 			calls.some((c) => c.startsWith("POST") || c.startsWith("PATCH")),
 		).toBe(false);
+	});
+});
+
+describe("persistDiscards", () => {
+	const settled: Discard = {
+		reason: "SUPPRESSED_SETTLED",
+		code: null,
+		disposition: "dropped",
+		title: "Missing null check",
+		path: "src/a.ts",
+		line: 12,
+		severity: "P2",
+		skill: "code-reviewer.md",
+		provider: "openai",
+	};
+	const offDiff: Discard = {
+		reason: "OFF_DIFF",
+		code: "OFF_DIFF_PATH",
+		disposition: "held",
+		title: "Unanchored claim",
+		path: null,
+		line: null,
+		severity: null,
+		skill: null,
+		provider: "openai",
+	};
+
+	it("writes one row per discard with the review sha and natural key", async () => {
+		const db = await createTestDb();
+		await persistDiscards({
+			db,
+			owner: "o",
+			repo: "r",
+			pr: 7,
+			headSha: "abc123",
+		})([settled, offDiff]);
+
+		const r = await db.execute(
+			sql`select provider, owner, repo, pr, review_sha, reason, code, disposition,
+				natural_key, path, line, severity, title, skill
+				from finding_discards order by title`,
+		);
+		expect(r.rows).toEqual([
+			{
+				provider: "openai",
+				owner: "o",
+				repo: "r",
+				pr: 7,
+				review_sha: "abc123",
+				reason: "SUPPRESSED_SETTLED",
+				code: null,
+				disposition: "dropped",
+				natural_key: discardKey(settled),
+				path: "src/a.ts",
+				line: 12,
+				severity: "P2",
+				title: "Missing null check",
+				skill: "code-reviewer.md",
+			},
+			{
+				provider: "openai",
+				owner: "o",
+				repo: "r",
+				pr: 7,
+				review_sha: "abc123",
+				reason: "OFF_DIFF",
+				code: "OFF_DIFF_PATH",
+				disposition: "held",
+				natural_key: discardKey(offDiff),
+				path: null,
+				line: null,
+				severity: null,
+				title: "Unanchored claim",
+				skill: null,
+			},
+		]);
+	});
+
+	it("writes nothing for an empty batch", async () => {
+		const db = await createTestDb();
+		await persistDiscards({ db, owner: "o", repo: "r", pr: 7, headSha: "a" })(
+			[],
+		);
+		const r = await db.execute(
+			sql`select count(*)::int as n from finding_discards`,
+		);
+		expect(r.rows).toEqual([{ n: 0 }]);
 	});
 });
