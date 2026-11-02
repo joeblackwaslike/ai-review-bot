@@ -131,6 +131,42 @@ describe("repairSuggestion", () => {
 		);
 	});
 
+	it("re-indents a nested block whose inner line repeats an outer structural line", () => {
+		const py = toMap({
+			4: "    if ready:",
+			5: "        go()",
+			6: "    else:",
+			7: "        if retry:",
+			8: "            again()",
+			9: "        else:",
+			10: "            stop()",
+		});
+		const s =
+			"if ready:\n    go()\nelse:\n    if retry:\n        again()\n    else:\n        halt()";
+		expect(repair(s, 10, 4, py)?.suggestion).toBe(
+			"    if ready:\n        go()\n    else:\n        if retry:\n            again()\n        else:\n            halt()",
+		);
+	});
+
+	it("leaves a multiline template literal untouched when restoring indentation", () => {
+		const js = toMap({ 5: '    return "old";' });
+		const s = "return `first\nsecond`;";
+		expect(repair(s, 5, null, js)?.suggestion).toBe(s);
+	});
+
+	it("leaves a multiline triple-quoted string untouched when restoring indentation", () => {
+		const py = toMap({ 5: '    text = "old"' });
+		const s = 'text = """first\nsecond"""';
+		expect(repair(s, 5, null, py)?.suggestion).toBe(s);
+	});
+
+	it("still re-indents a single-line template literal", () => {
+		const js = toMap({ 5: '    return "old";' });
+		expect(repair("return `new`;", 5, null, js)?.suggestion).toBe(
+			"    return `new`;",
+		);
+	});
+
 	it("widens the range when the suggestion starts with the preceding line", () => {
 		const s = "  if (total > 0) {\n    return total + 1;";
 		expect(repair(s, 11)).toEqual({

@@ -113,24 +113,45 @@ function covers(fileLines: FileLines, from: number, to: number): boolean {
 	return true;
 }
 
+function occurrences(text: string, token: string): number {
+	return text.split(token).length - 1;
+}
+
+/** Whether a string in the block runs across lines, where added indentation
+ * would change the string's value. A line with an odd count of a quote token
+ * opens or closes one. */
+function opensMultilineLiteral(lines: string[]): boolean {
+	return lines.some((l) =>
+		["`", '"""', "'''"].some((token) => occurrences(l, token) % 2 === 1),
+	);
+}
+
+/** Whether `line` keeps the indentation of a replaced line that is
+ * distinctive: long enough to anchor and appearing once in the range. A short
+ * or repeated line (`else:`, `}`) matches too easily to prove anything. */
+function copiesRangeLineVerbatim(line: string, range: string[]): boolean {
+	if (nonWhitespaceChars(line) < MIN_ANCHOR_CHARS) return false;
+	const twins = range.filter((r) => r.trim() === line.trim());
+	return (
+		twins.length === 1 &&
+		leadingWhitespace(twins[0]) === leadingWhitespace(line)
+	);
+}
+
 /** The block with the target line's indentation restored, when it looks lost:
  * the first text line is at column 0 under an indented target, no line the
  * block copies from the replaced range keeps that line's own indentation (a
  * verbatim copy means the block was written at file indentation, so its
- * column-0 lines are a deliberate dedent), and the result is not just the
- * replaced lines again (then the indentation change is the whole fix). */
+ * column-0 lines are a deliberate dedent), the block opens no multiline
+ * string, and the result is not just the replaced lines again (then the
+ * indentation change is the whole fix). */
 function restoreIndentation(lines: string[], range: string[]): string[] {
 	const target = leadingWhitespace(range[0] ?? "");
 	const firstText = lines.find((l) => l.trim() !== "") ?? "";
 	if (target === "" || leadingWhitespace(firstText) !== "") return lines;
+	if (opensMultilineLiteral(lines)) return lines;
 	const keepsVerbatim = lines.some(
-		(l) =>
-			l.trim() !== "" &&
-			range.some(
-				(r) =>
-					r.trim() === l.trim() &&
-					leadingWhitespace(r) === leadingWhitespace(l),
-			),
+		(l) => l.trim() !== "" && copiesRangeLineVerbatim(l, range),
 	);
 	if (keepsVerbatim) return lines;
 	const indented = lines.map((l) => (l.trim() === "" ? l : target + l));
