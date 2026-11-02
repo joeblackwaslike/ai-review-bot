@@ -27,7 +27,14 @@ function setOpenAIEnv(overrides: Record<string, string> = {}) {
 	}
 }
 
+let warn: ReturnType<typeof vi.spyOn>;
+
+beforeEach(() => {
+	warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+});
+
 afterEach(() => {
+	warn.mockRestore();
 	for (const key of [
 		"GITHUB_APP_ID",
 		"GITHUB_APP_PRIVATE_KEY",
@@ -430,7 +437,6 @@ describe("config tree wiring", () => {
 	});
 
 	it("AGENT_CONCURRENCY=2 sets concurrency through the alias and warns once", () => {
-		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 		setRequiredEnv({ AGENT_CONCURRENCY: "2" });
 		expect(getConfig().agentConcurrency).toBe(2);
 		expect(getConfig().agentConcurrency).toBe(2);
@@ -438,7 +444,6 @@ describe("config tree wiring", () => {
 		expect(warn).toHaveBeenCalledWith(
 			expect.stringContaining("AGENT_CONCURRENCY is deprecated"),
 		);
-		warn.mockRestore();
 	});
 
 	it("getOpenAIAppConfig keeps provider openai and its own prefix default", () => {
