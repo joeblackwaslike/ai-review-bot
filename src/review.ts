@@ -24,7 +24,12 @@ import { dedupeClaims, isSameClaim, withAbsorbedLink } from "./claim-dedupe.js";
 import { commentKey } from "./comment-key.js";
 import { mapWithConcurrency } from "./concurrency.js";
 import { collectRightSideLines, rightSideText } from "./diff-lines.js";
-import { type Discard, type DiscardReason, logDiscards } from "./discards.js";
+import {
+	type Discard,
+	type DiscardReason,
+	logDiscards,
+	type OffDiffCode,
+} from "./discards.js";
 import {
 	anchorFingerprint,
 	formatFpMarkers,
@@ -1528,9 +1533,13 @@ function withRepairedSuggestion(
 	};
 }
 
+/** Validates each inline comment against the diff and builds the ones that
+ * can post. Each comment that cannot is logged and passed to `onDrop` with
+ * its reason code. */
 export function buildReviewComments(
 	files: PullFile[],
 	inlineComments: ModelInlineComment[],
+	onDrop?: (comment: ModelInlineComment, code: OffDiffCode) => void,
 ): ReviewComment[] {
 	const validLinesByPath = buildValidLinesByPath(files);
 
@@ -1543,6 +1552,7 @@ export function buildReviewComments(
 				line: comment.line,
 				knownPaths: Array.from(validLinesByPath.keys()),
 			});
+			onDrop?.(comment, "OFF_DIFF_PATH");
 			return [];
 		}
 
@@ -1556,6 +1566,7 @@ export function buildReviewComments(
 					validLines: Array.from(validLines).sort((a, b) => a - b),
 				},
 			);
+			onDrop?.(comment, "OFF_DIFF_LINE");
 			return [];
 		}
 
@@ -1569,6 +1580,7 @@ export function buildReviewComments(
 					start_line: comment.start_line,
 				},
 			);
+			onDrop?.(comment, "BAD_RANGE");
 			return [];
 		}
 
@@ -1584,6 +1596,7 @@ export function buildReviewComments(
 					start_line: startLine,
 				},
 			);
+			onDrop?.(comment, "BAD_RANGE");
 			return [];
 		}
 
@@ -1808,16 +1821,32 @@ function toDiscard(
 	};
 }
 
+/** How long `buildReview` waits for `recordDiscards` before returning without it. */
+export const DISCARD_RECORD_TIMEOUT_MS = 5_000;
+
 async function flushDiscards(
 	discards: Discard[],
 	context: ReviewContext,
 ): Promise<void> {
 	const { owner, repo, pullNumber } = context;
 	logDiscards(discards, { owner, repo, pullNumber });
+	if (!context.recordDiscards) return;
+	let timer: ReturnType<typeof setTimeout> | undefined;
 	try {
-		await context.recordDiscards?.(discards);
+		const outcome = await Promise.race([
+			context.recordDiscards(discards).then(() => "recorded" as const),
+			new Promise<"timed out">((resolve) => {
+				timer = setTimeout(
+					() => resolve("timed out"),
+					DISCARD_RECORD_TIMEOUT_MS,
+				);
+			}),
+		]);
+		if (outcome === "timed out") console.warn("discard recording timed out");
 	} catch (error) {
 		console.warn("discard recording failed", { error });
+	} finally {
+		clearTimeout(timer);
 	}
 }
 
@@ -2906,15 +2935,48 @@ async function buildReviewInner(
 		});
 	}
 
+	const skillsByKey = new Map<string, Set<string>>();
+	outcomes.forEach((outcome, i) => {
+		if (outcome.status !== "ok") return;
+		const skillPath = allSkills[i]?.skillPath;
+		if (!skillPath) return;
+		for (const c of outcome.review.inline_comments) {
+			// Record against the survivor's key when this finding was collapsed
+			// into another. Keying on the agent's own anchor would strand the
+			// attribution: near-duplicate collapsing spans different nearby
+			// lines, so nothing later looks the original key up again, and a
+			// bug found by five agents would be credited to one skill.
+			const own = commentKey(c);
+			const key = mergeOutcome.inlineAliases.get(own) ?? own;
+			const set = skillsByKey.get(key) ?? new Set<string>();
+			set.add(skillPath);
+			skillsByKey.set(key, set);
+		}
+	});
+	const lateDiscard = (
+		c: ModelInlineComment,
+		reason: DiscardReason,
+		code: OffDiffCode | null = null,
+	) => {
+		const [skill = null] = skillsByKey.get(commentKey(c)) ?? [];
+		discards.push({ ...toDiscard(c, reason, skill, context.provider), code });
+	};
+	for (const c of overflowComments) lateDiscard(c, "CAP");
+
+	const offDiffCodes = new Map<string, OffDiffCode>();
 	const reviewComments = buildReviewComments(
 		anchorFiles,
 		effectiveInlineComments,
+		(c, code) => offDiffCodes.set(commentKey(c), code),
 	);
 
 	const { dropped, routed, routedKeys } = routeDroppedComments(
 		effectiveInlineComments,
 		reviewComments,
 	);
+	// Routed P0/P1 comments post as general findings, so only P2/P3 are discards.
+	for (const c of dropped)
+		lateDiscard(c, "OFF_DIFF", offDiffCodes.get(commentKey(c)) ?? null);
 	if (routed.length > 0) {
 		modelReview = {
 			...modelReview,
@@ -2938,24 +3000,6 @@ async function buildReviewInner(
 		| Map<string, { skills: string[]; title: string; severity: string | null }>
 		| undefined;
 	if (context.feedbackEnabled) {
-		const skillsByKey = new Map<string, Set<string>>();
-		outcomes.forEach((outcome, i) => {
-			if (outcome.status !== "ok") return;
-			const skillPath = allSkills[i]?.skillPath;
-			if (!skillPath) return;
-			for (const c of outcome.review.inline_comments) {
-				// Record against the survivor's key when this finding was collapsed
-				// into another. Keying on the agent's own anchor would strand the
-				// attribution: near-duplicate collapsing spans different nearby
-				// lines, so nothing later looks the original key up again, and a
-				// bug found by five agents would be credited to one skill.
-				const own = commentKey(c);
-				const key = mergeOutcome.inlineAliases.get(own) ?? own;
-				const set = skillsByKey.get(key) ?? new Set<string>();
-				set.add(skillPath);
-				skillsByKey.set(key, set);
-			}
-		});
 		const titleByKey = new Map<string, string>();
 		const severityByKey = new Map<string, string>();
 		for (const c of modelReview.inline_comments) {

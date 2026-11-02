@@ -31,6 +31,7 @@ import {
 	classifyRefusal,
 	computePaceDelayMs,
 	computeReadinessScore,
+	DISCARD_RECORD_TIMEOUT_MS,
 	formatFindings,
 	formatReviewBody,
 	generateSummary,
@@ -6848,6 +6849,282 @@ describe("buildReview ledger suppression", () => {
 				warn.mock.calls.filter(([m]) => m === "discard recording failed"),
 			).toEqual([["discard recording failed", { error }]]);
 			warn.mockRestore();
+		});
+
+		const noPrior = () =>
+			ledgerOctokit({ reviews: [], comments: [], threadNodes: [] });
+
+		it("records an off-diff P2 with its sub-code and the skill that reported it", async () => {
+			const offLine = buildInlineComment({
+				title: "Unchecked index into the cache array",
+				path: "src/review.ts",
+				line: 9,
+				severity: "P2",
+			});
+			const offPath = buildInlineComment({
+				title: "Missing timeout on the outbound fetch",
+				path: "src/elsewhere.ts",
+				line: 2,
+				severity: "P3",
+			});
+			routeAgents(
+				{
+					"code-reviewer.md": withInline(offLine),
+					"silent-failure-hunter.md": withInline(offPath),
+				},
+				empty,
+			);
+			const recordDiscards = spy();
+
+			const decision = await buildReview({
+				octokit: noPrior(),
+				...baseContext,
+				recordDiscards,
+			});
+
+			expect(baseContext.feedbackEnabled).toBe(false);
+			expect(decision?.comments).toEqual([]);
+			expect(recordsOf(recordDiscards)).toEqual([
+				{
+					reason: "OFF_DIFF",
+					code: "OFF_DIFF_LINE",
+					disposition: "dropped",
+					title: offLine.title,
+					path: "src/review.ts",
+					line: 9,
+					severity: "P2",
+					skill: "code-reviewer.md",
+					provider: "anthropic",
+				},
+				{
+					reason: "OFF_DIFF",
+					code: "OFF_DIFF_PATH",
+					disposition: "dropped",
+					title: offPath.title,
+					path: "src/elsewhere.ts",
+					line: 2,
+					severity: "P3",
+					skill: "silent-failure-hunter.md",
+					provider: "anthropic",
+				},
+			]);
+		});
+
+		it("records nothing for an off-diff P1 routed into a general finding", async () => {
+			const blocking = buildInlineComment({
+				title: "Token written to the debug log",
+				path: "src/review.ts",
+				line: 9,
+				severity: "P1",
+			});
+			routeAgents({ "code-reviewer.md": withInline(blocking) }, empty);
+			const recordDiscards = spy();
+
+			const decision = await buildReview({
+				octokit: noPrior(),
+				...baseContext,
+				recordDiscards,
+			});
+
+			expect(decision?.event).toBe("REQUEST_CHANGES");
+			expect(recordsOf(recordDiscards)).toEqual([]);
+		});
+
+		it("buildReviewComments reports each drop's code to onDrop", () => {
+			const file = buildPullFile("src/review.ts", SIMPLE_PATCH);
+			const inverted = buildInlineComment({
+				path: "src/review.ts",
+				line: 2,
+				start_line: 3,
+			});
+			const offLine = buildInlineComment({ path: "src/review.ts", line: 9 });
+			const offPath = buildInlineComment({ path: "src/other.ts", line: 2 });
+			const onDrop = vi.fn();
+
+			const posted = buildReviewComments(
+				[file],
+				[inverted, offLine, offPath],
+				onDrop,
+			);
+
+			expect(posted).toEqual([]);
+			expect(onDrop.mock.calls).toEqual([
+				[inverted, "BAD_RANGE"],
+				[offLine, "OFF_DIFF_LINE"],
+				[offPath, "OFF_DIFF_PATH"],
+			]);
+		});
+
+		it("records the lowest-severity overflow of the 50-comment cap", async () => {
+			const severityAt = (i: number) =>
+				i === 10 || i === 30 ? "P3" : i % 2 ? "P1" : "P2";
+			const comments = Array.from({ length: 52 }, (_, i) =>
+				buildInlineComment({
+					title: `Finding ${i}`,
+					path: "src/review.ts",
+					line: (i % 3) + 1,
+					severity: severityAt(i),
+				}),
+			);
+			routeAgents({ "code-reviewer.md": withInline(...comments) }, empty);
+			const recordDiscards = spy();
+
+			const decision = await buildReview({
+				octokit: noPrior(),
+				...baseContext,
+				recordDiscards,
+			});
+
+			expect(decision?.comments).toHaveLength(50);
+			const byTitle = (a: Discard, b: Discard) =>
+				a.title.localeCompare(b.title);
+			expect(recordsOf(recordDiscards).sort(byTitle)).toEqual(
+				[10, 30].map((i) => ({
+					reason: "CAP",
+					code: null,
+					disposition: "dropped",
+					title: `Finding ${i}`,
+					path: "src/review.ts",
+					line: (i % 3) + 1,
+					severity: "P3",
+					skill: "code-reviewer.md",
+					provider: "anthropic",
+				})),
+			);
+		});
+
+		it("records nothing for an adjacent-line restatement dedupeClaims collapses", async () => {
+			const claim = buildInlineComment({
+				title: "Pagination loop skips the final page entirely",
+				body: "The `page` counter stops one short.",
+				path: "src/review.ts",
+				line: 2,
+			});
+			routeAgents(
+				{
+					"code-reviewer.md": withInline(claim),
+					"silent-failure-hunter.md": withInline({ ...claim, line: 3 }),
+				},
+				empty,
+			);
+			const recordDiscards = spy();
+
+			const decision = await buildReview({
+				octokit: noPrior(),
+				...baseContext,
+				recordDiscards,
+			});
+
+			expect(decision?.comments).toHaveLength(1);
+			expect(recordsOf(recordDiscards)).toEqual([]);
+		});
+
+		it("records no retraction when the filter is off", async () => {
+			expect(REVIEWER_TUNING.dropRetractions).toBe(false);
+			const filler = {
+				...fresh,
+				title: "Stale comment",
+				body: "The comment mentions the old name. No issues found.",
+				severity: "P3" as const,
+				suppressible: true,
+			};
+			routeAgents(
+				{
+					"code-reviewer.md": buildModelReview({
+						event: "COMMENT",
+						general_findings: [filler],
+						inline_comments: [],
+					}),
+				},
+				empty,
+			);
+			const recordDiscards = spy();
+
+			await buildReview({
+				octokit: ledgerOctokit(),
+				...baseContext,
+				recordDiscards,
+			});
+
+			expect(recordsOf(recordDiscards)).toEqual([]);
+		});
+
+		it("a synchronously throwing recorder warns once and leaves the review unchanged", async () => {
+			const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+			const error = new Error("bad config");
+			routeAgents({ "code-reviewer.md": withInline(repeat) }, empty);
+			const baseline = await buildReview({
+				octokit: ledgerOctokit(),
+				...baseContext,
+			});
+			routeAgents({ "code-reviewer.md": withInline(repeat) }, empty);
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit(),
+				...baseContext,
+				recordDiscards: () => {
+					throw error;
+				},
+			});
+
+			// Agent timings in the body's agents marker differ between runs.
+			const untimed = (d: typeof decision) => ({
+				...d,
+				body: d?.body.replace(/durationMs\\?":\d+/g, ""),
+			});
+			expect(untimed(decision)).toEqual(untimed(baseline));
+			expect(
+				warn.mock.calls.filter(([m]) => m === "discard recording failed"),
+			).toEqual([["discard recording failed", { error }]]);
+			warn.mockRestore();
+		});
+
+		it("a recorder that never settles is abandoned after the time bound", async () => {
+			const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+			onTestFinished(() => {
+				vi.useRealTimers();
+				warn.mockRestore();
+			});
+			vi.useFakeTimers();
+			routeAgents({ "code-reviewer.md": withInline(repeat) }, empty);
+			let reached: () => void = () => {};
+			const called = new Promise<void>((resolve) => {
+				reached = resolve;
+			});
+
+			const pending = buildReview({
+				octokit: ledgerOctokit(),
+				...baseContext,
+				recordDiscards: () => {
+					reached();
+					return new Promise<void>(() => {});
+				},
+			});
+			await called;
+			await vi.advanceTimersByTimeAsync(DISCARD_RECORD_TIMEOUT_MS);
+			const decision = await pending;
+
+			expect(decision).not.toBeNull();
+			expect(vi.getTimerCount()).toBe(0);
+			expect(
+				warn.mock.calls.filter(([m]) => m === "discard recording timed out"),
+			).toEqual([["discard recording timed out"]]);
+		});
+
+		it("clears the time bound when the recorder settles", async () => {
+			vi.useFakeTimers();
+			onTestFinished(() => {
+				vi.useRealTimers();
+			});
+			routeAgents({ "code-reviewer.md": withInline(repeat) }, empty);
+
+			await buildReview({
+				octokit: ledgerOctokit(),
+				...baseContext,
+				recordDiscards: spy(),
+			});
+
+			expect(vi.getTimerCount()).toBe(0);
 		});
 	});
 });
