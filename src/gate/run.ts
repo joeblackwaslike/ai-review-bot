@@ -2,6 +2,8 @@ import { execFileSync } from "node:child_process";
 import { writeFile } from "node:fs/promises";
 import { type ReviewPassResult, runReviewPasses } from "../audit.js";
 import { isSettled, type LedgerEntry } from "../ledger/types.js";
+import { logGateRun } from "../mistakes/gate-events.js";
+import type { MistakeLog } from "../mistakes/log.js";
 import type { ModelReview } from "../review.js";
 import {
 	type AuditFile,
@@ -33,6 +35,7 @@ export type GateOptions = {
 	storeDir?: string;
 	runGit?: GitRunner;
 	review?: (files: AuditFile[]) => Promise<ReviewPassResult>;
+	mistakes?: MistakeLog;
 };
 
 export type GateResult = {
@@ -158,6 +161,7 @@ export function gateRepoSlug(
 
 /** One gate round over the branch's range: review what changed since the last round, update the store, and write or print the report. */
 export async function runGate(opts: GateOptions): Promise<GateResult> {
+	const startedAt = Date.now();
 	const runGit = opts.runGit ?? defaultGitRunner(opts.cwd);
 	const review =
 		opts.review ??
@@ -227,6 +231,24 @@ export async function runGate(opts: GateOptions): Promise<GateResult> {
 		idleProviders: (pass?.providerStats ?? []).filter((s) => s.succeeded === 0),
 	});
 	for (const w of result.warnings) console.error(w);
+	if (opts.mistakes) {
+		try {
+			logGateRun({
+				log: opts.mistakes,
+				pass,
+				round,
+				mergeBase,
+				headSha: head,
+				durationSeconds: (Date.now() - startedAt) / 1000,
+				before: store.entries,
+				after: result.store.entries,
+			});
+		} catch (err) {
+			console.error(
+				`mistake log write failed: ${err instanceof Error ? err.message : String(err)}`,
+			);
+		}
+	}
 
 	const suggestions = new Map(
 		result.emitted.map(({ entry, suggestion }) => [entry.id, suggestion]),

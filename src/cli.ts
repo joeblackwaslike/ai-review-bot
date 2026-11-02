@@ -1228,12 +1228,20 @@ async function cmdGate(args: string[]): Promise<void> {
 		gitOut(["remote", "get-url", "origin"]),
 		root,
 	);
+	const runGit = defaultGitRunner(root);
 	const result = await runGate({
 		cwd: root,
 		owner,
 		repo,
 		base,
 		extra,
+		runGit,
+		mistakes: openMistakeLog({
+			owner,
+			repo,
+			source: "gate",
+			branch: branchForHead(runGit),
+		}),
 		findingsFile: process.env.NO_MISTAKES_FINDINGS_FILE || undefined,
 	});
 	console.log(result.stdout);
