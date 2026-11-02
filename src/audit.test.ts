@@ -136,6 +136,36 @@ describe("runAuditPass", () => {
 		errorSpy.mockRestore();
 	});
 
+	it("returns one agentReviews entry per successful agent keyed by skill basename", async () => {
+		const failing = TIER1_SKILLS[1];
+		(runAgent as ReturnType<typeof vi.fn>).mockImplementation(
+			async (skill: string) =>
+				skill === failing
+					? {
+							status: "error",
+							failure: { class: "unknown", retryable: false, errorName: "E" },
+							durationMs: 1,
+						}
+					: {
+							status: "ok",
+							review: buildModelReview(),
+							usage: { promptTokens: 1, completionTokens: 1 },
+						},
+		);
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const { agentReviews } = await runAuditPass({
+			files: [{ path: "a.ts", content: "x" }],
+			selection,
+			extraInstructions: "",
+			meta: { owner: "o", repo: "r", ref: "local" },
+		});
+		const base = (p: string) => (p.split("/").pop() ?? p).replace(/\.md$/, "");
+		expect(agentReviews.map((a) => a.skill)).toEqual(
+			TIER1_SKILLS.filter((s) => s !== failing).map(base),
+		);
+		expect(agentReviews[0].review).toBeDefined();
+	});
+
 	it("splits files across batches when content exceeds BATCH_BYTES", async () => {
 		(runAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
 			status: "ok",
@@ -809,6 +839,34 @@ describe("runReviewPasses", () => {
 		expect(result.agentsAttempted).toBe(2 * n);
 		expect(result.agentsSucceeded).toBe(n);
 		expect([...result.providersRun].sort()).toEqual(["anthropic", "openai"]);
+	});
+
+	it("returns agentReviews tagged with provider and model across both providers", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		(runAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
+			status: "ok",
+			review: buildModelReview(),
+			usage: { promptTokens: 1, completionTokens: 1 },
+		});
+		const { runReviewPasses } = await import("./audit.js");
+		const result = await runReviewPasses({
+			files: [{ path: "a.ts", content: "x" }],
+			meta: { owner: "o", repo: "r", ref: "range" },
+			resolveAuthFor: async (provider: Provider) => ({
+				mode: "api-key" as const,
+				provider,
+				apiKey: "k",
+			}),
+		});
+		const got = result.agentReviews ?? [];
+		expect(got).toHaveLength(2 * TIER1_SKILLS.length);
+		for (const [i, provider] of result.providersRun.entries()) {
+			const mine = got.filter((a) => a.provider === provider);
+			expect(mine).toHaveLength(TIER1_SKILLS.length);
+			expect(new Set(mine.map((a) => a.model))).toEqual(
+				new Set([result.models[i]]),
+			);
+		}
 	});
 });
 

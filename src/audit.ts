@@ -19,6 +19,7 @@ import {
 } from "./auth.js";
 import { mapWithConcurrency } from "./concurrency.js";
 import { parseAgentConcurrency } from "./config.js";
+import type { AgentReview } from "./mistakes/types.js";
 import { computeCost } from "./models.js";
 import { buildAuditUserMessage } from "./prompt.js";
 import {
@@ -96,9 +97,11 @@ export async function runAuditPass(opts: {
 	 * an `agentsSucceeded === 0` failure check on this being nonzero first,
 	 * or an empty-but-valid pass misreports as "every agent failed". */
 	agentsAttempted: number;
+	agentReviews: { skill: string; review: ModelReview }[];
 }> {
 	const { files, selection, extraInstructions, meta, auth } = opts;
 	const reviews: ModelReview[] = [];
+	const agentReviews: { skill: string; review: ModelReview }[] = [];
 	const usage: PassUsage = { promptTokens: 0, completionTokens: 0 };
 	let agentsSucceeded = 0;
 	let agentsAttempted = 0;
@@ -153,13 +156,18 @@ export async function runAuditPass(opts: {
 			stacks,
 		});
 		let batchSucceeded = 0;
-		for (const o of outcomes) {
+		for (const [i, o] of outcomes.entries()) {
 			if (o.status === "error" && o.usage) {
 				usage.promptTokens += o.usage.promptTokens;
 				usage.completionTokens += o.usage.completionTokens;
 			}
 			if (o.status === "ok") {
 				reviews.push(o.review);
+				const file = TIER1_SKILLS[i].split("/").pop() ?? TIER1_SKILLS[i];
+				agentReviews.push({
+					skill: file.replace(/\.md$/, ""),
+					review: o.review,
+				});
 				usage.promptTokens += o.usage.promptTokens;
 				usage.completionTokens += o.usage.completionTokens;
 				batchSucceeded += 1;
@@ -181,7 +189,7 @@ export async function runAuditPass(opts: {
 					inline_comments: [],
 				}
 			: mergeReviews(reviews);
-	return { review, usage, agentsSucceeded, agentsAttempted };
+	return { review, usage, agentsSucceeded, agentsAttempted, agentReviews };
 }
 
 export async function auditRepo({
@@ -643,6 +651,7 @@ export interface ReviewPassResult {
 	agentsAttempted: number;
 	agentsSucceeded: number;
 	providerStats: { provider: Provider; attempted: number; succeeded: number }[];
+	agentReviews?: AgentReview[];
 }
 
 /**
@@ -664,6 +673,7 @@ export async function runReviewPasses(opts: {
 			provider === "anthropic" ? resolveAnthropicAuth() : resolveOpenAIAuth());
 	const filePaths = files.map((f) => f.path);
 	const reviews: ModelReview[] = [];
+	const agentReviews: AgentReview[] = [];
 	const models: string[] = [];
 	const providersRun: Provider[] = [];
 	const providerStats: ReviewPassResult["providerStats"] = [];
@@ -693,6 +703,9 @@ export async function runReviewPasses(opts: {
 			auth,
 		});
 		reviews.push(pass.review);
+		for (const a of pass.agentReviews) {
+			agentReviews.push({ provider, model: selection.model, ...a });
+		}
 		models.push(selection.model);
 		providersRun.push(provider);
 		costUsd += computeCost(pass.usage, selection.model);
@@ -732,6 +745,7 @@ export async function runReviewPasses(opts: {
 		agentsAttempted,
 		agentsSucceeded,
 		providerStats,
+		agentReviews,
 	};
 }
 
