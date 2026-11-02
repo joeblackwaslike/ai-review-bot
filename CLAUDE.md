@@ -8,7 +8,7 @@ This file provides context and conventions for AI coding agents working on this 
 pnpm install
 pnpm typecheck    # tsc --noEmit — must pass before any commit
 pnpm lint         # biome check — must pass before any commit
-pnpm test         # vitest run (1813 passed, 4 skipped) — must pass before any commit
+pnpm test         # vitest run (1816 passed, 4 skipped) — must pass before any commit
 pnpm dev          # vercel dev — local server on :3000
 ```
 
@@ -52,6 +52,8 @@ Settled repeats are dropped per agent before this merge, and a re-review round w
 Findings carried from the previous review appear in the body's "Still open from the previous review" table. A carried finding whose file has left the PR moves to a "Retired, file no longer in this PR" block and no longer holds the PR at `REQUEST_CHANGES`. When the PR file list is cut short, nothing is retired, because a missing path proves nothing (see `docs/superpowers/specs/2026-10-30-vercel-parity-design.md`).
 
 **Diff anchor validation** (`buildReviewComments()`): Before submission, every inline comment is checked against the set of valid right-side line numbers extracted from the unified diff (`collectRightSideLines()`). The diff is shown to the agents with right-side line numbers (`numberPatchLines()` in `src/diff-lines.ts`), and a comment whose line is not in the diff is dropped, never moved. A dropped P0/P1 becomes a general finding and blocks; dropped P2/P3 are named in one plain sentence in the body that the next round's baseline does not read back as findings. Every drop is logged with a reason code (`OFF_DIFF_PATH`, `OFF_DIFF_LINE`, `BAD_RANGE`). A suggestion block that `repairSuggestion()` cannot place on the diff is dropped from a comment that still posts, and logged as `SUGGESTION_UNPLACEABLE` (or `SUGGESTION_RANGE_OFF_DIFF`). The valid lines come from the full GitHub patches, not the packed prompt text, so a comment on a line the packer cut still posts.
+
+**Summary is best-effort** (`src/review.ts` → `buildReview()`): the summary call is capped at 30s (`SUMMARY_TIMEOUT_MS`) and a thrown error is logged and replaced by the fixed fallback sentence, so a rate limit or timeout after the agents finish never discards their findings or the verdict.
 
 **Fallback retry** (`src/github-app.ts` → `maybeSubmitReview()`): If the GitHub Reviews API rejects the POST, the bot retries up to 3 times with exponential backoff. If all retries fail, it posts a regular PR comment preserving the findings.
 
