@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+command -v jq >/dev/null 2>&1 || { echo "pack-smoke needs jq" >&2; exit 1; }
+
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 name="$(jq -r .name "$root/package.json")"
 work="$(mktemp -d)"

@@ -145,4 +145,21 @@ describe("applyEnvOverlay", () => {
 		applyEnvOverlay(input, { REVIEW_ENABLED: "false" });
 		expect(input).toEqual(raw({ agentConcurrency: 2 }));
 	});
+
+	it("rejects prototype-polluting map keys without touching Object.prototype", () => {
+		const yaml = JSON.parse(
+			'{"version":1,"reviewers":{"__proto__":{"tiers":{"normal":{"model":"google/a"}}}}}',
+		);
+		const name = envNameForPath([
+			"reviewers",
+			"__proto__",
+			"tiers",
+			"normal",
+			"model",
+		]);
+		expect(() => applyEnvOverlay(yaml, { [name]: "polluted" })).toThrow(
+			/__proto__/,
+		);
+		expect(({} as Record<string, unknown>).tiers).toBeUndefined();
+	});
 });

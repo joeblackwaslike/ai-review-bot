@@ -78,11 +78,18 @@ export function renderConfigSection(): string {
 
 export function injectConfigSection(doc: string, section: string): string {
 	const start = doc.indexOf(DOCS_START);
-	const end = doc.indexOf(DOCS_END);
-	if (start === -1 && end === -1) return `${doc.trimEnd()}\n\n${section}\n`;
-	if (start === -1 || end === -1 || start > end) {
+	if (start === -1) {
+		if (doc.includes(DOCS_END)) {
+			throw new Error(`docs/configuration.md is missing ${DOCS_START}`);
+		}
+		return `${doc.trimEnd()}\n\n${section}\n`;
+	}
+	const end = doc.indexOf(DOCS_END, start);
+	if (end === -1) {
 		throw new Error(
-			`docs/configuration.md must contain ${DOCS_START} before ${DOCS_END}, or neither`,
+			doc.includes(DOCS_END)
+				? `docs/configuration.md has ${DOCS_END} before ${DOCS_START}`
+				: `docs/configuration.md is missing ${DOCS_END}`,
 		);
 	}
 	return doc.slice(0, start) + section + doc.slice(end + DOCS_END.length);

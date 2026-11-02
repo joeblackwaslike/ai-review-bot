@@ -111,19 +111,26 @@ describe("injectConfigSection", () => {
 
 	it("throws when the end marker is missing", () => {
 		expect(() => injectConfigSection(`a\n${DOCS_START}\nb`, section)).toThrow(
-			/before/,
+			/missing .*config-reference:end/,
 		);
 	});
 
 	it("throws when only the end marker exists", () => {
 		expect(() => injectConfigSection(`a\n${DOCS_END}\nb`, section)).toThrow(
-			/before/,
+			/missing .*config-reference:start/,
 		);
 	});
 
 	it("throws when the markers are reversed", () => {
 		expect(() =>
 			injectConfigSection(`${DOCS_END}\nx\n${DOCS_START}`, section),
-		).toThrow(/before/);
+		).toThrow(/config-reference:end -->.* before .*config-reference:start/);
+	});
+
+	it("finds the end marker after the start when a stray end comes first", () => {
+		const doc = `${DOCS_END}\nx\n${DOCS_START}\nold\n${DOCS_END}\ny\n`;
+		expect(injectConfigSection(doc, section)).toBe(
+			`${DOCS_END}\nx\n${section}\ny\n`,
+		);
 	});
 });

@@ -41,4 +41,16 @@ describe("GET /api/debug", () => {
 		]);
 		expect(JSON.stringify(body)).not.toContain("sk-ant-secret");
 	});
+
+	it("redacts the custom prompt text", () => {
+		vi.stubEnv("CUSTOM_REVIEW_PROMPT", "TOP-SECRET-PROMPT");
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		const body = call();
+		expect(body.config).toContainEqual({
+			path: "review.customPrompt",
+			value: "[set]",
+			source: "alias",
+		});
+		expect(JSON.stringify(body)).not.toContain("TOP-SECRET-PROMPT");
+	});
 });

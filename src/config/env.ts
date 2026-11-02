@@ -100,11 +100,23 @@ const getAt = (obj: unknown, path: readonly string[]): unknown =>
 		obj,
 	);
 
+const UNSAFE_KEYS: ReadonlySet<string> = new Set([
+	"__proto__",
+	"constructor",
+	"prototype",
+]);
+
 const setAt = (
 	obj: Record<string, unknown>,
 	path: readonly string[],
 	value: unknown,
 ): void => {
+	const unsafe = path.find((key) => UNSAFE_KEYS.has(key));
+	if (unsafe !== undefined) {
+		throw new Error(
+			`Config path ${path.join(".")} contains unsafe key "${unsafe}"`,
+		);
+	}
 	let cur = obj;
 	for (const key of path.slice(0, -1)) {
 		if (!isRecord(cur[key])) cur[key] = {};
