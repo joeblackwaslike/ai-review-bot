@@ -1,7 +1,7 @@
 const WINDOW = 3;
 const MIN_ANCHOR_CHARS = 8;
 const FENCE = /^\s*```[\w-]*\s*$/;
-const NUMBER_PREFIX = /^\s*(\d+)\s*[|:]\s?/;
+const COLON_NUMBER_PREFIX = /^\s*(\d+)\s*:\s?/;
 const PIPE_NUMBER_PREFIX = /^\s*(\d+)\s*\|\s?/;
 const NUMERIC_KEY = /^\s*\d+\s*:/;
 
@@ -31,33 +31,44 @@ function stripFence(lines: string[]): string[] {
 	return lines;
 }
 
-/** Drops `N |` and `N:` display prefixes. When a replaced file line itself
- * starts with a numeric key (`1: "one",`), `N:` is source syntax and only the
- * pipe form is stripped, with its usual +-WINDOW tolerance. Otherwise the
- * colon form strips only when its numbers land on the replaced range
- * exactly, so a suggestion that introduces its own numeric keys near the
- * range (rather than echoing real line numbers) is left alone. */
+/** Drops `N |` and `N:` display prefixes. The pipe form is display-only and
+ * strips when its numbers land within +-WINDOW of the replaced range. The
+ * colon form is also source syntax (`1: "one",`), so it strips only when its
+ * numbers land on the range exactly, and never when a replaced file line
+ * itself starts with a numeric key. */
 function stripNumberPrefixes(
 	lines: string[],
 	start: number,
 	end: number,
 	fileLines: FileLines,
 ): string[] {
-	const range = rangeLines(fileLines, start, end);
-	const usesPipeForm = range.some((l) => NUMERIC_KEY.test(l));
-	const prefix = usesPipeForm ? PIPE_NUMBER_PREFIX : NUMBER_PREFIX;
-	const numbers = lines.map((l) => Number(prefix.exec(l)?.[1] ?? NaN));
-	if (lines.length === 0 || numbers.some(Number.isNaN)) return lines;
-	const consecutive = numbers.every(
-		(n, i) => i === 0 || n === numbers[i - 1] + 1,
+	if (lines.length === 0) return lines;
+	const hasNumericKeys = rangeLines(fileLines, start, end).some((l) =>
+		NUMERIC_KEY.test(l),
 	);
-	const first = numbers[0];
-	const last = numbers[numbers.length - 1];
-	const matchesSpan = usesPipeForm
-		? Math.abs(first - start) <= WINDOW && Math.abs(last - end) <= WINDOW
-		: first === start && last === end;
-	if (!consecutive || !matchesSpan) return lines;
-	return lines.map((l) => l.replace(prefix, ""));
+	const forms = hasNumericKeys
+		? [{ prefix: PIPE_NUMBER_PREFIX, tolerance: WINDOW }]
+		: [
+				{ prefix: PIPE_NUMBER_PREFIX, tolerance: WINDOW },
+				{ prefix: COLON_NUMBER_PREFIX, tolerance: 0 },
+			];
+	for (const { prefix, tolerance } of forms) {
+		const numbers = lines.map((l) => Number(prefix.exec(l)?.[1] ?? NaN));
+		if (numbers.some(Number.isNaN)) continue;
+		const consecutive = numbers.every(
+			(n, i) => i === 0 || n === numbers[i - 1] + 1,
+		);
+		const first = numbers[0];
+		const last = numbers[numbers.length - 1];
+		if (
+			consecutive &&
+			Math.abs(first - start) <= tolerance &&
+			Math.abs(last - end) <= tolerance
+		) {
+			return lines.map((l) => l.replace(prefix, ""));
+		}
+	}
+	return lines;
 }
 
 function rangeLines(fileLines: FileLines, from: number, to: number): string[] {
@@ -130,12 +141,13 @@ function restoreIndentation(lines: string[], range: string[]): string[] {
  * line-number prefixes, restores a lost indentation, and widens the replaced
  * range when the suggestion repeats neighbouring file lines verbatim. It never
  * narrows the range, since an edge line the suggestion leaves out may be an
- * intended deletion. Never adds lines and never judges the content. A block
- * that is empty or only blank lines once cleaned is posted as is on the
- * original range (a deletion or a blank-line replacement).
+ * intended deletion. Never adds lines and never judges the content.
  *
- * Returns null only when the replaced range, or the range widened to, crosses
- * lines the diff does not show, so the caller keeps the comment without it. */
+ * Returns null when the replaced range, or the range widened to, crosses
+ * lines the diff does not show, and when the block is empty or only blank
+ * lines once cleaned (an empty value cannot be told from "no suggestion", and
+ * GitHub would apply it as a one-click deletion). The caller then keeps the
+ * comment without the block. */
 export function repairSuggestion(
 	input: RepairInput,
 ): RepairedSuggestion | null {
@@ -153,13 +165,7 @@ export function repairSuggestion(
 		end,
 		fileLines,
 	);
-	if (lines.every((l) => l.trim() === "")) {
-		return {
-			suggestion: lines.join("\n"),
-			line: end,
-			startLine: input.startLine,
-		};
-	}
+	if (lines.every((l) => l.trim() === "")) return null;
 
 	const s = findMatch(lines[0], start, fileLines);
 	const e = findMatch(lines[lines.length - 1], end, fileLines);

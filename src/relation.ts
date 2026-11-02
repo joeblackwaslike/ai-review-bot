@@ -49,7 +49,7 @@ export function entryForShortId(
 	return best;
 }
 
-/** The line a `caused_by` comment opens with: a link to the earlier thread when the entry came from an inline comment, else its title. */
+/** The line appended to a `caused_by` comment: a link to the earlier thread when the entry came from an inline comment, else its title. */
 export function causedByLine(
 	entry: LedgerEntry,
 	pr: { owner: string; repo: string; pullNumber: number },

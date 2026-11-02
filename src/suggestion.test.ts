@@ -236,19 +236,33 @@ describe("repairSuggestion", () => {
 		expect(repair(s, 6, null, hunks)).toBeNull();
 	});
 
-	it("posts an empty fence as a deletion of the range", () => {
-		expect(repair("```\n```", 12, 11)).toEqual({
-			suggestion: "",
-			line: 12,
-			startLine: 11,
-		});
+	it("drops an empty fence instead of posting a one-click deletion", () => {
+		expect(repair("```\n```", 12, 11)).toBeNull();
 	});
 
-	it("posts a whitespace-only block as is, on the original range", () => {
-		expect(repair("\n", 12, 11)).toEqual({
-			suggestion: "\n",
-			line: 12,
-			startLine: 11,
-		});
+	it("drops an empty suggestion", () => {
+		expect(repair("", 12, 11)).toBeNull();
+	});
+
+	it("drops a whitespace-only block instead of posting blank lines", () => {
+		expect(repair("\n", 12, 11)).toBeNull();
+	});
+
+	it("strips pipe prefixes that are off by one when the file has no numeric keys", () => {
+		expect(
+			repair("10 |     return total + 1;\n11 |   }", 12, 11)?.suggestion,
+		).toBe("    return total + 1;\n  }");
+	});
+
+	it("keeps colon prefixes that are off by one when the file has no numeric keys", () => {
+		const out = repair("10:     return total + 1;\n11:   }", 12, 11);
+		expect(out?.suggestion).toContain("10:");
+		expect(out?.suggestion).toContain("11:");
+	});
+
+	it("strips colon prefixes that land on the range exactly", () => {
+		expect(
+			repair("11:     return total + 1;\n12:   }", 12, 11)?.suggestion,
+		).toBe("    return total + 1;\n  }");
 	});
 });
