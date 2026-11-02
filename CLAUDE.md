@@ -8,7 +8,7 @@ This file provides context and conventions for AI coding agents working on this 
 pnpm install
 pnpm typecheck    # tsc --noEmit — must pass before any commit
 pnpm lint         # biome check — must pass before any commit
-pnpm test         # vitest run (1913 passed, 4 skipped) — must pass before any commit
+pnpm test         # vitest run (1945 passed, 6 skipped) — must pass before any commit
 pnpm dev          # vercel dev — local server on :3000
 ```
 
@@ -53,6 +53,8 @@ Findings carried from the previous review appear in the body's "Still open from 
 
 **Diff anchor validation** (`buildReviewComments()`): Before submission, every inline comment is checked against the set of valid right-side line numbers extracted from the unified diff (`collectRightSideLines()`). The diff is shown to the agents with right-side line numbers (`numberPatchLines()` in `src/diff-lines.ts`), and a comment whose line is not in the diff is dropped, never moved. A dropped P0/P1 becomes a general finding and blocks; dropped P2/P3 are named in one plain sentence in the body that the next round's baseline does not read back as findings. Every drop is logged with a reason code (`OFF_DIFF_PATH`, `OFF_DIFF_LINE`, `BAD_RANGE`). A suggestion block that `repairSuggestion()` cannot place on the diff is dropped from a comment that still posts, and logged as `SUGGESTION_UNPLACEABLE` (or `SUGGESTION_RANGE_OFF_DIFF`). The valid lines come from the full GitHub patches, not the packed prompt text, so a comment on a line the packer cut still posts.
 
+**Discard records** (`src/discards.ts`): every finding the pipeline drops or holds back is collected as a `Discard` with a reason (`SUPPRESSED_SETTLED`, `SUPPRESSED_OPEN`, `RETRACTION`, `OFF_DIFF` with its code, `CAP`, `DISCARDED_BY_VERIFY`, `RESOLVED_LOCATION`) and a disposition: `dropped` leaves the review, `held` still holds the verdict (open restatements). Each flagging skill gets its own record, attributed through the merge survivor's key. `buildReview()` wraps `buildReviewInner()` and flushes the list in a `finally`, so a failed run still records; the flush is bounded at 5s (`DISCARD_RECORD_TIMEOUT_MS`) and a rejection is logged, never surfaced. Each record logs a `finding discarded` line. When `IMPROVE_ENABLED` is set, `persistDiscards()` (`src/improve/capture.ts`) writes them to `finding_discards`, whose unique index covers provider, repo, PR, review sha, reason, natural key and `coalesce(skill, '')`, so a re-run is idempotent and five skills restating one finding stay five rows. Claim-dedupe collapses, the advisory P0/P1 cap into P2, and dropped suggestion blocks are not recorded.
+
 **Summary is best-effort** (`src/review.ts` → `buildReview()`): the summary call is capped at 30s (`SUMMARY_TIMEOUT_MS`) and a thrown error is logged and replaced by the fixed fallback sentence, so a rate limit or timeout after the agents finish never discards their findings or the verdict.
 
 **Fallback retry** (`src/github-app.ts` → `maybeSubmitReview()`): If the GitHub Reviews API rejects the POST, the bot retries up to 3 times with exponential backoff. If all retries fail, it posts a regular PR comment preserving the findings.
@@ -74,6 +76,7 @@ Findings carried from the previous review appear in the body's "Still open from 
 | `src/claim-dedupe.ts` | Near-duplicate claim clustering (`dedupeClaims()`, `isSameClaim()`) |
 | `src/diff-pack.ts` | `packDiff()` and `formatPackedDiff()`: PR-wide diff budget, file ordering, deletion-only hunk dropping under budget pressure, truncated and omitted files; `isGeneratedFile()` |
 | `src/suggestion.ts` | `repairSuggestion()`: cleans a model's suggestion block (fence, line-number prefixes, indentation, replaced range) before it is posted; never adds lines |
+| `src/discards.ts` | `Discard`, `DISCARD_REASONS`, `DISPOSITIONS`, `OFF_DIFF_CODES`, `discardKey()` (natural key for the unique index) and `logDiscards()`; the `finding_discards` table is in `src/improve/db/schema.ts` |
 | `src/diff-lines.ts` | Right-side line walk of a unified patch: `collectRightSideLines()`, `rightSideText()`, `numberPatchLines()` |
 | `src/retraction.ts` | Strict self-retraction phrase rule and `dropRetractions()`, applied in the posting path to P2/P3 suppressible findings only when `REVIEWER_TUNING.dropRetractions` is on (default off); the replay filter-margin report measures the same rule |
 | `src/ledger/fingerprint.ts` | Anchor-code and suggestion-code fingerprints and their `ai-review:fp`/`sfp` comment markers (match candidates only) |
