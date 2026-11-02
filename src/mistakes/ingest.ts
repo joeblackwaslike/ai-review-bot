@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import {
 	linkSync,
 	mkdirSync,
@@ -11,7 +11,7 @@ import {
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { gateRepoSlug, gateRoot } from "../gate/run.js";
-import { fileStamp, safeSegment } from "./log.js";
+import { safeSegment } from "./log.js";
 import {
 	decisionsFor,
 	type NoMistakesSource,
@@ -231,89 +231,47 @@ async function noMistakesEvents(opts: {
 	return events;
 }
 
-const MAX_WRITE_ATTEMPTS = 10;
-const LOCK_STALE_MS = 10 * 60 * 1000;
-
-function writeExclusive(dir: string, stem: string, data: string): string {
+/** Writes `records` to a content-addressed `ingest-<hash16>.jsonl`, so two overlapping ingests that computed the same record set publish to the same file. The name comes from the sorted dedupe keys (an annotation's `runId`, an event's `eventKey`), not the content order. */
+function publish(
+	dir: string,
+	records: (AnnotationRecord | EventRecord)[],
+): string {
+	const keys = records
+		.map((r) => (r.type === "annotation" ? r.runId : eventKey(r)))
+		.sort();
+	const hash = createHash("sha256")
+		.update(JSON.stringify(keys))
+		.digest("hex")
+		.slice(0, 16);
+	const file = join(dir, `ingest-${hash}.jsonl`);
 	const tmp = join(
 		dir,
 		`.ingest-${process.pid}-${randomBytes(6).toString("hex")}.tmp`,
 	);
+	const data = records.map((r) => `${JSON.stringify(r)}\n`).join("");
 	try {
 		writeFileSync(tmp, data, { flag: "wx", mode: 0o600 });
-		for (let attempt = 1; ; attempt++) {
-			const file = join(
-				dir,
-				`${stem}${attempt === 1 ? "" : `-${attempt}`}.jsonl`,
-			);
-			try {
-				linkSync(tmp, file);
-				return file;
-			} catch (error) {
-				const taken = (error as NodeJS.ErrnoException).code === "EEXIST";
-				if (!taken || attempt >= MAX_WRITE_ATTEMPTS) throw error;
-			}
+		try {
+			linkSync(tmp, file);
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
 		}
 	} finally {
 		rmSync(tmp, { force: true });
 	}
+	return file;
 }
 
-function lockHolderGone(path: string): boolean {
-	let content: string;
-	try {
-		content = readFileSync(path, "utf-8");
-	} catch (error) {
-		return (error as NodeJS.ErrnoException).code === "ENOENT";
-	}
-	const [pidText, tsText] = content.trim().split(" ");
-	const pid = Number(pidText);
-	const at = Number(tsText);
-	if (!Number.isInteger(pid) || !Number.isFinite(at)) return true;
-	if (Date.now() - at > LOCK_STALE_MS) return true;
-	try {
-		process.kill(pid, 0);
-		return false;
-	} catch (error) {
-		return (error as NodeJS.ErrnoException).code === "ESRCH";
-	}
-}
-
-function acquireLock(dir: string, repo: string): () => void {
-	mkdirSync(dir, { recursive: true, mode: 0o700 });
-	const path = join(dir, ".ingest.lock");
-	for (let attempt = 0; attempt < 2; attempt++) {
-		try {
-			writeFileSync(path, `${process.pid} ${Date.now()}`, {
-				flag: "wx",
-				mode: 0o600,
-			});
-			return () => rmSync(path, { force: true });
-		} catch (error) {
-			if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-			if (!lockHolderGone(path)) break;
-			rmSync(path, { force: true });
-		}
-	}
-	throw new Error(
-		`mistakes ingest: another ingest is running for ${repo} (lock ${path})`,
-	);
-}
-
-/** Resolves gate runs with no implementer to a Claude Code session and records no-mistakes decisions for captured branches and heads, appending both to a new `ingest-<stamp>.jsonl` beside the capture files. Capture files are only read. Annotations and events already written by an earlier ingest are not repeated. */
+/** Resolves gate runs with no implementer to a Claude Code session and records no-mistakes decisions for captured branches and heads, appending both to a content-addressed `ingest-<hash>.jsonl` beside the capture files. Capture files are only read. Annotations and events already written by an earlier ingest are not repeated. */
 export async function ingest(opts: IngestOptions): Promise<IngestResult> {
 	const repo = opts.repo ?? currentRepoSlug();
 	const [owner, name] = repo.split("/");
 	const dir = join(opts.root, `${safeSegment(owner)}__${safeSegment(name)}`);
-	const release = acquireLock(dir, repo);
-	try {
-		return await ingestLocked(opts, repo, name, dir);
-	} finally {
-		release();
-	}
+	mkdirSync(dir, { recursive: true, mode: 0o700 });
+	return await ingestInto(opts, repo, name, dir);
 }
 
-async function ingestLocked(
+async function ingestInto(
 	opts: IngestOptions,
 	repo: string,
 	name: string | undefined,
@@ -420,10 +378,6 @@ async function ingestLocked(
 	lines.push(...events);
 
 	if (lines.length === 0) return result;
-	result.file = writeExclusive(
-		dir,
-		`ingest-${fileStamp(started)}`,
-		lines.map((l) => `${JSON.stringify(l)}\n`).join(""),
-	);
+	result.file = publish(dir, lines);
 	return result;
 }

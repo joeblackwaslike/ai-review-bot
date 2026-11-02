@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import {
 	chmodSync,
-	existsSync,
 	mkdirSync,
 	mkdtempSync,
 	readdirSync,
@@ -28,7 +27,7 @@ vi.mock("node:fs", async (importOriginal) => {
 });
 
 import { ingest } from "./ingest.js";
-import { fileStamp, openMistakeLog } from "./log.js";
+import { openMistakeLog } from "./log.js";
 import type { NoMistakesRound, NoMistakesSource } from "./nomistakes.js";
 import { type Implementer, MistakeRecord } from "./types.js";
 
@@ -186,9 +185,7 @@ describe("ingest", () => {
 
 		expect(res.resolved).toEqual({ byReviewRow: 1, byTranscript: 0 });
 		expect(res.unresolved).toBe(0);
-		expect(res.file).toMatch(
-			/o__ai-review-bot\/ingest-2026-11-02T00-00-00-000Z\.jsonl$/,
-		);
+		expect(res.file).toMatch(/o__ai-review-bot\/ingest-[0-9a-f]{16}\.jsonl$/);
 		const out = readOutput(res.file);
 		expect(out).toEqual([
 			{
@@ -619,7 +616,7 @@ describe("ingest", () => {
 		},
 	);
 
-	it("retries with a numbered suffix when the ingest file name is taken", async () => {
+	it("skips publishing silently when the content-addressed file already exists", async () => {
 		const root = tempDir();
 		capture(root, {
 			source: "gate",
@@ -627,22 +624,19 @@ describe("ingest", () => {
 			at: "2026-11-01T12:00:00.000Z",
 			implementer: claude("s-env"),
 		});
-		const now = new Date("2026-11-02T00:00:00.000Z");
-		const dir = join(root, `${OWNER}__${REPO}`);
-		const taken = `ingest-${fileStamp(now)}`;
-		writeFileSync(join(dir, `${taken}.jsonl`), "");
-		writeFileSync(join(dir, `${taken}-2.jsonl`), "");
+		const noMistakes = () =>
+			fakeNoMistakes([{ id: "NMRUN1", branch: "feat/x", headSha: "aaaa" }], {
+				NMRUN1: [DECIDED_ROUND],
+			});
+		const first = await run(root, { noMistakes: noMistakes() });
+		writeFileSync(first.file as string, "stale content from an earlier run");
 
-		const res = await run(root, {
-			now: () => now,
-			noMistakes: fakeNoMistakes(
-				[{ id: "NMRUN1", branch: "feat/x", headSha: "aaaa" }],
-				{ NMRUN1: [DECIDED_ROUND] },
-			),
-		});
+		const res = await run(root, { noMistakes: noMistakes() });
 
-		expect(res.file).toBe(join(dir, `${taken}-3.jsonl`));
-		expect(readOutput(res.file)).toHaveLength(1);
+		expect(res.file).toBe(first.file);
+		expect(readFileSync(res.file as string, "utf-8")).toBe(
+			"stale content from an earlier run",
+		);
 	});
 
 	it("preserves the review's implementer agent when resolving a gate run", async () => {
@@ -807,9 +801,7 @@ describe("ingest", () => {
 		});
 	});
 
-	describe("locking and atomic publish", () => {
-		const lockPath = (root: string) =>
-			join(root, `${OWNER}__${REPO}`, ".ingest.lock");
+	describe("content-addressed atomic publish", () => {
 		const gateCapture = (root: string) =>
 			capture(root, {
 				source: "gate",
@@ -829,52 +821,70 @@ describe("ingest", () => {
 		it("keeps dedupe intact when two ingests race for one repo", async () => {
 			const root = tempDir();
 			gateCapture(root);
-			const results = await Promise.allSettled([
+			await Promise.all([
 				run(root, { noMistakes: nm() }),
 				run(root, { noMistakes: nm() }),
 			]);
-			const rejected = results.filter((r) => r.status === "rejected");
-			expect(rejected.length).toBeLessThanOrEqual(1);
-			for (const r of rejected)
-				expect(String(r.reason)).toMatch(/another ingest is running/);
 			const dir = join(root, `${OWNER}__${REPO}`);
+			const names = readdirSync(dir);
+			expect(ingestFiles(root)).toHaveLength(1);
+			expect(names.filter((f) => f.endsWith(".tmp"))).toEqual([]);
 			const records = ingestFiles(root).flatMap((f) =>
 				readOutput(join(dir, f)),
 			);
 			expect(records.filter((r) => r.type === "event")).toHaveLength(1);
 			expect(records.filter((r) => r.type === "annotation")).toHaveLength(0);
-			expect(existsSync(lockPath(root))).toBe(false);
 		});
 
-		it("takes over a lock held by a dead pid", async () => {
+		it("names the output file by the hash of its record set", async () => {
 			const root = tempDir();
 			gateCapture(root);
-			writeFileSync(lockPath(root), `999999999 ${Date.now()}`);
 			const res = await run(root, { noMistakes: nm() });
-			expect(res.events).toBe(1);
-			expect(existsSync(lockPath(root))).toBe(false);
+			const events = readOutput(res.file).filter((r) => r.type === "event");
+			const keys = events
+				.map((e) =>
+					JSON.stringify([
+						e.runId,
+						e.findingId,
+						e.status,
+						e.atHead,
+						e.by,
+						e.step ?? null,
+					]),
+				)
+				.sort();
+			const hash = createHash("sha256")
+				.update(JSON.stringify(keys))
+				.digest("hex")
+				.slice(0, 16);
+			expect(res.file).toMatch(`ingest-${hash}.jsonl`);
 		});
 
-		it("refuses to run while a live process holds a fresh lock", async () => {
+		it("gives a different record set a different file name", async () => {
 			const root = tempDir();
 			gateCapture(root);
-			writeFileSync(lockPath(root), `${process.pid} ${Date.now()}`);
-			await expect(run(root, { noMistakes: nm() })).rejects.toThrow(
-				/mistakes ingest: another ingest is running for o\/ai-review-bot/,
+			const first = await run(root, { noMistakes: nm() });
+			const otherRound: NoMistakesRound = {
+				...DECIDED_ROUND,
+				findingsJson: JSON.stringify({
+					findings: [
+						{
+							id: "f2",
+							severity: "error",
+							file: "src/b.ts",
+							description: "Other bug",
+						},
+					],
+				}),
+				selectedFindingIds: '["f2"]',
+			};
+			const differentNm = fakeNoMistakes(
+				[{ id: "NMRUN1", branch: "feat/x", headSha: "aaaa" }],
+				{ NMRUN1: [otherRound] },
 			);
-			expect(existsSync(lockPath(root))).toBe(true);
-		});
-
-		it("releases the lock when ingest fails", async () => {
-			const root = tempDir();
-			gateCapture(root);
-			failure.link = true;
-			try {
-				await expect(run(root, { noMistakes: nm() })).rejects.toThrow();
-			} finally {
-				failure.link = false;
-			}
-			expect(existsSync(lockPath(root))).toBe(false);
+			const second = await run(root, { noMistakes: differentNm });
+			expect(second.file).not.toBe(first.file);
+			expect(ingestFiles(root)).toHaveLength(2);
 		});
 
 		it("leaves no ingest file and no temp file when publishing fails", async () => {

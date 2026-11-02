@@ -1,4 +1,7 @@
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
 	decisionsFor,
@@ -7,6 +10,15 @@ import {
 	type SqliteExec,
 	sqliteNoMistakesSource,
 } from "./nomistakes.js";
+
+const hasSqlite3 = (() => {
+	try {
+		execFileSync("sqlite3", ["-version"], { stdio: "ignore" });
+		return true;
+	} catch {
+		return false;
+	}
+})();
 
 const fixture = (name: string) =>
 	readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf-8");
@@ -264,3 +276,61 @@ describe("decisionsFor", () => {
 		expect(skipped).toBe(0);
 	});
 });
+
+describe.skipIf(!hasSqlite3)(
+	"sqliteNoMistakesSource against a real sqlite3 database",
+	() => {
+		it("reads runs and decisions through the production schema", async () => {
+			const dir = mkdtempSync(join(tmpdir(), "nomistakes-sqlite-"));
+			const dbPath = join(dir, "state.sqlite");
+			try {
+				execFileSync(
+					"sqlite3",
+					[
+						dbPath,
+						`
+CREATE TABLE repos (id TEXT PRIMARY KEY, working_path TEXT NOT NULL UNIQUE, upstream_url TEXT NOT NULL, created_at INTEGER NOT NULL);
+CREATE TABLE runs (id TEXT PRIMARY KEY, repo_id TEXT NOT NULL REFERENCES repos(id), branch TEXT NOT NULL, head_sha TEXT NOT NULL, created_at INTEGER NOT NULL);
+CREATE TABLE step_results (id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES runs(id), step_name TEXT NOT NULL, step_order INTEGER NOT NULL, status TEXT NOT NULL, findings_json TEXT);
+CREATE TABLE step_rounds (id TEXT PRIMARY KEY, step_result_id TEXT NOT NULL REFERENCES step_results(id), round INTEGER NOT NULL, findings_json TEXT, reviewed_head_sha TEXT, selected_finding_ids TEXT, selection_source TEXT, created_at INTEGER NOT NULL);
+
+INSERT INTO repos VALUES ('repo1', '/work/match', 'https://github.com/o/r.git', 1000);
+INSERT INTO repos VALUES ('repo2', '/work/other', 'https://github.com/o/other.git', 1000);
+
+INSERT INTO runs VALUES ('run1', 'repo1', 'feat/x', 'aaaa', 2000);
+INSERT INTO runs VALUES ('run2', 'repo2', 'feat/y', 'bbbb', 2000);
+
+INSERT INTO step_results VALUES ('step1', 'run1', 'gate.review.ai-review', 1, 'completed', NULL);
+
+INSERT INTO step_rounds VALUES ('round1', 'step1', 1, '{"findings":[{"id":"f1","severity":"error","file":"src/a.ts","description":"Bug"}]}', 'aaaa', '["f1"]', 'user', 3000);
+`,
+					],
+					{ encoding: "utf-8" },
+				);
+
+				const src = sqliteNoMistakesSource({ dbPath });
+				const runs = await src.runs("o/r");
+				expect(runs).toEqual([
+					{ id: "run1", branch: "feat/x", headSha: "aaaa" },
+				]);
+
+				const rounds = await src.rounds("run1");
+				const { decisions } = decisionsFor(runs[0] as NoMistakesRun, rounds);
+				expect(decisions).toEqual([
+					{
+						findingId: "f1",
+						step: "gate.review.ai-review",
+						status: "approved",
+						note: "selected-for-fix",
+						atHead: "aaaa",
+						path: "src/a.ts",
+						title: "Bug",
+						severity: "error",
+					},
+				]);
+			} finally {
+				rmSync(dir, { recursive: true, force: true });
+			}
+		});
+	},
+);
