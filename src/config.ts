@@ -1,4 +1,4 @@
-import { DEFAULT_DIFF_BUDGET_CHARS } from "./diff-pack.js";
+import { getConfigTree } from "./config/load.js";
 
 export interface AppConfig {
 	appId: string;
@@ -81,29 +81,23 @@ export function validatePrivateKey(key: string): string {
  * counted as skipped, so the run submits what it has instead of being killed
  * with nothing posted. */
 export function parseAgentBudgetMs(): number {
-	const raw = Number(process.env.REVIEW_AGENT_BUDGET_SECONDS ?? "210");
+	const seconds = getConfigTree().review.agentBudgetSeconds;
 	// Rounded in milliseconds, not seconds. Flooring seconds first turned any
-	// sub-second value into a 0ms budget, which passes the positive check above
-	// and then skips every agent — a review that silently does nothing.
-	const ms = Number.isFinite(raw) && raw > 0 ? Math.floor(raw * 1000) : 210_000;
-	return Math.max(1, ms);
+	// sub-second value into a 0ms budget, which skips every agent — a review
+	// that silently does nothing.
+	return Math.max(1, Math.floor(seconds * 1000));
 }
 
-/** `REVIEW_DIFF_BUDGET_CHARS` as a positive integer; anything else gives the
- * default. */
+/** `review.diffBudgetChars`: PR-wide character budget for the serialized diff. */
 export function parseDiffBudgetChars(): number {
-	const raw = Number(process.env.REVIEW_DIFF_BUDGET_CHARS);
-	return Number.isInteger(raw) && raw > 0 ? raw : DEFAULT_DIFF_BUDGET_CHARS;
+	return getConfigTree().review.diffBudgetChars;
 }
 
 /** Sequential agents cannot fit a review in the 300s Hobby cap (measured 212s at
  * 1 vs 75s at 4 on a 14-file diff, same cost, no 429s). Lower it if a provider's
  * input-tokens-per-minute limit starts rejecting the burst. */
 export function parseAgentConcurrency(): number {
-	return Math.max(
-		1,
-		Math.floor(Number(process.env.AGENT_CONCURRENCY ?? "4")) || 4,
-	);
+	return getConfigTree().review.agentConcurrency;
 }
 
 // Parse a delay env var expressed in seconds into milliseconds. A missing,
@@ -130,6 +124,8 @@ export interface GetConfigOptions {
 
 export function getConfig(opts: GetConfigOptions = {}): AppConfig {
 	const requireWebhookSecret = opts.requireWebhookSecret ?? true;
+	const tree = getConfigTree();
+	const review = tree.review;
 	return {
 		appId: getRequiredEnv("GITHUB_APP_ID"),
 		privateKey: validatePrivateKey(
@@ -138,35 +134,34 @@ export function getConfig(opts: GetConfigOptions = {}): AppConfig {
 		webhookSecret: requireWebhookSecret
 			? getRequiredEnv("GITHUB_WEBHOOK_SECRET")
 			: (process.env.GITHUB_WEBHOOK_SECRET ?? ""),
-		reviewEnabled: process.env.REVIEW_ENABLED !== "false",
-		reviewDelayMs: parseDelayMs(process.env.REVIEW_DELAY_SECONDS, 0),
-		reviewResyncDelayMs: parseDelayMs(
-			process.env.REVIEW_RESYNC_DELAY_SECONDS,
-			0,
-		),
+		reviewEnabled: review.enabled,
+		reviewDelayMs: review.delaySeconds * 1000,
+		reviewResyncDelayMs: review.resyncDelaySeconds * 1000,
 		reviewCommentPrefix: firstNonBlank(
 			process.env.REVIEW_COMMENT_PREFIX,
 			"ai-review-bot",
 		),
-		reviewCommand: process.env.REVIEW_COMMAND ?? "/ai-review",
+		reviewCommand: review.command,
 		provider: "anthropic",
-		feedbackEnabled: process.env.FEEDBACK_ENABLED === "true",
-		improveEnabled: process.env.IMPROVE_ENABLED === "true",
-		improveCarrierEnabled: process.env.IMPROVE_CARRIER_ENABLED === "true",
+		feedbackEnabled: review.feedbackEnabled,
+		improveEnabled: tree.improve.enabled,
+		improveCarrierEnabled: tree.improve.carrierEnabled,
 		agentConcurrency: parseAgentConcurrency(),
 		agentBudgetMs: parseAgentBudgetMs(),
 		diffBudgetChars: parseDiffBudgetChars(),
-		tier2Enabled: process.env.REVIEW_TIER2_ENABLED !== "false",
+		tier2Enabled: review.tier2Enabled,
 		qstashToken: process.env.QSTASH_TOKEN,
 		qstashCurrentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY,
 		qstashNextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY,
-		qstashUrl: process.env.QSTASH_URL,
-		publicUrl: process.env.PUBLIC_URL,
+		qstashUrl: tree.infra.qstashUrl,
+		publicUrl: tree.infra.publicUrl,
 	};
 }
 
 export function getOpenAIAppConfig(opts: GetConfigOptions = {}): AppConfig {
 	const requireWebhookSecret = opts.requireWebhookSecret ?? true;
+	const tree = getConfigTree();
+	const review = tree.review;
 	return {
 		appId: getRequiredEnv("OPENAI_APP_ID"),
 		privateKey: validatePrivateKey(
@@ -175,31 +170,28 @@ export function getOpenAIAppConfig(opts: GetConfigOptions = {}): AppConfig {
 		webhookSecret: requireWebhookSecret
 			? getRequiredEnv("OPENAI_APP_WEBHOOK_SECRET")
 			: (process.env.OPENAI_APP_WEBHOOK_SECRET ?? ""),
-		reviewEnabled: process.env.REVIEW_ENABLED !== "false",
-		reviewDelayMs: parseDelayMs(process.env.REVIEW_DELAY_SECONDS, 0),
-		reviewResyncDelayMs: parseDelayMs(
-			process.env.REVIEW_RESYNC_DELAY_SECONDS,
-			0,
-		),
+		reviewEnabled: review.enabled,
+		reviewDelayMs: review.delaySeconds * 1000,
+		reviewResyncDelayMs: review.resyncDelaySeconds * 1000,
 		reviewCommentPrefix: firstNonBlank(
 			process.env.OPENAI_REVIEW_COMMENT_PREFIX,
 			process.env.REVIEW_COMMENT_PREFIX,
 			"codex-review-bot",
 		),
-		reviewCommand: process.env.REVIEW_COMMAND ?? "/ai-review",
+		reviewCommand: review.command,
 		provider: "openai",
-		feedbackEnabled: process.env.FEEDBACK_ENABLED === "true",
-		improveEnabled: process.env.IMPROVE_ENABLED === "true",
-		improveCarrierEnabled: process.env.IMPROVE_CARRIER_ENABLED === "true",
+		feedbackEnabled: review.feedbackEnabled,
+		improveEnabled: tree.improve.enabled,
+		improveCarrierEnabled: tree.improve.carrierEnabled,
 		agentConcurrency: parseAgentConcurrency(),
 		agentBudgetMs: parseAgentBudgetMs(),
 		diffBudgetChars: parseDiffBudgetChars(),
-		tier2Enabled: process.env.REVIEW_TIER2_ENABLED !== "false",
+		tier2Enabled: review.tier2Enabled,
 		qstashToken: process.env.QSTASH_TOKEN,
 		qstashCurrentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY,
 		qstashNextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY,
-		qstashUrl: process.env.QSTASH_URL,
-		publicUrl: process.env.PUBLIC_URL,
+		qstashUrl: tree.infra.qstashUrl,
+		publicUrl: tree.infra.publicUrl,
 	};
 }
 

@@ -23,6 +23,7 @@ import {
 import { dedupeClaims, isSameClaim, withAbsorbedLink } from "./claim-dedupe.js";
 import { commentKey } from "./comment-key.js";
 import { mapWithConcurrency } from "./concurrency.js";
+import { getConfigTree } from "./config/load.js";
 import { collectRightSideLines, rightSideText } from "./diff-lines.js";
 import {
 	type Discard,
@@ -2015,7 +2016,7 @@ async function buildReviewInner(
 	}
 
 	const customPrompt =
-		process.env.CUSTOM_REVIEW_PROMPT ??
+		getConfigTree().review.customPrompt ??
 		"Focus on correctness, security, regressions, and missing tests.";
 
 	const filePaths = files.map((f) => f.filename);

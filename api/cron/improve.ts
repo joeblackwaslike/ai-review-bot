@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { getConfigTree } from "../../src/config/load.js";
 import { getConfig } from "../../src/config.js";
 import type { KvClient } from "../../src/feedback/kv.js";
 import { createUpstashKv } from "../../src/feedback/kv.js";
@@ -24,7 +25,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 	const { status, body } = await improveRequest({
 		authorization: req.headers.authorization,
 		secret: process.env.CRON_SECRET,
-		improveEnabled: process.env.IMPROVE_ENABLED === "true",
+		improveEnabled: getConfigTree().improve.enabled,
 		run: async () => {
 			const slug =
 				process.env.IMPROVE_TARGET_REPO ?? "joeblackwaslike/ai-review-bot";

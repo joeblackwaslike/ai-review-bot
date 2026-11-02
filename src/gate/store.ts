@@ -4,6 +4,7 @@ import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { PROVIDERS, type Provider } from "../auth.js";
+import { getConfigTree } from "../config/load.js";
 import { isEntry } from "../ledger/file.js";
 import type { Ledger } from "../ledger/types.js";
 import type { GitRunner } from "../sources.js";
@@ -85,9 +86,7 @@ export function storeKey(
 
 export function gateStorePath(key: string, dir?: string): string {
 	const base =
-		dir ??
-		process.env.AI_REVIEW_GATE_DIR ??
-		join(homedir(), ".ai-review", "gate");
+		dir ?? getConfigTree().cli.gateDir ?? join(homedir(), ".ai-review", "gate");
 	return join(base, `${key}.json`);
 }
 

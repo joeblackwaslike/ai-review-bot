@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { resetConfigForTests } from "./config/load.js";
 import { getConfig, getOpenAIAppConfig, parseAgentBudgetMs } from "./config.js";
 
 const PKCS8_KEY =
@@ -44,6 +45,9 @@ afterEach(() => {
 		"REVIEW_RESYNC_DELAY_SECONDS",
 		"AGENT_CONCURRENCY",
 		"REVIEW_TIER2_ENABLED",
+		"REVIEW_COMMAND",
+		"REVIEW_DIFF_BUDGET_CHARS",
+		"IMPROVE_ENABLED",
 		"QSTASH_TOKEN",
 		"QSTASH_CURRENT_SIGNING_KEY",
 		"QSTASH_NEXT_SIGNING_KEY",
@@ -92,10 +96,21 @@ describe("review delay parsing", () => {
 		expect(getConfig().reviewDelayMs).toBe(0);
 	});
 
-	it("falls back to the default for non-numeric, blank, or negative values", () => {
-		for (const bad of ["abc", "", "   ", "-30"]) {
-			setRequiredEnv({ REVIEW_DELAY_SECONDS: bad });
+	it("treats blank values as unset", () => {
+		for (const blank of ["", "   "]) {
+			setRequiredEnv({ REVIEW_DELAY_SECONDS: blank });
 			expect(getConfig().reviewDelayMs).toBe(0);
+			resetConfigForTests();
+		}
+	});
+
+	it("now throws on non-numeric or negative values instead of falling back", () => {
+		for (const bad of ["abc", "-30"]) {
+			resetConfigForTests();
+			setRequiredEnv({ REVIEW_DELAY_SECONDS: bad });
+			expect(() => getConfig()).toThrow(
+				/review\.delaySeconds|REVIEW_DELAY_SECONDS/,
+			);
 		}
 	});
 });
@@ -113,9 +128,18 @@ describe("IMPROVE_CARRIER_ENABLED", () => {
 		setOpenAIEnv();
 		expect(getConfig().improveCarrierEnabled).toBe(true);
 		expect(getOpenAIAppConfig().improveCarrierEnabled).toBe(true);
-		for (const other of ["false", "1", "TRUE", "yes", ""]) {
-			process.env.IMPROVE_CARRIER_ENABLED = other;
+		for (const off of ["false", "", "  "]) {
+			resetConfigForTests();
+			process.env.IMPROVE_CARRIER_ENABLED = off;
 			expect(getConfig().improveCarrierEnabled).toBe(false);
+		}
+	});
+
+	it("now throws on a malformed boolean instead of reading it as off", () => {
+		for (const bad of ["1", "yes"]) {
+			resetConfigForTests();
+			setRequiredEnv({ IMPROVE_CARRIER_ENABLED: bad });
+			expect(() => getConfig()).toThrow(/IMPROVE_CARRIER_ENABLED/);
 		}
 	});
 });
@@ -206,10 +230,12 @@ describe("feedbackEnabled", () => {
 		setRequiredEnv();
 		delete process.env.FEEDBACK_ENABLED;
 		expect(getConfig().feedbackEnabled).toBe(false);
+		resetConfigForTests();
 		process.env.FEEDBACK_ENABLED = "true";
 		expect(getConfig().feedbackEnabled).toBe(true);
+		resetConfigForTests();
 		process.env.FEEDBACK_ENABLED = "1";
-		expect(getConfig().feedbackEnabled).toBe(false); // only exact "true" enables
+		expect(() => getConfig()).toThrow(/FEEDBACK_ENABLED/);
 		delete process.env.FEEDBACK_ENABLED;
 	});
 });
@@ -255,12 +281,16 @@ describe("agentConcurrency", () => {
 		setRequiredEnv();
 		delete process.env.AGENT_CONCURRENCY;
 		expect(getConfig().agentConcurrency).toBe(4);
+		resetConfigForTests();
 		process.env.AGENT_CONCURRENCY = "3";
 		expect(getConfig().agentConcurrency).toBe(3);
-		process.env.AGENT_CONCURRENCY = "abc";
-		expect(getConfig().agentConcurrency).toBe(4);
-		process.env.AGENT_CONCURRENCY = "0";
-		expect(getConfig().agentConcurrency).toBe(4);
+		for (const bad of ["abc", "0"]) {
+			resetConfigForTests();
+			process.env.AGENT_CONCURRENCY = bad;
+			expect(() => getConfig()).toThrow(
+				/AGENT_CONCURRENCY|review\.agentConcurrency/,
+			);
+		}
 		delete process.env.AGENT_CONCURRENCY;
 	});
 });
@@ -335,7 +365,17 @@ describe("parseAgentBudgetMs", () => {
 		expect(parseAgentBudgetMs()).toBe(1);
 	});
 
-	it.each(["0", "-5", "abc", ""])("falls back to the default on %s", (raw) => {
+	it.each(["0", "-5", "abc"])("a malformed value %s now throws", (raw) => {
+		process.env.REVIEW_AGENT_BUDGET_SECONDS = raw;
+		expect(() => parseAgentBudgetMs()).toThrow(
+			/REVIEW_AGENT_BUDGET_SECONDS|review\.agentBudgetSeconds/,
+		);
+	});
+
+	it.each([
+		"",
+		"   ",
+	])("a blank value %j is unset and gives the default", (raw) => {
 		process.env.REVIEW_AGENT_BUDGET_SECONDS = raw;
 		expect(parseAgentBudgetMs()).toBe(210_000);
 	});
@@ -345,16 +385,66 @@ describe("diffBudgetChars", () => {
 	it.each([
 		[undefined, 200_000],
 		["50000", 50_000],
-		["abc", 200_000],
-		["0", 200_000],
-		["-5", 200_000],
-		["1.5", 200_000],
 		["", 200_000],
 	])("REVIEW_DIFF_BUDGET_CHARS=%s gives %i", (raw, expected) => {
 		setRequiredEnv();
 		if (raw === undefined) delete process.env.REVIEW_DIFF_BUDGET_CHARS;
 		else process.env.REVIEW_DIFF_BUDGET_CHARS = raw;
 		expect(getConfig().diffBudgetChars).toBe(expected);
-		delete process.env.REVIEW_DIFF_BUDGET_CHARS;
+	});
+
+	it.each(["abc", "0", "-5", "1.5"])("%s now throws", (raw) => {
+		setRequiredEnv({ REVIEW_DIFF_BUDGET_CHARS: raw });
+		expect(() => getConfig()).toThrow(
+			/REVIEW_DIFF_BUDGET_CHARS|review\.diffBudgetChars/,
+		);
+	});
+});
+
+describe("config tree wiring", () => {
+	it("getConfig reproduces the legacy defaults with an empty env", () => {
+		setRequiredEnv();
+		expect(getConfig()).toEqual({
+			appId: "123",
+			privateKey: PKCS8_KEY,
+			webhookSecret: "secret",
+			reviewEnabled: true,
+			reviewDelayMs: 0,
+			reviewResyncDelayMs: 0,
+			reviewCommentPrefix: "ai-review-bot",
+			reviewCommand: "/ai-review",
+			provider: "anthropic",
+			feedbackEnabled: false,
+			improveEnabled: false,
+			improveCarrierEnabled: false,
+			agentConcurrency: 4,
+			agentBudgetMs: 210_000,
+			diffBudgetChars: 200_000,
+			tier2Enabled: true,
+			qstashToken: undefined,
+			qstashCurrentSigningKey: undefined,
+			qstashNextSigningKey: undefined,
+			qstashUrl: undefined,
+			publicUrl: undefined,
+		});
+	});
+
+	it("AGENT_CONCURRENCY=2 sets concurrency through the alias and warns once", () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		setRequiredEnv({ AGENT_CONCURRENCY: "2" });
+		expect(getConfig().agentConcurrency).toBe(2);
+		expect(getConfig().agentConcurrency).toBe(2);
+		expect(warn).toHaveBeenCalledTimes(1);
+		expect(warn).toHaveBeenCalledWith(
+			expect.stringContaining("AGENT_CONCURRENCY is deprecated"),
+		);
+		warn.mockRestore();
+	});
+
+	it("getOpenAIAppConfig keeps provider openai and its own prefix default", () => {
+		setOpenAIEnv();
+		const c = getOpenAIAppConfig();
+		expect(c.provider).toBe("openai");
+		expect(c.reviewCommentPrefix).toBe("codex-review-bot");
 	});
 });

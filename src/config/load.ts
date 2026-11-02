@@ -61,7 +61,10 @@ export function loadConfig(opts: LoadOptions = {}): LoadedConfig {
 let memo: LoadedConfig | undefined;
 
 export function getLoadedConfig(): LoadedConfig {
-	memo ??= loadConfig();
+	if (!memo) {
+		memo = loadConfig();
+		for (const warning of memo.warnings) console.warn(`config: ${warning}`);
+	}
 	return memo;
 }
 

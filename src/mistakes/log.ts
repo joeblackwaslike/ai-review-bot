@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { getConfigTree } from "../config/load.js";
 import type { ModelReview } from "../review.js";
 import type {
 	AgentReview,
@@ -46,8 +47,7 @@ export function findingKey(f: { path: string | null; title: string }): string {
 /** Mistake log root: `AI_REVIEW_MISTAKES_DIR`, else `~/.ai-review/mistakes`. */
 export function mistakesRoot(): string {
 	return (
-		process.env.AI_REVIEW_MISTAKES_DIR ||
-		join(homedir(), ".ai-review", "mistakes")
+		getConfigTree().cli.mistakesDir || join(homedir(), ".ai-review", "mistakes")
 	);
 }
 

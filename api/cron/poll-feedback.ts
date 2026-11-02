@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { getConfigTree } from "../../src/config/load.js";
 import { pollFeedbackRequest } from "../../src/feedback/cron.js";
 import { createUpstashKv } from "../../src/feedback/kv.js";
 import type { OctokitLike } from "../../src/feedback/reactions.js";
@@ -11,7 +12,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 	const { status, body } = await pollFeedbackRequest({
 		authorization: req.headers.authorization,
 		secret: process.env.CRON_SECRET,
-		feedbackEnabled: process.env.FEEDBACK_ENABLED === "true",
+		feedbackEnabled: getConfigTree().review.feedbackEnabled,
 		buildDeps: () => ({
 			kv: createUpstashKv(),
 			getOctokit: async (
@@ -33,7 +34,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 	// on this pass land in the same run. LLM-free and idempotent, so it stays
 	// well inside the 60s budget and a failure costs nothing — the buffer is not
 	// consumed, and the next run picks up whatever this one missed.
-	if (status === 200 && process.env.IMPROVE_ENABLED === "true") {
+	if (status === 200 && getConfigTree().improve.enabled) {
 		try {
 			const drained = await drainKvEvents({
 				kv: createUpstashKv(),
