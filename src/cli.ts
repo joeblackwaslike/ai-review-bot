@@ -55,8 +55,11 @@ import {
 	computeSkillSignals,
 	detectDuplicateClusters,
 } from "./improve/trends.js";
+import { openMistakeLog } from "./mistakes/log.js";
+import { branchForHead } from "./mistakes/session.js";
 import { runReplay } from "./replay/command.js";
 import { slugify } from "./report.js";
+import { defaultGitRunner } from "./sources.js";
 import { type ProviderTarget, watchPr } from "./watch.js";
 
 function fatal(msg: string): never {
@@ -287,7 +290,15 @@ async function cmdReview(args: string[]): Promise<void> {
 	}
 
 	const { owner, repo } = originSlug();
+	const mistakes = openMistakeLog({
+		owner,
+		repo,
+		source: "review",
+		branch: branchForHead(defaultGitRunner(process.cwd())),
+	});
 	const result = await runLocalReview({
+		mistakes,
+		headSha: gitOut(["rev-parse", "HEAD"]) ?? "unknown",
 		cwd: process.cwd(),
 		scope,
 		docsDir: outDir,

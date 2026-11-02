@@ -635,6 +635,103 @@ describe("runLocalReview", () => {
 		expect(writeSpy.mock.calls[0][1]).toContain('title: "My Review"');
 	});
 
+	it("logs the run once with the report path when a mistake log is injected", async () => {
+		const { collectFilesFromLocal } = await import("./sources.js");
+		(collectFilesFromLocal as ReturnType<typeof vi.fn>).mockResolvedValue([
+			{ path: "a.ts", content: "x" },
+		]);
+		(runAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
+			status: "ok",
+			review: buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+			usage: { promptTokens: 1, completionTokens: 1 },
+		});
+		const fs = await import("node:fs/promises");
+		(fs.writeFile as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+		(fs.mkdir as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+		const append = vi.fn();
+		const mistakes = { runId: "r1", path: "/nowhere", append };
+		const { runLocalReview } = await import("./audit.js");
+		const result = await runLocalReview({
+			cwd: "/repo",
+			scope: { kind: "changed" },
+			docsDir: "docs/code-reviews",
+			slug: "s",
+			title: "T",
+			owner: "o",
+			repo: "r",
+			remote: "https://github.com/o/r",
+			now: () => 1_700_000_000_000,
+			resolveAuthFor: async (provider: Provider) => ({
+				mode: "api-key" as const,
+				provider,
+				apiKey: "k",
+			}),
+			mistakes,
+			headSha: "deadbeef",
+		});
+		const runs = append.mock.calls
+			.map((c) => c[0])
+			.filter((r) => r.type === "run");
+		expect(runs).toHaveLength(1);
+		expect(runs[0]).toMatchObject({
+			headSha: "deadbeef",
+			reportPath: result.path,
+		});
+	});
+
+	it("does not fail the review when the mistake log throws", async () => {
+		const { collectFilesFromLocal } = await import("./sources.js");
+		(collectFilesFromLocal as ReturnType<typeof vi.fn>).mockResolvedValue([
+			{ path: "a.ts", content: "x" },
+		]);
+		(runAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
+			status: "ok",
+			review: buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+			usage: { promptTokens: 1, completionTokens: 1 },
+		});
+		const fs = await import("node:fs/promises");
+		(fs.writeFile as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+		(fs.mkdir as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+		const warn = vi.spyOn(console, "error").mockImplementation(() => {});
+		const mistakes = {
+			runId: "r1",
+			path: "/nowhere",
+			append: () => {
+				throw new Error("boom");
+			},
+		};
+		const { runLocalReview } = await import("./audit.js");
+		await expect(
+			runLocalReview({
+				cwd: "/repo",
+				scope: { kind: "changed" },
+				docsDir: "docs/code-reviews",
+				slug: "s",
+				title: "T",
+				owner: "o",
+				repo: "r",
+				remote: "https://github.com/o/r",
+				resolveAuthFor: async (provider: Provider) => ({
+					mode: "api-key" as const,
+					provider,
+					apiKey: "k",
+				}),
+				mistakes,
+				headSha: "x",
+			}),
+		).resolves.toMatchObject({ filesReviewed: 1 });
+		expect(warn).toHaveBeenCalledWith(expect.stringContaining("boom"));
+		warn.mockRestore();
+	});
+
 	// `ai-review review` resolves real per-provider auth (API key or OAuth) via
 	// resolveAuthFor before routing. GPT-5.6 is confirmed available on both
 	// backends, so an OAuth-authenticated openai run must resolve to the same

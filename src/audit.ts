@@ -19,6 +19,8 @@ import {
 } from "./auth.js";
 import { mapWithConcurrency } from "./concurrency.js";
 import { parseAgentConcurrency } from "./config.js";
+import { logReviewRun } from "./mistakes/capture.js";
+import type { MistakeLog } from "./mistakes/log.js";
 import type { AgentReview } from "./mistakes/types.js";
 import { computeCost } from "./models.js";
 import { buildAuditUserMessage } from "./prompt.js";
@@ -766,6 +768,8 @@ export async function runLocalReview(opts: {
 	extraInstructions?: string;
 	now?: () => number;
 	resolveAuthFor?: (provider: Provider) => Promise<ResolvedAuth>;
+	mistakes?: MistakeLog;
+	headSha?: string;
 }): Promise<LocalReviewResult> {
 	const now = opts.now ?? Date.now;
 	const resolveAuthFor =
@@ -785,7 +789,15 @@ export async function runLocalReview(opts: {
 		ref: scopeRef(opts.scope),
 	};
 
-	const { merged, costUsd, providersRun, models } = await runReviewPasses({
+	const {
+		merged,
+		costUsd,
+		providersRun,
+		models,
+		agentsAttempted,
+		agentsSucceeded,
+		agentReviews,
+	} = await runReviewPasses({
 		files,
 		meta,
 		extraInstructions,
@@ -820,6 +832,30 @@ export async function runLocalReview(opts: {
 		formatReviewReport({ merged, meta: reportMeta }),
 		"utf-8",
 	);
+
+	if (opts.mistakes) {
+		try {
+			logReviewRun({
+				log: opts.mistakes,
+				headSha: opts.headSha ?? "unknown",
+				scope: scopeLabel(opts.scope),
+				costUsd,
+				durationSeconds,
+				providers: providersRun,
+				models,
+				agentsAttempted,
+				agentsSucceeded,
+				reportPath: outPath,
+				agentReviews: agentReviews ?? [],
+				merged,
+				env: process.env,
+			});
+		} catch (error) {
+			console.error(
+				`mistake log capture failed: ${error instanceof Error ? error.message : String(error)}`,
+			);
+		}
+	}
 
 	return {
 		path: outPath,
