@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import {
 	chmodSync,
+	mkdirSync,
 	mkdtempSync,
 	readdirSync,
 	readFileSync,
@@ -640,6 +641,47 @@ describe("ingest", () => {
 				chmodSync(badFile, 0o600);
 			}
 			expect(gateId).toBeTruthy();
+		},
+	);
+
+	it.skipIf(process.platform === "win32")(
+		"aborts instead of reporting a partial result when an existing ingest file is unreadable",
+		async () => {
+			const root = tempDir();
+			capture(root, {
+				source: "gate",
+				branch: "feat/x",
+				at: "2026-11-01T12:00:00.000Z",
+				implementer: claude("s-env"),
+			});
+			const dir = join(root, `${OWNER}__${REPO}`);
+			const badIngestFile = join(dir, "ingest-2026-11-01T00-00-00-000Z.jsonl");
+			writeFileSync(badIngestFile, '{"type":"annotation"}\n');
+			chmodSync(badIngestFile, 0o000);
+			vi.spyOn(console, "error").mockImplementation(() => {});
+
+			try {
+				await expect(run(root)).rejects.toThrow(badIngestFile);
+			} finally {
+				chmodSync(badIngestFile, 0o600);
+			}
+		},
+	);
+
+	it.skipIf(process.platform === "win32")(
+		"aborts instead of reporting an empty result when the capture dir cannot be listed",
+		async () => {
+			const root = tempDir();
+			const dir = join(root, `${OWNER}__${REPO}`);
+			mkdirSync(dir, { recursive: true });
+			chmodSync(dir, 0o000);
+			vi.spyOn(console, "error").mockImplementation(() => {});
+
+			try {
+				await expect(run(root)).rejects.toThrow(dir);
+			} finally {
+				chmodSync(dir, 0o700);
+			}
 		},
 	);
 

@@ -139,7 +139,7 @@ describe("decisionsFor", () => {
 				severity: "warning",
 			},
 		]);
-		expect(skipped).toBe(2);
+		expect(skipped).toBe(3);
 	});
 
 	it("dates a skipped step's findings at its last round head, else the run head", () => {
@@ -174,6 +174,24 @@ describe("decisionsFor", () => {
 				findings: [{ id: "f1", severity: "error", description: "Bug" }],
 			}),
 			selectedFindingIds: "[",
+			selectionSource: "user_declined",
+			reviewedHeadSha: "aaaa",
+		};
+		const { decisions, skipped } = decisionsFor(run, [round]);
+		expect(decisions).toEqual([]);
+		expect(skipped).toBe(1);
+	});
+
+	it("skips decision generation for a round with missing selectedFindingIds", () => {
+		const round: NoMistakesRound = {
+			stepName: "gate.review.ai-review",
+			stepStatus: "completed",
+			stepFindingsJson: null,
+			round: 1,
+			findingsJson: JSON.stringify({
+				findings: [{ id: "f1", severity: "error", description: "Bug" }],
+			}),
+			selectedFindingIds: null,
 			selectionSource: "user_declined",
 			reviewedHeadSha: "aaaa",
 		};

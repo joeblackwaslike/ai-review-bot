@@ -178,7 +178,7 @@ function parseFindings(json: string | null): {
 
 /** Parses a `selected_finding_ids` column into a set of ids. Returns `null` for invalid JSON, non-array JSON, or an array with a non-string entry — distinct from a genuinely empty `[]`, which is a valid, deliberate selection. */
 function parseIds(json: string | null): Set<string> | null {
-	if (json === null) return new Set();
+	if (json === null) return null;
 	let raw: unknown;
 	try {
 		raw = JSON.parse(json);

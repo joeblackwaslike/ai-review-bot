@@ -91,25 +91,23 @@ function readLog(dir: string): LogState {
 	try {
 		files = readdirSync(dir).filter((f) => f.endsWith(".jsonl"));
 	} catch (error) {
-		if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-			warn(
-				`could not list ${dir}: ${error instanceof Error ? error.message : String(error)}`,
-			);
-		}
-		return state;
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") return state;
+		throw new Error(
+			`could not list ${dir}: ${error instanceof Error ? error.message : String(error)}`,
+		);
 	}
 	for (const file of files) {
 		const path = join(dir, file);
+		const isIngest = file.startsWith("ingest-");
 		let content: string;
 		try {
 			content = readFileSync(path, "utf-8");
 		} catch (error) {
-			warn(
-				`could not read ${path}: ${error instanceof Error ? error.message : String(error)}`,
-			);
+			const message = `could not read ${path}: ${error instanceof Error ? error.message : String(error)}`;
+			if (isIngest) throw new Error(message);
+			warn(message);
 			continue;
 		}
-		const isIngest = file.startsWith("ingest-");
 		for (const line of content.split("\n")) {
 			if (!line.trim()) continue;
 			let rec: MistakeRecord;
