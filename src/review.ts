@@ -2482,15 +2482,26 @@ export async function buildReview(
 		.filter((a) => !(a.attempt === 2 && a.outcome.status === "skipped"))
 		.map((a) => toRecord(a.skill, a.attempt, a.outcome));
 	// A pending skill clears only on an ok run over the whole PR with nothing
-	// missing, truncated or omitted by the diff packer. Pending afterwards: what was pending and did not
-	// clear (run or not), plus every skill that ran this round and did not end
-	// ok, plus every whole-PR skill that ran ok on cut input, so the round
-	// cannot approve and the next push or same-head retry reruns it.
+	// missing, truncated or omitted by the diff packer. Pending afterwards:
+	// what was pending and did not clear (run or not), plus every skill that
+	// ran this round and did not end ok, plus every skill that ran on cut
+	// input (the whole PR, or an INCREMENTAL delta), so the round cannot
+	// approve and the next push or same-head retry reruns it over the PR.
 	const inputComplete = wholePrInputComplete(
 		files,
 		context.changedFiles,
 		context.diffBudgetChars,
 	);
+	const deltaInputComplete =
+		!incrementalPass ||
+		(fileListComplete &&
+			wholePrInputComplete(
+				scopedFiles,
+				scopedFiles.length,
+				context.diffBudgetChars,
+			));
+	const ranOnCompleteInput = (n: string) =>
+		wholePrFor(n) ? inputComplete : deltaInputComplete;
 	const ranNames = allSkills.map((s) => skillName(s.skillPath));
 	const cleared = scheduledPending.filter((s) => {
 		const i = ranNames.indexOf(s);
@@ -2500,7 +2511,7 @@ export async function buildReview(
 		...new Set([
 			...priorPending.filter((s) => !cleared.includes(s)),
 			...ranNames.filter((_, i) => outcomes[i]?.status !== "ok"),
-			...(inputComplete ? [] : ranNames.filter((n) => wholePrFor(n))),
+			...ranNames.filter((n) => !ranOnCompleteInput(n)),
 		]),
 	];
 	if (priorPending.length > 0 || pending.length > 0) {
@@ -2510,6 +2521,7 @@ export async function buildReview(
 			cleared,
 			pending,
 			inputComplete,
+			deltaInputComplete,
 		});
 	}
 	const skipFallback = async (): Promise<null> => {

@@ -7964,7 +7964,11 @@ describe("delta scoping without KV", () => {
 		});
 
 		it.each([
-			["stays pending when the PR is over the diff budget", 1, [SAST]],
+			[
+				"stays pending (with the delta skills) when the PR is over the diff budget",
+				1,
+				[...TIER1_SKILLS],
+			],
 			["clears when the PR fits the diff budget", 200_000, []],
 		])("a pending skill that runs ok %s", async (_, diffBudgetChars, after) => {
 			agents();
@@ -7980,7 +7984,40 @@ describe("delta scoping without KV", () => {
 				diffBudgetChars,
 			});
 
-			expect(pendingIn(decision?.body)).toEqual(after);
+			expect([...(pendingIn(decision?.body) ?? [])].sort()).toEqual(
+				[...after].sort(),
+			);
+		});
+
+		it("an incremental round whose delta is over the diff budget does not approve and leaves its skills pending", async () => {
+			agents();
+			incremental();
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: buildOwnReviewBody({ sha: OLD, count: 1 }) }],
+				compare: deltaB,
+			});
+
+			const decision = await buildReview({
+				octokit,
+				...baseContext,
+				diffBudgetChars: 1,
+			});
+
+			expect(decision?.event).toBe("COMMENT");
+			expect(pendingIn(decision?.body)).toEqual(
+				expect.arrayContaining([...TIER1_SKILLS]),
+			);
+		});
+
+		it("an incremental round whose delta fits the diff budget is unchanged: nothing new posts nothing", async () => {
+			agents();
+			incremental();
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: buildOwnReviewBody({ sha: OLD, count: 1 }) }],
+				compare: deltaB,
+			});
+
+			expect(await buildReview({ octokit, ...baseContext })).toBeNull();
 		});
 
 		it("a first review on input the packer cut does not approve and records every skill pending", async () => {
@@ -8407,13 +8444,22 @@ describe("delta scoping without KV", () => {
 					rawDiff: "",
 				},
 			],
+		])("success on whole-PR input with %s stays pending, and its findings still merge", async (_name, pr) => {
+			expect(await runWith(pr)).toEqual([SAST]);
+		});
+
+		// A cut PR file list may hide delta files too, so the delta skills
+		// that ran ok stay pending as well.
+		it.each<[string, PrInput]>([
 			[
 				"a file list shorter than the PR's changed files",
 				{ files: [aFile, bFile], changedFiles: 3 },
 			],
 			["a file list at the 3000-file cap", { files: [aFile, bFile, ...many] }],
-		])("success on whole-PR input with %s stays pending, and its findings still merge", async (_name, pr) => {
-			expect(await runWith(pr)).toEqual([SAST]);
+		])("success on input with %s leaves every skill pending", async (_name, pr) => {
+			expect(await runWith(pr)).toEqual(
+				expect.arrayContaining([...TIER1_SKILLS]),
+			);
 		});
 
 		it.each<[string, PrInput]>([
