@@ -6993,6 +6993,82 @@ describe("buildReview ledger suppression", () => {
 			);
 		});
 
+		it("records one off-diff discard per skill that flagged the merged comment", async () => {
+			const offLine = buildInlineComment({
+				title: "Unchecked index into the cache array",
+				path: "src/review.ts",
+				line: 9,
+				severity: "P2",
+			});
+			routeAgents(
+				{
+					"code-reviewer.md": withInline(offLine),
+					"silent-failure-hunter.md": withInline(offLine),
+				},
+				empty,
+			);
+			const recordDiscards = spy();
+
+			await buildReview({
+				octokit: noPrior(),
+				...baseContext,
+				recordDiscards,
+			});
+
+			expect(recordsOf(recordDiscards)).toEqual(
+				["code-reviewer.md", "silent-failure-hunter.md"].map((skill) => ({
+					reason: "OFF_DIFF",
+					code: "OFF_DIFF_LINE",
+					disposition: "dropped",
+					title: offLine.title,
+					path: "src/review.ts",
+					line: 9,
+					severity: "P2",
+					skill,
+					provider: "anthropic",
+				})),
+			);
+		});
+
+		it("records one cap discard per skill that flagged the overflowed comment", async () => {
+			const comments = Array.from({ length: 51 }, (_, i) =>
+				buildInlineComment({
+					title: `Finding ${i}`,
+					path: "src/review.ts",
+					line: (i % 3) + 1,
+					severity: i === 10 ? "P3" : "P2",
+				}),
+			);
+			routeAgents(
+				{
+					"code-reviewer.md": withInline(...comments),
+					"silent-failure-hunter.md": withInline(comments[10]),
+				},
+				empty,
+			);
+			const recordDiscards = spy();
+
+			await buildReview({
+				octokit: noPrior(),
+				...baseContext,
+				recordDiscards,
+			});
+
+			expect(recordsOf(recordDiscards)).toEqual(
+				["code-reviewer.md", "silent-failure-hunter.md"].map((skill) => ({
+					reason: "CAP",
+					code: null,
+					disposition: "dropped",
+					title: "Finding 10",
+					path: "src/review.ts",
+					line: 2,
+					severity: "P3",
+					skill,
+					provider: "anthropic",
+				})),
+			);
+		});
+
 		it("records nothing for an adjacent-line restatement dedupeClaims collapses", async () => {
 			const claim = buildInlineComment({
 				title: "Pagination loop skips the final page entirely",

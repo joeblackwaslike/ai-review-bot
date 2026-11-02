@@ -2958,8 +2958,9 @@ async function buildReviewInner(
 		reason: DiscardReason,
 		code: OffDiffCode | null = null,
 	) => {
-		const [skill = null] = skillsByKey.get(commentKey(c)) ?? [];
-		discards.push({ ...toDiscard(c, reason, skill, context.provider), code });
+		const skills = [...(skillsByKey.get(commentKey(c)) ?? [])];
+		for (const skill of skills.length ? skills : [null])
+			discards.push({ ...toDiscard(c, reason, skill, context.provider), code });
 	};
 	for (const c of overflowComments) lateDiscard(c, "CAP");
 
