@@ -46,7 +46,7 @@ export function findingKey(f: { path: string | null; title: string }): string {
 /** Mistake log root: `AI_REVIEW_MISTAKES_DIR`, else `~/.ai-review/mistakes`. */
 export function mistakesRoot(): string {
 	return (
-		process.env.AI_REVIEW_MISTAKES_DIR ??
+		process.env.AI_REVIEW_MISTAKES_DIR ||
 		join(homedir(), ".ai-review", "mistakes")
 	);
 }

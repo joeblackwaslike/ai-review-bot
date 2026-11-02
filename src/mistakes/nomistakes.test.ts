@@ -96,7 +96,9 @@ describe("sqliteNoMistakesSource", () => {
 
 	it("refuses a run id that is not a plain identifier", async () => {
 		const { exec, src } = source("[]");
-		expect(await src.rounds("x'; DROP TABLE runs; --")).toEqual([]);
+		await expect(src.rounds("x'; DROP TABLE runs; --")).rejects.toThrow(
+			/refusing no-mistakes run id with unexpected characters/,
+		);
 		expect(exec).not.toHaveBeenCalled();
 	});
 });

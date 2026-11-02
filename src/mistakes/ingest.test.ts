@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import {
 	chmodSync,
+	existsSync,
 	mkdirSync,
 	mkdtempSync,
 	readdirSync,
@@ -13,6 +14,19 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+const failure = vi.hoisted(() => ({ link: false }));
+vi.mock("node:fs", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("node:fs")>();
+	return {
+		...actual,
+		linkSync: (...args: Parameters<typeof actual.linkSync>) => {
+			if (failure.link) throw new Error("disk full");
+			return actual.linkSync(...args);
+		},
+	};
+});
+
 import { ingest } from "./ingest.js";
 import { fileStamp, openMistakeLog } from "./log.js";
 import type { NoMistakesRound, NoMistakesSource } from "./nomistakes.js";
@@ -790,6 +804,93 @@ describe("ingest", () => {
 			unresolved: 0,
 			events: 0,
 			file: null,
+		});
+	});
+
+	describe("locking and atomic publish", () => {
+		const lockPath = (root: string) =>
+			join(root, `${OWNER}__${REPO}`, ".ingest.lock");
+		const gateCapture = (root: string) =>
+			capture(root, {
+				source: "gate",
+				branch: "feat/x",
+				at: "2026-11-01T12:00:00.000Z",
+				implementer: claude("s-env"),
+			});
+		const nm = () =>
+			fakeNoMistakes([{ id: "NMRUN1", branch: "feat/x", headSha: "aaaa" }], {
+				NMRUN1: [DECIDED_ROUND],
+			});
+		const ingestFiles = (root: string) =>
+			readdirSync(join(root, `${OWNER}__${REPO}`)).filter((f) =>
+				f.startsWith("ingest-"),
+			);
+
+		it("keeps dedupe intact when two ingests race for one repo", async () => {
+			const root = tempDir();
+			gateCapture(root);
+			const results = await Promise.allSettled([
+				run(root, { noMistakes: nm() }),
+				run(root, { noMistakes: nm() }),
+			]);
+			const rejected = results.filter((r) => r.status === "rejected");
+			expect(rejected.length).toBeLessThanOrEqual(1);
+			for (const r of rejected)
+				expect(String(r.reason)).toMatch(/another ingest is running/);
+			const dir = join(root, `${OWNER}__${REPO}`);
+			const records = ingestFiles(root).flatMap((f) =>
+				readOutput(join(dir, f)),
+			);
+			expect(records.filter((r) => r.type === "event")).toHaveLength(1);
+			expect(records.filter((r) => r.type === "annotation")).toHaveLength(0);
+			expect(existsSync(lockPath(root))).toBe(false);
+		});
+
+		it("takes over a lock held by a dead pid", async () => {
+			const root = tempDir();
+			gateCapture(root);
+			writeFileSync(lockPath(root), `999999999 ${Date.now()}`);
+			const res = await run(root, { noMistakes: nm() });
+			expect(res.events).toBe(1);
+			expect(existsSync(lockPath(root))).toBe(false);
+		});
+
+		it("refuses to run while a live process holds a fresh lock", async () => {
+			const root = tempDir();
+			gateCapture(root);
+			writeFileSync(lockPath(root), `${process.pid} ${Date.now()}`);
+			await expect(run(root, { noMistakes: nm() })).rejects.toThrow(
+				/mistakes ingest: another ingest is running for o\/ai-review-bot/,
+			);
+			expect(existsSync(lockPath(root))).toBe(true);
+		});
+
+		it("releases the lock when ingest fails", async () => {
+			const root = tempDir();
+			gateCapture(root);
+			failure.link = true;
+			try {
+				await expect(run(root, { noMistakes: nm() })).rejects.toThrow();
+			} finally {
+				failure.link = false;
+			}
+			expect(existsSync(lockPath(root))).toBe(false);
+		});
+
+		it("leaves no ingest file and no temp file when publishing fails", async () => {
+			const root = tempDir();
+			gateCapture(root);
+			failure.link = true;
+			try {
+				await expect(run(root, { noMistakes: nm() })).rejects.toThrow(
+					/disk full/,
+				);
+			} finally {
+				failure.link = false;
+			}
+			const names = readdirSync(join(root, `${OWNER}__${REPO}`));
+			expect(names.filter((f) => f.startsWith("ingest-"))).toEqual([]);
+			expect(names.filter((f) => f.endsWith(".tmp"))).toEqual([]);
 		});
 	});
 });

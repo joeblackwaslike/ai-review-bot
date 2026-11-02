@@ -1,5 +1,13 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import {
+	linkSync,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { gateRepoSlug, gateRoot } from "../gate/run.js";
@@ -224,29 +232,94 @@ async function noMistakesEvents(opts: {
 }
 
 const MAX_WRITE_ATTEMPTS = 10;
+const LOCK_STALE_MS = 10 * 60 * 1000;
 
 function writeExclusive(dir: string, stem: string, data: string): string {
-	for (let attempt = 1; ; attempt++) {
-		const file = join(
-			dir,
-			`${stem}${attempt === 1 ? "" : `-${attempt}`}.jsonl`,
-		);
+	const tmp = join(
+		dir,
+		`.ingest-${process.pid}-${randomBytes(6).toString("hex")}.tmp`,
+	);
+	try {
+		writeFileSync(tmp, data, { flag: "wx", mode: 0o600 });
+		for (let attempt = 1; ; attempt++) {
+			const file = join(
+				dir,
+				`${stem}${attempt === 1 ? "" : `-${attempt}`}.jsonl`,
+			);
+			try {
+				linkSync(tmp, file);
+				return file;
+			} catch (error) {
+				const taken = (error as NodeJS.ErrnoException).code === "EEXIST";
+				if (!taken || attempt >= MAX_WRITE_ATTEMPTS) throw error;
+			}
+		}
+	} finally {
+		rmSync(tmp, { force: true });
+	}
+}
+
+function lockHolderGone(path: string): boolean {
+	let content: string;
+	try {
+		content = readFileSync(path, "utf-8");
+	} catch (error) {
+		return (error as NodeJS.ErrnoException).code === "ENOENT";
+	}
+	const [pidText, tsText] = content.trim().split(" ");
+	const pid = Number(pidText);
+	const at = Number(tsText);
+	if (!Number.isInteger(pid) || !Number.isFinite(at)) return true;
+	if (Date.now() - at > LOCK_STALE_MS) return true;
+	try {
+		process.kill(pid, 0);
+		return false;
+	} catch (error) {
+		return (error as NodeJS.ErrnoException).code === "ESRCH";
+	}
+}
+
+function acquireLock(dir: string, repo: string): () => void {
+	mkdirSync(dir, { recursive: true, mode: 0o700 });
+	const path = join(dir, ".ingest.lock");
+	for (let attempt = 0; attempt < 2; attempt++) {
 		try {
-			writeFileSync(file, data, { flag: "wx", mode: 0o600 });
-			return file;
+			writeFileSync(path, `${process.pid} ${Date.now()}`, {
+				flag: "wx",
+				mode: 0o600,
+			});
+			return () => rmSync(path, { force: true });
 		} catch (error) {
-			const taken = (error as NodeJS.ErrnoException).code === "EEXIST";
-			if (!taken || attempt >= MAX_WRITE_ATTEMPTS) throw error;
+			if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+			if (!lockHolderGone(path)) break;
+			rmSync(path, { force: true });
 		}
 	}
+	throw new Error(
+		`mistakes ingest: another ingest is running for ${repo} (lock ${path})`,
+	);
 }
 
 /** Resolves gate runs with no implementer to a Claude Code session and records no-mistakes decisions for captured branches and heads, appending both to a new `ingest-<stamp>.jsonl` beside the capture files. Capture files are only read. Annotations and events already written by an earlier ingest are not repeated. */
 export async function ingest(opts: IngestOptions): Promise<IngestResult> {
-	const now = opts.now ?? (() => new Date());
 	const repo = opts.repo ?? currentRepoSlug();
 	const [owner, name] = repo.split("/");
 	const dir = join(opts.root, `${safeSegment(owner)}__${safeSegment(name)}`);
+	const release = acquireLock(dir, repo);
+	try {
+		return await ingestLocked(opts, repo, name, dir);
+	} finally {
+		release();
+	}
+}
+
+async function ingestLocked(
+	opts: IngestOptions,
+	repo: string,
+	name: string | undefined,
+	dir: string,
+): Promise<IngestResult> {
+	const now = opts.now ?? (() => new Date());
 	const state = readLog(dir);
 	const started = now();
 	const ts = started.toISOString();
@@ -347,7 +420,6 @@ export async function ingest(opts: IngestOptions): Promise<IngestResult> {
 	lines.push(...events);
 
 	if (lines.length === 0) return result;
-	mkdirSync(dir, { recursive: true, mode: 0o700 });
 	result.file = writeExclusive(
 		dir,
 		`ingest-${fileStamp(started)}`,

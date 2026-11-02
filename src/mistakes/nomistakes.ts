@@ -150,7 +150,10 @@ export function sqliteNoMistakesSource(opts: {
 				}));
 		},
 		async rounds(runId) {
-			if (!SAFE_ID.test(runId)) return [];
+			if (!SAFE_ID.test(runId))
+				throw new Error(
+					`mistakes ingest: refusing no-mistakes run id with unexpected characters: ${JSON.stringify(runId)}`,
+				);
 			return parseRows(
 				await query(roundsSql(runId)),
 				RoundRow,

@@ -61,9 +61,9 @@ On ingest `event` records, `runId` is the no-mistakes run id; every other record
 
 New `src/mistakes/` holds `types.ts` (zod schemas), `log.ts` (`openMistakeLog`, `appendRun`, `appendFinding`, `appendEvent`) and `session.ts` (environment lookup). Writes fail open. An error is caught, one warning goes to stderr, and the run continues.
 
-- `runLocalReview` in `src/audit.ts` writes after the provider passes and the merge, while `merged` is in scope and before the report is written.
+- `runLocalReview` in `src/audit.ts` writes after the provider passes, the merge and the report write, because the run record needs `reportPath`.
 - `src/gate/run.ts` writes after `applyRound`. It logs a `finding` for every entry reviewed this round and an `event` for each inferred fix or reopen.
-- Per-finding skill provenance exists today only as the merge-time `commentProvenance` map used for GitHub posting. `src/review.ts` must expose it to the local path.
+- Skill attribution comes from the `agentReviews` that `runAuditPass` and `runReviewPasses` in `src/audit.ts` return, not from `commentProvenance` in `src/review.ts`.
 
 ### Ingest
 
@@ -71,7 +71,7 @@ New `src/mistakes/` holds `types.ts` (zod schemas), `log.ts` (`openMistakeLog`, 
 
 1. Resolve `gate` rows to sessions. First use a `review` row on the same repo and branch that carries a session id, since the agent runs `review --full` before opening the PR. Then scan `~/.claude/projects/<repo>/*.jsonl`. A line counts when its `gitBranch` equals the run branch and its `cwd` is the repo, verified by `cwd` basename (the repo name, or a path containing `/<repo>/.worktrees/`) because a project dir name suffix alone can match a sibling repo. Lines without a `cwd` do not count. Commit shas are not matched. `git commit` and `git push` Bash tool_use calls serve only as a ranking tiebreak between sessions. Anything unresolved stays null.
 2. Join no-mistakes decisions for the same branch and head from `~/.no-mistakes/`. The builder inspects the run logs and `eval` cases first.
-3. Write results as `event` and `implementer` annotation lines in an `ingest-<ts>.jsonl` file beside the capture files.
+3. Write results as `event` and `implementer` annotation lines in an `ingest-<ts>.jsonl` file beside the capture files. Ingest holds a per-repo lock (`.ingest.lock`, taken over when stale or its pid is dead) for the whole read, dedupe and write sequence, and publishes the file atomically (temp file, then an exclusive hard link), so a failed or concurrent run never leaves a partial `ingest-*.jsonl`.
 
 ### Privacy
 

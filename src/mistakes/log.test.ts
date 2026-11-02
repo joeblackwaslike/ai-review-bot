@@ -6,10 +6,15 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, relative } from "node:path";
+import { dirname, isAbsolute, join, relative } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ModelReview } from "../review.js";
-import { findingKey, findingRecords, openMistakeLog } from "./log.js";
+import {
+	findingKey,
+	findingRecords,
+	mistakesRoot,
+	openMistakeLog,
+} from "./log.js";
 import { type AgentReview, MistakeRecord } from "./types.js";
 
 const base = {
@@ -115,6 +120,11 @@ describe("openMistakeLog", () => {
 		const lines = readFileSync(log.path, "utf-8").split("\n").filter(Boolean);
 		expect(lines).toHaveLength(1);
 		expect(JSON.parse(lines[0] as string).note).toBe(note);
+	});
+
+	it("treats an empty AI_REVIEW_MISTAKES_DIR as unset", () => {
+		vi.stubEnv("AI_REVIEW_MISTAKES_DIR", "");
+		expect(isAbsolute(mistakesRoot())).toBe(true);
 	});
 
 	it("honors AI_REVIEW_MISTAKES_DIR and lays out owner__repo/stamp-runId.jsonl", () => {
