@@ -177,7 +177,7 @@ describe("insertDiscards", () => {
 		expect(r.rows).toEqual([{ n: 5 }]);
 	});
 
-	it("keeps rows that differ only in line, with a null line colliding with itself", async () => {
+	it("keeps rows that differ only in line, including a null line", async () => {
 		const db = await createTestDb();
 		await insertDiscards(
 			db,
