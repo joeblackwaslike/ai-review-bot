@@ -40,6 +40,8 @@
 		"test": "vitest run",
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",
+		"config:check": "bun scripts/config-check.ts",
+		"docs:config": "bun scripts/gen-config-docs.ts",
 		"docs:dev": "vitepress dev docs",
 		"docs:build": "vitepress build docs",
 		"docs:preview": "vitepress preview docs"

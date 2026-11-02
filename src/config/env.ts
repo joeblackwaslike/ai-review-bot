@@ -70,12 +70,12 @@ export function envNameForPath(path: readonly string[]): string {
 	return ENV_PREFIX + segments.join("__");
 }
 
-interface ZodNode {
+export interface ZodNode {
 	_zod: { def: { type: string; innerType?: ZodNode; valueType?: ZodNode } };
 	shape?: Record<string, ZodNode>;
 }
 
-const unwrap = (node: ZodNode): ZodNode => {
+export const unwrap = (node: ZodNode): ZodNode => {
 	let current = node;
 	while (
 		current._zod.def.type === "default" ||

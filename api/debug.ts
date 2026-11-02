@@ -1,9 +1,13 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { describeConfig, getLoadedConfig } from "../src/config/load.js";
 
 export default function handler(_req: VercelRequest, res: VercelResponse) {
+	const loaded = getLoadedConfig();
 	res.status(200).json({
-		reviewEnabled: process.env.REVIEW_ENABLED !== "false",
-		reviewCommand: process.env.REVIEW_COMMAND ?? "/ai-review",
+		config: describeConfig(loaded),
+		warnings: loaded.warnings,
+		reviewEnabled: loaded.config.review.enabled,
+		reviewCommand: loaded.config.review.command,
 		hasAnthropicKey: !!process.env.ANTHROPIC_API_KEY,
 		hasAppId: !!process.env.GITHUB_APP_ID,
 		hasPrivateKey: !!process.env.GITHUB_APP_PRIVATE_KEY,

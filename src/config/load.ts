@@ -58,6 +58,32 @@ export function loadConfig(opts: LoadOptions = {}): LoadedConfig {
 	return { config: deepFreeze(parsed.data), sources, warnings };
 }
 
+export interface ConfigRow {
+	path: string;
+	value: unknown;
+	source: ValueSource;
+}
+
+export function describeConfig(loaded: LoadedConfig): ConfigRow[] {
+	const rows: ConfigRow[] = [];
+	const walk = (value: unknown, path: string[]): void => {
+		if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+			for (const [key, child] of Object.entries(value)) {
+				walk(child, [...path, key]);
+			}
+			return;
+		}
+		const dotted = path.join(".");
+		rows.push({
+			path: dotted,
+			value,
+			source: loaded.sources[dotted] ?? "yaml",
+		});
+	};
+	walk(loaded.config, []);
+	return rows;
+}
+
 let memo: LoadedConfig | undefined;
 
 export function getLoadedConfig(): LoadedConfig {

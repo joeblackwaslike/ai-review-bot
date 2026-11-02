@@ -1,0 +1,44 @@
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { resetConfigForTests } from "../src/config/load.js";
+import handler from "./debug.js";
+
+afterEach(() => {
+	resetConfigForTests();
+	vi.unstubAllEnvs();
+});
+
+function call() {
+	let body: Record<string, unknown> = {};
+	const res = {
+		status: () => res,
+		json: (payload: Record<string, unknown>) => {
+			body = payload;
+			return res;
+		},
+	};
+	handler({} as VercelRequest, res as unknown as VercelResponse);
+	return body;
+}
+
+describe("GET /api/debug", () => {
+	it("reports config leaves with sources and keeps the has* fields", () => {
+		vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-secret");
+		vi.stubEnv("REVIEW_COMMAND", "/x");
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		const body = call();
+		expect(body.hasAnthropicKey).toBe(true);
+		expect(body.hasOpenAIKey).toBe(false);
+		expect(body.reviewCommand).toBe("/x");
+		expect(body.reviewEnabled).toBe(true);
+		expect(body.config).toContainEqual({
+			path: "review.command",
+			value: "/x",
+			source: "alias",
+		});
+		expect(body.warnings).toEqual([
+			"REVIEW_COMMAND is deprecated; use AI_REVIEW_REVIEW__COMMAND",
+		]);
+		expect(JSON.stringify(body)).not.toContain("sk-ant-secret");
+	});
+});
