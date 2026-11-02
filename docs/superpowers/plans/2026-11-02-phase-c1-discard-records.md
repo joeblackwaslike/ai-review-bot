@@ -104,9 +104,11 @@
   - 52 inline comments: the two overflow comments produce `CAP` records (assert they are the lowest-severity ones).
   - skill attribution: with `feedbackEnabled: false`, an off-diff discard still carries the skill that reported it; a discard whose key has no skill entry has `skill: null`.
   - a general finding with no path records `path: null, line: null`.
-  - `recordDiscards` that rejects: the returned review is deep-equal to the one returned with no callback, and `console.warn` got `"discard recording failed"`.
+  - `recordDiscards` that rejects: the returned review is deep-equal to the one returned with no callback, and `console.warn` got `"discard recording failed"`. Same for a recorder that throws synchronously.
+  - a recorder that never resolves: with fake timers, `buildReview` still returns after the 5-second bound and `console.warn` got `"discard recording timed out"`.
+  - carried from the Task 2 review: two agents reporting one claim on adjacent lines that `dedupeClaims` collapses produce no record for the loser; with `dropRetractions` off, retraction filler produces no `RETRACTION` record.
 - [ ] **Step 2: Run them; confirm they fail.**
-- [ ] **Step 3: Implement.** Pass an `onDrop` that pushes `OFF_DIFF` discards; push `CAP` discards from `overflowComments`; hoist the `skillsByKey` construction out of the `feedbackEnabled` branch and look skills up by `commentKey` for late drops.
+- [ ] **Step 3: Implement.** Pass an `onDrop` that pushes `OFF_DIFF` discards; push `CAP` discards from `overflowComments`; hoist the `skillsByKey` construction out of the `feedbackEnabled` branch and look skills up by `commentKey` for late drops. Bound the `recordDiscards` await in `flushDiscards` with a 5-second `Promise.race` timeout (named constant `DISCARD_RECORD_TIMEOUT_MS`); on timeout log one `console.warn("discard recording timed out")` and carry on.
 - [ ] **Step 4: Run `pnpm vitest run --pool=forks src/review.test.ts`; all pass.**
 - [ ] **Step 5: Commit** `feat(review): record off-diff and cap discards with skill attribution`.
 
@@ -123,8 +125,9 @@
 - [ ] **Step 1: Write failing tests.** `persistDiscards` maps fields correctly (including `reviewSha`, `naturalKey`, null passthrough) and calls `insertDiscards` once with all rows; with `improveEnabled: false`, `maybeSubmitReview` passes no `recordDiscards`; with it on, a settled-repeat round inserts a row (use the test DB).
 - [ ] **Step 2: Run them; confirm they fail.**
 - [ ] **Step 3: Implement** `persistDiscards`; in `github-app.ts` add `recordDiscards: config.improveEnabled ? persistDiscards({ db: getDb(), owner, repo, pr: pullNumber, headSha }) : undefined` to the `buildReview` context. A `getDb()` failure must degrade to no recording, not a thrown review.
-- [ ] **Step 4: Run the tests; all pass.**
-- [ ] **Step 5: Commit** `feat(improve): persist discard records when the corpus is enabled`.
+- [ ] **Step 4: Include the skill in the unique key.** Five agents restating one settled finding must stay five rows (C3 counts per skill), so change the `finding_discards` unique index to `(provider, owner, repo, pr, reviewSha, reason, naturalKey, coalesce(skill, ''))`. Because this branch is unmerged, regenerate migration `0003` instead of adding `0004`: delete the generated `0003_*.sql`, `meta/0003_snapshot.json` and the `0003` entry in `meta/_journal.json`, then run `pnpm db:generate` and format the snapshot with `pnpm exec biome check --write`. If pg-mem cannot execute the expression index (every `createTestDb()` test then fails at migration load), fall back to a `skill` column that is `NOT NULL DEFAULT ''` with `''` meaning unknown, map `null` to `''` inside `persistDiscards`, and report the fallback as a ruling. Tests: five records differing only in skill insert 5 rows; the same record twice inserts 0 the second time (including with `skill: null`); the duplicate cases run in `repo.integration.test.ts` against real Postgres (`docker run -d --rm --name c1-pg -e POSTGRES_PASSWORD=x -p 54329:5432 postgres:16-alpine`, then `DATABASE_URL_TEST=postgres://postgres:x@localhost:54329/postgres pnpm vitest run --pool=forks src/improve/db/repo.integration.test.ts`; stop the container afterwards).
+- [ ] **Step 5: Run the tests; all pass.**
+- [ ] **Step 6: Commit** `feat(improve): persist discard records when the corpus is enabled`.
 
 ### Task 5: Docs and verification
 
