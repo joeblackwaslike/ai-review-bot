@@ -181,6 +181,36 @@ describe("repairSuggestion", () => {
 		expect(repair(s, 13)).toEqual({ suggestion: s, line: 13, startLine: null });
 	});
 
+	it("widens the end of the range to an unchanged following line", () => {
+		const trail = toMap({
+			10: "  foo();",
+			11: "  return someLongValueHere;",
+			12: "  return anotherLongValue;",
+		});
+		const s = "  return someLongValueHere;\n  return anotherLongValue;";
+		expect(repair(s, 11, null, trail)).toEqual({
+			suggestion: s,
+			line: 12,
+			startLine: 11,
+		});
+	});
+
+	it("does not widen the end when intervening lines are not in the suggestion", () => {
+		const s = "  const total = items.length;\n    return total;";
+		expect(repair(s, 9)).toEqual({ suggestion: s, line: 9, startLine: null });
+	});
+
+	it("returns null when startLine is after line", () => {
+		expect(
+			repairSuggestion({
+				suggestion: "replacement();",
+				line: 11,
+				startLine: 12,
+				fileLines: new Map(),
+			}),
+		).toBeNull();
+	});
+
 	it("keeps the range when the suggestion deletes its first line", () => {
 		const del = toMap({
 			10: "const obsolete = load();",
@@ -270,6 +300,18 @@ describe("repairSuggestion", () => {
 		});
 		const s = "const third = applyConfiguration(second);\nconst sixth = fix();";
 		expect(repair(s, 6, null, hunks)).toBeNull();
+	});
+
+	it("returns null instead of widening the end across a hidden gap", () => {
+		const hunks = toMap({
+			1: "const first = one();",
+			2: "const second = two();",
+			3: "const third = applyConfiguration(second);",
+			6: "const sixth = six();",
+			7: "const seventh = seven();",
+		});
+		const s = "const third = applyConfiguration(second);\nconst sixth = six();";
+		expect(repair(s, 3, null, hunks)).toBeNull();
 	});
 
 	it("drops an empty fence instead of posting a one-click deletion", () => {

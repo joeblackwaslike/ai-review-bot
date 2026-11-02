@@ -175,6 +175,7 @@ export function repairSuggestion(
 	const { fileLines } = input;
 	const start = input.startLine ?? input.line;
 	const end = input.line;
+	if (start > end) return null;
 	if (!covers(fileLines, start, end)) return null;
 
 	const keepFences =
