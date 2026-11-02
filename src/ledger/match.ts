@@ -37,11 +37,12 @@ export const FINGERPRINT_CLAIM_MATCH: ClaimMatchOptions = {
 	identifierSimilarity: 0.5,
 };
 
-/** Bar for a declared `repeats` on a P0: a model's say-so suppresses it, so the title and a shared identifier both need 0.8 within the usual line window. */
+/** Bar for a declared `repeats` on a P0: a model's say-so suppresses it, so the title needs 0.8 similarity, with or without a shared identifier or an anchor, within the usual line window. */
 export const DECLARED_P0_CLAIM_MATCH: ClaimMatchOptions = {
 	...DEFAULT_CLAIM_MATCH,
 	titleSimilarity: 0.8,
 	identifierSimilarity: 0.8,
+	unanchoredSimilarity: 0.8,
 };
 
 const normalizeTitle = (title: string) => title.trim().toLowerCase();

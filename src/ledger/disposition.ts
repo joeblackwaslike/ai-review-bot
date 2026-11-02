@@ -13,7 +13,7 @@ export interface ReplyDisposition {
 }
 
 export const DEFERRED =
-	/follow[- ]?up|out of scope|separate pr|later pr|will (address|fix) (this |it )?later|tracked in/i;
+	/\bfollow[- ]?ups?\b|out of scope|separate pr|later pr|\b(?:will|i'?ll|we'?ll)\s+(?:address|fix)\s+(?:\w+\s+){0,3}?later\b|tracked in/i;
 export const REJECTED =
 	/\bintentional(ly)?\b|\bno change\b|\bby design\b|no defect|working as intended|won'?t fix|not a (bug|problem|issue)|\bkept (it |this )?as[- ]is\b|\balready done\b/i;
 export const FIX_REF =

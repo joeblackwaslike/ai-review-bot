@@ -150,6 +150,33 @@ describe("declaredRepeat at P0", () => {
 			declaredRepeat([p0])(declared("Unvalidated token in verify()")),
 		).toBe(p0);
 	});
+
+	describe("without a path", () => {
+		const title = "Unvalidated session token allows account takeover";
+		const general = { ...p0, path: null, line: null, title };
+		const repeat = (t: string) => ({
+			path: null,
+			line: null,
+			title: t,
+			severity: "P0",
+			relation: {
+				kind: "repeats",
+				entry_id: shortFindingId(findingId(null, null, title)),
+			},
+		});
+
+		it("refuses a related P0 below the 0.8 bar", () => {
+			expect(
+				declaredRepeat([general])(
+					repeat("Unvalidated session token allows account hijack"),
+				),
+			).toBeUndefined();
+		});
+
+		it("accepts the same P0 claim", () => {
+			expect(declaredRepeat([general])(repeat(title))).toBe(general);
+		});
+	});
 });
 
 describe("uniqueShortIds", () => {

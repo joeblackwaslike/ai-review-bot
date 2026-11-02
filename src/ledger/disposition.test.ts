@@ -80,6 +80,24 @@ describe("classifyReplies", () => {
 			);
 			expect(status("will do in a follow-up")).toBe("deferred");
 			expect(status("will do in a followup")).toBe("deferred");
+			expect(status("tracking it in the follow-ups list")).toBe("deferred");
+		});
+
+		it("does not read follow plus an up- word as a follow-up", () => {
+			expect(status("good catch, I'll fix it to follow upstream")).toBe(
+				"acknowledged",
+			);
+			expect(
+				status("you're right, I'll update it to follow updated docs"),
+			).toBe("acknowledged");
+		});
+
+		it("treats a fix promised for later, up to three words on, as deferred", () => {
+			expect(status("Good catch, I'll fix this later")).toBe("deferred");
+			expect(status("agreed, we'll fix it later")).toBe("deferred");
+			expect(status("good catch, I'll address the parser bit later")).toBe(
+				"deferred",
+			);
 		});
 
 		it("turns fixed when a later reply cites the commit", () => {
@@ -92,13 +110,15 @@ describe("classifyReplies", () => {
 
 		it("does not acknowledge hedges, negations or a promise without agreement", () => {
 			expect(status("not sure this is right")).toBeNull();
-			expect(status("agreed, but not fixing this")).toBeNull();
-			expect(status("agreed, we won't be fixing it")).toBeNull();
+			expect(status("agreed, not sure I'll fix it")).toBeNull();
+			expect(status("agreed, we never said we'll fix it")).toBeNull();
 			expect(status("will fix")).toBeNull();
 		});
 
 		it("does not acknowledge a disagreement that borrows agreeing words", () => {
-			expect(status("makes sense, but fixing this would break X")).toBeNull();
+			expect(
+				status("makes sense, but I'll change it only if X breaks"),
+			).toBeNull();
 			expect(status("agreed, we depend on it")).toBeNull();
 			expect(status("fair point, I don't think I'll fix it")).toBeNull();
 			expect(status("we agreed earlier that I'll fix the rest")).toBeNull();

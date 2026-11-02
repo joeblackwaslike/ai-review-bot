@@ -20,7 +20,7 @@ import {
 	ledgerEntryFinding,
 	MAX_CARRY_IDS,
 } from "./baseline.js";
-import { dedupeClaims, isSameClaim } from "./claim-dedupe.js";
+import { dedupeClaims, isSameClaim, withAbsorbedLink } from "./claim-dedupe.js";
 import { commentKey } from "./comment-key.js";
 import { mapWithConcurrency } from "./concurrency.js";
 import { collectRightSideLines, rightSideText } from "./diff-lines.js";
@@ -710,8 +710,10 @@ export function mergeReviewsDetailed(
 			}
 			const existing = group[index];
 			const incomingWins = outranks(comment, existing);
-			const survivor = incomingWins ? comment : existing;
 			const loser = incomingWins ? existing : comment;
+			const survivor = withAbsorbedLink(incomingWins ? comment : existing, [
+				loser,
+			]);
 			group[index] = survivor;
 			if (commentKey(loser) !== commentKey(survivor)) {
 				const survivorKey = commentKey(survivor);

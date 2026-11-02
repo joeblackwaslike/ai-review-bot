@@ -2976,6 +2976,37 @@ describe("sanitizeInlineComments", () => {
 // ---------------------------------------------------------------------------
 
 describe("mergeReviewsDetailed — key collision", () => {
+	it("keeps the caused-by link of a restatement that loses to a more severe one", () => {
+		const causedBy = "Caused by an earlier finding: https://example.test/#r1";
+		const comment = (severity: "P1" | "P3", extra = {}) =>
+			buildModelReview({
+				event: "COMMENT",
+				inline_comments: [
+					{
+						...buildInlineComment({
+							path: "src/a.ts",
+							line: 1,
+							title: "Token cache never expires",
+							severity,
+						}),
+						...extra,
+					},
+				],
+			});
+		const { review } = mergeReviewsDetailed([
+			comment("P3", {
+				relation: { kind: "caused_by", entry_id: "abc123" },
+				causedBy,
+			}),
+			comment("P1"),
+		]);
+		expect(review.inline_comments).toHaveLength(1);
+		expect(review.inline_comments[0]).toMatchObject({
+			severity: "P1",
+			causedBy,
+		});
+	});
+
 	it("keeps distinct claims at one path:line as separate comments, most severe first", () => {
 		const r1 = buildModelReview({
 			event: "COMMENT",

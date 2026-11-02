@@ -306,6 +306,32 @@ describe("merge mapping", () => {
 		expect(result.collapsed).toBe(2);
 	});
 
+	it("carries an absorbed member's caused-by link to a survivor without one", () => {
+		const link = {
+			relation: { kind: "caused_by", entry_id: "abc123" },
+			causedBy: "Caused by an earlier finding: https://example.test/#r1",
+		};
+		const low = {
+			...claim({
+				line: 116,
+				severity: "P3",
+				title:
+					"`body: f.title` duplicates the title instead of the finding body",
+			}),
+			...link,
+		};
+		const high = claim({
+			line: 120,
+			severity: "P1",
+			title: "body field set to f.title — finding body duplicates the title",
+		});
+
+		const result = dedupeClaims([low, high]);
+
+		expect(result.kept).toEqual([{ ...high, ...link }]);
+		expect(result.merges).toEqual([{ from: low, into: result.kept[0] }]);
+	});
+
 	it("reports no merges when every finding is distinct", () => {
 		const result = dedupeClaims([
 			claim({ line: 10, title: "`alpha` is silently swallowed here" }),
