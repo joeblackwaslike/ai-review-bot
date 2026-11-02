@@ -4,7 +4,6 @@ import {
 	numberPatchLines,
 	rightSideText,
 } from "./diff-lines.js";
-import { trimPatch } from "./prompt.js";
 
 const TWO_HUNKS = [
 	"@@ -1,3 +1,3 @@",
@@ -50,7 +49,9 @@ describe("numberPatchLines", () => {
 			"@@ -1,2 +1,2 @@",
 			...Array.from({ length: 40 }, (_, i) => `+line${i}`),
 		].join("\n");
-		const out = numberPatchLines(trimPatch(patch, 100)).split("\n");
+		const out = numberPatchLines(
+			`${patch.slice(0, 100)}\n\n[patch truncated]`,
+		).split("\n");
 		expect(out.at(-1)).toBe("[patch truncated]");
 		expect(out[1]).toBe("   1|+line0");
 		expect(out[2]).toBe("   2|+line1");

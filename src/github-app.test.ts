@@ -138,6 +138,7 @@ const baseArgs = {
 		improveCarrierEnabled: false,
 		agentConcurrency: 1,
 		agentBudgetMs: 600_000,
+		diffBudgetChars: 200_000,
 		tier2Enabled: false,
 	},
 };

@@ -13,6 +13,7 @@ function claim(
 		title: string;
 		severity: string | null;
 		body: string;
+		advisory: boolean;
 	}> = {},
 ) {
 	return {
@@ -212,6 +213,31 @@ describe("dedupeClaims", () => {
 		]);
 		expect(result.kept.map((c) => c.line)).toEqual([400, 10]);
 	});
+
+	it("keeps the non-advisory finding over an advisory one, even with lower severity and a shorter body", () => {
+		const nonAdvisory = claim({
+			line: 116,
+			severity: "P3",
+			body: "short",
+			title:
+				"`body: f.title` duplicates the title instead of passing the finding body",
+		});
+		const advisory = claim({
+			line: 120,
+			severity: "P1",
+			body: "the long explanation of why this matters",
+			advisory: true,
+			title:
+				"body field set to f.title — finding body duplicates the title, no description",
+		});
+		const forward = dedupeClaims([nonAdvisory, advisory]);
+		expect(forward.kept).toEqual([nonAdvisory]);
+		expect(forward.merges).toEqual([{ from: advisory, into: nonAdvisory }]);
+
+		const backward = dedupeClaims([advisory, nonAdvisory]);
+		expect(backward.kept).toEqual([nonAdvisory]);
+		expect(backward.merges).toEqual([{ from: advisory, into: nonAdvisory }]);
+	});
 });
 
 describe("anchor handling", () => {
@@ -304,6 +330,32 @@ describe("merge mapping", () => {
 		expect(result.kept).toEqual([third]);
 		expect(result.merges.map((m) => m.into)).toEqual([third, third]);
 		expect(result.collapsed).toBe(2);
+	});
+
+	it("carries an absorbed member's caused-by link to a survivor without one", () => {
+		const link = {
+			relation: { kind: "caused_by", entry_id: "abc123" },
+			causedBy: "Caused by an earlier finding: https://example.test/#r1",
+		};
+		const low = {
+			...claim({
+				line: 116,
+				severity: "P3",
+				title:
+					"`body: f.title` duplicates the title instead of the finding body",
+			}),
+			...link,
+		};
+		const high = claim({
+			line: 120,
+			severity: "P1",
+			title: "body field set to f.title — finding body duplicates the title",
+		});
+
+		const result = dedupeClaims([low, high]);
+
+		expect(result.kept).toEqual([{ ...high, ...link }]);
+		expect(result.merges).toEqual([{ from: low, into: result.kept[0] }]);
 	});
 
 	it("reports no merges when every finding is distinct", () => {

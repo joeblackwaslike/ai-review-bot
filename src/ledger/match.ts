@@ -7,7 +7,12 @@ import {
 	isSameClaim,
 	jaccard,
 } from "../claim-dedupe.js";
-import { isSettled, type Ledger, type LedgerEntry } from "./types.js";
+import {
+	isAcknowledged,
+	isSettled,
+	type Ledger,
+	type LedgerEntry,
+} from "./types.js";
 
 export const CROSS_ROUND_MATCH: ClaimMatchOptions = {
 	lineWindow: Number.POSITIVE_INFINITY,
@@ -30,6 +35,14 @@ export const FINGERPRINT_CLAIM_MATCH: ClaimMatchOptions = {
 	...CROSS_ROUND_MATCH,
 	titleSimilarity: 0.5,
 	identifierSimilarity: 0.5,
+};
+
+/** Bar for a declared `repeats` on a P0: a model's say-so suppresses it, so the title needs 0.8 similarity, with or without a shared identifier or an anchor, within the usual line window. */
+export const DECLARED_P0_CLAIM_MATCH: ClaimMatchOptions = {
+	...DEFAULT_CLAIM_MATCH,
+	titleSimilarity: 0.8,
+	identifierSimilarity: 0.8,
+	unanchoredSimilarity: 0.8,
 };
 
 const normalizeTitle = (title: string) => title.trim().toLowerCase();
@@ -190,6 +203,14 @@ export function findSettledMatch(
 	ledger: Ledger,
 ): LedgerEntry | null {
 	return findMatch(finding, ledger, isSettled);
+}
+
+/** The acknowledged entry the finding restates, or null. */
+export function findAcknowledgedMatch(
+	finding: ClaimLike,
+	ledger: Ledger,
+): LedgerEntry | null {
+	return findMatch(finding, ledger, isAcknowledged);
 }
 
 /** The open entry the finding restates, or null. Settled entries never match. */

@@ -61,7 +61,7 @@ function labelClaim(f: ReplayFixture, c: PostedClaim): ClaimLabel {
 		thread?.replies ?? [],
 		(r) => r.author === f.author,
 	);
-	if (disposition) {
+	if (disposition && disposition.status !== "acknowledged") {
 		return make(disposition.status, "high", disposition.evidence);
 	}
 

@@ -188,6 +188,27 @@ describe("deriveBaseline", () => {
 			expect(r?.state.findings.map((f) => f.severity)).toEqual(["P0"]);
 		});
 
+		it("carries an acknowledged entry and holds REQUEST_CHANGES", () => {
+			const acked = entry({
+				id: "r0:c1:0",
+				round: 0,
+				path: "src/a.ts",
+				line: 42,
+				title: "Unchecked cast",
+				status: "acknowledged",
+				decidedBy: "author",
+			});
+			const r = deriveBaseline(
+				{ id: 20, body: body({ carry: "r0:c1:0" }) },
+				warm([acked]),
+				KNOWN_SKILLS,
+			);
+			expect(r?.state.findings.map((f) => f.id)).toEqual([
+				findingId("src/a.ts", 42, "Unchecked cast"),
+			]);
+			expect(r?.state.event).toBe("REQUEST_CHANGES");
+		});
+
 		it("does not carry a listed entry that is no longer open", () => {
 			const b = body({ carry: "r0:c1:0" });
 			const r = deriveBaseline(
@@ -449,5 +470,26 @@ describe("deriveBaseline incompleteSkills", () => {
 			KNOWN_SKILLS,
 		);
 		expect(r?.state.incompleteSkills).toEqual([]);
+	});
+});
+
+describe("deriveBaseline advisory entries", () => {
+	it("does not carry an open advisory inline entry as a finding", () => {
+		const e = entry({
+			id: "r1:c5:0",
+			round: 1,
+			path: "src/a.ts",
+			line: 3,
+			severity: "P2",
+			title: "Layering",
+			advisory: true,
+		});
+		const r = deriveBaseline(
+			{ id: 20, body: body({ count: 2 }) },
+			warm([e]),
+			KNOWN_SKILLS,
+		);
+		expect(r?.state.findings).toEqual([]);
+		expect(r?.state.event).toBe("COMMENT");
 	});
 });

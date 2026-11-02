@@ -145,6 +145,12 @@ export interface ClaimLike {
 	title: string;
 	severity?: string | null;
 	body?: string | null;
+	/** From an advisory agent; never replaces a non-advisory restatement. */
+	advisory?: boolean;
+	/** The prior entry the finder declared this finding repeats or follows from. */
+	relation?: { kind: string; entry_id: string } | null;
+	/** The link line a resolved `caused_by` relation posts with. */
+	causedBy?: string;
 	/** Anchor-code fingerprint; see `ledger/fingerprint.ts`. */
 	fp?: string;
 	/** Suggestion-code fingerprint. */
@@ -225,13 +231,28 @@ function severityRank(severity: string | null | undefined): number {
 		: 0;
 }
 
-/** The representative of a cluster: most severe first, then the longest body —
+/** The representative of a cluster: non-advisory first, then most severe, then the longest body —
  * the version that actually explains the problem rather than restating it. */
 function preferred<T extends ClaimLike & { body?: string }>(a: T, b: T): T {
+	if (Boolean(a.advisory) !== Boolean(b.advisory)) return a.advisory ? b : a;
 	const rankA = severityRank(a.severity);
 	const rankB = severityRank(b.severity);
 	if (rankA !== rankB) return rankA > rankB ? a : b;
 	return (b.body?.length ?? 0) > (a.body?.length ?? 0) ? b : a;
+}
+
+/** The survivor of a merge, with the caused-by link (and its relation) of the
+ * first absorbed restatement that has one when the survivor has none, so a
+ * merge never drops the line pointing at the earlier thread. */
+export function withAbsorbedLink<T extends ClaimLike>(
+	survivor: T,
+	absorbed: readonly T[],
+): T {
+	if (survivor.causedBy) return survivor;
+	const donor = absorbed.find((m) => m.causedBy);
+	return donor
+		? { ...survivor, relation: donor.relation, causedBy: donor.causedBy }
+		: survivor;
 }
 
 export interface DedupeResult<T> {
@@ -276,12 +297,12 @@ export function dedupeClaims<T extends ClaimLike & { body?: string }>(
 	}
 
 	const merges: Array<{ from: T; into: T }> = [];
-	members.forEach((group, index) => {
-		for (const member of group) {
-			if (member !== kept[index])
-				merges.push({ from: member, into: kept[index] });
-		}
+	const survivors = kept.map((rep, index) => {
+		const absorbed = members[index].filter((m) => m !== rep);
+		const into = withAbsorbedLink(rep, absorbed);
+		for (const from of absorbed) merges.push({ from, into });
+		return into;
 	});
 
-	return { kept, collapsed: merges.length, merges };
+	return { kept: survivors, collapsed: merges.length, merges };
 }

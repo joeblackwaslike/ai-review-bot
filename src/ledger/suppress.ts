@@ -8,14 +8,23 @@ export interface Suppressed<T> {
 	entry: LedgerEntry;
 }
 
+/** Looks up the entry a finding declared it repeats. */
+export type DeclaredEntry = (f: ClaimLike) => LedgerEntry | undefined;
+
 export function suppressSettled<T extends ClaimLike>(
 	findings: readonly T[],
 	ledger: Ledger,
+	declared?: DeclaredEntry,
 ): { kept: T[]; suppressed: Suppressed<T>[] } {
 	const kept: T[] = [];
 	const suppressed: Suppressed<T>[] = [];
 	for (const finding of findings) {
-		const entry = findSettledMatch(finding, ledger);
+		const named = declared?.(finding);
+		const entry = named
+			? isSettled(named)
+				? named
+				: null
+			: findSettledMatch(finding, ledger);
 		if (entry) suppressed.push({ finding, entry });
 		else kept.push(finding);
 	}
@@ -28,12 +37,17 @@ export function suppressSettled<T extends ClaimLike>(
 export function suppressOpenRestatements<T extends ClaimLike>(
 	findings: readonly T[],
 	ledger: Ledger,
+	declared?: DeclaredEntry,
 ): { kept: T[]; suppressed: Suppressed<T>[] } {
 	const open = ledger.filter((e) => !isSettled(e)).map(recoverLocation);
 	const kept: T[] = [];
 	const suppressed: Suppressed<T>[] = [];
 	for (const finding of findings) {
-		const entry = findOpenMatch(finding, open);
+		const named = declared?.(finding);
+		const entry =
+			named && !isSettled(named)
+				? recoverLocation(named)
+				: findOpenMatch(finding, open);
 		const wouldLoseBlock =
 			entry !== null &&
 			blocksVerdict(finding) &&
@@ -49,18 +63,23 @@ const isBlockingSeverity = (s: string | null | undefined) =>
 
 /** Whether an open finding or entry blocks the verdict. One with a path has a
  * thread the author can settle, so it blocks at every severity; a path-less
- * (general) one has no thread, so only P0 and P1 decide. */
+ * (general) one has no thread, so only P0 and P1 decide. An advisory one
+ * never blocks. */
 export function blocksVerdict(f: {
 	path?: string | null;
 	severity?: string | null;
+	advisory?: boolean;
 }): boolean {
-	return Boolean(f.path) || isBlockingSeverity(f.severity);
+	return !f.advisory && (Boolean(f.path) || isBlockingSeverity(f.severity));
 }
 
 /** A restated open entry holds the verdict if the entry blocks, or the
- * restatement is P0/P1. */
+ * restatement is a non-advisory P0/P1. */
 function holdsVerdict(s: Suppressed<ClaimLike>): boolean {
-	return blocksVerdict(s.entry) || isBlockingSeverity(s.finding.severity);
+	return (
+		blocksVerdict(s.entry) ||
+		(!s.finding.advisory && isBlockingSeverity(s.finding.severity))
+	);
 }
 
 /** Returns a copy without settled repeats or restatements of open entries.
@@ -75,15 +94,16 @@ export function suppressInReview<
 >(
 	review: R,
 	ledger: Ledger,
+	declared?: DeclaredEntry,
 ): {
 	review: R;
 	suppressed: Suppressed<ClaimLike>[];
 	restatedOpen: Suppressed<ClaimLike>[];
 } {
-	const general = suppressSettled(review.general_findings, ledger);
-	const inline = suppressSettled(review.inline_comments, ledger);
-	const generalOpen = suppressOpenRestatements(general.kept, ledger);
-	const inlineOpen = suppressOpenRestatements(inline.kept, ledger);
+	const general = suppressSettled(review.general_findings, ledger, declared);
+	const inline = suppressSettled(review.inline_comments, ledger, declared);
+	const generalOpen = suppressOpenRestatements(general.kept, ledger, declared);
+	const inlineOpen = suppressOpenRestatements(inline.kept, ledger, declared);
 	const restatedOpen = [...generalOpen.suppressed, ...inlineOpen.suppressed];
 	const hadFindings =
 		review.general_findings.length + review.inline_comments.length > 0;

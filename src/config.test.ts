@@ -340,3 +340,21 @@ describe("parseAgentBudgetMs", () => {
 		expect(parseAgentBudgetMs()).toBe(210_000);
 	});
 });
+
+describe("diffBudgetChars", () => {
+	it.each([
+		[undefined, 200_000],
+		["50000", 50_000],
+		["abc", 200_000],
+		["0", 200_000],
+		["-5", 200_000],
+		["1.5", 200_000],
+		["", 200_000],
+	])("REVIEW_DIFF_BUDGET_CHARS=%s gives %i", (raw, expected) => {
+		setRequiredEnv();
+		if (raw === undefined) delete process.env.REVIEW_DIFF_BUDGET_CHARS;
+		else process.env.REVIEW_DIFF_BUDGET_CHARS = raw;
+		expect(getConfig().diffBudgetChars).toBe(expected);
+		delete process.env.REVIEW_DIFF_BUDGET_CHARS;
+	});
+});

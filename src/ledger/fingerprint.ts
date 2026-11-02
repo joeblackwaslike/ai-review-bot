@@ -7,6 +7,7 @@ const MIN_ANCHOR_CHARS = 12;
 const MIN_SUGGESTION_CHARS = 24;
 const FP_LINE = /^<!--\s*ai-review:fp=(.+?)\s*-->$/;
 const SFP_LINE = /^<!--\s*ai-review:sfp=(.+?)\s*-->$/;
+const ADVISORY_LINE = /^<!--\s*ai-review:advisory\s*-->$/;
 
 const hash = (text: string) =>
 	createHash("sha256").update(text).digest("hex").slice(0, HASH_CHARS);
@@ -90,14 +91,17 @@ export function suggestionFingerprint(code: string): string | null {
 	return stripped.length < MIN_SUGGESTION_CHARS ? null : hash(stripped);
 }
 
-/** HTML-comment marker lines for a posted inline comment; empty when neither is set. */
+/** HTML-comment marker lines (fp, sfp, advisory) for a posted inline comment;
+ * empty when none is set. */
 export function formatFpMarkers(markers: {
 	fp?: string;
 	sfp?: string;
+	advisory?: boolean;
 }): string {
 	return [
 		markers.fp ? `<!-- ai-review:fp=${markers.fp} -->` : "",
 		markers.sfp ? `<!-- ai-review:sfp=${markers.sfp} -->` : "",
+		markers.advisory ? "<!-- ai-review:advisory -->" : "",
 	]
 		.filter(Boolean)
 		.join("\n");
@@ -110,7 +114,11 @@ function splitTrailingMarkers(text: string): { body: string; block: string[] } {
 		const line = lines[lines.length - 1].trim();
 		if (line === "") {
 			lines.pop();
-		} else if (FP_LINE.test(line) || SFP_LINE.test(line)) {
+		} else if (
+			FP_LINE.test(line) ||
+			SFP_LINE.test(line) ||
+			ADVISORY_LINE.test(line)
+		) {
 			block.unshift(line);
 			lines.pop();
 		} else {
@@ -123,7 +131,11 @@ function splitTrailingMarkers(text: string): { body: string; block: string[] } {
 /** Reads the markers back out of the trailing marker block of a posted
  * comment's text. Only the block at the very end counts, so a marker written
  * into the model's own text cannot stand in for the real one. */
-export function readFpMarkers(text: string): { fp?: string; sfp?: string } {
+export function readFpMarkers(text: string): {
+	fp?: string;
+	sfp?: string;
+	advisory?: true;
+} {
 	const { block } = splitTrailingMarkers(text);
 	const fp = block
 		.map((l) => FP_LINE.exec(l)?.[1])
@@ -133,7 +145,12 @@ export function readFpMarkers(text: string): { fp?: string; sfp?: string } {
 		.map((l) => SFP_LINE.exec(l)?.[1])
 		.filter(Boolean)
 		.at(-1);
-	return { ...(fp ? { fp } : {}), ...(sfp ? { sfp } : {}) };
+	const advisory = block.some((l) => ADVISORY_LINE.test(l));
+	return {
+		...(fp ? { fp } : {}),
+		...(sfp ? { sfp } : {}),
+		...(advisory ? { advisory: true as const } : {}),
+	};
 }
 
 /** The comment text without its trailing marker block. */
@@ -141,12 +158,15 @@ export function stripFpMarkers(text: string): string {
 	return splitTrailingMarkers(text).body;
 }
 
-/** Removes anything shaped like an fp/sfp marker from model-written text, so it
+/** Removes anything shaped like an fp/sfp/advisory marker from model-written text, so it
  * cannot stand in for the markers the bot writes itself. */
 export function stripForgedFpMarkers(text: string): string {
 	let current = text;
 	for (;;) {
-		const next = current.replace(/<!--\s*ai-review:s?fp=.*?-->/gs, "");
+		const next = current.replace(
+			/<!--\s*ai-review:(?:s?fp=.*?|advisory\s*)-->/gs,
+			"",
+		);
 		if (next === current) return current;
 		current = next;
 	}

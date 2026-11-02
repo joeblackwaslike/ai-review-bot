@@ -70,7 +70,8 @@ export function deriveBaseline(
 	const fromLedger: PersistedFinding[] = ledger.entries
 		.filter(
 			(e) =>
-				e.status === "open" &&
+				(e.status === "open" || e.status === "acknowledged") &&
+				!e.advisory &&
 				((e.round === round && !e.id.includes(":body:")) || carried.has(e.id)),
 		)
 		.map(ledgerEntryFinding);

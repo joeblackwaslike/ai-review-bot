@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { App } from "octokit";
+import { capAdvisoryOutcome } from "./advisory.js";
 import { logAgentRecords, toRecord } from "./agent-log.js";
 import {
 	createHeadBranch,
@@ -121,8 +122,13 @@ export async function runAuditPass(opts: {
 		const outcomes = await mapWithConcurrency(
 			TIER1_SKILLS,
 			concurrency,
-			(skill) =>
-				runAgent(skill, userMessage, selection, extraInstructions, { auth }),
+			async (skill) =>
+				capAdvisoryOutcome(
+					skill,
+					await runAgent(skill, userMessage, selection, extraInstructions, {
+						auth,
+					}),
+				),
 		);
 		agentsAttempted += outcomes.length;
 		const messages: Record<string, string> = {};

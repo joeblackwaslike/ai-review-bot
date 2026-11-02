@@ -116,6 +116,42 @@ describe("buildLedger", () => {
 		expect(e.status).toBe("open");
 	});
 
+	describe("an acknowledged thread", () => {
+		const ack = reply({ author: "joe", body: "Good catch, will fix." });
+
+		it("stays acknowledged while the thread is open", () => {
+			expect(build([thread({ replies: [ack] })])[0].status).toBe(
+				"acknowledged",
+			);
+		});
+
+		it("settles as resolved when a decider resolves the thread", () => {
+			const [e] = build([
+				thread({ isResolved: true, resolvedBy: "joe", replies: [ack] }),
+			]);
+			expect(e.status).toBe("resolved");
+			expect(e.decidedBy).toBe("author");
+		});
+
+		it("stays acknowledged when a non-decider resolves the thread", () => {
+			const [e] = build([
+				thread({ isResolved: true, resolvedBy: "rando", replies: [ack] }),
+			]);
+			expect(e.status).toBe("acknowledged");
+		});
+
+		it("lets a later fix-commit reply win over the resolution", () => {
+			const [e] = build([
+				thread({
+					isResolved: true,
+					resolvedBy: "joe",
+					replies: [ack, reply({ author: "joe", body: "fixed in abc1234" })],
+				}),
+			]);
+			expect(e.status).toBe("fixed");
+		});
+	});
+
 	it("resolves an author-resolved thread without a reply", () => {
 		const [e] = build([thread({ isResolved: true, resolvedBy: "joe" })]);
 		expect(e.status).toBe("resolved");

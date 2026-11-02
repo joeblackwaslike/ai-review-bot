@@ -1,6 +1,7 @@
 import { APICallError } from "@ai-sdk/provider";
 import { generateObject } from "ai";
 import { z } from "zod";
+import { capAdvisoryOutcome } from "./advisory.js";
 import {
 	type AgentFailure,
 	classifyAgentError,
@@ -19,10 +20,10 @@ import {
 	ledgerEntryFinding,
 	MAX_CARRY_IDS,
 } from "./baseline.js";
-import { dedupeClaims, isSameClaim } from "./claim-dedupe.js";
+import { dedupeClaims, isSameClaim, withAbsorbedLink } from "./claim-dedupe.js";
 import { commentKey } from "./comment-key.js";
 import { mapWithConcurrency } from "./concurrency.js";
-import { collectRightSideLines } from "./diff-lines.js";
+import { collectRightSideLines, rightSideText } from "./diff-lines.js";
 import {
 	anchorFingerprint,
 	formatFpMarkers,
@@ -30,14 +31,14 @@ import {
 	suggestionFingerprint,
 } from "./ledger/fingerprint.js";
 import { loadLedger, reconcileSurvivingPrior } from "./ledger/live.js";
-import { findSettledMatch } from "./ledger/match.js";
+import { findAcknowledgedMatch, findSettledMatch } from "./ledger/match.js";
 import { retargetCarried } from "./ledger/retarget.js";
 import {
 	blocksVerdict,
 	type Suppressed,
 	suppressInReview,
 } from "./ledger/suppress.js";
-import { isSettled, type LedgerEntry } from "./ledger/types.js";
+import { isAcknowledged, isSettled, type LedgerEntry } from "./ledger/types.js";
 import { computeCost, createAIModel } from "./models.js";
 import {
 	type AgentPromptOptions,
@@ -47,6 +48,13 @@ import {
 	PR_FILE_LIST_CAP,
 	wholePrInputComplete,
 } from "./prompt.js";
+import {
+	declaredRepeat,
+	RELATION_KINDS,
+	resolveRelations,
+	shortFindingId,
+	uniqueShortIds,
+} from "./relation.js";
 import { claimTitle } from "./replay/claims.js";
 import type { ResolvedFindingRef } from "./resolve-threads.js";
 import { candidateFamilies, dropRetractions } from "./retraction.js";
@@ -64,6 +72,7 @@ import {
 	reasoningProviderOptions,
 	routeModel,
 } from "./router.js";
+import { repairSuggestion } from "./suggestion.js";
 import { detectTier2Skills, TIER2_DETECTORS } from "./tier2.js";
 import {
 	fetchDeltaMeta,
@@ -116,6 +125,8 @@ interface ReviewContext {
 	 * skipped and the review is submitted with what completed — the platform's own
 	 * timeout would otherwise kill the run with nothing posted at all. */
 	agentBudgetMs: number;
+	/** PR-wide diff budget passed to `buildUserMessage`; absent means the default. */
+	diffBudgetChars?: number;
 	tier2Enabled: boolean;
 	/** Local subscription/OAuth or explicit API-key auth for this review's model
 	 * calls. Omitted on the hosted webhook path (env-var API keys apply via
@@ -352,6 +363,12 @@ const findingBase = z
 		confidence: z.number().min(0).max(1),
 		evidence: z.string().trim().min(1),
 		suppressible: z.boolean(),
+		relation: z
+			.object({ kind: z.enum(RELATION_KINDS), entry_id: z.string() })
+			.nullable()
+			.describe(
+				"Set only when this finding restates (repeats) or is a consequence of fixing (caused_by) a finding listed under your prior findings; entry_id is that line's [#id] without the #. Otherwise null.",
+			),
 	})
 	.refine((f) => !(f.severity === "P0" && f.suppressible), {
 		message: "P0 findings must not be marked suppressible",
@@ -375,10 +392,32 @@ const SummarySchema = z.object({
 	summary: z.string(),
 });
 
-export type ModelReview = z.infer<typeof ModelReviewSchema>;
+type ParsedReview = z.infer<typeof ModelReviewSchema>;
 
-export type ModelFinding = ModelReview["general_findings"][number];
-export type ModelInlineComment = ModelReview["inline_comments"][number];
+/** Set after parsing, on findings from advisory skills; not in the schema. */
+export type ModelFinding = Omit<
+	ParsedReview["general_findings"][number],
+	"relation"
+> & {
+	relation?: ParsedReview["general_findings"][number]["relation"];
+	advisory?: true;
+	causedBy?: string;
+};
+export type ModelInlineComment = Omit<
+	ParsedReview["inline_comments"][number],
+	"relation"
+> & {
+	relation?: ParsedReview["inline_comments"][number]["relation"];
+	advisory?: true;
+	causedBy?: string;
+};
+export type ModelReview = Omit<
+	ParsedReview,
+	"general_findings" | "inline_comments"
+> & {
+	general_findings: ModelFinding[];
+	inline_comments: ModelInlineComment[];
+};
 
 const SEVERITY_EMOJI: Record<Severity, string> = {
 	P0: "🔴",
@@ -609,9 +648,13 @@ function flattenAliases(aliases: Map<string, string>): void {
 	}
 }
 
-/** Whether `a` should replace `b` as the representative of one claim: higher
- * severity first, then the longer body. */
-function outranks(a: ModelInlineComment, b: ModelInlineComment): boolean {
+/** Whether `a` should replace `b` as the representative of one claim:
+ * non-advisory first, then higher severity, then the longer body. */
+function outranks(
+	a: { severity: string; body: string; advisory?: true },
+	b: { severity: string; body: string; advisory?: true },
+): boolean {
+	if (Boolean(a.advisory) !== Boolean(b.advisory)) return !a.advisory;
 	const diff =
 		(INLINE_SEVERITY_RANK[a.severity] ?? 0) -
 		(INLINE_SEVERITY_RANK[b.severity] ?? 0);
@@ -636,16 +679,22 @@ export function mergeReviewsDetailed(
 	const isResolvedInline = (path: string, line: number) =>
 		resolved.has(`inline:${path}:${line}`);
 
-	const seenTitles = new Set<string>();
-	const general_findings = agentResults
+	const byTitle = new Map<string, ModelFinding>();
+	for (const f of agentResults
 		.flatMap((r) => r.general_findings)
-		.filter((f) => {
-			if (isResolvedGeneral(f.title)) return false;
-			const key = f.title.toLowerCase().trim();
-			if (seenTitles.has(key)) return false;
-			seenTitles.add(key);
-			return true;
-		});
+		.filter((finding) => !isResolvedGeneral(finding.title))) {
+		const key = f.title.toLowerCase().trim();
+		const existing = byTitle.get(key);
+		byTitle.set(
+			key,
+			existing
+				? withAbsorbedLink(outranks(f, existing) ? f : existing, [
+						outranks(f, existing) ? existing : f,
+					])
+				: f,
+		);
+	}
+	const general_findings = Array.from(byTitle.values());
 
 	// Distinct claims at one path:line stay separate comments; only restatements
 	// (isSameClaim) at the exact same location fold into one.
@@ -669,8 +718,10 @@ export function mergeReviewsDetailed(
 			}
 			const existing = group[index];
 			const incomingWins = outranks(comment, existing);
-			const survivor = incomingWins ? comment : existing;
 			const loser = incomingWins ? existing : comment;
+			const survivor = withAbsorbedLink(incomingWins ? comment : existing, [
+				loser,
+			]);
 			group[index] = survivor;
 			if (commentKey(loser) !== commentKey(survivor)) {
 				const survivorKey = commentKey(survivor);
@@ -721,8 +772,10 @@ export function mergeReviewsDetailed(
 			// path check in isSameClaim would always short-circuit. Compare on
 			// title/body similarity alone — that's the whole-PR signal here.
 			(gf) =>
-				!inline_comments.some((ic) =>
-					isSameClaim({ ...gf, path: null }, { ...ic, path: null }),
+				!inline_comments.some(
+					(ic) =>
+						(gf.advisory || !ic.advisory) &&
+						isSameClaim({ ...gf, path: null }, { ...ic, path: null }),
 				),
 		);
 		collapsed += beforeCross - merged_general.length;
@@ -731,7 +784,8 @@ export function mergeReviewsDetailed(
 	// Event is REQUEST_CHANGES only if an UNRESOLVED finding survived the filters
 	// above — a lone re-raise of an already-addressed finding no longer blocks.
 	const event: "COMMENT" | "REQUEST_CHANGES" =
-		merged_general.length > 0 || inline_comments.length > 0
+		merged_general.some((f) => !f.advisory) ||
+		inline_comments.some((c) => !c.advisory)
 			? agentResults.some((r) => r.event === "REQUEST_CHANGES")
 				? "REQUEST_CHANGES"
 				: "COMMENT"
@@ -854,6 +908,25 @@ export async function generateSummary(
 			completionTokens: usage.outputTokens ?? 0,
 		},
 	};
+}
+
+const MAX_ADVISORY_NOTE_CHARS = 300;
+
+/** An advisory note's body as one indented line under its bullet: HTML
+ * comments (forged markers) removed, whitespace collapsed so no line can start
+ * a badge row or a quoted bullet the baseline reads back, and capped. */
+function advisoryNoteLine(body: string): string {
+	const text = body
+		.replace(/<!--[\s\S]*?-->/g, "")
+		.replace(/<!--/g, "")
+		.replace(/\s+/g, " ")
+		.trim();
+	if (!text) return "";
+	const capped =
+		text.length > MAX_ADVISORY_NOTE_CHARS
+			? `${text.slice(0, MAX_ADVISORY_NOTE_CHARS).trimEnd()}…`
+			: text;
+	return `\n  ${capped}`;
 }
 
 export function formatFindings(findings: ModelFinding[]): string {
@@ -1121,7 +1194,21 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		allSkillsCount,
 	});
 
-	const findingsBlock = formatFindings(generalFindings);
+	const findingsBlock = formatFindings(
+		generalFindings.filter((f) => !f.advisory),
+	);
+	// A bullet list, not a badge table: the next round's baseline reads badge
+	// rows back as open findings.
+	const advisoryNotes = generalFindings.filter((f) => f.advisory);
+	const advisoryBlock =
+		advisoryNotes.length > 0
+			? `#### Quality and architecture notes\n\nAdvisory only. These never block the PR.\n\n${advisoryNotes
+					.map(
+						(f) =>
+							`- ${f.severity} **${plainTitle(f.title)}**${advisoryNoteLine(f.body)}`,
+					)
+					.join("\n")}`
+			: "";
 
 	const inlineSummary =
 		reviewComments.length > 0
@@ -1200,6 +1287,7 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		overflowNotice,
 		feedbackInvite,
 		findingsBlock,
+		advisoryBlock,
 		priorBlock,
 		retiredBlock,
 		commandHints,
@@ -1242,13 +1330,20 @@ function withFingerprints<T extends ModelInlineComment>(
 }
 
 function buildCommentBody(comment: ModelInlineComment, patch?: string): string {
-	const badge = severityBadge(comment.severity);
+	const badge = `${severityBadge(comment.severity)}${comment.advisory ? " · advisory" : ""}`;
 	const title = stripForgedFpMarkers(comment.title);
-	const base = `${badge}\n\n**${title}**\n\n${stripForgedFpMarkers(comment.body)}`;
-	const withFix = comment.suggestion
-		? `${base}\n\n*Suggested fix:*\n\n\`\`\`suggestion\n${comment.suggestion}\n\`\`\``
-		: base;
-	const markers = formatFpMarkers(commentFingerprints(comment, patch));
+	const linked = comment.causedBy
+		? `\n\n${stripForgedFpMarkers(comment.causedBy)}`
+		: "";
+	const base = `${badge}\n\n**${title}**\n\n${stripForgedFpMarkers(comment.body)}${linked}`;
+	const withFix =
+		comment.suggestion !== null
+			? `${base}\n\n*Suggested fix:*\n\n\`\`\`suggestion\n${comment.suggestion}\n\`\`\``
+			: base;
+	const markers = formatFpMarkers({
+		...commentFingerprints(comment, patch),
+		advisory: comment.advisory === true,
+	});
 	return markers ? `${withFix}\n\n${markers}` : withFix;
 }
 
@@ -1375,6 +1470,45 @@ export function routeDroppedComments(
 	};
 }
 
+/** Applies `repairSuggestion` to a comment already validated against the diff.
+ * A suggestion that cannot be repaired, or whose repaired range leaves the
+ * valid lines, is dropped and logged, and the comment keeps its original
+ * anchor. */
+function withRepairedSuggestion(
+	comment: ModelInlineComment,
+	patch: string | undefined,
+	validLines: Set<number>,
+): ModelInlineComment {
+	if (comment.suggestion === null || !patch) return comment;
+	const repaired = repairSuggestion({
+		suggestion: comment.suggestion,
+		line: comment.line,
+		startLine: comment.start_line,
+		fileLines: rightSideText(patch),
+	});
+	const inRange =
+		repaired !== null &&
+		validLines.has(repaired.line) &&
+		(repaired.startLine === null ||
+			(validLines.has(repaired.startLine) &&
+				repaired.startLine < repaired.line));
+	if (!repaired || !inRange) {
+		console.log("suggestion dropped: cannot be placed on the diff", {
+			reason: repaired ? "SUGGESTION_RANGE_OFF_DIFF" : "SUGGESTION_UNPLACEABLE",
+			path: comment.path,
+			line: comment.line,
+			start_line: comment.start_line,
+		});
+		return { ...comment, suggestion: null };
+	}
+	return {
+		...comment,
+		suggestion: repaired.suggestion,
+		line: repaired.line,
+		start_line: repaired.startLine,
+	};
+}
+
 export function buildReviewComments(
 	files: PullFile[],
 	inlineComments: ModelInlineComment[],
@@ -1434,16 +1568,17 @@ export function buildReviewComments(
 			return [];
 		}
 
+		const patch = files.find((f) => f.filename === comment.path)?.patch;
+		const posted = withRepairedSuggestion(comment, patch, validLines);
+		const postedStart = posted.start_line ?? undefined;
+
 		const built: ReviewComment = {
-			path: comment.path,
-			body: buildCommentBody(
-				comment,
-				files.find((f) => f.filename === comment.path)?.patch,
-			),
-			line: comment.line,
+			path: posted.path,
+			body: buildCommentBody(posted, patch),
+			line: posted.line,
 			side: "RIGHT" as const,
-			...(startLine !== undefined
-				? { start_line: startLine, start_side: "RIGHT" as const }
+			...(postedStart !== undefined
+				? { start_line: postedStart, start_side: "RIGHT" as const }
 				: {}),
 		};
 		sourceKeys.set(built, commentKey(comment));
@@ -1551,11 +1686,14 @@ async function restampCheckRun(
 }
 
 /** Records one restatement of an open entry as the finding it holds, keyed by
- * finding id, keeping the most severe of the entry and its restatements. */
+ * finding id, keeping the most severe of the entry and its restatements. An
+ * advisory restatement of an advisory entry holds nothing: it was advice and
+ * stays advice. */
 function addRestated(
 	restated: Map<string, PersistedFinding>,
-	s: Suppressed<{ severity?: string | null }>,
+	s: Suppressed<{ severity?: string | null; advisory?: boolean }>,
 ): void {
+	if (s.entry.advisory && s.finding.advisory) return;
 	const f = ledgerEntryFinding(s.entry);
 	const prev = restated.get(f.id);
 	const severity = moreSevere(
@@ -1565,11 +1703,14 @@ function addRestated(
 	restated.set(f.id, { ...f, severity });
 }
 
-/** The ledger open-restatement suppression may match: every settled entry, and
- * only the open entries behind a carried finding (so not one triage resolved
- * this round, one the bot resolved earlier, or one whose file left the PR).
- * A restatement of any other open entry posts fresh. `prPaths` is null when
- * the PR file list is cut short and a missing path proves nothing. */
+/** The ledger open-restatement suppression may match: every settled entry,
+ * and the open or acknowledged entries behind a carried finding (so not one
+ * triage resolved this round, one the bot resolved earlier, or one whose file
+ * left the PR). An acknowledged advisory entry is never carried, so it is
+ * matched whenever its file is in the PR, and its advisory repeat is dropped
+ * without holding the verdict. A restatement of any other entry posts fresh.
+ * `prPaths` is null when the PR file list is cut short and a missing path
+ * proves nothing. */
 function holdableLedger(
 	ledger: LedgerEntry[],
 	carried: PersistedFinding[],
@@ -1580,7 +1721,7 @@ function holdableLedger(
 		if (isSettled(e)) return true;
 		const f = ledgerEntryFinding(e);
 		const inPr = !prPaths || f.path === null || prPaths.has(f.path);
-		return inPr && carriedIds.has(f.id);
+		return inPr && (carriedIds.has(f.id) || (isAcknowledged(e) && e.advisory));
 	});
 }
 
@@ -2037,10 +2178,12 @@ export async function buildReview(
 		resolvedThisRound = state.findings.filter((f) => resolvedNowIds.has(f.id));
 	}
 	const priorFindings = state?.findings ?? [];
-	const priorMatches = priorFindings.map((f) => findSettledMatch(f, ledger));
+	const priorMatches = priorFindings.map(
+		(f) => findSettledMatch(f, ledger) ?? findAcknowledgedMatch(f, ledger),
+	);
 	const priorMatchedIds = new Set(priorMatches.map((m) => m?.id));
 	const ledgerOnlySettled = ledger.filter(
-		(e) => isSettled(e) && !priorMatchedIds.has(e.id),
+		(e) => (isSettled(e) || isAcknowledged(e)) && !priorMatchedIds.has(e.id),
 	);
 
 	const scopedFilePaths = scopedFiles.map((f) => f.filename);
@@ -2058,13 +2201,15 @@ export async function buildReview(
 		changedFiles: context.changedFiles,
 		labels: context.labels,
 		extraInstructions: context.extraInstructions,
+		diffBudgetChars: context.diffBudgetChars,
 		priorBotReviews,
 		priorOwnReview,
 		priorOwnFindings: tuning.showPriorOwnFindings
-			? [
+			? uniqueShortIds([
 					...priorFindings.map((f, i) => {
 						const settled = priorMatches[i];
 						return {
+							shortId: shortFindingId(f.id),
 							path: f.path,
 							line: f.line,
 							title: f.title,
@@ -2076,6 +2221,7 @@ export async function buildReview(
 						};
 					}),
 					...ledgerOnlySettled.map((e) => ({
+						shortId: shortFindingId(ledgerEntryFinding(e).id),
 						path: e.path,
 						line: e.line,
 						title: e.title,
@@ -2084,9 +2230,13 @@ export async function buildReview(
 						decidedBy: e.decidedBy,
 						reason: e.reason,
 					})),
-				]
+				])
 			: undefined,
 	};
+
+	const shownIds = new Set(
+		(promptBase.priorOwnFindings ?? []).flatMap((f) => f.shortId ?? []),
+	);
 
 	// Detect Tier 2 skills relevant to this PR and run all agents together.
 	// Keyed off scopedFiles so an INCREMENTAL pass only activates Tier 2 skills
@@ -2191,7 +2341,7 @@ export async function buildReview(
 		if (outcome.status === "ok" || outcome.status === "rate_limited") {
 			lastRateLimit = outcome.rateLimit;
 		}
-		return outcome;
+		return capAdvisoryOutcome(skillPath, outcome);
 	};
 	const paceNext = async (
 		next: { idx: number } | { skill: string },
@@ -2379,9 +2529,26 @@ export async function buildReview(
 		.filter((a) => !(a.attempt === 2 && a.outcome.status === "skipped"))
 		.map((a) => toRecord(a.skill, a.attempt, a.outcome));
 	// A pending skill clears only on an ok run over the whole PR with nothing
-	// missing or trimmed. Pending afterwards: what was pending and did not
-	// clear (run or not), plus every skill that ran this round and did not end ok.
-	const inputComplete = wholePrInputComplete(files, context.changedFiles);
+	// missing, truncated or omitted by the diff packer. Pending afterwards:
+	// what was pending and did not clear (run or not), plus every skill that
+	// ran this round and did not end ok, plus every skill that ran on cut
+	// input (the whole PR, or an INCREMENTAL delta), so the round cannot
+	// approve and the next push or same-head retry reruns it over the PR.
+	const inputComplete = wholePrInputComplete(
+		files,
+		context.changedFiles,
+		context.diffBudgetChars,
+	);
+	const deltaInputComplete =
+		!incrementalPass ||
+		(fileListComplete &&
+			wholePrInputComplete(
+				scopedFiles,
+				scopedFiles.length,
+				context.diffBudgetChars,
+			));
+	const ranOnCompleteInput = (n: string) =>
+		wholePrFor(n) ? inputComplete : deltaInputComplete;
 	const ranNames = allSkills.map((s) => skillName(s.skillPath));
 	const cleared = scheduledPending.filter((s) => {
 		const i = ranNames.indexOf(s);
@@ -2391,6 +2558,7 @@ export async function buildReview(
 		...new Set([
 			...priorPending.filter((s) => !cleared.includes(s)),
 			...ranNames.filter((_, i) => outcomes[i]?.status !== "ok"),
+			...ranNames.filter((n) => !ranOnCompleteInput(n)),
 		]),
 	];
 	if (priorPending.length > 0 || pending.length > 0) {
@@ -2400,6 +2568,7 @@ export async function buildReview(
 			cleared,
 			pending,
 			inputComplete,
+			deltaInputComplete,
 		});
 	}
 	const skipFallback = async (): Promise<null> => {
@@ -2495,11 +2664,29 @@ export async function buildReview(
 	);
 	const restated = new Map<string, PersistedFinding>();
 	const unsettledResults = agentResults.map((agentResult) => {
+		const pr = {
+			owner: context.owner,
+			repo: context.repo,
+			pullNumber: context.pullNumber,
+		};
 		const r = {
 			...agentResult,
-			inline_comments: withFingerprints(agentResult.inline_comments, files),
+			general_findings: resolveRelations(
+				agentResult.general_findings,
+				shownIds,
+				ledger,
+				pr,
+			),
+			inline_comments: withFingerprints(
+				resolveRelations(agentResult.inline_comments, shownIds, ledger, pr),
+				files,
+			),
 		};
-		const outcome = suppressInReview(r, suppressionLedger);
+		const outcome = suppressInReview(
+			r,
+			suppressionLedger,
+			declaredRepeat(suppressionLedger),
+		);
 		suppressedCount += outcome.suppressed.length;
 		for (const s of outcome.restatedOpen) {
 			console.log("suppressed open restatement", {
@@ -2633,7 +2820,9 @@ export async function buildReview(
 	if (routed.length > 0) {
 		modelReview = {
 			...modelReview,
-			event: "REQUEST_CHANGES",
+			event: routed.some((f) => !f.advisory)
+				? "REQUEST_CHANGES"
+				: modelReview.event,
 			general_findings: [...modelReview.general_findings, ...routed],
 			inline_comments: modelReview.inline_comments.filter(
 				(c) => !routedKeys.has(commentKey(c)),

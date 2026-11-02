@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+	blocksVerdict,
 	suppressInReview,
 	suppressOpenRestatements,
 	suppressSettled,
 } from "./suppress.js";
-import type { LedgerEntry } from "./types.js";
+import { isSettled, type LedgerEntry } from "./types.js";
 
 const settled: LedgerEntry = {
 	id: "e1",
@@ -224,5 +225,123 @@ describe("suppressInReview with open entries", () => {
 		);
 		expect(out.review.general_findings).toEqual([]);
 		expect(out.review.event).toBe("REQUEST_CHANGES");
+	});
+});
+
+describe("blocksVerdict advisory", () => {
+	it("never blocks an advisory finding, even with a path", () => {
+		expect(
+			blocksVerdict({ path: "a.ts", severity: "P2", advisory: true }),
+		).toBe(false);
+		expect(blocksVerdict({ path: "a.ts", severity: "P2" })).toBe(true);
+	});
+
+	it.each([
+		"P0",
+		"P1",
+		"P2",
+	])("never blocks an advisory %s finding, with or without a path", (severity) => {
+		expect(blocksVerdict({ path: "a.ts", severity, advisory: true })).toBe(
+			false,
+		);
+		expect(blocksVerdict({ path: null, severity, advisory: true })).toBe(false);
+	});
+
+	it("still blocks a non-advisory P0/P1 general finding", () => {
+		expect(blocksVerdict({ path: null, severity: "P0" })).toBe(true);
+		expect(blocksVerdict({ path: null, severity: "P1" })).toBe(true);
+	});
+
+	it("does not hold REQUEST_CHANGES for an advisory open restatement", () => {
+		const advisoryOpen: LedgerEntry = { ...open, advisory: true };
+		const out = suppressInReview(
+			{
+				event: "REQUEST_CHANGES",
+				general_findings: [],
+				inline_comments: [{ ...repeat, severity: "P1", advisory: true }],
+			},
+			[advisoryOpen],
+		);
+		expect(out.review.inline_comments).toEqual([]);
+		expect(out.restatedOpen).toHaveLength(1);
+		expect(out.review.event).toBe("COMMENT");
+	});
+});
+
+describe("acknowledged entries", () => {
+	const acknowledged: LedgerEntry = {
+		...open,
+		id: "r0:c12:0",
+		status: "acknowledged",
+		decidedBy: "author",
+		reason: "good catch, will fix",
+	};
+
+	it("suppresses a restatement and still holds the verdict", () => {
+		expect(suppressSettled([repeat], [acknowledged]).kept).toEqual([repeat]);
+		const out = suppressInReview(
+			{
+				event: "REQUEST_CHANGES",
+				general_findings: [],
+				inline_comments: [repeat],
+			},
+			[acknowledged],
+		);
+		expect(out.review.inline_comments).toEqual([]);
+		expect(out.review.event).toBe("REQUEST_CHANGES");
+		expect(out.restatedOpen[0]?.entry.id).toBe("r0:c12:0");
+	});
+
+	it("is not settled", () => {
+		expect(isSettled(acknowledged)).toBe(false);
+	});
+});
+
+describe("declared repeats", () => {
+	const declaredTo = (entry: LedgerEntry) => () => entry;
+	const unrelated = { ...fresh, severity: "P2" };
+
+	it("suppresses a declared repeat of an open entry that would not match by text and still holds the verdict", () => {
+		const out = suppressInReview(
+			{
+				event: "REQUEST_CHANGES",
+				general_findings: [],
+				inline_comments: [unrelated],
+			},
+			[open],
+			declaredTo(open),
+		);
+		expect(out.review.inline_comments).toEqual([]);
+		expect(out.restatedOpen).toEqual([{ finding: unrelated, entry: open }]);
+		expect(out.review.event).toBe("REQUEST_CHANGES");
+	});
+
+	it("drops a declared repeat of a settled entry without holding", () => {
+		const out = suppressInReview(
+			{
+				event: "REQUEST_CHANGES",
+				general_findings: [],
+				inline_comments: [unrelated],
+			},
+			[settled],
+			declaredTo(settled),
+		);
+		expect(out.review.inline_comments).toEqual([]);
+		expect(out.suppressed).toEqual([{ finding: unrelated, entry: settled }]);
+		expect(out.restatedOpen).toEqual([]);
+		expect(out.review.event).toBe("COMMENT");
+	});
+
+	it("does not suppress a finding whose declared entry does not resolve", () => {
+		const out = suppressInReview(
+			{
+				event: "REQUEST_CHANGES",
+				general_findings: [],
+				inline_comments: [unrelated],
+			},
+			[open],
+			() => undefined,
+		);
+		expect(out.review.inline_comments).toEqual([unrelated]);
 	});
 });
