@@ -55,6 +55,11 @@ export function fileStamp(at: Date): string {
 	return at.toISOString().replace(/[:.]/g, "-");
 }
 
+function safeSegment(value: string): string {
+	const cleaned = value.replace(/[^A-Za-z0-9._-]/g, "_");
+	return cleaned === "" || cleaned === "." || cleaned === ".." ? "_" : cleaned;
+}
+
 export function openMistakeLog(opts: OpenMistakeLogOptions): MistakeLog {
 	const now = opts.now ?? (() => new Date());
 	const runId = opts.runId ?? randomUUID();
@@ -62,8 +67,8 @@ export function openMistakeLog(opts: OpenMistakeLogOptions): MistakeLog {
 	const stamp = fileStamp(now());
 	const path = join(
 		root,
-		`${opts.owner}__${opts.repo}`,
-		`${stamp}-${runId}.jsonl`,
+		`${safeSegment(opts.owner)}__${safeSegment(opts.repo)}`,
+		`${stamp}-${safeSegment(runId)}.jsonl`,
 	);
 	let warned = false;
 	return {

@@ -42,7 +42,10 @@ export function diffRoundEvents(
 	const events: EventRecordBody[] = [];
 	for (const e of after) {
 		const was = prior.get(e.id);
-		if (e.status === "fixed" && (was === undefined || was === "open")) {
+		if (
+			e.status === "fixed" &&
+			(was === undefined || was === "open" || was === "acknowledged")
+		) {
 			events.push(
 				event(
 					e,

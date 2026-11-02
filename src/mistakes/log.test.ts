@@ -315,4 +315,18 @@ describe("log permissions", () => {
 			expect(statSync(dirname(log.path)).mode & 0o077).toBe(0);
 		},
 	);
+
+	it("keeps the log file under the root for a crafted owner and repo", () => {
+		const root = tempRoot();
+		const log = openMistakeLog({
+			root,
+			owner: "../evil",
+			repo: "a/b",
+			runId: "../../x",
+			source: "review",
+			branch: "b",
+		});
+		expect(log.path.startsWith(`${root}/`)).toBe(true);
+		expect(relative(root, log.path).split("/")).toHaveLength(2);
+	});
 });

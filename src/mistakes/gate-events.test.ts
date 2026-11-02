@@ -40,7 +40,29 @@ describe("diffRoundEvents", () => {
 
 	it("emits fixed for an entry missing before", () => {
 		const after = entry({ status: "fixed", evidence: ["inferred: x"] });
-		expect(diffRoundEvents([], [after], "h2")).toHaveLength(1);
+		expect(diffRoundEvents([], [after], "h2")).toEqual([
+			{
+				type: "event",
+				findingId: "f1",
+				status: "fixed",
+				by: "gate-inferred",
+				atHead: "h2",
+				fixCommit: null,
+				path: "src/a.ts",
+				title: "Retry loop swallows the error",
+				severity: "P1",
+				note: "inferred: x",
+			},
+		]);
+	});
+
+	it("emits fixed for acknowledged to fixed", () => {
+		const events = diffRoundEvents(
+			[entry({ status: "acknowledged" })],
+			[entry({ status: "fixed", evidence: ["inferred: y"] })],
+			"h2",
+		);
+		expect(events).toMatchObject([{ status: "fixed", findingId: "f1" }]);
 	});
 
 	it("emits reopened for fixed to open", () => {

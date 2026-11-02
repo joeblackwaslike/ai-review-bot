@@ -77,6 +77,14 @@ describe("sqliteNoMistakesSource", () => {
 		expect(await src.rounds("01RUN")).toEqual([]);
 	});
 
+	it("names the label and db path when sqlite3 output is not JSON", async () => {
+		const { src } = source("not json");
+		await expect(src.runs("o/r")).rejects.toThrow(/run.*\/db\/state\.sqlite/s);
+		await expect(src.runs("o/r")).rejects.toMatchObject({
+			cause: expect.any(SyntaxError),
+		});
+	});
+
 	it("refuses a run id that is not a plain identifier", async () => {
 		const { exec, src } = source("[]");
 		expect(await src.rounds("x'; DROP TABLE runs; --")).toEqual([]);
@@ -198,6 +206,22 @@ describe("decisionsFor", () => {
 		const { decisions, skipped } = decisionsFor(run, [round]);
 		expect(decisions).toEqual([]);
 		expect(skipped).toBe(1);
+	});
+
+	it("does not count a round nobody has decided yet as unrecognized", () => {
+		const round: NoMistakesRound = {
+			stepName: "gate.review.ai-review",
+			stepStatus: "completed",
+			stepFindingsJson: null,
+			round: 1,
+			findingsJson: JSON.stringify({
+				findings: [{ id: "f1", severity: "error", description: "Bug" }],
+			}),
+			selectedFindingIds: null,
+			selectionSource: null,
+			reviewedHeadSha: "aaaa",
+		};
+		expect(decisionsFor(run, [round])).toEqual({ decisions: [], skipped: 0 });
 	});
 
 	it("keeps a genuinely empty selection distinct from corrupt data", () => {

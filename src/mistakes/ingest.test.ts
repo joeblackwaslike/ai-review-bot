@@ -311,6 +311,25 @@ describe("ingest", () => {
 		]);
 	});
 
+	it("persists the run head as atHead when the round has no reviewed head", async () => {
+		const root = tempDir();
+		capture(root, {
+			source: "gate",
+			branch: "feat/x",
+			at: "2026-11-01T12:00:00.000Z",
+			headSha: "aaaa",
+			implementer: claude("s-env"),
+		});
+		const res = await run(root, {
+			noMistakes: fakeNoMistakes(
+				[{ id: "NMRUN1", branch: "feat/x", headSha: "aaaa" }],
+				{ NMRUN1: [{ ...DECIDED_ROUND, reviewedHeadSha: null }] },
+			),
+		});
+		expect(res.events).toBe(1);
+		expect(readOutput(res.file)).toMatchObject([{ atHead: "aaaa" }]);
+	});
+
 	it("matches a no-mistakes run by a reviewed head when the run head differs", async () => {
 		const root = tempDir();
 		capture(root, {

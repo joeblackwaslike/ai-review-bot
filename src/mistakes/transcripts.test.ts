@@ -77,12 +77,37 @@ describe("scanTranscripts", () => {
 		mkdirSync(join(root, "-Users-x-ai-review-bot"), { recursive: true });
 		writeFileSync(
 			join(root, "-Users-x-ai-review-bot", "sess-real.jsonl"),
-			`${JSON.stringify({ sessionId: "sess-real", gitBranch: "feat/x", timestamp: "2026-11-01T10:00:00.000Z" })}\n`,
+			`${JSON.stringify({ sessionId: "sess-real", cwd: "/Users/x/ai-review-bot", gitBranch: "feat/x", timestamp: "2026-11-01T10:00:00.000Z" })}\n`,
 		);
 		mkdirSync(join(root, "-Users-x-ai-review-bot-demo"), { recursive: true });
 		writeFileSync(
 			join(root, "-Users-x-ai-review-bot-demo", "sess-demo.jsonl"),
-			`${JSON.stringify({ sessionId: "sess-demo", gitBranch: "feat/x", timestamp: "2026-11-01T10:00:00.000Z" })}\n`,
+			`${JSON.stringify({ sessionId: "sess-demo", cwd: "/Users/x/ai-review-bot-demo", gitBranch: "feat/x", timestamp: "2026-11-01T10:00:00.000Z" })}\n`,
+		);
+
+		const { sessions } = await scanTranscripts({
+			dir: root,
+			repoName: "ai-review-bot",
+			branch: "feat/x",
+		});
+
+		expect(sessions.map((s) => s.sessionId)).toEqual(["sess-real"]);
+	});
+
+	it("requires the line cwd to be the repo, so a suffix-named sibling repo is excluded", async () => {
+		const root = await mkdtemp(join(tmpdir(), "transcripts-"));
+		const write = (project: string, id: string, cwd: string) => {
+			mkdirSync(join(root, project), { recursive: true });
+			writeFileSync(
+				join(root, project, `${id}.jsonl`),
+				`${JSON.stringify({ sessionId: id, cwd, gitBranch: "feat/x", timestamp: "2026-11-01T10:00:00.000Z" })}\n`,
+			);
+		};
+		write("-Users-x-ai-review-bot", "sess-real", "/Users/x/ai-review-bot");
+		write(
+			"-Users-x-my-ai-review-bot",
+			"sess-sibling",
+			"/Users/x/my-ai-review-bot",
 		);
 
 		const { sessions } = await scanTranscripts({
@@ -123,7 +148,7 @@ describe("scanTranscripts", () => {
 			const bad = join(project, "sess-bad.jsonl");
 			writeFileSync(
 				good,
-				`${JSON.stringify({ sessionId: "sess-good", gitBranch: "feat/x", timestamp: "2026-11-01T10:00:00.000Z" })}\n`,
+				`${JSON.stringify({ sessionId: "sess-good", cwd: "/Users/x/ai-review-bot", gitBranch: "feat/x", timestamp: "2026-11-01T10:00:00.000Z" })}\n`,
 			);
 			writeFileSync(bad, "unreadable\n");
 			chmodSync(bad, 0o000);
@@ -171,6 +196,7 @@ describe("pickSession", () => {
 	it("ignores sessions that start after the run and commits after the run", () => {
 		const pick = pickSession(
 			[
+				s("early", ["2026-11-01T10:00:00Z"], ["2026-11-01T10:30:00Z"]),
 				s("late", ["2026-11-01T13:00:00Z"], ["2026-11-01T13:00:00Z"]),
 				s(
 					"after",
@@ -180,7 +206,7 @@ describe("pickSession", () => {
 			],
 			RUN,
 		);
-		expect(pick).toEqual({ sessionId: "after", confidence: "medium" });
+		expect(pick).toEqual({ sessionId: "early", confidence: "medium" });
 	});
 
 	it("returns the latest active session with low confidence when the top tier ties", () => {

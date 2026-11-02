@@ -69,7 +69,7 @@ New `src/mistakes/` holds `types.ts` (zod schemas), `log.ts` (`openMistakeLog`, 
 
 `ai-review mistakes ingest [--repo <owner/name>]` reads capture files and writes annotations. It never modifies a capture file.
 
-1. Resolve `gate` rows to sessions. First use a `review` row on the same repo and branch that carries a session id, since the agent runs `review --full` before opening the PR. Then scan `~/.claude/projects/<repo>/*.jsonl` for a matching branch, cwd or commit sha. Anything unresolved stays null. Whether transcripts record branch or cwd is unverified.
+1. Resolve `gate` rows to sessions. First use a `review` row on the same repo and branch that carries a session id, since the agent runs `review --full` before opening the PR. Then scan `~/.claude/projects/<repo>/*.jsonl`. A line counts when its `gitBranch` equals the run branch and its `cwd` is the repo, verified by `cwd` basename (the repo name, or a path containing `/<repo>/.worktrees/`) because a project dir name suffix alone can match a sibling repo. Lines without a `cwd` do not count. Commit shas are not matched. `git commit` and `git push` Bash tool_use calls serve only as a ranking tiebreak between sessions. Anything unresolved stays null.
 2. Join no-mistakes decisions for the same branch and head from `~/.no-mistakes/`. The builder inspects the run logs and `eval` cases first.
 3. Write results as `event` and `implementer` annotation lines in an `ingest-<ts>.jsonl` file beside the capture files.
 

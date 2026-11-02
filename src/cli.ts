@@ -57,7 +57,7 @@ import {
 } from "./improve/trends.js";
 import { ingest } from "./mistakes/ingest.js";
 import { mistakesRoot, openMistakeLog } from "./mistakes/log.js";
-import { branchForHead } from "./mistakes/session.js";
+import { branchForHead, headShaFor } from "./mistakes/session.js";
 import { runReplay } from "./replay/command.js";
 import { slugify } from "./report.js";
 import { defaultGitRunner } from "./sources.js";
@@ -305,7 +305,7 @@ async function cmdReview(args: string[]): Promise<void> {
 	});
 	const result = await runLocalReview({
 		mistakes,
-		headSha: gitOut(["rev-parse", "HEAD"]) ?? "unknown",
+		headSha: headShaFor(scope, gitOut(["rev-parse", "HEAD"])),
 		cwd: process.cwd(),
 		scope,
 		docsDir: outDir,

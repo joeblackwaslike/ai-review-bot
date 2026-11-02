@@ -93,10 +93,19 @@ function parseRows<T>(
 	output: string,
 	schema: z.ZodType<T>,
 	what: string,
+	dbPath: string,
 	warn: (msg: string) => void,
 ): T[] {
 	if (!output.trim()) return [];
-	const raw: unknown = JSON.parse(output);
+	let raw: unknown;
+	try {
+		raw = JSON.parse(output);
+	} catch (error) {
+		throw new Error(
+			`mistakes ingest: could not parse sqlite3 ${what} output from ${dbPath}`,
+			{ cause: error },
+		);
+	}
 	const rows = Array.isArray(raw) ? raw : [];
 	const parsed = rows.map((r) => schema.safeParse(r));
 	const skipped = parsed.filter((p) => !p.success).length;
@@ -121,7 +130,7 @@ export function sqliteNoMistakesSource(opts: {
 	return {
 		async runs(repo) {
 			const want = repo.toLowerCase();
-			return parseRows(await query(RUNS_SQL), RunRow, "run", warn)
+			return parseRows(await query(RUNS_SQL), RunRow, "run", opts.dbPath, warn)
 				.filter((r) => {
 					const { owner, repo: name } = gateRepoSlug(
 						r.upstream_url,
@@ -141,6 +150,7 @@ export function sqliteNoMistakesSource(opts: {
 				await query(roundsSql(runId)),
 				RoundRow,
 				"round",
+				opts.dbPath,
 				warn,
 			).map((r) => ({
 				stepName: r.step_name,
@@ -242,7 +252,7 @@ export function decisionsFor(
 		skipped += round.skipped;
 		const selected = parseIds(r.selectedFindingIds);
 		if (selected === null) {
-			skipped++;
+			if (r.selectionSource !== null) skipped++;
 			continue;
 		}
 		const chosen = round.findings.filter((f) => selected.has(f.id));

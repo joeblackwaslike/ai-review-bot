@@ -1,3 +1,4 @@
+import type { ReviewScope } from "../audit.js";
 import type { GitRunner } from "../sources.js";
 import type { Implementer } from "./types.js";
 
@@ -16,7 +17,12 @@ export function implementerFromEnv(env: NodeJS.ProcessEnv): Implementer {
 
 export function branchForHead(runGit: GitRunner): string | null {
 	try {
-		const current = runGit(["rev-parse", "--abbrev-ref", "HEAD"]).trim();
+		let current: string;
+		try {
+			current = runGit(["rev-parse", "--abbrev-ref", "HEAD"]).trim();
+		} catch {
+			current = runGit(["symbolic-ref", "--quiet", "--short", "HEAD"]).trim();
+		}
 		if (current && current !== "HEAD") return current;
 		const listed = runGit([
 			"for-each-ref",
@@ -32,4 +38,11 @@ export function branchForHead(runGit: GitRunner): string | null {
 	} catch {
 		return null;
 	}
+}
+
+export function headShaFor(
+	scope: ReviewScope,
+	headFromGit: string | null,
+): string {
+	return scope.kind === "commit" ? scope.sha : (headFromGit ?? "unknown");
 }

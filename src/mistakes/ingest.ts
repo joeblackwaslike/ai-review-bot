@@ -205,7 +205,7 @@ async function noMistakesEvents(opts: {
 				status: d.status,
 				by: "no-mistakes",
 				step: d.step,
-				atHead: d.atHead,
+				atHead,
 				fixCommit: null,
 				path: d.path,
 				title: d.title,

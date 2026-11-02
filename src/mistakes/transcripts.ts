@@ -22,6 +22,7 @@ const GIT_COMMIT_OR_PUSH =
 interface TranscriptLine {
 	sessionId?: unknown;
 	gitBranch?: unknown;
+	cwd?: unknown;
 	timestamp?: unknown;
 	message?: { content?: unknown };
 }
@@ -35,6 +36,15 @@ function isGitCommitOrPush(line: TranscriptLine): boolean {
 			block.name === "Bash" &&
 			typeof block.input?.command === "string" &&
 			GIT_COMMIT_OR_PUSH.test(block.input.command),
+	);
+}
+
+function isRepoCwd(cwd: unknown, repoName: string): boolean {
+	if (typeof cwd !== "string") return false;
+	const trimmed = cwd.replace(/\/+$/, "");
+	return (
+		trimmed.slice(trimmed.lastIndexOf("/") + 1) === repoName ||
+		cwd.includes(`/${repoName}/.worktrees/`)
 	);
 }
 
@@ -101,6 +111,7 @@ export async function scanTranscripts(opts: {
 					continue;
 				}
 				if (line?.gitBranch !== opts.branch) continue;
+				if (!isRepoCwd(line.cwd, opts.repoName)) continue;
 				if (typeof line.sessionId !== "string") continue;
 				const at =
 					typeof line.timestamp === "string" ? Date.parse(line.timestamp) : NaN;
