@@ -191,6 +191,8 @@ async function noMistakesEvents(opts: {
 		const result = decisionsFor(run, rounds);
 		skipped += result.skipped;
 		for (const d of result.decisions) {
+			const atHead = d.atHead ?? run.headSha;
+			if (!branchHeads.has(atHead)) continue;
 			const event: EventRecord = {
 				v: 1,
 				type: "event",

@@ -329,6 +329,48 @@ describe("ingest", () => {
 		expect(res.events).toBe(1);
 	});
 
+	it("drops decisions at heads not captured even when the run matches", async () => {
+		const root = tempDir();
+		capture(root, {
+			source: "gate",
+			branch: "feat/x",
+			at: "2026-11-01T12:00:00.000Z",
+			headSha: "aaaa",
+			implementer: claude("s-env"),
+		});
+		const res = await run(root, {
+			noMistakes: fakeNoMistakes(
+				[{ id: "NMRUN1", branch: "feat/x", headSha: "aaaa" }],
+				{
+					NMRUN1: [
+						DECIDED_ROUND,
+						{
+							...DECIDED_ROUND,
+							round: 2,
+							findingsJson: JSON.stringify({
+								findings: [
+									{
+										id: "f2",
+										severity: "error",
+										file: "src/b.ts",
+										description: "Other bug",
+									},
+								],
+							}),
+							selectedFindingIds: '["f2"]',
+							reviewedHeadSha: "bbbb",
+						},
+					],
+				},
+			),
+		});
+		expect(res.events).toBe(1);
+		const findingIds = readOutput(res.file).map((l) =>
+			l.type === "event" ? l.findingId : null,
+		);
+		expect(findingIds).toEqual(["f1"]);
+	});
+
 	it("still annotates when the no-mistakes source fails", async () => {
 		const root = tempDir();
 		capture(root, {
