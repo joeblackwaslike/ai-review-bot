@@ -4,7 +4,6 @@ import { fileURLToPath } from "node:url";
 import {
 	DEFAULT_DIFF_BUDGET_CHARS,
 	formatPackedDiff,
-	isDeletionOnlyPatch,
 	isGeneratedFile,
 	type PackedDiff,
 	type PackInputFile,
@@ -115,9 +114,8 @@ export const PR_FILE_LIST_CAP = 3000;
 /** True when these files are the whole PR as a FULL round sees it: the list
  * is not cut short, and every file other than a generated one has a patch or
  * has no changes to show (a binary file, a pure rename), and `packDiff` under
- * `budgetChars` neither truncates nor omits it. A cut file whose patch is
- * deletion-only still counts, since the model would not see its hunks anyway.
- * The files are packed exactly as `buildUserMessage` packs them, status
+ * `budgetChars` neither truncates nor omits it nor drops its deletion-only
+ * hunks (a removed guard is a change worth reviewing). The files are packed exactly as `buildUserMessage` packs them, status
  * included, so a PR at the budget edge is judged by the prompt it gets. Only
  * such input clears a pending skill. */
 export function wholePrInputComplete(
@@ -136,13 +134,15 @@ export function wholePrInputComplete(
 	const packed = packPromptFiles(files, budgetChars);
 	const cut = new Set([
 		...packed.omitted,
-		...packed.files.filter((f) => f.truncated).map((f) => f.filename),
+		...packed.files
+			.filter((f) => f.truncated || f.droppedDeletionHunks > 0)
+			.map((f) => f.filename),
 	]);
 	return files.every(
 		(f) =>
 			isGeneratedFile(f.filename) ||
 			((Boolean(f.patch) || (f.additions === 0 && f.deletions === 0)) &&
-				(!cut.has(f.filename) || isDeletionOnlyPatch(f.patch))),
+				!cut.has(f.filename)),
 	);
 }
 

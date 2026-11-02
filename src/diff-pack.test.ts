@@ -7,7 +7,6 @@ import {
 import {
 	DEFAULT_DIFF_BUDGET_CHARS,
 	formatPackedDiff,
-	isDeletionOnlyPatch,
 	packDiff,
 } from "./diff-pack.js";
 
@@ -211,10 +210,37 @@ describe("packDiff deletion-only hunks", () => {
 	const deletion =
 		"@@ -5,2 +4,0 @@\n-gone1\n-gone2\n\\ No newline at end of file";
 	const keep = "@@ -20,1 +18,2 @@\n ctx\n+new";
+	const keepBig = `@@ -20,1 +18,21 @@\n ctx\n${Array.from({ length: 20 }, (_, i) => `+new${i}`).join("\n")}`;
 
-	it("drops a hunk with no added lines, with its \\ No newline line, and keeps the other hunks' headers", () => {
-		const [packed] = packDiff([file("a.ts", `${keep}\n${deletion}`)], {
+	it("keeps deletion-only hunks when the whole diff fits the budget", () => {
+		const patch = `${keep}\n${deletion}`;
+		const [packed] = packDiff([file("a.ts", patch)], {
 			budgetChars: DEFAULT_DIFF_BUDGET_CHARS,
+		}).files;
+		expect(packed.patch).toBe(patch);
+		expect(packed.droppedDeletionHunks).toBe(0);
+		expect(serialized([file("a.ts", patch)], DEFAULT_DIFF_BUDGET_CHARS)).toBe(
+			block("a.ts", patch),
+		);
+	});
+
+	it("shows a deletions-only file in full when it fits", () => {
+		const packed = packDiff([file("a.ts", deletion)], {
+			budgetChars: DEFAULT_DIFF_BUDGET_CHARS,
+		});
+		expect(packed.files[0]).toMatchObject({
+			patch: deletion,
+			deletionsOnly: false,
+			droppedDeletionHunks: 0,
+		});
+		expect(formatPackedDiff(packed)).toBe(block("a.ts", deletion));
+	});
+
+	it("drops a hunk with no added lines, with its \\ No newline line, only when the diff does not fit with it", () => {
+		const patch = `${keep}\n${deletion}`;
+		const budget = block("a.ts", patch).length - 1;
+		const [packed] = packDiff([file("a.ts", patch)], {
+			budgetChars: budget,
 		}).files;
 		expect(packed.patch).toBe(keep);
 		expect(packed.droppedDeletionHunks).toBe(1);
@@ -222,21 +248,22 @@ describe("packDiff deletion-only hunks", () => {
 	});
 
 	it("notes dropped deletion-only hunks under the file header and counts the note in the budget", () => {
-		const files = [file("a.ts", `${deletion}\n${keep}\n${deletion}`)];
-		const full = serialized(files, DEFAULT_DIFF_BUDGET_CHARS);
-		expect(full).toBe(
-			`FILE: a.ts\nSTATUS: modified\n(2 deletion-only hunks not shown)\nPATCH:\n${numberPatchLines(keep)}`,
-		);
+		const files = [file("a.ts", `${deletion}\n${keepBig}\n${deletion}`)];
+		const trimmed = `FILE: a.ts\nSTATUS: modified\n(2 deletion-only hunks not shown)\nPATCH:\n${numberPatchLines(keepBig)}`;
+		expect(serialized(files, trimmed.length)).toBe(trimmed);
 		expect(
-			packDiff(files, { budgetChars: full.length }).files[0].truncated,
+			packDiff(files, { budgetChars: trimmed.length }).files[0].truncated,
 		).toBe(false);
-		const short = packDiff(files, { budgetChars: full.length - 1 });
-		expect(short.files[0]?.truncated ?? true).toBe(true);
+		const short = packDiff(files, { budgetChars: trimmed.length - 1 });
+		expect(short.omitted).toEqual([]);
+		expect(short.files).toHaveLength(1);
+		expect(short.files[0].truncated).toBe(true);
 	});
 
-	it("marks a file left with no hunks as deletions only instead of dropping it", () => {
-		const packed = packDiff([file("a.ts", deletion)], {
-			budgetChars: DEFAULT_DIFF_BUDGET_CHARS,
+	it("marks a deletions-only file as such, with a note, when its hunks do not fit", () => {
+		const files = [file("a.ts", deletion)];
+		const packed = packDiff(files, {
+			budgetChars: block("a.ts", deletion).length - 1,
 		});
 		expect(packed.omitted).toEqual([]);
 		expect(packed.files).toEqual([
@@ -250,25 +277,22 @@ describe("packDiff deletion-only hunks", () => {
 			},
 		]);
 		expect(formatPackedDiff(packed)).toBe(
-			"FILE: a.ts\nSTATUS: modified\nPATCH: [deletions only]",
+			"FILE: a.ts\nSTATUS: modified\n(1 deletion-only hunk not shown)\nPATCH: [deletions only]",
 		);
-	});
-
-	it("isDeletionOnlyPatch is true only for a patch whose every hunk only deletes", () => {
-		expect(isDeletionOnlyPatch(deletion)).toBe(true);
-		expect(isDeletionOnlyPatch(`${deletion}\n${keep}`)).toBe(false);
-		expect(isDeletionOnlyPatch(undefined)).toBe(false);
 	});
 });
 
 describe("packDiff and anchor validation", () => {
-	it("does not change the valid-line set computed from the full patch", () => {
+	it("leaves the full patch alone and shows only lines of its valid-line set", () => {
 		const full = [added(1, 30, "a"), added(100, 30, "b")].join("\n");
 		const before = collectRightSideLines(full);
 		const files = [file("a.ts", full)];
 		const { files: packed } = packDiff(files, { budgetChars: 300 });
 		expect(packed[0].truncated).toBe(true);
 		expect(files[0].patch).toBe(full);
-		expect(collectRightSideLines(files[0].patch ?? "")).toEqual(before);
+		const shown = collectRightSideLines(packed[0].patch ?? "");
+		expect(shown.size).toBeGreaterThan(0);
+		expect(shown.size).toBeLessThan(before.size);
+		expect([...shown].every((n) => before.has(n))).toBe(true);
 	});
 });

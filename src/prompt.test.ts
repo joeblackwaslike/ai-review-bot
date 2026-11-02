@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-	formatPackedDiff,
-	isDeletionOnlyPatch,
-	isGeneratedFile,
-	packDiff,
-} from "./diff-pack.js";
+import { formatPackedDiff, isGeneratedFile, packDiff } from "./diff-pack.js";
 import {
 	buildAgentSystemPrompt,
 	buildAuditUserMessage,
@@ -67,19 +62,18 @@ describe("buildUserMessage diff packing", () => {
 		expect(msg).not.toContain("FILE: a.ts");
 	});
 
-	it("says a deletions-only file is there without showing its hunks", () => {
-		const msg = buildUserMessage({
-			...base,
-			files: [
-				{
-					filename: "gone.ts",
-					status: "modified",
-					patch: "@@ -1,2 +0,0 @@\n-a\n-b",
-				},
-			],
-		});
+	it("shows a deletions-only file's hunks when they fit, and says it is there when they do not", () => {
+		const files = [
+			{
+				filename: "gone.ts",
+				status: "modified",
+				patch: `@@ -1,30 +0,0 @@\n${Array.from({ length: 30 }, (_, i) => `-a${i}`).join("\n")}`,
+			},
+		];
+		expect(buildUserMessage({ ...base, files })).toContain("|-a");
+		const msg = buildUserMessage({ ...base, files, diffBudgetChars: 120 });
 		expect(msg).toContain(
-			"FILE: gone.ts\nSTATUS: modified\nPATCH: [deletions only]",
+			"FILE: gone.ts\nSTATUS: modified\n(1 deletion-only hunk not shown)\nPATCH: [deletions only]",
 		);
 		expect(msg).not.toContain("|-a");
 	});
@@ -454,20 +448,31 @@ describe("wholePrInputComplete", () => {
 		expect(wholePrInputComplete(files, 2, 300)).toBe(true);
 	});
 
-	it("an omitted file whose patch only deletes still counts as complete", () => {
+	it("a deletions-only file shown in full is complete", () => {
+		const files = [
+			file("a.ts"),
+			file("gone.md", { patch: "@@ -1,2 +0,0 @@\n-a\n-b", deletions: 2 }),
+		];
+		expect(wholePrInputComplete(files, 2, 200_000)).toBe(true);
+	});
+
+	it("a file whose deletion-only hunks were dropped to fit the budget is incomplete", () => {
 		const kept = "@@ -1 +1 @@\n+x";
-		const gone = "@@ -1,2 +0,0 @@\n-a\n-b";
+		const gone = `@@ -1,30 +0,0 @@\n${Array.from({ length: 30 }, (_, i) => `-a${i}`).join("\n")}`;
 		const files = [
 			file("a.ts", { patch: kept, additions: 1 }),
-			file("gone.md", { patch: gone, deletions: 2 }),
+			file("gone.md", { patch: gone, deletions: 30 }),
 		];
 		const budget =
 			`FILE: a.ts\nSTATUS: modified\nPATCH:\n${kept.replace("+x", "   1|+x")}`
-				.length + 52;
-		expect(packDiff(files, { budgetChars: budget }).omitted).toEqual([
-			"gone.md",
-		]);
-		expect(wholePrInputComplete(files, 2, budget)).toBe(true);
+				.length + 120;
+		const packed = packDiff(files, { budgetChars: budget });
+		expect(packed.omitted).toEqual([]);
+		expect(packed.files.find((f) => f.filename === "gone.md")).toMatchObject({
+			deletionsOnly: true,
+			droppedDeletionHunks: 1,
+		});
+		expect(wholePrInputComplete(files, 2, budget)).toBe(false);
 	});
 
 	it("judges a PR at the budget edge by the packing the prompt does, status line included", () => {
@@ -485,7 +490,7 @@ describe("wholePrInputComplete", () => {
 	it("agrees with the prompt's own packing on random PRs", () => {
 		let seed = 42;
 		const rand = (n: number) => {
-			seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+			seed = (Math.imul(seed, 1_103_515_245) + 12_345) & 0x7fffffff;
 			return seed % n;
 		};
 		const names = [
@@ -525,13 +530,12 @@ describe("wholePrInputComplete", () => {
 			const packed = packDiff(files, { budgetChars: budget });
 			const cut = new Set([
 				...packed.omitted,
-				...packed.files.filter((f) => f.truncated).map((f) => f.filename),
+				...packed.files
+					.filter((f) => f.truncated || f.droppedDeletionHunks > 0)
+					.map((f) => f.filename),
 			]);
 			const expected = files.every(
-				(f) =>
-					!cut.has(f.filename) ||
-					isGeneratedFile(f.filename) ||
-					isDeletionOnlyPatch(f.patch),
+				(f) => !cut.has(f.filename) || isGeneratedFile(f.filename),
 			);
 			const actual = wholePrInputComplete(files, files.length, budget);
 			expect({ round, actual }).toEqual({ round, actual: expected });
@@ -542,12 +546,19 @@ describe("wholePrInputComplete", () => {
 	});
 
 	it("an omitted binary file is incomplete input", () => {
+		const kept = "@@ -1 +1 @@\n+x";
 		const files = [
-			file("a.ts", { patch: "@@ -1 +1 @@\n+x", additions: 1 }),
+			file("a.ts", { patch: kept, additions: 1 }),
 			file("logo.png", { additions: 0, deletions: 0 }),
 		];
 		expect(wholePrInputComplete(files, 2, 200_000)).toBe(true);
-		expect(wholePrInputComplete(files, 2, 1)).toBe(false);
+		const budget =
+			`FILE: a.ts\nSTATUS: modified\nPATCH:\n${kept.replace("+x", "   1|+x")}`
+				.length + "Files not shown (over the diff budget): logo.png\n\n".length;
+		const packed = packDiff(files, { budgetChars: budget });
+		expect(packed.files.map((f) => f.filename)).toEqual(["a.ts"]);
+		expect(packed.omitted).toEqual(["logo.png"]);
+		expect(wholePrInputComplete(files, 2, budget)).toBe(false);
 	});
 
 	it("a file with no patch and no changes (binary, pure rename) is complete", () => {

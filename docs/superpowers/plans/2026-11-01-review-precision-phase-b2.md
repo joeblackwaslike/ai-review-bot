@@ -21,7 +21,7 @@
 1. **B11 cap point.** Findings from `code-review-and-quality.md` and `architect-review.md` are capped at P2 and the agent's event forced to COMMENT in `dispatch`, tagged `advisory: true` (not in the zod schema; set after parsing). Body renders them in a separate "Quality and architecture notes" section. Advisory findings never feed `blocksVerdict` as new blockers.
 2. **B13 status.** Add `acknowledged` to `LedgerStatus`. `isSettled` stays "not open" for suppression of re-posts, but `blocksVerdict` and the carried table treat `acknowledged` like `open`. A later reply citing a fix commit moves it to `fixed` via the existing FIX_REF rule.
 3. **B7 `repeats`** feeds the existing suppression path as a declared match (still requires the id to exist in the shown ledger; unknown id is ignored). **`caused_by`** posts normally with a link line to the earlier thread's comment URL when the entry has one; no suppression.
-4. **B10 ordering.** Main language by changed-line count of the extension with most additions; within it, larger patches first; deletion-only hunks dropped; omitted files named in the prompt. Budget default 200,000 characters PR-wide, configurable via `REVIEW_DIFF_BUDGET_CHARS`.
+4. **B10 ordering.** Main language by changed-line count of the extension with most additions; within it, larger patches first; deletion-only hunks dropped; omitted files named in the prompt. **Deviation (PR #103 review):** deletion-only hunks are kept when the whole diff fits the budget and dropped only when it does not, and a file whose deletion-only hunks were dropped counts as cut input. Dropping them always hid a change that only removes a guard or a cleanup call, and treating a deletion-only patch as complete let such a PR approve unseen. Budget default 200,000 characters PR-wide, configurable via `REVIEW_DIFF_BUDGET_CHARS`.
 
 ## Global constraints
 
@@ -80,7 +80,7 @@
 
 **Interfaces:** `packDiff(files: PromptFile[], opts: { budgetChars: number }): { files: PackedFile[]; omitted: string[] }` in new `src/diff-pack.ts`; `serializeFiles` uses it and prints an "Omitted files" line; `trimPatch` removed.
 
-- [ ] RED unit tests: ordering (main language, then size), budget never exceeded, deletion-only hunks dropped, omitted list exact, a truncated file keeps correct right-side line numbers.
+- [ ] RED unit tests: ordering (main language, then size), budget never exceeded, deletion-only hunks dropped only when the diff does not fit with them (see the decision 4 deviation), omitted list exact, a truncated file keeps correct right-side line numbers.
 - [ ] Asymmetric hunk context: extend each hunk 5 lines before and 1 line after toward the enclosing function only when the full file text is available; otherwise keep the patch hunks as given.
 - [ ] Update `wholePrInputComplete` and its docstring: a packed or omitted file is no longer complete input; add a test.
 - [ ] Verify: `ai-review replay --live --max-cost 2` stays within the budget and reports no silent truncation. Commit `feat(prompt): pack the diff PR-wide instead of trimming per file`.

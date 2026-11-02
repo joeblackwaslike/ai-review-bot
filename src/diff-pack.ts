@@ -37,9 +37,10 @@ export interface PackInputFile {
 }
 
 /** A file as the model sees it after packing. `patch` holds whole hunks of the
- * GitHub patch (deletion-only hunks dropped and counted in
- * `droppedDeletionHunks`), ending in `[patch truncated]` when the budget cut
- * it; it is undefined for a file with no patch or no hunk left. */
+ * GitHub patch, ending in `[patch truncated]` when the budget cut it; when the
+ * diff did not fit with its deletion-only hunks, those are dropped and counted
+ * in `droppedDeletionHunks`. It is undefined for a file with no patch or no
+ * hunk left. */
 export interface PackedFile {
 	filename: string;
 	status: string;
@@ -71,13 +72,6 @@ function splitHunks(patch: string): Split {
 
 const hasAddition = (hunk: string[]) =>
 	hunk.some((line, i) => i > 0 && line.startsWith("+"));
-
-/** True when the patch has hunks and none of them adds a line. */
-export function isDeletionOnlyPatch(patch: string | undefined): boolean {
-	if (!patch) return false;
-	const { hunks } = splitHunks(patch);
-	return hunks.length > 0 && !hunks.some(hasAddition);
-}
 
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
@@ -119,7 +113,7 @@ function patchLabel(file: PackedFile): string {
 
 /** Everything in a file's block except the numbered patch text. */
 function fileFrame(file: PackedFile): string {
-	const n = file.patch ? file.droppedDeletionHunks : 0;
+	const n = file.droppedDeletionHunks;
 	const note =
 		n > 0
 			? `(${n} deletion-only ${n === 1 ? "hunk" : "hunks"} not shown)\n`
@@ -169,9 +163,9 @@ interface Prepared {
 	dropped: number;
 }
 
-function prepare(input: PackInputFile): Prepared {
+function prepare(input: PackInputFile, keepDeletions: boolean): Prepared {
 	const { preamble, hunks } = splitHunks(input.patch ?? "");
-	const kept = hunks.filter(hasAddition);
+	const kept = keepDeletions ? hunks : hunks.filter(hasAddition);
 	const deletionsOnly = hunks.length > 0 && kept.length === 0;
 	const lines =
 		!input.patch || deletionsOnly ? [] : [...preamble, ...kept.flat()];
@@ -255,28 +249,48 @@ function packWithin(items: readonly Prepared[], budget: number): PackedDiff {
 	return { files, omitted };
 }
 
+function packFitting(
+	items: readonly Prepared[],
+	budget: number,
+	names: readonly string[],
+): PackedDiff {
+	const first = packWithin(items, budget);
+	const need = omittedSection(first.omitted).length;
+	if (need === 0) return first;
+	const second = packWithin(items, budget - need);
+	if (omittedSection(second.omitted).length <= need) return second;
+	return packWithin(items, budget - omittedUpperBound(names));
+}
+
 /** Pack a PR's patches into one budget for the whole serialized diff section
  * (`formatPackedDiff`): file framing, numbered patch text and the
  * omitted-files line all count. Files go main language first (the extension
  * with the most added lines), larger patches first within a language,
- * generated files last. Deletion-only hunks are dropped and counted in a note.
- * Whole files fit until one would cross the budget; that one is cut at a hunk
- * boundary (or mid-hunk, by whole lines, when its first hunk alone is too big)
- * and every later file is named in `omitted`. A file of which nothing fits is
- * omitted and packing goes on. When the budget cannot hold even the omitted
- * list, every file is omitted: the output is only that list, never silent. */
+ * generated files last. The diff is shown whole, deletion-only hunks
+ * included, when it fits; otherwise every deletion-only hunk is dropped and
+ * counted in a note, so the budget goes to added lines. Whole files then fit
+ * until one would cross the budget. If some of that file fits, it is cut at a
+ * hunk boundary (or mid-hunk, by whole lines, when its first hunk alone is too
+ * big) and every later file is named in `omitted`; if nothing of it fits, it
+ * alone is omitted and packing goes on with the next file. When the budget
+ * cannot hold even the omitted list, every file is omitted: the output is
+ * only that list, never silent. */
 export function packDiff(
 	files: readonly PackInputFile[],
 	opts: { budgetChars: number },
 ): PackedDiff {
-	const items = orderFiles(files).map(prepare);
-	const first = packWithin(items, opts.budgetChars);
-	const need = omittedSection(first.omitted).length;
-	if (need === 0) return first;
-	const second = packWithin(items, opts.budgetChars - need);
-	if (omittedSection(second.omitted).length <= need) return second;
-	return packWithin(
-		items,
-		opts.budgetChars - omittedUpperBound(files.map((f) => f.filename)),
+	const ordered = orderFiles(files);
+	const names = files.map((f) => f.filename);
+	const whole = packFitting(
+		ordered.map((f) => prepare(f, true)),
+		opts.budgetChars,
+		names,
+	);
+	if (whole.omitted.length === 0 && !whole.files.some((f) => f.truncated))
+		return whole;
+	return packFitting(
+		ordered.map((f) => prepare(f, false)),
+		opts.budgetChars,
+		names,
 	);
 }
