@@ -409,6 +409,28 @@ describe("diffBudgetChars", () => {
 });
 
 describe("config tree wiring", () => {
+	it("keeps fractional delays: REVIEW_DELAY_SECONDS=0.5 is 500 ms", () => {
+		setRequiredEnv({ REVIEW_DELAY_SECONDS: "0.5" });
+		expect(getConfig().reviewDelayMs).toBe(500);
+	});
+
+	it("floors fractional concurrency: AGENT_CONCURRENCY=2.5 gives 2", () => {
+		setRequiredEnv({ AGENT_CONCURRENCY: "2.5" });
+		expect(getConfig().agentConcurrency).toBe(2);
+	});
+
+	it("AGENT_CONCURRENCY=0 still throws", () => {
+		setRequiredEnv({ AGENT_CONCURRENCY: "0" });
+		expect(() => getConfig()).toThrow(
+			/AGENT_CONCURRENCY|review\.agentConcurrency/,
+		);
+	});
+
+	it("passes a bare-hostname PUBLIC_URL through byte-for-byte", () => {
+		setRequiredEnv({ PUBLIC_URL: "example.com" });
+		expect(getConfig().publicUrl).toBe("example.com");
+	});
+
 	it("getConfig reproduces the legacy defaults with an empty env", () => {
 		setRequiredEnv();
 		expect(getConfig()).toEqual({

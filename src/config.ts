@@ -97,7 +97,7 @@ export function parseDiffBudgetChars(): number {
  * 1 vs 75s at 4 on a 14-file diff, same cost, no 429s). Lower it if a provider's
  * input-tokens-per-minute limit starts rejecting the burst. */
 export function parseAgentConcurrency(): number {
-	return getConfigTree().review.agentConcurrency;
+	return Math.floor(getConfigTree().review.agentConcurrency);
 }
 
 // Parse a delay env var expressed in seconds into milliseconds. A missing,

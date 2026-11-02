@@ -69,13 +69,11 @@ const ReviewSchema = z
 			.describe("Review pull requests automatically."),
 		delaySeconds: z
 			.number()
-			.int()
 			.nonnegative()
 			.default(0)
 			.describe("Delay before the first automatic review."),
 		resyncDelaySeconds: z
 			.number()
-			.int()
 			.nonnegative()
 			.default(0)
 			.describe("Delay before re-reviewing after a push."),
@@ -90,8 +88,7 @@ const ReviewSchema = z
 			.describe("Extra instructions appended to every agent prompt."),
 		agentConcurrency: z
 			.number()
-			.int()
-			.positive()
+			.min(1)
 			.default(4)
 			.describe("Maximum review agents run in parallel per PR."),
 		agentBudgetSeconds: z
@@ -133,14 +130,9 @@ const InfraSchema = z
 	.object({
 		publicUrl: z
 			.string()
-			.url()
 			.optional()
 			.describe("Stable public origin used for QStash callbacks."),
-		qstashUrl: z
-			.string()
-			.url()
-			.optional()
-			.describe("QStash regional endpoint."),
+		qstashUrl: z.string().optional().describe("QStash regional endpoint."),
 	})
 	.strict();
 
