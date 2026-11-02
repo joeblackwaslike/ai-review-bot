@@ -12,8 +12,14 @@ export interface ReplyDisposition {
 	evidence: string[];
 }
 
-export const DEFERRED =
-	/\bfollow[- ]?ups?\b|out of scope|separate pr|later pr|\b(?:will|i'?ll|we'?ll)\s+(?:address|fix)\s+(?:\w+\s+){0,3}?later\b|tracked in/i;
+const FIX_VERBS =
+	"will|i'?ll|i'?m going to|i am going to|going to|gonna|we'?ll";
+const LATER_WINDOW = "(?:\\w+\\s+){0,3}?later";
+
+export const DEFERRED = new RegExp(
+	`\\bfollow[- ]?ups?\\b|out of scope|separate pr|later pr|\\b(?:${FIX_VERBS})\\s+(?:address|fix)\\s+${LATER_WINDOW}\\b|tracked in`,
+	"i",
+);
 export const REJECTED =
 	/\bintentional(ly)?\b|\bno change\b|\bby design\b|no defect|working as intended|won'?t fix|not a (bug|problem|issue)|\bkept (it |this )?as[- ]is\b|\balready done\b/i;
 export const FIX_REF =
@@ -21,8 +27,10 @@ export const FIX_REF =
 
 const AGREES =
 	/(?:^|[.!?\n]\s*)(?:good catch|you'?re (?:absolutely |totally )?right|agreed|makes sense|fair point|thanks for catching)\b/gi;
-const PROMISES_FIX =
-	/\b(?:will|i'?ll|i'?m going to|i am going to|going to|gonna|we'?ll)\s+(?:fix|address|handle|update|change|resolve|patch|take care of)\b(?!\s+later)/gi;
+const PROMISES_FIX = new RegExp(
+	`\\b(?:${FIX_VERBS})\\s+(?:fix|address|handle|update|change|resolve|patch|take care of)\\b(?!\\s+${LATER_WINDOW}\\b)`,
+	"gi",
+);
 const NEGATED_BEFORE =
 	/\b(?:don'?t|do not|won'?t|will not|not|never|wouldn'?t)\W+(?:\w+\W+){0,3}$/i;
 

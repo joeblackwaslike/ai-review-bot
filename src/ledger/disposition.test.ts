@@ -100,6 +100,13 @@ describe("classifyReplies", () => {
 			);
 		});
 
+		it("treats gonna/going-to fix-later phrasing as deferred too", () => {
+			expect(status("Good catch, gonna fix this later")).toBe("deferred");
+			expect(status("good catch, I'm going to fix this later")).toBe(
+				"deferred",
+			);
+		});
+
 		it("turns fixed when a later reply cites the commit", () => {
 			const d = classifyReplies(
 				[reply("good catch, will fix"), reply("fixed in a1b2c3d4")],

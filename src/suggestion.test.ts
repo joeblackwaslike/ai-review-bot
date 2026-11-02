@@ -77,6 +77,12 @@ describe("repairSuggestion", () => {
 		);
 	});
 
+	it("keeps numeric mapping keys introduced near the top of the file", () => {
+		const top = toMap({ 1: "export const X = 5;" });
+		const s = '1: "one",\n2: "two",';
+		expect(repair(s, 1, null, top)?.suggestion).toBe(s);
+	});
+
 	it("keeps a single numeric label far from the anchored line", () => {
 		expect(repair("42: x", 10)?.suggestion).toBe("  42: x");
 	});

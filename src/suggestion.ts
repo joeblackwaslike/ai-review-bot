@@ -4,6 +4,7 @@ const FENCE = /^\s*```[\w-]*\s*$/;
 const NUMBER_PREFIX = /^\s*(\d+)\s*[|:]\s?/;
 const PIPE_NUMBER_PREFIX = /^\s*(\d+)\s*\|\s?/;
 const NUMERIC_KEY = /^\s*\d+\s*:/;
+const DICT_VALUE_LINE = /^\s*\d+\s*:\s*\S.*[,{]\s*$/;
 
 interface RepairInput {
 	suggestion: string;
@@ -31,9 +32,9 @@ function stripFence(lines: string[]): string[] {
 	return lines;
 }
 
-/** Drops `N |` and `N:` display prefixes. When a replaced file line itself
- * starts with a numeric key (`1: "one",`), `N:` is source syntax and only the
- * pipe form is stripped. */
+/** Drops `N |` and `N:` display prefixes. When a replaced file line, or the
+ * suggestion's own line, looks like a numeric map key (`1: "one",`), `N:` is
+ * source syntax and only the pipe form is stripped. */
 function stripNumberPrefixes(
 	lines: string[],
 	start: number,
@@ -41,9 +42,10 @@ function stripNumberPrefixes(
 	fileLines: FileLines,
 ): string[] {
 	const range = rangeLines(fileLines, start, end);
-	const prefix = range.some((l) => NUMERIC_KEY.test(l))
-		? PIPE_NUMBER_PREFIX
-		: NUMBER_PREFIX;
+	const looksLikeNumericKeys =
+		range.some((l) => NUMERIC_KEY.test(l)) ||
+		lines.some((l) => DICT_VALUE_LINE.test(l));
+	const prefix = looksLikeNumericKeys ? PIPE_NUMBER_PREFIX : NUMBER_PREFIX;
 	const numbers = lines.map((l) => Number(prefix.exec(l)?.[1] ?? NaN));
 	if (lines.length === 0 || numbers.some(Number.isNaN)) return lines;
 	const consecutive = numbers.every(
