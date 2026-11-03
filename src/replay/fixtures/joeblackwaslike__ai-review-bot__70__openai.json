@@ -58,7 +58,33 @@
 					"title": "Low",
 					"text": "🟢 **Low**\n\n**Test comment references external incident details that don't help maintain the test**\n\nThis comment explains the originating bug report in great detail, but most of that context is specific to a past PR and model run rather than to the behavior this test protects. That creates comment-maintenance overhead without helping a future reader understand the assertion. Consider replacing it with a shorter statement of the invariant under test: the schema must accept only bare open-finding IDs and reject echoed `id — title` prompt lines."
 				}
-			]
+			],
+			"trace": {
+				"candidates": [],
+				"posted": [],
+				"usage": {
+					"code-reviewer.md": {
+						"promptTokens": 4112,
+						"completionTokens": 21
+					},
+					"silent-failure-hunter.md": {
+						"promptTokens": 5223,
+						"completionTokens": 21
+					},
+					"pr-test-analyzer.md": {
+						"promptTokens": 4415,
+						"completionTokens": 21
+					},
+					"security-sast.md": {
+						"promptTokens": 7159,
+						"completionTokens": 21
+					},
+					"code-review-and-quality.md": {
+						"promptTokens": 4407,
+						"completionTokens": 21
+					}
+				}
+			}
 		},
 		{
 			"index": 1,

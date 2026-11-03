@@ -46,7 +46,33 @@
 					"title": "Medium",
 					"text": "🟡 **Medium**\n\n**Preserve the existing retry-delay schedule**\n\n**Required:** This also changes the delay schedule, beyond skipping the final delay. Previously, after the first failure (`attempt === 0`), the retry proceeded after `sleep(0)`; now it waits `baseDelayMs` before the second invocation. For example, with `maxAttempts: 2` and `baseDelayMs: 100`, this adds a 100 ms delay that was not present before. Keep the original multiplier while retaining the `isLastAttempt` guard so this fix does not introduce a timing regression.\n\n*Suggested fix:*\n\n```suggestion\n        await sleep(options.baseDelayMs * attempt);\n```"
 				}
-			]
+			],
+			"trace": {
+				"candidates": [],
+				"posted": [],
+				"usage": {
+					"code-reviewer.md": {
+						"promptTokens": 3141,
+						"completionTokens": 21
+					},
+					"silent-failure-hunter.md": {
+						"promptTokens": 4252,
+						"completionTokens": 21
+					},
+					"pr-test-analyzer.md": {
+						"promptTokens": 3444,
+						"completionTokens": 21
+					},
+					"security-sast.md": {
+						"promptTokens": 6188,
+						"completionTokens": 21
+					},
+					"code-review-and-quality.md": {
+						"promptTokens": 3436,
+						"completionTokens": 21
+					}
+				}
+			}
 		},
 		{
 			"index": 1,
@@ -83,7 +109,49 @@
 					"title": "Medium",
 					"text": "🟡 **Medium**\n\n**Retry timing contract is untested**\n\nAll failure-path tests set `baseDelayMs` to `0`, so they cannot detect a regression in the retry timing behavior this PR changes. For example, moving `sleep` back outside the `isLastAttempt` guard would reintroduce a needless final delay while these tests still pass. Add a fake-timer test with a nonzero delay that verifies retries retain the expected backoff and that the promise rejects immediately after the final failed invocation. Criticality: 6/10."
 				}
-			]
+			],
+			"trace": {
+				"candidates": [
+					{
+						"skill": "pr-test-analyzer.md",
+						"title": "First retry now has no delay",
+						"path": "src/retry.ts",
+						"line": 23,
+						"severity": "P2"
+					}
+				],
+				"posted": [
+					{
+						"skill": "pr-test-analyzer.md",
+						"title": "First retry now has no delay",
+						"path": "src/retry.ts",
+						"line": 23,
+						"severity": "P2"
+					}
+				],
+				"usage": {
+					"code-reviewer.md": {
+						"promptTokens": 2382,
+						"completionTokens": 21
+					},
+					"silent-failure-hunter.md": {
+						"promptTokens": 3493,
+						"completionTokens": 21
+					},
+					"pr-test-analyzer.md": {
+						"promptTokens": 2685,
+						"completionTokens": 210
+					},
+					"security-sast.md": {
+						"promptTokens": 5429,
+						"completionTokens": 21
+					},
+					"code-review-and-quality.md": {
+						"promptTokens": 2677,
+						"completionTokens": 21
+					}
+				}
+			}
 		},
 		{
 			"index": 2,
@@ -124,7 +192,33 @@
 					"title": "Medium",
 					"text": "🟡 **Medium**\n\n**Non-integer attempt-limit validation is untested**\n\nThe test suite covers `maxAttempts: 0`, but not the `!Number.isInteger(...)` branch introduced here. A regression that reduced this guard to `maxAttempts < 1` would still pass every test while accepting `1.5` and invoking `fn` twice (attempts 0 and 1), despite the documented positive-integer contract. Add a rejection case such as `maxAttempts: 1.5` (ideally alongside `NaN`/`Infinity` in a parameterized test). Criticality: 5/10."
 				}
-			]
+			],
+			"trace": {
+				"candidates": [],
+				"posted": [],
+				"usage": {
+					"code-reviewer.md": {
+						"promptTokens": 3072,
+						"completionTokens": 21
+					},
+					"silent-failure-hunter.md": {
+						"promptTokens": 4183,
+						"completionTokens": 21
+					},
+					"pr-test-analyzer.md": {
+						"promptTokens": 3375,
+						"completionTokens": 21
+					},
+					"security-sast.md": {
+						"promptTokens": 6119,
+						"completionTokens": 21
+					},
+					"code-review-and-quality.md": {
+						"promptTokens": 3367,
+						"completionTokens": 21
+					}
+				}
+			}
 		},
 		{
 			"index": 3,
