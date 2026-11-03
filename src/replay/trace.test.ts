@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
+import { ledgerEntryFinding } from "../baseline.js";
 import type { Ledger } from "../ledger/types.js";
+import { shortFindingId } from "../relation.js";
 import { REVIEWER_TUNING } from "../reviewer-tuning.js";
 import {
 	buildInlineComment,
 	buildModelReview,
 	buildPullFile,
 	SIMPLE_PATCH,
+	TWO_HUNK_PATCH,
 } from "../testing.js";
 import { ledgerFromView } from "./pipeline.js";
 import { ledgerForRound, postFilterTrace } from "./trace.js";
@@ -253,6 +256,108 @@ describe("postFilterTrace", () => {
 
 		expect(trace.posted).toHaveLength(50);
 		expect(titles(trace.dropped)).toEqual(["Nit 0", "Nit 1"]);
+	});
+});
+
+describe("postFilterTrace anchors and relations", () => {
+	it("posts a comment on a numbered line in the diff and drops a P2 on a line outside it", () => {
+		const onDiff = inline("Added branch skips validation", {
+			path: "src/b.ts",
+			line: 10,
+		});
+		const offDiff = inline("Loop bound is off by one", {
+			path: "src/b.ts",
+			line: 6,
+			severity: "P2",
+		});
+
+		const trace = postFilterTrace({
+			agentReviews: [
+				{
+					skill: "code-reviewer",
+					review: buildModelReview({ inline_comments: [onDiff, offDiff] }),
+				},
+			],
+			ledger: noLedger,
+			files: [buildPullFile("src/b.ts", TWO_HUNK_PATCH)],
+			tuning,
+		});
+
+		expect(trace.posted).toEqual([
+			{
+				skill: "code-reviewer.md",
+				title: onDiff.title,
+				path: "src/b.ts",
+				line: 10,
+				severity: "P2",
+			},
+		]);
+		expect(trace.dropped).toEqual([
+			{
+				skill: "code-reviewer.md",
+				title: offDiff.title,
+				path: "src/b.ts",
+				line: 6,
+				severity: "P2",
+			},
+		]);
+	});
+
+	it("does not honour a declared relation, since replay shows the agents no ids", () => {
+		const ledger = ledgerFromView({
+			priorClaims: [
+				{
+					...priorClaim(
+						"r0:c1:0",
+						0,
+						"Token cache never expires",
+						"Entries in `tokenCache` are never evicted.",
+					),
+					line: 40,
+				},
+			],
+			labels: new Map([
+				[
+					"r0:c1:0",
+					{
+						claimId: "r0:c1:0",
+						label: "rejected",
+						confidence: "high",
+						evidence: ["2026-10-02T00:00:00Z|Intentional."],
+						confirmed: true,
+					},
+				],
+			]),
+		});
+		const [entry] = ledger;
+		const plain = inline("Token cache never expires after logout", {
+			body: "Logout leaves the session alive in the store.",
+			severity: "P1",
+		});
+		const declared = {
+			...plain,
+			relation: {
+				kind: "repeats" as const,
+				entry_id: shortFindingId(
+					ledgerEntryFinding(entry as Ledger[number]).id,
+				),
+			},
+		};
+		const run = (c: typeof plain) =>
+			postFilterTrace({
+				agentReviews: [
+					{
+						skill: "code-reviewer",
+						review: buildModelReview({ inline_comments: [c] }),
+					},
+				],
+				ledger,
+				files,
+				tuning,
+			});
+
+		expect(titles(run(plain).posted)).toEqual([plain.title]);
+		expect(run(declared)).toEqual(run(plain));
 	});
 });
 

@@ -3,6 +3,7 @@ import {
 	buildInlineComment,
 	buildModelReview,
 	SIMPLE_PATCH,
+	TWO_HUNK_PATCH,
 } from "../testing.js";
 import type { GhClient } from "./gh.js";
 import {
@@ -249,5 +250,48 @@ describe("buildLiveWiring", () => {
 		]);
 		expect(output.candidates).toHaveLength(3);
 		expect(routes).toEqual(["repos/o/r/compare/m1...h1"]);
+	});
+
+	it("shows the agents each compare patch with right-side line numbers", async () => {
+		const routes: string[] = [];
+		const client = {
+			rest: async (route: string) => {
+				routes.push(route);
+				return {
+					files: [
+						{ filename: "src/b.ts", status: "modified", patch: TWO_HUNK_PATCH },
+					],
+				};
+			},
+		} as unknown as GhClient;
+		const empty = buildModelReview();
+		mockRunAuditPass.mockResolvedValue({
+			review: empty,
+			agentReviews: [],
+			usageBySkill: {},
+		});
+		const wiring = buildLiveWiring(fixture, client, labels);
+		const target = fixture.rounds[1] as Round;
+
+		const { diff } = await wiring.fetchDiff(target);
+		await wiring.review(diff, target);
+
+		const expected = [
+			"--- src/b.ts",
+			"@@ -1,2 +1,3 @@",
+			"   1| line1",
+			"   2|+line2",
+			"   3| line3",
+			"@@ -8,2 +9,4 @@",
+			"   9| context",
+			"  10|+added-a",
+			"  11|+added-b",
+			"  12| context2",
+		].join("\n");
+		expect(diff).toBe(expected);
+		expect(mockRunAuditPass.mock.lastCall?.[0].files).toEqual([
+			{ path: "replay.diff", content: expected },
+		]);
+		expect(routes).toHaveLength(1);
 	});
 });

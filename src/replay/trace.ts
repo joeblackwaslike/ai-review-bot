@@ -1,7 +1,7 @@
 import { commentKey } from "../comment-key.js";
 import { suppressInReview } from "../ledger/suppress.js";
 import type { Ledger } from "../ledger/types.js";
-import { declaredRepeat } from "../relation.js";
+import { declaredRepeat, resolveRelations } from "../relation.js";
 import { dropRetractions } from "../retraction.js";
 import {
 	buildReviewComments,
@@ -28,6 +28,11 @@ import type {
 
 type Item = ModelFinding | ModelInlineComment;
 
+/** Replay shows the agents no prior-finding ids, so every declared relation
+ * resolves to none, as production resolves an id it did not show. */
+const NO_SHOWN_IDS: ReadonlySet<string> = new Set();
+const NO_PR = { owner: "", repo: "", pullNumber: 0 };
+
 /** The suppression ledger a review of `round` would see: every claim of the
  * fixture's earlier rounds, settled by the labels visible before the round,
  * kept to the settled entries and the open ones the baseline carries. */
@@ -48,7 +53,8 @@ export function ledgerForRound(
 
 /**
  * What the posting path would post from these agent reviews, built from the
- * same functions in the same order: per agent `suppressInReview` and, when
+ * same functions in the same order: per agent `resolveRelations` (against no
+ * shown ids), `suppressInReview` and, when
  * `tuning.dropRetractions`, `dropRetractions`; then `mergeReviewsDetailed`,
  * `sanitizeInlineComments`, `capInlineComments`, `buildReviewComments` and
  * `routeDroppedComments`. `posted` holds the inline comments that anchor and
@@ -80,16 +86,16 @@ export function postFilterTrace(input: {
 	const drop = (f: object) => dropped.push(toRecord(f as Item));
 
 	const filtered = input.agentReviews.map(({ skill, review }) => {
-		const own = <T extends Item>(f: T): T => {
-			const copy = { ...f };
-			skillOf.set(copy, `${skill}.md`);
-			return copy;
-		};
+		const own = <T extends Item>(findings: T[]): T[] =>
+			resolveRelations(findings, NO_SHOWN_IDS, ledger, NO_PR).map((f) => {
+				skillOf.set(f, `${skill}.md`);
+				return f;
+			});
 		const outcome = suppressInReview(
 			{
 				...review,
-				general_findings: review.general_findings.map(own),
-				inline_comments: review.inline_comments.map(own),
+				general_findings: own(review.general_findings),
+				inline_comments: own(review.inline_comments),
 			},
 			ledger,
 			declaredRepeat(ledger),

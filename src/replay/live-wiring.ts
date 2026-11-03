@@ -1,5 +1,6 @@
 import { runAuditPass } from "../audit.js";
 import { resolveAnthropicAuth, resolveOpenAIAuth } from "../auth.js";
+import { numberPatchLines } from "../diff-lines.js";
 import { computeCost } from "../models.js";
 import type { ModelReview, PullFile } from "../review.js";
 import { REVIEWER_TUNING } from "../reviewer-tuning.js";
@@ -113,7 +114,12 @@ export function buildLiveWiring(
 		fetchDiff: async (round) => {
 			const files = await compareFiles(round);
 			return {
-				diff: files.map((f) => `--- ${f.filename}\n${f.patch}`).join("\n"),
+				diff: files
+					.map(
+						(f) =>
+							`--- ${f.filename}\n${f.patch ? numberPatchLines(f.patch) : ""}`,
+					)
+					.join("\n"),
 				approximate: round.approximate || round.mergeBase === null,
 			};
 		},
