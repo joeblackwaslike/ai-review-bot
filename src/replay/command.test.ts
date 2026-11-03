@@ -465,6 +465,67 @@ describe("runReplay live and record flags", () => {
 		).toBe(0);
 	});
 
+	describe("a clean fixture the cost cap cut short", () => {
+		const costly = (n: number) =>
+			(() => ({
+				...(wiringFor(n) as unknown as () => object)(),
+				estimateCost: () => 1,
+			})) as unknown as NonNullable<
+				Parameters<typeof runReplay>[1]
+			>["liveWiring"];
+		const seedTwoRounds = (dir: string) => {
+			const f = makeFixture([["a"], ["b"]], { expect: { clean: true } });
+			const id = fixtureId(f);
+			writeFileSync(join(dir, `${id}.json`), JSON.stringify(f, null, 2));
+			writeFileSync(
+				join(dir, `${id}.labels.json`),
+				JSON.stringify({ ...makeLabels(), fixtureId: id }),
+			);
+			return id;
+		};
+		const run = (maxCost: string, posted: number) => {
+			const dir = tmp();
+			const id = seedTwoRounds(dir);
+			const { lines, out } = collect();
+			return runReplay(["--live", "--max-cost", maxCost], {
+				fixturesDir: dir,
+				out,
+				client: fakeClient(),
+				liveWiring: costly(posted),
+			}).then((code) => ({ code, lines, id }));
+		};
+
+		it("warns when the cap stops it before the first round", async () => {
+			const { code, lines, id } = await run("0.5", 0);
+			expect(code).toBe(0);
+			expect(lines).toContain(
+				`UNCHECKED ${id}: cost cap stopped before round 0 (0 of 2 rounds replayed)`,
+			);
+		});
+
+		it("warns when the cap stops it after a clean first round", async () => {
+			const { code, lines, id } = await run("1.5", 0);
+			expect(code).toBe(0);
+			expect(lines).toContain(
+				`UNCHECKED ${id}: cost cap stopped before round 1 (1 of 2 rounds replayed)`,
+			);
+		});
+
+		it("still fails when a replayed round posts", async () => {
+			const { code, lines, id } = await run("1.5", 1);
+			expect(code).toBe(1);
+			expect(lines).toContain(
+				`FAIL ${id} round 0: clean fixture would post 1 findings`,
+			);
+		});
+
+		it("says nothing extra when every selected round ran", async () => {
+			const { code, lines } = await run("5", 0);
+			expect(code).toBe(0);
+			expect(lines.some((l) => l.startsWith("UNCHECKED"))).toBe(false);
+		});
+	});
+
 	it("passes a non-clean fixture that posts findings", async () => {
 		const dir = tmp();
 		seedLive(dir, false);

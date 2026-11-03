@@ -382,14 +382,20 @@ async function liveAll(
 		});
 		remaining -= report.spentUsd;
 		if (p.saveTrace) await writeTrace(join(dir, name), f, report);
-		if (f.expect?.clean)
-			for (const r of report.rounds)
-				if (r.posted > 0) {
-					out(
-						`FAIL ${id} round ${r.index}: clean fixture would post ${r.posted} findings`,
-					);
-					failed = true;
-				}
+		if (!f.expect?.clean) continue;
+		for (const r of report.rounds)
+			if (r.posted > 0) {
+				out(
+					`FAIL ${id} round ${r.index}: clean fixture would post ${r.posted} findings`,
+				);
+				failed = true;
+			}
+		const ran = new Set(report.rounds.map((r) => r.index));
+		const skipped = rounds.find((i) => !ran.has(i));
+		if (skipped !== undefined)
+			out(
+				`UNCHECKED ${id}: cost cap stopped before round ${skipped} (${report.rounds.length} of ${rounds.length} rounds replayed)`,
+			);
 	}
 	return failed ? 1 : 0;
 }

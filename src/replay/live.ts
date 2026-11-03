@@ -140,6 +140,10 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 		out(
 			`round ${row.index}${row.approximate ? " (approximate diff)" : ""}: ${row.matchedFixed} of ${findings.length} matched fixed, ${row.matchedRejected} of ${findings.length} matched rejected, ${row.newUnlabeled} new unlabeled (no accuracy claimed); ${row.raw} raw findings, ${row.retracted} candidate retractions; ${row.candidates} candidates, ${row.joined} joined to labelled claims, ${row.posted} would post`,
 		);
+		const usageLine = Object.entries(usage)
+			.map(([s, u]) => `${s} ${u.promptTokens}+${u.completionTokens}`)
+			.join(", ");
+		if (usageLine) out(`  usage: ${usageLine}`);
 	}
 	return report;
 }

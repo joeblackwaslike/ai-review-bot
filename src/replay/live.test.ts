@@ -195,6 +195,33 @@ describe("runLiveTier", () => {
 		expect(report.rounds[0]?.approximate).toBe(true);
 	});
 
+	it("prints token usage per skill after the round line, in skill order", async () => {
+		const usage = {
+			"code-reviewer.md": { promptTokens: 2269, completionTokens: 21 },
+			"silent-failure-hunter.md": { promptTokens: 3380, completionTokens: 340 },
+		};
+		const { opts, lines } = base({
+			rounds: [1],
+			review: async () => ({
+				findings: [],
+				candidates: [],
+				posted: [],
+				usage,
+			}),
+		});
+		await runLiveTier(opts);
+		const at = lines.findIndex((l) => l.startsWith("round 1"));
+		expect(lines[at + 1]).toBe(
+			"  usage: code-reviewer.md 2269+21, silent-failure-hunter.md 3380+340",
+		);
+	});
+
+	it("prints no usage line when a round has no usage", async () => {
+		const { opts, lines } = base({ rounds: [1] });
+		await runLiveTier(opts);
+		expect(lines.some((l) => l.trimStart().startsWith("usage:"))).toBe(false);
+	});
+
 	it("reports candidates, joined-to-labelled count and usage per round", async () => {
 		const usage = { "code-reviewer": { promptTokens: 5, completionTokens: 2 } };
 		const cand = (title: string, path: string) => ({
