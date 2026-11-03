@@ -15,10 +15,9 @@ const MAX_CONFIG_ERROR_LENGTH = 300;
 export function sanitizeConfigError(error: unknown): string {
 	const message = error instanceof Error ? error.message : String(error);
 	const firstLine = message.split("\n")[0] ?? "";
-	const withoutValues = firstLine.replace(
-		/\b(got|value)(\s+)"[^"]*"/g,
-		'$1$2"[redacted]"',
-	);
+	const withoutValues = firstLine
+		.replace(/\b(got\s+)".*$/, '$1"[redacted]"')
+		.replace(/\b(value\s+)"[^"]*"/g, '$1"[redacted]"');
 	const withoutPaths = withoutValues.replace(
 		/(^|[\s"'(=:])\/[^\s"']+/g,
 		(match, boundary: string) => {

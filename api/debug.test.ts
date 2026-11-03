@@ -98,6 +98,19 @@ describe("sanitizeConfigError", () => {
 		expect(message).toContain('got "[redacted]"');
 	});
 
+	it("redacts a value that contains an inner or escaped quote", () => {
+		for (const value of ['x"TOP-SECRET', 'x\\"TOP-SECRET']) {
+			const message = sanitizeConfigError(
+				new Error(
+					`AI_REVIEW_REVIEW__DELAY_SECONDS: expected number, got "${value}"`,
+				),
+			);
+			expect(message).not.toContain("TOP-SECRET");
+			expect(message).toContain("AI_REVIEW_REVIEW__DELAY_SECONDS");
+			expect(message).toContain("expected number");
+		}
+	});
+
 	it("redacts a quoted segment after the word value", () => {
 		const message = sanitizeConfigError(
 			new Error('bad value "hunter2" for AI_REVIEW_X'),
