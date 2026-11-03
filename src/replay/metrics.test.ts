@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { computeMetrics, formatReport } from "./metrics.js";
+import { claimTokens, jaccard } from "../claim-dedupe.js";
+import { computeMetrics, countJoined, formatReport } from "./metrics.js";
 import { makeFixture, makeLabel, makeLabels, makeResult } from "./testkit.js";
+import type { PostedClaim } from "./types.js";
 
 describe("computeMetrics", () => {
 	it("rejection rate counts rejected over fixed plus rejected and excludes deferred and unadjudicated", () => {
@@ -195,8 +197,73 @@ describe("joinRate", () => {
 			labels,
 			makeResult([{ posted: [] }, { posted: [] }]),
 		);
-		expect(m.joinRate).toEqual({ joined: 3, candidates: 4 });
-		expect(formatReport([m], ["fx"])).toContain("join rate: 3/4");
+		expect(m.joinRate).toEqual({ joined: 2, candidates: 3 });
+		expect(formatReport([m], ["fx"])).toContain("join rate: 2/3");
+	});
+
+	describe("countJoined on pairs from ai-review-bot-demo#2", () => {
+		const claim = (title: string, line: number, path = "src/retry.ts") =>
+			({ id: title, path, line, title }) as unknown as PostedClaim;
+		const at = (title: string, line: number, skill = "s.md") => ({
+			skill,
+			title,
+			path: "src/retry.ts",
+			line,
+			severity: "P2",
+		});
+
+		it("joins a same-line restatement below the default title bar", () => {
+			expect(
+				countJoined(
+					[at("Preserve the base delay before the first retry", 23)],
+					[claim("Preserve the existing retry-delay schedule", 23)],
+				),
+			).toEqual({ joined: 1, candidates: 1 });
+		});
+
+		it("keeps a validation finding apart from a test-gap claim three lines away", () => {
+			expect(
+				countJoined(
+					[at("Validate maxAttempts before entering the retry loop", 16)],
+					[claim("Non-integer attempt-limit validation is untested", 13)],
+				),
+			).toEqual({ joined: 0, candidates: 1 });
+		});
+
+		it("does not lower the bar for anchors 10 lines apart", () => {
+			const a = "Preserve the base delay before the first retry";
+			const b = "Preserve the existing retry-delay schedule";
+			expect(jaccard(claimTokens(a), claimTokens(b))).toBe(0.375);
+			expect(countJoined([at(a, 33)], [claim(b, 23)])).toEqual({
+				joined: 0,
+				candidates: 1,
+			});
+		});
+
+		it("counts five skills raising one finding as one candidate", () => {
+			const title = "Preserve the base delay before the first retry";
+			const five = [
+				"code-reviewer.md",
+				"silent-failure-hunter.md",
+				"pr-test-analyzer.md",
+				"security-sast.md",
+				"code-review-and-quality.md",
+			].map((skill) => at(title, 23, skill));
+			expect(
+				countJoined(five, [
+					claim("Preserve the existing retry-delay schedule", 23),
+				]),
+			).toEqual({ joined: 1, candidates: 1 });
+		});
+
+		it("still requires the same file", () => {
+			expect(
+				countJoined(
+					[at("Cover the changed retry delays with fake-timer tests", 23)],
+					[claim("Retry timing contract is untested", 20, "src/retry.test.ts")],
+				),
+			).toEqual({ joined: 0, candidates: 1 });
+		});
 	});
 
 	it("does not join a claim without a labels entry", () => {

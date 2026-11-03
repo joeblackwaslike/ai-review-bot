@@ -1,4 +1,8 @@
-import { isSameClaim } from "../claim-dedupe.js";
+import {
+	type ClaimMatchOptions,
+	DEFAULT_CLAIM_MATCH,
+	isSameClaim,
+} from "../claim-dedupe.js";
 import { type ReplayResult, roundCutoff, visibleLabels } from "./replay.js";
 import type {
 	CandidateRecord,
@@ -36,13 +40,33 @@ export function labelledClaims(
 	return f.rounds.flatMap((r) => r.claims.filter((c) => labelled.has(c.id)));
 }
 
-/** How many candidates restate one of the given claims. */
+/** PROVISIONAL: derived from one fixture's observed pairs (ai-review-bot-demo#2).
+ * Within 3 lines a candidate joins a claim at 0.33 title overlap instead of
+ * 0.5, because a restatement at the same anchor tends to reword the title
+ * ("Preserve the base delay before the first retry" for "Preserve the existing
+ * retry-delay schedule", 0.375). Same file is still required. */
+export const JOIN_CLAIM_MATCH: ClaimMatchOptions = {
+	...DEFAULT_CLAIM_MATCH,
+	nearby: { lineWindow: 3, titleSimilarity: 0.33 },
+};
+
+/** Distinct candidates, by path, line and title, and how many of them restate
+ * one of the given claims. Several agents raising one finding count once. */
 export function countJoined(
 	candidates: CandidateRecord[],
 	claims: PostedClaim[],
-): number {
-	return candidates.filter((cand) => claims.some((c) => isSameClaim(cand, c)))
-		.length;
+): { joined: number; candidates: number } {
+	const distinct = [
+		...new Map(
+			candidates.map((c) => [`${c.path}\0${c.line}\0${c.title}`, c]),
+		).values(),
+	];
+	return {
+		joined: distinct.filter((cand) =>
+			claims.some((c) => isSameClaim(cand, c, JOIN_CLAIM_MATCH)),
+		).length,
+		candidates: distinct.length,
+	};
 }
 
 function computeJoinRate(
@@ -54,9 +78,9 @@ function computeJoinRate(
 	let joined = 0;
 	let candidates = 0;
 	for (const round of f.rounds) {
-		const cands = round.trace?.candidates ?? [];
-		candidates += cands.length;
-		joined += countJoined(cands, claims);
+		const counted = countJoined(round.trace?.candidates ?? [], claims);
+		candidates += counted.candidates;
+		joined += counted.joined;
 	}
 	return { joined, candidates };
 }

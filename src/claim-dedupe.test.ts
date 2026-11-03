@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	claimIdentifiers,
 	claimTokens,
+	DEFAULT_CLAIM_MATCH,
 	dedupeClaims,
 	isSameClaim,
 } from "./claim-dedupe.js";
@@ -364,5 +365,37 @@ describe("merge mapping", () => {
 			claim({ line: 400, title: "`beta` leaks a file handle" }),
 		]);
 		expect(result.merges).toEqual([]);
+	});
+});
+
+describe("ClaimMatchOptions.nearby", () => {
+	const a = claim({
+		path: "src/retry.ts",
+		line: 23,
+		title: "Preserve the base delay before the first retry",
+	});
+	const b = claim({
+		path: "src/retry.ts",
+		line: 23,
+		title: "Preserve the existing retry-delay schedule",
+	});
+	const nearby = {
+		...DEFAULT_CLAIM_MATCH,
+		nearby: { lineWindow: 3, titleSimilarity: 0.33 },
+	};
+
+	it("is absent from the default, so existing callers keep the 0.5 bar", () => {
+		expect(DEFAULT_CLAIM_MATCH.nearby).toBeUndefined();
+		expect(isSameClaim(a, b)).toBe(false);
+		expect(dedupeClaims([a, b]).kept).toHaveLength(2);
+	});
+
+	it("lowers the title bar for anchors within its window", () => {
+		expect(isSameClaim(a, b, nearby)).toBe(true);
+		expect(isSameClaim(a, { ...b, line: 26 }, nearby)).toBe(true);
+	});
+
+	it("leaves the bar alone past its window", () => {
+		expect(isSameClaim(a, { ...b, line: 27 }, nearby)).toBe(false);
 	});
 });

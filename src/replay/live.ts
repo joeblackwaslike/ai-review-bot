@@ -110,6 +110,7 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 			d.round,
 		);
 		report.spentUsd += estimate;
+		const counted = countJoined(candidates, labelled);
 		const row: LiveRoundReport = {
 			index: d.round.index,
 			matchedFixed: 0,
@@ -120,8 +121,8 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 				(f) => candidateFamilies({ ...f, body: f.body ?? "" }).length > 0,
 			).length,
 			approximate: d.approximate,
-			candidates: candidates.length,
-			joined: countJoined(candidates, labelled),
+			candidates: counted.candidates,
+			joined: counted.joined,
 			posted: posted.length,
 			usage,
 			trace: { candidates, posted, usage },
