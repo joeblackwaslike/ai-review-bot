@@ -1,5 +1,8 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
-import type { PostedClaim } from "../replay/types.js";
+import type { PostedClaim, ReplayFixture } from "../replay/types.js";
 import { buildStrictOctokit } from "../testing.js";
 import {
 	buildLedger,
@@ -276,7 +279,10 @@ function assertGraphqlVariables(
 		throw new Error(`cursor ${String(v.cursor)} != ${String(expectedCursor)}`);
 }
 
-function fake(pages: unknown[]): RequestLike {
+function fake(
+	pages: unknown[],
+	comments: unknown[] = GH_COMMENTS,
+): RequestLike {
 	let g = 0;
 	let cursor: string | undefined;
 	const request = async (route: string, params?: Record<string, unknown>) => {
@@ -298,10 +304,55 @@ function fake(pages: unknown[]): RequestLike {
 		}
 		if (route.endsWith("/reviews"))
 			return { data: params?.page === 1 ? GH_REVIEWS : [] };
-		return { data: params?.page === 1 ? GH_COMMENTS : [] };
+		return { data: params?.page === 1 ? comments : [] };
 	};
 	return { request: request as RequestLike["request"] };
 }
+
+describe("ledger rebuild titles", () => {
+	const fixtures = join(
+		dirname(fileURLToPath(import.meta.url)),
+		"../replay/fixtures",
+	);
+	const recorded = (file: string, id: string): PostedClaim => {
+		const f = JSON.parse(
+			readFileSync(join(fixtures, file), "utf8"),
+		) as ReplayFixture;
+		const c = f.rounds.flatMap((r) => r.claims).find((x) => x.id === id);
+		if (!c) throw new Error(`no claim ${id} in ${file}`);
+		return c;
+	};
+	const rebuildTitle = async (body: string) => {
+		const octokit = fake(
+			[page([t(10)], null)],
+			[{ id: 10, pull_request_review_id: 1, path: "a.ts", line: 3, body }],
+		);
+		const ledger = buildLedger(await fetchLedgerEvidence(octokit, opts));
+		return ledger.map((e) => e.title);
+	};
+
+	it("titles an old-format finding by its bold title, not the word badge", async () => {
+		const old = recorded(
+			"joeblackwaslike__ai-review-bot-demo__2__openai.json",
+			"r0:c3839253293:0",
+		);
+		expect(old.text.startsWith("🟡 **Medium**")).toBe(true);
+		expect(await rebuildTitle(old.text)).toEqual([
+			"Preserve the existing retry-delay schedule",
+		]);
+	});
+
+	it("keeps the title a new-format finding had before old-format recovery", async () => {
+		const current = recorded(
+			"joeblackwaslike__ai-review-bot__92__openai.json",
+			"r0:c4420395320:0",
+		);
+		expect(current.text.startsWith("🟡 **P2**")).toBe(true);
+		expect(await rebuildTitle(current.text)).toEqual([
+			"Keep findings that quote a retraction-like status message",
+		]);
+	});
+});
 
 const opts = {
 	owner: "o",

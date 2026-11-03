@@ -8,7 +8,8 @@ const MAX_FALLBACK_TITLE = 100;
 
 /** The finding's bold title, skipping the severity badge. Without one: the
  * first line, or for a badged finding with no title the first sentence of
- * its body, cut to 100 characters. */
+ * its body, cut to 100 characters. Also used by the ledger rebuild and the
+ * posted-comment key, not only by replay. */
 export function claimTitle(part: string): string {
 	for (const m of part.matchAll(/\*\*(.+?)\*\*/g)) {
 		const span = m[1].trim();
@@ -26,6 +27,8 @@ export function claimTitle(part: string): string {
 		: sentence;
 }
 
+/** One claim per finding in a posted comment body, split on the merge
+ * separator. Also used by the ledger rebuild, not only by replay. */
 export function splitInlineClaims(
 	body: string,
 ): { title: string; text: string }[] {

@@ -5,6 +5,7 @@ import {
 	DEFAULT_CLAIM_MATCH,
 	dedupeClaims,
 	isSameClaim,
+	jaccard,
 } from "./claim-dedupe.js";
 
 function claim(
@@ -397,5 +398,37 @@ describe("ClaimMatchOptions.nearby", () => {
 
 	it("leaves the bar alone past its window", () => {
 		expect(isSameClaim(a, { ...b, line: 27 }, nearby)).toBe(false);
+	});
+});
+
+describe("default match bar with an unset nearby field", () => {
+	const base = claim({ line: 40, title: "missing retry handler" });
+	const atBar = claim({
+		line: 41,
+		title: "missing retry handler leaks socket memory",
+	});
+	const belowBar = claim({
+		line: 41,
+		title: "missing retry handler leaks socket memory quickly",
+	});
+	const unset = { ...DEFAULT_CLAIM_MATCH, nearby: undefined };
+
+	it("sits exactly on and just under the 0.5 title bar", () => {
+		expect(jaccard(claimTokens(base.title), claimTokens(atBar.title))).toBe(
+			0.5,
+		);
+		expect(
+			jaccard(claimTokens(base.title), claimTokens(belowBar.title)),
+		).toBeLessThan(0.5);
+	});
+
+	it.each([
+		["at the bar", atBar, true],
+		["just below it", belowBar, false],
+	])("gives the same answer %s with or without the key", (_, other, same) => {
+		expect(isSameClaim(base, other)).toBe(same);
+		expect(isSameClaim(base, other, DEFAULT_CLAIM_MATCH)).toBe(same);
+		expect(isSameClaim(base, other, unset)).toBe(same);
+		expect(dedupeClaims([base, other], unset).kept).toHaveLength(same ? 1 : 2);
 	});
 });
