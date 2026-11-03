@@ -70,7 +70,9 @@ describe("ConfigSchema", () => {
 
 	it("rejects two models that share a bare id", () => {
 		const cfg = minimal();
-		Object.assign(cfg.models, { "openai/claude-sonnet-5-5": structuredClone(sonnet) });
+		Object.assign(cfg.models, {
+			"openai/claude-sonnet-5-5": structuredClone(sonnet),
+		});
 		const result = ConfigSchema.safeParse(cfg);
 		expect(result.success).toBe(false);
 		const text = JSON.stringify(result.error?.issues);
