@@ -296,6 +296,29 @@ describe("buildLiveWiring", () => {
 		expect(routes).toHaveLength(1);
 	});
 
+	it("fails the round when every review agent failed, saving no trace", async () => {
+		const client = {
+			rest: async () => ({
+				files: [
+					{ filename: "src/a.ts", status: "modified", patch: SIMPLE_PATCH },
+				],
+			}),
+		} as unknown as GhClient;
+		mockRunAuditPass.mockResolvedValue({
+			review: buildModelReview(),
+			agentReviews: [],
+			usageBySkill: {},
+			agentsAttempted: 5,
+			agentsSucceeded: 0,
+		});
+		const wiring = buildLiveWiring(fixture, client, labels);
+		const target = fixture.rounds[1] as Round;
+		const { diff } = await wiring.fetchDiff(target);
+		await expect(wiring.review(diff, target)).rejects.toThrow(
+			"round 1: all 5 review agents failed",
+		);
+	});
+
 	describe("model routing per round", () => {
 		const added = (n: number) =>
 			`@@ -0,0 +1,${n} @@\n${Array.from({ length: n }, (_, i) => `+line${i}`).join("\n")}`;
@@ -314,6 +337,15 @@ describe("buildLiveWiring", () => {
 				status: "modified",
 				patch: `${added(45)}\n-old${i}`,
 			})),
+			// Compare patches carry no file headers, so a deleted "-- note" line
+			// starts with "---" and is still a deletion.
+			h3: [
+				{
+					filename: "README.md",
+					status: "modified",
+					patch: `${added(15)}\n${Array.from({ length: 6 }, (_, i) => `--- note ${i}`).join("\n")}`,
+				},
+			],
 		};
 		const client = {
 			rest: async (route: string) => ({
@@ -325,6 +357,7 @@ describe("buildLiveWiring", () => {
 			[0, { model: "gpt-6-luna", effort: "none" }],
 			[1, { model: "gpt-6.1-sol", effort: "low" }],
 			[2, { model: "gpt-6.1-sol", effort: "high" }],
+			[3, { model: "gpt-6.1-sol", effort: "low" }],
 		])("round %i reviews and estimates with the model its real diff size routes to", async (index, expected) => {
 			mockRunAuditPass.mockResolvedValue({
 				review: buildModelReview(),

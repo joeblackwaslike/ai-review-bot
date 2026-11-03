@@ -87,7 +87,6 @@ function routerContext(files: PullFile[]): RouterContext {
 	let deletions = 0;
 	for (const f of files)
 		for (const line of (f.patch ?? "").split("\n")) {
-			if (line.startsWith("+++") || line.startsWith("---")) continue;
 			if (line.startsWith("+")) additions++;
 			else if (line.startsWith("-")) deletions++;
 		}
@@ -169,6 +168,10 @@ export function buildLiveWiring(
 				meta,
 				auth,
 			});
+			if (result.agentsAttempted > 0 && result.agentsSucceeded === 0)
+				throw new Error(
+					`round ${round.index}: all ${result.agentsAttempted} review agents failed`,
+				);
 			const { posted } = postFilterTrace({
 				agentReviews: result.agentReviews,
 				ledger: ledgerForRound(fixture, labels, round),
