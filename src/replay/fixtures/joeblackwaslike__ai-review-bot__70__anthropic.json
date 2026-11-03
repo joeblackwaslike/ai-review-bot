@@ -5,7 +5,7 @@
 	"pull": 70,
 	"provider": "anthropic",
 	"author": "joeblackwaslike",
-	"recordedAt": "2026-11-03T21:18:07.973Z",
+	"recordedAt": "2026-11-03T22:44:29.728Z",
 	"rounds": [
 		{
 			"index": 0,
@@ -42,7 +42,7 @@
 					"commentId": 3802679098,
 					"path": "src/triage.ts",
 					"line": 41,
-					"severity": "P3",
+					"severity": "P1",
 					"title": "z.array(z.string()).length(0) is not a valid Zod API",
 					"text": "🔴 **High**\n\n**z.array(z.string()).length(0) is not a valid Zod API**\n\nZod arrays do not have a `.length()` method. The correct constraint is `z.array(z.string()).max(0)` or `z.tuple([])`. As written this will throw a runtime TypeError when `openFindings` is empty, which is exactly the path the second new test exercises.\n\n*Suggested fix:*\n\n```suggestion\n\t\t\t: z.tuple([]),\n```"
 				},
@@ -54,7 +54,7 @@
 					"commentId": 3802679114,
 					"path": "src/triage.ts",
 					"line": 34,
-					"severity": "P3",
+					"severity": "P2",
 					"title": "No deduplication before z.enum() — duplicate IDs will throw at runtime",
 					"text": "🟡 **Medium**\n\n**No deduplication before z.enum() — duplicate IDs will throw at runtime**\n\nThe prior reviewer already noted this. `z.enum` with duplicate values throws a Zod internal error at construction time, not a parse error. The call `openFindings.map((f) => f.id)` produces whatever duplicates exist in the input array; there is no guard here. If any upstream code produces duplicate finding IDs (e.g., two passes over the same finding list), `buildTriageSchema` will throw before `generateObject` is ever called, and the existing try/catch in `triageReReview` will swallow it into `FAIL_SAFE` — a silent failure with no indication that the schema itself was the problem.\n\nFix: deduplicate before constructing the enum:\n```ts\nconst ids = [...new Set(openFindings.map((f) => f.id))];\n```\n\n*Suggested fix:*\n\n```suggestion\n  const ids = [...new Set(openFindings.map((f) => f.id))];\n```"
 				},
@@ -66,7 +66,7 @@
 					"commentId": 3802679121,
 					"path": "src/triage.ts",
 					"line": 38,
-					"severity": "P3",
+					"severity": "P2",
 					"title": "Cast to non-empty tuple silently accepts duplicate ids",
 					"text": "🟡 **Medium**\n\n**Cast to non-empty tuple silently accepts duplicate ids**\n\nThe cast `ids as [string, ...string[]]` satisfies TypeScript but Zod's `z.enum()` will throw at runtime if `ids` contains duplicates (Zod validates its enum values are unique during construction). The prior review already flagged this; it has not been addressed. If `PersistedFinding.id` values can ever be duplicated in the array passed here, this will crash the triage call rather than degrade gracefully.\n\nDe-duplicate before constructing the enum:\n```ts\nconst ids = [...new Set(openFindings.map((f) => f.id))];\n```\n\n*Suggested fix:*\n\n```suggestion\nconst ids = [...new Set(openFindings.map((f) => f.id))];\n```"
 				},
@@ -330,7 +330,7 @@
 					"commentId": 3802768620,
 					"path": "src/triage.ts",
 					"line": 38,
-					"severity": "P3",
+					"severity": "P1",
 					"title": "z.array(z.string()).length(0) is not a valid Zod API",
 					"text": "🔴 **High**\n\n**z.array(z.string()).length(0) is not a valid Zod API**\n\nZod's `ZodArray` does not have a `.length()` method. The intended constraint — requiring exactly zero elements — should use `.max(0)` or `z.tuple([])` instead. As written, calling `.length(0)` at schema-construction time will throw a `TypeError: z.array(...).length is not a function` whenever `openFindings` is empty, which is precisely the case this branch is meant to handle.\n\nThis will cause every triage call with no open findings to throw at schema construction, hitting the FAIL_SAFE path and returning `newRisk: true` even when the model would have said `INCREMENTAL`/no-new-risk.\n\n*Suggested fix:*\n\n```suggestion\n            : z.tuple([]),\n```"
 				},
@@ -342,7 +342,7 @@
 					"commentId": 3802768637,
 					"path": "src/triage.ts",
 					"line": 43,
-					"severity": "P3",
+					"severity": "P2",
 					"title": "FAIL_SAFE catch block silently discards valid resolutions when any single resolved ID is invalid",
 					"text": "🟡 **Medium**\n\n**FAIL_SAFE catch block silently discards valid resolutions when any single resolved ID is invalid**\n\nThe broad `catch` block at line ~95 converts any `generateObject` failure — including a Zod enum validation error for a single bad `resolved` element — into `FAIL_SAFE` with `resolved: []`. This means if the model emits one malformed ID alongside several correct bare IDs, all correct resolutions are discarded and `newRisk` is forced to `true`.\n\nThe prior-reviewer comment notes this was already raised and the current diff has not added any element-level coercion or partial-parse recovery. The fallback is not silent (there is a `console.error` in the existing catch), but the user impact is real: a correct triage decision (e.g. `recommendation: \"FULL\"`) is silently replaced by `INCREMENTAL` + `newRisk: true`, and all resolved findings stay open.\n\nConsider replacing `z.array(z.enum(...))` with a `.transform()` that filters out non-member elements rather than failing the whole parse, or add a `.catch([])` to the `resolved` field so a bad element degrades only that field and not the entire object."
 				},

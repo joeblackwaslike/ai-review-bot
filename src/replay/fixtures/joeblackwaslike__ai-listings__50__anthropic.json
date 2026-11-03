@@ -5,7 +5,7 @@
 	"pull": 50,
 	"provider": "anthropic",
 	"author": "joeblackwaslike",
-	"recordedAt": "2026-11-03T21:51:10.719Z",
+	"recordedAt": "2026-11-03T22:45:03.106Z",
 	"rounds": [
 		{
 			"index": 0,
@@ -54,7 +54,7 @@
 					"commentId": 3810323701,
 					"path": "src/lib/pipeline/step3-pricing-research.ts",
 					"line": 449,
-					"severity": "P3",
+					"severity": "P1",
 					"title": "NaN map key from non-numeric LLM response keys",
 					"text": "🔴 **High**\n\n**NaN map key from non-numeric LLM response keys**\n\nWhen the LLM returns an object with non-numeric keys (e.g. `\"foo\"`, `\"-1a\"`), `Number(idx)` produces `NaN`. `Map` accepts `NaN` as a key, and any consumer that iterates by numeric index will silently miss those entries or behave unexpectedly. The prior review already flagged this and provided a fix — it has not been applied.\n\n*Suggested fix:*\n\n```suggestion\n  for (const [idx, entry] of Object.entries(parsed)) {\n    const numericIdx = Number(idx)\n    if (!Number.isInteger(numericIdx) || numericIdx < 0) continue\n    const score = entry?.score\n    if (typeof score !== 'number' || !Number.isFinite(score)) continue\n    const color = typeof entry?.color === 'string' ? entry.color : null\n    entries.set(numericIdx, { score, color })\n  }\n```"
 				},
@@ -257,7 +257,7 @@
 					"commentId": 3810378950,
 					"path": "src/lib/pipeline/step3-pricing-research.ts",
 					"line": 466,
-					"severity": "P3",
+					"severity": "P2",
 					"title": "Brace-depth extraction does not handle string literals containing braces",
 					"text": "🟡 **Medium**\n\n**Brace-depth extraction does not handle string literals containing braces**\n\nThe `extractJsonObject` brace-counter walks character-by-character and increments/decrements depth on every `{` or `}` it finds — including those inside JSON string values (e.g. `\"color\": \"vintage {frame}\"` or any quoted string the LLM emits). A `}` inside a string value would prematurely close the depth counter and return a truncated, unparseable substring, causing `JSON.parse` to throw and the whole batch to yield an empty map.\n\nThe LLM prompt constrains responses tightly, so in practice this is unlikely to fire, but the implementation does not actually handle the nested-string case it was written to replace the regex for."
 				},
