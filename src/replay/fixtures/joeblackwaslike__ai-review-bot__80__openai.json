@@ -114,8 +114,5 @@
 		}
 	],
 	"threads": [],
-	"reactions": [],
-	"expect": {
-		"clean": true
-	}
+	"reactions": []
 }
