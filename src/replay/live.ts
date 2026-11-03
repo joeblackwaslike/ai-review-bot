@@ -54,7 +54,7 @@ export interface LiveOptions {
 	rounds: number[];
 	maxCostUsd: number;
 	review: (diffInput: string, round: Round) => Promise<LiveReviewOutput>;
-	estimateCost: (diffInput: string) => number;
+	estimateCost: (diffInput: string, round: Round) => number;
 	fetchDiff: (round: Round) => Promise<{ diff: string; approximate: boolean }>;
 	out?: (s: string) => void;
 }
@@ -83,7 +83,7 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 		selected.map(async (r) => ({ round: r, ...(await opts.fetchDiff(r)) })),
 	);
 	const estimates = diffs.map((d) => {
-		const e = opts.estimateCost(d.diff);
+		const e = opts.estimateCost(d.diff, d.round);
 		if (!Number.isFinite(e) || e < 0) return 0;
 		return e;
 	});

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { computeCost } from "../models.js";
 import {
 	buildInlineComment,
 	buildModelReview,
@@ -293,5 +294,68 @@ describe("buildLiveWiring", () => {
 			{ path: "replay.diff", content: expected },
 		]);
 		expect(routes).toHaveLength(1);
+	});
+
+	describe("model routing per round", () => {
+		const added = (n: number) =>
+			`@@ -0,0 +1,${n} @@\n${Array.from({ length: n }, (_, i) => `+line${i}`).join("\n")}`;
+		const openaiFixture = {
+			...fixture,
+			provider: "openai",
+		} as unknown as ReplayFixture;
+		const compareByHead: Record<
+			string,
+			{ filename: string; status: string; patch: string }[]
+		> = {
+			h0: [{ filename: "README.md", status: "modified", patch: added(3) }],
+			h1: [{ filename: "src/a.ts", status: "modified", patch: added(30) }],
+			h2: Array.from({ length: 12 }, (_, i) => ({
+				filename: `src/f${i}.ts`,
+				status: "modified",
+				patch: `${added(45)}\n-old${i}`,
+			})),
+		};
+		const client = {
+			rest: async (route: string) => ({
+				files: compareByHead[route.split("...")[1] as string],
+			}),
+		} as unknown as GhClient;
+
+		it.each([
+			[0, { model: "gpt-6-luna", effort: "none" }],
+			[1, { model: "gpt-6.1-sol", effort: "low" }],
+			[2, { model: "gpt-6.1-sol", effort: "high" }],
+		])("round %i reviews and estimates with the model its real diff size routes to", async (index, expected) => {
+			mockRunAuditPass.mockResolvedValue({
+				review: buildModelReview(),
+				agentReviews: [],
+				usageBySkill: {},
+			});
+			const target = round(index, []);
+			const wiring = buildLiveWiring(
+				{ ...openaiFixture, rounds: [target] } as ReplayFixture,
+				client,
+				labels,
+			);
+
+			const { diff } = await wiring.fetchDiff(target);
+			const estimate = wiring.estimateCost(diff, target);
+			await wiring.review(diff, target);
+
+			expect(mockRunAuditPass.mock.lastCall?.[0].selection).toMatchObject({
+				provider: "openai",
+				...expected,
+			});
+			expect(estimate).toBe(
+				computeCost(
+					{
+						promptTokens: (diff.length / 4) * 5,
+						completionTokens: 2000 * 5,
+					},
+					expected.model,
+				),
+			);
+			expect(estimate).toBeGreaterThan(0);
+		});
 	});
 });
