@@ -44,7 +44,8 @@ export function labelledClaims(
  * Within 3 lines a candidate joins a claim at 0.33 title overlap instead of
  * 0.5, because a restatement at the same anchor tends to reword the title
  * ("Preserve the base delay before the first retry" for "Preserve the existing
- * retry-delay schedule", 0.375). Same file is still required. */
+ * retry-delay schedule", 0.375). Same file is still required. That fixture is
+ * the held-out ai-review-bot-demo#2, so its join figure is in-sample. */
 export const JOIN_CLAIM_MATCH: ClaimMatchOptions = {
 	...DEFAULT_CLAIM_MATCH,
 	nearby: { lineWindow: 3, titleSimilarity: 0.33 },
