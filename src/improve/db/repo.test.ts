@@ -2,7 +2,12 @@ import { sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import type { Db } from "./client.js";
 import { baseFinding, baseRaw } from "./repo.fixtures.js";
-import { insertRawFeedback, upsertFinding } from "./repo.js";
+import {
+	type DiscardInsert,
+	insertDiscards,
+	insertRawFeedback,
+	upsertFinding,
+} from "./repo.js";
 import { createTestDb } from "./testing.js";
 
 interface FindingRow {
@@ -104,5 +109,88 @@ describe("upsertFinding", () => {
 			const row = await readFinding(db);
 			expect(Number(row.comment_id)).toBe(4242);
 		});
+	});
+});
+
+const baseDiscard: DiscardInsert = {
+	provider: "anthropic",
+	owner: "o",
+	repo: "r",
+	pr: 1,
+	reviewSha: "abc",
+	reason: "CAP",
+	code: null,
+	disposition: "dropped",
+	naturalKey: "k1",
+	path: "src/a.ts",
+	line: 3,
+	severity: "P2",
+	title: "t",
+	skill: "code-reviewer",
+};
+
+describe("insertDiscards", () => {
+	it("inserts rows and reads them back", async () => {
+		const db = await createTestDb();
+		const n = await insertDiscards(db, [
+			baseDiscard,
+			{
+				...baseDiscard,
+				naturalKey: "k2",
+				reason: "OFF_DIFF",
+				code: "BAD_RANGE",
+			},
+		]);
+		expect(n).toBe(2);
+		const r = await db.execute(
+			sql`select reason, disposition, skill from finding_discards order by natural_key`,
+		);
+		expect(r.rows).toEqual([
+			{ reason: "CAP", disposition: "dropped", skill: "code-reviewer" },
+			{ reason: "OFF_DIFF", disposition: "dropped", skill: "code-reviewer" },
+		]);
+	});
+
+	it("round-trips null skill, path and line", async () => {
+		const db = await createTestDb();
+		await insertDiscards(db, [
+			{ ...baseDiscard, skill: null, path: null, line: null },
+		]);
+		const r = await db.execute(
+			sql`select skill, path, line from finding_discards`,
+		);
+		expect(r.rows).toEqual([{ skill: null, path: null, line: null }]);
+	});
+
+	it("inserts 5 rows for 5 distinct skills, including one null skill", async () => {
+		const db = await createTestDb();
+		await insertDiscards(
+			db,
+			["a.md", "b.md", "c.md", "d.md", null].map((skill) => ({
+				...baseDiscard,
+				skill,
+			})),
+		);
+		const r = await db.execute(
+			sql`select count(*)::int as n from finding_discards`,
+		);
+		expect(r.rows).toEqual([{ n: 5 }]);
+	});
+
+	it("inserts 3 rows for rows differing only in line, including a null line", async () => {
+		const db = await createTestDb();
+		await insertDiscards(
+			db,
+			[20, 200, null].map((line) => ({ ...baseDiscard, line })),
+		);
+		const r = await db.execute(
+			sql`select count(*)::int as n from finding_discards`,
+		);
+		expect(r.rows).toEqual([{ n: 3 }]);
+	});
+
+	it("returns 0 for an empty batch", async () => {
+		const db = await createTestDb();
+		expect(await insertDiscards(db, [])).toBe(0);
 	});
 });

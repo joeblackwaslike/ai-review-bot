@@ -1,7 +1,8 @@
 import { findProvenance } from "../comment-key.js";
+import { type Discard, discardKey } from "../discards.js";
 import { claimTitle } from "../replay/claims.js";
 import type { Db } from "./db/client.js";
-import { upsertFinding } from "./db/repo.js";
+import { insertDiscards, upsertFinding } from "./db/repo.js";
 import { findingNaturalKey } from "./findings.js";
 
 export interface CaptureOctokit {
@@ -220,4 +221,38 @@ export async function capturePostedReview(deps: {
 	}
 
 	return { findings, carrierCommentId };
+}
+
+/** Build a `recordDiscards` callback that writes one review round's discards
+ * to `finding_discards` in a single insert, keyed to the reviewed head sha.
+ * Rows already recorded for that round are skipped. */
+export function persistDiscards(deps: {
+	db: Db;
+	owner: string;
+	repo: string;
+	pr: number;
+	headSha: string;
+}): (discards: Discard[]) => Promise<void> {
+	const { db, owner, repo, pr, headSha } = deps;
+	return async (discards) => {
+		await insertDiscards(
+			db,
+			discards.map((d) => ({
+				provider: d.provider,
+				owner,
+				repo,
+				pr,
+				reviewSha: headSha,
+				reason: d.reason,
+				code: d.code,
+				disposition: d.disposition,
+				naturalKey: discardKey(d),
+				path: d.path,
+				line: d.line,
+				severity: d.severity,
+				title: d.title,
+				skill: d.skill,
+			})),
+		);
+	};
 }

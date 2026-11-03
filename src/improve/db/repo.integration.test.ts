@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadMigrationStatements } from "./migrate.js";
 import { baseFinding, baseRaw } from "./repo.fixtures.js";
 import {
+	insertDiscards,
 	insertRawFeedback,
 	listUnclassifiedBundles,
 	upsertFinding,
@@ -62,6 +63,76 @@ describe.skipIf(!url)("repo (real postgres)", () => {
 		expect(first).toBe(1);
 		const second = await insertRawFeedback(db, baseRaw);
 		expect(second).toBe(0);
+	});
+
+	it("insertDiscards inserts 0 rows on a duplicate unique key", async () => {
+		const row = {
+			provider: "anthropic" as const,
+			owner: "o",
+			repo: "r",
+			pr: 1,
+			reviewSha: "abc",
+			reason: "CAP" as const,
+			code: null,
+			disposition: "dropped" as const,
+			naturalKey: "k1",
+			path: null,
+			line: null,
+			severity: null,
+			title: "t",
+			skill: null,
+		};
+		expect(await insertDiscards(db, [row])).toBe(1);
+		expect(await insertDiscards(db, [row])).toBe(0);
+	});
+
+	it("insertDiscards inserts one row per skill and none for a repeat", async () => {
+		const row = {
+			provider: "anthropic" as const,
+			owner: "o",
+			repo: "r",
+			pr: 2,
+			reviewSha: "def",
+			reason: "SUPPRESSED_SETTLED" as const,
+			code: null,
+			disposition: "dropped" as const,
+			naturalKey: "k2",
+			path: "src/a.ts",
+			line: 4,
+			severity: "P2",
+			title: "t",
+			skill: "a.md",
+		};
+		const rows = ["a.md", "b.md", "c.md", "d.md", null].map((skill) => ({
+			...row,
+			skill,
+		}));
+		expect(await insertDiscards(db, rows)).toBe(5);
+		expect(await insertDiscards(db, [row])).toBe(0);
+		expect(await insertDiscards(db, [{ ...row, skill: null }])).toBe(0);
+	});
+
+	it("insertDiscards inserts one row per line and none for a repeat", async () => {
+		const row = {
+			provider: "anthropic" as const,
+			owner: "o",
+			repo: "r",
+			pr: 3,
+			reviewSha: "fed",
+			reason: "OFF_DIFF" as const,
+			code: "OFF_DIFF_LINE" as const,
+			disposition: "dropped" as const,
+			naturalKey: "k3",
+			path: "src/x.ts",
+			line: 20,
+			severity: "P2",
+			title: "Missing error handling",
+			skill: "a.md",
+		};
+		const rows = [20, 200, null].map((line) => ({ ...row, line }));
+		expect(await insertDiscards(db, rows)).toBe(3);
+		expect(await insertDiscards(db, [row])).toBe(0);
+		expect(await insertDiscards(db, [{ ...row, line: null }])).toBe(0);
 	});
 
 	it("upsertFinding keeps a stable id on natural_key conflict", async () => {

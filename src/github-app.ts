@@ -9,7 +9,7 @@ import type { KvClient } from "./feedback/kv.js";
 import { createUpstashKv } from "./feedback/kv.js";
 import { persistPostedComments } from "./feedback/persist.js";
 import { recordPostedComment } from "./feedback/store.js";
-import { capturePostedReview } from "./improve/capture.js";
+import { capturePostedReview, persistDiscards } from "./improve/capture.js";
 import { getDb } from "./improve/db/client.js";
 import {
 	billingUrl,
@@ -555,6 +555,16 @@ export async function maybeSubmitReview(args: {
 			diffBudgetChars: config.diffBudgetChars,
 			tier2Enabled: config.tier2Enabled,
 			auth,
+			recordDiscards: config.improveEnabled
+				? async (discards) =>
+						persistDiscards({
+							db: getDb(),
+							owner,
+							repo,
+							pr: pullNumber,
+							headSha,
+						})(discards)
+				: undefined,
 		});
 
 		if (!review) {

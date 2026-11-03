@@ -13,6 +13,7 @@ import { deriveBaseline } from "./baseline.js";
 import { commentKey } from "./comment-key.js";
 import { collectRightSideLines } from "./diff-lines.js";
 import { packDiff } from "./diff-pack.js";
+import type { Discard } from "./discards.js";
 import {
 	anchorFingerprint,
 	readFpMarkers,
@@ -30,6 +31,7 @@ import {
 	classifyRefusal,
 	computePaceDelayMs,
 	computeReadinessScore,
+	DISCARD_RECORD_TIMEOUT_MS,
 	formatFindings,
 	formatReviewBody,
 	generateSummary,
@@ -75,7 +77,11 @@ vi.mock("ai", async (importOriginal) => ({
 
 vi.mock("./models.js", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("./models.js")>();
-	return { ...actual, createAIModel: vi.fn().mockReturnValue("mocked-model") };
+	return {
+		...actual,
+		createAIModel: vi.fn().mockReturnValue("mocked-model"),
+		computeCost: vi.fn(actual.computeCost),
+	};
 });
 
 vi.mock("./config.js", () => ({
@@ -6590,6 +6596,778 @@ describe("buildReview ledger suppression", () => {
 			expect(decision?.event).toBe("REQUEST_CHANGES");
 			expect(decision?.body.split(ROUTED)).toHaveLength(2);
 			expect(decision?.body).toContain("<!-- ai-review:carry=r0:body:0 -->");
+		});
+	});
+
+	describe("discard records", () => {
+		const empty = buildModelReview({
+			event: "COMMENT",
+			general_findings: [],
+			inline_comments: [],
+		});
+		const withInline = (...inline_comments: (typeof repeat)[]) =>
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments,
+			});
+		const [declinedNode] =
+			threads.data.repository.pullRequest.reviewThreads.nodes;
+		/** The bot's thread with no reply: its entry stays open. */
+		const openThread = {
+			...declinedNode,
+			comments: {
+				...declinedNode.comments,
+				nodes: [declinedNode.comments.nodes[0]],
+			},
+		};
+		const openRound = {
+			...ownReview,
+			body: buildOwnReviewBody({
+				sha: OLD_SHA,
+				count: 1,
+				inline: "Inline comments: 1",
+			}),
+		};
+		const spy = () => vi.fn(async (_discards: Discard[]) => {});
+		const prContext = {
+			owner: baseContext.owner,
+			repo: baseContext.repo,
+			pullNumber: baseContext.pullNumber,
+			headSha: baseContext.headSha,
+		};
+		const recordsOf = (record: ReturnType<typeof spy>) => {
+			expect(record).toHaveBeenCalledTimes(1);
+			return record.mock.calls[0]?.[0] ?? [];
+		};
+
+		it("records a settled repeat as dropped, with its skill and provider, and logs it", async () => {
+			const log = vi.spyOn(console, "log").mockImplementation(() => {});
+			routeAgents({ "code-reviewer.md": withInline(repeat) }, empty);
+			const recordDiscards = spy();
+
+			await buildReview({
+				octokit: ledgerOctokit(),
+				...baseContext,
+				recordDiscards,
+			});
+
+			const expected: Discard = {
+				reason: "SUPPRESSED_SETTLED",
+				code: null,
+				disposition: "dropped",
+				title: REPEAT_TITLE,
+				path: "src/review.ts",
+				line: 2,
+				severity: repeat.severity,
+				skill: "code-reviewer.md",
+				provider: "anthropic",
+			};
+			expect(recordsOf(recordDiscards)).toEqual([expected]);
+			expect(log.mock.calls.filter(([m]) => m === "finding discarded")).toEqual(
+				[
+					[
+						"finding discarded",
+						{
+							owner: baseContext.owner,
+							repo: baseContext.repo,
+							pullNumber: baseContext.pullNumber,
+							...expected,
+						},
+					],
+				],
+			);
+			log.mockRestore();
+		});
+
+		it("records an open restatement as held", async () => {
+			routeAgents({ "code-reviewer.md": withInline(repeat) }, empty);
+			const recordDiscards = spy();
+
+			await buildReview({
+				octokit: ledgerOctokit({
+					reviews: [openRound],
+					threadNodes: [openThread],
+				}),
+				...baseContext,
+				recordDiscards,
+			});
+
+			expect(recordsOf(recordDiscards)).toEqual([
+				expect.objectContaining({
+					reason: "SUPPRESSED_OPEN",
+					disposition: "held",
+					title: REPEAT_TITLE,
+					skill: "code-reviewer.md",
+				}),
+			]);
+		});
+
+		it("records retraction filler when the filter is on", async () => {
+			REVIEWER_TUNING.dropRetractions = true;
+			onTestFinished(() => {
+				REVIEWER_TUNING.dropRetractions = false;
+			});
+			const filler = {
+				...fresh,
+				title: "Stale comment",
+				body: "The comment mentions the old name. No issues found.",
+				severity: "P3" as const,
+				suppressible: true,
+			};
+			routeAgents(
+				{
+					"code-reviewer.md": buildModelReview({
+						event: "COMMENT",
+						general_findings: [filler],
+						inline_comments: [],
+					}),
+				},
+				empty,
+			);
+			const recordDiscards = spy();
+
+			await buildReview({
+				octokit: ledgerOctokit(),
+				...baseContext,
+				recordDiscards,
+			});
+
+			expect(recordsOf(recordDiscards)).toEqual([
+				{
+					reason: "RETRACTION",
+					code: null,
+					disposition: "dropped",
+					title: "Stale comment",
+					path: null,
+					line: null,
+					severity: "P3",
+					skill: "code-reviewer.md",
+					provider: "anthropic",
+				},
+			]);
+		});
+
+		it("records a new finding at a location triage resolved", async () => {
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "INCREMENTAL",
+				resolved: [findingId("src/review.ts", 2, REPEAT_TITLE)],
+				newRisk: false,
+			});
+			const atResolved = buildInlineComment({
+				title: "Off-by-one in the pagination loop",
+				body: "The `page` counter starts at zero.",
+				path: "src/review.ts",
+				line: 2,
+			});
+			routeAgents({ "code-reviewer.md": withInline(atResolved) }, empty);
+			const recordDiscards = spy();
+
+			await buildReview({
+				octokit: ledgerOctokit({
+					reviews: [openRound],
+					threadNodes: [openThread],
+				}),
+				...baseContext,
+				recordDiscards,
+			});
+
+			expect(recordsOf(recordDiscards)).toEqual([
+				expect.objectContaining({
+					reason: "RESOLVED_LOCATION",
+					disposition: "dropped",
+					title: atResolved.title,
+					path: "src/review.ts",
+					line: 2,
+					skill: "code-reviewer.md",
+				}),
+			]);
+		});
+
+		it("records nothing for a restatement collapsed into another agent's claim", async () => {
+			const claim = buildInlineComment({
+				title: "Off-by-one in the pagination loop",
+				body: "The `page` counter starts at zero.",
+				path: "src/review.ts",
+				line: 2,
+			});
+			routeAgents(
+				{
+					"code-reviewer.md": withInline(claim),
+					"silent-failure-hunter.md": withInline(claim),
+				},
+				empty,
+			);
+			const recordDiscards = spy();
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit({ reviews: [], comments: [], threadNodes: [] }),
+				...baseContext,
+				recordDiscards,
+			});
+
+			expect(decision?.comments).toHaveLength(1);
+			expect(recordsOf(recordDiscards)).toEqual([]);
+		});
+
+		it("still records when a nothing-new round returns null", async () => {
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "FULL",
+				resolved: [],
+				newRisk: true,
+			});
+			routeAgents({}, withInline(repeat));
+			const recordDiscards = spy();
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit({
+					reviews: [carrying(carriedRow, { state: "COMMENTED" })],
+				}),
+				...baseContext,
+				recordDiscards,
+			});
+
+			expect(decision).toBeNull();
+			const records = recordsOf(recordDiscards);
+			expect(records).toHaveLength(TIER1_SKILLS.length);
+			expect(records.map((d) => d.reason)).toEqual(
+				TIER1_SKILLS.map(() => "SUPPRESSED_SETTLED"),
+			);
+		});
+
+		it("a failing recorder warns once and leaves the review unchanged", async () => {
+			const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+			const error = new Error("db down");
+			routeAgents({ "code-reviewer.md": withInline(repeat) }, empty);
+			const baseline = await buildReview({
+				octokit: ledgerOctokit(),
+				...baseContext,
+			});
+			routeAgents({ "code-reviewer.md": withInline(repeat) }, empty);
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit(),
+				...baseContext,
+				recordDiscards: async () => {
+					throw error;
+				},
+			});
+
+			expect(decision?.event).toBe(baseline?.event);
+			expect(decision?.comments).toEqual(baseline?.comments);
+			expect(
+				warn.mock.calls.filter(([m]) => m === "discard recording failed"),
+			).toEqual([["discard recording failed", { ...prContext, error }]]);
+			warn.mockRestore();
+		});
+
+		const noPrior = () =>
+			ledgerOctokit({ reviews: [], comments: [], threadNodes: [] });
+
+		it("flushes the collected discards and rethrows the original error when the round throws", async () => {
+			const boom = new Error("cost table missing");
+			vi.mocked(computeCost).mockImplementationOnce(() => {
+				throw boom;
+			});
+			routeAgents(
+				{
+					"code-reviewer.md": withInline(repeat),
+					"silent-failure-hunter.md": buildModelReview({
+						event: "COMMENT",
+						general_findings: [fresh],
+						inline_comments: [],
+					}),
+				},
+				empty,
+			);
+			const recordDiscards = spy();
+
+			await expect(
+				buildReview({
+					octokit: ledgerOctokit(),
+					...baseContext,
+					recordDiscards,
+				}),
+			).rejects.toBe(boom);
+
+			expect(recordsOf(recordDiscards)).toEqual([
+				expect.objectContaining({
+					reason: "SUPPRESSED_SETTLED",
+					skill: "code-reviewer.md",
+				}),
+			]);
+		});
+
+		it("attributes a late drop only to skills whose own copy survived suppression", async () => {
+			const claim = buildInlineComment({
+				title: "Token cache entries never expire or shrink",
+				body: "Entries in `tokenCache` are kept forever.",
+				path: "src/review.ts",
+				line: 40,
+				severity: "P2",
+			});
+			const entryShortId = shortFindingId(
+				findingId("src/review.ts", 2, REPEAT_TITLE),
+			);
+			routeAgents(
+				{
+					"code-reviewer.md": withInline({
+						...claim,
+						relation: { kind: "repeats", entry_id: entryShortId },
+					}),
+					"silent-failure-hunter.md": withInline(claim),
+				},
+				empty,
+			);
+			const recordDiscards = spy();
+
+			await buildReview({
+				octokit: ledgerOctokit({
+					reviews: [openRound],
+					threadNodes: [openThread],
+				}),
+				...baseContext,
+				recordDiscards,
+			});
+
+			const records = recordsOf(recordDiscards);
+			expect(
+				records
+					.filter((d) => d.skill === "code-reviewer.md")
+					.map((d) => d.reason),
+			).toEqual([expect.stringMatching(/^SUPPRESSED_/)]);
+			expect(records.filter((d) => d.reason === "OFF_DIFF")).toEqual([
+				{
+					reason: "OFF_DIFF",
+					code: "OFF_DIFF_LINE",
+					disposition: "dropped",
+					title: claim.title,
+					path: "src/review.ts",
+					line: 40,
+					severity: "P2",
+					skill: "silent-failure-hunter.md",
+					provider: "anthropic",
+				},
+			]);
+		});
+
+		it("records an off-diff P2 with its sub-code and the skill that reported it", async () => {
+			const offLine = buildInlineComment({
+				title: "Unchecked index into the cache array",
+				path: "src/review.ts",
+				line: 9,
+				severity: "P2",
+			});
+			const offPath = buildInlineComment({
+				title: "Missing timeout on the outbound fetch",
+				path: "src/elsewhere.ts",
+				line: 2,
+				severity: "P3",
+			});
+			routeAgents(
+				{
+					"code-reviewer.md": withInline(offLine),
+					"silent-failure-hunter.md": withInline(offPath),
+				},
+				empty,
+			);
+			const recordDiscards = spy();
+
+			const decision = await buildReview({
+				octokit: noPrior(),
+				...baseContext,
+				recordDiscards,
+			});
+
+			expect(baseContext.feedbackEnabled).toBe(false);
+			expect(decision?.comments).toEqual([]);
+			expect(recordsOf(recordDiscards)).toEqual([
+				{
+					reason: "OFF_DIFF",
+					code: "OFF_DIFF_LINE",
+					disposition: "dropped",
+					title: offLine.title,
+					path: "src/review.ts",
+					line: 9,
+					severity: "P2",
+					skill: "code-reviewer.md",
+					provider: "anthropic",
+				},
+				{
+					reason: "OFF_DIFF",
+					code: "OFF_DIFF_PATH",
+					disposition: "dropped",
+					title: offPath.title,
+					path: "src/elsewhere.ts",
+					line: 2,
+					severity: "P3",
+					skill: "silent-failure-hunter.md",
+					provider: "anthropic",
+				},
+			]);
+		});
+
+		it("records nothing for an off-diff P1 routed into a general finding", async () => {
+			const blocking = buildInlineComment({
+				title: "Token written to the debug log",
+				path: "src/review.ts",
+				line: 9,
+				severity: "P1",
+			});
+			routeAgents({ "code-reviewer.md": withInline(blocking) }, empty);
+			const recordDiscards = spy();
+
+			const decision = await buildReview({
+				octokit: noPrior(),
+				...baseContext,
+				recordDiscards,
+			});
+
+			expect(decision?.event).toBe("REQUEST_CHANGES");
+			expect(recordsOf(recordDiscards)).toEqual([]);
+		});
+
+		it("buildReviewComments reports each drop's code to onDrop", () => {
+			const file = buildPullFile("src/review.ts", SIMPLE_PATCH);
+			const inverted = buildInlineComment({
+				path: "src/review.ts",
+				line: 2,
+				start_line: 3,
+			});
+			const offLine = buildInlineComment({ path: "src/review.ts", line: 9 });
+			const offPath = buildInlineComment({ path: "src/other.ts", line: 2 });
+			const onDrop = vi.fn();
+
+			const posted = buildReviewComments(
+				[file],
+				[inverted, offLine, offPath],
+				onDrop,
+			);
+
+			expect(posted).toEqual([]);
+			expect(onDrop.mock.calls).toEqual([
+				[inverted, "BAD_RANGE"],
+				[offLine, "OFF_DIFF_LINE"],
+				[offPath, "OFF_DIFF_PATH"],
+			]);
+		});
+
+		it("records the lowest-severity overflow of the 50-comment cap", async () => {
+			const severityAt = (i: number) =>
+				i === 10 || i === 30 ? "P3" : i % 2 ? "P1" : "P2";
+			const comments = Array.from({ length: 52 }, (_, i) =>
+				buildInlineComment({
+					title: `Finding ${i}`,
+					path: "src/review.ts",
+					line: (i % 3) + 1,
+					severity: severityAt(i),
+				}),
+			);
+			routeAgents({ "code-reviewer.md": withInline(...comments) }, empty);
+			const recordDiscards = spy();
+
+			const decision = await buildReview({
+				octokit: noPrior(),
+				...baseContext,
+				recordDiscards,
+			});
+
+			expect(decision?.comments).toHaveLength(50);
+			const byTitle = (a: Discard, b: Discard) =>
+				a.title.localeCompare(b.title);
+			expect(recordsOf(recordDiscards).sort(byTitle)).toEqual(
+				[10, 30].map((i) => ({
+					reason: "CAP",
+					code: null,
+					disposition: "dropped",
+					title: `Finding ${i}`,
+					path: "src/review.ts",
+					line: (i % 3) + 1,
+					severity: "P3",
+					skill: "code-reviewer.md",
+					provider: "anthropic",
+				})),
+			);
+		});
+
+		it("records one off-diff discard per skill that flagged the merged comment", async () => {
+			const offLine = buildInlineComment({
+				title: "Unchecked index into the cache array",
+				path: "src/review.ts",
+				line: 9,
+				severity: "P2",
+			});
+			routeAgents(
+				{
+					"code-reviewer.md": withInline(offLine),
+					"silent-failure-hunter.md": withInline(offLine),
+				},
+				empty,
+			);
+			const recordDiscards = spy();
+
+			await buildReview({
+				octokit: noPrior(),
+				...baseContext,
+				recordDiscards,
+			});
+
+			expect(recordsOf(recordDiscards)).toEqual(
+				["code-reviewer.md", "silent-failure-hunter.md"].map((skill) => ({
+					reason: "OFF_DIFF",
+					code: "OFF_DIFF_LINE",
+					disposition: "dropped",
+					title: offLine.title,
+					path: "src/review.ts",
+					line: 9,
+					severity: "P2",
+					skill,
+					provider: "anthropic",
+				})),
+			);
+		});
+
+		it("records one cap discard per skill that flagged the overflowed comment", async () => {
+			const comments = Array.from({ length: 51 }, (_, i) =>
+				buildInlineComment({
+					title: `Finding ${i}`,
+					path: "src/review.ts",
+					line: (i % 3) + 1,
+					severity: i === 10 ? "P3" : "P2",
+				}),
+			);
+			routeAgents(
+				{
+					"code-reviewer.md": withInline(...comments),
+					"silent-failure-hunter.md": withInline(comments[10]),
+				},
+				empty,
+			);
+			const recordDiscards = spy();
+
+			await buildReview({
+				octokit: noPrior(),
+				...baseContext,
+				recordDiscards,
+			});
+
+			expect(recordsOf(recordDiscards)).toEqual(
+				["code-reviewer.md", "silent-failure-hunter.md"].map((skill) => ({
+					reason: "CAP",
+					code: null,
+					disposition: "dropped",
+					title: "Finding 10",
+					path: "src/review.ts",
+					line: 2,
+					severity: "P3",
+					skill,
+					provider: "anthropic",
+				})),
+			);
+		});
+
+		it("records nothing for an adjacent-line restatement dedupeClaims collapses", async () => {
+			const claim = buildInlineComment({
+				title: "Pagination loop skips the final page entirely",
+				body: "The `page` counter stops one short.",
+				path: "src/review.ts",
+				line: 2,
+			});
+			routeAgents(
+				{
+					"code-reviewer.md": withInline(claim),
+					"silent-failure-hunter.md": withInline({ ...claim, line: 3 }),
+				},
+				empty,
+			);
+			const recordDiscards = spy();
+
+			const decision = await buildReview({
+				octokit: noPrior(),
+				...baseContext,
+				recordDiscards,
+			});
+
+			expect(decision?.comments).toHaveLength(1);
+			expect(recordsOf(recordDiscards)).toEqual([]);
+		});
+
+		it("records the folded skill too when a deduped survivor goes off-diff", async () => {
+			const claim = buildInlineComment({
+				title: "Pagination loop skips the final page entirely",
+				body: "The `page` counter stops one short.",
+				path: "src/review.ts",
+				line: 9,
+				severity: "P2",
+			});
+			routeAgents(
+				{
+					"code-reviewer.md": withInline(claim),
+					"silent-failure-hunter.md": withInline({ ...claim, line: 10 }),
+				},
+				empty,
+			);
+			const recordDiscards = spy();
+
+			await buildReview({
+				octokit: noPrior(),
+				...baseContext,
+				recordDiscards,
+			});
+
+			const records = recordsOf(recordDiscards);
+			expect(records.map((d) => [d.skill, d.reason, d.code]).sort()).toEqual([
+				["code-reviewer.md", "OFF_DIFF", "OFF_DIFF_LINE"],
+				["silent-failure-hunter.md", "OFF_DIFF", "OFF_DIFF_LINE"],
+			]);
+		});
+
+		it("records no retraction when the filter is off", async () => {
+			expect(REVIEWER_TUNING.dropRetractions).toBe(false);
+			const filler = {
+				...fresh,
+				title: "Stale comment",
+				body: "The comment mentions the old name. No issues found.",
+				severity: "P3" as const,
+				suppressible: true,
+			};
+			routeAgents(
+				{
+					"code-reviewer.md": buildModelReview({
+						event: "COMMENT",
+						general_findings: [filler],
+						inline_comments: [],
+					}),
+				},
+				empty,
+			);
+			const recordDiscards = spy();
+
+			await buildReview({
+				octokit: ledgerOctokit(),
+				...baseContext,
+				recordDiscards,
+			});
+
+			expect(recordsOf(recordDiscards)).toEqual([]);
+		});
+
+		it("a synchronously throwing recorder warns once and leaves the review unchanged", async () => {
+			const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+			const error = new Error("bad config");
+			routeAgents({ "code-reviewer.md": withInline(repeat) }, empty);
+			const baseline = await buildReview({
+				octokit: ledgerOctokit(),
+				...baseContext,
+			});
+			routeAgents({ "code-reviewer.md": withInline(repeat) }, empty);
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit(),
+				...baseContext,
+				recordDiscards: () => {
+					throw error;
+				},
+			});
+
+			const untimed = (d: typeof decision) => ({
+				...d,
+				body: d?.body.replace(/durationMs\\?":\d+/g, ""),
+			});
+			expect(untimed(decision)).toEqual(untimed(baseline));
+			expect(
+				warn.mock.calls.filter(([m]) => m === "discard recording failed"),
+			).toEqual([["discard recording failed", { ...prContext, error }]]);
+			warn.mockRestore();
+		});
+
+		it("a recorder that never settles is abandoned after the time bound", async () => {
+			const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+			onTestFinished(() => {
+				vi.useRealTimers();
+				warn.mockRestore();
+			});
+			vi.useFakeTimers();
+			routeAgents({ "code-reviewer.md": withInline(repeat) }, empty);
+			let reached: () => void = () => {};
+			const called = new Promise<void>((resolve) => {
+				reached = resolve;
+			});
+
+			const pending = buildReview({
+				octokit: ledgerOctokit(),
+				...baseContext,
+				recordDiscards: () => {
+					reached();
+					return new Promise<void>(() => {});
+				},
+			});
+			await called;
+			await vi.advanceTimersByTimeAsync(DISCARD_RECORD_TIMEOUT_MS);
+			const decision = await pending;
+
+			expect(decision).not.toBeNull();
+			expect(vi.getTimerCount()).toBe(0);
+			expect(
+				warn.mock.calls.filter(([m]) => m === "discard recording timed out"),
+			).toEqual([["discard recording timed out", prContext]]);
+		});
+
+		it("logs a recorder rejection that arrives after the time bound", async () => {
+			const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+			onTestFinished(() => {
+				vi.useRealTimers();
+				warn.mockRestore();
+			});
+			vi.useFakeTimers();
+			routeAgents({ "code-reviewer.md": withInline(repeat) }, empty);
+			const error = new Error("db down late");
+			let fail: (e: Error) => void = () => {};
+			let reached: () => void = () => {};
+			const called = new Promise<void>((resolve) => {
+				reached = resolve;
+			});
+
+			const pending = buildReview({
+				octokit: ledgerOctokit(),
+				...baseContext,
+				recordDiscards: () => {
+					reached();
+					return new Promise<void>((_, reject) => {
+						fail = reject;
+					});
+				},
+			});
+			await called;
+			await vi.advanceTimersByTimeAsync(DISCARD_RECORD_TIMEOUT_MS);
+			await pending;
+			fail(error);
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(
+				warn.mock.calls.filter(([m]) =>
+					String(m).startsWith("discard recording"),
+				),
+			).toEqual([
+				["discard recording timed out", prContext],
+				["discard recording failed after timing out", { ...prContext, error }],
+			]);
+		});
+
+		it("clears the time bound when the recorder settles", async () => {
+			vi.useFakeTimers();
+			onTestFinished(() => {
+				vi.useRealTimers();
+			});
+			routeAgents({ "code-reviewer.md": withInline(repeat) }, empty);
+
+			await buildReview({
+				octokit: ledgerOctokit(),
+				...baseContext,
+				recordDiscards: spy(),
+			});
+
+			expect(vi.getTimerCount()).toBe(0);
 		});
 	});
 });

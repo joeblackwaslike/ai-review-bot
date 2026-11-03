@@ -4,11 +4,13 @@ import type { Db } from "./client.js";
 import {
 	classifiedFeedback,
 	findingCatalog,
+	findingDiscards,
 	qcRuns,
 	rawFeedback,
 } from "./schema.js";
 
 export type RawFeedbackInsert = typeof rawFeedback.$inferInsert;
+export type DiscardInsert = typeof findingDiscards.$inferInsert;
 export type FindingInsert = typeof findingCatalog.$inferInsert;
 
 /** Insert a raw feedback row; a duplicate dedup_key is a no-op.
@@ -327,4 +329,21 @@ export async function reclaimStaleQcRun(
 		returning id
 	`);
 	return deleted.rows.length > 0;
+}
+
+/** Insert discard rows; rows whose unique key already exists are skipped.
+ * The key includes the skill so five agents restating one finding stay five
+ * rows; coalesce makes a null skill collide with itself.
+ * Returns the number of rows actually inserted. */
+export async function insertDiscards(
+	db: Db,
+	rows: DiscardInsert[],
+): Promise<number> {
+	if (rows.length === 0) return 0;
+	const inserted = await db
+		.insert(findingDiscards)
+		.values(rows)
+		.onConflictDoNothing()
+		.returning({ id: findingDiscards.id });
+	return inserted.length;
 }

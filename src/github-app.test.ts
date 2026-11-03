@@ -1,4 +1,6 @@
+import { sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Discard } from "./discards.js";
 import { persistPostedComments } from "./feedback/persist.js";
 import {
 	budgetAfterDelay,
@@ -7,6 +9,8 @@ import {
 	runScheduledReview,
 	selectReviewDelayMs,
 } from "./github-app.js";
+import { getDb } from "./improve/db/client.js";
+import { createTestDb } from "./improve/db/testing.js";
 import { quotaCommentMarker, rateLimitCommentMarker } from "./notify.js";
 import { buildReview } from "./review.js";
 import type { ReviewRunMessage } from "./scheduler.js";
@@ -54,7 +58,8 @@ vi.mock("./scheduler.js", () => ({
 }));
 
 const mockCapturePostedReview = vi.hoisted(() => vi.fn());
-vi.mock("./improve/capture.js", () => ({
+vi.mock("./improve/capture.js", async (importActual) => ({
+	...(await importActual<typeof import("./improve/capture.js")>()),
 	capturePostedReview: mockCapturePostedReview,
 }));
 vi.mock("./improve/db/client.js", () => ({ getDb: vi.fn(() => ({})) }));
@@ -2107,6 +2112,89 @@ describe("selectReviewDelayMs", () => {
 		expect(selectReviewDelayMs("opened", config)).toBe(30_000);
 		expect(selectReviewDelayMs("ready_for_review", config)).toBe(30_000);
 		expect(selectReviewDelayMs("synchronize", config)).toBe(12_000);
+	});
+});
+
+type ReviewContext = Parameters<typeof buildReview>[0];
+
+describe("discard recording wiring", () => {
+	const settled: Discard = {
+		reason: "SUPPRESSED_SETTLED",
+		code: null,
+		disposition: "dropped",
+		title: "Missing null check",
+		path: "src/x.ts",
+		line: 10,
+		severity: "P2",
+		skill: "code-reviewer.md",
+		provider: "anthropic",
+	};
+	const improveOn = { ...baseArgs.config, improveEnabled: true };
+
+	beforeEach(() => {
+		kvStore.clear();
+		mockCapturePostedReview
+			.mockReset()
+			.mockResolvedValue({ findings: 0, carrierCommentId: null });
+	});
+	afterEach(() => {
+		vi.mocked(getDb)
+			.mockReset()
+			.mockImplementation(() => ({}) as never);
+	});
+
+	it("passes no recordDiscards when the corpus is off", async () => {
+		const { app } = buildMockApp();
+		mockBuildReview.mockReset().mockResolvedValue(null);
+
+		await maybeSubmitReview({ app, ...baseArgs });
+
+		expect(mockBuildReview.mock.calls[0][0].recordDiscards).toBeUndefined();
+	});
+
+	it("records a settled-repeat discard in the corpus when it is on", async () => {
+		const db = await createTestDb();
+		vi.mocked(getDb).mockReturnValue(db);
+		const { app } = buildMockApp();
+		mockBuildReview
+			.mockReset()
+			.mockImplementation(async (ctx: ReviewContext) => {
+				await ctx.recordDiscards?.([settled]);
+				return null;
+			});
+
+		await maybeSubmitReview({ app, ...baseArgs, config: improveOn });
+
+		const r = await db.execute(
+			sql`select pr, review_sha, reason, skill from finding_discards`,
+		);
+		expect(r.rows).toEqual([
+			{
+				pr: baseArgs.pullNumber,
+				review_sha: pr.head.sha,
+				reason: "SUPPRESSED_SETTLED",
+				skill: "code-reviewer.md",
+			},
+		]);
+	});
+
+	it("opens the corpus inside recordDiscards so a getDb throw rejects instead of failing the review", async () => {
+		vi.mocked(getDb).mockImplementation(() => {
+			throw new Error("DATABASE_URL is required");
+		});
+		const { app } = buildMockApp();
+		let ctx: ReviewContext | undefined;
+		mockBuildReview.mockReset().mockImplementation(async (c: ReviewContext) => {
+			ctx = c;
+			return null;
+		});
+
+		await maybeSubmitReview({ app, ...baseArgs, config: improveOn });
+
+		expect(getDb).not.toHaveBeenCalled();
+		const recording = ctx?.recordDiscards?.([settled]);
+		expect(recording).toBeInstanceOf(Promise);
+		await expect(recording).rejects.toThrow("DATABASE_URL is required");
 	});
 });
 
