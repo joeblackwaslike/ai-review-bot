@@ -1,19 +1,34 @@
 import {
+	chmodSync,
 	existsSync,
 	mkdtempSync,
 	readdirSync,
 	readFileSync,
+	rmSync,
+	statSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { fixtureId } from "./claims.js";
 import { defaultFixturesDir, runReplay } from "./command.js";
 import type { GhClient } from "./gh.js";
 import type { ReplayPipeline } from "./pipeline.js";
 import { makeFixture, makeLabel, makeLabels } from "./testkit.js";
+
+const failRename = vi.hoisted(() => ({ on: false }));
+vi.mock("node:fs/promises", async (orig) => {
+	const actual = await orig<typeof import("node:fs/promises")>();
+	return {
+		...actual,
+		rename: (...a: Parameters<typeof actual.rename>) =>
+			failRename.on
+				? Promise.reject(new Error("rename boom"))
+				: actual.rename(...a),
+	};
+});
 
 const tmp = () => mkdtempSync(join(tmpdir(), "replay-"));
 
@@ -494,6 +509,128 @@ describe("runReplay live and record flags", () => {
 		expect(read(flagged).expect).toEqual({ clean: true });
 		expect("heldOut" in read(plain)).toBe(false);
 		expect("expect" in read(plain)).toBe(false);
+	});
+
+	it("cleans up the temp file when the write fails", async () => {
+		const dir = tmp();
+		const { path } = seedLive(dir, false);
+		failRename.on = true;
+		try {
+			await expect(
+				runReplay(["--live", "--save-trace"], {
+					fixturesDir: dir,
+					out: () => {},
+					client: fakeClient(),
+					liveWiring: wiringFor(1),
+				}),
+			).rejects.toThrow("rename boom");
+		} finally {
+			failRename.on = false;
+		}
+		expect(existsSync(`${path}.tmp`)).toBe(false);
+	});
+
+	it("keeps the fixture file mode when saving a trace", async () => {
+		const dir = tmp();
+		const { path } = seedLive(dir, false);
+		chmodSync(path, 0o640);
+		await runReplay(["--live", "--save-trace"], {
+			fixturesDir: dir,
+			out: () => {},
+			client: fakeClient(),
+			liveWiring: wiringFor(1),
+		});
+		expect(statSync(path).mode & 0o777).toBe(0o640);
+	});
+
+	it("--rounds 1 writes the last round and leaves an earlier trace alone", async () => {
+		const dir = tmp();
+		const f = makeFixture([["a"], ["b"]]);
+		const old = { candidates: [], posted: [], usage: { keep: 1 } };
+		f.rounds[0] = { ...f.rounds[0], trace: old } as (typeof f.rounds)[0];
+		const id = fixtureId(f);
+		const path = join(dir, `${id}.json`);
+		writeFileSync(path, JSON.stringify(f, null, 2));
+		writeFileSync(
+			join(dir, `${id}.labels.json`),
+			JSON.stringify({ ...makeLabels(), fixtureId: id }),
+		);
+		await runReplay(["--live", "--rounds", "1", "--save-trace"], {
+			fixturesDir: dir,
+			out: () => {},
+			client: fakeClient(),
+			liveWiring: wiringFor(1),
+		});
+		const rounds = JSON.parse(readFileSync(path, "utf8")).rounds;
+		expect(rounds[0].trace).toEqual(old);
+		expect(rounds[1].trace.posted).toHaveLength(1);
+	});
+
+	it("fails a clean fixture with no labels file", async () => {
+		const dir = tmp();
+		const { id } = seedLive(dir, true);
+		rmSync(join(dir, `${id}.labels.json`));
+		const { lines, out } = collect();
+		expect(
+			await runReplay(["--live"], {
+				fixturesDir: dir,
+				out,
+				client: fakeClient(),
+				liveWiring: wiringFor(0),
+			}),
+		).toBe(1);
+		expect(lines).toContain(`FAIL ${id}: clean fixture has no labels file`);
+	});
+
+	it("re-record keeps heldOut and expect, drops traces, and notes it", async () => {
+		const dir = tmp();
+		const first = tmp();
+		await runReplay([...recordArgs, "--fixtures", first], {
+			client: fakeClient(),
+			out: () => {},
+		});
+		const name = readdirSync(first).find(
+			(n) => n.endsWith(".json") && !n.includes(".labels."),
+		) as string;
+		const f = JSON.parse(readFileSync(join(first, name), "utf8"));
+		f.heldOut = true;
+		f.expect = { clean: true };
+		f.rounds = [
+			{
+				...(f.rounds[0] ?? {}),
+				trace: { candidates: [], posted: [], usage: {} },
+			},
+		];
+		writeFileSync(join(dir, name), JSON.stringify(f));
+		const { lines, out } = collect();
+		await runReplay([...recordArgs, "--fixtures", dir], {
+			client: fakeClient(),
+			out,
+		});
+		const after = JSON.parse(readFileSync(join(dir, name), "utf8"));
+		expect(after.heldOut).toBe(true);
+		expect(after.expect).toEqual({ clean: true });
+		expect(JSON.stringify(after.rounds)).not.toContain("trace");
+		expect(lines.join("\n")).toContain("replay --live --save-trace");
+	});
+
+	it("documents the new flags in usage and rejects --record with --save-trace", async () => {
+		const { lines, out } = collect();
+		expect(
+			await runReplay([...recordArgs, "--live", "--save-trace"], {
+				fixturesDir: tmp(),
+				client: fakeClient(),
+				out,
+			}),
+		).toBe(2);
+		const text = lines.join("\n");
+		for (const flag of [
+			"--live",
+			"--save-trace",
+			"--held-out",
+			"--expect-clean",
+		])
+			expect(text).toContain(flag);
 	});
 
 	it("rejects flags used outside their mode", async () => {

@@ -44,7 +44,8 @@ interface ParsedArgs {
 const USAGE = [
 	"Usage:",
 	"  ai-review replay [--fixtures <dir>]",
-	"  ai-review replay --record <pr-url> --provider anthropic|openai --bot <login> [--fixtures <dir>]",
+	"  ai-review replay --record <pr-url> --provider anthropic|openai --bot <login> [--held-out] [--expect-clean] [--fixtures <dir>]",
+	"  ai-review replay --live [--rounds <n>] [--max-cost <usd>] [--save-trace] [--fixtures <dir>]",
 ].join("\n");
 
 const PR_URL = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)\/?$/;
@@ -157,9 +158,21 @@ async function writeRecording(
 		provider: p.provider as Provider,
 		botLogin: p.bot as string,
 	});
+	const id = fixtureId(fixture);
+	const fixturePath = join(dir, `${id}.json`);
+	if (existsSync(fixturePath)) {
+		const prior = JSON.parse(
+			await readFile(fixturePath, "utf8"),
+		) as ReplayFixture;
+		if (prior.heldOut) fixture.heldOut = true;
+		if (prior.expect) fixture.expect = prior.expect;
+		if (prior.rounds.some((r) => r.trace))
+			out(
+				`dropped saved traces for ${id}; rerun replay --live --save-trace to restore them`,
+			);
+	}
 	if (p.heldOut) fixture.heldOut = true;
 	if (p.expectClean) fixture.expect = { clean: true };
-	const id = fixtureId(fixture);
 	const labelsPath = join(dir, `${id}.labels.json`);
 	let target = labelsPath;
 	if (existsSync(labelsPath)) {
@@ -175,10 +188,7 @@ async function writeRecording(
 			target = join(dir, `${id}.labels.proposed.json`);
 	}
 	await mkdir(dir, { recursive: true });
-	await writeFile(
-		join(dir, `${id}.json`),
-		`${JSON.stringify(fixture, null, 2)}\n`,
-	);
+	await writeFile(fixturePath, `${JSON.stringify(fixture, null, 2)}\n`);
 	await writeFile(
 		target,
 		`${JSON.stringify(labelFixture(fixture), null, 2)}\n`,
@@ -304,8 +314,17 @@ async function writeTrace(
 		};
 	});
 	const tmp = `${path}.tmp`;
-	await writeFile(tmp, `${JSON.stringify({ ...fixture, rounds }, null, 2)}\n`);
-	await rename(tmp, path);
+	try {
+		await writeFile(
+			tmp,
+			`${JSON.stringify({ ...fixture, rounds }, null, 2)}\n`,
+		);
+		await chmod(tmp, (await stat(path)).mode & 0o7777);
+		await rename(tmp, path);
+	} catch (err) {
+		await rm(tmp, { force: true });
+		throw err;
+	}
 }
 
 async function liveAll(
@@ -334,6 +353,10 @@ async function liveAll(
 		const labelsPath = join(dir, `${id}.labels.json`);
 		if (!existsSync(labelsPath)) {
 			out(`${id}: missing ${id}.labels.json (run --record first)`);
+			if (f.expect?.clean) {
+				out(`FAIL ${id}: clean fixture has no labels file`);
+				failed = true;
+			}
 			continue;
 		}
 		const labels = JSON.parse(await readFile(labelsPath, "utf8")) as LabelFile;
@@ -373,7 +396,9 @@ export async function runReplay(
 		return 2;
 	}
 	const misuse =
-		(parsed.saveTrace && !parsed.live && "--save-trace requires --live") ||
+		(parsed.saveTrace &&
+			(!parsed.live || parsed.record !== undefined) &&
+			"--save-trace requires --live without --record") ||
 		((parsed.heldOut || parsed.expectClean) &&
 			parsed.record === undefined &&
 			"--held-out and --expect-clean require --record");
