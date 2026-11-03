@@ -57,6 +57,10 @@ describe("claimTitle on old-format reviews", () => {
 		).toBe("The retry loop never gives up.");
 	});
 
+	it("falls back to the first sentence for a P-badged body with no bold title", () => {
+		expect(claimTitle("🟠 **P1**\n\nThe loop. More text")).toBe("The loop.");
+	});
+
 	it("truncates a long fallback sentence to 100 characters", () => {
 		const title = claimTitle(`🟡 **Medium**\n\n${"word ".repeat(60)}end.`);
 		expect(title.length).toBeLessThanOrEqual(100);
