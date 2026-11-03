@@ -9,8 +9,7 @@ const ABBREVIATION_END = /(?:^|\s)(?:e\.g|i\.e|etc|vs|cf)\.$/i;
 
 function firstSentence(line: string): string {
 	const re = /[.!?](?=\s|$)/g;
-	let m: RegExpExecArray | null;
-	while ((m = re.exec(line))) {
+	for (const m of line.matchAll(re)) {
 		const prefix = line.slice(0, m.index + 1);
 		if (!ABBREVIATION_END.test(prefix)) return prefix;
 	}
