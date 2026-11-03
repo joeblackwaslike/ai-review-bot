@@ -1,0 +1,255 @@
+{
+	"fixtureId": "joeblackwaslike__ai-review-bot__70__anthropic",
+	"provisional": true,
+	"labels": [
+		{
+			"claimId": "r0:c3802679098:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3802679114:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-08-18T09:17:02Z|changed src/triage.ts near line 34 in 9032eb5b3cd6bed43c986b804ce7d48204336e5b"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3802679121:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:body:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:body:2",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c3802719138:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-18T09:23:14Z|Fair — the trim in the prior round went too far. Restored a one-sentence mechanism explanation in b71742f (why the model echoes \"id — title\") without the PR-specific forensic narrative."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c3802719149:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-18T09:23:15Z|Same fix, same commit (b71742f) — replaced the dead-end ticket reference with the actual consequence explanation, close to your suggested wording."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:2",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:3",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:4",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c3802762258:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-18T09:29:52Z|Fair point — fixed in d5aaa1b, reworded to justify dedup on its own merits (distinct enum choices) instead of citing runtime zod behavior a reader can't verify from the diff."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:body:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:body:2",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:body:3",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c3802768620:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c3802768637:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c3802768642:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c3802768648:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-18T09:29:54Z|Same fix, same commit (d5aaa1b) — matches this suggestion too."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:body:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:body:2",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		}
+	],
+	"repeatPairs": [
+		{
+			"later": "r1:body:2",
+			"earlier": "r0:body:0",
+			"confirmed": false
+		},
+		{
+			"later": "r1:body:3",
+			"earlier": "r0:body:1",
+			"confirmed": false
+		},
+		{
+			"later": "r2:body:2",
+			"earlier": "r0:body:0",
+			"confirmed": false
+		},
+		{
+			"later": "r2:body:3",
+			"earlier": "r0:body:1",
+			"confirmed": false
+		},
+		{
+			"later": "r2:c3802762258:0",
+			"earlier": "r1:c3802719138:0",
+			"confirmed": false
+		},
+		{
+			"later": "r2:body:0",
+			"earlier": "r1:body:0",
+			"confirmed": false
+		},
+		{
+			"later": "r2:body:1",
+			"earlier": "r1:body:1",
+			"confirmed": false
+		},
+		{
+			"later": "r2:body:2",
+			"earlier": "r1:body:2",
+			"confirmed": false
+		},
+		{
+			"later": "r2:body:3",
+			"earlier": "r1:body:3",
+			"confirmed": false
+		},
+		{
+			"later": "r3:c3802768642:0",
+			"earlier": "r1:c3802719149:0",
+			"confirmed": false
+		},
+		{
+			"later": "r3:c3802768648:0",
+			"earlier": "r1:c3802719138:0",
+			"confirmed": false
+		},
+		{
+			"later": "r3:c3802768642:0",
+			"earlier": "r2:c3802762258:0",
+			"confirmed": false
+		}
+	],
+	"negativePairs": [],
+	"allowedSuppression": []
+}

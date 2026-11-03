@@ -1,0 +1,27 @@
+{
+	"fixtureId": "joeblackwaslike__ai-review-bot__70__openai",
+	"provisional": true,
+	"labels": [
+		{
+			"claimId": "r0:c3802685410:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-18T09:17:28Z|Fixed in 9032eb5 — trimmed to the durable invariant, moved the forensic detail out (ai-review-bot-49n has it)."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3802685426:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-18T09:17:29Z|Fixed in 9032eb5 — same trim, matches your suggested replacement wording."
+			],
+			"confirmed": false
+		}
+	],
+	"repeatPairs": [],
+	"negativePairs": [],
+	"allowedSuppression": []
+}

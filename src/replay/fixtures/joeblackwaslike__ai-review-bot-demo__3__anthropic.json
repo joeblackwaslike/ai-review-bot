@@ -1,0 +1,44 @@
+{
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "ai-review-bot-demo",
+	"pull": 3,
+	"provider": "anthropic",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-11-03T21:07:01.745Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 5003106400,
+			"provider": "anthropic",
+			"submittedAt": "2026-08-23T18:47:52Z",
+			"headSha": "94534258f4cff25c664234cd2fb9621f7237ef90",
+			"baseSha": "d2d067bbac0420ccf4739d8d55a33155c4ccb809",
+			"mergeBase": "d2d067bbac0420ccf4739d8d55a33155c4ccb809",
+			"triggerAt": "2026-08-23T18:47:31Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "94534258f4cff25c664234cd2fb9621f7237ef90",
+					"committedAt": "2026-08-23T18:47:31Z",
+					"files": [
+						{
+							"path": "src/clamp.test.ts",
+							"ranges": [[1, 26]]
+						},
+						{
+							"path": "src/clamp.ts",
+							"ranges": [[4, 10]]
+						}
+					]
+				}
+			],
+			"claims": []
+		}
+	],
+	"threads": [],
+	"reactions": [],
+	"expect": {
+		"clean": true
+	}
+}

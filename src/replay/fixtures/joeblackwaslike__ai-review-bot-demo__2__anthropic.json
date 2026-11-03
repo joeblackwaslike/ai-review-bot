@@ -1,0 +1,226 @@
+{
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "ai-review-bot-demo",
+	"pull": 2,
+	"provider": "anthropic",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-11-03T21:06:49.248Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 5003061020,
+			"provider": "anthropic",
+			"submittedAt": "2026-08-23T18:24:41Z",
+			"headSha": "f0d412dc9ce9aebf650fe0c1b10c1921abac455d",
+			"baseSha": "1640315c6de8168b94fc0ac0ac9f0418bf437395",
+			"mergeBase": "1640315c6de8168b94fc0ac0ac9f0418bf437395",
+			"triggerAt": "2026-08-23T18:24:11Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "f0d412dc9ce9aebf650fe0c1b10c1921abac455d",
+					"committedAt": "2026-08-23T18:24:11Z",
+					"files": [
+						{
+							"path": "src/retry.test.ts",
+							"ranges": [[1, 40]]
+						},
+						{
+							"path": "src/retry.ts",
+							"ranges": [[10, 29]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r0:c3839251381:0",
+					"roundIndex": 0,
+					"reviewId": 5003061020,
+					"source": "inline",
+					"commentId": 3839251381,
+					"path": "src/retry.ts",
+					"line": 30,
+					"severity": "P3",
+					"title": "Low",
+					"text": "🟢 **Low**\n\n**lastError typed as unknown thrown without context**\n\nlastError is typed unknown and thrown as-is when all attempts fail. This is correct behavior (propagates the real error), but there's no logging of intermediate attempt failures before the final throw, so debugging why earlier attempts failed (vs. just the last one) has no trace. Not blocking, but consider logging each attempt's failure with attempt number for observability."
+				}
+			]
+		},
+		{
+			"index": 1,
+			"reviewId": 5003064608,
+			"provider": "anthropic",
+			"submittedAt": "2026-08-23T18:26:35Z",
+			"headSha": "c43859eb87413ee9d72d9cf89baee85bc3339a60",
+			"baseSha": "f0d412dc9ce9aebf650fe0c1b10c1921abac455d",
+			"mergeBase": "f0d412dc9ce9aebf650fe0c1b10c1921abac455d",
+			"triggerAt": "2026-08-23T18:26:11Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "c43859eb87413ee9d72d9cf89baee85bc3339a60",
+					"committedAt": "2026-08-23T18:26:11Z",
+					"files": [
+						{
+							"path": "src/retry.ts",
+							"ranges": [[20, 26]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r1:body:0",
+					"roundIndex": 1,
+					"reviewId": 5003064608,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "maxAttempts=0 edge case not guarded",
+					"text": "maxAttempts=0 edge case not guarded"
+				}
+			]
+		},
+		{
+			"index": 2,
+			"reviewId": 5003069595,
+			"provider": "anthropic",
+			"submittedAt": "2026-08-23T18:29:13Z",
+			"headSha": "2453e377b8baf37f7b31c7a4bfc52562460f1102",
+			"baseSha": "c43859eb87413ee9d72d9cf89baee85bc3339a60",
+			"mergeBase": "c43859eb87413ee9d72d9cf89baee85bc3339a60",
+			"triggerAt": "2026-08-23T18:28:38Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "2453e377b8baf37f7b31c7a4bfc52562460f1102",
+					"committedAt": "2026-08-23T18:28:38Z",
+					"files": [
+						{
+							"path": "src/retry.test.ts",
+							"ranges": [[1, 10], [41, 74]]
+						},
+						{
+							"path": "src/retry.ts",
+							"ranges": [[11, 22]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r2:body:0",
+					"roundIndex": 2,
+					"reviewId": 5003069595,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "lastError thrown without type narrowing",
+					"text": "lastError thrown without type narrowing"
+				}
+			]
+		},
+		{
+			"index": 3,
+			"reviewId": 5003074637,
+			"provider": "anthropic",
+			"submittedAt": "2026-08-23T18:31:57Z",
+			"headSha": "2453e377b8baf37f7b31c7a4bfc52562460f1102",
+			"baseSha": "2453e377b8baf37f7b31c7a4bfc52562460f1102",
+			"mergeBase": "2453e377b8baf37f7b31c7a4bfc52562460f1102",
+			"triggerAt": null,
+			"approximate": true,
+			"commitsSince": [],
+			"claims": [
+				{
+					"id": "r3:body:0",
+					"roundIndex": 3,
+					"reviewId": 5003074637,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "lastError thrown as unknown without type narrowing",
+					"text": "lastError thrown as unknown without type narrowing"
+				}
+			]
+		},
+		{
+			"index": 4,
+			"reviewId": 5003083282,
+			"provider": "anthropic",
+			"submittedAt": "2026-08-23T18:36:35Z",
+			"headSha": "2453e377b8baf37f7b31c7a4bfc52562460f1102",
+			"baseSha": "2453e377b8baf37f7b31c7a4bfc52562460f1102",
+			"mergeBase": "2453e377b8baf37f7b31c7a4bfc52562460f1102",
+			"triggerAt": null,
+			"approximate": true,
+			"commitsSince": [],
+			"claims": [
+				{
+					"id": "r4:body:0",
+					"roundIndex": 4,
+					"reviewId": 5003083282,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "lastError thrown without narrowing (previously flagged, still unresolved)",
+					"text": "lastError thrown without narrowing (previously flagged, still unresolved)"
+				},
+				{
+					"id": "r4:body:1",
+					"roundIndex": 4,
+					"reviewId": 5003083282,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "maxAttempts=0 edge case now guarded",
+					"text": "maxAttempts=0 edge case now guarded"
+				},
+				{
+					"id": "r4:body:2",
+					"roundIndex": 4,
+					"reviewId": 5003083282,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "lastError typed as unknown thrown without narrowing",
+					"text": "lastError typed as unknown thrown without narrowing"
+				}
+			]
+		}
+	],
+	"threads": [
+		{
+			"threadId": "PRRT_kwDOUBzGtc6bhOGI",
+			"commentId": 3839251381,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": [
+				{
+					"id": 3839255041,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-23T18:26:19Z",
+					"editedAt": null,
+					"body": "Acknowledged — non-blocking. This module has no logger dependency and adding one here would pull observability concerns into a leaf utility. Callers that need per-attempt traces can wrap `fn` themselves; the final error now propagates with its original stack."
+				}
+			]
+		}
+	],
+	"reactions": [],
+	"heldOut": true
+}

@@ -1,0 +1,213 @@
+{
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "ai-review-bot-demo",
+	"pull": 2,
+	"provider": "openai",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-11-03T21:06:55.134Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 5003062664,
+			"provider": "openai",
+			"submittedAt": "2026-08-23T18:25:31Z",
+			"headSha": "f0d412dc9ce9aebf650fe0c1b10c1921abac455d",
+			"baseSha": "1640315c6de8168b94fc0ac0ac9f0418bf437395",
+			"mergeBase": "1640315c6de8168b94fc0ac0ac9f0418bf437395",
+			"triggerAt": "2026-08-23T18:24:11Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "f0d412dc9ce9aebf650fe0c1b10c1921abac455d",
+					"committedAt": "2026-08-23T18:24:11Z",
+					"files": [
+						{
+							"path": "src/retry.test.ts",
+							"ranges": [[1, 40]]
+						},
+						{
+							"path": "src/retry.ts",
+							"ranges": [[10, 29]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r0:c3839253293:0",
+					"roundIndex": 0,
+					"reviewId": 5003062664,
+					"source": "inline",
+					"commentId": 3839253293,
+					"path": "src/retry.ts",
+					"line": 23,
+					"severity": "P3",
+					"title": "Medium",
+					"text": "🟡 **Medium**\n\n**Preserve the existing retry-delay schedule**\n\n**Required:** This also changes the delay schedule, beyond skipping the final delay. Previously, after the first failure (`attempt === 0`), the retry proceeded after `sleep(0)`; now it waits `baseDelayMs` before the second invocation. For example, with `maxAttempts: 2` and `baseDelayMs: 100`, this adds a 100 ms delay that was not present before. Keep the original multiplier while retaining the `isLastAttempt` guard so this fix does not introduce a timing regression.\n\n*Suggested fix:*\n\n```suggestion\n        await sleep(options.baseDelayMs * attempt);\n```"
+				}
+			]
+		},
+		{
+			"index": 1,
+			"reviewId": 5003066514,
+			"provider": "openai",
+			"submittedAt": "2026-08-23T18:27:36Z",
+			"headSha": "c43859eb87413ee9d72d9cf89baee85bc3339a60",
+			"baseSha": "f0d412dc9ce9aebf650fe0c1b10c1921abac455d",
+			"mergeBase": "f0d412dc9ce9aebf650fe0c1b10c1921abac455d",
+			"triggerAt": "2026-08-23T18:26:11Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "c43859eb87413ee9d72d9cf89baee85bc3339a60",
+					"committedAt": "2026-08-23T18:26:11Z",
+					"files": [
+						{
+							"path": "src/retry.ts",
+							"ranges": [[20, 26]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r1:c3839257931:0",
+					"roundIndex": 1,
+					"reviewId": 5003066514,
+					"source": "inline",
+					"commentId": 3839257931,
+					"path": "src/retry.test.ts",
+					"line": 20,
+					"severity": "P3",
+					"title": "Medium",
+					"text": "🟡 **Medium**\n\n**Retry timing contract is untested**\n\nAll failure-path tests set `baseDelayMs` to `0`, so they cannot detect a regression in the retry timing behavior this PR changes. For example, moving `sleep` back outside the `isLastAttempt` guard would reintroduce a needless final delay while these tests still pass. Add a fake-timer test with a nonzero delay that verifies retries retain the expected backoff and that the promise rejects immediately after the final failed invocation. Criticality: 6/10."
+				}
+			]
+		},
+		{
+			"index": 2,
+			"reviewId": 5003076319,
+			"provider": "openai",
+			"submittedAt": "2026-08-23T18:32:48Z",
+			"headSha": "2453e377b8baf37f7b31c7a4bfc52562460f1102",
+			"baseSha": "c43859eb87413ee9d72d9cf89baee85bc3339a60",
+			"mergeBase": "c43859eb87413ee9d72d9cf89baee85bc3339a60",
+			"triggerAt": "2026-08-23T18:28:38Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "2453e377b8baf37f7b31c7a4bfc52562460f1102",
+					"committedAt": "2026-08-23T18:28:38Z",
+					"files": [
+						{
+							"path": "src/retry.test.ts",
+							"ranges": [[1, 10], [41, 74]]
+						},
+						{
+							"path": "src/retry.ts",
+							"ranges": [[11, 22]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r2:c3839269290:0",
+					"roundIndex": 2,
+					"reviewId": 5003076319,
+					"source": "inline",
+					"commentId": 3839269290,
+					"path": "src/retry.ts",
+					"line": 13,
+					"severity": "P3",
+					"title": "Medium",
+					"text": "🟡 **Medium**\n\n**Non-integer attempt-limit validation is untested**\n\nThe test suite covers `maxAttempts: 0`, but not the `!Number.isInteger(...)` branch introduced here. A regression that reduced this guard to `maxAttempts < 1` would still pass every test while accepting `1.5` and invoking `fn` twice (attempts 0 and 1), despite the documented positive-integer contract. Add a rejection case such as `maxAttempts: 1.5` (ideally alongside `NaN`/`Infinity` in a parameterized test). Criticality: 5/10."
+				}
+			]
+		},
+		{
+			"index": 3,
+			"reviewId": 5003084901,
+			"provider": "openai",
+			"submittedAt": "2026-08-23T18:37:12Z",
+			"headSha": "2453e377b8baf37f7b31c7a4bfc52562460f1102",
+			"baseSha": "2453e377b8baf37f7b31c7a4bfc52562460f1102",
+			"mergeBase": "2453e377b8baf37f7b31c7a4bfc52562460f1102",
+			"triggerAt": null,
+			"approximate": true,
+			"commitsSince": [],
+			"claims": [],
+			"trace": {
+				"candidates": [],
+				"posted": [],
+				"usage": {
+					"code-reviewer.md": {
+						"promptTokens": 2269,
+						"completionTokens": 21
+					},
+					"silent-failure-hunter.md": {
+						"promptTokens": 3380,
+						"completionTokens": 21
+					},
+					"pr-test-analyzer.md": {
+						"promptTokens": 2572,
+						"completionTokens": 21
+					},
+					"security-sast.md": {
+						"promptTokens": 5316,
+						"completionTokens": 21
+					},
+					"code-review-and-quality.md": {
+						"promptTokens": 2564,
+						"completionTokens": 21
+					}
+				}
+			}
+		}
+	],
+	"threads": [
+		{
+			"threadId": "PRRT_kwDOUBzGtc6bhOat",
+			"commentId": 3839253293,
+			"isResolved": false,
+			"isOutdated": true,
+			"resolvedBy": null,
+			"replies": [
+				{
+					"id": 3839255004,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-23T18:26:18Z",
+					"editedAt": null,
+					"body": "Fixed in c43859e — restored the `baseDelayMs * attempt` multiplier so the delay schedule is unchanged from before; the `isLastAttempt` guard still skips the sleep after the final failure."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOUBzGtc6bhPOo",
+			"commentId": 3839257931,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": [
+				{
+					"id": 3839260616,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-23T18:28:48Z",
+					"editedAt": null,
+					"body": "Added in 2453e37 — a fake-timer test asserts the exact sleep sequence `[0, 100, 200]` for `maxAttempts: 4, baseDelayMs: 100`, which pins both the `baseDelayMs * attempt` schedule and the absence of a sleep after the final failure. Moving the sleep outside the `isLastAttempt` guard now fails the suite."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOUBzGtc6bhRIm",
+			"commentId": 3839269290,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		}
+	],
+	"reactions": [],
+	"heldOut": true
+}

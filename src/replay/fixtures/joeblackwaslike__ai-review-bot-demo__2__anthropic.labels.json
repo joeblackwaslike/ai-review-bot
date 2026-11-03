@@ -1,0 +1,74 @@
+{
+	"fixtureId": "joeblackwaslike__ai-review-bot-demo__2__anthropic",
+	"provisional": true,
+	"labels": [
+		{
+			"claimId": "r0:c3839251381:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:body:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:body:2",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		}
+	],
+	"repeatPairs": [
+		{
+			"later": "r3:body:0",
+			"earlier": "r2:body:0",
+			"confirmed": false
+		},
+		{
+			"later": "r4:body:1",
+			"earlier": "r1:body:0",
+			"confirmed": false
+		},
+		{
+			"later": "r4:body:2",
+			"earlier": "r3:body:0",
+			"confirmed": false
+		}
+	],
+	"negativePairs": [],
+	"allowedSuppression": []
+}
