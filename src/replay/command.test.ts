@@ -546,7 +546,11 @@ describe("runReplay live and record flags", () => {
 	it("--rounds 1 writes the last round and leaves an earlier trace alone", async () => {
 		const dir = tmp();
 		const f = makeFixture([["a"], ["b"]]);
-		const old = { candidates: [], posted: [], usage: { keep: 1 } };
+		const old = {
+			candidates: [],
+			posted: [],
+			usage: { "s.md": { promptTokens: 1, completionTokens: 1 } },
+		};
 		f.rounds[0] = { ...f.rounds[0], trace: old } as (typeof f.rounds)[0];
 		const id = fixtureId(f);
 		const path = join(dir, `${id}.json`);
