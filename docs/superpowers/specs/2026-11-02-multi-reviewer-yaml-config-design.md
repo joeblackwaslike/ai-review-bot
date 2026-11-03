@@ -59,7 +59,7 @@ This design supersedes an earlier proposal ("multi-provider reviewer config and 
 - `config/ai-review.yaml` is committed and bundled with the deployment. It is read once at cold start using the `new URL(..., import.meta.url)` pattern that `src/prompt.ts` already uses for `skills/`.
 - **Packaging.** The CLI package currently ships only `dist/` and `skills/` (`package.json` `files`). `config/` is added to `files`, and the loader resolves the file relative to the built module. A test runs the CLI from an unpacked `pnpm pack` tarball outside the checkout, so an installed `ai-review` does not fail at module load.
 - One zod schema (`src/config/schema.ts`) is the source of truth for types, defaults, descriptions (`.describe()`) and which keys are secrets.
-- Load order is YAML, env overlay, schema defaults, validation, freeze. It is parsed at module scope, so a bad value fails the first request, not mid-review.
+- Load order is YAML, env overlay, schema defaults, validation, freeze. It loads lazily on first use (`getConfigTree()` memoizes on the first call), so a bad value fails the first request that reads the config, not mid-review.
 - **Env derivation.** The name is `AI_REVIEW_` plus the key path, with `__` between levels, camelCase turned into SCREAMING_SNAKE and hyphens into `_`. Example: `reviewers.gemini-lite.tiers.normal.model` becomes `AI_REVIEW_REVIEWERS__GEMINI_LITE__TIERS__NORMAL__MODEL`.
   - Collections (`reviewers`, `skills`) are maps keyed by id, never lists, so paths stay stable. Ids and skill names match `[a-z][a-z0-9-]*`, so the mapping is reversible.
   - Values are parsed by schema type. Arrays are JSON.
@@ -74,7 +74,9 @@ This design supersedes an earlier proposal ("multi-provider reviewer config and 
 - **Vercel caveat.** An env change applies on the next deployment, about a minute. An override skips the commit and review but still needs the redeploy. Keys marked `live` can also change with no redeploy through Edge Config (section 6).
 - Infra secrets (`DATABASE_URL`, QStash and KV tokens, `CRON_SECRET`) are env-only under the same convention. `PUBLIC_URL` and `QSTASH_URL` are YAML keys with env override, since they differ per environment.
 
-### 2. Models and resolution (slice 1)
+### 2. Models and resolution (slices 1 and 2)
+
+Slice 1 builds the `models:` map, pricing and cost lookup. The `skills:` overrides, the provider registry and effort capability validation arrive in slice 2.
 
 - Model ids are `provider/model`. The prefix picks the provider package from a registry built with `createProviderRegistry` (`@ai-sdk/anthropic`, `openai`, `google`, `deepseek`). Moonshot and other OpenAI-compatible endpoints use `@ai-sdk/openai-compatible` with a `baseURL`. Subscription OAuth in `src/auth.ts` stays a CLI-only path layered on the anthropic and openai providers.
 - `models:` holds `pricing` (`input`, `cachedInput`, `output`) and `structuredOutput: native | json`. Every model referenced anywhere needs an entry, and the schema cross-checks. This replaces `TOKEN_RATES`, and `computeCost` starts counting cached tokens.
@@ -115,7 +117,7 @@ Model ids and prices here are placeholders. The builder confirms them against pr
 - Webhook secret: `reviewers.<id>.webhookSecret`, falling back to a shared `github.webhookSecret`.
 - One route, `api/github/reviewer/[id].ts`. An unknown id returns 404 before signature checking, and a disabled reviewer returns 503. `webhook.ts` and `webhook-openai.ts` become wrappers for `claude` and `codex`. `vercel.json` gets an `api/github/**/*.ts` glob so new routes keep `maxDuration: 300`. The QStash `review-run` message carries the reviewer id.
 - `getConfig` and `getOpenAIAppConfig` collapse into `getReviewerAppConfig(id)`. `getGitHubApp` and `getOpenAIGitHubApp` collapse into `getReviewerGitHubApp(id)`.
-- **Data model.** `provider` stops being an identity. In Postgres, add `reviewer text not null` to the three tables that carry `provider`, backfill `anthropic` to `claude` and `openai` to `codex`, change `provider` from `pgEnum` to `text`, and move the `(provider, owner, repo, pr)` indexes to `reviewer`. Replay fixtures with `provider` load through the same mapping.
+- **Data model.** `provider` stops being an identity. In Postgres, add `reviewer text` (nullable during expand) to the three tables that carry `provider`, backfill `anthropic` to `claude` and `openai` to `codex`, change `provider` from `pgEnum` to `text`, and move the `(provider, owner, repo, pr)` indexes to `reviewer`. Enforce `NOT NULL` on `reviewer` only in the contract step, after old writers are retired (see section 8). Replay fixtures with `provider` load through the same mapping.
   - **Posted-review markers.** Reviews already on GitHub carry an `ai-review:provider` marker, and `isOwnReview` matches it literally (`src/review-metadata.ts`, `src/review.ts:1789`). Switching identity to the reviewer id would orphan those reviews and drop their carried blockers. Ownership therefore matches on reviewer id and also accepts the legacy provider marker (`anthropic` as `claude`, `openai` as `codex`, and an absent marker as today). New reviews write both markers for one release. Tests cover a same-head re-review, a carried blocker and a restart across the change.
   - KV keys, the ledger and feedback attribution switch to reviewer id or `appSlug`. Peer exclusion takes our own logins from `appSlug` across all reviewers.
 - Adding Gemini: create the App with `enabled: false`, run `ai-review replay --live --max-cost <usd>`, and enable it if false-positive rate and cost hold. Run `ModelReviewSchema` through `generateObject` on Flash-Lite first, because Gemini accepts only a subset of the schema language.

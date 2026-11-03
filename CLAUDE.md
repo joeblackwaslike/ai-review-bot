@@ -14,6 +14,8 @@ pnpm dev          # vercel dev — local server on :3000
 
 All three quality gates must pass before opening a PR.
 
+`pnpm config:check` and `pnpm docs:config` run through Bun (version in `.bun-version`), so install Bun before using them.
+
 ## Architecture Overview
 
 This is a GitHub App that deploys two bots (Claude via Anthropic, Codex via OpenAI) from a single Vercel deployment. Each bot runs five Tier 1 review agents (plus conditional Tier 2 agents) in parallel and merges their findings into a single structured review posted to GitHub.

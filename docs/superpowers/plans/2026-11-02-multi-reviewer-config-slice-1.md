@@ -235,7 +235,7 @@ Input classes the spec implies but no task's tests would exercise on their own. 
   - `pnpm docs:config`: runs `bun scripts/gen-config-docs.ts` and rewrites `docs/configuration.md`, a table with columns YAML path, env var, deprecated alias, type, default, description, built from the schema.
   - `api/debug.ts` returns `{ config: [{ path, value, source }], warnings }` for every non-secret leaf and keeps the existing `has*` credential fields unchanged.
 
-- [ ] **Step 1: Write failing test** `src/config/describe.test.ts` for a new `describeConfig(loaded: LoadedConfig): Array<{ path: string; value: unknown; source: ValueSource }>` exported from `src/config/load.ts`: it lists leaves with their source and omits `models` and `reviewers` internals beyond their paths. Run it. Expected: FAIL.
+- [ ] **Step 1: Write failing test** `src/config/describe.test.ts` for a new `describeConfig(loaded: LoadedConfig): Array<{ path: string; value: unknown; source: ValueSource }>` exported from `src/config/load.ts`: it lists every leaf of the tree, including `models` and `reviewers` entries by path, with its source. Run it. Expected: FAIL.
 - [ ] **Step 2: Implement** `describeConfig`, `api/debug.ts`, the generator script and the two package scripts. Generate `docs/configuration.md` once and commit it.
 - [ ] **Step 3: CI.** In the lint job add `pnpm config:check` and a stale-docs check: `pnpm docs:config && git diff --exit-code docs/configuration.md`.
 - [ ] **Step 4: Docs.** Update `.env.example` and the "Environment variables" section of `CLAUDE.md` to point at `docs/configuration.md`, name the deprecated aliases, and describe the derived-name rule in two lines.
