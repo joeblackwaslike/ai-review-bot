@@ -5,7 +5,7 @@
 	"pull": 70,
 	"provider": "openai",
 	"author": "joeblackwaslike",
-	"recordedAt": "2026-11-03T21:06:41.814Z",
+	"recordedAt": "2026-11-03T21:18:13.490Z",
 	"rounds": [
 		{
 			"index": 0,
@@ -43,7 +43,7 @@
 					"path": "src/triage.ts",
 					"line": 35,
 					"severity": "P3",
-					"title": "Low",
+					"title": "PR-specific root-cause narrative is likely to rot",
 					"text": "🟢 **Low**\n\n**PR-specific root-cause narrative is likely to rot**\n\nThis doc comment bakes in a lot of incident-specific history (`PR #69`, exact prompt formatting, downstream consumers, and a one-off live reproduction) that is much more detailed than the implementation itself. That makes it easy for the comment to become partially false the next time the prompt or triage pipeline changes, while future readers still treat it as authoritative. I'd keep the durable invariant here—`resolved` must be restricted to currently open finding IDs so echoed `id — title` strings cannot parse—and move the forensic history to a design note or post-mortem."
 				},
 				{
@@ -55,7 +55,7 @@
 					"path": "src/triage.test.ts",
 					"line": 153,
 					"severity": "P3",
-					"title": "Low",
+					"title": "Test comment references external incident details that don't help maintain the test",
 					"text": "🟢 **Low**\n\n**Test comment references external incident details that don't help maintain the test**\n\nThis comment explains the originating bug report in great detail, but most of that context is specific to a past PR and model run rather than to the behavior this test protects. That creates comment-maintenance overhead without helping a future reader understand the assertion. Consider replacing it with a shorter statement of the invariant under test: the schema must accept only bare open-finding IDs and reject echoed `id — title` prompt lines."
 				}
 			],
@@ -65,23 +65,23 @@
 				"usage": {
 					"code-reviewer.md": {
 						"promptTokens": 4112,
-						"completionTokens": 21
+						"completionTokens": 38
 					},
 					"silent-failure-hunter.md": {
 						"promptTokens": 5223,
-						"completionTokens": 21
+						"completionTokens": 36
 					},
 					"pr-test-analyzer.md": {
 						"promptTokens": 4415,
-						"completionTokens": 21
+						"completionTokens": 40
 					},
 					"security-sast.md": {
 						"promptTokens": 7159,
-						"completionTokens": 21
+						"completionTokens": 34
 					},
 					"code-review-and-quality.md": {
 						"promptTokens": 4407,
-						"completionTokens": 21
+						"completionTokens": 40
 					}
 				}
 			}

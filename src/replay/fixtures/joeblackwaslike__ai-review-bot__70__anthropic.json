@@ -5,7 +5,7 @@
 	"pull": 70,
 	"provider": "anthropic",
 	"author": "joeblackwaslike",
-	"recordedAt": "2026-11-03T21:06:36.772Z",
+	"recordedAt": "2026-11-03T21:18:07.973Z",
 	"rounds": [
 		{
 			"index": 0,
@@ -43,7 +43,7 @@
 					"path": "src/triage.ts",
 					"line": 41,
 					"severity": "P3",
-					"title": "High",
+					"title": "z.array(z.string()).length(0) is not a valid Zod API",
 					"text": "🔴 **High**\n\n**z.array(z.string()).length(0) is not a valid Zod API**\n\nZod arrays do not have a `.length()` method. The correct constraint is `z.array(z.string()).max(0)` or `z.tuple([])`. As written this will throw a runtime TypeError when `openFindings` is empty, which is exactly the path the second new test exercises.\n\n*Suggested fix:*\n\n```suggestion\n\t\t\t: z.tuple([]),\n```"
 				},
 				{
@@ -55,7 +55,7 @@
 					"path": "src/triage.ts",
 					"line": 34,
 					"severity": "P3",
-					"title": "Medium",
+					"title": "No deduplication before z.enum() — duplicate IDs will throw at runtime",
 					"text": "🟡 **Medium**\n\n**No deduplication before z.enum() — duplicate IDs will throw at runtime**\n\nThe prior reviewer already noted this. `z.enum` with duplicate values throws a Zod internal error at construction time, not a parse error. The call `openFindings.map((f) => f.id)` produces whatever duplicates exist in the input array; there is no guard here. If any upstream code produces duplicate finding IDs (e.g., two passes over the same finding list), `buildTriageSchema` will throw before `generateObject` is ever called, and the existing try/catch in `triageReReview` will swallow it into `FAIL_SAFE` — a silent failure with no indication that the schema itself was the problem.\n\nFix: deduplicate before constructing the enum:\n```ts\nconst ids = [...new Set(openFindings.map((f) => f.id))];\n```\n\n*Suggested fix:*\n\n```suggestion\n  const ids = [...new Set(openFindings.map((f) => f.id))];\n```"
 				},
 				{
@@ -67,7 +67,7 @@
 					"path": "src/triage.ts",
 					"line": 38,
 					"severity": "P3",
-					"title": "Medium",
+					"title": "Cast to non-empty tuple silently accepts duplicate ids",
 					"text": "🟡 **Medium**\n\n**Cast to non-empty tuple silently accepts duplicate ids**\n\nThe cast `ids as [string, ...string[]]` satisfies TypeScript but Zod's `z.enum()` will throw at runtime if `ids` contains duplicates (Zod validates its enum values are unique during construction). The prior review already flagged this; it has not been addressed. If `PersistedFinding.id` values can ever be duplicated in the array passed here, this will crash the triage call rather than degrade gracefully.\n\nDe-duplicate before constructing the enum:\n```ts\nconst ids = [...new Set(openFindings.map((f) => f.id))];\n```\n\n*Suggested fix:*\n\n```suggestion\nconst ids = [...new Set(openFindings.map((f) => f.id))];\n```"
 				},
 				{
@@ -144,7 +144,7 @@
 					"path": "src/triage.test.ts",
 					"line": 152,
 					"severity": "P3",
-					"title": "Low",
+					"title": "Test comment replaces self-contained explanation with an opaque external reference",
 					"text": "🟢 **Low**\n\n**Test comment replaces self-contained explanation with an opaque external reference**\n\nThe deleted block explained the root cause inline (prompt format, model echo behavior, exact-match failure, downstream consequence). The replacement — `see ai-review-bot-49n for the incident this protects against` — gives a future maintainer nothing actionable if that tracker is unavailable. The minimal surviving explanation (`The schema must accept only bare open-finding ids and reject an echoed \"id — title\" line`) is accurate, but the rationale for *why* the echo is the failure mode is now gone. Consider retaining one sentence: e.g., `the prompt shows each finding as \\'id — title\\', so the model naturally echoes that line; constraining to an enum of bare ids makes the echoed form structurally unrepresentable.`"
 				},
 				{
@@ -156,7 +156,7 @@
 					"path": "src/triage.ts",
 					"line": 33,
 					"severity": "P3",
-					"title": "Low",
+					"title": "JSDoc external reference is not browsable from source",
 					"text": "🟢 **Low**\n\n**JSDoc external reference is not browsable from source**\n\n`See git history / ai-review-bot-49n for the incident this closes.` is the only hook for the invariant's origin. The preceding sentence already captures the mechanism accurately; the ticket reference adds a dead-end pointer. Suggest replacing the last sentence with a one-liner explaining the downstream consequence: e.g., `Without this constraint the model's echoed \\`id — title\\` string silently fails the exact-match lookup in the resolution loop, keeping a genuinely-resolved finding permanently open.`"
 				},
 				{
@@ -257,7 +257,7 @@
 					"path": "src/triage.ts",
 					"line": 30,
 					"severity": "P3",
-					"title": "Low",
+					"title": "Deduplication comment misstates Zod's behavior",
 					"text": "🟢 **Low**\n\n**Deduplication comment misstates Zod's behavior**\n\nThe comment says \"z.enum tolerates repeats on the installed zod version\" but this is not guaranteed — Zod v3 does not explicitly document tolerance for duplicate enum values and may produce unexpected behavior. The deduplication was previously flagged as a required fix for correctness; the comment should not frame it as \"harmless either way\" or imply the old behavior was acceptable. The comment should instead say deduplication is required for correct enum construction.\n\n*Suggested fix:*\n\n```suggestion\n\t// Deduplicated: z.enum requires unique values; defensive but necessary.\n\tconst ids = [...new Set(openFindings.map((f) => f.id))];\n```"
 				},
 				{
@@ -331,7 +331,7 @@
 					"path": "src/triage.ts",
 					"line": 38,
 					"severity": "P3",
-					"title": "High",
+					"title": "z.array(z.string()).length(0) is not a valid Zod API",
 					"text": "🔴 **High**\n\n**z.array(z.string()).length(0) is not a valid Zod API**\n\nZod's `ZodArray` does not have a `.length()` method. The intended constraint — requiring exactly zero elements — should use `.max(0)` or `z.tuple([])` instead. As written, calling `.length(0)` at schema-construction time will throw a `TypeError: z.array(...).length is not a function` whenever `openFindings` is empty, which is precisely the case this branch is meant to handle.\n\nThis will cause every triage call with no open findings to throw at schema construction, hitting the FAIL_SAFE path and returning `newRisk: true` even when the model would have said `INCREMENTAL`/no-new-risk.\n\n*Suggested fix:*\n\n```suggestion\n            : z.tuple([]),\n```"
 				},
 				{
@@ -343,7 +343,7 @@
 					"path": "src/triage.ts",
 					"line": 43,
 					"severity": "P3",
-					"title": "Medium",
+					"title": "FAIL_SAFE catch block silently discards valid resolutions when any single resolved ID is invalid",
 					"text": "🟡 **Medium**\n\n**FAIL_SAFE catch block silently discards valid resolutions when any single resolved ID is invalid**\n\nThe broad `catch` block at line ~95 converts any `generateObject` failure — including a Zod enum validation error for a single bad `resolved` element — into `FAIL_SAFE` with `resolved: []`. This means if the model emits one malformed ID alongside several correct bare IDs, all correct resolutions are discarded and `newRisk` is forced to `true`.\n\nThe prior-reviewer comment notes this was already raised and the current diff has not added any element-level coercion or partial-parse recovery. The fallback is not silent (there is a `console.error` in the existing catch), but the user impact is real: a correct triage decision (e.g. `recommendation: \"FULL\"`) is silently replaced by `INCREMENTAL` + `newRisk: true`, and all resolved findings stay open.\n\nConsider replacing `z.array(z.enum(...))` with a `.transform()` that filters out non-member elements rather than failing the whole parse, or add a `.catch([])` to the `resolved` field so a bad element degrades only that field and not the entire object."
 				},
 				{
@@ -355,7 +355,7 @@
 					"path": "src/triage.test.ts",
 					"line": 200,
 					"severity": "P3",
-					"title": "Low",
+					"title": "Test for empty-findings path should assert rejection with a non-empty array",
 					"text": "🟢 **Low**\n\n**Test for empty-findings path should assert rejection with a non-empty array**\n\nThe test at line 195-200 correctly asserts `resolved: ['anything']` fails validation — good. But it only tests that the schema rejects a single-element array; it does not verify that `z.array(z.string()).length(0)` (vs. a correct implementation) actually produced this constraint. If `.length(0)` is silently a no-op and the schema accepted `['anything']`, this test would catch it. So the test coverage here is actually correct and will catch the API issue noted in the general finding — no action needed on the test itself."
 				},
 				{
@@ -367,7 +367,7 @@
 					"path": "src/triage.ts",
 					"line": 33,
 					"severity": "P3",
-					"title": "Low",
+					"title": "Inline comment in buildTriageSchema may mislead about z.enum duplicate handling",
 					"text": "🟢 **Low**\n\n**Inline comment in buildTriageSchema may mislead about z.enum duplicate handling**\n\nThe comment says `z.enum tolerates repeats on the installed zod version` — this is a runtime claim about the installed Zod version that the diff cannot verify, and it could mislead a future maintainer into removing the deduplication as unnecessary. The deduplication is genuinely correct regardless of Zod's behavior; the comment should justify it on that basis alone, not by speculating about what the current version allows.\n\n*Suggested fix:*\n\n```suggestion\n\t// Deduplicated defensively: z.enum with duplicate values is a logic error\n\t// regardless of runtime tolerance — an enum should represent distinct choices.\n```"
 				},
 				{

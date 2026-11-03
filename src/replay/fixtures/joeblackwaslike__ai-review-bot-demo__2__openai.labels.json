@@ -28,18 +28,7 @@
 			"confirmed": false
 		}
 	],
-	"repeatPairs": [
-		{
-			"later": "r1:c3839257931:0",
-			"earlier": "r0:c3839253293:0",
-			"confirmed": false
-		},
-		{
-			"later": "r2:c3839269290:0",
-			"earlier": "r1:c3839257931:0",
-			"confirmed": false
-		}
-	],
+	"repeatPairs": [],
 	"negativePairs": [],
 	"allowedSuppression": []
 }

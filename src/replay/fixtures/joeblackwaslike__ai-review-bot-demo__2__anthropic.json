@@ -5,7 +5,7 @@
 	"pull": 2,
 	"provider": "anthropic",
 	"author": "joeblackwaslike",
-	"recordedAt": "2026-11-03T21:06:49.248Z",
+	"recordedAt": "2026-11-03T21:18:19.257Z",
 	"rounds": [
 		{
 			"index": 0,
@@ -43,7 +43,7 @@
 					"path": "src/retry.ts",
 					"line": 30,
 					"severity": "P3",
-					"title": "Low",
+					"title": "lastError typed as unknown thrown without context",
 					"text": "🟢 **Low**\n\n**lastError typed as unknown thrown without context**\n\nlastError is typed unknown and thrown as-is when all attempts fail. This is correct behavior (propagates the real error), but there's no logging of intermediate attempt failures before the final throw, so debugging why earlier attempts failed (vs. just the last one) has no trace. Not blocking, but consider logging each attempt's failure with attempt number for observability."
 				}
 			]

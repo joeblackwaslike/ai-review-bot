@@ -210,11 +210,6 @@
 			"confirmed": false
 		},
 		{
-			"later": "r2:c3802762258:0",
-			"earlier": "r1:c3802719138:0",
-			"confirmed": false
-		},
-		{
 			"later": "r2:body:0",
 			"earlier": "r1:body:0",
 			"confirmed": false
@@ -235,18 +230,8 @@
 			"confirmed": false
 		},
 		{
-			"later": "r3:c3802768642:0",
-			"earlier": "r1:c3802719149:0",
-			"confirmed": false
-		},
-		{
-			"later": "r3:c3802768648:0",
-			"earlier": "r1:c3802719138:0",
-			"confirmed": false
-		},
-		{
-			"later": "r3:c3802768642:0",
-			"earlier": "r2:c3802762258:0",
+			"later": "r3:c3802768620:0",
+			"earlier": "r0:c3802679098:0",
 			"confirmed": false
 		}
 	],

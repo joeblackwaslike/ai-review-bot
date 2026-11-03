@@ -56,28 +56,58 @@
 			],
 			"claims": [],
 			"trace": {
-				"candidates": [],
-				"posted": [],
+				"candidates": [
+					{
+						"skill": "code-reviewer.md",
+						"title": "Bound marker-only deduplication to the current rate-limit window",
+						"path": "src/github-app.ts",
+						"line": 772,
+						"severity": "P2"
+					},
+					{
+						"skill": "silent-failure-hunter.md",
+						"title": "Bound marker-only deduplication to the current rate-limit window",
+						"path": "src/github-app.ts",
+						"line": 772,
+						"severity": "P2"
+					},
+					{
+						"skill": "code-review-and-quality.md",
+						"title": "Bound marker-only deduplication to the current rate-limit window",
+						"path": "src/github-app.ts",
+						"line": 772,
+						"severity": "P2"
+					}
+				],
+				"posted": [
+					{
+						"skill": "silent-failure-hunter.md",
+						"title": "Bound marker-only deduplication to the current rate-limit window",
+						"path": "src/github-app.ts",
+						"line": 772,
+						"severity": "P2"
+					}
+				],
 				"usage": {
 					"code-reviewer.md": {
 						"promptTokens": 5956,
-						"completionTokens": 21
+						"completionTokens": 314
 					},
 					"silent-failure-hunter.md": {
 						"promptTokens": 7067,
-						"completionTokens": 21
+						"completionTokens": 359
 					},
 					"pr-test-analyzer.md": {
 						"promptTokens": 6259,
-						"completionTokens": 21
+						"completionTokens": 46
 					},
 					"security-sast.md": {
 						"promptTokens": 9003,
-						"completionTokens": 21
+						"completionTokens": 112
 					},
 					"code-review-and-quality.md": {
 						"promptTokens": 6251,
-						"completionTokens": 21
+						"completionTokens": 339
 					}
 				}
 			}
