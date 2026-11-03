@@ -118,6 +118,16 @@ describe("sanitizeConfigError", () => {
 		expect(message).not.toContain("hunter2");
 	});
 
+	it("redacts a value after the word value that contains an inner or escaped quote", () => {
+		for (const value of ['x"TOP-SECRET', 'x\\"TOP-SECRET']) {
+			const message = sanitizeConfigError(
+				new Error(`AI_REVIEW_X: bad value "${value}" for config`),
+			);
+			expect(message).not.toContain("TOP-SECRET");
+			expect(message).toContain("AI_REVIEW_X");
+		}
+	});
+
 	it("caps the message at 300 characters", () => {
 		expect(sanitizeConfigError(new Error("x".repeat(500)))).toHaveLength(300);
 	});
