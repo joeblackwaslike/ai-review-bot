@@ -1,0 +1,61 @@
+{
+	"fixtureId": "joeblackwaslike__ai-listings__50__openai",
+	"provisional": true,
+	"labels": [
+		{
+			"claimId": "r0:c3810330611:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-19T05:47:30Z|Fixed in 84caa49 — parseRelevanceScores now logs via console.error (matching this file's [step3] prefix convention) when no JSON object is found, JSON.parse fails, or parsing succeeds but yields zero valid entries."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3810330614:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-19T05:47:32Z|Fixed in 84caa49 — same root fix as the chatgpt-codex-connector duplicate on this line: per-batch try/catch instead of one around the whole loop, explicit null score/color on a failed batch instead of a fabricated passing score, and the original exception is now logged via console.error before being converted to the null sentinel."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3810330618:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-19T05:47:24Z|Fixed in 84caa49 — parseRelevanceScores now rejects score < 0 || score > 10, not just non-numeric."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c3810498329:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-19T06:15:06Z|Real gap, fixed in c0d290b — extractJsonObject → findNextJsonObject, called in a loop that tries each balanced-brace candidate with JSON.parse and advances to the next one on failure instead of giving up. Added a regression test with prose containing a brace pair before the real payload."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c3810498337:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-19T06:15:08Z|Same root cause as the sibling finding on line 437, same fix in c0d290b."
+			],
+			"confirmed": false
+		}
+	],
+	"repeatPairs": [],
+	"negativePairs": [],
+	"allowedSuppression": []
+}

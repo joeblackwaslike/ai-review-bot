@@ -1,0 +1,965 @@
+{
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "ai-listings",
+	"pull": 50,
+	"provider": "anthropic",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-11-03T21:51:10.719Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 4968740410,
+			"provider": "anthropic",
+			"submittedAt": "2026-08-19T05:37:10Z",
+			"headSha": "a26d3386637322485bf556100b52a8c7472b7880",
+			"baseSha": "d2f55e5b7665a8e1f602a61a3f8e103b023f03c6",
+			"mergeBase": "d2f55e5b7665a8e1f602a61a3f8e103b023f03c6",
+			"triggerAt": "2026-08-19T05:32:44Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "a26d3386637322485bf556100b52a8c7472b7880",
+					"committedAt": "2026-08-19T05:32:44Z",
+					"files": [
+						{
+							"path": "src/lib/pipeline/step3-pricing-research.test.ts",
+							"ranges": [[1, 34]]
+						},
+						{
+							"path": "src/lib/pipeline/step3-pricing-research.ts",
+							"ranges": [
+								[422, 469],
+								[474, 480],
+								[490, 509],
+								[543, 550],
+								[566, 573],
+								[583, 590],
+								[595, 601],
+								[606, 612],
+								[617, 639],
+								[645, 662],
+								[665, 679]
+							]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r0:c3810323701:0",
+					"roundIndex": 0,
+					"reviewId": 4968740410,
+					"source": "inline",
+					"commentId": 3810323701,
+					"path": "src/lib/pipeline/step3-pricing-research.ts",
+					"line": 449,
+					"severity": "P3",
+					"title": "NaN map key from non-numeric LLM response keys",
+					"text": "🔴 **High**\n\n**NaN map key from non-numeric LLM response keys**\n\nWhen the LLM returns an object with non-numeric keys (e.g. `\"foo\"`, `\"-1a\"`), `Number(idx)` produces `NaN`. `Map` accepts `NaN` as a key, and any consumer that iterates by numeric index will silently miss those entries or behave unexpectedly. The prior review already flagged this and provided a fix — it has not been applied.\n\n*Suggested fix:*\n\n```suggestion\n  for (const [idx, entry] of Object.entries(parsed)) {\n    const numericIdx = Number(idx)\n    if (!Number.isInteger(numericIdx) || numericIdx < 0) continue\n    const score = entry?.score\n    if (typeof score !== 'number' || !Number.isFinite(score)) continue\n    const color = typeof entry?.color === 'string' ? entry.color : null\n    entries.set(numericIdx, { score, color })\n  }\n```"
+				},
+				{
+					"id": "r0:c3810323708:0",
+					"roundIndex": 0,
+					"reviewId": 4968740410,
+					"source": "inline",
+					"commentId": 3810323708,
+					"path": "src/lib/pipeline/step3-pricing-research.test.ts",
+					"line": 33,
+					"severity": "P3",
+					"title": "Test file missing a test for non-numeric/NaN-producing keys",
+					"text": "🟢 **Low**\n\n**Test file missing a test for non-numeric/NaN-producing keys**\n\nThe test suite covers malformed JSON, missing JSON, non-numeric scores, and missing color — but there is no test for a LLM response that includes non-numeric string keys (e.g. `{\"score\":8,\"total\":2}`). Once the `Number.isInteger` guard is added to `parseRelevanceScores`, a regression test for this case would ensure it is not silently reintroduced."
+				},
+				{
+					"id": "r0:c3810323712:0",
+					"roundIndex": 0,
+					"reviewId": 4968740410,
+					"source": "inline",
+					"commentId": 3810323712,
+					"path": "src/lib/pipeline/step3-pricing-research.test.ts",
+					"line": 34,
+					"severity": "P3",
+					"title": "Test file missing a case for non-integer / negative index keys",
+					"text": "🟢 **Low**\n\n**Test file missing a case for non-integer / negative index keys**\n\nThe existing test suite covers: valid entries, missing color, malformed JSON, no JSON object, and non-numeric score. It does not cover the NaN-key scenario (`{\"foo\":{\"score\":7,\"color\":null}}`) or a negative index (`{\"-1\":{\"score\":7,\"color\":null}}`). Both should return an empty map once the index validation is added; without it they silently insert bad keys. Adding these two cases would lock in the fix and prevent regression."
+				},
+				{
+					"id": "r0:c3810323716:0",
+					"roundIndex": 0,
+					"reviewId": 4968740410,
+					"source": "inline",
+					"commentId": 3810323716,
+					"path": "src/lib/pipeline/step3-pricing-research.ts",
+					"line": 480,
+					"severity": "P3",
+					"title": "Regex in `parseRelevanceScores` cannot match multi-line nested JSON",
+					"text": "🟢 **Low**\n\n**Regex in `parseRelevanceScores` cannot match multi-line nested JSON**\n\nThe regex `/{[^}]+}/` (used previously, now replaced by `/{[\\s\\S]+}/`) was updated, but the replacement greedy expression `/{[\\s\\S]+}/` will greedily match from the first `{` all the way to the _last_ `}` in the entire string. If the LLM response includes anything after the closing brace (e.g. trailing prose, a newline, or a coda sentence), the match will still be correct; however if the LLM emits two separate JSON objects (e.g. a preamble object and the actual result), it will swallow both and the merged string will fail `JSON.parse`. A non-greedy `/{[\\s\\S]+?}/` is still wrong for nested objects. The safest fix is to look for the last `}` that closes the outermost brace by counting depth, or simply to replace the regex approach with a `JSON.parse` on the whole response and falling back to a regex-extracted substring only on failure."
+				},
+				{
+					"id": "r0:c3810323720:0",
+					"roundIndex": 0,
+					"reviewId": 4968740410,
+					"source": "inline",
+					"commentId": 3810323720,
+					"path": "src/lib/pipeline/step3-pricing-research.ts",
+					"line": 470,
+					"severity": "P3",
+					"title": "Comment on `parseRelevanceScores` states callers apply the relevance threshold, but the function's own doc says it returns 'every entry it could recover'",
+					"text": "🟢 **Low**\n\n**Comment on `parseRelevanceScores` states callers apply the relevance threshold, but the function's own doc says it returns 'every entry it could recover'**\n\nThe JSDoc says: _\"callers apply their own relevance threshold against the returned scores\"_. This is accurate. However the function is also described as being fault-tolerant with degraded-drop semantics. The comment doesn't mention that an entry whose key is a non-integer is also silently dropped (or currently isn't — see sibling finding). The docs should acknowledge the numeric-key validation behavior to avoid future confusion about why certain LLM responses produce fewer entries than expected."
+				},
+				{
+					"id": "r0:c3810323723:0",
+					"roundIndex": 0,
+					"reviewId": 4968740410,
+					"source": "inline",
+					"commentId": 3810323723,
+					"path": "src/lib/pipeline/step3-pricing-research.ts",
+					"line": 440,
+					"severity": "P3",
+					"title": "Regex greedily merges multiple JSON objects in one response",
+					"text": "🟢 **Low**\n\n**Regex greedily merges multiple JSON objects in one response**\n\nThe regex `/\\{[\\s\\S]+\\}/` is greedy and will match from the first `{` to the last `}` in the entire LLM response. If the model returns prose containing braces before or after the JSON object (e.g. a code-fence or an example in its explanation), `JSON.parse` will receive malformed input and fall through to the empty-map path, silently losing all scores for the batch.\n\n*Suggested fix:*\n\n```suggestion\n  const match = /\\{[\\s\\S]+?\\}(?=[^{]*$)/.exec(text) ?? /\\{[\\s\\S]+\\}/.exec(text)\n```"
+				},
+				{
+					"id": "r0:body:0",
+					"roundIndex": 0,
+					"reviewId": 4968740410,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P0",
+					"title": "Silent failure in scoreCompRelevance catch block swallows all LLM/network errors without logging",
+					"text": "Silent failure in scoreCompRelevance catch block swallows all LLM/network errors without logging"
+				},
+				{
+					"id": "r0:body:1",
+					"roundIndex": 0,
+					"reviewId": 4968740410,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "parseRelevanceScores regex is too greedy and can parse partial/nested JSON incorrectly",
+					"text": "parseRelevanceScores regex is too greedy and can parse partial/nested JSON incorrectly"
+				},
+				{
+					"id": "r0:body:2",
+					"roundIndex": 0,
+					"reviewId": 4968740410,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "No tests for scoreCompRelevance fallback behavior",
+					"text": "No tests for scoreCompRelevance fallback behavior"
+				},
+				{
+					"id": "r0:body:3",
+					"roundIndex": 0,
+					"reviewId": 4968740410,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Regex in parseRelevanceScores can match nested objects incorrectly",
+					"text": "Regex in parseRelevanceScores can match nested objects incorrectly"
+				},
+				{
+					"id": "r0:body:4",
+					"roundIndex": 0,
+					"reviewId": 4968740410,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Fallback score equals threshold creates ambiguous filtering behavior",
+					"text": "Fallback score equals threshold creates ambiguous filtering behavior"
+				}
+			]
+		},
+		{
+			"index": 1,
+			"reviewId": 4968810003,
+			"provider": "anthropic",
+			"submittedAt": "2026-08-19T05:50:19Z",
+			"headSha": "84caa4909322b72f8c5380c204dc9e36518ff594",
+			"baseSha": "a26d3386637322485bf556100b52a8c7472b7880",
+			"mergeBase": "a26d3386637322485bf556100b52a8c7472b7880",
+			"triggerAt": "2026-08-19T05:46:32Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "84caa4909322b72f8c5380c204dc9e36518ff594",
+					"committedAt": "2026-08-19T05:46:32Z",
+					"files": [
+						{
+							"path": "src/lib/pipeline/step3-pricing-research.test.ts",
+							"ranges": [[32, 67]]
+						},
+						{
+							"path": "src/lib/pipeline/step3-pricing-research.ts",
+							"ranges": [
+								[423, 494],
+								[503, 512],
+								[535, 548],
+								[694, 705],
+								[711, 725]
+							]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r1:c3810378919:0",
+					"roundIndex": 1,
+					"reviewId": 4968810003,
+					"source": "inline",
+					"commentId": 3810378919,
+					"path": "src/lib/pipeline/step3-pricing-research.test.ts",
+					"line": 83,
+					"severity": "P3",
+					"title": "Test for trailing prose uses a greedy-safe regex — should verify the new balanced-brace extractor",
+					"text": "🟢 **Low**\n\n**Test for trailing prose uses a greedy-safe regex — should verify the new balanced-brace extractor**\n\nThis test (`parseRelevanceScores: extracts the JSON object even with trailing prose after it`) verifies that a clean JSON object followed by prose is handled correctly. However, the more dangerous case for `extractJsonObject` is when the LLM emits **two separate top-level objects** (e.g., `{...}{\"note\":\"...\"}`) — the balanced-brace counter will return only the first, which is correct, but there is no test asserting this. The current test only validates that trailing non-brace prose is ignored, which the old greedy regex also handled correctly. A test with two top-level objects would actually demonstrate the improvement over the old regex. Criticality: 5/10."
+				},
+				{
+					"id": "r1:c3810378928:0",
+					"roundIndex": 1,
+					"reviewId": 4968810003,
+					"source": "inline",
+					"commentId": 3810378928,
+					"path": "src/lib/pipeline/step3-pricing-research.ts",
+					"line": 473,
+					"severity": "P3",
+					"title": "Log warning when entries are empty due to zero valid results vs. zero comps",
+					"text": "🟢 **Low**\n\n**Log warning when entries are empty due to zero valid results vs. zero comps**\n\nThe `entries.size === 0` warning fires even when the LLM legitimately returned an empty object `{}` because the batch had zero comps (possible if slicing logic ever produces an empty batch). This is a low-risk false alarm but could confuse debugging. Consider only logging when `Object.keys(parsed).length > 0` (i.e., the LLM did return entries but all were invalid).\n\n*Suggested fix:*\n\n```suggestion\n  if (entries.size === 0 && Object.keys(parsed).length > 0) {\n    console.error(`[step3] parseRelevanceScores: JSON parsed but yielded no valid entries: ${jsonText.slice(0, 200)}`)\n  }\n```"
+				},
+				{
+					"id": "r1:c3810378947:0",
+					"roundIndex": 1,
+					"reviewId": 4968810003,
+					"source": "inline",
+					"commentId": 3810378947,
+					"path": "src/lib/pipeline/step3-pricing-research.test.ts",
+					"line": 51,
+					"severity": "P3",
+					"title": "out-of-range score validation added but test description is misleading",
+					"text": "🟢 **Low**\n\n**out-of-range score validation added but test description is misleading**\n\nThe test description says \"skips a score outside the 0-10 scale\" but the test only checks that scores of 11 and -1 are skipped. The score of -1 is actually skipped by the `numericIdx < 0` guard on the key `-1`... wait, no — here the keys are `\"0\"`, `\"1\"`, `\"2\"` and the scores are 11, -1, 10. Score -1 is skipped by `score < 0 || score > 10`. This is correct. However, the test comment/description could be clearer that it's testing score bounds (not index bounds), and that `score: -1` with key `\"1\"` is the negative-score case (not a negative-index case). Minor clarity issue only."
+				},
+				{
+					"id": "r1:c3810378950:0",
+					"roundIndex": 1,
+					"reviewId": 4968810003,
+					"source": "inline",
+					"commentId": 3810378950,
+					"path": "src/lib/pipeline/step3-pricing-research.ts",
+					"line": 466,
+					"severity": "P3",
+					"title": "Brace-depth extraction does not handle string literals containing braces",
+					"text": "🟡 **Medium**\n\n**Brace-depth extraction does not handle string literals containing braces**\n\nThe `extractJsonObject` brace-counter walks character-by-character and increments/decrements depth on every `{` or `}` it finds — including those inside JSON string values (e.g. `\"color\": \"vintage {frame}\"` or any quoted string the LLM emits). A `}` inside a string value would prematurely close the depth counter and return a truncated, unparseable substring, causing `JSON.parse` to throw and the whole batch to yield an empty map.\n\nThe LLM prompt constrains responses tightly, so in practice this is unlikely to fire, but the implementation does not actually handle the nested-string case it was written to replace the regex for."
+				},
+				{
+					"id": "r1:c3810378955:0",
+					"roundIndex": 1,
+					"reviewId": 4968810003,
+					"source": "inline",
+					"commentId": 3810378955,
+					"path": "src/lib/pipeline/step3-pricing-research.ts",
+					"line": 437,
+					"severity": "P3",
+					"title": "Comment overstates `extractJsonObject`'s protection against nested-brace ambiguity",
+					"text": "🟢 **Low**\n\n**Comment overstates `extractJsonObject`'s protection against nested-brace ambiguity**\n\nThe JSDoc for `extractJsonObject` claims that a greedy regex \"overshoots past trailing prose into a later unrelated `}`\", implying the new brace-depth counter fully solves that problem. It does solve the trailing-prose case, but the comment doesn't acknowledge the residual risk: if the LLM produces two separate top-level JSON objects (e.g. an explanation object followed by the real scoring object), `extractJsonObject` returns only the first one and silently discards the second. The comment should either drop the claim that this is a complete fix or note the remaining edge case so future maintainers aren't surprised."
+				},
+				{
+					"id": "r1:c3810378962:0",
+					"roundIndex": 1,
+					"reviewId": 4968810003,
+					"source": "inline",
+					"commentId": 3810378962,
+					"path": "src/lib/pipeline/step3-pricing-research.ts",
+					"line": 457,
+					"severity": "P3",
+					"title": "Score-range validation comment omits the new 0–10 bound in the function's doc block",
+					"text": "🟢 **Low**\n\n**Score-range validation comment omits the new 0–10 bound in the function's doc block**\n\nThe `parseRelevanceScores` JSDoc lists the rejection criteria (non-integer/negative index, non-numeric score) but does not mention the new `score < 0 || score > 10` out-of-range check added in this PR. A future maintainer reading only the doc block won't know scores outside 0–10 are silently dropped. The inline test at line 33 (`parseRelevanceScores: skips a score outside the 0-10 scale`) covers the behaviour, but the doc block should reflect it too.\n\n*Suggested fix:*\n\n```suggestion\n/** Parses the LLM's per-index `{score, color}` scoring response into a map of\n * every entry it could recover. A missing/unbalanced object, malformed JSON,\n * a non-integer or negative index, a score that is non-numeric, non-finite, or\n * outside the valid 0-10 range all degrade to that entry being dropped rather\n * than thrown — callers apply their own relevance threshold against the\n * returned scores. */\n```"
+				},
+				{
+					"id": "r1:body:0",
+					"roundIndex": 1,
+					"reviewId": 4968810003,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Missing test for scoreCompRelevance per-batch failure isolation",
+					"text": "Missing test for scoreCompRelevance per-batch failure isolation"
+				},
+				{
+					"id": "r1:body:1",
+					"roundIndex": 1,
+					"reviewId": 4968810003,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Missing test for fail-open vs fail-closed filtering with null relevance_score",
+					"text": "Missing test for fail-open vs fail-closed filtering with null relevance_score"
+				}
+			]
+		},
+		{
+			"index": 2,
+			"reviewId": 4968883600,
+			"provider": "anthropic",
+			"submittedAt": "2026-08-19T06:02:21Z",
+			"headSha": "9f3542c3747c3a7c876b0ddbf91f7c798ca34c98",
+			"baseSha": "84caa4909322b72f8c5380c204dc9e36518ff594",
+			"mergeBase": "84caa4909322b72f8c5380c204dc9e36518ff594",
+			"triggerAt": "2026-08-19T05:56:53Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "9f3542c3747c3a7c876b0ddbf91f7c798ca34c98",
+					"committedAt": "2026-08-19T05:56:53Z",
+					"files": [
+						{
+							"path": "src/lib/pipeline/step3-pricing-research.test.ts",
+							"ranges": [[46, 69]]
+						},
+						{
+							"path": "src/lib/pipeline/step3-pricing-research.ts",
+							"ranges": [[433, 460], [489, 495]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r2:c3810439641:0",
+					"roundIndex": 2,
+					"reviewId": 4968883600,
+					"source": "inline",
+					"commentId": 3810439641,
+					"path": "src/lib/pipeline/step3-pricing-research.ts",
+					"line": 456,
+					"severity": "P3",
+					"title": "String-literal state machine misses the opening quote of the first string",
+					"text": "🟢 **Low**\n\n**String-literal state machine misses the opening quote of the first string**\n\nThe `inString` flag is set when `ch === '\"'` is reached in the non-string branch, but at that point the code has already fallen through the `if (inString)` block and the `continue` is not hit. Trace through the first `\"` in `{\"0\":…}`:\n1. `ch === '\"'` → `inString = true` (correct, sets flag)\n2. Next char `0` → `inString` is true → enters string block, not escaped, not `\\`, not `\"` → `continue`\n3. Next char `\"` → `inString` is true → not escaped, not `\\`, `ch === '\"'` → `inString = false`\n\nThis is actually correct as written because the opening `\"` triggers `inString = true` and the inner content is skipped. However, the `{` / `}` inside a string literal detection only works because `{` and `}` are NOT hit when `inString` is true (the `continue` skips them). The logic is correct — this is a confirmation, not a bug."
+				},
+				{
+					"id": "r2:c3810439647:0",
+					"roundIndex": 2,
+					"reviewId": 4968883600,
+					"source": "inline",
+					"commentId": 3810439647,
+					"path": "src/lib/pipeline/step3-pricing-research.ts",
+					"line": 492,
+					"severity": "P3",
+					"title": "Log condition fix silences the error for an all-invalid-entry response — a meaningful signal is lost",
+					"text": "🟢 **Low**\n\n**Log condition fix silences the error for an all-invalid-entry response — a meaningful signal is lost**\n\nThe guard `&& Object.keys(parsed).length > 0` correctly avoids logging when the LLM returned an empty object `{}`. However, if the LLM returns a well-formed object with entries that all fail validation (e.g., all scores are strings, all indices are prose keys), `entries.size === 0` and `Object.keys(parsed).length > 0` — so the error IS logged. That is the intended behavior per the PR description.\n\nBut consider the case where the LLM returns `{}` legitimately (no comps to score). `Object.keys(parsed).length === 0` → no log, correct. This case is fine.\n\nThe remaining gap: if all keys fail the `Number.isInteger(numericIdx) || numericIdx >= 0` guard (added by a prior review), they are silently skipped and `entries` is empty, but `Object.keys(parsed).length > 0` causes the error to be logged — which is correct behavior. No issue here.\n\nHowever, the log message still says \"yielded no valid entries\" without distinguishing *why* (all scores out-of-range vs. all keys non-integer vs. all colors wrong type). This is a minor actionability gap, not a blocker."
+				},
+				{
+					"id": "r2:c3810439652:0",
+					"roundIndex": 2,
+					"reviewId": 4968883600,
+					"source": "inline",
+					"commentId": 3810439652,
+					"path": "src/lib/pipeline/step3-pricing-research.ts",
+					"line": 436,
+					"severity": "P3",
+					"title": "Comment overstates string-literal protection — `'` (single-quote) strings are not tracked",
+					"text": "🟢 **Low**\n\n**Comment overstates string-literal protection — `'` (single-quote) strings are not tracked**\n\nThe updated doc comment claims the extractor tracks string-literal state with `\\\"` escapes, but the implementation only tracks `\"` (double-quote) delimited strings and only the `\\` escape character. JSON does not allow single-quoted strings, so this is technically fine for well-formed LLM output, but the comment says nothing about this scope limitation. A maintainer reading the comment might believe it handles any quoted value. The comment should be narrowed to: `Tracks double-quoted JSON string literals (respecting \\`\\\\\\`\\` escapes)` to avoid overpromising."
+				},
+				{
+					"id": "r2:c3810439656:0",
+					"roundIndex": 2,
+					"reviewId": 4968883600,
+					"source": "inline",
+					"commentId": 3810439656,
+					"path": "src/lib/pipeline/step3-pricing-research.test.ts",
+					"line": 63,
+					"severity": "P3",
+					"title": "Test description for brace-inside-string case is accurate but doesn't assert the depth-counter is correct when `inString=false` is the mechanism",
+					"text": "🟢 **Low**\n\n**Test description for brace-inside-string case is accurate but doesn't assert the depth-counter is correct when `inString=false` is the mechanism**\n\nThe test exercises the happy path where a brace inside a quoted color value is skipped correctly. This is a good addition. No issue with correctness — this is a positive note that the test is meaningful and covers the previously-reported limitation."
+				}
+			]
+		},
+		{
+			"index": 3,
+			"reviewId": 4968947641,
+			"provider": "anthropic",
+			"submittedAt": "2026-08-19T06:09:09Z",
+			"headSha": "18d927fbd677d1460b51bc230083b7035dd2cc56",
+			"baseSha": "9f3542c3747c3a7c876b0ddbf91f7c798ca34c98",
+			"mergeBase": "9f3542c3747c3a7c876b0ddbf91f7c798ca34c98",
+			"triggerAt": "2026-08-19T06:05:56Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "18d927fbd677d1460b51bc230083b7035dd2cc56",
+					"committedAt": "2026-08-19T06:05:56Z",
+					"files": [
+						{
+							"path": "src/lib/pipeline/step3-pricing-research.ts",
+							"ranges": [[434, 440]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r3:c3810488074:0",
+					"roundIndex": 3,
+					"reviewId": 4968947641,
+					"source": "inline",
+					"commentId": 3810488074,
+					"path": "src/lib/pipeline/step3-pricing-research.ts",
+					"line": 434,
+					"severity": "P3",
+					"title": "Comment update is accurate but residual limitation on single-quote strings is undocumented",
+					"text": "🟢 **Low**\n\n**Comment update is accurate but residual limitation on single-quote strings is undocumented**\n\nThe updated comment now correctly says \"double-quoted JSON string literals\" instead of the previous overstated wording. This addresses the previously resolved finding. No new issue here — filing only to acknowledge the comment is now accurate."
+				},
+				{
+					"id": "r3:body:0",
+					"roundIndex": 3,
+					"reviewId": 4968947641,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "String-literal tracking skips brace/quote processing after opening quote (`src/lib/pipeline/step3-pricing-research.ts:462`)",
+					"text": "String-literal tracking skips brace/quote processing after opening quote (`src/lib/pipeline/step3-pricing-research.ts:462`)"
+				},
+				{
+					"id": "r3:body:1",
+					"roundIndex": 3,
+					"reviewId": 4968947641,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "String-literal state machine misses the opening quote of the first string (`src/lib/pipeline/step3-pricing-research.ts:456`)",
+					"text": "String-literal state machine misses the opening quote of the first string (`src/lib/pipeline/step3-pricing-research.ts:456`)"
+				},
+				{
+					"id": "r3:body:2",
+					"roundIndex": 3,
+					"reviewId": 4968947641,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Log condition fix silences the error for an all-invalid-entry response — a meaningful signal is lost (`src/lib/pipeline/step3-pricing-research.ts:492`)",
+					"text": "Log condition fix silences the error for an all-invalid-entry response — a meaningful signal is lost (`src/lib/pipeline/step3-pricing-research.ts:492`)"
+				},
+				{
+					"id": "r3:body:3",
+					"roundIndex": 3,
+					"reviewId": 4968947641,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Test description for brace-inside-string case is accurate but doesn't assert the depth-counter is correct when `inString=false` is the mechanism (`src/lib/pipeline/step3-pricing-research.test.ts:63`)",
+					"text": "Test description for brace-inside-string case is accurate but doesn't assert the depth-counter is correct when `inString=false` is the mechanism (`src/lib/pipeline/step3-pricing-research.test.ts:63`)"
+				}
+			]
+		},
+		{
+			"index": 4,
+			"reviewId": 4969006958,
+			"provider": "anthropic",
+			"submittedAt": "2026-08-19T06:17:00Z",
+			"headSha": "c0d290baf9c02ff147623f49860378f1194e01db",
+			"baseSha": "18d927fbd677d1460b51bc230083b7035dd2cc56",
+			"mergeBase": "18d927fbd677d1460b51bc230083b7035dd2cc56",
+			"triggerAt": "2026-08-19T06:14:55Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "c0d290baf9c02ff147623f49860378f1194e01db",
+					"committedAt": "2026-08-19T06:14:55Z",
+					"files": [
+						{
+							"path": "src/lib/pipeline/step3-pricing-research.test.ts",
+							"ranges": [[70, 81]]
+						},
+						{
+							"path": "src/lib/pipeline/step3-pricing-research.ts",
+							"ranges": [[430, 447], [458, 508]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r4:c3810531404:0",
+					"roundIndex": 4,
+					"reviewId": 4969006958,
+					"source": "inline",
+					"commentId": 3810531404,
+					"path": "src/lib/pipeline/step3-pricing-research.ts",
+					"line": 433,
+					"severity": "P3",
+					"title": "CompRelevance score field allows null but callers branch on null in two different semantics",
+					"text": "🟢 **Low**\n\n**CompRelevance score field allows null but callers branch on null in two different semantics**\n\nThe `CompRelevance` interface uses `score: number | null` to mean two distinct things depending on context: (1) \"the LLM call failed\" (null from a catch block) and (2) \"no Anthropic key was configured\" (null because `scoreCompRelevance` was never called, so the map has no entry for that index). Both produce the same `null` on the row object, but the two callers treat them differently — active rows are fail-closed on null, sold rows are fail-open on null — and that asymmetry is invisible in the type. A reader of `CompRelevance` cannot know which nulls are \"scored null\" vs \"never attempted\", so the interface's own JSDoc claim that null means \"not actually scored (LLM call failed)\" is false for the no-key path where the map simply has no entry (the row gets `relevance_score: null` through the `?? null` fallback, not through a `{ score: null }` CompRelevance value). The invariant that `score: null` exclusively represents a failed LLM call is enforced only by documentation and is violated by the no-key code path."
+				},
+				{
+					"id": "r4:c3810531409:0",
+					"roundIndex": 4,
+					"reviewId": 4969006958,
+					"source": "inline",
+					"commentId": 3810531409,
+					"path": "src/lib/pipeline/step3-pricing-research.ts",
+					"line": 496,
+					"severity": "P3",
+					"title": "Log condition misses the case where the first parsed object has zero entries due to all entries being invalid",
+					"text": "🟢 **Low**\n\n**Log condition misses the case where the first parsed object has zero entries due to all entries being invalid**\n\nThe `if (entries.size === 0 && Object.keys(parsed).length > 0)` condition only fires when the parsed object is non-empty but no entries passed validation — which is the right intent. However, because the log fires *before* `break`, and `entries` at that point reflects only the current candidate object (not accumulated entries from prior failed-JSON candidates), a response where the valid JSON object genuinely had all-invalid entries will log correctly. This is fine.\n\nThe actual gap: the condition logs when `entries.size === 0` at the point of checking, but if a *prior* successful `continue` (for a non-JSON candidate) already advanced `searchFrom` and this is the first JSON candidate, entries will always be 0 at this point even if the object had valid entries — wait, no, entries are accumulated into the outer `Map`. The logic is correct.\n\nActual issue: the comment `// used the first candidate that parsed as valid JSON, regardless of entry count` is slightly misleading. The code breaks after the first successfully-parsed JSON candidate, meaning if the LLM returns prose with a brace-containing word followed by the real payload, the prose brace-pair would fail `JSON.parse` → `continue`, and the real payload would be found. This is correct behavior. But the comment says \"regardless of entry count\" implying it doesn't retry on zero entries — which means a JSON object like `{}` (empty) would be used and the loop would exit with 0 entries, even if there's a real payload later in the text. This is a genuine (if unlikely) edge case worth documenting."
+				},
+				{
+					"id": "r4:body:0",
+					"roundIndex": 4,
+					"reviewId": 4969006958,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Log condition silences error for all-invalid-entry response (`...no entries parsed:492`)",
+					"text": "Log condition silences error for all-invalid-entry response (`...no entries parsed:492`)"
+				}
+			]
+		}
+	],
+	"threads": [
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aW033",
+			"commentId": 3810323701,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3810365222,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T05:47:13Z",
+					"editedAt": null,
+					"body": "Fixed in 84caa49 — added the Number.isInteger + >=0 guard before using the index as a Map key."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aW037",
+			"commentId": 3810323708,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3810365406,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T05:47:16Z",
+					"editedAt": null,
+					"body": "Added in 84caa49 — 'skips a non-numeric key instead of coercing it to a NaN map key' test."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aW03-",
+			"commentId": 3810323712,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3810365622,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T05:47:18Z",
+					"editedAt": null,
+					"body": "Added in 84caa49 — 'skips a negative index' test."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aW03_",
+			"commentId": 3810323716,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3810365727,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T05:47:20Z",
+					"editedAt": null,
+					"body": "Fixed in 84caa49 — replaced the regex with a balanced-brace scanner (extractJsonObject) that walks depth by character instead of trying to express nesting in a regex. Handles both this case and the sibling greedy-merge finding on the same root cause."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aW04D",
+			"commentId": 3810323720,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3810365839,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T05:47:21Z",
+					"editedAt": null,
+					"body": "Fixed in 84caa49 — rewrote the JSDoc to state explicitly that a non-integer/negative index and an out-of-range score are also dropped, not just malformed JSON."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aW04E",
+			"commentId": 3810323723,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3810366215,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T05:47:28Z",
+					"editedAt": null,
+					"body": "Same fix as the sibling nested-JSON finding — 84caa49 replaces the regex with a balanced-brace scanner, which handles the multiple-objects-in-one-response case too (it walks depth from the first { rather than eagerly matching to the last })."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aW96g",
+			"commentId": 3810378919,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3810410729,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T05:57:10Z",
+					"editedAt": null,
+					"body": "Added in 9f3542c — 'returns only the first top-level object when the LLM emits two' test, plus a doc update on extractJsonObject acknowledging this as a residual limitation rather than implying full protection."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aW96n",
+			"commentId": 3810378928,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3810410819,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T05:57:11Z",
+					"editedAt": null,
+					"body": "Fixed in 9f3542c — now only logs when Object.keys(parsed).length > 0, per your suggested fix."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aW964",
+			"commentId": 3810378947,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3810410947,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T05:57:12Z",
+					"editedAt": null,
+					"body": "Reworded in 9f3542c to make clear it's testing score-value bounds, not index/key bounds."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aW968",
+			"commentId": 3810378950,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3810411099,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T05:57:14Z",
+					"editedAt": null,
+					"body": "Real gap, fixed in 9f3542c — extractJsonObject now tracks string-literal state (with \\\" escape handling) so a brace inside a quoted color value can't perturb the depth count. Added a regression test for a color value containing literal braces."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aW97A",
+			"commentId": 3810378955,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3810411281,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T05:57:17Z",
+					"editedAt": null,
+					"body": "Fixed in 9f3542c — updated the doc to state the residual limitation explicitly (returns only the first of two top-level objects) rather than implying the brace counter fully solves multi-object responses."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aW97D",
+			"commentId": 3810378962,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3810411400,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T05:57:19Z",
+					"editedAt": null,
+					"body": "This is already present in the current diff — the docblock (lines 452-454) reads '...a non-integer or negative index, and a score that's non-numeric or outside 0-10 all degrade to that entry being dropped...'. Possibly reviewed against an intermediate view; no change needed."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aXH8y",
+			"commentId": 3810439641,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3810466828,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T06:06:08Z",
+					"editedAt": null,
+					"body": "Your own trace confirms this — 'The logic is correct — this is a confirmation, not a bug.' No change needed."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aXH82",
+			"commentId": 3810439647,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3810466988,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T06:06:09Z",
+					"editedAt": null,
+					"body": "Agreed this is correct as-is — your own conclusion: 'No issue here... minor actionability gap, not a blocker.' Declining the message-detail suggestion to keep scope bounded; happy to revisit if it becomes a real debugging pain point."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aXH86",
+			"commentId": 3810439652,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3810467136,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T06:06:10Z",
+					"editedAt": null,
+					"body": "Fixed in 18d927f — narrowed the comment to 'Tracks double-quoted JSON string literals (respecting \\\" escapes)'."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aXH88",
+			"commentId": 3810439656,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3810467355,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T06:06:12Z",
+					"editedAt": null,
+					"body": "Agreed, thanks — no action needed on a positive note."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aXPuA",
+			"commentId": 3810488074,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3810522476,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T06:15:05Z",
+					"editedAt": null,
+					"body": "Acknowledged — thanks."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aXWvn",
+			"commentId": 3810531404,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3810558418,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T06:22:21Z",
+					"editedAt": null,
+					"body": "Fixed in a9e433c — broadened the CompRelevance.score JSDoc to cover both the explicit failed-batch case and the never-attempted (no key) case, since both collapse to the same null on the row."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aXWvq",
+			"commentId": 3810531409,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3810558514,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T06:22:22Z",
+					"editedAt": null,
+					"body": "This is documented behavior, not a bug — the loop breaks on the first candidate that parses as valid JSON regardless of entry count, by design (an empty-but-valid {} response genuinely means 'the model scored nothing this batch', which is a legitimate outcome, not a signal to keep scanning). Declining to add retry-past-empty-object logic — the scenario is a stray empty object AND a real payload both appearing in one response, which the prompt's 'Return ONLY a JSON object' instruction makes very unlikely, and chasing it further is scope creep on a fix already 4 rounds deep. Filing ai-listings-8du's mocking-harness gap is the real prerequisite for testing this LLM-response-shape space more thoroughly than pure-function tests allow."
+				}
+			]
+		}
+	],
+	"reactions": [
+		{
+			"commentId": 3810323701,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-19T05:47:15Z"
+		},
+		{
+			"commentId": 3810323708,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-19T05:47:18Z"
+		},
+		{
+			"commentId": 3810323712,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-19T05:47:20Z"
+		},
+		{
+			"commentId": 3810323716,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-19T05:47:21Z"
+		},
+		{
+			"commentId": 3810323720,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-19T05:47:23Z"
+		},
+		{
+			"commentId": 3810323723,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-19T05:47:29Z"
+		},
+		{
+			"commentId": 3810378919,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-19T05:57:10Z"
+		},
+		{
+			"commentId": 3810378928,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-19T05:57:12Z"
+		},
+		{
+			"commentId": 3810378947,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-19T05:57:14Z"
+		},
+		{
+			"commentId": 3810378950,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-19T05:57:16Z"
+		},
+		{
+			"commentId": 3810378955,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-19T05:57:18Z"
+		},
+		{
+			"commentId": 3810378962,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-08-19T05:57:35Z"
+		},
+		{
+			"commentId": 3810439641,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-08-19T06:06:09Z"
+		},
+		{
+			"commentId": 3810439647,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-08-19T06:06:10Z"
+		},
+		{
+			"commentId": 3810439652,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-19T06:06:11Z"
+		},
+		{
+			"commentId": 3810439656,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-19T06:06:12Z"
+		},
+		{
+			"commentId": 3810488074,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-19T06:15:06Z"
+		},
+		{
+			"commentId": 3810531404,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-19T06:22:22Z"
+		},
+		{
+			"commentId": 3810531409,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-08-19T06:22:23Z"
+		}
+	],
+	"heldOut": true
+}

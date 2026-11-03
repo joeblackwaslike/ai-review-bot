@@ -13,6 +13,19 @@ joeblackwaslike__agent-skills__10__openai
   restated open: 0 of 13
   rounds with first-seen claims: 4 of 5, final round quiet: yes
 
+joeblackwaslike__ai-listings__50__anthropic
+  rejected: 4 of 18 adjudicated (deferred 0, unadjudicated 13)
+  recycled: 0 of 31
+  restated open: 0 of 31, +1 proposed
+  rounds with first-seen claims: 5 of 5, final round quiet: no
+
+joeblackwaslike__ai-listings__50__openai
+  rejected: 0 of 5 adjudicated (deferred 0, unadjudicated 1)
+  recycled: 0 of 6
+  restated open: 0 of 6
+  rounds with first-seen claims: 2 of 2, final round quiet: no
+  join rate: 0/5
+
 joeblackwaslike__ai-listings__74__anthropic
   rejected: 10 of 13 adjudicated (deferred 0, unadjudicated 27)
   recycled: 0 of 40

@@ -85,6 +85,8 @@ const dir = fileURLToPath(new URL("./fixtures/", import.meta.url));
 const FIXTURE_RECYCLED: Record<string, number> = {
 	"joeblackwaslike__agent-skills__10__anthropic": 1,
 	"joeblackwaslike__agent-skills__10__openai": 0,
+	"joeblackwaslike__ai-listings__50__anthropic": 0,
+	"joeblackwaslike__ai-listings__50__openai": 0,
 	"joeblackwaslike__ai-listings__74__anthropic": 0,
 	"joeblackwaslike__ai-listings__74__openai": 0,
 	"joeblackwaslike__ai-review-bot-demo__2__anthropic": 0,
