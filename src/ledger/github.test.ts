@@ -10,6 +10,7 @@ import {
 	fetchLedgerEvidence,
 	type RequestLike,
 } from "./github.js";
+import { blocksVerdict } from "./suppress.js";
 
 const claim = (commentId: number): PostedClaim => ({
 	id: `r0:c${commentId}:0`,
@@ -351,6 +352,44 @@ describe("ledger rebuild titles", () => {
 		expect(await rebuildTitle(current.text)).toEqual([
 			"Keep findings that quote a retraction-like status message",
 		]);
+	});
+
+	describe("severity of an old-format finding", () => {
+		const rebuild = async (body: string) => {
+			const octokit = fake(
+				[page([t(10)], null)],
+				[{ id: 10, pull_request_review_id: 1, path: "a.ts", line: 3, body }],
+			);
+			return buildLedger(await fetchLedgerEvidence(octokit, opts));
+		};
+
+		it("rebuilds a High badge as a P1 entry and a Medium badge as P2", async () => {
+			const high = recorded(
+				"joeblackwaslike__ai-review-bot__70__anthropic.json",
+				"r0:c3802679098:0",
+			);
+			const medium = recorded(
+				"joeblackwaslike__ai-review-bot-demo__2__openai.json",
+				"r0:c3839253293:0",
+			);
+			expect(high.text.startsWith("🔴 **High**")).toBe(true);
+			expect((await rebuild(high.text)).map((e) => e.severity)).toEqual(["P1"]);
+			expect((await rebuild(medium.text)).map((e) => e.severity)).toEqual([
+				"P2",
+			]);
+		});
+
+		// An anchored entry blocks at any severity; severity decides only once
+		// the finding has no path, which is where a native P1 holds the verdict.
+		it("holds the verdict without a path, like a native P1", async () => {
+			const high = recorded(
+				"joeblackwaslike__ai-review-bot__70__anthropic.json",
+				"r0:c3802679098:0",
+			);
+			const [entry] = await rebuild(high.text);
+			expect(blocksVerdict({ ...entry, path: null })).toBe(true);
+			expect(blocksVerdict({ path: null, severity: "P1" })).toBe(true);
+		});
 	});
 });
 

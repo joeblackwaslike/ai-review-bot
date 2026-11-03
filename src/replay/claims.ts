@@ -37,16 +37,42 @@ export function claimTitle(part: string): string {
 		: sentence;
 }
 
+const WORD_SEVERITY: Record<string, string> = {
+	Critical: "P0",
+	High: "P1",
+	Medium: "P2",
+	Low: "P3",
+};
+
+/** The finding's severity on the P0-P3 scale. A leading badge decides: a
+ * `P1` badge as written, an older word badge mapped (Critical P0, High P1,
+ * Medium P2, Low P3). Without a badge, the first P0-P3 in the text, else P3.
+ * Also used by the ledger rebuild, so old-format findings rebuild as P1/P2
+ * entries, not only by replay. */
+export function claimSeverity(part: string): string {
+	const first = part
+		.split("\n")
+		.map((l) => l.trim())
+		.find(Boolean);
+	const badge = first?.match(BADGE_LINE)?.[1];
+	if (badge) return WORD_SEVERITY[badge] ?? badge;
+	return part.match(/\bP[0-3]\b/)?.[0] ?? "P3";
+}
+
 /** One claim per finding in a posted comment body, split on the merge
  * separator. Also used by the ledger rebuild, not only by replay. */
 export function splitInlineClaims(
 	body: string,
-): { title: string; text: string }[] {
+): { title: string; text: string; severity: string }[] {
 	return body
 		.split(MERGE_SEPARATOR)
 		.map((text) => text.trim())
 		.filter(Boolean)
-		.map((text) => ({ title: claimTitle(text), text }));
+		.map((text) => ({
+			title: claimTitle(text),
+			text,
+			severity: claimSeverity(text),
+		}));
 }
 
 export function fixtureId(

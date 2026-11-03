@@ -2,7 +2,12 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { claimTitle, fixtureId, splitInlineClaims } from "./claims.js";
+import {
+	claimSeverity,
+	claimTitle,
+	fixtureId,
+	splitInlineClaims,
+} from "./claims.js";
 import type { ReplayFixture } from "./types.js";
 
 const FIXTURE_FILE = /^[^.]+\.json$/;
@@ -175,5 +180,78 @@ describe("fixtureId", () => {
 		expect(
 			fixtureId({ owner: "o", repo: "r", pull: 7, provider: "anthropic" }),
 		).toBe("o__r__7__anthropic");
+	});
+});
+
+describe("claimSeverity", () => {
+	it.each([
+		["🔴 **Critical**\n\n**t**\n\nbody", "P0"],
+		["🔴 **High**\n\n**t**\n\nbody", "P1"],
+		["🟡 **Medium**\n\n**t**\n\nbody mentions P3 later", "P2"],
+		["🟢 **Low**\n\n**t**\n\nbody", "P3"],
+		["🔴 **P0**\n\n**t**", "P0"],
+		["🟠 **P1**\n\n**t**", "P1"],
+		["🟡 **P2**\n\n**t**", "P2"],
+		["🟢 **P3**\n\n**t**", "P3"],
+		["A merged part without a badge that cites P1 inline", "P1"],
+		["A merged part with no severity at all", "P3"],
+	])("reads %j as %s", (text, severity) => {
+		expect(claimSeverity(text)).toBe(severity);
+	});
+
+	it("is carried on every split part", () => {
+		expect(
+			splitInlineClaims(
+				"🔴 **High**\n\n**a**\n\n---\n\n🟢 **Low**\n\n**b**",
+			).map((c) => c.severity),
+		).toEqual(["P1", "P3"]);
+	});
+});
+
+describe("claimSeverity over the committed fixtures", () => {
+	const dir = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
+	const PRE_EXISTING = [
+		"joeblackwaslike__agent-skills__10__",
+		"joeblackwaslike__ai-listings__74__",
+		"joeblackwaslike__ai-review-bot__92__",
+		"joeblackwaslike__stealth-browser__1__",
+	];
+	const claims = readdirSync(dir)
+		.filter((n) => FIXTURE_FILE.test(n))
+		.flatMap((n) =>
+			(
+				JSON.parse(readFileSync(join(dir, n), "utf8")) as ReplayFixture
+			).rounds.flatMap((r) =>
+				r.claims
+					.filter((c) => c.source === "inline")
+					.map((c) => ({ ...c, fixture: n })),
+			),
+		);
+	const wordBadge = (text: string) =>
+		/^\S*\s*\*\*(Critical|High|Medium|Low)\*\*\s*$/.test(
+			text
+				.split("\n")
+				.find((l) => l.trim())
+				?.trim() ?? "",
+		);
+
+	it("covers recorded inline claims", () => {
+		expect(claims.length).toBeGreaterThan(100);
+	});
+
+	it("keeps every severity that did not come from a word badge", () => {
+		const changed = claims
+			.filter((c) => !wordBadge(c.text))
+			.filter((c) => claimSeverity(c.text) !== c.severity)
+			.map((c) => `${c.fixture} ${c.id}`);
+		expect(changed).toEqual([]);
+	});
+
+	it("finds no word-badge claim in the four pre-existing fixtures, so none of them changes", () => {
+		const affected = claims
+			.filter((c) => PRE_EXISTING.some((p) => c.fixture.startsWith(p)))
+			.filter((c) => wordBadge(c.text))
+			.map((c) => `${c.fixture} ${c.id}`);
+		expect(affected).toEqual([]);
 	});
 });
