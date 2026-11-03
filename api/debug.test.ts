@@ -111,6 +111,25 @@ describe("sanitizeConfigError", () => {
 		}
 	});
 
+	it("redacts through line terminators after the marker", () => {
+		for (const terminator of ["\r", "\u2028", "\u2029", "\n"]) {
+			const message = sanitizeConfigError(
+				new Error(
+					`AI_REVIEW_X: expected number, got "x${terminator}TOP-SECRET`,
+				),
+			);
+			expect(message).not.toContain("TOP-SECRET");
+			expect(message).toContain("AI_REVIEW_X");
+		}
+	});
+
+	it("redacts a value form through line terminators", () => {
+		const message = sanitizeConfigError(
+			new Error('bad value "x\u2028TOP-SECRET" for AI_REVIEW_X'),
+		);
+		expect(message).not.toContain("TOP-SECRET");
+	});
+
 	it("redacts a quoted segment after the word value", () => {
 		const message = sanitizeConfigError(
 			new Error('bad value "hunter2" for AI_REVIEW_X'),
