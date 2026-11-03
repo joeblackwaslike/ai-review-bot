@@ -1,6 +1,11 @@
 import { isSameClaim } from "../claim-dedupe.js";
 import { type ReplayResult, roundCutoff, visibleLabels } from "./replay.js";
-import type { LabelFile, ReplayFixture } from "./types.js";
+import type {
+	CandidateRecord,
+	LabelFile,
+	PostedClaim,
+	ReplayFixture,
+} from "./types.js";
 
 export interface RepeatCount {
 	count: number;
@@ -22,22 +27,36 @@ export interface Metrics {
 	joinRate?: { joined: number; candidates: number };
 }
 
+/** Claims of the fixture that have an entry in the label file. */
+export function labelledClaims(
+	f: ReplayFixture,
+	labels: LabelFile,
+): PostedClaim[] {
+	const labelled = new Set(labels.labels.map((l) => l.claimId));
+	return f.rounds.flatMap((r) => r.claims.filter((c) => labelled.has(c.id)));
+}
+
+/** How many candidates restate one of the given claims. */
+export function countJoined(
+	candidates: CandidateRecord[],
+	claims: PostedClaim[],
+): number {
+	return candidates.filter((cand) => claims.some((c) => isSameClaim(cand, c)))
+		.length;
+}
+
 function computeJoinRate(
 	f: ReplayFixture,
 	labels: LabelFile,
 ): Metrics["joinRate"] {
 	if (!f.rounds.some((r) => r.trace)) return undefined;
-	const labelled = new Set(labels.labels.map((l) => l.claimId));
-	const claims = f.rounds.flatMap((r) =>
-		r.claims.filter((c) => labelled.has(c.id)),
-	);
+	const claims = labelledClaims(f, labels);
 	let joined = 0;
 	let candidates = 0;
 	for (const round of f.rounds) {
-		for (const cand of round.trace?.candidates ?? []) {
-			candidates++;
-			if (claims.some((c) => isSameClaim(cand, c))) joined++;
-		}
+		const cands = round.trace?.candidates ?? [];
+		candidates += cands.length;
+		joined += countJoined(cands, claims);
 	}
 	return { joined, candidates };
 }

@@ -4,8 +4,8 @@ import { computeCost } from "../models.js";
 import type { ModelReview } from "../review.js";
 import { routeModel } from "../router.js";
 import type { GhClient } from "./gh.js";
-import type { LiveFinding, LiveOptions } from "./live.js";
-import type { ReplayFixture } from "./types.js";
+import type { LiveFinding, LiveOptions, LiveReviewOutput } from "./live.js";
+import type { CandidateRecord, ReplayFixture, RoundUsage } from "./types.js";
 
 const AGENTS_PER_REVIEW = 5;
 const CHARS_PER_TOKEN = 4;
@@ -34,6 +34,34 @@ export function toLiveFindings(review: ModelReview): LiveFinding[] {
 			suppressible: g.suppressible,
 		})),
 	];
+}
+
+/** One candidate per inline comment and general finding of every agent review, in agent order. */
+export function toCandidates(
+	agentReviews: { skill: string; review: ModelReview }[],
+): CandidateRecord[] {
+	return agentReviews.flatMap(({ skill, review }) =>
+		toLiveFindings(review).map((f) => ({
+			skill,
+			title: f.title,
+			path: f.path,
+			line: f.line,
+			severity: f.severity ?? null,
+		})),
+	);
+}
+
+/** Shape a `runAuditPass` result into the live tier's review output. */
+export function toLiveReviewOutput(result: {
+	review: ModelReview;
+	agentReviews: { skill: string; review: ModelReview }[];
+	usageBySkill: RoundUsage;
+}): LiveReviewOutput {
+	return {
+		findings: toLiveFindings(result.review),
+		candidates: toCandidates(result.agentReviews),
+		usage: result.usageBySkill,
+	};
 }
 
 type LiveWiring = Pick<LiveOptions, "review" | "estimateCost" | "fetchDiff">;
@@ -72,19 +100,19 @@ export function buildLiveWiring(
 				},
 				selection.model,
 			),
-		review: async (diff): Promise<LiveFinding[]> => {
+		review: async (diff): Promise<LiveReviewOutput> => {
 			const auth =
 				provider === "anthropic"
 					? await resolveAnthropicAuth()
 					: await resolveOpenAIAuth();
-			const { review } = await runAuditPass({
+			const result = await runAuditPass({
 				files: [{ path: "replay.diff", content: diff }],
 				selection,
 				extraInstructions: "",
 				meta,
 				auth,
 			});
-			return toLiveFindings(review);
+			return toLiveReviewOutput(result);
 		},
 	};
 }

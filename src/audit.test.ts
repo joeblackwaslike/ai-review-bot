@@ -69,6 +69,55 @@ describe("runAuditPass failed-attempt cost", () => {
 	});
 });
 
+describe("runAuditPass usageBySkill", () => {
+	it("has one entry per skill and sums to the pass total, including failed agents", async () => {
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const mock = runAgent as ReturnType<typeof vi.fn>;
+		mock.mockReset();
+		mock.mockResolvedValueOnce({
+			status: "ok",
+			review: buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+			usage: { promptTokens: 10, completionTokens: 1 },
+		});
+		mock.mockResolvedValueOnce({
+			status: "error",
+			failure: { class: "unknown", retryable: false, errorName: "Error" },
+			usage: { promptTokens: 20, completionTokens: 2 },
+			durationMs: 1,
+		});
+		mock.mockResolvedValue({
+			status: "error",
+			failure: { class: "unknown", retryable: false, errorName: "Error" },
+			durationMs: 1,
+		});
+		const { usage, usageBySkill } = await runAuditPass({
+			files: [{ path: "a.ts", content: "x" }],
+			selection,
+			extraInstructions: "",
+			meta: { owner: "o", repo: "r", ref: "local" },
+		});
+		expect(Object.keys(usageBySkill)).toHaveLength(2);
+		expect(usageBySkill["code-reviewer"]).toEqual({
+			promptTokens: 10,
+			completionTokens: 1,
+		});
+		const sum = Object.values(usageBySkill).reduce(
+			(a, u) => ({
+				promptTokens: a.promptTokens + u.promptTokens,
+				completionTokens: a.completionTokens + u.completionTokens,
+			}),
+			{ promptTokens: 0, completionTokens: 0 },
+		);
+		expect(sum).toEqual(usage);
+		expect(usage).toEqual({ promptTokens: 30, completionTokens: 3 });
+	});
+});
+
 describe("runAuditPass", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
