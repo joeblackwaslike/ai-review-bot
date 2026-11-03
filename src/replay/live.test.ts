@@ -195,6 +195,26 @@ describe("runLiveTier", () => {
 		expect(report.rounds[0]?.approximate).toBe(true);
 	});
 
+	it.each([
+		[Number.NaN, "NaN"],
+		[Number.POSITIVE_INFINITY, "Infinity"],
+		[-1, "-1"],
+	])("rejects an estimate of %s before any review runs", async (value, shown) => {
+		const { opts, calls } = base({
+			estimateCost: (_d, r) => (r.index === 1 ? value : 1),
+		});
+		await expect(runLiveTier(opts)).rejects.toThrow(
+			`round 1: invalid cost estimate ${shown}`,
+		);
+		expect(calls).toHaveLength(0);
+	});
+
+	it("still runs every round when each estimate is valid", async () => {
+		const { opts, calls } = base({ estimateCost: () => 0 });
+		await runLiveTier(opts);
+		expect(calls).toEqual(["diff-0", "diff-1"]);
+	});
+
 	it("prints token usage per skill after the round line, in skill order", async () => {
 		const usage = {
 			"code-reviewer.md": { promptTokens: 2269, completionTokens: 21 },

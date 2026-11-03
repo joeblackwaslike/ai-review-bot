@@ -43,6 +43,10 @@ export interface LiveRoundReport {
 	trace: RoundTrace;
 }
 
+/** An estimate that is NaN, infinite or negative. The live tier refuses to run
+ * rather than treat the round as free, since the round spends real money. */
+export class InvalidEstimateError extends Error {}
+
 export interface LiveReport {
 	spentUsd: number;
 	rounds: LiveRoundReport[];
@@ -84,7 +88,10 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 	);
 	const estimates = diffs.map((d) => {
 		const e = opts.estimateCost(d.diff, d.round);
-		if (!Number.isFinite(e) || e < 0) return 0;
+		if (!Number.isFinite(e) || e < 0)
+			throw new InvalidEstimateError(
+				`round ${d.round.index}: invalid cost estimate ${e}`,
+			);
 		return e;
 	});
 	const total = estimates.reduce((a, b) => a + b, 0);

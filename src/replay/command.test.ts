@@ -465,6 +465,35 @@ describe("runReplay live and record flags", () => {
 		).toBe(0);
 	});
 
+	it("exits 1 with one line when a cost estimate is invalid, reviewing nothing", async () => {
+		const dir = tmp();
+		const { id } = seedLive(dir, false);
+		const { lines, out } = collect();
+		let reviews = 0;
+		const wiring = (() => ({
+			estimateCost: () => Number.NaN,
+			fetchDiff: async () => ({ diff: "d", approximate: false }),
+			review: async () => {
+				reviews++;
+				return { findings: [], candidates: [], posted: [], usage: {} };
+			},
+		})) as unknown as NonNullable<
+			Parameters<typeof runReplay>[1]
+		>["liveWiring"];
+		expect(
+			await runReplay(["--live"], {
+				fixturesDir: dir,
+				out,
+				client: fakeClient(),
+				liveWiring: wiring,
+			}),
+		).toBe(1);
+		expect(lines).toContain(
+			`live failed for ${id}: round 0: invalid cost estimate NaN`,
+		);
+		expect(reviews).toBe(0);
+	});
+
 	describe("a clean fixture the cost cap cut short", () => {
 		const costly = (n: number) =>
 			(() => ({

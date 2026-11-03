@@ -21,7 +21,7 @@ import { filterMargin, formatMargin } from "./filter-margin.js";
 import { type GhClient, ghCli } from "./gh.js";
 import { checkClean, checkRecall } from "./guard.js";
 import { labelFixture } from "./label.js";
-import { type LiveReport, runLiveTier } from "./live.js";
+import { InvalidEstimateError, type LiveReport, runLiveTier } from "./live.js";
 import type { buildLiveWiring } from "./live-wiring.js";
 import { computeMetrics, formatReport } from "./metrics.js";
 import { type ReplayPipeline, todaysCodePipeline } from "./pipeline.js";
@@ -372,14 +372,21 @@ async function liveAll(
 		const wiring = buildLiveWiring(f, client, labels);
 		const rounds = f.rounds.slice(-(p.rounds ?? 2)).map((r) => r.index);
 		out(`live ${id}`);
-		const report = await runLiveTier({
-			fixture: f,
-			labels,
-			rounds,
-			maxCostUsd: remaining,
-			out,
-			...wiring,
-		});
+		let report: LiveReport;
+		try {
+			report = await runLiveTier({
+				fixture: f,
+				labels,
+				rounds,
+				maxCostUsd: remaining,
+				out,
+				...wiring,
+			});
+		} catch (err) {
+			if (!(err instanceof InvalidEstimateError)) throw err;
+			out(`live failed for ${id}: ${err.message}`);
+			return 1;
+		}
 		remaining -= report.spentUsd;
 		if (p.saveTrace) await writeTrace(join(dir, name), f, report);
 		if (!f.expect?.clean) continue;
