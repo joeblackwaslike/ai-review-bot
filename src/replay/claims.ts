@@ -5,13 +5,13 @@ const MERGE_SEPARATOR = "\n\n---\n\n";
 const SEVERITY_BADGE_TEXT = /^(P\d|Critical|High|Medium|Low)$/;
 const BADGE_LINE = /^\S*\s*\*\*(P[0-3]|Critical|High|Medium|Low)\*\*\s*$/;
 const MAX_FALLBACK_TITLE = 100;
-const ABBREVIATION_END = /(?:^|\s)(?:e\.g|i\.e|etc|vs|cf)\.$/i;
+const ABBREVIATION_END = /(?<![a-z])(?:e\.g|i\.e|etc|vs|cf)\.$/i;
 
 function firstSentence(line: string): string {
-	const re = /[.!?](?=\s|$)/g;
+	const re = /[.!?]["'”’)\]]*(?=\s|$)/g;
 	for (const m of line.matchAll(re)) {
-		const prefix = line.slice(0, m.index + 1);
-		if (!ABBREVIATION_END.test(prefix)) return prefix;
+		if (ABBREVIATION_END.test(line.slice(0, m.index + 1))) continue;
+		return line.slice(0, m.index + m[0].length);
 	}
 	return line;
 }

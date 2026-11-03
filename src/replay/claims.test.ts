@@ -66,6 +66,26 @@ describe("claimTitle on old-format reviews", () => {
 		expect(claimTitle("🟠 **P1**\n\nThe loop. More text")).toBe("The loop.");
 	});
 
+	it("does not cut the fallback at a parenthesised abbreviation", () => {
+		expect(
+			claimTitle(
+				"🟢 **Low**\n\nMissing null check (e.g. for empty input). More",
+			),
+		).toBe("Missing null check (e.g. for empty input).");
+		expect(
+			claimTitle("🟢 **Low**\n\nRetry is unbounded (i.e. never stops). More"),
+		).toBe("Retry is unbounded (i.e. never stops).");
+	});
+
+	it("ends the fallback sentence after a closing quote or bracket", () => {
+		expect(
+			claimTitle('🟢 **Low**\n\nThe result is "invalid." It crashes.'),
+		).toBe('The result is "invalid."');
+		expect(claimTitle("🟢 **Low**\n\nThe cap (stays at 50.) It grows.")).toBe(
+			"The cap (stays at 50.)",
+		);
+	});
+
 	it("truncates a long fallback sentence to 100 characters", () => {
 		const title = claimTitle(`🟡 **Medium**\n\n${"word ".repeat(60)}end.`);
 		expect(title.length).toBeLessThanOrEqual(100);
@@ -127,6 +147,10 @@ describe("claimTitle over the committed fixtures", () => {
 	]);
 
 	it("keeps every pre-title-recovery title that was not a severity word", () => {
+		const loaded = new Set(inlineClaims.map((c) => c.fixture));
+		expect(
+			[...PRE_TITLE_RECOVERY_FIXTURES].filter((f) => !loaded.has(f)),
+		).toEqual([]);
 		const changed = inlineClaims
 			.filter((c) => PRE_TITLE_RECOVERY_FIXTURES.has(c.fixture))
 			.filter((c) => !SEVERITY_WORD.test(c.title))
