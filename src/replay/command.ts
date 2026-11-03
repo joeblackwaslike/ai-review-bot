@@ -10,7 +10,7 @@ import {
 } from "./classify.js";
 import { filterMargin, formatMargin } from "./filter-margin.js";
 import { type GhClient, ghCli } from "./gh.js";
-import { checkRecall } from "./guard.js";
+import { checkClean, checkRecall } from "./guard.js";
 import { labelFixture } from "./label.js";
 import { runLiveTier } from "./live.js";
 import { computeMetrics, formatReport } from "./metrics.js";
@@ -243,6 +243,12 @@ async function replayAll(
 		for (const e of guard.failures) out(`FAIL ${id}: ${e}`);
 		if (guard.failures.length > 0) failed = true;
 	}
+	const clean = checkClean(loaded.map((l) => l.fixture));
+	for (const id of clean.unchecked)
+		out(`warning ${id}: clean fixture has no trace`);
+	for (const v of clean.violations)
+		out(`FAIL ${v}: clean fixture posted findings`);
+	if (clean.violations.length > 0) failed = true;
 	if (metrics.length > 0) out(formatReport(metrics, ids));
 	const classFiles = await printClassReport(dir, out);
 	if (classFiles.length > 0) {

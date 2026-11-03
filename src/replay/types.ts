@@ -20,6 +20,28 @@ export interface CommitMeta {
 	files: { path: string; ranges: [number, number][] }[];
 }
 
+/** One finding a review skill produced, before or after the posting filters. */
+export interface CandidateRecord {
+	skill: string | null;
+	title: string;
+	path: string | null;
+	line: number | null;
+	severity: string | null;
+}
+
+/** Token usage per skill file name. */
+export type RoundUsage = Record<
+	string,
+	{ promptTokens: number; completionTokens: number }
+>;
+
+/** What a live round produced: all candidates, the post-filter posted set, and usage. */
+export interface RoundTrace {
+	candidates: CandidateRecord[];
+	posted: CandidateRecord[];
+	usage: RoundUsage;
+}
+
 export interface Round {
 	index: number;
 	reviewId: number;
@@ -32,6 +54,7 @@ export interface Round {
 	approximate: boolean;
 	commitsSince: CommitMeta[];
 	claims: PostedClaim[];
+	trace?: RoundTrace;
 }
 
 export interface Reply {
@@ -69,6 +92,8 @@ export interface ReplayFixture {
 	rounds: Round[];
 	threads: ThreadEvidence[];
 	reactions: ReactionEvidence[];
+	expect?: { clean: true };
+	heldOut?: true;
 }
 
 export interface ClaimLabel {

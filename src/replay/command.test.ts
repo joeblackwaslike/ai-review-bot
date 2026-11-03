@@ -22,6 +22,29 @@ function seed(dir: string, labels = makeLabels()) {
 	return id;
 }
 
+function seedClean(dir: string, posted: number) {
+	const f = makeFixture([["a"]], { expect: { clean: true } });
+	const item = {
+		skill: "s.md",
+		title: "t",
+		path: "a.ts",
+		line: 1,
+		severity: "high",
+	};
+	if (posted >= 0)
+		f.rounds[0] = {
+			...f.rounds[0],
+			trace: { candidates: [], posted: posted ? [item] : [], usage: {} },
+		} as (typeof f.rounds)[0];
+	const id = fixtureId(f);
+	writeFileSync(join(dir, `${id}.json`), JSON.stringify(f));
+	writeFileSync(
+		join(dir, `${id}.labels.json`),
+		JSON.stringify({ ...makeLabels(), fixtureId: id }),
+	);
+	return id;
+}
+
 function collect() {
 	const lines: string[] = [];
 	return { lines, out: (s: string) => lines.push(s) };
@@ -61,6 +84,24 @@ const recordArgs = [
 ];
 
 describe("runReplay", () => {
+	it("exits non-zero when a clean fixture posted something", async () => {
+		const dir = tmp();
+		const id = seedClean(dir, 1);
+		const { lines, out } = collect();
+		expect(await runReplay([], { fixturesDir: dir, out })).toBe(1);
+		expect(lines.join("\n")).toContain(`FAIL ${id} round 0`);
+	});
+
+	it("warns on a clean fixture with no trace and exits 0", async () => {
+		const dir = tmp();
+		const id = seedClean(dir, -1);
+		const { lines, out } = collect();
+		expect(await runReplay([], { fixturesDir: dir, out })).toBe(0);
+		expect(lines.join("\n")).toContain(
+			`warning ${id}: clean fixture has no trace`,
+		);
+	});
+
 	it("no flags replays every fixture in the directory and prints counts", async () => {
 		const dir = tmp();
 		const id = seed(dir);

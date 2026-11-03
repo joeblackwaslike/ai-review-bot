@@ -155,3 +155,73 @@ describe("formatReport", () => {
 		expect(formatReport([m], ["fx"])).toContain("0 of 2, +1 proposed");
 	});
 });
+
+describe("joinRate", () => {
+	const cand = (title: string, path = "a.ts") => ({
+		skill: "s.md",
+		title,
+		path,
+		line: 1,
+		severity: "high",
+	});
+	const trace = (candidates: ReturnType<typeof cand>[]) => ({
+		candidates,
+		posted: [],
+		usage: {},
+	});
+
+	it("counts candidates that match a labelled claim", () => {
+		const f = makeFixture([
+			["missing null check handler", "swallowed error retry loop"],
+			[],
+		]);
+		f.rounds[0] = {
+			...f.rounds[0],
+			trace: trace([
+				cand("missing null check handler"),
+				cand("swallowed error retry loop"),
+				cand("missing null check handler"),
+				cand("zzz unrelated thing here", "other.ts"),
+			]),
+		} as (typeof f.rounds)[0];
+		const labels = makeLabels({
+			labels: [
+				makeLabel("missing null check handler", "fixed"),
+				makeLabel("swallowed error retry loop", "rejected"),
+			],
+		});
+		const m = computeMetrics(
+			f,
+			labels,
+			makeResult([{ posted: [] }, { posted: [] }]),
+		);
+		expect(m.joinRate).toEqual({ joined: 3, candidates: 4 });
+		expect(formatReport([m], ["fx"])).toContain("join rate: 3/4");
+	});
+
+	it("does not join a claim without a labels entry", () => {
+		const f = makeFixture([["missing null check handler"]]);
+		f.rounds[0] = {
+			...f.rounds[0],
+			trace: trace([cand("missing null check handler")]),
+		} as (typeof f.rounds)[0];
+		const m = computeMetrics(f, makeLabels(), makeResult([{ posted: [] }]));
+		expect(m.joinRate).toEqual({ joined: 0, candidates: 1 });
+	});
+
+	it("is absent without a trace and leaves the report unchanged", () => {
+		const f = makeFixture([["a"]]);
+		const labels = makeLabels({ labels: [makeLabel("a", "fixed")] });
+		const m = computeMetrics(f, labels, makeResult([{ posted: ["a"] }]));
+		expect(m.joinRate).toBeUndefined();
+		expect(formatReport([m], ["fx"])).toBe(
+			[
+				"fx",
+				"  rejected: 0 of 1 adjudicated (deferred 0, unadjudicated 0)",
+				"  recycled: 0 of 1",
+				"  restated open: 0 of 1",
+				"  rounds with first-seen claims: 1 of 1, final round quiet: no",
+			].join("\n"),
+		);
+	});
+});

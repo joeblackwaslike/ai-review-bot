@@ -1,3 +1,4 @@
+import { isSameClaim } from "../claim-dedupe.js";
 import { type ReplayResult, roundCutoff, visibleLabels } from "./replay.js";
 import type { LabelFile, ReplayFixture } from "./types.js";
 
@@ -18,6 +19,27 @@ export interface Metrics {
 		totalRounds: number;
 		finalRoundQuiet: boolean;
 	};
+	joinRate?: { joined: number; candidates: number };
+}
+
+function computeJoinRate(
+	f: ReplayFixture,
+	labels: LabelFile,
+): Metrics["joinRate"] {
+	if (!f.rounds.some((r) => r.trace)) return undefined;
+	const labelled = new Set(labels.labels.map((l) => l.claimId));
+	const claims = f.rounds.flatMap((r) =>
+		r.claims.filter((c) => labelled.has(c.id)),
+	);
+	let joined = 0;
+	let candidates = 0;
+	for (const round of f.rounds) {
+		for (const cand of round.trace?.candidates ?? []) {
+			candidates++;
+			if (claims.some((c) => isSameClaim(cand, c))) joined++;
+		}
+	}
+	return { joined, candidates };
 }
 
 export function earlierRepeats(
@@ -95,6 +117,7 @@ export function computeMetrics(
 		finalRoundQuiet = firstSeen === 0;
 	}
 
+	const joinRate = computeJoinRate(f, labels);
 	return {
 		rejection: { rejected, adjudicated: fixed + rejected },
 		deferred,
@@ -106,6 +129,7 @@ export function computeMetrics(
 			totalRounds: result.rounds.length,
 			finalRoundQuiet,
 		},
+		...(joinRate ? { joinRate } : {}),
 	};
 }
 
@@ -123,6 +147,9 @@ export function formatReport(m: Metrics[], ids: string[]): string {
 				`  recycled: ${repeatText(x.recycled)}`,
 				`  restated open: ${repeatText(x.restatedOpen)}`,
 				`  rounds with first-seen claims: ${x.convergence.roundsWithFirstSeen} of ${x.convergence.totalRounds}, final round quiet: ${x.convergence.finalRoundQuiet ? "yes" : "no"}`,
+				...(x.joinRate
+					? [`  join rate: ${x.joinRate.joined}/${x.joinRate.candidates}`]
+					: []),
 			].join("\n"),
 		)
 		.join("\n\n");
