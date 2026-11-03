@@ -1,4 +1,10 @@
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -354,6 +360,148 @@ describe("runReplay", () => {
 		expect(code).toBe(1);
 		expect(lines.join("\n")).toMatch(/record failed: .*labels\.json/);
 		expect(readFileSync(path, "utf8")).toBe("{not json");
+	});
+});
+
+describe("runReplay live and record flags", () => {
+	const item = {
+		skill: "s.md",
+		title: "t",
+		path: "a.ts",
+		line: 1,
+		severity: "high",
+	};
+	const wiringFor = (n: number) =>
+		(() => ({
+			estimateCost: () => 0,
+			fetchDiff: async () => ({ diff: "d", approximate: false }),
+			review: async () => ({
+				findings: [],
+				candidates: [],
+				posted: Array.from({ length: n }, () => item),
+				usage: {},
+			}),
+		})) as unknown as NonNullable<
+			Parameters<typeof runReplay>[1]
+		>["liveWiring"];
+
+	function seedLive(dir: string, clean: boolean) {
+		const f = makeFixture([["a"]], clean ? { expect: { clean: true } } : {});
+		const id = fixtureId(f);
+		writeFileSync(join(dir, `${id}.json`), JSON.stringify(f, null, 2));
+		writeFileSync(
+			join(dir, `${id}.labels.json`),
+			JSON.stringify({ ...makeLabels(), fixtureId: id }),
+		);
+		return { id, path: join(dir, `${id}.json`) };
+	}
+
+	it("--save-trace writes the trace deterministically", async () => {
+		const dir = tmp();
+		const { path } = seedLive(dir, false);
+		const run = () =>
+			runReplay(["--live", "--save-trace"], {
+				fixturesDir: dir,
+				out: () => {},
+				client: fakeClient(),
+				liveWiring: wiringFor(1),
+			});
+		expect(await run()).toBe(0);
+		const first = readFileSync(path, "utf8");
+		const round = JSON.parse(first).rounds[0];
+		expect(Object.keys(round).at(-1)).toBe("trace");
+		expect(Object.keys(round.trace)).toEqual(["candidates", "posted", "usage"]);
+		expect(round.trace.posted).toHaveLength(1);
+		expect(first.endsWith("}\n")).toBe(true);
+		await run();
+		expect(readFileSync(path, "utf8")).toBe(first);
+	});
+
+	it("leaves the fixture untouched without --save-trace", async () => {
+		const dir = tmp();
+		const { path } = seedLive(dir, false);
+		const before = readFileSync(path, "utf8");
+		await runReplay(["--live"], {
+			fixturesDir: dir,
+			out: () => {},
+			client: fakeClient(),
+			liveWiring: wiringFor(1),
+		});
+		expect(readFileSync(path, "utf8")).toBe(before);
+	});
+
+	it("fails a clean fixture that would post, passes one that posts nothing", async () => {
+		const dir = tmp();
+		const { id } = seedLive(dir, true);
+		const { lines, out } = collect();
+		const base = { fixturesDir: dir, client: fakeClient() };
+		expect(
+			await runReplay(["--live"], { ...base, out, liveWiring: wiringFor(1) }),
+		).toBe(1);
+		expect(lines).toContain(
+			`FAIL ${id} round 0: clean fixture would post 1 findings`,
+		);
+		expect(
+			await runReplay(["--live"], {
+				...base,
+				out: () => {},
+				liveWiring: wiringFor(0),
+			}),
+		).toBe(0);
+	});
+
+	it("passes a non-clean fixture that posts findings", async () => {
+		const dir = tmp();
+		seedLive(dir, false);
+		expect(
+			await runReplay(["--live"], {
+				fixturesDir: dir,
+				out: () => {},
+				client: fakeClient(),
+				liveWiring: wiringFor(2),
+			}),
+		).toBe(0);
+	});
+
+	it("--record sets heldOut and expect only when asked", async () => {
+		const flagged = tmp();
+		expect(
+			await runReplay(
+				[...recordArgs, "--held-out", "--expect-clean", "--fixtures", flagged],
+				{ client: fakeClient(), out: () => {} },
+			),
+		).toBe(0);
+		const plain = tmp();
+		expect(
+			await runReplay([...recordArgs, "--fixtures", plain], {
+				client: fakeClient(),
+				out: () => {},
+			}),
+		).toBe(0);
+		const read = (d: string) =>
+			JSON.parse(
+				readFileSync(
+					join(
+						d,
+						readdirSync(d).find(
+							(n) => n.endsWith(".json") && !n.includes(".labels."),
+						) as string,
+					),
+					"utf8",
+				),
+			);
+		expect(read(flagged).heldOut).toBe(true);
+		expect(read(flagged).expect).toEqual({ clean: true });
+		expect("heldOut" in read(plain)).toBe(false);
+		expect("expect" in read(plain)).toBe(false);
+	});
+
+	it("rejects flags used outside their mode", async () => {
+		for (const args of [["--save-trace"], ["--held-out"], ["--expect-clean"]]) {
+			const { lines, out } = collect();
+			expect(await runReplay(args, { fixturesDir: tmp(), out })).toBe(2);
+			expect(lines.join("\n")).toContain("require");
+		}
 	});
 });
 

@@ -6,6 +6,7 @@ import type {
 	LabelFile,
 	ReplayFixture,
 	Round,
+	RoundTrace,
 	RoundUsage,
 } from "./types.js";
 
@@ -39,6 +40,7 @@ export interface LiveRoundReport {
 	joined: number;
 	posted: number;
 	usage: RoundUsage;
+	trace: RoundTrace;
 }
 
 export interface LiveReport {
@@ -122,6 +124,7 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 			joined: countJoined(candidates, labelled),
 			posted: posted.length,
 			usage,
+			trace: { candidates, posted, usage },
 		};
 		for (const f of findings) {
 			const hit = d.round.claims.find(
