@@ -3,7 +3,7 @@ import type { ReplayFixture } from "./types.js";
 const MERGE_SEPARATOR = "\n\n---\n\n";
 /** `P1` in current reviews; `High`/`Medium`/`Low` in older ones. */
 const SEVERITY_BADGE_TEXT = /^(P\d|Critical|High|Medium|Low)$/;
-const BADGE_LINE = /^\S*\s*\*\*(P\d|Critical|High|Medium|Low)\*\*\s*$/;
+const BADGE_LINE = /^\S*\s*\*\*(P[0-3]|Critical|High|Medium|Low)\*\*\s*$/;
 const MAX_FALLBACK_TITLE = 100;
 const ABBREVIATION_END = /(?:^|\s)(?:e\.g|i\.e|etc|vs|cf)\.$/i;
 
@@ -48,7 +48,9 @@ const WORD_SEVERITY: Record<string, string> = {
  * `P1` badge as written, an older word badge mapped (Critical P0, High P1,
  * Medium P2, Low P3). Without a badge, the first P0-P3 in the text, else P3.
  * Also used by the ledger rebuild, so old-format findings rebuild as P1/P2
- * entries, not only by replay. */
+ * entries, not only by replay. An inline `🔴 **High**` maps to P1 here, while
+ * `parseBodyFindings` (`src/review-state.ts`) maps a 🔴 body row to P0 on
+ * purpose; the verdict is the same either way. */
 export function claimSeverity(part: string): string {
 	const first = part
 		.split("\n")

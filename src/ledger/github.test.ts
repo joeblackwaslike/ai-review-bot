@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
+import { ledgerEntryFinding } from "../baseline.js";
+import { declaredRepeat, shortFindingId } from "../relation.js";
 import type { PostedClaim, ReplayFixture } from "../replay/types.js";
 import { buildStrictOctokit } from "../testing.js";
 import {
@@ -10,7 +12,6 @@ import {
 	fetchLedgerEvidence,
 	type RequestLike,
 } from "./github.js";
-import { blocksVerdict } from "./suppress.js";
 
 const claim = (commentId: number): PostedClaim => ({
 	id: `r0:c${commentId}:0`,
@@ -379,16 +380,23 @@ describe("ledger rebuild titles", () => {
 			]);
 		});
 
-		// An anchored entry blocks at any severity; severity decides only once
-		// the finding has no path, which is where a native P1 holds the verdict.
-		it("holds the verdict without a path, like a native P1", async () => {
+		it("accepts a declared P1 repeat of a rebuilt High entry", async () => {
 			const high = recorded(
 				"joeblackwaslike__ai-review-bot__70__anthropic.json",
 				"r0:c3802679098:0",
 			);
 			const [entry] = await rebuild(high.text);
-			expect(blocksVerdict({ ...entry, path: null })).toBe(true);
-			expect(blocksVerdict({ path: null, severity: "P1" })).toBe(true);
+			const repeat = {
+				path: entry.path,
+				line: entry.line,
+				title: entry.title,
+				severity: "P1",
+				relation: {
+					kind: "repeats",
+					entry_id: shortFindingId(ledgerEntryFinding(entry).id),
+				},
+			};
+			expect(declaredRepeat([entry])(repeat)).toBe(entry);
 		});
 	});
 });

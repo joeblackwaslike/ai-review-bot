@@ -195,6 +195,7 @@ describe("claimSeverity", () => {
 		["🟢 **P3**\n\n**t**", "P3"],
 		["A merged part without a badge that cites P1 inline", "P1"],
 		["A merged part with no severity at all", "P3"],
+		["🔴 **P7**\n\n**t**\n\nbody", "P3"],
 	])("reads %j as %s", (text, severity) => {
 		expect(claimSeverity(text)).toBe(severity);
 	});
