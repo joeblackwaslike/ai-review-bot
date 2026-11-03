@@ -68,8 +68,13 @@ export function resolveFinderModel(
 	reviewerId: string,
 	tier: ReviewTier,
 ): { provider: string; model: string; effort?: Effort } {
-	const choice = config.reviewers[reviewerId]?.tiers[tier];
-	if (!choice) throw new Error(`unknown reviewer "${reviewerId}"`);
+	const reviewer = config.reviewers[reviewerId];
+	if (!reviewer) throw new Error(`unknown reviewer "${reviewerId}"`);
+	const choice = reviewer.tiers[tier];
+	if (!choice)
+		throw new Error(
+			`reviewer "${reviewerId}" has no model configured for tier "${tier}"`,
+		);
 	const slash = choice.model.indexOf("/");
 	return {
 		provider: choice.model.slice(0, slash),

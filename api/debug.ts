@@ -2,6 +2,17 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { describeConfig, getLoadedConfig } from "../src/config/load.js";
 
 const REDACTED_PATHS = new Set(["review.customPrompt"]);
+const MAX_CONFIG_ERROR_LENGTH = 300;
+
+export function sanitizeConfigError(error: unknown): string {
+	const message = error instanceof Error ? error.message : String(error);
+	const firstLine = message.split("\n")[0] ?? "";
+	const withoutPaths = firstLine.replace(/\/[^\s"']+/g, (match) => {
+		const base = match.split("/").pop();
+		return base && base.length > 0 ? base : match;
+	});
+	return withoutPaths.slice(0, MAX_CONFIG_ERROR_LENGTH);
+}
 
 export default function handler(_req: VercelRequest, res: VercelResponse) {
 	const hasFields = {
@@ -19,7 +30,7 @@ export default function handler(_req: VercelRequest, res: VercelResponse) {
 		loaded = getLoadedConfig();
 	} catch (error) {
 		res.status(200).json({
-			configError: error instanceof Error ? error.message : String(error),
+			configError: sanitizeConfigError(error),
 			...hasFields,
 		});
 		return;

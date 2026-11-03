@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { resetConfigForTests } from "../src/config/load.js";
-import handler from "./debug.js";
+import handler, { sanitizeConfigError } from "./debug.js";
 
 afterEach(() => {
 	resetConfigForTests();
@@ -62,5 +62,18 @@ describe("GET /api/debug", () => {
 		expect(body.hasAnthropicKey).toBe(true);
 		expect(body.config).toBeUndefined();
 		expect(JSON.stringify(body)).not.toContain("sk-ant-secret");
+	});
+});
+
+describe("sanitizeConfigError", () => {
+	it("drops YAML parser excerpts and absolute paths from the message", () => {
+		const message = sanitizeConfigError(
+			new Error(
+				"Invalid YAML in /var/task/config/ai-review.yaml: Nested mappings are not allowed in compact mappings at line 2, column 17:\n\n  customPrompt: TOP-SECRET-PROMPT: bad\n                ^\n",
+			),
+		);
+		expect(message).not.toContain("TOP-SECRET-PROMPT");
+		expect(message).not.toContain("/var/task");
+		expect(message).toContain("ai-review.yaml");
 	});
 });

@@ -3,7 +3,9 @@ import { getConfigTree } from "./config/load.js";
 import type { RouterContext } from "./router.js";
 import {
 	classifyTier,
+	outputBudget,
 	reasoningProviderOptions,
+	resolveFinderModel,
 	routeModel,
 } from "./router.js";
 
@@ -262,5 +264,61 @@ describe("reasoningProviderOptions adds fallbacks only for refusalFallback model
 				effort: "low",
 			}),
 		).toEqual({ anthropic: { effort: "low" } });
+	});
+
+	it("OpenAI forwards reasoningEffort including 'none'; undefined effort returns undefined", () => {
+		expect(
+			reasoningProviderOptions({
+				provider: "openai",
+				model: "gpt-6-luna",
+				effort: "none",
+			}),
+		).toEqual({ openai: { reasoningEffort: "none" } });
+		expect(
+			reasoningProviderOptions({ provider: "openai", model: "gpt-6-luna" }),
+		).toBeUndefined();
+	});
+});
+
+describe("resolveFinderModel", () => {
+	const config = getConfigTree();
+
+	it("throws naming the reviewer when the reviewer is unknown", () => {
+		expect(() => resolveFinderModel(config, "nonexistent", "normal")).toThrow(
+			/unknown reviewer "nonexistent"/,
+		);
+	});
+
+	it("throws naming the missing tier, distinct from the unknown-reviewer message, when the reviewer exists but has no entry for the tier", () => {
+		const { normal, ...remainingTiers } = config.reviewers.claude.tiers;
+		const configMissingTier = {
+			...config,
+			reviewers: {
+				...config.reviewers,
+				claude: {
+					...config.reviewers.claude,
+					tiers: remainingTiers,
+				},
+			},
+		} as unknown as typeof config;
+		expect(() =>
+			resolveFinderModel(configMissingTier, "claude", "normal"),
+		).toThrow(/reviewer "claude" has no model configured for tier "normal"/);
+	});
+});
+
+describe("outputBudget", () => {
+	it.each([
+		["none" as const, 4096, 4096],
+		["low" as const, 4096, 32768],
+		["high" as const, 4096, 32768],
+		[undefined, 4096, 32768],
+		["none" as const, 256, 256],
+		["low" as const, 256, 16000],
+		[undefined, 256, 16000],
+	])("effort=%s, base=%i -> %i", (effort, base, expected) => {
+		expect(
+			outputBudget({ provider: "anthropic", model: "x", effort }, base),
+		).toBe(expected);
 	});
 });
