@@ -295,7 +295,7 @@ async function liveAll(
 			continue;
 		}
 		const labels = JSON.parse(await readFile(labelsPath, "utf8")) as LabelFile;
-		const wiring = buildLiveWiring(f, client);
+		const wiring = buildLiveWiring(f, client, labels);
 		const rounds = f.rounds.slice(-(p.rounds ?? 2)).map((r) => r.index);
 		out(`live ${id}`);
 		const report = await runLiveTier({

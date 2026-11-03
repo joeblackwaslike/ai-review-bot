@@ -18,10 +18,12 @@ export interface LiveFinding {
 	suppressible?: boolean;
 }
 
-/** What one live review produced: findings, every agent candidate, and per-skill usage. */
+/** What one live review produced: findings, every agent candidate, what the
+ * posting path would post from them, and per-skill usage. */
 export interface LiveReviewOutput {
 	findings: LiveFinding[];
 	candidates: CandidateRecord[];
+	posted: CandidateRecord[];
 	usage: RoundUsage;
 }
 
@@ -35,6 +37,7 @@ export interface LiveRoundReport {
 	approximate: boolean;
 	candidates: number;
 	joined: number;
+	posted: number;
 	usage: RoundUsage;
 }
 
@@ -48,7 +51,7 @@ export interface LiveOptions {
 	labels: LabelFile;
 	rounds: number[];
 	maxCostUsd: number;
-	review: (diffInput: string) => Promise<LiveReviewOutput>;
+	review: (diffInput: string, round: Round) => Promise<LiveReviewOutput>;
 	estimateCost: (diffInput: string) => number;
 	fetchDiff: (round: Round) => Promise<{ diff: string; approximate: boolean }>;
 	out?: (s: string) => void;
@@ -100,7 +103,10 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 			);
 			break;
 		}
-		const { findings, candidates, usage } = await opts.review(d.diff);
+		const { findings, candidates, posted, usage } = await opts.review(
+			d.diff,
+			d.round,
+		);
 		report.spentUsd += estimate;
 		const row: LiveRoundReport = {
 			index: d.round.index,
@@ -114,6 +120,7 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 			approximate: d.approximate,
 			candidates: candidates.length,
 			joined: countJoined(candidates, labelled),
+			posted: posted.length,
 			usage,
 		};
 		for (const f of findings) {
@@ -127,7 +134,7 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 		}
 		report.rounds.push(row);
 		out(
-			`round ${row.index}${row.approximate ? " (approximate diff)" : ""}: ${row.matchedFixed} of ${findings.length} matched fixed, ${row.matchedRejected} of ${findings.length} matched rejected, ${row.newUnlabeled} new unlabeled (no accuracy claimed); ${row.raw} raw findings, ${row.retracted} candidate retractions; ${row.candidates} candidates, ${row.joined} joined to labelled claims`,
+			`round ${row.index}${row.approximate ? " (approximate diff)" : ""}: ${row.matchedFixed} of ${findings.length} matched fixed, ${row.matchedRejected} of ${findings.length} matched rejected, ${row.newUnlabeled} new unlabeled (no accuracy claimed); ${row.raw} raw findings, ${row.retracted} candidate retractions; ${row.candidates} candidates, ${row.joined} joined to labelled claims, ${row.posted} would post`,
 		);
 	}
 	return report;

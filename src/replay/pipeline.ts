@@ -79,7 +79,7 @@ export function ledgerFromView(view: LedgerView): Ledger {
 /** Settled entries, and the open ones behind the baseline: the latest prior
  * round's open claims that no settled entry matches, as `deriveBaseline` and
  * `reconcileSurvivingPrior` carry them. */
-function holdable(entries: Ledger): Ledger {
+export function holdable(entries: Ledger): Ledger {
 	const source = Math.max(-1, ...entries.map((e) => e.round));
 	const carried = reconcileSurvivingPrior(
 		entries

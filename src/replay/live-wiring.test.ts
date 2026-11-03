@@ -1,5 +1,23 @@
-import { describe, expect, it } from "vitest";
-import { toLiveFindings, toLiveReviewOutput } from "./live-wiring.js";
+import { describe, expect, it, vi } from "vitest";
+import {
+	buildInlineComment,
+	buildModelReview,
+	SIMPLE_PATCH,
+} from "../testing.js";
+import type { GhClient } from "./gh.js";
+import {
+	buildLiveWiring,
+	toLiveFindings,
+	toLiveReviewOutput,
+} from "./live-wiring.js";
+import type { LabelFile, PostedClaim, ReplayFixture, Round } from "./types.js";
+
+const mockRunAuditPass = vi.hoisted(() => vi.fn());
+vi.mock("../audit.js", () => ({ runAuditPass: mockRunAuditPass }));
+vi.mock("../auth.js", () => ({
+	resolveAnthropicAuth: vi.fn(async () => ({})),
+	resolveOpenAIAuth: vi.fn(async () => ({})),
+}));
 
 describe("toLiveFindings", () => {
 	const finding = {
@@ -128,5 +146,108 @@ describe("toLiveReviewOutput", () => {
 		expect(out.usage).toEqual({
 			"code-reviewer.md": { promptTokens: 3, completionTokens: 1 },
 		});
+	});
+});
+
+describe("buildLiveWiring", () => {
+	const settled: PostedClaim = {
+		id: "r0:c1:0",
+		roundIndex: 0,
+		reviewId: 1,
+		source: "inline",
+		commentId: 1,
+		path: "src/a.ts",
+		line: 2,
+		severity: "P1",
+		title: "Token cache never expires",
+		text: "Entries in `tokenCache` are never evicted.",
+	};
+	const round = (index: number, claims: PostedClaim[]): Round => ({
+		index,
+		reviewId: index + 1,
+		provider: "anthropic",
+		submittedAt: `2026-10-0${index + 1}T12:00:00Z`,
+		headSha: `h${index}`,
+		baseSha: "b",
+		mergeBase: `m${index}`,
+		triggerAt: `2026-10-0${index + 1}T11:00:00Z`,
+		approximate: false,
+		commitsSince: [],
+		claims,
+	});
+	const fixture = {
+		owner: "o",
+		repo: "r",
+		provider: "anthropic",
+		rounds: [round(0, [settled]), round(1, [])],
+	} as unknown as ReplayFixture;
+	const labels = {
+		labels: [
+			{
+				claimId: settled.id,
+				label: "rejected",
+				confidence: "high",
+				evidence: ["2026-10-01T18:00:00Z|Intentional."],
+				confirmed: true,
+			},
+		],
+		repeatPairs: [],
+	} as unknown as LabelFile;
+
+	it("reports what would post for the round, against the fixture's earlier rounds and the compare files", async () => {
+		const routes: string[] = [];
+		const client = {
+			rest: async (route: string) => {
+				routes.push(route);
+				return {
+					files: [
+						{ filename: "src/a.ts", status: "modified", patch: SIMPLE_PATCH },
+					],
+				};
+			},
+		} as unknown as GhClient;
+		const fresh = buildInlineComment({
+			title: "Retry loop never gives up",
+			path: "src/a.ts",
+			line: 3,
+		});
+		const agentReview = buildModelReview({
+			inline_comments: [
+				buildInlineComment({
+					title: settled.title,
+					body: settled.text,
+					path: "src/a.ts",
+					line: 2,
+				}),
+				fresh,
+				buildInlineComment({
+					title: "Unchecked index",
+					path: "src/a.ts",
+					line: 9,
+				}),
+			],
+		});
+		mockRunAuditPass.mockResolvedValue({
+			review: agentReview,
+			agentReviews: [{ skill: "code-reviewer", review: agentReview }],
+			usageBySkill: {},
+		});
+		const wiring = buildLiveWiring(fixture, client, labels);
+		const target = fixture.rounds[1] as Round;
+
+		const { diff } = await wiring.fetchDiff(target);
+		const output = await wiring.review(diff, target);
+
+		expect(output.posted).toEqual([
+			{
+				skill: "code-reviewer.md",
+				title: fresh.title,
+				path: "src/a.ts",
+				line: 3,
+				severity: "P2",
+			},
+		]);
+		expect(output.candidates).toHaveLength(3);
+		expect(routes).toEqual(["repos/o/r/compare/m1...h1"]);
 	});
 });

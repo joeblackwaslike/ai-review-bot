@@ -69,6 +69,7 @@ function labels(confirmed: boolean): LabelFile {
 const out = (findings: LiveFinding[]) => ({
 	findings,
 	candidates: [],
+	posted: [],
 	usage: {},
 });
 
@@ -211,6 +212,7 @@ describe("runLiveTier", () => {
 					cand("Missing null check on user input", "src/a.ts"),
 					cand("Totally different concern about caching", "src/b.ts"),
 				],
+				posted: [],
 				usage,
 			}),
 		});
@@ -219,5 +221,27 @@ describe("runLiveTier", () => {
 		expect(lines.join("\n")).toContain(
 			"2 candidates, 1 joined to labelled claims",
 		);
+	});
+
+	it("passes the round to the review and reports how many findings would post", async () => {
+		const seen: number[] = [];
+		const posted = {
+			skill: "code-reviewer.md",
+			title: "Missing null check on user input",
+			path: "src/a.ts",
+			line: 10,
+			severity: "P1",
+		};
+		const { opts, lines } = base({
+			rounds: [1],
+			review: async (_d, r) => {
+				seen.push(r.index);
+				return { ...out([]), posted: [posted, { ...posted, line: 11 }] };
+			},
+		});
+		const report = await runLiveTier(opts);
+		expect(seen).toEqual([1]);
+		expect(report.rounds[0]?.posted).toBe(2);
+		expect(lines.join("\n")).toContain("2 would post");
 	});
 });

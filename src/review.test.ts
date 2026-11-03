@@ -23,10 +23,13 @@ import { buildLedger } from "./ledger/github.js";
 import { computeCost, createAIModel } from "./models.js";
 import { shortFindingId } from "./relation.js";
 import { claimTitle, splitInlineClaims } from "./replay/claims.js";
+import { ledgerFromView } from "./replay/pipeline.js";
+import { postFilterTrace } from "./replay/trace.js";
 import {
 	buildReview,
 	buildReviewComments,
 	buildValidLinesByPath,
+	capInlineComments,
 	capPaceToDeadline,
 	classifyRefusal,
 	computePaceDelayMs,
@@ -2974,6 +2977,55 @@ describe("parseRawDiff", () => {
 // ---------------------------------------------------------------------------
 // sanitizeInlineComments
 // ---------------------------------------------------------------------------
+
+describe("capInlineComments", () => {
+	const at = (i: number, severity: "P0" | "P1" | "P2" | "P3") =>
+		buildInlineComment({ title: `Finding ${i}`, line: i + 1, severity });
+
+	it("keeps the 50 most severe and overflows the 2 lowest", () => {
+		const severityAt = (i: number) =>
+			i === 7 || i === 40
+				? "P3"
+				: i % 3 === 0
+					? "P0"
+					: i % 3 === 1
+						? "P1"
+						: "P2";
+		const comments = Array.from({ length: 52 }, (_, i) => at(i, severityAt(i)));
+
+		const { kept, overflow } = capInlineComments(comments);
+
+		expect(kept).toHaveLength(50);
+		expect(overflow.map((c) => c.title)).toEqual(["Finding 7", "Finding 40"]);
+		expect(kept.map((c) => c.severity)).toEqual([
+			...Array(18).fill("P0"),
+			...Array(15).fill("P1"),
+			...Array(17).fill("P2"),
+		]);
+	});
+
+	it("keeps merge order among comments of one severity", () => {
+		const comments = Array.from({ length: 52 }, (_, i) => at(i, "P2"));
+
+		const { kept, overflow } = capInlineComments(comments);
+
+		expect(kept.map((c) => c.title)).toEqual(
+			comments.slice(0, 50).map((c) => c.title),
+		);
+		expect(overflow.map((c) => c.title)).toEqual(["Finding 50", "Finding 51"]);
+	});
+
+	it("returns every comment in order with no overflow at or under the cap", () => {
+		const comments = Array.from({ length: 50 }, (_, i) =>
+			at(i, i % 2 ? "P3" : "P0"),
+		);
+
+		const { kept, overflow } = capInlineComments(comments);
+
+		expect(kept).toEqual(comments);
+		expect(overflow).toEqual([]);
+	});
+});
 
 describe("sanitizeInlineComments", () => {
 	const patch = SIMPLE_PATCH; // has valid lines 1, 2, 3, 4 (etc.)
@@ -6597,6 +6649,121 @@ describe("buildReview ledger suppression", () => {
 			expect(decision?.body.split(ROUTED)).toHaveLength(2);
 			expect(decision?.body).toContain("<!-- ai-review:carry=r0:body:0 -->");
 		});
+	});
+
+	it("posts the same titles the replay post-filter trace reports", async () => {
+		const kept = buildInlineComment({
+			title: "Retry loop never gives up",
+			body: "The loop in `fetchWithRetry` retries forever on a 500.",
+			path: "src/review.ts",
+			line: 2,
+		});
+		const offP2 = buildInlineComment({
+			title: "Unchecked index into the cache array",
+			path: "src/review.ts",
+			line: 9,
+			severity: "P2",
+		});
+		const offP0 = buildInlineComment({
+			title: "SQL built from request input",
+			body: "The query string interpolates `req.query.id`.",
+			path: "src/other.ts",
+			line: 3,
+			severity: "P0",
+		});
+		const nits = Array.from({ length: 50 }, (_, i) =>
+			buildInlineComment({
+				title: `Nit ${i}`,
+				body: `Variable v${i} should be named for what it holds.`,
+				path: "src/review.ts",
+				line: (i % 3) + 1,
+				severity: "P3",
+			}),
+		);
+		const outputs = {
+			"code-reviewer": buildModelReview({
+				event: "REQUEST_CHANGES",
+				general_findings: [fresh],
+				inline_comments: [repeat, kept, offP2, offP0],
+			}),
+			"silent-failure-hunter": buildModelReview({
+				event: "COMMENT",
+				inline_comments: [kept],
+			}),
+			"pr-test-analyzer": buildModelReview({
+				event: "COMMENT",
+				inline_comments: nits,
+			}),
+		};
+		const none = buildModelReview({ event: "COMMENT" });
+		routeAgents(
+			Object.fromEntries(
+				Object.entries(outputs).map(([skill, r]) => [`${skill}.md`, r]),
+			),
+			none,
+		);
+
+		const decision = await buildReview({
+			octokit: ledgerOctokit(),
+			...baseContext,
+		});
+		const trace = postFilterTrace({
+			agentReviews: TIER1_SKILLS.map((path) => {
+				const skill = (path.split("/").pop() ?? path).replace(/\.md$/, "");
+				return {
+					skill,
+					review: outputs[skill as keyof typeof outputs] ?? none,
+				};
+			}),
+			ledger: ledgerFromView({
+				priorClaims: [
+					{
+						id: "r0:c11:0",
+						roundIndex: 0,
+						reviewId: 100,
+						source: "inline",
+						commentId: 11,
+						path: "src/review.ts",
+						line: 2,
+						severity: "P1",
+						title: REPEAT_TITLE,
+						text: "Entries in `tokenCache` are never evicted.",
+					},
+				],
+				labels: new Map([
+					[
+						"r0:c11:0",
+						{
+							claimId: "r0:c11:0",
+							label: "rejected",
+							confidence: "high",
+							evidence: [`2026-10-02T00:00:00Z|${DECLINE}`],
+							confirmed: true,
+						},
+					],
+				]),
+			}),
+			files: [buildPullFile("src/review.ts", SIMPLE_PATCH)],
+			tuning: REVIEWER_TUNING,
+		});
+
+		const postedInline = (decision?.comments ?? []).flatMap((c) =>
+			splitInlineClaims(c.body).map((p) => p.title),
+		);
+		const traceInline = trace.posted
+			.filter((r) => r.path !== null)
+			.map((r) => r.title);
+		expect(traceInline).toHaveLength(48);
+		expect([...traceInline].sort()).toEqual([...postedInline].sort());
+		const traceGeneral = trace.posted.filter((r) => r.path === null);
+		expect(traceGeneral.map((r) => r.title).sort()).toEqual([
+			fresh.title,
+			"SQL built from request input (`src/other.ts:3`)",
+		]);
+		expect(decision?.metadata.generalFindings).toBe(traceGeneral.length);
+		for (const r of traceGeneral) expect(decision?.body).toContain(r.title);
+		expect(trace.posted.map((r) => r.title)).not.toContain(REPEAT_TITLE);
+		expect(trace.posted.map((r) => r.title)).not.toContain(offP2.title);
 	});
 
 	describe("discard records", () => {
