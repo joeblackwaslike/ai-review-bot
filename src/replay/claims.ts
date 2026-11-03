@@ -5,6 +5,17 @@ const MERGE_SEPARATOR = "\n\n---\n\n";
 const SEVERITY_BADGE_TEXT = /^(P\d|Critical|High|Medium|Low)$/;
 const BADGE_LINE = /^\S*\s*\*\*(P\d|Critical|High|Medium|Low)\*\*\s*$/;
 const MAX_FALLBACK_TITLE = 100;
+const ABBREVIATION_END = /(?:^|\s)(?:e\.g|i\.e|etc|vs|cf)\.$/i;
+
+function firstSentence(line: string): string {
+	const re = /[.!?](?=\s|$)/g;
+	let m: RegExpExecArray | null;
+	while ((m = re.exec(line))) {
+		const prefix = line.slice(0, m.index + 1);
+		if (!ABBREVIATION_END.test(prefix)) return prefix;
+	}
+	return line;
+}
 
 /** The finding's bold title, skipping the severity badge. Without one: the
  * first line, or for a badged finding with no title the first sentence of
@@ -21,7 +32,7 @@ export function claimTitle(part: string): string {
 		.filter(Boolean);
 	if (!lines.some((l) => BADGE_LINE.test(l))) return lines[0] ?? "";
 	const line = lines.find((l) => !BADGE_LINE.test(l)) ?? "";
-	const sentence = line.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? line;
+	const sentence = firstSentence(line);
 	return sentence.length > MAX_FALLBACK_TITLE
 		? `${sentence.slice(0, MAX_FALLBACK_TITLE - 1).trimEnd()}…`
 		: sentence;

@@ -67,6 +67,27 @@ describe("claimTitle on old-format reviews", () => {
 		expect(title.endsWith("…")).toBe(true);
 		expect(title.startsWith("word word")).toBe(true);
 	});
+
+	it.each([
+		[
+			"🟡 **Medium**\n\ne.g. the retry delay is dropped on restart. More text",
+			"e.g. the retry delay is dropped on restart.",
+		],
+		[
+			"🟡 **Medium**\n\ni.e. the retry delay is dropped on restart. More text",
+			"i.e. the retry delay is dropped on restart.",
+		],
+		[
+			"🟡 **Medium**\n\nvs. the retry delay is dropped on restart. More text",
+			"vs. the retry delay is dropped on restart.",
+		],
+		[
+			"🟡 **Medium**\n\nThe loop vs. the timer is wrong. More",
+			"The loop vs. the timer is wrong.",
+		],
+	])("does not treat an abbreviation period as a sentence end: %#", (text, title) => {
+		expect(claimTitle(text)).toBe(title);
+	});
 });
 
 describe("claimTitle over the committed fixtures", () => {
