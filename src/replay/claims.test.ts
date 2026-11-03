@@ -71,24 +71,74 @@ describe("claimTitle on old-format reviews", () => {
 
 describe("claimTitle over the committed fixtures", () => {
 	const dir = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
-	const inlineClaims = readdirSync(dir)
-		.filter((n) => FIXTURE_FILE.test(n))
-		.flatMap((n) =>
-			(
-				JSON.parse(readFileSync(join(dir, n), "utf8")) as ReplayFixture
-			).rounds.flatMap((r) => r.claims.filter((c) => c.source === "inline")),
-		);
+	const fixtureFiles = readdirSync(dir).filter((n) => FIXTURE_FILE.test(n));
+	const inlineClaims = fixtureFiles.flatMap((n) =>
+		(
+			JSON.parse(readFileSync(join(dir, n), "utf8")) as ReplayFixture
+		).rounds.flatMap((r) =>
+			r.claims
+				.filter((c) => c.source === "inline")
+				.map((c) => ({ ...c, fixture: n.replace(/\.json$/, "") })),
+		),
+	);
 
 	it("covers recorded inline claims", () => {
 		expect(inlineClaims.length).toBeGreaterThan(50);
 	});
 
-	it("keeps every title that was not a severity word", () => {
+	// These eight fixtures were recorded before title recovery existed, so their
+	// stored titles come from the OLD extraction (badge-or-first-line) and serve
+	// as an independent regression oracle for claimTitle.
+	const PRE_TITLE_RECOVERY_FIXTURES = new Set([
+		"joeblackwaslike__agent-skills__10__anthropic",
+		"joeblackwaslike__agent-skills__10__openai",
+		"joeblackwaslike__ai-listings__74__anthropic",
+		"joeblackwaslike__ai-listings__74__openai",
+		"joeblackwaslike__ai-review-bot__92__anthropic",
+		"joeblackwaslike__ai-review-bot__92__openai",
+		"joeblackwaslike__stealth-browser__1__anthropic",
+		"joeblackwaslike__stealth-browser__1__openai",
+	]);
+
+	it("keeps every pre-title-recovery title that was not a severity word", () => {
 		const changed = inlineClaims
+			.filter((c) => PRE_TITLE_RECOVERY_FIXTURES.has(c.fixture))
 			.filter((c) => !SEVERITY_WORD.test(c.title))
 			.filter((c) => claimTitle(c.text) !== c.title)
 			.map((c) => c.id);
 		expect(changed).toEqual([]);
+	});
+
+	it("recovers the expected title from real claim bodies recorded after title recovery", () => {
+		const cases: Array<[string, string]> = [
+			[
+				"🔴 **High**\n\n**NaN map key from non-numeric LLM response keys**\n\nWhen the LLM returns an object with non-numeric keys (e.g. `\"foo\"`, `\"-1a\"`), `Number(idx)` produces `NaN`. `Map` accepts `NaN` as a key, and any consumer that iterates by numeric index will silently miss those entries or behave unexpectedly. The prior review already flagged this and provided a fix — it has not been applied.\n\n*Suggested fix:*\n\n```suggestion\n  for (const [idx, entry] of Object.entries(parsed)) {\n    const numericIdx = Number(idx)\n    if (!Number.isInteger(numericIdx) || numericIdx < 0) continue\n    const score = entry?.score\n    if (typeof score !== 'number' || !Number.isFinite(score)) continue\n    const color = typeof entry?.color === 'string' ? entry.color : null\n    entries.set(numericIdx, { score, color })\n  }\n```",
+				"NaN map key from non-numeric LLM response keys",
+			],
+			[
+				"🟡 **Medium**\n\n**Malformed LLM responses are silently discarded**\n\nThis `catch` turns any parse failure into an empty result with no signal that scoring data was lost. Because callers then persist `null` relevance/color values as if the model simply found nothing, debugging bad prompts, truncated responses, or upstream model regressions becomes much harder. This catch block could hide malformed JSON, unexpectedly wrapped responses, or other parsing bugs while producing apparently successful pricing output. At minimum, emit structured context or rethrow so the failure is observable.",
+				"Malformed LLM responses are silently discarded",
+			],
+			[
+				"🟢 **Low**\n\n**lastError typed as unknown thrown without context**\n\nlastError is typed unknown and thrown as-is when all attempts fail. This is correct behavior (propagates the real error), but there's no logging of intermediate attempt failures before the final throw, so debugging why earlier attempts failed (vs. just the last one) has no trace. Not blocking, but consider logging each attempt's failure with attempt number for observability.",
+				"lastError typed as unknown thrown without context",
+			],
+			[
+				"🟡 **Medium**\n\n**Preserve the existing retry-delay schedule**\n\n**Required:** This also changes the delay schedule, beyond skipping the final delay. Previously, after the first failure (`attempt === 0`), the retry proceeded after `sleep(0)`; now it waits `baseDelayMs` before the second invocation. For example, with `maxAttempts: 2` and `baseDelayMs: 100`, this adds a 100 ms delay that was not present before. Keep the original multiplier while retaining the `isLastAttempt` guard so this fix does not introduce a timing regression.\n\n*Suggested fix:*\n\n```suggestion\n        await sleep(options.baseDelayMs * attempt);\n```",
+				"Preserve the existing retry-delay schedule",
+			],
+			[
+				"🔴 **High**\n\n**z.array(z.string()).length(0) is not a valid Zod API**\n\nZod arrays do not have a `.length()` method. The correct constraint is `z.array(z.string()).max(0)` or `z.tuple([])`. As written this will throw a runtime TypeError when `openFindings` is empty, which is exactly the path the second new test exercises.\n\n*Suggested fix:*\n\n```suggestion\n\t\t\t: z.tuple([]),\n```",
+				"z.array(z.string()).length(0) is not a valid Zod API",
+			],
+			[
+				"🟢 **Low**\n\n**PR-specific root-cause narrative is likely to rot**\n\nThis doc comment bakes in a lot of incident-specific history (`PR #69`, exact prompt formatting, downstream consumers, and a one-off live reproduction) that is much more detailed than the implementation itself. That makes it easy for the comment to become partially false the next time the prompt or triage pipeline changes, while future readers still treat it as authoritative. I'd keep the durable invariant here—`resolved` must be restricted to currently open finding IDs so echoed `id — title` strings cannot parse—and move the forensic history to a design note or post-mortem.",
+				"PR-specific root-cause narrative is likely to rot",
+			],
+		];
+		for (const [text, title] of cases) {
+			expect(claimTitle(text)).toBe(title);
+		}
 	});
 
 	it("leaves no inline title that is only a severity word", () => {
