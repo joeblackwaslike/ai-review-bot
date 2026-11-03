@@ -42,7 +42,7 @@ export function toCandidates(
 ): CandidateRecord[] {
 	return agentReviews.flatMap(({ skill, review }) =>
 		toLiveFindings(review).map((f) => ({
-			skill,
+			skill: `${skill}.md`,
 			title: f.title,
 			path: f.path,
 			line: f.line,
@@ -60,7 +60,9 @@ export function toLiveReviewOutput(result: {
 	return {
 		findings: toLiveFindings(result.review),
 		candidates: toCandidates(result.agentReviews),
-		usage: result.usageBySkill,
+		usage: Object.fromEntries(
+			Object.entries(result.usageBySkill).map(([k, v]) => [`${k}.md`, v]),
+		),
 	};
 }
 

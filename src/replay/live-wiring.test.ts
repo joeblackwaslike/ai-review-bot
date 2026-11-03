@@ -96,28 +96,28 @@ describe("toLiveReviewOutput", () => {
 		});
 		expect(out.candidates).toEqual([
 			{
-				skill: "code-reviewer",
+				skill: "code-reviewer.md",
 				title: "A",
 				path: "src/a.ts",
 				line: 1,
 				severity: "P2",
 			},
 			{
-				skill: "code-reviewer",
+				skill: "code-reviewer.md",
 				title: "B",
 				path: "src/a.ts",
 				line: 2,
 				severity: "P2",
 			},
 			{
-				skill: "code-reviewer",
+				skill: "code-reviewer.md",
 				title: "G",
 				path: null,
 				line: null,
 				severity: "P3",
 			},
 			{
-				skill: "security-sast",
+				skill: "security-sast.md",
 				title: "H",
 				path: null,
 				line: null,
@@ -125,6 +125,8 @@ describe("toLiveReviewOutput", () => {
 			},
 		]);
 		expect(out.findings.map((f) => f.title)).toEqual(["A"]);
-		expect(out.usage).toBe(usageBySkill);
+		expect(out.usage).toEqual({
+			"code-reviewer.md": { promptTokens: 3, completionTokens: 1 },
+		});
 	});
 });

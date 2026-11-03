@@ -22,6 +22,7 @@ export interface CommitMeta {
 
 /** One finding a review skill produced, before or after the posting filters. */
 export interface CandidateRecord {
+	/** Skill file name with the .md suffix, as the hosted corpus uses. */
 	skill: string | null;
 	title: string;
 	path: string | null;
@@ -29,7 +30,7 @@ export interface CandidateRecord {
 	severity: string | null;
 }
 
-/** Token usage per skill file name. */
+/** Token usage per skill file name, with the .md suffix, as the hosted corpus uses. */
 export type RoundUsage = Record<
 	string,
 	{ promptTokens: number; completionTokens: number }
