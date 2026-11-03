@@ -56,15 +56,30 @@ The verifier (D1) and the tool-using agents (E2) are the expensive work, and the
 
 ### C2: replay traces
 
-**Fixture additions.** Each round may carry `candidates` (what the agents proposed: title, path, line, severity, skill) and `usage` (tokens per skill). A fixture may carry `expect: { clean: true }`, meaning the live run must post zero findings. Existing fixtures stay valid.
+**Fixture additions.** A round may carry `trace: {candidates, posted, usage}`. `candidates` holds what the agents proposed (title, path, line, severity, skill), `posted` what survived the filters, and `usage` tokens per skill. Skills are named by file, with the `.md` suffix, as the hosted corpus names them. A fixture may carry `expect: {clean: true}` and `heldOut: true`. `schemaVersion` stays 1 and existing fixtures stay valid.
 
-**Post-filter trace.** The live tier currently runs `runAuditPass` alone, which skips suppression, merge, the cap and anchor validation. The trace must call the same exported functions the posting path calls (`suppressInReview`, `mergeReviewsDetailed`, `dropRetractions`, `buildReviewComments`), composed in one place in `src/replay/`, never copies of their logic. If an exported function cannot be called without the whole of `buildReview`, the builder records candidates only and labels the post-filter trace approximate in the report. The builder decides this from the code.
+**Live tier.** The model is routed per round from that round's real compare files, so a large round no longer runs on the cheapest tier. The agents see a diff numbered on its right side, as in production. `runAuditPass` returns an additive `usageBySkill`, and the live report prints candidate and posted counts and token usage per skill.
 
-**Join rate.** Of the live candidates in a round, the share that the ledger matcher joins to a labelled fixture claim. A low rate means the labels cannot judge what the live pipeline now says, so rejection numbers mean less. `computeMetrics` reports it.
+**Post-filter trace.** `postFilterTrace` in `src/replay/trace.ts` calls the posting-path functions in production order: per agent `suppressInReview` and, when `REVIEWER_TUNING.dropRetractions` is on, `dropRetractions`; then `mergeReviewsDetailed`, `sanitizeInlineComments`, `capInlineComments`, `buildReviewComments` and `routeDroppedComments`. The cap was inline in `buildReview`, so it moved into an exported `capInlineComments` in `src/review.ts` with no change in behaviour. These filter steps are exact. The ledger they read is approximate. The trace skips the `withFingerprints` pre-step, neutralises `resolveRelations`, builds round i's ledger from the fixture's earlier rounds with `holdable()` in `src/replay/pipeline.ts` instead of production's `holdableLedger`, has no triage or resolved-location step, and validates anchors against all compare files.
 
-**Fixtures to record.** At least 2 held-out PRs, chosen from merged PRs with both bots' reviews that were not used to design B1 to B6, and marked `heldOut: true`. At least 2 clean PRs: first-round approvals with no posted findings. The builder picks them with `gh` and records them with `ai-review replay --record`.
+**Join rate.** `computeMetrics` reports `joinRate {joined, candidates}` for fixtures with a trace. It counts distinct candidates (by path, line, title) that `isSameClaim` joins to any labelled claim of the fixture. The join uses `JOIN_CLAIM_MATCH`: the same path and a title similarity of 0.33 within 3 lines, looser than the 0.5 bar used for same-review dedupe. That bar is provisional because one fixture produced it, and the rate is a lower bound. A test-gap candidate anchored on the source line misses a claim in the test file, and a candidate title under 3 tokens never joins. A low rate means the labels cannot judge what the live pipeline now says.
 
-**Acceptance.** `computeMetrics` reports join rate; a clean fixture fails the run if the post-filter trace shows anything posted (when the post-filter trace is only the approximate, candidates-only fallback, the clean check is reported as skipped, not passed); candidate and post-filter counts and token usage per skill appear in the live report; `pnpm test` covers the new fixture fields.
+**Clean check.** A fixture with `expect.clean` makes offline `ai-review replay` exit 1 when any saved trace round posted something, and `ai-review replay --live` exit 1 when the fixture would post. A clean fixture with no trace gets an "unchecked" warning offline. A clean fixture without a labels file fails live. The check shows disagreement with the old bot's clean approval and does not prove a false positive. ai-review-bot#80 was approved clean, contained a real defect (bead `ai-review-bot-5c4`), and lost its `expect.clean`.
+
+**Flags.** `--live --save-trace` writes traces into the fixtures through a temp file and rename, keeping the file mode and key order. `--record ... --held-out` and `--expect-clean` set the fixture flags. A re-record keeps `heldOut` and `expect`, drops saved traces and says so. A flag outside its mode exits 2.
+
+**Fixtures.** Held-out, both providers: ai-review-bot#70 and ai-review-bot-demo#2, labels provisional. Clean: ai-review-bot-demo#3 (anthropic, untraced until the Claude subscription session is renewed) and ai-review-bot#94 (openai, passes). ai-review-bot#80 (openai) stays without `expect` as a data point.
+
+**Findings from the first traces.**
+
+- The live tier always ran on the cheapest model. Per-round routing fixed that.
+- ai-review-bot#80, approved clean by the old bot, contained a real defect that today's pipeline flags.
+- On demo#2 (openai) the join rate was 0/8 under the 0.5 title bar and is 1/4 under `JOIN_CLAIM_MATCH` with distinct counting.
+- The Anthropic traces are not recorded yet. Old-format severities are recorded as P3 (bead `ai-review-bot-980`).
+
+**Side effect on production.** `claimTitle` and `splitInlineClaims` in `src/replay/claims.ts` also feed the ledger rebuild and the posted-comment key. Recovering real titles from old-format reviews changes ledger titles on PRs that still carry them, so a one-word title such as "Medium" can no longer sit in the ledger unmatched. `src/claim-dedupe.ts` gained an optional `nearby` match option, and its default behaviour is unchanged.
+
+**Acceptance.** `computeMetrics` reports join rate. A clean fixture fails the run when its trace shows anything posted. Candidate and posted counts and token usage per skill appear in the live report. `pnpm test` covers the new fixture fields.
 
 ### C3 timing
 
