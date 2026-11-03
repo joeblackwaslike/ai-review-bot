@@ -81,7 +81,7 @@ The aliased env vars (`REVIEW_ENABLED`, `AGENT_CONCURRENCY` and the rest) now go
 
 - A malformed boolean or number fails at config load instead of falling back to a default. Examples: `REVIEW_ENABLED=0`, `AGENT_CONCURRENCY=0`, `REVIEW_AGENT_BUDGET_SECONDS=abc`.
 - Booleans are case-insensitive `true` or `false`, so `REVIEW_ENABLED=FALSE` now disables review.
-- A blank env value counts as unset. `CUSTOM_REVIEW_PROMPT=""` falls back to the default prompt text, and `REVIEW_COMMAND=""` now means `/ai-review`.
+- A blank env value counts as unset, so the value from `config/ai-review.yaml` (or the schema default) applies. With the shipped YAML, `CUSTOM_REVIEW_PROMPT=""` uses the default prompt text and `REVIEW_COMMAND=""` uses `/ai-review`.
 - Decimal delays and fractional concurrency still work. Concurrency is floored.
 - `PUBLIC_URL` and `QSTASH_URL` are plain strings.
 - Any unknown `AI_REVIEW_*` variable is a hard startup error.
