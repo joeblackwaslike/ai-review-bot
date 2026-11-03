@@ -50,7 +50,9 @@ describe("committed replay fixtures", () => {
 	});
 
 	it("no clean fixture's saved trace posted anything", () => {
-		expect(checkClean(loaded.map((l) => l.f)).violations).toEqual([]);
+		const clean = checkClean(loaded.map((l) => l.f));
+		expect(clean.violations).toEqual([]);
+		expect(clean.unchecked).toEqual([]);
 	});
 
 	it("report matches the committed snapshot", () => {

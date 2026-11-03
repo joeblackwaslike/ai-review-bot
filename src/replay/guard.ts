@@ -83,7 +83,7 @@ export function checkClean(fixtures: ReplayFixture[]): {
 	for (const f of fixtures) {
 		if (!f.expect?.clean) continue;
 		const id = fixtureId(f);
-		if (!f.rounds.some((r) => r.trace)) unchecked.push(id);
+		if (f.rounds.some((r) => !r.trace)) unchecked.push(id);
 		for (const r of f.rounds) {
 			if (r.trace && r.trace.posted.length > 0)
 				violations.push(`${id} round ${r.index}`);

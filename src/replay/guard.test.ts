@@ -253,6 +253,15 @@ describe("checkClean", () => {
 		expect(r.unchecked).toEqual([]);
 	});
 
+	it("reports a clean fixture with an untraced round as unchecked", () => {
+		const fx = makeFixture([["a"], ["b"]], { expect: { clean: true } });
+		fx.rounds[1] = { ...fx.rounds[1], trace: tr([]) } as (typeof fx.rounds)[0];
+		expect(checkClean([fx])).toEqual({
+			violations: [],
+			unchecked: [fixtureId(fx)],
+		});
+	});
+
 	it("reports a clean fixture with no trace as unchecked", () => {
 		const fx = makeFixture([["a"]], { expect: { clean: true } });
 		expect(checkClean([fx])).toEqual({
