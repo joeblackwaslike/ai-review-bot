@@ -5,7 +5,7 @@
 	"pull": 70,
 	"provider": "openai",
 	"author": "joeblackwaslike",
-	"recordedAt": "2026-11-03T22:44:34.901Z",
+	"recordedAt": "2026-11-03T21:18:13.490Z",
 	"rounds": [
 		{
 			"index": 0,
@@ -58,7 +58,33 @@
 					"title": "Test comment references external incident details that don't help maintain the test",
 					"text": "🟢 **Low**\n\n**Test comment references external incident details that don't help maintain the test**\n\nThis comment explains the originating bug report in great detail, but most of that context is specific to a past PR and model run rather than to the behavior this test protects. That creates comment-maintenance overhead without helping a future reader understand the assertion. Consider replacing it with a shorter statement of the invariant under test: the schema must accept only bare open-finding IDs and reject echoed `id — title` prompt lines."
 				}
-			]
+			],
+			"trace": {
+				"candidates": [],
+				"posted": [],
+				"usage": {
+					"code-reviewer.md": {
+						"promptTokens": 4112,
+						"completionTokens": 38
+					},
+					"silent-failure-hunter.md": {
+						"promptTokens": 5223,
+						"completionTokens": 36
+					},
+					"pr-test-analyzer.md": {
+						"promptTokens": 4415,
+						"completionTokens": 40
+					},
+					"security-sast.md": {
+						"promptTokens": 7159,
+						"completionTokens": 34
+					},
+					"code-review-and-quality.md": {
+						"promptTokens": 4407,
+						"completionTokens": 40
+					}
+				}
+			}
 		},
 		{
 			"index": 1,
@@ -100,7 +126,33 @@
 					]
 				}
 			],
-			"claims": []
+			"claims": [],
+			"trace": {
+				"candidates": [],
+				"posted": [],
+				"usage": {
+					"code-reviewer.md": {
+						"promptTokens": 3250,
+						"completionTokens": 21
+					},
+					"silent-failure-hunter.md": {
+						"promptTokens": 4361,
+						"completionTokens": 21
+					},
+					"pr-test-analyzer.md": {
+						"promptTokens": 3553,
+						"completionTokens": 21
+					},
+					"security-sast.md": {
+						"promptTokens": 6297,
+						"completionTokens": 21
+					},
+					"code-review-and-quality.md": {
+						"promptTokens": 3545,
+						"completionTokens": 21
+					}
+				}
+			}
 		}
 	],
 	"threads": [
