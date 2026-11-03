@@ -193,10 +193,10 @@
 		},
 		{
 			"claimId": "r3:c3810488074:0",
-			"label": "fixed",
-			"confidence": "low",
+			"label": "unadjudicated",
+			"confidence": "high",
 			"evidence": [
-				"2026-08-19T06:14:55Z|changed src/lib/pipeline/step3-pricing-research.ts near line 434 in c0d290baf9c02ff147623f49860378f1194e01db"
+				"claim text: No new issue here — filing only to acknowledge the comment is now accurate."
 			],
 			"confirmed": false
 		},

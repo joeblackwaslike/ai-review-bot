@@ -106,7 +106,77 @@
 					"title": "JSDoc comment on `buildTriageSchema` references removed `TriageSchema` indirectly but duplicates explanation already in PR description",
 					"text": "JSDoc comment on `buildTriageSchema` references removed `TriageSchema` indirectly but duplicates explanation already in PR description"
 				}
-			]
+			],
+			"trace": {
+				"candidates": [
+					{
+						"skill": "silent-failure-hunter.md",
+						"title": "Schema rejection of one bad id fails the entire triage and falls back",
+						"path": "src/triage.ts",
+						"line": 43,
+						"severity": "P3"
+					},
+					{
+						"skill": "pr-test-analyzer.md",
+						"title": "No test for fail-safe path when enum-constrained schema rejects model output",
+						"path": null,
+						"line": null,
+						"severity": "P2"
+					},
+					{
+						"skill": "security-sast.md",
+						"title": "Enum-constrained schema turns a stray id into a hard failure",
+						"path": "src/triage.ts",
+						"line": 43,
+						"severity": "P3"
+					}
+				],
+				"posted": [
+					{
+						"skill": "silent-failure-hunter.md",
+						"title": "Schema rejection of one bad id fails the entire triage and falls back",
+						"path": "src/triage.ts",
+						"line": 43,
+						"severity": "P3"
+					},
+					{
+						"skill": "security-sast.md",
+						"title": "Enum-constrained schema turns a stray id into a hard failure",
+						"path": "src/triage.ts",
+						"line": 43,
+						"severity": "P3"
+					},
+					{
+						"skill": "pr-test-analyzer.md",
+						"title": "No test for fail-safe path when enum-constrained schema rejects model output",
+						"path": null,
+						"line": null,
+						"severity": "P2"
+					}
+				],
+				"usage": {
+					"code-reviewer.md": {
+						"promptTokens": 7001,
+						"completionTokens": 30
+					},
+					"silent-failure-hunter.md": {
+						"promptTokens": 8744,
+						"completionTokens": 404
+					},
+					"pr-test-analyzer.md": {
+						"promptTokens": 7477,
+						"completionTokens": 340
+					},
+					"security-sast.md": {
+						"promptTokens": 11980,
+						"completionTokens": 419
+					},
+					"code-review-and-quality.md": {
+						"promptTokens": 7449,
+						"completionTokens": 30
+					}
+				}
+			}
 		},
 		{
 			"index": 1,
@@ -219,7 +289,49 @@
 					"title": "No deduplication before z.enum() — duplicate IDs will throw at runtime (`src/triage.ts:34`)",
 					"text": "No deduplication before z.enum() — duplicate IDs will throw at runtime (`src/triage.ts:34`)"
 				}
-			]
+			],
+			"trace": {
+				"candidates": [
+					{
+						"skill": "code-review-and-quality.md",
+						"title": "Comment now relies on external tracker reference for rationale",
+						"path": "src/triage.ts",
+						"line": 27,
+						"severity": "P3"
+					}
+				],
+				"posted": [
+					{
+						"skill": "code-review-and-quality.md",
+						"title": "Comment now relies on external tracker reference for rationale",
+						"path": "src/triage.ts",
+						"line": 27,
+						"severity": "P3"
+					}
+				],
+				"usage": {
+					"code-reviewer.md": {
+						"promptTokens": 5731,
+						"completionTokens": 30
+					},
+					"silent-failure-hunter.md": {
+						"promptTokens": 7474,
+						"completionTokens": 30
+					},
+					"pr-test-analyzer.md": {
+						"promptTokens": 6207,
+						"completionTokens": 30
+					},
+					"security-sast.md": {
+						"promptTokens": 10710,
+						"completionTokens": 30
+					},
+					"code-review-and-quality.md": {
+						"promptTokens": 6179,
+						"completionTokens": 315
+					}
+				}
+			}
 		},
 		{
 			"index": 2,
@@ -308,7 +420,33 @@
 					"title": "Duplicate IDs passed to z.enum will cause a runtime Zod error",
 					"text": "Duplicate IDs passed to z.enum will cause a runtime Zod error"
 				}
-			]
+			],
+			"trace": {
+				"candidates": [],
+				"posted": [],
+				"usage": {
+					"code-reviewer.md": {
+						"promptTokens": 5382,
+						"completionTokens": 30
+					},
+					"silent-failure-hunter.md": {
+						"promptTokens": 7125,
+						"completionTokens": 30
+					},
+					"pr-test-analyzer.md": {
+						"promptTokens": 5858,
+						"completionTokens": 30
+					},
+					"security-sast.md": {
+						"promptTokens": 10361,
+						"completionTokens": 30
+					},
+					"code-review-and-quality.md": {
+						"promptTokens": 5830,
+						"completionTokens": 30
+					}
+				}
+			}
 		},
 		{
 			"index": 3,
@@ -406,7 +544,33 @@
 					"title": "buildTriageSchema duplicates TriageSchema shape instead of extending it",
 					"text": "buildTriageSchema duplicates TriageSchema shape instead of extending it"
 				}
-			]
+			],
+			"trace": {
+				"candidates": [],
+				"posted": [],
+				"usage": {
+					"code-reviewer.md": {
+						"promptTokens": 4482,
+						"completionTokens": 165
+					},
+					"silent-failure-hunter.md": {
+						"promptTokens": 6225,
+						"completionTokens": 143
+					},
+					"pr-test-analyzer.md": {
+						"promptTokens": 4958,
+						"completionTokens": 200
+					},
+					"security-sast.md": {
+						"promptTokens": 9461,
+						"completionTokens": 248
+					},
+					"code-review-and-quality.md": {
+						"promptTokens": 4930,
+						"completionTokens": 204
+					}
+				}
+			}
 		}
 	],
 	"threads": [

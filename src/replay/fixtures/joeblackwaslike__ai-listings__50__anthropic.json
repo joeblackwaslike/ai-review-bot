@@ -309,7 +309,105 @@
 					"title": "Missing test for fail-open vs fail-closed filtering with null relevance_score",
 					"text": "Missing test for fail-open vs fail-closed filtering with null relevance_score"
 				}
-			]
+			],
+			"trace": {
+				"candidates": [
+					{
+						"skill": "silent-failure-hunter.md",
+						"title": "Batch failure also silently inflates sold-comp median input",
+						"path": "src/lib/pipeline/step3-pricing-research.ts",
+						"line": 722,
+						"severity": "P2"
+					},
+					{
+						"skill": "pr-test-analyzer.md",
+						"title": "No tests for scoreCompRelevance per-batch failure isolation or null-score fail-closed/fail-open behavior",
+						"path": null,
+						"line": null,
+						"severity": "P2"
+					},
+					{
+						"skill": "security-sast.md",
+						"title": "Brace counting ignores braces inside JSON strings",
+						"path": "src/lib/pipeline/step3-pricing-research.ts",
+						"line": 446,
+						"severity": "P3"
+					},
+					{
+						"skill": "security-sast.md",
+						"title": "Failed-batch null scores may be mishandled by code outside the diff",
+						"path": null,
+						"line": null,
+						"severity": "P3"
+					},
+					{
+						"skill": "code-review-and-quality.md",
+						"title": "Failed-batch null scores may not be handled by other consumers of CompRelevance",
+						"path": null,
+						"line": null,
+						"severity": "P3"
+					}
+				],
+				"posted": [
+					{
+						"skill": "silent-failure-hunter.md",
+						"title": "Batch failure also silently inflates sold-comp median input",
+						"path": "src/lib/pipeline/step3-pricing-research.ts",
+						"line": 722,
+						"severity": "P2"
+					},
+					{
+						"skill": "security-sast.md",
+						"title": "Brace counting ignores braces inside JSON strings",
+						"path": "src/lib/pipeline/step3-pricing-research.ts",
+						"line": 446,
+						"severity": "P3"
+					},
+					{
+						"skill": "pr-test-analyzer.md",
+						"title": "No tests for scoreCompRelevance per-batch failure isolation or null-score fail-closed/fail-open behavior",
+						"path": null,
+						"line": null,
+						"severity": "P2"
+					},
+					{
+						"skill": "security-sast.md",
+						"title": "Failed-batch null scores may be mishandled by code outside the diff",
+						"path": null,
+						"line": null,
+						"severity": "P3"
+					},
+					{
+						"skill": "code-review-and-quality.md",
+						"title": "Failed-batch null scores may not be handled by other consumers of CompRelevance",
+						"path": null,
+						"line": null,
+						"severity": "P3"
+					}
+				],
+				"usage": {
+					"code-reviewer.md": {
+						"promptTokens": 8989,
+						"completionTokens": 30
+					},
+					"silent-failure-hunter.md": {
+						"promptTokens": 10732,
+						"completionTokens": 374
+					},
+					"pr-test-analyzer.md": {
+						"promptTokens": 9465,
+						"completionTokens": 420
+					},
+					"security-sast.md": {
+						"promptTokens": 13968,
+						"completionTokens": 517
+					},
+					"code-review-and-quality.md": {
+						"promptTokens": 9437,
+						"completionTokens": 242
+					}
+				}
+			}
 		},
 		{
 			"index": 2,
@@ -386,7 +484,91 @@
 					"title": "Test description for brace-inside-string case is accurate but doesn't assert the depth-counter is correct when `inString=false` is the mechanism",
 					"text": "🟢 **Low**\n\n**Test description for brace-inside-string case is accurate but doesn't assert the depth-counter is correct when `inString=false` is the mechanism**\n\nThe test exercises the happy path where a brace inside a quoted color value is skipped correctly. This is a good addition. No issue with correctness — this is a positive note that the test is meaningful and covers the previously-reported limitation."
 				}
-			]
+			],
+			"trace": {
+				"candidates": [
+					{
+						"skill": "silent-failure-hunter.md",
+						"title": "Multiple top-level objects silently drop data without a log",
+						"path": "src/lib/pipeline/step3-pricing-research.ts",
+						"line": 440,
+						"severity": "P3"
+					},
+					{
+						"skill": "pr-test-analyzer.md",
+						"title": "No test for escaped quote inside string value",
+						"path": "src/lib/pipeline/step3-pricing-research.ts",
+						"line": 451,
+						"severity": "P3"
+					},
+					{
+						"skill": "security-sast.md",
+						"title": "Empty-object case no longer logged",
+						"path": "src/lib/pipeline/step3-pricing-research.ts",
+						"line": 492,
+						"severity": "P3"
+					},
+					{
+						"skill": "code-review-and-quality.md",
+						"title": "Silent empty result may hide malformed LLM output",
+						"path": "src/lib/pipeline/step3-pricing-research.ts",
+						"line": 492,
+						"severity": "P3"
+					}
+				],
+				"posted": [
+					{
+						"skill": "silent-failure-hunter.md",
+						"title": "Multiple top-level objects silently drop data without a log",
+						"path": "src/lib/pipeline/step3-pricing-research.ts",
+						"line": 440,
+						"severity": "P3"
+					},
+					{
+						"skill": "pr-test-analyzer.md",
+						"title": "No test for escaped quote inside string value",
+						"path": "src/lib/pipeline/step3-pricing-research.ts",
+						"line": 451,
+						"severity": "P3"
+					},
+					{
+						"skill": "security-sast.md",
+						"title": "Empty-object case no longer logged",
+						"path": "src/lib/pipeline/step3-pricing-research.ts",
+						"line": 492,
+						"severity": "P3"
+					},
+					{
+						"skill": "code-review-and-quality.md",
+						"title": "Silent empty result may hide malformed LLM output",
+						"path": "src/lib/pipeline/step3-pricing-research.ts",
+						"line": 492,
+						"severity": "P3"
+					}
+				],
+				"usage": {
+					"code-reviewer.md": {
+						"promptTokens": 6138,
+						"completionTokens": 30
+					},
+					"silent-failure-hunter.md": {
+						"promptTokens": 7881,
+						"completionTokens": 355
+					},
+					"pr-test-analyzer.md": {
+						"promptTokens": 6614,
+						"completionTokens": 327
+					},
+					"security-sast.md": {
+						"promptTokens": 11117,
+						"completionTokens": 368
+					},
+					"code-review-and-quality.md": {
+						"promptTokens": 6586,
+						"completionTokens": 361
+					}
+				}
+			}
 		},
 		{
 			"index": 3,
@@ -471,7 +653,33 @@
 					"title": "Test description for brace-inside-string case is accurate but doesn't assert the depth-counter is correct when `inString=false` is the mechanism (`src/lib/pipeline/step3-pricing-research.test.ts:63`)",
 					"text": "Test description for brace-inside-string case is accurate but doesn't assert the depth-counter is correct when `inString=false` is the mechanism (`src/lib/pipeline/step3-pricing-research.test.ts:63`)"
 				}
-			]
+			],
+			"trace": {
+				"candidates": [],
+				"posted": [],
+				"usage": {
+					"code-reviewer.md": {
+						"promptTokens": 4802,
+						"completionTokens": 30
+					},
+					"silent-failure-hunter.md": {
+						"promptTokens": 6545,
+						"completionTokens": 30
+					},
+					"pr-test-analyzer.md": {
+						"promptTokens": 5278,
+						"completionTokens": 30
+					},
+					"security-sast.md": {
+						"promptTokens": 9781,
+						"completionTokens": 30
+					},
+					"code-review-and-quality.md": {
+						"promptTokens": 5250,
+						"completionTokens": 30
+					}
+				}
+			}
 		},
 		{
 			"index": 4,
@@ -536,7 +744,112 @@
 					"title": "Log condition silences error for all-invalid-entry response (`...no entries parsed:492`)",
 					"text": "Log condition silences error for all-invalid-entry response (`...no entries parsed:492`)"
 				}
-			]
+			],
+			"trace": {
+				"candidates": [
+					{
+						"skill": "code-reviewer.md",
+						"title": "Prose with valid-JSON braces can shadow the real payload",
+						"path": "src/lib/pipeline/step3-pricing-research.ts",
+						"line": 502,
+						"severity": "P2"
+					},
+					{
+						"skill": "silent-failure-hunter.md",
+						"title": "Parse-failure candidates are skipped with no logging",
+						"path": "src/lib/pipeline/step3-pricing-research.ts",
+						"line": 488,
+						"severity": "P2"
+					},
+					{
+						"skill": "pr-test-analyzer.md",
+						"title": "No diagnostic when every candidate fails JSON.parse",
+						"path": "src/lib/pipeline/step3-pricing-research.ts",
+						"line": 504,
+						"severity": "P2"
+					},
+					{
+						"skill": "pr-test-analyzer.md",
+						"title": "Missing tests for new multi-candidate scanning branches",
+						"path": null,
+						"line": null,
+						"severity": "P2"
+					},
+					{
+						"skill": "security-sast.md",
+						"title": "Valid-JSON prose object stops the scan before the real payload",
+						"path": "src/lib/pipeline/step3-pricing-research.ts",
+						"line": 502,
+						"severity": "P2"
+					},
+					{
+						"skill": "code-review-and-quality.md",
+						"title": "Valid-JSON prose braces can mask the real payload",
+						"path": "src/lib/pipeline/step3-pricing-research.ts",
+						"line": 502,
+						"severity": "P3"
+					}
+				],
+				"posted": [
+					{
+						"skill": "code-reviewer.md",
+						"title": "Prose with valid-JSON braces can shadow the real payload",
+						"path": "src/lib/pipeline/step3-pricing-research.ts",
+						"line": 502,
+						"severity": "P2"
+					},
+					{
+						"skill": "security-sast.md",
+						"title": "Valid-JSON prose object stops the scan before the real payload",
+						"path": "src/lib/pipeline/step3-pricing-research.ts",
+						"line": 502,
+						"severity": "P2"
+					},
+					{
+						"skill": "silent-failure-hunter.md",
+						"title": "Parse-failure candidates are skipped with no logging",
+						"path": "src/lib/pipeline/step3-pricing-research.ts",
+						"line": 488,
+						"severity": "P2"
+					},
+					{
+						"skill": "pr-test-analyzer.md",
+						"title": "No diagnostic when every candidate fails JSON.parse",
+						"path": "src/lib/pipeline/step3-pricing-research.ts",
+						"line": 504,
+						"severity": "P2"
+					},
+					{
+						"skill": "pr-test-analyzer.md",
+						"title": "Missing tests for new multi-candidate scanning branches",
+						"path": null,
+						"line": null,
+						"severity": "P2"
+					}
+				],
+				"usage": {
+					"code-reviewer.md": {
+						"promptTokens": 7471,
+						"completionTokens": 364
+					},
+					"silent-failure-hunter.md": {
+						"promptTokens": 9214,
+						"completionTokens": 344
+					},
+					"pr-test-analyzer.md": {
+						"promptTokens": 7947,
+						"completionTokens": 610
+					},
+					"security-sast.md": {
+						"promptTokens": 12450,
+						"completionTokens": 396
+					},
+					"code-review-and-quality.md": {
+						"promptTokens": 7919,
+						"completionTokens": 330
+					}
+				}
+			}
 		}
 	],
 	"threads": [

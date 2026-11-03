@@ -83,7 +83,91 @@
 					"title": "maxAttempts=0 edge case not guarded",
 					"text": "maxAttempts=0 edge case not guarded"
 				}
-			]
+			],
+			"trace": {
+				"candidates": [
+					{
+						"skill": "code-reviewer.md",
+						"title": "Backoff delay is zero on the first retry",
+						"path": "src/retry.ts",
+						"line": 23,
+						"severity": "P1"
+					},
+					{
+						"skill": "silent-failure-hunter.md",
+						"title": "Backoff delay is zero on first retry",
+						"path": "src/retry.ts",
+						"line": 23,
+						"severity": "P1"
+					},
+					{
+						"skill": "pr-test-analyzer.md",
+						"title": "Backoff delay is zero on first retry",
+						"path": "src/retry.ts",
+						"line": 23,
+						"severity": "P1"
+					},
+					{
+						"skill": "pr-test-analyzer.md",
+						"title": "No test coverage for retry backoff timing",
+						"path": null,
+						"line": null,
+						"severity": "P2"
+					},
+					{
+						"skill": "security-sast.md",
+						"title": "Backoff delay is zero on first retry",
+						"path": "src/retry.ts",
+						"line": 23,
+						"severity": "P1"
+					},
+					{
+						"skill": "code-review-and-quality.md",
+						"title": "Backoff delay is zero on the first retry",
+						"path": "src/retry.ts",
+						"line": 23,
+						"severity": "P2"
+					}
+				],
+				"posted": [
+					{
+						"skill": "code-reviewer.md",
+						"title": "Backoff delay is zero on the first retry",
+						"path": "src/retry.ts",
+						"line": 23,
+						"severity": "P1"
+					},
+					{
+						"skill": "pr-test-analyzer.md",
+						"title": "No test coverage for retry backoff timing",
+						"path": null,
+						"line": null,
+						"severity": "P2"
+					}
+				],
+				"usage": {
+					"code-reviewer.md": {
+						"promptTokens": 4651,
+						"completionTokens": 426
+					},
+					"silent-failure-hunter.md": {
+						"promptTokens": 6394,
+						"completionTokens": 377
+					},
+					"pr-test-analyzer.md": {
+						"promptTokens": 5127,
+						"completionTokens": 559
+					},
+					"security-sast.md": {
+						"promptTokens": 9630,
+						"completionTokens": 409
+					},
+					"code-review-and-quality.md": {
+						"promptTokens": 5099,
+						"completionTokens": 423
+					}
+				}
+			}
 		},
 		{
 			"index": 2,
@@ -124,7 +208,84 @@
 					"title": "lastError thrown without type narrowing",
 					"text": "lastError thrown without type narrowing"
 				}
-			]
+			],
+			"trace": {
+				"candidates": [
+					{
+						"skill": "code-reviewer.md",
+						"title": "Test mocks setTimeout so cb runs synchronously, weakening backoff verification",
+						"path": "src/retry.test.ts",
+						"line": 72,
+						"severity": "P3"
+					},
+					{
+						"skill": "silent-failure-hunter.md",
+						"title": "Test mocks setTimeout but also enables fake timers; spy restore not in finally",
+						"path": "src/retry.test.ts",
+						"line": 72,
+						"severity": "P3"
+					},
+					{
+						"skill": "pr-test-analyzer.md",
+						"title": "Backoff test is tightly coupled to implementation and mocks setTimeout while also using fake timers",
+						"path": "src/retry.test.ts",
+						"line": 70,
+						"severity": "P3"
+					},
+					{
+						"skill": "security-sast.md",
+						"title": "Test mocks setTimeout but also enables fake timers, which is redundant and fragile",
+						"path": "src/retry.test.ts",
+						"line": 54,
+						"severity": "P3"
+					},
+					{
+						"skill": "code-review-and-quality.md",
+						"title": "Fake-timer test mocks setTimeout directly; fake timers add nothing",
+						"path": "src/retry.test.ts",
+						"line": 72,
+						"severity": "P3"
+					}
+				],
+				"posted": [
+					{
+						"skill": "pr-test-analyzer.md",
+						"title": "Backoff test is tightly coupled to implementation and mocks setTimeout while also using fake timers",
+						"path": "src/retry.test.ts",
+						"line": 70,
+						"severity": "P3"
+					},
+					{
+						"skill": "silent-failure-hunter.md",
+						"title": "Test mocks setTimeout but also enables fake timers; spy restore not in finally",
+						"path": "src/retry.test.ts",
+						"line": 72,
+						"severity": "P3"
+					}
+				],
+				"usage": {
+					"code-reviewer.md": {
+						"promptTokens": 5620,
+						"completionTokens": 418
+					},
+					"silent-failure-hunter.md": {
+						"promptTokens": 7363,
+						"completionTokens": 347
+					},
+					"pr-test-analyzer.md": {
+						"promptTokens": 6096,
+						"completionTokens": 467
+					},
+					"security-sast.md": {
+						"promptTokens": 10599,
+						"completionTokens": 362
+					},
+					"code-review-and-quality.md": {
+						"promptTokens": 6068,
+						"completionTokens": 347
+					}
+				}
+			}
 		},
 		{
 			"index": 3,
@@ -150,7 +311,33 @@
 					"title": "lastError thrown as unknown without type narrowing",
 					"text": "lastError thrown as unknown without type narrowing"
 				}
-			]
+			],
+			"trace": {
+				"candidates": [],
+				"posted": [],
+				"usage": {
+					"code-reviewer.md": {
+						"promptTokens": 4485,
+						"completionTokens": 227
+					},
+					"silent-failure-hunter.md": {
+						"promptTokens": 6228,
+						"completionTokens": 131
+					},
+					"pr-test-analyzer.md": {
+						"promptTokens": 4961,
+						"completionTokens": 180
+					},
+					"security-sast.md": {
+						"promptTokens": 9464,
+						"completionTokens": 198
+					},
+					"code-review-and-quality.md": {
+						"promptTokens": 4933,
+						"completionTokens": 143
+					}
+				}
+			}
 		},
 		{
 			"index": 4,
@@ -200,7 +387,33 @@
 					"title": "lastError typed as unknown thrown without narrowing",
 					"text": "lastError typed as unknown thrown without narrowing"
 				}
-			]
+			],
+			"trace": {
+				"candidates": [],
+				"posted": [],
+				"usage": {
+					"code-reviewer.md": {
+						"promptTokens": 4485,
+						"completionTokens": 192
+					},
+					"silent-failure-hunter.md": {
+						"promptTokens": 6228,
+						"completionTokens": 170
+					},
+					"pr-test-analyzer.md": {
+						"promptTokens": 4961,
+						"completionTokens": 198
+					},
+					"security-sast.md": {
+						"promptTokens": 9464,
+						"completionTokens": 222
+					},
+					"code-review-and-quality.md": {
+						"promptTokens": 4933,
+						"completionTokens": 137
+					}
+				}
+			}
 		}
 	],
 	"threads": [

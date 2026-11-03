@@ -33,7 +33,33 @@
 					]
 				}
 			],
-			"claims": []
+			"claims": [],
+			"trace": {
+				"candidates": [],
+				"posted": [],
+				"usage": {
+					"code-reviewer.md": {
+						"promptTokens": 5056,
+						"completionTokens": 30
+					},
+					"silent-failure-hunter.md": {
+						"promptTokens": 6799,
+						"completionTokens": 30
+					},
+					"pr-test-analyzer.md": {
+						"promptTokens": 5532,
+						"completionTokens": 30
+					},
+					"security-sast.md": {
+						"promptTokens": 10035,
+						"completionTokens": 30
+					},
+					"code-review-and-quality.md": {
+						"promptTokens": 5504,
+						"completionTokens": 30
+					}
+				}
+			}
 		}
 	],
 	"threads": [],

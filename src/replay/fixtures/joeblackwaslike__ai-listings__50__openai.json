@@ -94,7 +94,77 @@
 					"title": "Greedy JSON extraction can discard otherwise valid LLM scoring output",
 					"text": "Greedy JSON extraction can discard otherwise valid LLM scoring output"
 				}
-			]
+			],
+			"trace": {
+				"candidates": [
+					{
+						"skill": "silent-failure-hunter.md",
+						"title": "Distinguish malformed scoring responses from valid empty results",
+						"path": "src/lib/pipeline/step3-pricing-research.ts",
+						"line": 442,
+						"severity": "P2"
+					},
+					{
+						"skill": "silent-failure-hunter.md",
+						"title": "Do not record fallback relevance as an actual model score",
+						"path": "src/lib/pipeline/step3-pricing-research.ts",
+						"line": 506,
+						"severity": "P2"
+					},
+					{
+						"skill": "pr-test-analyzer.md",
+						"title": "Cover the relevance gate at the pricing-pipeline boundary",
+						"path": "src/lib/pipeline/step3-pricing-research.ts",
+						"line": 676,
+						"severity": "P2"
+					}
+				],
+				"posted": [
+					{
+						"skill": "silent-failure-hunter.md",
+						"title": "Distinguish malformed scoring responses from valid empty results",
+						"path": "src/lib/pipeline/step3-pricing-research.ts",
+						"line": 442,
+						"severity": "P2"
+					},
+					{
+						"skill": "silent-failure-hunter.md",
+						"title": "Do not record fallback relevance as an actual model score",
+						"path": "src/lib/pipeline/step3-pricing-research.ts",
+						"line": 506,
+						"severity": "P2"
+					},
+					{
+						"skill": "pr-test-analyzer.md",
+						"title": "Cover the relevance gate at the pricing-pipeline boundary",
+						"path": "src/lib/pipeline/step3-pricing-research.ts",
+						"line": 676,
+						"severity": "P2"
+					}
+				],
+				"usage": {
+					"code-reviewer.md": {
+						"promptTokens": 5938,
+						"completionTokens": 105
+					},
+					"silent-failure-hunter.md": {
+						"promptTokens": 7049,
+						"completionTokens": 738
+					},
+					"pr-test-analyzer.md": {
+						"promptTokens": 6241,
+						"completionTokens": 351
+					},
+					"security-sast.md": {
+						"promptTokens": 8985,
+						"completionTokens": 126
+					},
+					"code-review-and-quality.md": {
+						"promptTokens": 6233,
+						"completionTokens": 133
+					}
+				}
+			}
 		},
 		{
 			"index": 1,
@@ -177,7 +247,63 @@
 					"title": "Extractor can lock onto a non-JSON brace pair before the actual payload",
 					"text": "🟡 **Medium**\n\n**Extractor can lock onto a non-JSON brace pair before the actual payload**\n\n`extractJsonObject` now stops at the first balanced `{...}` block anywhere in the response. That fixes the old greedy-regex failure mode, but it introduces a different one: if the model emits any prose with braces before the real JSON object (for example `Note {approximate colors only}. {\"0\": ...}`), this function returns the prose fragment, `JSON.parse` fails, and the valid scoring payload later in the response is discarded. Because `parseRelevanceScores` does not continue scanning after a parse failure, one stray brace pair can zero out an entire batch's scores."
 				}
-			]
+			],
+			"trace": {
+				"candidates": [
+					{
+						"skill": "silent-failure-hunter.md",
+						"title": "Surface incomplete scoring responses before failing open",
+						"path": "src/lib/pipeline/step3-pricing-research.ts",
+						"line": 550,
+						"severity": "P2"
+					},
+					{
+						"skill": "pr-test-analyzer.md",
+						"title": "Cover batch failure isolation and the resulting pricing policies",
+						"path": "src/lib/pipeline/step3-pricing-research.ts",
+						"line": 555,
+						"severity": "P2"
+					}
+				],
+				"posted": [
+					{
+						"skill": "silent-failure-hunter.md",
+						"title": "Surface incomplete scoring responses before failing open",
+						"path": "src/lib/pipeline/step3-pricing-research.ts",
+						"line": 550,
+						"severity": "P2"
+					},
+					{
+						"skill": "pr-test-analyzer.md",
+						"title": "Cover batch failure isolation and the resulting pricing policies",
+						"path": "src/lib/pipeline/step3-pricing-research.ts",
+						"line": 555,
+						"severity": "P2"
+					}
+				],
+				"usage": {
+					"code-reviewer.md": {
+						"promptTokens": 5829,
+						"completionTokens": 54
+					},
+					"silent-failure-hunter.md": {
+						"promptTokens": 6940,
+						"completionTokens": 442
+					},
+					"pr-test-analyzer.md": {
+						"promptTokens": 6132,
+						"completionTokens": 308
+					},
+					"security-sast.md": {
+						"promptTokens": 8876,
+						"completionTokens": 58
+					},
+					"code-review-and-quality.md": {
+						"promptTokens": 6124,
+						"completionTokens": 75
+					}
+				}
+			}
 		}
 	],
 	"threads": [
