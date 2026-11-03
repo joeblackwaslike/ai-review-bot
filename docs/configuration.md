@@ -75,6 +75,18 @@ To force the deep tier on a PR without a label, add `deep-review` to the PR labe
 - Domain-specific security concerns (`"Flag any query that touches the payments table without explicit row-level security"`)
 - Tone preferences (`"Be terse. Skip findings with < 90% confidence."`)
 
+## Behavior changes from the old env parsing
+
+The aliased env vars (`REVIEW_ENABLED`, `AGENT_CONCURRENCY` and the rest) now go through the config loader, which is stricter than the old code:
+
+- A malformed boolean or number fails at config load instead of falling back to a default. Examples: `REVIEW_ENABLED=0`, `AGENT_CONCURRENCY=0`, `REVIEW_AGENT_BUDGET_SECONDS=abc`.
+- Booleans are case-insensitive `true` or `false`, so `REVIEW_ENABLED=FALSE` now disables review.
+- A blank env value counts as unset. `CUSTOM_REVIEW_PROMPT=""` falls back to the default prompt text, and `REVIEW_COMMAND=""` now means `/ai-review`.
+- Decimal delays and fractional concurrency still work. Concurrency is floored.
+- `PUBLIC_URL` and `QSTASH_URL` are plain strings.
+- Any unknown `AI_REVIEW_*` variable is a hard startup error.
+- Each deprecated alias logs one warning per cold start that names its replacement. For `PUBLIC_URL` and `QSTASH_URL` the replacements are `AI_REVIEW_INFRA__PUBLIC_URL` and `AI_REVIEW_INFRA__QSTASH_URL`.
+
 ## Verifying your setup
 
 Two diagnostic endpoints are available after deployment:
