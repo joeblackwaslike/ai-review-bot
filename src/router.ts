@@ -25,11 +25,14 @@ export interface ModelSelection {
 
 function isSensitivePath(path: string, patterns: readonly string[]): boolean {
 	const lower = path.toLowerCase();
-	return patterns.some((pattern) => lower.includes(pattern));
+	return patterns.some((pattern) => lower.includes(pattern.toLowerCase()));
 }
 
 function isDocFile(path: string, extensions: readonly string[]): boolean {
-	return extensions.includes(path.slice(path.lastIndexOf(".")));
+	const lowerExtensions = extensions.map((ext) => ext.toLowerCase());
+	return lowerExtensions.includes(
+		path.slice(path.lastIndexOf(".")).toLowerCase(),
+	);
 }
 
 export function classifyTier(

@@ -8,7 +8,7 @@ export function sanitizeConfigError(error: unknown): string {
 	const message = error instanceof Error ? error.message : String(error);
 	const firstLine = message.split("\n")[0] ?? "";
 	const withoutPaths = firstLine.replace(
-		/(^|[\s"'(])\/[^\s"']+/g,
+		/(^|[\s"'(=:])\/[^\s"']+/g,
 		(match, boundary: string) => {
 			const path = match.slice(boundary.length);
 			const base = path.split("/").pop();

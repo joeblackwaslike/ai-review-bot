@@ -90,4 +90,20 @@ describe("sanitizeConfigError", () => {
 		);
 		expect(message).toBe("must look like provider/model");
 	});
+
+	it("reduces an absolute path following '=' to its basename", () => {
+		const message = sanitizeConfigError(
+			new Error("failed to read file=/var/task/x.yaml"),
+		);
+		expect(message).not.toContain("/var/task");
+		expect(message).toContain("file=x.yaml");
+	});
+
+	it("reduces an absolute path following ':' to its basename", () => {
+		const message = sanitizeConfigError(
+			new Error("failed to read file:/var/task/x.yaml"),
+		);
+		expect(message).not.toContain("/var/task");
+		expect(message).toContain("file:x.yaml");
+	});
 });

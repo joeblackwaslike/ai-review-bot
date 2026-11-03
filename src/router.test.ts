@@ -243,6 +243,35 @@ describe("classifyTier handles empty sensitivePathPatterns and docExtensions", (
 	});
 });
 
+describe("classifyTier matches configured patterns case-insensitively", () => {
+	const routing = {
+		...getConfigTree().routing,
+		sensitivePathPatterns: ["Auth/", "SECURITY"],
+		docExtensions: [".MD"],
+	};
+
+	it("matches a mixed-case pattern against a lowercase path", () => {
+		expect(
+			classifyTier({ ...base, filePaths: ["src/auth/handler.ts"] }, routing),
+		).toBe("complex");
+	});
+
+	it("matches a mixed-case pattern against a mixed-case path", () => {
+		expect(
+			classifyTier({ ...base, filePaths: ["src/Security/token.ts"] }, routing),
+		).toBe("complex");
+	});
+
+	it("matches a mixed-case doc extension against a lowercase path", () => {
+		expect(
+			classifyTier(
+				{ ...base, additions: 8, deletions: 3, filePaths: ["README.md"] },
+				routing,
+			),
+		).toBe("trivial");
+	});
+});
+
 describe("reasoningProviderOptions adds fallbacks only for refusalFallback models", () => {
 	it("opus and sonnet get fallbacks", () => {
 		for (const model of ["claude-opus-5-5", "claude-sonnet-5-5"]) {
