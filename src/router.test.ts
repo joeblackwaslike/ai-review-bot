@@ -243,11 +243,10 @@ describe("classifyTier handles empty sensitivePathPatterns and docExtensions", (
 	});
 });
 
-describe("classifyTier matches configured patterns case-insensitively", () => {
+describe("classifyTier sensitive patterns are case-insensitive, doc extensions are not", () => {
 	const routing = {
 		...getConfigTree().routing,
 		sensitivePathPatterns: ["Auth/", "SECURITY"],
-		docExtensions: [".MD"],
 	};
 
 	it("matches a mixed-case pattern against a lowercase path", () => {
@@ -262,13 +261,15 @@ describe("classifyTier matches configured patterns case-insensitively", () => {
 		).toBe("complex");
 	});
 
-	it("matches a mixed-case doc extension against a lowercase path", () => {
-		expect(
-			classifyTier(
-				{ ...base, additions: 8, deletions: 3, filePaths: ["README.md"] },
-				routing,
-			),
-		).toBe("trivial");
+	it("matches doc extensions exactly as written: README.MD is normal, README.md is trivial", () => {
+		const docs = getConfigTree().routing;
+		const small = { ...base, additions: 8, deletions: 3 };
+		expect(classifyTier({ ...small, filePaths: ["README.MD"] }, docs)).toBe(
+			"normal",
+		);
+		expect(classifyTier({ ...small, filePaths: ["README.md"] }, docs)).toBe(
+			"trivial",
+		);
 	});
 });
 

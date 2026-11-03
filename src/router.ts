@@ -29,10 +29,7 @@ function isSensitivePath(path: string, patterns: readonly string[]): boolean {
 }
 
 function isDocFile(path: string, extensions: readonly string[]): boolean {
-	const lowerExtensions = extensions.map((ext) => ext.toLowerCase());
-	return lowerExtensions.includes(
-		path.slice(path.lastIndexOf(".")).toLowerCase(),
-	);
+	return extensions.includes(path.slice(path.lastIndexOf(".")));
 }
 
 export function classifyTier(

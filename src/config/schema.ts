@@ -230,6 +230,20 @@ export const ConfigSchema = z
 				}
 			}
 		}
+		const bareIds = new Map<string, string>();
+		for (const key of Object.keys(cfg.models)) {
+			const bare = key.slice(key.indexOf("/") + 1);
+			const first = bareIds.get(bare);
+			if (first !== undefined) {
+				ctx.addIssue({
+					code: "custom",
+					path: ["models", key],
+					message: `models "${first}" and "${key}" share the bare model id "${bare}"; cost lookup would be ambiguous`,
+				});
+			} else {
+				bareIds.set(bare, key);
+			}
+		}
 	});
 
 export type Config = z.infer<typeof ConfigSchema>;

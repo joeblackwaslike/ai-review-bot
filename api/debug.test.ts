@@ -24,6 +24,7 @@ function call() {
 describe("GET /api/debug", () => {
 	it("reports config leaves with sources and keeps the has* fields", () => {
 		vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-secret");
+		vi.stubEnv("OPENAI_API_KEY", "");
 		vi.stubEnv("REVIEW_COMMAND", "/x");
 		vi.spyOn(console, "warn").mockImplementation(() => {});
 		const body = call();
@@ -85,6 +86,29 @@ describe("GET /api/debug", () => {
 });
 
 describe("sanitizeConfigError", () => {
+	it("redacts a quoted env value but keeps the variable name and expected type", () => {
+		const message = sanitizeConfigError(
+			new Error(
+				'AI_REVIEW_REVIEW__DELAY_SECONDS: expected number, got "sk-live-secret"',
+			),
+		);
+		expect(message).not.toContain("sk-live-secret");
+		expect(message).toContain("AI_REVIEW_REVIEW__DELAY_SECONDS");
+		expect(message).toContain("expected number");
+		expect(message).toContain('got "[redacted]"');
+	});
+
+	it("redacts a quoted segment after the word value", () => {
+		const message = sanitizeConfigError(
+			new Error('bad value "hunter2" for AI_REVIEW_X'),
+		);
+		expect(message).not.toContain("hunter2");
+	});
+
+	it("caps the message at 300 characters", () => {
+		expect(sanitizeConfigError(new Error("x".repeat(500)))).toHaveLength(300);
+	});
+
 	it("drops YAML parser excerpts and absolute paths from the message", () => {
 		const message = sanitizeConfigError(
 			new Error(

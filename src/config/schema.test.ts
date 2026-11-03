@@ -56,8 +56,26 @@ describe("ConfigSchema", () => {
 	});
 
 	it("rejects a bad model id", () => {
-		const cfg = { ...minimal(), models: { "claude-sonnet-5-5": sonnet } };
-		expect(ConfigSchema.safeParse(cfg).success).toBe(false);
+		const cfg = minimal();
+		Object.assign(cfg.models, { "claude-sonnet-5-5": structuredClone(sonnet) });
+		const result = ConfigSchema.safeParse(cfg);
+		expect(result.success).toBe(false);
+		expect(JSON.stringify(result.error?.issues)).toContain(
+			"must look like provider/model",
+		);
+		expect(JSON.stringify(result.error?.issues)).not.toContain(
+			"is not defined in models",
+		);
+	});
+
+	it("rejects two models that share a bare id", () => {
+		const cfg = minimal();
+		Object.assign(cfg.models, { "openai/claude-sonnet-5-5": structuredClone(sonnet) });
+		const result = ConfigSchema.safeParse(cfg);
+		expect(result.success).toBe(false);
+		const text = JSON.stringify(result.error?.issues);
+		expect(text).toContain("anthropic/claude-sonnet-5-5");
+		expect(text).toContain("openai/claude-sonnet-5-5");
 	});
 
 	it("rejects negative pricing", () => {
