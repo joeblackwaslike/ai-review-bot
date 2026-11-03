@@ -2,6 +2,14 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { describeConfig, getLoadedConfig } from "../src/config/load.js";
 
 const REDACTED_PATHS = new Set(["review.customPrompt"]);
+const REDACTED_PREFIXES = ["cli.", "infra."];
+
+function isRedacted(path: string): boolean {
+	return (
+		REDACTED_PATHS.has(path) ||
+		REDACTED_PREFIXES.some((prefix) => path.startsWith(prefix))
+	);
+}
 const MAX_CONFIG_ERROR_LENGTH = 300;
 
 export function sanitizeConfigError(error: unknown): string {
@@ -41,7 +49,7 @@ export default function handler(_req: VercelRequest, res: VercelResponse) {
 	}
 	res.status(200).json({
 		config: describeConfig(loaded).map((row) =>
-			REDACTED_PATHS.has(row.path) && row.value !== undefined
+			isRedacted(row.path) && row.value !== undefined
 				? { ...row, value: "[set]" }
 				: row,
 		),

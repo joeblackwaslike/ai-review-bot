@@ -54,6 +54,25 @@ describe("GET /api/debug", () => {
 		expect(JSON.stringify(body)).not.toContain("TOP-SECRET-PROMPT");
 	});
 
+	it("redacts every set cli and infra value but not other leaves", () => {
+		vi.stubEnv("AI_REVIEW_CLI__GATE_DIR", "/home/joe/secret-gate");
+		vi.stubEnv("PUBLIC_URL", "https://internal.example.com");
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		const body = call();
+		expect(body.config).toContainEqual(
+			expect.objectContaining({ path: "cli.gateDir", value: "[set]" }),
+		);
+		expect(body.config).toContainEqual(
+			expect.objectContaining({ path: "infra.publicUrl", value: "[set]" }),
+		);
+		expect(body.config).toContainEqual(
+			expect.objectContaining({ path: "review.command", value: "/ai-review" }),
+		);
+		const text = JSON.stringify(body);
+		expect(text).not.toContain("secret-gate");
+		expect(text).not.toContain("internal.example.com");
+	});
+
 	it("returns 200 with configError and the has* fields when config loading throws", () => {
 		vi.stubEnv("AI_REVIEW_TYPO", "1");
 		vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-secret");

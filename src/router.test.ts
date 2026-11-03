@@ -236,7 +236,7 @@ describe("classifyTier handles empty sensitivePathPatterns and docExtensions", (
 		).toBe("normal");
 	});
 
-	it("no extension counts as docs", () => {
+	it("empty docExtensions means no file counts as docs", () => {
 		expect(classifyTier({ ...base, filePaths: ["README.md"] }, routing)).toBe(
 			"normal",
 		);

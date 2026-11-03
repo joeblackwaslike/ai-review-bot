@@ -1,6 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { resetConfigForTests } from "./config/load.js";
+import { loadConfig, resetConfigForTests } from "./config/load.js";
 import { getConfig, getOpenAIAppConfig, parseAgentBudgetMs } from "./config.js";
+
+const treeOverride = vi.hoisted(() => ({
+	omit: undefined as string | undefined,
+}));
+
+vi.mock("./config/load.js", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("./config/load.js")>();
+	return {
+		...actual,
+		getConfigTree: () => {
+			const tree = actual.getConfigTree();
+			if (!treeOverride.omit) return tree;
+			const { [treeOverride.omit]: _omitted, ...reviewers } = tree.reviewers;
+			return { ...tree, reviewers };
+		},
+	};
+});
 
 const PKCS8_KEY =
 	"-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC7\n-----END PRIVATE KEY-----";
@@ -34,6 +51,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	treeOverride.omit = undefined;
 	warn.mockRestore();
 	for (const key of [
 		"GITHUB_APP_ID",
@@ -186,6 +204,23 @@ describe("getConfig", () => {
 			process.env.AI_REVIEW_REVIEWERS__CLAUDE__ENABLED = "false";
 			expect(getConfig().reviewEnabled).toBe(false);
 			expect(getOpenAIAppConfig().reviewEnabled).toBe(true);
+		});
+
+		it.each([
+			["claude", false, true],
+			["codex", true, false],
+		])("treats an absent %s reviewer entry as disabled", (id, claude, codex) => {
+			setRequiredEnv();
+			setOpenAIEnv();
+			treeOverride.omit = id;
+			expect(getConfig().reviewEnabled).toBe(claude);
+			expect(getOpenAIAppConfig().reviewEnabled).toBe(codex);
+		});
+
+		it("the shipped YAML enables both built-in reviewers", () => {
+			const { config } = loadConfig({ env: {} });
+			expect(config.reviewers.claude?.enabled).toBe(true);
+			expect(config.reviewers.codex?.enabled).toBe(true);
 		});
 
 		it("review.enabled=false still disables both", () => {

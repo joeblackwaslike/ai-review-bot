@@ -83,13 +83,13 @@ Returns `200 OK` with `{ "status": "ok" }`. Use this as your uptime check.
 
 ### `GET /api/debug`
 
-Returns the resolved config and which credentials are present. API keys are never returned, and `review.customPrompt` is shown as `[set]` when set:
+Returns the resolved config and which credentials are present. API keys are never returned, and `review.customPrompt` and every `cli.*` and `infra.*` value are shown as `[set]` when set:
 
 ```json
 {
   "config": [
-    { "path": "review.enabled", "value": true, "source": "default" },
-    { "path": "review.command", "value": "/ai-review", "source": "default" },
+    { "path": "review.enabled", "value": true, "source": "yaml" },
+    { "path": "review.command", "value": "/ai-review", "source": "yaml" },
     { "path": "review.customPrompt", "value": "[set]", "source": "env" }
   ],
   "warnings": [],

@@ -35,13 +35,17 @@ export function loadConfig(opts: LoadOptions = {}): LoadedConfig {
 	} catch (error) {
 		throw new Error(
 			`Cannot read config file ${yamlPath}: ${(error as Error).message}`,
+			{ cause: error },
 		);
 	}
 	let raw: unknown;
 	try {
 		raw = parse(text);
 	} catch (error) {
-		throw new Error(`Invalid YAML in ${yamlPath}: ${(error as Error).message}`);
+		throw new Error(
+			`Invalid YAML in ${yamlPath}: ${(error as Error).message}`,
+			{ cause: error },
+		);
 	}
 
 	const { value, sources, warnings } = applyEnvOverlay(

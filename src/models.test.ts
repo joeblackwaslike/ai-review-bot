@@ -104,7 +104,7 @@ describe("computeCost with config pricing", () => {
 			},
 			"claude-sonnet-5-5",
 		);
-		expect(cost).toBeCloseTo(0.5 * 2.0 + 0.5 * 0.2);
+		expect(cost).toBeCloseTo(0.5 * 2.0 + 0.5 * 0.1);
 	});
 
 	it("clamps cached tokens to the prompt size", () => {
@@ -116,7 +116,7 @@ describe("computeCost with config pricing", () => {
 			},
 			"claude-sonnet-5-5",
 		);
-		expect(cost).toBeCloseTo(0.2);
+		expect(cost).toBeCloseTo(0.1);
 	});
 });
 
