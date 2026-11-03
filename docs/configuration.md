@@ -163,7 +163,7 @@ Env overrides apply only to `reviewers.<id>` entries already present in the YAML
 | `cli.gateDir` | `AI_REVIEW_CLI__GATE_DIR` | `AI_REVIEW_GATE_DIR` (permanent) | string | unset | Directory for the gate store. |
 | `cli.mistakesDir` | `AI_REVIEW_CLI__MISTAKES_DIR` | `AI_REVIEW_MISTAKES_DIR` (permanent) | string | unset | Directory for the mistake log. |
 | `cli.logFile` | `AI_REVIEW_CLI__LOG_FILE` | `AI_REVIEW_LOG_FILE` (permanent) | string | unset | Path of the agent outcome log. |
-| `routing.sensitivePathPatterns` | `AI_REVIEW_ROUTING__SENSITIVE_PATH_PATTERNS` | none | string[] | `["auth","crypto","jwt","password","secret","/db/","database","migration","schema"]` | Lowercase path substrings that force the complex tier. |
+| `routing.sensitivePathPatterns` | `AI_REVIEW_ROUTING__SENSITIVE_PATH_PATTERNS` | none | string[] | `["auth","crypto","jwt","password","secret","/db/","database","migration","schema"]` | Path substrings (case-insensitive) that force the complex tier. |
 | `routing.docExtensions` | `AI_REVIEW_ROUTING__DOC_EXTENSIONS` | none | string[] | `[".md",".txt",".rst",".mdx"]` | File extensions treated as documentation. |
 | `routing.deepLabel` | `AI_REVIEW_ROUTING__DEEP_LABEL` | none | string | `"deep-review"` | PR label that forces the deep tier. |
 | `routing.complexLines` | `AI_REVIEW_ROUTING__COMPLEX_LINES` | none | number | `500` | Changed lines above which a PR is complex. |

@@ -164,7 +164,9 @@ const RoutingSchema = z
 				"migration",
 				"schema",
 			])
-			.describe("Lowercase path substrings that force the complex tier."),
+			.describe(
+				"Path substrings (case-insensitive) that force the complex tier.",
+			),
 		docExtensions: z
 			.array(z.string())
 			.default([".md", ".txt", ".rst", ".mdx"])
