@@ -97,7 +97,7 @@ Returns `200 OK` with `{ "status": "ok" }`. Use this as your uptime check.
 
 ### `GET /api/debug`
 
-Returns the resolved config and which credentials are present. API keys are never returned, and `review.customPrompt` and every `cli.*` and `infra.*` value are shown as `[set]` when set:
+Requires the cron secret. Call it with `curl -H "Authorization: Bearer $CRON_SECRET" https://<your-domain>/api/debug`. With the right bearer secret it returns the resolved config and which credentials are present. API keys are never returned, and `review.customPrompt` and every `cli.*` and `infra.*` value are shown as `[set]` when set:
 
 ```json
 {
@@ -121,6 +121,8 @@ Returns the resolved config and which credentials are present. API keys are neve
 ```
 
 `config` lists each resolved setting that has a value (unset optional settings are omitted) with its source (`env`, `alias`, `yaml` or `default`). If the config fails to load, the response is `{ "configError": "<message>", ...has* fields }` instead.
+
+A request without the right bearer secret, or any request when `CRON_SECRET` is unset or empty, gets only `reviewEnabled`, `reviewCommand` and the `has*` fields. It never gets `config`, `warnings` or `configError`. If the config fails to load, it gets only the `has*` fields.
 
 If any `has*` field is `false`, that variable is missing.
 

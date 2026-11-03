@@ -1,14 +1,20 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetConfigForTests } from "../src/config/load.js";
 import handler, { sanitizeConfigError } from "./debug.js";
+
+const SECRET = "cron-secret-value";
+
+beforeEach(() => {
+	vi.stubEnv("CRON_SECRET", SECRET);
+});
 
 afterEach(() => {
 	resetConfigForTests();
 	vi.unstubAllEnvs();
 });
 
-function call() {
+function call(authorization: string | null = `Bearer ${SECRET}`) {
 	let body: Record<string, unknown> = {};
 	const res = {
 		status: () => res,
@@ -17,7 +23,10 @@ function call() {
 			return res;
 		},
 	};
-	handler({} as VercelRequest, res as unknown as VercelResponse);
+	handler(
+		{ headers: { authorization: authorization ?? undefined } } as VercelRequest,
+		res as unknown as VercelResponse,
+	);
 	return body;
 }
 
@@ -82,6 +91,65 @@ describe("GET /api/debug", () => {
 		expect(body.hasAnthropicKey).toBe(true);
 		expect(body.config).toBeUndefined();
 		expect(JSON.stringify(body)).not.toContain("sk-ant-secret");
+	});
+});
+
+describe("GET /api/debug authorization", () => {
+	const mainShape = [
+		"hasAnthropicKey",
+		"hasAppId",
+		"hasOpenAIAppId",
+		"hasOpenAIKey",
+		"hasOpenAIPrivateKey",
+		"hasOpenAIWebhookSecret",
+		"hasPrivateKey",
+		"hasWebhookSecret",
+		"reviewCommand",
+		"reviewEnabled",
+	];
+
+	function expectMainShape(body: Record<string, unknown>) {
+		expect(Object.keys(body).sort()).toEqual(mainShape);
+		expect(body.reviewEnabled).toBe(true);
+		expect(body.reviewCommand).toBe("/ai-review");
+	}
+
+	beforeEach(() => {
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+	});
+
+	it("gives a request with no header only the main-shaped response", () => {
+		expectMainShape(call(null));
+	});
+
+	it("gives a wrong secret only the main-shaped response", () => {
+		expectMainShape(call("Bearer wrong"));
+		expectMainShape(call(`Bearer ${SECRET}x`));
+	});
+
+	it("gives everyone only the main-shaped response when CRON_SECRET is unset or empty", () => {
+		for (const value of [undefined, ""]) {
+			vi.stubEnv("CRON_SECRET", value as string);
+			if (value === undefined) delete process.env.CRON_SECRET;
+			expectMainShape(call("Bearer "));
+			expectMainShape(call("Bearer"));
+		}
+	});
+
+	it("returns the full report for the right secret", () => {
+		const body = call();
+		expect(body.config).toBeDefined();
+		expect(body.warnings).toBeDefined();
+	});
+
+	it("returns configError only when authorized", () => {
+		vi.stubEnv("AI_REVIEW_TYPO", "1");
+		const denied = call("Bearer wrong");
+		expect(denied.configError).toBeUndefined();
+		expect(denied.config).toBeUndefined();
+		expect(denied.warnings).toBeUndefined();
+		expect(denied.hasAnthropicKey).toBeDefined();
+		expect(String(call().configError)).toContain("AI_REVIEW_TYPO");
 	});
 });
 

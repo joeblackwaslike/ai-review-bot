@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { describeConfig, getLoadedConfig } from "../src/config/load.js";
 
@@ -29,7 +30,14 @@ export function sanitizeConfigError(error: unknown): string {
 	return withoutPaths.slice(0, MAX_CONFIG_ERROR_LENGTH);
 }
 
-export default function handler(_req: VercelRequest, res: VercelResponse) {
+function isAuthorized(authorization: string | undefined): boolean {
+	const secret = process.env.CRON_SECRET;
+	if (!secret || !authorization) return false;
+	const digest = (value: string) => createHash("sha256").update(value).digest();
+	return timingSafeEqual(digest(authorization), digest(`Bearer ${secret}`));
+}
+
+export default function handler(req: VercelRequest, res: VercelResponse) {
 	const hasFields = {
 		hasAnthropicKey: !!process.env.ANTHROPIC_API_KEY,
 		hasAppId: !!process.env.GITHUB_APP_ID,
@@ -40,12 +48,21 @@ export default function handler(_req: VercelRequest, res: VercelResponse) {
 		hasOpenAIPrivateKey: !!process.env.OPENAI_APP_PRIVATE_KEY,
 		hasOpenAIWebhookSecret: !!process.env.OPENAI_APP_WEBHOOK_SECRET,
 	};
+	const authorized = isAuthorized(req.headers?.authorization);
 	let loaded: ReturnType<typeof getLoadedConfig>;
 	try {
 		loaded = getLoadedConfig();
 	} catch (error) {
 		res.status(200).json({
-			configError: sanitizeConfigError(error),
+			...(authorized ? { configError: sanitizeConfigError(error) } : {}),
+			...hasFields,
+		});
+		return;
+	}
+	if (!authorized) {
+		res.status(200).json({
+			reviewEnabled: loaded.config.review.enabled,
+			reviewCommand: loaded.config.review.command,
 			...hasFields,
 		});
 		return;
