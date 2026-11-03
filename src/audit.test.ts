@@ -71,8 +71,8 @@ describe("runAuditPass failed-attempt cost", () => {
 
 describe("runAuditPass usageBySkill", () => {
 	it("has one entry per skill and sums to the pass total, including failed agents", async () => {
-		vi.spyOn(console, "log").mockImplementation(() => {});
-		vi.spyOn(console, "error").mockImplementation(() => {});
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 		const mock = runAgent as ReturnType<typeof vi.fn>;
 		mock.mockReset();
 		mock.mockResolvedValueOnce({
@@ -115,6 +115,8 @@ describe("runAuditPass usageBySkill", () => {
 		);
 		expect(sum).toEqual(usage);
 		expect(usage).toEqual({ promptTokens: 30, completionTokens: 3 });
+		log.mockRestore();
+		errSpy.mockRestore();
 	});
 });
 

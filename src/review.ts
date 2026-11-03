@@ -1449,13 +1449,6 @@ export function sanitizeInlineComments(
 }
 
 const MAX_INLINE_COMMENTS = 50;
-const INLINE_OVERFLOW_RANK: Record<string, number> = {
-	P0: 4,
-	P1: 3,
-	P2: 2,
-	P3: 1,
-};
-
 /** Caps inline comments at `max`, keeping the most severe. GitHub's review API
  * rejects payloads over a certain size, and a wall of 80+ low-severity nits
  * buries the high-severity findings that actually matter. At or under the cap
@@ -1468,8 +1461,8 @@ export function capInlineComments(
 	if (comments.length <= max) return { kept: comments, overflow: [] };
 	const sorted = [...comments].sort(
 		(a, b) =>
-			(INLINE_OVERFLOW_RANK[b.severity] ?? 0) -
-			(INLINE_OVERFLOW_RANK[a.severity] ?? 0),
+			(INLINE_SEVERITY_RANK[b.severity] ?? 0) -
+			(INLINE_SEVERITY_RANK[a.severity] ?? 0),
 	);
 	return { kept: sorted.slice(0, max), overflow: sorted.slice(max) };
 }
