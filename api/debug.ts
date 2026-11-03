@@ -18,7 +18,7 @@ export function sanitizeConfigError(error: unknown): string {
 	const redacted = message
 		.replace(/\b(got\s+)"[\s\S]*$/, '$1"[redacted]"')
 		.replace(/\b(value\s+)"[\s\S]*$/, '$1"[redacted]"');
-	const withoutValues = redacted.split("\n")[0] ?? "";
+	const withoutValues = redacted.split(/[\r\n\u2028\u2029]/)[0] ?? "";
 	const withoutPaths = withoutValues.replace(
 		/(^|[\s"'(=:])\/[^\s"']+/g,
 		(match, boundary: string) => {
@@ -53,8 +53,10 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
 	try {
 		loaded = getLoadedConfig();
 	} catch (error) {
+		const sanitized = sanitizeConfigError(error);
+		console.error(`config load failed: ${sanitized}`);
 		res.status(200).json({
-			...(authorized ? { configError: sanitizeConfigError(error) } : {}),
+			...(authorized ? { configError: sanitized } : {}),
 			...hasFields,
 		});
 		return;

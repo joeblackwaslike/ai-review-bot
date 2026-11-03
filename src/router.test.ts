@@ -98,6 +98,48 @@ describe("classifyTier", () => {
 	});
 });
 
+describe("classifyTier with custom routing thresholds", () => {
+	const routing = {
+		...getConfigTree().routing,
+		complexLines: 30,
+		trivialDocLines: 5,
+		deepLabel: "audit-deep",
+	};
+
+	it("honors a custom complexLines threshold at the boundary", () => {
+		expect(
+			classifyTier({ ...base, additions: 20, deletions: 10 }, routing),
+		).toBe("normal");
+		expect(
+			classifyTier({ ...base, additions: 20, deletions: 11 }, routing),
+		).toBe("complex");
+	});
+
+	it("honors a custom trivialDocLines threshold at the boundary", () => {
+		expect(
+			classifyTier(
+				{ ...base, additions: 3, deletions: 1, filePaths: ["README.md"] },
+				routing,
+			),
+		).toBe("trivial");
+		expect(
+			classifyTier(
+				{ ...base, additions: 3, deletions: 2, filePaths: ["README.md"] },
+				routing,
+			),
+		).toBe("normal");
+	});
+
+	it("honors a custom deepLabel", () => {
+		expect(classifyTier({ ...base, labels: ["audit-deep"] }, routing)).toBe(
+			"deep",
+		);
+		expect(classifyTier({ ...base, labels: ["deep-review"] }, routing)).toBe(
+			"normal",
+		);
+	});
+});
+
 // ---------------------------------------------------------------------------
 // routeModel — Anthropic
 // ---------------------------------------------------------------------------

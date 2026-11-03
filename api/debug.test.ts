@@ -92,6 +92,17 @@ describe("GET /api/debug", () => {
 		expect(body.config).toBeUndefined();
 		expect(JSON.stringify(body)).not.toContain("sk-ant-secret");
 	});
+
+	it("logs the sanitized config error server-side when config loading throws", () => {
+		vi.stubEnv("AI_REVIEW_TYPO", "1");
+		vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-secret");
+		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+		const body = call();
+		expect(errorSpy).toHaveBeenCalledTimes(1);
+		const logged = String(errorSpy.mock.calls[0]?.[0]);
+		expect(logged).toContain(String(body.configError));
+		expect(logged).not.toContain("sk-ant-secret");
+	});
 });
 
 describe("GET /api/debug authorization", () => {
@@ -189,6 +200,20 @@ describe("sanitizeConfigError", () => {
 			expect(message).not.toContain("TOP-SECRET");
 			expect(message).toContain("AI_REVIEW_X");
 		}
+	});
+
+	it("truncates at a carriage return with no got/value marker", () => {
+		const message = sanitizeConfigError(
+			new Error("Invalid YAML near line 2\rTOP-SECRET-PROMPT"),
+		);
+		expect(message).not.toContain("TOP-SECRET-PROMPT");
+	});
+
+	it("truncates at a U+2028 line separator with no got/value marker", () => {
+		const message = sanitizeConfigError(
+			new Error("Invalid YAML near line 2 TOP-SECRET-PROMPT"),
+		);
+		expect(message).not.toContain("TOP-SECRET-PROMPT");
 	});
 
 	it("redacts a value form through line terminators", () => {
