@@ -211,7 +211,7 @@ describe("sanitizeConfigError", () => {
 
 	it("truncates at a U+2028 line separator with no got/value marker", () => {
 		const message = sanitizeConfigError(
-			new Error("Invalid YAML near line 2 TOP-SECRET-PROMPT"),
+			new Error("Invalid YAML near line 2\u2028TOP-SECRET-PROMPT"),
 		);
 		expect(message).not.toContain("TOP-SECRET-PROMPT");
 	});
