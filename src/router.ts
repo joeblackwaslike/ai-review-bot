@@ -76,6 +76,11 @@ export function resolveFinderModel(
 			`reviewer "${reviewerId}" has no model configured for tier "${tier}"`,
 		);
 	const slash = choice.model.indexOf("/");
+	if (slash <= 0) {
+		throw new Error(
+			`reviewer "${reviewerId}" tier "${tier}" model "${choice.model}" must be in "provider/model" form`,
+		);
+	}
 	return {
 		provider: choice.model.slice(0, slash),
 		model: choice.model.slice(slash + 1),
@@ -93,11 +98,14 @@ export function routeModel(
 	provider: "anthropic" | "openai",
 ): ModelSelection {
 	const config = getConfigTree();
-	const resolved = resolveFinderModel(
-		config,
-		REVIEWER_ID_BY_PROVIDER[provider],
-		classifyTier(context, config.routing),
-	);
+	const reviewerId = REVIEWER_ID_BY_PROVIDER[provider];
+	const tier = classifyTier(context, config.routing);
+	const resolved = resolveFinderModel(config, reviewerId, tier);
+	if (resolved.provider !== provider) {
+		throw new Error(
+			`reviewer "${reviewerId}" tier "${tier}" model "${resolved.provider}/${resolved.model}" must use provider "${provider}"`,
+		);
+	}
 	return { provider, model: resolved.model, effort: resolved.effort };
 }
 

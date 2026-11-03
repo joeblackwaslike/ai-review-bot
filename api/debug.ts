@@ -7,10 +7,14 @@ const MAX_CONFIG_ERROR_LENGTH = 300;
 export function sanitizeConfigError(error: unknown): string {
 	const message = error instanceof Error ? error.message : String(error);
 	const firstLine = message.split("\n")[0] ?? "";
-	const withoutPaths = firstLine.replace(/\/[^\s"']+/g, (match) => {
-		const base = match.split("/").pop();
-		return base && base.length > 0 ? base : match;
-	});
+	const withoutPaths = firstLine.replace(
+		/(^|[\s"'(])\/[^\s"']+/g,
+		(match, boundary: string) => {
+			const path = match.slice(boundary.length);
+			const base = path.split("/").pop();
+			return base && base.length > 0 ? `${boundary}${base}` : match;
+		},
+	);
 	return withoutPaths.slice(0, MAX_CONFIG_ERROR_LENGTH);
 }
 

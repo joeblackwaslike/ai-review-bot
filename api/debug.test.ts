@@ -76,4 +76,18 @@ describe("sanitizeConfigError", () => {
 		expect(message).not.toContain("/var/task");
 		expect(message).toContain("ai-review.yaml");
 	});
+
+	it("leaves provider/model ids intact", () => {
+		const message = sanitizeConfigError(
+			new Error('model "openai/gpt-missing" is not defined in models'),
+		);
+		expect(message).toBe('model "openai/gpt-missing" is not defined in models');
+	});
+
+	it("leaves a bare provider/model form hint intact", () => {
+		const message = sanitizeConfigError(
+			new Error("must look like provider/model"),
+		);
+		expect(message).toBe("must look like provider/model");
+	});
 });

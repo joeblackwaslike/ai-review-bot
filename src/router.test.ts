@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { getConfigTree } from "./config/load.js";
+import { afterEach, describe, expect, it } from "vitest";
+import { getConfigTree, resetConfigForTests } from "./config/load.js";
 import type { RouterContext } from "./router.js";
 import {
 	classifyTier,
@@ -304,6 +304,46 @@ describe("resolveFinderModel", () => {
 		expect(() =>
 			resolveFinderModel(configMissingTier, "claude", "normal"),
 		).toThrow(/reviewer "claude" has no model configured for tier "normal"/);
+	});
+
+	it("throws naming the offending value when the model id has no provider/ prefix", () => {
+		const configBadModel = {
+			...config,
+			reviewers: {
+				...config.reviewers,
+				claude: {
+					...config.reviewers.claude,
+					tiers: {
+						...config.reviewers.claude.tiers,
+						normal: {
+							...config.reviewers.claude.tiers.normal,
+							model: "claude-sonnet-5-5",
+						},
+					},
+				},
+			},
+		} as unknown as typeof config;
+		expect(() =>
+			resolveFinderModel(configBadModel, "claude", "normal"),
+		).toThrow(
+			/reviewer "claude" tier "normal" model "claude-sonnet-5-5" must be in "provider\/model" form/,
+		);
+	});
+});
+
+describe("routeModel rejects a mismatched provider", () => {
+	afterEach(() => {
+		delete process.env.AI_REVIEW_REVIEWERS__CLAUDE__TIERS__NORMAL__MODEL;
+		resetConfigForTests();
+	});
+
+	it("throws when the claude reviewer's tier names an openai model", () => {
+		process.env.AI_REVIEW_REVIEWERS__CLAUDE__TIERS__NORMAL__MODEL =
+			"openai/gpt-6.1-sol";
+		resetConfigForTests();
+		expect(() => routeModel(base, "anthropic")).toThrow(
+			/reviewer "claude" tier "normal" model "openai\/gpt-6\.1-sol" must use provider "anthropic"/,
+		);
 	});
 });
 

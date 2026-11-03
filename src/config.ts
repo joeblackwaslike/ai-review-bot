@@ -100,20 +100,6 @@ export function parseAgentConcurrency(): number {
 	return Math.floor(getConfigTree().review.agentConcurrency);
 }
 
-// Parse a delay env var expressed in seconds into milliseconds. A missing,
-// blank, non-numeric, or negative value falls back to the default rather than
-// passing NaN or a negative number on to a timer or the scheduler.
-export function parseDelayMs(
-	envValue: string | undefined,
-	defaultSeconds: number,
-): number {
-	const seconds = Number(envValue);
-	if (envValue?.trim() && Number.isFinite(seconds) && seconds >= 0) {
-		return seconds * 1000;
-	}
-	return defaultSeconds * 1000;
-}
-
 export interface GetConfigOptions {
 	/** CLI-only call sites (cli.ts, watch.ts) never verify inbound webhooks and
 	 * so never need this secret — requiring it there just forces a dev machine
