@@ -95,7 +95,6 @@ const THREADS_QUERY = `
 
 const SHA_MARKER = /<!--\s*ai-review:sha=([0-9a-f]{7,40})\s*-->/;
 const HUNK_HEADER = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/gm;
-const SEVERITY = /\bP[0-3]\b/;
 
 const isBot = (login: string | undefined, bot: string) =>
 	login?.replace(/\[bot\]$/, "") === bot.replace(/\[bot\]$/, "");
@@ -226,7 +225,7 @@ export async function recordPr(
 					commentId: c.id,
 					path: c.path,
 					line: c.line ?? c.original_line ?? null,
-					severity: part.text.match(SEVERITY)?.[0] ?? "P3",
+					severity: part.severity,
 					title: part.title,
 					text: part.text,
 				});

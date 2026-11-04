@@ -1,5 +1,14 @@
 import { existsSync } from "node:fs";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import {
+	chmod,
+	mkdir,
+	readdir,
+	readFile,
+	rename,
+	rm,
+	stat,
+	writeFile,
+} from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fixtureId } from "./claims.js";
@@ -10,9 +19,10 @@ import {
 } from "./classify.js";
 import { filterMargin, formatMargin } from "./filter-margin.js";
 import { type GhClient, ghCli } from "./gh.js";
-import { checkRecall } from "./guard.js";
+import { checkClean, checkRecall } from "./guard.js";
 import { labelFixture } from "./label.js";
-import { runLiveTier } from "./live.js";
+import { InvalidEstimateError, type LiveReport, runLiveTier } from "./live.js";
+import type { buildLiveWiring } from "./live-wiring.js";
 import { computeMetrics, formatReport } from "./metrics.js";
 import { type ReplayPipeline, todaysCodePipeline } from "./pipeline.js";
 import { recordPr } from "./record.js";
@@ -24,6 +34,7 @@ export interface ReplayDeps {
 	fixturesDir?: string;
 	out?: (s: string) => void;
 	pipeline?: ReplayPipeline;
+	liveWiring?: typeof buildLiveWiring;
 }
 
 interface ParsedArgs {
@@ -34,12 +45,16 @@ interface ParsedArgs {
 	live?: boolean;
 	rounds?: number;
 	maxCost?: number;
+	saveTrace?: boolean;
+	heldOut?: boolean;
+	expectClean?: boolean;
 }
 
 const USAGE = [
 	"Usage:",
 	"  ai-review replay [--fixtures <dir>]",
-	"  ai-review replay --record <pr-url> --provider anthropic|openai --bot <login> [--fixtures <dir>]",
+	"  ai-review replay --record <pr-url> --provider anthropic|openai --bot <login> [--held-out] [--expect-clean] [--fixtures <dir>]",
+	"  ai-review replay --live [--rounds <n>] [--max-cost <usd>] [--save-trace] [--fixtures <dir>]",
 ].join("\n");
 
 const PR_URL = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)\/?$/;
@@ -64,6 +79,18 @@ function parseArgs(args: string[]): ParsedArgs | null {
 		const value = args[i + 1];
 		if (flag === "--live") {
 			parsed.live = true;
+			continue;
+		}
+		if (flag === "--save-trace") {
+			parsed.saveTrace = true;
+			continue;
+		}
+		if (flag === "--held-out") {
+			parsed.heldOut = true;
+			continue;
+		}
+		if (flag === "--expect-clean") {
+			parsed.expectClean = true;
 			continue;
 		}
 		if (flag === "--rounds" || flag === "--max-cost") {
@@ -141,6 +168,20 @@ async function writeRecording(
 		botLogin: p.bot as string,
 	});
 	const id = fixtureId(fixture);
+	const fixturePath = join(dir, `${id}.json`);
+	if (existsSync(fixturePath)) {
+		const prior = JSON.parse(
+			await readFile(fixturePath, "utf8"),
+		) as ReplayFixture;
+		if (prior.heldOut) fixture.heldOut = true;
+		if (prior.expect) fixture.expect = prior.expect;
+		if (prior.rounds.some((r) => r.trace))
+			out(
+				`dropped saved traces for ${id}; rerun replay --live --save-trace to restore them`,
+			);
+	}
+	if (p.heldOut) fixture.heldOut = true;
+	if (p.expectClean) fixture.expect = { clean: true };
 	const labelsPath = join(dir, `${id}.labels.json`);
 	let target = labelsPath;
 	if (existsSync(labelsPath)) {
@@ -156,10 +197,7 @@ async function writeRecording(
 			target = join(dir, `${id}.labels.proposed.json`);
 	}
 	await mkdir(dir, { recursive: true });
-	await writeFile(
-		join(dir, `${id}.json`),
-		`${JSON.stringify(fixture, null, 2)}\n`,
-	);
+	await writeFile(fixturePath, `${JSON.stringify(fixture, null, 2)}\n`);
 	await writeFile(
 		target,
 		`${JSON.stringify(labelFixture(fixture), null, 2)}\n`,
@@ -243,6 +281,12 @@ async function replayAll(
 		for (const e of guard.failures) out(`FAIL ${id}: ${e}`);
 		if (guard.failures.length > 0) failed = true;
 	}
+	const clean = checkClean(loaded.map((l) => l.fixture));
+	for (const id of clean.unchecked)
+		out(`warning ${id}: clean fixture has no trace`);
+	for (const v of clean.violations)
+		out(`FAIL ${v}: clean fixture posted findings`);
+	if (clean.violations.length > 0) failed = true;
 	if (metrics.length > 0) out(formatReport(metrics, ids));
 	const classFiles = await printClassReport(dir, out);
 	if (classFiles.length > 0) {
@@ -263,13 +307,44 @@ async function replayAll(
 	return failed ? 1 : 0;
 }
 
+async function writeTrace(
+	path: string,
+	fixture: ReplayFixture,
+	report: LiveReport,
+): Promise<void> {
+	const traces = new Map(report.rounds.map((r) => [r.index, r.trace]));
+	const rounds = fixture.rounds.map((r) => {
+		const t = traces.get(r.index);
+		if (!t) return r;
+		const { trace: _old, ...rest } = r;
+		return {
+			...rest,
+			trace: { candidates: t.candidates, posted: t.posted, usage: t.usage },
+		};
+	});
+	const tmp = `${path}.tmp`;
+	try {
+		await writeFile(
+			tmp,
+			`${JSON.stringify({ ...fixture, rounds }, null, 2)}\n`,
+		);
+		await chmod(tmp, (await stat(path)).mode & 0o7777);
+		await rename(tmp, path);
+	} catch (err) {
+		await rm(tmp, { force: true });
+		throw err;
+	}
+}
+
 async function liveAll(
 	dir: string,
 	p: ParsedArgs,
 	client: GhClient,
 	out: (s: string) => void,
+	wire?: typeof buildLiveWiring,
 ): Promise<number> {
-	const { buildLiveWiring } = await import("./live-wiring.js");
+	const buildLiveWiring =
+		wire ?? (await import("./live-wiring.js")).buildLiveWiring;
 	const files = existsSync(dir)
 		? (await readdir(dir)).filter((n) => FIXTURE_FILE.test(n)).sort()
 		: [];
@@ -278,6 +353,7 @@ async function liveAll(
 		return 1;
 	}
 	let remaining = p.maxCost ?? 5;
+	let failed = false;
 	for (const name of files) {
 		const f = JSON.parse(
 			await readFile(join(dir, name), "utf8"),
@@ -286,23 +362,49 @@ async function liveAll(
 		const labelsPath = join(dir, `${id}.labels.json`);
 		if (!existsSync(labelsPath)) {
 			out(`${id}: missing ${id}.labels.json (run --record first)`);
+			if (f.expect?.clean) {
+				out(`FAIL ${id}: clean fixture has no labels file`);
+				failed = true;
+			}
 			continue;
 		}
 		const labels = JSON.parse(await readFile(labelsPath, "utf8")) as LabelFile;
-		const wiring = buildLiveWiring(f, client);
+		const wiring = buildLiveWiring(f, client, labels);
 		const rounds = f.rounds.slice(-(p.rounds ?? 2)).map((r) => r.index);
 		out(`live ${id}`);
-		const report = await runLiveTier({
-			fixture: f,
-			labels,
-			rounds,
-			maxCostUsd: remaining,
-			out,
-			...wiring,
-		});
+		let report: LiveReport;
+		try {
+			report = await runLiveTier({
+				fixture: f,
+				labels,
+				rounds,
+				maxCostUsd: remaining,
+				out,
+				...wiring,
+			});
+		} catch (err) {
+			if (!(err instanceof InvalidEstimateError)) throw err;
+			out(`live failed for ${id}: ${err.message}`);
+			return 1;
+		}
 		remaining -= report.spentUsd;
+		if (p.saveTrace) await writeTrace(join(dir, name), f, report);
+		if (!f.expect?.clean) continue;
+		for (const r of report.rounds)
+			if (r.posted > 0) {
+				out(
+					`FAIL ${id} round ${r.index}: clean fixture would post ${r.posted} findings`,
+				);
+				failed = true;
+			}
+		const ran = new Set(report.rounds.map((r) => r.index));
+		const skipped = rounds.find((i) => !ran.has(i));
+		if (skipped !== undefined)
+			out(
+				`UNCHECKED ${id}: cost cap stopped before round ${skipped} (${report.rounds.length} of ${rounds.length} rounds replayed)`,
+			);
 	}
-	return 0;
+	return failed ? 1 : 0;
 }
 
 export async function runReplay(
@@ -315,10 +417,22 @@ export async function runReplay(
 		out(USAGE);
 		return 2;
 	}
+	const misuse =
+		(parsed.saveTrace &&
+			(!parsed.live || parsed.record !== undefined) &&
+			"--save-trace requires --live without --record") ||
+		((parsed.heldOut || parsed.expectClean) &&
+			parsed.record === undefined &&
+			"--held-out and --expect-clean require --record");
+	if (misuse) {
+		out(`${misuse}\n${USAGE}`);
+		return 2;
+	}
 	const dir =
 		parsed.fixtures ?? deps.fixturesDir ?? defaultFixturesDir(import.meta.url);
 	if (parsed.record !== undefined)
 		return record(parsed, dir, deps.client ?? ghCli(), out);
-	if (parsed.live) return liveAll(dir, parsed, deps.client ?? ghCli(), out);
+	if (parsed.live)
+		return liveAll(dir, parsed, deps.client ?? ghCli(), out, deps.liveWiring);
 	return replayAll(dir, deps.pipeline ?? todaysCodePipeline, out);
 }

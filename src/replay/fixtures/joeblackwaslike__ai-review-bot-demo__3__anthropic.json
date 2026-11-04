@@ -1,0 +1,70 @@
+{
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "ai-review-bot-demo",
+	"pull": 3,
+	"provider": "anthropic",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-11-03T21:07:01.745Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 5003106400,
+			"provider": "anthropic",
+			"submittedAt": "2026-08-23T18:47:52Z",
+			"headSha": "94534258f4cff25c664234cd2fb9621f7237ef90",
+			"baseSha": "d2d067bbac0420ccf4739d8d55a33155c4ccb809",
+			"mergeBase": "d2d067bbac0420ccf4739d8d55a33155c4ccb809",
+			"triggerAt": "2026-08-23T18:47:31Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "94534258f4cff25c664234cd2fb9621f7237ef90",
+					"committedAt": "2026-08-23T18:47:31Z",
+					"files": [
+						{
+							"path": "src/clamp.test.ts",
+							"ranges": [[1, 26]]
+						},
+						{
+							"path": "src/clamp.ts",
+							"ranges": [[4, 10]]
+						}
+					]
+				}
+			],
+			"claims": [],
+			"trace": {
+				"candidates": [],
+				"posted": [],
+				"usage": {
+					"code-reviewer.md": {
+						"promptTokens": 5056,
+						"completionTokens": 30
+					},
+					"silent-failure-hunter.md": {
+						"promptTokens": 6799,
+						"completionTokens": 30
+					},
+					"pr-test-analyzer.md": {
+						"promptTokens": 5532,
+						"completionTokens": 30
+					},
+					"security-sast.md": {
+						"promptTokens": 10035,
+						"completionTokens": 30
+					},
+					"code-review-and-quality.md": {
+						"promptTokens": 5504,
+						"completionTokens": 30
+					}
+				}
+			}
+		}
+	],
+	"threads": [],
+	"reactions": [],
+	"expect": {
+		"clean": true
+	}
+}

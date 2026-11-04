@@ -1,0 +1,248 @@
+{
+	"fixtureId": "joeblackwaslike__ai-review-bot__70__anthropic",
+	"provisional": true,
+	"labels": [
+		{
+			"claimId": "r0:c3802679098:0",
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-18T09:17:25Z|This is incorrect for the zod version actually installed here (4.4.3) — verified directly, not assumed: `z.array(z.string()).length(0)` builds and parses fine, accepting `[]` and rejecting non-empty arrays (`node -e \"require('zod').z.array(require('zod').z.string()).length(0).safeParse([])\"` → `success: true`). The suite's own 'constrains resolved to an empty array' test already exercises this exact path and passes — if `.length()` didn't exist on ZodArray, that test would throw at collection/execution time, not just fail an assertion. Declining the suggested `z.tuple([])` change since the premise is false; keeping `.length(0)`."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3802679114:0",
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-18T09:17:26Z|Also verified directly and it does not hold for zod 4.4.3: `z.enum(['a','a','b'])` builds without throwing, and parsing the duplicated value succeeds (`safeParse('a').success === true`). Reproduced the exact schema shape used here (object wrapping `z.array(z.enum(ids))` with a deliberately duplicated id array) — construction succeeds, parsing succeeds. Zod does not reject duplicate enum values at construction in this version. Declining the dedup suggestion since there's no throw to guard against; happy to revisit if a future zod upgrade changes that behavior, but that's speculative, not current."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3802679121:0",
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-18T09:17:27Z|Same finding as the thread above (duplicate ids in z.enum) — same empirical result: no throw, construction and parsing both succeed on the installed zod version (4.4.3). Declining for the same reason."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:body:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:body:2",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c3802719138:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-18T09:23:14Z|Fair — the trim in the prior round went too far. Restored a one-sentence mechanism explanation in b71742f (why the model echoes \"id — title\") without the PR-specific forensic narrative."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c3802719149:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-18T09:23:15Z|Same fix, same commit (b71742f) — replaced the dead-end ticket reference with the actual consequence explanation, close to your suggested wording."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:2",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:3",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:4",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c3802762258:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-18T09:29:52Z|Fair point — fixed in d5aaa1b, reworded to justify dedup on its own merits (distinct enum choices) instead of citing runtime zod behavior a reader can't verify from the diff."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:body:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:body:2",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:body:3",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c3802768620:0",
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-18T09:29:58Z|This has now been verified false against the installed zod (4.4.3) three times across this PR's rounds — directly, with reproducible node -e commands, and the suite's own passing tests already exercise this exact code path. I understand the review pipeline can't see prior-round replies, but the claim doesn't get more true by recurring. Not making further changes here; happy to revisit if a zod upgrade ever changes this, but that's not the case today."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c3802768637:0",
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-18T09:29:57Z|Addressed at length in the PR-level comment thread (not this inline one) a round back: verified the all-or-nothing schema behavior directly, and it fails in the safe direction (falls back to INCREMENTAL, never silently drops a resolution) — same principle this codebase already uses for the KV-cold-fallback path. Declining a per-item-filter redesign for the reasons there."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c3802768642:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c3802768648:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-18T09:29:54Z|Same fix, same commit (d5aaa1b) — matches this suggestion too."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:body:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:body:2",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		}
+	],
+	"repeatPairs": [
+		{
+			"later": "r1:body:2",
+			"earlier": "r0:body:0",
+			"confirmed": false
+		},
+		{
+			"later": "r1:body:3",
+			"earlier": "r0:body:1",
+			"confirmed": false
+		},
+		{
+			"later": "r2:body:2",
+			"earlier": "r0:body:0",
+			"confirmed": false
+		},
+		{
+			"later": "r2:body:3",
+			"earlier": "r0:body:1",
+			"confirmed": false
+		},
+		{
+			"later": "r2:body:0",
+			"earlier": "r1:body:0",
+			"confirmed": false
+		},
+		{
+			"later": "r2:body:1",
+			"earlier": "r1:body:1",
+			"confirmed": false
+		},
+		{
+			"later": "r2:body:2",
+			"earlier": "r1:body:2",
+			"confirmed": false
+		},
+		{
+			"later": "r2:body:3",
+			"earlier": "r1:body:3",
+			"confirmed": false
+		},
+		{
+			"later": "r3:c3802768620:0",
+			"earlier": "r0:c3802679098:0",
+			"confirmed": false
+		}
+	],
+	"negativePairs": [],
+	"allowedSuppression": []
+}

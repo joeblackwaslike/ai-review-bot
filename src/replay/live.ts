@@ -1,6 +1,14 @@
 import { isSameClaim } from "../claim-dedupe.js";
 import { candidateFamilies } from "../retraction.js";
-import type { LabelFile, ReplayFixture, Round } from "./types.js";
+import { countJoined, labelledClaims } from "./metrics.js";
+import type {
+	CandidateRecord,
+	LabelFile,
+	ReplayFixture,
+	Round,
+	RoundTrace,
+	RoundUsage,
+} from "./types.js";
 
 export interface LiveFinding {
 	title: string;
@@ -11,6 +19,15 @@ export interface LiveFinding {
 	suppressible?: boolean;
 }
 
+/** What one live review produced: findings, every agent candidate, what the
+ * posting path would post from them, and per-skill usage. */
+export interface LiveReviewOutput {
+	findings: LiveFinding[];
+	candidates: CandidateRecord[];
+	posted: CandidateRecord[];
+	usage: RoundUsage;
+}
+
 export interface LiveRoundReport {
 	index: number;
 	matchedFixed: number;
@@ -19,7 +36,16 @@ export interface LiveRoundReport {
 	raw: number;
 	retracted: number;
 	approximate: boolean;
+	candidates: number;
+	joined: number;
+	posted: number;
+	usage: RoundUsage;
+	trace: RoundTrace;
 }
+
+/** An estimate that is NaN, infinite or negative. The live tier refuses to run
+ * rather than treat the round as free, since the round spends real money. */
+export class InvalidEstimateError extends Error {}
 
 export interface LiveReport {
 	spentUsd: number;
@@ -31,8 +57,8 @@ export interface LiveOptions {
 	labels: LabelFile;
 	rounds: number[];
 	maxCostUsd: number;
-	review: (diffInput: string) => Promise<LiveFinding[]>;
-	estimateCost: (diffInput: string) => number;
+	review: (diffInput: string, round: Round) => Promise<LiveReviewOutput>;
+	estimateCost: (diffInput: string, round: Round) => number;
 	fetchDiff: (round: Round) => Promise<{ diff: string; approximate: boolean }>;
 	out?: (s: string) => void;
 }
@@ -61,8 +87,11 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 		selected.map(async (r) => ({ round: r, ...(await opts.fetchDiff(r)) })),
 	);
 	const estimates = diffs.map((d) => {
-		const e = opts.estimateCost(d.diff);
-		if (!Number.isFinite(e) || e < 0) return 0;
+		const e = opts.estimateCost(d.diff, d.round);
+		if (!Number.isFinite(e) || e < 0)
+			throw new InvalidEstimateError(
+				`round ${d.round.index}: invalid cost estimate ${e}`,
+			);
 		return e;
 	});
 	const total = estimates.reduce((a, b) => a + b, 0);
@@ -72,6 +101,7 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 
 	const matchable = confirmedClaimIds(opts.labels);
 	const labelOf = new Map(opts.labels.labels.map((l) => [l.claimId, l.label]));
+	const labelled = labelledClaims(opts.fixture, opts.labels);
 	const report: LiveReport = { spentUsd: 0, rounds: [] };
 
 	for (const [i, d] of diffs.entries()) {
@@ -82,8 +112,12 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 			);
 			break;
 		}
-		const findings = await opts.review(d.diff);
+		const { findings, candidates, posted, usage } = await opts.review(
+			d.diff,
+			d.round,
+		);
 		report.spentUsd += estimate;
+		const counted = countJoined(candidates, labelled);
 		const row: LiveRoundReport = {
 			index: d.round.index,
 			matchedFixed: 0,
@@ -94,6 +128,11 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 				(f) => candidateFamilies({ ...f, body: f.body ?? "" }).length > 0,
 			).length,
 			approximate: d.approximate,
+			candidates: counted.candidates,
+			joined: counted.joined,
+			posted: posted.length,
+			usage,
+			trace: { candidates, posted, usage },
 		};
 		for (const f of findings) {
 			const hit = d.round.claims.find(
@@ -106,8 +145,12 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 		}
 		report.rounds.push(row);
 		out(
-			`round ${row.index}${row.approximate ? " (approximate diff)" : ""}: ${row.matchedFixed} of ${findings.length} matched fixed, ${row.matchedRejected} of ${findings.length} matched rejected, ${row.newUnlabeled} new unlabeled (no accuracy claimed); ${row.raw} raw findings, ${row.retracted} candidate retractions`,
+			`round ${row.index}${row.approximate ? " (approximate diff)" : ""}: ${row.matchedFixed} of ${findings.length} matched fixed, ${row.matchedRejected} of ${findings.length} matched rejected, ${row.newUnlabeled} new unlabeled (no accuracy claimed); ${row.raw} raw findings, ${row.retracted} candidate retractions; ${row.candidates} candidates, ${row.joined} joined to labelled claims, ${row.posted} would post`,
 		);
+		const usageLine = Object.entries(usage)
+			.map(([s, u]) => `${s} ${u.promptTokens}+${u.completionTokens}`)
+			.join(", ");
+		if (usageLine) out(`  usage: ${usageLine}`);
 	}
 	return report;
 }

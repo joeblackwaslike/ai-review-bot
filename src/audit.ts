@@ -100,11 +100,23 @@ export async function runAuditPass(opts: {
 	 * or an empty-but-valid pass misreports as "every agent failed". */
 	agentsAttempted: number;
 	agentReviews: { skill: string; review: ModelReview }[];
+	/** Tokens per skill (same names as `agentReviews`); values sum to `usage`. */
+	usageBySkill: Record<string, PassUsage>;
 }> {
 	const { files, selection, extraInstructions, meta, auth } = opts;
 	const reviews: ModelReview[] = [];
 	const agentReviews: { skill: string; review: ModelReview }[] = [];
 	const usage: PassUsage = { promptTokens: 0, completionTokens: 0 };
+	const usageBySkill: Record<string, PassUsage> = {};
+	const addUsage = (skill: string, u: PassUsage) => {
+		const entry = usageBySkill[skill] ?? {
+			promptTokens: 0,
+			completionTokens: 0,
+		};
+		usageBySkill[skill] = entry;
+		entry.promptTokens += u.promptTokens;
+		entry.completionTokens += u.completionTokens;
+	};
 	let agentsSucceeded = 0;
 	let agentsAttempted = 0;
 
@@ -159,7 +171,11 @@ export async function runAuditPass(opts: {
 		});
 		let batchSucceeded = 0;
 		for (const [i, o] of outcomes.entries()) {
+			const skillName = (
+				TIER1_SKILLS[i].split("/").pop() ?? TIER1_SKILLS[i]
+			).replace(/\.md$/, "");
 			if (o.status === "error" && o.usage) {
+				addUsage(skillName, o.usage);
 				usage.promptTokens += o.usage.promptTokens;
 				usage.completionTokens += o.usage.completionTokens;
 			}
@@ -170,6 +186,7 @@ export async function runAuditPass(opts: {
 					skill: file.replace(/\.md$/, ""),
 					review: o.review,
 				});
+				addUsage(skillName, o.usage);
 				usage.promptTokens += o.usage.promptTokens;
 				usage.completionTokens += o.usage.completionTokens;
 				batchSucceeded += 1;
@@ -191,7 +208,14 @@ export async function runAuditPass(opts: {
 					inline_comments: [],
 				}
 			: mergeReviews(reviews);
-	return { review, usage, agentsSucceeded, agentsAttempted, agentReviews };
+	return {
+		review,
+		usage,
+		agentsSucceeded,
+		agentsAttempted,
+		agentReviews,
+		usageBySkill,
+	};
 }
 
 export async function auditRepo({

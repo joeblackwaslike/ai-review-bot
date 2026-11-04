@@ -1,3 +1,4 @@
+import { fixtureId } from "./claims.js";
 import { earlierRepeats } from "./metrics.js";
 import type { ReplayResult } from "./replay.js";
 import type { LabelFile, ReplayFixture } from "./types.js";
@@ -70,4 +71,23 @@ export function checkRecall(
 		}
 	}
 	return report;
+}
+
+/** Checks clean-PR fixtures: any round whose trace posted something is a violation. */
+export function checkClean(fixtures: ReplayFixture[]): {
+	violations: string[];
+	unchecked: string[];
+} {
+	const violations: string[] = [];
+	const unchecked: string[] = [];
+	for (const f of fixtures) {
+		if (!f.expect?.clean) continue;
+		const id = fixtureId(f);
+		if (f.rounds.some((r) => !r.trace)) unchecked.push(id);
+		for (const r of f.rounds) {
+			if (r.trace && r.trace.posted.length > 0)
+				violations.push(`${id} round ${r.index}`);
+		}
+	}
+	return { violations, unchecked };
 }

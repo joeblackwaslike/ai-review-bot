@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { checkRecall } from "./guard.js";
+import { fixtureId } from "./claims.js";
+import { checkClean, checkRecall } from "./guard.js";
 import { makeFixture, makeLabel, makeLabels, makeResult } from "./testkit.js";
 
 const f = makeFixture([["a", "b"], ["c"]]);
@@ -223,5 +224,66 @@ describe("checkRecall", () => {
 		expect(r.failures).toContain(
 			"confirmed fixed first-round claim b was suppressed",
 		);
+	});
+});
+
+describe("checkClean", () => {
+	const item = {
+		skill: "s.md",
+		title: "t",
+		path: "a.ts",
+		line: 1,
+		severity: "high",
+	};
+	const tr = (posted: (typeof item)[]) => ({
+		candidates: [],
+		posted,
+		usage: {},
+	});
+
+	it("names the clean fixture round that posted something", () => {
+		const fx = makeFixture([["a"], ["b"]], { expect: { clean: true } });
+		fx.rounds[0] = { ...fx.rounds[0], trace: tr([]) } as (typeof fx.rounds)[0];
+		fx.rounds[1] = {
+			...fx.rounds[1],
+			trace: tr([item]),
+		} as (typeof fx.rounds)[0];
+		const r = checkClean([fx]);
+		expect(r.violations).toEqual([`${fixtureId(fx)} round 1`]);
+		expect(r.unchecked).toEqual([]);
+	});
+
+	it("reports a clean fixture with an untraced round as unchecked", () => {
+		const fx = makeFixture([["a"], ["b"]], { expect: { clean: true } });
+		fx.rounds[1] = { ...fx.rounds[1], trace: tr([]) } as (typeof fx.rounds)[0];
+		expect(checkClean([fx])).toEqual({
+			violations: [],
+			unchecked: [fixtureId(fx)],
+		});
+	});
+
+	it("reports a clean fixture with no trace as unchecked", () => {
+		const fx = makeFixture([["a"]], { expect: { clean: true } });
+		expect(checkClean([fx])).toEqual({
+			violations: [],
+			unchecked: [fixtureId(fx)],
+		});
+	});
+
+	it("ignores clean fixtures that posted nothing and non-clean fixtures", () => {
+		const clean = makeFixture([["a"]], { expect: { clean: true } });
+		clean.rounds[0] = {
+			...clean.rounds[0],
+			trace: tr([]),
+		} as (typeof clean.rounds)[0];
+		const other = makeFixture([["a"]]);
+		other.rounds[0] = {
+			...other.rounds[0],
+			trace: tr([item]),
+		} as (typeof other.rounds)[0];
+		expect(checkClean([clean, other])).toEqual({
+			violations: [],
+			unchecked: [],
+		});
 	});
 });

@@ -1,0 +1,439 @@
+{
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "ai-review-bot-demo",
+	"pull": 2,
+	"provider": "anthropic",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-11-03T22:44:41.491Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 5003061020,
+			"provider": "anthropic",
+			"submittedAt": "2026-08-23T18:24:41Z",
+			"headSha": "f0d412dc9ce9aebf650fe0c1b10c1921abac455d",
+			"baseSha": "1640315c6de8168b94fc0ac0ac9f0418bf437395",
+			"mergeBase": "1640315c6de8168b94fc0ac0ac9f0418bf437395",
+			"triggerAt": "2026-08-23T18:24:11Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "f0d412dc9ce9aebf650fe0c1b10c1921abac455d",
+					"committedAt": "2026-08-23T18:24:11Z",
+					"files": [
+						{
+							"path": "src/retry.test.ts",
+							"ranges": [[1, 40]]
+						},
+						{
+							"path": "src/retry.ts",
+							"ranges": [[10, 29]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r0:c3839251381:0",
+					"roundIndex": 0,
+					"reviewId": 5003061020,
+					"source": "inline",
+					"commentId": 3839251381,
+					"path": "src/retry.ts",
+					"line": 30,
+					"severity": "P3",
+					"title": "lastError typed as unknown thrown without context",
+					"text": "🟢 **Low**\n\n**lastError typed as unknown thrown without context**\n\nlastError is typed unknown and thrown as-is when all attempts fail. This is correct behavior (propagates the real error), but there's no logging of intermediate attempt failures before the final throw, so debugging why earlier attempts failed (vs. just the last one) has no trace. Not blocking, but consider logging each attempt's failure with attempt number for observability."
+				}
+			]
+		},
+		{
+			"index": 1,
+			"reviewId": 5003064608,
+			"provider": "anthropic",
+			"submittedAt": "2026-08-23T18:26:35Z",
+			"headSha": "c43859eb87413ee9d72d9cf89baee85bc3339a60",
+			"baseSha": "f0d412dc9ce9aebf650fe0c1b10c1921abac455d",
+			"mergeBase": "f0d412dc9ce9aebf650fe0c1b10c1921abac455d",
+			"triggerAt": "2026-08-23T18:26:11Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "c43859eb87413ee9d72d9cf89baee85bc3339a60",
+					"committedAt": "2026-08-23T18:26:11Z",
+					"files": [
+						{
+							"path": "src/retry.ts",
+							"ranges": [[20, 26]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r1:body:0",
+					"roundIndex": 1,
+					"reviewId": 5003064608,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "maxAttempts=0 edge case not guarded",
+					"text": "maxAttempts=0 edge case not guarded"
+				}
+			],
+			"trace": {
+				"candidates": [
+					{
+						"skill": "code-reviewer.md",
+						"title": "Backoff delay is zero on the first retry",
+						"path": "src/retry.ts",
+						"line": 23,
+						"severity": "P1"
+					},
+					{
+						"skill": "silent-failure-hunter.md",
+						"title": "Backoff delay is zero on first retry",
+						"path": "src/retry.ts",
+						"line": 23,
+						"severity": "P1"
+					},
+					{
+						"skill": "pr-test-analyzer.md",
+						"title": "Backoff delay is zero on first retry",
+						"path": "src/retry.ts",
+						"line": 23,
+						"severity": "P1"
+					},
+					{
+						"skill": "pr-test-analyzer.md",
+						"title": "No test coverage for retry backoff timing",
+						"path": null,
+						"line": null,
+						"severity": "P2"
+					},
+					{
+						"skill": "security-sast.md",
+						"title": "Backoff delay is zero on first retry",
+						"path": "src/retry.ts",
+						"line": 23,
+						"severity": "P1"
+					},
+					{
+						"skill": "code-review-and-quality.md",
+						"title": "Backoff delay is zero on the first retry",
+						"path": "src/retry.ts",
+						"line": 23,
+						"severity": "P2"
+					}
+				],
+				"posted": [
+					{
+						"skill": "code-reviewer.md",
+						"title": "Backoff delay is zero on the first retry",
+						"path": "src/retry.ts",
+						"line": 23,
+						"severity": "P1"
+					},
+					{
+						"skill": "pr-test-analyzer.md",
+						"title": "No test coverage for retry backoff timing",
+						"path": null,
+						"line": null,
+						"severity": "P2"
+					}
+				],
+				"usage": {
+					"code-reviewer.md": {
+						"promptTokens": 4651,
+						"completionTokens": 426
+					},
+					"silent-failure-hunter.md": {
+						"promptTokens": 6394,
+						"completionTokens": 377
+					},
+					"pr-test-analyzer.md": {
+						"promptTokens": 5127,
+						"completionTokens": 559
+					},
+					"security-sast.md": {
+						"promptTokens": 9630,
+						"completionTokens": 409
+					},
+					"code-review-and-quality.md": {
+						"promptTokens": 5099,
+						"completionTokens": 423
+					}
+				}
+			}
+		},
+		{
+			"index": 2,
+			"reviewId": 5003069595,
+			"provider": "anthropic",
+			"submittedAt": "2026-08-23T18:29:13Z",
+			"headSha": "2453e377b8baf37f7b31c7a4bfc52562460f1102",
+			"baseSha": "c43859eb87413ee9d72d9cf89baee85bc3339a60",
+			"mergeBase": "c43859eb87413ee9d72d9cf89baee85bc3339a60",
+			"triggerAt": "2026-08-23T18:28:38Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "2453e377b8baf37f7b31c7a4bfc52562460f1102",
+					"committedAt": "2026-08-23T18:28:38Z",
+					"files": [
+						{
+							"path": "src/retry.test.ts",
+							"ranges": [[1, 10], [41, 74]]
+						},
+						{
+							"path": "src/retry.ts",
+							"ranges": [[11, 22]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r2:body:0",
+					"roundIndex": 2,
+					"reviewId": 5003069595,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "lastError thrown without type narrowing",
+					"text": "lastError thrown without type narrowing"
+				}
+			],
+			"trace": {
+				"candidates": [
+					{
+						"skill": "code-reviewer.md",
+						"title": "Test mocks setTimeout so cb runs synchronously, weakening backoff verification",
+						"path": "src/retry.test.ts",
+						"line": 72,
+						"severity": "P3"
+					},
+					{
+						"skill": "silent-failure-hunter.md",
+						"title": "Test mocks setTimeout but also enables fake timers; spy restore not in finally",
+						"path": "src/retry.test.ts",
+						"line": 72,
+						"severity": "P3"
+					},
+					{
+						"skill": "pr-test-analyzer.md",
+						"title": "Backoff test is tightly coupled to implementation and mocks setTimeout while also using fake timers",
+						"path": "src/retry.test.ts",
+						"line": 70,
+						"severity": "P3"
+					},
+					{
+						"skill": "security-sast.md",
+						"title": "Test mocks setTimeout but also enables fake timers, which is redundant and fragile",
+						"path": "src/retry.test.ts",
+						"line": 54,
+						"severity": "P3"
+					},
+					{
+						"skill": "code-review-and-quality.md",
+						"title": "Fake-timer test mocks setTimeout directly; fake timers add nothing",
+						"path": "src/retry.test.ts",
+						"line": 72,
+						"severity": "P3"
+					}
+				],
+				"posted": [
+					{
+						"skill": "pr-test-analyzer.md",
+						"title": "Backoff test is tightly coupled to implementation and mocks setTimeout while also using fake timers",
+						"path": "src/retry.test.ts",
+						"line": 70,
+						"severity": "P3"
+					},
+					{
+						"skill": "silent-failure-hunter.md",
+						"title": "Test mocks setTimeout but also enables fake timers; spy restore not in finally",
+						"path": "src/retry.test.ts",
+						"line": 72,
+						"severity": "P3"
+					}
+				],
+				"usage": {
+					"code-reviewer.md": {
+						"promptTokens": 5620,
+						"completionTokens": 418
+					},
+					"silent-failure-hunter.md": {
+						"promptTokens": 7363,
+						"completionTokens": 347
+					},
+					"pr-test-analyzer.md": {
+						"promptTokens": 6096,
+						"completionTokens": 467
+					},
+					"security-sast.md": {
+						"promptTokens": 10599,
+						"completionTokens": 362
+					},
+					"code-review-and-quality.md": {
+						"promptTokens": 6068,
+						"completionTokens": 347
+					}
+				}
+			}
+		},
+		{
+			"index": 3,
+			"reviewId": 5003074637,
+			"provider": "anthropic",
+			"submittedAt": "2026-08-23T18:31:57Z",
+			"headSha": "2453e377b8baf37f7b31c7a4bfc52562460f1102",
+			"baseSha": "2453e377b8baf37f7b31c7a4bfc52562460f1102",
+			"mergeBase": "2453e377b8baf37f7b31c7a4bfc52562460f1102",
+			"triggerAt": null,
+			"approximate": true,
+			"commitsSince": [],
+			"claims": [
+				{
+					"id": "r3:body:0",
+					"roundIndex": 3,
+					"reviewId": 5003074637,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "lastError thrown as unknown without type narrowing",
+					"text": "lastError thrown as unknown without type narrowing"
+				}
+			],
+			"trace": {
+				"candidates": [],
+				"posted": [],
+				"usage": {
+					"code-reviewer.md": {
+						"promptTokens": 4485,
+						"completionTokens": 227
+					},
+					"silent-failure-hunter.md": {
+						"promptTokens": 6228,
+						"completionTokens": 131
+					},
+					"pr-test-analyzer.md": {
+						"promptTokens": 4961,
+						"completionTokens": 180
+					},
+					"security-sast.md": {
+						"promptTokens": 9464,
+						"completionTokens": 198
+					},
+					"code-review-and-quality.md": {
+						"promptTokens": 4933,
+						"completionTokens": 143
+					}
+				}
+			}
+		},
+		{
+			"index": 4,
+			"reviewId": 5003083282,
+			"provider": "anthropic",
+			"submittedAt": "2026-08-23T18:36:35Z",
+			"headSha": "2453e377b8baf37f7b31c7a4bfc52562460f1102",
+			"baseSha": "2453e377b8baf37f7b31c7a4bfc52562460f1102",
+			"mergeBase": "2453e377b8baf37f7b31c7a4bfc52562460f1102",
+			"triggerAt": null,
+			"approximate": true,
+			"commitsSince": [],
+			"claims": [
+				{
+					"id": "r4:body:0",
+					"roundIndex": 4,
+					"reviewId": 5003083282,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "lastError thrown without narrowing (previously flagged, still unresolved)",
+					"text": "lastError thrown without narrowing (previously flagged, still unresolved)"
+				},
+				{
+					"id": "r4:body:1",
+					"roundIndex": 4,
+					"reviewId": 5003083282,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "maxAttempts=0 edge case now guarded",
+					"text": "maxAttempts=0 edge case now guarded"
+				},
+				{
+					"id": "r4:body:2",
+					"roundIndex": 4,
+					"reviewId": 5003083282,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "lastError typed as unknown thrown without narrowing",
+					"text": "lastError typed as unknown thrown without narrowing"
+				}
+			],
+			"trace": {
+				"candidates": [],
+				"posted": [],
+				"usage": {
+					"code-reviewer.md": {
+						"promptTokens": 4485,
+						"completionTokens": 192
+					},
+					"silent-failure-hunter.md": {
+						"promptTokens": 6228,
+						"completionTokens": 170
+					},
+					"pr-test-analyzer.md": {
+						"promptTokens": 4961,
+						"completionTokens": 198
+					},
+					"security-sast.md": {
+						"promptTokens": 9464,
+						"completionTokens": 222
+					},
+					"code-review-and-quality.md": {
+						"promptTokens": 4933,
+						"completionTokens": 137
+					}
+				}
+			}
+		}
+	],
+	"threads": [
+		{
+			"threadId": "PRRT_kwDOUBzGtc6bhOGI",
+			"commentId": 3839251381,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": [
+				{
+					"id": 3839255041,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-23T18:26:19Z",
+					"editedAt": null,
+					"body": "Acknowledged — non-blocking. This module has no logger dependency and adding one here would pull observability concerns into a leaf utility. Callers that need per-attempt traces can wrap `fn` themselves; the final error now propagates with its original stack."
+				}
+			]
+		}
+	],
+	"reactions": [],
+	"heldOut": true
+}

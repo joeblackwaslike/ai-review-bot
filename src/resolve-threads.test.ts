@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { claimTitle } from "./replay/claims.js";
 import { resolveStaleThreads } from "./resolve-threads.js";
 
 const PREFIX = "AI Review";
@@ -129,6 +130,28 @@ describe("resolveStaleThreads", () => {
 			},
 		]);
 		await run(f.octokit);
+		expect(f.mutations).toEqual(["t1"]);
+	});
+
+	it("resolves only the matching one of two old-format threads on a path", async () => {
+		const first = "🟡 **Medium**\n\n**Null deref**\n\nx";
+		const f = fakeOctokit([
+			{
+				id: "t1",
+				path: "a.ts",
+				body: first,
+				typename: "Bot",
+				reviewBody: ownBody("anthropic"),
+			},
+			{
+				id: "t2",
+				path: "a.ts",
+				body: "🟡 **Medium**\n\n**Unbounded retry**\n\ny",
+				typename: "Bot",
+				reviewBody: ownBody("anthropic"),
+			},
+		]);
+		await run(f.octokit, [{ path: "a.ts", title: claimTitle(first) }]);
 		expect(f.mutations).toEqual(["t1"]);
 	});
 

@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { fixtureId } from "./claims.js";
-import { checkRecall } from "./guard.js";
+import { checkClean, checkRecall } from "./guard.js";
 import { computeMetrics, formatReport } from "./metrics.js";
 import { asRecordedPipeline } from "./pipeline.js";
 import { replayFixture } from "./replay.js";
@@ -47,6 +47,12 @@ describe("committed replay fixtures", () => {
 		for (const { f, labels, result } of loaded) {
 			expect(checkRecall(f, labels, result).failures).toEqual([]);
 		}
+	});
+
+	it("no clean fixture's saved trace posted anything", () => {
+		const clean = checkClean(loaded.map((l) => l.f));
+		expect(clean.violations).toEqual([]);
+		expect(clean.unchecked).toEqual([]);
 	});
 
 	it("report matches the committed snapshot", () => {

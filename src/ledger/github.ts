@@ -28,7 +28,6 @@ export interface LedgerEvidence {
 }
 
 const DECIDER_ASSOCIATIONS = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
-const SEVERITY = /\bP[0-3]\b/;
 const PER_PAGE = 100;
 
 export function buildLedger(e: LedgerEvidence): Ledger {
@@ -225,7 +224,7 @@ export async function fetchLedgerEvidence(
 					commentId: c.id,
 					path: c.path,
 					line: c.line ?? c.original_line ?? null,
-					severity: part.text.match(SEVERITY)?.[0] ?? "P3",
+					severity: part.severity,
 					title: part.title,
 					text: part.text,
 				});

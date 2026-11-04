@@ -21,7 +21,11 @@ export const claim = (id: string, roundIndex: number): PostedClaim => ({
 	text: id,
 });
 
-export const makeRound = (index: number, ids: string[]): Round => ({
+export const makeRound = (
+	index: number,
+	ids: string[],
+	overrides: Partial<Round> = {},
+): Round => ({
 	index,
 	reviewId: index,
 	provider: "anthropic",
@@ -33,9 +37,13 @@ export const makeRound = (index: number, ids: string[]): Round => ({
 	approximate: false,
 	commitsSince: [],
 	claims: ids.map((id) => claim(id, index)),
+	...overrides,
 });
 
-export const makeFixture = (rounds: string[][]): ReplayFixture => ({
+export const makeFixture = (
+	rounds: string[][],
+	overrides: Partial<ReplayFixture> = {},
+): ReplayFixture => ({
 	schemaVersion: 1,
 	owner: "o",
 	repo: "r",
@@ -46,6 +54,7 @@ export const makeFixture = (rounds: string[][]): ReplayFixture => ({
 	rounds: rounds.map((ids, i) => makeRound(i, ids)),
 	threads: [],
 	reactions: [],
+	...overrides,
 });
 
 export const makeLabel = (

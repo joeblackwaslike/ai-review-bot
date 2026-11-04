@@ -174,6 +174,9 @@ export interface ClaimMatchOptions {
 	 * two-word titles sharing one word score a perfect 1.0, which says nothing
 	 * about whether they are the same claim. */
 	minTokens: number;
+	/** A lower `titleSimilarity` for anchors at most `lineWindow` lines apart.
+	 * Absent by default: only replay's join measure sets it. */
+	nearby?: { lineWindow: number; titleSimilarity: number };
 }
 
 export const DEFAULT_CLAIM_MATCH: ClaimMatchOptions = {
@@ -216,9 +219,13 @@ export function isSameClaim(
 
 	const similarity = jaccard(tokensA, tokensB);
 	if (!anchored) return similarity >= options.unanchoredSimilarity;
-	return sharesIdentifier
-		? similarity >= options.identifierSimilarity
-		: similarity >= options.titleSimilarity;
+	if (sharesIdentifier) return similarity >= options.identifierSimilarity;
+	const { nearby } = options;
+	const bar =
+		nearby && Math.abs(lineA - lineB) <= nearby.lineWindow
+			? nearby.titleSimilarity
+			: options.titleSimilarity;
+	return similarity >= bar;
 }
 
 // Keyed on the shared severity scale so a typo is a compile error rather than a

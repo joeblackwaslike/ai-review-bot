@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { runLiveTier } from "./live.js";
+import { type LiveFinding, runLiveTier } from "./live.js";
 import type { LabelFile, PostedClaim, ReplayFixture, Round } from "./types.js";
 
 function claim(id: string, roundIndex: number, title: string): PostedClaim {
@@ -66,6 +66,13 @@ function labels(confirmed: boolean): LabelFile {
 	};
 }
 
+const out = (findings: LiveFinding[]) => ({
+	findings,
+	candidates: [],
+	posted: [],
+	usage: {},
+});
+
 const finding = (title: string, path = "src/a.ts") => ({
 	title,
 	path,
@@ -82,7 +89,7 @@ function base(over: Partial<Parameters<typeof runLiveTier>[0]> = {}) {
 		maxCostUsd: 10,
 		review: async (d) => {
 			calls.push(d);
-			return [];
+			return out([]);
 		},
 		estimateCost: () => 1,
 		fetchDiff: async (r) => ({ diff: `diff-${r.index}`, approximate: false }),
@@ -107,7 +114,7 @@ describe("runLiveTier", () => {
 			out: (s) => order.push(`out:${s}`),
 			review: async () => {
 				order.push("review");
-				return [];
+				return out([]);
 			},
 		});
 		await runLiveTier(opts);
@@ -116,10 +123,11 @@ describe("runLiveTier", () => {
 	});
 
 	it("matches live findings only through confirmed pairs and reports the rest as newUnlabeled", async () => {
-		const review = async () => [
-			finding("Missing null check on user input"),
-			finding("Totally different concern about caching", "src/b.ts"),
-		];
+		const review = async () =>
+			out([
+				finding("Missing null check on user input"),
+				finding("Totally different concern about caching", "src/b.ts"),
+			]);
 		const confirmed = await runLiveTier(base({ review, rounds: [1] }).opts);
 		expect(confirmed.rounds[0]).toMatchObject({
 			matchedRejected: 1,
@@ -138,7 +146,7 @@ describe("runLiveTier", () => {
 
 	it("reports no accuracy figure for newUnlabeled findings", async () => {
 		const { opts, lines } = base({
-			review: async () => [finding("Brand new thing", "src/z.ts")],
+			review: async () => out([finding("Brand new thing", "src/z.ts")]),
 			rounds: [0],
 		});
 		await runLiveTier(opts);
@@ -150,24 +158,25 @@ describe("runLiveTier", () => {
 	it("counts raw and candidate retraction findings per round without dropping them", async () => {
 		const { opts, lines } = base({
 			rounds: [0],
-			review: async () => [
-				{
-					...finding("Queue slot"),
-					body: "It is intended. No actionable defect found.",
-					severity: "P3",
-				},
-				{
-					...finding("Auth bypass"),
-					body: "No actionable defect found.",
-					severity: "P0",
-				},
-				{ ...finding("Real issue"), body: "The socket is never closed." },
-				{
-					...finding("Lost write"),
-					body: "No actionable defect found.",
-					severity: "P1",
-				},
-			],
+			review: async () =>
+				out([
+					{
+						...finding("Queue slot"),
+						body: "It is intended. No actionable defect found.",
+						severity: "P3",
+					},
+					{
+						...finding("Auth bypass"),
+						body: "No actionable defect found.",
+						severity: "P0",
+					},
+					{ ...finding("Real issue"), body: "The socket is never closed." },
+					{
+						...finding("Lost write"),
+						body: "No actionable defect found.",
+						severity: "P1",
+					},
+				]),
 		});
 		const report = await runLiveTier(opts);
 		expect(report.rounds[0]).toMatchObject({ raw: 4, retracted: 1 });
@@ -184,5 +193,102 @@ describe("runLiveTier", () => {
 		});
 		const report = await runLiveTier(opts);
 		expect(report.rounds[0]?.approximate).toBe(true);
+	});
+
+	it.each([
+		[Number.NaN, "NaN"],
+		[Number.POSITIVE_INFINITY, "Infinity"],
+		[-1, "-1"],
+	])("rejects an estimate of %s before any review runs", async (value, shown) => {
+		const { opts, calls } = base({
+			estimateCost: (_d, r) => (r.index === 1 ? value : 1),
+		});
+		await expect(runLiveTier(opts)).rejects.toThrow(
+			`round 1: invalid cost estimate ${shown}`,
+		);
+		expect(calls).toHaveLength(0);
+	});
+
+	it("still runs every round when each estimate is valid", async () => {
+		const { opts, calls } = base({ estimateCost: () => 0 });
+		await runLiveTier(opts);
+		expect(calls).toEqual(["diff-0", "diff-1"]);
+	});
+
+	it("prints token usage per skill after the round line, in skill order", async () => {
+		const usage = {
+			"code-reviewer.md": { promptTokens: 2269, completionTokens: 21 },
+			"silent-failure-hunter.md": { promptTokens: 3380, completionTokens: 340 },
+		};
+		const { opts, lines } = base({
+			rounds: [1],
+			review: async () => ({
+				findings: [],
+				candidates: [],
+				posted: [],
+				usage,
+			}),
+		});
+		await runLiveTier(opts);
+		const at = lines.findIndex((l) => l.startsWith("round 1"));
+		expect(lines[at + 1]).toBe(
+			"  usage: code-reviewer.md 2269+21, silent-failure-hunter.md 3380+340",
+		);
+	});
+
+	it("prints no usage line when a round has no usage", async () => {
+		const { opts, lines } = base({ rounds: [1] });
+		await runLiveTier(opts);
+		expect(lines.some((l) => l.trimStart().startsWith("usage:"))).toBe(false);
+	});
+
+	it("reports candidates, joined-to-labelled count and usage per round", async () => {
+		const usage = { "code-reviewer": { promptTokens: 5, completionTokens: 2 } };
+		const cand = (title: string, path: string) => ({
+			skill: "code-reviewer",
+			title,
+			path,
+			line: 10,
+			severity: "P1",
+		});
+		const { opts, lines } = base({
+			rounds: [1],
+			review: async () => ({
+				findings: [],
+				candidates: [
+					cand("Missing null check on user input", "src/a.ts"),
+					cand("Totally different concern about caching", "src/b.ts"),
+				],
+				posted: [],
+				usage,
+			}),
+		});
+		const report = await runLiveTier(opts);
+		expect(report.rounds[0]).toMatchObject({ candidates: 2, joined: 1, usage });
+		expect(lines.join("\n")).toContain(
+			"2 candidates, 1 joined to labelled claims",
+		);
+	});
+
+	it("passes the round to the review and reports how many findings would post", async () => {
+		const seen: number[] = [];
+		const posted = {
+			skill: "code-reviewer.md",
+			title: "Missing null check on user input",
+			path: "src/a.ts",
+			line: 10,
+			severity: "P1",
+		};
+		const { opts, lines } = base({
+			rounds: [1],
+			review: async (_d, r) => {
+				seen.push(r.index);
+				return { ...out([]), posted: [posted, { ...posted, line: 11 }] };
+			},
+		});
+		const report = await runLiveTier(opts);
+		expect(seen).toEqual([1]);
+		expect(report.rounds[0]?.posted).toBe(2);
+		expect(lines.join("\n")).toContain("2 would post");
 	});
 });

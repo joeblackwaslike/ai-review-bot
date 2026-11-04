@@ -1,5 +1,15 @@
+import {
+	type ClaimMatchOptions,
+	DEFAULT_CLAIM_MATCH,
+	isSameClaim,
+} from "../claim-dedupe.js";
 import { type ReplayResult, roundCutoff, visibleLabels } from "./replay.js";
-import type { LabelFile, ReplayFixture } from "./types.js";
+import type {
+	CandidateRecord,
+	LabelFile,
+	PostedClaim,
+	ReplayFixture,
+} from "./types.js";
 
 export interface RepeatCount {
 	count: number;
@@ -18,6 +28,62 @@ export interface Metrics {
 		totalRounds: number;
 		finalRoundQuiet: boolean;
 	};
+	joinRate?: { joined: number; candidates: number };
+}
+
+/** Claims of the fixture that have an entry in the label file. */
+export function labelledClaims(
+	f: ReplayFixture,
+	labels: LabelFile,
+): PostedClaim[] {
+	const labelled = new Set(labels.labels.map((l) => l.claimId));
+	return f.rounds.flatMap((r) => r.claims.filter((c) => labelled.has(c.id)));
+}
+
+/** PROVISIONAL: derived from one fixture's observed pairs (ai-review-bot-demo#2).
+ * Within 3 lines a candidate joins a claim at 0.33 title overlap instead of
+ * 0.5, because a restatement at the same anchor tends to reword the title
+ * ("Preserve the base delay before the first retry" for "Preserve the existing
+ * retry-delay schedule", 0.375). Same file is still required. That fixture is
+ * the held-out ai-review-bot-demo#2, so its join figure is in-sample. */
+export const JOIN_CLAIM_MATCH: ClaimMatchOptions = {
+	...DEFAULT_CLAIM_MATCH,
+	nearby: { lineWindow: 3, titleSimilarity: 0.33 },
+};
+
+/** Distinct candidates, by path, line and title, and how many of them restate
+ * one of the given claims. Several agents raising one finding count once. */
+export function countJoined(
+	candidates: CandidateRecord[],
+	claims: PostedClaim[],
+): { joined: number; candidates: number } {
+	const distinct = [
+		...new Map(
+			candidates.map((c) => [`${c.path}\0${c.line}\0${c.title}`, c]),
+		).values(),
+	];
+	return {
+		joined: distinct.filter((cand) =>
+			claims.some((c) => isSameClaim(cand, c, JOIN_CLAIM_MATCH)),
+		).length,
+		candidates: distinct.length,
+	};
+}
+
+function computeJoinRate(
+	f: ReplayFixture,
+	labels: LabelFile,
+): Metrics["joinRate"] {
+	if (!f.rounds.some((r) => r.trace)) return undefined;
+	const claims = labelledClaims(f, labels);
+	let joined = 0;
+	let candidates = 0;
+	for (const round of f.rounds) {
+		const counted = countJoined(round.trace?.candidates ?? [], claims);
+		candidates += counted.candidates;
+		joined += counted.joined;
+	}
+	return { joined, candidates };
 }
 
 export function earlierRepeats(
@@ -95,6 +161,7 @@ export function computeMetrics(
 		finalRoundQuiet = firstSeen === 0;
 	}
 
+	const joinRate = computeJoinRate(f, labels);
 	return {
 		rejection: { rejected, adjudicated: fixed + rejected },
 		deferred,
@@ -106,6 +173,7 @@ export function computeMetrics(
 			totalRounds: result.rounds.length,
 			finalRoundQuiet,
 		},
+		...(joinRate ? { joinRate } : {}),
 	};
 }
 
@@ -123,6 +191,9 @@ export function formatReport(m: Metrics[], ids: string[]): string {
 				`  recycled: ${repeatText(x.recycled)}`,
 				`  restated open: ${repeatText(x.restatedOpen)}`,
 				`  rounds with first-seen claims: ${x.convergence.roundsWithFirstSeen} of ${x.convergence.totalRounds}, final round quiet: ${x.convergence.finalRoundQuiet ? "yes" : "no"}`,
+				...(x.joinRate
+					? [`  join rate: ${x.joinRate.joined}/${x.joinRate.candidates}`]
+					: []),
 			].join("\n"),
 		)
 		.join("\n\n");
