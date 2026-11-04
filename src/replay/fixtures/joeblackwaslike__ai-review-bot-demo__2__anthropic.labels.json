@@ -59,11 +59,6 @@
 			"confirmed": false
 		},
 		{
-			"later": "r4:body:1",
-			"earlier": "r1:body:0",
-			"confirmed": false
-		},
-		{
 			"later": "r4:body:2",
 			"earlier": "r3:body:0",
 			"confirmed": false
