@@ -68,7 +68,7 @@ The verifier (D1) and the tool-using agents (E2) are the expensive work, and the
 
 **Flags.** `--live --save-trace` writes traces into the fixtures through a temp file and rename, keeping the file mode and key order. `--record ... --held-out` and `--expect-clean` set the fixture flags. A re-record keeps `heldOut` and `expect`, drops saved traces and says so. `--save-trace` without `--live` or alongside `--record` exits 2, as do `--held-out` and `--expect-clean` without `--record`; `--rounds` and `--max-cost` without `--live` are ignored.
 
-**Fixtures.** Held-out, both providers: ai-review-bot#70, ai-review-bot-demo#2 and ai-listings#50, labels provisional. Clean: ai-review-bot-demo#3 (anthropic, passes) and ai-review-bot#94 (openai, passes). Every new fixture has a trace for both providers. Two Anthropic traces are partial: `--rounds 4` left round 0 untraced in ai-review-bot-demo#2 and ai-listings#50. ai-review-bot#80 (openai) stays without `expect` as a data point.
+**Fixtures.** Held-out, both providers: ai-review-bot#70, ai-review-bot-demo#2 and ai-listings#50, labels provisional. Clean: ai-review-bot-demo#3 (anthropic, passes) and ai-review-bot#94 (openai, passes). Each held-out fixture has traces for both providers, and each clean fixture has one for its single provider. Two Anthropic traces are partial: `--rounds 4` left round 0 untraced in ai-review-bot-demo#2 and ai-listings#50. ai-review-bot#80 (openai) stays without `expect` as a data point.
 
 **Findings from the first traces.**
 
