@@ -242,7 +242,7 @@ narrows_playbooks: true
 escalates_with: [public-api]
 guide_refs:
   - "#hand-the-mechanical-rules-to-tools"
-  - "#idiomatic-python"
+  - "#idiomatic-code"
   - "#size-the-change-before-reading-it"
 tools: [tree-sitter-diff, ripgrep, read-file, ci-results, agent-instructions]
 bot_visibility: partial

@@ -5,19 +5,34 @@ renamed, deleted, reformatted, made to behave differently. The [operations/](ope
 define those. The domain is what the code is: an endpoint, a migration, an auth check, a test, a
 config file. This file defines the domains.
 
-Joe's [Code Review Guide and Playbooks](../Code-Review-Guide-and-Playbooks.md) already holds the
-checklist for each kind of code, so this file does not repeat any of it. Every entry here adds
-only what the guide lacks: how to tell from a diff that the domain is present, where the obvious
+Joe's [Code Review Guide, Playbooks and Language Notes](../Code-Review-Guide-and-Playbooks.md)
+already holds the checklist for each kind of code, so this file does not repeat any of it. Every
+entry here adds only what the guide lacks: how to tell from a diff that the domain is present, where the obvious
 signals mislead, how each family of operations changes the amount of review the domain needs, and
 what ai-review-bot can and cannot see of it today.
 
 Three kinds of entry:
 
-- **playbook.** One per Part 2 playbook of the guide (DOM-01 to DOM-18).
+- **playbook.** One per Part 2 playbook of the guide, or per cluster of closely related
+  playbooks (DOM-01 to DOM-18, DOM-23 to DOM-26, DOM-28, DOM-42 and DOM-45 to DOM-52). That is 32
+  entries. DOM-42 maps to the agent workflows playbook and notes the two gaps it leaves.
 - **cross-cutting.** The four Part 1 concerns that apply to every diff but gain weight in some
   code (DOM-19 to DOM-22).
-- **proposed.** Kinds of file the guide has no playbook for but that appear in real PRs (DOM-23
-  to DOM-44). Each has detection notes and a sketch of what a playbook would need.
+- **proposed.** Kinds of file the guide has no playbook for but that appear in real PRs (DOM-27,
+  DOM-29 to DOM-41, DOM-43 and DOM-44). That is 16 entries. Each has detection notes and a sketch
+  of what a playbook would need.
+
+Ids are stable. DOM-23 to DOM-28 and DOM-42 were proposed entries until the guide gained matching
+playbooks, and DOM-45 onward were added after them, so the numbering does not follow the guide's
+order.
+
+Language is a modifier, not a domain. Part 3 of the guide holds the notes for
+[Python](../Code-Review-Guide-and-Playbooks.md#python),
+[TypeScript and JavaScript](../Code-Review-Guide-and-Playbooks.md#typescript-and-javascript),
+[shell](../Code-Review-Guide-and-Playbooks.md#shell-bash-and-zsh) and
+[SQL](../Code-Review-Guide-and-Playbooks.md#sql). Detection picks the language from the file
+extension or shebang, and the reviewer then reads the matching section for idioms and smells in
+addition to the domain's playbook. Entries here name the language only where the signals differ.
 
 Field notes for the YAML blocks:
 
@@ -58,12 +73,12 @@ Field notes for the YAML blocks:
 | [DOM-20](#dom-20-concurrency-and-io) | Concurrency and I/O | cross-cutting | high |
 | [DOM-21](#dom-21-compatibility) | Compatibility | cross-cutting | high |
 | [DOM-22](#dom-22-performance-and-observability) | Performance and observability | cross-cutting | medium |
-| [DOM-23](#dom-23-frontend-and-ui-components) | Frontend and UI components | proposed | medium |
-| [DOM-24](#dom-24-dockerfile-and-infrastructure-as-code) | Dockerfile and infrastructure-as-code | proposed | high |
-| [DOM-25](#dom-25-shell-scripts) | Shell scripts | proposed | medium |
-| [DOM-26](#dom-26-html-artifacts) | HTML artifacts | proposed | low |
+| [DOM-23](#dom-23-react-components-jsx-and-tsx) | React components (JSX and TSX) | playbook | medium |
+| [DOM-24](#dom-24-dockerfiles-and-container-images) | Dockerfiles and container images | playbook | high |
+| [DOM-25](#dom-25-shell-scripts) | Shell scripts | playbook | medium |
+| [DOM-26](#dom-26-html-artifacts) | HTML artifacts | playbook | low |
 | [DOM-27](#dom-27-binary-assets) | Binary assets | proposed | low |
-| [DOM-28](#dom-28-llm-prompt-and-agent-instruction-files) | LLM prompt and agent-instruction files | proposed | medium |
+| [DOM-28](#dom-28-llm-prompts) | LLM prompts | playbook | medium |
 | [DOM-29](#dom-29-outbound-service-clients-and-integrations) | Outbound service clients and integrations | proposed | high |
 | [DOM-30](#dom-30-application-startup-shutdown-and-resource-ownership) | Application startup, shutdown and resource ownership | proposed | medium |
 | [DOM-31](#dom-31-build-packaging-and-release-artifacts) | Build, packaging and release artifacts | proposed | medium |
@@ -77,9 +92,17 @@ Field notes for the YAML blocks:
 | [DOM-39](#dom-39-data-retention-erasure-and-archival) | Data retention, erasure and archival | proposed | high |
 | [DOM-40](#dom-40-streaming-and-long-lived-connections) | Streaming and long-lived connections | proposed | medium |
 | [DOM-41](#dom-41-llm-inference-and-structured-output-handling) | LLM inference and structured-output handling | proposed | medium |
-| [DOM-42](#dom-42-agent-execution-tools-and-durable-state) | Agent execution, tools and durable state | proposed | high |
+| [DOM-42](#dom-42-agent-execution-tools-and-durable-state) | Agent execution, tools and durable state | playbook | high |
 | [DOM-43](#dom-43-retrieval-embeddings-and-search-indexes) | Retrieval, embeddings and search indexes | proposed | medium |
 | [DOM-44](#dom-44-model-and-agent-evaluation-datasets) | Model and agent evaluation datasets | proposed | medium |
+| [DOM-45](#dom-45-nextjs) | Next.js | playbook | high |
+| [DOM-46](#dom-46-accessibility) | Accessibility | playbook | medium |
+| [DOM-47](#dom-47-css-and-styling) | CSS and styling | playbook | low |
+| [DOM-48](#dom-48-sql-files-and-raw-queries) | SQL files and raw queries | playbook | high |
+| [DOM-49](#dom-49-infrastructure-as-code) | Infrastructure as code | playbook | high |
+| [DOM-50](#dom-50-skills-and-instruction-files) | Skills and instruction files | playbook | medium |
+| [DOM-51](#dom-51-agent-rules-files-and-subagents) | Agent rules files and subagents | playbook | medium |
+| [DOM-52](#dom-52-hooks-and-commands) | Hooks and commands | playbook | high |
 
 ## How today's routing sees domains
 
@@ -273,8 +296,11 @@ any added route. Read request and response models before the handler body, and c
 
 Added routes are a full review. A route
 [renamed](operations/relocation.md#rel-03-symbol-renamed-in-place) in code but not in its path
-string is invisible to HTTP callers, but the generated OpenAPI `operationId` can derive from
-the function name, so generated clients may see it. A path or method change is an
+string is invisible to HTTP callers. FastAPI, though, derives the default OpenAPI
+`operationId` from the handler's name, and generated SDKs use it as the client method name. So
+unless the route sets `operation_id` explicitly, a handler rename is an
+[interface](operations/interface.md) change for generated clients, not only a REL-03 rename.
+A path or method change is an
 [interface](operations/interface.md) change and moves to [DOM-04](#dom-04-endpoint-schema-changes-versioning-and-deprecation).
 A [deleted](operations/deletion.md) route needs a check for remaining callers, including other
 services the repo cannot see.
@@ -1038,7 +1064,7 @@ fixtures changed in the diff, not the tests that depend on them.
 id: DOM-15
 name: Documentation
 kind: playbook
-playbook: "#documentation"
+playbook: "#documentation-and-markdown"
 path_signals:
   - "README*"
   - "docs/**"
@@ -1066,14 +1092,15 @@ but a README with install commands is code in disguise.
 Look-alikes:
 
 - Specs, plans and ADRs are [DOM-02](#dom-02-design-specs-and-plans). Prompt and instruction
-  files such as `AGENTS.md` and `skills/*.md` are Markdown that executes, see
-  [DOM-28](#dom-28-llm-prompt-and-agent-instruction-files).
+  files such as `AGENTS.md`, `SKILL.md` and `skills/*.md` are Markdown that executes, see
+  [DOM-28](#dom-28-llm-prompts), [DOM-50](#dom-50-skills-and-instruction-files) and
+  [DOM-51](#dom-51-agent-rules-files-and-subagents).
 - `.txt` files include `requirements.txt` and robots files, which are dependencies and config.
 - A generated API reference is output.
 
 ### Playbook
 
-Use the [documentation playbook](../Code-Review-Guide-and-Playbooks.md#documentation) for any
+Use the [documentation playbook](../Code-Review-Guide-and-Playbooks.md#documentation-and-markdown) for any
 docs change, and for any source change that alters something a doc describes.
 
 ### How operations change it
@@ -1147,7 +1174,8 @@ Look-alikes:
 
 Pull the [configuration playbook](../Code-Review-Guide-and-Playbooks.md#configuration-files) for
 any change to a settings model, CI workflow or tooling gate. Workflows with permissions or
-secrets also fall under [DOM-24](#dom-24-dockerfile-and-infrastructure-as-code).
+secrets also fall under
+[DOM-37](#dom-37-ci-pipelines-deploy-orchestration-and-repository-automation).
 
 ### How operations change it
 
@@ -1542,28 +1570,24 @@ capped to P2). No agent can run a benchmark or read a profile.
 
 ---
 
-## DOM-23: Frontend and UI components
+## DOM-23: React components (JSX and TSX)
 
 ```yaml
 id: DOM-23
-name: Frontend and UI components
-kind: proposed
-playbook: null
+name: React components (JSX and TSX)
+kind: playbook
+playbook: "#react-components-jsx-and-tsx"
 path_signals:
-  - "**/*.{tsx,jsx,vue,svelte}"
-  - "app/**/page.tsx"
-  - "app/**/layout.tsx"
+  - "**/*.{tsx,jsx}"
   - "components/**"
-  - "**/*.{css,scss}"
-  - "tailwind.config.*"
   - "**/*.stories.*"
-  - "**/*.module.css"
+  - "src/hooks/**"
 content_signals:
-  - "React: useState, useEffect with dependency array, useMemo, useCallback, 'use client', 'use server'"
-  - "Next.js app router: server vs client component boundary, metadata exports, revalidate, cookies(), headers()"
-  - "dangerouslySetInnerHTML; key props missing in lists; fetch inside useEffect"
-  - "accessibility: aria-*, role=, alt=, label htmlFor, tabIndex, onClick on non-button elements"
-  - "Tailwind class lists, CSS variables, media queries"
+  - "hooks: useState, useEffect with a dependency array, useMemo, useCallback, useRef, custom use* hooks"
+  - "derived state copied into useState; fetch or subscriptions inside useEffect"
+  - "dangerouslySetInnerHTML; list items without a stable key; index as key"
+  - "props spread onto DOM elements; prop types or interfaces that grow flags"
+  - "Python: Streamlit or Gradio scripts, HTMX fragments returned from handlers"
 agents_today: [type-design-analyzer, code-reviewer, security-sast]
 triage_weight: medium
 bot_visibility: partial
@@ -1571,81 +1595,94 @@ bot_visibility: partial
 
 ### Detection
 
-`.tsx`, `.jsx`, `.vue`, `.svelte` files and stylesheets. In Next.js, `page.tsx`, `layout.tsx` and
-`'use client'` files mark the app-router component tree, and `route.ts` in the same folder is an
-endpoint ([DOM-03](#dom-03-new-api-endpoints)). Python projects reach this domain through Jinja
-or Django templates, HTMX fragments and Streamlit or Gradio apps.
+`.tsx` and `.jsx` files that return JSX, and the hooks and helpers beside them. The Next.js
+specifics (server and client boundary, server actions) are [DOM-45](#dom-45-nextjs), markup and
+keyboard behavior are [DOM-46](#dom-46-accessibility), and stylesheets are
+[DOM-47](#dom-47-css-and-styling). Python projects reach this domain through Streamlit or Gradio
+apps and HTMX fragments, where the state and raw-HTML questions apply but the hooks do not. Vue and
+Svelte files get the same questions, though the playbook's examples are React.
 
 Look-alikes: a `.tsx` file with no JSX (a typed utility) is plain TypeScript. A `components/`
-folder in a backend repo may hold something else entirely. Storybook files and snapshot tests
-are test code ([DOM-13](#dom-13-tests-levels-coverage-gaps-and-tdd)).
+folder in a backend repo may hold something else entirely. Storybook files and snapshot tests are
+test code ([DOM-13](#dom-13-tests-levels-coverage-gaps-and-tdd)).
 
-### What a playbook would need to cover
+### Playbook
 
-State and effects (dependency arrays, derived state, stale closures, effects that should be event
-handlers); the server and client component boundary in Next.js (secrets or server-only imports
-leaking into client bundles, serialization across the boundary); accessibility basics (semantic
-elements, labels, keyboard access, focus, contrast); rendering cost (list keys, memoization only
-where measured, bundle size from new imports); styling consistency with the design system; and the
-XSS surface of any raw-HTML sink. Visual correctness cannot be judged from a diff, so the
-playbook should say what to ask the author for (screenshots, a Storybook link) instead of
-guessing.
+Pull the [React components playbook](../Code-Review-Guide-and-Playbooks.md#react-components-jsx-and-tsx)
+for any change that adds or edits a component or hook. Visual correctness cannot be judged from a
+diff, so ask the author for a screenshot or a Storybook link when the change is about layout.
+
+### How operations change it
+
+A [move](operations/relocation.md#rel-01-function-or-class-moved-between-files) of a component
+narrows the review to its import sites and the tests that referenced the old path. A
+[behavior](operations/behavior.md) change to props or state widens it to every caller, since a
+prop that becomes required breaks them without a type error in untyped JSX.
+[Mechanical](operations/mechanical.md) edits such as a class-name sweep are narrow.
+
+### ai-review-bot today
+
+The bot sees the markup and hook code in the diff and cannot render it. `type-design-analyzer` fires
+when the PR adds type definitions to `.ts` or `.tsx` files, and `security-sast` can flag a raw-HTML
+sink. The exhaustive-deps check is a lint rule the bot does not run. Nothing in routing treats a
+`components/` path as sensitive.
 
 ---
 
-## DOM-24: Dockerfile and infrastructure-as-code
+## DOM-24: Dockerfiles and container images
 
 ```yaml
 id: DOM-24
-name: Dockerfile and infrastructure-as-code
-kind: proposed
-playbook: null
+name: Dockerfiles and container images
+kind: playbook
+playbook: "#dockerfiles-and-container-images"
 path_signals:
   - "Dockerfile*"
   - "**/Dockerfile*"
-  - "docker-compose*.{yml,yaml}"
-  - "compose*.{yml,yaml}"
-  - "**/*.tf"
-  - "**/*.tfvars"
-  - "k8s/**"
-  - "helm/**"
-  - "charts/**"
-  - ".github/workflows/**"
-  - "vercel.json"
-  - "pulumi*"
+  - "**/*.dockerfile"
+  - ".dockerignore"
+  - "docker-bake.*"
+  - ".devcontainer/Dockerfile*"
 content_signals:
-  - "Dockerfile: FROM with :latest or no digest, USER root or no USER, ADD from URL, curl | sh, COPY . ., secrets passed with ARG or ENV, apt-get without cleanup, missing .dockerignore"
-  - "Compose: privileged: true, network_mode: host, ports published on 0.0.0.0, volumes mounting the Docker socket or host root"
-  - "Terraform: wildcard IAM actions or resources, 0.0.0.0/0 ingress, public buckets, hardcoded credentials, removed lifecycle or deletion_protection"
-  - "Kubernetes: runAsUser: 0 or runAsNonRoot unset, privileged: true, missing resource limits or probes, hostPath, latest tags, secrets in manifests"
-  - "GitHub Actions: permissions: write-all, pull_request_target with checkout of PR code, actions pinned by tag instead of SHA, secrets echoed"
-agents_today: [security-auditor, architect-review]
+  - 'FROM with :latest or no digest; no USER or USER root; ADD from a URL; curl piped to sh; COPY . . before the dependency install'
+  - 'secrets passed with ARG or ENV; apt-get without cleanup or --no-install-recommends'
+  - 'Python: pip install without hashes, uv sync without --locked, no multi-stage build'
+  - 'TypeScript: npm install instead of pnpm install --frozen-lockfile, node_modules copied from the host, dev dependencies in the final image'
+  - 'missing or deleted .dockerignore; HEALTHCHECK removed'
+agents_today: [security-auditor]
 triage_weight: high
 bot_visibility: partial
 ```
 
 ### Detection
 
-File names do most of the work (`Dockerfile`, `*.tf`, Helm charts, compose files, workflow YAML).
-Content signals then separate a harmless tweak from a change that widens access or alters
-deployment. Python and TypeScript projects hit this domain as multi-stage builds, `uv` or `pnpm`
-install steps in images, and CI workflows.
+File names do most of the work (`Dockerfile`, `*.dockerfile`, `.dockerignore`). Content signals then
+separate a harmless tweak from a change that widens access or alters what ships. Python and
+TypeScript projects hit this domain as multi-stage builds with `uv` or `pnpm` install steps.
 
-Look-alikes: a Dockerfile for a dev container is lower risk than the production image. A
-workflow that only runs lint has a smaller blast radius than one with deploy credentials. A
-`.tfvars.example` file holds placeholders. The word `deploy` in a Python module name is application
-code, but today's `security-auditor` path match treats it the same.
+Look-alikes: a Dockerfile for a dev container is lower risk than the production image. Compose
+files, Kubernetes manifests and Terraform are [DOM-49](#dom-49-infrastructure-as-code). A
+`.dockerignore` change looks like config and decides what lands in the build context, including
+secrets.
 
-### What a playbook would need to cover
+### Playbook
 
-Least privilege for IAM, network rules, container users and CI tokens; image provenance (pinned
-by version or digest, minimal base, no secrets in layers or build args); reproducible builds
-(lockfile install flags such as `pnpm install --frozen-lockfile`, `uv sync --locked`); CI
-workflow safety (trigger choice, `pull_request_target`, SHA-pinned actions, scoped
-`permissions`); blast radius and rollback of an apply (plan output, state moves, resource
-replacement that destroys data); and drift between environments. The guide's configuration
-playbook ([DOM-16](#dom-16-configuration-files)) covers part of it, and a dedicated playbook
-should absorb the infra items.
+Use the [Dockerfile playbook](../Code-Review-Guide-and-Playbooks.md#dockerfiles-and-container-images)
+for any change to an image definition. Pair it with [DOM-17](#dom-17-new-dependencies) when the
+change adds a base image or a system package.
+
+### How operations change it
+
+A base-image bump is a [dependency upgrade](operations/behavior.md) with a larger blast radius than
+a library bump, since it changes the OS and runtime underneath everything. Reordering layers is
+[mechanical](operations/mechanical.md) in intent and changes cache behavior and image size.
+Removing a `USER` or `HEALTHCHECK` line is a [deletion](operations/deletion.md) of a guard.
+
+### ai-review-bot today
+
+`security-auditor` fires on any path containing `docker`. The bot cannot build the image, so it sees
+neither layer size nor what the build context contains. Tag-versus-digest and `USER` questions are
+visible in the text.
 
 ---
 
@@ -1654,8 +1691,8 @@ should absorb the infra items.
 ```yaml
 id: DOM-25
 name: Shell scripts
-kind: proposed
-playbook: null
+kind: playbook
+playbook: "#shell-scripts-bash-and-zsh"
 path_signals:
   - "**/*.{sh,bash,zsh}"
   - "scripts/**"
@@ -1684,17 +1721,28 @@ the shebang, not the folder.
 
 Look-alikes: a `.sh` file that is only sourced for exports is configuration. A script under
 `scripts/` written in TypeScript or Python is that language's code. Husky hook lines such as
-`bd hooks run ... || true` are intentional fail-open, which is the opposite of a bug.
+`bd hooks run ... || true` are intentional fail-open, which is the opposite of a bug. A script
+registered as an agent hook is also [DOM-52](#dom-52-hooks-and-commands).
 
-### What a playbook would need to cover
+### Playbook
 
-Strict mode and error handling (what happens on failure, exit codes, `trap` cleanup);
-quoting and word splitting; portability between `sh`, `bash` and `zsh` (this repo's author runs
-zsh, where an unmatched glob aborts a command); destructive commands guarded against empty
-variables; idempotence on re-run; secrets in arguments and logs; and whether a shell script
-should be a small program in the repo's main language instead. ShellCheck catches most of the
-mechanical items, so the playbook should say to run it and spend review time on intent and blast
-radius.
+Use the [shell scripts playbook](../Code-Review-Guide-and-Playbooks.md#shell-scripts-bash-and-zsh)
+for any script change, and read the [shell section of the language notes](../Code-Review-Guide-and-Playbooks.md#shell-bash-and-zsh)
+for the Bash and zsh differences before judging a quoting or glob finding. The check for this repo's
+author is zsh, where an unmatched glob aborts the whole command.
+
+### How operations change it
+
+[Mechanical](operations/mechanical.md) changes such as quoting sweeps are checkable with ShellCheck.
+A [behavior](operations/behavior.md) change to an error path (`set -e` removed, `|| true` added)
+widens the review, because shell fails open by default. A [deletion](operations/deletion.md) of a
+guard in front of `rm` or `kubectl` is the dangerous kind.
+
+### ai-review-bot today
+
+The whole script is usually in the diff, so visibility is full. The bot does not run ShellCheck, and
+zsh is outside ShellCheck's support anyway. `security-sast` flags injection patterns, and
+`code-reviewer` judges intent.
 
 ---
 
@@ -1703,8 +1751,8 @@ radius.
 ```yaml
 id: DOM-26
 name: HTML artifacts
-kind: proposed
-playbook: null
+kind: playbook
+playbook: "#html-artifacts"
 path_signals:
   - "**/*.html"
   - "docs/**/*.html"
@@ -1730,18 +1778,27 @@ an agent or a tool. Check whether the file is generated (coverage report, docs b
 page) before reading it, since generated HTML is not reviewed line by line.
 
 Look-alikes: an `index.html` that is the entry point of a Vite or Next SPA is application
-shell, and belongs with [DOM-23](#dom-23-frontend-and-ui-components). A Jinja or Django
+shell, and belongs with [DOM-23](#dom-23-react-components-jsx-and-tsx). A Jinja or Django
 template that happens to end in `.html` is a template, with an XSS surface to check. An SVG is
 markup that can carry script.
 
-### What a playbook would need to cover
+### Playbook
 
-Whether the artifact is source or output; where it is served from and who can open it (public
-pages need a stricter look at inline script, third-party loads and any embedded data); external
-resources pinned with versions and `integrity` attributes; size, since a multi-megabyte inline
-blob bloats diffs and the review budget; accessibility and responsive behavior at a glance; and
-whether sensitive content (tokens, internal URLs, personal data) is embedded. A reviewer should
-open the file in a browser rather than read the markup.
+Use the [HTML artifacts playbook](../Code-Review-Guide-and-Playbooks.md#html-artifacts) for a
+standalone page. Add [DOM-46](#dom-46-accessibility) and [DOM-47](#dom-47-css-and-styling) when the
+page is meant for people to read, and open it in a browser rather than reading the markup.
+
+### How operations change it
+
+A regenerated file is a large [mechanical](operations/mechanical.md) diff whose source of truth is
+elsewhere, so review the generator and skim the output. A change that adds a third-party script or
+an embedded data blob widens the review, because it changes who can run code in the page.
+
+### ai-review-bot today
+
+Inline blobs can push the diff over `REVIEW_DIFF_BUDGET_CHARS`, so the file may arrive cut or named
+in the "Files not shown" line. `security-sast` reads inline script and `innerHTML` use. Layout and
+rendering are out of reach.
 
 ---
 
@@ -1794,31 +1851,24 @@ what to ask for, since the bot cannot open the file.
 
 ---
 
-## DOM-28: LLM prompt and agent-instruction files
+## DOM-28: LLM prompts
 
 ```yaml
 id: DOM-28
-name: LLM prompt and agent-instruction files
-kind: proposed
-playbook: null
+name: LLM prompts
+kind: playbook
+playbook: "#llm-prompts"
 path_signals:
-  - "skills/**/*.md"
-  - "**/SKILL.md"
-  - "AGENTS.md"
-  - "CLAUDE.md"
-  - "GEMINI.md"
-  - ".cursor/rules/**"
-  - ".cursorrules"
-  - ".github/copilot-instructions.md"
-  - ".claude/**"
   - "**/prompts/**"
   - "**/*.prompt.{md,txt}"
+  - "**/*.{jinja,j2,mustache}"
+  - "skills/*.md"
 content_signals:
-  - "YAML front matter with name and description (skill files)"
-  - "imperative rules addressed to the model: 'always', 'never', 'you must', 'do not'"
-  - "tool lists, permission allowlists, hook definitions in .claude/settings.json"
-  - "template placeholders passed to a model: {{var}}, ${var}, f-string prompts in code"
-  - "system prompt strings in Python or TypeScript source passed to an SDK call"
+  - 'system prompt strings in Python or TypeScript source passed to an SDK call'
+  - 'template placeholders passed to a model: {{var}}, ${var}, f-string prompts in code'
+  - 'imperative rules addressed to the model: "always", "never", "you must", "do not"'
+  - 'few-shot examples; JSON schema or output-format instructions inside the prompt text'
+  - 'untrusted text (a diff, an issue body, a web page) interpolated into a prompt'
 agents_today: [comment-analyzer]
 triage_weight: medium
 bot_visibility: partial
@@ -1826,29 +1876,43 @@ bot_visibility: partial
 
 ### Detection
 
-Markdown files whose reader is a model. In this repo `skills/*.md` are the review agents' system
-prompts, loaded by `buildAgentSystemPrompt()`, so a change to them changes the bot's behavior as
-much as a code change does. `AGENTS.md`, `CLAUDE.md` and `.cursor/rules` do the same for coding
-agents. Prompts also live inside source as string constants and template literals.
+Text whose reader is a model inside a product or pipeline. In this repo `skills/*.md` are the
+review agents' system prompts, loaded by `buildAgentSystemPrompt()`, so a change to them changes the
+bot's behavior as much as a code change does. Prompts also live inside source as string constants,
+template literals and Python f-strings, where the diff shows a code change and the behavior change
+is in the text.
 
 Look-alikes: a README that talks about prompts is documentation
-([DOM-15](#dom-15-documentation)). A spec for a skill is [DOM-02](#dom-02-design-specs-and-plans).
+([DOM-15](#dom-15-documentation)). A spec for a prompt is [DOM-02](#dom-02-design-specs-and-plans).
+Files that instruct a coding agent working on the repo (`SKILL.md`, `AGENTS.md`, `CLAUDE.md`,
+subagent definitions, hooks) are [DOM-50](#dom-50-skills-and-instruction-files),
+[DOM-51](#dom-51-agent-rules-files-and-subagents) and [DOM-52](#dom-52-hooks-and-commands).
 `skills/code-review-excellence/SKILL.md` in this repo is a source document that the runtime does
-not load, so editing it changes nothing at runtime. A file listed here may or may not be loaded
-by the product, so check the loader.
+not load, so editing it changes nothing at runtime. A file listed here may or may not be loaded by
+the product, so check the loader.
 
-### What a playbook would need to cover
+### Playbook
 
-Because the file executes, review it as behavior: is each rule testable by a scenario that fails
-without it; do rules conflict with others in the same or a parent file; is an added rule scoped
-to the cases that justified it or does it generalize from one incident; does it duplicate a
-rule elsewhere; do loaded files stay within the context budget; do permission and hook entries
-widen what an agent may run (a trust-boundary question, [DOM-19](#dom-19-trust-boundaries)); and
-for a prompt that processes untrusted text, is there injection exposure (a diff, an issue body or
-a web page flowing into the prompt). The playbook should also say what evidence to ask for, such
-as a before and after run on a fixture, since a diff of prose cannot show whether behavior
-improved. Today `comment-analyzer` fires only because the files are `.md`, and it judges comments
-and docs, not instruction quality.
+Use the [LLM prompts playbook](../Code-Review-Guide-and-Playbooks.md#llm-prompts) for any change to
+prompt text, and ask for the before and after run on a fixture, since a diff of prose cannot show
+whether behavior improved. A prompt that handles untrusted text also gets
+[DOM-19](#dom-19-trust-boundaries). The call that consumes the prompt's output is
+[DOM-41](#dom-41-llm-inference-and-structured-output-handling).
+
+### How operations change it
+
+A one-line rewording is a [behavior](operations/behavior.md) change with no compile-time signal, so
+it widens the review rather than narrowing it. A [move](operations/relocation.md) of a prompt file
+needs the loader's path checked. [Reformatting](operations/mechanical.md) is narrow only when
+whitespace inside the prompt is not significant, which a reviewer cannot assume.
+
+### ai-review-bot today
+
+`comment-analyzer` fires when the files are `.md`, and it judges comments and docs, not prompt
+quality. Prompt strings inside source go to the general agents as ordinary string literals. Nothing
+runs the prompt, so evidence has to come from the PR text.
+
+---
 
 ## DOM-29: Outbound service clients and integrations
 
@@ -2145,7 +2209,7 @@ Next.js the file tree is the route table, so a moved or renamed `page.tsx` chang
 equivalent is the URL pattern list and `redirect` calls.
 
 Look-alikes: a component that calls `router.push` is UI code
-([DOM-23](#dom-23-frontend-and-ui-components)) unless the route structure or the URL contract
+([DOM-23](#dom-23-react-components-jsx-and-tsx)) unless the route structure or the URL contract
 changes. An API route (`route.ts`) is an endpoint ([DOM-03](#dom-03-new-api-endpoints)). Internal
 state kept in `useState` does not need to survive a refresh.
 
@@ -2293,8 +2357,9 @@ bot_visibility: partial
 
 ### Detection
 
-Workflow files and repository automation config. [DOM-24](#dom-24-dockerfile-and-infrastructure-as-code)
-covers the security surface of the same files (token scopes, SHA pinning, `pull_request_target`).
+Workflow files and repository automation config. [DOM-16](#dom-16-configuration-files)
+is the nearest playbook for the security surface of the same files (token scopes, SHA pinning,
+`pull_request_target`), and the guide has no dedicated workflow playbook.
 This entry is about whether the pipeline selects, orders and reports the right things. A workflow
 that parses and runs is not necessarily one that tests what the PR changed.
 
@@ -2495,7 +2560,7 @@ bot_visibility: partial
 
 Code that calls a model and then consumes what comes back. The call site, the schema handed to it,
 the code that assembles a streamed answer, and the code that validates it are all in scope. The
-instructions given to the model are [DOM-28](#dom-28-llm-prompt-and-agent-instruction-files). This
+instructions given to the model are [DOM-28](#dom-28-llm-prompts). This
 entry covers what the program does with the output. Provider clients also fall under
 [DOM-29](#dom-29-outbound-service-clients-and-integrations) for transport and credentials.
 
@@ -2522,8 +2587,8 @@ whether any decision depends on the exact wording of a reply.
 ```yaml
 id: DOM-42
 name: Agent execution, tools and durable state
-kind: proposed
-playbook: null
+kind: playbook
+playbook: "#agent-workflows"
 path_signals:
   - "**/agents/**"
   - "**/tools/**"
@@ -2554,19 +2619,31 @@ an interface that other agents depend on
 Look-alikes: a single model call with a fixed prompt is
 [DOM-41](#dom-41-llm-inference-and-structured-output-handling). A background job queue is
 [DOM-11](#dom-11-background-jobs-queues-and-events). Instruction files that configure an agent are
-[DOM-28](#dom-28-llm-prompt-and-agent-instruction-files).
+[DOM-28](#dom-28-llm-prompts).
 
-### What a playbook would need to cover
+### Playbook
 
-Termination: a step limit, a token or time budget, and a stop condition a confused model cannot
-dodge. Authorization at execution time, checked against the user the run acts for, not the user who
-started the session or the model's own claim; a tool that wraps a destructive operation needs the
-guard inside the tool ([DEL-04](operations/deletion.md#del-04-guard-or-check-removed)). Duplicate
-side effects after a resume, where a step that already sent an email runs again because the
-checkpoint was saved before the effect. Checkpoint consistency when state and external effects can
-diverge ([BEH-10](operations/behavior.md)). Attribution of tool output: text from a web page or a
-file is data and must not be able to change the instructions
-([DOM-19](#dom-19-trust-boundaries)). Also what is logged, so a failed run can be reconstructed.
+Use the [agent workflows playbook](../Code-Review-Guide-and-Playbooks.md#agent-workflows) for any
+loop, fan-out or scheduled run in which a model picks actions. It covers termination limits,
+idempotent side effects, least privilege per step, untrusted content staying data, and traces.
+The guide leaves two things for this entry to cover. One is checkpoint consistency: state saved
+before an external effect makes a resume repeat the effect ([BEH-10](operations/behavior.md)). The
+other is a tool exposed over MCP, which other agents depend on, so its schema changes are
+[IFC](operations/interface.md) changes. A destructive tool also needs the guard inside the tool
+([DEL-04](operations/deletion.md#del-04-guard-or-check-removed)).
+
+### How operations change it
+
+A [behavior](operations/behavior.md) change to a limit, a retry or an approval step widens the
+review to everything the loop can reach. Adding a tool to an existing agent is an
+[interface](operations/interface.md) change with a new trust boundary
+([DOM-19](#dom-19-trust-boundaries)).
+
+### ai-review-bot today
+
+`security-auditor` and `architect-review` fire only on path words, and a folder named `agents/` or
+`tools/` matches neither. The bot sees the loop and the tool handlers in the diff, but not the
+checkpointer's storage or the prompts assembled at run time.
 
 ---
 
@@ -2660,7 +2737,7 @@ Look-alikes: ordinary unit test fixtures
 ([DOM-14](#dom-14-test-code-itself-helpers-fixtures-and-fakes)) check the correctness of code and
 have no aggregate score. A benchmark of runtime speed is
 [DOM-22](#dom-22-performance-and-observability). A prompt change is
-[DOM-28](#dom-28-llm-prompt-and-agent-instruction-files) and is judged by this domain's evidence.
+[DOM-28](#dom-28-llm-prompts) and is judged by this domain's evidence.
 
 ### What a playbook would need to cover
 
@@ -2672,3 +2749,472 @@ and removed, skipped or failed cases need to be reported. Reproducibility: seeds
 temperature, and a recorded run so a number can be rerun. Slices: an aggregate gain can hide a loss
 on one language, size or category, so the report should break out slices and flag regressions.
 Sample size matters when the claimed gain is a few cases.
+
+---
+
+## DOM-45: Next.js
+
+```yaml
+id: DOM-45
+name: Next.js
+kind: playbook
+playbook: "#nextjs"
+path_signals:
+  - "next.config.*"
+  - "app/**/{page,layout,loading,error,not-found,route}.{ts,tsx,js,jsx}"
+  - "app/**/actions.{ts,js}"
+  - "{proxy,middleware}.{ts,js}"
+  - "pages/**"
+  - "lib/dal.*"
+content_signals:
+  - "'use client' or 'use server' directives; import 'server-only'"
+  - "NEXT_PUBLIC_ environment variables"
+  - "exported async functions in a 'use server' file (server actions)"
+  - "cookies(), headers(), searchParams, params; revalidatePath, revalidateTag, fetch cache options"
+  - "generateMetadata, next/image, next/font"
+agents_today: [security-sast, security-auditor, code-reviewer]
+triage_weight: high
+bot_visibility: partial
+```
+
+### Detection
+
+The App Router layout (`app/` with `page.tsx`, `layout.tsx` and `route.ts`), `next.config.*`, and
+the two directives. Which side a file runs on is decided by its directives and by who imports it, so
+a changed file with no directive can still be a server module pulled into the client bundle. This
+domain is TypeScript only. A Python backend that serves a Next.js frontend meets it at the API
+boundary ([DOM-03](#dom-03-new-api-endpoints)).
+
+Look-alikes: a `route.ts` file is an endpoint and also gets
+[DOM-03](#dom-03-new-api-endpoints). A `pages/` folder in a non-Next project is something else. A
+React component with `'use client'` and nothing else Next-specific is mostly
+[DOM-23](#dom-23-react-components-jsx-and-tsx).
+
+### Playbook
+
+Use the [Next.js playbook](../Code-Review-Guide-and-Playbooks.md#nextjs) for any change under
+`app/`, any server action, and any edit to `next.config.*`, `proxy.ts` or `middleware.ts`. Treat each
+server action as an endpoint and pull in [DOM-06](#dom-06-authentication-and-authorization) when it
+changes data.
+
+### How operations change it
+
+Adding or removing `'use client'` is a one-line [behavior](operations/behavior.md) change that moves
+code across the trust boundary ([DOM-19](#dom-19-trust-boundaries)), so it widens the review far
+more than its size suggests. A [move](operations/relocation.md) of a module between `app/` folders
+changes what is route-colocated. A cache option change alters who sees whose data.
+
+### ai-review-bot today
+
+The directive lines are visible only when they fall inside a hunk, and the bot cannot see the import
+graph that decides whether a module reaches the client. `security-sast` can catch a secret behind a
+`NEXT_PUBLIC_` name. A path containing `middleware` triggers `security-auditor`.
+
+---
+
+## DOM-46: Accessibility
+
+```yaml
+id: DOM-46
+name: Accessibility
+kind: playbook
+playbook: "#accessibility"
+path_signals:
+  - "**/*.{tsx,jsx,vue,svelte,html}"
+  - "**/templates/**/*.{html,jinja,j2}"
+  - "**/*.stories.*"
+content_signals:
+  - "onClick on div or span; role= and aria-* attributes added, removed or mismatched with behavior"
+  - "img without alt; icon-only buttons without a label; input without a label"
+  - "tabIndex greater than zero; outline: none or outline: 0 without a replacement; autoFocus"
+  - "modal or dialog markup, custom dropdowns, toasts, live regions"
+  - "prefers-reduced-motion removed; color-only status indicators"
+  - "Python: Jinja, Django or Streamlit templates that emit the same markup"
+agents_today: [code-reviewer]
+triage_weight: medium
+bot_visibility: partial
+```
+
+### Detection
+
+Any change to markup a person will operate. The strongest signals are interactive elements built from
+non-interactive ones, new custom widgets (dialogs, menus, tabs, comboboxes), and removed labels or
+focus styles. TypeScript projects show it in JSX; Python projects in server-rendered templates.
+
+Look-alikes: this domain is a lens on [DOM-23](#dom-23-react-components-jsx-and-tsx),
+[DOM-26](#dom-26-html-artifacts) and [DOM-47](#dom-47-css-and-styling), not a separate kind of file.
+A purely visual restyle that keeps the markup needs only the contrast and motion checks.
+
+### Playbook
+
+Pull the [accessibility playbook](../Code-Review-Guide-and-Playbooks.md#accessibility) alongside the
+component or template playbook whenever interactive markup changes. A keyboard-only pass and a
+screen reader check cannot come from a diff, so ask the author whether they were done.
+
+### How operations change it
+
+A [behavior](operations/behavior.md) change to a widget's interaction (focus handling, Escape,
+announcement) widens the review. A [rename](operations/relocation.md#rel-03-symbol-renamed-in-place)
+of an element or class is narrow unless a selector, `htmlFor` or `aria-labelledby` points at the old
+id. [Mechanical](operations/mechanical.md) swaps from `div` to `button` are the fix and need no extra scrutiny.
+
+### ai-review-bot today
+
+The bot reads the markup, so missing labels, `alt` text and `onClick` on a `div` are visible in the
+diff. It runs no `eslint-plugin-jsx-a11y` or axe, and it cannot judge contrast, focus order or
+announcements from text. No agent carries the accessibility checks as a skill.
+
+---
+
+## DOM-47: CSS and styling
+
+```yaml
+id: DOM-47
+name: CSS and styling
+kind: playbook
+playbook: "#css-and-styling"
+path_signals:
+  - "**/*.{css,scss,sass,less}"
+  - "**/*.module.css"
+  - "tailwind.config.*"
+  - "postcss.config.*"
+  - "**/theme.*"
+  - "**/tokens.*"
+content_signals:
+  - "!important; deep selector chains; global selectors that reach into other components"
+  - "hard-coded hex colors, pixel values and z-index numbers"
+  - "@apply blocks; class lists built by string concatenation; clsx or cva helpers"
+  - "@layer, @media, prefers-color-scheme, prefers-reduced-motion, CSS variables"
+  - "Python: Django or Flask static CSS, Jinja templates with inline style attributes"
+agents_today: [code-reviewer]
+triage_weight: low
+bot_visibility: partial
+```
+
+### Detection
+
+Stylesheets, CSS Modules, Tailwind config and class lists in JSX, and theme or token files. A change
+to global CSS or to a token reaches every page, so path alone understates its blast radius. Python
+projects see it in static folders and template `style` attributes.
+
+Look-alikes: a Tailwind class change in a `.tsx` file is a component edit
+([DOM-23](#dom-23-react-components-jsx-and-tsx)) with a styling effect. Generated CSS (a build
+output, a minified bundle) is not reviewed. Contrast and motion rules belong to
+[DOM-46](#dom-46-accessibility).
+
+### Playbook
+
+Use the [CSS and styling playbook](../Code-Review-Guide-and-Playbooks.md#css-and-styling) for any
+stylesheet or theme change, with extra scrutiny when it is global. Rendered appearance cannot be
+judged from a diff, so ask for screenshots at narrow and wide widths.
+
+### How operations change it
+
+A token or variable [rename](operations/relocation.md#rel-03-symbol-renamed-in-place) breaks every
+consumer silently, because an unknown CSS variable falls back without an error. Deleting a component
+leaves [dead styles](operations/deletion.md) unless its stylesheet goes with it. Reordering rules is
+not [mechanical](operations/mechanical.md): cascade order is behavior.
+
+### ai-review-bot today
+
+The bot reads the CSS text and can spot `!important`, magic numbers and unscoped selectors. It cannot
+render, so specificity fights, overflow and layout shift are invisible to it.
+
+---
+
+## DOM-48: SQL files and raw queries
+
+```yaml
+id: DOM-48
+name: SQL files and raw queries
+kind: playbook
+playbook: "#sql-files-and-raw-queries"
+path_signals:
+  - "**/*.sql"
+  - "db/**"
+  - "sql/**"
+  - "queries/**"
+  - "seeds/**"
+  - "**/views/**/*.sql"
+content_signals:
+  - 'Python: cursor.execute with an f-string, format() or % interpolation; sqlalchemy text(); asyncpg fetch with a built string'
+  - 'TypeScript: sql template tags; client.query with a template literal; prisma $queryRawUnsafe; knex.raw; drizzle sql.raw'
+  - 'DELETE or UPDATE with no WHERE; TRUNCATE; DROP; ALTER on a large table'
+  - 'SECURITY DEFINER without a set search_path; CREATE TRIGGER; GRANT'
+  - 'NOT IN with a subquery; DISTINCT added to hide duplicate rows; SELECT *'
+agents_today: [security-sast, code-reviewer]
+triage_weight: high
+bot_visibility: partial
+```
+
+### Detection
+
+`.sql` files, and SQL strings inside Python or TypeScript where the query builder is bypassed. The
+second form is easy to miss because the diff reads as application code. Interpolated strings are the
+signal that matters most. Reporting queries and seed scripts often run with more privilege than the
+application.
+
+Look-alikes: an ORM or query-builder chain is [DOM-08](#dom-08-queries-and-indexes) only. A `.sql`
+file under `migrations/` is also [DOM-09](#dom-09-migrations-and-deployment-sequencing), and
+usually the more serious of the two. A table definition is
+[DOM-07](#dom-07-data-modeling-tables-relationships-and-domain-objects).
+
+### Playbook
+
+Use the [SQL files and raw queries playbook](../Code-Review-Guide-and-Playbooks.md#sql-files-and-raw-queries)
+for the pass over the statement, then read the [SQL language notes](../Code-Review-Guide-and-Playbooks.md#sql)
+for idioms and smells. Add the queries and indexes pass for performance, and
+[DOM-05](#dom-05-code-that-validates-user-input) when a value reaches the statement from a request.
+
+### How operations change it
+
+A [behavior](operations/behavior.md) change to a predicate or join changes which rows are touched,
+so it widens the review to the data, not the code. A [rename](operations/relocation.md#rel-03-symbol-renamed-in-place)
+of a column or view breaks raw strings that no type checker follows. Formatting a `.sql` file is
+[mechanical](operations/mechanical.md) only when the formatter is the project's own.
+
+### ai-review-bot today
+
+The bot sees the statement and not the schema, so a wrong join key or a missing index is a guess.
+`security-sast` flags interpolation into queries in both languages. A path containing `schema` or
+`database` raises the PR to the complex tier, and a bare `queries/` folder does not.
+
+---
+
+## DOM-49: Infrastructure as code
+
+```yaml
+id: DOM-49
+name: Infrastructure as code
+kind: playbook
+playbook: "#infrastructure-as-code"
+path_signals:
+  - "**/*.tf"
+  - "**/*.tfvars"
+  - ".terraform.lock.hcl"
+  - "k8s/**"
+  - "helm/**"
+  - "charts/**"
+  - "kustomization.y*ml"
+  - "docker-compose*.{yml,yaml}"
+  - "compose*.{yml,yaml}"
+  - "pulumi*"
+content_signals:
+  - 'Terraform: wildcard IAM actions or resources, 0.0.0.0/0 ingress, public buckets, hardcoded credentials, removed lifecycle or deletion_protection'
+  - 'Kubernetes: runAsUser 0 or runAsNonRoot unset, privileged true, missing resource limits or probes, hostPath, latest tags, secrets in manifests'
+  - 'Compose: privileged true, network_mode host, ports published on 0.0.0.0, mounts of the Docker socket or host root'
+  - 'a resource whose attribute change forces replacement; moved or removed blocks; ignore_changes'
+  - 'Python or TypeScript: Pulumi programs and AWS CDK stacks written in the application language'
+agents_today: [security-auditor, architect-review]
+triage_weight: high
+bot_visibility: partial
+```
+
+### Detection
+
+File names and extensions do most of the work. Pulumi and CDK define the same resources in Python or
+TypeScript, so a `Stack` class or `new aws_s3.Bucket(...)` belongs here even though the file looks
+like application code. What matters is whether the change can destroy or expose a running resource.
+
+Look-alikes: a `.tfvars.example` holds placeholders. A Compose file for local development has a
+smaller blast radius than production manifests. Image definitions are
+[DOM-24](#dom-24-dockerfiles-and-container-images). CI workflow files are configuration
+([DOM-16](#dom-16-configuration-files)) and automation ([DOM-37](#dom-37-ci-pipelines-deploy-orchestration-and-repository-automation)).
+
+### Playbook
+
+Use the [infrastructure as code playbook](../Code-Review-Guide-and-Playbooks.md#infrastructure-as-code)
+for any change to these files. It asks for the plan output, which the diff does not contain, so ask
+the author to paste `terraform plan` or `helm diff` into the PR.
+
+### How operations change it
+
+A [rename](operations/relocation.md#rel-03-symbol-renamed-in-place) of a resource address is a
+destroy and create unless a `moved` block says otherwise. A [deletion](operations/deletion.md) of a
+resource block deletes the thing it describes. Splitting a module is a
+[move](operations/relocation.md) with state consequences that no diff shows.
+
+### ai-review-bot today
+
+`security-auditor` fires only when the path contains a listed word such as `terraform`, `k8s`, `helm`,
+`docker` or `infrastructure`, so `infra/main.tf` matches none of them. `architect-review` has its own
+list including `terraform` and `docker-compose`. The bot has no plan output or state, which are what
+the playbook leans on most.
+
+---
+
+## DOM-50: Skills and instruction files
+
+```yaml
+id: DOM-50
+name: Skills and instruction files
+kind: playbook
+playbook: "#skills-and-instruction-files"
+path_signals:
+  - "**/SKILL.md"
+  - ".claude/skills/**"
+  - ".claude/commands/**"
+  - ".agents/skills/**"
+  - "**/skills/*/scripts/**"
+content_signals:
+  - "YAML front matter with name and description"
+  - "allowed-tools, disable-model-invocation or similar frontmatter fields"
+  - "steps addressed to an agent: run, read, then write"
+  - "bundled scripts and supporting reference files beside the SKILL.md"
+agents_today: [comment-analyzer]
+triage_weight: medium
+bot_visibility: partial
+```
+
+### Detection
+
+`SKILL.md` folders, custom slash commands defined as Markdown, and the scripts and reference files
+bundled with them. The front matter `description` decides when the skill loads, so an edit to a
+single line changes when the agent acts. Scripts in the folder run on the user's machine and are
+code in Python, TypeScript or shell.
+
+Look-alikes: product prompts loaded by the application are [DOM-28](#dom-28-llm-prompts). In this
+repo `skills/*.md` are review-agent prompts of that kind, and
+`skills/code-review-excellence/SKILL.md` is a source document the runtime never loads. Project-wide
+rules files are [DOM-51](#dom-51-agent-rules-files-and-subagents). Hook entries in settings files
+are [DOM-52](#dom-52-hooks-and-commands).
+
+### Playbook
+
+Use the [skills and instruction files playbook](../Code-Review-Guide-and-Playbooks.md#skills-and-instruction-files)
+for any change to a skill, command or its bundled files. Run the bundled scripts through the shell,
+Python or TypeScript playbook that matches them, and ask for a before and after run on a realistic
+request, including one that should not trigger the skill.
+
+### How operations change it
+
+Rewording a `description` is a [behavior](operations/behavior.md) change to triggering. Adding a rule
+because of one incident generalizes from a single case, and the review should ask whether it is
+scoped. A [move](operations/relocation.md) of a skill folder breaks references from other skills and
+rules files.
+
+### ai-review-bot today
+
+`comment-analyzer` fires only because the file is Markdown, and it judges comments and docs, not
+trigger quality. A skill diff under 20 lines is routed to the trivial tier as a docs change. The bot
+cannot run the skill or see which other skills overlap it.
+
+---
+
+## DOM-51: Agent rules files and subagents
+
+```yaml
+id: DOM-51
+name: Agent rules files and subagents
+kind: playbook
+playbook: "#agent-rules-files-and-subagents"
+path_signals:
+  - "AGENTS.md"
+  - "**/AGENTS.md"
+  - "CLAUDE.md"
+  - "GEMINI.md"
+  - ".cursor/rules/**"
+  - ".cursorrules"
+  - ".github/copilot-instructions.md"
+  - ".claude/agents/**"
+  - ".codex/agents/**"
+content_signals:
+  - "build, test and lint commands in a rules file"
+  - "imperative rules: always, never, must, do not"
+  - "@file imports between CLAUDE.md and AGENTS.md"
+  - "subagent definitions with a tools list, model or permission mode"
+  - "rules that restate a lint or branch-protection setting"
+agents_today: [comment-analyzer]
+triage_weight: medium
+bot_visibility: partial
+```
+
+### Detection
+
+Files that sit in every agent session for a repository, and subagent definitions that set a tool list
+and a prompt. A nested `AGENTS.md` applies to its folder and overrides the parent, so location is part
+of the content. This repo's own `CLAUDE.md` is one: a wrong command in it is followed by every agent.
+
+Look-alikes: a README for humans is [DOM-15](#dom-15-documentation). On-demand skills are
+[DOM-50](#dom-50-skills-and-instruction-files). Permission and hook entries in `.claude/settings.json`
+are [DOM-52](#dom-52-hooks-and-commands) and [DOM-16](#dom-16-configuration-files). A subagent that
+exists to be called inside a workflow also gets [DOM-42](#dom-42-agent-execution-tools-and-durable-state).
+
+### Playbook
+
+Use the [agent rules files and subagents playbook](../Code-Review-Guide-and-Playbooks.md#agent-rules-files-and-subagents)
+for any change to these files. Check that each command in the diff still works in the repository as
+it is now, since an agent follows a stale one.
+
+### How operations change it
+
+A [behavior](operations/behavior.md) change here is a changed rule, and it applies to every future
+session. A [deletion](operations/deletion.md) of a rule needs the same Chesterton's Fence question as
+a deleted guard in code. Splitting one file into two is a
+[move](operations/relocation.md) that can leave the agent loading both or neither.
+
+### ai-review-bot today
+
+The hosted bot does not read the repository's rules files unless they are in the diff, so it cannot
+tell a new rule from one that already exists elsewhere. `comment-analyzer` fires because the file is
+Markdown, and a short edit routes to the trivial tier. The proposed `agent_instructions` tool in
+[reviewer-tools.md](reviewer-tools.md#agent_instructions) is what would let it compare.
+
+---
+
+## DOM-52: Hooks and commands
+
+```yaml
+id: DOM-52
+name: Hooks and commands
+kind: playbook
+playbook: "#hooks-and-commands"
+path_signals:
+  - ".claude/settings.json"
+  - ".claude/settings.local.json"
+  - ".claude/hooks/**"
+  - "hooks/hooks.json"
+  - ".codex/hooks.json"
+  - ".codex/config.toml"
+  - ".husky/**"
+content_signals:
+  - 'a "hooks" key with PreToolUse, PostToolUse, UserPromptSubmit or Stop entries'
+  - 'matcher patterns; exit 2 versus exit 1 in a hook script; timeout values'
+  - 'reading the event JSON from stdin with grep instead of jq'
+  - 'hook scripts built from CLAUDE_PROJECT_DIR or similar variables without quoting'
+  - 'text a hook prints that reaches the model'
+agents_today: [security-sast, security-auditor]
+triage_weight: high
+bot_visibility: partial
+```
+
+### Detection
+
+Hook definitions in agent settings files, and the scripts they point at. A committed project hook
+runs on every contributor's machine with their permissions, so the settings file is a trust
+boundary. The script is shell, Python or TypeScript, and the registration is JSON or TOML.
+
+Look-alikes: a Husky or git hook is [DOM-25](#dom-25-shell-scripts) unless it is also registered with
+an agent. Permission allowlists in the same settings file are
+[DOM-16](#dom-16-configuration-files) and widen what an agent may run without asking
+([DOM-19](#dom-19-trust-boundaries)). Slash commands defined as Markdown are
+[DOM-50](#dom-50-skills-and-instruction-files).
+
+### Playbook
+
+Use the [hooks and commands playbook](../Code-Review-Guide-and-Playbooks.md#hooks-and-commands) for
+any hook registration or script change, together with the matching language playbook for the script.
+Check its exit-code and fail-open rules first.
+
+### How operations change it
+
+A change of matcher or event is a [behavior](operations/behavior.md) change that alters how often
+the hook fires, which the diff does not show. A [deletion](operations/deletion.md) of a blocking hook
+removes a guard. Editing a script that Codex has already trusted changes its hash, so it is skipped
+until re-trusted.
+
+### ai-review-bot today
+
+`security-sast` reads the script text and `security-auditor` fires on path words such as `ci` or
+`deploy` rather than on `.claude/`. The bot cannot run the hook or see the permission settings that
+make its exit code matter.

@@ -67,6 +67,9 @@ bot_visibility: none
 ## Writing rules
 
 - Detection signals cover Python and TypeScript at least, since the bot reviews both.
+- Link the guide's Part 3 [language notes](../../Code-Review-Guide-and-Playbooks.md#part-3-language-notes)
+  for language-specific idioms and smells (Python, TypeScript and JavaScript, shell, SQL) instead of
+  restating them. An entry names the language only where its detection or its failure mode differs.
 - "Context to gather" names a tool for each item. Name the IDE action from the guide's
   [navigation table](../../Code-Review-Guide-and-Playbooks.md#review-locally-not-only-in-the-browser)
   where one fits, then the agent-callable equivalent.

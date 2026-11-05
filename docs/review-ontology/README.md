@@ -36,7 +36,7 @@ exists.
 | --- | --- |
 | [00-origin.md](00-origin.md) | The problem, in Joe's words |
 | [operations/](operations/) | One file per operation family. Each entry says how to detect the operation from a diff, how to confirm why it happened, what context to gather, what not to review, what to check, and what ai-review-bot sees today |
-| [domains.md](domains.md) | One detection entry per guide playbook, plus cross-cutting domains and proposed new ones: how to tell from a diff that the domain is present, and which playbook to pull in |
+| [domains.md](domains.md) | One detection entry per guide playbook (32 entries), plus 4 cross-cutting domains and 16 proposed ones for kinds of file the guide has no playbook for: how to tell from a diff that the domain is present, and which playbook to pull in |
 | [triage.md](triage.md) | How to size a PR by what it contains, not how many lines it has, and how that picks the tier, the agents and each agent's model and effort |
 | [context-building.md](context-building.md) | The levels of context a reviewer reads beyond the diff, and the tools (git, tree-sitter, LSP, Serena, Graphify, GitHub APIs) that reach each one |
 | [reviewer-tools.md](reviewer-tools.md) | The proposed tool surface that lets the bot work like an engineer with the branch checked out |
@@ -56,7 +56,7 @@ exists.
 
 ### Domains, lenses and provenance
 
-Not every entry in [domains.md](domains.md) describes what code *is*. Three kinds apply on top
+Not every entry in [domains.md](domains.md) describes what code *is*. Four kinds apply on top
 of any domain, and a classifier should treat them as modifiers, not as one more domain to pick:
 
 - **Lenses** are ways of reading any change. Reviewing against the spec (DOM-01) applies to
@@ -64,6 +64,13 @@ of any domain, and a classifier should treat them as modifiers, not as one more 
   (DOM-19 to DOM-22) cut across code of every kind.
 - **Provenance** says who or what wrote the change. AI-generated code (DOM-18) and an
   AI-generated bulk change (CMP-08) change where to look, not what the code is.
+- **Language** is a modifier too. The guide's Part 3 holds notes for
+  [Python](../Code-Review-Guide-and-Playbooks.md#python),
+  [TypeScript and JavaScript](../Code-Review-Guide-and-Playbooks.md#typescript-and-javascript),
+  [shell](../Code-Review-Guide-and-Playbooks.md#shell-bash-and-zsh) and
+  [SQL](../Code-Review-Guide-and-Playbooks.md#sql). Detection picks the language, and the reviewer
+  reads the matching section for idioms and smells next to the domain's playbook. Language notes
+  are not domains and have no DOM id.
 - **Contract domains** overlap with operations. New endpoints (DOM-03) and endpoint schema
   changes (DOM-04) are two domains with separate detections and playbooks, both under API
   contracts, each combined with a behavior or interface operation.
