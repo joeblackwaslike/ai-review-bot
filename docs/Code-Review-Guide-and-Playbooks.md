@@ -237,7 +237,7 @@ With the [GitHub Pull Requests extension](https://marketplace.visualstudio.com/i
 1. Commit or stash your own work. Open the **Pull Requests** view and select the PR to open its **Description**.
 2. Select **Checkout**. The extension switches to the PR's branch and enters review mode. **Changes in Pull Request** lists the changed files and commits.
 3. Select a file there to see its diff and comment on lines, or use **Open File** to open the working copy with full language support.
-4. Install the branch's dependencies (`uv sync`), or pnpm install, npm ci or bun install in Node projects, so navigation and tests reflect the PR, not your previous branch.
+4. Install the branch's dependencies (`uv sync`), or pnpm install, npm ci or bun install in Node projects, so navigation and tests reflect the PR, not your previous branch. Installing runs code from the PR (package install scripts, build hooks), and so do its tests. For a contributor you don't already trust, do this in a disposable, isolated environment (a dev container or VM) with no host credentials, no sensitive mounts and no privileged access, not in your authenticated workspace.
 5. Submit comments and your verdict from the **Description**, then select **Exit Review Mode** to return to the branch you were on.
 
 From a terminal, `gh pr checkout <number>` checks out the same branch for any editor.
@@ -1720,7 +1720,7 @@ The guide and the playbooks apply to any language. This part holds what differs 
 
 - **PyPI** is the public package index. Anyone can publish to it, so a package name is not a guarantee of who wrote it.
 - **`pyproject.toml`** declares the project's dependencies with version ranges. A **lockfile** pins the exact versions of everything, including transitive dependencies, so every install is identical. Applications commit a lockfile; libraries declare ranges and let applications lock.
-- **uv** manages Python versions, virtual environments, dependencies and the lockfile (`uv.lock`) in one tool. `uv add` and `uv remove` edit `pyproject.toml` and the lock together; `uv sync --locked` (or `--frozen`) installs exactly what the lock says and fails if it's out of date; `uv run` runs a command in the project environment. Dependency groups keep dev, test and docs tools out of production installs.
+- **uv** manages Python versions, virtual environments, dependencies and the lockfile (`uv.lock`) in one tool. `uv add` and `uv remove` edit `pyproject.toml` and the lock together; `uv sync --locked` installs from the lockfile and fails if it is out of date, while `uv sync --frozen` uses the existing lockfile without checking whether it is up to date; `uv run` runs a command in the project environment. Dependency groups keep dev, test and docs tools out of production installs.
 - **pip** installs packages into the active environment. It doesn't manage a lockfile on its own; projects using pip pin with a fully resolved `requirements.txt` (from `pip-tools` or `uv pip compile`), ideally with hashes and `--require-hashes`.
 - **Virtual environments** isolate each project's packages. Nothing is installed into the system Python, and `.venv` is never committed.
 - **Wheels and sdists.** A wheel is a prebuilt package and installs without running code. A source distribution runs its build backend during install, which is arbitrary code on your machine.
