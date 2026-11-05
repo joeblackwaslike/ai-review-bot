@@ -410,7 +410,7 @@ file has the id and the full checklist.
 | --- | --- |
 | Function or class moved (REL-01) | See the full recipe below |
 | File moved or renamed (REL-02) | `pr-files-api` for `previous_filename`; `git-diff-M` if the similarity is borderline; `log-follow` on the new path; `ripgrep` for the old path in config, CI, Dockerfiles, docs and `CODEOWNERS`; `lsp-references` on exported symbols |
-| Symbol renamed in place (REL-03) | `tree-sitter-diff` or a token comparison to confirm only the name changed; `lsp-references` on the new name against the base reference count; `ripgrep` for the old name in strings, docs and serialized keys; `read-file` on response models and DB mappings to see if the name is a wire name |
+| Symbol renamed in place (REL-03) | `tree-sitter-diff` or a token comparison to confirm only the name changed; `lsp-references` on the old name at base and on the new name at head, with the two counts compared; `ripgrep` for the old name in strings, docs and serialized keys; `read-file` on response models and DB mappings to see if the name is a wire name |
 | Module split or merge (REL-04, REL-05) | `color-moved` per new or deleted file; `module-graph` at base and head for cycles; `lsp-references` per moved symbol; `ripgrep` for deleted module paths |
 | Package restructure (REL-08) | `pr-files-api` (collapse pure renames); `ripgrep` per old directory prefix; `module-graph` before and after; check that the file list was not truncated at 3,000 |
 | Extract or inline function (REL-06, REL-07) | `tree-sitter-diff` between the removed block and the new function; `lsp-references` for the number of callers |
@@ -420,7 +420,7 @@ file has the id and the full checklist.
 | Signature or public type changed | `lsp-references` at base for every caller, `lsp-implementations` for interfaces and protocols, `ripgrep` for the name in docs, client SDKs and OpenAPI files, `linked-work-item` for whether a breaking change was agreed |
 | Field added, removed or renamed on a serialized type | As above, plus `read-file` on the migration directory and consumer schemas; `ripgrep` for the key in other services' code if they share the repository |
 | Behavior changed (condition, limit, guard) | `read-file` window around the hunk; `lsp-references` for callers that relied on the old behavior; `lsp-call-hierarchy` up to the entry point to see who can reach it; `blame-C` on the old line for the reason; `ci-results` and tests changed in the PR |
-| Formatting, import sort or lint autofix | `tree-sitter-diff` with `--exit-code` (or `git diff -w`) to confirm no syntax change; no further context |
+| Formatting, import sort or lint autofix | `tree-sitter-diff` with `--exit-code` to confirm no syntax change (`git diff -w` hides indentation changes, so it is not enough for Python, YAML or Make); no further context |
 | Dependency bump | `read-file` on the manifest and the lockfile diff; `linked-work-item`; changelog lookup, which is not one of these tools |
 | Moves hidden in a larger change (composite) | Run the relocation recipe first, subtract the moved lines from the diff, then run the behavior recipe on what remains |
 | Config key added or changed | `ripgrep` for the key across code, docs and deployment config; `read-file` on the loader and schema; `agent-instructions` for config conventions |

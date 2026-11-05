@@ -48,7 +48,7 @@ playbook yet; it is a proposed domain in [domains.md](domains.md).
 | Operations | Add checks to an operation; add a new operation | "Moving anything under `packages/sdk/` keeps a re-export at the old path for one minor release" |
 | Domain detection | Map paths to domains the detectors would miss | `services/ledger/**` is critical-path; `schema/**` is zod, not database |
 | Triage | Always-deep paths, tier floors and ceilings, a cost cap per PR | Anything under `auth/` reviews at the deep tier |
-| Context | Required context files; allowed reviewer tools; which instruction formats to honour; which ticket trackers to query and with what credentials | Always load `docs/adr/`; allow Jira lookups for `PAY-` keys; never run code in a sandbox |
+| Context | Required context files; allowed reviewer tools; which instruction formats to honour; which ticket trackers to query (credential values come only from deployment environment variables, never from repository config) | Always load `docs/adr/`; allow Jira lookups for `PAY-` keys; never run code in a sandbox |
 | Output | Severity thresholds, label mapping, comment budget, ignore globs, which findings are advisory | Treat style findings as advisory; never comment on `generated/**` |
 | Process | Which passes run, once [process-design.md](process-design.md) settles the architecture | Skip the test-gap pass on docs-only PRs |
 
@@ -102,7 +102,7 @@ Checked against current documentation on 2026-11-04.
 | [Qodo PR-Agent](https://github.com/qodo-ai/pr-agent/blob/main/docs/docs/usage-guide/configuration_options.md) | `.pr_agent.toml` | `extra_instructions` per tool, per-tool settings | Default branch, with a config-branch override |
 | [GitHub Copilot code review](https://docs.github.com/en/copilot/concepts/prompting/response-customization) | `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md` | Repo-wide and path-specific (`applyTo`) instructions, `AGENTS.md`, `excludeAgent: "code-review"` to opt a file out | PR head |
 
-What carries over: path-scoped instructions (all four), cascading per directory (Greptile),
+What carries over: path-scoped instructions (CodeRabbit, Greptile and Copilot), cascading per directory (Greptile),
 reading the agent-instruction files a repo already has (CodeRabbit and Copilot), a single
 strictness dial (Greptile, CodeRabbit), and opting a rule out of review specifically
 (Copilot's `excludeAgent`).

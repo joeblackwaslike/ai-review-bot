@@ -69,8 +69,8 @@ head. Classify by what an existing caller experiences:
 | Widen a parameter type | Keep working |
 | Change a parameter's meaning at the same name and type | Break silently |
 
-The last two rows are the dangerous ones: the type checker stays quiet and the runtime keeps
-running.
+The positional-insert row and the changed-meaning row are the dangerous ones: the type checker
+stays quiet and the runtime keeps running.
 
 Look-alikes to rule out:
 
@@ -832,8 +832,8 @@ changed meaning, and none should have.
 
 ### Worked example
 
-`render(obj, compact=False, legacy=False)` becomes `render(obj, style=Style.COMPACT)`. The
-mapping covers `compact=True` and the default. `legacy=True` has no equivalent: the legacy path
+`render(obj, compact=False, legacy=False)` becomes `render(obj, style=Style.DEFAULT)`, with
+`compact=True` mapping to `Style.COMPACT`. The mapping covers `compact=True` and the default. `legacy=True` has no equivalent: the legacy path
 was deleted, and two callers in `export/` that passed `legacy=True` were not updated. The
 comment: either these callers need a `Style.LEGACY`, or the PR is removing a mode, which should
 be said.

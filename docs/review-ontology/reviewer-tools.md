@@ -50,12 +50,12 @@ and 3 are cheapest to ship there first.
 | Tool | Inputs | Returns | Notes |
 | --- | --- | --- | --- |
 | `read_file` | `path`, `ref` (`base` or `head`), optional `around_line` and `window`, or `symbol` | File text, or the window around a line, with line numbers | The fix for "five lines deleted, no context". Contents API; cap the size and say when truncated |
-| `pr_files` | none | Every changed file with status, additions, deletions and `previous_filename` for renames | Already fetched by the bot; today only the ledger uses rename info |
+| `pr_files` | none | Every changed file with status, additions, deletions and `previous_filename` for renames, up to GitHub's 3,000-file cap | Already fetched by the bot (`PR_FILE_LIST_CAP` in `src/prompt.ts`). Return a truncation flag when the cap is hit. Re-review triage and the ledger use rename info today; the agent prompt does not |
 | `compare` | `base`, `head`, optional `path` | The diff between two refs | For re-review deltas and backports |
 | `commits` | none | The PR's commits with messages | Commit boundaries show whether mechanical edits were separated |
 | `blame` | `path`, `ref`, line range | For each line, the commit, author, date and message | GitHub exposes blame through GraphQL |
 | `file_history` | `path`, `limit` | Commits that touched the file, following renames where the API allows | |
-| `ci_results` | `ref` | Check runs with conclusion, summary and annotations | Lint, typecheck and test failures arrive as annotations with file and line |
+| `ci_results` | `ref` | Check runs with conclusion, summary and annotations | Lint, typecheck and test failures usually arrive as annotations with file and line; when a failing check has none, fall back to the check summary or a bounded `job_log` slice |
 | `job_log` | `job_id`, `tail` or `grep` | A bounded slice of a job's log | Logs can be large; never return the whole log |
 | `linked_work_item` | none | The issue or ticket the PR implements: title, body, acceptance criteria, labels, comments | See below |
 | `agent_instructions` | `paths`, `ref` (default `base`) | For each path, the ordered instruction blocks that apply, with source and precedence | See below |
@@ -66,7 +66,7 @@ and 3 are cheapest to ship there first.
 | --- | --- | --- | --- |
 | `search_text` | `pattern`, optional `glob`, `ref` | Matches with file, line and a line of context | ripgrep. GitHub's code search can't replace it: it doesn't search the PR's head branch |
 | `moved_code` | none | Blocks moved between files, with source and destination ranges and whether they changed | `git diff --color-moved` plus a body comparison; feeds REL-01 and REL-10 |
-| `renames` | optional similarity threshold | Renamed and copied files, below GitHub's threshold too | `git diff -M -C` |
+| `renames` | optional similarity threshold | Renamed and copied files, below GitHub's threshold too | `git diff -M<t> -C<t> --find-copies-harder`, with `<t>` the threshold (default 30%) |
 | `function_history` | `path`, `symbol` | The commits that changed one function | `git log -L :symbol:path` |
 | `blame_moved` | `path`, line range | Blame that follows lines moved or copied from other files | `git blame -C`; shows that "new" lines are old |
 
@@ -96,7 +96,7 @@ the reviewer read and follow them. Coverage:
 
 - `AGENTS.md`, nested, nearest file to the path taking precedence
 - Codex `AGENTS.override.md`
-- `CLAUDE.md` with `@` imports, plus `.claude/rules/*.md` scoped by `paths:` globs
+- `CLAUDE.md` with `@` imports, plus `.claude/rules/**/*.md` scoped by `paths:` globs
 - `GEMINI.md`
 - Cursor `.cursor/rules/*.mdc` (`globs`, `alwaysApply`) and legacy `.cursorrules`
 - GitHub Copilot `.github/copilot-instructions.md` and `.github/instructions/*.instructions.md`
@@ -146,7 +146,7 @@ What each operation family fetches, in order. The operation entries in
 | REL-01 move | `moved_code` → `references(old symbol, ref=base)` → `search_text(old dotted path, old file path)` across mocks, config and docs → `read_file` on `__init__`/`index.ts` barrels at base and head |
 | REL-10 move plus modify | `moved_code` → `structural_diff(old body, new body)` → full review of the changed lines only |
 | DEL guard removed | `read_file(around_line)` at base → `search_text(the exception or sentinel)` → `references(the function, ref=base)` → `blame` on the removed lines → `ci_results` |
-| IFC signature change | `references(symbol, ref=head)` → check each call site → `search_text(name)` for dynamic or string uses |
+| IFC signature change | `references(symbol, ref=base)` for every original caller → `references(symbol, ref=head)` for stragglers → check each call site → `search_text(name)` for dynamic or string uses |
 | MEC formatter-only | `structural_diff` on every file → if any file has a semantic change, reclassify it |
 | BEH bug fix | `linked_work_item` → `ci_results` (does a new test fail on base?) → `references` for other callers that relied on the old behavior |
 | Any PR | `agent_instructions(changed paths)` → `linked_work_item` → `ci_results` before line-level comments |
@@ -179,7 +179,10 @@ architecture.
   For fork PRs that is untrusted. The default is to read CI results, not to run anything
   hosted. Running code needs a sandbox and an explicit setting in
   [customization.md](customization.md).
-- **Base versus head.** Every tool takes a `ref`. Questions about who *depended* on something
+- **Base versus head.** Tools that list a `ref` input take `base` or `head`. A tool with no `ref`
+  input works on the PR's base-to-head diff (`pr_files`, `commits`, `moved_code`, `renames`) or
+  on the head checkout the harness fixes (`function_history`); `structural_diff` is given both
+  bodies explicitly. Questions about who *depended* on something
   are asked at base. Questions about what is *left over* are asked at head.
 
 ## Verified facts

@@ -19,7 +19,7 @@ confirm or reject.
 | Tier | `classifyTier()` in `src/router.ts` | Model and effort for every agent | Line counts, file paths, labels | What the change is |
 | Packing | `packDiff()` in `src/diff-pack.ts` | What part of the diff fits in 200k characters | Patches | Moves, renames, file roles; deletion-only hunks dropped under pressure |
 | Tier 1 agents | `runAgent()` in `src/review.ts` | Findings, five times over, from five personas | PR title and body, the packed diff | Files, references, history, CI, the ticket, the repo's instructions |
-| Tier 2 detection | `detectTier2Skills()` in `src/tier2.ts` | Which of four extra personas run | Paths and patch keywords | Same as packing |
+| Tier 2 detection | `detectTier2Skills()` in `src/tier2.ts` | Which of four extra personas run | Paths, patch keywords, PR title and body, labels | Same as packing |
 | Merge | `mergeReviews()`, `src/claim-dedupe.ts`, `src/advisory.ts` | One review out of many | All agents' findings | Whether any finding is true |
 | Memory | `src/ledger/`, `src/baseline.ts` | What not to repeat; what still blocks | Earlier reviews and threads | |
 | Anchoring | `buildReviewComments()` | Which comments can post inline | The full patches | |
@@ -38,7 +38,7 @@ section and its checklist give the steps. How today's pipeline does each:
 | Guide step | Today | Gap |
 | --- | --- | --- |
 | Restate the intent; read the spec or ticket first | The PR body is in the prompt. The linked ticket and spec aren't fetched | No intent step. A PR without stated intent gets a full review, not a question |
-| Let CI go first | CI results aren't read | Agents comment on things the type checker or tests already caught, or miss that tests fail |
+| Let CI go first | CI results aren't given to the agents (head-SHA check runs only feed the approval message's outstanding-checks note) | Agents comment on things the type checker or tests already caught, or miss that tests fail |
 | Size the change, split along a seam | Lines changed | No idea of operations or roles ([triage.md](triage.md)) |
 | Separate mechanical edits | Not detected | Reformat and rename noise is reviewed as code ([operations/mechanical.md](operations/mechanical.md)) |
 | Read the tests first | One persona looks at tests | Tests aren't used as the statement of intent |
@@ -102,7 +102,7 @@ version of step 3, and no steps 2, 4 or 6.
 
 | | Shape | Maps to the target | Cost and latency | Prompt cache | Main risk | Testable with replay |
 | --- | --- | --- | --- | --- | --- | --- |
-| **A0** | Baseline: one diff-only reviewer, same model and token budget as A, run several times | Step 5 once | Lower than A; set to match A's spend for a fair comparison | Good | Shows whether personas beat buying more inference | Yes, with a pluggable strategy |
+| **A0** | Baseline: one diff-only reviewer, same model and token budget as A, run several times | Step 5 once | Set to match A's spend for a fair comparison | Good | Shows whether personas beat buying more inference | Yes, with a pluggable strategy |
 | **A** | Today: tiered personas in parallel on one input, then merge | Step 5 only, five times | Known: about 75s for a 14-file diff at concurrency 4 | Good: shared prefix | Overlap, unchecked claims | Yes, today |
 | **B** | A planner reads the classification and builds a per-PR graph of passes from the catalog and the playbooks | Steps 2–3 explicit; passes are domain playbooks, not personas | One planner call, then only the passes that apply | Good if passes share a context block | A bad plan skips a needed pass | Yes, with a pluggable strategy |
 | **C** | One senior-reviewer agent with tools, in a loop | All seven steps, in one context | Long loop; risk against the 210s budget | To be measured: depends on how each provider caches a growing conversation | One model's blind spots; hard to bound | Yes, but runs vary more |

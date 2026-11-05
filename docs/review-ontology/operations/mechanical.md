@@ -943,7 +943,7 @@ guide_refs:
   - "#explicit-over-implicit"
   - "#tests-levels-coverage-gaps-and-tdd"
 tools: [read-file, ripgrep, ci-results, linked-work-item, agent-instructions]
-bot_visibility: full
+bot_visibility: partial
 ```
 
 ### What it looks like in a diff

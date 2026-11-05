@@ -246,7 +246,7 @@ guide_refs:
   - "#tests-levels-coverage-gaps-and-tdd"
   - "#constants-for-self-explanatory-literals"
 tools: [read-file, lsp-references, ripgrep, linked-work-item, ci-results]
-bot_visibility: full
+bot_visibility: partial
 ```
 
 ### What it looks like in a diff
@@ -450,7 +450,7 @@ bot_visibility: partial
 ### What it looks like in a diff
 
 A one-keyword change that alters every caller. Making a function `async` makes every call site
-need `await`, and a missing one produces a coroutine or Promise that is never run. Parallelizing
+need `await`, and a missing one produces a Python coroutine that never runs, or a JavaScript Promise that runs but whose result or rejection nobody observes. Parallelizing
 a loop with `gather` changes the order of side effects and the number of simultaneous
 connections.
 
@@ -695,7 +695,7 @@ The code that makes the call, if unchanged.
   the path's limit, as the guide asks for critical-path code
   ([timeouts and budgets](../../Code-Review-Guide-and-Playbooks.md#code-on-the-critical-path)).
 - **Retries are bounded, backed off and jittered**, and only for errors that can be transient.
-  A 4xx or a validation failure isn't retried.
+  A non-retryable 4xx or a validation failure isn't retried; a 429 or 503 is, honoring `Retry-After`.
 - **No stacking.** A retry inside a client that is called by a retrying job multiplies
   attempts. Three layers of three tries is 27 calls.
 - **Exhaustion is handled.** After the last attempt, the error reaches a place that logs it and

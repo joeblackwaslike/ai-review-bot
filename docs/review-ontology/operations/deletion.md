@@ -673,7 +673,7 @@ The new symbol is defined and the old one becomes a stub:
 ```python
 def parse_invoice(raw): ...
 
-def parse_line_items(raw):  # old name
+def parse_line_items(raw, strict=False):  # old name
     warnings.warn("parse_line_items is deprecated; use parse_invoice",
                   DeprecationWarning, stacklevel=2)
     return parse_invoice(raw)
@@ -768,7 +768,6 @@ escalates_with: [public-api]
 guide_refs:
   - "#compatibility-hyrums-law"
   - "#endpoint-schema-changes-versioning-and-deprecation"
-  - "#new-dependencies"
 tools: [lsp-references, ripgrep, linked-work-item, read-file]
 bot_visibility: partial
 ```
@@ -1191,9 +1190,10 @@ adding; this is its removal clause.
 
 ### Worked example
 
-`python-dateutil` is removed from `pyproject.toml`. `rg "dateutil"` finds no imports, but
-`pandas` in the lockfile depends on it, so it stays installed transitively and a hidden import
-in a script now relies on a package the project doesn't declare. The comment asks to
+`python-dateutil` is removed from `pyproject.toml`. `rg "dateutil"` finds no import, but
+`pandas` in the lockfile depends on it, so it stays installed transitively. A script that loads
+it by a built string, `importlib.import_module("date" + "util.parser")`, which the search can't
+match, now relies on a package the project doesn't declare. The comment asks to
 either declare it or remove the import.
 
 ### ai-review-bot today

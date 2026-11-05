@@ -90,8 +90,9 @@ Lines that moved or were renamed without any difference. They keep their earlier
 - **Ask for a split.** The refactor goes first as its own commit or PR, then the fix. The guide
   says the same for renames, moves and formatting. The split also lets the refactor be
   verified by "tests unchanged and green".
-- **Tests did not change in the refactor commit.** A refactor with edited tests is a refactor
-  that changed behavior, or tests that were adjusted to the new behavior (see
+- **Tests did not change in the refactor commit, beyond mechanical updates.** Import paths and
+  call sites that follow a rename or move are expected. Edited assertions, fixtures, inputs or
+  expected values mean the refactor changed behavior, or tests were adjusted to the new behavior (see
   [CMP-05](#cmp-05-tests-changed-to-match-new-behavior)).
 - **The fix has its own test**, which fails without it
   ([tests: bug fixes](../../Code-Review-Guide-and-Playbooks.md#tests-levels-coverage-gaps-and-tdd)).
@@ -296,8 +297,9 @@ reviewed before.
 ### Checklist
 
 - **It is an exact inverse, or the differences are named.** A revert with extra edits is a
-  composite and gets those edits reviewed as new code
-  ([CMP-01](#cmp-01-refactor-mixed-with-a-behavior-change)).
+  composite and gets those edits reviewed as new code,
+  each under its own operation and domain playbook (for a refactor-style extra edit, see
+  [CMP-01](#cmp-01-refactor-mixed-with-a-behavior-change)).
 - **Later work that depended on the original is handled.** Code merged after the original that
   calls its new functions or reads its new fields breaks when they vanish. Search for the
   original's added symbols at head.
@@ -460,7 +462,7 @@ family: composite
 aliases: [weakened assertion, test bent to pass, snapshot update, expected value copied from output, skip added, xfail added]
 signals:
   - 'an assertion loosened: `assertEqual` to `assertTrue`, `toEqual` to `toBeTruthy` / `toBeDefined` / `expect.anything()`, an exact value to a range or `in`'
-  - '`@pytest.mark.skip`, `@pytest.mark.xfail`, `it.skip`, `xit`, `describe.skip`, `test.todo`, `pytest.importorskip` added'
+  - '`@pytest.mark.skip`, `@pytest.mark.xfail`, `it.skip`, `xit`, `describe.skip` added to an existing test'
   - an expected literal in a test edited to match what the code now returns
   - '`-u` / `--update-snapshot` run, `.snap` files rewritten'
   - a mock added around the code under test, or a mock's return value edited to fit
@@ -544,7 +546,7 @@ tests were edited, so the tests can't be used as evidence that the change is rig
 ### Red flags
 
 - Tests edited and the production code changed in the same commit, with no test that fails on
-  the new code and passes on the old.
+  the old code and passes on the new.
 - `xfail` / `skip` on the test covering the code the PR modifies.
 - A mock for the function the test is named after.
 - A snapshot diff that is larger than the production diff.
@@ -644,8 +646,9 @@ Mapped to this PR:
 - **Other consumers are accounted for.** Workers, cron jobs, reporting tools, dashboards,
   BI exports, and other services often read the column by raw name. A rename that `lsp-references`
   passes still breaks them. Search all the repos you can.
-- **Rollback works.** The downgrade restores the data, not only the name. A dropped column
-  cannot be restored by a downgrade.
+- **Rollback works.** The downgrade restores the schema, and the data too where the change
+  needs it. A downgrade can recreate a dropped column but cannot recover its contents without a
+  backup or preservation plan.
 - **Locks are considered.** A type change or rename on a large table can block writes.
 
 ### How it combines with domain playbooks

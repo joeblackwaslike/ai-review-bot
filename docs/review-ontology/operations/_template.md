@@ -71,7 +71,8 @@ bot_visibility: none
   [navigation table](../../Code-Review-Guide-and-Playbooks.md#review-locally-not-only-in-the-browser)
   where one fits, then the agent-callable equivalent.
 - "ai-review-bot today" is factual and short. The hosted path sees the serialized diff with
-  right-side line numbers and PR metadata. It has no repository access, no rename or move
-  handling, and no symbol search. Deletion-only hunks are dropped when the diff is over budget.
+  right-side line numbers and PR metadata. It has no repository access and no symbol search. The agent prompt
+  gets each file's `renamed` status but not `previous_filename`, so it can't connect an old path
+  to a new one; re-review triage and the ledger do use GitHub's rename data. Deletion-only hunks are dropped when the diff is over budget.
   The local CLI has a checkout but doesn't use it for navigation.
 - "Eval seed" is one sentence: what a reviewer must say or not say on a minimal example to pass.

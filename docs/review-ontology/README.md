@@ -65,8 +65,8 @@ of any domain, and a classifier should treat them as modifiers, not as one more 
 - **Provenance** says who or what wrote the change. AI-generated code (DOM-18) and an
   AI-generated bulk change (CMP-08) change where to look, not what the code is.
 - **Contract domains** overlap with operations. New endpoints (DOM-03) and endpoint schema
-  changes (DOM-04) are one domain, API contracts, combined with a behavior or interface
-  operation.
+  changes (DOM-04) are two domains with separate detections and playbooks, both under API
+  contracts, each combined with a behavior or interface operation.
 
 ## How the pieces connect
 

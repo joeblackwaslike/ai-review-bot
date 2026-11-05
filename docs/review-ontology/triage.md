@@ -165,7 +165,8 @@ the single auth dependency.
 
 *How to measure.* For each changed exported symbol, count distinct referencing files:
 
-- with a language server, `lsp-references` at the base commit (see the
+- with a language server, `lsp-references` at the base commit for removed or moved symbols and
+  at the head commit for new exports and callers the PR adds (see the
   [tool reference](context-building.md#tool-reference));
 - with an import graph, the in-degree of the changed module (`module-graph`);
 - with neither, a `ripgrep` count of the symbol name, which overcounts common names.
@@ -308,8 +309,10 @@ the logic agents, and the checks come from the operation entry.
 **Step 6: model and effort per agent.** Match effort to what the agent needs reasoning for:
 `security-sast` and `security-auditor` take the tier's top effort whenever they run, and
 `comment-analyzer` and `pr-test-analyzer` on a non-risky PR take one step lower than the tier. The
-existing constraint stays: the `deep` tier is capped at `high` effort because `xhigh` can outlast
-the 210-second agent deadline on Vercel Hobby (comment in `src/router.ts`).
+existing Anthropic constraint stays: the `deep` tier is capped at `high` effort because `xhigh`
+Opus can outlast the 210-second agent deadline on Vercel Hobby (comment in `src/router.ts`). The
+OpenAI route currently maps `deep` to `xhigh`, so the deadline constraint is provider-specific
+and the cap has to be set per provider.
 
 ### Worked table
 

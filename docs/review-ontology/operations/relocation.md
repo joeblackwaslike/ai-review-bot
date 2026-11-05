@@ -146,8 +146,9 @@ playbook applies to the change of context:
     old name fail after deploy.
   - Pickled objects and Django content types store dotted paths.
   - Next.js and other file-based routers turn a file move into a URL change.
-- **Mocks patched at the old path still pass.** `mock.patch("pkg.a.parse_invoice")` with
-  `create=True`, or a module that still exists, can patch nothing and let a test pass
+- **Mocks patched at the old path still pass.** `mock.patch("pkg.a.parse_invoice")` fails
+  loudly when the old attribute is gone, unless `create=True` is set or the old module still
+  exposes that name (a re-export). In those two cases it patches nothing and a test passes
   vacuously.
 - **A move with no stated reason into a shared module.** See REL-09.
 
@@ -285,7 +286,7 @@ path. Those are the comments, and there are none on the file's contents.
 ### ai-review-bot today
 
 The GitHub files API reports `previous_filename`, and `retargetCarried()` uses renames to
-carry earlier findings. The agents' prompt doesn't present the change as a rename, and nothing
+carry earlier findings. The agents' prompt shows each file's `renamed` status but omits `previous_filename`, so an agent can't connect the old and new paths, and nothing
 searches for leftover references to the old path. What it would need: rename info in the
 prompt, and a string search at head.
 

@@ -273,7 +273,8 @@ any added route. Read request and response models before the handler body, and c
 
 Added routes are a full review. A route
 [renamed](operations/relocation.md#rel-03-symbol-renamed-in-place) in code but not in its path
-string changes nothing public. A path or method change is an
+string is invisible to HTTP callers, but the generated OpenAPI `operationId` can derive from
+the function name, so generated clients may see it. A path or method change is an
 [interface](operations/interface.md) change and moves to [DOM-04](#dom-04-endpoint-schema-changes-versioning-and-deprecation).
 A [deleted](operations/deletion.md) route needs a check for remaining callers, including other
 services the repo cannot see.
