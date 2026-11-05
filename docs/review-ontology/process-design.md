@@ -168,8 +168,9 @@ Three rules shape F:
   rules and regexes, linters, type checks, tests, static analysis, security scanners,
   reference lookups. Every finding should be backed or checked by one of these where one
   exists, and each scanner finding is evidence the reviewer confirms, not a comment it posts.
-  The pipeline already works this way in two places: anchor validation drops comments that
-  aren't on the diff, and the verifier in section 5 confirms findings before they post.
+  Today's pipeline has one such check: anchor validation drops comments whose line isn't in
+  the diff. The verifier in section 5, which would confirm each finding before it posts, is
+  still a proposal; `DISCARDED_BY_VERIFY` is reserved for it and nothing emits it yet.
 - **Scanners plus a checklist, never scanners alone.** Each scanner finds only certain
   classes of problem. For security, the main reviewer triages scanner output and also works
   through a checklist end to end for the flow the PR touches. For web applications that
@@ -184,8 +185,10 @@ Three rules shape F:
   context window, the first step is to split it into chunks that do, along the seams
   triage already finds: operations and domains, so a move-only chunk, a migration chunk and an
   endpoint chunk each get reviewed on their own, followed by one pass that combines them.
-  Today's `packDiff()` instead compresses the diff into a single prompt and names the files
-  that don't fit. That is the same strategy as Qodo's PR-Agent, which also makes a single
+  Today's `packDiff()` instead fits the diff into a single prompt: it orders files by
+  language and size, drops deletion-only hunks when over budget, cuts the first file that only
+  partly fits and marks it truncated, and names every later file in a "Files not shown" line.
+  That is close to the strategy of Qodo's PR-Agent, which also makes a single
   model call per tool ([compression strategy](https://docs.pr-agent.ai/core-abilities/compression_strategy/)).
   PR-Agent's [dynamic context](https://docs.pr-agent.ai/core-abilities/dynamic_context/) is
   worth adopting: it widens each hunk to its enclosing function or class, with more lines

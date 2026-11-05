@@ -31,6 +31,76 @@ comments. The bot's part is the rest, the conventions written in prose:
 
 Today the bot sees a repo's written rules only when the PR edits the file that holds them.
 
+### A strict linter is the strongest standard
+
+The best standard is one a linter enforces before review ever happens.
+[wemake-python-styleguide](https://wemake-python-styleguide.readthedocs.io/en/latest/) is the
+model: a flake8 plugin whose rules (`WPS` codes) are strict on purpose. Many look excessive
+on their own (limits on module members, expression complexity, argument counts), but each one
+quantifies a design constraint. Code that is badly shaped fails the linter, and the author
+has to restructure it to pass. Because it is a linter, the feedback is instant and arrives at
+every commit, not days later in review. That applies to agents as much as to people: a strict
+linter is one of the most effective ways to make an agent write better code.
+
+Joe's [spinup-py](https://github.com/joeblackwaslike/spinup-py) project template enforces it
+at every step. Generated projects set `format = wemake` and `select = WPS, E999` in
+`setup.cfg`, run the `wemake-python-styleguide` hook in pre-commit, and run the same checks in
+CI (`make check`). Exceptions are narrow and documented: `per-file-ignores` lists specific
+codes for specific files, each with a comment saying why (test fixtures, `__init__.py`
+re-exports).
+
+Its sister template, [spinup-ts](https://github.com/joeblackwaslike/spinup-ts), ports as much
+of wemake as TypeScript tooling allows. Biome handles formatting and the baseline rules, in the
+role ruff plays for Python. ESLint runs the strict, opinionated rules through
+`typescript-eslint` (its type-checked strict preset, in mypy's role), `eslint-plugin-unicorn`
+(the closest equivalent to wemake's rewrite-forcing opinions), `eslint-plugin-sonarjs`
+(complexity and duplication), `eslint-plugin-import-x` and `eslint-plugin-no-secrets`. Joe's
+`joe-stack-preferences` skill keeps a rule-by-rule coverage matrix of WPS against ruff, Biome
+and ESLint.
+
+That matrix also lists the WPS checks with **no TypeScript linter equivalent**, and those are
+the ones a reviewer has to check by hand in TypeScript code:
+
+| WPS rule | Check | Why no linter catches it in TypeScript |
+| --- | --- | --- |
+| `WPS425` | Boolean positional arguments (the boolean trap) | No rule tells a boolean parameter from any other by position |
+| `WPS430` | Nested functions | `no-inner-declarations` catches `function` declarations, not `const fn = () =>` |
+| `WPS416` | `try` blocks that cover too much | No rule measures what a `try` block wraps |
+| `WPS424` | Catching too broadly | TypeScript doesn't narrow the `catch` variable, and no rule checks what is caught |
+| `WPS214` | Too many methods on a class | No ESLint rule counts class methods |
+| `WPS202` | Too many module members or exports | No ESLint rule counts top-level exports |
+| `WPS221` | Too many conditions in one expression | Cognitive complexity is only a proxy |
+
+This is the deterministic and stochastic split from
+[process-design.md](process-design.md#5a-direction-set-by-joe-one-reviewer-runbooks-and-tools)
+in practice. Where a linter can enforce a rule, the reviewer trusts it. Where none can, the
+rule becomes a checklist item in the reviewer's runbook for that language.
+
+What this means for the review:
+
+- **Trust the linter.** Read its result through `ci_results` and don't restate what it
+  enforces. A clean run means the shape of the code already met the constraints.
+- **Every weakening is a finding.** This includes a new `# noqa: WPS...`, a new
+  `per-file-ignores` entry, a narrowed `select`, a removed or skipped pre-commit hook
+  (`SKIP=`, `--no-verify` in scripts) and a CI step that stops failing the build. Each needs a
+  stated reason that holds, typically a name forced by a third-party tool. "The rule is too
+  strict" doesn't count. [MEC-10](operations/mechanical.md#mec-10-tooling-config-loosened)
+  has the detection signals.
+- **Agents push back on these rules.** They try to silence rules they find hard to satisfy,
+  so a suppression in an agent-written PR gets the closest look. The fix is the
+  restructuring the rule asks for. The reply should explain why the rule exists: wemake's
+  documentation gives the reasoning for each violation, and that is the knowledge-transfer
+  aim below. wemake now ships an agent skill
+  ([`wps`](https://github.com/wemake-services/wemake-python-styleguide/blob/master/wemake_python_styleguide/.agents/skills/wps/SKILL.md))
+  that states the same rules for the agent writing the code: fix the code, not the config;
+  suppress only with a specific `# noqa: WPS###` when asked or when an existing
+  `per-file-ignores` entry covers the line; leave the flake8 config alone without approval;
+  delete a `noqa` once `flake8 --disable-noqa` shows it no longer fires. The reviewer
+  enforces the same rules from the other side.
+- **Where a repo has no strict linter, say so once.** Recommend one in the review summary,
+  or through the org pack in [customization.md](customization.md), rather than enforcing its
+  rules by hand in comments.
+
 ## Fresh eyes
 
 A reviewer who didn't write the code sees what its author can't: a missed case, a wrong
@@ -99,15 +169,18 @@ acceptance or manual tests. The guide's
 [PR description template](../Code-Review-Guide-and-Playbooks.md#appendix-pull-request-description-template)
 includes one. A reviewer checks the list against the change.
 
-The bot can do this deterministically:
+Parsing is deterministic; judging is not. The bot can:
 
-- parse the Markdown task lists in the PR body (`- [ ]` and `- [x]`)
-- for each ticked item, look for evidence in the diff or in CI: a test that exists, a check
-  that passed, the file that implements it. Flag ticked items with no evidence.
+- parse the Markdown task lists in the PR body (`- [ ]` and `- [x]`), deterministically
+- for each ticked item, gather candidate evidence from the diff and CI: a test that exists, a
+  check that passed, the file that implements it. Whether that evidence satisfies the item's
+  prose is the reviewer's call, so a ticked item with no convincing evidence is raised as a
+  question, not asserted as false.
 - for each unticked item, say whether the diff now appears to cover it, so the author can
   tick it
-- list unticked items in the summary, because a PR with open items isn't ready to approve,
-  whatever the code looks like
+- list unticked items in the summary for the author to confirm. An unticked item blocks
+  approval only when it is required work that remains undone. Rows that don't apply, optional
+  items and author attestations are surfaced, not blocking.
 
 ## Team radar
 
