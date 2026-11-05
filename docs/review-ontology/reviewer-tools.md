@@ -32,7 +32,7 @@ Two more aren't in the table, but the guide asks for both before reading the dif
 reading the spec or ticket, the other is following the project's own rules. They become
 `linked_work_item` and `agent_instructions`.
 
-## Three capability tiers
+## Capability tiers
 
 Tools are grouped by what they need to run. That decides where each can run today.
 
@@ -41,9 +41,10 @@ Tools are grouped by what they need to run. That decides where each can run toda
 | 1. API | A GitHub App installation token | Hosted (Vercel) and local |
 | 2. Checkout | A clone of the repo at base and head | Local CLI now; hosted via a sandbox, if it fits the budget |
 | 3. Semantic | A checkout plus a language server or parser | Local CLI now; hosted via a sandbox |
+| 4. Scanners | A checkout plus the analyzers, or their results from CI | Local CLI now; hosted by reading CI results |
 
 The local CLI (`ai-review review`, `watch`, `gate`) already runs inside a checkout, so tiers 2
-and 3 are cheapest to ship there first.
+to 4 are cheapest to ship there first.
 
 ### Tier 1: GitHub API
 
@@ -82,6 +83,25 @@ and 3 are cheapest to ship there first.
 | `file_outline` | `path`, `ref` | Classes and functions with ranges | tree-sitter, no language server needed |
 | `module_graph` | optional `paths` | Import edges among the changed modules and their neighbours | Graphify or a tree-sitter import scan; cycles and direction |
 | `structural_diff` | `path` or two bodies | An AST-level diff that ignores formatting and moves | Separates a reformat from a change |
+
+### Tier 4: Scanners
+
+Deterministic analyzers that replace work today's persona agents do by reading the diff. Each
+returns findings with file, line, column and rule id, limited to the changed lines, and the
+main reviewer triages them with the matching runbook. A scanner finding is evidence, not a
+posted comment: the reviewer confirms it in context first, the same way it confirms its own
+findings (see the verifier in [process-design.md](process-design.md)).
+
+| Tool | Replaces | Backed by | Returns | Notes |
+| --- | --- | --- | --- | --- |
+| `silent_failures` | `silent-failure-hunter` | Ruff `BLE001` (blind except), `E722` (bare except), `S110` (`try`/`except`/`pass`); ESLint `no-empty` and `@typescript-eslint/no-floating-promises`; Semgrep rules for swallowed errors and silent fallbacks | Swallowed-error sites on changed lines | Needs a checkout. Type-aware ESLint rules need the project's `tsconfig` |
+| `coverage_gaps` | Part of `pr-test-analyzer` | Coverage reports the test runners already produce (pytest-cov `coverage.xml`, Vitest or Jest lcov), reduced to changed lines with `diff-cover` | Changed lines and branches no test executed | Reading the report from a CI artifact is the default. Producing it means running the PR's tests, which runs PR code: only in an isolated sandbox, and only when [customization.md](customization.md) allows it |
+| `sast` | `security-sast` | Semgrep (Python and TypeScript rule packs), Bandit (Python) | Injection, path traversal, unsafe deserialization and similar, with rule id and severity | Needs a checkout; doesn't run PR code |
+| `secrets` | The secrets part of `security-sast` | Gitleaks over the PR's commits | Credentials added in the diff or its history | Runs on the commits, so a secret added and then removed in the same PR is still found |
+
+The scanner tier needs a checkout, so like tiers 2 and 3 it ships first on the local CLI. On
+the hosted path the CI already runs some of these tools. Reading their results through
+`ci_results` costs nothing extra and runs no code.
 
 ## The two intent and standards tools
 

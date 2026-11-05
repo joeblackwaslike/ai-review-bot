@@ -131,6 +131,54 @@ Notes on each:
 - **E** is likely where the experiments end up, but which parts earn their place is the
   question.
 
+## 5a. Direction set by Joe: one reviewer, runbooks and tools
+
+Joe went through today's nine skills and concluded that none of them needs to be a subagent
+that reads the whole diff (2026-11-04). The direction is candidate **F**:
+
+- **One main reviewer agent** runs the review. The guide's playbooks and the
+  [operations](operations/) entries are its runbooks, and it picks them from the triage in
+  [triage.md](triage.md).
+- **Today's skills become runbooks or tools.**
+
+  | Today | Becomes |
+  | --- | --- |
+  | `code-reviewer` | The main reviewer itself |
+  | `code-review-and-quality` (five-axis checklist) | A runbook: the guide's review order and checklist already cover correctness, readability, design, security and performance |
+  | `pr-test-analyzer` | A runbook (the guide's tests playbooks) plus a coverage tool |
+  | `silent-failure-hunter` | A scanner tool that reports line and column, plus a runbook to triage its output |
+  | `security-sast` | A scanner tool (SAST and secrets), plus a runbook to triage its output |
+  | `type-design-analyzer`, `comment-analyzer`, `security-auditor`, `architect-review` | Runbooks the main reviewer applies when triage finds type, documentation, security-relevant or boundary changes |
+
+- **No subagent runs by default.** If the main reviewer decides a runbook deserves its own
+  pass, it creates a subagent and gives it a job, curated context and tools. The context is
+  only the files and hunks the job concerns, with whatever surrounding code it needs. A
+  type-design pass gets the type changes, not the Dockerfile and the docs. An authentication
+  pass gets the session and cookie code. Each subagent's instructions say what changed and
+  what to check.
+- **Detection is done by the model and the catalog, not by substrings.** The current Tier 2
+  detectors match path fragments: `ci` matches `decimal.ts` and `role` matches
+  `controller.ts` (bead ai-review-bot-t0c.43), so the extra agents run on most PRs.
+
+Where F sits against the candidates in section 5: it is C (one agent with tools) plus the
+targeted subagents of D and E, created on demand by the main reviewer.
+
+What has to be measured before F replaces A, all of it in the experiments below:
+
+- **Cost.** Today's five agents share one cached copy of the diff, so input isn't five times
+  the cost. The waste is overlapping output (34% restatements) and duplicated reasoning. F
+  should cost less, but by how much is what A0 measures.
+- **Attention on large PRs.** One agent spread across every concern may miss what a focused
+  pass catches. The targeted subagents are the answer to test.
+- **Time.** A long tool loop has to finish inside the 210-second hosted budget, or run on the
+  local CLI.
+- **Running PR code.** The coverage tool needs the tests to run. For an untrusted PR, read
+  coverage from CI artifacts or run in an isolated sandbox. The guide's
+  [Review locally](../Code-Review-Guide-and-Playbooks.md#review-locally-not-only-in-the-browser)
+  section draws the same line.
+
+The scanner tools are specified in [reviewer-tools.md](reviewer-tools.md#tier-4-scanners).
+
 ## 6. Experiment plan
 
 The replay harness (`ai-review replay`, [the replay design](../superpowers/specs/2026-10-27-review-replay-harness-design.md))
@@ -187,9 +235,11 @@ variant on the same fixture snapshots, several repeated trials each, in randomiz
 shows each component's effect and their interaction, which a one-at-a-time sequence can't.
 Then:
 
-1. **B**, planner and playbook passes, carrying forward whichever components won.
-2. **C**, one agent with every tool, run locally with a generous time limit, as a reference
-   point for what tools buy. Unlimited time doesn't make it an upper bound on accuracy.
+1. **F**, the one-reviewer design from section 5a: first the main reviewer alone with its
+   runbooks and tools, then with the targeted subagents it may create. It is compared on the
+   same snapshots against A and A0, and against the factorial's best A variant.
+2. **B**, planner and playbook passes, only if F loses on large PRs, where a fixed plan of
+   passes may beat one agent's choices.
 
 Measure hosted-budget completion from the first run, not only at the end, so a winner that
 can't finish in 210 seconds is known early. Run locally first; move a candidate to the hosted
@@ -209,7 +259,11 @@ Run the factorial in section 6 first. The evidence in section 3 suggests missing
 and missing context, but it doesn't prove either: duplicate rates show overlap, not its cause,
 and the precision figures come from three PRs, which can't separate missing context from model
 or prompt effects. The factorial, with the A0 baseline, is the cheapest way to find out which
-of those actually matters before choosing between B, D and E.
+of those actually matters.
+
+F, from section 5a, is the leading candidate. The factorial still runs first, because it sets
+the baselines F has to beat and tells whether verification and context, which F builds in,
+are worth their cost.
 
 ## Open questions
 
