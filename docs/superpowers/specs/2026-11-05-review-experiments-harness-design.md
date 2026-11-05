@@ -262,7 +262,8 @@ These are proposals. The plan file is where they become binding, and they are fi
 the first scored run.
 
 - A candidate beats a baseline on precision only if the paired PR-level bootstrap interval
-  for the difference excludes zero on the test set, on both providers, and recall has not
+  for the difference excludes zero on the test set, on Anthropic and, within the OpenAI cap,
+  on OpenAI, and recall has not
   dropped by more than 5 percentage points (point estimate) on the same set.
 - A candidate is cost-competitive if median cost per PR is no more than the baseline's, or
   if it is higher and precision and recall both clear their bars.
@@ -301,11 +302,25 @@ file can tighten any of them.
   recomputed. Scoring in experiments adds one step on top: candidates the join leaves
   unmatched go to adjudication (section 5), whose cached verdicts are the only place a model
   is used in scoring.
-- **Judges.** With two providers, a candidate's producer family is excluded from its first
-  judge. The second judge is the other family's strongest available model, run with a
-  different prompt and reasoning effort, since a third family is not available. Judge spend
-  is a separate line in the plan with its own cap, outside the strategy cost comparison.
-  Auth follows the CLI rule: subscription first, API key only when there is no subscription.
+- **OpenAI quota is scarce (Joe, 2026-11-05).** OpenAI use is treated as a rationed
+  resource, not a second equal provider. The plan carries a hard OpenAI cap, separate from
+  the Anthropic cap, and the runner refuses to start a cell that would pass it. Anthropic is
+  the primary provider for every strategy and for all tuning and validation runs. OpenAI
+  strategy runs happen only on the test set, as a confirmatory pass, and only for strategies
+  that already cleared their bars on Anthropic. The "both providers" requirement in the
+  thresholds therefore means Anthropic on all splits and OpenAI confirmation on the test
+  set; if the OpenAI cap blocks it, the result is reported as Anthropic-only and labeled so.
+  Offline replay and all non-model work spend no OpenAI quota.
+- **Judges.** Judging is where OpenAI quota would leak fastest, so it is rationed too. The
+  first judge for an Anthropic-produced candidate is a different Anthropic model (the
+  strongest available) with a prompt that is blind to the producer. The cross-family check
+  uses OpenAI only on verdicts that matter: candidates the first judge calls `real` or
+  `unclear`, deduplicated by the verdict cache and capped by the OpenAI line above. Verdicts
+  that skip the cross-check are marked `single-family` and the count is printed with every
+  precision and recall figure. For OpenAI-produced candidates the first judge is Anthropic,
+  so OpenAI judges nothing it produced. Judge spend is its own line in the plan, outside the
+  strategy cost comparison. Auth follows the CLI rule: subscription first, API key only when
+  there is no subscription.
 - **A0 spend matching.** The target is A's cost for the same round in the same grid run, in
   dollars computed from recorded tokens at list price with cache reads priced as cache reads.
   A runs first in the grid, so the target always exists. Tolerance is plus or minus 10%.
