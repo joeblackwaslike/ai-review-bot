@@ -1823,7 +1823,7 @@ describe("runAgent caching + telemetry", () => {
 				providerMetadata: {},
 			});
 			const out = await runAgent("code-reviewer.md", "S", sel, "");
-			expect(out.status === "ok" && out.usage).toEqual({
+			expect(out.status === "ok" && out.usage).toStrictEqual({
 				promptTokens: 10,
 				completionTokens: 5,
 				cachedInputTokens: 7,
@@ -1838,7 +1838,7 @@ describe("runAgent caching + telemetry", () => {
 				providerMetadata: { anthropic: { cacheReadInputTokens: 4 } },
 			});
 			const out = await runAgent("code-reviewer.md", "S", sel, "");
-			expect(out.status === "ok" && out.usage).toEqual({
+			expect(out.status === "ok" && out.usage).toStrictEqual({
 				promptTokens: 10,
 				completionTokens: 5,
 				cachedInputTokens: 4,
@@ -1852,7 +1852,7 @@ describe("runAgent caching + telemetry", () => {
 				providerMetadata: {},
 			});
 			const out = await runAgent("code-reviewer.md", "S", sel, "");
-			expect(out.status === "ok" && out.usage).toEqual({
+			expect(out.status === "ok" && out.usage).toStrictEqual({
 				promptTokens: 10,
 				completionTokens: 5,
 			});
