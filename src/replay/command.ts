@@ -33,7 +33,11 @@ import { type ReplayPipeline, todaysCodePipeline } from "./pipeline.js";
 import { recordPr } from "./record.js";
 import { replayFixture } from "./replay.js";
 import { registerBuiltinStrategies } from "./strategies/index.js";
-import { getStrategy } from "./strategy.js";
+import {
+	getStrategy,
+	type ReviewStrategy,
+	UnknownStrategyError,
+} from "./strategy.js";
 import type { LabelFile, Provider, ReplayFixture } from "./types.js";
 
 export interface ReplayDeps {
@@ -55,13 +59,14 @@ interface ParsedArgs {
 	saveTrace?: boolean;
 	heldOut?: boolean;
 	expectClean?: boolean;
+	strategy?: string;
 }
 
 const USAGE = [
 	"Usage:",
 	"  ai-review replay [--fixtures <dir>]",
 	"  ai-review replay --record <pr-url> --provider anthropic|openai --bot <login> [--held-out] [--expect-clean] [--fixtures <dir>]",
-	"  ai-review replay --live [--rounds <n>] [--max-cost <usd>] [--save-trace] [--fixtures <dir>]",
+	"  ai-review replay --live [--rounds <n>] [--max-cost <usd>] [--strategy <name>] [--save-trace] [--fixtures <dir>]",
 ].join("\n");
 
 const PR_URL = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)\/?$/;
@@ -112,6 +117,7 @@ function parseArgs(args: string[]): ParsedArgs | null {
 		}
 		if (
 			(flag === "--record" ||
+				flag === "--strategy" ||
 				flag === "--provider" ||
 				flag === "--bot" ||
 				flag === "--fixtures") &&
@@ -119,6 +125,7 @@ function parseArgs(args: string[]): ParsedArgs | null {
 		)
 			return null;
 		if (flag === "--record") parsed.record = value;
+		else if (flag === "--strategy") parsed.strategy = value;
 		else if (flag === "--bot") parsed.bot = value;
 		else if (flag === "--fixtures") parsed.fixtures = value;
 		else if (flag === "--provider") {
@@ -348,11 +355,11 @@ async function liveAll(
 	p: ParsedArgs,
 	client: GhClient,
 	out: (s: string) => void,
+	strategy: ReviewStrategy,
 	wire?: typeof buildLiveWiring,
 ): Promise<number> {
 	const buildLiveWiring =
 		wire ?? (await import("./live-wiring.js")).buildLiveWiring;
-	registerBuiltinStrategies();
 	const files = existsSync(dir)
 		? (await readdir(dir)).filter((n) => FIXTURE_FILE.test(n)).sort()
 		: [];
@@ -388,7 +395,7 @@ async function liveAll(
 				rounds,
 				maxCostUsd: remaining,
 				out,
-				strategy: getStrategy("a"),
+				strategy,
 				...wiring,
 			});
 		} catch (err) {
@@ -438,16 +445,37 @@ export async function runReplay(
 			"--save-trace requires --live without --record") ||
 		((parsed.heldOut || parsed.expectClean) &&
 			parsed.record === undefined &&
-			"--held-out and --expect-clean require --record");
+			"--held-out and --expect-clean require --record") ||
+		(parsed.strategy !== undefined &&
+			(!parsed.live || parsed.record !== undefined) &&
+			"--strategy requires --live without --record");
 	if (misuse) {
 		out(`${misuse}\n${USAGE}`);
 		return 2;
+	}
+	let strategy: ReviewStrategy | undefined;
+	if (parsed.live) {
+		registerBuiltinStrategies();
+		try {
+			strategy = getStrategy(parsed.strategy ?? "a");
+		} catch (err) {
+			if (!(err instanceof UnknownStrategyError)) throw err;
+			out(err.message);
+			return 2;
+		}
 	}
 	const dir =
 		parsed.fixtures ?? deps.fixturesDir ?? defaultFixturesDir(import.meta.url);
 	if (parsed.record !== undefined)
 		return record(parsed, dir, deps.client ?? ghCli(), out);
-	if (parsed.live)
-		return liveAll(dir, parsed, deps.client ?? ghCli(), out, deps.liveWiring);
+	if (strategy)
+		return liveAll(
+			dir,
+			parsed,
+			deps.client ?? ghCli(),
+			out,
+			strategy,
+			deps.liveWiring,
+		);
 	return replayAll(dir, deps.pipeline ?? todaysCodePipeline, out);
 }

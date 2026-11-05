@@ -768,8 +768,68 @@ describe("runReplay live and record flags", () => {
 			"--save-trace",
 			"--held-out",
 			"--expect-clean",
+			"--strategy",
 		])
 			expect(text).toContain(flag);
+	});
+
+	it("--strategy a and the default both run strategy a", async () => {
+		for (const args of [["--live", "--strategy", "a"], ["--live"]]) {
+			const dir = tmp();
+			seedLive(dir, false);
+			const names: string[] = [];
+			stubStrategy(
+				0,
+				() => 0,
+				() => names.push("ran"),
+			);
+			expect(
+				await runReplay(args, {
+					fixturesDir: dir,
+					out: () => {},
+					client: fakeClient(),
+					liveWiring: fetchOnly,
+				}),
+			).toBe(0);
+			expect(names).toEqual(["ran"]);
+		}
+	});
+
+	it("--strategy with an unknown name exits 2, lists known names and never builds the wiring", async () => {
+		const dir = tmp();
+		seedLive(dir, false);
+		stubStrategy(0, () => 0);
+		const wiring = vi.fn(fetchOnly as never) as unknown as Wiring;
+		const { lines, out } = collect();
+		expect(
+			await runReplay(["--live", "--strategy", "nope"], {
+				fixturesDir: dir,
+				out,
+				client: fakeClient(),
+				liveWiring: wiring,
+			}),
+		).toBe(2);
+		expect(wiring).not.toHaveBeenCalled();
+		expect(lines.join("\n")).toContain('unknown strategy "nope"');
+		expect(lines.join("\n")).toContain("registered: a");
+	});
+
+	it("--strategy needs a value, --live, and no --record", async () => {
+		for (const args of [
+			["--live", "--strategy"],
+			["--strategy", "a"],
+			[...recordArgs, "--live", "--strategy", "a"],
+		]) {
+			const { lines, out } = collect();
+			expect(
+				await runReplay(args, {
+					fixturesDir: tmp(),
+					out,
+					client: fakeClient(),
+				}),
+			).toBe(2);
+			expect(lines.join("\n")).toContain("--strategy");
+		}
 	});
 
 	it("rejects flags used outside their mode", async () => {
