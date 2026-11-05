@@ -102,21 +102,32 @@ version of step 3, and no steps 2, 4 or 6.
 
 | | Shape | Maps to the target | Cost and latency | Prompt cache | Main risk | Testable with replay |
 | --- | --- | --- | --- | --- | --- | --- |
+| **A0** | Baseline: one diff-only reviewer, same model and token budget as A, run several times | Step 5 once | Lower than A; set to match A's spend for a fair comparison | Good | Shows whether personas beat buying more inference | Yes, with a pluggable strategy |
 | **A** | Today: tiered personas in parallel on one input, then merge | Step 5 only, five times | Known: about 75s for a 14-file diff at concurrency 4 | Good: shared prefix | Overlap, unchecked claims | Yes, today |
 | **B** | A planner reads the classification and builds a per-PR graph of passes from the catalog and the playbooks | Steps 2–3 explicit; passes are domain playbooks, not personas | One planner call, then only the passes that apply | Good if passes share a context block | A bad plan skips a needed pass | Yes, with a pluggable strategy |
-| **C** | One senior-reviewer agent with tools, in a loop | All seven steps, in one context | Long loop; risk against the 210s budget | Weak: the context grows each step | One model's blind spots; hard to bound | Yes, but runs vary more |
-| **D** | Triage, then specialist investigators with tools, then a verifier, then a writer | Steps 1–7 split by role | More calls than A; the verifier adds one call per candidate or batch | Good for the shared block; tool turns aren't cached | Coordination, cost | Yes |
-| **E** | Hybrids, for example B's planner, a deterministic context pre-pass, domain passes, D's verifier | Steps 1–7, with the deterministic parts in code | Between A and D | Good | More moving parts | Yes |
+| **C** | One senior-reviewer agent with tools, in a loop | All seven steps, in one context | Long loop; risk against the 210s budget | To be measured: depends on how each provider caches a growing conversation | One model's blind spots; hard to bound | Yes, but runs vary more |
+| **D** | Triage, then specialist investigators with tools, then a verifier, then a writer | Steps 1–7 split by role | Depends on how many investigators run; the verifier adds a call per candidate or per batch | To be measured per provider | Coordination, cost | Yes |
+| **E** | Hybrids, for example B's planner, a deterministic context pre-pass, domain passes, D's verifier | Steps 1–7, with the deterministic parts in code | Between A and D | Good for the shared block | More moving parts | Yes |
+
+The cost and cache columns are expectations, not measurements. Each run records cached input
+tokens, uncached input, output and reasoning tokens, tool-call costs and wall time, under
+matched cold-cache and warm-cache conditions, and the comparison uses those numbers.
 
 Notes on each:
 
+- **A0** answers the first question: does splitting the work into personas help at all, or
+  does A only spend more? A tool-using candidate changes too many variables at once to answer
+  it.
 - **A** keeps what works today: failure isolation per agent, the shared cached prefix, anchor
   validation, the ledger. Those stay in every candidate.
 - **B** replaces personas with the guide's playbooks as the unit of work. A move-only PR gets
   the relocation checks and nothing else; an endpoint plus migration gets two playbook passes.
 - **C** is closest to how a person reviews, and the hardest to make reliable and fast.
-- **D**'s verifier is the cheapest single change against the precision evidence. The discard
-  records already reserve `DISCARDED_BY_VERIFY` for it.
+- **D**'s verifier targets the precision evidence directly. The discard records already
+  reserve `DISCARDED_BY_VERIFY` for it. Its cost depends on candidate counts and how deep each
+  check goes, so it is measured, not assumed cheap. A verifier returns one of three outcomes:
+  verified, refuted, or unresolved. Missing evidence or a timeout is unresolved, never
+  refuted; an unresolved finding becomes a question, as the guide asks.
 - **E** is likely where the experiments end up, but which parts earn their place is the
   question.
 
@@ -133,56 +144,72 @@ against labelled claims.
    run through the same interface so the metrics compare like with like.
 2. **A checkout per fixture.** Candidates with tools need the repository at the fixture's
    base and head commits, not just the recorded diff.
-3. **A join rate that means something.** The out-of-sample 0 of 15 has to be explained (miss
+3. **Frozen inputs.** Models, prompts, budgets and the review history a round may see are
+   pinned per run. A round never sees replies, fixes or reviews from after its own time.
+4. **A join rate that means something.** The out-of-sample 0 of 15 has to be explained (miss
    versus matcher) before recall numbers count.
-4. **Seeded fixtures from the catalog.** Joe asked for simulations. Each operation entry's
+5. **Adjudication of unmatched findings.** Historical labels are incomplete: a correct
+   finding the old reviewers never made matches no label and would count as a false positive.
+   Every unmatched candidate is judged by a reviewer who doesn't know which strategy produced
+   it (a different model, then a cross-check), and fixtures are audited for defects the old
+   reviewers missed. Without this, precision and recall reward reproducing the old bot.
+6. **Seeded fixtures from the catalog.** Joe asked for simulations. Each operation entry's
    "Eval seed" becomes a small synthetic PR with a known right answer:
    - REL-01 move with one stale mock path
    - REL-10 move with one changed comparison
-   - DEL guard removal (the guide's `charge()` example)
+   - DEL-04 guard removal (the guide's `charge()` example)
    - REL-03 rename that changes a serialized field
-   - MEC formatter-only change with one hidden logic edit
+   - MEC-01 formatter-only change with one hidden logic edit
 
-   These measure recall on the cases that matter, which real fixtures rarely contain.
+   Each seed gets independently written variants (other languages, other names, the defect in
+   a different place) and a clean control with no defect, so a strategy can't pass by pattern
+   matching one example or by flagging everything.
 
 ### Metrics
 
-- **Precision**: share of posted findings that are right, against labels.
-- **Recall**: share of labelled real issues found (real fixtures), and seeded right answers
-  found (synthetic fixtures).
-- **Noise on old code**: findings on lines that only moved, were renamed or were reformatted.
-  Should be zero.
-- **Recycling and convergence**: repeats across rounds; rounds until nothing real is left.
-- **Cost and latency**: per PR, against the hosted budget.
+- **Precision**: share of posted findings that are right, against labels plus adjudication.
+- **Recall**: share of labelled and adjudicated real issues found (real fixtures), and seeded
+  right answers found (synthetic fixtures).
+- **Wrong or irrelevant findings**: findings that are incorrect or have nothing to do with the
+  change, with a separate count for those on lines that only moved, were renamed or were
+  reformatted. The second count is not required to be zero, because a move can create a real
+  integration defect; it is required to be about the move, not the moved body.
+- **Recycling and convergence**: repeats across rounds and rounds until nothing real is left,
+  always reported next to recall and the incomplete-review rate. A strategy that converges by
+  saying less is not converging.
+- **Cost and latency**: per PR, from the recorded token and time breakdown, and the share of
+  runs that would finish inside the hosted budget.
 
-### Order of experiments
+### Design and order
 
-Change one thing at a time, cheapest first, so each result says which component matters:
+Run A0, A, A + verifier, A + context pre-pass and A + both as a **paired factorial**: every
+variant on the same fixture snapshots, several repeated trials each, in randomized order. That
+shows each component's effect and their interaction, which a one-at-a-time sequence can't.
+Then:
 
-1. **A + verifier.** Same agents, one verification step before posting.
-2. **A + context pre-pass.** Same agents, with the operation recipes' results in the shared
-   prompt block.
-3. **A + both.**
-4. **B**: planner and playbook passes, with the winners of 1–3.
-5. **C** as a ceiling: one agent with every tool, run locally, no time limit.
+1. **B**, planner and playbook passes, carrying forward whichever components won.
+2. **C**, one agent with every tool, run locally with a generous time limit, as a reference
+   point for what tools buy. Unlimited time doesn't make it an upper bound on accuracy.
 
-Run locally first, where time isn't capped. Move a candidate to the hosted path only once it
-wins locally and fits the budget.
+Measure hosted-budget completion from the first run, not only at the end, so a winner that
+can't finish in 210 seconds is known early. Run locally first; move a candidate to the hosted
+path once it wins locally and the completion rate fits.
 
 ### When a result counts
 
-Write the metrics and the threshold down before running. A result counts only on fixtures the
-strategy wasn't tuned on (the harness already marks held-out fixtures), on both providers, with
-enough labelled claims that one fixture can't decide it. The current held-out set is two
-fixtures, which isn't enough; growing it comes first.
+Write the metrics and thresholds down before running. Split fixtures three ways: tuning,
+validation, and a test set nobody looks at until the end. A result counts only on the test
+set, on both providers, and with uncertainty computed over independent PRs rather than over
+claims, since claims within one PR are correlated. A precision gain counts only if recall
+holds. The current held-out set is two fixtures, which isn't enough; growing it comes first.
 
 ## 7. Recommendation, provisional
 
-Start with experiments 1 and 2. The evidence points at missing verification and missing
-context more than at the shape of the agent graph, and both can be added to today's pipeline
-without replacing it. If they move precision and noise-on-old-code the way the evidence
-suggests, the architecture question (B, D or E) becomes a question about which passes to run,
-which the catalog already answers.
+Run the factorial in section 6 first. The evidence in section 3 suggests missing verification
+and missing context, but it doesn't prove either: duplicate rates show overlap, not its cause,
+and the precision figures come from three PRs, which can't separate missing context from model
+or prompt effects. The factorial, with the A0 baseline, is the cheapest way to find out which
+of those actually matters before choosing between B, D and E.
 
 ## Open questions
 
