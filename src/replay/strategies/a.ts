@@ -42,7 +42,7 @@ export const strategyA: ReviewStrategy = {
 	},
 	async run(input) {
 		const started = Date.now();
-		const { fixture, round } = input;
+		const { fixture } = input;
 		const auth =
 			fixture.provider === "anthropic"
 				? await resolveAnthropicAuth()
@@ -55,9 +55,7 @@ export const strategyA: ReviewStrategy = {
 			auth,
 		});
 		if (result.agentsAttempted > 0 && result.agentsSucceeded === 0)
-			throw new Error(
-				`round ${round.index}: all ${result.agentsAttempted} review agents failed`,
-			);
+			throw new Error(`all ${result.agentsAttempted} review agents failed`);
 		const { posted } = postFilterTrace({
 			agentReviews: result.agentReviews,
 			ledger: input.history.ledger,

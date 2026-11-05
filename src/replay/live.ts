@@ -59,6 +59,17 @@ export interface LiveReport {
 	rounds: LiveRoundReport[];
 }
 
+/** A strategy run that threw, carrying the spend and rows of the rounds that finished. */
+export class LiveRunError extends Error {
+	constructor(
+		message: string,
+		readonly partial: LiveReport,
+		options?: { cause?: unknown },
+	) {
+		super(message, options);
+	}
+}
+
 export interface LiveOptions {
 	fixture: ReplayFixture;
 	labels: LabelFile;
@@ -142,8 +153,9 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 			);
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
-			throw new Error(
+			throw new LiveRunError(
 				`${opts.strategy.name} round ${d.round.index}: ${message}`,
+				report,
 				{ cause: err },
 			);
 		}

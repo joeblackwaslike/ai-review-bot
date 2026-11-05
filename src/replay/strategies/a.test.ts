@@ -112,7 +112,7 @@ describe("strategyA", () => {
 			agentsSucceeded: 0,
 		});
 		await expect(strategyA.run(inputFor())).rejects.toThrow(
-			"all 5 review agents failed",
+			new Error("all 5 review agents failed"),
 		);
 	});
 

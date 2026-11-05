@@ -21,7 +21,12 @@ import { filterMargin, formatMargin } from "./filter-margin.js";
 import { type GhClient, ghCli } from "./gh.js";
 import { checkClean, checkRecall } from "./guard.js";
 import { labelFixture } from "./label.js";
-import { InvalidEstimateError, type LiveReport, runLiveTier } from "./live.js";
+import {
+	InvalidEstimateError,
+	type LiveReport,
+	LiveRunError,
+	runLiveTier,
+} from "./live.js";
 import type { buildLiveWiring } from "./live-wiring.js";
 import { computeMetrics, formatReport } from "./metrics.js";
 import { type ReplayPipeline, todaysCodePipeline } from "./pipeline.js";
@@ -387,6 +392,12 @@ async function liveAll(
 				...wiring,
 			});
 		} catch (err) {
+			if (err instanceof LiveRunError) {
+				out(
+					`live failed for ${id}: ${err.message} (spent $${err.partial.spentUsd.toFixed(2)} before failure)`,
+				);
+				return 1;
+			}
 			if (!(err instanceof InvalidEstimateError)) throw err;
 			out(`live failed for ${id}: ${err.message}`);
 			return 1;

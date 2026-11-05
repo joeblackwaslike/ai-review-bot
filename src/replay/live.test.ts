@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	type LiveFinding,
 	type LiveReviewOutput,
+	LiveRunError,
 	runLiveTier,
 } from "./live.js";
 import type { ReviewStrategy, StrategyInput } from "./strategy.js";
@@ -359,7 +360,7 @@ describe("runLiveTier", () => {
 		expect(inputs[0]?.signal.aborted).toBe(false);
 	});
 
-	it("rethrows a failing run prefixed with the strategy name and round, keeping the cause and spend counted", async () => {
+	it("throws a LiveRunError naming strategy and round, with the cause and the earlier rounds' spend and rows", async () => {
 		const boom = new Error("model exploded");
 		const { opts } = base({
 			review: async (_d, r) => {
@@ -368,9 +369,12 @@ describe("runLiveTier", () => {
 			},
 		});
 		const err = await runLiveTier(opts).catch((e: unknown) => e);
-		expect(err).toBeInstanceOf(Error);
-		expect((err as Error).message).toBe("stub round 1: model exploded");
-		expect((err as Error).cause).toBe(boom);
+		expect(err).toBeInstanceOf(LiveRunError);
+		const failure = err as LiveRunError;
+		expect(failure.message).toBe("stub round 1: model exploded");
+		expect(failure.cause).toBe(boom);
+		expect(failure.partial.spentUsd).toBe(1);
+		expect(failure.partial.rounds.map((r) => r.index)).toEqual([0]);
 	});
 
 	it("carries wallMs and toolCalls into the round row", async () => {

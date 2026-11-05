@@ -486,6 +486,37 @@ describe("runReplay live and record flags", () => {
 		).toBe(0);
 	});
 
+	it("exits 1 and reports the spend so far when the strategy throws mid-run", async () => {
+		const dir = tmp();
+		const f = makeFixture([["a"], ["b"]]);
+		const id = fixtureId(f);
+		writeFileSync(join(dir, `${id}.json`), JSON.stringify(f, null, 2));
+		writeFileSync(
+			join(dir, `${id}.labels.json`),
+			JSON.stringify({ ...makeLabels(), fixtureId: id }),
+		);
+		let runs = 0;
+		stubStrategy(
+			0,
+			() => 1,
+			() => {
+				if (++runs === 2) throw new Error("model exploded");
+			},
+		);
+		const { lines, out } = collect();
+		expect(
+			await runReplay(["--live"], {
+				fixturesDir: dir,
+				out,
+				client: fakeClient(),
+				liveWiring: fetchOnly,
+			}),
+		).toBe(1);
+		expect(lines).toContain(
+			`live failed for ${id}: a round 1: model exploded (spent $1.00 before failure)`,
+		);
+	});
+
 	it("exits 1 with one line when a cost estimate is invalid, reviewing nothing", async () => {
 		const dir = tmp();
 		const { id } = seedLive(dir, false);
