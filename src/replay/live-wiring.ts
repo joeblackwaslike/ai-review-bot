@@ -1,17 +1,11 @@
-import { runAuditPass } from "../audit.js";
-import { resolveAnthropicAuth, resolveOpenAIAuth } from "../auth.js";
 import { numberPatchLines } from "../diff-lines.js";
-import { computeCost } from "../models.js";
 import type { ModelReview, PullFile } from "../review.js";
-import { REVIEWER_TUNING } from "../reviewer-tuning.js";
-import {
-	type ModelSelection,
-	type RouterContext,
-	routeModel,
-} from "../router.js";
+import type { RouterContext } from "../router.js";
 import type { GhClient } from "./gh.js";
 import type { LiveFinding, LiveOptions, LiveReviewOutput } from "./live.js";
-import { ledgerForRound, postFilterTrace } from "./trace.js";
+import { strategyA } from "./strategies/a.js";
+import type { StrategyInput } from "./strategy.js";
+import { ledgerForRound } from "./trace.js";
 import type {
 	CandidateRecord,
 	LabelFile,
@@ -19,10 +13,6 @@ import type {
 	Round,
 	RoundUsage,
 } from "./types.js";
-
-const AGENTS_PER_REVIEW = 5;
-const CHARS_PER_TOKEN = 4;
-const EXPECTED_COMPLETION_TOKENS = 2000;
 
 interface CompareResponse {
 	files?: { filename: string; status?: string; patch?: string }[];
@@ -82,7 +72,7 @@ export function toLiveReviewOutput(result: {
 type LiveWiring = Pick<LiveOptions, "review" | "estimateCost" | "fetchDiff">;
 
 /** The router input production derives from a PR, taken from a round's compare files. */
-function routerContext(files: PullFile[]): RouterContext {
+export function routerContext(files: PullFile[]): RouterContext {
 	let additions = 0;
 	let deletions = 0;
 	for (const f of files)
@@ -98,24 +88,15 @@ function routerContext(files: PullFile[]): RouterContext {
 	};
 }
 
-/** Real review, cost estimate, and diff fetch for `replay --live`. Needs local
- * auth. The review also traces what would post, against a ledger of the
- * fixture's earlier rounds and the round's compare files. */
+/** Adapter over strategy a for `replay --live`: fetches the round's diff and
+ * compare files, then delegates review and cost estimate to the strategy. */
 export function buildLiveWiring(
 	fixture: ReplayFixture,
 	client: GhClient,
 	labels: LabelFile,
 ): LiveWiring {
-	const provider = fixture.provider;
-	const meta = { owner: fixture.owner, repo: fixture.repo, ref: "replay" };
-	const selections = new Map<number, ModelSelection>();
-	const selectionFor = (round: Round): ModelSelection => {
-		const selection = selections.get(round.index);
-		if (!selection)
-			throw new Error(`round ${round.index}: fetchDiff must run first`);
-		return selection;
-	};
 	const compared = new Map<number, Promise<PullFile[]>>();
+	const fetched = new Map<number, StrategyInput>();
 	const compareFiles = (round: Round): Promise<PullFile[]> => {
 		const cached = compared.get(round.index);
 		if (cached) return cached;
@@ -134,51 +115,46 @@ export function buildLiveWiring(
 		compared.set(round.index, files);
 		return files;
 	};
+	const inputFor = (diff: string, round: Round): StrategyInput => {
+		const fetchedInput = fetched.get(round.index);
+		if (!fetchedInput)
+			throw new Error(`round ${round.index}: fetchDiff must run first`);
+		return { ...fetchedInput, diff };
+	};
 	return {
 		fetchDiff: async (round) => {
 			const files = await compareFiles(round);
-			selections.set(round.index, routeModel(routerContext(files), provider));
-			return {
-				diff: files
-					.map(
-						(f) =>
-							`--- ${f.filename}\n${f.patch ? numberPatchLines(f.patch) : ""}`,
-					)
-					.join("\n"),
-				approximate: round.approximate || round.mergeBase === null,
-			};
+			const approximate = round.approximate || round.mergeBase === null;
+			const diff = files
+				.map(
+					(f) =>
+						`--- ${f.filename}\n${f.patch ? numberPatchLines(f.patch) : ""}`,
+				)
+				.join("\n");
+			fetched.set(round.index, {
+				fixture,
+				round,
+				labels,
+				diff,
+				files,
+				approximateDiff: approximate,
+				checkout: null,
+				history: { ledger: ledgerForRound(fixture, labels, round) },
+				budget: {
+					maxUsd: Number.POSITIVE_INFINITY,
+					maxWallMs: Number.POSITIVE_INFINITY,
+				},
+				signal: new AbortController().signal,
+			});
+			return { diff, approximate };
 		},
 		estimateCost: (diff, round) =>
-			computeCost(
-				{
-					promptTokens: (diff.length / CHARS_PER_TOKEN) * AGENTS_PER_REVIEW,
-					completionTokens: EXPECTED_COMPLETION_TOKENS * AGENTS_PER_REVIEW,
-				},
-				selectionFor(round).model,
-			),
+			strategyA.estimateCost(inputFor(diff, round)),
 		review: async (diff, round): Promise<LiveReviewOutput> => {
-			const auth =
-				provider === "anthropic"
-					? await resolveAnthropicAuth()
-					: await resolveOpenAIAuth();
-			const result = await runAuditPass({
-				files: [{ path: "replay.diff", content: diff }],
-				selection: selectionFor(round),
-				extraInstructions: "",
-				meta,
-				auth,
-			});
-			if (result.agentsAttempted > 0 && result.agentsSucceeded === 0)
-				throw new Error(
-					`round ${round.index}: all ${result.agentsAttempted} review agents failed`,
-				);
-			const { posted } = postFilterTrace({
-				agentReviews: result.agentReviews,
-				ledger: ledgerForRound(fixture, labels, round),
-				files: await compareFiles(round),
-				tuning: REVIEWER_TUNING,
-			});
-			return { ...toLiveReviewOutput(result), posted };
+			const { findings, candidates, posted, usage } = await strategyA.run(
+				inputFor(diff, round),
+			);
+			return { findings, candidates, posted, usage };
 		},
 	};
 }
