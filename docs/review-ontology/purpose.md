@@ -58,18 +58,18 @@ role ruff plays for Python. ESLint runs the strict, opinionated rules through
 `joe-stack-preferences` skill keeps a rule-by-rule coverage matrix of WPS against ruff, Biome
 and ESLint.
 
-That matrix also lists the WPS checks with **no TypeScript linter equivalent**, and those are
-the ones a reviewer has to check by hand in TypeScript code:
+That matrix also lists the Python checks with **no TypeScript linter equivalent**, and those
+are the ones a reviewer has to check by hand in TypeScript code:
 
-| WPS rule | Check | Why no linter catches it in TypeScript |
+| Python rule | Check | Why no linter catches it in TypeScript |
 | --- | --- | --- |
-| `WPS425` | Boolean positional arguments (the boolean trap) | No rule tells a boolean parameter from any other by position |
-| `WPS430` | Nested functions | `no-inner-declarations` catches `function` declarations, not `const fn = () =>` |
-| `WPS416` | `try` blocks that cover too much | No rule measures what a `try` block wraps |
-| `WPS424` | Catching too broadly | TypeScript doesn't narrow the `catch` variable, and no rule checks what is caught |
+| Ruff `FBT001`, `FBT003` (wemake's old `WPS425`) | Boolean positional arguments (the boolean trap) | No rule tells a boolean parameter from any other by position |
+| `WPS430` | Nested functions | `no-inner-declarations` checks only declarations inside blocks, so neither a `function` nested directly in another function's body nor `const fn = () =>` is flagged |
+| `WPS229` | A `try` body that covers too much | No rule measures what a `try` block wraps |
+| Ruff `BLE001` | Catching too broadly | TypeScript has one untyped `catch` clause per `try`. With `useUnknownInCatchVariables` the variable is `unknown` and must be narrowed before use, but no rule checks that the handler narrows and rethrows what it doesn't handle |
 | `WPS214` | Too many methods on a class | No ESLint rule counts class methods |
-| `WPS202` | Too many module members or exports | No ESLint rule counts top-level exports |
-| `WPS221` | Too many conditions in one expression | Cognitive complexity is only a proxy |
+| `WPS202` | Too many functions and classes in one module | No ESLint rule counts a module's functions and classes |
+| `WPS221` | Too complex a line (Jones complexity, counted over the line's syntax nodes) | ESLint's complexity rules work per function; cognitive complexity is only a proxy |
 
 This is the deterministic and stochastic split from
 [process-design.md](process-design.md#5a-direction-set-by-joe-one-reviewer-runbooks-and-tools)

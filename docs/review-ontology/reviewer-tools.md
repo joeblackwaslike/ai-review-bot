@@ -100,7 +100,6 @@ findings (see the verifier in [process-design.md](process-design.md)).
 | `silent_failures` | `silent-failure-hunter` | Ruff `BLE001` (blind except), `E722` (bare except), `S110` (`try`/`except`/`pass`); ESLint `no-empty` and `@typescript-eslint/no-floating-promises`; Semgrep rules for swallowed errors and silent fallbacks | Swallowed-error sites on changed lines | Needs a checkout. Type-aware ESLint rules need the project's `tsconfig` |
 | `coverage_gaps` | Part of `pr-test-analyzer` | Coverage reports the test runners already produce (pytest-cov `coverage.xml`, Vitest or Jest lcov), reduced to changed lines with `diff-cover` | Changed lines and branches no test executed | Reading the report from a CI artifact (`ci_artifact`) is the default. Producing it means running the PR's tests, which runs PR code: only in an isolated sandbox, and only when [customization.md](customization.md) allows it |
 | `sast` | `security-sast` | Semgrep (Python and TypeScript rule packs), Bandit (Python) | Injection, path traversal, unsafe deserialization and similar, with rule id and severity | Needs a checkout; doesn't run PR code |
-| `explain_rule` | Hand-written rule rationale in review comments | wemake's MCP server (`explain_violation('WPS###')`, from `wemake-python-styleguide[mcp]`); the rule pages of Ruff, ESLint plugins and Biome for other linters | The rule's reasoning and the fix it expects | Lets a finding about a suppression or a lint rule quote the rule's own reasoning and link it, instead of the model paraphrasing |
 | `secrets` | The secrets part of `security-sast` | Gitleaks over the PR's commits | Credentials added in the diff or its history | Runs on the commits, so a secret added and then removed in the same PR is still found |
 
 The scanner tier needs a checkout, so like tiers 2 and 3 it ships first on the local CLI. On
@@ -109,6 +108,15 @@ it does, and publishes the results as annotations or artifacts (SARIF, `coverage
 reading them through `ci_results` and `ci_artifact` costs nothing extra and runs no code.
 When it doesn't, the hosted path has no scanner results, and the repo's
 [customization](customization.md) can say which CI jobs produce them.
+
+### Rule explanations
+
+Not a scanner: it returns no findings, only the reasoning behind a rule another tool or the
+reviewer has already flagged, so it needs no checkout.
+
+| Tool | Replaces | Backed by | Returns | Notes |
+| --- | --- | --- | --- | --- |
+| `explain_rule` | Hand-written rule rationale in review comments | wemake's MCP server (`explain_violation('WPS###')`, from `wemake-python-styleguide[mcp]`); the rule pages of Ruff, ESLint plugins and Biome for other linters | The rule's reasoning and the fix it expects | Lets a finding about a suppression or a lint rule quote the rule's own reasoning and link it, instead of the model paraphrasing |
 
 ## The two intent and standards tools
 
