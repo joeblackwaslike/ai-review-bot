@@ -226,7 +226,6 @@ describe("buildLiveWiring", () => {
 	): StrategyInput => ({
 		fixture: f,
 		round: target,
-		labels,
 		diff: fetched.diff,
 		files: fetched.files,
 		approximateDiff: fetched.approximate,

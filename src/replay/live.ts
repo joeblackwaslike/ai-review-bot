@@ -111,7 +111,6 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 	): StrategyInput => ({
 		fixture: opts.fixture,
 		round: d.round,
-		labels: opts.labels,
 		diff: d.diff,
 		files: d.files,
 		approximateDiff: d.approximate,

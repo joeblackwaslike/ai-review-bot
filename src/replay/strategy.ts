@@ -3,7 +3,6 @@ import type { PullFile } from "../review.js";
 import type { LiveFinding } from "./live.js";
 import type {
 	CandidateRecord,
-	LabelFile,
 	ReplayFixture,
 	Round,
 	RoundUsage,
@@ -28,7 +27,6 @@ export interface ToolCallRecord {
 export interface StrategyInput {
 	fixture: ReplayFixture;
 	round: Round;
-	labels: LabelFile;
 	diff: string;
 	files: PullFile[];
 	approximateDiff: boolean;

@@ -119,7 +119,9 @@ interface ReviewStrategy {
 `RoundUsage` today is per skill prompt and completion tokens. It grows to carry cached
 input, uncached input, output and reasoning tokens, so cold-cache and warm-cache runs can be
 told apart. This is a change to a type the existing fixtures store inside traces, so the
-extension is additive and optional, and `schemaVersion` stays 1.
+extension is additive and optional, and `schemaVersion` stays 1. Usage for a failed or
+retried agent attempt does not carry cached or reasoning counts, so experiment cost totals
+undercount cache reads on those attempts.
 
 Strategies register in a map in `src/replay/strategies/index.ts`. `ai-review replay --live
 --strategy <name>` picks one; the default stays `a`, so today's behaviour is unchanged.

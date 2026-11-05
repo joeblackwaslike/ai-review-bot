@@ -27,7 +27,7 @@ import {
 	LiveRunError,
 	runLiveTier,
 } from "./live.js";
-import type { buildLiveWiring } from "./live-wiring.js";
+import { buildLiveWiring as defaultLiveWiring } from "./live-wiring.js";
 import { computeMetrics, formatReport } from "./metrics.js";
 import { type ReplayPipeline, todaysCodePipeline } from "./pipeline.js";
 import { recordPr } from "./record.js";
@@ -45,7 +45,7 @@ export interface ReplayDeps {
 	fixturesDir?: string;
 	out?: (s: string) => void;
 	pipeline?: ReplayPipeline;
-	liveWiring?: typeof buildLiveWiring;
+	liveWiring?: typeof defaultLiveWiring;
 }
 
 interface ParsedArgs {
@@ -356,10 +356,9 @@ async function liveAll(
 	client: GhClient,
 	out: (s: string) => void,
 	strategy: ReviewStrategy,
-	wire?: typeof buildLiveWiring,
+	wire?: typeof defaultLiveWiring,
 ): Promise<number> {
-	const buildLiveWiring =
-		wire ?? (await import("./live-wiring.js")).buildLiveWiring;
+	const buildLiveWiring = wire ?? defaultLiveWiring;
 	const files = existsSync(dir)
 		? (await readdir(dir)).filter((n) => FIXTURE_FILE.test(n)).sort()
 		: [];

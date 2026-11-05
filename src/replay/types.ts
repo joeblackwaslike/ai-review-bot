@@ -30,7 +30,11 @@ export interface CandidateRecord {
 	severity: string | null;
 }
 
-/** Token usage per skill file name, with the .md suffix, as the hosted corpus uses. */
+/**
+ * Token usage per skill file name, with the .md suffix, as the hosted corpus uses.
+ * `promptTokens` is the provider's total input including cache reads, uncached input is
+ * `promptTokens - cachedInputTokens`, and cache writes are not recorded.
+ */
 export type RoundUsage = Record<
 	string,
 	{

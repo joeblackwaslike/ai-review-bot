@@ -814,9 +814,20 @@ describe("runReplay live and record flags", () => {
 		expect(lines.join("\n")).toContain("registered: a");
 	});
 
-	it("--strategy needs a value, --live, and no --record", async () => {
+	it("--strategy needs a value", async () => {
+		const { lines, out } = collect();
+		expect(
+			await runReplay(["--live", "--strategy"], {
+				fixturesDir: tmp(),
+				out,
+				client: fakeClient(),
+			}),
+		).toBe(2);
+		expect(lines.join("\n")).toContain("--strategy <name>");
+	});
+
+	it("--strategy requires --live and no --record", async () => {
 		for (const args of [
-			["--live", "--strategy"],
 			["--strategy", "a"],
 			[...recordArgs, "--live", "--strategy", "a"],
 		]) {
@@ -828,7 +839,9 @@ describe("runReplay live and record flags", () => {
 					client: fakeClient(),
 				}),
 			).toBe(2);
-			expect(lines.join("\n")).toContain("--strategy");
+			expect(lines.join("\n")).toContain(
+				"--strategy requires --live without --record",
+			);
 		}
 	});
 

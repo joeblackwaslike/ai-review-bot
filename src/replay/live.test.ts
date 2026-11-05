@@ -355,6 +355,7 @@ describe("runLiveTier", () => {
 		expect(inputs[0]?.history.ledger).toEqual(
 			ledgerForRound(fixture, labels(true), fixture.rounds[0] as Round),
 		);
+		expect(inputs[0]).not.toHaveProperty("labels");
 		expect(inputs[1]?.budget).toEqual({ maxUsd: 9, maxWallMs: 210_000 });
 		expect(inputs[0]?.signal).not.toBe(inputs[1]?.signal);
 		expect(inputs[0]?.signal.aborted).toBe(false);

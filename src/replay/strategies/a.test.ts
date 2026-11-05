@@ -42,7 +42,6 @@ const files = [buildPullFile("src/a.ts", SIMPLE_PATCH)];
 const inputFor = (): StrategyInput => ({
 	fixture,
 	round,
-	labels,
 	diff: "x".repeat(4000),
 	files,
 	approximateDiff: false,
@@ -126,7 +125,7 @@ describe("strategyA", () => {
 		);
 	});
 
-	it("a reproduces a saved trace", async () => {
+	it("maps saved trace candidates back to themselves", async () => {
 		const saved = (round.trace?.candidates ?? []) as CandidateRecord[];
 		expect(saved.length).toBeGreaterThan(0);
 		const bySkill = new Map<string, CandidateRecord[]>();
