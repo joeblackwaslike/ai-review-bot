@@ -38,6 +38,10 @@ function isSensitivePath(path: string): boolean {
 }
 
 function isDocFile(path: string): boolean {
+	const base = path.slice(path.lastIndexOf("/") + 1).toLowerCase();
+	if (/^(requirements|constraints)[^/]*\.txt$/.test(base)) {
+		return false;
+	}
 	const ext = path.slice(path.lastIndexOf("."));
 	return DOC_EXTENSIONS.has(ext);
 }
@@ -49,17 +53,17 @@ export function classifyTier(context: RouterContext): ReviewTier {
 		return "deep";
 	}
 
+	const totalLines = additions + deletions;
+	if (totalLines < 20 && filePaths.every(isDocFile)) {
+		return "trivial";
+	}
+
 	if (filePaths.some(isSensitivePath)) {
 		return "complex";
 	}
 
-	if (additions + deletions > 500) {
+	if (totalLines > 500) {
 		return "complex";
-	}
-
-	const totalLines = additions + deletions;
-	if (totalLines < 20 && filePaths.every(isDocFile)) {
-		return "trivial";
 	}
 
 	return "normal";

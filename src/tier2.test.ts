@@ -85,6 +85,34 @@ describe("detectTier2Skills", () => {
 		expect(matches.map((m) => m.skillPath)).toContain("security-auditor.md");
 	});
 
+	it.each([
+		"src/decimal.ts",
+		"docs/decision.md",
+		"src/precision.py",
+		"src/social.ts",
+		"docs/specification.md",
+		"src/tokenizer.ts",
+	])("does not activate security-auditor for unrelated path %s", (path) => {
+		const matches = detectTier2Skills({ ...base, filePaths: [path] });
+		expect(matches.map((m) => m.skillPath)).not.toContain(
+			"security-auditor.md",
+		);
+	});
+
+	it.each([
+		"src/users/list.ts",
+		"src/userService.ts",
+		".github/workflows/ci.yml",
+		"ci/build.sh",
+		"src/authentication.ts",
+		"infra/deployment.yaml",
+		".env.production",
+		"src/api/tokens.ts",
+	])("activates security-auditor for sensitive path %s", (path) => {
+		const matches = detectTier2Skills({ ...base, filePaths: [path] });
+		expect(matches.map((m) => m.skillPath)).toContain("security-auditor.md");
+	});
+
 	it("activates security-auditor for payment path changes", () => {
 		const matches = detectTier2Skills({
 			...base,

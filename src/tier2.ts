@@ -142,11 +142,31 @@ const SECURITY_PATCH_PATTERNS = [
 	/process\.env\./,
 ];
 
+const SECURITY_PATH_TOKENS = new Set([
+	...SECURITY_PATH_PATTERNS.map((p) => p.replace(/^\./, "")),
+	"authn",
+	"authz",
+	"authentication",
+	"authorization",
+	"deployment",
+	"permissions",
+]);
+
+function hasSecurityPathToken(path: string): boolean {
+	const tokens = path
+		.replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+		.toLowerCase()
+		.split(/[^a-z0-9]+/)
+		.filter(Boolean);
+	return tokens.some(
+		(t) =>
+			SECURITY_PATH_TOKENS.has(t) ||
+			(t.endsWith("s") && SECURITY_PATH_TOKENS.has(t.slice(0, -1))),
+	);
+}
+
 function shouldRunSecurityAuditor(ctx: Tier2Context): string | null {
-	const matchedPaths = ctx.filePaths.filter((p) => {
-		const lower = p.toLowerCase();
-		return SECURITY_PATH_PATTERNS.some((pattern) => lower.includes(pattern));
-	});
+	const matchedPaths = ctx.filePaths.filter(hasSecurityPathToken);
 
 	if (matchedPaths.length > 0) {
 		const sample = matchedPaths.slice(0, 3).join(", ");
