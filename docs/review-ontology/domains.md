@@ -22,7 +22,7 @@ Three kinds of entry:
   DOM-29 to DOM-41, DOM-43 and DOM-44). That is 16 entries. Each has detection notes and a sketch
   of what a playbook would need.
 
-Ids are stable. DOM-23 to DOM-28 and DOM-42 were proposed entries until the guide gained matching
+Ids are stable. DOM-23 to DOM-26, DOM-28 and DOM-42 were proposed entries until the guide gained matching
 playbooks, and DOM-45 onward were added after them, so the numbering does not follow the guide's
 order.
 

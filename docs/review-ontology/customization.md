@@ -37,8 +37,9 @@ An organization's pack and a repo's pack use the same shapes:
 
 Phase 3's rule packs map onto guide playbook groups. `backend-api` is the APIs group,
 `database` is the data group, `tests` is the tests group, `docs` is documentation, and
-`agent-generated-code` is the AI-generated code playbook. `frontend-react` is the frontend group: React components (DOM-23), Next.js (DOM-45),
-accessibility (DOM-46) and CSS (DOM-47) in [domains.md](domains.md).
+`agent-generated-code` is the AI-generated code playbook. `frontend-react` is the frontend
+group: React components (DOM-23), HTML artifacts (DOM-26), Next.js (DOM-45), accessibility
+(DOM-46) and CSS (DOM-47) in [domains.md](domains.md).
 
 ## Extension points
 
