@@ -35,6 +35,7 @@ exists.
 | File | What it answers |
 | --- | --- |
 | [00-origin.md](00-origin.md) | The problem, in Joe's words |
+| [purpose.md](purpose.md) | What a review is for, beyond finding defects, and which of those aims the bot serves today |
 | [operations/](operations/) | One file per operation family. Each entry says how to detect the operation from a diff, how to confirm why it happened, what context to gather, what not to review, what to check, and what ai-review-bot sees today |
 | [domains.md](domains.md) | One detection entry per guide playbook (32 entries), plus 4 cross-cutting domains and 16 proposed ones for kinds of file the guide has no playbook for: how to tell from a diff that the domain is present, and which playbook to pull in |
 | [triage.md](triage.md) | How to size a PR by what it contains, not how many lines it has, and how that picks the tier, the agents and each agent's model and effort |

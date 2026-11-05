@@ -157,8 +157,39 @@ that reads the whole diff (2026-11-04). The direction is candidate **F**:
   pass gets the session and cookie code. Each subagent's instructions say what changed and
   what to check.
 - **Detection is done by the model and the catalog, not by substrings.** The current Tier 2
-  detectors match path fragments: `ci` matches `decimal.ts` and `role` matches
-  `controller.ts` (bead ai-review-bot-t0c.43), so the extra agents run on most PRs.
+  detectors match path fragments: `ci` matches `decimal.ts`, `precision.py` and
+  `decision.md`, and `user` matches every path under `users/` (bead ai-review-bot-t0c.43),
+  so the security auditor runs on PRs with no security content.
+
+Three rules shape F:
+
+- **Deterministic checks bound the model's output.** A language model's output varies from
+  run to run. What keeps a review trustworthy is checking it against things that don't vary:
+  rules and regexes, linters, type checks, tests, static analysis, security scanners,
+  reference lookups. Every finding should be backed or checked by one of these where one
+  exists, and each scanner finding is evidence the reviewer confirms, not a comment it posts.
+  The pipeline already works this way in two places: anchor validation drops comments that
+  aren't on the diff, and the verifier in section 5 confirms findings before they post.
+- **Scanners plus a checklist, never scanners alone.** Each scanner finds only certain
+  classes of problem. For security, the main reviewer triages scanner output and also works
+  through a checklist end to end for the flow the PR touches. For web applications that
+  checklist is the [OWASP Application Security Verification Standard](https://owasp.org/www-project-application-security-verification-standard/)
+  (ASVS): its authentication, session management and access control requirements are the
+  audit of a registration or login flow, and the
+  [OWASP Web Security Testing Guide](https://owasp.org/www-project-web-security-testing-guide/)
+  maps requirements to tests and tools. The guide's
+  [authentication and authorization](../Code-Review-Guide-and-Playbooks.md#authentication-and-authorization)
+  playbook is the starting runbook; ASVS gives it coverage.
+- **Large PRs are split before they are reviewed.** If the diff doesn't fit comfortably in one
+  context window, the first step is to split it into chunks that do, along the seams
+  triage already finds: operations and domains, so a move-only chunk, a migration chunk and an
+  endpoint chunk each get reviewed on their own, followed by one pass that combines them.
+  Today's `packDiff()` instead compresses the diff into a single prompt and names the files
+  that don't fit. That is the same strategy as Qodo's PR-Agent, which also makes a single
+  model call per tool ([compression strategy](https://docs.pr-agent.ai/core-abilities/compression_strategy/)).
+  PR-Agent's [dynamic context](https://docs.pr-agent.ai/core-abilities/dynamic_context/) is
+  worth adopting: it widens each hunk to its enclosing function or class, with more lines
+  before the change than after.
 
 Where F sits against the candidates in section 5: it is C (one agent with tools) plus the
 targeted subagents of D and E, created on demand by the main reviewer.

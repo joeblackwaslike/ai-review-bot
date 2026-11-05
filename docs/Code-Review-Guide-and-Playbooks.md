@@ -1311,7 +1311,7 @@ A PR that renames a column, changes a type or drops anything in one step, alongs
 | --- | --- | --- |
 | `CREATE INDEX` | Blocks writes for the whole build | `CREATE INDEX CONCURRENTLY`, which can't run inside a transaction (in Alembic, use `autocommit_block()`); check for an `INVALID` index if it fails |
 | Add a column with a default | Fast on PostgreSQL 11 and later | Fine for constant and stable defaults, including `now()`; a volatile default (`random()`, `gen_random_uuid()`, `clock_timestamp()`) still rewrites the table |
-| Add `NOT NULL` to an existing column | Full scan under an exclusive lock | Add `CHECK (col IS NOT NULL) NOT VALID`, then `VALIDATE CONSTRAINT`, then `SET NOT NULL` (PostgreSQL 12+ skips the scan) |
+| Add `NOT NULL` to an existing column | Full scan under an exclusive lock | Add `CHECK (col IS NOT NULL) NOT VALID` and commit; then, in a separate transaction, `VALIDATE CONSTRAINT`, which takes only a `SHARE UPDATE EXCLUSIVE` lock; then `SET NOT NULL`, which PostgreSQL 12+ does without a scan. In one transaction, the `ACCESS EXCLUSIVE` lock from the first step is held through the validation scan, so Alembic needs separate migrations or `autocommit_block()` |
 | Add a foreign key | Scans the table while holding locks on both tables | Add it `NOT VALID`, then `VALIDATE CONSTRAINT` separately |
 | Change a column type | Usually rewrites the table | New column plus backfill, via expand and contract |
 | Rename or drop a column or table | Breaks running old code instantly | Expand and contract; drop only after no deployed code references it |

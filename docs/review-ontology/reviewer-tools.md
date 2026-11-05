@@ -58,6 +58,7 @@ to 4 are cheapest to ship there first.
 | `file_history` | `path`, `limit` | Commits that touched the file, following renames where the API allows | |
 | `ci_results` | `ref` | Check runs with conclusion, summary and annotations | Lint, typecheck and test failures usually arrive as annotations with file and line; when a failing check has none, fall back to the check summary or a bounded `job_log` slice |
 | `job_log` | `job_id`, `tail` or `grep` | A bounded slice of a job's log | Logs can be large; never return the whole log |
+| `ci_artifact` | `ref`, artifact `name`, optional file `path` inside it | The named workflow artifact (a coverage report, a SARIF file), bounded in size | GitHub Actions artifacts API; this is how `coverage_gaps` and the scanners read CI output without running code |
 | `linked_work_item` | none | The issue or ticket the PR implements: title, body, acceptance criteria, labels, comments | See below |
 | `agent_instructions` | `paths`, `ref` (default `base`) | For each path, the ordered instruction blocks that apply, with source and precedence | See below |
 
@@ -88,20 +89,25 @@ to 4 are cheapest to ship there first.
 
 Deterministic analyzers that replace work today's persona agents do by reading the diff. Each
 returns findings with file, line, column and rule id, limited to the changed lines, and the
-main reviewer triages them with the matching runbook. A scanner finding is evidence, not a
+main reviewer triages them with the matching runbook. The one exception is `secrets`, whose
+findings can come from a commit whose lines are gone from the final diff; those carry the
+commit SHA and become a general finding on the review, not an inline comment. A scanner finding is evidence, not a
 posted comment: the reviewer confirms it in context first, the same way it confirms its own
 findings (see the verifier in [process-design.md](process-design.md)).
 
 | Tool | Replaces | Backed by | Returns | Notes |
 | --- | --- | --- | --- | --- |
 | `silent_failures` | `silent-failure-hunter` | Ruff `BLE001` (blind except), `E722` (bare except), `S110` (`try`/`except`/`pass`); ESLint `no-empty` and `@typescript-eslint/no-floating-promises`; Semgrep rules for swallowed errors and silent fallbacks | Swallowed-error sites on changed lines | Needs a checkout. Type-aware ESLint rules need the project's `tsconfig` |
-| `coverage_gaps` | Part of `pr-test-analyzer` | Coverage reports the test runners already produce (pytest-cov `coverage.xml`, Vitest or Jest lcov), reduced to changed lines with `diff-cover` | Changed lines and branches no test executed | Reading the report from a CI artifact is the default. Producing it means running the PR's tests, which runs PR code: only in an isolated sandbox, and only when [customization.md](customization.md) allows it |
+| `coverage_gaps` | Part of `pr-test-analyzer` | Coverage reports the test runners already produce (pytest-cov `coverage.xml`, Vitest or Jest lcov), reduced to changed lines with `diff-cover` | Changed lines and branches no test executed | Reading the report from a CI artifact (`ci_artifact`) is the default. Producing it means running the PR's tests, which runs PR code: only in an isolated sandbox, and only when [customization.md](customization.md) allows it |
 | `sast` | `security-sast` | Semgrep (Python and TypeScript rule packs), Bandit (Python) | Injection, path traversal, unsafe deserialization and similar, with rule id and severity | Needs a checkout; doesn't run PR code |
 | `secrets` | The secrets part of `security-sast` | Gitleaks over the PR's commits | Credentials added in the diff or its history | Runs on the commits, so a secret added and then removed in the same PR is still found |
 
 The scanner tier needs a checkout, so like tiers 2 and 3 it ships first on the local CLI. On
-the hosted path the CI already runs some of these tools. Reading their results through
-`ci_results` costs nothing extra and runs no code.
+the hosted path, the reviewed repository's own CI may already run some of these tools. When
+it does, and publishes the results as annotations or artifacts (SARIF, `coverage.xml`, lcov),
+reading them through `ci_results` and `ci_artifact` costs nothing extra and runs no code.
+When it doesn't, the hosted path has no scanner results, and the repo's
+[customization](customization.md) can say which CI jobs produce them.
 
 ## The two intent and standards tools
 
