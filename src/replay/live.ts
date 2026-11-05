@@ -1,6 +1,9 @@
 import { isSameClaim } from "../claim-dedupe.js";
 import { candidateFamilies } from "../retraction.js";
+import type { PullFile } from "../review.js";
 import { countJoined, labelledClaims } from "./metrics.js";
+import type { ReviewStrategy, StrategyInput } from "./strategy.js";
+import { ledgerForRound } from "./trace.js";
 import type {
 	CandidateRecord,
 	LabelFile,
@@ -28,6 +31,8 @@ export interface LiveReviewOutput {
 	usage: RoundUsage;
 }
 
+const ROUND_WALL_MS = 210_000;
+
 export interface LiveRoundReport {
 	index: number;
 	matchedFixed: number;
@@ -40,6 +45,8 @@ export interface LiveRoundReport {
 	joined: number;
 	posted: number;
 	usage: RoundUsage;
+	wallMs: number;
+	toolCalls: number;
 	trace: RoundTrace;
 }
 
@@ -57,9 +64,10 @@ export interface LiveOptions {
 	labels: LabelFile;
 	rounds: number[];
 	maxCostUsd: number;
-	review: (diffInput: string, round: Round) => Promise<LiveReviewOutput>;
-	estimateCost: (diffInput: string, round: Round) => number;
-	fetchDiff: (round: Round) => Promise<{ diff: string; approximate: boolean }>;
+	strategy: ReviewStrategy;
+	fetchDiff: (
+		round: Round,
+	) => Promise<{ diff: string; files: PullFile[]; approximate: boolean }>;
 	out?: (s: string) => void;
 }
 
@@ -86,8 +94,23 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 	const diffs = await Promise.all(
 		selected.map(async (r) => ({ round: r, ...(await opts.fetchDiff(r)) })),
 	);
+	const inputFor = (
+		d: (typeof diffs)[number],
+		maxUsd: number,
+	): StrategyInput => ({
+		fixture: opts.fixture,
+		round: d.round,
+		labels: opts.labels,
+		diff: d.diff,
+		files: d.files,
+		approximateDiff: d.approximate,
+		checkout: null,
+		history: { ledger: ledgerForRound(opts.fixture, opts.labels, d.round) },
+		budget: { maxUsd, maxWallMs: ROUND_WALL_MS },
+		signal: new AbortController().signal,
+	});
 	const estimates = diffs.map((d) => {
-		const e = opts.estimateCost(d.diff, d.round);
+		const e = opts.strategy.estimateCost(inputFor(d, opts.maxCostUsd));
 		if (!Number.isFinite(e) || e < 0)
 			throw new InvalidEstimateError(
 				`round ${d.round.index}: invalid cost estimate ${e}`,
@@ -112,10 +135,19 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 			);
 			break;
 		}
-		const { findings, candidates, posted, usage } = await opts.review(
-			d.diff,
-			d.round,
-		);
+		let result: Awaited<ReturnType<ReviewStrategy["run"]>>;
+		try {
+			result = await opts.strategy.run(
+				inputFor(d, opts.maxCostUsd - report.spentUsd),
+			);
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+			throw new Error(
+				`${opts.strategy.name} round ${d.round.index}: ${message}`,
+				{ cause: err },
+			);
+		}
+		const { findings, candidates, posted, usage } = result;
 		report.spentUsd += estimate;
 		const counted = countJoined(candidates, labelled);
 		const row: LiveRoundReport = {
@@ -132,6 +164,8 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 			joined: counted.joined,
 			posted: posted.length,
 			usage,
+			wallMs: result.wallMs,
+			toolCalls: result.toolCalls.length,
 			trace: { candidates, posted, usage },
 		};
 		for (const f of findings) {

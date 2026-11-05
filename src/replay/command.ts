@@ -27,6 +27,8 @@ import { computeMetrics, formatReport } from "./metrics.js";
 import { type ReplayPipeline, todaysCodePipeline } from "./pipeline.js";
 import { recordPr } from "./record.js";
 import { replayFixture } from "./replay.js";
+import { registerBuiltinStrategies } from "./strategies/index.js";
+import { getStrategy } from "./strategy.js";
 import type { LabelFile, Provider, ReplayFixture } from "./types.js";
 
 export interface ReplayDeps {
@@ -345,6 +347,7 @@ async function liveAll(
 ): Promise<number> {
 	const buildLiveWiring =
 		wire ?? (await import("./live-wiring.js")).buildLiveWiring;
+	registerBuiltinStrategies();
 	const files = existsSync(dir)
 		? (await readdir(dir)).filter((n) => FIXTURE_FILE.test(n)).sort()
 		: [];
@@ -369,7 +372,7 @@ async function liveAll(
 			continue;
 		}
 		const labels = JSON.parse(await readFile(labelsPath, "utf8")) as LabelFile;
-		const wiring = buildLiveWiring(f, client, labels);
+		const wiring = buildLiveWiring(f, client);
 		const rounds = f.rounds.slice(-(p.rounds ?? 2)).map((r) => r.index);
 		out(`live ${id}`);
 		let report: LiveReport;
@@ -380,6 +383,7 @@ async function liveAll(
 				rounds,
 				maxCostUsd: remaining,
 				out,
+				strategy: getStrategy("a"),
 				...wiring,
 			});
 		} catch (err) {

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { computeCost } from "../models.js";
+import type { PullFile } from "../review.js";
 import {
 	buildInlineComment,
 	buildModelReview,
@@ -12,6 +13,9 @@ import {
 	toLiveFindings,
 	toLiveReviewOutput,
 } from "./live-wiring.js";
+import { strategyA } from "./strategies/a.js";
+import type { StrategyInput } from "./strategy.js";
+import { ledgerForRound } from "./trace.js";
 import type { LabelFile, PostedClaim, ReplayFixture, Round } from "./types.js";
 
 const mockRunAuditPass = vi.hoisted(() => vi.fn());
@@ -215,7 +219,24 @@ describe("buildLiveWiring", () => {
 		repeatPairs: [],
 	} as unknown as LabelFile;
 
-	it("reports what would post for the round, against the fixture's earlier rounds and the compare files", async () => {
+	const inputFor = (
+		f: ReplayFixture,
+		target: Round,
+		fetched: { diff: string; files: PullFile[]; approximate: boolean },
+	): StrategyInput => ({
+		fixture: f,
+		round: target,
+		labels,
+		diff: fetched.diff,
+		files: fetched.files,
+		approximateDiff: fetched.approximate,
+		checkout: null,
+		history: { ledger: ledgerForRound(f, labels, target) },
+		budget: { maxUsd: 5, maxWallMs: 210_000 },
+		signal: new AbortController().signal,
+	});
+
+	it("fetches the round's compare files once and reports what would post against the fixture's earlier rounds", async () => {
 		const routes: string[] = [];
 		const client = {
 			rest: async (route: string) => {
@@ -253,11 +274,11 @@ describe("buildLiveWiring", () => {
 			agentReviews: [{ skill: "code-reviewer", review: agentReview }],
 			usageBySkill: {},
 		});
-		const wiring = buildLiveWiring(fixture, client, labels);
+		const wiring = buildLiveWiring(fixture, client);
 		const target = fixture.rounds[1] as Round;
 
-		const { diff } = await wiring.fetchDiff(target);
-		const output = await wiring.review(diff, target);
+		const fetched = await wiring.fetchDiff(target);
+		const output = await strategyA.run(inputFor(fixture, target, fetched));
 
 		expect(output.posted).toEqual([
 			{
@@ -270,6 +291,8 @@ describe("buildLiveWiring", () => {
 		]);
 		expect(output.candidates).toHaveLength(3);
 		expect(routes).toEqual(["repos/o/r/compare/m1...h1"]);
+		await wiring.fetchDiff(target);
+		expect(routes).toHaveLength(1);
 	});
 
 	it("shows the agents each compare patch with right-side line numbers", async () => {
@@ -290,11 +313,11 @@ describe("buildLiveWiring", () => {
 			agentReviews: [],
 			usageBySkill: {},
 		});
-		const wiring = buildLiveWiring(fixture, client, labels);
+		const wiring = buildLiveWiring(fixture, client);
 		const target = fixture.rounds[1] as Round;
 
-		const { diff } = await wiring.fetchDiff(target);
-		await wiring.review(diff, target);
+		const fetched = await wiring.fetchDiff(target);
+		await strategyA.run(inputFor(fixture, target, fetched));
 
 		const expected = [
 			"--- src/b.ts",
@@ -308,34 +331,22 @@ describe("buildLiveWiring", () => {
 			"  11|+added-b",
 			"  12| context2",
 		].join("\n");
-		expect(diff).toBe(expected);
+		expect(fetched.diff).toBe(expected);
+		expect(fetched.approximate).toBe(false);
+		expect(fetched.files.map((f) => f.filename)).toEqual(["src/b.ts"]);
 		expect(mockRunAuditPass.mock.lastCall?.[0].files).toEqual([
 			{ path: "replay.diff", content: expected },
 		]);
 		expect(routes).toHaveLength(1);
 	});
 
-	it("fails the round when every review agent failed, saving no trace", async () => {
+	it("marks the diff approximate when the round has no merge base", async () => {
 		const client = {
-			rest: async () => ({
-				files: [
-					{ filename: "src/a.ts", status: "modified", patch: SIMPLE_PATCH },
-				],
-			}),
+			rest: async () => ({ files: [] }),
 		} as unknown as GhClient;
-		mockRunAuditPass.mockResolvedValue({
-			review: buildModelReview(),
-			agentReviews: [],
-			usageBySkill: {},
-			agentsAttempted: 5,
-			agentsSucceeded: 0,
-		});
-		const wiring = buildLiveWiring(fixture, client, labels);
-		const target = fixture.rounds[1] as Round;
-		const { diff } = await wiring.fetchDiff(target);
-		await expect(wiring.review(diff, target)).rejects.toThrow(
-			"round 1: all 5 review agents failed",
-		);
+		const target = { ...round(1, []), mergeBase: null };
+		const wiring = buildLiveWiring(fixture, client);
+		expect((await wiring.fetchDiff(target)).approximate).toBe(true);
 	});
 
 	describe("model routing per round", () => {
@@ -387,12 +398,17 @@ describe("buildLiveWiring", () => {
 			const wiring = buildLiveWiring(
 				{ ...openaiFixture, rounds: [target] } as ReplayFixture,
 				client,
-				labels,
 			);
 
-			const { diff } = await wiring.fetchDiff(target);
-			const estimate = wiring.estimateCost(diff, target);
-			await wiring.review(diff, target);
+			const fetched = await wiring.fetchDiff(target);
+			const { diff } = fetched;
+			const input = inputFor(
+				{ ...openaiFixture, rounds: [target] } as ReplayFixture,
+				target,
+				fetched,
+			);
+			const estimate = strategyA.estimateCost(input);
+			await strategyA.run(input);
 
 			expect(mockRunAuditPass.mock.lastCall?.[0].selection).toMatchObject({
 				provider: "openai",

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { type LiveFinding, runLiveTier } from "./live.js";
+import {
+	type LiveFinding,
+	type LiveReviewOutput,
+	runLiveTier,
+} from "./live.js";
+import type { ReviewStrategy, StrategyInput } from "./strategy.js";
+import { ledgerForRound } from "./trace.js";
 import type { LabelFile, PostedClaim, ReplayFixture, Round } from "./types.js";
 
 function claim(id: string, roundIndex: number, title: string): PostedClaim {
@@ -79,20 +85,54 @@ const finding = (title: string, path = "src/a.ts") => ({
 	line: 10,
 });
 
-function base(over: Partial<Parameters<typeof runLiveTier>[0]> = {}) {
+type Review = (
+	diff: string,
+	round: Round,
+	input: StrategyInput,
+) => Promise<LiveReviewOutput & Partial<{ wallMs: number; toolCalls: [] }>>;
+
+function stub(
+	review: Review,
+	estimateCost: (diff: string, round: Round) => number = () => 1,
+): ReviewStrategy {
+	return {
+		name: "stub",
+		version: "1",
+		needsCheckout: false,
+		estimateCost: (i) => estimateCost(i.diff, i.round),
+		run: async (i) => ({
+			wallMs: 0,
+			toolCalls: [],
+			...(await review(i.diff, i.round, i)),
+		}),
+	};
+}
+
+type Over = Partial<Parameters<typeof runLiveTier>[0]> & {
+	review?: Review;
+	estimateCost?: (diff: string, round: Round) => number;
+};
+
+function base({ review: r, estimateCost: e, ...over }: Over = {}) {
 	const lines: string[] = [];
 	const calls: string[] = [];
+	const review: Review =
+		r ??
+		(async (d) => {
+			calls.push(d);
+			return out([]);
+		});
 	const opts: Parameters<typeof runLiveTier>[0] = {
 		fixture,
 		labels: labels(true),
 		rounds: [0, 1],
 		maxCostUsd: 10,
-		review: async (d) => {
-			calls.push(d);
-			return out([]);
-		},
-		estimateCost: () => 1,
-		fetchDiff: async (r) => ({ diff: `diff-${r.index}`, approximate: false }),
+		strategy: stub(review, e),
+		fetchDiff: async (r) => ({
+			diff: `diff-${r.index}`,
+			files: [],
+			approximate: false,
+		}),
 		out: (s) => lines.push(s),
 		...over,
 	};
@@ -189,7 +229,7 @@ describe("runLiveTier", () => {
 	it("marks a round approximate when fetchDiff says the history was rewritten", async () => {
 		const { opts } = base({
 			rounds: [0],
-			fetchDiff: async () => ({ diff: "d", approximate: true }),
+			fetchDiff: async () => ({ diff: "d", files: [], approximate: true }),
 		});
 		const report = await runLiveTier(opts);
 		expect(report.rounds[0]?.approximate).toBe(true);
@@ -290,5 +330,55 @@ describe("runLiveTier", () => {
 		expect(seen).toEqual([1]);
 		expect(report.rounds[0]?.posted).toBe(2);
 		expect(lines.join("\n")).toContain("2 would post");
+	});
+
+	it("hands the strategy no checkout, the round's ledger, the remaining cap and a live signal", async () => {
+		const inputs: StrategyInput[] = [];
+		const { opts } = base({
+			rounds: [0, 1],
+			maxCostUsd: 10,
+			review: async (_d, _r, input) => {
+				inputs.push(input);
+				return out([]);
+			},
+		});
+		await runLiveTier(opts);
+		expect(inputs).toHaveLength(2);
+		expect(inputs[0]).toMatchObject({
+			checkout: null,
+			diff: "diff-0",
+			files: [],
+			approximateDiff: false,
+			budget: { maxUsd: 10, maxWallMs: 210_000 },
+		});
+		expect(inputs[0]?.history.ledger).toEqual(
+			ledgerForRound(fixture, labels(true), fixture.rounds[0] as Round),
+		);
+		expect(inputs[1]?.budget).toEqual({ maxUsd: 9, maxWallMs: 210_000 });
+		expect(inputs[0]?.signal).not.toBe(inputs[1]?.signal);
+		expect(inputs[0]?.signal.aborted).toBe(false);
+	});
+
+	it("rethrows a failing run prefixed with the strategy name and round, keeping the cause and spend counted", async () => {
+		const boom = new Error("model exploded");
+		const { opts } = base({
+			review: async (_d, r) => {
+				if (r.index === 1) throw boom;
+				return out([]);
+			},
+		});
+		const err = await runLiveTier(opts).catch((e: unknown) => e);
+		expect(err).toBeInstanceOf(Error);
+		expect((err as Error).message).toBe("stub round 1: model exploded");
+		expect((err as Error).cause).toBe(boom);
+	});
+
+	it("carries wallMs and toolCalls into the round row", async () => {
+		const { opts } = base({
+			rounds: [0],
+			review: async () => ({ ...out([]), wallMs: 1234, toolCalls: [] }),
+		});
+		const report = await runLiveTier(opts);
+		expect(report.rounds[0]).toMatchObject({ wallMs: 1234, toolCalls: 0 });
 	});
 });

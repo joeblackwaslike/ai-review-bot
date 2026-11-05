@@ -3,12 +3,8 @@ import type { ModelReview, PullFile } from "../review.js";
 import type { RouterContext } from "../router.js";
 import type { GhClient } from "./gh.js";
 import type { LiveFinding, LiveOptions, LiveReviewOutput } from "./live.js";
-import { strategyA } from "./strategies/a.js";
-import type { StrategyInput } from "./strategy.js";
-import { ledgerForRound } from "./trace.js";
 import type {
 	CandidateRecord,
-	LabelFile,
 	ReplayFixture,
 	Round,
 	RoundUsage,
@@ -69,8 +65,6 @@ export function toLiveReviewOutput(result: {
 	};
 }
 
-type LiveWiring = Pick<LiveOptions, "review" | "estimateCost" | "fetchDiff">;
-
 /** The router input production derives from a PR, taken from a round's compare files. */
 export function routerContext(files: PullFile[]): RouterContext {
 	let additions = 0;
@@ -88,15 +82,13 @@ export function routerContext(files: PullFile[]): RouterContext {
 	};
 }
 
-/** Adapter over strategy a for `replay --live`: fetches the round's diff and
- * compare files, then delegates review and cost estimate to the strategy. */
+/** Fetches each round's compare files once and turns them into the numbered
+ * diff the strategies review. */
 export function buildLiveWiring(
 	fixture: ReplayFixture,
 	client: GhClient,
-	labels: LabelFile,
-): LiveWiring {
+): Pick<LiveOptions, "fetchDiff"> {
 	const compared = new Map<number, Promise<PullFile[]>>();
-	const fetched = new Map<number, StrategyInput>();
 	const compareFiles = (round: Round): Promise<PullFile[]> => {
 		const cached = compared.get(round.index);
 		if (cached) return cached;
@@ -115,46 +107,20 @@ export function buildLiveWiring(
 		compared.set(round.index, files);
 		return files;
 	};
-	const inputFor = (diff: string, round: Round): StrategyInput => {
-		const fetchedInput = fetched.get(round.index);
-		if (!fetchedInput)
-			throw new Error(`round ${round.index}: fetchDiff must run first`);
-		return { ...fetchedInput, diff };
-	};
 	return {
 		fetchDiff: async (round) => {
 			const files = await compareFiles(round);
-			const approximate = round.approximate || round.mergeBase === null;
 			const diff = files
 				.map(
 					(f) =>
 						`--- ${f.filename}\n${f.patch ? numberPatchLines(f.patch) : ""}`,
 				)
 				.join("\n");
-			fetched.set(round.index, {
-				fixture,
-				round,
-				labels,
+			return {
 				diff,
 				files,
-				approximateDiff: approximate,
-				checkout: null,
-				history: { ledger: ledgerForRound(fixture, labels, round) },
-				budget: {
-					maxUsd: Number.POSITIVE_INFINITY,
-					maxWallMs: Number.POSITIVE_INFINITY,
-				},
-				signal: new AbortController().signal,
-			});
-			return { diff, approximate };
-		},
-		estimateCost: (diff, round) =>
-			strategyA.estimateCost(inputFor(diff, round)),
-		review: async (diff, round): Promise<LiveReviewOutput> => {
-			const { findings, candidates, posted, usage } = await strategyA.run(
-				inputFor(diff, round),
-			);
-			return { findings, candidates, posted, usage };
+				approximate: round.approximate || round.mergeBase === null,
+			};
 		},
 	};
 }

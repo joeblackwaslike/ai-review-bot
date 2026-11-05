@@ -11,11 +11,12 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { fixtureId } from "./claims.js";
 import { defaultFixturesDir, runReplay } from "./command.js";
 import type { GhClient } from "./gh.js";
 import type { ReplayPipeline } from "./pipeline.js";
+import { registerStrategy, resetStrategiesForTest } from "./strategy.js";
 import { makeFixture, makeLabel, makeLabels } from "./testkit.js";
 
 const failRename = vi.hoisted(() => ({ on: false }));
@@ -386,19 +387,39 @@ describe("runReplay live and record flags", () => {
 		line: 1,
 		severity: "high",
 	};
-	const wiringFor = (n: number) =>
-		(() => ({
-			estimateCost: () => 0,
-			fetchDiff: async () => ({ diff: "d", approximate: false }),
-			review: async () => ({
-				findings: [],
-				candidates: [],
-				posted: Array.from({ length: n }, () => item),
-				usage: {},
-			}),
-		})) as unknown as NonNullable<
-			Parameters<typeof runReplay>[1]
-		>["liveWiring"];
+	const stubStrategy = (
+		posted: number,
+		estimate: () => number,
+		onRun: () => void = () => {},
+	) => {
+		resetStrategiesForTest();
+		registerStrategy({
+			name: "a",
+			version: "1",
+			needsCheckout: false,
+			estimateCost: estimate,
+			run: async () => {
+				onRun();
+				return {
+					findings: [],
+					candidates: [],
+					posted: Array.from({ length: posted }, () => item),
+					usage: {},
+					toolCalls: [],
+					wallMs: 0,
+				};
+			},
+		});
+	};
+	afterEach(() => resetStrategiesForTest());
+	type Wiring = NonNullable<Parameters<typeof runReplay>[1]>["liveWiring"];
+	const fetchOnly = (() => ({
+		fetchDiff: async () => ({ diff: "d", files: [], approximate: false }),
+	})) as unknown as Wiring;
+	const wiringFor = (n: number) => {
+		stubStrategy(n, () => 0);
+		return fetchOnly;
+	};
 
 	function seedLive(dir: string, clean: boolean) {
 		const f = makeFixture([["a"]], clean ? { expect: { clean: true } } : {});
@@ -470,16 +491,12 @@ describe("runReplay live and record flags", () => {
 		const { id } = seedLive(dir, false);
 		const { lines, out } = collect();
 		let reviews = 0;
-		const wiring = (() => ({
-			estimateCost: () => Number.NaN,
-			fetchDiff: async () => ({ diff: "d", approximate: false }),
-			review: async () => {
-				reviews++;
-				return { findings: [], candidates: [], posted: [], usage: {} };
-			},
-		})) as unknown as NonNullable<
-			Parameters<typeof runReplay>[1]
-		>["liveWiring"];
+		stubStrategy(
+			0,
+			() => Number.NaN,
+			() => reviews++,
+		);
+		const wiring = fetchOnly;
 		expect(
 			await runReplay(["--live"], {
 				fixturesDir: dir,
@@ -495,13 +512,10 @@ describe("runReplay live and record flags", () => {
 	});
 
 	describe("a clean fixture the cost cap cut short", () => {
-		const costly = (n: number) =>
-			(() => ({
-				...(wiringFor(n) as unknown as () => object)(),
-				estimateCost: () => 1,
-			})) as unknown as NonNullable<
-				Parameters<typeof runReplay>[1]
-			>["liveWiring"];
+		const costly = (n: number) => {
+			stubStrategy(n, () => 1);
+			return fetchOnly;
+		};
 		const seedTwoRounds = (dir: string) => {
 			const f = makeFixture([["a"], ["b"]], { expect: { clean: true } });
 			const id = fixtureId(f);
