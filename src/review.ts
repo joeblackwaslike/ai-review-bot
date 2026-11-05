@@ -210,6 +210,15 @@ const STANDING_REVIEW_STATES = new Set([
 interface TokenUsage {
 	promptTokens: number;
 	completionTokens: number;
+	cachedInputTokens?: number;
+	reasoningTokens?: number;
+}
+
+function optionalCount<K extends string>(
+	key: K,
+	n: number | undefined,
+): { [P in K]?: number } {
+	return n === undefined ? {} : ({ [key]: n } as { [P in K]?: number });
 }
 
 export interface RateLimitInfo {
@@ -582,6 +591,16 @@ export async function runAgent(
 			usage: {
 				promptTokens: usage.inputTokens ?? 0,
 				completionTokens: usage.outputTokens ?? 0,
+				// ai SDK usage.inputTokenDetails.cacheReadTokens / outputTokenDetails.reasoningTokens; Anthropic's cacheReadInputTokens in providerMetadata is the fallback.
+				...optionalCount(
+					"cachedInputTokens",
+					usage.inputTokenDetails?.cacheReadTokens ??
+						anthro.cacheReadInputTokens,
+				),
+				...optionalCount(
+					"reasoningTokens",
+					usage.outputTokenDetails?.reasoningTokens,
+				),
 			},
 			durationMs: Date.now() - startedAt,
 			rateLimit: readRateLimitHeaders(

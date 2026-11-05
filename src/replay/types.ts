@@ -33,7 +33,12 @@ export interface CandidateRecord {
 /** Token usage per skill file name, with the .md suffix, as the hosted corpus uses. */
 export type RoundUsage = Record<
 	string,
-	{ promptTokens: number; completionTokens: number }
+	{
+		promptTokens: number;
+		completionTokens: number;
+		cachedInputTokens?: number;
+		reasoningTokens?: number;
+	}
 >;
 
 /** What a live round produced: all candidates, the post-filter posted set, and usage. */

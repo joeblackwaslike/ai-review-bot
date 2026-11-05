@@ -102,6 +102,25 @@ describe("toLiveReviewOutput", () => {
 		})),
 	});
 
+	it("keeps the optional cached and reasoning token fields", () => {
+		const usageBySkill = {
+			"code-reviewer": {
+				promptTokens: 3,
+				completionTokens: 1,
+				cachedInputTokens: 2,
+				reasoningTokens: 1,
+			},
+		};
+		const out = toLiveReviewOutput({
+			review: review([], []),
+			agentReviews: [],
+			usageBySkill,
+		});
+		expect(out.usage["code-reviewer.md"]).toEqual(
+			usageBySkill["code-reviewer"],
+		);
+	});
+
 	it("tags candidates with each agent's skill, one per inline and general finding, in agent order", () => {
 		const usageBySkill = {
 			"code-reviewer": { promptTokens: 3, completionTokens: 1 },
