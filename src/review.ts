@@ -214,13 +214,6 @@ interface TokenUsage {
 	reasoningTokens?: number;
 }
 
-function optionalCount<K extends string>(
-	key: K,
-	n: number | undefined,
-): { [P in K]?: number } {
-	return n === undefined ? {} : ({ [key]: n } as { [P in K]?: number });
-}
-
 export interface RateLimitInfo {
 	inputTokensRemaining?: number;
 	inputTokensResetAt?: string;
@@ -579,6 +572,9 @@ export async function runAgent(
 			cacheReadInputTokens?: number;
 			cacheCreationInputTokens?: number;
 		};
+		const cachedInput =
+			usage.inputTokenDetails?.cacheReadTokens ?? anthro.cacheReadInputTokens;
+		const reasoning = usage.outputTokenDetails?.reasoningTokens;
 		console.log("agent ok", {
 			skillPath,
 			cacheRead: anthro.cacheReadInputTokens ?? 0,
@@ -591,16 +587,11 @@ export async function runAgent(
 			usage: {
 				promptTokens: usage.inputTokens ?? 0,
 				completionTokens: usage.outputTokens ?? 0,
-				// ai SDK usage.inputTokenDetails.cacheReadTokens / outputTokenDetails.reasoningTokens; Anthropic's cacheReadInputTokens in providerMetadata is the fallback.
-				...optionalCount(
-					"cachedInputTokens",
-					usage.inputTokenDetails?.cacheReadTokens ??
-						anthro.cacheReadInputTokens,
-				),
-				...optionalCount(
-					"reasoningTokens",
-					usage.outputTokenDetails?.reasoningTokens,
-				),
+				// ai SDK: usage.inputTokenDetails.cacheReadTokens and
+				// usage.outputTokenDetails.reasoningTokens; Anthropic's
+				// providerMetadata cacheReadInputTokens is the cache-read fallback.
+				...(cachedInput !== undefined && { cachedInputTokens: cachedInput }),
+				...(reasoning !== undefined && { reasoningTokens: reasoning }),
 			},
 			durationMs: Date.now() - startedAt,
 			rateLimit: readRateLimitHeaders(
