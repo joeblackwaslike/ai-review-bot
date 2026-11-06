@@ -233,6 +233,50 @@ describe("adjudicate", () => {
 		expect(later.verdicts.get(claimKey(c))?.status).toBe("agreed");
 	});
 
+	const cachedRecord = (model: string, promptHash: string): VerdictRecord => ({
+		...notReal,
+		first: { family: "anthropic", model, promptHash },
+		second: null,
+		secondVerdict: null,
+		status: "single-family",
+	});
+
+	it.each([
+		["the prompt hash changed", "m1", "old-hash"],
+		["the first judge model changed", "old-model", PROMPT_HASH],
+	])("treats a cached verdict as a miss when %s", async (_name, model, hash) => {
+		const base = setup();
+		const c = cand("Retry delay skipped");
+		base.cache.put("snap", claimKey(c), cachedRecord(model, hash));
+		const first = stub(real);
+		const result = await adjudicate({
+			...base,
+			candidates: [c],
+			producer: "anthropic",
+			judges: judges(first, null),
+			caps: { anthropic: 10, openai: 0 },
+		});
+		expect(first).toHaveBeenCalledTimes(1);
+		expect(result.counts.cached).toBe(0);
+		expect(result.verdicts.get(claimKey(c))?.verdict).toBe("real");
+	});
+
+	it("still uses a cached verdict that matches the current prompt and model", async () => {
+		const base = setup();
+		const c = cand("Retry delay skipped");
+		base.cache.put("snap", claimKey(c), cachedRecord("m1", PROMPT_HASH));
+		const first = stub(real);
+		const result = await adjudicate({
+			...base,
+			candidates: [c],
+			producer: "anthropic",
+			judges: judges(first, null),
+			caps: { anthropic: 10, openai: 0 },
+		});
+		expect(first).not.toHaveBeenCalled();
+		expect(result.counts.cached).toBe(1);
+	});
+
 	it("records distinct error messages from the first judge, capped at five", async () => {
 		const messages = ["a", "a", "b", "c", "d", "e", "f", "g"];
 		let n = 0;
