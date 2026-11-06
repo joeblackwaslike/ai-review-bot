@@ -23,6 +23,8 @@ const AuditSchema = z.object({
 	),
 });
 
+export const MAX_AUDIT_DIFF_CHARS = 60000;
+
 export function modelAuditJudge(
 	spec: JudgeSpec,
 	auth: ResolvedAuth,
@@ -31,6 +33,10 @@ export function modelAuditJudge(
 		family: spec.provider,
 		model: spec.model,
 		run: async (input: AuditInput): Promise<AuditFinding[]> => {
+			if (input.diff.length > MAX_AUDIT_DIFF_CHARS)
+				throw new Error(
+					`audit diff is ${input.diff.length} characters, over the ${MAX_AUDIT_DIFF_CHARS} limit; the audit was not run so no defect is missed silently`,
+				);
 			const claims = input.claims
 				.map((c) => `- ${c.path ?? "(none)"}:${c.line ?? "?"} ${c.title}`)
 				.join("\n");
@@ -40,7 +46,7 @@ export function modelAuditJudge(
 				maxOutputTokens: outputBudget(spec, 2048),
 				maxRetries: 0,
 				providerOptions: reasoningProviderOptions(spec),
-				prompt: `${AUDIT_PROMPT}\n\nClaims already raised:\n${claims || "(none)"}\n\nDiff:\n${input.diff.slice(0, 60000)}`,
+				prompt: `${AUDIT_PROMPT}\n\nClaims already raised:\n${claims || "(none)"}\n\nDiff:\n${input.diff}`,
 			});
 			return object.findings;
 		},
