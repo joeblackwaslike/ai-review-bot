@@ -12,7 +12,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { VerdictCache } from "./adjudication/cache.js";
+import { PROMPT_HASH } from "./adjudication/judge.js";
 import type { AdjudicationJudges } from "./adjudication/run.js";
+import { claimKey, snapshotId } from "./adjudication/snapshot.js";
 import { fixtureId } from "./claims.js";
 import { defaultFixturesDir, runReplay } from "./command.js";
 import type { GhClient } from "./gh.js";
@@ -1141,6 +1144,42 @@ describe("runReplay --adjudicate", () => {
 		expect(text).toContain("candidates to judge: 1");
 		expect(text).toContain("anthropic calls allowed: 1 of 40");
 		expect(text).toContain("openai calls allowed: 0");
+	});
+
+	it.each([
+		["a stale prompt hash", "old-hash", "claude-opus-5-5", 0],
+		["a model the judges would not pick", PROMPT_HASH, "old-model", 0],
+		["a current record", PROMPT_HASH, "claude-opus-5-5", 1],
+	])("--plan counts a cached record with %s only if adjudicate would accept it", async (_n, hash, model, cached) => {
+		const { dir, id } = seedFixture();
+		const f = JSON.parse(
+			readFileSync(join(dir, `${id}.json`), "utf8"),
+		) as Parameters<typeof snapshotId>[0];
+		new VerdictCache(join(dir, "cache")).put(
+			snapshotId(f),
+			claimKey({
+				path: "a.ts",
+				title: "unrelated cache invalidation race condition",
+			}),
+			{
+				verdict: "not-real",
+				scope: null,
+				reason: "r",
+				first: { family: "anthropic", model, promptHash: hash },
+				second: null,
+				secondVerdict: null,
+				status: "single-family",
+			},
+		);
+		const { lines, out } = collect();
+		await runReplay(["--adjudicate", id, "--plan", "--fixtures", dir], {
+			out,
+			client: noRest,
+			adjudicationDir: join(dir, "cache"),
+		});
+		const text = lines.join("\n");
+		expect(text).toContain(`cached: ${cached}`);
+		expect(text).toContain(`candidates to judge: ${1 - cached}`);
 	});
 
 	it("routes the producer model from the round's compare files and defaults the OpenAI cap to 0", async () => {

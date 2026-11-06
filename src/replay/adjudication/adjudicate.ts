@@ -47,6 +47,18 @@ export interface AdjudicateOptions {
 	evidence: (candidate: AdjCandidate) => Promise<string>;
 }
 
+/** A cached verdict counts only if it was made with the current prompt and a current first-judge model. */
+export function isCurrentVerdict(
+	record: VerdictRecord | undefined,
+	firstModels: readonly string[],
+): record is VerdictRecord {
+	return (
+		record !== undefined &&
+		record.first.promptHash === PROMPT_HASH &&
+		firstModels.includes(record.first.model)
+	);
+}
+
 const judgeRecord = (j: NamedJudge): JudgeRecord => ({
 	family: j.family,
 	model: j.model,
@@ -100,11 +112,9 @@ export async function adjudicate(
 
 	for (const [key, candidate] of distinct) {
 		const stored = cache.get(snapshot, key);
-		const hit =
-			stored?.first.promptHash === PROMPT_HASH &&
-			stored.first.model === judges.first.model
-				? stored
-				: undefined;
+		const hit = isCurrentVerdict(stored, [judges.first.model])
+			? stored
+			: undefined;
 		const second = judges.second;
 		const upgradable =
 			hit?.status === "single-family" &&

@@ -11,11 +11,13 @@ import {
 	type AdjCandidate,
 	type AdjudicationCounts,
 	adjudicate,
+	isCurrentVerdict,
 	MAX_ERROR_SAMPLES,
 	type NamedJudge,
 } from "./adjudicate.js";
 import { type AuditJudge, type AuditStored, auditFixture } from "./audit.js";
 import { VerdictCache } from "./cache.js";
+import { possibleFirstModels } from "./judge.js";
 import { claimKey, snapshotId } from "./snapshot.js";
 import type { VerdictRecord } from "./types.js";
 
@@ -117,7 +119,7 @@ function planLines(
 	let upgradable = 0;
 	for (const key of distinct.keys()) {
 		const hit = cache.get(snapshot, key) as VerdictRecord | undefined;
-		if (!hit) continue;
+		if (!isCurrentVerdict(hit, possibleFirstModels(producer))) continue;
 		cached++;
 		if (
 			producer === "anthropic" &&

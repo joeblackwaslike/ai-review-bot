@@ -106,6 +106,15 @@ const SONNET_JUDGE: JudgeSpec = {
  * prompt. An Anthropic-produced candidate needs a different Anthropic model as first judge, so
  * an Opus producer falls back to Sonnet.
  */
+/** Every first-judge model `routeJudges` can pick for a producer family, whatever the producer model. */
+export function possibleFirstModels(
+	producer: "anthropic" | "openai",
+): string[] {
+	return producer === "anthropic"
+		? [JUDGE_MODELS.anthropic.model, SONNET_JUDGE.model]
+		: [JUDGE_MODELS.anthropic.model];
+}
+
 export function routeJudges(
 	producer: "anthropic" | "openai",
 	producerModel?: string,
