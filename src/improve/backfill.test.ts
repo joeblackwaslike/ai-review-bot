@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
+import { getConfigTree } from "../config/load.js";
 import {
 	attributeProviderForComment,
 	backfillPr,
+	botLoginsToReviewer,
 	commentDedupKey,
 	findingsMissingReactions,
 	findUnratedFindings,
@@ -258,6 +260,21 @@ describe("backfillPr", () => {
 		return { octokit, db, rawRows };
 	}
 
+	it("attributes a gemini bot finding to gemini", async () => {
+		const { octokit, db, rawRows } = buildRouteAwareDeps(
+			[comment({ id: 1, user: { login: "gemini-review-bot[bot]" } })],
+			[],
+		);
+
+		const result = await backfillPr(
+			{ db, octokit },
+			{ owner: "o", repo: "r", pr: 55 },
+		);
+
+		expect(result.findings).toBe(1);
+		expect(rawRows[0]).toMatchObject({ provider: "gemini", commentId: 1 });
+	});
+
 	it("captures a top-level comment as pr_comment when exactly one provider reviewed", async () => {
 		const { octokit, db, rawRows } = buildRouteAwareDeps(
 			[comment({ id: 1 })],
@@ -393,23 +410,20 @@ describe("backfillPr", () => {
 describe("attributeProviderForComment", () => {
 	it("attributes directly when only one provider reviewed, regardless of body", () => {
 		expect(
-			attributeProviderForComment(new Set(["anthropic"]), "no mention here"),
-		).toBe("anthropic");
+			attributeProviderForComment(new Set(["claude"]), "no mention here"),
+		).toBe("claude");
 	});
 
 	it("returns null when both providers are active and neither is named", () => {
 		expect(
-			attributeProviderForComment(
-				new Set(["anthropic", "openai"]),
-				"great work",
-			),
+			attributeProviderForComment(new Set(["claude", "codex"]), "great work"),
 		).toBeNull();
 	});
 
 	it("returns null when both providers are active and both are named (a tie)", () => {
 		expect(
 			attributeProviderForComment(
-				new Set(["anthropic", "openai"]),
+				new Set(["claude", "codex"]),
 				"anthropicreviewbot and codexreviewbot both flagged this",
 			),
 		).toBeNull();
@@ -418,19 +432,19 @@ describe("attributeProviderForComment", () => {
 	it("attributes to the one bot named when both providers are active", () => {
 		expect(
 			attributeProviderForComment(
-				new Set(["anthropic", "openai"]),
+				new Set(["claude", "codex"]),
 				"@codexreviewbot nice catch",
 			),
-		).toBe("openai");
+		).toBe("codex");
 	});
 
 	it("ignores a mention of a provider that isn't active", () => {
 		expect(
 			attributeProviderForComment(
-				new Set(["anthropic"]),
+				new Set(["claude"]),
 				"codexreviewbot missed this",
 			),
-		).toBe("anthropic");
+		).toBe("claude");
 	});
 
 	// Flagged independently by coderabbitai and anthropicreviewbot on this PR's
@@ -439,7 +453,7 @@ describe("attributeProviderForComment", () => {
 	it("does not match a bot login embedded in a longer word", () => {
 		expect(
 			attributeProviderForComment(
-				new Set(["anthropic", "openai"]),
+				new Set(["claude", "codex"]),
 				"don't let notcodexreviewbot fool you",
 			),
 		).toBeNull();
@@ -448,10 +462,68 @@ describe("attributeProviderForComment", () => {
 	it("does not match a bot login embedded in a URL fragment", () => {
 		expect(
 			attributeProviderForComment(
-				new Set(["anthropic", "openai"]),
+				new Set(["claude", "codex"]),
 				"see https://example.com/codexreviewbot-docs for details",
 			),
 		).toBeNull();
+	});
+
+	it("attributes a mention of a third reviewer's login", () => {
+		expect(
+			attributeProviderForComment(
+				new Set(["claude", "gemini"]),
+				"@gemini-review-bot nice catch",
+			),
+		).toBe("gemini");
+	});
+
+	it("attributes a mention of a reviewer's comment prefix", () => {
+		expect(
+			attributeProviderForComment(
+				new Set(["claude", "codex"]),
+				"codex-review-bot was right here",
+			),
+		).toBe("codex");
+	});
+});
+
+describe("botLoginsToReviewer", () => {
+	it("maps each configured appSlug to its reviewer id", () => {
+		const logins = botLoginsToReviewer();
+		expect(logins["anthropicreviewbot[bot]"]).toBe("claude");
+		expect(logins["codexreviewbot[bot]"]).toBe("codex");
+		expect(logins["gemini-review-bot[bot]"]).toBe("gemini");
+	});
+
+	it("omits a reviewer with no appSlug", () => {
+		const reviewers = getConfigTree().reviewers;
+		const logins = botLoginsToReviewer({
+			...reviewers,
+			gemini: { ...reviewers.gemini, appSlug: undefined },
+		});
+		expect(Object.values(logins)).not.toContain("gemini");
+	});
+
+	it("does not attribute an unknown bot", () => {
+		expect(botLoginsToReviewer()["sourcery-ai[bot]"]).toBeUndefined();
+	});
+
+	it("catalogs a gemini finding and excludes its replies from feedback", () => {
+		const { findings, replies } = partitionComments([
+			comment({ id: 1, user: { login: "gemini-review-bot[bot]" } }),
+			comment({
+				id: 2,
+				in_reply_to_id: 1,
+				user: { login: "anthropicreviewbot[bot]" },
+			}),
+			comment({
+				id: 3,
+				in_reply_to_id: 1,
+				user: { login: "joeblackwaslike" },
+			}),
+		]);
+		expect(findings.map((c) => c.id)).toEqual([1]);
+		expect(replies.map((c) => c.id)).toEqual([3]);
 	});
 });
 

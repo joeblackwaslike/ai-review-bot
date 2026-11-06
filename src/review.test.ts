@@ -7737,6 +7737,43 @@ describe("delta scoping without KV", () => {
 			);
 		});
 
+		it("shows a reviewer=gemini review at the same head as a sister review, and ignores it at another head", async () => {
+			routeModels({ agent: withFresh() });
+			const gemini = (sha: string) => ({
+				id: 13,
+				body: [
+					"### gemini-review-bot",
+					"",
+					"Summary.",
+					"",
+					[
+						`sha=${sha}`,
+						"review=1",
+						"readiness=4",
+						"reviewer=gemini",
+						"provider=gemini",
+						"model=m",
+						"findings=0",
+						"cost=0.000100",
+					]
+						.map((m) => `<!-- ai-review:${m} -->`)
+						.join("\n"),
+				].join("\n"),
+			});
+			const same = gemini(HEAD);
+			const sameRun = prOctokit({ reviews: [same] });
+			await buildReview({ octokit: sameRun.octokit, ...baseContext });
+			expect(mockBuildUserMessage).toHaveBeenLastCalledWith(
+				expect.objectContaining({ priorBotReviews: [same.body] }),
+			);
+
+			const otherRun = prOctokit({ reviews: [gemini(OLD)] });
+			await buildReview({ octokit: otherRun.octokit, ...baseContext });
+			expect(mockBuildUserMessage).toHaveBeenLastCalledWith(
+				expect.objectContaining({ priorBotReviews: [] }),
+			);
+		});
+
 		it("skips a head this provider has already reviewed", async () => {
 			routeModels({ agent: withFresh() });
 			const { octokit } = prOctokit({
