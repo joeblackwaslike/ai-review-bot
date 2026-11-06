@@ -151,6 +151,15 @@ describe("strategyA0", () => {
 		expect(mockRunAgent).toHaveBeenCalledTimes(1);
 	});
 
+	it("uses input.tolerance to decide the first run already meets the target", async () => {
+		const input = inputFor(oneRunUsd * 1.3);
+		await strategyA0.run(input);
+		expect(mockRunAgent.mock.calls.length).toBeGreaterThan(1);
+		mockRunAgent.mockClear();
+		await strategyA0.run({ ...input, tolerance: 0.5 });
+		expect(mockRunAgent).toHaveBeenCalledTimes(1);
+	});
+
 	it("rechecks running spend before each queued repeat", async () => {
 		vi.stubEnv("AGENT_CONCURRENCY", "1");
 		const pricey = { promptTokens: 160_000, completionTokens: 16_000 };

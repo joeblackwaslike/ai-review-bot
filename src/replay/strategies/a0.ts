@@ -66,6 +66,7 @@ export const strategyA0: ReviewStrategy = {
 	estimateCost(input) {
 		const perRunUsd = oneRunEstimate(input);
 		const target = input.spendTargetUsd;
+		const tolerance = input.tolerance ?? DEFAULT_TOLERANCE;
 		if (target === undefined) return perRunUsd;
 		const byCap = Math.max(1, Math.floor(input.budget.maxUsd / perRunUsd));
 		return (
@@ -75,7 +76,7 @@ export const strategyA0: ReviewStrategy = {
 				repeatsForBudget({
 					targetUsd: target,
 					perRunUsd,
-					tolerance: DEFAULT_TOLERANCE,
+					tolerance,
 					max: MAX_REPEATS,
 				}),
 			)
@@ -86,6 +87,7 @@ export const strategyA0: ReviewStrategy = {
 		const { fixture, signal } = input;
 		const { maxUsd, maxWallMs } = input.budget;
 		const target = input.spendTargetUsd;
+		const tolerance = input.tolerance ?? DEFAULT_TOLERANCE;
 		const selection = selectionFor(input);
 		const auth =
 			fixture.provider === "anthropic"
@@ -116,7 +118,7 @@ export const strategyA0: ReviewStrategy = {
 		if (
 			target !== undefined &&
 			target > spent &&
-			!withinTolerance(spent, target, DEFAULT_TOLERANCE) &&
+			!withinTolerance(spent, target, tolerance) &&
 			spent + coldUsd <= maxUsd &&
 			mayLaunch()
 		) {
@@ -171,7 +173,7 @@ export const strategyA0: ReviewStrategy = {
 				achievedUsd,
 				withinTolerance:
 					target !== undefined &&
-					withinTolerance(achievedUsd, target, DEFAULT_TOLERANCE),
+					withinTolerance(achievedUsd, target, tolerance),
 				failedAttempts,
 			},
 		};
