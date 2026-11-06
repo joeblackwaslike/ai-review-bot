@@ -68,8 +68,8 @@ reviewers:
       normal: { model: openai/gpt-6.1-sol, effort: low }
       complex: { model: openai/gpt-6.1-sol, effort: high }
       deep: { model: openai/gpt-6.1-sol, effort: xhigh }
-  # Inert until slice 2 adds the google provider, the Gemini GitHub App and its
-  # webhook route. Do not set enabled: true before then.
+  # Enable only after the GitHub App exists and `ai-review replay --live --max-cost <usd>`
+  # shows an acceptable false-positive rate and cost.
   gemini:
     enabled: false
     appSlug: gemini-review-bot

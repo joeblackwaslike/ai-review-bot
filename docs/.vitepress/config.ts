@@ -24,6 +24,7 @@ export default defineConfig({
 					{ text: "Quick Start", link: "/quick-start" },
 					{ text: "How it works", link: "/how-it-works" },
 					{ text: "Configuration", link: "/configuration" },
+					{ text: "Adding a reviewer", link: "/adding-a-reviewer" },
 					{ text: "CLI & npm", link: "/cli-and-npm" },
 					{ text: "Known Issues", link: "/known-issues" },
 					{ text: "Greptile Parity Roadmap", link: "/greptile-parity-roadmap" },
