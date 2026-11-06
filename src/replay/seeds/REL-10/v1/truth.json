@@ -1,0 +1,11 @@
+{
+	"clean": false,
+	"defects": [
+		{
+			"path": "src/refunds.ts",
+			"startLine": 12,
+			"endLine": 12,
+			"description": "Minimum refundable total check changed from < to <=, so orders totalling exactly MIN_REFUNDABLE_TOTAL are no longer refundable."
+		}
+	]
+}

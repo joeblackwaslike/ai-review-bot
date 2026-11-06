@@ -1,0 +1,11 @@
+{
+	"clean": false,
+	"defects": [
+		{
+			"path": "retry.go",
+			"startLine": 6,
+			"endLine": 6,
+			"description": "maxAttempts drops from 5 to 1 inside the gofmt realignment, so shouldRetry never allows a retry and failed jobs are dropped after one attempt."
+		}
+	]
+}

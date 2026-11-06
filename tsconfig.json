@@ -10,5 +10,6 @@
 		"noEmit": true,
 		"types": ["node"]
 	},
-	"include": ["api/**/*.ts", "src/**/*.ts"]
+	"include": ["api/**/*.ts", "src/**/*.ts"],
+	"exclude": ["src/replay/seeds/**/base", "src/replay/seeds/**/head"]
 }

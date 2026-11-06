@@ -1,0 +1,11 @@
+{
+	"clean": false,
+	"defects": [
+		{
+			"path": "src/pricing/checkout.test.ts",
+			"startLine": 5,
+			"endLine": 5,
+			"description": "applyDiscount moved to ./discount, but the test still calls vi.mock('./cart'). The mock no longer replaces the function checkout.ts imports, so applyDiscount is the real implementation and the mock assertions never exercise the intended path."
+		}
+	]
+}

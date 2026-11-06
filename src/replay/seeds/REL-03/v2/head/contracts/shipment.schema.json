@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Shipment",
+  "type": "object",
+  "required": ["id", "order_id", "tracking_no", "status"],
+  "properties": {
+    "id": { "type": "string" },
+    "order_id": { "type": "string" },
+    "tracking_no": { "type": "string" },
+    "status": { "type": "string" }
+  }
+}

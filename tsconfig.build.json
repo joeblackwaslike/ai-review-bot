@@ -9,5 +9,10 @@
 		"sourceMap": true
 	},
 	"include": ["src/**/*.ts"],
-	"exclude": ["**/*.test.ts", "src/testing.ts"]
+	"exclude": [
+		"**/*.test.ts",
+		"src/testing.ts",
+		"src/replay/seeds/**/base",
+		"src/replay/seeds/**/head"
+	]
 }

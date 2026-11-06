@@ -1,0 +1,11 @@
+{
+	"clean": false,
+	"defects": [
+		{
+			"path": "src/client.ts",
+			"startLine": 9,
+			"endLine": 9,
+			"description": "The default request timeout drops from 30000 ms to 3000 ms inside the reformat, so slow but healthy API calls now abort after 3 seconds."
+		}
+	]
+}
