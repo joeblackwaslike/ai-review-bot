@@ -136,6 +136,9 @@ const KIND_BY_TYPE: Record<string, Kind> = {
 const MAP_KEYS: Record<string, string> = {
 	models: "<provider/model>",
 	reviewers: "<id>",
+	providerOptions: "<provider>",
+	skills: "<skill>",
+	providers: "<provider>",
 };
 
 interface Def {
@@ -173,6 +176,7 @@ function typeOf(node: ZodNode): string {
 		return `one of ${Object.keys(def.entries ?? {}).join(", ")}`;
 	}
 	if (def.type === "array") return `${typeOf(def.element as ZodNode)}[]`;
+	if (def.type === "custom") return "object";
 	return def.type;
 }
 
@@ -199,7 +203,7 @@ export function listSchemaLeaves(
 	} else if (def.type === "record") {
 		listSchemaLeaves(
 			def.valueType as ZodNode,
-			[...path, MAP_KEYS[path[0] as string] ?? "<key>"],
+			[...path, MAP_KEYS[path.at(-1) as string] ?? "<key>"],
 			[...mapIndexes, path.length],
 			out,
 		);

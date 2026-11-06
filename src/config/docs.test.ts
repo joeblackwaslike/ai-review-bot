@@ -71,13 +71,25 @@ describe("documented env vars", () => {
 		const documented = buildConfigRows().filter((r) => r.env !== "none");
 		expect(documented.length).toBeGreaterThan(20);
 		for (const row of documented) {
-			const name = row.env.replace("<ID>", "CLAUDE");
-			const path = row.path.replace("<id>", "claude").split(".");
+			const name = row.env
+				.replace("<ID>", "CLAUDE")
+				.replace("<SKILL>", "CODE_REVIEWER")
+				.replace("<PROVIDER>", "GOOGLE");
+			const path = row.path
+				.replace("<id>", "claude")
+				.replace("<skill>", "code-reviewer")
+				.replace("<provider>", "google")
+				.split(".");
 			const sample = sampleFor(row.type);
-			const { value, sources } = applyEnvOverlay(
-				{ reviewers: { claude: {} } },
-				{ [name]: sample.text },
-			);
+			const raw = path
+				.slice(0, -1)
+				.reduceRight<Record<string, unknown>>(
+					(inner, key) => ({ [key]: inner }),
+					{},
+				);
+			const { value, sources } = applyEnvOverlay(raw, {
+				[name]: sample.text,
+			});
 			expect(sources[path.join(".")], name).toBe("env");
 			expect(
 				path.reduce<unknown>(

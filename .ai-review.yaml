@@ -44,10 +44,14 @@ models:
     refusalFallback: true
   anthropic/claude-opus-5-5:
     refusalFallback: true
+  google/gemini-3.1-flash-lite:
+    effortControl: level
 
 reviewers:
   claude:
     enabled: true
+    appSlug: anthropicreviewbot
+    commentPrefix: ai-review-bot
     tiers:
       trivial: { model: anthropic/claude-haiku-5-5, effort: low }
       normal: { model: anthropic/claude-sonnet-5-5, effort: medium }
@@ -57,6 +61,8 @@ reviewers:
       deep: { model: anthropic/claude-opus-5-5, effort: high }
   codex:
     enabled: true
+    appSlug: codexreviewbot
+    commentPrefix: codex-review-bot
     tiers:
       trivial: { model: openai/gpt-6-luna, effort: none }
       normal: { model: openai/gpt-6.1-sol, effort: low }
@@ -66,6 +72,8 @@ reviewers:
   # webhook route. Do not set enabled: true before then.
   gemini:
     enabled: false
+    appSlug: gemini-review-bot
+    commentPrefix: gemini-review-bot
     tiers:
       trivial: { model: google/gemini-3.1-flash-lite, effort: low }
       normal: { model: google/gemini-3.1-flash-lite, effort: medium }

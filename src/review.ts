@@ -80,6 +80,7 @@ import {
 	reasoningProviderOptions,
 	routeModel,
 } from "./router.js";
+import { TIER1_SKILL_FILES } from "./skill-names.js";
 import { repairSuggestion } from "./suggestion.js";
 import { detectTier2Skills, TIER2_DETECTORS } from "./tier2.js";
 import {
@@ -453,13 +454,7 @@ export function severityBadge(severity: string): string {
 }
 
 // Tier 1: always runs on every PR.
-export const TIER1_SKILLS: readonly string[] = [
-	"code-reviewer.md",
-	"silent-failure-hunter.md",
-	"pr-test-analyzer.md",
-	"security-sast.md",
-	"code-review-and-quality.md",
-];
+export const TIER1_SKILLS: readonly string[] = TIER1_SKILL_FILES;
 
 const baseName = (path: string) => path.split("/").pop() ?? path;
 

@@ -1,6 +1,9 @@
 import type { JSONObject } from "@ai-sdk/provider";
 import { z } from "zod";
 import { DEFAULT_DIFF_BUDGET_CHARS } from "../diff-pack.js";
+import { supportedEfforts } from "../providers/effort.js";
+import { isProviderName, PROVIDER_NAMES } from "../providers/names.js";
+import { SKILL_NAMES } from "../skill-names.js";
 
 export const EffortSchema = z
 	.enum(["none", "low", "medium", "high", "xhigh", "max"])
@@ -68,9 +71,80 @@ const TierChoiceSchema = z
 	})
 	.strict();
 
+const TIER_KEYS = ["trivial", "normal", "complex", "deep"] as const;
+
+const SkillChoiceSchema = z
+	.object({
+		model: modelId("Model for this skill in every tier.").optional(),
+		effort: EffortSchema.optional().describe(
+			"Effort for the skill model; needs model.",
+		),
+		trivial: TierChoiceSchema.optional().describe(
+			"Model and effort for this skill on trivial PRs.",
+		),
+		normal: TierChoiceSchema.optional().describe(
+			"Model and effort for this skill on normal PRs.",
+		),
+		complex: TierChoiceSchema.optional().describe(
+			"Model and effort for this skill on complex PRs.",
+		),
+		deep: TierChoiceSchema.optional().describe(
+			"Model and effort for this skill on deep PRs.",
+		),
+	})
+	.strict()
+	.superRefine((choice, ctx) => {
+		if (!choice.model && !TIER_KEYS.some((t) => choice[t])) {
+			ctx.addIssue({
+				code: "custom",
+				message: "a skills entry needs a model or at least one tier",
+			});
+		}
+		if (choice.effort && !choice.model) {
+			ctx.addIssue({
+				code: "custom",
+				path: ["effort"],
+				message: "effort needs a model on the same skills entry",
+			});
+		}
+	});
+
 const ReviewerSchema = z
 	.object({
 		enabled: z.boolean().default(true).describe("Run this reviewer."),
+		appId: z.coerce
+			.string()
+			.regex(/^\d+$/, "must be a numeric GitHub App id")
+			.optional()
+			.describe("GitHub App id; the environment supplies it when unset."),
+		appSlug: z
+			.string()
+			.regex(/^[a-z0-9][a-z0-9-]*$/i, "must be a GitHub App slug")
+			.optional()
+			.describe("GitHub App slug, used to recognize this bot's own reviews."),
+		commentPrefix: z
+			.string()
+			.min(1)
+			.optional()
+			.describe("Heading prefix on this reviewer's comments."),
+		concurrency: z
+			.number()
+			.int()
+			.min(1)
+			.optional()
+			.describe("Maximum agents run in parallel for this reviewer."),
+		runOn: z
+			.array(TierSchema)
+			.min(1)
+			.refine((tiers) => new Set(tiers).size === tiers.length, {
+				message: "tiers must be unique",
+			})
+			.optional()
+			.describe("Tiers this reviewer runs on; every tier when unset."),
+		skills: z
+			.record(z.string(), SkillChoiceSchema)
+			.optional()
+			.describe("Per-skill model overrides, keyed by skill name."),
 		tiers: z
 			.object({
 				trivial: TierChoiceSchema,
@@ -236,21 +310,109 @@ export const ConfigSchema = z
 				ReviewerSchema,
 			)
 			.describe("Reviewers, keyed by id."),
+		providers: z
+			.partialRecord(
+				z.enum(PROVIDER_NAMES),
+				z
+					.object({
+						baseURL: z
+							.string()
+							.optional()
+							.describe("Override the provider API base URL."),
+					})
+					.strict(),
+			)
+			.default({})
+			.describe("Per-provider connection settings."),
 	})
 	.strict()
 	.superRefine((cfg, ctx) => {
+		const issue = (path: (string | number)[], message: string) =>
+			ctx.addIssue({ code: "custom", path, message });
+
 		const bareIds = new Map<string, string>();
 		for (const key of Object.keys(cfg.models)) {
 			const bare = key.slice(key.indexOf("/") + 1);
 			const first = bareIds.get(bare);
 			if (first !== undefined) {
-				ctx.addIssue({
-					code: "custom",
-					path: ["models", key],
-					message: `models "${first}" and "${key}" share the bare model id "${bare}"; cost lookup would be ambiguous`,
-				});
+				issue(
+					["models", key],
+					`models "${first}" and "${key}" share the bare model id "${bare}"; cost lookup would be ambiguous`,
+				);
 			} else {
 				bareIds.set(bare, key);
+			}
+		}
+
+		const providerOf = (path: (string | number)[], id: string) => {
+			const prefix = id.split("/")[0] as string;
+			if (isProviderName(prefix)) return prefix;
+			issue(
+				path,
+				`unknown provider "${prefix}" in "${id}"; expected one of ${PROVIDER_NAMES.join(", ")}`,
+			);
+			return undefined;
+		};
+
+		const checkChoice = (
+			path: (string | number)[],
+			id: string,
+			effort: string | undefined,
+		) => {
+			const provider = providerOf([...path, "model"], id);
+			if (!provider || !effort) return;
+			const control = cfg.models[id]?.effortControl;
+			const allowed: readonly string[] = supportedEfforts(provider, control);
+			if (!allowed.includes(effort)) {
+				issue(
+					[...path, "effort"],
+					`${provider} models do not take effort "${effort}"`,
+				);
+			}
+		};
+
+		for (const [key, model] of Object.entries(cfg.models)) {
+			providerOf(["models", key], key);
+			for (const name of Object.keys(model.providerOptions ?? {})) {
+				if (!isProviderName(name)) {
+					issue(
+						["models", key, "providerOptions", name],
+						`unknown provider "${name}"; expected one of ${PROVIDER_NAMES.join(", ")}`,
+					);
+				}
+			}
+		}
+
+		const slugs = new Map<string, string>();
+		for (const [id, reviewer] of Object.entries(cfg.reviewers)) {
+			for (const tier of TIER_KEYS) {
+				const choice = reviewer.tiers[tier];
+				checkChoice(
+					["reviewers", id, "tiers", tier],
+					choice.model,
+					choice.effort,
+				);
+			}
+			for (const [name, skill] of Object.entries(reviewer.skills ?? {})) {
+				const base = ["reviewers", id, "skills", name];
+				if (!SKILL_NAMES.has(name)) issue(base, `unknown skill "${name}"`);
+				if (skill.model) checkChoice(base, skill.model, skill.effort);
+				for (const tier of TIER_KEYS) {
+					const choice = skill[tier];
+					if (choice) checkChoice([...base, tier], choice.model, choice.effort);
+				}
+			}
+			if (reviewer.appSlug) {
+				const slug = reviewer.appSlug.toLowerCase();
+				const first = slugs.get(slug);
+				if (first !== undefined) {
+					issue(
+						["reviewers", id, "appSlug"],
+						`appSlug "${reviewer.appSlug}" is already used by reviewer "${first}"`,
+					);
+				} else {
+					slugs.set(slug, id);
+				}
 			}
 		}
 	});
