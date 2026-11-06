@@ -1,10 +1,4 @@
-import {
-	existsSync,
-	mkdirSync,
-	readFileSync,
-	renameSync,
-	writeFileSync,
-} from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { VerdictRecord } from "./types.js";
@@ -32,16 +26,12 @@ export class VerdictCache<T = VerdictRecord> {
 	}
 
 	put(snapshot: string, key: string, record: T): void {
-		const entries = this.load(snapshot);
-		entries.set(key, record);
+		this.load(snapshot).set(key, record);
 		mkdirSync(this.dir, { recursive: true });
-		const file = this.file(snapshot);
-		const body = [...entries]
-			.map(([k, r]) => JSON.stringify({ key: k, record: r } satisfies Line<T>))
-			.join("\n");
-		const temp = `${file}.${process.pid}.tmp`;
-		writeFileSync(temp, `${body}\n`);
-		renameSync(temp, file);
+		appendFileSync(
+			this.file(snapshot),
+			`${JSON.stringify({ key, record } satisfies Line<T>)}\n`,
+		);
 	}
 
 	private file(snapshot: string): string {

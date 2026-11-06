@@ -1,4 +1,4 @@
-import { appendFileSync, mkdtempSync } from "node:fs";
+import { appendFileSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -45,5 +45,27 @@ describe("VerdictCache", () => {
 	it("treats a missing file as empty", () => {
 		const cache = new VerdictCache(newDir());
 		expect(cache.get("none", "k")).toBeUndefined();
+	});
+
+	it("keeps entries put by two instances on one snapshot", () => {
+		const dir = newDir();
+		const a = new VerdictCache(dir);
+		const b = new VerdictCache(dir);
+		a.get("snap", "warm");
+		b.get("snap", "warm");
+		a.put("snap", "k1", record("from a"));
+		b.put("snap", "k2", record("from b"));
+		const fresh = new VerdictCache(dir);
+		expect(fresh.get("snap", "k1")?.reason).toBe("from a");
+		expect(fresh.get("snap", "k2")?.reason).toBe("from b");
+	});
+
+	it("never deletes an unreadable line when it puts", () => {
+		const dir = newDir();
+		appendFileSync(join(dir, "snap.jsonl"), "{not json\n");
+		new VerdictCache(dir).put("snap", "k1", record("ok"));
+		expect(readFileSync(join(dir, "snap.jsonl"), "utf8")).toContain(
+			"{not json",
+		);
 	});
 });
