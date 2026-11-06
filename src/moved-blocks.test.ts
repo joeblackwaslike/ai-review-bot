@@ -160,4 +160,47 @@ describe("findMovedBlocks at scale", () => {
 		expect(out).toHaveLength(100);
 		expect(elapsed).toBeLessThan(500);
 	});
+
+	it("handles 2000 identical lines moved as one block in under 500 ms", () => {
+		const same = Array.from({ length: 2000 }, () => "const same = repeat();");
+		const files = [file("a.ts", same, []), file("b.ts", [], same)];
+		const start = performance.now();
+		const out = findMovedBlocks(files);
+		const elapsed = performance.now() - start;
+		expect(out).toEqual([{ from: "a.ts", to: "b.ts", lineCount: 2000 }]);
+		expect(elapsed).toBeLessThan(500);
+	});
+
+	it("keeps distinct moves visible among 3000 repeated lines per file", () => {
+		const repeated = () =>
+			Array.from({ length: 3000 }, () => "const same = repeat();");
+		const deleted = repeated();
+		const added = repeated();
+		for (let m = 0; m < 100; m++) {
+			const block = Array.from(
+				{ length: 5 },
+				(_, i) => `const moved${m}x${i} = call(${i});`,
+			);
+			deleted.splice(
+				m * 29,
+				0,
+				`const del${m}a = 0;`,
+				...block,
+				`const del${m}b = 0;`,
+			);
+			added.splice(
+				m * 31 + 7,
+				0,
+				`const add${m}a = 0;`,
+				...block,
+				`const add${m}b = 0;`,
+			);
+		}
+		const files = [file("a.ts", deleted, []), file("b.ts", [], added)];
+		const start = performance.now();
+		const out = findMovedBlocks(files);
+		const elapsed = performance.now() - start;
+		expect(out.filter((b) => b.lineCount === 5)).toHaveLength(100);
+		expect(elapsed).toBeLessThan(1000);
+	});
 });

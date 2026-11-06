@@ -23,6 +23,7 @@ interface Run {
 }
 
 const MIN_COUNTED_LENGTH = 3;
+const MAX_KEY_OCCURRENCES = 50;
 
 function normalize(line: string): string {
 	return line.trim().replace(/\s+/g, " ");
@@ -128,13 +129,7 @@ function windowKeys(run: Run, minLines: number): Map<number, string> {
 	return keys;
 }
 
-function extend(
-	from: Run,
-	fromPos: number,
-	to: Run,
-	toPos: number,
-	minLines: number,
-): Candidate | null {
+function extend(from: Run, fromPos: number, to: Run, toPos: number): Candidate {
 	let fs = fromPos;
 	let ts = toPos;
 	while (fs > 0 && ts > 0 && from.lines[fs - 1] === to.lines[ts - 1]) {
@@ -149,9 +144,14 @@ function extend(
 	) {
 		length++;
 	}
-	const counted = countRange(from.lines, fs, length);
-	if (counted < minLines) return null;
-	return { from, to, fromStart: fs, toStart: ts, length, counted };
+	return {
+		from,
+		to,
+		fromStart: fs,
+		toStart: ts,
+		length,
+		counted: countRange(from.lines, fs, length),
+	};
 }
 
 function collectCandidates(
@@ -163,19 +163,27 @@ function collectCandidates(
 	for (const run of added) {
 		for (const [pos, key] of windowKeys(run, minLines)) {
 			const hits = index.get(key);
-			if (hits) hits.push({ run, pos });
-			else index.set(key, [{ run, pos }]);
+			if (!hits) index.set(key, [{ run, pos }]);
+			else if (hits.length < MAX_KEY_OCCURRENCES) hits.push({ run, pos });
 		}
 	}
 	const seen = new Set<string>();
+	const coveredTo = new Map<string, number>();
 	const out: Candidate[] = [];
 	for (const run of deleted) {
+		const occurrences = new Map<string, number>();
 		for (const [pos, key] of windowKeys(run, minLines)) {
+			const n = (occurrences.get(key) ?? 0) + 1;
+			occurrences.set(key, n);
+			if (n > MAX_KEY_OCCURRENCES) continue;
 			for (const hit of index.get(key) ?? []) {
 				if (hit.run.filename === run.filename) continue;
-				const c = extend(run, pos, hit.run, hit.pos, minLines);
-				if (!c) continue;
-				const id = `${run.index}|${hit.run.index}|${c.fromStart}|${c.toStart}`;
+				const diagonal = `${run.index}|${hit.run.index}|${pos - hit.pos}`;
+				if (pos < (coveredTo.get(diagonal) ?? 0)) continue;
+				const c = extend(run, pos, hit.run, hit.pos);
+				coveredTo.set(diagonal, c.fromStart + c.length);
+				if (c.counted < minLines) continue;
+				const id = `${diagonal}|${c.fromStart}`;
 				if (seen.has(id)) continue;
 				seen.add(id);
 				out.push(c);
@@ -220,6 +228,8 @@ function unusedSegments(c: Candidate, minLines: number): Candidate[] {
  * Finds runs of at least `minLines` lines deleted in one file and added to
  * another. Lines are compared after trimming and collapsing whitespace; lines
  * under 3 characters stay inside a run but do not count toward its length.
+ * A window of lines that occurs more than 50 times on either side (repeated
+ * boilerplate) is matched only through its first 50 occurrences per side.
  */
 export function findMovedBlocks(files: PushFile[], minLines = 5): MovedBlock[] {
 	const need = Math.max(1, minLines);
