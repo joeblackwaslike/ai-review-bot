@@ -1721,3 +1721,52 @@ describe("runReplay --adjudicate", () => {
 		expect(lines.join("\n")).toContain("audit:");
 	});
 });
+
+describe("replay --experiment", () => {
+	const lines = () => {
+		const out: string[] = [];
+		return { out, push: (s: string) => out.push(s) };
+	};
+	const misuse = [
+		["--experiment", "plan", "--live"],
+		["--experiment", "plan", "--strategy", "a"],
+		["--experiment", "run", "--seeds"],
+		["--experiment", "score", "--adjudicate", "x"],
+		["--experiment", "plan", "--plan"],
+		["--experiment", "plan", "--record", "https://github.com/o/r/pull/1"],
+		["--experiment", "bogus"],
+		["--experiment", "plan", "--final"],
+		["--final"],
+		["--plan-file", "x.json"],
+	];
+
+	it.each(misuse)("exits 2 for %s", async (...args) => {
+		const l = lines();
+		expect(await runReplay(args, { out: l.push })).toBe(2);
+	});
+
+	it("documents --experiment, --fixtures and score-only --final in the usage", async () => {
+		const l = lines();
+		await runReplay(["--final"], { out: l.push });
+		const usage = l.out.join("\n");
+		expect(usage).toMatch(
+			/--experiment plan\|run\|score \[--plan-file <path>\] \[--fixtures <dir>\]/,
+		);
+		expect(usage).toMatch(/--final is for score only/);
+	});
+
+	it("exits 1 for a missing plan file without building any model", async () => {
+		const l = lines();
+		const code = await runReplay(
+			[
+				"--experiment",
+				"plan",
+				"--plan-file",
+				join(tmpdir(), "no-such", "plan.json"),
+			],
+			{ out: l.push, fixturesDir: tmpdir() },
+		);
+		expect(code).toBe(1);
+		expect(l.out.join("\n")).toMatch(/cannot load plan/);
+	});
+});

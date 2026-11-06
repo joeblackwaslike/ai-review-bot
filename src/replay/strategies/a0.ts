@@ -33,10 +33,21 @@ const skillsDir = fileURLToPath(new URL("../../../skills", import.meta.url));
 const readSkillFile = (name: string): string =>
 	readFileSync(`${skillsDir}/${name}`, "utf8");
 
-export function strategyA0Version(readSkill: (name: string) => string): string {
+/** Bump when run or estimateCost behavior changes (repeat policy, tolerance), so stored cells go stale. */
+export const A0_IMPLEMENTATION_REVISION = 2;
+
+export function strategyA0Version(
+	readSkill: (name: string) => string,
+	revision: number = A0_IMPLEMENTATION_REVISION,
+): string {
 	return createHash("sha256")
 		.update(
-			JSON.stringify([readSkill(A0_SKILL), CLAUDE_TIER_MAP, OPENAI_TIER_MAP]),
+			JSON.stringify([
+				readSkill(A0_SKILL),
+				CLAUDE_TIER_MAP,
+				OPENAI_TIER_MAP,
+				revision,
+			]),
 		)
 		.digest("hex")
 		.slice(0, 12);
@@ -66,26 +77,30 @@ export const strategyA0: ReviewStrategy = {
 	estimateCost(input) {
 		const perRunUsd = oneRunEstimate(input);
 		const target = input.spendTargetUsd;
+		const tolerance = input.tolerance ?? DEFAULT_TOLERANCE;
 		if (target === undefined) return perRunUsd;
 		const byCap = Math.max(1, Math.floor(input.budget.maxUsd / perRunUsd));
-		return (
-			perRunUsd *
-			Math.min(
-				byCap,
-				repeatsForBudget({
-					targetUsd: target,
-					perRunUsd,
-					tolerance: DEFAULT_TOLERANCE,
-					max: MAX_REPEATS,
-				}),
-			)
-		);
+		const meetsTarget =
+			target <= perRunUsd || withinTolerance(perRunUsd, target, tolerance);
+		const repeats = meetsTarget
+			? 1
+			: Math.max(
+					2,
+					repeatsForBudget({
+						targetUsd: target,
+						perRunUsd,
+						tolerance,
+						max: MAX_REPEATS,
+					}),
+				);
+		return perRunUsd * Math.min(byCap, repeats);
 	},
 	async run(input) {
 		const started = Date.now();
 		const { fixture, signal } = input;
 		const { maxUsd, maxWallMs } = input.budget;
 		const target = input.spendTargetUsd;
+		const tolerance = input.tolerance ?? DEFAULT_TOLERANCE;
 		const selection = selectionFor(input);
 		const auth =
 			fixture.provider === "anthropic"
@@ -116,7 +131,7 @@ export const strategyA0: ReviewStrategy = {
 		if (
 			target !== undefined &&
 			target > spent &&
-			!withinTolerance(spent, target, DEFAULT_TOLERANCE) &&
+			!withinTolerance(spent, target, tolerance) &&
 			spent + coldUsd <= maxUsd &&
 			mayLaunch()
 		) {
@@ -171,7 +186,7 @@ export const strategyA0: ReviewStrategy = {
 				achievedUsd,
 				withinTolerance:
 					target !== undefined &&
-					withinTolerance(achievedUsd, target, DEFAULT_TOLERANCE),
+					withinTolerance(achievedUsd, target, tolerance),
 				failedAttempts,
 			},
 		};

@@ -8,7 +8,11 @@ import {
 } from "../../testing.js";
 import { roundCostUsd } from "../cost.js";
 import type { StrategyInput } from "../strategy.js";
-import { strategyA0, strategyA0Version } from "./a0.js";
+import {
+	A0_IMPLEMENTATION_REVISION,
+	strategyA0,
+	strategyA0Version,
+} from "./a0.js";
 
 const mockRunAgent = vi.hoisted(() => vi.fn());
 vi.mock("../../review.js", async (orig) => ({
@@ -65,6 +69,17 @@ describe("strategyA0", () => {
 		expect(strategyA0.name).toBe("a0");
 		expect(strategyA0.needsCheckout).toBe(false);
 		expect(strategyA0.version).toMatch(/^[0-9a-f]{12}$/);
+	});
+
+	it("changes version when the implementation revision changes", () => {
+		const read = () => "same";
+		expect(strategyA0Version(read, A0_IMPLEMENTATION_REVISION)).toBe(
+			strategyA0Version(read),
+		);
+		expect(strategyA0Version(read, A0_IMPLEMENTATION_REVISION + 1)).not.toBe(
+			strategyA0Version(read),
+		);
+		expect(A0_IMPLEMENTATION_REVISION).toBeGreaterThan(1);
 	});
 
 	it("changes version when the skill text changes", () => {
@@ -149,6 +164,42 @@ describe("strategyA0", () => {
 		mockRunAgent.mockClear();
 		await strategyA0.run(inputFor(oneRunUsd * 0.5));
 		expect(mockRunAgent).toHaveBeenCalledTimes(1);
+	});
+
+	it("uses input.tolerance to decide the first run already meets the target", async () => {
+		const input = inputFor(oneRunUsd * 1.3);
+		await strategyA0.run(input);
+		expect(mockRunAgent.mock.calls.length).toBeGreaterThan(1);
+		mockRunAgent.mockClear();
+		await strategyA0.run({ ...input, tolerance: 0.5 });
+		expect(mockRunAgent).toHaveBeenCalledTimes(1);
+	});
+
+	it.each([
+		[0.5, undefined],
+		[1.05, undefined],
+		[1.3, undefined],
+		[1.3, 0.5],
+		[3.2, undefined],
+		[5.4, undefined],
+	])("estimates the repeat count run uses (target %sx, tolerance %s)", async (factor, tolerance) => {
+		const diff = "x".repeat(40_000);
+		const matched = {
+			promptTokens: diff.length / 4,
+			completionTokens: 2000,
+		};
+		mockRunAgent.mockImplementation(async () => ({
+			...okOutcome("f"),
+			usage: matched,
+		}));
+		const perRun = roundCostUsd({ x: matched }, MODEL);
+		const make = (target?: number) =>
+			({ ...inputFor(target), diff, tolerance }) as StrategyInput;
+		const estimate = strategyA0.estimateCost(make(perRun * factor));
+		await strategyA0.run(make(perRun * factor));
+		expect(estimate / strategyA0.estimateCost(make())).toBeCloseTo(
+			mockRunAgent.mock.calls.length,
+		);
 	});
 
 	it("rechecks running spend before each queued repeat", async () => {

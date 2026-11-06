@@ -32,6 +32,8 @@ export interface StrategyInput {
 	budget: { maxUsd: number; maxWallMs: number };
 	/** What spend-matched strategies aim for: A's cost for this round, set by the grid runner. */
 	spendTargetUsd?: number;
+	/** Relative spend-match tolerance for a0; defaults to 0.10. */
+	tolerance?: number;
 	signal: AbortSignal;
 }
 

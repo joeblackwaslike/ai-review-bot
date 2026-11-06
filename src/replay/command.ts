@@ -24,6 +24,13 @@ import {
 	formatClassReport,
 	summarizeClasses,
 } from "./classify.js";
+import {
+	defaultPlanFile,
+	type ExperimentDeps,
+	type ExperimentMode,
+	realExperimentDeps,
+	runExperiment,
+} from "./experiment/command.js";
 import { filterMargin, formatMargin } from "./filter-margin.js";
 import { type GhClient, ghCli } from "./gh.js";
 import { checkClean, checkRecall } from "./guard.js";
@@ -67,6 +74,7 @@ export interface ReplayDeps {
 	adjudicationDir?: string;
 	/** Seed root for `--seeds`; defaults to the committed seeds. */
 	seedsRoot?: string;
+	experiment?: ExperimentDeps;
 }
 
 interface ParsedArgs {
@@ -89,6 +97,9 @@ interface ParsedArgs {
 	audit?: boolean;
 	seeds?: boolean;
 	check?: boolean;
+	experiment?: ExperimentMode;
+	planFile?: string;
+	final?: boolean;
 }
 
 const USAGE = [
@@ -98,6 +109,7 @@ const USAGE = [
 	"  ai-review replay --live [--rounds <n>] [--max-cost <usd>] [--strategy <name>] [--save-trace] [--fixtures <dir>]",
 	"  ai-review replay --investigate-join <fixture-id> [--fixtures <dir>]",
 	"  ai-review replay --seeds [--check | --plan [--strategy <name>] | --strategy <name> --max-cost <usd>]",
+	"  ai-review replay --experiment plan|run|score [--plan-file <path>] [--fixtures <dir>]  (--final is for score only)",
 	"  ai-review replay --adjudicate <fixture-id> [--max-anthropic <n>] [--max-openai <n>] [--plan | --audit] [--fixtures <dir>]",
 ].join("\n");
 
@@ -135,6 +147,22 @@ function parseArgs(args: string[]): ParsedArgs | null {
 		}
 		if (flag === "--expect-clean") {
 			parsed.expectClean = true;
+			continue;
+		}
+		if (flag === "--final") {
+			parsed.final = true;
+			continue;
+		}
+		if (flag === "--experiment") {
+			if (value !== "plan" && value !== "run" && value !== "score") return null;
+			parsed.experiment = value;
+			i++;
+			continue;
+		}
+		if (flag === "--plan-file") {
+			if (value === undefined || value.startsWith("--")) return null;
+			parsed.planFile = value;
+			i++;
 			continue;
 		}
 		if (flag === "--seeds" || flag === "--check") {
@@ -609,6 +637,38 @@ async function runSeeds(
 	});
 }
 
+function checkExperimentFlags(p: ParsedArgs): string | null {
+	if (p.experiment === undefined)
+		return p.final || p.planFile !== undefined
+			? "--final and --plan-file require --experiment"
+			: null;
+	const others = [
+		p.live,
+		p.record,
+		p.strategy,
+		p.investigateJoin,
+		p.adjudicate,
+		p.seeds,
+		p.check,
+		p.plan,
+		p.audit,
+		p.rounds,
+		p.maxCost,
+		p.saveTrace,
+		p.heldOut,
+		p.expectClean,
+		p.maxAnthropic,
+		p.maxOpenai,
+		p.provider,
+		p.bot,
+	];
+	if (others.some((v) => v !== undefined && v !== false))
+		return "--experiment takes only --plan-file, --final (score) and --fixtures";
+	if (p.final && p.experiment !== "score")
+		return "--final applies only to --experiment score";
+	return null;
+}
+
 export async function runReplay(
 	args: string[],
 	deps: ReplayDeps = {},
@@ -618,6 +678,31 @@ export async function runReplay(
 	if (!parsed) {
 		out(USAGE);
 		return 2;
+	}
+	const experimentMisuse = checkExperimentFlags(parsed);
+	if (experimentMisuse) {
+		out(`${experimentMisuse}\n${USAGE}`);
+		return 2;
+	}
+	if (parsed.experiment) {
+		const fixturesDir =
+			parsed.fixtures ??
+			deps.fixturesDir ??
+			defaultFixturesDir(import.meta.url);
+		return runExperiment(
+			{
+				mode: parsed.experiment,
+				planFile: parsed.planFile ?? defaultPlanFile(import.meta.url),
+				final: parsed.final === true,
+			},
+			deps.experiment ??
+				realExperimentDeps({
+					fixturesDir,
+					out,
+					client: deps.client,
+					adjudicationDir: deps.adjudicationDir,
+				}),
+		);
 	}
 	if (parsed.seeds) return runSeeds(parsed, deps, out);
 	const misuse =
