@@ -30,7 +30,8 @@ every report says they are not measured.
 - `ai-review replay --experiment score` scores tuning and validation cells. It never reads a
   test-split cell and prints no verdict.
 - `ai-review replay --experiment score --final` scores the test split and nothing else. It refuses
-  (exit 1, nothing written) when the test grid is partial or a seed gate is missing, then produces the
+  (exit 1, nothing written) when the test grid is partial or holds an over-budget cell, or, for a plan
+  that is not directional, when a candidate has no seed-gate result; then it produces the
   report, and only then writes `final.marker`. A crash while scoring therefore does not consume the
   final; once the marker exists, a second `--final` for the same plan hash is refused. A marker that
   cannot be read is treated as scored, and a revised plan that shares test PRs with a scored plan, or
