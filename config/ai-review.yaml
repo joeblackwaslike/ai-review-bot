@@ -56,6 +56,14 @@ models:
     pricing: { input: 0.1, cachedInput: 0.01, output: 0.5 }
   openai/gpt-6.1-sol:
     pricing: { input: 2.0, cachedInput: 0.1, output: 10.0 }
+  # Gemini prices checked 2026-11-06: aistudio.google.com/docs/pricing.
+  # gemini-3.8-flash is $0.75/$0.075/$3.75 through 2026-12-31, then $1.50/$0.15/
+  # $7.50 from 2027-01-01; update the entry when the rate changes. Output
+  # includes thinking tokens.
+  google/gemini-3.1-flash-lite:
+    pricing: { input: 0.25, cachedInput: 0.025, output: 1.5 }
+  google/gemini-3.8-flash:
+    pricing: { input: 0.75, cachedInput: 0.075, output: 3.75 }
 
 reviewers:
   claude:
@@ -74,3 +82,12 @@ reviewers:
       normal: { model: openai/gpt-6.1-sol, effort: low }
       complex: { model: openai/gpt-6.1-sol, effort: high }
       deep: { model: openai/gpt-6.1-sol, effort: xhigh }
+  # Inert until slice 2 adds the google provider, the Gemini GitHub App and its
+  # webhook route. Do not set enabled: true before then.
+  gemini:
+    enabled: false
+    tiers:
+      trivial: { model: google/gemini-3.1-flash-lite, effort: low }
+      normal: { model: google/gemini-3.1-flash-lite, effort: medium }
+      complex: { model: google/gemini-3.8-flash, effort: medium }
+      deep: { model: google/gemini-3.8-flash, effort: high }
