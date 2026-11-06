@@ -421,6 +421,7 @@ async function replayAll(
 	dir: string,
 	pipeline: ReplayPipeline,
 	out: (s: string) => void,
+	adjudicationDir?: string,
 ): Promise<number> {
 	const files = existsSync(dir)
 		? (await readdir(dir)).filter((n) => FIXTURE_FILE.test(n)).sort()
@@ -476,7 +477,7 @@ async function replayAll(
 			),
 		);
 	}
-	printAdaptiveReport(loaded, out);
+	printAdaptiveReport(loaded, out, adjudicationDir);
 	out(`replayed ${metrics.length} fixture${metrics.length === 1 ? "" : "s"}`);
 	return failed ? 1 : 0;
 }
@@ -484,10 +485,11 @@ async function replayAll(
 function printAdaptiveReport(
 	loaded: { fixture: ReplayFixture; labels: LabelFile }[],
 	out: (s: string) => void,
+	adjudicationDir?: string,
 ): void {
 	const traced = loaded.filter((l) => l.fixture.rounds.some((r) => r.trace));
 	if (traced.length === 0) return;
-	const cache = new VerdictCache();
+	const cache = new VerdictCache(adjudicationDir);
 	out(
 		adaptiveReport(
 			traced.map(({ fixture, labels }) => {
@@ -833,5 +835,10 @@ export async function runReplay(
 			strategy,
 			deps.liveWiring,
 		);
-	return replayAll(dir, deps.pipeline ?? todaysCodePipeline, out);
+	return replayAll(
+		dir,
+		deps.pipeline ?? todaysCodePipeline,
+		out,
+		deps.adjudicationDir,
+	);
 }

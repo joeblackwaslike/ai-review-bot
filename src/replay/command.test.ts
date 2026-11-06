@@ -285,6 +285,68 @@ describe("runReplay", () => {
 		);
 	});
 
+	it("counts a cached adjudication verdict from the configured directory in the adaptive report", async () => {
+		const dir = tmp();
+		const f = makeFixture([["a", "b"], ["c", "d"], ["e"]]);
+		const id = fixtureId(f);
+		const rejected = (claimId: string, at: string) =>
+			makeLabel(claimId, "rejected", { evidence: [`${at}|no`] });
+		const items = Array.from({ length: 8 }, (_, i) => ({
+			skill: "code-reviewer.md",
+			title: `unrelated nit number ${i}`,
+			path: `src/n${i}.ts`,
+			line: 5,
+			severity: "P3",
+		}));
+		f.rounds[2] = {
+			...f.rounds[2],
+			trace: { candidates: items, posted: [], usage: {} },
+		} as (typeof f.rounds)[0];
+		writeFileSync(join(dir, `${id}.json`), JSON.stringify(f));
+		writeFileSync(
+			join(dir, `${id}.labels.json`),
+			JSON.stringify({
+				...makeLabels({
+					labels: [
+						rejected("a", "2026-01-01T11:00:00Z"),
+						rejected("b", "2026-01-01T11:00:00Z"),
+						rejected("c", "2026-01-02T13:00:00Z"),
+						rejected("d", "2026-01-02T13:00:00Z"),
+					],
+				}),
+				fixtureId: id,
+			}),
+		);
+		const cacheDir = join(dir, "cache");
+		const verdict = {
+			verdict: "not-real" as const,
+			scope: null,
+			reason: "r",
+			first: { family: "anthropic" as const, model: "m", promptHash: "h" },
+			second: null,
+			secondVerdict: null,
+			status: "single-family" as const,
+		};
+		new VerdictCache(cacheDir).put(
+			snapshotId(f),
+			claimKey({ path: "src/n7.ts", title: "unrelated nit number 7" }),
+			verdict,
+		);
+		const run = async (adjudicationDir: string) => {
+			const { lines, out } = collect();
+			await runReplay([], { fixturesDir: dir, out, adjudicationDir });
+			return lines.join("\n");
+		};
+		const seeded = await run(cacheDir);
+		const empty = await run(join(dir, "empty-cache"));
+		expect(seeded).toMatch(
+			/would remove 0 labelled-real[^,]*, 1 rejected, 7 unjoined/,
+		);
+		expect(empty).toMatch(
+			/would remove 0 labelled-real[^,]*, 0 rejected, 8 unjoined/,
+		);
+	});
+
 	it("prints no adaptive report when no fixture has a trace", async () => {
 		const dir = tmp();
 		seed(dir);
