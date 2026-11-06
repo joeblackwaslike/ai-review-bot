@@ -12,12 +12,15 @@ import {
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ModelSelection } from "../router.js";
+import { adaptiveReport } from "./adaptive-report.js";
+import { VerdictCache } from "./adjudication/cache.js";
 import {
 	type AdjudicationJudges,
 	DEFAULT_MAX_ANTHROPIC,
 	DEFAULT_MAX_OPENAI,
 	runAdjudication,
 } from "./adjudication/run.js";
+import { claimKey, snapshotId } from "./adjudication/snapshot.js";
 import { fixtureId } from "./claims.js";
 import {
 	type ClassFile,
@@ -473,8 +476,33 @@ async function replayAll(
 			),
 		);
 	}
+	printAdaptiveReport(loaded, out);
 	out(`replayed ${metrics.length} fixture${metrics.length === 1 ? "" : "s"}`);
 	return failed ? 1 : 0;
+}
+
+function printAdaptiveReport(
+	loaded: { fixture: ReplayFixture; labels: LabelFile }[],
+	out: (s: string) => void,
+): void {
+	const traced = loaded.filter((l) => l.fixture.rounds.some((r) => r.trace));
+	if (traced.length === 0) return;
+	const cache = new VerdictCache();
+	out(
+		adaptiveReport(
+			traced.map(({ fixture, labels }) => {
+				const snapshot = snapshotId(fixture);
+				return {
+					fixture,
+					labels,
+					verdictFor: (c) => {
+						const rec = cache.get(snapshot, claimKey(c));
+						return rec && rec.status !== "unresolved" ? rec.verdict : undefined;
+					},
+				};
+			}),
+		).text,
+	);
 }
 
 async function writeTrace(

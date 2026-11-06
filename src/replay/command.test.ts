@@ -250,6 +250,49 @@ describe("runReplay", () => {
 		expect(lines.join("\n")).not.toContain("candidate retraction rule");
 	});
 
+	it("prints the adaptive report after the filter margin when a fixture has a trace", async () => {
+		const dir = tmp();
+		const id = seed(
+			dir,
+			makeLabels({
+				labels: [makeLabel("a", "rejected"), makeLabel("b", "rejected")],
+			}),
+		);
+		const fixturePath = join(dir, `${id}.json`);
+		const f = JSON.parse(readFileSync(fixturePath, "utf8"));
+		const item = {
+			skill: "code-reviewer.md",
+			title: "x",
+			path: "a.ts",
+			line: 1,
+			severity: "P2",
+		};
+		f.rounds[0].trace = { candidates: [item], posted: [item], usage: {} };
+		writeFileSync(fixturePath, JSON.stringify(f));
+		writeFileSync(
+			join(dir, `${id}.classes.json`),
+			JSON.stringify({ fixtureId: id, provisional: true, records: [] }),
+		);
+		const { lines, out } = collect();
+		expect(await runReplay([], { fixturesDir: dir, out })).toBe(0);
+		const text = lines.join("\n");
+		expect(text).toContain("adaptive limits");
+		expect(text.indexOf("adaptive limits")).toBeGreaterThan(
+			text.indexOf("candidate retraction rule"),
+		);
+		expect(text.indexOf("adaptive limits")).toBeLessThan(
+			text.indexOf("replayed 1 fixture"),
+		);
+	});
+
+	it("prints no adaptive report when no fixture has a trace", async () => {
+		const dir = tmp();
+		seed(dir);
+		const { lines, out } = collect();
+		expect(await runReplay([], { fixturesDir: dir, out })).toBe(0);
+		expect(lines.join("\n")).not.toContain("adaptive limits");
+	});
+
 	it("exits 1 when the guard has a failure and 0 when only warnings", async () => {
 		const suppressA: ReplayPipeline = ({ claims }) => ({
 			posted: claims.filter((c) => c.id !== "a").map((c) => c.id),
