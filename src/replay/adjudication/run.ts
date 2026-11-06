@@ -198,17 +198,31 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 		}
 	}
 
-	const unique = [
-		...new Map([...candidates].reverse().map((c) => [claimKey(c), c])).values(),
-	].reverse();
-	const judgeable = unique.filter((c) => !unavailable.has(c.roundIndex));
-	const skipped = unique.filter((c) => unavailable.has(c.roundIndex));
-	const evidenceByKey = new Map(
-		judgeable.map((c) => [
-			claimKey(c),
-			(c.path && patches.get(c.roundIndex)?.get(c.path)) || "",
-		]),
-	);
+	const evidenceOf = (c: Located): { text: string } | { reason: string } => {
+		const failure = unavailable.get(c.roundIndex);
+		if (failure !== undefined)
+			return {
+				reason: `evidence unavailable, round ${c.roundIndex} diff could not be fetched: ${failure}`,
+			};
+		if (!c.path) return { reason: "unanchored finding, no evidence" };
+		const patch = patches.get(c.roundIndex)?.get(c.path);
+		return patch
+			? { text: patch }
+			: { reason: `no patch evidence for ${c.path}` };
+	};
+	const evidenceByKey = new Map<string, string>();
+	const judgeable: Located[] = [];
+	const skipped = new Map<string, { c: Located; reason: string }>();
+	for (const c of candidates) {
+		const key = claimKey(c);
+		if (evidenceByKey.has(key)) continue;
+		const ev = evidenceOf(c);
+		if ("text" in ev) {
+			evidenceByKey.set(key, ev.text);
+			judgeable.push(c);
+			skipped.delete(key);
+		} else if (!skipped.has(key)) skipped.set(key, { c, reason: ev.reason });
+	}
 
 	try {
 		const judges =
@@ -260,11 +274,9 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 			notes.set(info.model, info.note);
 		}
 		let counts = zero();
-		for (const c of skipped) {
+		for (const { c, reason } of skipped.values()) {
 			counts.deferred++;
-			out(
-				`evidence unavailable, not judged: ${c.title} (round ${c.roundIndex} diff could not be fetched: ${unavailable.get(c.roundIndex)})`,
-			);
+			out(`not judged, ${reason}: ${c.title}`);
 		}
 		const spend = { anthropic: 0, openai: 0 };
 		for (const [model, group] of groups) {

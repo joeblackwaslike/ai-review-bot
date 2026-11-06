@@ -1026,7 +1026,7 @@ describe("runReplay --adjudicate", () => {
 		graphql: () => Promise.reject(new Error("no network")),
 	};
 
-	function seedFixture() {
+	function seedFixture(path: string | null = "a.ts") {
 		const dir = tmp();
 		const f = makeFixture([["a"]]);
 		f.rounds[0] = {
@@ -1036,7 +1036,7 @@ describe("runReplay --adjudicate", () => {
 					{
 						skill: "s.md",
 						title: "unrelated cache invalidation race condition",
-						path: "z.ts",
+						path,
 						line: 1,
 						severity: "P1",
 					},
@@ -1282,6 +1282,41 @@ describe("runReplay --adjudicate", () => {
 		});
 		expect(seen).toHaveLength(1);
 		expect(seen[0]).toContain("PATCH-ONE");
+	});
+
+	it.each([
+		["a null path", null, withFiles, "unanchored finding, no evidence"],
+		[
+			"a file missing from the compare files",
+			"z.ts",
+			withFiles,
+			"no patch evidence",
+		],
+		[
+			"a file with no patch",
+			"a.ts",
+			{
+				rest: async <T>() => ({ files: [{ filename: "a.ts" }] }) as T,
+				graphql: () => Promise.reject(new Error("no network")),
+			} satisfies GhClient,
+			"no patch evidence",
+		],
+	])("defers a candidate with %s instead of judging it", async (_n, path, client, reason) => {
+		const { dir, id } = seedFixture(path);
+		const { judges, calls } = stubJudges();
+		const { lines, out } = collect();
+		const code = await runReplay(["--adjudicate", id, "--fixtures", dir], {
+			out,
+			client,
+			adjudicationJudges: judges,
+			adjudicationDir: join(dir, "cache"),
+		});
+		expect(code).toBe(0);
+		expect(calls.verdict).not.toHaveBeenCalled();
+		expect(existsSync(join(dir, "cache"))).toBe(false);
+		const text = lines.join("\n");
+		expect(text).toContain(reason);
+		expect(text).toContain("deferred=1");
 	});
 
 	it("--audit runs the audit judges", async () => {
