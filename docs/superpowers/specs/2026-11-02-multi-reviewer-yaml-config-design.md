@@ -39,16 +39,14 @@ This design supersedes an earlier proposal ("multi-provider reviewer config and 
 
 ## Approaches
 
-- **A. Five slices, config system and models first (chosen).**
-  1. Config system and model resolution, with Claude and Codex reproduced exactly. Tier classifier settings move into config here.
-  2. N reviewers: env convention, unified route, DB migration, Gemini.
-  3. Judge roles and the D1 verifier hook.
-  4. Edge Config live overrides.
-  5. Per-repo override files.
+- **A. Two PRs, then three small follow-ups (chosen).**
+  1. **This PR (slices 1 and 2).** Config system and model resolution, with Claude and Codex reproduced exactly, tier classifier settings in config, prices from OpenRouter. Then N reviewers: env convention, unified route, provider registry, `skills:` overrides, DB migration (expand step only), Gemini.
+  2. **Slice 3, minimal.** A top-level `roles:` map where each judge role (`verifier`, `qcJudge`, `classifier`) takes an optional `{model, effort}` override. Defaults stay what the code derives today. No `differentFrom`, no per-reviewer roles.
+  3. **Slice 4, minimal.** Edge Config as a kill switch for two keys only: `review.enabled` and `reviewers.<id>.enabled`.
+  4. **Slice 5, minimal.** A root `.ai-review.yaml` in a reviewed repo that can only disable reviewers or skills and set `customPrompt`, read from the default branch.
 
-  Each slice ships and verifies alone.
+  Slices 3 to 5 are separate PRs after this one. Each ships and verifies alone.
 
-  Slice 1 as built moved three items out, because nothing in slice 1 can reach them: the `skills:` overrides, the provider registry and effort/thinking capability validation now land in slice 2, and the per-reviewer and judge `roles:` land in slice 3. Secret env names for reviewers (`AI_REVIEW_REVIEWERS__<ID>__PRIVATE_KEY`) also land in slice 2; slice 1 builds the overlay and uses it for non-secret keys. See the slice 1 plan for the full list.
 - B. Reviewers first. A third bot lands sooner, but Gemini still needs hard-coded tier maps and the model plumbing gets written twice.
 - C. One change. No intermediate state to verify, and it touches about 22 files plus the DB.
 
@@ -122,12 +120,10 @@ Model ids and prices here are placeholders. The builder confirms them against pr
   - KV keys, the ledger and feedback attribution switch to reviewer id or `appSlug`. Peer exclusion takes our own logins from `appSlug` across all reviewers.
 - Adding Gemini: create the App with `enabled: false`, run `ai-review replay --live --max-cost <usd>`, and enable it if false-positive rate and cost hold. Run `ModelReviewSchema` through `generateObject` on Flash-Lite first, because Gemini accepts only a subset of the schema language.
 
-### 4. Judge roles (slice 3)
+### 4. Judge roles (slice 3, minimal)
 
-- Per-reviewer roles (`summary`, `triage`, `revalidate`) default to what each call derives today. The summary uses the PR's routed selection, which can be a complex or deep model (`src/review.ts`, `generateSummary(modelReview, selection, ...)`). Triage and revalidate use the cheap model of the routed provider (`triageSelection`). A YAML entry overrides the default. The equivalence tests cover every role, not only finders.
-- Deployment-wide top-level `roles:` cover judge-type calls: `verifier`, `qcJudge`, `classifier`, and later `adjudicator` and `auditor`. They replace `judgeSelection`, the classify selection and the triage-derived picks.
-- A role may declare `differentFrom: finder`. The verifier (epic `ai-review-bot-t0c`, D1) uses it. If only one provider is configured, the verifier is skipped and findings count as unverified, matching D1's outage behavior.
-- F1's per-role routing for defect and security skills is expressed through `skills:` overrides, driven by C3 data.
+- A top-level `roles:` map with the keys `verifier`, `qcJudge` and `classifier`. Each takes an optional `{model, effort}`. When a role is absent, the call keeps the model it derives today (`judgeSelection`, the classify selection, the triage-derived pick), so behavior is unchanged.
+- Out of scope until needed: per-reviewer `summary`, `triage` and `revalidate` roles, `differentFrom: finder`, and the `adjudicator` and `auditor` roles. The verifier itself (epic `ai-review-bot-t0c`, D1) is a separate project that will consume this map.
 
 ### 5. Tier classification as config (slice 1)
 
@@ -135,20 +131,18 @@ A `routing:` block replaces the constants in `src/router.ts`: `sensitivePathPatt
 
 Defaults equal today's values, so behavior is unchanged. The block is deployment-wide, not per reviewer, because every reviewer must classify a PR the same way. `classifyTier` reads the frozen config instead of module constants, and its existing tests become the equivalence check.
 
-### 6. Edge Config live overrides (slice 4)
+### 6. Edge Config kill switch (slice 4, minimal)
 
-- This layer changes selected settings in seconds with no redeploy, mainly to disable one reviewer or all review.
-- Edge Config holds a flat JSON map whose keys are the same derived env names (`AI_REVIEW_REVIEWERS__GEMINI__ENABLED`), so there is still one naming scheme. It is read per request through `@vercel/edge-config` with a short in-memory cache, and layered on top of the cold-start config.
-- Only schema keys marked `live` are accepted: reviewer `enabled`, `review.enabled`, delays, budgets, concurrency and the `verifier` toggle. Everything else is frozen at cold start (models, App credentials, tiers) and is rejected here.
-- Precedence becomes Edge Config, env, YAML, default. An unknown or non-`live` key in Edge Config is ignored for requests and reported at the top of `/api/debug`. A live typo must not crash a running bot, which is the opposite of the env rule. Edge Config is edited under pressure with no deploy gate in front of it.
-- `EDGE_CONFIG` (the connection string) is env-only and optional. Without it the layer is off. The builder confirms current `@vercel/edge-config` read semantics and plan limits.
+- Two keys only, `review.enabled` and `reviewers.<id>.enabled`, changed in seconds with no redeploy. They use the same derived names as env (`AI_REVIEW_REVIEWERS__GEMINI__ENABLED`) in a flat JSON map, read per request through `@vercel/edge-config` with a short in-memory cache.
+- Precedence is Edge Config, env, YAML, default. An unknown key in Edge Config is ignored for requests and reported at the top of `/api/debug`, because a live typo must not crash a running bot.
+- `EDGE_CONFIG` (the connection string) is env-only and optional. Without it the layer is off. Delays, budgets and the other `live` keys from the earlier design are out of scope.
 
-### 7. Per-repo override files (slice 5)
+### 7. Per-repo override file (slice 5, minimal)
 
-- The file is `.github/ai-review.yml` in the repo under review, fetched through the GitHub API from the **default branch**, never the PR head, so a PR author cannot change how their own PR is reviewed.
-- It uses a subset of the deployment schema, validated separately. A repo may disable a reviewer or skill, restrict `runOn`, add `routing.sensitivePathPatterns`, raise (not lower) severity floors, set a `customPrompt`, and set `review.command`. It cannot enable a disabled reviewer, add a model, change an App, or exceed deployment budgets. The deployment config is a ceiling.
-- It is fetched once per review run and cached in KV per default-branch SHA. An invalid file is ignored, with a one-line note in the review body naming the problem. It never fails a review.
-- Restrictive controls combine monotonically, they do not follow the usual precedence. A reviewer or skill runs only if the deployment config, env, Edge Config and the repo file all leave it enabled (logical AND), and `runOn` is the intersection of every layer. So an env `enabled=true` cannot override a repo-level disable, and an Edge Config disable always wins. For non-restrictive scalars (for example `customPrompt`) the order is Edge Config, env, repo file, YAML.
+- The file is `.ai-review.yaml` at the root of the repo under review, fetched through the GitHub API from the **default branch**, never the PR head, so a PR author cannot change how their own PR is reviewed.
+- A repo may disable a reviewer or a skill and set a `customPrompt`. It cannot enable anything, add a model, or change an App. Disabling combines with logical AND across the deployment config, env, Edge Config and the repo file, so a disable at any layer wins.
+- The file is fetched once per review run and cached in KV per default-branch SHA. An invalid file is ignored, with a one-line note in the review body naming the problem. It never fails a review.
+- Out of scope: `runOn`, extra sensitive-path patterns, severity floors and `review.command` overrides.
 
 ### 8. Details settled after the builder check
 
