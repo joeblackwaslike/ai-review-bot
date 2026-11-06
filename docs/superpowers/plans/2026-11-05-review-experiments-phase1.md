@@ -10,6 +10,10 @@
 
 **Spec:** [docs/superpowers/specs/2026-11-05-review-experiments-harness-design.md](../specs/2026-11-05-review-experiments-harness-design.md) (section 1, phase 1 of Phasing). Phases 2 to 6 get their own plans.
 
+## Deviations made during execution
+
+`labels` was removed from `StrategyInput`, because strategies must not see scoring ground truth. `buildLiveWiring` now returns only `fetchDiff`, since the adapter was removed in Task 4. Strategy failures use `LiveRunError`, which carries the partial report. The "fetchDiff must run first" error no longer exists.
+
 ## Global Constraints
 
 - TypeScript ESM, imports use `.js` extensions, named exports only, no default exports.

@@ -121,7 +121,12 @@ input, uncached input, output and reasoning tokens, so cold-cache and warm-cache
 told apart. This is a change to a type the existing fixtures store inside traces, so the
 extension is additive and optional, and `schemaVersion` stays 1. Usage for a failed or
 retried agent attempt does not carry cached or reasoning counts, so experiment cost totals
-undercount cache reads on those attempts.
+undercount cache reads on those attempts. The count of failed or retried attempts per run is
+recorded, so the bias is visible in the report.
+
+`StrategyInput.fixture` currently exposes the whole fixture, including rounds after the one
+under review. Phase 2 replaces it with a frozen view containing only what existed at the
+round's time.
 
 Strategies register in a map in `src/replay/strategies/index.ts`. `ai-review replay --live
 --strategy <name>` picks one; the default stays `a`, so today's behaviour is unchanged.
@@ -190,7 +195,8 @@ strategy produced it.
   `real` whether it is about the change or about code the change only moved, renamed or
   reformatted.
 - The judge is a different model family from the candidate's producer where that is
-  possible. A second judge from another family re-judges all `real` and `unclear` verdicts.
+  possible. A second judge re-checks verdicts within the scope the Judges rule below defines,
+  which is capped by the OpenAI line.
   Verdicts both judges agree on count; disagreements stay `unresolved`, are reported as a
   count, and are excluded from precision and recall numerators and denominators with the
   count shown next to the result. They do not go to a human.
@@ -312,25 +318,34 @@ file can tighten any of them.
   that already cleared their bars on Anthropic. The "both providers" requirement in the
   thresholds therefore means Anthropic on all splits and OpenAI confirmation on the test
   set; if the OpenAI cap blocks it, the result is reported as Anthropic-only and labeled so.
+  A result confirmed only on Anthropic because of the OpenAI cap is reported as
+  "Anthropic-only, unconfirmed on OpenAI" and carries no go or no-go claim. This is the one
+  exception to the anti-goal against reporting a result from a single provider.
   Offline replay and all non-model work spend no OpenAI quota.
 - **Judges.** Judging is where OpenAI quota would leak fastest, so it is rationed too. The
   first judge for an Anthropic-produced candidate is a different Anthropic model (the
   strongest available) with a prompt that is blind to the producer. The cross-family check
-  uses OpenAI only on verdicts that matter: candidates the first judge calls `real` or
-  `unclear`, deduplicated by the verdict cache and capped by the OpenAI line above. Verdicts
-  that skip the cross-check are marked `single-family` and the count is printed with every
-  precision and recall figure. For OpenAI-produced candidates the first judge is Anthropic,
-  so OpenAI judges nothing it produced. Judge spend is its own line in the plan, outside the
+  applies to Anthropic-produced candidates only. OpenAI judges them, and only the verdicts
+  that matter: candidates the first judge calls `real` or `unclear`, deduplicated by the
+  verdict cache and capped by the OpenAI line above. Verdicts that skip the cross-check are
+  marked `single-family` and the count is printed with every precision and recall figure.
+  OpenAI-produced candidates are judged by Anthropic models only and get no OpenAI check, so
+  OpenAI judges nothing it produced. Judge spend is its own line in the plan, outside the
   strategy cost comparison. Auth follows the CLI rule: subscription first, API key only when
   there is no subscription.
 - **A0 spend matching.** The target is A's cost for the same round in the same grid run, in
   dollars computed from recorded tokens at list price with cache reads priced as cache reads.
   A runs first in the grid, so the target always exists. Tolerance is plus or minus 10%.
-  Recorded traces from older runs are not used for matching.
+  Recorded traces from older runs are not used for matching. `computeCost` currently ignores
+  `cachedInputTokens`, so phase 5 must add cache-aware per-model rates before A0 spend
+  matching, because matching in dollars needs them.
 - **Posting path.** Every strategy's output goes through the same posting-path functions
   (`postFilterTrace`), including ledger suppression. A strategy returns candidates grouped by
   producing agent, and a single-agent strategy is one group. A strategy that does its own
-  deduplication still gets the common filters, so `posted` means the same thing for all.
+  deduplication still gets the common filters, so `posted` means the same thing for all. In
+  phase 1, strategy `a` computes `posted` itself through `postFilterTrace`. Phase 5 moves the
+  common posting path into the harness, so every strategy's candidates, grouped by agent, go
+  through the same filters whatever the strategy returns in `posted`.
 - **Unresolved items.** Labels that are unadjudicated, `unresolved` verdicts and audit
   candidates the two judges split on leave both numerator and denominator. Their count is
   printed next to every precision and recall figure.
@@ -346,7 +361,9 @@ file can tighten any of them.
 - **Base commits and dead rounds.** The checkout manager takes the base commit from the
   compare data the fixture was recorded from, and `--record` is extended to store it if it
   is missing. Rounds whose commits cannot be fetched are listed per strategy. The report
-  states when tool-using strategies ran on a smaller subset than diff-only ones.
+  states when tool-using strategies ran on a smaller subset than diff-only ones. Paired
+  comparisons between a tool-using and a diff-only strategy are computed on the intersection
+  of rounds both completed, and the report gives the intersection size.
 - **Wall time.** Wall time is measured at the concurrency the strategy would use in
   production (`AGENT_CONCURRENCY`, default 4), with A0's repeats run at that concurrency.
   The 210-second fit is judged against that figure, and local-only runs are labeled as such.
