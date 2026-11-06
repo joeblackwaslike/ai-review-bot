@@ -13,7 +13,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ModelSelection } from "../router.js";
 import { adaptiveReport } from "./adaptive-report.js";
+import { isCurrentVerdict } from "./adjudication/adjudicate.js";
 import { VerdictCache } from "./adjudication/cache.js";
+import { possibleFirstModels } from "./adjudication/judge.js";
 import {
 	type AdjudicationJudges,
 	DEFAULT_MAX_ANTHROPIC,
@@ -499,7 +501,11 @@ function printAdaptiveReport(
 					labels,
 					verdictFor: (c) => {
 						const rec = cache.get(snapshot, claimKey(c));
-						return rec && rec.status !== "unresolved" ? rec.verdict : undefined;
+						return rec &&
+							rec.status !== "unresolved" &&
+							isCurrentVerdict(rec, possibleFirstModels(fixture.provider))
+							? rec.verdict
+							: undefined;
 					},
 				};
 			}),

@@ -18,7 +18,7 @@ vi.mock("./run-strategy.js", () => ({
 }));
 
 import { VerdictCache } from "./adjudication/cache.js";
-import { PROMPT_HASH } from "./adjudication/judge.js";
+import { PROMPT_HASH, possibleFirstModels } from "./adjudication/judge.js";
 import type { AdjudicationJudges } from "./adjudication/run.js";
 import { claimKey, snapshotId } from "./adjudication/snapshot.js";
 import { fixtureId } from "./claims.js";
@@ -322,15 +322,25 @@ describe("runReplay", () => {
 			verdict: "not-real" as const,
 			scope: null,
 			reason: "r",
-			first: { family: "anthropic" as const, model: "m", promptHash: "h" },
+			first: {
+				family: "anthropic" as const,
+				model: possibleFirstModels(f.provider)[0] as string,
+				promptHash: PROMPT_HASH,
+			},
 			second: null,
 			secondVerdict: null,
 			status: "single-family" as const,
 		};
-		new VerdictCache(cacheDir).put(
+		const cache = new VerdictCache(cacheDir);
+		cache.put(
 			snapshotId(f),
 			claimKey({ path: "src/n7.ts", title: "unrelated nit number 7" }),
 			verdict,
+		);
+		cache.put(
+			snapshotId(f),
+			claimKey({ path: "src/n6.ts", title: "unrelated nit number 6" }),
+			{ ...verdict, first: { ...verdict.first, promptHash: "stale" } },
 		);
 		const run = async (adjudicationDir: string) => {
 			const { lines, out } = collect();
