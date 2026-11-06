@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { AdjudicationJudges } from "./adjudication/run.js";
 import { fixtureId } from "./claims.js";
 import { defaultFixturesDir, runReplay } from "./command.js";
 import type { GhClient } from "./gh.js";
@@ -1011,5 +1012,198 @@ describe("runReplay --investigate-join", () => {
 				out: () => {},
 			}),
 		).toBe(1);
+	});
+});
+
+describe("runReplay --adjudicate", () => {
+	const noRest: GhClient = {
+		rest: () => Promise.reject(new Error("no network")),
+		graphql: () => Promise.reject(new Error("no network")),
+	};
+	const withFiles: GhClient = {
+		rest: async <T>() =>
+			({ files: [{ filename: "a.ts", patch: "@@ -1 +1 @@\n+x" }] }) as T,
+		graphql: () => Promise.reject(new Error("no network")),
+	};
+
+	function seedFixture() {
+		const dir = tmp();
+		const f = makeFixture([["a"]]);
+		f.rounds[0] = {
+			...f.rounds[0],
+			trace: {
+				candidates: [
+					{
+						skill: "s.md",
+						title: "unrelated cache invalidation race condition",
+						path: "z.ts",
+						line: 1,
+						severity: "P1",
+					},
+				],
+				posted: [],
+				usage: {},
+			},
+		} as (typeof f.rounds)[0];
+		const id = fixtureId(f);
+		writeFileSync(join(dir, `${id}.json`), JSON.stringify(f));
+		writeFileSync(
+			join(dir, `${id}.labels.json`),
+			JSON.stringify({
+				...makeLabels({ labels: [makeLabel("a", "fixed")] }),
+				fixtureId: id,
+			}),
+		);
+		return { dir, id };
+	}
+
+	const stubJudges = () => {
+		const calls = { verdict: vi.fn(), audit: vi.fn() };
+		const judges: AdjudicationJudges = {
+			verdictJudges: async (producer, model, wantSecond) => {
+				calls.verdict(producer, model, wantSecond);
+				return {
+					first: {
+						family: "anthropic",
+						model: "stub",
+						run: async () => ({
+							verdict: "real",
+							scope: "change",
+							reason: "r",
+						}),
+					},
+					second: wantSecond
+						? {
+								family: "openai",
+								model: "stub2",
+								run: async () => ({
+									verdict: "real",
+									scope: "change",
+									reason: "r",
+								}),
+							}
+						: null,
+				};
+			},
+			auditJudges: async () => {
+				calls.audit();
+				return {
+					judge: { family: "anthropic", model: "stub", run: async () => [] },
+					second: null,
+				};
+			},
+		};
+		return { judges, calls };
+	};
+
+	it("exits 2 on misuse", async () => {
+		for (const args of [
+			["--adjudicate", "x", "--plan", "--audit"],
+			["--adjudicate", "../x"],
+			["--adjudicate", "x", "--live"],
+			["--adjudicate", "x", "--investigate-join", "y"],
+			["--adjudicate", "x", "--record", "u"],
+			["--plan"],
+			["--audit"],
+			["--max-openai", "2"],
+			["--adjudicate", "x", "--max-openai", "-1"],
+			["--adjudicate", "x", "--max-anthropic", "1.5"],
+			["--adjudicate"],
+		])
+			expect(await runReplay(args, { out: () => {} })).toBe(2);
+	});
+
+	it("exits 1 when the fixture is missing", async () => {
+		expect(
+			await runReplay(["--adjudicate", "nope", "--fixtures", tmp()], {
+				out: () => {},
+			}),
+		).toBe(1);
+	});
+
+	it("--plan constructs no judge and calls no model", async () => {
+		const { dir, id } = seedFixture();
+		const { judges, calls } = stubJudges();
+		const { lines, out } = collect();
+		const code = await runReplay(
+			["--adjudicate", id, "--plan", "--fixtures", dir],
+			{
+				out,
+				client: noRest,
+				adjudicationJudges: judges,
+				adjudicationDir: join(dir, "cache"),
+			},
+		);
+		expect(code).toBe(0);
+		expect(calls.verdict).not.toHaveBeenCalled();
+		expect(calls.audit).not.toHaveBeenCalled();
+		const text = lines.join("\n");
+		expect(text).toContain("candidates to judge: 1");
+		expect(text).toContain("anthropic calls allowed: 1 of 40");
+		expect(text).toContain("openai calls allowed: 0");
+	});
+
+	it("routes the producer model from the round's compare files and defaults the OpenAI cap to 0", async () => {
+		const { dir, id } = seedFixture();
+		const { judges, calls } = stubJudges();
+		const { lines, out } = collect();
+		const code = await runReplay(["--adjudicate", id, "--fixtures", dir], {
+			out,
+			client: withFiles,
+			adjudicationJudges: judges,
+			adjudicationDir: join(dir, "cache"),
+		});
+		expect(code).toBe(0);
+		expect(calls.verdict).toHaveBeenCalledWith(
+			"anthropic",
+			"claude-sonnet-5-5",
+			false,
+		);
+		const text = lines.join("\n");
+		expect(text).toContain("real=1");
+		expect(text).toContain("single-family=1");
+		expect(text).toContain("single-family verdicts have no second-model check");
+		expect(text).toContain("anthropic=1 openai=0");
+	});
+
+	it("falls back to the tier map's model and says so when the diff is unavailable", async () => {
+		const { dir, id } = seedFixture();
+		const { judges, calls } = stubJudges();
+		const { lines, out } = collect();
+		await runReplay(
+			["--adjudicate", id, "--max-openai", "3", "--fixtures", dir],
+			{
+				out,
+				client: noRest,
+				adjudicationJudges: judges,
+				adjudicationDir: join(dir, "cache"),
+			},
+		);
+		expect(calls.verdict).toHaveBeenCalledWith(
+			"anthropic",
+			"claude-sonnet-5-5",
+			true,
+		);
+		const text = lines.join("\n");
+		expect(text).toContain("tier map");
+		expect(text).not.toContain("have no second-model check");
+	});
+
+	it("--audit runs the audit judges", async () => {
+		const { dir, id } = seedFixture();
+		const { judges, calls } = stubJudges();
+		const { lines, out } = collect();
+		const code = await runReplay(
+			["--adjudicate", id, "--audit", "--fixtures", dir],
+			{
+				out,
+				client: withFiles,
+				adjudicationJudges: judges,
+				adjudicationDir: join(dir, "cache"),
+			},
+		);
+		expect(code).toBe(0);
+		expect(calls.audit).toHaveBeenCalledTimes(1);
+		expect(lines.join("\n")).toContain("audit:");
 	});
 });
