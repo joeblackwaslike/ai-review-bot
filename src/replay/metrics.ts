@@ -1,5 +1,6 @@
 import {
 	type ClaimMatchOptions,
+	claimTokens,
 	DEFAULT_CLAIM_MATCH,
 	isSameClaim,
 } from "../claim-dedupe.js";
@@ -51,6 +52,35 @@ export const JOIN_CLAIM_MATCH: ClaimMatchOptions = {
 	nearby: { lineWindow: 3, titleSimilarity: 0.33 },
 };
 
+/** PROVISIONAL: a labelled claim's title can misstate what its body argues
+ * (ai-listings#50: a claim titled "Log condition misses ..." whose body is about
+ * an empty `{}` object masking the real payload). So a candidate also joins when
+ * its title words are mostly found in the claim's full text (title and body).
+ * Coverage alone is fooled by short titles, so a minimum count of shared words is
+ * required too. Chosen from 3 positives and 12 negatives on one fixture; not
+ * validated on a second repository. */
+export const JOIN_BODY_MATCH = {
+	lineWindow: 10,
+	minShared: 5,
+	minCoverage: 0.75,
+};
+
+function joinsByBody(cand: CandidateRecord, claim: PostedClaim): boolean {
+	if (!cand.path || cand.path !== claim.path) return false;
+	if (cand.line === null || claim.line === null) return false;
+	if (Math.abs(cand.line - claim.line) > JOIN_BODY_MATCH.lineWindow)
+		return false;
+	const words = claimTokens(cand.title);
+	if (words.size === 0) return false;
+	const text = claimTokens(`${claim.title} ${claim.text ?? ""}`);
+	let shared = 0;
+	for (const w of words) if (text.has(w)) shared += 1;
+	return (
+		shared >= JOIN_BODY_MATCH.minShared &&
+		shared / words.size >= JOIN_BODY_MATCH.minCoverage
+	);
+}
+
 /** Distinct candidates, by path, line and title, and how many of them restate
  * one of the given claims. Several agents raising one finding count once. */
 export function countJoined(
@@ -64,7 +94,9 @@ export function countJoined(
 	];
 	return {
 		joined: distinct.filter((cand) =>
-			claims.some((c) => isSameClaim(cand, c, JOIN_CLAIM_MATCH)),
+			claims.some(
+				(c) => isSameClaim(cand, c, JOIN_CLAIM_MATCH) || joinsByBody(cand, c),
+			),
 		).length,
 		candidates: distinct.length,
 	};
