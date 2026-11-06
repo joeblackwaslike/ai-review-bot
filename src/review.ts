@@ -32,6 +32,8 @@ import {
 	logDiscards,
 	type OffDiffCode,
 } from "./discards.js";
+import type { KvClient } from "./feedback/kv.js";
+import { loadReactionsFor } from "./feedback/reactions-for.js";
 import {
 	anchorFingerprint,
 	formatFpMarkers,
@@ -128,6 +130,8 @@ interface ReviewContext {
 	force: boolean;
 	provider: "anthropic" | "openai";
 	feedbackEnabled: boolean;
+	/** Lazy KV accessor; read only when adaptive limits need author reactions. */
+	getKv?: () => KvClient | null;
 	agentConcurrency: number;
 	/** Wall-clock allowance for launching agents. Past it the remaining agents are
 	 * skipped and the review is submitted with what completed — the platform's own
@@ -2996,7 +3000,10 @@ async function buildReviewInner(
 	if (tuning.adaptiveLimits && loadedLedger) {
 		const limits = resolveLimits({
 			entries: ledger,
-			reactionsFor: () => [],
+			reactionsFor: await loadReactionsFor(
+				context.feedbackEnabled ? context.getKv : undefined,
+				context,
+			),
 			currentRound: loadedLedger.reviewIds.length,
 			delta:
 				incrementalPass && !anyWholePrSkill

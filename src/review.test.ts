@@ -6948,6 +6948,96 @@ describe("buildReview ledger suppression", () => {
 			expect(new Set(titlesIn(decision?.body ?? "")).size).toBe(9);
 		});
 
+		describe("author reactions", () => {
+			const [openThread] = [
+				{
+					...declinedThread,
+					comments: {
+						...declinedThread.comments,
+						nodes: [declinedThread.comments.nodes[0]],
+					},
+				},
+			];
+			const downRecord = {
+				commentId: 11,
+				provider: "anthropic",
+				installationId: 1,
+				owner: baseContext.owner,
+				repo: baseContext.repo,
+				pr: baseContext.pullNumber,
+				headSha: "abc",
+				path: ownComment.path,
+				line: ownComment.line,
+				skills: [],
+				title: REPEAT_TITLE,
+				body: "",
+				postedAtMs: 0,
+				expiresAtMs: Date.now() + 1e9,
+				lastSeenReactions: { joe: "down" },
+			};
+			const fakeKv = (records: unknown[]) => ({
+				zrangebyscore: vi.fn(async () =>
+					records.map((_, i) => `anthropic:${i}`),
+				),
+				get: vi.fn(async (k: string) =>
+					JSON.stringify(records[Number(k.split(":").pop())]),
+				),
+			});
+			const scoreWith = async (getKv?: () => unknown) => {
+				REVIEWER_TUNING.adaptiveLimits = true;
+				const log = vi.spyOn(console, "log").mockImplementation(() => {});
+				routeAgents({ "code-reviewer.md": agentOutput(nine) }, none);
+				await buildReview({
+					octokit: ledgerOctokit({ threadNodes: [openThread] }),
+					...baseContext,
+					feedbackEnabled: true,
+					getKv: getKv as never,
+				});
+				const line = budgetLog(log) as { score: number | null } | undefined;
+				log.mockRestore();
+				return line;
+			};
+
+			it("counts a down reaction on an open entry as rejected", async () => {
+				const kv = fakeKv([downRecord]);
+				expect((await scoreWith(() => kv))?.score).toBe(1);
+				expect((await scoreWith())?.score).toBeNull();
+			});
+
+			it("proceeds on ledger statuses when KV is unset", async () => {
+				expect((await scoreWith(() => null))?.score).toBeNull();
+			});
+
+			it("proceeds and warns once when KV throws", async () => {
+				const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+				const kv = {
+					zrangebyscore: vi.fn(async () => {
+						throw new Error("kv down");
+					}),
+					get: vi.fn(),
+				};
+				const line = await scoreWith(() => kv);
+				const calls = warn.mock.calls.length;
+				warn.mockRestore();
+				expect(line?.score).toBeNull();
+				expect(calls).toBe(1);
+			});
+
+			it("never touches KV with the switch off", async () => {
+				const kv = fakeKv([downRecord]);
+				const getKv = vi.fn(() => kv);
+				routeAgents({ "code-reviewer.md": agentOutput(nine) }, none);
+				await buildReview({
+					octokit: ledgerOctokit({ threadNodes: [openThread] }),
+					...baseContext,
+					feedbackEnabled: true,
+					getKv: getKv as never,
+				});
+				expect(getKv).not.toHaveBeenCalled();
+				expect(kv.zrangebyscore).not.toHaveBeenCalled();
+			});
+		});
+
 		it("uses the band budget unscaled on a non-incremental review", async () => {
 			REVIEWER_TUNING.adaptiveLimits = true;
 			const log = vi.spyOn(console, "log").mockImplementation(() => {});
