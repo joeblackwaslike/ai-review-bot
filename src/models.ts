@@ -8,7 +8,7 @@ import { resolveProviderCredentials } from "./providers/credentials.js";
 import { createModelRegistry } from "./providers/registry.js";
 import type { ModelSelection } from "./router.js";
 
-interface TokenUsage {
+export interface TokenUsage {
 	promptTokens: number;
 	cachedPromptTokens?: number;
 	completionTokens: number;
@@ -32,6 +32,22 @@ export function computeCost(
 		(cached / 1_000_000) * cachedInput +
 		(usage.completionTokens / 1_000_000) * output
 	);
+}
+
+export function sumCost(
+	byModel: ReadonlyMap<string, TokenUsage>,
+): number | undefined {
+	let total = 0;
+	for (const [model, usage] of byModel) {
+		const cost = computeCost(usage, model);
+		if (cost === undefined) return undefined;
+		total += cost;
+	}
+	return total;
+}
+
+export function modelLabel(models: readonly string[]): string {
+	return [...new Set(models)].sort().join(",");
 }
 
 function fromRegistry(selection: ModelSelection): LanguageModel {

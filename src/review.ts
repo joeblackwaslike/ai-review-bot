@@ -22,7 +22,10 @@ import {
 } from "./baseline.js";
 import { dedupeClaims, isSameClaim, withAbsorbedLink } from "./claim-dedupe.js";
 import { commentKey } from "./comment-key.js";
-import { mapWithConcurrency } from "./concurrency.js";
+import {
+	mapWithConcurrency,
+	mapWithConcurrencyByGroup,
+} from "./concurrency.js";
 import { getConfigTree } from "./config/load.js";
 import { collectRightSideLines, rightSideText } from "./diff-lines.js";
 import {
@@ -47,7 +50,7 @@ import {
 	suppressInReview,
 } from "./ledger/suppress.js";
 import { isAcknowledged, isSettled, type LedgerEntry } from "./ledger/types.js";
-import { computeCost, createAIModel } from "./models.js";
+import { createAIModel, modelLabel, sumCost } from "./models.js";
 import {
 	type AgentPromptOptions,
 	buildAgentSystemPrompt,
@@ -74,7 +77,6 @@ import {
 	type ReviewState,
 } from "./review-state.js";
 import {
-	type LegacyProvider,
 	legacyProviderOf,
 	type ReviewerId,
 	reviewerFromLegacy,
@@ -84,7 +86,9 @@ import type { ModelSelection } from "./router.js";
 import {
 	outputBudget,
 	reasoningProviderOptions,
-	routeModel,
+	resolveSkillModel,
+	routeReviewerModel,
+	shouldRunOnTier,
 } from "./router.js";
 import { TIER1_SKILL_FILES } from "./skill-names.js";
 import { repairSuggestion } from "./suggestion.js";
@@ -2032,15 +2036,25 @@ async function buildReviewInner(
 		"Focus on correctness, security, regressions, and missing tests.";
 
 	const filePaths = files.map((f) => f.filename);
-	const selection = routeModel(
+	const { selection, tier: routedTier } = routeReviewerModel(
 		{
 			additions: context.additions,
 			deletions: context.deletions,
 			filePaths,
 			labels: context.labels,
 		},
-		legacyProviderOf(context.reviewer) as LegacyProvider,
+		context.reviewer,
 	);
+	if (!shouldRunOnTier(getConfigTree(), context.reviewer, routedTier)) {
+		console.log("reviewer does not run on this tier; posting nothing", {
+			owner: context.owner,
+			repo: context.repo,
+			pullNumber: context.pullNumber,
+			reviewer: context.reviewer,
+			tier: routedTier,
+		});
+		return null;
+	}
 
 	// Triage gate (re-review only). On a re-review against an OLDER head SHA, a
 	// cheap triage call decides whether to SKIP (post nothing, just re-stamp the
@@ -2462,13 +2476,33 @@ async function buildReviewInner(
 		);
 	}
 
+	const selectionBySkill = new Map<string, ModelSelection>(
+		allSkills.map(({ skillPath }) => {
+			const { provider, model, effort } = resolveSkillModel(
+				getConfigTree(),
+				context.reviewer,
+				skillName(skillPath).replace(/\.md$/, ""),
+				routedTier,
+			);
+			return [skillPath, { provider, model, effort }];
+		}),
+	);
+	const selectionFor = (skillPath: string): ModelSelection =>
+		selectionBySkill.get(skillPath) ?? selection;
+	const modelOfSkill = (name: string): string =>
+		selectionFor(
+			allSkills.find((s) => skillName(s.skillPath) === name)?.skillPath ?? "",
+		).model;
+	const usedModels = allSkills.map((s) => selectionFor(s.skillPath).model);
+	const reviewModelLabel = modelLabel(usedModels);
+
 	let lastRateLimit: RateLimitInfo | undefined;
 	const deadline = Date.now() + context.agentBudgetMs;
 	const dispatch = async (skillPath: string): Promise<AgentOutcome> => {
 		const outcome = await runAgent(
 			skillPath,
 			userMessages.get(wholePrFor(skillPath)) ?? "",
-			selection,
+			selectionFor(skillPath),
 			customPrompt,
 			{
 				auth: context.auth,
@@ -2496,10 +2530,14 @@ async function buildReviewInner(
 			await sleep(delay);
 		}
 	};
-	const firstOutcomes = await mapWithConcurrency(
+	const firstOutcomes = await mapWithConcurrencyByGroup(
 		allSkills,
+		({ skillPath }) => {
+			const { provider, model } = selectionFor(skillPath);
+			return `${provider}/${model}`;
+		},
 		context.agentConcurrency,
-		async ({ skillPath }, i) => {
+		async ({ skillPath }, i): Promise<AgentOutcome> => {
 			// Checked before dispatch, never mid-call: an agent already reasoning
 			// should finish and contribute. What this prevents is *starting* an
 			// agent whose run the platform would kill before anything is
@@ -2524,7 +2562,6 @@ async function buildReviewInner(
 			return outcome;
 		},
 		{
-			serialFirst: true,
 			onBeforeEach: async (i) => {
 				if (i === 0) return; // nothing learned yet
 				await paceNext({ idx: i + 1 });
@@ -2632,17 +2669,26 @@ async function buildReviewInner(
 	const quotaExhausted: ModelSelection["provider"][] = [];
 	const skipped: string[] = [];
 	const errored: string[] = [];
-	let totalPromptTokens = 0;
-	let totalCachedPromptTokens = 0;
-	let totalCompletionTokens = 0;
+	const usageByModel = new Map<string, TokenUsage>();
+	const bill = (model: string, usage: TokenUsage) => {
+		const sum = usageByModel.get(model) ?? {
+			promptTokens: 0,
+			cachedPromptTokens: 0,
+			completionTokens: 0,
+		};
+		usageByModel.set(model, {
+			promptTokens: sum.promptTokens + usage.promptTokens,
+			cachedPromptTokens:
+				(sum.cachedPromptTokens ?? 0) + (usage.cachedPromptTokens ?? 0),
+			completionTokens: sum.completionTokens + usage.completionTokens,
+		});
+	};
 
-	// Every attempt is billed, including a failed first attempt whose retry
-	// then succeeded.
-	for (const { outcome: o } of attempts) {
+	// Every attempt is billed to its own agent's model, including a failed
+	// first attempt whose retry then succeeded.
+	for (const { skill, outcome: o } of attempts) {
 		if ((o.status === "ok" || o.status === "error") && o.usage) {
-			totalPromptTokens += o.usage.promptTokens;
-			totalCachedPromptTokens += o.usage.cachedPromptTokens ?? 0;
-			totalCompletionTokens += o.usage.completionTokens;
+			bill(modelOfSkill(skill), o.usage);
 		}
 	}
 
@@ -3161,9 +3207,7 @@ async function buildReviewInner(
 				);
 				summary = fallbackSummary;
 			}
-			totalPromptTokens += summaryResult.usage.promptTokens;
-			totalCachedPromptTokens += summaryResult.usage.cachedPromptTokens ?? 0;
-			totalCompletionTokens += summaryResult.usage.completionTokens;
+			bill(selection.model, summaryResult.usage);
 		} catch (error) {
 			// The summary is prose over findings the agents already produced; losing
 			// the whole review to a rate limit or timeout here would be worse.
@@ -3175,14 +3219,7 @@ async function buildReviewInner(
 		}
 	}
 
-	const cost = computeCost(
-		{
-			promptTokens: totalPromptTokens,
-			cachedPromptTokens: totalCachedPromptTokens,
-			completionTokens: totalCompletionTokens,
-		},
-		selection.model,
-	);
+	const cost = sumCost(usageByModel);
 
 	let approvalMessage = "";
 	if (finalEvent === "APPROVE") {
@@ -3244,7 +3281,7 @@ async function buildReviewInner(
 		headSha: context.headSha,
 		reviewCount: reviewCountBase + 1,
 		reviewer: context.reviewer,
-		model: selection.model,
+		model: reviewModelLabel,
 		cost,
 		ledgerNote: loadedLedger
 			? loadedLedger.warm
@@ -3261,7 +3298,7 @@ async function buildReviewInner(
 		summary: finalEvent === "APPROVE" ? approvalMessage : summary,
 		comments: reviewComments,
 		metadata: {
-			model: selection.model,
+			model: reviewModelLabel,
 			tier1Count: TIER1_SKILLS.length,
 			tier2Skills: tier2Matches.map(({ skillPath }) =>
 				skillPath.replace(/\.md$/, ""),

@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { mapWithConcurrency } from "./concurrency.js";
+import {
+	mapWithConcurrency,
+	mapWithConcurrencyByGroup,
+} from "./concurrency.js";
 
 describe("mapWithConcurrency", () => {
 	it("limit 1 runs strictly sequentially, preserving order", async () => {
@@ -93,5 +96,73 @@ describe("mapWithConcurrency", () => {
 			return n;
 		});
 		expect(peak).toBe(2);
+	});
+});
+
+describe("mapWithConcurrencyByGroup", () => {
+	it("finishes each group before the next, warming each group alone, results in input order", async () => {
+		const events: string[] = [];
+		const items = ["a1", "b1", "a2", "b2"];
+		const out = await mapWithConcurrencyByGroup(
+			items,
+			(item) => item[0] as string,
+			4,
+			async (item) => {
+				events.push(`start:${item}`);
+				await new Promise((r) => setTimeout(r, item.endsWith("1") ? 5 : 1));
+				events.push(`end:${item}`);
+				return item.toUpperCase();
+			},
+		);
+		expect(out).toEqual(["A1", "B1", "A2", "B2"]);
+		expect(events).toEqual([
+			"start:a1",
+			"end:a1",
+			"start:a2",
+			"end:a2",
+			"start:b1",
+			"end:b1",
+			"start:b2",
+			"end:b2",
+		]);
+	});
+
+	it("passes whole-input indexes to fn and onBeforeEach", async () => {
+		const before: number[] = [];
+		const seen: number[] = [];
+		await mapWithConcurrencyByGroup(
+			["a", "b", "a"],
+			(item) => item,
+			1,
+			async (_item, i) => {
+				seen.push(i);
+			},
+			{ onBeforeEach: async (i) => void before.push(i) },
+		);
+		expect(seen).toEqual([0, 2, 1]);
+		expect(before).toEqual([0, 2, 1]);
+	});
+
+	it("with one group behaves like mapWithConcurrency with serialFirst", async () => {
+		const run = async (
+			mapper: (log: string[]) => Promise<number[]>,
+		): Promise<[number[], string[]]> => {
+			const log: string[] = [];
+			return [await mapper(log), log];
+		};
+		const fn = (log: string[]) => async (n: number) => {
+			log.push(`s${n}`);
+			await new Promise((r) => setTimeout(r, n === 1 ? 5 : 1));
+			log.push(`e${n}`);
+			return n;
+		};
+		const items = [1, 2, 3];
+		const grouped = await run((log) =>
+			mapWithConcurrencyByGroup(items, () => "g", 2, fn(log)),
+		);
+		const plain = await run((log) =>
+			mapWithConcurrency(items, 2, fn(log), { serialFirst: true }),
+		);
+		expect(grouped).toEqual(plain);
 	});
 });

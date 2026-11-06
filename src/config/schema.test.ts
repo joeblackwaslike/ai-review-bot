@@ -51,6 +51,15 @@ describe("ConfigSchema", () => {
 		}
 	});
 
+	it("rejects reviewer ids that collide with the legacy provider names", () => {
+		for (const id of ["anthropic", "openai"]) {
+			const cfg = { ...minimal(), reviewers: { [id]: { tiers } } };
+			const result = ConfigSchema.safeParse(cfg);
+			expect(result.success).toBe(false);
+			expect(JSON.stringify(result.error?.issues)).toContain("reserved");
+		}
+	});
+
 	it("rejects a secret key in a reviewer", () => {
 		const cfg = minimal();
 		Object.assign(cfg.reviewers.claude, { privateKey: "x" });

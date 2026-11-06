@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getConfigTree, resetConfigForTests } from "./config/load.js";
+import type { Config } from "./config/schema.js";
+import { SKILL_NAMES } from "./skill-names.js";
 
 const pins = vi.hoisted(() => ({
 	models: undefined as Record<string, unknown> | undefined,
@@ -22,7 +24,10 @@ import {
 	outputBudget,
 	reasoningProviderOptions,
 	resolveFinderModel,
+	resolveSkillModel,
 	routeModel,
+	routeReviewerModel,
+	shouldRunOnTier,
 } from "./router.js";
 
 const base: RouterContext = {
@@ -521,5 +526,122 @@ describe("cheapSelection", () => {
 			model: "gemini-3.8-flash",
 			effort: "low",
 		});
+	});
+});
+
+describe("resolveSkillModel", () => {
+	const withReviewer = (patch: Record<string, unknown>): Config => {
+		const tree = getConfigTree();
+		const claude = tree.reviewers.claude as Config["reviewers"][string];
+		return {
+			...tree,
+			reviewers: { ...tree.reviewers, claude: { ...claude, ...patch } },
+		} as Config;
+	};
+
+	it("falls back to the tier model", () => {
+		const config = withReviewer({});
+		expect(
+			resolveSkillModel(config, "claude", "code-reviewer", "normal"),
+		).toEqual(resolveFinderModel(config, "claude", "normal"));
+	});
+
+	it("uses the skill model over the tier model", () => {
+		const config = withReviewer({
+			skills: {
+				"code-reviewer": { model: "anthropic/claude-haiku-5-5", effort: "low" },
+			},
+		});
+		expect(
+			resolveSkillModel(config, "claude", "code-reviewer", "deep"),
+		).toEqual({
+			provider: "anthropic",
+			model: "claude-haiku-5-5",
+			effort: "low",
+		});
+		expect(
+			resolveSkillModel(config, "claude", "security-sast", "deep"),
+		).toEqual(resolveFinderModel(config, "claude", "deep"));
+	});
+
+	it("uses the skill tier model over the skill model", () => {
+		const config = withReviewer({
+			skills: {
+				"code-reviewer": {
+					model: "anthropic/claude-haiku-5-5",
+					deep: { model: "anthropic/claude-opus-5-5", effort: "high" },
+				},
+			},
+		});
+		expect(
+			resolveSkillModel(config, "claude", "code-reviewer", "deep"),
+		).toEqual({
+			provider: "anthropic",
+			model: "claude-opus-5-5",
+			effort: "high",
+		});
+		expect(
+			resolveSkillModel(config, "claude", "code-reviewer", "normal"),
+		).toEqual({
+			provider: "anthropic",
+			model: "claude-haiku-5-5",
+		});
+	});
+
+	it("matches routeModel for every skill and tier of the real YAML", () => {
+		const config = getConfigTree();
+		const tiers = ["trivial", "normal", "complex", "deep"] as const;
+		const contexts: Record<(typeof tiers)[number], RouterContext> = {
+			trivial: {
+				...base,
+				filePaths: ["README.md"],
+				additions: 1,
+				deletions: 0,
+			},
+			normal: base,
+			complex: { ...base, filePaths: ["src/auth/login.ts"] },
+			deep: { ...base, labels: [config.routing.deepLabel] },
+		};
+		for (const [reviewerId, legacy] of [
+			["claude", "anthropic"],
+			["codex", "openai"],
+		] as const) {
+			for (const tier of tiers) {
+				const routed = routeModel(contexts[tier], legacy);
+				expect(routeReviewerModel(contexts[tier], reviewerId).tier).toBe(tier);
+				for (const skill of SKILL_NAMES) {
+					expect(resolveSkillModel(config, reviewerId, skill, tier)).toEqual({
+						provider: routed.provider,
+						model: routed.model,
+						effort: routed.effort,
+					});
+				}
+			}
+		}
+	});
+});
+
+describe("shouldRunOnTier", () => {
+	const config = getConfigTree();
+	const withRunOn = (runOn: string[] | undefined): Config =>
+		({
+			...config,
+			reviewers: {
+				...config.reviewers,
+				claude: { ...config.reviewers.claude, runOn },
+			},
+		}) as Config;
+
+	it("runs on every tier when runOn is absent", () => {
+		for (const tier of ["trivial", "normal", "complex", "deep"] as const) {
+			expect(shouldRunOnTier(withRunOn(undefined), "claude", tier)).toBe(true);
+		}
+	});
+
+	it("runs only on listed tiers, without classifying the PR", () => {
+		const cfg = withRunOn(["complex", "deep"]);
+		expect(shouldRunOnTier(cfg, "claude", "complex")).toBe(true);
+		expect(shouldRunOnTier(cfg, "claude", "normal")).toBe(false);
+		expect(shouldRunOnTier.length).toBe(3);
 	});
 });

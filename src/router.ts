@@ -8,8 +8,8 @@ import {
 	openaiOptions,
 	type ProviderOptions,
 } from "./providers/effort.js";
-import type { ProviderName } from "./providers/names.js";
-import type { LegacyProvider } from "./reviewer-id.js";
+import { isProviderName, type ProviderName } from "./providers/names.js";
+import type { LegacyProvider, ReviewerId } from "./reviewer-id.js";
 
 type Effort = NonNullable<ModelSelection["effort"]>;
 
@@ -81,29 +81,87 @@ export function classifyTier(
 	return "normal";
 }
 
+function splitChoice(
+	reviewerId: string,
+	where: string,
+	choice: { model: string; effort?: Effort },
+): { provider: ProviderName; model: string; effort?: Effort } {
+	const slash = choice.model.indexOf("/");
+	const provider = choice.model.slice(0, slash);
+	if (slash <= 0 || !isProviderName(provider)) {
+		throw new Error(
+			`reviewer "${reviewerId}" ${where} model "${choice.model}" must be in "provider/model" form`,
+		);
+	}
+	return {
+		provider,
+		model: choice.model.slice(slash + 1),
+		...(choice.effort ? { effort: choice.effort } : {}),
+	};
+}
+
+function requireReviewer(config: Config, reviewerId: string) {
+	const reviewer = config.reviewers[reviewerId];
+	if (!reviewer) throw new Error(`unknown reviewer "${reviewerId}"`);
+	return reviewer;
+}
+
+export function resolveSkillModel(
+	config: Config,
+	reviewerId: string,
+	skill: string,
+	tier: ReviewTier,
+): { provider: ProviderName; model: string; effort?: Effort } {
+	const reviewer = requireReviewer(config, reviewerId);
+	const override = reviewer.skills?.[skill];
+	const choice =
+		override?.[tier] ??
+		(override?.model
+			? { model: override.model, effort: override.effort }
+			: undefined) ??
+		reviewer.tiers[tier];
+	if (!choice)
+		throw new Error(
+			`reviewer "${reviewerId}" has no model configured for tier "${tier}"`,
+		);
+	return splitChoice(reviewerId, `tier "${tier}"`, choice);
+}
+
 export function resolveFinderModel(
 	config: Config,
 	reviewerId: string,
 	tier: ReviewTier,
-): { provider: string; model: string; effort?: Effort } {
-	const reviewer = config.reviewers[reviewerId];
-	if (!reviewer) throw new Error(`unknown reviewer "${reviewerId}"`);
+): { provider: ProviderName; model: string; effort?: Effort } {
+	const reviewer = requireReviewer(config, reviewerId);
 	const choice = reviewer.tiers[tier];
 	if (!choice)
 		throw new Error(
 			`reviewer "${reviewerId}" has no model configured for tier "${tier}"`,
 		);
-	const slash = choice.model.indexOf("/");
-	if (slash <= 0) {
-		throw new Error(
-			`reviewer "${reviewerId}" tier "${tier}" model "${choice.model}" must be in "provider/model" form`,
-		);
-	}
-	return {
-		provider: choice.model.slice(0, slash),
-		model: choice.model.slice(slash + 1),
-		...(choice.effort ? { effort: choice.effort } : {}),
-	};
+	return splitChoice(reviewerId, `tier "${tier}"`, choice);
+}
+
+export function shouldRunOnTier(
+	config: Config,
+	reviewerId: string,
+	tier: ReviewTier,
+): boolean {
+	const { runOn } = requireReviewer(config, reviewerId);
+	return runOn === undefined || runOn.includes(tier);
+}
+
+export function routeReviewerModel(
+	context: RouterContext,
+	reviewerId: ReviewerId,
+): { selection: ModelSelection; tier: ReviewTier } {
+	const config = getConfigTree();
+	const tier = classifyTier(context, config.routing);
+	const { provider, model, effort } = resolveFinderModel(
+		config,
+		reviewerId,
+		tier,
+	);
+	return { selection: { provider, model, effort }, tier };
 }
 
 const REVIEWER_ID_BY_PROVIDER = {
@@ -115,16 +173,14 @@ export function routeModel(
 	context: RouterContext,
 	provider: LegacyProvider,
 ): ModelSelection {
-	const config = getConfigTree();
 	const reviewerId = REVIEWER_ID_BY_PROVIDER[provider];
-	const tier = classifyTier(context, config.routing);
-	const resolved = resolveFinderModel(config, reviewerId, tier);
-	if (resolved.provider !== provider) {
+	const { selection, tier } = routeReviewerModel(context, reviewerId);
+	if (selection.provider !== provider) {
 		throw new Error(
-			`reviewer "${reviewerId}" tier "${tier}" model "${resolved.provider}/${resolved.model}" must use provider "${provider}"`,
+			`reviewer "${reviewerId}" tier "${tier}" model "${selection.provider}/${selection.model}" must use provider "${provider}"`,
 		);
 	}
-	return { provider, model: resolved.model, effort: resolved.effort };
+	return selection;
 }
 
 /** Maps the tier's effort onto the active provider's reasoning knob through

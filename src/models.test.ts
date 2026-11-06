@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { computeCost, createAIModel } from "./models.js";
+import { computeCost, createAIModel, modelLabel, sumCost } from "./models.js";
 import { setPriceTable } from "./pricing.js";
 
 const pins = vi.hoisted(() => ({
@@ -220,5 +220,41 @@ describe("createAIModel google", () => {
 				apiKey: "x",
 			} as never),
 		).toThrow(/cannot be used with a google model/);
+	});
+});
+
+describe("sumCost and modelLabel", () => {
+	const usage = (promptTokens: number, completionTokens: number) => ({
+		promptTokens,
+		completionTokens,
+	});
+
+	it("sums computeCost per model", () => {
+		const byModel = new Map([
+			["claude-haiku-5-5", usage(1_000_000, 1_000_000)],
+			["claude-sonnet-5-5", usage(1_000_000, 0)],
+		]);
+		const expected =
+			(computeCost(usage(1_000_000, 1_000_000), "claude-haiku-5-5") ?? NaN) +
+			(computeCost(usage(1_000_000, 0), "claude-sonnet-5-5") ?? NaN);
+		expect(sumCost(byModel)).toBeCloseTo(expected);
+		expect(expected).toBeGreaterThan(0);
+	});
+
+	it("is undefined when any model has no price", () => {
+		const byModel = new Map([
+			["claude-haiku-5-5", usage(10, 10)],
+			["no-such-model", usage(10, 10)],
+		]);
+		expect(sumCost(byModel)).toBeUndefined();
+	});
+
+	it("is 0 for an empty map", () => {
+		expect(sumCost(new Map())).toBe(0);
+	});
+
+	it("labels unique sorted models joined with a comma", () => {
+		expect(modelLabel(["b", "a", "b"])).toBe("a,b");
+		expect(modelLabel(["only"])).toBe("only");
 	});
 });

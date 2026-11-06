@@ -20,7 +20,7 @@ import {
 	suggestionFingerprint,
 } from "./ledger/fingerprint.js";
 import { buildLedger } from "./ledger/github.js";
-import { computeCost, createAIModel } from "./models.js";
+import { computeCost, createAIModel, sumCost } from "./models.js";
 import { shortFindingId } from "./relation.js";
 import { claimTitle, splitInlineClaims } from "./replay/claims.js";
 import {
@@ -72,6 +72,10 @@ const mockGenerateObject = vi.hoisted(() => vi.fn());
 const mockBuildUserMessage = vi.hoisted(() => vi.fn().mockReturnValue("user"));
 const mockBuildAgentSystemPrompt = vi.hoisted(() => vi.fn());
 
+const reviewerPatch = vi.hoisted(() => ({
+	value: undefined as Record<string, unknown> | undefined,
+}));
+
 vi.mock("ai", async (importOriginal) => ({
 	...(await importOriginal<typeof import("ai")>()),
 	generateObject: mockGenerateObject,
@@ -83,6 +87,25 @@ vi.mock("./models.js", async (importOriginal) => {
 		...actual,
 		createAIModel: vi.fn().mockReturnValue("mocked-model"),
 		computeCost: vi.fn(actual.computeCost),
+		sumCost: vi.fn(actual.sumCost),
+	};
+});
+
+vi.mock("./config/load.js", async (importOriginal) => {
+	const real = await importOriginal<typeof import("./config/load.js")>();
+	return {
+		...real,
+		getConfigTree: () => {
+			const tree = real.getConfigTree();
+			if (!reviewerPatch.value) return tree;
+			return {
+				...tree,
+				reviewers: {
+					...tree.reviewers,
+					claude: { ...tree.reviewers.claude, ...reviewerPatch.value },
+				},
+			};
+		},
 	};
 });
 
@@ -6916,7 +6939,7 @@ describe("buildReview ledger suppression", () => {
 
 		it("flushes the collected discards and rethrows the original error when the round throws", async () => {
 			const boom = new Error("cost table missing");
-			vi.mocked(computeCost).mockImplementationOnce(() => {
+			vi.mocked(sumCost).mockImplementationOnce(() => {
 				throw boom;
 			});
 			routeAgents(
@@ -10977,5 +11000,173 @@ describe("mergeReviewsDetailed — advisory never displaces a blocking finding",
 		);
 		expect(review.general_findings).toHaveLength(1);
 		expect(review.event).toBe("REQUEST_CHANGES");
+	});
+});
+
+describe("buildReview per-reviewer routing", () => {
+	const sonnetUsage = { inputTokens: 1_000_000, outputTokens: 0 };
+
+	function runAgents() {
+		const events: string[] = [];
+		const models: Record<string, string> = {};
+		let active = 0;
+		let peak = 0;
+		vi.mocked(createAIModel).mockImplementation(
+			(selection: ModelSelection) => selection.model as never,
+		);
+		mockGenerateObject.mockImplementation(
+			async (args: {
+				model?: string;
+				system?: unknown;
+				messages?: Array<{ content: Array<{ text: string }> }>;
+			}) => {
+				if (args.system !== undefined) {
+					return {
+						object: { summary: "Summary." },
+						usage: { inputTokens: 0, outputTokens: 0 },
+					};
+				}
+				const skill = (args.messages?.[0]?.content[1]?.text ?? "").replace(
+					/^system:/,
+					"",
+				);
+				models[skill] = String(args.model);
+				events.push(`start:${skill}`);
+				active += 1;
+				peak = Math.max(peak, active);
+				await new Promise((r) =>
+					setTimeout(r, skill === "code-reviewer.md" ? 8 : 2),
+				);
+				active -= 1;
+				events.push(`end:${skill}`);
+				return {
+					object: buildModelReview({
+						event: "COMMENT",
+						general_findings: [
+							{
+								title: `Finding from ${skill}`,
+								body: "A real problem.",
+								severity: "P2",
+								category: "style",
+								confidence: 0.8,
+								evidence: "See diff.",
+								suppressible: true,
+							},
+						],
+					}),
+					usage: sonnetUsage,
+				};
+			},
+		);
+		return { events, models, peak: () => peak };
+	}
+
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+	});
+
+	afterEach(() => {
+		reviewerPatch.value = undefined;
+		vi.mocked(createAIModel).mockReset();
+		vi.mocked(createAIModel).mockReturnValue("mocked-model" as never);
+	});
+
+	it("a reviewer with runOn [complex, deep] posts nothing on a normal PR", async () => {
+		reviewerPatch.value = { runOn: ["complex", "deep"] };
+		runAgents();
+
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+		});
+
+		expect(review).toBeNull();
+		expect(mockGenerateObject).not.toHaveBeenCalled();
+	});
+
+	it("a skill override on another model prices that agent with its own model", async () => {
+		reviewerPatch.value = {
+			skills: { "security-sast": { model: "anthropic/claude-haiku-5-5" } },
+		};
+		const run = runAgents();
+
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			agentConcurrency: 4,
+		});
+
+		expect(run.models["security-sast.md"]).toBe("claude-haiku-5-5");
+		expect(run.models["code-reviewer.md"]).toBe("claude-sonnet-5-5");
+		const price = (model: string) =>
+			computeCost({ promptTokens: 1_000_000, completionTokens: 0 }, model) ??
+			Number.NaN;
+		expect(review?.metadata.cost).toBeCloseTo(
+			4 * price("claude-sonnet-5-5") + price("claude-haiku-5-5"),
+		);
+		expect(review?.metadata.model).toBe("claude-haiku-5-5,claude-sonnet-5-5");
+		expect(review?.body).toContain(
+			"<!-- ai-review:model=claude-haiku-5-5,claude-sonnet-5-5 -->",
+		);
+	});
+
+	it("warms the cache once per distinct model, one model after the other", async () => {
+		reviewerPatch.value = {
+			skills: { "security-sast": { model: "anthropic/claude-haiku-5-5" } },
+		};
+		const run = runAgents();
+
+		await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			agentConcurrency: 4,
+		});
+
+		const at = (e: string) => run.events.indexOf(e);
+		expect(at("end:code-reviewer.md")).toBeLessThan(
+			at("start:silent-failure-hunter.md"),
+		);
+		for (const sonnet of [
+			"code-reviewer.md",
+			"silent-failure-hunter.md",
+			"pr-test-analyzer.md",
+			"code-review-and-quality.md",
+		]) {
+			expect(at(`end:${sonnet}`)).toBeLessThan(at("start:security-sast.md"));
+		}
+	});
+
+	it("one distinct model means one serial warm-up (same call order as today)", async () => {
+		const run = runAgents();
+
+		await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			agentConcurrency: 4,
+		});
+
+		const starts = run.events.filter((e) => e.startsWith("start:"));
+		expect(starts[0]).toBe("start:code-reviewer.md");
+		expect(run.events[1]).toBe("end:code-reviewer.md");
+		expect(starts.slice(1)).toEqual([
+			"start:silent-failure-hunter.md",
+			"start:pr-test-analyzer.md",
+			"start:security-sast.md",
+			"start:code-review-and-quality.md",
+		]);
+	});
+
+	it("concurrency 1 serialises agents", async () => {
+		const run = runAgents();
+
+		await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			agentConcurrency: 1,
+		});
+
+		expect(run.peak()).toBe(1);
 	});
 });

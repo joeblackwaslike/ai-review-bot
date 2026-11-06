@@ -71,6 +71,11 @@ const TierChoiceSchema = z
 	})
 	.strict();
 
+const RESERVED_REVIEWER_IDS: ReadonlySet<string> = new Set([
+	"anthropic",
+	"openai",
+]);
+
 const TIER_KEYS = ["trivial", "normal", "complex", "deep"] as const;
 
 const SkillChoiceSchema = z
@@ -385,6 +390,12 @@ export const ConfigSchema = z
 
 		const slugs = new Map<string, string>();
 		for (const [id, reviewer] of Object.entries(cfg.reviewers)) {
+			if (RESERVED_REVIEWER_IDS.has(id)) {
+				issue(
+					["reviewers", id],
+					`reviewer id "${id}" is reserved: it is the persisted provider name of claude or codex`,
+				);
+			}
 			for (const tier of TIER_KEYS) {
 				const choice = reviewer.tiers[tier];
 				checkChoice(
