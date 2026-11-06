@@ -496,6 +496,8 @@ describe("config tree wiring", () => {
 	it("getConfig reproduces the legacy defaults with an empty env", () => {
 		setRequiredEnv();
 		expect(getConfig()).toEqual({
+			reviewer: "claude",
+			appSlug: "anthropicreviewbot",
 			appId: "123",
 			privateKey: PKCS8_KEY,
 			webhookSecret: "secret",
@@ -524,10 +526,10 @@ describe("config tree wiring", () => {
 		setRequiredEnv({ AGENT_CONCURRENCY: "2" });
 		expect(getConfig().agentConcurrency).toBe(2);
 		expect(getConfig().agentConcurrency).toBe(2);
-		expect(warn).toHaveBeenCalledTimes(1);
-		expect(warn).toHaveBeenCalledWith(
-			expect.stringContaining("AGENT_CONCURRENCY is deprecated"),
+		const concurrencyWarnings = warn.mock.calls.filter((c) =>
+			String(c[0]).includes("AGENT_CONCURRENCY is deprecated"),
 		);
+		expect(concurrencyWarnings).toHaveLength(1);
 	});
 
 	it("getOpenAIAppConfig keeps provider openai and its own prefix default", () => {

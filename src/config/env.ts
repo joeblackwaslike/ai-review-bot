@@ -75,7 +75,7 @@ export interface SchemaLeaf {
 	description: string;
 }
 
-type Env = Readonly<Record<string, string | undefined>>;
+export type Env = Readonly<Record<string, string | undefined>>;
 
 export function envNameForPath(path: readonly string[]): string {
 	const segments = path.map((segment) =>
@@ -308,7 +308,7 @@ const LEGACY_REVIEWER_SECRETS: Readonly<
 > = {
 	claude: {
 		privateKey: { name: "GITHUB_APP_PRIVATE_KEY", deprecated: false },
-		webhookSecret: { name: "GITHUB_WEBHOOK_SECRET", deprecated: false },
+		webhookSecret: { name: "GITHUB_WEBHOOK_SECRET", deprecated: true },
 	},
 	codex: {
 		privateKey: { name: "OPENAI_APP_PRIVATE_KEY", deprecated: true },
@@ -345,7 +345,7 @@ export function providerKeySpec(provider: ProviderName): SecretSpec {
 	);
 }
 
-function reviewerSecretSpecs(id: string): SecretSpec[] {
+export function reviewerSecretSpecs(id: string): SecretSpec[] {
 	const legacy = LEGACY_REVIEWER_SECRETS[id] ?? {};
 	return (["privateKey", "webhookSecret"] as const).map((leaf) =>
 		specFor(["reviewers", id, leaf], legacy[leaf] ? [legacy[leaf]] : [], id),

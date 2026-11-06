@@ -1,7 +1,12 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
-import { applyEnvOverlay, type ValueSource } from "./env.js";
+import {
+	applyEnvOverlay,
+	readSecret,
+	secretSpecs,
+	type ValueSource,
+} from "./env.js";
 import { type Config, ConfigSchema } from "./schema.js";
 
 export interface LoadedConfig {
@@ -58,6 +63,9 @@ export function loadConfig(opts: LoadOptions = {}): LoadedConfig {
 			.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
 			.join("; ");
 		throw new Error(`Invalid config (${yamlPath}): ${issues}`);
+	}
+	for (const spec of secretSpecs(parsed.data)) {
+		warnings.push(...readSecret(spec, opts.env ?? process.env).warnings);
 	}
 	return { config: deepFreeze(parsed.data), sources, warnings };
 }

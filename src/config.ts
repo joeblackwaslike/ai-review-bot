@@ -1,6 +1,10 @@
 import { getConfigTree } from "./config/load.js";
+import type { ReviewerId } from "./reviewer-id.js";
+import { buildAppConfig } from "./reviewers.js";
 
 export interface AppConfig {
+	reviewer?: ReviewerId;
+	appSlug?: string;
 	appId: string;
 	privateKey: string;
 	webhookSecret: string;
@@ -33,17 +37,6 @@ export interface AppConfig {
 	publicUrl?: string;
 }
 
-// Returns the first argument that is a non-blank string after trimming, else
-// the final argument. Treats "" / whitespace-only env values as unset so a
-// blank prefix can't make `body.includes(prefix)` match everything.
-function firstNonBlank(...values: Array<string | undefined>): string {
-	for (const v of values) {
-		const trimmed = v?.trim();
-		if (trimmed) return trimmed;
-	}
-	return values[values.length - 1] ?? "";
-}
-
 function getRequiredEnv(name: string): string {
 	const value = process.env[name];
 	if (!value) {
@@ -52,7 +45,7 @@ function getRequiredEnv(name: string): string {
 	return value;
 }
 
-function normalizePrivateKey(raw: string): string {
+export function normalizePrivateKey(raw: string): string {
 	return raw.replaceAll(String.raw`\n`, "\n");
 }
 
@@ -109,76 +102,11 @@ export interface GetConfigOptions {
 }
 
 export function getConfig(opts: GetConfigOptions = {}): AppConfig {
-	const requireWebhookSecret = opts.requireWebhookSecret ?? true;
-	const tree = getConfigTree();
-	const review = tree.review;
-	return {
-		appId: getRequiredEnv("GITHUB_APP_ID"),
-		privateKey: validatePrivateKey(
-			normalizePrivateKey(getRequiredEnv("GITHUB_APP_PRIVATE_KEY")),
-		),
-		webhookSecret: requireWebhookSecret
-			? getRequiredEnv("GITHUB_WEBHOOK_SECRET")
-			: (process.env.GITHUB_WEBHOOK_SECRET ?? ""),
-		reviewEnabled: review.enabled && (tree.reviewers.claude?.enabled ?? false),
-		reviewDelayMs: review.delaySeconds * 1000,
-		reviewResyncDelayMs: review.resyncDelaySeconds * 1000,
-		reviewCommentPrefix: firstNonBlank(
-			process.env.REVIEW_COMMENT_PREFIX,
-			"ai-review-bot",
-		),
-		reviewCommand: review.command,
-		provider: "anthropic",
-		feedbackEnabled: review.feedbackEnabled,
-		improveEnabled: tree.improve.enabled,
-		improveCarrierEnabled: tree.improve.carrierEnabled,
-		agentConcurrency: parseAgentConcurrency(),
-		agentBudgetMs: parseAgentBudgetMs(),
-		diffBudgetChars: parseDiffBudgetChars(),
-		tier2Enabled: review.tier2Enabled,
-		qstashToken: process.env.QSTASH_TOKEN,
-		qstashCurrentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY,
-		qstashNextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY,
-		qstashUrl: tree.infra.qstashUrl,
-		publicUrl: tree.infra.publicUrl,
-	};
+	return buildAppConfig("claude", opts);
 }
 
 export function getOpenAIAppConfig(opts: GetConfigOptions = {}): AppConfig {
-	const requireWebhookSecret = opts.requireWebhookSecret ?? true;
-	const tree = getConfigTree();
-	const review = tree.review;
-	return {
-		appId: getRequiredEnv("OPENAI_APP_ID"),
-		privateKey: validatePrivateKey(
-			normalizePrivateKey(getRequiredEnv("OPENAI_APP_PRIVATE_KEY")),
-		),
-		webhookSecret: requireWebhookSecret
-			? getRequiredEnv("OPENAI_APP_WEBHOOK_SECRET")
-			: (process.env.OPENAI_APP_WEBHOOK_SECRET ?? ""),
-		reviewEnabled: review.enabled && (tree.reviewers.codex?.enabled ?? false),
-		reviewDelayMs: review.delaySeconds * 1000,
-		reviewResyncDelayMs: review.resyncDelaySeconds * 1000,
-		reviewCommentPrefix: firstNonBlank(
-			process.env.OPENAI_REVIEW_COMMENT_PREFIX,
-			process.env.REVIEW_COMMENT_PREFIX,
-			"codex-review-bot",
-		),
-		reviewCommand: review.command,
-		provider: "openai",
-		feedbackEnabled: review.feedbackEnabled,
-		improveEnabled: tree.improve.enabled,
-		improveCarrierEnabled: tree.improve.carrierEnabled,
-		agentConcurrency: parseAgentConcurrency(),
-		agentBudgetMs: parseAgentBudgetMs(),
-		diffBudgetChars: parseDiffBudgetChars(),
-		tier2Enabled: review.tier2Enabled,
-		qstashToken: process.env.QSTASH_TOKEN,
-		qstashCurrentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY,
-		qstashNextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY,
-		qstashUrl: tree.infra.qstashUrl,
-		publicUrl: tree.infra.publicUrl,
-	};
+	return buildAppConfig("codex", opts);
 }
 
 export interface QcAppConfig {

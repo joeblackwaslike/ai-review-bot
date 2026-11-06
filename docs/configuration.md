@@ -228,7 +228,7 @@ Secrets are never part of the config tree. Each is read from the env var below, 
 | Env var | Standard name | Permanence |
 | --- | --- | --- |
 | `AI_REVIEW_REVIEWERS__CLAUDE__PRIVATE_KEY` | `GITHUB_APP_PRIVATE_KEY` | permanent |
-| `AI_REVIEW_REVIEWERS__CLAUDE__WEBHOOK_SECRET` | `GITHUB_WEBHOOK_SECRET` | permanent |
+| `AI_REVIEW_REVIEWERS__CLAUDE__WEBHOOK_SECRET` | `GITHUB_WEBHOOK_SECRET` | deprecated |
 | `AI_REVIEW_REVIEWERS__CODEX__PRIVATE_KEY` | `OPENAI_APP_PRIVATE_KEY` | deprecated |
 | `AI_REVIEW_REVIEWERS__CODEX__WEBHOOK_SECRET` | `OPENAI_APP_WEBHOOK_SECRET` | deprecated |
 | `AI_REVIEW_PROVIDERS__ANTHROPIC__API_KEY` | `ANTHROPIC_API_KEY` | permanent |
