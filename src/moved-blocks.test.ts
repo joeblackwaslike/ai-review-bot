@@ -141,3 +141,23 @@ describe("findMovedBlocks", () => {
 		).toEqual([]);
 	});
 });
+
+describe("findMovedBlocks at scale", () => {
+	it("finds 100 scattered moves among 3000 lines each way in under 500 ms", () => {
+		const unique = (tag: string, n: number) =>
+			Array.from({ length: n }, (_, i) => `const ${tag}${i} = call(${i});`);
+		const deleted = unique("old", 3000);
+		const added = unique("new", 3000);
+		for (let m = 0; m < 100; m++) {
+			const block = unique(`moved${m}x`, 5);
+			deleted.splice(m * 29, 5, ...block);
+			added.splice(m * 29 + 7, 5, ...block);
+		}
+		const files = [file("a.ts", deleted, []), file("b.ts", [], added)];
+		const start = performance.now();
+		const out = findMovedBlocks(files);
+		const elapsed = performance.now() - start;
+		expect(out).toHaveLength(100);
+		expect(elapsed).toBeLessThan(500);
+	});
+});

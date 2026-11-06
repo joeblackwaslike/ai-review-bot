@@ -16,6 +16,7 @@ export interface MovedBlock {
 }
 
 interface Run {
+	index: number;
 	filename: string;
 	lines: string[];
 	used: boolean[];
@@ -43,13 +44,19 @@ function extractRuns(
 	const flush = () => {
 		if (del.length) {
 			deleted.push({
+				index: -1,
 				filename,
 				lines: del,
 				used: del.map(() => false),
 			});
 		}
 		if (add.length) {
-			added.push({ filename, lines: add, used: add.map(() => false) });
+			added.push({
+				index: -1,
+				filename,
+				lines: add,
+				used: add.map(() => false),
+			});
 		}
 		del = [];
 		add = [];
@@ -69,7 +76,7 @@ function extractRuns(
 	return { deleted, added };
 }
 
-interface Match {
+interface Candidate {
 	from: Run;
 	to: Run;
 	fromStart: number;
@@ -78,35 +85,135 @@ interface Match {
 	counted: number;
 }
 
-function longestMatch(from: Run, to: Run): Match | null {
-	let best: Match | null = null;
-	let prev = new Array<number>(to.lines.length + 1).fill(0);
-	let prevCounted = new Array<number>(to.lines.length + 1).fill(0);
-	for (let i = 1; i <= from.lines.length; i++) {
-		const cur = new Array<number>(to.lines.length + 1).fill(0);
-		const curCounted = new Array<number>(to.lines.length + 1).fill(0);
-		for (let j = 1; j <= to.lines.length; j++) {
-			const a = from.lines[i - 1] as string;
-			if (a === to.lines[j - 1] && !from.used[i - 1] && !to.used[j - 1]) {
-				cur[j] = (prev[j - 1] as number) + 1;
-				curCounted[j] =
-					(prevCounted[j - 1] as number) + (countsTowardBlock(a) ? 1 : 0);
-				if (!best || curCounted[j] > best.counted) {
-					best = {
-						from,
-						to,
-						fromStart: i - cur[j],
-						toStart: j - cur[j],
-						length: cur[j],
-						counted: curCounted[j],
-					};
-				}
+function countRange(lines: string[], start: number, length: number): number {
+	let counted = 0;
+	for (let k = start; k < start + length; k++) {
+		if (countsTowardBlock(lines[k] as string)) counted++;
+	}
+	return counted;
+}
+
+function compareCandidates(a: Candidate, b: Candidate): number {
+	return (
+		b.counted - a.counted ||
+		a.from.index - b.from.index ||
+		a.to.index - b.to.index ||
+		a.fromStart + a.length - (b.fromStart + b.length) ||
+		a.toStart + a.length - (b.toStart + b.length)
+	);
+}
+
+function insertSorted(queue: Candidate[], c: Candidate): void {
+	let lo = 0;
+	let hi = queue.length;
+	while (lo < hi) {
+		const mid = (lo + hi) >> 1;
+		if (compareCandidates(queue[mid] as Candidate, c) > 0) lo = mid + 1;
+		else hi = mid;
+	}
+	queue.splice(lo, 0, c);
+}
+
+function windowKeys(run: Run, minLines: number): Map<number, string> {
+	const counted: number[] = [];
+	run.lines.forEach((line, i) => {
+		if (countsTowardBlock(line)) counted.push(i);
+	});
+	const keys = new Map<number, string>();
+	for (let k = 0; k + minLines <= counted.length; k++) {
+		const start = counted[k] as number;
+		const end = counted[k + minLines - 1] as number;
+		keys.set(start, run.lines.slice(start, end + 1).join("\n"));
+	}
+	return keys;
+}
+
+function extend(
+	from: Run,
+	fromPos: number,
+	to: Run,
+	toPos: number,
+	minLines: number,
+): Candidate | null {
+	let fs = fromPos;
+	let ts = toPos;
+	while (fs > 0 && ts > 0 && from.lines[fs - 1] === to.lines[ts - 1]) {
+		fs--;
+		ts--;
+	}
+	let length = fromPos - fs + 1;
+	while (
+		fs + length < from.lines.length &&
+		ts + length < to.lines.length &&
+		from.lines[fs + length] === to.lines[ts + length]
+	) {
+		length++;
+	}
+	const counted = countRange(from.lines, fs, length);
+	if (counted < minLines) return null;
+	return { from, to, fromStart: fs, toStart: ts, length, counted };
+}
+
+function collectCandidates(
+	deleted: Run[],
+	added: Run[],
+	minLines: number,
+): Candidate[] {
+	const index = new Map<string, { run: Run; pos: number }[]>();
+	for (const run of added) {
+		for (const [pos, key] of windowKeys(run, minLines)) {
+			const hits = index.get(key);
+			if (hits) hits.push({ run, pos });
+			else index.set(key, [{ run, pos }]);
+		}
+	}
+	const seen = new Set<string>();
+	const out: Candidate[] = [];
+	for (const run of deleted) {
+		for (const [pos, key] of windowKeys(run, minLines)) {
+			for (const hit of index.get(key) ?? []) {
+				if (hit.run.filename === run.filename) continue;
+				const c = extend(run, pos, hit.run, hit.pos, minLines);
+				if (!c) continue;
+				const id = `${run.index}|${hit.run.index}|${c.fromStart}|${c.toStart}`;
+				if (seen.has(id)) continue;
+				seen.add(id);
+				out.push(c);
 			}
 		}
-		prev = cur;
-		prevCounted = curCounted;
 	}
-	return best;
+	return out;
+}
+
+function unusedSegments(c: Candidate, minLines: number): Candidate[] {
+	const out: Candidate[] = [];
+	let k = 0;
+	while (k < c.length) {
+		if (c.from.used[c.fromStart + k] || c.to.used[c.toStart + k]) {
+			k++;
+			continue;
+		}
+		const start = k;
+		while (
+			k < c.length &&
+			!c.from.used[c.fromStart + k] &&
+			!c.to.used[c.toStart + k]
+		) {
+			k++;
+		}
+		const counted = countRange(c.from.lines, c.fromStart + start, k - start);
+		if (counted >= minLines) {
+			out.push({
+				from: c.from,
+				to: c.to,
+				fromStart: c.fromStart + start,
+				toStart: c.toStart + start,
+				length: k - start,
+				counted,
+			});
+		}
+	}
+	return out;
 }
 
 /**
@@ -115,6 +222,7 @@ function longestMatch(from: Run, to: Run): Match | null {
  * under 3 characters stay inside a run but do not count toward its length.
  */
 export function findMovedBlocks(files: PushFile[], minLines = 5): MovedBlock[] {
+	const need = Math.max(1, minLines);
 	const deleted: Run[] = [];
 	const added: Run[] = [];
 	for (const f of files) {
@@ -122,25 +230,32 @@ export function findMovedBlocks(files: PushFile[], minLines = 5): MovedBlock[] {
 		deleted.push(...runs.deleted);
 		added.push(...runs.added);
 	}
+	deleted.forEach((r, i) => {
+		r.index = i;
+	});
+	added.forEach((r, i) => {
+		r.index = i;
+	});
+	const queue: Candidate[] = [];
+	for (const c of collectCandidates(deleted, added, need)) {
+		insertSorted(queue, c);
+	}
 	const blocks: MovedBlock[] = [];
-	for (;;) {
-		let best: Match | null = null;
-		for (const d of deleted) {
-			for (const a of added) {
-				if (d.filename === a.filename) continue;
-				const m = longestMatch(d, a);
-				if (m && (!best || m.counted > best.counted)) best = m;
-			}
+	for (let c = queue.pop(); c; c = queue.pop()) {
+		const free = unusedSegments(c, need);
+		if (free.length !== 1 || free[0]?.length !== c.length) {
+			for (const part of free) insertSorted(queue, part);
+			continue;
 		}
-		if (!best || best.counted < minLines) return blocks;
-		for (let k = 0; k < best.length; k++) {
-			best.from.used[best.fromStart + k] = true;
-			best.to.used[best.toStart + k] = true;
+		for (let k = 0; k < c.length; k++) {
+			c.from.used[c.fromStart + k] = true;
+			c.to.used[c.toStart + k] = true;
 		}
 		blocks.push({
-			from: best.from.filename,
-			to: best.to.filename,
-			lineCount: best.counted,
+			from: c.from.filename,
+			to: c.to.filename,
+			lineCount: c.counted,
 		});
 	}
+	return blocks;
 }
