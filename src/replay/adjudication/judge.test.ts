@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
 	buildJudgePrompt,
 	computePromptHash,
+	EVIDENCE_CHARS,
 	JUDGE_MODELS,
 	JudgementSchema,
 	PROMPT_HASH,
@@ -26,6 +27,24 @@ describe("buildJudgePrompt", () => {
 		expect(PROMPT_TEMPLATE).not.toMatch(
 			/anthropic|openai|claude|gpt|codex|strategy|provider/i,
 		);
+	});
+});
+
+describe("evidence truncation", () => {
+	it("marks a cut patch with the shown and total size", () => {
+		const total = EVIDENCE_CHARS + 500;
+		const prompt = buildJudgePrompt({
+			claim: { path: "a.ts", line: 3, title: "t" },
+			diffEvidence: "y".repeat(total),
+		});
+		expect(prompt).toContain(
+			`[patch truncated: ${EVIDENCE_CHARS} of ${total} chars shown]`,
+		);
+	});
+
+	it("adds no marker to a patch that fits", () => {
+		const prompt = buildJudgePrompt(input("t"));
+		expect(prompt).not.toContain("patch truncated");
 	});
 });
 

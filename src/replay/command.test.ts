@@ -1032,6 +1032,7 @@ describe("runReplay --adjudicate", () => {
 	function seedFixture(
 		path: string | null = "a.ts",
 		titles: string[] = ["unrelated cache invalidation race condition"],
+		lines: number[] = [],
 	) {
 		const dir = tmp();
 		const f = makeFixture([["a"]]);
@@ -1042,7 +1043,7 @@ describe("runReplay --adjudicate", () => {
 					skill: "s.md",
 					title,
 					path,
-					line: i + 1,
+					line: lines[i] ?? i + 1,
 					severity: "P1",
 				})),
 				posted: [],
@@ -1242,16 +1243,123 @@ describe("runReplay --adjudicate", () => {
 		expect(lines.join("\n")).toContain("deferred=1");
 	});
 
-	it("builds the judges once, on the first call that needs them", async () => {
-		const { dir, id } = seedFixture();
+	it("resolves the judge factory once and builds each producer-model group's judges once", async () => {
+		const dir = tmp();
+		const f = makeFixture([["a"], ["b"]]);
+		const cand = (title: string, path: string) => ({
+			skill: "s.md",
+			title,
+			path,
+			line: 1,
+			severity: "P1",
+		});
+		const [r0, r1] = f.rounds;
+		if (!r0 || !r1) throw new Error("rounds");
+		f.rounds[0] = {
+			...r0,
+			headSha: "h1",
+			trace: {
+				candidates: [
+					cand("Alpha problem here", "a.ts"),
+					cand("Bravo issue there", "a.ts"),
+				],
+				posted: [],
+				usage: {},
+			},
+		} as typeof r0;
+		f.rounds[1] = {
+			...r1,
+			headSha: "h2",
+			trace: {
+				candidates: [cand("Charlie bug elsewhere", "README.md")],
+				posted: [],
+				usage: {},
+			},
+		} as typeof r1;
+		const id = fixtureId(f);
+		writeFileSync(join(dir, `${id}.json`), JSON.stringify(f));
+		writeFileSync(
+			join(dir, `${id}.labels.json`),
+			JSON.stringify({
+				...makeLabels({ labels: [makeLabel("a", "fixed")] }),
+				fixtureId: id,
+			}),
+		);
+		const client: GhClient = {
+			rest: async <T>(route: string) =>
+				({
+					files: [
+						{
+							filename: route.endsWith("h1") ? "a.ts" : "README.md",
+							patch: "@@ -1 +1 @@\n+x",
+						},
+					],
+				}) as T,
+			graphql: () => Promise.reject(new Error("no network")),
+		};
 		const { judges, calls } = stubJudges();
+		const constructed = vi.fn();
 		await runReplay(["--adjudicate", id, "--fixtures", dir], {
 			out: () => {},
-			client: withFiles,
-			adjudicationJudges: judges,
+			client,
+			adjudicationJudges: async () => {
+				constructed();
+				return judges;
+			},
 			adjudicationDir: join(dir, "cache"),
 		});
-		expect(calls.verdict).toHaveBeenCalledTimes(1);
+		expect(constructed).toHaveBeenCalledTimes(1);
+		expect(calls.verdict.mock.calls.map((c) => c[1]).sort()).toEqual([
+			"claude-haiku-5-5",
+			"claude-sonnet-5-5",
+		]);
+	});
+
+	it("defers a candidate whose line falls outside the shown part of a long patch", async () => {
+		const { dir, id } = seedFixture(
+			"a.ts",
+			["Alpha problem here", "Bravo issue there"],
+			[2, 900],
+		);
+		const long: GhClient = {
+			rest: async <T>() =>
+				({
+					files: [
+						{
+							filename: "a.ts",
+							patch: `@@ -0,0 +1,900 @@\n${Array.from({ length: 900 }, (_v, i) => `+const value${i + 1} = ${i + 1};`).join("\n")}`,
+						},
+					],
+				}) as T,
+			graphql: () => Promise.reject(new Error("no network")),
+		};
+		const seen: string[] = [];
+		const { lines, out } = collect();
+		await runReplay(["--adjudicate", id, "--fixtures", dir], {
+			out,
+			client: long,
+			adjudicationJudges: {
+				verdictJudges: async () => ({
+					first: {
+						family: "anthropic",
+						model: "stub",
+						run: async (input) => {
+							seen.push(input.claim.title);
+							return { verdict: "not-real", scope: null, reason: "r" };
+						},
+					},
+					second: null,
+				}),
+				auditJudges: async () => {
+					throw new Error("unused");
+				},
+			},
+			adjudicationDir: join(dir, "cache"),
+		});
+		expect(seen).toEqual(["Alpha problem here"]);
+		const text = lines.join("\n");
+		expect(text).toContain("line outside the shown patch");
+		expect(text).toContain("deferred=1");
 	});
 
 	it("builds no audit judge for a cached audit", async () => {
@@ -1584,7 +1692,7 @@ describe("runReplay --adjudicate", () => {
 		expect(text).toContain("judge unavailable: session expired");
 		expect(text).toContain("errors=0");
 		expect(text).not.toContain("error samples");
-		expect(text).toContain("anthropic=1 openai=0");
+		expect(text).toContain("anthropic=0 openai=0");
 		expect(existsSync(join(dir, "cache"))).toBe(false);
 	});
 

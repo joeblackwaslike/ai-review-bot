@@ -108,8 +108,10 @@ Interfaces:
   from the first judge caches nothing. A second-judge error after a successful first judge caches
   the first verdict as `single-family` (not tallied this run) so a later run can upgrade it. An
   error in an upgrade call keeps the cached verdict, counted as cached. A judge-construction failure
-  stops the run (`unavailable`), is reported once as "judge unavailable: <message>" and is not
-  retried per candidate.
+  stops the run (`unavailable`), is reported once as "judge unavailable: <message>", counts no
+  call (no model request was made) and is not retried per candidate. A patch longer than the
+  evidence limit is marked `[patch truncated: N of M chars shown]` in the prompt, and a candidate
+  whose line is past the shown part is deferred.
 - A cached record is a hit only when its first judge's prompt hash is the current `PROMPT_HASH` and
   its first model is one the current routing would pick (`isCurrentVerdict`, shared with `--plan`).
   A cached `single-family` verdict for an Anthropic-produced candidate with verdict `real` or

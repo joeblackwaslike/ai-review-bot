@@ -20,7 +20,7 @@ import {
 import { type AuditJudge, type AuditStored, auditFixture } from "./audit.js";
 import { VerdictCache } from "./cache.js";
 import type { JudgeInput } from "./judge.js";
-import { possibleFirstModels, routeJudges } from "./judge.js";
+import { EVIDENCE_CHARS, possibleFirstModels, routeJudges } from "./judge.js";
 import { claimKey, snapshotId } from "./snapshot.js";
 import type { VerdictRecord } from "./types.js";
 
@@ -68,6 +68,15 @@ const unavailableError = (err: unknown): never => {
 		err instanceof Error ? err.message : String(err),
 	);
 };
+
+/** Whether the candidate's line is within the part of the numbered patch the judge is shown. */
+function lineShown(numbered: string, line: number | null): boolean {
+	if (numbered.length <= EVIDENCE_CHARS || line === null) return true;
+	let lastShown = 0;
+	for (const m of numbered.slice(0, EVIDENCE_CHARS).matchAll(/^\s*(\d+)\|/gm))
+		lastShown = Math.max(lastShown, Number(m[1]));
+	return line <= lastShown;
+}
 
 const SINGLE_FAMILY_NOTE = "single-family verdicts have no second-model check";
 
@@ -218,9 +227,13 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 			};
 		if (!c.path) return { reason: "unanchored finding, no evidence" };
 		const patch = patches.get(c.roundIndex)?.get(c.path);
-		return patch
-			? { text: numberPatchLines(patch) }
-			: { reason: `no patch evidence for ${c.path}` };
+		if (!patch) return { reason: `no patch evidence for ${c.path}` };
+		const numbered = numberPatchLines(patch);
+		if (!lineShown(numbered, c.line))
+			return {
+				reason: `line outside the shown patch (${c.path}:${c.line}; the judge sees ${EVIDENCE_CHARS} of ${numbered.length} chars)`,
+			};
+		return { text: numbered };
 	};
 	const evidenceByKey = new Map<string, string>();
 	const judgeable: Located[] = [];

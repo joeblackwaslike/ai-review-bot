@@ -145,6 +145,7 @@ export async function adjudicate(
 			} catch (err) {
 				if (err instanceof JudgeUnavailableError) {
 					unavailable = err.message;
+					spend[second.family]--;
 					break;
 				}
 				noteError(err);
@@ -178,6 +179,7 @@ export async function adjudicate(
 		} catch (err) {
 			if (err instanceof JudgeUnavailableError) {
 				unavailable = err.message;
+				spend[judges.first.family]--;
 				break;
 			}
 			noteError(err);
@@ -210,6 +212,7 @@ export async function adjudicate(
 			} catch (err) {
 				if (err instanceof JudgeUnavailableError) {
 					unavailable = err.message;
+					spend[second.family]--;
 					break;
 				}
 				noteError(err);

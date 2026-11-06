@@ -10,7 +10,7 @@ import {
 } from "../../router.js";
 import type { Scope, Verdict } from "./types.js";
 
-const EVIDENCE_CHARS = 8000;
+export const EVIDENCE_CHARS = 8000;
 
 export interface JudgeClaim {
 	path: string | null;
@@ -51,6 +51,12 @@ export const PROMPT_TEMPLATE = [
 	"Give a one-line reason. Judge the finding on its own merits.",
 ].join("\n");
 
+function renderEvidence(diffEvidence: string, evidenceChars: number): string {
+	if (diffEvidence.length === 0) return "(none available)";
+	if (diffEvidence.length <= evidenceChars) return diffEvidence;
+	return `${diffEvidence.slice(0, evidenceChars)}\n[patch truncated: ${evidenceChars} of ${diffEvidence.length} chars shown]`;
+}
+
 function renderJudgePrompt(
 	input: JudgeInput,
 	template: string,
@@ -62,7 +68,7 @@ function renderJudgePrompt(
 		`Finding: ${claim.title}`,
 		`Location: ${claim.path ?? "(none)"}:${claim.line ?? "?"}`,
 		`Finding text:\n${claim.body ?? "(none)"}`,
-		`Diff evidence:\n${diffEvidence.slice(0, evidenceChars) || "(none available)"}`,
+		`Diff evidence:\n${renderEvidence(diffEvidence, evidenceChars)}`,
 	].join("\n\n");
 }
 
