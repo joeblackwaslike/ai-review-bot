@@ -6925,7 +6925,7 @@ describe("buildReview ledger suppression", () => {
 			expect(limited.every((d) => d.disposition === "dropped")).toBe(true);
 			expect(limited.every((d) => d.skill === "code-reviewer.md")).toBe(true);
 			expect(decision?.body).toContain(
-				"Showing the 5 highest-severity findings this round (P2 and up)",
+				"Held back 4 findings below P2 or over the budget of 5 this round",
 			);
 		});
 
@@ -6936,7 +6936,7 @@ describe("buildReview ledger suppression", () => {
 				...baseContext,
 			});
 			expect(new Set(titlesIn(decision?.body ?? "")).size).toBe(9);
-			expect(decision?.body).not.toContain("highest-severity findings");
+			expect(decision?.body).not.toContain("Held back");
 		});
 
 		it("posts all nine in round 1, with no earlier own review", async () => {
