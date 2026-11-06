@@ -1,0 +1,11 @@
+{
+  "clean": false,
+  "defects": [
+    {
+      "path": "src/refunds.ts",
+      "startLine": 12,
+      "endLine": 13,
+      "description": "The idempotency-key lookup and the empty-items skip were removed from postRefund, so nothing stops a second gateway.issueRefund for the same key. handleRefundMessage in src/consumer.ts requeues the message whenever postRefund throws (for example when ledger.credit fails after the gateway refund succeeded), so the retry issues a duplicate refund to the customer."
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+{"clean": false, "defects": [{"path": "auth/tokens.py", "startLine": 16, "endLine": 16, "description": "The moved expiry_status changes `age < ttl` to `age <= ttl`, so a token whose age equals ttl is still reported valid, one tick past its lifetime, and inconsistent with the strict `<` used for the grace boundary."}]}

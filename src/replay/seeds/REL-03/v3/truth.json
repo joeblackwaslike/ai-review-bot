@@ -1,0 +1,1 @@
+{"clean": false, "defects": [{"path": "app/dtos/invoice_dto.rb", "startLine": 6, "endLine": 6, "description": "The rename of total_cents to amount_cents also renamed the serialized key in the DTO, but docs/openapi.yml and lib/billing_client.rb (unchanged) still use total_cents, so the client reads nil."}]}

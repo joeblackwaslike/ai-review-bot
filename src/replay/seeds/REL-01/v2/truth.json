@@ -1,0 +1,11 @@
+{
+  "clean": false,
+  "defects": [
+    {
+      "path": "queue/worker_test.go",
+      "startLine": 12,
+      "endLine": 12,
+      "description": "NextDelay moved to the backoff package, which has its own jitter variable. The test still overrides queue.jitter, which now only affects pollInterval, so backoff.NextDelay runs with real randomness and the exact-duration assertion is flaky."
+    }
+  ]
+}

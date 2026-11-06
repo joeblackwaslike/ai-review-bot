@@ -1,0 +1,11 @@
+{
+  "clean": false,
+  "defects": [
+    {
+      "path": "tests/test_client.py",
+      "startLine": 19,
+      "endLine": 19,
+      "description": "wait_before_retry moved into app/client.py, but the test still patches app.util.backoff.time, which the moved function no longer uses, so the patch has no effect and the sleep assertion fails."
+    }
+  ]
+}

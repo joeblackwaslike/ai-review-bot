@@ -1,0 +1,1 @@
+{"clean": false, "defects": [{"path": "src/serializer.ts", "startLine": 8, "endLine": 8, "description": "The internal rename of dueDate to returnBy also renames the serialized response field from due_date to return_by, but client/loanClient.ts (unchanged) still reads row.due_date, so consumers get an Invalid Date."}]}

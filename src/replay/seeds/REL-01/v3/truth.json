@@ -1,0 +1,11 @@
+{
+  "clean": false,
+  "defects": [
+    {
+      "path": "spec/receipt_spec.rb",
+      "startLine": 5,
+      "endLine": 5,
+      "description": "money moved to Shop::Currency, but the spec still stubs Shop::Formatting.money. Receipt#summary now calls Currency.money, so the stub is never hit and the real formatter runs."
+    }
+  ]
+}
