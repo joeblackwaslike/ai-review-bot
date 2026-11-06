@@ -28,7 +28,7 @@ export interface StrategyInput {
 	approximateDiff: boolean;
 	checkout: CheckoutHandle | null;
 	history: FrozenHistory;
-	/** A hard cap, never a target. */
+	/** A cap, never a target. A strategy's first call is always allowed; callers gate it with `estimateCost` before running. */
 	budget: { maxUsd: number; maxWallMs: number };
 	/** What spend-matched strategies aim for: A's cost for this round, set by the grid runner. */
 	spendTargetUsd?: number;

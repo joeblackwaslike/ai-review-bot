@@ -116,7 +116,8 @@ export const strategyA0: ReviewStrategy = {
 		if (
 			target !== undefined &&
 			target > spent &&
-			spent <= maxUsd - coldUsd &&
+			!withinTolerance(spent, target, DEFAULT_TOLERANCE) &&
+			spent + coldUsd <= maxUsd &&
 			mayLaunch()
 		) {
 			const second = await once();
@@ -130,10 +131,17 @@ export const strategyA0: ReviewStrategy = {
 					0,
 					Math.min(wanted, room, MAX_REPEATS - attempts.length),
 				);
+				let committed = spent;
 				const rest = await mapWithConcurrency(
 					Array.from({ length: extra }),
 					parseAgentConcurrency(),
-					async () => (mayLaunch() ? once() : null),
+					async () => {
+						if (!mayLaunch() || committed + warmUsd > maxUsd) return null;
+						committed += warmUsd;
+						const o = await once();
+						committed += costOf(o) - warmUsd;
+						return o;
+					},
 				);
 				for (const o of rest) if (o) attempts.push(o);
 			}

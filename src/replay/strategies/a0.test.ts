@@ -143,6 +143,32 @@ describe("strategyA0", () => {
 		expect(mockRunAgent).toHaveBeenCalledTimes(3);
 	});
 
+	it("skips the warm run when the first already meets the target within tolerance", async () => {
+		await strategyA0.run(inputFor(oneRunUsd * 1.05));
+		expect(mockRunAgent).toHaveBeenCalledTimes(1);
+		mockRunAgent.mockClear();
+		await strategyA0.run(inputFor(oneRunUsd * 0.5));
+		expect(mockRunAgent).toHaveBeenCalledTimes(1);
+	});
+
+	it("rechecks running spend before each queued repeat", async () => {
+		vi.stubEnv("AGENT_CONCURRENCY", "1");
+		const pricey = { promptTokens: 160_000, completionTokens: 16_000 };
+		let k = 0;
+		mockRunAgent.mockImplementation(async () => ({
+			...okOutcome(`f${++k}`),
+			usage: k <= 2 ? ONE_RUN : pricey,
+		}));
+		await strategyA0.run(inputFor(oneRunUsd * 10, { maxUsd: oneRunUsd * 4.5 }));
+		vi.unstubAllEnvs();
+		expect(mockRunAgent).toHaveBeenCalledTimes(3);
+	});
+
+	it("skips the warm run when the first run's cost would pass maxUsd", async () => {
+		await strategyA0.run(inputFor(oneRunUsd * 10, { maxUsd: oneRunUsd * 1.5 }));
+		expect(mockRunAgent).toHaveBeenCalledTimes(1);
+	});
+
 	it("always allows the first run even when it exceeds maxUsd", async () => {
 		await strategyA0.run(inputFor(oneRunUsd * 10, { maxUsd: oneRunUsd / 10 }));
 		expect(mockRunAgent).toHaveBeenCalledTimes(1);
