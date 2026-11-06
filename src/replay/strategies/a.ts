@@ -5,15 +5,13 @@ import { runAuditPass } from "../../audit.js";
 import { resolveAnthropicAuth, resolveOpenAIAuth } from "../../auth.js";
 import { computeCost } from "../../models.js";
 import { TIER1_SKILLS } from "../../review.js";
-import { REVIEWER_TUNING } from "../../reviewer-tuning.js";
 import { CLAUDE_TIER_MAP, OPENAI_TIER_MAP, routeModel } from "../../router.js";
 import { routerContext, toLiveReviewOutput } from "../live-wiring.js";
 import type { ReviewStrategy, StrategyInput } from "../strategy.js";
-import { postFilterTrace } from "../trace.js";
 
 const AGENTS_PER_REVIEW = 5;
-const CHARS_PER_TOKEN = 4;
-const EXPECTED_COMPLETION_TOKENS = 2000;
+export const CHARS_PER_TOKEN = 4;
+export const EXPECTED_COMPLETION_TOKENS = 2000;
 
 const skillsDir = fileURLToPath(new URL("../../../skills", import.meta.url));
 
@@ -71,15 +69,10 @@ export const strategyA: ReviewStrategy = {
 		});
 		if (result.agentsAttempted > 0 && result.agentsSucceeded === 0)
 			throw new Error(`all ${result.agentsAttempted} review agents failed`);
-		const { posted } = postFilterTrace({
-			agentReviews: result.agentReviews,
-			ledger: input.history.ledger,
-			files: input.files,
-			tuning: REVIEWER_TUNING,
-		});
 		return {
 			...toLiveReviewOutput(result),
-			posted,
+			posted: [],
+			agentReviews: result.agentReviews,
 			toolCalls: [],
 			wallMs: Date.now() - started,
 		};

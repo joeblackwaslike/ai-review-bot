@@ -20,6 +20,7 @@ function stub(name: string): ReviewStrategy {
 			posted: [],
 			usage: {},
 			toolCalls: [],
+			agentReviews: [],
 			wallMs: 0,
 		}),
 	};

@@ -12,6 +12,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("./run-strategy.js", () => ({
+	runStrategy: (s: { run: (i: unknown) => unknown }, i: unknown) => s.run(i),
+}));
+
 import { VerdictCache } from "./adjudication/cache.js";
 import { PROMPT_HASH } from "./adjudication/judge.js";
 import type { AdjudicationJudges } from "./adjudication/run.js";
@@ -411,6 +416,7 @@ describe("runReplay live and record flags", () => {
 					posted: Array.from({ length: posted }, () => item),
 					usage: {},
 					toolCalls: [],
+					agentReviews: [],
 					wallMs: 0,
 				};
 			},
@@ -469,6 +475,7 @@ describe("runReplay live and record flags", () => {
 			posted: [],
 			usage: {},
 			toolCalls: [],
+			agentReviews: [],
 			wallMs: 0,
 		});
 		expect(

@@ -1,3 +1,4 @@
+import { runStrategy } from "../run-strategy.js";
 import type { ReviewStrategy, StrategyInput } from "../strategy.js";
 import { type SeedReviewInput, seedReviewInput, truthInDiff } from "./input.js";
 import { DEFAULT_SEEDS_ROOT, listSeeds, type Seed } from "./schema.js";
@@ -137,7 +138,8 @@ export async function runSeedsWithStrategy(
 					throw new Error(`invalid cost estimate ${estimate}`);
 				if (spent + estimate > opts.maxCostUsd) return null;
 				spent += estimate;
-				const result = await strategy.run(
+				const result = await runStrategy(
+					strategy,
 					strategyInput(input, remaining, strategy.needsCheckout),
 				);
 				return scoreSeed(seed, result.posted);
