@@ -51,17 +51,24 @@ const setup = (p: ExperimentPlan, lock: string | null | "match" = "match") => {
 	const deps: ExperimentDeps = {
 		out: (s) => lines.push(s),
 		root: join(dir, "store"),
-		loadFixtures: async () => ({
-			"o/r#1": {
-				fixture: makeFixture([["c1"]], { pull: 1 }),
-				labels: makeLabels(),
-				fetchDiff: async () => ({
-					diff: "d",
-					files: [buildPullFile("src/a.ts", SIMPLE_PATCH)],
-					approximate: false,
-				}),
-			},
-		}),
+		loadFixtures: async () =>
+			Object.fromEntries(
+				p.fixtures.map((f, i) => [
+					f.id,
+					{
+						fixture: makeFixture([["c1"]], {
+							pull: i + 1,
+							provider: f.provider,
+						}),
+						labels: makeLabels(),
+						fetchDiff: async () => ({
+							diff: "d",
+							files: [buildPullFile("src/a.ts", SIMPLE_PATCH)],
+							approximate: false,
+						}),
+					},
+				]),
+			),
 		registry: (n) => {
 			const s = registry.get(n);
 			if (!s) throw new Error(`unknown ${n}`);
@@ -168,6 +175,7 @@ describe("score --final seed gates", () => {
 
 	it("refuses before writing the marker when a candidate lacks a seed-gate result", async () => {
 		const s = setup(fullSizePlan());
+		expect(await call(s, "run")).toBe(0);
 		expect(await call(s, "score", true)).toBe(1);
 		expect(s.lines.join("\n")).toMatch(/seed gate/i);
 		const dir = join(s.deps.root, planHash(fullSizePlan()));
@@ -187,7 +195,49 @@ describe("score --final seed gates", () => {
 				fixtures: [{ id: "o/r#1", split: "test", provider: "anthropic" }],
 			}),
 		);
+		expect(await call(s, "run")).toBe(0);
 		expect(await call(s, "score", true)).toBe(0);
+	});
+
+	it("refuses --final before the marker when planned test cells are missing", async () => {
+		const full = fullSizePlan();
+		const s = setup(full);
+		const dir = join(s.deps.root, planHash(full));
+		mkdirSync(dir, { recursive: true });
+		writeFileSync(join(dir, "seed-gates.json"), JSON.stringify({ a0: gate }));
+		expect(await call(s, "score", true)).toBe(1);
+		expect(s.lines.join("\n")).toMatch(/missing|partial/i);
+		expect(existsSync(join(dir, "final.marker"))).toBe(false);
+	});
+
+	it("reads seed-gates.json only for --final", async () => {
+		const s = setup(plan());
+		const dir = join(s.deps.root, planHash(plan()));
+		mkdirSync(dir, { recursive: true });
+		writeFileSync(join(dir, "seed-gates.json"), "{not json");
+		expect(await call(s, "run")).toBe(0);
+		expect(await call(s, "score")).toBe(0);
+	});
+
+	it("rejects a plan without the baseline strategy before scoring", async () => {
+		const s = setup(plan({ strategies: [{ name: "a0", version: "v1" }] }));
+		expect(await call(s, "score")).toBe(1);
+		expect(s.lines.join("\n")).toMatch(/baseline/);
+	});
+
+	it("lists each missing cell of a partial run", async () => {
+		const s = setup(
+			plan({
+				budgets: {
+					maxAnthropicUsd: 0.001,
+					maxOpenAiUsd: 1,
+					perCellUsd: 1,
+					perCellWallMs: 210_000,
+				},
+			}),
+		);
+		expect(await call(s, "run")).toBe(3);
+		expect(s.lines.join("\n")).toMatch(/missing a o\/r#1 round 0 trial 0/);
 	});
 
 	it("does not burn the marker when scoring throws", async () => {

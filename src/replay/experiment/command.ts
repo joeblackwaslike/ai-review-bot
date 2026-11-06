@@ -23,6 +23,7 @@ import {
 import { formatScoreReport } from "./report.js";
 import {
 	type LoadedFixture,
+	type PlannedCell,
 	planGrid,
 	type RunnerDeps,
 	runGrid,
@@ -64,6 +65,12 @@ export interface ExperimentDeps {
 	withCheckout?: RunnerDeps["withCheckout"];
 	modelFor?: RunnerDeps["modelFor"];
 }
+
+const cellLines = (label: string, cells: PlannedCell[]): string[] =>
+	cells.map(
+		(c) =>
+			`${label} ${c.strategy} ${c.fixtureId} round ${c.round} trial ${c.trial}`,
+	);
 
 export async function runExperiment(
 	args: { mode: ExperimentMode; planFile: string; final: boolean },
@@ -143,8 +150,12 @@ export async function runExperiment(
 					? `PARTIAL: ${report.missing.length} missing, ${report.overCellCap.length} over the cell cap, ${report.unavailable.length} without a checkout, ${report.failed.length} failed`
 					: "complete",
 				...report.failed.map(
-					(f) => `failed ${f.strategy} ${f.fixtureId} r${f.round}: ${f.error}`,
+					(f) =>
+						`failed ${f.strategy} ${f.fixtureId} round ${f.round} trial ${f.trial} (reserved $${f.reservedUsd.toFixed(2)}): ${f.error}`,
 				),
+				...cellLines("missing", report.missing),
+				...cellLines("over the cell cap", report.overCellCap),
+				...cellLines("no checkout", report.unavailable),
 			].join("\n"),
 		);
 		if (report.failed.length > 0) return 1;
@@ -155,14 +166,20 @@ export async function runExperiment(
 		.filter((f) => f.split === "test")
 		.map((f) => f.id);
 	const baseline = "a";
-	let seedGates: ReturnType<typeof readSeedGates>;
-	try {
-		seedGates = readSeedGates(deps.root, hash);
-	} catch (err) {
-		out(
-			`cannot read seed-gates.json: ${err instanceof Error ? err.message : String(err)}`,
-		);
+	if (!plan.strategies.some((s) => s.name === baseline)) {
+		out(`the plan has no baseline strategy "${baseline}"; nothing was scored`);
 		return 1;
+	}
+	let seedGates: ReturnType<typeof readSeedGates> = {};
+	if (args.final) {
+		try {
+			seedGates = readSeedGates(deps.root, hash);
+		} catch (err) {
+			out(
+				`cannot read seed-gates.json: ${err instanceof Error ? err.message : String(err)}`,
+			);
+			return 1;
+		}
 	}
 	if (args.final) {
 		if (finalScored(deps.root, hash)) {
@@ -190,19 +207,26 @@ export async function runExperiment(
 		),
 	);
 	if (skipped > 0) out(`${skipped} unreadable result line(s) skipped`);
-	const report = formatScoreReport(
-		scoreExperiment({
-			plan,
-			records,
-			fixtures,
-			cache: deps.cache,
-			final: args.final,
-			baseline,
-			seedGates,
-			exploratory,
-		}),
-		{ planHash: hash, hostedFitSeconds: plan.thresholds.hostedFitSeconds },
-	);
+	const scored = scoreExperiment({
+		plan,
+		records,
+		fixtures,
+		cache: deps.cache,
+		final: args.final,
+		baseline,
+		seedGates,
+		exploratory,
+	});
+	if (args.final && scored.partial) {
+		out(
+			"the test grid is partial: planned test cells have no result. Run the grid to completion first; nothing was scored and the one-shot final is still available",
+		);
+		return 1;
+	}
+	const report = formatScoreReport(scored, {
+		planHash: hash,
+		hostedFitSeconds: plan.thresholds.hostedFitSeconds,
+	});
 	if (args.final) {
 		try {
 			writeFinalMarker(deps.root, hash, testIds, deps.now);
