@@ -6,7 +6,7 @@ import type {
 } from "../review.js";
 import { REVIEWER_TUNING } from "../reviewer-tuning.js";
 import { fixtureId } from "./claims.js";
-import { joinsClaim, labelledClaims } from "./metrics.js";
+import { candidateKey, joinsClaim, labelledClaims } from "./metrics.js";
 import {
 	adaptiveInputForRound,
 	ledgerForRound,
@@ -138,6 +138,12 @@ export const traceRoundRunner: RoundRunner = (fixture, labels, round) => {
 	};
 };
 
+const SEVERITIES = ["P0", "P1", "P2", "P3"];
+const severityRank = (c: CandidateRecord): number => {
+	const i = SEVERITIES.indexOf(c.severity ?? "");
+	return i < 0 ? SEVERITIES.length : i;
+};
+
 const firstClean = (rounds: number[], posted: number[]): number | null => {
 	const i = posted.findIndex((n) => n === 0);
 	return i < 0 ? null : (rounds[i] as number);
@@ -179,6 +185,10 @@ function rowFor(input: AdaptiveFixtureInput, run: RoundRunner): AdaptiveRow {
 		postedAfter: [],
 		roundsToClean: { before: null, after: null },
 	};
+	const distinct = new Map<
+		string,
+		{ round: number; candidate: CandidateRecord }
+	>();
 	for (const round of fixture.rounds) {
 		if (!round.trace) continue;
 		const r = run(fixture, labels, round);
@@ -186,15 +196,22 @@ function rowFor(input: AdaptiveFixtureInput, run: RoundRunner): AdaptiveRow {
 		row.postedBefore.push(r.before.length);
 		row.postedAfter.push(r.after.length);
 		for (const candidate of r.removed) {
-			const side = sideOf(candidate, input, claims);
-			if (side === "real") {
-				row.removedReal++;
-				row.realRemovals.push({ round: round.index, candidate });
-			} else if (side === "rejected") row.removedRejected++;
-			else {
-				row.removedUnjoined++;
-				row.unjoined.push({ round: round.index, candidate });
-			}
+			const key = candidateKey(candidate);
+			const seen = distinct.get(key);
+			if (!seen) distinct.set(key, { round: round.index, candidate });
+			else if (severityRank(candidate) < severityRank(seen.candidate))
+				seen.candidate = candidate;
+		}
+	}
+	for (const entry of distinct.values()) {
+		const side = sideOf(entry.candidate, input, claims);
+		if (side === "real") {
+			row.removedReal++;
+			row.realRemovals.push(entry);
+		} else if (side === "rejected") row.removedRejected++;
+		else {
+			row.removedUnjoined++;
+			row.unjoined.push(entry);
 		}
 	}
 	row.roundsToClean = {
@@ -219,7 +236,7 @@ function formatReport(rows: AdaptiveRow[], gate: AdaptiveGate): string {
 	const evidence = sum((r) => r.removedReal + r.removedRejected);
 	const lines = [
 		`adaptive limits (REVIEWER_TUNING.adaptiveLimits, off): gate ${gate.toUpperCase()}`,
-		`  would remove ${sum((r) => r.removedReal)} confirmed-real, ${sum((r) => r.removedRejected)} rejected, ${sum((r) => r.removedUnjoined)} unjoined (counted for neither side); ${evidence} of ${MIN_EVIDENCE} needed labelled or adjudicated`,
+		`  would remove ${sum((r) => r.removedReal)} labelled-real (confirmed or provisional \`fixed\`), ${sum((r) => r.removedRejected)} rejected, ${sum((r) => r.removedUnjoined)} unjoined (counted for neither side); ${evidence} of ${MIN_EVIDENCE} needed labelled or adjudicated`,
 	];
 	if (heldOutReal.length > 0) {
 		lines.push(
@@ -231,7 +248,7 @@ function formatReport(rows: AdaptiveRow[], gate: AdaptiveGate): string {
 			);
 	}
 	if (real.length > 0) {
-		lines.push("  removed confirmed-real findings by severity:");
+		lines.push("  removed labelled-real findings by severity:");
 		for (const x of real)
 			lines.push(
 				`    ${x.candidate.severity ?? "?"} ${x.row.fixtureId} round ${x.round} ${where(x.candidate)} ${x.candidate.title}`,
@@ -242,8 +259,12 @@ function formatReport(rows: AdaptiveRow[], gate: AdaptiveGate): string {
 			`  ${r.fixtureId}: ${r.removedReal} real, ${r.removedRejected} rejected, ${r.removedUnjoined} unjoined; posted before [${r.postedBefore.join(",")}] after [${r.postedAfter.join(",")}]; rounds to clean ${ctn(r.roundsToClean.before)} before, ${ctn(r.roundsToClean.after)} after`,
 		);
 	lines.push(
+		"  counts are over distinct removed findings per fixture (path, line, title), however many rounds removed them; severity shown is the highest seen",
 		"  unadjudicated and unclear items do not count for or against; labels are provisional",
-		"  offline replay does not model the push-shape factor, so the band budget is unscaled: removals are a lower bound on what production would remove",
+		"  a label wins over an adjudicated verdict, and real wins over rejected when a candidate joins both",
+		"  push-shape factor is not modeled, so the band budget is unscaled: removals are under-counted for small pushes",
+		"  off-diff drops are not modeled, every candidate line is treated as on the diff: this slightly enlarges the pool the limits see, so removals can be over-counted",
+		"  candidate confidence is not recorded in traces and is set to 1 for every reconstructed candidate, so ties among equal-severity candidates are broken by agent support and input order",
 		"  rounds to clean is the index of the first traced round that posts nothing",
 	);
 	return lines.join("\n");

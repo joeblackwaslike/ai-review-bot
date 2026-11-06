@@ -152,6 +152,62 @@ describe("adaptiveReport verdicts", () => {
 	});
 });
 
+describe("adaptiveReport distinct findings", () => {
+	const roundsFixture = (
+		n: number,
+		kinds: (Label | null)[],
+		heldOut = false,
+	) => {
+		const { input } = build(kinds, { heldOut });
+		const round0 = input.fixture.rounds[0] as (typeof input.fixture.rounds)[0];
+		const fixture: ReplayFixture = {
+			...input.fixture,
+			rounds: Array.from({ length: n }, (_, i) => ({ ...round0, index: i })),
+		};
+		return { ...input, fixture };
+	};
+
+	it("counts one finding removed in 12 rounds once and stays inconclusive", () => {
+		const input = roundsFixture(12, ["rejected"]);
+		const r = adaptiveReport([input], runnerOf(withRemoved([cand(0)])));
+		expect(r.perFixture[0]?.removedRejected).toBe(1);
+		expect(r.gate).toBe("inconclusive");
+	});
+
+	it("passes with 10 distinct rejected findings each removed in 3 rounds", () => {
+		const input = roundsFixture(3, Array(10).fill("rejected"));
+		const removed = Array.from({ length: 10 }, (_, i) => cand(i));
+		const r = adaptiveReport([input], runnerOf(withRemoved(removed)));
+		expect(r.perFixture[0]?.removedRejected).toBe(10);
+		expect(r.gate).toBe("pass");
+	});
+
+	it("lists a real finding removed in two held-out rounds once and fails", () => {
+		const input = roundsFixture(
+			2,
+			["fixed", ...Array(10).fill("rejected")],
+			true,
+		);
+		const removed = Array.from({ length: 11 }, (_, i) =>
+			cand(i, i === 0 ? "P3" : "P2"),
+		);
+		const run: RoundRunner = (_f, _l, round) =>
+			withRemoved(
+				round.index === 0
+					? removed
+					: removed.map((c, i) => (i === 0 ? { ...c, severity: "P1" } : c)),
+			);
+		const r = adaptiveReport([input], run);
+		const row = r.perFixture[0];
+		expect(row?.removedReal).toBe(1);
+		expect(row?.realRemovals).toHaveLength(1);
+		expect(row?.realRemovals[0]?.round).toBe(0);
+		expect(row?.realRemovals[0]?.candidate.severity).toBe("P1");
+		expect(r.gate).toBe("fail");
+		expect(r.text.match(/HELD-OUT REAL/g)).toHaveLength(1);
+	});
+});
+
 describe("adaptiveReport rounds", () => {
 	it("reports posted counts per traced round and rounds to clean", () => {
 		const base = makeFixture([["a"], ["b"], ["c"]]);
@@ -179,8 +235,13 @@ describe("adaptiveReport rounds", () => {
 	it("states the lower bound and provisional labels", () => {
 		const { input, removed } = build(["rejected"]);
 		const { text } = adaptiveReport([input], runnerOf(withRemoved(removed)));
-		expect(text).toContain("lower bound");
-		expect(text).toContain("push-shape");
+		expect(text).toContain("push-shape factor is not modeled");
+		expect(text).toContain("off-diff drops are not modeled");
+		expect(text).not.toContain("lower bound");
+		expect(text).toContain("labelled-real (confirmed or provisional `fixed`)");
+		expect(text).toContain("a label wins over an adjudicated verdict");
+		expect(text).toContain("real wins over rejected");
+		expect(text).toContain("confidence is not recorded");
 		expect(text).toContain("labels are provisional");
 		expect(text).toContain("do not count for or against");
 	});
