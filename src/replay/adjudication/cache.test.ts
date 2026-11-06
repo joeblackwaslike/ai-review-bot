@@ -1,8 +1,8 @@
 import { appendFileSync, mkdtempSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { VerdictCache } from "./cache.js";
+import { defaultAdjudicationDir, VerdictCache } from "./cache.js";
 import type { VerdictRecord } from "./types.js";
 
 const record = (reason: string): VerdictRecord => ({
@@ -67,5 +67,21 @@ describe("VerdictCache", () => {
 		expect(readFileSync(join(dir, "snap.jsonl"), "utf8")).toContain(
 			"{not json",
 		);
+	});
+
+	it.each([
+		"",
+		"   ",
+	])("falls back to the default directory for a blank override %j", (blank) => {
+		const prior = process.env.AI_REVIEW_ADJUDICATION_DIR;
+		process.env.AI_REVIEW_ADJUDICATION_DIR = blank;
+		try {
+			expect(defaultAdjudicationDir()).toBe(
+				join(homedir(), ".ai-review", "adjudication"),
+			);
+		} finally {
+			if (prior === undefined) delete process.env.AI_REVIEW_ADJUDICATION_DIR;
+			else process.env.AI_REVIEW_ADJUDICATION_DIR = prior;
+		}
 	});
 });

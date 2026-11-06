@@ -4,10 +4,8 @@ import { join } from "node:path";
 import type { VerdictRecord } from "./types.js";
 
 export function defaultAdjudicationDir(): string {
-	return (
-		process.env.AI_REVIEW_ADJUDICATION_DIR ??
-		join(homedir(), ".ai-review", "adjudication")
-	);
+	const override = process.env.AI_REVIEW_ADJUDICATION_DIR?.trim();
+	return override || join(homedir(), ".ai-review", "adjudication");
 }
 
 interface Line<T> {
