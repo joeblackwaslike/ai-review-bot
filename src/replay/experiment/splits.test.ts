@@ -35,6 +35,25 @@ const fx = (split: "tuning" | "validation" | "test", repo: number, n: number) =>
 		provider: "anthropic" as const,
 	}));
 
+describe("provider-suffixed ids", () => {
+	it("puts both providers of one PR in the same split", () => {
+		for (const id of ids(40)) {
+			expect(splitOf(`${id}@openai`, "s")).toBe(
+				splitOf(`${id}@anthropic`, "s"),
+			);
+			expect(splitOf(`${id}@openai`, "s")).toBe(splitOf(id, "s"));
+		}
+	});
+
+	it("counts a PR recorded for both providers once", () => {
+		const both = [
+			{ id: "o/r#1@anthropic", split: "tuning" as const },
+			{ id: "o/r#1@openai", split: "tuning" as const },
+		];
+		expect(splitCounts({ fixtures: both }).tuning).toBe(1);
+	});
+});
+
 describe("splitCounts and isDirectional", () => {
 	it("counts per split and repositories", () => {
 		const counts = splitCounts({

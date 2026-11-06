@@ -44,6 +44,7 @@ export const ExperimentPlanSchema = z
 		}),
 		a0Tolerance: z.number().positive().lt(1),
 		selectionRule: z.string().min(1),
+		draft: z.boolean().optional(),
 	})
 	.superRefine((plan, ctx) => {
 		for (const [i, f] of plan.fixtures.entries()) {

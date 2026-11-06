@@ -6,9 +6,13 @@ export const MIN_PRS = 30;
 export const MIN_PER_SPLIT = 10;
 export const MIN_REPOS = 5;
 
+/** `owner/repo#pull`, without any `@provider` suffix. */
+export const prOf = (fixtureId: string): string =>
+	fixtureId.replace(/@(anthropic|openai)$/, "");
+
 export function splitOf(fixtureId: string, seed: string): Split {
 	const hex = createHash("sha256")
-		.update(seed + fixtureId)
+		.update(seed + prOf(fixtureId))
 		.digest("hex")
 		.slice(0, 8);
 	const unit = Number.parseInt(hex, 16) / 2 ** 32;
@@ -27,9 +31,13 @@ export function splitCounts(plan: {
 }): Record<Split, number> & { repos: number } {
 	const counts = { tuning: 0, validation: 0, test: 0 };
 	const repos = new Set<string>();
+	const seen = new Set<string>();
 	for (const f of plan.fixtures) {
+		const pr = prOf(f.id);
+		if (seen.has(pr)) continue;
+		seen.add(pr);
 		counts[f.split]++;
-		repos.add(f.id.split("#")[0] as string);
+		repos.add(pr.split("#")[0] as string);
 	}
 	return { ...counts, repos: repos.size };
 }
@@ -37,7 +45,7 @@ export function splitCounts(plan: {
 export function isDirectional(plan: { fixtures: FixtureRef[] }): boolean {
 	const c = splitCounts(plan);
 	return (
-		plan.fixtures.length < MIN_PRS ||
+		new Set(plan.fixtures.map((f) => prOf(f.id))).size < MIN_PRS ||
 		c.tuning < MIN_PER_SPLIT ||
 		c.validation < MIN_PER_SPLIT ||
 		c.test < MIN_PER_SPLIT ||

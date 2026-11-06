@@ -46,6 +46,14 @@ describe("ExperimentPlanSchema", () => {
 		expect(parsed.success).toBe(false);
 	});
 
+	it("accepts an optional draft flag", () => {
+		const parsed = ExperimentPlanSchema.safeParse({
+			...samplePlan(),
+			draft: true,
+		});
+		expect(parsed.success && parsed.data.draft).toBe(true);
+	});
+
 	it("rejects a non per-round mode", () => {
 		expect(
 			ExperimentPlanSchema.safeParse({ ...samplePlan(), mode: "chained" })
