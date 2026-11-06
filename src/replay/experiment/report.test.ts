@@ -7,6 +7,7 @@ const base = (over: Partial<ExperimentScore> = {}): ExperimentScore => ({
 	directional: false,
 	exploratory: null,
 	partial: false,
+	overCapCells: 0,
 	staleExcluded: 0,
 	baseline: "a",
 	perPr: [],

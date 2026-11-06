@@ -359,6 +359,8 @@ export interface ExperimentScore {
 	directional: boolean;
 	exploratory: string | null;
 	partial: boolean;
+	/** Fresh cells that spent past the budget they were given. */
+	overCapCells: number;
 	staleExcluded: number;
 	baseline: string;
 	perPr: PrScore[];
@@ -387,6 +389,7 @@ export function scoreExperiment(args: {
 	const inScope = args.records.filter((r) => readable.has(r.key.fixtureId));
 	const staleExcluded = inScope.filter((r) => r.stale).length;
 	const fresh = inScope.filter((r) => !r.stale);
+	const overCapCells = fresh.filter((r) => r.overCap).length;
 
 	const groups = new Map<string, StoredCell[]>();
 	for (const r of fresh) {
@@ -508,7 +511,8 @@ export function scoreExperiment(args: {
 		final,
 		directional,
 		exploratory: args.exploratory,
-		partial: fresh.length < expected,
+		partial: fresh.length < expected || overCapCells > 0,
+		overCapCells,
 		staleExcluded,
 		baseline: args.baseline,
 		perPr,

@@ -210,6 +210,24 @@ describe("score --final seed gates", () => {
 		expect(existsSync(join(dir, "final.marker"))).toBe(false);
 	});
 
+	it("refuses --final before the marker when a test cell went over budget", async () => {
+		const p = plan({
+			seed: seedFor(["o/r#1", "test"]),
+			fixtures: [{ id: "o/r#1", split: "test", provider: "anthropic" }],
+		});
+		const s = setup(p);
+		s.deps.runStrategy = async (st, i) => ({
+			...(await st.run(i)),
+			usage: { x: { promptTokens: 400_000, completionTokens: 40_000 } },
+		});
+		await call(s, "run");
+		expect(await call(s, "score", true)).toBe(1);
+		expect(s.lines.join("\n")).toMatch(/over budget|over cap/i);
+		expect(existsSync(join(s.deps.root, planHash(p), "final.marker"))).toBe(
+			false,
+		);
+	});
+
 	it("reads seed-gates.json only for --final", async () => {
 		const s = setup(plan());
 		const dir = join(s.deps.root, planHash(plan()));

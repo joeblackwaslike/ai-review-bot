@@ -503,6 +503,42 @@ describe("scoreExperiment", () => {
 		expect(a?.cells).toEqual(["0:0"]);
 	});
 
+	it("is partial when a complete grid holds an over-budget cell", () => {
+		const onePlan = {
+			...plan,
+			strategies: [{ name: "a", version: "v1" }],
+			fixtures: [
+				{
+					id: "o/r#1",
+					split: "tuning" as const,
+					provider: "anthropic" as const,
+				},
+			],
+		};
+		const full = [0, 1, 2].map((round) =>
+			cell({ strategy: "a", fixtureId: "o/r#1", round }),
+		);
+		const score = (recs: StoredCell[]) =>
+			scoreExperiment({
+				plan: onePlan,
+				records: recs,
+				fixtures,
+				cache: cacheOf([]),
+				final: false,
+				baseline: "a",
+				seedGates: {},
+				exploratory: null,
+			});
+		expect(score(full).partial).toBe(false);
+		const over = [
+			...full.slice(1),
+			{ ...(full[0] as StoredCell), overCap: { allowedUsd: 1, actualUsd: 2 } },
+		];
+		const out = score(over);
+		expect(out.partial).toBe(true);
+		expect(out.overCapCells).toBe(1);
+	});
+
 	it("compares on the shared cells of each PR instead of dropping the PR", () => {
 		const out = run(false, [
 			cell({ strategy: "a", fixtureId: "o/r#1", round: 0, posted: [cand(C2)] }),

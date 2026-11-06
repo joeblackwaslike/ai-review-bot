@@ -223,7 +223,9 @@ export async function runExperiment(
 	});
 	if (args.final && scored.partial) {
 		out(
-			"the test grid is partial: planned test cells have no result. Run the grid to completion first; nothing was scored and the one-shot final is still available",
+			scored.overCapCells > 0
+				? `${scored.overCapCells} test cell(s) went over budget (overCap); a final verdict needs every cell inside its budget. Nothing was scored and the one-shot final is still available`
+				: "the test grid is partial: planned test cells have no result. Run the grid to completion first; nothing was scored and the one-shot final is still available",
 		);
 		return 1;
 	}
