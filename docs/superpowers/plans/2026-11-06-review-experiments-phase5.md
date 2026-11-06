@@ -83,10 +83,13 @@ Interfaces:
   }): number`: the integer `n >= 1` whose `n * perRunUsd` is closest to `targetUsd`, capped at
   `max`; the result reports whether it landed inside `tolerance` (default 0.10).
 - Strategy `a0`: `needsCheckout: false`; `version` = hash of the a0 skill text and the tier maps.
-  Its `run` gets A's cost for the same round from `input.budget.maxUsd`, which the grid runner
-  sets from A's recorded result in the same run (recorded traces from older runs are never used).
-  It measures its own first run's cost with `roundCostUsd`, then chooses `n` and runs the rest
-  through `runAgent` with `mapWithConcurrency` at `AGENT_CONCURRENCY`. Each repeat is one entry
+  Its `run` gets A's cost for the same round from `input.spendTargetUsd` (an optional field the
+  grid runner sets from A's recorded result in the same run; recorded traces from older runs
+  are never used). `budget.maxUsd` is only a hard cap; without a target a0 runs once. It runs
+  once cold, then once warm unless the first run already meets the target within tolerance,
+  measures the warm run's cost with `roundCostUsd`, then chooses `n` and runs the rest through
+  `runAgent` with `mapWithConcurrency` at `AGENT_CONCURRENCY`, rechecking running spend against
+  `maxUsd` before each launch. The tolerance comes from `plan.a0Tolerance`, passed by the runner. Each repeat is one entry
   in `agentReviews` with skill name `a0-run-<k>`. Wall time is measured at that concurrency.
   The result reports achieved spend and whether it was within tolerance.
 - The router model is the one A uses for the round (`routeModel(routerContext(files), provider)`).
@@ -177,8 +180,8 @@ Interfaces:
 - `pairedBootstrap(perPr: {a:number; b:number}[], opts: { level; resamples; seed })` resamples
   PRs, never claims, and returns the difference estimate and interval. Seeded, so the same
   input gives the same interval.
-- `verdictFor(strategyPair, metrics, thresholds)` applies section 9: precision interval excludes
-  zero and recall point estimate drops no more than 5 points, cost-competitive rule, 90% inside
+- `verdictFor(strategyPair, metrics, thresholds)` applies section 9: precision interval lies
+  wholly above zero (an interval wholly below zero is a loss, not a win) and recall point estimate drops no more than 5 points, cost-competitive rule, 90% inside
   210 seconds, seeds gate. A result confirmed only on Anthropic reads "Anthropic-only,
   unconfirmed on OpenAI" with no go or no-go claim. Directional plans print no verdict.
 - `final-guard.ts`: `experiment score --final` writes a marker file next to the results; a
@@ -197,7 +200,7 @@ directional label below the minimum. Then implement.
 ## Task 8 (5b): CLI, protocol, docs
 
 Files: modify `src/cli.ts` and `src/replay/command.ts` (or the file that parses replay flags),
-their tests; create `docs/review-experiments/protocol.md`, `plan.json`, `plan.lock`; modify
+their tests; create `docs/review-experiments/protocol.md` and `plan.json` (no `plan.lock`; phase 6 creates it); modify
 `CLAUDE.md` replay paragraph and the bead.
 
 Interfaces:
