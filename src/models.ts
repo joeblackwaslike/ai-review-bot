@@ -12,7 +12,7 @@ interface TokenUsage {
 // $/1M tokens. Anthropic rates from platform.claude.com/docs/en/about-claude/models/overview;
 // OpenAI rates from developers.openai.com/api/docs/models/gpt-6{-luna,.1-sol} (Oct 2026).
 // cachedInput: Anthropic cache reads bill at 0.1x input (platform.claude.com/docs/en/build-with-claude/prompt-caching);
-// OpenAI cached input is taken at the same 0.1x ratio (not re-verified against the model pages).
+// OpenAI cached input per the model pages: gpt-6.1-sol at 5% of input, gpt-6-luna at 10%.
 // Cache writes are not recorded in usage, so cost undercounts the write premium on cold runs.
 // ponytail: flat rates — Haiku 5.5 bills $0.50/$2.50 above 100K prompt tokens,
 // so huge trivial-tier diffs are under-reported; add a tier split if that matters.
@@ -24,7 +24,7 @@ const TOKEN_RATES: Record<
 	"claude-sonnet-5-5": { input: 2.0, cachedInput: 0.2, output: 10.0 },
 	"claude-opus-5-5": { input: 4.0, cachedInput: 0.4, output: 20.0 },
 	"gpt-6-luna": { input: 0.1, cachedInput: 0.01, output: 0.5 },
-	"gpt-6.1-sol": { input: 2.0, cachedInput: 0.2, output: 10.0 },
+	"gpt-6.1-sol": { input: 2.0, cachedInput: 0.1, output: 10.0 },
 };
 
 export function computeCost(usage: TokenUsage, model: string): number {
