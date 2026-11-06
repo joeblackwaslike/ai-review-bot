@@ -34,8 +34,8 @@ const spellOutNegation = (title: string): string =>
 
 /**
  * Same path, same title words, same named identifiers, same negation and same numbers give the
- * same key. Negation and numbers are stop-word or too short for the token set, yet they flip a
- * claim, so they are keyed separately.
+ * same key. claimTokens drops negation words and short numbers, yet they flip a claim, so they
+ * are keyed separately.
  */
 export function claimKey(c: { path: string | null; title: string }): string {
 	const title = spellOutNegation(c.title);
