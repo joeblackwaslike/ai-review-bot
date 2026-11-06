@@ -177,6 +177,53 @@ describe("inherited GIT_* environment", () => {
 	});
 });
 
+describe("user git configuration", () => {
+	it("does not change the commits", async () => {
+		const seed = await loadSeed(
+			await inlineSeed("REL-01", "original", defect()),
+		);
+		const plain = await materializeSeed(seed);
+		const home = join(root, "home");
+		await write(
+			join(home, "template", "hooks", "pre-commit"),
+			"#!/bin/sh\nexit 1\n",
+		);
+		await write(join(home, "attrs"), "* filter=evil\n");
+		await write(
+			join(home, ".gitconfig"),
+			[
+				"[commit]\n\tgpgsign = true",
+				"[gpg]\n\tprogram = /nonexistent/gpg",
+				`[init]\n\ttemplateDir = ${join(home, "template")}`,
+				`[core]\n\thooksPath = ${join(home, "template", "hooks")}\n\tattributesFile = ${join(home, "attrs")}`,
+				'[filter "evil"]\n\tclean = tr a b',
+				"[user]\n\tuseConfigOnly = true",
+			].join("\n"),
+		);
+		const saved = { ...process.env };
+		process.env.HOME = home;
+		process.env.XDG_CONFIG_HOME = join(home, "xdg");
+		let configured: Awaited<ReturnType<typeof materializeSeed>> | undefined;
+		try {
+			configured = await materializeSeed(seed);
+		} finally {
+			process.env.HOME = saved.HOME;
+			if (saved.XDG_CONFIG_HOME === undefined)
+				delete process.env.XDG_CONFIG_HOME;
+			else process.env.XDG_CONFIG_HOME = saved.XDG_CONFIG_HOME;
+		}
+		try {
+			expect([configured.baseSha, configured.headSha]).toEqual([
+				plain.baseSha,
+				plain.headSha,
+			]);
+		} finally {
+			await plain.cleanup();
+			await configured.cleanup();
+		}
+	});
+});
+
 describe("listSeeds", () => {
 	it("lists op-id directories in stable order and skips other directories", async () => {
 		await inlineSeed("REL-10", "v1", defect());

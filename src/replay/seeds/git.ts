@@ -7,10 +7,15 @@ function cleanEnv(extra: Record<string, string>): NodeJS.ProcessEnv {
 	const env: NodeJS.ProcessEnv = {};
 	for (const [k, v] of Object.entries(process.env))
 		if (!k.startsWith("GIT_")) env[k] = v;
-	return { ...env, ...extra };
+	return {
+		...env,
+		GIT_CONFIG_GLOBAL: "/dev/null",
+		GIT_CONFIG_NOSYSTEM: "1",
+		...extra,
+	};
 }
 
-/** Runs git in `cwd` with no hooks and no inherited `GIT_*` variables, so it can only touch `cwd`. */
+/** Runs git in `cwd` with no hooks, no inherited `GIT_*` variables and no user or system git config, so it only touches `cwd` and behaves the same on every machine. */
 export async function seedGit(
 	cwd: string,
 	args: string[],

@@ -94,12 +94,17 @@ export async function planSeeds(
 	const seeds = await loadAll(opts);
 	if (!seeds) return 1;
 	let total = 0;
-	for (const seed of seeds) {
-		total += await withInput(seed, async (input) =>
-			strategy.estimateCost(
-				strategyInput(input, Number.POSITIVE_INFINITY, false),
-			),
-		);
+	try {
+		for (const seed of seeds) {
+			total += await withInput(seed, async (input) =>
+				strategy.estimateCost(
+					strategyInput(input, Number.POSITIVE_INFINITY, false),
+				),
+			);
+		}
+	} catch (err) {
+		opts.out(`seed plan failed: ${message(err)}`);
+		return 1;
 	}
 	opts.out(
 		`${seeds.length} seeds, strategy ${strategy.name}@${strategy.version}, estimated cost $${total.toFixed(2)}`,

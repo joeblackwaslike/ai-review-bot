@@ -149,6 +149,28 @@ describe("planSeeds", () => {
 	});
 });
 
+describe("planSeeds failures", () => {
+	it("prints and exits 1 when estimateCost throws", async () => {
+		await fullRoot();
+		const s = stub(findsAll, {
+			estimateCost: () => {
+				throw new Error("estimate boom");
+			},
+		});
+		expect(await planSeeds(s, { root, out })).toBe(1);
+		expect(lines.join("\n")).toContain("seed plan failed: estimate boom");
+	});
+
+	it("prints and exits 1 when a seed cannot be materialised", async () => {
+		await fullRoot();
+		await rm(join(root, "REL-01", "original", "head"), { recursive: true });
+		const s = stub(findsAll);
+		expect(await planSeeds(s, { root, out })).toBe(1);
+		expect(lines.join("\n")).toContain("seed plan failed:");
+		expect(s.run).not.toHaveBeenCalled();
+	});
+});
+
 describe("runSeedsWithStrategy", () => {
 	it("passes the gate when every defect is found and controls are quiet", async () => {
 		await fullRoot();
@@ -175,11 +197,34 @@ describe("runSeedsWithStrategy", () => {
 		expect(await runSeedsWithStrategy(s, { root, out, maxCostUsd: 5 })).toBe(0);
 	});
 
-	it("fails the gate on a finding on a clean control", async () => {
+	it("fails the gate on a clean control finding even when every defect is found", async () => {
 		await fullRoot();
-		const s = stub((repo) => [posted("src/a.ts", 2)].slice(0, repo ? 1 : 0));
+		const s = stub((repo) => [posted("src/a.ts", 2)].filter(() => repo !== ""));
 		expect(await runSeedsWithStrategy(s, { root, out, maxCostUsd: 5 })).toBe(1);
-		expect(lines.join("\n")).toMatch(/clean controls/);
+		const text = lines.join("\n");
+		expect(text).toMatch(/originals missed 0/);
+		expect(text).toMatch(/clean control findings 5/);
+		expect(text).toMatch(/clean controls/);
+	});
+
+	it("a strategy that only posts on clean controls misses the originals and fails", async () => {
+		await fullRoot();
+		const s = stub((repo) =>
+			repo.endsWith("-clean") ? [posted("src/a.ts", 2)] : [],
+		);
+		expect(await runSeedsWithStrategy(s, { root, out, maxCostUsd: 5 })).toBe(1);
+		const text = lines.join("\n");
+		expect(text).toMatch(/originals missed 5/);
+		expect(text).toMatch(/clean control findings 5/);
+	});
+
+	it("a strategy that only posts on defect seeds passes", async () => {
+		await fullRoot();
+		const s = stub((repo) =>
+			repo.endsWith("-clean") ? [] : [posted("src/a.ts", 2)],
+		);
+		expect(await runSeedsWithStrategy(s, { root, out, maxCostUsd: 5 })).toBe(0);
+		expect(lines.join("\n")).toMatch(/clean control findings 0/);
 	});
 
 	it("stops at the cost cap and exits 1", async () => {
