@@ -10,6 +10,7 @@ export const DISCARD_REASONS = [
 	"CAP",
 	"DISCARDED_BY_VERIFY",
 	"RESOLVED_LOCATION",
+	"ADAPTIVE_LIMIT",
 ] as const;
 /** Whether a discarded finding was removed outright or still holds the verdict. */
 export const DISPOSITIONS = ["dropped", "held"] as const;
