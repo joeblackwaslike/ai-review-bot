@@ -47,7 +47,7 @@ Interfaces:
   `CheckoutUnavailable = { unavailable: true; reason: string }`.
 - `GitRunner = (args: string[], cwd?: string) => Promise<{ stdout: string }>`, default wraps
   `execFile("git", ...)` (no shell).
-- Cache path `~/.ai-review/checkouts/<owner>__<repo>.git` (override via `AI_REVIEW_CHECKOUT_DIR`).
+- Cache path `~/.ai-review/checkouts/<owner>/<repo>.git` (override via `AI_REVIEW_CHECKOUT_DIR`).
 - Uses the base commit already stored on each round (`baseSha`, `mergeBase`); no `--record`
   change is needed because both are recorded today.
 

@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { access, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import type { CheckoutHandle } from "./strategy.js";
 
@@ -90,14 +90,11 @@ export async function withCheckout<T>(
 	fn: (handle: CheckoutHandle) => Promise<T>,
 ): Promise<T | CheckoutUnavailable> {
 	const git = opts.git ?? defaultGit;
-	const bare = join(
-		cacheRoot(opts.cacheDir),
-		`${opts.owner}__${opts.repo}.git`,
-	);
+	const bare = join(cacheRoot(opts.cacheDir), opts.owner, `${opts.repo}.git`);
 
 	try {
 		if (!(await exists(bare))) {
-			await mkdir(cacheRoot(opts.cacheDir), { recursive: true });
+			await mkdir(dirname(bare), { recursive: true });
 			const url = await (opts.remoteUrl ?? defaultRemoteUrl)(
 				opts.owner,
 				opts.repo,

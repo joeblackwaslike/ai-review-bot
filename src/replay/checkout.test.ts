@@ -84,9 +84,10 @@ describe("withCheckout", () => {
 				expect(h.headSha).toBe(head1);
 				expect(await sh(h.path, "rev-parse", "HEAD")).toBe(head1);
 				expect(await readFile(join(h.path, "b.txt"), "utf8")).toBe("two");
-				await expect(
-					writeFile(join(h.path, "b.txt"), "x"),
-				).rejects.toMatchObject({ code: "EACCES" });
+				if (process.getuid?.() !== 0)
+					await expect(
+						writeFile(join(h.path, "b.txt"), "x"),
+					).rejects.toMatchObject({ code: "EACCES" });
 				return "ok";
 			},
 		);
@@ -96,14 +97,38 @@ describe("withCheckout", () => {
 
 		const head2 = await commit("c.txt", "three");
 		calls.length = 0;
-		await withCheckout(
+		const second = await withCheckout(
 			{ ...opts, baseSha: head1, headSha: head2 },
 			async (h) => {
 				expect(await readFile(join(h.path, "c.txt"), "utf8")).toBe("three");
+				return `ran at ${await sh(h.path, "rev-parse", "HEAD")}`;
 			},
 		);
+		expect(second).toBe(`ran at ${head2}`);
 		expect(calls.some((c) => c[0] === "clone")).toBe(false);
 		expect(calls.some((c) => c[0] === "fetch")).toBe(true);
+	});
+
+	it("keeps repos whose names contain double underscores in separate caches", async () => {
+		const head = await commit("a.txt", "one");
+		const { git, calls } = recorder();
+		for (const [owner, repo] of [
+			["a__b", "c"],
+			["a", "b__c"],
+		] as const)
+			await withCheckout(
+				{
+					owner,
+					repo,
+					baseSha: head,
+					headSha: head,
+					cacheDir: cache,
+					git,
+					remoteUrl: async () => origin,
+				},
+				async () => "ok",
+			);
+		expect(calls.filter((c) => c[0] === "clone")).toHaveLength(2);
 	});
 
 	it("removes the worktree when fn throws", async () => {
