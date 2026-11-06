@@ -139,3 +139,23 @@ export function applyLimits<R extends LimitableReview<Limitable, Limitable>>(
 		removed,
 	};
 }
+
+/** One plain sentence for the review body naming the limits that removed findings, or
+ * null when nothing was removed. It carries no bullet and no marker, so the next round's
+ * baseline cannot read it back as a finding. */
+export function limitNotice(
+	limits: Pick<ResolvedLimits, "floor" | "budget">,
+	removedCount: number,
+): string | null {
+	if (removedCount === 0) return null;
+	const { floor, budget } = limits;
+	const why = "because most findings in earlier rounds were declined";
+	if (budget !== null) {
+		const floorPart = floor !== null ? ` (${floor} and up)` : "";
+		return `Showing the ${budget} highest-severity findings this round${floorPart}, ${why}.`;
+	}
+	if (floor !== null) {
+		return `Showing findings of ${floor} and up this round, ${why}.`;
+	}
+	return null;
+}

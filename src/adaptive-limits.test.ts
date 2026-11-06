@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { applyLimits, resolveLimits } from "./adaptive-limits.js";
+import { applyLimits, limitNotice, resolveLimits } from "./adaptive-limits.js";
 import type { LedgerEntry } from "./ledger/types.js";
 import type { Sev } from "./trajectory.js";
 import * as trajectory from "./trajectory.js";
@@ -269,5 +269,37 @@ describe("resolveLimits", () => {
 		expect(out.floor).toBe("P2");
 		expect(out.budget).toBeNull();
 		expect(out.shape).toBeNull();
+	});
+});
+
+describe("limitNotice", () => {
+	const base = { score: 0.9, rounds: [], shape: null };
+
+	it("is null when nothing was removed", () => {
+		expect(limitNotice({ ...base, floor: "P2", budget: 5 }, 0)).toBeNull();
+	});
+
+	it("names the budget and floor", () => {
+		expect(limitNotice({ ...base, floor: "P2", budget: 5 }, 3)).toBe(
+			"Showing the 5 highest-severity findings this round (P2 and up), because most findings in earlier rounds were declined.",
+		);
+	});
+
+	it("names only the budget", () => {
+		expect(limitNotice({ ...base, floor: null, budget: 10 }, 1)).toBe(
+			"Showing the 10 highest-severity findings this round, because most findings in earlier rounds were declined.",
+		);
+	});
+
+	it("names only the floor", () => {
+		expect(limitNotice({ ...base, floor: "P2", budget: null }, 1)).toBe(
+			"Showing findings of P2 and up this round, because most findings in earlier rounds were declined.",
+		);
+	});
+
+	it("carries no bullet or marker", () => {
+		const n = limitNotice({ ...base, floor: "P2", budget: 5 }, 2) ?? "";
+		expect(n).not.toContain("> - ");
+		expect(n).not.toContain("ai-review:");
 	});
 });

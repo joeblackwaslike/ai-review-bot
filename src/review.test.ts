@@ -6840,6 +6840,152 @@ describe("buildReview ledger suppression", () => {
 		expect(trace.posted.map((r) => r.title)).not.toContain(offP2.title);
 	});
 
+	describe("adaptive limits", () => {
+		const none = buildModelReview({
+			event: "COMMENT",
+			general_findings: [],
+			inline_comments: [],
+		});
+		const finding = (
+			n: number,
+			severity: "P1" | "P2" | "P3",
+			confidence = 0.9 - n / 100,
+		) => ({
+			...fresh,
+			title: `Adaptive finding ${n}`,
+			severity,
+			confidence,
+		});
+		const nine = [
+			finding(0, "P1"),
+			...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => finding(n, "P2")),
+		];
+		const agentOutput = (
+			general: typeof nine,
+			event: "COMMENT" | "REQUEST_CHANGES" = "COMMENT",
+		) =>
+			buildModelReview({
+				event,
+				general_findings: general,
+				inline_comments: [],
+			});
+		const titlesIn = (body: string) =>
+			[...body.matchAll(/Adaptive finding \d/g)].map((m) => m[0]);
+		const spy = () => vi.fn(async (_discards: Discard[]) => {});
+		const secondComment = {
+			id: 21,
+			pull_request_review_id: 100,
+			path: "src/review.ts",
+			line: 3,
+			body: "**P2** **Second open claim**\n\nStill open.",
+		};
+		const [declinedThread] =
+			threads.data.repository.pullRequest.reviewThreads.nodes;
+		const openSecondThread = {
+			...declinedThread,
+			comments: {
+				...declinedThread.comments,
+				nodes: [
+					{
+						...declinedThread.comments.nodes[0],
+						databaseId: 21,
+						body: secondComment.body,
+					},
+				],
+			},
+		};
+
+		afterEach(() => {
+			REVIEWER_TUNING.adaptiveLimits = false;
+		});
+
+		it("keeps the P1 and 4 P2 and records 4 ADAPTIVE_LIMIT discards", async () => {
+			REVIEWER_TUNING.adaptiveLimits = true;
+			routeAgents({ "code-reviewer.md": agentOutput(nine) }, none);
+			const recordDiscards = spy();
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit(),
+				...baseContext,
+				recordDiscards,
+			});
+
+			expect(titlesIn(decision?.body ?? "")).toEqual(
+				[0, 1, 2, 3, 4].map((n) => `Adaptive finding ${n}`),
+			);
+			const records = recordDiscards.mock.calls[0]?.[0] ?? [];
+			const limited = records.filter((d) => d.reason === "ADAPTIVE_LIMIT");
+			expect(limited.map((d) => d.title).sort()).toEqual(
+				[5, 6, 7, 8].map((n) => `Adaptive finding ${n}`),
+			);
+			expect(limited.every((d) => d.disposition === "dropped")).toBe(true);
+			expect(limited.every((d) => d.skill === "code-reviewer.md")).toBe(true);
+			expect(decision?.body).toContain(
+				"Showing the 5 highest-severity findings this round (P2 and up)",
+			);
+		});
+
+		it("posts all nine with the switch off", async () => {
+			routeAgents({ "code-reviewer.md": agentOutput(nine) }, none);
+			const decision = await buildReview({
+				octokit: ledgerOctokit(),
+				...baseContext,
+			});
+			expect(new Set(titlesIn(decision?.body ?? "")).size).toBe(9);
+			expect(decision?.body).not.toContain("highest-severity findings");
+		});
+
+		it("posts all nine in round 1, with no earlier own review", async () => {
+			REVIEWER_TUNING.adaptiveLimits = true;
+			routeAgents({ "code-reviewer.md": agentOutput(nine) }, none);
+			const decision = await buildReview({
+				octokit: ledgerOctokit({ reviews: [], comments: [], threadNodes: [] }),
+				...baseContext,
+			});
+			expect(new Set(titlesIn(decision?.body ?? "")).size).toBe(9);
+		});
+
+		it("uses the band budget unscaled on a non-incremental review", async () => {
+			REVIEWER_TUNING.adaptiveLimits = true;
+			const log = vi.spyOn(console, "log").mockImplementation(() => {});
+			routeAgents({ "code-reviewer.md": agentOutput(nine) }, none);
+			await buildReview({ octokit: ledgerOctokit(), ...baseContext });
+			const line = log.mock.calls.find(([m]) => m === "adaptive limits");
+			log.mockRestore();
+			expect(line?.[1]).toMatchObject({ floor: "P2", budget: 5, removed: 4 });
+			expect(line?.[1].shape).toBeNull();
+		});
+
+		const allBelowFloor = agentOutput(
+			[1, 2, 3].map((n) => finding(n, "P3")),
+			"REQUEST_CHANGES",
+		);
+
+		it("downgrades to COMMENT when every new finding is removed and nothing carried blocks", async () => {
+			REVIEWER_TUNING.adaptiveLimits = true;
+			routeAgents({ "code-reviewer.md": allBelowFloor }, none);
+			const decision = await buildReview({
+				octokit: ledgerOctokit(),
+				...baseContext,
+			});
+			expect(decision?.event).toBe("COMMENT");
+			expect(titlesIn(decision?.body ?? "")).toEqual([]);
+		});
+
+		it("keeps REQUEST_CHANGES when a carried entry still blocks", async () => {
+			REVIEWER_TUNING.adaptiveLimits = true;
+			routeAgents({ "code-reviewer.md": allBelowFloor }, none);
+			const decision = await buildReview({
+				octokit: ledgerOctokit({
+					comments: [{ ...ownComment, id: 11 }, secondComment],
+					threadNodes: [declinedThread, openSecondThread],
+				}),
+				...baseContext,
+			});
+			expect(decision?.event).toBe("REQUEST_CHANGES");
+		});
+	});
+
 	describe("discard records", () => {
 		const empty = buildModelReview({
 			event: "COMMENT",
