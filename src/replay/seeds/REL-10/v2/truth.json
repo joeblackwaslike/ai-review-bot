@@ -1,1 +1,11 @@
-{"clean": false, "defects": [{"path": "fees.go", "startLine": 10, "endLine": 10, "description": "Grace period check changed from <= to <, so an invoice exactly GraceDays late is charged a late fee although still within the grace period."}]}
+{
+	"clean": false,
+	"defects": [
+		{
+			"path": "fees.go",
+			"startLine": 10,
+			"endLine": 10,
+			"description": "Grace period check changed from <= to <, so an invoice exactly GraceDays late is charged a late fee although still within the grace period."
+		}
+	]
+}

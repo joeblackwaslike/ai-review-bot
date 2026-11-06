@@ -1,11 +1,11 @@
 {
-  "clean": false,
-  "defects": [
-    {
-      "path": "internal/restock/service.go",
-      "startLine": 19,
-      "endLine": 21,
-      "description": "The already-sent (SentAt != nil) check and the zero-quantity skip were removed from SendRestock, so every call now builds and sends a supplier email. Worker.Run in internal/restock/worker.go re-queues the job via retry whenever SendRestock returns an error (for example when MarkSent fails after mailer.Send succeeded), so the supplier receives the restock email again, including for zero-quantity orders."
-    }
-  ]
+	"clean": false,
+	"defects": [
+		{
+			"path": "internal/restock/service.go",
+			"startLine": 19,
+			"endLine": 21,
+			"description": "The already-sent (SentAt != nil) check and the zero-quantity skip were removed from SendRestock, so every call now builds and sends a supplier email. Worker.Run in internal/restock/worker.go re-queues the job via retry whenever SendRestock returns an error (for example when MarkSent fails after mailer.Send succeeded), so the supplier receives the restock email again, including for zero-quantity orders."
+		}
+	]
 }

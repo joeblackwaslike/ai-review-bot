@@ -1,1 +1,11 @@
-{"clean": false, "defects": [{"path": "model/shipment.go", "startLine": 6, "endLine": 6, "description": "Renaming TrackingNo to CarrierRef also changed the json tag from tracking_no to carrier_ref, breaking contracts/shipment.schema.json (unchanged, requires tracking_no) and every consumer of the response."}]}
+{
+	"clean": false,
+	"defects": [
+		{
+			"path": "model/shipment.go",
+			"startLine": 6,
+			"endLine": 6,
+			"description": "Renaming TrackingNo to CarrierRef also changed the json tag from tracking_no to carrier_ref, breaking contracts/shipment.schema.json (unchanged, requires tracking_no) and every consumer of the response."
+		}
+	]
+}
