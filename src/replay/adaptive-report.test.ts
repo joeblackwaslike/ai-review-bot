@@ -102,6 +102,30 @@ describe("adaptiveReport gate", () => {
 		expect(r.text).toContain("P2");
 	});
 
+	it("fails when removed findings are not mostly rejected-labelled", () => {
+		for (const [real, rejected] of [
+			[6, 4],
+			[5, 5],
+			[10, 0],
+		] as const) {
+			const { input, removed } = build([
+				...Array(real).fill("fixed"),
+				...Array(rejected).fill("rejected"),
+			]);
+			const r = adaptiveReport([input], runnerOf(withRemoved(removed)));
+			expect(r.gate).toBe("fail");
+		}
+	});
+
+	it("passes with 4 real and 6 rejected removals outside the held-out fixtures", () => {
+		const { input, removed } = build([
+			...Array(4).fill("fixed"),
+			...Array(6).fill("rejected"),
+		]);
+		const r = adaptiveReport([input], runnerOf(withRemoved(removed)));
+		expect(r.gate).toBe("pass");
+	});
+
 	it("is inconclusive with 9 labelled or adjudicated removals", () => {
 		const { input, removed } = build(Array(9).fill("rejected"));
 		expect(adaptiveReport([input], runnerOf(withRemoved(removed))).gate).toBe(
@@ -126,7 +150,7 @@ describe("adaptiveReport verdicts", () => {
 			[
 				{
 					...input,
-					verdictFor: (c) => verdicts[removed.findIndex((x) => x === c)],
+					verdictFor: (c) => verdicts[removed.indexOf(c)],
 				},
 			],
 			runnerOf(withRemoved(removed)),

@@ -145,7 +145,7 @@ const severityRank = (c: CandidateRecord): number => {
 };
 
 const firstClean = (rounds: number[], posted: number[]): number | null => {
-	const i = posted.findIndex((n) => n === 0);
+	const i = posted.indexOf(0);
 	return i < 0 ? null : (rounds[i] as number);
 };
 
@@ -266,13 +266,14 @@ function formatReport(rows: AdaptiveRow[], gate: AdaptiveGate): string {
 		"  off-diff drops are not modeled, every candidate line is treated as on the diff: this slightly enlarges the pool the limits see, so removals can be over-counted",
 		"  candidate confidence is not recorded in traces and is set to 1 for every reconstructed candidate, so ties among equal-severity candidates are broken by agent support and input order",
 		"  rounds to clean is the index of the first traced round that posts nothing",
+		`  gate: inconclusive under ${MIN_EVIDENCE} evidenced removals, fail on any held-out labelled-real removal, fail unless more removals are rejected-labelled than real across all fixtures, else pass`,
 	);
 	return lines.join("\n");
 }
 
 /**
  * Replays each traced round with the adaptive limits off and on and reports what they remove against labels and adjudicated verdicts.
- * Gate: inconclusive under 10 labelled or adjudicated removals, then fail on a confirmed-real removal from a held-out fixture, else pass.
+ * Gate: inconclusive under 10 labelled or adjudicated removals, then fail on a labelled-real removal from a held-out fixture, then fail unless more removals are rejected than real, else pass.
  */
 export function adaptiveReport(
 	fixtures: AdaptiveFixtureInput[],
@@ -284,7 +285,13 @@ export function adaptiveReport(
 		0,
 	);
 	const heldOutReal = perFixture.some((r) => r.heldOut && r.removedReal > 0);
+	const real = perFixture.reduce((n, r) => n + r.removedReal, 0);
+	const rejected = perFixture.reduce((n, r) => n + r.removedRejected, 0);
 	const gate: AdaptiveGate =
-		evidence < MIN_EVIDENCE ? "inconclusive" : heldOutReal ? "fail" : "pass";
+		evidence < MIN_EVIDENCE
+			? "inconclusive"
+			: heldOutReal || rejected <= real
+				? "fail"
+				: "pass";
 	return { perFixture, gate, text: formatReport(perFixture, gate) };
 }
