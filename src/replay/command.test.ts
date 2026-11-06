@@ -1182,6 +1182,87 @@ describe("runReplay --adjudicate", () => {
 		expect(text).toContain(`candidates to judge: ${1 - cached}`);
 	});
 
+	it("builds no judge for a fully cached run", async () => {
+		const { dir, id } = seedFixture();
+		const f = JSON.parse(
+			readFileSync(join(dir, `${id}.json`), "utf8"),
+		) as Parameters<typeof snapshotId>[0];
+		new VerdictCache(join(dir, "cache")).put(
+			snapshotId(f),
+			claimKey({
+				path: "a.ts",
+				title: "unrelated cache invalidation race condition",
+			}),
+			{
+				verdict: "not-real",
+				scope: null,
+				reason: "r",
+				first: {
+					family: "anthropic",
+					model: "claude-opus-5-5",
+					promptHash: PROMPT_HASH,
+				},
+				second: null,
+				secondVerdict: null,
+				status: "single-family",
+			},
+		);
+		const { judges, calls } = stubJudges();
+		const { lines, out } = collect();
+		await runReplay(["--adjudicate", id, "--fixtures", dir], {
+			out,
+			client: withFiles,
+			adjudicationJudges: judges,
+			adjudicationDir: join(dir, "cache"),
+		});
+		expect(calls.verdict).not.toHaveBeenCalled();
+		expect(lines.join("\n")).toContain("cached=1");
+	});
+
+	it("builds no judge when the Anthropic cap defers everything", async () => {
+		const { dir, id } = seedFixture();
+		const { judges, calls } = stubJudges();
+		const { lines, out } = collect();
+		await runReplay(
+			["--adjudicate", id, "--max-anthropic", "0", "--fixtures", dir],
+			{
+				out,
+				client: withFiles,
+				adjudicationJudges: judges,
+				adjudicationDir: join(dir, "cache"),
+			},
+		);
+		expect(calls.verdict).not.toHaveBeenCalled();
+		expect(lines.join("\n")).toContain("deferred=1");
+	});
+
+	it("builds the judges once, on the first call that needs them", async () => {
+		const { dir, id } = seedFixture();
+		const { judges, calls } = stubJudges();
+		await runReplay(["--adjudicate", id, "--fixtures", dir], {
+			out: () => {},
+			client: withFiles,
+			adjudicationJudges: judges,
+			adjudicationDir: join(dir, "cache"),
+		});
+		expect(calls.verdict).toHaveBeenCalledTimes(1);
+	});
+
+	it("builds no audit judge for a cached audit", async () => {
+		const { dir, id } = seedFixture();
+		const { judges, calls } = stubJudges();
+		const run = () =>
+			runReplay(["--adjudicate", id, "--audit", "--fixtures", dir], {
+				out: () => {},
+				client: withFiles,
+				adjudicationJudges: judges,
+				adjudicationDir: join(dir, "cache"),
+			});
+		await run();
+		await run();
+		expect(calls.audit).toHaveBeenCalledTimes(1);
+	});
+
 	it("routes the producer model from the round's compare files and defaults the OpenAI cap to 0", async () => {
 		const { dir, id } = seedFixture();
 		const { judges, calls } = stubJudges();

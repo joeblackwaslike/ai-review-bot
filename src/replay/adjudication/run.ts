@@ -17,7 +17,8 @@ import {
 } from "./adjudicate.js";
 import { type AuditJudge, type AuditStored, auditFixture } from "./audit.js";
 import { VerdictCache } from "./cache.js";
-import { possibleFirstModels } from "./judge.js";
+import type { JudgeInput } from "./judge.js";
+import { possibleFirstModels, routeJudges } from "./judge.js";
 import { claimKey, snapshotId } from "./snapshot.js";
 import type { VerdictRecord } from "./types.js";
 
@@ -228,8 +229,13 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 	}
 
 	try {
-		const judges =
-			typeof run.judges === "function" ? await run.judges() : run.judges;
+		let factory: Promise<AdjudicationJudges> | undefined;
+		const getFactory = () => {
+			factory ??= Promise.resolve(
+				typeof run.judges === "function" ? run.judges() : run.judges,
+			);
+			return factory;
+		};
 		const wantSecond = caps.openai > 0;
 
 		if (run.audit) {
@@ -243,11 +249,33 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 				return 1;
 			}
 			out(`producer model: ${info.model} (${info.note})`);
-			const { judge, second } = await judges.auditJudges(
-				fixture.provider,
-				info.model,
-				wantSecond,
-			);
+			const route = routeJudges(fixture.provider, info.model);
+			let built:
+				| Promise<Awaited<ReturnType<AdjudicationJudges["auditJudges"]>>>
+				| undefined;
+			const build = () => {
+				built ??= getFactory().then((f) =>
+					f.auditJudges(fixture.provider, info.model, wantSecond),
+				);
+				return built;
+			};
+			const judge: AuditJudge = {
+				family: route.first.provider,
+				model: route.first.model,
+				run: async (input) => (await build()).judge.run(input),
+			};
+			const second: AuditJudge | null =
+				wantSecond && route.second
+					? {
+							family: route.second.provider,
+							model: route.second.model,
+							run: async (input) => {
+								const other = (await build()).second;
+								if (!other) throw new Error("no second audit judge");
+								return other.run(input);
+							},
+						}
+					: null;
 			const result = await auditFixture({
 				snapshot,
 				fixture,
@@ -289,11 +317,35 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 		const errorSamples: string[] = [];
 		for (const [model, group] of groups) {
 			out(`producer model: ${model} (${notes.get(model)})`);
-			const pair = await judges.verdictJudges(
-				fixture.provider,
-				model,
-				wantSecond,
-			);
+			const route = routeJudges(fixture.provider, model);
+			let built:
+				| Promise<Awaited<ReturnType<AdjudicationJudges["verdictJudges"]>>>
+				| undefined;
+			const build = () => {
+				built ??= getFactory().then((f) =>
+					f.verdictJudges(fixture.provider, model, wantSecond),
+				);
+				return built;
+			};
+			const pair = {
+				first: {
+					family: route.first.provider,
+					model: route.first.model,
+					run: async (input: JudgeInput) => (await build()).first.run(input),
+				},
+				second:
+					wantSecond && route.second
+						? {
+								family: route.second.provider,
+								model: route.second.model,
+								run: async (input: JudgeInput) => {
+									const other = (await build()).second;
+									if (!other) throw new Error("no second verdict judge");
+									return other.run(input);
+								},
+							}
+						: null,
+			};
 			const result = await adjudicate({
 				snapshot,
 				candidates: group,
