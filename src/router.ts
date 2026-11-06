@@ -43,7 +43,7 @@ const PROSE_EXTENSIONS = new Set([".md", ".mdx", ".rst"]);
 function extensionOf(path: string): string {
 	const base = path.slice(path.lastIndexOf("/") + 1);
 	const dot = base.lastIndexOf(".");
-	return dot === -1 ? "" : base.slice(dot);
+	return dot === -1 ? "" : base.slice(dot).toLowerCase();
 }
 
 function isDocFile(path: string, extensions: readonly string[]): boolean {
@@ -51,7 +51,7 @@ function isDocFile(path: string, extensions: readonly string[]): boolean {
 	if (/^(requirements|constraints)[^/]*\.txt$/.test(base)) {
 		return false;
 	}
-	return extensions.includes(extensionOf(path));
+	return extensions.some((ext) => ext.toLowerCase() === extensionOf(path));
 }
 
 function isTrivialDoc(path: string, routing: Config["routing"]): boolean {
@@ -59,7 +59,7 @@ function isTrivialDoc(path: string, routing: Config["routing"]): boolean {
 		return false;
 	}
 	return (
-		PROSE_EXTENSIONS.has(extensionOf(path).toLowerCase()) ||
+		PROSE_EXTENSIONS.has(extensionOf(path)) ||
 		!isSensitivePath(path, routing.sensitivePathPatterns)
 	);
 }

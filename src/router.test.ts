@@ -359,7 +359,7 @@ describe("classifyTier handles empty sensitivePathPatterns and docExtensions", (
 	});
 });
 
-describe("classifyTier sensitive patterns are case-insensitive, doc extensions are not", () => {
+describe("classifyTier sensitive patterns are case-insensitive, doc extensions too", () => {
 	const routing = {
 		...getConfigTree().routing,
 		sensitivePathPatterns: ["Auth/", "SECURITY"],
@@ -377,11 +377,11 @@ describe("classifyTier sensitive patterns are case-insensitive, doc extensions a
 		).toBe("complex");
 	});
 
-	it("matches doc extensions exactly as written: README.MD is normal, README.md is trivial", () => {
+	it("matches doc extensions case-insensitively: README.MD and README.md are both trivial", () => {
 		const docs = getConfigTree().routing;
 		const small = { ...base, additions: 8, deletions: 3 };
 		expect(classifyTier({ ...small, filePaths: ["README.MD"] }, docs)).toBe(
-			"normal",
+			"trivial",
 		);
 		expect(classifyTier({ ...small, filePaths: ["README.md"] }, docs)).toBe(
 			"trivial",
