@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { CLAUDE_TIER_MAP, OPENAI_TIER_MAP, routeModel } from "../../router.js";
+import { routeModel } from "../../router.js";
 import type { GhClient } from "../gh.js";
 import { buildLiveWiring, routerContext } from "../live-wiring.js";
 import { joinsClaim, labelledClaims } from "../metrics.js";
@@ -83,9 +83,6 @@ const add = (
 	deferred: a.deferred + b.deferred,
 	errors: a.errors + b.errors,
 });
-
-const tierFallback = (provider: Provider): string =>
-	(provider === "anthropic" ? CLAUDE_TIER_MAP : OPENAI_TIER_MAP).normal.model;
 
 function unmatchedCandidates(
 	fixture: ReplayFixture,
@@ -178,11 +175,13 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 	const { fetchDiff } = buildLiveWiring(fixture, run.client);
 	const modelOf = new Map<number, ModelInfo>();
 	const patches = new Map<number, Map<string, string>>();
+	const unavailable = new Map<number, string>();
 	let lastDiff = "";
+	const lastRound = fixture.rounds[fixture.rounds.length - 1];
 	for (const round of fixture.rounds) {
 		try {
 			const { files, diff } = await fetchDiff(round);
-			lastDiff = diff;
+			if (round === lastRound) lastDiff = diff;
 			patches.set(
 				round.index,
 				new Map(files.map((f) => [f.filename, f.patch ?? ""])),
@@ -191,32 +190,41 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 				model: routeModel(routerContext(files), fixture.provider).model,
 				note: "routed from the round's compare files",
 			});
-		} catch {
-			modelOf.set(round.index, {
-				model: tierFallback(fixture.provider),
-				note: "tier map normal tier, because the compare files were unavailable offline",
-			});
+		} catch (err) {
+			unavailable.set(
+				round.index,
+				err instanceof Error ? err.message : String(err),
+			);
 		}
 	}
-	const evidenceByKey = new Map<string, string>();
-	for (const c of candidates)
-		evidenceByKey.set(
+
+	const unique = [
+		...new Map([...candidates].reverse().map((c) => [claimKey(c), c])).values(),
+	].reverse();
+	const judgeable = unique.filter((c) => !unavailable.has(c.roundIndex));
+	const skipped = unique.filter((c) => unavailable.has(c.roundIndex));
+	const evidenceByKey = new Map(
+		judgeable.map((c) => [
 			claimKey(c),
 			(c.path && patches.get(c.roundIndex)?.get(c.path)) || "",
-		);
+		]),
+	);
 
 	try {
 		const judges =
 			typeof run.judges === "function" ? await run.judges() : run.judges;
 		const wantSecond = caps.openai > 0;
-		const lastRound = fixture.rounds[fixture.rounds.length - 1];
-		const lastInfo = lastRound ? modelOf.get(lastRound.index) : undefined;
 
 		if (run.audit) {
-			const info = lastInfo ?? {
-				model: tierFallback(fixture.provider),
-				note: "tier map normal tier, because the fixture has no rounds",
-			};
+			const info = lastRound ? modelOf.get(lastRound.index) : undefined;
+			if (!lastRound || !info) {
+				out(
+					lastRound
+						? `audit aborted, evidence unavailable: the last round's diff could not be fetched (${unavailable.get(lastRound.index)}); no audit was recorded`
+						: "audit aborted: the fixture has no rounds",
+				);
+				return 1;
+			}
 			out(`producer model: ${info.model} (${info.note})`);
 			const { judge, second } = await judges.auditJudges(
 				fixture.provider,
@@ -246,12 +254,18 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 
 		const groups = new Map<string, Located[]>();
 		const notes = new Map<string, string>();
-		for (const c of candidates) {
+		for (const c of judgeable) {
 			const info = modelOf.get(c.roundIndex) as ModelInfo;
 			groups.set(info.model, [...(groups.get(info.model) ?? []), c]);
 			notes.set(info.model, info.note);
 		}
 		let counts = zero();
+		for (const c of skipped) {
+			counts.deferred++;
+			out(
+				`evidence unavailable, not judged: ${c.title} (round ${c.roundIndex} diff could not be fetched: ${unavailable.get(c.roundIndex)})`,
+			);
+		}
 		const spend = { anthropic: 0, openai: 0 };
 		for (const [model, group] of groups) {
 			out(`producer model: ${model} (${notes.get(model)})`);
