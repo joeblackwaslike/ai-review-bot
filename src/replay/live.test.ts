@@ -5,7 +5,11 @@ import {
 	LiveRunError,
 	runLiveTier,
 } from "./live.js";
-import type { ReviewStrategy, StrategyInput } from "./strategy.js";
+import type {
+	ReviewStrategy,
+	StrategyInput,
+	ToolCallRecord,
+} from "./strategy.js";
 import { ledgerForRound } from "./trace.js";
 import type { LabelFile, PostedClaim, ReplayFixture, Round } from "./types.js";
 
@@ -90,7 +94,9 @@ type Review = (
 	diff: string,
 	round: Round,
 	input: StrategyInput,
-) => Promise<LiveReviewOutput & Partial<{ wallMs: number; toolCalls: [] }>>;
+) => Promise<
+	LiveReviewOutput & Partial<{ wallMs: number; toolCalls: ToolCallRecord[] }>
+>;
 
 function stub(
 	review: Review,
@@ -358,10 +364,11 @@ describe("runLiveTier", () => {
 		expect(inputs[0]).not.toHaveProperty("labels");
 		expect(inputs[1]?.budget).toEqual({ maxUsd: 9, maxWallMs: 210_000 });
 		expect(inputs[0]?.signal).not.toBe(inputs[1]?.signal);
+		expect(inputs[0]?.signal).toBeInstanceOf(AbortSignal);
 		expect(inputs[0]?.signal.aborted).toBe(false);
 	});
 
-	it("throws a LiveRunError naming strategy and round, with the cause and the earlier rounds' spend and rows", async () => {
+	it("throws a LiveRunError naming strategy and round, with the cause and the failing round's estimated spend and the finished rows", async () => {
 		const boom = new Error("model exploded");
 		const { opts } = base({
 			review: async (_d, r) => {
@@ -374,16 +381,33 @@ describe("runLiveTier", () => {
 		const failure = err as LiveRunError;
 		expect(failure.message).toBe("stub round 1: model exploded");
 		expect(failure.cause).toBe(boom);
-		expect(failure.partial.spentUsd).toBe(1);
+		expect(failure.partial.spentUsd).toBe(2);
 		expect(failure.partial.rounds.map((r) => r.index)).toEqual([0]);
 	});
 
 	it("carries wallMs and toolCalls into the round row", async () => {
 		const { opts } = base({
 			rounds: [0],
-			review: async () => ({ ...out([]), wallMs: 1234, toolCalls: [] }),
+			review: async () => ({
+				...out([]),
+				wallMs: 1234,
+				toolCalls: [{ name: "grep", wallMs: 5, costUsd: 0 }],
+			}),
 		});
 		const report = await runLiveTier(opts);
-		expect(report.rounds[0]).toMatchObject({ wallMs: 1234, toolCalls: 0 });
+		expect(report.rounds[0]).toMatchObject({ wallMs: 1234, toolCalls: 1 });
+	});
+
+	it("prints wall time and tool-call count after the round line", async () => {
+		const { opts, lines } = base({
+			rounds: [0],
+			review: async () => ({
+				...out([]),
+				wallMs: 1234,
+				toolCalls: [{ name: "grep", wallMs: 5, costUsd: 0 }],
+			}),
+		});
+		await runLiveTier(opts);
+		expect(lines).toContain("  wall 1234ms, 1 tool calls");
 	});
 });

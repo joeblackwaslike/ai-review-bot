@@ -577,7 +577,7 @@ export async function runAgent(
 		const reasoning = usage.outputTokenDetails?.reasoningTokens;
 		console.log("agent ok", {
 			skillPath,
-			cacheRead: anthro.cacheReadInputTokens ?? 0,
+			cacheRead: cachedInput ?? 0,
 			cacheCreation: anthro.cacheCreationInputTokens ?? 0,
 		});
 

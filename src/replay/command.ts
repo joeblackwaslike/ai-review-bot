@@ -366,7 +366,8 @@ async function liveAll(
 		out(`no fixtures found in ${dir}; record some with --record`);
 		return 1;
 	}
-	let remaining = p.maxCost ?? 5;
+	const cap = p.maxCost ?? 5;
+	let remaining = cap;
 	let failed = false;
 	for (const name of files) {
 		const f = JSON.parse(
@@ -400,7 +401,7 @@ async function liveAll(
 		} catch (err) {
 			if (err instanceof LiveRunError) {
 				out(
-					`live failed for ${id}: ${err.message} (spent $${err.partial.spentUsd.toFixed(2)} before failure)`,
+					`live failed for ${id}: ${err.message} (estimated spend $${(cap - remaining + err.partial.spentUsd).toFixed(2)} across fixtures)`,
 				);
 				return 1;
 			}

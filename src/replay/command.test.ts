@@ -16,6 +16,7 @@ import { fixtureId } from "./claims.js";
 import { defaultFixturesDir, runReplay } from "./command.js";
 import type { GhClient } from "./gh.js";
 import type { ReplayPipeline } from "./pipeline.js";
+import { strategyA } from "./strategies/a.js";
 import { registerStrategy, resetStrategiesForTest } from "./strategy.js";
 import { makeFixture, makeLabel, makeLabels } from "./testkit.js";
 
@@ -453,6 +454,33 @@ describe("runReplay live and record flags", () => {
 		expect(readFileSync(path, "utf8")).toBe(first);
 	});
 
+	it("resolves the real built-in strategy a when --strategy is absent", async () => {
+		resetStrategiesForTest();
+		const dir = tmp();
+		seedLive(dir, false);
+		const estimate = vi.spyOn(strategyA, "estimateCost").mockReturnValue(0);
+		const run = vi.spyOn(strategyA, "run").mockResolvedValue({
+			findings: [],
+			candidates: [],
+			posted: [],
+			usage: {},
+			toolCalls: [],
+			wallMs: 0,
+		});
+		expect(
+			await runReplay(["--live"], {
+				fixturesDir: dir,
+				out: () => {},
+				client: fakeClient(),
+				liveWiring: fetchOnly,
+			}),
+		).toBe(0);
+		expect(estimate).toHaveBeenCalled();
+		expect(run).toHaveBeenCalledTimes(1);
+		estimate.mockRestore();
+		run.mockRestore();
+	});
+
 	it("leaves the fixture untouched without --save-trace", async () => {
 		const dir = tmp();
 		const { path } = seedLive(dir, false);
@@ -486,7 +514,7 @@ describe("runReplay live and record flags", () => {
 		).toBe(0);
 	});
 
-	it("exits 1 and reports the spend so far when the strategy throws mid-run", async () => {
+	it("exits 1 and reports the estimated total spend, failing round included, when the strategy throws mid-run", async () => {
 		const dir = tmp();
 		const f = makeFixture([["a"], ["b"]]);
 		const id = fixtureId(f);
@@ -513,7 +541,7 @@ describe("runReplay live and record flags", () => {
 			}),
 		).toBe(1);
 		expect(lines).toContain(
-			`live failed for ${id}: a round 1: model exploded (spent $1.00 before failure)`,
+			`live failed for ${id}: a round 1: model exploded (estimated spend $2.00 across fixtures)`,
 		);
 	});
 

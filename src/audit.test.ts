@@ -96,12 +96,17 @@ describe("runAuditPass extended usage", () => {
 			extraInstructions: "",
 			meta: { owner: "o", repo: "r", ref: "local" },
 		});
-		expect(usageBySkill["code-reviewer"]).toEqual({
-			promptTokens: 10,
-			completionTokens: 2,
-			cachedInputTokens: 6,
-			reasoningTokens: 1,
-		});
+		const skillNames = TIER1_SKILLS.map((s) =>
+			s.replace(/^.*\//, "").replace(/\.md$/, ""),
+		);
+		expect(Object.keys(usageBySkill).sort()).toEqual([...skillNames].sort());
+		for (const name of skillNames)
+			expect(usageBySkill[name]).toEqual({
+				promptTokens: 10,
+				completionTokens: 2,
+				cachedInputTokens: 6,
+				reasoningTokens: 1,
+			});
 		expect(usage.cachedInputTokens).toBe(6 * TIER1_SKILLS.length);
 		expect(usage.reasoningTokens).toBe(TIER1_SKILLS.length);
 		log.mockRestore();

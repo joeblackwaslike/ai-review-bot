@@ -17,7 +17,7 @@ import type {
 	ReplayFixture,
 	Round,
 } from "../types.js";
-import { strategyA } from "./a.js";
+import { strategyA, strategyVersion } from "./a.js";
 
 const mockRunAuditPass = vi.hoisted(() => vi.fn());
 vi.mock("../../audit.js", () => ({ runAuditPass: mockRunAuditPass }));
@@ -56,6 +56,14 @@ describe("strategyA", () => {
 		expect(strategyA.name).toBe("a");
 		expect(strategyA.needsCheckout).toBe(false);
 		expect(strategyA.version).toMatch(/^[0-9a-f]{12}$/);
+	});
+
+	it("changes version when a skill file's contents change and is stable otherwise", () => {
+		const read = (text: string) => (name: string) => `${name}:${text}`;
+		const v1 = strategyVersion(read("one"));
+		expect(strategyVersion(read("one"))).toBe(v1);
+		expect(strategyVersion(read("two"))).not.toBe(v1);
+		expect(v1).toMatch(/^[0-9a-f]{12}$/);
 	});
 
 	it("returns the candidates and the post-filter trace of the audit pass", async () => {

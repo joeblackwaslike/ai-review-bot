@@ -59,7 +59,7 @@ export interface LiveReport {
 	rounds: LiveRoundReport[];
 }
 
-/** A strategy run that threw, carrying the spend and rows of the rounds that finished. */
+/** A strategy run that threw. `partial.spentUsd` includes the failing round's estimate, an upper bound since the strategy reported no usage; `partial.rounds` holds only finished rounds. */
 export class LiveRunError extends Error {
 	constructor(
 		message: string,
@@ -117,7 +117,7 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 		checkout: null,
 		history: { ledger: ledgerForRound(opts.fixture, opts.labels, d.round) },
 		budget: { maxUsd, maxWallMs: ROUND_WALL_MS },
-		signal: new AbortController().signal,
+		signal: AbortSignal.timeout(ROUND_WALL_MS),
 	});
 	const estimates = diffs.map((d) => {
 		const e = opts.strategy.estimateCost(inputFor(d, opts.maxCostUsd));
@@ -154,7 +154,7 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 			const message = err instanceof Error ? err.message : String(err);
 			throw new LiveRunError(
 				`${opts.strategy.name} round ${d.round.index}: ${message}`,
-				report,
+				{ spentUsd: report.spentUsd + estimate, rounds: report.rounds },
 				{ cause: err },
 			);
 		}
@@ -196,6 +196,7 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 			.map(([s, u]) => `${s} ${u.promptTokens}+${u.completionTokens}`)
 			.join(", ");
 		if (usageLine) out(`  usage: ${usageLine}`);
+		out(`  wall ${row.wallMs}ms, ${row.toolCalls} tool calls`);
 	}
 	return report;
 }

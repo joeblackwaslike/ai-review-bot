@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { runAuditPass } from "../../audit.js";
 import { resolveAnthropicAuth, resolveOpenAIAuth } from "../../auth.js";
 import { computeCost } from "../../models.js";
@@ -13,23 +15,36 @@ const AGENTS_PER_REVIEW = 5;
 const CHARS_PER_TOKEN = 4;
 const EXPECTED_COMPLETION_TOKENS = 2000;
 
-const VERSION = createHash("sha256")
-	.update(
-		JSON.stringify([
-			[...TIER1_SKILLS].sort(),
-			CLAUDE_TIER_MAP,
-			OPENAI_TIER_MAP,
-		]),
-	)
-	.digest("hex")
-	.slice(0, 12);
+const skillsDir = fileURLToPath(new URL("../../../skills", import.meta.url));
+
+const readSkillFile = (name: string): string =>
+	readFileSync(`${skillsDir}/${name}`, "utf8");
+
+export function strategyVersion(readSkill: (name: string) => string): string {
+	const names = [...TIER1_SKILLS].sort();
+	return createHash("sha256")
+		.update(
+			JSON.stringify([
+				names.map((n) => [n, readSkill(n)]),
+				CLAUDE_TIER_MAP,
+				OPENAI_TIER_MAP,
+			]),
+		)
+		.digest("hex")
+		.slice(0, 12);
+}
+
+let cachedVersion: string | undefined;
 
 const selectionFor = (input: StrategyInput) =>
 	routeModel(routerContext(input.files), input.fixture.provider);
 
 export const strategyA: ReviewStrategy = {
 	name: "a",
-	version: VERSION,
+	get version() {
+		cachedVersion ??= strategyVersion(readSkillFile);
+		return cachedVersion;
+	},
 	needsCheckout: false,
 	estimateCost(input) {
 		return computeCost(

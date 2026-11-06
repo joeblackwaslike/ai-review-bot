@@ -1831,6 +1831,25 @@ describe("runAgent caching + telemetry", () => {
 			});
 		});
 
+		it("logs the same cached-input value that goes into usage", async () => {
+			const log = vi.spyOn(console, "log").mockImplementation(() => {});
+			mockGenerateObject.mockResolvedValue({
+				object: emptyReview,
+				usage: {
+					inputTokens: 10,
+					outputTokens: 5,
+					inputTokenDetails: { cacheReadTokens: 7 },
+				},
+				providerMetadata: {},
+			});
+			await runAgent("code-reviewer.md", "S", sel, "");
+			expect(log).toHaveBeenCalledWith(
+				"agent ok",
+				expect.objectContaining({ cacheRead: 7 }),
+			);
+			log.mockRestore();
+		});
+
 		it("falls back to anthropic providerMetadata for cache reads", async () => {
 			mockGenerateObject.mockResolvedValue({
 				object: emptyReview,
