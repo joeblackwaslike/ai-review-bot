@@ -110,7 +110,7 @@ export async function adjudicate(
 				upgraded.status =
 					check.verdict === hit.verdict ? "agreed" : "unresolved";
 				cache.put(snapshot, key, upgraded);
-			} catch (err) {
+			} catch {
 				counts.errors++;
 				counts.cached++;
 				verdicts.set(key, hit);
