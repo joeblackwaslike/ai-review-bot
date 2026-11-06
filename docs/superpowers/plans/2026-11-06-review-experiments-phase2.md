@@ -79,10 +79,13 @@ Files: create `src/replay/join-investigation.ts`, `src/replay/join-investigation
 `docs/review-ontology/join-rate-investigation.md` (the finding).
 
 Interfaces:
-- Produces `investigateJoin(opts: { fixture; labels; judge: JoinJudge }): Promise<JoinInvestigation>`
-  where `JoinJudge = (c: { candidate; claim; evidence }) => Promise<"same" | "different" | "unclear">`
-  and `JoinInvestigation = { pairs: { candidate; claim; verdict; matcherJoined: boolean }[];
-  judgeFoundMatcherMissed: number; matcherJoined: number }`.
+- Produces `investigateJoin(opts: { fixture; labels; judge: JoinJudge; judgeFamily: Provider;
+  maxCalls?: number; evidenceFor?: (path, roundIndex) => Promise<string> }): Promise<JoinInvestigation>`
+  where `JoinJudge = (c: { candidate; claim; evidence }) => Promise<{ verdict: "same" | "different" | "unclear"; reason: string }>`
+  and `JoinInvestigation = { pairs: { candidate; claim; verdict; reason; matcherJoined: boolean }[];
+  judgeFoundMatcherMissed: number; matcherJoined: number; skipped: number; errors: number; candidates: number }`.
+  `judgeFamily` is required. A judge that throws on a pair is recorded as `unclear` with a reason
+  starting `judge error:` and counted in `errors`. `maxCalls` is clamped to 20.
 - A judge must come from the other model family than the candidate's provider (Anthropic
   candidates judged by OpenAI, OpenAI candidates by Anthropic); the function throws if the
   judge's family equals the candidate's.

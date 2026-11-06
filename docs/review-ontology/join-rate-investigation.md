@@ -2,7 +2,7 @@
 
 ## Question
 
-The join rate counts how many distinct review candidates in a fixture's trace restate a labelled claim. On the held-out ai-listings#50 fixture the anthropic trace joined 0 of 15 candidates and the openai trace 0 of 5. Either the reviewer found nothing the labelled threads cover, or the matcher misses real restatements.
+The join rate counts how many distinct review candidates restate a labelled claim. Candidates are deduplicated by path, line and title within each round, and the per-round counts are then summed, so a candidate raised again in a later round counts again. On the held-out ai-listings#50 fixture the anthropic trace joined 0 of 15 candidates and the openai trace 0 of 5. Either the reviewer found nothing the labelled threads cover, or the matcher misses real restatements.
 
 ## Method
 
@@ -12,7 +12,7 @@ Anthropic fixture: the judge was `gpt-6.1-sol` (OpenAI). 15 pairs were judged, o
 
 ## Result
 
-The judge called 3 of the 15 pairs the same problem and 12 different. Another 12 candidates had no counterpart.
+The judge called 3 of the 15 pairs the same problem and 12 different. The other 12 candidates were each judged against their nearest labelled claim and judged different from it, so none of them has a counterpart among the labelled claims.
 
 All 3 matches are candidates at line 502 against one claim at line 496 of `src/lib/pipeline/step3-pricing-research.ts`:
 
