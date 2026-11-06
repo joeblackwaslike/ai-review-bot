@@ -270,6 +270,15 @@ async function investigate(
 	const family: Provider =
 		fixture.provider === "anthropic" ? "openai" : "anthropic";
 	const { fetchDiff } = defaultLiveWiring(fixture, client);
+	const diffs = new Map<number, ReturnType<typeof fetchDiff>>();
+	const diffFor = (round: (typeof fixture.rounds)[number]) => {
+		let pending = diffs.get(round.index);
+		if (!pending) {
+			pending = fetchDiff(round);
+			diffs.set(round.index, pending);
+		}
+		return pending;
+	};
 	try {
 		const result = await investigateJoin({
 			fixture,
@@ -280,7 +289,7 @@ async function investigate(
 				const round = fixture.rounds.find((r) => r.index === roundIndex);
 				if (!round) return "";
 				try {
-					const { files } = await fetchDiff(round);
+					const { files } = await diffFor(round);
 					return files.find((f) => f.filename === path)?.patch ?? "";
 				} catch (err) {
 					return `(diff unavailable: ${err instanceof Error ? err.message : String(err)})`;
@@ -288,6 +297,9 @@ async function investigate(
 			},
 		});
 		out(formatInvestigation(id, result));
+		out(
+			`judge: ${family} (${JUDGE_MODELS[family].model}); single-provider judgement, not confirmed by a second model family`,
+		);
 		return 0;
 	} catch (err) {
 		out(
@@ -528,6 +540,8 @@ export async function runReplay(
 			"--strategy requires --live without --record") ||
 		(parsed.investigateJoin !== undefined &&
 			(parsed.live ||
+				parsed.provider !== undefined ||
+				parsed.bot !== undefined ||
 				parsed.record !== undefined ||
 				parsed.saveTrace ||
 				parsed.strategy !== undefined ||

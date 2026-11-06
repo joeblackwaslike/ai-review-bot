@@ -947,10 +947,58 @@ describe("runReplay --investigate-join", () => {
 		expect(lines.join("\n")).toContain("judgeFoundMatcherMissed=1");
 	});
 
+	it("fetches each round's diff once and states the judgement is single-provider", async () => {
+		const dir = tmp();
+		const f = makeFixture([["a"]]);
+		const cands = [1, 2, 3].map((n) => ({
+			skill: "s.md",
+			title: `other wording ${n}`,
+			path: "a.ts",
+			line: n * 100,
+			severity: "P1",
+		}));
+		f.rounds[0] = {
+			...f.rounds[0],
+			trace: { candidates: cands, posted: [], usage: {} },
+		} as (typeof f.rounds)[0];
+		const id = fixtureId(f);
+		writeFileSync(join(dir, `${id}.json`), JSON.stringify(f));
+		writeFileSync(
+			join(dir, `${id}.labels.json`),
+			JSON.stringify({
+				...makeLabels({ labels: [makeLabel("a", "fixed")] }),
+				fixtureId: id,
+			}),
+		);
+		let calls = 0;
+		const client: GhClient = {
+			rest: () => {
+				calls++;
+				return Promise.reject(new Error("no network"));
+			},
+			graphql: () => Promise.reject(new Error("no network")),
+		};
+		const { lines, out } = collect();
+		await runReplay(["--investigate-join", id, "--fixtures", dir], {
+			out,
+			client,
+			joinJudge: async () => async () => ({
+				verdict: "different",
+				reason: "r",
+			}),
+		});
+		expect(calls).toBe(1);
+		const text = lines.join("\n");
+		expect(text).toContain("judge: openai (");
+		expect(text).toContain("single-provider judgement");
+	});
+
 	it("exits 2 when combined with other modes or given a path-like id", async () => {
 		for (const args of [
 			["--investigate-join", "x", "--live"],
 			["--investigate-join", "x", "--save-trace"],
+			["--investigate-join", "x", "--provider", "openai"],
+			["--investigate-join", "x", "--bot", "some-bot"],
 			["--investigate-join", "../x"],
 			["--investigate-join"],
 		])
