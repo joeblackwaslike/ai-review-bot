@@ -2,6 +2,7 @@ import { isGeneratedFile } from "./diff-pack.js";
 import {
 	findMovedBlocks,
 	type MovedBlock,
+	normalizeCodeLine,
 	type PushFile,
 } from "./moved-blocks.js";
 
@@ -90,14 +91,28 @@ export function classifyFile(filename: string): FileKind {
 	return "code";
 }
 
-function isWhitespaceOnly(patch: string | undefined): boolean {
+const INDENT_SENSITIVE_EXT = /\.(py|pyi|ya?ml|mk)$/i;
+
+function isIndentSensitive(filename: string): boolean {
+	const name = filename.split("/").pop() ?? filename;
+	return name === "Makefile" || INDENT_SENSITIVE_EXT.test(name);
+}
+
+function isWhitespaceOnly(
+	filename: string,
+	patch: string | undefined,
+): boolean {
 	if (!patch) return false;
+	const opts = isIndentSensitive(filename)
+		? { strip: true, keepIndent: true }
+		: { strip: true };
 	const removed: string[] = [];
 	const added: string[] = [];
 	for (const line of patch.split("\n")) {
-		if (line.startsWith("-")) removed.push(line.slice(1).replace(/\s+/g, ""));
+		if (line.startsWith("-"))
+			removed.push(normalizeCodeLine(line.slice(1), opts));
 		else if (line.startsWith("+"))
-			added.push(line.slice(1).replace(/\s+/g, ""));
+			added.push(normalizeCodeLine(line.slice(1), opts));
 	}
 	if (removed.length + added.length === 0) return false;
 	return removed.join("\n") === added.join("\n");
@@ -111,7 +126,7 @@ function shapeFile(
 	const kind = classifyFile(file.filename);
 	const renameOnly =
 		file.status === "renamed" && file.additions === 0 && file.deletions === 0;
-	const whitespaceOnly = isWhitespaceOnly(file.patch);
+	const whitespaceOnly = isWhitespaceOnly(file.filename, file.patch);
 	const deletionOnly = file.additions === 0 && file.deletions > 0;
 	const changed =
 		Math.max(file.additions - movedIn, 0) +

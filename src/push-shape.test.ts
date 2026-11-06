@@ -84,6 +84,60 @@ describe("classifyPush", () => {
 		expect(shape.reviewableWeight).toBe(0);
 	});
 
+	describe("whitespace-only", () => {
+		const ws = (filename: string, before: string, after: string) =>
+			classifyPush([
+				file({
+					filename,
+					additions: 1,
+					deletions: 1,
+					patch: `@@ -1 +1 @@\n-${before}\n+${after}`,
+				}),
+			]).files[0];
+
+		it("keeps weight when a string literal's whitespace changes", () => {
+			const f = ws(
+				"src/a.ts",
+				'const role = "read only";',
+				'const role = "readonly";',
+			);
+			expect(f?.whitespaceOnly).toBe(false);
+			expect(f?.weight).toBeGreaterThan(0);
+		});
+
+		it("keeps weight when a literal becomes empty", () => {
+			expect(
+				ws("src/a.ts", 'const separator = " ";', 'const separator = "";')
+					?.whitespaceOnly,
+			).toBe(false);
+		});
+
+		it("still ignores formatting outside literals", () => {
+			expect(ws("src/a.ts", "const a=1;", "const a = 1;")?.whitespaceOnly).toBe(
+				true,
+			);
+			expect(
+				ws("src/a.ts", "    return 1;", "  return 1;")?.whitespaceOnly,
+			).toBe(true);
+		});
+
+		it("treats a Python, YAML or Makefile reindent as a change", () => {
+			expect(ws("src/a.py", "    return 1", "  return 1")?.whitespaceOnly).toBe(
+				false,
+			);
+			expect(ws("ci/a.yml", "  key: 1", "    key: 1")?.whitespaceOnly).toBe(
+				false,
+			);
+			expect(ws("Makefile", "\tgo build", "  go build")?.whitespaceOnly).toBe(
+				false,
+			);
+		});
+
+		it("still ignores spacing inside a Python line outside literals", () => {
+			expect(ws("src/a.py", "x=1", "x = 1")?.whitespaceOnly).toBe(true);
+		});
+	});
+
 	it("weighs a pure rename at 0", () => {
 		const shape = classifyPush([
 			file({

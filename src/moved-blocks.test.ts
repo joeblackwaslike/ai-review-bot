@@ -52,6 +52,33 @@ describe("findMovedBlocks", () => {
 		expect(out).toEqual([{ from: "a.ts", to: "b.ts", lineCount: 6 }]);
 	});
 
+	it("does not treat a changed string literal as a move", () => {
+		const del = Array.from({ length: 5 }, (_, i) => `log${i}("a  b");`);
+		const add = Array.from({ length: 5 }, (_, i) => `log${i}("a b");`);
+		expect(
+			findMovedBlocks([file("a.ts", del, []), file("b.ts", [], add)]),
+		).toEqual([]);
+	});
+
+	it("still matches re-indented statements that contain literals", () => {
+		const del = Array.from({ length: 5 }, (_, i) => `log${i}("a  b");`);
+		const add = del.map((l) => `\t\t${l}  `);
+		expect(
+			findMovedBlocks([file("a.ts", del, []), file("b.ts", [], add)]),
+		).toEqual([{ from: "a.ts", to: "b.ts", lineCount: 5 }]);
+	});
+
+	it("matches identical lines with an unmatched apostrophe after re-indenting", () => {
+		const del = Array.from(
+			{ length: 5 },
+			(_, i) => `run${i}(); // don't  skip`,
+		);
+		const add = del.map((l) => `    ${l}`);
+		expect(
+			findMovedBlocks([file("a.ts", del, []), file("b.ts", [], add)]),
+		).toEqual([{ from: "a.ts", to: "b.ts", lineCount: 5 }]);
+	});
+
 	it("ignores blocks shorter than minLines", () => {
 		expect(
 			findMovedBlocks([

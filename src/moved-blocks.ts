@@ -25,8 +25,52 @@ interface Run {
 const MIN_COUNTED_LENGTH = 3;
 const MAX_KEY_OCCURRENCES = 50;
 
+const QUOTES = new Set(['"', "'", "`"]);
+
+/**
+ * Normalizes one source line for formatting-insensitive comparison. Outside string
+ * literals (`"`, `'`, backtick, backslash escapes honored) whitespace is trimmed and
+ * collapsed to one space, or removed with `strip`; `keepIndent` keeps the leading
+ * whitespace verbatim. Inside a literal every character is kept. An unterminated quote
+ * (multi-line template, apostrophe in a comment) keeps the rest of the line verbatim, so
+ * the comparison only gets stricter.
+ */
+export function normalizeCodeLine(
+	line: string,
+	opts: { strip?: boolean; keepIndent?: boolean } = {},
+): string {
+	let out = "";
+	let i = 0;
+	if (opts.keepIndent) {
+		while (i < line.length && /\s/.test(line[i] as string)) i++;
+		out = line.slice(0, i);
+	}
+	let pendingSpace = false;
+	while (i < line.length) {
+		const ch = line[i] as string;
+		if (/\s/.test(ch)) {
+			pendingSpace = true;
+			i++;
+			continue;
+		}
+		if (pendingSpace && out.trim() !== "" && !opts.strip) out += " ";
+		pendingSpace = false;
+		if (!QUOTES.has(ch)) {
+			out += ch;
+			i++;
+			continue;
+		}
+		let j = i + 1;
+		while (j < line.length && line[j] !== ch) j += line[j] === "\\" ? 2 : 1;
+		if (j >= line.length) return out + line.slice(i);
+		out += line.slice(i, j + 1);
+		i = j + 1;
+	}
+	return out;
+}
+
 function normalize(line: string): string {
-	return line.trim().replace(/\s+/g, " ");
+	return normalizeCodeLine(line);
 }
 
 function countsTowardBlock(line: string): boolean {
@@ -226,7 +270,7 @@ function unusedSegments(c: Candidate, minLines: number): Candidate[] {
 
 /**
  * Finds runs of at least `minLines` lines deleted in one file and added to
- * another. Lines are compared after trimming and collapsing whitespace; lines
+ * another. Lines are compared after trimming and collapsing whitespace outside string literals; lines
  * under 3 characters stay inside a run but do not count toward its length.
  * A window of lines that occurs more than 50 times (repeated boilerplate) is matched
  * only through its first 50 occurrences: counted across all added runs on the added
