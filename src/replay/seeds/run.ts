@@ -1,6 +1,6 @@
 import type { ReviewStrategy, StrategyInput } from "../strategy.js";
 import { type SeedReviewInput, seedReviewInput, truthInDiff } from "./input.js";
-import { listSeeds, type Seed } from "./schema.js";
+import { DEFAULT_SEEDS_ROOT, listSeeds, type Seed } from "./schema.js";
 import { type SeedOutcome, scoreSeed, seedGate } from "./score.js";
 
 const SEED_WALL_MS = 210_000;
@@ -47,19 +47,26 @@ async function withInput<T>(
 	}
 }
 
-/** Validates every seed offline: it loads, materialises and its defect is inside the diff. */
-export async function checkSeeds(opts: SeedRunOptions): Promise<number> {
+/** Loads every seed, or prints why not and returns null (also when there are none). */
+async function loadAll(opts: SeedRunOptions): Promise<Seed[] | null> {
 	let seeds: Seed[];
 	try {
 		seeds = await listSeeds(opts.root);
 	} catch (err) {
 		opts.out(`seed load failed: ${message(err)}`);
-		return 1;
+		return null;
 	}
 	if (seeds.length === 0) {
-		opts.out("no seeds found");
-		return 1;
+		opts.out(`no seeds found under ${opts.root ?? DEFAULT_SEEDS_ROOT}`);
+		return null;
 	}
+	return seeds;
+}
+
+/** Validates every seed offline: it loads, materialises and its defect is inside the diff. */
+export async function checkSeeds(opts: SeedRunOptions): Promise<number> {
+	const seeds = await loadAll(opts);
+	if (!seeds) return 1;
 	let failed = 0;
 	for (const seed of seeds) {
 		try {
@@ -84,7 +91,8 @@ export async function planSeeds(
 	strategy: ReviewStrategy,
 	opts: SeedRunOptions,
 ): Promise<number> {
-	const seeds = await listSeeds(opts.root);
+	const seeds = await loadAll(opts);
+	if (!seeds) return 1;
 	let total = 0;
 	for (const seed of seeds) {
 		total += await withInput(seed, async (input) =>
@@ -108,7 +116,8 @@ export async function runSeedsWithStrategy(
 	strategy: ReviewStrategy,
 	opts: SeedStrategyOptions,
 ): Promise<number> {
-	const seeds = await listSeeds(opts.root);
+	const seeds = await loadAll(opts);
+	if (!seeds) return 1;
 	const results: { seed: Seed; outcome: SeedOutcome }[] = [];
 	let spent = 0;
 	let stopped = false;

@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -31,7 +32,19 @@ export interface Seed {
 	truth: SeedTruth;
 }
 
-export const DEFAULT_SEEDS_ROOT = dirname(fileURLToPath(import.meta.url));
+/** The committed seeds, found from the package root so a built `dist/` copy still resolves. */
+export function defaultSeedsRoot(fromUrl: string): string {
+	let dir = dirname(fileURLToPath(fromUrl));
+	for (;;) {
+		if (existsSync(join(dir, "package.json")))
+			return join(dir, "src", "replay", "seeds");
+		const parent = dirname(dir);
+		if (parent === dir) return join(process.cwd(), "src", "replay", "seeds");
+		dir = parent;
+	}
+}
+
+export const DEFAULT_SEEDS_ROOT = defaultSeedsRoot(import.meta.url);
 
 /** Loads `<opId>/<variant>/truth.json` from a seed directory; throws on a malformed truth. */
 export async function loadSeed(dir: string): Promise<Seed> {

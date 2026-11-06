@@ -1,11 +1,8 @@
-import { execFile } from "node:child_process";
 import { cp, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { promisify } from "node:util";
+import { seedGit } from "./git.js";
 import type { Seed } from "./schema.js";
-
-const execFileAsync = promisify(execFile);
 
 export interface MaterializedSeed {
 	repoPath: string;
@@ -16,12 +13,10 @@ export interface MaterializedSeed {
 
 const FIXED_DATE = "2026-01-01T00:00:00+00:00";
 
-async function git(cwd: string, args: string[]): Promise<string> {
-	const { stdout } = await execFileAsync(
-		"git",
+function git(cwd: string, args: string[]): Promise<string> {
+	return seedGit(
+		cwd,
 		[
-			"-c",
-			"core.hooksPath=/dev/null",
 			"-c",
 			"commit.gpgsign=false",
 			"-c",
@@ -30,16 +25,8 @@ async function git(cwd: string, args: string[]): Promise<string> {
 			"user.email=seed@example.invalid",
 			...args,
 		],
-		{
-			cwd,
-			env: {
-				...process.env,
-				GIT_AUTHOR_DATE: FIXED_DATE,
-				GIT_COMMITTER_DATE: FIXED_DATE,
-			},
-		},
+		{ GIT_AUTHOR_DATE: FIXED_DATE, GIT_COMMITTER_DATE: FIXED_DATE },
 	);
-	return stdout.trim();
 }
 
 async function replaceTree(repo: string, from: string): Promise<void> {

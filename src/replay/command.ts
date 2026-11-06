@@ -574,9 +574,10 @@ async function runSeeds(
 			p.bot !== undefined ||
 			p.rounds !== undefined ||
 			p.audit ||
+			p.fixtures !== undefined ||
 			p.maxAnthropic !== undefined ||
 			p.maxOpenai !== undefined) &&
-			"--seeds takes only --check, --plan, --strategy and --max-cost") ||
+			"--seeds takes only --check, --plan, --strategy and --max-cost (no --fixtures)") ||
 		(p.check &&
 			(p.plan || p.strategy !== undefined || p.maxCost !== undefined) &&
 			"--check takes no other seed flags") ||

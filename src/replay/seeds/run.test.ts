@@ -116,6 +116,26 @@ describe("checkSeeds", () => {
 	});
 });
 
+describe("zero seeds and malformed truth", () => {
+	it("plan and strategy runs refuse an empty root", async () => {
+		const s = stub(findsAll);
+		expect(await planSeeds(s, { root, out })).toBe(1);
+		expect(await runSeedsWithStrategy(s, { root, out, maxCostUsd: 5 })).toBe(1);
+		expect(s.run).not.toHaveBeenCalled();
+		expect(lines.join("\n")).toContain(`no seeds found under ${root}`);
+	});
+
+	it("a malformed truth.json prints and exits 1 in all three modes", async () => {
+		await addSeed("REL-01", "original", { clean: false, defects: [] });
+		const s = stub(findsAll);
+		expect(await checkSeeds({ root, out })).toBe(1);
+		expect(await planSeeds(s, { root, out })).toBe(1);
+		expect(await runSeedsWithStrategy(s, { root, out, maxCostUsd: 5 })).toBe(1);
+		expect(s.run).not.toHaveBeenCalled();
+		expect(lines.join("\n")).toContain("seed load failed");
+	});
+});
+
 describe("planSeeds", () => {
 	it("prints count, strategy and cost and never runs the strategy", async () => {
 		await fullRoot();
@@ -234,6 +254,7 @@ describe("ai-review replay --seeds", () => {
 			["--seeds", "--check", "--strategy", "stub"],
 			["--seeds", "--check", "--plan"],
 			["--check"],
+			["--seeds", "--fixtures", root],
 		];
 		for (const args of bad) expect(await run(args), args.join(" ")).toBe(2);
 	});

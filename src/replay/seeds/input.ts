@@ -5,6 +5,7 @@ import type { PullFile } from "../../review.js";
 import type { FrozenFixture } from "../frozen.js";
 import type { CheckoutHandle } from "../strategy.js";
 import type { Round } from "../types.js";
+import { seedGit } from "./git.js";
 import { type MaterializedSeed, materializeSeed } from "./materialize.js";
 import type { Seed } from "./schema.js";
 
@@ -28,22 +29,13 @@ const STATUS: Record<string, string> = {
 	T: "modified",
 };
 
-async function git(cwd: string, args: string[]): Promise<string> {
-	const { stdout } = await execFileAsync(
-		"git",
-		["-c", "core.hooksPath=/dev/null", ...args],
-		{ cwd, maxBuffer: 16 * 1024 * 1024 },
-	);
-	return stdout;
-}
-
 function stripHeader(raw: string): string | undefined {
 	const at = raw.search(/^@@/m);
 	return at === -1 ? undefined : raw.slice(at).replace(/\n$/, "");
 }
 
 async function diffFiles(m: MaterializedSeed): Promise<PullFile[]> {
-	const names = await git(m.repoPath, [
+	const names = await seedGit(m.repoPath, [
 		"diff",
 		"-M",
 		"--name-status",
@@ -57,7 +49,7 @@ async function diffFiles(m: MaterializedSeed): Promise<PullFile[]> {
 		const filename = second ?? first;
 		const paths = previous ? [previous, filename] : [filename];
 		const patch = stripHeader(
-			await git(m.repoPath, [
+			await seedGit(m.repoPath, [
 				"diff",
 				"-M",
 				m.baseSha,

@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { seedReviewInput } from "./input.js";
 import { materializeSeed } from "./materialize.js";
 import { listSeeds, loadSeed } from "./schema.js";
 
@@ -127,6 +128,52 @@ describe("materializeSeed", () => {
 			await a.cleanup();
 			await b.cleanup();
 		}
+	});
+});
+
+describe("inherited GIT_* environment", () => {
+	it("never touches an outer repository", async () => {
+		const outer = join(root, "outer");
+		await run("git", ["init", "-q", outer]);
+		const seed = await loadSeed(
+			await inlineSeed("REL-01", "original", defect()),
+		);
+		const saved = { ...process.env };
+		process.env.GIT_DIR = join(outer, ".git");
+		process.env.GIT_INDEX_FILE = join(outer, ".git", "index");
+		process.env.GIT_WORK_TREE = outer;
+		const m = await materializeSeed(seed);
+		const input = await seedReviewInput(seed);
+		try {
+			expect(input.files.length).toBeGreaterThan(0);
+			for (const k of Object.keys(process.env))
+				if (k.startsWith("GIT_")) delete process.env[k];
+			Object.assign(process.env, saved);
+			const count = await run("git", [
+				"-C",
+				m.repoPath,
+				"rev-list",
+				"--count",
+				"HEAD",
+			]);
+			expect(count.stdout.trim()).toBe("2");
+		} finally {
+			for (const k of Object.keys(process.env))
+				if (k.startsWith("GIT_")) delete process.env[k];
+			Object.assign(process.env, saved);
+			await m.cleanup();
+			await input.cleanup();
+		}
+		const commits = await run("git", [
+			"-C",
+			outer,
+			"rev-list",
+			"--all",
+			"--count",
+		]);
+		expect(commits.stdout.trim()).toBe("0");
+		const status = await run("git", ["-C", outer, "status", "--porcelain"]);
+		expect(status.stdout.trim()).toBe("");
 	});
 });
 
