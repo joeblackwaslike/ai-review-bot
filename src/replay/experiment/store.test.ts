@@ -79,6 +79,27 @@ describe("ResultsStore", () => {
 		expect(skipped).toBe(2);
 	});
 
+	it("rejects lines whose nested shape is wrong", () => {
+		const store = new ResultsStore(tmp(), "abc");
+		const good = record();
+		const bad = [
+			{ ...good, costUsd: "1" },
+			{ ...good, provider: "gemini" },
+			{ ...good, result: { ...good.result, posted: "none" } },
+			{
+				...good,
+				result: { ...good.result, usage: { x: { promptTokens: 1 } } },
+			},
+			{ ...good, result: { ...good.result, findings: [{ title: 5 }] } },
+			{ ...good, cacheTemperature: "hot" },
+		];
+		store.append(good);
+		for (const b of bad) appendFileSync(store.file, `${JSON.stringify(b)}\n`);
+		const { records, skipped } = store.readAll();
+		expect(records).toHaveLength(1);
+		expect(skipped).toBe(bad.length);
+	});
+
 	it("flags records whose version differs from the registered one", () => {
 		const store = new ResultsStore(tmp(), "abc");
 		store.append(record());
