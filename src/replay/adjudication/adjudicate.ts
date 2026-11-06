@@ -85,7 +85,12 @@ export async function adjudicate(
 	}
 
 	for (const [key, candidate] of distinct) {
-		const hit = cache.get(snapshot, key);
+		const stored = cache.get(snapshot, key);
+		const hit =
+			stored?.first.promptHash === PROMPT_HASH &&
+			stored.first.model === judges.first.model
+				? stored
+				: undefined;
 		const second = judges.second;
 		const upgradable =
 			hit?.status === "single-family" &&

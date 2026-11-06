@@ -1,10 +1,20 @@
+import { createHash } from "node:crypto";
 import { isSameClaim } from "../../claim-dedupe.js";
 import { joinsClaim, labelledClaims } from "../metrics.js";
 import type { LabelFile, ReplayFixture } from "../types.js";
 import type { VerdictCache } from "./cache.js";
-import { PROMPT_HASH } from "./judge.js";
 import { claimKey } from "./snapshot.js";
 import type { JudgeFamily, JudgeRecord } from "./types.js";
+
+export const AUDIT_PROMPT = [
+	"You are auditing the diff of a pull request for real defects.",
+	"Below are claims reviewers already raised. List real defects in the diff that none of those claims covers.",
+	"Give a file path, a right-side line number, a short title and a body for each. List nothing you are not confident is a defect.",
+].join("\n");
+
+export const AUDIT_PROMPT_HASH = createHash("sha256")
+	.update(AUDIT_PROMPT)
+	.digest("hex");
 
 export interface AuditFinding {
 	path: string | null;
@@ -34,6 +44,7 @@ export interface AuditRecord extends AuditFinding {
 
 export interface AuditRunRecord {
 	kind: "audit-run";
+	first: JudgeRecord;
 	findingKeys: string[];
 	unresolved: number;
 }
@@ -53,18 +64,21 @@ export interface AuditOptions {
 	fixture: ReplayFixture;
 	labels: LabelFile;
 	diff: string;
+	/** Hash of the labels file content; the audit depends on which claims count as covered. */
+	labelsHash: string;
 	judge: AuditJudge;
 	second: AuditJudge | null;
 	cache: VerdictCache<AuditStored>;
 	caps: { anthropic: number; openai: number };
 }
 
-const RUN_KEY = "audit-run";
-const findingKey = (f: AuditFinding) => `audit:${claimKey(f)}`;
+const runKey = (labelsHash: string) => `audit-run:${labelsHash}`;
+const findingKey = (labelsHash: string, f: AuditFinding) =>
+	`audit:${labelsHash}:${claimKey(f)}`;
 const judgeRecord = (j: AuditJudge): JudgeRecord => ({
 	family: j.family,
 	model: j.model,
-	promptHash: PROMPT_HASH,
+	promptHash: AUDIT_PROMPT_HASH,
 });
 
 function summarize(
@@ -83,8 +97,13 @@ function summarize(
 
 export async function auditFixture(opts: AuditOptions): Promise<AuditResult> {
 	const { cache, snapshot, judge, second, caps } = opts;
-	const prior = cache.get(snapshot, RUN_KEY);
-	if (prior?.kind === "audit-run") {
+	const { labelsHash } = opts;
+	const prior = cache.get(snapshot, runKey(labelsHash));
+	if (
+		prior?.kind === "audit-run" &&
+		prior.first.promptHash === AUDIT_PROMPT_HASH &&
+		prior.first.model === judge.model
+	) {
 		const records = prior.findingKeys.flatMap((k) => {
 			const r = cache.get(snapshot, k);
 			return r?.kind === "audit" ? [r] : [];
@@ -111,7 +130,7 @@ export async function auditFixture(opts: AuditOptions): Promise<AuditResult> {
 							joinsClaim({ ...f, skill: null, severity: null }, c),
 						),
 				)
-				.map((f) => [findingKey(f), f]),
+				.map((f) => [findingKey(labelsHash, f), f]),
 		).values(),
 	];
 
@@ -152,10 +171,11 @@ export async function auditFixture(opts: AuditOptions): Promise<AuditResult> {
 	}
 
 	if (cacheable) {
-		for (const r of added) cache.put(snapshot, findingKey(r), r);
-		cache.put(snapshot, RUN_KEY, {
+		for (const r of added) cache.put(snapshot, findingKey(labelsHash, r), r);
+		cache.put(snapshot, runKey(labelsHash), {
 			kind: "audit-run",
-			findingKeys: added.map(findingKey),
+			first: judgeRecord(judge),
+			findingKeys: added.map((r) => findingKey(labelsHash, r)),
 			unresolved,
 		});
 	}

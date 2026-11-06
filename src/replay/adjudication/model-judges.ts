@@ -3,7 +3,12 @@ import { z } from "zod";
 import type { ResolvedAuth } from "../../auth.js";
 import { createAIModel } from "../../models.js";
 import { outputBudget, reasoningProviderOptions } from "../../router.js";
-import type { AuditFinding, AuditInput, AuditJudge } from "./audit.js";
+import {
+	AUDIT_PROMPT,
+	type AuditFinding,
+	type AuditInput,
+	type AuditJudge,
+} from "./audit.js";
 import { type JudgeSpec, modelJudge, routeJudges } from "./judge.js";
 import type { AdjudicationJudges } from "./run.js";
 
@@ -17,12 +22,6 @@ const AuditSchema = z.object({
 		}),
 	),
 });
-
-const AUDIT_PROMPT = [
-	"You are auditing the diff of a pull request for real defects.",
-	"Below are claims reviewers already raised. List real defects in the diff that none of those claims covers.",
-	"Give a file path, a right-side line number, a short title and a body for each. List nothing you are not confident is a defect.",
-].join("\n");
 
 export function modelAuditJudge(
 	spec: JudgeSpec,

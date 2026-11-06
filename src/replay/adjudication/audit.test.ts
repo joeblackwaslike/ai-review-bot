@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { LabelFile, ReplayFixture } from "../types.js";
 import {
+	AUDIT_PROMPT_HASH,
 	type AuditFinding,
 	type AuditJudge,
 	type AuditStored,
@@ -63,6 +64,7 @@ const base = () => ({
 	fixture,
 	labels,
 	diff: "diff",
+	labelsHash: "L1",
 	cache: new VerdictCache<AuditStored>(mkdtempSync(join(tmpdir(), "aud-"))),
 });
 
@@ -139,7 +141,41 @@ describe("auditFixture", () => {
 			second: null,
 			caps: { anthropic: 1, openai: 0 },
 		});
-		const kinds = [shared.cache.get("snap", "audit-run")?.kind];
+		const kinds = [shared.cache.get("snap", "audit-run:L1")?.kind];
 		expect(kinds).toEqual(["audit-run"]);
+	});
+
+	it("re-runs when the labels changed", async () => {
+		const shared = base();
+		const run = (j: ReturnType<typeof judge>, labelsHash: string) =>
+			auditFixture({
+				...shared,
+				labelsHash,
+				judge: j,
+				second: null,
+				caps: { anthropic: 1, openai: 0 },
+			});
+		await run(judge([missedA]), "L1");
+		const again = judge([missedA]);
+		await run(again, "L2");
+		expect(again.run).toHaveBeenCalledTimes(1);
+	});
+
+	it("re-runs when the cached run used another model or prompt", async () => {
+		const shared = base();
+		const run = (j: ReturnType<typeof judge>) =>
+			auditFixture({
+				...shared,
+				judge: j,
+				second: null,
+				caps: { anthropic: 1, openai: 0 },
+			});
+		await run(judge([missedA]));
+		const other = { ...judge([missedA]), model: "newer-model" };
+		await run(other);
+		expect(other.run).toHaveBeenCalledTimes(1);
+		const stale = shared.cache.get("snap", "audit-run:L1");
+		expect(stale?.kind).toBe("audit-run");
+		expect(AUDIT_PROMPT_HASH).toMatch(/^[0-9a-f]{64}$/);
 	});
 });

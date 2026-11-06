@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -152,7 +153,12 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 	const fixture = JSON.parse(
 		await readFile(fixturePath, "utf8"),
 	) as ReplayFixture;
-	const labels = JSON.parse(await readFile(labelsPath, "utf8")) as LabelFile;
+	const labelsText = await readFile(labelsPath, "utf8");
+	const labels = JSON.parse(labelsText) as LabelFile;
+	const labelsHash = createHash("sha256")
+		.update(labelsText)
+		.digest("hex")
+		.slice(0, 16);
 	const snapshot = snapshotId(fixture);
 	const cache: Cache = new VerdictCache(run.cacheDir);
 	const candidates = unmatchedCandidates(fixture, labels);
@@ -222,6 +228,7 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 				fixture,
 				labels,
 				diff: lastDiff,
+				labelsHash,
 				judge,
 				second,
 				cache: cache as VerdictCache<AuditStored>,

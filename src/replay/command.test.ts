@@ -1166,11 +1166,11 @@ describe("runReplay --adjudicate", () => {
 		expect(text).toContain("anthropic=1 openai=0");
 	});
 
-	it("falls back to the tier map's model and says so when the diff is unavailable", async () => {
+	it("does not judge a candidate whose round diff could not be fetched", async () => {
 		const { dir, id } = seedFixture();
 		const { judges, calls } = stubJudges();
 		const { lines, out } = collect();
-		await runReplay(
+		const code = await runReplay(
 			["--adjudicate", id, "--max-openai", "3", "--fixtures", dir],
 			{
 				out,
@@ -1179,14 +1179,109 @@ describe("runReplay --adjudicate", () => {
 				adjudicationDir: join(dir, "cache"),
 			},
 		);
-		expect(calls.verdict).toHaveBeenCalledWith(
-			"anthropic",
-			"claude-sonnet-5-5",
-			true,
-		);
+		expect(code).toBe(0);
+		expect(calls.verdict).not.toHaveBeenCalled();
+		expect(existsSync(join(dir, "cache"))).toBe(false);
 		const text = lines.join("\n");
-		expect(text).toContain("tier map");
-		expect(text).not.toContain("have no second-model check");
+		expect(text).toContain("evidence unavailable");
+		expect(text).toContain("deferred=1");
+	});
+
+	it("aborts the audit without a record when the last round's diff cannot be fetched", async () => {
+		const { dir, id } = seedFixture();
+		const { judges, calls } = stubJudges();
+		const { lines, out } = collect();
+		const code = await runReplay(
+			["--adjudicate", id, "--audit", "--fixtures", dir],
+			{
+				out,
+				client: noRest,
+				adjudicationJudges: judges,
+				adjudicationDir: join(dir, "cache"),
+			},
+		);
+		expect(code).toBe(1);
+		expect(calls.audit).not.toHaveBeenCalled();
+		expect(existsSync(join(dir, "cache"))).toBe(false);
+		expect(lines.join("\n")).toContain("evidence unavailable");
+	});
+
+	it("judges a claim with the evidence of its first occurrence", async () => {
+		const dir = tmp();
+		const f = makeFixture([["a"], ["b"]]);
+		const cand = (title: string, line: number) => ({
+			skill: "s.md",
+			title,
+			path: "a.ts",
+			line,
+			severity: "P1",
+		});
+		const [r0, r1] = f.rounds;
+		if (!r0 || !r1) throw new Error("rounds");
+		f.rounds[0] = {
+			...r0,
+			headSha: "h1",
+			trace: {
+				candidates: [cand("Retry delay skipped", 1)],
+				posted: [],
+				usage: {},
+			},
+		} as typeof r0;
+		f.rounds[1] = {
+			...r1,
+			headSha: "h2",
+			trace: {
+				candidates: [cand("skipped retry delay", 9)],
+				posted: [],
+				usage: {},
+			},
+		} as typeof r1;
+		const id = fixtureId(f);
+		writeFileSync(join(dir, `${id}.json`), JSON.stringify(f));
+		writeFileSync(
+			join(dir, `${id}.labels.json`),
+			JSON.stringify({
+				...makeLabels({ labels: [makeLabel("a", "fixed")] }),
+				fixtureId: id,
+			}),
+		);
+		const client: GhClient = {
+			rest: async <T>(route: string) =>
+				({
+					files: [
+						{
+							filename: "a.ts",
+							patch: route.endsWith("h1") ? "PATCH-ONE" : "PATCH-TWO",
+						},
+					],
+				}) as T,
+			graphql: () => Promise.reject(new Error("no network")),
+		};
+		const seen: string[] = [];
+		const judges: AdjudicationJudges = {
+			verdictJudges: async () => ({
+				first: {
+					family: "anthropic",
+					model: "stub",
+					run: async (input) => {
+						seen.push(input.diffEvidence);
+						return { verdict: "not-real", scope: null, reason: "r" };
+					},
+				},
+				second: null,
+			}),
+			auditJudges: async () => {
+				throw new Error("unused");
+			},
+		};
+		await runReplay(["--adjudicate", id, "--fixtures", dir], {
+			out: () => {},
+			client,
+			adjudicationJudges: judges,
+			adjudicationDir: join(dir, "cache"),
+		});
+		expect(seen).toHaveLength(1);
+		expect(seen[0]).toContain("PATCH-ONE");
 	});
 
 	it("--audit runs the audit judges", async () => {

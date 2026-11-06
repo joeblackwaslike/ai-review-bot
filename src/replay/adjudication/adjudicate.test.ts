@@ -4,8 +4,9 @@ import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { type AdjCandidate, adjudicate } from "./adjudicate.js";
 import { VerdictCache } from "./cache.js";
-import type { Judge, JudgeOutput } from "./judge.js";
+import { type Judge, type JudgeOutput, PROMPT_HASH } from "./judge.js";
 import { claimKey } from "./snapshot.js";
+import type { VerdictRecord } from "./types.js";
 
 const real: JudgeOutput = { verdict: "real", scope: "change", reason: "r" };
 const notReal: JudgeOutput = { verdict: "not-real", scope: null, reason: "n" };
@@ -215,5 +216,49 @@ describe("adjudicate", () => {
 		expect(
 			base.cache.get("snap", claimKey(cand("Retry delay skipped"))),
 		).toBeUndefined();
+	});
+
+	const cachedRecord = (model: string, promptHash: string): VerdictRecord => ({
+		...notReal,
+		first: { family: "anthropic", model, promptHash },
+		second: null,
+		secondVerdict: null,
+		status: "single-family",
+	});
+
+	it.each([
+		["the prompt hash changed", "m1", "old-hash"],
+		["the first judge model changed", "old-model", PROMPT_HASH],
+	])("treats a cached verdict as a miss when %s", async (_name, model, hash) => {
+		const base = setup();
+		const c = cand("Retry delay skipped");
+		base.cache.put("snap", claimKey(c), cachedRecord(model, hash));
+		const first = stub(real);
+		const result = await adjudicate({
+			...base,
+			candidates: [c],
+			producer: "anthropic",
+			judges: judges(first, null),
+			caps: { anthropic: 10, openai: 0 },
+		});
+		expect(first).toHaveBeenCalledTimes(1);
+		expect(result.counts.cached).toBe(0);
+		expect(result.verdicts.get(claimKey(c))?.verdict).toBe("real");
+	});
+
+	it("still uses a cached verdict that matches the current prompt and model", async () => {
+		const base = setup();
+		const c = cand("Retry delay skipped");
+		base.cache.put("snap", claimKey(c), cachedRecord("m1", PROMPT_HASH));
+		const first = stub(real);
+		const result = await adjudicate({
+			...base,
+			candidates: [c],
+			producer: "anthropic",
+			judges: judges(first, null),
+			caps: { anthropic: 10, openai: 0 },
+		});
+		expect(first).not.toHaveBeenCalled();
+		expect(result.counts.cached).toBe(1);
 	});
 });
