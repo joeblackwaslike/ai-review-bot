@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { LedgerEntry } from "../ledger/types.js";
-import { reactionsFor } from "./reactions-for.js";
+import type { KvClient } from "./kv.js";
+import { loadReactionsFor, reactionsFor } from "./reactions-for.js";
 import type { PostedCommentRecord, Verdict } from "./types.js";
 
 function record(
@@ -66,5 +67,64 @@ describe("reactionsFor", () => {
 		const f = reactionsFor([record({ alice: "down" })]);
 		expect(f(entry({ path: null }))).toEqual([]);
 		expect(f(entry({ line: null }))).toEqual([]);
+	});
+});
+
+describe("loadReactionsFor", () => {
+	const pr = { owner: "o", repo: "r", pullNumber: 1 };
+	const kvOf = (records: PostedCommentRecord[]) =>
+		({
+			zrangebyscore: vi.fn(async () => records.map((_, i) => `anthropic:${i}`)),
+			get: vi.fn(async (k: string) =>
+				JSON.stringify(records[Number(k.split(":").pop())]),
+			),
+		}) as unknown as KvClient;
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("joins only records for this owner, repo and PR", async () => {
+		const kv = kvOf([
+			record({ alice: "up" }, { owner: "other" }),
+			record({ alice: "up" }, { repo: "other" }),
+			record({ alice: "up" }, { pr: 2 }),
+			record({ alice: "down" }),
+		]);
+		const f = await loadReactionsFor(() => kv, pr);
+		expect(f(entry())).toEqual(["down"]);
+	});
+
+	it("gives up after the timeout and stops reading the remaining records", async () => {
+		vi.useFakeTimers();
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		const releases: Array<() => void> = [];
+		const get = vi.fn(
+			() =>
+				new Promise<string | null>((resolve) => {
+					releases.push(() =>
+						resolve(JSON.stringify(record({ alice: "down" }))),
+					);
+				}),
+		);
+		const kv = {
+			zrangebyscore: vi.fn(async () => ["a:1", "a:2", "a:3", "a:4", "a:5"]),
+			get,
+		} as unknown as KvClient;
+
+		const pending = loadReactionsFor(() => kv, pr);
+		await vi.advanceTimersByTimeAsync(3_000);
+		const f = await pending;
+		expect(f(entry())).toEqual([]);
+
+		const issued = get.mock.calls.length;
+		for (let i = 0; i < 6; i++) {
+			releases.splice(0).forEach((r) => {
+				r();
+			});
+			await vi.advanceTimersByTimeAsync(0);
+		}
+		expect(get.mock.calls.length).toBeLessThanOrEqual(issued + 1);
+		expect(get.mock.calls.length).toBeLessThan(5);
 	});
 });

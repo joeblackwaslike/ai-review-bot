@@ -43,15 +43,16 @@ export async function loadReactionsFor(
 		const kv = getKv?.();
 		if (!kv) return reactionsFor([]);
 		let timer: NodeJS.Timeout | undefined;
+		let stopped = false;
 		const timeout = new Promise<never>((_, reject) => {
-			timer = setTimeout(
-				() => reject(new Error("reaction lookup timed out")),
-				REACTIONS_TIMEOUT_MS,
-			);
+			timer = setTimeout(() => {
+				stopped = true;
+				reject(new Error("reaction lookup timed out"));
+			}, REACTIONS_TIMEOUT_MS);
 		});
 		try {
 			const all = await Promise.race([
-				listActiveComments(kv, Date.now()),
+				listActiveComments(kv, Date.now(), () => stopped),
 				timeout,
 			]);
 			return reactionsFor(
@@ -63,6 +64,7 @@ export async function loadReactionsFor(
 				),
 			);
 		} finally {
+			stopped = true;
 			clearTimeout(timer);
 		}
 	} catch (err) {

@@ -39,6 +39,12 @@ describe("classifyFinding", () => {
 			"unanswered",
 		);
 	});
+	it("lets a settled status win over a contrary reaction", () => {
+		expect(classifyFinding(entry("rejected"), ["up"])).toBe("rejected");
+		expect(
+			classifyFinding(entry("fixed", { decidedBy: "author" }), ["down"]),
+		).toBe("accepted");
+	});
 	it("maps rejected and deferred statuses", () => {
 		expect(classifyFinding(entry("rejected"), [])).toBe("rejected");
 		expect(classifyFinding(entry("deferred"), [])).toBe("deferred");

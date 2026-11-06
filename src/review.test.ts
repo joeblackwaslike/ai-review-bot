@@ -7024,6 +7024,7 @@ describe("buildReview ledger suppression", () => {
 			});
 
 			it("never touches KV with the switch off", async () => {
+				REVIEWER_TUNING.adaptiveLimits = false;
 				const kv = fakeKv([downRecord]);
 				const getKv = vi.fn(() => kv);
 				routeAgents({ "code-reviewer.md": agentOutput(nine) }, none);
