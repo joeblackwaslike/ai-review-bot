@@ -157,7 +157,7 @@ export function limitNotice(
 	].filter((x) => x !== null);
 	if (limitsText.length === 0) return null;
 	const noun = removedCount === 1 ? "finding" : "findings";
-	return `Held back ${removedCount} ${noun} ${limitsText.join(" or ")} this round, because most findings in earlier rounds were declined.`;
+	return `Held back ${removedCount} ${noun} ${limitsText.join(" or ")} this round, because earlier rounds drew a high share of declined findings.`;
 }
 
 /** How many agents support each finding, for the limits' tie-break. Inline comments are

@@ -329,19 +329,19 @@ describe("limitNotice", () => {
 
 	it("names the budget and floor", () => {
 		expect(limitNotice({ ...base, floor: "P2", budget: 5 }, 3)).toBe(
-			"Held back 3 findings below P2 or over the budget of 5 this round, because most findings in earlier rounds were declined.",
+			"Held back 3 findings below P2 or over the budget of 5 this round, because earlier rounds drew a high share of declined findings.",
 		);
 	});
 
 	it("names only the budget", () => {
 		expect(limitNotice({ ...base, floor: null, budget: 10 }, 1)).toBe(
-			"Held back 1 finding over the budget of 10 this round, because most findings in earlier rounds were declined.",
+			"Held back 1 finding over the budget of 10 this round, because earlier rounds drew a high share of declined findings.",
 		);
 	});
 
 	it("names only the floor", () => {
 		expect(limitNotice({ ...base, floor: "P2", budget: null }, 1)).toBe(
-			"Held back 1 finding below P2 this round, because most findings in earlier rounds were declined.",
+			"Held back 1 finding below P2 this round, because earlier rounds drew a high share of declined findings.",
 		);
 	});
 
