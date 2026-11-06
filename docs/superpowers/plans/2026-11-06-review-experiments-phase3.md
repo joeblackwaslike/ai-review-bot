@@ -44,7 +44,13 @@ Interfaces:
 - `claimKey(c: { path: string | null; title: string }): string`: sha256 over path, the sorted
   `claimTokens(title)` and the sorted `claimIdentifiers(title)` (reuse `src/claim-dedupe.ts`), so
   rewording and line moves share a key but titles that differ in a backticked name do not; a title
-  with neither tokens nor identifiers falls back to its normalized text.
+  with neither tokens nor identifiers falls back to its normalized text. Negation (spelled out or
+  as an "n't" contraction) and numeric literals are part of the key too.
+- Stale entries are misses: a cached verdict or audit record is ignored when its first judge's
+  `promptHash` differs from the current one (the hash covers the rendered prompt framing, the
+  evidence limit and the response schema) or its first model is not one the current routing would
+  pick, and an audit record is also keyed by a hash of the labels file. A blank
+  `AI_REVIEW_ADJUDICATION_DIR` falls back to the default directory.
 - `VerdictCache` with `get(snapshot, key)`, `put(snapshot, key, record)`; JSONL files under
   `~/.ai-review/adjudication/<snapshot>.jsonl` (`AI_REVIEW_ADJUDICATION_DIR` overrides), each put
   appends one complete line in a single call (no temp file, no rewrite, so two instances on one
@@ -60,7 +66,10 @@ skipped, two puts of one key keep the later. Then implement.
 Files: create `src/replay/adjudication/judge.ts`, `judge.test.ts`.
 
 Interfaces:
-- `JudgeInput = { claim: { path; line; title; body? }; diffEvidence: string }`. It has no field
+- `JudgeInput = { claim: { path; line; title; body? }; diffEvidence: string }`. Candidate bodies are
+  not recorded in traces, so for candidates `body` is never set and the judge sees title, path,
+  line and the diff only (recording bodies is a fixture schema change for the scoring phase). The
+  diff evidence is line-numbered. It has no field
   for producer, strategy, provider or model, so a producer name cannot reach the prompt.
 - `Judge = (i: JudgeInput) => Promise<{ verdict; scope; reason }>`.
 - `buildJudgePrompt(i: JudgeInput): string` and `PROMPT_HASH` (sha256 of the prompt template).
@@ -95,8 +104,12 @@ Interfaces:
   of 0 gives `single-family`.
 - A call that would pass a cap is not made: the candidate is counted in `deferred` and left out of
   `verdicts`. A judge error, from either judge or from the upgrade call, produces no verdict: it is
-  counted under `errors` only, its message goes to `errorSamples`, it is not tallied and it is not
-  cached.
+  counted under `errors` only, its message goes to `errorSamples` and it is not tallied. An error
+  from the first judge caches nothing. A second-judge error after a successful first judge caches
+  the first verdict as `single-family` (not tallied this run) so a later run can upgrade it. An
+  error in an upgrade call keeps the cached verdict, counted as cached. A judge-construction failure
+  stops the run (`unavailable`), is reported once as "judge unavailable: <message>" and is not
+  retried per candidate.
 - A cached record is a hit only when its first judge's prompt hash is the current `PROMPT_HASH` and
   its first model is one the current routing would pick (`isCurrentVerdict`, shared with `--plan`).
   A cached `single-family` verdict for an Anthropic-produced candidate with verdict `real` or
@@ -121,7 +134,10 @@ Interfaces:
 - Audit records are cached by `(snapshot, labels-file hash, claimKey)`, and a run marker records
   that the audit finished; a repeat run makes no call unless the audit prompt, the judge model or
   the labels changed. A thrown cross-check is reported as `crossCheckFailed` with its message and
-  nothing is cached.
+  nothing is cached. An error from the first audit judge aborts the run. Findings are keyed by
+  path, line and title. A cached audit with single-family findings is cross-checked later when a
+  second judge is available and the OpenAI cap allows, like the verdict upgrade. The model judge
+  refuses a diff over 60,000 characters rather than cutting it.
 
 Steps: red tests with stub judges: a defect already covered by a label (by `joinsClaim`) is
 dropped, a split is unresolved, a single-family result is marked, a repeat run makes no calls.
