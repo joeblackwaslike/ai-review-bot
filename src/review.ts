@@ -1,6 +1,12 @@
 import { APICallError } from "@ai-sdk/provider";
 import { generateObject } from "ai";
 import { z } from "zod";
+import {
+	applyLimits,
+	limitNotice,
+	resolveLimits,
+	supportCounts,
+} from "./adaptive-limits.js";
 import { capAdvisoryOutcome } from "./advisory.js";
 import {
 	type AgentFailure,
@@ -31,6 +37,8 @@ import {
 	logDiscards,
 	type OffDiffCode,
 } from "./discards.js";
+import type { KvClient } from "./feedback/kv.js";
+import { loadReactionsFor } from "./feedback/reactions-for.js";
 import {
 	anchorFingerprint,
 	formatFpMarkers,
@@ -127,6 +135,8 @@ interface ReviewContext {
 	force: boolean;
 	provider: "anthropic" | "openai";
 	feedbackEnabled: boolean;
+	/** Lazy KV accessor; read only when adaptive limits need author reactions. */
+	getKv?: () => KvClient | null;
 	agentConcurrency: number;
 	/** Wall-clock allowance for launching agents. Past it the remaining agents are
 	 * skipped and the review is submitted with what completed — the platform's own
@@ -1083,6 +1093,8 @@ export interface FormatReviewBodyOptions {
 	 * `ai-review:carry` marker that `deriveBaseline` reads. */
 	carryIds?: string[];
 	scopeNote?: ScopeNote;
+	/** Plain sentence naming the adaptive limits that removed findings. */
+	limitNote?: string | null;
 }
 
 type ScopeReason =
@@ -1211,6 +1223,7 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		ledgerNote,
 		scopeNote,
 		carryIds = [],
+		limitNote = null,
 	} = opts;
 
 	const readinessBar = renderReadinessBar(readiness);
@@ -1324,6 +1337,7 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		...(finalEvent === "APPROVE" ? [] : [inlineSummary]),
 		droppedNotice,
 		overflowNotice,
+		limitNote ?? "",
 		feedbackInvite,
 		findingsBlock,
 		advisoryBlock,
@@ -2951,26 +2965,17 @@ async function buildReviewInner(
 	// on one of those would make GitHub reject the review. A skill given the
 	// whole PR may anchor anywhere in it.
 	const scopedPathSet = new Set(scopedFilePaths);
-	const anchorFiles = allSkills.some((s) => wholePrFor(s.skillPath))
+	const anyWholePrSkill = allSkills.some((s) => wholePrFor(s.skillPath));
+	const anchorFiles = anyWholePrSkill
 		? files
 		: files.filter((f) => scopedPathSet.has(f.filename));
 	const validLines = buildValidLinesByPath(anchorFiles);
 
 	// Clear backwards or invalid start_line ranges before diff validation.
-	const sanitizedComments = sanitizeInlineComments(
+	let sanitizedComments = sanitizeInlineComments(
 		modelReview.inline_comments,
 		validLines,
 	);
-
-	const { kept: effectiveInlineComments, overflow: overflowComments } =
-		capInlineComments(sanitizedComments, MAX_INLINE_COMMENTS);
-	if (overflowComments.length > 0) {
-		console.warn("inline comment cap applied", {
-			total: sanitizedComments.length,
-			kept: MAX_INLINE_COMMENTS,
-			overflow: overflowComments.length,
-		});
-	}
 
 	const skillsByKey = new Map<string, Set<string>>();
 	outcomes.forEach((outcome, i) => {
@@ -2995,6 +3000,113 @@ async function buildReviewInner(
 			discardSkillsByKey.set(key, set);
 		}
 	});
+	let limitRemovedCount = 0;
+	let limitNote: string | null = null;
+	if (tuning.adaptiveLimits && loadedLedger) {
+		const currentRound = loadedLedger.reviewIds.length;
+		const hasEarlierRound = ledger.some((e) => e.round < currentRound);
+		const limits = resolveLimits({
+			entries: ledger,
+			reactionsFor: hasEarlierRound
+				? await loadReactionsFor(
+						context.feedbackEnabled ? context.getKv : undefined,
+						context,
+					)
+				: () => [],
+			currentRound,
+			delta:
+				incrementalPass && !anyWholePrSkill
+					? scopedFiles.map((f) => ({
+							...f,
+							additions: f.additions ?? 0,
+							deletions: f.deletions ?? 0,
+						}))
+					: null,
+		});
+		const generalSet = new Set<object>(modelReview.general_findings);
+		const agentsWithTitle = (title: string) =>
+			unsettledResults
+				.map((r, i) => ({ r, i }))
+				.filter(({ r }) =>
+					r.general_findings.some(
+						(g) => g.title.toLowerCase() === title.toLowerCase(),
+					),
+				)
+				.map(({ i }) => i);
+		const support = supportCounts({
+			inlineByAgent: outcomes.map((o, i) =>
+				o.status === "ok" && allSkills[i]?.skillPath
+					? o.review.inline_comments
+					: [],
+			),
+			generalByAgent: unsettledResults.map((r) => r.general_findings),
+			inlineKey: commentKey,
+			aliases: mergeOutcome.inlineAliases,
+		});
+		const limited = applyLimits(
+			{
+				event: modelReview.event,
+				general_findings: modelReview.general_findings,
+				inline_comments: sanitizedComments,
+			},
+			limits,
+			(f) =>
+				generalSet.has(f)
+					? support.general(f.title)
+					: support.inline(f as ModelInlineComment),
+			survivingPrior.some(blocksVerdict),
+		);
+		const removedInlineKeys = new Set<string>();
+		for (const f of limited.removed) {
+			const skills = generalSet.has(f)
+				? agentsWithTitle(f.title).map((i) => agentSkills[i])
+				: [
+						...(discardSkillsByKey.get(
+							mergeOutcome.inlineAliases.get(
+								commentKey(f as ModelInlineComment),
+							) ?? commentKey(f as ModelInlineComment),
+						) ?? []),
+					];
+			if (!generalSet.has(f))
+				removedInlineKeys.add(commentKey(f as ModelInlineComment));
+			for (const skill of skills.length ? skills : [null])
+				discards.push(toDiscard(f, "ADAPTIVE_LIMIT", skill, context.provider));
+		}
+		limitRemovedCount = limited.removed.length;
+		limitNote = limitNotice(limits, limitRemovedCount);
+		modelReview = {
+			...modelReview,
+			event: limited.review.event,
+			general_findings: limited.review.general_findings,
+			inline_comments: modelReview.inline_comments.filter(
+				(c) => !removedInlineKeys.has(commentKey(c)),
+			),
+		};
+		sanitizedComments = limited.review.inline_comments;
+		console.log("adaptive limits", {
+			score: limits.score,
+			rounds: limits.rounds,
+			floor: limits.floor,
+			budget: limits.budget,
+			removed: limitRemovedCount,
+			shape: limits.shape && {
+				files: limits.shape.fileCount,
+				reviewableWeight: limits.shape.reviewableWeight,
+				moved: limits.shape.moved.length,
+			},
+		});
+	}
+
+	const { kept: effectiveInlineComments, overflow: overflowComments } =
+		capInlineComments(sanitizedComments, MAX_INLINE_COMMENTS);
+	if (overflowComments.length > 0) {
+		console.warn("inline comment cap applied", {
+			total: sanitizedComments.length,
+			kept: MAX_INLINE_COMMENTS,
+			overflow: overflowComments.length,
+		});
+	}
+
 	const lateDiscard = (
 		c: ModelInlineComment,
 		kind:
@@ -3080,6 +3192,7 @@ async function buildReviewInner(
 	const allAgentsSucceeded = agentResults.length === allSkills.length;
 	const cleanDelta =
 		allAgentsSucceeded &&
+		limitRemovedCount === 0 &&
 		pending.length === 0 &&
 		modelReview.event === "COMMENT" &&
 		modelReview.general_findings.length === 0 &&
@@ -3244,6 +3357,7 @@ async function buildReviewInner(
 			: undefined,
 		carryIds: carryEntryIds(survivingPrior, ledger),
 		scopeNote: scope,
+		limitNote,
 	});
 
 	return {

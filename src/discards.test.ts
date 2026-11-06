@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { type Discard, discardKey, logDiscards } from "./discards.js";
+import {
+	DISCARD_REASONS,
+	type Discard,
+	discardKey,
+	logDiscards,
+} from "./discards.js";
 
 const base: Discard = {
 	reason: "CAP",
@@ -61,6 +66,29 @@ type Kind<T> = T extends Discard
 	? Pick<T, "reason" | "code" | "disposition">
 	: never;
 const kind = (k: Kind<Discard>) => k;
+
+describe("ADAPTIVE_LIMIT", () => {
+	it("is a discard reason that is dropped with no code", () => {
+		const adaptive: Discard = {
+			...base,
+			reason: "ADAPTIVE_LIMIT",
+			code: null,
+			disposition: "dropped",
+		};
+		expect(DISCARD_REASONS).toContain(adaptive.reason);
+		const rejected = [
+			kind({
+				reason: "ADAPTIVE_LIMIT",
+				// @ts-expect-error an adaptive-limit discard has no off-diff code
+				code: "BAD_RANGE",
+				disposition: "dropped",
+			}),
+			// @ts-expect-error an adaptive-limit discard is dropped, not held
+			kind({ reason: "ADAPTIVE_LIMIT", code: null, disposition: "held" }),
+		];
+		expect(rejected).toHaveLength(2);
+	});
+});
 
 describe("Discard", () => {
 	it("rejects contradictory reason, code and disposition combinations", () => {

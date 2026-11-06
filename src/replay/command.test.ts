@@ -18,7 +18,7 @@ vi.mock("./run-strategy.js", () => ({
 }));
 
 import { VerdictCache } from "./adjudication/cache.js";
-import { PROMPT_HASH } from "./adjudication/judge.js";
+import { PROMPT_HASH, possibleFirstModels } from "./adjudication/judge.js";
 import type { AdjudicationJudges } from "./adjudication/run.js";
 import { claimKey, snapshotId } from "./adjudication/snapshot.js";
 import { fixtureId } from "./claims.js";
@@ -248,6 +248,121 @@ describe("runReplay", () => {
 		const { lines, out } = collect();
 		expect(await runReplay([], { fixturesDir: dir, out })).toBe(0);
 		expect(lines.join("\n")).not.toContain("candidate retraction rule");
+	});
+
+	it("prints the adaptive report after the filter margin when a fixture has a trace", async () => {
+		const dir = tmp();
+		const id = seed(
+			dir,
+			makeLabels({
+				labels: [makeLabel("a", "rejected"), makeLabel("b", "rejected")],
+			}),
+		);
+		const fixturePath = join(dir, `${id}.json`);
+		const f = JSON.parse(readFileSync(fixturePath, "utf8"));
+		const item = {
+			skill: "code-reviewer.md",
+			title: "x",
+			path: "a.ts",
+			line: 1,
+			severity: "P2",
+		};
+		f.rounds[0].trace = { candidates: [item], posted: [item], usage: {} };
+		writeFileSync(fixturePath, JSON.stringify(f));
+		writeFileSync(
+			join(dir, `${id}.classes.json`),
+			JSON.stringify({ fixtureId: id, provisional: true, records: [] }),
+		);
+		const { lines, out } = collect();
+		expect(await runReplay([], { fixturesDir: dir, out })).toBe(0);
+		const text = lines.join("\n");
+		expect(text).toContain("adaptive limits");
+		expect(text.indexOf("adaptive limits")).toBeGreaterThan(
+			text.indexOf("candidate retraction rule"),
+		);
+		expect(text.indexOf("adaptive limits")).toBeLessThan(
+			text.indexOf("replayed 1 fixture"),
+		);
+	});
+
+	it("counts a cached adjudication verdict from the configured directory in the adaptive report", async () => {
+		const dir = tmp();
+		const f = makeFixture([["a", "b"], ["c", "d"], ["e"]]);
+		const id = fixtureId(f);
+		const rejected = (claimId: string, at: string) =>
+			makeLabel(claimId, "rejected", { evidence: [`${at}|no`] });
+		const items = Array.from({ length: 8 }, (_, i) => ({
+			skill: "code-reviewer.md",
+			title: `unrelated nit number ${i}`,
+			path: `src/n${i}.ts`,
+			line: 5,
+			severity: "P3",
+		}));
+		f.rounds[2] = {
+			...f.rounds[2],
+			trace: { candidates: items, posted: [], usage: {} },
+		} as (typeof f.rounds)[0];
+		writeFileSync(join(dir, `${id}.json`), JSON.stringify(f));
+		writeFileSync(
+			join(dir, `${id}.labels.json`),
+			JSON.stringify({
+				...makeLabels({
+					labels: [
+						rejected("a", "2026-01-01T11:00:00Z"),
+						rejected("b", "2026-01-01T11:00:00Z"),
+						rejected("c", "2026-01-02T13:00:00Z"),
+						rejected("d", "2026-01-02T13:00:00Z"),
+					],
+				}),
+				fixtureId: id,
+			}),
+		);
+		const cacheDir = join(dir, "cache");
+		const verdict = {
+			verdict: "not-real" as const,
+			scope: null,
+			reason: "r",
+			first: {
+				family: "anthropic" as const,
+				model: possibleFirstModels(f.provider)[0] as string,
+				promptHash: PROMPT_HASH,
+			},
+			second: null,
+			secondVerdict: null,
+			status: "single-family" as const,
+		};
+		const cache = new VerdictCache(cacheDir);
+		cache.put(
+			snapshotId(f),
+			claimKey({ path: "src/n7.ts", title: "unrelated nit number 7" }),
+			verdict,
+		);
+		cache.put(
+			snapshotId(f),
+			claimKey({ path: "src/n6.ts", title: "unrelated nit number 6" }),
+			{ ...verdict, first: { ...verdict.first, promptHash: "stale" } },
+		);
+		const run = async (adjudicationDir: string) => {
+			const { lines, out } = collect();
+			await runReplay([], { fixturesDir: dir, out, adjudicationDir });
+			return lines.join("\n");
+		};
+		const seeded = await run(cacheDir);
+		const empty = await run(join(dir, "empty-cache"));
+		expect(seeded).toMatch(
+			/would remove 0 labelled-real[^,]*, 1 rejected, 7 unjoined/,
+		);
+		expect(empty).toMatch(
+			/would remove 0 labelled-real[^,]*, 0 rejected, 8 unjoined/,
+		);
+	});
+
+	it("prints no adaptive report when no fixture has a trace", async () => {
+		const dir = tmp();
+		seed(dir);
+		const { lines, out } = collect();
+		expect(await runReplay([], { fixturesDir: dir, out })).toBe(0);
+		expect(lines.join("\n")).not.toContain("adaptive limits");
 	});
 
 	it("exits 1 when the guard has a failure and 0 when only warnings", async () => {

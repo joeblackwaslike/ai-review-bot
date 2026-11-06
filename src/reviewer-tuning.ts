@@ -17,6 +17,8 @@
  * provider-agnostic prompt/merge behavior — so there was no remaining reason
  * to withhold them from a reviewer now shown to need the same protection. */
 export interface ReviewerTuning {
+	/** Tighten the severity floor and findings budget from earlier rounds' outcomes. */
+	adaptiveLimits: boolean;
 	/** Collapse several agents' restatements of one claim into a single finding. */
 	dedupeNearDuplicateClaims: boolean;
 	/** Drop P2/P3 suppressible findings whose own closing sentence retracts them.
@@ -29,8 +31,19 @@ export interface ReviewerTuning {
 }
 
 export const REVIEWER_TUNING: ReviewerTuning = {
+	adaptiveLimits: false,
 	dedupeNearDuplicateClaims: true,
 	dropRetractions: false,
 	showPriorOwnFindings: true,
 	strictEvidenceRules: true,
 };
+
+/** Score bands for adaptive review limits. A score below `edges[0]` applies no
+ * limit; each later band index selects the matching `budgets` and `floors` entry. */
+export const ADAPTIVE_LIMIT_BANDS = {
+	edges: [0.35, 0.6],
+	budgets: [null, 10, 5],
+	floors: [null, null, "P2"],
+	decay: 0.5,
+	deferredWeight: 0.5,
+} as const;

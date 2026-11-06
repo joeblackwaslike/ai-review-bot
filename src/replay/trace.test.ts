@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { resolveLimits } from "../adaptive-limits.js";
 import { ledgerEntryFinding } from "../baseline.js";
 import type { Ledger } from "../ledger/types.js";
 import { shortFindingId } from "../relation.js";
@@ -11,10 +12,15 @@ import {
 	TWO_HUNK_PATCH,
 } from "../testing.js";
 import { ledgerFromView } from "./pipeline.js";
-import { ledgerForRound, postFilterTrace } from "./trace.js";
+import {
+	adaptiveInputForRound,
+	ledgerForRound,
+	postFilterTrace,
+} from "./trace.js";
 import type { LabelFile, PostedClaim, ReplayFixture, Round } from "./types.js";
 
 const files = [buildPullFile("src/a.ts", SIMPLE_PATCH)];
+const LONG_PATCH = `@@ -0,0 +1,12 @@\n${Array.from({ length: 12 }, (_, i) => `+line ${i}`).join("\n")}`;
 const tuning = { ...REVIEWER_TUNING, dropRetractions: false };
 const noLedger: Ledger = [];
 
@@ -409,5 +415,340 @@ describe("ledgerForRound", () => {
 			["r0:c1:0", "rejected"],
 			["r1:c2:0", "open"],
 		]);
+	});
+});
+
+describe("adaptive limits in the trace", () => {
+	const mkRound = (
+		index: number,
+		claims: PostedClaim[],
+		over: Partial<Round> = {},
+	): Round => ({
+		index,
+		reviewId: index + 1,
+		provider: "anthropic",
+		submittedAt: `2026-10-0${index + 1}T12:00:00Z`,
+		headSha: `h${index}`,
+		baseSha: "b",
+		mergeBase: null,
+		triggerAt: `2026-10-0${index + 1}T11:00:00Z`,
+		approximate: false,
+		commitsSince: [],
+		claims,
+		...over,
+	});
+	const claim = (id: string, roundIndex: number, commentId: number) => ({
+		...priorClaim(id, roundIndex, `Earlier finding ${id}`, "text"),
+		commentId,
+		severity: "P2",
+	});
+	const rejected = (claimId: string, at: string) => ({
+		claimId,
+		label: "rejected",
+		confidence: "high",
+		evidence: [`${at}|Intentional.`],
+		confirmed: true,
+	});
+	const build = () => {
+		const fixture = {
+			reactions: [],
+			rounds: [
+				mkRound(0, [claim("r0:a", 0, 11), claim("r0:b", 0, 12)]),
+				mkRound(1, [claim("r1:a", 1, 21), claim("r1:b", 1, 22)]),
+				mkRound(2, [claim("r2:a", 2, 31)]),
+			],
+		} as unknown as ReplayFixture;
+		const labels = {
+			labels: [
+				rejected("r0:a", "2026-10-01T18:00:00Z"),
+				rejected("r0:b", "2026-10-01T18:00:00Z"),
+				rejected("r1:a", "2026-10-02T18:00:00Z"),
+				rejected("r1:b", "2026-10-02T18:00:00Z"),
+				rejected("r2:a", "2026-10-09T18:00:00Z"),
+			],
+		} as unknown as LabelFile;
+		return { fixture, labels };
+	};
+	const review = () =>
+		buildModelReview({
+			general_findings: [
+				general("Blocker one", "b", "P0" as never),
+				general("Serious two", "b", "P1" as never),
+				...[1, 2, 3, 4, 5, 6].map((n) => general(`Medium ${n}`, "b")),
+				general("Nit seven", "b", "P3" as never),
+			],
+		});
+	const on = { ...tuning, adaptiveLimits: true };
+	const off = { ...tuning, adaptiveLimits: false };
+
+	it("removes findings once earlier rounds were rejected, and reports them apart", () => {
+		const { fixture, labels } = build();
+		const round = fixture.rounds[2] as Round;
+		const input = {
+			agentReviews: [{ skill: "code-reviewer", review: review() }],
+			ledger: ledgerForRound(fixture, labels, round),
+			files,
+		};
+		const adaptive = adaptiveInputForRound(fixture, labels, round);
+		const base = postFilterTrace({ ...input, tuning: off, adaptive });
+		const limited = postFilterTrace({ ...input, tuning: on, adaptive });
+
+		expect(limited.posted.length).toBeLessThan(base.posted.length);
+		expect(limited.adaptiveRemoved?.length).toBe(
+			base.posted.length - limited.posted.length,
+		);
+		const removed = titles(limited.adaptiveRemoved ?? []);
+		expect(removed).toContain("Nit seven");
+		for (const t of removed) {
+			expect(titles(limited.posted)).not.toContain(t);
+			expect(titles(limited.dropped)).not.toContain(t);
+		}
+		expect(titles(limited.posted)).toEqual(
+			expect.arrayContaining(["Blocker one", "Serious two"]),
+		);
+		expect(limited.dropped).toEqual(base.dropped);
+	});
+
+	it("leaves round 0 unchanged", () => {
+		const { fixture, labels } = build();
+		const round = fixture.rounds[0] as Round;
+		const input = {
+			agentReviews: [{ skill: "code-reviewer", review: review() }],
+			ledger: ledgerForRound(fixture, labels, round),
+			files,
+		};
+		const adaptive = adaptiveInputForRound(fixture, labels, round);
+		const limited = postFilterTrace({ ...input, tuning: on, adaptive });
+		const base = postFilterTrace({ ...input, tuning: off, adaptive });
+		expect(limited.posted).toEqual(base.posted);
+		expect(limited.adaptiveRemoved).toEqual([]);
+	});
+
+	it("is identical to the plain trace with the switch off or no adaptive input", () => {
+		const { fixture, labels } = build();
+		const round = fixture.rounds[2] as Round;
+		const input = {
+			agentReviews: [{ skill: "code-reviewer", review: review() }],
+			ledger: ledgerForRound(fixture, labels, round),
+			files,
+		};
+		const plain = postFilterTrace({ ...input, tuning: off });
+		const adaptive = adaptiveInputForRound(fixture, labels, round);
+		expect(postFilterTrace({ ...input, tuning: off, adaptive })).toEqual(plain);
+		expect(postFilterTrace({ ...input, tuning: on })).toEqual(plain);
+		expect(plain).not.toHaveProperty("adaptiveRemoved");
+	});
+
+	it("never reads round i or later when building the input", () => {
+		const { fixture, labels } = build();
+		const round = fixture.rounds[1] as Round;
+		const strip = (a: ReturnType<typeof adaptiveInputForRound>) => ({
+			entries: a.entries,
+			currentRound: a.currentRound,
+			delta: a.delta,
+			reactions: a.entries.map((e) => a.reactionsFor(e)),
+		});
+		const before = structuredClone(
+			strip(adaptiveInputForRound(fixture, labels, round)),
+		);
+		const claims = round.claims as PostedClaim[];
+		claims[0] = {
+			...claims[0],
+			title: "changed",
+			commentId: 999,
+		} as PostedClaim;
+		(fixture.rounds[2] as Round).claims = [];
+		const after = adaptiveInputForRound(fixture, labels, round);
+		expect(strip(after)).toEqual(before);
+		expect(after.currentRound).toBe(1);
+		expect(after.entries.every((e) => e.round < 1)).toBe(true);
+	});
+
+	it("reads visible reactions as verdicts", () => {
+		const { fixture, labels } = build();
+		fixture.reactions = [
+			{
+				commentId: 11,
+				user: "joe",
+				content: "-1",
+				createdAt: "2026-10-01T20:00:00Z",
+			},
+			{
+				commentId: 11,
+				user: "joe",
+				content: "heart",
+				createdAt: "2026-10-01T21:00:00Z",
+			},
+			{
+				commentId: 12,
+				user: "joe",
+				content: "+1",
+				createdAt: "2026-10-09T20:00:00Z",
+			},
+		];
+		const a = adaptiveInputForRound(
+			fixture,
+			labels,
+			fixture.rounds[2] as Round,
+		);
+		const byId = new Map(a.entries.map((e) => [e.id, a.reactionsFor(e)]));
+		expect(byId.get("r0:a")).toEqual(["down"]);
+		expect(byId.get("r0:b")).toEqual([]);
+	});
+
+	it("ignores labels and reactions dated after the round cutoff", () => {
+		const { fixture, labels } = build();
+		(labels.labels as unknown[]).length = 0;
+		(labels.labels as unknown[]).push(rejected("r0:a", "2026-10-05T18:00:00Z"));
+		fixture.reactions = [
+			{
+				commentId: 12,
+				user: "joe",
+				content: "-1",
+				createdAt: "2026-10-05T18:00:00Z",
+			},
+		];
+		const a = adaptiveInputForRound(
+			fixture,
+			labels,
+			fixture.rounds[1] as Round,
+		);
+		expect(a.entries.find((e) => e.id === "r0:a")?.status).toBe("open");
+		const b = a.entries.find((e) => e.id === "r0:b");
+		expect(b && a.reactionsFor(b)).toEqual([]);
+	});
+
+	it("keeps entries the holdable ledger drops", () => {
+		const { fixture, labels } = build();
+		(labels.labels as unknown[]).length = 0;
+		const round = fixture.rounds[2] as Round;
+		const a = adaptiveInputForRound(fixture, labels, round);
+		const held = ledgerForRound(fixture, labels, round).map((e) => e.id);
+		expect(a.entries.map((e) => e.id)).toContain("r0:a");
+		expect(held).not.toContain("r0:a");
+	});
+
+	it("scores earlier rounds when round indexes are not contiguous", () => {
+		const { fixture, labels } = build();
+		fixture.rounds = [
+			mkRound(0, [claim("r0:a", 0, 11)]),
+			mkRound(2, [claim("r2:a", 2, 31)]),
+			mkRound(3, []),
+		];
+		labels.labels = [
+			rejected("r0:a", "2026-10-01T18:00:00Z"),
+			rejected("r2:a", "2026-10-03T12:30:00Z"),
+		] as never;
+		const a = adaptiveInputForRound(
+			fixture,
+			labels,
+			fixture.rounds[2] as Round,
+		);
+		expect(a.currentRound).toBe(3);
+		expect(resolveLimits(a).rounds.map((r) => r.round)).toEqual([0, 2]);
+	});
+
+	it("does not force the budget to 2 when the round records changed files", () => {
+		const { fixture, labels } = build();
+		const round = fixture.rounds[2] as Round;
+		round.commitsSince = [
+			{
+				sha: "c1",
+				committedAt: "2026-10-03T00:00:00Z",
+				files: [{ path: "src/a.ts", ranges: [[1, 3]] }],
+			},
+		];
+		const adaptive = adaptiveInputForRound(fixture, labels, round);
+		expect(adaptive.delta).toBeNull();
+		const result = postFilterTrace({
+			agentReviews: [
+				{
+					skill: "code-reviewer",
+					review: buildModelReview({
+						general_findings: [1, 2, 3, 4, 5, 6].map((n) =>
+							general(`Medium ${n}`, "b"),
+						),
+					}),
+				},
+			],
+			ledger: ledgerForRound(fixture, labels, round),
+			files,
+			tuning: on,
+			adaptive,
+		});
+		expect(result.posted).toHaveLength(5);
+		expect(result.adaptiveRemoved).toHaveLength(1);
+	});
+
+	it("counts agents behind an inline comment and names the skill that raised a removed one", () => {
+		const { fixture, labels } = build();
+		const round = fixture.rounds[2] as Round;
+		const comments = [1, 2, 3, 4, 5, 6].map((n) =>
+			inline(`Inline ${n}`, { severity: "P2" }),
+		);
+		const result = postFilterTrace({
+			agentReviews: [
+				{
+					skill: "agent-a",
+					review: buildModelReview({ inline_comments: comments }),
+				},
+				{
+					skill: "agent-b",
+					review: buildModelReview({
+						inline_comments: [inline("Inline 6", { severity: "P2" })],
+					}),
+				},
+			],
+			ledger: ledgerForRound(fixture, labels, round),
+			files,
+			tuning: on,
+			adaptive: adaptiveInputForRound(fixture, labels, round),
+		});
+		expect(result.adaptiveRemoved).toHaveLength(1);
+		expect(result.adaptiveRemoved?.[0]?.title).toBe("Inline 5");
+		expect(result.adaptiveRemoved?.[0]?.skill).toBe("agent-a.md");
+		expect(titles(result.posted)).toContain("Inline 6");
+	});
+
+	it("counts a restated claim for its survivor, as production does", () => {
+		const { fixture, labels } = build();
+		const round = fixture.rounds[2] as Round;
+		const topics = [
+			"Alpha widget leaks memory",
+			"Beta socket never closes",
+			"Gamma parser skips validation",
+			"Delta cache returns stale rows",
+			"Epsilon retry loop spins forever",
+		];
+		const last = "Zeta token comparison is not constant time";
+		const result = postFilterTrace({
+			agentReviews: [
+				{
+					skill: "agent-a",
+					review: buildModelReview({
+						inline_comments: [...topics, last].map((t, i) =>
+							inline(t, { severity: "P2", line: 2 + i }),
+						),
+					}),
+				},
+				{
+					skill: "agent-b",
+					review: buildModelReview({
+						inline_comments: [
+							inline("Zeta token comparison is not constant-time", {
+								severity: "P2",
+								line: 7,
+							}),
+						],
+					}),
+				},
+			],
+			ledger: ledgerForRound(fixture, labels, round),
+			files: [buildPullFile("src/a.ts", LONG_PATCH)],
+			tuning: { ...on, dedupeNearDuplicateClaims: true },
+			adaptive: adaptiveInputForRound(fixture, labels, round),
+		});
+		expect(result.adaptiveRemoved).toHaveLength(1);
+		expect(result.adaptiveRemoved?.[0]?.title).toBe(topics[4]);
 	});
 });

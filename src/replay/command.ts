@@ -12,12 +12,17 @@ import {
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ModelSelection } from "../router.js";
+import { adaptiveReport } from "./adaptive-report.js";
+import { isCurrentVerdict } from "./adjudication/adjudicate.js";
+import { VerdictCache } from "./adjudication/cache.js";
+import { possibleFirstModels } from "./adjudication/judge.js";
 import {
 	type AdjudicationJudges,
 	DEFAULT_MAX_ANTHROPIC,
 	DEFAULT_MAX_OPENAI,
 	runAdjudication,
 } from "./adjudication/run.js";
+import { claimKey, snapshotId } from "./adjudication/snapshot.js";
 import { fixtureId } from "./claims.js";
 import {
 	type ClassFile,
@@ -418,6 +423,7 @@ async function replayAll(
 	dir: string,
 	pipeline: ReplayPipeline,
 	out: (s: string) => void,
+	adjudicationDir?: string,
 ): Promise<number> {
 	const files = existsSync(dir)
 		? (await readdir(dir)).filter((n) => FIXTURE_FILE.test(n)).sort()
@@ -473,8 +479,38 @@ async function replayAll(
 			),
 		);
 	}
+	printAdaptiveReport(loaded, out, adjudicationDir);
 	out(`replayed ${metrics.length} fixture${metrics.length === 1 ? "" : "s"}`);
 	return failed ? 1 : 0;
+}
+
+function printAdaptiveReport(
+	loaded: { fixture: ReplayFixture; labels: LabelFile }[],
+	out: (s: string) => void,
+	adjudicationDir?: string,
+): void {
+	const traced = loaded.filter((l) => l.fixture.rounds.some((r) => r.trace));
+	if (traced.length === 0) return;
+	const cache = new VerdictCache(adjudicationDir);
+	out(
+		adaptiveReport(
+			traced.map(({ fixture, labels }) => {
+				const snapshot = snapshotId(fixture);
+				return {
+					fixture,
+					labels,
+					verdictFor: (c) => {
+						const rec = cache.get(snapshot, claimKey(c));
+						return rec &&
+							rec.status !== "unresolved" &&
+							isCurrentVerdict(rec, possibleFirstModels(fixture.provider))
+							? rec.verdict
+							: undefined;
+					},
+				};
+			}),
+		).text,
+	);
 }
 
 async function writeTrace(
@@ -805,5 +841,10 @@ export async function runReplay(
 			strategy,
 			deps.liveWiring,
 		);
-	return replayAll(dir, deps.pipeline ?? todaysCodePipeline, out);
+	return replayAll(
+		dir,
+		deps.pipeline ?? todaysCodePipeline,
+		out,
+		deps.adjudicationDir,
+	);
 }

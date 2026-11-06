@@ -12,6 +12,7 @@ describe("REVIEWER_TUNING", () => {
 	// unified for both providers rather than re-forking per bot.
 	it("turns the signal-quality changes on unconditionally, except the retraction filter", () => {
 		expect(REVIEWER_TUNING).toEqual({
+			adaptiveLimits: false,
 			dedupeNearDuplicateClaims: true,
 			dropRetractions: false,
 			showPriorOwnFindings: true,
