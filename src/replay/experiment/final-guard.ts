@@ -77,3 +77,7 @@ export function readableFixtureIds(
 			.map((f) => f.id),
 	);
 }
+
+export function finalScored(root: string, planHash: string): boolean {
+	return existsSync(join(root, planHash, MARKER));
+}

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { z } from "zod";
+import { splitOf } from "./splits.js";
 
 const ProviderSchema = z.enum(["anthropic", "openai"]);
 const SplitSchema = z.enum(["tuning", "validation", "test"]);
@@ -48,6 +49,12 @@ export const ExperimentPlanSchema = z
 	})
 	.superRefine((plan, ctx) => {
 		for (const [i, f] of plan.fixtures.entries()) {
+			if (splitOf(f.id, plan.seed) !== f.split)
+				ctx.addIssue({
+					code: "custom",
+					path: ["fixtures", i, "split"],
+					message: `split of ${f.id} must be ${splitOf(f.id, plan.seed)} from the seeded hash`,
+				});
 			if (f.provider === "openai" && f.split !== "test")
 				ctx.addIssue({
 					code: "custom",

@@ -9,6 +9,7 @@ import type { LabelFile, ReplayFixture } from "../types.js";
 import {
 	exploratoryReason,
 	FinalAlreadyScoredError,
+	finalScored,
 	writeFinalMarker,
 } from "./final-guard.js";
 import {
@@ -29,6 +30,7 @@ import {
 	scoreExperiment,
 	type VerdictLookup,
 } from "./score.js";
+import { readSeedGates } from "./seed-gates.js";
 import { isDirectional } from "./splits.js";
 import { defaultExperimentsDir, ResultsStore } from "./store.js";
 
@@ -133,12 +135,59 @@ export async function runExperiment(
 		return report.failed.length > 0 ? 1 : 0;
 	}
 
-	let exploratory: string | null = null;
+	const testIds = plan.fixtures
+		.filter((f) => f.split === "test")
+		.map((f) => f.id);
+	const baseline = "a";
+	let seedGates: ReturnType<typeof readSeedGates>;
+	try {
+		seedGates = readSeedGates(deps.root, hash);
+	} catch (err) {
+		out(
+			`cannot read seed-gates.json: ${err instanceof Error ? err.message : String(err)}`,
+		);
+		return 1;
+	}
 	if (args.final) {
-		const testIds = plan.fixtures
-			.filter((f) => f.split === "test")
-			.map((f) => f.id);
-		exploratory = exploratoryReason(deps.root, hash, testIds);
+		if (finalScored(deps.root, hash)) {
+			out(
+				`plan ${hash} already had its final scoring; revise the plan with fresh test PRs`,
+			);
+			return 1;
+		}
+		const lacking = plan.strategies
+			.map((s) => s.name)
+			.filter((n) => n !== baseline && !seedGates[n]);
+		if (!isDirectional(plan) && lacking.length > 0) {
+			out(
+				`no seed gate result for ${lacking.join(", ")}; a final verdict needs one per candidate in ${join(deps.root, hash, "seed-gates.json")} (storing \`replay --seeds\` results there is phase 6). Nothing was scored and the one-shot final is still available`,
+			);
+			return 1;
+		}
+	}
+	const exploratory = args.final
+		? exploratoryReason(deps.root, hash, testIds)
+		: null;
+	const { records, skipped } = store.readAll(
+		Object.fromEntries(
+			plan.strategies.map((s) => [s.name, deps.registry(s.name).version]),
+		),
+	);
+	if (skipped > 0) out(`${skipped} unreadable result line(s) skipped`);
+	const report = formatScoreReport(
+		scoreExperiment({
+			plan,
+			records,
+			fixtures,
+			cache: deps.cache,
+			final: args.final,
+			baseline,
+			seedGates,
+			exploratory,
+		}),
+		{ planHash: hash },
+	);
+	if (args.final) {
 		try {
 			writeFinalMarker(deps.root, hash, testIds, deps.now);
 		} catch (err) {
@@ -149,27 +198,7 @@ export async function runExperiment(
 			throw err;
 		}
 	}
-	const { records, skipped } = store.readAll(
-		Object.fromEntries(
-			plan.strategies.map((s) => [s.name, deps.registry(s.name).version]),
-		),
-	);
-	if (skipped > 0) out(`${skipped} unreadable result line(s) skipped`);
-	out(
-		formatScoreReport(
-			scoreExperiment({
-				plan,
-				records,
-				fixtures,
-				cache: deps.cache,
-				final: args.final,
-				baseline: "a",
-				seedGates: {},
-				exploratory,
-			}),
-			{ planHash: hash },
-		),
-	);
+	out(report);
 	return 0;
 }
 

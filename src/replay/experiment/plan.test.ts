@@ -46,6 +46,23 @@ describe("ExperimentPlanSchema", () => {
 		expect(parsed.success).toBe(false);
 	});
 
+	it("rejects a split that does not follow the seeded hash", () => {
+		const plan = samplePlan();
+		const f = plan.fixtures[0] as (typeof plan.fixtures)[number];
+		f.split = f.split === "tuning" ? "validation" : "tuning";
+		expect(ExperimentPlanSchema.safeParse(plan).success).toBe(false);
+	});
+
+	it("accepts both providers of one PR in the hashed split", () => {
+		const plan = samplePlan();
+		plan.fixtures.push({
+			id: "o/r#2@anthropic",
+			split: "test",
+			provider: "anthropic",
+		});
+		expect(ExperimentPlanSchema.safeParse(plan).success).toBe(true);
+	});
+
 	it("accepts an optional draft flag", () => {
 		const parsed = ExperimentPlanSchema.safeParse({
 			...samplePlan(),

@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -7,7 +7,7 @@ import type { ReviewStrategy, StrategyResult } from "../strategy.js";
 import { makeFixture, makeLabels } from "../testkit.js";
 import { type ExperimentDeps, runExperiment } from "./command.js";
 import { type ExperimentPlan, planHash } from "./plan.js";
-import { samplePlan } from "./testkit.js";
+import { fullSizePlan, samplePlan, seedFor } from "./testkit.js";
 
 const result = (): StrategyResult => ({
 	findings: [],
@@ -29,6 +29,7 @@ const stub = (name: string): ReviewStrategy => ({
 
 const plan = (over: Partial<ExperimentPlan> = {}): ExperimentPlan => ({
 	...samplePlan(),
+	seed: seedFor(["o/r#1", "tuning"]),
 	fixtures: [{ id: "o/r#1", split: "tuning", provider: "anthropic" }],
 	...over,
 });
@@ -122,11 +123,68 @@ describe("runExperiment", () => {
 	it("allows one --final per plan hash", async () => {
 		const s = setup(
 			plan({
+				seed: seedFor(["o/r#1", "test"]),
 				fixtures: [{ id: "o/r#1", split: "test", provider: "anthropic" }],
 			}),
 		);
 		expect(await call(s, "run")).toBe(0);
 		expect(await call(s, "score", true)).toBe(0);
 		expect(await call(s, "score", true)).toBe(1);
+	});
+});
+
+describe("score --final seed gates", () => {
+	const gate = {
+		pass: true,
+		originalsMissed: 0,
+		cleanFindings: 0,
+		reasons: [],
+	};
+
+	it("refuses before writing the marker when a candidate lacks a seed-gate result", async () => {
+		const s = setup(fullSizePlan());
+		expect(await call(s, "score", true)).toBe(1);
+		expect(s.lines.join("\n")).toMatch(/seed gate/i);
+		const dir = join(s.deps.root, planHash(fullSizePlan()));
+		expect(existsSync(join(dir, "final.marker"))).toBe(false);
+
+		mkdirSync(dir, { recursive: true });
+		writeFileSync(join(dir, "seed-gates.json"), JSON.stringify({ a0: gate }));
+		expect(await call(s, "score", true)).toBe(0);
+		expect(existsSync(join(dir, "final.marker"))).toBe(true);
+		expect(await call(s, "score", true)).toBe(1);
+	});
+
+	it("needs no seed gates for a directional plan", async () => {
+		const s = setup(
+			plan({
+				seed: seedFor(["o/r#1", "test"]),
+				fixtures: [{ id: "o/r#1", split: "test", provider: "anthropic" }],
+			}),
+		);
+		expect(await call(s, "score", true)).toBe(0);
+	});
+
+	it("does not burn the marker when scoring throws", async () => {
+		const s = setup(
+			plan({
+				seed: seedFor(["o/r#1", "test"]),
+				fixtures: [{ id: "o/r#1", split: "test", provider: "anthropic" }],
+			}),
+		);
+		s.deps.registry = () => {
+			throw new Error("boom");
+		};
+		await expect(call(s, "score", true)).rejects.toThrow("boom");
+		const dir = join(
+			s.deps.root,
+			planHash(
+				plan({
+					seed: seedFor(["o/r#1", "test"]),
+					fixtures: [{ id: "o/r#1", split: "test", provider: "anthropic" }],
+				}),
+			),
+		);
+		expect(existsSync(join(dir, "final.marker"))).toBe(false);
 	});
 });
