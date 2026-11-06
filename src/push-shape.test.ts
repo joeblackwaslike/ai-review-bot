@@ -200,6 +200,49 @@ describe("classifyPush", () => {
 				).toBe(true);
 			});
 
+			const runOf = (
+				removed: string[],
+				added: string[],
+				filename = "src/a.ts",
+			) =>
+				patchOnly(
+					[
+						`@@ -1,${removed.length} +1,${added.length} @@`,
+						...removed.map((l) => `-${l}`),
+						...added.map((l) => `+${l}`),
+					].join("\n"),
+					filename,
+				);
+
+			it("keeps weight when a break after return would change meaning", () => {
+				expect(runOf(["return loadUser();"], ["return", "loadUser();"])).toBe(
+					false,
+				);
+				expect(runOf(["return value;"], ["return", "value;"])).toBe(false);
+			});
+
+			it("keeps weight when a statement is absorbed into a line comment", () => {
+				expect(runOf(["// note foo();"], ["// note", "foo();"])).toBe(false);
+			});
+
+			it("keeps weight when a statement moves onto its own line after a condition", () => {
+				expect(runOf(["if (x) y();"], ["if (x)", "y();"])).toBe(false);
+			});
+
+			it("keeps weight when an indentation-sensitive run changes its line count", () => {
+				expect(runOf(["x = [1, 2]"], ["x = [1,", "2]"], "src/a.py")).toBe(
+					false,
+				);
+			});
+
+			it("ignores wrapped calls and safe breaks", () => {
+				expect(runOf(["foo(a, b, c)"], ["foo(", "a,", "b,", "c", ")"])).toBe(
+					true,
+				);
+				expect(runOf(["x = a + b;"], ["x = a +", "b;"])).toBe(true);
+				expect(runOf(["x = [1, 2];"], ["x = [", "1,", "2", "];"])).toBe(true);
+			});
+
 			it("ignores a file where every run is a pure reindent", () => {
 				expect(
 					patchOnly(

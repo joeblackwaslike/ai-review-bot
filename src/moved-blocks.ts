@@ -27,6 +27,24 @@ const MIN_COUNTED_LENGTH = 3;
 const MAX_KEY_OCCURRENCES = 50;
 
 const QUOTES = new Set(['"', "'", "`"]);
+/** True when `line` has a `//` outside any string literal; an unterminated quote hides the rest of the line. */
+export function hasLineComment(line: string): boolean {
+	let i = 0;
+	while (i < line.length) {
+		const ch = line[i] as string;
+		if (ch === "/" && line[i + 1] === "/") return true;
+		if (!QUOTES.has(ch)) {
+			i++;
+			continue;
+		}
+		let j = i + 1;
+		while (j < line.length && line[j] !== ch) j += line[j] === "\\" ? 2 : 1;
+		if (j >= line.length) return false;
+		i = j + 1;
+	}
+	return false;
+}
+
 const OPERATOR_CHARS = new Set("+-*/%&|<>=!~^?:");
 
 /** True when removing the space between `before` (the end of `text`) and `next` could merge two tokens. */

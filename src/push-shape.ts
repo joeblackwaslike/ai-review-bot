@@ -1,6 +1,7 @@
 import { isGeneratedFile } from "./diff-pack.js";
 import {
 	findMovedBlocks,
+	hasLineComment,
 	isIndentSensitive,
 	type MovedBlock,
 	needsSeparator,
@@ -93,12 +94,41 @@ export function classifyFile(filename: string): FileKind {
 	return "code";
 }
 
-function joinRun(lines: string[]): string {
+const OPEN_OR_SEPARATOR = new Set("([{,");
+const BINARY_OPERATORS = new Set("=+-*/%&|^<>?:.");
+const CONTINUATION_START = new Set(")]},.;?:");
+
+function isSafeBreak(prev: string, next: string): boolean {
+	const last = prev.slice(-1);
+	if (OPEN_OR_SEPARATOR.has(last)) return true;
+	if (
+		BINARY_OPERATORS.has(last) &&
+		!((last === "+" || last === "-") && prev.slice(-2, -1) === last)
+	)
+		return true;
+	return CONTINUATION_START.has(next.charAt(0));
+}
+
+/**
+ * Joins the normalized lines of one side of a change run. A line break is dropped only
+ * when it is safe: the previous line ends with an opening bracket, a comma or a single
+ * binary-operator character (not `++`/`--`), or the next line starts with a closing
+ * bracket, `.`, `,`, `;`, `?` or `:`. Any other break stays as a separator, as does every
+ * break in a run with a `//` comment, so `return` / `value;` never equals `return value;`
+ * and a statement is never absorbed into a comment. Conservative: `if (x)` / `y();` keeps
+ * its weight too, and a break the rules cannot prove safe is never ignored.
+ */
+function joinRun(lines: string[], hasComment: boolean): string {
 	let out = "";
+	let prev = "";
 	for (const line of lines) {
 		if (line.trim() === "") continue;
-		if (out !== "" && needsSeparator(out, line[0] as string)) out += " ";
+		if (out !== "") {
+			if (hasComment || !isSafeBreak(prev, line)) out += "\n";
+			else if (needsSeparator(out, line[0] as string)) out += " ";
+		}
 		out += line;
+		prev = line;
 	}
 	return out;
 }
@@ -117,7 +147,15 @@ function isWhitespaceOnly(
 	const closeRun = (): boolean => {
 		if (removed.length + added.length === 0) return true;
 		runs++;
-		const same = joinRun(removed) === joinRun(added);
+		const nonBlank = (l: string) => l.trim() !== "";
+		if (
+			opts.keepIndent &&
+			removed.filter(nonBlank).length !== added.filter(nonBlank).length
+		) {
+			return false;
+		}
+		const hasComment = [...removed, ...added].some(hasLineComment);
+		const same = joinRun(removed, hasComment) === joinRun(added, hasComment);
 		removed = [];
 		added = [];
 		return same;

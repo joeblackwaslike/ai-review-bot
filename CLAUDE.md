@@ -8,7 +8,7 @@ This file provides context and conventions for AI coding agents working on this 
 pnpm install
 pnpm typecheck    # tsc --noEmit — must pass before any commit
 pnpm lint         # biome check — must pass before any commit
-pnpm test         # vitest run (2678 passed, 7 skipped) — must pass before any commit
+pnpm test         # vitest run (2683 passed, 7 skipped) — must pass before any commit
 pnpm dev          # vercel dev — local server on :3000
 ```
 
@@ -76,7 +76,7 @@ Findings carried from the previous review appear in the body's "Still open from 
 | `src/tier2.ts` | Tier 2 skill detection (`detectTier2Skills()`) |
 | `src/trajectory.ts` | `scoreTrajectory()`, `limitsForScore()`, `classifyFinding()`: per-round author friction from ledger outcomes and the score-to-limits mapping |
 | `src/moved-blocks.ts` | `PushFile` and detection of blocks moved between files in one push, so a move does not count as new code |
-| `src/push-shape.ts` | `classifyPush()` and `shapedBudget()`: weights a push by file kind and scales the findings budget. A file is whitespace-only only if every change run (consecutive `-`/`+` lines with no context between them) matches its replacement after whitespace normalization, so a statement moved between runs keeps its weight |
+| `src/push-shape.ts` | `classifyPush()` and `shapedBudget()`: weights a push by file kind and scales the findings budget. A file is whitespace-only only if every change run (consecutive `-`/`+` lines with no context between them) matches its replacement after whitespace normalization, so a statement moved between runs keeps its weight, and a line break is ignored only when provably safe (not after `return`, not in a run with a `//` comment) |
 | `src/adaptive-limits.ts` | `resolveLimits()`, `applyLimits()` and `limitNotice()`: the severity floor and findings budget applied in `buildReviewInner` |
 | `src/feedback/reactions-for.ts` | `reactionsFor()` and `loadReactionsFor()`: joins this provider's tracked comment reactions on the PR to ledger entries by path, line and title, with a 3 s timeout and fail-open. Scans the global poll set, not a per-PR index (follow-up ai-review-bot-t0c.52), and `ADAPTIVE_LIMIT` discards need migration `0004_tired_sage.sql` applied, so do not flip `adaptiveLimits` before both |
 | `src/replay/adaptive-report.ts` | `adaptiveReport()`: replays traced rounds with the adaptive limits off and on, joins removals to labels and verdicts, and applies the pass/fail/inconclusive gate |
