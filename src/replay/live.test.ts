@@ -45,6 +45,8 @@ function round(index: number, claims: PostedClaim[]): Round {
 }
 
 const fixture = {
+	threads: [],
+	reactions: [],
 	rounds: [
 		round(0, [claim("c0", 0, "Missing null check on user input")]),
 		round(1, [claim("c1", 1, "Missing null check on user input")]),
@@ -339,6 +341,28 @@ describe("runLiveTier", () => {
 		expect(lines.join("\n")).toContain("2 would post");
 	});
 
+	it("hands the strategy a round without claims or trace", async () => {
+		const withTrace = {
+			...(fixture.rounds[0] as Round),
+			trace: { candidates: [], posted: [], usage: {} },
+		};
+		const f = { ...fixture, rounds: [withTrace] } as unknown as ReplayFixture;
+		expect(withTrace.claims.length).toBeGreaterThan(0);
+		const inputs: StrategyInput[] = [];
+		const { opts } = base({
+			fixture: f,
+			rounds: [0],
+			review: async (_d, _r, input) => {
+				inputs.push(input);
+				return out([]);
+			},
+		});
+		await runLiveTier(opts);
+		expect(inputs[0]?.round.claims).toEqual([]);
+		expect(inputs[0]?.round.trace).toBeUndefined();
+		expect(inputs[0]?.round.index).toBe(0);
+	});
+
 	it("hands the strategy no checkout, the round's ledger, the remaining cap and a live signal", async () => {
 		const inputs: StrategyInput[] = [];
 		const { opts } = base({
@@ -409,5 +433,69 @@ describe("runLiveTier", () => {
 		});
 		await runLiveTier(opts);
 		expect(lines).toContain("  wall 1234ms, 1 tool calls");
+	});
+
+	describe("checkouts", () => {
+		const handle = { path: "/tmp/x", baseSha: "b", headSha: "h" };
+		const toolStrategy = (seen: (StrategyInput["checkout"] | "run")[]) =>
+			({
+				...stub(async (_d, _r, input) => {
+					seen.push(input.checkout);
+					return out([]);
+				}),
+				needsCheckout: true,
+			}) satisfies ReviewStrategy;
+
+		it("hands a needsCheckout strategy a checkout and asks for the round's shas", async () => {
+			const seen: StrategyInput["checkout"][] = [];
+			const asked: { baseSha: string; headSha: string }[] = [];
+			const { opts } = base({
+				rounds: [1],
+				strategy: toolStrategy(seen),
+				withCheckout: async (o, fn) => {
+					asked.push({ baseSha: o.baseSha, headSha: o.headSha });
+					return fn(handle);
+				},
+			});
+			await runLiveTier(opts);
+			expect(seen).toEqual([handle]);
+			expect(asked).toEqual([{ baseSha: "b", headSha: "h1" }]);
+		});
+
+		it("gives a diff-only strategy null and never touches git", async () => {
+			let attempts = 0;
+			const seen: StrategyInput["checkout"][] = [];
+			const { opts } = base({
+				review: async (_d, _r, input) => {
+					seen.push(input.checkout);
+					return out([]);
+				},
+				withCheckout: async (_o, fn) => {
+					attempts++;
+					return fn(handle);
+				},
+			});
+			await runLiveTier(opts);
+			expect(attempts).toBe(0);
+			expect(seen).toEqual([null, null]);
+		});
+
+		it("skips an unavailable round, records it and reports the count per strategy", async () => {
+			const seen: StrategyInput["checkout"][] = [];
+			const { opts, lines } = base({
+				strategy: toolStrategy(seen),
+				withCheckout: async (o, fn) =>
+					o.headSha === "h0"
+						? { unavailable: true as const, reason: "gone" }
+						: fn(handle),
+			});
+			const report = await runLiveTier(opts);
+			expect(report.checkoutUnavailable).toEqual([0]);
+			expect(report.rounds.map((r) => r.index)).toEqual([1]);
+			expect(seen).toEqual([handle]);
+			expect(lines.join("\n")).toMatch(
+				/stub: 1 of 2 round\(s\) could not run \(checkout unavailable\)/,
+			);
+		});
 	});
 });

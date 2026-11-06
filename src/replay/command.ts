@@ -11,6 +11,7 @@ import {
 } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { ModelSelection } from "../router.js";
 import { fixtureId } from "./claims.js";
 import {
 	type ClassFile,
@@ -20,6 +21,12 @@ import {
 import { filterMargin, formatMargin } from "./filter-margin.js";
 import { type GhClient, ghCli } from "./gh.js";
 import { checkClean, checkRecall } from "./guard.js";
+import {
+	formatInvestigation,
+	investigateJoin,
+	type JoinJudge,
+	modelJudge,
+} from "./join-investigation.js";
 import { labelFixture } from "./label.js";
 import {
 	InvalidEstimateError,
@@ -46,6 +53,8 @@ export interface ReplayDeps {
 	out?: (s: string) => void;
 	pipeline?: ReplayPipeline;
 	liveWiring?: typeof defaultLiveWiring;
+	/** Builds the judge for a model family; the default resolves real credentials. */
+	joinJudge?: (family: Provider) => Promise<JoinJudge>;
 }
 
 interface ParsedArgs {
@@ -60,6 +69,7 @@ interface ParsedArgs {
 	heldOut?: boolean;
 	expectClean?: boolean;
 	strategy?: string;
+	investigateJoin?: string;
 }
 
 const USAGE = [
@@ -67,6 +77,7 @@ const USAGE = [
 	"  ai-review replay [--fixtures <dir>]",
 	"  ai-review replay --record <pr-url> --provider anthropic|openai --bot <login> [--held-out] [--expect-clean] [--fixtures <dir>]",
 	"  ai-review replay --live [--rounds <n>] [--max-cost <usd>] [--strategy <name>] [--save-trace] [--fixtures <dir>]",
+	"  ai-review replay --investigate-join <fixture-id> [--fixtures <dir>]",
 ].join("\n");
 
 const PR_URL = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)\/?$/;
@@ -118,6 +129,7 @@ function parseArgs(args: string[]): ParsedArgs | null {
 		if (
 			(flag === "--record" ||
 				flag === "--strategy" ||
+				flag === "--investigate-join" ||
 				flag === "--provider" ||
 				flag === "--bot" ||
 				flag === "--fixtures") &&
@@ -126,6 +138,7 @@ function parseArgs(args: string[]): ParsedArgs | null {
 			return null;
 		if (flag === "--record") parsed.record = value;
 		else if (flag === "--strategy") parsed.strategy = value;
+		else if (flag === "--investigate-join") parsed.investigateJoin = value;
 		else if (flag === "--bot") parsed.bot = value;
 		else if (flag === "--fixtures") parsed.fixtures = value;
 		else if (flag === "--provider") {
@@ -218,6 +231,82 @@ async function writeRecording(
 	);
 	out(`recorded ${id} (${fixture.rounds.length} rounds) -> ${target}`);
 	return 0;
+}
+
+const FIXTURE_ID = /^[A-Za-z0-9._-]+$/;
+
+const JUDGE_MODELS: Record<Provider, ModelSelection> = {
+	anthropic: {
+		provider: "anthropic",
+		model: "claude-sonnet-5-5",
+		effort: "medium",
+	},
+	openai: { provider: "openai", model: "gpt-6.1-sol", effort: "low" },
+};
+
+async function realJoinJudge(family: Provider): Promise<JoinJudge> {
+	const { resolveAuth } = await import("../auth.js");
+	return modelJudge(JUDGE_MODELS[family], await resolveAuth(family));
+}
+
+async function investigate(
+	p: ParsedArgs,
+	dir: string,
+	client: GhClient,
+	out: (s: string) => void,
+	makeJudge: (family: Provider) => Promise<JoinJudge>,
+): Promise<number> {
+	const id = p.investigateJoin as string;
+	const fixturePath = join(dir, `${id}.json`);
+	const labelsPath = join(dir, `${id}.labels.json`);
+	if (!existsSync(fixturePath) || !existsSync(labelsPath)) {
+		out(`no fixture or labels for ${id} in ${dir}`);
+		return 1;
+	}
+	const fixture = JSON.parse(
+		await readFile(fixturePath, "utf8"),
+	) as ReplayFixture;
+	const labels = JSON.parse(await readFile(labelsPath, "utf8")) as LabelFile;
+	const family: Provider =
+		fixture.provider === "anthropic" ? "openai" : "anthropic";
+	const { fetchDiff } = defaultLiveWiring(fixture, client);
+	const diffs = new Map<number, ReturnType<typeof fetchDiff>>();
+	const diffFor = (round: (typeof fixture.rounds)[number]) => {
+		let pending = diffs.get(round.index);
+		if (!pending) {
+			pending = fetchDiff(round);
+			diffs.set(round.index, pending);
+		}
+		return pending;
+	};
+	try {
+		const result = await investigateJoin({
+			fixture,
+			labels,
+			judge: await makeJudge(family),
+			judgeFamily: family,
+			evidenceFor: async (path, roundIndex) => {
+				const round = fixture.rounds.find((r) => r.index === roundIndex);
+				if (!round) return "";
+				try {
+					const { files } = await diffFor(round);
+					return files.find((f) => f.filename === path)?.patch ?? "";
+				} catch (err) {
+					return `(diff unavailable: ${err instanceof Error ? err.message : String(err)})`;
+				}
+			},
+		});
+		out(formatInvestigation(id, result));
+		out(
+			`judge: ${family} (${JUDGE_MODELS[family].model}); single-provider judgement, not confirmed by a second model family`,
+		);
+		return 0;
+	} catch (err) {
+		out(
+			`join investigation failed: ${err instanceof Error ? err.message : String(err)}`,
+		);
+		return 1;
+	}
 }
 
 async function printClassReport(
@@ -448,7 +537,20 @@ export async function runReplay(
 			"--held-out and --expect-clean require --record") ||
 		(parsed.strategy !== undefined &&
 			(!parsed.live || parsed.record !== undefined) &&
-			"--strategy requires --live without --record");
+			"--strategy requires --live without --record") ||
+		(parsed.investigateJoin !== undefined &&
+			(parsed.live ||
+				parsed.provider !== undefined ||
+				parsed.bot !== undefined ||
+				parsed.record !== undefined ||
+				parsed.saveTrace ||
+				parsed.strategy !== undefined ||
+				parsed.rounds !== undefined ||
+				parsed.maxCost !== undefined ||
+				parsed.heldOut ||
+				parsed.expectClean ||
+				!FIXTURE_ID.test(parsed.investigateJoin)) &&
+			"--investigate-join takes a fixture id and no other mode flags");
 	if (misuse) {
 		out(`${misuse}\n${USAGE}`);
 		return 2;
@@ -466,6 +568,14 @@ export async function runReplay(
 	}
 	const dir =
 		parsed.fixtures ?? deps.fixturesDir ?? defaultFixturesDir(import.meta.url);
+	if (parsed.investigateJoin !== undefined)
+		return investigate(
+			parsed,
+			dir,
+			deps.client ?? ghCli(),
+			out,
+			deps.joinJudge ?? realJoinJudge,
+		);
 	if (parsed.record !== undefined)
 		return record(parsed, dir, deps.client ?? ghCli(), out);
 	if (strategy)

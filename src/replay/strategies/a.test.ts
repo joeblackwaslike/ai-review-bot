@@ -8,6 +8,7 @@ import {
 	buildPullFile,
 	SIMPLE_PATCH,
 } from "../../testing.js";
+import { freezeFixture } from "../frozen.js";
 import { toCandidates } from "../live-wiring.js";
 import type { StrategyInput } from "../strategy.js";
 import { ledgerForRound, postFilterTrace } from "../trace.js";
@@ -40,7 +41,7 @@ const round = fixture.rounds[1] as Round;
 const files = [buildPullFile("src/a.ts", SIMPLE_PATCH)];
 
 const inputFor = (): StrategyInput => ({
-	fixture,
+	fixture: freezeFixture(fixture, round.index),
 	round,
 	diff: "x".repeat(4000),
 	files,

@@ -146,7 +146,7 @@ more.
 `needsCheckout` strategies get a worktree of the fixture's repository at the round's head
 commit, plus the base commit for diffing.
 
-- A cache of bare clones lives under `~/.ai-review/checkouts/<owner>__<repo>.git`, filled
+- A cache of bare clones lives under `~/.ai-review/checkouts/<owner>/<repo>.git`, filled
   with `gh repo clone` or `git fetch` on demand.
 - Each run gets a throwaway worktree, created read-only in practice (the harness removes
   write permission after checkout) and deleted when the run ends.
