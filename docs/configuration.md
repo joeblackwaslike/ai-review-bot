@@ -221,4 +221,19 @@ Env overrides apply to every section. Only dynamic map entries (`reviewers.<id>`
 | `reviewers.<id>.tiers.deep.effort` | `AI_REVIEW_REVIEWERS__<ID>__TIERS__DEEP__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
 | `providers.<provider>.baseURL` | `AI_REVIEW_PROVIDERS__<PROVIDER>__BASE_URL` | none | string | unset | Override the provider API base URL. |
 
+### Secrets
+
+Secrets are never part of the config tree. Each is read from the env var below, or from a standard name. When both are set the env var named `AI_REVIEW_` plus the path wins. Any other reviewer uses `AI_REVIEW_REVIEWERS__<ID>__PRIVATE_KEY` and `AI_REVIEW_REVIEWERS__<ID>__WEBHOOK_SECRET`; a name for a reviewer that is not in the YAML is ignored with a warning.
+
+| Env var | Standard name | Permanence |
+| --- | --- | --- |
+| `AI_REVIEW_REVIEWERS__CLAUDE__PRIVATE_KEY` | `GITHUB_APP_PRIVATE_KEY` | permanent |
+| `AI_REVIEW_REVIEWERS__CLAUDE__WEBHOOK_SECRET` | `GITHUB_WEBHOOK_SECRET` | permanent |
+| `AI_REVIEW_REVIEWERS__CODEX__PRIVATE_KEY` | `OPENAI_APP_PRIVATE_KEY` | deprecated |
+| `AI_REVIEW_REVIEWERS__CODEX__WEBHOOK_SECRET` | `OPENAI_APP_WEBHOOK_SECRET` | deprecated |
+| `AI_REVIEW_PROVIDERS__ANTHROPIC__API_KEY` | `ANTHROPIC_API_KEY` | permanent |
+| `AI_REVIEW_PROVIDERS__OPENAI__API_KEY` | `OPENAI_API_KEY` | permanent |
+| `AI_REVIEW_PROVIDERS__GOOGLE__API_KEY` | `GOOGLE_GENERATIVE_AI_API_KEY` | permanent |
+| `AI_REVIEW_GITHUB__WEBHOOK_SECRET` | none | - |
+
 <!-- config-reference:end -->

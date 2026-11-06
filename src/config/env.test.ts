@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
 	applyEnvOverlay,
+	describeSecrets,
 	ENV_ALIASES,
 	envNameForPath,
+	providerKeySpec,
+	readSecret,
+	type SecretSpec,
+	secretSpecs,
 	UnknownConfigEnvError,
 } from "./env.js";
 
@@ -161,5 +166,148 @@ describe("applyEnvOverlay", () => {
 			/__proto__/,
 		);
 		expect(({} as Record<string, unknown>).tiers).toBeUndefined();
+	});
+});
+
+const reviewersYaml = (...ids: string[]) => ({
+	version: 1,
+	reviewers: Object.fromEntries(ids.map((id) => [id, {}])),
+});
+
+describe("multi-path aliases", () => {
+	it("GITHUB_APP_ID is accepted with no warning", () => {
+		const r = applyEnvOverlay(reviewersYaml("claude"), { GITHUB_APP_ID: "12" });
+		expect(r.value).toMatchObject({ reviewers: { claude: { appId: "12" } } });
+		expect(r.sources["reviewers.claude.appId"]).toBe("alias");
+		expect(r.warnings).toEqual([]);
+	});
+
+	it("OPENAI_APP_ID warns once and names AI_REVIEW_REVIEWERS__CODEX__APP_ID", () => {
+		const r = applyEnvOverlay(reviewersYaml("codex"), { OPENAI_APP_ID: "7" });
+		expect(r.value).toMatchObject({ reviewers: { codex: { appId: "7" } } });
+		expect(r.warnings).toEqual([
+			"OPENAI_APP_ID is deprecated; use AI_REVIEW_REVIEWERS__CODEX__APP_ID",
+		]);
+	});
+
+	it("derived name beats alias for appId and warns", () => {
+		const r = applyEnvOverlay(reviewersYaml("claude"), {
+			GITHUB_APP_ID: "1",
+			AI_REVIEW_REVIEWERS__CLAUDE__APP_ID: "2",
+		});
+		expect(r.value).toMatchObject({ reviewers: { claude: { appId: "2" } } });
+		expect(r.warnings).toEqual([
+			"GITHUB_APP_ID and AI_REVIEW_REVIEWERS__CLAUDE__APP_ID are both set; using AI_REVIEW_REVIEWERS__CLAUDE__APP_ID",
+		]);
+	});
+
+	it("REVIEW_COMMENT_PREFIX sets both claude and codex prefixes, OPENAI_REVIEW_COMMENT_PREFIX wins for codex", () => {
+		const yaml = reviewersYaml("claude", "codex");
+		const both = applyEnvOverlay(yaml, { REVIEW_COMMENT_PREFIX: "x" });
+		expect(both.value).toMatchObject({
+			reviewers: {
+				claude: { commentPrefix: "x" },
+				codex: { commentPrefix: "x" },
+			},
+		});
+		const split = applyEnvOverlay(yaml, {
+			REVIEW_COMMENT_PREFIX: "x",
+			OPENAI_REVIEW_COMMENT_PREFIX: "y",
+		});
+		expect(split.value).toMatchObject({
+			reviewers: {
+				claude: { commentPrefix: "x" },
+				codex: { commentPrefix: "y" },
+			},
+		});
+	});
+});
+
+describe("secret env names", () => {
+	it("AI_REVIEW_REVIEWERS__GEMINI__PRIVATE_KEY is accepted when gemini is in the config", () => {
+		const r = applyEnvOverlay(reviewersYaml("gemini"), {
+			AI_REVIEW_REVIEWERS__GEMINI__PRIVATE_KEY: "pem",
+		});
+		expect(r.warnings).toEqual([]);
+	});
+
+	it("the same name for a reviewer absent from YAML produces a warning, not an UnknownConfigEnvError", () => {
+		const r = applyEnvOverlay(reviewersYaml("claude"), {
+			AI_REVIEW_REVIEWERS__GEMINI__PRIVATE_KEY: "pem",
+		});
+		expect(r.warnings).toHaveLength(1);
+		expect(r.warnings[0]).toContain("AI_REVIEW_REVIEWERS__GEMINI__PRIVATE_KEY");
+	});
+
+	it("AI_REVIEW_PROVIDERS__GOOGLE__API_KEY is accepted without a providers.google YAML entry", () => {
+		const r = applyEnvOverlay(reviewersYaml("claude"), {
+			AI_REVIEW_PROVIDERS__GOOGLE__API_KEY: "k",
+			AI_REVIEW_GITHUB__WEBHOOK_SECRET: "s",
+		});
+		expect(r.warnings).toEqual([]);
+	});
+
+	it("a typo still throws with the closest name", () => {
+		const call = () =>
+			applyEnvOverlay(reviewersYaml("gemini"), {
+				AI_REVIEW_REVIEWERS__GEMINI__PRIVATE_KEYS: "pem",
+			});
+		expect(call).toThrow(UnknownConfigEnvError);
+		expect(call).toThrow(/AI_REVIEW_REVIEWERS__GEMINI__PRIVATE_KEY\?/);
+	});
+
+	it("a secret value never appears in applyEnvOverlay's value or sources", () => {
+		const r = applyEnvOverlay(reviewersYaml("claude"), {
+			AI_REVIEW_REVIEWERS__CLAUDE__PRIVATE_KEY: "TOPSECRET",
+			GITHUB_WEBHOOK_SECRET: "TOPSECRET",
+			ANTHROPIC_API_KEY: "TOPSECRET",
+		});
+		expect(JSON.stringify(r)).not.toContain("TOPSECRET");
+	});
+});
+
+describe("secretSpecs and readSecret", () => {
+	const config = {
+		reviewers: { claude: {}, codex: {}, gemini: {} },
+	} as never;
+
+	it("lists reviewer, provider and shared specs", () => {
+		const names = secretSpecs(config).map((s) => s.envName);
+		expect(names).toContain("AI_REVIEW_REVIEWERS__CODEX__WEBHOOK_SECRET");
+		expect(names).toContain("AI_REVIEW_PROVIDERS__ANTHROPIC__API_KEY");
+		expect(names).toContain("AI_REVIEW_GITHUB__WEBHOOK_SECRET");
+	});
+
+	it("readSecret prefers the derived name over the standard name", () => {
+		const spec = providerKeySpec("anthropic");
+		const r = readSecret(spec, {
+			ANTHROPIC_API_KEY: "std",
+			AI_REVIEW_PROVIDERS__ANTHROPIC__API_KEY: "derived",
+		});
+		expect(r.value).toBe("derived");
+	});
+
+	it("readSecret falls back to the alias and treats blank as unset", () => {
+		const spec = providerKeySpec("openai");
+		expect(readSecret(spec, { OPENAI_API_KEY: "k" }).value).toBe("k");
+		expect(readSecret(spec, { OPENAI_API_KEY: "  " }).value).toBeUndefined();
+	});
+
+	it("a deprecated secret alias warns", () => {
+		const spec = secretSpecs(config).find(
+			(s) => s.envName === "AI_REVIEW_REVIEWERS__CODEX__PRIVATE_KEY",
+		) as SecretSpec;
+		const r = readSecret(spec, { OPENAI_APP_PRIVATE_KEY: "pem" });
+		expect(r.value).toBe("pem");
+		expect(r.warnings).toHaveLength(1);
+	});
+
+	it("describeSecrets returns presence only", () => {
+		const d = describeSecrets(config, {
+			GITHUB_APP_PRIVATE_KEY: "TOPSECRET",
+		});
+		expect(d.AI_REVIEW_REVIEWERS__CLAUDE__PRIVATE_KEY).toBe("present");
+		expect(d.AI_REVIEW_REVIEWERS__CODEX__PRIVATE_KEY).toBe("absent");
+		expect(JSON.stringify(d)).not.toContain("TOPSECRET");
 	});
 });

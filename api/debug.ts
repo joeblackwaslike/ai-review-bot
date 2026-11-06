@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { describeSecrets } from "../src/config/env.js";
 import { describeConfig, getLoadedConfig } from "../src/config/load.js";
 
 const REDACTED_PATHS = new Set(["review.customPrompt"]);
@@ -76,6 +77,11 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
 				: row,
 		),
 		warnings: loaded.warnings,
+		secrets: describeSecrets(loaded.config, process.env),
+		reviewers: Object.entries(loaded.config.reviewers).map(([id, r]) => ({
+			id,
+			enabled: r.enabled,
+		})),
 		reviewEnabled: loaded.config.review.enabled,
 		reviewCommand: loaded.config.review.command,
 		...hasFields,

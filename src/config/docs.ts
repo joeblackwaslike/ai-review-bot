@@ -2,6 +2,9 @@ import {
 	ENV_ALIASES,
 	envNameForPath,
 	listSchemaLeaves,
+	type SecretSpec,
+	SHARED_WEBHOOK_SECRET,
+	secretSpecs,
 	type ZodNode,
 } from "./env.js";
 import { ConfigSchema } from "./schema.js";
@@ -19,10 +22,12 @@ export interface DocRow {
 }
 
 const aliasByPath = new Map(
-	Object.entries(ENV_ALIASES).map(([name, entry]) => [
-		entry.path.join("."),
-		`${name} (${entry.deprecated ? "deprecated" : "permanent"})`,
-	]),
+	Object.entries(ENV_ALIASES).flatMap(([name, entry]) =>
+		entry.paths.map((path) => [
+			path.join("."),
+			`${name} (${entry.deprecated ? "deprecated" : "permanent"})`,
+		]),
+	),
 );
 
 export function buildConfigRows(): DocRow[] {
@@ -38,6 +43,27 @@ export function buildConfigRows(): DocRow[] {
 			type: leaf.type,
 			default: leaf.default,
 			description: leaf.description,
+		};
+	});
+}
+
+function secretDocRows(): {
+	envName: string;
+	alias: string;
+	permanence: string;
+}[] {
+	const specs: SecretSpec[] = secretSpecs({
+		reviewers: { claude: {}, codex: {} },
+	} as never);
+	return [
+		...specs.filter((s) => s !== SHARED_WEBHOOK_SECRET),
+		SHARED_WEBHOOK_SECRET,
+	].map((spec) => {
+		const alias = spec.aliases[0];
+		return {
+			envName: spec.envName,
+			alias: alias ? `\`${alias.name}\`` : "none",
+			permanence: alias ? (alias.deprecated ? "deprecated" : "permanent") : "-",
 		};
 	});
 }
@@ -72,7 +98,20 @@ export function renderConfigSection(): string {
 			`| \`${r.path}\` | ${code(r.env)} | ${alias} | ${cell(r.type)} | ${dflt} | ${cell(r.description)} |`,
 		);
 	}
-	lines.push("", DOCS_END);
+	lines.push(
+		"",
+		"### Secrets",
+		"",
+		"Secrets are never part of the config tree. Each is read from the env var below, or from a standard name. When both are set the env var named `AI_REVIEW_` plus the path wins. Any other reviewer uses `AI_REVIEW_REVIEWERS__<ID>__PRIVATE_KEY` and `AI_REVIEW_REVIEWERS__<ID>__WEBHOOK_SECRET`; a name for a reviewer that is not in the YAML is ignored with a warning.",
+		"",
+		"| Env var | Standard name | Permanence |",
+		"| --- | --- | --- |",
+		...secretDocRows().map(
+			(r) => `| \`${r.envName}\` | ${r.alias} | ${r.permanence} |`,
+		),
+		"",
+		DOCS_END,
+	);
 	return lines.join("\n");
 }
 

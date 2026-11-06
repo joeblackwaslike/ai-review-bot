@@ -1,3 +1,5 @@
+import { providerKeySpec, readSecret } from "../config/env.js";
+import type { Config } from "../config/schema.js";
 import type { ProviderName } from "./names.js";
 
 export interface ProviderCredentials {
@@ -5,16 +7,15 @@ export interface ProviderCredentials {
 	baseURL?: string;
 }
 
-const KEY_ENV: Record<ProviderName, string> = {
-	anthropic: "ANTHROPIC_API_KEY",
-	openai: "OPENAI_API_KEY",
-	google: "GOOGLE_GENERATIVE_AI_API_KEY",
-};
-
 export function resolveProviderCredentials(
 	provider: ProviderName,
 	env: Readonly<Record<string, string | undefined>> = process.env,
+	providers: Config["providers"] = {},
 ): ProviderCredentials {
-	const apiKey = env[KEY_ENV[provider]]?.trim();
-	return apiKey ? { apiKey } : {};
+	const { value: apiKey } = readSecret(providerKeySpec(provider), env);
+	const baseURL = providers[provider]?.baseURL;
+	return {
+		...(apiKey ? { apiKey } : {}),
+		...(baseURL ? { baseURL } : {}),
+	};
 }

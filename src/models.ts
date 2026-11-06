@@ -36,7 +36,11 @@ export function computeCost(
 
 function fromRegistry(selection: ModelSelection): LanguageModel {
 	const creds = {
-		[selection.provider]: resolveProviderCredentials(selection.provider),
+		[selection.provider]: resolveProviderCredentials(
+			selection.provider,
+			process.env,
+			getConfigTree().providers,
+		),
 	};
 	return createModelRegistry(creds).languageModel(
 		`${selection.provider}/${selection.model}`,

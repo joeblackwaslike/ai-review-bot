@@ -1,42 +1,54 @@
 import { z } from "zod";
-import { ConfigSchema } from "./schema.js";
+import { PROVIDER_NAMES, type ProviderName } from "../providers/names.js";
+import { type Config, ConfigSchema } from "./schema.js";
 
 export const ENV_PREFIX = "AI_REVIEW_";
 
 export type ValueSource = "env" | "alias" | "yaml" | "default";
 
 export interface AliasEntry {
-	path: readonly string[];
+	paths: readonly (readonly string[])[];
 	deprecated: boolean;
 }
 
-const deprecated = (...path: string[]): AliasEntry => ({
-	path,
+const deprecated = (...paths: string[][]): AliasEntry => ({
+	paths,
 	deprecated: true,
 });
-const permanent = (...path: string[]): AliasEntry => ({
-	path,
+const permanent = (...paths: string[][]): AliasEntry => ({
+	paths,
 	deprecated: false,
 });
 
 export const ENV_ALIASES: Readonly<Record<string, AliasEntry>> = {
-	REVIEW_ENABLED: deprecated("review", "enabled"),
-	REVIEW_DELAY_SECONDS: deprecated("review", "delaySeconds"),
-	REVIEW_RESYNC_DELAY_SECONDS: deprecated("review", "resyncDelaySeconds"),
-	REVIEW_COMMAND: deprecated("review", "command"),
-	CUSTOM_REVIEW_PROMPT: deprecated("review", "customPrompt"),
-	AGENT_CONCURRENCY: deprecated("review", "agentConcurrency"),
-	REVIEW_AGENT_BUDGET_SECONDS: deprecated("review", "agentBudgetSeconds"),
-	REVIEW_DIFF_BUDGET_CHARS: deprecated("review", "diffBudgetChars"),
-	REVIEW_TIER2_ENABLED: deprecated("review", "tier2Enabled"),
-	FEEDBACK_ENABLED: deprecated("review", "feedbackEnabled"),
-	IMPROVE_ENABLED: deprecated("improve", "enabled"),
-	IMPROVE_CARRIER_ENABLED: deprecated("improve", "carrierEnabled"),
-	PUBLIC_URL: deprecated("infra", "publicUrl"),
-	QSTASH_URL: deprecated("infra", "qstashUrl"),
-	AI_REVIEW_GATE_DIR: permanent("cli", "gateDir"),
-	AI_REVIEW_MISTAKES_DIR: permanent("cli", "mistakesDir"),
-	AI_REVIEW_LOG_FILE: permanent("cli", "logFile"),
+	REVIEW_ENABLED: deprecated(["review", "enabled"]),
+	REVIEW_DELAY_SECONDS: deprecated(["review", "delaySeconds"]),
+	REVIEW_RESYNC_DELAY_SECONDS: deprecated(["review", "resyncDelaySeconds"]),
+	REVIEW_COMMAND: deprecated(["review", "command"]),
+	CUSTOM_REVIEW_PROMPT: deprecated(["review", "customPrompt"]),
+	AGENT_CONCURRENCY: deprecated(["review", "agentConcurrency"]),
+	REVIEW_AGENT_BUDGET_SECONDS: deprecated(["review", "agentBudgetSeconds"]),
+	REVIEW_DIFF_BUDGET_CHARS: deprecated(["review", "diffBudgetChars"]),
+	REVIEW_TIER2_ENABLED: deprecated(["review", "tier2Enabled"]),
+	FEEDBACK_ENABLED: deprecated(["review", "feedbackEnabled"]),
+	IMPROVE_ENABLED: deprecated(["improve", "enabled"]),
+	IMPROVE_CARRIER_ENABLED: deprecated(["improve", "carrierEnabled"]),
+	PUBLIC_URL: deprecated(["infra", "publicUrl"]),
+	QSTASH_URL: deprecated(["infra", "qstashUrl"]),
+	AI_REVIEW_GATE_DIR: permanent(["cli", "gateDir"]),
+	AI_REVIEW_MISTAKES_DIR: permanent(["cli", "mistakesDir"]),
+	AI_REVIEW_LOG_FILE: permanent(["cli", "logFile"]),
+	GITHUB_APP_ID: permanent(["reviewers", "claude", "appId"]),
+	OPENAI_APP_ID: deprecated(["reviewers", "codex", "appId"]),
+	OPENAI_REVIEW_COMMENT_PREFIX: deprecated([
+		"reviewers",
+		"codex",
+		"commentPrefix",
+	]),
+	REVIEW_COMMENT_PREFIX: deprecated(
+		["reviewers", "claude", "commentPrefix"],
+		["reviewers", "codex", "commentPrefix"],
+	),
 };
 
 export interface OverlayResult {
@@ -282,6 +294,110 @@ const closest = (name: string, candidates: string[]): string =>
 const isSet = (v: string | undefined): v is string =>
 	v !== undefined && v.trim() !== "";
 
+type SecretAlias = { name: string; deprecated: boolean };
+
+export interface SecretSpec {
+	reviewer?: string;
+	path: readonly string[];
+	envName: string;
+	aliases: readonly SecretAlias[];
+}
+
+const LEGACY_REVIEWER_SECRETS: Readonly<
+	Record<string, Partial<Record<"privateKey" | "webhookSecret", SecretAlias>>>
+> = {
+	claude: {
+		privateKey: { name: "GITHUB_APP_PRIVATE_KEY", deprecated: false },
+		webhookSecret: { name: "GITHUB_WEBHOOK_SECRET", deprecated: false },
+	},
+	codex: {
+		privateKey: { name: "OPENAI_APP_PRIVATE_KEY", deprecated: true },
+		webhookSecret: { name: "OPENAI_APP_WEBHOOK_SECRET", deprecated: true },
+	},
+};
+
+const PROVIDER_KEY_ENV: Record<ProviderName, string> = {
+	anthropic: "ANTHROPIC_API_KEY",
+	openai: "OPENAI_API_KEY",
+	google: "GOOGLE_GENERATIVE_AI_API_KEY",
+};
+
+const specFor = (
+	path: string[],
+	aliases: SecretAlias[],
+	reviewer?: string,
+): SecretSpec => ({
+	...(reviewer === undefined ? {} : { reviewer }),
+	path,
+	envName: envNameForPath(path),
+	aliases,
+});
+
+export const SHARED_WEBHOOK_SECRET: SecretSpec = specFor(
+	["github", "webhookSecret"],
+	[],
+);
+
+export function providerKeySpec(provider: ProviderName): SecretSpec {
+	return specFor(
+		["providers", provider, "apiKey"],
+		[{ name: PROVIDER_KEY_ENV[provider], deprecated: false }],
+	);
+}
+
+function reviewerSecretSpecs(id: string): SecretSpec[] {
+	const legacy = LEGACY_REVIEWER_SECRETS[id] ?? {};
+	return (["privateKey", "webhookSecret"] as const).map((leaf) =>
+		specFor(["reviewers", id, leaf], legacy[leaf] ? [legacy[leaf]] : [], id),
+	);
+}
+
+export function secretSpecs(config: Pick<Config, "reviewers">): SecretSpec[] {
+	return [
+		...Object.keys(config.reviewers).flatMap(reviewerSecretSpecs),
+		...PROVIDER_NAMES.map(providerKeySpec),
+		SHARED_WEBHOOK_SECRET,
+	];
+}
+
+export function readSecret(
+	spec: SecretSpec,
+	env: Env,
+): { value?: string; warnings: string[] } {
+	const warnings: string[] = [];
+	const derivedText = env[spec.envName];
+	const aliases = spec.aliases.filter((a) => isSet(env[a.name]));
+	if (isSet(derivedText)) {
+		for (const a of aliases) {
+			warnings.push(
+				`${a.name} and ${spec.envName} are both set; using ${spec.envName}`,
+			);
+		}
+		return { value: derivedText.trim(), warnings };
+	}
+	const used = aliases[0];
+	if (!used) return { warnings };
+	if (used.deprecated) {
+		warnings.push(`${used.name} is deprecated; use ${spec.envName}`);
+	}
+	return { value: (env[used.name] as string).trim(), warnings };
+}
+
+export function describeSecrets(
+	config: Pick<Config, "reviewers">,
+	env: Env,
+): Record<string, "present" | "absent"> {
+	return Object.fromEntries(
+		secretSpecs(config).map((spec) => [
+			spec.envName,
+			readSecret(spec, env).value === undefined ? "absent" : "present",
+		]),
+	);
+}
+
+const REVIEWER_SECRET_ENV =
+	/^AI_REVIEW_REVIEWERS__[A-Z0-9_]+?__(?:PRIVATE_KEY|WEBHOOK_SECRET)$/;
+
 export function applyEnvOverlay(raw: unknown, env: Env): OverlayResult {
 	const value: Record<string, unknown> = isRecord(raw)
 		? structuredClone(raw)
@@ -292,31 +408,51 @@ export function applyEnvOverlay(raw: unknown, env: Env): OverlayResult {
 	).filter((l) => l.kind !== undefined && l.path[0] !== "models");
 
 	const derived = new Map(leaves.map((l) => [envNameForPath(l.path), l]));
+	const yamlReviewers = isRecord(value.reviewers)
+		? Object.keys(value.reviewers)
+		: [];
+	const secretNames = new Set(
+		secretSpecs({
+			reviewers: Object.fromEntries(yamlReviewers.map((id) => [id, {}])),
+		} as Pick<Config, "reviewers">).map((s) => s.envName),
+	);
 	const valid = [
 		...derived.keys(),
+		...secretNames,
 		...Object.keys(ENV_ALIASES).filter((n) => n.startsWith(ENV_PREFIX)),
 	];
+	const warnings: string[] = [];
 	for (const name of Object.keys(env)) {
 		if (
-			name.startsWith(ENV_PREFIX) &&
-			!derived.has(name) &&
-			!ENV_ALIASES[name]
+			!name.startsWith(ENV_PREFIX) ||
+			derived.has(name) ||
+			ENV_ALIASES[name] ||
+			secretNames.has(name)
 		) {
-			throw new UnknownConfigEnvError(name, closest(name, valid));
+			continue;
 		}
+		if (REVIEWER_SECRET_ENV.test(name)) {
+			warnings.push(`${name} is ignored: no such reviewer in the config`);
+			continue;
+		}
+		throw new UnknownConfigEnvError(name, closest(name, valid));
 	}
 
 	const sources: Record<string, ValueSource> = {};
-	const warnings: string[] = [];
-	const aliasFor = new Map<string, [string, AliasEntry]>();
+	const aliasesFor = new Map<string, [string, AliasEntry][]>();
 	for (const [name, entry] of Object.entries(ENV_ALIASES)) {
-		aliasFor.set(entry.path.join("."), [name, entry]);
+		for (const path of entry.paths) {
+			const key = path.join(".");
+			aliasesFor.set(key, [...(aliasesFor.get(key) ?? []), [name, entry]]);
+		}
 	}
 
 	for (const leaf of leaves) {
 		const dotted = leaf.path.join(".");
 		const derivedName = envNameForPath(leaf.path);
-		const alias = aliasFor.get(dotted);
+		const alias = (aliasesFor.get(dotted) ?? []).find(([name]) =>
+			isSet(env[name]),
+		);
 		const derivedText = env[derivedName];
 		const aliasText = alias ? env[alias[0]] : undefined;
 		let source: ValueSource =
