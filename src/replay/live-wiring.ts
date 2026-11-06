@@ -104,10 +104,7 @@ export function buildLiveWiring(
 				selection.model,
 			),
 		review: async (diff): Promise<LiveFinding[]> => {
-			const auth =
-				selection.provider === "anthropic"
-					? await resolveAnthropicAuth()
-					: await resolveOpenAIAuth();
+			const auth = await resolveSelectionAuth(selection.provider);
 			const { review } = await runAuditPass({
 				files: [{ path: "replay.diff", content: diff }],
 				selection,
