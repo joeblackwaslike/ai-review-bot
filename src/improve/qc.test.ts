@@ -111,6 +111,10 @@ describe("judgeSelection", () => {
 		expect(judgeSelection("anthropic").provider).toBe("anthropic");
 	});
 
+	it("judges gemini findings with the anthropic QC model", () => {
+		expect(judgeSelection("gemini")).toEqual(judgeSelection("anthropic"));
+	});
+
 	// /qc is a webhook-only command (GitHub App auth via qc-app.ts) with no
 	// subscription/OAuth auth concept anywhere in its call chain — it always
 	// runs on the API-key backend, where gpt-6-luna is confirmed available.

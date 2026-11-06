@@ -63,10 +63,8 @@ export const QC_ANTHROPIC_MODEL = "claude-haiku-5-5";
  * A cross-provider judge measures disagreement between two models, which is a
  * different question from whether the finding holds — and it would let one
  * provider's style systematically mark down the other's. */
-export function judgeSelection(
-	provider: "anthropic" | "openai",
-): ModelSelection {
-	return provider === "openai"
+export function judgeSelection(identity: string): ModelSelection {
+	return identity === "openai"
 		? { provider: "openai", model: QC_OPENAI_MODEL, effort: "low" }
 		: { provider: "anthropic", model: QC_ANTHROPIC_MODEL, effort: "low" };
 }

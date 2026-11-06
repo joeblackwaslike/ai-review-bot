@@ -4,6 +4,7 @@ import type { ResolvedAuth } from "./auth.js";
 import { createAIModel } from "./models.js";
 import type { PersistedFinding } from "./review-state.js";
 import {
+	cheapSelection,
 	type ModelSelection,
 	outputBudget,
 	reasoningProviderOptions,
@@ -44,14 +45,6 @@ function buildTriageSchema(openFindings: PersistedFinding[]) {
 	});
 }
 
-// Cheap, fast triage tier. The call only classifies; it does not review.
-// Both models are confirmed on the API-key and OAuth/subscription backends.
-function triageSelection(base: ModelSelection): ModelSelection {
-	return base.provider === "openai"
-		? { provider: "openai", model: "gpt-6-luna", effort: "low" }
-		: { provider: "anthropic", model: "claude-haiku-5-5", effort: "low" };
-}
-
 export async function triageReReview(
 	selection: ModelSelection,
 	deltaDiff: string,
@@ -77,7 +70,7 @@ export async function triageReReview(
 	].join("\n");
 
 	try {
-		const triage = triageSelection(selection);
+		const triage = cheapSelection(selection);
 		const { object } = await generateObject({
 			model: createAIModel(triage, auth),
 			schema: buildTriageSchema(openFindings),
@@ -183,7 +176,7 @@ export async function revalidateFindings(
 	].join("\n");
 
 	try {
-		const triage = triageSelection(selection);
+		const triage = cheapSelection(selection);
 		const { object } = await generateObject({
 			model: createAIModel(triage, auth),
 			schema: z.object({ resolved: z.array(z.enum(ids)) }),

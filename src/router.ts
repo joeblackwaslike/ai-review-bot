@@ -41,6 +41,14 @@ function isDocFile(path: string, extensions: readonly string[]): boolean {
 	return extensions.includes(path.slice(path.lastIndexOf(".")));
 }
 
+export function cheapSelection(base: ModelSelection): ModelSelection {
+	if (base.provider === "openai")
+		return { provider: "openai", model: "gpt-6-luna", effort: "low" };
+	if (base.provider === "anthropic")
+		return { provider: "anthropic", model: "claude-haiku-5-5", effort: "low" };
+	return { provider: base.provider, model: base.model, effort: "low" };
+}
+
 export function classifyTier(
 	context: RouterContext,
 	routing: Config["routing"] = getConfigTree().routing,

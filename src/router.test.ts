@@ -17,6 +17,7 @@ vi.mock("./config/load.js", async (importOriginal) => {
 
 import type { RouterContext } from "./router.js";
 import {
+	cheapSelection,
 	classifyTier,
 	outputBudget,
 	reasoningProviderOptions,
@@ -486,5 +487,39 @@ describe("outputBudget", () => {
 		expect(
 			outputBudget({ provider: "anthropic", model: "x", effort }, base),
 		).toBe(expected);
+	});
+});
+
+describe("cheapSelection", () => {
+	it("maps anthropic to haiku at low effort", () => {
+		expect(
+			cheapSelection({ provider: "anthropic", model: "x", effort: "high" }),
+		).toEqual({
+			provider: "anthropic",
+			model: "claude-haiku-5-5",
+			effort: "low",
+		});
+	});
+
+	it("maps openai to luna at low effort", () => {
+		expect(cheapSelection({ provider: "openai", model: "x" })).toEqual({
+			provider: "openai",
+			model: "gpt-6-luna",
+			effort: "low",
+		});
+	});
+
+	it("keeps google on its own model at low effort", () => {
+		expect(
+			cheapSelection({
+				provider: "google",
+				model: "gemini-3.8-flash",
+				effort: "high",
+			}),
+		).toEqual({
+			provider: "google",
+			model: "gemini-3.8-flash",
+			effort: "low",
+		});
 	});
 });
