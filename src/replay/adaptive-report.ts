@@ -195,8 +195,10 @@ function rowFor(input: AdaptiveFixtureInput, run: RoundRunner): AdaptiveRow {
 		row.rounds.push(round.index);
 		row.postedBefore.push(r.before.length);
 		row.postedAfter.push(r.after.length);
+		const baselinePosted = new Set(r.before.map(candidateKey));
 		for (const candidate of r.removed) {
 			const key = candidateKey(candidate);
+			if (!baselinePosted.has(key)) continue;
 			const seen = distinct.get(key);
 			if (!seen) distinct.set(key, { round: round.index, candidate });
 			else if (severityRank(candidate) < severityRank(seen.candidate))

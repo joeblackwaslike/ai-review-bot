@@ -5,7 +5,7 @@ import {
 	type RoundRun,
 	type RoundRunner,
 } from "./adaptive-report.js";
-import { makeFixture, makeLabel, makeLabels } from "./testkit.js";
+import { claim, makeFixture, makeLabel, makeLabels } from "./testkit.js";
 import type { CandidateRecord, Label, ReplayFixture } from "./types.js";
 
 const WORDS = [
@@ -282,5 +282,104 @@ describe("adaptiveReport rounds", () => {
 		};
 		const r = adaptiveReport([{ fixture, labels: makeLabels() }]);
 		expect(r.perFixture[0]?.postedBefore).toEqual([1, 1]);
+	});
+});
+
+describe("adaptiveReport with the real posting filters", () => {
+	const WORD_IDS = WORDS.slice(0, 10);
+	const rejectedAt = (id: string, at: string) =>
+		makeLabel(id, "rejected", { evidence: [`${at}|no`] });
+	const claimOf = (
+		id: string,
+		roundIndex: number,
+		path: string,
+		title: string,
+		commentId: number,
+	) => ({
+		...claim(id, roundIndex),
+		commentId,
+		path,
+		line: 10,
+		severity: "P2",
+		title,
+		text: title,
+	});
+
+	function buildFixture(p1Count: number) {
+		const base = makeFixture([["x"], ["y"], ["z"]]);
+		const earlier = (roundIndex: number, at: string) => {
+			const ids = [`e${roundIndex}a`, `e${roundIndex}b`];
+			return {
+				claims: ids.map((id, i) =>
+					claimOf(
+						id,
+						roundIndex,
+						`src/earlier${roundIndex}${i}.ts`,
+						`earlier ${id} finding`,
+						100 * (roundIndex + 1) + i,
+					),
+				),
+				labels: ids.map((id) => rejectedAt(id, at)),
+			};
+		};
+		const r0 = earlier(0, "2026-01-01T11:00:00Z");
+		const r1 = earlier(1, "2026-01-02T11:00:00Z");
+		const p3Claims = WORD_IDS.map((w, i) =>
+			claimOf(`n${i}`, 2, `src/${w}.ts`, `${w} widget leaks memory`, 300 + i),
+		);
+		const p3 = WORD_IDS.map((w, i) => ({
+			skill: "code-reviewer.md",
+			title: `${w} widget leaks memory`,
+			path: `src/${w}.ts`,
+			line: 10,
+			severity: "P3",
+		}));
+		const p1 = Array.from({ length: p1Count }, (_, i) => ({
+			skill: "code-reviewer.md",
+			title: `serious problem number ${i}`,
+			path: `src/serious${i}.ts`,
+			line: 10,
+			severity: "P1",
+		}));
+		const fixture: ReplayFixture = {
+			...base,
+			rounds: [
+				{ ...(base.rounds[0] as (typeof base.rounds)[0]), claims: r0.claims },
+				{ ...(base.rounds[1] as (typeof base.rounds)[0]), claims: r1.claims },
+				{
+					...(base.rounds[2] as (typeof base.rounds)[0]),
+					claims: p3Claims,
+					trace: {
+						candidates: [...p1, ...p3],
+						posted: [],
+						usage: {},
+					},
+				},
+			],
+		};
+		const labels = makeLabels({
+			labels: [
+				...r0.labels,
+				...r1.labels,
+				...p3Claims.map((c) => rejectedAt(c.id, "2026-01-03T11:00:00Z")),
+			],
+		});
+		return { fixture, labels };
+	}
+
+	it("does not count a removal the inline cap would have made anyway", () => {
+		const { fixture, labels } = buildFixture(50);
+		const r = adaptiveReport([{ fixture, labels }]);
+		expect(r.perFixture[0]?.postedBefore).toEqual([50]);
+		expect(r.perFixture[0]?.postedAfter).toEqual([50]);
+		expect(r.perFixture[0]?.removedRejected).toBe(0);
+		expect(r.gate).toBe("inconclusive");
+	});
+
+	it("counts the same removals when the baseline would have posted them", () => {
+		const { fixture, labels } = buildFixture(5);
+		const r = adaptiveReport([{ fixture, labels }]);
+		expect(r.perFixture[0]?.removedRejected).toBe(10);
+		expect(r.gate).toBe("pass");
 	});
 });
