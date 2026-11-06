@@ -1,9 +1,17 @@
 import { isSameClaim } from "../claim-dedupe.js";
 import { candidateFamilies } from "../retraction.js";
 import type { PullFile } from "../review.js";
+import {
+	isCheckoutUnavailable,
+	withCheckout as realWithCheckout,
+} from "./checkout.js";
 import { freezeFixture } from "./frozen.js";
 import { countJoined, labelledClaims } from "./metrics.js";
-import type { ReviewStrategy, StrategyInput } from "./strategy.js";
+import type {
+	CheckoutHandle,
+	ReviewStrategy,
+	StrategyInput,
+} from "./strategy.js";
 import { ledgerForRound } from "./trace.js";
 import type {
 	CandidateRecord,
@@ -58,6 +66,7 @@ export class InvalidEstimateError extends Error {}
 export interface LiveReport {
 	spentUsd: number;
 	rounds: LiveRoundReport[];
+	checkoutUnavailable: number[];
 }
 
 /** A strategy run that threw. `partial.spentUsd` includes the failing round's estimate, an upper bound since the strategy reported no usage; `partial.rounds` holds only finished rounds. */
@@ -81,6 +90,7 @@ export interface LiveOptions {
 		round: Round,
 	) => Promise<{ diff: string; files: PullFile[]; approximate: boolean }>;
 	out?: (s: string) => void;
+	withCheckout?: typeof realWithCheckout;
 }
 
 function confirmedClaimIds(labels: LabelFile): Set<string> {
@@ -109,13 +119,14 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 	const inputFor = (
 		d: (typeof diffs)[number],
 		maxUsd: number,
+		checkout: CheckoutHandle | null = null,
 	): StrategyInput => ({
 		fixture: freezeFixture(opts.fixture, d.round.index),
 		round: d.round,
 		diff: d.diff,
 		files: d.files,
 		approximateDiff: d.approximate,
-		checkout: null,
+		checkout,
 		history: { ledger: ledgerForRound(opts.fixture, opts.labels, d.round) },
 		budget: { maxUsd, maxWallMs: ROUND_WALL_MS },
 		signal: AbortSignal.timeout(ROUND_WALL_MS),
@@ -136,7 +147,12 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 	const matchable = confirmedClaimIds(opts.labels);
 	const labelOf = new Map(opts.labels.labels.map((l) => [l.claimId, l.label]));
 	const labelled = labelledClaims(opts.fixture, opts.labels);
-	const report: LiveReport = { spentUsd: 0, rounds: [] };
+	const report: LiveReport = {
+		spentUsd: 0,
+		rounds: [],
+		checkoutUnavailable: [],
+	};
+	const checkoutFor = opts.withCheckout ?? realWithCheckout;
 
 	for (const [i, d] of diffs.entries()) {
 		const estimate = estimates[i] as number;
@@ -148,14 +164,33 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 		}
 		let result: Awaited<ReturnType<ReviewStrategy["run"]>>;
 		try {
-			result = await opts.strategy.run(
-				inputFor(d, opts.maxCostUsd - report.spentUsd),
-			);
+			const budget = opts.maxCostUsd - report.spentUsd;
+			const ran = opts.strategy.needsCheckout
+				? await checkoutFor(
+						{
+							owner: opts.fixture.owner,
+							repo: opts.fixture.repo,
+							baseSha: d.round.mergeBase ?? d.round.baseSha,
+							headSha: d.round.headSha,
+						},
+						(handle) => opts.strategy.run(inputFor(d, budget, handle)),
+					)
+				: await opts.strategy.run(inputFor(d, budget));
+			if (isCheckoutUnavailable(ran)) {
+				report.checkoutUnavailable.push(d.round.index);
+				out(`round ${d.round.index}: skipped, ${ran.reason}`);
+				continue;
+			}
+			result = ran;
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
 			throw new LiveRunError(
 				`${opts.strategy.name} round ${d.round.index}: ${message}`,
-				{ spentUsd: report.spentUsd + estimate, rounds: report.rounds },
+				{
+					spentUsd: report.spentUsd + estimate,
+					rounds: report.rounds,
+					checkoutUnavailable: report.checkoutUnavailable,
+				},
 				{ cause: err },
 			);
 		}
@@ -199,5 +234,9 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 		if (usageLine) out(`  usage: ${usageLine}`);
 		out(`  wall ${row.wallMs}ms, ${row.toolCalls} tool calls`);
 	}
+	if (report.checkoutUnavailable.length > 0)
+		out(
+			`${opts.strategy.name}: ${report.checkoutUnavailable.length} of ${diffs.length} round(s) could not run (checkout unavailable)`,
+		);
 	return report;
 }
