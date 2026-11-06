@@ -27,6 +27,14 @@ const MIN_COUNTED_LENGTH = 3;
 const MAX_KEY_OCCURRENCES = 50;
 
 const QUOTES = new Set(['"', "'", "`"]);
+const OPERATOR_CHARS = new Set("+-*/%&|<>=!~^?:");
+
+/** True when removing the space between `before` (the end of `text`) and `next` could merge two tokens. */
+export function needsSeparator(text: string, next: string): boolean {
+	const last = text.slice(-1);
+	if (/\w/.test(last) && /\w/.test(next)) return true;
+	return OPERATOR_CHARS.has(last) && OPERATOR_CHARS.has(next);
+}
 
 /**
  * Normalizes one source line for formatting-insensitive comparison. Outside string
@@ -36,6 +44,10 @@ const QUOTES = new Set(['"', "'", "`"]);
  * whitespace verbatim. Inside a literal every character is kept. An unterminated quote
  * (multi-line template, apostrophe in a comment) keeps the rest of the line verbatim, so
  * the comparison only gets stricter.
+ *
+ * With `strip` a space survives between two word characters and between two operator
+ * characters (`a + ++b` versus `a++ + b`), so `x=-1;` and `x = -1;` compare different: the
+ * comparison keeps weight there rather than risk hiding a token change.
  *
  * Known ceiling with `strip`: spaces next to punctuation inside a regex literal (`a - b`
  * versus `a-b`) and the interior lines of a multi-line template literal are not detected,
@@ -62,7 +74,7 @@ export function normalizeCodeLine(
 		if (
 			pendingSpace &&
 			out.trim() !== "" &&
-			(!opts.strip || (/\w$/.test(out) && /\w/.test(ch)))
+			(!opts.strip || needsSeparator(out, ch))
 		)
 			out += " ";
 		pendingSpace = false;

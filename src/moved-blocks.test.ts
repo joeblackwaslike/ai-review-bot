@@ -14,6 +14,11 @@ describe("normalizeCodeLine with strip", () => {
 		expect(strip("/foo bar/")).not.toBe(strip("/foobar/"));
 	});
 
+	it("keeps one space between two operator characters", () => {
+		expect(strip("const x = a + ++b;")).not.toBe(strip("const x = a++ + b;"));
+		expect(strip("x=-1;")).not.toBe(strip("x = -1;"));
+	});
+
 	it("still ignores spacing next to punctuation and at the edges", () => {
 		expect(strip("const a=1;")).toBe(strip("const a = 1;"));
 		expect(strip("  return  1;  ")).toBe(strip("return 1;"));
