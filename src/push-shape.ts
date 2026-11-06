@@ -54,9 +54,13 @@ const LOCKFILES = new Set([
 	"Cargo.lock",
 	"poetry.lock",
 	"go.sum",
+	"uv.lock",
+	"Gemfile.lock",
+	"composer.lock",
 ]);
 const BINARY_EXT =
 	/\.(png|jpe?g|gif|webp|ico|pdf|zip|gz|woff2?|ttf|eot|mp[34]|mov|wasm)$/i;
+const PIN_FILE = /^(requirements|constraints)[^/]*\.txt$/i;
 const DOCS_EXT = /\.(md|mdx|rst|txt)$/i;
 const CONFIG_EXT = /\.(json|jsonc|ya?ml|toml|ini|env)$/i;
 const INFRA_EXT = /\.(tf|tfvars|hcl)$/i;
@@ -68,6 +72,7 @@ export function classifyFile(filename: string, hasPatch: boolean): FileKind {
 	if (LOCKFILES.has(name)) return "lockfile";
 	if (isGeneratedFile(filename)) return "generated";
 	if (BINARY_EXT.test(name) || !hasPatch) return "binary";
+	if (PIN_FILE.test(name)) return "config";
 	if (TEST_PATH.test(filename)) return "test";
 	if (
 		name === "Dockerfile" ||
@@ -77,7 +82,7 @@ export function classifyFile(filename: string, hasPatch: boolean): FileKind {
 	) {
 		return "infra";
 	}
-	if (name.endsWith(".sh")) return "shell";
+	if (/\.(sh|bash|zsh)$/.test(name)) return "shell";
 	if (DOCS_EXT.test(name) || filename.startsWith("docs/")) return "docs";
 	if (CONFIG_EXT.test(name)) return "config";
 	return "code";
@@ -88,7 +93,6 @@ function isWhitespaceOnly(patch: string | undefined): boolean {
 	const removed: string[] = [];
 	const added: string[] = [];
 	for (const line of patch.split("\n")) {
-		if (line.startsWith("---") || line.startsWith("+++")) continue;
 		if (line.startsWith("-")) removed.push(line.slice(1).replace(/\s+/g, ""));
 		else if (line.startsWith("+"))
 			added.push(line.slice(1).replace(/\s+/g, ""));
@@ -97,13 +101,19 @@ function isWhitespaceOnly(patch: string | undefined): boolean {
 	return removed.join("\n") === added.join("\n");
 }
 
-function shapeFile(file: PushFile, movedIn: number): FileShape {
+function shapeFile(
+	file: PushFile,
+	movedIn: number,
+	movedOut: number,
+): FileShape {
 	const kind = classifyFile(file.filename, file.patch !== undefined);
 	const renameOnly =
 		file.status === "renamed" && file.additions === 0 && file.deletions === 0;
 	const whitespaceOnly = isWhitespaceOnly(file.patch);
 	const deletionOnly = file.additions === 0 && file.deletions > 0;
-	const changed = Math.max(file.additions - movedIn, 0) + file.deletions;
+	const changed =
+		Math.max(file.additions - movedIn, 0) +
+		Math.max(file.deletions - movedOut, 0);
 	const weight =
 		renameOnly || whitespaceOnly || file.patch === undefined
 			? 0
@@ -125,7 +135,13 @@ export function classifyPush(files: PushFile[]): PushShape {
 	for (const block of moved) {
 		movedIn.set(block.to, (movedIn.get(block.to) ?? 0) + block.lineCount);
 	}
-	const shaped = files.map((f) => shapeFile(f, movedIn.get(f.filename) ?? 0));
+	const movedOut = new Map<string, number>();
+	for (const block of moved) {
+		movedOut.set(block.from, (movedOut.get(block.from) ?? 0) + block.lineCount);
+	}
+	const shaped = files.map((f) =>
+		shapeFile(f, movedIn.get(f.filename) ?? 0, movedOut.get(f.filename) ?? 0),
+	);
 	return {
 		files: shaped,
 		reviewableWeight: shaped.reduce((sum, f) => sum + f.weight, 0),

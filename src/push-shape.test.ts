@@ -39,6 +39,13 @@ describe("classifyFile", () => {
 		[".github/workflows/ci.yml", "infra"],
 		["main.tf", "infra"],
 		["scripts/run.sh", "shell"],
+		["scripts/run.bash", "shell"],
+		["scripts/run.zsh", "shell"],
+		["requirements.txt", "config"],
+		["constraints-dev.txt", "config"],
+		["uv.lock", "lockfile"],
+		["Gemfile.lock", "lockfile"],
+		["composer.lock", "lockfile"],
 		["pnpm-lock.yaml", "lockfile"],
 		["logo.png", "binary"],
 		["dist/app.min.js", "generated"],
@@ -113,7 +120,52 @@ describe("classifyPush", () => {
 			}),
 		]);
 		expect(shape.moved).toHaveLength(1);
+		expect(shape.reviewableWeight).toBe(10);
+	});
+
+	it("weighs a pure move at 0 and keeps the source deletion-only", () => {
+		const block = lines(10, "moved statement");
+		const shape = classifyPush([
+			file({ filename: "src/a.ts", deletions: 10, patch: delPatch(block) }),
+			file({ filename: "src/b.ts", additions: 10, patch: addPatch(block) }),
+		]);
+		expect(shape.files[0]?.deletionOnly).toBe(true);
+		expect(shape.reviewableWeight).toBe(0);
+		expect(shapedBudget(shape, 10)).toBe(2);
+	});
+
+	it("weighs a 100-line pure move at 0", () => {
+		const block = lines(100, "moved statement");
+		const shape = classifyPush([
+			file({ filename: "src/a.ts", deletions: 100, patch: delPatch(block) }),
+			file({ filename: "src/b.ts", additions: 100, patch: addPatch(block) }),
+		]);
+		expect(shape.reviewableWeight).toBe(0);
+	});
+
+	it("weighs a 10-line move plus 20 fresh lines at 20", () => {
+		const block = lines(10, "moved statement");
+		const shape = classifyPush([
+			file({ filename: "src/a.ts", deletions: 10, patch: delPatch(block) }),
+			file({
+				filename: "src/b.ts",
+				additions: 30,
+				patch: addPatch([...block, ...lines(20, "fresh")]),
+			}),
+		]);
 		expect(shape.reviewableWeight).toBe(20);
+	});
+
+	it("treats a deleted --- line as a real change", () => {
+		const shape = classifyPush([
+			file({
+				filename: "docs/a.md",
+				additions: 1,
+				deletions: 2,
+				patch: "@@ -1,2 +1,1 @@\n-foo\n----\n+foo",
+			}),
+		]);
+		expect(shape.files[0]?.whitespaceOnly).toBe(false);
 	});
 
 	it("separates file count from weight", () => {
