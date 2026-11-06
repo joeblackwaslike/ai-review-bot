@@ -122,6 +122,31 @@ function splitChoice(
 	};
 }
 
+const TIER_ORDER: readonly ReviewTier[] = [
+	"trivial",
+	"normal",
+	"complex",
+	"deep",
+];
+
+export function legacyTierMap(
+	reviewerId: string,
+	config: Config = getConfigTree(),
+): Record<ReviewTier, Pick<ModelSelection, "model" | "effort">> | undefined {
+	const reviewer = config.reviewers[reviewerId];
+	if (!reviewer) return undefined;
+	const entries = TIER_ORDER.flatMap((tier) => {
+		const choice = reviewer.tiers[tier];
+		if (!choice) return [];
+		const { model, effort } = splitChoice(reviewerId, `tier "${tier}"`, choice);
+		return [[tier, { model, effort }] as const];
+	});
+	return Object.fromEntries(entries) as Record<
+		ReviewTier,
+		Pick<ModelSelection, "model" | "effort">
+	>;
+}
+
 function requireReviewer(config: Config, reviewerId: string) {
 	const reviewer = config.reviewers[reviewerId];
 	if (!reviewer) throw new Error(`unknown reviewer "${reviewerId}"`);

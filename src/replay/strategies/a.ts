@@ -2,10 +2,9 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { runAuditPass } from "../../audit.js";
-import { getConfigTree } from "../../config/load.js";
 import { computeCost } from "../../models.js";
 import { TIER1_SKILLS } from "../../review.js";
-import { routeReviewerModel } from "../../router.js";
+import { legacyTierMap, routeReviewerModel } from "../../router.js";
 import {
 	resolveSelectionAuth,
 	routerContext,
@@ -29,8 +28,8 @@ export function strategyVersion(readSkill: (name: string) => string): string {
 		.update(
 			JSON.stringify([
 				names.map((n) => [n, readSkill(n)]),
-				getConfigTree().reviewers.claude?.tiers,
-				getConfigTree().reviewers.codex?.tiers,
+				legacyTierMap("claude"),
+				legacyTierMap("codex"),
 			]),
 		)
 		.digest("hex")

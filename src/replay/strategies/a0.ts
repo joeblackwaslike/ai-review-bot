@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { mapWithConcurrency } from "../../concurrency.js";
-import { getConfigTree } from "../../config/load.js";
 import { parseAgentConcurrency } from "../../config.js";
 import { computeCost } from "../../models.js";
 import { buildAuditUserMessage } from "../../prompt.js";
@@ -11,7 +10,7 @@ import {
 	mergeReviewsDetailed,
 	runAgent,
 } from "../../review.js";
-import { routeReviewerModel } from "../../router.js";
+import { legacyTierMap, routeReviewerModel } from "../../router.js";
 import { requireCost, roundCostUsd } from "../cost.js";
 import {
 	resolveSelectionAuth,
@@ -48,8 +47,8 @@ export function strategyA0Version(
 		.update(
 			JSON.stringify([
 				readSkill(A0_SKILL),
-				getConfigTree().reviewers.claude?.tiers,
-				getConfigTree().reviewers.codex?.tiers,
+				legacyTierMap("claude"),
+				legacyTierMap("codex"),
 				revision,
 			]),
 		)
