@@ -5325,6 +5325,7 @@ describe("buildReview ledger suppression", () => {
 			comments?: unknown[];
 			threadNodes?: unknown[];
 			patch?: string;
+			files?: unknown[];
 		} = {},
 	) {
 		const request = vi
@@ -5387,7 +5388,9 @@ describe("buildReview ledger suppression", () => {
 				.mockImplementation(async (route: string) =>
 					route.endsWith("/reviews")
 						? allReviews
-						: [buildPullFile("src/review.ts", o.patch ?? SIMPLE_PATCH)],
+						: (o.files ?? [
+								buildPullFile("src/review.ts", o.patch ?? SIMPLE_PATCH),
+							]),
 				),
 		};
 	}
@@ -6961,6 +6964,178 @@ describe("buildReview ledger suppression", () => {
 			"REQUEST_CHANGES",
 		);
 
+		const rawFile = (name: string, additions: number, deletions = 0) => ({
+			...buildPullFile(name, SIMPLE_PATCH),
+			additions,
+			deletions,
+		});
+		const incrementalRound = (deltaFiles: ReturnType<typeof rawFile>[]) => {
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "INCREMENTAL",
+				resolved: [],
+				newRisk: true,
+			});
+			mockFetchDeltaMeta.mockResolvedValueOnce({
+				files: deltaFiles as never[],
+				diff: "delta",
+				truncated: false,
+			});
+		};
+		const prFiles = (...extra: ReturnType<typeof rawFile>[]) => [
+			rawFile("src/review.ts", 40),
+			...extra,
+		];
+		const budgetLog = (log: { mock: { calls: unknown[][] } }) =>
+			log.mock.calls.find(([m]) => m === "adaptive limits")?.[1];
+
+		it("scales the budget to a docs-only delta on an incremental round", async () => {
+			REVIEWER_TUNING.adaptiveLimits = true;
+			const log = vi.spyOn(console, "log").mockImplementation(() => {});
+			const readme = rawFile("README.md", 20);
+			incrementalRound([readme]);
+			routeAgents({ "code-reviewer.md": agentOutput(nine) }, none);
+			const recordDiscards = spy();
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit({ files: prFiles(readme) }),
+				...baseContext,
+				recordDiscards,
+			});
+
+			const logged = budgetLog(log);
+			log.mockRestore();
+			expect(logged).toMatchObject({ budget: 2, removed: 7 });
+			expect(titlesIn(decision?.body ?? "")).toEqual([
+				"Adaptive finding 0",
+				"Adaptive finding 1",
+			]);
+			const limited = (recordDiscards.mock.calls[0]?.[0] ?? []).filter(
+				(d) => d.reason === "ADAPTIVE_LIMIT",
+			);
+			expect(limited).toHaveLength(7);
+		});
+
+		it("keeps the band budget for a 40-line code delta on an incremental round", async () => {
+			REVIEWER_TUNING.adaptiveLimits = true;
+			const log = vi.spyOn(console, "log").mockImplementation(() => {});
+			const code = rawFile("src/other.ts", 40);
+			incrementalRound([code]);
+			routeAgents({ "code-reviewer.md": agentOutput(nine) }, none);
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit({ files: prFiles(code) }),
+				...baseContext,
+			});
+
+			const logged = budgetLog(log);
+			log.mockRestore();
+			expect(logged).toMatchObject({ budget: 5, removed: 4 });
+			expect(new Set(titlesIn(decision?.body ?? "")).size).toBe(5);
+		});
+
+		it("applies the band budget unscaled when a whole-PR skill runs in an incremental round", async () => {
+			REVIEWER_TUNING.adaptiveLimits = true;
+			const log = vi.spyOn(console, "log").mockImplementation(() => {});
+			const readme = rawFile("README.md", 1);
+			incrementalRound([readme]);
+			routeAgents({ "code-reviewer.md": agentOutput(nine) }, none);
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit({
+					files: prFiles(readme),
+					reviews: [
+						{
+							...ownReview,
+							body: buildOwnReviewBody({
+								sha: OLD_SHA,
+								count: 1,
+								inline: "Inline comments: 1",
+								pending: ["security-sast.md"],
+							}),
+						},
+					],
+				}),
+				...baseContext,
+			});
+
+			const logged = budgetLog(log);
+			log.mockRestore();
+			expect(logged).toMatchObject({ budget: 5, removed: 4, shape: null });
+			expect(new Set(titlesIn(decision?.body ?? "")).size).toBe(5);
+		});
+
+		it("indexes the current round by the earlier own reviews, over two rounds", async () => {
+			REVIEWER_TUNING.adaptiveLimits = true;
+			const log = vi.spyOn(console, "log").mockImplementation(() => {});
+			const bot = (id: number, path: string, line: number, title: string) => ({
+				id,
+				pull_request_review_id: id < 30 ? 100 : 200,
+				path,
+				line,
+				body: `**P2** **${title}**\n\nBody ${id}.`,
+			});
+			const threadFor = (
+				c: { id: number; body: string },
+				o: { decline?: boolean; resolved?: boolean },
+			) => ({
+				isResolved: o.resolved ?? false,
+				resolvedBy: o.resolved ? { login: "joe" } : null,
+				comments: {
+					pageInfo: { hasNextPage: false },
+					nodes: [
+						{
+							databaseId: c.id,
+							author: { login: "ai-review-bot", __typename: "Bot" },
+							authorAssociation: "NONE",
+							body: c.body,
+							createdAt: "2026-10-01T00:00:00Z",
+						},
+						...(o.decline
+							? [
+									{
+										databaseId: c.id + 1000,
+										author: { login: "joe", __typename: "User" },
+										authorAssociation: "OWNER",
+										body: DECLINE,
+										createdAt: "2026-10-04T00:00:00Z",
+									},
+								]
+							: []),
+					],
+				},
+			});
+			const c0 = bot(11, "src/review.ts", 2, "Old declined claim");
+			const c1 = bot(31, "src/review.ts", 3, "New declined claim");
+			const c2 = bot(32, "src/review.ts", 4, "New accepted claim A");
+			const c3 = bot(33, "src/review.ts", 5, "New accepted claim B");
+			const round1 = {
+				...ownReview,
+				id: 200,
+				submitted_at: "2026-10-03T00:00:00Z",
+				body: buildOwnReviewBody({ sha: OLD_SHA, count: 2 }),
+			};
+			routeAgents({ "code-reviewer.md": agentOutput(nine) }, none);
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit({
+					reviews: [ownReview, round1],
+					comments: [c0, c1, c2, c3],
+					threadNodes: [
+						threadFor(c0, { decline: true }),
+						threadFor(c1, { decline: true }),
+						threadFor(c2, { resolved: true }),
+						threadFor(c3, { resolved: true }),
+					],
+				}),
+				...baseContext,
+			});
+
+			const logged = budgetLog(log);
+			log.mockRestore();
+			expect(logged).toMatchObject({ rounds: 2, floor: null, budget: 10 });
+			expect(new Set(titlesIn(decision?.body ?? "")).size).toBe(9);
+		});
+
 		it("downgrades to COMMENT when every new finding is removed and nothing carried blocks", async () => {
 			REVIEWER_TUNING.adaptiveLimits = true;
 			routeAgents({ "code-reviewer.md": allBelowFloor }, none);
@@ -6972,7 +7147,7 @@ describe("buildReview ledger suppression", () => {
 			expect(titlesIn(decision?.body ?? "")).toEqual([]);
 		});
 
-		it("keeps REQUEST_CHANGES when a carried entry still blocks", async () => {
+		it("keeps REQUEST_CHANGES when a carried entry blocks the verdict", async () => {
 			REVIEWER_TUNING.adaptiveLimits = true;
 			routeAgents({ "code-reviewer.md": allBelowFloor }, none);
 			const decision = await buildReview({

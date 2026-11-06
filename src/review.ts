@@ -2956,7 +2956,8 @@ async function buildReviewInner(
 	// on one of those would make GitHub reject the review. A skill given the
 	// whole PR may anchor anywhere in it.
 	const scopedPathSet = new Set(scopedFilePaths);
-	const anchorFiles = allSkills.some((s) => wholePrFor(s.skillPath))
+	const anyWholePrSkill = allSkills.some((s) => wholePrFor(s.skillPath));
+	const anchorFiles = anyWholePrSkill
 		? files
 		: files.filter((f) => scopedPathSet.has(f.filename));
 	const validLines = buildValidLinesByPath(anchorFiles);
@@ -2997,13 +2998,14 @@ async function buildReviewInner(
 			entries: ledger,
 			reactionsFor: () => [],
 			currentRound: loadedLedger.reviewIds.length,
-			delta: incrementalPass
-				? scopedFiles.map((f) => ({
-						...f,
-						additions: f.additions ?? 0,
-						deletions: f.deletions ?? 0,
-					}))
-				: null,
+			delta:
+				incrementalPass && !anyWholePrSkill
+					? scopedFiles.map((f) => ({
+							...f,
+							additions: f.additions ?? 0,
+							deletions: f.deletions ?? 0,
+						}))
+					: null,
 		});
 		const generalSet = new Set<object>(modelReview.general_findings);
 		const agentsWithTitle = (title: string) =>
