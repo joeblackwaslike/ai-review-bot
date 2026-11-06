@@ -477,13 +477,32 @@ describe("attributeProviderForComment", () => {
 		).toBe("gemini");
 	});
 
-	it("attributes a mention of a reviewer's comment prefix", () => {
+	it("attributes a mention of a reviewer's app slug", () => {
 		expect(
 			attributeProviderForComment(
 				new Set(["claude", "codex"]),
-				"codex-review-bot was right here",
+				"codexreviewbot was right here",
 			),
 		).toBe("codex");
+	});
+
+	it.each([
+		"ai-review-bot is looping",
+		"see github.com/joe/ai-review-bot/pull/1",
+		"ai-review-bot#47",
+	])("does not attribute a repo-name mention: %s", (body) => {
+		expect(
+			attributeProviderForComment(new Set(["claude", "codex"]), body),
+		).toBeNull();
+	});
+
+	it("still attributes anthropicreviewbot to claude beside codex", () => {
+		expect(
+			attributeProviderForComment(
+				new Set(["claude", "codex"]),
+				"anthropicreviewbot is looping",
+			),
+		).toBe("claude");
 	});
 });
 

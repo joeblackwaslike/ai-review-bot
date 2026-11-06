@@ -214,16 +214,11 @@ export function attributeProviderForComment(
 	const mentioned = new Set<ReviewerId>();
 	for (const id of activeReviewers) {
 		const reviewer = reviewers[id];
-		const names = [reviewer?.appSlug, reviewer?.commentPrefix].filter(
-			(n): n is string => Boolean(n),
-		);
-		for (const name of names) {
-			const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-			if (
-				new RegExp(`(?:^|[^a-z0-9-])${escaped}(?![a-z0-9-])`, "i").test(body)
-			) {
-				mentioned.add(id);
-			}
+		const slug = reviewer?.appSlug;
+		if (!slug) continue;
+		const escaped = slug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+		if (new RegExp(`(?:^|[^a-z0-9-])${escaped}(?![a-z0-9-])`, "i").test(body)) {
+			mentioned.add(id);
 		}
 	}
 	if (mentioned.size !== 1) return null;
