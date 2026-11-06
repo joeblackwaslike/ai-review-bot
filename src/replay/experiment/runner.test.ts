@@ -315,4 +315,58 @@ describe("runGrid", () => {
 			runGrid(plan({ strategies: [{ name: "a0", version: "v1" }] }), deps),
 		).rejects.toThrow(/requires "a"/);
 	});
+
+	it("counts the estimate of a cell whose strategy threw, and lists the amount", async () => {
+		const boom = stub("a", {
+			run: async () => {
+				throw new Error("boom");
+			},
+		});
+		const { deps, calls } = harness([boom], {
+			fixtures: { "o/r#1": loaded(1) },
+		});
+		const report = await runGrid(
+			plan({
+				strategies: [{ name: "a", version: "v1" }],
+				fixtures: [{ id: "o/r#1", split: "tuning", provider: "anthropic" }],
+				budgets: {
+					maxAnthropicUsd: ONE * 1.5,
+					maxOpenAiUsd: 10,
+					perCellUsd: 100,
+					perCellWallMs: 210_000,
+				},
+			}),
+			deps,
+		);
+		expect(calls).toHaveLength(1);
+		expect(report.failed).toHaveLength(1);
+		expect(report.failed[0]?.reservedUsd).toBeCloseTo(ONE);
+		expect(report.spentUsd.anthropic).toBeCloseTo(ONE);
+		expect(report.missing).toHaveLength(1);
+	});
+
+	it("stops one provider at its cap without stopping the other", async () => {
+		const { deps, calls } = harness([stub("a")], {
+			fixtures: { "o/r#1": loaded(1), "o/r#2": loaded(2, "openai") },
+		});
+		const report = await runGrid(
+			plan({
+				strategies: [{ name: "a", version: "v1" }],
+				providers: ["anthropic", "openai"],
+				fixtures: [
+					{ id: "o/r#1", split: "tuning", provider: "anthropic" },
+					{ id: "o/r#2", split: "test", provider: "openai" },
+				],
+				budgets: {
+					maxAnthropicUsd: ONE * 0.5,
+					maxOpenAiUsd: 1000,
+					perCellUsd: 100,
+					perCellWallMs: 210_000,
+				},
+			}),
+			deps,
+		);
+		expect(calls.map((c) => c.fixture)).toEqual([2, 2]);
+		expect(report.missing).toHaveLength(2);
+	});
 });

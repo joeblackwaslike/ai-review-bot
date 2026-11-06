@@ -54,7 +54,8 @@ export interface GridReport {
 	overCellCap: PlannedCell[];
 	refused: PlannedCell[];
 	unavailable: PlannedCell[];
-	failed: (PlannedCell & { error: string })[];
+	/** `reservedUsd` is the cell's estimate, counted against the cap because a thrown run reports no usage. */
+	failed: (PlannedCell & { error: string; reservedUsd: number })[];
 	spentUsd: Record<Provider, number>;
 	partial: boolean;
 }
@@ -229,7 +230,7 @@ export async function runGrid(
 		spentUsd,
 		partial: false,
 	};
-	let stopped = false;
+	const stopped = new Set<Provider>();
 
 	for (const u of unitsOf(plan, deps)) {
 		const loaded = deps.fixtures[u.fixtureId] as LoadedFixture;
@@ -258,7 +259,7 @@ export async function runGrid(
 					)?.costUsd;
 				continue;
 			}
-			if (stopped || (s.name === A0 && aCost === undefined)) {
+			if (stopped.has(provider) || (s.name === A0 && aCost === undefined)) {
 				report.missing.push(cell);
 				continue;
 			}
@@ -274,7 +275,7 @@ export async function runGrid(
 				continue;
 			}
 			if (spentUsd[provider] + estimate > capFor(plan, provider)) {
-				stopped = true;
+				stopped.add(provider);
 				out(
 					`experiment: ${provider} cap $${capFor(plan, provider).toFixed(2)} reached; stopping`,
 				);
@@ -325,8 +326,10 @@ export async function runGrid(
 				deps.store.append(record);
 				report.ran++;
 			} catch (err) {
+				spentUsd[provider] += estimate;
 				report.failed.push({
 					...cell,
+					reservedUsd: estimate,
 					error: err instanceof Error ? err.message : String(err),
 				});
 			}
