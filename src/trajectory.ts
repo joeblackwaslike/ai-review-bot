@@ -9,7 +9,7 @@ export type Sev = "P0" | "P1" | "P2" | "P3";
 export const SEV_RANK: Record<Sev, number> = { P0: 4, P1: 3, P2: 2, P3: 1 };
 
 /** How the author responded to a finding. */
-export type FindingOutcome =
+export type AuthorResponse =
 	| "accepted"
 	| "rejected"
 	| "deferred"
@@ -27,7 +27,7 @@ export interface RoundFriction {
 export function classifyFinding(
 	entry: LedgerEntry,
 	reactions: Verdict[],
-): FindingOutcome {
+): AuthorResponse {
 	switch (entry.status) {
 		case "fixed":
 		case "resolved":
@@ -53,7 +53,7 @@ export function scoreTrajectory(
 	currentRound: number,
 ): { score: number | null; rounds: RoundFriction[] } {
 	const { decay, deferredWeight } = ADAPTIVE_LIMIT_BANDS;
-	const byRound = new Map<number, FindingOutcome[]>();
+	const byRound = new Map<number, AuthorResponse[]>();
 	for (const e of entries) {
 		if (e.round >= currentRound) continue;
 		const list = byRound.get(e.round) ?? [];
@@ -62,7 +62,7 @@ export function scoreTrajectory(
 	}
 	const rounds: RoundFriction[] = [];
 	for (const [round, outcomes] of [...byRound].sort((a, b) => a[0] - b[0])) {
-		const count = (o: FindingOutcome) => outcomes.filter((x) => x === o).length;
+		const count = (o: AuthorResponse) => outcomes.filter((x) => x === o).length;
 		const answered = outcomes.length - count("unanswered");
 		if (answered === 0) continue;
 		const friction =

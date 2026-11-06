@@ -228,8 +228,9 @@ function unusedSegments(c: Candidate, minLines: number): Candidate[] {
  * Finds runs of at least `minLines` lines deleted in one file and added to
  * another. Lines are compared after trimming and collapsing whitespace; lines
  * under 3 characters stay inside a run but do not count toward its length.
- * A window of lines that occurs more than 50 times on either side (repeated
- * boilerplate) is matched only through its first 50 occurrences per side.
+ * A window of lines that occurs more than 50 times (repeated boilerplate) is matched
+ * only through its first 50 occurrences: counted across all added runs on the added
+ * side, and within each deleted run on the deleted side.
  */
 export function findMovedBlocks(files: PushFile[], minLines = 5): MovedBlock[] {
 	const need = Math.max(1, minLines);

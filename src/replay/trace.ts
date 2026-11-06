@@ -74,8 +74,8 @@ const VERDICT_BY_REACTION: ReadonlyMap<string, Verdict> = new Map([
  * one verdict per reactor (the latest verdict-bearing reaction); an entry
  * without a comment id has none. `delta` is always null: fixtures carry no patch
  * text, so the push-shape factor is not modeled offline and the replay applies
- * the band budget unscaled. That removes no more than production would, so the
- * trace is a lower bound on removal for small pushes.
+ * the band budget unscaled. That under-counts removal for small pushes. Off-diff
+ * drops are not modeled either, which can over-count it, so the trace is not a strict bound.
  */
 export function adaptiveInputForRound(
 	fixture: ReplayFixture,
