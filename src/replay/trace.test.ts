@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { resolveLimits } from "../adaptive-limits.js";
 import { ledgerEntryFinding } from "../baseline.js";
 import type { Ledger } from "../ledger/types.js";
 import { shortFindingId } from "../relation.js";
@@ -556,9 +557,6 @@ describe("adaptive limits in the trace", () => {
 			commentId: 999,
 		} as PostedClaim;
 		(fixture.rounds[2] as Round).claims = [];
-		(labels.labels as { claimId: string }[]).push(
-			rejected("r1:a", "2026-10-01T00:00:00Z") as never,
-		);
 		const after = adaptiveInputForRound(fixture, labels, round);
 		expect(strip(after)).toEqual(before);
 		expect(after.currentRound).toBe(1);
@@ -595,5 +593,119 @@ describe("adaptive limits in the trace", () => {
 		const byId = new Map(a.entries.map((e) => [e.id, a.reactionsFor(e)]));
 		expect(byId.get("r0:a")).toEqual(["down"]);
 		expect(byId.get("r0:b")).toEqual([]);
+	});
+
+	it("ignores labels and reactions dated after the round cutoff", () => {
+		const { fixture, labels } = build();
+		(labels.labels as unknown[]).length = 0;
+		(labels.labels as unknown[]).push(rejected("r0:a", "2026-10-05T18:00:00Z"));
+		fixture.reactions = [
+			{
+				commentId: 12,
+				user: "joe",
+				content: "-1",
+				createdAt: "2026-10-05T18:00:00Z",
+			},
+		];
+		const a = adaptiveInputForRound(
+			fixture,
+			labels,
+			fixture.rounds[1] as Round,
+		);
+		expect(a.entries.find((e) => e.id === "r0:a")?.status).toBe("open");
+		const b = a.entries.find((e) => e.id === "r0:b");
+		expect(b && a.reactionsFor(b)).toEqual([]);
+	});
+
+	it("keeps entries the holdable ledger drops", () => {
+		const { fixture, labels } = build();
+		(labels.labels as unknown[]).length = 0;
+		const round = fixture.rounds[2] as Round;
+		const a = adaptiveInputForRound(fixture, labels, round);
+		const held = ledgerForRound(fixture, labels, round).map((e) => e.id);
+		expect(a.entries.map((e) => e.id)).toContain("r0:a");
+		expect(held).not.toContain("r0:a");
+	});
+
+	it("scores earlier rounds when round indexes are not contiguous", () => {
+		const { fixture, labels } = build();
+		fixture.rounds = [
+			mkRound(0, [claim("r0:a", 0, 11)]),
+			mkRound(2, [claim("r2:a", 2, 31)]),
+			mkRound(3, []),
+		];
+		labels.labels = [
+			rejected("r0:a", "2026-10-01T18:00:00Z"),
+			rejected("r2:a", "2026-10-03T12:30:00Z"),
+		] as never;
+		const a = adaptiveInputForRound(
+			fixture,
+			labels,
+			fixture.rounds[2] as Round,
+		);
+		expect(a.currentRound).toBe(3);
+		expect(resolveLimits(a).rounds.map((r) => r.round)).toEqual([0, 2]);
+	});
+
+	it("does not force the budget to 2 when the round records changed files", () => {
+		const { fixture, labels } = build();
+		const round = fixture.rounds[2] as Round;
+		round.commitsSince = [
+			{
+				sha: "c1",
+				committedAt: "2026-10-03T00:00:00Z",
+				files: [{ path: "src/a.ts", ranges: [[1, 3]] }],
+			},
+		];
+		const adaptive = adaptiveInputForRound(fixture, labels, round);
+		expect(adaptive.delta).toBeNull();
+		const result = postFilterTrace({
+			agentReviews: [
+				{
+					skill: "code-reviewer",
+					review: buildModelReview({
+						general_findings: [1, 2, 3, 4, 5, 6].map((n) =>
+							general(`Medium ${n}`, "b"),
+						),
+					}),
+				},
+			],
+			ledger: ledgerForRound(fixture, labels, round),
+			files,
+			tuning: on,
+			adaptive,
+		});
+		expect(result.posted).toHaveLength(5);
+		expect(result.adaptiveRemoved).toHaveLength(1);
+	});
+
+	it("counts agents behind an inline comment and names the skill that raised a removed one", () => {
+		const { fixture, labels } = build();
+		const round = fixture.rounds[2] as Round;
+		const comments = [1, 2, 3, 4, 5, 6].map((n) =>
+			inline(`Inline ${n}`, { severity: "P2" }),
+		);
+		const result = postFilterTrace({
+			agentReviews: [
+				{
+					skill: "agent-a",
+					review: buildModelReview({ inline_comments: comments }),
+				},
+				{
+					skill: "agent-b",
+					review: buildModelReview({
+						inline_comments: [inline("Inline 6", { severity: "P2" })],
+					}),
+				},
+			],
+			ledger: ledgerForRound(fixture, labels, round),
+			files,
+			tuning: on,
+			adaptive: adaptiveInputForRound(fixture, labels, round),
+		});
+		expect(result.adaptiveRemoved).toHaveLength(1);
+		expect(result.adaptiveRemoved?.[0]?.title).toBe("Inline 5");
+		expect(result.adaptiveRemoved?.[0]?.skill).toBe("agent-a.md");
+		expect(titles(result.posted)).toContain("Inline 6");
 	});
 });

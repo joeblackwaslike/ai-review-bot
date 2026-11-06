@@ -64,12 +64,14 @@ const VERDICT_BY_REACTION: ReadonlyMap<string, Verdict> = new Map([
  * The adaptive-limits input a review of `round` would have, from the fixture's
  * earlier rounds only. `entries` is every earlier claim as a ledger entry
  * (settled by the labels visible before the round, open otherwise), not only
- * the holdable ones. `currentRound` counts the earlier rounds. `reactionsFor`
+ * the holdable ones. `currentRound` is `round.index`, which is what
+ * `ledgerFromView` stamps on entries (the claim's `roundIndex`). `reactionsFor`
  * reads the recorded reactions on the entry's claim that predate the round,
  * one verdict per reactor (the latest verdict-bearing reaction); an entry
- * without a comment id has none. `delta` is the round's own `commitsSince`
- * files (push metadata, not a finding), each with its changed line count as
- * additions, or null when the round records none.
+ * without a comment id has none. `delta` is always null: fixtures carry no patch
+ * text, so the push-shape factor is not modeled offline and the replay applies
+ * the band budget unscaled. That removes no more than production would, so the
+ * trace is a lower bound on removal for small pushes.
  */
 export function adaptiveInputForRound(
 	fixture: ReplayFixture,
@@ -100,24 +102,7 @@ export function adaptiveInputForRound(
 		}
 		return [...latest.values()].map((v) => v.verdict);
 	};
-	const changed = new Map<string, number>();
-	for (const commit of round.commitsSince)
-		for (const f of commit.files)
-			changed.set(
-				f.path,
-				(changed.get(f.path) ?? 0) +
-					f.ranges.reduce((n, [lo, hi]) => n + (hi - lo + 1), 0),
-			);
-	const delta: PushFile[] | null =
-		changed.size === 0
-			? null
-			: [...changed].map(([filename, additions]) => ({
-					filename,
-					status: "modified",
-					additions,
-					deletions: 0,
-				}));
-	return { entries, reactionsFor, currentRound: earlier.length, delta };
+	return { entries, reactionsFor, currentRound: round.index, delta: null };
 }
 
 /**
