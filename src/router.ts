@@ -83,7 +83,7 @@ export function classifyTier(context: RouterContext): ReviewTier {
 	return "normal";
 }
 
-const CLAUDE_TIER_MAP: Record<
+export const CLAUDE_TIER_MAP: Record<
 	ReviewTier,
 	Pick<ModelSelection, "model" | "effort">
 > = {
@@ -100,7 +100,7 @@ const CLAUDE_TIER_MAP: Record<
 // ($10/$50) is deliberately unused. Luna is the only GPT-6 tier that accepts
 // effort "none". All IDs verified live on both the API-key and the
 // Codex/ChatGPT-OAuth backends on 2026-10-25, so there is no auth-mode split.
-const OPENAI_TIER_MAP: Record<
+export const OPENAI_TIER_MAP: Record<
 	ReviewTier,
 	Pick<ModelSelection, "model" | "effort">
 > = {

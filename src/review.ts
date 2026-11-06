@@ -210,6 +210,8 @@ const STANDING_REVIEW_STATES = new Set([
 interface TokenUsage {
 	promptTokens: number;
 	completionTokens: number;
+	cachedInputTokens?: number;
+	reasoningTokens?: number;
 }
 
 export interface RateLimitInfo {
@@ -570,9 +572,12 @@ export async function runAgent(
 			cacheReadInputTokens?: number;
 			cacheCreationInputTokens?: number;
 		};
+		const cachedInput =
+			usage.inputTokenDetails?.cacheReadTokens ?? anthro.cacheReadInputTokens;
+		const reasoning = usage.outputTokenDetails?.reasoningTokens;
 		console.log("agent ok", {
 			skillPath,
-			cacheRead: anthro.cacheReadInputTokens ?? 0,
+			cacheRead: cachedInput ?? 0,
 			cacheCreation: anthro.cacheCreationInputTokens ?? 0,
 		});
 
@@ -582,6 +587,11 @@ export async function runAgent(
 			usage: {
 				promptTokens: usage.inputTokens ?? 0,
 				completionTokens: usage.outputTokens ?? 0,
+				// ai SDK: usage.inputTokenDetails.cacheReadTokens and
+				// usage.outputTokenDetails.reasoningTokens; Anthropic's
+				// providerMetadata cacheReadInputTokens is the cache-read fallback.
+				...(cachedInput !== undefined && { cachedInputTokens: cachedInput }),
+				...(reasoning !== undefined && { reasoningTokens: reasoning }),
 			},
 			durationMs: Date.now() - startedAt,
 			rateLimit: readRateLimitHeaders(

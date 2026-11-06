@@ -69,6 +69,76 @@ describe("runAuditPass failed-attempt cost", () => {
 	});
 });
 
+describe("runAuditPass extended usage", () => {
+	const okReview = buildModelReview({
+		event: "COMMENT",
+		general_findings: [],
+		inline_comments: [],
+	});
+
+	it("sums cached and reasoning tokens into usageBySkill and usage", async () => {
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		const mock = runAgent as ReturnType<typeof vi.fn>;
+		mock.mockReset();
+		mock.mockResolvedValue({
+			status: "ok",
+			review: okReview,
+			usage: {
+				promptTokens: 10,
+				completionTokens: 2,
+				cachedInputTokens: 6,
+				reasoningTokens: 1,
+			},
+		});
+		const { usage, usageBySkill } = await runAuditPass({
+			files: [{ path: "a.ts", content: "x" }],
+			selection,
+			extraInstructions: "",
+			meta: { owner: "o", repo: "r", ref: "local" },
+		});
+		const skillNames = TIER1_SKILLS.map((s) =>
+			s.replace(/^.*\//, "").replace(/\.md$/, ""),
+		);
+		expect(Object.keys(usageBySkill).sort()).toEqual([...skillNames].sort());
+		for (const name of skillNames)
+			expect(usageBySkill[name]).toEqual({
+				promptTokens: 10,
+				completionTokens: 2,
+				cachedInputTokens: 6,
+				reasoningTokens: 1,
+			});
+		expect(usage.cachedInputTokens).toBe(6 * TIER1_SKILLS.length);
+		expect(usage.reasoningTokens).toBe(TIER1_SKILLS.length);
+		log.mockRestore();
+	});
+
+	it("leaves the extended fields absent when no agent reports them", async () => {
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		const mock = runAgent as ReturnType<typeof vi.fn>;
+		mock.mockReset();
+		mock.mockResolvedValue({
+			status: "ok",
+			review: okReview,
+			usage: { promptTokens: 10, completionTokens: 2 },
+		});
+		const { usage, usageBySkill } = await runAuditPass({
+			files: [{ path: "a.ts", content: "x" }],
+			selection,
+			extraInstructions: "",
+			meta: { owner: "o", repo: "r", ref: "local" },
+		});
+		expect(usage).toEqual({
+			promptTokens: 10 * TIER1_SKILLS.length,
+			completionTokens: 2 * TIER1_SKILLS.length,
+		});
+		expect(usageBySkill["code-reviewer"]).toEqual({
+			promptTokens: 10,
+			completionTokens: 2,
+		});
+		log.mockRestore();
+	});
+});
+
 describe("runAuditPass usageBySkill", () => {
 	it("has one entry per skill and sums to the pass total, including failed agents", async () => {
 		const log = vi.spyOn(console, "log").mockImplementation(() => {});

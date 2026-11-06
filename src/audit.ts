@@ -78,6 +78,18 @@ function batchFiles(files: AuditFile[]): AuditFile[][] {
 export interface PassUsage {
 	promptTokens: number;
 	completionTokens: number;
+	cachedInputTokens?: number;
+	reasoningTokens?: number;
+}
+
+function sumUsage(into: PassUsage, u: PassUsage): void {
+	into.promptTokens += u.promptTokens;
+	into.completionTokens += u.completionTokens;
+	if (u.cachedInputTokens !== undefined)
+		into.cachedInputTokens =
+			(into.cachedInputTokens ?? 0) + u.cachedInputTokens;
+	if (u.reasoningTokens !== undefined)
+		into.reasoningTokens = (into.reasoningTokens ?? 0) + u.reasoningTokens;
 }
 
 export async function runAuditPass(opts: {
@@ -114,8 +126,8 @@ export async function runAuditPass(opts: {
 			completionTokens: 0,
 		};
 		usageBySkill[skill] = entry;
-		entry.promptTokens += u.promptTokens;
-		entry.completionTokens += u.completionTokens;
+		sumUsage(entry, u);
+		sumUsage(usage, u);
 	};
 	let agentsSucceeded = 0;
 	let agentsAttempted = 0;
@@ -176,8 +188,6 @@ export async function runAuditPass(opts: {
 			).replace(/\.md$/, "");
 			if (o.status === "error" && o.usage) {
 				addUsage(skillName, o.usage);
-				usage.promptTokens += o.usage.promptTokens;
-				usage.completionTokens += o.usage.completionTokens;
 			}
 			if (o.status === "ok") {
 				reviews.push(o.review);
@@ -187,8 +197,6 @@ export async function runAuditPass(opts: {
 					review: o.review,
 				});
 				addUsage(skillName, o.usage);
-				usage.promptTokens += o.usage.promptTokens;
-				usage.completionTokens += o.usage.completionTokens;
 				batchSucceeded += 1;
 			}
 		}

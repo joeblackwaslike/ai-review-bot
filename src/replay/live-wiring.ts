@@ -1,28 +1,14 @@
-import { runAuditPass } from "../audit.js";
-import { resolveAnthropicAuth, resolveOpenAIAuth } from "../auth.js";
 import { numberPatchLines } from "../diff-lines.js";
-import { computeCost } from "../models.js";
 import type { ModelReview, PullFile } from "../review.js";
-import { REVIEWER_TUNING } from "../reviewer-tuning.js";
-import {
-	type ModelSelection,
-	type RouterContext,
-	routeModel,
-} from "../router.js";
+import type { RouterContext } from "../router.js";
 import type { GhClient } from "./gh.js";
 import type { LiveFinding, LiveOptions, LiveReviewOutput } from "./live.js";
-import { ledgerForRound, postFilterTrace } from "./trace.js";
 import type {
 	CandidateRecord,
-	LabelFile,
 	ReplayFixture,
 	Round,
 	RoundUsage,
 } from "./types.js";
-
-const AGENTS_PER_REVIEW = 5;
-const CHARS_PER_TOKEN = 4;
-const EXPECTED_COMPLETION_TOKENS = 2000;
 
 interface CompareResponse {
 	files?: { filename: string; status?: string; patch?: string }[];
@@ -79,10 +65,8 @@ export function toLiveReviewOutput(result: {
 	};
 }
 
-type LiveWiring = Pick<LiveOptions, "review" | "estimateCost" | "fetchDiff">;
-
 /** The router input production derives from a PR, taken from a round's compare files. */
-function routerContext(files: PullFile[]): RouterContext {
+export function routerContext(files: PullFile[]): RouterContext {
 	let additions = 0;
 	let deletions = 0;
 	for (const f of files)
@@ -98,23 +82,12 @@ function routerContext(files: PullFile[]): RouterContext {
 	};
 }
 
-/** Real review, cost estimate, and diff fetch for `replay --live`. Needs local
- * auth. The review also traces what would post, against a ledger of the
- * fixture's earlier rounds and the round's compare files. */
+/** Fetches each round's compare files once and turns them into the numbered
+ * diff the strategies review. */
 export function buildLiveWiring(
 	fixture: ReplayFixture,
 	client: GhClient,
-	labels: LabelFile,
-): LiveWiring {
-	const provider = fixture.provider;
-	const meta = { owner: fixture.owner, repo: fixture.repo, ref: "replay" };
-	const selections = new Map<number, ModelSelection>();
-	const selectionFor = (round: Round): ModelSelection => {
-		const selection = selections.get(round.index);
-		if (!selection)
-			throw new Error(`round ${round.index}: fetchDiff must run first`);
-		return selection;
-	};
+): Pick<LiveOptions, "fetchDiff"> {
 	const compared = new Map<number, Promise<PullFile[]>>();
 	const compareFiles = (round: Round): Promise<PullFile[]> => {
 		const cached = compared.get(round.index);
@@ -137,48 +110,17 @@ export function buildLiveWiring(
 	return {
 		fetchDiff: async (round) => {
 			const files = await compareFiles(round);
-			selections.set(round.index, routeModel(routerContext(files), provider));
+			const diff = files
+				.map(
+					(f) =>
+						`--- ${f.filename}\n${f.patch ? numberPatchLines(f.patch) : ""}`,
+				)
+				.join("\n");
 			return {
-				diff: files
-					.map(
-						(f) =>
-							`--- ${f.filename}\n${f.patch ? numberPatchLines(f.patch) : ""}`,
-					)
-					.join("\n"),
+				diff,
+				files,
 				approximate: round.approximate || round.mergeBase === null,
 			};
-		},
-		estimateCost: (diff, round) =>
-			computeCost(
-				{
-					promptTokens: (diff.length / CHARS_PER_TOKEN) * AGENTS_PER_REVIEW,
-					completionTokens: EXPECTED_COMPLETION_TOKENS * AGENTS_PER_REVIEW,
-				},
-				selectionFor(round).model,
-			),
-		review: async (diff, round): Promise<LiveReviewOutput> => {
-			const auth =
-				provider === "anthropic"
-					? await resolveAnthropicAuth()
-					: await resolveOpenAIAuth();
-			const result = await runAuditPass({
-				files: [{ path: "replay.diff", content: diff }],
-				selection: selectionFor(round),
-				extraInstructions: "",
-				meta,
-				auth,
-			});
-			if (result.agentsAttempted > 0 && result.agentsSucceeded === 0)
-				throw new Error(
-					`round ${round.index}: all ${result.agentsAttempted} review agents failed`,
-				);
-			const { posted } = postFilterTrace({
-				agentReviews: result.agentReviews,
-				ledger: ledgerForRound(fixture, labels, round),
-				files: await compareFiles(round),
-				tuning: REVIEWER_TUNING,
-			});
-			return { ...toLiveReviewOutput(result), posted };
 		},
 	};
 }

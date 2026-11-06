@@ -1804,6 +1804,80 @@ describe("runAgent caching + telemetry", () => {
 		expect(out?.status).toBe("ok");
 	});
 
+	describe("usage mapping", () => {
+		const emptyReview = buildModelReview({
+			event: "COMMENT",
+			general_findings: [],
+			inline_comments: [],
+		});
+
+		it("carries SDK cache-read and reasoning token details", async () => {
+			mockGenerateObject.mockResolvedValue({
+				object: emptyReview,
+				usage: {
+					inputTokens: 10,
+					outputTokens: 5,
+					inputTokenDetails: { cacheReadTokens: 7 },
+					outputTokenDetails: { reasoningTokens: 3 },
+				},
+				providerMetadata: {},
+			});
+			const out = await runAgent("code-reviewer.md", "S", sel, "");
+			expect(out.status === "ok" && out.usage).toStrictEqual({
+				promptTokens: 10,
+				completionTokens: 5,
+				cachedInputTokens: 7,
+				reasoningTokens: 3,
+			});
+		});
+
+		it("logs the same cached-input value that goes into usage", async () => {
+			const log = vi.spyOn(console, "log").mockImplementation(() => {});
+			mockGenerateObject.mockResolvedValue({
+				object: emptyReview,
+				usage: {
+					inputTokens: 10,
+					outputTokens: 5,
+					inputTokenDetails: { cacheReadTokens: 7 },
+				},
+				providerMetadata: {},
+			});
+			await runAgent("code-reviewer.md", "S", sel, "");
+			expect(log).toHaveBeenCalledWith(
+				"agent ok",
+				expect.objectContaining({ cacheRead: 7 }),
+			);
+			log.mockRestore();
+		});
+
+		it("falls back to anthropic providerMetadata for cache reads", async () => {
+			mockGenerateObject.mockResolvedValue({
+				object: emptyReview,
+				usage: { inputTokens: 10, outputTokens: 5 },
+				providerMetadata: { anthropic: { cacheReadInputTokens: 4 } },
+			});
+			const out = await runAgent("code-reviewer.md", "S", sel, "");
+			expect(out.status === "ok" && out.usage).toStrictEqual({
+				promptTokens: 10,
+				completionTokens: 5,
+				cachedInputTokens: 4,
+			});
+		});
+
+		it("omits the extended keys when the provider reports neither", async () => {
+			mockGenerateObject.mockResolvedValue({
+				object: emptyReview,
+				usage: { inputTokens: 10, outputTokens: 5 },
+				providerMetadata: {},
+			});
+			const out = await runAgent("code-reviewer.md", "S", sel, "");
+			expect(out.status === "ok" && out.usage).toStrictEqual({
+				promptTokens: 10,
+				completionTokens: 5,
+			});
+		});
+	});
+
 	it("forwards the abort signal to generateObject", async () => {
 		mockGenerateObject.mockResolvedValue({
 			object: buildModelReview({

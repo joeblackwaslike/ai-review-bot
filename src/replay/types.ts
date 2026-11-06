@@ -30,10 +30,23 @@ export interface CandidateRecord {
 	severity: string | null;
 }
 
-/** Token usage per skill file name, with the .md suffix, as the hosted corpus uses. */
+/**
+ * Token usage per skill file name, with the .md suffix, as the hosted corpus uses.
+ * `promptTokens` is the provider's total input including cache reads, uncached input is
+ * `promptTokens - cachedInputTokens`, and cache writes are not recorded.
+ * `completionTokens` is the SDK's `outputTokens`, the total output. The `ai` package types
+ * (`LanguageModelUsage`) document `outputTokenDetails` as a breakdown of that total into
+ * `textTokens` and `reasoningTokens`, so `reasoningTokens` is a component of `completionTokens`
+ * and must not be added to it.
+ */
 export type RoundUsage = Record<
 	string,
-	{ promptTokens: number; completionTokens: number }
+	{
+		promptTokens: number;
+		completionTokens: number;
+		cachedInputTokens?: number;
+		reasoningTokens?: number;
+	}
 >;
 
 /** What a live round produced: all candidates, the post-filter posted set, and usage. */

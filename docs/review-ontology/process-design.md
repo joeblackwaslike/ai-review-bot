@@ -223,7 +223,8 @@ against labelled claims.
 ### What the harness needs first
 
 1. **A pluggable review strategy.** `--live` re-runs today's pipeline. Each candidate has to
-   run through the same interface so the metrics compare like with like.
+   run through the same interface so the metrics compare like with like. The interface now
+   exists in `src/replay/strategy.ts`, and today's pipeline is registered as `a`.
 2. **A checkout per fixture.** Candidates with tools need the repository at the fixture's
    base and head commits, not just the recorded diff.
 3. **Frozen inputs.** Models, prompts, budgets and the review history a round may see are

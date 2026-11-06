@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { type LiveFinding, runLiveTier } from "./live.js";
+import {
+	type LiveFinding,
+	type LiveReviewOutput,
+	LiveRunError,
+	runLiveTier,
+} from "./live.js";
+import type {
+	ReviewStrategy,
+	StrategyInput,
+	ToolCallRecord,
+} from "./strategy.js";
+import { ledgerForRound } from "./trace.js";
 import type { LabelFile, PostedClaim, ReplayFixture, Round } from "./types.js";
 
 function claim(id: string, roundIndex: number, title: string): PostedClaim {
@@ -79,20 +90,56 @@ const finding = (title: string, path = "src/a.ts") => ({
 	line: 10,
 });
 
-function base(over: Partial<Parameters<typeof runLiveTier>[0]> = {}) {
+type Review = (
+	diff: string,
+	round: Round,
+	input: StrategyInput,
+) => Promise<
+	LiveReviewOutput & Partial<{ wallMs: number; toolCalls: ToolCallRecord[] }>
+>;
+
+function stub(
+	review: Review,
+	estimateCost: (diff: string, round: Round) => number = () => 1,
+): ReviewStrategy {
+	return {
+		name: "stub",
+		version: "1",
+		needsCheckout: false,
+		estimateCost: (i) => estimateCost(i.diff, i.round),
+		run: async (i) => ({
+			wallMs: 0,
+			toolCalls: [],
+			...(await review(i.diff, i.round, i)),
+		}),
+	};
+}
+
+type Over = Partial<Parameters<typeof runLiveTier>[0]> & {
+	review?: Review;
+	estimateCost?: (diff: string, round: Round) => number;
+};
+
+function base({ review: r, estimateCost: e, ...over }: Over = {}) {
 	const lines: string[] = [];
 	const calls: string[] = [];
+	const review: Review =
+		r ??
+		(async (d) => {
+			calls.push(d);
+			return out([]);
+		});
 	const opts: Parameters<typeof runLiveTier>[0] = {
 		fixture,
 		labels: labels(true),
 		rounds: [0, 1],
 		maxCostUsd: 10,
-		review: async (d) => {
-			calls.push(d);
-			return out([]);
-		},
-		estimateCost: () => 1,
-		fetchDiff: async (r) => ({ diff: `diff-${r.index}`, approximate: false }),
+		strategy: stub(review, e),
+		fetchDiff: async (r) => ({
+			diff: `diff-${r.index}`,
+			files: [],
+			approximate: false,
+		}),
 		out: (s) => lines.push(s),
 		...over,
 	};
@@ -189,7 +236,7 @@ describe("runLiveTier", () => {
 	it("marks a round approximate when fetchDiff says the history was rewritten", async () => {
 		const { opts } = base({
 			rounds: [0],
-			fetchDiff: async () => ({ diff: "d", approximate: true }),
+			fetchDiff: async () => ({ diff: "d", files: [], approximate: true }),
 		});
 		const report = await runLiveTier(opts);
 		expect(report.rounds[0]?.approximate).toBe(true);
@@ -290,5 +337,77 @@ describe("runLiveTier", () => {
 		expect(seen).toEqual([1]);
 		expect(report.rounds[0]?.posted).toBe(2);
 		expect(lines.join("\n")).toContain("2 would post");
+	});
+
+	it("hands the strategy no checkout, the round's ledger, the remaining cap and a live signal", async () => {
+		const inputs: StrategyInput[] = [];
+		const { opts } = base({
+			rounds: [0, 1],
+			maxCostUsd: 10,
+			review: async (_d, _r, input) => {
+				inputs.push(input);
+				return out([]);
+			},
+		});
+		await runLiveTier(opts);
+		expect(inputs).toHaveLength(2);
+		expect(inputs[0]).toMatchObject({
+			checkout: null,
+			diff: "diff-0",
+			files: [],
+			approximateDiff: false,
+			budget: { maxUsd: 10, maxWallMs: 210_000 },
+		});
+		expect(inputs[0]?.history.ledger).toEqual(
+			ledgerForRound(fixture, labels(true), fixture.rounds[0] as Round),
+		);
+		expect(inputs[0]).not.toHaveProperty("labels");
+		expect(inputs[1]?.budget).toEqual({ maxUsd: 9, maxWallMs: 210_000 });
+		expect(inputs[0]?.signal).not.toBe(inputs[1]?.signal);
+		expect(inputs[0]?.signal).toBeInstanceOf(AbortSignal);
+		expect(inputs[0]?.signal.aborted).toBe(false);
+	});
+
+	it("throws a LiveRunError naming strategy and round, with the cause and the failing round's estimated spend and the finished rows", async () => {
+		const boom = new Error("model exploded");
+		const { opts } = base({
+			review: async (_d, r) => {
+				if (r.index === 1) throw boom;
+				return out([]);
+			},
+		});
+		const err = await runLiveTier(opts).catch((e: unknown) => e);
+		expect(err).toBeInstanceOf(LiveRunError);
+		const failure = err as LiveRunError;
+		expect(failure.message).toBe("stub round 1: model exploded");
+		expect(failure.cause).toBe(boom);
+		expect(failure.partial.spentUsd).toBe(2);
+		expect(failure.partial.rounds.map((r) => r.index)).toEqual([0]);
+	});
+
+	it("carries wallMs and toolCalls into the round row", async () => {
+		const { opts } = base({
+			rounds: [0],
+			review: async () => ({
+				...out([]),
+				wallMs: 1234,
+				toolCalls: [{ name: "grep", wallMs: 5, costUsd: 0 }],
+			}),
+		});
+		const report = await runLiveTier(opts);
+		expect(report.rounds[0]).toMatchObject({ wallMs: 1234, toolCalls: 1 });
+	});
+
+	it("prints wall time and tool-call count after the round line", async () => {
+		const { opts, lines } = base({
+			rounds: [0],
+			review: async () => ({
+				...out([]),
+				wallMs: 1234,
+				toolCalls: [{ name: "grep", wallMs: 5, costUsd: 0 }],
+			}),
+		});
+		await runLiveTier(opts);
+		expect(lines).toContain("  wall 1234ms, 1 tool calls");
 	});
 });
