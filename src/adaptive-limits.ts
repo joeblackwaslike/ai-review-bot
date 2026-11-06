@@ -14,6 +14,7 @@ import {
 export interface Limitable {
 	severity: Sev;
 	confidence: number;
+	advisory?: true;
 	path?: string | null;
 	line?: number | null;
 }
@@ -67,8 +68,8 @@ interface Slot<T> {
 
 /** Removes new findings under the severity floor and past the budget. P0 and P1 are never
  * removed but do count toward the budget (a budget of 2 with two P1 leaves no room for any
- * P2). Findings rank by severity, confidence, `supportOf`, then original position, and kept
- * findings keep their input order. A REQUEST_CHANGES review whose findings are all removed
+ * P2). Findings rank by severity, non-advisory before advisory, confidence, `supportOf`, then original position, and kept
+ * findings keep their input order. A REQUEST_CHANGES review whose kept findings are all advisory (or none)
  * becomes COMMENT unless `carriedBlocks`. Inputs are not mutated. */
 export function applyLimits<R extends LimitableReview<Limitable, Limitable>>(
 	review: R,
@@ -107,6 +108,7 @@ export function applyLimits<R extends LimitableReview<Limitable, Limitable>>(
 			.sort(
 				(a, b) =>
 					SEV_RANK[b.item.severity] - SEV_RANK[a.item.severity] ||
+					Number(!b.item.advisory) - Number(!a.item.advisory) ||
 					b.item.confidence - a.item.confidence ||
 					supportOf(b.item) - supportOf(a.item) ||
 					Number(b.general) - Number(a.general) ||
@@ -129,8 +131,8 @@ export function applyLimits<R extends LimitableReview<Limitable, Limitable>>(
 	const removed = slots.filter((s) => dropped.has(s)).map((s) => s.item);
 	const event =
 		review.event === "REQUEST_CHANGES" &&
-		general_findings.length + inline_comments.length === 0 &&
 		removed.length > 0 &&
+		![...general_findings, ...inline_comments].some((x) => !x.advisory) &&
 		!carriedBlocks
 			? "COMMENT"
 			: review.event;

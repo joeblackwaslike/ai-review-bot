@@ -13,12 +13,18 @@ interface F {
 	id: string;
 	severity: Sev;
 	confidence: number;
+	advisory?: true;
 }
 
 const f = (id: string, severity: Sev, confidence = 0.5): F => ({
 	id,
 	severity,
 	confidence,
+});
+
+const adv = (id: string, severity: Sev, confidence = 0.5): F => ({
+	...f(id, severity, confidence),
+	advisory: true,
 });
 
 const review = (event: string, general: F[], inline: F[] = []) => ({
@@ -158,6 +164,37 @@ describe("applyLimits", () => {
 		]);
 		const out = applyLimits(r, { floor: null, budget: 2 }, noSupport, false);
 		expect(out.review.general_findings.map((x) => x.id)).toEqual(["b", "c"]);
+	});
+
+	it("returns kept findings in input order, not rank order", () => {
+		const r = review("COMMENT", [f("c", "P2", 0.9), f("b", "P1")]);
+		const out = applyLimits(r, { floor: null, budget: 2 }, noSupport, false);
+		expect(out.review.general_findings.map((x) => x.id)).toEqual(["c", "b"]);
+	});
+
+	it("downgrades REQUEST_CHANGES when only an advisory finding is kept", () => {
+		const r = review("REQUEST_CHANGES", [adv("note", "P2", 0.9), f("nit", "P3")]);
+		const out = applyLimits(r, { floor: "P2", budget: null }, noSupport, false);
+		expect(out.review.general_findings.map((x) => x.id)).toEqual(["note"]);
+		expect(out.review.event).toBe("COMMENT");
+	});
+
+	it("keeps REQUEST_CHANGES when a non-advisory finding is kept beside an advisory one", () => {
+		const r = review("REQUEST_CHANGES", [adv("note", "P2"), f("nit", "P2", 0.9)]);
+		const out = applyLimits(r, { floor: "P2", budget: null }, noSupport, false);
+		expect(out.review.event).toBe("REQUEST_CHANGES");
+	});
+
+	it("keeps REQUEST_CHANGES with only advisory kept when carried findings block", () => {
+		const r = review("REQUEST_CHANGES", [adv("note", "P2"), f("nit", "P3")]);
+		const out = applyLimits(r, { floor: "P2", budget: null }, noSupport, true);
+		expect(out.review.event).toBe("REQUEST_CHANGES");
+	});
+
+	it("ranks advisory below non-advisory at the same severity", () => {
+		const r = review("COMMENT", [adv("note", "P2", 0.9), f("real", "P2", 0.1)]);
+		const out = applyLimits(r, { floor: null, budget: 1 }, noSupport, false);
+		expect(out.review.general_findings.map((x) => x.id)).toEqual(["real"]);
 	});
 
 	it("leaves REQUEST_CHANGES alone when there were no findings to remove", () => {
