@@ -579,13 +579,6 @@ export async function maybeSubmitReview(args: {
 		if (review.event === "QUOTA_EXHAUSTED") {
 			const quotaProvider = review.quotaProvider ?? "unknown";
 			const billing = billingUrl(quotaProvider);
-			// Fixed: the marker was previously keyed off `review.quotaProvider`,
-			// which falls back to "unknown" when unset — a mismatch against any
-			// marker already stored under the legacy provider form that silently defeated
-			// the dedup this PR exists to add. Always key off the reviewer so
-			// the lookup and the stored marker agree; quotaProvider is still used
-			// for the human-readable message and billing link below. Reworded per
-			// anthropicreviewbot reviewing PR #67 (PRRT_kwDOSM5cU86Z-uZS).
 			const marker = quotaCommentMarker(legacyProviderOf(config.reviewer));
 			const body = [
 				marker,
