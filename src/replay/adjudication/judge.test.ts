@@ -83,4 +83,16 @@ describe("routeJudges", () => {
 		expect(first.provider).toBe("anthropic");
 		expect(second).toBeNull();
 	});
+
+	it("uses a different Anthropic model when the producer was Opus", () => {
+		const { first, second } = routeJudges("anthropic", "claude-opus-5-5");
+		expect(first.model).toBe("claude-sonnet-5-5");
+		expect(second).toEqual(JUDGE_MODELS.openai);
+	});
+
+	it("keeps the strongest model when the producer was Sonnet", () => {
+		expect(routeJudges("anthropic", "claude-sonnet-5-5").first).toEqual(
+			JUDGE_MODELS.anthropic,
+		);
+	});
 });

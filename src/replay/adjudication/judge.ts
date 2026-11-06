@@ -95,11 +95,30 @@ export const JUDGE_MODELS: Record<"anthropic" | "openai", JudgeSpec> = {
 	openai: { provider: "openai", model: "gpt-6.1-sol", effort: "medium" },
 };
 
-export function routeJudges(producer: "anthropic" | "openai"): {
+const SONNET_JUDGE: JudgeSpec = {
+	provider: "anthropic",
+	model: "claude-sonnet-5-5",
+	effort: "medium",
+};
+
+/**
+ * `producerModel` is the run's routed model id. It only picks the judge and never reaches the
+ * prompt. An Anthropic-produced candidate needs a different Anthropic model as first judge, so
+ * an Opus producer falls back to Sonnet.
+ */
+export function routeJudges(
+	producer: "anthropic" | "openai",
+	producerModel?: string,
+): {
 	first: JudgeSpec;
 	second: JudgeSpec | null;
 } {
-	return producer === "anthropic"
-		? { first: JUDGE_MODELS.anthropic, second: JUDGE_MODELS.openai }
-		: { first: JUDGE_MODELS.anthropic, second: null };
+	if (producer === "openai") {
+		return { first: JUDGE_MODELS.anthropic, second: null };
+	}
+	const first =
+		producerModel === JUDGE_MODELS.anthropic.model
+			? SONNET_JUDGE
+			: JUDGE_MODELS.anthropic;
+	return { first, second: JUDGE_MODELS.openai };
 }

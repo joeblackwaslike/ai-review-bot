@@ -89,6 +89,38 @@ export async function adjudicate(
 
 	for (const [key, candidate] of distinct) {
 		const hit = cache.get(snapshot, key);
+		const second = judges.second;
+		const upgradable =
+			hit?.status === "single-family" &&
+			hit.second === null &&
+			hit.verdict !== "not-real" &&
+			opts.producer === "anthropic" &&
+			second !== null &&
+			callsMade(second.family) < caps[second.family];
+		if (hit && upgradable && second) {
+			const upgraded = { ...hit };
+			spend[second.family]++;
+			try {
+				const check = await second.run({
+					claim: candidate,
+					diffEvidence: await opts.evidence(candidate),
+				});
+				upgraded.second = judgeRecord(second);
+				upgraded.secondVerdict = check.verdict;
+				upgraded.status =
+					check.verdict === hit.verdict ? "agreed" : "unresolved";
+				cache.put(snapshot, key, upgraded);
+			} catch (err) {
+				counts.errors++;
+				counts.cached++;
+				verdicts.set(key, hit);
+				tally(hit);
+				continue;
+			}
+			verdicts.set(key, upgraded);
+			tally(upgraded);
+			continue;
+		}
 		if (hit) {
 			counts.cached++;
 			verdicts.set(key, hit);
@@ -131,7 +163,6 @@ export async function adjudicate(
 			status: "single-family",
 		};
 		let cacheable = true;
-		const second = judges.second;
 		const wantsSecond =
 			opts.producer === "anthropic" &&
 			second !== null &&
