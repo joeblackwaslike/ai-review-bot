@@ -56,12 +56,15 @@ export function exploratoryReason(
 		if (!existsSync(file)) continue;
 		try {
 			const marker = JSON.parse(readFileSync(file, "utf8")) as Marker;
+			if (!Array.isArray(marker.testFixtureIds)) throw new Error("malformed");
 			const shared = marker.testFixtureIds
 				.map(prOf)
 				.filter((id) => mine.has(id));
 			if (shared.length > 0)
 				return `exploratory: ${new Set(shared).size} test PR(s) were already scored by plan ${marker.planHash}`;
-		} catch {}
+		} catch {
+			return `exploratory: the final marker of plan ${entry} is unreadable, so its test PRs cannot be ruled out`;
+		}
 	}
 	return null;
 }

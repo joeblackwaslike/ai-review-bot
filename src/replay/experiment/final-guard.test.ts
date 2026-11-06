@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -35,6 +35,18 @@ describe("exploratoryReason", () => {
 		const reason = exploratoryReason(dir, "h2", ["o/r#3@anthropic", "o/r#8"]);
 		expect(reason).toMatch(/exploratory/);
 		expect(reason).toMatch(/h1/);
+	});
+
+	it("fails closed on an unreadable or malformed marker of another plan", () => {
+		for (const body of ["{not json", JSON.stringify({ planHash: "h1" })]) {
+			const dir = root();
+			mkdirSync(join(dir, "h1"), { recursive: true });
+			writeFileSync(join(dir, "h1", "final.marker"), body);
+			const reason = exploratoryReason(dir, "h2", ["o/r#7"]);
+			expect(reason).toMatch(/exploratory/);
+			expect(reason).toMatch(/unreadable/);
+			expect(reason).toMatch(/h1/);
+		}
 	});
 
 	it("is null when test PRs are disjoint, and ignores its own marker", () => {
