@@ -2,16 +2,20 @@ import type { Verdict } from "./feedback/types.js";
 import type { Ledger, LedgerEntry } from "./ledger/types.js";
 import { ADAPTIVE_LIMIT_BANDS } from "./reviewer-tuning.js";
 
+/** Finding severity, P0 most severe. */
 export type Sev = "P0" | "P1" | "P2" | "P3";
 
+/** Numeric severity rank; higher is more severe. */
 export const SEV_RANK: Record<Sev, number> = { P0: 4, P1: 3, P2: 2, P3: 1 };
 
+/** How the author responded to a finding. */
 export type FindingOutcome =
 	| "accepted"
 	| "rejected"
 	| "deferred"
 	| "unanswered";
 
+/** Rejection share of one earlier round, with its age relative to the current round. */
 export interface RoundFriction {
 	round: number;
 	age: number;
@@ -73,7 +77,7 @@ export function scoreTrajectory(
 		den += w;
 	}
 	return {
-		score: den === 0 ? null : Math.round((num / den) * 10000) / 10000,
+		score: den === 0 ? null : num / den,
 		rounds,
 	};
 }

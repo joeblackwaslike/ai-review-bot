@@ -64,7 +64,7 @@ describe("scoreTrajectory", () => {
 			entry("fixed", { decidedBy: "author" }),
 		];
 		const r = scoreTrajectory(es, none, 1);
-		expect(r.score).toBe(0.75);
+		expect(r.score).toBeCloseTo(0.75, 4);
 		expect(r.rounds[0]?.age).toBe(0);
 	});
 	it("weights newer rounds more", () => {
@@ -74,7 +74,7 @@ describe("scoreTrajectory", () => {
 				entry("fixed", { round: 1, decidedBy: "author" }),
 			),
 		];
-		expect(scoreTrajectory(es, none, 2).score).toBe(0.3333);
+		expect(scoreTrajectory(es, none, 2).score).toBeCloseTo(0.3333, 4);
 	});
 	it("skips all-unanswered rounds and ignores future rounds", () => {
 		const es = [
@@ -88,11 +88,40 @@ describe("scoreTrajectory", () => {
 	});
 });
 
+describe("scoreTrajectory details", () => {
+	it("weights deferred findings at half a rejection", () => {
+		const es = [
+			entry("rejected"),
+			entry("deferred"),
+			entry("deferred"),
+			entry("fixed", { decidedBy: "author" }),
+		];
+		expect(scoreTrajectory(es, none, 1).score).toBe(0.5);
+	});
+	it("passes reactions into classification", () => {
+		const es = [entry("open")];
+		expect(scoreTrajectory(es, () => ["down"], 1).score).toBe(1);
+		expect(scoreTrajectory(es, () => [], 1).score).toBeNull();
+	});
+	it("ages non-contiguous rounds from the current round", () => {
+		const es = [
+			entry("rejected", { round: 0 }),
+			entry("fixed", { round: 2, decidedBy: "author" }),
+		];
+		const r = scoreTrajectory(es, none, 4);
+		expect(r.rounds.map((x) => x.age)).toEqual([3, 1]);
+		expect(r.score).toBeCloseTo(0.125 / 0.625, 4);
+	});
+});
+
 describe("limitsForScore", () => {
+	it("bands on the unrounded score", () => {
+		expect(limitsForScore(0.34996)).toEqual({ floor: null, budget: null });
+	});
 	it("maps bands", () => {
-		const none_ = { floor: null, budget: null };
-		expect(limitsForScore(null)).toEqual(none_);
-		expect(limitsForScore(0.34)).toEqual(none_);
+		const noLimits = { floor: null, budget: null };
+		expect(limitsForScore(null)).toEqual(noLimits);
+		expect(limitsForScore(0.34)).toEqual(noLimits);
 		expect(limitsForScore(0.35)).toEqual({ floor: null, budget: 10 });
 		expect(limitsForScore(0.59)).toEqual({ floor: null, budget: 10 });
 		expect(limitsForScore(0.6)).toEqual({ floor: "P2", budget: 5 });
