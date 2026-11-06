@@ -1,0 +1,10 @@
+components:
+  schemas:
+    Invoice:
+      type: object
+      required: [id, customer_id, total_cents, balance_cents]
+      properties:
+        id: { type: string }
+        customer_id: { type: string }
+        total_cents: { type: integer }
+        balance_cents: { type: integer }

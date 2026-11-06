@@ -1,0 +1,11 @@
+{
+	"clean": false,
+	"defects": [
+		{
+			"path": "app/jobs/ship_order_job.rb",
+			"startLine": 6,
+			"endLine": 7,
+			"description": "The `return if order.shipped?` and `return if items.empty?` guards were removed from ShipOrderJob#perform, so Carrier.create_shipment runs on every call. RetryScheduler#run in app/jobs/retry_scheduler.rb re-enqueues the job whenever perform raises (for example when order.update! fails after the shipment was created), so the retry books a second shipment, and an order with no items also gets a shipment."
+		}
+	]
+}

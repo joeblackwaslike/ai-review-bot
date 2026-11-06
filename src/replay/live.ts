@@ -1,6 +1,27 @@
 import { isSameClaim } from "../claim-dedupe.js";
 import { candidateFamilies } from "../retraction.js";
-import type { LabelFile, ReplayFixture, Round } from "./types.js";
+import type { PullFile } from "../review.js";
+import {
+	isCheckoutUnavailable,
+	withCheckout as realWithCheckout,
+} from "./checkout.js";
+import { freezeFixture } from "./frozen.js";
+import { countJoined, labelledClaims } from "./metrics.js";
+import { runStrategy } from "./run-strategy.js";
+import type {
+	CheckoutHandle,
+	ReviewStrategy,
+	StrategyInput,
+} from "./strategy.js";
+import { ledgerForRound } from "./trace.js";
+import type {
+	CandidateRecord,
+	LabelFile,
+	ReplayFixture,
+	Round,
+	RoundTrace,
+	RoundUsage,
+} from "./types.js";
 
 export interface LiveFinding {
 	title: string;
@@ -11,6 +32,17 @@ export interface LiveFinding {
 	suppressible?: boolean;
 }
 
+/** What one live review produced: findings, every agent candidate, what the
+ * posting path would post from them, and per-skill usage. */
+export interface LiveReviewOutput {
+	findings: LiveFinding[];
+	candidates: CandidateRecord[];
+	posted: CandidateRecord[];
+	usage: RoundUsage;
+}
+
+const ROUND_WALL_MS = 210_000;
+
 export interface LiveRoundReport {
 	index: number;
 	matchedFixed: number;
@@ -19,11 +51,34 @@ export interface LiveRoundReport {
 	raw: number;
 	retracted: number;
 	approximate: boolean;
+	candidates: number;
+	joined: number;
+	posted: number;
+	usage: RoundUsage;
+	wallMs: number;
+	toolCalls: number;
+	trace: RoundTrace;
 }
+
+/** An estimate that is NaN, infinite or negative. The live tier refuses to run
+ * rather than treat the round as free, since the round spends real money. */
+export class InvalidEstimateError extends Error {}
 
 export interface LiveReport {
 	spentUsd: number;
 	rounds: LiveRoundReport[];
+	checkoutUnavailable: number[];
+}
+
+/** A strategy run that threw. `partial.spentUsd` includes the failing round's estimate, an upper bound since the strategy reported no usage; `partial.rounds` holds only finished rounds. */
+export class LiveRunError extends Error {
+	constructor(
+		message: string,
+		readonly partial: LiveReport,
+		options?: { cause?: unknown },
+	) {
+		super(message, options);
+	}
 }
 
 export interface LiveOptions {
@@ -31,11 +86,12 @@ export interface LiveOptions {
 	labels: LabelFile;
 	rounds: number[];
 	maxCostUsd: number;
-	review: (diffInput: string) => Promise<LiveFinding[]>;
-	/** Undefined when the model has no known price. */
-	estimateCost: (diffInput: string) => number | undefined;
-	fetchDiff: (round: Round) => Promise<{ diff: string; approximate: boolean }>;
+	strategy: ReviewStrategy;
+	fetchDiff: (
+		round: Round,
+	) => Promise<{ diff: string; files: PullFile[]; approximate: boolean }>;
 	out?: (s: string) => void;
+	withCheckout?: typeof realWithCheckout;
 }
 
 function confirmedClaimIds(labels: LabelFile): Set<string> {
@@ -61,14 +117,31 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 	const diffs = await Promise.all(
 		selected.map(async (r) => ({ round: r, ...(await opts.fetchDiff(r)) })),
 	);
+	const inputFor = (
+		d: (typeof diffs)[number],
+		maxUsd: number,
+		checkout: CheckoutHandle | null = null,
+	): StrategyInput => ({
+		fixture: freezeFixture(opts.fixture, d.round.index),
+		round: { ...d.round, claims: [], trace: undefined },
+		diff: d.diff,
+		files: d.files,
+		approximateDiff: d.approximate,
+		checkout,
+		history: { ledger: ledgerForRound(opts.fixture, opts.labels, d.round) },
+		budget: { maxUsd, maxWallMs: ROUND_WALL_MS },
+		signal: AbortSignal.timeout(ROUND_WALL_MS),
+	});
 	const estimates = diffs.map((d) => {
-		const e = opts.estimateCost(d.diff);
-		if (e === undefined) {
+		const e = opts.strategy.estimateCost(inputFor(d, opts.maxCostUsd));
+		if (e === undefined)
 			throw new Error(
 				"live: no price known for the selected model, so --max-cost cannot be enforced. Pin models.<provider/model>.pricing in .ai-review.yaml or check network access to openrouter.ai.",
 			);
-		}
-		if (!Number.isFinite(e) || e < 0) return 0;
+		if (!Number.isFinite(e) || e < 0)
+			throw new InvalidEstimateError(
+				`round ${d.round.index}: invalid cost estimate ${e}`,
+			);
 		return e;
 	});
 	const total = estimates.reduce((a, b) => a + b, 0);
@@ -78,7 +151,13 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 
 	const matchable = confirmedClaimIds(opts.labels);
 	const labelOf = new Map(opts.labels.labels.map((l) => [l.claimId, l.label]));
-	const report: LiveReport = { spentUsd: 0, rounds: [] };
+	const labelled = labelledClaims(opts.fixture, opts.labels);
+	const report: LiveReport = {
+		spentUsd: 0,
+		rounds: [],
+		checkoutUnavailable: [],
+	};
+	const checkoutFor = opts.withCheckout ?? realWithCheckout;
 
 	for (const [i, d] of diffs.entries()) {
 		const estimate = estimates[i] as number;
@@ -88,8 +167,41 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 			);
 			break;
 		}
-		const findings = await opts.review(d.diff);
+		let result: Awaited<ReturnType<ReviewStrategy["run"]>>;
+		try {
+			const budget = opts.maxCostUsd - report.spentUsd;
+			const ran = opts.strategy.needsCheckout
+				? await checkoutFor(
+						{
+							owner: opts.fixture.owner,
+							repo: opts.fixture.repo,
+							baseSha: d.round.mergeBase ?? d.round.baseSha,
+							headSha: d.round.headSha,
+						},
+						(handle) => runStrategy(opts.strategy, inputFor(d, budget, handle)),
+					)
+				: await runStrategy(opts.strategy, inputFor(d, budget));
+			if (isCheckoutUnavailable(ran)) {
+				report.checkoutUnavailable.push(d.round.index);
+				out(`round ${d.round.index}: skipped, ${ran.reason}`);
+				continue;
+			}
+			result = ran;
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+			throw new LiveRunError(
+				`${opts.strategy.name} round ${d.round.index}: ${message}`,
+				{
+					spentUsd: report.spentUsd + estimate,
+					rounds: report.rounds,
+					checkoutUnavailable: report.checkoutUnavailable,
+				},
+				{ cause: err },
+			);
+		}
+		const { findings, candidates, posted, usage } = result;
 		report.spentUsd += estimate;
+		const counted = countJoined(candidates, labelled);
 		const row: LiveRoundReport = {
 			index: d.round.index,
 			matchedFixed: 0,
@@ -100,6 +212,13 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 				(f) => candidateFamilies({ ...f, body: f.body ?? "" }).length > 0,
 			).length,
 			approximate: d.approximate,
+			candidates: counted.candidates,
+			joined: counted.joined,
+			posted: posted.length,
+			usage,
+			wallMs: result.wallMs,
+			toolCalls: result.toolCalls.length,
+			trace: { candidates, posted, usage },
 		};
 		for (const f of findings) {
 			const hit = d.round.claims.find(
@@ -112,8 +231,17 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 		}
 		report.rounds.push(row);
 		out(
-			`round ${row.index}${row.approximate ? " (approximate diff)" : ""}: ${row.matchedFixed} of ${findings.length} matched fixed, ${row.matchedRejected} of ${findings.length} matched rejected, ${row.newUnlabeled} new unlabeled (no accuracy claimed); ${row.raw} raw findings, ${row.retracted} candidate retractions`,
+			`round ${row.index}${row.approximate ? " (approximate diff)" : ""}: ${row.matchedFixed} of ${findings.length} matched fixed, ${row.matchedRejected} of ${findings.length} matched rejected, ${row.newUnlabeled} new unlabeled (no accuracy claimed); ${row.raw} raw findings, ${row.retracted} candidate retractions; ${row.candidates} candidates, ${row.joined} joined to labelled claims, ${row.posted} would post`,
 		);
+		const usageLine = Object.entries(usage)
+			.map(([s, u]) => `${s} ${u.promptTokens}+${u.completionTokens}`)
+			.join(", ");
+		if (usageLine) out(`  usage: ${usageLine}`);
+		out(`  wall ${row.wallMs}ms, ${row.toolCalls} tool calls`);
 	}
+	if (report.checkoutUnavailable.length > 0)
+		out(
+			`${opts.strategy.name}: ${report.checkoutUnavailable.length} of ${diffs.length} round(s) could not run (checkout unavailable)`,
+		);
 	return report;
 }

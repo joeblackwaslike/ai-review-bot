@@ -1,6 +1,12 @@
-import { type ReviewerId, reviewerFromLegacy } from "../reviewer-id.js";
+import {
+	type LegacyProvider,
+	legacyProviderOf,
+	type ReviewerId,
+	reviewerFromLegacy,
+} from "../reviewer-id.js";
 
 export type PersistedProvider = string;
+export type Provider = LegacyProvider;
 export type Label = "fixed" | "rejected" | "deferred" | "unadjudicated";
 
 export interface PostedClaim {
@@ -22,6 +28,42 @@ export interface CommitMeta {
 	files: { path: string; ranges: [number, number][] }[];
 }
 
+/** One finding a review skill produced, before or after the posting filters. */
+export interface CandidateRecord {
+	/** Skill file name with the .md suffix, as the hosted corpus uses. */
+	skill: string | null;
+	title: string;
+	path: string | null;
+	line: number | null;
+	severity: string | null;
+}
+
+/**
+ * Token usage per skill file name, with the .md suffix, as the hosted corpus uses.
+ * `promptTokens` is the provider's total input including cache reads, uncached input is
+ * `promptTokens - cachedInputTokens`, and cache writes are not recorded.
+ * `completionTokens` is the SDK's `outputTokens`, the total output. The `ai` package types
+ * (`LanguageModelUsage`) document `outputTokenDetails` as a breakdown of that total into
+ * `textTokens` and `reasoningTokens`, so `reasoningTokens` is a component of `completionTokens`
+ * and must not be added to it.
+ */
+export type RoundUsage = Record<
+	string,
+	{
+		promptTokens: number;
+		completionTokens: number;
+		cachedInputTokens?: number;
+		reasoningTokens?: number;
+	}
+>;
+
+/** What a live round produced: all candidates, the post-filter posted set, and usage. */
+export interface RoundTrace {
+	candidates: CandidateRecord[];
+	posted: CandidateRecord[];
+	usage: RoundUsage;
+}
+
 export interface Round {
 	index: number;
 	reviewId: number;
@@ -34,6 +76,7 @@ export interface Round {
 	approximate: boolean;
 	commitsSince: CommitMeta[];
 	claims: PostedClaim[];
+	trace?: RoundTrace;
 }
 
 export interface Reply {
@@ -72,12 +115,24 @@ export interface ReplayFixture {
 	rounds: Round[];
 	threads: ThreadEvidence[];
 	reactions: ReactionEvidence[];
+	expect?: { clean: true };
+	heldOut?: true;
 }
 
 export function fixtureReviewer(
 	f: Pick<ReplayFixture, "provider" | "reviewer">,
 ): ReviewerId {
 	return f.reviewer ?? reviewerFromLegacy(f.provider);
+}
+
+export function fixtureFamily(
+	f: Pick<ReplayFixture, "provider" | "reviewer">,
+): Provider {
+	const family = legacyProviderOf(fixtureReviewer(f));
+	if (family === "anthropic" || family === "openai") return family;
+	throw new Error(
+		`this replay path supports only anthropic and openai fixtures, got "${family}"`,
+	);
 }
 
 export interface ClaimLabel {

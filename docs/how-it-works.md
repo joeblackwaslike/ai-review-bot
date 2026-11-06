@@ -39,6 +39,8 @@ Before firing agents, the router (`src/router.ts`) classifies the PR into a tier
 | `complex` | >500 lines or sensitive paths (auth, crypto, db…) | `claude-sonnet-5-5`, effort high | `gpt-6.1-sol`, effort high |
 | `deep` | `deep-review` label | `claude-opus-5-5`, effort high | `gpt-6.1-sol`, effort xhigh |
 
+A doc-only change under 20 lines is checked before the sensitive-path rule, so a small edit to `docs/authentication.md` stays `trivial`. That shortcut covers prose docs (`.md`, `.mdx`, `.rst`) and other `.txt` files. `requirements*.txt` and `constraints*.txt` are not docs, and a sensitive-named `.txt` such as `secrets.txt` falls through to `complex`.
+
 Claude uses the `effort` parameter (low/medium/high/xhigh/max); Codex uses `reasoningEffort` on the same scale (none/low/medium/high/xhigh/max). Both are forwarded from the tier's `effort` value in `src/router.ts`.
 
 ## The two-layer engine

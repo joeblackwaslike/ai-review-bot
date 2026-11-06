@@ -13,6 +13,20 @@ joeblackwaslike__agent-skills__10__openai
   restated open: 0 of 13
   rounds with first-seen claims: 4 of 5, final round quiet: yes
 
+joeblackwaslike__ai-listings__50__anthropic
+  rejected: 4 of 17 adjudicated (deferred 0, unadjudicated 14)
+  recycled: 0 of 31
+  restated open: 0 of 31, +1 proposed
+  rounds with first-seen claims: 5 of 5, final round quiet: no
+  join rate: 3/15
+
+joeblackwaslike__ai-listings__50__openai
+  rejected: 0 of 5 adjudicated (deferred 0, unadjudicated 1)
+  recycled: 0 of 6
+  restated open: 0 of 6
+  rounds with first-seen claims: 2 of 2, final round quiet: no
+  join rate: 0/5
+
 joeblackwaslike__ai-listings__74__anthropic
   rejected: 10 of 13 adjudicated (deferred 0, unadjudicated 27)
   recycled: 0 of 40
@@ -25,6 +39,48 @@ joeblackwaslike__ai-listings__74__openai
   restated open: 1 of 13
   rounds with first-seen claims: 4 of 5, final round quiet: no
 
+joeblackwaslike__ai-review-bot-demo__2__anthropic
+  rejected: 1 of 1 adjudicated (deferred 0, unadjudicated 6)
+  recycled: 0 of 7
+  restated open: 0 of 7, +3 proposed
+  rounds with first-seen claims: 5 of 5, final round quiet: no
+  join rate: 0/8
+
+joeblackwaslike__ai-review-bot-demo__2__openai
+  rejected: 0 of 2 adjudicated (deferred 0, unadjudicated 1)
+  recycled: 0 of 3
+  restated open: 0 of 3
+  rounds with first-seen claims: 3 of 4, final round quiet: yes
+  join rate: 2/4
+
+joeblackwaslike__ai-review-bot-demo__3__anthropic
+  rejected: 0 of 0 adjudicated (deferred 0, unadjudicated 0)
+  recycled: 0 of 0
+  restated open: 0 of 0
+  rounds with first-seen claims: 0 of 1, final round quiet: yes
+  join rate: 0/0
+
+joeblackwaslike__ai-review-bot__70__anthropic
+  rejected: 5 of 9 adjudicated (deferred 0, unadjudicated 16)
+  recycled: 0 of 25
+  restated open: 0 of 25, +7 proposed
+  rounds with first-seen claims: 4 of 4, final round quiet: no
+  join rate: 0/4
+
+joeblackwaslike__ai-review-bot__70__openai
+  rejected: 0 of 2 adjudicated (deferred 0, unadjudicated 0)
+  recycled: 0 of 2
+  restated open: 0 of 2
+  rounds with first-seen claims: 1 of 2, final round quiet: yes
+  join rate: 0/0
+
+joeblackwaslike__ai-review-bot__80__openai
+  rejected: 0 of 0 adjudicated (deferred 0, unadjudicated 0)
+  recycled: 0 of 0
+  restated open: 0 of 0
+  rounds with first-seen claims: 0 of 1, final round quiet: yes
+  join rate: 0/1
+
 joeblackwaslike__ai-review-bot__92__anthropic
   rejected: 0 of 10 adjudicated (deferred 0, unadjudicated 8)
   recycled: 0 of 18
@@ -36,6 +92,13 @@ joeblackwaslike__ai-review-bot__92__openai
   recycled: 0 of 21
   restated open: 0 of 21, +1 proposed
   rounds with first-seen claims: 5 of 5, final round quiet: no
+
+joeblackwaslike__ai-review-bot__94__openai
+  rejected: 0 of 0 adjudicated (deferred 0, unadjudicated 0)
+  recycled: 0 of 0
+  restated open: 0 of 0
+  rounds with first-seen claims: 0 of 1, final round quiet: yes
+  join rate: 0/0
 
 joeblackwaslike__stealth-browser__1__anthropic
   rejected: 29 of 33 adjudicated (deferred 0, unadjudicated 32)

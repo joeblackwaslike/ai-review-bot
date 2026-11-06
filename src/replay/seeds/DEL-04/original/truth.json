@@ -1,0 +1,11 @@
+{
+	"clean": false,
+	"defects": [
+		{
+			"path": "billing/charge.py",
+			"startLine": 17,
+			"endLine": 18,
+			"description": "The paid-invoice check and the zero-amount skip were removed from Charger.charge. charge_with_retry in billing/retry.py calls charge again after any failure, including a failure in the notify step after the gateway already charged, so a retry now charges an already-paid invoice a second time; zero-amount invoices also now hit the gateway."
+		}
+	]
+}

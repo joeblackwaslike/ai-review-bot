@@ -112,7 +112,7 @@ type OctokitLike = {
 	) => Promise<T[]>;
 };
 
-interface PullFile {
+export interface PullFile {
 	filename: string;
 	status: string;
 	patch?: string;
@@ -224,6 +224,8 @@ interface TokenUsage {
 	promptTokens: number;
 	cachedPromptTokens?: number;
 	completionTokens: number;
+	cachedInputTokens?: number;
+	reasoningTokens?: number;
 }
 
 export interface RateLimitInfo {
@@ -578,9 +580,12 @@ export async function runAgent(
 			cacheReadInputTokens?: number;
 			cacheCreationInputTokens?: number;
 		};
+		const cachedInput =
+			usage.inputTokenDetails?.cacheReadTokens ?? anthro.cacheReadInputTokens;
+		const reasoning = usage.outputTokenDetails?.reasoningTokens;
 		console.log("agent ok", {
 			skillPath,
-			cacheRead: anthro.cacheReadInputTokens ?? 0,
+			cacheRead: cachedInput ?? 0,
 			cacheCreation: anthro.cacheCreationInputTokens ?? 0,
 		});
 
@@ -589,8 +594,12 @@ export async function runAgent(
 			review: object,
 			usage: {
 				promptTokens: usage.inputTokens ?? 0,
-				cachedPromptTokens: usage.inputTokenDetails?.cacheReadTokens ?? 0,
 				completionTokens: usage.outputTokens ?? 0,
+				// ai SDK: usage.inputTokenDetails.cacheReadTokens and
+				// usage.outputTokenDetails.reasoningTokens; Anthropic's
+				// providerMetadata cacheReadInputTokens is the cache-read fallback.
+				...(cachedInput !== undefined && { cachedInputTokens: cachedInput }),
+				...(reasoning !== undefined && { reasoningTokens: reasoning }),
 			},
 			durationMs: Date.now() - startedAt,
 			rateLimit: readRateLimitHeaders(
@@ -1466,6 +1475,25 @@ export function sanitizeInlineComments(
 		if (line === c.line && start_line === c.start_line) return c;
 		return { ...c, line, start_line };
 	});
+}
+
+const MAX_INLINE_COMMENTS = 50;
+/** Caps inline comments at `max`, keeping the most severe. GitHub's review API
+ * rejects payloads over a certain size, and a wall of 80+ low-severity nits
+ * buries the high-severity findings that actually matter. At or under the cap
+ * every comment is kept in order; over it, the stable severity sort keeps merge
+ * order within one severity. */
+export function capInlineComments(
+	comments: ModelInlineComment[],
+	max = MAX_INLINE_COMMENTS,
+): { kept: ModelInlineComment[]; overflow: ModelInlineComment[] } {
+	if (comments.length <= max) return { kept: comments, overflow: [] };
+	const sorted = [...comments].sort(
+		(a, b) =>
+			(INLINE_SEVERITY_RANK[b.severity] ?? 0) -
+			(INLINE_SEVERITY_RANK[a.severity] ?? 0),
+	);
+	return { kept: sorted.slice(0, max), overflow: sorted.slice(max) };
 }
 
 const sourceKeys = new WeakMap<ReviewComment, string>();
@@ -2681,7 +2709,8 @@ async function buildReviewInner(
 		usageByModel.set(model, {
 			promptTokens: sum.promptTokens + usage.promptTokens,
 			cachedPromptTokens:
-				(sum.cachedPromptTokens ?? 0) + (usage.cachedPromptTokens ?? 0),
+				(sum.cachedPromptTokens ?? 0) +
+				(usage.cachedInputTokens ?? usage.cachedPromptTokens ?? 0),
 			completionTokens: sum.completionTokens + usage.completionTokens,
 		});
 	};
@@ -3000,26 +3029,9 @@ async function buildReviewInner(
 		validLines,
 	);
 
-	// Cap at 50 inline comments, keeping the most severe. GitHub's review API
-	// rejects payloads over a certain size, and a wall of 80+ low-severity nits
-	// buries the high-severity findings that actually matter.
-	const MAX_INLINE_COMMENTS = 50;
-	const INLINE_OVERFLOW_RANK: Record<string, number> = {
-		P0: 4,
-		P1: 3,
-		P2: 2,
-		P3: 1,
-	};
-	let effectiveInlineComments = sanitizedComments;
-	let overflowComments: ModelInlineComment[] = [];
-	if (sanitizedComments.length > MAX_INLINE_COMMENTS) {
-		const sorted = [...sanitizedComments].sort(
-			(a, b) =>
-				(INLINE_OVERFLOW_RANK[b.severity] ?? 0) -
-				(INLINE_OVERFLOW_RANK[a.severity] ?? 0),
-		);
-		effectiveInlineComments = sorted.slice(0, MAX_INLINE_COMMENTS);
-		overflowComments = sorted.slice(MAX_INLINE_COMMENTS);
+	const { kept: effectiveInlineComments, overflow: overflowComments } =
+		capInlineComments(sanitizedComments, MAX_INLINE_COMMENTS);
+	if (overflowComments.length > 0) {
 		console.warn("inline comment cap applied", {
 			total: sanitizedComments.length,
 			kept: MAX_INLINE_COMMENTS,

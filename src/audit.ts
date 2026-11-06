@@ -80,6 +80,21 @@ export interface PassUsage {
 	promptTokens: number;
 	cachedPromptTokens?: number;
 	completionTokens: number;
+	cachedInputTokens?: number;
+	reasoningTokens?: number;
+}
+
+function sumUsage(into: PassUsage, u: PassUsage): void {
+	into.promptTokens += u.promptTokens;
+	into.completionTokens += u.completionTokens;
+	if (u.cachedPromptTokens !== undefined)
+		into.cachedPromptTokens =
+			(into.cachedPromptTokens ?? 0) + u.cachedPromptTokens;
+	if (u.cachedInputTokens !== undefined)
+		into.cachedInputTokens =
+			(into.cachedInputTokens ?? 0) + u.cachedInputTokens;
+	if (u.reasoningTokens !== undefined)
+		into.reasoningTokens = (into.reasoningTokens ?? 0) + u.reasoningTokens;
 }
 
 export async function runAuditPass(opts: {
@@ -102,14 +117,22 @@ export async function runAuditPass(opts: {
 	 * or an empty-but-valid pass misreports as "every agent failed". */
 	agentsAttempted: number;
 	agentReviews: { skill: string; review: ModelReview }[];
+	/** Tokens per skill (same names as `agentReviews`); values sum to `usage`. */
+	usageBySkill: Record<string, PassUsage>;
 }> {
 	const { files, selection, extraInstructions, meta, auth } = opts;
 	const reviews: ModelReview[] = [];
 	const agentReviews: { skill: string; review: ModelReview }[] = [];
-	const usage: PassUsage = {
-		promptTokens: 0,
-		cachedPromptTokens: 0,
-		completionTokens: 0,
+	const usage: PassUsage = { promptTokens: 0, completionTokens: 0 };
+	const usageBySkill: Record<string, PassUsage> = {};
+	const addUsage = (skill: string, u: PassUsage) => {
+		const entry = usageBySkill[skill] ?? {
+			promptTokens: 0,
+			completionTokens: 0,
+		};
+		usageBySkill[skill] = entry;
+		sumUsage(entry, u);
+		sumUsage(usage, u);
 	};
 	let agentsSucceeded = 0;
 	let agentsAttempted = 0;
@@ -166,11 +189,11 @@ export async function runAuditPass(opts: {
 		});
 		let batchSucceeded = 0;
 		for (const [i, o] of outcomes.entries()) {
+			const skillName = (
+				TIER1_SKILLS[i].split("/").pop() ?? TIER1_SKILLS[i]
+			).replace(/\.md$/, "");
 			if (o.status === "error" && o.usage) {
-				usage.promptTokens += o.usage.promptTokens;
-				usage.cachedPromptTokens =
-					(usage.cachedPromptTokens ?? 0) + (o.usage.cachedPromptTokens ?? 0);
-				usage.completionTokens += o.usage.completionTokens;
+				addUsage(skillName, o.usage);
 			}
 			if (o.status === "ok") {
 				reviews.push(o.review);
@@ -179,10 +202,7 @@ export async function runAuditPass(opts: {
 					skill: file.replace(/\.md$/, ""),
 					review: o.review,
 				});
-				usage.promptTokens += o.usage.promptTokens;
-				usage.cachedPromptTokens =
-					(usage.cachedPromptTokens ?? 0) + (o.usage.cachedPromptTokens ?? 0);
-				usage.completionTokens += o.usage.completionTokens;
+				addUsage(skillName, o.usage);
 				batchSucceeded += 1;
 			}
 		}
@@ -202,7 +222,14 @@ export async function runAuditPass(opts: {
 					inline_comments: [],
 				}
 			: mergeReviews(reviews);
-	return { review, usage, agentsSucceeded, agentsAttempted, agentReviews };
+	return {
+		review,
+		usage,
+		agentsSucceeded,
+		agentsAttempted,
+		agentReviews,
+		usageBySkill,
+	};
 }
 
 export async function auditRepo({

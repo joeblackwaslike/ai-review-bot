@@ -76,6 +76,52 @@ describe("computeCost", () => {
 		expect(cost).toBeCloseTo(0.007, 5);
 	});
 
+	it("prices cached input tokens below uncached ones", () => {
+		const cold = computeCost(
+			{ promptTokens: 1_000_000, completionTokens: 0 },
+			"claude-sonnet-5-5",
+		);
+		const warm = computeCost(
+			{
+				promptTokens: 1_000_000,
+				completionTokens: 0,
+				cachedInputTokens: 800_000,
+			},
+			"claude-sonnet-5-5",
+		);
+		expect(cold).toBeCloseTo(2.0);
+		expect(warm).toBeCloseTo(0.2 * 2.0 + 0.8 * 0.2);
+	});
+
+	it("prices a call without cachedInputTokens as before", () => {
+		const cost = computeCost(
+			{ promptTokens: 1_000_000, completionTokens: 1_000_000 },
+			"gpt-6.1-sol",
+		);
+		expect(cost).toBeCloseTo(12.0);
+	});
+
+	it("clamps cached tokens above the prompt to the prompt", () => {
+		const cost = computeCost(
+			{
+				promptTokens: 1_000_000,
+				completionTokens: 0,
+				cachedInputTokens: 5_000_000,
+			},
+			"claude-sonnet-5-5",
+		);
+		expect(cost).toBeCloseTo(0.2);
+	});
+
+	it("is unavailable for an unknown model with cached tokens", () => {
+		expect(
+			computeCost(
+				{ promptTokens: 10, completionTokens: 10, cachedInputTokens: 5 },
+				"nope",
+			),
+		).toBeUndefined();
+	});
+
 	it("returns 0 when both token counts are 0", () => {
 		const cost = computeCost(
 			{ promptTokens: 0, completionTokens: 0 },
@@ -157,7 +203,7 @@ describe("computeCost with config pricing", () => {
 			},
 			"claude-sonnet-5-5",
 		);
-		expect(cost).toBeCloseTo(0.5 * 2.0 + 0.5 * 0.1);
+		expect(cost).toBeCloseTo(0.5 * 2.0 + 0.5 * 0.2);
 	});
 
 	it("clamps cached tokens to the prompt size", () => {
@@ -169,7 +215,7 @@ describe("computeCost with config pricing", () => {
 			},
 			"claude-sonnet-5-5",
 		);
-		expect(cost).toBeCloseTo(0.1);
+		expect(cost).toBeCloseTo(0.2);
 	});
 });
 

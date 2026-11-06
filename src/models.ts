@@ -12,6 +12,7 @@ export interface TokenUsage {
 	promptTokens: number;
 	cachedPromptTokens?: number;
 	completionTokens: number;
+	cachedInputTokens?: number;
 }
 
 /** Cost in USD, or undefined when no price is known. A `pricing` pin in the
@@ -26,7 +27,10 @@ export function computeCost(
 	const price = pinned ?? lookupPrice(model, usage.promptTokens);
 	if (!price) return undefined;
 	const { input, cachedInput, output } = price;
-	const cached = Math.min(usage.cachedPromptTokens ?? 0, usage.promptTokens);
+	const cached = Math.min(
+		Math.max(usage.cachedInputTokens ?? usage.cachedPromptTokens ?? 0, 0),
+		usage.promptTokens,
+	);
 	return (
 		((usage.promptTokens - cached) / 1_000_000) * input +
 		(cached / 1_000_000) * cachedInput +

@@ -1,0 +1,118 @@
+{
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "ai-review-bot",
+	"pull": 80,
+	"provider": "openai",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-11-03T21:06:58.799Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 5251201597,
+			"provider": "openai",
+			"submittedAt": "2026-09-18T18:26:12Z",
+			"headSha": "c2677e38f4bf494a808ace97cafc83bdd0f6e6bd",
+			"baseSha": "cec3b7ad1a6c35fd6c26cd2e2c6916ce7afd4408",
+			"mergeBase": "cec3b7ad1a6c35fd6c26cd2e2c6916ce7afd4408",
+			"triggerAt": "2026-09-18T18:11:27Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "25e7f47dc9c3e19d05bfd6d0698509bbbc6d369a",
+					"committedAt": "2026-09-18T18:02:48Z",
+					"files": [
+						{
+							"path": "src/github-app.test.ts",
+							"ranges": [
+								[2, 8],
+								[61, 95],
+								[141, 147],
+								[223, 256],
+								[338, 376],
+								[1250, 1326]
+							]
+						},
+						{
+							"path": "src/github-app.ts",
+							"ranges": [[53, 59], [760, 782]]
+						}
+					]
+				},
+				{
+					"sha": "c2677e38f4bf494a808ace97cafc83bdd0f6e6bd",
+					"committedAt": "2026-09-18T18:11:27Z",
+					"files": [
+						{
+							"path": "CLAUDE.md",
+							"ranges": [[8, 14]]
+						},
+						{
+							"path": "src/github-app.test.ts",
+							"ranges": [[2, 11]]
+						}
+					]
+				}
+			],
+			"claims": [],
+			"trace": {
+				"candidates": [
+					{
+						"skill": "code-reviewer.md",
+						"title": "Bound marker-only deduplication to the current rate-limit window",
+						"path": "src/github-app.ts",
+						"line": 772,
+						"severity": "P2"
+					},
+					{
+						"skill": "silent-failure-hunter.md",
+						"title": "Bound marker-only deduplication to the current rate-limit window",
+						"path": "src/github-app.ts",
+						"line": 772,
+						"severity": "P2"
+					},
+					{
+						"skill": "code-review-and-quality.md",
+						"title": "Bound marker-only deduplication to the current rate-limit window",
+						"path": "src/github-app.ts",
+						"line": 772,
+						"severity": "P2"
+					}
+				],
+				"posted": [
+					{
+						"skill": "silent-failure-hunter.md",
+						"title": "Bound marker-only deduplication to the current rate-limit window",
+						"path": "src/github-app.ts",
+						"line": 772,
+						"severity": "P2"
+					}
+				],
+				"usage": {
+					"code-reviewer.md": {
+						"promptTokens": 5956,
+						"completionTokens": 314
+					},
+					"silent-failure-hunter.md": {
+						"promptTokens": 7067,
+						"completionTokens": 359
+					},
+					"pr-test-analyzer.md": {
+						"promptTokens": 6259,
+						"completionTokens": 46
+					},
+					"security-sast.md": {
+						"promptTokens": 9003,
+						"completionTokens": 112
+					},
+					"code-review-and-quality.md": {
+						"promptTokens": 6251,
+						"completionTokens": 339
+					}
+				}
+			}
+		}
+	],
+	"threads": [],
+	"reactions": []
+}

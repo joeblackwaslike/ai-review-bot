@@ -53,6 +53,59 @@ describe("classifyTier", () => {
 		).toBe("trivial");
 	});
 
+	it("does not treat a small requirements.txt change as a doc", () => {
+		expect(classifyTier({ ...base, filePaths: ["requirements.txt"] })).toBe(
+			"normal",
+		);
+		expect(
+			classifyTier({ ...base, filePaths: ["backend/constraints-dev.txt"] }),
+		).toBe("normal");
+	});
+
+	it("keeps a small doc-only change trivial even when the doc name is sensitive", () => {
+		expect(
+			classifyTier({ ...base, filePaths: ["docs/authentication.md"] }),
+		).toBe("trivial");
+	});
+
+	it.each([
+		"secrets.txt",
+		"auth/allowlist.txt",
+	])("routes a small sensitive-named %s to complex", (path) => {
+		expect(classifyTier({ ...base, filePaths: [path] })).toBe("complex");
+	});
+
+	it.each([
+		"docs.v2/README",
+		"docs/LICENSE",
+	])("does not treat extensionless %s as a doc", (path) => {
+		expect(classifyTier({ ...base, filePaths: [path] })).toBe("normal");
+	});
+
+	it("routes a sensitive-named extensionless file to complex", () => {
+		expect(classifyTier({ ...base, filePaths: ["auth.v2/LICENSE"] })).toBe(
+			"complex",
+		);
+	});
+
+	it("keeps docs.v2/guide.md trivial", () => {
+		expect(classifyTier({ ...base, filePaths: ["docs.v2/guide.md"] })).toBe(
+			"trivial",
+		);
+	});
+
+	it("keeps docs/README.md trivial", () => {
+		expect(classifyTier({ ...base, filePaths: ["docs/README.md"] })).toBe(
+			"trivial",
+		);
+	});
+
+	it("still routes a source auth change to complex", () => {
+		expect(classifyTier({ ...base, filePaths: ["src/auth/session.ts"] })).toBe(
+			"complex",
+		);
+	});
+
 	it("returns normal by default for small source diffs", () => {
 		expect(classifyTier(base)).toBe("normal");
 	});

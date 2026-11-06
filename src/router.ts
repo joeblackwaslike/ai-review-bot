@@ -38,8 +38,30 @@ function isSensitivePath(path: string, patterns: readonly string[]): boolean {
 	return patterns.some((pattern) => lower.includes(pattern.toLowerCase()));
 }
 
+const PROSE_EXTENSIONS = new Set([".md", ".mdx", ".rst"]);
+
+function extensionOf(path: string): string {
+	const base = path.slice(path.lastIndexOf("/") + 1);
+	const dot = base.lastIndexOf(".");
+	return dot === -1 ? "" : base.slice(dot);
+}
+
 function isDocFile(path: string, extensions: readonly string[]): boolean {
-	return extensions.includes(path.slice(path.lastIndexOf(".")));
+	const base = path.slice(path.lastIndexOf("/") + 1).toLowerCase();
+	if (/^(requirements|constraints)[^/]*\.txt$/.test(base)) {
+		return false;
+	}
+	return extensions.includes(extensionOf(path));
+}
+
+function isTrivialDoc(path: string, routing: Config["routing"]): boolean {
+	if (!isDocFile(path, routing.docExtensions)) {
+		return false;
+	}
+	return (
+		PROSE_EXTENSIONS.has(extensionOf(path).toLowerCase()) ||
+		!isSensitivePath(path, routing.sensitivePathPatterns)
+	);
 }
 
 export function cheapSelection(base: ModelSelection): ModelSelection {
@@ -60,22 +82,22 @@ export function classifyTier(
 		return "deep";
 	}
 
+	const totalLines = additions + deletions;
+	if (
+		totalLines < routing.trivialDocLines &&
+		filePaths.every((p) => isTrivialDoc(p, routing))
+	) {
+		return "trivial";
+	}
+
 	if (
 		filePaths.some((p) => isSensitivePath(p, routing.sensitivePathPatterns))
 	) {
 		return "complex";
 	}
 
-	const totalLines = additions + deletions;
 	if (totalLines > routing.complexLines) {
 		return "complex";
-	}
-
-	if (
-		totalLines < routing.trivialDocLines &&
-		filePaths.every((p) => isDocFile(p, routing.docExtensions))
-	) {
-		return "trivial";
 	}
 
 	return "normal";

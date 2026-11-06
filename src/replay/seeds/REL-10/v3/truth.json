@@ -1,0 +1,11 @@
+{
+	"clean": false,
+	"defects": [
+		{
+			"path": "lib/shipping.rb",
+			"startLine": 14,
+			"endLine": 14,
+			"description": "Free shipping check changed from >= to >, so orders exactly at FREE_SHIPPING_MIN_CENTS no longer ship free."
+		}
+	]
+}

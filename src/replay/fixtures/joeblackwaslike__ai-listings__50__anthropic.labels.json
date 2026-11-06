@@ -1,0 +1,266 @@
+{
+	"fixtureId": "joeblackwaslike__ai-listings__50__anthropic",
+	"provisional": true,
+	"labels": [
+		{
+			"claimId": "r0:c3810323701:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-19T05:47:13Z|Fixed in 84caa49 — added the Number.isInteger + >=0 guard before using the index as a Map key."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3810323708:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-19T05:47:16Z|Added in 84caa49 — 'skips a non-numeric key instead of coercing it to a NaN map key' test."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3810323712:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-19T05:47:18Z|Added in 84caa49 — 'skips a negative index' test."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3810323716:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-19T05:47:20Z|Fixed in 84caa49 — replaced the regex with a balanced-brace scanner (extractJsonObject) that walks depth by character instead of trying to express nesting in a regex. Handles both this case and the sibling greedy-merge finding on the same root cause."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3810323720:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-19T05:47:21Z|Fixed in 84caa49 — rewrote the JSDoc to state explicitly that a non-integer/negative index and an out-of-range score are also dropped, not just malformed JSON."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3810323723:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-19T05:47:28Z|Same fix as the sibling nested-JSON finding — 84caa49 replaces the regex with a balanced-brace scanner, which handles the multiple-objects-in-one-response case too (it walks depth from the first { rather than eagerly matching to the last })."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:body:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:body:2",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:body:3",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:body:4",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c3810378919:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-19T05:57:10Z|Added in 9f3542c — 'returns only the first top-level object when the LLM emits two' test, plus a doc update on extractJsonObject acknowledging this as a residual limitation rather than implying full protection."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c3810378928:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-19T05:57:11Z|Fixed in 9f3542c — now only logs when Object.keys(parsed).length > 0, per your suggested fix."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c3810378947:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-19T05:57:12Z|Reworded in 9f3542c to make clear it's testing score-value bounds, not index/key bounds."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c3810378950:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-19T05:57:14Z|Real gap, fixed in 9f3542c — extractJsonObject now tracks string-literal state (with \\\" escape handling) so a brace inside a quoted color value can't perturb the depth count. Added a regression test for a color value containing literal braces."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c3810378955:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-19T05:57:17Z|Fixed in 9f3542c — updated the doc to state the residual limitation explicitly (returns only the first of two top-level objects) rather than implying the brace counter fully solves multi-object responses."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c3810378962:0",
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-19T05:57:19Z|This is already present in the current diff — the docblock (lines 452-454) reads '...a non-integer or negative index, and a score that's non-numeric or outside 0-10 all degrade to that entry being dropped...'. Possibly reviewed against an intermediate view; no change needed."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c3810439641:0",
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-19T06:06:08Z|Your own trace confirms this — 'The logic is correct — this is a confirmation, not a bug.' No change needed."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c3810439647:0",
+			"label": "rejected",
+			"confidence": "low",
+			"evidence": ["2026-08-19T06:06:10Z|reaction confused by joeblackwaslike"],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c3810439652:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-19T06:06:10Z|Fixed in 18d927f — narrowed the comment to 'Tracks double-quoted JSON string literals (respecting \\\" escapes)'."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c3810439656:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c3810488074:0",
+			"label": "unadjudicated",
+			"confidence": "high",
+			"evidence": [
+				"claim text: No new issue here — filing only to acknowledge the comment is now accurate."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:body:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:body:2",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:body:3",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:c3810531404:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-19T06:22:21Z|Fixed in a9e433c — broadened the CompRelevance.score JSDoc to cover both the explicit failed-batch case and the never-attempted (no key) case, since both collapse to the same null on the row."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:c3810531409:0",
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-19T06:22:22Z|This is documented behavior, not a bug — the loop breaks on the first candidate that parses as valid JSON regardless of entry count, by design (an empty-but-valid {} response genuinely means 'the model scored nothing this batch', which is a legitimate outcome, not a signal to keep scanning). Declining to add retry-past-empty-object logic — the scenario is a stray empty object AND a real payload both appearing in one response, which the prompt's 'Return ONLY a JSON object' instruction makes very unlikely, and chasing it further is scope creep on a fix already 4 rounds deep. Filing ai-listings-8du's mocking-harness gap is the real prerequisite for testing this LLM-response-shape space more thoroughly than pure-function tests allow."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		}
+	],
+	"repeatPairs": [
+		{
+			"later": "r4:body:0",
+			"earlier": "r3:body:2",
+			"confirmed": false
+		}
+	],
+	"negativePairs": [],
+	"allowedSuppression": []
+}
