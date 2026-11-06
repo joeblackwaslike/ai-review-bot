@@ -78,7 +78,7 @@ Findings carried from the previous review appear in the body's "Still open from 
 | `src/moved-blocks.ts` | `PushFile` and detection of blocks moved between files in one push, so a move does not count as new code |
 | `src/push-shape.ts` | `classifyPush()` and `shapedBudget()`: weights a push by file kind and scales the findings budget |
 | `src/adaptive-limits.ts` | `resolveLimits()`, `applyLimits()` and `limitNotice()`: the severity floor and findings budget applied in `buildReviewInner` |
-| `src/feedback/reactions-for.ts` | `reactionsFor()` and `loadReactionsFor()`: joins this provider's tracked comment reactions on the PR to ledger entries by path, line and title, with a 3 s timeout and fail-open |
+| `src/feedback/reactions-for.ts` | `reactionsFor()` and `loadReactionsFor()`: joins this provider's tracked comment reactions on the PR to ledger entries by path, line and title, with a 3 s timeout and fail-open. Scans the global poll set, not a per-PR index (follow-up ai-review-bot-t0c.52), and `ADAPTIVE_LIMIT` discards need migration `0004_tired_sage.sql` applied, so do not flip `adaptiveLimits` before both |
 | `src/replay/adaptive-report.ts` | `adaptiveReport()`: replays traced rounds with the adaptive limits off and on, joins removals to labels and verdicts, and applies the pass/fail/inconclusive gate |
 | `src/claim-dedupe.ts` | Near-duplicate claim clustering (`dedupeClaims()`, `isSameClaim()`) |
 | `src/diff-pack.ts` | `packDiff()` and `formatPackedDiff()`: PR-wide diff budget, file ordering, deletion-only hunk dropping under budget pressure, truncated and omitted files; `isGeneratedFile()` |

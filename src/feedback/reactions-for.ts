@@ -17,10 +17,11 @@ export function reactionsFor(
 ): (e: LedgerEntry) => Verdict[] {
 	const byKey = new Map<string, Verdict[]>();
 	for (const r of records) {
-		byKey.set(
-			joinKey(r.path, r.line, r.title),
-			Object.values(r.lastSeenReactions),
-		);
+		const key = joinKey(r.path, r.line, r.title);
+		byKey.set(key, [
+			...(byKey.get(key) ?? []),
+			...Object.values(r.lastSeenReactions),
+		]);
 	}
 	return (e) =>
 		e.path === null || e.line === null

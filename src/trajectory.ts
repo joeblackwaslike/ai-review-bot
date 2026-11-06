@@ -23,7 +23,7 @@ export interface RoundFriction {
 	answered: number;
 }
 
-/** Reads how the author responded to one finding. A settled status wins over reactions. */
+/** Reads how the PR responded to one finding; a reaction from any reactor counts. A settled status wins over reactions. */
 export function classifyFinding(
 	entry: LedgerEntry,
 	reactions: Verdict[],

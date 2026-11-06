@@ -43,6 +43,14 @@ describe("reactionsFor", () => {
 		expect(f(entry())).toEqual(["down"]);
 	});
 
+	it("accumulates the verdicts of records sharing a path, line and title", () => {
+		const f = reactionsFor([
+			record({ alice: "down" }, { commentId: 1 }),
+			record({ bob: "up" }, { commentId: 2 }),
+		]);
+		expect(f(entry())).toEqual(["down", "up"]);
+	});
+
 	it("returns [] for an unmatched entry", () => {
 		const f = reactionsFor([record({ alice: "down" })]);
 		expect(f(entry({ line: 11 }))).toEqual([]);
