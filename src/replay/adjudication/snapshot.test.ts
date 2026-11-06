@@ -48,9 +48,7 @@ describe("claimKey", () => {
 	it("matches a reworded title with the same tokens and identifiers", () => {
 		expect(
 			claimKey({ path: "a.ts", title: "`parseA` throws on empty input" }),
-		).toBe(
-			claimKey({ path: "a.ts", title: "On empty input `parseA` throws" }),
-		);
+		).toBe(claimKey({ path: "a.ts", title: "On empty input `parseA` throws" }));
 	});
 
 	it("keeps titles with no tokens distinct", () => {

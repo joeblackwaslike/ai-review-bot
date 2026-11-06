@@ -174,7 +174,7 @@ describe("adjudicate", () => {
 		expect([...result.verdicts.values()][0]?.status).toBe("single-family");
 	});
 
-	it("records a judge error as unclear and does not cache it", async () => {
+	it("counts an errored first judge only under errors and does not cache it", async () => {
 		const base = setup();
 		const result = await adjudicate({
 			...base,
@@ -183,72 +183,37 @@ describe("adjudicate", () => {
 			judges: judges(stub(new Error("boom")), null),
 			caps: { anthropic: 10, openai: 0 },
 		});
-		const record = [...result.verdicts.values()][0];
-		expect(record?.verdict).toBe("unclear");
-		expect(record?.reason).toMatch(/^judge error:/);
+		expect(result.verdicts.size).toBe(0);
+		expect(result.counts).toEqual({
+			real: 0,
+			notReal: 0,
+			unclear: 0,
+			unresolved: 0,
+			singleFamily: 0,
+			cached: 0,
+			deferred: 0,
+			errors: 1,
+		});
 		expect(
 			base.cache.get("snap", claimKey(cand("Retry delay skipped"))),
 		).toBeUndefined();
 	});
 
-	it("upgrades a cached single-family verdict once the OpenAI cap allows it", async () => {
+	it("counts an errored second judge only under errors", async () => {
 		const base = setup();
-		const c = cand("Retry delay skipped");
-		const key = claimKey(c);
-		const run = (first: Judge, second: Judge, openai: number) =>
-			adjudicate({
-				...base,
-				candidates: [c],
-				producer: "anthropic",
-				judges: judges(first, second),
-				caps: { anthropic: 10, openai },
-			});
-		await run(stub(real), stub(real), 0);
-		expect(base.cache.get("snap", key)?.status).toBe("single-family");
-
-		const first = stub(real);
-		const second = stub(real);
-		const result = await run(first, second, 5);
-		expect(first).not.toHaveBeenCalled();
-		expect(second).toHaveBeenCalledTimes(1);
-		expect(result.spend).toEqual({ anthropic: 0, openai: 1 });
-		expect(result.verdicts.get(key)?.status).toBe("agreed");
-		expect(base.cache.get("snap", key)?.status).toBe("agreed");
+		const result = await adjudicate({
+			...base,
+			candidates: [cand("Retry delay skipped")],
+			producer: "anthropic",
+			judges: judges(stub(real), stub(new Error("boom"))),
+			caps: { anthropic: 10, openai: 5 },
+		});
+		expect(result.verdicts.size).toBe(0);
+		expect(result.counts.errors).toBe(1);
+		expect(result.counts.real).toBe(0);
 		expect(result.counts.singleFamily).toBe(0);
-	});
-
-	it("leaves a cached single-family verdict alone while the OpenAI cap is 0", async () => {
-		const base = setup();
-		const c = cand("Retry delay skipped");
-		const run = (second: Judge) =>
-			adjudicate({
-				...base,
-				candidates: [c],
-				producer: "anthropic",
-				judges: judges(stub(real), second),
-				caps: { anthropic: 10, openai: 0 },
-			});
-		await run(stub(real));
-		const second = stub(real);
-		const result = await run(second);
-		expect(second).not.toHaveBeenCalled();
-		expect(result.counts.cached).toBe(1);
-	});
-
-	it("does not upgrade a cached not-real verdict", async () => {
-		const base = setup();
-		const c = cand("Retry delay skipped");
-		const run = (second: Judge, openai: number) =>
-			adjudicate({
-				...base,
-				candidates: [c],
-				producer: "anthropic",
-				judges: judges(stub(notReal), second),
-				caps: { anthropic: 10, openai },
-			});
-		await run(stub(real), 0);
-		const second = stub(real);
-		await run(second, 5);
-		expect(second).not.toHaveBeenCalled();
+		expect(
+			base.cache.get("snap", claimKey(cand("Retry delay skipped"))),
+		).toBeUndefined();
 	});
 });

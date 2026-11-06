@@ -49,9 +49,6 @@ const judgeRecord = (j: NamedJudge): JudgeRecord => ({
 	promptHash: PROMPT_HASH,
 });
 
-const errorReason = (err: unknown) =>
-	`judge error: ${err instanceof Error ? err.message : String(err)}`;
-
 export async function adjudicate(
 	opts: AdjudicateOptions,
 ): Promise<AdjudicationResult> {
@@ -139,19 +136,8 @@ export async function adjudicate(
 		let first: Awaited<ReturnType<Judge>>;
 		try {
 			first = await judges.first.run(input);
-		} catch (err) {
+		} catch {
 			counts.errors++;
-			const record: VerdictRecord = {
-				verdict: "unclear",
-				scope: null,
-				reason: errorReason(err),
-				first: judgeRecord(judges.first),
-				second: null,
-				secondVerdict: null,
-				status: "single-family",
-			};
-			verdicts.set(key, record);
-			tally(record);
 			continue;
 		}
 
@@ -162,7 +148,6 @@ export async function adjudicate(
 			secondVerdict: null,
 			status: "single-family",
 		};
-		let cacheable = true;
 		const wantsSecond =
 			opts.producer === "anthropic" &&
 			second !== null &&
@@ -179,15 +164,14 @@ export async function adjudicate(
 				record.secondVerdict = check.verdict;
 				record.status =
 					check.verdict === first.verdict ? "agreed" : "unresolved";
-			} catch (err) {
+			} catch {
 				counts.errors++;
-				cacheable = false;
-				record.reason = `${record.reason} (${errorReason(err)})`;
+				continue;
 			}
 		}
 		verdicts.set(key, record);
 		tally(record);
-		if (cacheable) cache.put(snapshot, key, record);
+		cache.put(snapshot, key, record);
 	}
 
 	return { verdicts, counts, spend };
