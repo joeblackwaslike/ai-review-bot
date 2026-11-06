@@ -64,4 +64,5 @@ Using `--seeds` together with `--live`, `--record`, `--adjudicate` or `--investi
 Write the base and head trees small and realistic, with a defect a reviewer could find from
 the diff alone. Avoid comments or names that announce the defect. Write the truth file with
 the defect's head-side lines, then run `ai-review replay --seeds` and the seed acceptance
-test, which also rejects hint words such as "bug" or "todo" in any seed file.
+test, which also rejects hint words such as "bug" or "todo" in the files under each seed's
+`base/` and `head/` trees (it does not read `truth.json`).
