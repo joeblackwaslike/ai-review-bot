@@ -233,6 +233,15 @@ export async function runGrid(
 		spentUsd,
 		partial: false,
 	};
+	for (const r of stored)
+		if (r.overCap)
+			report.overCap.push({
+				strategy: r.key.strategy,
+				fixtureId: r.key.fixtureId,
+				round: r.key.round,
+				trial: r.key.trial,
+				...r.overCap,
+			});
 	const stopped = new Set<Provider>();
 
 	for (const u of unitsOf(plan, deps)) {

@@ -427,4 +427,34 @@ describe("runGrid", () => {
 			expect(c.input.round.trace).toBeUndefined();
 		}
 	});
+
+	it("carries stored overCap records into the report on resume", async () => {
+		const pricey: StrategyResult = {
+			...result(),
+			usage: { x: { promptTokens: 400_000, completionTokens: 40_000 } },
+		};
+		const mk = () => [stub("a", { run: async () => pricey })];
+		const p = plan({
+			strategies: [{ name: "a", version: "v1" }],
+			fixtures: [{ id: "o/r#1", split: "tuning", provider: "anthropic" }],
+			budgets: {
+				maxAnthropicUsd: ONE * 10,
+				maxOpenAiUsd: 10,
+				perCellUsd: ONE * 2,
+				perCellWallMs: 210_000,
+			},
+		});
+		const first = harness(mk(), { fixtures: { "o/r#1": loaded(1) } });
+		await runGrid(p, first.deps);
+		const second = harness(
+			mk(),
+			{ fixtures: { "o/r#1": loaded(1) } },
+			first.store.records,
+		);
+		const report = await runGrid(p, second.deps);
+		expect(second.calls).toHaveLength(0);
+		expect(report.overCap).toHaveLength(2);
+		expect(report.overCap[0]?.actualUsd).toBeCloseTo(ONE * 4);
+		expect(report.partial).toBe(true);
+	});
 });
