@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+	formatInvestigation,
 	investigateJoin,
 	JoinFamilyError,
 	type JoinJudge,
@@ -213,5 +214,45 @@ describe("investigateJoin matcher predicate", () => {
 		});
 		expect(r.matcherJoined).toBe(1);
 		expect(r.judgeFoundMatcherMissed).toBe(0);
+	});
+});
+
+describe("investigateJoin judge failures", () => {
+	it("records a thrown judge as unclear and keeps the other verdicts", async () => {
+		const { fixture, labels } = build(
+			[cand("First wording", "a.ts", 10), cand("Second wording", "a.ts", 40)],
+			[mk("c1", "a.ts", 11, "Other")],
+		);
+		const judge: JoinJudge = async ({ candidate }) => {
+			if (candidate.line === 10) throw new Error("429");
+			return { verdict: "same", reason: "ok" };
+		};
+		const r = await investigateJoin({
+			fixture,
+			labels,
+			judge,
+			judgeFamily: "openai",
+		});
+		expect(r.errors).toBe(1);
+		expect(r.pairs.map((p) => p.verdict)).toEqual(["unclear", "same"]);
+		expect(r.pairs[0]?.reason).toMatch(/^judge error: 429/);
+		expect(formatInvestigation("x", r)).toContain("errors=1");
+	});
+
+	it("clamps a maxCalls override to the default cap", async () => {
+		const cands = Array.from({ length: 25 }, (_, i) =>
+			cand(`Wording ${i}`, "a.ts", 100 + i * 50),
+		);
+		const { fixture, labels } = build(cands, [mk("c1", "a.ts", 1, "Other")]);
+		const judge = vi.fn(same);
+		const r = await investigateJoin({
+			fixture,
+			labels,
+			judge,
+			judgeFamily: "openai",
+			maxCalls: 500,
+		});
+		expect(judge).toHaveBeenCalledTimes(20);
+		expect(r.skipped).toBe(5);
 	});
 });

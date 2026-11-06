@@ -47,6 +47,8 @@ export interface JoinInvestigation {
 	matcherJoined: number;
 	/** Pairs not judged because `maxCalls` was reached. */
 	skipped: number;
+	/** Pairs whose judge call threw; recorded as unclear. */
+	errors: number;
 	candidates: number;
 }
 
@@ -100,11 +102,14 @@ export async function investigateJoin(
 		);
 	const claims = labelledClaims(fixture, labels);
 	const candidates = distinctCandidates(fixture);
-	const maxCalls =
-		opts.maxCalls ?? Math.min(DEFAULT_MAX_CALLS, candidates.length);
+	const maxCalls = Math.min(
+		opts.maxCalls ?? candidates.length,
+		DEFAULT_MAX_CALLS,
+	);
 	const nearest = candidates.map((c) => nearestClaims(c.candidate, claims));
 	const pairs: JoinPair[] = [];
 	let skipped = 0;
+	let errors = 0;
 	for (let k = 0; k < MAX_CLAIMS_PER_CANDIDATE; k++) {
 		for (const [i, entry] of candidates.entries()) {
 			const claim = nearest[i]?.[k];
@@ -121,7 +126,15 @@ export async function investigateJoin(
 							EVIDENCE_CHARS,
 						)
 					: "";
-			const { verdict, reason } = await judge({ candidate, claim, evidence });
+			let verdict: JoinVerdict;
+			let reason: string;
+			try {
+				({ verdict, reason } = await judge({ candidate, claim, evidence }));
+			} catch (err) {
+				errors++;
+				verdict = "unclear";
+				reason = `judge error: ${err instanceof Error ? err.message : String(err)}`;
+			}
 			pairs.push({
 				candidate,
 				claim,
@@ -135,6 +148,7 @@ export async function investigateJoin(
 		pairs,
 		candidates: candidates.length,
 		skipped,
+		errors,
 		matcherJoined: pairs.filter((p) => p.matcherJoined).length,
 		judgeFoundMatcherMissed: pairs.filter(
 			(p) => p.verdict === "same" && !p.matcherJoined,
@@ -159,7 +173,7 @@ export function modelJudge(
 			model: createAIModel(selection, auth),
 			schema: JudgementSchema,
 			maxOutputTokens: outputBudget(selection, 512),
-			maxRetries: 2,
+			maxRetries: 0,
 			providerOptions: reasoningProviderOptions(selection),
 			system: SYSTEM,
 			prompt: [
@@ -183,6 +197,6 @@ export function formatInvestigation(id: string, r: JoinInvestigation): string {
 	return [
 		`join investigation ${id}`,
 		...rows,
-		`candidates=${r.candidates} judged=${r.pairs.length} skipped=${r.skipped} matcherJoined=${r.matcherJoined} judgeFoundMatcherMissed=${r.judgeFoundMatcherMissed}`,
+		`candidates=${r.candidates} judged=${r.pairs.length} skipped=${r.skipped} errors=${r.errors} matcherJoined=${r.matcherJoined} judgeFoundMatcherMissed=${r.judgeFoundMatcherMissed}`,
 	].join("\n");
 }
