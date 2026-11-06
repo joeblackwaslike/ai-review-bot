@@ -6929,6 +6929,87 @@ describe("buildReview ledger suppression", () => {
 			);
 		});
 
+		it("drops inline findings from comments, provenance and records with their skill", async () => {
+			REVIEWER_TUNING.adaptiveLimits = true;
+			const patch = `@@ -1,2 +1,12 @@\n line1\n${Array.from({ length: 11 }, (_, i) => `+added${i}`).join("\n")}`;
+			const inline = (
+				line: number,
+				title: string,
+				severity: "P1" | "P2" | "P3",
+				confidence: number,
+			) =>
+				buildInlineComment({
+					path: "src/review.ts",
+					line,
+					title,
+					body: `${title} body.`,
+					severity,
+					confidence,
+					suppressible: false,
+				});
+			const titles = [
+				"Unchecked cursor overflow",
+				"Stale cache invalidation",
+				"Missing retry backoff",
+				"Leaked file descriptor",
+				"Racy counter update",
+				"Ambiguous timezone parsing",
+				"Unbounded queue growth",
+				"Misleading log wording",
+			];
+			const comments = [
+				inline(4, titles[0] as string, "P1", 0.95),
+				inline(5, titles[1] as string, "P2", 0.9),
+				inline(6, titles[2] as string, "P2", 0.89),
+				inline(7, titles[3] as string, "P2", 0.88),
+				inline(8, titles[4] as string, "P2", 0.87),
+				inline(9, titles[5] as string, "P2", 0.5),
+				inline(10, titles[6] as string, "P2", 0.4),
+				inline(11, titles[7] as string, "P3", 0.9),
+			];
+			routeAgents(
+				{
+					"code-reviewer.md": buildModelReview({
+						event: "COMMENT",
+						general_findings: [],
+						inline_comments: comments,
+					}),
+				},
+				none,
+			);
+			const recordDiscards = spy();
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit({ patch }),
+				...baseContext,
+				feedbackEnabled: true,
+				recordDiscards,
+			});
+
+			const removed = titles.slice(5);
+			const kept = titles.slice(0, 5);
+			const posted = decision?.comments ?? [];
+			expect(posted.map((c) => c.line).sort((a, b) => a - b)).toEqual([
+				4, 5, 6, 7, 8,
+			]);
+			for (const t of removed)
+				expect(posted.some((c) => c.body.includes(t))).toBe(false);
+			const keys = [...(decision?.commentProvenance?.keys() ?? [])];
+			for (const [i, t] of titles.entries()) {
+				const key = commentKey({
+					path: "src/review.ts",
+					line: [4, 5, 6, 7, 8, 9, 10, 11][i] as number,
+					title: t,
+				});
+				expect(keys.includes(key)).toBe(kept.includes(t));
+			}
+			const records = recordDiscards.mock.calls[0]?.[0] ?? [];
+			const limited = records.filter((d) => d.reason === "ADAPTIVE_LIMIT");
+			expect(limited.map((d) => d.title).sort()).toEqual([...removed].sort());
+			expect(limited.every((d) => d.skill === "code-reviewer.md")).toBe(true);
+			expect(limited.every((d) => d.disposition === "dropped")).toBe(true);
+		});
+
 		it("posts all nine with the switch off", async () => {
 			routeAgents({ "code-reviewer.md": agentOutput(nine) }, none);
 			const decision = await buildReview({
