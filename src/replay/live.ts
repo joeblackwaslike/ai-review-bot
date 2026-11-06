@@ -1,6 +1,7 @@
 import { isSameClaim } from "../claim-dedupe.js";
 import { candidateFamilies } from "../retraction.js";
 import type { PullFile } from "../review.js";
+import { freezeFixture } from "./frozen.js";
 import { countJoined, labelledClaims } from "./metrics.js";
 import type { ReviewStrategy, StrategyInput } from "./strategy.js";
 import { ledgerForRound } from "./trace.js";
@@ -109,7 +110,7 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 		d: (typeof diffs)[number],
 		maxUsd: number,
 	): StrategyInput => ({
-		fixture: opts.fixture,
+		fixture: freezeFixture(opts.fixture, d.round.index),
 		round: d.round,
 		diff: d.diff,
 		files: d.files,

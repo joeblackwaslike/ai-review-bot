@@ -7,6 +7,7 @@ import {
 	SIMPLE_PATCH,
 	TWO_HUNK_PATCH,
 } from "../testing.js";
+import { freezeFixture } from "./frozen.js";
 import type { GhClient } from "./gh.js";
 import {
 	buildLiveWiring,
@@ -204,6 +205,8 @@ describe("buildLiveWiring", () => {
 		owner: "o",
 		repo: "r",
 		provider: "anthropic",
+		threads: [],
+		reactions: [],
 		rounds: [round(0, [settled]), round(1, [])],
 	} as unknown as ReplayFixture;
 	const labels = {
@@ -224,7 +227,7 @@ describe("buildLiveWiring", () => {
 		target: Round,
 		fetched: { diff: string; files: PullFile[]; approximate: boolean },
 	): StrategyInput => ({
-		fixture: f,
+		fixture: freezeFixture(f, target.index),
 		round: target,
 		diff: fetched.diff,
 		files: fetched.files,

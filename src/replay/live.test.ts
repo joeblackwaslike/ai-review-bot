@@ -45,6 +45,8 @@ function round(index: number, claims: PostedClaim[]): Round {
 }
 
 const fixture = {
+	threads: [],
+	reactions: [],
 	rounds: [
 		round(0, [claim("c0", 0, "Missing null check on user input")]),
 		round(1, [claim("c1", 1, "Missing null check on user input")]),
