@@ -7,8 +7,10 @@ import { getReviewerGitHubApp } from "../../src/github-app.js";
 import { getDb } from "../../src/improve/db/client.js";
 import { drainKvEvents } from "../../src/improve/drain.js";
 import type { ReviewerId } from "../../src/reviewer-id.js";
+import { logReviewerReadiness } from "../../src/reviewers.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+	logReviewerReadiness();
 	const { status, body } = await pollFeedbackRequest({
 		authorization: req.headers.authorization,
 		secret: process.env.CRON_SECRET,

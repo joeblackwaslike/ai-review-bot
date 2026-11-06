@@ -96,4 +96,39 @@ describe("runFeedbackPoll", () => {
 		const failed = active.find((c) => c.commentId === 1);
 		expect(failed?.lastSeenReactions).toEqual({}); // errored comment not advanced
 	});
+
+	it("skips a record whose reviewer is not ready and still polls the next", async () => {
+		const kv = createFakeKv();
+		await recordPostedComment(
+			kv,
+			rec({ commentId: 1, reviewer: "gemini", provider: "gemini" }),
+			NOW,
+		);
+		await recordPostedComment(kv, rec({ commentId: 2 }), NOW);
+		const octokit = {
+			request: vi.fn().mockResolvedValue({
+				data: [
+					{
+						user: { login: "m" },
+						content: "+1",
+						created_at: "2026-06-10T00:00:00Z",
+					},
+				],
+			}),
+		};
+		const err = vi.spyOn(console, "error").mockImplementation(() => {});
+		const result = await runFeedbackPoll({
+			kv,
+			getOctokit: async (reviewer) => {
+				if (reviewer === "gemini")
+					throw new Error("Reviewer gemini is not ready");
+				return octokit;
+			},
+			nowMs: NOW,
+		});
+		expect(result.polled).toBe(2);
+		expect(result.events).toBe(1);
+		expect(err).toHaveBeenCalledTimes(1);
+		err.mockRestore();
+	});
 });

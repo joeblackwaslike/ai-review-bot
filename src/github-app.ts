@@ -21,11 +21,7 @@ import { primePrices } from "./pricing.js";
 import { resolveStaleThreads } from "./resolve-threads.js";
 import type { ReviewDecision } from "./review.js";
 import { buildReview } from "./review.js";
-import {
-	type LegacyProvider,
-	legacyProviderOf,
-	type ReviewerId,
-} from "./reviewer-id.js";
+import { legacyProviderOf, type ReviewerId } from "./reviewer-id.js";
 import {
 	getReviewerAppConfig,
 	ReviewerNotReadyError,
@@ -1008,7 +1004,8 @@ function registerHandlers(app: App, configFn: () => AppConfig) {
 			// The /api/github/review-run endpoint invokes runScheduledReview after
 			// the delay.
 			const message: ReviewRunMessage = {
-				provider: legacyProviderOf(config.reviewer) as LegacyProvider,
+				reviewer: config.reviewer,
+				provider: legacyProviderOf(config.reviewer),
 				owner,
 				repo,
 				pullNumber,
