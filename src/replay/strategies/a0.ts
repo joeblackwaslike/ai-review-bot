@@ -65,19 +65,27 @@ export const strategyA0: ReviewStrategy = {
 	needsCheckout: false,
 	estimateCost(input) {
 		const perRunUsd = oneRunEstimate(input);
+		const target = input.spendTargetUsd;
+		if (target === undefined) return perRunUsd;
+		const byCap = Math.max(1, Math.floor(input.budget.maxUsd / perRunUsd));
 		return (
 			perRunUsd *
-			repeatsForBudget({
-				targetUsd: input.budget.maxUsd,
-				perRunUsd,
-				tolerance: DEFAULT_TOLERANCE,
-				max: MAX_REPEATS,
-			})
+			Math.min(
+				byCap,
+				repeatsForBudget({
+					targetUsd: target,
+					perRunUsd,
+					tolerance: DEFAULT_TOLERANCE,
+					max: MAX_REPEATS,
+				}),
+			)
 		);
 	},
 	async run(input) {
 		const started = Date.now();
-		const { fixture } = input;
+		const { fixture, signal } = input;
+		const { maxUsd, maxWallMs } = input.budget;
+		const target = input.spendTargetUsd;
 		const selection = selectionFor(input);
 		const auth =
 			fixture.provider === "anthropic"
@@ -90,32 +98,56 @@ export const strategyA0: ReviewStrategy = {
 			extraInstructions: "",
 			files: [{ path: "replay.diff", content: input.diff }],
 		});
-		const once = () => runAgent(A0_SKILL, context, selection, "", { auth });
+		const once = () =>
+			runAgent(A0_SKILL, context, selection, "", { auth, abortSignal: signal });
+		const costOf = (o: AgentOutcome): number =>
+			"usage" in o && o.usage
+				? roundCostUsd({ a0: o.usage }, selection.model)
+				: 0;
+		const mayLaunch = () => !signal.aborted && Date.now() - started < maxWallMs;
 
 		const first = await once();
 		if (first.status !== "ok")
 			throw new Error(`a0 first run failed: ${first.status}`);
-		const targetUsd = input.budget.maxUsd;
-		const n = repeatsForBudget({
-			targetUsd,
-			perRunUsd: roundCostUsd({ a0: first.usage }, selection.model),
-			tolerance: DEFAULT_TOLERANCE,
-			max: MAX_REPEATS,
-		});
-		const rest = await mapWithConcurrency(
-			Array.from({ length: n - 1 }),
-			parseAgentConcurrency(),
-			once,
-		);
+		const attempts: AgentOutcome[] = [first];
+		let spent = costOf(first);
+		const coldUsd = spent;
 
-		const ok = [first, ...rest].filter(isOk);
-		const agentReviews = ok.map((o, i) => ({
-			skill: `a0-run-${i + 1}`,
-			review: o.review,
-		}));
-		const usage: RoundUsage = Object.fromEntries(
-			ok.map((o, i) => [`a0-run-${i + 1}.md`, o.usage]),
-		);
+		if (
+			target !== undefined &&
+			target > spent &&
+			spent <= maxUsd - coldUsd &&
+			mayLaunch()
+		) {
+			const second = await once();
+			attempts.push(second);
+			spent += costOf(second);
+			const warmUsd = costOf(second);
+			if (warmUsd > 0) {
+				const wanted = Math.max(0, Math.round((target - spent) / warmUsd));
+				const room = Math.floor((maxUsd - spent) / warmUsd);
+				const extra = Math.max(
+					0,
+					Math.min(wanted, room, MAX_REPEATS - attempts.length),
+				);
+				const rest = await mapWithConcurrency(
+					Array.from({ length: extra }),
+					parseAgentConcurrency(),
+					async () => (mayLaunch() ? once() : null),
+				);
+				for (const o of rest) if (o) attempts.push(o);
+			}
+		}
+
+		const usage: RoundUsage = {};
+		const agentReviews: { skill: string; review: OkOutcome["review"] }[] = [];
+		let failedAttempts = 0;
+		for (const [i, o] of attempts.entries()) {
+			const skill = `a0-run-${i + 1}`;
+			if (isOk(o)) agentReviews.push({ skill, review: o.review });
+			else failedAttempts++;
+			if ("usage" in o && o.usage) usage[`${skill}.md`] = o.usage;
+		}
 		const achievedUsd = roundCostUsd(usage, selection.model);
 		const merged = mergeReviewsDetailed(agentReviews.map((a) => a.review));
 		return {
@@ -127,13 +159,12 @@ export const strategyA0: ReviewStrategy = {
 			toolCalls: [],
 			wallMs: Date.now() - started,
 			spend: {
-				targetUsd,
+				targetUsd: target ?? null,
 				achievedUsd,
-				withinTolerance: withinTolerance(
-					achievedUsd,
-					targetUsd,
-					DEFAULT_TOLERANCE,
-				),
+				withinTolerance:
+					target !== undefined &&
+					withinTolerance(achievedUsd, target, DEFAULT_TOLERANCE),
+				failedAttempts,
 			},
 		};
 	},

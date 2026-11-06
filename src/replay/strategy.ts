@@ -28,7 +28,10 @@ export interface StrategyInput {
 	approximateDiff: boolean;
 	checkout: CheckoutHandle | null;
 	history: FrozenHistory;
+	/** A hard cap, never a target. */
 	budget: { maxUsd: number; maxWallMs: number };
+	/** What spend-matched strategies aim for: A's cost for this round, set by the grid runner. */
+	spendTargetUsd?: number;
 	signal: AbortSignal;
 }
 
@@ -42,7 +45,12 @@ export interface StrategyResult {
 	usage: RoundUsage;
 	toolCalls: ToolCallRecord[];
 	/** Set by spend-matched strategies (a0): what they aimed for and hit. */
-	spend?: { targetUsd: number; achievedUsd: number; withinTolerance: boolean };
+	spend?: {
+		targetUsd: number | null;
+		achievedUsd: number;
+		withinTolerance: boolean;
+		failedAttempts: number;
+	};
 	wallMs: number;
 }
 
