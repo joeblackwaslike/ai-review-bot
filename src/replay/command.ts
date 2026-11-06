@@ -12,6 +12,12 @@ import {
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ModelSelection } from "../router.js";
+import {
+	type AdjudicationJudges,
+	DEFAULT_MAX_ANTHROPIC,
+	DEFAULT_MAX_OPENAI,
+	runAdjudication,
+} from "./adjudication/run.js";
 import { fixtureId } from "./claims.js";
 import {
 	type ClassFile,
@@ -55,6 +61,9 @@ export interface ReplayDeps {
 	liveWiring?: typeof defaultLiveWiring;
 	/** Builds the judge for a model family; the default resolves real credentials. */
 	joinJudge?: (family: Provider) => Promise<JoinJudge>;
+	/** Judges for `--adjudicate`; the default builds real models only after `--plan` is ruled out. */
+	adjudicationJudges?: AdjudicationJudges | (() => Promise<AdjudicationJudges>);
+	adjudicationDir?: string;
 }
 
 interface ParsedArgs {
@@ -70,6 +79,11 @@ interface ParsedArgs {
 	expectClean?: boolean;
 	strategy?: string;
 	investigateJoin?: string;
+	adjudicate?: string;
+	maxAnthropic?: number;
+	maxOpenai?: number;
+	plan?: boolean;
+	audit?: boolean;
 }
 
 const USAGE = [
@@ -78,6 +92,7 @@ const USAGE = [
 	"  ai-review replay --record <pr-url> --provider anthropic|openai --bot <login> [--held-out] [--expect-clean] [--fixtures <dir>]",
 	"  ai-review replay --live [--rounds <n>] [--max-cost <usd>] [--strategy <name>] [--save-trace] [--fixtures <dir>]",
 	"  ai-review replay --investigate-join <fixture-id> [--fixtures <dir>]",
+	"  ai-review replay --adjudicate <fixture-id> [--max-anthropic <n>] [--max-openai <n>] [--plan | --audit] [--fixtures <dir>]",
 ].join("\n");
 
 const PR_URL = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)\/?$/;
@@ -116,6 +131,18 @@ function parseArgs(args: string[]): ParsedArgs | null {
 			parsed.expectClean = true;
 			continue;
 		}
+		if (flag === "--plan" || flag === "--audit") {
+			parsed[flag === "--plan" ? "plan" : "audit"] = true;
+			continue;
+		}
+		if (flag === "--max-anthropic" || flag === "--max-openai") {
+			const n = Number(value);
+			if (value === undefined || !Number.isInteger(n) || n < 0) return null;
+			if (flag === "--max-anthropic") parsed.maxAnthropic = n;
+			else parsed.maxOpenai = n;
+			i++;
+			continue;
+		}
 		if (flag === "--rounds" || flag === "--max-cost") {
 			const n = Number(value);
 			if (value === undefined || !Number.isFinite(n) || n <= 0) return null;
@@ -130,6 +157,7 @@ function parseArgs(args: string[]): ParsedArgs | null {
 			(flag === "--record" ||
 				flag === "--strategy" ||
 				flag === "--investigate-join" ||
+				flag === "--adjudicate" ||
 				flag === "--provider" ||
 				flag === "--bot" ||
 				flag === "--fixtures") &&
@@ -139,6 +167,7 @@ function parseArgs(args: string[]): ParsedArgs | null {
 		if (flag === "--record") parsed.record = value;
 		else if (flag === "--strategy") parsed.strategy = value;
 		else if (flag === "--investigate-join") parsed.investigateJoin = value;
+		else if (flag === "--adjudicate") parsed.adjudicate = value;
 		else if (flag === "--bot") parsed.bot = value;
 		else if (flag === "--fixtures") parsed.fixtures = value;
 		else if (flag === "--provider") {
@@ -550,7 +579,28 @@ export async function runReplay(
 				parsed.heldOut ||
 				parsed.expectClean ||
 				!FIXTURE_ID.test(parsed.investigateJoin)) &&
-			"--investigate-join takes a fixture id and no other mode flags");
+			"--investigate-join takes a fixture id and no other mode flags") ||
+		(parsed.adjudicate !== undefined &&
+			(parsed.live ||
+				parsed.provider !== undefined ||
+				parsed.bot !== undefined ||
+				parsed.record !== undefined ||
+				parsed.investigateJoin !== undefined ||
+				parsed.saveTrace ||
+				parsed.strategy !== undefined ||
+				parsed.rounds !== undefined ||
+				parsed.maxCost !== undefined ||
+				parsed.heldOut ||
+				parsed.expectClean ||
+				(parsed.plan && parsed.audit) ||
+				!FIXTURE_ID.test(parsed.adjudicate)) &&
+			"--adjudicate takes a fixture id, optional caps, and either --plan or --audit, with no other mode flags") ||
+		(parsed.adjudicate === undefined &&
+			(parsed.plan ||
+				parsed.audit ||
+				parsed.maxAnthropic !== undefined ||
+				parsed.maxOpenai !== undefined) &&
+			"--plan, --audit, --max-anthropic and --max-openai require --adjudicate");
 	if (misuse) {
 		out(`${misuse}\n${USAGE}`);
 		return 2;
@@ -568,6 +618,25 @@ export async function runReplay(
 	}
 	const dir =
 		parsed.fixtures ?? deps.fixturesDir ?? defaultFixturesDir(import.meta.url);
+	if (parsed.adjudicate !== undefined)
+		return runAdjudication({
+			id: parsed.adjudicate,
+			dir,
+			caps: {
+				anthropic: parsed.maxAnthropic ?? DEFAULT_MAX_ANTHROPIC,
+				openai: parsed.maxOpenai ?? DEFAULT_MAX_OPENAI,
+			},
+			plan: parsed.plan === true,
+			audit: parsed.audit === true,
+			client: deps.client ?? ghCli(),
+			out,
+			cacheDir: deps.adjudicationDir,
+			judges:
+				deps.adjudicationJudges ??
+				(async () =>
+					(await import("./adjudication/model-judges.js"))
+						.modelAdjudicationJudges),
+		});
 	if (parsed.investigateJoin !== undefined)
 		return investigate(
 			parsed,

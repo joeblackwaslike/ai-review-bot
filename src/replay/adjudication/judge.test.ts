@@ -1,0 +1,135 @@
+import { describe, expect, it } from "vitest";
+import { z } from "zod";
+import {
+	buildJudgePrompt,
+	computePromptHash,
+	EVIDENCE_CHARS,
+	JUDGE_MODELS,
+	JudgementSchema,
+	PROMPT_HASH,
+	PROMPT_TEMPLATE,
+	routeJudges,
+} from "./judge.js";
+
+const input = (title: string) => ({
+	claim: { path: "a.ts", line: 3, title },
+	diffEvidence: "+const x = 1;",
+});
+
+describe("buildJudgePrompt", () => {
+	it("differs between inputs only where the claim differs", () => {
+		const a = buildJudgePrompt(input("zzz-a"));
+		const b = buildJudgePrompt(input("zzz-b"));
+		expect(a.replace("zzz-a", "")).toBe(b.replace("zzz-b", ""));
+	});
+
+	it("names no producer, strategy or model family in the template", () => {
+		expect(PROMPT_TEMPLATE).not.toMatch(
+			/anthropic|openai|claude|gpt|codex|strategy|provider/i,
+		);
+	});
+});
+
+describe("evidence truncation", () => {
+	it("marks a cut patch with the shown and total size", () => {
+		const total = EVIDENCE_CHARS + 500;
+		const prompt = buildJudgePrompt({
+			claim: { path: "a.ts", line: 3, title: "t" },
+			diffEvidence: "y".repeat(total),
+		});
+		expect(prompt).toContain(
+			`[patch truncated: ${EVIDENCE_CHARS} of ${total} chars shown]`,
+		);
+	});
+
+	it("adds no marker to a patch that fits", () => {
+		const prompt = buildJudgePrompt(input("t"));
+		expect(prompt).not.toContain("patch truncated");
+	});
+});
+
+describe("PROMPT_HASH", () => {
+	it("is the hash of the default prompt inputs", () => {
+		expect(PROMPT_HASH).toBe(computePromptHash());
+	});
+
+	it("changes with the template", () => {
+		expect(computePromptHash({ template: `${PROMPT_TEMPLATE} more` })).not.toBe(
+			PROMPT_HASH,
+		);
+	});
+
+	it("changes with the evidence limit", () => {
+		expect(computePromptHash({ evidenceChars: 4000 })).not.toBe(PROMPT_HASH);
+	});
+
+	it("changes with the response schema", () => {
+		expect(
+			computePromptHash({
+				schema: z.object({ verdict: z.enum(["real", "not-real"]) }),
+			}),
+		).not.toBe(PROMPT_HASH);
+	});
+});
+
+describe("JudgementSchema", () => {
+	it("rejects a real verdict without scope", () => {
+		expect(
+			JudgementSchema.safeParse({ verdict: "real", scope: null, reason: "r" })
+				.success,
+		).toBe(false);
+	});
+
+	it("accepts real with scope and not-real without", () => {
+		expect(
+			JudgementSchema.safeParse({
+				verdict: "real",
+				scope: "change",
+				reason: "r",
+			}).success,
+		).toBe(true);
+		expect(
+			JudgementSchema.safeParse({
+				verdict: "not-real",
+				scope: null,
+				reason: "r",
+			}).success,
+		).toBe(true);
+	});
+
+	it("rejects a scope on a verdict that is not real", () => {
+		expect(
+			JudgementSchema.safeParse({
+				verdict: "unclear",
+				scope: "moved",
+				reason: "r",
+			}).success,
+		).toBe(false);
+	});
+});
+
+describe("routeJudges", () => {
+	it("judges an anthropic candidate by Anthropic first and OpenAI second", () => {
+		const { first, second } = routeJudges("anthropic");
+		expect(first).toEqual(JUDGE_MODELS.anthropic);
+		expect(second).toEqual(JUDGE_MODELS.openai);
+	});
+
+	it("judges an openai candidate by Anthropic only", () => {
+		const { first, second } = routeJudges("openai");
+		expect(first.provider).toBe("anthropic");
+		expect(second).toBeNull();
+	});
+
+	it("uses a different Anthropic model when the producer was Opus", () => {
+		const { first, second } = routeJudges("anthropic", "claude-opus-5-5");
+		expect(first.model).toBe("claude-sonnet-5-5");
+		expect(second).toEqual(JUDGE_MODELS.openai);
+	});
+
+	it("keeps the strongest model when the producer was Sonnet", () => {
+		expect(routeJudges("anthropic", "claude-sonnet-5-5").first).toEqual(
+			JUDGE_MODELS.anthropic,
+		);
+	});
+});
