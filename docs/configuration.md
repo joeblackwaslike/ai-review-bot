@@ -192,6 +192,8 @@ Env overrides apply to every section. Only dynamic map entries (`reviewers.<id>`
 | `models.<provider/model>.pricing.cachedInput` | none | none | number | required | Cached input token price, USD per million tokens. |
 | `models.<provider/model>.pricing.output` | none | none | number | required | Output token price, USD per million tokens. |
 | `models.<provider/model>.refusalFallback` | none | none | boolean | `false` | Retry once with a fallback when the model refuses. |
+| `models.<provider/model>.effortControl` | none | none | one of level, budget | unset | How a Google model takes reasoning effort. |
+| `models.<provider/model>.providerOptions.<provider/model>` | none | none | custom | required | Options for one provider. |
 | `models.<provider/model>.structuredOutput` | none | none | one of native, json | `"native"` | Reserved. Not read yet; a later slice will use it to pick the structured output mode. |
 | `reviewers.<id>.enabled` | `AI_REVIEW_REVIEWERS__<ID>__ENABLED` | none | boolean | `true` | Run this reviewer. |
 | `reviewers.<id>.tiers.trivial.model` | `AI_REVIEW_REVIEWERS__<ID>__TIERS__TRIVIAL__MODEL` | none | string | required | Model for this tier. |

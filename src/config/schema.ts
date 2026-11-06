@@ -1,3 +1,4 @@
+import type { JSONObject } from "@ai-sdk/provider";
 import { z } from "zod";
 import { DEFAULT_DIFF_BUDGET_CHARS } from "../diff-pack.js";
 
@@ -35,6 +36,22 @@ const ModelSchema = z
 			.boolean()
 			.default(false)
 			.describe("Retry once with a fallback when the model refuses."),
+		effortControl: z
+			.enum(["level", "budget"])
+			.optional()
+			.describe("How a Google model takes reasoning effort."),
+		providerOptions: z
+			.record(
+				z.string(),
+				z
+					.custom<JSONObject>(
+						(v) => typeof v === "object" && v !== null && !Array.isArray(v),
+						"must be an object",
+					)
+					.describe("Options for one provider."),
+			)
+			.optional()
+			.describe("Provider options merged over the computed options."),
 		structuredOutput: z
 			.enum(["native", "json"])
 			.default("native")

@@ -1,5 +1,13 @@
+import type { JSONObject } from "@ai-sdk/provider";
 import { getConfigTree } from "./config/load.js";
 import type { Config } from "./config/schema.js";
+import {
+	anthropicOptions,
+	googleOptions,
+	mergeProviderOptions,
+	openaiOptions,
+	type ProviderOptions,
+} from "./providers/effort.js";
 import type { ProviderName } from "./providers/names.js";
 
 type Effort = NonNullable<ModelSelection["effort"]>;
@@ -110,27 +118,30 @@ export function routeModel(
 	return { provider, model: resolved.model, effort: resolved.effort };
 }
 
-/** Maps the tier's effort onto the active provider's reasoning knob:
- *  OpenAI reads `reasoningEffort`, Anthropic reads `effort`, and models whose
- *  config sets `refusalFallback` (server-side reruns on a model chosen by
- *  refusal category) also get `fallbacks: "default"`. Returns
- *  undefined when there is nothing to send, so the provider default applies.
- *  `"none"` is a valid OpenAI `reasoningEffort` value (gpt-6-luna's explicit
- *  non-reasoning mode) and is forwarded as-is; the Anthropic tiers never emit it. */
+/** Maps the tier's effort onto the active provider's reasoning knob through
+ *  the per-provider translators, then merges the model entry's
+ *  `providerOptions` over the result. Returns undefined when there is nothing
+ *  to send, so the provider default applies. */
 export function reasoningProviderOptions(
 	selection: ModelSelection,
-): Record<string, Record<string, string>> | undefined {
-	if (selection.provider === "openai") {
-		return selection.effort
-			? { openai: { reasoningEffort: selection.effort } }
-			: undefined;
-	}
-	const anthropic: Record<string, string> = {};
-	if (selection.effort) anthropic.effort = selection.effort;
+): ProviderOptions | undefined {
 	const entry =
 		getConfigTree().models[`${selection.provider}/${selection.model}`];
-	if (entry?.refusalFallback) anthropic.fallbacks = "default";
-	return Object.keys(anthropic).length > 0 ? { anthropic } : undefined;
+	let computed: JSONObject | undefined;
+	if (selection.provider === "openai") {
+		computed = openaiOptions(selection.effort);
+	} else if (selection.provider === "google") {
+		computed = googleOptions(selection.effort, entry?.effortControl);
+	} else {
+		computed = anthropicOptions(
+			selection.effort,
+			entry?.refusalFallback ?? false,
+		);
+	}
+	return mergeProviderOptions(
+		computed ? { [selection.provider]: computed } : undefined,
+		entry?.providerOptions,
+	);
 }
 
 /** Output-token budget for a generateObject call. Reasoning/thinking tokens are

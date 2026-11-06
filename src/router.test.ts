@@ -1,5 +1,20 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { getConfigTree, resetConfigForTests } from "./config/load.js";
+
+const pins = vi.hoisted(() => ({
+	models: undefined as Record<string, unknown> | undefined,
+}));
+vi.mock("./config/load.js", async (importOriginal) => {
+	const real = await importOriginal<typeof import("./config/load.js")>();
+	return {
+		...real,
+		getConfigTree: () => {
+			const tree = real.getConfigTree();
+			return pins.models ? { ...tree, models: pins.models } : tree;
+		},
+	};
+});
+
 import type { RouterContext } from "./router.js";
 import {
 	classifyTier,
@@ -349,6 +364,45 @@ describe("reasoningProviderOptions adds fallbacks only for refusalFallback model
 		expect(
 			reasoningProviderOptions({ provider: "openai", model: "gpt-6-luna" }),
 		).toBeUndefined();
+	});
+});
+
+describe("reasoningProviderOptions for google", () => {
+	afterEach(() => {
+		pins.models = undefined;
+	});
+	const selection = {
+		provider: "google",
+		model: "gemini-3.8-flash",
+		effort: "high",
+	} as const;
+
+	it("defaults to a thinking level", () => {
+		expect(reasoningProviderOptions(selection)).toEqual({
+			google: {
+				thinkingConfig: { thinkingLevel: "high", includeThoughts: false },
+			},
+		});
+	});
+
+	it("uses a budget when the model entry says so", () => {
+		pins.models = { "google/gemini-3.8-flash": { effortControl: "budget" } };
+		expect(reasoningProviderOptions(selection)).toEqual({
+			google: {
+				thinkingConfig: { thinkingBudget: 24576, includeThoughts: false },
+			},
+		});
+	});
+
+	it("merges the entry's providerOptions over the computed block", () => {
+		pins.models = {
+			"google/gemini-3.8-flash": {
+				providerOptions: { google: { thinkingConfig: { thinkingBudget: 42 } } },
+			},
+		};
+		expect(reasoningProviderOptions(selection)).toEqual({
+			google: { thinkingConfig: { thinkingBudget: 42 } },
+		});
 	});
 });
 
