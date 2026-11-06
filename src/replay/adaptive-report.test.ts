@@ -327,7 +327,7 @@ describe("adaptiveReport with the real posting filters", () => {
 		const p3Claims = WORD_IDS.map((w, i) =>
 			claimOf(`n${i}`, 2, `src/${w}.ts`, `${w} widget leaks memory`, 300 + i),
 		);
-		const p3 = WORD_IDS.map((w, i) => ({
+		const p3 = WORD_IDS.map((w) => ({
 			skill: "code-reviewer.md",
 			title: `${w} widget leaks memory`,
 			path: `src/${w}.ts`,
