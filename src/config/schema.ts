@@ -74,6 +74,8 @@ const TierChoiceSchema = z
 const RESERVED_REVIEWER_IDS: ReadonlySet<string> = new Set([
 	"anthropic",
 	"openai",
+	"constructor",
+	"prototype",
 ]);
 
 const TIER_KEYS = ["trivial", "normal", "complex", "deep"] as const;
@@ -393,7 +395,7 @@ export const ConfigSchema = z
 			if (RESERVED_REVIEWER_IDS.has(id)) {
 				issue(
 					["reviewers", id],
-					`reviewer id "${id}" is reserved: it is the persisted provider name of claude or codex`,
+					`reviewer id "${id}" is reserved: it is a legacy provider name or an unsafe config path key`,
 				);
 			}
 			for (const tier of TIER_KEYS) {

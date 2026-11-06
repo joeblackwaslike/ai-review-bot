@@ -3330,7 +3330,7 @@ async function buildReviewInner(
 				);
 				summary = fallbackSummary;
 			}
-			bill(selection.model, summaryResult.usage);
+			bill(`${selection.provider}/${selection.model}`, summaryResult.usage);
 		} catch (error) {
 			// The summary is prose over findings the agents already produced; losing
 			// the whole review to a rate limit or timeout here would be worse.

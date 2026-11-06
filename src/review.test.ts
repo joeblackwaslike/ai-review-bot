@@ -10738,6 +10738,37 @@ describe("classified agent failures with usage", () => {
 		}
 	});
 
+	it("bills the summary call under the provider-qualified model id", async () => {
+		const base = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [
+					{
+						title: "Missing guard",
+						body: "b",
+						severity: "P2",
+						category: "bug",
+						confidence: 0.9,
+						evidence: "e",
+						suppressible: false,
+					},
+				],
+				inline_comments: [],
+			}),
+		);
+		mockGenerateObject.mockResolvedValue({
+			...base,
+			object: { ...base.object, summary: "s" },
+			usage: { inputTokens: 1000, outputTokens: 100 },
+		});
+		vi.mocked(sumCost).mockClear();
+		await buildReview(ctx());
+		const billed = vi.mocked(sumCost).mock.calls[0]?.[0];
+		for (const key of billed?.keys() ?? []) {
+			expect(key).toMatch(/^[a-z]+\/.+/);
+		}
+	});
+
 	it("prices each request on its own prompt size, so summed prompts crossing a tier threshold stay at the base rate", async () => {
 		const tier = (input: number, cachedInput: number, output: number) => ({
 			input,

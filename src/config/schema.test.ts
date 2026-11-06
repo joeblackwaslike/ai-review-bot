@@ -60,6 +60,15 @@ describe("ConfigSchema", () => {
 		}
 	});
 
+	it("rejects reviewer ids the env overlay refuses as unsafe path keys", () => {
+		for (const id of ["constructor", "prototype"]) {
+			const cfg = { ...minimal(), reviewers: { [id]: { tiers } } };
+			const result = ConfigSchema.safeParse(cfg);
+			expect(result.success).toBe(false);
+			expect(JSON.stringify(result.error?.issues)).toContain("reserved");
+		}
+	});
+
 	it("rejects a secret key in a reviewer", () => {
 		const cfg = minimal();
 		Object.assign(cfg.reviewers.claude, { privateKey: "x" });
