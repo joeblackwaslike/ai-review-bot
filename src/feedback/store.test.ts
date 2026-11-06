@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createFakeKv } from "./kv.fake.js";
 import {
 	appendFeedbackEvent,
@@ -42,6 +42,27 @@ describe("feedback store", () => {
 		expect(active).toHaveLength(1);
 		expect(active[0]?.commentId).toBe(1);
 		expect(active[0]?.skills).toEqual(["code-reviewer.md"]);
+	});
+
+	it("lists every record when shouldStop is omitted", async () => {
+		const kv = createFakeKv();
+		for (const id of [1, 2, 3])
+			await recordPostedComment(kv, rec({ commentId: id }), NOW);
+		expect(await listActiveComments(kv, NOW)).toHaveLength(3);
+	});
+
+	it("stops issuing gets once shouldStop returns true", async () => {
+		const kv = createFakeKv();
+		for (const id of [1, 2, 3])
+			await recordPostedComment(kv, rec({ commentId: id }), NOW);
+		const get = vi.spyOn(kv, "get");
+		const active = await listActiveComments(
+			kv,
+			NOW,
+			() => get.mock.calls.length >= 1,
+		);
+		expect(get).toHaveBeenCalledTimes(1);
+		expect(active).toHaveLength(1);
 	});
 
 	it("markPolled persists the updated lastSeenReactions", async () => {

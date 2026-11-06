@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { limitNotice } from "./adaptive-limits.js";
 import { type AgentRecord, formatAgentsMarker } from "./agent-log.js";
 import { deriveBaseline } from "./baseline.js";
 import type { Ledger, LedgerEntry } from "./ledger/types.js";
@@ -331,6 +332,18 @@ describe("deriveBaseline", () => {
 		);
 		expect(r?.state.findings).toEqual([]);
 		expect(r?.state.event).toBe("COMMENT");
+		expect(r?.complete).toBe(true);
+	});
+
+	it("reads no finding from the adaptive limit notice", () => {
+		const notice = limitNotice({ floor: "P2", budget: 5 }, 3) ?? "";
+		const r = deriveBaseline(
+			{ id: 20, body: `${notice}\n\n${body({})}` },
+			warm([]),
+			KNOWN_SKILLS,
+		);
+		expect(notice).not.toBe("");
+		expect(r?.state.findings).toEqual([]);
 		expect(r?.complete).toBe(true);
 	});
 

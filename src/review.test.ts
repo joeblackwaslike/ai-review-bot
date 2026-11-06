@@ -5399,6 +5399,7 @@ describe("buildReview ledger suppression", () => {
 			comments?: unknown[];
 			threadNodes?: unknown[];
 			patch?: string;
+			files?: unknown[];
 		} = {},
 	) {
 		const request = vi
@@ -5461,7 +5462,9 @@ describe("buildReview ledger suppression", () => {
 				.mockImplementation(async (route: string) =>
 					route.endsWith("/reviews")
 						? allReviews
-						: [buildPullFile("src/review.ts", o.patch ?? SIMPLE_PATCH)],
+						: (o.files ?? [
+								buildPullFile("src/review.ts", o.patch ?? SIMPLE_PATCH),
+							]),
 				),
 		};
 	}
@@ -6912,6 +6915,523 @@ describe("buildReview ledger suppression", () => {
 		for (const r of traceGeneral) expect(decision?.body).toContain(r.title);
 		expect(trace.posted.map((r) => r.title)).not.toContain(REPEAT_TITLE);
 		expect(trace.posted.map((r) => r.title)).not.toContain(offP2.title);
+	});
+
+	describe("adaptive limits", () => {
+		const none = buildModelReview({
+			event: "COMMENT",
+			general_findings: [],
+			inline_comments: [],
+		});
+		const finding = (
+			n: number,
+			severity: "P1" | "P2" | "P3",
+			confidence = 0.9 - n / 100,
+		) => ({
+			...fresh,
+			title: `Adaptive finding ${n}`,
+			severity,
+			confidence,
+		});
+		const nine = [
+			finding(0, "P1"),
+			...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => finding(n, "P2")),
+		];
+		const agentOutput = (
+			general: typeof nine,
+			event: "COMMENT" | "REQUEST_CHANGES" = "COMMENT",
+		) =>
+			buildModelReview({
+				event,
+				general_findings: general,
+				inline_comments: [],
+			});
+		const titlesIn = (body: string) =>
+			[...body.matchAll(/Adaptive finding \d/g)].map((m) => m[0]);
+		const spy = () => vi.fn(async (_discards: Discard[]) => {});
+		const secondComment = {
+			id: 21,
+			pull_request_review_id: 100,
+			path: "src/review.ts",
+			line: 3,
+			body: "**P2** **Second open claim**\n\nStill open.",
+		};
+		const [declinedThread] =
+			threads.data.repository.pullRequest.reviewThreads.nodes;
+		const openSecondThread = {
+			...declinedThread,
+			comments: {
+				...declinedThread.comments,
+				nodes: [
+					{
+						...declinedThread.comments.nodes[0],
+						databaseId: 21,
+						body: secondComment.body,
+					},
+				],
+			},
+		};
+
+		const originalAdaptiveLimits = REVIEWER_TUNING.adaptiveLimits;
+		afterEach(() => {
+			REVIEWER_TUNING.adaptiveLimits = originalAdaptiveLimits;
+		});
+
+		it("keeps the P1 and 4 P2 and records 4 ADAPTIVE_LIMIT discards", async () => {
+			REVIEWER_TUNING.adaptiveLimits = true;
+			routeAgents({ "code-reviewer.md": agentOutput(nine) }, none);
+			const recordDiscards = spy();
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit(),
+				...baseContext,
+				recordDiscards,
+			});
+
+			expect(titlesIn(decision?.body ?? "")).toEqual(
+				[0, 1, 2, 3, 4].map((n) => `Adaptive finding ${n}`),
+			);
+			const records = recordDiscards.mock.calls[0]?.[0] ?? [];
+			const limited = records.filter((d) => d.reason === "ADAPTIVE_LIMIT");
+			expect(limited.map((d) => d.title).sort()).toEqual(
+				[5, 6, 7, 8].map((n) => `Adaptive finding ${n}`),
+			);
+			expect(limited.every((d) => d.disposition === "dropped")).toBe(true);
+			expect(limited.every((d) => d.skill === "code-reviewer.md")).toBe(true);
+			expect(decision?.body).toContain(
+				"Held back 4 findings below P2 or over the budget of 5 this round",
+			);
+		});
+
+		it("drops inline findings from comments, provenance and records with their skill", async () => {
+			REVIEWER_TUNING.adaptiveLimits = true;
+			const patch = `@@ -1,2 +1,12 @@\n line1\n${Array.from({ length: 11 }, (_, i) => `+added${i}`).join("\n")}`;
+			const inline = (
+				line: number,
+				title: string,
+				severity: "P1" | "P2" | "P3",
+				confidence: number,
+			) =>
+				buildInlineComment({
+					path: "src/review.ts",
+					line,
+					title,
+					body: `${title} body.`,
+					severity,
+					confidence,
+					suppressible: false,
+				});
+			const titles = [
+				"Unchecked cursor overflow",
+				"Stale cache invalidation",
+				"Missing retry backoff",
+				"Leaked file descriptor",
+				"Racy counter update",
+				"Ambiguous timezone parsing",
+				"Unbounded queue growth",
+				"Misleading log wording",
+			];
+			const comments = [
+				inline(4, titles[0] as string, "P1", 0.95),
+				inline(5, titles[1] as string, "P2", 0.9),
+				inline(6, titles[2] as string, "P2", 0.89),
+				inline(7, titles[3] as string, "P2", 0.88),
+				inline(8, titles[4] as string, "P2", 0.87),
+				inline(9, titles[5] as string, "P2", 0.5),
+				inline(10, titles[6] as string, "P2", 0.4),
+				inline(11, titles[7] as string, "P3", 0.9),
+			];
+			routeAgents(
+				{
+					"code-reviewer.md": buildModelReview({
+						event: "COMMENT",
+						general_findings: [],
+						inline_comments: comments,
+					}),
+				},
+				none,
+			);
+			const recordDiscards = spy();
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit({ patch }),
+				...baseContext,
+				feedbackEnabled: true,
+				recordDiscards,
+			});
+
+			const removed = titles.slice(5);
+			const kept = titles.slice(0, 5);
+			const posted = decision?.comments ?? [];
+			expect(posted.map((c) => c.line).sort((a, b) => a - b)).toEqual([
+				4, 5, 6, 7, 8,
+			]);
+			for (const t of removed)
+				expect(posted.some((c) => c.body.includes(t))).toBe(false);
+			const keys = [...(decision?.commentProvenance?.keys() ?? [])];
+			for (const [i, t] of titles.entries()) {
+				const key = commentKey({
+					path: "src/review.ts",
+					line: [4, 5, 6, 7, 8, 9, 10, 11][i] as number,
+					title: t,
+				});
+				expect(keys.includes(key)).toBe(kept.includes(t));
+			}
+			const records = recordDiscards.mock.calls[0]?.[0] ?? [];
+			const limited = records.filter((d) => d.reason === "ADAPTIVE_LIMIT");
+			expect(limited.map((d) => d.title).sort()).toEqual([...removed].sort());
+			expect(limited.every((d) => d.skill === "code-reviewer.md")).toBe(true);
+			expect(limited.every((d) => d.disposition === "dropped")).toBe(true);
+		});
+
+		it("posts all nine with the switch off", async () => {
+			routeAgents({ "code-reviewer.md": agentOutput(nine) }, none);
+			const decision = await buildReview({
+				octokit: ledgerOctokit(),
+				...baseContext,
+			});
+			expect(new Set(titlesIn(decision?.body ?? "")).size).toBe(9);
+			expect(decision?.body).not.toContain("Held back");
+		});
+
+		it("posts all nine in round 1, with no earlier own review", async () => {
+			REVIEWER_TUNING.adaptiveLimits = true;
+			routeAgents({ "code-reviewer.md": agentOutput(nine) }, none);
+			const decision = await buildReview({
+				octokit: ledgerOctokit({ reviews: [], comments: [], threadNodes: [] }),
+				...baseContext,
+			});
+			expect(new Set(titlesIn(decision?.body ?? "")).size).toBe(9);
+		});
+
+		describe("author reactions", () => {
+			const [openThread] = [
+				{
+					...declinedThread,
+					comments: {
+						...declinedThread.comments,
+						nodes: [declinedThread.comments.nodes[0]],
+					},
+				},
+			];
+			const downRecord = {
+				commentId: 11,
+				provider: "anthropic",
+				installationId: 1,
+				owner: baseContext.owner,
+				repo: baseContext.repo,
+				pr: baseContext.pullNumber,
+				headSha: "abc",
+				path: ownComment.path,
+				line: ownComment.line,
+				skills: [],
+				title: REPEAT_TITLE,
+				body: "",
+				postedAtMs: 0,
+				expiresAtMs: Date.now() + 1e9,
+				lastSeenReactions: { joe: "down" },
+			};
+			const fakeKv = (records: unknown[]) => ({
+				zrangebyscore: vi.fn(async () =>
+					records.map((_, i) => `anthropic:${i}`),
+				),
+				get: vi.fn(async (k: string) =>
+					JSON.stringify(records[Number(k.split(":").pop())]),
+				),
+			});
+			const scoreWith = async (getKv?: () => unknown) => {
+				REVIEWER_TUNING.adaptiveLimits = true;
+				const log = vi.spyOn(console, "log").mockImplementation(() => {});
+				routeAgents({ "code-reviewer.md": agentOutput(nine) }, none);
+				await buildReview({
+					octokit: ledgerOctokit({ threadNodes: [openThread] }),
+					...baseContext,
+					feedbackEnabled: true,
+					getKv: getKv as never,
+				});
+				const line = budgetLog(log) as { score: number | null } | undefined;
+				log.mockRestore();
+				return line;
+			};
+
+			it("counts a down reaction on an open entry as rejected", async () => {
+				const kv = fakeKv([downRecord]);
+				expect((await scoreWith(() => kv))?.score).toBe(1);
+				expect((await scoreWith())?.score).toBeNull();
+			});
+
+			it("proceeds on ledger statuses when KV is unset", async () => {
+				expect((await scoreWith(() => null))?.score).toBeNull();
+			});
+
+			it("proceeds and warns once when KV throws", async () => {
+				const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+				const kv = {
+					zrangebyscore: vi.fn(async () => {
+						throw new Error("kv down");
+					}),
+					get: vi.fn(),
+				};
+				const line = await scoreWith(() => kv);
+				const calls = warn.mock.calls.length;
+				warn.mockRestore();
+				expect(line?.score).toBeNull();
+				expect(calls).toBe(1);
+			});
+
+			it("does not read KV when no ledger entry predates the current round", async () => {
+				REVIEWER_TUNING.adaptiveLimits = true;
+				const kv = fakeKv([downRecord]);
+				const getKv = vi.fn(() => kv);
+				routeAgents({ "code-reviewer.md": agentOutput(nine) }, none);
+				await buildReview({
+					octokit: ledgerOctokit({ comments: [], threadNodes: [] }),
+					...baseContext,
+					feedbackEnabled: true,
+					getKv: getKv as never,
+				});
+				expect(getKv).not.toHaveBeenCalled();
+			});
+
+			it("logs the per-round friction values", async () => {
+				const kv = fakeKv([downRecord]);
+				const line = (await scoreWith(() => kv)) as
+					| { rounds?: unknown[] }
+					| undefined;
+				expect(line?.rounds?.[0]).toHaveProperty("friction");
+			});
+
+			it("never touches KV with the switch off", async () => {
+				REVIEWER_TUNING.adaptiveLimits = false;
+				const kv = fakeKv([downRecord]);
+				const getKv = vi.fn(() => kv);
+				routeAgents({ "code-reviewer.md": agentOutput(nine) }, none);
+				await buildReview({
+					octokit: ledgerOctokit({ threadNodes: [openThread] }),
+					...baseContext,
+					feedbackEnabled: true,
+					getKv: getKv as never,
+				});
+				expect(getKv).not.toHaveBeenCalled();
+				expect(kv.zrangebyscore).not.toHaveBeenCalled();
+			});
+		});
+
+		it("uses the band budget unscaled on a non-incremental review", async () => {
+			REVIEWER_TUNING.adaptiveLimits = true;
+			const log = vi.spyOn(console, "log").mockImplementation(() => {});
+			routeAgents({ "code-reviewer.md": agentOutput(nine) }, none);
+			await buildReview({ octokit: ledgerOctokit(), ...baseContext });
+			const line = log.mock.calls.find(([m]) => m === "adaptive limits");
+			log.mockRestore();
+			expect(line?.[1]).toMatchObject({ floor: "P2", budget: 5, removed: 4 });
+			expect(line?.[1].shape).toBeNull();
+		});
+
+		const allBelowFloor = agentOutput(
+			[1, 2, 3].map((n) => finding(n, "P3")),
+			"REQUEST_CHANGES",
+		);
+
+		const rawFile = (name: string, additions: number, deletions = 0) => ({
+			...buildPullFile(name, SIMPLE_PATCH),
+			additions,
+			deletions,
+		});
+		const incrementalRound = (deltaFiles: ReturnType<typeof rawFile>[]) => {
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "INCREMENTAL",
+				resolved: [],
+				newRisk: true,
+			});
+			mockFetchDeltaMeta.mockResolvedValueOnce({
+				files: deltaFiles as never[],
+				diff: "delta",
+				truncated: false,
+			});
+		};
+		const prFiles = (...extra: ReturnType<typeof rawFile>[]) => [
+			rawFile("src/review.ts", 40),
+			...extra,
+		];
+		const budgetLog = (log: { mock: { calls: unknown[][] } }) =>
+			log.mock.calls.find(([m]) => m === "adaptive limits")?.[1];
+
+		it("scales the budget to a docs-only delta on an incremental round", async () => {
+			REVIEWER_TUNING.adaptiveLimits = true;
+			const log = vi.spyOn(console, "log").mockImplementation(() => {});
+			const readme = rawFile("README.md", 20);
+			incrementalRound([readme]);
+			routeAgents({ "code-reviewer.md": agentOutput(nine) }, none);
+			const recordDiscards = spy();
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit({ files: prFiles(readme) }),
+				...baseContext,
+				recordDiscards,
+			});
+
+			const logged = budgetLog(log);
+			log.mockRestore();
+			expect(logged).toMatchObject({ budget: 2, removed: 7 });
+			expect(titlesIn(decision?.body ?? "")).toEqual([
+				"Adaptive finding 0",
+				"Adaptive finding 1",
+			]);
+			const limited = (recordDiscards.mock.calls[0]?.[0] ?? []).filter(
+				(d) => d.reason === "ADAPTIVE_LIMIT",
+			);
+			expect(limited).toHaveLength(7);
+		});
+
+		it("keeps the band budget for a 40-line code delta on an incremental round", async () => {
+			REVIEWER_TUNING.adaptiveLimits = true;
+			const log = vi.spyOn(console, "log").mockImplementation(() => {});
+			const code = rawFile("src/other.ts", 40);
+			incrementalRound([code]);
+			routeAgents({ "code-reviewer.md": agentOutput(nine) }, none);
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit({ files: prFiles(code) }),
+				...baseContext,
+			});
+
+			const logged = budgetLog(log);
+			log.mockRestore();
+			expect(logged).toMatchObject({ budget: 5, removed: 4 });
+			expect(new Set(titlesIn(decision?.body ?? "")).size).toBe(5);
+		});
+
+		it("applies the band budget unscaled when a whole-PR skill runs in an incremental round", async () => {
+			REVIEWER_TUNING.adaptiveLimits = true;
+			const log = vi.spyOn(console, "log").mockImplementation(() => {});
+			const readme = rawFile("README.md", 1);
+			incrementalRound([readme]);
+			routeAgents({ "code-reviewer.md": agentOutput(nine) }, none);
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit({
+					files: prFiles(readme),
+					reviews: [
+						{
+							...ownReview,
+							body: buildOwnReviewBody({
+								sha: OLD_SHA,
+								count: 1,
+								inline: "Inline comments: 1",
+								pending: ["security-sast.md"],
+							}),
+						},
+					],
+				}),
+				...baseContext,
+			});
+
+			const logged = budgetLog(log);
+			log.mockRestore();
+			expect(logged).toMatchObject({ budget: 5, removed: 4, shape: null });
+			expect(new Set(titlesIn(decision?.body ?? "")).size).toBe(5);
+		});
+
+		it("indexes the current round by the earlier own reviews, over two rounds", async () => {
+			REVIEWER_TUNING.adaptiveLimits = true;
+			const log = vi.spyOn(console, "log").mockImplementation(() => {});
+			const bot = (id: number, path: string, line: number, title: string) => ({
+				id,
+				pull_request_review_id: id < 30 ? 100 : 200,
+				path,
+				line,
+				body: `**P2** **${title}**\n\nBody ${id}.`,
+			});
+			const threadFor = (
+				c: { id: number; body: string },
+				o: { decline?: boolean; resolved?: boolean },
+			) => ({
+				isResolved: o.resolved ?? false,
+				resolvedBy: o.resolved ? { login: "joe" } : null,
+				comments: {
+					pageInfo: { hasNextPage: false },
+					nodes: [
+						{
+							databaseId: c.id,
+							author: { login: "ai-review-bot", __typename: "Bot" },
+							authorAssociation: "NONE",
+							body: c.body,
+							createdAt: "2026-10-01T00:00:00Z",
+						},
+						...(o.decline
+							? [
+									{
+										databaseId: c.id + 1000,
+										author: { login: "joe", __typename: "User" },
+										authorAssociation: "OWNER",
+										body: DECLINE,
+										createdAt: "2026-10-04T00:00:00Z",
+									},
+								]
+							: []),
+					],
+				},
+			});
+			const c0 = bot(11, "src/review.ts", 2, "Old declined claim");
+			const c1 = bot(31, "src/review.ts", 3, "New declined claim");
+			const c2 = bot(32, "src/review.ts", 4, "New accepted claim A");
+			const c3 = bot(33, "src/review.ts", 5, "New accepted claim B");
+			const round1 = {
+				...ownReview,
+				id: 200,
+				submitted_at: "2026-10-03T00:00:00Z",
+				body: buildOwnReviewBody({ sha: OLD_SHA, count: 2 }),
+			};
+			routeAgents({ "code-reviewer.md": agentOutput(nine) }, none);
+
+			const decision = await buildReview({
+				octokit: ledgerOctokit({
+					reviews: [ownReview, round1],
+					comments: [c0, c1, c2, c3],
+					threadNodes: [
+						threadFor(c0, { decline: true }),
+						threadFor(c1, { decline: true }),
+						threadFor(c2, { resolved: true }),
+						threadFor(c3, { resolved: true }),
+					],
+				}),
+				...baseContext,
+			});
+
+			const logged = budgetLog(log);
+			log.mockRestore();
+			expect(logged).toMatchObject({ floor: null, budget: 10 });
+			expect((logged as { rounds: unknown[] }).rounds).toHaveLength(2);
+			expect((logged as { rounds: unknown[] }).rounds[0]).toHaveProperty(
+				"friction",
+			);
+			expect(new Set(titlesIn(decision?.body ?? "")).size).toBe(9);
+		});
+
+		it("downgrades to COMMENT when every new finding is removed and nothing carried blocks", async () => {
+			REVIEWER_TUNING.adaptiveLimits = true;
+			routeAgents({ "code-reviewer.md": allBelowFloor }, none);
+			const decision = await buildReview({
+				octokit: ledgerOctokit(),
+				...baseContext,
+			});
+			expect(decision?.event).toBe("COMMENT");
+			expect(titlesIn(decision?.body ?? "")).toEqual([]);
+		});
+
+		it("keeps REQUEST_CHANGES when a carried entry blocks the verdict", async () => {
+			REVIEWER_TUNING.adaptiveLimits = true;
+			routeAgents({ "code-reviewer.md": allBelowFloor }, none);
+			const decision = await buildReview({
+				octokit: ledgerOctokit({
+					comments: [{ ...ownComment, id: 11 }, secondComment],
+					threadNodes: [declinedThread, openSecondThread],
+				}),
+				...baseContext,
+			});
+			expect(decision?.event).toBe("REQUEST_CHANGES");
+		});
 	});
 
 	describe("discard records", () => {

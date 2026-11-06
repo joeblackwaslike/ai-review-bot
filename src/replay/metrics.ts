@@ -86,6 +86,10 @@ export function joinsClaim(cand: CandidateRecord, claim: PostedClaim): boolean {
 	return isSameClaim(cand, claim, JOIN_CLAIM_MATCH) || joinsByBody(cand, claim);
 }
 
+/** Identity of a candidate for counting: path, line and title. */
+export const candidateKey = (c: CandidateRecord): string =>
+	`${c.path}\0${c.line}\0${c.title}`;
+
 /** Distinct candidates, by path, line and title, and how many of them restate
  * one of the given claims. Several agents raising one finding count once. */
 export function countJoined(
@@ -93,9 +97,7 @@ export function countJoined(
 	claims: PostedClaim[],
 ): { joined: number; candidates: number } {
 	const distinct = [
-		...new Map(
-			candidates.map((c) => [`${c.path}\0${c.line}\0${c.title}`, c]),
-		).values(),
+		...new Map(candidates.map((c) => [candidateKey(c), c])).values(),
 	];
 	return {
 		joined: distinct.filter((cand) => claims.some((c) => joinsClaim(cand, c)))

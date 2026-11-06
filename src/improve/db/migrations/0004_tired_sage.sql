@@ -1,0 +1,1 @@
+ALTER TYPE "public"."discard_reason" ADD VALUE 'ADAPTIVE_LIMIT';

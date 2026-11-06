@@ -555,6 +555,7 @@ export async function maybeSubmitReview(args: {
 			force,
 			reviewer: config.reviewer,
 			feedbackEnabled: config.feedbackEnabled,
+			getKv,
 			agentConcurrency: config.agentConcurrency,
 			agentBudgetMs: config.agentBudgetMs,
 			diffBudgetChars: config.diffBudgetChars,

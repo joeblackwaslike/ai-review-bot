@@ -1,5 +1,5 @@
 {
-	"id": "ed3b35c0-8c2c-4cc2-a05c-df4657bbd785",
+	"id": "2d195eb1-c164-46d6-99c4-bf200769d842",
 	"prevId": "c63bdbe8-d99e-4fd6-90d6-1ec3cd7baafa",
 	"version": "7",
 	"dialect": "postgresql",
@@ -155,15 +155,10 @@
 				},
 				"provider": {
 					"name": "provider",
-					"type": "text",
+					"type": "provider",
+					"typeSchema": "public",
 					"primaryKey": false,
 					"notNull": true
-				},
-				"reviewer": {
-					"name": "reviewer",
-					"type": "text",
-					"primaryKey": false,
-					"notNull": false
 				},
 				"owner": {
 					"name": "owner",
@@ -299,39 +294,6 @@
 					"concurrently": false,
 					"method": "btree",
 					"with": {}
-				},
-				"finding_catalog_reviewer_idx": {
-					"name": "finding_catalog_reviewer_idx",
-					"columns": [
-						{
-							"expression": "reviewer",
-							"isExpression": false,
-							"asc": true,
-							"nulls": "last"
-						},
-						{
-							"expression": "owner",
-							"isExpression": false,
-							"asc": true,
-							"nulls": "last"
-						},
-						{
-							"expression": "repo",
-							"isExpression": false,
-							"asc": true,
-							"nulls": "last"
-						},
-						{
-							"expression": "pr",
-							"isExpression": false,
-							"asc": true,
-							"nulls": "last"
-						}
-					],
-					"isUnique": false,
-					"concurrently": false,
-					"method": "btree",
-					"with": {}
 				}
 			},
 			"foreignKeys": {},
@@ -353,15 +315,10 @@
 				},
 				"provider": {
 					"name": "provider",
-					"type": "text",
+					"type": "provider",
+					"typeSchema": "public",
 					"primaryKey": false,
 					"notNull": true
-				},
-				"reviewer": {
-					"name": "reviewer",
-					"type": "text",
-					"primaryKey": false,
-					"notNull": false
 				},
 				"owner": {
 					"name": "owner",
@@ -521,39 +478,6 @@
 					"columns": [
 						{
 							"expression": "provider",
-							"isExpression": false,
-							"asc": true,
-							"nulls": "last"
-						},
-						{
-							"expression": "owner",
-							"isExpression": false,
-							"asc": true,
-							"nulls": "last"
-						},
-						{
-							"expression": "repo",
-							"isExpression": false,
-							"asc": true,
-							"nulls": "last"
-						},
-						{
-							"expression": "pr",
-							"isExpression": false,
-							"asc": true,
-							"nulls": "last"
-						}
-					],
-					"isUnique": false,
-					"concurrently": false,
-					"method": "btree",
-					"with": {}
-				},
-				"finding_discards_reviewer_idx": {
-					"name": "finding_discards_reviewer_idx",
-					"columns": [
-						{
-							"expression": "reviewer",
 							"isExpression": false,
 							"asc": true,
 							"nulls": "last"
@@ -802,15 +726,10 @@
 				},
 				"provider": {
 					"name": "provider",
-					"type": "text",
+					"type": "provider",
+					"typeSchema": "public",
 					"primaryKey": false,
 					"notNull": true
-				},
-				"reviewer": {
-					"name": "reviewer",
-					"type": "text",
-					"primaryKey": false,
-					"notNull": false
 				},
 				"trigger": {
 					"name": "trigger",
@@ -928,15 +847,10 @@
 				},
 				"provider": {
 					"name": "provider",
-					"type": "text",
+					"type": "provider",
+					"typeSchema": "public",
 					"primaryKey": false,
 					"notNull": true
-				},
-				"reviewer": {
-					"name": "reviewer",
-					"type": "text",
-					"primaryKey": false,
-					"notNull": false
 				},
 				"owner": {
 					"name": "owner",
@@ -1057,39 +971,6 @@
 					"columns": [
 						{
 							"expression": "provider",
-							"isExpression": false,
-							"asc": true,
-							"nulls": "last"
-						},
-						{
-							"expression": "owner",
-							"isExpression": false,
-							"asc": true,
-							"nulls": "last"
-						},
-						{
-							"expression": "repo",
-							"isExpression": false,
-							"asc": true,
-							"nulls": "last"
-						},
-						{
-							"expression": "pr",
-							"isExpression": false,
-							"asc": true,
-							"nulls": "last"
-						}
-					],
-					"isUnique": false,
-					"concurrently": false,
-					"method": "btree",
-					"with": {}
-				},
-				"raw_feedback_reviewer_idx": {
-					"name": "raw_feedback_reviewer_idx",
-					"columns": [
-						{
-							"expression": "reviewer",
 							"isExpression": false,
 							"asc": true,
 							"nulls": "last"
@@ -1269,7 +1150,8 @@
 				"OFF_DIFF",
 				"CAP",
 				"DISCARDED_BY_VERIFY",
-				"RESOLVED_LOCATION"
+				"RESOLVED_LOCATION",
+				"ADAPTIVE_LIMIT"
 			]
 		},
 		"public.feedback_intent": {
