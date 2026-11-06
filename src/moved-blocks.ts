@@ -8,11 +8,17 @@ export interface PushFile {
 	deletions: number;
 }
 
-/** Lines deleted from one file and added to another in the same push. */
+/**
+ * Lines deleted from one file and added to another in the same push. `lineCount` counts
+ * only meaningful lines (and decides match eligibility); `spanLines` is every line of the
+ * matched run on each side, blank and lone-bracket lines included, and is what a move
+ * discounts from the file totals.
+ */
 export interface MovedBlock {
 	from: string;
 	to: string;
 	lineCount: number;
+	spanLines: number;
 }
 
 interface Run {
@@ -364,6 +370,7 @@ export function findMovedBlocks(files: PushFile[], minLines = 5): MovedBlock[] {
 			from: c.from.filename,
 			to: c.to.filename,
 			lineCount: c.counted,
+			spanLines: c.length,
 		});
 	}
 	return blocks;

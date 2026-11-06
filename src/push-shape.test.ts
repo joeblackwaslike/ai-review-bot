@@ -455,3 +455,29 @@ describe("shapedBudget", () => {
 		expect(budget(3, 10)).toBe(2);
 	});
 });
+
+describe("classifyPush moved blocks with blank and bracket lines", () => {
+	const lines = Array.from({ length: 20 }, (_, i) => [
+		`const value${i} = compute(${i});`,
+		i % 2 === 0 ? "" : "}",
+	]).flat();
+
+	it("discounts the whole span of a pure move", () => {
+		const shape = classifyPush([
+			file({
+				filename: "src/a.ts",
+				additions: 0,
+				deletions: 40,
+				patch: `@@ -1,40 +0,0 @@\n${lines.map((l) => `-${l}`).join("\n")}`,
+			}),
+			file({
+				filename: "src/b.ts",
+				additions: 40,
+				deletions: 0,
+				patch: `@@ -0,0 +1,40 @@\n${lines.map((l) => `+${l}`).join("\n")}`,
+			}),
+		]);
+		expect(shape.reviewableWeight).toBe(0);
+		expect(shapedBudget(shape, 5)).toBe(2);
+	});
+});

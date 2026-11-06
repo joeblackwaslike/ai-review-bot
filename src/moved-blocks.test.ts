@@ -61,7 +61,7 @@ describe("findMovedBlocks", () => {
 			file("a.ts", LINES, []),
 			file("b.ts", [], LINES),
 		]);
-		expect(out).toEqual([{ from: "a.ts", to: "b.ts", lineCount: 6 }]);
+		expect(out).toMatchObject([{ from: "a.ts", to: "b.ts", lineCount: 6 }]);
 	});
 
 	it("matches through re-indentation and trailing whitespace", () => {
@@ -73,7 +73,7 @@ describe("findMovedBlocks", () => {
 				LINES.map((l) => `\t\t${l.replace(/ /g, "  ")}   `),
 			),
 		]);
-		expect(out).toEqual([{ from: "a.ts", to: "b.ts", lineCount: 6 }]);
+		expect(out).toMatchObject([{ from: "a.ts", to: "b.ts", lineCount: 6 }]);
 	});
 
 	it("does not treat a changed string literal as a move", () => {
@@ -89,7 +89,7 @@ describe("findMovedBlocks", () => {
 		const add = del.map((l) => `\t\t${l}  `);
 		expect(
 			findMovedBlocks([file("a.ts", del, []), file("b.ts", [], add)]),
-		).toEqual([{ from: "a.ts", to: "b.ts", lineCount: 5 }]);
+		).toMatchObject([{ from: "a.ts", to: "b.ts", lineCount: 5 }]);
 	});
 
 	it("matches identical lines with an unmatched apostrophe after re-indenting", () => {
@@ -100,7 +100,7 @@ describe("findMovedBlocks", () => {
 		const add = del.map((l) => `    ${l}`);
 		expect(
 			findMovedBlocks([file("a.ts", del, []), file("b.ts", [], add)]),
-		).toEqual([{ from: "a.ts", to: "b.ts", lineCount: 5 }]);
+		).toMatchObject([{ from: "a.ts", to: "b.ts", lineCount: 5 }]);
 	});
 
 	describe("indentation-sensitive files", () => {
@@ -115,7 +115,7 @@ describe("findMovedBlocks", () => {
 			expect(moved("a.py", "b.py", py, deeper)).toEqual([]);
 		});
 		it("counts a Python block moved with identical indentation", () => {
-			expect(moved("a.py", "b.py", deeper, deeper)).toEqual([
+			expect(moved("a.py", "b.py", deeper, deeper)).toMatchObject([
 				{ from: "a.py", to: "b.py", lineCount: 5 },
 			]);
 		});
@@ -123,7 +123,7 @@ describe("findMovedBlocks", () => {
 			expect(moved("a.yml", "b.yml", yml, yDeeper)).toEqual([]);
 		});
 		it("counts a YAML block moved with identical indentation", () => {
-			expect(moved("a.yml", "b.yml", yDeeper, yDeeper)).toEqual([
+			expect(moved("a.yml", "b.yml", yDeeper, yDeeper)).toMatchObject([
 				{ from: "a.yml", to: "b.yml", lineCount: 5 },
 			]);
 		});
@@ -139,12 +139,12 @@ describe("findMovedBlocks", () => {
 				"    d = 4",
 				"    e = 5",
 			];
-			expect(moved("a.py", "b.py", block, block)).toEqual([
+			expect(moved("a.py", "b.py", block, block)).toMatchObject([
 				{ from: "a.py", to: "b.py", lineCount: 5 },
 			]);
 		});
 		it("still counts a re-indented TypeScript block as a move", () => {
-			expect(moved("a.ts", "b.ts", py, deeper)).toEqual([
+			expect(moved("a.ts", "b.ts", py, deeper)).toMatchObject([
 				{ from: "a.ts", to: "b.ts", lineCount: 5 },
 			]);
 		});
@@ -187,7 +187,7 @@ describe("findMovedBlocks", () => {
 				file("a.ts", withBrace, []),
 				file("b.ts", [], withBrace),
 			]),
-		).toEqual([{ from: "a.ts", to: "b.ts", lineCount: 5 }]);
+		).toMatchObject([{ from: "a.ts", to: "b.ts", lineCount: 5 }]);
 	});
 
 	it("splits a block interrupted by one changed line", () => {
@@ -230,13 +230,38 @@ describe("findMovedBlocks", () => {
 				[file("a.ts", [], [], patch), file("b.ts", [], LINES)],
 				3,
 			),
-		).toEqual([
+		).toMatchObject([
 			{ from: "a.ts", to: "b.ts", lineCount: 3 },
 			{ from: "a.ts", to: "b.ts", lineCount: 3 },
 		]);
 		expect(
 			findMovedBlocks([file("a.ts", [], [], patch), file("b.ts", [], LINES)]),
 		).toEqual([]);
+	});
+});
+
+describe("findMovedBlocks span", () => {
+	const mixed = Array.from({ length: 20 }, (_, i) => [
+		`const value${i} = compute(${i});`,
+		i % 2 === 0 ? "" : "}",
+	]).flat();
+
+	it("reports the full matched run as spanLines and the meaningful lines as lineCount", () => {
+		expect(
+			findMovedBlocks([file("a.ts", mixed, []), file("b.ts", [], mixed)]),
+		).toEqual([{ from: "a.ts", to: "b.ts", lineCount: 20, spanLines: 40 }]);
+	});
+
+	it("does not extend the span beyond the lines that matched", () => {
+		const block = LINES.slice(0, 5);
+		const out = findMovedBlocks([
+			file("a.ts", ["", ...block, ""], []),
+			file("b.ts", [], ["", "", ...block, "", ""]),
+		]);
+		expect(out).toHaveLength(1);
+		expect(out[0]?.lineCount).toBe(5);
+		expect(out[0]?.spanLines).toBeLessThanOrEqual(7);
+		expect(out[0]?.spanLines).toBeGreaterThanOrEqual(5);
 	});
 });
 
@@ -265,7 +290,7 @@ describe("findMovedBlocks at scale", () => {
 		const start = performance.now();
 		const out = findMovedBlocks(files);
 		const elapsed = performance.now() - start;
-		expect(out).toEqual([{ from: "a.ts", to: "b.ts", lineCount: 2000 }]);
+		expect(out).toMatchObject([{ from: "a.ts", to: "b.ts", lineCount: 2000 }]);
 		expect(elapsed).toBeLessThan(500);
 	});
 

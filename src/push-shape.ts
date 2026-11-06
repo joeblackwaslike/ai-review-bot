@@ -200,11 +200,11 @@ export function classifyPush(files: PushFile[]): PushShape {
 	const moved = findMovedBlocks(files);
 	const movedIn = new Map<string, number>();
 	for (const block of moved) {
-		movedIn.set(block.to, (movedIn.get(block.to) ?? 0) + block.lineCount);
+		movedIn.set(block.to, (movedIn.get(block.to) ?? 0) + block.spanLines);
 	}
 	const movedOut = new Map<string, number>();
 	for (const block of moved) {
-		movedOut.set(block.from, (movedOut.get(block.from) ?? 0) + block.lineCount);
+		movedOut.set(block.from, (movedOut.get(block.from) ?? 0) + block.spanLines);
 	}
 	const shaped = files.map((f) =>
 		shapeFile(f, movedIn.get(f.filename) ?? 0, movedOut.get(f.filename) ?? 0),
