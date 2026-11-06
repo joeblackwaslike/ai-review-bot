@@ -426,6 +426,14 @@ describe("main credential-resolution dispatch", () => {
 		expect(resolveCliCredentials).toHaveBeenCalled();
 	});
 
+	it("does not load prices for a subcommand that never prices a review", async () => {
+		vi.mocked(primePrices).mockClear();
+		process.argv = ["node", "dist/cli.js", "unknown-subcommand"];
+		await expect(main()).rejects.toThrow(ProcessExitError);
+		expect(resolveCliCredentials).toHaveBeenCalled();
+		expect(primePrices).not.toHaveBeenCalled();
+	});
+
 	it("skips credential resolution for the creds subcommand itself", async () => {
 		process.argv = ["node", "dist/cli.js", "creds", "list"];
 		await main();

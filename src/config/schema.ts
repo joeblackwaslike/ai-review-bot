@@ -33,7 +33,7 @@ const ModelSchema = z
 			.strict()
 			.optional()
 			.describe(
-				"Pin token prices for cost reporting; when absent, prices come from OpenRouter.",
+				"Pin token prices for cost reporting; when absent, prices come from OpenRouter. When set, input, cachedInput and output are all required.",
 			),
 		refusalFallback: z
 			.boolean()

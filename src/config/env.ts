@@ -205,12 +205,16 @@ export function listSchemaLeaves(
 	path: string[] = [],
 	mapIndexes: number[] = [],
 	out: SchemaLeaf[] = [],
+	underOptional = false,
 ): SchemaLeaf[] {
 	const inner = unwrap(node);
 	const def = defOf(inner);
+	const optional =
+		underOptional ||
+		wrapperChain(node).some((n) => defOf(n).type === "optional");
 	if (def.type === "object" && inner.shape) {
 		for (const [key, child] of Object.entries(inner.shape)) {
-			listSchemaLeaves(child, [...path, key], mapIndexes, out);
+			listSchemaLeaves(child, [...path, key], mapIndexes, out, optional);
 		}
 	} else if (def.type === "record") {
 		listSchemaLeaves(
@@ -218,6 +222,7 @@ export function listSchemaLeaves(
 			[...path, MAP_KEYS[path.at(-1) as string] ?? "<key>"],
 			[...mapIndexes, path.length],
 			out,
+			optional,
 		);
 	} else {
 		out.push({
@@ -225,7 +230,10 @@ export function listSchemaLeaves(
 			mapIndexes,
 			kind: KIND_BY_TYPE[def.type],
 			type: typeOf(node),
-			default: defaultOf(node),
+			default:
+				underOptional && defaultOf(node) === "required"
+					? "unset"
+					: defaultOf(node),
 			description: describeOf(node),
 		});
 	}

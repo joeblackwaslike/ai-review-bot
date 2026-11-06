@@ -53,7 +53,7 @@ This design supersedes an earlier proposal ("multi-provider reviewer config and 
 ### 1. Config system (slice 1)
 
 - `.ai-review.yaml` is committed and bundled with the deployment. It is read once at cold start using the `new URL(..., import.meta.url)` pattern that `src/prompt.ts` already uses for `skills/`.
-- **Packaging.** The CLI package currently ships only `dist/` and `skills/` (`package.json` `files`). `config/` is added to `files`, and the loader resolves the file relative to the built module. A test runs the CLI from an unpacked `pnpm pack` tarball outside the checkout, so an installed `ai-review` does not fail at module load.
+- **Packaging.** The CLI package currently ships only `dist/` and `skills/` (`package.json` `files`). `.ai-review.yaml` is added to `files`, and the loader resolves it relative to the built module with `new URL("../../.ai-review.yaml", import.meta.url)` in `src/config/load.ts`, which reaches the package root from both `src/config/` and `dist/config/`. A test runs the CLI from an unpacked `pnpm pack` tarball outside the checkout, so an installed `ai-review` does not fail at module load.
 - One zod schema (`src/config/schema.ts`) is the source of truth for types, defaults, descriptions (`.describe()`) and which keys are secrets.
 - Load order is YAML, env overlay, schema defaults, validation, freeze. It loads lazily on first use (`getConfigTree()` memoizes on the first call), so a bad value fails the first request that reads the config, not mid-review.
 - **Env derivation.** The name is `AI_REVIEW_` plus the key path, with `__` between levels, camelCase turned into SCREAMING_SNAKE and hyphens into `_`. Example: `reviewers.gemini-lite.tiers.normal.model` becomes `AI_REVIEW_REVIEWERS__GEMINI_LITE__TIERS__NORMAL__MODEL`.

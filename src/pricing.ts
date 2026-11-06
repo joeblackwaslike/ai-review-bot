@@ -10,6 +10,17 @@ const KV_EXPIRY_SECONDS = 48 * 3600;
 const FETCH_TIMEOUT_MS = 3000;
 export const FETCH_RETRY_MS = 5 * 60 * 1000;
 
+const OVERRIDE_KEYS: ReadonlySet<string> = new Set([
+	"min_prompt_tokens",
+	"prompt",
+	"completion",
+	"input_cache_read",
+	"input_cache_write",
+	"input_cache_write_1h",
+	"input_audio_cache",
+	"audio",
+]);
+
 export interface PriceTier {
 	minPromptTokens: number;
 	input: number;
@@ -63,18 +74,19 @@ export function parseOpenRouterPrices(json: unknown): PriceTable {
 		};
 		const tiers: PriceTier[] = [];
 		for (const o of Array.isArray(p.overrides) ? p.overrides : []) {
-			if (!isRecord(o)) continue;
-			const tin = perMillion(o.prompt);
-			const tout = perMillion(o.completion);
-			const min = Number(o.min_prompt_tokens);
-			if (tin === undefined || tout === undefined || !Number.isFinite(min)) {
+			if (!isRecord(o) || !Object.keys(o).every((k) => OVERRIDE_KEYS.has(k))) {
 				continue;
 			}
+			const min = Number(o.min_prompt_tokens);
+			if (o.min_prompt_tokens == null || !Number.isFinite(min)) continue;
+			const tin = perMillion(o.prompt) ?? input;
 			tiers.push({
 				minPromptTokens: min,
 				input: tin,
-				output: tout,
-				cachedInput: perMillion(o.input_cache_read) ?? tin,
+				output: perMillion(o.completion) ?? output,
+				cachedInput:
+					perMillion(o.input_cache_read) ??
+					(o.prompt === undefined ? price.cachedInput : tin),
 			});
 		}
 		if (tiers.length > 0) price.tiers = tiers;
@@ -110,7 +122,7 @@ export function lookupPrice(
 			: Object.entries(table).find(([key]) => key.endsWith(`/${id}`))?.[1]);
 	if (!found) return undefined;
 	const tier = (found.tiers ?? [])
-		.filter((t) => t.minPromptTokens <= promptTokens)
+		.filter((t) => t.minPromptTokens < promptTokens)
 		.sort((a, b) => b.minPromptTokens - a.minPromptTokens)[0];
 	return tier ?? found;
 }

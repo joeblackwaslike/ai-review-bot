@@ -39,6 +39,15 @@ describe("buildConfigRows", () => {
 		);
 	});
 
+	it("marks leaves under an optional object as unset, not required", () => {
+		for (const leaf of ["input", "cachedInput", "output"]) {
+			expect(
+				byPath.get(`models.<provider/model>.pricing.${leaf}`)?.default,
+			).toBe("unset");
+		}
+		expect(byPath.get("version")?.default).toBe("required");
+	});
+
 	it("documents map sections with placeholder paths and no env var for models", () => {
 		expect(byPath.get("models.<provider/model>.pricing.input")?.env).toBe(
 			"none",

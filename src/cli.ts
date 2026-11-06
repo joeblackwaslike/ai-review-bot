@@ -1322,7 +1322,7 @@ export async function main(): Promise<void> {
 		sub !== "mistakes" &&
 		(sub !== "replay" || rest.includes("--live"));
 	const needsPrices =
-		needsCreds ||
+		(sub !== undefined && ["review", "audit", "gate", "watch"].includes(sub)) ||
 		(sub === "replay" &&
 			["--live", "--experiment", "--seeds", "--adjudicate"].some((f) =>
 				rest.includes(f),

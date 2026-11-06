@@ -12,9 +12,15 @@ function isAuthorized(authorization: string | undefined): boolean {
 }
 
 function optionalKv(): KvClient | null {
+	if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
+		return null;
+	}
 	try {
 		return createUpstashKv();
-	} catch {
+	} catch (error) {
+		console.warn("KV init failed; refreshing prices without the shared cache", {
+			error: error instanceof Error ? error.message : String(error),
+		});
 		return null;
 	}
 }

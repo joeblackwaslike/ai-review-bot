@@ -66,7 +66,7 @@ Tier thresholds, path patterns and the model and effort chosen for each tier are
 
 ### Model prices
 
-Cost figures come from the [OpenRouter models API](https://openrouter.ai/api/v1/models), fetched at most once per 24 hours (a daily cron refreshes the cache in KV; the CLI caches in `~/.ai-review/pricing.json`) and never per review. Ids match after lowercasing and mapping `.` to `-`, so `claude-sonnet-5.5` and `claude-sonnet-5-5` are the same model. Prompts above a model's override threshold bill at the higher rate. A `models.<provider/model>.pricing` entry in the YAML pins a price and wins over OpenRouter. A model with neither shows "cost unavailable" in the review footer, and `replay --live` refuses to run because it cannot enforce `--max-cost`.
+Cost figures come from the [OpenRouter models API](https://openrouter.ai/api/v1/models), cached for 24 hours rather than fetched per review (a daily cron refreshes the shared cache in KV; the CLI caches in `~/.ai-review/pricing.json`). The shared cache needs KV. Without KV, each cold hosted instance fetches once, with a 3 second timeout, and retries a failed fetch no sooner than every 5 minutes. Ids match after lowercasing and mapping `.` to `-`, so `claude-sonnet-5.5` and `claude-sonnet-5-5` are the same model. Prompts above a model's override threshold bill at the higher rate. A `models.<provider/model>.pricing` entry in the YAML pins a price and wins over OpenRouter. A model with neither shows "cost unavailable" in the review footer, and `replay --live` refuses to run because it cannot enforce `--max-cost`.
 
 To force the deep tier on a PR without a label, add `deep-review` to the PR labels before triggering the review.
 
@@ -188,12 +188,12 @@ Env overrides apply to every section. Dynamic map entries must already exist in 
 | `routing.deepLabel` | `AI_REVIEW_ROUTING__DEEP_LABEL` | none | string | `"deep-review"` | PR label that forces the deep tier. |
 | `routing.complexLines` | `AI_REVIEW_ROUTING__COMPLEX_LINES` | none | number | `500` | Changed lines above which a PR is complex. |
 | `routing.trivialDocLines` | `AI_REVIEW_ROUTING__TRIVIAL_DOC_LINES` | none | number | `20` | Changed lines below which a docs-only PR is trivial. |
-| `models.<provider/model>.pricing.input` | none | none | number | required | Input token price, USD per million tokens. |
-| `models.<provider/model>.pricing.cachedInput` | none | none | number | required | Cached input token price, USD per million tokens. |
-| `models.<provider/model>.pricing.output` | none | none | number | required | Output token price, USD per million tokens. |
+| `models.<provider/model>.pricing.input` | none | none | number | unset | Input token price, USD per million tokens. |
+| `models.<provider/model>.pricing.cachedInput` | none | none | number | unset | Cached input token price, USD per million tokens. |
+| `models.<provider/model>.pricing.output` | none | none | number | unset | Output token price, USD per million tokens. |
 | `models.<provider/model>.refusalFallback` | none | none | boolean | `false` | Retry once with a fallback when the model refuses. |
 | `models.<provider/model>.effortControl` | none | none | one of level, budget | unset | How a Google model takes reasoning effort. |
-| `models.<provider/model>.providerOptions.<provider>` | none | none | object | required | Options for one provider. |
+| `models.<provider/model>.providerOptions.<provider>` | none | none | object | unset | Options for one provider. |
 | `models.<provider/model>.structuredOutput` | none | none | one of native, json | `"native"` | Reserved. Not read yet; a later slice will use it to pick the structured output mode. |
 | `reviewers.<id>.enabled` | `AI_REVIEW_REVIEWERS__<ID>__ENABLED` | none | boolean | `true` | Run this reviewer. |
 | `reviewers.<id>.appId` | `AI_REVIEW_REVIEWERS__<ID>__APP_ID` | none | string | unset | GitHub App id; the environment supplies it when unset. |
@@ -203,13 +203,13 @@ Env overrides apply to every section. Dynamic map entries must already exist in 
 | `reviewers.<id>.runOn` | `AI_REVIEW_REVIEWERS__<ID>__RUN_ON` | none | one of trivial, normal, complex, deep[] | unset | Tiers this reviewer runs on; every tier when unset. |
 | `reviewers.<id>.skills.<skill>.model` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__MODEL` | none | string | unset | Model for this skill in every tier. |
 | `reviewers.<id>.skills.<skill>.effort` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Effort for the skill model; needs model. |
-| `reviewers.<id>.skills.<skill>.trivial.model` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__TRIVIAL__MODEL` | none | string | required | Model for this tier. |
+| `reviewers.<id>.skills.<skill>.trivial.model` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__TRIVIAL__MODEL` | none | string | unset | Model for this tier. |
 | `reviewers.<id>.skills.<skill>.trivial.effort` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__TRIVIAL__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
-| `reviewers.<id>.skills.<skill>.normal.model` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__NORMAL__MODEL` | none | string | required | Model for this tier. |
+| `reviewers.<id>.skills.<skill>.normal.model` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__NORMAL__MODEL` | none | string | unset | Model for this tier. |
 | `reviewers.<id>.skills.<skill>.normal.effort` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__NORMAL__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
-| `reviewers.<id>.skills.<skill>.complex.model` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__COMPLEX__MODEL` | none | string | required | Model for this tier. |
+| `reviewers.<id>.skills.<skill>.complex.model` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__COMPLEX__MODEL` | none | string | unset | Model for this tier. |
 | `reviewers.<id>.skills.<skill>.complex.effort` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__COMPLEX__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
-| `reviewers.<id>.skills.<skill>.deep.model` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__DEEP__MODEL` | none | string | required | Model for this tier. |
+| `reviewers.<id>.skills.<skill>.deep.model` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__DEEP__MODEL` | none | string | unset | Model for this tier. |
 | `reviewers.<id>.skills.<skill>.deep.effort` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__DEEP__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
 | `reviewers.<id>.tiers.trivial.model` | `AI_REVIEW_REVIEWERS__<ID>__TIERS__TRIVIAL__MODEL` | none | string | required | Model for this tier. |
 | `reviewers.<id>.tiers.trivial.effort` | `AI_REVIEW_REVIEWERS__<ID>__TIERS__TRIVIAL__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |

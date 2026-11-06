@@ -107,6 +107,49 @@ describe("parseOpenRouterPrices", () => {
 	});
 });
 
+describe("parseOpenRouterPrices overrides", () => {
+	const parse = (overrides: unknown[]) =>
+		parseOpenRouterPrices({
+			data: [
+				{
+					id: "x/m",
+					pricing: {
+						prompt: "0.000001",
+						completion: "0.000002",
+						input_cache_read: "0.0000001",
+						overrides,
+					},
+				},
+			],
+		})["x/m"];
+
+	it("ignores overrides with a condition other than min_prompt_tokens", () => {
+		const price = parse([
+			{
+				utc_start: 100,
+				utc_end: 1500,
+				prompt: "0.000009",
+				completion: "0.00001",
+			},
+			{ utc_days: [1], prompt: "0.000009", completion: "0.00001" },
+			{
+				min_prompt_tokens: 10,
+				utc_start: 100,
+				prompt: "0.000009",
+				completion: "0.00001",
+			},
+		]);
+		expect(price?.tiers).toBeUndefined();
+	});
+
+	it("inherits missing price keys from the base rate", () => {
+		const price = parse([{ min_prompt_tokens: 50, prompt: "0.000004" }]);
+		expect(price?.tiers).toEqual([
+			{ minPromptTokens: 50, input: 4, cachedInput: 4, output: 2 },
+		]);
+	});
+});
+
 describe("lookupPrice", () => {
 	beforeEach(() => setPriceTable(parseOpenRouterPrices(SAMPLE)));
 
@@ -116,8 +159,8 @@ describe("lookupPrice", () => {
 	});
 
 	it("selects the tier by prompt size", () => {
-		expect(lookupPrice("claude-haiku-5-5", 100000)?.input).toBeCloseTo(0.5);
-		expect(lookupPrice("claude-haiku-5-5", 99999)?.input).toBeCloseTo(0.1);
+		expect(lookupPrice("claude-haiku-5-5", 100001)?.input).toBeCloseTo(0.5);
+		expect(lookupPrice("claude-haiku-5-5", 100000)?.input).toBeCloseTo(0.1);
 	});
 
 	it("does not guess a vendor for a provider-qualified id", () => {
@@ -172,8 +215,8 @@ describe("primePrices", () => {
 		await primePrices({ kv, fetchImpl: okFetch(), nowMs: 1000, force: true });
 		clearPriceTable();
 		await primePrices({ kv, fetchImpl: okFetch(), nowMs: 2000 });
-		expect(lookupPrice("claude-haiku-5-5", 99999)?.input).toBeCloseTo(0.1);
-		expect(lookupPrice("claude-haiku-5-5", 100000)?.input).toBeCloseTo(0.5);
+		expect(lookupPrice("claude-haiku-5-5", 100000)?.input).toBeCloseTo(0.1);
+		expect(lookupPrice("claude-haiku-5-5", 100001)?.input).toBeCloseTo(0.5);
 	});
 
 	it("keeps the stale table when the fetch fails and never throws", async () => {
