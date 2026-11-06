@@ -247,7 +247,7 @@ describe("sanitizeConfigError", () => {
 	it("drops YAML parser excerpts and absolute paths from the message", () => {
 		const message = sanitizeConfigError(
 			new Error(
-				"Invalid YAML in /var/task/config/ai-review.yaml: Nested mappings are not allowed in compact mappings at line 2, column 17:\n\n  customPrompt: TOP-SECRET-PROMPT: bad\n                ^\n",
+				"Invalid YAML in /var/task/.ai-review.yaml: Nested mappings are not allowed in compact mappings at line 2, column 17:\n\n  customPrompt: TOP-SECRET-PROMPT: bad\n                ^\n",
 			),
 		);
 		expect(message).not.toContain("TOP-SECRET-PROMPT");

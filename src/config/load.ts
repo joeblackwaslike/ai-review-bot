@@ -16,7 +16,7 @@ interface LoadOptions {
 }
 
 const DEFAULT_YAML_PATH = fileURLToPath(
-	new URL("../../config/ai-review.yaml", import.meta.url),
+	new URL("../../.ai-review.yaml", import.meta.url),
 );
 
 function deepFreeze<T>(value: T): T {

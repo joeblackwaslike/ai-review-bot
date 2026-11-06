@@ -24,7 +24,7 @@ afterEach(() => {
 });
 
 describe("loadConfig", () => {
-	it("the real config/ai-review.yaml parses under ConfigSchema", () => {
+	it("the real .ai-review.yaml parses under ConfigSchema", () => {
 		const { config } = loadConfig({ env: {} });
 		expect(config.version).toBe(1);
 		expect(Object.keys(config.reviewers)).toEqual([
