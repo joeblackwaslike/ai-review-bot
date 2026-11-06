@@ -52,7 +52,7 @@ describe("classifyFile", () => {
 	];
 	for (const [name, kind] of table) {
 		it(`${name} is ${kind}`, () => {
-			expect(classifyFile(name, true)).toBe(kind);
+			expect(classifyFile(name)).toBe(kind);
 		});
 	}
 });
@@ -187,11 +187,32 @@ describe("classifyPush", () => {
 		expect(one.fileCount).toBe(1);
 	});
 
-	it("does not throw on a missing patch", () => {
+	it("weighs a patchless code file by its counts at its kind weight", () => {
 		const shape = classifyPush([
-			file({ filename: "src/big.ts", additions: 5000, patch: undefined }),
+			file({ filename: "src/big.ts", additions: 500, patch: undefined }),
+		]);
+		expect(shape.reviewableWeight).toBe(500);
+		expect(shape.files[0].kind).toBe("code");
+		expect(shapedBudget(shape, 10)).toBe(10);
+	});
+
+	it("weighs a patchless binary file at 0", () => {
+		const shape = classifyPush([
+			file({ filename: "logo.png", additions: 500, patch: undefined }),
 		]);
 		expect(shape.reviewableWeight).toBe(0);
+	});
+
+	it("weighs a patchless rename with no counts at 0 and marks it rename-only", () => {
+		const shape = classifyPush([
+			file({
+				filename: "src/b.ts",
+				status: "renamed",
+				patch: undefined,
+			}),
+		]);
+		expect(shape.reviewableWeight).toBe(0);
+		expect(shape.files[0].renameOnly).toBe(true);
 	});
 });
 

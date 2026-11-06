@@ -66,12 +66,14 @@ const CONFIG_EXT = /\.(json|jsonc|ya?ml|toml|ini|env)$/i;
 const INFRA_EXT = /\.(tf|tfvars|hcl)$/i;
 const TEST_PATH = /(^|\/)(tests?|__tests__)\/|\.(test|spec)\.[^/]+$/;
 
-/** Sorts a path into the kind that sets how much of its change is worth reviewing. */
-export function classifyFile(filename: string, hasPatch: boolean): FileKind {
+/** Sorts a path into the kind that sets how much of its change is worth reviewing. A file
+ * GitHub sent without a patch is still classified by its path, so only a binary extension
+ * makes it weightless. */
+export function classifyFile(filename: string): FileKind {
 	const name = filename.split("/").pop() ?? filename;
 	if (LOCKFILES.has(name)) return "lockfile";
 	if (isGeneratedFile(filename)) return "generated";
-	if (BINARY_EXT.test(name) || !hasPatch) return "binary";
+	if (BINARY_EXT.test(name)) return "binary";
 	if (PIN_FILE.test(name)) return "config";
 	if (TEST_PATH.test(filename)) return "test";
 	if (
@@ -106,7 +108,7 @@ function shapeFile(
 	movedIn: number,
 	movedOut: number,
 ): FileShape {
-	const kind = classifyFile(file.filename, file.patch !== undefined);
+	const kind = classifyFile(file.filename);
 	const renameOnly =
 		file.status === "renamed" && file.additions === 0 && file.deletions === 0;
 	const whitespaceOnly = isWhitespaceOnly(file.patch);
@@ -114,10 +116,7 @@ function shapeFile(
 	const changed =
 		Math.max(file.additions - movedIn, 0) +
 		Math.max(file.deletions - movedOut, 0);
-	const weight =
-		renameOnly || whitespaceOnly || file.patch === undefined
-			? 0
-			: KIND_WEIGHT[kind] * changed;
+	const weight = renameOnly || whitespaceOnly ? 0 : KIND_WEIGHT[kind] * changed;
 	return {
 		filename: file.filename,
 		kind,
