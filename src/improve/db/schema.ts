@@ -20,7 +20,6 @@ import {
 	OFF_DIFF_CODES,
 } from "../../discards.js";
 
-export const provider = pgEnum("provider", ["anthropic", "openai"]);
 export const feedbackSource = pgEnum("feedback_source", [
 	"inline_reaction",
 	"review_reaction",
@@ -59,7 +58,8 @@ export const findingCatalog = pgTable(
 	"finding_catalog",
 	{
 		id: bigserial("id", { mode: "number" }).primaryKey(),
-		provider: provider("provider").notNull(),
+		provider: text("provider").notNull(),
+		reviewer: text("reviewer"),
 		owner: text("owner").notNull(),
 		repo: text("repo").notNull(),
 		pr: integer("pr").notNull(),
@@ -80,6 +80,7 @@ export const findingCatalog = pgTable(
 	(t) => [
 		uniqueIndex("finding_catalog_natural_key_uq").on(t.naturalKey),
 		index("finding_catalog_pr_idx").on(t.provider, t.owner, t.repo, t.pr),
+		index("finding_catalog_reviewer_idx").on(t.reviewer, t.owner, t.repo, t.pr),
 	],
 );
 
@@ -88,7 +89,8 @@ export const rawFeedback = pgTable(
 	{
 		id: bigserial("id", { mode: "number" }).primaryKey(),
 		source: feedbackSource("source").notNull(),
-		provider: provider("provider").notNull(),
+		provider: text("provider").notNull(),
+		reviewer: text("reviewer"),
 		owner: text("owner").notNull(),
 		repo: text("repo").notNull(),
 		pr: integer("pr").notNull(),
@@ -111,6 +113,7 @@ export const rawFeedback = pgTable(
 	(t) => [
 		uniqueIndex("raw_feedback_dedup_key_uq").on(t.dedupKey),
 		index("raw_feedback_pr_idx").on(t.provider, t.owner, t.repo, t.pr),
+		index("raw_feedback_reviewer_idx").on(t.reviewer, t.owner, t.repo, t.pr),
 		index("raw_feedback_source_idx").on(t.source),
 		index("raw_feedback_captured_at_idx").on(t.capturedAt),
 	],
@@ -155,7 +158,8 @@ export const qcScores = pgTable(
 		findingId: bigint("finding_id", { mode: "number" })
 			.notNull()
 			.references(() => findingCatalog.id),
-		provider: provider("provider").notNull(),
+		provider: text("provider").notNull(),
+		reviewer: text("reviewer"),
 		trigger: qcTrigger("trigger").notNull(),
 		isFalsePositive: boolean("is_false_positive").notNull(),
 		isUseful: boolean("is_useful").notNull(),
@@ -231,7 +235,8 @@ export const findingDiscards = pgTable(
 	"finding_discards",
 	{
 		id: bigserial("id", { mode: "number" }).primaryKey(),
-		provider: provider("provider").notNull(),
+		provider: text("provider").notNull(),
+		reviewer: text("reviewer"),
 		owner: text("owner").notNull(),
 		repo: text("repo").notNull(),
 		pr: integer("pr").notNull(),
@@ -262,5 +267,11 @@ export const findingDiscards = pgTable(
 			sql`coalesce(${t.line}, -1)`,
 		),
 		index("finding_discards_pr_idx").on(t.provider, t.owner, t.repo, t.pr),
+		index("finding_discards_reviewer_idx").on(
+			t.reviewer,
+			t.owner,
+			t.repo,
+			t.pr,
+		),
 	],
 );

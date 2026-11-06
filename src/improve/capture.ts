@@ -1,13 +1,9 @@
 import { findProvenance } from "../comment-key.js";
 import { type Discard, discardKey } from "../discards.js";
 import { claimTitle } from "../replay/claims.js";
-import {
-	type LegacyProvider,
-	legacyProviderOf,
-	type ReviewerId,
-} from "../reviewer-id.js";
+import type { ReviewerId } from "../reviewer-id.js";
 import type { Db } from "./db/client.js";
-import { insertDiscards, upsertFinding } from "./db/repo.js";
+import { identityColumns, insertDiscards, upsertFinding } from "./db/repo.js";
 import { findingNaturalKey } from "./findings.js";
 
 export interface CaptureOctokit {
@@ -135,7 +131,7 @@ export async function capturePostedReview(deps: {
 	postCarrier: boolean;
 }): Promise<{ findings: number; carrierCommentId: number | null }> {
 	const { db, octokit, owner, repo, pr } = deps;
-	const provider = legacyProviderOf(deps.reviewer) as LegacyProvider;
+	const identity = identityColumns(deps.reviewer);
 	let findings = 0;
 	let carrierCommentId: number | null = null;
 
@@ -199,7 +195,7 @@ export async function capturePostedReview(deps: {
 		deps.provenance,
 	)) {
 		await upsertFinding(db, {
-			provider,
+			...identity,
 			owner,
 			repo,
 			pr,
@@ -213,7 +209,7 @@ export async function capturePostedReview(deps: {
 			headSha: deps.headSha,
 			postedAt: parsePostedAt(comment.created_at),
 			naturalKey: findingNaturalKey({
-				provider,
+				provider: identity.provider,
 				owner,
 				repo,
 				pr,
@@ -244,7 +240,7 @@ export function persistDiscards(deps: {
 		await insertDiscards(
 			db,
 			discards.map((d) => ({
-				provider: legacyProviderOf(d.reviewer) as LegacyProvider,
+				...identityColumns(d.reviewer),
 				owner,
 				repo,
 				pr,

@@ -1,12 +1,12 @@
 import { getConfigTree } from "../config/load.js";
 import type { Config } from "../config/schema.js";
-import {
-	type LegacyProvider,
-	legacyProviderOf,
-	type ReviewerId,
-} from "../reviewer-id.js";
+import type { ReviewerId } from "../reviewer-id.js";
 import type { Db } from "./db/client.js";
-import { insertRawFeedback, upsertFinding } from "./db/repo.js";
+import {
+	identityColumns,
+	insertRawFeedback,
+	upsertFinding,
+} from "./db/repo.js";
 import { findingNaturalKey, parseFindingComment } from "./findings.js";
 
 export interface BackfillOctokit {
@@ -73,10 +73,6 @@ export function botLoginsToReviewer(
 		if (reviewer.appSlug) logins[`${reviewer.appSlug}[bot]`] = id;
 	}
 	return logins;
-}
-
-function corpusProvider(id: ReviewerId): LegacyProvider {
-	return legacyProviderOf(id) as LegacyProvider;
 }
 
 // A Map for the same reason as feedback/reactions.ts: `content` is an
@@ -263,7 +259,7 @@ export async function backfillPr(
 	};
 
 	for (const comment of findings) {
-		const provider = corpusProvider(botLogins[comment.user?.login ?? ""]);
+		const identity = identityColumns(botLogins[comment.user?.login ?? ""]);
 		const parsed = parseFindingComment(comment.body);
 		if (!parsed) {
 			result.unparseable++;
@@ -271,7 +267,7 @@ export async function backfillPr(
 		}
 
 		await upsertFinding(deps.db, {
-			provider,
+			...identity,
 			owner,
 			repo,
 			pr,
@@ -289,7 +285,7 @@ export async function backfillPr(
 			headSha: comment.original_commit_id ?? comment.commit_id ?? "unknown",
 			postedAt: parseTimestamp(comment.created_at),
 			naturalKey: findingNaturalKey({
-				provider,
+				provider: identity.provider,
 				owner,
 				repo,
 				pr,
@@ -312,7 +308,7 @@ export async function backfillPr(
 			const actor = reaction.user?.login ?? "unknown";
 			result.reactions += await insertRawFeedback(deps.db, {
 				source: "inline_reaction",
-				provider,
+				...identity,
 				owner,
 				repo,
 				pr,
@@ -342,10 +338,10 @@ export async function backfillPr(
 		// silently misattributing another reviewer's thread to us.
 		const parentReviewer = botLogins[parent?.user?.login ?? ""];
 		if (!parentReviewer) continue;
-		const provider = corpusProvider(parentReviewer);
+		const identity = identityColumns(parentReviewer);
 		result.replies += await insertRawFeedback(deps.db, {
 			source: "inline_reply",
-			provider,
+			...identity,
 			owner,
 			repo,
 			pr,
@@ -387,10 +383,10 @@ export async function backfillPr(
 		if (isBotLogin(login)) continue;
 		const attributed = attributeProviderForComment(activeReviewers, ic.body);
 		if (!attributed) continue;
-		const provider = corpusProvider(attributed);
+		const identity = identityColumns(attributed);
 		result.prComments += await insertRawFeedback(deps.db, {
 			source: "pr_comment",
-			provider,
+			...identity,
 			owner,
 			repo,
 			pr,

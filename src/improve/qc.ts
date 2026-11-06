@@ -2,7 +2,7 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import { createAIModel } from "../models.js";
 import { SEVERITY_LEVELS } from "../review.js";
-import type { LegacyProvider } from "../reviewer-id.js";
+import { legacyProviderOf, type ReviewerId } from "../reviewer-id.js";
 import {
 	type ModelSelection,
 	outputBudget,
@@ -23,7 +23,7 @@ export type QcVerdict = z.infer<typeof QcVerdictSchema>;
 
 export interface JudgeableFinding {
 	id: number;
-	provider: LegacyProvider;
+	reviewer: ReviewerId;
 	path: string | null;
 	line: number | null;
 	title: string;
@@ -116,7 +116,7 @@ export async function judgeFinding(
 	finding: JudgeableFinding,
 	hunk: string,
 ): Promise<QcVerdict | null> {
-	const selection = judgeSelection(finding.provider);
+	const selection = judgeSelection(legacyProviderOf(finding.reviewer));
 	try {
 		const { object } = await generateObject({
 			model: createAIModel(selection),
@@ -132,7 +132,7 @@ export async function judgeFinding(
 		if (isProgrammingError(err)) throw err;
 		console.error("qc: judge call failed", {
 			findingId: finding.id,
-			provider: finding.provider,
+			reviewer: finding.reviewer,
 			err,
 		});
 		return null;

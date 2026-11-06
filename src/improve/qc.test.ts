@@ -13,7 +13,7 @@ import {
 function finding(over: Partial<JudgeableFinding> = {}): JudgeableFinding {
 	return {
 		id: 1,
-		provider: "anthropic",
+		reviewer: "claude",
 		path: "src/x.ts",
 		line: 10,
 		title: "a finding",

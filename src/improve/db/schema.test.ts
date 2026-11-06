@@ -53,3 +53,15 @@ describe("corpus schema", () => {
 		expect(discardDisposition.enumValues).toEqual([...DISPOSITIONS]);
 	});
 });
+
+describe("reviewer identity", () => {
+	it("gives the four provider tables a nullable reviewer and a text provider", () => {
+		for (const t of [findingCatalog, rawFeedback, qcScores, findingDiscards]) {
+			expect(t.reviewer.notNull).toBe(false);
+			expect(t.reviewer.dataType).toBe("string");
+			expect(t.provider.notNull).toBe(true);
+			expect(t.provider.dataType).toBe("string");
+			expect(t.provider.getSQLType()).toBe("text");
+		}
+	});
+});

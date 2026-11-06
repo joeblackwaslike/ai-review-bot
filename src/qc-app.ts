@@ -159,7 +159,7 @@ export async function runPrQc(deps: {
 			);
 			const finding: JudgeableFinding = {
 				id: row.id,
-				provider: row.provider,
+				reviewer: row.reviewer,
 				path: row.path,
 				line: row.line,
 				title: row.title,
