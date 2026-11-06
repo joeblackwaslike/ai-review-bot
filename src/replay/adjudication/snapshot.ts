@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { claimTokens } from "../../claim-dedupe.js";
+import { claimIdentifiers, claimTokens } from "../../claim-dedupe.js";
 import type { ReplayFixture } from "../types.js";
 
 function canonical(value: unknown): unknown {
@@ -24,5 +24,10 @@ export function snapshotId(fixture: ReplayFixture): string {
 
 export function claimKey(c: { path: string | null; title: string }): string {
 	const tokens = [...claimTokens(c.title)].sort();
-	return sha256(JSON.stringify([c.path, tokens]));
+	const identifiers = [...claimIdentifiers(c.title)].sort();
+	const raw =
+		tokens.length === 0 && identifiers.length === 0
+			? c.title.toLowerCase().replace(/\s+/g, " ").trim()
+			: null;
+	return sha256(JSON.stringify([c.path, tokens, identifiers, raw]));
 }

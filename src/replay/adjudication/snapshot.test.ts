@@ -36,4 +36,26 @@ describe("claimKey", () => {
 			claimKey({ path: "b.ts", title }),
 		);
 	});
+
+	it("keeps claims that differ only in a backticked identifier apart", () => {
+		expect(
+			claimKey({ path: "a.ts", title: "`parseA` throws on empty input" }),
+		).not.toBe(
+			claimKey({ path: "a.ts", title: "`parseB` throws on empty input" }),
+		);
+	});
+
+	it("matches a reworded title with the same tokens and identifiers", () => {
+		expect(
+			claimKey({ path: "a.ts", title: "`parseA` throws on empty input" }),
+		).toBe(
+			claimKey({ path: "a.ts", title: "On empty input `parseA` throws" }),
+		);
+	});
+
+	it("keeps titles with no tokens distinct", () => {
+		expect(claimKey({ path: "a.ts", title: "Do it" })).not.toBe(
+			claimKey({ path: "a.ts", title: "Is it" }),
+		);
+	});
 });
