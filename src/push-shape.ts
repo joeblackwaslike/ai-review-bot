@@ -1,6 +1,7 @@
 import { isGeneratedFile } from "./diff-pack.js";
 import {
 	findMovedBlocks,
+	isIndentSensitive,
 	type MovedBlock,
 	normalizeCodeLine,
 	type PushFile,
@@ -89,13 +90,6 @@ export function classifyFile(filename: string): FileKind {
 	if (DOCS_EXT.test(name) || filename.startsWith("docs/")) return "docs";
 	if (CONFIG_EXT.test(name)) return "config";
 	return "code";
-}
-
-const INDENT_SENSITIVE_EXT = /\.(py|pyi|ya?ml|mk)$/i;
-
-function isIndentSensitive(filename: string): boolean {
-	const name = filename.split("/").pop() ?? filename;
-	return name === "Makefile" || INDENT_SENSITIVE_EXT.test(name);
 }
 
 function isWhitespaceOnly(

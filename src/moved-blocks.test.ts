@@ -79,6 +79,40 @@ describe("findMovedBlocks", () => {
 		).toEqual([{ from: "a.ts", to: "b.ts", lineCount: 5 }]);
 	});
 
+	describe("indentation-sensitive files", () => {
+		const py = ["if ready:", "x = 1", "y = 2", "z = 3", "w = 4"];
+		const deeper = py.map((l) => `    ${l}`);
+		const yml = ["key:", "a: 1", "b: 2", "c: 3", "d: 4"];
+		const yDeeper = yml.map((l) => `    ${l}`);
+		const moved = (from: string, to: string, d: string[], a: string[]) =>
+			findMovedBlocks([file(from, d, []), file(to, [], a)]);
+
+		it("does not count a Python block whose indentation changed as a move", () => {
+			expect(moved("a.py", "b.py", py, deeper)).toEqual([]);
+		});
+		it("counts a Python block moved with identical indentation", () => {
+			expect(moved("a.py", "b.py", deeper, deeper)).toEqual([
+				{ from: "a.py", to: "b.py", lineCount: 5 },
+			]);
+		});
+		it("does not count a YAML block whose indentation changed as a move", () => {
+			expect(moved("a.yml", "b.yml", yml, yDeeper)).toEqual([]);
+		});
+		it("counts a YAML block moved with identical indentation", () => {
+			expect(moved("a.yml", "b.yml", yDeeper, yDeeper)).toEqual([
+				{ from: "a.yml", to: "b.yml", lineCount: 5 },
+			]);
+		});
+		it("never matches between an indentation-sensitive and a free-form file", () => {
+			expect(moved("a.py", "b.ts", py, py)).toEqual([]);
+		});
+		it("still counts a re-indented TypeScript block as a move", () => {
+			expect(moved("a.ts", "b.ts", py, deeper)).toEqual([
+				{ from: "a.ts", to: "b.ts", lineCount: 5 },
+			]);
+		});
+	});
+
 	it("ignores blocks shorter than minLines", () => {
 		expect(
 			findMovedBlocks([

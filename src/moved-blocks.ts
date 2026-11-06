@@ -18,6 +18,7 @@ export interface MovedBlock {
 interface Run {
 	index: number;
 	filename: string;
+	indentSensitive: boolean;
 	lines: string[];
 	used: boolean[];
 }
@@ -69,8 +70,12 @@ export function normalizeCodeLine(
 	return out;
 }
 
-function normalize(line: string): string {
-	return normalizeCodeLine(line);
+const INDENT_SENSITIVE_EXT = /\.(py|pyi|ya?ml|mk)$/i;
+
+/** True for files where leading indentation changes meaning (Python, YAML, Makefile). */
+export function isIndentSensitive(filename: string): boolean {
+	const name = filename.split("/").pop() ?? filename;
+	return name === "Makefile" || INDENT_SENSITIVE_EXT.test(name);
 }
 
 function countsTowardBlock(line: string): boolean {
@@ -84,6 +89,9 @@ function extractRuns(
 	const deleted: Run[] = [];
 	const added: Run[] = [];
 	if (!patch) return { deleted, added };
+	const indentSensitive = isIndentSensitive(filename);
+	const normalize = (line: string) =>
+		normalizeCodeLine(line, { keepIndent: indentSensitive });
 	let del: string[] = [];
 	let add: string[] = [];
 	const flush = () => {
@@ -91,6 +99,7 @@ function extractRuns(
 			deleted.push({
 				index: -1,
 				filename,
+				indentSensitive,
 				lines: del,
 				used: del.map(() => false),
 			});
@@ -99,6 +108,7 @@ function extractRuns(
 			added.push({
 				index: -1,
 				filename,
+				indentSensitive,
 				lines: add,
 				used: add.map(() => false),
 			});
@@ -221,7 +231,11 @@ function collectCandidates(
 			occurrences.set(key, n);
 			if (n > MAX_KEY_OCCURRENCES) continue;
 			for (const hit of index.get(key) ?? []) {
-				if (hit.run.filename === run.filename) continue;
+				if (
+					hit.run.filename === run.filename ||
+					hit.run.indentSensitive !== run.indentSensitive
+				)
+					continue;
 				const diagonal = `${run.index}|${hit.run.index}|${pos - hit.pos}`;
 				if (pos < (coveredTo.get(diagonal) ?? 0)) continue;
 				const c = extend(run, pos, hit.run, hit.pos);

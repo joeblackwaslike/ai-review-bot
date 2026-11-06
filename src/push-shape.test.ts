@@ -138,6 +138,18 @@ describe("classifyPush", () => {
 		});
 	});
 
+	it("keeps weight for a Python block whose nesting changed, drops a pure move", () => {
+		const py = ["if ready:", "x = 1", "y = 2", "z = 3", "w = 4"];
+		const deeper = py.map((l) => `    ${l}`);
+		const shape = (added: string[]) =>
+			classifyPush([
+				file({ filename: "a.py", deletions: 5, patch: delPatch(deeper) }),
+				file({ filename: "b.py", additions: 5, patch: addPatch(added) }),
+			]);
+		expect(shape(py).reviewableWeight).toBeGreaterThan(0);
+		expect(shape(deeper).reviewableWeight).toBe(0);
+	});
+
 	it("weighs a pure rename at 0", () => {
 		const shape = classifyPush([
 			file({
