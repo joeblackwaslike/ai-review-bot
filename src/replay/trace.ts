@@ -1,6 +1,9 @@
+import { applyLimits, resolveLimits } from "../adaptive-limits.js";
 import { commentKey } from "../comment-key.js";
-import { suppressInReview } from "../ledger/suppress.js";
-import type { Ledger } from "../ledger/types.js";
+import type { Verdict } from "../feedback/types.js";
+import { blocksVerdict, suppressInReview } from "../ledger/suppress.js";
+import type { Ledger, LedgerEntry } from "../ledger/types.js";
+import type { PushFile } from "../moved-blocks.js";
 import { declaredRepeat, resolveRelations } from "../relation.js";
 import { dropRetractions } from "../retraction.js";
 import {
@@ -51,13 +54,85 @@ export function ledgerForRound(
 	);
 }
 
+const VERDICT_BY_REACTION: ReadonlyMap<string, Verdict> = new Map([
+	["+1", "up"],
+	["-1", "down"],
+	["confused", "confused"],
+]);
+
+/**
+ * The adaptive-limits input a review of `round` would have, from the fixture's
+ * earlier rounds only. `entries` is every earlier claim as a ledger entry
+ * (settled by the labels visible before the round, open otherwise), not only
+ * the holdable ones. `currentRound` counts the earlier rounds. `reactionsFor`
+ * reads the recorded reactions on the entry's claim that predate the round,
+ * one verdict per reactor (the latest verdict-bearing reaction); an entry
+ * without a comment id has none. `delta` is the round's own `commitsSince`
+ * files (push metadata, not a finding), each with its changed line count as
+ * additions, or null when the round records none.
+ */
+export function adaptiveInputForRound(
+	fixture: ReplayFixture,
+	labels: LabelFile,
+	round: Round,
+): NonNullable<Parameters<typeof postFilterTrace>[0]["adaptive"]> {
+	const earlier = fixture.rounds.filter((r) => r.index < round.index);
+	const cutoff = roundCutoff(round).getTime();
+	const priorClaims = earlier.flatMap((r) => r.claims);
+	const entries = ledgerFromView({
+		priorClaims,
+		labels: visibleLabels(fixture, labels, roundCutoff(round)),
+	});
+	const commentOf = new Map(priorClaims.map((c) => [c.id, c.commentId]));
+	const reactions = fixture.reactions.filter(
+		(r) => new Date(r.createdAt).getTime() < cutoff,
+	);
+	const reactionsFor = (e: LedgerEntry): Verdict[] => {
+		const commentId = commentOf.get(e.id);
+		if (commentId === null || commentId === undefined) return [];
+		const latest = new Map<string, { verdict: Verdict; at: number }>();
+		for (const r of reactions) {
+			const verdict = VERDICT_BY_REACTION.get(r.content);
+			if (r.commentId !== commentId || !verdict) continue;
+			const at = new Date(r.createdAt).getTime();
+			if (at >= (latest.get(r.user)?.at ?? -Infinity))
+				latest.set(r.user, { verdict, at });
+		}
+		return [...latest.values()].map((v) => v.verdict);
+	};
+	const changed = new Map<string, number>();
+	for (const commit of round.commitsSince)
+		for (const f of commit.files)
+			changed.set(
+				f.path,
+				(changed.get(f.path) ?? 0) +
+					f.ranges.reduce((n, [lo, hi]) => n + (hi - lo + 1), 0),
+			);
+	const delta: PushFile[] | null =
+		changed.size === 0
+			? null
+			: [...changed].map(([filename, additions]) => ({
+					filename,
+					status: "modified",
+					additions,
+					deletions: 0,
+				}));
+	return { entries, reactionsFor, currentRound: earlier.length, delta };
+}
+
 /**
  * What the posting path would post from these agent reviews, built from the
  * same functions in the same order: per agent `resolveRelations` (against no
  * shown ids), `suppressInReview` and, when
  * `tuning.dropRetractions`, `dropRetractions`; then `mergeReviewsDetailed`,
  * `sanitizeInlineComments`, `capInlineComments`, `buildReviewComments` and
- * `routeDroppedComments`. `posted` holds the inline comments that anchor and
+ * `routeDroppedComments`. With `adaptive` and `tuning.adaptiveLimits`,
+ * `resolveLimits` and `applyLimits` run after `sanitizeInlineComments` and
+ * before `capInlineComments`, as in production; what they remove lands in
+ * `adaptiveRemoved` and in neither `posted` nor `dropped`, and the key is
+ * absent otherwise so the plain output is unchanged. `carriedBlocks` is true
+ * when `ledger` holds an open or acknowledged entry that blocks the verdict.
+ * `posted` holds the inline comments that anchor and
  * the general findings, including P0/P1 comments promoted off the diff;
  * `dropped` holds every finding a step removed. Skill names carry `.md`.
  */
@@ -66,7 +141,17 @@ export function postFilterTrace(input: {
 	ledger: Ledger;
 	files: PullFile[];
 	tuning: ReviewerTuning;
-}): { posted: CandidateRecord[]; dropped: CandidateRecord[] } {
+	adaptive?: {
+		entries: Ledger;
+		reactionsFor: (e: LedgerEntry) => Verdict[];
+		currentRound: number;
+		delta: PushFile[] | null;
+	};
+}): {
+	posted: CandidateRecord[];
+	dropped: CandidateRecord[];
+	adaptiveRemoved?: CandidateRecord[];
+} {
 	const { ledger, files, tuning } = input;
 	const skillOf = new Map<object, string>();
 	const toRecord = (
@@ -128,7 +213,42 @@ export function postFilterTrace(input: {
 		if (skill) skillOf.set(c, skill);
 	});
 
-	const { kept, overflow } = capInlineComments(sanitized);
+	let generalKept = merged.general_findings;
+	let inlineCandidates = sanitized;
+	let adaptiveRemoved: CandidateRecord[] | undefined;
+	if (input.adaptive && tuning.adaptiveLimits) {
+		const limits = resolveLimits(input.adaptive);
+		const agentsWith = (match: (r: ModelReview) => boolean) =>
+			Math.max(1, filtered.filter(match).length);
+		const limited = applyLimits(
+			{
+				event: merged.event,
+				general_findings: generalKept,
+				inline_comments: sanitized,
+			},
+			limits,
+			(f) =>
+				"path" in f
+					? agentsWith((r) =>
+							r.inline_comments.some((c) => commentKey(c) === commentKey(f)),
+						)
+					: agentsWith((r) =>
+							r.general_findings.some(
+								(g) => g.title.toLowerCase() === f.title.toLowerCase(),
+							),
+						),
+			ledger.some(
+				(e) =>
+					(e.status === "open" || e.status === "acknowledged") &&
+					blocksVerdict(e),
+			),
+		);
+		generalKept = limited.review.general_findings;
+		inlineCandidates = limited.review.inline_comments;
+		adaptiveRemoved = limited.removed.map((f) => toRecord(f));
+	}
+
+	const { kept, overflow } = capInlineComments(inlineCandidates);
 	for (const c of overflow) drop(c);
 
 	const reviewComments = buildReviewComments(files, kept);
@@ -152,9 +272,10 @@ export function postFilterTrace(input: {
 	return {
 		posted: [
 			...postedInline,
-			...merged.general_findings.map((f) => toRecord(f)),
+			...generalKept.map((f) => toRecord(f)),
 			...routed,
 		],
 		dropped,
+		...(adaptiveRemoved ? { adaptiveRemoved } : {}),
 	};
 }
