@@ -161,7 +161,7 @@ describe("auditFixture", () => {
 		expect(again.run).toHaveBeenCalledTimes(1);
 	});
 
-	it("re-runs when the cached run used another model or prompt", async () => {
+	it("re-runs when the cached run used another model, and records the new one", async () => {
 		const shared = base();
 		const run = (j: ReturnType<typeof judge>) =>
 			auditFixture({
@@ -174,9 +174,98 @@ describe("auditFixture", () => {
 		const other = { ...judge([missedA]), model: "newer-model" };
 		await run(other);
 		expect(other.run).toHaveBeenCalledTimes(1);
-		const stale = shared.cache.get("snap", "audit-run:L1");
-		expect(stale?.kind).toBe("audit-run");
-		expect(AUDIT_PROMPT_HASH).toMatch(/^[0-9a-f]{64}$/);
+		const stored = shared.cache.get("snap", "audit-run:L1");
+		expect(stored?.kind === "audit-run" && stored.first.model).toBe(
+			"newer-model",
+		);
+		const again = { ...judge([missedA]), model: "newer-model" };
+		await run(again);
+		expect(again.run).not.toHaveBeenCalled();
+	});
+
+	it("re-runs when only the prompt hash differs, and records the current one", async () => {
+		const shared = base();
+		const j = judge([missedA]);
+		shared.cache.put("snap", "audit-run:L1", {
+			kind: "audit-run",
+			first: { family: "anthropic", model: j.model, promptHash: "old-hash" },
+			findingKeys: [],
+			unresolved: 0,
+		});
+		await auditFixture({
+			...shared,
+			judge: j,
+			second: null,
+			caps: { anthropic: 1, openai: 0 },
+		});
+		expect(j.run).toHaveBeenCalledTimes(1);
+		const stored = shared.cache.get("snap", "audit-run:L1");
+		expect(stored?.kind === "audit-run" && stored.first.promptHash).toBe(
+			AUDIT_PROMPT_HASH,
+		);
+	});
+
+	describe("upgrading a cached single-family audit", () => {
+		const firstRun = async (shared: ReturnType<typeof base>) =>
+			auditFixture({
+				...shared,
+				judge: judge([missedA]),
+				second: null,
+				caps: { anthropic: 1, openai: 0 },
+			});
+
+		it("cross-checks the single-family findings once the OpenAI cap allows it", async () => {
+			const shared = base();
+			await firstRun(shared);
+			const j = judge([missedA]);
+			const second = judge([missedA], "openai");
+			const result = await auditFixture({
+				...shared,
+				judge: j,
+				second,
+				caps: { anthropic: 1, openai: 1 },
+			});
+			expect(j.run).not.toHaveBeenCalled();
+			expect(second.run).toHaveBeenCalledTimes(1);
+			expect(result.calls).toEqual({ anthropic: 0, openai: 1 });
+			expect(result.added[0]?.status).toBe("agreed");
+			expect(result.singleFamily).toBe(0);
+			const third = judge([missedA], "openai");
+			const final = await auditFixture({
+				...shared,
+				judge: judge([missedA]),
+				second: third,
+				caps: { anthropic: 1, openai: 1 },
+			});
+			expect(third.run).not.toHaveBeenCalled();
+			expect(final.added[0]?.status).toBe("agreed");
+		});
+
+		it("drops a finding the second judge does not repeat and counts it unresolved", async () => {
+			const shared = base();
+			await firstRun(shared);
+			const result = await auditFixture({
+				...shared,
+				judge: judge([missedA]),
+				second: judge([], "openai"),
+				caps: { anthropic: 1, openai: 1 },
+			});
+			expect(result.added).toHaveLength(0);
+			expect(result.unresolved).toBe(1);
+		});
+
+		it("keeps the cached findings and reports a thrown cross-check", async () => {
+			const shared = base();
+			await firstRun(shared);
+			const result = await auditFixture({
+				...shared,
+				judge: judge([missedA]),
+				second: judge(new Error("quota exhausted"), "openai"),
+				caps: { anthropic: 1, openai: 1 },
+			});
+			expect(result.crossCheckFailed).toBe("quota exhausted");
+			expect(result.added[0]?.status).toBe("single-family");
+		});
 	});
 
 	it("surfaces a thrown cross-check and caches nothing", async () => {

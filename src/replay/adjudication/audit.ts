@@ -98,30 +98,87 @@ function summarize(
 	};
 }
 
+/**
+ * A finished audit is reused as is. Findings it stored as single-family are cross-checked by the
+ * second judge when one is available and its cap allows a call, like a cached verdict upgrade.
+ */
+async function upgradeCachedRun(
+	opts: AuditOptions,
+	prior: AuditRunRecord,
+	input: AuditInput,
+): Promise<AuditResult> {
+	const { cache, snapshot, second, caps, labelsHash } = opts;
+	const calls = { anthropic: 0, openai: 0 };
+	const records = prior.findingKeys.flatMap((k) => {
+		const r = cache.get(snapshot, k);
+		return r?.kind === "audit" ? [r] : [];
+	});
+	const pending = records.filter(
+		(r) => r.status === "single-family" && r.second === null,
+	);
+	if (!second || pending.length === 0 || caps[second.family] < 1) {
+		return summarize(records, prior.unresolved, calls);
+	}
+	calls[second.family]++;
+	let confirmations: AuditFinding[];
+	try {
+		confirmations = await second.run(input);
+	} catch (err) {
+		return {
+			...summarize(records, prior.unresolved, calls),
+			crossCheckFailed: err instanceof Error ? err.message : String(err),
+		};
+	}
+	const kept: AuditRecord[] = [];
+	let unresolved = prior.unresolved;
+	for (const r of records) {
+		if (!pending.includes(r)) {
+			kept.push(r);
+			continue;
+		}
+		const confirmed = confirmations.some(
+			(o) => claimKey(o) === claimKey(r) || isSameClaim(o, r),
+		);
+		if (!confirmed) {
+			unresolved++;
+			continue;
+		}
+		const upgraded: AuditRecord = {
+			...r,
+			status: "agreed",
+			second: judgeRecord(second),
+		};
+		cache.put(snapshot, findingKey(labelsHash, upgraded), upgraded);
+		kept.push(upgraded);
+	}
+	cache.put(snapshot, runKey(labelsHash), {
+		...prior,
+		findingKeys: kept.map((r) => findingKey(labelsHash, r)),
+		unresolved,
+	});
+	return summarize(kept, unresolved, calls);
+}
+
 export async function auditFixture(opts: AuditOptions): Promise<AuditResult> {
 	const { cache, snapshot, judge, second, caps } = opts;
 	const { labelsHash } = opts;
+	const claims = labelledClaims(opts.fixture, opts.labels);
+	const input: AuditInput = {
+		diff: opts.diff,
+		claims: claims.map(({ path, line, title }) => ({ path, line, title })),
+	};
 	const prior = cache.get(snapshot, runKey(labelsHash));
 	if (
 		prior?.kind === "audit-run" &&
 		prior.first.promptHash === AUDIT_PROMPT_HASH &&
 		prior.first.model === judge.model
 	) {
-		const records = prior.findingKeys.flatMap((k) => {
-			const r = cache.get(snapshot, k);
-			return r?.kind === "audit" ? [r] : [];
-		});
-		return summarize(records, prior.unresolved, { anthropic: 0, openai: 0 });
+		return upgradeCachedRun(opts, prior, input);
 	}
 	const calls = { anthropic: 0, openai: 0 };
 	if (calls[judge.family] >= caps[judge.family]) {
 		return { ...summarize([], 0, calls), deferred: true };
 	}
-	const claims = labelledClaims(opts.fixture, opts.labels);
-	const input: AuditInput = {
-		diff: opts.diff,
-		claims: claims.map(({ path, line, title }) => ({ path, line, title })),
-	};
 	calls[judge.family]++;
 	const listed = await judge.run(input);
 	const uncovered = [
