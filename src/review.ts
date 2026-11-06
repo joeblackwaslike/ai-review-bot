@@ -2998,13 +2998,17 @@ async function buildReviewInner(
 	let limitRemovedCount = 0;
 	let limitNote: string | null = null;
 	if (tuning.adaptiveLimits && loadedLedger) {
+		const currentRound = loadedLedger.reviewIds.length;
+		const hasEarlierRound = ledger.some((e) => e.round < currentRound);
 		const limits = resolveLimits({
 			entries: ledger,
-			reactionsFor: await loadReactionsFor(
-				context.feedbackEnabled ? context.getKv : undefined,
-				context,
-			),
-			currentRound: loadedLedger.reviewIds.length,
+			reactionsFor: hasEarlierRound
+				? await loadReactionsFor(
+						context.feedbackEnabled ? context.getKv : undefined,
+						context,
+					)
+				: () => [],
+			currentRound,
 			delta:
 				incrementalPass && !anyWholePrSkill
 					? scopedFiles.map((f) => ({
@@ -3070,7 +3074,7 @@ async function buildReviewInner(
 		sanitizedComments = limited.review.inline_comments;
 		console.log("adaptive limits", {
 			score: limits.score,
-			rounds: limits.rounds.length,
+			rounds: limits.rounds,
 			floor: limits.floor,
 			budget: limits.budget,
 			removed: limitRemovedCount,

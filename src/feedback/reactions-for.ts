@@ -31,13 +31,18 @@ export function reactionsFor(
 const REACTIONS_TIMEOUT_MS = 3_000;
 
 /**
- * Reads this PR's tracked comments from KV and returns the reaction lookup.
+ * Reads this provider's tracked comments on this PR from KV and returns the reaction lookup.
  * Any failure (KV unset, throws, or slower than the timeout) logs one warning
  * and yields a lookup with no reactions, so a review never depends on KV.
  */
 export async function loadReactionsFor(
 	getKv: (() => KvClient | null) | undefined,
-	pr: { owner: string; repo: string; pullNumber: number },
+	pr: {
+		owner: string;
+		repo: string;
+		pullNumber: number;
+		provider: PostedCommentRecord["provider"];
+	},
 ): Promise<(e: LedgerEntry) => Verdict[]> {
 	try {
 		const kv = getKv?.();
@@ -58,6 +63,7 @@ export async function loadReactionsFor(
 			return reactionsFor(
 				all.filter(
 					(r) =>
+						r.provider === pr.provider &&
 						r.owner === pr.owner &&
 						r.repo === pr.repo &&
 						r.pr === pr.pullNumber,

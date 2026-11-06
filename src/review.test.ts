@@ -6898,8 +6898,9 @@ describe("buildReview ledger suppression", () => {
 			},
 		};
 
+		const originalAdaptiveLimits = REVIEWER_TUNING.adaptiveLimits;
 		afterEach(() => {
-			REVIEWER_TUNING.adaptiveLimits = false;
+			REVIEWER_TUNING.adaptiveLimits = originalAdaptiveLimits;
 		});
 
 		it("keeps the P1 and 4 P2 and records 4 ADAPTIVE_LIMIT discards", async () => {
@@ -7021,6 +7022,28 @@ describe("buildReview ledger suppression", () => {
 				warn.mockRestore();
 				expect(line?.score).toBeNull();
 				expect(calls).toBe(1);
+			});
+
+			it("does not read KV when no ledger entry predates the current round", async () => {
+				REVIEWER_TUNING.adaptiveLimits = true;
+				const kv = fakeKv([downRecord]);
+				const getKv = vi.fn(() => kv);
+				routeAgents({ "code-reviewer.md": agentOutput(nine) }, none);
+				await buildReview({
+					octokit: ledgerOctokit({ comments: [], threadNodes: [] }),
+					...baseContext,
+					feedbackEnabled: true,
+					getKv: getKv as never,
+				});
+				expect(getKv).not.toHaveBeenCalled();
+			});
+
+			it("logs the per-round friction values", async () => {
+				const kv = fakeKv([downRecord]);
+				const line = (await scoreWith(() => kv)) as
+					| { rounds?: unknown[] }
+					| undefined;
+				expect(line?.rounds?.[0]).toHaveProperty("friction");
 			});
 
 			it("never touches KV with the switch off", async () => {
@@ -7223,7 +7246,11 @@ describe("buildReview ledger suppression", () => {
 
 			const logged = budgetLog(log);
 			log.mockRestore();
-			expect(logged).toMatchObject({ rounds: 2, floor: null, budget: 10 });
+			expect(logged).toMatchObject({ floor: null, budget: 10 });
+			expect((logged as { rounds: unknown[] }).rounds).toHaveLength(2);
+			expect((logged as { rounds: unknown[] }).rounds[0]).toHaveProperty(
+				"friction",
+			);
 			expect(new Set(titlesIn(decision?.body ?? "")).size).toBe(9);
 		});
 

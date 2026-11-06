@@ -71,7 +71,12 @@ describe("reactionsFor", () => {
 });
 
 describe("loadReactionsFor", () => {
-	const pr = { owner: "o", repo: "r", pullNumber: 1 };
+	const pr = {
+		owner: "o",
+		repo: "r",
+		pullNumber: 1,
+		provider: "anthropic" as const,
+	};
 	const kvOf = (records: PostedCommentRecord[]) =>
 		({
 			zrangebyscore: vi.fn(async () => records.map((_, i) => `anthropic:${i}`)),
@@ -82,6 +87,7 @@ describe("loadReactionsFor", () => {
 
 	afterEach(() => {
 		vi.useRealTimers();
+		vi.restoreAllMocks();
 	});
 
 	it("joins only records for this owner, repo and PR", async () => {
@@ -90,6 +96,15 @@ describe("loadReactionsFor", () => {
 			record({ alice: "up" }, { repo: "other" }),
 			record({ alice: "up" }, { pr: 2 }),
 			record({ alice: "down" }),
+		]);
+		const f = await loadReactionsFor(() => kv, pr);
+		expect(f(entry())).toEqual(["down"]);
+	});
+
+	it("does not join a record from the other provider at the same path, line and title", async () => {
+		const kv = kvOf([
+			record({ alice: "down" }),
+			record({ alice: "up" }, { provider: "openai" }),
 		]);
 		const f = await loadReactionsFor(() => kv, pr);
 		expect(f(entry())).toEqual(["down"]);
