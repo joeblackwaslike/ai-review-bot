@@ -8,6 +8,7 @@ const KV_KEY = "pricing:openrouter";
 const DEFAULT_TTL_MS = 24 * 3600 * 1000;
 const KV_EXPIRY_SECONDS = 48 * 3600;
 const FETCH_TIMEOUT_MS = 3000;
+export const FETCH_RETRY_MS = 5 * 60 * 1000;
 
 export interface PriceTier {
 	minPromptTokens: number;
@@ -28,6 +29,7 @@ export type PriceTable = Record<string, Price>;
 
 let table: PriceTable = {};
 let loadedAt: number | undefined;
+let lastFailedAt: number | undefined;
 
 export function normalizeModelId(id: string): string {
 	return id.toLowerCase().replaceAll(".", "-");
@@ -89,6 +91,7 @@ export function setPriceTable(next: PriceTable, at: number = Date.now()): void {
 export function clearPriceTable(): void {
 	table = {};
 	loadedAt = undefined;
+	lastFailedAt = undefined;
 }
 
 export function priceTableSize(): number {
@@ -165,9 +168,17 @@ export async function primePrices(opts: PrimeOptions = {}): Promise<number> {
 	if (!opts.force && loadedAt !== undefined && fresh(loadedAt)) {
 		return priceTableSize();
 	}
+	if (
+		!opts.force &&
+		lastFailedAt !== undefined &&
+		now - lastFailedAt < FETCH_RETRY_MS
+	) {
+		return priceTableSize();
+	}
+	let cached: Cached | undefined;
 	try {
 		if (!opts.force) {
-			const cached = await readCache(opts).catch(() => undefined);
+			cached = await readCache(opts).catch(() => undefined);
 			if (cached && fresh(cached.fetchedAt)) {
 				setPriceTable(cached.table, cached.fetchedAt);
 				return priceTableSize();
@@ -182,10 +193,15 @@ export async function primePrices(opts: PrimeOptions = {}): Promise<number> {
 			throw new Error("OpenRouter returned no usable prices");
 		}
 		setPriceTable(fetched, now);
+		lastFailedAt = undefined;
 		await writeCache(opts, { fetchedAt: now, table: fetched }).catch(
 			() => undefined,
 		);
 	} catch (error) {
+		lastFailedAt = now;
+		if (cached && priceTableSize() === 0) {
+			setPriceTable(cached.table, cached.fetchedAt);
+		}
 		console.warn("price refresh failed; using the last known prices", {
 			error: error instanceof Error ? error.message : String(error),
 		});

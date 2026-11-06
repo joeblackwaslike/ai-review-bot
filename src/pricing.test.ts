@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createFakeKv } from "./feedback/kv.fake.js";
 import {
 	clearPriceTable,
+	FETCH_RETRY_MS,
 	lookupPrice,
 	normalizeModelId,
 	parseOpenRouterPrices,
@@ -174,6 +175,29 @@ describe("primePrices", () => {
 		const failing = vi.fn(async () => new Response("no", { status: 500 }));
 		await primePrices({ fetchImpl: failing, nowMs: 1 });
 		expect(lookupPrice("claude-sonnet-5-5", 1)).toBeUndefined();
+	});
+
+	it("uses a stale KV table when the fetch fails", async () => {
+		const kv = createFakeKv();
+		await kv.set(
+			"pricing:openrouter",
+			JSON.stringify({
+				fetchedAt: 0,
+				table: parseOpenRouterPrices(SAMPLE),
+			}),
+		);
+		const failing = vi.fn(async () => new Response("no", { status: 500 }));
+		await primePrices({ kv, fetchImpl: failing, nowMs: 40 * 3600 * 1000 });
+		expect(lookupPrice("claude-sonnet-5-5", 1)?.input).toBe(2);
+	});
+
+	it("does not retry a failed fetch until the retry window passes", async () => {
+		const failing = vi.fn(async () => new Response("no", { status: 500 }));
+		await primePrices({ fetchImpl: failing, nowMs: 1000 });
+		await primePrices({ fetchImpl: failing, nowMs: 1000 + FETCH_RETRY_MS - 1 });
+		expect(failing).toHaveBeenCalledTimes(1);
+		await primePrices({ fetchImpl: failing, nowMs: 1000 + FETCH_RETRY_MS });
+		expect(failing).toHaveBeenCalledTimes(2);
 	});
 
 	it("force bypasses fresh caches", async () => {
