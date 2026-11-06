@@ -173,14 +173,20 @@ describe("applyLimits", () => {
 	});
 
 	it("downgrades REQUEST_CHANGES when only an advisory finding is kept", () => {
-		const r = review("REQUEST_CHANGES", [adv("note", "P2", 0.9), f("nit", "P3")]);
+		const r = review("REQUEST_CHANGES", [
+			adv("note", "P2", 0.9),
+			f("nit", "P3"),
+		]);
 		const out = applyLimits(r, { floor: "P2", budget: null }, noSupport, false);
 		expect(out.review.general_findings.map((x) => x.id)).toEqual(["note"]);
 		expect(out.review.event).toBe("COMMENT");
 	});
 
 	it("keeps REQUEST_CHANGES when a non-advisory finding is kept beside an advisory one", () => {
-		const r = review("REQUEST_CHANGES", [adv("note", "P2"), f("nit", "P2", 0.9)]);
+		const r = review("REQUEST_CHANGES", [
+			adv("note", "P2"),
+			f("nit", "P2", 0.9),
+		]);
 		const out = applyLimits(r, { floor: "P2", budget: null }, noSupport, false);
 		expect(out.review.event).toBe("REQUEST_CHANGES");
 	});
