@@ -1,4 +1,5 @@
 import { eq, sql } from "drizzle-orm";
+import { legacyProviderOf, type ReviewerId } from "../../reviewer-id.js";
 import type { FindingOutcome } from "../trends.js";
 import type { Db } from "./client.js";
 import {
@@ -8,6 +9,18 @@ import {
 	qcRuns,
 	rawFeedback,
 } from "./schema.js";
+
+export function identityColumns(reviewer: ReviewerId): {
+	reviewer: string;
+	provider: string;
+} {
+	return { reviewer, provider: legacyProviderOf(reviewer) };
+}
+
+/** Reviewer id for a corpus row. Rows written by code that predates the
+ * `reviewer` column carry only `provider`, so reads must never use `reviewer`
+ * alone. */
+export const reviewerExpr = sql`coalesce(reviewer, case provider when 'anthropic' then 'claude' when 'openai' then 'codex' else provider end)`;
 
 export type RawFeedbackInsert = typeof rawFeedback.$inferInsert;
 export type DiscardInsert = typeof findingDiscards.$inferInsert;
@@ -232,7 +245,7 @@ export async function listFindingsForPr(
 ): Promise<
 	{
 		id: number;
-		provider: "anthropic" | "openai";
+		reviewer: string;
 		commentId: number | null;
 		path: string | null;
 		line: number | null;
@@ -241,7 +254,7 @@ export async function listFindingsForPr(
 	}[]
 > {
 	const result = await db.execute(sql`
-		select id, provider, comment_id, path, line, title, severity
+		select id, ${reviewerExpr} as reviewer, comment_id, path, line, title, severity
 		from finding_catalog
 		where owner = ${owner} and repo = ${repo} and pr = ${pr}
 		order by id
@@ -249,7 +262,7 @@ export async function listFindingsForPr(
 	return (
 		result.rows as unknown as {
 			id: string | number;
-			provider: "anthropic" | "openai";
+			reviewer: string;
 			comment_id: string | number | null;
 			path: string | null;
 			line: number | null;

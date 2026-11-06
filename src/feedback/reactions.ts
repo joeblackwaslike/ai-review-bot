@@ -100,6 +100,7 @@ export async function diffReactions(
 		commentId: record.commentId,
 		surface: record.surface,
 		provider: record.provider,
+		reviewer: record.reviewer,
 		owner: record.owner,
 		repo: record.repo,
 		pr: record.pr,

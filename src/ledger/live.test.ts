@@ -14,7 +14,7 @@ const opts = {
 	repo: "r",
 	pull: 1,
 	commentPrefix: "Bot",
-	provider: "anthropic",
+	reviewer: "claude",
 };
 
 const entry = (over: Partial<LedgerEntry>): LedgerEntry => ({

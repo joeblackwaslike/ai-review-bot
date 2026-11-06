@@ -42,7 +42,7 @@ export async function loadReactionsFor(
 		owner: string;
 		repo: string;
 		pullNumber: number;
-		provider: PostedCommentRecord["provider"];
+		reviewer: PostedCommentRecord["reviewer"];
 	},
 ): Promise<(e: LedgerEntry) => Verdict[]> {
 	try {
@@ -64,7 +64,7 @@ export async function loadReactionsFor(
 			return reactionsFor(
 				all.filter(
 					(r) =>
-						r.provider === pr.provider &&
+						r.reviewer === pr.reviewer &&
 						r.owner === pr.owner &&
 						r.repo === pr.repo &&
 						r.pr === pr.pullNumber,

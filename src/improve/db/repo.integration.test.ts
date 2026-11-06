@@ -4,8 +4,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadMigrationStatements } from "./migrate.js";
 import { baseFinding, baseRaw } from "./repo.fixtures.js";
 import {
+	identityColumns,
 	insertDiscards,
 	insertRawFeedback,
+	listFindingsForPr,
 	listUnclassifiedBundles,
 	upsertFinding,
 } from "./repo.js";
@@ -133,6 +135,28 @@ describe.skipIf(!url)("repo (real postgres)", () => {
 		expect(await insertDiscards(db, rows)).toBe(3);
 		expect(await insertDiscards(db, [row])).toBe(0);
 		expect(await insertDiscards(db, [{ ...row, line: null }])).toBe(0);
+	});
+
+	it("persists a custom reviewer and reads an old-shape row back through the coalesce", async () => {
+		await upsertFinding(db, {
+			...baseFinding,
+			...identityColumns("gemini"),
+			pr: 9,
+			naturalKey: "k-gemini-9",
+		});
+		await upsertFinding(db, {
+			...baseFinding,
+			provider: "openai",
+			pr: 9,
+			naturalKey: "k-old-9",
+		});
+		const rows = await listFindingsForPr(
+			db,
+			baseFinding.owner,
+			baseFinding.repo,
+			9,
+		);
+		expect(rows.map((r) => r.reviewer)).toEqual(["gemini", "codex"]);
 	});
 
 	it("upsertFinding keeps a stable id on natural_key conflict", async () => {

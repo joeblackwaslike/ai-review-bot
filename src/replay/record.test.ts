@@ -84,7 +84,7 @@ const opts = {
 	owner: "o",
 	repo: "r",
 	pull: 1,
-	provider: "anthropic" as const,
+	reviewer: "claude",
 	botLogin: BOT,
 	now: NOW,
 };

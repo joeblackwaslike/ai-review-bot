@@ -1,7 +1,7 @@
 import { APICallError } from "@ai-sdk/provider";
 import { NoObjectGeneratedError, RetryError } from "ai";
 import { describe, expect, it } from "vitest";
-import { classifyAgentError } from "./agent-failure.js";
+import { classifyAgentError, usageFromError } from "./agent-failure.js";
 
 const usage = {} as never;
 const response = {} as never;
@@ -204,5 +204,39 @@ describe("classifyAgentError", () => {
 			retryable: false,
 			errorName: "other",
 		});
+	});
+});
+
+describe("usageFromError", () => {
+	const withUsage = (u: Record<string, unknown>) =>
+		new NoObjectGeneratedError({
+			message: "x",
+			response,
+			usage: u as never,
+			finishReason: "length" as never,
+		});
+
+	it("carries cache read tokens from the error usage", () => {
+		expect(
+			usageFromError(
+				withUsage({
+					inputTokens: 100,
+					outputTokens: 5,
+					inputTokenDetails: { cacheReadTokens: 80 },
+				}),
+			),
+		).toEqual({
+			promptTokens: 100,
+			completionTokens: 5,
+			cachedPromptTokens: 80,
+		});
+	});
+
+	it("leaves cachedPromptTokens undefined when the usage has none", () => {
+		const result = usageFromError(
+			withUsage({ inputTokens: 100, outputTokens: 5 }),
+		);
+		expect(result).toMatchObject({ promptTokens: 100, completionTokens: 5 });
+		expect(result?.cachedPromptTokens).toBeUndefined();
 	});
 });

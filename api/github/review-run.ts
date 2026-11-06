@@ -1,13 +1,21 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getConfig, getOpenAIAppConfig } from "../../src/config.js";
+import type { AppConfig } from "../../src/config.js";
 import {
-	getGitHubApp,
-	getOpenAIGitHubApp,
+	getReviewerGitHubApp,
 	runScheduledReview,
 } from "../../src/github-app.js";
 import { readRawBody } from "../../src/http.js";
+import {
+	getReviewerAppConfig,
+	listReviewerIds,
+	logReviewerReadiness,
+	reviewerReadiness,
+} from "../../src/reviewers.js";
 import type { ReviewRunMessage } from "../../src/scheduler.js";
-import { verifyQStashSignature } from "../../src/scheduler.js";
+import {
+	reviewerOfMessage,
+	verifyQStashSignature,
+} from "../../src/scheduler.js";
 
 // QStash delayed-callback endpoint. The pull_request webhook publishes a
 // ReviewRunMessage here with a delay; QStash invokes this after the delay so the
@@ -21,6 +29,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 		return;
 	}
 
+	logReviewerReadiness();
+
 	const signature = req.headers["upstash-signature"];
 	if (typeof signature !== "string") {
 		res.status(400).json({ error: "Missing Upstash-Signature header" });
@@ -29,8 +39,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
 	const rawBody = (await readRawBody(req)).toString("utf8");
 
-	// Parse before verifying ONLY to select the right provider's signing keys.
-	// Verification gates every side effect below — an unverified body is inert.
 	let parsed: unknown;
 	try {
 		parsed = JSON.parse(rawBody);
@@ -39,29 +47,57 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 		return;
 	}
 
-	// Validate shape + provider explicitly: a non-object body would crash on
-	// property access, and an unknown provider must not silently fall through to
-	// the wrong bot's credentials. (Both bots share QStash signing keys, so a
-	// corrupted provider field could otherwise pass verification on the wrong
-	// path.) Reject anything that isn't a known provider.
-	if (
-		typeof parsed !== "object" ||
-		parsed === null ||
-		((parsed as ReviewRunMessage).provider !== "openai" &&
-			(parsed as ReviewRunMessage).provider !== "anthropic")
-	) {
-		res.status(400).json({ error: "Invalid or missing provider" });
+	const message =
+		typeof parsed === "object" && parsed !== null
+			? (parsed as ReviewRunMessage)
+			: undefined;
+	const reviewerId = message ? reviewerOfMessage(message) : null;
+	if (!message || reviewerId === null) {
+		res.status(400).json({ error: "Invalid or missing reviewer" });
 		return;
 	}
-	const message = parsed as ReviewRunMessage;
 
-	const isOpenAI = message.provider === "openai";
-	const config = isOpenAI ? getOpenAIAppConfig() : getConfig();
-	const app = isOpenAI ? getOpenAIGitHubApp() : getGitHubApp();
+	if (!listReviewerIds().includes(reviewerId)) {
+		res.status(404).json({ error: "Unknown reviewer" });
+		return;
+	}
+	const readiness = reviewerReadiness(reviewerId, "hosted");
+	if (!readiness.ready) {
+		console.warn("Reviewer not ready", {
+			reviewer: reviewerId,
+			missing: readiness.missing,
+		});
+		res.status(503).json({ error: "Reviewer unavailable" });
+		return;
+	}
+
+	let config: AppConfig;
+	try {
+		config = getReviewerAppConfig(reviewerId);
+	} catch (error) {
+		console.error("Reviewer config unavailable", {
+			reviewer: reviewerId,
+			message: error instanceof Error ? error.message : "unknown error",
+		});
+		res.status(503).json({ error: "Reviewer unavailable" });
+		return;
+	}
 
 	const verified = await verifyQStashSignature(config, rawBody, signature);
 	if (!verified) {
 		res.status(401).json({ error: "Invalid QStash signature" });
+		return;
+	}
+
+	let app: ReturnType<typeof getReviewerGitHubApp>;
+	try {
+		app = getReviewerGitHubApp(reviewerId);
+	} catch (error) {
+		console.error("Reviewer app unavailable", {
+			reviewer: reviewerId,
+			message: error instanceof Error ? error.message : "unknown error",
+		});
+		res.status(503).json({ error: "Reviewer unavailable" });
 		return;
 	}
 
@@ -73,7 +109,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 	} catch (error) {
 		// Non-2xx makes QStash retry, which is the desired resilience.
 		console.error("Scheduled review run failed", {
-			provider: message.provider,
+			reviewer: reviewerId,
 			owner: message.owner,
 			repo: message.repo,
 			pullNumber: message.pullNumber,

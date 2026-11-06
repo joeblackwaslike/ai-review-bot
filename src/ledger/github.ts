@@ -2,6 +2,7 @@ import { splitInlineClaims } from "../replay/claims.js";
 import type { PostedClaim } from "../replay/types.js";
 import { isOwnReview } from "../review-metadata.js";
 import { parseBodyFindings } from "../review-state.js";
+import type { ReviewerId } from "../reviewer-id.js";
 import { classifyReplies, type DecisionReply } from "./disposition.js";
 import { readFpMarkers, stripFpMarkers } from "./fingerprint.js";
 import type { Ledger, LedgerEntry } from "./types.js";
@@ -189,7 +190,7 @@ export async function fetchLedgerEvidence(
 		repo: string;
 		pull: number;
 		commentPrefix: string;
-		provider: string;
+		reviewer: ReviewerId;
 	},
 ): Promise<LedgerEvidence> {
 	const route = { owner: o.owner, repo: o.repo, pull_number: o.pull };
@@ -200,7 +201,14 @@ export async function fetchLedgerEvidence(
 			route,
 		)
 	)
-		.filter((r) => r.submitted_at && isOwnReview(r.body, o))
+		.filter(
+			(r) =>
+				r.submitted_at &&
+				isOwnReview(r.body, {
+					commentPrefix: o.commentPrefix,
+					reviewer: o.reviewer,
+				}),
+		)
 		.sort((a, b) => (a.submitted_at ?? "").localeCompare(b.submitted_at ?? ""));
 	const comments = await getAll<ApiComment>(
 		octokit,

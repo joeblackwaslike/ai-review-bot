@@ -18,8 +18,8 @@ describe("roundCostUsd", () => {
 		expect(roundCostUsd(usage, "claude-sonnet-5-5")).toBeCloseTo(4.1);
 	});
 
-	it("is 0 for an unknown model or empty usage", () => {
-		expect(roundCostUsd(usage, "nope")).toBe(0);
+	it("is unavailable for an unknown model and 0 for empty usage", () => {
+		expect(roundCostUsd(usage, "nope")).toBeUndefined();
 		expect(roundCostUsd({}, "claude-sonnet-5-5")).toBe(0);
 	});
 });

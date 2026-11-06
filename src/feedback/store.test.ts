@@ -16,6 +16,7 @@ function rec(over: Partial<PostedCommentRecord> = {}): PostedCommentRecord {
 	return {
 		commentId: 1,
 		provider: "anthropic",
+		reviewer: "claude",
 		installationId: 99,
 		owner: "o",
 		repo: "r",
@@ -103,6 +104,7 @@ describe("feedback store", () => {
 		const kv = createFakeKv();
 		const event: FeedbackEvent = {
 			commentId: 1,
+			reviewer: "claude",
 			provider: "anthropic",
 			owner: "o",
 			repo: "r",
@@ -120,5 +122,52 @@ describe("feedback store", () => {
 		const list = kv._dump().lists.get("fb:events");
 		expect(list).toHaveLength(1);
 		expect(JSON.parse(list?.[0] as string).verdict).toBe("down");
+	});
+
+	it("reads back a record stored before reviewer existed, under the same KV key", async () => {
+		const kv = createFakeKv();
+		const { reviewer: _drop, ...legacy } = rec({
+			commentId: 9,
+			provider: "openai",
+		});
+		await kv.set("fb:cmt:openai:9", JSON.stringify(legacy), 60);
+		await kv.zadd("fb:poll", NOW + DAY, "openai:9");
+		const active = await listActiveComments(kv, NOW);
+		expect(active).toHaveLength(1);
+		expect(active[0]?.reviewer).toBe("codex");
+		expect(active[0]?.provider).toBe("openai");
+	});
+
+	it("keeps the legacy fb:cmt key for claude and codex", async () => {
+		const kv = createFakeKv();
+		await recordPostedComment(kv, rec({ commentId: 3 }), NOW);
+		await recordPostedComment(
+			kv,
+			rec({ commentId: 3, provider: "openai", reviewer: "codex" }),
+			NOW,
+		);
+		expect([...kv._dump().strings.keys()].sort()).toEqual([
+			"fb:cmt:anthropic:3",
+			"fb:cmt:openai:3",
+		]);
+	});
+
+	it("gives two reviewers on one provider distinct rows for the same comment id", async () => {
+		const kv = createFakeKv();
+		await recordPostedComment(kv, rec({ commentId: 4 }), NOW);
+		await recordPostedComment(
+			kv,
+			rec({ commentId: 4, provider: "claude-lite", reviewer: "claude-lite" }),
+			NOW,
+		);
+		const active = await listActiveComments(kv, NOW);
+		expect(active.map((r) => r.reviewer).sort()).toEqual([
+			"claude",
+			"claude-lite",
+		]);
+		expect([...kv._dump().strings.keys()].sort()).toEqual([
+			"fb:cmt:anthropic:4",
+			"fb:cmt:claude-lite:4",
+		]);
 	});
 });

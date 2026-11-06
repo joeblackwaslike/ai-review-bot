@@ -3,8 +3,8 @@ import { App } from "octokit";
 import type { ResolvedAuth } from "./auth.js";
 import { createCheckRun } from "./check-run.js";
 import { isTrustedAuthorAssociation, parseReviewCommand } from "./commands.js";
+import { getConfigTree } from "./config/load.js";
 import type { AppConfig } from "./config.js";
-import { getConfig, getOpenAIAppConfig } from "./config.js";
 import type { KvClient } from "./feedback/kv.js";
 import { createUpstashKv } from "./feedback/kv.js";
 import { persistPostedComments } from "./feedback/persist.js";
@@ -17,9 +17,16 @@ import {
 	quotaCommentMarker,
 	rateLimitCommentMarker,
 } from "./notify.js";
+import { primePrices } from "./pricing.js";
 import { resolveStaleThreads } from "./resolve-threads.js";
 import type { ReviewDecision } from "./review.js";
 import { buildReview } from "./review.js";
+import { legacyProviderOf, type ReviewerId } from "./reviewer-id.js";
+import {
+	getReviewerAppConfig,
+	ReviewerNotReadyError,
+	reviewerReadiness,
+} from "./reviewers.js";
 import type { ReviewRunMessage } from "./scheduler.js";
 import { scheduleReview } from "./scheduler.js";
 
@@ -288,9 +295,6 @@ export type PullRequestDetails = {
 	labels?: Array<{ name: string }>;
 };
 
-let appSingleton: App | null = null;
-let openAIAppSingleton: App | null = null;
-
 let kvSingleton: KvClient | null = null;
 function getKv(): KvClient | null {
 	if (kvSingleton) return kvSingleton;
@@ -482,7 +486,7 @@ export async function maybeSubmitReview(args: {
 	// intentionally bypasses it) and SHA-gated. Review state comes from GitHub,
 	// so buildReview takes no KV client.
 	const claimKv = force || !validSha ? null : getKv();
-	const claimKey = `review-claim:${config.provider}:${owner}/${repo}#${pullNumber}@${headSha}`;
+	const claimKey = `review-claim:${legacyProviderOf(config.reviewer)}:${owner}/${repo}#${pullNumber}@${headSha}`;
 	let claimed = false;
 	if (claimKv) {
 		try {
@@ -533,6 +537,7 @@ export async function maybeSubmitReview(args: {
 	let reviewPosted = false;
 	let review: Awaited<ReturnType<typeof buildReview>> | null = null;
 	try {
+		await primePrices({ kv: getKv() });
 		review = await buildReview({
 			octokit,
 			owner,
@@ -548,7 +553,7 @@ export async function maybeSubmitReview(args: {
 			commentPrefix: config.reviewCommentPrefix,
 			extraInstructions,
 			force,
-			provider: config.provider,
+			reviewer: config.reviewer,
 			feedbackEnabled: config.feedbackEnabled,
 			getKv,
 			agentConcurrency: config.agentConcurrency,
@@ -575,14 +580,7 @@ export async function maybeSubmitReview(args: {
 		if (review.event === "QUOTA_EXHAUSTED") {
 			const quotaProvider = review.quotaProvider ?? "unknown";
 			const billing = billingUrl(quotaProvider);
-			// Fixed: the marker was previously keyed off `review.quotaProvider`,
-			// which falls back to "unknown" when unset — a mismatch against any
-			// marker already stored under `config.provider` that silently defeated
-			// the dedup this PR exists to add. Always key off `config.provider` so
-			// the lookup and the stored marker agree; quotaProvider is still used
-			// for the human-readable message and billing link below. Reworded per
-			// anthropicreviewbot reviewing PR #67 (PRRT_kwDOSM5cU86Z-uZS).
-			const marker = quotaCommentMarker(config.provider);
+			const marker = quotaCommentMarker(legacyProviderOf(config.reviewer));
 			const body = [
 				marker,
 				`⛔ **[${config.reviewCommentPrefix}]** Review couldn't run — **the ${providerLabel(quotaProvider)} account is out of credits.**`,
@@ -630,7 +628,7 @@ export async function maybeSubmitReview(args: {
 				: review.rateLimitRetryAfterSeconds
 					? `retry in ~${review.rateLimitRetryAfterSeconds}s`
 					: "will reset shortly";
-			const marker = rateLimitCommentMarker(config.provider);
+			const marker = rateLimitCommentMarker(legacyProviderOf(config.reviewer));
 			const body = `${marker}\n⚠️ **[${config.reviewCommentPrefix}]** Review couldn't run — the model is rate-limited (input-token budget). Budget ${when}. Push again after that, or it will auto-retry on your next commit.`;
 			// A throw here propagates to the outer finally, which releases the
 			// claim. Intended: a rate-limited run spent no model budget, so the
@@ -732,7 +730,7 @@ export async function maybeSubmitReview(args: {
 			try {
 				await resolveStaleThreads(octokit, owner, repo, pullNumber, {
 					commentPrefix: config.reviewCommentPrefix,
-					provider: config.provider,
+					reviewer: config.reviewer,
 					resolved: review.resolvedFindings ?? [],
 				});
 			} catch (resolveErr) {
@@ -757,7 +755,7 @@ export async function maybeSubmitReview(args: {
 							reviewId,
 							headSha,
 							installationId,
-							provider: config.provider,
+							reviewer: config.reviewer,
 							provenance: review.commentProvenance,
 							nowMs: Date.now(),
 						});
@@ -785,7 +783,7 @@ export async function maybeSubmitReview(args: {
 								pr: pullNumber,
 								reviewId,
 								headSha,
-								provider: config.provider,
+								reviewer: config.reviewer,
 								provenance: review.commentProvenance,
 								summary: review.summary,
 								commentPrefix: config.reviewCommentPrefix,
@@ -801,7 +799,8 @@ export async function maybeSubmitReview(args: {
 										{
 											commentId,
 											surface: "carrier",
-											provider: config.provider,
+											provider: legacyProviderOf(config.reviewer),
+											reviewer: config.reviewer,
 											installationId,
 											owner,
 											repo,
@@ -999,7 +998,8 @@ function registerHandlers(app: App, configFn: () => AppConfig) {
 			// The /api/github/review-run endpoint invokes runScheduledReview after
 			// the delay.
 			const message: ReviewRunMessage = {
-				provider: config.provider,
+				reviewer: config.reviewer,
+				provider: legacyProviderOf(config.reviewer),
 				owner,
 				repo,
 				pullNumber,
@@ -1124,38 +1124,28 @@ function registerHandlers(app: App, configFn: () => AppConfig) {
 	});
 }
 
-export function getGitHubApp(): App {
-	if (appSingleton) {
-		return appSingleton;
-	}
+const reviewerApps = new WeakMap<object, Map<ReviewerId, App>>();
 
-	const config = getConfig();
-	appSingleton = new App({
+export function getReviewerGitHubApp(id: ReviewerId): App {
+	const tree = getConfigTree();
+	let apps = reviewerApps.get(tree);
+	if (!apps) {
+		apps = new Map();
+		reviewerApps.set(tree, apps);
+	}
+	const cached = apps.get(id);
+	if (cached) return cached;
+
+	const { ready, missing } = reviewerReadiness(id, "hosted");
+	if (!ready) throw new ReviewerNotReadyError(id, missing);
+
+	const config = getReviewerAppConfig(id);
+	const app = new App({
 		appId: config.appId,
 		privateKey: config.privateKey,
-		webhooks: {
-			secret: config.webhookSecret,
-		},
+		webhooks: { secret: config.webhookSecret },
 	});
-
-	registerHandlers(appSingleton, getConfig);
-	return appSingleton;
-}
-
-export function getOpenAIGitHubApp(): App {
-	if (openAIAppSingleton) {
-		return openAIAppSingleton;
-	}
-
-	const config = getOpenAIAppConfig();
-	openAIAppSingleton = new App({
-		appId: config.appId,
-		privateKey: config.privateKey,
-		webhooks: {
-			secret: config.webhookSecret,
-		},
-	});
-
-	registerHandlers(openAIAppSingleton, getOpenAIAppConfig);
-	return openAIAppSingleton;
+	registerHandlers(app, () => getReviewerAppConfig(id));
+	apps.set(id, app);
+	return app;
 }

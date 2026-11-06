@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { legacyProviderOf } from "../reviewer-id.js";
 import { findingNaturalKey, parseFindingComment } from "./findings.js";
 
 describe("parseFindingComment", () => {
@@ -114,6 +115,24 @@ describe("findingNaturalKey", () => {
 	it("differs across providers so both bots' findings coexist", () => {
 		expect(findingNaturalKey(base)).not.toBe(
 			findingNaturalKey({ ...base, provider: "openai" }),
+		);
+	});
+
+	it("keeps the claude and codex keys in their legacy form", () => {
+		expect(findingNaturalKey(base)).toBe("anthropic:o/r#55:comment:3687330487");
+		expect(findingNaturalKey({ ...base, provider: "openai" })).toBe(
+			"openai:o/r#55:comment:3687330487",
+		);
+	});
+
+	it("separates two reviewers on one provider", () => {
+		expect(
+			findingNaturalKey({
+				...base,
+				provider: legacyProviderOf("claude-lite"),
+			}),
+		).not.toBe(
+			findingNaturalKey({ ...base, provider: legacyProviderOf("claude") }),
 		);
 	});
 

@@ -20,11 +20,24 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
 
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Config check
+        run: pnpm config:check
+
+      - name: Config docs are current
+        run: pnpm docs:config && git diff --exit-code docs/configuration.md
+
       - name: Lint
         run: pnpm lint
+
+      - name: Pack smoke
+        run: bash scripts/pack-smoke.sh
 
       - name: Typecheck (dashboard)
         run: pnpm --filter dashboard typecheck

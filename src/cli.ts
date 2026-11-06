@@ -25,6 +25,7 @@ import {
 	setCredential,
 	unsetCredential,
 } from "./cli-creds.js";
+import { getConfigTree } from "./config/load.js";
 import { getConfig, getOpenAIAppConfig } from "./config.js";
 import { gateRepoSlug, gateRoot, runGate } from "./gate/run.js";
 import {
@@ -58,10 +59,17 @@ import {
 import { ingest } from "./mistakes/ingest.js";
 import { mistakesRoot, openMistakeLog } from "./mistakes/log.js";
 import { branchForHead, headShaFor } from "./mistakes/session.js";
+import { defaultPricingFile, primePrices } from "./pricing.js";
 import { runReplay } from "./replay/command.js";
-import { slugify } from "./report.js";
+import { formatCost, slugify } from "./report.js";
+import { type LegacyProvider, reviewerFromLegacy } from "./reviewer-id.js";
+import {
+	getReviewerAppConfig,
+	listReviewerIds,
+	reviewerReadiness,
+} from "./reviewers.js";
 import { defaultGitRunner } from "./sources.js";
-import { type ProviderTarget, watchPr } from "./watch.js";
+import { type ReviewerTarget, subscriptionAuthFor, watchPr } from "./watch.js";
 
 function fatal(msg: string): never {
 	console.error(`Error: ${msg}`);
@@ -333,7 +341,7 @@ async function cmdReview(args: string[]): Promise<void> {
 	} else {
 		console.log(`Report: ${result.path}`);
 		console.log(
-			`${result.filesReviewed} file(s) · ${result.providersRun.join(" + ")} · ${result.durationSeconds}s · $${result.costUsd.toFixed(4)}`,
+			`${result.filesReviewed} file(s) · ${result.providersRun.join(" + ")} · ${result.durationSeconds}s · ${formatCost(result.costUsd)}`,
 		);
 	}
 }
@@ -455,7 +463,7 @@ async function cmdReady(args: string[]): Promise<void> {
 export async function cmdWatch(args: string[]): Promise<void> {
 	let pr: number | undefined;
 	let repoArg: string | undefined;
-	let providerArg: "anthropic" | "openai" | undefined;
+	const reviewerArgs: string[] = [];
 	// 5-min conservative default; see CLAUDE.md §watch and
 	// docs/post-mortem-review-loop-churn.md. --interval overrides for a
 	// supervised fast pass.
@@ -470,12 +478,13 @@ export async function cmdWatch(args: string[]): Promise<void> {
 				fatal(`--pr must be a positive integer, got: ${raw}`);
 			}
 		} else if (a === "--repo") repoArg = requireValue(args, i++, a);
+		else if (a === "--reviewer") reviewerArgs.push(requireValue(args, i++, a));
 		else if (a === "--provider") {
 			const v = requireValue(args, i++, a);
 			if (v !== "anthropic" && v !== "openai") {
 				fatal(`--provider must be anthropic or openai, got: ${v}`);
 			}
-			providerArg = v;
+			reviewerArgs.push(reviewerFromLegacy(v));
 		} else if (a === "--interval") {
 			const raw = requireValue(args, i++, a);
 			intervalSeconds = Number(raw);
@@ -494,23 +503,36 @@ export async function cmdWatch(args: string[]): Promise<void> {
 		? { owner: repoArg.split("/")[0], repo: repoArg.split("/")[1] }
 		: originSlug();
 
-	const providers: Array<"anthropic" | "openai"> = providerArg
-		? [providerArg]
-		: ["anthropic", "openai"];
+	const tree = getConfigTree();
+	const known = listReviewerIds();
+	for (const id of reviewerArgs) {
+		if (!known.includes(id)) fatal(`Unknown reviewer: ${id}`);
+		const { ready, missing } = reviewerReadiness(id, "cli");
+		if (!ready) {
+			fatal(
+				`reviewer ${id} is not ready for the CLI: missing ${missing.join(", ")}`,
+			);
+		}
+	}
+	const reviewers = reviewerArgs.length
+		? [...new Set(reviewerArgs)]
+		: known.filter((id) => reviewerReadiness(id, "cli").ready);
+	if (reviewers.length === 0) {
+		fatal("no enabled reviewer is ready for the CLI");
+	}
 
-	const targets: ProviderTarget[] = [];
-	for (const provider of providers) {
-		const config =
-			provider === "anthropic"
-				? getConfig({ requireWebhookSecret: false })
-				: getOpenAIAppConfig({ requireWebhookSecret: false });
+	const targets: ReviewerTarget[] = [];
+	for (const reviewer of reviewers) {
+		const config = getReviewerAppConfig(reviewer, {
+			requireWebhookSecret: false,
+		});
 		const { app, installationId } = await installationApp(
 			config.appId,
 			config.privateKey,
 			owner,
 			repo,
 		);
-		targets.push({ provider, app, installationId, config });
+		targets.push({ reviewer, app, installationId, config });
 	}
 
 	const pollOctokit = await targets[0].app.getInstallationOctokit(
@@ -518,7 +540,7 @@ export async function cmdWatch(args: string[]): Promise<void> {
 	);
 
 	console.log(
-		`Watching ${owner}/${repo}#${pr} (${providers.join(", ")}) every ${intervalSeconds}s — Ctrl-C to stop early.`,
+		`Watching ${owner}/${repo}#${pr} (${reviewers.join(", ")}) every ${intervalSeconds}s — Ctrl-C to stop early.`,
 	);
 
 	const result = await watchPr({
@@ -527,7 +549,7 @@ export async function cmdWatch(args: string[]): Promise<void> {
 		pullNumber: pr,
 		pollOctokit: pollOctokit as unknown as OctokitLike,
 		targets,
-		resolveAuthFor: resolveSubscriptionAuth,
+		resolveAuthFor: subscriptionAuthFor(tree, resolveSubscriptionAuth),
 		intervalMs: intervalSeconds * 1000,
 		...(noCircuitBreaker ? { circuitBreaker: false as const } : {}),
 	});
@@ -545,7 +567,7 @@ async function cmdLegacyRemote(args: string[]): Promise<void> {
 	let ref: string | undefined;
 	let dryRun = false;
 	let extraInstructions = "";
-	let provider: "anthropic" | "openai" = "anthropic";
+	let provider: LegacyProvider = "anthropic";
 
 	for (let i = 1; i < args.length; i++) {
 		const a = args[i];
@@ -1299,6 +1321,15 @@ export async function main(): Promise<void> {
 		sub !== "creds" &&
 		sub !== "mistakes" &&
 		(sub !== "replay" || rest.includes("--live"));
+	const needsPrices =
+		(sub !== undefined && ["review", "audit", "gate", "watch"].includes(sub)) ||
+		(sub === "replay" &&
+			["--live", "--experiment", "--seeds", "--adjudicate"].some((f) =>
+				rest.includes(f),
+			));
+	if (needsPrices) {
+		await primePrices({ file: defaultPricingFile() });
+	}
 	if (needsCreds) {
 		// Populate process.env from the Keychain/XDG fallback before any
 		// subcommand runs, so createApp()/getConfig() see credentials even when

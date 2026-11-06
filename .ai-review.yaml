@@ -1,0 +1,84 @@
+version: 1
+
+review:
+  enabled: true
+  delaySeconds: 0
+  resyncDelaySeconds: 0
+  command: /ai-review
+  agentConcurrency: 4
+  agentBudgetSeconds: 210
+  diffBudgetChars: 200000
+  tier2Enabled: true
+  feedbackEnabled: false
+
+improve:
+  enabled: false
+  carrierEnabled: false
+
+infra: {}
+
+cli: {}
+
+routing:
+  sensitivePathPatterns:
+    - auth
+    - crypto
+    - jwt
+    - password
+    - secret
+    - /db/
+    - database
+    - migration
+    - schema
+  docExtensions: [.md, .txt, .rst, .mdx]
+  deepLabel: deep-review
+  complexLines: 500
+  trivialDocLines: 20
+
+# Token prices come from OpenRouter (cached 24h); models need no entry here.
+# An entry only adds options: `refusalFallback`, or a pinned
+# `pricing: { input, cachedInput, output }` in USD per million tokens, which
+# wins over OpenRouter. Pin gemini-3.1-flash-lite if cost shows unavailable.
+models:
+  anthropic/claude-sonnet-5-5:
+    refusalFallback: true
+  anthropic/claude-opus-5-5:
+    refusalFallback: true
+  google/gemini-3.1-flash-lite:
+    effortControl: level
+
+reviewers:
+  claude:
+    enabled: true
+    appSlug: anthropicreviewbot
+    commentPrefix: ai-review-bot
+    tiers:
+      trivial: { model: anthropic/claude-haiku-5-5, effort: low }
+      normal: { model: anthropic/claude-sonnet-5-5, effort: medium }
+      complex: { model: anthropic/claude-sonnet-5-5, effort: high }
+      # high, not xhigh: xhigh Opus can outlast the 210s agent deadline on
+      # Vercel Hobby, which would abort every deep-review agent and post nothing.
+      deep: { model: anthropic/claude-opus-5-5, effort: high }
+  codex:
+    enabled: true
+    appSlug: codexreviewbot
+    commentPrefix: codex-review-bot
+    tiers:
+      trivial: { model: openai/gpt-6-luna, effort: none }
+      normal: { model: openai/gpt-6.1-sol, effort: low }
+      complex: { model: openai/gpt-6.1-sol, effort: high }
+      deep: { model: openai/gpt-6.1-sol, effort: xhigh }
+  # A disabled reviewer cannot review. To trial it: create the GitHub App, install it on
+  # one test repo only, set enabled: true and deploy, open a PR there, then run
+  # `ai-review replay --record` on that PR and `ai-review replay --live --reviewer gemini
+  # --max-cost <usd>`. Set enabled: false again if the false-positive rate or cost is bad.
+  # See docs/adding-a-reviewer.md.
+  gemini:
+    enabled: false
+    appSlug: gemini-review-bot
+    commentPrefix: gemini-review-bot
+    tiers:
+      trivial: { model: google/gemini-3.1-flash-lite, effort: low }
+      normal: { model: google/gemini-3.1-flash-lite, effort: medium }
+      complex: { model: google/gemini-3.8-flash, effort: medium }
+      deep: { model: google/gemini-3.8-flash, effort: high }

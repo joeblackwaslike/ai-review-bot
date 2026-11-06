@@ -279,6 +279,7 @@ describe("logAgentRecords", () => {
 		pr: 4,
 		sha: "abc",
 		provider: "anthropic",
+		reviewer: "claude",
 		model: "m",
 		messages: { "a.md": "x".repeat(500) },
 	};
@@ -386,6 +387,7 @@ describe("log file path", () => {
 			pr: 1,
 			sha: "s",
 			provider: "anthropic",
+			reviewer: "claude",
 			model: "m",
 		});
 	};

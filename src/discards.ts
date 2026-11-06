@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { ReviewerId } from "./reviewer-id.js";
 
 /** Why the pipeline dropped or held back a finding. `DISCARDED_BY_VERIFY` is
  * reserved for the D1 verifier and has no producer yet. */
@@ -33,7 +34,7 @@ export interface DiscardFields {
 	line: number | null;
 	severity: string | null;
 	skill: string | null;
-	provider: "anthropic" | "openai";
+	reviewer: ReviewerId;
 }
 
 /** A finding the review pipeline dropped or held back, with why. Only an

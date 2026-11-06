@@ -1,25 +1,27 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { getConfigTree } from "../../src/config/load.js";
 import { pollFeedbackRequest } from "../../src/feedback/cron.js";
 import { createUpstashKv } from "../../src/feedback/kv.js";
 import type { OctokitLike } from "../../src/feedback/reactions.js";
-import type { Provider } from "../../src/feedback/types.js";
-import { getGitHubApp, getOpenAIGitHubApp } from "../../src/github-app.js";
+import { getReviewerGitHubApp } from "../../src/github-app.js";
 import { getDb } from "../../src/improve/db/client.js";
 import { drainKvEvents } from "../../src/improve/drain.js";
+import type { ReviewerId } from "../../src/reviewer-id.js";
+import { logReviewerReadiness } from "../../src/reviewers.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+	logReviewerReadiness();
 	const { status, body } = await pollFeedbackRequest({
 		authorization: req.headers.authorization,
 		secret: process.env.CRON_SECRET,
-		feedbackEnabled: process.env.FEEDBACK_ENABLED === "true",
+		feedbackEnabled: getConfigTree().review.feedbackEnabled,
 		buildDeps: () => ({
 			kv: createUpstashKv(),
 			getOctokit: async (
-				provider: Provider,
+				reviewer: ReviewerId,
 				installationId: number,
 			): Promise<OctokitLike> => {
-				const app =
-					provider === "anthropic" ? getGitHubApp() : getOpenAIGitHubApp();
+				const app = getReviewerGitHubApp(reviewer);
 				return (await app.getInstallationOctokit(
 					installationId,
 				)) as unknown as OctokitLike;
@@ -33,7 +35,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 	// on this pass land in the same run. LLM-free and idempotent, so it stays
 	// well inside the 60s budget and a failure costs nothing — the buffer is not
 	// consumed, and the next run picks up whatever this one missed.
-	if (status === 200 && process.env.IMPROVE_ENABLED === "true") {
+	if (status === 200 && getConfigTree().improve.enabled) {
 		try {
 			const drained = await drainKvEvents({
 				kv: createUpstashKv(),

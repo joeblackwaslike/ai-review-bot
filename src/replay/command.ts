@@ -11,6 +11,11 @@ import {
 } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+	type LegacyProvider,
+	type ReviewerId,
+	reviewerFromLegacy,
+} from "../reviewer-id.js";
 import type { ModelSelection } from "../router.js";
 import { adaptiveReport } from "./adaptive-report.js";
 import { isCurrentVerdict } from "./adjudication/adjudicate.js";
@@ -64,7 +69,11 @@ import {
 	type ReviewStrategy,
 	UnknownStrategyError,
 } from "./strategy.js";
-import type { LabelFile, Provider, ReplayFixture } from "./types.js";
+import {
+	fixtureReviewer,
+	type LabelFile,
+	type ReplayFixture,
+} from "./types.js";
 
 export interface ReplayDeps {
 	client?: GhClient;
@@ -73,7 +82,7 @@ export interface ReplayDeps {
 	pipeline?: ReplayPipeline;
 	liveWiring?: typeof defaultLiveWiring;
 	/** Builds the judge for a model family; the default resolves real credentials. */
-	joinJudge?: (family: Provider) => Promise<JoinJudge>;
+	joinJudge?: (family: LegacyProvider) => Promise<JoinJudge>;
 	/** Judges for `--adjudicate`; the default builds real models only after `--plan` is ruled out. */
 	adjudicationJudges?: AdjudicationJudges | (() => Promise<AdjudicationJudges>);
 	adjudicationDir?: string;
@@ -84,7 +93,7 @@ export interface ReplayDeps {
 
 interface ParsedArgs {
 	record?: string;
-	provider?: Provider;
+	reviewer?: ReviewerId;
 	bot?: string;
 	fixtures?: string;
 	live?: boolean;
@@ -110,7 +119,7 @@ interface ParsedArgs {
 const USAGE = [
 	"Usage:",
 	"  ai-review replay [--fixtures <dir>]",
-	"  ai-review replay --record <pr-url> --provider anthropic|openai --bot <login> [--held-out] [--expect-clean] [--fixtures <dir>]",
+	"  ai-review replay --record <pr-url> (--reviewer <id> | --provider anthropic|openai) --bot <login> [--held-out] [--expect-clean] [--fixtures <dir>]",
 	"  ai-review replay --live [--rounds <n>] [--max-cost <usd>] [--strategy <name>] [--save-trace] [--fixtures <dir>]",
 	"  ai-review replay --investigate-join <fixture-id> [--fixtures <dir>]",
 	"  ai-review replay --seeds [--check | --plan [--strategy <name>] | --strategy <name> --max-cost <usd>]",
@@ -135,6 +144,7 @@ export function defaultFixturesDir(fromUrl: string): string {
 
 function parseArgs(args: string[]): ParsedArgs | null {
 	const parsed: ParsedArgs = {};
+	let legacy: string | undefined;
 	for (let i = 0; i < args.length; i++) {
 		const flag = args[i];
 		const value = args[i + 1];
@@ -202,6 +212,7 @@ function parseArgs(args: string[]): ParsedArgs | null {
 				flag === "--investigate-join" ||
 				flag === "--adjudicate" ||
 				flag === "--provider" ||
+				flag === "--reviewer" ||
 				flag === "--bot" ||
 				flag === "--fixtures") &&
 			(value === undefined || value.startsWith("--"))
@@ -215,10 +226,13 @@ function parseArgs(args: string[]): ParsedArgs | null {
 		else if (flag === "--fixtures") parsed.fixtures = value;
 		else if (flag === "--provider") {
 			if (value !== "anthropic" && value !== "openai") return null;
-			parsed.provider = value;
-		} else return null;
+			legacy = value;
+		} else if (flag === "--reviewer") parsed.reviewer = value;
+		else return null;
 		i++;
 	}
+	if (parsed.reviewer !== undefined && legacy !== undefined) return null;
+	if (legacy !== undefined) parsed.reviewer = reviewerFromLegacy(legacy);
 	return parsed;
 }
 
@@ -236,7 +250,7 @@ async function record(
 	out: (s: string) => void,
 ): Promise<number> {
 	const m = p.record?.match(PR_URL);
-	if (!m || !p.provider || !p.bot) {
+	if (!m || !p.reviewer || !p.bot) {
 		out(USAGE);
 		return 2;
 	}
@@ -263,7 +277,7 @@ async function writeRecording(
 		owner: m[1] as string,
 		repo: m[2] as string,
 		pull: Number(m[3]),
-		provider: p.provider as Provider,
+		reviewer: p.reviewer as string,
 		botLogin: p.bot as string,
 	});
 	const id = fixtureId(fixture);
@@ -307,7 +321,7 @@ async function writeRecording(
 
 const FIXTURE_ID = /^[A-Za-z0-9._-]+$/;
 
-const JUDGE_MODELS: Record<Provider, ModelSelection> = {
+const JUDGE_MODELS: Record<LegacyProvider, ModelSelection> = {
 	anthropic: {
 		provider: "anthropic",
 		model: "claude-sonnet-5-5",
@@ -316,7 +330,7 @@ const JUDGE_MODELS: Record<Provider, ModelSelection> = {
 	openai: { provider: "openai", model: "gpt-6.1-sol", effort: "low" },
 };
 
-async function realJoinJudge(family: Provider): Promise<JoinJudge> {
+async function realJoinJudge(family: LegacyProvider): Promise<JoinJudge> {
 	const { resolveAuth } = await import("../auth.js");
 	return modelJudge(JUDGE_MODELS[family], await resolveAuth(family));
 }
@@ -326,7 +340,7 @@ async function investigate(
 	dir: string,
 	client: GhClient,
 	out: (s: string) => void,
-	makeJudge: (family: Provider) => Promise<JoinJudge>,
+	makeJudge: (family: LegacyProvider) => Promise<JoinJudge>,
 ): Promise<number> {
 	const id = p.investigateJoin as string;
 	const fixturePath = join(dir, `${id}.json`);
@@ -339,7 +353,7 @@ async function investigate(
 		await readFile(fixturePath, "utf8"),
 	) as ReplayFixture;
 	const labels = JSON.parse(await readFile(labelsPath, "utf8")) as LabelFile;
-	const family: Provider =
+	const family: LegacyProvider =
 		fixture.provider === "anthropic" ? "openai" : "anthropic";
 	const { fetchDiff } = defaultLiveWiring(fixture, client);
 	const diffs = new Map<number, ReturnType<typeof fetchDiff>>();
@@ -565,6 +579,7 @@ async function liveAll(
 		const f = JSON.parse(
 			await readFile(join(dir, name), "utf8"),
 		) as ReplayFixture;
+		if (p.reviewer !== undefined && fixtureReviewer(f) !== p.reviewer) continue;
 		const id = fixtureId(f);
 		const labelsPath = join(dir, `${id}.labels.json`);
 		if (!existsSync(labelsPath)) {
@@ -634,7 +649,7 @@ async function runSeeds(
 			p.saveTrace ||
 			p.heldOut ||
 			p.expectClean ||
-			p.provider !== undefined ||
+			p.reviewer !== undefined ||
 			p.bot !== undefined ||
 			p.rounds !== undefined ||
 			p.audit ||
@@ -695,7 +710,7 @@ function checkExperimentFlags(p: ParsedArgs): string | null {
 		p.expectClean,
 		p.maxAnthropic,
 		p.maxOpenai,
-		p.provider,
+		p.reviewer,
 		p.bot,
 	];
 	if (others.some((v) => v !== undefined && v !== false))
@@ -754,7 +769,7 @@ export async function runReplay(
 			"--strategy requires --live without --record") ||
 		(parsed.investigateJoin !== undefined &&
 			(parsed.live ||
-				parsed.provider !== undefined ||
+				parsed.reviewer !== undefined ||
 				parsed.bot !== undefined ||
 				parsed.record !== undefined ||
 				parsed.saveTrace ||
@@ -767,7 +782,7 @@ export async function runReplay(
 			"--investigate-join takes a fixture id and no other mode flags") ||
 		(parsed.adjudicate !== undefined &&
 			(parsed.live ||
-				parsed.provider !== undefined ||
+				parsed.reviewer !== undefined ||
 				parsed.bot !== undefined ||
 				parsed.record !== undefined ||
 				parsed.investigateJoin !== undefined ||

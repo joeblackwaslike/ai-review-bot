@@ -134,6 +134,10 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 	});
 	const estimates = diffs.map((d) => {
 		const e = opts.strategy.estimateCost(inputFor(d, opts.maxCostUsd));
+		if (e === undefined)
+			throw new Error(
+				"live: no price known for the selected model, so --max-cost cannot be enforced. Pin models.<provider/model>.pricing in .ai-review.yaml or check network access to openrouter.ai.",
+			);
 		if (!Number.isFinite(e) || e < 0)
 			throw new InvalidEstimateError(
 				`round ${d.round.index}: invalid cost estimate ${e}`,

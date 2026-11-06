@@ -28,7 +28,11 @@ import {
 } from "./baseline.js";
 import { dedupeClaims, isSameClaim, withAbsorbedLink } from "./claim-dedupe.js";
 import { commentKey } from "./comment-key.js";
-import { mapWithConcurrency } from "./concurrency.js";
+import {
+	mapWithConcurrency,
+	mapWithConcurrencyByGroup,
+} from "./concurrency.js";
+import { getConfigTree } from "./config/load.js";
 import { collectRightSideLines, rightSideText } from "./diff-lines.js";
 import {
 	type Discard,
@@ -54,7 +58,7 @@ import {
 	suppressInReview,
 } from "./ledger/suppress.js";
 import { isAcknowledged, isSettled, type LedgerEntry } from "./ledger/types.js";
-import { computeCost, createAIModel } from "./models.js";
+import { createAIModel, modelLabel, sumCost } from "./models.js";
 import {
 	type AgentPromptOptions,
 	buildAgentSystemPrompt,
@@ -80,13 +84,21 @@ import {
 	plainTitle,
 	type ReviewState,
 } from "./review-state.js";
+import {
+	legacyProviderOf,
+	type ReviewerId,
+	reviewerFromLegacy,
+} from "./reviewer-id.js";
 import { REVIEWER_TUNING, type ReviewerTuning } from "./reviewer-tuning.js";
 import type { ModelSelection } from "./router.js";
 import {
 	outputBudget,
 	reasoningProviderOptions,
-	routeModel,
+	resolveSkillModel,
+	routeReviewerModel,
+	shouldRunOnTier,
 } from "./router.js";
+import { TIER1_SKILL_FILES } from "./skill-names.js";
 import { repairSuggestion } from "./suggestion.js";
 import { detectTier2Skills, TIER2_DETECTORS } from "./tier2.js";
 import {
@@ -133,7 +145,7 @@ interface ReviewContext {
 	commentPrefix: string;
 	extraInstructions: string;
 	force: boolean;
-	provider: "anthropic" | "openai";
+	reviewer: ReviewerId;
 	feedbackEnabled: boolean;
 	/** Lazy KV accessor; read only when adaptive limits need author reactions. */
 	getKv?: () => KvClient | null;
@@ -163,7 +175,8 @@ export interface ReviewMetadata {
 	tier2Skills: string[];
 	generalFindings: number;
 	inlineComments: number;
-	cost: number;
+	/** USD, or undefined when no price is known for the model. */
+	cost: number | undefined;
 }
 
 export interface ReviewDecision {
@@ -219,6 +232,7 @@ const STANDING_REVIEW_STATES = new Set([
 
 interface TokenUsage {
 	promptTokens: number;
+	cachedPromptTokens?: number;
 	completionTokens: number;
 	cachedInputTokens?: number;
 	reasoningTokens?: number;
@@ -462,13 +476,7 @@ export function severityBadge(severity: string): string {
 }
 
 // Tier 1: always runs on every PR.
-export const TIER1_SKILLS: readonly string[] = [
-	"code-reviewer.md",
-	"silent-failure-hunter.md",
-	"pr-test-analyzer.md",
-	"security-sast.md",
-	"code-review-and-quality.md",
-];
+export const TIER1_SKILLS: readonly string[] = TIER1_SKILL_FILES;
 
 const baseName = (path: string) => path.split("/").pop() ?? path;
 
@@ -954,6 +962,7 @@ export async function generateSummary(
 		summary: object.summary,
 		usage: {
 			promptTokens: usage.inputTokens ?? 0,
+			cachedPromptTokens: usage.inputTokenDetails?.cacheReadTokens ?? 0,
 			completionTokens: usage.outputTokens ?? 0,
 		},
 	};
@@ -1012,14 +1021,17 @@ export function renderReadinessBar(score: number): string {
 	return `${"🟩".repeat(score)}${"⬜".repeat(5 - score)} **${score}/5**`;
 }
 
+const COST_UNAVAILABLE = "unavailable";
+
 export interface ReviewMetaParsed {
 	sha: string;
 	review: number;
 	readiness: number;
 	provider: string;
+	reviewer: string;
 	model: string;
 	findings: number;
-	cost: number;
+	cost: number | undefined;
 }
 
 export function parseReviewMetadata(body: string): ReviewMetaParsed | null {
@@ -1027,7 +1039,12 @@ export function parseReviewMetadata(body: string): ReviewMetaParsed | null {
 	const sha = extract("sha");
 	const reviewStr = extract("review");
 	const readinessStr = extract("readiness");
-	const provider = extract("provider");
+	const reviewerMarker = extract("reviewer");
+	const provider =
+		extract("provider") ??
+		(reviewerMarker === undefined
+			? undefined
+			: legacyProviderOf(reviewerMarker));
 	const model = extract("model");
 	const findingsStr = extract("findings");
 	const costStr = extract("cost");
@@ -1047,9 +1064,10 @@ export function parseReviewMetadata(body: string): ReviewMetaParsed | null {
 		review: Number(reviewStr),
 		readiness: Number(readinessStr),
 		provider,
+		reviewer: reviewerMarker ?? reviewerFromLegacy(provider),
 		model,
 		findings: Number(findingsStr),
-		cost: Number(costStr),
+		cost: costStr === COST_UNAVAILABLE ? undefined : Number(costStr),
 	};
 }
 
@@ -1085,9 +1103,9 @@ export interface FormatReviewBodyOptions {
 	priorSha: string;
 	headSha: string;
 	reviewCount: number;
-	provider: string;
+	reviewer: ReviewerId;
 	model: string;
-	cost: number;
+	cost: number | undefined;
 	ledgerNote?: string;
 	/** Open ledger entry ids behind the carried findings, written as the
 	 * `ai-review:carry` marker that `deriveBaseline` reads. */
@@ -1217,7 +1235,7 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		priorSha,
 		headSha,
 		reviewCount,
-		provider,
+		reviewer,
 		model,
 		cost,
 		ledgerNote,
@@ -1316,17 +1334,18 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		`<!-- ai-review:sha=${headSha} -->`,
 		`<!-- ai-review:review=${reviewCount} -->`,
 		`<!-- ai-review:readiness=${readiness} -->`,
-		`<!-- ai-review:provider=${provider} -->`,
+		`<!-- ai-review:reviewer=${reviewer} -->`,
+		`<!-- ai-review:provider=${legacyProviderOf(reviewer)} -->`,
 		`<!-- ai-review:model=${model} -->`,
 		`<!-- ai-review:findings=${generalFindings.length} -->`,
-		`<!-- ai-review:cost=${cost.toFixed(6)} -->`,
+		`<!-- ai-review:cost=${cost === undefined ? COST_UNAVAILABLE : cost.toFixed(6)} -->`,
 		...(carryIds.length > 0
 			? [`<!-- ai-review:carry=${carryIds.join(",")} -->`]
 			: []),
 		formatAgentsMarker(agentRecords, pending, KNOWN_SKILLS),
 	].join("\n");
 
-	const costFooter = `---\n*Model: ${model} · ${allSkillsCount} agents · $${cost.toFixed(6)}${ledgerNote ? ` · ${ledgerNote}` : ""}${scopeNote ? ` · ${scopeNote}` : ""} · [ai-review-bot](https://github.com/joeblackwaslike/ai-review-bot)*`;
+	const costFooter = `---\n*Model: ${model} · ${allSkillsCount} agents · ${cost === undefined ? "cost unavailable" : `$${cost.toFixed(6)}`}${ledgerNote ? ` · ${ledgerNote}` : ""}${scopeNote ? ` · ${scopeNote}` : ""} · [ai-review-bot](https://github.com/joeblackwaslike/ai-review-bot)*`;
 
 	const parts = [
 		`### ${commentPrefix}`,
@@ -1855,7 +1874,7 @@ interface DiscardedFinding {
 function discardFields(
 	finding: DiscardedFinding,
 	skill: string | null,
-	provider: Discard["provider"],
+	reviewer: Discard["reviewer"],
 ): DiscardFields {
 	return {
 		title: finding.title,
@@ -1863,7 +1882,7 @@ function discardFields(
 		line: finding.line ?? null,
 		severity: finding.severity ?? null,
 		skill,
-		provider,
+		reviewer,
 	};
 }
 
@@ -1871,9 +1890,9 @@ function toDiscard(
 	finding: DiscardedFinding,
 	reason: Exclude<DiscardReason, "OFF_DIFF">,
 	skill: string | null,
-	provider: Discard["provider"],
+	reviewer: Discard["reviewer"],
 ): Discard {
-	const fields = discardFields(finding, skill, provider);
+	const fields = discardFields(finding, skill, reviewer);
 	return reason === "SUPPRESSED_OPEN"
 		? { ...fields, reason, code: null, disposition: "held" }
 		: { ...fields, reason, code: null, disposition: "dropped" };
@@ -1950,7 +1969,7 @@ async function buildReviewInner(
 	const ownReviewOf = (review: PullRequestReview) =>
 		isOwnReview(review.body, {
 			commentPrefix: context.commentPrefix,
-			provider: context.provider,
+			reviewer: context.reviewer,
 		});
 
 	if (!context.force) {
@@ -2055,19 +2074,29 @@ async function buildReviewInner(
 	}
 
 	const customPrompt =
-		process.env.CUSTOM_REVIEW_PROMPT ??
+		getConfigTree().review.customPrompt ??
 		"Focus on correctness, security, regressions, and missing tests.";
 
 	const filePaths = files.map((f) => f.filename);
-	const selection = routeModel(
+	const { selection, tier: routedTier } = routeReviewerModel(
 		{
 			additions: context.additions,
 			deletions: context.deletions,
 			filePaths,
 			labels: context.labels,
 		},
-		context.provider,
+		context.reviewer,
 	);
+	if (!shouldRunOnTier(getConfigTree(), context.reviewer, routedTier)) {
+		console.log("reviewer does not run on this tier; posting nothing", {
+			owner: context.owner,
+			repo: context.repo,
+			pullNumber: context.pullNumber,
+			reviewer: context.reviewer,
+			tier: routedTier,
+		});
+		return null;
+	}
 
 	// Triage gate (re-review only). On a re-review against an OLDER head SHA, a
 	// cheap triage call decides whether to SKIP (post nothing, just re-stamp the
@@ -2112,7 +2141,7 @@ async function buildReviewInner(
 			repo: context.repo,
 			pull: context.pullNumber,
 			commentPrefix: context.commentPrefix,
-			provider: context.provider,
+			reviewer: context.reviewer,
 		});
 		return ledgerLoad;
 	};
@@ -2489,13 +2518,35 @@ async function buildReviewInner(
 		);
 	}
 
+	const selectionBySkill = new Map<string, ModelSelection>(
+		allSkills.map(({ skillPath }) => {
+			const { provider, model, effort } = resolveSkillModel(
+				getConfigTree(),
+				context.reviewer,
+				skillName(skillPath).replace(/\.md$/, ""),
+				routedTier,
+			);
+			return [skillPath, { provider, model, effort }];
+		}),
+	);
+	const selectionFor = (skillPath: string): ModelSelection =>
+		selectionBySkill.get(skillPath) ?? selection;
+	const billedModelOfSkill = (name: string): string => {
+		const { provider, model } = selectionFor(
+			allSkills.find((s) => skillName(s.skillPath) === name)?.skillPath ?? "",
+		);
+		return `${provider}/${model}`;
+	};
+	const usedModels = allSkills.map((s) => selectionFor(s.skillPath).model);
+	const reviewModelLabel = modelLabel(usedModels);
+
 	let lastRateLimit: RateLimitInfo | undefined;
 	const deadline = Date.now() + context.agentBudgetMs;
 	const dispatch = async (skillPath: string): Promise<AgentOutcome> => {
 		const outcome = await runAgent(
 			skillPath,
 			userMessages.get(wholePrFor(skillPath)) ?? "",
-			selection,
+			selectionFor(skillPath),
 			customPrompt,
 			{
 				auth: context.auth,
@@ -2523,10 +2574,14 @@ async function buildReviewInner(
 			await sleep(delay);
 		}
 	};
-	const firstOutcomes = await mapWithConcurrency(
+	const firstOutcomes = await mapWithConcurrencyByGroup(
 		allSkills,
+		({ skillPath }) => {
+			const { provider, model } = selectionFor(skillPath);
+			return `${provider}/${model}`;
+		},
 		context.agentConcurrency,
-		async ({ skillPath }, i) => {
+		async ({ skillPath }, i): Promise<AgentOutcome> => {
 			// Checked before dispatch, never mid-call: an agent already reasoning
 			// should finish and contribute. What this prevents is *starting* an
 			// agent whose run the platform would kill before anything is
@@ -2551,7 +2606,6 @@ async function buildReviewInner(
 			return outcome;
 		},
 		{
-			serialFirst: true,
 			onBeforeEach: async (i) => {
 				if (i === 0) return; // nothing learned yet
 				await paceNext({ idx: i + 1 });
@@ -2577,7 +2631,8 @@ async function buildReviewInner(
 				repo: context.repo,
 				pr: context.pullNumber,
 				sha: context.headSha,
-				provider: context.provider,
+				provider: selection.provider,
+				reviewer: context.reviewer,
 				model: selection.model,
 				messages,
 				stacks,
@@ -2658,15 +2713,23 @@ async function buildReviewInner(
 	const quotaExhausted: ModelSelection["provider"][] = [];
 	const skipped: string[] = [];
 	const errored: string[] = [];
-	let totalPromptTokens = 0;
-	let totalCompletionTokens = 0;
+	const usageByModel = new Map<string, TokenUsage[]>();
+	const bill = (model: string, usage: TokenUsage) => {
+		const requests = usageByModel.get(model) ?? [];
+		requests.push({
+			promptTokens: usage.promptTokens,
+			cachedPromptTokens:
+				usage.cachedInputTokens ?? usage.cachedPromptTokens ?? 0,
+			completionTokens: usage.completionTokens,
+		});
+		usageByModel.set(model, requests);
+	};
 
-	// Every attempt is billed, including a failed first attempt whose retry
-	// then succeeded.
-	for (const { outcome: o } of attempts) {
+	// Every attempt is billed to its own agent's model, including a failed
+	// first attempt whose retry then succeeded.
+	for (const { skill, outcome: o } of attempts) {
 		if ((o.status === "ok" || o.status === "error") && o.usage) {
-			totalPromptTokens += o.usage.promptTokens;
-			totalCompletionTokens += o.usage.completionTokens;
+			bill(billedModelOfSkill(skill), o.usage);
 		}
 	}
 
@@ -2839,7 +2902,7 @@ async function buildReviewInner(
 			reason: Exclude<DiscardReason, "OFF_DIFF">,
 		) =>
 			discards.push(
-				toDiscard(finding, reason, agentSkills[index], context.provider),
+				toDiscard(finding, reason, agentSkills[index], context.reviewer),
 			);
 		const pr = {
 			owner: context.owner,
@@ -2926,7 +2989,7 @@ async function buildReviewInner(
 				f,
 				"RESOLVED_LOCATION",
 				skillOf.get(f) ?? null,
-				context.provider,
+				context.reviewer,
 			),
 		);
 	}
@@ -3070,7 +3133,7 @@ async function buildReviewInner(
 			if (!generalSet.has(f))
 				removedInlineKeys.add(commentKey(f as ModelInlineComment));
 			for (const skill of skills.length ? skills : [null])
-				discards.push(toDiscard(f, "ADAPTIVE_LIMIT", skill, context.provider));
+				discards.push(toDiscard(f, "ADAPTIVE_LIMIT", skill, context.reviewer));
 		}
 		limitRemovedCount = limited.removed.length;
 		limitNote = limitNotice(limits, limitRemovedCount);
@@ -3116,7 +3179,7 @@ async function buildReviewInner(
 		const skills = [...(discardSkillsByKey.get(commentKey(c)) ?? [])];
 		for (const skill of skills.length ? skills : [null])
 			discards.push({
-				...discardFields(c, skill, context.provider),
+				...discardFields(c, skill, context.reviewer),
 				...kind,
 				disposition: "dropped",
 			});
@@ -3267,8 +3330,7 @@ async function buildReviewInner(
 				);
 				summary = fallbackSummary;
 			}
-			totalPromptTokens += summaryResult.usage.promptTokens;
-			totalCompletionTokens += summaryResult.usage.completionTokens;
+			bill(`${selection.provider}/${selection.model}`, summaryResult.usage);
 		} catch (error) {
 			// The summary is prose over findings the agents already produced; losing
 			// the whole review to a rate limit or timeout here would be worse.
@@ -3280,13 +3342,7 @@ async function buildReviewInner(
 		}
 	}
 
-	const cost = computeCost(
-		{
-			promptTokens: totalPromptTokens,
-			completionTokens: totalCompletionTokens,
-		},
-		selection.model,
-	);
+	const cost = sumCost(usageByModel);
 
 	let approvalMessage = "";
 	if (finalEvent === "APPROVE") {
@@ -3347,8 +3403,8 @@ async function buildReviewInner(
 		priorSha,
 		headSha: context.headSha,
 		reviewCount: reviewCountBase + 1,
-		provider: selection.provider,
-		model: selection.model,
+		reviewer: context.reviewer,
+		model: reviewModelLabel,
 		cost,
 		ledgerNote: loadedLedger
 			? loadedLedger.warm
@@ -3366,7 +3422,7 @@ async function buildReviewInner(
 		summary: finalEvent === "APPROVE" ? approvalMessage : summary,
 		comments: reviewComments,
 		metadata: {
-			model: selection.model,
+			model: reviewModelLabel,
 			tier1Count: TIER1_SKILLS.length,
 			tier2Skills: tier2Matches.map(({ skillPath }) =>
 				skillPath.replace(/\.md$/, ""),

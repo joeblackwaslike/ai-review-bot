@@ -1,3 +1,18 @@
+import type { JSONObject } from "@ai-sdk/provider";
+import { getConfigTree } from "./config/load.js";
+import type { Config } from "./config/schema.js";
+import {
+	anthropicOptions,
+	googleOptions,
+	mergeProviderOptions,
+	openaiOptions,
+	type ProviderOptions,
+} from "./providers/effort.js";
+import { isProviderName, type ProviderName } from "./providers/names.js";
+import type { LegacyProvider, ReviewerId } from "./reviewer-id.js";
+
+type Effort = NonNullable<ModelSelection["effort"]>;
+
 export type ReviewTier = "trivial" | "normal" | "complex" | "deep";
 
 export interface RouterContext {
@@ -8,7 +23,7 @@ export interface RouterContext {
 }
 
 export interface ModelSelection {
-	provider: "anthropic" | "openai";
+	provider: ProviderName;
 	model: string;
 	/** Reasoning depth, applied per provider by reasoningProviderOptions below:
 	 *  - OpenAI → `reasoningEffort` (none | low | medium | high | xhigh)
@@ -18,23 +33,9 @@ export interface ModelSelection {
 	effort?: "none" | "low" | "medium" | "high" | "xhigh" | "max";
 }
 
-const SENSITIVE_PATH_PATTERNS = [
-	"auth",
-	"crypto",
-	"jwt",
-	"password",
-	"secret",
-	"/db/",
-	"database",
-	"migration",
-	"schema",
-];
-
-const DOC_EXTENSIONS = new Set([".md", ".txt", ".rst", ".mdx"]);
-
-function isSensitivePath(path: string): boolean {
+function isSensitivePath(path: string, patterns: readonly string[]): boolean {
 	const lower = path.toLowerCase();
-	return SENSITIVE_PATH_PATTERNS.some((pattern) => lower.includes(pattern));
+	return patterns.some((pattern) => lower.includes(pattern.toLowerCase()));
 }
 
 const PROSE_EXTENSIONS = new Set([".md", ".mdx", ".rst"]);
@@ -45,111 +46,214 @@ function extensionOf(path: string): string {
 	return dot === -1 ? "" : base.slice(dot).toLowerCase();
 }
 
-function isTrivialDoc(path: string): boolean {
-	if (!isDocFile(path)) {
-		return false;
-	}
-	return PROSE_EXTENSIONS.has(extensionOf(path)) || !isSensitivePath(path);
-}
-
-function isDocFile(path: string): boolean {
+function isDocFile(path: string, extensions: readonly string[]): boolean {
 	const base = path.slice(path.lastIndexOf("/") + 1).toLowerCase();
 	if (/^(requirements|constraints)[^/]*\.txt$/.test(base)) {
 		return false;
 	}
-	return DOC_EXTENSIONS.has(extensionOf(path));
+	return extensions.some((ext) => ext.toLowerCase() === extensionOf(path));
 }
 
-export function classifyTier(context: RouterContext): ReviewTier {
+function isTrivialDoc(path: string, routing: Config["routing"]): boolean {
+	if (!isDocFile(path, routing.docExtensions)) {
+		return false;
+	}
+	return (
+		PROSE_EXTENSIONS.has(extensionOf(path)) ||
+		!isSensitivePath(path, routing.sensitivePathPatterns)
+	);
+}
+
+export function cheapSelection(base: ModelSelection): ModelSelection {
+	if (base.provider === "openai")
+		return { provider: "openai", model: "gpt-6-luna", effort: "low" };
+	if (base.provider === "anthropic")
+		return { provider: "anthropic", model: "claude-haiku-5-5", effort: "low" };
+	return { provider: base.provider, model: base.model, effort: "low" };
+}
+
+export function classifyTier(
+	context: RouterContext,
+	routing: Config["routing"] = getConfigTree().routing,
+): ReviewTier {
 	const { additions, deletions, filePaths, labels } = context;
 
-	if (labels.includes("deep-review")) {
+	if (labels.includes(routing.deepLabel)) {
 		return "deep";
 	}
 
 	const totalLines = additions + deletions;
-	if (totalLines < 20 && filePaths.every(isTrivialDoc)) {
+	if (
+		totalLines < routing.trivialDocLines &&
+		filePaths.every((p) => isTrivialDoc(p, routing))
+	) {
 		return "trivial";
 	}
 
-	if (filePaths.some(isSensitivePath)) {
+	if (
+		filePaths.some((p) => isSensitivePath(p, routing.sensitivePathPatterns))
+	) {
 		return "complex";
 	}
 
-	if (totalLines > 500) {
+	if (totalLines > routing.complexLines) {
 		return "complex";
 	}
 
 	return "normal";
 }
 
-export const CLAUDE_TIER_MAP: Record<
-	ReviewTier,
-	Pick<ModelSelection, "model" | "effort">
-> = {
-	trivial: { model: "claude-haiku-5-5", effort: "low" },
-	normal: { model: "claude-sonnet-5-5", effort: "medium" },
-	complex: { model: "claude-sonnet-5-5", effort: "high" },
-	// high, not xhigh: xhigh Opus can outlast the 210s agent deadline on Vercel
-	// Hobby, which would abort every deep-review agent and post nothing.
-	deep: { model: "claude-opus-5-5", effort: "high" },
-};
+function splitChoice(
+	reviewerId: string,
+	where: string,
+	choice: { model: string; effort?: Effort },
+): { provider: ProviderName; model: string; effort?: Effort } {
+	const slash = choice.model.indexOf("/");
+	const provider = choice.model.slice(0, slash);
+	if (slash <= 0 || !isProviderName(provider)) {
+		throw new Error(
+			`reviewer "${reviewerId}" ${where} model "${choice.model}" must be in "provider/model" form`,
+		);
+	}
+	return {
+		provider,
+		model: choice.model.slice(slash + 1),
+		...(choice.effort ? { effort: choice.effort } : {}),
+	};
+}
 
-// GPT-6.1 Sol ($2/$10) undercuts the old GPT-5.6 Terra and Sol tiers, so it
-// covers normal through deep, separated by effort alone. GPT-6 Astra
-// ($10/$50) is deliberately unused. Luna is the only GPT-6 tier that accepts
-// effort "none". All IDs verified live on both the API-key and the
-// Codex/ChatGPT-OAuth backends on 2026-10-25, so there is no auth-mode split.
-export const OPENAI_TIER_MAP: Record<
-	ReviewTier,
-	Pick<ModelSelection, "model" | "effort">
-> = {
-	trivial: { model: "gpt-6-luna", effort: "none" },
-	normal: { model: "gpt-6.1-sol", effort: "low" },
-	complex: { model: "gpt-6.1-sol", effort: "high" },
-	deep: { model: "gpt-6.1-sol", effort: "xhigh" },
-};
+const TIER_ORDER: readonly ReviewTier[] = [
+	"trivial",
+	"normal",
+	"complex",
+	"deep",
+];
+
+export function legacyTierMap(
+	reviewerId: string,
+	config: Config = getConfigTree(),
+): Record<ReviewTier, Pick<ModelSelection, "model" | "effort">> | undefined {
+	const reviewer = config.reviewers[reviewerId];
+	if (!reviewer) return undefined;
+	const entries = TIER_ORDER.flatMap((tier) => {
+		const choice = reviewer.tiers[tier];
+		if (!choice) return [];
+		const { model, effort } = splitChoice(reviewerId, `tier "${tier}"`, choice);
+		return [[tier, { model, effort }] as const];
+	});
+	return Object.fromEntries(entries) as Record<
+		ReviewTier,
+		Pick<ModelSelection, "model" | "effort">
+	>;
+}
+
+function requireReviewer(config: Config, reviewerId: string) {
+	const reviewer = config.reviewers[reviewerId];
+	if (!reviewer) throw new Error(`unknown reviewer "${reviewerId}"`);
+	return reviewer;
+}
+
+export function resolveSkillModel(
+	config: Config,
+	reviewerId: string,
+	skill: string,
+	tier: ReviewTier,
+): { provider: ProviderName; model: string; effort?: Effort } {
+	const reviewer = requireReviewer(config, reviewerId);
+	const override = reviewer.skills?.[skill];
+	const choice =
+		override?.[tier] ??
+		(override?.model
+			? { model: override.model, effort: override.effort }
+			: undefined) ??
+		reviewer.tiers[tier];
+	if (!choice)
+		throw new Error(
+			`reviewer "${reviewerId}" has no model configured for tier "${tier}"`,
+		);
+	return splitChoice(reviewerId, `tier "${tier}"`, choice);
+}
+
+export function resolveFinderModel(
+	config: Config,
+	reviewerId: string,
+	tier: ReviewTier,
+): { provider: ProviderName; model: string; effort?: Effort } {
+	const reviewer = requireReviewer(config, reviewerId);
+	const choice = reviewer.tiers[tier];
+	if (!choice)
+		throw new Error(
+			`reviewer "${reviewerId}" has no model configured for tier "${tier}"`,
+		);
+	return splitChoice(reviewerId, `tier "${tier}"`, choice);
+}
+
+export function shouldRunOnTier(
+	config: Config,
+	reviewerId: string,
+	tier: ReviewTier,
+): boolean {
+	const { runOn } = requireReviewer(config, reviewerId);
+	return runOn === undefined || runOn.includes(tier);
+}
+
+export function routeReviewerModel(
+	context: RouterContext,
+	reviewerId: ReviewerId,
+): { selection: ModelSelection; tier: ReviewTier } {
+	const config = getConfigTree();
+	const tier = classifyTier(context, config.routing);
+	const { provider, model, effort } = resolveFinderModel(
+		config,
+		reviewerId,
+		tier,
+	);
+	return { selection: { provider, model, effort }, tier };
+}
+
+const REVIEWER_ID_BY_PROVIDER = {
+	anthropic: "claude",
+	openai: "codex",
+} as const;
 
 export function routeModel(
 	context: RouterContext,
-	provider: "anthropic" | "openai",
+	provider: LegacyProvider,
 ): ModelSelection {
-	const tier = classifyTier(context);
-
-	if (provider === "anthropic") {
-		return { provider, ...CLAUDE_TIER_MAP[tier] };
+	const reviewerId = REVIEWER_ID_BY_PROVIDER[provider];
+	const { selection, tier } = routeReviewerModel(context, reviewerId);
+	if (selection.provider !== provider) {
+		throw new Error(
+			`reviewer "${reviewerId}" tier "${tier}" model "${selection.provider}/${selection.model}" must use provider "${provider}"`,
+		);
 	}
-
-	return { provider, ...OPENAI_TIER_MAP[tier] };
+	return selection;
 }
 
-/** Models whose safety classifiers can decline security-heavy diffs and that
- * support server-side refusal fallbacks (`fallbacks: "default"` reruns the
- * request on a model chosen by refusal category). Haiku 5.5 has no fallback. */
-const REFUSAL_FALLBACK_MODELS = new Set([
-	"claude-opus-5-5",
-	"claude-sonnet-5-5",
-]);
-
-/** Maps the tier's effort onto the active provider's reasoning knob:
- *  OpenAI reads `reasoningEffort`, Anthropic reads `effort`, and Anthropic
- *  models in REFUSAL_FALLBACK_MODELS also get `fallbacks: "default"`. Returns
- *  undefined when there is nothing to send, so the provider default applies.
- *  `"none"` is a valid OpenAI `reasoningEffort` value (gpt-6-luna's explicit
- *  non-reasoning mode) and is forwarded as-is; the Anthropic tiers never emit it. */
+/** Maps the tier's effort onto the active provider's reasoning knob through
+ *  the per-provider translators, then merges the model entry's
+ *  `providerOptions` over the result. Returns undefined when there is nothing
+ *  to send, so the provider default applies. */
 export function reasoningProviderOptions(
 	selection: ModelSelection,
-): Record<string, Record<string, string>> | undefined {
+): ProviderOptions | undefined {
+	const entry =
+		getConfigTree().models[`${selection.provider}/${selection.model}`];
+	let computed: JSONObject | undefined;
 	if (selection.provider === "openai") {
-		return selection.effort
-			? { openai: { reasoningEffort: selection.effort } }
-			: undefined;
+		computed = openaiOptions(selection.effort);
+	} else if (selection.provider === "google") {
+		computed = googleOptions(selection.effort, entry?.effortControl);
+	} else {
+		computed = anthropicOptions(
+			selection.effort,
+			entry?.refusalFallback ?? false,
+		);
 	}
-	const anthropic: Record<string, string> = {};
-	if (selection.effort) anthropic.effort = selection.effort;
-	if (REFUSAL_FALLBACK_MODELS.has(selection.model))
-		anthropic.fallbacks = "default";
-	return Object.keys(anthropic).length > 0 ? { anthropic } : undefined;
+	return mergeProviderOptions(
+		computed ? { [selection.provider]: computed } : undefined,
+		entry?.providerOptions,
+	);
 }
 
 /** Output-token budget for a generateObject call. Reasoning/thinking tokens are

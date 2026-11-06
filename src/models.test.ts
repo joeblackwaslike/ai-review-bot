@@ -1,5 +1,27 @@
-import { describe, expect, it } from "vitest";
-import { computeCost } from "./models.js";
+import { describe, expect, it, vi } from "vitest";
+import {
+	computeAggregateCost,
+	computeCost,
+	computeRequestsCost,
+	createAIModel,
+	modelLabel,
+	sumCost,
+} from "./models.js";
+import { setPriceTable } from "./pricing.js";
+
+const pins = vi.hoisted(() => ({
+	models: undefined as Record<string, unknown> | undefined,
+}));
+vi.mock("./config/load.js", async (importOriginal) => {
+	const real = await importOriginal<typeof import("./config/load.js")>();
+	return {
+		...real,
+		getConfigTree: () => {
+			const tree = real.getConfigTree();
+			return pins.models ? { ...tree, models: pins.models } : tree;
+		},
+	};
+});
 
 describe("computeCost", () => {
 	it("computes cost for claude-haiku-5-5 at 1M tokens each", () => {
@@ -42,12 +64,12 @@ describe("computeCost", () => {
 		expect(cost).toBeCloseTo(12.0); // $2 input + $10 output
 	});
 
-	it("returns 0 for an unknown model", () => {
+	it("returns undefined for an unknown model", () => {
 		const cost = computeCost(
 			{ promptTokens: 100_000, completionTokens: 50_000 },
 			"unknown-model-xyz",
 		);
-		expect(cost).toBe(0);
+		expect(cost).toBeUndefined();
 	});
 
 	it("scales correctly for small token counts (sonnet)", () => {
@@ -98,13 +120,13 @@ describe("computeCost", () => {
 		expect(cost).toBeCloseTo(0.2);
 	});
 
-	it("returns 0 for an unknown model with cached tokens", () => {
+	it("is unavailable for an unknown model with cached tokens", () => {
 		expect(
 			computeCost(
 				{ promptTokens: 10, completionTokens: 10, cachedInputTokens: 5 },
 				"nope",
 			),
-		).toBe(0);
+		).toBeUndefined();
 	});
 
 	it("returns 0 when both token counts are 0", () => {
@@ -113,5 +135,253 @@ describe("computeCost", () => {
 			"claude-sonnet-5-5",
 		);
 		expect(cost).toBe(0);
+	});
+});
+
+describe("computeCost with config pricing", () => {
+	it("computeCost matches the old rates for all five models", () => {
+		const expected: Record<string, number> = {
+			"claude-haiku-5-5": 0.6,
+			"claude-sonnet-5-5": 12,
+			"claude-opus-5-5": 24,
+			"gpt-6-luna": 0.6,
+			"gpt-6.1-sol": 12,
+		};
+		for (const [model, cost] of Object.entries(expected)) {
+			expect(
+				computeCost(
+					{ promptTokens: 1_000_000, completionTokens: 1_000_000 },
+					model,
+				),
+			).toBeCloseTo(cost);
+		}
+	});
+
+	it("returns undefined for an unknown model", () => {
+		expect(
+			computeCost({ promptTokens: 1000, completionTokens: 1000 }, "nope"),
+		).toBeUndefined();
+	});
+
+	it("applies the tier price for large prompts", () => {
+		setPriceTable({
+			"anthropic/claude-haiku-5-5": {
+				input: 0.1,
+				cachedInput: 0.01,
+				output: 0.5,
+				tiers: [
+					{
+						minPromptTokens: 100_000,
+						input: 0.5,
+						cachedInput: 0.05,
+						output: 2.5,
+					},
+				],
+			},
+		});
+		const usage = { promptTokens: 200_000, completionTokens: 0 };
+		expect(computeCost(usage, "claude-haiku-5-5")).toBeCloseTo(0.1);
+	});
+
+	it("lets a config pin beat the price table", () => {
+		pins.models = {
+			"anthropic/claude-sonnet-5-5": {
+				pricing: { input: 1, cachedInput: 1, output: 1 },
+			},
+		};
+		try {
+			expect(
+				computeCost(
+					{ promptTokens: 1_000_000, completionTokens: 0 },
+					"claude-sonnet-5-5",
+				),
+			).toBeCloseTo(1);
+		} finally {
+			pins.models = undefined;
+		}
+	});
+
+	it("computeCost bills cached tokens at cachedInput", () => {
+		const cost = computeCost(
+			{
+				promptTokens: 1_000_000,
+				cachedPromptTokens: 500_000,
+				completionTokens: 0,
+			},
+			"claude-sonnet-5-5",
+		);
+		expect(cost).toBeCloseTo(0.5 * 2.0 + 0.5 * 0.2);
+	});
+
+	it("clamps cached tokens to the prompt size", () => {
+		const cost = computeCost(
+			{
+				promptTokens: 1_000_000,
+				cachedPromptTokens: 2_000_000,
+				completionTokens: 0,
+			},
+			"claude-sonnet-5-5",
+		);
+		expect(cost).toBeCloseTo(0.2);
+	});
+});
+
+describe("createAIModel auth binding", () => {
+	const anthropic = {
+		provider: "anthropic",
+		model: "claude-haiku-5-5",
+		effort: "low",
+	} as const;
+
+	it("createAIModel rejects a credential for a different provider", () => {
+		expect(() =>
+			createAIModel(anthropic, {
+				mode: "api-key",
+				provider: "openai",
+				apiKey: "k",
+			}),
+		).toThrow("auth for openai cannot be used with a anthropic model");
+	});
+
+	it("createAIModel accepts matching provider auth", () => {
+		expect(() =>
+			createAIModel(anthropic, {
+				mode: "api-key",
+				provider: "anthropic",
+				apiKey: "k",
+			}),
+		).not.toThrow();
+	});
+});
+
+describe("createAIModel google", () => {
+	it("builds a google model from the env key", () => {
+		vi.stubEnv("GOOGLE_GENERATIVE_AI_API_KEY", "k");
+		const model = createAIModel({
+			provider: "google",
+			model: "gemini-3.8-flash",
+		});
+		expect((model as { provider: string }).provider).toMatch(/^google/);
+		vi.unstubAllEnvs();
+	});
+
+	it("rejects an anthropic auth for a google model", () => {
+		expect(() =>
+			createAIModel({ provider: "google", model: "gemini-3.8-flash" }, {
+				provider: "anthropic",
+				mode: "api-key",
+				apiKey: "x",
+			} as never),
+		).toThrow(/cannot be used with a google model/);
+	});
+});
+
+describe("long-prompt tiers apply per request", () => {
+	const tiered = (
+		base: [number, number, number],
+		tier: [number, number, number],
+		min: number,
+	) => ({
+		input: base[0],
+		cachedInput: base[1],
+		output: base[2],
+		tiers: [
+			{
+				minPromptTokens: min,
+				input: tier[0],
+				cachedInput: tier[1],
+				output: tier[2],
+			},
+		],
+	});
+	const req = (promptTokens: number, completionTokens = 0) => ({
+		promptTokens,
+		completionTokens,
+	});
+
+	it("bills five 60K requests on gpt-6.1-sol at the base rate and one 300K request at the tier rate", () => {
+		setPriceTable({
+			"openai/gpt-6-1-sol": tiered([2, 0.1, 10], [4, 0.2, 15], 272_000),
+		});
+		const five = computeRequestsCost(
+			Array.from({ length: 5 }, () => req(60_000, 10_000)),
+			"gpt-6.1-sol",
+		);
+		expect(five).toBeCloseTo(5 * (0.06 * 2 + 0.01 * 10));
+		expect(computeCost(req(300_000, 10_000), "gpt-6.1-sol")).toBeCloseTo(
+			0.3 * 4 + 0.01 * 15,
+		);
+		expect(
+			sumCost(
+				new Map([
+					["gpt-6.1-sol", Array.from({ length: 5 }, () => req(60_000))],
+				]),
+			),
+		).toBeCloseTo(5 * 0.06 * 2);
+	});
+
+	it("bills two 60K Haiku requests at the base rate and one 120K request at the tier rate", () => {
+		setPriceTable({
+			"anthropic/claude-haiku-5-5": tiered(
+				[0.1, 0.01, 0.5],
+				[0.5, 0.05, 2.5],
+				100_000,
+			),
+		});
+		expect(
+			computeRequestsCost([req(60_000), req(60_000)], "claude-haiku-5-5"),
+		).toBeCloseTo(2 * 0.06 * 0.1);
+		expect(computeCost(req(120_000), "claude-haiku-5-5")).toBeCloseTo(
+			0.12 * 0.5,
+		);
+	});
+
+	it("prices an aggregate at the base rate without guessing a tier", () => {
+		setPriceTable({
+			"anthropic/claude-haiku-5-5": tiered(
+				[0.1, 0.01, 0.5],
+				[0.5, 0.05, 2.5],
+				100_000,
+			),
+		});
+		expect(computeAggregateCost(req(120_000), "claude-haiku-5-5")).toBeCloseTo(
+			0.12 * 0.1,
+		);
+	});
+});
+
+describe("sumCost and modelLabel", () => {
+	const usage = (promptTokens: number, completionTokens: number) => ({
+		promptTokens,
+		completionTokens,
+	});
+
+	it("sums computeCost per model", () => {
+		const byModel = new Map([
+			["claude-haiku-5-5", [usage(1_000_000, 1_000_000)]],
+			["claude-sonnet-5-5", [usage(1_000_000, 0)]],
+		]);
+		const expected =
+			(computeCost(usage(1_000_000, 1_000_000), "claude-haiku-5-5") ?? NaN) +
+			(computeCost(usage(1_000_000, 0), "claude-sonnet-5-5") ?? NaN);
+		expect(sumCost(byModel)).toBeCloseTo(expected);
+		expect(expected).toBeGreaterThan(0);
+	});
+
+	it("is undefined when any model has no price", () => {
+		const byModel = new Map([
+			["claude-haiku-5-5", [usage(10, 10)]],
+			["no-such-model", [usage(10, 10)]],
+		]);
+		expect(sumCost(byModel)).toBeUndefined();
+	});
+
+	it("is 0 for an empty map", () => {
+		expect(sumCost(new Map())).toBe(0);
+	});
+
+	it("labels unique sorted models joined with a comma", () => {
+		expect(modelLabel(["b", "a", "b"])).toBe("a,b");
+		expect(modelLabel(["only"])).toBe("only");
 	});
 });

@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { resolveAnthropicAuth, resolveOpenAIAuth } from "../auth.js";
 import { computeCost } from "../models.js";
 import type { PullFile } from "../review.js";
 import {
@@ -11,6 +12,7 @@ import { freezeFixture } from "./frozen.js";
 import type { GhClient } from "./gh.js";
 import {
 	buildLiveWiring,
+	resolveSelectionAuth,
 	toLiveFindings,
 	toLiveReviewOutput,
 } from "./live-wiring.js";
@@ -78,6 +80,119 @@ describe("toLiveFindings", () => {
 				suppressible: false,
 			},
 		]);
+	});
+});
+
+describe("resolveSelectionAuth", () => {
+	const deps = () => ({
+		anthropic: vi.fn().mockResolvedValue({ provider: "anthropic" }),
+		openai: vi.fn().mockResolvedValue({ provider: "openai" }),
+	});
+
+	it("resolves anthropic and openai selections exactly as before", async () => {
+		const d = deps();
+		await expect(resolveSelectionAuth("anthropic", d)).resolves.toEqual({
+			provider: "anthropic",
+		});
+		await expect(resolveSelectionAuth("openai", d)).resolves.toEqual({
+			provider: "openai",
+		});
+		expect(d.anthropic).toHaveBeenCalledTimes(1);
+		expect(d.openai).toHaveBeenCalledTimes(1);
+	});
+
+	it("a google selection with no key names the missing env var and uses no other credential", async () => {
+		const d = deps();
+		await expect(resolveSelectionAuth("google", d, {})).rejects.toThrow(
+			/GOOGLE_GENERATIVE_AI_API_KEY/,
+		);
+		expect(d.anthropic).not.toHaveBeenCalled();
+		expect(d.openai).not.toHaveBeenCalled();
+	});
+
+	it("a google selection with a key resolves to the registry path", async () => {
+		const d = deps();
+		await expect(
+			resolveSelectionAuth("google", d, { GOOGLE_GENERATIVE_AI_API_KEY: "k" }),
+		).resolves.toBeUndefined();
+	});
+});
+
+describe("strategy a review auth", () => {
+	const inputFor = (reviewer: string, provider: string): StrategyInput =>
+		({
+			fixture: { owner: "o", repo: "r", provider, reviewer },
+			round: { index: 0 },
+			diff: "diff",
+			files: [],
+			history: { ledger: [] },
+			budget: { maxUsd: 5, maxWallMs: 1000 },
+			signal: new AbortController().signal,
+		}) as unknown as StrategyInput;
+
+	const withGoogleKey = async (
+		key: string | undefined,
+		body: () => Promise<void>,
+	) => {
+		const saved = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+		if (key === undefined) delete process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+		else process.env.GOOGLE_GENERATIVE_AI_API_KEY = key;
+		try {
+			await body();
+		} finally {
+			if (saved === undefined) delete process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+			else process.env.GOOGLE_GENERATIVE_AI_API_KEY = saved;
+		}
+	};
+
+	beforeEach(() => {
+		mockRunAuditPass.mockReset();
+		vi.mocked(resolveAnthropicAuth).mockClear();
+		vi.mocked(resolveOpenAIAuth).mockClear();
+		mockRunAuditPass.mockResolvedValue({
+			review: buildModelReview(),
+			agentReviews: [],
+			usageBySkill: {},
+			agentsAttempted: 0,
+			agentsSucceeded: 0,
+		});
+	});
+
+	it("a google selection with no key errors naming the env var and receives no other provider's credentials", async () => {
+		await withGoogleKey(undefined, async () => {
+			await expect(strategyA.run(inputFor("gemini", "google"))).rejects.toThrow(
+				/GOOGLE_GENERATIVE_AI_API_KEY/,
+			);
+			expect(resolveAnthropicAuth).not.toHaveBeenCalled();
+			expect(resolveOpenAIAuth).not.toHaveBeenCalled();
+			expect(mockRunAuditPass).not.toHaveBeenCalled();
+		});
+	});
+
+	it("a google selection with a key runs with undefined auth", async () => {
+		await withGoogleKey("k", async () => {
+			await strategyA.run(inputFor("gemini", "google"));
+			expect(mockRunAuditPass.mock.calls[0]?.[0].auth).toBeUndefined();
+			expect(resolveAnthropicAuth).not.toHaveBeenCalled();
+			expect(resolveOpenAIAuth).not.toHaveBeenCalled();
+		});
+	});
+
+	it("legacy anthropic and openai fixtures resolve their own auth as before", async () => {
+		vi.mocked(resolveAnthropicAuth).mockResolvedValueOnce({
+			provider: "anthropic",
+		} as never);
+		await strategyA.run(inputFor("claude", "anthropic"));
+		expect(mockRunAuditPass.mock.calls[0]?.[0].auth).toEqual({
+			provider: "anthropic",
+		});
+		vi.mocked(resolveOpenAIAuth).mockResolvedValueOnce({
+			provider: "openai",
+		} as never);
+		await strategyA.run(inputFor("codex", "openai"));
+		expect(mockRunAuditPass.mock.calls[1]?.[0].auth).toEqual({
+			provider: "openai",
+		});
 	});
 });
 

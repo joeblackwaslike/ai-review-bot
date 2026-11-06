@@ -1,6 +1,7 @@
 import type { App } from "octokit";
 import type { OctokitLike } from "./audit-pr.js";
 import type { Provider, ResolvedAuth } from "./auth.js";
+import type { Config } from "./config/schema.js";
 import type { AppConfig } from "./config.js";
 import {
 	maybeSubmitReview,
@@ -8,6 +9,10 @@ import {
 	type PullRequestDetails,
 	type SubmitReviewOutcome,
 } from "./github-app.js";
+import type { ReviewerId } from "./reviewer-id.js";
+import { reviewerAuthProvider } from "./reviewers.js";
+
+export { reviewerAuthProvider };
 
 /** Enough of the GET /pulls/{n} response shape for watchPr's own merged/closed
  * check plus everything maybeSubmitReview's pullRequest param needs. */
@@ -16,8 +21,8 @@ interface PolledPullRequest extends PullRequestDetails {
 	state: string;
 }
 
-export interface ProviderTarget {
-	provider: Provider;
+export interface ReviewerTarget {
+	reviewer: ReviewerId;
 	app: App;
 	installationId: number;
 	config: AppConfig;
@@ -28,8 +33,8 @@ export interface WatchPrOptions {
 	repo: string;
 	pullNumber: number;
 	pollOctokit: OctokitLike;
-	targets: ProviderTarget[];
-	resolveAuthFor: (provider: Provider) => Promise<ResolvedAuth>;
+	targets: ReviewerTarget[];
+	resolveAuthFor: (reviewer: ReviewerId) => Promise<ResolvedAuth | undefined>;
 	intervalMs?: number;
 	sleep?: (ms: number) => Promise<void>;
 	log?: (msg: string) => void;
@@ -56,6 +61,16 @@ export interface WatchPrOptions {
 export interface WatchResult {
 	cycles: number;
 	reason: "merged" | "closed" | "max-cycles" | "circuit-breaker";
+}
+
+export function subscriptionAuthFor(
+	config: Config,
+	resolve: (provider: Provider) => Promise<ResolvedAuth>,
+): (reviewer: ReviewerId) => Promise<ResolvedAuth | undefined> {
+	return async (reviewer) => {
+		const provider = reviewerAuthProvider(config, reviewer);
+		return provider ? resolve(provider) : undefined;
+	};
 }
 
 const DEFAULT_CIRCUIT_BREAKER = { maxReviews: 3, windowMs: 15 * 60_000 };
@@ -147,9 +162,9 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 	let cycles = 0;
 	// Per provider, so one provider's failed or skipped cycle never denies a
 	// co-target a retry on the same commit.
-	const providerState = new Map(
+	const reviewerState = new Map(
 		targets.map((target) => [
-			target.provider,
+			target.reviewer,
 			{
 				lastReviewedSha: null as string | null,
 				// Timestamps of this provider's recent posts, for the circuit
@@ -166,7 +181,7 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 	// per-cycle below is still correct — this is an additional up-front
 	// validation, not a replacement. See Bug D.
 	for (const target of targets) {
-		await resolveAuthFor(target.provider);
+		await resolveAuthFor(target.reviewer);
 	}
 
 	while (true) {
@@ -201,14 +216,14 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 		}
 
 		for (const target of targets) {
-			const state = providerState.get(target.provider);
+			const state = reviewerState.get(target.reviewer);
 			if (!state || pr.head.sha === state.lastReviewedSha) continue;
 
 			// Not caught here: an auth-resolution failure (e.g. the local
 			// subscription session logged out mid-watch) propagates out of
 			// watchPr entirely, surfacing auth.ts's own "run `claude`/`codex
 			// login`" error instead of retrying forever with no signal.
-			const auth = await resolveAuthFor(target.provider);
+			const auth = await resolveAuthFor(target.reviewer);
 			try {
 				const outcome = await submitReview({
 					app: target.app,
@@ -229,7 +244,7 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 					// "handled". See Bug C.
 					state.lastReviewedSha = pr.head.sha;
 					log(
-						`ai-review watch: posted ${target.provider} review for ${pr.head.sha}`,
+						`ai-review watch: posted ${target.reviewer} review for ${pr.head.sha}`,
 					);
 
 					if (circuitBreaker) {
@@ -241,7 +256,7 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 						if (state.recentPosts.length >= circuitBreaker.maxReviews) {
 							const windowMin = Math.round(circuitBreaker.windowMs / 60_000);
 							log(
-								`ai-review watch: circuit breaker tripped on cycle ${cycles} — ${target.provider} posted ${state.recentPosts.length} reviews for ${owner}/${repo}#${pullNumber} within ${windowMin} min. This usually means fixes are being pushed faster than the reviewer can converge (see docs/post-mortem-review-loop-churn.md). Stopping — let the PR settle, then restart watch for a final confirmation pass.`,
+								`ai-review watch: circuit breaker tripped on cycle ${cycles} — ${target.reviewer} posted ${state.recentPosts.length} reviews for ${owner}/${repo}#${pullNumber} within ${windowMin} min. This usually means fixes are being pushed faster than the reviewer can converge (see docs/post-mortem-review-loop-churn.md). Stopping — let the PR settle, then restart watch for a final confirmation pass.`,
 							);
 							return { cycles, reason: "circuit-breaker" };
 						}
@@ -257,7 +272,7 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 							pr = refreshed.data;
 						} catch (pollErr) {
 							log(
-								`ai-review watch: re-poll after ${target.provider} post failed; the next provider will review the previous snapshot: ${errMsg(pollErr)}`,
+								`ai-review watch: re-poll after ${target.reviewer} post failed; the next provider will review the previous snapshot: ${errMsg(pollErr)}`,
 							);
 						}
 					}
@@ -267,16 +282,16 @@ export async function watchPr(opts: WatchPrOptions): Promise<WatchResult> {
 					// retrying it would only repeat that decision. See Bug F.
 					state.lastReviewedSha = pr.head.sha;
 					log(
-						`ai-review watch: ${target.provider} has no new review to post for ${pr.head.sha}`,
+						`ai-review watch: ${target.reviewer} has no new review to post for ${pr.head.sha}`,
 					);
 				} else {
 					log(
-						`ai-review watch: ${target.provider} review skipped for ${pr.head.sha}: ${outcomeSkipReason(outcome)}`,
+						`ai-review watch: ${target.reviewer} review skipped for ${pr.head.sha}: ${outcomeSkipReason(outcome)}`,
 					);
 				}
 			} catch (err) {
 				log(
-					`ai-review watch: ${target.provider} review failed, continuing: ${errMsg(err)}`,
+					`ai-review watch: ${target.reviewer} review failed, continuing: ${errMsg(err)}`,
 				);
 			}
 		}

@@ -3,11 +3,17 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { numberPatchLines } from "../../diff-lines.js";
-import { routeModel } from "../../router.js";
+import { routeReviewerModel } from "../../router.js";
 import type { GhClient } from "../gh.js";
 import { buildLiveWiring, routerContext } from "../live-wiring.js";
 import { joinsClaim, labelledClaims } from "../metrics.js";
-import type { LabelFile, Provider, ReplayFixture } from "../types.js";
+import {
+	fixtureFamily,
+	fixtureReviewer,
+	type LabelFile,
+	type Provider,
+	type ReplayFixture,
+} from "../types.js";
 import {
 	type AdjCandidate,
 	type AdjudicationCounts,
@@ -186,7 +192,7 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 			candidates,
 			cache,
 			snapshot,
-			fixture.provider,
+			fixtureFamily(fixture),
 			caps,
 		))
 			out(line);
@@ -208,7 +214,10 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 				new Map(files.map((f) => [f.filename, f.patch ?? ""])),
 			);
 			modelOf.set(round.index, {
-				model: routeModel(routerContext(files), fixture.provider).model,
+				model: routeReviewerModel(
+					routerContext(files),
+					fixtureReviewer(fixture),
+				).selection.model,
 				note: "routed from the round's compare files",
 			});
 		} catch (err) {
@@ -277,14 +286,16 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 				return 1;
 			}
 			out(`producer model: ${info.model} (${info.note})`);
-			const route = routeJudges(fixture.provider, info.model);
+			const route = routeJudges(fixtureFamily(fixture), info.model);
 			let built:
 				| Promise<Awaited<ReturnType<AdjudicationJudges["auditJudges"]>>>
 				| undefined;
 			const build = () => {
 				built ??= Promise.resolve()
 					.then(() => getFactory())
-					.then((f) => f.auditJudges(fixture.provider, info.model, wantSecond))
+					.then((f) =>
+						f.auditJudges(fixtureFamily(fixture), info.model, wantSecond),
+					)
 					.catch(unavailableError);
 				return built;
 			};
@@ -347,14 +358,16 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 		let unavailableMessage: string | null = null;
 		for (const [model, group] of groups) {
 			out(`producer model: ${model} (${notes.get(model)})`);
-			const route = routeJudges(fixture.provider, model);
+			const route = routeJudges(fixtureFamily(fixture), model);
 			let built:
 				| Promise<Awaited<ReturnType<AdjudicationJudges["verdictJudges"]>>>
 				| undefined;
 			const build = () => {
 				built ??= Promise.resolve()
 					.then(() => getFactory())
-					.then((f) => f.verdictJudges(fixture.provider, model, wantSecond))
+					.then((f) =>
+						f.verdictJudges(fixtureFamily(fixture), model, wantSecond),
+					)
 					.catch(unavailableError);
 				return built;
 			};
@@ -380,7 +393,7 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 			const result = await adjudicate({
 				snapshot,
 				candidates: group,
-				producer: fixture.provider,
+				producer: fixtureFamily(fixture),
 				judges: pair,
 				cache: cache as VerdictCache<VerdictRecord>,
 				caps: {

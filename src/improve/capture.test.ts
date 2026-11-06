@@ -205,7 +205,7 @@ describe("carrier comment reuse", () => {
 		pr: 1,
 		reviewId: 900,
 		headSha: "sha",
-		provider: "anthropic" as const,
+		reviewer: "claude",
 		provenance: new Map(),
 		summary: "s",
 		commentPrefix: "ai-review",
@@ -282,7 +282,7 @@ describe("persistDiscards", () => {
 		line: 12,
 		severity: "P2",
 		skill: "code-reviewer.md",
-		provider: "openai",
+		reviewer: "codex",
 	};
 	const offDiff: Discard = {
 		reason: "OFF_DIFF",
@@ -293,7 +293,7 @@ describe("persistDiscards", () => {
 		line: null,
 		severity: null,
 		skill: null,
-		provider: "openai",
+		reviewer: "codex",
 	};
 
 	it("writes one row per discard with the review sha and natural key", async () => {

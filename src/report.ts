@@ -20,7 +20,7 @@ export interface ReviewReportMeta {
 	scope: string;
 	remote: string;
 	durationSeconds: number;
-	costUsd: number;
+	costUsd: number | undefined;
 	providers: string[];
 	models: string[];
 	skills: string[];
@@ -117,7 +117,7 @@ function frontMatter(meta: ReviewReportMeta, merged: ModelReview): string {
 		`scope: ${meta.scope}`,
 		`remote: ${meta.remote}`,
 		`duration_seconds: ${meta.durationSeconds}`,
-		`cost_usd: ${meta.costUsd.toFixed(6)}`,
+		`cost_usd: ${meta.costUsd === undefined ? "unavailable" : meta.costUsd.toFixed(6)}`,
 		`providers: ${yamlList(meta.providers)}`,
 		`models: ${yamlList(meta.models)}`,
 		`skills: ${yamlList(meta.skills)}`,
@@ -132,6 +132,10 @@ function frontMatter(meta: ReviewReportMeta, merged: ModelReview): string {
 }
 
 /** Build the full Markdown report (front-matter + TOC + body). */
+export function formatCost(costUsd: number | undefined): string {
+	return costUsd === undefined ? "cost unavailable" : `$${costUsd.toFixed(4)}`;
+}
+
 export function formatReviewReport(opts: {
 	merged: ModelReview;
 	meta: ReviewReportMeta;
@@ -161,7 +165,7 @@ export function formatReviewReport(opts: {
 		"",
 		`Reviewed **${meta.filesReviewed}** file(s) (${meta.scope}) with ${meta.providers.join(" + ")}. ` +
 			`Found **${total}** item(s): ${c.P0} critical · ${c.P1} high · ${c.P2} medium · ${c.P3} low. ` +
-			`Took ${meta.durationSeconds}s · $${meta.costUsd.toFixed(4)}.`,
+			`Took ${meta.durationSeconds}s · ${formatCost(meta.costUsd)}.`,
 	];
 
 	if (merged.general_findings.length > 0) {

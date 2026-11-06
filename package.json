@@ -23,6 +23,7 @@
 		"ai-review": "dist/cli.js"
 	},
 	"files": [
+		".ai-review.yaml",
 		"dist/",
 		"skills/"
 	],
@@ -39,12 +40,15 @@
 		"test": "vitest run",
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",
+		"config:check": "bun scripts/config-check.ts",
+		"docs:config": "bun scripts/gen-config-docs.ts",
 		"docs:dev": "vitepress dev docs",
 		"docs:build": "vitepress build docs",
 		"docs:preview": "vitepress preview docs"
 	},
 	"dependencies": {
 		"@ai-sdk/anthropic": "^3.0.135",
+		"@ai-sdk/google": "3.0.137",
 		"@ai-sdk/openai": "^3.0.131",
 		"@ai-sdk/provider": "^3.0.19",
 		"@anthropic-ai/sdk": "^0.39.0",
@@ -57,6 +61,7 @@
 		"drizzle-orm": "^0.45.2",
 		"octokit": "^4.0.2",
 		"pg": "^8.22.0",
+		"yaml": "^2.9.1",
 		"zod": "^4.4.3"
 	},
 	"devDependencies": {

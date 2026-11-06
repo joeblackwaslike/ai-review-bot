@@ -406,7 +406,7 @@ const opts = {
 	repo: "r",
 	pull: 1,
 	commentPrefix: "Bot",
-	provider: "anthropic",
+	reviewer: "claude",
 };
 
 describe("fetchLedgerEvidence", () => {
@@ -549,7 +549,7 @@ describe("fetchLedgerEvidence", () => {
 		});
 		const ev = await fetchLedgerEvidence(octokit, {
 			...opts,
-			provider: "anthropic",
+			reviewer: "claude",
 		});
 		expect(ev.reviewIds).toEqual([7, 9]);
 		expect(ev.claims).toEqual([]);
@@ -559,5 +559,135 @@ describe("fetchLedgerEvidence", () => {
 			pull_number: 1,
 			page: 1,
 		});
+	});
+});
+
+describe("reviewer identity in the ledger", () => {
+	const review = (id: number, markers: string[], at: number) => ({
+		id,
+		body: `### Bot\nb\n\n<!-- ai-review:sha=abc -->\n${markers.join("\n")}\n\n---\n*Model: m*`,
+		submitted_at: `2026-01-01T00:00:0${at}Z`,
+	});
+	const settledThread = (commentId: number) => ({
+		isResolved: true,
+		resolvedBy: { login: "joe" },
+		comments: {
+			pageInfo: { hasNextPage: false },
+			nodes: [node(commentId), node(commentId + 1, { body: "fixed" })],
+		},
+	});
+	const octokitFor = (
+		reviews: ReturnType<typeof review>[],
+		comments: Array<{ id: number; review: number }>,
+		threadComments: number[],
+	) =>
+		buildStrictOctokit({
+			"GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews": (p) =>
+				p.page === 1 ? reviews : [],
+			"GET /repos/{owner}/{repo}/pulls/{pull_number}/comments": (p) =>
+				p.page === 1
+					? comments.map((c) => ({
+							id: c.id,
+							pull_request_review_id: c.review,
+							path: "a.ts",
+							line: 1,
+							body: "**P2** thing",
+						}))
+					: [],
+			"POST /graphql": () => ({
+				data: {
+					repository: {
+						pullRequest: {
+							author: { login: "joe" },
+							reviewThreads: {
+								nodes: threadComments.map(settledThread),
+								pageInfo: { hasNextPage: false, endCursor: null },
+							},
+						},
+					},
+				},
+			}),
+		}) as unknown as RequestLike;
+
+	it("keeps the settled thread of a review that carries only the legacy provider marker", async () => {
+		const octokit = octokitFor(
+			[review(7, ["<!-- ai-review:provider=anthropic -->"], 0)],
+			[{ id: 70, review: 7 }],
+			[70],
+		);
+		const ev = await fetchLedgerEvidence(octokit, {
+			...opts,
+			reviewer: "claude",
+		});
+		expect(ev.reviewIds).toEqual([7]);
+		expect(ev.threads.map((x) => x.commentId)).toEqual([70]);
+		const ledger = buildLedger(ev);
+		expect(ledger.map((e) => e.status)).toEqual(["resolved"]);
+	});
+
+	it("reads a custom reviewer id only from its own reviews and does not collide with claude or codex", async () => {
+		const reviews = [
+			review(1, ["<!-- ai-review:provider=anthropic -->"], 0),
+			review(2, ["<!-- ai-review:provider=openai -->"], 1),
+			review(
+				3,
+				[
+					"<!-- ai-review:reviewer=gemini -->",
+					"<!-- ai-review:provider=gemini -->",
+				],
+				2,
+			),
+		];
+		const comments = [
+			{ id: 10, review: 1 },
+			{ id: 20, review: 2 },
+			{ id: 30, review: 3 },
+		];
+		const seen = async (reviewer: string) =>
+			(
+				await fetchLedgerEvidence(octokitFor(reviews, comments, [10, 20, 30]), {
+					...opts,
+					reviewer,
+				})
+			).threads.map((x) => x.commentId);
+		expect(await seen("gemini")).toEqual([30]);
+		expect(await seen("claude")).toEqual([10]);
+		expect(await seen("codex")).toEqual([20]);
+	});
+
+	it("keeps two reviewers on the same provider apart", async () => {
+		const reviews = [
+			review(
+				1,
+				[
+					"<!-- ai-review:reviewer=claude -->",
+					"<!-- ai-review:provider=anthropic -->",
+				],
+				0,
+			),
+			review(
+				2,
+				[
+					"<!-- ai-review:reviewer=claude-lite -->",
+					"<!-- ai-review:provider=claude-lite -->",
+				],
+				1,
+			),
+		];
+		const comments = [
+			{ id: 10, review: 1 },
+			{ id: 20, review: 2 },
+		];
+		const evFor = (reviewer: string) =>
+			fetchLedgerEvidence(octokitFor(reviews, comments, [10, 20]), {
+				...opts,
+				reviewer,
+			});
+		expect((await evFor("claude")).threads.map((x) => x.commentId)).toEqual([
+			10,
+		]);
+		expect(
+			(await evFor("claude-lite")).threads.map((x) => x.commentId),
+		).toEqual([20]);
 	});
 });

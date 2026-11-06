@@ -1,22 +1,16 @@
 {
 	"buildCommand": "",
 	"functions": {
-		"api/github/webhook.ts": {
-			"maxDuration": 300
-		},
-		"api/github/webhook-openai.ts": {
-			"maxDuration": 300
-		},
-		"api/github/review-run.ts": {
+		"api/github/**/*.ts": {
 			"maxDuration": 300
 		},
 		"api/cron/poll-feedback.ts": {
 			"maxDuration": 60
 		},
-		"api/cron/improve.ts": {
-			"maxDuration": 300
+		"api/cron/refresh-prices.ts": {
+			"maxDuration": 60
 		},
-		"api/github/webhook-qc.ts": {
+		"api/cron/improve.ts": {
 			"maxDuration": 300
 		}
 	},
@@ -24,6 +18,10 @@
 		{
 			"path": "/api/cron/poll-feedback",
 			"schedule": "0 0 * * *"
+		},
+		{
+			"path": "/api/cron/refresh-prices",
+			"schedule": "0 3 * * *"
 		},
 		{
 			"path": "/api/cron/improve",

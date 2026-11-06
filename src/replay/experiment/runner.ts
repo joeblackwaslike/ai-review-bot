@@ -1,16 +1,23 @@
 import type { PullFile } from "../../review.js";
-import { routeModel } from "../../router.js";
+import { routeReviewerModel } from "../../router.js";
 import {
 	isCheckoutUnavailable,
 	withCheckout as realWithCheckout,
 } from "../checkout.js";
-import { roundCostUsd } from "../cost.js";
+import { requireCost, roundCostUsd } from "../cost.js";
 import { freezeFixture } from "../frozen.js";
 import { routerContext } from "../live-wiring.js";
 import type { runStrategy as runStrategyFn } from "../run-strategy.js";
 import type { ReviewStrategy, StrategyInput } from "../strategy.js";
 import { ledgerForRound } from "../trace.js";
-import type { LabelFile, Provider, ReplayFixture, Round } from "../types.js";
+import {
+	fixtureFamily,
+	fixtureReviewer,
+	type LabelFile,
+	type Provider,
+	type ReplayFixture,
+	type Round,
+} from "../types.js";
 import { mulberry32 } from "./bootstrap.js";
 import type { ExperimentPlan } from "./plan.js";
 import type { CellKey, CellRecord, ResultsStore } from "./store.js";
@@ -178,8 +185,9 @@ export async function planGrid(
 	const cells: PlannedCell[] = [];
 	const estimate: Record<Provider, number> = { anthropic: 0, openai: 0 };
 	for (const u of unitsOf(plan, deps)) {
-		const provider = (deps.fixtures[u.fixtureId] as LoadedFixture).fixture
-			.provider;
+		const provider = fixtureFamily(
+			(deps.fixtures[u.fixtureId] as LoadedFixture).fixture,
+		);
 		if (!plan.providers.includes(provider)) continue;
 		if (refusedOpenAi(plan, u.fixtureId, provider)) continue;
 		let aEstimate: number | undefined;
@@ -187,7 +195,7 @@ export async function planGrid(
 			const { input } = await builder.build(u.fixtureId, u.round, plan, {
 				spendTargetUsd: s.name === A0 ? aEstimate : undefined,
 			});
-			const e = s.estimateCost(input);
+			const e = requireCost(s.estimateCost(input), `strategy ${s.name}`);
 			if (s.name === A) aEstimate = e;
 			estimate[provider] += e;
 			cells.push({ strategy: s.name, ...u });
@@ -216,7 +224,8 @@ export async function runGrid(
 	const modelFor =
 		deps.modelFor ??
 		((i: StrategyInput) =>
-			routeModel(routerContext(i.files), i.fixture.provider).model);
+			routeReviewerModel(routerContext(i.files), fixtureReviewer(i.fixture))
+				.selection.model);
 
 	const stored = deps.store.readAll().records;
 	const spentUsd: Record<Provider, number> = { anthropic: 0, openai: 0 };
@@ -246,7 +255,7 @@ export async function runGrid(
 
 	for (const u of unitsOf(plan, deps)) {
 		const loaded = deps.fixtures[u.fixtureId] as LoadedFixture;
-		const provider = loaded.fixture.provider;
+		const provider = fixtureFamily(loaded.fixture);
 		if (!plan.providers.includes(provider)) continue;
 		let aCost: number | undefined;
 
@@ -279,7 +288,7 @@ export async function runGrid(
 			const { input, round } = await builder.build(u.fixtureId, u.round, plan, {
 				spendTargetUsd: s.name === A0 ? aCost : undefined,
 			});
-			const estimate = s.estimateCost(input);
+			const estimate = requireCost(s.estimateCost(input), `strategy ${s.name}`);
 			if (!Number.isFinite(estimate) || estimate < 0)
 				throw new Error(`invalid cost estimate ${estimate} for ${s.name}`);
 			if (estimate > plan.budgets.perCellUsd) {
@@ -317,7 +326,10 @@ export async function runGrid(
 					report.unavailable.push(cell);
 					continue;
 				}
-				const costUsd = roundCostUsd(ran.usage, modelFor(input));
+				const costUsd = requireCost(
+					roundCostUsd(ran.usage, modelFor(input)),
+					modelFor(input),
+				);
 				spentUsd[provider] += costUsd;
 				if (s.name === A) aCost = costUsd;
 				const overCap =

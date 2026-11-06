@@ -150,21 +150,29 @@ export function classifyAgentError(err: unknown): AgentFailure {
 }
 
 /** Tokens the SDK attached to a failed generation, mapped to the app's names. */
-export function usageFromError(
-	err: unknown,
-): { promptTokens: number; completionTokens: number } | undefined {
+export function usageFromError(err: unknown):
+	| {
+			promptTokens: number;
+			completionTokens: number;
+			cachedPromptTokens?: number;
+	  }
+	| undefined {
 	let probe: unknown = RetryError.isInstance(err)
 		? (err as RetryError).lastError
 		: err;
 	for (let i = 0; i <= MAX_CAUSE_DEPTH && probe != null; i++) {
 		if (NoObjectGeneratedError.isInstance(probe)) {
-			const { inputTokens, outputTokens } = probe.usage ?? {};
+			const { inputTokens, outputTokens, inputTokenDetails } =
+				probe.usage ?? {};
 			if (inputTokens === undefined && outputTokens === undefined) {
 				return undefined;
 			}
 			return {
 				promptTokens: inputTokens ?? 0,
 				completionTokens: outputTokens ?? 0,
+				...(inputTokenDetails?.cacheReadTokens !== undefined && {
+					cachedPromptTokens: inputTokenDetails.cacheReadTokens,
+				}),
 			};
 		}
 		probe = causeOf(probe);

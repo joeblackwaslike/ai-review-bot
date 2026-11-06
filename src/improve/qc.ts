@@ -2,6 +2,7 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import { createAIModel } from "../models.js";
 import { SEVERITY_LEVELS } from "../review.js";
+import { legacyProviderOf, type ReviewerId } from "../reviewer-id.js";
 import {
 	type ModelSelection,
 	outputBudget,
@@ -22,7 +23,7 @@ export type QcVerdict = z.infer<typeof QcVerdictSchema>;
 
 export interface JudgeableFinding {
 	id: number;
-	provider: "anthropic" | "openai";
+	reviewer: ReviewerId;
 	path: string | null;
 	line: number | null;
 	title: string;
@@ -63,10 +64,8 @@ export const QC_ANTHROPIC_MODEL = "claude-haiku-5-5";
  * A cross-provider judge measures disagreement between two models, which is a
  * different question from whether the finding holds — and it would let one
  * provider's style systematically mark down the other's. */
-export function judgeSelection(
-	provider: "anthropic" | "openai",
-): ModelSelection {
-	return provider === "openai"
+export function judgeSelection(identity: string): ModelSelection {
+	return identity === "openai"
 		? { provider: "openai", model: QC_OPENAI_MODEL, effort: "low" }
 		: { provider: "anthropic", model: QC_ANTHROPIC_MODEL, effort: "low" };
 }
@@ -117,7 +116,7 @@ export async function judgeFinding(
 	finding: JudgeableFinding,
 	hunk: string,
 ): Promise<QcVerdict | null> {
-	const selection = judgeSelection(finding.provider);
+	const selection = judgeSelection(legacyProviderOf(finding.reviewer));
 	try {
 		const { object } = await generateObject({
 			model: createAIModel(selection),
@@ -133,7 +132,7 @@ export async function judgeFinding(
 		if (isProgrammingError(err)) throw err;
 		console.error("qc: judge call failed", {
 			findingId: finding.id,
-			provider: finding.provider,
+			reviewer: finding.reviewer,
 			err,
 		});
 		return null;

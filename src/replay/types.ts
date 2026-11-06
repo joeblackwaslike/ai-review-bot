@@ -1,4 +1,12 @@
-export type Provider = "anthropic" | "openai";
+import {
+	type LegacyProvider,
+	legacyProviderOf,
+	type ReviewerId,
+	reviewerFromLegacy,
+} from "../reviewer-id.js";
+
+export type PersistedProvider = string;
+export type Provider = LegacyProvider;
 export type Label = "fixed" | "rejected" | "deferred" | "unadjudicated";
 
 export interface PostedClaim {
@@ -59,7 +67,7 @@ export interface RoundTrace {
 export interface Round {
 	index: number;
 	reviewId: number;
-	provider: Provider;
+	provider: PersistedProvider;
 	submittedAt: string;
 	headSha: string;
 	baseSha: string;
@@ -100,7 +108,8 @@ export interface ReplayFixture {
 	owner: string;
 	repo: string;
 	pull: number;
-	provider: Provider;
+	provider: PersistedProvider;
+	reviewer?: ReviewerId;
 	author: string;
 	recordedAt: string;
 	rounds: Round[];
@@ -108,6 +117,22 @@ export interface ReplayFixture {
 	reactions: ReactionEvidence[];
 	expect?: { clean: true };
 	heldOut?: true;
+}
+
+export function fixtureReviewer(
+	f: Pick<ReplayFixture, "provider" | "reviewer">,
+): ReviewerId {
+	return f.reviewer ?? reviewerFromLegacy(f.provider);
+}
+
+export function fixtureFamily(
+	f: Pick<ReplayFixture, "provider" | "reviewer">,
+): Provider {
+	const family = legacyProviderOf(fixtureReviewer(f));
+	if (family === "anthropic" || family === "openai") return family;
+	throw new Error(
+		`this replay path supports only anthropic and openai fixtures, got "${family}"`,
+	);
 }
 
 export interface ClaimLabel {
