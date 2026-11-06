@@ -45,6 +45,7 @@ import { computeMetrics, formatReport } from "./metrics.js";
 import { type ReplayPipeline, todaysCodePipeline } from "./pipeline.js";
 import { recordPr } from "./record.js";
 import { replayFixture } from "./replay.js";
+import { checkSeeds, planSeeds, runSeedsWithStrategy } from "./seeds/run.js";
 import { registerBuiltinStrategies } from "./strategies/index.js";
 import {
 	getStrategy,
@@ -64,6 +65,8 @@ export interface ReplayDeps {
 	/** Judges for `--adjudicate`; the default builds real models only after `--plan` is ruled out. */
 	adjudicationJudges?: AdjudicationJudges | (() => Promise<AdjudicationJudges>);
 	adjudicationDir?: string;
+	/** Seed root for `--seeds`; defaults to the committed seeds. */
+	seedsRoot?: string;
 }
 
 interface ParsedArgs {
@@ -84,6 +87,8 @@ interface ParsedArgs {
 	maxOpenai?: number;
 	plan?: boolean;
 	audit?: boolean;
+	seeds?: boolean;
+	check?: boolean;
 }
 
 const USAGE = [
@@ -92,6 +97,7 @@ const USAGE = [
 	"  ai-review replay --record <pr-url> --provider anthropic|openai --bot <login> [--held-out] [--expect-clean] [--fixtures <dir>]",
 	"  ai-review replay --live [--rounds <n>] [--max-cost <usd>] [--strategy <name>] [--save-trace] [--fixtures <dir>]",
 	"  ai-review replay --investigate-join <fixture-id> [--fixtures <dir>]",
+	"  ai-review replay --seeds [--check | --plan [--strategy <name>] | --strategy <name> --max-cost <usd>]",
 	"  ai-review replay --adjudicate <fixture-id> [--max-anthropic <n>] [--max-openai <n>] [--plan | --audit] [--fixtures <dir>]",
 ].join("\n");
 
@@ -129,6 +135,10 @@ function parseArgs(args: string[]): ParsedArgs | null {
 		}
 		if (flag === "--expect-clean") {
 			parsed.expectClean = true;
+			continue;
+		}
+		if (flag === "--seeds" || flag === "--check") {
+			parsed[flag === "--seeds" ? "seeds" : "check"] = true;
 			continue;
 		}
 		if (flag === "--plan" || flag === "--audit") {
@@ -547,6 +557,57 @@ async function liveAll(
 	return failed ? 1 : 0;
 }
 
+async function runSeeds(
+	p: ParsedArgs,
+	deps: ReplayDeps,
+	out: (s: string) => void,
+): Promise<number> {
+	const misuse =
+		((p.live ||
+			p.record !== undefined ||
+			p.adjudicate !== undefined ||
+			p.investigateJoin !== undefined ||
+			p.saveTrace ||
+			p.heldOut ||
+			p.expectClean ||
+			p.provider !== undefined ||
+			p.bot !== undefined ||
+			p.rounds !== undefined ||
+			p.audit ||
+			p.maxAnthropic !== undefined ||
+			p.maxOpenai !== undefined) &&
+			"--seeds takes only --check, --plan, --strategy and --max-cost") ||
+		(p.check &&
+			(p.plan || p.strategy !== undefined || p.maxCost !== undefined) &&
+			"--check takes no other seed flags") ||
+		(p.maxCost !== undefined &&
+			p.strategy === undefined &&
+			"--max-cost requires --strategy") ||
+		(p.maxCost !== undefined &&
+			p.plan &&
+			"--max-cost does not apply to --plan");
+	if (misuse) {
+		out(`${misuse}\n${USAGE}`);
+		return 2;
+	}
+	const opts = { root: deps.seedsRoot, out };
+	if (p.strategy === undefined && !p.plan) return checkSeeds(opts);
+	registerBuiltinStrategies();
+	let strategy: ReviewStrategy;
+	try {
+		strategy = getStrategy(p.strategy ?? "a");
+	} catch (err) {
+		if (!(err instanceof UnknownStrategyError)) throw err;
+		out(err.message);
+		return 2;
+	}
+	if (p.plan) return planSeeds(strategy, opts);
+	return runSeedsWithStrategy(strategy, {
+		...opts,
+		maxCostUsd: p.maxCost ?? 5,
+	});
+}
+
 export async function runReplay(
 	args: string[],
 	deps: ReplayDeps = {},
@@ -557,7 +618,9 @@ export async function runReplay(
 		out(USAGE);
 		return 2;
 	}
+	if (parsed.seeds) return runSeeds(parsed, deps, out);
 	const misuse =
+		(parsed.check && "--check requires --seeds") ||
 		(parsed.saveTrace &&
 			(!parsed.live || parsed.record !== undefined) &&
 			"--save-trace requires --live without --record") ||
