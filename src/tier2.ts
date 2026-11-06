@@ -122,6 +122,7 @@ const SECURITY_PATH_PATTERNS = [
 	"infrastructure",
 	"terraform",
 	"docker",
+	"dockerfile",
 	"k8s",
 	"kubernetes",
 	"helm",
@@ -142,11 +143,40 @@ const SECURITY_PATCH_PATTERNS = [
 	/process\.env\./,
 ];
 
+const SECURITY_PATH_TOKENS = new Set([
+	...SECURITY_PATH_PATTERNS.map((p) => p.replace(/^\./, "")),
+	"authn",
+	"authz",
+	"authentication",
+	"authorization",
+	"deployment",
+	"permissions",
+]);
+
+function isSecurityToken(t: string): boolean {
+	if (SECURITY_PATH_TOKENS.has(t)) return true;
+	if (t.endsWith("ies") && SECURITY_PATH_TOKENS.has(`${t.slice(0, -3)}y`)) {
+		return true;
+	}
+	return t.endsWith("s") && SECURITY_PATH_TOKENS.has(t.slice(0, -1));
+}
+
+function hasSecurityPathToken(path: string): boolean {
+	return path
+		.replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+		.replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+		.toLowerCase()
+		.split(/[^a-z0-9]+/)
+		.filter(Boolean)
+		.some(
+			(t) =>
+				isSecurityToken(t) ||
+				t.split(/(?<=[a-z])(?=\d)|(?<=\d)(?=[a-z])/).some(isSecurityToken),
+		);
+}
+
 function shouldRunSecurityAuditor(ctx: Tier2Context): string | null {
-	const matchedPaths = ctx.filePaths.filter((p) => {
-		const lower = p.toLowerCase();
-		return SECURITY_PATH_PATTERNS.some((pattern) => lower.includes(pattern));
-	});
+	const matchedPaths = ctx.filePaths.filter(hasSecurityPathToken);
 
 	if (matchedPaths.length > 0) {
 		const sample = matchedPaths.slice(0, 3).join(", ");

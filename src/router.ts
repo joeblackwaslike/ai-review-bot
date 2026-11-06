@@ -37,9 +37,27 @@ function isSensitivePath(path: string): boolean {
 	return SENSITIVE_PATH_PATTERNS.some((pattern) => lower.includes(pattern));
 }
 
+const PROSE_EXTENSIONS = new Set([".md", ".mdx", ".rst"]);
+
+function extensionOf(path: string): string {
+	const base = path.slice(path.lastIndexOf("/") + 1);
+	const dot = base.lastIndexOf(".");
+	return dot === -1 ? "" : base.slice(dot).toLowerCase();
+}
+
+function isTrivialDoc(path: string): boolean {
+	if (!isDocFile(path)) {
+		return false;
+	}
+	return PROSE_EXTENSIONS.has(extensionOf(path)) || !isSensitivePath(path);
+}
+
 function isDocFile(path: string): boolean {
-	const ext = path.slice(path.lastIndexOf("."));
-	return DOC_EXTENSIONS.has(ext);
+	const base = path.slice(path.lastIndexOf("/") + 1).toLowerCase();
+	if (/^(requirements|constraints)[^/]*\.txt$/.test(base)) {
+		return false;
+	}
+	return DOC_EXTENSIONS.has(extensionOf(path));
 }
 
 export function classifyTier(context: RouterContext): ReviewTier {
@@ -49,17 +67,17 @@ export function classifyTier(context: RouterContext): ReviewTier {
 		return "deep";
 	}
 
+	const totalLines = additions + deletions;
+	if (totalLines < 20 && filePaths.every(isTrivialDoc)) {
+		return "trivial";
+	}
+
 	if (filePaths.some(isSensitivePath)) {
 		return "complex";
 	}
 
-	if (additions + deletions > 500) {
+	if (totalLines > 500) {
 		return "complex";
-	}
-
-	const totalLines = additions + deletions;
-	if (totalLines < 20 && filePaths.every(isDocFile)) {
-		return "trivial";
 	}
 
 	return "normal";
