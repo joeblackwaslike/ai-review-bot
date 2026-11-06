@@ -51,21 +51,64 @@ export const PROMPT_TEMPLATE = [
 	"Give a one-line reason. Judge the finding on its own merits.",
 ].join("\n");
 
-export const hashPromptTemplate = (template: string): string =>
-	createHash("sha256").update(template).digest("hex");
-
-export const PROMPT_HASH = hashPromptTemplate(PROMPT_TEMPLATE);
-
-export function buildJudgePrompt(input: JudgeInput): string {
+function renderJudgePrompt(
+	input: JudgeInput,
+	template: string,
+	evidenceChars: number,
+): string {
 	const { claim, diffEvidence } = input;
 	return [
-		PROMPT_TEMPLATE,
+		template,
 		`Finding: ${claim.title}`,
 		`Location: ${claim.path ?? "(none)"}:${claim.line ?? "?"}`,
 		`Finding text:\n${claim.body ?? "(none)"}`,
-		`Diff evidence:\n${diffEvidence.slice(0, EVIDENCE_CHARS) || "(none available)"}`,
+		`Diff evidence:\n${diffEvidence.slice(0, evidenceChars) || "(none available)"}`,
 	].join("\n\n");
 }
+
+export function buildJudgePrompt(input: JudgeInput): string {
+	return renderJudgePrompt(input, PROMPT_TEMPLATE, EVIDENCE_CHARS);
+}
+
+const HASH_SAMPLE: JudgeInput = {
+	claim: {
+		path: "sample.ts",
+		line: 1,
+		title: "sample title",
+		body: "sample body",
+	},
+	diffEvidence: "x".repeat(20000),
+};
+
+/**
+ * Hash of everything that shapes a verdict: the rendered prompt of a fixed sample (template and
+ * framing), the evidence limit and the response schema. A change to any of them makes cached
+ * verdicts stale. The schema's refinement is code, not data, and is not part of the hash.
+ */
+export function computePromptHash(
+	inputs: {
+		template?: string;
+		evidenceChars?: number;
+		schema?: z.ZodType;
+	} = {},
+): string {
+	const evidenceChars = inputs.evidenceChars ?? EVIDENCE_CHARS;
+	return createHash("sha256")
+		.update(
+			JSON.stringify({
+				prompt: renderJudgePrompt(
+					HASH_SAMPLE,
+					inputs.template ?? PROMPT_TEMPLATE,
+					evidenceChars,
+				),
+				evidenceChars,
+				schema: z.toJSONSchema(inputs.schema ?? JudgementSchema),
+			}),
+		)
+		.digest("hex");
+}
+
+export const PROMPT_HASH = computePromptHash();
 
 export function modelJudge(spec: JudgeSpec, auth: ResolvedAuth): Judge {
 	return async (input) => {
@@ -101,11 +144,6 @@ const SONNET_JUDGE: JudgeSpec = {
 	effort: "medium",
 };
 
-/**
- * `producerModel` is the run's routed model id. It only picks the judge and never reaches the
- * prompt. An Anthropic-produced candidate needs a different Anthropic model as first judge, so
- * an Opus producer falls back to Sonnet.
- */
 /** Every first-judge model `routeJudges` can pick for a producer family, whatever the producer model. */
 export function possibleFirstModels(
 	producer: "anthropic" | "openai",
@@ -115,6 +153,11 @@ export function possibleFirstModels(
 		: [JUDGE_MODELS.anthropic.model];
 }
 
+/**
+ * `producerModel` is the run's routed model id. It only picks the judge and never reaches the
+ * prompt. An Anthropic-produced candidate needs a different Anthropic model as first judge, so
+ * an Opus producer falls back to Sonnet.
+ */
 export function routeJudges(
 	producer: "anthropic" | "openai",
 	producerModel?: string,

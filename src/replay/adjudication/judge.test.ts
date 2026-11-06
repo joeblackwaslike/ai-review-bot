@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import {
 	buildJudgePrompt,
-	hashPromptTemplate,
+	computePromptHash,
 	JUDGE_MODELS,
 	JudgementSchema,
 	PROMPT_HASH,
@@ -29,9 +30,26 @@ describe("buildJudgePrompt", () => {
 });
 
 describe("PROMPT_HASH", () => {
-	it("hashes the template and changes with it", () => {
-		expect(PROMPT_HASH).toBe(hashPromptTemplate(PROMPT_TEMPLATE));
-		expect(hashPromptTemplate(`${PROMPT_TEMPLATE} more`)).not.toBe(PROMPT_HASH);
+	it("is the hash of the default prompt inputs", () => {
+		expect(PROMPT_HASH).toBe(computePromptHash());
+	});
+
+	it("changes with the template", () => {
+		expect(computePromptHash({ template: `${PROMPT_TEMPLATE} more` })).not.toBe(
+			PROMPT_HASH,
+		);
+	});
+
+	it("changes with the evidence limit", () => {
+		expect(computePromptHash({ evidenceChars: 4000 })).not.toBe(PROMPT_HASH);
+	});
+
+	it("changes with the response schema", () => {
+		expect(
+			computePromptHash({
+				schema: z.object({ verdict: z.enum(["real", "not-real"]) }),
+			}),
+		).not.toBe(PROMPT_HASH);
 	});
 });
 
