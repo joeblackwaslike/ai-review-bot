@@ -56,4 +56,27 @@ describe("claimKey", () => {
 			claimKey({ path: "a.ts", title: "Is it" }),
 		);
 	});
+
+	it("keeps a negated claim apart from its affirmative", () => {
+		expect(
+			claimKey({ path: "a.ts", title: "Retry delay is not skipped" }),
+		).not.toBe(claimKey({ path: "a.ts", title: "Retry delay is skipped" }));
+		expect(
+			claimKey({ path: "a.ts", title: "Retry delay is skipped" }),
+		).not.toBe(claimKey({ path: "a.ts", title: "Retry delay isn't skipped" }));
+	});
+
+	it("treats spelled-out and contracted negation alike", () => {
+		expect(
+			claimKey({ path: "a.ts", title: "Retry delay is not skipped" }),
+		).toBe(claimKey({ path: "a.ts", title: "Retry delay isn't skipped" }));
+	});
+
+	it("keeps claims that differ only in a numeric literal apart", () => {
+		expect(
+			claimKey({ path: "a.ts", title: "Retry limit of 3 attempts is ignored" }),
+		).not.toBe(
+			claimKey({ path: "a.ts", title: "Retry limit of 5 attempts is ignored" }),
+		);
+	});
 });
