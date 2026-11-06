@@ -105,7 +105,9 @@ export function lookupPrice(
 	const id = normalizeModelId(model);
 	const found =
 		table[id] ??
-		Object.entries(table).find(([key]) => key.endsWith(`/${id}`))?.[1];
+		(id.includes("/")
+			? undefined
+			: Object.entries(table).find(([key]) => key.endsWith(`/${id}`))?.[1]);
 	if (!found) return undefined;
 	const tier = (found.tiers ?? [])
 		.filter((t) => t.minPromptTokens <= promptTokens)

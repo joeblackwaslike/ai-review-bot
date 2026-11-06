@@ -9954,6 +9954,28 @@ describe("classified agent failures with usage", () => {
 		expect(out).toEqual({ status: "skipped", skillPath: "code-reviewer.md" });
 	});
 
+	it("bills usage under the provider-qualified model id", async () => {
+		const base = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+		);
+		mockGenerateObject.mockResolvedValue({
+			...base,
+			object: { ...base.object, summary: "s" },
+			usage: { inputTokens: 1000, outputTokens: 100 },
+		});
+		vi.mocked(sumCost).mockClear();
+		await buildReview(ctx());
+		const billed = vi.mocked(sumCost).mock.calls[0]?.[0];
+		expect(billed?.size).toBeGreaterThan(0);
+		for (const key of billed?.keys() ?? []) {
+			expect(key).toMatch(/^[a-z]+\/.+/);
+		}
+	});
+
 	it("counts failed-attempt tokens in cost and logs one record per agent", async () => {
 		const log = vi.spyOn(console, "log").mockImplementation(() => {});
 		const base = buildGenerateObjectResponse(

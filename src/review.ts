@@ -2489,10 +2489,12 @@ async function buildReviewInner(
 	);
 	const selectionFor = (skillPath: string): ModelSelection =>
 		selectionBySkill.get(skillPath) ?? selection;
-	const modelOfSkill = (name: string): string =>
-		selectionFor(
+	const billedModelOfSkill = (name: string): string => {
+		const { provider, model } = selectionFor(
 			allSkills.find((s) => skillName(s.skillPath) === name)?.skillPath ?? "",
-		).model;
+		);
+		return `${provider}/${model}`;
+	};
 	const usedModels = allSkills.map((s) => selectionFor(s.skillPath).model);
 	const reviewModelLabel = modelLabel(usedModels);
 
@@ -2688,7 +2690,7 @@ async function buildReviewInner(
 	// first attempt whose retry then succeeded.
 	for (const { skill, outcome: o } of attempts) {
 		if ((o.status === "ok" || o.status === "error") && o.usage) {
-			bill(modelOfSkill(skill), o.usage);
+			bill(billedModelOfSkill(skill), o.usage);
 		}
 	}
 

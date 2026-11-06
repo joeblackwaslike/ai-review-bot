@@ -120,6 +120,16 @@ describe("lookupPrice", () => {
 		expect(lookupPrice("claude-haiku-5-5", 99999)?.input).toBeCloseTo(0.1);
 	});
 
+	it("does not guess a vendor for a provider-qualified id", () => {
+		setPriceTable({
+			"openai/shared-model": { input: 1, cachedInput: 1, output: 1 },
+			"other/shared-model": { input: 9, cachedInput: 9, output: 9 },
+		});
+		expect(lookupPrice("other/shared-model", 1)?.input).toBe(9);
+		expect(lookupPrice("openai/shared-model", 1)?.input).toBe(1);
+		expect(lookupPrice("google/shared-model", 1)).toBeUndefined();
+	});
+
 	it("returns undefined for unknown models", () => {
 		expect(lookupPrice("google/gemini-3.1-flash-lite", 10)).toBeUndefined();
 	});
