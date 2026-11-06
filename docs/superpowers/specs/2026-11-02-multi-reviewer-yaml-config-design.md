@@ -56,7 +56,7 @@ This design supersedes an earlier proposal ("multi-provider reviewer config and 
 
 ### 1. Config system (slice 1)
 
-- `config/ai-review.yaml` is committed and bundled with the deployment. It is read once at cold start using the `new URL(..., import.meta.url)` pattern that `src/prompt.ts` already uses for `skills/`.
+- `.ai-review.yaml` is committed and bundled with the deployment. It is read once at cold start using the `new URL(..., import.meta.url)` pattern that `src/prompt.ts` already uses for `skills/`.
 - **Packaging.** The CLI package currently ships only `dist/` and `skills/` (`package.json` `files`). `config/` is added to `files`, and the loader resolves the file relative to the built module. A test runs the CLI from an unpacked `pnpm pack` tarball outside the checkout, so an installed `ai-review` does not fail at module load.
 - One zod schema (`src/config/schema.ts`) is the source of truth for types, defaults, descriptions (`.describe()`) and which keys are secrets.
 - Load order is YAML, env overlay, schema defaults, validation, freeze. It loads lazily on first use (`getConfigTree()` memoizes on the first call), so a bad value fails the first request that reads the config, not mid-review.
@@ -177,7 +177,7 @@ Defaults equal today's values, so behavior is unchanged. The block is deployment
 
 ## Calls made without asking
 
-- The config file is `config/ai-review.yaml`, not `reviewers.yaml`, since it holds everything.
+- The config file is `.ai-review.yaml` at the repo root, not `reviewers.yaml`, since it holds everything. A deployment is a copy of this repo, so the root is where its owner expects to find it, and slice 5 reuses the name for per-repo override files.
 - `reviewers` and `skills` are maps, not lists.
 - Standard provider key names stay as permanent fallbacks. All behavior aliases are deprecated.
 - `models:` is excluded from env derivation.

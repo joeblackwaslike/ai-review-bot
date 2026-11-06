@@ -4,7 +4,7 @@
 
 **Goal:** Replace hard-coded tier maps, prices, tier thresholds and behavior env parsing with one validated YAML config plus a derived-name env overlay, with Claude and Codex behaving exactly as today.
 
-**Architecture:** A zod schema (`src/config/schema.ts`) defines every non-secret setting. `config/ai-review.yaml` holds the values. A loader applies YAML, then env (derived names and a deprecated-alias table), validates, and freezes. `router.ts`, `models.ts` and `config.ts` read the frozen tree. Hosted credentials and GitHub App secrets stay on their current env names in this slice.
+**Architecture:** A zod schema (`src/config/schema.ts`) defines every non-secret setting. `.ai-review.yaml` holds the values. A loader applies YAML, then env (derived names and a deprecated-alias table), validates, and freezes. `router.ts`, `models.ts` and `config.ts` read the frozen tree. Hosted credentials and GitHub App secrets stay on their current env names in this slice.
 
 **Tech Stack:** TypeScript ESM, zod 4, `yaml` (new dependency), vitest, biome, pnpm, Bun for the docs script.
 
@@ -38,7 +38,7 @@ Input classes the spec implies but no task's tests would exercise on their own. 
 1. Blank or whitespace env values (`REVIEW_DELAY_SECONDS=""`). Legacy code treats them as unset. The overlay must too. (Task 2)
 2. Boolean spellings. Legacy `REVIEW_ENABLED` is off only for the exact string `false`. New rule: `true` or `false`, case-insensitive; blank is unset; anything else is a startup error. State this change in the PR body. (Task 2)
 3. Both a deprecated alias and its derived name set, with different values. The derived name wins and a warning names both. (Task 2)
-4. `config/ai-review.yaml` missing or unreadable at cold start. The error names the resolved path. (Task 3)
+4. `.ai-review.yaml` missing or unreadable at cold start. The error names the resolved path. (Task 3)
 5. `routing.sensitivePathPatterns` empty, and `docExtensions` empty, must not crash `classifyTier`. (Task 4)
 
 ## File Structure
@@ -46,7 +46,7 @@ Input classes the spec implies but no task's tests would exercise on their own. 
 - Create `src/config/schema.ts`: zod schema, `Config` type, enums.
 - Create `src/config/env.ts`: name derivation, overlay, alias table, unknown-var check.
 - Create `src/config/load.ts`: YAML read, load pipeline, memoized frozen tree.
-- Create `config/ai-review.yaml`: the values.
+- Create `.ai-review.yaml`: the values.
 - Create `scripts/gen-config-docs.ts` and `scripts/pack-smoke.sh`.
 - Modify `src/router.ts`, `src/models.ts`, `src/config.ts`, `api/debug.ts`, `package.json`, `.github/workflows/ci.yml`, `.env.example`, `CLAUDE.md`.
 - Tests colocated: `src/config/schema.test.ts`, `env.test.ts`, `load.test.ts`; extend `router.test.ts`, `models.test.ts`, `config.test.ts`.
@@ -125,7 +125,7 @@ Input classes the spec implies but no task's tests would exercise on their own. 
 ### Task 3: Loader, YAML file, packaging
 
 **Files:**
-- Create: `src/config/load.ts`, `src/config/load.test.ts`, `config/ai-review.yaml`, `scripts/pack-smoke.sh`
+- Create: `src/config/load.ts`, `src/config/load.test.ts`, `.ai-review.yaml`, `scripts/pack-smoke.sh`
 - Modify: `package.json` (`files` add `"config/"`), `.github/workflows/ci.yml` (run `bash scripts/pack-smoke.sh` in the lint-typecheck job)
 
 **Interfaces:**
@@ -138,18 +138,18 @@ Input classes the spec implies but no task's tests would exercise on their own. 
   export function getLoadedConfig(): LoadedConfig;
   export function resetConfigForTests(): void;
   ```
-  The default YAML path is `fileURLToPath(new URL("../../config/ai-review.yaml", import.meta.url))`. This resolves correctly from both `src/config/load.ts` and `dist/config/load.js`. Check against how `src/prompt.ts:13` resolves `skills/`.
+  The default YAML path is `fileURLToPath(new URL("../../.ai-review.yaml", import.meta.url))`. This resolves correctly from both `src/config/load.ts` and `dist/config/load.js`. Check against how `src/prompt.ts:13` resolves `skills/`.
 - `src/config.ts` already exports `getConfig` (the GitHub App config), so the tree accessor is named `getConfigTree`.
-- `config/ai-review.yaml` content: `version: 1`; `models` with the five current entries keyed `anthropic/claude-haiku-5-5`, `anthropic/claude-sonnet-5-5`, `anthropic/claude-opus-5-5`, `openai/gpt-6-luna`, `openai/gpt-6.1-sol`, using the rates in `src/models.ts` (`TOKEN_RATES`) for `input`/`output`. Set `cachedInput` to 0.1x input for Anthropic, and for OpenAI use 0.05x input (gpt-6-luna 0.005, gpt-6.1-sol 0.10). These cached rates are unverified guesses; the implementer confirms them on the provider pricing pages and notes any change in the PR. `refusalFallback: true` on `claude-opus-5-5` and `claude-sonnet-5-5`. `reviewers.claude` and `reviewers.codex` with the tier maps from `src/router.ts` (`CLAUDE_TIER_MAP`, `OPENAI_TIER_MAP`), prefixed model ids. `routing` with today's `SENSITIVE_PATH_PATTERNS`, `DOC_EXTENSIONS`, `deepLabel: deep-review`, `complexLines: 500`, `trivialDocLines: 20`. Keep the two explanatory comments from `router.ts` (Opus `high` not `xhigh`; Haiku long-context pricing) as YAML comments.
+- `.ai-review.yaml` content: `version: 1`; `models` with the five current entries keyed `anthropic/claude-haiku-5-5`, `anthropic/claude-sonnet-5-5`, `anthropic/claude-opus-5-5`, `openai/gpt-6-luna`, `openai/gpt-6.1-sol`, using the rates in `src/models.ts` (`TOKEN_RATES`) for `input`/`output`. Set `cachedInput` to 0.1x input for Anthropic, and for OpenAI use 0.05x input (gpt-6-luna 0.005, gpt-6.1-sol 0.10). These cached rates are unverified guesses; the implementer confirms them on the provider pricing pages and notes any change in the PR. `refusalFallback: true` on `claude-opus-5-5` and `claude-sonnet-5-5`. `reviewers.claude` and `reviewers.codex` with the tier maps from `src/router.ts` (`CLAUDE_TIER_MAP`, `OPENAI_TIER_MAP`), prefixed model ids. `routing` with today's `SENSITIVE_PATH_PATTERNS`, `DOC_EXTENSIONS`, `deepLabel: deep-review`, `complexLines: 500`, `trivialDocLines: 20`. Keep the two explanatory comments from `router.ts` (Opus `high` not `xhigh`; Haiku long-context pricing) as YAML comments.
 
 - [ ] **Step 1: Write failing tests** in `load.test.ts`:
-  - `the real config/ai-review.yaml parses under ConfigSchema` (this is the CI gate for config typos).
+  - `the real .ai-review.yaml parses under ConfigSchema` (this is the CI gate for config typos).
   - `missing yaml throws an error that names the resolved path`.
   - `env overlay is applied after yaml` with an injected env.
   - `getConfigTree returns a frozen object` (assigning throws in strict mode).
   - `invalid yaml surfaces the schema issue path`.
 - [ ] **Step 2: Run** `pnpm vitest run src/config/load.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement** `src/config/load.ts` and write `config/ai-review.yaml`. Add `"config/"` to `package.json` `files`.
+- [ ] **Step 3: Implement** `src/config/load.ts` and write `.ai-review.yaml`. Add `".ai-review.yaml"` to `package.json` `files`.
 - [ ] **Step 4: Write `scripts/pack-smoke.sh`**: `pnpm build`, `pnpm pack` into a temp dir, extract, run `node -e "import('./package/dist/config/load.js').then(m => m.loadConfig())"` from outside the checkout, exit non-zero on failure. Run it once locally. Expected: exit 0. Add the CI step.
 - [ ] **Step 5: Run** `pnpm vitest run src/config` and `pnpm typecheck`. Expected: PASS.
 - [ ] **Step 6: Commit** `feat(config): load, validate and freeze config from yaml and env`.
