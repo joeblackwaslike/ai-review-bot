@@ -8,7 +8,11 @@ import {
 } from "../../testing.js";
 import { roundCostUsd } from "../cost.js";
 import type { StrategyInput } from "../strategy.js";
-import { strategyA0, strategyA0Version } from "./a0.js";
+import {
+	A0_IMPLEMENTATION_REVISION,
+	strategyA0,
+	strategyA0Version,
+} from "./a0.js";
 
 const mockRunAgent = vi.hoisted(() => vi.fn());
 vi.mock("../../review.js", async (orig) => ({
@@ -65,6 +69,17 @@ describe("strategyA0", () => {
 		expect(strategyA0.name).toBe("a0");
 		expect(strategyA0.needsCheckout).toBe(false);
 		expect(strategyA0.version).toMatch(/^[0-9a-f]{12}$/);
+	});
+
+	it("changes version when the implementation revision changes", () => {
+		const read = () => "same";
+		expect(strategyA0Version(read, A0_IMPLEMENTATION_REVISION)).toBe(
+			strategyA0Version(read),
+		);
+		expect(strategyA0Version(read, A0_IMPLEMENTATION_REVISION + 1)).not.toBe(
+			strategyA0Version(read),
+		);
+		expect(A0_IMPLEMENTATION_REVISION).toBeGreaterThan(1);
 	});
 
 	it("changes version when the skill text changes", () => {

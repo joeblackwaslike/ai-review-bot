@@ -33,10 +33,21 @@ const skillsDir = fileURLToPath(new URL("../../../skills", import.meta.url));
 const readSkillFile = (name: string): string =>
 	readFileSync(`${skillsDir}/${name}`, "utf8");
 
-export function strategyA0Version(readSkill: (name: string) => string): string {
+/** Bump when run or estimateCost behavior changes (repeat policy, tolerance), so stored cells go stale. */
+export const A0_IMPLEMENTATION_REVISION = 2;
+
+export function strategyA0Version(
+	readSkill: (name: string) => string,
+	revision: number = A0_IMPLEMENTATION_REVISION,
+): string {
 	return createHash("sha256")
 		.update(
-			JSON.stringify([readSkill(A0_SKILL), CLAUDE_TIER_MAP, OPENAI_TIER_MAP]),
+			JSON.stringify([
+				readSkill(A0_SKILL),
+				CLAUDE_TIER_MAP,
+				OPENAI_TIER_MAP,
+				revision,
+			]),
 		)
 		.digest("hex")
 		.slice(0, 12);
