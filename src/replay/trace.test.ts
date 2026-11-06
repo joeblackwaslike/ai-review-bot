@@ -20,6 +20,7 @@ import {
 import type { LabelFile, PostedClaim, ReplayFixture, Round } from "./types.js";
 
 const files = [buildPullFile("src/a.ts", SIMPLE_PATCH)];
+const LONG_PATCH = `@@ -0,0 +1,12 @@\n${Array.from({ length: 12 }, (_, i) => `+line ${i}`).join("\n")}`;
 const tuning = { ...REVIEWER_TUNING, dropRetractions: false };
 const noLedger: Ledger = [];
 
@@ -707,5 +708,47 @@ describe("adaptive limits in the trace", () => {
 		expect(result.adaptiveRemoved?.[0]?.title).toBe("Inline 5");
 		expect(result.adaptiveRemoved?.[0]?.skill).toBe("agent-a.md");
 		expect(titles(result.posted)).toContain("Inline 6");
+	});
+
+	it("counts a restated claim for its survivor, as production does", () => {
+		const { fixture, labels } = build();
+		const round = fixture.rounds[2] as Round;
+		const topics = [
+			"Alpha widget leaks memory",
+			"Beta socket never closes",
+			"Gamma parser skips validation",
+			"Delta cache returns stale rows",
+			"Epsilon retry loop spins forever",
+		];
+		const last = "Zeta token comparison is not constant time";
+		const result = postFilterTrace({
+			agentReviews: [
+				{
+					skill: "agent-a",
+					review: buildModelReview({
+						inline_comments: [...topics, last].map((t, i) =>
+							inline(t, { severity: "P2", line: 2 + i }),
+						),
+					}),
+				},
+				{
+					skill: "agent-b",
+					review: buildModelReview({
+						inline_comments: [
+							inline("Zeta token comparison is not constant-time", {
+								severity: "P2",
+								line: 7,
+							}),
+						],
+					}),
+				},
+			],
+			ledger: ledgerForRound(fixture, labels, round),
+			files: [buildPullFile("src/a.ts", LONG_PATCH)],
+			tuning: { ...on, dedupeNearDuplicateClaims: true },
+			adaptive: adaptiveInputForRound(fixture, labels, round),
+		});
+		expect(result.adaptiveRemoved).toHaveLength(1);
+		expect(result.adaptiveRemoved?.[0]?.title).toBe(topics[4]);
 	});
 });

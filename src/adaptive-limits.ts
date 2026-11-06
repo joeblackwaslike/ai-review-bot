@@ -161,3 +161,42 @@ export function limitNotice(
 	}
 	return null;
 }
+
+/** How many agents support each finding, for the limits' tie-break. Inline comments are
+ * counted per `inlineKey` resolved through `aliases` (collapsed restatements count for the
+ * survivor); general findings per case-insensitive title. A finding no agent lists counts 1. */
+export function supportCounts<
+	I,
+	G extends { title: string } = { title: string },
+>(input: {
+	inlineByAgent: I[][];
+	generalByAgent: G[][];
+	inlineKey: (c: I) => string;
+	aliases: ReadonlyMap<string, string>;
+}): { inline: (c: I) => number; general: (title: string) => number } {
+	const resolve = (c: I) => {
+		const own = input.inlineKey(c);
+		return input.aliases.get(own) ?? own;
+	};
+	const inlineAgents = new Map<string, Set<number>>();
+	input.inlineByAgent.forEach((comments, agent) => {
+		for (const c of comments) {
+			const key = resolve(c);
+			const set = inlineAgents.get(key) ?? new Set<number>();
+			set.add(agent);
+			inlineAgents.set(key, set);
+		}
+	});
+	return {
+		inline: (c) => Math.max(1, inlineAgents.get(resolve(c))?.size ?? 0),
+		general: (title) => {
+			const t = title.toLowerCase();
+			return Math.max(
+				1,
+				input.generalByAgent.filter((g) =>
+					g.some((f) => f.title.toLowerCase() === t),
+				).length,
+			);
+		},
+	};
+}

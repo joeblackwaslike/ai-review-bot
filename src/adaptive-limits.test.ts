@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { applyLimits, limitNotice, resolveLimits } from "./adaptive-limits.js";
+import {
+	applyLimits,
+	limitNotice,
+	resolveLimits,
+	supportCounts,
+} from "./adaptive-limits.js";
 import type { LedgerEntry } from "./ledger/types.js";
 import type { Sev } from "./trajectory.js";
 import * as trajectory from "./trajectory.js";
@@ -344,5 +349,32 @@ describe("limitNotice", () => {
 		const n = limitNotice({ ...base, floor: "P2", budget: 5 }, 2) ?? "";
 		expect(n).not.toContain("> - ");
 		expect(n).not.toContain("ai-review:");
+	});
+});
+
+describe("supportCounts", () => {
+	const key = (c: { k: string }) => c.k;
+
+	it("counts each agent once per survivor, through the aliases", () => {
+		const s = supportCounts({
+			inlineByAgent: [[{ k: "a" }, { k: "a2" }], [{ k: "a2" }], [{ k: "b" }]],
+			generalByAgent: [],
+			inlineKey: key,
+			aliases: new Map([["a2", "a"]]),
+		});
+		expect(s.inline({ k: "a" })).toBe(2);
+		expect(s.inline({ k: "b" })).toBe(1);
+		expect(s.inline({ k: "unknown" })).toBe(1);
+	});
+
+	it("counts general findings by case-insensitive title and floors at 1", () => {
+		const s = supportCounts({
+			inlineByAgent: [],
+			generalByAgent: [[{ title: "Leak" }], [{ title: "leak" }], []],
+			inlineKey: key,
+			aliases: new Map(),
+		});
+		expect(s.general("LEAK")).toBe(2);
+		expect(s.general("other")).toBe(1);
 	});
 });

@@ -1,4 +1,8 @@
-import { applyLimits, resolveLimits } from "../adaptive-limits.js";
+import {
+	applyLimits,
+	resolveLimits,
+	supportCounts,
+} from "../adaptive-limits.js";
 import { commentKey } from "../comment-key.js";
 import type { Verdict } from "../feedback/types.js";
 import { blocksVerdict, suppressInReview } from "../ledger/suppress.js";
@@ -178,9 +182,10 @@ export function postFilterTrace(input: {
 		return retractions.review;
 	});
 
-	const merged = mergeReviewsDetailed(filtered, new Set(), {
+	const mergeOutcome = mergeReviewsDetailed(filtered, new Set(), {
 		dedupeNearDuplicateClaims: tuning.dedupeNearDuplicateClaims,
-	}).review;
+	});
+	const merged = mergeOutcome.review;
 	const survivors = new Set<object>([
 		...merged.general_findings,
 		...merged.inline_comments,
@@ -203,8 +208,12 @@ export function postFilterTrace(input: {
 	let adaptiveRemoved: CandidateRecord[] | undefined;
 	if (input.adaptive && tuning.adaptiveLimits) {
 		const limits = resolveLimits(input.adaptive);
-		const agentsWith = (match: (r: ModelReview) => boolean) =>
-			Math.max(1, filtered.filter(match).length);
+		const support = supportCounts({
+			inlineByAgent: filtered.map((r) => r.inline_comments),
+			generalByAgent: filtered.map((r) => r.general_findings),
+			inlineKey: commentKey,
+			aliases: mergeOutcome.inlineAliases,
+		});
 		const limited = applyLimits(
 			{
 				event: merged.event,
@@ -212,16 +221,7 @@ export function postFilterTrace(input: {
 				inline_comments: sanitized,
 			},
 			limits,
-			(f) =>
-				"path" in f
-					? agentsWith((r) =>
-							r.inline_comments.some((c) => commentKey(c) === commentKey(f)),
-						)
-					: agentsWith((r) =>
-							r.general_findings.some(
-								(g) => g.title.toLowerCase() === f.title.toLowerCase(),
-							),
-						),
+			(f) => ("path" in f ? support.inline(f) : support.general(f.title)),
 			ledger.some(
 				(e) =>
 					(e.status === "open" || e.status === "acknowledged") &&

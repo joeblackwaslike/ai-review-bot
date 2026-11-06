@@ -1,7 +1,12 @@
 import { APICallError } from "@ai-sdk/provider";
 import { generateObject } from "ai";
 import { z } from "zod";
-import { applyLimits, limitNotice, resolveLimits } from "./adaptive-limits.js";
+import {
+	applyLimits,
+	limitNotice,
+	resolveLimits,
+	supportCounts,
+} from "./adaptive-limits.js";
 import { capAdvisoryOutcome } from "./advisory.js";
 import {
 	type AgentFailure,
@@ -3028,6 +3033,16 @@ async function buildReviewInner(
 					),
 				)
 				.map(({ i }) => i);
+		const support = supportCounts({
+			inlineByAgent: outcomes.map((o, i) =>
+				o.status === "ok" && allSkills[i]?.skillPath
+					? o.review.inline_comments
+					: [],
+			),
+			generalByAgent: unsettledResults.map((r) => r.general_findings),
+			inlineKey: commentKey,
+			aliases: mergeOutcome.inlineAliases,
+		});
 		const limited = applyLimits(
 			{
 				event: modelReview.event,
@@ -3037,12 +3052,8 @@ async function buildReviewInner(
 			limits,
 			(f) =>
 				generalSet.has(f)
-					? Math.max(1, agentsWithTitle(f.title).length)
-					: (skillsByKey.get(
-							mergeOutcome.inlineAliases.get(
-								commentKey(f as ModelInlineComment),
-							) ?? commentKey(f as ModelInlineComment),
-						)?.size ?? 1),
+					? support.general(f.title)
+					: support.inline(f as ModelInlineComment),
 			survivingPrior.some(blocksVerdict),
 		);
 		const removedInlineKeys = new Set<string>();
