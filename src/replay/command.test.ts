@@ -1347,6 +1347,45 @@ describe("runReplay --adjudicate", () => {
 		expect(text).toContain("error samples: session expired");
 	});
 
+	it("--audit prints a failed cross-check", async () => {
+		const { dir, id } = seedFixture();
+		const { lines, out } = collect();
+		const finding = {
+			path: "a.ts",
+			line: 1,
+			title: "Unbounded loop never terminates on empty queue",
+			body: "b",
+		};
+		await runReplay(
+			["--adjudicate", id, "--audit", "--max-openai", "2", "--fixtures", dir],
+			{
+				out,
+				client: withFiles,
+				adjudicationJudges: {
+					verdictJudges: async () => {
+						throw new Error("unused");
+					},
+					auditJudges: async () => ({
+						judge: {
+							family: "anthropic",
+							model: "stub",
+							run: async () => [finding],
+						},
+						second: {
+							family: "openai",
+							model: "stub2",
+							run: async () => {
+								throw new Error("quota exhausted");
+							},
+						},
+					}),
+				},
+				adjudicationDir: join(dir, "cache"),
+			},
+		);
+		expect(lines.join("\n")).toContain("cross-check failed: quota exhausted");
+	});
+
 	it("--audit runs the audit judges", async () => {
 		const { dir, id } = seedFixture();
 		const { judges, calls } = stubJudges();

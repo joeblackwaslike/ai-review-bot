@@ -56,6 +56,8 @@ export interface AuditResult {
 	unresolved: number;
 	singleFamily: number;
 	deferred: boolean;
+	/** Message of a thrown cross-check; the findings are then single-family and not cached. */
+	crossCheckFailed: string | null;
 	calls: { anthropic: number; openai: number };
 }
 
@@ -91,6 +93,7 @@ function summarize(
 		unresolved,
 		singleFamily: records.filter((r) => r.status === "single-family").length,
 		deferred: false,
+		crossCheckFailed: null,
 		calls,
 	};
 }
@@ -135,7 +138,7 @@ export async function auditFixture(opts: AuditOptions): Promise<AuditResult> {
 	];
 
 	let confirmations: AuditFinding[] | null = null;
-	let cacheable = true;
+	let crossCheckFailed: string | null = null;
 	if (
 		second &&
 		uncovered.length > 0 &&
@@ -144,8 +147,8 @@ export async function auditFixture(opts: AuditOptions): Promise<AuditResult> {
 		calls[second.family]++;
 		try {
 			confirmations = await second.run(input);
-		} catch {
-			cacheable = false;
+		} catch (err) {
+			crossCheckFailed = err instanceof Error ? err.message : String(err);
 		}
 	}
 
@@ -170,7 +173,7 @@ export async function auditFixture(opts: AuditOptions): Promise<AuditResult> {
 		});
 	}
 
-	if (cacheable) {
+	if (crossCheckFailed === null) {
 		for (const r of added) cache.put(snapshot, findingKey(labelsHash, r), r);
 		cache.put(snapshot, runKey(labelsHash), {
 			kind: "audit-run",
@@ -179,5 +182,5 @@ export async function auditFixture(opts: AuditOptions): Promise<AuditResult> {
 			unresolved,
 		});
 	}
-	return summarize(added, unresolved, calls);
+	return { ...summarize(added, unresolved, calls), crossCheckFailed };
 }

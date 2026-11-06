@@ -263,6 +263,10 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 			out(
 				`judge spend (calls, outside strategy cost): anthropic=${result.calls.anthropic} openai=${result.calls.openai}`,
 			);
+			if (result.crossCheckFailed !== null)
+				out(
+					`cross-check failed: ${result.crossCheckFailed}; the findings are single-family and the audit was not recorded`,
+				);
 			if (result.singleFamily > 0) out(SINGLE_FAMILY_NOTE);
 			return 0;
 		}

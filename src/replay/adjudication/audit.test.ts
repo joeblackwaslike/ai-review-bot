@@ -178,4 +178,24 @@ describe("auditFixture", () => {
 		expect(stale?.kind).toBe("audit-run");
 		expect(AUDIT_PROMPT_HASH).toMatch(/^[0-9a-f]{64}$/);
 	});
+
+	it("surfaces a thrown cross-check and caches nothing", async () => {
+		const shared = base();
+		const result = await auditFixture({
+			...shared,
+			judge: judge([missedA]),
+			second: judge(new Error("quota exhausted"), "openai"),
+			caps: { anthropic: 1, openai: 1 },
+		});
+		expect(result.crossCheckFailed).toBe("quota exhausted");
+		expect(result.added[0]?.status).toBe("single-family");
+		expect(shared.cache.get("snap", "audit-run:L1")).toBeUndefined();
+		const clean = await auditFixture({
+			...shared,
+			judge: judge([missedA]),
+			second: null,
+			caps: { anthropic: 1, openai: 0 },
+		});
+		expect(clean.crossCheckFailed).toBeNull();
+	});
 });
