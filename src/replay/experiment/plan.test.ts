@@ -8,6 +8,7 @@ import {
 	loadPlan,
 	planHash,
 } from "./plan.js";
+import { splitOf } from "./splits.js";
 import { samplePlan } from "./testkit.js";
 
 describe("planHash", () => {
@@ -37,13 +38,50 @@ describe("ExperimentPlanSchema", () => {
 
 	it("rejects an OpenAI cell on a non-test split", () => {
 		const plan = samplePlan();
+		let n = 10;
+		while (splitOf(`o/r#${n}`, plan.seed) !== "validation") n++;
 		plan.fixtures.push({
-			id: "o/r#3",
+			id: `o/r#${n}`,
 			split: "validation",
 			provider: "openai",
 		});
 		const parsed = ExperimentPlanSchema.safeParse(plan);
 		expect(parsed.success).toBe(false);
+		const messages = (parsed.error?.issues ?? []).map((i) => i.message);
+		expect(messages).toHaveLength(1);
+		expect(messages[0]).toMatch(/OpenAI cells run only on the test split/);
+	});
+
+	it("rejects duplicate fixture ids", () => {
+		const plan = samplePlan();
+		plan.fixtures.push({
+			...(plan.fixtures[0] as (typeof plan.fixtures)[number]),
+		});
+		const parsed = ExperimentPlanSchema.safeParse(plan);
+		expect(parsed.success).toBe(false);
+		expect(JSON.stringify(parsed.error?.issues)).toMatch(/duplicate/i);
+	});
+
+	it.each([
+		"not-an-id",
+		"o/r#x",
+		"o/r#1@gemini",
+		"o/r/x#1",
+		"o/r#1@openai@openai",
+	])("rejects the malformed fixture id %s", (id) => {
+		const plan = samplePlan();
+		plan.fixtures.push({ id, split: "tuning", provider: "anthropic" });
+		expect(ExperimentPlanSchema.safeParse(plan).success).toBe(false);
+	});
+
+	it("rejects a provider suffix that disagrees with the provider", () => {
+		const plan = samplePlan();
+		plan.fixtures.push({
+			id: "o/r#7@openai",
+			split: splitOf("o/r#7", plan.seed),
+			provider: "anthropic",
+		});
+		expect(ExperimentPlanSchema.safeParse(plan).success).toBe(false);
 	});
 
 	it("rejects a split that does not follow the seeded hash", () => {

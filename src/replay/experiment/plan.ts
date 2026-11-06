@@ -7,6 +7,8 @@ import { splitOf } from "./splits.js";
 const ProviderSchema = z.enum(["anthropic", "openai"]);
 const SplitSchema = z.enum(["tuning", "validation", "test"]);
 
+const FIXTURE_ID = /^[^/#@\s]+\/[^/#@\s]+#\d+(?:@(?:anthropic|openai))?$/;
+
 export const ExperimentPlanSchema = z
 	.object({
 		planVersion: z.number().int().positive(),
@@ -27,7 +29,7 @@ export const ExperimentPlanSchema = z
 		fixtures: z
 			.array(
 				z.object({
-					id: z.string().regex(/^[^/#\s]+\/[^/#\s]+#\d+$|^[^#]+#.+$/),
+					id: z.string().regex(FIXTURE_ID),
 					split: SplitSchema,
 					provider: ProviderSchema,
 				}),
@@ -48,7 +50,22 @@ export const ExperimentPlanSchema = z
 		draft: z.boolean().optional(),
 	})
 	.superRefine((plan, ctx) => {
+		const seen = new Set<string>();
 		for (const [i, f] of plan.fixtures.entries()) {
+			if (seen.has(f.id))
+				ctx.addIssue({
+					code: "custom",
+					path: ["fixtures", i, "id"],
+					message: `duplicate fixture id ${f.id}`,
+				});
+			seen.add(f.id);
+			const suffix = f.id.split("@")[1];
+			if (suffix !== undefined && suffix !== f.provider)
+				ctx.addIssue({
+					code: "custom",
+					path: ["fixtures", i, "id"],
+					message: `fixture id ${f.id} names ${suffix} but the provider is ${f.provider}`,
+				});
 			if (splitOf(f.id, plan.seed) !== f.split)
 				ctx.addIssue({
 					code: "custom",
