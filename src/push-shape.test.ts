@@ -122,9 +122,9 @@ describe("classifyPush", () => {
 		});
 
 		it("keeps weight when a space between words is removed", () => {
-			expect(ws("src/a.ts", "x = /foo bar/;", "x = /foobar/;")?.whitespaceOnly).toBe(
-				false,
-			);
+			expect(
+				ws("src/a.ts", "x = /foo bar/;", "x = /foobar/;")?.whitespaceOnly,
+			).toBe(false);
 		});
 
 		it("ignores added blank lines and a reindent plus blank lines", () => {
