@@ -47,6 +47,25 @@ describe("classifyTier", () => {
 		expect(classifyTier({ ...base, filePaths: [path] })).toBe("complex");
 	});
 
+	it.each([
+		"docs.v2/README",
+		"docs/LICENSE",
+	])("does not treat extensionless %s as a doc", (path) => {
+		expect(classifyTier({ ...base, filePaths: [path] })).toBe("normal");
+	});
+
+	it("routes a sensitive-named extensionless file to complex", () => {
+		expect(classifyTier({ ...base, filePaths: ["auth.v2/LICENSE"] })).toBe(
+			"complex",
+		);
+	});
+
+	it("keeps docs.v2/guide.md trivial", () => {
+		expect(classifyTier({ ...base, filePaths: ["docs.v2/guide.md"] })).toBe(
+			"trivial",
+		);
+	});
+
 	it("keeps docs/README.md trivial", () => {
 		expect(classifyTier({ ...base, filePaths: ["docs/README.md"] })).toBe(
 			"trivial",

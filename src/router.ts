@@ -39,12 +39,17 @@ function isSensitivePath(path: string): boolean {
 
 const PROSE_EXTENSIONS = new Set([".md", ".mdx", ".rst"]);
 
+function extensionOf(path: string): string {
+	const base = path.slice(path.lastIndexOf("/") + 1);
+	const dot = base.lastIndexOf(".");
+	return dot === -1 ? "" : base.slice(dot).toLowerCase();
+}
+
 function isTrivialDoc(path: string): boolean {
 	if (!isDocFile(path)) {
 		return false;
 	}
-	const ext = path.slice(path.lastIndexOf("."));
-	return PROSE_EXTENSIONS.has(ext) || !isSensitivePath(path);
+	return PROSE_EXTENSIONS.has(extensionOf(path)) || !isSensitivePath(path);
 }
 
 function isDocFile(path: string): boolean {
@@ -52,8 +57,7 @@ function isDocFile(path: string): boolean {
 	if (/^(requirements|constraints)[^/]*\.txt$/.test(base)) {
 		return false;
 	}
-	const ext = path.slice(path.lastIndexOf("."));
-	return DOC_EXTENSIONS.has(ext);
+	return DOC_EXTENSIONS.has(extensionOf(path));
 }
 
 export function classifyTier(context: RouterContext): ReviewTier {
