@@ -11,7 +11,7 @@ The bot should notice this on its own and tighten what it posts, using only what
 Two limits are adjusted before each review:
 
 - **Severity floor.** Findings below a level are not posted.
-- **Findings budget.** At most N findings are posted, ranked by severity and then by how much support each has. An empty result is allowed.
+- **Findings budget.** At most N findings are posted, ranked by severity and then by how much support each has; P0 and P1 are never removed, so a round with many can exceed N. An empty result is allowed.
 
 ## Goals
 
@@ -73,7 +73,7 @@ Starting bands (provisional constants in `src/reviewer-tuning.ts`):
 | Score | Floor | Budget |
 | --- | --- | --- |
 | below 0.35 | none | none |
-| 0.35 to 0.6 | none | 10 |
+| 0.35 up to but not including 0.6 | none | 10 |
 | 0.6 and above | P2 | 5 |
 
 The budget is also capped by the push-shape factor below. The 50-comment payload cap stays as the outer limit.
@@ -101,7 +101,7 @@ Applied once, after merge and diff-anchor sanitizing and before `buildReviewComm
 
 - The pool is this review's new findings, inline comments and general findings together. Carried open entries are never counted against the budget and never removed.
 - P0 and P1 are never removed.
-- P2 and P3 below the floor are removed. If more than the budget remain after P0 and P1, the rest are removed in order of severity, then `confidence`, then the number of agents that raised the same claim, then position. The agent count has to be available at this point, so the map that `skillsByKey` builds moves ahead of the cap site or is passed in.
+- P2 and P3 below the floor are removed. P0 and P1 still count toward the budget, so if more than the budget remain, P2 and P3 are removed in rank order until P0 and P1 plus the kept P2 and P3 reach the budget, in order of severity, then `confidence`, then the number of agents that raised the same claim, then position. The agent count has to be available at this point, so the map that `skillsByKey` builds moves ahead of the cap site or is passed in.
 - Each removed finding is recorded as a `Discard` with its own reason, `ADAPTIVE_LIMIT`, so replay can separate it from the 50-comment `CAP`. Disposition is `dropped`.
 - If the review would request changes and the limits removed every new finding, and no carried entry blocks, the event drops to `COMMENT`. If any new finding remains posted, or any carried entry blocks, the event is unchanged. This is the same rule `dropRetractions` uses. The event is `APPROVE` only when the normal rule gives `APPROVE`.
 - Removed findings are not written to the carry marker and are not read back by `deriveBaseline`.
@@ -134,7 +134,7 @@ Gate for turning the switch on: no confirmed-real finding removed on the held-ou
 - Rollout switch off until replay passes the gate above.
 - Band edges (0.35, 0.6), the budgets (10, 5), the half-weight for deferred and the decay of 0.5 per round are starting values, not derived. Replay tunes them.
 - Unanswered findings are excluded from friction rather than counted as a mild rejection. Findings the bot settled itself are excluded too.
-- Push shape only scales a budget the trajectory already imposes. It never limits a review on its own, so round 2 and any healthy loop get a full review whatever the push looked like.
+- Push shape only scales a budget the trajectory already imposes. It never limits a review on its own, so any review whose band imposes no budget gets a full review whatever the push looked like; only round 1 is always unlimited.
 - Non-incremental reviews skip the push-shape factor.
 - One pool for inline and general findings, and carried entries stay outside it.
 - The replay gate needs at least 10 labelled or adjudicated removed candidates; below that it says "inconclusive".
