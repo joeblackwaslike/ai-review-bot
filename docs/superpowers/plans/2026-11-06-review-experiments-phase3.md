@@ -41,11 +41,15 @@ Interfaces:
   "single-family" }`.
 - `snapshotId(fixture: ReplayFixture): string`: first 16 hex of sha256 over a canonical JSON of
   the fixture with `trace` fields removed, so saving a trace does not change the id.
-- `claimKey(c: { path: string | null; title: string }): string`: sha256 over path plus the sorted
-  `claimTokens(title)` (reuse `src/claim-dedupe.ts`), so rewording and line moves share a key.
+- `claimKey(c: { path: string | null; title: string }): string`: sha256 over path, the sorted
+  `claimTokens(title)` and the sorted `claimIdentifiers(title)` (reuse `src/claim-dedupe.ts`), so
+  rewording and line moves share a key but titles that differ in a backticked name do not; a title
+  with neither tokens nor identifiers falls back to its normalized text.
 - `VerdictCache` with `get(snapshot, key)`, `put(snapshot, key, record)`; JSONL files under
-  `~/.ai-review/adjudication/<snapshot>.jsonl` (`AI_REVIEW_ADJUDICATION_DIR` overrides), write by
-  temp file and rename, last record per key wins, unreadable lines skipped and counted.
+  `~/.ai-review/adjudication/<snapshot>.jsonl` (`AI_REVIEW_ADJUDICATION_DIR` overrides), each put
+  appends one complete line in a single call (no temp file, no rewrite, so two instances on one
+  snapshot both keep their entries), last record per key wins, unreadable lines skipped, counted
+  and never deleted.
 
 Steps: red tests for id stability (trace added: same id; label text changed: different id), key
 stability (title reworded with the same tokens: same key), cache round trip, corrupt line
@@ -83,14 +87,20 @@ Interfaces:
   : Promise<AdjudicationResult>`.
 - `AdjudicationResult = { verdicts: Map<claimKey, VerdictRecord>; counts: { real; notReal;
   unclear; unresolved; singleFamily; cached; deferred }; spend: { anthropic; openai } }`
-  where `spend` counts calls.
+  where `spend` counts calls. The result also carries `errors` (in `counts`) and `errorSamples`
+  (up to five distinct error messages).
 - Candidates are deduplicated by `claimKey` before any call; cache hits cost nothing.
 - Second judge runs only when the first verdict is `real` or `unclear` and the producer is
   Anthropic; agreement gives `agreed`, disagreement `unresolved`; no second judge or OpenAI cap
   of 0 gives `single-family`.
 - A call that would pass a cap is not made: the candidate is counted in `deferred` and left out of
-  `verdicts`. A judge error becomes `unclear` with a reason starting `judge error:`, counted, and
-  is not cached.
+  `verdicts`. A judge error, from either judge or from the upgrade call, produces no verdict: it is
+  counted under `errors` only, its message goes to `errorSamples`, it is not tallied and it is not
+  cached.
+- A cached record is a hit only when its first judge's prompt hash is the current `PROMPT_HASH` and
+  its first model is one the current routing would pick (`isCurrentVerdict`, shared with `--plan`).
+  A cached `single-family` verdict for an Anthropic-produced candidate with verdict `real` or
+  `unclear` is upgraded by running only the second judge when the OpenAI cap allows it.
 
 Steps: red tests with stub judges for dedupe (two candidates, one key, one call), cache hit (no
 call), the OpenAI-cap-0 path (`single-family`, zero OpenAI calls), the Anthropic cap stopping
@@ -108,7 +118,10 @@ Interfaces:
 - Candidates that survive the second judge (or that have no second judge, marked
   `single-family`) are stored as audit records in the verdict cache under the snapshot id, with a
   distinct record kind so they cannot be read as candidate verdicts. Splits are `unresolved`.
-- Audit results are cached by `(snapshot, claimKey)` like verdicts.
+- Audit records are cached by `(snapshot, labels-file hash, claimKey)`, and a run marker records
+  that the audit finished; a repeat run makes no call unless the audit prompt, the judge model or
+  the labels changed. A thrown cross-check is reported as `crossCheckFailed` with its message and
+  nothing is cached.
 
 Steps: red tests with stub judges: a defect already covered by a label (by `joinsClaim`) is
 dropped, a split is unresolved, a single-family result is marked, a repeat run makes no calls.
@@ -127,7 +140,13 @@ Interfaces:
   many would be deferred, and calls no model. `--max-anthropic` defaults to 40, `--max-openai` to
   0. Misuse (path-like id, `--plan` with `--audit`, combined with other mode flags) exits 2; a
   missing fixture exits 1.
-- Output: the verdict counts line from Task 3 and the spend line, and the sentence "single-family
+- Judges are built lazily, on the first uncached candidate that needs a call, so a fully cached or
+  fully deferred run constructs no judge and resolves no auth. A candidate with no evidence (round
+  diff not fetched, null path, file absent from the compare files, or no patch) is never judged or
+  cached: it is counted in `deferred` and printed with its reason. The audit uses the last round's
+  diff only and aborts without a record if it cannot be fetched.
+- Output: the verdict counts line from Task 3, the error samples when `errors` is above 0, and the
+  spend line, and the sentence "single-family
   verdicts have no second-model check" whenever that count is above 0.
 
 Steps: red tests for the exit codes and for `--plan` making zero judge constructions (injected

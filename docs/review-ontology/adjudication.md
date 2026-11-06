@@ -10,7 +10,7 @@ Each judge sees the finding's title, location and text, plus the diff of the fil
 
 ## Which models judge
 
-An Anthropic-produced candidate is judged first by a different Anthropic model than the one that produced it. The first judge is Opus; if the producer was Opus, the first judge is Sonnet. The producer's model comes from routing the round's compare files the same way the live tier does. When a round's compare files cannot be fetched, the candidates from that round are not judged: they are counted as deferred and listed with the reason "evidence unavailable", and nothing is cached for them.
+An Anthropic-produced candidate is judged first by a different Anthropic model than the one that produced it. The first judge is Opus; if the producer was Opus, the first judge is Sonnet. The producer's model comes from routing the round's compare files the same way the live tier does. When a round's compare files cannot be fetched, the candidates from that round are not judged: they are counted as deferred and listed with the reason "evidence unavailable", and nothing is cached for them. The same holds for a candidate with no path ("unanchored finding, no evidence") and for one whose file is missing from the compare files or has no patch ("no patch evidence").
 
 A first verdict of `real` or `unclear` is cross-checked by an OpenAI model. When both agree, the verdict stands. When they disagree, the verdict is `unresolved`. It is counted and reported, left out of precision and recall, and never sent to a human.
 
@@ -24,7 +24,7 @@ A verdict with no cross-check is marked `single-family`. The command prints "sin
 
 A later run with a higher OpenAI cap upgrades those cached `single-family` verdicts: it runs only the second judge, and overwrites the cached record with `agreed` or `unresolved`. Verdicts that were `not-real` are never cross-checked.
 
-Judge spend is its own line in the output, counted in calls, and is not part of any strategy's cost.
+Judges are built only when the first call that needs one is made, so a run that is fully cached or fully deferred resolves no credentials. When judge calls fail, the output prints up to five distinct error messages next to the error count, so an expired session or a bad key is visible. Judge spend is its own line in the output, counted in calls, and is not part of any strategy's cost.
 
 ## Cache
 
@@ -36,4 +36,4 @@ Verdicts are stored per fixture snapshot as JSON lines in `~/.ai-review/adjudica
 
 ## Fixture audit
 
-`--audit` asks a judge to read the fixture's diff with the labelled claims shown and list real defects none of them covers. A listed defect that `joinsClaim` matches to a label is dropped. The rest go to the second judge when the OpenAI cap allows it. A defect the second judge also lists is stored as an audit record; one it does not list is counted as unresolved. Without a second judge the defects are stored marked `single-family`. Audit records carry the kind `audit`, so they cannot be read as candidate verdicts, and a finished audit is remembered, under the snapshot and the labels hash, so a repeat run makes no call unless the audit prompt, the judge model or the labels changed. The audit reads the last round's diff only. If that diff cannot be fetched the audit stops with a message and records nothing. The added defects join the recall denominator, marked `auditAdded`. Scoring itself belongs to a later phase.
+`--audit` asks a judge to read the fixture's diff with the labelled claims shown and list real defects none of them covers. A listed defect that `joinsClaim` matches to a label is dropped. The rest go to the second judge when the OpenAI cap allows it. A defect the second judge also lists is stored as an audit record; one it does not list is counted as unresolved. Without a second judge the defects are stored marked `single-family`. Audit records carry the kind `audit`, so they cannot be read as candidate verdicts, and a finished audit is remembered, under the snapshot and the labels hash, so a repeat run makes no call unless the audit prompt, the judge model or the labels changed. The audit reads the last round's diff only. If that diff cannot be fetched the audit stops with a message and records nothing. If the cross-check call throws, the output says so, the findings are reported as single-family, and nothing is cached. The added defects join the recall denominator, marked `auditAdded`. Scoring itself belongs to a later phase.
