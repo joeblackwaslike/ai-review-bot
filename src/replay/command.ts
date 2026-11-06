@@ -62,7 +62,7 @@ export interface ReplayDeps {
 	/** Builds the judge for a model family; the default resolves real credentials. */
 	joinJudge?: (family: Provider) => Promise<JoinJudge>;
 	/** Judges for `--adjudicate`; the default builds real models only after `--plan` is ruled out. */
-	adjudicationJudges?: AdjudicationJudges;
+	adjudicationJudges?: AdjudicationJudges | (() => Promise<AdjudicationJudges>);
 	adjudicationDir?: string;
 }
 

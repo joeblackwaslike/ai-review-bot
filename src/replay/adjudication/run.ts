@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { numberPatchLines } from "../../diff-lines.js";
 import { routeModel } from "../../router.js";
 import type { GhClient } from "../gh.js";
 import { buildLiveWiring, routerContext } from "../live-wiring.js";
@@ -12,6 +13,7 @@ import {
 	type AdjudicationCounts,
 	adjudicate,
 	isCurrentVerdict,
+	JudgeUnavailableError,
 	MAX_ERROR_SAMPLES,
 	type NamedJudge,
 } from "./adjudicate.js";
@@ -60,6 +62,12 @@ interface ModelInfo {
 }
 
 type Cache = VerdictCache<VerdictRecord | AuditStored>;
+
+const unavailableError = (err: unknown): never => {
+	throw new JudgeUnavailableError(
+		err instanceof Error ? err.message : String(err),
+	);
+};
 
 const SINGLE_FAMILY_NOTE = "single-family verdicts have no second-model check";
 
@@ -211,7 +219,7 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 		if (!c.path) return { reason: "unanchored finding, no evidence" };
 		const patch = patches.get(c.roundIndex)?.get(c.path);
 		return patch
-			? { text: patch }
+			? { text: numberPatchLines(patch) }
 			: { reason: `no patch evidence for ${c.path}` };
 	};
 	const evidenceByKey = new Map<string, string>();
@@ -248,15 +256,23 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 				);
 				return 1;
 			}
+			const lastPatches = patches.get(lastRound.index);
+			if (!lastPatches || ![...lastPatches.values()].some(Boolean)) {
+				out(
+					"audit aborted, evidence unavailable: the last round's diff has no patch text; no audit was recorded",
+				);
+				return 1;
+			}
 			out(`producer model: ${info.model} (${info.note})`);
 			const route = routeJudges(fixture.provider, info.model);
 			let built:
 				| Promise<Awaited<ReturnType<AdjudicationJudges["auditJudges"]>>>
 				| undefined;
 			const build = () => {
-				built ??= getFactory().then((f) =>
-					f.auditJudges(fixture.provider, info.model, wantSecond),
-				);
+				built ??= Promise.resolve()
+					.then(() => getFactory())
+					.then((f) => f.auditJudges(fixture.provider, info.model, wantSecond))
+					.catch(unavailableError);
 				return built;
 			};
 			const judge: AuditJudge = {
@@ -315,6 +331,7 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 		}
 		const spend = { anthropic: 0, openai: 0 };
 		const errorSamples: string[] = [];
+		let unavailableMessage: string | null = null;
 		for (const [model, group] of groups) {
 			out(`producer model: ${model} (${notes.get(model)})`);
 			const route = routeJudges(fixture.provider, model);
@@ -322,9 +339,10 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 				| Promise<Awaited<ReturnType<AdjudicationJudges["verdictJudges"]>>>
 				| undefined;
 			const build = () => {
-				built ??= getFactory().then((f) =>
-					f.verdictJudges(fixture.provider, model, wantSecond),
-				);
+				built ??= Promise.resolve()
+					.then(() => getFactory())
+					.then((f) => f.verdictJudges(fixture.provider, model, wantSecond))
+					.catch(unavailableError);
 				return built;
 			};
 			const pair = {
@@ -367,6 +385,10 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 					errorSamples.push(m);
 			spend.anthropic += result.spend.anthropic;
 			spend.openai += result.spend.openai;
+			if (result.unavailable !== null) {
+				unavailableMessage = result.unavailable;
+				break;
+			}
 		}
 		out(
 			`verdicts: real=${counts.real} not-real=${counts.notReal} unclear=${counts.unclear} unresolved=${counts.unresolved} single-family=${counts.singleFamily} cached=${counts.cached} deferred=${counts.deferred} errors=${counts.errors}`,
@@ -376,9 +398,17 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 		out(
 			`judge spend (calls, outside strategy cost): anthropic=${spend.anthropic} openai=${spend.openai}`,
 		);
+		if (unavailableMessage !== null) {
+			out(`judge unavailable: ${unavailableMessage}`);
+			return 1;
+		}
 		if (counts.singleFamily > 0) out(SINGLE_FAMILY_NOTE);
 		return 0;
 	} catch (err) {
+		if (err instanceof JudgeUnavailableError) {
+			out(`judge unavailable: ${err.message}`);
+			return 1;
+		}
 		out(
 			`adjudication failed: ${err instanceof Error ? err.message : String(err)}`,
 		);

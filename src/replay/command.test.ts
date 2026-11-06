@@ -1029,21 +1029,22 @@ describe("runReplay --adjudicate", () => {
 		graphql: () => Promise.reject(new Error("no network")),
 	};
 
-	function seedFixture(path: string | null = "a.ts") {
+	function seedFixture(
+		path: string | null = "a.ts",
+		titles: string[] = ["unrelated cache invalidation race condition"],
+	) {
 		const dir = tmp();
 		const f = makeFixture([["a"]]);
 		f.rounds[0] = {
 			...f.rounds[0],
 			trace: {
-				candidates: [
-					{
-						skill: "s.md",
-						title: "unrelated cache invalidation race condition",
-						path,
-						line: 1,
-						severity: "P1",
-					},
-				],
+				candidates: titles.map((title, i) => ({
+					skill: "s.md",
+					title,
+					path,
+					line: i + 1,
+					severity: "P1",
+				})),
 				posted: [],
 				usage: {},
 			},
@@ -1127,17 +1128,22 @@ describe("runReplay --adjudicate", () => {
 	it("--plan constructs no judge and calls no model", async () => {
 		const { dir, id } = seedFixture();
 		const { judges, calls } = stubJudges();
+		const constructed = vi.fn();
 		const { lines, out } = collect();
 		const code = await runReplay(
 			["--adjudicate", id, "--plan", "--fixtures", dir],
 			{
 				out,
 				client: noRest,
-				adjudicationJudges: judges,
+				adjudicationJudges: async () => {
+					constructed();
+					return judges;
+				},
 				adjudicationDir: join(dir, "cache"),
 			},
 		);
 		expect(code).toBe(0);
+		expect(constructed).not.toHaveBeenCalled();
 		expect(calls.verdict).not.toHaveBeenCalled();
 		expect(calls.audit).not.toHaveBeenCalled();
 		const text = lines.join("\n");
@@ -1504,6 +1510,82 @@ describe("runReplay --adjudicate", () => {
 			},
 		);
 		expect(lines.join("\n")).toContain("cross-check failed: quota exhausted");
+	});
+
+	it("aborts the audit without a record when the last round has no patch to audit", async () => {
+		const { dir, id } = seedFixture();
+		const { judges, calls } = stubJudges();
+		const { lines, out } = collect();
+		const empty: GhClient = {
+			rest: async <T>() => ({ files: [] }) as T,
+			graphql: () => Promise.reject(new Error("no network")),
+		};
+		const code = await runReplay(
+			["--adjudicate", id, "--audit", "--fixtures", dir],
+			{
+				out,
+				client: empty,
+				adjudicationJudges: judges,
+				adjudicationDir: join(dir, "cache"),
+			},
+		);
+		expect(code).toBe(1);
+		expect(calls.audit).not.toHaveBeenCalled();
+		expect(existsSync(join(dir, "cache"))).toBe(false);
+		expect(lines.join("\n")).toContain("evidence unavailable");
+	});
+
+	it("gives the judge line-numbered evidence", async () => {
+		const { dir, id } = seedFixture();
+		const seen: string[] = [];
+		await runReplay(["--adjudicate", id, "--fixtures", dir], {
+			out: () => {},
+			client: withFiles,
+			adjudicationJudges: {
+				verdictJudges: async () => ({
+					first: {
+						family: "anthropic",
+						model: "stub",
+						run: async (input) => {
+							seen.push(input.diffEvidence);
+							return { verdict: "not-real", scope: null, reason: "r" };
+						},
+					},
+					second: null,
+				}),
+				auditJudges: async () => {
+					throw new Error("unused");
+				},
+			},
+			adjudicationDir: join(dir, "cache"),
+		});
+		expect(seen[0]).toContain("   1|+x");
+	});
+
+	it("stops at the first judge-construction failure instead of retrying per candidate", async () => {
+		const { dir, id } = seedFixture("a.ts", [
+			"Alpha problem here",
+			"Bravo issue there",
+			"Charlie bug elsewhere",
+		]);
+		const factory = vi.fn(async (): Promise<AdjudicationJudges> => {
+			throw new Error("session expired");
+		});
+		const { lines, out } = collect();
+		const code = await runReplay(["--adjudicate", id, "--fixtures", dir], {
+			out,
+			client: withFiles,
+			adjudicationJudges: factory,
+			adjudicationDir: join(dir, "cache"),
+		});
+		expect(code).toBe(1);
+		expect(factory).toHaveBeenCalledTimes(1);
+		const text = lines.join("\n");
+		expect(text).toContain("judge unavailable: session expired");
+		expect(text).toContain("errors=0");
+		expect(text).not.toContain("error samples");
+		expect(text).toContain("anthropic=1 openai=0");
+		expect(existsSync(join(dir, "cache"))).toBe(false);
 	});
 
 	it("--audit runs the audit judges", async () => {

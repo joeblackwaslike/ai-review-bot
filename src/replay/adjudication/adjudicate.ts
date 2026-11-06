@@ -27,12 +27,17 @@ export interface AdjudicationCounts {
 	errors: number;
 }
 
+/** Thrown by a judge wrapper when no judge can be built (expired session, missing key); it stops the run. */
+export class JudgeUnavailableError extends Error {}
+
 export interface AdjudicationResult {
 	verdicts: Map<string, VerdictRecord>;
 	counts: AdjudicationCounts;
 	spend: { anthropic: number; openai: number };
 	/** Distinct error messages from judge calls, at most MAX_ERROR_SAMPLES. */
 	errorSamples: string[];
+	/** Set when the judges could not be built; the run stopped there. */
+	unavailable: string | null;
 }
 
 export const MAX_ERROR_SAMPLES = 5;
@@ -82,6 +87,7 @@ export async function adjudicate(
 	};
 	const spend = { anthropic: 0, openai: 0 };
 	const errorSamples: string[] = [];
+	let unavailable: string | null = null;
 	const noteError = (err: unknown) => {
 		counts.errors++;
 		const message = err instanceof Error ? err.message : String(err);
@@ -137,6 +143,10 @@ export async function adjudicate(
 					check.verdict === hit.verdict ? "agreed" : "unresolved";
 				cache.put(snapshot, key, upgraded);
 			} catch (err) {
+				if (err instanceof JudgeUnavailableError) {
+					unavailable = err.message;
+					break;
+				}
 				noteError(err);
 				counts.cached++;
 				verdicts.set(key, hit);
@@ -166,6 +176,10 @@ export async function adjudicate(
 		try {
 			first = await judges.first.run(input);
 		} catch (err) {
+			if (err instanceof JudgeUnavailableError) {
+				unavailable = err.message;
+				break;
+			}
 			noteError(err);
 			continue;
 		}
@@ -194,6 +208,10 @@ export async function adjudicate(
 				record.status =
 					check.verdict === first.verdict ? "agreed" : "unresolved";
 			} catch (err) {
+				if (err instanceof JudgeUnavailableError) {
+					unavailable = err.message;
+					break;
+				}
 				noteError(err);
 				cache.put(snapshot, key, {
 					...record,
@@ -209,5 +227,5 @@ export async function adjudicate(
 		cache.put(snapshot, key, record);
 	}
 
-	return { verdicts, counts, spend, errorSamples };
+	return { verdicts, counts, spend, errorSamples, unavailable };
 }
