@@ -1319,6 +1319,34 @@ describe("runReplay --adjudicate", () => {
 		expect(text).toContain("deferred=1");
 	});
 
+	it("prints error samples next to the error count", async () => {
+		const { dir, id } = seedFixture();
+		const { lines, out } = collect();
+		await runReplay(["--adjudicate", id, "--fixtures", dir], {
+			out,
+			client: withFiles,
+			adjudicationJudges: {
+				verdictJudges: async () => ({
+					first: {
+						family: "anthropic",
+						model: "stub",
+						run: async () => {
+							throw new Error("session expired");
+						},
+					},
+					second: null,
+				}),
+				auditJudges: async () => {
+					throw new Error("unused");
+				},
+			},
+			adjudicationDir: join(dir, "cache"),
+		});
+		const text = lines.join("\n");
+		expect(text).toContain("errors=1");
+		expect(text).toContain("error samples: session expired");
+	});
+
 	it("--audit runs the audit judges", async () => {
 		const { dir, id } = seedFixture();
 		const { judges, calls } = stubJudges();

@@ -31,7 +31,11 @@ export interface AdjudicationResult {
 	verdicts: Map<string, VerdictRecord>;
 	counts: AdjudicationCounts;
 	spend: { anthropic: number; openai: number };
+	/** Distinct error messages from judge calls, at most MAX_ERROR_SAMPLES. */
+	errorSamples: string[];
 }
+
+export const MAX_ERROR_SAMPLES = 5;
 
 export interface AdjudicateOptions {
 	snapshot: string;
@@ -65,6 +69,16 @@ export async function adjudicate(
 		errors: 0,
 	};
 	const spend = { anthropic: 0, openai: 0 };
+	const errorSamples: string[] = [];
+	const noteError = (err: unknown) => {
+		counts.errors++;
+		const message = err instanceof Error ? err.message : String(err);
+		if (
+			errorSamples.length < MAX_ERROR_SAMPLES &&
+			!errorSamples.includes(message)
+		)
+			errorSamples.push(message);
+	};
 	const callsMade = (family: JudgeFamily) => spend[family];
 
 	const tally = (record: VerdictRecord) => {
@@ -112,8 +126,8 @@ export async function adjudicate(
 				upgraded.status =
 					check.verdict === hit.verdict ? "agreed" : "unresolved";
 				cache.put(snapshot, key, upgraded);
-			} catch {
-				counts.errors++;
+			} catch (err) {
+				noteError(err);
 				counts.cached++;
 				verdicts.set(key, hit);
 				tally(hit);
@@ -141,8 +155,8 @@ export async function adjudicate(
 		let first: Awaited<ReturnType<Judge>>;
 		try {
 			first = await judges.first.run(input);
-		} catch {
-			counts.errors++;
+		} catch (err) {
+			noteError(err);
 			continue;
 		}
 
@@ -169,8 +183,8 @@ export async function adjudicate(
 				record.secondVerdict = check.verdict;
 				record.status =
 					check.verdict === first.verdict ? "agreed" : "unresolved";
-			} catch {
-				counts.errors++;
+			} catch (err) {
+				noteError(err);
 				continue;
 			}
 		}
@@ -179,5 +193,5 @@ export async function adjudicate(
 		cache.put(snapshot, key, record);
 	}
 
-	return { verdicts, counts, spend };
+	return { verdicts, counts, spend, errorSamples };
 }

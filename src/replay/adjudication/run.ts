@@ -11,6 +11,7 @@ import {
 	type AdjCandidate,
 	type AdjudicationCounts,
 	adjudicate,
+	MAX_ERROR_SAMPLES,
 	type NamedJudge,
 } from "./adjudicate.js";
 import { type AuditJudge, type AuditStored, auditFixture } from "./audit.js";
@@ -279,6 +280,7 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 			out(`not judged, ${reason}: ${c.title}`);
 		}
 		const spend = { anthropic: 0, openai: 0 };
+		const errorSamples: string[] = [];
 		for (const [model, group] of groups) {
 			out(`producer model: ${model} (${notes.get(model)})`);
 			const pair = await judges.verdictJudges(
@@ -299,12 +301,20 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 				evidence: async (c) => evidenceByKey.get(claimKey(c)) ?? "",
 			});
 			counts = add(counts, result.counts);
+			for (const m of result.errorSamples)
+				if (
+					errorSamples.length < MAX_ERROR_SAMPLES &&
+					!errorSamples.includes(m)
+				)
+					errorSamples.push(m);
 			spend.anthropic += result.spend.anthropic;
 			spend.openai += result.spend.openai;
 		}
 		out(
 			`verdicts: real=${counts.real} not-real=${counts.notReal} unclear=${counts.unclear} unresolved=${counts.unresolved} single-family=${counts.singleFamily} cached=${counts.cached} deferred=${counts.deferred} errors=${counts.errors}`,
 		);
+		if (errorSamples.length > 0)
+			out(`error samples: ${errorSamples.join(" | ")}`);
 		out(
 			`judge spend (calls, outside strategy cost): anthropic=${spend.anthropic} openai=${spend.openai}`,
 		);

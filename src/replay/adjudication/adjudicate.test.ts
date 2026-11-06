@@ -261,4 +261,55 @@ describe("adjudicate", () => {
 		expect(first).not.toHaveBeenCalled();
 		expect(result.counts.cached).toBe(1);
 	});
+
+	it("records distinct error messages from the first judge, capped at five", async () => {
+		const messages = ["a", "a", "b", "c", "d", "e", "f", "g"];
+		let n = 0;
+		const first = vi.fn<Judge>(async () => {
+			throw new Error(messages[n++ % messages.length]);
+		});
+		const result = await adjudicate({
+			...setup(),
+			candidates: messages.map((_m, i) =>
+				cand(`Distinct claim number${"x".repeat(i)} here`, `f${i}.ts`),
+			),
+			producer: "anthropic",
+			judges: judges(first, null),
+			caps: { anthropic: 20, openai: 0 },
+		});
+		expect(result.counts.errors).toBe(8);
+		expect(result.errorSamples).toEqual(["a", "b", "c", "d", "e"]);
+	});
+
+	it("records the message of an errored second judge", async () => {
+		const result = await adjudicate({
+			...setup(),
+			candidates: [cand("Retry delay skipped")],
+			producer: "anthropic",
+			judges: judges(stub(real), stub(new Error("quota exhausted"))),
+			caps: { anthropic: 10, openai: 5 },
+		});
+		expect(result.errorSamples).toEqual(["quota exhausted"]);
+	});
+
+	it("records the message of an errored upgrade", async () => {
+		const base = setup();
+		const c = cand("Retry delay skipped");
+		await adjudicate({
+			...base,
+			candidates: [c],
+			producer: "anthropic",
+			judges: judges(stub(real), null),
+			caps: { anthropic: 10, openai: 0 },
+		});
+		const result = await adjudicate({
+			...base,
+			candidates: [c],
+			producer: "anthropic",
+			judges: judges(stub(real), stub(new Error("bad key"))),
+			caps: { anthropic: 10, openai: 5 },
+		});
+		expect(result.errorSamples).toEqual(["bad key"]);
+		expect(result.counts.errors).toBe(1);
+	});
 });
