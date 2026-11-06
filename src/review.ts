@@ -2699,20 +2699,16 @@ async function buildReviewInner(
 	const quotaExhausted: ModelSelection["provider"][] = [];
 	const skipped: string[] = [];
 	const errored: string[] = [];
-	const usageByModel = new Map<string, TokenUsage>();
+	const usageByModel = new Map<string, TokenUsage[]>();
 	const bill = (model: string, usage: TokenUsage) => {
-		const sum = usageByModel.get(model) ?? {
-			promptTokens: 0,
-			cachedPromptTokens: 0,
-			completionTokens: 0,
-		};
-		usageByModel.set(model, {
-			promptTokens: sum.promptTokens + usage.promptTokens,
+		const requests = usageByModel.get(model) ?? [];
+		requests.push({
+			promptTokens: usage.promptTokens,
 			cachedPromptTokens:
-				(sum.cachedPromptTokens ?? 0) +
-				(usage.cachedInputTokens ?? usage.cachedPromptTokens ?? 0),
-			completionTokens: sum.completionTokens + usage.completionTokens,
+				usage.cachedInputTokens ?? usage.cachedPromptTokens ?? 0,
+			completionTokens: usage.completionTokens,
 		});
+		usageByModel.set(model, requests);
 	};
 
 	// Every attempt is billed to its own agent's model, including a failed

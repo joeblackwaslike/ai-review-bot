@@ -22,7 +22,7 @@ import { parseAgentConcurrency } from "./config.js";
 import { logReviewRun } from "./mistakes/capture.js";
 import type { MistakeLog } from "./mistakes/log.js";
 import type { AgentReview } from "./mistakes/types.js";
-import { computeCost } from "./models.js";
+import { computeAggregateCost } from "./models.js";
 import { buildAuditUserMessage } from "./prompt.js";
 import {
 	allocateReportPath,
@@ -749,7 +749,7 @@ export async function runReviewPasses(opts: {
 		}
 		models.push(selection.model);
 		providersRun.push(provider);
-		const passCost = computeCost(pass.usage, selection.model);
+		const passCost = computeAggregateCost(pass.usage, selection.model);
 		costUsd =
 			costUsd === undefined || passCost === undefined
 				? undefined

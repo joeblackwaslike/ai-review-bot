@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { runAuditPass } from "../../audit.js";
-import { computeCost } from "../../models.js";
+import { computeRepeatedCost } from "../../models.js";
 import { TIER1_SKILLS } from "../../review.js";
 import { legacyTierMap, routeReviewerModel } from "../../router.js";
 import {
@@ -50,12 +50,13 @@ export const strategyA: ReviewStrategy = {
 	},
 	needsCheckout: false,
 	estimateCost(input) {
-		return computeCost(
+		return computeRepeatedCost(
 			{
-				promptTokens: (input.diff.length / CHARS_PER_TOKEN) * AGENTS_PER_REVIEW,
-				completionTokens: EXPECTED_COMPLETION_TOKENS * AGENTS_PER_REVIEW,
+				promptTokens: input.diff.length / CHARS_PER_TOKEN,
+				completionTokens: EXPECTED_COMPLETION_TOKENS,
 			},
 			selectionFor(input).model,
+			AGENTS_PER_REVIEW,
 		);
 	},
 	async run(input) {

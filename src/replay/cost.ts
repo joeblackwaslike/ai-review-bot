@@ -1,6 +1,9 @@
 import { computeCost } from "../models.js";
 import type { RoundUsage } from "./types.js";
 
+/** Each entry is one skill's usage, normally a single request, so the long-prompt
+ * tier is chosen per entry. A skill that retried sums its attempts and can
+ * overstate its tier. */
 export function roundCostUsd(
 	usage: RoundUsage,
 	model: string,

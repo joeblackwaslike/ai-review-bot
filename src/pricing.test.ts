@@ -167,6 +167,15 @@ describe("primePrices", () => {
 		expect(Object.keys(stored.table)).toHaveLength(3);
 	});
 
+	it("keeps tiers through the KV cache the cron route writes", async () => {
+		const kv = createFakeKv();
+		await primePrices({ kv, fetchImpl: okFetch(), nowMs: 1000, force: true });
+		clearPriceTable();
+		await primePrices({ kv, fetchImpl: okFetch(), nowMs: 2000 });
+		expect(lookupPrice("claude-haiku-5-5", 99999)?.input).toBeCloseTo(0.1);
+		expect(lookupPrice("claude-haiku-5-5", 100000)?.input).toBeCloseTo(0.5);
+	});
+
 	it("keeps the stale table when the fetch fails and never throws", async () => {
 		await primePrices({ fetchImpl: okFetch(), nowMs: 0 });
 		const failing = vi.fn(async () => {

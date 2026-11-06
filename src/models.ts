@@ -15,16 +15,78 @@ export interface TokenUsage {
 	cachedInputTokens?: number;
 }
 
-/** Cost in USD, or undefined when no price is known. A `pricing` pin in the
- * config wins over the OpenRouter table. Unknown is never reported as $0. */
+function priceFor(model: string, tierPromptTokens: number) {
+	const pinned = Object.entries(getConfigTree().models).find(
+		([key]) => key === model || key.endsWith(`/${model}`),
+	)?.[1]?.pricing;
+	return pinned ?? lookupPrice(model, tierPromptTokens);
+}
+
+/** Cost in USD of ONE request, or undefined when no price is known. The
+ * OpenRouter long-prompt tier is chosen from this request's own prompt size.
+ * A `pricing` pin in the config wins over the table. Unknown is never $0. */
 export function computeCost(
 	usage: TokenUsage,
 	model: string,
 ): number | undefined {
-	const pinned = Object.entries(getConfigTree().models).find(
-		([key]) => key === model || key.endsWith(`/${model}`),
-	)?.[1]?.pricing;
-	const price = pinned ?? lookupPrice(model, usage.promptTokens);
+	return costAt(usage, model, usage.promptTokens);
+}
+
+/** Cost in USD of `count` identical requests, with the tier chosen from one
+ * request's prompt size. For estimates that model N similar calls. */
+export function computeRepeatedCost(
+	request: TokenUsage,
+	model: string,
+	count: number,
+): number | undefined {
+	return costAt(
+		{
+			promptTokens: request.promptTokens * count,
+			completionTokens: request.completionTokens * count,
+			cachedInputTokens:
+				request.cachedInputTokens === undefined
+					? undefined
+					: request.cachedInputTokens * count,
+			cachedPromptTokens:
+				request.cachedPromptTokens === undefined
+					? undefined
+					: request.cachedPromptTokens * count,
+		},
+		model,
+		request.promptTokens,
+	);
+}
+
+/** Cost in USD of usage summed over several requests, priced at the base rate.
+ * A prompt-size tier applies to a single request, which a sum cannot tell, so
+ * no tier is guessed. Use `computeRequestsCost` when per-request usage exists. */
+export function computeAggregateCost(
+	usage: TokenUsage,
+	model: string,
+): number | undefined {
+	return costAt(usage, model, 0);
+}
+
+/** Sum of per-request costs, each request tiered by its own prompt size. */
+export function computeRequestsCost(
+	requests: readonly TokenUsage[],
+	model: string,
+): number | undefined {
+	let total = 0;
+	for (const request of requests) {
+		const cost = computeCost(request, model);
+		if (cost === undefined) return undefined;
+		total += cost;
+	}
+	return total;
+}
+
+function costAt(
+	usage: TokenUsage,
+	model: string,
+	tierPromptTokens: number,
+): number | undefined {
+	const price = priceFor(model, tierPromptTokens);
 	if (!price) return undefined;
 	const { input, cachedInput, output } = price;
 	const cached = Math.min(
@@ -39,11 +101,11 @@ export function computeCost(
 }
 
 export function sumCost(
-	byModel: ReadonlyMap<string, TokenUsage>,
+	byModel: ReadonlyMap<string, readonly TokenUsage[]>,
 ): number | undefined {
 	let total = 0;
-	for (const [model, usage] of byModel) {
-		const cost = computeCost(usage, model);
+	for (const [model, requests] of byModel) {
+		const cost = computeRequestsCost(requests, model);
 		if (cost === undefined) return undefined;
 		total += cost;
 	}

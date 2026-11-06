@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { computeCost, createAIModel, modelLabel, sumCost } from "./models.js";
+import {
+	computeAggregateCost,
+	computeCost,
+	computeRequestsCost,
+	createAIModel,
+	modelLabel,
+	sumCost,
+} from "./models.js";
 import { setPriceTable } from "./pricing.js";
 
 const pins = vi.hoisted(() => ({
@@ -269,6 +276,80 @@ describe("createAIModel google", () => {
 	});
 });
 
+describe("long-prompt tiers apply per request", () => {
+	const tiered = (
+		base: [number, number, number],
+		tier: [number, number, number],
+		min: number,
+	) => ({
+		input: base[0],
+		cachedInput: base[1],
+		output: base[2],
+		tiers: [
+			{
+				minPromptTokens: min,
+				input: tier[0],
+				cachedInput: tier[1],
+				output: tier[2],
+			},
+		],
+	});
+	const req = (promptTokens: number, completionTokens = 0) => ({
+		promptTokens,
+		completionTokens,
+	});
+
+	it("bills five 60K requests on gpt-6.1-sol at the base rate and one 300K request at the tier rate", () => {
+		setPriceTable({
+			"openai/gpt-6-1-sol": tiered([2, 0.1, 10], [4, 0.2, 15], 272_000),
+		});
+		const five = computeRequestsCost(
+			Array.from({ length: 5 }, () => req(60_000, 10_000)),
+			"gpt-6.1-sol",
+		);
+		expect(five).toBeCloseTo(5 * (0.06 * 2 + 0.01 * 10));
+		expect(computeCost(req(300_000, 10_000), "gpt-6.1-sol")).toBeCloseTo(
+			0.3 * 4 + 0.01 * 15,
+		);
+		expect(
+			sumCost(
+				new Map([
+					["gpt-6.1-sol", Array.from({ length: 5 }, () => req(60_000))],
+				]),
+			),
+		).toBeCloseTo(5 * 0.06 * 2);
+	});
+
+	it("bills two 60K Haiku requests at the base rate and one 120K request at the tier rate", () => {
+		setPriceTable({
+			"anthropic/claude-haiku-5-5": tiered(
+				[0.1, 0.01, 0.5],
+				[0.5, 0.05, 2.5],
+				100_000,
+			),
+		});
+		expect(
+			computeRequestsCost([req(60_000), req(60_000)], "claude-haiku-5-5"),
+		).toBeCloseTo(2 * 0.06 * 0.1);
+		expect(computeCost(req(120_000), "claude-haiku-5-5")).toBeCloseTo(
+			0.12 * 0.5,
+		);
+	});
+
+	it("prices an aggregate at the base rate without guessing a tier", () => {
+		setPriceTable({
+			"anthropic/claude-haiku-5-5": tiered(
+				[0.1, 0.01, 0.5],
+				[0.5, 0.05, 2.5],
+				100_000,
+			),
+		});
+		expect(computeAggregateCost(req(120_000), "claude-haiku-5-5")).toBeCloseTo(
+			0.12 * 0.1,
+		);
+	});
+});
+
 describe("sumCost and modelLabel", () => {
 	const usage = (promptTokens: number, completionTokens: number) => ({
 		promptTokens,
@@ -277,8 +358,8 @@ describe("sumCost and modelLabel", () => {
 
 	it("sums computeCost per model", () => {
 		const byModel = new Map([
-			["claude-haiku-5-5", usage(1_000_000, 1_000_000)],
-			["claude-sonnet-5-5", usage(1_000_000, 0)],
+			["claude-haiku-5-5", [usage(1_000_000, 1_000_000)]],
+			["claude-sonnet-5-5", [usage(1_000_000, 0)]],
 		]);
 		const expected =
 			(computeCost(usage(1_000_000, 1_000_000), "claude-haiku-5-5") ?? NaN) +
@@ -289,8 +370,8 @@ describe("sumCost and modelLabel", () => {
 
 	it("is undefined when any model has no price", () => {
 		const byModel = new Map([
-			["claude-haiku-5-5", usage(10, 10)],
-			["no-such-model", usage(10, 10)],
+			["claude-haiku-5-5", [usage(10, 10)]],
+			["no-such-model", [usage(10, 10)]],
 		]);
 		expect(sumCost(byModel)).toBeUndefined();
 	});

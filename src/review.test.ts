@@ -21,6 +21,7 @@ import {
 } from "./ledger/fingerprint.js";
 import { buildLedger } from "./ledger/github.js";
 import { computeCost, createAIModel, sumCost } from "./models.js";
+import { setPriceTable } from "./pricing.js";
 import { shortFindingId } from "./relation.js";
 import { claimTitle, splitInlineClaims } from "./replay/claims.js";
 import { ledgerFromView } from "./replay/pipeline.js";
@@ -10215,6 +10216,55 @@ describe("classified agent failures with usage", () => {
 		for (const key of billed?.keys() ?? []) {
 			expect(key).toMatch(/^[a-z]+\/.+/);
 		}
+	});
+
+	it("prices each request on its own prompt size, so summed prompts crossing a tier threshold stay at the base rate", async () => {
+		const tier = (input: number, cachedInput: number, output: number) => ({
+			input,
+			cachedInput,
+			output,
+			tiers: [
+				{
+					minPromptTokens: 100_000,
+					input: input * 5,
+					cachedInput: cachedInput * 5,
+					output: output * 5,
+				},
+			],
+		});
+		setPriceTable({
+			"anthropic/claude-haiku-5-5": tier(0.1, 0.01, 0.5),
+			"anthropic/claude-sonnet-5-5": tier(2, 0.2, 10),
+			"anthropic/claude-opus-5-5": tier(4, 0.4, 20),
+			"openai/gpt-6-luna": tier(0.1, 0.01, 0.5),
+			"openai/gpt-6-1-sol": tier(2, 0.1, 10),
+		});
+		const base = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+		);
+		mockGenerateObject.mockResolvedValue({
+			...base,
+			object: { ...base.object, summary: "s" },
+			usage: { inputTokens: 60_000, outputTokens: 1_000 },
+		});
+		const decision = await buildReview(ctx());
+		const requests = mockGenerateObject.mock.calls.length;
+		const model = decision?.metadata.model ?? "";
+		const single = computeCost(
+			{ promptTokens: 60_000, completionTokens: 1_000 },
+			model,
+		) as number;
+		const wrong = computeCost(
+			{ promptTokens: requests * 60_000, completionTokens: requests * 1_000 },
+			model,
+		) as number;
+		expect(requests * 60_000).toBeGreaterThan(100_000);
+		expect(wrong).toBeGreaterThan(requests * single * 2);
+		expect(decision?.metadata.cost).toBeCloseTo(requests * single, 10);
 	});
 
 	it("counts failed-attempt tokens in cost and logs one record per agent", async () => {
