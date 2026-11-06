@@ -195,6 +195,12 @@ export async function adjudicate(
 					check.verdict === first.verdict ? "agreed" : "unresolved";
 			} catch (err) {
 				noteError(err);
+				cache.put(snapshot, key, {
+					...record,
+					second: null,
+					secondVerdict: null,
+					status: "single-family",
+				});
 				continue;
 			}
 		}
