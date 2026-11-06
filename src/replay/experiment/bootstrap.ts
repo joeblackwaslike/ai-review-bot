@@ -20,6 +20,15 @@ export function median(values: number[]): number {
 		: ((sorted[mid - 1] as number) + (sorted[mid] as number)) / 2;
 }
 
+/** Nearest-rank percentile: the value at rank ceil(q * n), clamped to the ends, on a sorted array. */
+export function nearestRank(sorted: number[], q: number): number {
+	const rank = Math.min(
+		sorted.length,
+		Math.max(1, Math.ceil(q * sorted.length)),
+	);
+	return sorted[rank - 1] as number;
+}
+
 export interface BootstrapInterval {
 	mean: number;
 	lo: number;
@@ -46,9 +55,10 @@ export function pairedBootstrap(
 	}
 	means.sort((x, y) => x - y);
 	const alpha = (1 - opts.level) / 2;
-	const at = (q: number) =>
-		means[
-			Math.min(means.length - 1, Math.max(0, Math.floor(q * means.length)))
-		] as number;
-	return { mean, lo: at(alpha), hi: at(1 - alpha), n };
+	return {
+		mean,
+		lo: nearestRank(means, alpha),
+		hi: nearestRank(means, 1 - alpha),
+		n,
+	};
 }

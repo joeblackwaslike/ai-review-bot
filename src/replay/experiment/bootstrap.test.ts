@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { median, mulberry32, pairedBootstrap } from "./bootstrap.js";
+import {
+	median,
+	mulberry32,
+	nearestRank,
+	pairedBootstrap,
+} from "./bootstrap.js";
 
 describe("mulberry32", () => {
 	it("repeats for a seed and differs across seeds", () => {
@@ -13,6 +18,22 @@ describe("mulberry32", () => {
 			expect(v).toBeGreaterThanOrEqual(0);
 			expect(v).toBeLessThan(1);
 		}
+	});
+});
+
+describe("nearestRank", () => {
+	const sorted = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+	it("returns the value at rank ceil(q * n)", () => {
+		expect(nearestRank(sorted, 0.5)).toBe(5);
+		expect(nearestRank(sorted, 0.95)).toBe(10);
+		expect(nearestRank(sorted, 0.25)).toBe(3);
+		expect(nearestRank(sorted, 0.1)).toBe(1);
+	});
+
+	it("clamps q of 0 and 1 to the ends", () => {
+		expect(nearestRank(sorted, 0)).toBe(1);
+		expect(nearestRank(sorted, 1)).toBe(10);
 	});
 });
 
