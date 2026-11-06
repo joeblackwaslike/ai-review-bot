@@ -33,6 +33,26 @@ vi.mock("./watch.js", async (orig) => {
 	const actual = await orig<typeof import("./watch.js")>();
 	return { ...actual, watchPr: vi.fn() };
 });
+vi.mock("./pricing.js", async (orig) => {
+	const actual = await orig<typeof import("./pricing.js")>();
+	return {
+		...actual,
+		primePrices: vi.fn(async () => {
+			actual.setPriceTable({
+				"anthropic/claude-sonnet-5-5": {
+					input: 2,
+					cachedInput: 0.2,
+					output: 10,
+				},
+			});
+			return 1;
+		}),
+	};
+});
+vi.mock("./replay/command.js", async (orig) => {
+	const actual = await orig<typeof import("./replay/command.js")>();
+	return { ...actual, runReplay: vi.fn() };
+});
 vi.mock("./cli-creds.js", async (orig) => {
 	const actual = await orig<typeof import("./cli-creds.js")>();
 	return {
@@ -55,6 +75,8 @@ import {
 } from "./cli-creds.js";
 import { getConfig, getOpenAIAppConfig } from "./config.js";
 import { installationApp, installationOctokit } from "./improve/octokit.js";
+import { clearPriceTable, priceTableSize, primePrices } from "./pricing.js";
+import { runReplay } from "./replay/command.js";
 import {
 	getReviewerAppConfig,
 	listReviewerIds,
@@ -409,6 +431,39 @@ describe("main credential-resolution dispatch", () => {
 		await main();
 		expect(resolveCliCredentials).not.toHaveBeenCalled();
 		expect(listCredentialSources).toHaveBeenCalled();
+	});
+});
+
+describe("main price loading for replay", () => {
+	const originalArgv = process.argv;
+	afterEach(() => {
+		process.argv = originalArgv;
+	});
+
+	it.each([
+		["--seeds", "--plan"],
+		["--experiment", "plan"],
+		["--adjudicate", "x"],
+	])("loads the price table before replay %s", async (...args) => {
+		clearPriceTable();
+		let sizeAtRun = -1;
+		vi.mocked(runReplay).mockImplementation(async () => {
+			sizeAtRun = priceTableSize();
+			return 0;
+		});
+		process.argv = ["node", "dist/cli.js", "replay", ...args];
+		await main();
+		expect(sizeAtRun).toBeGreaterThan(0);
+		expect(resolveCliCredentials).not.toHaveBeenCalled();
+	});
+
+	it("does not load prices for a plain offline replay", async () => {
+		clearPriceTable();
+		vi.mocked(primePrices).mockClear();
+		vi.mocked(runReplay).mockResolvedValue(0);
+		process.argv = ["node", "dist/cli.js", "replay"];
+		await main();
+		expect(primePrices).not.toHaveBeenCalled();
 	});
 });
 

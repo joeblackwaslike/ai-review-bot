@@ -1321,12 +1321,20 @@ export async function main(): Promise<void> {
 		sub !== "creds" &&
 		sub !== "mistakes" &&
 		(sub !== "replay" || rest.includes("--live"));
+	const needsPrices =
+		needsCreds ||
+		(sub === "replay" &&
+			["--live", "--experiment", "--seeds", "--adjudicate"].some((f) =>
+				rest.includes(f),
+			));
+	if (needsPrices) {
+		await primePrices({ file: defaultPricingFile() });
+	}
 	if (needsCreds) {
 		// Populate process.env from the Keychain/XDG fallback before any
 		// subcommand runs, so createApp()/getConfig() see credentials even when
 		// the globally npm-linked binary is invoked from outside this repo.
 		await resolveCliCredentials();
-		await primePrices({ file: defaultPricingFile() });
 	}
 
 	if (sub === "classify") return cmdClassify(rest);
