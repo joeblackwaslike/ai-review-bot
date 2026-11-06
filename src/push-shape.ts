@@ -3,6 +3,7 @@ import {
 	findMovedBlocks,
 	isIndentSensitive,
 	type MovedBlock,
+	needsSeparator,
 	normalizeCodeLine,
 	type PushFile,
 } from "./moved-blocks.js";
@@ -92,6 +93,16 @@ export function classifyFile(filename: string): FileKind {
 	return "code";
 }
 
+function joinRun(lines: string[]): string {
+	let out = "";
+	for (const line of lines) {
+		if (line.trim() === "") continue;
+		if (out !== "" && needsSeparator(out, line[0] as string)) out += " ";
+		out += line;
+	}
+	return out;
+}
+
 function isWhitespaceOnly(
 	filename: string,
 	patch: string | undefined,
@@ -100,19 +111,26 @@ function isWhitespaceOnly(
 	const opts = isIndentSensitive(filename)
 		? { strip: true, keepIndent: true }
 		: { strip: true };
-	const removed: string[] = [];
-	const added: string[] = [];
+	let removed: string[] = [];
+	let added: string[] = [];
+	let runs = 0;
+	const closeRun = (): boolean => {
+		if (removed.length + added.length === 0) return true;
+		runs++;
+		const same = joinRun(removed) === joinRun(added);
+		removed = [];
+		added = [];
+		return same;
+	};
 	for (const line of patch.split("\n")) {
+		if (line.startsWith("\\")) continue;
 		if (line.startsWith("-"))
 			removed.push(normalizeCodeLine(line.slice(1), opts));
 		else if (line.startsWith("+"))
 			added.push(normalizeCodeLine(line.slice(1), opts));
+		else if (!closeRun()) return false;
 	}
-	if (removed.length + added.length === 0) return false;
-	const nonBlank = (l: string) => l.trim() !== "";
-	return (
-		removed.filter(nonBlank).join("\n") === added.filter(nonBlank).join("\n")
-	);
+	return closeRun() && runs > 0;
 }
 
 function shapeFile(

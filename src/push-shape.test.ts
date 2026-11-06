@@ -137,6 +137,107 @@ describe("classifyPush", () => {
 			expect(blanks("@@ -1 +1,3 @@\n-  b();\n+b();\n+\n+")).toBe(true);
 		});
 
+		describe("per change run", () => {
+			const patchOnly = (patch: string, filename = "src/a.ts") =>
+				classifyPush([file({ filename, additions: 1, deletions: 1, patch })])
+					.files[0]?.whitespaceOnly;
+
+			it("keeps weight when a statement moves from an if branch to its else branch", () => {
+				expect(
+					patchOnly(
+						[
+							"@@ -1,5 +1,5 @@",
+							" if (ok) {",
+							"-  grantAccess();",
+							" } else {",
+							"+  grantAccess();",
+							" }",
+						].join("\n"),
+					),
+				).toBe(false);
+			});
+
+			it("keeps weight when a statement moves from before a write to after it", () => {
+				expect(
+					patchOnly(
+						[
+							"@@ -1,2 +1,2 @@",
+							"-authorize(user);",
+							" write(data);",
+							"+authorize(user);",
+						].join("\n"),
+					),
+				).toBe(false);
+			});
+
+			it("keeps weight when a statement moves across two hunks", () => {
+				expect(
+					patchOnly(
+						[
+							"@@ -1,2 +1,1 @@",
+							"-authorize(user);",
+							" first();",
+							"@@ -40,1 +39,2 @@",
+							" last();",
+							"+authorize(user);",
+						].join("\n"),
+					),
+				).toBe(false);
+			});
+
+			it("ignores a call wrapped onto several lines", () => {
+				expect(
+					patchOnly(
+						[
+							"@@ -1 +1,4 @@",
+							"-foo(a, b);",
+							"+foo(",
+							"+  a,",
+							"+  b",
+							"+);",
+						].join("\n"),
+					),
+				).toBe(true);
+			});
+
+			it("ignores a file where every run is a pure reindent", () => {
+				expect(
+					patchOnly(
+						[
+							"@@ -1,3 +1,3 @@",
+							"-    a();",
+							"+  a();",
+							" keep();",
+							"-    b();",
+							"+  b();",
+						].join("\n"),
+					),
+				).toBe(true);
+			});
+
+			it("keeps weight when one run of several is a real change", () => {
+				expect(
+					patchOnly(
+						[
+							"@@ -1,3 +1,3 @@",
+							"-    a();",
+							"+  a();",
+							" keep();",
+							"-    b();",
+							"+  c();",
+						].join("\n"),
+					),
+				).toBe(false);
+			});
+		});
+
+		it("keeps weight when an increment moves across a plus operator", () => {
+			expect(
+				ws("src/a.ts", "const x = a + ++b;", "const x = a++ + b;")
+					?.whitespaceOnly,
+			).toBe(false);
+		});
+
 		it("treats a Python, YAML or Makefile reindent as a change", () => {
 			expect(ws("src/a.py", "    return 1", "  return 1")?.whitespaceOnly).toBe(
 				false,
