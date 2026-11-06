@@ -1,10 +1,10 @@
 import { parseBodyFindings } from "../review-state.js";
+import { legacyProviderOf, type ReviewerId } from "../reviewer-id.js";
 import { splitInlineClaims } from "./claims.js";
 import { type GhClient, GhHttpError } from "./gh.js";
 import type {
 	CommitMeta,
 	PostedClaim,
-	Provider,
 	ReactionEvidence,
 	ReplayFixture,
 	Round,
@@ -15,7 +15,7 @@ interface RecordOpts {
 	owner: string;
 	repo: string;
 	pull: number;
-	provider: Provider;
+	reviewer: ReviewerId;
 	botLogin: string;
 	now?: () => Date;
 }
@@ -249,7 +249,7 @@ export async function recordPr(
 		rounds.push({
 			index,
 			reviewId: review.id,
-			provider: o.provider,
+			provider: legacyProviderOf(o.reviewer),
 			submittedAt: review.submitted_at as string,
 			headSha,
 			baseSha: prevHead,
@@ -317,7 +317,8 @@ export async function recordPr(
 		owner: o.owner,
 		repo: o.repo,
 		pull: o.pull,
-		provider: o.provider,
+		provider: legacyProviderOf(o.reviewer),
+		reviewer: o.reviewer,
 		author,
 		recordedAt: (o.now ?? (() => new Date()))().toISOString(),
 		rounds,

@@ -20,7 +20,7 @@ import {
 	validatePrivateKey,
 } from "./config.js";
 import { type ProviderName, splitModelId } from "./providers/names.js";
-import type { ReviewerId } from "./reviewer-id.js";
+import type { LegacyProvider, ReviewerId } from "./reviewer-id.js";
 
 export type { LegacyProvider, ReviewerId } from "./reviewer-id.js";
 
@@ -125,6 +125,15 @@ export function reviewerProviders(
 		}
 	}
 	return [...new Set(models.map((m) => splitModelId(m).provider))];
+}
+
+export function reviewerAuthProvider(
+	config: Config,
+	id: ReviewerId,
+): LegacyProvider | null {
+	const providers = reviewerProviders(config, id);
+	const sole = providers.length === 1 ? providers[0] : undefined;
+	return sole === "anthropic" || sole === "openai" ? sole : null;
 }
 
 export function reviewerReadiness(

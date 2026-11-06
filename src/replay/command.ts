@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { type ReviewerId, reviewerFromLegacy } from "../reviewer-id.js";
 import { fixtureId } from "./claims.js";
 import {
 	type ClassFile,
@@ -17,7 +18,11 @@ import { computeMetrics, formatReport } from "./metrics.js";
 import { type ReplayPipeline, todaysCodePipeline } from "./pipeline.js";
 import { recordPr } from "./record.js";
 import { replayFixture } from "./replay.js";
-import type { LabelFile, Provider, ReplayFixture } from "./types.js";
+import {
+	fixtureReviewer,
+	type LabelFile,
+	type ReplayFixture,
+} from "./types.js";
 
 export interface ReplayDeps {
 	client?: GhClient;
@@ -28,7 +33,7 @@ export interface ReplayDeps {
 
 interface ParsedArgs {
 	record?: string;
-	provider?: Provider;
+	reviewer?: ReviewerId;
 	bot?: string;
 	fixtures?: string;
 	live?: boolean;
@@ -39,7 +44,7 @@ interface ParsedArgs {
 const USAGE = [
 	"Usage:",
 	"  ai-review replay [--fixtures <dir>]",
-	"  ai-review replay --record <pr-url> --provider anthropic|openai --bot <login> [--fixtures <dir>]",
+	"  ai-review replay --record <pr-url> (--reviewer <id> | --provider anthropic|openai) --bot <login> [--fixtures <dir>]",
 ].join("\n");
 
 const PR_URL = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)\/?$/;
@@ -59,6 +64,7 @@ export function defaultFixturesDir(fromUrl: string): string {
 
 function parseArgs(args: string[]): ParsedArgs | null {
 	const parsed: ParsedArgs = {};
+	let legacy: string | undefined;
 	for (let i = 0; i < args.length; i++) {
 		const flag = args[i];
 		const value = args[i + 1];
@@ -79,6 +85,7 @@ function parseArgs(args: string[]): ParsedArgs | null {
 		if (
 			(flag === "--record" ||
 				flag === "--provider" ||
+				flag === "--reviewer" ||
 				flag === "--bot" ||
 				flag === "--fixtures") &&
 			(value === undefined || value.startsWith("--"))
@@ -89,10 +96,13 @@ function parseArgs(args: string[]): ParsedArgs | null {
 		else if (flag === "--fixtures") parsed.fixtures = value;
 		else if (flag === "--provider") {
 			if (value !== "anthropic" && value !== "openai") return null;
-			parsed.provider = value;
-		} else return null;
+			legacy = value;
+		} else if (flag === "--reviewer") parsed.reviewer = value;
+		else return null;
 		i++;
 	}
+	if (parsed.reviewer !== undefined && legacy !== undefined) return null;
+	if (legacy !== undefined) parsed.reviewer = reviewerFromLegacy(legacy);
 	return parsed;
 }
 
@@ -110,7 +120,7 @@ async function record(
 	out: (s: string) => void,
 ): Promise<number> {
 	const m = p.record?.match(PR_URL);
-	if (!m || !p.provider || !p.bot) {
+	if (!m || !p.reviewer || !p.bot) {
 		out(USAGE);
 		return 2;
 	}
@@ -137,7 +147,7 @@ async function writeRecording(
 		owner: m[1] as string,
 		repo: m[2] as string,
 		pull: Number(m[3]),
-		provider: p.provider as Provider,
+		reviewer: p.reviewer as string,
 		botLogin: p.bot as string,
 	});
 	const id = fixtureId(fixture);
@@ -282,6 +292,7 @@ async function liveAll(
 		const f = JSON.parse(
 			await readFile(join(dir, name), "utf8"),
 		) as ReplayFixture;
+		if (p.reviewer !== undefined && fixtureReviewer(f) !== p.reviewer) continue;
 		const id = fixtureId(f);
 		const labelsPath = join(dir, `${id}.labels.json`);
 		if (!existsSync(labelsPath)) {

@@ -4,6 +4,19 @@ vi.mock("./config.js", async (orig) => {
 	const actual = await orig<typeof import("./config.js")>();
 	return { ...actual, getConfig: vi.fn(), getOpenAIAppConfig: vi.fn() };
 });
+vi.mock("./reviewers.js", async (orig) => {
+	const actual = await orig<typeof import("./reviewers.js")>();
+	return {
+		...actual,
+		getReviewerAppConfig: vi.fn(),
+		listReviewerIds: vi.fn(),
+		reviewerReadiness: vi.fn(),
+	};
+});
+vi.mock("./auth.js", async (orig) => {
+	const actual = await orig<typeof import("./auth.js")>();
+	return { ...actual, resolveSubscriptionAuth: vi.fn() };
+});
 vi.mock("./audit.js", async (orig) => {
 	const actual = await orig<typeof import("./audit.js")>();
 	return { ...actual, runLocalAudit: vi.fn() };
@@ -42,6 +55,11 @@ import {
 } from "./cli-creds.js";
 import { getConfig, getOpenAIAppConfig } from "./config.js";
 import { installationApp, installationOctokit } from "./improve/octokit.js";
+import {
+	getReviewerAppConfig,
+	listReviewerIds,
+	reviewerReadiness,
+} from "./reviewers.js";
 import { watchPr } from "./watch.js";
 
 class ProcessExitError extends Error {
@@ -134,18 +152,25 @@ describe("cmdWatch", () => {
 	let codexGetInstallationOctokit: ReturnType<typeof vi.fn>;
 
 	beforeEach(() => {
-		vi.mocked(getConfig)
+		vi.mocked(listReviewerIds)
 			.mockReset()
-			.mockReturnValue({
-				appId: "claude-app",
-				privateKey: "claude-pem",
-			} as unknown as ReturnType<typeof getConfig>);
-		vi.mocked(getOpenAIAppConfig)
+			.mockReturnValue(["claude", "codex", "gemini"]);
+		vi.mocked(reviewerReadiness)
 			.mockReset()
-			.mockReturnValue({
-				appId: "codex-app",
-				privateKey: "codex-pem",
-			} as unknown as ReturnType<typeof getOpenAIAppConfig>);
+			.mockImplementation((id) => ({
+				ready: id !== "gemini",
+				missing: id === "gemini" ? ["GEMINI_APP_ID"] : [],
+			}));
+		vi.mocked(getReviewerAppConfig)
+			.mockReset()
+			.mockImplementation(
+				(id) =>
+					({
+						appId: `${id}-app`,
+						privateKey: `${id}-pem`,
+					}) as unknown as ReturnType<typeof getReviewerAppConfig>,
+			);
+		vi.mocked(resolveSubscriptionAuth).mockReset();
 		claudeGetInstallationOctokit = vi
 			.fn()
 			.mockResolvedValue({ request: vi.fn() });
@@ -245,10 +270,7 @@ describe("cmdWatch", () => {
 		expect(call.repo).toBe("r");
 		expect(call.pullNumber).toBe(5);
 		expect(call.intervalMs).toBe(300_000);
-		expect(call.targets.map((t) => t.provider)).toEqual([
-			"anthropic",
-			"openai",
-		]);
+		expect(call.targets.map((t) => t.reviewer)).toEqual(["claude", "codex"]);
 		// pollOctokit is built directly off the already-resolved claude
 		// installation (target[0].app.getInstallationOctokit), not by
 		// re-resolving the installation through a second installationOctokit()
@@ -267,15 +289,57 @@ describe("cmdWatch", () => {
 		await cmdWatch(["--pr", "5", "--repo", "o/r"]);
 
 		const call = vi.mocked(watchPr).mock.calls[0][0];
-		expect(call.resolveAuthFor).toBe(resolveSubscriptionAuth);
+		await call.resolveAuthFor("claude");
+		expect(resolveSubscriptionAuth).toHaveBeenCalledWith("anthropic");
 	});
 
-	it("--provider narrows to a single target", async () => {
+	it("--provider anthropic is an alias for --reviewer claude", async () => {
 		await cmdWatch(["--pr", "5", "--repo", "o/r", "--provider", "anthropic"]);
 
 		const call = vi.mocked(watchPr).mock.calls[0][0];
-		expect(call.targets.map((t) => t.provider)).toEqual(["anthropic"]);
-		expect(getOpenAIAppConfig).not.toHaveBeenCalled();
+		expect(call.targets.map((t) => t.reviewer)).toEqual(["claude"]);
+		expect(getReviewerAppConfig).toHaveBeenCalledTimes(1);
+	});
+
+	it("--reviewer is repeatable", async () => {
+		await cmdWatch([
+			"--pr",
+			"5",
+			"--repo",
+			"o/r",
+			"--reviewer",
+			"codex",
+			"--reviewer",
+			"claude",
+		]);
+
+		const call = vi.mocked(watchPr).mock.calls[0][0];
+		expect(call.targets.map((t) => t.reviewer)).toEqual(["codex", "claude"]);
+	});
+
+	it("rejects an unknown or not-ready --reviewer", async () => {
+		await expect(
+			cmdWatch(["--pr", "5", "--repo", "o/r", "--reviewer", "nope"]),
+		).rejects.toThrow(ProcessExitError);
+		expect(console.error).toHaveBeenCalledWith("Error: Unknown reviewer: nope");
+		await expect(
+			cmdWatch(["--pr", "5", "--repo", "o/r", "--reviewer", "gemini"]),
+		).rejects.toThrow(ProcessExitError);
+		expect(watchPr).not.toHaveBeenCalled();
+	});
+
+	it("exits when no enabled reviewer is ready for the CLI", async () => {
+		vi.mocked(reviewerReadiness).mockReturnValue({
+			ready: false,
+			missing: ["X"],
+		});
+		await expect(cmdWatch(["--pr", "5", "--repo", "o/r"])).rejects.toThrow(
+			ProcessExitError,
+		);
+		expect(console.error).toHaveBeenCalledWith(
+			"Error: no enabled reviewer is ready for the CLI",
+		);
+		expect(watchPr).not.toHaveBeenCalled();
 	});
 
 	it("--interval converts seconds to milliseconds", async () => {

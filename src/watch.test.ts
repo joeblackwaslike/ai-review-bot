@@ -1,15 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
+import type { Config } from "./config/schema.js";
 import type { AppConfig } from "./config.js";
 import type { SubmitReviewOutcome } from "./github-app.js";
-import { reviewerFromLegacy } from "./reviewer-id.js";
-import { watchPr } from "./watch.js";
+import { reviewerAuthProvider, subscriptionAuthFor, watchPr } from "./watch.js";
 
-function buildTarget(provider: "anthropic" | "openai") {
+function buildTarget(reviewer: string) {
 	return {
-		provider,
-		app: { marker: `${provider}-app` } as never,
-		installationId: provider === "anthropic" ? 1 : 2,
-		config: { reviewer: reviewerFromLegacy(provider) } as unknown as AppConfig,
+		reviewer,
+		app: { marker: `${reviewer}-app` } as never,
+		installationId: reviewer === "claude" ? 1 : 2,
+		config: { reviewer } as unknown as AppConfig,
 	};
 }
 
@@ -59,9 +59,10 @@ describe("watchPr", () => {
 	it("posts once per provider on the first cycle, then not again while the SHA is unchanged", async () => {
 		const request = vi.fn().mockResolvedValue(pollResponse());
 		const submitReview = vi.fn().mockResolvedValue(posted);
-		const resolveAuthFor = vi.fn(async (provider: "anthropic" | "openai") => ({
+		const resolveAuthFor = vi.fn(async (reviewer: string) => ({
 			...apiKeyAuth,
-			provider,
+			provider:
+				reviewer === "codex" ? ("openai" as const) : ("anthropic" as const),
 		}));
 		const sleep = vi.fn().mockResolvedValue(undefined);
 
@@ -70,7 +71,7 @@ describe("watchPr", () => {
 			repo: "r",
 			pullNumber: 5,
 			pollOctokit: { request },
-			targets: [buildTarget("anthropic"), buildTarget("openai")],
+			targets: [buildTarget("claude"), buildTarget("codex")],
 			resolveAuthFor,
 			sleep,
 			log: () => {},
@@ -99,7 +100,7 @@ describe("watchPr", () => {
 			repo: "r",
 			pullNumber: 5,
 			pollOctokit: { request },
-			targets: [buildTarget("anthropic")],
+			targets: [buildTarget("claude")],
 			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
 			sleep: vi.fn().mockResolvedValue(undefined),
 			log: () => {},
@@ -123,7 +124,7 @@ describe("watchPr", () => {
 			repo: "r",
 			pullNumber: 5,
 			pollOctokit: { request },
-			targets: [buildTarget("anthropic")],
+			targets: [buildTarget("claude")],
 			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
 			sleep: vi.fn().mockResolvedValue(undefined),
 			log: () => {},
@@ -143,7 +144,7 @@ describe("watchPr", () => {
 			repo: "r",
 			pullNumber: 5,
 			pollOctokit: { request },
-			targets: [buildTarget("anthropic")],
+			targets: [buildTarget("claude")],
 			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
 			sleep: vi.fn().mockResolvedValue(undefined),
 			log: () => {},
@@ -165,7 +166,7 @@ describe("watchPr", () => {
 			repo: "r",
 			pullNumber: 5,
 			pollOctokit: { request },
-			targets: [buildTarget("anthropic")],
+			targets: [buildTarget("claude")],
 			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
 			sleep: vi.fn().mockResolvedValue(undefined),
 			log,
@@ -190,7 +191,7 @@ describe("watchPr", () => {
 				repo: "r",
 				pullNumber: 5,
 				pollOctokit: { request },
-				targets: [buildTarget("anthropic")],
+				targets: [buildTarget("claude")],
 				resolveAuthFor,
 				sleep: vi.fn().mockResolvedValue(undefined),
 				log: () => {},
@@ -212,7 +213,7 @@ describe("watchPr", () => {
 			repo: "r",
 			pullNumber: 5,
 			pollOctokit: { request },
-			targets: [buildTarget("anthropic"), buildTarget("openai")],
+			targets: [buildTarget("claude"), buildTarget("codex")],
 			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
 			sleep: vi.fn().mockResolvedValue(undefined),
 			log,
@@ -240,7 +241,7 @@ describe("watchPr", () => {
 			repo: "r",
 			pullNumber: 5,
 			pollOctokit: { request },
-			targets: [buildTarget("anthropic")],
+			targets: [buildTarget("claude")],
 			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
 			sleep: vi.fn().mockResolvedValue(undefined),
 			log: () => {},
@@ -277,7 +278,7 @@ describe("watchPr", () => {
 			repo: "r",
 			pullNumber: 5,
 			pollOctokit: { request },
-			targets: [buildTarget("anthropic")],
+			targets: [buildTarget("claude")],
 			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
 			sleep: vi.fn().mockResolvedValue(undefined),
 			log: () => {},
@@ -311,7 +312,7 @@ describe("watchPr", () => {
 			repo: "r",
 			pullNumber: 5,
 			pollOctokit: { request },
-			targets: [buildTarget("anthropic")],
+			targets: [buildTarget("claude")],
 			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
 			sleep: vi.fn().mockResolvedValue(undefined),
 			log: () => {},
@@ -332,11 +333,11 @@ describe("watchPr", () => {
 	it("resolves auth for every target before the first poll, and a failure for one target prevents any post", async () => {
 		const request = vi.fn().mockResolvedValue(pollResponse());
 		const submitReview = vi.fn().mockResolvedValue(posted);
-		const resolveAuthFor = vi.fn(async (provider: "anthropic" | "openai") => {
-			if (provider === "openai") {
+		const resolveAuthFor = vi.fn(async (reviewer: string) => {
+			if (reviewer === "codex") {
 				throw new Error("run `codex login` to log in");
 			}
-			return { ...apiKeyAuth, provider };
+			return apiKeyAuth;
 		});
 
 		await expect(
@@ -345,7 +346,7 @@ describe("watchPr", () => {
 				repo: "r",
 				pullNumber: 5,
 				pollOctokit: { request },
-				targets: [buildTarget("anthropic"), buildTarget("openai")],
+				targets: [buildTarget("claude"), buildTarget("codex")],
 				resolveAuthFor,
 				sleep: vi.fn().mockResolvedValue(undefined),
 				log: () => {},
@@ -379,7 +380,7 @@ describe("watchPr", () => {
 			repo: "r",
 			pullNumber: 5,
 			pollOctokit: { request },
-			targets: [buildTarget("anthropic"), buildTarget("openai")],
+			targets: [buildTarget("claude"), buildTarget("codex")],
 			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
 			sleep: vi.fn().mockResolvedValue(undefined),
 			log: () => {},
@@ -423,7 +424,7 @@ describe("watchPr", () => {
 			repo: "r",
 			pullNumber: 5,
 			pollOctokit: { request },
-			targets: [buildTarget("anthropic")],
+			targets: [buildTarget("claude")],
 			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
 			sleep: vi.fn().mockResolvedValue(undefined),
 			log: () => {},
@@ -454,7 +455,7 @@ describe("watchPr", () => {
 			repo: "r",
 			pullNumber: 5,
 			pollOctokit: { request },
-			targets: [buildTarget("anthropic")],
+			targets: [buildTarget("claude")],
 			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
 			sleep: vi.fn().mockResolvedValue(undefined),
 			log: () => {},
@@ -479,7 +480,7 @@ describe("watchPr", () => {
 			repo: "r",
 			pullNumber: 5,
 			pollOctokit: { request },
-			targets: [buildTarget("anthropic")],
+			targets: [buildTarget("claude")],
 			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
 			sleep: vi.fn().mockResolvedValue(undefined),
 			log,
@@ -492,10 +493,10 @@ describe("watchPr", () => {
 			expect.objectContaining({ force: false }),
 		);
 		expect(log).not.toHaveBeenCalledWith(
-			expect.stringContaining("posted anthropic review"),
+			expect.stringContaining("posted claude review"),
 		);
 		expect(log).toHaveBeenCalledWith(
-			"ai-review watch: anthropic has no new review to post for sha1",
+			"ai-review watch: claude has no new review to post for sha1",
 		);
 	});
 
@@ -513,7 +514,7 @@ describe("watchPr", () => {
 			repo: "r",
 			pullNumber: 5,
 			pollOctokit: { request },
-			targets: [buildTarget("anthropic"), buildTarget("openai")],
+			targets: [buildTarget("claude"), buildTarget("codex")],
 			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
 			sleep: vi.fn().mockResolvedValue(undefined),
 			log: () => {},
@@ -526,12 +527,11 @@ describe("watchPr", () => {
 		const calls = submitReview.mock.calls as unknown as Array<
 			[{ config: { reviewer: string }; pullRequest: { head: { sha: string } } }]
 		>;
-		const shaFor = (provider: string) =>
-			calls.find(
-				([arg]) => arg.config.reviewer === reviewerFromLegacy(provider),
-			)?.[0].pullRequest.head.sha;
-		expect(shaFor("anthropic")).toBe("old");
-		expect(shaFor("openai")).toBe("new");
+		const shaFor = (reviewer: string) =>
+			calls.find(([arg]) => arg.config.reviewer === reviewer)?.[0].pullRequest
+				.head.sha;
+		expect(shaFor("claude")).toBe("old");
+		expect(shaFor("codex")).toBe("new");
 	});
 
 	it("does not re-poll after the last target in a cycle posts", async () => {
@@ -543,7 +543,7 @@ describe("watchPr", () => {
 			repo: "r",
 			pullNumber: 5,
 			pollOctokit: { request },
-			targets: [buildTarget("anthropic")],
+			targets: [buildTarget("claude")],
 			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
 			sleep: vi.fn().mockResolvedValue(undefined),
 			log: () => {},
@@ -567,7 +567,7 @@ describe("watchPr", () => {
 			repo: "r",
 			pullNumber: 5,
 			pollOctokit: { request },
-			targets: [buildTarget("anthropic"), buildTarget("openai")],
+			targets: [buildTarget("claude"), buildTarget("codex")],
 			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
 			sleep: vi.fn().mockResolvedValue(undefined),
 			log,
@@ -582,7 +582,7 @@ describe("watchPr", () => {
 		const openaiCall = calls.find(([arg]) => arg.config.reviewer === "codex");
 		expect(openaiCall?.[0].pullRequest.head.sha).toBe("old");
 		expect(log).toHaveBeenCalledWith(
-			expect.stringContaining("re-poll after anthropic post failed"),
+			expect.stringContaining("re-poll after claude post failed"),
 		);
 	});
 
@@ -595,7 +595,7 @@ describe("watchPr", () => {
 			repo: "r",
 			pullNumber: 5,
 			pollOctokit: { request },
-			targets: [buildTarget("anthropic"), buildTarget("openai")],
+			targets: [buildTarget("claude"), buildTarget("codex")],
 			resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
 			sleep: vi.fn().mockResolvedValue(undefined),
 			log: () => {},
@@ -634,7 +634,7 @@ describe("watchPr", () => {
 				repo: "r",
 				pullNumber: 5,
 				pollOctokit: { request },
-				targets: [buildTarget("anthropic")],
+				targets: [buildTarget("claude")],
 				resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
 				sleep: vi.fn().mockResolvedValue(undefined),
 				log,
@@ -667,7 +667,7 @@ describe("watchPr", () => {
 					repo: "r",
 					pullNumber: 5,
 					pollOctokit: { request: vi.fn() },
-					targets: [buildTarget("anthropic")],
+					targets: [buildTarget("claude")],
 					resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
 					sleep: vi.fn().mockResolvedValue(undefined),
 					log: () => {},
@@ -687,7 +687,7 @@ describe("watchPr", () => {
 					repo: "r",
 					pullNumber: 5,
 					pollOctokit: { request: vi.fn() },
-					targets: [buildTarget("anthropic")],
+					targets: [buildTarget("claude")],
 					resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
 					sleep: vi.fn().mockResolvedValue(undefined),
 					log: () => {},
@@ -710,7 +710,7 @@ describe("watchPr", () => {
 					repo: "r",
 					pullNumber: 5,
 					pollOctokit: { request: vi.fn() },
-					targets: [buildTarget("anthropic")],
+					targets: [buildTarget("claude")],
 					resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
 					sleep: vi.fn().mockResolvedValue(undefined),
 					log: () => {},
@@ -732,7 +732,7 @@ describe("watchPr", () => {
 					repo: "r",
 					pullNumber: 5,
 					pollOctokit: { request: vi.fn() },
-					targets: [buildTarget("anthropic")],
+					targets: [buildTarget("claude")],
 					resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
 					sleep: vi.fn().mockResolvedValue(undefined),
 					log: () => {},
@@ -754,7 +754,7 @@ describe("watchPr", () => {
 					repo: "r",
 					pullNumber: 5,
 					pollOctokit: { request: vi.fn() },
-					targets: [buildTarget("anthropic")],
+					targets: [buildTarget("claude")],
 					resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
 					sleep: vi.fn().mockResolvedValue(undefined),
 					log: () => {},
@@ -792,7 +792,7 @@ describe("watchPr", () => {
 				repo: "r",
 				pullNumber: 5,
 				pollOctokit: { request },
-				targets: [buildTarget("anthropic")],
+				targets: [buildTarget("claude")],
 				resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
 				sleep: vi.fn().mockResolvedValue(undefined),
 				log: () => {},
@@ -823,7 +823,7 @@ describe("watchPr", () => {
 				repo: "r",
 				pullNumber: 5,
 				pollOctokit: { request },
-				targets: [buildTarget("anthropic")],
+				targets: [buildTarget("claude")],
 				resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
 				sleep: vi.fn().mockResolvedValue(undefined),
 				log: () => {},
@@ -856,7 +856,7 @@ describe("watchPr", () => {
 				repo: "r",
 				pullNumber: 5,
 				pollOctokit: { request },
-				targets: [buildTarget("anthropic")],
+				targets: [buildTarget("claude")],
 				resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
 				sleep: vi.fn().mockResolvedValue(undefined),
 				log: () => {},
@@ -870,7 +870,7 @@ describe("watchPr", () => {
 			expect(submitReview).toHaveBeenCalledTimes(5);
 		});
 
-		it("tracks each provider's window independently, tripping only the one that is rapid-posting", async () => {
+		it("tracks each reviewer's window independently, tripping only the one that is rapid-posting", async () => {
 			let call = 0;
 			const request = vi
 				.fn()
@@ -894,7 +894,7 @@ describe("watchPr", () => {
 				repo: "r",
 				pullNumber: 5,
 				pollOctokit: { request },
-				targets: [buildTarget("anthropic"), buildTarget("openai")],
+				targets: [buildTarget("claude"), buildTarget("codex")],
 				resolveAuthFor: vi.fn().mockResolvedValue(apiKeyAuth),
 				sleep: vi.fn().mockResolvedValue(undefined),
 				log: () => {},
@@ -906,5 +906,100 @@ describe("watchPr", () => {
 
 			expect(result).toEqual({ cycles: 3, reason: "circuit-breaker" });
 		});
+
+		it("circuit breaker state is per reviewer", async () => {
+			let call = 0;
+			const request = vi
+				.fn()
+				.mockImplementation(() =>
+					Promise.resolve(pollResponse({ headSha: `sha${++call}` })),
+				);
+			const submitReview = vi.fn().mockResolvedValue(posted);
+			const result = await watchPr({
+				owner: "o",
+				repo: "r",
+				pullNumber: 5,
+				pollOctokit: { request },
+				targets: [buildTarget("claude"), buildTarget("gemini")],
+				resolveAuthFor: vi.fn().mockResolvedValue(undefined),
+				sleep: vi.fn().mockResolvedValue(undefined),
+				log: () => {},
+				submitReview,
+				circuitBreaker: { maxReviews: 3, windowMs: 900_000 },
+				maxCycles: 2,
+			});
+
+			expect(result).toEqual({ cycles: 2, reason: "max-cycles" });
+			expect(submitReview).toHaveBeenCalledTimes(4);
+		});
+	});
+});
+
+function configWith(models: Record<string, string[]>): Config {
+	return {
+		reviewers: Object.fromEntries(
+			Object.entries(models).map(([id, list]) => [
+				id,
+				{
+					tiers: Object.fromEntries(
+						list.map((model, i) => [
+							["trivial", "normal", "complex", "deep"][i],
+							{ model },
+						]),
+					),
+				},
+			]),
+		),
+	} as unknown as Config;
+}
+
+describe("reviewerAuthProvider", () => {
+	const config = configWith({
+		claude: ["anthropic/claude-sonnet-5-5"],
+		codex: ["openai/gpt-5"],
+		gemini: ["google/gemini-3-pro"],
+		mixed: ["anthropic/claude-sonnet-5-5", "openai/gpt-5"],
+	});
+
+	it("gives the sole subscription provider of claude and codex", () => {
+		expect(reviewerAuthProvider(config, "claude")).toBe("anthropic");
+		expect(reviewerAuthProvider(config, "codex")).toBe("openai");
+	});
+
+	it("gives null for a google reviewer and for one that spans providers", () => {
+		expect(reviewerAuthProvider(config, "gemini")).toBeNull();
+		expect(reviewerAuthProvider(config, "mixed")).toBeNull();
+	});
+});
+
+describe("subscriptionAuthFor", () => {
+	const config = configWith({
+		claude: ["anthropic/claude-sonnet-5-5"],
+		gemini: ["google/gemini-3-pro"],
+		mixed: ["anthropic/claude-sonnet-5-5", "openai/gpt-5"],
+	});
+
+	it("a google reviewer gets undefined auth and never calls resolveSubscriptionAuth", async () => {
+		const resolve = vi.fn();
+		await expect(
+			subscriptionAuthFor(config, resolve)("gemini"),
+		).resolves.toBeUndefined();
+		expect(resolve).not.toHaveBeenCalled();
+	});
+
+	it("a reviewer whose models span anthropic and openai gets undefined auth", async () => {
+		const resolve = vi.fn();
+		await expect(
+			subscriptionAuthFor(config, resolve)("mixed"),
+		).resolves.toBeUndefined();
+		expect(resolve).not.toHaveBeenCalled();
+	});
+
+	it("claude resolves subscription auth for anthropic", async () => {
+		const resolve = vi.fn().mockResolvedValue(apiKeyAuth);
+		await expect(subscriptionAuthFor(config, resolve)("claude")).resolves.toBe(
+			apiKeyAuth,
+		);
+		expect(resolve).toHaveBeenCalledWith("anthropic");
 	});
 });

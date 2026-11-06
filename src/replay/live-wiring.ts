@@ -1,12 +1,17 @@
 import { runAuditPass } from "../audit.js";
-import { resolveAnthropicAuth, resolveOpenAIAuth } from "../auth.js";
+import {
+	type ResolvedAuth,
+	resolveAnthropicAuth,
+	resolveOpenAIAuth,
+} from "../auth.js";
+import { providerKeySpec, readSecret } from "../config/env.js";
 import { computeCost } from "../models.js";
+import type { ProviderName } from "../providers/names.js";
 import type { ModelReview } from "../review.js";
-import { reviewerFromLegacy } from "../reviewer-id.js";
 import { routeReviewerModel } from "../router.js";
 import type { GhClient } from "./gh.js";
 import type { LiveFinding, LiveOptions } from "./live.js";
-import type { ReplayFixture } from "./types.js";
+import { fixtureReviewer, type ReplayFixture } from "./types.js";
 
 const AGENTS_PER_REVIEW = 5;
 const CHARS_PER_TOKEN = 4;
@@ -37,6 +42,32 @@ export function toLiveFindings(review: ModelReview): LiveFinding[] {
 	];
 }
 
+interface SelectionAuthResolvers {
+	anthropic: () => Promise<ResolvedAuth>;
+	openai: () => Promise<ResolvedAuth>;
+}
+
+const SUBSCRIPTION_RESOLVERS: SelectionAuthResolvers = {
+	anthropic: () => resolveAnthropicAuth(),
+	openai: () => resolveOpenAIAuth(),
+};
+
+export async function resolveSelectionAuth(
+	provider: ProviderName,
+	resolvers: SelectionAuthResolvers = SUBSCRIPTION_RESOLVERS,
+	env: Readonly<Record<string, string | undefined>> = process.env,
+): Promise<ResolvedAuth | undefined> {
+	if (provider === "anthropic") return resolvers.anthropic();
+	if (provider === "openai") return resolvers.openai();
+	const spec = providerKeySpec(provider);
+	if (readSecret(spec, env).value === undefined) {
+		throw new Error(
+			`replay --live needs ${spec.aliases[0]?.name ?? spec.envName} for the ${provider} provider`,
+		);
+	}
+	return undefined;
+}
+
 type LiveWiring = Pick<LiveOptions, "review" | "estimateCost" | "fetchDiff">;
 
 /** Real review, cost estimate, and diff fetch for `replay --live`. Needs local auth. */
@@ -47,7 +78,7 @@ export function buildLiveWiring(
 	const meta = { owner: fixture.owner, repo: fixture.repo, ref: "replay" };
 	const { selection } = routeReviewerModel(
 		{ additions: 0, deletions: 0, filePaths: [], labels: [] },
-		reviewerFromLegacy(fixture.provider),
+		fixtureReviewer(fixture),
 	);
 	return {
 		fetchDiff: async (round) => {

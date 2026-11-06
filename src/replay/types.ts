@@ -1,6 +1,6 @@
-import type { ReviewerId } from "../reviewer-id.js";
+import { type ReviewerId, reviewerFromLegacy } from "../reviewer-id.js";
 
-export type Provider = ReviewerId;
+export type PersistedProvider = string;
 export type Label = "fixed" | "rejected" | "deferred" | "unadjudicated";
 
 export interface PostedClaim {
@@ -25,7 +25,7 @@ export interface CommitMeta {
 export interface Round {
 	index: number;
 	reviewId: number;
-	provider: Provider;
+	provider: PersistedProvider;
 	submittedAt: string;
 	headSha: string;
 	baseSha: string;
@@ -65,12 +65,19 @@ export interface ReplayFixture {
 	owner: string;
 	repo: string;
 	pull: number;
-	provider: Provider;
+	provider: PersistedProvider;
+	reviewer?: ReviewerId;
 	author: string;
 	recordedAt: string;
 	rounds: Round[];
 	threads: ThreadEvidence[];
 	reactions: ReactionEvidence[];
+}
+
+export function fixtureReviewer(
+	f: Pick<ReplayFixture, "provider" | "reviewer">,
+): ReviewerId {
+	return f.reviewer ?? reviewerFromLegacy(f.provider);
 }
 
 export interface ClaimLabel {
