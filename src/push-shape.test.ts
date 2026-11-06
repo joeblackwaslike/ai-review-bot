@@ -121,6 +121,22 @@ describe("classifyPush", () => {
 			).toBe(true);
 		});
 
+		it("keeps weight when a space between words is removed", () => {
+			expect(ws("src/a.ts", "x = /foo bar/;", "x = /foobar/;")?.whitespaceOnly).toBe(
+				false,
+			);
+		});
+
+		it("ignores added blank lines and a reindent plus blank lines", () => {
+			const blanks = (patch: string) =>
+				classifyPush([
+					file({ filename: "src/a.ts", additions: 3, deletions: 1, patch }),
+				]).files[0]?.whitespaceOnly;
+			expect(blanks("@@ -1 +1,2 @@\n a();\n+")).toBe(true);
+			expect(blanks("@@ -1 +1,3 @@\n a();\n+\n+")).toBe(true);
+			expect(blanks("@@ -1 +1,3 @@\n-  b();\n+b();\n+\n+")).toBe(true);
+		});
+
 		it("treats a Python, YAML or Makefile reindent as a change", () => {
 			expect(ws("src/a.py", "    return 1", "  return 1")?.whitespaceOnly).toBe(
 				false,

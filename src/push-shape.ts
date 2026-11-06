@@ -109,7 +109,10 @@ function isWhitespaceOnly(
 			added.push(normalizeCodeLine(line.slice(1), opts));
 	}
 	if (removed.length + added.length === 0) return false;
-	return removed.join("\n") === added.join("\n");
+	const nonBlank = (l: string) => l.trim() !== "";
+	return (
+		removed.filter(nonBlank).join("\n") === added.filter(nonBlank).join("\n")
+	);
 }
 
 function shapeFile(

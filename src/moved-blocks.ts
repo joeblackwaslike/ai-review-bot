@@ -31,10 +31,15 @@ const QUOTES = new Set(['"', "'", "`"]);
 /**
  * Normalizes one source line for formatting-insensitive comparison. Outside string
  * literals (`"`, `'`, backtick, backslash escapes honored) whitespace is trimmed and
- * collapsed to one space, or removed with `strip`; `keepIndent` keeps the leading
+ * collapsed to one space, or with `strip` removed unless it separates two word
+ * characters (then it stays one space); `keepIndent` keeps the leading
  * whitespace verbatim. Inside a literal every character is kept. An unterminated quote
  * (multi-line template, apostrophe in a comment) keeps the rest of the line verbatim, so
  * the comparison only gets stricter.
+ *
+ * Known ceiling with `strip`: spaces next to punctuation inside a regex literal (`a - b`
+ * versus `a-b`) and the interior lines of a multi-line template literal are not detected,
+ * so the comparison errs toward ignoring formatting only in those narrow cases.
  */
 export function normalizeCodeLine(
 	line: string,
@@ -54,7 +59,12 @@ export function normalizeCodeLine(
 			i++;
 			continue;
 		}
-		if (pendingSpace && out.trim() !== "" && !opts.strip) out += " ";
+		if (
+			pendingSpace &&
+			out.trim() !== "" &&
+			(!opts.strip || (/\w$/.test(out) && /\w/.test(ch)))
+		)
+			out += " ";
 		pendingSpace = false;
 		if (!QUOTES.has(ch)) {
 			out += ch;
@@ -79,7 +89,7 @@ export function isIndentSensitive(filename: string): boolean {
 }
 
 function countsTowardBlock(line: string): boolean {
-	return line.length >= MIN_COUNTED_LENGTH;
+	return line.trimStart().length >= MIN_COUNTED_LENGTH;
 }
 
 function extractRuns(

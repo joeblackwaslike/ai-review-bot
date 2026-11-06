@@ -1,5 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { findMovedBlocks, type PushFile } from "./moved-blocks.js";
+import {
+	findMovedBlocks,
+	normalizeCodeLine,
+	type PushFile,
+} from "./moved-blocks.js";
+
+describe("normalizeCodeLine with strip", () => {
+	const strip = (s: string) => normalizeCodeLine(s, { strip: true });
+
+	it("keeps one space between two word characters", () => {
+		expect(strip("hello world")).not.toBe(strip("helloworld"));
+		expect(strip("/a b/")).not.toBe(strip("/ab/"));
+		expect(strip("/foo bar/")).not.toBe(strip("/foobar/"));
+	});
+
+	it("still ignores spacing next to punctuation and at the edges", () => {
+		expect(strip("const a=1;")).toBe(strip("const a = 1;"));
+		expect(strip("  return  1;  ")).toBe(strip("return 1;"));
+	});
+});
 
 const LINES = [
 	"const alpha = compute(1);",
@@ -105,6 +124,19 @@ describe("findMovedBlocks", () => {
 		});
 		it("never matches between an indentation-sensitive and a free-form file", () => {
 			expect(moved("a.py", "b.ts", py, py)).toEqual([]);
+		});
+		it("does not count an indented closing bracket toward the 3-character minimum", () => {
+			const block = [
+				"    a = call(",
+				"    )",
+				"    b = 2",
+				"    c = 3",
+				"    d = 4",
+				"    e = 5",
+			];
+			expect(moved("a.py", "b.py", block, block)).toEqual([
+				{ from: "a.py", to: "b.py", lineCount: 5 },
+			]);
 		});
 		it("still counts a re-indented TypeScript block as a move", () => {
 			expect(moved("a.ts", "b.ts", py, deeper)).toEqual([
