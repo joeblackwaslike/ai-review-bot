@@ -41,6 +41,8 @@ export interface StrategyResult {
 	agentReviews: { skill: string; review: ModelReview }[];
 	usage: RoundUsage;
 	toolCalls: ToolCallRecord[];
+	/** Set by spend-matched strategies (a0): what they aimed for and hit. */
+	spend?: { targetUsd: number; achievedUsd: number; withinTolerance: boolean };
 	wallMs: number;
 }
 

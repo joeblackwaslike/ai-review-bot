@@ -10,8 +10,8 @@ import { routerContext, toLiveReviewOutput } from "../live-wiring.js";
 import type { ReviewStrategy, StrategyInput } from "../strategy.js";
 
 const AGENTS_PER_REVIEW = 5;
-const CHARS_PER_TOKEN = 4;
-const EXPECTED_COMPLETION_TOKENS = 2000;
+export const CHARS_PER_TOKEN = 4;
+export const EXPECTED_COMPLETION_TOKENS = 2000;
 
 const skillsDir = fileURLToPath(new URL("../../../skills", import.meta.url));
 
