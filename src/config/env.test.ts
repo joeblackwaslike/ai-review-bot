@@ -247,6 +247,25 @@ describe("secret env names", () => {
 		expect(r.warnings).toEqual([]);
 	});
 
+	it("a provider base URL is applied without a providers entry in YAML", () => {
+		const r = applyEnvOverlay(reviewersYaml("claude"), {
+			AI_REVIEW_PROVIDERS__GOOGLE__BASE_URL: "https://proxy.example/v1",
+		});
+		expect((r.value as { providers: unknown }).providers).toEqual({
+			google: { baseURL: "https://proxy.example/v1" },
+		});
+	});
+
+	it("a provider base URL is applied when providers is an empty object", () => {
+		const r = applyEnvOverlay(
+			{ ...reviewersYaml("claude"), providers: {} },
+			{ AI_REVIEW_PROVIDERS__OPENAI__BASE_URL: "https://proxy.example/v1" },
+		);
+		expect((r.value as { providers: unknown }).providers).toEqual({
+			openai: { baseURL: "https://proxy.example/v1" },
+		});
+	});
+
 	it("a typo still throws with the closest name", () => {
 		const call = () =>
 			applyEnvOverlay(reviewersYaml("gemini"), {

@@ -239,8 +239,10 @@ function expandLeaves(leaves: SchemaLeaf[], raw: unknown): SchemaLeaf[] {
 			if (m === undefined) return [[...prefix, ...leaf.path.slice(from)]];
 			const base = [...prefix, ...leaf.path.slice(from, m)];
 			const obj = getAt(raw, base);
-			if (!isRecord(obj)) return [];
-			return Object.keys(obj).flatMap((key) => go([...base, key], m + 1));
+			const isProviders = base.length === 1 && base[0] === "providers";
+			if (!isProviders && !isRecord(obj)) return [];
+			const keys = isProviders ? PROVIDER_NAMES : Object.keys(obj as object);
+			return keys.flatMap((key) => go([...base, key], m + 1));
 		};
 		return go([], 0).map((path) => ({ ...leaf, path, mapIndexes: [] }));
 	});
