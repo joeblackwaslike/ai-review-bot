@@ -369,4 +369,62 @@ describe("runGrid", () => {
 		expect(calls.map((c) => c.fixture)).toEqual([2, 2]);
 		expect(report.missing).toHaveLength(2);
 	});
+
+	it("passes each strategy the lesser of the cell cap and the remaining provider cap", async () => {
+		const { deps, calls } = harness([stub("a")], {
+			fixtures: { "o/r#1": loaded(1) },
+		});
+		await runGrid(
+			plan({
+				strategies: [{ name: "a", version: "v1" }],
+				fixtures: [{ id: "o/r#1", split: "tuning", provider: "anthropic" }],
+				budgets: {
+					maxAnthropicUsd: ONE * 1.5,
+					maxOpenAiUsd: 10,
+					perCellUsd: ONE * 5,
+					perCellWallMs: 210_000,
+				},
+			}),
+			deps,
+		);
+		expect(calls[0]?.input.budget.maxUsd).toBeCloseTo(ONE * 1.5);
+	});
+
+	it("records spend past the allowed budget as overCap in the cell and the report", async () => {
+		const pricey: StrategyResult = {
+			...result(),
+			usage: { x: { promptTokens: 400_000, completionTokens: 40_000 } },
+		};
+		const { deps, store } = harness([stub("a", { run: async () => pricey })], {
+			fixtures: { "o/r#1": loaded(1) },
+		});
+		const report = await runGrid(
+			plan({
+				strategies: [{ name: "a", version: "v1" }],
+				fixtures: [{ id: "o/r#1", split: "tuning", provider: "anthropic" }],
+				budgets: {
+					maxAnthropicUsd: ONE * 10,
+					maxOpenAiUsd: 10,
+					perCellUsd: ONE * 2,
+					perCellWallMs: 210_000,
+				},
+			}),
+			deps,
+		);
+		expect(report.overCap).toHaveLength(2);
+		expect(report.overCap[0]?.actualUsd).toBeCloseTo(ONE * 4);
+		expect(report.overCap[0]?.allowedUsd).toBeCloseTo(ONE * 2);
+		expect(store.records[0]?.overCap?.actualUsd).toBeCloseTo(ONE * 4);
+		expect(report.partial).toBe(true);
+	});
+
+	it("gives every strategy input an empty claim list and no saved trace", async () => {
+		const { deps, calls } = harness([stub("a"), stub("a0")]);
+		await runGrid(plan(), deps);
+		expect(calls.length).toBeGreaterThan(0);
+		for (const c of calls) {
+			expect(c.input.round.claims).toEqual([]);
+			expect(c.input.round.trace).toBeUndefined();
+		}
+	});
 });

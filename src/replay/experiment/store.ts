@@ -21,6 +21,8 @@ export interface CellRecord {
 	fitIn210s: boolean;
 	failedAttempts: number;
 	cacheTemperature: "cold" | "warm" | "unknown";
+	/** Set when the strategy spent past the budget it was given. */
+	overCap?: { allowedUsd: number; actualUsd: number };
 	result: Pick<
 		StrategyResult,
 		| "findings"

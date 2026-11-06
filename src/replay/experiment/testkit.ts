@@ -17,8 +17,8 @@ export const samplePlan = (): ExperimentPlan => ({
 		{ name: "a", version: "v1" },
 		{ name: "a0", version: "v1" },
 	],
-	models: { anthropic: "claude-sonnet-5-5" },
-	providers: ["anthropic"],
+	models: { anthropic: "claude-sonnet-5-5", openai: "gpt-6.1-sol" },
+	providers: ["anthropic", "openai"],
 	budgets: {
 		maxAnthropicUsd: 10,
 		maxOpenAiUsd: 2,

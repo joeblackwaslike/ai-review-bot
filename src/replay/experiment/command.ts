@@ -147,7 +147,7 @@ export async function runExperiment(
 				`ran ${report.ran} cell(s), ${report.skippedExisting} already stored`,
 				`spent: anthropic $${report.spentUsd.anthropic.toFixed(2)}, openai $${report.spentUsd.openai.toFixed(2)}`,
 				report.partial
-					? `PARTIAL: ${report.missing.length} missing, ${report.overCellCap.length} over the cell cap, ${report.unavailable.length} without a checkout, ${report.failed.length} failed`
+					? `PARTIAL: ${report.missing.length} missing, ${report.overCellCap.length} over the cell cap, ${report.overCap.length} overspent, ${report.unavailable.length} without a checkout, ${report.failed.length} failed`
 					: "complete",
 				...report.failed.map(
 					(f) =>
@@ -156,6 +156,10 @@ export async function runExperiment(
 				...cellLines("missing", report.missing),
 				...cellLines("over the cell cap", report.overCellCap),
 				...cellLines("no checkout", report.unavailable),
+				...report.overCap.map(
+					(c) =>
+						`over cap ${c.strategy} ${c.fixtureId} round ${c.round} trial ${c.trial}: spent $${c.actualUsd.toFixed(2)} of $${c.allowedUsd.toFixed(2)} allowed`,
+				),
 			].join("\n"),
 		);
 		if (report.failed.length > 0) return 1;

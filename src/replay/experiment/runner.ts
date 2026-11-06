@@ -55,6 +55,8 @@ export interface GridReport {
 	refused: PlannedCell[];
 	unavailable: PlannedCell[];
 	/** `reservedUsd` is the cell's estimate, counted against the cap because a thrown run reports no usage. */
+	/** Spend past the budget the strategy was given; `a` cannot be capped mid-run. */
+	overCap: (PlannedCell & { allowedUsd: number; actualUsd: number })[];
 	failed: (PlannedCell & { error: string; reservedUsd: number })[];
 	spentUsd: Record<Provider, number>;
 	partial: boolean;
@@ -224,6 +226,7 @@ export async function runGrid(
 		skippedExisting: 0,
 		missing: [],
 		overCellCap: [],
+		overCap: [],
 		refused: [],
 		unavailable: [],
 		failed: [],
@@ -283,6 +286,11 @@ export async function runGrid(
 				continue;
 			}
 
+			const allowedUsd = Math.min(
+				plan.budgets.perCellUsd,
+				capFor(plan, provider) - spentUsd[provider],
+			);
+			input.budget = { ...input.budget, maxUsd: allowedUsd };
 			try {
 				const run = (i: StrategyInput) => deps.runStrategy(s, i);
 				const ran = s.needsCheckout
@@ -303,6 +311,11 @@ export async function runGrid(
 				const costUsd = roundCostUsd(ran.usage, modelFor(input));
 				spentUsd[provider] += costUsd;
 				if (s.name === A) aCost = costUsd;
+				const overCap =
+					costUsd > allowedUsd + 1e-9
+						? { allowedUsd, actualUsd: costUsd }
+						: undefined;
+				if (overCap) report.overCap.push({ ...cell, ...overCap });
 				const record: CellRecord = {
 					key,
 					provider,
@@ -312,6 +325,7 @@ export async function runGrid(
 					fitIn210s: ran.wallMs <= plan.thresholds.hostedFitSeconds * 1000,
 					failedAttempts: ran.spend?.failedAttempts ?? 0,
 					cacheTemperature: "unknown",
+					...(overCap ? { overCap } : {}),
 					result: {
 						findings: ran.findings,
 						candidates: ran.candidates,
@@ -339,6 +353,7 @@ export async function runGrid(
 	report.partial =
 		report.missing.length > 0 ||
 		report.overCellCap.length > 0 ||
+		report.overCap.length > 0 ||
 		report.unavailable.length > 0 ||
 		report.failed.length > 0;
 	return report;
