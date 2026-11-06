@@ -6,5 +6,5 @@ LIMITS = {'low_stock': 10, 'reorder_qty': 250, 'max_per_order': 40, 'hold_hours'
 def get_limit(name):
     override = os.environ.get('INV_' + name.upper())
     if override is not None:
-        return int(override)
+        return type(LIMITS[name])(override)
     return LIMITS[name]

@@ -11,7 +11,7 @@ def main(argv=None):
     parser.add_argument("--limit", type=int, default=50, help="max events per run")
     args = parser.parse_args(argv)
     queue = EventQueue()
-    result = process(queue, args.endpoint)
+    result = process(queue, args.endpoint, args.limit)
     print("sent=%(sent)d failed=%(failed)d" % result)
     return 0 if not result["failed"] else 1
 

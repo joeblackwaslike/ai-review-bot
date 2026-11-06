@@ -6,9 +6,9 @@ from notifier.templates import render
 log = logging.getLogger('notifier.worker')
 
 
-def process(queue, endpoint):
+def process(queue, endpoint, limit=50):
     sent, failed = 0, 0
-    for event in queue.drain():
+    for event in queue.drain(limit):
         body = {'to': event['to'], 'text': render(event['template'], **event['fields'])}
         try:
             post_event(endpoint, body)

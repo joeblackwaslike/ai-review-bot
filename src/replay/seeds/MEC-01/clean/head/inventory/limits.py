@@ -12,5 +12,5 @@ LIMITS = {
 def get_limit(name):
     override = os.environ.get("INV_" + name.upper())
     if override is not None:
-        return int(override)
+        return type(LIMITS[name])(override)
     return LIMITS[name]

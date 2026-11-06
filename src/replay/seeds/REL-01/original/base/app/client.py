@@ -12,5 +12,6 @@ def fetch_with_retry(send, attempts=3):
             return send()
         except FlakyError as exc:
             last_error = exc
-            wait_before_retry(attempt)
+            if attempt < attempts - 1:
+                wait_before_retry(attempt)
     raise last_error

@@ -17,7 +17,7 @@ class StockLevel:
         return self.available <= get_limit("low_stock")
 
     def reserve(self, qty):
-        if qty > get_limit("max_per_order") or qty > self.available:
+        if qty <= 0 or qty > get_limit("max_per_order") or qty > self.available:
             raise ValueError("cannot reserve %d of %s" % (qty, self.sku))
         self.reserved += qty
         return datetime.datetime.utcnow() + datetime.timedelta(

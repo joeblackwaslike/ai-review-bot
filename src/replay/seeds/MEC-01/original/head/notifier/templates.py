@@ -7,8 +7,8 @@ TEMPLATES = {
 }
 
 
-def render(name, **fields):
-    template = string.Template(TEMPLATES[name])
+def render(template_name, **fields):
+    template = string.Template(TEMPLATES[template_name])
     return template.substitute(**fields)
 
 
