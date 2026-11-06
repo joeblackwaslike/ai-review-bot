@@ -135,6 +135,7 @@ describe("review-run request handling", () => {
 	it("returns 503 for a configured reviewer that is not ready", async () => {
 		const res = await call({ ...BASE, reviewer: "gemini" });
 		expect(res.statusCode).toBe(503);
+		expect(res.body).toEqual({ error: "Reviewer unavailable" });
 		expect(getReviewerGitHubApp).not.toHaveBeenCalled();
 		expect(runScheduledReview).not.toHaveBeenCalled();
 	});

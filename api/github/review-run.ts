@@ -63,9 +63,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 	}
 	const readiness = reviewerReadiness(reviewerId, "hosted");
 	if (!readiness.ready) {
-		res
-			.status(503)
-			.json({ error: "Reviewer unavailable", missing: readiness.missing });
+		console.warn("Reviewer not ready", {
+			reviewer: reviewerId,
+			missing: readiness.missing,
+		});
+		res.status(503).json({ error: "Reviewer unavailable" });
 		return;
 	}
 

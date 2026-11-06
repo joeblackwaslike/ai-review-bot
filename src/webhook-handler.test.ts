@@ -165,7 +165,7 @@ describe("createReviewerWebhookHandler routing", () => {
 			stubReq({ query: { id: "gemini" } }),
 		);
 		expect(res.statusCode).toBe(503);
-		expect(JSON.stringify(res.body)).toContain("reviewers.gemini.enabled");
+		expect(res.body).toEqual({ error: "Reviewer unavailable" });
 		expect(readRawBody).not.toHaveBeenCalled();
 	});
 
@@ -177,6 +177,7 @@ describe("createReviewerWebhookHandler routing", () => {
 			stubReq({ query: { id: "gemini" } }),
 		);
 		expect(res.statusCode).toBe(503);
+		expect(res.body).toEqual({ error: "Reviewer unavailable" });
 		expect(readRawBody).not.toHaveBeenCalled();
 	});
 

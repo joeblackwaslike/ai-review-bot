@@ -41,10 +41,7 @@ export function createReviewerWebhookHandler(fixedId?: ReviewerId) {
 
 		const readiness = reviewerReadiness(id, "hosted");
 		if (!readiness.ready) {
-			res.status(503).json({
-				error: "Reviewer unavailable",
-				missing: readiness.missing,
-			});
+			res.status(503).json({ error: "Reviewer unavailable" });
 			return;
 		}
 
