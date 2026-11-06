@@ -194,3 +194,24 @@ describe("investigateJoin", () => {
 		).rejects.toBeInstanceOf(JoinFamilyError);
 	});
 });
+
+describe("investigateJoin matcher predicate", () => {
+	it("counts a body-text join as matcherJoined, as countJoined does", async () => {
+		const c = {
+			...mk("c1", "a.ts", 12, "Log condition misses the empty case"),
+			text: "A valid prose object with braces can mask the real payload and stop the scan before it",
+		};
+		const { fixture, labels } = build(
+			[cand("Valid prose object braces mask the real payload", "a.ts", 12)],
+			[c],
+		);
+		const r = await investigateJoin({
+			fixture,
+			labels,
+			judge: same,
+			judgeFamily: "openai",
+		});
+		expect(r.matcherJoined).toBe(1);
+		expect(r.judgeFoundMatcherMissed).toBe(0);
+	});
+});

@@ -1,14 +1,13 @@
 import { generateObject } from "ai";
 import { z } from "zod";
 import type { ResolvedAuth } from "../auth.js";
-import { isSameClaim } from "../claim-dedupe.js";
 import { createAIModel } from "../models.js";
 import {
 	type ModelSelection,
 	outputBudget,
 	reasoningProviderOptions,
 } from "../router.js";
-import { JOIN_CLAIM_MATCH, labelledClaims } from "./metrics.js";
+import { joinsClaim, labelledClaims } from "./metrics.js";
 import type {
 	CandidateRecord,
 	LabelFile,
@@ -128,7 +127,7 @@ export async function investigateJoin(
 				claim,
 				verdict,
 				reason,
-				matcherJoined: isSameClaim(candidate, claim, JOIN_CLAIM_MATCH),
+				matcherJoined: joinsClaim(candidate, claim),
 			});
 		}
 	}

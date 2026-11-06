@@ -81,6 +81,11 @@ function joinsByBody(cand: CandidateRecord, claim: PostedClaim): boolean {
 	);
 }
 
+/** The join rule `countJoined` applies: title match or body match. */
+export function joinsClaim(cand: CandidateRecord, claim: PostedClaim): boolean {
+	return isSameClaim(cand, claim, JOIN_CLAIM_MATCH) || joinsByBody(cand, claim);
+}
+
 /** Distinct candidates, by path, line and title, and how many of them restate
  * one of the given claims. Several agents raising one finding count once. */
 export function countJoined(
@@ -93,11 +98,8 @@ export function countJoined(
 		).values(),
 	];
 	return {
-		joined: distinct.filter((cand) =>
-			claims.some(
-				(c) => isSameClaim(cand, c, JOIN_CLAIM_MATCH) || joinsByBody(cand, c),
-			),
-		).length,
+		joined: distinct.filter((cand) => claims.some((c) => joinsClaim(cand, c)))
+			.length,
 		candidates: distinct.length,
 	};
 }
