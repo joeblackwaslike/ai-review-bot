@@ -1,0 +1,141 @@
+import { isGeneratedFile } from "./diff-pack.js";
+import {
+	findMovedBlocks,
+	type MovedBlock,
+	type PushFile,
+} from "./moved-blocks.js";
+
+export type FileKind =
+	| "code"
+	| "test"
+	| "docs"
+	| "config"
+	| "infra"
+	| "shell"
+	| "binary"
+	| "generated"
+	| "lockfile";
+
+/** What one file of a push contributes to its reviewable weight. */
+export interface FileShape {
+	filename: string;
+	kind: FileKind;
+	weight: number;
+	whitespaceOnly: boolean;
+	renameOnly: boolean;
+	deletionOnly: boolean;
+}
+
+/** What a push changed, reduced to a reviewable weight. */
+export interface PushShape {
+	files: FileShape[];
+	reviewableWeight: number;
+	fileCount: number;
+	moved: MovedBlock[];
+}
+
+const KIND_WEIGHT: Record<FileKind, number> = {
+	code: 1,
+	shell: 1,
+	test: 0.7,
+	config: 0.5,
+	infra: 0.5,
+	docs: 0.3,
+	generated: 0,
+	lockfile: 0,
+	binary: 0,
+};
+
+const LOCKFILES = new Set([
+	"package-lock.json",
+	"pnpm-lock.yaml",
+	"yarn.lock",
+	"bun.lock",
+	"Cargo.lock",
+	"poetry.lock",
+	"go.sum",
+]);
+const BINARY_EXT =
+	/\.(png|jpe?g|gif|webp|ico|pdf|zip|gz|woff2?|ttf|eot|mp[34]|mov|wasm)$/i;
+const DOCS_EXT = /\.(md|mdx|rst|txt)$/i;
+const CONFIG_EXT = /\.(json|jsonc|ya?ml|toml|ini|env)$/i;
+const INFRA_EXT = /\.(tf|tfvars|hcl)$/i;
+const TEST_PATH = /(^|\/)(tests?|__tests__)\/|\.(test|spec)\.[^/]+$/;
+
+/** Sorts a path into the kind that sets how much of its change is worth reviewing. */
+export function classifyFile(filename: string, hasPatch: boolean): FileKind {
+	const name = filename.split("/").pop() ?? filename;
+	if (LOCKFILES.has(name)) return "lockfile";
+	if (isGeneratedFile(filename)) return "generated";
+	if (BINARY_EXT.test(name) || !hasPatch) return "binary";
+	if (TEST_PATH.test(filename)) return "test";
+	if (
+		name === "Dockerfile" ||
+		name.startsWith("Dockerfile.") ||
+		filename.startsWith(".github/workflows/") ||
+		INFRA_EXT.test(name)
+	) {
+		return "infra";
+	}
+	if (name.endsWith(".sh")) return "shell";
+	if (DOCS_EXT.test(name) || filename.startsWith("docs/")) return "docs";
+	if (CONFIG_EXT.test(name)) return "config";
+	return "code";
+}
+
+function isWhitespaceOnly(patch: string | undefined): boolean {
+	if (!patch) return false;
+	const removed: string[] = [];
+	const added: string[] = [];
+	for (const line of patch.split("\n")) {
+		if (line.startsWith("---") || line.startsWith("+++")) continue;
+		if (line.startsWith("-")) removed.push(line.slice(1).replace(/\s+/g, ""));
+		else if (line.startsWith("+"))
+			added.push(line.slice(1).replace(/\s+/g, ""));
+	}
+	if (removed.length + added.length === 0) return false;
+	return removed.join("\n") === added.join("\n");
+}
+
+function shapeFile(file: PushFile, movedIn: number): FileShape {
+	const kind = classifyFile(file.filename, file.patch !== undefined);
+	const renameOnly =
+		file.status === "renamed" && file.additions === 0 && file.deletions === 0;
+	const whitespaceOnly = isWhitespaceOnly(file.patch);
+	const deletionOnly = file.additions === 0 && file.deletions > 0;
+	const changed = Math.max(file.additions - movedIn, 0) + file.deletions;
+	const weight =
+		renameOnly || whitespaceOnly || file.patch === undefined
+			? 0
+			: KIND_WEIGHT[kind] * changed;
+	return {
+		filename: file.filename,
+		kind,
+		weight,
+		whitespaceOnly,
+		renameOnly,
+		deletionOnly,
+	};
+}
+
+/** Reads what a push changed: file kinds, whitespace-only, renames, deletions and moved code. */
+export function classifyPush(files: PushFile[]): PushShape {
+	const moved = findMovedBlocks(files);
+	const movedIn = new Map<string, number>();
+	for (const block of moved) {
+		movedIn.set(block.to, (movedIn.get(block.to) ?? 0) + block.lineCount);
+	}
+	const shaped = files.map((f) => shapeFile(f, movedIn.get(f.filename) ?? 0));
+	return {
+		files: shaped,
+		reviewableWeight: shaped.reduce((sum, f) => sum + f.weight, 0),
+		fileCount: files.length,
+		moved,
+	};
+}
+
+/** Review-round budget for a push: one unit per 8 weight, at least 2, at most the band's. */
+export function shapedBudget(shape: PushShape, bandBudget: number): number {
+	const wanted = Math.ceil(shape.reviewableWeight / 8);
+	return Math.min(Math.max(wanted, 2), bandBudget);
+}
