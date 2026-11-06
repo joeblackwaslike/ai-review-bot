@@ -92,6 +92,10 @@ describe("detectTier2Skills", () => {
 		"src/social.ts",
 		"docs/specification.md",
 		"src/tokenizer.ts",
+		"src/dockerize.ts",
+		"src/sha256.ts",
+		"src/utf8.ts",
+		"src/series.ts",
 	])("does not activate security-auditor for unrelated path %s", (path) => {
 		const matches = detectTier2Skills({ ...base, filePaths: [path] });
 		expect(matches.map((m) => m.skillPath)).not.toContain(
@@ -108,6 +112,13 @@ describe("detectTier2Skills", () => {
 		"infra/deployment.yaml",
 		".env.production",
 		"src/api/tokens.ts",
+		"src/Dockerfile",
+		"deploy/Dockerfile.prod",
+		"src/JWTVerifier.ts",
+		"src/ACLGuard.ts",
+		"src/auth0.ts",
+		"src/oauth2.ts",
+		"src/policies/access.ts",
 	])("activates security-auditor for sensitive path %s", (path) => {
 		const matches = detectTier2Skills({ ...base, filePaths: [path] });
 		expect(matches.map((m) => m.skillPath)).toContain("security-auditor.md");

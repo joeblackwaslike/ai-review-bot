@@ -122,6 +122,7 @@ const SECURITY_PATH_PATTERNS = [
 	"infrastructure",
 	"terraform",
 	"docker",
+	"dockerfile",
 	"k8s",
 	"kubernetes",
 	"helm",
@@ -152,17 +153,26 @@ const SECURITY_PATH_TOKENS = new Set([
 	"permissions",
 ]);
 
+function isSecurityToken(t: string): boolean {
+	if (SECURITY_PATH_TOKENS.has(t)) return true;
+	if (t.endsWith("ies") && SECURITY_PATH_TOKENS.has(`${t.slice(0, -3)}y`)) {
+		return true;
+	}
+	return t.endsWith("s") && SECURITY_PATH_TOKENS.has(t.slice(0, -1));
+}
+
 function hasSecurityPathToken(path: string): boolean {
-	const tokens = path
+	return path
+		.replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
 		.replace(/([a-z0-9])([A-Z])/g, "$1 $2")
 		.toLowerCase()
 		.split(/[^a-z0-9]+/)
-		.filter(Boolean);
-	return tokens.some(
-		(t) =>
-			SECURITY_PATH_TOKENS.has(t) ||
-			(t.endsWith("s") && SECURITY_PATH_TOKENS.has(t.slice(0, -1))),
-	);
+		.filter(Boolean)
+		.some(
+			(t) =>
+				isSecurityToken(t) ||
+				t.split(/(?<=[a-z])(?=\d)|(?<=\d)(?=[a-z])/).some(isSecurityToken),
+		);
 }
 
 function shouldRunSecurityAuditor(ctx: Tier2Context): string | null {
