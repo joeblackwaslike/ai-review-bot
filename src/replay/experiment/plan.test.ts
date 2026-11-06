@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -86,5 +86,17 @@ describe("assertCommittedPlan and loadPlan", () => {
 		const dir = mkdtempSync(join(tmpdir(), "plan-"));
 		writeFileSync(join(dir, "plan.json"), JSON.stringify(samplePlan()));
 		expect(loadPlan(join(dir, "plan.json")).lockedHash).toBeNull();
+	});
+});
+
+describe("committed draft plan", () => {
+	const dir = join(process.cwd(), "docs", "review-experiments");
+
+	it("is valid, marked draft, and has no lock yet", () => {
+		const parsed = ExperimentPlanSchema.parse(
+			JSON.parse(readFileSync(join(dir, "plan.json"), "utf8")),
+		);
+		expect(parsed.draft).toBe(true);
+		expect(existsSync(join(dir, "plan.lock"))).toBe(false);
 	});
 });
