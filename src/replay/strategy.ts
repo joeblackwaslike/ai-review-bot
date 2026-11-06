@@ -1,5 +1,5 @@
 import type { Ledger } from "../ledger/types.js";
-import type { PullFile } from "../review.js";
+import type { ModelReview, PullFile } from "../review.js";
 import type { FrozenFixture } from "./frozen.js";
 import type { LiveFinding } from "./live.js";
 import type { CandidateRecord, Round, RoundUsage } from "./types.js";
@@ -35,7 +35,10 @@ export interface StrategyInput {
 export interface StrategyResult {
 	findings: LiveFinding[];
 	candidates: CandidateRecord[];
+	/** Overwritten by `runStrategy`; strategies may leave it empty. */
 	posted: CandidateRecord[];
+	/** Candidates grouped by producing agent; the harness filters these into `posted`. */
+	agentReviews: { skill: string; review: ModelReview }[];
 	usage: RoundUsage;
 	toolCalls: ToolCallRecord[];
 	wallMs: number;

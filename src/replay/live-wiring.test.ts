@@ -14,6 +14,7 @@ import {
 	toLiveFindings,
 	toLiveReviewOutput,
 } from "./live-wiring.js";
+import { runStrategy } from "./run-strategy.js";
 import { strategyA } from "./strategies/a.js";
 import type { StrategyInput } from "./strategy.js";
 import { ledgerForRound } from "./trace.js";
@@ -280,7 +281,10 @@ describe("buildLiveWiring", () => {
 		const target = fixture.rounds[1] as Round;
 
 		const fetched = await wiring.fetchDiff(target);
-		const output = await strategyA.run(inputFor(fixture, target, fetched));
+		const output = await runStrategy(
+			strategyA,
+			inputFor(fixture, target, fetched),
+		);
 
 		expect(output.posted).toEqual([
 			{

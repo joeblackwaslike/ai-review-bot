@@ -10,6 +10,7 @@ import {
 } from "../../testing.js";
 import { freezeFixture } from "../frozen.js";
 import { toCandidates } from "../live-wiring.js";
+import { runStrategy } from "../run-strategy.js";
 import type { StrategyInput } from "../strategy.js";
 import { ledgerForRound, postFilterTrace } from "../trace.js";
 import type {
@@ -93,7 +94,7 @@ describe("strategyA", () => {
 		});
 		const input = inputFor();
 
-		const out = await strategyA.run(input);
+		const out = await runStrategy(strategyA, input);
 
 		expect(out.candidates).toEqual(toCandidates(agentReviews));
 		expect(out.posted).toEqual(

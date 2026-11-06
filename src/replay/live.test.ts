@@ -1,4 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("./run-strategy.js", () => ({
+	runStrategy: (s: { run: (i: unknown) => unknown }, i: unknown) => s.run(i),
+}));
+
 import {
 	type LiveFinding,
 	type LiveReviewOutput,
@@ -112,6 +117,7 @@ function stub(
 		run: async (i) => ({
 			wallMs: 0,
 			toolCalls: [],
+			agentReviews: [],
 			...(await review(i.diff, i.round, i)),
 		}),
 	};

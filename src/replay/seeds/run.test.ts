@@ -2,6 +2,11 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("../run-strategy.js", () => ({
+	runStrategy: (s: { run: (i: unknown) => unknown }, i: unknown) => s.run(i),
+}));
+
 import { runReplay } from "../command.js";
 import {
 	type ReviewStrategy,
@@ -61,6 +66,7 @@ const emptyResult = (postedFindings: CandidateRecord[]) => ({
 	posted: postedFindings,
 	usage: {},
 	toolCalls: [],
+	agentReviews: [],
 	wallMs: 1,
 });
 

@@ -7,6 +7,7 @@ import {
 } from "./checkout.js";
 import { freezeFixture } from "./frozen.js";
 import { countJoined, labelledClaims } from "./metrics.js";
+import { runStrategy } from "./run-strategy.js";
 import type {
 	CheckoutHandle,
 	ReviewStrategy,
@@ -173,9 +174,9 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 							baseSha: d.round.mergeBase ?? d.round.baseSha,
 							headSha: d.round.headSha,
 						},
-						(handle) => opts.strategy.run(inputFor(d, budget, handle)),
+						(handle) => runStrategy(opts.strategy, inputFor(d, budget, handle)),
 					)
-				: await opts.strategy.run(inputFor(d, budget));
+				: await runStrategy(opts.strategy, inputFor(d, budget));
 			if (isCheckoutUnavailable(ran)) {
 				report.checkoutUnavailable.push(d.round.index);
 				out(`round ${d.round.index}: skipped, ${ran.reason}`);
