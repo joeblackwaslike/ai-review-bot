@@ -200,3 +200,25 @@ describe("createAIModel auth binding", () => {
 		).not.toThrow();
 	});
 });
+
+describe("createAIModel google", () => {
+	it("builds a google model from the env key", () => {
+		vi.stubEnv("GOOGLE_GENERATIVE_AI_API_KEY", "k");
+		const model = createAIModel({
+			provider: "google",
+			model: "gemini-3.8-flash",
+		});
+		expect((model as { provider: string }).provider).toMatch(/^google/);
+		vi.unstubAllEnvs();
+	});
+
+	it("rejects an anthropic auth for a google model", () => {
+		expect(() =>
+			createAIModel({ provider: "google", model: "gemini-3.8-flash" }, {
+				provider: "anthropic",
+				mode: "api-key",
+				apiKey: "x",
+			} as never),
+		).toThrow(/cannot be used with a google model/);
+	});
+});

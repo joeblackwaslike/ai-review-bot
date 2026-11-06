@@ -18,6 +18,7 @@ export function rateLimitCommentMarker(provider: string): string {
 export function providerLabel(provider: string): string {
 	if (provider === "openai") return "OpenAI";
 	if (provider === "anthropic") return "Anthropic";
+	if (provider === "google") return "Google";
 	return `provider "${provider}"`;
 }
 

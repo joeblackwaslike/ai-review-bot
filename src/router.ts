@@ -1,5 +1,6 @@
 import { getConfigTree } from "./config/load.js";
 import type { Config } from "./config/schema.js";
+import type { ProviderName } from "./providers/names.js";
 
 type Effort = NonNullable<ModelSelection["effort"]>;
 
@@ -13,7 +14,7 @@ export interface RouterContext {
 }
 
 export interface ModelSelection {
-	provider: "anthropic" | "openai";
+	provider: ProviderName;
 	model: string;
 	/** Reasoning depth, applied per provider by reasoningProviderOptions below:
 	 *  - OpenAI → `reasoningEffort` (none | low | medium | high | xhigh)

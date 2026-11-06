@@ -1,8 +1,11 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
+import type { LanguageModel } from "ai";
 import type { ResolvedAuth } from "./auth.js";
 import { getConfigTree } from "./config/load.js";
 import { lookupPrice } from "./pricing.js";
+import { resolveProviderCredentials } from "./providers/credentials.js";
+import { createModelRegistry } from "./providers/registry.js";
 import type { ModelSelection } from "./router.js";
 
 interface TokenUsage {
@@ -31,13 +34,25 @@ export function computeCost(
 	);
 }
 
+function fromRegistry(selection: ModelSelection): LanguageModel {
+	const creds = {
+		[selection.provider]: resolveProviderCredentials(selection.provider),
+	};
+	return createModelRegistry(creds).languageModel(
+		`${selection.provider}/${selection.model}`,
+	);
+}
+
 /**
  * Build a language model for a provider. When `auth` is omitted (the hosted
  * webhook path), the providers read their API key from the environment exactly
  * as before. When `auth` is supplied (local CLI), it carries either an explicit
  * API key or an OAuth token + custom `fetch` for subscription billing.
  */
-export function createAIModel(selection: ModelSelection, auth?: ResolvedAuth) {
+export function createAIModel(
+	selection: ModelSelection,
+	auth?: ResolvedAuth,
+): LanguageModel {
 	if (auth && auth.provider !== selection.provider) {
 		throw new Error(
 			`auth for ${auth.provider} cannot be used with a ${selection.provider} model`,
@@ -45,10 +60,12 @@ export function createAIModel(selection: ModelSelection, auth?: ResolvedAuth) {
 	}
 	switch (selection.provider) {
 		case "anthropic": {
-			if (!auth || auth.mode === "api-key") {
-				const provider = createAnthropic(
-					auth ? { apiKey: auth.apiKey, baseURL: auth.baseURL } : {},
-				);
+			if (!auth) return fromRegistry(selection);
+			if (auth.mode === "api-key") {
+				const provider = createAnthropic({
+					apiKey: auth.apiKey,
+					baseURL: auth.baseURL,
+				});
 				return provider(selection.model);
 			}
 			// OAuth: token is asserted by the custom fetch; pass a placeholder key
@@ -62,10 +79,12 @@ export function createAIModel(selection: ModelSelection, auth?: ResolvedAuth) {
 			return provider(selection.model);
 		}
 		case "openai": {
-			if (!auth || auth.mode === "api-key") {
-				const provider = createOpenAI(
-					auth ? { apiKey: auth.apiKey, baseURL: auth.baseURL } : {},
-				);
+			if (!auth) return fromRegistry(selection);
+			if (auth.mode === "api-key") {
+				const provider = createOpenAI({
+					apiKey: auth.apiKey,
+					baseURL: auth.baseURL,
+				});
 				return provider(selection.model);
 			}
 			// Codex subscription backend is Responses-API only.
@@ -77,5 +96,7 @@ export function createAIModel(selection: ModelSelection, auth?: ResolvedAuth) {
 			});
 			return provider.responses(selection.model);
 		}
+		case "google":
+			return fromRegistry(selection);
 	}
 }
