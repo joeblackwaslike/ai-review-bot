@@ -32,13 +32,20 @@ every report says they are not measured.
   `final.marker` first, so a second `--final` for the same plan hash is refused even if the first
   crashed. A revised plan that shares test PRs with a scored plan is labeled exploratory.
 
+`run` exits 0 only when the grid is complete, 3 when it is partial (a provider cap, a per-cell cap, a
+round without a checkout), and 1 when a cell failed. A cell whose strategy threw is charged at its
+estimate against that provider's cap, since a thrown run reports no usage. Caps stop one provider
+at a time, so an exhausted Anthropic cap does not stop OpenAI test cells. The default plan path is
+`docs/review-experiments/plan.json` in the repository, whatever `--fixtures` says.
+
 Exit codes: 2 for flag misuse (any other mode flag combined with `--experiment`, `--final` outside
 `score`), 1 for a missing or unreadable plan, a lock mismatch, a draft plan, a second final, or
 failed cells.
 
 ## Splits
 
-A fixture's split comes from `sha256(seed + owner/repo#pull)`: the first 32 bits as a fraction of
+The plan schema rejects any fixture whose split differs from this rule, so a hand-edited split fails
+validation. A fixture's split comes from `sha256(seed + owner/repo#pull)`: the first 32 bits as a fraction of
 2^32, below one third is tuning, below two thirds validation, the rest test. Both providers' fixtures
 of one PR share a split. Fixture ids are `owner/repo#pull@provider`.
 
@@ -80,8 +87,12 @@ and recall figure.
   clear their bars.
 - Hosted: at least 90% of rounds finish inside 210 seconds, otherwise the strategy is local-only.
 - Seeds: a gate. Missing more than one of the five originals, or any finding on a clean control, is
-  a no-go. The gate is run with `replay --seeds --strategy <name>`; a verdict without a seed gate
-  result reads "incomplete".
+  a no-go. The gate is run with `replay --seeds --strategy <name>`. `score --final` on a plan that
+  is not directional refuses (exit 1) before writing the one-shot marker unless every candidate
+  strategy has a result in `<experiments dir>/<plan-hash>/seed-gates.json`, shaped
+  `{"<strategy>": {"pass", "originalsMissed", "cleanFindings", "reasons"}}`. The marker is written
+  only after the report is produced. Storing `--seeds` results into that file is phase 6; until then
+  the file is written by hand from the `--seeds` output.
 - OpenAI is rationed. Fixtures for OpenAI run only on the test split, and the plan carries a separate
   `maxOpenAiUsd`. An Anthropic result that clears its bars but has no OpenAI confirmation reads
   "Anthropic-only, unconfirmed on OpenAI" and carries no go or no-go.
@@ -90,5 +101,9 @@ and recall figure.
 
 - The scorer takes audit-added defects as input but the command does not yet read them from the
   adjudication cache, so recall counts labelled claims only.
-- Seed gate results are not stored by `--seeds`, so `score` does not yet receive them.
+- `--seeds` does not yet write `seed-gates.json` (phase 6).
+- Paired comparisons use only PRs where both strategies completed the same `(round, trial)` cells;
+  the report prints how many PRs were excluded for incomplete coverage and for no judged finding.
+- A cell that failed is not stored, so its reserved cost counts against the cap in that run only; a
+  resumed run does not see it.
 - Cache temperature is recorded as unknown.

@@ -1,4 +1,6 @@
-import { join } from "node:path";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { VerdictCache } from "../adjudication/cache.js";
 import { type GhClient, ghCli } from "../gh.js";
 import { buildLiveWiring } from "../live-wiring.js";
@@ -33,6 +35,19 @@ import {
 import { readSeedGates } from "./seed-gates.js";
 import { isDirectional } from "./splits.js";
 import { defaultExperimentsDir, ResultsStore } from "./store.js";
+
+/** The committed plan, found from the package root so a built `dist/` copy still resolves. */
+export function defaultPlanFile(fromUrl: string): string {
+	let dir = dirname(fileURLToPath(fromUrl));
+	for (;;) {
+		if (existsSync(join(dir, "package.json")))
+			return join(dir, "docs", "review-experiments", "plan.json");
+		const parent = dirname(dir);
+		if (parent === dir)
+			return join(process.cwd(), "docs", "review-experiments", "plan.json");
+		dir = parent;
+	}
+}
 
 export type ExperimentMode = "plan" | "run" | "score";
 
@@ -132,7 +147,8 @@ export async function runExperiment(
 				),
 			].join("\n"),
 		);
-		return report.failed.length > 0 ? 1 : 0;
+		if (report.failed.length > 0) return 1;
+		return report.partial ? 3 : 0;
 	}
 
 	const testIds = plan.fixtures

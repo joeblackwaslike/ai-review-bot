@@ -5,7 +5,11 @@ import { describe, expect, it } from "vitest";
 import { buildPullFile, SIMPLE_PATCH } from "../../testing.js";
 import type { ReviewStrategy, StrategyResult } from "../strategy.js";
 import { makeFixture, makeLabels } from "../testkit.js";
-import { type ExperimentDeps, runExperiment } from "./command.js";
+import {
+	defaultPlanFile,
+	type ExperimentDeps,
+	runExperiment,
+} from "./command.js";
 import { type ExperimentPlan, planHash } from "./plan.js";
 import { fullSizePlan, samplePlan, seedFor } from "./testkit.js";
 
@@ -120,6 +124,27 @@ describe("runExperiment", () => {
 		expect(s.lines.join("\n")).toMatch(/no verdict outside --final/);
 	});
 
+	it("run exits 3 when the grid is partial and 0 when complete", async () => {
+		const tight = plan({
+			budgets: {
+				maxAnthropicUsd: 0.001,
+				maxOpenAiUsd: 1,
+				perCellUsd: 1,
+				perCellWallMs: 210_000,
+			},
+		});
+		expect(await call(setup(tight), "run")).toBe(3);
+		expect(await call(setup(plan()), "run")).toBe(0);
+	});
+
+	it("run exits 1 when a cell failed", async () => {
+		const s = setup(plan());
+		s.deps.runStrategy = async () => {
+			throw new Error("boom");
+		};
+		expect(await call(s, "run")).toBe(1);
+	});
+
 	it("allows one --final per plan hash", async () => {
 		const s = setup(
 			plan({
@@ -186,5 +211,15 @@ describe("score --final seed gates", () => {
 			),
 		);
 		expect(existsSync(join(dir, "final.marker"))).toBe(false);
+	});
+});
+
+describe("defaultPlanFile", () => {
+	it("is the repo's docs/review-experiments/plan.json, whatever --fixtures says", () => {
+		const file = defaultPlanFile(import.meta.url);
+		expect(file.endsWith(join("docs", "review-experiments", "plan.json"))).toBe(
+			true,
+		);
+		expect(existsSync(file)).toBe(true);
 	});
 });

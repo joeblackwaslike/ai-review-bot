@@ -25,6 +25,7 @@ import {
 	summarizeClasses,
 } from "./classify.js";
 import {
+	defaultPlanFile,
 	type ExperimentDeps,
 	type ExperimentMode,
 	realExperimentDeps,
@@ -690,17 +691,7 @@ export async function runReplay(
 		return runExperiment(
 			{
 				mode: parsed.experiment,
-				planFile:
-					parsed.planFile ??
-					join(
-						fixturesDir,
-						"..",
-						"..",
-						"..",
-						"docs",
-						"review-experiments",
-						"plan.json",
-					),
+				planFile: parsed.planFile ?? defaultPlanFile(import.meta.url),
 				final: parsed.final === true,
 			},
 			deps.experiment ??
