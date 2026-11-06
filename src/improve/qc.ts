@@ -2,6 +2,7 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import { createAIModel } from "../models.js";
 import { SEVERITY_LEVELS } from "../review.js";
+import type { LegacyProvider } from "../reviewer-id.js";
 import {
 	type ModelSelection,
 	outputBudget,
@@ -22,7 +23,7 @@ export type QcVerdict = z.infer<typeof QcVerdictSchema>;
 
 export interface JudgeableFinding {
 	id: number;
-	provider: "anthropic" | "openai";
+	provider: LegacyProvider;
 	path: string | null;
 	line: number | null;
 	title: string;

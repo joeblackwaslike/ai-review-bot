@@ -9,6 +9,7 @@ import {
 	type ProviderOptions,
 } from "./providers/effort.js";
 import type { ProviderName } from "./providers/names.js";
+import type { LegacyProvider } from "./reviewer-id.js";
 
 type Effort = NonNullable<ModelSelection["effort"]>;
 
@@ -112,7 +113,7 @@ const REVIEWER_ID_BY_PROVIDER = {
 
 export function routeModel(
 	context: RouterContext,
-	provider: "anthropic" | "openai",
+	provider: LegacyProvider,
 ): ModelSelection {
 	const config = getConfigTree();
 	const reviewerId = REVIEWER_ID_BY_PROVIDER[provider];

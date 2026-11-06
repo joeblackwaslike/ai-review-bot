@@ -54,7 +54,7 @@ describe("persistPostedComments", () => {
 			reviewId: 55,
 			headSha: "sha",
 			installationId: 5,
-			provider: "anthropic",
+			reviewer: "claude",
 			provenance,
 			nowMs: NOW,
 		});
@@ -108,7 +108,7 @@ describe("persistPostedComments", () => {
 			reviewId: 55,
 			headSha: "sha",
 			installationId: 5,
-			provider: "anthropic",
+			reviewer: "claude",
 			provenance,
 			nowMs: NOW,
 		});
@@ -140,7 +140,7 @@ describe("persistPostedComments", () => {
 			reviewId: 55,
 			headSha: "sha",
 			installationId: 5,
-			provider: "anthropic",
+			reviewer: "claude",
 			provenance: new Map(),
 			nowMs: NOW,
 		});
@@ -177,7 +177,7 @@ describe("persistPostedComments", () => {
 			reviewId: 55,
 			headSha: "sha",
 			installationId: 5,
-			provider: "anthropic",
+			reviewer: "claude",
 			provenance: new Map([
 				[
 					commentKey({ path: "src/x.ts", line: 10, title }),
@@ -187,5 +187,47 @@ describe("persistPostedComments", () => {
 			nowMs: NOW,
 		});
 		expect(count).toBe(1);
+	});
+
+	it("writes the legacy provider next to the reviewer, so reviewers on one provider keep separate rows", async () => {
+		const kv = createFakeKv();
+		const octokit = {
+			paginate: vi.fn(async () => [
+				{
+					id: 300,
+					path: "src/x.ts",
+					line: 10,
+					body: "**Bug**\n\nb",
+					pull_request_review_id: 55,
+				},
+			]),
+		};
+		const provenance = new Map([
+			[
+				commentKey({ path: "src/x.ts", line: 10, title: "Bug" }),
+				{ skills: ["a.md"], title: "Bug" },
+			],
+		]);
+		const persist = (reviewer: string) =>
+			persistPostedComments({
+				kv,
+				octokit,
+				owner: "o",
+				repo: "r",
+				pr: 7,
+				reviewId: 55,
+				headSha: "sha",
+				installationId: 5,
+				reviewer,
+				provenance,
+				nowMs: NOW,
+			});
+		await persist("claude");
+		await persist("claude-lite");
+		const active = await listActiveComments(kv, NOW);
+		expect(active.map((a) => [a.reviewer, a.provider]).sort()).toEqual([
+			["claude", "anthropic"],
+			["claude-lite", "claude-lite"],
+		]);
 	});
 });

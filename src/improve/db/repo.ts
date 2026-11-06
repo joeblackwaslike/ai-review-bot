@@ -1,4 +1,5 @@
 import { eq, sql } from "drizzle-orm";
+import type { LegacyProvider } from "../../reviewer-id.js";
 import type { FindingOutcome } from "../trends.js";
 import type { Db } from "./client.js";
 import {
@@ -232,7 +233,7 @@ export async function listFindingsForPr(
 ): Promise<
 	{
 		id: number;
-		provider: "anthropic" | "openai";
+		provider: LegacyProvider;
 		commentId: number | null;
 		path: string | null;
 		line: number | null;
@@ -249,7 +250,7 @@ export async function listFindingsForPr(
 	return (
 		result.rows as unknown as {
 			id: string | number;
-			provider: "anthropic" | "openai";
+			provider: LegacyProvider;
 			comment_id: string | number | null;
 			path: string | null;
 			line: number | null;

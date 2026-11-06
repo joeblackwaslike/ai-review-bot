@@ -1,4 +1,6 @@
-export type Provider = "anthropic" | "openai";
+import type { ReviewerId } from "../reviewer-id.js";
+
+export type Provider = ReviewerId;
 export type Label = "fixed" | "rejected" | "deferred" | "unadjudicated";
 
 export interface PostedClaim {

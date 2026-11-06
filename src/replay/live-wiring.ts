@@ -2,6 +2,7 @@ import { runAuditPass } from "../audit.js";
 import { resolveAnthropicAuth, resolveOpenAIAuth } from "../auth.js";
 import { computeCost } from "../models.js";
 import type { ModelReview } from "../review.js";
+import type { LegacyProvider } from "../reviewer-id.js";
 import { routeModel } from "../router.js";
 import type { GhClient } from "./gh.js";
 import type { LiveFinding, LiveOptions } from "./live.js";
@@ -43,7 +44,7 @@ export function buildLiveWiring(
 	fixture: ReplayFixture,
 	client: GhClient,
 ): LiveWiring {
-	const provider = fixture.provider;
+	const provider = fixture.provider as LegacyProvider;
 	const meta = { owner: fixture.owner, repo: fixture.repo, ref: "replay" };
 	const selection = routeModel(
 		{ additions: 0, deletions: 0, filePaths: [], labels: [] },

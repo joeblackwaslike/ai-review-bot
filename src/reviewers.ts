@@ -20,7 +20,7 @@ import {
 	validatePrivateKey,
 } from "./config.js";
 import { type ProviderName, splitModelId } from "./providers/names.js";
-import { legacyProviderOf, type ReviewerId } from "./reviewer-id.js";
+import type { ReviewerId } from "./reviewer-id.js";
 
 export type { LegacyProvider, ReviewerId } from "./reviewer-id.js";
 
@@ -187,7 +187,6 @@ export function buildAppConfig(
 		reviewResyncDelayMs: review.resyncDelaySeconds * 1000,
 		reviewCommentPrefix: reviewer?.commentPrefix ?? `${id}-review-bot`,
 		reviewCommand: review.command,
-		provider: legacyProviderOf(id) as AppConfig["provider"],
 		feedbackEnabled: review.feedbackEnabled,
 		improveEnabled: tree.improve.enabled,
 		improveCarrierEnabled: tree.improve.carrierEnabled,

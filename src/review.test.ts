@@ -52,6 +52,7 @@ import {
 import { readMetadataBlock } from "./review-metadata.js";
 import type { PersistedFinding } from "./review-state.js";
 import { findingId, parseBodyFindings } from "./review-state.js";
+import { reviewerFromLegacy } from "./reviewer-id.js";
 import { REVIEWER_TUNING } from "./reviewer-tuning.js";
 import { type ModelSelection, reasoningProviderOptions } from "./router.js";
 import {
@@ -752,7 +753,7 @@ const baseContext = {
 	commentPrefix: "ai-review-bot",
 	extraInstructions: "",
 	force: false,
-	provider: "anthropic" as const,
+	reviewer: "claude",
 	feedbackEnabled: false,
 	agentConcurrency: 1,
 	agentBudgetMs: 600_000,
@@ -2152,7 +2153,7 @@ describe("buildReview rate-limit decision", () => {
 			commentPrefix: "ai-review-bot",
 			extraInstructions: "",
 			force: true,
-			provider: "anthropic",
+			reviewer: "claude",
 			feedbackEnabled: false,
 			agentConcurrency: 1,
 			agentBudgetMs: 600_000,
@@ -2187,7 +2188,7 @@ describe("buildReview rate-limit decision", () => {
 			commentPrefix: "ai-review-bot",
 			extraInstructions: "",
 			force: true,
-			provider,
+			reviewer: reviewerFromLegacy(provider),
 			feedbackEnabled: false,
 			agentConcurrency: 1,
 			agentBudgetMs: 600_000,
@@ -2289,7 +2290,7 @@ describe("buildReview rate-limit decision", () => {
 			commentPrefix: "ai-review-bot",
 			extraInstructions: "",
 			force: true,
-			provider: "anthropic",
+			reviewer: "claude",
 			feedbackEnabled: false,
 			agentConcurrency: 1,
 			agentBudgetMs: 600_000,
@@ -3709,7 +3710,7 @@ describe("reviewer tuning wiring", () => {
 		const review = await buildReview({
 			octokit: buildOctokit(),
 			...baseContext,
-			provider: "anthropic" as const,
+			reviewer: "claude",
 		});
 
 		expect(review?.comments).toHaveLength(1);
@@ -3735,7 +3736,7 @@ describe("reviewer tuning wiring", () => {
 		const review = await buildReview({
 			octokit: buildOctokit(),
 			...baseContext,
-			provider: "openai" as const,
+			reviewer: "codex",
 		});
 
 		expect(review?.comments).toHaveLength(1);
@@ -3781,7 +3782,7 @@ describe("strict evidence rules propagation", () => {
 		await buildReview({
 			octokit: buildOctokit(),
 			...baseContext,
-			provider,
+			reviewer: reviewerFromLegacy(provider),
 		});
 
 		for (const call of mockBuildAgentSystemPrompt.mock.calls) {
@@ -3827,7 +3828,7 @@ describe("the retraction filter is off by default", () => {
 		const result = await buildReview({
 			octokit: buildOctokit(),
 			...baseContext,
-			provider: "anthropic" as const,
+			reviewer: "claude",
 		});
 		expect(result?.event).not.toBe("APPROVE");
 		expect(result?.body ?? "").toContain("Slot accounting");
@@ -3875,7 +3876,7 @@ describe("retraction phrases are filtered", () => {
 		const result = await buildReview({
 			octokit: buildOctokit(),
 			...baseContext,
-			provider: "anthropic" as const,
+			reviewer: "claude",
 		});
 
 		expect(result?.event).toBe("APPROVE");
@@ -3941,7 +3942,7 @@ describe("prior own findings propagation", () => {
 				files: filesWithA(),
 			}),
 			...baseContext,
-			provider: "anthropic" as const,
+			reviewer: "claude",
 		});
 
 		expect(mockBuildUserMessage).toHaveBeenCalledWith(
@@ -3969,7 +3970,7 @@ describe("prior own findings propagation", () => {
 			}),
 			...baseContext,
 			commentPrefix: "codex-review-bot",
-			provider: "openai" as const,
+			reviewer: "codex",
 		});
 
 		expect(mockBuildUserMessage).toHaveBeenCalledWith(
@@ -4070,7 +4071,7 @@ describe("provenance across collapsed claims", () => {
 				files: [buildPullFile("src/x.ts", TWENTY_LINE_PATCH)],
 			}),
 			...baseContext,
-			provider: "anthropic" as const,
+			reviewer: "claude",
 			feedbackEnabled: true,
 		});
 
@@ -4617,7 +4618,7 @@ describe("buildReview auth threading", () => {
 		await buildReview({
 			octokit: buildOctokit(),
 			...baseContext,
-			provider: "openai",
+			reviewer: "codex",
 			auth,
 		});
 
@@ -4657,7 +4658,7 @@ describe("buildReview auth threading", () => {
 		await buildReview({
 			octokit: buildOctokit(),
 			...baseContext,
-			provider: "openai",
+			reviewer: "codex",
 		});
 
 		const agentCalls = vi
@@ -6710,7 +6711,7 @@ describe("buildReview ledger suppression", () => {
 				line: 2,
 				severity: repeat.severity,
 				skill: "code-reviewer.md",
-				provider: "anthropic",
+				reviewer: "claude",
 			};
 			expect(recordsOf(recordDiscards)).toEqual([expected]);
 			expect(log.mock.calls.filter(([m]) => m === "finding discarded")).toEqual(
@@ -6792,7 +6793,7 @@ describe("buildReview ledger suppression", () => {
 					line: null,
 					severity: "P3",
 					skill: "code-reviewer.md",
-					provider: "anthropic",
+					reviewer: "claude",
 				},
 			]);
 		});
@@ -6995,7 +6996,7 @@ describe("buildReview ledger suppression", () => {
 					line: 40,
 					severity: "P2",
 					skill: "silent-failure-hunter.md",
-					provider: "anthropic",
+					reviewer: "claude",
 				},
 			]);
 		});
@@ -7040,7 +7041,7 @@ describe("buildReview ledger suppression", () => {
 					line: 9,
 					severity: "P2",
 					skill: "code-reviewer.md",
-					provider: "anthropic",
+					reviewer: "claude",
 				},
 				{
 					reason: "OFF_DIFF",
@@ -7051,7 +7052,7 @@ describe("buildReview ledger suppression", () => {
 					line: 2,
 					severity: "P3",
 					skill: "silent-failure-hunter.md",
-					provider: "anthropic",
+					reviewer: "claude",
 				},
 			]);
 		});
@@ -7134,7 +7135,7 @@ describe("buildReview ledger suppression", () => {
 					line: (i % 3) + 1,
 					severity: "P3",
 					skill: "code-reviewer.md",
-					provider: "anthropic",
+					reviewer: "claude",
 				})),
 			);
 		});
@@ -7171,7 +7172,7 @@ describe("buildReview ledger suppression", () => {
 					line: 9,
 					severity: "P2",
 					skill,
-					provider: "anthropic",
+					reviewer: "claude",
 				})),
 			);
 		});
@@ -7210,7 +7211,7 @@ describe("buildReview ledger suppression", () => {
 					line: 2,
 					severity: "P3",
 					skill,
-					provider: "anthropic",
+					reviewer: "claude",
 				})),
 			);
 		});
@@ -9847,7 +9848,7 @@ describe("classified agent failures with usage", () => {
 			commentPrefix: "ai-review-bot",
 			extraInstructions: "",
 			force: true,
-			provider: "anthropic" as const,
+			reviewer: "claude",
 			feedbackEnabled: false,
 			agentConcurrency: 1,
 			agentBudgetMs: 600_000,
@@ -10134,7 +10135,7 @@ describe("agent retry", () => {
 			commentPrefix: "ai-review-bot",
 			extraInstructions: "",
 			force: true,
-			provider: "anthropic" as const,
+			reviewer: "claude",
 			feedbackEnabled: false,
 			agentConcurrency: 1,
 			agentBudgetMs: 600_000,

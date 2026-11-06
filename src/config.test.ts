@@ -506,7 +506,6 @@ describe("config tree wiring", () => {
 			reviewResyncDelayMs: 0,
 			reviewCommentPrefix: "ai-review-bot",
 			reviewCommand: "/ai-review",
-			provider: "anthropic",
 			feedbackEnabled: false,
 			improveEnabled: false,
 			improveCarrierEnabled: false,
@@ -532,10 +531,10 @@ describe("config tree wiring", () => {
 		expect(concurrencyWarnings).toHaveLength(1);
 	});
 
-	it("getOpenAIAppConfig keeps provider openai and its own prefix default", () => {
+	it("getOpenAIAppConfig keeps reviewer codex and its own prefix default", () => {
 		setOpenAIEnv();
 		const c = getOpenAIAppConfig();
-		expect(c.provider).toBe("openai");
+		expect(c.reviewer).toBe("codex");
 		expect(c.reviewCommentPrefix).toBe("codex-review-bot");
 	});
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AppConfig } from "./config.js";
 import type { SubmitReviewOutcome } from "./github-app.js";
+import { reviewerFromLegacy } from "./reviewer-id.js";
 import { watchPr } from "./watch.js";
 
 function buildTarget(provider: "anthropic" | "openai") {
@@ -8,7 +9,7 @@ function buildTarget(provider: "anthropic" | "openai") {
 		provider,
 		app: { marker: `${provider}-app` } as never,
 		installationId: provider === "anthropic" ? 1 : 2,
-		config: { provider } as unknown as AppConfig,
+		config: { reviewer: reviewerFromLegacy(provider) } as unknown as AppConfig,
 	};
 }
 
@@ -367,8 +368,8 @@ describe("watchPr", () => {
 		const request = vi
 			.fn()
 			.mockResolvedValue(pollResponse({ headSha: "sha1" }));
-		const submitReview = vi.fn((arg: { config: { provider: string } }) =>
-			arg.config.provider === "openai"
+		const submitReview = vi.fn((arg: { config: { reviewer: string } }) =>
+			arg.config.reviewer === "codex"
 				? Promise.reject(new Error("boom"))
 				: Promise.resolve(posted),
 		);
@@ -390,13 +391,13 @@ describe("watchPr", () => {
 		// Cycle 2, same SHA: anthropic must NOT be called again (it already
 		// posted for sha1), but openai must be retried (it never succeeded).
 		const calls = submitReview.mock.calls as unknown as Array<
-			[{ config: { provider: string } }]
+			[{ config: { reviewer: string } }]
 		>;
 		const anthropicCalls = calls.filter(
-			([arg]) => arg.config.provider === "anthropic",
+			([arg]) => arg.config.reviewer === "claude",
 		);
 		const openaiCalls = calls.filter(
-			([arg]) => arg.config.provider === "openai",
+			([arg]) => arg.config.reviewer === "codex",
 		);
 		expect(anthropicCalls).toHaveLength(1);
 		expect(openaiCalls).toHaveLength(2);
@@ -523,11 +524,12 @@ describe("watchPr", () => {
 		expect(request).toHaveBeenCalledTimes(2);
 		expect(request.mock.calls[1][0]).toBe(PR_ROUTE);
 		const calls = submitReview.mock.calls as unknown as Array<
-			[{ config: { provider: string }; pullRequest: { head: { sha: string } } }]
+			[{ config: { reviewer: string }; pullRequest: { head: { sha: string } } }]
 		>;
 		const shaFor = (provider: string) =>
-			calls.find(([arg]) => arg.config.provider === provider)?.[0].pullRequest
-				.head.sha;
+			calls.find(
+				([arg]) => arg.config.reviewer === reviewerFromLegacy(provider),
+			)?.[0].pullRequest.head.sha;
 		expect(shaFor("anthropic")).toBe("old");
 		expect(shaFor("openai")).toBe("new");
 	});
@@ -575,9 +577,9 @@ describe("watchPr", () => {
 
 		expect(submitReview).toHaveBeenCalledTimes(2);
 		const calls = submitReview.mock.calls as unknown as Array<
-			[{ config: { provider: string }; pullRequest: { head: { sha: string } } }]
+			[{ config: { reviewer: string }; pullRequest: { head: { sha: string } } }]
 		>;
-		const openaiCall = calls.find(([arg]) => arg.config.provider === "openai");
+		const openaiCall = calls.find(([arg]) => arg.config.reviewer === "codex");
 		expect(openaiCall?.[0].pullRequest.head.sha).toBe("old");
 		expect(log).toHaveBeenCalledWith(
 			expect.stringContaining("re-poll after anthropic post failed"),
@@ -878,8 +880,8 @@ describe("watchPr", () => {
 			// anthropic always posts; openai always reports no new review, so
 			// only anthropic's window ever accumulates posts.
 			const submitReview = vi.fn(
-				async ({ config }: { config: { provider: string } }) =>
-					config.provider === "anthropic" ? posted : noNewReview,
+				async ({ config }: { config: { reviewer: string } }) =>
+					config.reviewer === "claude" ? posted : noNewReview,
 			);
 			let clock = 0;
 			const now = vi.fn(() => {

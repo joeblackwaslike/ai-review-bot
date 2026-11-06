@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import type { AgentFailure, ErrorName, FailureClass } from "./agent-failure.js";
 import { getConfigTree } from "./config/load.js";
 import { readMetadataBlock } from "./review-metadata.js";
+import type { ReviewerId } from "./reviewer-id.js";
 
 export type AgentStatus =
 	| "ok"
@@ -51,6 +52,7 @@ export interface AgentLogContext {
 	pr: number;
 	sha: string;
 	provider: string;
+	reviewer: ReviewerId;
 	model: string;
 	messages?: Record<string, string>;
 	/** Stack frames of `unknown` failures, for the console line only. */

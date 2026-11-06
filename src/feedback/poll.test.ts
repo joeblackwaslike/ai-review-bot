@@ -11,6 +11,7 @@ function rec(over: Partial<PostedCommentRecord> = {}): PostedCommentRecord {
 	return {
 		commentId: 1,
 		provider: "anthropic",
+		reviewer: "claude",
 		installationId: 5,
 		owner: "o",
 		repo: "r",

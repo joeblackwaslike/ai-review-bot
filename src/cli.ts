@@ -61,6 +61,7 @@ import { branchForHead, headShaFor } from "./mistakes/session.js";
 import { defaultPricingFile, primePrices } from "./pricing.js";
 import { runReplay } from "./replay/command.js";
 import { formatCost, slugify } from "./report.js";
+import type { LegacyProvider } from "./reviewer-id.js";
 import { defaultGitRunner } from "./sources.js";
 import { type ProviderTarget, watchPr } from "./watch.js";
 
@@ -453,7 +454,7 @@ async function cmdReady(args: string[]): Promise<void> {
 export async function cmdWatch(args: string[]): Promise<void> {
 	let pr: number | undefined;
 	let repoArg: string | undefined;
-	let providerArg: "anthropic" | "openai" | undefined;
+	let providerArg: LegacyProvider | undefined;
 	// 5-min conservative default; see CLAUDE.md §watch and
 	// docs/post-mortem-review-loop-churn.md. --interval overrides for a
 	// supervised fast pass.
@@ -492,7 +493,7 @@ export async function cmdWatch(args: string[]): Promise<void> {
 		? { owner: repoArg.split("/")[0], repo: repoArg.split("/")[1] }
 		: originSlug();
 
-	const providers: Array<"anthropic" | "openai"> = providerArg
+	const providers: Array<LegacyProvider> = providerArg
 		? [providerArg]
 		: ["anthropic", "openai"];
 
@@ -543,7 +544,7 @@ async function cmdLegacyRemote(args: string[]): Promise<void> {
 	let ref: string | undefined;
 	let dryRun = false;
 	let extraInstructions = "";
-	let provider: "anthropic" | "openai" = "anthropic";
+	let provider: LegacyProvider = "anthropic";
 
 	for (let i = 1; i < args.length; i++) {
 		const a = args[i];

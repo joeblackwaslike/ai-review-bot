@@ -3,7 +3,7 @@ import type { ReviewerId } from "./reviewer-id.js";
 import { buildAppConfig } from "./reviewers.js";
 
 export interface AppConfig {
-	reviewer?: ReviewerId;
+	reviewer: ReviewerId;
 	appSlug?: string;
 	appId: string;
 	privateKey: string;
@@ -13,7 +13,6 @@ export interface AppConfig {
 	reviewResyncDelayMs: number;
 	reviewCommentPrefix: string;
 	reviewCommand: string;
-	provider: "anthropic" | "openai";
 	feedbackEnabled: boolean;
 	/** Master switch for the improvement corpus. Off by default so a deployment
 	 * without DATABASE_URL behaves exactly as before. */

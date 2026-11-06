@@ -74,6 +74,7 @@ import {
 	type ReviewState,
 } from "./review-state.js";
 import {
+	type LegacyProvider,
 	legacyProviderOf,
 	type ReviewerId,
 	reviewerFromLegacy,
@@ -132,7 +133,7 @@ interface ReviewContext {
 	commentPrefix: string;
 	extraInstructions: string;
 	force: boolean;
-	provider: "anthropic" | "openai";
+	reviewer: ReviewerId;
 	feedbackEnabled: boolean;
 	agentConcurrency: number;
 	/** Wall-clock allowance for launching agents. Past it the remaining agents are
@@ -1827,7 +1828,7 @@ interface DiscardedFinding {
 function discardFields(
 	finding: DiscardedFinding,
 	skill: string | null,
-	provider: Discard["provider"],
+	reviewer: Discard["reviewer"],
 ): DiscardFields {
 	return {
 		title: finding.title,
@@ -1835,7 +1836,7 @@ function discardFields(
 		line: finding.line ?? null,
 		severity: finding.severity ?? null,
 		skill,
-		provider,
+		reviewer,
 	};
 }
 
@@ -1843,9 +1844,9 @@ function toDiscard(
 	finding: DiscardedFinding,
 	reason: Exclude<DiscardReason, "OFF_DIFF">,
 	skill: string | null,
-	provider: Discard["provider"],
+	reviewer: Discard["reviewer"],
 ): Discard {
-	const fields = discardFields(finding, skill, provider);
+	const fields = discardFields(finding, skill, reviewer);
 	return reason === "SUPPRESSED_OPEN"
 		? { ...fields, reason, code: null, disposition: "held" }
 		: { ...fields, reason, code: null, disposition: "dropped" };
@@ -1922,7 +1923,7 @@ async function buildReviewInner(
 	const ownReviewOf = (review: PullRequestReview) =>
 		isOwnReview(review.body, {
 			commentPrefix: context.commentPrefix,
-			reviewer: reviewerFromLegacy(context.provider),
+			reviewer: context.reviewer,
 		});
 
 	if (!context.force) {
@@ -2038,7 +2039,7 @@ async function buildReviewInner(
 			filePaths,
 			labels: context.labels,
 		},
-		context.provider,
+		legacyProviderOf(context.reviewer) as LegacyProvider,
 	);
 
 	// Triage gate (re-review only). On a re-review against an OLDER head SHA, a
@@ -2084,7 +2085,7 @@ async function buildReviewInner(
 			repo: context.repo,
 			pull: context.pullNumber,
 			commentPrefix: context.commentPrefix,
-			provider: context.provider,
+			reviewer: context.reviewer,
 		});
 		return ledgerLoad;
 	};
@@ -2549,7 +2550,8 @@ async function buildReviewInner(
 				repo: context.repo,
 				pr: context.pullNumber,
 				sha: context.headSha,
-				provider: context.provider,
+				provider: selection.provider,
+				reviewer: context.reviewer,
 				model: selection.model,
 				messages,
 				stacks,
@@ -2813,7 +2815,7 @@ async function buildReviewInner(
 			reason: Exclude<DiscardReason, "OFF_DIFF">,
 		) =>
 			discards.push(
-				toDiscard(finding, reason, agentSkills[index], context.provider),
+				toDiscard(finding, reason, agentSkills[index], context.reviewer),
 			);
 		const pr = {
 			owner: context.owner,
@@ -2900,7 +2902,7 @@ async function buildReviewInner(
 				f,
 				"RESOLVED_LOCATION",
 				skillOf.get(f) ?? null,
-				context.provider,
+				context.reviewer,
 			),
 		);
 	}
@@ -3009,7 +3011,7 @@ async function buildReviewInner(
 		const skills = [...(discardSkillsByKey.get(commentKey(c)) ?? [])];
 		for (const skill of skills.length ? skills : [null])
 			discards.push({
-				...discardFields(c, skill, context.provider),
+				...discardFields(c, skill, context.reviewer),
 				...kind,
 				disposition: "dropped",
 			});
@@ -3241,7 +3243,7 @@ async function buildReviewInner(
 		priorSha,
 		headSha: context.headSha,
 		reviewCount: reviewCountBase + 1,
-		reviewer: reviewerFromLegacy(context.provider),
+		reviewer: context.reviewer,
 		model: selection.model,
 		cost,
 		ledgerNote: loadedLedger

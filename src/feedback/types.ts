@@ -1,4 +1,5 @@
-export type Provider = "anthropic" | "openai";
+import type { ReviewerId } from "../reviewer-id.js";
+
 /** `confused` (😕) means the finding did not land — it is not a synonym for `down`. It always
  * arrives with a reply on the same thread explaining why, and that reply is what carries the
  * intent; a `confused` verdict read without its reply is not interpretable. */
@@ -15,7 +16,10 @@ export interface PostedCommentRecord {
 	/** Absent on records written before carriers existed; treated as "inline",
 	 * which is what they were. */
 	surface?: CommentSurface;
-	provider: Provider;
+	/** Legacy provider form of `reviewer`, written for one more release so older
+	 * readers keep finding the record under its original KV key. */
+	provider: string;
+	reviewer: ReviewerId;
 	installationId: number;
 	owner: string;
 	repo: string;
@@ -41,7 +45,8 @@ export interface FeedbackEvent {
 	commentId: number;
 	/** Which surface the reaction was left on; absent means inline. */
 	surface?: CommentSurface;
-	provider: Provider;
+	provider: string;
+	reviewer: ReviewerId;
 	owner: string;
 	repo: string;
 	pr: number;

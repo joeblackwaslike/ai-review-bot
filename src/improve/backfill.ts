@@ -1,3 +1,4 @@
+import type { LegacyProvider } from "../reviewer-id.js";
 import type { Db } from "./db/client.js";
 import { insertRawFeedback, upsertFinding } from "./db/repo.js";
 import { findingNaturalKey, parseFindingComment } from "./findings.js";
@@ -58,7 +59,7 @@ export interface BackfillResult {
 /** Our own review bots, mapped to the corpus provider. Third-party reviewers
  * (coderabbitai, sourcery-ai, chatgpt-codex-connector) are deliberately absent:
  * their findings are not ours to judge and would pollute the catalog. */
-export const BOT_PROVIDERS: Record<string, "anthropic" | "openai"> = {
+export const BOT_PROVIDERS: Record<string, LegacyProvider> = {
 	"anthropicreviewbot[bot]": "anthropic",
 	"codexreviewbot[bot]": "openai",
 };
@@ -181,15 +182,15 @@ export function findUnratedFindings(
  * PR by any signal backfillPr collects), since there is nothing to attribute
  * to either way. */
 export function attributeProviderForComment(
-	activeProviders: Set<"anthropic" | "openai">,
+	activeProviders: Set<LegacyProvider>,
 	body: string,
-): "anthropic" | "openai" | null {
+): LegacyProvider | null {
 	if (activeProviders.size === 1) {
 		const [only] = activeProviders;
 		return only;
 	}
 
-	const mentioned = new Set<"anthropic" | "openai">();
+	const mentioned = new Set<LegacyProvider>();
 	if (
 		activeProviders.has("anthropic") &&
 		/(?:^|[^a-z0-9-])anthropicreviewbot(?![a-z0-9-])/i.test(body)
@@ -354,7 +355,7 @@ export async function backfillPr(
 	const activeProviders = new Set(
 		[...comments, ...issueComments]
 			.map((c) => BOT_PROVIDERS[c.user?.login ?? ""])
-			.filter((p): p is "anthropic" | "openai" => p !== undefined),
+			.filter((p): p is LegacyProvider => p !== undefined),
 	);
 
 	for (const ic of issueComments) {

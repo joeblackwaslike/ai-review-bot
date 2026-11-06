@@ -64,7 +64,7 @@ const run = (
 ) =>
 	resolveStaleThreads(octokit, "o", "r", 1, {
 		commentPrefix: PREFIX,
-		provider: "anthropic",
+		reviewer: "claude",
 		resolved: r,
 	});
 
@@ -201,5 +201,30 @@ describe("resolveStaleThreads", () => {
 		const f = fakeOctokit([]);
 		await run(f.octokit, []);
 		expect(f.queries()).toBe(0);
+	});
+
+	it("resolves only a custom reviewer's own threads, leaving claude and codex alone", async () => {
+		const bodyFor = (marker: string) => ({
+			path: "a.ts",
+			body: botBody,
+			typename: "Bot",
+			reviewBody: `### ${PREFIX}\n\nsummary\n\n${marker}`,
+		});
+		const f = fakeOctokit([
+			{
+				id: "mine",
+				...bodyFor(
+					"<!-- ai-review:reviewer=gemini -->\n<!-- ai-review:provider=gemini -->",
+				),
+			},
+			{ id: "claude", ...bodyFor("<!-- ai-review:provider=anthropic -->") },
+			{ id: "codex", ...bodyFor("<!-- ai-review:provider=openai -->") },
+		]);
+		await resolveStaleThreads(f.octokit, "o", "r", 1, {
+			commentPrefix: PREFIX,
+			reviewer: "gemini",
+			resolved,
+		});
+		expect(f.mutations).toEqual(["mine"]);
 	});
 });

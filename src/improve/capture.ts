@@ -1,6 +1,11 @@
 import { findProvenance } from "../comment-key.js";
 import { type Discard, discardKey } from "../discards.js";
 import { claimTitle } from "../replay/claims.js";
+import {
+	type LegacyProvider,
+	legacyProviderOf,
+	type ReviewerId,
+} from "../reviewer-id.js";
 import type { Db } from "./db/client.js";
 import { insertDiscards, upsertFinding } from "./db/repo.js";
 import { findingNaturalKey } from "./findings.js";
@@ -123,13 +128,14 @@ export async function capturePostedReview(deps: {
 	pr: number;
 	reviewId: number;
 	headSha: string;
-	provider: "anthropic" | "openai";
+	reviewer: ReviewerId;
 	provenance: Provenance;
 	summary: string;
 	commentPrefix: string;
 	postCarrier: boolean;
 }): Promise<{ findings: number; carrierCommentId: number | null }> {
-	const { db, octokit, owner, repo, pr, provider } = deps;
+	const { db, octokit, owner, repo, pr } = deps;
+	const provider = legacyProviderOf(deps.reviewer) as LegacyProvider;
 	let findings = 0;
 	let carrierCommentId: number | null = null;
 
@@ -238,7 +244,7 @@ export function persistDiscards(deps: {
 		await insertDiscards(
 			db,
 			discards.map((d) => ({
-				provider: d.provider,
+				provider: legacyProviderOf(d.reviewer) as LegacyProvider,
 				owner,
 				repo,
 				pr,

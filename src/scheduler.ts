@@ -1,8 +1,9 @@
 import { Client, Receiver } from "@upstash/qstash";
 import type { AppConfig } from "./config.js";
+import type { LegacyProvider } from "./reviewer-id.js";
 
 export interface ReviewRunMessage {
-	provider: "anthropic" | "openai";
+	provider: LegacyProvider;
 	owner: string;
 	repo: string;
 	pullNumber: number;

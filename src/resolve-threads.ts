@@ -1,6 +1,6 @@
 import { splitInlineClaims } from "./replay/claims.js";
 import { isOwnReview } from "./review-metadata.js";
-import { reviewerFromLegacy } from "./reviewer-id.js";
+import type { ReviewerId } from "./reviewer-id.js";
 
 export interface ResolvedFindingRef {
 	path: string | null;
@@ -68,7 +68,7 @@ async function fetchOwnOpenThreads(
 	owner: string,
 	repo: string,
 	pullNumber: number,
-	own: { commentPrefix: string; provider: string },
+	own: { commentPrefix: string; reviewer: ReviewerId },
 ): Promise<ReviewThread[]> {
 	const threads: ReviewThread[] = [];
 	let cursor: string | null = null;
@@ -91,7 +91,7 @@ async function fetchOwnOpenThreads(
 			if (
 				!isOwnReview(first.pullRequestReview?.body, {
 					commentPrefix: own.commentPrefix,
-					reviewer: reviewerFromLegacy(own.provider),
+					reviewer: own.reviewer,
 				})
 			)
 				continue;
@@ -124,7 +124,7 @@ export async function resolveStaleThreads(
 	pullNumber: number,
 	options: {
 		commentPrefix: string;
-		provider: "anthropic" | "openai";
+		reviewer: ReviewerId;
 		resolved: readonly ResolvedFindingRef[];
 	},
 ): Promise<number> {

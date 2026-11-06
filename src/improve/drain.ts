@@ -1,5 +1,6 @@
 import type { KvClient } from "../feedback/kv.js";
 import type { FeedbackEvent } from "../feedback/types.js";
+import type { LegacyProvider } from "../reviewer-id.js";
 import type { Db } from "./db/client.js";
 import { insertRawFeedback, type RawFeedbackInsert } from "./db/repo.js";
 
@@ -17,7 +18,7 @@ export function mapKvEventToRaw(event: FeedbackEvent): RawFeedbackInsert {
 		event.surface === "carrier" ? "review_reaction" : "inline_reaction";
 	return {
 		source,
-		provider: event.provider,
+		provider: event.provider as LegacyProvider,
 		owner: event.owner,
 		repo: event.repo,
 		pr: event.pr,

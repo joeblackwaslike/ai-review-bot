@@ -6,6 +6,7 @@ function event(over: Partial<FeedbackEvent> = {}): FeedbackEvent {
 	return {
 		commentId: 101,
 		provider: "anthropic",
+		reviewer: "claude",
 		owner: "o",
 		repo: "r",
 		pr: 7,

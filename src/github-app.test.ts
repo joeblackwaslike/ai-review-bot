@@ -13,6 +13,7 @@ import { getDb } from "./improve/db/client.js";
 import { createTestDb } from "./improve/db/testing.js";
 import { quotaCommentMarker, rateLimitCommentMarker } from "./notify.js";
 import { buildReview } from "./review.js";
+import { legacyProviderOf } from "./reviewer-id.js";
 import type { ReviewRunMessage } from "./scheduler.js";
 import { buildPullRequestPayload } from "./testing.js";
 
@@ -35,7 +36,7 @@ vi.mock("./config.js", () => ({
 		reviewEnabled: true,
 		reviewCommentPrefix: "ai-review-bot",
 		reviewCommand: "/ai-review",
-		provider: "anthropic",
+		reviewer: "claude",
 		agentConcurrency: 1,
 		agentBudgetMs: 600_000,
 		tier2Enabled: false,
@@ -137,7 +138,7 @@ const baseArgs = {
 		reviewResyncDelayMs: 0,
 		reviewCommentPrefix: "ai-review-bot",
 		reviewCommand: "/ai-review",
-		provider: "anthropic" as const,
+		reviewer: "claude",
 		feedbackEnabled: false,
 		improveEnabled: false,
 		improveCarrierEnabled: false,
@@ -244,7 +245,7 @@ describe("maybeSubmitReview", () => {
 		// Assert the claim was actually released by the finally block — not merely
 		// absent because beforeEach cleared the store. The throwing run above set
 		// the claim via setNx; the finally must have deleted it.
-		const claimKey = `review-claim:${baseArgs.config.provider}:${baseArgs.owner}/${baseArgs.repo}#${baseArgs.pullNumber}@${pr.head.sha}`;
+		const claimKey = `review-claim:${legacyProviderOf(baseArgs.config.reviewer)}:${baseArgs.owner}/${baseArgs.repo}#${baseArgs.pullNumber}@${pr.head.sha}`;
 		expect(kvStore.has(claimKey)).toBe(false);
 
 		// The failed run must not lock the commit out of a retry.
@@ -872,14 +873,14 @@ describe("maybeSubmitReview", () => {
 
 	// anthropicreviewbot (PRRT_kwDOSM5cU86Z_qo5) reviewing PR #67: the test
 	// above round-trips a real posted body through the dedup check, but since
-	// its fixture's quotaProvider ("anthropic") always matches config.provider
-	// ("anthropic"), it can't distinguish "keyed off config.provider" from
+	// its fixture's quotaProvider ("anthropic") always matches config.reviewer
+	// ("anthropic"), it can't distinguish "keyed off config.reviewer" from
 	// "keyed off quotaProvider" — a regression that reverted the marker key to
 	// quotaProvider would still pass it. This is the invariant test that check
 	// was folded away from: quotaProvider is deliberately "unknown" (unset)
-	// while config.provider stays "anthropic", so only a key derived from
-	// config.provider can dedupe correctly.
-	it("keys the quota-exhausted marker off config.provider even when quotaProvider diverges", async () => {
+	// while config.reviewer stays "anthropic", so only a key derived from
+	// config.reviewer can dedupe correctly.
+	it("keys the quota-exhausted marker off config.reviewer even when quotaProvider diverges", async () => {
 		mockBuildReview.mockReset().mockResolvedValue({
 			event: "QUOTA_EXHAUSTED" as const,
 			body: "",
@@ -981,9 +982,9 @@ describe("maybeSubmitReview", () => {
 		expect(postedBody).toBeDefined();
 		expect(postedBody).toContain("Anthropic");
 
-		// Same underlying condition, same config.provider, but this retry's
+		// Same underlying condition, same config.reviewer, but this retry's
 		// quotaProvider is unset — the human-facing label text differs even
-		// though the marker (keyed off config.provider) does not.
+		// though the marker (keyed off config.reviewer) does not.
 		mockBuildReview.mockReset().mockResolvedValueOnce({
 			event: "QUOTA_EXHAUSTED" as const,
 			body: "",
@@ -1670,7 +1671,7 @@ describe("maybeSubmitReview", () => {
 		// Findings were delivered via the fallback comment, so the claim must be
 		// retained (TTL backstop only) — releasing it would let a redelivery re-run
 		// the agents and double-bill the same commit.
-		const claimKey = `review-claim:${baseArgs.config.provider}:${baseArgs.owner}/${baseArgs.repo}#${baseArgs.pullNumber}@${pr.head.sha}`;
+		const claimKey = `review-claim:${legacyProviderOf(baseArgs.config.reviewer)}:${baseArgs.owner}/${baseArgs.repo}#${baseArgs.pullNumber}@${pr.head.sha}`;
 		expect(kvStore.has(claimKey)).toBe(true);
 	});
 
@@ -1691,7 +1692,7 @@ describe("maybeSubmitReview", () => {
 
 		await maybeSubmitReview({ app, ...baseArgs }).catch(() => {});
 
-		const claimKey = `review-claim:${baseArgs.config.provider}:${baseArgs.owner}/${baseArgs.repo}#${baseArgs.pullNumber}@${pr.head.sha}`;
+		const claimKey = `review-claim:${legacyProviderOf(baseArgs.config.reviewer)}:${baseArgs.owner}/${baseArgs.repo}#${baseArgs.pullNumber}@${pr.head.sha}`;
 		expect(kvStore.has(claimKey)).toBe(false);
 	});
 
@@ -1741,7 +1742,7 @@ describe("maybeSubmitReview", () => {
 			config: {
 				reviewEnabled: true,
 				reviewCommentPrefix: "ai-review-bot",
-				provider: "anthropic",
+				reviewer: "claude",
 				feedbackEnabled: true,
 				improveEnabled: false,
 				improveCarrierEnabled: false,
@@ -1755,7 +1756,7 @@ describe("maybeSubmitReview", () => {
 				pr: 7,
 				reviewId: 55,
 				installationId: 5,
-				provider: "anthropic",
+				reviewer: "claude",
 				headSha: "sha",
 				provenance: new Map([
 					["src/x.ts:10", { skills: ["code-reviewer.md"], title: "Bug" }],
@@ -1810,7 +1811,7 @@ describe("maybeSubmitReview", () => {
 			config: {
 				reviewEnabled: true,
 				reviewCommentPrefix: "ai-review-bot",
-				provider: "anthropic",
+				reviewer: "claude",
 				feedbackEnabled: false,
 				improveEnabled: false,
 				improveCarrierEnabled: false,
@@ -1868,7 +1869,7 @@ describe("maybeSubmitReview", () => {
 				config: {
 					reviewEnabled: true,
 					reviewCommentPrefix: "ai-review-bot",
-					provider: "anthropic",
+					reviewer: "claude",
 					feedbackEnabled: true,
 					improveEnabled: false,
 					improveCarrierEnabled: false,
@@ -1915,6 +1916,89 @@ describe("maybeSubmitReview", () => {
 		expect(mockBuildReview).toHaveBeenCalledWith(
 			expect.objectContaining({ auth: undefined }),
 		);
+	});
+
+	describe("reviewer identity in persisted keys", () => {
+		const claimKeyFor = async (reviewer: string) => {
+			kvStore.clear();
+			mockBuildReview.mockReset().mockResolvedValue({
+				event: "COMMENT" as const,
+				body: "Review body.",
+				comments: [],
+				metadata: DEFAULT_METADATA,
+			});
+			await maybeSubmitReview({
+				app: buildMockApp().app,
+				...baseArgs,
+				config: { ...baseArgs.config, reviewer },
+			});
+			return [...kvStore.keys()].filter((k) => k.startsWith("review-claim:"));
+		};
+
+		it("claim key for claude is byte-identical to the old key", async () => {
+			expect(await claimKeyFor("claude")).toEqual([
+				`review-claim:anthropic:owner/repo#1@${pr.head.sha}`,
+			]);
+		});
+
+		it("claim key for codex is byte-identical to the old key", async () => {
+			expect(await claimKeyFor("codex")).toEqual([
+				`review-claim:openai:owner/repo#1@${pr.head.sha}`,
+			]);
+		});
+
+		it("two reviewers on the same provider get different claim keys", async () => {
+			const claude = await claimKeyFor("claude");
+			const lite = await claimKeyFor("claude-lite");
+			expect(lite).toEqual([
+				`review-claim:claude-lite:owner/repo#1@${pr.head.sha}`,
+			]);
+			expect(lite).not.toEqual(claude);
+		});
+
+		const quotaBody = async (reviewer: string) => {
+			mockBuildReview.mockReset().mockResolvedValue({
+				event: "QUOTA_EXHAUSTED" as const,
+				body: "",
+				comments: [],
+				validLinesByPath: new Map(),
+				metadata: DEFAULT_METADATA,
+				quotaProvider: "anthropic",
+			});
+			let posted = "";
+			const octokit = {
+				request: vi.fn(
+					async (route: string, params: Record<string, unknown>) => {
+						if (route.startsWith("GET") && route.includes("/comments"))
+							return { data: [] };
+						if (route.startsWith("POST") && route.includes("/comments"))
+							posted = params.body as string;
+						return { data: {} };
+					},
+				),
+			};
+			kvStore.clear();
+			await maybeSubmitReview({
+				app: { getInstallationOctokit: vi.fn(async () => octokit) } as never,
+				...baseArgs,
+				config: { ...baseArgs.config, reviewer },
+			});
+			return posted;
+		};
+
+		it("quota-exhausted marker for claude is the old string", async () => {
+			expect(await quotaBody("claude")).toContain(
+				"<!-- ai-review:quota-exhausted-comment:anthropic -->",
+			);
+		});
+
+		it("quota-exhausted marker for gemini embeds gemini", async () => {
+			const body = await quotaBody("gemini");
+			expect(body).toContain(
+				"<!-- ai-review:quota-exhausted-comment:gemini -->",
+			);
+			expect(body).not.toContain("quota-exhausted-comment:anthropic");
+		});
 	});
 });
 
@@ -2036,7 +2120,7 @@ describe("runScheduledReview", () => {
 			{
 				reviewEnabled: true,
 				reviewCommentPrefix: "ai-review-bot",
-				provider: "anthropic",
+				reviewer: "claude",
 			} as never,
 		);
 
@@ -2127,7 +2211,7 @@ describe("discard recording wiring", () => {
 		line: 10,
 		severity: "P2",
 		skill: "code-reviewer.md",
-		provider: "anthropic",
+		reviewer: "claude",
 	};
 	const improveOn = { ...baseArgs.config, improveEnabled: true };
 

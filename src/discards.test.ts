@@ -10,7 +10,7 @@ const base: Discard = {
 	line: 3,
 	severity: "P2",
 	skill: "code-reviewer",
-	provider: "anthropic",
+	reviewer: "claude",
 };
 
 describe("discardKey", () => {

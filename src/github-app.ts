@@ -21,6 +21,7 @@ import { primePrices } from "./pricing.js";
 import { resolveStaleThreads } from "./resolve-threads.js";
 import type { ReviewDecision } from "./review.js";
 import { buildReview } from "./review.js";
+import { type LegacyProvider, legacyProviderOf } from "./reviewer-id.js";
 import type { ReviewRunMessage } from "./scheduler.js";
 import { scheduleReview } from "./scheduler.js";
 
@@ -483,7 +484,7 @@ export async function maybeSubmitReview(args: {
 	// intentionally bypasses it) and SHA-gated. Review state comes from GitHub,
 	// so buildReview takes no KV client.
 	const claimKv = force || !validSha ? null : getKv();
-	const claimKey = `review-claim:${config.provider}:${owner}/${repo}#${pullNumber}@${headSha}`;
+	const claimKey = `review-claim:${legacyProviderOf(config.reviewer)}:${owner}/${repo}#${pullNumber}@${headSha}`;
 	let claimed = false;
 	if (claimKv) {
 		try {
@@ -550,7 +551,7 @@ export async function maybeSubmitReview(args: {
 			commentPrefix: config.reviewCommentPrefix,
 			extraInstructions,
 			force,
-			provider: config.provider,
+			reviewer: config.reviewer,
 			feedbackEnabled: config.feedbackEnabled,
 			agentConcurrency: config.agentConcurrency,
 			agentBudgetMs: config.agentBudgetMs,
@@ -578,12 +579,12 @@ export async function maybeSubmitReview(args: {
 			const billing = billingUrl(quotaProvider);
 			// Fixed: the marker was previously keyed off `review.quotaProvider`,
 			// which falls back to "unknown" when unset — a mismatch against any
-			// marker already stored under `config.provider` that silently defeated
-			// the dedup this PR exists to add. Always key off `config.provider` so
+			// marker already stored under the legacy provider form that silently defeated
+			// the dedup this PR exists to add. Always key off the reviewer so
 			// the lookup and the stored marker agree; quotaProvider is still used
 			// for the human-readable message and billing link below. Reworded per
 			// anthropicreviewbot reviewing PR #67 (PRRT_kwDOSM5cU86Z-uZS).
-			const marker = quotaCommentMarker(config.provider);
+			const marker = quotaCommentMarker(legacyProviderOf(config.reviewer));
 			const body = [
 				marker,
 				`⛔ **[${config.reviewCommentPrefix}]** Review couldn't run — **the ${providerLabel(quotaProvider)} account is out of credits.**`,
@@ -631,7 +632,7 @@ export async function maybeSubmitReview(args: {
 				: review.rateLimitRetryAfterSeconds
 					? `retry in ~${review.rateLimitRetryAfterSeconds}s`
 					: "will reset shortly";
-			const marker = rateLimitCommentMarker(config.provider);
+			const marker = rateLimitCommentMarker(legacyProviderOf(config.reviewer));
 			const body = `${marker}\n⚠️ **[${config.reviewCommentPrefix}]** Review couldn't run — the model is rate-limited (input-token budget). Budget ${when}. Push again after that, or it will auto-retry on your next commit.`;
 			// A throw here propagates to the outer finally, which releases the
 			// claim. Intended: a rate-limited run spent no model budget, so the
@@ -733,7 +734,7 @@ export async function maybeSubmitReview(args: {
 			try {
 				await resolveStaleThreads(octokit, owner, repo, pullNumber, {
 					commentPrefix: config.reviewCommentPrefix,
-					provider: config.provider,
+					reviewer: config.reviewer,
 					resolved: review.resolvedFindings ?? [],
 				});
 			} catch (resolveErr) {
@@ -758,7 +759,7 @@ export async function maybeSubmitReview(args: {
 							reviewId,
 							headSha,
 							installationId,
-							provider: config.provider,
+							reviewer: config.reviewer,
 							provenance: review.commentProvenance,
 							nowMs: Date.now(),
 						});
@@ -786,7 +787,7 @@ export async function maybeSubmitReview(args: {
 								pr: pullNumber,
 								reviewId,
 								headSha,
-								provider: config.provider,
+								reviewer: config.reviewer,
 								provenance: review.commentProvenance,
 								summary: review.summary,
 								commentPrefix: config.reviewCommentPrefix,
@@ -802,7 +803,8 @@ export async function maybeSubmitReview(args: {
 										{
 											commentId,
 											surface: "carrier",
-											provider: config.provider,
+											provider: legacyProviderOf(config.reviewer),
+											reviewer: config.reviewer,
 											installationId,
 											owner,
 											repo,
@@ -1000,7 +1002,7 @@ function registerHandlers(app: App, configFn: () => AppConfig) {
 			// The /api/github/review-run endpoint invokes runScheduledReview after
 			// the delay.
 			const message: ReviewRunMessage = {
-				provider: config.provider,
+				provider: legacyProviderOf(config.reviewer) as LegacyProvider,
 				owner,
 				repo,
 				pullNumber,

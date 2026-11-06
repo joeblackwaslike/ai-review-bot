@@ -98,6 +98,7 @@ describe("diffReactions", () => {
 		const record = {
 			commentId: 5,
 			provider: "anthropic",
+			reviewer: "claude",
 			installationId: 1,
 			owner: "o",
 			repo: "r",
@@ -146,6 +147,7 @@ describe("diffReactions", () => {
 		const record = {
 			commentId: 5,
 			provider: "anthropic",
+			reviewer: "claude",
 			installationId: 1,
 			owner: "o",
 			repo: "r",
@@ -178,6 +180,7 @@ describe("diffReactions route selection", () => {
 	const base = {
 		commentId: 5,
 		provider: "anthropic" as const,
+		reviewer: "claude",
 		installationId: 1,
 		owner: "o",
 		repo: "r",
