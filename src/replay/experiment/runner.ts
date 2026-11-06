@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import type { PullFile } from "../../review.js";
 import { routeModel } from "../../router.js";
 import {
@@ -12,6 +11,7 @@ import type { runStrategy as runStrategyFn } from "../run-strategy.js";
 import type { ReviewStrategy, StrategyInput } from "../strategy.js";
 import { ledgerForRound } from "../trace.js";
 import type { LabelFile, Provider, ReplayFixture, Round } from "../types.js";
+import { mulberry32 } from "./bootstrap.js";
 import type { ExperimentPlan } from "./plan.js";
 import type { CellKey, CellRecord, ResultsStore } from "./store.js";
 
@@ -62,20 +62,9 @@ export interface GridReport {
 const A = "a";
 const A0 = "a0";
 
-function rngFrom(seed: string): () => number {
-	let state = createHash("sha256").update(seed).digest().readUInt32LE(0);
-	return () => {
-		state = (state + 0x6d2b79f5) >>> 0;
-		let t = state;
-		t = Math.imul(t ^ (t >>> 15), t | 1);
-		t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-		return ((t ^ (t >>> 14)) >>> 0) / 2 ** 32;
-	};
-}
-
 function shuffled<T>(items: T[], seed: string): T[] {
 	const out = [...items];
-	const rand = rngFrom(seed);
+	const rand = mulberry32(seed);
 	for (let i = out.length - 1; i > 0; i--) {
 		const j = Math.floor(rand() * (i + 1));
 		[out[i], out[j]] = [out[j] as T, out[i] as T];
