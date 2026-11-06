@@ -20,8 +20,10 @@ export interface FrozenFixture {
 /**
  * The fixture as it stood when round `roundIndex` was submitted. Items stamped after that
  * time are dropped and counted in `excluded.later`; items whose timestamp does not parse
- * are dropped and counted in `excluded.unknownTimestamp`. Threads carry no resolution
- * time, so `isResolved` is always recomputed as false rather than guessed.
+ * are dropped and counted in `excluded.unknownTimestamp`. Replies edited after the cutoff
+ * are dropped too. The cutoff round keeps its metadata but not its claims, and threads
+ * rooted on a claim of that round or later are dropped. Threads carry no resolution time,
+ * so `isResolved` and `isOutdated` are always recomputed as false rather than guessed.
  */
 export function freezeFixture(
 	fixture: ReplayFixture,
@@ -34,7 +36,8 @@ export function freezeFixture(
 		throw new Error(`round ${roundIndex} has an unparseable submittedAt`);
 	const excluded = { unknownTimestamp: 0, later: 0 };
 
-	const visible = (timestamp: string): boolean => {
+	const visible = (timestamp: string | null): boolean => {
+		if (timestamp === null) return true;
 		const t = Date.parse(timestamp);
 		if (Number.isNaN(t)) {
 			excluded.unknownTimestamp++;
@@ -54,8 +57,14 @@ export function freezeFixture(
 			continue;
 		}
 		const { trace: _trace, ...rest } = r;
-		rounds.push(rest);
+		rounds.push(r.index === roundIndex ? { ...rest, claims: [] } : rest);
 	}
+
+	const hiddenRoots = new Set(
+		fixture.rounds
+			.filter((r) => r.index >= roundIndex)
+			.flatMap((r) => r.claims.map((c) => c.commentId)),
+	);
 
 	return {
 		owner: fixture.owner,
@@ -64,12 +73,21 @@ export function freezeFixture(
 		provider: fixture.provider,
 		author: fixture.author,
 		rounds,
-		threads: fixture.threads.map((t) => ({
-			...t,
-			isResolved: false,
-			resolvedBy: null,
-			replies: t.replies.filter((r) => visible(r.createdAt)),
-		})),
+		threads: fixture.threads
+			.filter((t) => {
+				if (!hiddenRoots.has(t.commentId)) return true;
+				excluded.later++;
+				return false;
+			})
+			.map((t) => ({
+				...t,
+				isResolved: false,
+				isOutdated: false,
+				resolvedBy: null,
+				replies: t.replies.filter(
+					(r) => visible(r.createdAt) && visible(r.editedAt),
+				),
+			})),
 		reactions: fixture.reactions.filter((r) => visible(r.createdAt)),
 		excluded,
 	};

@@ -58,7 +58,7 @@ export interface InvestigateOptions {
 	labels: LabelFile;
 	judge: JoinJudge;
 	/** Model family of the judge; must differ from the fixture's provider. */
-	judgeFamily?: Provider;
+	judgeFamily: Provider;
 	maxCalls?: number;
 	/** Diff or code evidence for a candidate's path. */
 	evidenceFor?: (path: string, roundIndex: number) => Promise<string>;
@@ -93,6 +93,8 @@ export async function investigateJoin(
 	opts: InvestigateOptions,
 ): Promise<JoinInvestigation> {
 	const { fixture, labels, judge } = opts;
+	if (opts.judgeFamily === undefined)
+		throw new JoinFamilyError("judgeFamily is required");
 	if (opts.judgeFamily === fixture.provider)
 		throw new JoinFamilyError(
 			`judge family ${opts.judgeFamily} produced these candidates; use the other family`,

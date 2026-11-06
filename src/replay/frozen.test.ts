@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { freezeFixture } from "./frozen.js";
-import type { ReplayFixture, Round } from "./types.js";
+import type { PostedClaim, ReplayFixture, Round } from "./types.js";
 
 function round(index: number, submittedAt: string): Round {
 	return {
@@ -19,8 +19,23 @@ function round(index: number, submittedAt: string): Round {
 	};
 }
 
-function reply(id: number, createdAt: string) {
-	return { id, author: "a", createdAt, editedAt: null, body: `r${id}` };
+function reply(id: number, createdAt: string, editedAt: string | null = null) {
+	return { id, author: "a", createdAt, editedAt, body: `r${id}` };
+}
+
+function claimOn(roundIndex: number, commentId: number): PostedClaim {
+	return {
+		id: `c${commentId}`,
+		roundIndex,
+		reviewId: roundIndex,
+		source: "inline",
+		commentId,
+		path: "a.ts",
+		line: 1,
+		severity: "P1",
+		title: "t",
+		text: "t",
+	};
 }
 
 function build(
@@ -93,5 +108,56 @@ describe("freezeFixture", () => {
 		freezeFixture(src, 0);
 		expect(src.rounds).toHaveLength(3);
 		expect(src.threads[0]?.replies).toHaveLength(2);
+	});
+
+	it("keeps the cutoff round's metadata but empties its claims, earlier rounds keep theirs", () => {
+		const src = build();
+		const [r0, r1, r2] = src.rounds as [Round, Round, Round];
+		r0.claims = [claimOn(0, 100)];
+		r1.claims = [claimOn(1, 101)];
+		r2.claims = [claimOn(2, 102)];
+		const f = freezeFixture(src, 1);
+		expect(f.rounds[0]?.claims).toHaveLength(1);
+		expect(f.rounds[1]).toMatchObject({ index: 1, headSha: "h1", claims: [] });
+		expect(f.rounds).toHaveLength(2);
+		expect(src.rounds[1]?.claims).toHaveLength(1);
+	});
+
+	it("sets isOutdated false on kept threads", () => {
+		const src = build();
+		(src.threads[0] as { isOutdated: boolean }).isOutdated = true;
+		expect(freezeFixture(src, 1).threads[0]?.isOutdated).toBe(false);
+	});
+
+	it("drops threads rooted on a claim of the cutoff or a later round and counts them as later", () => {
+		const src = build();
+		const [r0, r1, r2] = src.rounds as [Round, Round, Round];
+		r0.claims = [claimOn(0, 10)];
+		r1.claims = [claimOn(1, 11)];
+		r2.claims = [claimOn(2, 12)];
+		const mkThread = (commentId: number) => ({
+			threadId: `t${commentId}`,
+			commentId,
+			isResolved: false,
+			isOutdated: false,
+			resolvedBy: null,
+			replies: [],
+		});
+		src.threads = [mkThread(10), mkThread(11), mkThread(12)];
+		src.reactions = [];
+		const f = freezeFixture(src, 1);
+		expect(f.threads.map((t) => t.commentId)).toEqual([10]);
+		expect(f.excluded.later).toBe(3);
+	});
+
+	it("excludes replies edited after the cutoff, and counts unparseable edit times as unknown", () => {
+		const src = build([
+			reply(5, "2026-01-01T14:00:00Z", "2026-01-09T00:00:00Z"),
+			reply(6, "2026-01-01T15:00:00Z", "garbage"),
+			reply(7, "2026-01-01T16:00:00Z", "2026-01-01T17:00:00Z"),
+		]);
+		const f = freezeFixture(src, 1);
+		expect(f.threads[0]?.replies.map((r) => r.id)).toEqual([1, 7]);
+		expect(f.excluded).toEqual({ unknownTimestamp: 1, later: 3 });
 	});
 });

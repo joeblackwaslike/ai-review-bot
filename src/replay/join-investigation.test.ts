@@ -58,7 +58,12 @@ describe("investigateJoin", () => {
 			candidate.line === 40
 				? { verdict: "same", reason: "same bug" }
 				: { verdict: "same", reason: "same" };
-		const r = await investigateJoin({ fixture, labels, judge });
+		const r = await investigateJoin({
+			fixture,
+			labels,
+			judge,
+			judgeFamily: "openai",
+		});
 		expect(r.pairs).toHaveLength(2);
 		expect(r.matcherJoined).toBe(1);
 		expect(r.judgeFoundMatcherMissed).toBe(1);
@@ -73,6 +78,7 @@ describe("investigateJoin", () => {
 		const r = await investigateJoin({
 			fixture,
 			labels,
+			judgeFamily: "openai",
 			judge: async () => ({ verdict: "different", reason: "no" }),
 		});
 		expect(r.judgeFoundMatcherMissed).toBe(0);
@@ -94,6 +100,7 @@ describe("investigateJoin", () => {
 		const r = await investigateJoin({
 			fixture,
 			labels,
+			judgeFamily: "openai",
 			judge,
 			maxCalls: 10,
 		});
@@ -108,7 +115,12 @@ describe("investigateJoin", () => {
 			[mk("c1", "a.ts", 1, "z"), mk("c2", "a.ts", 50, "z")],
 		);
 		const judge = vi.fn(same);
-		const r = await investigateJoin({ fixture, labels, judge });
+		const r = await investigateJoin({
+			fixture,
+			labels,
+			judge,
+			judgeFamily: "openai",
+		});
 		expect(judge).toHaveBeenCalledTimes(2);
 		expect(r.pairs.map((p) => p.claim.id)).toEqual(["c1", "c2"]);
 		expect(r.skipped).toBe(2);
@@ -125,7 +137,13 @@ describe("investigateJoin", () => {
 			[mk("c1", "a.ts", 2, "z")],
 		);
 		const judge = vi.fn(same);
-		const r = await investigateJoin({ fixture, labels, judge, maxCalls: 2 });
+		const r = await investigateJoin({
+			fixture,
+			labels,
+			judge,
+			judgeFamily: "openai",
+			maxCalls: 2,
+		});
 		expect(judge).toHaveBeenCalledTimes(2);
 		expect(r.pairs).toHaveLength(2);
 		expect(r.skipped).toBe(1);
@@ -140,6 +158,7 @@ describe("investigateJoin", () => {
 		await investigateJoin({
 			fixture,
 			labels,
+			judgeFamily: "openai",
 			judge,
 			evidenceFor: async (path) => `diff of ${path}`,
 		});
@@ -162,5 +181,16 @@ describe("investigateJoin", () => {
 		await expect(
 			investigateJoin({ fixture, labels, judge: same, judgeFamily: "openai" }),
 		).resolves.toBeDefined();
+	});
+
+	it("rejects a call that omits judgeFamily", async () => {
+		const { fixture, labels } = build(
+			[cand("t", "a.ts", 1)],
+			[mk("c", "a.ts", 1, "t")],
+		);
+		await expect(
+			// @ts-expect-error judgeFamily is required
+			investigateJoin({ fixture, labels, judge: same }),
+		).rejects.toBeInstanceOf(JoinFamilyError);
 	});
 });
