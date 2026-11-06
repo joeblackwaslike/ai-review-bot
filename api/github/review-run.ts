@@ -1,11 +1,11 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getConfig, getOpenAIAppConfig } from "../../src/config.js";
 import {
-	getGitHubApp,
-	getOpenAIGitHubApp,
+	getReviewerGitHubApp,
 	runScheduledReview,
 } from "../../src/github-app.js";
 import { readRawBody } from "../../src/http.js";
+import { reviewerFromLegacy } from "../../src/reviewer-id.js";
 import type { ReviewRunMessage } from "../../src/scheduler.js";
 import { verifyQStashSignature } from "../../src/scheduler.js";
 
@@ -57,7 +57,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
 	const isOpenAI = message.provider === "openai";
 	const config = isOpenAI ? getOpenAIAppConfig() : getConfig();
-	const app = isOpenAI ? getOpenAIGitHubApp() : getGitHubApp();
+	const app = getReviewerGitHubApp(reviewerFromLegacy(message.provider));
 
 	const verified = await verifyQStashSignature(config, rawBody, signature);
 	if (!verified) {

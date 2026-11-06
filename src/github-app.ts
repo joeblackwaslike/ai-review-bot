@@ -3,8 +3,8 @@ import { App } from "octokit";
 import type { ResolvedAuth } from "./auth.js";
 import { createCheckRun } from "./check-run.js";
 import { isTrustedAuthorAssociation, parseReviewCommand } from "./commands.js";
+import { getConfigTree } from "./config/load.js";
 import type { AppConfig } from "./config.js";
-import { getConfig, getOpenAIAppConfig } from "./config.js";
 import type { KvClient } from "./feedback/kv.js";
 import { createUpstashKv } from "./feedback/kv.js";
 import { persistPostedComments } from "./feedback/persist.js";
@@ -21,7 +21,16 @@ import { primePrices } from "./pricing.js";
 import { resolveStaleThreads } from "./resolve-threads.js";
 import type { ReviewDecision } from "./review.js";
 import { buildReview } from "./review.js";
-import { type LegacyProvider, legacyProviderOf } from "./reviewer-id.js";
+import {
+	type LegacyProvider,
+	legacyProviderOf,
+	type ReviewerId,
+} from "./reviewer-id.js";
+import {
+	getReviewerAppConfig,
+	ReviewerNotReadyError,
+	reviewerReadiness,
+} from "./reviewers.js";
 import type { ReviewRunMessage } from "./scheduler.js";
 import { scheduleReview } from "./scheduler.js";
 
@@ -289,9 +298,6 @@ export type PullRequestDetails = {
 	body: string | null;
 	labels?: Array<{ name: string }>;
 };
-
-let appSingleton: App | null = null;
-let openAIAppSingleton: App | null = null;
 
 let kvSingleton: KvClient | null = null;
 function getKv(): KvClient | null {
@@ -1127,38 +1133,28 @@ function registerHandlers(app: App, configFn: () => AppConfig) {
 	});
 }
 
-export function getGitHubApp(): App {
-	if (appSingleton) {
-		return appSingleton;
-	}
+const reviewerApps = new WeakMap<object, Map<ReviewerId, App>>();
 
-	const config = getConfig();
-	appSingleton = new App({
+export function getReviewerGitHubApp(id: ReviewerId): App {
+	const tree = getConfigTree();
+	let apps = reviewerApps.get(tree);
+	if (!apps) {
+		apps = new Map();
+		reviewerApps.set(tree, apps);
+	}
+	const cached = apps.get(id);
+	if (cached) return cached;
+
+	const { ready, missing } = reviewerReadiness(id, "hosted");
+	if (!ready) throw new ReviewerNotReadyError(id, missing);
+
+	const config = getReviewerAppConfig(id);
+	const app = new App({
 		appId: config.appId,
 		privateKey: config.privateKey,
-		webhooks: {
-			secret: config.webhookSecret,
-		},
+		webhooks: { secret: config.webhookSecret },
 	});
-
-	registerHandlers(appSingleton, getConfig);
-	return appSingleton;
-}
-
-export function getOpenAIGitHubApp(): App {
-	if (openAIAppSingleton) {
-		return openAIAppSingleton;
-	}
-
-	const config = getOpenAIAppConfig();
-	openAIAppSingleton = new App({
-		appId: config.appId,
-		privateKey: config.privateKey,
-		webhooks: {
-			secret: config.webhookSecret,
-		},
-	});
-
-	registerHandlers(openAIAppSingleton, getOpenAIAppConfig);
-	return openAIAppSingleton;
+	registerHandlers(app, () => getReviewerAppConfig(id));
+	apps.set(id, app);
+	return app;
 }

@@ -3,7 +3,7 @@ import { getConfigTree } from "../../src/config/load.js";
 import { pollFeedbackRequest } from "../../src/feedback/cron.js";
 import { createUpstashKv } from "../../src/feedback/kv.js";
 import type { OctokitLike } from "../../src/feedback/reactions.js";
-import { getGitHubApp, getOpenAIGitHubApp } from "../../src/github-app.js";
+import { getReviewerGitHubApp } from "../../src/github-app.js";
 import { getDb } from "../../src/improve/db/client.js";
 import { drainKvEvents } from "../../src/improve/drain.js";
 import type { ReviewerId } from "../../src/reviewer-id.js";
@@ -19,8 +19,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 				reviewer: ReviewerId,
 				installationId: number,
 			): Promise<OctokitLike> => {
-				const app =
-					reviewer === "claude" ? getGitHubApp() : getOpenAIGitHubApp();
+				const app = getReviewerGitHubApp(reviewer);
 				return (await app.getInstallationOctokit(
 					installationId,
 				)) as unknown as OctokitLike;

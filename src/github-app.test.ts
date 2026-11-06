@@ -28,7 +28,8 @@ const DEFAULT_METADATA = {
 
 const mockBuildReview = vi.hoisted(() => vi.fn());
 
-vi.mock("./config.js", () => ({
+vi.mock("./config.js", async (importOriginal) => ({
+	...(await importOriginal<typeof import("./config.js")>()),
 	getConfig: () => ({
 		appId: "1",
 		privateKey: "pem",
