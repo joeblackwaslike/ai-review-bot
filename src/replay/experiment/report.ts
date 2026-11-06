@@ -32,7 +32,7 @@ export function formatScoreReport(
 	for (const c of score.comparisons) {
 		const p = c.comparison.precision;
 		lines.push(
-			`  ${c.candidate} vs ${score.baseline} [${c.provider}] n=${c.comparison.nPrs} precision diff ${num(p.mean)} [${num(p.lo)}, ${num(p.hi)}], recall diff ${num(c.comparison.recallDiffPoints, 1)} pts, median cost $${num(c.comparison.medianCostCandidate, 2)} vs $${num(c.comparison.medianCostBaseline, 2)}`,
+			`  ${c.candidate} vs ${score.baseline} [${c.provider}] n=${c.comparison.nPrs} precision diff ${num(p.mean)} [${num(p.lo)}, ${num(p.hi)}], recall diff ${num(c.comparison.recallDiffPoints, 1)} pts, median cost $${num(c.comparison.medianCostCandidate, 2)} vs $${num(c.comparison.medianCostBaseline, 2)}; excluded ${c.comparison.excludedIncomplete} PR(s) for incomplete coverage, ${c.comparison.excludedNullPrecision} for no judged finding`,
 		);
 	}
 

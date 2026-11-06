@@ -187,6 +187,7 @@ const pr = (
 	precision: number | null,
 	recall: number | null,
 	costUsd = 1,
+	cells: string[] = ["0:0", "1:0"],
 ) => ({
 	strategy,
 	fixtureId,
@@ -205,6 +206,7 @@ const pr = (
 	costUsd,
 	rounds: 2,
 	fitRounds: 2,
+	cells,
 });
 
 describe("aggregate and compareStrategies", () => {
@@ -219,6 +221,30 @@ describe("aggregate and compareStrategies", () => {
 		expect(s.recall).toBeCloseTo(0.75);
 		expect(s.unresolved).toBe(3);
 		expect(s.fitShare).toBe(1);
+	});
+
+	it("pairs only PRs with the same completed cells and reports what it excluded", () => {
+		const base = [
+			pr("p1", "a", 0.5, 0.8),
+			pr("p2", "a", 0.5, 0.8),
+			pr("p3", "a", null, 0.8),
+			pr("p4", "a", 0.5, 0.8),
+		];
+		const candi = [
+			pr("p1", "b", 0.9, 0.8),
+			pr("p2", "b", 0.9, 0.8, 1, ["0:0"]),
+			pr("p3", "b", 0.9, 0.8),
+			pr("p4", "b", 0.9, 0.8),
+		];
+		const cmp = compareStrategies(candi, base, {
+			level: 0.95,
+			resamples: 200,
+			seed: "s",
+		});
+		expect(cmp.nPrs).toBe(3);
+		expect(cmp.excludedIncomplete).toBe(1);
+		expect(cmp.excludedNullPrecision).toBe(1);
+		expect(cmp.precision.n).toBe(2);
 	});
 
 	it("pairs on the PRs both strategies have a value for", () => {
@@ -241,6 +267,7 @@ describe("aggregate and compareStrategies", () => {
 		expect(cmp.precision.mean).toBeCloseTo(0.4);
 		expect(cmp.recallDiffPoints).toBeCloseTo(-5);
 		expect(cmp.nPrs).toBe(2);
+		expect(cmp.excludedIncomplete).toBe(2);
 	});
 });
 
@@ -253,6 +280,8 @@ describe("verdictFor", () => {
 		medianCostBaseline: 1,
 		fitShare: 0.95,
 		nPrs: 12,
+		excludedIncomplete: 0,
+		excludedNullPrecision: 0,
 		...over,
 	});
 	const gate = {

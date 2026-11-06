@@ -48,6 +48,8 @@ export interface PrScore {
 	costUsd: number;
 	rounds: number;
 	fitRounds: number;
+	/** Completed `round:trial` cells, sorted. */
+	cells: string[];
 }
 
 const asVerdict = (v: unknown): VerdictRecord | undefined => {
@@ -91,6 +93,7 @@ export function scorePr(args: {
 		costUsd: 0,
 		rounds: records.length,
 		fitRounds: 0,
+		cells: records.map((r) => `${r.key.round}:${r.key.trial}`).sort(),
 	};
 	const fixedClaims = claims.filter(
 		(c) => labelOf.get(c.id)?.label === "fixed",
@@ -194,7 +197,10 @@ export interface Comparison {
 	medianCostCandidate: number;
 	medianCostBaseline: number;
 	fitShare: number;
+	/** PRs paired: both strategies completed the same cells. */
 	nPrs: number;
+	excludedIncomplete: number;
+	excludedNullPrecision: number;
 }
 
 /** Paired over the PRs both strategies completed; claims within a PR are never resampled apart. */
@@ -204,10 +210,17 @@ export function compareStrategies(
 	opts: { level: number; resamples: number; seed: string },
 ): Comparison {
 	const baseById = new Map(baseline.map((p) => [p.fixtureId, p]));
+	const same = (x: string[], y: string[]) =>
+		x.length === y.length && x.every((v, i) => v === y[i]);
 	const both = candidate.flatMap((c) => {
 		const b = baseById.get(c.fixtureId);
-		return b ? [{ c, b }] : [];
+		return b && same(c.cells, b.cells) ? [{ c, b }] : [];
 	});
+	const prs = new Set([...candidate, ...baseline].map((p) => p.fixtureId));
+	const excludedIncomplete = prs.size - both.length;
+	const excludedNullPrecision = both.filter(
+		({ c, b }) => c.precision === null || b.precision === null,
+	).length;
 	const precisionPairs = both.flatMap(({ c, b }) =>
 		c.precision !== null && b.precision !== null
 			? [{ a: c.precision, b: b.precision }]
@@ -226,6 +239,8 @@ export function compareStrategies(
 		medianCostBaseline: median(both.map(({ b }) => b.costUsd)),
 		fitShare: rounds > 0 ? fit / rounds : 0,
 		nPrs: both.length,
+		excludedIncomplete,
+		excludedNullPrecision,
 	};
 }
 

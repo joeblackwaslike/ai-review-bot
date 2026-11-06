@@ -39,6 +39,8 @@ const base = (over: Partial<ExperimentScore> = {}): ExperimentScore => ({
 				medianCostBaseline: 1.5,
 				fitShare: 0.95,
 				nPrs: 11,
+				excludedIncomplete: 2,
+				excludedNullPrecision: 1,
 			},
 		},
 	],
@@ -62,6 +64,9 @@ describe("formatScoreReport", () => {
 		const out = text(base());
 		expect(out).toMatch(/b vs a/);
 		expect(out).toMatch(/n=11/);
+		expect(out).toMatch(
+			/excluded 2 PR\(s\) for incomplete coverage, 1 for no judged/,
+		);
 		expect(out).toMatch(/\[0\.100, 0\.300\]/);
 	});
 
