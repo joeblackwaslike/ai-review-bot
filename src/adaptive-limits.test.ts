@@ -1,7 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { applyLimits, resolveLimits } from "./adaptive-limits.js";
 import type { LedgerEntry } from "./ledger/types.js";
 import type { Sev } from "./trajectory.js";
+import * as trajectory from "./trajectory.js";
+
+vi.mock("./trajectory.js", async (orig) => {
+	const actual = await orig<typeof import("./trajectory.js")>();
+	return { ...actual, limitsForScore: vi.fn(actual.limitsForScore) };
+});
 
 interface F {
 	id: string;
@@ -35,7 +41,7 @@ describe("applyLimits", () => {
 		const r = review("COMMENT", [f("a", "P2"), f("b", "P3")]);
 		const out = applyLimits(r, { floor: "P2", budget: null }, noSupport, false);
 		expect(out.review.general_findings.map((x) => x.id)).toEqual(["a"]);
-		expect(out.removed.map((x) => (x as F).id)).toEqual(["b"]);
+		expect(out.removed.map((x) => x.id)).toEqual(["b"]);
 	});
 
 	it("budget 3 keeps both P1 and the best P2 by confidence, then support, then position", () => {
@@ -45,12 +51,7 @@ describe("applyLimits", () => {
 			[f("p1b", "P1"), f("p2c", "P2", 0.9), f("p2d", "P2", 0.1)],
 		);
 		const support = (x: F) => (x.id === "p2c" ? 5 : 0);
-		const out = applyLimits(
-			r,
-			{ floor: null, budget: 3 },
-			support as never,
-			false,
-		);
+		const out = applyLimits(r, { floor: null, budget: 3 }, support, false);
 		const kept = [
 			...out.review.general_findings,
 			...out.review.inline_comments,
@@ -102,6 +103,93 @@ describe("applyLimits", () => {
 		const copy = structuredClone(r);
 		applyLimits(r, { floor: "P2", budget: 1 }, noSupport, false);
 		expect(r).toEqual(copy);
+	});
+
+	it("budget 0 and a negative budget remove every P2/P3 and keep P0/P1", () => {
+		for (const budget of [0, -3]) {
+			const r = review(
+				"COMMENT",
+				[f("a", "P0"), f("b", "P2"), f("c", "P3")],
+				[f("d", "P1"), f("e", "P2")],
+			);
+			const out = applyLimits(r, { floor: null, budget }, noSupport, false);
+			expect(out.review.general_findings.map((x) => x.id)).toEqual(["a"]);
+			expect(out.review.inline_comments.map((x) => x.id)).toEqual(["d"]);
+			expect(out.removed).toHaveLength(3);
+		}
+	});
+
+	it("P1 count toward the budget, leaving no room for P2", () => {
+		const r = review("COMMENT", [f("a", "P1"), f("b", "P1"), f("c", "P2")]);
+		const out = applyLimits(r, { floor: null, budget: 2 }, noSupport, false);
+		expect(out.review.general_findings.map((x) => x.id)).toEqual(["a", "b"]);
+	});
+
+	it("ranks by confidence alone when severity and support are equal", () => {
+		const r = review("COMMENT", [
+			f("low", "P2", 0.2),
+			f("high", "P2", 0.9),
+			f("mid", "P2", 0.5),
+		]);
+		const out = applyLimits(r, { floor: null, budget: 2 }, noSupport, false);
+		expect(out.review.general_findings.map((x) => x.id)).toEqual([
+			"high",
+			"mid",
+		]);
+	});
+
+	it("breaks ties by earlier position, general before inline", () => {
+		const r = review(
+			"COMMENT",
+			[f("g1", "P2"), f("g2", "P2")],
+			[f("i1", "P2")],
+		);
+		const out = applyLimits(r, { floor: null, budget: 2 }, noSupport, false);
+		expect(out.review.general_findings.map((x) => x.id)).toEqual(["g1", "g2"]);
+		expect(out.review.inline_comments).toEqual([]);
+	});
+
+	it("keeps kept findings in their input order", () => {
+		const r = review("COMMENT", [
+			f("a", "P3"),
+			f("b", "P1"),
+			f("c", "P2", 0.9),
+			f("d", "P2", 0.1),
+		]);
+		const out = applyLimits(r, { floor: null, budget: 2 }, noSupport, false);
+		expect(out.review.general_findings.map((x) => x.id)).toEqual(["b", "c"]);
+	});
+
+	it("leaves REQUEST_CHANGES alone when there were no findings to remove", () => {
+		const r = review("REQUEST_CHANGES", []);
+		const out = applyLimits(r, { floor: "P2", budget: 1 }, noSupport, false);
+		expect(out.review.event).toBe("REQUEST_CHANGES");
+	});
+
+	it("infers extra finding fields without casts", () => {
+		const r = {
+			event: "COMMENT",
+			general_findings: [
+				{ id: "abc", severity: "P3" as Sev, confidence: 0.5, title: "t" },
+			],
+			inline_comments: [
+				{
+					id: "de",
+					severity: "P3" as Sev,
+					confidence: 0.5,
+					path: "a.ts",
+					line: 1,
+				},
+			],
+		};
+		const out = applyLimits(
+			r,
+			{ floor: "P2", budget: null },
+			(x) => x.id.length,
+			false,
+		);
+		const id: string = out.removed[0].id;
+		expect(id).toBe("abc");
 	});
 });
 
@@ -165,5 +253,21 @@ describe("resolveLimits", () => {
 		expect(out.floor).toBeNull();
 		expect(out.budget).toBeNull();
 		expect(out.score).toBeNull();
+	});
+
+	it("keeps a floor when the band has no budget", () => {
+		vi.mocked(trajectory.limitsForScore).mockReturnValueOnce({
+			floor: "P2",
+			budget: null,
+		});
+		const out = resolveLimits({
+			entries,
+			reactionsFor: () => [],
+			currentRound: 1,
+			delta: docsDelta,
+		});
+		expect(out.floor).toBe("P2");
+		expect(out.budget).toBeNull();
+		expect(out.shape).toBeNull();
 	});
 });

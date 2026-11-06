@@ -55,6 +55,10 @@ export function resolveLimits(input: {
 	return { floor, budget: shapedBudget(shape, budget), score, rounds, shape };
 }
 
+type Finding<R extends LimitableReview<Limitable, Limitable>> =
+	| R["general_findings"][number]
+	| R["inline_comments"][number];
+
 interface Slot<T> {
 	item: T;
 	general: boolean;
@@ -62,19 +66,18 @@ interface Slot<T> {
 }
 
 /** Removes new findings under the severity floor and past the budget. P0 and P1 are never
- * removed. Findings rank by severity, confidence, `supportOf`, then original position.
- * A REQUEST_CHANGES review whose findings are all removed becomes COMMENT unless
- * `carriedBlocks`. Inputs are not mutated. */
-export function applyLimits<
-	G extends Limitable,
-	I extends Limitable,
-	R extends LimitableReview<G, I>,
->(
+ * removed but do count toward the budget (a budget of 2 with two P1 leaves no room for any
+ * P2). Findings rank by severity, confidence, `supportOf`, then original position, and kept
+ * findings keep their input order. A REQUEST_CHANGES review whose findings are all removed
+ * becomes COMMENT unless `carriedBlocks`. Inputs are not mutated. */
+export function applyLimits<R extends LimitableReview<Limitable, Limitable>>(
 	review: R,
 	limits: { floor: Sev | null; budget: number | null },
-	supportOf: (f: G | I) => number,
+	supportOf: (f: Finding<R>) => number,
 	carriedBlocks: boolean,
-): { review: R; removed: (G | I)[] } {
+): { review: R; removed: Finding<R>[] } {
+	type G = R["general_findings"][number];
+	type I = R["inline_comments"][number];
 	const slots: Slot<G | I>[] = [
 		...review.general_findings.map((item, index) => ({
 			item,
