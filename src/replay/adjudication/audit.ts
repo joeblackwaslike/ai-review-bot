@@ -76,7 +76,7 @@ export interface AuditOptions {
 
 const runKey = (labelsHash: string) => `audit-run:${labelsHash}`;
 const findingKey = (labelsHash: string, f: AuditFinding) =>
-	`audit:${labelsHash}:${claimKey(f)}`;
+	`audit:${labelsHash}:${f.path}:${f.line}:${claimKey(f)}`;
 const judgeRecord = (j: AuditJudge): JudgeRecord => ({
 	family: j.family,
 	model: j.model,

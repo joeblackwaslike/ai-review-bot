@@ -198,4 +198,15 @@ describe("auditFixture", () => {
 		});
 		expect(clean.crossCheckFailed).toBeNull();
 	});
+
+	it("keeps the same defect reported at two lines", async () => {
+		const twin: AuditFinding = { ...missedA, line: 40 };
+		const result = await auditFixture({
+			...base(),
+			judge: judge([missedA, twin]),
+			second: null,
+			caps: { anthropic: 1, openai: 0 },
+		});
+		expect(result.added.map((a) => a.line)).toEqual([5, 40]);
+	});
 });
