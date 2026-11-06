@@ -122,7 +122,7 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 		checkout: CheckoutHandle | null = null,
 	): StrategyInput => ({
 		fixture: freezeFixture(opts.fixture, d.round.index),
-		round: d.round,
+		round: { ...d.round, claims: [], trace: undefined },
 		diff: d.diff,
 		files: d.files,
 		approximateDiff: d.approximate,

@@ -341,6 +341,28 @@ describe("runLiveTier", () => {
 		expect(lines.join("\n")).toContain("2 would post");
 	});
 
+	it("hands the strategy a round without claims or trace", async () => {
+		const withTrace = {
+			...(fixture.rounds[0] as Round),
+			trace: { candidates: [], posted: [], usage: {} },
+		};
+		const f = { ...fixture, rounds: [withTrace] } as unknown as ReplayFixture;
+		expect(withTrace.claims.length).toBeGreaterThan(0);
+		const inputs: StrategyInput[] = [];
+		const { opts } = base({
+			fixture: f,
+			rounds: [0],
+			review: async (_d, _r, input) => {
+				inputs.push(input);
+				return out([]);
+			},
+		});
+		await runLiveTier(opts);
+		expect(inputs[0]?.round.claims).toEqual([]);
+		expect(inputs[0]?.round.trace).toBeUndefined();
+		expect(inputs[0]?.round.index).toBe(0);
+	});
+
 	it("hands the strategy no checkout, the round's ledger, the remaining cap and a live signal", async () => {
 		const inputs: StrategyInput[] = [];
 		const { opts } = base({
