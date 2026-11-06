@@ -894,3 +894,74 @@ describe("defaultFixturesDir", () => {
 		expect(defaultFixturesDir(url)).toBe(want);
 	});
 });
+
+describe("runReplay --investigate-join", () => {
+	const noRest: GhClient = {
+		rest: () => Promise.reject(new Error("no network")),
+		graphql: () => Promise.reject(new Error("no network")),
+	};
+
+	it("judges with the other family and prints the counts", async () => {
+		const dir = tmp();
+		const f = makeFixture([["a"]]);
+		f.rounds[0] = {
+			...f.rounds[0],
+			trace: {
+				candidates: [
+					{
+						skill: "s.md",
+						title: "other wording",
+						path: "a.ts",
+						line: 1,
+						severity: "P1",
+					},
+				],
+				posted: [],
+				usage: {},
+			},
+		} as (typeof f.rounds)[0];
+		const id = fixtureId(f);
+		writeFileSync(join(dir, `${id}.json`), JSON.stringify(f));
+		writeFileSync(
+			join(dir, `${id}.labels.json`),
+			JSON.stringify({
+				...makeLabels({ labels: [makeLabel("a", "fixed")] }),
+				fixtureId: id,
+			}),
+		);
+		const families: string[] = [];
+		const { lines, out } = collect();
+		const code = await runReplay(
+			["--investigate-join", id, "--fixtures", dir],
+			{
+				out,
+				client: noRest,
+				joinJudge: async (family) => {
+					families.push(family);
+					return async () => ({ verdict: "same", reason: "r" });
+				},
+			},
+		);
+		expect(code).toBe(0);
+		expect(families).toEqual(["openai"]);
+		expect(lines.join("\n")).toContain("judgeFoundMatcherMissed=1");
+	});
+
+	it("exits 2 when combined with other modes or given a path-like id", async () => {
+		for (const args of [
+			["--investigate-join", "x", "--live"],
+			["--investigate-join", "x", "--save-trace"],
+			["--investigate-join", "../x"],
+			["--investigate-join"],
+		])
+			expect(await runReplay(args, { out: () => {} })).toBe(2);
+	});
+
+	it("exits 1 when the fixture is missing", async () => {
+		expect(
+			await runReplay(["--investigate-join", "nope", "--fixtures", tmp()], {
+				out: () => {},
+			}),
+		).toBe(1);
+	});
+});
