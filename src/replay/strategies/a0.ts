@@ -69,18 +69,20 @@ export const strategyA0: ReviewStrategy = {
 		const tolerance = input.tolerance ?? DEFAULT_TOLERANCE;
 		if (target === undefined) return perRunUsd;
 		const byCap = Math.max(1, Math.floor(input.budget.maxUsd / perRunUsd));
-		return (
-			perRunUsd *
-			Math.min(
-				byCap,
-				repeatsForBudget({
-					targetUsd: target,
-					perRunUsd,
-					tolerance,
-					max: MAX_REPEATS,
-				}),
-			)
-		);
+		const meetsTarget =
+			target <= perRunUsd || withinTolerance(perRunUsd, target, tolerance);
+		const repeats = meetsTarget
+			? 1
+			: Math.max(
+					2,
+					repeatsForBudget({
+						targetUsd: target,
+						perRunUsd,
+						tolerance,
+						max: MAX_REPEATS,
+					}),
+				);
+		return perRunUsd * Math.min(byCap, repeats);
 	},
 	async run(input) {
 		const started = Date.now();

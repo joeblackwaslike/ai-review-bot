@@ -160,6 +160,33 @@ describe("strategyA0", () => {
 		expect(mockRunAgent).toHaveBeenCalledTimes(1);
 	});
 
+	it.each([
+		[0.5, undefined],
+		[1.05, undefined],
+		[1.3, undefined],
+		[1.3, 0.5],
+		[3.2, undefined],
+		[5.4, undefined],
+	])("estimates the repeat count run uses (target %sx, tolerance %s)", async (factor, tolerance) => {
+		const diff = "x".repeat(40_000);
+		const matched = {
+			promptTokens: diff.length / 4,
+			completionTokens: 2000,
+		};
+		mockRunAgent.mockImplementation(async () => ({
+			...okOutcome("f"),
+			usage: matched,
+		}));
+		const perRun = roundCostUsd({ x: matched }, MODEL);
+		const make = (target?: number) =>
+			({ ...inputFor(target), diff, tolerance }) as StrategyInput;
+		const estimate = strategyA0.estimateCost(make(perRun * factor));
+		await strategyA0.run(make(perRun * factor));
+		expect(estimate / strategyA0.estimateCost(make())).toBeCloseTo(
+			mockRunAgent.mock.calls.length,
+		);
+	});
+
 	it("rechecks running spend before each queued repeat", async () => {
 		vi.stubEnv("AGENT_CONCURRENCY", "1");
 		const pricey = { promptTokens: 160_000, completionTokens: 16_000 };
