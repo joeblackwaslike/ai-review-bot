@@ -37,6 +37,16 @@ function isSensitivePath(path: string): boolean {
 	return SENSITIVE_PATH_PATTERNS.some((pattern) => lower.includes(pattern));
 }
 
+const PROSE_EXTENSIONS = new Set([".md", ".mdx", ".rst"]);
+
+function isTrivialDoc(path: string): boolean {
+	if (!isDocFile(path)) {
+		return false;
+	}
+	const ext = path.slice(path.lastIndexOf("."));
+	return PROSE_EXTENSIONS.has(ext) || !isSensitivePath(path);
+}
+
 function isDocFile(path: string): boolean {
 	const base = path.slice(path.lastIndexOf("/") + 1).toLowerCase();
 	if (/^(requirements|constraints)[^/]*\.txt$/.test(base)) {
@@ -54,7 +64,7 @@ export function classifyTier(context: RouterContext): ReviewTier {
 	}
 
 	const totalLines = additions + deletions;
-	if (totalLines < 20 && filePaths.every(isDocFile)) {
+	if (totalLines < 20 && filePaths.every(isTrivialDoc)) {
 		return "trivial";
 	}
 

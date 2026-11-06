@@ -40,6 +40,19 @@ describe("classifyTier", () => {
 		).toBe("trivial");
 	});
 
+	it.each([
+		"secrets.txt",
+		"auth/allowlist.txt",
+	])("routes a small sensitive-named %s to complex", (path) => {
+		expect(classifyTier({ ...base, filePaths: [path] })).toBe("complex");
+	});
+
+	it("keeps docs/README.md trivial", () => {
+		expect(classifyTier({ ...base, filePaths: ["docs/README.md"] })).toBe(
+			"trivial",
+		);
+	});
+
 	it("still routes a source auth change to complex", () => {
 		expect(classifyTier({ ...base, filePaths: ["src/auth/session.ts"] })).toBe(
 			"complex",

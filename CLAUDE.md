@@ -71,7 +71,7 @@ Findings carried from the previous review appear in the body's "Still open from 
 | `src/review.ts` | `runAgent()`, `mergeReviews()`, `buildReviewComments()`, `buildReview()`, `capInlineComments()` (the inline cap, exported so the replay trace calls it) |
 | `src/models.ts` | AI model creation (`createAIModel(selection, auth?)`), token cost calculation |
 | `src/auth.ts` | Local subscription/OAuth + API-key resolution (`resolveAnthropicAuth()`, `resolveOpenAIAuth()`); custom-fetch wrappers. **CLI-only — never import from webhook paths** |
-| `src/router.ts` | PR tier classification (`classifyTier()`), model selection (`routeModel()`) |
+| `src/router.ts` | PR tier classification (`classifyTier()`), model selection (`routeModel()`). A doc-only change under 20 lines is checked before the sensitive-path rule (prose docs only), `requirements*`/`constraints*.txt` are not docs, and a sensitive-named `.txt` falls through to `complex` |
 | `src/tier2.ts` | Tier 2 skill detection (`detectTier2Skills()`) |
 | `src/claim-dedupe.ts` | Near-duplicate claim clustering (`dedupeClaims()`, `isSameClaim()`) |
 | `src/diff-pack.ts` | `packDiff()` and `formatPackedDiff()`: PR-wide diff budget, file ordering, deletion-only hunk dropping under budget pressure, truncated and omitted files; `isGeneratedFile()` |
