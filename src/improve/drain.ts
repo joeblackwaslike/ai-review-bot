@@ -1,5 +1,6 @@
 import type { KvClient } from "../feedback/kv.js";
 import type { FeedbackEvent } from "../feedback/types.js";
+import { reviewerFromLegacy } from "../reviewer-id.js";
 import type { Db } from "./db/client.js";
 import {
 	identityColumns,
@@ -48,13 +49,19 @@ export function parseEvents(raw: string[]): {
 	let malformed = 0;
 	for (const entry of raw) {
 		try {
-			const parsed = JSON.parse(entry) as FeedbackEvent;
+			const parsed = JSON.parse(entry) as Partial<FeedbackEvent>;
+			const reviewer =
+				parsed?.reviewer ??
+				(typeof parsed?.provider === "string"
+					? reviewerFromLegacy(parsed.provider)
+					: undefined);
 			if (
 				typeof parsed?.commentId === "number" &&
 				typeof parsed?.reactor === "string" &&
-				typeof parsed?.verdict === "string"
+				typeof parsed?.verdict === "string" &&
+				reviewer !== undefined
 			) {
-				events.push(parsed);
+				events.push({ ...parsed, reviewer } as FeedbackEvent);
 			} else {
 				malformed++;
 			}

@@ -118,3 +118,38 @@ describe("carrier reactions", () => {
 		);
 	});
 });
+
+describe("legacy events queued before the reviewer field", () => {
+	function legacyEntry(over: Record<string, unknown>): string {
+		const { reviewer: _reviewer, ...rest } = event();
+		return JSON.stringify({ ...rest, ...over });
+	}
+
+	it("writes provider and reviewer for events carrying only provider, and skips events with neither", async () => {
+		const written: Record<string, unknown>[] = [];
+		const db = {
+			insert: () => ({
+				values: (row: Record<string, unknown>) => {
+					written.push(row);
+					return {
+						onConflictDoNothing: () => ({ returning: async () => [{ id: 1 }] }),
+					};
+				},
+			}),
+		} as never;
+		const kv = {
+			lrange: async () => [
+				legacyEntry({ commentId: 1, provider: "anthropic" }),
+				legacyEntry({ commentId: 2, provider: "openai" }),
+				legacyEntry({ commentId: 3, provider: undefined }),
+			],
+		} as never;
+		const { drainKvEvents } = await import("./drain.js");
+		const result = await drainKvEvents({ kv, db });
+		expect(written.map((r) => [r.provider, r.reviewer])).toEqual([
+			["anthropic", "claude"],
+			["openai", "codex"],
+		]);
+		expect(result).toMatchObject({ read: 3, inserted: 2, malformed: 1 });
+	});
+});
