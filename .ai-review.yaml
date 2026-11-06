@@ -68,8 +68,11 @@ reviewers:
       normal: { model: openai/gpt-6.1-sol, effort: low }
       complex: { model: openai/gpt-6.1-sol, effort: high }
       deep: { model: openai/gpt-6.1-sol, effort: xhigh }
-  # Enable only after the GitHub App exists and `ai-review replay --live --max-cost <usd>`
-  # shows an acceptable false-positive rate and cost.
+  # A disabled reviewer cannot review. To trial it: create the GitHub App, install it on
+  # one test repo only, set enabled: true and deploy, open a PR there, then run
+  # `ai-review replay --record` on that PR and `ai-review replay --live --reviewer gemini
+  # --max-cost <usd>`. Set enabled: false again if the false-positive rate or cost is bad.
+  # See docs/adding-a-reviewer.md.
   gemini:
     enabled: false
     appSlug: gemini-review-bot

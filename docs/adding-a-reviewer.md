@@ -26,7 +26,7 @@ reviewers:
 - `tiers` picks a model and a reasoning effort for each PR size. Every tier needs an entry. A model is written `provider/model`, and the provider must be one of `anthropic`, `openai` or `google`. The effort values a model accepts depend on its provider; `pnpm config:check` rejects one that is not supported.
 - `skills` (optional) overrides the model for a single review skill. `runOn` (optional) limits the reviewer to some tiers.
 
-Leave `enabled: false` until step 6.
+Leave `enabled: false` for now. Step 4 turns it on for a test repo.
 
 Token prices come from OpenRouter and are cached for 24 hours. If a model shows "cost unavailable" in a review, pin its price under `models.<provider/model>.pricing` in the YAML.
 
@@ -40,7 +40,7 @@ Create the app the same way as the Claude app in [Quick Start](quick-start.md), 
 - Permissions: Pull requests read and write, Contents read-only, Metadata read-only, Issues read-only. Events: Pull request and Issue comment.
 - Generate a private key and note the App ID.
 
-Install the app on the repos it should review. That is also a person's step.
+Install the app on one test repo only for now. Installing it is also a human step. You widen the install in step 6.
 
 ## 3. Set the environment variables (human step)
 
@@ -65,27 +65,15 @@ pnpm config:check
 
 It exits 1 on any error, and warns when a reviewer secret names an id that is not in the YAML.
 
-## 4. Run a replay
+## 4. Enable it on a test repo
 
-The offline replay re-runs recorded review rounds. To use it for a new reviewer, record a PR the bot has reviewed:
+A disabled reviewer cannot review anything. The hosted route answers 503 and `ai-review watch` refuses it, so no PR can be reviewed by a new reviewer until it is enabled. That means the replay check has to come after a first real review, and the order is:
 
-```bash
-ai-review replay --record <pr-url> --reviewer gemini --bot <bot-login>[bot]
-```
+1. Confirm the App is installed on the test repo only.
+2. Set `enabled: true` for the reviewer in `.ai-review.yaml`, commit, and deploy.
+3. Open a PR on the test repo with a real change in it. Give the bot a few rounds if you can: push a fix commit after its first review, or reply to a finding you think is wrong.
 
-Then run the live replay with a spending cap:
-
-```bash
-ai-review replay --live --reviewer gemini --max-cost 2
-```
-
-`--live` calls the models and costs real money, and it never gates CI. `--max-cost` is in USD and defaults to 5. The run needs a known price for each model, so pin one in the YAML if OpenRouter does not list it. Check the false-positive rate and the cost in the output before you enable the reviewer.
-
-Gemini's structured output was checked only against a mocked request. The first live run sends the review schema to the real Google API, so that run is the real test of whether Gemini accepts it.
-
-## 5. Turn it on
-
-Set `enabled: true` in `.ai-review.yaml`, commit, and deploy. While `enabled` is false the route answers 503 and lists `reviewers.<id>.enabled` among the missing settings, so a delivery to it does nothing. Once it is on, the route behaves like this:
+Once enabled, the route behaves like this:
 
 | Request | Response |
 | --- | --- |
@@ -95,6 +83,37 @@ Set `enabled: true` in `.ai-review.yaml`, commit, and deploy. While `enabled` is
 | Valid delivery | 202, and the review runs in the background |
 
 An enabled reviewer that is not ready logs one warning naming the missing settings. The other reviewers keep working.
+
+## 5. Record the PR and run the live replay
+
+The replay can only run after the bot has reviewed at least one PR. `ai-review replay --live --reviewer <id>` skips every fixture recorded for a different reviewer, so for a reviewer with no recorded fixture it does nothing useful: it prints `no fixtures found` and exits 1 when the fixtures directory is empty, and otherwise skips everything and exits 0 without running a review.
+
+Record the test PR. The bot login is the App slug plus `[bot]`:
+
+```bash
+ai-review replay --record <pr-url> --reviewer gemini --bot gemini-review-bot[bot]
+```
+
+Then re-run the reviewer on the last two recorded rounds with a spending cap:
+
+```bash
+ai-review replay --live --reviewer gemini --max-cost 2
+```
+
+`--live` calls the models and costs real money, and it never gates CI. `--max-cost` is in USD and defaults to 5. `--rounds <n>` changes how many of the latest rounds are re-run (default 2). The run needs a known price for each model, so pin one under `models.<provider/model>.pricing` if OpenRouter does not list it.
+
+Read these lines of the output:
+
+- `live: N round(s), estimated spend $X (cap $Y)` is the cost estimate for the run. `live: stopping before round ...` means the cap cut it short.
+- `round N: ...` appears once per round. `matched rejected` counts re-run findings that restate a claim recorded as rejected, which is the closest thing to a false-positive count. `matched fixed` counts findings that restate a claim the author went on to fix. `new unlabeled` findings carry no accuracy claim, and `candidate retractions` counts findings whose closing sentence takes the claim back.
+
+Only claims in confirmed labels are matched. Labels from a fresh `--record` are provisional, so on a new fixture most findings land in `new unlabeled` until the labels are checked against the PR threads. The code defines no pass or fail threshold, so decide what rate you accept, and compare the new reviewer's `matched rejected` and cost against a run for claude or codex on a comparable PR. The plain `ai-review replay` run (no `--live`) also prints `rejected: X of Y adjudicated`, `recycled` and `restated open` per fixture, again without a threshold.
+
+Gemini's structured output was checked only against a mocked request. The first real review in step 4 and this live run send the review schema to the real Google API, so those are the real test of whether Gemini accepts it.
+
+## 6. Keep it or turn it off
+
+If the results are acceptable, install the App on the other repos (a human step). If they are bad, set `enabled: false` again, commit, and deploy. The bot then stops reviewing, and you can change the tiers and repeat from step 4.
 
 ## Limits today
 

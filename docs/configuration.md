@@ -8,25 +8,23 @@ Behavior settings live in `.ai-review.yaml`. Credentials and infra secrets are e
 
 | Variable | Required | Description |
 | --- | --- | --- |
-| `GITHUB_APP_ID` | ✓ | Numeric GitHub App ID for the Claude bot (shown in app settings) |
-| `GITHUB_APP_PRIVATE_KEY` | ✓ | PKCS#8 private key PEM with literal `\n` for newlines (see [formatting](#private-key-formatting)) |
-| `GITHUB_WEBHOOK_SECRET` | ✓ | HMAC secret for webhook signature verification |
-| `ANTHROPIC_API_KEY` | ✓ | Anthropic API key (starts with `sk-ant-`) |
+| `AI_REVIEW_REVIEWERS__CLAUDE__APP_ID` | ✓ | Numeric GitHub App ID for the Claude bot (shown in app settings). Alias: `GITHUB_APP_ID` (permanent) |
+| `AI_REVIEW_REVIEWERS__CLAUDE__PRIVATE_KEY` | ✓ | PKCS#8 private key PEM with literal `\n` for newlines (see [formatting](#private-key-formatting)). Alias: `GITHUB_APP_PRIVATE_KEY` (permanent) |
+| `AI_REVIEW_REVIEWERS__CLAUDE__WEBHOOK_SECRET` | ✓ | HMAC secret for webhook signature verification. Alias: `GITHUB_WEBHOOK_SECRET` (deprecated) |
+| `AI_REVIEW_PROVIDERS__ANTHROPIC__API_KEY` | ✓ | Anthropic API key (starts with `sk-ant-`). Alias: `ANTHROPIC_API_KEY` (permanent) |
 
-The Claude bot webhook is at `/api/github/webhook`.
+The Claude bot webhook is at `/api/github/webhook`, and also at `/api/github/reviewer/claude`.
 
 ## Codex bot credentials
 
 | Variable | Required | Description |
 | --- | --- | --- |
-| `OPENAI_APP_ID` | ✓ | Numeric GitHub App ID for the Codex bot |
-| `OPENAI_APP_PRIVATE_KEY` | ✓ | PKCS#8 private key PEM with literal `\n` for newlines |
-| `OPENAI_APP_WEBHOOK_SECRET` | ✓ | HMAC secret for the Codex bot webhook |
-| `OPENAI_API_KEY` | ✓ | OpenAI API key (starts with `sk-`) |
+| `AI_REVIEW_REVIEWERS__CODEX__APP_ID` | ✓ | Numeric GitHub App ID for the Codex bot. Alias: `OPENAI_APP_ID` (deprecated) |
+| `AI_REVIEW_REVIEWERS__CODEX__PRIVATE_KEY` | ✓ | PKCS#8 private key PEM with literal `\n` for newlines. Alias: `OPENAI_APP_PRIVATE_KEY` (deprecated) |
+| `AI_REVIEW_REVIEWERS__CODEX__WEBHOOK_SECRET` | ✓ | HMAC secret for the Codex bot webhook. Alias: `OPENAI_APP_WEBHOOK_SECRET` (deprecated) |
+| `AI_REVIEW_PROVIDERS__OPENAI__API_KEY` | ✓ | OpenAI API key (starts with `sk-`). Alias: `OPENAI_API_KEY` (permanent) |
 
-The Codex bot webhook is at `/api/github/webhook-openai`.
-
-The webhook names `GITHUB_WEBHOOK_SECRET`, `OPENAI_APP_ID`, `OPENAI_APP_PRIVATE_KEY` and `OPENAI_APP_WEBHOOK_SECRET` still work but are deprecated and log a warning. Every reviewer, including these two, also answers at `/api/github/reviewer/<id>`. To add another reviewer, see [Adding a reviewer](adding-a-reviewer.md).
+The Codex bot webhook is at `/api/github/webhook-openai`, and also at `/api/github/reviewer/codex`. Deprecated aliases still work and log a warning. To add another reviewer, see [Adding a reviewer](adding-a-reviewer.md).
 
 ## Shared behavior
 
