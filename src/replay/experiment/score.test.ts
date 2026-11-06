@@ -162,6 +162,46 @@ describe("scorePr", () => {
 		expect(pr.fitRounds).toBe(1);
 	});
 
+	it("counts moved findings whatever their verdict", () => {
+		const a = cand("alpha one distinct finding text here", "x.ts", 5);
+		const b = cand("beta two distinct finding text here", "y.ts", 6);
+		const cache = cacheOf([
+			[a, verdict("real", { scope: "moved" })],
+			[b, verdict("not-real", { scope: "moved" })],
+		]);
+		const pr = scorePr({
+			strategy: "a",
+			fixtureId: "o/r#1",
+			records: [cell({ posted: [a, b] })],
+			fx: scored(),
+			cache,
+		});
+		expect(pr.moved).toBe(2);
+		expect(pr.real).toBe(1);
+		expect(pr.notReal).toBe(1);
+	});
+
+	it("keys extra defects by path, line and title", () => {
+		const title = "audit added defect text words";
+		const fx = {
+			...scored(),
+			extraDefects: [
+				{ path: "q.ts", line: 9, title },
+				{ path: "q.ts", line: 90, title },
+			],
+		};
+		const pr = scorePr({
+			strategy: "a",
+			fixtureId: "o/r#1",
+			records: [
+				cell({ posted: [cand(title, "q.ts", 9), cand(title, "q.ts", 90)] }),
+			],
+			fx,
+			cache: cacheOf([]),
+		});
+		expect(pr.foundClaims).toBe(2);
+	});
+
 	it("counts extra audit defects in the recall denominator", () => {
 		const fx = {
 			...scored(),
@@ -207,6 +247,7 @@ const pr = (
 	rounds: 2,
 	fitRounds: 2,
 	cells,
+	wallMs: [1000, 3000],
 });
 
 describe("aggregate and compareStrategies", () => {
@@ -221,6 +262,14 @@ describe("aggregate and compareStrategies", () => {
 		expect(s.recall).toBeCloseTo(0.75);
 		expect(s.unresolved).toBe(3);
 		expect(s.fitShare).toBe(1);
+	});
+
+	it("reports the median wall latency over every round", () => {
+		const s = aggregate([
+			pr("p1", "a", 0.5, 1),
+			{ ...pr("p2", "a", 1, 0.5), wallMs: [9000] },
+		]);
+		expect(s.medianWallMs).toBe(3000);
 	});
 
 	it("pairs only PRs with the same completed cells and reports what it excluded", () => {
@@ -282,6 +331,8 @@ describe("verdictFor", () => {
 		nPrs: 12,
 		excludedIncomplete: 0,
 		excludedNullPrecision: 0,
+		intersectionCells: 24,
+		emptyIntersectionPrs: [] as string[],
 		...over,
 	});
 	const gate = {
@@ -359,6 +410,27 @@ describe("verdictFor", () => {
 		expect(v.label).toBe("Anthropic-only, unconfirmed on OpenAI");
 	});
 
+	it("is not hosted when OpenAI's fit share is below the bar", () => {
+		const v = verdictFor({
+			...base,
+			anthropic: cmp(),
+			openai: cmp({ fitShare: 0.5 }),
+		});
+		expect(v.hosted).toBe(false);
+		expect(v.label).toMatch(/local-only/);
+	});
+
+	it("treats an empty OpenAI comparison as unavailable, not a failed confirmation", () => {
+		const empty = cmp({
+			precision: { mean: Number.NaN, lo: Number.NaN, hi: Number.NaN, n: 0 },
+			recallDiffPoints: null,
+			nPrs: 0,
+		});
+		const v = verdictFor({ ...base, anthropic: cmp(), openai: empty });
+		expect(v.go).toBeNull();
+		expect(v.label).toBe("Anthropic-only, unconfirmed on OpenAI");
+	});
+
 	it("is no-go when OpenAI confirmation fails", () => {
 		const v = verdictFor({
 			...base,
@@ -424,5 +496,33 @@ describe("scoreExperiment", () => {
 		]);
 		expect(out.staleExcluded).toBe(1);
 		expect(out.partial).toBe(true);
+		const a = out.perPr.find(
+			(p) => p.strategy === "a" && p.fixtureId === "o/r#1",
+		);
+		expect(a?.rounds).toBe(1);
+		expect(a?.cells).toEqual(["0:0"]);
+	});
+
+	it("compares on the shared cells of each PR instead of dropping the PR", () => {
+		const out = run(false, [
+			cell({ strategy: "a", fixtureId: "o/r#1", round: 0, posted: [cand(C2)] }),
+			cell({ strategy: "a", fixtureId: "o/r#1", round: 1, posted: [cand(C1)] }),
+			cell({ strategy: "b", fixtureId: "o/r#1", round: 0, posted: [cand(C1)] }),
+		]);
+		const c = out.comparisons[0]?.comparison;
+		expect(c?.nPrs).toBe(1);
+		expect(c?.intersectionCells).toBe(1);
+		expect(c?.emptyIntersectionPrs).toEqual([]);
+		expect(c?.precision.mean).toBeCloseTo(1);
+	});
+
+	it("lists PRs whose strategies share no cell", () => {
+		const out = run(false, [
+			cell({ strategy: "a", fixtureId: "o/r#1", round: 0, posted: [cand(C2)] }),
+			cell({ strategy: "b", fixtureId: "o/r#1", round: 1, posted: [cand(C1)] }),
+		]);
+		const c = out.comparisons[0]?.comparison;
+		expect(c?.nPrs).toBe(0);
+		expect(c?.emptyIntersectionPrs).toEqual(["o/r#1"]);
 	});
 });

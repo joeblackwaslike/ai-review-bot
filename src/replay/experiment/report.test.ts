@@ -25,6 +25,7 @@ const base = (over: Partial<ExperimentScore> = {}): ExperimentScore => ({
 			moved: 1,
 			provisional: 0,
 			medianCostUsd: 1.5,
+			medianWallMs: 42_000,
 			fitShare: 0.95,
 		},
 	],
@@ -41,6 +42,8 @@ const base = (over: Partial<ExperimentScore> = {}): ExperimentScore => ({
 				nPrs: 11,
 				excludedIncomplete: 2,
 				excludedNullPrecision: 1,
+				intersectionCells: 22,
+				emptyIntersectionPrs: ["o/r#9"],
 			},
 		},
 	],
@@ -48,7 +51,8 @@ const base = (over: Partial<ExperimentScore> = {}): ExperimentScore => ({
 	...over,
 });
 
-const text = (s: ExperimentScore) => formatScoreReport(s, { planHash: "abc" });
+const text = (s: ExperimentScore) =>
+	formatScoreReport(s, { planHash: "abc", hostedFitSeconds: 180 });
 
 describe("formatScoreReport", () => {
 	it("always says per-round only and prints unresolved counts next to the figures", () => {
@@ -68,6 +72,15 @@ describe("formatScoreReport", () => {
 			/excluded 2 PR\(s\) for incomplete coverage, 1 for no judged/,
 		);
 		expect(out).toMatch(/\[0\.100, 0\.300\]/);
+	});
+
+	it("renders the plan's hosted seconds, median latency, intersection and empty-intersection PRs", () => {
+		const out = text(base());
+		expect(out).toMatch(/inside 180s/);
+		expect(out).not.toMatch(/inside 210s/);
+		expect(out).toMatch(/median latency 42\.0s/);
+		expect(out).toMatch(/22 shared cell/);
+		expect(out).toMatch(/no shared cell: o\/r#9/);
 	});
 
 	it("says no verdict outside --final", () => {

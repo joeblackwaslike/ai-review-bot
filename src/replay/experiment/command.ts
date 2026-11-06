@@ -201,7 +201,7 @@ export async function runExperiment(
 			seedGates,
 			exploratory,
 		}),
-		{ planHash: hash },
+		{ planHash: hash, hostedFitSeconds: plan.thresholds.hostedFitSeconds },
 	);
 	if (args.final) {
 		try {

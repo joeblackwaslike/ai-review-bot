@@ -5,7 +5,7 @@ const num = (v: number | null, digits = 3): string =>
 
 export function formatScoreReport(
 	score: ExperimentScore,
-	meta: { planHash: string },
+	meta: { planHash: string; hostedFitSeconds: number },
 ): string {
 	const lines: string[] = [
 		`experiment ${meta.planHash} (${score.final ? "FINAL, test split" : "tuning and validation splits"})`,
@@ -25,16 +25,22 @@ export function formatScoreReport(
 	lines.push("", "per strategy and provider (macro mean over PRs):");
 	for (const s of score.summaries)
 		lines.push(
-			`  ${s.strategy} [${s.provider}] PRs=${s.nPrs} precision ${num(s.precision)} recall ${num(s.recall)} | real ${s.real}, not-real ${s.notReal}, moved ${s.moved} | unresolved ${s.unresolved}, unadjudicated ${s.unadjudicated}, single-family ${s.singleFamily}, provisional labels ${s.provisional} | median cost $${num(s.medianCostUsd, 2)}, inside 210s ${num(s.fitShare * 100, 0)}%`,
+			`  ${s.strategy} [${s.provider}] PRs=${s.nPrs} precision ${num(s.precision)} recall ${num(s.recall)} | real ${s.real}, not-real ${s.notReal}, moved ${s.moved} | unresolved ${s.unresolved}, unadjudicated ${s.unadjudicated}, single-family ${s.singleFamily}, provisional labels ${s.provisional} | median cost $${num(s.medianCostUsd, 2)}, inside ${meta.hostedFitSeconds}s ${num(s.fitShare * 100, 0)}%, median latency ${num(s.medianWallMs / 1000, 1)}s`,
 		);
 
 	lines.push("", `paired against ${score.baseline} (PR-level bootstrap):`);
 	for (const c of score.comparisons) {
 		const p = c.comparison.precision;
 		lines.push(
-			`  ${c.candidate} vs ${score.baseline} [${c.provider}] n=${c.comparison.nPrs} precision diff ${num(p.mean)} [${num(p.lo)}, ${num(p.hi)}], recall diff ${num(c.comparison.recallDiffPoints, 1)} pts, median cost $${num(c.comparison.medianCostCandidate, 2)} vs $${num(c.comparison.medianCostBaseline, 2)}; excluded ${c.comparison.excludedIncomplete} PR(s) for incomplete coverage, ${c.comparison.excludedNullPrecision} for no judged finding`,
+			`  ${c.candidate} vs ${score.baseline} [${c.provider}] n=${c.comparison.nPrs} precision diff ${num(p.mean)} [${num(p.lo)}, ${num(p.hi)}], recall diff ${num(c.comparison.recallDiffPoints, 1)} pts, median cost $${num(c.comparison.medianCostCandidate, 2)} vs $${num(c.comparison.medianCostBaseline, 2)}; excluded ${c.comparison.excludedIncomplete} PR(s) for incomplete coverage, ${c.comparison.excludedNullPrecision} for no judged finding; ${c.comparison.intersectionCells} shared cell(s)`,
 		);
 	}
+
+	for (const c of score.comparisons)
+		if (c.comparison.emptyIntersectionPrs.length > 0)
+			lines.push(
+				`  ${c.candidate} vs ${score.baseline} [${c.provider}] no shared cell: ${c.comparison.emptyIntersectionPrs.join(", ")}`,
+			);
 
 	lines.push("");
 	if (!score.final) lines.push("no verdict outside --final");

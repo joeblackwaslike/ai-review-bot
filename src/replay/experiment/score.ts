@@ -50,6 +50,7 @@ export interface PrScore {
 	fitRounds: number;
 	/** Completed `round:trial` cells, sorted. */
 	cells: string[];
+	wallMs: number[];
 }
 
 const asVerdict = (v: unknown): VerdictRecord | undefined => {
@@ -94,12 +95,18 @@ export function scorePr(args: {
 		rounds: records.length,
 		fitRounds: 0,
 		cells: records.map((r) => `${r.key.round}:${r.key.trial}`).sort(),
+		wallMs: records.map((r) => r.result.wallMs),
 	};
 	const fixedClaims = claims.filter(
 		(c) => labelOf.get(c.id)?.label === "fixed",
 	);
 	const extras = (fx.extraDefects ?? []).map(
-		(d) => ({ ...d, id: d.title, text: "" }) as unknown as PostedClaim,
+		(d) =>
+			({
+				...d,
+				id: `${d.path}\u0000${d.line}\u0000${d.title}`,
+				text: "",
+			}) as unknown as PostedClaim,
 	);
 	const found = new Set<string>();
 
@@ -133,11 +140,9 @@ export function scorePr(args: {
 			return;
 		}
 		if (v.status === "single-family") out.singleFamily++;
+		if (v.scope === "moved") out.moved++;
 		if (v.verdict === "real") out.real++;
-		else {
-			out.notReal++;
-			if (v.scope === "moved") out.moved++;
-		}
+		else out.notReal++;
 	}
 
 	out.foundClaims = found.size;
@@ -165,6 +170,7 @@ export interface Summary {
 	moved: number;
 	provisional: number;
 	medianCostUsd: number;
+	medianWallMs: number;
 	fitShare: number;
 }
 
@@ -187,6 +193,7 @@ export function aggregate(prs: PrScore[]): Summary {
 		moved: sum((p) => p.moved),
 		provisional: sum((p) => p.provisional),
 		medianCostUsd: median(prs.map((p) => p.costUsd)),
+		medianWallMs: median(prs.flatMap((p) => p.wallMs)),
 		fitShare: rounds > 0 ? sum((p) => p.fitRounds) / rounds : 0,
 	};
 }
@@ -201,6 +208,10 @@ export interface Comparison {
 	nPrs: number;
 	excludedIncomplete: number;
 	excludedNullPrecision: number;
+	/** Cells shared by both strategies, summed over the paired PRs. */
+	intersectionCells: number;
+	/** PRs where the two strategies share no cell; set by `scoreExperiment`. */
+	emptyIntersectionPrs: string[];
 }
 
 /** Paired over the PRs both strategies completed; claims within a PR are never resampled apart. */
@@ -241,6 +252,8 @@ export function compareStrategies(
 		nPrs: both.length,
 		excludedIncomplete,
 		excludedNullPrecision,
+		intersectionCells: both.reduce((s, { c }) => s + c.cells.length, 0),
+		emptyIntersectionPrs: [],
 	};
 }
 
@@ -293,7 +306,13 @@ export function verdictFor(input: {
 			hosted: false,
 			reasons: ["no paired Anthropic PRs"],
 		};
-	const hosted = input.anthropic.fitShare >= t.hostedFitShare;
+	const openai =
+		input.openai && input.openai.nPrs > 0 && input.openai.precision.n > 0
+			? input.openai
+			: null;
+	const hosted =
+		input.anthropic.fitShare >= t.hostedFitShare &&
+		(openai === null || openai.fitShare >= t.hostedFitShare);
 	const suffix = hosted ? "hosted" : "local-only";
 	if (!input.seedGate)
 		return {
@@ -317,14 +336,14 @@ export function verdictFor(input: {
 			hosted,
 			reasons: a.reasons,
 		};
-	if (!input.openai)
+	if (!openai)
 		return {
 			label: "Anthropic-only, unconfirmed on OpenAI",
 			go: null,
 			hosted,
 			reasons: [],
 		};
-	const o = clears(input.openai, t);
+	const o = clears(openai, t);
 	if (!o.pass)
 		return {
 			label: `no-go (${suffix}); fails on OpenAI`,
@@ -411,22 +430,56 @@ export function scoreExperiment(args: {
 		resamples: plan.thresholds.precisionBootstrap.resamples,
 		seed: args.bootstrapSeed ?? plan.seed,
 	};
+	const fixtureIds = [...new Set(perPr.map((p) => p.fixtureId))];
 	const comparisons = strategies
 		.filter((s) => s !== args.baseline)
 		.flatMap((candidate) =>
-			providers.map((provider) => ({
-				candidate,
-				provider,
-				comparison: compareStrategies(
-					perPr.filter(
-						(p) => p.strategy === candidate && p.provider === provider,
-					),
-					perPr.filter(
-						(p) => p.strategy === args.baseline && p.provider === provider,
-					),
-					opts,
-				),
-			})),
+			providers.map((provider) => {
+				const candPrs: PrScore[] = [];
+				const basePrs: PrScore[] = [];
+				const empty: string[] = [];
+				for (const id of fixtureIds) {
+					const fx = fixtures[id];
+					if (!fx || fx.fixture.provider !== provider) continue;
+					const of = (strategy: string) =>
+						fresh.filter(
+							(r) => r.key.strategy === strategy && r.key.fixtureId === id,
+						);
+					const cellOf = (r: StoredCell) => `${r.key.round}:${r.key.trial}`;
+					const baseRecs = of(args.baseline);
+					const candRecs = of(candidate);
+					if (baseRecs.length === 0 && candRecs.length === 0) continue;
+					const shared = new Set(
+						baseRecs
+							.map(cellOf)
+							.filter((c) => candRecs.some((r) => cellOf(r) === c)),
+					);
+					if (shared.size === 0) {
+						empty.push(id);
+						continue;
+					}
+					const pick = (recs: StoredCell[], strategy: string) =>
+						scorePr({
+							strategy,
+							fixtureId: id,
+							records: recs.filter((r) => shared.has(cellOf(r))),
+							fx,
+							cache: args.cache,
+						});
+					candPrs.push(pick(candRecs, candidate));
+					basePrs.push(pick(baseRecs, args.baseline));
+				}
+				const comparison = compareStrategies(candPrs, basePrs, opts);
+				return {
+					candidate,
+					provider,
+					comparison: {
+						...comparison,
+						excludedIncomplete: empty.length,
+						emptyIntersectionPrs: empty,
+					},
+				};
+			}),
 		);
 
 	const directional = isDirectional(plan);
