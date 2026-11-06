@@ -150,7 +150,7 @@ function usage(): never {
 		"  ai-review replay --live [--rounds <n>] [--max-cost <usd>]  (opt-in, spends tokens, never gates CI)",
 	);
 	console.error(
-		"  ai-review replay --experiment plan|run|score [--plan-file <path>] [--final]  (pre-registered plan; run spends tokens, exits 3 when partial)",
+		"  ai-review replay --experiment plan|run|score [--plan-file <path>] [--fixtures <dir>]  (pre-registered plan; run spends tokens, exits 3 when partial); score also takes --final (once per plan)",
 	);
 	console.error("  ai-review backfill --repo <owner/name> [--pr <n>] [--json]");
 	console.error("  ai-review unrated --repo <owner/name> --pr <n> [--json]");

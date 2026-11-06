@@ -1745,6 +1745,16 @@ describe("replay --experiment", () => {
 		expect(await runReplay(args, { out: l.push })).toBe(2);
 	});
 
+	it("documents --experiment, --fixtures and score-only --final in the usage", async () => {
+		const l = lines();
+		await runReplay(["--final"], { out: l.push });
+		const usage = l.out.join("\n");
+		expect(usage).toMatch(
+			/--experiment plan\|run\|score \[--plan-file <path>\] \[--fixtures <dir>\]/,
+		);
+		expect(usage).toMatch(/--final is for score only/);
+	});
+
 	it("exits 1 for a missing plan file without building any model", async () => {
 		const l = lines();
 		const code = await runReplay(

@@ -109,6 +109,7 @@ const USAGE = [
 	"  ai-review replay --live [--rounds <n>] [--max-cost <usd>] [--strategy <name>] [--save-trace] [--fixtures <dir>]",
 	"  ai-review replay --investigate-join <fixture-id> [--fixtures <dir>]",
 	"  ai-review replay --seeds [--check | --plan [--strategy <name>] | --strategy <name> --max-cost <usd>]",
+	"  ai-review replay --experiment plan|run|score [--plan-file <path>] [--fixtures <dir>]  (--final is for score only)",
 	"  ai-review replay --adjudicate <fixture-id> [--max-anthropic <n>] [--max-openai <n>] [--plan | --audit] [--fixtures <dir>]",
 ].join("\n");
 

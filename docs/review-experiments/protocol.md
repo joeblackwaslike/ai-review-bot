@@ -24,13 +24,17 @@ every report says they are not measured.
   spend per provider and the caps. It runs and writes nothing, and builds no model. It fetches each
   round's compare files through `gh` to size the diffs.
 - `ai-review replay --experiment run` runs the grid in an order shuffled from the plan seed,
-  stops at the first cap and lists the missing cells. Results are appended to
+  stops at a provider's cap and prints one line per missing, over-cap or checkout-less cell
+  (strategy, fixture, round, trial), so the list of cells to rerun is the output. Results are appended to
   `~/.ai-review/experiments/<plan-hash>/results.jsonl` (`AI_REVIEW_EXPERIMENTS_DIR` overrides).
 - `ai-review replay --experiment score` scores tuning and validation cells. It never reads a
   test-split cell and prints no verdict.
-- `ai-review replay --experiment score --final` scores the test split and nothing else. It writes
-  `final.marker` first, so a second `--final` for the same plan hash is refused even if the first
-  crashed. A revised plan that shares test PRs with a scored plan is labeled exploratory.
+- `ai-review replay --experiment score --final` scores the test split and nothing else. It refuses
+  (exit 1, nothing written) when the test grid is partial or a seed gate is missing, then produces the
+  report, and only then writes `final.marker`. A crash while scoring therefore does not consume the
+  final; once the marker exists, a second `--final` for the same plan hash is refused. A marker that
+  cannot be read is treated as scored, and a revised plan that shares test PRs with a scored plan, or
+  finds an unreadable marker, is labeled exploratory.
 
 `run` exits 0 only when the grid is complete, 3 when it is partial (a provider cap, a per-cell cap, a
 round without a checkout), and 1 when a cell failed. A cell whose strategy threw is charged at its
@@ -72,8 +76,10 @@ Computed per PR, then aggregated by macro mean over PRs:
   calls a judge.
 - Recall: labelled real claims found, over labelled real claims plus audit-added defects.
 - Wrong or irrelevant findings, with a separate count for findings about code that only moved.
-- Cost per PR and latency from recorded usage; the share of rounds inside 210 seconds.
-- Join rate as `{joined, candidates}`.
+- Cost per PR from recorded usage; median wall latency per round; the share of rounds inside the
+  plan's `hostedFitSeconds` (210 in the draft).
+- Join rate is deferred to phase 6. The scorer does not compute it; `replay` still reports it
+  offline for fixtures with saved traces.
 
 Unadjudicated labels, `unclear` or `unresolved` verdicts and missing verdicts leave the numerator and
 denominator. Their counts, and the count of `single-family` verdicts, print next to every precision
@@ -102,8 +108,9 @@ and recall figure.
 - The scorer takes audit-added defects as input but the command does not yet read them from the
   adjudication cache, so recall counts labelled claims only.
 - `--seeds` does not yet write `seed-gates.json` (phase 6).
-- Paired comparisons use only PRs where both strategies completed the same `(round, trial)` cells;
-  the report prints how many PRs were excluded for incomplete coverage and for no judged finding.
+- Paired comparisons score both strategies on the `(round, trial)` cells they share within each PR.
+  The report prints the number of shared cells and the PRs with no shared cell (left out), plus the
+  PRs left out of the precision interval for having no judged finding.
 - A cell that failed is not stored, so its reserved cost counts against the cap in that run only; a
   resumed run does not see it.
 - Cache temperature is recorded as unknown.

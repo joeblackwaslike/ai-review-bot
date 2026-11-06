@@ -107,5 +107,5 @@
 		"hostedFitSeconds": 210
 	},
 	"a0Tolerance": 0.1,
-	"selectionRule": "All fixtures recorded to date; later PRs are chosen from Joe's repositories to spread languages and operation types, by this rule written before recording and without looking at outcomes."
+	"selectionRule": "The eligible subset of the fixtures recorded to date: every anthropic fixture, and an openai fixture only when its PR lands in the test split, because OpenAI is rationed to the test split (the schema rejects the rest). Left out for that reason: the openai fixtures of agent-skills#10, ai-review-bot-demo#2, ai-review-bot#70, #92 and #94. Later PRs are chosen from Joe's repositories to spread languages and operation types, by this rule written before recording and without looking at outcomes."
 }
