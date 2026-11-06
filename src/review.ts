@@ -73,6 +73,11 @@ import {
 	plainTitle,
 	type ReviewState,
 } from "./review-state.js";
+import {
+	legacyProviderOf,
+	type ReviewerId,
+	reviewerFromLegacy,
+} from "./reviewer-id.js";
 import { REVIEWER_TUNING, type ReviewerTuning } from "./reviewer-tuning.js";
 import type { ModelSelection } from "./router.js";
 import {
@@ -999,6 +1004,7 @@ export interface ReviewMetaParsed {
 	review: number;
 	readiness: number;
 	provider: string;
+	reviewer: string;
 	model: string;
 	findings: number;
 	cost: number | undefined;
@@ -1009,7 +1015,12 @@ export function parseReviewMetadata(body: string): ReviewMetaParsed | null {
 	const sha = extract("sha");
 	const reviewStr = extract("review");
 	const readinessStr = extract("readiness");
-	const provider = extract("provider");
+	const reviewerMarker = extract("reviewer");
+	const provider =
+		extract("provider") ??
+		(reviewerMarker === undefined
+			? undefined
+			: legacyProviderOf(reviewerMarker));
 	const model = extract("model");
 	const findingsStr = extract("findings");
 	const costStr = extract("cost");
@@ -1029,6 +1040,7 @@ export function parseReviewMetadata(body: string): ReviewMetaParsed | null {
 		review: Number(reviewStr),
 		readiness: Number(readinessStr),
 		provider,
+		reviewer: reviewerMarker ?? reviewerFromLegacy(provider),
 		model,
 		findings: Number(findingsStr),
 		cost: costStr === COST_UNAVAILABLE ? undefined : Number(costStr),
@@ -1067,7 +1079,7 @@ export interface FormatReviewBodyOptions {
 	priorSha: string;
 	headSha: string;
 	reviewCount: number;
-	provider: string;
+	reviewer: ReviewerId;
 	model: string;
 	cost: number | undefined;
 	ledgerNote?: string;
@@ -1197,7 +1209,7 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		priorSha,
 		headSha,
 		reviewCount,
-		provider,
+		reviewer,
 		model,
 		cost,
 		ledgerNote,
@@ -1295,7 +1307,8 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		`<!-- ai-review:sha=${headSha} -->`,
 		`<!-- ai-review:review=${reviewCount} -->`,
 		`<!-- ai-review:readiness=${readiness} -->`,
-		`<!-- ai-review:provider=${provider} -->`,
+		`<!-- ai-review:reviewer=${reviewer} -->`,
+		`<!-- ai-review:provider=${legacyProviderOf(reviewer)} -->`,
 		`<!-- ai-review:model=${model} -->`,
 		`<!-- ai-review:findings=${generalFindings.length} -->`,
 		`<!-- ai-review:cost=${cost === undefined ? COST_UNAVAILABLE : cost.toFixed(6)} -->`,
@@ -1909,7 +1922,7 @@ async function buildReviewInner(
 	const ownReviewOf = (review: PullRequestReview) =>
 		isOwnReview(review.body, {
 			commentPrefix: context.commentPrefix,
-			provider: context.provider,
+			reviewer: reviewerFromLegacy(context.provider),
 		});
 
 	if (!context.force) {
@@ -3228,7 +3241,7 @@ async function buildReviewInner(
 		priorSha,
 		headSha: context.headSha,
 		reviewCount: reviewCountBase + 1,
-		provider: selection.provider,
+		reviewer: reviewerFromLegacy(context.provider),
 		model: selection.model,
 		cost,
 		ledgerNote: loadedLedger

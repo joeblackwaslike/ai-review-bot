@@ -48,8 +48,8 @@ describe("readMetadataBlock", () => {
 });
 
 describe("isOwnReview", () => {
-	const own = { commentPrefix: "ai-review", provider: "anthropic" };
-	const review = (provider?: string) =>
+	const own = { commentPrefix: "ai-review", reviewer: "claude" };
+	const review = (markers: string[] = []) =>
 		[
 			"<!-- ai-review:post-attempt:1a31033b -->",
 			"### ai-review",
@@ -57,26 +57,42 @@ describe("isOwnReview", () => {
 			"Summary.",
 			"",
 			block,
-			...(provider ? [`<!-- ai-review:provider=${provider} -->`] : []),
+			...markers.map((m) => `<!-- ai-review:${m} -->`),
 			"",
 			footer,
 		].join("\n");
 
-	it("counts a review under our heading from our provider", () => {
-		expect(isOwnReview(review("anthropic"), own)).toBe(true);
+	it("counts a legacy provider-only review for the mapped reviewer only", () => {
+		const body = review(["provider=anthropic"]);
+		expect(isOwnReview(body, own)).toBe(true);
+		expect(isOwnReview(body, { ...own, reviewer: "codex" })).toBe(false);
+		expect(isOwnReview(body, { ...own, reviewer: "gemini" })).toBe(false);
 	});
 
-	it("does not count the other provider's review under the same heading", () => {
-		expect(isOwnReview(review("openai"), own)).toBe(false);
+	it("counts a reviewer marker for that reviewer only", () => {
+		const body = review(["reviewer=gemini", "provider=gemini"]);
+		expect(isOwnReview(body, { ...own, reviewer: "gemini" })).toBe(true);
+		expect(isOwnReview(body, own)).toBe(false);
+		expect(isOwnReview(body, { ...own, reviewer: "codex" })).toBe(false);
 	});
 
-	it("counts a review with no provider marker as ours", () => {
-		expect(isOwnReview(review(), own)).toBe(true);
+	it("lets the reviewer marker win over a stale provider marker", () => {
+		const body = review(["reviewer=claude", "provider=openai"]);
+		expect(isOwnReview(body, own)).toBe(true);
+		expect(isOwnReview(body, { ...own, reviewer: "codex" })).toBe(false);
+	});
+
+	it("counts a review with no marker as ours for any reviewer", () => {
+		for (const reviewer of ["claude", "codex", "gemini"])
+			expect(isOwnReview(review(), { ...own, reviewer })).toBe(true);
 	});
 
 	it("does not count a body without our heading", () => {
 		expect(
-			isOwnReview(review("anthropic").replace("### ai-review", ""), own),
+			isOwnReview(
+				review(["provider=anthropic"]).replace("### ai-review", ""),
+				own,
+			),
 		).toBe(false);
 		expect(isOwnReview(null, own)).toBe(false);
 		expect(isOwnReview(undefined, own)).toBe(false);
@@ -85,27 +101,30 @@ describe("isOwnReview", () => {
 	it("does not count a heading that only starts with our prefix", () => {
 		expect(
 			isOwnReview(
-				review("anthropic").replace("### ai-review", "### ai-review-qc"),
+				review(["provider=anthropic"]).replace(
+					"### ai-review",
+					"### ai-review-qc",
+				),
 				own,
 			),
 		).toBe(false);
 	});
 
 	it("does not count a human review that quotes our review", () => {
-		const quoted = review("anthropic")
+		const quoted = review(["provider=anthropic"])
 			.split("\n")
 			.map((l) => `> ${l}`)
 			.join("\n");
 		expect(isOwnReview(`I disagree with this:\n\n${quoted}`, own)).toBe(false);
 	});
 
-	it("reads the provider from the block, not from a quoted marker in the summary", () => {
-		const body = review("anthropic").replace(
+	it("reads markers from the block, not from a quoted marker in the summary", () => {
+		const body = review(["provider=anthropic"]).replace(
 			"Summary.",
-			"Summary.\n> <!-- ai-review:provider=openai -->",
+			"Summary.\n> <!-- ai-review:reviewer=codex -->\n> <!-- ai-review:provider=openai -->",
 		);
 		expect(isOwnReview(body, own)).toBe(true);
-		expect(isOwnReview(body, { ...own, provider: "openai" })).toBe(false);
+		expect(isOwnReview(body, { ...own, reviewer: "codex" })).toBe(false);
 	});
 });
 

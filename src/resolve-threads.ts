@@ -1,5 +1,6 @@
 import { splitInlineClaims } from "./replay/claims.js";
 import { isOwnReview } from "./review-metadata.js";
+import { reviewerFromLegacy } from "./reviewer-id.js";
 
 export interface ResolvedFindingRef {
 	path: string | null;
@@ -87,7 +88,13 @@ async function fetchOwnOpenThreads(
 			const first = node.comments.nodes[0];
 			if (!first || node.isResolved) continue;
 			if (first.author?.__typename !== "Bot") continue;
-			if (!isOwnReview(first.pullRequestReview?.body, own)) continue;
+			if (
+				!isOwnReview(first.pullRequestReview?.body, {
+					commentPrefix: own.commentPrefix,
+					reviewer: reviewerFromLegacy(own.provider),
+				})
+			)
+				continue;
 			threads.push({ id: node.id, path: node.path, body: first.body });
 		}
 

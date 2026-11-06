@@ -49,6 +49,7 @@ import {
 	severityBadge,
 	TIER1_SKILLS,
 } from "./review.js";
+import { readMetadataBlock } from "./review-metadata.js";
 import type { PersistedFinding } from "./review-state.js";
 import { findingId, parseBodyFindings } from "./review-state.js";
 import { REVIEWER_TUNING } from "./reviewer-tuning.js";
@@ -4822,9 +4823,37 @@ describe("parseReviewMetadata", () => {
 		expect(result?.review).toBe(2);
 		expect(result?.readiness).toBe(4);
 		expect(result?.provider).toBe("anthropic");
+		expect(result?.reviewer).toBe("claude");
 		expect(result?.model).toBe("claude-sonnet-4-6");
 		expect(result?.findings).toBe(5);
 		expect(result?.cost).toBeCloseTo(0.0123);
+	});
+});
+
+describe("parseReviewMetadata reviewer marker", () => {
+	const fields = (markers: string[]) =>
+		[
+			"<!-- ai-review:sha=abc1234567890 -->",
+			"<!-- ai-review:review=2 -->",
+			"<!-- ai-review:readiness=4 -->",
+			...markers.map((m) => `<!-- ai-review:${m} -->`),
+			"<!-- ai-review:model=m -->",
+			"<!-- ai-review:findings=5 -->",
+			"<!-- ai-review:cost=0.0123 -->",
+		].join("\n");
+
+	it("prefers the reviewer marker and keeps the provider", () => {
+		const meta = parseReviewMetadata(
+			fields(["reviewer=gemini", "provider=gemini"]),
+		);
+		expect(meta?.reviewer).toBe("gemini");
+		expect(meta?.provider).toBe("gemini");
+	});
+
+	it("reads a reviewer-only body", () => {
+		const meta = parseReviewMetadata(fields(["reviewer=codex"]));
+		expect(meta?.reviewer).toBe("codex");
+		expect(meta?.provider).toBe("openai");
 	});
 });
 
@@ -4858,7 +4887,7 @@ describe("formatReviewBody", () => {
 		priorSha: "",
 		headSha: "abc123def456",
 		reviewCount: 2,
-		provider: "anthropic",
+		reviewer: "claude",
 		model: "claude-sonnet-5-5",
 		cost: 0.000042,
 	};
@@ -4954,6 +4983,19 @@ describe("formatReviewBody", () => {
 		expect(body).toContain("<!-- ai-review:review=2 -->");
 		expect(body).toContain("<!-- ai-review:readiness=3 -->");
 		expect(body).toContain("<!-- ai-review:provider=anthropic -->");
+	});
+
+	it("writes the reviewer and legacy provider markers in one contiguous block", () => {
+		const body = formatReviewBody({ ...baseOpts, reviewer: "gemini" });
+		const block = readMetadataBlock(body);
+		expect(block?.get("reviewer")).toBe("gemini");
+		expect(block?.get("provider")).toBe("gemini");
+		const claude = readMetadataBlock(formatReviewBody(baseOpts));
+		expect(claude?.get("reviewer")).toBe("claude");
+		expect(claude?.get("provider")).toBe("anthropic");
+		expect(body).toContain(
+			"<!-- ai-review:reviewer=gemini -->\n<!-- ai-review:provider=gemini -->",
+		);
 	});
 
 	it("roundtrips through parseReviewMetadata", () => {
@@ -7699,6 +7741,63 @@ describe("delta scoping without KV", () => {
 			const { octokit } = prOctokit({
 				reviews: [postedReview(12, "openai"), postedReview(11, "anthropic")],
 			});
+
+			expect(await buildReview({ octokit, ...baseContext })).toBeNull();
+		});
+
+		it("old review is recognised at the same head", async () => {
+			routeModels({ agent: withFresh() });
+			const { octokit } = prOctokit({
+				reviews: [postedReview(11, "anthropic")],
+			});
+
+			expect(await buildReview({ octokit, ...baseContext })).toBeNull();
+		});
+
+		it("carried blocker survives the marker change", async () => {
+			incremental();
+			const { octokit } = prOctokit({
+				reviews: [
+					{
+						id: 11,
+						body: buildOwnReviewBody({
+							sha: OLD,
+							count: 3,
+							provider: "anthropic",
+							rows: ["| 🟠 | **Legacy blocker** (`src/a.ts:6`) |"],
+						}),
+					},
+				],
+				compare: () => ({ status: "ahead", files: [bFile] }),
+			});
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(decision?.event).toBe("REQUEST_CHANGES");
+			expect(decision?.body).toContain("Legacy blocker");
+			expect(decision?.body).toContain("<!-- ai-review:review=4 -->");
+		});
+
+		it("restart reviews only the delta", async () => {
+			incremental();
+			const { octokit, compareCalls } = prOctokit({
+				reviews: [anthropicReview()],
+				compare: () => ({ status: "ahead", files: [bFile] }),
+			});
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(compareCalls).toEqual([`${OLD}...${HEAD}`]);
+			expect(decision?.body).toContain("scope: delta from");
+		});
+
+		it("a review with only the new reviewer marker counts as ours", async () => {
+			routeModels({ agent: withFresh() });
+			const body = postedReview(11, "anthropic").body.replace(
+				"<!-- ai-review:provider=anthropic -->",
+				"<!-- ai-review:reviewer=claude -->",
+			);
+			const { octokit } = prOctokit({ reviews: [{ id: 11, body }] });
 
 			expect(await buildReview({ octokit, ...baseContext })).toBeNull();
 		});
