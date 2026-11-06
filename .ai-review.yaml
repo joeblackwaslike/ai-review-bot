@@ -35,35 +35,15 @@ routing:
   complexLines: 500
   trivialDocLines: 20
 
-# Prices checked 2026-11-03: platform.claude.com/docs/en/about-claude/pricing
-# and developers.openai.com/api/docs/models/gpt-6-luna and gpt-6.1-sol.
-# Haiku 5.5 bills $0.50/$2.50 above 100K prompt tokens, so huge trivial-tier
-# diffs are under-reported by these flat rates.
+# Token prices come from OpenRouter (cached 24h); models need no entry here.
+# An entry only adds options: `refusalFallback`, or a pinned
+# `pricing: { input, cachedInput, output }` in USD per million tokens, which
+# wins over OpenRouter. Pin gemini-3.1-flash-lite if cost shows unavailable.
 models:
-  anthropic/claude-haiku-5-5:
-    pricing: { input: 0.1, cachedInput: 0.01, output: 0.5 }
   anthropic/claude-sonnet-5-5:
-    pricing: { input: 2.0, cachedInput: 0.1, output: 10.0 }
     refusalFallback: true
   anthropic/claude-opus-5-5:
-    pricing: { input: 4.0, cachedInput: 0.2, output: 20.0 }
     refusalFallback: true
-  # GPT-6.1 Sol ($2/$10) undercuts the old GPT-5.6 Terra and Sol tiers, so it
-  # covers normal through deep, separated by effort alone. GPT-6 Astra
-  # ($10/$50) is deliberately unused. Luna is the only GPT-6 tier that accepts
-  # effort "none".
-  openai/gpt-6-luna:
-    pricing: { input: 0.1, cachedInput: 0.01, output: 0.5 }
-  openai/gpt-6.1-sol:
-    pricing: { input: 2.0, cachedInput: 0.1, output: 10.0 }
-  # Gemini prices checked 2026-11-06: aistudio.google.com/docs/pricing.
-  # gemini-3.8-flash is $0.75/$0.075/$3.75 through 2026-12-31, then $1.50/$0.15/
-  # $7.50 from 2027-01-01; update the entry when the rate changes. Output
-  # includes thinking tokens.
-  google/gemini-3.1-flash-lite:
-    pricing: { input: 0.25, cachedInput: 0.025, output: 1.5 }
-  google/gemini-3.8-flash:
-    pricing: { input: 0.75, cachedInput: 0.075, output: 3.75 }
 
 reviewers:
   claude:

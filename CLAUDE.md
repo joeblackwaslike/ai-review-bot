@@ -72,6 +72,7 @@ Findings carried from the previous review appear in the body's "Still open from 
 | `src/prompt.ts` | `buildUserMessage()`, `buildAgentSystemPrompt(skillPath, customPrompt)` |
 | `src/review.ts` | `runAgent()`, `mergeReviews()`, `buildReviewComments()`, `buildReview()` |
 | `src/models.ts` | AI model creation (`createAIModel(selection, auth?)`), token cost calculation |
+| `src/pricing.ts` | OpenRouter price table: `primePrices()` (24h cache in KV or `~/.ai-review/pricing.json`, never throws), `lookupPrice()`. `computeCost()` uses a `models.<id>.pricing` pin first, then this table, else `undefined` (shown as "cost unavailable") |
 | `src/auth.ts` | Local subscription/OAuth + API-key resolution (`resolveAnthropicAuth()`, `resolveOpenAIAuth()`); custom-fetch wrappers. **CLI-only — never import from webhook paths** |
 | `src/router.ts` | PR tier classification (`classifyTier()`), model selection (`routeModel()`) |
 | `src/tier2.ts` | Tier 2 skill detection (`detectTier2Skills()`) |

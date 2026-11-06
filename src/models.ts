@@ -2,6 +2,7 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import type { ResolvedAuth } from "./auth.js";
 import { getConfigTree } from "./config/load.js";
+import { lookupPrice } from "./pricing.js";
 import type { ModelSelection } from "./router.js";
 
 interface TokenUsage {
@@ -10,13 +11,18 @@ interface TokenUsage {
 	completionTokens: number;
 }
 
-export function computeCost(usage: TokenUsage, model: string): number {
-	const models = getConfigTree().models;
-	const entry = Object.entries(models).find(
+/** Cost in USD, or undefined when no price is known. A `pricing` pin in the
+ * config wins over the OpenRouter table. Unknown is never reported as $0. */
+export function computeCost(
+	usage: TokenUsage,
+	model: string,
+): number | undefined {
+	const pinned = Object.entries(getConfigTree().models).find(
 		([key]) => key === model || key.endsWith(`/${model}`),
-	)?.[1];
-	if (!entry) return 0;
-	const { input, cachedInput, output } = entry.pricing;
+	)?.[1]?.pricing;
+	const price = pinned ?? lookupPrice(model, usage.promptTokens);
+	if (!price) return undefined;
+	const { input, cachedInput, output } = price;
 	const cached = Math.min(usage.cachedPromptTokens ?? 0, usage.promptTokens);
 	return (
 		((usage.promptTokens - cached) / 1_000_000) * input +

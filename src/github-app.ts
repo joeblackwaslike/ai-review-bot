@@ -17,6 +17,7 @@ import {
 	quotaCommentMarker,
 	rateLimitCommentMarker,
 } from "./notify.js";
+import { primePrices } from "./pricing.js";
 import { resolveStaleThreads } from "./resolve-threads.js";
 import type { ReviewDecision } from "./review.js";
 import { buildReview } from "./review.js";
@@ -533,6 +534,7 @@ export async function maybeSubmitReview(args: {
 	let reviewPosted = false;
 	let review: Awaited<ReturnType<typeof buildReview>> | null = null;
 	try {
+		await primePrices({ kv: getKv() });
 		review = await buildReview({
 			octokit,
 			owner,

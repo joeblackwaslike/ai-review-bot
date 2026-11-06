@@ -154,7 +154,8 @@ export interface ReviewMetadata {
 	tier2Skills: string[];
 	generalFindings: number;
 	inlineComments: number;
-	cost: number;
+	/** USD, or undefined when no price is known for the model. */
+	cost: number | undefined;
 }
 
 export interface ReviewDecision {
@@ -996,6 +997,8 @@ export function renderReadinessBar(score: number): string {
 	return `${"🟩".repeat(score)}${"⬜".repeat(5 - score)} **${score}/5**`;
 }
 
+const COST_UNAVAILABLE = "unavailable";
+
 export interface ReviewMetaParsed {
 	sha: string;
 	review: number;
@@ -1003,7 +1006,7 @@ export interface ReviewMetaParsed {
 	provider: string;
 	model: string;
 	findings: number;
-	cost: number;
+	cost: number | undefined;
 }
 
 export function parseReviewMetadata(body: string): ReviewMetaParsed | null {
@@ -1033,7 +1036,7 @@ export function parseReviewMetadata(body: string): ReviewMetaParsed | null {
 		provider,
 		model,
 		findings: Number(findingsStr),
-		cost: Number(costStr),
+		cost: costStr === COST_UNAVAILABLE ? undefined : Number(costStr),
 	};
 }
 
@@ -1071,7 +1074,7 @@ export interface FormatReviewBodyOptions {
 	reviewCount: number;
 	provider: string;
 	model: string;
-	cost: number;
+	cost: number | undefined;
 	ledgerNote?: string;
 	/** Open ledger entry ids behind the carried findings, written as the
 	 * `ai-review:carry` marker that `deriveBaseline` reads. */
@@ -1300,14 +1303,14 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		`<!-- ai-review:provider=${provider} -->`,
 		`<!-- ai-review:model=${model} -->`,
 		`<!-- ai-review:findings=${generalFindings.length} -->`,
-		`<!-- ai-review:cost=${cost.toFixed(6)} -->`,
+		`<!-- ai-review:cost=${cost === undefined ? COST_UNAVAILABLE : cost.toFixed(6)} -->`,
 		...(carryIds.length > 0
 			? [`<!-- ai-review:carry=${carryIds.join(",")} -->`]
 			: []),
 		formatAgentsMarker(agentRecords, pending, KNOWN_SKILLS),
 	].join("\n");
 
-	const costFooter = `---\n*Model: ${model} · ${allSkillsCount} agents · $${cost.toFixed(6)}${ledgerNote ? ` · ${ledgerNote}` : ""}${scopeNote ? ` · ${scopeNote}` : ""} · [ai-review-bot](https://github.com/joeblackwaslike/ai-review-bot)*`;
+	const costFooter = `---\n*Model: ${model} · ${allSkillsCount} agents · ${cost === undefined ? "cost unavailable" : `$${cost.toFixed(6)}`}${ledgerNote ? ` · ${ledgerNote}` : ""}${scopeNote ? ` · ${scopeNote}` : ""} · [ai-review-bot](https://github.com/joeblackwaslike/ai-review-bot)*`;
 
 	const parts = [
 		`### ${commentPrefix}`,

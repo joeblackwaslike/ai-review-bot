@@ -4868,6 +4868,13 @@ describe("formatReviewBody", () => {
 		expect(body.startsWith("### Claude Review")).toBe(true);
 	});
 
+	it("says cost is unavailable when the model has no known price", () => {
+		const body = formatReviewBody({ ...baseOpts, cost: undefined });
+		expect(body).toContain("cost unavailable");
+		expect(body).toContain("<!-- ai-review:cost=unavailable -->");
+		expect(body).not.toContain("$0.000000");
+	});
+
 	it("includes the readiness bar", () => {
 		const body = formatReviewBody(baseOpts);
 		expect(body).toContain("🟩🟩🟩⬜⬜ **3/5**");
@@ -9814,7 +9821,7 @@ describe("classified agent failures with usage", () => {
 			decision?.metadata.model ?? "",
 		);
 		expect(expected).toBeGreaterThan(0);
-		expect(decision?.metadata.cost).toBeCloseTo(expected, 10);
+		expect(decision?.metadata.cost).toBeCloseTo(expected as number, 10);
 		const recs = outcomeLogs(log);
 		expect(recs).toHaveLength(TIER1_SKILLS.length);
 		const failed = recs.find((c) => c[1].status === "error")?.[1];
@@ -10093,7 +10100,7 @@ describe("agent retry", () => {
 			},
 			decision?.metadata.model ?? "",
 		);
-		expect(decision?.metadata.cost).toBeCloseTo(expected, 10);
+		expect(decision?.metadata.cost).toBeCloseTo(expected as number, 10);
 	});
 
 	it("never reruns a non-retryable failure", async () => {
@@ -10392,7 +10399,7 @@ describe("agent retry", () => {
 			},
 			decision?.metadata.model ?? "",
 		);
-		expect(decision?.metadata.cost).toBeCloseTo(expected, 10);
+		expect(decision?.metadata.cost).toBeCloseTo(expected as number, 10);
 	});
 
 	it("does not pace for a retry already ruled out at collection", async () => {

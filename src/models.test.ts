@@ -1,5 +1,20 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { computeCost, createAIModel } from "./models.js";
+import { setPriceTable } from "./pricing.js";
+
+const pins = vi.hoisted(() => ({
+	models: undefined as Record<string, unknown> | undefined,
+}));
+vi.mock("./config/load.js", async (importOriginal) => {
+	const real = await importOriginal<typeof import("./config/load.js")>();
+	return {
+		...real,
+		getConfigTree: () => {
+			const tree = real.getConfigTree();
+			return pins.models ? { ...tree, models: pins.models } : tree;
+		},
+	};
+});
 
 describe("computeCost", () => {
 	it("computes cost for claude-haiku-5-5 at 1M tokens each", () => {
@@ -42,12 +57,12 @@ describe("computeCost", () => {
 		expect(cost).toBeCloseTo(12.0); // $2 input + $10 output
 	});
 
-	it("returns 0 for an unknown model", () => {
+	it("returns undefined for an unknown model", () => {
 		const cost = computeCost(
 			{ promptTokens: 100_000, completionTokens: 50_000 },
 			"unknown-model-xyz",
 		);
-		expect(cost).toBe(0);
+		expect(cost).toBeUndefined();
 	});
 
 	it("scales correctly for small token counts (sonnet)", () => {
@@ -89,10 +104,48 @@ describe("computeCost with config pricing", () => {
 		}
 	});
 
-	it("returns 0 for an unknown model", () => {
+	it("returns undefined for an unknown model", () => {
 		expect(
 			computeCost({ promptTokens: 1000, completionTokens: 1000 }, "nope"),
-		).toBe(0);
+		).toBeUndefined();
+	});
+
+	it("applies the tier price for large prompts", () => {
+		setPriceTable({
+			"anthropic/claude-haiku-5-5": {
+				input: 0.1,
+				cachedInput: 0.01,
+				output: 0.5,
+				tiers: [
+					{
+						minPromptTokens: 100_000,
+						input: 0.5,
+						cachedInput: 0.05,
+						output: 2.5,
+					},
+				],
+			},
+		});
+		const usage = { promptTokens: 200_000, completionTokens: 0 };
+		expect(computeCost(usage, "claude-haiku-5-5")).toBeCloseTo(0.1);
+	});
+
+	it("lets a config pin beat the price table", () => {
+		pins.models = {
+			"anthropic/claude-sonnet-5-5": {
+				pricing: { input: 1, cachedInput: 1, output: 1 },
+			},
+		};
+		try {
+			expect(
+				computeCost(
+					{ promptTokens: 1_000_000, completionTokens: 0 },
+					"claude-sonnet-5-5",
+				),
+			).toBeCloseTo(1);
+		} finally {
+			pins.models = undefined;
+		}
 	});
 
 	it("computeCost bills cached tokens at cachedInput", () => {

@@ -27,7 +27,10 @@ const ModelSchema = z
 				output: price("Output token price"),
 			})
 			.strict()
-			.describe("Token prices used for cost reporting."),
+			.optional()
+			.describe(
+				"Pin token prices for cost reporting; when absent, prices come from OpenRouter.",
+			),
 		refusalFallback: z
 			.boolean()
 			.default(false)
@@ -43,7 +46,7 @@ const ModelSchema = z
 
 const TierChoiceSchema = z
 	.object({
-		model: modelId("Model for this tier; must exist in models."),
+		model: modelId("Model for this tier."),
 		effort: EffortSchema.optional(),
 	})
 	.strict();
@@ -219,17 +222,6 @@ export const ConfigSchema = z
 	})
 	.strict()
 	.superRefine((cfg, ctx) => {
-		for (const [id, reviewer] of Object.entries(cfg.reviewers)) {
-			for (const [tier, choice] of Object.entries(reviewer.tiers)) {
-				if (!(choice.model in cfg.models)) {
-					ctx.addIssue({
-						code: "custom",
-						path: ["reviewers", id, "tiers", tier, "model"],
-						message: `model "${choice.model}" is not defined in models`,
-					});
-				}
-			}
-		}
 		const bareIds = new Map<string, string>();
 		for (const key of Object.keys(cfg.models)) {
 			const bare = key.slice(key.indexOf("/") + 1);

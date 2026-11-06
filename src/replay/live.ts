@@ -32,7 +32,8 @@ export interface LiveOptions {
 	rounds: number[];
 	maxCostUsd: number;
 	review: (diffInput: string) => Promise<LiveFinding[]>;
-	estimateCost: (diffInput: string) => number;
+	/** Undefined when the model has no known price. */
+	estimateCost: (diffInput: string) => number | undefined;
 	fetchDiff: (round: Round) => Promise<{ diff: string; approximate: boolean }>;
 	out?: (s: string) => void;
 }
@@ -62,6 +63,11 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 	);
 	const estimates = diffs.map((d) => {
 		const e = opts.estimateCost(d.diff);
+		if (e === undefined) {
+			throw new Error(
+				"live: no price known for the selected model, so --max-cost cannot be enforced. Pin models.<provider/model>.pricing in .ai-review.yaml or check network access to openrouter.ai.",
+			);
+		}
 		if (!Number.isFinite(e) || e < 0) return 0;
 		return e;
 	});

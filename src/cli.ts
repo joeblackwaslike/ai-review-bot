@@ -58,8 +58,9 @@ import {
 import { ingest } from "./mistakes/ingest.js";
 import { mistakesRoot, openMistakeLog } from "./mistakes/log.js";
 import { branchForHead, headShaFor } from "./mistakes/session.js";
+import { defaultPricingFile, primePrices } from "./pricing.js";
 import { runReplay } from "./replay/command.js";
-import { slugify } from "./report.js";
+import { formatCost, slugify } from "./report.js";
 import { defaultGitRunner } from "./sources.js";
 import { type ProviderTarget, watchPr } from "./watch.js";
 
@@ -330,7 +331,7 @@ async function cmdReview(args: string[]): Promise<void> {
 	} else {
 		console.log(`Report: ${result.path}`);
 		console.log(
-			`${result.filesReviewed} file(s) · ${result.providersRun.join(" + ")} · ${result.durationSeconds}s · $${result.costUsd.toFixed(4)}`,
+			`${result.filesReviewed} file(s) · ${result.providersRun.join(" + ")} · ${result.durationSeconds}s · ${formatCost(result.costUsd)}`,
 		);
 	}
 }
@@ -1301,6 +1302,7 @@ export async function main(): Promise<void> {
 		// subcommand runs, so createApp()/getConfig() see credentials even when
 		// the globally npm-linked binary is invoked from outside this repo.
 		await resolveCliCredentials();
+		await primePrices({ file: defaultPricingFile() });
 	}
 
 	if (sub === "classify") return cmdClassify(rest);

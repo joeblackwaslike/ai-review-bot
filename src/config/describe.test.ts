@@ -28,7 +28,7 @@ describe("describeConfig", () => {
 		expect(paths).toContain("reviewers.claude.tiers.normal.model");
 		expect(
 			paths.some(
-				(p) => p.startsWith("models.") && p.endsWith(".pricing.input"),
+				(p) => p.startsWith("models.") && p.endsWith(".refusalFallback"),
 			),
 		).toBe(true);
 	});

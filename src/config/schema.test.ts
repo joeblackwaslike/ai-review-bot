@@ -27,17 +27,21 @@ describe("ConfigSchema", () => {
 		expect(model?.refusalFallback).toBe(false);
 	});
 
-	it("rejects a tier model with no models entry", () => {
+	it("accepts a tier model that has no models entry", () => {
 		const cfg = minimal();
 		cfg.reviewers.claude.tiers.deep = {
 			model: "openai/gpt-missing",
 			effort: "high",
 		};
-		const result = ConfigSchema.safeParse(cfg);
-		expect(result.success).toBe(false);
-		expect(JSON.stringify(result.error?.issues)).toContain(
-			"openai/gpt-missing",
-		);
+		expect(ConfigSchema.safeParse(cfg).success).toBe(true);
+	});
+
+	it("accepts a model entry without pricing", () => {
+		const cfg = minimal();
+		cfg.models["anthropic/claude-sonnet-5-5"] = {
+			refusalFallback: true,
+		} as never;
+		expect(ConfigSchema.safeParse(cfg).success).toBe(true);
 	});
 
 	it("rejects a bad reviewer id", () => {

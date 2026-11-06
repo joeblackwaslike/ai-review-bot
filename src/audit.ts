@@ -626,7 +626,7 @@ export type ReviewScope =
 export interface LocalReviewResult {
 	path: string;
 	durationSeconds: number;
-	costUsd: number;
+	costUsd: number | undefined;
 	filesReviewed: number;
 	providersRun: Provider[];
 	merged: ModelReview;
@@ -656,7 +656,8 @@ function scopeLabel(scope: ReviewScope): string {
 
 export interface ReviewPassResult {
 	merged: ModelReview;
-	costUsd: number;
+	/** Undefined when any model had no known price. */
+	costUsd: number | undefined;
 	providersRun: Provider[];
 	models: string[];
 	agentsAttempted: number;
@@ -688,7 +689,7 @@ export async function runReviewPasses(opts: {
 	const models: string[] = [];
 	const providersRun: Provider[] = [];
 	const providerStats: ReviewPassResult["providerStats"] = [];
-	let costUsd = 0;
+	let costUsd: number | undefined = 0;
 	let agentsSucceeded = 0;
 	let agentsAttempted = 0;
 
@@ -719,7 +720,11 @@ export async function runReviewPasses(opts: {
 		}
 		models.push(selection.model);
 		providersRun.push(provider);
-		costUsd += computeCost(pass.usage, selection.model);
+		const passCost = computeCost(pass.usage, selection.model);
+		costUsd =
+			costUsd === undefined || passCost === undefined
+				? undefined
+				: costUsd + passCost;
 		agentsSucceeded += pass.agentsSucceeded;
 		agentsAttempted += pass.agentsAttempted;
 		providerStats.push({
@@ -848,7 +853,7 @@ export async function runLocalReview(opts: {
 				log: opts.mistakes,
 				headSha: opts.headSha ?? "unknown",
 				scope: scopeLabel(opts.scope),
-				costUsd,
+				costUsd: costUsd ?? 0,
 				durationSeconds,
 				providers: providersRun,
 				models,
