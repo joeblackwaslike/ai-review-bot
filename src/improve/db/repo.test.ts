@@ -312,7 +312,13 @@ describe("reviewer identity columns", () => {
 		}
 	});
 
-	it("discards: the same reviewer twice yields one row, two reviewers on one provider yield two rows", async () => {
+	it("keeps the legacy provider enum type after the expand migration", async () => {
+		const db = await createTestDb();
+		const r = await db.execute(sql`select 'anthropic'::provider as p`);
+		expect(r.rows).toEqual([{ p: "anthropic" }]);
+	});
+
+	it("discards: the same reviewer twice yields one row, and a second reviewer with a different natural key yields a second row", async () => {
 		const db = await createTestDb();
 		const row = { ...baseDiscard, provider: "shared" };
 		await insertDiscards(db, [{ ...row, reviewer: "alpha" }]);

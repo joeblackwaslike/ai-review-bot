@@ -20,6 +20,7 @@ import {
 	OFF_DIFF_CODES,
 } from "../../discards.js";
 
+export const provider = pgEnum("provider", ["anthropic", "openai"]);
 export const feedbackSource = pgEnum("feedback_source", [
 	"inline_reaction",
 	"review_reaction",

@@ -1,5 +1,5 @@
 {
-	"id": "bd48f78c-3f40-43c7-84f9-f78f9f4eddc1",
+	"id": "ed3b35c0-8c2c-4cc2-a05c-df4657bbd785",
 	"prevId": "c63bdbe8-d99e-4fd6-90d6-1ec3cd7baafa",
 	"version": "7",
 	"dialect": "postgresql",
@@ -1303,6 +1303,11 @@
 				"closed_merged",
 				"closed_rejected"
 			]
+		},
+		"public.provider": {
+			"name": "provider",
+			"schema": "public",
+			"values": ["anthropic", "openai"]
 		},
 		"public.qc_trigger": {
 			"name": "qc_trigger",
