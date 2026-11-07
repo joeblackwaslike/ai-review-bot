@@ -12225,4 +12225,121 @@ describe("per-repo overrides", () => {
 		expect(plain?.body).toContain("Same P3");
 		expect(withOverrides).toEqual(plain);
 	});
+
+	it("extra sensitive patterns raise the routed tier", async () => {
+		runAgents();
+		const runOn = ["complex", "deep"] as const;
+		const without = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			repoOverrides: { ...noOverrides, runOn: [...runOn] },
+		});
+		expect(without).toBeNull();
+		mockGenerateObject.mockClear();
+		runAgents();
+		const withPattern = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			repoOverrides: {
+				...noOverrides,
+				runOn: [...runOn],
+				extraSensitivePatterns: ["review"],
+			},
+		});
+		expect(withPattern).not.toBeNull();
+	});
+
+	it("a skill the repo disables is not owed from the prior round, so a clean re-review posts nothing", async () => {
+		const headSha = "1234567890abcdef";
+		mockTriageReReview.mockResolvedValueOnce({
+			recommendation: "FULL",
+			resolved: [],
+			newRisk: false,
+		});
+		const body = [
+			"### ai-review-bot",
+			"",
+			"Prior review.",
+			"",
+			"<!-- ai-review:sha=0dd5a1111111 -->",
+			"<!-- ai-review:review=1 -->",
+			"<!-- ai-review:readiness=4 -->",
+			"<!-- ai-review:provider=anthropic -->",
+			"<!-- ai-review:model=m -->",
+			"<!-- ai-review:findings=0 -->",
+			"<!-- ai-review:cost=0.000100 -->",
+			'<!-- ai-review:agents={"r":[],"p":["security-sast.md"]} -->',
+		].join("\n");
+		runAgents([]);
+		const review = await buildReview({
+			octokit: buildOctokit({ existingReviews: [{ body }] }),
+			...baseContext,
+			headSha,
+			repoOverrides: {
+				...noOverrides,
+				disabledSkills: new Set(["security-sast"]),
+			},
+		});
+		expect(review).toBeNull();
+	});
+	describe("the floor and the verdict", () => {
+		const agentFor = (
+			bySkill: (skill: string) => ReturnType<typeof buildModelReview>,
+		) =>
+			mockGenerateObject.mockImplementation(
+				async (args: {
+					system?: unknown;
+					messages?: Array<{ content: Array<{ text: string }> }>;
+				}) => {
+					if (args.system !== undefined)
+						return {
+							object: { summary: "Summary." },
+							usage: { inputTokens: 10, outputTokens: 5 },
+						};
+					const skill = (args.messages?.[0]?.content[1]?.text ?? "").replace(
+						/^system:/,
+						"",
+					);
+					return buildGenerateObjectResponse(bySkill(skill));
+				},
+			);
+
+		it("an agent's REQUEST_CHANGES justified only by floor-dropped findings does not block", async () => {
+			agentFor((skill) =>
+				skill.includes("code-reviewer")
+					? buildModelReview({
+							event: "REQUEST_CHANGES",
+							general_findings: [finding("Hidden P2", "P2")],
+						})
+					: buildModelReview({
+							event: "COMMENT",
+							general_findings: [
+								{ ...finding("Kept P1", "P2"), severity: "P1" as never },
+							],
+						}),
+			);
+			const review = await buildReview({
+				octokit: buildOctokit(),
+				...baseContext,
+				repoOverrides: { ...noOverrides, minSeverity: "P1" },
+			});
+			expect(review?.body).toContain("Kept P1");
+			expect(review?.event).toBe("COMMENT");
+		});
+
+		it("a round where the floor removed everything never upgrades to APPROVE", async () => {
+			agentFor(() =>
+				buildModelReview({
+					event: "COMMENT",
+					general_findings: [finding("Only P3", "P3")],
+				}),
+			);
+			const review = await buildReview({
+				octokit: buildOctokit(),
+				...baseContext,
+				repoOverrides: { ...noOverrides, minSeverity: "P2" },
+			});
+			expect(review?.event).toBe("COMMENT");
+		});
+	});
 });

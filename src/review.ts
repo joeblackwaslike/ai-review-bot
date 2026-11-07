@@ -2244,8 +2244,10 @@ async function buildReviewInner(
 	}
 	// Skills that still owe the PR a whole-PR review. One whose skill file is
 	// gone is dropped; a Tier 2 one waits while Tier 2 is switched off.
-	const priorPending = [...new Set(state?.incompleteSkills ?? [])].filter((s) =>
-		KNOWN_SKILLS.has(s),
+	const priorPending = [...new Set(state?.incompleteSkills ?? [])].filter(
+		(s) =>
+			KNOWN_SKILLS.has(s) &&
+			!context.repoOverrides?.disabledSkills.has(s.replace(/\.md$/, "")),
 	);
 	const scheduledPending = priorPending.filter(
 		(s) => context.tier2Enabled || TIER1_SKILLS.includes(s),
@@ -2935,6 +2937,7 @@ async function buildReviewInner(
 		fileListComplete ? new Set(files.map((f) => f.filename)) : null,
 	);
 	const restated = new Map<string, PersistedFinding>();
+	let floorDroppedCount = 0;
 	const severityFloor =
 		repoOverrides?.minSeverity ?? getConfigTree().review.minSeverity;
 	const unsettledResults = agentResults.map((agentResult, index) => {
@@ -2965,11 +2968,21 @@ async function buildReviewInner(
 		};
 		const generalFloor = applySeverityFloor(r.general_findings, severityFloor);
 		const inlineFloor = applySeverityFloor(r.inline_comments, severityFloor);
-		for (const f of [...generalFloor.dropped, ...inlineFloor.dropped])
-			discard(f, "ADAPTIVE_LIMIT");
+		const floorDropped = [...generalFloor.dropped, ...inlineFloor.dropped];
+		for (const f of floorDropped) discard(f, "ADAPTIVE_LIMIT");
+		floorDroppedCount += floorDropped.length;
+		const blockingLeft = [...generalFloor.kept, ...inlineFloor.kept].some(
+			(f) => !f.advisory,
+		);
 		const outcome = suppressInReview(
 			{
 				...r,
+				event:
+					floorDropped.length > 0 &&
+					!blockingLeft &&
+					r.event === "REQUEST_CHANGES"
+						? "COMMENT"
+						: r.event,
 				general_findings: generalFloor.kept,
 				inline_comments: inlineFloor.kept,
 			},
@@ -3299,6 +3312,7 @@ async function buildReviewInner(
 	const cleanDelta =
 		allAgentsSucceeded &&
 		limitRemovedCount === 0 &&
+		floorDroppedCount === 0 &&
 		pending.length === 0 &&
 		modelReview.event === "COMMENT" &&
 		modelReview.general_findings.length === 0 &&

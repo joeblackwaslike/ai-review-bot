@@ -1135,13 +1135,20 @@ function registerHandlers(app: App, configFn: () => Promise<AppConfig>) {
 		const repo = commentPayload.repository.name;
 		let commandName = config.reviewCommand;
 		if (installationId && commentPayload.comment.body.trim().startsWith("/")) {
-			const { overrides } = await loadRepoOverrides({
-				octokit: await app.getInstallationOctokit(installationId),
-				owner,
-				repo,
-				reviewer: config.reviewer,
-			});
-			commandName = overrides?.command ?? commandName;
+			try {
+				const { overrides } = await loadRepoOverrides({
+					octokit: await app.getInstallationOctokit(installationId),
+					owner,
+					repo,
+					reviewer: config.reviewer,
+				});
+				commandName = overrides?.command ?? commandName;
+			} catch (err) {
+				console.warn(
+					"repo command lookup failed; using deployment command",
+					err,
+				);
+			}
 		}
 
 		const command = parseReviewCommand(
