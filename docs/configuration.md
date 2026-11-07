@@ -201,6 +201,12 @@ Env overrides apply to every section. Dynamic map entries must already exist in 
 | `reviewers.<id>.commentPrefix` | `AI_REVIEW_REVIEWERS__<ID>__COMMENT_PREFIX` | none | string | unset | Heading prefix on this reviewer's comments. |
 | `reviewers.<id>.concurrency` | `AI_REVIEW_REVIEWERS__<ID>__CONCURRENCY` | none | number | unset | Maximum agents run in parallel for this reviewer. |
 | `reviewers.<id>.runOn` | `AI_REVIEW_REVIEWERS__<ID>__RUN_ON` | none | one of trivial, normal, complex, deep[] | unset | Tiers this reviewer runs on; every tier when unset. |
+| `reviewers.<id>.roles.summary.model` | `AI_REVIEW_REVIEWERS__<ID>__ROLES__SUMMARY__MODEL` | none | string | unset | Model for this role. |
+| `reviewers.<id>.roles.summary.effort` | `AI_REVIEW_REVIEWERS__<ID>__ROLES__SUMMARY__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
+| `reviewers.<id>.roles.triage.model` | `AI_REVIEW_REVIEWERS__<ID>__ROLES__TRIAGE__MODEL` | none | string | unset | Model for this role. |
+| `reviewers.<id>.roles.triage.effort` | `AI_REVIEW_REVIEWERS__<ID>__ROLES__TRIAGE__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
+| `reviewers.<id>.roles.revalidate.model` | `AI_REVIEW_REVIEWERS__<ID>__ROLES__REVALIDATE__MODEL` | none | string | unset | Model for this role. |
+| `reviewers.<id>.roles.revalidate.effort` | `AI_REVIEW_REVIEWERS__<ID>__ROLES__REVALIDATE__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
 | `reviewers.<id>.skills.<skill>.model` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__MODEL` | none | string | unset | Model for this skill in every tier. |
 | `reviewers.<id>.skills.<skill>.effort` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Effort for the skill model; needs model. |
 | `reviewers.<id>.skills.<skill>.trivial.model` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__TRIVIAL__MODEL` | none | string | unset | Model for this tier. |
@@ -219,6 +225,20 @@ Env overrides apply to every section. Dynamic map entries must already exist in 
 | `reviewers.<id>.tiers.complex.effort` | `AI_REVIEW_REVIEWERS__<ID>__TIERS__COMPLEX__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
 | `reviewers.<id>.tiers.deep.model` | `AI_REVIEW_REVIEWERS__<ID>__TIERS__DEEP__MODEL` | none | string | required | Model for this tier. |
 | `reviewers.<id>.tiers.deep.effort` | `AI_REVIEW_REVIEWERS__<ID>__TIERS__DEEP__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
+| `roles.summary.model` | `AI_REVIEW_ROLES__SUMMARY__MODEL` | none | string | unset | Model for this role. |
+| `roles.summary.effort` | `AI_REVIEW_ROLES__SUMMARY__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
+| `roles.triage.model` | `AI_REVIEW_ROLES__TRIAGE__MODEL` | none | string | unset | Model for this role. |
+| `roles.triage.effort` | `AI_REVIEW_ROLES__TRIAGE__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
+| `roles.revalidate.model` | `AI_REVIEW_ROLES__REVALIDATE__MODEL` | none | string | unset | Model for this role. |
+| `roles.revalidate.effort` | `AI_REVIEW_ROLES__REVALIDATE__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
+| `roles.verifier.model` | `AI_REVIEW_ROLES__VERIFIER__MODEL` | none | string | unset | Model for this role. |
+| `roles.verifier.effort` | `AI_REVIEW_ROLES__VERIFIER__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
+| `roles.verifier.differentFrom` | none | none | literal | unset | Require a verifier from a different model than the finder. |
+| `roles.verifier.enabled` | `AI_REVIEW_ROLES__VERIFIER__ENABLED` | none | boolean | `true` | Run the verifier. |
+| `roles.qcJudge.model` | `AI_REVIEW_ROLES__QC_JUDGE__MODEL` | none | string | unset | Model for this role. |
+| `roles.qcJudge.effort` | `AI_REVIEW_ROLES__QC_JUDGE__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
+| `roles.classifier.model` | `AI_REVIEW_ROLES__CLASSIFIER__MODEL` | none | string | unset | Model for this role. |
+| `roles.classifier.effort` | `AI_REVIEW_ROLES__CLASSIFIER__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
 | `providers.<provider>.baseURL` | `AI_REVIEW_PROVIDERS__<PROVIDER>__BASE_URL` | none | string | unset | Override the provider API base URL. |
 
 ### Secrets

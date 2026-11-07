@@ -71,6 +71,36 @@ const TierChoiceSchema = z
 	})
 	.strict();
 
+const RoleChoiceSchema = z
+	.object({
+		model: modelId("Model for this role."),
+		effort: EffortSchema.optional(),
+	})
+	.strict();
+
+const ReviewerRolesSchema = z
+	.object({
+		summary: RoleChoiceSchema.optional().describe("Summary writer."),
+		triage: RoleChoiceSchema.optional().describe("Reply triage."),
+		revalidate: RoleChoiceSchema.optional().describe("Finding revalidation."),
+	})
+	.strict();
+
+const RolesSchema = ReviewerRolesSchema.extend({
+	verifier: RoleChoiceSchema.extend({
+		differentFrom: z
+			.literal("finder")
+			.optional()
+			.describe("Require a verifier from a different model than the finder."),
+		enabled: z.boolean().default(true).describe("Run the verifier."),
+	})
+		.strict()
+		.optional()
+		.describe("Finding verifier."),
+	qcJudge: RoleChoiceSchema.optional().describe("Quality-check judge."),
+	classifier: RoleChoiceSchema.optional().describe("Finding classifier."),
+}).strict();
+
 const RESERVED_REVIEWER_IDS: ReadonlySet<string> = new Set([
 	"anthropic",
 	"openai",
@@ -148,6 +178,9 @@ const ReviewerSchema = z
 			})
 			.optional()
 			.describe("Tiers this reviewer runs on; every tier when unset."),
+		roles: ReviewerRolesSchema.optional().describe(
+			"Per-reviewer models for non-review roles.",
+		),
 		skills: z
 			.record(z.string(), SkillChoiceSchema)
 			.optional()
@@ -317,6 +350,9 @@ export const ConfigSchema = z
 				ReviewerSchema,
 			)
 			.describe("Reviewers, keyed by id."),
+		roles: RolesSchema.default(() => ({})).describe(
+			"Deployment-wide models for non-review roles.",
+		),
 		providers: z
 			.partialRecord(
 				z.enum(PROVIDER_NAMES),
@@ -390,6 +426,12 @@ export const ConfigSchema = z
 			}
 		}
 
+		for (const [name, role] of Object.entries(cfg.roles)) {
+			if (typeof role === "object" && role !== null && "model" in role) {
+				checkChoice(["roles", name], role.model, role.effort);
+			}
+		}
+
 		const slugs = new Map<string, string>();
 		for (const [id, reviewer] of Object.entries(cfg.reviewers)) {
 			if (RESERVED_REVIEWER_IDS.has(id)) {
@@ -405,6 +447,9 @@ export const ConfigSchema = z
 					choice.model,
 					choice.effort,
 				);
+			}
+			for (const [name, role] of Object.entries(reviewer.roles ?? {})) {
+				checkChoice(["reviewers", id, "roles", name], role.model, role.effort);
 			}
 			for (const [name, skill] of Object.entries(reviewer.skills ?? {})) {
 				const base = ["reviewers", id, "skills", name];
