@@ -1,10 +1,16 @@
 import { createHmac } from "node:crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { resetConfigForTests } from "./config/load.js";
+import { applyLiveOverrides, getEffectiveConfig } from "./config/edge.js";
+import { getConfigTree, resetConfigForTests } from "./config/load.js";
 import { getReviewerGitHubApp } from "./github-app.js";
 import { ReviewerNotReadyError, UnknownReviewerError } from "./reviewers.js";
 import { createReviewerWebhookHandler } from "./webhook-handler.js";
+
+vi.mock("./config/edge.js", async (importOriginal) => ({
+	...(await importOriginal<typeof import("./config/edge.js")>()),
+	getEffectiveConfig: vi.fn(),
+}));
 
 const readRawBody = vi.hoisted(() => vi.fn());
 
@@ -105,6 +111,11 @@ async function call(
 let warn: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
+	vi.mocked(getEffectiveConfig).mockImplementation(async () => ({
+		config: getConfigTree(),
+		applied: [],
+		ignored: [],
+	}));
 	readRawBody.mockReset().mockResolvedValue(Buffer.from(PAYLOAD, "utf8"));
 	warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 	resetConfigForTests();
@@ -166,6 +177,37 @@ describe("createReviewerWebhookHandler routing", () => {
 		);
 		expect(res.statusCode).toBe(503);
 		expect(res.body).toEqual({ error: "Reviewer unavailable" });
+		expect(readRawBody).not.toHaveBeenCalled();
+	});
+
+	it("a reviewer disabled in Edge returns 503 from the handler", async () => {
+		geminiEnv();
+		vi.mocked(getEffectiveConfig).mockImplementation(async () =>
+			applyLiveOverrides(getConfigTree(), {
+				AI_REVIEW_REVIEWERS__GEMINI__ENABLED: "false",
+			}),
+		);
+		const res = await call(
+			createReviewerWebhookHandler(),
+			stubReq({ query: { id: "gemini" } }),
+		);
+		expect(res.statusCode).toBe(503);
+		expect(readRawBody).not.toHaveBeenCalled();
+	});
+
+	it("an Edge enable cannot ready a reviewer whose secrets are missing", async () => {
+		geminiEnv({ AI_REVIEW_REVIEWERS__GEMINI__ENABLED: "false" });
+		delete process.env.AI_REVIEW_REVIEWERS__GEMINI__PRIVATE_KEY;
+		vi.mocked(getEffectiveConfig).mockImplementation(async () =>
+			applyLiveOverrides(getConfigTree(), {
+				AI_REVIEW_REVIEWERS__GEMINI__ENABLED: "true",
+			}),
+		);
+		const res = await call(
+			createReviewerWebhookHandler(),
+			stubReq({ query: { id: "gemini" } }),
+		);
+		expect(res.statusCode).toBe(503);
 		expect(readRawBody).not.toHaveBeenCalled();
 	});
 

@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { applyLiveOverrides, getEffectiveConfig } from "./config/edge.js";
 import { getConfigTree, resetConfigForTests } from "./config/load.js";
 import {
+	getLiveReviewerAppConfig,
 	getReviewerAppConfig,
 	listReviewerIds,
 	logReviewerReadiness,
@@ -10,6 +12,11 @@ import {
 	reviewerReadiness,
 	UnknownReviewerError,
 } from "./reviewers.js";
+
+vi.mock("./config/edge.js", async (importOriginal) => ({
+	...(await importOriginal<typeof import("./config/edge.js")>()),
+	getEffectiveConfig: vi.fn(),
+}));
 
 const KEY =
 	"-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC7\n-----END PRIVATE KEY-----";
@@ -39,6 +46,11 @@ function geminiEnv(extra: Record<string, string> = {}) {
 }
 
 beforeEach(() => {
+	vi.mocked(getEffectiveConfig).mockImplementation(async () => ({
+		config: getConfigTree(),
+		applied: [],
+		ignored: [],
+	}));
 	warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 });
 
@@ -288,4 +300,26 @@ it("ReviewerNotReadyError carries id and missing", () => {
 	const e = new ReviewerNotReadyError("gemini", ["A", "B"]);
 	expect(e.reviewerId).toBe("gemini");
 	expect(e.missing).toEqual(["A", "B"]);
+});
+
+describe("getLiveReviewerAppConfig", () => {
+	it("getLiveReviewerAppConfig reflects an Edge disable (reviewEnabled false)", async () => {
+		claudeEnv();
+		vi.mocked(getEffectiveConfig).mockImplementation(async () =>
+			applyLiveOverrides(getConfigTree(), {
+				AI_REVIEW_REVIEWERS__CLAUDE__ENABLED: "false",
+			}),
+		);
+		expect(getReviewerAppConfig("claude").reviewEnabled).toBe(true);
+		expect((await getLiveReviewerAppConfig("claude")).reviewEnabled).toBe(
+			false,
+		);
+	});
+
+	it("still throws UnknownReviewerError for an unknown id", async () => {
+		claudeEnv();
+		await expect(getLiveReviewerAppConfig("nope")).rejects.toThrow(
+			UnknownReviewerError,
+		);
+	});
 });

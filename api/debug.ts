@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { getEffectiveConfig } from "../src/config/edge.js";
 import { describeSecrets } from "../src/config/env.js";
 import { describeConfig, getLoadedConfig } from "../src/config/load.js";
 
@@ -38,7 +39,7 @@ function isAuthorized(authorization: string | undefined): boolean {
 	return timingSafeEqual(digest(authorization), digest(`Bearer ${secret}`));
 }
 
-export default function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
 	const hasFields = {
 		hasAnthropicKey: !!process.env.ANTHROPIC_API_KEY,
 		hasAppId: !!process.env.GITHUB_APP_ID,
@@ -70,7 +71,17 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
 		});
 		return;
 	}
+	const live = await getEffectiveConfig();
 	res.status(200).json({
+		edge: {
+			enabled: !!process.env.EDGE_CONFIG?.trim(),
+			applied: live.applied,
+			ignored: live.ignored.map((i) => ({
+				key: i.key,
+				reason: sanitizeConfigError(i.reason),
+			})),
+			...(live.error ? { error: sanitizeConfigError(live.error) } : {}),
+		},
 		config: describeConfig(loaded).map((row) =>
 			isRedacted(row.path) && row.value !== undefined
 				? { ...row, value: "[set]" }

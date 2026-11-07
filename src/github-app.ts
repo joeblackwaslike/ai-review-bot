@@ -23,6 +23,7 @@ import type { ReviewDecision } from "./review.js";
 import { buildReview } from "./review.js";
 import { legacyProviderOf, type ReviewerId } from "./reviewer-id.js";
 import {
+	getLiveReviewerAppConfig,
 	getReviewerAppConfig,
 	ReviewerNotReadyError,
 	reviewerReadiness,
@@ -971,7 +972,7 @@ export async function runScheduledReview(
 	return { status: "reviewed" };
 }
 
-function registerHandlers(app: App, configFn: () => AppConfig) {
+function registerHandlers(app: App, configFn: () => Promise<AppConfig>) {
 	app.webhooks.on(
 		[
 			"pull_request.opened",
@@ -987,7 +988,7 @@ function registerHandlers(app: App, configFn: () => AppConfig) {
 				throw new Error("Webhook payload did not include an installation id");
 			}
 
-			const config = configFn();
+			const config = await configFn();
 			const owner = prPayload.repository.owner.login;
 			const repo = prPayload.repository.name;
 			const pullNumber = prPayload.number;
@@ -1048,7 +1049,7 @@ function registerHandlers(app: App, configFn: () => AppConfig) {
 	);
 
 	app.webhooks.on("issue_comment.created", async ({ payload }) => {
-		const config = configFn();
+		const config = await configFn();
 		const commentPayload = payload as IssueCommentWebhookPayload;
 
 		console.log("issue_comment.created received", {
@@ -1145,7 +1146,7 @@ export function getReviewerGitHubApp(id: ReviewerId): App {
 		privateKey: config.privateKey,
 		webhooks: { secret: config.webhookSecret },
 	});
-	registerHandlers(app, () => getReviewerAppConfig(id));
+	registerHandlers(app, () => getLiveReviewerAppConfig(id));
 	apps.set(id, app);
 	return app;
 }

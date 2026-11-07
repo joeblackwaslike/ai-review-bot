@@ -1,3 +1,4 @@
+import { getEffectiveConfig } from "./config/edge.js";
 import {
 	ENV_ALIASES,
 	type Env,
@@ -144,8 +145,8 @@ export function reviewerReadiness(
 	id: ReviewerId,
 	mode: ReadinessMode,
 	env: Env = process.env,
+	config: Config = getConfigTree(),
 ): Readiness {
-	const config = getConfigTree();
 	const reviewer = requireReviewer(config, id);
 	const missing: string[] = [];
 	if (!reviewer.enabled) missing.push(`reviewers.${id}.enabled`);
@@ -175,9 +176,9 @@ function requireValue(value: string | undefined, name: string): string {
 export function buildAppConfig(
 	id: ReviewerId,
 	opts: GetConfigOptions = {},
+	tree: Config = getConfigTree(),
 ): AppConfig {
 	const requireWebhookSecret = opts.requireWebhookSecret ?? true;
-	const tree = getConfigTree();
 	const review = tree.review;
 	const reviewer = lookupReviewer(tree, id);
 	const specs = reviewerSpecs(id);
@@ -221,6 +222,15 @@ export function getReviewerAppConfig(
 ): AppConfig {
 	requireReviewer(getConfigTree(), id);
 	return buildAppConfig(id, opts);
+}
+
+export async function getLiveReviewerAppConfig(
+	id: ReviewerId,
+	opts: GetConfigOptions = {},
+): Promise<AppConfig> {
+	const { config } = await getEffectiveConfig();
+	requireReviewer(config, id);
+	return buildAppConfig(id, opts, config);
 }
 
 const logged = new WeakSet<object>();
