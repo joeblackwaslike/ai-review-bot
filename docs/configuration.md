@@ -233,7 +233,7 @@ Env overrides apply to every section. Dynamic map entries must already exist in 
 | `roles.revalidate.effort` | `AI_REVIEW_ROLES__REVALIDATE__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
 | `roles.verifier.model` | `AI_REVIEW_ROLES__VERIFIER__MODEL` | none | string | unset | Model for this role. |
 | `roles.verifier.effort` | `AI_REVIEW_ROLES__VERIFIER__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
-| `roles.verifier.differentFrom` | none | none | literal | unset | Require a verifier from a different model than the finder. |
+| `roles.verifier.differentFrom` | none | none | literal | unset | Require the verifier to use a different provider than the finder. |
 | `roles.verifier.enabled` | `AI_REVIEW_ROLES__VERIFIER__ENABLED` | none | boolean | `true` | Run the verifier. |
 | `roles.qcJudge.model` | `AI_REVIEW_ROLES__QC_JUDGE__MODEL` | none | string | unset | Model for this role. |
 | `roles.qcJudge.effort` | `AI_REVIEW_ROLES__QC_JUDGE__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |

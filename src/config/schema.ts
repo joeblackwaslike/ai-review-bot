@@ -91,7 +91,9 @@ const RolesSchema = ReviewerRolesSchema.extend({
 		differentFrom: z
 			.literal("finder")
 			.optional()
-			.describe("Require a verifier from a different model than the finder."),
+			.describe(
+				"Require the verifier to use a different provider than the finder.",
+			),
 		enabled: z.boolean().default(true).describe("Run the verifier."),
 	})
 		.strict()
