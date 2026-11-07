@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { ValueSource } from "../config/env.js";
 import { ConfigSchema } from "../config/schema.js";
 import { SKILL_NAMES } from "../skill-names.js";
-import { mergeRepoConfig, repoCoverageNotice } from "./merge.js";
+import {
+	mergeRepoConfig,
+	repoCoverageNotice,
+	repoIgnoredNotice,
+} from "./merge.js";
 import type { RepoConfig } from "./schema.js";
 
 const tier = { model: "anthropic/claude-sonnet-5-5", effort: "high" };
@@ -45,7 +49,7 @@ describe("mergeRepoConfig", () => {
 			disabledSkills: new Set(),
 			extraSensitivePatterns: [],
 			minSeverity: "P2",
-			floorRaisedByRepo: false,
+			ignoredKeys: [],
 			customPrompt: undefined,
 			command: undefined,
 		});
@@ -196,9 +200,30 @@ describe("mergeRepoConfig", () => {
 		expect(out.reviewerDisabled).toBe(false);
 	});
 
-	it("flags a floor raised by the repo", () => {
-		const out = merge({ version: 1, review: { minSeverity: "P2" } });
-		expect(out.floorRaisedByRepo).toBe(true);
+	it("reports a repo customPrompt and command that env or an alias pins", () => {
+		const repo: RepoConfig = {
+			version: 1,
+			review: { customPrompt: "x", command: "/lgtm" },
+		};
+		const pinned = merge(repo, {
+			sources: {
+				"review.customPrompt": "alias",
+				"review.command": "env",
+			},
+		});
+		expect(pinned.customPrompt).toBeUndefined();
+		expect(pinned.command).toBeUndefined();
+		expect(pinned.ignoredKeys).toEqual([
+			"review.customPrompt",
+			"review.command",
+		]);
+		const free = merge(repo, {
+			sources: { "review.customPrompt": "yaml", "review.command": "default" },
+		});
+		expect(free.ignoredKeys).toEqual([]);
+		expect(
+			merge(undefined, { sources: { "review.command": "env" } }).ignoredKeys,
+		).toEqual([]);
 	});
 });
 
@@ -208,7 +233,7 @@ describe("repoCoverageNotice", () => {
 		disabledSkills: new Set<string>(),
 		extraSensitivePatterns: [],
 		minSeverity: "P3" as const,
-		floorRaisedByRepo: false,
+		ignoredKeys: [] as string[],
 	};
 	it("is null when nothing reduces coverage", () => {
 		expect(repoCoverageNotice(none)).toBeNull();
@@ -220,7 +245,6 @@ describe("repoCoverageNotice", () => {
 				...none,
 				disabledSkills: new Set(["security-sast", "code-reviewer"]),
 				minSeverity: "P2",
-				floorRaisedByRepo: true,
 			}),
 		).toBe(
 			"Repository override active: skills code-reviewer, security-sast disabled; findings below P2 are hidden.",
@@ -231,8 +255,18 @@ describe("repoCoverageNotice", () => {
 			repoCoverageNotice({
 				...none,
 				minSeverity: "P1",
-				floorRaisedByRepo: true,
 			}),
 		).toBe("Repository override active: findings below P1 are hidden.");
+	});
+});
+
+describe("repoIgnoredNotice", () => {
+	it("is null with nothing ignored", () => {
+		expect(repoIgnoredNotice([])).toBeNull();
+	});
+	it("names one key", () => {
+		expect(repoIgnoredNotice(["review.command"])).toBe(
+			"Repository setting review.command ignored: the deployment environment sets it.",
+		);
 	});
 });

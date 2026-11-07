@@ -12,7 +12,7 @@ export interface RepoOverrides {
 	disabledSkills: ReadonlySet<string>;
 	extraSensitivePatterns: string[];
 	minSeverity: MinSeverity;
-	floorRaisedByRepo: boolean;
+	ignoredKeys: string[];
 	customPrompt?: string;
 	command?: string;
 }
@@ -65,12 +65,24 @@ export function mergeRepoConfig(args: {
 	if (disabledSkills.size >= SKILL_NAMES.size) reviewerDisabled = true;
 
 	const repoFloor = repo?.review?.minSeverity;
-	const floorRaisedByRepo =
-		!!repoFloor &&
-		SEVERITY_ORDER.indexOf(repoFloor) >
-			SEVERITY_ORDER.indexOf(deployment.review.minSeverity);
 	const minSeverity =
-		floorRaisedByRepo && repoFloor ? repoFloor : deployment.review.minSeverity;
+		repoFloor &&
+		SEVERITY_ORDER.indexOf(repoFloor) >
+			SEVERITY_ORDER.indexOf(deployment.review.minSeverity)
+			? repoFloor
+			: deployment.review.minSeverity;
+
+	const ignoredKeys: string[] = [];
+	if (
+		repo?.review?.customPrompt !== undefined &&
+		!repoMayOverride(sources["review.customPrompt"])
+	)
+		ignoredKeys.push("review.customPrompt");
+	if (
+		repo?.review?.command !== undefined &&
+		!repoMayOverride(sources["review.command"])
+	)
+		ignoredKeys.push("review.command");
 
 	return {
 		reviewerDisabled,
@@ -78,7 +90,7 @@ export function mergeRepoConfig(args: {
 		disabledSkills,
 		extraSensitivePatterns,
 		minSeverity,
-		floorRaisedByRepo,
+		ignoredKeys,
 		customPrompt: repoMayOverride(sources["review.customPrompt"])
 			? repo?.review?.customPrompt
 			: undefined,
@@ -88,10 +100,11 @@ export function mergeRepoConfig(args: {
 	};
 }
 
-/** One fixed-text line for the review body when the repo file reduces coverage.
- * Built only from bare skill names in SKILL_NAMES and the floor value. */
+/** One fixed-text line for the review body when skills are disabled or the
+ * effective severity floor is above P3. Built only from bare skill names in
+ * SKILL_NAMES and the floor value. */
 export function repoCoverageNotice(
-	overrides: RepoOverrides | undefined,
+	overrides: Pick<RepoOverrides, "disabledSkills" | "minSeverity"> | undefined,
 ): string | null {
 	if (!overrides) return null;
 	const parts: string[] = [];
@@ -99,10 +112,17 @@ export function repoCoverageNotice(
 		const names = [...overrides.disabledSkills].sort().join(", ");
 		parts.push(`skills ${names} disabled`);
 	}
-	if (overrides.floorRaisedByRepo) {
+	if (overrides.minSeverity !== "P3") {
 		parts.push(`findings below ${overrides.minSeverity} are hidden`);
 	}
 	return parts.length === 0
 		? null
 		: `Repository override active: ${parts.join("; ")}.`;
+}
+
+/** One fixed-text line naming repo settings that env or an alias pins. */
+export function repoIgnoredNotice(keys: readonly string[]): string | null {
+	if (keys.length === 0) return null;
+	const many = keys.length > 1;
+	return `Repository setting${many ? "s" : ""} ${keys.join(", ")} ignored: the deployment environment sets ${many ? "them" : "it"}.`;
 }

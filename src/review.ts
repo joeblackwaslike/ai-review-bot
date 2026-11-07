@@ -74,7 +74,11 @@ import {
 	uniqueShortIds,
 } from "./relation.js";
 import { claimTitle } from "./replay/claims.js";
-import { type RepoOverrides, repoCoverageNotice } from "./repo-config/merge.js";
+import {
+	type RepoOverrides,
+	repoCoverageNotice,
+	repoIgnoredNotice,
+} from "./repo-config/merge.js";
 import type { ResolvedFindingRef } from "./resolve-threads.js";
 import { candidateFamilies, dropRetractions } from "./retraction.js";
 import { isOwnReview, readMetadataValue } from "./review-metadata.js";
@@ -1122,6 +1126,8 @@ export interface FormatReviewBodyOptions {
 	limitNote?: string | null;
 	/** One line about an ignored repo override file. */
 	repoNote?: string;
+	/** The repo-defined review command, shown in the hint line. */
+	command?: string;
 }
 
 type ScopeReason =
@@ -1252,6 +1258,7 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		carryIds = [],
 		limitNote = null,
 		repoNote,
+		command = "/ai-review",
 	} = opts;
 
 	const readinessBar = renderReadinessBar(readiness);
@@ -1337,8 +1344,7 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 			? "💬 React on any inline comment to train our reviewers: 👍 it helped, 👎 it was wrong, 😕 it didn't land. For 😕, please also reply saying why — the reply is what we learn from."
 			: "";
 
-	const commandHints =
-		"> Re-run: `/ai-review` · Full diff: `/ai-review --full` · Skip: `/ai-review --skip`";
+	const commandHints = `> Re-run: \`${command}\` · Full diff: \`${command} --full\` · Skip: \`${command} --skip\``;
 
 	const metadataBlock = [
 		`<!-- ai-review:sha=${headSha} -->`,
@@ -2542,6 +2548,15 @@ async function buildReviewInner(
 		...pendingItems,
 		...otherItems.slice(warmUp.length),
 	];
+	if (allSkills.length === 0 && repoOverrides?.disabledSkills.size) {
+		console.log("every skill is disabled by the repository; posting nothing", {
+			owner: context.owner,
+			repo: context.repo,
+			pullNumber: context.pullNumber,
+			reviewer: context.reviewer,
+		});
+		return null;
+	}
 
 	const skillName = (path: string) => path.split("/").pop() ?? path;
 	// A pending skill reviews the PR's own files, as on a FULL round; the rest
@@ -2942,7 +2957,6 @@ async function buildReviewInner(
 		fileListComplete ? new Set(files.map((f) => f.filename)) : null,
 	);
 	const restated = new Map<string, PersistedFinding>();
-	let floorDroppedCount = 0;
 	const severityFloor =
 		repoOverrides?.minSeverity ?? getConfigTree().review.minSeverity;
 	const unsettledResults = agentResults.map((agentResult, index) => {
@@ -2975,7 +2989,6 @@ async function buildReviewInner(
 		const inlineFloor = applySeverityFloor(r.inline_comments, severityFloor);
 		const floorDropped = [...generalFloor.dropped, ...inlineFloor.dropped];
 		for (const f of floorDropped) discard(f, "ADAPTIVE_LIMIT");
-		floorDroppedCount += floorDropped.length;
 		const blockingLeft = [...generalFloor.kept, ...inlineFloor.kept].some(
 			(f) => !f.advisory,
 		);
@@ -3317,7 +3330,6 @@ async function buildReviewInner(
 	const cleanDelta =
 		allAgentsSucceeded &&
 		limitRemovedCount === 0 &&
-		floorDroppedCount === 0 &&
 		pending.length === 0 &&
 		modelReview.event === "COMMENT" &&
 		modelReview.general_findings.length === 0 &&
@@ -3331,25 +3343,17 @@ async function buildReviewInner(
 	// away a still-open blocking finding (C1). Path-less P2/P3 findings stay
 	// listed but do not block (see blocksVerdict).
 	const blockingPrior = survivingPrior.filter(blocksVerdict);
-	const computedEvent: ReviewDecision["event"] =
+	const finalEvent: ReviewDecision["event"] =
 		blockingPrior.length > 0
 			? "REQUEST_CHANGES"
 			: cleanDelta
 				? "APPROVE"
 				: modelReview.event;
 
-	// A repo that disabled skills has reduced the coverage a clean round proves,
-	// so it never earns an APPROVE. The nothing-new check below still sees the
-	// clean round, so a quiet re-review posts nothing.
-	const finalEvent: ReviewDecision["event"] =
-		computedEvent === "APPROVE" && repoOverrides?.disabledSkills.size
-			? "COMMENT"
-			: computedEvent;
-
 	// A round that cleared a pending skill always posts, so the agents marker
 	// on GitHub stops listing it.
 	if (
-		computedEvent === "APPROVE" &&
+		finalEvent === "APPROVE" &&
 		hasOwnReview &&
 		!needsFreshApprove &&
 		!context.force &&
@@ -3487,9 +3491,17 @@ async function buildReviewInner(
 		carryIds: carryEntryIds(survivingPrior, ledger),
 		scopeNote: scope,
 		limitNote,
-		repoNote: [context.repoNote, repoCoverageNotice(repoOverrides)]
+		repoNote: [
+			context.repoNote,
+			repoIgnoredNotice(repoOverrides?.ignoredKeys ?? []),
+			repoCoverageNotice({
+				disabledSkills: repoOverrides?.disabledSkills ?? new Set(),
+				minSeverity: severityFloor,
+			}),
+		]
 			.filter(Boolean)
 			.join("\n\n"),
+		command: repoOverrides?.command,
 	});
 
 	return {

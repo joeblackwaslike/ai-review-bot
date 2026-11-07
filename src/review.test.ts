@@ -12115,7 +12115,7 @@ describe("per-repo overrides", () => {
 		disabledSkills: new Set<string>(),
 		extraSensitivePatterns: [],
 		minSeverity: "P3" as const,
-		floorRaisedByRepo: false,
+		ignoredKeys: [] as string[],
 	};
 
 	function runAgents(general = [finding("Floor P2 finding", "P2")]) {
@@ -12224,7 +12224,12 @@ describe("per-repo overrides", () => {
 			repoOverrides: noOverrides,
 		});
 		expect(plain?.body).toContain("Same P3");
-		expect(withOverrides).toEqual(plain);
+		const timeless = <T extends { body?: string } | null | undefined>(d: T) =>
+			d && {
+				...d,
+				body: d.body?.replace(/"durationMs":\d+/g, '"durationMs":0'),
+			};
+		expect(timeless(withOverrides)).toEqual(timeless(plain));
 	});
 
 	it("extra sensitive patterns raise the model tier but not the tier that gates runOn", async () => {
@@ -12250,17 +12255,143 @@ describe("per-repo overrides", () => {
 		expect(withPattern).toBeNull();
 	});
 
-	it("a repo that disables a skill never gets an APPROVE", async () => {
+	const priorBodyFor = (pendingSkills: string[]) =>
+		[
+			"### ai-review-bot",
+			"",
+			"Prior review.",
+			"",
+			"<!-- ai-review:sha=0dd5a1111111 -->",
+			"<!-- ai-review:review=1 -->",
+			"<!-- ai-review:readiness=4 -->",
+			"<!-- ai-review:provider=anthropic -->",
+			"<!-- ai-review:model=m -->",
+			"<!-- ai-review:findings=0 -->",
+			"<!-- ai-review:cost=0.000100 -->",
+			`<!-- ai-review:agents=${JSON.stringify({ r: [], p: pendingSkills })} -->`,
+		].join("\n");
+	const NOTICE_SKILL =
+		"Repository override active: skills security-sast disabled.";
+
+	it("a clean round with a disabled skill clears a standing CHANGES_REQUESTED", async () => {
+		mockTriageReReview.mockResolvedValueOnce({
+			recommendation: "FULL",
+			resolved: [],
+			newRisk: false,
+		});
 		runAgents([]);
 		const review = await buildReview({
-			octokit: buildOctokit(),
+			octokit: buildOctokit({
+				existingReviews: [
+					{
+						body: priorBodyFor(["security-sast.md"]),
+						state: "CHANGES_REQUESTED",
+					},
+				],
+			}),
 			...baseContext,
+			headSha: "1234567890abcdef",
 			repoOverrides: {
 				...noOverrides,
 				disabledSkills: new Set(["security-sast"]),
 			},
 		});
-		expect(review?.event).toBe("COMMENT");
+		expect(review?.event).toBe("APPROVE");
+		expect(review?.body).toContain(NOTICE_SKILL);
+	});
+
+	it("a clean round whose only output is below the floor clears a standing CHANGES_REQUESTED", async () => {
+		mockTriageReReview.mockResolvedValueOnce({
+			recommendation: "FULL",
+			resolved: [],
+			newRisk: false,
+		});
+		runAgents([finding("Just a nit", "P3")]);
+		const review = await buildReview({
+			octokit: buildOctokit({
+				existingReviews: [
+					{ body: priorBodyFor([]), state: "CHANGES_REQUESTED" },
+				],
+			}),
+			...baseContext,
+			headSha: "1234567890abcdef",
+			repoOverrides: { ...noOverrides, minSeverity: "P2" },
+		});
+		expect(review?.event).toBe("APPROVE");
+		expect(review?.body).toContain(
+			"Repository override active: findings below P2 are hidden.",
+		);
+	});
+
+	it("a quiet re-review with a floor and disabled skills posts nothing", async () => {
+		mockTriageReReview.mockResolvedValueOnce({
+			recommendation: "FULL",
+			resolved: [],
+			newRisk: false,
+		});
+		runAgents([finding("Just a nit", "P3")]);
+		const review = await buildReview({
+			octokit: buildOctokit({
+				existingReviews: [{ body: priorBodyFor([]), state: "APPROVED" }],
+			}),
+			...baseContext,
+			headSha: "1234567890abcdef",
+			repoOverrides: {
+				...noOverrides,
+				minSeverity: "P2",
+				disabledSkills: new Set(["security-sast"]),
+			},
+		});
+		expect(review).toBeNull();
+	});
+
+	it("posts nothing when the repo disabled every skill the queue would run", async () => {
+		runAgents();
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			repoOverrides: {
+				...noOverrides,
+				disabledSkills: new Set([
+					"code-reviewer",
+					"silent-failure-hunter",
+					"pr-test-analyzer",
+					"security-sast",
+					"code-review-and-quality",
+				]),
+			},
+		});
+		expect(review).toBeNull();
+		expect(mockGenerateObject).not.toHaveBeenCalled();
+	});
+
+	it("shows the repo command in the hint line", async () => {
+		runAgents();
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			repoOverrides: { ...noOverrides, command: "/lgtm" },
+		});
+		expect(review?.body).toContain("Re-run: `/lgtm`");
+		expect(review?.body).not.toContain("`/ai-review`");
+	});
+
+	it("notes a repo setting that the deployment environment pins, in one line", async () => {
+		runAgents();
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			repoOverrides: {
+				...noOverrides,
+				ignoredKeys: ["review.customPrompt", "review.command"],
+			},
+		});
+		const lines = (review?.body ?? "")
+			.split("\n")
+			.filter((l) => l.startsWith("Repository setting"));
+		expect(lines).toEqual([
+			"Repository settings review.customPrompt, review.command ignored: the deployment environment sets them.",
+		]);
 	});
 
 	it("discloses a coverage-reducing override in one fixed line", async () => {
@@ -12272,7 +12403,6 @@ describe("per-repo overrides", () => {
 				...noOverrides,
 				disabledSkills: new Set(["security-sast"]),
 				minSeverity: "P2",
-				floorRaisedByRepo: true,
 			},
 		});
 		const lines = (review?.body ?? "")
@@ -12361,7 +12491,7 @@ describe("per-repo overrides", () => {
 			expect(review?.event).toBe("COMMENT");
 		});
 
-		it("a round where the floor removed everything never upgrades to APPROVE", async () => {
+		it("a round where the floor removed everything is a clean round and approves", async () => {
 			agentFor(() =>
 				buildModelReview({
 					event: "COMMENT",
@@ -12373,7 +12503,7 @@ describe("per-repo overrides", () => {
 				...baseContext,
 				repoOverrides: { ...noOverrides, minSeverity: "P2" },
 			});
-			expect(review?.event).toBe("COMMENT");
+			expect(review?.event).toBe("APPROVE");
 		});
 	});
 });
