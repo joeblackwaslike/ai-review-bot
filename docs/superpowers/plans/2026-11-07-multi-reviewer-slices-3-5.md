@@ -19,7 +19,7 @@
 - Precedence: Edge Config, env, YAML, default. Restrictive controls (reviewer or skill enabled, `runOn`, severity floor, sensitive patterns) combine monotonically across every layer and the repo file; a repo file can only stay at or below the deployment config.
 - The repo file is read from the default branch, never the PR head.
 - No database migration is added or applied in this work.
-- Spec, plan and code land on one branch (`feat/multi-reviewer-slices-3-5`) and one PR. Merge only after Joe approves.
+- The diff is about 300K characters, over the review bot's 200,000-character budget, so the work ships as three stacked PRs opened one at a time: slice 3 (`feat/multi-reviewer-roles`), slice 4 (`feat/multi-reviewer-edge-config`) and slice 5 (`feat/multi-reviewer-repo-config`). Merge only after Joe approves.
 - Gates before every commit: `pnpm typecheck`, `pnpm lint`, `pnpm test`. After any schema change also run `pnpm docs:config` and commit the regenerated `docs/configuration.md`.
 - Model for subagents is named on every dispatch (Sonnet 5.5 for implementers and task reviews, Opus 5.5 only for the final whole-branch review).
 

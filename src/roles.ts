@@ -64,8 +64,7 @@ export function resolveVerifier(
 	if (!configuredProviders.includes(selection.provider)) return null;
 	if (
 		verifier.differentFrom === "finder" &&
-		(selection.provider === finder.provider ||
-			!configuredProviders.some((p) => p !== finder.provider))
+		selection.provider === finder.provider
 	) {
 		return null;
 	}
