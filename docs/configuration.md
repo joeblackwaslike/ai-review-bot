@@ -163,83 +163,83 @@ Values come from `.ai-review.yaml`. Any supported scalar leaf can be overridden 
 
 Env overrides apply to every section. Dynamic map entries must already exist in the YAML before an env var can set them: `reviewers.<id>`, `reviewers.<id>.skills.<skill>` and `providers.<provider>`. `version` and everything under `models` have no env var. Array leaves take a JSON value. In `<ID>`, `<SKILL>` and `<PROVIDER>`, hyphens become underscores.
 
-| YAML path | Env var | Alias | Type | Default | Description |
-| --- | --- | --- | --- | --- | --- |
-| `version` | none | none | literal | required | Config schema version. |
-| `review.enabled` | `AI_REVIEW_REVIEW__ENABLED` | `REVIEW_ENABLED` (deprecated) | boolean | `true` | Review pull requests automatically. |
-| `review.delaySeconds` | `AI_REVIEW_REVIEW__DELAY_SECONDS` | `REVIEW_DELAY_SECONDS` (deprecated) | number | `0` | Delay before the first automatic review. |
-| `review.resyncDelaySeconds` | `AI_REVIEW_REVIEW__RESYNC_DELAY_SECONDS` | `REVIEW_RESYNC_DELAY_SECONDS` (deprecated) | number | `0` | Delay before re-reviewing after a push. |
-| `review.command` | `AI_REVIEW_REVIEW__COMMAND` | `REVIEW_COMMAND` (deprecated) | string | `"/ai-review"` | Comment command that triggers a review. |
-| `review.customPrompt` | `AI_REVIEW_REVIEW__CUSTOM_PROMPT` | `CUSTOM_REVIEW_PROMPT` (deprecated) | string | unset | Extra instructions appended to every agent prompt. |
-| `review.agentConcurrency` | `AI_REVIEW_REVIEW__AGENT_CONCURRENCY` | `AGENT_CONCURRENCY` (deprecated) | number | `4` | Maximum review agents run in parallel per PR. |
-| `review.agentBudgetSeconds` | `AI_REVIEW_REVIEW__AGENT_BUDGET_SECONDS` | `REVIEW_AGENT_BUDGET_SECONDS` (deprecated) | number | `210` | Wall-clock deadline for agents, in seconds. |
-| `review.diffBudgetChars` | `AI_REVIEW_REVIEW__DIFF_BUDGET_CHARS` | `REVIEW_DIFF_BUDGET_CHARS` (deprecated) | number | `200000` | PR-wide character budget for the serialized diff. |
-| `review.tier2Enabled` | `AI_REVIEW_REVIEW__TIER2_ENABLED` | `REVIEW_TIER2_ENABLED` (deprecated) | boolean | `true` | Run conditional Tier 2 review skills. |
-| `review.feedbackEnabled` | `AI_REVIEW_REVIEW__FEEDBACK_ENABLED` | `FEEDBACK_ENABLED` (deprecated) | boolean | `false` | Record reaction feedback on findings. |
-| `improve.enabled` | `AI_REVIEW_IMPROVE__ENABLED` | `IMPROVE_ENABLED` (deprecated) | boolean | `false` | Capture the improvement corpus. |
-| `improve.carrierEnabled` | `AI_REVIEW_IMPROVE__CARRIER_ENABLED` | `IMPROVE_CARRIER_ENABLED` (deprecated) | boolean | `false` | Post the review summary carrier comment. |
-| `infra.publicUrl` | `AI_REVIEW_INFRA__PUBLIC_URL` | `PUBLIC_URL` (deprecated) | string | unset | Stable public origin used for QStash callbacks. |
-| `infra.qstashUrl` | `AI_REVIEW_INFRA__QSTASH_URL` | `QSTASH_URL` (deprecated) | string | unset | QStash regional endpoint. |
-| `cli.gateDir` | `AI_REVIEW_CLI__GATE_DIR` | `AI_REVIEW_GATE_DIR` (permanent) | string | unset | Directory for the gate store. |
-| `cli.mistakesDir` | `AI_REVIEW_CLI__MISTAKES_DIR` | `AI_REVIEW_MISTAKES_DIR` (permanent) | string | unset | Directory for the mistake log. |
-| `cli.logFile` | `AI_REVIEW_CLI__LOG_FILE` | `AI_REVIEW_LOG_FILE` (permanent) | string | unset | Path of the agent outcome log. |
-| `routing.sensitivePathPatterns` | `AI_REVIEW_ROUTING__SENSITIVE_PATH_PATTERNS` | none | string[] | `["auth","crypto","jwt","password","secret","/db/","database","migration","schema"]` | Path substrings (case-insensitive) that force the complex tier. |
-| `routing.docExtensions` | `AI_REVIEW_ROUTING__DOC_EXTENSIONS` | none | string[] | `[".md",".txt",".rst",".mdx"]` | File extensions treated as documentation. |
-| `routing.deepLabel` | `AI_REVIEW_ROUTING__DEEP_LABEL` | none | string | `"deep-review"` | PR label that forces the deep tier. |
-| `routing.complexLines` | `AI_REVIEW_ROUTING__COMPLEX_LINES` | none | number | `500` | Changed lines above which a PR is complex. |
-| `routing.trivialDocLines` | `AI_REVIEW_ROUTING__TRIVIAL_DOC_LINES` | none | number | `20` | Changed lines below which a docs-only PR is trivial. |
-| `models.<provider/model>.pricing.input` | none | none | number | unset | Input token price, USD per million tokens. |
-| `models.<provider/model>.pricing.cachedInput` | none | none | number | unset | Cached input token price, USD per million tokens. |
-| `models.<provider/model>.pricing.output` | none | none | number | unset | Output token price, USD per million tokens. |
-| `models.<provider/model>.refusalFallback` | none | none | boolean | `false` | Retry once with a fallback when the model refuses. |
-| `models.<provider/model>.effortControl` | none | none | one of level, budget | unset | How a Google model takes reasoning effort. |
-| `models.<provider/model>.providerOptions.<provider>` | none | none | object | unset | Options for one provider. |
-| `models.<provider/model>.structuredOutput` | none | none | one of native, json | `"native"` | Reserved. Not read yet; a later slice will use it to pick the structured output mode. |
-| `reviewers.<id>.enabled` | `AI_REVIEW_REVIEWERS__<ID>__ENABLED` | none | boolean | `true` | Run this reviewer. |
-| `reviewers.<id>.appId` | `AI_REVIEW_REVIEWERS__<ID>__APP_ID` | none | string | unset | GitHub App id; the environment supplies it when unset. |
-| `reviewers.<id>.appSlug` | `AI_REVIEW_REVIEWERS__<ID>__APP_SLUG` | none | string | unset | GitHub App slug, used to recognize this bot's own reviews. |
-| `reviewers.<id>.commentPrefix` | `AI_REVIEW_REVIEWERS__<ID>__COMMENT_PREFIX` | none | string | unset | Heading prefix on this reviewer's comments. |
-| `reviewers.<id>.concurrency` | `AI_REVIEW_REVIEWERS__<ID>__CONCURRENCY` | none | number | unset | Maximum agents run in parallel for this reviewer. |
-| `reviewers.<id>.runOn` | `AI_REVIEW_REVIEWERS__<ID>__RUN_ON` | none | one of trivial, normal, complex, deep[] | unset | Tiers this reviewer runs on; every tier when unset. |
-| `reviewers.<id>.roles.summary.model` | `AI_REVIEW_REVIEWERS__<ID>__ROLES__SUMMARY__MODEL` | none | string | unset | Model for this role. |
-| `reviewers.<id>.roles.summary.effort` | `AI_REVIEW_REVIEWERS__<ID>__ROLES__SUMMARY__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
-| `reviewers.<id>.roles.triage.model` | `AI_REVIEW_REVIEWERS__<ID>__ROLES__TRIAGE__MODEL` | none | string | unset | Model for this role. |
-| `reviewers.<id>.roles.triage.effort` | `AI_REVIEW_REVIEWERS__<ID>__ROLES__TRIAGE__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
-| `reviewers.<id>.roles.revalidate.model` | `AI_REVIEW_REVIEWERS__<ID>__ROLES__REVALIDATE__MODEL` | none | string | unset | Model for this role. |
-| `reviewers.<id>.roles.revalidate.effort` | `AI_REVIEW_REVIEWERS__<ID>__ROLES__REVALIDATE__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
-| `reviewers.<id>.skills.<skill>.model` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__MODEL` | none | string | unset | Model for this skill in every tier. |
-| `reviewers.<id>.skills.<skill>.effort` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Effort for the skill model; needs model. |
-| `reviewers.<id>.skills.<skill>.trivial.model` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__TRIVIAL__MODEL` | none | string | unset | Model for this tier. |
-| `reviewers.<id>.skills.<skill>.trivial.effort` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__TRIVIAL__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
-| `reviewers.<id>.skills.<skill>.normal.model` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__NORMAL__MODEL` | none | string | unset | Model for this tier. |
-| `reviewers.<id>.skills.<skill>.normal.effort` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__NORMAL__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
-| `reviewers.<id>.skills.<skill>.complex.model` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__COMPLEX__MODEL` | none | string | unset | Model for this tier. |
-| `reviewers.<id>.skills.<skill>.complex.effort` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__COMPLEX__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
-| `reviewers.<id>.skills.<skill>.deep.model` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__DEEP__MODEL` | none | string | unset | Model for this tier. |
-| `reviewers.<id>.skills.<skill>.deep.effort` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__DEEP__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
-| `reviewers.<id>.tiers.trivial.model` | `AI_REVIEW_REVIEWERS__<ID>__TIERS__TRIVIAL__MODEL` | none | string | required | Model for this tier. |
-| `reviewers.<id>.tiers.trivial.effort` | `AI_REVIEW_REVIEWERS__<ID>__TIERS__TRIVIAL__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
-| `reviewers.<id>.tiers.normal.model` | `AI_REVIEW_REVIEWERS__<ID>__TIERS__NORMAL__MODEL` | none | string | required | Model for this tier. |
-| `reviewers.<id>.tiers.normal.effort` | `AI_REVIEW_REVIEWERS__<ID>__TIERS__NORMAL__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
-| `reviewers.<id>.tiers.complex.model` | `AI_REVIEW_REVIEWERS__<ID>__TIERS__COMPLEX__MODEL` | none | string | required | Model for this tier. |
-| `reviewers.<id>.tiers.complex.effort` | `AI_REVIEW_REVIEWERS__<ID>__TIERS__COMPLEX__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
-| `reviewers.<id>.tiers.deep.model` | `AI_REVIEW_REVIEWERS__<ID>__TIERS__DEEP__MODEL` | none | string | required | Model for this tier. |
-| `reviewers.<id>.tiers.deep.effort` | `AI_REVIEW_REVIEWERS__<ID>__TIERS__DEEP__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
-| `roles.summary.model` | `AI_REVIEW_ROLES__SUMMARY__MODEL` | none | string | unset | Model for this role. |
-| `roles.summary.effort` | `AI_REVIEW_ROLES__SUMMARY__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
-| `roles.triage.model` | `AI_REVIEW_ROLES__TRIAGE__MODEL` | none | string | unset | Model for this role. |
-| `roles.triage.effort` | `AI_REVIEW_ROLES__TRIAGE__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
-| `roles.revalidate.model` | `AI_REVIEW_ROLES__REVALIDATE__MODEL` | none | string | unset | Model for this role. |
-| `roles.revalidate.effort` | `AI_REVIEW_ROLES__REVALIDATE__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
-| `roles.verifier.model` | `AI_REVIEW_ROLES__VERIFIER__MODEL` | none | string | unset | Model for this role. |
-| `roles.verifier.effort` | `AI_REVIEW_ROLES__VERIFIER__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
-| `roles.verifier.differentFrom` | none | none | literal | unset | Require the verifier to use a different provider than the finder. |
-| `roles.verifier.enabled` | `AI_REVIEW_ROLES__VERIFIER__ENABLED` | none | boolean | `true` | Run the verifier. |
-| `roles.qcJudge.model` | `AI_REVIEW_ROLES__QC_JUDGE__MODEL` | none | string | unset | Model for this role. |
-| `roles.qcJudge.effort` | `AI_REVIEW_ROLES__QC_JUDGE__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
-| `roles.classifier.model` | `AI_REVIEW_ROLES__CLASSIFIER__MODEL` | none | string | unset | Model for this role. |
-| `roles.classifier.effort` | `AI_REVIEW_ROLES__CLASSIFIER__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset | Reasoning effort passed to the provider. |
-| `providers.<provider>.baseURL` | `AI_REVIEW_PROVIDERS__<PROVIDER>__BASE_URL` | none | string | unset | Override the provider API base URL. |
+| YAML path | Env var | Alias | Type | Default | Live | Description |
+| --- | --- | --- | --- | --- | --- | --- |
+| `version` | none | none | literal | required |  | Config schema version. |
+| `review.enabled` | `AI_REVIEW_REVIEW__ENABLED` | `REVIEW_ENABLED` (deprecated) | boolean | `true` | yes | Review pull requests automatically. |
+| `review.delaySeconds` | `AI_REVIEW_REVIEW__DELAY_SECONDS` | `REVIEW_DELAY_SECONDS` (deprecated) | number | `0` | yes | Delay before the first automatic review. |
+| `review.resyncDelaySeconds` | `AI_REVIEW_REVIEW__RESYNC_DELAY_SECONDS` | `REVIEW_RESYNC_DELAY_SECONDS` (deprecated) | number | `0` | yes | Delay before re-reviewing after a push. |
+| `review.command` | `AI_REVIEW_REVIEW__COMMAND` | `REVIEW_COMMAND` (deprecated) | string | `"/ai-review"` |  | Comment command that triggers a review. |
+| `review.customPrompt` | `AI_REVIEW_REVIEW__CUSTOM_PROMPT` | `CUSTOM_REVIEW_PROMPT` (deprecated) | string | unset |  | Extra instructions appended to every agent prompt. |
+| `review.agentConcurrency` | `AI_REVIEW_REVIEW__AGENT_CONCURRENCY` | `AGENT_CONCURRENCY` (deprecated) | number | `4` | yes | Maximum review agents run in parallel per PR. |
+| `review.agentBudgetSeconds` | `AI_REVIEW_REVIEW__AGENT_BUDGET_SECONDS` | `REVIEW_AGENT_BUDGET_SECONDS` (deprecated) | number | `210` | yes | Wall-clock deadline for agents, in seconds. |
+| `review.diffBudgetChars` | `AI_REVIEW_REVIEW__DIFF_BUDGET_CHARS` | `REVIEW_DIFF_BUDGET_CHARS` (deprecated) | number | `200000` | yes | PR-wide character budget for the serialized diff. |
+| `review.tier2Enabled` | `AI_REVIEW_REVIEW__TIER2_ENABLED` | `REVIEW_TIER2_ENABLED` (deprecated) | boolean | `true` | yes | Run conditional Tier 2 review skills. |
+| `review.feedbackEnabled` | `AI_REVIEW_REVIEW__FEEDBACK_ENABLED` | `FEEDBACK_ENABLED` (deprecated) | boolean | `false` |  | Record reaction feedback on findings. |
+| `improve.enabled` | `AI_REVIEW_IMPROVE__ENABLED` | `IMPROVE_ENABLED` (deprecated) | boolean | `false` |  | Capture the improvement corpus. |
+| `improve.carrierEnabled` | `AI_REVIEW_IMPROVE__CARRIER_ENABLED` | `IMPROVE_CARRIER_ENABLED` (deprecated) | boolean | `false` |  | Post the review summary carrier comment. |
+| `infra.publicUrl` | `AI_REVIEW_INFRA__PUBLIC_URL` | `PUBLIC_URL` (deprecated) | string | unset |  | Stable public origin used for QStash callbacks. |
+| `infra.qstashUrl` | `AI_REVIEW_INFRA__QSTASH_URL` | `QSTASH_URL` (deprecated) | string | unset |  | QStash regional endpoint. |
+| `cli.gateDir` | `AI_REVIEW_CLI__GATE_DIR` | `AI_REVIEW_GATE_DIR` (permanent) | string | unset |  | Directory for the gate store. |
+| `cli.mistakesDir` | `AI_REVIEW_CLI__MISTAKES_DIR` | `AI_REVIEW_MISTAKES_DIR` (permanent) | string | unset |  | Directory for the mistake log. |
+| `cli.logFile` | `AI_REVIEW_CLI__LOG_FILE` | `AI_REVIEW_LOG_FILE` (permanent) | string | unset |  | Path of the agent outcome log. |
+| `routing.sensitivePathPatterns` | `AI_REVIEW_ROUTING__SENSITIVE_PATH_PATTERNS` | none | string[] | `["auth","crypto","jwt","password","secret","/db/","database","migration","schema"]` |  | Path substrings (case-insensitive) that force the complex tier. |
+| `routing.docExtensions` | `AI_REVIEW_ROUTING__DOC_EXTENSIONS` | none | string[] | `[".md",".txt",".rst",".mdx"]` |  | File extensions treated as documentation. |
+| `routing.deepLabel` | `AI_REVIEW_ROUTING__DEEP_LABEL` | none | string | `"deep-review"` |  | PR label that forces the deep tier. |
+| `routing.complexLines` | `AI_REVIEW_ROUTING__COMPLEX_LINES` | none | number | `500` |  | Changed lines above which a PR is complex. |
+| `routing.trivialDocLines` | `AI_REVIEW_ROUTING__TRIVIAL_DOC_LINES` | none | number | `20` |  | Changed lines below which a docs-only PR is trivial. |
+| `models.<provider/model>.pricing.input` | none | none | number | unset |  | Input token price, USD per million tokens. |
+| `models.<provider/model>.pricing.cachedInput` | none | none | number | unset |  | Cached input token price, USD per million tokens. |
+| `models.<provider/model>.pricing.output` | none | none | number | unset |  | Output token price, USD per million tokens. |
+| `models.<provider/model>.refusalFallback` | none | none | boolean | `false` |  | Retry once with a fallback when the model refuses. |
+| `models.<provider/model>.effortControl` | none | none | one of level, budget | unset |  | How a Google model takes reasoning effort. |
+| `models.<provider/model>.providerOptions.<provider>` | none | none | object | unset |  | Options for one provider. |
+| `models.<provider/model>.structuredOutput` | none | none | one of native, json | `"native"` |  | Reserved. Not read yet; a later slice will use it to pick the structured output mode. |
+| `reviewers.<id>.enabled` | `AI_REVIEW_REVIEWERS__<ID>__ENABLED` | none | boolean | `true` | yes | Run this reviewer. |
+| `reviewers.<id>.appId` | `AI_REVIEW_REVIEWERS__<ID>__APP_ID` | none | string | unset |  | GitHub App id; the environment supplies it when unset. |
+| `reviewers.<id>.appSlug` | `AI_REVIEW_REVIEWERS__<ID>__APP_SLUG` | none | string | unset |  | GitHub App slug, used to recognize this bot's own reviews. |
+| `reviewers.<id>.commentPrefix` | `AI_REVIEW_REVIEWERS__<ID>__COMMENT_PREFIX` | none | string | unset |  | Heading prefix on this reviewer's comments. |
+| `reviewers.<id>.concurrency` | `AI_REVIEW_REVIEWERS__<ID>__CONCURRENCY` | none | number | unset | yes | Maximum agents run in parallel for this reviewer. |
+| `reviewers.<id>.runOn` | `AI_REVIEW_REVIEWERS__<ID>__RUN_ON` | none | one of trivial, normal, complex, deep[] | unset |  | Tiers this reviewer runs on; every tier when unset. |
+| `reviewers.<id>.roles.summary.model` | `AI_REVIEW_REVIEWERS__<ID>__ROLES__SUMMARY__MODEL` | none | string | unset |  | Model for this role. |
+| `reviewers.<id>.roles.summary.effort` | `AI_REVIEW_REVIEWERS__<ID>__ROLES__SUMMARY__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset |  | Reasoning effort passed to the provider. |
+| `reviewers.<id>.roles.triage.model` | `AI_REVIEW_REVIEWERS__<ID>__ROLES__TRIAGE__MODEL` | none | string | unset |  | Model for this role. |
+| `reviewers.<id>.roles.triage.effort` | `AI_REVIEW_REVIEWERS__<ID>__ROLES__TRIAGE__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset |  | Reasoning effort passed to the provider. |
+| `reviewers.<id>.roles.revalidate.model` | `AI_REVIEW_REVIEWERS__<ID>__ROLES__REVALIDATE__MODEL` | none | string | unset |  | Model for this role. |
+| `reviewers.<id>.roles.revalidate.effort` | `AI_REVIEW_REVIEWERS__<ID>__ROLES__REVALIDATE__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset |  | Reasoning effort passed to the provider. |
+| `reviewers.<id>.skills.<skill>.model` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__MODEL` | none | string | unset |  | Model for this skill in every tier. |
+| `reviewers.<id>.skills.<skill>.effort` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset |  | Effort for the skill model; needs model. |
+| `reviewers.<id>.skills.<skill>.trivial.model` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__TRIVIAL__MODEL` | none | string | unset |  | Model for this tier. |
+| `reviewers.<id>.skills.<skill>.trivial.effort` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__TRIVIAL__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset |  | Reasoning effort passed to the provider. |
+| `reviewers.<id>.skills.<skill>.normal.model` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__NORMAL__MODEL` | none | string | unset |  | Model for this tier. |
+| `reviewers.<id>.skills.<skill>.normal.effort` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__NORMAL__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset |  | Reasoning effort passed to the provider. |
+| `reviewers.<id>.skills.<skill>.complex.model` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__COMPLEX__MODEL` | none | string | unset |  | Model for this tier. |
+| `reviewers.<id>.skills.<skill>.complex.effort` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__COMPLEX__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset |  | Reasoning effort passed to the provider. |
+| `reviewers.<id>.skills.<skill>.deep.model` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__DEEP__MODEL` | none | string | unset |  | Model for this tier. |
+| `reviewers.<id>.skills.<skill>.deep.effort` | `AI_REVIEW_REVIEWERS__<ID>__SKILLS__<SKILL>__DEEP__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset |  | Reasoning effort passed to the provider. |
+| `reviewers.<id>.tiers.trivial.model` | `AI_REVIEW_REVIEWERS__<ID>__TIERS__TRIVIAL__MODEL` | none | string | required |  | Model for this tier. |
+| `reviewers.<id>.tiers.trivial.effort` | `AI_REVIEW_REVIEWERS__<ID>__TIERS__TRIVIAL__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset |  | Reasoning effort passed to the provider. |
+| `reviewers.<id>.tiers.normal.model` | `AI_REVIEW_REVIEWERS__<ID>__TIERS__NORMAL__MODEL` | none | string | required |  | Model for this tier. |
+| `reviewers.<id>.tiers.normal.effort` | `AI_REVIEW_REVIEWERS__<ID>__TIERS__NORMAL__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset |  | Reasoning effort passed to the provider. |
+| `reviewers.<id>.tiers.complex.model` | `AI_REVIEW_REVIEWERS__<ID>__TIERS__COMPLEX__MODEL` | none | string | required |  | Model for this tier. |
+| `reviewers.<id>.tiers.complex.effort` | `AI_REVIEW_REVIEWERS__<ID>__TIERS__COMPLEX__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset |  | Reasoning effort passed to the provider. |
+| `reviewers.<id>.tiers.deep.model` | `AI_REVIEW_REVIEWERS__<ID>__TIERS__DEEP__MODEL` | none | string | required |  | Model for this tier. |
+| `reviewers.<id>.tiers.deep.effort` | `AI_REVIEW_REVIEWERS__<ID>__TIERS__DEEP__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset |  | Reasoning effort passed to the provider. |
+| `roles.summary.model` | `AI_REVIEW_ROLES__SUMMARY__MODEL` | none | string | unset |  | Model for this role. |
+| `roles.summary.effort` | `AI_REVIEW_ROLES__SUMMARY__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset |  | Reasoning effort passed to the provider. |
+| `roles.triage.model` | `AI_REVIEW_ROLES__TRIAGE__MODEL` | none | string | unset |  | Model for this role. |
+| `roles.triage.effort` | `AI_REVIEW_ROLES__TRIAGE__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset |  | Reasoning effort passed to the provider. |
+| `roles.revalidate.model` | `AI_REVIEW_ROLES__REVALIDATE__MODEL` | none | string | unset |  | Model for this role. |
+| `roles.revalidate.effort` | `AI_REVIEW_ROLES__REVALIDATE__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset |  | Reasoning effort passed to the provider. |
+| `roles.verifier.model` | `AI_REVIEW_ROLES__VERIFIER__MODEL` | none | string | unset |  | Model for this role. |
+| `roles.verifier.effort` | `AI_REVIEW_ROLES__VERIFIER__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset |  | Reasoning effort passed to the provider. |
+| `roles.verifier.differentFrom` | none | none | literal | unset |  | Require the verifier to use a different provider than the finder. |
+| `roles.verifier.enabled` | `AI_REVIEW_ROLES__VERIFIER__ENABLED` | none | boolean | `true` | yes | Run the verifier. |
+| `roles.qcJudge.model` | `AI_REVIEW_ROLES__QC_JUDGE__MODEL` | none | string | unset |  | Model for this role. |
+| `roles.qcJudge.effort` | `AI_REVIEW_ROLES__QC_JUDGE__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset |  | Reasoning effort passed to the provider. |
+| `roles.classifier.model` | `AI_REVIEW_ROLES__CLASSIFIER__MODEL` | none | string | unset |  | Model for this role. |
+| `roles.classifier.effort` | `AI_REVIEW_ROLES__CLASSIFIER__EFFORT` | none | one of none, low, medium, high, xhigh, max | unset |  | Reasoning effort passed to the provider. |
+| `providers.<provider>.baseURL` | `AI_REVIEW_PROVIDERS__<PROVIDER>__BASE_URL` | none | string | unset |  | Override the provider API base URL. |
 
 ### Secrets
 
