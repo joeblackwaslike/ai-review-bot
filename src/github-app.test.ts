@@ -27,6 +27,12 @@ const DEFAULT_METADATA = {
 };
 
 const mockBuildReview = vi.hoisted(() => vi.fn());
+const mockFetchRepoConfig = vi.hoisted(() =>
+	vi.fn(async (): Promise<{ config?: unknown; note?: string }> => ({})),
+);
+vi.mock("./repo-config/fetch.js", () => ({
+	fetchRepoConfig: mockFetchRepoConfig,
+}));
 
 vi.mock("./config.js", async (importOriginal) => ({
 	...(await importOriginal<typeof import("./config.js")>()),
@@ -158,6 +164,74 @@ describe("maybeSubmitReview", () => {
 	});
 	afterEach(() => {
 		vi.useRealTimers();
+	});
+
+	describe("per-repo override file", () => {
+		const reviewResult = {
+			event: "COMMENT" as const,
+			body: "Review body.",
+			comments: [],
+			metadata: DEFAULT_METADATA,
+		};
+		beforeEach(() => {
+			mockFetchRepoConfig.mockReset().mockResolvedValue({});
+			mockBuildReview.mockReset().mockResolvedValue(reviewResult);
+		});
+
+		it("maybeSubmitReview skips when the repo file disables the reviewer", async () => {
+			mockFetchRepoConfig.mockResolvedValue({
+				config: { version: 1, reviewers: { claude: { enabled: false } } },
+			});
+			const { app } = buildMockApp();
+
+			const outcome = await maybeSubmitReview({ app, ...baseArgs });
+
+			expect(outcome).toEqual({
+				status: "skipped",
+				reason: "disabled by the repository's .github/ai-review.yml",
+			});
+			expect(mockBuildReview).not.toHaveBeenCalled();
+			expect(kvStore.size).toBe(0);
+		});
+
+		it("passes the repo overrides and note into buildReview", async () => {
+			mockFetchRepoConfig.mockResolvedValue({
+				config: {
+					version: 1,
+					review: { minSeverity: "P2" },
+					reviewers: {
+						claude: { skills: { "security-sast": { enabled: false } } },
+					},
+				},
+				note: "a note",
+			});
+			const { app } = buildMockApp();
+
+			await maybeSubmitReview({ app, ...baseArgs });
+
+			const args = mockBuildReview.mock.calls[0]?.[0];
+			expect(args.repoNote).toBe("a note");
+			expect(args.repoOverrides.minSeverity).toBe("P2");
+			expect([...args.repoOverrides.disabledSkills]).toEqual(["security-sast"]);
+		});
+
+		it("a repo-file fetch failure still posts the review", async () => {
+			vi.spyOn(console, "warn").mockImplementation(() => {});
+			mockFetchRepoConfig.mockRejectedValue(new Error("boom"));
+			const { app, octokit } = buildMockApp();
+
+			await maybeSubmitReview({ app, ...baseArgs });
+
+			expect(mockBuildReview).toHaveBeenCalledTimes(1);
+			expect(mockBuildReview.mock.calls[0]?.[0].repoOverrides.minSeverity).toBe(
+				"P3",
+			);
+			const posts = octokit.request.mock.calls.filter(
+				([route]) =>
+					route === "POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
+			);
+			expect(posts).toHaveLength(1);
+		});
 	});
 
 	it("a throwing KV does not fail a review", async () => {

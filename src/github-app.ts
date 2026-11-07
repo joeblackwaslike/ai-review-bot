@@ -3,7 +3,7 @@ import { App } from "octokit";
 import type { ResolvedAuth } from "./auth.js";
 import { createCheckRun } from "./check-run.js";
 import { isTrustedAuthorAssociation, parseReviewCommand } from "./commands.js";
-import { getConfigTree } from "./config/load.js";
+import { getConfigTree, getLoadedConfig } from "./config/load.js";
 import type { AppConfig } from "./config.js";
 import type { KvClient } from "./feedback/kv.js";
 import { createUpstashKv } from "./feedback/kv.js";
@@ -18,6 +18,11 @@ import {
 	rateLimitCommentMarker,
 } from "./notify.js";
 import { primePrices } from "./pricing.js";
+import {
+	fetchRepoConfig,
+	type RepoConfigOctokit,
+} from "./repo-config/fetch.js";
+import { mergeRepoConfig, type RepoOverrides } from "./repo-config/merge.js";
 import { resolveStaleThreads } from "./resolve-threads.js";
 import type { ReviewDecision } from "./review.js";
 import { buildReview } from "./review.js";
@@ -428,6 +433,36 @@ async function hasExistingComment(
 	return false;
 }
 
+async function loadRepoOverrides(args: {
+	octokit: RepoConfigOctokit;
+	owner: string;
+	repo: string;
+	reviewer: ReviewerId;
+}): Promise<{ overrides?: RepoOverrides; note?: string }> {
+	const { octokit, owner, repo, reviewer } = args;
+	const deployment = getConfigTree();
+	if (
+		!Object.hasOwn(deployment.reviewers, reviewer) ||
+		!deployment.reviewers[reviewer].enabled
+	)
+		return {};
+	let fetched: Awaited<ReturnType<typeof fetchRepoConfig>> = {};
+	try {
+		fetched = await fetchRepoConfig({ octokit, owner, repo, kv: getKv() });
+	} catch (err) {
+		console.warn("repo config fetch failed; using deployment config", err);
+	}
+	return {
+		overrides: mergeRepoConfig({
+			deployment,
+			sources: getLoadedConfig().sources,
+			reviewerId: reviewer,
+			repo: fetched.config,
+		}),
+		note: fetched.note,
+	};
+}
+
 /** @internal Exported for unit testing only. */
 export async function maybeSubmitReview(args: {
 	app: App;
@@ -466,6 +501,24 @@ export async function maybeSubmitReview(args: {
 
 	const headSha = pullRequest.head.sha;
 	const octokit = await app.getInstallationOctokit(installationId);
+
+	const { overrides: repoOverrides, note: repoNote } = await loadRepoOverrides({
+		octokit,
+		owner,
+		repo,
+		reviewer: config.reviewer,
+	});
+	if (repoOverrides?.reviewerDisabled) {
+		console.log("review skipped: disabled by the repository's override file", {
+			owner,
+			repo,
+			reviewer: config.reviewer,
+		});
+		return {
+			status: "skipped",
+			reason: "disabled by the repository's .github/ai-review.yml",
+		};
+	}
 
 	// Idempotency claim: take an atomic lock on this commit BEFORE running the
 	// (expensive) agents, so a duplicate, concurrent, or redelivered invocation
@@ -562,6 +615,8 @@ export async function maybeSubmitReview(args: {
 			diffBudgetChars: config.diffBudgetChars,
 			tier2Enabled: config.tier2Enabled,
 			auth,
+			repoOverrides,
+			repoNote,
 			recordDiscards: config.improveEnabled
 				? async (discards) =>
 						persistDiscards({
