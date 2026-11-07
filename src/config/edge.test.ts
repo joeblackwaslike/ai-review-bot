@@ -28,12 +28,38 @@ describe("applyLiveOverrides", () => {
 	});
 
 	it("Edge beats env", () => {
-		const cold = base({ AI_REVIEW_REVIEWERS__CLAUDE__ENABLED: "false" });
-		expect(cold.reviewers.claude?.enabled).toBe(false);
+		const cold = base({ AI_REVIEW_REVIEW__TIER2_ENABLED: "false" });
+		expect(cold.review.tier2Enabled).toBe(false);
 		const result = applyLiveOverrides(cold, {
-			AI_REVIEW_REVIEWERS__CLAUDE__ENABLED: "true",
+			AI_REVIEW_REVIEW__TIER2_ENABLED: "true",
 		});
-		expect(result.config.reviewers.claude?.enabled).toBe(true);
+		expect(result.config.review.tier2Enabled).toBe(true);
+	});
+
+	it("Edge true over a cold false is ignored and reported", () => {
+		const cold = base({
+			AI_REVIEW_REVIEWERS__CLAUDE__ENABLED: "false",
+			AI_REVIEW_REVIEW__ENABLED: "false",
+		});
+		const result = applyLiveOverrides(cold, {
+			AI_REVIEW_REVIEWERS__CLAUDE__ENABLED: true,
+			AI_REVIEW_REVIEW__ENABLED: true,
+		});
+		expect(result.config.reviewers.claude?.enabled).toBe(false);
+		expect(result.config.review.enabled).toBe(false);
+		expect(result.applied).toEqual([]);
+		expect(result.ignored).toHaveLength(2);
+		expect(result.ignored.every((i) => /can only disable/.test(i.reason))).toBe(
+			true,
+		);
+	});
+
+	it("Edge false over a cold true applies", () => {
+		const result = applyLiveOverrides(base(), {
+			AI_REVIEW_REVIEW__ENABLED: false,
+		});
+		expect(result.config.review.enabled).toBe(false);
+		expect(result.applied).toEqual(["AI_REVIEW_REVIEW__ENABLED"]);
 	});
 
 	it("ignores a non-live key and reports it", () => {
@@ -174,5 +200,52 @@ describe("getEffectiveConfig", () => {
 		const recovered = await getEffectiveConfig(opts);
 		expect(recovered.error).toBeUndefined();
 		expect(recovered.config.reviewers.claude?.enabled).toBe(false);
+	});
+
+	it("warns once per refresh when the read fails, with the message only", async () => {
+		vi.stubEnv("EDGE_CONFIG", "https://edge-config.vercel.com/x?token=t");
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const t = 1000;
+		const opts = {
+			now: () => t,
+			read: async () => {
+				throw new Error("down");
+			},
+		};
+		await getEffectiveConfig(opts);
+		await getEffectiveConfig(opts);
+		expect(warn).toHaveBeenCalledTimes(1);
+		expect(String(warn.mock.calls[0]?.[0])).toContain("down");
+		expect(warn.mock.calls[0]).toHaveLength(1);
+		warn.mockRestore();
+	});
+
+	it("reports a non-Error throw as its string", async () => {
+		vi.stubEnv("EDGE_CONFIG", "https://edge-config.vercel.com/x?token=t");
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const result = await getEffectiveConfig({
+			read: async () => {
+				throw "plain string failure";
+			},
+		});
+		expect(result.error).toBe("plain string failure");
+		warn.mockRestore();
+	});
+
+	it("redacts connection URLs and tokens from the error and the warning", async () => {
+		vi.stubEnv("EDGE_CONFIG", "https://edge-config.vercel.com/x?token=abc");
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const result = await getEffectiveConfig({
+			read: async () => {
+				throw new Error(
+					"fetch https://edge-config.vercel.com/ecfg_1/items?token=abc failed; token=abc",
+				);
+			},
+		});
+		const text = `${result.error} ${String(warn.mock.calls[0]?.[0])}`;
+		expect(text).not.toContain("abc");
+		expect(text).not.toContain("edge-config.vercel.com");
+		expect(result.error).toContain("failed");
+		warn.mockRestore();
 	});
 });

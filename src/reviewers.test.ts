@@ -316,6 +316,21 @@ describe("getLiveReviewerAppConfig", () => {
 		);
 	});
 
+	it("takes budgets from the Edge-effective config", async () => {
+		claudeEnv();
+		vi.mocked(getEffectiveConfig).mockImplementation(async () =>
+			applyLiveOverrides(getConfigTree(), {
+				AI_REVIEW_REVIEW__AGENT_CONCURRENCY: 2,
+				AI_REVIEW_REVIEW__AGENT_BUDGET_SECONDS: 99,
+				AI_REVIEW_REVIEW__DIFF_BUDGET_CHARS: 12345,
+			}),
+		);
+		const live = await getLiveReviewerAppConfig("claude");
+		expect(live.agentConcurrency).toBe(2);
+		expect(live.agentBudgetMs).toBe(99000);
+		expect(live.diffBudgetChars).toBe(12345);
+	});
+
 	it("still throws UnknownReviewerError for an unknown id", async () => {
 		claudeEnv();
 		await expect(getLiveReviewerAppConfig("nope")).rejects.toThrow(

@@ -134,10 +134,11 @@ Defaults equal today's values, so behavior is unchanged. The block is deployment
 ### 6. Edge Config live overrides (slice 4)
 
 - This layer changes selected settings in seconds with no redeploy, mainly to disable one reviewer or all review.
-- Edge Config holds a flat JSON map whose keys are the same derived env names (`AI_REVIEW_REVIEWERS__GEMINI__ENABLED`), so there is still one naming scheme. It is read per request through `@vercel/edge-config` with a short in-memory cache, and layered on top of the cold-start config.
+- Edge Config holds a flat JSON map whose keys are the same derived env names (`AI_REVIEW_REVIEWERS__GEMINI__ENABLED`), so there is still one naming scheme. It is read per request through `@vercel/global-config` (renamed from `@vercel/edge-config`, same API) with a short in-memory cache, and layered on top of the cold-start config.
 - Only schema keys marked `live` are accepted: reviewer `enabled`, `review.enabled`, delays, budgets, concurrency and the `verifier` toggle. Everything else is frozen at cold start (models, App credentials, tiers) and is rejected here.
+- Edge Config can disable but cannot enable. For `review.enabled`, `reviewers.<id>.enabled` and the `verifier` toggle, an Edge `true` over a disabled base is ignored and reported under `edge.ignored`; an Edge `false` over an enabled base applies. Other live keys follow normal precedence.
 - Precedence becomes Edge Config, env, YAML, default. An unknown or non-`live` key in Edge Config is ignored for requests and reported at the top of `/api/debug`. A live typo must not crash a running bot, which is the opposite of the env rule. Edge Config is edited under pressure with no deploy gate in front of it.
-- `EDGE_CONFIG` (the connection string) is env-only and optional. Without it the layer is off. The builder confirms current `@vercel/edge-config` read semantics and plan limits.
+- `EDGE_CONFIG` (the connection string) is env-only and optional. Without it the layer is off. The builder confirms current `@vercel/global-config` read semantics and plan limits.
 
 ### 7. Per-repo override files (slice 5)
 

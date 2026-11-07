@@ -25,6 +25,39 @@ export interface LiveResult {
 	error?: string;
 }
 
+const DISABLE_ONLY_PATHS: readonly (readonly string[])[] = [
+	["review", "enabled"],
+	["reviewers", "*", "enabled"],
+	["roles", "verifier", "enabled"],
+];
+
+function isDisableOnly(path: readonly string[]): boolean {
+	return DISABLE_ONLY_PATHS.some(
+		(p) =>
+			p.length === path.length &&
+			p.every((seg, i) => seg === "*" || seg === path[i]),
+	);
+}
+
+function valueAt(root: unknown, path: readonly string[]): unknown {
+	let cur: unknown = root;
+	for (const seg of path) {
+		if (typeof cur !== "object" || cur === null) return undefined;
+		cur = (cur as Record<string, unknown>)[seg];
+	}
+	return cur;
+}
+
+function redact(text: string): string {
+	return text
+		.replace(/https?:\/\/\S+/g, "[url]")
+		.replace(/token=\S*/g, "token=[redacted]");
+}
+
+function errorMessage(error: unknown): string {
+	return redact(error instanceof Error ? error.message : String(error));
+}
+
 interface LiveTarget {
 	path: string[];
 	kind: Kind;
@@ -70,7 +103,15 @@ export function applyLiveOverrides(
 			const text = typeof raw === "string" ? raw : JSON.stringify(raw);
 			setAt(trial, target.path, coerce(key, text ?? "", target.kind));
 		} catch (error) {
-			ignored.push({ key, reason: (error as Error).message });
+			ignored.push({ key, reason: errorMessage(error) });
+			continue;
+		}
+		if (
+			isDisableOnly(target.path) &&
+			valueAt(base, target.path) === false &&
+			valueAt(trial, target.path) === true
+		) {
+			ignored.push({ key, reason: "Edge Config can only disable" });
 			continue;
 		}
 		const parsed = ConfigSchema.safeParse(trial);
@@ -136,12 +177,9 @@ export async function getEffectiveConfig(
 		const payload = await withTimeout(read(), EDGE_TIMEOUT_MS);
 		result = applyLiveOverrides(cold, isRecord(payload) ? payload : {});
 	} catch (error) {
-		result = {
-			config: cold,
-			applied: [],
-			ignored: [],
-			error: (error as Error).message,
-		};
+		const message = errorMessage(error);
+		console.warn(`Edge Config read failed: ${message.slice(0, 200)}`);
+		result = { config: cold, applied: [], ignored: [], error: message };
 	}
 	cache = { at: now, result };
 	return result;
