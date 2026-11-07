@@ -136,7 +136,7 @@ reviewers:
       triage: { model: anthropic/claude-haiku-5-5, effort: low }
 ```
 
-Env names follow the usual pattern, for example `AI_REVIEW_ROLES__QC_JUDGE__MODEL`. A role that points at a provider with no API key disables that role with a log line and does not crash the process. Hosted readiness checks the role providers as well as the finder's.
+Env names follow the usual pattern, for example `AI_REVIEW_ROLES__QC_JUDGE__MODEL`. Readiness is per reviewer, so a missing API key for any provider a reviewer's roles use makes the whole reviewer not ready. No individual role is disabled. Hosted mode answers 503 and names the missing variable, and the startup log names it too. Hosted readiness checks the role providers as well as the finder's.
 
 The verifier has a resolver (`resolveVerifier()`) and tests but nothing calls it yet. The call site belongs to epic `ai-review-bot-t0c` (D1), so setting `roles.verifier` changes nothing today.
 

@@ -117,8 +117,10 @@ export function reviewerProviders(
 ): ProviderName[] {
 	const reviewer = requireReviewer(config, id);
 	const models = Object.values(reviewer.tiers).map((t) => t.model);
-	for (const role of Object.values(reviewer.roles ?? {}))
-		models.push(role.model);
+	for (const name of ["summary", "triage", "revalidate"] as const) {
+		const role = reviewer.roles?.[name] ?? config.roles?.[name];
+		if (role) models.push(role.model);
+	}
 	for (const skill of Object.values(reviewer.skills ?? {})) {
 		if (skill.model) models.push(skill.model);
 		for (const tier of SKILL_TIERS) {
