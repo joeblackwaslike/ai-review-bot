@@ -5,7 +5,7 @@ import {
 	getEffectiveConfig,
 	resetEdgeCacheForTests,
 } from "./edge.js";
-import { loadConfig, resetConfigForTests } from "./load.js";
+import { getConfigTree, loadConfig, resetConfigForTests } from "./load.js";
 
 const base = (env: Record<string, string> = {}) => loadConfig({ env }).config;
 
@@ -28,11 +28,12 @@ describe("applyLiveOverrides", () => {
 	});
 
 	it("Edge beats env", () => {
-		const cold = base({ AI_REVIEW_REVIEWERS__CLAUDE__ENABLED: "true" });
+		const cold = base({ AI_REVIEW_REVIEWERS__CLAUDE__ENABLED: "false" });
+		expect(cold.reviewers.claude?.enabled).toBe(false);
 		const result = applyLiveOverrides(cold, {
-			AI_REVIEW_REVIEWERS__CLAUDE__ENABLED: "false",
+			AI_REVIEW_REVIEWERS__CLAUDE__ENABLED: "true",
 		});
-		expect(result.config.reviewers.claude?.enabled).toBe(false);
+		expect(result.config.reviewers.claude?.enabled).toBe(true);
 	});
 
 	it("ignores a non-live key and reports it", () => {
@@ -77,6 +78,19 @@ describe("applyLiveOverrides", () => {
 		expect(result.ignored).toHaveLength(1);
 	});
 
+	it("reports __proto__ and constructor keys and leaves prototypes alone", () => {
+		const edge = JSON.parse(
+			'{"__proto__":{"polluted":true},"constructor":{"x":1}}',
+		);
+		const result = applyLiveOverrides(base(), edge);
+		expect(result.applied).toEqual([]);
+		expect(result.ignored.map((i) => i.key).sort()).toEqual([
+			"__proto__",
+			"constructor",
+		]);
+		expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+	});
+
 	it("returns a frozen config and does not mutate the base", () => {
 		const cold = base();
 		const snapshot = structuredClone(cold);
@@ -95,6 +109,7 @@ describe("getEffectiveConfig", () => {
 		const read = vi.fn();
 		const result = await getEffectiveConfig({ read });
 		expect(read).not.toHaveBeenCalled();
+		expect(result.config).toBe(getConfigTree());
 		expect(result.applied).toEqual([]);
 		expect(result.ignored).toEqual([]);
 		expect(result.error).toBeUndefined();
@@ -144,5 +159,20 @@ describe("getEffectiveConfig", () => {
 		t += 1;
 		await getEffectiveConfig(opts);
 		expect(read).toHaveBeenCalledTimes(2);
+	});
+
+	it("re-reads after a failed read once the cache expires and recovers", async () => {
+		vi.stubEnv("EDGE_CONFIG", "https://edge-config.vercel.com/x?token=t");
+		let t = 1000;
+		const read = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("down"))
+			.mockResolvedValueOnce({ AI_REVIEW_REVIEWERS__CLAUDE__ENABLED: false });
+		const opts = { now: () => t, read };
+		expect((await getEffectiveConfig(opts)).error).toContain("down");
+		t += EDGE_CACHE_MS;
+		const recovered = await getEffectiveConfig(opts);
+		expect(recovered.error).toBeUndefined();
+		expect(recovered.config.reviewers.claude?.enabled).toBe(false);
 	});
 });
