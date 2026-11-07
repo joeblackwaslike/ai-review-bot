@@ -99,7 +99,7 @@ Edge Config changes a few settings in seconds, with no redeploy. Typical use is 
 - Store a flat JSON map. Each key is a derived env name, for example `AI_REVIEW_REVIEWERS__GEMINI__ENABLED`, with a JSON value.
 - Only settings marked Live in the reference below apply. A typo or a non-live key is ignored, and `/api/debug` lists it under `edge.ignored` with a reason.
 - Precedence is Edge Config, then env, then YAML.
-- Edge Config can disable a reviewer. It cannot enable one that YAML disables, and it cannot ready one whose secrets are missing: that reviewer still returns 503.
+- Edge Config can only disable `review.enabled`, `reviewers.<id>.enabled` and `roles.verifier.enabled`. A `true` over a cold `false` is ignored and listed under `edge.ignored` with the reason "Edge Config can only disable". Edge Config never loosens the cold state, and a reviewer whose secrets are missing stays unready regardless.
 - If the read fails or takes longer than 2 seconds, the bot uses the cold config and `/api/debug` shows `edge.error`. Reads are cached for 5 seconds.
 
 ## Verifying your setup

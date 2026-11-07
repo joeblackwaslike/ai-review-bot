@@ -164,7 +164,7 @@ Defaults equal today's values, so behavior is unchanged. The block is deployment
   - Reviewer readiness ignores the top-level `qcJudge` and `classifier` provider keys. A missing key shows up as unjudged results, not as a disabled reviewer.
   - "Raise severity floors" needed a deployment key, so `review.minSeverity` was added (default `P3`, allowed `P3|P2|P1`). P0 and P1 are never dropped by the floor. Findings below it are dropped before merge and recorded as `ADAPTIVE_LIMIT` discards, so no enum migration was needed.
   - Source rule for `review.customPrompt` and `review.command`: env beats the repo file, and the repo file beats YAML. The repo file applies only when the setting's source is `yaml` or `default`. A repo `review.command` replaces the deployment command in that repo.
-  - Edge Config cannot enable a reviewer that YAML disables or whose secrets are missing. Such a reviewer still returns 503.
+  - Edge Config can only disable. For `review.enabled`, `reviewers.*.enabled` and `roles.verifier.enabled`, an Edge `true` over a cold `false` is ignored and reported under `edge.ignored`, so the effective enabled state is never looser than the cold state. Repo-file merging reads the cold state and stays coherent.
 
 ## Constraints
 

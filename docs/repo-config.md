@@ -15,10 +15,10 @@ The file must be a regular file of 20 KB or less, valid UTF-8 and valid YAML.
 | `reviewers.<id>.enabled: false` | Turn one reviewer off in this repo. |
 | `reviewers.<id>.runOn` | Run that reviewer only on these tiers. |
 | `reviewers.<id>.skills.<name>.enabled: false` | Turn one skill off for that reviewer. |
-| `routing.sensitivePathPatterns` | Extra path fragments that count as sensitive when the PR is classified. A path matches if it contains the fragment, ignoring case. Up to 50 fragments, each up to 100 characters. |
+| `routing.sensitivePathPatterns` | Extra path fragments that count as sensitive when the PR is classified. A path matches if it contains the fragment, ignoring case. Up to 50 fragments, each 3 to 100 characters. |
 | `review.minSeverity` | Drop findings below `P2` or `P1`. `P3` is the default. P0 and P1 are never dropped by the floor. |
-| `review.customPrompt` | Extra review instructions (up to 2000 characters). |
-| `review.command` | The slash command that starts a review in this repo. It starts with `/` and is at most 50 characters. |
+| `review.customPrompt` | Review instructions (up to 2000 characters). They replace the deployment's custom prompt in this repo; they do not append to it. |
+| `review.command` | The slash command that starts a review in this repo. It starts with `/` and is 4 to 50 characters including the slash. In a comment it matches only as the whole first word, so `/lgtm` does not match `/lgtmx`. |
 
 ## What a repo cannot do
 
@@ -26,6 +26,12 @@ The file must be a regular file of 20 KB or less, valid UTF-8 and valid YAML.
 - Add a model, change a model's tier or effort, or change a GitHub App.
 - Exceed the deployment's budgets.
 - Lower anything: `minSeverity` cannot go below the deployment value, and `runOn` cannot add a tier the deployment excludes.
+
+## Cost and coverage effects
+
+- Sensitive path fragments change which model tier reviews the PR. They do not change which tier decides whether a reviewer runs: both the deployment `runOn` and the repo `runOn` are checked against the tier the deployment routing alone gives. A repo can still route its own PRs to a costlier model tier by adding fragments, which raises its own review cost.
+- Disabling a skill or raising `minSeverity` reduces what a clean review proves. The review body then carries one fixed line, for example `Repository override active: skills security-sast disabled; findings below P2 are hidden.`
+- A repo that disables any skill never gets an APPROVE from the bot; a clean round posts a COMMENT. A repo that disables every skill turns the reviewer off for that repo.
 
 ## How layers combine
 
