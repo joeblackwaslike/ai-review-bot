@@ -4,7 +4,6 @@ import type { ResolvedAuth } from "./auth.js";
 import { createAIModel } from "./models.js";
 import type { PersistedFinding } from "./review-state.js";
 import {
-	cheapSelection,
 	type ModelSelection,
 	outputBudget,
 	reasoningProviderOptions,
@@ -70,13 +69,12 @@ export async function triageReReview(
 	].join("\n");
 
 	try {
-		const triage = cheapSelection(selection);
 		const { object } = await generateObject({
-			model: createAIModel(triage, auth),
+			model: createAIModel(selection, auth),
 			schema: buildTriageSchema(openFindings),
 			prompt,
-			maxOutputTokens: outputBudget(triage, 2000),
-			providerOptions: reasoningProviderOptions(triage),
+			maxOutputTokens: outputBudget(selection, 2000),
+			providerOptions: reasoningProviderOptions(selection),
 		});
 		return object;
 	} catch (err) {
@@ -176,13 +174,12 @@ export async function revalidateFindings(
 	].join("\n");
 
 	try {
-		const triage = cheapSelection(selection);
 		const { object } = await generateObject({
-			model: createAIModel(triage, auth),
+			model: createAIModel(selection, auth),
 			schema: z.object({ resolved: z.array(z.enum(ids)) }),
 			prompt,
-			maxOutputTokens: outputBudget(triage, 2000),
-			providerOptions: reasoningProviderOptions(triage),
+			maxOutputTokens: outputBudget(selection, 2000),
+			providerOptions: reasoningProviderOptions(selection),
 		});
 		return [...moot, ...object.resolved];
 	} catch (err) {

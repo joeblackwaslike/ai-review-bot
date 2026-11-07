@@ -8,6 +8,7 @@ const mockCreateAIModel = vi.hoisted(() =>
 vi.mock("ai", () => ({ generateObject: mockGenerateObject }));
 vi.mock("./models.js", () => ({ createAIModel: mockCreateAIModel }));
 
+import { cheapSelection } from "./router.js";
 import { buildStrictOctokit } from "./testing.js";
 import type { DeltaFile } from "./triage.js";
 import {
@@ -30,6 +31,15 @@ const openFindings = [
 ];
 
 describe("triageReReview", () => {
+	it("uses the selection it is given without cheapening it", async () => {
+		mockGenerateObject.mockResolvedValueOnce({
+			object: { recommendation: "SKIP", resolved: [], newRisk: false },
+		});
+		const given = { provider: "anthropic", model: "claude-opus-5-5" } as never;
+		await triageReReview(given, "delta diff", openFindings);
+		expect(mockCreateAIModel.mock.calls.at(-1)?.[0]).toBe(given);
+	});
+
 	it("returns the model's SKIP decision with resolved ids", async () => {
 		mockGenerateObject.mockResolvedValueOnce({
 			object: {
@@ -56,7 +66,11 @@ describe("triageReReview", () => {
 		});
 		mockCreateAIModel.mockClear();
 		await triageReReview(
-			{ provider: "google", model: "gemini-3.8-flash", effort: "high" },
+			cheapSelection({
+				provider: "google",
+				model: "gemini-3.8-flash",
+				effort: "high",
+			}),
 			"delta diff",
 			openFindings,
 		);
@@ -86,7 +100,7 @@ describe("triageReReview", () => {
 			object: { recommendation: "SKIP", resolved: [], newRisk: false },
 		});
 		await triageReReview(
-			{ provider: "openai", model: "gpt-6.1-sol" } as never,
+			cheapSelection({ provider: "openai", model: "gpt-6.1-sol" }),
 			"delta diff",
 			openFindings,
 		);
@@ -105,7 +119,7 @@ describe("triageReReview", () => {
 			object: { recommendation: "SKIP", resolved: [], newRisk: false },
 		});
 		await triageReReview(
-			{ provider: "anthropic", model: "claude-sonnet-5-5" } as never,
+			cheapSelection({ provider: "anthropic", model: "claude-sonnet-5-5" }),
 			"delta diff",
 			openFindings,
 		);
@@ -134,7 +148,7 @@ describe("triageReReview", () => {
 			fetch: (async () => new Response()) as typeof fetch,
 		};
 		await triageReReview(
-			{ provider: "openai", model: "gpt-6.1-sol" } as never,
+			cheapSelection({ provider: "openai", model: "gpt-6.1-sol" }),
 			"delta diff",
 			openFindings,
 			auth,
@@ -326,6 +340,26 @@ describe("fetchDeltaMeta compare outcomes", () => {
 });
 
 describe("revalidateFindings", () => {
+	it("uses the selection it is given without cheapening it", async () => {
+		mockGenerateObject.mockResolvedValueOnce({ object: { resolved: [] } });
+		const given = { provider: "anthropic", model: "claude-opus-5-5" } as never;
+		await revalidateFindings(
+			given,
+			[
+				{
+					id: "a",
+					path: "a.ts",
+					line: 1,
+					title: "t",
+					severity: "P1",
+					status: "open",
+				},
+			],
+			[{ filename: "a.ts", status: "modified", patch: "@@ -1 +1 @@\n-a\n+b" }],
+		);
+		expect(mockCreateAIModel.mock.calls.at(-1)?.[0]).toBe(given);
+	});
+
 	const f = (id: string, path: string | null = null) => ({
 		id,
 		path,
