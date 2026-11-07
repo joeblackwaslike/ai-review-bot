@@ -1,3 +1,4 @@
+import { reviewerFromLegacy } from "../reviewer-id.js";
 import type { KvClient } from "./kv.js";
 import type { FeedbackEvent, PostedCommentRecord, Verdict } from "./types.js";
 
@@ -14,6 +15,13 @@ function cmtKey(provider: string, commentId: number): string {
 
 function ttlSeconds(expiresAtMs: number, nowMs: number): number {
 	return Math.max(1, Math.ceil((expiresAtMs - nowMs) / 1000));
+}
+
+export function normalizeRecord(
+	raw: Omit<PostedCommentRecord, "reviewer"> &
+		Partial<Pick<PostedCommentRecord, "reviewer">>,
+): PostedCommentRecord {
+	return { ...raw, reviewer: raw.reviewer ?? reviewerFromLegacy(raw.provider) };
 }
 
 export async function recordPostedComment(
@@ -46,7 +54,7 @@ export async function listActiveComments(
 		const provider = r.slice(0, sep);
 		const commentId = Number(r.slice(sep + 1));
 		const raw = await kv.get(cmtKey(provider, commentId));
-		if (raw) out.push(JSON.parse(raw) as PostedCommentRecord);
+		if (raw) out.push(normalizeRecord(JSON.parse(raw)));
 	}
 	return out;
 }

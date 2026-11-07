@@ -22,7 +22,7 @@ import { parseAgentConcurrency } from "./config.js";
 import { logReviewRun } from "./mistakes/capture.js";
 import type { MistakeLog } from "./mistakes/log.js";
 import type { AgentReview } from "./mistakes/types.js";
-import { computeCost } from "./models.js";
+import { computeAggregateCost } from "./models.js";
 import { buildAuditUserMessage } from "./prompt.js";
 import {
 	allocateReportPath,
@@ -35,6 +35,7 @@ import {
 	runAgent,
 	TIER1_SKILLS,
 } from "./review.js";
+import { type LegacyProvider, reviewerFromLegacy } from "./reviewer-id.js";
 import { type ModelSelection, routeModel } from "./router.js";
 import {
 	type AuditFile,
@@ -51,7 +52,7 @@ export interface AuditParams {
 	ref?: string;
 	extraInstructions?: string;
 	dryRun?: boolean;
-	provider?: "anthropic" | "openai";
+	provider?: LegacyProvider;
 }
 
 const BATCH_BYTES = 150 * 1024;
@@ -77,6 +78,7 @@ function batchFiles(files: AuditFile[]): AuditFile[][] {
 
 export interface PassUsage {
 	promptTokens: number;
+	cachedPromptTokens?: number;
 	completionTokens: number;
 	cachedInputTokens?: number;
 	reasoningTokens?: number;
@@ -85,6 +87,9 @@ export interface PassUsage {
 function sumUsage(into: PassUsage, u: PassUsage): void {
 	into.promptTokens += u.promptTokens;
 	into.completionTokens += u.completionTokens;
+	if (u.cachedPromptTokens !== undefined)
+		into.cachedPromptTokens =
+			(into.cachedPromptTokens ?? 0) + u.cachedPromptTokens;
 	if (u.cachedInputTokens !== undefined)
 		into.cachedInputTokens =
 			(into.cachedInputTokens ?? 0) + u.cachedInputTokens;
@@ -177,6 +182,7 @@ export async function runAuditPass(opts: {
 			pr: 0,
 			sha: meta.ref,
 			provider: selection.provider,
+			reviewer: reviewerFromLegacy(selection.provider),
 			model: selection.model,
 			messages,
 			stacks,
@@ -426,7 +432,7 @@ export interface AuditMeta {
 	owner: string;
 	repo: string;
 	ref: string;
-	provider: "anthropic" | "openai";
+	provider: LegacyProvider;
 	model: string;
 	fileCount: number;
 	pr?: number;
@@ -465,7 +471,7 @@ export async function writeArtifacts(opts: {
 }
 
 export interface LocalAuditResult {
-	providers: Array<{ provider: "anthropic" | "openai"; review: ModelReview }>;
+	providers: Array<{ provider: LegacyProvider; review: ModelReview }>;
 	artifacts: string[];
 	pr?: number;
 	url?: string;
@@ -483,7 +489,7 @@ export async function runLocalAudit(opts: {
 		repo: string;
 		baseBranch: string;
 		postAs: Array<{
-			provider: "anthropic" | "openai";
+			provider: LegacyProvider;
 			prefix: string;
 			octokit?: OctokitLike;
 		}>;
@@ -649,7 +655,7 @@ export type ReviewScope =
 export interface LocalReviewResult {
 	path: string;
 	durationSeconds: number;
-	costUsd: number;
+	costUsd: number | undefined;
 	filesReviewed: number;
 	providersRun: Provider[];
 	merged: ModelReview;
@@ -679,7 +685,8 @@ function scopeLabel(scope: ReviewScope): string {
 
 export interface ReviewPassResult {
 	merged: ModelReview;
-	costUsd: number;
+	/** Undefined when any model had no known price. */
+	costUsd: number | undefined;
 	providersRun: Provider[];
 	models: string[];
 	agentsAttempted: number;
@@ -711,7 +718,7 @@ export async function runReviewPasses(opts: {
 	const models: string[] = [];
 	const providersRun: Provider[] = [];
 	const providerStats: ReviewPassResult["providerStats"] = [];
-	let costUsd = 0;
+	let costUsd: number | undefined = 0;
 	let agentsSucceeded = 0;
 	let agentsAttempted = 0;
 
@@ -742,7 +749,11 @@ export async function runReviewPasses(opts: {
 		}
 		models.push(selection.model);
 		providersRun.push(provider);
-		costUsd += computeCost(pass.usage, selection.model);
+		const passCost = computeAggregateCost(pass.usage, selection.model);
+		costUsd =
+			costUsd === undefined || passCost === undefined
+				? undefined
+				: costUsd + passCost;
 		agentsSucceeded += pass.agentsSucceeded;
 		agentsAttempted += pass.agentsAttempted;
 		providerStats.push({
@@ -871,7 +882,7 @@ export async function runLocalReview(opts: {
 				log: opts.mistakes,
 				headSha: opts.headSha ?? "unknown",
 				scope: scopeLabel(opts.scope),
-				costUsd,
+				costUsd: costUsd ?? 0,
 				durationSeconds,
 				providers: providersRun,
 				models,

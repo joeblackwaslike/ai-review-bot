@@ -20,7 +20,8 @@ import {
 	suggestionFingerprint,
 } from "./ledger/fingerprint.js";
 import { buildLedger } from "./ledger/github.js";
-import { computeCost, createAIModel } from "./models.js";
+import { computeCost, createAIModel, sumCost } from "./models.js";
+import { setPriceTable } from "./pricing.js";
 import { shortFindingId } from "./relation.js";
 import { claimTitle, splitInlineClaims } from "./replay/claims.js";
 import { ledgerFromView } from "./replay/pipeline.js";
@@ -52,8 +53,10 @@ import {
 	severityBadge,
 	TIER1_SKILLS,
 } from "./review.js";
+import { readMetadataBlock } from "./review-metadata.js";
 import type { PersistedFinding } from "./review-state.js";
 import { findingId, parseBodyFindings } from "./review-state.js";
+import { reviewerFromLegacy } from "./reviewer-id.js";
 import { REVIEWER_TUNING } from "./reviewer-tuning.js";
 import { type ModelSelection, reasoningProviderOptions } from "./router.js";
 import {
@@ -73,6 +76,10 @@ const mockGenerateObject = vi.hoisted(() => vi.fn());
 const mockBuildUserMessage = vi.hoisted(() => vi.fn().mockReturnValue("user"));
 const mockBuildAgentSystemPrompt = vi.hoisted(() => vi.fn());
 
+const reviewerPatch = vi.hoisted(() => ({
+	value: undefined as Record<string, unknown> | undefined,
+}));
+
 vi.mock("ai", async (importOriginal) => ({
 	...(await importOriginal<typeof import("ai")>()),
 	generateObject: mockGenerateObject,
@@ -84,6 +91,25 @@ vi.mock("./models.js", async (importOriginal) => {
 		...actual,
 		createAIModel: vi.fn().mockReturnValue("mocked-model"),
 		computeCost: vi.fn(actual.computeCost),
+		sumCost: vi.fn(actual.sumCost),
+	};
+});
+
+vi.mock("./config/load.js", async (importOriginal) => {
+	const real = await importOriginal<typeof import("./config/load.js")>();
+	return {
+		...real,
+		getConfigTree: () => {
+			const tree = real.getConfigTree();
+			if (!reviewerPatch.value) return tree;
+			return {
+				...tree,
+				reviewers: {
+					...tree.reviewers,
+					claude: { ...tree.reviewers.claude, ...reviewerPatch.value },
+				},
+			};
+		},
 	};
 });
 
@@ -754,7 +780,7 @@ const baseContext = {
 	commentPrefix: "ai-review-bot",
 	extraInstructions: "",
 	force: false,
-	provider: "anthropic" as const,
+	reviewer: "claude",
 	feedbackEnabled: false,
 	agentConcurrency: 1,
 	agentBudgetMs: 600_000,
@@ -2228,7 +2254,7 @@ describe("buildReview rate-limit decision", () => {
 			commentPrefix: "ai-review-bot",
 			extraInstructions: "",
 			force: true,
-			provider: "anthropic",
+			reviewer: "claude",
 			feedbackEnabled: false,
 			agentConcurrency: 1,
 			agentBudgetMs: 600_000,
@@ -2263,7 +2289,7 @@ describe("buildReview rate-limit decision", () => {
 			commentPrefix: "ai-review-bot",
 			extraInstructions: "",
 			force: true,
-			provider,
+			reviewer: reviewerFromLegacy(provider),
 			feedbackEnabled: false,
 			agentConcurrency: 1,
 			agentBudgetMs: 600_000,
@@ -2365,7 +2391,7 @@ describe("buildReview rate-limit decision", () => {
 			commentPrefix: "ai-review-bot",
 			extraInstructions: "",
 			force: true,
-			provider: "anthropic",
+			reviewer: "claude",
 			feedbackEnabled: false,
 			agentConcurrency: 1,
 			agentBudgetMs: 600_000,
@@ -3834,7 +3860,7 @@ describe("reviewer tuning wiring", () => {
 		const review = await buildReview({
 			octokit: buildOctokit(),
 			...baseContext,
-			provider: "anthropic" as const,
+			reviewer: "claude",
 		});
 
 		expect(review?.comments).toHaveLength(1);
@@ -3860,7 +3886,7 @@ describe("reviewer tuning wiring", () => {
 		const review = await buildReview({
 			octokit: buildOctokit(),
 			...baseContext,
-			provider: "openai" as const,
+			reviewer: "codex",
 		});
 
 		expect(review?.comments).toHaveLength(1);
@@ -3906,7 +3932,7 @@ describe("strict evidence rules propagation", () => {
 		await buildReview({
 			octokit: buildOctokit(),
 			...baseContext,
-			provider,
+			reviewer: reviewerFromLegacy(provider),
 		});
 
 		for (const call of mockBuildAgentSystemPrompt.mock.calls) {
@@ -3952,7 +3978,7 @@ describe("the retraction filter is off by default", () => {
 		const result = await buildReview({
 			octokit: buildOctokit(),
 			...baseContext,
-			provider: "anthropic" as const,
+			reviewer: "claude",
 		});
 		expect(result?.event).not.toBe("APPROVE");
 		expect(result?.body ?? "").toContain("Slot accounting");
@@ -4000,7 +4026,7 @@ describe("retraction phrases are filtered", () => {
 		const result = await buildReview({
 			octokit: buildOctokit(),
 			...baseContext,
-			provider: "anthropic" as const,
+			reviewer: "claude",
 		});
 
 		expect(result?.event).toBe("APPROVE");
@@ -4066,7 +4092,7 @@ describe("prior own findings propagation", () => {
 				files: filesWithA(),
 			}),
 			...baseContext,
-			provider: "anthropic" as const,
+			reviewer: "claude",
 		});
 
 		expect(mockBuildUserMessage).toHaveBeenCalledWith(
@@ -4094,7 +4120,7 @@ describe("prior own findings propagation", () => {
 			}),
 			...baseContext,
 			commentPrefix: "codex-review-bot",
-			provider: "openai" as const,
+			reviewer: "codex",
 		});
 
 		expect(mockBuildUserMessage).toHaveBeenCalledWith(
@@ -4195,7 +4221,7 @@ describe("provenance across collapsed claims", () => {
 				files: [buildPullFile("src/x.ts", TWENTY_LINE_PATCH)],
 			}),
 			...baseContext,
-			provider: "anthropic" as const,
+			reviewer: "claude",
 			feedbackEnabled: true,
 		});
 
@@ -4742,7 +4768,7 @@ describe("buildReview auth threading", () => {
 		await buildReview({
 			octokit: buildOctokit(),
 			...baseContext,
-			provider: "openai",
+			reviewer: "codex",
 			auth,
 		});
 
@@ -4782,7 +4808,7 @@ describe("buildReview auth threading", () => {
 		await buildReview({
 			octokit: buildOctokit(),
 			...baseContext,
-			provider: "openai",
+			reviewer: "codex",
 		});
 
 		const agentCalls = vi
@@ -4948,9 +4974,37 @@ describe("parseReviewMetadata", () => {
 		expect(result?.review).toBe(2);
 		expect(result?.readiness).toBe(4);
 		expect(result?.provider).toBe("anthropic");
+		expect(result?.reviewer).toBe("claude");
 		expect(result?.model).toBe("claude-sonnet-4-6");
 		expect(result?.findings).toBe(5);
 		expect(result?.cost).toBeCloseTo(0.0123);
+	});
+});
+
+describe("parseReviewMetadata reviewer marker", () => {
+	const fields = (markers: string[]) =>
+		[
+			"<!-- ai-review:sha=abc1234567890 -->",
+			"<!-- ai-review:review=2 -->",
+			"<!-- ai-review:readiness=4 -->",
+			...markers.map((m) => `<!-- ai-review:${m} -->`),
+			"<!-- ai-review:model=m -->",
+			"<!-- ai-review:findings=5 -->",
+			"<!-- ai-review:cost=0.0123 -->",
+		].join("\n");
+
+	it("prefers the reviewer marker and keeps the provider", () => {
+		const meta = parseReviewMetadata(
+			fields(["reviewer=gemini", "provider=gemini"]),
+		);
+		expect(meta?.reviewer).toBe("gemini");
+		expect(meta?.provider).toBe("gemini");
+	});
+
+	it("reads a reviewer-only body", () => {
+		const meta = parseReviewMetadata(fields(["reviewer=codex"]));
+		expect(meta?.reviewer).toBe("codex");
+		expect(meta?.provider).toBe("openai");
 	});
 });
 
@@ -4984,7 +5038,7 @@ describe("formatReviewBody", () => {
 		priorSha: "",
 		headSha: "abc123def456",
 		reviewCount: 2,
-		provider: "anthropic",
+		reviewer: "claude",
 		model: "claude-sonnet-5-5",
 		cost: 0.000042,
 	};
@@ -4992,6 +5046,13 @@ describe("formatReviewBody", () => {
 	it("starts with the commentPrefix heading", () => {
 		const body = formatReviewBody(baseOpts);
 		expect(body.startsWith("### Claude Review")).toBe(true);
+	});
+
+	it("says cost is unavailable when the model has no known price", () => {
+		const body = formatReviewBody({ ...baseOpts, cost: undefined });
+		expect(body).toContain("cost unavailable");
+		expect(body).toContain("<!-- ai-review:cost=unavailable -->");
+		expect(body).not.toContain("$0.000000");
 	});
 
 	it("includes the readiness bar", () => {
@@ -5073,6 +5134,19 @@ describe("formatReviewBody", () => {
 		expect(body).toContain("<!-- ai-review:review=2 -->");
 		expect(body).toContain("<!-- ai-review:readiness=3 -->");
 		expect(body).toContain("<!-- ai-review:provider=anthropic -->");
+	});
+
+	it("writes the reviewer and legacy provider markers in one contiguous block", () => {
+		const body = formatReviewBody({ ...baseOpts, reviewer: "gemini" });
+		const block = readMetadataBlock(body);
+		expect(block?.get("reviewer")).toBe("gemini");
+		expect(block?.get("provider")).toBe("gemini");
+		const claude = readMetadataBlock(formatReviewBody(baseOpts));
+		expect(claude?.get("reviewer")).toBe("claude");
+		expect(claude?.get("provider")).toBe("anthropic");
+		expect(body).toContain(
+			"<!-- ai-review:reviewer=gemini -->\n<!-- ai-review:provider=gemini -->",
+		);
 	});
 
 	it("roundtrips through parseReviewMetadata", () => {
@@ -7422,7 +7496,7 @@ describe("buildReview ledger suppression", () => {
 				line: 2,
 				severity: repeat.severity,
 				skill: "code-reviewer.md",
-				provider: "anthropic",
+				reviewer: "claude",
 			};
 			expect(recordsOf(recordDiscards)).toEqual([expected]);
 			expect(log.mock.calls.filter(([m]) => m === "finding discarded")).toEqual(
@@ -7504,7 +7578,7 @@ describe("buildReview ledger suppression", () => {
 					line: null,
 					severity: "P3",
 					skill: "code-reviewer.md",
-					provider: "anthropic",
+					reviewer: "claude",
 				},
 			]);
 		});
@@ -7627,7 +7701,7 @@ describe("buildReview ledger suppression", () => {
 
 		it("flushes the collected discards and rethrows the original error when the round throws", async () => {
 			const boom = new Error("cost table missing");
-			vi.mocked(computeCost).mockImplementationOnce(() => {
+			vi.mocked(sumCost).mockImplementationOnce(() => {
 				throw boom;
 			});
 			routeAgents(
@@ -7707,7 +7781,7 @@ describe("buildReview ledger suppression", () => {
 					line: 40,
 					severity: "P2",
 					skill: "silent-failure-hunter.md",
-					provider: "anthropic",
+					reviewer: "claude",
 				},
 			]);
 		});
@@ -7752,7 +7826,7 @@ describe("buildReview ledger suppression", () => {
 					line: 9,
 					severity: "P2",
 					skill: "code-reviewer.md",
-					provider: "anthropic",
+					reviewer: "claude",
 				},
 				{
 					reason: "OFF_DIFF",
@@ -7763,7 +7837,7 @@ describe("buildReview ledger suppression", () => {
 					line: 2,
 					severity: "P3",
 					skill: "silent-failure-hunter.md",
-					provider: "anthropic",
+					reviewer: "claude",
 				},
 			]);
 		});
@@ -7846,7 +7920,7 @@ describe("buildReview ledger suppression", () => {
 					line: (i % 3) + 1,
 					severity: "P3",
 					skill: "code-reviewer.md",
-					provider: "anthropic",
+					reviewer: "claude",
 				})),
 			);
 		});
@@ -7883,7 +7957,7 @@ describe("buildReview ledger suppression", () => {
 					line: 9,
 					severity: "P2",
 					skill,
-					provider: "anthropic",
+					reviewer: "claude",
 				})),
 			);
 		});
@@ -7922,7 +7996,7 @@ describe("buildReview ledger suppression", () => {
 					line: 2,
 					severity: "P3",
 					skill,
-					provider: "anthropic",
+					reviewer: "claude",
 				})),
 			);
 		});
@@ -8448,11 +8522,105 @@ describe("delta scoping without KV", () => {
 			);
 		});
 
+		it("shows a reviewer=gemini review at the same head as a sister review, and ignores it at another head", async () => {
+			routeModels({ agent: withFresh() });
+			const gemini = (sha: string) => ({
+				id: 13,
+				body: [
+					"### gemini-review-bot",
+					"",
+					"Summary.",
+					"",
+					[
+						`sha=${sha}`,
+						"review=1",
+						"readiness=4",
+						"reviewer=gemini",
+						"provider=gemini",
+						"model=m",
+						"findings=0",
+						"cost=0.000100",
+					]
+						.map((m) => `<!-- ai-review:${m} -->`)
+						.join("\n"),
+				].join("\n"),
+			});
+			const same = gemini(HEAD);
+			const sameRun = prOctokit({ reviews: [same] });
+			await buildReview({ octokit: sameRun.octokit, ...baseContext });
+			expect(mockBuildUserMessage).toHaveBeenLastCalledWith(
+				expect.objectContaining({ priorBotReviews: [same.body] }),
+			);
+
+			const otherRun = prOctokit({ reviews: [gemini(OLD)] });
+			await buildReview({ octokit: otherRun.octokit, ...baseContext });
+			expect(mockBuildUserMessage).toHaveBeenLastCalledWith(
+				expect.objectContaining({ priorBotReviews: [] }),
+			);
+		});
+
 		it("skips a head this provider has already reviewed", async () => {
 			routeModels({ agent: withFresh() });
 			const { octokit } = prOctokit({
 				reviews: [postedReview(12, "openai"), postedReview(11, "anthropic")],
 			});
+
+			expect(await buildReview({ octokit, ...baseContext })).toBeNull();
+		});
+
+		it("old review is recognised at the same head", async () => {
+			routeModels({ agent: withFresh() });
+			const { octokit } = prOctokit({
+				reviews: [postedReview(11, "anthropic")],
+			});
+
+			expect(await buildReview({ octokit, ...baseContext })).toBeNull();
+		});
+
+		it("carried blocker survives the marker change", async () => {
+			incremental();
+			const { octokit } = prOctokit({
+				reviews: [
+					{
+						id: 11,
+						body: buildOwnReviewBody({
+							sha: OLD,
+							count: 3,
+							provider: "anthropic",
+							rows: ["| 🟠 | **Legacy blocker** (`src/a.ts:6`) |"],
+						}),
+					},
+				],
+				compare: () => ({ status: "ahead", files: [bFile] }),
+			});
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(decision?.event).toBe("REQUEST_CHANGES");
+			expect(decision?.body).toContain("Legacy blocker");
+			expect(decision?.body).toContain("<!-- ai-review:review=4 -->");
+		});
+
+		it("restart reviews only the delta", async () => {
+			incremental();
+			const { octokit, compareCalls } = prOctokit({
+				reviews: [anthropicReview()],
+				compare: () => ({ status: "ahead", files: [bFile] }),
+			});
+
+			const decision = await buildReview({ octokit, ...baseContext });
+
+			expect(compareCalls).toEqual([`${OLD}...${HEAD}`]);
+			expect(decision?.body).toContain("scope: delta from");
+		});
+
+		it("a review with only the new reviewer marker counts as ours", async () => {
+			routeModels({ agent: withFresh() });
+			const body = postedReview(11, "anthropic").body.replace(
+				"<!-- ai-review:provider=anthropic -->",
+				"<!-- ai-review:reviewer=claude -->",
+			);
+			const { octokit } = prOctokit({ reviews: [{ id: 11, body }] });
 
 			expect(await buildReview({ octokit, ...baseContext })).toBeNull();
 		});
@@ -10502,7 +10670,7 @@ describe("classified agent failures with usage", () => {
 			commentPrefix: "ai-review-bot",
 			extraInstructions: "",
 			force: true,
-			provider: "anthropic" as const,
+			reviewer: "claude",
 			feedbackEnabled: false,
 			agentConcurrency: 1,
 			agentBudgetMs: 600_000,
@@ -10548,6 +10716,108 @@ describe("classified agent failures with usage", () => {
 		expect(out).toEqual({ status: "skipped", skillPath: "code-reviewer.md" });
 	});
 
+	it("bills usage under the provider-qualified model id", async () => {
+		const base = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+		);
+		mockGenerateObject.mockResolvedValue({
+			...base,
+			object: { ...base.object, summary: "s" },
+			usage: { inputTokens: 1000, outputTokens: 100 },
+		});
+		vi.mocked(sumCost).mockClear();
+		await buildReview(ctx());
+		const billed = vi.mocked(sumCost).mock.calls[0]?.[0];
+		expect(billed?.size).toBeGreaterThan(0);
+		for (const key of billed?.keys() ?? []) {
+			expect(key).toMatch(/^[a-z]+\/.+/);
+		}
+	});
+
+	it("bills the summary call under the provider-qualified model id", async () => {
+		const base = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [
+					{
+						title: "Missing guard",
+						body: "b",
+						severity: "P2",
+						category: "bug",
+						confidence: 0.9,
+						evidence: "e",
+						suppressible: false,
+					},
+				],
+				inline_comments: [],
+			}),
+		);
+		mockGenerateObject.mockResolvedValue({
+			...base,
+			object: { ...base.object, summary: "s" },
+			usage: { inputTokens: 1000, outputTokens: 100 },
+		});
+		vi.mocked(sumCost).mockClear();
+		await buildReview(ctx());
+		const billed = vi.mocked(sumCost).mock.calls[0]?.[0];
+		for (const key of billed?.keys() ?? []) {
+			expect(key).toMatch(/^[a-z]+\/.+/);
+		}
+	});
+
+	it("prices each request on its own prompt size, so summed prompts crossing a tier threshold stay at the base rate", async () => {
+		const tier = (input: number, cachedInput: number, output: number) => ({
+			input,
+			cachedInput,
+			output,
+			tiers: [
+				{
+					minPromptTokens: 100_000,
+					input: input * 5,
+					cachedInput: cachedInput * 5,
+					output: output * 5,
+				},
+			],
+		});
+		setPriceTable({
+			"anthropic/claude-haiku-5-5": tier(0.1, 0.01, 0.5),
+			"anthropic/claude-sonnet-5-5": tier(2, 0.2, 10),
+			"anthropic/claude-opus-5-5": tier(4, 0.4, 20),
+			"openai/gpt-6-luna": tier(0.1, 0.01, 0.5),
+			"openai/gpt-6-1-sol": tier(2, 0.1, 10),
+		});
+		const base = buildGenerateObjectResponse(
+			buildModelReview({
+				event: "COMMENT",
+				general_findings: [],
+				inline_comments: [],
+			}),
+		);
+		mockGenerateObject.mockResolvedValue({
+			...base,
+			object: { ...base.object, summary: "s" },
+			usage: { inputTokens: 60_000, outputTokens: 1_000 },
+		});
+		const decision = await buildReview(ctx());
+		const requests = mockGenerateObject.mock.calls.length;
+		const model = decision?.metadata.model ?? "";
+		const single = computeCost(
+			{ promptTokens: 60_000, completionTokens: 1_000 },
+			model,
+		) as number;
+		const wrong = computeCost(
+			{ promptTokens: requests * 60_000, completionTokens: requests * 1_000 },
+			model,
+		) as number;
+		expect(requests * 60_000).toBeGreaterThan(100_000);
+		expect(wrong).toBeGreaterThan(requests * single * 2);
+		expect(decision?.metadata.cost).toBeCloseTo(requests * single, 10);
+	});
+
 	it("counts failed-attempt tokens in cost and logs one record per agent", async () => {
 		const log = vi.spyOn(console, "log").mockImplementation(() => {});
 		const base = buildGenerateObjectResponse(
@@ -10575,7 +10845,7 @@ describe("classified agent failures with usage", () => {
 			decision?.metadata.model ?? "",
 		);
 		expect(expected).toBeGreaterThan(0);
-		expect(decision?.metadata.cost).toBeCloseTo(expected, 10);
+		expect(decision?.metadata.cost).toBeCloseTo(expected as number, 10);
 		const recs = outcomeLogs(log);
 		expect(recs).toHaveLength(TIER1_SKILLS.length);
 		const failed = recs.find((c) => c[1].status === "error")?.[1];
@@ -10789,7 +11059,7 @@ describe("agent retry", () => {
 			commentPrefix: "ai-review-bot",
 			extraInstructions: "",
 			force: true,
-			provider: "anthropic" as const,
+			reviewer: "claude",
 			feedbackEnabled: false,
 			agentConcurrency: 1,
 			agentBudgetMs: 600_000,
@@ -10854,7 +11124,7 @@ describe("agent retry", () => {
 			},
 			decision?.metadata.model ?? "",
 		);
-		expect(decision?.metadata.cost).toBeCloseTo(expected, 10);
+		expect(decision?.metadata.cost).toBeCloseTo(expected as number, 10);
 	});
 
 	it("never reruns a non-retryable failure", async () => {
@@ -11153,7 +11423,7 @@ describe("agent retry", () => {
 			},
 			decision?.metadata.model ?? "",
 		);
-		expect(decision?.metadata.cost).toBeCloseTo(expected, 10);
+		expect(decision?.metadata.cost).toBeCloseTo(expected as number, 10);
 	});
 
 	it("does not pace for a retry already ruled out at collection", async () => {
@@ -11594,5 +11864,173 @@ describe("mergeReviewsDetailed — advisory never displaces a blocking finding",
 		);
 		expect(review.general_findings).toHaveLength(1);
 		expect(review.event).toBe("REQUEST_CHANGES");
+	});
+});
+
+describe("buildReview per-reviewer routing", () => {
+	const sonnetUsage = { inputTokens: 1_000_000, outputTokens: 0 };
+
+	function runAgents() {
+		const events: string[] = [];
+		const models: Record<string, string> = {};
+		let active = 0;
+		let peak = 0;
+		vi.mocked(createAIModel).mockImplementation(
+			(selection: ModelSelection) => selection.model as never,
+		);
+		mockGenerateObject.mockImplementation(
+			async (args: {
+				model?: string;
+				system?: unknown;
+				messages?: Array<{ content: Array<{ text: string }> }>;
+			}) => {
+				if (args.system !== undefined) {
+					return {
+						object: { summary: "Summary." },
+						usage: { inputTokens: 0, outputTokens: 0 },
+					};
+				}
+				const skill = (args.messages?.[0]?.content[1]?.text ?? "").replace(
+					/^system:/,
+					"",
+				);
+				models[skill] = String(args.model);
+				events.push(`start:${skill}`);
+				active += 1;
+				peak = Math.max(peak, active);
+				await new Promise((r) =>
+					setTimeout(r, skill === "code-reviewer.md" ? 8 : 2),
+				);
+				active -= 1;
+				events.push(`end:${skill}`);
+				return {
+					object: buildModelReview({
+						event: "COMMENT",
+						general_findings: [
+							{
+								title: `Finding from ${skill}`,
+								body: "A real problem.",
+								severity: "P2",
+								category: "style",
+								confidence: 0.8,
+								evidence: "See diff.",
+								suppressible: true,
+							},
+						],
+					}),
+					usage: sonnetUsage,
+				};
+			},
+		);
+		return { events, models, peak: () => peak };
+	}
+
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+	});
+
+	afterEach(() => {
+		reviewerPatch.value = undefined;
+		vi.mocked(createAIModel).mockReset();
+		vi.mocked(createAIModel).mockReturnValue("mocked-model" as never);
+	});
+
+	it("a reviewer with runOn [complex, deep] posts nothing on a normal PR", async () => {
+		reviewerPatch.value = { runOn: ["complex", "deep"] };
+		runAgents();
+
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+		});
+
+		expect(review).toBeNull();
+		expect(mockGenerateObject).not.toHaveBeenCalled();
+	});
+
+	it("a skill override on another model prices that agent with its own model", async () => {
+		reviewerPatch.value = {
+			skills: { "security-sast": { model: "anthropic/claude-haiku-5-5" } },
+		};
+		const run = runAgents();
+
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			agentConcurrency: 4,
+		});
+
+		expect(run.models["security-sast.md"]).toBe("claude-haiku-5-5");
+		expect(run.models["code-reviewer.md"]).toBe("claude-sonnet-5-5");
+		const price = (model: string) =>
+			computeCost({ promptTokens: 1_000_000, completionTokens: 0 }, model) ??
+			Number.NaN;
+		expect(review?.metadata.cost).toBeCloseTo(
+			4 * price("claude-sonnet-5-5") + price("claude-haiku-5-5"),
+		);
+		expect(review?.metadata.model).toBe("claude-haiku-5-5,claude-sonnet-5-5");
+		expect(review?.body).toContain(
+			"<!-- ai-review:model=claude-haiku-5-5,claude-sonnet-5-5 -->",
+		);
+	});
+
+	it("warms the cache once per distinct model, one model after the other", async () => {
+		reviewerPatch.value = {
+			skills: { "security-sast": { model: "anthropic/claude-haiku-5-5" } },
+		};
+		const run = runAgents();
+
+		await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			agentConcurrency: 4,
+		});
+
+		const at = (e: string) => run.events.indexOf(e);
+		expect(at("end:code-reviewer.md")).toBeLessThan(
+			at("start:silent-failure-hunter.md"),
+		);
+		for (const sonnet of [
+			"code-reviewer.md",
+			"silent-failure-hunter.md",
+			"pr-test-analyzer.md",
+			"code-review-and-quality.md",
+		]) {
+			expect(at(`end:${sonnet}`)).toBeLessThan(at("start:security-sast.md"));
+		}
+	});
+
+	it("one distinct model means one serial warm-up (same call order as today)", async () => {
+		const run = runAgents();
+
+		await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			agentConcurrency: 4,
+		});
+
+		const starts = run.events.filter((e) => e.startsWith("start:"));
+		expect(starts[0]).toBe("start:code-reviewer.md");
+		expect(run.events[1]).toBe("end:code-reviewer.md");
+		expect(starts.slice(1)).toEqual([
+			"start:silent-failure-hunter.md",
+			"start:pr-test-analyzer.md",
+			"start:security-sast.md",
+			"start:code-review-and-quality.md",
+		]);
+	});
+
+	it("concurrency 1 serialises agents", async () => {
+		const run = runAgents();
+
+		await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			agentConcurrency: 1,
+		});
+
+		expect(run.peak()).toBe(1);
 	});
 });

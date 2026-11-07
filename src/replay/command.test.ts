@@ -453,6 +453,53 @@ describe("runReplay", () => {
 		expect(code).toBe(2);
 	});
 
+	it("--reviewer gemini records a fixture holding both fields", async () => {
+		const dir = tmp();
+		const { out } = collect();
+		const code = await runReplay(
+			["--record", PR_URL, "--reviewer", "gemini", "--bot", "bot[bot]"],
+			{ client: fakeClient(), fixturesDir: dir, out },
+		);
+		expect(code).toBe(0);
+		const name = readdirSync(dir).find((n) => /__gemini\.json$/.test(n));
+		expect(name).toBeDefined();
+		const f = JSON.parse(readFileSync(join(dir, name as string), "utf8"));
+		expect(f.reviewer).toBe("gemini");
+		expect(f.provider).toBe("gemini");
+	});
+
+	it("--provider openai records reviewer codex and keeps the legacy provider", async () => {
+		const dir = tmp();
+		const { out } = collect();
+		const code = await runReplay(
+			["--record", PR_URL, "--provider", "openai", "--bot", "bot[bot]"],
+			{ client: fakeClient(), fixturesDir: dir, out },
+		);
+		expect(code).toBe(0);
+		const name = readdirSync(dir).find((n) => /__openai\.json$/.test(n));
+		const f = JSON.parse(readFileSync(join(dir, name as string), "utf8"));
+		expect(f.reviewer).toBe("codex");
+		expect(f.provider).toBe("openai");
+	});
+
+	it("--reviewer and --provider together exit 2", async () => {
+		const { out } = collect();
+		const code = await runReplay(
+			[
+				"--record",
+				PR_URL,
+				"--reviewer",
+				"claude",
+				"--provider",
+				"anthropic",
+				"--bot",
+				"bot[bot]",
+			],
+			{ client: fakeClient(), fixturesDir: tmp(), out },
+		);
+		expect(code).toBe(2);
+	});
+
 	it("a fixture with no labels file exits 1", async () => {
 		const dir = tmp();
 		const f = makeFixture([["a"]]);

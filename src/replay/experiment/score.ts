@@ -2,12 +2,13 @@ import { claimKey, snapshotId } from "../adjudication/snapshot.js";
 import type { VerdictRecord } from "../adjudication/types.js";
 import { joinsClaim, labelledClaims } from "../metrics.js";
 import type { SeedGate } from "../seeds/score.js";
-import type {
-	CandidateRecord,
-	LabelFile,
-	PostedClaim,
-	Provider,
-	ReplayFixture,
+import {
+	type CandidateRecord,
+	fixtureFamily,
+	type LabelFile,
+	type PostedClaim,
+	type Provider,
+	type ReplayFixture,
 } from "../types.js";
 import {
 	type BootstrapInterval,
@@ -79,7 +80,7 @@ export function scorePr(args: {
 	const out: PrScore = {
 		strategy: args.strategy,
 		fixtureId: args.fixtureId,
-		provider: fx.fixture.provider,
+		provider: fixtureFamily(fx.fixture),
 		real: 0,
 		notReal: 0,
 		unresolved: 0,
@@ -443,7 +444,7 @@ export function scoreExperiment(args: {
 				const empty: string[] = [];
 				for (const id of fixtureIds) {
 					const fx = fixtures[id];
-					if (!fx || fx.fixture.provider !== provider) continue;
+					if (!fx || fixtureFamily(fx.fixture) !== provider) continue;
 					const of = (strategy: string) =>
 						fresh.filter(
 							(r) => r.key.strategy === strategy && r.key.fixtureId === id,

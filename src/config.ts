@@ -1,6 +1,10 @@
-import { DEFAULT_DIFF_BUDGET_CHARS } from "./diff-pack.js";
+import { getConfigTree } from "./config/load.js";
+import type { ReviewerId } from "./reviewer-id.js";
+import { buildAppConfig } from "./reviewers.js";
 
 export interface AppConfig {
+	reviewer: ReviewerId;
+	appSlug?: string;
 	appId: string;
 	privateKey: string;
 	webhookSecret: string;
@@ -9,7 +13,6 @@ export interface AppConfig {
 	reviewResyncDelayMs: number;
 	reviewCommentPrefix: string;
 	reviewCommand: string;
-	provider: "anthropic" | "openai";
 	feedbackEnabled: boolean;
 	/** Master switch for the improvement corpus. Off by default so a deployment
 	 * without DATABASE_URL behaves exactly as before. */
@@ -33,17 +36,6 @@ export interface AppConfig {
 	publicUrl?: string;
 }
 
-// Returns the first argument that is a non-blank string after trimming, else
-// the final argument. Treats "" / whitespace-only env values as unset so a
-// blank prefix can't make `body.includes(prefix)` match everything.
-function firstNonBlank(...values: Array<string | undefined>): string {
-	for (const v of values) {
-		const trimmed = v?.trim();
-		if (trimmed) return trimmed;
-	}
-	return values[values.length - 1] ?? "";
-}
-
 function getRequiredEnv(name: string): string {
 	const value = process.env[name];
 	if (!value) {
@@ -52,7 +44,7 @@ function getRequiredEnv(name: string): string {
 	return value;
 }
 
-function normalizePrivateKey(raw: string): string {
+export function normalizePrivateKey(raw: string): string {
 	return raw.replaceAll(String.raw`\n`, "\n");
 }
 
@@ -81,43 +73,23 @@ export function validatePrivateKey(key: string): string {
  * counted as skipped, so the run submits what it has instead of being killed
  * with nothing posted. */
 export function parseAgentBudgetMs(): number {
-	const raw = Number(process.env.REVIEW_AGENT_BUDGET_SECONDS ?? "210");
+	const seconds = getConfigTree().review.agentBudgetSeconds;
 	// Rounded in milliseconds, not seconds. Flooring seconds first turned any
-	// sub-second value into a 0ms budget, which passes the positive check above
-	// and then skips every agent — a review that silently does nothing.
-	const ms = Number.isFinite(raw) && raw > 0 ? Math.floor(raw * 1000) : 210_000;
-	return Math.max(1, ms);
+	// sub-second value into a 0ms budget, which skips every agent — a review
+	// that silently does nothing.
+	return Math.max(1, Math.floor(seconds * 1000));
 }
 
-/** `REVIEW_DIFF_BUDGET_CHARS` as a positive integer; anything else gives the
- * default. */
+/** `review.diffBudgetChars`: PR-wide character budget for the serialized diff. */
 export function parseDiffBudgetChars(): number {
-	const raw = Number(process.env.REVIEW_DIFF_BUDGET_CHARS);
-	return Number.isInteger(raw) && raw > 0 ? raw : DEFAULT_DIFF_BUDGET_CHARS;
+	return getConfigTree().review.diffBudgetChars;
 }
 
 /** Sequential agents cannot fit a review in the 300s Hobby cap (measured 212s at
  * 1 vs 75s at 4 on a 14-file diff, same cost, no 429s). Lower it if a provider's
  * input-tokens-per-minute limit starts rejecting the burst. */
 export function parseAgentConcurrency(): number {
-	return Math.max(
-		1,
-		Math.floor(Number(process.env.AGENT_CONCURRENCY ?? "4")) || 4,
-	);
-}
-
-// Parse a delay env var expressed in seconds into milliseconds. A missing,
-// blank, non-numeric, or negative value falls back to the default rather than
-// passing NaN or a negative number on to a timer or the scheduler.
-export function parseDelayMs(
-	envValue: string | undefined,
-	defaultSeconds: number,
-): number {
-	const seconds = Number(envValue);
-	if (envValue?.trim() && Number.isFinite(seconds) && seconds >= 0) {
-		return seconds * 1000;
-	}
-	return defaultSeconds * 1000;
+	return Math.floor(getConfigTree().review.agentConcurrency);
 }
 
 export interface GetConfigOptions {
@@ -129,78 +101,11 @@ export interface GetConfigOptions {
 }
 
 export function getConfig(opts: GetConfigOptions = {}): AppConfig {
-	const requireWebhookSecret = opts.requireWebhookSecret ?? true;
-	return {
-		appId: getRequiredEnv("GITHUB_APP_ID"),
-		privateKey: validatePrivateKey(
-			normalizePrivateKey(getRequiredEnv("GITHUB_APP_PRIVATE_KEY")),
-		),
-		webhookSecret: requireWebhookSecret
-			? getRequiredEnv("GITHUB_WEBHOOK_SECRET")
-			: (process.env.GITHUB_WEBHOOK_SECRET ?? ""),
-		reviewEnabled: process.env.REVIEW_ENABLED !== "false",
-		reviewDelayMs: parseDelayMs(process.env.REVIEW_DELAY_SECONDS, 0),
-		reviewResyncDelayMs: parseDelayMs(
-			process.env.REVIEW_RESYNC_DELAY_SECONDS,
-			0,
-		),
-		reviewCommentPrefix: firstNonBlank(
-			process.env.REVIEW_COMMENT_PREFIX,
-			"ai-review-bot",
-		),
-		reviewCommand: process.env.REVIEW_COMMAND ?? "/ai-review",
-		provider: "anthropic",
-		feedbackEnabled: process.env.FEEDBACK_ENABLED === "true",
-		improveEnabled: process.env.IMPROVE_ENABLED === "true",
-		improveCarrierEnabled: process.env.IMPROVE_CARRIER_ENABLED === "true",
-		agentConcurrency: parseAgentConcurrency(),
-		agentBudgetMs: parseAgentBudgetMs(),
-		diffBudgetChars: parseDiffBudgetChars(),
-		tier2Enabled: process.env.REVIEW_TIER2_ENABLED !== "false",
-		qstashToken: process.env.QSTASH_TOKEN,
-		qstashCurrentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY,
-		qstashNextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY,
-		qstashUrl: process.env.QSTASH_URL,
-		publicUrl: process.env.PUBLIC_URL,
-	};
+	return buildAppConfig("claude", opts);
 }
 
 export function getOpenAIAppConfig(opts: GetConfigOptions = {}): AppConfig {
-	const requireWebhookSecret = opts.requireWebhookSecret ?? true;
-	return {
-		appId: getRequiredEnv("OPENAI_APP_ID"),
-		privateKey: validatePrivateKey(
-			normalizePrivateKey(getRequiredEnv("OPENAI_APP_PRIVATE_KEY")),
-		),
-		webhookSecret: requireWebhookSecret
-			? getRequiredEnv("OPENAI_APP_WEBHOOK_SECRET")
-			: (process.env.OPENAI_APP_WEBHOOK_SECRET ?? ""),
-		reviewEnabled: process.env.REVIEW_ENABLED !== "false",
-		reviewDelayMs: parseDelayMs(process.env.REVIEW_DELAY_SECONDS, 0),
-		reviewResyncDelayMs: parseDelayMs(
-			process.env.REVIEW_RESYNC_DELAY_SECONDS,
-			0,
-		),
-		reviewCommentPrefix: firstNonBlank(
-			process.env.OPENAI_REVIEW_COMMENT_PREFIX,
-			process.env.REVIEW_COMMENT_PREFIX,
-			"codex-review-bot",
-		),
-		reviewCommand: process.env.REVIEW_COMMAND ?? "/ai-review",
-		provider: "openai",
-		feedbackEnabled: process.env.FEEDBACK_ENABLED === "true",
-		improveEnabled: process.env.IMPROVE_ENABLED === "true",
-		improveCarrierEnabled: process.env.IMPROVE_CARRIER_ENABLED === "true",
-		agentConcurrency: parseAgentConcurrency(),
-		agentBudgetMs: parseAgentBudgetMs(),
-		diffBudgetChars: parseDiffBudgetChars(),
-		tier2Enabled: process.env.REVIEW_TIER2_ENABLED !== "false",
-		qstashToken: process.env.QSTASH_TOKEN,
-		qstashCurrentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY,
-		qstashNextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY,
-		qstashUrl: process.env.QSTASH_URL,
-		publicUrl: process.env.PUBLIC_URL,
-	};
+	return buildAppConfig("codex", opts);
 }
 
 export interface QcAppConfig {

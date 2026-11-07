@@ -1,3 +1,4 @@
+import type { ReviewerId } from "../reviewer-id.js";
 import type { KvClient } from "./kv.js";
 import { diffReactions, type OctokitLike } from "./reactions.js";
 import {
@@ -6,12 +7,11 @@ import {
 	markPolled,
 	prune,
 } from "./store.js";
-import type { Provider } from "./types.js";
 
 export interface PollDeps {
 	kv: KvClient;
 	getOctokit: (
-		provider: Provider,
+		reviewer: ReviewerId,
 		installationId: number,
 	) => Promise<OctokitLike>;
 	nowMs: number;
@@ -30,7 +30,7 @@ export async function runFeedbackPoll(
 
 	for (const record of records) {
 		try {
-			const octokit = await getOctokit(record.provider, record.installationId);
+			const octokit = await getOctokit(record.reviewer, record.installationId);
 			const { events: newEvents, lastSeen } = await diffReactions(
 				octokit,
 				record,
@@ -44,7 +44,7 @@ export async function runFeedbackPoll(
 		} catch (err) {
 			console.error("feedback poll: comment failed", {
 				commentId: record.commentId,
-				provider: record.provider,
+				reviewer: record.reviewer,
 				err,
 			});
 		}

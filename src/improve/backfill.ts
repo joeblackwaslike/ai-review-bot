@@ -1,5 +1,12 @@
+import { getConfigTree } from "../config/load.js";
+import type { Config } from "../config/schema.js";
+import type { ReviewerId } from "../reviewer-id.js";
 import type { Db } from "./db/client.js";
-import { insertRawFeedback, upsertFinding } from "./db/repo.js";
+import {
+	identityColumns,
+	insertRawFeedback,
+	upsertFinding,
+} from "./db/repo.js";
 import { findingNaturalKey, parseFindingComment } from "./findings.js";
 
 export interface BackfillOctokit {
@@ -55,13 +62,18 @@ export interface BackfillResult {
 	prComments: number;
 }
 
-/** Our own review bots, mapped to the corpus provider. Third-party reviewers
+/** Our own review bots, mapped to their reviewer id. Third-party reviewers
  * (coderabbitai, sourcery-ai, chatgpt-codex-connector) are deliberately absent:
  * their findings are not ours to judge and would pollute the catalog. */
-export const BOT_PROVIDERS: Record<string, "anthropic" | "openai"> = {
-	"anthropicreviewbot[bot]": "anthropic",
-	"codexreviewbot[bot]": "openai",
-};
+export function botLoginsToReviewer(
+	reviewers: Config["reviewers"] = getConfigTree().reviewers,
+): Record<string, ReviewerId> {
+	const logins: Record<string, ReviewerId> = {};
+	for (const [id, reviewer] of Object.entries(reviewers)) {
+		if (reviewer.appSlug) logins[`${reviewer.appSlug}[bot]`] = id;
+	}
+	return logins;
+}
 
 // A Map for the same reason as feedback/reactions.ts: `content` is an
 // unconstrained string off the API payload, and object indexing would resolve
@@ -108,7 +120,10 @@ function isBotLogin(login: string): boolean {
  * root comment, so the root's author identifies whose thread it is.
  *
  * A reply authored by any bot is not feedback either — see isBotLogin. */
-export function partitionComments(comments: ReviewCommentPayload[]): {
+export function partitionComments(
+	comments: ReviewCommentPayload[],
+	botLogins: Record<string, ReviewerId> = botLoginsToReviewer(),
+): {
 	findings: ReviewCommentPayload[];
 	replies: ReviewCommentPayload[];
 } {
@@ -119,13 +134,13 @@ export function partitionComments(comments: ReviewCommentPayload[]): {
 
 	for (const c of comments) {
 		const login = c.user?.login ?? "";
-		const isOurBot = login in BOT_PROVIDERS;
+		const isOurBot = Object.hasOwn(botLogins, login);
 		if (c.in_reply_to_id !== undefined) {
 			const rootAuthor = authorByCommentId.get(c.in_reply_to_id);
 			if (
 				!isBotLogin(login) &&
 				rootAuthor !== undefined &&
-				rootAuthor in BOT_PROVIDERS
+				Object.hasOwn(botLogins, rootAuthor)
 			) {
 				replies.push(c);
 			}
@@ -144,8 +159,9 @@ export function partitionComments(comments: ReviewCommentPayload[]): {
  * to refuse a verdict rather than report a plausible one. */
 export function findingsMissingReactions(
 	comments: ReviewCommentPayload[],
+	botLogins?: Record<string, ReviewerId>,
 ): ReviewCommentPayload[] {
-	return partitionComments(comments).findings.filter(
+	return partitionComments(comments, botLogins).findings.filter(
 		(c) => c.reactions === undefined,
 	);
 }
@@ -161,8 +177,9 @@ export function findingsMissingReactions(
  * and listing it here would bury the ones that were genuinely dispositioned. */
 export function findUnratedFindings(
 	comments: ReviewCommentPayload[],
+	botLogins?: Record<string, ReviewerId>,
 ): ReviewCommentPayload[] {
-	const { findings, replies } = partitionComments(comments);
+	const { findings, replies } = partitionComments(comments, botLogins);
 	const answered = new Set(replies.map((r) => r.in_reply_to_id));
 	return findings.filter(
 		(f) => answered.has(f.id) && (f.reactions?.total_count ?? 0) === 0,
@@ -181,30 +198,28 @@ export function findUnratedFindings(
  * PR by any signal backfillPr collects), since there is nothing to attribute
  * to either way. */
 export function attributeProviderForComment(
-	activeProviders: Set<"anthropic" | "openai">,
+	activeReviewers: Set<ReviewerId>,
 	body: string,
-): "anthropic" | "openai" | null {
-	if (activeProviders.size === 1) {
-		const [only] = activeProviders;
+	reviewers: Config["reviewers"] = getConfigTree().reviewers,
+): ReviewerId | null {
+	if (activeReviewers.size === 1) {
+		const [only] = activeReviewers;
 		return only;
 	}
 
-	const mentioned = new Set<"anthropic" | "openai">();
-	if (
-		activeProviders.has("anthropic") &&
-		/(?:^|[^a-z0-9-])anthropicreviewbot(?![a-z0-9-])/i.test(body)
-	) {
-		mentioned.add("anthropic");
-	}
-	if (
-		activeProviders.has("openai") &&
-		/(?:^|[^a-z0-9-])codexreviewbot(?![a-z0-9-])/i.test(body)
-	) {
-		mentioned.add("openai");
+	const mentioned = new Set<ReviewerId>();
+	for (const id of activeReviewers) {
+		const reviewer = reviewers[id];
+		const slug = reviewer?.appSlug;
+		if (!slug) continue;
+		const escaped = slug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+		if (new RegExp(`(?:^|[^a-z0-9-])${escaped}(?![a-z0-9-])`, "i").test(body)) {
+			mentioned.add(id);
+		}
 	}
 	if (mentioned.size !== 1) return null;
-	const [provider] = mentioned;
-	return provider;
+	const [reviewer] = mentioned;
+	return reviewer;
 }
 
 function parseTimestamp(iso: string): Date {
@@ -217,16 +232,21 @@ function parseTimestamp(iso: string): Date {
  * same PR inserts nothing new, which is what makes this usable as a recurring
  * sweep while feedback keeps arriving. */
 export async function backfillPr(
-	deps: { db: Db; octokit: BackfillOctokit },
+	deps: {
+		db: Db;
+		octokit: BackfillOctokit;
+		botLogins?: Record<string, ReviewerId>;
+	},
 	target: { owner: string; repo: string; pr: number },
 ): Promise<BackfillResult> {
 	const { owner, repo, pr } = target;
+	const botLogins = deps.botLogins ?? botLoginsToReviewer();
 	const comments = (await deps.octokit.paginate(
 		"GET /repos/{owner}/{repo}/pulls/{pull_number}/comments",
 		{ owner, repo, pull_number: pr, per_page: 100 },
 	)) as ReviewCommentPayload[];
 
-	const { findings, replies } = partitionComments(comments);
+	const { findings, replies } = partitionComments(comments, botLogins);
 	const result: BackfillResult = {
 		owner,
 		repo,
@@ -239,7 +259,7 @@ export async function backfillPr(
 	};
 
 	for (const comment of findings) {
-		const provider = BOT_PROVIDERS[comment.user?.login ?? ""];
+		const identity = identityColumns(botLogins[comment.user?.login ?? ""]);
 		const parsed = parseFindingComment(comment.body);
 		if (!parsed) {
 			result.unparseable++;
@@ -247,7 +267,7 @@ export async function backfillPr(
 		}
 
 		await upsertFinding(deps.db, {
-			provider,
+			...identity,
 			owner,
 			repo,
 			pr,
@@ -265,7 +285,7 @@ export async function backfillPr(
 			headSha: comment.original_commit_id ?? comment.commit_id ?? "unknown",
 			postedAt: parseTimestamp(comment.created_at),
 			naturalKey: findingNaturalKey({
-				provider,
+				provider: identity.provider,
 				owner,
 				repo,
 				pr,
@@ -288,7 +308,7 @@ export async function backfillPr(
 			const actor = reaction.user?.login ?? "unknown";
 			result.reactions += await insertRawFeedback(deps.db, {
 				source: "inline_reaction",
-				provider,
+				...identity,
 				owner,
 				repo,
 				pr,
@@ -316,11 +336,12 @@ export async function backfillPr(
 		// bots, so this lookup always resolves. Skipping on a miss rather than
 		// defaulting to a provider keeps a future change to that filter from
 		// silently misattributing another reviewer's thread to us.
-		const provider = BOT_PROVIDERS[parent?.user?.login ?? ""];
-		if (!provider) continue;
+		const parentReviewer = botLogins[parent?.user?.login ?? ""];
+		if (!parentReviewer) continue;
+		const identity = identityColumns(parentReviewer);
 		result.replies += await insertRawFeedback(deps.db, {
 			source: "inline_reply",
-			provider,
+			...identity,
 			owner,
 			repo,
 			pr,
@@ -351,20 +372,21 @@ export async function backfillPr(
 	// carrier and any bot fallback comment are posted under one of these same
 	// bot logins, so isBotLogin below excludes them without a separate marker
 	// check.
-	const activeProviders = new Set(
+	const activeReviewers = new Set(
 		[...comments, ...issueComments]
-			.map((c) => BOT_PROVIDERS[c.user?.login ?? ""])
-			.filter((p): p is "anthropic" | "openai" => p !== undefined),
+			.map((c) => botLogins[c.user?.login ?? ""])
+			.filter((r): r is ReviewerId => r !== undefined),
 	);
 
 	for (const ic of issueComments) {
 		const login = ic.user?.login ?? "";
 		if (isBotLogin(login)) continue;
-		const provider = attributeProviderForComment(activeProviders, ic.body);
-		if (!provider) continue;
+		const attributed = attributeProviderForComment(activeReviewers, ic.body);
+		if (!attributed) continue;
+		const identity = identityColumns(attributed);
 		result.prComments += await insertRawFeedback(deps.db, {
 			source: "pr_comment",
-			provider,
+			...identity,
 			owner,
 			repo,
 			pr,
@@ -386,9 +408,10 @@ export async function discoverReviewedPrs(
 	octokit: BackfillOctokit,
 	owner: string,
 	repo: string,
+	botLogins: Record<string, ReviewerId> = botLoginsToReviewer(),
 ): Promise<number[]> {
 	const numbers = new Set<number>();
-	for (const login of Object.keys(BOT_PROVIDERS)) {
+	for (const login of Object.keys(botLogins)) {
 		const items = (await octokit.paginate("GET /search/issues", {
 			q: `repo:${owner}/${repo} type:pr commenter:${login}`,
 			per_page: 100,

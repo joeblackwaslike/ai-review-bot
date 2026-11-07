@@ -13,7 +13,7 @@ import {
 function finding(over: Partial<JudgeableFinding> = {}): JudgeableFinding {
 	return {
 		id: 1,
-		provider: "anthropic",
+		reviewer: "claude",
 		path: "src/x.ts",
 		line: 10,
 		title: "a finding",
@@ -109,6 +109,10 @@ describe("judgeSelection", () => {
 	it("judges each finding with its own provider", () => {
 		expect(judgeSelection("openai").provider).toBe("openai");
 		expect(judgeSelection("anthropic").provider).toBe("anthropic");
+	});
+
+	it("judges gemini findings with the anthropic QC model", () => {
+		expect(judgeSelection("gemini")).toEqual(judgeSelection("anthropic"));
 	});
 
 	// /qc is a webhook-only command (GitHub App auth via qc-app.ts) with no

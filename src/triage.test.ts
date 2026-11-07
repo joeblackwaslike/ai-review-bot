@@ -50,6 +50,23 @@ describe("triageReReview", () => {
 		});
 	});
 
+	it("builds the triage model on the finder's google provider", async () => {
+		mockGenerateObject.mockResolvedValueOnce({
+			object: { recommendation: "SKIP", resolved: [], newRisk: false },
+		});
+		mockCreateAIModel.mockClear();
+		await triageReReview(
+			{ provider: "google", model: "gemini-3.8-flash", effort: "high" },
+			"delta diff",
+			openFindings,
+		);
+		expect(mockCreateAIModel.mock.calls[0]?.[0]).toEqual({
+			provider: "google",
+			model: "gemini-3.8-flash",
+			effort: "low",
+		});
+	});
+
 	it("fails safe to INCREMENTAL (never SKIP) when the model call throws", async () => {
 		mockGenerateObject.mockRejectedValueOnce(new Error("boom"));
 		const d = await triageReReview(

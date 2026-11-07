@@ -1,3 +1,4 @@
+import { requireCost } from "../cost.js";
 import { runStrategy } from "../run-strategy.js";
 import type { ReviewStrategy, StrategyInput } from "../strategy.js";
 import { type SeedReviewInput, seedReviewInput, truthInDiff } from "./input.js";
@@ -98,8 +99,11 @@ export async function planSeeds(
 	try {
 		for (const seed of seeds) {
 			total += await withInput(seed, async (input) =>
-				strategy.estimateCost(
-					strategyInput(input, Number.POSITIVE_INFINITY, false),
+				requireCost(
+					strategy.estimateCost(
+						strategyInput(input, Number.POSITIVE_INFINITY, false),
+					),
+					`strategy ${strategy.name}`,
 				),
 			);
 		}
@@ -131,8 +135,9 @@ export async function runSeedsWithStrategy(
 		try {
 			const outcome = await withInput(seed, async (input) => {
 				const remaining = opts.maxCostUsd - spent;
-				const estimate = strategy.estimateCost(
-					strategyInput(input, remaining, false),
+				const estimate = requireCost(
+					strategy.estimateCost(strategyInput(input, remaining, false)),
+					`strategy ${strategy.name}`,
 				);
 				if (!Number.isFinite(estimate) || estimate < 0)
 					throw new Error(`invalid cost estimate ${estimate}`);

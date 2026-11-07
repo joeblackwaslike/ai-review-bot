@@ -1,8 +1,8 @@
 import { findProvenance } from "../comment-key.js";
 import { claimTitle } from "../replay/claims.js";
+import { legacyProviderOf, type ReviewerId } from "../reviewer-id.js";
 import type { KvClient } from "./kv.js";
 import { recordPostedComment } from "./store.js";
-import type { Provider } from "./types.js";
 
 const TTL_MS = 14 * 24 * 60 * 60 * 1000;
 
@@ -32,7 +32,7 @@ export async function persistPostedComments(opts: {
 	reviewId: number;
 	headSha: string;
 	installationId: number;
-	provider: Provider;
+	reviewer: ReviewerId;
 	provenance: Map<string, { skills: string[]; title: string }>;
 	nowMs: number;
 }): Promise<number> {
@@ -62,7 +62,8 @@ export async function persistPostedComments(opts: {
 			opts.kv,
 			{
 				commentId: c.id,
-				provider: opts.provider,
+				provider: legacyProviderOf(opts.reviewer),
+				reviewer: opts.reviewer,
 				installationId: opts.installationId,
 				owner: opts.owner,
 				repo: opts.repo,

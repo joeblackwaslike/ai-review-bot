@@ -1,43 +1,131 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
+import type { LanguageModel } from "ai";
 import type { ResolvedAuth } from "./auth.js";
+import { getConfigTree } from "./config/load.js";
+import { lookupPrice } from "./pricing.js";
+import { resolveProviderCredentials } from "./providers/credentials.js";
+import { createModelRegistry } from "./providers/registry.js";
 import type { ModelSelection } from "./router.js";
 
-interface TokenUsage {
+export interface TokenUsage {
 	promptTokens: number;
+	cachedPromptTokens?: number;
 	completionTokens: number;
 	cachedInputTokens?: number;
 }
 
-// $/1M tokens. Anthropic rates from platform.claude.com/docs/en/about-claude/models/overview;
-// OpenAI rates from developers.openai.com/api/docs/models/gpt-6{-luna,.1-sol} (Oct 2026).
-// cachedInput: Anthropic cache reads bill at 0.1x input (platform.claude.com/docs/en/build-with-claude/prompt-caching);
-// OpenAI cached input per the model pages: gpt-6.1-sol at 5% of input, gpt-6-luna at 10%.
-// Cache writes are not recorded in usage, so cost undercounts the write premium on cold runs.
-// ponytail: flat rates — Haiku 5.5 bills $0.50/$2.50 above 100K prompt tokens,
-// so huge trivial-tier diffs are under-reported; add a tier split if that matters.
-const TOKEN_RATES: Record<
-	string,
-	{ input: number; cachedInput: number; output: number }
-> = {
-	"claude-haiku-5-5": { input: 0.1, cachedInput: 0.01, output: 0.5 },
-	"claude-sonnet-5-5": { input: 2.0, cachedInput: 0.2, output: 10.0 },
-	"claude-opus-5-5": { input: 4.0, cachedInput: 0.4, output: 20.0 },
-	"gpt-6-luna": { input: 0.1, cachedInput: 0.01, output: 0.5 },
-	"gpt-6.1-sol": { input: 2.0, cachedInput: 0.1, output: 10.0 },
-};
+function priceFor(model: string, tierPromptTokens: number) {
+	const pinned = Object.entries(getConfigTree().models).find(
+		([key]) => key === model || key.endsWith(`/${model}`),
+	)?.[1]?.pricing;
+	return pinned ?? lookupPrice(model, tierPromptTokens);
+}
 
-export function computeCost(usage: TokenUsage, model: string): number {
-	const rates = TOKEN_RATES[model];
-	if (!rates) return 0;
+/** Cost in USD of ONE request, or undefined when no price is known. The
+ * OpenRouter long-prompt tier is chosen from this request's own prompt size.
+ * A `pricing` pin in the config wins over the table. Unknown is never $0. */
+export function computeCost(
+	usage: TokenUsage,
+	model: string,
+): number | undefined {
+	return costAt(usage, model, usage.promptTokens);
+}
+
+/** Cost in USD of `count` identical requests, with the tier chosen from one
+ * request's prompt size. For estimates that model N similar calls. */
+export function computeRepeatedCost(
+	request: TokenUsage,
+	model: string,
+	count: number,
+): number | undefined {
+	return costAt(
+		{
+			promptTokens: request.promptTokens * count,
+			completionTokens: request.completionTokens * count,
+			cachedInputTokens:
+				request.cachedInputTokens === undefined
+					? undefined
+					: request.cachedInputTokens * count,
+			cachedPromptTokens:
+				request.cachedPromptTokens === undefined
+					? undefined
+					: request.cachedPromptTokens * count,
+		},
+		model,
+		request.promptTokens,
+	);
+}
+
+/** Cost in USD of usage summed over several requests, priced at the base rate.
+ * A prompt-size tier applies to a single request, which a sum cannot tell, so
+ * no tier is guessed. Use `computeRequestsCost` when per-request usage exists. */
+export function computeAggregateCost(
+	usage: TokenUsage,
+	model: string,
+): number | undefined {
+	return costAt(usage, model, 0);
+}
+
+/** Sum of per-request costs, each request tiered by its own prompt size. */
+export function computeRequestsCost(
+	requests: readonly TokenUsage[],
+	model: string,
+): number | undefined {
+	let total = 0;
+	for (const request of requests) {
+		const cost = computeCost(request, model);
+		if (cost === undefined) return undefined;
+		total += cost;
+	}
+	return total;
+}
+
+function costAt(
+	usage: TokenUsage,
+	model: string,
+	tierPromptTokens: number,
+): number | undefined {
+	const price = priceFor(model, tierPromptTokens);
+	if (!price) return undefined;
+	const { input, cachedInput, output } = price;
 	const cached = Math.min(
-		Math.max(usage.cachedInputTokens ?? 0, 0),
+		Math.max(usage.cachedInputTokens ?? usage.cachedPromptTokens ?? 0, 0),
 		usage.promptTokens,
 	);
 	return (
-		((usage.promptTokens - cached) / 1_000_000) * rates.input +
-		(cached / 1_000_000) * rates.cachedInput +
-		(usage.completionTokens / 1_000_000) * rates.output
+		((usage.promptTokens - cached) / 1_000_000) * input +
+		(cached / 1_000_000) * cachedInput +
+		(usage.completionTokens / 1_000_000) * output
+	);
+}
+
+export function sumCost(
+	byModel: ReadonlyMap<string, readonly TokenUsage[]>,
+): number | undefined {
+	let total = 0;
+	for (const [model, requests] of byModel) {
+		const cost = computeRequestsCost(requests, model);
+		if (cost === undefined) return undefined;
+		total += cost;
+	}
+	return total;
+}
+
+export function modelLabel(models: readonly string[]): string {
+	return [...new Set(models)].sort().join(",");
+}
+
+function fromRegistry(selection: ModelSelection): LanguageModel {
+	const creds = {
+		[selection.provider]: resolveProviderCredentials(
+			selection.provider,
+			process.env,
+			getConfigTree().providers,
+		),
+	};
+	return createModelRegistry(creds).languageModel(
+		`${selection.provider}/${selection.model}`,
 	);
 }
 
@@ -47,13 +135,23 @@ export function computeCost(usage: TokenUsage, model: string): number {
  * as before. When `auth` is supplied (local CLI), it carries either an explicit
  * API key or an OAuth token + custom `fetch` for subscription billing.
  */
-export function createAIModel(selection: ModelSelection, auth?: ResolvedAuth) {
+export function createAIModel(
+	selection: ModelSelection,
+	auth?: ResolvedAuth,
+): LanguageModel {
+	if (auth && auth.provider !== selection.provider) {
+		throw new Error(
+			`auth for ${auth.provider} cannot be used with a ${selection.provider} model`,
+		);
+	}
 	switch (selection.provider) {
 		case "anthropic": {
-			if (!auth || auth.mode === "api-key") {
-				const provider = createAnthropic(
-					auth ? { apiKey: auth.apiKey, baseURL: auth.baseURL } : {},
-				);
+			if (!auth) return fromRegistry(selection);
+			if (auth.mode === "api-key") {
+				const provider = createAnthropic({
+					apiKey: auth.apiKey,
+					baseURL: auth.baseURL,
+				});
 				return provider(selection.model);
 			}
 			// OAuth: token is asserted by the custom fetch; pass a placeholder key
@@ -67,10 +165,12 @@ export function createAIModel(selection: ModelSelection, auth?: ResolvedAuth) {
 			return provider(selection.model);
 		}
 		case "openai": {
-			if (!auth || auth.mode === "api-key") {
-				const provider = createOpenAI(
-					auth ? { apiKey: auth.apiKey, baseURL: auth.baseURL } : {},
-				);
+			if (!auth) return fromRegistry(selection);
+			if (auth.mode === "api-key") {
+				const provider = createOpenAI({
+					apiKey: auth.apiKey,
+					baseURL: auth.baseURL,
+				});
 				return provider(selection.model);
 			}
 			// Codex subscription backend is Responses-API only.
@@ -82,5 +182,7 @@ export function createAIModel(selection: ModelSelection, auth?: ResolvedAuth) {
 			});
 			return provider.responses(selection.model);
 		}
+		case "google":
+			return fromRegistry(selection);
 	}
 }

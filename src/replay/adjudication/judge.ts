@@ -3,6 +3,7 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import type { ResolvedAuth } from "../../auth.js";
 import { createAIModel } from "../../models.js";
+import type { LegacyProvider } from "../../reviewer-id.js";
 import {
 	type ModelSelection,
 	outputBudget,
@@ -31,7 +32,9 @@ export interface JudgeOutput {
 }
 
 export type Judge = (input: JudgeInput) => Promise<JudgeOutput>;
-export type JudgeSpec = ModelSelection;
+export type JudgeSpec = Omit<ModelSelection, "provider"> & {
+	provider: LegacyProvider;
+};
 
 export const JudgementSchema = z
 	.object({
@@ -131,7 +134,7 @@ export function modelJudge(spec: JudgeSpec, auth: ResolvedAuth): Judge {
 }
 
 /**
- * Model IDs come from the CLAUDE_TIER_MAP and OPENAI_TIER_MAP in src/router.ts and the price
+ * Model IDs come from the claude and codex reviewer tiers in the config and the price
  * table in src/models.ts. Opus is the strongest Anthropic model there; it also serves as the
  * judge for Sonnet-produced candidates, so "a different model" holds for the Sonnet runs.
  */
@@ -151,9 +154,7 @@ const SONNET_JUDGE: JudgeSpec = {
 };
 
 /** Every first-judge model `routeJudges` can pick for a producer family, whatever the producer model. */
-export function possibleFirstModels(
-	producer: "anthropic" | "openai",
-): string[] {
+export function possibleFirstModels(producer: string): string[] {
 	return producer === "anthropic"
 		? [JUDGE_MODELS.anthropic.model, SONNET_JUDGE.model]
 		: [JUDGE_MODELS.anthropic.model];
@@ -165,7 +166,7 @@ export function possibleFirstModels(
  * an Opus producer falls back to Sonnet.
  */
 export function routeJudges(
-	producer: "anthropic" | "openai",
+	producer: string,
 	producerModel?: string,
 ): {
 	first: JudgeSpec;

@@ -1,4 +1,5 @@
 import type { PersistedFinding } from "../review-state.js";
+import type { ReviewerId } from "../reviewer-id.js";
 import {
 	buildLedger,
 	fetchLedgerEvidence,
@@ -23,7 +24,7 @@ export async function loadLedger(
 		repo: string;
 		pull: number;
 		commentPrefix: string;
-		provider: string;
+		reviewer: ReviewerId;
 	},
 ): Promise<LoadedLedger> {
 	let timer: ReturnType<typeof setTimeout> | undefined;

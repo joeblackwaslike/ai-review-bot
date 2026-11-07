@@ -1,4 +1,11 @@
+import {
+	type ResolvedAuth,
+	resolveAnthropicAuth,
+	resolveOpenAIAuth,
+} from "../auth.js";
+import { providerKeySpec, readSecret } from "../config/env.js";
 import { numberPatchLines } from "../diff-lines.js";
+import type { ProviderName } from "../providers/names.js";
 import type { ModelReview, PullFile } from "../review.js";
 import type { RouterContext } from "../router.js";
 import type { GhClient } from "./gh.js";
@@ -33,6 +40,32 @@ export function toLiveFindings(review: ModelReview): LiveFinding[] {
 			suppressible: g.suppressible,
 		})),
 	];
+}
+
+interface SelectionAuthResolvers {
+	anthropic: () => Promise<ResolvedAuth>;
+	openai: () => Promise<ResolvedAuth>;
+}
+
+const SUBSCRIPTION_RESOLVERS: SelectionAuthResolvers = {
+	anthropic: () => resolveAnthropicAuth(),
+	openai: () => resolveOpenAIAuth(),
+};
+
+export async function resolveSelectionAuth(
+	provider: ProviderName,
+	resolvers: SelectionAuthResolvers = SUBSCRIPTION_RESOLVERS,
+	env: Readonly<Record<string, string | undefined>> = process.env,
+): Promise<ResolvedAuth | undefined> {
+	if (provider === "anthropic") return resolvers.anthropic();
+	if (provider === "openai") return resolvers.openai();
+	const spec = providerKeySpec(provider);
+	if (readSecret(spec, env).value === undefined) {
+		throw new Error(
+			`replay --live needs ${spec.aliases[0]?.name ?? spec.envName} for the ${provider} provider`,
+		);
+	}
+	return undefined;
 }
 
 /** One candidate per inline comment and general finding of every agent review, in agent order. */

@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { resolveAnthropicAuth, resolveOpenAIAuth } from "../../auth.js";
 import { mapWithConcurrency } from "../../concurrency.js";
 import { parseAgentConcurrency } from "../../config.js";
 import { computeCost } from "../../models.js";
@@ -11,11 +10,15 @@ import {
 	mergeReviewsDetailed,
 	runAgent,
 } from "../../review.js";
-import { CLAUDE_TIER_MAP, OPENAI_TIER_MAP, routeModel } from "../../router.js";
-import { roundCostUsd } from "../cost.js";
-import { routerContext, toLiveFindings } from "../live-wiring.js";
+import { legacyTierMap, routeReviewerModel } from "../../router.js";
+import { requireCost, roundCostUsd } from "../cost.js";
+import {
+	resolveSelectionAuth,
+	routerContext,
+	toLiveFindings,
+} from "../live-wiring.js";
 import type { ReviewStrategy, StrategyInput } from "../strategy.js";
-import type { RoundUsage } from "../types.js";
+import { fixtureReviewer, type RoundUsage } from "../types.js";
 import { CHARS_PER_TOKEN, EXPECTED_COMPLETION_TOKENS } from "./a.js";
 import {
 	DEFAULT_TOLERANCE,
@@ -44,8 +47,8 @@ export function strategyA0Version(
 		.update(
 			JSON.stringify([
 				readSkill(A0_SKILL),
-				CLAUDE_TIER_MAP,
-				OPENAI_TIER_MAP,
+				legacyTierMap("claude"),
+				legacyTierMap("codex"),
 				revision,
 			]),
 		)
@@ -56,9 +59,10 @@ export function strategyA0Version(
 let cachedVersion: string | undefined;
 
 const selectionFor = (input: StrategyInput) =>
-	routeModel(routerContext(input.files), input.fixture.provider);
+	routeReviewerModel(routerContext(input.files), fixtureReviewer(input.fixture))
+		.selection;
 
-const oneRunEstimate = (input: StrategyInput): number =>
+const oneRunEstimate = (input: StrategyInput): number | undefined =>
 	computeCost(
 		{
 			promptTokens: input.diff.length / CHARS_PER_TOKEN,
@@ -76,6 +80,7 @@ export const strategyA0: ReviewStrategy = {
 	needsCheckout: false,
 	estimateCost(input) {
 		const perRunUsd = oneRunEstimate(input);
+		if (perRunUsd === undefined) return undefined;
 		const target = input.spendTargetUsd;
 		const tolerance = input.tolerance ?? DEFAULT_TOLERANCE;
 		if (target === undefined) return perRunUsd;
@@ -102,10 +107,7 @@ export const strategyA0: ReviewStrategy = {
 		const target = input.spendTargetUsd;
 		const tolerance = input.tolerance ?? DEFAULT_TOLERANCE;
 		const selection = selectionFor(input);
-		const auth =
-			fixture.provider === "anthropic"
-				? await resolveAnthropicAuth()
-				: await resolveOpenAIAuth();
+		const auth = await resolveSelectionAuth(selection.provider);
 		const context = buildAuditUserMessage({
 			owner: fixture.owner,
 			repo: fixture.repo,
@@ -117,7 +119,10 @@ export const strategyA0: ReviewStrategy = {
 			runAgent(A0_SKILL, context, selection, "", { auth, abortSignal: signal });
 		const costOf = (o: AgentOutcome): number =>
 			"usage" in o && o.usage
-				? roundCostUsd({ a0: o.usage }, selection.model)
+				? requireCost(
+						roundCostUsd({ a0: o.usage }, selection.model),
+						selection.model,
+					)
 				: 0;
 		const mayLaunch = () => !signal.aborted && Date.now() - started < maxWallMs;
 
@@ -171,7 +176,10 @@ export const strategyA0: ReviewStrategy = {
 			else failedAttempts++;
 			if ("usage" in o && o.usage) usage[`${skill}.md`] = o.usage;
 		}
-		const achievedUsd = roundCostUsd(usage, selection.model);
+		const achievedUsd = requireCost(
+			roundCostUsd(usage, selection.model),
+			selection.model,
+		);
 		const merged = mergeReviewsDetailed(agentReviews.map((a) => a.review));
 		return {
 			findings: toLiveFindings(merged.review),

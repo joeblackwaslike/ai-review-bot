@@ -2,12 +2,16 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { runAuditPass } from "../../audit.js";
-import { resolveAnthropicAuth, resolveOpenAIAuth } from "../../auth.js";
-import { computeCost } from "../../models.js";
+import { computeRepeatedCost } from "../../models.js";
 import { TIER1_SKILLS } from "../../review.js";
-import { CLAUDE_TIER_MAP, OPENAI_TIER_MAP, routeModel } from "../../router.js";
-import { routerContext, toLiveReviewOutput } from "../live-wiring.js";
+import { legacyTierMap, routeReviewerModel } from "../../router.js";
+import {
+	resolveSelectionAuth,
+	routerContext,
+	toLiveReviewOutput,
+} from "../live-wiring.js";
 import type { ReviewStrategy, StrategyInput } from "../strategy.js";
+import { fixtureReviewer } from "../types.js";
 
 const AGENTS_PER_REVIEW = 5;
 export const CHARS_PER_TOKEN = 4;
@@ -24,8 +28,8 @@ export function strategyVersion(readSkill: (name: string) => string): string {
 		.update(
 			JSON.stringify([
 				names.map((n) => [n, readSkill(n)]),
-				CLAUDE_TIER_MAP,
-				OPENAI_TIER_MAP,
+				legacyTierMap("claude"),
+				legacyTierMap("codex"),
 			]),
 		)
 		.digest("hex")
@@ -35,7 +39,8 @@ export function strategyVersion(readSkill: (name: string) => string): string {
 let cachedVersion: string | undefined;
 
 const selectionFor = (input: StrategyInput) =>
-	routeModel(routerContext(input.files), input.fixture.provider);
+	routeReviewerModel(routerContext(input.files), fixtureReviewer(input.fixture))
+		.selection;
 
 export const strategyA: ReviewStrategy = {
 	name: "a",
@@ -45,24 +50,23 @@ export const strategyA: ReviewStrategy = {
 	},
 	needsCheckout: false,
 	estimateCost(input) {
-		return computeCost(
+		return computeRepeatedCost(
 			{
-				promptTokens: (input.diff.length / CHARS_PER_TOKEN) * AGENTS_PER_REVIEW,
-				completionTokens: EXPECTED_COMPLETION_TOKENS * AGENTS_PER_REVIEW,
+				promptTokens: input.diff.length / CHARS_PER_TOKEN,
+				completionTokens: EXPECTED_COMPLETION_TOKENS,
 			},
 			selectionFor(input).model,
+			AGENTS_PER_REVIEW,
 		);
 	},
 	async run(input) {
 		const started = Date.now();
 		const { fixture } = input;
-		const auth =
-			fixture.provider === "anthropic"
-				? await resolveAnthropicAuth()
-				: await resolveOpenAIAuth();
+		const selection = selectionFor(input);
+		const auth = await resolveSelectionAuth(selection.provider);
 		const result = await runAuditPass({
 			files: [{ path: "replay.diff", content: input.diff }],
-			selection: selectionFor(input),
+			selection,
 			extraInstructions: "",
 			meta: { owner: fixture.owner, repo: fixture.repo, ref: "replay" },
 			auth,

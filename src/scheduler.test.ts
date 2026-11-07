@@ -9,7 +9,13 @@ vi.mock("@upstash/qstash", () => ({
 
 import { Client } from "@upstash/qstash";
 import type { AppConfig } from "./config.js";
-import { scheduleReview, verifyQStashSignature } from "./scheduler.js";
+import {
+	dedupId,
+	type ReviewRunMessage,
+	reviewerOfMessage,
+	scheduleReview,
+	verifyQStashSignature,
+} from "./scheduler.js";
 
 beforeEach(() => {
 	vi.clearAllMocks();
@@ -23,7 +29,8 @@ const cfg = {
 } as unknown as AppConfig;
 
 const msg = {
-	provider: "anthropic" as const,
+	reviewer: "claude",
+	provider: "anthropic",
 	owner: "o",
 	repo: "r",
 	pullNumber: 7,
@@ -42,7 +49,7 @@ describe("scheduleReview", () => {
 				url: "https://example.test/api/github/review-run",
 				body: msg,
 				delay: 300,
-				deduplicationId: "anthropic-o-r-7-abc",
+				deduplicationId: "claude-o-r-7-abc",
 			}),
 		);
 	});
@@ -76,7 +83,7 @@ describe("scheduleReview", () => {
 		const dedupId = publishJSON.mock.calls[0][0].deduplicationId as string;
 		expect(dedupId).toMatch(/^[A-Za-z0-9_-]+$/);
 		expect(dedupId).not.toContain(":");
-		expect(dedupId).toBe("anthropic-joeblackwaslike-ai-review-bot-28-f7633ba");
+		expect(dedupId).toBe("claude-joeblackwaslike-ai-review-bot-28-f7633ba");
 	});
 	it("returns null when QStash is unconfigured (caller falls back to inline)", async () => {
 		const out = await scheduleReview(
@@ -130,6 +137,52 @@ describe("scheduleReview", () => {
 				url: "https://example.test/api/github/review-run",
 			}),
 		);
+	});
+});
+
+describe("reviewerOfMessage", () => {
+	const base = { owner: "o", repo: "r", pullNumber: 1, headSha: "s" } as const;
+	const m = (extra: Partial<ReviewRunMessage>) =>
+		({ ...base, action: "a", installationId: 1, ...extra }) as ReviewRunMessage;
+
+	it("maps a provider-only message through the legacy table", () => {
+		expect(reviewerOfMessage(m({ provider: "openai" }))).toBe("codex");
+		expect(reviewerOfMessage(m({ provider: "anthropic" }))).toBe("claude");
+	});
+	it("prefers the reviewer field", () => {
+		expect(
+			reviewerOfMessage(m({ reviewer: "gemini", provider: "gemini" })),
+		).toBe("gemini");
+		expect(reviewerOfMessage(m({ reviewer: "codex" }))).toBe("codex");
+	});
+	it("is null with neither field or an unmapped provider", () => {
+		expect(reviewerOfMessage(m({}))).toBeNull();
+		expect(reviewerOfMessage(m({ provider: "gemini" }))).toBeNull();
+	});
+	it("builds a colon-free dedup id that differs per reviewer", () => {
+		const a = dedupId(m({ reviewer: "claude" }));
+		const b = dedupId(m({ reviewer: "gemini" }));
+		expect(a).not.toContain(":");
+		expect(a).not.toBe(b);
+	});
+});
+
+describe("scheduleReview message body", () => {
+	it("publishes both fields for claude, derived from the reviewer", async () => {
+		publishJSON.mockResolvedValueOnce({ messageId: "m" });
+		await scheduleReview(cfg, { ...msg, provider: undefined }, 0);
+		expect(publishJSON.mock.calls[0][0].body).toMatchObject({
+			reviewer: "claude",
+			provider: "anthropic",
+		});
+	});
+	it("publishes provider equal to the id for a non-legacy reviewer", async () => {
+		publishJSON.mockResolvedValueOnce({ messageId: "m" });
+		await scheduleReview(cfg, { ...msg, reviewer: "gemini" }, 0);
+		expect(publishJSON.mock.calls[0][0].body).toMatchObject({
+			reviewer: "gemini",
+			provider: "gemini",
+		});
 	});
 });
 

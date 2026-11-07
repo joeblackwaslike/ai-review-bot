@@ -40,3 +40,41 @@ export async function mapWithConcurrency<T, R>(
 	await Promise.all(Array.from({ length: width }, () => worker()));
 	return results;
 }
+
+/**
+ * Like `mapWithConcurrency` with `serialFirst`, once per group: groups run one
+ * after another in first-appearance order so each group's first item can warm
+ * a cache that only that group shares. Results keep input order, and `fn` and
+ * `onBeforeEach` see the item's index in the whole input.
+ */
+export async function mapWithConcurrencyByGroup<T, R>(
+	items: readonly T[],
+	groupOf: (item: T) => string,
+	limit: number,
+	fn: (item: T, index: number) => Promise<R>,
+	opts: { onBeforeEach?: (index: number) => Promise<void> | void } = {},
+): Promise<R[]> {
+	const groups = new Map<string, number[]>();
+	items.forEach((item, i) => {
+		const key = groupOf(item);
+		groups.set(key, [...(groups.get(key) ?? []), i]);
+	});
+	const results = new Array<R>(items.length);
+	for (const indexes of groups.values()) {
+		const out = await mapWithConcurrency(
+			indexes,
+			limit,
+			(i) => fn(items[i] as T, i),
+			{
+				serialFirst: true,
+				onBeforeEach: opts.onBeforeEach
+					? (n) => opts.onBeforeEach?.(indexes[n] as number)
+					: undefined,
+			},
+		);
+		indexes.forEach((i, n) => {
+			results[i] = out[n] as R;
+		});
+	}
+	return results;
+}

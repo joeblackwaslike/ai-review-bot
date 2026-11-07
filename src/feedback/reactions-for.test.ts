@@ -11,6 +11,7 @@ function record(
 	return {
 		commentId: 1,
 		provider: "anthropic",
+		reviewer: "claude",
 		installationId: 1,
 		owner: "o",
 		repo: "r",
@@ -83,7 +84,7 @@ describe("loadReactionsFor", () => {
 		owner: "o",
 		repo: "r",
 		pullNumber: 1,
-		provider: "anthropic" as const,
+		reviewer: "claude",
 	};
 	const kvOf = (records: PostedCommentRecord[]) =>
 		({
@@ -109,10 +110,10 @@ describe("loadReactionsFor", () => {
 		expect(f(entry())).toEqual(["down"]);
 	});
 
-	it("does not join a record from the other provider at the same path, line and title", async () => {
+	it("does not join a record from the other reviewer at the same path, line and title", async () => {
 		const kv = kvOf([
 			record({ alice: "down" }),
-			record({ alice: "up" }, { provider: "openai" }),
+			record({ alice: "up" }, { provider: "openai", reviewer: "codex" }),
 		]);
 		const f = await loadReactionsFor(() => kv, pr);
 		expect(f(entry())).toEqual(["down"]);

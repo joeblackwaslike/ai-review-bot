@@ -1,5 +1,23 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { loadConfig, resetConfigForTests } from "./config/load.js";
 import { getConfig, getOpenAIAppConfig, parseAgentBudgetMs } from "./config.js";
+
+const treeOverride = vi.hoisted(() => ({
+	omit: undefined as string | undefined,
+}));
+
+vi.mock("./config/load.js", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("./config/load.js")>();
+	return {
+		...actual,
+		getConfigTree: () => {
+			const tree = actual.getConfigTree();
+			if (!treeOverride.omit) return tree;
+			const { [treeOverride.omit]: _omitted, ...reviewers } = tree.reviewers;
+			return { ...tree, reviewers };
+		},
+	};
+});
 
 const PKCS8_KEY =
 	"-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC7\n-----END PRIVATE KEY-----";
@@ -26,13 +44,23 @@ function setOpenAIEnv(overrides: Record<string, string> = {}) {
 	}
 }
 
+let warn: ReturnType<typeof vi.spyOn>;
+
+beforeEach(() => {
+	warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+});
+
 afterEach(() => {
+	treeOverride.omit = undefined;
+	warn.mockRestore();
 	for (const key of [
 		"GITHUB_APP_ID",
 		"GITHUB_APP_PRIVATE_KEY",
 		"GITHUB_WEBHOOK_SECRET",
 		"ANTHROPIC_API_KEY",
 		"REVIEW_ENABLED",
+		"AI_REVIEW_REVIEWERS__CODEX__ENABLED",
+		"AI_REVIEW_REVIEWERS__CLAUDE__ENABLED",
 		"FEEDBACK_ENABLED",
 		"OPENAI_APP_ID",
 		"OPENAI_APP_PRIVATE_KEY",
@@ -44,6 +72,9 @@ afterEach(() => {
 		"REVIEW_RESYNC_DELAY_SECONDS",
 		"AGENT_CONCURRENCY",
 		"REVIEW_TIER2_ENABLED",
+		"REVIEW_COMMAND",
+		"REVIEW_DIFF_BUDGET_CHARS",
+		"IMPROVE_ENABLED",
 		"QSTASH_TOKEN",
 		"QSTASH_CURRENT_SIGNING_KEY",
 		"QSTASH_NEXT_SIGNING_KEY",
@@ -92,10 +123,21 @@ describe("review delay parsing", () => {
 		expect(getConfig().reviewDelayMs).toBe(0);
 	});
 
-	it("falls back to the default for non-numeric, blank, or negative values", () => {
-		for (const bad of ["abc", "", "   ", "-30"]) {
-			setRequiredEnv({ REVIEW_DELAY_SECONDS: bad });
+	it("treats blank values as unset", () => {
+		for (const blank of ["", "   "]) {
+			setRequiredEnv({ REVIEW_DELAY_SECONDS: blank });
 			expect(getConfig().reviewDelayMs).toBe(0);
+			resetConfigForTests();
+		}
+	});
+
+	it("now throws on non-numeric or negative values instead of falling back", () => {
+		for (const bad of ["abc", "-30"]) {
+			resetConfigForTests();
+			setRequiredEnv({ REVIEW_DELAY_SECONDS: bad });
+			expect(() => getConfig()).toThrow(
+				/review\.delaySeconds|REVIEW_DELAY_SECONDS/,
+			);
 		}
 	});
 });
@@ -113,9 +155,18 @@ describe("IMPROVE_CARRIER_ENABLED", () => {
 		setOpenAIEnv();
 		expect(getConfig().improveCarrierEnabled).toBe(true);
 		expect(getOpenAIAppConfig().improveCarrierEnabled).toBe(true);
-		for (const other of ["false", "1", "TRUE", "yes", ""]) {
-			process.env.IMPROVE_CARRIER_ENABLED = other;
+		for (const off of ["false", "", "  "]) {
+			resetConfigForTests();
+			process.env.IMPROVE_CARRIER_ENABLED = off;
 			expect(getConfig().improveCarrierEnabled).toBe(false);
+		}
+	});
+
+	it("now throws on a malformed boolean instead of reading it as off", () => {
+		for (const bad of ["1", "yes"]) {
+			resetConfigForTests();
+			setRequiredEnv({ IMPROVE_CARRIER_ENABLED: bad });
+			expect(() => getConfig()).toThrow(/IMPROVE_CARRIER_ENABLED/);
 		}
 	});
 });
@@ -135,6 +186,48 @@ describe("getConfig", () => {
 		it("is true when REVIEW_ENABLED=true", () => {
 			setRequiredEnv({ REVIEW_ENABLED: "true" });
 			expect(getConfig().reviewEnabled).toBe(true);
+		});
+	});
+
+	describe("reviewers.<id>.enabled", () => {
+		it("disables only the Codex config when reviewers.codex.enabled is false", () => {
+			setRequiredEnv();
+			setOpenAIEnv();
+			process.env.AI_REVIEW_REVIEWERS__CODEX__ENABLED = "false";
+			expect(getOpenAIAppConfig().reviewEnabled).toBe(false);
+			expect(getConfig().reviewEnabled).toBe(true);
+		});
+
+		it("disables only the Claude config when reviewers.claude.enabled is false", () => {
+			setRequiredEnv();
+			setOpenAIEnv();
+			process.env.AI_REVIEW_REVIEWERS__CLAUDE__ENABLED = "false";
+			expect(getConfig().reviewEnabled).toBe(false);
+			expect(getOpenAIAppConfig().reviewEnabled).toBe(true);
+		});
+
+		it.each([
+			["claude", false, true],
+			["codex", true, false],
+		])("treats an absent %s reviewer entry as disabled", (id, claude, codex) => {
+			setRequiredEnv();
+			setOpenAIEnv();
+			treeOverride.omit = id;
+			expect(getConfig().reviewEnabled).toBe(claude);
+			expect(getOpenAIAppConfig().reviewEnabled).toBe(codex);
+		});
+
+		it("the shipped YAML enables both built-in reviewers", () => {
+			const { config } = loadConfig({ env: {} });
+			expect(config.reviewers.claude?.enabled).toBe(true);
+			expect(config.reviewers.codex?.enabled).toBe(true);
+		});
+
+		it("review.enabled=false still disables both", () => {
+			setRequiredEnv({ REVIEW_ENABLED: "false" });
+			setOpenAIEnv();
+			expect(getConfig().reviewEnabled).toBe(false);
+			expect(getOpenAIAppConfig().reviewEnabled).toBe(false);
 		});
 	});
 
@@ -206,10 +299,12 @@ describe("feedbackEnabled", () => {
 		setRequiredEnv();
 		delete process.env.FEEDBACK_ENABLED;
 		expect(getConfig().feedbackEnabled).toBe(false);
+		resetConfigForTests();
 		process.env.FEEDBACK_ENABLED = "true";
 		expect(getConfig().feedbackEnabled).toBe(true);
+		resetConfigForTests();
 		process.env.FEEDBACK_ENABLED = "1";
-		expect(getConfig().feedbackEnabled).toBe(false); // only exact "true" enables
+		expect(() => getConfig()).toThrow(/FEEDBACK_ENABLED/);
 		delete process.env.FEEDBACK_ENABLED;
 	});
 });
@@ -255,12 +350,16 @@ describe("agentConcurrency", () => {
 		setRequiredEnv();
 		delete process.env.AGENT_CONCURRENCY;
 		expect(getConfig().agentConcurrency).toBe(4);
+		resetConfigForTests();
 		process.env.AGENT_CONCURRENCY = "3";
 		expect(getConfig().agentConcurrency).toBe(3);
-		process.env.AGENT_CONCURRENCY = "abc";
-		expect(getConfig().agentConcurrency).toBe(4);
-		process.env.AGENT_CONCURRENCY = "0";
-		expect(getConfig().agentConcurrency).toBe(4);
+		for (const bad of ["abc", "0"]) {
+			resetConfigForTests();
+			process.env.AGENT_CONCURRENCY = bad;
+			expect(() => getConfig()).toThrow(
+				/AGENT_CONCURRENCY|review\.agentConcurrency/,
+			);
+		}
 		delete process.env.AGENT_CONCURRENCY;
 	});
 });
@@ -335,7 +434,17 @@ describe("parseAgentBudgetMs", () => {
 		expect(parseAgentBudgetMs()).toBe(1);
 	});
 
-	it.each(["0", "-5", "abc", ""])("falls back to the default on %s", (raw) => {
+	it.each(["0", "-5", "abc"])("a malformed value %s now throws", (raw) => {
+		process.env.REVIEW_AGENT_BUDGET_SECONDS = raw;
+		expect(() => parseAgentBudgetMs()).toThrow(
+			/REVIEW_AGENT_BUDGET_SECONDS|review\.agentBudgetSeconds/,
+		);
+	});
+
+	it.each([
+		"",
+		"   ",
+	])("a blank value %j is unset and gives the default", (raw) => {
 		process.env.REVIEW_AGENT_BUDGET_SECONDS = raw;
 		expect(parseAgentBudgetMs()).toBe(210_000);
 	});
@@ -345,16 +454,87 @@ describe("diffBudgetChars", () => {
 	it.each([
 		[undefined, 200_000],
 		["50000", 50_000],
-		["abc", 200_000],
-		["0", 200_000],
-		["-5", 200_000],
-		["1.5", 200_000],
 		["", 200_000],
 	])("REVIEW_DIFF_BUDGET_CHARS=%s gives %i", (raw, expected) => {
 		setRequiredEnv();
 		if (raw === undefined) delete process.env.REVIEW_DIFF_BUDGET_CHARS;
 		else process.env.REVIEW_DIFF_BUDGET_CHARS = raw;
 		expect(getConfig().diffBudgetChars).toBe(expected);
-		delete process.env.REVIEW_DIFF_BUDGET_CHARS;
+	});
+
+	it.each(["abc", "0", "-5", "1.5"])("%s now throws", (raw) => {
+		setRequiredEnv({ REVIEW_DIFF_BUDGET_CHARS: raw });
+		expect(() => getConfig()).toThrow(
+			/REVIEW_DIFF_BUDGET_CHARS|review\.diffBudgetChars/,
+		);
+	});
+});
+
+describe("config tree wiring", () => {
+	it("keeps fractional delays: REVIEW_DELAY_SECONDS=0.5 is 500 ms", () => {
+		setRequiredEnv({ REVIEW_DELAY_SECONDS: "0.5" });
+		expect(getConfig().reviewDelayMs).toBe(500);
+	});
+
+	it("floors fractional concurrency: AGENT_CONCURRENCY=2.5 gives 2", () => {
+		setRequiredEnv({ AGENT_CONCURRENCY: "2.5" });
+		expect(getConfig().agentConcurrency).toBe(2);
+	});
+
+	it("AGENT_CONCURRENCY=0 still throws", () => {
+		setRequiredEnv({ AGENT_CONCURRENCY: "0" });
+		expect(() => getConfig()).toThrow(
+			/AGENT_CONCURRENCY|review\.agentConcurrency/,
+		);
+	});
+
+	it("passes a bare-hostname PUBLIC_URL through byte-for-byte", () => {
+		setRequiredEnv({ PUBLIC_URL: "example.com" });
+		expect(getConfig().publicUrl).toBe("example.com");
+	});
+
+	it("getConfig reproduces the legacy defaults with an empty env", () => {
+		setRequiredEnv();
+		expect(getConfig()).toEqual({
+			reviewer: "claude",
+			appSlug: "anthropicreviewbot",
+			appId: "123",
+			privateKey: PKCS8_KEY,
+			webhookSecret: "secret",
+			reviewEnabled: true,
+			reviewDelayMs: 0,
+			reviewResyncDelayMs: 0,
+			reviewCommentPrefix: "ai-review-bot",
+			reviewCommand: "/ai-review",
+			feedbackEnabled: false,
+			improveEnabled: false,
+			improveCarrierEnabled: false,
+			agentConcurrency: 4,
+			agentBudgetMs: 210_000,
+			diffBudgetChars: 200_000,
+			tier2Enabled: true,
+			qstashToken: undefined,
+			qstashCurrentSigningKey: undefined,
+			qstashNextSigningKey: undefined,
+			qstashUrl: undefined,
+			publicUrl: undefined,
+		});
+	});
+
+	it("AGENT_CONCURRENCY=2 sets concurrency through the alias and warns once", () => {
+		setRequiredEnv({ AGENT_CONCURRENCY: "2" });
+		expect(getConfig().agentConcurrency).toBe(2);
+		expect(getConfig().agentConcurrency).toBe(2);
+		const concurrencyWarnings = warn.mock.calls.filter((c) =>
+			String(c[0]).includes("AGENT_CONCURRENCY is deprecated"),
+		);
+		expect(concurrencyWarnings).toHaveLength(1);
+	});
+
+	it("getOpenAIAppConfig keeps reviewer codex and its own prefix default", () => {
+		setOpenAIEnv();
+		const c = getOpenAIAppConfig();
+		expect(c.reviewer).toBe("codex");
+		expect(c.reviewCommentPrefix).toBe("codex-review-bot");
 	});
 });

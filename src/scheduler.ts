@@ -1,8 +1,14 @@
 import { Client, Receiver } from "@upstash/qstash";
 import type { AppConfig } from "./config.js";
+import {
+	legacyProviderOf,
+	type ReviewerId,
+	reviewerFromLegacy,
+} from "./reviewer-id.js";
 
 export interface ReviewRunMessage {
-	provider: "anthropic" | "openai";
+	reviewer?: ReviewerId;
+	provider?: string;
 	owner: string;
 	repo: string;
 	pullNumber: number;
@@ -11,13 +17,25 @@ export interface ReviewRunMessage {
 	installationId: number;
 }
 
+export function reviewerOfMessage(
+	message: ReviewRunMessage,
+): ReviewerId | null {
+	if (typeof message.reviewer === "string" && message.reviewer !== "") {
+		return message.reviewer;
+	}
+	if (message.provider === "anthropic" || message.provider === "openai") {
+		return reviewerFromLegacy(message.provider);
+	}
+	return null;
+}
+
 // QStash rejects ':' (and other punctuation) in deduplicationId — the original
 // "provider:owner/repo:pr:sha" form failed EVERY publish with
 // `DeduplicationId cannot contain ':'`, silently forcing the inline fallback.
 // Build the id from QStash-safe chars only ([A-Za-z0-9_-]); it still uniquely
 // keys (provider, owner, repo, pr, headSha) to dedup webhook redeliveries.
-function dedupId(message: ReviewRunMessage): string {
-	return `${message.provider}-${message.owner}-${message.repo}-${message.pullNumber}-${message.headSha}`.replace(
+export function dedupId(message: ReviewRunMessage): string {
+	return `${reviewerOfMessage(message)}-${message.owner}-${message.repo}-${message.pullNumber}-${message.headSha}`.replace(
 		/[^A-Za-z0-9_-]/g,
 		"-",
 	);
@@ -60,10 +78,14 @@ export async function scheduleReview(
 			: { token: config.qstashToken },
 	);
 	const delay = Math.floor(delaySeconds);
+	const reviewer = reviewerOfMessage(message);
+	const body: ReviewRunMessage = reviewer
+		? { ...message, reviewer, provider: legacyProviderOf(reviewer) }
+		: message;
 	try {
 		const res = await client.publishJSON({
 			url: reviewRunCallbackUrl(config),
-			body: message,
+			body,
 			...(delay > 0 ? { delay } : {}),
 			// Dedups GitHub webhook REDELIVERIES of the same push only. Cross-push
 			// coalescing is handled by the head-SHA staleness check in the callback —

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import { setPriceTable } from "../../pricing.js";
 import { buildPullFile, SIMPLE_PATCH } from "../../testing.js";
-import { roundCostUsd } from "../cost.js";
+import { requireCost, roundCostUsd } from "../cost.js";
 import type {
 	ReviewStrategy,
 	StrategyInput,
@@ -12,9 +13,12 @@ import type { CellKey, CellRecord } from "./store.js";
 import { cellId } from "./store.js";
 import { samplePlan } from "./testkit.js";
 
+setPriceTable({
+	"anthropic/claude-sonnet-5-5": { input: 2, cachedInput: 0.2, output: 10 },
+});
 const USAGE = { x: { promptTokens: 100_000, completionTokens: 10_000 } };
 const MODEL = "claude-sonnet-5-5";
-const ONE = roundCostUsd(USAGE, MODEL);
+const ONE = requireCost(roundCostUsd(USAGE, MODEL), MODEL);
 
 const result = (): StrategyResult => ({
 	findings: [],

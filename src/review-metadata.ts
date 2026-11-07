@@ -1,3 +1,5 @@
+import { reviewerFromLegacy } from "./reviewer-id.js";
+
 const MARKER_LINE = /^<!--\s*ai-review:([\w-]+)=([^\s>]+)\s*-->\s*$/;
 const MODEL_FOOTER = "*Model:";
 
@@ -36,21 +38,24 @@ export function readMetadataBlock(body: string): Map<string, string> | null {
 }
 
 /**
- * Whether a review body is this bot's own review. Both production bots can
- * post under the same `### <prefix>` heading, so the heading must sit on its
- * own unquoted line and the `provider` marker must be absent (a legacy body)
- * or equal `o.provider`.
+ * Whether a review body is this bot's own review. Several bots can post under
+ * the same `### <prefix>` heading, so the heading must sit on its own unquoted
+ * line. A `reviewer` marker then decides by equality, else a legacy `provider`
+ * marker decides through `reviewerFromLegacy`, else (a legacy body with
+ * neither) the review is ours.
  */
 export function isOwnReview(
 	body: string | null | undefined,
-	o: { commentPrefix: string; provider: string },
+	o: { commentPrefix: string; reviewer: string },
 ): boolean {
 	if (!body) return false;
 	const heading = `### ${o.commentPrefix}`;
 	if (!body.split("\n").some((line) => line.trimEnd() === heading))
 		return false;
+	const reviewer = readMetadataValue(body, "reviewer");
+	if (reviewer !== undefined) return reviewer === o.reviewer;
 	const provider = readMetadataValue(body, "provider");
-	return provider === undefined || provider === o.provider;
+	return provider === undefined || reviewerFromLegacy(provider) === o.reviewer;
 }
 
 /** One marker value: from the block, or by whole-body search for a legacy body. */

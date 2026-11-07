@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setPriceTable } from "../../pricing.js";
 import { mergeReviewsDetailed } from "../../review.js";
 import {
 	buildInlineComment,
@@ -6,7 +7,7 @@ import {
 	buildPullFile,
 	SIMPLE_PATCH,
 } from "../../testing.js";
-import { roundCostUsd } from "../cost.js";
+import { requireCost, roundCostUsd } from "../cost.js";
 import type { StrategyInput } from "../strategy.js";
 import {
 	A0_IMPLEMENTATION_REVISION,
@@ -25,8 +26,11 @@ vi.mock("../../auth.js", () => ({
 }));
 
 const MODEL = "claude-sonnet-5-5";
+setPriceTable({
+	"anthropic/claude-sonnet-5-5": { input: 2, cachedInput: 0.2, output: 10 },
+});
 const ONE_RUN = { promptTokens: 100_000, completionTokens: 10_000 };
-const oneRunUsd = roundCostUsd({ x: ONE_RUN }, MODEL);
+const oneRunUsd = requireCost(roundCostUsd({ x: ONE_RUN }, MODEL), MODEL);
 
 const inputFor = (
 	target?: number,
@@ -136,7 +140,7 @@ describe("strategyA0", () => {
 			completionTokens: 10_000,
 			cachedInputTokens: 90_000,
 		};
-		const warmUsd = roundCostUsd({ x: warm }, MODEL);
+		const warmUsd = requireCost(roundCostUsd({ x: warm }, MODEL), MODEL);
 		let k = 0;
 		mockRunAgent.mockImplementation(async () => ({
 			...okOutcome(`f${++k}`),
@@ -192,14 +196,17 @@ describe("strategyA0", () => {
 			...okOutcome("f"),
 			usage: matched,
 		}));
-		const perRun = roundCostUsd({ x: matched }, MODEL);
+		const perRun = requireCost(roundCostUsd({ x: matched }, MODEL), MODEL);
 		const make = (target?: number) =>
 			({ ...inputFor(target), diff, tolerance }) as StrategyInput;
-		const estimate = strategyA0.estimateCost(make(perRun * factor));
-		await strategyA0.run(make(perRun * factor));
-		expect(estimate / strategyA0.estimateCost(make())).toBeCloseTo(
-			mockRunAgent.mock.calls.length,
+		const estimate = requireCost(
+			strategyA0.estimateCost(make(perRun * factor)),
+			MODEL,
 		);
+		await strategyA0.run(make(perRun * factor));
+		expect(
+			estimate / requireCost(strategyA0.estimateCost(make()), MODEL),
+		).toBeCloseTo(mockRunAgent.mock.calls.length);
 	});
 
 	it("rechecks running spend before each queued repeat", async () => {
@@ -273,7 +280,10 @@ describe("strategyA0", () => {
 	});
 
 	it("estimates one run without a target and one run times repeats with one", () => {
-		const one = strategyA0.estimateCost(inputFor(undefined));
+		const one = requireCost(
+			strategyA0.estimateCost(inputFor(undefined)),
+			MODEL,
+		);
 		expect(one).toBeGreaterThan(0);
 		expect(strategyA0.estimateCost(inputFor(one * 3))).toBeCloseTo(one * 3);
 	});

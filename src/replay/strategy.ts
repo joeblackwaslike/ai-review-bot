@@ -60,7 +60,8 @@ export interface ReviewStrategy {
 	name: string;
 	version: string;
 	needsCheckout: boolean;
-	estimateCost(input: StrategyInput): number;
+	/** Undefined when the selected model has no known price. */
+	estimateCost(input: StrategyInput): number | undefined;
 	run(input: StrategyInput): Promise<StrategyResult>;
 }
 
