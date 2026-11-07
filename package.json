@@ -54,6 +54,7 @@
 		"@anthropic-ai/sdk": "^0.39.0",
 		"@upstash/qstash": "^2.11.1",
 		"@upstash/redis": "^1.38.0",
+		"@vercel/edge-config": "1.5.1",
 		"@vercel/functions": "^3.4.4",
 		"@vercel/node": "^3.2.25",
 		"ai": "^6.0.315",
