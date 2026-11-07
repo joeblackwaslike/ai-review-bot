@@ -1130,27 +1130,38 @@ function registerHandlers(app: App, configFn: () => Promise<AppConfig>) {
 			return;
 		}
 
+		const installationId = commentPayload.installation?.id;
+		const owner = commentPayload.repository.owner.login;
+		const repo = commentPayload.repository.name;
+		let commandName = config.reviewCommand;
+		if (installationId && commentPayload.comment.body.trim().startsWith("/")) {
+			const { overrides } = await loadRepoOverrides({
+				octokit: await app.getInstallationOctokit(installationId),
+				owner,
+				repo,
+				reviewer: config.reviewer,
+			});
+			commandName = overrides?.command ?? commandName;
+		}
+
 		const command = parseReviewCommand(
 			commentPayload.comment.body,
-			config.reviewCommand,
+			commandName,
 		);
 		if (!command) {
 			console.log("skip: command not matched", {
 				body: commentPayload.comment.body,
-				reviewCommand: config.reviewCommand,
+				reviewCommand: commandName,
 			});
 			return;
 		}
 
 		console.log("command matched, proceeding with review", command);
 
-		const installationId = commentPayload.installation?.id;
 		if (!installationId) {
 			throw new Error("Webhook payload did not include an installation id");
 		}
 
-		const owner = commentPayload.repository.owner.login;
-		const repo = commentPayload.repository.name;
 		const pullNumber = commentPayload.issue.number;
 		const octokit = await app.getInstallationOctokit(installationId);
 		const pullResponse = await octokit.request(

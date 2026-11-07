@@ -4,6 +4,7 @@ import type { Discard } from "./discards.js";
 import { persistPostedComments } from "./feedback/persist.js";
 import {
 	budgetAfterDelay,
+	getReviewerGitHubApp,
 	maybeSubmitReview,
 	REVIEW_CLAIM_TTL_SECONDS,
 	runScheduledReview,
@@ -2435,5 +2436,64 @@ describe("carrier comment wiring", () => {
 		const arg = mockCapturePostedReview.mock.calls[0][0];
 		expect(arg.postCarrier).toBe(true);
 		expect(arg.onCarrier).toBeTypeOf("function");
+	});
+});
+
+describe("issue_comment review commands with a repo command", () => {
+	const SNAPSHOT_ENV = { ...process.env };
+	const KEY =
+		"-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC7\n-----END PRIVATE KEY-----";
+
+	async function sendComment(body: string) {
+		const octokit = {
+			request: vi.fn().mockResolvedValue({ data: pr }),
+		};
+		const app = getReviewerGitHubApp("claude");
+		app.getInstallationOctokit = vi.fn().mockResolvedValue(octokit) as never;
+		await app.webhooks.receive({
+			id: "1",
+			name: "issue_comment",
+			payload: {
+				action: "created",
+				comment: { body, author_association: "OWNER" },
+				issue: { number: 1, pull_request: {} },
+				repository: { owner: { login: "owner" }, name: "repo" },
+				installation: { id: 123 },
+			},
+		} as never);
+	}
+
+	beforeEach(() => {
+		kvStore.clear();
+		Object.assign(process.env, {
+			GITHUB_APP_ID: "123",
+			GITHUB_APP_PRIVATE_KEY: KEY,
+			GITHUB_WEBHOOK_SECRET: "secret",
+			ANTHROPIC_API_KEY: "sk-ant",
+		});
+		mockBuildReview.mockReset().mockResolvedValue(null);
+		mockFetchRepoConfig.mockReset().mockResolvedValue({});
+	});
+	afterEach(() => {
+		for (const k of Object.keys(process.env))
+			if (!(k in SNAPSHOT_ENV)) delete process.env[k];
+		Object.assign(process.env, SNAPSHOT_ENV);
+	});
+
+	it("an issue_comment using the repo command triggers a review, and the deployment command does not when the repo sets another", async () => {
+		mockFetchRepoConfig.mockResolvedValue({
+			config: { version: 1, review: { command: "/lgtm" } },
+		});
+
+		await sendComment("/ai-review");
+		expect(mockBuildReview).not.toHaveBeenCalled();
+
+		await sendComment("/lgtm");
+		expect(mockBuildReview).toHaveBeenCalledTimes(1);
+	});
+
+	it("the deployment command still works when the repo sets none", async () => {
+		await sendComment("/ai-review");
+		expect(mockBuildReview).toHaveBeenCalledTimes(1);
 	});
 });
