@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { ValueSource } from "../config/env.js";
 import { ConfigSchema } from "../config/schema.js";
-import { mergeRepoConfig } from "./merge.js";
+import { SKILL_NAMES } from "../skill-names.js";
+import { mergeRepoConfig, repoCoverageNotice } from "./merge.js";
 import type { RepoConfig } from "./schema.js";
 
 const tier = { model: "anthropic/claude-sonnet-5-5", effort: "high" };
@@ -44,6 +45,7 @@ describe("mergeRepoConfig", () => {
 			disabledSkills: new Set(),
 			extraSensitivePatterns: [],
 			minSeverity: "P2",
+			floorRaisedByRepo: false,
 			customPrompt: undefined,
 			command: undefined,
 		});
@@ -174,5 +176,63 @@ describe("mergeRepoConfig", () => {
 		expect(
 			merge(repo, { sources: { "review.command": "env" } }).command,
 		).toBeUndefined();
+	});
+
+	it("disabling every known skill disables the reviewer", () => {
+		const skills = Object.fromEntries(
+			[...SKILL_NAMES].map((n) => [n, { enabled: false as const }]),
+		);
+		const out = merge({ version: 1, reviewers: { claude: { skills } } });
+		expect(out.reviewerDisabled).toBe(true);
+	});
+
+	it("disabling some skills leaves the reviewer on", () => {
+		const out = merge({
+			version: 1,
+			reviewers: {
+				claude: { skills: { "security-sast": { enabled: false } } },
+			},
+		});
+		expect(out.reviewerDisabled).toBe(false);
+	});
+
+	it("flags a floor raised by the repo", () => {
+		const out = merge({ version: 1, review: { minSeverity: "P2" } });
+		expect(out.floorRaisedByRepo).toBe(true);
+	});
+});
+
+describe("repoCoverageNotice", () => {
+	const none = {
+		reviewerDisabled: false,
+		disabledSkills: new Set<string>(),
+		extraSensitivePatterns: [],
+		minSeverity: "P3" as const,
+		floorRaisedByRepo: false,
+	};
+	it("is null when nothing reduces coverage", () => {
+		expect(repoCoverageNotice(none)).toBeNull();
+		expect(repoCoverageNotice(undefined)).toBeNull();
+	});
+	it("names skills and the floor from fixed strings", () => {
+		expect(
+			repoCoverageNotice({
+				...none,
+				disabledSkills: new Set(["security-sast", "code-reviewer"]),
+				minSeverity: "P2",
+				floorRaisedByRepo: true,
+			}),
+		).toBe(
+			"Repository override active: skills code-reviewer, security-sast disabled; findings below P2 are hidden.",
+		);
+	});
+	it("names only the floor when no skill is disabled", () => {
+		expect(
+			repoCoverageNotice({
+				...none,
+				minSeverity: "P1",
+				floorRaisedByRepo: true,
+			}),
+		).toBe("Repository override active: findings below P1 are hidden.");
 	});
 });

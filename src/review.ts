@@ -74,7 +74,7 @@ import {
 	uniqueShortIds,
 } from "./relation.js";
 import { claimTitle } from "./replay/claims.js";
-import type { RepoOverrides } from "./repo-config/merge.js";
+import { type RepoOverrides, repoCoverageNotice } from "./repo-config/merge.js";
 import type { ResolvedFindingRef } from "./resolve-threads.js";
 import { candidateFamilies, dropRetractions } from "./retraction.js";
 import { isOwnReview, readMetadataValue } from "./review-metadata.js";
@@ -91,8 +91,9 @@ import {
 } from "./reviewer-id.js";
 import { REVIEWER_TUNING, type ReviewerTuning } from "./reviewer-tuning.js";
 import { type ReviewerRoleName, resolveReviewerRole } from "./roles.js";
-import type { ModelSelection } from "./router.js";
 import {
+	classifyTier,
+	type ModelSelection,
 	outputBudget,
 	reasoningProviderOptions,
 	resolveSkillModel,
@@ -2090,13 +2091,14 @@ async function buildReviewInner(
 		"Focus on correctness, security, regressions, and missing tests.";
 
 	const filePaths = files.map((f) => f.filename);
+	const routerContext = {
+		additions: context.additions,
+		deletions: context.deletions,
+		filePaths,
+		labels: context.labels,
+	};
 	const { selection, tier: routedTier } = routeReviewerModel(
-		{
-			additions: context.additions,
-			deletions: context.deletions,
-			filePaths,
-			labels: context.labels,
-		},
+		routerContext,
 		context.reviewer,
 		repoOverrides
 			? {
@@ -2113,11 +2115,14 @@ async function buildReviewInner(
 	const triageSelection = roleSelection("triage");
 	const revalidateSelection = roleSelection("revalidate");
 	const summarySelection = roleSelection("summary");
+	const gateTier = repoOverrides?.extraSensitivePatterns.length
+		? classifyTier(routerContext, getConfigTree().routing)
+		: routedTier;
 	if (
 		!shouldRunOnTier(
 			getConfigTree(),
 			context.reviewer,
-			routedTier,
+			gateTier,
 			repoOverrides?.runOn,
 		)
 	) {
@@ -2126,7 +2131,7 @@ async function buildReviewInner(
 			repo: context.repo,
 			pullNumber: context.pullNumber,
 			reviewer: context.reviewer,
-			tier: routedTier,
+			tier: gateTier,
 		});
 		return null;
 	}
@@ -3326,17 +3331,25 @@ async function buildReviewInner(
 	// away a still-open blocking finding (C1). Path-less P2/P3 findings stay
 	// listed but do not block (see blocksVerdict).
 	const blockingPrior = survivingPrior.filter(blocksVerdict);
-	const finalEvent: ReviewDecision["event"] =
+	const computedEvent: ReviewDecision["event"] =
 		blockingPrior.length > 0
 			? "REQUEST_CHANGES"
 			: cleanDelta
 				? "APPROVE"
 				: modelReview.event;
 
+	// A repo that disabled skills has reduced the coverage a clean round proves,
+	// so it never earns an APPROVE. The nothing-new check below still sees the
+	// clean round, so a quiet re-review posts nothing.
+	const finalEvent: ReviewDecision["event"] =
+		computedEvent === "APPROVE" && repoOverrides?.disabledSkills.size
+			? "COMMENT"
+			: computedEvent;
+
 	// A round that cleared a pending skill always posts, so the agents marker
 	// on GitHub stops listing it.
 	if (
-		finalEvent === "APPROVE" &&
+		computedEvent === "APPROVE" &&
 		hasOwnReview &&
 		!needsFreshApprove &&
 		!context.force &&
@@ -3474,7 +3487,9 @@ async function buildReviewInner(
 		carryIds: carryEntryIds(survivingPrior, ledger),
 		scopeNote: scope,
 		limitNote,
-		repoNote: context.repoNote,
+		repoNote: [context.repoNote, repoCoverageNotice(repoOverrides)]
+			.filter(Boolean)
+			.join("\n\n"),
 	});
 
 	return {

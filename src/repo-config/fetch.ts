@@ -50,13 +50,13 @@ function cleanNote(text: string): string {
 
 function safeToken(value: unknown): string {
 	return String(value)
-		.replace(/[^\w.-]/g, "?")
+		.replace(/[^\w-]/g, (c) => (c === "." ? "_" : "?"))
 		.slice(0, 120);
 }
 
 function fieldPath(path: ReadonlyArray<PropertyKey>): string {
-	const joined = path.map(String).join(".") || "(root)";
-	return joined.replace(/[^\w.-]/g, "?").slice(0, 120);
+	const joined = path.map(safeToken).join("/") || "(root)";
+	return joined.slice(0, 120);
 }
 
 function decode(content: string): string | null {
@@ -112,6 +112,7 @@ function interpret(data: unknown): RepoConfigResult {
 async function readThrough(
 	kv: RepoConfigKv | null,
 	key: string | null,
+	where: { owner: string; repo: string },
 ): Promise<RepoConfigResult | null> {
 	if (!kv || !key) return null;
 	try {
@@ -132,6 +133,7 @@ async function readThrough(
 		if (typeof cachedNote === "string") return { note: cleanNote(cachedNote) };
 		return Object.keys(value).length === 0 ? {} : null;
 	} catch {
+		console.warn("repo config cache read failed", where);
 		return null;
 	}
 }
@@ -140,12 +142,13 @@ async function writeThrough(
 	kv: RepoConfigKv | null,
 	key: string | null,
 	result: RepoConfigResult,
+	where: { owner: string; repo: string },
 ): Promise<void> {
 	if (!kv || !key) return;
 	try {
 		await kv.set(key, JSON.stringify(result), CACHE_TTL_SECONDS);
 	} catch {
-		// cache is best-effort
+		console.warn("repo config cache write failed", where);
 	}
 }
 
@@ -167,7 +170,7 @@ export async function fetchRepoConfig(args: {
 		const sha = branchData.commit.sha;
 		const validSha = SHA_PATTERN.test(sha);
 		const key = validSha ? `repo-config:${owner}/${repo}@${sha}` : null;
-		const cached = await readThrough(kv, key);
+		const cached = await readThrough(kv, key, { owner, repo });
 		if (cached) return cached;
 
 		let result: RepoConfigResult;
@@ -183,9 +186,15 @@ export async function fetchRepoConfig(args: {
 			if ((err as { status?: number }).status !== 404) throw err;
 			result = {};
 		}
-		await writeThrough(kv, key, result);
+		await writeThrough(kv, key, result, { owner, repo });
 		return result;
-	} catch {
+	} catch (err) {
+		const status = (err as { status?: unknown } | null)?.status;
+		console.warn("repo config fetch failed", {
+			owner,
+			repo,
+			status: typeof status === "number" ? status : undefined,
+		});
 		return { note: GENERIC_NOTE };
 	}
 }

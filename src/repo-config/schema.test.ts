@@ -50,4 +50,31 @@ describe("RepoConfigSchema", () => {
 				.success,
 		).toBe(false);
 	});
+
+	it("rejects a sensitive path pattern shorter than 3 characters", () => {
+		for (const bad of ["/", ".", "ab"])
+			expect(
+				RepoConfigSchema.safeParse({
+					version: 1,
+					routing: { sensitivePathPatterns: [bad] },
+				}).success,
+			).toBe(false);
+		expect(
+			RepoConfigSchema.safeParse({
+				version: 1,
+				routing: { sensitivePathPatterns: ["abc"] },
+			}).success,
+		).toBe(true);
+	});
+	it("rejects a command shorter than 4 characters including the slash", () => {
+		for (const bad of ["/a", "/ab"])
+			expect(
+				RepoConfigSchema.safeParse({ version: 1, review: { command: bad } })
+					.success,
+			).toBe(false);
+		expect(
+			RepoConfigSchema.safeParse({ version: 1, review: { command: "/abc" } })
+				.success,
+		).toBe(true);
+	});
 });

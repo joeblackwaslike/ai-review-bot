@@ -2492,6 +2492,16 @@ describe("issue_comment review commands with a repo command", () => {
 		expect(mockBuildReview).toHaveBeenCalledTimes(1);
 	});
 
+	it("the repo command matches only as a whole first token", async () => {
+		mockFetchRepoConfig.mockResolvedValue({
+			config: { version: 1, review: { command: "/lgtm" } },
+		});
+		await sendComment("/lgtmx please");
+		expect(mockBuildReview).not.toHaveBeenCalled();
+		await sendComment("/lgtm please look");
+		expect(mockBuildReview).toHaveBeenCalledTimes(1);
+	});
+
 	it("a repo-config fetch rejection falls back to the deployment command", async () => {
 		vi.spyOn(console, "warn").mockImplementation(() => {});
 		mockFetchRepoConfig.mockRejectedValue(new Error("boom"));

@@ -12115,6 +12115,7 @@ describe("per-repo overrides", () => {
 		disabledSkills: new Set<string>(),
 		extraSensitivePatterns: [],
 		minSeverity: "P3" as const,
+		floorRaisedByRepo: false,
 	};
 
 	function runAgents(general = [finding("Floor P2 finding", "P2")]) {
@@ -12226,7 +12227,7 @@ describe("per-repo overrides", () => {
 		expect(withOverrides).toEqual(plain);
 	});
 
-	it("extra sensitive patterns raise the routed tier", async () => {
+	it("extra sensitive patterns raise the model tier but not the tier that gates runOn", async () => {
 		runAgents();
 		const runOn = ["complex", "deep"] as const;
 		const without = await buildReview({
@@ -12246,7 +12247,40 @@ describe("per-repo overrides", () => {
 				extraSensitivePatterns: ["review"],
 			},
 		});
-		expect(withPattern).not.toBeNull();
+		expect(withPattern).toBeNull();
+	});
+
+	it("a repo that disables a skill never gets an APPROVE", async () => {
+		runAgents([]);
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			repoOverrides: {
+				...noOverrides,
+				disabledSkills: new Set(["security-sast"]),
+			},
+		});
+		expect(review?.event).toBe("COMMENT");
+	});
+
+	it("discloses a coverage-reducing override in one fixed line", async () => {
+		runAgents();
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			repoOverrides: {
+				...noOverrides,
+				disabledSkills: new Set(["security-sast"]),
+				minSeverity: "P2",
+				floorRaisedByRepo: true,
+			},
+		});
+		const lines = (review?.body ?? "")
+			.split("\n")
+			.filter((l) => l.startsWith("Repository override active"));
+		expect(lines).toEqual([
+			"Repository override active: skills security-sast disabled; findings below P2 are hidden.",
+		]);
 	});
 
 	it("a skill the repo disables is not owed from the prior round, so a clean re-review posts nothing", async () => {

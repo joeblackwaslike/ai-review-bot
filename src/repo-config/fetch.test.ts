@@ -104,7 +104,7 @@ describe("fetchRepoConfig", () => {
 			file("version: 1\nreview:\n  minSeverity: TOPSECRET\n"),
 		);
 		const r = await run(octokit);
-		expect(r.note).toContain("review.minSeverity");
+		expect(r.note).toContain("review/minSeverity");
 		expect(r.note).not.toContain("TOPSECRET");
 		expect(r.note?.length).toBeLessThanOrEqual(200);
 	});
@@ -212,5 +212,60 @@ describe("fetchRepoConfig", () => {
 		expect(r.note).not.toContain("<img");
 		expect(r.note).not.toContain("@someone");
 		expect(r.note).not.toMatch(/[<>@ ]\S*=/);
+	});
+
+	it("never lets a key in a note look like a link", async () => {
+		const root = fakeOctokit(async () =>
+			file('version: 1\n"www.evil.com": 1\n'),
+		);
+		const rootNote = (await run(root.octokit)).note ?? "";
+		expect(rootNote).toMatch(/unrecognized_keys/);
+		expect(rootNote).not.toContain("www.");
+		const nested = fakeOctokit(async () =>
+			file('version: 1\nreview:\n  "www.evil.com": 1\n'),
+		);
+		const nestedNote = (await run(nested.octokit)).note ?? "";
+		expect(nestedNote).toContain("review");
+		expect(nestedNote).not.toContain("www.");
+		expect(nestedNote).not.toMatch(/invalid at \S*\./);
+	});
+
+	it("logs a non-404 API failure with owner, repo and status only", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const { octokit } = fakeOctokit(async () => {
+			throw Object.assign(new Error("secret body"), { status: 502 });
+		});
+		await run(octokit);
+		expect(warn).toHaveBeenCalledWith("repo config fetch failed", {
+			owner: "o",
+			repo: "r",
+			status: 502,
+		});
+		expect(JSON.stringify(warn.mock.calls)).not.toContain("secret body");
+		warn.mockRestore();
+	});
+
+	it("logs KV read and write failures at warn without the error object", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const kv = {
+			get: async () => {
+				throw new Error("kv-secret");
+			},
+			set: async () => {
+				throw new Error("kv-secret");
+			},
+		};
+		const { octokit } = fakeOctokit(async () => file("version: 1\n"));
+		await fetchRepoConfig({ octokit, owner: "o", repo: "r", kv });
+		expect(warn).toHaveBeenCalledWith("repo config cache read failed", {
+			owner: "o",
+			repo: "r",
+		});
+		expect(warn).toHaveBeenCalledWith("repo config cache write failed", {
+			owner: "o",
+			repo: "r",
+		});
+		expect(JSON.stringify(warn.mock.calls)).not.toContain("kv-secret");
+		warn.mockRestore();
 	});
 });

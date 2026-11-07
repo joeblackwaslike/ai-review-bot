@@ -1134,6 +1134,7 @@ function registerHandlers(app: App, configFn: () => Promise<AppConfig>) {
 		const owner = commentPayload.repository.owner.login;
 		const repo = commentPayload.repository.name;
 		let commandName = config.reviewCommand;
+		let repoCommand = false;
 		if (installationId && commentPayload.comment.body.trim().startsWith("/")) {
 			try {
 				const { overrides } = await loadRepoOverrides({
@@ -1142,7 +1143,10 @@ function registerHandlers(app: App, configFn: () => Promise<AppConfig>) {
 					repo,
 					reviewer: config.reviewer,
 				});
-				commandName = overrides?.command ?? commandName;
+				if (overrides?.command) {
+					commandName = overrides.command;
+					repoCommand = true;
+				}
 			} catch (err) {
 				console.warn(
 					"repo command lookup failed; using deployment command",
@@ -1154,6 +1158,7 @@ function registerHandlers(app: App, configFn: () => Promise<AppConfig>) {
 		const command = parseReviewCommand(
 			commentPayload.comment.body,
 			commandName,
+			{ wholeToken: repoCommand },
 		);
 		if (!command) {
 			console.log("skip: command not matched", {

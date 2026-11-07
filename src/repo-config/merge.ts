@@ -12,6 +12,7 @@ export interface RepoOverrides {
 	disabledSkills: ReadonlySet<string>;
 	extraSensitivePatterns: string[];
 	minSeverity: MinSeverity;
+	floorRaisedByRepo: boolean;
 	customPrompt?: string;
 	command?: string;
 }
@@ -61,13 +62,15 @@ export function mergeRepoConfig(args: {
 		extraSensitivePatterns.push(pattern);
 	}
 
+	if (disabledSkills.size >= SKILL_NAMES.size) reviewerDisabled = true;
+
 	const repoFloor = repo?.review?.minSeverity;
-	const minSeverity =
-		repoFloor &&
+	const floorRaisedByRepo =
+		!!repoFloor &&
 		SEVERITY_ORDER.indexOf(repoFloor) >
-			SEVERITY_ORDER.indexOf(deployment.review.minSeverity)
-			? repoFloor
-			: deployment.review.minSeverity;
+			SEVERITY_ORDER.indexOf(deployment.review.minSeverity);
+	const minSeverity =
+		floorRaisedByRepo && repoFloor ? repoFloor : deployment.review.minSeverity;
 
 	return {
 		reviewerDisabled,
@@ -75,6 +78,7 @@ export function mergeRepoConfig(args: {
 		disabledSkills,
 		extraSensitivePatterns,
 		minSeverity,
+		floorRaisedByRepo,
 		customPrompt: repoMayOverride(sources["review.customPrompt"])
 			? repo?.review?.customPrompt
 			: undefined,
@@ -82,4 +86,23 @@ export function mergeRepoConfig(args: {
 			? repo?.review?.command
 			: undefined,
 	};
+}
+
+/** One fixed-text line for the review body when the repo file reduces coverage.
+ * Built only from bare skill names in SKILL_NAMES and the floor value. */
+export function repoCoverageNotice(
+	overrides: RepoOverrides | undefined,
+): string | null {
+	if (!overrides) return null;
+	const parts: string[] = [];
+	if (overrides.disabledSkills.size > 0) {
+		const names = [...overrides.disabledSkills].sort().join(", ");
+		parts.push(`skills ${names} disabled`);
+	}
+	if (overrides.floorRaisedByRepo) {
+		parts.push(`findings below ${overrides.minSeverity} are hidden`);
+	}
+	return parts.length === 0
+		? null
+		: `Repository override active: ${parts.join("; ")}.`;
 }

@@ -32,7 +32,7 @@ export const RepoConfigSchema = z
 		routing: z
 			.object({
 				sensitivePathPatterns: z
-					.array(z.string().min(1).max(100))
+					.array(z.string().min(3).max(100))
 					.max(50)
 					.optional(),
 			})
@@ -44,7 +44,7 @@ export const RepoConfigSchema = z
 				customPrompt: z.string().max(2000).optional(),
 				command: z
 					.string()
-					.min(1)
+					.min(4)
 					.max(50)
 					.refine((c) => c.startsWith("/"), "must start with /")
 					.optional(),
