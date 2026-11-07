@@ -173,6 +173,7 @@ Rows marked Live can also be overridden at runtime through Edge Config (`EDGE_CO
 | `review.resyncDelaySeconds` | `AI_REVIEW_REVIEW__RESYNC_DELAY_SECONDS` | `REVIEW_RESYNC_DELAY_SECONDS` (deprecated) | number | `0` | yes | Delay before re-reviewing after a push. |
 | `review.command` | `AI_REVIEW_REVIEW__COMMAND` | `REVIEW_COMMAND` (deprecated) | string | `"/ai-review"` |  | Comment command that triggers a review. |
 | `review.customPrompt` | `AI_REVIEW_REVIEW__CUSTOM_PROMPT` | `CUSTOM_REVIEW_PROMPT` (deprecated) | string | unset |  | Extra instructions appended to every agent prompt. |
+| `review.minSeverity` | `AI_REVIEW_REVIEW__MIN_SEVERITY` | none | one of P3, P2, P1 | `"P3"` |  | Findings below this floor are dropped. P0 and P1 are never dropped by the floor; P1 drops P2 and P3. |
 | `review.agentConcurrency` | `AI_REVIEW_REVIEW__AGENT_CONCURRENCY` | `AGENT_CONCURRENCY` (deprecated) | number | `4` | yes | Maximum review agents run in parallel per PR. |
 | `review.agentBudgetSeconds` | `AI_REVIEW_REVIEW__AGENT_BUDGET_SECONDS` | `REVIEW_AGENT_BUDGET_SECONDS` (deprecated) | number | `210` | yes | Wall-clock deadline for agents, in seconds. |
 | `review.diffBudgetChars` | `AI_REVIEW_REVIEW__DIFF_BUDGET_CHARS` | `REVIEW_DIFF_BUDGET_CHARS` (deprecated) | number | `200000` | yes | PR-wide character budget for the serialized diff. |
