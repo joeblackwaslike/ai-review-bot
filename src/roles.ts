@@ -49,8 +49,9 @@ export function resolveJudgeRole(
 }
 
 /**
- * Verifier model, or null when absent, disabled, or `differentFrom: finder`
- * cannot be met because every configured provider is the finder's.
+ * Verifier model, or null when absent, disabled, its provider is not
+ * configured, or `differentFrom: finder` cannot be met (the verifier shares
+ * the finder's provider, or every configured provider is the finder's).
  */
 export function resolveVerifier(
 	config: Config,
@@ -59,11 +60,14 @@ export function resolveVerifier(
 ): ModelSelection | null {
 	const verifier = config.roles.verifier;
 	if (!verifier?.enabled) return null;
+	const selection = toSelection(verifier);
+	if (!configuredProviders.includes(selection.provider)) return null;
 	if (
 		verifier.differentFrom === "finder" &&
-		!configuredProviders.some((p) => p !== finder.provider)
+		(selection.provider === finder.provider ||
+			!configuredProviders.some((p) => p !== finder.provider))
 	) {
 		return null;
 	}
-	return toSelection(verifier);
+	return selection;
 }

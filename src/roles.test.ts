@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { loadConfig } from "./config/load.js";
-import type { Config } from "./config/schema.js";
+import { type Config, ConfigSchema } from "./config/schema.js";
 import type { ProviderName } from "./providers/names.js";
 import {
 	DEFAULT_JUDGE,
@@ -71,6 +71,17 @@ describe("resolveReviewerRole precedence", () => {
 		"summary",
 		"triage",
 		"revalidate",
+	] as ReviewerRoleName[])("applies a reviewer-level %s role when top-level is empty", (role) => {
+		const cfg = withRoles({}, { [role]: { model: "google/gemini-3-pro" } });
+		expect(resolveReviewerRole(cfg, reviewerId, role, finder)).toEqual({
+			provider: "google",
+			model: "gemini-3-pro",
+		});
+	});
+	it.each([
+		"summary",
+		"triage",
+		"revalidate",
 	] as ReviewerRoleName[])("reviewer beats top-level beats default for %s", (role) => {
 		const top = { model: "openai/gpt-6", effort: "high" as const };
 		const own = { model: "google/gemini-3-pro" };
@@ -137,6 +148,32 @@ describe("resolveVerifier", () => {
 			verifier: { ...verifier, differentFrom: "finder" },
 		});
 		expect(resolveVerifier(cfg, finder, ["anthropic"])).toBeNull();
+	});
+	it("is null when differentFrom finder and the verifier shares the finder provider", () => {
+		const cfg = withRoles({
+			verifier: {
+				model: "anthropic/claude-opus-5-5",
+				enabled: true,
+				differentFrom: "finder",
+			},
+		});
+		expect(resolveVerifier(cfg, finder, both)).toBeNull();
+	});
+	it("is null when the verifier provider is not configured", () => {
+		const cfg = withRoles({
+			verifier: { ...verifier, model: "google/gemini-3-pro" },
+		});
+		expect(resolveVerifier(cfg, finder, both)).toBeNull();
+	});
+	it("resolves a verifier with enabled omitted (schema defaults it to true)", () => {
+		const parsed = ConfigSchema.parse({
+			...base,
+			roles: { verifier: { model: "openai/gpt-6" } },
+		});
+		expect(resolveVerifier(parsed, finder, both)).toEqual({
+			provider: "openai",
+			model: "gpt-6",
+		});
 	});
 	it("returns the model when a different provider is available", () => {
 		const cfg = withRoles({
