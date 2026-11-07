@@ -1,3 +1,5 @@
+import { computeReactionDelta } from "../feedback/reactions.js";
+import type { Verdict } from "../feedback/types.js";
 import { splitInlineClaims } from "../replay/claims.js";
 import type { PostedClaim } from "../replay/types.js";
 import { isOwnReview } from "../review-metadata.js";
@@ -19,6 +21,8 @@ export interface EvidenceThread {
 	isResolved: boolean;
 	resolvedBy: string | null;
 	replies: DecisionReply[];
+	/** Verdicts from reactions on the thread's first comment, one per reactor. */
+	reactions?: Verdict[];
 }
 
 export interface LedgerEvidence {
@@ -29,6 +33,36 @@ export interface LedgerEvidence {
 }
 
 const DECIDER_ASSOCIATIONS = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
+
+const REST_REACTION_BY_GRAPHQL = new Map([
+	["THUMBS_UP", "+1"],
+	["THUMBS_DOWN", "-1"],
+	["CONFUSED", "confused"],
+]);
+
+/** One verdict per reactor (the latest verdict-bearing reaction wins), the same reduction the feedback poller applies. */
+function reactionVerdicts(
+	nodes: readonly {
+		content: string;
+		user: { login: string } | null;
+		createdAt: string;
+	}[],
+): Verdict[] {
+	const current = nodes.flatMap((n) => {
+		const content = REST_REACTION_BY_GRAPHQL.get(n.content);
+		return content && n.user
+			? [
+					{
+						login: n.user.login,
+						content,
+						createdAtMs: Date.parse(n.createdAt),
+					},
+				]
+			: [];
+	});
+	return Object.values(computeReactionDelta(current, {}).lastSeen);
+}
+
 const PER_PAGE = 100;
 
 export function buildLedger(e: LedgerEvidence): Ledger {
@@ -52,6 +86,10 @@ export function buildLedger(e: LedgerEvidence): Ledger {
 			);
 
 	return e.claims.map((c): LedgerEntry => {
+		const t = c.commentId === null ? undefined : byComment.get(c.commentId);
+		// One reply cannot say which of several merged claims it settles.
+		const isSingleClaim =
+			c.commentId !== null && claimsPerComment.get(c.commentId) === 1;
 		const base = {
 			id: c.id,
 			round: c.roundIndex,
@@ -61,11 +99,10 @@ export function buildLedger(e: LedgerEvidence): Ledger {
 			title: c.title,
 			body: stripFpMarkers(c.text),
 			...readFpMarkers(c.text),
+			...(isSingleClaim && t?.reactions?.length
+				? { reactions: t.reactions }
+				: {}),
 		};
-		const t = c.commentId === null ? undefined : byComment.get(c.commentId);
-		// One reply cannot say which of several merged claims it settles.
-		const isSingleClaim =
-			c.commentId !== null && claimsPerComment.get(c.commentId) === 1;
 		const d = t && isSingleClaim && classifyReplies(t.replies, isDecider);
 		const resolvedByDecider = Boolean(
 			t?.isResolved && t.resolvedBy && deciderLogins.has(t.resolvedBy),
@@ -118,6 +155,13 @@ interface ThreadNode {
 			authorAssociation: string;
 			body: string;
 			createdAt: string;
+			reactions?: {
+				nodes: {
+					content: string;
+					user: { login: string } | null;
+					createdAt: string;
+				}[];
+			};
 		}[];
 	};
 }
@@ -156,6 +200,9 @@ const THREADS_QUERY = `
                 authorAssociation
                 body
                 createdAt
+                reactions(first: 100) {
+                  nodes { content user { login } createdAt }
+                }
               }
             }
           }
@@ -288,6 +335,7 @@ export async function fetchLedgerEvidence(
 				commentId: first.databaseId,
 				isResolved: t.isResolved,
 				resolvedBy: t.resolvedBy?.login ?? null,
+				reactions: reactionVerdicts(first.reactions?.nodes ?? []),
 				replies: rest.map((r) => ({
 					author: r.author?.login ?? "",
 					createdAt: r.createdAt,

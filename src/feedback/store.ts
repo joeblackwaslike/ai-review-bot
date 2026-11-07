@@ -44,12 +44,10 @@ export async function recordPostedComment(
 export async function listActiveComments(
 	kv: KvClient,
 	nowMs: number,
-	shouldStop?: () => boolean,
 ): Promise<PostedCommentRecord[]> {
 	const refs = await kv.zrangebyscore(POLL_SET, nowMs, "+inf");
 	const out: PostedCommentRecord[] = [];
 	for (const r of refs) {
-		if (shouldStop?.()) break;
 		const sep = r.indexOf(":");
 		const provider = r.slice(0, sep);
 		const commentId = Number(r.slice(sep + 1));
