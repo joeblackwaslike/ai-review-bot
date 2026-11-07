@@ -127,14 +127,22 @@ describe("mergeRepoConfig", () => {
 		expect([...out.disabledSkills]).toEqual(["code-reviewer"]);
 	});
 
-	it('a repo reviewer key like "__proto__" or "constructor" does not disable anything or throw', () => {
-		const repo = JSON.parse(
-			'{"version":1,"reviewers":{"__proto__":{"enabled":false},"constructor":{"enabled":false}}}',
-		) as RepoConfig;
-		expect(merge(repo, { reviewerId: "constructor" }).reviewerDisabled).toBe(
-			true,
-		);
+	it("an inherited repo reviewer entry is ignored", () => {
+		const reviewers = Object.create({ claude: { enabled: false } });
+		const repo = { version: 1, reviewers } as unknown as RepoConfig;
 		expect(merge(repo).reviewerDisabled).toBe(false);
+	});
+
+	it('a repo reviewer key like "__proto__" does not throw or disable anything', () => {
+		const repo = JSON.parse(
+			'{"version":1,"reviewers":{"__proto__":{"enabled":false}}}',
+		) as RepoConfig;
+		expect(merge(repo).reviewerDisabled).toBe(false);
+	});
+
+	it("an absent sources key with a repo customPrompt yields no override", () => {
+		const repo: RepoConfig = { version: 1, review: { customPrompt: "hi" } };
+		expect(merge(repo, { sources: {} }).customPrompt).toBeUndefined();
 	});
 
 	it("customPrompt from the repo applies only when the deployment value came from yaml or default", () => {

@@ -74,6 +74,7 @@ import {
 	uniqueShortIds,
 } from "./relation.js";
 import { claimTitle } from "./replay/claims.js";
+import type { RepoOverrides } from "./repo-config/merge.js";
 import type { ResolvedFindingRef } from "./resolve-threads.js";
 import { candidateFamilies, dropRetractions } from "./retraction.js";
 import { isOwnReview, readMetadataValue } from "./review-metadata.js";
@@ -98,6 +99,7 @@ import {
 	routeReviewerModel,
 	shouldRunOnTier,
 } from "./router.js";
+import { applySeverityFloor } from "./severity-floor.js";
 import { TIER1_SKILL_FILES } from "./skill-names.js";
 import { repairSuggestion } from "./suggestion.js";
 import { detectTier2Skills, TIER2_DETECTORS } from "./tier2.js";
@@ -167,6 +169,10 @@ interface ReviewContext {
 	 * Callers open the corpus inside it, so a connection failure rejects here
 	 * instead of failing the review before any agent runs. */
 	recordDiscards?: (discards: Discard[]) => Promise<void>;
+	/** Restrictive overrides from the repository's `.github/ai-review.yml`. */
+	repoOverrides?: RepoOverrides;
+	/** One sanitized line about an ignored repo file, shown in the review body. */
+	repoNote?: string;
 }
 
 export interface ReviewMetadata {
@@ -1113,6 +1119,8 @@ export interface FormatReviewBodyOptions {
 	scopeNote?: ScopeNote;
 	/** Plain sentence naming the adaptive limits that removed findings. */
 	limitNote?: string | null;
+	/** One line about an ignored repo override file. */
+	repoNote?: string;
 }
 
 type ScopeReason =
@@ -1242,6 +1250,7 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		scopeNote,
 		carryIds = [],
 		limitNote = null,
+		repoNote,
 	} = opts;
 
 	const readinessBar = renderReadinessBar(readiness);
@@ -1357,6 +1366,7 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		droppedNotice,
 		overflowNotice,
 		limitNote ?? "",
+		repoNote ?? "",
 		feedbackInvite,
 		findingsBlock,
 		advisoryBlock,
@@ -2073,7 +2083,9 @@ async function buildReviewInner(
 		}
 	}
 
+	const repoOverrides = context.repoOverrides;
 	const customPrompt =
+		repoOverrides?.customPrompt ??
 		getConfigTree().review.customPrompt ??
 		"Focus on correctness, security, regressions, and missing tests.";
 
@@ -2086,13 +2098,29 @@ async function buildReviewInner(
 			labels: context.labels,
 		},
 		context.reviewer,
+		repoOverrides
+			? {
+					...getConfigTree().routing,
+					sensitivePathPatterns: [
+						...getConfigTree().routing.sensitivePathPatterns,
+						...repoOverrides.extraSensitivePatterns,
+					],
+				}
+			: undefined,
 	);
 	const roleSelection = (role: ReviewerRoleName) =>
 		resolveReviewerRole(getConfigTree(), context.reviewer, role, selection);
 	const triageSelection = roleSelection("triage");
 	const revalidateSelection = roleSelection("revalidate");
 	const summarySelection = roleSelection("summary");
-	if (!shouldRunOnTier(getConfigTree(), context.reviewer, routedTier)) {
+	if (
+		!shouldRunOnTier(
+			getConfigTree(),
+			context.reviewer,
+			routedTier,
+			repoOverrides?.runOn,
+		)
+	) {
 		console.log("reviewer does not run on this tier; posting nothing", {
 			owner: context.owner,
 			repo: context.repo,
@@ -2489,7 +2517,13 @@ async function buildReviewInner(
 			const t2 = tier2Items[i];
 			return t2 !== undefined ? [t1, t2] : [t1];
 		})
-		.concat(tier2Items.slice(tier1Items.length));
+		.concat(tier2Items.slice(tier1Items.length))
+		.filter(
+			(s) =>
+				!repoOverrides?.disabledSkills.has(
+					baseName(s.skillPath).replace(/\.md$/, ""),
+				),
+		);
 	const isPending = (s: { skillPath: string }) =>
 		pendingSet.has(baseName(s.skillPath));
 	const pendingItems = queue.filter(isPending);
@@ -2901,6 +2935,8 @@ async function buildReviewInner(
 		fileListComplete ? new Set(files.map((f) => f.filename)) : null,
 	);
 	const restated = new Map<string, PersistedFinding>();
+	const severityFloor =
+		repoOverrides?.minSeverity ?? getConfigTree().review.minSeverity;
 	const unsettledResults = agentResults.map((agentResult, index) => {
 		const discard = (
 			finding: DiscardedFinding,
@@ -2927,8 +2963,16 @@ async function buildReviewInner(
 				files,
 			),
 		};
+		const generalFloor = applySeverityFloor(r.general_findings, severityFloor);
+		const inlineFloor = applySeverityFloor(r.inline_comments, severityFloor);
+		for (const f of [...generalFloor.dropped, ...inlineFloor.dropped])
+			discard(f, "ADAPTIVE_LIMIT");
 		const outcome = suppressInReview(
-			r,
+			{
+				...r,
+				general_findings: generalFloor.kept,
+				inline_comments: inlineFloor.kept,
+			},
 			suppressionLedger,
 			declaredRepeat(suppressionLedger),
 		);
@@ -3416,6 +3460,7 @@ async function buildReviewInner(
 		carryIds: carryEntryIds(survivingPrior, ledger),
 		scopeNote: scope,
 		limitNote,
+		repoNote: context.repoNote,
 	});
 
 	return {

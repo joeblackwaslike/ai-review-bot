@@ -695,6 +695,32 @@ describe("shouldRunOnTier", () => {
 		const cfg = withRunOn(["complex", "deep"]);
 		expect(shouldRunOnTier(cfg, "claude", "complex")).toBe(true);
 		expect(shouldRunOnTier(cfg, "claude", "normal")).toBe(false);
-		expect(shouldRunOnTier.length).toBe(3);
+		expect(shouldRunOnTier.length).toBe(4);
+	});
+});
+
+describe("per-repo router overrides", () => {
+	const ctx: RouterContext = {
+		additions: 10,
+		deletions: 0,
+		filePaths: ["src/billing/charge.ts"],
+		labels: [],
+	};
+
+	it("extra sensitive patterns force complex for a path that is otherwise normal", () => {
+		const routing = getConfigTree().routing;
+		expect(routeReviewerModel(ctx, "claude").tier).toBe("normal");
+		const extra = {
+			...routing,
+			sensitivePathPatterns: [...routing.sensitivePathPatterns, "billing"],
+		};
+		expect(routeReviewerModel(ctx, "claude", extra).tier).toBe("complex");
+	});
+
+	it("a repo runOn excludes a tier the deployment allows", () => {
+		const config = getConfigTree();
+		expect(shouldRunOnTier(config, "claude", "normal")).toBe(true);
+		expect(shouldRunOnTier(config, "claude", "normal", ["deep"])).toBe(false);
+		expect(shouldRunOnTier(config, "claude", "deep", ["deep"])).toBe(true);
 	});
 });

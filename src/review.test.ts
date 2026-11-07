@@ -12099,3 +12099,130 @@ describe("buildReview per-reviewer routing", () => {
 		expect(run.peak()).toBe(1);
 	});
 });
+
+describe("per-repo overrides", () => {
+	const finding = (title: string, severity: "P2" | "P3") => ({
+		title,
+		body: "A real problem.",
+		severity,
+		category: "style" as const,
+		confidence: 0.8,
+		evidence: "See diff.",
+		suppressible: true,
+	});
+	const noOverrides = {
+		reviewerDisabled: false,
+		disabledSkills: new Set<string>(),
+		extraSensitivePatterns: [],
+		minSeverity: "P3" as const,
+	};
+
+	function runAgents(general = [finding("Floor P2 finding", "P2")]) {
+		mockGenerateObject.mockImplementation(async (args: { system?: unknown }) =>
+			args.system !== undefined
+				? {
+						object: { summary: "Summary." },
+						usage: { inputTokens: 10, outputTokens: 5 },
+					}
+				: buildGenerateObjectResponse(
+						buildModelReview({ event: "COMMENT", general_findings: general }),
+					),
+		);
+	}
+
+	beforeEach(() => {
+		mockGenerateObject.mockReset();
+		mockBuildUserMessage.mockReset();
+		mockBuildUserMessage.mockReturnValue("user");
+		mockBuildAgentSystemPrompt.mockReset();
+	});
+
+	it("a disabled skill does not run", async () => {
+		runAgents();
+		await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			repoOverrides: {
+				...noOverrides,
+				disabledSkills: new Set(["security-sast"]),
+			},
+		});
+		const prompted = mockBuildAgentSystemPrompt.mock.calls.map((c) =>
+			String(c[0]),
+		);
+		expect(prompted).toHaveLength(TIER1_SKILLS.length - 1);
+		expect(prompted.some((p) => p.includes("security-sast"))).toBe(false);
+		expect(prompted.some((p) => p.includes("code-reviewer"))).toBe(true);
+	});
+
+	it("the repo customPrompt reaches the agent prompt", async () => {
+		runAgents();
+		await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			repoOverrides: { ...noOverrides, customPrompt: "Only check billing." },
+		});
+		expect(mockBuildAgentSystemPrompt).toHaveBeenCalled();
+		for (const call of mockBuildAgentSystemPrompt.mock.calls)
+			expect(call[1]).toBe("Only check billing.");
+	});
+
+	it("floor-dropped findings are recorded as ADAPTIVE_LIMIT discards", async () => {
+		runAgents([finding("Keep me", "P2"), finding("Below the floor", "P3")]);
+		const recordDiscards = vi.fn(async (_d: Discard[]) => {});
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			recordDiscards,
+			repoOverrides: { ...noOverrides, minSeverity: "P2" },
+		});
+		expect(review?.body).toContain("Keep me");
+		expect(review?.body).not.toContain("Below the floor");
+		const limited = (recordDiscards.mock.calls[0]?.[0] ?? []).filter(
+			(d) => d.reason === "ADAPTIVE_LIMIT",
+		);
+		expect(limited.length).toBeGreaterThan(0);
+		expect(limited.every((d) => d.title === "Below the floor")).toBe(true);
+		expect(limited.every((d) => d.disposition === "dropped")).toBe(true);
+	});
+
+	it("the review body carries the repo note as one line", async () => {
+		runAgents();
+		const note = "Ignored .github/ai-review.yml: invalid YAML.";
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			repoNote: note,
+		});
+		const lines = (review?.body ?? "").split("\n");
+		expect(lines.filter((l) => l === note)).toHaveLength(1);
+	});
+
+	it("runOn intersection posts nothing when the tier is excluded", async () => {
+		runAgents();
+		const review = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			repoOverrides: { ...noOverrides, runOn: ["deep"] },
+		});
+		expect(review).toBeNull();
+		expect(mockGenerateObject).not.toHaveBeenCalled();
+	});
+
+	it("a floor of P3 with no note is byte-identical to no overrides", async () => {
+		runAgents([finding("Same P2", "P2"), finding("Same P3", "P3")]);
+		const plain = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+		});
+		mockGenerateObject.mockClear();
+		runAgents([finding("Same P2", "P2"), finding("Same P3", "P3")]);
+		const withOverrides = await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			repoOverrides: noOverrides,
+		});
+		expect(plain?.body).toContain("Same P3");
+		expect(withOverrides).toEqual(plain);
+	});
+});

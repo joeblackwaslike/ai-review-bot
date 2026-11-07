@@ -36,7 +36,7 @@ export function mergeRepoConfig(args: {
 			? repo.reviewers[reviewerId]
 			: undefined;
 
-	let reviewerDisabled = !reviewer || !reviewer.enabled;
+	let reviewerDisabled = !reviewer?.enabled;
 	if (repoReviewer?.enabled === false) reviewerDisabled = true;
 
 	let runOn: Tier[] | undefined = reviewer?.runOn;
