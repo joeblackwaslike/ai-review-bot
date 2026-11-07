@@ -91,6 +91,17 @@ The aliased env vars (`REVIEW_ENABLED`, `AGENT_CONCURRENCY` and the rest) now go
 - Any unknown `AI_REVIEW_*` variable is a hard startup error.
 - Each deprecated alias logs one warning per cold start that names its replacement. For `PUBLIC_URL` and `QSTASH_URL` the replacements are `AI_REVIEW_INFRA__PUBLIC_URL` and `AI_REVIEW_INFRA__QSTASH_URL`.
 
+## Live overrides (Edge Config)
+
+Edge Config changes a few settings in seconds, with no redeploy. Typical use is turning off one reviewer, or all review, during an incident.
+
+- Set `EDGE_CONFIG` to your Vercel Edge Config connection string. Without it, nothing changes. The package is `@vercel/global-config`, the renamed `@vercel/edge-config` with the same API.
+- Store a flat JSON map. Each key is a derived env name, for example `AI_REVIEW_REVIEWERS__GEMINI__ENABLED`, with a JSON value.
+- Only settings marked Live in the reference below apply. A typo or a non-live key is ignored, and `/api/debug` lists it under `edge.ignored` with a reason.
+- Precedence is Edge Config, then env, then YAML.
+- Edge Config can disable a reviewer. It cannot enable one that YAML disables, and it cannot ready one whose secrets are missing: that reviewer still returns 503.
+- If the read fails or takes longer than 2 seconds, the bot uses the cold config and `/api/debug` shows `edge.error`. Reads are cached for 5 seconds.
+
 ## Verifying your setup
 
 Two diagnostic endpoints are available after deployment:
