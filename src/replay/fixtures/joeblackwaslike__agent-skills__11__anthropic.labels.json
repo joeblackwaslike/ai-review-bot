@@ -1,0 +1,73 @@
+{
+  "fixtureId": "joeblackwaslike__agent-skills__11__anthropic",
+  "provisional": true,
+  "labels": [
+    {
+      "claimId": "r0:c4416818460:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-10-29T19:28:33Z|changed skills/devcontainers/references/joe-devcontainer.md near line 80 in 158a29316e00c26df49d9776c8f3b3a80c477ae9"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c4416818467:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c4416818479:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:1",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:2",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:3",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    }
+  ],
+  "repeatPairs": [
+    {
+      "later": "r1:body:0",
+      "earlier": "r0:body:0",
+      "confirmed": false
+    }
+  ],
+  "negativePairs": [],
+  "allowedSuppression": []
+}

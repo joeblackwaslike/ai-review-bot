@@ -1,0 +1,91 @@
+{
+  "fixtureId": "joeblackwaslike__ai-review-bot__95__anthropic",
+  "provisional": true,
+  "labels": [
+    {
+      "claimId": "r0:c4430189966:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-10-31T03:56:00Z|Confirmed: a deleted file stays in the PR file list as status removed under its old name, so it counted as present. PathFile now carries status and removed files are left out of the present set. Tests cover the helper and a full buildReview round (carried blocker on a removed file, clean delta, non-blocking review with the Retired note). Fixed in 1821d1f."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c4430189972:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-10-31T03:56:02Z|Confirmed: nothing in buildReview read the field. Removed ReviewContext.kv and the call-site argument; the claim and feedback code use their own client. The test that passed a kv into buildReview is replaced by one at maybeSubmitReview level showing a throwing KV still posts a review. Fixed in 1f5ca12."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c4430189972:1",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-10-31T03:56:02Z|Confirmed: nothing in buildReview read the field. Removed ReviewContext.kv and the call-site argument; the claim and feedback code use their own client. The test that passed a kv into buildReview is replaced by one at maybeSubmitReview level showing a throwing KV still posts a review. Fixed in 1f5ca12."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c4430189972:2",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-10-31T03:56:02Z|Confirmed: nothing in buildReview read the field. Removed ReviewContext.kv and the call-site argument; the claim and feedback code use their own client. The test that passed a kv into buildReview is replaced by one at maybeSubmitReview level showing a throwing KV still posts a review. Fixed in 1f5ca12."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:1",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c4430351677:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:1",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    }
+  ],
+  "repeatPairs": [
+    {
+      "later": "r1:body:0",
+      "earlier": "r0:body:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:body:1",
+      "earlier": "r0:body:1",
+      "confirmed": false
+    }
+  ],
+  "negativePairs": [],
+  "allowedSuppression": []
+}

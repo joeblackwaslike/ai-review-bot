@@ -1,0 +1,3524 @@
+{
+  "schemaVersion": 1,
+  "owner": "joeblackwaslike",
+  "repo": "ai-listings",
+  "pull": 53,
+  "provider": "anthropic",
+  "reviewer": "claude",
+  "author": "joeblackwaslike",
+  "recordedAt": "2026-11-07T23:29:16.402Z",
+  "rounds": [
+    {
+      "index": 0,
+      "reviewId": 5001715154,
+      "provider": "anthropic",
+      "submittedAt": "2026-08-23T05:18:08Z",
+      "headSha": "da89af6f45e437f4605c8a85bd9dce0f97487eb9",
+      "baseSha": "0c4042e36aeed22b8e91c1733bedfda0e5dc0b28",
+      "mergeBase": "0c4042e36aeed22b8e91c1733bedfda0e5dc0b28",
+      "triggerAt": "2026-08-23T05:16:04Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "da89af6f45e437f4605c8a85bd9dce0f97487eb9",
+          "committedAt": "2026-08-23T05:16:04Z",
+          "files": [
+            {
+              "path": "deployment/scripts/deploy-app.sh",
+              "ranges": [
+                [
+                  10,
+                  17
+                ],
+                [
+                  100,
+                  106
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/pipeline/step3-pricing-research.ts",
+              "ranges": [
+                [
+                  2,
+                  9
+                ],
+                [
+                  92,
+                  158
+                ],
+                [
+                  674,
+                  688
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/platforms/adapters/ebay.ts",
+              "ranges": [
+                [
+                  10,
+                  16
+                ],
+                [
+                  257,
+                  272
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/platforms/ebay-soldcomps.ts",
+              "ranges": [
+                [
+                  1,
+                  64
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r0:c3837766061:0",
+          "roundIndex": 0,
+          "reviewId": 5001715154,
+          "source": "inline",
+          "commentId": 3837766061,
+          "path": "src/lib/platforms/ebay-soldcomps.ts",
+          "line": 64,
+          "severity": "P3",
+          "title": "soldPrice parsed with parseFloat before validating it's a clean numeric string",
+          "text": "🟢 **Low**\n\n**soldPrice parsed with parseFloat before validating it's a clean numeric string**\n\n`parseFloat(it.soldPrice)` will silently succeed on partially-numeric strings like \"25 USD\" or \"$25\" would fail (parseFloat(\"$25\") -> NaN, correctly filtered), but a value like \"25.99 (Buy It Now)\" would parse to 25.99 without any indication the field format changed. If the upstream API changes soldPrice formatting, this could silently produce plausible-looking but wrong prices rather than failing loudly. Low risk given the API is third-party and undocumented in the diff, but worth a comment noting the expected format assumption."
+        },
+        {
+          "id": "r0:c3837766063:0",
+          "roundIndex": 0,
+          "reviewId": 5001715154,
+          "source": "inline",
+          "commentId": 3837766063,
+          "path": "src/lib/platforms/ebay-soldcomps.ts",
+          "line": 35,
+          "severity": "P2",
+          "title": "SoldComps API failures and empty-results are logged identically to the removed dead-source failures, with no distinction for auth errors",
+          "text": "🟡 **Medium**\n\n**SoldComps API failures and empty-results are logged identically to the removed dead-source failures, with no distinction for auth errors**\n\n`searchEbaySoldComps` returns `[]` on missing API key, HTTP error, and any thrown exception, all via `console.warn`. Given this PR is explicitly a fix for the fact that a prior silent comp-source failure went undetected for ~2 weeks (per the PR description), a 401 (bad/expired SOLDCOMPS_API_KEY) will look identical in logs/behavior to a legitimate 'zero sold comps for this query' or a transient timeout. Since this is the exact failure mode the PR is fixing (dead source silently returning empty), consider logging the HTTP status explicitly and/or incrementing a metric so a future silent-key-rotation-failure doesn't reproduce the same multi-week blind spot this PR is remediating."
+        },
+        {
+          "id": "r0:c3837766064:0",
+          "roundIndex": 0,
+          "reviewId": 5001715154,
+          "source": "inline",
+          "commentId": 3837766064,
+          "path": "src/lib/platforms/ebay-soldcomps.ts",
+          "line": 39,
+          "severity": "P3",
+          "title": "No rate limiting / retry handling for free-tier 100 searches/month cap",
+          "text": "🟢 **Low**\n\n**No rate limiting / retry handling for free-tier 100 searches/month cap**\n\nThe free SoldComps tier is capped at 100 searches/month per the PR description. There's no caching, dedup across concurrent calls, or quota-exhaustion detection (e.g. distinguishing a 429/quota error from a generic failure) — a 429 will just log a warning and silently return `[]`, degrading indistinguishably from \"no comps found\", making it hard to detect quota exhaustion in production. Consider logging a distinct warning for 429/402 status codes so operators can tell quota exhaustion apart from a transient failure."
+        },
+        {
+          "id": "r0:c3837766066:0",
+          "roundIndex": 0,
+          "reviewId": 5001715154,
+          "source": "inline",
+          "commentId": 3837766066,
+          "path": "src/lib/platforms/adapters/ebay.ts",
+          "line": 273,
+          "severity": "P3",
+          "title": "condition hardcoded to 'Not specified' discarding SoldComps item quality",
+          "text": "🟢 **Low**\n\n**condition hardcoded to 'Not specified' discarding SoldComps item quality**\n\n`EbayAdapter.searchSoldComps` maps every `PlatformComp.condition` to the literal `'Not specified'` regardless of what `SoldListing` might convey, since `SoldListing` doesn't carry a condition field. This is consistent with `ebay-soldcomps.ts` not returning condition, but worth flagging: `PlatformComp` callers relying on condition for filtering/adjustment will silently treat all eBay sold comps as unknown condition even if better signal is available from the API's item payload (`SoldCompsItem` doesn't currently capture condition either)."
+        },
+        {
+          "id": "r0:c3837766068:0",
+          "roundIndex": 0,
+          "reviewId": 5001715154,
+          "source": "inline",
+          "commentId": 3837766068,
+          "path": "src/lib/pipeline/step3-pricing-research.ts",
+          "line": 192,
+          "severity": "P3",
+          "title": "Comment above searchEbayActiveWithFallback slightly overstates guarantee",
+          "text": "🟢 **Low**\n\n**Comment above searchEbayActiveWithFallback slightly overstates guarantee**\n\nThe comment states \"a healthy Browse API never costs a SerpAPI request,\" which is accurate given the logic (browseResults.length > 0 short-circuits). However it doesn't mention that a Browse API call which throws (rather than returning an empty array) will propagate and skip the fallback entirely — Promise.all in the caller will reject the whole batch. If searchEbayActive can throw on transient errors, this fallback provides no resilience in that case, which the comment doesn't caveat."
+        },
+        {
+          "id": "r0:c3837766069:0",
+          "roundIndex": 0,
+          "reviewId": 5001715154,
+          "source": "inline",
+          "commentId": 3837766069,
+          "path": "src/lib/pipeline/step3-pricing-research.ts",
+          "line": 723,
+          "severity": "P2",
+          "title": "SOLDCOMPS_API_KEY read directly from process.env instead of via ApiKeys/apiKeys plumbing",
+          "text": "🟡 **Medium**\n\n**SOLDCOMPS_API_KEY read directly from process.env instead of via ApiKeys/apiKeys plumbing**\n\nEvery other external API key in this pipeline (serpapi, poshmarkCookies, anthropic, etc.) is threaded through the `ApiKeys` object passed into `runStep3PricingResearch` and its helpers, but `searchEbaySoldComps` reads `process.env.SOLDCOMPS_API_KEY` directly. This breaks the existing pattern of per-request/user-scoped key injection used elsewhere in this file (e.g. `apiKeys.serpapi`, `apiKeys.poshmarkCookies`), makes the function harder to test/mock, and means this call site silently depends on a different configuration mechanism than its neighbors in the same `Promise.all`. If `ApiKeys` is meant to represent user-supplied/overridable keys, this diverges from that model without explanation."
+        },
+        {
+          "id": "r0:c3837766072:0",
+          "roundIndex": 0,
+          "reviewId": 5001715154,
+          "source": "inline",
+          "commentId": 3837766072,
+          "path": "src/lib/platforms/adapters/ebay.ts",
+          "line": 265,
+          "severity": "P3",
+          "title": "condition hardcoded to 'Not specified' loses data already available from SoldComps API response",
+          "text": "🟢 **Low**\n\n**condition hardcoded to 'Not specified' loses data already available from SoldComps API response**\n\n`EbayAdapter.searchSoldComps` now maps SoldComps results to `PlatformComp` with `condition: 'Not specified'` unconditionally. Since `SoldListing` (from `ebay-soldcomps.ts`) doesn't carry a condition field at all, this is consistent with the current type, but it means condition data is being discarded/never fetched from the SoldComps API even though the API may expose it (mirroring `SoldCompsItem`'s title/soldPrice/endedAt/url fields already parsed). This silently degrades comp quality data for the eBay adapter path without any indication this is a stub."
+        },
+        {
+          "id": "r0:body:0",
+          "roundIndex": 0,
+          "reviewId": 5001715154,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "No error/response-shape validation for SoldComps API auth failures",
+          "text": "No error/response-shape validation for SoldComps API auth failures"
+        },
+        {
+          "id": "r0:body:1",
+          "roundIndex": 0,
+          "reviewId": 5001715154,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "SoldComps price parsing has no locale/currency safeguards",
+          "text": "SoldComps price parsing has no locale/currency safeguards"
+        },
+        {
+          "id": "r0:body:2",
+          "roundIndex": 0,
+          "reviewId": 5001715154,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "Multiple broad catch-alls collapse distinct failure modes into identical fallback behavior",
+          "text": "Multiple broad catch-alls collapse distinct failure modes into identical fallback behavior"
+        },
+        {
+          "id": "r0:body:3",
+          "roundIndex": 0,
+          "reviewId": 5001715154,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "No tests added for the new SoldComps client or fallback logic",
+          "text": "No tests added for the new SoldComps client or fallback logic"
+        },
+        {
+          "id": "r0:body:4",
+          "roundIndex": 0,
+          "reviewId": 5001715154,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "EbayAdapter.searchSoldComps behavior change is untested",
+          "text": "EbayAdapter.searchSoldComps behavior change is untested"
+        },
+        {
+          "id": "r0:body:5",
+          "roundIndex": 0,
+          "reviewId": 5001715154,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "SoldComps API key sent over query string in Authorization is fine, but request query param naming unverified",
+          "text": "SoldComps API key sent over query string in Authorization is fine, but request query param naming unverified"
+        },
+        {
+          "id": "r0:body:6",
+          "roundIndex": 0,
+          "reviewId": 5001715154,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "SoldComps response field/parse assumptions unverified",
+          "text": "SoldComps response field/parse assumptions unverified"
+        },
+        {
+          "id": "r0:body:7",
+          "roundIndex": 0,
+          "reviewId": 5001715154,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "EbayAdapter.searchSoldComps condition hardcoded and soldPrice unit assumption",
+          "text": "EbayAdapter.searchSoldComps condition hardcoded and soldPrice unit assumption"
+        },
+        {
+          "id": "r0:body:8",
+          "roundIndex": 0,
+          "reviewId": 5001715154,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "SoldComps API response parsing not validated against real schema shape assumptions",
+          "text": "SoldComps API response parsing not validated against real schema shape assumptions"
+        },
+        {
+          "id": "r0:body:9",
+          "roundIndex": 0,
+          "reviewId": 5001715154,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "EbayAdapter.searchSoldComps now hardcodes condition to 'Not specified'",
+          "text": "EbayAdapter.searchSoldComps now hardcodes condition to 'Not specified'"
+        },
+        {
+          "id": "r0:body:10",
+          "roundIndex": 0,
+          "reviewId": 5001715154,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "SoldComps API key is transmitted via query-less GET; verify no key leakage in logs",
+          "text": "SoldComps API key is transmitted via query-less GET; verify no key leakage in logs"
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "reviewId": 5001737458,
+      "provider": "anthropic",
+      "submittedAt": "2026-08-23T05:36:17Z",
+      "headSha": "2d6b175855c04bdaaa7b0b156588aabee0ccc207",
+      "baseSha": "da89af6f45e437f4605c8a85bd9dce0f97487eb9",
+      "mergeBase": "da89af6f45e437f4605c8a85bd9dce0f97487eb9",
+      "triggerAt": "2026-08-23T05:34:29Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "2d6b175855c04bdaaa7b0b156588aabee0ccc207",
+          "committedAt": "2026-08-23T05:34:29Z",
+          "files": [
+            {
+              "path": "src/lib/pipeline/step3-pricing-research.ts",
+              "ranges": [
+                [
+                  682,
+                  688
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/platforms/adapters/ebay.ts",
+              "ranges": [
+                [
+                  258,
+                  272
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/platforms/ebay-soldcomps.ts",
+              "ranges": [
+                [
+                  10,
+                  31
+                ],
+                [
+                  37,
+                  50
+                ],
+                [
+                  62,
+                  68
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/user-api-keys.ts",
+              "ranges": [
+                [
+                  7,
+                  13
+                ],
+                [
+                  21,
+                  27
+                ],
+                [
+                  47,
+                  52
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r1:c3837791059:0",
+          "roundIndex": 1,
+          "reviewId": 5001737458,
+          "source": "inline",
+          "commentId": 3837791059,
+          "path": "src/lib/platforms/ebay-soldcomps.ts",
+          "line": 64,
+          "severity": "P2",
+          "title": "parseFloat on soldPrice has no currency/locale safeguard",
+          "text": "🟡 **Medium**\n\n**parseFloat on soldPrice has no currency/locale safeguard**\n\n`parseFloat(it.soldPrice)` will silently misparse or NaN-out on any currency-prefixed value (e.g. \"$123.45\", \"US $123.45\", or a value with thousands separators like \"1,234.56\"). Since the result is filtered by `priceCents > 0`, a currency-prefixed price string returns `NaN`, is caught by `Number.isFinite(price) ? ... : 0`, and the whole row is silently dropped by the final filter -- with no log line indicating a parse failure occurred, only a quietly smaller result set. Given this client exists specifically to fix a previously-undetected silent comp collapse, a parse failure here would reproduce the same class of bug without any signal."
+        },
+        {
+          "id": "r1:c3837791062:0",
+          "roundIndex": 1,
+          "reviewId": 5001737458,
+          "source": "inline",
+          "commentId": 3837791062,
+          "path": "src/lib/platforms/adapters/ebay.ts",
+          "line": 265,
+          "severity": "P2",
+          "title": "searchSoldComps limit parameter from PlatformSDK not honored",
+          "text": "🟡 **Medium**\n\n**searchSoldComps limit parameter from PlatformSDK not honored**\n\nIf `PlatformSDK.searchSoldComps` accepts an optional limit/options argument (as referenced by the prior review comment and the MCP dispatcher passing `input.limit`), this implementation ignores it entirely and returns every row SoldComps returns unbounded. This is a correctness gap for any caller requesting a bounded result set, not just a nice-to-have."
+        },
+        {
+          "id": "r1:c3837791064:0",
+          "roundIndex": 1,
+          "reviewId": 5001737458,
+          "source": "inline",
+          "commentId": 3837791064,
+          "path": "src/lib/platforms/ebay-soldcomps.ts",
+          "line": 66,
+          "severity": "P2",
+          "title": "SoldComps price parsing can silently drop all comps on currency-formatted strings",
+          "text": "🟡 **Medium**\n\n**SoldComps price parsing can silently drop all comps on currency-formatted strings**\n\n`parseFloat(it.soldPrice)` on a price string like `\"$123.45\"` or `\"1,234.56\"` returns `NaN` for a leading `$`, or truncates at the comma for thousands-separated values (`parseFloat(\"1,234.56\")` === `1`). Since the response schema for `soldPrice` is unverified and the code has no stripping of currency symbols/separators, this can cause `priceCents` to be `0` or wildly wrong for every row, silently filtered out by the `priceCents > 0` check (rows would vanish) or, worse, pass through with a wrong price (e.g. `\"1,234.56\"` -> `100` cents instead of `123456` cents).\n\n*Suggested fix:*\n\n```suggestion\n        const price = it.soldPrice ? parseFloat(it.soldPrice.replace(/[^0-9.-]/g, '')) : NaN\n```"
+        },
+        {
+          "id": "r1:c3837791068:0",
+          "roundIndex": 1,
+          "reviewId": 5001737458,
+          "source": "inline",
+          "commentId": 3837791068,
+          "path": "src/lib/pipeline/step3-pricing-research.ts",
+          "line": 173,
+          "severity": "P2",
+          "title": "SerpAPI active-listing fallback price filter/mapping may reference a nonexistent field",
+          "text": "🟡 **Medium**\n\n**SerpAPI active-listing fallback price filter/mapping may reference a nonexistent field**\n\nThe new `fetchEbayActiveSerpApi` reads `price.extracted` instead of the previously used `price.extracted_value` (still used elsewhere in this same file for `SerpShoppingResult`). If SerpAPI's eBay plain-search engine actually returns `extracted_value` (consistent with its other engines), this filter (`r.price?.extracted`) will always be falsy, silently dropping every result and making the fallback permanently dead code returning `[]`."
+        },
+        {
+          "id": "r1:body:0",
+          "roundIndex": 1,
+          "reviewId": 5001737458,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "EbayAdapter.searchSoldComps reads SOLDCOMPS_API_KEY from env instead of per-user ApiKeys, unlike every other adapter path in this PR",
+          "text": "EbayAdapter.searchSoldComps reads SOLDCOMPS_API_KEY from env instead of per-user ApiKeys, unlike every other adapter path in this PR"
+        },
+        {
+          "id": "r1:body:1",
+          "roundIndex": 1,
+          "reviewId": 5001737458,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "SoldComps auth/quota errors indistinguishable from EbayAdapter callers",
+          "text": "SoldComps auth/quota errors indistinguishable from EbayAdapter callers"
+        },
+        {
+          "id": "r1:body:2",
+          "roundIndex": 1,
+          "reviewId": 5001737458,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "No tests for new SoldComps client, EbayAdapter change, or SerpAPI fallback logic",
+          "text": "No tests for new SoldComps client, EbayAdapter change, or SerpAPI fallback logic"
+        },
+        {
+          "id": "r1:body:3",
+          "roundIndex": 1,
+          "reviewId": 5001737458,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "EbayAdapter.searchSoldComps ignores optional limit parameter",
+          "text": "EbayAdapter.searchSoldComps ignores optional limit parameter"
+        },
+        {
+          "id": "r1:body:4",
+          "roundIndex": 1,
+          "reviewId": 5001737458,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "EbayAdapter.searchSoldComps ignores per-user SoldComps key, reads process.env directly",
+          "text": "EbayAdapter.searchSoldComps ignores per-user SoldComps key, reads process.env directly"
+        },
+        {
+          "id": "r1:body:5",
+          "roundIndex": 1,
+          "reviewId": 5001737458,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "SoldComps price parsing has no currency-symbol handling",
+          "text": "SoldComps price parsing has no currency-symbol handling"
+        },
+        {
+          "id": "r1:body:6",
+          "roundIndex": 1,
+          "reviewId": 5001737458,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "SoldComps API key duplicated/inconsistently sourced between EbayAdapter and pipeline",
+          "text": "SoldComps API key duplicated/inconsistently sourced between EbayAdapter and pipeline"
+        },
+        {
+          "id": "r1:body:7",
+          "roundIndex": 1,
+          "reviewId": 5001737458,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "fetchEbayActiveSerpApi comment claims plain search 'returns in ~2s' as a general fact",
+          "text": "fetchEbayActiveSerpApi comment claims plain search 'returns in ~2s' as a general fact"
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "reviewId": 5001798217,
+      "provider": "anthropic",
+      "submittedAt": "2026-08-23T06:20:41Z",
+      "headSha": "a45fc50b8a98ceade2d76165f0feef785a09b671",
+      "baseSha": "2d6b175855c04bdaaa7b0b156588aabee0ccc207",
+      "mergeBase": "2d6b175855c04bdaaa7b0b156588aabee0ccc207",
+      "triggerAt": "2026-08-23T06:14:37Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "a45fc50b8a98ceade2d76165f0feef785a09b671",
+          "committedAt": "2026-08-23T06:14:37Z",
+          "files": [
+            {
+              "path": "src/lib/pipeline/step3-pricing-research.ts",
+              "ranges": [
+                [
+                  24,
+                  56
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r2:c3837857408:0",
+          "roundIndex": 2,
+          "reviewId": 5001798217,
+          "source": "inline",
+          "commentId": 3837857408,
+          "path": "src/lib/platforms/ebay-soldcomps.ts",
+          "line": 65,
+          "severity": "P2",
+          "title": "parseFloat on soldPrice will silently zero out currency-formatted prices",
+          "text": "🟡 **Medium**\n\n**parseFloat on soldPrice will silently zero out currency-formatted prices**\n\n`parseFloat(it.soldPrice)` assumes `soldPrice` is a bare numeric string. If the SoldComps API returns a currency-formatted string (e.g. `\"$123.45\"` or `\"1,234.56\"`), `parseFloat` will either return `NaN` (dropped by the later `priceCents > 0` filter) or truncate at the comma, producing a wrong/undercounted price. Since this filters silently to `0`/dropped rather than throwing, a format assumption bug here would reproduce the exact \"comp counts collapse\" symptom this PR fixes, with no test or logging to reveal it. Worth stripping non-numeric characters before parsing, or adding a warning log when parsing fails/produces an unexpected value."
+        },
+        {
+          "id": "r2:c3837857410:0",
+          "roundIndex": 2,
+          "reviewId": 5001798217,
+          "source": "inline",
+          "commentId": 3837857410,
+          "path": "src/lib/platforms/adapters/ebay.ts",
+          "line": 269,
+          "severity": "P2",
+          "title": "EbayAdapter.searchSoldComps ignores the optional limit parameter from PlatformSDK",
+          "text": "🟡 **Medium**\n\n**EbayAdapter.searchSoldComps ignores the optional limit parameter from PlatformSDK**\n\n`searchSoldComps` returns every mapped result from SoldComps unbounded. If `PlatformSDK.searchSoldComps` accepts an optional `limit`/options argument (as referenced by the MCP dispatcher passing `input.limit`), that value is dropped here — a caller requesting a small result set still gets the full SoldComps response. This should either slice the results to the requested limit or forward the limit into the SoldComps query if the API supports it."
+        },
+        {
+          "id": "r2:c3837857412:0",
+          "roundIndex": 2,
+          "reviewId": 5001798217,
+          "source": "inline",
+          "commentId": 3837857412,
+          "path": "src/lib/platforms/adapters/ebay.ts",
+          "line": 261,
+          "severity": "P2",
+          "title": "searchEbaySoldComps reads SOLDCOMPS_API_KEY from process.env instead of the per-user key",
+          "text": "🟡 **Medium**\n\n**searchEbaySoldComps reads SOLDCOMPS_API_KEY from process.env instead of the per-user key**\n\nThis call passes `process.env.SOLDCOMPS_API_KEY` directly rather than a per-user key, diverging from the `apiKeys.soldcomps` pattern this same PR introduces in `step3-pricing-research.ts` (which is sourced per-user via `getUserApiKeys`/`user-api-keys.ts`). Any MCP user with their own configured SoldComps key but no server-wide env var set will get empty comps here, and multi-tenant deployments would share one global key rather than each user's own."
+        },
+        {
+          "id": "r2:body:0",
+          "roundIndex": 2,
+          "reviewId": 5001798217,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "EbayAdapter.searchSoldComps reads SOLDCOMPS_API_KEY from process.env instead of per-user ApiKeys.soldcomps",
+          "text": "EbayAdapter.searchSoldComps reads SOLDCOMPS_API_KEY from process.env instead of per-user ApiKeys.soldcomps"
+        },
+        {
+          "id": "r2:body:1",
+          "roundIndex": 2,
+          "reviewId": 5001798217,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "EbayAdapter.searchSoldComps ignores optional limit parameter from PlatformSDK",
+          "text": "EbayAdapter.searchSoldComps ignores optional limit parameter from PlatformSDK"
+        },
+        {
+          "id": "r2:body:2",
+          "roundIndex": 2,
+          "reviewId": 5001798217,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "No tests added for new SoldComps client, EbayAdapter changes, or SerpAPI active-listing fallback",
+          "text": "No tests added for new SoldComps client, EbayAdapter changes, or SerpAPI active-listing fallback"
+        },
+        {
+          "id": "r2:body:3",
+          "roundIndex": 2,
+          "reviewId": 5001798217,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "SoldComps price parsing has no currency-symbol handling",
+          "text": "SoldComps price parsing has no currency-symbol handling"
+        },
+        {
+          "id": "r2:body:4",
+          "roundIndex": 2,
+          "reviewId": 5001798217,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "soldPrice from SoldComps is parsed with parseFloat without stripping currency symbols",
+          "text": "soldPrice from SoldComps is parsed with parseFloat without stripping currency symbols"
+        },
+        {
+          "id": "r2:body:5",
+          "roundIndex": 2,
+          "reviewId": 5001798217,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Comment claiming fetchEbayActiveSerpApi 'returns in ~2s' is presented as a hard fact but based on a single live test",
+          "text": "Comment claiming fetchEbayActiveSerpApi 'returns in ~2s' is presented as a hard fact but based on a single live test"
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "reviewId": 5001809239,
+      "provider": "anthropic",
+      "submittedAt": "2026-08-23T06:29:06Z",
+      "headSha": "0a7568247f2d38e11ea1d89724fa021f866b66ce",
+      "baseSha": "a45fc50b8a98ceade2d76165f0feef785a09b671",
+      "mergeBase": "a45fc50b8a98ceade2d76165f0feef785a09b671",
+      "triggerAt": "2026-08-23T06:26:35Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "0a7568247f2d38e11ea1d89724fa021f866b66ce",
+          "committedAt": "2026-08-23T06:26:35Z",
+          "files": [
+            {
+              "path": "src/lib/pipeline/serpapi-client.ts",
+              "ranges": [
+                [
+                  1,
+                  41
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/pipeline/step1-product-id.ts",
+              "ranges": [
+                [
+                  2,
+                  8
+                ],
+                [
+                  91,
+                  107
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/pipeline/step3-pricing-research.ts",
+              "ranges": [
+                [
+                  5,
+                  11
+                ],
+                [
+                  27,
+                  44
+                ],
+                [
+                  62,
+                  77
+                ],
+                [
+                  127,
+                  141
+                ],
+                [
+                  224,
+                  239
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r3:c3837870319:0",
+          "roundIndex": 3,
+          "reviewId": 5001809239,
+          "source": "inline",
+          "commentId": 3837870319,
+          "path": "src/lib/platforms/ebay-soldcomps.ts",
+          "line": 64,
+          "severity": "P3",
+          "title": "soldPrice parsed with parseFloat without stripping currency symbols",
+          "text": "🟢 **Low**\n\n**soldPrice parsed with parseFloat without stripping currency symbols**\n\n`it.soldPrice` from the SoldComps API is parsed with `parseFloat(it.soldPrice)` with no handling for a leading currency symbol (e.g. `\"$123.45\"`). `parseFloat` on a string starting with a non-numeric character returns `NaN`, which is caught by the `Number.isFinite` check and silently zeroed to `priceCents: 0`, then dropped by the `priceCents > 0` filter — meaning every sold comp would silently disappear if the API returns currency-prefixed price strings. Since the actual response format hasn't been confirmed, this may or may not trigger in practice, but stripping non-numeric characters before parsing would make the code robust either way."
+        },
+        {
+          "id": "r3:c3837870320:0",
+          "roundIndex": 3,
+          "reviewId": 5001809239,
+          "source": "inline",
+          "commentId": 3837870320,
+          "path": "src/lib/pipeline/step3-pricing-research.ts",
+          "line": 168,
+          "severity": "P2",
+          "title": "Comment states an unverified latency figure as fact",
+          "text": "🟡 **Medium**\n\n**Comment states an unverified latency figure as fact**\n\nThe comment claims the plain-search form \"returns in ~2s\" based on a single live test noted in the PR description. Presenting a one-off measurement as a hard fact in a comment is misleading for future maintainers relying on it to reason about timeouts (the actual `fetchSerpApi` call below uses a 10s timeout, not ~2s) — consider softening the wording (e.g. \"observed ~2s in one live test\") or removing the specific number."
+        },
+        {
+          "id": "r3:c3837870321:0",
+          "roundIndex": 3,
+          "reviewId": 5001809239,
+          "source": "inline",
+          "commentId": 3837870321,
+          "path": "src/lib/platforms/adapters/ebay.ts",
+          "line": 269,
+          "severity": "P3",
+          "title": "EbayAdapter.searchSoldComps ignores the optional limit parameter from PlatformSDK",
+          "text": "🟢 **Low**\n\n**EbayAdapter.searchSoldComps ignores the optional limit parameter from PlatformSDK**\n\nThe MCP dispatcher passes `input.limit` for comp searches, but this implementation calls `searchEbaySoldComps(query)` and returns every mapped result unbounded. A caller requesting a small result set (e.g. limit=5) still receives all comps returned by the SoldComps API. Consider accepting an options/limit argument and slicing the results before returning."
+        },
+        {
+          "id": "r3:c3837870322:0",
+          "roundIndex": 3,
+          "reviewId": 5001809239,
+          "source": "inline",
+          "commentId": 3837870322,
+          "path": "src/lib/pipeline/step3-pricing-research.ts",
+          "line": 152,
+          "severity": "P3",
+          "title": "Comment claims a hard \"~2s\" latency figure based on a single live test",
+          "text": "🟢 **Low**\n\n**Comment claims a hard \"~2s\" latency figure based on a single live test**\n\nThe comment states plain-search \"returns in ~2s\" as if it's an established characteristic, but per the PR description this is based on one live test (90.04s→503 for the Sold filter vs. \"2.3s\" for plain search in one run). SerpAPI scrape latency for a bot-blocked-adjacent flow is likely to vary significantly across runs; presenting a single sample as a stable timing figure risks misleading future maintainers who might rely on it for timeout tuning. Consider softening to something like \"observed well under the 10s fallback timeout in initial testing\" rather than a specific number."
+        },
+        {
+          "id": "r3:body:0",
+          "roundIndex": 3,
+          "reviewId": 5001809239,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "soldPrice parsed with parseFloat without stripping currency symbols",
+          "text": "soldPrice parsed with parseFloat without stripping currency symbols"
+        },
+        {
+          "id": "r3:body:1",
+          "roundIndex": 3,
+          "reviewId": 5001809239,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "EbayAdapter.searchSoldComps ignores the optional limit parameter",
+          "text": "EbayAdapter.searchSoldComps ignores the optional limit parameter"
+        },
+        {
+          "id": "r3:body:2",
+          "roundIndex": 3,
+          "reviewId": 5001809239,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "EbayAdapter.searchSoldComps reads SOLDCOMPS_API_KEY from process.env instead of the per-user key threaded elsewhere in this PR",
+          "text": "EbayAdapter.searchSoldComps reads SOLDCOMPS_API_KEY from process.env instead of the per-user key threaded elsewhere in this PR"
+        },
+        {
+          "id": "r3:body:3",
+          "roundIndex": 3,
+          "reviewId": 5001809239,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "No tests added for new SoldComps client, EbayAdapter.searchSoldComps, or the SerpAPI active-listing fallback",
+          "text": "No tests added for new SoldComps client, EbayAdapter.searchSoldComps, or the SerpAPI active-listing fallback"
+        },
+        {
+          "id": "r3:body:4",
+          "roundIndex": 3,
+          "reviewId": 5001809239,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "SoldComps price parsing does not strip currency symbols",
+          "text": "SoldComps price parsing does not strip currency symbols"
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "reviewId": 5001828145,
+      "provider": "anthropic",
+      "submittedAt": "2026-08-23T06:42:50Z",
+      "headSha": "ecb8e6e16e7159d973aeee216a623e96e982f42a",
+      "baseSha": "0a7568247f2d38e11ea1d89724fa021f866b66ce",
+      "mergeBase": "0a7568247f2d38e11ea1d89724fa021f866b66ce",
+      "triggerAt": "2026-08-23T06:38:59Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "ecb8e6e16e7159d973aeee216a623e96e982f42a",
+          "committedAt": "2026-08-23T06:38:59Z",
+          "files": [
+            {
+              "path": "src/lib/pipeline/step3-pricing-research.ts",
+              "ranges": [
+                [
+                  120,
+                  127
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/platforms/ebay-soldcomps.ts",
+              "ranges": [
+                [
+                  56,
+                  66
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r4:c3837891160:0",
+          "roundIndex": 4,
+          "reviewId": 5001828145,
+          "source": "inline",
+          "commentId": 3837891160,
+          "path": "src/lib/platforms/adapters/ebay.ts",
+          "line": 261,
+          "severity": "P2",
+          "title": "searchSoldComps ignores the optional limit parameter from PlatformSDK",
+          "text": "🟡 **Medium**\n\n**searchSoldComps ignores the optional limit parameter from PlatformSDK**\n\n`EbayAdapter.searchSoldComps(query)` doesn't accept or apply any `limit`/options parameter, so results from `searchEbaySoldComps` are returned unbounded regardless of what the MCP caller (`mcp-server.ts`) requests. If the `PlatformSDK` interface exposes an optional limit for this method, a caller requesting a small result set will still receive every item returned by the SoldComps API."
+        },
+        {
+          "id": "r4:c3837891161:0",
+          "roundIndex": 4,
+          "reviewId": 5001828145,
+          "source": "inline",
+          "commentId": 3837891161,
+          "path": "src/lib/pipeline/step3-pricing-research.ts",
+          "line": 67,
+          "severity": "P3",
+          "title": "fetchSerpComps swallows all errors including programming bugs, not just network/API failures",
+          "text": "🟢 **Low**\n\n**fetchSerpComps swallows all errors including programming bugs, not just network/API failures**\n\nThe try/catch around the entire fetchSerpComps body now catches everything — including a TypeError from a bug in the URL-building code, JSON parsing errors, or an unexpected response shape — and logs a generic warning before returning []. While the PR's stated intent (fail-soft, since a SerpAPI 429 previously crashed the whole pricing step) is reasonable for network/HTTP failures, wrapping the entire function body means a genuine bug here (e.g. a typo introduced later) will silently manifest as 'no shopping comps' in production rather than surfacing as a distinguishable error. Consider narrowing the try block to just the fetch+response handling, or at least logging err.stack / distinguishing AbortError from other error types so operators can tell a timeout from a code defect."
+        },
+        {
+          "id": "r4:c3837891162:0",
+          "roundIndex": 4,
+          "reviewId": 5001828145,
+          "source": "inline",
+          "commentId": 3837891162,
+          "path": "src/lib/platforms/ebay-soldcomps.ts",
+          "line": 66,
+          "severity": "P3",
+          "title": "soldPrice/priceCents parsed with parseFloat without robust currency-symbol handling could be fragile long-term",
+          "text": "🟢 **Low**\n\n**soldPrice/priceCents parsed with parseFloat without robust currency-symbol handling could be fragile long-term**\n\n`it.soldPrice.replace(/[^0-9.-]/g, '')` strips symbols but will mishandle thousands separators like \"1,234.56\" (comma removed, fine) but also strings with multiple `-` or malformed input could produce `NaN` silently swallowed by the `Number.isFinite` check turning into `priceCents: 0`, which is then filtered out by `priceCents > 0`. This is defensive but means any format change silently drops all sold comps rather than surfacing a parsing issue — worth a comment or metric, not a blocker given the existing guard."
+        },
+        {
+          "id": "r4:c3837891163:0",
+          "roundIndex": 4,
+          "reviewId": 5001828145,
+          "source": "inline",
+          "commentId": 3837891163,
+          "path": "src/lib/platforms/adapters/ebay.ts",
+          "line": 267,
+          "severity": "P3",
+          "title": "condition field passed through without normalization",
+          "text": "🟢 **Low**\n\n**condition field passed through without normalization**\n\nr.condition is passed straight from SoldComps' response (default 'Not specified') into the PlatformComp without any normalization against the condition vocabulary used elsewhere in the codebase (e.g. 'Not specified' is also used as a fallback literal in step3-pricing-research.ts's fetchEbayActiveSerpApi). If downstream condition-based pricing adjustments expect a specific enum/string set, an unrecognized value from SoldComps could silently fail to match and fall through to a default multiplier."
+        },
+        {
+          "id": "r4:body:0",
+          "roundIndex": 4,
+          "reviewId": 5001828145,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "EbayAdapter.searchSoldComps reads SOLDCOMPS_API_KEY from process.env instead of per-user apiKeys.soldcomps",
+          "text": "EbayAdapter.searchSoldComps reads SOLDCOMPS_API_KEY from process.env instead of per-user apiKeys.soldcomps"
+        },
+        {
+          "id": "r4:body:1",
+          "roundIndex": 4,
+          "reviewId": 5001828145,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "soldPrice/priceCents parsed with parseFloat without robust currency-symbol handling could silently zero out valid comps",
+          "text": "soldPrice/priceCents parsed with parseFloat without robust currency-symbol handling could silently zero out valid comps"
+        },
+        {
+          "id": "r4:body:2",
+          "roundIndex": 4,
+          "reviewId": 5001828145,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "No test coverage added for new SoldComps client, EbayAdapter.searchSoldComps, or SerpAPI fallback logic",
+          "text": "No test coverage added for new SoldComps client, EbayAdapter.searchSoldComps, or SerpAPI fallback logic"
+        },
+        {
+          "id": "r4:body:3",
+          "roundIndex": 4,
+          "reviewId": 5001828145,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "searchEbaySoldComps error handling swallows all errors uniformly",
+          "text": "searchEbaySoldComps error handling swallows all errors uniformly"
+        },
+        {
+          "id": "r4:body:4",
+          "roundIndex": 4,
+          "reviewId": 5001828145,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "EbayAdapter.searchSoldComps ignores the optional limit parameter",
+          "text": "EbayAdapter.searchSoldComps ignores the optional limit parameter"
+        },
+        {
+          "id": "r4:body:5",
+          "roundIndex": 4,
+          "reviewId": 5001828145,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "SoldComps API key threading is inconsistent between step3 and EbayAdapter",
+          "text": "SoldComps API key threading is inconsistent between step3 and EbayAdapter"
+        }
+      ]
+    },
+    {
+      "index": 5,
+      "reviewId": 5001856448,
+      "provider": "anthropic",
+      "submittedAt": "2026-08-23T07:02:45Z",
+      "headSha": "93712bbe1179978e3da9e3fbdc8ce1952cc7fcf6",
+      "baseSha": "ecb8e6e16e7159d973aeee216a623e96e982f42a",
+      "mergeBase": "ecb8e6e16e7159d973aeee216a623e96e982f42a",
+      "triggerAt": "2026-08-23T06:58:34Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "93712bbe1179978e3da9e3fbdc8ce1952cc7fcf6",
+          "committedAt": "2026-08-23T06:58:34Z",
+          "files": [
+            {
+              "path": "src/components/workspace/EvidenceDrawer.tsx",
+              "ranges": [
+                [
+                  28,
+                  43
+                ],
+                [
+                  118,
+                  128
+                ],
+                [
+                  140,
+                  158
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/pipeline/comps/ebay-browse.ts",
+              "ranges": [
+                [
+                  7,
+                  15
+                ],
+                [
+                  54,
+                  60
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/pipeline/pricing-adjust.test.ts",
+              "ranges": [
+                [
+                  187,
+                  193
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/pipeline/step3-pricing-research.ts",
+              "ranges": [
+                [
+                  153,
+                  159
+                ],
+                [
+                  716,
+                  722
+                ],
+                [
+                  740,
+                  746
+                ],
+                [
+                  758,
+                  764
+                ],
+                [
+                  769,
+                  775
+                ],
+                [
+                  780,
+                  786
+                ],
+                [
+                  791,
+                  813
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/platforms/unified-listing.test.ts",
+              "ranges": [
+                [
+                  81,
+                  87
+                ]
+              ]
+            },
+            {
+              "path": "src/types/listings.ts",
+              "ranges": [
+                [
+                  39,
+                  50
+                ],
+                [
+                  294,
+                  300
+                ]
+              ]
+            },
+            {
+              "path": "supabase/migrations/0023_pricing_comps_provider.sql",
+              "ranges": [
+                [
+                  1,
+                  8
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r5:c3837923017:0",
+          "roundIndex": 5,
+          "reviewId": 5001856448,
+          "source": "inline",
+          "commentId": 3837923017,
+          "path": "src/lib/platforms/adapters/ebay.ts",
+          "line": 269,
+          "severity": "P2",
+          "title": "searchSoldComps ignores the optional limit parameter from PlatformSDK",
+          "text": "🟡 **Medium**\n\n**searchSoldComps ignores the optional limit parameter from PlatformSDK**\n\n`searchSoldComps` doesn't accept the `limit` argument that `PlatformSDK`'s interface (and MCP dispatcher, per the PR body) passes through, and the mapped `results` array from `searchEbaySoldComps` is returned unbounded. A caller requesting a small result set via `limit` will still get every row SoldComps returns. Accept an options/limit parameter and slice `results` (or the mapped array) before returning."
+        },
+        {
+          "id": "r5:c3837923019:0",
+          "roundIndex": 5,
+          "reviewId": 5001856448,
+          "source": "inline",
+          "commentId": 3837923019,
+          "path": "src/lib/platforms/adapters/ebay.ts",
+          "line": 261,
+          "severity": "P2",
+          "title": "Hardcoded process.env read bypasses the adapter's constructor-injected credential pattern",
+          "text": "🟡 **Medium**\n\n**Hardcoded process.env read bypasses the adapter's constructor-injected credential pattern**\n\nUnlike the rest of `EbayAdapter`, which is constructed with pre-loaded credentials (per the comment on this line), this method reaches directly into `process.env.SOLDCOMPS_API_KEY`. If `EbayAdapter` is ever instantiated in a test harness or a context where env vars aren't populated (e.g., unit tests, or a future multi-tenant deployment where keys come from a secrets manager per request), this silently degrades to `[]` with no configuration error surfaced — consistent with the general findings comment about the ApiKeys.soldcomps threading inconsistency."
+        },
+        {
+          "id": "r5:c3837923020:0",
+          "roundIndex": 5,
+          "reviewId": 5001856448,
+          "source": "inline",
+          "commentId": 3837923020,
+          "path": "src/lib/platforms/ebay-soldcomps.ts",
+          "line": 54,
+          "severity": "P3",
+          "title": "soldPrice/priceCents comment overstates currency-symbol robustness",
+          "text": "🟢 **Low**\n\n**soldPrice/priceCents comment overstates currency-symbol robustness**\n\nThe comment claims stripping `[^0-9.-]` handles a future `\"$1,234.56\"` format \"correctly,\" but this regex strips commas along with the currency symbol, turning `\"$1,234.56\"` into `\"1234.56\"` — that part is actually fine. However, the same strip also collapses a legitimately negative or malformed string in unexpected ways (e.g. a stray `-` anywhere in the string survives the filter and can produce a wrong sign via `parseFloat`). More importantly, the comment's framing implies this parsing is robust against arbitrary currency formats, which isn't fully true for formats using a different decimal separator (e.g. European `\"1.234,56\"` would parse as `1.234` cents-scaled incorrectly). Consider narrowing the comment to state it only handles USD-style `$`/comma formatting, or add a stricter format guard."
+        },
+        {
+          "id": "r5:c3837923022:0",
+          "roundIndex": 5,
+          "reviewId": 5001856448,
+          "source": "inline",
+          "commentId": 3837923022,
+          "path": "src/lib/pipeline/step3-pricing-research.ts",
+          "line": 148,
+          "severity": "P3",
+          "title": "Comment describing fallback fetch error handling is now only partially accurate",
+          "text": "🟢 **Low**\n\n**Comment describing fallback fetch error handling is now only partially accurate**\n\nThe comment block above `fetchEbayActiveSerpApi` states the 503/timeout behavior was \"confirmed live\" for the old `show_only=Sold` filter, but the function has been repurposed to plain search — the historical 503 evidence describes a code path (Sold filter) that no longer exists in this function, and the comment doesn't distinguish that the described failure mode applied to the *old* filtered query, not the current plain-search query this function now issues. A future maintainer could reasonably assume the 503 risk still applies to this exact code today, when in fact it was empirically the Sold filter, not plain search, that eBay blocked (per the PR description, plain search returns 200 OK in ~2.3s). Consider clarifying that the 503 evidence is historical context for the *replaced* Sold-filter fetcher, not a current risk of this plain-search function."
+        },
+        {
+          "id": "r5:c3837923023:0",
+          "roundIndex": 5,
+          "reviewId": 5001856448,
+          "source": "inline",
+          "commentId": 3837923023,
+          "path": "src/lib/platforms/ebay-soldcomps.ts",
+          "line": 66,
+          "severity": "P3",
+          "title": "SoldComps price parsed with a lossy currency-stripping regex that also strips thousands-separator commas incorrectly",
+          "text": "🟢 **Low**\n\n**SoldComps price parsed with a lossy currency-stripping regex that also strips thousands-separator commas incorrectly**\n\n`it.soldPrice.replace(/[^0-9.-]/g, '')` strips currency symbols and commas together. For a price like \"$1,234.56\" this produces \"1234.56\" (correct, by coincidence, since comma is simply dropped), but for a European-style price such as \"1.234,56\" it would produce \"1.234.56\" -> `parseFloat` returns `1.234`, silently truncating the value by three orders of magnitude with no error or warning. Given the comment above acknowledges a future format change is anticipated (\"a future format change (e.g. '$1,234.56')\"), the current regex doesn't actually handle thousands separators correctly — it only works for USD-style formatting by accident, and a malformed/foreign-format price will silently produce a wrong (not obviously invalid) `priceCents` value that passes the `priceCents > 0` filter and gets inserted as real pricing evidence."
+        },
+        {
+          "id": "r5:body:0",
+          "roundIndex": 5,
+          "reviewId": 5001856448,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P0",
+          "title": "EbayAdapter.searchSoldComps reads SOLDCOMPS_API_KEY from process.env instead of per-user apiKeys.soldcomps",
+          "text": "EbayAdapter.searchSoldComps reads SOLDCOMPS_API_KEY from process.env instead of per-user apiKeys.soldcomps"
+        },
+        {
+          "id": "r5:body:1",
+          "roundIndex": 5,
+          "reviewId": 5001856448,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "No test coverage added for new SoldComps client, EbayAdapter.searchSoldComps, or SerpAPI fallback logic",
+          "text": "No test coverage added for new SoldComps client, EbayAdapter.searchSoldComps, or SerpAPI fallback logic"
+        },
+        {
+          "id": "r5:body:2",
+          "roundIndex": 5,
+          "reviewId": 5001856448,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Fragile currency parsing in ebay-soldcomps.ts silently drops rows on unexpected formats",
+          "text": "Fragile currency parsing in ebay-soldcomps.ts silently drops rows on unexpected formats"
+        },
+        {
+          "id": "r5:body:3",
+          "roundIndex": 5,
+          "reviewId": 5001856448,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "EbayAdapter.searchSoldComps ignores the injected SoldComps key and reads process.env directly",
+          "text": "EbayAdapter.searchSoldComps ignores the injected SoldComps key and reads process.env directly"
+        },
+        {
+          "id": "r5:body:4",
+          "roundIndex": 5,
+          "reviewId": 5001856448,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "EbayAdapter.searchSoldComps drops the optional limit parameter from PlatformSDK",
+          "text": "EbayAdapter.searchSoldComps drops the optional limit parameter from PlatformSDK"
+        }
+      ]
+    },
+    {
+      "index": 6,
+      "reviewId": 5001875427,
+      "provider": "anthropic",
+      "submittedAt": "2026-08-23T07:16:11Z",
+      "headSha": "550265aa6fc1eeb97ee1685f8542f1f7fa874c12",
+      "baseSha": "93712bbe1179978e3da9e3fbdc8ce1952cc7fcf6",
+      "mergeBase": "93712bbe1179978e3da9e3fbdc8ce1952cc7fcf6",
+      "triggerAt": "2026-08-23T07:05:30Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "5319204609cf7bb3188552802fc02298467b50d4",
+          "committedAt": "2026-08-23T07:00:30Z",
+          "files": [
+            {
+              "path": "src/lib/pipeline/step3-pricing-research.ts",
+              "ranges": [
+                [
+                  687,
+                  705
+                ],
+                [
+                  1050,
+                  1056
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/pipeline/step4a-draft-listing.ts",
+              "ranges": [
+                [
+                  31,
+                  46
+                ],
+                [
+                  216,
+                  222
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "sha": "550265aa6fc1eeb97ee1685f8542f1f7fa874c12",
+          "committedAt": "2026-08-23T07:05:30Z",
+          "files": [
+            {
+              "path": "src/lib/pipeline/step5-auth-plan.ts",
+              "ranges": [
+                [
+                  1,
+                  5
+                ],
+                [
+                  19,
+                  35
+                ],
+                [
+                  122,
+                  128
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r6:c3837944026:0",
+          "roundIndex": 6,
+          "reviewId": 5001875427,
+          "source": "inline",
+          "commentId": 3837944026,
+          "path": "src/lib/platforms/adapters/ebay.ts",
+          "line": 269,
+          "severity": "P1",
+          "title": "searchSoldComps drops the limit parameter and reads key from process.env instead of per-user config",
+          "text": "🔴 **High**\n\n**searchSoldComps drops the limit parameter and reads key from process.env instead of per-user config**\n\nTwo issues here: (1) `process.env.SOLDCOMPS_API_KEY` bypasses the per-user `apiKeys.soldcomps` value plumbed through `user-api-keys.ts` elsewhere in this PR, so a user's own SoldComps key configured via the app is ignored by this adapter method; (2) the `limit` parameter from `PlatformSDK.searchSoldComps` is not accepted or applied, so results are returned unbounded regardless of what a caller (e.g. via mcp-server.ts's `platform_search_comps`) requests."
+        },
+        {
+          "id": "r6:c3837944031:0",
+          "roundIndex": 6,
+          "reviewId": 5001875427,
+          "source": "inline",
+          "commentId": 3837944031,
+          "path": "src/lib/platforms/ebay-soldcomps.ts",
+          "line": 61,
+          "severity": "P3",
+          "title": "Currency parsing in ebay-soldcomps.ts assumes a plain numeric string; a value with a thousands separator like \"1,234.56\" will silently produce the wrong price",
+          "text": "🟢 **Low**\n\n**Currency parsing in ebay-soldcomps.ts assumes a plain numeric string; a value with a thousands separator like \"1,234.56\" will silently produce the wrong price**\n\n`it.soldPrice.replace(/[^0-9.-]/g, '')` strips currency symbols but not comma thousands separators, since commas are simply removed rather than treated as a separator. For a price like `\"$1,234.56\"`, this produces the string `\"1234.56\"` by coincidence of removing the comma correctly here — but if the format ever includes a comma as a decimal separator (e.g. European-style `\"1.234,56\"`), or if `soldPrice` is already comma-stripped upstream and this instead encounters `\"-\"` in a range/placeholder string, `parseFloat` will silently produce an incorrect or truncated price rather than failing loudly. Given this is explicitly hardening against a *future* format change (per the comment), the current regex only handles the single-format case observed in testing and doesn't protect against comma-as-decimal-separator formats a truly different locale/format change could introduce."
+        },
+        {
+          "id": "r6:body:0",
+          "roundIndex": 6,
+          "reviewId": 5001875427,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P0",
+          "title": "EbayAdapter.searchSoldComps reads SOLDCOMPS_API_KEY directly from process.env instead of using per-user API keys threaded elsewhere in this PR",
+          "text": "EbayAdapter.searchSoldComps reads SOLDCOMPS_API_KEY directly from process.env instead of using per-user API keys threaded elsewhere in this PR"
+        },
+        {
+          "id": "r6:body:1",
+          "roundIndex": 6,
+          "reviewId": 5001875427,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "EbayAdapter.searchSoldComps drops the optional `limit` parameter from PlatformSDK",
+          "text": "EbayAdapter.searchSoldComps drops the optional `limit` parameter from PlatformSDK"
+        },
+        {
+          "id": "r6:body:2",
+          "roundIndex": 6,
+          "reviewId": 5001875427,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Fragile currency parsing in ebay-soldcomps.ts could silently zero out prices",
+          "text": "Fragile currency parsing in ebay-soldcomps.ts could silently zero out prices"
+        },
+        {
+          "id": "r6:body:3",
+          "roundIndex": 6,
+          "reviewId": 5001875427,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "No test coverage added for the new SoldComps client, EbayAdapter.searchSoldComps, or the SerpAPI active-listing fallback logic",
+          "text": "No test coverage added for the new SoldComps client, EbayAdapter.searchSoldComps, or the SerpAPI active-listing fallback logic"
+        },
+        {
+          "id": "r6:body:4",
+          "roundIndex": 6,
+          "reviewId": 5001875427,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P0",
+          "title": "EbayAdapter.searchSoldComps ignores the injected SoldComps key and reads process.env directly",
+          "text": "EbayAdapter.searchSoldComps ignores the injected SoldComps key and reads process.env directly"
+        },
+        {
+          "id": "r6:body:5",
+          "roundIndex": 6,
+          "reviewId": 5001875427,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Fragile currency parsing in ebay-soldcomps.ts",
+          "text": "Fragile currency parsing in ebay-soldcomps.ts"
+        },
+        {
+          "id": "r6:body:6",
+          "roundIndex": 6,
+          "reviewId": 5001875427,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "EbayAdapter.searchSoldComps still ignores per-user apiKeys.soldcomps threaded elsewhere in this PR",
+          "text": "EbayAdapter.searchSoldComps still ignores per-user apiKeys.soldcomps threaded elsewhere in this PR"
+        },
+        {
+          "id": "r6:body:7",
+          "roundIndex": 6,
+          "reviewId": 5001875427,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "CompProvider type union doesn't include 'ebay_browse'/'serpapi' consistently with ActiveListing.provider typing",
+          "text": "CompProvider type union doesn't include 'ebay_browse'/'serpapi' consistently with ActiveListing.provider typing"
+        },
+        {
+          "id": "r6:body:8",
+          "roundIndex": 6,
+          "reviewId": 5001875427,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "EbayAdapter.searchSoldComps maps SoldComps condition through but soldPrice/priceCents units aren't documented on PlatformComp",
+          "text": "EbayAdapter.searchSoldComps maps SoldComps condition through but soldPrice/priceCents units aren't documented on PlatformComp"
+        },
+        {
+          "id": "r6:body:9",
+          "roundIndex": 6,
+          "reviewId": 5001875427,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "EbayAdapter.searchSoldComps drops the optional limit parameter and reads process.env directly instead of injected credentials",
+          "text": "EbayAdapter.searchSoldComps drops the optional limit parameter and reads process.env directly instead of injected credentials"
+        }
+      ]
+    },
+    {
+      "index": 7,
+      "reviewId": 5001897873,
+      "provider": "anthropic",
+      "submittedAt": "2026-08-23T07:31:19Z",
+      "headSha": "a2b3fe15ba6a4072c907a414285e966c64b8fd28",
+      "baseSha": "550265aa6fc1eeb97ee1685f8542f1f7fa874c12",
+      "mergeBase": "550265aa6fc1eeb97ee1685f8542f1f7fa874c12",
+      "triggerAt": "2026-08-23T07:27:34Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "a2b3fe15ba6a4072c907a414285e966c64b8fd28",
+          "committedAt": "2026-08-23T07:27:34Z",
+          "files": [
+            {
+              "path": "src/lib/pipeline/step3-pricing-research.ts",
+              "ranges": [
+                [
+                  9,
+                  28
+                ],
+                [
+                  87,
+                  93
+                ],
+                [
+                  107,
+                  113
+                ],
+                [
+                  743,
+                  750
+                ],
+                [
+                  758,
+                  764
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r7:c3837969247:0",
+          "roundIndex": 7,
+          "reviewId": 5001897873,
+          "source": "inline",
+          "commentId": 3837969247,
+          "path": "src/lib/platforms/ebay-soldcomps.ts",
+          "line": 62,
+          "severity": "P3",
+          "title": "Fragile currency parsing could silently zero out non-numeric or unexpected soldPrice formats",
+          "text": "🟢 **Low**\n\n**Fragile currency parsing could silently zero out non-numeric or unexpected soldPrice formats**\n\n`it.soldPrice.replace(/[^0-9.-]/g, '')` strips everything except digits, `.` and `-`. A thousands-separator format like \"1,234.56\" becomes \"1234.56\" correctly, but any format with multiple `.`/`-` characters (e.g. a stray dash in a price range or a malformed string) would produce a value that `parseFloat` parses partially/incorrectly rather than failing, and the resulting NaN-guard (`Number.isFinite(price) ? ... : 0`) only catches a fully-non-numeric string, not a partially-valid one — the row would still be inserted with a silently wrong price rather than being dropped. Since this is the primary sold-price source being restored, consider validating the parsed price against a stricter pattern before accepting it."
+        },
+        {
+          "id": "r7:c3837969249:0",
+          "roundIndex": 7,
+          "reviewId": 5001897873,
+          "source": "inline",
+          "commentId": 3837969249,
+          "path": "src/types/listings.ts",
+          "line": 46,
+          "severity": "P3",
+          "title": "CompProvider union doesn't include the 'ebay_browse'/'serpapi' provider tags used for active-listing rows in a type-consistent way",
+          "text": "🟢 **Low**\n\n**CompProvider union doesn't include the 'ebay_browse'/'serpapi' provider tags used for active-listing rows in a type-consistent way**\n\n`CompProvider` is defined as `'soldcomps' | 'ebay_browse' | 'serpapi' | 'poshmark_direct' | 'reddit_claude'` and `PricingComp.provider` is typed `CompProvider | null`, but in step3-pricing-research.ts the in-flight `compRows`/`activeRows` arrays that build these objects are typed with `provider: string | null` (see the local interface literal added around the compRows push), not `CompProvider | null`. This means a typo or new provider string added later in step3 (e.g. `provider: 'ebay_broswe'`) would not be caught by the type checker even though a proper union type exists for exactly this purpose."
+        },
+        {
+          "id": "r7:c3837969251:0",
+          "roundIndex": 7,
+          "reviewId": 5001897873,
+          "source": "inline",
+          "commentId": 3837969251,
+          "path": "src/lib/platforms/adapters/ebay.ts",
+          "line": 269,
+          "severity": "P1",
+          "title": "searchSoldComps ignores per-user SoldComps key and reads process.env directly",
+          "text": "🔴 **High**\n\n**searchSoldComps ignores per-user SoldComps key and reads process.env directly**\n\nThis reads `process.env.SOLDCOMPS_API_KEY` directly rather than accepting an injected/per-user key. Elsewhere in this PR (`step3-pricing-research.ts`, `user-api-keys.ts`), the SoldComps key is threaded per-user via `apiKeys.soldcomps`. Any caller of this adapter method (e.g. via `mcp-server.ts`, which resolves per-user credentials) will bypass that user's configured key and fall back to whatever key happens to be set in the server process env, which may belong to a different user or be unset entirely for a user who has their own key configured. Also note `_query` was previously unused-prefixed but is now used without a corresponding `limit`/options parameter, even though `PlatformSDK.searchSoldComps` (per the MCP dispatcher usage referenced in the review body) is expected to accept an optional `limit`."
+        },
+        {
+          "id": "r7:c3837969252:0",
+          "roundIndex": 7,
+          "reviewId": 5001897873,
+          "source": "inline",
+          "commentId": 3837969252,
+          "path": "src/lib/platforms/adapters/ebay.ts",
+          "line": 261,
+          "severity": "P2",
+          "title": "searchSoldComps drops the optional limit parameter from PlatformSDK",
+          "text": "🟡 **Medium**\n\n**searchSoldComps drops the optional limit parameter from PlatformSDK**\n\nThe `SoldListing[]` results from `searchEbaySoldComps` are mapped and returned unbounded. If `PlatformSDK.searchSoldComps` is expected to accept an optional `limit` (as used by the MCP dispatcher passing `input.limit`), this signature drops it entirely, so callers requesting a small result set still get every row SoldComps returns."
+        },
+        {
+          "id": "r7:c3837969255:0",
+          "roundIndex": 7,
+          "reviewId": 5001897873,
+          "source": "inline",
+          "commentId": 3837969255,
+          "path": "src/lib/platforms/ebay-soldcomps.ts",
+          "line": 65,
+          "severity": "P3",
+          "title": "Currency parsing regex will mis-parse negative-looking or multi-hyphen strings",
+          "text": "🟢 **Low**\n\n**Currency parsing regex will mis-parse negative-looking or multi-hyphen strings**\n\n`it.soldPrice.replace(/[^0-9.-]/g, '')` keeps both `.` and `-` characters. If the API ever returns something like a price range or a value containing a stray hyphen (e.g. `\"$29.99-\"` from a trailing dash, or multiple `.` from thousands-as-period formats in other locales), `parseFloat` will parse only the leading numeric run and silently ignore the rest rather than failing loudly — the `Number.isFinite` check won't catch a partially-correct parse. This is low-risk given the currently-observed format is a bare number, but worth tightening (e.g. strip everything but digits and a single decimal point, or reject strings containing `-` entirely) since the whole point of this fallback path per the comment is to guard against a future format change."
+        },
+        {
+          "id": "r7:body:0",
+          "roundIndex": 7,
+          "reviewId": 5001897873,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P0",
+          "title": "EbayAdapter.searchSoldComps reads SOLDCOMPS_API_KEY directly from process.env instead of using the per-user apiKeys threaded elsewhere in this PR",
+          "text": "EbayAdapter.searchSoldComps reads SOLDCOMPS_API_KEY directly from process.env instead of using the per-user apiKeys threaded elsewhere in this PR"
+        },
+        {
+          "id": "r7:body:1",
+          "roundIndex": 7,
+          "reviewId": 5001897873,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "EbayAdapter.searchSoldComps drops the optional `limit` parameter expected by PlatformSDK",
+          "text": "EbayAdapter.searchSoldComps drops the optional `limit` parameter expected by PlatformSDK"
+        },
+        {
+          "id": "r7:body:2",
+          "roundIndex": 7,
+          "reviewId": 5001897873,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "Missing test coverage for new SoldComps client, EbayAdapter.searchSoldComps, and SerpAPI active-listing fallback",
+          "text": "Missing test coverage for new SoldComps client, EbayAdapter.searchSoldComps, and SerpAPI active-listing fallback"
+        },
+        {
+          "id": "r7:body:3",
+          "roundIndex": 7,
+          "reviewId": 5001897873,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P0",
+          "title": "EbayAdapter.searchSoldComps still bypasses per-user SoldComps key and drops limit",
+          "text": "EbayAdapter.searchSoldComps still bypasses per-user SoldComps key and drops limit"
+        },
+        {
+          "id": "r7:body:4",
+          "roundIndex": 7,
+          "reviewId": 5001897873,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Fragile currency parsing in ebay-soldcomps.ts could silently coerce malformed prices to 0 rather than dropping them",
+          "text": "Fragile currency parsing in ebay-soldcomps.ts could silently coerce malformed prices to 0 rather than dropping them"
+        },
+        {
+          "id": "r7:body:5",
+          "roundIndex": 7,
+          "reviewId": 5001897873,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "searchSoldComps ignores the optional limit parameter from PlatformSDK",
+          "text": "searchSoldComps ignores the optional limit parameter from PlatformSDK"
+        },
+        {
+          "id": "r7:body:6",
+          "roundIndex": 7,
+          "reviewId": 5001897873,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "No test coverage for new SoldComps client / adapter method / SerpAPI active fallback",
+          "text": "No test coverage for new SoldComps client / adapter method / SerpAPI active fallback"
+        },
+        {
+          "id": "r7:body:7",
+          "roundIndex": 7,
+          "reviewId": 5001897873,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Fragile currency parsing in ebay-soldcomps.ts could silently zero out or misparse prices",
+          "text": "Fragile currency parsing in ebay-soldcomps.ts could silently zero out or misparse prices"
+        },
+        {
+          "id": "r7:body:8",
+          "roundIndex": 7,
+          "reviewId": 5001897873,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "CompProvider union doesn't cover all provider values actually written to `pricing_comps.provider`",
+          "text": "CompProvider union doesn't cover all provider values actually written to `pricing_comps.provider`"
+        }
+      ]
+    },
+    {
+      "index": 8,
+      "reviewId": 5002000091,
+      "provider": "anthropic",
+      "submittedAt": "2026-08-23T08:35:28Z",
+      "headSha": "14fceff6084f5ddf3efcec8199f126d5cb971e5c",
+      "baseSha": "a2b3fe15ba6a4072c907a414285e966c64b8fd28",
+      "mergeBase": "a2b3fe15ba6a4072c907a414285e966c64b8fd28",
+      "triggerAt": "2026-08-23T08:29:59Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "14fceff6084f5ddf3efcec8199f126d5cb971e5c",
+          "committedAt": "2026-08-23T08:29:59Z",
+          "files": [
+            {
+              "path": "src/lib/pipeline/step3-pricing-research.ts",
+              "ranges": [
+                [
+                  65,
+                  123
+                ],
+                [
+                  719,
+                  731
+                ],
+                [
+                  868,
+                  910
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r8:c3838082790:0",
+          "roundIndex": 8,
+          "reviewId": 5002000091,
+          "source": "inline",
+          "commentId": 3838082790,
+          "path": "src/lib/platforms/adapters/ebay.ts",
+          "line": 269,
+          "severity": "P1",
+          "title": "searchSoldComps reads SOLDCOMPS_API_KEY from process.env instead of per-user apiKeys.soldcomps, and ignores the limit parameter",
+          "text": "🔴 **High**\n\n**searchSoldComps reads SOLDCOMPS_API_KEY from process.env instead of per-user apiKeys.soldcomps, and ignores the limit parameter**\n\nThis adapter method now calls `searchEbaySoldComps(query, process.env.SOLDCOMPS_API_KEY ?? '')`, bypassing the per-user `apiKeys.soldcomps` value introduced in `user-api-keys.ts` and used everywhere else in this PR (e.g. `step3-pricing-research.ts`). A user with a per-user SoldComps key configured but no matching env var (or vice versa) will get inconsistent, hard-to-diagnose behavior between this MCP-facing adapter path and the pipeline path. Additionally, this method's signature drops the `limit` parameter that `PlatformSDK` implementations are expected to honor (per the MCP dispatcher passing `input.limit`), so callers requesting a bounded result set get an unbounded list back."
+        },
+        {
+          "id": "r8:c3838082794:0",
+          "roundIndex": 8,
+          "reviewId": 5002000091,
+          "source": "inline",
+          "commentId": 3838082794,
+          "path": "src/lib/platforms/ebay-soldcomps.ts",
+          "line": 66,
+          "severity": "P3",
+          "title": "Currency parsing strips digits from thousands separators inconsistently",
+          "text": "🟢 **Low**\n\n**Currency parsing strips digits from thousands separators inconsistently**\n\n`it.soldPrice.replace(/[^0-9.-]/g, '')` strips a leading `$` but also silently strips a comma thousands separator without removing the digits around it (e.g. \"$1,234.56\" becomes \"1234.56\", which happens to be correct here) — but this only works because `,` is stripped entirely rather than treated as a separator; if SoldComps ever formats with a `.` as a thousands separator and `,` as decimal (some locales), this would silently produce a wrong value (e.g. \"1.234,56\" -> \"1.234.56\" -> `parseFloat` truncates at the second `.`, yielding 1.234). This is speculative on future format changes but worth a narrower regex or explicit locale assumption in the comment."
+        },
+        {
+          "id": "r8:c3838082796:0",
+          "roundIndex": 8,
+          "reviewId": 5002000091,
+          "source": "inline",
+          "commentId": 3838082796,
+          "path": "src/lib/pipeline/step3-pricing-research.ts",
+          "line": 162,
+          "severity": "P2",
+          "title": "fetchEbayActiveSerpApi filters on price.extracted; verify this matches SerpAPI's actual eBay engine response field",
+          "text": "🟡 **Medium**\n\n**fetchEbayActiveSerpApi filters on price.extracted; verify this matches SerpAPI's actual eBay engine response field**\n\nThe new fallback filters/maps on `r.price?.extracted` (`SerpApiEbayActiveResult.price?: { extracted?: number }`), diverging from the file's other SerpAPI response type (`SerpShoppingResult`) which uses `extracted_price` at the top level per a comment noting the shopping engine's real field name was discovered via live testing. If the eBay engine's plain-search response nests the numeric price under a different key than `extracted`, every row is filtered out here and the fallback silently becomes dead code returning `[]` — which is exactly the class of bug this PR is fixing for the shopping engine. The PR body claims this was live-tested (\"52 real active listings\"), so this may already be correct, but given the sibling field-name bug just fixed in this same file, this is worth an explicit test fixture asserting the exact response shape rather than relying on a one-off manual test."
+        },
+        {
+          "id": "r8:c3838082797:0",
+          "roundIndex": 8,
+          "reviewId": 5002000091,
+          "source": "inline",
+          "commentId": 3838082797,
+          "path": "src/lib/pipeline/step3-pricing-research.ts",
+          "line": 862,
+          "severity": "P2",
+          "title": "retailResult now always relies on scoreCompRelevance / apiKeys.anthropic, changing prior no-key behavior",
+          "text": "🟡 **Medium**\n\n**retailResult now always relies on scoreCompRelevance / apiKeys.anthropic, changing prior no-key behavior**\n\nPreviously `fetchRetailPrice` returned a retail price purely from the cheapest `new`-condition Google Shopping result, independent of any Anthropic key. Now `retailRelevance` is only computed `if (apiKeys.anthropic && retailCandidates.length > 0)`, otherwise it's an empty `Map`, which means `relevantRetail` filters out every candidate (since `relevance_score !== null` will never be true) whenever `apiKeys.anthropic` is unset — so retail pricing silently disappears entirely for any user without an Anthropic key configured, not just degrading match quality. This is an intentional relevance-gating design per the surrounding comment, but it's worth confirming this fail-closed behavior (no retail price shown at all without an Anthropic key) is the desired tradeoff versus the previous unconditional-but-less-accurate retail price."
+        },
+        {
+          "id": "r8:c3838082799:0",
+          "roundIndex": 8,
+          "reviewId": 5002000091,
+          "source": "inline",
+          "commentId": 3838082799,
+          "path": "src/lib/pipeline/step3-pricing-research.ts",
+          "line": 167,
+          "severity": "P3",
+          "title": "fetchEbayActiveSerpApi rows are missing a soldAt/provider consistency guard versus ActiveListing type",
+          "text": "🟢 **Low**\n\n**fetchEbayActiveSerpApi rows are missing a soldAt/provider consistency guard versus ActiveListing type**\n\nThe mapped objects here satisfy the `ActiveListing` interface (`title`, `priceCents`, `url`, `condition`, `provider`), but the filter above only checks `r.title && r.price?.extracted && r.link` — there is no numeric-validity guard equivalent to the old code's `priceCents > 0` post-filter. If `r.price.extracted` is a truthy but non-numeric-like value (unlikely given the type, but the raw JSON is untyped `unknown` cast through the interface), `Math.round(NaN)` would produce `NaN` for `priceCents`, which would then pass through as a comp row with an invalid price. Consider adding `Number.isFinite(priceCents)` back as a safety net."
+        },
+        {
+          "id": "r8:body:0",
+          "roundIndex": 8,
+          "reviewId": 5002000091,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P0",
+          "title": "EbayAdapter.searchSoldComps reads SOLDCOMPS_API_KEY from process.env instead of per-user key, and drops the limit parameter — still unresolved",
+          "text": "EbayAdapter.searchSoldComps reads SOLDCOMPS_API_KEY from process.env instead of per-user key, and drops the limit parameter — still unresolved"
+        },
+        {
+          "id": "r8:body:1",
+          "roundIndex": 8,
+          "reviewId": 5002000091,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Fragile currency parsing in ebay-soldcomps.ts silently coerces malformed prices to 0 instead of dropping the row",
+          "text": "Fragile currency parsing in ebay-soldcomps.ts silently coerces malformed prices to 0 instead of dropping the row"
+        },
+        {
+          "id": "r8:body:2",
+          "roundIndex": 8,
+          "reviewId": 5002000091,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "No test coverage added for new SoldComps client, EbayAdapter.searchSoldComps, or SerpAPI active-listing fallback",
+          "text": "No test coverage added for new SoldComps client, EbayAdapter.searchSoldComps, or SerpAPI active-listing fallback"
+        },
+        {
+          "id": "r8:body:3",
+          "roundIndex": 8,
+          "reviewId": 5002000091,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "CompProvider union doesn't cover all provider values actually written to pricing_comps.provider",
+          "text": "CompProvider union doesn't cover all provider values actually written to pricing_comps.provider"
+        },
+        {
+          "id": "r8:body:4",
+          "roundIndex": 8,
+          "reviewId": 5002000091,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P0",
+          "title": "SOLDCOMPS_API_KEY read directly from process.env instead of per-user apiKeys.soldcomps in EbayAdapter",
+          "text": "SOLDCOMPS_API_KEY read directly from process.env instead of per-user apiKeys.soldcomps in EbayAdapter"
+        },
+        {
+          "id": "r8:body:5",
+          "roundIndex": 8,
+          "reviewId": 5002000091,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Currency parsing in ebay-soldcomps.ts strips characters but doesn't validate format before parseFloat",
+          "text": "Currency parsing in ebay-soldcomps.ts strips characters but doesn't validate format before parseFloat"
+        },
+        {
+          "id": "r8:body:6",
+          "roundIndex": 8,
+          "reviewId": 5002000091,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P0",
+          "title": "EbayAdapter.searchSoldComps still bypasses the per-user SoldComps key threaded through this PR",
+          "text": "EbayAdapter.searchSoldComps still bypasses the per-user SoldComps key threaded through this PR"
+        },
+        {
+          "id": "r8:body:7",
+          "roundIndex": 8,
+          "reviewId": 5002000091,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "EbayAdapter.searchSoldComps drops the optional `limit` parameter expected by PlatformSDK",
+          "text": "EbayAdapter.searchSoldComps drops the optional `limit` parameter expected by PlatformSDK"
+        },
+        {
+          "id": "r8:body:8",
+          "roundIndex": 8,
+          "reviewId": 5002000091,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "No test coverage for new SoldComps/SerpAPI-fallback logic",
+          "text": "No test coverage for new SoldComps/SerpAPI-fallback logic"
+        },
+        {
+          "id": "r8:body:9",
+          "roundIndex": 8,
+          "reviewId": 5002000091,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "EbayAdapter.searchSoldComps ignores the optional limit parameter from PlatformSDK",
+          "text": "EbayAdapter.searchSoldComps ignores the optional limit parameter from PlatformSDK"
+        }
+      ]
+    },
+    {
+      "index": 9,
+      "reviewId": 5002079198,
+      "provider": "anthropic",
+      "submittedAt": "2026-08-23T09:24:34Z",
+      "headSha": "7c2cb3d6933048cc7440bf9d23fbd34f8d9a9758",
+      "baseSha": "14fceff6084f5ddf3efcec8199f126d5cb971e5c",
+      "mergeBase": "14fceff6084f5ddf3efcec8199f126d5cb971e5c",
+      "triggerAt": "2026-08-23T09:20:15Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "7c2cb3d6933048cc7440bf9d23fbd34f8d9a9758",
+          "committedAt": "2026-08-23T09:20:15Z",
+          "files": [
+            {
+              "path": "src/app/api/listings/[id]/comps/route.ts",
+              "ranges": [
+                [
+                  1,
+                  105
+                ]
+              ]
+            },
+            {
+              "path": "src/app/api/listings/[id]/price-override/route.ts",
+              "ranges": [
+                [
+                  1,
+                  38
+                ]
+              ]
+            },
+            {
+              "path": "src/components/workspace/EvidenceDrawer.tsx",
+              "ranges": [
+                [
+                  1,
+                  16
+                ],
+                [
+                  28,
+                  34
+                ],
+                [
+                  57,
+                  63
+                ],
+                [
+                  69,
+                  138
+                ],
+                [
+                  225,
+                  312
+                ]
+              ]
+            },
+            {
+              "path": "src/components/workspace/FieldsPanel.tsx",
+              "ranges": [
+                [
+                  1,
+                  7
+                ],
+                [
+                  80,
+                  90
+                ],
+                [
+                  215,
+                  238
+                ],
+                [
+                  352,
+                  411
+                ],
+                [
+                  775,
+                  781
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/pipeline/step3-pricing-research.ts",
+              "ranges": [
+                [
+                  987,
+                  996
+                ],
+                [
+                  1037,
+                  1062
+                ],
+                [
+                  1160,
+                  1237
+                ]
+              ]
+            },
+            {
+              "path": "src/types/listings.ts",
+              "ranges": [
+                [
+                  37,
+                  50
+                ],
+                [
+                  290,
+                  296
+                ]
+              ]
+            },
+            {
+              "path": "supabase/migrations/0024_manual_comps.sql",
+              "ranges": [
+                [
+                  1,
+                  15
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r9:c3838168916:0",
+          "roundIndex": 9,
+          "reviewId": 5002079198,
+          "source": "inline",
+          "commentId": 3838168916,
+          "path": "src/lib/platforms/ebay-soldcomps.ts",
+          "line": 58,
+          "severity": "P3",
+          "title": "Malformed soldPrice silently coerces to 0 instead of being dropped",
+          "text": "🟢 **Low**\n\n**Malformed soldPrice silently coerces to 0 instead of being dropped**\n\nWhen `it.soldPrice` fails to parse as a finite number (e.g. an unexpected format), `Number.isFinite(price) ? Math.round(price * 100) : 0` produces `priceCents: 0` rather than treating the row as invalid. The downstream filter `it.priceCents > 0` does drop these `0`-priced rows before they reach callers, so this doesn't currently insert bad $0 comps — but the coercion-to-0-then-filter pattern silently discards a parse failure without any log line, unlike the analogous `soldAt` parse-failure path just above it which is also silently dropped without a warning. A `console.warn` when `price` parsing fails would let operators distinguish \"provider returned malformed price\" from \"provider returned no comps\" when comp counts drop unexpectedly — the exact class of problem this PR exists to fix."
+        },
+        {
+          "id": "r9:c3838168917:0",
+          "roundIndex": 9,
+          "reviewId": 5002079198,
+          "source": "inline",
+          "commentId": 3838168917,
+          "path": "src/types/listings.ts",
+          "line": 44,
+          "severity": "P3",
+          "title": "CompProvider union type doesn't cover all provider values actually written to pricing_comps.provider",
+          "text": "🟢 **Low**\n\n**CompProvider union type doesn't cover all provider values actually written to pricing_comps.provider**\n\nThe `CompProvider` union is `'soldcomps' | 'ebay_browse' | 'serpapi' | 'poshmark_direct' | 'reddit_claude' | 'manual'`, but the DB column added in `0023_pricing_comps_provider.sql` is a plain `text` with no CHECK constraint, and application code writes provider values that must stay in sync manually (e.g. `provider: item.provider` from `ActiveListing.provider` which is typed `'ebay_browse' | 'serpapi'`, matching fine here). This is low risk today since all current call sites in the diff use values within the union, but there's no compile-time or DB-time enforcement tying the TS union to what's actually persisted, so a future addition of a provider string in one file without updating this type would silently produce untyped/mismatched data with no error."
+        },
+        {
+          "id": "r9:c3838168919:0",
+          "roundIndex": 9,
+          "reviewId": 5002079198,
+          "source": "inline",
+          "commentId": 3838168919,
+          "path": "src/lib/platforms/adapters/ebay.ts",
+          "line": 261,
+          "severity": "P1",
+          "title": "SOLDCOMPS_API_KEY read from process.env instead of per-user apiKeys.soldcomps threaded elsewhere in this PR",
+          "text": "🔴 **High**\n\n**SOLDCOMPS_API_KEY read from process.env instead of per-user apiKeys.soldcomps threaded elsewhere in this PR**\n\nThis PR adds a proper per-user `apiKeys.soldcomps` field (`src/lib/user-api-keys.ts`) and threads it through `step3-pricing-research.ts` via `searchEbaySoldComps(searchQuery, apiKeys.soldcomps)`. `EbayAdapter.searchSoldComps` bypasses that entirely and reads `process.env.SOLDCOMPS_API_KEY` directly. In a multi-tenant deployment where different users configure different SoldComps keys (the same pattern the PR establishes for `apiKeys.soldcomps`), any MCP call routed through `EbayAdapter` will use the server-wide env var instead of the calling user's own key — silently ignoring per-user credentials, and returning empty results for any user who configured a key through the per-user path but relies on the adapter having no env var set. This is flagged as still-unresolved from the prior review round with no code change addressing it in this diff."
+        },
+        {
+          "id": "r9:c3838168921:0",
+          "roundIndex": 9,
+          "reviewId": 5002079198,
+          "source": "inline",
+          "commentId": 3838168921,
+          "path": "src/lib/platforms/adapters/ebay.ts",
+          "line": 269,
+          "severity": "P2",
+          "title": "searchSoldComps drops the optional limit parameter expected by PlatformSDK",
+          "text": "🟡 **Medium**\n\n**searchSoldComps drops the optional limit parameter expected by PlatformSDK**\n\n`searchSoldComps` only accepts `query: string` and returns every result from `searchEbaySoldComps` unbounded. If `PlatformSDK.searchSoldComps` (per the MCP dispatcher referenced in the review thread) is called with a `limit` argument (e.g. `platform_search_comps` with a small requested count), that limit is silently dropped and the caller gets back every SoldComps result regardless of how many were requested. This is flagged as still-unresolved from the prior review round with no code change addressing it in this diff."
+        },
+        {
+          "id": "r9:c3838168922:0",
+          "roundIndex": 9,
+          "reviewId": 5002079198,
+          "source": "inline",
+          "commentId": 3838168922,
+          "path": "supabase/migrations/0023_pricing_comps_provider.sql",
+          "line": 8,
+          "severity": "P3",
+          "title": "Migration adds nullable comp provider column without validating written values",
+          "text": "🟢 **Low**\n\n**Migration adds nullable comp provider column without validating written values**\n\nThe `provider` column is added as a free-form nullable `text` with no check constraint, while `src/types/listings.ts` defines a closed `CompProvider` union (`'soldcomps' | 'ebay_browse' | 'serpapi' | 'poshmark_direct' | 'reddit_claude' | 'manual'`). Since the application-level type isn't enforced at the DB layer, any typo or future provider value written outside the TS layer (e.g. from a raw SQL script, migration backfill, or a different service) can silently diverge from the type without any DB-level guard, unlike the `source` column which does get a check constraint in the companion migration 0024."
+        },
+        {
+          "id": "r9:body:0",
+          "roundIndex": 9,
+          "reviewId": 5002079198,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P0",
+          "title": "EbayAdapter.searchSoldComps reads SOLDCOMPS_API_KEY from process.env instead of the per-user apiKeys.soldcomps threaded elsewhere in this PR",
+          "text": "EbayAdapter.searchSoldComps reads SOLDCOMPS_API_KEY from process.env instead of the per-user apiKeys.soldcomps threaded elsewhere in this PR"
+        },
+        {
+          "id": "r9:body:1",
+          "roundIndex": 9,
+          "reviewId": 5002079198,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "EbayAdapter.searchSoldComps ignores the optional limit parameter from PlatformSDK",
+          "text": "EbayAdapter.searchSoldComps ignores the optional limit parameter from PlatformSDK"
+        },
+        {
+          "id": "r9:body:2",
+          "roundIndex": 9,
+          "reviewId": 5002079198,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "No test coverage added for new SoldComps client, EbayAdapter.searchSoldComps, or SerpAPI active-listing fallback",
+          "text": "No test coverage added for new SoldComps client, EbayAdapter.searchSoldComps, or SerpAPI active-listing fallback"
+        },
+        {
+          "id": "r9:body:3",
+          "roundIndex": 9,
+          "reviewId": 5002079198,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "fetchEbaySoldComps error handling swallows all failures with no error-type distinction, but this matches an existing repo-wide pattern",
+          "text": "fetchEbaySoldComps error handling swallows all failures with no error-type distinction, but this matches an existing repo-wide pattern"
+        },
+        {
+          "id": "r9:body:4",
+          "roundIndex": 9,
+          "reviewId": 5002079198,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "EbayAdapter.searchSoldComps bypasses per-user API key plumbing and reads process.env directly",
+          "text": "EbayAdapter.searchSoldComps bypasses per-user API key plumbing and reads process.env directly"
+        },
+        {
+          "id": "r9:body:5",
+          "roundIndex": 9,
+          "reviewId": 5002079198,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Currency parsing in ebay-soldcomps.ts can silently produce a 0-priced row that is then filtered, masking upstream format changes",
+          "text": "Currency parsing in ebay-soldcomps.ts can silently produce a 0-priced row that is then filtered, masking upstream format changes"
+        },
+        {
+          "id": "r9:body:6",
+          "roundIndex": 9,
+          "reviewId": 5002079198,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "pricing_comps has no owner-scoped RLS; new manual comp routes rely entirely on the ownership check in application code",
+          "text": "pricing_comps has no owner-scoped RLS; new manual comp routes rely entirely on the ownership check in application code"
+        },
+        {
+          "id": "r9:body:7",
+          "roundIndex": 9,
+          "reviewId": 5002079198,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "CompProvider union omits 'ebay_active' provider value stored for Browse-API rows via ActiveListing.provider",
+          "text": "CompProvider union omits 'ebay_active' provider value stored for Browse-API rows via ActiveListing.provider"
+        },
+        {
+          "id": "r9:body:8",
+          "roundIndex": 9,
+          "reviewId": 5002079198,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "provider column added without a DB-level CHECK constraint, unlike source",
+          "text": "provider column added without a DB-level CHECK constraint, unlike source"
+        },
+        {
+          "id": "r9:body:9",
+          "roundIndex": 9,
+          "reviewId": 5002079198,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Comment claims a testing detail as fact without qualification in ebay-soldcomps.ts",
+          "text": "Comment claims a testing detail as fact without qualification in ebay-soldcomps.ts"
+        },
+        {
+          "id": "r9:body:10",
+          "roundIndex": 9,
+          "reviewId": 5002079198,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "EvidenceDrawer manual comp API routes have no automated test coverage for authorization edge cases",
+          "text": "EvidenceDrawer manual comp API routes have no automated test coverage for authorization edge cases"
+        }
+      ]
+    },
+    {
+      "index": 10,
+      "reviewId": 5002106148,
+      "provider": "anthropic",
+      "submittedAt": "2026-08-23T09:42:52Z",
+      "headSha": "a742249cc220bc9633eb8ad7c300d48f207ce83b",
+      "baseSha": "7c2cb3d6933048cc7440bf9d23fbd34f8d9a9758",
+      "mergeBase": "7c2cb3d6933048cc7440bf9d23fbd34f8d9a9758",
+      "triggerAt": "2026-08-23T09:35:53Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "a742249cc220bc9633eb8ad7c300d48f207ce83b",
+          "committedAt": "2026-08-23T09:35:53Z",
+          "files": [
+            {
+              "path": "src/lib/pipeline/serpapi-client.ts",
+              "ranges": [
+                [
+                  14,
+                  44
+                ],
+                [
+                  50,
+                  62
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/pipeline/step3-pricing-research.ts",
+              "ranges": [
+                [
+                  107,
+                  116
+                ],
+                [
+                  119,
+                  126
+                ],
+                [
+                  166,
+                  172
+                ],
+                [
+                  706,
+                  711
+                ],
+                [
+                  1117,
+                  1127
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/pipeline/step4a-draft-listing.ts",
+              "ranges": [
+                [
+                  31,
+                  36
+                ],
+                [
+                  206,
+                  214
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/pipeline/step5-auth-plan.ts",
+              "ranges": [
+                [
+                  1,
+                  5
+                ],
+                [
+                  19,
+                  24
+                ],
+                [
+                  111,
+                  119
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/pipeline/supabase-push.ts",
+              "ranges": [
+                [
+                  19,
+                  50
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/platforms/adapters/ebay.ts",
+              "ranges": [
+                [
+                  166,
+                  190
+                ],
+                [
+                  266,
+                  282
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/platforms/mcp-server.ts",
+              "ranges": [
+                [
+                  11,
+                  17
+                ],
+                [
+                  134,
+                  141
+                ]
+              ]
+            },
+            {
+              "path": "supabase/migrations/0025_bump_pipeline_step_rpc.sql",
+              "ranges": [
+                [
+                  1,
+                  14
+                ]
+              ]
+            },
+            {
+              "path": "supabase/migrations/0026_pricing_comps_provider_check.sql",
+              "ranges": [
+                [
+                  1,
+                  8
+                ]
+              ]
+            },
+            {
+              "path": "supabase/migrations/0027_user_api_keys_soldcomps.sql",
+              "ranges": [
+                [
+                  1,
+                  9
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r10:c3838198611:0",
+          "roundIndex": 10,
+          "reviewId": 5002106148,
+          "source": "inline",
+          "commentId": 3838198611,
+          "path": "src/lib/platforms/adapters/ebay.ts",
+          "line": 190,
+          "severity": "P3",
+          "title": "Sync-platform call sites construct EbayAdapter without a per-user SoldComps key",
+          "text": "🟢 **Low**\n\n**Sync-platform call sites construct EbayAdapter without a per-user SoldComps key**\n\nThe constructor's default parameter `private readonly soldcompsApiKey: string = process.env.SOLDCOMPS_API_KEY ?? ''` means any call site that constructs `EbayAdapter` without explicitly passing a second argument (the comment mentions \"sync-platform-* Inngest functions\") will silently fall back to a global env var rather than a per-user key, even though `user-api-keys.ts` now models `soldcomps` as a per-user credential. This is a design inconsistency: `mcp-server.ts`'s `getAdapter` correctly threads the per-user key, but other constructors of `EbayAdapter` (not shown in this diff) may still get single-tenant behavior for a nominally per-user credential. If SoldComps searches from those other call sites are expected to use per-user keys like the rest of the per-user credential system, this silently uses the wrong key instead of failing loudly."
+        },
+        {
+          "id": "r10:c3838198614:0",
+          "roundIndex": 10,
+          "reviewId": 5002106148,
+          "source": "inline",
+          "commentId": 3838198614,
+          "path": "src/lib/platforms/ebay-soldcomps.ts",
+          "line": 58,
+          "severity": "P3",
+          "title": "Currency parsing silently coerces malformed soldPrice strings to 0 rather than dropping the row",
+          "text": "🟢 **Low**\n\n**Currency parsing silently coerces malformed soldPrice strings to 0 rather than dropping the row**\n\n`parseFloat(it.soldPrice.replace(/[^0-9.-]/g, ''))` on a value like `\"Best Offer\"` or `\"Free\"` (with no digits at all) produces `NaN` via `parseFloat('')`, which correctly gets filtered by `Number.isFinite(price) ? ... : 0` and then dropped by `.filter(it => it.priceCents > 0 ...)`. However, a malformed value containing stray digits unrelated to price (e.g. a listing ID embedded in the string, or a range like `\"$100-$150\"` which strips to `\"100-150\"` and parses as `100`) would silently produce a wrong-but-plausible price rather than being rejected. This is a low-confidence edge case since the comment states the live-tested format is a bare numeric string, but the defensive stripping logic itself doesn't validate the stripped string matches a single well-formed number before parsing."
+        },
+        {
+          "id": "r10:c3838198616:0",
+          "roundIndex": 10,
+          "reviewId": 5002106148,
+          "source": "inline",
+          "commentId": 3838198616,
+          "path": "src/lib/pipeline/step3-pricing-research.ts",
+          "line": 897,
+          "severity": "P2",
+          "title": "Retail relevance/luxury filtering applies before `removeOutlierComps`, but outlier removal on `RetailCandidate[]` needs a `sale_price_cents`-shaped input",
+          "text": "🟡 **Medium**\n\n**Retail relevance/luxury filtering applies before `removeOutlierComps`, but outlier removal on `RetailCandidate[]` needs a `sale_price_cents`-shaped input**\n\n`relevantRetail` builds objects with `priceCents` as the raw field name (from `RetailCandidate`), then adds `adjusted_price_cents`. `removeOutlierComps` is used elsewhere in this file against arrays whose price field is `sale_price_cents` (see `compRows`/`activeRows` usage). If `removeOutlierComps` reads `sale_price_cents` internally, `filteredRetail` here would silently no-op (or worse, misbehave) because `relevantRetail` objects only carry `priceCents`/`adjusted_price_cents`, not `sale_price_cents`. This isn't confirmed from the diff since `removeOutlierComps`'s implementation isn't shown, so treat this as a question rather than a confirmed bug — but it's worth an explicit check given the field name mismatch is visible in the diff."
+        },
+        {
+          "id": "r10:c3838198620:0",
+          "roundIndex": 10,
+          "reviewId": 5002106148,
+          "source": "inline",
+          "commentId": 3838198620,
+          "path": "src/lib/platforms/ebay-soldcomps.ts",
+          "line": 66,
+          "severity": "P3",
+          "title": "SoldComps price parsing on 'soldPrice' field could produce priceCents=0 for legitimately free/very-cheap items and silently drop them",
+          "text": "🟢 **Low**\n\n**SoldComps price parsing on 'soldPrice' field could produce priceCents=0 for legitimately free/very-cheap items and silently drop them**\n\n`parseFloat(it.soldPrice.replace(/[^0-9.-]/g, ''))` followed by `.filter((it) => it.priceCents > 0 ...)` means any comp that legitimately sold for $0.00 (unlikely but possible for bundled/promotional listings) or whose price string fails to parse (`NaN` -> `Number.isFinite` false -> `priceCents = 0`) is silently dropped with no distinguishing log between 'parse failed' and 'genuinely zero price'. This matches the pattern used elsewhere in the file (e.g., the old sold-comps fetcher), so it's a low-impact consistency nit rather than a new regression."
+        },
+        {
+          "id": "r10:c3838198622:0",
+          "roundIndex": 10,
+          "reviewId": 5002106148,
+          "source": "inline",
+          "commentId": 3838198622,
+          "path": "src/app/api/listings/[id]/comps/route.ts",
+          "line": 44,
+          "severity": "P2",
+          "title": "listingUrl accepted without scheme validation, enabling stored javascript: URI in a rendered <a href>",
+          "text": "🟡 **Medium**\n\n**listingUrl accepted without scheme validation, enabling stored javascript: URI in a rendered <a href>**\n\n`body.listingUrl` is stored verbatim (only trimmed) with no scheme allow-list check. `EvidenceDrawer.tsx` renders `comp.listing_url` directly as an `<a href={...}>` for every comp including manual ones, without the `isUrl()` guard used elsewhere in that same component. A caller could submit `listingUrl: 'javascript:alert(document.cookie)'`, which would be stored and rendered as a clickable link. Since `pricing_comps` has no owner-scoped RLS per this route's own comment, any authenticated user could write this to any listing_id they can guess, creating a stored XSS vector triggered when that listing's evidence drawer is viewed and the link clicked. Validate the URL has an `http(s)` scheme before persisting (or apply the same check client-side that `isUrl()` already implements, but do it server-side since this is the actual trust boundary).\n\n*Suggested fix:*\n\n```suggestion\n    listing_url: body.listingUrl?.trim() && /^https?:\\/\\//i.test(body.listingUrl.trim()) ? body.listingUrl.trim() : null,\n```"
+        },
+        {
+          "id": "r10:c3838198624:0",
+          "roundIndex": 10,
+          "reviewId": 5002106148,
+          "source": "inline",
+          "commentId": 3838198624,
+          "path": "src/app/api/listings/[id]/comps/route.ts",
+          "line": 88,
+          "severity": "P3",
+          "title": "pricing_comps DELETE route has no rate limiting or input length validation on compId",
+          "text": "🟢 **Low**\n\n**pricing_comps DELETE route has no rate limiting or input length validation on compId**\n\n`body.compId` is used directly in a `.eq('id', body.compId)` filter without validating it's actually a UUID. If `compId` is not a valid UUID, Supabase/Postgres will likely just error the query (caught by the existing `deleteError` handling), so this is low risk, but adding a basic UUID shape check before the query would give a cleaner 400 instead of a 500 on malformed input."
+        },
+        {
+          "id": "r10:c3838198625:0",
+          "roundIndex": 10,
+          "reviewId": 5002106148,
+          "source": "inline",
+          "commentId": 3838198625,
+          "path": "src/app/api/listings/[id]/price-override/route.ts",
+          "line": 17,
+          "severity": "P3",
+          "title": "final_price_cents validation only rejects non-positive values, not NaN from unparsed strings",
+          "text": "🟢 **Low**\n\n**final_price_cents validation only rejects non-positive values, not NaN from unparsed strings**\n\nThe check `typeof body.finalPriceCents !== 'number' || !Number.isFinite(...) || body.finalPriceCents <= 0` correctly guards against non-numeric/NaN/non-positive values, but there's no upper bound or integer check — a caller could send `0.5` cents or an extremely large float, which then gets silently `Math.round()`-ed. This is a minor validation gap, not a security issue given this is an authenticated same-user write, but worth tightening for defense in depth."
+        },
+        {
+          "id": "r10:c3838198628:0",
+          "roundIndex": 10,
+          "reviewId": 5002106148,
+          "source": "inline",
+          "commentId": 3838198628,
+          "path": "src/components/workspace/EvidenceDrawer.tsx",
+          "line": 111,
+          "severity": "P3",
+          "title": "EvidenceDrawer add-comp form pointer default for isActive comps sets sold_at path but skips soldAt validation",
+          "text": "🟢 **Low**\n\n**EvidenceDrawer add-comp form pointer default for isActive comps sets sold_at path but skips soldAt validation**\n\n`submitManualComp` sends `isActive: addActive` but never collects/sends a `soldAt` date from the UI for non-active (sold) manual comps — the API route defaults `sold_at` to `body.soldAt ?? null` when not active, meaning every manually-added 'sold' comp will have `sold_at: null` despite being marked as sold rather than active. This is a UX/data-completeness gap: a sold comp with no sold date is indistinguishable from a data-entry error later, and downstream code that filters/sorts by `sold_at` may silently drop or misclassify these rows."
+        },
+        {
+          "id": "r10:body:0",
+          "roundIndex": 10,
+          "reviewId": 5002106148,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Silent zero-price rows possible in SoldComps currency parsing",
+          "text": "Silent zero-price rows possible in SoldComps currency parsing"
+        },
+        {
+          "id": "r10:body:1",
+          "roundIndex": 10,
+          "reviewId": 5002106148,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "fetchEbayActiveSerpApi and fetchSerpComps/fetchRetailCandidates broadly catch and swallow all errors",
+          "text": "fetchEbayActiveSerpApi and fetchSerpComps/fetchRetailCandidates broadly catch and swallow all errors"
+        },
+        {
+          "id": "r10:body:2",
+          "roundIndex": 10,
+          "reviewId": 5002106148,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "No test coverage for new SoldComps client, EbayAdapter.searchSoldComps, or SerpAPI active-listing fallback",
+          "text": "No test coverage for new SoldComps client, EbayAdapter.searchSoldComps, or SerpAPI active-listing fallback"
+        },
+        {
+          "id": "r10:body:3",
+          "roundIndex": 10,
+          "reviewId": 5002106148,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "fetchRetailCandidates' promo-note median calculation duplicates the buggy indexing pattern without a test to catch a miscalculation",
+          "text": "fetchRetailCandidates' promo-note median calculation duplicates the buggy indexing pattern without a test to catch a miscalculation"
+        },
+        {
+          "id": "r10:body:4",
+          "roundIndex": 10,
+          "reviewId": 5002106148,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "SOLDCOMPS_API_KEY constructor default still exists but per-user key is now threaded through mcp-server.ts",
+          "text": "SOLDCOMPS_API_KEY constructor default still exists but per-user key is now threaded through mcp-server.ts"
+        },
+        {
+          "id": "r10:body:5",
+          "roundIndex": 10,
+          "reviewId": 5002106148,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "fetchRetailCandidates omits the promo-sale 'lowestPrice' rank guard that existed in old fetchRetailPrice",
+          "text": "fetchRetailCandidates omits the promo-sale 'lowestPrice' rank guard that existed in old fetchRetailPrice"
+        },
+        {
+          "id": "r10:body:6",
+          "roundIndex": 10,
+          "reviewId": 5002106148,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "provider defaults to non-null but DB column and TS type allow null inconsistently for older rows",
+          "text": "provider defaults to non-null but DB column and TS type allow null inconsistently for older rows"
+        },
+        {
+          "id": "r10:body:7",
+          "roundIndex": 10,
+          "reviewId": 5002106148,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "CompProvider type doesn't align 1:1 with runtime `source.endsWith('_active')` split",
+          "text": "CompProvider type doesn't align 1:1 with runtime `source.endsWith('_active')` split"
+        },
+        {
+          "id": "r10:body:8",
+          "roundIndex": 10,
+          "reviewId": 5002106148,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "PricingComp.listing_url widened to nullable without checking all read sites in this diff",
+          "text": "PricingComp.listing_url widened to nullable without checking all read sites in this diff"
+        },
+        {
+          "id": "r10:body:9",
+          "roundIndex": 10,
+          "reviewId": 5002106148,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Bearer API key sent via URL query param logging risk in fetchSerpApi is acceptable; SoldComps key sent via Authorization header is correct",
+          "text": "Bearer API key sent via URL query param logging risk in fetchSerpApi is acceptable; SoldComps key sent via Authorization header is correct"
+        },
+        {
+          "id": "r10:body:10",
+          "roundIndex": 10,
+          "reviewId": 5002106148,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "SOLDCOMPS_API_KEY fallback to process.env in EbayAdapter constructor is a residual credential-scoping gap",
+          "text": "SOLDCOMPS_API_KEY fallback to process.env in EbayAdapter constructor is a residual credential-scoping gap"
+        },
+        {
+          "id": "r10:body:11",
+          "roundIndex": 10,
+          "reviewId": 5002106148,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "Manual comp insert route lacks server-side URL scheme validation on listing_url",
+          "text": "Manual comp insert route lacks server-side URL scheme validation on listing_url"
+        },
+        {
+          "id": "r10:body:12",
+          "roundIndex": 10,
+          "reviewId": 5002106148,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "pricing_comps.provider CHECK constraint doesn't cover all values actually written",
+          "text": "pricing_comps.provider CHECK constraint doesn't cover all values actually written"
+        },
+        {
+          "id": "r10:body:13",
+          "roundIndex": 10,
+          "reviewId": 5002106148,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "Architectural layering: EbayAdapter now depends on pipeline-adjacent SoldComps client with an env-var default",
+          "text": "Architectural layering: EbayAdapter now depends on pipeline-adjacent SoldComps client with an env-var default"
+        },
+        {
+          "id": "r10:body:14",
+          "roundIndex": 10,
+          "reviewId": 5002106148,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "New API routes (comps, price-override) established without corresponding tests",
+          "text": "New API routes (comps, price-override) established without corresponding tests"
+        }
+      ]
+    }
+  ],
+  "threads": [
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bdT43",
+      "commentId": 3837766061,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bdT45",
+      "commentId": 3837766063,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838191146,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:38:15Z",
+          "editedAt": null,
+          "body": "Declined — 429/402 (quota exhaustion, the free-tier-relevant case) already logs distinctly from other HTTP errors. Further splitting out 401/403/5xx is marginal value for a fail-soft fetcher that returns `[]` either way by design (matches every other comp source in this pipeline)."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bdT46",
+      "commentId": 3837766064,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838191201,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:38:17Z",
+          "editedAt": null,
+          "body": "Declined for this PR — explicitly deferred in the original plan: no caching/dedup/rate-limiting against the 100/month free cap, with the $9/mo Starter tier (2,000/mo) as the immediate next step if that proves too limiting. Not building speculative quota management before there's real usage data on how tight it actually is."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bdT48",
+      "commentId": 3837766066,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bdT4-",
+      "commentId": 3837766068,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838191376,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:38:22Z",
+          "editedAt": null,
+          "body": "Declined — these are prose accuracy nitpicks on comments describing live tests actually run this session (curl timing, field-name verification), not code defects. Leaving as-is rather than hedging comments that are already accurate about what was tested."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bdT4_",
+      "commentId": 3837766069,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838191438,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:38:24Z",
+          "editedAt": null,
+          "body": "Fixed in a742249 — this call already reads `apiKeys.soldcomps` (threaded per-user), not process.env directly — this finding predates that being wired in and is stale against the current diff."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bdT5B",
+      "commentId": 3837766072,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838191505,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:38:26Z",
+          "editedAt": null,
+          "body": "Fixed in a742249 — condition is passed through from SoldComps unmodified, not hardcoded to \"Not specified\"."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bdYMj",
+      "commentId": 3837791059,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bdYMl",
+      "commentId": 3837791062,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838191553,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:38:29Z",
+          "editedAt": null,
+          "body": "Fixed in a742249 — searchSoldComps now accepts `options?.limit` and honors it."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bdYMn",
+      "commentId": 3837791064,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bdYMq",
+      "commentId": 3837791068,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838191708,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:38:35Z",
+          "editedAt": null,
+          "body": "Declined — these are prose accuracy nitpicks on comments describing live tests actually run this session (curl timing, field-name verification), not code defects. Leaving as-is rather than hedging comments that are already accurate about what was tested."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bdjSW",
+      "commentId": 3837857408,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bdjSY",
+      "commentId": 3837857410,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bdjSa",
+      "commentId": 3837857412,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bdleb",
+      "commentId": 3837870319,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838191056,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:38:11Z",
+          "editedAt": null,
+          "body": "Declined as a group — SoldComps is a real, live-tested, US-only API (bare numeric strings like \"380\"/\"29.99\", ISO date-only endedAt); the comma/negative-hyphen/locale-format concerns are hypothetical for a format that's never been observed. The existing `Number.isFinite(price)` and `!isNaN(parsedDate.getTime())` guards already fail safely (drop the row via the `priceCents > 0`/`soldAt !== null` filter) rather than insert corrupted data if the format ever does change. Not adding speculative parsing for a format this API doesn't produce."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bdlec",
+      "commentId": 3837870320,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838192256,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:38:59Z",
+          "editedAt": null,
+          "body": "Declined — these are prose accuracy nitpicks on comments describing live tests actually run this session (curl timing, field-name verification), not code defects. Leaving as-is rather than hedging comments that are already accurate about what was tested."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bdled",
+      "commentId": 3837870321,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bdlee",
+      "commentId": 3837870322,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838192341,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:39:01Z",
+          "editedAt": null,
+          "body": "Declined — these are prose accuracy nitpicks on comments describing live tests actually run this session (curl timing, field-name verification), not code defects. Leaving as-is rather than hedging comments that are already accurate about what was tested."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bdo92",
+      "commentId": 3837891160,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bdo93",
+      "commentId": 3837891161,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838192443,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:39:06Z",
+          "editedAt": null,
+          "body": "Declined — this matches the file-wide convention already: every other fetcher here (fetchRetailCandidates, fetchEbayActiveSerpApi, searchEbaySoldComps, etc.) also catches broadly and degrades to empty/null rather than throwing, so one listing's fetch failure doesn't crash the whole pricing run. Consistent behavior across the file, not a one-off gap."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bdo94",
+      "commentId": 3837891162,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bdo95",
+      "commentId": 3837891163,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838191280,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:38:19Z",
+          "editedAt": null,
+          "body": "Fixed in a742249 — condition is passed through from SoldComps unmodified (`condition: r.condition`), not hardcoded."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bdubS",
+      "commentId": 3837923017,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bdubT",
+      "commentId": 3837923019,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bdubV",
+      "commentId": 3837923020,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838192647,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:39:12Z",
+          "editedAt": null,
+          "body": "Declined as a group — SoldComps is a real, live-tested, US-only API (bare numeric strings like \"380\"/\"29.99\", ISO date-only endedAt); the comma/negative-hyphen/locale-format concerns are hypothetical for a format that's never been observed. The existing `Number.isFinite(price)` and `!isNaN(parsedDate.getTime())` guards already fail safely (drop the row via the `priceCents > 0`/`soldAt !== null` filter) rather than insert corrupted data if the format ever does change. Not adding speculative parsing for a format this API doesn't produce."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bdubW",
+      "commentId": 3837923022,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838192688,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:39:15Z",
+          "editedAt": null,
+          "body": "Declined — these are prose accuracy nitpicks on comments describing live tests actually run this session (curl timing, field-name verification), not code defects. Leaving as-is rather than hedging comments that are already accurate about what was tested."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bdubX",
+      "commentId": 3837923023,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bdyGE",
+      "commentId": 3837944026,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bdyGJ",
+      "commentId": 3837944031,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bd2Ur",
+      "commentId": 3837969247,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838192969,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:39:25Z",
+          "editedAt": null,
+          "body": "Declined as a group — SoldComps is a real, live-tested, US-only API (bare numeric strings like \"380\"/\"29.99\", ISO date-only endedAt); the comma/negative-hyphen/locale-format concerns are hypothetical for a format that's never been observed. The existing `Number.isFinite(price)` and `!isNaN(parsedDate.getTime())` guards already fail safely (drop the row via the `priceCents > 0`/`soldAt !== null` filter) rather than insert corrupted data if the format ever does change. Not adding speculative parsing for a format this API doesn't produce."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bd2Ut",
+      "commentId": 3837969249,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838193021,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:39:27Z",
+          "editedAt": null,
+          "body": "Declined — `ebay_browse` and `serpapi` are both already in the CompProvider union as written; the DB-level enforcement gap is addressed separately (migration 0026)."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bd2Uv",
+      "commentId": 3837969251,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bd2Uw",
+      "commentId": 3837969252,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bd2Uy",
+      "commentId": 3837969255,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838191937,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:38:45Z",
+          "editedAt": null,
+          "body": "Declined as a group — SoldComps is a real, live-tested, US-only API (bare numeric strings like \"380\"/\"29.99\", ISO date-only endedAt); the comma/negative-hyphen/locale-format concerns are hypothetical for a format that's never been observed. The existing `Number.isFinite(price)` and `!isNaN(parsedDate.getTime())` guards already fail safely (drop the row via the `priceCents > 0`/`soldAt !== null` filter) rather than insert corrupted data if the format ever does change. Not adding speculative parsing for a format this API doesn't produce."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6beJhx",
+      "commentId": 3838082790,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6beJhz",
+      "commentId": 3838082794,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838191628,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:38:31Z",
+          "editedAt": null,
+          "body": "Declined as a group — SoldComps is a real, live-tested, US-only API (bare numeric strings like \"380\"/\"29.99\", ISO date-only endedAt); the comma/negative-hyphen/locale-format concerns are hypothetical for a format that's never been observed. The existing `Number.isFinite(price)` and `!isNaN(parsedDate.getTime())` guards already fail safely (drop the row via the `priceCents > 0`/`soldAt !== null` filter) rather than insert corrupted data if the format ever does change. Not adding speculative parsing for a format this API doesn't produce."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6beJh0",
+      "commentId": 3838082796,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838193186,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:39:33Z",
+          "editedAt": null,
+          "body": "Declined — `price.extracted` (not `.extracted_value`) was live-verified against SerpAPI's real eBay engine response via a direct curl test before this landed (see the `fetchEbayActiveSerpApi`/`SerpApiEbayActiveResult` comment). It's the correct field name for this specific engine, distinct from the Shopping engine's top-level `extracted_price`."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6beJh1",
+      "commentId": 3838082797,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838193219,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:39:35Z",
+          "editedAt": null,
+          "body": "Declined — this is an intentional design change, not a regression. The prior \"always trust the cheapest new-condition result\" behavior is exactly what produced a fabricated retail price (a wrong-item $81 match, live-confirmed on a real listing this session). Fail-closed (no key/no score = no retail price shown) matches the existing `lowestActive` pattern for the same reason: a wrong price claim shown as fact is worse than showing none."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6beJh3",
+      "commentId": 3838082799,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838193274,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:39:37Z",
+          "editedAt": null,
+          "body": "Fixed in a742249 — added an explicit `typeof r.price?.extracted === 'number' && r.price.extracted > 0` guard before treating it as a usable price."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6beX9X",
+      "commentId": 3838168916,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838193427,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:39:43Z",
+          "editedAt": null,
+          "body": "Declined as a group — SoldComps is a real, live-tested, US-only API (bare numeric strings like \"380\"/\"29.99\", ISO date-only endedAt); the comma/negative-hyphen/locale-format concerns are hypothetical for a format that's never been observed. The existing `Number.isFinite(price)` and `!isNaN(parsedDate.getTime())` guards already fail safely (drop the row via the `priceCents > 0`/`soldAt !== null` filter) rather than insert corrupted data if the format ever does change. Not adding speculative parsing for a format this API doesn't produce."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6beX9Z",
+      "commentId": 3838168917,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838193469,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:39:45Z",
+          "editedAt": null,
+          "body": "Fixed in a742249 — added a CHECK constraint on pricing_comps.provider matching the CompProvider union (migration 0026) — the TS type and DB now enforce the same set."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6beX9a",
+      "commentId": 3838168919,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838192100,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:38:53Z",
+          "editedAt": null,
+          "body": "Fixed in a742249 — EbayAdapter constructor now takes an optional `soldcompsApiKey` param; mcp-server.ts's getAdapter (the userId-aware call site) passes `apiKeys.soldcomps`. Other call sites (sync-platform-*, post-to-ebay) have no userId and keep the env-var default, same as before."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6beX9b",
+      "commentId": 3838168921,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838192005,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:38:47Z",
+          "editedAt": null,
+          "body": "Fixed in a742249 — searchSoldComps now accepts `options?.limit` (slices results) and reads the per-user `soldcompsApiKey` threaded through the constructor instead of process.env."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6beX9c",
+      "commentId": 3838168922,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838193526,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:39:47Z",
+          "editedAt": null,
+          "body": "Fixed in a742249 — added a CHECK constraint on provider matching the CompProvider union (migration 0026), applied to production and verified against existing data first (all rows were null/serpapi/soldcomps — no violations)."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bedCV",
+      "commentId": 3838198611,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838203842,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:45:53Z",
+          "editedAt": null,
+          "body": "Declined — intentional, and documented in the constructor comment: sync-platform-* call sites have no userId in scope, so the env-var default is the correct fallback there. mcp-server.ts (the userId-aware call site) passes the real per-user key."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bedCX",
+      "commentId": 3838198614,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838203925,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:45:56Z",
+          "editedAt": null,
+          "body": "Declined — same rationale as the other currency-parsing findings: this is real sold-comp data from a live API (numeric prices only), not free-text like \"Best Offer\"/\"Free\". The existing Number.isFinite guard already drops anything that doesn't parse rather than inserting bad data."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bedCZ",
+      "commentId": 3838198616,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838203968,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:45:58Z",
+          "editedAt": null,
+          "body": "Confirmed non-issue — appreciate the explicit \"treat as a question\" framing. removeOutlierComps's actual signature is `<T extends { adjusted_price_cents: number }>`, it only ever reads adjusted_price_cents, never sale_price_cents. relevantRetail's objects carry adjusted_price_cents (added via the .map above), so this works correctly."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bedCb",
+      "commentId": 3838198620,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838204041,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:46:00Z",
+          "editedAt": null,
+          "body": "Declined — same currency/edge-case rationale as the sibling findings on this file. A genuinely free/$0 sold comp is vanishingly unlikely for real eBay sold data and not worth the added complexity to special-case."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bedCd",
+      "commentId": 3838198622,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838204105,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:46:03Z",
+          "editedAt": null,
+          "body": "Fixed in 026aa65 — listingUrl is now rejected with a 400 unless it starts with http:// or https://, before it's ever persisted or rendered."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bedCg",
+      "commentId": 3838198624,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838204159,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:46:05Z",
+          "editedAt": null,
+          "body": "Fixed in 026aa65 — compId is now validated against a UUID shape regex before use in the delete filter."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bedCh",
+      "commentId": 3838198625,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838204243,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:46:08Z",
+          "editedAt": null,
+          "body": "Declined — the value is `Math.round()`-ed before storage, so a non-integer input like 0.5 normalizes to a whole cent rather than being stored as a fraction. No realistic upper bound needed for a listing price field."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6bedCj",
+      "commentId": 3838198628,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3838204318,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-23T09:46:11Z",
+          "editedAt": null,
+          "body": "Declined for now — a real gap (there's no date picker for sold manual comps), but sold_at:null is handled gracefully everywhere it's read (relativeDate, the sold/active split logic). Minor UX enhancement, not a defect; can add a date input as a follow-up if it turns out to matter in practice."
+        }
+      ]
+    }
+  ],
+  "reactions": [
+    {
+      "commentId": 3837766063,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-08-23T09:38:15Z"
+    },
+    {
+      "commentId": 3837766064,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-08-23T09:38:18Z"
+    },
+    {
+      "commentId": 3837766068,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-08-23T09:38:23Z"
+    },
+    {
+      "commentId": 3837766069,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-08-23T09:38:25Z"
+    },
+    {
+      "commentId": 3837766072,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-08-23T09:38:27Z"
+    },
+    {
+      "commentId": 3837791062,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-08-23T09:38:30Z"
+    },
+    {
+      "commentId": 3837791068,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-08-23T09:38:36Z"
+    },
+    {
+      "commentId": 3837870319,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-08-23T09:38:12Z"
+    },
+    {
+      "commentId": 3837870320,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-08-23T09:38:59Z"
+    },
+    {
+      "commentId": 3837870322,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-08-23T09:39:02Z"
+    },
+    {
+      "commentId": 3837891161,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-08-23T09:39:07Z"
+    },
+    {
+      "commentId": 3837891163,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-08-23T09:38:20Z"
+    },
+    {
+      "commentId": 3837923020,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-08-23T09:39:13Z"
+    },
+    {
+      "commentId": 3837923022,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-08-23T09:39:16Z"
+    },
+    {
+      "commentId": 3837969247,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-08-23T09:39:26Z"
+    },
+    {
+      "commentId": 3837969249,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-08-23T09:39:28Z"
+    },
+    {
+      "commentId": 3837969255,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-08-23T09:38:46Z"
+    },
+    {
+      "commentId": 3838082794,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-08-23T09:38:32Z"
+    },
+    {
+      "commentId": 3838082796,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-08-23T09:39:34Z"
+    },
+    {
+      "commentId": 3838082797,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-08-23T09:39:36Z"
+    },
+    {
+      "commentId": 3838082799,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-08-23T09:39:38Z"
+    },
+    {
+      "commentId": 3838168916,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-08-23T09:39:44Z"
+    },
+    {
+      "commentId": 3838168917,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-08-23T09:39:45Z"
+    },
+    {
+      "commentId": 3838168919,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-08-23T09:38:54Z"
+    },
+    {
+      "commentId": 3838168921,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-08-23T09:38:49Z"
+    },
+    {
+      "commentId": 3838168922,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-08-23T09:39:47Z"
+    },
+    {
+      "commentId": 3838198611,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-08-23T09:45:55Z"
+    },
+    {
+      "commentId": 3838198614,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-08-23T09:45:57Z"
+    },
+    {
+      "commentId": 3838198616,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-08-23T09:45:59Z"
+    },
+    {
+      "commentId": 3838198620,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-08-23T09:46:01Z"
+    },
+    {
+      "commentId": 3838198622,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-08-23T09:46:04Z"
+    },
+    {
+      "commentId": 3838198624,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-08-23T09:46:06Z"
+    },
+    {
+      "commentId": 3838198625,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-08-23T09:46:09Z"
+    },
+    {
+      "commentId": 3838198628,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-08-23T09:46:11Z"
+    }
+  ]
+}

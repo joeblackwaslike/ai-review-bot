@@ -1,0 +1,430 @@
+{
+  "schemaVersion": 1,
+  "owner": "joeblackwaslike",
+  "repo": "stealth-browser",
+  "pull": 9,
+  "provider": "anthropic",
+  "reviewer": "claude",
+  "author": "joeblackwaslike",
+  "recordedAt": "2026-11-07T23:31:26.759Z",
+  "rounds": [
+    {
+      "index": 0,
+      "reviewId": 5778088356,
+      "provider": "anthropic",
+      "submittedAt": "2026-11-05T00:39:17Z",
+      "headSha": "6d2ea2d4e00c22d12370ead875b40762c04d6503",
+      "baseSha": "3a137e82634a04e3c3a8809dfc3c4ef750365c60",
+      "mergeBase": "3a137e82634a04e3c3a8809dfc3c4ef750365c60",
+      "triggerAt": "2026-11-05T00:38:42Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "6d2ea2d4e00c22d12370ead875b40762c04d6503",
+          "committedAt": "2026-11-05T00:38:42Z",
+          "files": [
+            {
+              "path": "deploy/k8s/searxng/configmap.yaml",
+              "ranges": [
+                [
+                  1,
+                  29
+                ]
+              ]
+            },
+            {
+              "path": "deploy/k8s/searxng/deploy.sh",
+              "ranges": [
+                [
+                  1,
+                  34
+                ]
+              ]
+            },
+            {
+              "path": "deploy/k8s/searxng/deployment.yaml",
+              "ranges": [
+                [
+                  1,
+                  120
+                ]
+              ]
+            },
+            {
+              "path": "deploy/k8s/searxng/ingress.yaml",
+              "ranges": [
+                [
+                  1,
+                  17
+                ]
+              ]
+            },
+            {
+              "path": "deploy/k8s/searxng/kustomization.yaml",
+              "ranges": [
+                [
+                  1,
+                  13
+                ]
+              ]
+            },
+            {
+              "path": "deploy/k8s/searxng/namespace.yaml",
+              "ranges": [
+                [
+                  1,
+                  4
+                ]
+              ]
+            },
+            {
+              "path": "deploy/k8s/searxng/service.yaml",
+              "ranges": [
+                [
+                  1,
+                  10
+                ]
+              ]
+            },
+            {
+              "path": "integrations/searxng/README.md",
+              "ranges": [
+                [
+                  43,
+                  58
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r0:c4475171382:0",
+          "roundIndex": 0,
+          "reviewId": 5778088356,
+          "source": "inline",
+          "commentId": 4475171382,
+          "path": "deploy/k8s/searxng/deploy.sh",
+          "line": 25,
+          "severity": "P2",
+          "title": "README says gatewayToken is copied but deploy.sh/key naming not verified in docs; gateway token piped without empty check",
+          "text": "🟡 **P2**\n\n**README says gatewayToken is copied but deploy.sh/key naming not verified in docs; gateway token piped without empty check**\n\nIf the `stealth-browser-secrets` Secret lacks `.data.gatewayToken` (or the secret doesn't exist yet), jsonpath yields empty output and `base64 -d` outputs nothing. Because of `pipefail`, a missing secret errors out, but a missing key produces an empty stream. `kubectl create secret --from-file=token=/dev/stdin` then creates `searxng-gateway` with an empty token and applies it without error. The engine will then send an empty bearer token and fail with auth errors at search time, while the rollout reports success. Capture the token into a variable and fail if it is empty.\n\n<!-- ai-review:fp=bug|deploy/k8s/searxng/deploy.sh|690ee011082cc509.0 -->"
+        },
+        {
+          "id": "r0:c4475171388:0",
+          "roundIndex": 0,
+          "reviewId": 5778088356,
+          "source": "inline",
+          "commentId": 4475171388,
+          "path": "deploy/k8s/searxng/deploy.sh",
+          "line": 25,
+          "severity": "P2",
+          "title": "Gateway token copy fails silently into an empty Secret",
+          "text": "🟡 **P2**\n\n**Gateway token copy fails silently into an empty Secret**\n\nWith `pipefail`, a missing `stealth-browser-secrets` Secret or `gatewayToken` key aborts the script. But if the Secret exists and the key is absent, the jsonpath returns an empty string. `base64 -d` then succeeds on empty input, and `--from-file=token=/dev/stdin` creates or overwrites `searxng-gateway` with an empty token. The script continues without any error. The engine then sends unauthenticated requests to the gateway and every `gg` search fails at runtime with a 401. Capture the token into a variable and fail with a clear message if it is empty. This is the same fail-fast check that the Brave key file option already has.\n\n<!-- ai-review:fp=bug|deploy/k8s/searxng/deploy.sh|690ee011082cc509.0 -->"
+        },
+        {
+          "id": "r0:c4475171393:0",
+          "roundIndex": 0,
+          "reviewId": 5778088356,
+          "source": "inline",
+          "commentId": 4475171393,
+          "path": "deploy/k8s/searxng/deploy.sh",
+          "line": 25,
+          "severity": "P2",
+          "title": "README says gatewayToken, but nothing documents the key is required",
+          "text": "🟡 **P2**\n\n**README says gatewayToken, but nothing documents the key is required**\n\ndeploy.sh pipes `jq`-less jsonpath `{.data.gatewayToken}` through `base64 -d`. If the Secret or key is absent, jsonpath yields empty output, and with `set -o pipefail` only kubectl's exit status matters (a missing key still exits 0). The script then creates `searxng-gateway` with an empty token and proceeds, so the engine would be deployed with an empty STEALTH_BROWSER_TOKEN and fail with auth errors at search time. Add a non-empty check before creating the Secret.\n\n<!-- ai-review:fp=bug|deploy/k8s/searxng/deploy.sh|690ee011082cc509.0 -->"
+        },
+        {
+          "id": "r0:c4475171397:0",
+          "roundIndex": 0,
+          "reviewId": 5778088356,
+          "source": "inline",
+          "commentId": 4475171397,
+          "path": "deploy/k8s/searxng/deploy.sh",
+          "line": 32,
+          "severity": "P3",
+          "title": "README says deploy.sh copies `gatewayToken` but omits the stale/accurate wording on restart; also doc omits Reloader dependency",
+          "text": "🟢 **P3**\n\n**README says deploy.sh copies `gatewayToken` but omits the stale/accurate wording on restart; also doc omits Reloader dependency**\n\nThe README bullet says deploy.sh copies `gatewayToken` into `searxng-gateway`, which matches the script. However, the Deployment relies on `reloader.stakater.com/auto`, and `deploy.sh` comments note that Reloader skips newly created Secrets. The gateway-token Secret is re-applied on every run but `rollout restart` only occurs when `--brave-key-file` is passed. A rotated gateway token therefore depends on Reloader being installed, which the docs do not mention.\n\n<!-- ai-review:fp=nitpick|deploy/k8s/searxng/deploy.sh|502c0e7e614e4fae.0 -->"
+        },
+        {
+          "id": "r0:c4475171404:0",
+          "roundIndex": 0,
+          "reviewId": 5778088356,
+          "source": "inline",
+          "commentId": 4475171404,
+          "path": "deploy/k8s/searxng/deployment.yaml",
+          "line": 67,
+          "severity": "P3",
+          "title": "Gateway token sent over plaintext HTTP with no NetworkPolicy",
+          "text": "🟢 **P3**\n\n**Gateway token sent over plaintext HTTP with no NetworkPolicy**\n\nThe gateway bearer token reaches the gateway via `http://` inside the cluster, so the token is unencrypted on the pod network. No NetworkPolicy in these manifests limits who can reach the gateway or who can sniff this traffic. This is defense-in-depth rather than an exploit, so consider TLS or a mesh, or at least a NetworkPolicy restricting ingress to the gateway from the `searxng` namespace.\n\n<!-- ai-review:fp=security|deploy/k8s/searxng/deployment.yaml|adb60f490d8b3346.0 -->"
+        },
+        {
+          "id": "r0:c4475171409:0",
+          "roundIndex": 0,
+          "reviewId": 5778088356,
+          "source": "inline",
+          "commentId": 4475171409,
+          "path": "deploy/k8s/searxng/deployment.yaml",
+          "line": 67,
+          "severity": "P3",
+          "title": "README says deploy.sh copies `gatewayToken` but omits the key rename and describes a different flow",
+          "text": "🟢 **P3**\n\n**README says deploy.sh copies `gatewayToken` but omits the key rename and describes a different flow**\n\nThe Deployment mounts the gateway token with no NetworkPolicy shown, and the token travels in plain HTTP to the gateway (`http://gateway...:8080`). This is intra-cluster, so low risk, but the bearer token is unencrypted on the pod network. Consider documenting or restricting access with a NetworkPolicy.\n\n<!-- ai-review:fp=security|deploy/k8s/searxng/deployment.yaml|adb60f490d8b3346.0 -->"
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "reviewId": 5778100918,
+      "provider": "anthropic",
+      "submittedAt": "2026-11-05T00:40:46Z",
+      "headSha": "87eb09c0ede6ca368087524de6181699abf566f7",
+      "baseSha": "6d2ea2d4e00c22d12370ead875b40762c04d6503",
+      "mergeBase": "6d2ea2d4e00c22d12370ead875b40762c04d6503",
+      "triggerAt": "2026-11-05T00:40:25Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "87eb09c0ede6ca368087524de6181699abf566f7",
+          "committedAt": "2026-11-05T00:40:25Z",
+          "files": [
+            {
+              "path": "deploy/k8s/searxng/deploy.sh",
+              "ranges": [
+                [
+                  13,
+                  21
+                ],
+                [
+                  25,
+                  31
+                ]
+              ]
+            },
+            {
+              "path": "integrations/searxng/README.md",
+              "ranges": [
+                [
+                  50,
+                  56
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r1:body:0",
+          "roundIndex": 1,
+          "reviewId": 5778100918,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "README says deploy.sh copies gatewayToken but omits the stale/accurate wording on restart; also doc omits Reloader dependency (`deploy/k8s/searxng/deploy.sh:32`)",
+          "text": "README says deploy.sh copies gatewayToken but omits the stale/accurate wording on restart; also doc omits Reloader dependency (`deploy/k8s/searxng/deploy.sh:32`)"
+        },
+        {
+          "id": "r1:body:1",
+          "roundIndex": 1,
+          "reviewId": 5778100918,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Gateway token sent over plaintext HTTP with no NetworkPolicy (`deploy/k8s/searxng/deployment.yaml:67`)",
+          "text": "Gateway token sent over plaintext HTTP with no NetworkPolicy (`deploy/k8s/searxng/deployment.yaml:67`)"
+        },
+        {
+          "id": "r1:body:2",
+          "roundIndex": 1,
+          "reviewId": 5778100918,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "README says deploy.sh copies gatewayToken but omits the key rename and describes a different flow (`deploy/k8s/searxng/deployment.yaml:67`)",
+          "text": "README says deploy.sh copies gatewayToken but omits the key rename and describes a different flow (`deploy/k8s/searxng/deployment.yaml:67`)"
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "reviewId": 5778155243,
+      "provider": "anthropic",
+      "submittedAt": "2026-11-05T00:47:29Z",
+      "headSha": "da662165348e74f7f7888d53dec8ca6957e8e3cd",
+      "baseSha": "87eb09c0ede6ca368087524de6181699abf566f7",
+      "mergeBase": "87eb09c0ede6ca368087524de6181699abf566f7",
+      "triggerAt": "2026-11-05T00:47:11Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "da662165348e74f7f7888d53dec8ca6957e8e3cd",
+          "committedAt": "2026-11-05T00:47:11Z",
+          "files": [
+            {
+              "path": "deploy/k8s/searxng/deploy.sh",
+              "ranges": [
+                [
+                  30,
+                  35
+                ]
+              ]
+            },
+            {
+              "path": "integrations/searxng/README.md",
+              "ranges": [
+                [
+                  50,
+                  56
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": []
+    }
+  ],
+  "threads": [
+    {
+      "threadId": "PRRT_kwDOVL2EQc6z3sv-",
+      "commentId": 4475171382,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 4475179476,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-11-05T00:40:32Z",
+          "editedAt": null,
+          "body": "Fixed in 87eb09c0. deploy.sh reads the token first and exits before applying anything if it is empty. Checked with a stub kubectl: an empty token exits 1 with no apply calls, and a present token still succeeds."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOVL2EQc6z3swC",
+      "commentId": 4475171388,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "anthropicreviewbot[bot]",
+      "replies": [
+        {
+          "id": 4475179904,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-11-05T00:40:36Z",
+          "editedAt": null,
+          "body": "Fixed in 87eb09c0. deploy.sh reads the token first and exits before applying anything if it is empty. Checked with a stub kubectl: an empty token exits 1 with no apply calls, and a present token still succeeds."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOVL2EQc6z3swH",
+      "commentId": 4475171393,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "anthropicreviewbot[bot]",
+      "replies": [
+        {
+          "id": 4475180391,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-11-05T00:40:40Z",
+          "editedAt": null,
+          "body": "Fixed in 87eb09c0. deploy.sh reads the token first and exits before applying anything if it is empty. Checked with a stub kubectl: an empty token exits 1 with no apply calls, and a present token still succeeds."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOVL2EQc6z3swL",
+      "commentId": 4475171397,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 4475180918,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-11-05T00:40:44Z",
+          "editedAt": null,
+          "body": "Fixed in 87eb09c0. The README now notes the Reloader dependency for token rotation."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOVL2EQc6z3swN",
+      "commentId": 4475171404,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 4475181496,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-11-05T00:40:49Z",
+          "editedAt": null,
+          "body": "Not changing it in this PR. The gateway is plain in-cluster HTTP today and a NetworkPolicy belongs in the gateway manifests, not in the SearXNG move. Tracked as stealth-browser-may."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOVL2EQc6z3swP",
+      "commentId": 4475171409,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 4475182195,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-11-05T00:40:52Z",
+          "editedAt": null,
+          "body": "Not changing it in this PR. The gateway is plain in-cluster HTTP today and a NetworkPolicy belongs in the gateway manifests, not in the SearXNG move. Tracked as stealth-browser-may."
+        }
+      ]
+    }
+  ],
+  "reactions": [
+    {
+      "commentId": 4475171382,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-11-05T00:40:34Z"
+    },
+    {
+      "commentId": 4475171388,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-11-05T00:40:38Z"
+    },
+    {
+      "commentId": 4475171393,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-11-05T00:40:42Z"
+    },
+    {
+      "commentId": 4475171397,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-11-05T00:40:46Z"
+    },
+    {
+      "commentId": 4475171404,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-11-05T00:40:50Z"
+    },
+    {
+      "commentId": 4475171409,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-11-05T00:40:54Z"
+    }
+  ]
+}

@@ -1,0 +1,4854 @@
+{
+  "fixtureId": "joeblackwaslike__ai-listings__51__anthropic",
+  "provisional": true,
+  "labels": [
+    {
+      "claimId": "r0:c3810637709:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:14:38Z|Fixed in a5fedc2 -- restored the `if (insertedIds.length > 0)` guard around the delete."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637712:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:07:18Z|Fixed in a5fedc2 -- added a 60s per-user in-memory cache in the health-check route; both checkPoshmark and checkEbay results are cached and reused for repeat calls within the TTL."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637716:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:11:36Z|Same fix as the other concurrency-limit thread on this function (a5fedc2) -- batched to concurrency 3."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637719:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:09:41Z|Fixed in a5fedc2 -- both patterns now use `\\bsold\\b` word boundaries so substrings like resold/unsold/sold_count don't false-positive."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637729:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T07:08:55Z|reaction -1 by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637732:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:11:13Z|Fixed in a5fedc2 -- added a console.warn in the catch block (listing_url + error message) before returning UNCONFIRMED. Left the return value unchanged (still UNCONFIRMED for every failure mode) rather than rethrowing, since verifyComp's best-effort contract means one bad comp shouldn't be able to fail the pipeline."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637737:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T07:10:07Z|reaction -1 by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637742:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:07:56Z|Fixed in a5fedc2 -- the new regex (`/^[^=;\\s]+=[^;]*(;\\s*[^=;\\s]+=[^;]*)*;?\\s*$/`) accepts a single `name=value` pair with no semicolon, so `sessionid=abc123` now passes. Verified against 10 representative cases including this one."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637758:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:06:35Z|Fixed in a5fedc2 -- getSetting is now called outside the fetch try/catch, with its own catch that logs distinctly (`checkPoshmark: getSetting failed`) before returning 'unreachable'. Didn't add a new HealthStatus value for this (that ripples into PlatformSettings.tsx/VALID_HEALTH_STATUSES and is a bigger UI decision) -- this at least makes the failure mode visible in server logs."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637763:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:14:53Z|Checked the schema (supabase/migrations/0001_initial_schema.sql): `pricing_comps.id` is `uuid primary key default gen_random_uuid()` -- always DB-generated, never user- or API-influenced, so it can never contain a comma or paren. The F41/F42/F44 guard (insertedIds.length > 0, fixed in a5fedc2) already closes the empty-list edge case this shares a root cause with. Not switching to an array-based `.not()` call given the theoretical-only risk here and the added uncertainty of postgrest-js's array handling for `.not(col,'in',array)` that I couldn't verify without testing against live Supabase."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637765:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:16:02Z|Fixed in a5fedc2 -- wrapped the call in `.catch(() => null)` so a transient Claude API failure degrades to a null methodology instead of crashing the whole step after comps/pricing are already computed and would otherwise be lost."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637769:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:13:04Z|Fixed in a5fedc2 -- extractPriceFromSnippet now uses `matchAll` and takes the *last* `$`-amount in the snippet instead of the first. Retail-then-resale snippets ('Originally $1,200 · Now $380') were previously always priced at the inflated first amount."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637777:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:12:37Z|Fixed in a5fedc2 -- the outer catch now logs via console.warn with the error message before returning []."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637782:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:14:27Z|Fixed in a5fedc2 -- restored the `if (insertedIds.length > 0)` guard around the delete. One correction on mechanism: Postgres treats `NOT IN ()` as a syntax error, not a silently-true/no-op filter, so the pre-fix code would throw via `deleteError` rather than actually executing an unconditional `DELETE FROM pricing_comps WHERE listing_id = $1` -- but throwing there still crashed the whole step after a successful insert, instead of gracefully skipping the delete the way the original guard did. Restoring the guard fixes both the invalid-SQL case and the unnecessary hard failure."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637787:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T07:12:16Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637792:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:09:29Z|Same mitigation as the other health-check-caching thread (a5fedc2) -- server-side 60s cache absorbs repeat client-side fetches."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637795:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:07:07Z|Resolved as a side effect of the eBay per-user credential fix in a5fedc2 -- checkEbay no longer shares any logic with ebay-oauth.ts's getEbayAppToken (different grant type, different credential source entirely), so there's nothing left to duplicate."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637798:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:10:16Z|Fixed in a5fedc2 -- fetch() now passes `redirect: 'error'` instead of following redirects, so a redirect toward an internal address is rejected outright rather than followed before the post-fetch hostname check runs. Safe given verifyComp already treats every failure mode as UNCONFIRMED (best-effort verification)."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637801:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:11:48Z|Same fix (a5fedc2) -- batched to concurrency 3."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637802:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T07:12:03Z|reaction -1 by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637806:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:12:26Z|Fixed in a5fedc2 -- strips a leading 'Sold' prefix (case-insensitive) and validates the parsed date with `isNaN(...getTime())` before calling toISOString(), instead of letting an Invalid Date throw a RangeError that previously dropped the entire fetchEbaySoldComps batch."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637809:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T07:05:37Z|reaction -1 by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637814:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T07:06:57Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637816:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:08:20Z|Fixed in a5fedc2 -- switched to a template literal, no more escaped quote."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637818:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T07:10:31Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637824:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:13:50Z|Same fix (a5fedc2) -- last-match instead of first-match."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637828:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:07:43Z|Fixed in a5fedc2 -- replaced the substring check with `/^[^=;\\s]+=[^;]*(;\\s*[^=;\\s]+=[^;]*)*;?\\s*$/`, requiring the whole trimmed value to be one or more well-formed name=value pairs, closing the loose-substring-match gap this thread flagged."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637833:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:15:05Z|Fixed in a5fedc2 -- restored the `if (insertedIds.length > 0)` guard around the delete."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637835:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:08:42Z|Fixed in a5fedc2 -- HealthBadge now renders 'Checking…' instead of returning null while status is null."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637839:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:09:16Z|Mitigated via the server-side 60s cache added in a5fedc2 (health-check/route.ts) rather than a client-side cache -- the client still fetches on every mount, but the server absorbs repeat calls within the TTL instead of re-hitting Poshmark/eBay each time. Open to a client-side cache/manual-refresh control too if the server-side cache isn't enough in practice."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637844:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:13:37Z|Same fix (a5fedc2) -- last-match instead of first-match resolves the systematic upward bias on luxury-item snippets you're describing here."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637846:0",
+      "label": "deferred",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:11:00Z|Also moot after the redirect:'error' fix (a5fedc2) -- redirects are no longer followed at all, so a redirect to an unlisted TRR subdomain now fails verification the same way an originally-unlisted subdomain always did (both correctly UNCONFIRMED). Expanding ALLOWED_HOSTNAMES to include m.therealreal.com is a product call rather than something this fix implies -- leaving out of scope here."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637848:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:14:03Z|Fixed in a5fedc2 -- confirmed via grep that url-verify.ts is never imported into this file, so reworded the comment to say verification exists but isn't wired in here, instead of implying it runs at 'Task 12'."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637854:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T07:14:16Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637861:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:15:51Z|Fixed in a5fedc2 -- reworded the comment to state explicitly that the confidence score is halved and then capped at 35."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637864:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:15:17Z|Addressed as a side effect of restoring the insertedIds.length > 0 guard in a5fedc2 -- the branch this thread said future readers might reintroduce a bug by removing is back in the code, so the comment gap it's warning about no longer exists."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637866:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:08:32Z|Fixed in a5fedc2 -- reworded the comment to state explicitly that this is a structural format check only and can't catch an expired-but-well-formed cookie (only the live health-check probe can)."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637869:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:09:04Z|Fixed in a5fedc2 -- VALID_HEALTH_STATUSES is now `ReadonlySet<HealthStatus>`. Had to cast to `ReadonlySet<string>` at the one `.has()` call site in isHealthStatus (which is deliberately checking an as-yet-unvalidated string), otherwise TS rejects passing a bare `string` into `Set<HealthStatus>.has()`."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637878:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:10:42Z|Moot after the redirect:'error' fix (a5fedc2) -- fetch() now throws before res.url could ever reflect a followed redirect, so this comment's caveat about runtime-dependent redirect-URL exposure no longer applies. Updated the surrounding comment to describe the new defense-in-depth framing instead."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637888:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:08:07Z|Fixed in a5fedc2 -- the new regex requires the *entire* trimmed value to be well-formed name=value pairs, so `=;` or a JWT with a stray `=`/`;` appended no longer passes; a bare JWT (no `=` at all) still fails as before."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637892:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:07:32Z|Same fix as the caching thread above (a5fedc2) -- repeat calls within the 60s window return the cached result instead of re-probing Poshmark/eBay. This isn't full rate-limiting/abuse-prevention (a caller could still wait out the TTL each time), but it removes the 'unlimited live probes' exposure for normal usage (page loads, remounts, multiple tabs)."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637897:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T07:06:25Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637902:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:11:25Z|Fixed in a5fedc2 -- verifyAndReclassify now processes candidates in batches of 3 (VERIFY_CONCURRENCY) instead of firing up to sampleSize (10) requests at once."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637907:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:09:53Z|Fixed in a5fedc2 -- isAllowedHostname now rejects any non-`https:` protocol before checking the hostname."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637914:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:12:48Z|Fixed in a5fedc2 -- same change as the adjacent Invalid Date thread: strips a leading 'Sold' prefix and validates the parse before calling toISOString()."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637920:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:13:24Z|Same fix as the other extractPriceFromSnippet threads (a5fedc2) -- now takes the last `$`-amount, not the first."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810637926:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:15:30Z|Verified: calcConfidenceScore only ever returns 20/40/60/75/90, and the only one of those that produces a non-integer at *0.5 is 75 -> 37.5, which `Math.min(35, ...)` caps to 35 regardless of whether it's rounded first. Math.round was mathematically inert in every reachable case -- removed it in a5fedc2."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:1",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:2",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:3",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:4",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:5",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:6",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:7",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:8",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:9",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:10",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:11",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:12",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:13",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:14",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:15",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:16",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:17",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:18",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:19",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:20",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:21",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:22",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:23",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:24",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:25",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:26",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:27",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644005:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:14:47Z|Fixed in a5fedc2 -- restored the `if (insertedIds.length > 0)` guard around the delete."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644007:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:07:26Z|Fixed in a5fedc2 -- added a 60s per-user in-memory cache in the health-check route; both checkPoshmark and checkEbay results are cached and reused for repeat calls within the TTL."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644009:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:11:42Z|Same fix as the other concurrency-limit thread on this function (a5fedc2) -- batched to concurrency 3."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644012:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:09:46Z|Fixed in a5fedc2 -- both patterns now use `\\bsold\\b` word boundaries so substrings like resold/unsold/sold_count don't false-positive."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644021:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T07:09:01Z|reaction -1 by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644026:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:11:20Z|Fixed in a5fedc2 -- added a console.warn in the catch block (listing_url + error message) before returning UNCONFIRMED. Left the return value unchanged (still UNCONFIRMED for every failure mode) rather than rethrowing, since verifyComp's best-effort contract means one bad comp shouldn't be able to fail the pipeline."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644028:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T06:57:40Z|changed src/lib/pipeline/comps/url-verify.ts near line 100 in a5fedc28a23063c5fdb1429493077881c4501f74"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644034:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:08:01Z|Fixed in a5fedc2 -- the new regex (`/^[^=;\\s]+=[^;]*(;\\s*[^=;\\s]+=[^;]*)*;?\\s*$/`) accepts a single `name=value` pair with no semicolon, so `sessionid=abc123` now passes. Verified against 10 representative cases including this one."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644039:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:06:44Z|Fixed in a5fedc2 -- getSetting is now called outside the fetch try/catch, with its own catch that logs distinctly (`checkPoshmark: getSetting failed`) before returning 'unreachable'. Didn't add a new HealthStatus value for this (that ripples into PlatformSettings.tsx/VALID_HEALTH_STATUSES and is a bigger UI decision) -- this at least makes the failure mode visible in server logs."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644041:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:14:59Z|Checked the schema (supabase/migrations/0001_initial_schema.sql): `pricing_comps.id` is `uuid primary key default gen_random_uuid()` -- always DB-generated, never user- or API-influenced, so it can never contain a comma or paren. The F41/F42/F44 guard (insertedIds.length > 0, fixed in a5fedc2) already closes the empty-list edge case this shares a root cause with. Not switching to an array-based `.not()` call given the theoretical-only risk here and the added uncertainty of postgrest-js's array handling for `.not(col,'in',array)` that I couldn't verify without testing against live Supabase."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644044:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:16:08Z|Fixed in a5fedc2 -- wrapped the call in `.catch(() => null)` so a transient Claude API failure degrades to a null methodology instead of crashing the whole step after comps/pricing are already computed and would otherwise be lost."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644045:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:13:15Z|Fixed in a5fedc2 -- extractPriceFromSnippet now uses `matchAll` and takes the *last* `$`-amount in the snippet instead of the first. Retail-then-resale snippets ('Originally $1,200 · Now $380') were previously always priced at the inflated first amount."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644047:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:12:43Z|Fixed in a5fedc2 -- the outer catch now logs via console.warn with the error message before returning []."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644050:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:14:32Z|Fixed in a5fedc2 -- restored the `if (insertedIds.length > 0)` guard around the delete. One correction on mechanism: Postgres treats `NOT IN ()` as a syntax error, not a silently-true/no-op filter, so the pre-fix code would throw via `deleteError` rather than actually executing an unconditional `DELETE FROM pricing_comps WHERE listing_id = $1` -- but throwing there still crashed the whole step after a successful insert, instead of gracefully skipping the delete the way the original guard did. Restoring the guard fixes both the invalid-SQL case and the unnecessary hard failure."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644053:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T07:12:22Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644058:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:09:35Z|Same mitigation as the other health-check-caching thread (a5fedc2) -- server-side 60s cache absorbs repeat client-side fetches."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644065:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:07:12Z|Resolved as a side effect of the eBay per-user credential fix in a5fedc2 -- checkEbay no longer shares any logic with ebay-oauth.ts's getEbayAppToken (different grant type, different credential source entirely), so there's nothing left to duplicate."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644071:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:10:22Z|Fixed in a5fedc2 -- fetch() now passes `redirect: 'error'` instead of following redirects, so a redirect toward an internal address is rejected outright rather than followed before the post-fetch hostname check runs. Safe given verifyComp already treats every failure mode as UNCONFIRMED (best-effort verification)."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644074:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:11:55Z|Same fix (a5fedc2) -- batched to concurrency 3."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644077:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T07:12:09Z|reaction -1 by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644080:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:12:32Z|Fixed in a5fedc2 -- strips a leading 'Sold' prefix (case-insensitive) and validates the parsed date with `isNaN(...getTime())` before calling toISOString(), instead of letting an Invalid Date throw a RangeError that previously dropped the entire fetchEbaySoldComps batch."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644085:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T07:05:42Z|reaction -1 by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644093:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T06:57:40Z|changed src/app/api/settings/platform/health-check/route.ts near line 37 in a5fedc28a23063c5fdb1429493077881c4501f74"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644097:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:08:26Z|Fixed in a5fedc2 -- switched to a template literal, no more escaped quote."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644104:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T06:57:40Z|changed src/lib/pipeline/comps/url-verify.ts near line 97 in a5fedc28a23063c5fdb1429493077881c4501f74"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644107:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:13:56Z|Same fix (a5fedc2) -- last-match instead of first-match."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644110:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:07:49Z|Fixed in a5fedc2 -- replaced the substring check with `/^[^=;\\s]+=[^;]*(;\\s*[^=;\\s]+=[^;]*)*;?\\s*$/`, requiring the whole trimmed value to be one or more well-formed name=value pairs, closing the loose-substring-match gap this thread flagged."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644114:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:15:11Z|Fixed in a5fedc2 -- restored the `if (insertedIds.length > 0)` guard around the delete."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644118:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:08:48Z|Fixed in a5fedc2 -- HealthBadge now renders 'Checking…' instead of returning null while status is null."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644121:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:09:22Z|Mitigated via the server-side 60s cache added in a5fedc2 (health-check/route.ts) rather than a client-side cache -- the client still fetches on every mount, but the server absorbs repeat calls within the TTL instead of re-hitting Poshmark/eBay each time. Open to a client-side cache/manual-refresh control too if the server-side cache isn't enough in practice."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644124:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:13:44Z|Same fix (a5fedc2) -- last-match instead of first-match resolves the systematic upward bias on luxury-item snippets you're describing here."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644128:0",
+      "label": "deferred",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:11:06Z|Also moot after the redirect:'error' fix (a5fedc2) -- redirects are no longer followed at all, so a redirect to an unlisted TRR subdomain now fails verification the same way an originally-unlisted subdomain always did (both correctly UNCONFIRMED). Expanding ALLOWED_HOSTNAMES to include m.therealreal.com is a product call rather than something this fix implies -- leaving out of scope here."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644135:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:14:08Z|Fixed in a5fedc2 -- confirmed via grep that url-verify.ts is never imported into this file, so reworded the comment to say verification exists but isn't wired in here, instead of implying it runs at 'Task 12'."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644139:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T06:57:40Z|changed src/lib/pipeline/step3-pricing-research.ts near line 864 in a5fedc28a23063c5fdb1429493077881c4501f74"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644143:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:15:57Z|Fixed in a5fedc2 -- reworded the comment to state explicitly that the confidence score is halved and then capped at 35."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644144:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:15:23Z|Addressed as a side effect of restoring the insertedIds.length > 0 guard in a5fedc2 -- the branch this thread said future readers might reintroduce a bug by removing is back in the code, so the comment gap it's warning about no longer exists."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644150:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:08:37Z|Fixed in a5fedc2 -- reworded the comment to state explicitly that this is a structural format check only and can't catch an expired-but-well-formed cookie (only the live health-check probe can)."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644152:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:09:09Z|Fixed in a5fedc2 -- VALID_HEALTH_STATUSES is now `ReadonlySet<HealthStatus>`. Had to cast to `ReadonlySet<string>` at the one `.has()` call site in isHealthStatus (which is deliberately checking an as-yet-unvalidated string), otherwise TS rejects passing a bare `string` into `Set<HealthStatus>.has()`."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644155:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:10:50Z|Moot after the redirect:'error' fix (a5fedc2) -- fetch() now throws before res.url could ever reflect a followed redirect, so this comment's caveat about runtime-dependent redirect-URL exposure no longer applies. Updated the surrounding comment to describe the new defense-in-depth framing instead."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644157:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:08:14Z|Fixed in a5fedc2 -- the new regex requires the *entire* trimmed value to be well-formed name=value pairs, so `=;` or a JWT with a stray `=`/`;` appended no longer passes; a bare JWT (no `=` at all) still fails as before."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644164:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:07:37Z|Same fix as the caching thread above (a5fedc2) -- repeat calls within the 60s window return the cached result instead of re-probing Poshmark/eBay. This isn't full rate-limiting/abuse-prevention (a caller could still wait out the TTL each time), but it removes the 'unlimited live probes' exposure for normal usage (page loads, remounts, multiple tabs)."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644166:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T07:06:32Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644170:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:11:31Z|Fixed in a5fedc2 -- verifyAndReclassify now processes candidates in batches of 3 (VERIFY_CONCURRENCY) instead of firing up to sampleSize (10) requests at once."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644179:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:09:59Z|Fixed in a5fedc2 -- isAllowedHostname now rejects any non-`https:` protocol before checking the hostname."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644187:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:12:56Z|Fixed in a5fedc2 -- same change as the adjacent Invalid Date thread: strips a leading 'Sold' prefix and validates the parse before calling toISOString()."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644191:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:13:30Z|Same fix as the other extractPriceFromSnippet threads (a5fedc2) -- now takes the last `$`-amount, not the first."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810644192:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:15:36Z|Verified: calcConfidenceScore only ever returns 20/40/60/75/90, and the only one of those that produces a non-integer at *0.5 is 75 -> 37.5, which `Math.min(35, ...)` caps to 35 regardless of whether it's rounded first. Math.round was mathematically inert in every reachable case -- removed it in a5fedc2."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:1",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:2",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:3",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:4",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:5",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:6",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:7",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:8",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:9",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:10",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:11",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:12",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:13",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:14",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:15",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:16",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:17",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:18",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:19",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:20",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:21",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:22",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:23",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:24",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:25",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:26",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:27",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810797418:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:23:18Z|Fixed in 909ef2b — restored Math.round around the whole expression. Verified this wasn't live-broken today (calcConfidenceScore's fixed {90,75,60,40,20} outputs all resolve to an integer after *0.5 and the Math.min(35,...) cap), but it's fragile against any future change to that function's return values, so restoring it is correct."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810797428:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T07:20:51Z|changed src/app/api/settings/platform/health-check/route.ts near line 91 in 03f754c5cacc9342f9ba14fd2ddcba5516585249"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810797431:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:45:51Z|Fixed in 7d28e2d — added console.warn when the insertedIds guard skips delete-old-rows."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810797433:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:37:26Z|Acknowledged — this one confirms itself as not a finding ('the regex looks correct for its stated purpose'). No change."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810797436:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:41:47Z|Fixed in 1fe4296 — reworded both comments (fetch options and the post-fetch re-check) to say plainly that the re-check is dead code under documented redirect:'error' semantics, kept only as insurance against runtime variance."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810797439:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:45:53Z|This finding concludes itself as correct (the /g flag is present). No change needed."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810797442:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:23:19Z|Same fix as the duplicate finding on this line — Math.round restored in 909ef2b."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810797450:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-20T11:35:38Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810797454:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-20T11:35:40Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810797457:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:39:11Z|Self-confirmed as correct ('this is fine... no issue'). No change."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810797461:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:39:13Z|Fixed in b4f3371 — same underlying cast flagged by 4 independent passes. Replaced the Set<HealthStatus> + cast-to-string with a readonly HealthStatus[] const widened to readonly string[] for the includes() check, so there's no longer a cast that looks like it's undoing the type narrowing."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810797465:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:41:48Z|Self-confirmed as correct ('No bug here'). No change."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810797468:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:41:50Z|Self-confirmed ('no action needed'). No change."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810797474:0",
+      "label": "deferred",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:45:55Z|Declining for now — this is a real limitation of an empirical heuristic, but properly testing it needs real TRR/SerpAPI snippet examples we don't have on hand in this session. Worth a follow-up with an actual fixture if this proves wrong in practice; the current behavior (last-match) is still a strict improvement over the prior first-match bug."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810797475:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-20T11:41:52Z|reaction -1 by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810797479:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:39:14Z|Fixed in b4f3371 — same underlying cast flagged by 4 independent passes. Replaced the Set<HealthStatus> + cast-to-string with a readonly HealthStatus[] const widened to readonly string[] for the includes() check, so there's no longer a cast that looks like it's undoing the type narrowing."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810797480:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T07:20:51Z|changed src/app/api/settings/platform/health-check/route.ts near line 94 in 03f754c5cacc9342f9ba14fd2ddcba5516585249"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810797486:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-20T11:37:28Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810797490:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:45:56Z|Fixed in 7d28e2d — comment now cites the tracking issue (ai-listings-534) instead of the vague 'until that's done.'"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810797498:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-20T11:45:59Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810797502:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:46:00Z|Declining — verifying SerpAPI's actual sold_date format against production would need live API access this session doesn't have. The code already handles both hypotheses defensively (strips a 'Sold' prefix if present, validates the parse, drops the row on failure per 909ef2b) regardless of which format SerpAPI actually returns, so this doesn't block on resolving the comment's accuracy."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810797504:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-20T11:41:53Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810797508:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:39:15Z|Fixed in b4f3371 — same underlying cast flagged by 4 independent passes. Replaced the Set<HealthStatus> + cast-to-string with a readonly HealthStatus[] const widened to readonly string[] for the includes() check, so there's no longer a cast that looks like it's undoing the type narrowing."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810797513:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:37:29Z|Fixed in 8559a00 — tightened the value groups from [^;]* to [^;]+ so a=/a=;b= (empty-valued pairs) no longer pass. Verified against a set of pass/fail cases including the single-pair, multi-pair, and JWT-shaped inputs before applying."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810797519:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:39:17Z|Fixed in b4f3371 — applied essentially your suggested approach (array + includes instead of Set + cast), with an inline comment explaining why the widening cast is still needed and sound."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810797526:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-20T11:41:54Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810797530:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:41:55Z|Fixed in 1fe4296 — reworded the fetch-options comment to note the throw-vs-opaque-response uncertainty explicitly and explain why both outcomes are safe here."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810797536:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:46:01Z|Fixed in 7d28e2d — stores a sentinel string on generation failure instead of null, so EvidenceDrawer (which only renders the methodology section for a truthy value) surfaces the failure instead of silently showing nothing."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:1",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:2",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:3",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:4",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:5",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:6",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:7",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:8",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:9",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:10",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:11",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:12",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:13",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:14",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:15",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:16",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:17",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:18",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:19",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:20",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:21",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:22",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:23",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:24",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:25",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:26",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:27",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:28",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:29",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:30",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:31",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:32",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:33",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:34",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:35",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:36",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:37",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:38",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:39",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:40",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:41",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:42",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:43",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:44",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:45",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:46",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:47",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:48",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:49",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:50",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:51",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:52",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:53",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:54",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:55",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:56",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:57",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:58",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:59",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:60",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:61",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:62",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:63",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:64",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:65",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:66",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:67",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:68",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:69",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:70",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:71",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:72",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:73",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:74",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:75",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:76",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:77",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:78",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:79",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:80",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:81",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:82",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:83",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:84",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:85",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:86",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:87",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:88",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810928469:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:08:27Z|Fixed in 459a937 — dropped the `Array.isArray(json.data)` assertion. This is an undocumented reverse-engineered endpoint; asserting an exact shape we haven't verified would flip every valid cookie to 'invalid'. Now only requires the body to parse as JSON.",
+        "2026-08-20T11:08:59Z|Fixed in 459a937 — dropped the `Array.isArray(json.data)` assertion. This is an undocumented reverse-engineered endpoint; asserting an exact shape we haven't verified would flip every valid cookie to 'invalid'. Now only requires the body to parse as JSON."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810928478:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:39:19Z|Acknowledged as a UX-only note (your own text: 'not a bug'). The request-generation-counter fix in bf0d350 already ensures the freshest health response wins the display regardless of resolution order — the brief flash you're describing (old status showing for the few hundred ms between save and refetch resolving) is an inherent, acceptable latency gap, not a race. Not adding a loading-state transition for this."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810928484:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:33:52Z|Fixed in bf0d350 — switched to a shared request-generation counter (latestRequestId ref) so only the most recently issued refetchHealth response is ever applied, regardless of resolution order."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810928490:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:10:15Z|Fixed in 459a937 — call site now passes `brand` through: `significantTitleWords(comp.title, brand)`."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810928493:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:09:30Z|Fixed in 459a937 — same fix as the High-severity duplicate of this finding: dropped the `Array.isArray(json.data)` assertion, now only requires the body to parse as JSON."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810928498:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:33:54Z|Same fix as the other race-condition finding on this component — bf0d350's request-generation counter replaces the per-call cancelled flag."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810928502:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:10:17Z|Fixed in 459a937 — `significantTitleWords` now tokenizes the brand string and excludes each token individually, so a multi-word brand like Louis Vuitton doesn't leave 'louis'/'vuitton' behind as bogus independent signal."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810928520:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:46:05Z|Fixed in 7d28e2d — applied your suggested JSON.stringify."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810928533:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:26:07Z|Fixed in 8e88d5a — logs relevantActive.length when filteredActive comes back empty despite having relevant candidates."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810928540:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:23:10Z|Addressed in 909ef2b — extracted isActiveSource() as the single source of truth for the sold/active split, used at both insert and reload time. Doesn't fully close the gap if a future source name breaks the suffix convention entirely, but centralizes the definition so that's a one-line fix instead of four call sites drifting independently."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810928547:0",
+      "label": "deferred",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:23:11Z|Same fix as the other _active-suffix finding on this block — isActiveSource() in 909ef2b centralizes this. A dedicated is_active schema column would close the gap more fully but is a migration, out of scope for this PR."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810928556:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:23:15Z|Fixed in 909ef2b — reloaded rows are now deduped and outlier-filtered before use, matching the fresh-fetch path."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810928563:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:39:20Z|Declining — bf0d350's request-generation counter already means the *last-fired* fresh=1 request's response wins regardless of arrival order, so a second field's save always supersedes the first's badge state once it resolves. The narrower scenario you're describing (two near-simultaneous saves where the health-check read races ahead of the second write's DB propagation) is a genuine edge case, but debouncing/sequencing refetches to close it is more complexity than this UX detail warrants for a single-user settings page."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810928578:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-20T11:46:08Z|reaction -1 by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810928587:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-20T11:41:57Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810928597:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-20T11:46:10Z|reaction -1 by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810928602:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:23:16Z|Fixed in 909ef2b — added .order('created_at', {ascending:false}).limit(200) to the reload query."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810928608:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-20T11:35:42Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810928612:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:23:25Z|Fixed in 909ef2b — rows whose sold_date failed to parse (soldAt null) are now dropped rather than inserted as sold evidence with no confirmable date."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810928617:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-20T11:46:11Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810928623:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:18:14Z|Fixed in 162beb3 — the reload now checks the Supabase error and throws (matching the insert/delete guards above it) instead of defaulting existingRows to []."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810928633:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:35:42Z|Acknowledged as correct (your own note says 'this is correct for single-session use') — the multi-tab scenario just means a second tab's badge updates a few seconds early, not a security or correctness issue. No change."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810928642:0",
+      "label": "deferred",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:46:12Z|Declining as out of scope — this is about historical rows written by an older code version before filteredActive existed, which is a data-migration/backfill concern, not something a code-level fix here can address retroactively. The reload path added in 909ef2b already re-applies dedup/outlier filtering to whatever's currently in the table regardless of which code version wrote it, so this doesn't get worse, just doesn't retroactively clean up old data."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810928649:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:46:14Z|Fixed in 7d28e2d — tightened the comment's wording to make explicit that relevantActive is the input and filteredActive is the output."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810928656:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:41:58Z|Fixed in 1fe4296 — same comment cleanup as the other redirect:'error' wording finding."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810928660:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:41:59Z|Fixed in 1fe4296 — updated the comment to note otherTitleWords can be empty for any title whose non-brand words are all short/stopwords, not just single-word titles like 'Chanel'."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810928666:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:23:14Z|Same fix as the other dedup/outlier-on-reload finding — 909ef2b applies deduplicateComps + removeOutlierComps to both effectiveSoldComps and effectiveActiveComps on reload."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810928672:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:23:12Z|Fixed in 909ef2b — reloaded rows now go through the same deduplicateComps + removeOutlierComps pipeline the fresh-fetch path uses."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810928675:0",
+      "label": "deferred",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:18:17Z|Confirmed dead code, but wiring it in is a separate, already-tracked follow-up: ai-listings-534 (P2, 'Wire url-verify.ts reclassification pass into step3-pricing-research.ts'). Deliberately out of scope here -- integrating it means deciding where in the step3 pipeline to call it and how to derive sold_at for a reclassified comp, which is a design decision, not a mechanical fix."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810928677:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-20T11:33:50Z|Fixed in bf0d350 — added a 5s minimum interval between honored ?fresh=1 bypasses per user (lastFreshProbeAt map), so a tight client loop hitting fresh=1 falls back to the normal cache instead of forcing a live probe every call."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:1",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:2",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:3",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:4",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:5",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:6",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:7",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:8",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:9",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:10",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:11",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:12",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:13",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:14",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:15",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:16",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:17",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:18",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:19",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:20",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:21",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:22",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:23",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:24",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:25",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:26",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:27",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:28",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:29",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:30",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:31",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:32",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:33",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:34",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:35",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:36",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:37",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:38",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:39",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:40",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:41",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:42",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:43",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:44",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:45",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:46",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:47",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:48",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:49",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:50",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:51",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:52",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:53",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:54",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:55",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:56",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:57",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:58",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:59",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:60",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:61",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:62",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:63",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:64",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:65",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:66",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:67",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:68",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:69",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:70",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:71",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:72",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:73",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:74",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:75",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:76",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:77",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:78",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:79",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:80",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:81",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:82",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:83",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:84",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:85",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:86",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:87",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:88",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:89",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:90",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:91",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:92",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:93",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:94",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:95",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:96",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:97",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:98",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:99",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:100",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:101",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:102",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:103",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:104",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:105",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:106",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:107",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:108",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:109",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:110",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:111",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:112",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:113",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:114",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:115",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:116",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:117",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:118",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:119",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:120",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:121",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:122",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:123",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:124",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:125",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:126",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:127",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:128",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:129",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:130",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:131",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:132",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:133",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:134",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    }
+  ],
+  "repeatPairs": [
+    {
+      "later": "r1:c3810644005:0",
+      "earlier": "r0:c3810637709:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644007:0",
+      "earlier": "r0:c3810637712:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644009:0",
+      "earlier": "r0:c3810637716:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644012:0",
+      "earlier": "r0:c3810637719:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644021:0",
+      "earlier": "r0:c3810637729:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644026:0",
+      "earlier": "r0:c3810637732:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644028:0",
+      "earlier": "r0:c3810637737:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644034:0",
+      "earlier": "r0:c3810637742:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644039:0",
+      "earlier": "r0:c3810637758:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644041:0",
+      "earlier": "r0:c3810637763:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644044:0",
+      "earlier": "r0:c3810637765:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644045:0",
+      "earlier": "r0:c3810637769:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644047:0",
+      "earlier": "r0:c3810637777:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644050:0",
+      "earlier": "r0:c3810637782:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644053:0",
+      "earlier": "r0:c3810637787:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644058:0",
+      "earlier": "r0:c3810637792:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644065:0",
+      "earlier": "r0:c3810637795:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644071:0",
+      "earlier": "r0:c3810637798:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644074:0",
+      "earlier": "r0:c3810637801:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644077:0",
+      "earlier": "r0:c3810637802:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644080:0",
+      "earlier": "r0:c3810637806:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644085:0",
+      "earlier": "r0:c3810637809:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644093:0",
+      "earlier": "r0:c3810637814:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644097:0",
+      "earlier": "r0:c3810637816:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644104:0",
+      "earlier": "r0:c3810637818:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644107:0",
+      "earlier": "r0:c3810637824:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644110:0",
+      "earlier": "r0:c3810637828:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644114:0",
+      "earlier": "r0:c3810637833:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644118:0",
+      "earlier": "r0:c3810637835:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644121:0",
+      "earlier": "r0:c3810637839:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644124:0",
+      "earlier": "r0:c3810637844:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644128:0",
+      "earlier": "r0:c3810637846:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644135:0",
+      "earlier": "r0:c3810637848:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644139:0",
+      "earlier": "r0:c3810637854:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644143:0",
+      "earlier": "r0:c3810637861:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644144:0",
+      "earlier": "r0:c3810637864:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644150:0",
+      "earlier": "r0:c3810637866:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644152:0",
+      "earlier": "r0:c3810637869:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644155:0",
+      "earlier": "r0:c3810637878:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644157:0",
+      "earlier": "r0:c3810637888:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644164:0",
+      "earlier": "r0:c3810637892:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644166:0",
+      "earlier": "r0:c3810637897:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644170:0",
+      "earlier": "r0:c3810637902:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644179:0",
+      "earlier": "r0:c3810637907:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644187:0",
+      "earlier": "r0:c3810637914:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644191:0",
+      "earlier": "r0:c3810637920:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:c3810644192:0",
+      "earlier": "r0:c3810637926:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:body:0",
+      "earlier": "r0:body:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:body:1",
+      "earlier": "r0:body:1",
+      "confirmed": false
+    },
+    {
+      "later": "r1:body:2",
+      "earlier": "r0:body:2",
+      "confirmed": false
+    },
+    {
+      "later": "r1:body:3",
+      "earlier": "r0:body:3",
+      "confirmed": false
+    },
+    {
+      "later": "r1:body:4",
+      "earlier": "r0:body:4",
+      "confirmed": false
+    },
+    {
+      "later": "r1:body:5",
+      "earlier": "r0:body:5",
+      "confirmed": false
+    },
+    {
+      "later": "r1:body:6",
+      "earlier": "r0:body:6",
+      "confirmed": false
+    },
+    {
+      "later": "r1:body:7",
+      "earlier": "r0:body:7",
+      "confirmed": false
+    },
+    {
+      "later": "r1:body:8",
+      "earlier": "r0:body:8",
+      "confirmed": false
+    },
+    {
+      "later": "r1:body:9",
+      "earlier": "r0:body:9",
+      "confirmed": false
+    },
+    {
+      "later": "r1:body:10",
+      "earlier": "r0:body:10",
+      "confirmed": false
+    },
+    {
+      "later": "r1:body:11",
+      "earlier": "r0:body:11",
+      "confirmed": false
+    },
+    {
+      "later": "r1:body:12",
+      "earlier": "r0:body:12",
+      "confirmed": false
+    },
+    {
+      "later": "r1:body:13",
+      "earlier": "r0:body:13",
+      "confirmed": false
+    },
+    {
+      "later": "r1:body:14",
+      "earlier": "r0:body:14",
+      "confirmed": false
+    },
+    {
+      "later": "r1:body:15",
+      "earlier": "r0:body:15",
+      "confirmed": false
+    },
+    {
+      "later": "r1:body:16",
+      "earlier": "r0:body:16",
+      "confirmed": false
+    },
+    {
+      "later": "r1:body:17",
+      "earlier": "r0:body:17",
+      "confirmed": false
+    },
+    {
+      "later": "r1:body:18",
+      "earlier": "r0:body:18",
+      "confirmed": false
+    },
+    {
+      "later": "r1:body:19",
+      "earlier": "r0:body:19",
+      "confirmed": false
+    },
+    {
+      "later": "r1:body:20",
+      "earlier": "r0:body:20",
+      "confirmed": false
+    },
+    {
+      "later": "r1:body:21",
+      "earlier": "r0:body:21",
+      "confirmed": false
+    },
+    {
+      "later": "r1:body:22",
+      "earlier": "r0:body:22",
+      "confirmed": false
+    },
+    {
+      "later": "r1:body:23",
+      "earlier": "r0:body:23",
+      "confirmed": false
+    },
+    {
+      "later": "r1:body:24",
+      "earlier": "r0:body:24",
+      "confirmed": false
+    },
+    {
+      "later": "r1:body:25",
+      "earlier": "r0:body:25",
+      "confirmed": false
+    },
+    {
+      "later": "r1:body:26",
+      "earlier": "r0:body:26",
+      "confirmed": false
+    },
+    {
+      "later": "r1:body:27",
+      "earlier": "r0:body:27",
+      "confirmed": false
+    },
+    {
+      "later": "r2:c3810797439:0",
+      "earlier": "r0:c3810637844:0",
+      "confirmed": false
+    },
+    {
+      "later": "r2:c3810797474:0",
+      "earlier": "r0:c3810637824:0",
+      "confirmed": false
+    },
+    {
+      "later": "r2:c3810797508:0",
+      "earlier": "r0:c3810637869:0",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:4",
+      "earlier": "r0:body:5",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:12",
+      "earlier": "r0:body:0",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:13",
+      "earlier": "r0:body:1",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:14",
+      "earlier": "r0:body:2",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:15",
+      "earlier": "r0:body:3",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:16",
+      "earlier": "r0:body:4",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:17",
+      "earlier": "r0:body:5",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:18",
+      "earlier": "r0:body:6",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:19",
+      "earlier": "r0:body:7",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:20",
+      "earlier": "r0:body:8",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:21",
+      "earlier": "r0:body:9",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:22",
+      "earlier": "r0:body:10",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:23",
+      "earlier": "r0:body:11",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:24",
+      "earlier": "r0:body:12",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:25",
+      "earlier": "r0:body:13",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:26",
+      "earlier": "r0:body:14",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:27",
+      "earlier": "r0:body:15",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:28",
+      "earlier": "r0:body:16",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:29",
+      "earlier": "r0:body:17",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:30",
+      "earlier": "r0:body:18",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:31",
+      "earlier": "r0:body:19",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:32",
+      "earlier": "r0:body:20",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:33",
+      "earlier": "r0:body:21",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:34",
+      "earlier": "r0:body:22",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:35",
+      "earlier": "r0:body:23",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:36",
+      "earlier": "r0:body:24",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:37",
+      "earlier": "r0:body:25",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:38",
+      "earlier": "r0:body:26",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:39",
+      "earlier": "r0:body:27",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:42",
+      "earlier": "r0:body:2",
+      "confirmed": false
+    },
+    {
+      "later": "r2:c3810797439:0",
+      "earlier": "r1:c3810644124:0",
+      "confirmed": false
+    },
+    {
+      "later": "r2:c3810797474:0",
+      "earlier": "r1:c3810644107:0",
+      "confirmed": false
+    },
+    {
+      "later": "r2:c3810797508:0",
+      "earlier": "r1:c3810644152:0",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:4",
+      "earlier": "r1:body:5",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:12",
+      "earlier": "r1:body:0",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:13",
+      "earlier": "r1:body:1",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:14",
+      "earlier": "r1:body:2",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:15",
+      "earlier": "r1:body:3",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:16",
+      "earlier": "r1:body:4",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:17",
+      "earlier": "r1:body:5",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:18",
+      "earlier": "r1:body:6",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:19",
+      "earlier": "r1:body:7",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:20",
+      "earlier": "r1:body:8",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:21",
+      "earlier": "r1:body:9",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:22",
+      "earlier": "r1:body:10",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:23",
+      "earlier": "r1:body:11",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:24",
+      "earlier": "r1:body:12",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:25",
+      "earlier": "r1:body:13",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:26",
+      "earlier": "r1:body:14",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:27",
+      "earlier": "r1:body:15",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:28",
+      "earlier": "r1:body:16",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:29",
+      "earlier": "r1:body:17",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:30",
+      "earlier": "r1:body:18",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:31",
+      "earlier": "r1:body:19",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:32",
+      "earlier": "r1:body:20",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:33",
+      "earlier": "r1:body:21",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:34",
+      "earlier": "r1:body:22",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:35",
+      "earlier": "r1:body:23",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:36",
+      "earlier": "r1:body:24",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:37",
+      "earlier": "r1:body:25",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:38",
+      "earlier": "r1:body:26",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:39",
+      "earlier": "r1:body:27",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:42",
+      "earlier": "r1:body:2",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:5",
+      "earlier": "r0:body:5",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:6",
+      "earlier": "r0:body:15",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:15",
+      "earlier": "r0:body:5",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:58",
+      "earlier": "r0:body:0",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:59",
+      "earlier": "r0:body:1",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:60",
+      "earlier": "r0:body:2",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:61",
+      "earlier": "r0:body:3",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:62",
+      "earlier": "r0:body:4",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:63",
+      "earlier": "r0:body:5",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:64",
+      "earlier": "r0:body:6",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:65",
+      "earlier": "r0:body:7",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:66",
+      "earlier": "r0:body:8",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:67",
+      "earlier": "r0:body:9",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:68",
+      "earlier": "r0:body:10",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:69",
+      "earlier": "r0:body:11",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:70",
+      "earlier": "r0:body:12",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:71",
+      "earlier": "r0:body:13",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:72",
+      "earlier": "r0:body:14",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:73",
+      "earlier": "r0:body:15",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:74",
+      "earlier": "r0:body:16",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:75",
+      "earlier": "r0:body:17",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:76",
+      "earlier": "r0:body:18",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:77",
+      "earlier": "r0:body:19",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:78",
+      "earlier": "r0:body:20",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:79",
+      "earlier": "r0:body:21",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:80",
+      "earlier": "r0:body:22",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:81",
+      "earlier": "r0:body:23",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:82",
+      "earlier": "r0:body:24",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:83",
+      "earlier": "r0:body:25",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:84",
+      "earlier": "r0:body:26",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:85",
+      "earlier": "r0:body:27",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:88",
+      "earlier": "r0:body:2",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:5",
+      "earlier": "r1:body:5",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:6",
+      "earlier": "r1:body:15",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:15",
+      "earlier": "r1:body:5",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:58",
+      "earlier": "r1:body:0",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:59",
+      "earlier": "r1:body:1",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:60",
+      "earlier": "r1:body:2",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:61",
+      "earlier": "r1:body:3",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:62",
+      "earlier": "r1:body:4",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:63",
+      "earlier": "r1:body:5",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:64",
+      "earlier": "r1:body:6",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:65",
+      "earlier": "r1:body:7",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:66",
+      "earlier": "r1:body:8",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:67",
+      "earlier": "r1:body:9",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:68",
+      "earlier": "r1:body:10",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:69",
+      "earlier": "r1:body:11",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:70",
+      "earlier": "r1:body:12",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:71",
+      "earlier": "r1:body:13",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:72",
+      "earlier": "r1:body:14",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:73",
+      "earlier": "r1:body:15",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:74",
+      "earlier": "r1:body:16",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:75",
+      "earlier": "r1:body:17",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:76",
+      "earlier": "r1:body:18",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:77",
+      "earlier": "r1:body:19",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:78",
+      "earlier": "r1:body:20",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:79",
+      "earlier": "r1:body:21",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:80",
+      "earlier": "r1:body:22",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:81",
+      "earlier": "r1:body:23",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:82",
+      "earlier": "r1:body:24",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:83",
+      "earlier": "r1:body:25",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:84",
+      "earlier": "r1:body:26",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:85",
+      "earlier": "r1:body:27",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:88",
+      "earlier": "r1:body:2",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:5",
+      "earlier": "r2:body:4",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:5",
+      "earlier": "r2:body:17",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:6",
+      "earlier": "r2:body:27",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:11",
+      "earlier": "r2:body:0",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:12",
+      "earlier": "r2:body:1",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:13",
+      "earlier": "r2:body:2",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:14",
+      "earlier": "r2:body:3",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:15",
+      "earlier": "r2:body:4",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:15",
+      "earlier": "r2:body:17",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:16",
+      "earlier": "r2:body:5",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:17",
+      "earlier": "r2:body:6",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:18",
+      "earlier": "r2:body:7",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:19",
+      "earlier": "r2:body:8",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:20",
+      "earlier": "r2:body:9",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:21",
+      "earlier": "r2:body:10",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:22",
+      "earlier": "r2:body:11",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:30",
+      "earlier": "r2:body:72",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:42",
+      "earlier": "r2:body:11",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:58",
+      "earlier": "r2:body:12",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:59",
+      "earlier": "r2:body:13",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:60",
+      "earlier": "r2:body:14",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:60",
+      "earlier": "r2:body:42",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:61",
+      "earlier": "r2:body:15",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:62",
+      "earlier": "r2:body:16",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:63",
+      "earlier": "r2:body:4",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:63",
+      "earlier": "r2:body:17",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:64",
+      "earlier": "r2:body:18",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:65",
+      "earlier": "r2:body:19",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:66",
+      "earlier": "r2:body:20",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:67",
+      "earlier": "r2:body:21",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:68",
+      "earlier": "r2:body:22",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:69",
+      "earlier": "r2:body:23",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:70",
+      "earlier": "r2:body:24",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:71",
+      "earlier": "r2:body:25",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:72",
+      "earlier": "r2:body:26",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:73",
+      "earlier": "r2:body:27",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:74",
+      "earlier": "r2:body:28",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:75",
+      "earlier": "r2:body:29",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:76",
+      "earlier": "r2:body:30",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:77",
+      "earlier": "r2:body:31",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:78",
+      "earlier": "r2:body:32",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:79",
+      "earlier": "r2:body:33",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:80",
+      "earlier": "r2:body:34",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:81",
+      "earlier": "r2:body:35",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:82",
+      "earlier": "r2:body:36",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:83",
+      "earlier": "r2:body:37",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:84",
+      "earlier": "r2:body:38",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:85",
+      "earlier": "r2:body:39",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:86",
+      "earlier": "r2:body:40",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:87",
+      "earlier": "r2:body:41",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:88",
+      "earlier": "r2:body:14",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:88",
+      "earlier": "r2:body:42",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:89",
+      "earlier": "r2:body:43",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:90",
+      "earlier": "r2:body:44",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:91",
+      "earlier": "r2:body:45",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:92",
+      "earlier": "r2:body:46",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:93",
+      "earlier": "r2:body:47",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:94",
+      "earlier": "r2:body:48",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:95",
+      "earlier": "r2:body:49",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:96",
+      "earlier": "r2:body:50",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:97",
+      "earlier": "r2:body:51",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:98",
+      "earlier": "r2:body:52",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:99",
+      "earlier": "r2:body:53",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:100",
+      "earlier": "r2:body:54",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:101",
+      "earlier": "r2:body:55",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:102",
+      "earlier": "r2:body:56",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:103",
+      "earlier": "r2:body:57",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:104",
+      "earlier": "r2:body:58",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:105",
+      "earlier": "r2:body:59",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:106",
+      "earlier": "r2:body:60",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:107",
+      "earlier": "r2:body:61",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:108",
+      "earlier": "r2:body:62",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:109",
+      "earlier": "r2:body:63",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:110",
+      "earlier": "r2:body:64",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:111",
+      "earlier": "r2:body:65",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:112",
+      "earlier": "r2:body:66",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:113",
+      "earlier": "r2:body:67",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:114",
+      "earlier": "r2:body:68",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:115",
+      "earlier": "r2:body:69",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:116",
+      "earlier": "r2:body:70",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:117",
+      "earlier": "r2:body:71",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:118",
+      "earlier": "r2:body:72",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:119",
+      "earlier": "r2:body:73",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:120",
+      "earlier": "r2:body:74",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:121",
+      "earlier": "r2:body:75",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:122",
+      "earlier": "r2:body:76",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:123",
+      "earlier": "r2:body:77",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:124",
+      "earlier": "r2:body:78",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:125",
+      "earlier": "r2:body:79",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:126",
+      "earlier": "r2:body:80",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:127",
+      "earlier": "r2:body:81",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:128",
+      "earlier": "r2:body:82",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:129",
+      "earlier": "r2:body:83",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:130",
+      "earlier": "r2:body:84",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:131",
+      "earlier": "r2:body:85",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:132",
+      "earlier": "r2:body:86",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:133",
+      "earlier": "r2:body:87",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:134",
+      "earlier": "r2:body:88",
+      "confirmed": false
+    }
+  ],
+  "negativePairs": [],
+  "allowedSuppression": []
+}

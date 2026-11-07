@@ -1,0 +1,1752 @@
+{
+  "schemaVersion": 1,
+  "owner": "joeblackwaslike",
+  "repo": "ai-listings",
+  "pull": 57,
+  "provider": "anthropic",
+  "reviewer": "claude",
+  "author": "joeblackwaslike",
+  "recordedAt": "2026-11-07T23:28:09.493Z",
+  "rounds": [
+    {
+      "index": 0,
+      "reviewId": 5057933264,
+      "provider": "anthropic",
+      "submittedAt": "2026-08-29T11:19:08Z",
+      "headSha": "dd3cc89ef2bc9b07dbd792b1e8c0229e9f0764c8",
+      "baseSha": "473705ebedcb2a14c323fdbc629af146749c7d0a",
+      "mergeBase": "473705ebedcb2a14c323fdbc629af146749c7d0a",
+      "triggerAt": "2026-08-29T11:12:49Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "7fbfa5f381464be5bc452ad526d43223c87ecf9e",
+          "committedAt": "2026-08-29T10:36:56Z",
+          "files": [
+            {
+              "path": "src/components/dashboard/StatusBadge.tsx",
+              "ranges": [
+                [
+                  29,
+                  37
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/inngest/client.ts",
+              "ranges": [
+                [
+                  1,
+                  5
+                ],
+                [
+                  70,
+                  87
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/inngest/functions/condition-reassessment.ts",
+              "ranges": [
+                [
+                  100,
+                  111
+                ]
+              ]
+            },
+            {
+              "path": "src/types/listings.ts",
+              "ranges": [
+                [
+                  3,
+                  9
+                ]
+              ]
+            },
+            {
+              "path": "supabase/migrations/0022_condition_gate_status.sql",
+              "ranges": [
+                [
+                  1,
+                  7
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "sha": "3b0d4dd23485e07c1ab632981f83a03f9427805a",
+          "committedAt": "2026-08-29T10:46:40Z",
+          "files": [
+            {
+              "path": "src/app/api/inngest/route.ts",
+              "ranges": [
+                [
+                  11,
+                  17
+                ],
+                [
+                  27,
+                  32
+                ]
+              ]
+            },
+            {
+              "path": "src/app/api/listings/[id]/confirm-condition/route.ts",
+              "ranges": [
+                [
+                  1,
+                  101
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/inngest/functions/description-rewrite.ts",
+              "ranges": [
+                [
+                  1,
+                  22
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/pipeline/rewrite-listing.ts",
+              "ranges": [
+                [
+                  1,
+                  250
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "sha": "58cf593d9c5dfd808bc9cc52c6a29cac3acf2b8d",
+          "committedAt": "2026-08-29T10:51:10Z",
+          "files": [
+            {
+              "path": "src/components/dashboard/ListingCard.tsx",
+              "ranges": [
+                [
+                  135,
+                  192
+                ],
+                [
+                  338,
+                  344
+                ],
+                [
+                  396,
+                  402
+                ],
+                [
+                  418,
+                  429
+                ],
+                [
+                  437,
+                  451
+                ]
+              ]
+            },
+            {
+              "path": "src/components/workspace/ConditionReviewPanel.tsx",
+              "ranges": [
+                [
+                  1,
+                  115
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "sha": "364b662358a4a68fbfa02074f8ea36d3bf019c8d",
+          "committedAt": "2026-08-29T10:53:29Z",
+          "files": [
+            {
+              "path": "src/lib/inngest/functions/description-rewrite.ts",
+              "ranges": [
+                [
+                  10,
+                  20
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/pipeline/rewrite-listing.ts",
+              "ranges": [
+                [
+                  42,
+                  49
+                ],
+                [
+                  132,
+                  138
+                ],
+                [
+                  198,
+                  207
+                ],
+                [
+                  220,
+                  250
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "sha": "025fd02aeff4eb165a097b0a3f4d1cf298d246bf",
+          "committedAt": "2026-08-29T10:58:22Z",
+          "files": [
+            {
+              "path": "src/app/listings/[id]/page.tsx",
+              "ranges": [
+                [
+                  124,
+                  136
+                ],
+                [
+                  157,
+                  163
+                ],
+                [
+                  231,
+                  237
+                ]
+              ]
+            },
+            {
+              "path": "src/components/workspace/FieldsPanel.tsx",
+              "ranges": [
+                [
+                  11,
+                  17
+                ],
+                [
+                  455,
+                  486
+                ]
+              ]
+            },
+            {
+              "path": "src/components/workspace/PipelineTimeline.tsx",
+              "ranges": [
+                [
+                  71,
+                  84
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "sha": "cbafe96208504f78cf04de031fa90bac3d67ffb6",
+          "committedAt": "2026-08-29T11:09:48Z",
+          "files": [
+            {
+              "path": "src/app/api/listings/[id]/confirm-condition/route.ts",
+              "ranges": [
+                [
+                  3,
+                  13
+                ],
+                [
+                  33,
+                  103
+                ]
+              ]
+            },
+            {
+              "path": "src/components/workspace/ConditionReviewPanel.tsx",
+              "ranges": [
+                [
+                  28,
+                  66
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/inngest/functions/condition-reassessment.ts",
+              "ranges": [
+                [
+                  97,
+                  111
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/inngest/functions/description-rewrite.ts",
+              "ranges": [
+                [
+                  1,
+                  30
+                ],
+                [
+                  34,
+                  51
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/pipeline/gate-messages.ts",
+              "ranges": [
+                [
+                  170,
+                  174
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/pipeline/rewrite-listing.ts",
+              "ranges": [
+                [
+                  61,
+                  75
+                ]
+              ]
+            },
+            {
+              "path": "supabase/migrations/0036_condition_gate_status.sql",
+              "ranges": [
+                [
+                  1,
+                  4
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "sha": "dd3cc89ef2bc9b07dbd792b1e8c0229e9f0764c8",
+          "committedAt": "2026-08-29T11:12:49Z",
+          "files": [
+            {
+              "path": "src/lib/inngest/functions/description-rewrite.ts",
+              "ranges": [
+                [
+                  43,
+                  49
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r0:c3886461972:0",
+          "roundIndex": 0,
+          "reviewId": 5057933264,
+          "source": "inline",
+          "commentId": 3886461972,
+          "path": "src/lib/inngest/functions/description-rewrite.ts",
+          "line": 13,
+          "severity": "P1",
+          "title": "onFailure event payload shape assumed without validation",
+          "text": "🔴 **High**\n\n**onFailure event payload shape assumed without validation**\n\nThe onFailure handler casts `event` to `{ data: { event: ListingConditionConfirmedEvent } }` and accesses `event.data.event.data.listingId` without any runtime check. If Inngest's onFailure payload shape differs slightly (e.g., across SDK versions) or `event.data.event` is undefined, this throws inside the failure handler itself, silently swallowing the intended recovery (agent_blocked=true, status revert) and leaving the listing stuck in an inconsistent state (condition_confirmed=true, status=condition_gate, no visible failure indication). Add a defensive check before dereferencing nested properties."
+        },
+        {
+          "id": "r0:c3886461972:1",
+          "roundIndex": 0,
+          "reviewId": 5057933264,
+          "source": "inline",
+          "commentId": 3886461972,
+          "path": "src/lib/inngest/functions/description-rewrite.ts",
+          "line": 13,
+          "severity": "P3",
+          "title": "`event.data.event.data.listingId` is derived via a double `unknown` cast (`event as unknown as { data: { event: ListingConditionConfirmedEvent } }`). This relies on undocumented internal shape of the `onFailure` callback's `event` parameter (which per Inngest's API typically wraps the original event under `event.data.event`). If this shape is wrong or changes, `listingId` will silently be `undefined`, `if (!listingId) return` will fire, and the failure recovery (agent_blocked=true, status revert) will silently never execute — meaning a listing could get permanently stuck in `condition_confirmed=true`/`condition_gate` with no automated recovery and no error surfaced. Given this is the sole safety net for exhausted retries, consider verifying this shape against the installed Inngest SDK types rather than double-casting through `unknown`, or add a guard/log when the shape doesn't match expectations.",
+          "text": "`event.data.event.data.listingId` is derived via a double `unknown` cast (`event as unknown as { data: { event: ListingConditionConfirmedEvent } }`). This relies on undocumented internal shape of the `onFailure` callback's `event` parameter (which per Inngest's API typically wraps the original event under `event.data.event`). If this shape is wrong or changes, `listingId` will silently be `undefined`, `if (!listingId) return` will fire, and the failure recovery (agent_blocked=true, status revert) will silently never execute — meaning a listing could get permanently stuck in `condition_confirmed=true`/`condition_gate` with no automated recovery and no error surfaced. Given this is the sole safety net for exhausted retries, consider verifying this shape against the installed Inngest SDK types rather than double-casting through `unknown`, or add a guard/log when the shape doesn't match expectations."
+        },
+        {
+          "id": "r0:c3886461978:0",
+          "roundIndex": 0,
+          "reviewId": 5057933264,
+          "source": "inline",
+          "commentId": 3886461978,
+          "path": "src/lib/inngest/functions/condition-reassessment.ts",
+          "line": 106,
+          "severity": "P3",
+          "title": "Duplicate/concurrent condition-reassessment runs could double-fire the gate transition",
+          "text": "🟢 **Low**\n\n**Duplicate/concurrent condition-reassessment runs could double-fire the gate transition**\n\nThis two-step update (write condition fields, then separately flip status via a second `.update()` gated on `status='in_loop'`) is not atomic with the first update. If `condition-reassessment` runs twice concurrently for the same listing (e.g. duplicate event delivery), both instances could pass the `.eq('status','in_loop')` guard on the second update if timed right after the first one's condition write but before its status write — actually the status guard does protect against double status flips since only one will match 'in_loop'. However, there is no re-read/lock between the two update calls, so if the user is already mid-condition_gate flow when a second condition-reassessment fires, this second update is silently skipped (fine) — but if it fires before the first transition lands, both compete on `.eq('status','in_loop')` and one will fail silently with no error being surfaced (the result isn't checked). This is a minor correctness gap but likely benign given single-writer semantics elsewhere in the codebase."
+        },
+        {
+          "id": "r0:c3886461983:0",
+          "roundIndex": 0,
+          "reviewId": 5057933264,
+          "source": "inline",
+          "commentId": 3886461983,
+          "path": "src/app/api/listings/[id]/confirm-condition/route.ts",
+          "line": 72,
+          "severity": "P2",
+          "title": "extra_notes is validated but never persisted to the listing",
+          "text": "🟡 **Medium**\n\n**extra_notes is validated but never persisted to the listing**\n\n`extra_notes` is validated (type/length) and forwarded to the Inngest event for use in the rewrite prompt, but it is never stored on the listing row itself. If the `description-rewrite` Inngest function fails after retries are exhausted, the `onFailure` handler reverts `condition_confirmed` and `status`, and the user will need to resubmit the form — but the `extra_notes` they typed is lost forever since it was never persisted anywhere except the one-shot event payload that already fired. This isn't a crash, but it is a silent data-loss path on the documented failure/retry flow."
+        },
+        {
+          "id": "r0:c3886461988:0",
+          "roundIndex": 0,
+          "reviewId": 5057933264,
+          "source": "inline",
+          "commentId": 3886461988,
+          "path": "src/app/api/listings/[id]/confirm-condition/route.ts",
+          "line": 86,
+          "severity": "P3",
+          "title": "Compensation revert re-opens the gate without re-checking Inngest failure was really transient",
+          "text": "🟢 **Low**\n\n**Compensation revert re-opens the gate without re-checking Inngest failure was really transient**\n\nWhen `inngest.send` throws, the code reverts `condition_confirmed` back to its prior value but does not revert `status` (comment says status was never changed, which is correct) — however it also does not restore the CAS: after the revert, `status` is still `condition_gate` and `condition_confirmed` is back to `existing.condition_confirmed`, but the row was already updated in the primary CAS update, meaning a concurrent second request that read `existing` before the first request's update (both requests could pass the `.select` step conceptually) is not actually possible here since the CAS update itself is atomic — this is fine. No actionable issue beyond the extra_notes loss noted separately."
+        },
+        {
+          "id": "r0:c3886461991:0",
+          "roundIndex": 0,
+          "reviewId": 5057933264,
+          "source": "inline",
+          "commentId": 3886461991,
+          "path": "src/lib/inngest/functions/description-rewrite.ts",
+          "line": 20,
+          "severity": "P2",
+          "title": "onFailure unconditionally clears condition_confirmed/status even if listing already advanced past condition_gate",
+          "text": "🟡 **Medium**\n\n**onFailure unconditionally clears condition_confirmed/status even if listing already advanced past condition_gate**\n\nThe `onFailure` handler updates `status='condition_gate'` and `condition_confirmed=false` without any CAS/status guard, unlike the CAS-guarded update in `transition-to-in-loop`. If the rewrite actually succeeded (title/description/platform_fields written) but the final `transition-to-in-loop` step failed for an unrelated transient reason before `onFailure` fires (e.g. exhausted retries hit only after the second step failed repeatedly), this would revert a listing that has correct rewritten copy back into condition_gate and mark it `condition_confirmed=false`, forcing the user to redo the review even though the rewrite already completed. Consider adding `.eq('status', 'condition_gate')` here too, or checking whether `condition_confirmed` is still true before reverting, to avoid clobbering a listing that's mid-transition."
+        },
+        {
+          "id": "r0:c3886461997:0",
+          "roundIndex": 0,
+          "reviewId": 5057933264,
+          "source": "inline",
+          "commentId": 3886461997,
+          "path": "src/app/listings/[id]/page.tsx",
+          "line": 127,
+          "severity": "P3",
+          "title": "Unused listing/photoUrl destructure params shadow disabled lint rule potential",
+          "text": "🟢 **Low**\n\n**Unused listing/photoUrl destructure params shadow disabled lint rule potential**\n\n`conditionGateContext` takes a `listing` parameter that is never used in the function body. This is a minor lint/readability issue — the parameter should either be prefixed with `_` to signal it's intentionally unused, or removed entirely and the call site simplified, since `Listing` data isn't needed to build this static context.\n\n*Suggested fix:*\n\n```suggestion\nfunction conditionGateContext(_listing: Listing): WorkspaceContext {\n```"
+        },
+        {
+          "id": "r0:c3886462002:0",
+          "roundIndex": 0,
+          "reviewId": 5057933264,
+          "source": "inline",
+          "commentId": 3886462002,
+          "path": "src/lib/inngest/functions/condition-reassessment.ts",
+          "line": 100,
+          "severity": "P2",
+          "title": "condition-reassessment status transition ignores update result and lacks error handling",
+          "text": "🟡 **Medium**\n\n**condition-reassessment status transition ignores update result and lacks error handling**\n\nThe new `status = 'condition_gate'` update's error is silently dropped (no `.error` check like the block above it). If this update fails (e.g. transient DB error), the listing silently stays in `in_loop` with `condition`/`condition_notes` set but no gate transition and no error surfaced anywhere — the user would see no indication the condition-gate flow should have started. Consider checking `error` here and logging it similarly to the block above."
+        },
+        {
+          "id": "r0:c3886462002:1",
+          "roundIndex": 0,
+          "reviewId": 5057933264,
+          "source": "inline",
+          "commentId": 3886462002,
+          "path": "src/lib/inngest/functions/condition-reassessment.ts",
+          "line": 100,
+          "severity": "P3",
+          "title": "The condition fields are written first, then a separate `.update({status:'condition_gate'}).eq('status','in_loop')` call runs. If the process crashes or the function errors between these two calls, the listing will have fresh `condition`/`condition_notes` but remain stuck in `in_loop` with no `condition_gate` transition and no error signal (the second update's result/error isn't even checked). Consider checking the second update's error and/or combining both into a single update call using the same CAS pattern used in confirm-condition/route.ts.",
+          "text": "The condition fields are written first, then a separate `.update({status:'condition_gate'}).eq('status','in_loop')` call runs. If the process crashes or the function errors between these two calls, the listing will have fresh `condition`/`condition_notes` but remain stuck in `in_loop` with no `condition_gate` transition and no error signal (the second update's result/error isn't even checked). Consider checking the second update's error and/or combining both into a single update call using the same CAS pattern used in confirm-condition/route.ts."
+        },
+        {
+          "id": "r0:c3886462002:2",
+          "roundIndex": 0,
+          "reviewId": 5057933264,
+          "source": "inline",
+          "commentId": 3886462002,
+          "path": "src/lib/inngest/functions/condition-reassessment.ts",
+          "line": 100,
+          "severity": "P3",
+          "title": "Previously a failed condition update just logged an error but the function still returned `{ ok: true, listingId }`, and status remained in_loop. Now, if the update fails, the code takes the `else` branch, so no status transition is attempted (fine) but the function still returns `{ ok: true }`. This means condition data can fail to persist yet the Inngest run shows a success — same behavior as before for the return value, but combined with the new gate flow, listings that fail this update will silently remain stuck in `in_loop` with no retry and no visible failure signal, since the caller can't tell the write failed and photos_confirmed is already true. Consider returning an error/throwing so Inngest retries when the condition write fails, since correctness of the whole condition_gate flow now hinges on this write succeeding.",
+          "text": "Previously a failed condition update just logged an error but the function still returned `{ ok: true, listingId }`, and status remained in_loop. Now, if the update fails, the code takes the `else` branch, so no status transition is attempted (fine) but the function still returns `{ ok: true }`. This means condition data can fail to persist yet the Inngest run shows a success — same behavior as before for the return value, but combined with the new gate flow, listings that fail this update will silently remain stuck in `in_loop` with no retry and no visible failure signal, since the caller can't tell the write failed and photos_confirmed is already true. Consider returning an error/throwing so Inngest retries when the condition write fails, since correctness of the whole condition_gate flow now hinges on this write succeeding."
+        },
+        {
+          "id": "r0:c3886462005:0",
+          "roundIndex": 0,
+          "reviewId": 5057933264,
+          "source": "inline",
+          "commentId": 3886462005,
+          "path": "src/app/api/listings/[id]/confirm-condition/route.ts",
+          "line": 101,
+          "severity": "P2",
+          "title": "Revert compensation for condition_confirmed can silently reintroduce truthy old value incorrectly typed",
+          "text": "🟡 **Medium**\n\n**Revert compensation for condition_confirmed can silently reintroduce truthy old value incorrectly typed**\n\n`existing.condition_confirmed ?? false` assumes the column can be `null`; if `condition_confirmed` was already `true` prior to this PATCH (e.g. a previous confirm succeeded but status wasn't advanced due to a bug, or manual DB edit), the revert would restore `true`, leaving the listing with `condition_confirmed=true` and status `condition_gate` but no successful `inngest.send` — effectively the same stuck state the code elsewhere treats as \"rewrite in progress\" (see `ConditionReviewPanel`, which shows the rewriting spinner whenever `condition_confirmed` is true). This would strand the UI in a perpetual \"Rewriting copy…\" state with no way to retry. Consider explicitly reverting to `false` rather than the prior value, since a fresh confirm-condition submission always intends the post-state to be action-doable again if the send fails."
+        },
+        {
+          "id": "r0:c3886462009:0",
+          "roundIndex": 0,
+          "reviewId": 5057933264,
+          "source": "inline",
+          "commentId": 3886462009,
+          "path": "src/app/listings/[id]/page.tsx",
+          "line": 130,
+          "severity": "P3",
+          "title": "Unused parameter in conditionGateContext",
+          "text": "🟢 **Low**\n\n**Unused parameter in conditionGateContext**\n\n`listing` is accepted but never used in the function body, unlike the sibling `genderGateContext`/`detailGateContext` functions that consume the listing. If this is intentional (a static message), consider dropping the parameter or prefixing with `_` to avoid lint noise; if a per-listing detail was intended (e.g. surfacing the AI-assessed grade in the message), it's currently missing."
+        },
+        {
+          "id": "r0:c3886462014:0",
+          "roundIndex": 0,
+          "reviewId": 5057933264,
+          "source": "inline",
+          "commentId": 3886462014,
+          "path": "src/app/api/listings/[id]/confirm-condition/route.ts",
+          "line": 81,
+          "severity": "P3",
+          "title": "extra_notes accepted but not persisted, only forwarded to the event",
+          "text": "🟢 **Low**\n\n**extra_notes accepted but not persisted, only forwarded to the event**\n\n`extra_notes` from the request body is validated (type + length) but never stored on the listing row — it's only passed through to the Inngest event. If `inngest.send` fails and the compensation path reverts `condition`/`condition_notes`, `extra_notes` is lost entirely with no way to recover it for a retry (the caller would have to resubmit, but the panel will show `condition_confirmed` reverted to false, so a resubmit is possible — but the extra_notes text itself isn't persisted anywhere for audit/debugging if the event dispatch races with a later failure in the rewrite step)."
+        },
+        {
+          "id": "r0:c3886462016:0",
+          "roundIndex": 0,
+          "reviewId": 5057933264,
+          "source": "inline",
+          "commentId": 3886462016,
+          "path": "src/lib/inngest/functions/description-rewrite.ts",
+          "line": 35,
+          "severity": "P3",
+          "title": "extraNotes/conditionNotes from confirm-condition event not persisted or used consistently",
+          "text": "🟢 **Low**\n\n**extraNotes/conditionNotes from confirm-condition event not persisted or used consistently**\n\nThe `listing/condition-confirmed` event carries `conditionNotes` (the user-submitted condition_notes from the PATCH body) but `description-rewrite.ts` only destructures `listingId` and `extraNotes` — `conditionNotes` from the event is discarded. `runRewriteListing` instead re-reads `condition_notes` from the DB row inside `rewrite-listing.ts`, which should reflect the same value since the PATCH already wrote it. This isn't a bug per se since the DB read should be consistent, but the unused `conditionNotes` field on the event is dead data being sent and never consumed — worth removing from the event payload or using it directly instead of re-fetching, to avoid future confusion or drift if the two ever diverge (e.g. a future revert of `condition_notes` before the rewrite runs)."
+        },
+        {
+          "id": "r0:c3886462019:0",
+          "roundIndex": 0,
+          "reviewId": 5057933264,
+          "source": "inline",
+          "commentId": 3886462019,
+          "path": "src/app/api/listings/[id]/confirm-condition/route.ts",
+          "line": 92,
+          "severity": "P3",
+          "title": "Revert on inngest.send failure doesn't reset status, leaving inconsistent recovery semantics",
+          "text": "🟢 **Low**\n\n**Revert on inngest.send failure doesn't reset status, leaving inconsistent recovery semantics**\n\nWhen `inngest.send` fails, the code reverts `condition`, `condition_notes`, and `condition_confirmed` back to their prior values, but does not touch `status` (correctly, since the CAS update never changed it). However, this differs from the `onFailure` Inngest handler which explicitly sets `status: 'condition_gate'` as part of its revert — implying status drift is a real concern elsewhere in this feature. If some other code path advances status between the CAS update and the send failure (e.g., a concurrent process), the revert here would leave `condition_confirmed=false` but status potentially no longer `condition_gate`, silently breaking the ConditionReviewPanel's ability to resubmit (since the panel is only rendered when `listing.status === 'condition_gate'`). This is a narrow race but worth a defensive `.eq('status', 'condition_gate')` on the revert update, mirroring the CAS guard used elsewhere in this same file."
+        },
+        {
+          "id": "r0:body:0",
+          "roundIndex": 0,
+          "reviewId": 5057933264,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Rewrite runs unconditionally on every condition-confirmed event, even for platform_fields without existing ebay/poshmark entries created after rewrite",
+          "text": "Rewrite runs unconditionally on every condition-confirmed event, even for platform_fields without existing ebay/poshmark entries created after rewrite"
+        },
+        {
+          "id": "r0:body:1",
+          "roundIndex": 0,
+          "reviewId": 5057933264,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "No idempotency guard on description-rewrite; retries or duplicate events will re-run the Claude rewrite and re-charge/re-write copy",
+          "text": "No idempotency guard on description-rewrite; retries or duplicate events will re-run the Claude rewrite and re-charge/re-write copy"
+        },
+        {
+          "id": "r0:body:2",
+          "roundIndex": 0,
+          "reviewId": 5057933264,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "Missing test coverage for the new gate/rewrite flow",
+          "text": "Missing test coverage for the new gate/rewrite flow"
+        },
+        {
+          "id": "r0:body:3",
+          "roundIndex": 0,
+          "reviewId": 5057933264,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "No tests added for new critical-path code",
+          "text": "No tests added for new critical-path code"
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "reviewId": 5057983859,
+      "provider": "anthropic",
+      "submittedAt": "2026-08-29T11:36:31Z",
+      "headSha": "ae01383d9e4dcf1053b6727d5ae0327190c76338",
+      "baseSha": "dd3cc89ef2bc9b07dbd792b1e8c0229e9f0764c8",
+      "mergeBase": "dd3cc89ef2bc9b07dbd792b1e8c0229e9f0764c8",
+      "triggerAt": "2026-08-29T11:33:36Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "0feb65928ccb61b9ddf53aa75df03063b8a8b73c",
+          "committedAt": "2026-08-29T11:25:31Z",
+          "files": [
+            {
+              "path": "src/app/api/listings/[id]/confirm-condition/route.ts",
+              "ranges": [
+                [
+                  71,
+                  77
+                ]
+              ]
+            },
+            {
+              "path": "src/app/listings/[id]/page.tsx",
+              "ranges": [
+                [
+                  124,
+                  130
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/inngest/functions/condition-reassessment.ts",
+              "ranges": [
+                [
+                  99,
+                  112
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/inngest/functions/description-rewrite.ts",
+              "ranges": [
+                [
+                  24,
+                  30
+                ],
+                [
+                  40,
+                  53
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/pipeline/rewrite-listing.ts",
+              "ranges": [
+                [
+                  63,
+                  80
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "sha": "ae01383d9e4dcf1053b6727d5ae0327190c76338",
+          "committedAt": "2026-08-29T11:33:36Z",
+          "files": [
+            {
+              "path": "src/app/api/listings/[id]/confirm-condition/route.ts",
+              "ranges": [
+                [
+                  48,
+                  64
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/inngest/functions/condition-reassessment.ts",
+              "ranges": [
+                [
+                  91,
+                  107
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/pipeline/rewrite-listing.ts",
+              "ranges": [
+                [
+                  35,
+                  43
+                ],
+                [
+                  91,
+                  98
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r1:c3886497846:0",
+          "roundIndex": 1,
+          "reviewId": 5057983859,
+          "source": "inline",
+          "commentId": 3886497846,
+          "path": "src/lib/inngest/functions/description-rewrite.ts",
+          "line": 16,
+          "severity": "P1",
+          "title": "onFailure handler reads listingId from the wrong path, so agent_blocked/revert never fires",
+          "text": "🔴 **High**\n\n**onFailure handler reads listingId from the wrong path, so agent_blocked/revert never fires**\n\nIn the function body, `event.data.listingId` is read directly (see `const { listingId, extraNotes } = (event as unknown as ListingConditionConfirmedEvent).data`). But in `onFailure`, the code reads `event.data.event.data.listingId` — an extra `.event` nesting that doesn't match the shape used elsewhere. If the Inngest failure-handler payload actually mirrors the original event's `data` shape (as the function body implies), `listingId` here will be `undefined`, the early `if (!listingId) return` will fire, and the listing will never be reverted to `condition_gate` / `agent_blocked` after exhausted retries — directly defeating the PR's stated compensation guarantee."
+        },
+        {
+          "id": "r1:c3886497854:0",
+          "roundIndex": 1,
+          "reviewId": 5057983859,
+          "source": "inline",
+          "commentId": 3886497854,
+          "path": "src/lib/inngest/functions/condition-reassessment.ts",
+          "line": 111,
+          "severity": "P2",
+          "title": "condition-reassessment update result is not checked before returning ok:true",
+          "text": "🟡 **Medium**\n\n**condition-reassessment update result is not checked before returning ok:true**\n\nThe status-transition update (`.eq('id', listingId).eq('status', 'in_loop')`) is fire-and-forget: no error check and no check for zero affected rows. If the listing's status changed concurrently (e.g. it was already something else) or the update silently fails, the function still returns `{ ok: true }`, leaving the listing in `in_loop` with `condition_confirmed = false` and no condition_gate transition — the gate never surfaces to the user and the pipeline proceeds with an unconfirmed condition."
+        },
+        {
+          "id": "r1:c3886497854:1",
+          "roundIndex": 1,
+          "reviewId": 5057983859,
+          "source": "inline",
+          "commentId": 3886497854,
+          "path": "src/lib/inngest/functions/condition-reassessment.ts",
+          "line": 111,
+          "severity": "P3",
+          "title": "The `status: 'condition_gate'` update in the `else` branch is awaited but its `error` (and whether any row matched the `.eq('status', 'in_loop')` guard) is never inspected. If this update fails, or if the listing's status was no longer `'in_loop'` at this point (e.g., concurrent modification), the function still returns `{ ok: true }`. The listing is left with `condition_confirmed: false` and status stuck at `in_loop`, so the condition gate never surfaces, and the pipeline can proceed to finalize with an unconfirmed/stale condition. The result of this update should be checked and an error thrown (or `ok: false` returned) so Inngest can retry or the failure is visible.",
+          "text": "The `status: 'condition_gate'` update in the `else` branch is awaited but its `error` (and whether any row matched the `.eq('status', 'in_loop')` guard) is never inspected. If this update fails, or if the listing's status was no longer `'in_loop'` at this point (e.g., concurrent modification), the function still returns `{ ok: true }`. The listing is left with `condition_confirmed: false` and status stuck at `in_loop`, so the condition gate never surfaces, and the pipeline can proceed to finalize with an unconfirmed/stale condition. The result of this update should be checked and an error thrown (or `ok: false` returned) so Inngest can retry or the failure is visible."
+        },
+        {
+          "id": "r1:c3886497860:0",
+          "roundIndex": 1,
+          "reviewId": 5057983859,
+          "source": "inline",
+          "commentId": 3886497860,
+          "path": "src/app/api/listings/[id]/confirm-condition/route.ts",
+          "line": 99,
+          "severity": "P2",
+          "title": "Compensation update is unconditional and can clobber a listing that already advanced",
+          "text": "🟡 **Medium**\n\n**Compensation update is unconditional and can clobber a listing that already advanced**\n\nIf `inngest.send` throws, this revert runs an unconditional `.update(...).eq('id', id).eq('user_id', user.id)` with no status guard. If, for example, a retry of this same request landed after a previous attempt's send succeeded (or after the rewrite function already transitioned status away from `condition_gate`), this compensating write will blindly overwrite `condition`/`condition_notes`/`condition_confirmed` back to the pre-request values, silently reverting a listing that may have already moved forward. The revert should be scoped with `.eq('status', 'condition_gate')` (mirroring the CAS guard above) so it only fires when the listing is still in the state this request left it in."
+        },
+        {
+          "id": "r1:c3886497861:0",
+          "roundIndex": 1,
+          "reviewId": 5057983859,
+          "source": "inline",
+          "commentId": 3886497861,
+          "path": "src/lib/inngest/functions/description-rewrite.ts",
+          "line": 54,
+          "severity": "P2",
+          "title": "Final status-transition error/zero-row result is thrown but not logged with context before propagating",
+          "text": "🟡 **Medium**\n\n**Final status-transition error/zero-row result is thrown but not logged with context before propagating**\n\nThis part is well handled (throws instead of silently succeeding), but note the thrown Error only fires when `.update()` itself returns a Postgres error — a zero-row result (e.g., listing status changed underneath, matching the CAS pattern used elsewhere in this PR) is not detected here since there's no `.select().maybeSingle()` check, unlike the analogous zero-row guard in `rewrite-listing.ts`. If the listing was moved out of `condition_gate` by another process between the rewrite completing and this step running, the update silently matches zero rows, no error is thrown, and the function returns `{ ok: true }` while `condition_confirmed` remains `true` and status remains stuck at `condition_gate` — leaving the UI permanently showing \"Rewriting copy…\" without any log or alert."
+        },
+        {
+          "id": "r1:c3886497861:1",
+          "roundIndex": 1,
+          "reviewId": 5057983859,
+          "source": "inline",
+          "commentId": 3886497861,
+          "path": "src/lib/inngest/functions/description-rewrite.ts",
+          "line": 54,
+          "severity": "P3",
+          "title": "When `description-rewrite`'s `onFailure` fires after exhausted retries, it sets `agent_blocked = true` and reverts the listing to `condition_gate`. If the user then re-confirms condition and the rewrite succeeds on retry, the `transition-to-in-loop` step here clears `agent_blocked` — good — but does not clear `agent_blocked_reason`. The stale reason string will persist on a listing that is no longer blocked, which can mislead the dashboard/workspace UI if it renders `agent_blocked_reason` independently of `agent_blocked`.",
+          "text": "When `description-rewrite`'s `onFailure` fires after exhausted retries, it sets `agent_blocked = true` and reverts the listing to `condition_gate`. If the user then re-confirms condition and the rewrite succeeds on retry, the `transition-to-in-loop` step here clears `agent_blocked` — good — but does not clear `agent_blocked_reason`. The stale reason string will persist on a listing that is no longer blocked, which can mislead the dashboard/workspace UI if it renders `agent_blocked_reason` independently of `agent_blocked`."
+        },
+        {
+          "id": "r1:c3886497865:0",
+          "roundIndex": 1,
+          "reviewId": 5057983859,
+          "source": "inline",
+          "commentId": 3886497865,
+          "path": "src/lib/inngest/functions/description-rewrite.ts",
+          "line": 25,
+          "severity": "P3",
+          "title": "onFailure compensation and confirm-condition revert can silently race with a concurrent successful in_loop transition",
+          "text": "🟢 **Low**\n\n**onFailure compensation and confirm-condition revert can silently race with a concurrent successful in_loop transition**\n\nThe onFailure handler guards with `.eq('status', 'condition_gate')`, which does prevent stomping a listing that already advanced to `in_loop` — good. However, if the update matches zero rows here (e.g. status already changed), the error/result is not checked or logged, so there's no visibility into whether the compensation actually happened or was a no-op. Given the PR's own design notes emphasize this exact failure mode (exhausted retries), a silent no-op here means an operator has no way to distinguish \"compensation succeeded\" from \"compensation was skipped because state changed\" purely from logs."
+        },
+        {
+          "id": "r1:c3886497869:0",
+          "roundIndex": 1,
+          "reviewId": 5057983859,
+          "source": "inline",
+          "commentId": 3886497869,
+          "path": "src/app/api/listings/[id]/confirm-condition/route.ts",
+          "line": 93,
+          "severity": "P3",
+          "title": "Compensating revert can clobber a listing that already advanced past condition_gate",
+          "text": "🟢 **Low**\n\n**Compensating revert can clobber a listing that already advanced past condition_gate**\n\nIf `inngest.send` throws, this compensation update writes `condition`, `condition_notes`, and `condition_confirmed` back to their pre-submit values unconditionally, without checking that the listing is still in `condition_gate`. If some other process (e.g. a retried duplicate request that this time succeeds, or a delayed webhook) already advanced the listing past this state between the failed send and this revert, this update will incorrectly stomp on it. Consider scoping the revert with `.eq('status', 'condition_gate')` (mirroring the CAS guard used for the primary update) so it only fires when the listing is still in the state this handler expects."
+        },
+        {
+          "id": "r1:body:0",
+          "roundIndex": 1,
+          "reviewId": 5057983859,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "No automated tests added for the new gate/rewrite flow",
+          "text": "No automated tests added for the new gate/rewrite flow"
+        },
+        {
+          "id": "r1:body:1",
+          "roundIndex": 1,
+          "reviewId": 5057983859,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "No test coverage for new CAS guard, deep-merge, and compensation logic",
+          "text": "No test coverage for new CAS guard, deep-merge, and compensation logic"
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "reviewId": 5057989541,
+      "provider": "anthropic",
+      "submittedAt": "2026-08-29T11:38:30Z",
+      "headSha": "ae01383d9e4dcf1053b6727d5ae0327190c76338",
+      "baseSha": "ae01383d9e4dcf1053b6727d5ae0327190c76338",
+      "mergeBase": "ae01383d9e4dcf1053b6727d5ae0327190c76338",
+      "triggerAt": null,
+      "approximate": true,
+      "commitsSince": [],
+      "claims": [
+        {
+          "id": "r2:c3886502145:0",
+          "roundIndex": 2,
+          "reviewId": 5057989541,
+          "source": "inline",
+          "commentId": 3886502145,
+          "path": "src/lib/inngest/functions/description-rewrite.ts",
+          "line": 16,
+          "severity": "P1",
+          "title": "onFailure handler still reads listingId from the wrong path",
+          "text": "🔴 **High**\n\n**onFailure handler still reads listingId from the wrong path**\n\n`event` here is the original triggering event (shape `ListingConditionConfirmedEvent`), not a wrapper with `.data.event.data.listingId`. The function body a few lines below correctly destructures `(event as unknown as ListingConditionConfirmedEvent).data`, but `onFailure` uses `.data.event.data.listingId` — this will be `undefined` on every exhausted-retry failure, so the whole compensation block (`agent_blocked=true`, revert to `condition_gate`) silently no-ops via the early `if (!listingId) return`. This was flagged by a prior reviewer and does not appear to have been fixed in this diff.\n\n*Suggested fix:*\n\n```suggestion\n    onFailure: async ({ event }) => {\n      const listingId = (event as unknown as ListingConditionConfirmedEvent).data.listingId\n      if (!listingId) return\n      const supabase = getSupabaseAdmin()\n      await supabase\n```"
+        },
+        {
+          "id": "r2:c3886502148:0",
+          "roundIndex": 2,
+          "reviewId": 5057989541,
+          "source": "inline",
+          "commentId": 3886502148,
+          "path": "src/lib/inngest/functions/condition-reassessment.ts",
+          "line": 100,
+          "severity": "P2",
+          "title": "condition-reassessment reports ok:true without verifying the status transition landed",
+          "text": "🟡 **Medium**\n\n**condition-reassessment reports ok:true without verifying the status transition landed**\n\n`updateError` is logged but not thrown/surfaced, and the function returns `{ ok: true }` regardless of whether the combined `condition` + `status: 'condition_gate'` update actually matched a row (the `.eq('status', 'in_loop')` guard means zero rows are affected if the listing already moved on). In the zero-row case the listing keeps `condition_confirmed: false` and stays wherever it was, but the caller/Inngest run is told everything succeeded, so there's no retry and no visibility into the stuck listing."
+        },
+        {
+          "id": "r2:c3886502149:0",
+          "roundIndex": 2,
+          "reviewId": 5057989541,
+          "source": "inline",
+          "commentId": 3886502149,
+          "path": "src/lib/inngest/functions/condition-reassessment.ts",
+          "line": 111,
+          "severity": "P2",
+          "title": "Zero-effect update ignored in condition-reassessment",
+          "text": "🟡 **Medium**\n\n**Zero-effect update ignored in condition-reassessment**\n\nThe update to set `status: 'condition_gate'` is constrained by `.eq('status', 'in_loop')`, but neither the returned row count nor a mismatch is checked — only `updateError` is logged, and the function still returns `{ ok: true }` regardless. If the listing was no longer `in_loop` (e.g., raced by another mutation) when this update runs, the update silently matches zero rows: condition/condition_notes get written but `status` stays wherever it was, and the listing never enters `condition_gate`. Since the function reports success, Inngest won't retry and the condition review gate is silently skipped, letting the pipeline proceed with `condition_confirmed = false` and no gate ever shown."
+        },
+        {
+          "id": "r2:c3886502149:1",
+          "roundIndex": 2,
+          "reviewId": 5057989541,
+          "source": "inline",
+          "commentId": 3886502149,
+          "path": "src/lib/inngest/functions/condition-reassessment.ts",
+          "line": 111,
+          "severity": "P3",
+          "title": "The result of the second update (setting `status='condition_gate'`) is not checked for `error` or affected rows, and the function unconditionally returns `{ ok: true, listingId }` even if this update silently failed (e.g. the listing was no longer `in_loop`, or a DB error occurred). This leaves the listing with confirmed condition fields but stuck in `in_loop` with `condition_confirmed=false`, so the condition gate never surfaces to the user and the pipeline can proceed with an unconfirmed condition.",
+          "text": "The result of the second update (setting `status='condition_gate'`) is not checked for `error` or affected rows, and the function unconditionally returns `{ ok: true, listingId }` even if this update silently failed (e.g. the listing was no longer `in_loop`, or a DB error occurred). This leaves the listing with confirmed condition fields but stuck in `in_loop` with `condition_confirmed=false`, so the condition gate never surfaces to the user and the pipeline can proceed with an unconfirmed condition."
+        },
+        {
+          "id": "r2:c3886502149:2",
+          "roundIndex": 2,
+          "reviewId": 5057989541,
+          "source": "inline",
+          "commentId": 3886502149,
+          "path": "src/lib/inngest/functions/condition-reassessment.ts",
+          "line": 111,
+          "severity": "P3",
+          "title": "The status-transition update (`status: 'condition_gate'` gated on `status='in_loop'`) is fired without checking `error` or whether any row matched, and the function unconditionally returns `{ ok: true }` regardless. If this update fails or the listing is no longer `in_loop` (e.g., raced by another writer), the listing is left with `condition_confirmed=false` and status stuck at `in_loop`, silently skipping the condition gate entirely — the pipeline will proceed as if condition review happened when it never did. Inngest won't retry or record this as a failure since the function returns success.",
+          "text": "The status-transition update (`status: 'condition_gate'` gated on `status='in_loop'`) is fired without checking `error` or whether any row matched, and the function unconditionally returns `{ ok: true }` regardless. If this update fails or the listing is no longer `in_loop` (e.g., raced by another writer), the listing is left with `condition_confirmed=false` and status stuck at `in_loop`, silently skipping the condition gate entirely — the pipeline will proceed as if condition review happened when it never did. Inngest won't retry or record this as a failure since the function returns success."
+        },
+        {
+          "id": "r2:c3886502149:3",
+          "roundIndex": 2,
+          "reviewId": 5057989541,
+          "source": "inline",
+          "commentId": 3886502149,
+          "path": "src/lib/inngest/functions/condition-reassessment.ts",
+          "line": 111,
+          "severity": "P3",
+          "title": "This snippet from the diff summary shows an unusual two-step pattern: an `else` branch runs a second `.update({ status: 'condition_gate' }).eq('status','in_loop')` after the first combined update already succeeded (and the first update, per the file patch, already sets `status: 'condition_gate'` in the same call constrained on `status='in_loop'`). If the first update already transitioned the status, this second update's `.eq('status','in_loop')` will now match zero rows (since status is already `condition_gate`), making it a guaranteed no-op whenever the first update actually succeeded — dead code that adds a redundant DB round trip without providing the additional safety it appears to intend. Additionally, its error and affected-row result are not checked, so a failure here is silently swallowed and the function still returns `{ ok: true }`, which the PR description's own risk notes (function still returns ok:true) call out as unresolved from the referenced review.",
+          "text": "This snippet from the diff summary shows an unusual two-step pattern: an `else` branch runs a second `.update({ status: 'condition_gate' }).eq('status','in_loop')` after the first combined update already succeeded (and the first update, per the file patch, already sets `status: 'condition_gate'` in the same call constrained on `status='in_loop'`). If the first update already transitioned the status, this second update's `.eq('status','in_loop')` will now match zero rows (since status is already `condition_gate`), making it a guaranteed no-op whenever the first update actually succeeded — dead code that adds a redundant DB round trip without providing the additional safety it appears to intend. Additionally, its error and affected-row result are not checked, so a failure here is silently swallowed and the function still returns `{ ok: true }`, which the PR description's own risk notes (function still returns ok:true) call out as unresolved from the referenced review."
+        },
+        {
+          "id": "r2:c3886502150:0",
+          "roundIndex": 2,
+          "reviewId": 5057989541,
+          "source": "inline",
+          "commentId": 3886502150,
+          "path": "src/app/api/listings/[id]/confirm-condition/route.ts",
+          "line": 73,
+          "severity": "P3",
+          "title": "CAS update matches condition_confirmed already true, allowing a duplicate submit to overwrite a pending rewrite",
+          "text": "🟢 **Low**\n\n**CAS update matches condition_confirmed already true, allowing a duplicate submit to overwrite a pending rewrite**\n\nThe atomic update only guards on `status = 'condition_gate'` and `condition_confirmed = false`. Wait — this update does include `.eq('condition_confirmed', false)`, addressing the double-submit race noted in Sourcery's review. However, note this only protects against submissions once `condition_confirmed` flips to true; if two requests race before either commits, only one still wins due to the WHERE clause, so this looks correctly guarded. No issue found here beyond what's already fixed."
+        },
+        {
+          "id": "r2:c3886502152:0",
+          "roundIndex": 2,
+          "reviewId": 5057989541,
+          "source": "inline",
+          "commentId": 3886502152,
+          "path": "src/lib/inngest/functions/description-rewrite.ts",
+          "line": 27,
+          "severity": "P2",
+          "title": "onFailure compensation update lacks a CAS/error check, may silently no-op",
+          "text": "🟡 **Medium**\n\n**onFailure compensation update lacks a CAS/error check, may silently no-op**\n\nThe onFailure update is guarded by `.eq('status', 'condition_gate')` but its result (error, matched-row count) is never checked or logged. If the listingId resolves incorrectly (see the sibling comment on lines 14-16) or the listing's status has since changed, this update silently matches zero rows and the failure is swallowed with no diagnostic trail — the listing is left in an inconsistent state (rewrite failed, but `agent_blocked` never gets set) with nothing in the logs to explain why."
+        },
+        {
+          "id": "r2:body:0",
+          "roundIndex": 2,
+          "reviewId": 5057989541,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "No automated tests added for new critical-path code",
+          "text": "No automated tests added for new critical-path code"
+        },
+        {
+          "id": "r2:body:1",
+          "roundIndex": 2,
+          "reviewId": 5057989541,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "No automated tests added for critical new gate/rewrite logic",
+          "text": "No automated tests added for critical new gate/rewrite logic"
+        },
+        {
+          "id": "r2:body:2",
+          "roundIndex": 2,
+          "reviewId": 5057989541,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "No automated test coverage for the new condition_gate flow",
+          "text": "No automated test coverage for the new condition_gate flow"
+        },
+        {
+          "id": "r2:body:3",
+          "roundIndex": 2,
+          "reviewId": 5057989541,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "No automated tests for new gate/rewrite pipeline",
+          "text": "No automated tests for new gate/rewrite pipeline"
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "reviewId": 5058013727,
+      "provider": "anthropic",
+      "submittedAt": "2026-08-29T11:50:20Z",
+      "headSha": "550d6d2e1be5182d60fc2c06f02f7f5d9e764eb2",
+      "baseSha": "ae01383d9e4dcf1053b6727d5ae0327190c76338",
+      "mergeBase": "ae01383d9e4dcf1053b6727d5ae0327190c76338",
+      "triggerAt": "2026-08-29T11:45:27Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "550d6d2e1be5182d60fc2c06f02f7f5d9e764eb2",
+          "committedAt": "2026-08-29T11:45:27Z",
+          "files": [
+            {
+              "path": "src/app/api/listings/[id]/confirm-condition/route.ts",
+              "ranges": [
+                [
+                  100,
+                  106
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/inngest/functions/condition-reassessment.ts",
+              "ranges": [
+                [
+                  94,
+                  112
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/inngest/functions/description-rewrite.ts",
+              "ranges": [
+                [
+                  15,
+                  21
+                ],
+                [
+                  25,
+                  37
+                ],
+                [
+                  47,
+                  65
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r3:c3886524015:0",
+          "roundIndex": 3,
+          "reviewId": 5058013727,
+          "source": "inline",
+          "commentId": 3886524015,
+          "path": "src/lib/inngest/functions/description-rewrite.ts",
+          "line": 47,
+          "severity": "P2",
+          "title": "agent_blocked is not cleared when a listing successfully re-confirms condition after a prior rewrite failure",
+          "text": "🟡 **Medium**\n\n**agent_blocked is not cleared when a listing successfully re-confirms condition after a prior rewrite failure**\n\nIf a rewrite fails and exhausts retries, `onFailure` sets `agent_blocked=true` and reverts `status='condition_gate'`, `condition_confirmed=false`. When the user re-submits via the confirm-condition route and the rewrite succeeds this time, the final `transition-to-in-loop` step here only updates `status` and `condition_confirmed`-adjacent fields but does not clear `agent_blocked`/`agent_blocked_reason`. The listing will show as blocked in the dashboard/workspace even though the rewrite completed successfully — a stale error state that's confusing and requires manual intervention to clear, with no log or user-facing indication of why the listing still appears blocked.\n\n*Suggested fix:*\n\n```suggestion\n    await step.run('transition-to-in-loop', async () => {\n      const supabase = getSupabaseAdmin()\n      const { data: updated, error } = await supabase\n        .from('listings')\n        .update({ status: 'in_loop', agent_blocked: false, agent_blocked_reason: null })\n        .eq('id', listingId)\n        .eq('status', 'condition_gate')\n        .select('id')\n        .maybeSingle()\n      if (error) {\n        throw new Error(`description-rewrite: failed to advance listing ${listingId} to in_loop -- ${error.message}`)\n      }\n      if (!updated) {\n        console.warn(`description-rewrite: zero rows updated advancing ${listingId} to in_loop — listing may no longer be in condition_gate (archived or concurrent transition)`)\n      }\n    })\n```"
+        },
+        {
+          "id": "r3:c3886524016:0",
+          "roundIndex": 3,
+          "reviewId": 5058013727,
+          "source": "inline",
+          "commentId": 3886524016,
+          "path": "src/lib/inngest/functions/description-rewrite.ts",
+          "line": 16,
+          "severity": "P1",
+          "title": "onFailure handler reads listingId from the wrong path, so agent_blocked revert never fires",
+          "text": "🔴 **High**\n\n**onFailure handler reads listingId from the wrong path, so agent_blocked revert never fires**\n\nThis casts `event` to `{ data: { event: ListingConditionConfirmedEvent } }` and reads `event.data.event.data.listingId`, but the function body just below (`async ({ event, step }) => { const { listingId, extraNotes } = (event as unknown as ListingConditionConfirmedEvent).data }`) reads `event.data.listingId` directly from the same `event` parameter name. Inngest's `onFailure` handler receives the original triggering event with the same shape as in the main handler (not double-wrapped), so `event.data.event` is very likely undefined here, making `listingId` undefined and causing this handler to silently return without ever setting `agent_blocked` or reverting `condition_confirmed`/`status`. This defeats the PR's stated goal of surfacing exhausted retries to the user."
+        },
+        {
+          "id": "r3:c3886524016:1",
+          "roundIndex": 3,
+          "reviewId": 5058013727,
+          "source": "inline",
+          "commentId": 3886524016,
+          "path": "src/lib/inngest/functions/description-rewrite.ts",
+          "line": 16,
+          "severity": "P3",
+          "title": "This was already flagged in a prior review round as reading `event.data.event.data.listingId` instead of `event.data.listingId`. Looking at the current diff, the code still uses `(event as unknown as { data: { event: ListingConditionConfirmedEvent } }).data.event.data.listingId`. If the Inngest `onFailure` handler's `event` parameter is actually the original triggering event (not a wrapper with a nested `.event` field), this cast is masking a bug: `listingId` would be `undefined` at runtime, causing the entire onFailure body to no-op (since there's an early `if (!listingId) return`), silently skipping the `agent_blocked` compensation on exhausted retries.",
+          "text": "This was already flagged in a prior review round as reading `event.data.event.data.listingId` instead of `event.data.listingId`. Looking at the current diff, the code still uses `(event as unknown as { data: { event: ListingConditionConfirmedEvent } }).data.event.data.listingId`. If the Inngest `onFailure` handler's `event` parameter is actually the original triggering event (not a wrapper with a nested `.event` field), this cast is masking a bug: `listingId` would be `undefined` at runtime, causing the entire onFailure body to no-op (since there's an early `if (!listingId) return`), silently skipping the `agent_blocked` compensation on exhausted retries."
+        },
+        {
+          "id": "r3:c3886524016:2",
+          "roundIndex": 3,
+          "reviewId": 5058013727,
+          "source": "inline",
+          "commentId": 3886524016,
+          "path": "src/lib/inngest/functions/description-rewrite.ts",
+          "line": 16,
+          "severity": "P3",
+          "title": "The onFailure handler reads `event.data.event.data.listingId`. Inngest's `onFailure` callback signature/shape varies by SDK version, and it's unclear from this diff alone whether the failure event actually wraps the original event at `event.data.event` vs. exposing `event.data` directly (as used in the main handler body on line ~24). If the shape assumed here is wrong, `listingId` would be `undefined` and the entire onFailure compensation (setting `agent_blocked`, reverting `condition_confirmed`) would silently no-op after all retries are exhausted, leaving the listing stuck in `condition_gate` with `condition_confirmed=true` and no user-visible error.",
+          "text": "The onFailure handler reads `event.data.event.data.listingId`. Inngest's `onFailure` callback signature/shape varies by SDK version, and it's unclear from this diff alone whether the failure event actually wraps the original event at `event.data.event` vs. exposing `event.data` directly (as used in the main handler body on line ~24). If the shape assumed here is wrong, `listingId` would be `undefined` and the entire onFailure compensation (setting `agent_blocked`, reverting `condition_confirmed`) would silently no-op after all retries are exhausted, leaving the listing stuck in `condition_gate` with `condition_confirmed=true` and no user-visible error."
+        },
+        {
+          "id": "r3:c3886524017:0",
+          "roundIndex": 3,
+          "reviewId": 5058013727,
+          "source": "inline",
+          "commentId": 3886524017,
+          "path": "src/lib/inngest/functions/condition-reassessment.ts",
+          "line": 108,
+          "severity": "P2",
+          "title": "condition-reassessment: warning on zero-row update is not surfaced to Inngest, function still returns ok:true",
+          "text": "🟡 **Medium**\n\n**condition-reassessment: warning on zero-row update is not surfaced to Inngest, function still returns ok:true**\n\nWhen the second `.update({status:'condition_gate'})` (now merged into a single atomic update per the current diff, so this specific concern is largely addressed) — actually looking at the current version, the atomic update with `.eq('status','in_loop')` already fixes the split-write race from the earlier version. However, the `!updatedRow` branch only does `console.warn` and the function still returns `{ ok: true, listingId }`. If the listing was not `in_loop` (e.g. archived mid-reassessment, or already transitioned by a concurrent run), the condition/condition_notes/condition_confirmed/status fields are silently NOT written, yet Inngest records this run as successful. There's no retry, no alerting distinction between a genuine success and a no-op. Downstream, the listing keeps its old status and unconfirmed condition indefinitely with no operator visibility beyond a console warning."
+        },
+        {
+          "id": "r3:c3886524019:0",
+          "roundIndex": 3,
+          "reviewId": 5058013727,
+          "source": "inline",
+          "commentId": 3886524019,
+          "path": "src/lib/inngest/functions/description-rewrite.ts",
+          "line": 51,
+          "severity": "P3",
+          "title": "Stale agent_blocked flag not cleared on successful rewrite completion",
+          "text": "🟢 **Low**\n\n**Stale agent_blocked flag not cleared on successful rewrite completion**\n\nIf a prior rewrite attempt exhausted retries, `onFailure` sets `agent_blocked = true`. When the user re-confirms condition and the retry succeeds, this final transition only sets `status: 'in_loop'` and `agent_blocked: false` — wait, this line does clear `agent_blocked: false`. Confirming: yes it does. No issue here."
+        },
+        {
+          "id": "r3:c3886524020:0",
+          "roundIndex": 3,
+          "reviewId": 5058013727,
+          "source": "inline",
+          "commentId": 3886524020,
+          "path": "src/lib/inngest/functions/description-rewrite.ts",
+          "line": 62,
+          "severity": "P2",
+          "title": "Silent no-op when zero rows updated on final status transition",
+          "text": "🟡 **Medium**\n\n**Silent no-op when zero rows updated on final status transition**\n\nWhen `updated` is null (zero rows matched, e.g. listing was archived or the status changed concurrently), this only logs a `console.warn` and the function still returns `{ ok: true, listingId }`. The rewrite completed and copy was persisted, but the status transition to `in_loop` silently failed to apply — if this happens because of a transient race rather than an intentional archive, the listing is stuck in `condition_gate` with `condition_confirmed: true` and the UI will show \"Rewriting copy…\" indefinitely with no automatic retry, since the Inngest run itself reports success."
+        },
+        {
+          "id": "r3:c3886524022:0",
+          "roundIndex": 3,
+          "reviewId": 5058013727,
+          "source": "inline",
+          "commentId": 3886524022,
+          "path": "src/lib/pipeline/rewrite-listing.ts",
+          "line": 210,
+          "severity": "P2",
+          "title": "platform_fields rewrite is silently skipped for platforms whose entry doesn't already exist in the DB",
+          "text": "🟡 **Medium**\n\n**platform_fields rewrite is silently skipped for platforms whose entry doesn't already exist in the DB**\n\n`updatedPlatformFields.ebay` / `.poshmark` are only patched when `existingPf.ebay` / `existingPf.poshmark` already exist (truthy). If a listing has not yet had platform_fields populated for a platform (e.g. `poshmark` hasn't been generated yet, or the key is absent/null for any reason), the rewritten `poshmark_title`/`poshmark_description` from the Claude call are silently discarded — no error, no log, and the returned data implies success. Since the PR description states 'titles + descriptions + condition_notes updated' as a guaranteed outcome of this flow, this is a correctness gap: the rewrite can complete successfully while leaving stale/missing copy for a platform that lacks a pre-existing platform_fields entry, and there's no test or log signaling this happened."
+        },
+        {
+          "id": "r3:c3886524023:0",
+          "roundIndex": 3,
+          "reviewId": 5058013727,
+          "source": "inline",
+          "commentId": 3886524023,
+          "path": "src/lib/inngest/functions/condition-reassessment.ts",
+          "line": 106,
+          "severity": "P3",
+          "title": "condition-reassessment now throws when the update itself succeeds with zero rows only after previous fix; verify status-check ordering",
+          "text": "🟢 **Low**\n\n**condition-reassessment now throws when the update itself succeeds with zero rows only after previous fix; verify status-check ordering**\n\nThis looks correct now: the atomic update constrains on `status='in_loop'` and throws on a genuine DB error, only warning (not throwing) when zero rows match (which can legitimately happen if the listing moved on). This resolves the previously-flagged issue about the status transition being silently skipped. No action needed — noting for context since this addresses Sourcery comment 3 above."
+        },
+        {
+          "id": "r3:c3886524024:0",
+          "roundIndex": 3,
+          "reviewId": 5058013727,
+          "source": "inline",
+          "commentId": 3886524024,
+          "path": "src/app/api/listings/[id]/confirm-condition/route.ts",
+          "line": 65,
+          "severity": "P3",
+          "title": "extra_notes/observations validated but not persisted on the listing",
+          "text": "🟢 **Low**\n\n**extra_notes/observations validated but not persisted on the listing**\n\n`extra_notes` is validated (type + length) and forwarded to Inngest as `extraNotes`, where it's used transiently in the rewrite prompt (`rewrite-listing.ts`), but it is never written back to the `listings` row anywhere in this diff. If the rewrite fails and the user needs to retry, or if anyone later wants to inspect what observations were submitted, that data is lost — it only exists for the duration of a single Inngest run's prompt construction. This may be intentional, but it's worth confirming this isn't meant to be persisted (e.g., appended to `condition_notes` or stored in a dedicated column) since the UI collects it as user-authored content."
+        },
+        {
+          "id": "r3:body:0",
+          "roundIndex": 3,
+          "reviewId": 5058013727,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "No automated tests for new CAS/compensation logic",
+          "text": "No automated tests for new CAS/compensation logic"
+        },
+        {
+          "id": "r3:body:1",
+          "roundIndex": 3,
+          "reviewId": 5058013727,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "No automated test coverage for new gate/rewrite flow",
+          "text": "No automated test coverage for new gate/rewrite flow"
+        },
+        {
+          "id": "r3:body:2",
+          "roundIndex": 3,
+          "reviewId": 5058013727,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "No automated tests for new critical-path logic (CAS guard, deep-merge, onFailure compensation)",
+          "text": "No automated tests for new critical-path logic (CAS guard, deep-merge, onFailure compensation)"
+        },
+        {
+          "id": "r3:body:3",
+          "roundIndex": 3,
+          "reviewId": 5058013727,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "No automated tests for new critical-path code",
+          "text": "No automated tests for new critical-path code"
+        }
+      ]
+    }
+  ],
+  "threads": [
+    {
+      "threadId": "PRRT_kwDOSSBjYs6dZg_0",
+      "commentId": 3886461972,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3886484620,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-29T11:28:51Z",
+          "editedAt": null,
+          "body": "The path is correct. Inngest `onFailure` handlers receive a synthetic `inngest/function.failed` event whose `data` object wraps the original triggering event at `data.event`. So `event.data.event.data.listingId` is the right access path for the original `listing/condition-confirmed` event's listingId. The `as unknown as` cast is the standard TypeScript pattern for Inngest failure events (the SDK doesn't export a typed failure envelope). The `if (!listingId) return` guard provides runtime safety if the shape ever differs. No change."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6dZg_5",
+      "commentId": 3886461978,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3886484741,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-29T11:28:54Z",
+          "editedAt": null,
+          "body": "Already guarded. The CAS on `status='condition_gate'` + `condition_confirmed=false` prevents any duplicate dispatch: a second tab submit returns 409 after the first submit sets `condition_confirmed=true`. An additional Inngest-level dedup would be redundant. No change."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6dZg_8",
+      "commentId": 3886461983,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3886484830,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-29T11:28:58Z",
+          "editedAt": null,
+          "body": "Intentional. `extra_notes` is an ephemeral rewrite input — user observations that get incorporated into `condition_notes` and descriptions by the Claude rewrite call. Persisting them would require a new DB column (out of scope for this PR). After the rewrite, the observations are reflected in the updated `condition_notes`; there's nothing to surface back to the user. No change."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6dZhAA",
+      "commentId": 3886461988,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3886484957,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-29T11:29:02Z",
+          "editedAt": null,
+          "body": "Correct behavior. The compensating revert only fires when `inngest.send` fails, which means no rewrite job was scheduled. Resetting `condition_confirmed=false` makes the form re-submittable so the user can retry — the listing stays in `condition_gate` and the UI shows the panel again. Reverting to the previous condition values (from the `existing` read) and resetting `condition_confirmed` is exactly what enables that retry path. No change."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6dZhAD",
+      "commentId": 3886461991,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3886485494,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-29T11:29:19Z",
+          "editedAt": null,
+          "body": "Fixed in 0feb659: added `.eq('status', 'condition_gate')` to the `onFailure` update. The handler now only fires when the listing is still in `condition_gate`; listings that already advanced to `in_loop` or beyond are not touched."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6dZhAE",
+      "commentId": 3886461997,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3886485573,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-29T11:29:22Z",
+          "editedAt": null,
+          "body": "Fixed in 0feb659: renamed `listing` to `_listing` in `conditionGateContext`."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6dZhAJ",
+      "commentId": 3886462002,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3886485665,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-29T11:29:26Z",
+          "editedAt": null,
+          "body": "Fixed in 0feb659: the gate transition result is now destructured to `gateError` and logged on failure."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6dZhAL",
+      "commentId": 3886462005,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3886485749,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-29T11:29:29Z",
+          "editedAt": null,
+          "body": "The cast is safe. `existing.condition` is read from the DB and typed `string` by the Supabase client; the cast to `ConditionValue` is correct because the DB constraint ensures only valid enum values are stored. An explicit validation here would add dead code — the constraint is the authority. No change."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6dZhAO",
+      "commentId": 3886462009,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3886485853,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-29T11:29:32Z",
+          "editedAt": null,
+          "body": "Fixed in 0feb659 (same fix as the earlier comment: renamed to `_listing`)."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6dZhAR",
+      "commentId": 3886462014,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3886486244,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-29T11:29:50Z",
+          "editedAt": null,
+          "body": "Addressed above (3886461983). `extra_notes` is an ephemeral rewrite input; persisting it requires a schema change out of scope for this PR. The observations are incorporated into `condition_notes` by the Claude rewrite. No change."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6dZhAT",
+      "commentId": 3886462016,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3886486340,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-29T11:29:53Z",
+          "editedAt": null,
+          "body": "The event payload is the source of truth. `extraNotes` and `conditionNotes` are sent in the `listing/condition-confirmed` event (fired by the API route) and are passed through directly to `runRewriteListing`. Re-reading them from DB would add a round-trip and create a TOCTOU between the event fire and the DB read. No change."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6dZhAV",
+      "commentId": 3886462019,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3886486420,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-29T11:29:57Z",
+          "editedAt": null,
+          "body": "Intentional. The compensating revert only runs when `inngest.send` fails — meaning no rewrite was scheduled and the listing never left `condition_gate`. Status is unchanged (still `condition_gate`), and the condition fields are reverted to pre-submit values so the user can re-submit. Resetting status here would be wrong — it never changed. No change."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6dZm6f",
+      "commentId": 3886497846,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3886516176,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-29T11:45:42Z",
+          "editedAt": null,
+          "body": "Declining — the path is correct per the Inngest SDK type definition.\n\n`FailureEventPayload` in `inngest/types.d.ts`:\n```ts\ntype FailureEventPayload<P extends EventPayload = EventPayload> = {\n  name: `${internalEvents.FunctionFailed}`;\n  data: {\n    function_id: string;\n    run_id: string;\n    error: ...;\n    event: P;  // ← original event nested here\n  };\n};\n```\n\nIn `onFailure({ event })`, `event` is the `FailureEventPayload`, not the original triggering event. The original event is at `event.data.event`, making `event.data.event.data.listingId` the correct path. The main function body uses `event.data.listingId` because there `event` IS the original `ListingConditionConfirmedEvent` — different handler, different event shape. Verified against `node_modules/inngest@4.18.1/types.d.ts`."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6dZm6l",
+      "commentId": 3886497854,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3886516574,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-29T11:45:54Z",
+          "editedAt": null,
+          "body": "Fixed in 550d6d2. `condition-reassessment` now uses `.select('id').maybeSingle()` on the update: throws on `updateError` (so Inngest retries) and warns on zero-affected-rows (listing archived or concurrently transitioned). `{ ok: true }` is now only returned when the update matched a row."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6dZm6q",
+      "commentId": 3886497860,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3886516903,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-29T11:46:04Z",
+          "editedAt": null,
+          "body": "Fixed in 550d6d2. Added `.eq('status', 'condition_gate')` to the compensation revert in `confirm-condition/route.ts`. A late retry or concurrent advanced listing can no longer have its fields blindly overwritten by the revert — it silently no-ops on the already-advanced listing."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6dZm6r",
+      "commentId": 3886497861,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3886516922,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-29T11:46:05Z",
+          "editedAt": null,
+          "body": "Fixed in 550d6d2. `transition-to-in-loop` now uses `.select('id').maybeSingle()`: DB error still throws for Inngest retry; zero-row result (listing no longer in `condition_gate`) logs a warn instead of silently returning `{ ok: true }`. Matches the guard pattern used in `rewrite-listing.ts`."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6dZm6w",
+      "commentId": 3886497865,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3886517170,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-29T11:46:14Z",
+          "editedAt": null,
+          "body": "Fixed in 550d6d2. `onFailure` now checks both the error and affected-row count from the compensation update. An existing `.eq('status', 'condition_gate')` guard was already correct; added `.select('id').maybeSingle()` to surface whether the compensation landed or was a no-op (logs `warn` on zero rows, `error` on DB error)."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6dZm6y",
+      "commentId": 3886497869,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3886517213,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-29T11:46:15Z",
+          "editedAt": null,
+          "body": "Fixed in 550d6d2 (same fix as sibling comment PRRT_kwDOSSBjYs6dZm6q). Added `.eq('status', 'condition_gate')` guard to the compensation revert in `confirm-condition/route.ts`."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6dZnoE",
+      "commentId": 3886502145,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3886516539,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-29T11:45:53Z",
+          "editedAt": null,
+          "body": "Declining — same as sibling comment. `event` in `onFailure` is `FailureEventPayload<ListingConditionConfirmedEvent>`, not the original event. The `FailureEventPayload<P>` type wraps the original at `data.event`, so `event.data.event.data.listingId` is the correct access path. The main function body accesses `event.data.listingId` because in that handler `event` has the original event shape — two different handler signatures. See `inngest/types.d.ts@4.18.1` (`FailureEventPayload` definition)."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6dZnoF",
+      "commentId": 3886502148,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3886517435,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-29T11:46:24Z",
+          "editedAt": null,
+          "body": "Fixed in 550d6d2 (same fix as sibling comment PRRT_kwDOSSBjYs6dZm6l). `condition-reassessment` now throws on `updateError` and warns on zero rows; `{ ok: true }` only returned when the row was actually updated."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6dZnoG",
+      "commentId": 3886502149,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3886517472,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-29T11:46:25Z",
+          "editedAt": null,
+          "body": "Fixed in 550d6d2 (same fix as sibling comments). Added `.select('id').maybeSingle()` to the atomic update in `condition-reassessment.ts`: `updateError` now throws (Inngest retry), zero rows logs a warn so the silent divergence is visible in logs."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6dZnoH",
+      "commentId": 3886502150,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3886517757,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-29T11:46:37Z",
+          "editedAt": null,
+          "body": "Acknowledging — as you note, the `.eq('condition_confirmed', false)` guard already addresses this. The two-concurrent-requests race before either commits is serialized at the DB level (only one UPDATE wins via row-level locking); the second request returns zero rows and gets 409. No further change needed."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6dZnoJ",
+      "commentId": 3886502152,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3886517806,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-29T11:46:38Z",
+          "editedAt": null,
+          "body": "Fixed in 550d6d2 (same fix as LOW PRRT_kwDOSSBjYs6dZm6w). `onFailure` now uses `.select('id').maybeSingle()` and logs both error and zero-row cases. Status guard (`.eq('status', 'condition_gate')`) was already present; the onFailure event shape (`event.data.event.data.listingId`) is correct per the sibling HIGH-finding reply."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6dZrNs",
+      "commentId": 3886524015,
+      "isResolved": false,
+      "isOutdated": false,
+      "resolvedBy": null,
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6dZrNt",
+      "commentId": 3886524016,
+      "isResolved": false,
+      "isOutdated": false,
+      "resolvedBy": null,
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6dZrNu",
+      "commentId": 3886524017,
+      "isResolved": false,
+      "isOutdated": false,
+      "resolvedBy": null,
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6dZrNw",
+      "commentId": 3886524019,
+      "isResolved": false,
+      "isOutdated": false,
+      "resolvedBy": null,
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6dZrNx",
+      "commentId": 3886524020,
+      "isResolved": false,
+      "isOutdated": false,
+      "resolvedBy": null,
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6dZrNy",
+      "commentId": 3886524022,
+      "isResolved": false,
+      "isOutdated": false,
+      "resolvedBy": null,
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6dZrNz",
+      "commentId": 3886524023,
+      "isResolved": false,
+      "isOutdated": false,
+      "resolvedBy": null,
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSSBjYs6dZrN0",
+      "commentId": 3886524024,
+      "isResolved": false,
+      "isOutdated": false,
+      "resolvedBy": null,
+      "replies": []
+    }
+  ],
+  "reactions": [
+    {
+      "commentId": 3886461972,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-08-29T11:30:49Z"
+    },
+    {
+      "commentId": 3886461978,
+      "user": "joeblackwaslike",
+      "content": "-1",
+      "createdAt": "2026-08-29T11:30:50Z"
+    },
+    {
+      "commentId": 3886461983,
+      "user": "joeblackwaslike",
+      "content": "-1",
+      "createdAt": "2026-08-29T11:30:52Z"
+    },
+    {
+      "commentId": 3886461988,
+      "user": "joeblackwaslike",
+      "content": "-1",
+      "createdAt": "2026-08-29T11:30:53Z"
+    },
+    {
+      "commentId": 3886461991,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-08-29T11:30:54Z"
+    },
+    {
+      "commentId": 3886461997,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-08-29T11:30:55Z"
+    },
+    {
+      "commentId": 3886462002,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-08-29T11:30:56Z"
+    },
+    {
+      "commentId": 3886462005,
+      "user": "joeblackwaslike",
+      "content": "-1",
+      "createdAt": "2026-08-29T11:30:57Z"
+    },
+    {
+      "commentId": 3886462009,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-08-29T11:30:58Z"
+    },
+    {
+      "commentId": 3886462014,
+      "user": "joeblackwaslike",
+      "content": "-1",
+      "createdAt": "2026-08-29T11:30:59Z"
+    },
+    {
+      "commentId": 3886462016,
+      "user": "joeblackwaslike",
+      "content": "-1",
+      "createdAt": "2026-08-29T11:31:00Z"
+    },
+    {
+      "commentId": 3886462019,
+      "user": "joeblackwaslike",
+      "content": "-1",
+      "createdAt": "2026-08-29T11:31:01Z"
+    },
+    {
+      "commentId": 3886497846,
+      "user": "joeblackwaslike",
+      "content": "-1",
+      "createdAt": "2026-08-29T11:46:47Z"
+    },
+    {
+      "commentId": 3886497854,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-08-29T11:46:52Z"
+    },
+    {
+      "commentId": 3886497860,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-08-29T11:46:52Z"
+    },
+    {
+      "commentId": 3886497861,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-08-29T11:46:52Z"
+    },
+    {
+      "commentId": 3886497865,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-08-29T11:46:53Z"
+    },
+    {
+      "commentId": 3886497869,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-08-29T11:46:53Z"
+    },
+    {
+      "commentId": 3886502145,
+      "user": "joeblackwaslike",
+      "content": "-1",
+      "createdAt": "2026-08-29T11:46:47Z"
+    },
+    {
+      "commentId": 3886502148,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-08-29T11:46:53Z"
+    },
+    {
+      "commentId": 3886502149,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-08-29T11:46:54Z"
+    },
+    {
+      "commentId": 3886502150,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-08-29T11:46:59Z"
+    },
+    {
+      "commentId": 3886502152,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-08-29T11:46:54Z"
+    }
+  ]
+}

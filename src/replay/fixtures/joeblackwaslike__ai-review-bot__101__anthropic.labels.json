@@ -1,0 +1,128 @@
+{
+  "fixtureId": "joeblackwaslike__ai-review-bot__101__anthropic",
+  "provisional": true,
+  "labels": [
+    {
+      "claimId": "r0:c4434795275:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-11-01T07:56:53Z|Fixed in 2cba2c9. `hasClaudeAccessToken` now requires a parseable entry holding a `claudeAiOauth.accessToken` (or top-level `accessToken`); an entry without one falls back to `ANTHROPIC_API_KEY`. Covered by \"falls back to ANTHROPIC_API_KEY when the keychain entry has no access token\"."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c4434795276:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-11-01T07:57:01Z|Fixed in 2cba2c9. `parseCodexAuth` now distinguishes the cases: a missing file keeps the original \"no ~/.codex/auth.json\" message, a corrupt one throws \"~/.codex/auth.json is not valid JSON — fix or remove it, then run `codex login`\"."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c4434795278:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-11-01T07:57:05Z|Fixed in 2cba2c9. You're right that falling back would undercut the point of the PR. An unparseable auth.json now throws before `OPENAI_API_KEY` is considered, and the same rule applies to the Claude keychain entry (c6c3a55). Tests: \"throws instead of billing OPENAI_API_KEY when auth.json is unparseable\" and its Anthropic counterpart."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c4434795279:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-11-01T07:56:57Z|Fixed in 2cba2c9, same change as the sibling thread: the keychain blob must carry an access token to count as a subscription. An unparseable blob now throws instead of being treated as a subscription (c6c3a55), so it can't bill the key silently either."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c4434795280:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-11-01T07:57:08Z|Fixed in 2cba2c9. The refresh-failure assertions now match `/session expired|refresh failed/i`, and an Anthropic broken-subscription test was added alongside, so neither can pass on an unrelated error."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:1",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:1",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:2",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:3",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:4",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:5",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:6",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    }
+  ],
+  "repeatPairs": [
+    {
+      "later": "r1:body:5",
+      "earlier": "r0:body:0",
+      "confirmed": false
+    },
+    {
+      "later": "r1:body:6",
+      "earlier": "r0:body:1",
+      "confirmed": false
+    }
+  ],
+  "negativePairs": [],
+  "allowedSuppression": []
+}

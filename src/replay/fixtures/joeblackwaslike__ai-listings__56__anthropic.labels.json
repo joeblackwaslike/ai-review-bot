@@ -1,0 +1,562 @@
+{
+  "fixtureId": "joeblackwaslike__ai-listings__56__anthropic",
+  "provisional": true,
+  "labels": [
+    {
+      "claimId": "r0:c3857895410:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-26T00:00:30Z|Duplicate of the Codex/Sourcery finding above -- already fixed in ed9a510 (`processed_url ?? raw_url` in all consumers)."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3857895413:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-26T00:00:34Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:1",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:2",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:3",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:4",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:5",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:6",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:1",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:2",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:3",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:4",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:5",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:6",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:7",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:8",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3858281377:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-25T23:59:12Z|changed src/app/api/listings/[id]/skip-bg/route.ts near line 78 in f455437efb0febbc69f42926cb8f0f2d76d95c35"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3858281386:0",
+      "label": "deferred",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-26T00:00:58Z|Declining for this PR -- narrow window (DB update failure after a successful reprocess), and it matches the existing reprocess-then-flip-flag ordering already used by photos/[id]/quality-override/route.ts (removeBackground runs before the metadata update there too). A transactional rewrite is out of scope for this PR; filing a follow-up if it recurs in practice."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3858281392:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-25T23:59:12Z|changed src/app/api/listings/[id]/skip-bg/route.ts near line 63 in f455437efb0febbc69f42926cb8f0f2d76d95c35"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:1",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:2",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:3",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:4",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:5",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:6",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:7",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:8",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3858557511:0",
+      "label": "deferred",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-26T00:08:19Z|Declining for this PR -- same race theme flagged repeatedly across earlier rounds (step4b vs skip-bg storage-path overlap), narrowed here to the DB row specifically. The window requires a skip-bg toggle to land mid-flight while step4b's own initial processing for the same photo is still in progress, which needs an already-toggled listing to still be mid-intake-pipeline -- a narrow, low-frequency edge case. Optimistic locking or serializing the two paths is a real fix but a bigger design change than this PR's scope; filing a follow-up rather than blocking on it here."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3858557515:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-26T00:08:17Z|Fixed in 8a33c7f -- reused categorySkipsBackgroundRemoval() here too, so the jewelry exclusion is checked alongside skip_background_removal, matching step4b-photoroom.ts and the skip-bg toggle route."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:1",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:2",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:3",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:4",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:5",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:6",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:7",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:8",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:9",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3858626853:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-26T00:21:25Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3858626860:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3858626867:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3858626870:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-26T00:21:33Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3858626876:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-26T00:21:35Z|Fixed in 0b1b1de -- reworded to attribute the behavior to sharp's read-time default rather than the jpeg()/toBuffer() output step."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3858626877:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-26T00:21:38Z|Declining -- the reordering is intentional: raw_url should always be present (photos are only ever created with raw_url set), so surfacing a missing/unreadable photo row as an error is more correct than the old silent-skip-if-flag-checked-first behavior. No known path leaves a studio photo without raw_url."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3858626880:0",
+      "label": "deferred",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-26T00:21:40Z|Declining -- same finding as an earlier round (reprocess-then-flip-flag ordering), same rationale: narrow window, matches the existing precedent in photos/[id]/quality-override/route.ts (removeBackground before the metadata update there too), and a transactional rewrite is out of scope for this PR."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3858626882:0",
+      "label": "deferred",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-26T00:21:43Z|Declining for this PR -- correct observation, but low risk as you note. categorySkipsBackgroundRemoval() is already the shared piece; unifying the full routing decision (category-or-flag) into one helper both call sites use is a reasonable follow-up, not required here."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:body:1",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:body:2",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:body:3",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:body:4",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:body:5",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:body:6",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:body:7",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:body:8",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:body:9",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:c3858689465:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:c3858689469:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-26T00:35:44Z|Acknowledged, matches your own conclusion -- intentional, not a defect. No action needed."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:body:1",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:body:2",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:body:3",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:body:4",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:body:5",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:body:6",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:body:7",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:body:8",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:body:9",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    }
+  ],
+  "repeatPairs": [
+    {
+      "later": "r1:body:0",
+      "earlier": "r0:body:5",
+      "confirmed": false
+    },
+    {
+      "later": "r4:body:0",
+      "earlier": "r2:body:8",
+      "confirmed": false
+    },
+    {
+      "later": "r4:body:0",
+      "earlier": "r3:body:5",
+      "confirmed": false
+    },
+    {
+      "later": "r4:body:6",
+      "earlier": "r3:body:2",
+      "confirmed": false
+    }
+  ],
+  "negativePairs": [],
+  "allowedSuppression": []
+}

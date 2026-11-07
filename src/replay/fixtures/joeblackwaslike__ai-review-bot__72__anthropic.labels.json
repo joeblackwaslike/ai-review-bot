@@ -1,0 +1,3923 @@
+{
+  "fixtureId": "joeblackwaslike__ai-review-bot__72__anthropic",
+  "provisional": true,
+  "labels": [
+    {
+      "claimId": "r0:c3810139839:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T05:16:11Z|Partially addressed in 2c6973a5, with a scope note: our own CLI no longer requires the secret on *our* argv (stdin/prompt, see the cli.ts:916 thread), so the process-listing/shell-history exposure for the `ai-review` process itself is gone. The residual you're pointing at is one level deeper — the `security add-generic-password -w <value>` subprocess call itself. `security`'s own docs (`security add-generic-password -h`, and the man page) say the *only* way to avoid `-w`'s value being visible via `ps` for that subprocess is to omit it and let `security` prompt interactively — which doesn't work for non-interactive/piped operation, the primary flow this feature targets (`op read ... | ai-review creds set VAR`). `src/auth.ts`'s existing `defaultWriteKeychain` (the Claude Code OAuth token storage this PR explicitly mirrors) has the identical `-w <value>` pattern already, so this isn't a regression introduced here. Leaving this as a documented, accepted trade-off rather than a fix — resolving since there's no further move available without breaking non-interactive use."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810139848:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T05:16:19Z|Fixed in 2c6973a5: `getConfig({ requireWebhookSecret: false })` is now called once and reused for both `appId` and `privateKey`."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810139857:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T05:16:26Z|Fixed in 2c6973a5: the loop now writes a diagnostic to stderr for any Keychain-read failure that isn't a recognized \"item not found\"/\"security binary missing\" outcome, while still degrading to the next resolution tier rather than aborting."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810139860:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T05:16:33Z|Fixed in 2c6973a5: `defaultReadXdgFile` now distinguishes `ENOENT` (expected — no fallback file) from other read failures (e.g. a permissions error) and writes a stderr diagnostic for the latter instead of treating every failure identically."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810139861:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T05:16:39Z|Fixed in 2c6973a5: `defaultWriteKeychain` now catches `security` failures and throws a friendlier `Error` (distinguishing a missing `security` binary from other failures) instead of letting the raw `execFile` rejection propagate."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810139865:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T05:16:46Z|Fixed in 2c6973a5: `defaultWriteKeychain`/`defaultDeleteKeychain` now recognize the `ENOENT` case (via `isKeychainUnavailableError`) and throw a clear \"macOS Keychain is not available on this platform\" message instead of an unhandled raw `ENOENT` rejection. (In practice this still surfaces cleanly either way — `main()` already has a top-level `.catch` that prints `Fatal: <message>` rather than a raw stack trace — but the message itself is now actionable.)"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810139868:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T05:16:53Z|Fixed in 2c6973a5: `defaultDeleteKeychain` now only swallows the specific \"item not found\" case (`isItemNotFoundError`, keyed on `security`'s exit code 44); any other failure propagates as a clear error instead of `unset` reporting false success."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810139872:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T05:17:00Z|Fixed in 2c6973a5 — same fix as the sourcery-ai thread on this line: `cmdCreds` now validates `varName` against `CLI_CREDENTIAL_VARS` before dispatching to either helper."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810139874:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T05:17:08Z|Fixed in 2c6973a5: `main()` now skips `resolveCliCredentials()` entirely when the subcommand is `creds`, since it manages the Keychain directly and doesn't consume the resolved env vars."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810139876:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T05:17:16Z|Fixed in 2c6973a5: added `cmdCreds` test coverage in `src/cli.test.ts` (unknown var rejected for both `set` and `unset`, known var accepted, `setCredential`/`unsetCredential` not called on rejection) — colocated with the new validation logic in `cli.ts` rather than `cli-creds.test.ts`, since `cli-creds.ts` doesn't own the CLI-argument-parsing layer."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810139877:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T05:17:23Z|Fixed in 2c6973a5 — same fix as the other var-validation threads on this file."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810139878:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T05:17:30Z|Fixed in 2c6973a5: `defaultWriteKeychain`/`defaultDeleteKeychain` now catch and translate the non-macOS `ENOENT` case into a clear message; `defaultReadKeychain` already degraded gracefully and now additionally warns on stderr for a genuinely unexpected (non-ENOENT, non-not-found) failure."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810139881:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T05:17:37Z|Fixed in 2c6973a5: removed the redundant `if (env[v]) continue;` — confirmed dead as described (every element of `missing` already has `env[v]` falsy)."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810139887:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T05:17:43Z|Fixed in 2c6973a5: `setCredential`'s `varName` parameter is now typed `CliCredentialVar` instead of `string`."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810139890:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T05:17:51Z|Fixed in 2c6973a5: `unsetCredential`'s `varName` parameter is now typed `CliCredentialVar` instead of `string`."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810139895:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T05:17:59Z|Fixed in 2c6973a5 — same fix as the other non-macOS `defaultWriteKeychain` thread (cli-creds.ts:63)."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810139900:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T05:18:06Z|Fixed in 2c6973a5 — same dead-code removal as the other `if (env[v]) continue` thread (cli-creds.ts:108); confirmed it's the identical guard, correctly flagged twice at slightly different post-edit line numbers."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810139905:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T05:18:15Z|reaction -1 by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810139908:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T05:13:54Z|changed src/cli-creds.ts near line 227 in 2c6973a5b117502b5369181cc6f201be0ec22ff1"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810139913:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T05:18:27Z|Fixed in 2c6973a5 — same var-validation fix, applied right before the `setCredential`/`unsetCredential` calls as requested."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810139916:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T05:18:35Z|Fixed in 2c6973a5 — same fix as the cli.ts:884 thread on this line pair (single `getConfig()` call, reused)."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810139922:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T05:18:42Z|Fixed in 2c6973a5: validated in `cmdCreds` (the caller) and typed as `CliCredentialVar` on `setCredential`/`unsetCredential` themselves, per both options you suggested."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3810139925:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T05:18:49Z|Addressed in 2c6973a5 with a code comment at the `dotenv.parse(raw)` call noting the line-by-line parsing constraint and pointing at the docs' required `\\n`-escaped one-liner format — matches your \"at minimum a comment\" suggestion. Not adding parse-time validation beyond that; the one-liner format is already the only documented/supported input for this fallback."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:1",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:2",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:3",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:4",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:5",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:6",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:7",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:8",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:9",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:10",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:11",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:12",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:13",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:14",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:15",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:16",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810271593:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T05:36:48Z|Fixed in 9ce815e3: `defaultReadSecret` now uses `.trim()` for piped stdin input instead of only stripping a trailing newline."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810271604:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T05:36:56Z|Declining — no defect identified (the finding itself concludes \"no runtime impact\", \"low risk\"). `fatal()` is already typed `(msg: string): never` in this file, so the cast on the return path is exactly the standard TS pattern for narrowing after a never-typed guard call, not a fragile assumption."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810271608:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T05:37:03Z|Declining — the finding's own conclusion is \"No fix is strictly required.\" Ctrl-D-on-empty resolving `rl.question` to `\"\"` is exactly the intended behavior (falls into the existing `fatal(\"No value provided.\")` path). Also moot as of 9ce815e3: the interactive path no longer uses `readline.question` at all (replaced with a raw-mode masked reader, see the cli.ts:952 thread) — the hang scenario described doesn't apply to the new implementation."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810271611:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T05:37:10Z|Declining — this describes code that isn't present. `defaultWriteKeychain` only calls `isKeychainUnavailableError` in its catch, never `isItemNotFoundError` (see cli-creds.ts as of 9ce815e3). There's no path where a write's failure gets classified as \"item not found\"."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810271620:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T05:35:54Z|changed src/cli.ts near line 968 in 9ce815e321c1623b43c932f8d5fd5a790d0cea1c"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810271623:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T05:37:23Z|Fixed in 9ce815e3: replaced the visible `readline.question()` prompt with a raw-mode reader that suppresses echo, so an interactively-typed secret no longer appears on screen or in terminal scrollback. Went with a self-contained raw-mode implementation rather than the suggested `setRawMode` + `rl.question` combination — mixing the two doesn't actually suppress echo on its own (readline's terminal interface does its own character echo independent of the underlying tty's raw/cooked mode), so a fully manual reader was the more reliable route."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810271627:0",
+      "label": "deferred",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T05:37:30Z|Comment corrected in 9ce815e3 to state the real reason (creds manages the Keychain directly and doesn't consume the resolved vars) instead of overstating a \"double read\" cost. On the `creds list` vs `process.env` UX point: that's pre-existing behavior (listCredentials only ever checked the Keychain, unchanged by this PR) rather than a regression introduced here — leaving the design question of whether `list` should also reflect `process.env` state out of scope for this review-response pass."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810271631:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T05:37:36Z|Added in 9ce815e3 — the suggested `Object.assign(new Error(...), { code: 44 })` regression test, confirming the classifier handles the real execFile-rejection shape, not just a bare object."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810271640:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T05:37:46Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810271645:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T05:37:50Z|Agreed and no action needed — thanks for the correction. Confirmed the XDG-merge `if (!env[v] && parsed[v])` guard is load-bearing (prevents the file from overwriting a Keychain-resolved value), and the Keychain loop itself has no equivalent redundant check post-9ce815e3/2c6973a5."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810271650:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T05:37:59Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810271652:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T05:38:03Z|Fixed in 9ce815e3: added a runtime `assertKnownCredentialVar` guard inside both `setCredential` and `unsetCredential`, so a caller that bypasses the `CliCredentialVar` compile-time constraint (a plain-JS caller, or an explicit cast) is still rejected. Covered by two new tests exercising the bypass via `as CliCredentialVar`."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810271659:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T05:38:09Z|Fixed in 9ce815e3 — same comment correction as the cli.ts:1029 thread on this file."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810271668:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T05:38:18Z|Fixed in 9ce815e3: `cmdCreds` now writes a stderr tip (\"omit the value and pipe it on stdin instead...\") whenever a positional value is supplied for a `_PRIVATE_KEY` var specifically."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3810271671:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T05:38:25Z|Fixed in 9ce815e3 — trimmed the bot-name/PR-number attribution out of the new test comments; they now read as plain behavior + rationale, matching this file's existing comment style."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:1",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:2",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:3",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:4",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:5",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:6",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:7",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:8",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:9",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:10",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:11",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:12",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810349721:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:11:52Z|Fixed the overclaim in cddcd65: docs and comments now say precisely what's protected (our own argv/history) vs. what isn't (the `security` subprocess's own transient argv). The write path itself can't fully close this — verified directly that `security`'s only non-argv input mode is an interactive double-entry terminal prompt (type it twice, no piping), incompatible with the non-interactive/piped flow this feature targets. See the new comment on `defaultWriteKeychain` and the docs' \"Residual exposure\" section for the full explanation."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810349725:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:18:45Z|The stdin-hang concern this raised is fixed in cddcd65 (`end`/`error` listeners). On the specific claim: `main()` already has a top-level `.catch()` (`main().catch((err) => { console.error(\"Fatal:\", ...); process.exit(1); })`), so a Ctrl-C rejection was always caught and printed cleanly rather than genuinely unhandled — but the underlying \"no end/error listener\" gap this thread and its duplicates identified was real and is now fixed."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810349729:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T06:16:49Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810349731:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:15:36Z|Fixed in cddcd65: `cleanup()` is now invoked exactly once via a `settled` guard shared by `settleResolve`/`settleReject`, called from every exit path (`data`, `end`, `error`) — not just the two paths that existed before, so there's no route that skips it."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810349736:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:17:00Z|Declining — the tip firing whenever a positional value is supplied for a `_PRIVATE_KEY` var (regardless of whether the caller is interactive or scripted) is the intended behavior, not a bug: any positional value for those vars is the unsafe path, full stop. Not scoping the message narrower."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810349741:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T06:18:54Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810349744:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:13:36Z|Fixed in cddcd65: `listCredentials`'s catch now warns to stderr for anything that isn't a recognized \"item not found\"/\"Keychain unavailable\" outcome — same pattern already applied to `resolveCliCredentials` and `defaultReadKeychain` in earlier rounds, now consistent across all four read paths."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810349757:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:18:13Z|Fixed in 3125c592 — and I want to flag a correction on my part: I declined an earlier instance of this exact finding in round 2, reasoning the `!env[v]` guard was load-bearing against the Keychain loop overwriting a value. That reasoning was wrong — the Keychain loop completes fully before `stillMissing` is computed, and nothing between that computation and this loop writes to `env`, so the guard was unconditionally true and genuinely dead. Removed it. Thanks for catching what I got wrong the first time."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810349766:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810349770:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810349778:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:17:20Z|Agreed, thanks for confirming — no defect, no action needed."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810349785:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:14:46Z|Fixed in cddcd65: added `end`/`error` listeners (alongside `data`) so `readHiddenLine` always settles instead of hanging if stdin closes or errors before a keypress."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810349793:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:19:18Z|Fixed in e28efeb: added a test exercising the `list` dispatch branch (`cmdCreds([\"list\"])`) that asserts `listCredentials` is called and each var prints the correct ✓/✗ based on presence."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810349797:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:14:54Z|Fixed in cddcd65 — same fix as the cli.ts:961 thread (added `error`/`end` listeners so the promise can't hang or leak the listener)."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810349801:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T06:16:07Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810349805:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:16:25Z|Added a comment in cddcd65 clarifying `ensureKnownCredentialVar` (cli.ts) and `assertKnownCredentialVar` (cli-creds.ts) are two intentionally independent guards — CLI fail-fast layer + library defense-in-depth — not accidental duplication, and that each has its own test coverage. Keeping both: removing the CLI-layer guard would mean `setCredential`/`unsetCredential` get called (and throw) on an unknown var, which contradicts the existing `cmdCreds` tests asserting they're *not* called on rejection."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810349808:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T06:19:02Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810349811:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:15:29Z|Agreed the empty-piped-stdin path was already fine (confirmed in your own analysis). The TTY-EOF-before-first-keypress hang you flagged is fixed in cddcd65 via the new `end` listener."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810349813:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:18:39Z|Agreed this is worth documenting explicitly — the comment added on `assertKnownCredentialVar` in cddcd65 (\"the `CliCredentialVar` parameter type is a compile-time constraint only and does nothing against a caller that bypasses it\") covers this; the runtime guard is what future maintainers should treat as the real boundary."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810349815:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T06:14:35Z|reaction -1 by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810349819:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:12:20Z|Fixed the overclaim in cddcd65 — duplicate of the other argv-exposure threads on this file from this same review pass; see the reply on cli-creds.ts:107 for the full explanation."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810349821:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:12:47Z|Fixed in cddcd65 — this was the sharpest version of the finding (the docs made a claim the implementation didn't back up) and is what drove the fix. `docs/cli-and-npm.md` now has a \"Residual exposure\" section stating exactly what the stdin/prompt form does and doesn't protect against, instead of the blanket \"nothing sensitive touches argv or shell history\" claim."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3810349826:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:15:21Z|The \"stuck in raw mode with no way to interrupt it\" scenario is substantially closed in cddcd65 — `end`/`error` listeners now guarantee `cleanup()` runs (restoring raw mode) even if `onData` never fires. Not implementing the suggested `process.kill(pid, 'SIGINT')` re-emission specifically — that's a bigger behavioral change (re-triggering the process's own signal handling from inside a library function) for a scenario the listener fix already covers by other means."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:1",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:2",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:3",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:4",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:5",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:6",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:7",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:8",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:9",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810351781:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T06:15:45Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810351782:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T06:16:56Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810351787:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T06:14:42Z|reaction -1 by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810351789:0",
+      "label": "deferred",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:19:05Z|Already fixed as of round 1: `defaultReadKeychain`'s catch has warned to stderr for exactly this class of error (anything that isn't `isItemNotFoundError`/`isKeychainUnavailableError`) since 2c6973a5. It still returns `null` afterward — by design, so `resolveCliCredentials` can fall through to the XDG fallback rather than crashing the whole CLI over one Keychain read — but it's not silent. The separate, still-open gap is `creds list`'s own ✓/✗ *display* not distinguishing \"confirmed absent\" from \"couldn't check\"; see the cli-creds.ts:86 thread for that follow-up."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810351793:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:15:00Z|The stdin-hang concern is fixed in cddcd65 (`end`/`error` listeners added). On the \"unhandled rejection\" framing specifically: `main()` at the bottom of this file already has `main().catch((err) => { console.error(\"Fatal:\", ...); process.exit(1); })`, so a Ctrl-C rejection from `readHiddenLine` was always caught and printed cleanly, not genuinely unhandled — but the underlying robustness gap you and the other threads in this cluster identified (no `end`/`error` handling) was real and is now fixed."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810351797:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:17:07Z|Declining — turning this into a hard error (or requiring an `--unsafe` flag) is a bigger behavior/design change than a review-response pass should make unilaterally; it contradicts the round-1 decision that the positional form stays available for scripted callers who've accepted the trade-off. The tip is advisory by design."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810351801:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T06:06:27Z|changed src/cli.ts near line 997 in cddcd65056f8b6f056b987be812728fbfb3a2896"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810351806:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:15:14Z|Fixed in cddcd65: wrapped `stdin.setRawMode?.(true)` in try/catch so a throw there rejects the promise cleanly instead of leaving it unsettled with no cleanup registered."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810351808:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T06:15:59Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810351813:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:18:20Z|Fixed in 3125c592 — duplicate of the cli-creds.ts:162 thread (same finding); see that reply for the correction on my earlier wrong decline."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810351820:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:12:54Z|Fixed the overclaim in cddcd65 — duplicate of the other argv-exposure threads on this file; see the reply on cli-creds.ts:107 for the full explanation."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810351824:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:15:07Z|Fixed in cddcd65 — added an `error` listener on stdin (alongside `end`) so a stream error before any data doesn't leave the promise unsettled and the terminal stuck in raw mode."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810351829:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T06:06:27Z|changed src/cli.ts near line 979 in cddcd65056f8b6f056b987be812728fbfb3a2896"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810351831:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:13:01Z|Fixed the overclaim in cddcd65 — duplicate of the other argv-exposure threads on this file; see the reply on cli-creds.ts:107 for the full explanation."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810351832:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T06:06:27Z|changed src/cli.ts near line 1017 in cddcd65056f8b6f056b987be812728fbfb3a2896"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810351838:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T06:06:27Z|changed src/cli.ts near line 976 in cddcd65056f8b6f056b987be812728fbfb3a2896"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810351841:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:16:32Z|Same clarification as the cli.ts:1011 thread — comment added in cddcd65 explaining the two guards are intentionally independent, not something that needs to \"stay in sync\" by accident. Keeping both layers; see that reply for the reasoning."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810351845:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T06:17:37Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810351849:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T06:17:16Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810351854:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:18:26Z|Fixed in 3125c592 — duplicate of the cli-creds.ts:162 thread (same finding, third time raised); see that reply for the correction on my earlier wrong decline."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810351861:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:13:22Z|Fixed the overclaim in cddcd65 — duplicate of the other argv-exposure threads on this file; see the reply on cli-creds.ts:107 for the full explanation."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810351865:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:18:33Z|Fixed in cddcd65 — reworded to \"must not be swallowed\" and added a clause noting the binary-missing case is translated into a friendlier error rather than rethrown as-is, so the comment no longer overstates a literal passthrough."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810351867:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810351870:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810351872:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810351876:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T06:06:27Z|changed src/cli.ts near line 994 in cddcd65056f8b6f056b987be812728fbfb3a2896"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:c3810351880:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:16:40Z|Same clarification as the cli.ts:1011 thread — comment added in cddcd65. The `throw` vs. `fatal()`/`process.exit` difference between the two layers is intentional: the library layer (`cli-creds.ts`) shouldn't call `process.exit` on behalf of an arbitrary caller (e.g. a test, or a future non-CLI consumer), while the CLI layer's `fatal()` is the right UX for a terminal command. Not unifying them."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:1",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:2",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:3",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:4",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:5",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:6",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:7",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:8",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r3:body:9",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3810589510:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:46:43Z|Fixed in dc2f970: reworded to state the actual invariant directly (`stillMissing` is computed after the Keychain loop's writes, so every `v` here is guaranteed `!env[v]`) instead of narrating the removal of the old guard.",
+        "2026-08-19T06:47:04Z|Fixed in dc2f970: reworded to state the actual invariant directly (`stillMissing` is computed after the Keychain loop's writes, so every `v` here is guaranteed `!env[v]`) instead of narrating the removal of the old guard."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3810589516:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:46:50Z|Declining — a hung upstream pipe blocking indefinitely is a caller bug, not something `ai-review creds set` should defend against with an internal timeout; the process is still Ctrl-C-able. Scope boundary for this round: see the commit message on dc2f970.",
+        "2026-08-19T06:47:10Z|Declining — a hung upstream pipe blocking indefinitely is a caller bug, not something `ai-review creds set` should defend against with an internal timeout; the process is still Ctrl-C-able. Scope boundary for this round: see the commit message on dc2f970."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3810589522:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:46:57Z|Fixed in b664592 — narrowed `ensureKnownCredentialVar`'s parameter from `string | undefined` to `string`; both call sites already guard `!varName` before calling it, and TS's narrowing after that guard means no caller changes were needed.",
+        "2026-08-19T06:47:16Z|Fixed in b664592 — narrowed `ensureKnownCredentialVar`'s parameter from `string | undefined` to `string`; both call sites already guard `!varName` before calling it, and TS's narrowing after that guard means no caller changes were needed."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3810589525:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T06:47:06Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3810589526:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T06:45:48Z|changed src/cli.ts near line 1053 in b6645922ab4796507d53bcd4cd8d1d8ad1d449df"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3810589531:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T06:44:03Z|changed src/cli.ts near line 1003 in dc2f97087920c23d24a26ac423d11379ce5b9969"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3810589550:0",
+      "label": "deferred",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:47:24Z|Same class of finding as the cli-creds.ts:86/90/93 cluster from round 3 (re-throw non-expected errors instead of degrading to null) — now for the XDG path specifically. Agreed real, declining to build it in this pass for the same reason: it's a 3-state model (works / doesn't exist / exists-but-unreadable) across every read path, not a one-line fix. Filed as a follow-up alongside the Keychain-side version."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3810589557:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T06:44:03Z|changed src/cli.ts near line 1042 in dc2f97087920c23d24a26ac423d11379ce5b9969"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3810589562:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:47:37Z|Fixed in dc2f970 — same fix as the cli.ts:1019 thread (`onEnd` now writes `\\n` before resolving, matching the other two exit paths)."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3810589565:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:47:45Z|Fixed in b664592: the assertion now matches both the typo'd name and that the supported vars are listed in the message."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3810589590:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:47:52Z|Declining for this pass — real coverage gap, but `defaultReadSecret`'s internal stdin iteration is a default IO implementation, same category as `defaultReadKeychain`/`defaultWriteKeychain`/`readHiddenLine`'s raw-mode internals, none of which are unit-mocked in this file by design; the injectable `io.readSecret` boundary is what's tested (and is exercised by the existing tests). Not introducing `process.stdin` mocking infrastructure for this one path in a review-response pass."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3810589594:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3810589602:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T06:45:48Z|changed src/cli.ts near line 1045 in b6645922ab4796507d53bcd4cd8d1d8ad1d449df"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3810589607:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:48:12Z|Fixed in dc2f970 — applied your suggested fix (write `\\n` in `onEnd` before resolving)."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3810589616:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:48:18Z|Fixed the removable half in b664592: `assertKnownCredentialVar` (cli-creds.ts) no longer casts — verified via a standalone tsc check that `CLI_CREDENTIAL_VARS.includes(varName)` type-checks without it once `varName` is already `CliCredentialVar`. `ensureKnownCredentialVar` (cli.ts) keeps its cast because it narrows from a plain `string`, where the cast is genuinely required — confirmed by the same tsc check failing without it there. Not duplicated by accident; each cast (or its absence) is correct for its own function's parameter type."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3810589627:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:48:25Z|Same finding as round 3's cli.ts:976 thread (no size limit on piped stdin) — declining again for the same reason: a private key is a few hundred bytes to ~2KB in practice, and an oversized accidental pipe fails visibly (bad `creds list`/`watch` outcome) rather than silently corrupting. Scope boundary for this round; see dc2f970's commit message."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3810589633:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:48:38Z|The highest-consequence case this could apply to — a partially-typed private key silently stored via Ctrl-D — is closed by dc2f970 (interactive entry is refused outright for `_PRIVATE_KEY` vars now, forcing the pipe form). For the two ID vars, a truncated numeric value is low-consequence (fails obviously on first auth attempt, not a silent security issue). Declining to add EOF-vs-newline distinction for the remaining case."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3810589638:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:48:46Z|Fixed in b664592 — applied your suggested fix, narrowing `ensureKnownCredentialVar` to `name: string`."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3810589640:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:48:52Z|Fixed in b664592 — applied your suggested fix, dropping the unnecessary cast in `assertKnownCredentialVar`. Verified via a standalone tsc check that it type-checks without it."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3810589649:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:48:59Z|Fixed in dc2f970 — you're right, my comment's stated reasoning was wrong (the Keychain loop does write to `env`, just before `stillMissing` is computed, not \"nothing between the filter and here\"). Reworded to state the actual invariant."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3810589654:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:49:07Z|Agreed, thanks for confirming no defect — the intentional-duplication comment (added last round) already explains why the two guards exist independently."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3810589659:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:49:13Z|Fixed in dc2f970 — corrected to `--help` (the real flag). Thanks for catching a citation error in my own comment."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3810589673:0",
+      "label": "deferred",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:49:20Z|Same finding as the cli.ts:1022/1014 threads from round 3 (this is its 3rd occurrence) — declining again for the same reason: pre-existing behavior, and fixing `creds list`'s XDG-awareness is a real but separate piece of scope. Filed as a follow-up."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3810589679:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:49:26Z|Same reasoning as the cli.ts:993 thread — the worst-case (a partial private key silently stored) is closed by dc2f970's interactive-entry refusal for `_PRIVATE_KEY` vars. Declining the general EOF-vs-reject change for the remaining low-consequence case (a truncated ID var)."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3810589680:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:49:32Z|Declining for this pass — each `ai-review` invocation is a short-lived process with no subsequent same-process stdin read after `readHiddenLine` returns; same reasoning as the equivalent encoding-reset findings declined last round. Scope boundary for this round; see dc2f970's commit message."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:c3810589687:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T06:49:38Z|Fixed alongside the cli-creds.ts:221 thread in b664592 — same cast, removed. The narrowing concern is resolved by removing the cast entirely rather than refining it, since `varName: CliCredentialVar` already matches what `.includes()` needs with no cast at all."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:body:1",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:body:2",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:body:3",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:body:4",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:body:5",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:body:6",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:body:7",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:body:8",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:body:9",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:body:10",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:body:11",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r4:body:12",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:c3810741233:0",
+      "label": "deferred",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:15:50Z|Same finding as the cli.ts:1064/1022/1014 threads from rounds 3-4 (this is now its 5th occurrence) — declining again for the same reason: pre-existing behavior, `creds list`'s XDG-awareness is real but separate scope, filed as a follow-up. Not re-litigating each recurrence."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:c3810741236:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T07:15:59Z|reaction -1 by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:c3810741240:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:16:03Z|Declining the \"reject a partial value on EOF\" ask — `fatal(\"No value provided.\")` already handles the empty case, and a non-empty partial value on Ctrl-D is a real but low-consequence edge case for the two ID vars (fails obviously on first auth attempt). Note the adjacent bug this thread's title touches on — Ctrl-D wasn't reaching `onEnd` at all in raw mode, it was being appended as a literal byte — is fixed in 0742130a (see the codexreviewbot cli.ts:1000 thread)."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:c3810741246:0",
+      "label": "deferred",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:16:11Z|Declining for this pass — real gap (EACCES/EPERM not covered by `isKeychainUnavailableError`), but this is the same class of \"expand the error taxonomy\" scope as the other declined follow-ups in this cluster. Filed alongside them rather than fixed piecemeal."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:c3810741251:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:16:19Z|Declining — cosmetic edge case (an exception between two synchronous statements that don't throw in practice) on an interactive-only function that's untested by design, same category as the other readHiddenLine robustness nitpicks declined this round. Scope boundary holds from dc2f970."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:c3810741254:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:c3810741259:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:16:33Z|Declining for this pass — real coverage suggestion for existing-correct behavior, not a bug. Holding the scope boundary from dc2f970 rather than adding one more test per round indefinitely."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:c3810741268:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:c3810741272:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T07:14:17Z|changed src/cli.ts near line 1015 in 0742130aade53402d1368c71dd72e8907b1f8b76"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:c3810741274:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:16:54Z|Declining — agreed with your own conclusion (\"minor UX concern rather than a security issue... no code change is strictly needed\"). Not adding PEM-newline validation beyond the shape check added in 0742130a for `_PRIVATE_KEY` vars, which already catches the truncation case this concern is really about."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:c3810741279:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:c3810741282:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:c3810741288:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T07:14:17Z|changed src/cli.ts near line 996 in 0742130aade53402d1368c71dd72e8907b1f8b76"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:c3810741292:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T07:17:26Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:c3810741300:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T07:17:33Z|reaction -1 by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:c3810741302:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:17:37Z|Declining — the \"intentionally duplicated\" comment added on `ensureKnownCredentialVar` in dc2f970 already documents the CLI-fail-fast-vs-library-defense-in-depth split this inconsistency follows from; not adding a second comment restating the same distinction from the throw/fatal angle."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:c3810741308:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T07:14:17Z|changed src/cli.ts near line 1029 in 0742130aade53402d1368c71dd72e8907b1f8b76"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:c3810741313:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T07:18:00Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:c3810741319:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T07:18:06Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:c3810741326:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T07:18:14Z|reaction -1 by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:c3810741330:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T07:14:17Z|changed src/cli.ts near line 1052 in 0742130aade53402d1368c71dd72e8907b1f8b76"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:c3810741339:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:18:27Z|Agreed, thanks for confirming the two-layer pattern is correct and intentional — no change needed."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:c3810741341:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T07:18:36Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:c3810741347:0",
+      "label": "deferred",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T07:18:40Z|Declining for this pass — reasonable diagnosability improvement but a new debug-gated logging surface is more scope than a review-response pass should add unprompted; filed as a follow-up."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:body:1",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:body:2",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:body:3",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:body:4",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:body:5",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:body:6",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:body:7",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:body:8",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:body:9",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r5:body:10",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:c3810892724:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T10:28:37Z|Fixed in 7359639 — `listCredentials()` now checks the XDG fallback file for whatever the Keychain doesn't have, same order `resolveCliCredentials` already uses, reading the file at most once per call."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:c3810892728:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:c3810892734:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:c3810892739:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:c3810892743:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:c3810892748:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:c3810892753:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:c3810892758:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:c3810892762:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:c3810892766:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:c3810892771:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:c3810892775:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:c3810892776:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:c3810892781:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T10:28:53Z|Fixed in 7359639 — `listCredentials()` now checks the XDG fallback file for whatever the Keychain doesn't have, same order `resolveCliCredentials` already uses, reading the file at most once per call."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:c3810892786:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T10:26:12Z|changed src/cli-creds.ts near line 311 in 73596397752b6be8b7d89836d13c360fa90c9590"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:c3810892788:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:c3810892791:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:c3810892795:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:c3810892798:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:c3810892803:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T10:29:00Z|Declined as a UX preference, not a defect — the documented flow is intentional: a value on the command line for IDs, piped/prompted input for secrets."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:c3810892807:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T10:29:01Z|Declined as a UX preference, not a defect — the documented flow is intentional: a value on the command line for IDs, piped/prompted input for secrets."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:c3810892810:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:c3810892813:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:c3810892815:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T10:26:12Z|changed src/cli-creds.ts near line 265 in 73596397752b6be8b7d89836d13c360fa90c9590"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:c3810892819:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:c3810892822:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T10:29:06Z|Declined as a UX preference, not a defect — the documented flow is intentional: a value on the command line for IDs, piped/prompted input for secrets."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:c3810892826:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:body:1",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:body:2",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:body:3",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:body:4",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:body:5",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:body:6",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:body:7",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:body:8",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:body:9",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:body:10",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:body:11",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:body:12",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r6:body:13",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:c3812599374:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T12:35:44Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:c3812599382:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T12:35:35Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:c3812599386:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T12:35:59Z|reaction -1 by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:c3812599396:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T12:35:28Z|This is the intentional design already stated in the module header comment (log-and-degrade for read-time failures, so one bad var doesn't abort resolution of the other three). Your own writeup calls it \"arguably correct\" for resolution and only speculative for `listCredentials`. Declining the behavior change; the trade-off is deliberate and documented, not an oversight."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:c3812599399:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T12:36:14Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:c3812599402:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T12:36:32Z|Fixed in f69547d: `cmdCreds` now rejects extra positional args to `creds set` (`args.length` beyond the value) with a `fatal()` usage hint instead of silently dropping them."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:c3812599405:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T12:36:54Z|Fixed in f69547d: `creds unset` now checks the post-delete source and warns explicitly when the var still resolves from the XDG fallback file, instead of an unconditional \"Removed\" message."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:c3812599412:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T12:36:34Z|By design, same cluster as 1010/1027/1038 — now documented explicitly in a8aa59c as a heuristic that catches the one stated truncation failure mode, not a structural parse. An empty-body value fails later at JWT-signing time with a clear error. Declining the stricter check."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:c3812599417:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T12:35:57Z|Fixed in f69547d: added `\"reports plain success when unset actually cleared the only source (Keychain)\"` and the XDG-only-success-message tests to cli.test.ts, covering exactly the gap described (the misleading \"Removed\" message when the credential only lived in the XDG file)."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:c3812599421:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T12:35:40Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:c3812599424:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T12:36:08Z|reaction -1 by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:c3812599428:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T12:36:23Z|Addressed in a8aa59c: added a doc comment on `defaultReadSecret` noting the single-use stdin constraint this thread describes."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:c3812599434:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T12:36:47Z|Your own analysis concludes \"No defect.\" Agreed — resolving."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:c3812599439:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T12:36:57Z|reaction -1 by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:c3812599458:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T12:35:43Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:c3812599461:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T12:36:18Z|By design, same cluster as 1010/1027/1071 — the heuristic's scope (catch the documented truncation failure mode) is now stated explicitly in a8aa59c. A label mismatch that clears this check fails later at JWT-signing time with a clear error. Declining the stricter check."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:c3812599464:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T12:36:27Z|Fixed in f69547d — this is the same arity gap as the anthropicreviewbot thread on line 1068 (\"dispatches `creds set` with a positional value without any arity check\"): `cmdCreds` now rejects extra positional args for both `set` and `unset` instead of silently dropping them."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:c3812599475:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T12:36:21Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:c3812599482:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T12:36:01Z|Applied your suggested approach in a8aa59c: `ensureKnownCredentialVar` now uses `CLI_CREDENTIAL_VARS.some((v) => v === name)` instead of casting to `readonly string[]` to satisfy `.includes()`."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:c3812599487:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T12:36:17Z|By design, same as the sibling threads on this function (1010, 1038, 1071) — now documented explicitly in a8aa59c as a heuristic, not a structural parse. Declining the stricter marker-order check to keep the heuristic's scope matching its documented, single stated purpose."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:c3812599492:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T12:36:27Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:c3812599500:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T12:35:47Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:c3812599508:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T12:35:50Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:c3812599513:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T12:35:47Z|Fixed in f69547d: `setCredential` now validates `_PRIVATE_KEY` vars with `looksLikeCompletePemOneLiner` before writing, as defense-in-depth for a caller that imports it directly and bypasses `cmdCreds`'s check — mirrors the existing `assertKnownCredentialVar` dual-layer pattern. `looksLikeCompletePemOneLiner` moved to cli-creds.ts (exported) so both layers share one definition instead of drifting as two copies."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:c3812599520:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T12:35:32Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:body:1",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:body:2",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:body:3",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:body:4",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:body:5",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:body:6",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:body:7",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:body:8",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:body:9",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:body:10",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:body:11",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:body:12",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:body:13",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r7:body:14",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:c3812759264:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T12:33:08Z|changed src/cli.ts near line 1032 in a8aa59c08edce9642d5c32ca20ca2d9900d70044"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:c3812759269:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T12:36:10Z|By design — `looksLikeCompletePemOneLiner` is documented (and now, in a8aa59c, explicitly commented) as a shape heuristic for catching the one common truncation failure mode, not a structural PEM parse. An empty-body value that clears this check fails later at JWT-signing time with its own clear error, not silently. Declining the stricter check to avoid scope creep on a heuristic that's explicit about its own limits."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:c3812759275:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T12:35:40Z|Your own analysis concludes \"This is the correct design. No defect\" — both `defaultWriteKeychain` and `defaultDeleteKeychain` already check `isKeychainUnavailableError` and throw the friendly message; the read-vs-write/delete asymmetry (degrade vs. fail loudly) is intentional. Marking as not-a-defect per your own conclusion."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:c3812759281:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T12:35:35Z|Addressed in a8aa59c: added a comment on the catch clarifying it's only reachable via an injected `readKeychain` that throws — the default implementation never does."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:c3812759289:0",
+      "label": "deferred",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T12:35:30Z|Declining: `isKeychainUnavailableError` (ENOENT/EACCES) is intentionally silent in `defaultReadKeychain` so a non-macOS user (Linux, CI) doesn't see a Keychain warning on every run — that's the expected, common case there, not an error. A one-time diagnostic is a reasonable enhancement but out of scope for this PR; filing as a follow-up rather than adding new observable output here."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:c3812759297:0",
+      "label": "deferred",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T12:35:51Z|Reasonable enhancement (distinguish \"not stored\" from \"could not check\" in `creds list` output) but out of scope for this PR — the stderr diagnostic already surfaces the read failure to the operator. Filing as a follow-up rather than expanding the output format here."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:c3812759304:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T12:13:38Z|changed src/cli.ts near line 1107 in 02abc8a6a512e7765f71da0f14282410d85f14d0"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:c3812759310:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T12:36:01Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:c3812759316:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T12:13:38Z|changed src/cli.ts near line 1129 in 02abc8a6a512e7765f71da0f14282410d85f14d0"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:c3812759321:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T12:36:57Z|Fixed in f69547d: `cmdCreds`'s `unset` action now checks whether the var still resolves via the XDG fallback after the Keychain delete and says so explicitly, instead of an unconditional \"Removed ... (if it was set)\" message."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:c3812759327:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T12:36:42Z|Your own analysis concludes \"No defect here — omit.\" Agreed — resolving."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:c3812759332:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T12:35:57Z|reaction -1 by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:c3812759336:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T12:35:26Z|Fixed in f69547d: `isKeychainUnavailableError` now also treats `EACCES` as \"unavailable\" alongside `ENOENT`, so a present-but-not-executable `security` binary degrades to the XDG fallback the same way a missing one does."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:c3812759339:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T12:35:32Z|Your own analysis concludes \"No defect.\" Agreed — resolving."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:c3812759344:0",
+      "label": "deferred",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T12:35:24Z|Declining for this PR: the stderr-message secondary check is speculative (no reproduction of `security` returning a non-44 exit for \"item not found\" across macOS versions, and the test suite can't exercise the real binary either way). The documented, verified behavior (exit 44) is what's implemented and tested. Happy to add the secondary check if/when a real non-44 case is observed — filing as a follow-up rather than guessing at stderr text now."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:c3812759350:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T12:35:36Z|Addressed in a8aa59c: added a clarifying comment on the catch in `resolveCliCredentials` stating explicitly that it's only reachable via an injected `readKeychain` that throws."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:c3812759356:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T12:35:23Z|Fixed in f69547d — same underlying gap as the codexreviewbot thread on this line: `creds unset` now warns when the var still resolves from `~/.config/ai-review/.env` after the Keychain delete, since `unsetCredential` never touches that file."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:c3812759365:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T12:36:35Z|The tip firing before PEM validation is correct, not a bug: the `ps`/shell-history exposure it warns about already happened the moment the value was typed as a positional argument, regardless of whether that value later passes or fails the PEM shape check. Suppressing or delaying the tip until after validation wouldn't reduce the exposure it's warning about. Declining the reorder."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:c3812759373:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T12:30:15Z|changed src/cli.ts near line 1086 in f69547de81c5ae63404b8e65604a8839d5440423"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:c3812759379:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T12:30:15Z|changed src/cli.ts near line 1048 in f69547de81c5ae63404b8e65604a8839d5440423"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:c3812759381:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T12:37:00Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:c3812759384:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T12:36:11Z|Addressed in a8aa59c: added a doc comment on `defaultReadSecret` stating it consumes `process.stdin` to EOF and must only be called once per process invocation."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:c3812759393:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T12:36:15Z|Addressed in a8aa59c, applying your suggested comment (adapted to the function's new home in cli-creds.ts): `looksLikeCompletePemOneLiner` now states explicitly that it's a heuristic, not a structural parse, and names the one failure mode it exists to catch."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:c3812759409:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T12:30:15Z|changed src/cli.ts near line 1046 in f69547de81c5ae63404b8e65604a8839d5440423"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:c3812759416:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T12:35:42Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:c3812759421:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T12:13:38Z|changed src/cli-creds.ts near line 269 in 02abc8a6a512e7765f71da0f14282410d85f14d0"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:c3812759427:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T12:30:15Z|changed src/cli.ts near line 1041 in f69547de81c5ae63404b8e65604a8839d5440423"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:c3812759431:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T12:36:31Z|Your own analysis concludes \"No code defect — this is consistent.\" This is also moot as of 02abc8a, which already changed `creds list` to label Keychain vs. XDG sources distinctly rather than a flat ✓/✗. Resolving."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:c3812759436:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T12:13:38Z|changed src/cli.ts near line 1140 in 02abc8a6a512e7765f71da0f14282410d85f14d0"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:c3812759441:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T12:36:39Z|Your own analysis concludes \"No defect\" — and confirms the mechanism I'd independently verified (the check passes for a real multi-line PEM because `.includes('-----END')` matches across real newlines too, and downstream `normalizePrivateKey` handles real newlines identically to escaped ones). Resolving."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:body:1",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:body:2",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:body:3",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:body:4",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:body:5",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:body:6",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:body:7",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:body:8",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:body:9",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:body:10",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r8:body:11",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:c3813080878:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T13:01:54Z|changed src/cli.ts near line 981 in f6970504fa2031b07491463063a87f381341a63e"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:c3813080887:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T13:02:55Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:c3813080893:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T13:02:55Z|Same design point as the thread this comment is attached near (already addressed with a clarifying comment in commit a8aa59c): the catch here is only reachable via an injected `readKeychain` that throws, by design — the default implementation never does. Re-throwing an injected reader's programming error would change behavior for test doubles, not the real Keychain path this PR is about. Declining the behavior change; the comment already documents why."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:c3813080903:0",
+      "label": "deferred",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T13:02:57Z|Recycled from round 1 (declined on cli-creds.ts:84/88/99, same design trade-off): read-time Keychain failures degrade silently by design so one bad var doesn't abort resolution of the other three, and so non-macOS hosts (Linux, CI) don't see a Keychain warning on every run. A distinct \"could not check\" signal in `creds list` output is a reasonable future enhancement but out of scope here — declining the behavior change, same as the prior round."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:c3813080911:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T13:02:59Z|Addressed in f697050: added a comment on the `_PRIVATE_KEY` suffix check in `setCredential` noting it's the coupling point with `CLI_CREDENTIAL_VARS` — a future var needing PEM validation must be named to match, in both this function and cmdCreds's identical check."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:c3813080922:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T13:03:00Z|Same suggestion as round 1's threads on cli.ts:1099/1125 (gate the tip on `process.stdin.isTTY`), declined there for the same reason: gating on TTY would suppress the `ps`/shell-history warning specifically for scripted/non-interactive callers — exactly the audience most likely to have hardcoded a secret into a script without realizing the exposure. Making it a blocking error would also break the documented, intentional \"still works for scripted callers who've accepted the trade-off\" behavior. Declining."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:c3813080936:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T13:03:03Z|reaction -1 by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:c3813080949:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T13:03:04Z|Recycled from round 1 (cli-creds.ts:84/99/122) and its own round-2 sibling on line 130 — same intentional log-and-degrade design, already explained in the module's header comment and the function's own comments. Declining again for the same reason."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:c3813080959:0",
+      "label": "rejected",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T13:03:05Z|Self-acknowledged as \"not a bug... consider a local rename for clarity\" — a variable-naming nitpick, not a defect. Declining the rename to avoid churn on already-correct code."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:c3813080964:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T13:01:54Z|changed src/cli.ts near line 974 in f6970504fa2031b07491463063a87f381341a63e"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:c3813080994:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T13:03:08Z|Fixed in f697050: wrapped `stdin.resume()`/`stdin.setEncoding()` in try/catch that restores raw mode directly and rejects, since `cleanup()`'s listener references (`onData`/`onEnd`/`onError`) aren't initialized yet at that point in the function and can't be called safely there."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:c3813081003:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T13:03:11Z|reaction -1 by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:c3813081009:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T13:03:12Z|Fixed in f697050: `readHiddenLine`'s return value is now trimmed (`.trim()` at the call site in `defaultReadSecret`), matching the non-TTY path's existing `.trim()`."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:c3813081017:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T13:03:13Z|This directly contradicts round 1's anthropicreviewbot finding on this same function (databaseId 3812599482, \"ensureKnownCredentialVar cast silently widens on unknown input\" / cli.ts:993), which asked for exactly the change already applied here in commit a8aa59c (`.some()` instead of the `readonly string[]` cast). Reverting to `.includes(name as CliCredentialVar)` would reintroduce the cast that round asked to remove. Declining — keeping the current form."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:c3813081030:0",
+      "label": "deferred",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T13:03:15Z|Verified the suggested one-liner (`if (value !== null) env[v] = value;`) doesn't actually close the gap described: `stillMissing` is computed a few lines later as `CLI_CREDENTIAL_VARS.filter((v) => !env[v])`, which still treats an empty string as falsy/missing regardless of whether it was assigned to `env[v]`. So an empty-string Keychain value would still be re-selected as \"still missing\" and the XDG loop would still run and potentially overwrite it — the exact problem this finding describes, unfixed by its own suggested change. A complete fix needs the \"already set\" truthiness convention reworked throughout `resolveCliCredentials` (including the top-level `missing` filter over real `process.env`, not just the Keychain-specific value), which is a bigger behavioral change than warranted here — this requires an operator to have deliberately stored an empty-string secret, which has no functional value (an empty `GITHUB_APP_ID` can't authenticate anything). Applied the equivalent, *complete* fix in `listCredentialSources` instead (f697050), where there's no secondary falsy re-check downstream. Declining the resolveCliCredentials change; filing the fuller rework as a follow-up if this ever becomes a real scenario."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:c3813081042:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T13:03:17Z|Fixed in f697050, using your suggested approach: `listCredentialSources` now checks `value !== null` instead of truthy, so a genuinely-stored-but-empty Keychain value reports `\"keychain\"` rather than falling through to `\"xdg\"`/`\"absent\"`. Verified red-then-green: reverted, confirmed the new test failed with `expected 'absent' to be 'keychain'`, restored."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:c3813081059:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T13:03:19Z|reaction -1 by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:c3813081070:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T13:03:21Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:c3813081080:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T13:03:22Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:c3813081086:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T13:03:24Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:c3813081098:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T13:03:25Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:c3813081104:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T13:03:27Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:c3813081109:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T13:03:28Z|reaction -1 by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:c3813081115:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T13:03:29Z|The double-Keychain-read is a non-issue (single local CLI invocation, no perf concern). On distinguishing \"was present and removed\" vs \"was never present\": that would require capturing pre-delete state too (an extra read before the delete), doubling the reads again for marginal UX gain over the XDG-specific warning already added in f69547d — the \"(if it was set)\" hedge is accurate and sufficient. Declining the further UX expansion."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:c3813081125:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T13:03:31Z|Same contradiction as the cli.ts:1074 thread this round: this is round 1's own anthropicreviewbot suggestion (databaseId 3812599482) already applied in commit a8aa59c, now being reversed by a different thread in the same review. Keeping the `.some()` form applied in response to that round-1 finding — declining the revert."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:body:1",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:body:2",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:body:3",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:body:4",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:body:5",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:body:6",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:body:7",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:body:8",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:body:9",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r9:body:10",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:c3813240723:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:c3813240728:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:c3813240738:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:c3813240743:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:c3813240746:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:c3813240758:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:c3813240762:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:c3813240765:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:c3813240770:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:c3813240776:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:c3813240780:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:c3813240784:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:c3813240788:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:c3813240796:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:c3813240799:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:c3813240804:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:c3813240806:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:c3813240811:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:c3813240818:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:c3813240824:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:c3813240831:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:c3813240835:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:c3813240838:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:c3813240841:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T13:21:25Z|Speculative for how this CLI is actually invoked: `main()` (cli.ts) dispatches exactly one subcommand per process invocation — there's no code path that calls `cmdCreds` twice in the same process today, batch mode or otherwise. Adding a guard for a call pattern the CLI doesn't have would be defending against a hypothetical future feature, not a real gap in this one. Declining; the existing doc comment (added in a8aa59c) already states the constraint for anyone adding such a caller later."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:c3813240849:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T13:21:27Z|This is the third time this exact point has flip-flopped across rounds of feedback on this same function: round 1 (databaseId 3812599482) asked for `.some()` instead of the `readonly string[]` cast — applied in a8aa59c. Round 2 (databaseIds 3813081017 and 3813081125) asked to revert to `.includes(name as CliCredentialVar)` — declined, since it directly contradicted round 1's own suggestion already applied. This thread asks for the same revert a third time. Keeping `.some()` — declining again for the same reason."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:body:1",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:body:2",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:body:3",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:body:4",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:body:5",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:body:6",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:body:7",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:body:8",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:body:9",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:body:10",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r10:body:11",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    }
+  ],
+  "repeatPairs": [
+    {
+      "later": "r1:body:9",
+      "earlier": "r0:body:13",
+      "confirmed": false
+    },
+    {
+      "later": "r2:c3810349770:0",
+      "earlier": "r0:c3810139881:0",
+      "confirmed": false
+    },
+    {
+      "later": "r2:c3810349770:0",
+      "earlier": "r1:c3810271645:0",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:3",
+      "earlier": "r1:body:4",
+      "confirmed": false
+    },
+    {
+      "later": "r3:c3810351813:0",
+      "earlier": "r1:c3810271645:0",
+      "confirmed": false
+    },
+    {
+      "later": "r3:c3810351782:0",
+      "earlier": "r2:c3810349729:0",
+      "confirmed": false
+    },
+    {
+      "later": "r3:c3810351793:0",
+      "earlier": "r2:c3810349826:0",
+      "confirmed": false
+    },
+    {
+      "later": "r3:c3810351806:0",
+      "earlier": "r2:c3810349731:0",
+      "confirmed": false
+    },
+    {
+      "later": "r3:c3810351813:0",
+      "earlier": "r2:c3810349770:0",
+      "confirmed": false
+    },
+    {
+      "later": "r3:c3810351831:0",
+      "earlier": "r2:c3810349819:0",
+      "confirmed": false
+    },
+    {
+      "later": "r3:c3810351861:0",
+      "earlier": "r2:c3810349721:0",
+      "confirmed": false
+    },
+    {
+      "later": "r3:body:1",
+      "earlier": "r2:body:6",
+      "confirmed": false
+    },
+    {
+      "later": "r4:c3810589510:0",
+      "earlier": "r1:c3810271645:0",
+      "confirmed": false
+    },
+    {
+      "later": "r4:body:12",
+      "earlier": "r1:body:12",
+      "confirmed": false
+    },
+    {
+      "later": "r4:c3810589673:0",
+      "earlier": "r2:c3810349729:0",
+      "confirmed": false
+    },
+    {
+      "later": "r4:body:2",
+      "earlier": "r2:body:1",
+      "confirmed": false
+    },
+    {
+      "later": "r4:body:3",
+      "earlier": "r2:body:6",
+      "confirmed": false
+    },
+    {
+      "later": "r4:body:6",
+      "earlier": "r2:body:5",
+      "confirmed": false
+    },
+    {
+      "later": "r4:body:8",
+      "earlier": "r2:body:6",
+      "confirmed": false
+    },
+    {
+      "later": "r4:c3810589510:0",
+      "earlier": "r3:c3810351813:0",
+      "confirmed": false
+    },
+    {
+      "later": "r4:c3810589525:0",
+      "earlier": "r3:c3810351787:0",
+      "confirmed": false
+    },
+    {
+      "later": "r4:c3810589673:0",
+      "earlier": "r3:c3810351782:0",
+      "confirmed": false
+    },
+    {
+      "later": "r4:body:2",
+      "earlier": "r3:body:0",
+      "confirmed": false
+    },
+    {
+      "later": "r4:body:3",
+      "earlier": "r3:body:1",
+      "confirmed": false
+    },
+    {
+      "later": "r4:body:3",
+      "earlier": "r3:body:9",
+      "confirmed": false
+    },
+    {
+      "later": "r5:c3810741233:0",
+      "earlier": "r2:c3810349729:0",
+      "confirmed": false
+    },
+    {
+      "later": "r5:c3810741233:0",
+      "earlier": "r3:c3810351782:0",
+      "confirmed": false
+    },
+    {
+      "later": "r5:c3810741236:0",
+      "earlier": "r3:c3810351787:0",
+      "confirmed": false
+    },
+    {
+      "later": "r5:c3810741272:0",
+      "earlier": "r3:c3810351793:0",
+      "confirmed": false
+    },
+    {
+      "later": "r5:c3810741300:0",
+      "earlier": "r3:c3810351787:0",
+      "confirmed": false
+    },
+    {
+      "later": "r5:c3810741233:0",
+      "earlier": "r4:c3810589673:0",
+      "confirmed": false
+    },
+    {
+      "later": "r5:c3810741236:0",
+      "earlier": "r4:c3810589525:0",
+      "confirmed": false
+    },
+    {
+      "later": "r5:c3810741240:0",
+      "earlier": "r4:c3810589633:0",
+      "confirmed": false
+    },
+    {
+      "later": "r5:c3810741282:0",
+      "earlier": "r4:c3810589616:0",
+      "confirmed": false
+    },
+    {
+      "later": "r5:body:9",
+      "earlier": "r4:body:11",
+      "confirmed": false
+    },
+    {
+      "later": "r6:c3810892758:0",
+      "earlier": "r1:c3810271645:0",
+      "confirmed": false
+    },
+    {
+      "later": "r6:c3810892724:0",
+      "earlier": "r2:c3810349729:0",
+      "confirmed": false
+    },
+    {
+      "later": "r6:c3810892753:0",
+      "earlier": "r2:c3810349826:0",
+      "confirmed": false
+    },
+    {
+      "later": "r6:c3810892758:0",
+      "earlier": "r2:c3810349757:0",
+      "confirmed": false
+    },
+    {
+      "later": "r6:c3810892771:0",
+      "earlier": "r2:c3810349731:0",
+      "confirmed": false
+    },
+    {
+      "later": "r6:c3810892781:0",
+      "earlier": "r2:c3810349729:0",
+      "confirmed": false
+    },
+    {
+      "later": "r6:body:2",
+      "earlier": "r2:body:2",
+      "confirmed": false
+    },
+    {
+      "later": "r6:body:2",
+      "earlier": "r2:body:6",
+      "confirmed": false
+    },
+    {
+      "later": "r6:c3810892753:0",
+      "earlier": "r3:c3810351793:0",
+      "confirmed": false
+    },
+    {
+      "later": "r6:c3810892758:0",
+      "earlier": "r3:c3810351813:0",
+      "confirmed": false
+    },
+    {
+      "later": "r6:c3810892771:0",
+      "earlier": "r3:c3810351806:0",
+      "confirmed": false
+    },
+    {
+      "later": "r6:c3810892781:0",
+      "earlier": "r3:c3810351782:0",
+      "confirmed": false
+    },
+    {
+      "later": "r6:body:7",
+      "earlier": "r3:body:1",
+      "confirmed": false
+    },
+    {
+      "later": "r6:c3810892724:0",
+      "earlier": "r4:c3810589673:0",
+      "confirmed": false
+    },
+    {
+      "later": "r6:c3810892758:0",
+      "earlier": "r4:c3810589510:0",
+      "confirmed": false
+    },
+    {
+      "later": "r6:c3810892766:0",
+      "earlier": "r4:c3810589516:0",
+      "confirmed": false
+    },
+    {
+      "later": "r6:c3810892776:0",
+      "earlier": "r4:c3810589510:0",
+      "confirmed": false
+    },
+    {
+      "later": "r6:c3810892788:0",
+      "earlier": "r4:c3810589594:0",
+      "confirmed": false
+    },
+    {
+      "later": "r6:c3810892813:0",
+      "earlier": "r4:c3810589649:0",
+      "confirmed": false
+    },
+    {
+      "later": "r6:body:7",
+      "earlier": "r4:body:8",
+      "confirmed": false
+    },
+    {
+      "later": "r6:c3810892724:0",
+      "earlier": "r5:c3810741233:0",
+      "confirmed": false
+    },
+    {
+      "later": "r6:c3810892734:0",
+      "earlier": "r5:c3810741279:0",
+      "confirmed": false
+    },
+    {
+      "later": "r6:c3810892753:0",
+      "earlier": "r5:c3810741272:0",
+      "confirmed": false
+    },
+    {
+      "later": "r6:c3810892781:0",
+      "earlier": "r5:c3810741233:0",
+      "confirmed": false
+    },
+    {
+      "later": "r6:body:2",
+      "earlier": "r5:body:8",
+      "confirmed": false
+    },
+    {
+      "later": "r7:c3812599374:0",
+      "earlier": "r0:c3810139881:0",
+      "confirmed": false
+    },
+    {
+      "later": "r7:c3812599374:0",
+      "earlier": "r1:c3810271645:0",
+      "confirmed": false
+    },
+    {
+      "later": "r7:c3812599421:0",
+      "earlier": "r1:c3810271645:0",
+      "confirmed": false
+    },
+    {
+      "later": "r7:body:14",
+      "earlier": "r1:body:7",
+      "confirmed": false
+    },
+    {
+      "later": "r7:c3812599374:0",
+      "earlier": "r2:c3810349770:0",
+      "confirmed": false
+    },
+    {
+      "later": "r7:c3812599386:0",
+      "earlier": "r2:c3810349731:0",
+      "confirmed": false
+    },
+    {
+      "later": "r7:c3812599374:0",
+      "earlier": "r3:c3810351813:0",
+      "confirmed": false
+    },
+    {
+      "later": "r7:c3812599374:0",
+      "earlier": "r4:c3810589510:0",
+      "confirmed": false
+    },
+    {
+      "later": "r7:c3812599424:0",
+      "earlier": "r4:c3810589557:0",
+      "confirmed": false
+    },
+    {
+      "later": "r7:c3812599424:0",
+      "earlier": "r4:c3810589602:0",
+      "confirmed": false
+    },
+    {
+      "later": "r7:c3812599386:0",
+      "earlier": "r5:c3810741251:0",
+      "confirmed": false
+    },
+    {
+      "later": "r7:c3812599405:0",
+      "earlier": "r5:c3810741233:0",
+      "confirmed": false
+    },
+    {
+      "later": "r7:c3812599421:0",
+      "earlier": "r5:c3810741279:0",
+      "confirmed": false
+    },
+    {
+      "later": "r7:c3812599434:0",
+      "earlier": "r5:c3810741339:0",
+      "confirmed": false
+    },
+    {
+      "later": "r7:c3812599500:0",
+      "earlier": "r5:c3810741282:0",
+      "confirmed": false
+    },
+    {
+      "later": "r7:c3812599374:0",
+      "earlier": "r6:c3810892758:0",
+      "confirmed": false
+    },
+    {
+      "later": "r7:c3812599405:0",
+      "earlier": "r6:c3810892781:0",
+      "confirmed": false
+    },
+    {
+      "later": "r8:c3812759310:0",
+      "earlier": "r2:c3810349731:0",
+      "confirmed": false
+    },
+    {
+      "later": "r8:c3812759365:0",
+      "earlier": "r2:c3810349736:0",
+      "confirmed": false
+    },
+    {
+      "later": "r8:c3812759281:0",
+      "earlier": "r3:c3810351787:0",
+      "confirmed": false
+    },
+    {
+      "later": "r8:c3812759436:0",
+      "earlier": "r3:c3810351880:0",
+      "confirmed": false
+    },
+    {
+      "later": "r8:c3812759416:0",
+      "earlier": "r4:c3810589649:0",
+      "confirmed": false
+    },
+    {
+      "later": "r8:body:5",
+      "earlier": "r4:body:3",
+      "confirmed": false
+    },
+    {
+      "later": "r8:body:10",
+      "earlier": "r4:body:11",
+      "confirmed": false
+    },
+    {
+      "later": "r8:c3812759264:0",
+      "earlier": "r5:c3810741240:0",
+      "confirmed": false
+    },
+    {
+      "later": "r8:c3812759281:0",
+      "earlier": "r5:c3810741236:0",
+      "confirmed": false
+    },
+    {
+      "later": "r8:c3812759310:0",
+      "earlier": "r5:c3810741251:0",
+      "confirmed": false
+    },
+    {
+      "later": "r8:c3812759310:0",
+      "earlier": "r5:c3810741272:0",
+      "confirmed": false
+    },
+    {
+      "later": "r8:c3812759350:0",
+      "earlier": "r5:c3810741300:0",
+      "confirmed": false
+    },
+    {
+      "later": "r8:c3812759381:0",
+      "earlier": "r5:c3810741259:0",
+      "confirmed": false
+    },
+    {
+      "later": "r8:c3812759310:0",
+      "earlier": "r6:c3810892771:0",
+      "confirmed": false
+    },
+    {
+      "later": "r8:c3812759339:0",
+      "earlier": "r6:c3810892791:0",
+      "confirmed": false
+    },
+    {
+      "later": "r8:c3812759416:0",
+      "earlier": "r6:c3810892813:0",
+      "confirmed": false
+    },
+    {
+      "later": "r8:body:4",
+      "earlier": "r6:body:12",
+      "confirmed": false
+    },
+    {
+      "later": "r8:c3812759310:0",
+      "earlier": "r7:c3812599386:0",
+      "confirmed": false
+    },
+    {
+      "later": "r8:c3812759339:0",
+      "earlier": "r7:c3812599421:0",
+      "confirmed": false
+    },
+    {
+      "later": "r8:body:1",
+      "earlier": "r7:body:9",
+      "confirmed": false
+    },
+    {
+      "later": "r9:c3813081003:0",
+      "earlier": "r4:c3810589516:0",
+      "confirmed": false
+    },
+    {
+      "later": "r9:body:9",
+      "earlier": "r4:body:11",
+      "confirmed": false
+    },
+    {
+      "later": "r9:c3813080994:0",
+      "earlier": "r5:c3810741251:0",
+      "confirmed": false
+    },
+    {
+      "later": "r9:c3813081003:0",
+      "earlier": "r5:c3810741274:0",
+      "confirmed": false
+    },
+    {
+      "later": "r9:c3813080994:0",
+      "earlier": "r6:c3810892771:0",
+      "confirmed": false
+    },
+    {
+      "later": "r9:body:0",
+      "earlier": "r6:body:0",
+      "confirmed": false
+    },
+    {
+      "later": "r9:c3813080878:0",
+      "earlier": "r7:c3812599386:0",
+      "confirmed": false
+    },
+    {
+      "later": "r9:c3813080922:0",
+      "earlier": "r7:c3812599492:0",
+      "confirmed": false
+    },
+    {
+      "later": "r9:c3813080994:0",
+      "earlier": "r7:c3812599386:0",
+      "confirmed": false
+    },
+    {
+      "later": "r9:c3813081059:0",
+      "earlier": "r7:c3812599492:0",
+      "confirmed": false
+    },
+    {
+      "later": "r9:c3813080878:0",
+      "earlier": "r8:c3812759310:0",
+      "confirmed": false
+    },
+    {
+      "later": "r9:c3813080994:0",
+      "earlier": "r8:c3812759310:0",
+      "confirmed": false
+    },
+    {
+      "later": "r10:c3813240746:0",
+      "earlier": "r4:c3810589550:0",
+      "confirmed": false
+    },
+    {
+      "later": "r10:c3813240788:0",
+      "earlier": "r4:c3810589616:0",
+      "confirmed": false
+    },
+    {
+      "later": "r10:c3813240788:0",
+      "earlier": "r5:c3810741282:0",
+      "confirmed": false
+    },
+    {
+      "later": "r10:c3813240796:0",
+      "earlier": "r5:c3810741251:0",
+      "confirmed": false
+    },
+    {
+      "later": "r10:c3813240796:0",
+      "earlier": "r5:c3810741272:0",
+      "confirmed": false
+    },
+    {
+      "later": "r10:c3813240758:0",
+      "earlier": "r6:c3810892822:0",
+      "confirmed": false
+    },
+    {
+      "later": "r10:c3813240796:0",
+      "earlier": "r6:c3810892753:0",
+      "confirmed": false
+    },
+    {
+      "later": "r10:body:10",
+      "earlier": "r6:body:12",
+      "confirmed": false
+    },
+    {
+      "later": "r10:c3813240728:0",
+      "earlier": "r7:c3812599386:0",
+      "confirmed": false
+    },
+    {
+      "later": "r10:c3813240796:0",
+      "earlier": "r7:c3812599386:0",
+      "confirmed": false
+    },
+    {
+      "later": "r10:c3813240796:0",
+      "earlier": "r8:c3812759310:0",
+      "confirmed": false
+    },
+    {
+      "later": "r10:c3813240738:0",
+      "earlier": "r9:c3813080893:0",
+      "confirmed": false
+    },
+    {
+      "later": "r10:c3813240738:0",
+      "earlier": "r9:c3813080949:0",
+      "confirmed": false
+    },
+    {
+      "later": "r10:c3813240758:0",
+      "earlier": "r9:c3813081059:0",
+      "confirmed": false
+    },
+    {
+      "later": "r10:c3813240796:0",
+      "earlier": "r9:c3813080994:0",
+      "confirmed": false
+    }
+  ],
+  "negativePairs": [],
+  "allowedSuppression": []
+}

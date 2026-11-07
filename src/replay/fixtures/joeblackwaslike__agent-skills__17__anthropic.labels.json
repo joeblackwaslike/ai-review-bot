@@ -1,0 +1,54 @@
+{
+  "fixtureId": "joeblackwaslike__agent-skills__17__anthropic",
+  "provisional": true,
+  "labels": [
+    {
+      "claimId": "r0:c4438494946:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-11-02T02:57:24Z|changed skills/agent-instructions/SKILL.md near line 7 in 27a86ea6bec8115a81230ff4b3ddb01dc785737b"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c4438494948:0",
+      "label": "fixed",
+      "confidence": "low",
+      "evidence": [
+        "2026-11-02T02:57:24Z|changed scripts/lint-descriptions.py near line 49 in 27a86ea6bec8115a81230ff4b3ddb01dc785737b"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c4438776869:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    }
+  ],
+  "repeatPairs": [
+    {
+      "later": "r1:body:0",
+      "earlier": "r0:body:0",
+      "confirmed": false
+    }
+  ],
+  "negativePairs": [],
+  "allowedSuppression": []
+}

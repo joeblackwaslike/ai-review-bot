@@ -1,0 +1,192 @@
+{
+  "schemaVersion": 1,
+  "owner": "joeblackwaslike",
+  "repo": "agent-skills",
+  "pull": 5,
+  "provider": "anthropic",
+  "reviewer": "claude",
+  "author": "joeblackwaslike",
+  "recordedAt": "2026-11-07T23:31:13.427Z",
+  "rounds": [
+    {
+      "index": 0,
+      "reviewId": 5001697467,
+      "provider": "anthropic",
+      "submittedAt": "2026-08-23T05:04:11Z",
+      "headSha": "4dfc1bb9958d2b1e16a79046fb50956a5b5d6cae",
+      "baseSha": "dbb4341f3fca1cb324c0a1dbb7f0af1fa8f102e9",
+      "mergeBase": "dbb4341f3fca1cb324c0a1dbb7f0af1fa8f102e9",
+      "triggerAt": "2026-08-23T05:03:25Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "4dfc1bb9958d2b1e16a79046fb50956a5b5d6cae",
+          "committedAt": "2026-08-23T05:03:25Z",
+          "files": [
+            {
+              "path": ".gitignore",
+              "ranges": [
+                [
+                  2,
+                  8
+                ]
+              ]
+            },
+            {
+              "path": "skills/git-github-workflows/SKILL.md",
+              "ranges": [
+                [
+                  24,
+                  30
+                ]
+              ]
+            },
+            {
+              "path": "skills/working-with-git/SKILL.md",
+              "ranges": [
+                [
+                  28,
+                  34
+                ]
+              ]
+            },
+            {
+              "path": "skills/working-with-git/references/howto/worktree-conventions.md",
+              "ranges": [
+                [
+                  1,
+                  63
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": []
+    },
+    {
+      "index": 1,
+      "reviewId": 5002424631,
+      "provider": "anthropic",
+      "submittedAt": "2026-08-23T12:56:16Z",
+      "headSha": "bd20d5bad59a6bc3e63b432f11ab2bb364028671",
+      "baseSha": "4dfc1bb9958d2b1e16a79046fb50956a5b5d6cae",
+      "mergeBase": "4dfc1bb9958d2b1e16a79046fb50956a5b5d6cae",
+      "triggerAt": "2026-08-23T12:55:36Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "bd20d5bad59a6bc3e63b432f11ab2bb364028671",
+          "committedAt": "2026-08-23T12:55:36Z",
+          "files": [
+            {
+              "path": "skills/working-with-git/references/howto/worktree-conventions.md",
+              "ranges": [
+                [
+                  53,
+                  65
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": []
+    },
+    {
+      "index": 2,
+      "reviewId": 5002439784,
+      "provider": "anthropic",
+      "submittedAt": "2026-08-23T13:04:50Z",
+      "headSha": "4fb64dd060852b655985227d67f2941e168ddb41",
+      "baseSha": "bd20d5bad59a6bc3e63b432f11ab2bb364028671",
+      "mergeBase": "bd20d5bad59a6bc3e63b432f11ab2bb364028671",
+      "triggerAt": "2026-08-23T12:56:41Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "4fb64dd060852b655985227d67f2941e168ddb41",
+          "committedAt": "2026-08-23T12:56:41Z",
+          "files": [
+            {
+              "path": ".gitignore",
+              "ranges": [
+                [
+                  2,
+                  7
+                ]
+              ]
+            },
+            {
+              "path": "skills/git-github-workflows/SKILL.md",
+              "ranges": [
+                [
+                  2,
+                  8
+                ]
+              ]
+            },
+            {
+              "path": "skills/working-with-git/SKILL.md",
+              "ranges": [
+                [
+                  2,
+                  8
+                ]
+              ]
+            },
+            {
+              "path": "skills/working-with-git/references/howto/worktree-conventions.md",
+              "ranges": [
+                [
+                  0,
+                  0
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r2:body:0",
+          "roundIndex": 2,
+          "reviewId": 5002439784,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P0",
+          "title": "Worktree symlink guidance is overstated and misleading",
+          "text": "Worktree symlink guidance is overstated and misleading"
+        },
+        {
+          "id": "r2:body:1",
+          "roundIndex": 2,
+          "reviewId": 5002439784,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P0",
+          "title": "Accuracy of symlink handling in worktree documentation needs correction",
+          "text": "Accuracy of symlink handling in worktree documentation needs correction"
+        },
+        {
+          "id": "r2:body:2",
+          "roundIndex": 2,
+          "reviewId": 5002439784,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P0",
+          "title": "Factual inaccuracy in worktree symlink behavior — misleads on verification workflow",
+          "text": "Factual inaccuracy in worktree symlink behavior — misleads on verification workflow"
+        }
+      ]
+    }
+  ],
+  "threads": [],
+  "reactions": []
+}

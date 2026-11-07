@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "owner": "joeblackwaslike",
+  "repo": "ai-review-bot-demo",
+  "pull": 1,
+  "provider": "anthropic",
+  "reviewer": "claude",
+  "author": "joeblackwaslike",
+  "recordedAt": "2026-11-07T23:32:14.139Z",
+  "rounds": [
+    {
+      "index": 0,
+      "reviewId": 5003013222,
+      "provider": "anthropic",
+      "submittedAt": "2026-08-23T18:00:06Z",
+      "headSha": "167af5aebc9cfeb0817bd7cf2a25343be4341a69",
+      "baseSha": "c0588fc1aa2436ba52361c424af11385e0f78a9b",
+      "mergeBase": "c0588fc1aa2436ba52361c424af11385e0f78a9b",
+      "triggerAt": "2026-08-23T17:59:24Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "167af5aebc9cfeb0817bd7cf2a25343be4341a69",
+          "committedAt": "2026-08-23T17:59:24Z",
+          "files": [
+            {
+              "path": "src/rate-limiter.ts",
+              "ranges": [
+                [
+                  10,
+                  16
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r0:body:0",
+          "roundIndex": 0,
+          "reviewId": 5003013222,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "No test added for the off-by-one fix",
+          "text": "No test added for the off-by-one fix"
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "reviewId": 5003016232,
+      "provider": "anthropic",
+      "submittedAt": "2026-08-23T18:01:41Z",
+      "headSha": "b08758908a34b7108cde781339bd24ee9d55fafe",
+      "baseSha": "167af5aebc9cfeb0817bd7cf2a25343be4341a69",
+      "mergeBase": "167af5aebc9cfeb0817bd7cf2a25343be4341a69",
+      "triggerAt": "2026-08-23T18:01:11Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "b08758908a34b7108cde781339bd24ee9d55fafe",
+          "committedAt": "2026-08-23T18:01:11Z",
+          "files": [
+            {
+              "path": "src/rate-limiter.test.ts",
+              "ranges": [
+                [
+                  14,
+                  25
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": []
+    }
+  ],
+  "threads": [],
+  "reactions": []
+}

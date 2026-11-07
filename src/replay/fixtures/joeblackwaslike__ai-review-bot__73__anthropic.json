@@ -1,0 +1,1057 @@
+{
+  "schemaVersion": 1,
+  "owner": "joeblackwaslike",
+  "repo": "ai-review-bot",
+  "pull": 73,
+  "provider": "anthropic",
+  "reviewer": "claude",
+  "author": "joeblackwaslike",
+  "recordedAt": "2026-11-07T23:35:55.220Z",
+  "rounds": [
+    {
+      "index": 0,
+      "reviewId": 4971705941,
+      "provider": "anthropic",
+      "submittedAt": "2026-08-19T11:43:44Z",
+      "headSha": "41b0663a612dfac01d9e6eb6eb12279e7b04cf1e",
+      "baseSha": "398786afba16c098096b2249104e244002180734",
+      "mergeBase": "398786afba16c098096b2249104e244002180734",
+      "triggerAt": "2026-08-19T10:33:38Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "644411999c47768738202a46a5b389971d9b2f0e",
+          "committedAt": "2026-08-19T10:23:59Z",
+          "files": [
+            {
+              "path": "src/github-app.test.ts",
+              "ranges": [
+                [
+                  299,
+                  319
+                ],
+                [
+                  333,
+                  388
+                ],
+                [
+                  1188,
+                  1206
+                ],
+                [
+                  1220,
+                  1236
+                ]
+              ]
+            },
+            {
+              "path": "src/github-app.ts",
+              "ranges": [
+                [
+                  55,
+                  98
+                ],
+                [
+                  133,
+                  158
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "sha": "41b0663a612dfac01d9e6eb6eb12279e7b04cf1e",
+          "committedAt": "2026-08-19T10:33:38Z",
+          "files": [
+            {
+              "path": "src/github-app.test.ts",
+              "ranges": [
+                [
+                  385,
+                  483
+                ],
+                [
+                  1340,
+                  1356
+                ]
+              ]
+            },
+            {
+              "path": "src/github-app.ts",
+              "ranges": [
+                [
+                  60,
+                  88
+                ],
+                [
+                  92,
+                  123
+                ],
+                [
+                  170,
+                  196
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r0:c3812634042:0",
+          "roundIndex": 0,
+          "reviewId": 4971705941,
+          "source": "inline",
+          "commentId": 3812634042,
+          "path": "src/github-app.ts",
+          "line": 68,
+          "severity": "P3",
+          "title": "Double JSDoc comment block on `findMatchingReview`",
+          "text": "🟢 **Low**\n\n**Double JSDoc comment block on `findMatchingReview`**\n\nThere are two separate `/** … */` JSDoc blocks immediately above `findMatchingReview` (lines ~58-61 and ~62-71 in `github-app.ts`). The first block (`Best-effort check …`) was superseded by the second (`checked: false means …`) but was never removed. Only one block will be attached to the function by documentation tooling; the other floats as dead comment noise and its description (`Returns null on any lookup failure`) is now inaccurate — the function no longer returns `null`."
+        },
+        {
+          "id": "r0:c3812634049:0",
+          "roundIndex": 0,
+          "reviewId": 4971705941,
+          "source": "inline",
+          "commentId": 3812634049,
+          "path": "src/github-app.ts",
+          "line": 113,
+          "severity": "P2",
+          "title": "Bare `catch {}` discards all diagnostic information",
+          "text": "🟡 **Medium**\n\n**Bare `catch {}` discards all diagnostic information**\n\nThis catch block catches every exception and returns `{ checked: false }` with no logging whatsoever. A bug inside the loop body (e.g. a TypeError on `response.data`) will be indistinguishable from a 503 network error in production logs — both result in a silent refusal to retry. Add at minimum a `console.warn` or `console.error` here so unexpected errors are visible.\n\n*Suggested fix:*\n\n```suggestion\n  } catch (err) {\n    console.warn(\"findMatchingReview: lookup failed, treating as unverifiable\", err);\n    return { checked: false };\n  }\n```"
+        },
+        {
+          "id": "r0:c3812634061:0",
+          "roundIndex": 0,
+          "reviewId": 4971705941,
+          "source": "inline",
+          "commentId": 3812634061,
+          "path": "src/github-app.test.ts",
+          "line": 440,
+          "severity": "P2",
+          "title": "Unverifiable-state test asserts `status: 'posted'` but the code path throws before any fallback comment is sent in this test setup",
+          "text": "🟡 **Medium**\n\n**Unverifiable-state test asserts `status: 'posted'` but the code path throws before any fallback comment is sent in this test setup**\n\nThe test `\"refuses to retry — rather than risk a duplicate…\"` expects `outcome` to equal `{ status: 'posted', event: 'COMMENT' }` and also expects a fallback issue comment call. However, the `request` mock returns `{ data: {} }` for all other routes — meaning the fallback comment POST (which this mock handles as the catch-all) will return successfully. The assertion `status: 'posted'` relies on `maybeSubmitReview`'s outer catch converting the thrown error into a `posted` result via the fallback path. If the outer catch does **not** currently set `status: 'posted'` for this scenario, or if the fallback comment itself fails, the test would produce a misleading false positive. The test should assert the fallback comment body contains the findings to confirm the right code path ran, not just that the call exists."
+        },
+        {
+          "id": "r0:c3812634070:0",
+          "roundIndex": 0,
+          "reviewId": 4971705941,
+          "source": "inline",
+          "commentId": 3812634070,
+          "path": "src/github-app.ts",
+          "line": 67,
+          "severity": "P3",
+          "title": "Duplicate JSDoc block — first comment is unreachable dead text",
+          "text": "🟢 **Low**\n\n**Duplicate JSDoc block — first comment is unreachable dead text**\n\nThere are two consecutive doc-comment blocks before the `ReviewLookupResult` type. The first one (starting \"Best-effort check...\") is immediately overwritten by the second and will never be shown by tooling. Delete the first block."
+        },
+        {
+          "id": "r0:c3812634081:0",
+          "roundIndex": 0,
+          "reviewId": 4971705941,
+          "source": "inline",
+          "commentId": 3812634081,
+          "path": "src/github-app.ts",
+          "line": 97,
+          "severity": "P2",
+          "title": "Empty-body review would match any prior empty-body review from a different context",
+          "text": "🟡 **Medium**\n\n**Empty-body review would match any prior empty-body review from a different context**\n\nIf `params.body` is an empty string (or a very short generic string), `findMatchingReview` could match a review posted by a different invocation that happened to produce the same empty/generic body on the same commit. The result would be: the POST is skipped, `lookup.reviewId` is returned, and `postReviewWithRetry` reports success with a stale, unrelated review ID. The immediate caller then treats this as the current review's ID and proceeds (PATCH, check-run, etc.). Adding a minimum-body-length guard or a sentinel prefix would close this, but it is most cleanly fixed by also matching on a review-level metadata field if one is embedded in the body."
+        },
+        {
+          "id": "r0:c3812634088:0",
+          "roundIndex": 0,
+          "reviewId": 4971705941,
+          "source": "inline",
+          "commentId": 3812634088,
+          "path": "src/github-app.ts",
+          "line": 108,
+          "severity": "P3",
+          "title": "Page-cap exceeded silently degrades to `checked: false`, aborting the review",
+          "text": "🟢 **Low**\n\n**Page-cap exceeded silently degrades to `checked: false`, aborting the review**\n\nWhen `MAX_REVIEW_LOOKUP_PAGES` (50 × 100 = 5 000 reviews) is reached, the function returns `{ checked: false }`, which causes `postReviewWithRetry` to throw and abort the entire review without posting. On a PR that legitimately has 5 000+ reviews the first POST will always fail this way. Consider whether a hard abort is the right policy, or whether the loop should fall through to retry the POST after the cap (accepting the small theoretical duplicate risk for pathological PRs)."
+        },
+        {
+          "id": "r0:c3812634095:0",
+          "roundIndex": 0,
+          "reviewId": 4971705941,
+          "source": "inline",
+          "commentId": 3812634095,
+          "path": "src/github-app.ts",
+          "line": 114,
+          "severity": "P3",
+          "title": "`reviews` cast suppresses type errors from the actual Octokit response shape",
+          "text": "🟢 **Low**\n\n**`reviews` cast suppresses type errors from the actual Octokit response shape**\n\nThe response data is cast with `as Array<{id,commit_id,body}> | undefined`. The actual Octokit response type for this endpoint includes many more fields and is never `undefined` — the cast hides the real type and means TypeScript will not warn if the API shape changes. Prefer `const reviews: unknown = response.data; if (!Array.isArray(reviews)) …` and then use a type guard or `z.array(…).safeParse` to narrow, rather than silently trusting the cast."
+        },
+        {
+          "id": "r0:c3812634101:0",
+          "roundIndex": 0,
+          "reviewId": 4971705941,
+          "source": "inline",
+          "commentId": 3812634101,
+          "path": "src/github-app.test.ts",
+          "line": 438,
+          "severity": "P2",
+          "title": "Retry count is silently bounded by lookup failures",
+          "text": "🟡 **Medium**\n\n**Retry count is silently bounded by lookup failures**\n\nWhen `findMatchingReview` returns `{ checked: false }`, the code throws immediately and aborts the retry loop entirely (falling through to `maybeSubmitReview`'s outer catch → fallback comment). That is the documented intent. However, the test titled \"refuses to retry\" asserts `outcome` equals `{ status: 'posted', event: 'COMMENT' }`, which implies the fallback comment path returns that shape. If the outer catch in `maybeSubmitReview` actually returns a different shape (e.g. `{ status: 'fallback' }`), the test would be asserting the wrong thing. This is only a risk — the shape of the outer catch return is not visible in the diff — but worth confirming the test assertion matches the real fallback return value."
+        },
+        {
+          "id": "r0:c3812634105:0",
+          "roundIndex": 0,
+          "reviewId": 4971705941,
+          "source": "inline",
+          "commentId": 3812634105,
+          "path": "src/github-app.ts",
+          "line": 111,
+          "severity": "P2",
+          "title": "Pagination terminates on `reviews.length < 100` but the last page may coincidentally return exactly 100 items",
+          "text": "🟡 **Medium**\n\n**Pagination terminates on `reviews.length < 100` but the last page may coincidentally return exactly 100 items**\n\nThe loop exits when `reviews.length < 100`, treating that as the signal that all reviews have been fetched. However, if a page returns exactly 100 items and it is simultaneously the last page, the next iteration will receive an empty array. That empty array has `length === 0 < 100`, so the loop will still terminate correctly — no review will be missed in that edge case. The real concern is the opposite direction: if the API ever returns an empty array on a non-final page (e.g. due to a transient gap), the loop stops early and reports `{ checked: true, reviewId: null }` when the match may still be on a later page. This converts a \"unknown\" state into a confident \"absent\" result and can cause the very duplicate the fix is designed to prevent. Consider treating an empty-page response as `{ checked: false }` or requiring two consecutive empty pages before concluding absence."
+        },
+        {
+          "id": "r0:c3812634112:0",
+          "roundIndex": 0,
+          "reviewId": 4971705941,
+          "source": "inline",
+          "commentId": 3812634112,
+          "path": "src/github-app.ts",
+          "line": 61,
+          "severity": "P2",
+          "title": "First block comment claims function returns `null` but it never does",
+          "text": "🟡 **Medium**\n\n**First block comment claims function returns `null` but it never does**\n\nThe comment immediately above the `ReviewLookupResult` type says 'Returns null on any lookup failure' but every code path in `findMatchingReview` returns either `{ checked: true; reviewId: ... }` or `{ checked: false }` — `null` is never returned. This is a direct factual contradiction with the implementation and the type definition on the very next line. The comment should be deleted; the second comment block accurately describes the discriminated union."
+        },
+        {
+          "id": "r0:c3812634122:0",
+          "roundIndex": 0,
+          "reviewId": 4971705941,
+          "source": "inline",
+          "commentId": 3812634122,
+          "path": "src/github-app.test.ts",
+          "line": 439,
+          "severity": "P3",
+          "title": "Test assertion on `outcome` may silently pass for the wrong reason when GET itself throws",
+          "text": "🟢 **Low**\n\n**Test assertion on `outcome` may silently pass for the wrong reason when GET itself throws**\n\nIn the 'refuses to retry' test, `outcome` is asserted to equal `{ status: 'posted', event: 'COMMENT' }`. But if the GET verification throws and the function rethrows, `maybeSubmitReview`'s outer catch is expected to produce this outcome via the fallback comment path. If the fallback comment POST also matches the catch-all `return { data: {} }` branch, the assertion can still pass even if the control flow diverged in an unexpected way. The test would be more robust if it also asserted that `postAttempts === 1` was the *sole* POST to the reviews endpoint — which it already does — but additionally verified the fallback comment body contains the review findings, confirming the right code path was taken. Currently `fallbackCall` is only checked for existence, not for its content."
+        },
+        {
+          "id": "r0:body:0",
+          "roundIndex": 0,
+          "reviewId": 4971705941,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "Body comparison is exact-string, but GitHub's API may trim or normalise whitespace",
+          "text": "Body comparison is exact-string, but GitHub's API may trim or normalise whitespace"
+        },
+        {
+          "id": "r0:body:1",
+          "roundIndex": 0,
+          "reviewId": 4971705941,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "The `MAX_REVIEW_LOOKUP_PAGES` cap silently degrades to 'unknown' and suppresses retries, but the comment says it prevents an infinite loop on a 'pathologically churned PR'",
+          "text": "The `MAX_REVIEW_LOOKUP_PAGES` cap silently degrades to 'unknown' and suppresses retries, but the comment says it prevents an infinite loop on a 'pathologically churned PR'"
+        },
+        {
+          "id": "r0:body:2",
+          "roundIndex": 0,
+          "reviewId": 4971705941,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P0",
+          "title": "Body comparison uses full review body including metadata footer — match may never fire or fire on wrong review",
+          "text": "Body comparison uses full review body including metadata footer — match may never fire or fire on wrong review"
+        },
+        {
+          "id": "r0:body:3",
+          "roundIndex": 0,
+          "reviewId": 4971705941,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "`findMatchingReview` silently swallows all errors with a bare `catch {}`",
+          "text": "`findMatchingReview` silently swallows all errors with a bare `catch {}`"
+        },
+        {
+          "id": "r0:body:4",
+          "roundIndex": 0,
+          "reviewId": 4971705941,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "Body comparison uses full string equality — metadata suffix will cause false negatives",
+          "text": "Body comparison uses full string equality — metadata suffix will cause false negatives"
+        },
+        {
+          "id": "r0:body:5",
+          "roundIndex": 0,
+          "reviewId": 4971705941,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "No test covers the MAX_REVIEW_LOOKUP_PAGES cap behaviour",
+          "text": "No test covers the MAX_REVIEW_LOOKUP_PAGES cap behaviour"
+        },
+        {
+          "id": "r0:body:6",
+          "roundIndex": 0,
+          "reviewId": 4971705941,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "Body comparison for duplicate detection is exact-string and may miss legitimate retries",
+          "text": "Body comparison for duplicate detection is exact-string and may miss legitimate retries"
+        },
+        {
+          "id": "r0:body:7",
+          "roundIndex": 0,
+          "reviewId": 4971705941,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "Parallel concurrent calls to `postReviewWithRetry` for the same PR are still not serialised",
+          "text": "Parallel concurrent calls to `postReviewWithRetry` for the same PR are still not serialised"
+        },
+        {
+          "id": "r0:body:8",
+          "roundIndex": 0,
+          "reviewId": 4971705941,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "Duplicate JSDoc-style block comment on `findMatchingReview`",
+          "text": "Duplicate JSDoc-style block comment on `findMatchingReview`"
+        },
+        {
+          "id": "r0:body:9",
+          "roundIndex": 0,
+          "reviewId": 4971705941,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "ReviewLookupResult has two JSDoc blocks — the first is orphaned",
+          "text": "ReviewLookupResult has two JSDoc blocks — the first is orphaned"
+        },
+        {
+          "id": "r0:body:10",
+          "roundIndex": 0,
+          "reviewId": 4971705941,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "`!lookup.checked` branch rethrows with a new error, discarding the original stack trace",
+          "text": "`!lookup.checked` branch rethrows with a new error, discarding the original stack trace"
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "reviewId": 4971780469,
+      "provider": "anthropic",
+      "submittedAt": "2026-08-19T11:53:45Z",
+      "headSha": "2bfac5b76538794cd41c1c7159101c6083163abc",
+      "baseSha": "41b0663a612dfac01d9e6eb6eb12279e7b04cf1e",
+      "mergeBase": "41b0663a612dfac01d9e6eb6eb12279e7b04cf1e",
+      "triggerAt": "2026-08-19T11:49:21Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "2bfac5b76538794cd41c1c7159101c6083163abc",
+          "committedAt": "2026-08-19T11:49:21Z",
+          "files": [
+            {
+              "path": "src/github-app.test.ts",
+              "ranges": [
+                [
+                  348,
+                  381
+                ],
+                [
+                  389,
+                  396
+                ],
+                [
+                  399,
+                  427
+                ],
+                [
+                  487,
+                  576
+                ]
+              ]
+            },
+            {
+              "path": "src/github-app.ts",
+              "ranges": [
+                [
+                  1,
+                  4
+                ],
+                [
+                  56,
+                  66
+                ],
+                [
+                  71,
+                  104
+                ],
+                [
+                  113,
+                  131
+                ],
+                [
+                  146,
+                  159
+                ],
+                [
+                  164,
+                  170
+                ],
+                [
+                  195,
+                  205
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r1:c3812696527:0",
+          "roundIndex": 1,
+          "reviewId": 4971780469,
+          "source": "inline",
+          "commentId": 3812696527,
+          "path": "src/github-app.ts",
+          "line": 110,
+          "severity": "P3",
+          "title": "params used as lookup key but pullNumber field name may differ from what octokit.request expects",
+          "text": "🟢 **Low**\n\n**params used as lookup key but pullNumber field name may differ from what octokit.request expects**\n\nIn `findMatchingReview`, `params.pullNumber` is passed as `pull_number` to `octokit.request`. The `params` object is typed locally as `{ owner: string; repo: string; pullNumber: number }`, which is correct camelCase. The mapping to `pull_number` (snake_case) inside the request call looks correct. No issue — confirming the mapping is explicit and correct."
+        },
+        {
+          "id": "r1:c3812696532:0",
+          "roundIndex": 1,
+          "reviewId": 4971780469,
+          "source": "inline",
+          "commentId": 3812696532,
+          "path": "src/github-app.ts",
+          "line": 149,
+          "severity": "P3",
+          "title": "postMarker is never stored; if postReviewWithRetry is called again from the outer retry loop it would generate a new marker, defeating dedup across outer-loop retries",
+          "text": "🟢 **Low**\n\n**postMarker is never stored; if postReviewWithRetry is called again from the outer retry loop it would generate a new marker, defeating dedup across outer-loop retries**\n\nThe marker is generated once at the top of `postReviewWithRetry` and reused across the inner retry loop — this is correct for retries within a single call. However, if the caller (`maybeSubmitReview`) calls `postReviewWithRetry` multiple times (it does not appear to from the diff, but if the call site wraps it in its own loop), each outer call would generate a new marker and the inner lookup would search for the new marker, not the one from the previous outer call. From the diff, `postReviewWithRetry` is called once per `maybeSubmitReview` invocation and has its own internal retry loop, so this is not currently a problem. No action needed given current structure, but worth noting if the call pattern changes."
+        },
+        {
+          "id": "r1:c3812696536:0",
+          "roundIndex": 1,
+          "reviewId": 4971780469,
+          "source": "inline",
+          "commentId": 3812696536,
+          "path": "src/github-app.ts",
+          "line": 196,
+          "severity": "P3",
+          "title": "Thrown error discards the original cause's stack when `lookup.checked` is false",
+          "text": "🟢 **Low**\n\n**Thrown error discards the original cause's stack when `lookup.checked` is false**\n\nThe `new Error(...)` with `{ cause: err }` correctly threads the original error through. However, the message says 'refusing to retry to avoid a possible duplicate' but `lastError` is never updated before this throw — the outer catch in `maybeSubmitReview` will see this new error as `lastError`, which is correct. This path is fine as written; the `cause` is preserved. No issue here — previously raised concern is resolved."
+        },
+        {
+          "id": "r1:c3812696542:0",
+          "roundIndex": 1,
+          "reviewId": 4971780469,
+          "source": "inline",
+          "commentId": 3812696542,
+          "path": "src/github-app.ts",
+          "line": 128,
+          "severity": "P3",
+          "title": "console.error in findMatchingReview uses the project's own logging pattern correctly",
+          "text": "🟢 **Low**\n\n**console.error in findMatchingReview uses the project's own logging pattern correctly**\n\nThe previous review flagged a bare `catch {}` that silently swallowed errors. The current diff shows `console.error('findMatchingReview lookup failed', err)` before returning `{ checked: false }`. This resolves the prior finding — errors are now logged with the error object included. The catch is no longer silent."
+        },
+        {
+          "id": "r1:c3812696547:0",
+          "roundIndex": 1,
+          "reviewId": 4971780469,
+          "source": "inline",
+          "commentId": 3812696547,
+          "path": "src/github-app.test.ts",
+          "line": 473,
+          "severity": "P3",
+          "title": "Test asserts `outcome` is `{ status: 'posted', event: 'COMMENT' }` after the lookup failure path, but that path throws — this may actually be testing the fallback comment path",
+          "text": "🟢 **Low**\n\n**Test asserts `outcome` is `{ status: 'posted', event: 'COMMENT' }` after the lookup failure path, but that path throws — this may actually be testing the fallback comment path**\n\nWhen `GET /reviews` throws a 503, `findMatchingReview` returns `{ checked: false }`, and `postReviewWithRetry` then throws `Cannot verify whether the review POST landed...`. The test expects `outcome` to equal `{ status: 'posted', event: 'COMMENT' }`. This means the test is actually asserting the `maybeSubmitReview` outer catch / fallback comment path returns that outcome — which is fine, but the comment says \"Exactly one POST attempt — no blind retry against an unverifiable state\" while the outcome check conflates two different success paths (real post vs. fallback). If the fallback comment also fails, `outcome` would differ. The test is valid but the assertion on `outcome` is testing the fallback path, not the duplicate-prevention path itself; a reader could be misled into thinking the function returned \"posted\" via the normal path."
+        },
+        {
+          "id": "r1:c3812696555:0",
+          "roundIndex": 1,
+          "reviewId": 4971780469,
+          "source": "inline",
+          "commentId": 3812696555,
+          "path": "src/github-app.test.ts",
+          "line": 546,
+          "severity": "P3",
+          "title": "Page-cap test never asserts that a fallback comment was posted after only 1 POST attempt on the first retry",
+          "text": "🟢 **Low**\n\n**Page-cap test never asserts that a fallback comment was posted after only 1 POST attempt on the first retry**\n\nThe page-cap test (`refuses to retry once the page cap is reached`) correctly checks `postAttempts === 1` and that a fallback comment is issued. However, it does not verify that `GET /reviews` was called exactly `MAX_REVIEW_LOOKUP_PAGES` (50) times, so if the implementation exits the loop early (a bug), the test still passes. This is a minor coverage gap — the test validates the outcome but not that the page cap was actually reached vs. some other early-exit path."
+        },
+        {
+          "id": "r1:c3812696557:0",
+          "roundIndex": 1,
+          "reviewId": 4971780469,
+          "source": "inline",
+          "commentId": 3812696557,
+          "path": "src/github-app.ts",
+          "line": 1,
+          "severity": "P3",
+          "title": "randomUUID import is from Node built-in — no browser/edge compatibility concern, but worth noting for future portability",
+          "text": "🟢 **Low**\n\n**randomUUID import is from Node built-in — no browser/edge compatibility concern, but worth noting for future portability**\n\n`randomUUID` from `node:crypto` is used to generate the per-attempt marker. This is a secure, non-guessable token — appropriate for the dedup use case. No security concern here. The `node:` prefix protocol import is correct for Node 14.18+/16+."
+        },
+        {
+          "id": "r1:c3812696565:0",
+          "roundIndex": 1,
+          "reviewId": 4971780469,
+          "source": "inline",
+          "commentId": 3812696565,
+          "path": "src/github-app.ts",
+          "line": 153,
+          "severity": "P3",
+          "title": "`wireBody` uses `\\n` as a separator, but `params.body` may already start with a newline — resulting in a double blank line at the top of the rendered review",
+          "text": "🟢 **Low**\n\n**`wireBody` uses `\\n` as a separator, but `params.body` may already start with a newline — resulting in a double blank line at the top of the rendered review**\n\nThe concatenation `${postMarker}\\n${params.body}` will produce a visible blank line between the invisible HTML comment and the review body if `params.body` starts with a newline (e.g. `\\nSome text`). The HTML comment itself is invisible in GitHub's rendered Markdown, so the double newline would appear as extra vertical whitespace at the top of the review. This is cosmetic, not a correctness issue, but could be surprising.\n\nMore critically: if `params.body` starts with `\\n`, the wire body is `<!-- marker -->\\n\\nSome text`, and the whitespace-drift test in the test file uses `trimEnd()` + CRLF normalisation on the returned body — not `trimStart()`. A leading-newline body would not be affected by the current drift simulation, so the test does not cover this edge case."
+        },
+        {
+          "id": "r1:c3812696570:0",
+          "roundIndex": 1,
+          "reviewId": 4971780469,
+          "source": "inline",
+          "commentId": 3812696570,
+          "path": "src/github-app.ts",
+          "line": 197,
+          "severity": "P3",
+          "title": "Error thrown when lookup is inconclusive discards original error as cause only in older Node — verify `cause` is supported",
+          "text": "🟢 **Low**\n\n**Error thrown when lookup is inconclusive discards original error as cause only in older Node — verify `cause` is supported**\n\nThe `new Error('...', { cause: err })` syntax requires Node 16.9+. If the runtime target is older, `cause` is silently ignored and the original error stack is lost. This is almost certainly fine for a modern project, but since the original finding about lost stack traces was previously raised and the fix uses `{ cause: err }`, confirm the Node engine field in `package.json` covers 16.9+. If it does, this is resolved; if not, the cause is still lost."
+        },
+        {
+          "id": "r1:c3812696579:0",
+          "roundIndex": 1,
+          "reviewId": 4971780469,
+          "source": "inline",
+          "commentId": 3812696579,
+          "path": "src/github-app.ts",
+          "line": 131,
+          "severity": "P3",
+          "title": "findMatchingReview catch block logs the error but does not include the marker or PR coordinates, making it hard to correlate in production logs",
+          "text": "🟢 **Low**\n\n**findMatchingReview catch block logs the error but does not include the marker or PR coordinates, making it hard to correlate in production logs**\n\nThe `console.error` call logs `err` but not `params.owner`, `params.repo`, `params.pullNumber`, or `marker`. In production, if this fires you will see 'findMatchingReview lookup failed' with a stack trace but no context about which PR or which submission attempt triggered it. Adding the params to the log line would make the failure actionable.\n\n*Suggested fix:*\n\n```suggestion\n\t\tconsole.error(\"findMatchingReview lookup failed\", {\n\t\t\towner: params.owner,\n\t\t\trepo: params.repo,\n\t\t\tpullNumber: params.pullNumber,\n\t\t\tmarker,\n\t\t\terr,\n\t\t});\n```"
+        },
+        {
+          "id": "r1:body:0",
+          "roundIndex": 1,
+          "reviewId": 4971780469,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "wireBody is sent to GitHub but params.body is used for the fallback comment — fallback will lack the marker",
+          "text": "wireBody is sent to GitHub but params.body is used for the fallback comment — fallback will lack the marker"
+        },
+        {
+          "id": "r1:body:1",
+          "roundIndex": 1,
+          "reviewId": 4971780469,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "wireBody is used for POST but params.body is used for fallback comment — marker never appears in fallback, but mismatch is benign",
+          "text": "wireBody is used for POST but params.body is used for fallback comment — marker never appears in fallback, but mismatch is benign"
+        },
+        {
+          "id": "r1:body:2",
+          "roundIndex": 1,
+          "reviewId": 4971780469,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "findMatchingReview is called on every retry iteration but the marker is static — on a genuine 3-attempt retry scenario the GET is called twice (after attempt 1 and attempt 2), each paginating up to MAX_REVIEW_LOOKUP_PAGES×100 reviews",
+          "text": "findMatchingReview is called on every retry iteration but the marker is static — on a genuine 3-attempt retry scenario the GET is called twice (after attempt 1 and attempt 2), each paginating up to MAX_REVIEW_LOOKUP_PAGES×100 reviews"
+        },
+        {
+          "id": "r1:body:3",
+          "roundIndex": 1,
+          "reviewId": 4971780469,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Marker is appended to wireBody but params.body used for fallback comment may omit the marker, causing fallback content to differ from what was posted",
+          "text": "Marker is appended to wireBody but params.body used for fallback comment may omit the marker, causing fallback content to differ from what was posted"
+        },
+        {
+          "id": "r1:body:4",
+          "roundIndex": 1,
+          "reviewId": 4971780469,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "The `wireBody` marker is regenerated on each call to `postReviewWithRetry` but never across calls — if `maybeSubmitReview` itself is retried externally, a new marker is generated and the old landed review won't be found",
+          "text": "The `wireBody` marker is regenerated on each call to `postReviewWithRetry` but never across calls — if `maybeSubmitReview` itself is retried externally, a new marker is generated and the old landed review won't be found"
+        },
+        {
+          "id": "r1:body:5",
+          "roundIndex": 1,
+          "reviewId": 4971780469,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Marker injected into wire body is also present in fallback comment body",
+          "text": "Marker injected into wire body is also present in fallback comment body"
+        },
+        {
+          "id": "r1:body:6",
+          "roundIndex": 1,
+          "reviewId": 4971780469,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "The `!lookup.checked` early-exit throws unconditionally, preventing all remaining retry attempts after a single lookup failure",
+          "text": "The `!lookup.checked` early-exit throws unconditionally, preventing all remaining retry attempts after a single lookup failure"
+        },
+        {
+          "id": "r1:body:7",
+          "roundIndex": 1,
+          "reviewId": 4971780469,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Marker is prepended to wireBody but the lookup searches params.body-derived body — mismatch already addressed by the marker approach, but verify params.pullNumber vs pull_number threading",
+          "text": "Marker is prepended to wireBody but the lookup searches params.body-derived body — mismatch already addressed by the marker approach, but verify params.pullNumber vs pull_number threading"
+        },
+        {
+          "id": "r1:body:8",
+          "roundIndex": 1,
+          "reviewId": 4971780469,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "The `wireBody` marker is generated once per `postReviewWithRetry` call but a caller invoking `postReviewWithRetry` twice for the same logical review would get two different markers",
+          "text": "The `wireBody` marker is generated once per `postReviewWithRetry` call but a caller invoking `postReviewWithRetry` twice for the same logical review would get two different markers"
+        },
+        {
+          "id": "r1:body:9",
+          "roundIndex": 1,
+          "reviewId": 4971780469,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "postMarker is embedded in the wire body but the fallback comment path uses params.body, so findings are not lost — but the visible review body always has an invisible marker prepended",
+          "text": "postMarker is embedded in the wire body but the fallback comment path uses params.body, so findings are not lost — but the visible review body always has an invisible marker prepended"
+        },
+        {
+          "id": "r1:body:10",
+          "roundIndex": 1,
+          "reviewId": 4971780469,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "ReviewLookupResult discriminated union is sound but the `checked: false` branch conflates two distinct failure modes",
+          "text": "ReviewLookupResult discriminated union is sound but the `checked: false` branch conflates two distinct failure modes"
+        },
+        {
+          "id": "r1:body:11",
+          "roundIndex": 1,
+          "reviewId": 4971780469,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "The `outcome` assertions in the unverifiable-lookup and page-cap tests are wrong",
+          "text": "The `outcome` assertions in the unverifiable-lookup and page-cap tests are wrong"
+        },
+        {
+          "id": "r1:body:12",
+          "roundIndex": 1,
+          "reviewId": 4971780469,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Marker is never stripped from the review body visible to users",
+          "text": "Marker is never stripped from the review body visible to users"
+        }
+      ]
+    }
+  ],
+  "threads": [
+    {
+      "threadId": "PRRT_kwDOSM5cU86acyuR",
+      "commentId": 3812634042,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3812673677,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-19T11:50:04Z",
+          "editedAt": null,
+          "body": "Fixed in 2bfac5b — replaced commit_id+body equality with a per-attempt marker (invisible HTML comment, same technique as quotaCommentMarker/rateLimitCommentMarker in notify.ts), fully paginated. This closes both the whitespace-drift false-negative risk and the coincidental-match-against-an-unrelated-review risk in one change — see the commit message for the full rationale."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86acyuW",
+      "commentId": 3812634049,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3812673820,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-19T11:50:05Z",
+          "editedAt": null,
+          "body": "Fixed in 2bfac5b — replaced commit_id+body equality with a per-attempt marker (invisible HTML comment, same technique as quotaCommentMarker/rateLimitCommentMarker in notify.ts), fully paginated. This closes both the whitespace-drift false-negative risk and the coincidental-match-against-an-unrelated-review risk in one change — see the commit message for the full rationale."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86acyug",
+      "commentId": 3812634061,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3812674012,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-19T11:50:06Z",
+          "editedAt": null,
+          "body": "Fixed in 2bfac5b — replaced commit_id+body equality with a per-attempt marker (invisible HTML comment, same technique as quotaCommentMarker/rateLimitCommentMarker in notify.ts), fully paginated. This closes both the whitespace-drift false-negative risk and the coincidental-match-against-an-unrelated-review risk in one change — see the commit message for the full rationale."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86acyuo",
+      "commentId": 3812634070,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3812674143,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-19T11:50:08Z",
+          "editedAt": null,
+          "body": "Fixed in 2bfac5b — replaced commit_id+body equality with a per-attempt marker (invisible HTML comment, same technique as quotaCommentMarker/rateLimitCommentMarker in notify.ts), fully paginated. This closes both the whitespace-drift false-negative risk and the coincidental-match-against-an-unrelated-review risk in one change — see the commit message for the full rationale."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86acyuw",
+      "commentId": 3812634081,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3812674297,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-19T11:50:09Z",
+          "editedAt": null,
+          "body": "Fixed in 2bfac5b — replaced commit_id+body equality with a per-attempt marker (invisible HTML comment, same technique as quotaCommentMarker/rateLimitCommentMarker in notify.ts), fully paginated. This closes both the whitespace-drift false-negative risk and the coincidental-match-against-an-unrelated-review risk in one change — see the commit message for the full rationale."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86acyu1",
+      "commentId": 3812634088,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3812674438,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-19T11:50:10Z",
+          "editedAt": null,
+          "body": "Fixed in 2bfac5b — replaced commit_id+body equality with a per-attempt marker (invisible HTML comment, same technique as quotaCommentMarker/rateLimitCommentMarker in notify.ts), fully paginated. This closes both the whitespace-drift false-negative risk and the coincidental-match-against-an-unrelated-review risk in one change — see the commit message for the full rationale."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86acyu9",
+      "commentId": 3812634095,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3812674604,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-19T11:50:12Z",
+          "editedAt": null,
+          "body": "Fixed in 2bfac5b — replaced commit_id+body equality with a per-attempt marker (invisible HTML comment, same technique as quotaCommentMarker/rateLimitCommentMarker in notify.ts), fully paginated. This closes both the whitespace-drift false-negative risk and the coincidental-match-against-an-unrelated-review risk in one change — see the commit message for the full rationale."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86acyvC",
+      "commentId": 3812634101,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3812674725,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-19T11:50:14Z",
+          "editedAt": null,
+          "body": "Fixed in 2bfac5b — replaced commit_id+body equality with a per-attempt marker (invisible HTML comment, same technique as quotaCommentMarker/rateLimitCommentMarker in notify.ts), fully paginated. This closes both the whitespace-drift false-negative risk and the coincidental-match-against-an-unrelated-review risk in one change — see the commit message for the full rationale."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86acyvG",
+      "commentId": 3812634105,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3812674890,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-19T11:50:15Z",
+          "editedAt": null,
+          "body": "Fixed in 2bfac5b — replaced commit_id+body equality with a per-attempt marker (invisible HTML comment, same technique as quotaCommentMarker/rateLimitCommentMarker in notify.ts), fully paginated. This closes both the whitespace-drift false-negative risk and the coincidental-match-against-an-unrelated-review risk in one change — see the commit message for the full rationale."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86acyvL",
+      "commentId": 3812634112,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3812675024,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-19T11:50:16Z",
+          "editedAt": null,
+          "body": "Fixed in 2bfac5b — replaced commit_id+body equality with a per-attempt marker (invisible HTML comment, same technique as quotaCommentMarker/rateLimitCommentMarker in notify.ts), fully paginated. This closes both the whitespace-drift false-negative risk and the coincidental-match-against-an-unrelated-review risk in one change — see the commit message for the full rationale."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86acyvT",
+      "commentId": 3812634122,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3812675192,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-19T11:50:18Z",
+          "editedAt": null,
+          "body": "Fixed in 2bfac5b — replaced commit_id+body equality with a per-attempt marker (invisible HTML comment, same technique as quotaCommentMarker/rateLimitCommentMarker in notify.ts), fully paginated. This closes both the whitespace-drift false-negative risk and the coincidental-match-against-an-unrelated-review risk in one change — see the commit message for the full rationale."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86ac9KS",
+      "commentId": 3812696527,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3812707719,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-19T11:55:35Z",
+          "editedAt": null,
+          "body": "Declined as low-value for this PR — this is a Node-only CLI/server tool, not a browser or multi-runtime library; Node built-ins are the correct and only target here."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86ac9KV",
+      "commentId": 3812696532,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3812707943,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-19T11:55:37Z",
+          "editedAt": null,
+          "body": "Declined — this is intentional, not a defect. The marker's scope is deliberately limited to this call's own retry loop; cross-invocation duplicate prevention is a separate, already-solved problem handled by maybeSubmitReview's per-commit KV idempotency claim. Conflating the two would be the wrong layer for this concern."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86ac9KX",
+      "commentId": 3812696536,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3812708165,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-19T11:55:39Z",
+          "editedAt": null,
+          "body": "Declined — verified against the current code: the throw at this location already uses `{ cause: err }` (ES2022 Error cause), preserving the original failure. This appears to be reviewing a prior revision; please re-check against 2bfac5b before re-raising."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86ac9Kc",
+      "commentId": 3812696542,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3812708401,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-19T11:55:42Z",
+          "editedAt": null,
+          "body": "Declined as low-value for this PR — this is a Node-only CLI/server tool, not a browser or multi-runtime library; Node built-ins are the correct and only target here."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86ac9Kg",
+      "commentId": 3812696547,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3812708593,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-19T11:55:43Z",
+          "editedAt": null,
+          "body": "Declined — verified against the current test: it already asserts the fallback comment was posted (`expect(fallbackCall).toBeDefined()`), and the `{ status: 'posted', event: 'COMMENT' }` expectation matches the pre-existing 'posts fallback comment with findings when all retries are exhausted' test's identical, already-verified assertion for the same code path (maybeSubmitReview's outer catch sets reviewPosted=true and returns status:'posted' when the fallback comment succeeds)."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86ac9Kn",
+      "commentId": 3812696555,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3812708747,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-19T11:55:45Z",
+          "editedAt": null,
+          "body": "Declined — verified against the current test: it already asserts the fallback comment was posted (`expect(fallbackCall).toBeDefined()`), and the `{ status: 'posted', event: 'COMMENT' }` expectation matches the pre-existing 'posts fallback comment with findings when all retries are exhausted' test's identical, already-verified assertion for the same code path (maybeSubmitReview's outer catch sets reviewPosted=true and returns status:'posted' when the fallback comment succeeds)."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86ac9Kp",
+      "commentId": 3812696557,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3812708983,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-19T11:55:47Z",
+          "editedAt": null,
+          "body": "Declined as low-value for this PR — this is a Node-only CLI/server tool, not a browser or multi-runtime library; Node built-ins are the correct and only target here."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86ac9Kt",
+      "commentId": 3812696565,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3812709156,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-19T11:55:49Z",
+          "editedAt": null,
+          "body": "Declined as low-value for this PR — this is a Node-only CLI/server tool, not a browser or multi-runtime library; Node built-ins are the correct and only target here."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86ac9Kv",
+      "commentId": 3812696570,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3812709312,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-19T11:55:50Z",
+          "editedAt": null,
+          "body": "Declined — verified against the current code: the throw at this location already uses `{ cause: err }` (ES2022 Error cause), preserving the original failure. This appears to be reviewing a prior revision; please re-check against 2bfac5b before re-raising."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86ac9K2",
+      "commentId": 3812696579,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3812709464,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-19T11:55:52Z",
+          "editedAt": null,
+          "body": "Declined as low-value for this PR — this is a Node-only CLI/server tool, not a browser or multi-runtime library; Node built-ins are the correct and only target here."
+        }
+      ]
+    }
+  ],
+  "reactions": []
+}

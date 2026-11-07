@@ -1,0 +1,322 @@
+{
+  "schemaVersion": 1,
+  "owner": "joeblackwaslike",
+  "repo": "ai-review-bot",
+  "pull": 61,
+  "provider": "anthropic",
+  "reviewer": "claude",
+  "author": "joeblackwaslike",
+  "recordedAt": "2026-11-07T23:32:42.318Z",
+  "rounds": [
+    {
+      "index": 0,
+      "reviewId": 4902954816,
+      "provider": "anthropic",
+      "submittedAt": "2026-08-11T04:35:52Z",
+      "headSha": "75efae9a59523b23b68a6e13f57a9a21fcf5ab14",
+      "baseSha": "6ef97bbfbee3f204c1078ddd478f8049ad952089",
+      "mergeBase": "6ef97bbfbee3f204c1078ddd478f8049ad952089",
+      "triggerAt": "2026-08-11T04:33:09Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "75efae9a59523b23b68a6e13f57a9a21fcf5ab14",
+          "committedAt": "2026-08-11T04:33:09Z",
+          "files": [
+            {
+              "path": "src/review.test.ts",
+              "ranges": [
+                [
+                  11,
+                  17
+                ],
+                [
+                  1224,
+                  1295
+                ],
+                [
+                  2108,
+                  2123
+                ]
+              ]
+            },
+            {
+              "path": "src/review.ts",
+              "ranges": [
+                [
+                  554,
+                  561
+                ],
+                [
+                  574,
+                  604
+                ],
+                [
+                  610,
+                  617
+                ],
+                [
+                  622,
+                  630
+                ],
+                [
+                  1397,
+                  1404
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r0:c3755255234:0",
+          "roundIndex": 0,
+          "reviewId": 4902954816,
+          "source": "inline",
+          "commentId": 3755255234,
+          "path": "src/review.test.ts",
+          "line": 2119,
+          "severity": "P2",
+          "title": "Hardcoded call index makes summary assertion unreliable",
+          "text": "🟡 **Medium**\n\n**Hardcoded call index makes summary assertion unreliable**\n\nThis index (`[5]`) will silently break if any earlier `generateObject` call is added or removed. Scanning for the call by a distinguishing property (e.g., the system prompt containing `\"ground truth\"`) is more robust and was already recommended by a prior reviewer.\n\nSuggested replacement:\n```ts\nconst summaryCall = (mockGenerateObject as ReturnType<typeof vi.fn>).mock.calls\n  .find((c) => (c[0].system as string)?.includes(\"ground truth\"))?.[0];\nexpect(summaryCall).toBeDefined();\nconst summaryPrompt = summaryCall.messages[0].content as string;\nexpect(summaryPrompt).toContain(\"Bug\");\n```\n\n*Suggested fix:*\n\n```suggestion\n    const summaryCall = (mockGenerateObject as ReturnType<typeof vi.fn>).mock.calls\n      .find((c) => (c[0].system as string)?.includes(\"ground truth\"))?.[0];\n    expect(summaryCall).toBeDefined();\n    const summaryPrompt = summaryCall!.messages[0].content as string;\n    expect(summaryPrompt).toContain(\"Bug\");\n```"
+        },
+        {
+          "id": "r0:c3755255243:0",
+          "roundIndex": 0,
+          "reviewId": 4902954816,
+          "source": "inline",
+          "commentId": 3755255243,
+          "path": "src/review.ts",
+          "line": 615,
+          "severity": "P3",
+          "title": "Empty string produced by join when both grounding sections are absent causes a stray leading newline",
+          "text": "🟢 **Low**\n\n**Empty string produced by join when both grounding sections are absent causes a stray leading newline**\n\nWhen both `survivingPrior` and `resolvedTombstones` are empty, `stillOpenSection` and `resolvedSection` are both `\"\"`. These empty strings are passed to the outer `[…].join(\"\\n\")` call in `prompt`, which produces a trailing `\\n\\n` on the assembled prompt. This is cosmetically harmless but would be eliminated if the two sections were filtered out (e.g. `.filter(Boolean)`) the same way the `system` array already is.\n\n*Suggested fix:*\n\n```suggestion\n    priorSection,\n    stillOpenSection,\n    resolvedSection,\n  ].filter(Boolean).join(\"\\n\");\n```"
+        },
+        {
+          "id": "r0:body:0",
+          "roundIndex": 0,
+          "reviewId": 4902954816,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "Integration test uses hardcoded call index to identify summary invocation",
+          "text": "Integration test uses hardcoded call index to identify summary invocation"
+        },
+        {
+          "id": "r0:body:1",
+          "roundIndex": 0,
+          "reviewId": 4902954816,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "Integration test index [5] is brittle and already flagged by prior review",
+          "text": "Integration test index [5] is brittle and already flagged by prior review"
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "reviewId": 4903007304,
+      "provider": "anthropic",
+      "submittedAt": "2026-08-11T04:49:20Z",
+      "headSha": "82ba81cdef06a471c867a2b617b58848c2529b7b",
+      "baseSha": "75efae9a59523b23b68a6e13f57a9a21fcf5ab14",
+      "mergeBase": "75efae9a59523b23b68a6e13f57a9a21fcf5ab14",
+      "triggerAt": "2026-08-11T04:39:23Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "82ba81cdef06a471c867a2b617b58848c2529b7b",
+          "committedAt": "2026-08-11T04:39:23Z",
+          "files": [
+            {
+              "path": "src/review.test.ts",
+              "ranges": [
+                [
+                  2109,
+                  2220
+                ]
+              ]
+            },
+            {
+              "path": "src/review.ts",
+              "ranges": [
+                [
+                  555,
+                  565
+                ],
+                [
+                  595,
+                  605
+                ],
+                [
+                  616,
+                  624
+                ],
+                [
+                  628,
+                  634
+                ],
+                [
+                  991,
+                  1003
+                ],
+                [
+                  1072,
+                  1080
+                ],
+                [
+                  1414,
+                  1420
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r1:c3755300903:0",
+          "roundIndex": 1,
+          "reviewId": 4903007304,
+          "source": "inline",
+          "commentId": 3755300903,
+          "path": "src/review.ts",
+          "line": 1074,
+          "severity": "P3",
+          "title": "Tombstone filter uses Array.includes on id strings — correct but triage.resolved type unverifiable",
+          "text": "🟢 **Low**\n\n**Tombstone filter uses Array.includes on id strings — correct but triage.resolved type unverifiable**\n\nThe expression `triage.resolved.includes(f.id)` is correct if `triage.resolved` is `string[]` (finding IDs). This is consistent with the surrounding code that treats `resolved` as an array of IDs. No issue found here — just confirming the logic is sound."
+        },
+        {
+          "id": "r1:c3755300907:0",
+          "roundIndex": 1,
+          "reviewId": 4903007304,
+          "source": "inline",
+          "commentId": 3755300907,
+          "path": "src/review.test.ts",
+          "line": 2182,
+          "severity": "P2",
+          "title": "New test uses hardcoded call index as fallback comment but finder is correct",
+          "text": "🟡 **Medium**\n\n**New test uses hardcoded call index as fallback comment but finder is correct**\n\nThe `.find()` approach using `\"ground truth\"` as the discriminator is sound and addresses the brittle-index concern. However, the new test for historical tombstone exclusion at the bottom of the block also uses the same `.find()` pattern with `\"ground truth\"` — which is correct — but it interleaves a fresh `mockGenerateObject` call sequence starting from `.mockResolvedValueOnce` without calling `vi.clearAllMocks()` or equivalent. If the outer test suite's mock state bleeds into this test, `mock.calls` may contain calls from the prior test, causing the `.find()` to match the wrong invocation. Verify that `beforeEach` in this describe block resets mock state, or add an explicit `vi.clearAllMocks()` at the top of this test."
+        },
+        {
+          "id": "r1:c3755300911:0",
+          "roundIndex": 1,
+          "reviewId": 4903007304,
+          "source": "inline",
+          "commentId": 3755300911,
+          "path": "src/review.test.ts",
+          "line": 2185,
+          "severity": "P3",
+          "title": "JSDoc parameter name mismatch after rename",
+          "text": "🟢 **Low**\n\n**JSDoc parameter name mismatch after rename**\n\nThe JSDoc comment on the `resolvedThisRound` parameter in `generateSummary` is a prose block comment rather than a `@param` tag, so the name mismatch is not a compiler error — but the inline comment directly above the parameter correctly describes the new semantics. No issue here.\n\nHowever, the new test `excludes historical tombstones from THIS round's 'confirmed resolved' grounding` sets `triage.resolved: []` and then asserts `summaryPrompt` does not contain `'CONFIRMED resolved this round'`. This is correct given the `resolvedThisRound.length > 0` guard, but the test also asserts the prompt does not contain `'Old bug fixed two rounds ago'`. Since `historicalTombstoneId` is a persisted `status: 'resolved'` finding and `resolvedThisRound` is derived only from `triage.resolved`, that tombstone will not appear — the assertion is valid and will pass for the right reason. No defect."
+        }
+      ]
+    }
+  ],
+  "threads": [
+    {
+      "threadId": "PRRT_kwDOSM5cU86YHO2_",
+      "commentId": 3755255234,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3755268119,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-11T04:39:57Z",
+          "editedAt": null,
+          "body": "Fixed in 82ba81cd: applied your suggested fix verbatim — the summary call is now found by system prompt content (\"ground truth\") instead of a positional index."
+        },
+        {
+          "id": 3755268622,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-11T04:40:06Z",
+          "editedAt": null,
+          "body": "Fixed in 82ba81cd: applied your suggested fix verbatim — the summary call is now found by system prompt content (\"ground truth\") instead of a positional index."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86YHO3E",
+      "commentId": 3755255243,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3755268178,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-11T04:39:58Z",
+          "editedAt": null,
+          "body": "Fixed in 82ba81cd: applied your suggested fix verbatim — .filter(Boolean) before the outer join."
+        },
+        {
+          "id": 3755268678,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-11T04:40:07Z",
+          "editedAt": null,
+          "body": "Fixed in 82ba81cd: applied your suggested fix verbatim — .filter(Boolean) before the outer join."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86YHWUO",
+      "commentId": 3755300903,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86YHWUT",
+      "commentId": 3755300907,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3755322318,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-11T04:55:29Z",
+          "editedAt": null,
+          "body": "Factually incorrect — the describe block's own beforeEach (src/review.test.ts:2023) calls mockGenerateObject.mockReset() before every test, including this one and the preceding one. Mock state cannot bleed between them; vitest runs beforeEach before each it() unconditionally."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86YHWUX",
+      "commentId": 3755300911,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": []
+    }
+  ],
+  "reactions": [
+    {
+      "commentId": 3755255234,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-08-11T04:40:14Z"
+    },
+    {
+      "commentId": 3755255243,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-08-11T04:40:14Z"
+    },
+    {
+      "commentId": 3755300907,
+      "user": "joeblackwaslike",
+      "content": "-1",
+      "createdAt": "2026-08-11T04:55:30Z"
+    }
+  ]
+}

@@ -1,0 +1,207 @@
+{
+  "schemaVersion": 1,
+  "owner": "joeblackwaslike",
+  "repo": "ai-listings",
+  "pull": 61,
+  "provider": "anthropic",
+  "reviewer": "claude",
+  "author": "joeblackwaslike",
+  "recordedAt": "2026-11-07T23:27:37.958Z",
+  "rounds": [
+    {
+      "index": 0,
+      "reviewId": 5247245462,
+      "provider": "anthropic",
+      "submittedAt": "2026-09-18T11:27:03Z",
+      "headSha": "f4213a907a3a496d9d2a85906e3ecab7bb842e58",
+      "baseSha": "19fcd541e0c848b64c610f8f616c799c8ac18db9",
+      "mergeBase": "25d0e014124ca462096b60feb61d92aac34e42e2",
+      "triggerAt": "2026-09-18T11:25:54Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "9c6db7a55864307fc5a90fa694395f8e7a554cba",
+          "committedAt": "2026-09-18T11:10:46Z",
+          "files": [
+            {
+              "path": "src/components/dashboard/ListingCard.tsx",
+              "ranges": [
+                [
+                  22,
+                  28
+                ],
+                [
+                  489,
+                  499
+                ]
+              ]
+            },
+            {
+              "path": "src/components/dashboard/UploadZone.tsx",
+              "ranges": [
+                [
+                  69,
+                  75
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/platforms/adapters/ebay.ts",
+              "ranges": [
+                [
+                  537,
+                  563
+                ],
+                [
+                  576,
+                  595
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "sha": "9a12929042edd50deb689f7b53a07deb31e64ed4",
+          "committedAt": "2026-09-18T11:22:41Z",
+          "files": [
+            {
+              "path": "docs/superpowers/specs/2026-05-20-ebay-integration-design.md",
+              "ranges": [
+                [
+                  74,
+                  83
+                ],
+                [
+                  86,
+                  92
+                ]
+              ]
+            },
+            {
+              "path": "src/components/dashboard/ListingCard.test.ts",
+              "ranges": [
+                [
+                  22,
+                  75
+                ]
+              ]
+            },
+            {
+              "path": "src/lib/platforms/adapters/ebay.test.ts",
+              "ranges": [
+                [
+                  1,
+                  6
+                ],
+                [
+                  19,
+                  173
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "sha": "f4213a907a3a496d9d2a85906e3ecab7bb842e58",
+          "committedAt": "2026-09-18T11:25:54Z",
+          "files": [
+            {
+              "path": "src/components/dashboard/ListingsGrid.tsx",
+              "ranges": [
+                [
+                  42,
+                  48
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r0:c4046282809:0",
+          "roundIndex": 0,
+          "reviewId": 5247245462,
+          "source": "inline",
+          "commentId": 4046282809,
+          "path": "src/lib/platforms/adapters/ebay.ts",
+          "line": 563,
+          "severity": "P2",
+          "title": "Pagination loop lacks a max-iteration/cursor-safety guard",
+          "text": "🟡 **P2**\n\n**Pagination loop lacks a max-iteration/cursor-safety guard**\n\nThe while loops in getMyListings and getOrders follow `next` indefinitely based on the API response. If the eBay API ever returns a `next` URL that repeats (e.g., due to a bug or unexpected pagination behavior), this could cause an infinite loop with unbounded memory growth in allOffers/allOrders. Consider adding a max page count or a check that nextUrl actually changes between iterations."
+        },
+        {
+          "id": "r0:body:0",
+          "roundIndex": 0,
+          "reviewId": 5247245462,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "getMyListings status mapping breaks statusParam when filters.status is undefined but statusMap variable unused check",
+          "text": "getMyListings status mapping breaks statusParam when filters.status is undefined but statusMap variable unused check"
+        },
+        {
+          "id": "r0:body:1",
+          "roundIndex": 0,
+          "reviewId": 5247245462,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "UNPUBLISHED status mapping may not align with eBay's actual semantics",
+          "text": "UNPUBLISHED status mapping may not align with eBay's actual semantics"
+        },
+        {
+          "id": "r0:body:2",
+          "roundIndex": 0,
+          "reviewId": 5247245462,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "Pagination loop lacks a safety bound against infinite loops",
+          "text": "Pagination loop lacks a safety bound against infinite loops"
+        },
+        {
+          "id": "r0:body:3",
+          "roundIndex": 0,
+          "reviewId": 5247245462,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Pagination follows `next` URL as-is, but eBay's `next` field format is unverified",
+          "text": "Pagination follows `next` URL as-is, but eBay's `next` field format is unverified"
+        },
+        {
+          "id": "r0:body:4",
+          "roundIndex": 0,
+          "reviewId": 5247245462,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "eBay pagination follows raw next URL from response with token appended separately",
+          "text": "eBay pagination follows raw next URL from response with token appended separately"
+        }
+      ]
+    }
+  ],
+  "threads": [
+    {
+      "threadId": "PRRT_kwDOSSBjYs6juJxH",
+      "commentId": 4046282809,
+      "isResolved": false,
+      "isOutdated": false,
+      "resolvedBy": null,
+      "replies": []
+    }
+  ],
+  "reactions": []
+}

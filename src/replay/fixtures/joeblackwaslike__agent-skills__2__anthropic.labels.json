@@ -1,0 +1,68 @@
+{
+  "fixtureId": "joeblackwaslike__agent-skills__2__anthropic",
+  "provisional": true,
+  "labels": [
+    {
+      "claimId": "r0:c3745393153:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-09T21:57:24Z|Fixed in 4330b22 — restructured the two mechanisms into sub-bullets per your suggested diff."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3745393157:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-09T21:57:23Z|Fixed in 4330b22 — promoted 'Dismiss a review' to a real ### heading (matching this file's existing 'position vs line' subheading precedent), fixed the cross-reference to #dismiss-a-review, and trimmed the duplicated stacked-reviews caveat out of the cross-reference line per your suggested wording."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3745447757:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3745447762:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:1",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    }
+  ],
+  "repeatPairs": [
+    {
+      "later": "r1:body:1",
+      "earlier": "r0:body:0",
+      "confirmed": false
+    }
+  ],
+  "negativePairs": [],
+  "allowedSuppression": []
+}

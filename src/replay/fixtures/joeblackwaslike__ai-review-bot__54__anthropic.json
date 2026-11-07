@@ -1,0 +1,411 @@
+{
+  "schemaVersion": 1,
+  "owner": "joeblackwaslike",
+  "repo": "ai-review-bot",
+  "pull": 54,
+  "provider": "anthropic",
+  "reviewer": "claude",
+  "author": "joeblackwaslike",
+  "recordedAt": "2026-11-07T23:32:21.097Z",
+  "rounds": [
+    {
+      "index": 0,
+      "reviewId": 4890282861,
+      "provider": "anthropic",
+      "submittedAt": "2026-08-09T01:42:31Z",
+      "headSha": "0a48e0a031b830f55919c0eb63a531ed19b4b2c6",
+      "baseSha": "8ed4380f33c6f4d4d2bff7ce7f1906c32a8f25d3",
+      "mergeBase": "8ed4380f33c6f4d4d2bff7ce7f1906c32a8f25d3",
+      "triggerAt": "2026-08-09T01:40:12Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "0a48e0a031b830f55919c0eb63a531ed19b4b2c6",
+          "committedAt": "2026-08-09T01:40:12Z",
+          "files": [
+            {
+              "path": "CLAUDE.md",
+              "ranges": [
+                [
+                  64,
+                  70
+                ]
+              ]
+            },
+            {
+              "path": "src/review.test.ts",
+              "ranges": [
+                [
+                  2198,
+                  2216
+                ],
+                [
+                  2221,
+                  2227
+                ],
+                [
+                  2251,
+                  2264
+                ],
+                [
+                  2268,
+                  2274
+                ],
+                [
+                  2334,
+                  2341
+                ],
+                [
+                  2358,
+                  2367
+                ],
+                [
+                  2372,
+                  2384
+                ]
+              ]
+            },
+            {
+              "path": "src/review.ts",
+              "ranges": [
+                [
+                  13,
+                  19
+                ],
+                [
+                  1028,
+                  1034
+                ]
+              ]
+            },
+            {
+              "path": "src/reviewer-tuning.test.ts",
+              "ranges": [
+                [
+                  1,
+                  20
+                ]
+              ]
+            },
+            {
+              "path": "src/reviewer-tuning.ts",
+              "ranges": [
+                [
+                  1,
+                  21
+                ],
+                [
+                  25,
+                  32
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r0:body:0",
+          "roundIndex": 0,
+          "reviewId": 4890282861,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Test comment references in reviewer-tuning.test.ts are overly narrative",
+          "text": "Test comment references in reviewer-tuning.test.ts are overly narrative"
+        },
+        {
+          "id": "r0:body:1",
+          "roundIndex": 0,
+          "reviewId": 4890282861,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "In-code comments are dense with PR/issue references that will age poorly",
+          "text": "In-code comments are dense with PR/issue references that will age poorly"
+        },
+        {
+          "id": "r0:body:2",
+          "roundIndex": 0,
+          "reviewId": 4890282861,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "ReviewerTuning interface is a plain boolean bag with no invariant enforcement",
+          "text": "ReviewerTuning interface is a plain boolean bag with no invariant enforcement"
+        },
+        {
+          "id": "r0:body:3",
+          "roundIndex": 0,
+          "reviewId": 4890282861,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "PR-reference-heavy inline comments will rot as tickets close",
+          "text": "PR-reference-heavy inline comments will rot as tickets close"
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "reviewId": 4890309461,
+      "provider": "anthropic",
+      "submittedAt": "2026-08-09T02:02:56Z",
+      "headSha": "8bf7ed8f9144e49cb4ecb1a4484d2c25e28a2e9d",
+      "baseSha": "0a48e0a031b830f55919c0eb63a531ed19b4b2c6",
+      "mergeBase": "0a48e0a031b830f55919c0eb63a531ed19b4b2c6",
+      "triggerAt": "2026-08-09T01:53:04Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "8bf7ed8f9144e49cb4ecb1a4484d2c25e28a2e9d",
+          "committedAt": "2026-08-09T01:53:04Z",
+          "files": [
+            {
+              "path": "src/review.test.ts",
+              "ranges": [
+                [
+                  1907,
+                  2008
+                ]
+              ]
+            },
+            {
+              "path": "src/review.ts",
+              "ranges": [
+                [
+                  925,
+                  951
+                ],
+                [
+                  1009,
+                  1024
+                ],
+                [
+                  1415,
+                  1434
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r1:c3742300895:0",
+          "roundIndex": 1,
+          "reviewId": 4890309461,
+          "source": "inline",
+          "commentId": 3742300895,
+          "path": "src/review.ts",
+          "line": 1009,
+          "severity": "P2",
+          "title": "incrementalPass flag not set when triage is FULL but prior state exists",
+          "text": "🟡 **Medium**\n\n**incrementalPass flag not set when triage is FULL but prior state exists**\n\nWhen `triage.recommendation === \"FULL\"` (or truncated fallback), `incrementalPass` stays `false` and `survivingPrior` is populated from the state block above. That is intentional and correct for the carry-forward logic.\n\nHowever, look at the test: agents return empty responses and the expectation is `r2?.event === \"REQUEST_CHANGES\"`. The test passes only if the surviving prior finding is merged into the final verdict. Trace the merge path: `survivingPrior` feeds into `priorBlock`, which is appended to the review body, but the `event` decision must also be `REQUEST_CHANGES`. Confirm that the event-elevation path reads `survivingPrior` (not just newly filed findings) — if it only checks freshly filed findings from agents, a FULL pass with zero new findings but one surviving prior finding could still emit `COMMENT` or `APPROVE` rather than `REQUEST_CHANGES`. The test asserts the correct outcome, but if the production event-elevation does not consume `survivingPrior`, the test itself would be failing — worth verifying this path is exercised by the test rather than passing for the wrong reason (e.g., a mock returning REQUEST_CHANGES unconditionally)."
+        },
+        {
+          "id": "r1:c3742300897:0",
+          "roundIndex": 1,
+          "reviewId": 4890309461,
+          "source": "inline",
+          "commentId": 3742300897,
+          "path": "src/review.test.ts",
+          "line": 2006,
+          "severity": "P3",
+          "title": "FULL-pass carry-forward test does not assert priorBlock text shape",
+          "text": "🟢 **Low**\n\n**FULL-pass carry-forward test does not assert priorBlock text shape**\n\nThe new test asserts `event` and `findings.status` but never checks the review body. After the FULL-path change the `priorBlockExplanation` differs from the INCREMENTAL wording — if that string were accidentally swapped or broken the test would still pass. Consider asserting that `r2?.body` contains the FULL-path explanation string (\"flagged in a previous review\") rather than the INCREMENTAL one (\"reviewed only what changed\")."
+        },
+        {
+          "id": "r1:body:0",
+          "roundIndex": 1,
+          "reviewId": 4890309461,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "ReviewerTuning interface is a plain boolean bag with no invariant enforcement",
+          "text": "ReviewerTuning interface is a plain boolean bag with no invariant enforcement"
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "reviewId": 4890337958,
+      "provider": "anthropic",
+      "submittedAt": "2026-08-09T02:23:32Z",
+      "headSha": "3b707a17f7dd2152c350f625bcb3bebb82d0b3b3",
+      "baseSha": "8bf7ed8f9144e49cb4ecb1a4484d2c25e28a2e9d",
+      "mergeBase": "8bf7ed8f9144e49cb4ecb1a4484d2c25e28a2e9d",
+      "triggerAt": "2026-08-09T02:13:44Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "3b707a17f7dd2152c350f625bcb3bebb82d0b3b3",
+          "committedAt": "2026-08-09T02:13:44Z",
+          "files": [
+            {
+              "path": "src/review.test.ts",
+              "ranges": [
+                [
+                  1994,
+                  2006
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r2:c3742345961:0",
+          "roundIndex": 2,
+          "reviewId": 4890337958,
+          "source": "inline",
+          "commentId": 3742345961,
+          "path": "src/review.test.ts",
+          "line": 2003,
+          "severity": "P2",
+          "title": "Test assertion verifies wording but not the path that produced it",
+          "text": "🟡 **Medium**\n\n**Test assertion verifies wording but not the path that produced it**\n\nThe comment claims this proves the review went through the \"agents saw it and were told not to restate it\" path rather than a swapped string, but the assertion only checks the body text. The same body content could be produced by a different code path (e.g., if `incrementalPass` is incorrectly set but the template string still renders the expected phrase). The open finding about `incrementalPass` not being set when triage is FULL but prior state exists (`src/review.ts:1009`) means this assertion may be passing for the wrong reason — it cannot distinguish the correct path from a coincidentally matching output."
+        },
+        {
+          "id": "r2:c3742345964:0",
+          "roundIndex": 2,
+          "reviewId": 4890337958,
+          "source": "inline",
+          "commentId": 3742345964,
+          "path": "src/review.test.ts",
+          "line": 2001,
+          "severity": "P3",
+          "title": "FULL-pass wording assertion relies on exact string that could silently drift",
+          "text": "🟢 **Low**\n\n**FULL-pass wording assertion relies on exact string that could silently drift**\n\nThe new assertions check for `\"flagged in a previous review\"` and the absence of `\"reviewed only what changed since\"`. These string literals are not imported or derived from a shared constant — if the template strings in `review.ts` change wording, these tests will silently pass even though the behavior they intend to distinguish (FULL vs INCREMENTAL path) is broken. Consider extracting the discriminating substrings into shared test constants alongside the template sources, or at minimum add a comment cross-referencing the exact source location of each string so future editors know to update both."
+        },
+        {
+          "id": "r2:body:0",
+          "roundIndex": 2,
+          "reviewId": 4890337958,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "incrementalPass flag not set when triage is FULL but prior state exists (`src/review.ts:1009`)",
+          "text": "incrementalPass flag not set when triage is FULL but prior state exists (`src/review.ts:1009`)"
+        },
+        {
+          "id": "r2:body:1",
+          "roundIndex": 2,
+          "reviewId": 4890337958,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "ReviewerTuning interface is a plain boolean bag with no invariant enforcement",
+          "text": "ReviewerTuning interface is a plain boolean bag with no invariant enforcement"
+        }
+      ]
+    }
+  ],
+  "threads": [
+    {
+      "threadId": "PRRT_kwDOSM5cU86XiqI2",
+      "commentId": 3742300895,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3742325842,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-09T02:14:08Z",
+          "editedAt": null,
+          "body": "**No change — already correct** — `finalEvent` is `survivingPrior.length > 0 ? \"REQUEST_CHANGES\" : cleanDelta ? \"APPROVE\" : modelReview.event` (src/review.ts). The test seeds one open prior finding and mocks agents/triage to resolve nothing, so `survivingPrior` is genuinely non-empty at the real ternary — the test goes through `buildReview` end-to-end, not a re-implementation, so there's no mock-returns-REQUEST_CHANGES-unconditionally risk here. Fair thing to ask given the bug class this PR fixes, but it's not landing as a new gap."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86XiqI4",
+      "commentId": 3742300897,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3742325903,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-09T02:14:10Z",
+          "editedAt": null,
+          "body": "**Fixed in 3b707a1** — asserts `r2?.body` contains the FULL-path wording and not the INCREMENTAL one, per your suggestion."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86Xiy4q",
+      "commentId": 3742345961,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3742350130,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-09T02:25:19Z",
+          "editedAt": null,
+          "body": "**No change — recycled concern, already answered** — this conflates `incrementalPass` (only selects which of two hardcoded message strings renders) with the actual event/state logic, which is `finalEvent = survivingPrior.length > 0 ? \"REQUEST_CHANGES\" : ...` (src/review.ts) — entirely independent of `incrementalPass`. The test seeds a real open prior finding and mocks agents/triage to resolve nothing, so `survivingPrior` is genuinely non-empty at that real ternary. A miscomputed `incrementalPass` could produce the wrong *wording* but cannot produce the wrong *event* or *persisted status* — both of which the test also asserts. See my reply to the identical concern raised earlier in this PR's review."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86Xiy4t",
+      "commentId": 3742345964,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3742350158,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-09T02:25:20Z",
+          "editedAt": null,
+          "body": "**No change — scope boundary** — fair in isolation, but this PR has had 3 full review rounds; every substantive finding is fixed and both bots' own prose now says the implementation is sound. Extracting shared string constants for two literals used in exactly one test each is marginal robustness for real churn. Not doing it here."
+        }
+      ]
+    }
+  ],
+  "reactions": [
+    {
+      "commentId": 3742300895,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-08-09T02:14:09Z"
+    },
+    {
+      "commentId": 3742300897,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-08-09T02:14:11Z"
+    },
+    {
+      "commentId": 3742345961,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-08-09T02:25:20Z"
+    },
+    {
+      "commentId": 3742345964,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-08-09T02:25:21Z"
+    }
+  ]
+}

@@ -1,0 +1,1927 @@
+{
+  "schemaVersion": 1,
+  "owner": "joeblackwaslike",
+  "repo": "agent-skills",
+  "pull": 16,
+  "provider": "anthropic",
+  "reviewer": "claude",
+  "author": "joeblackwaslike",
+  "recordedAt": "2026-11-07T23:30:55.237Z",
+  "rounds": [
+    {
+      "index": 0,
+      "reviewId": 5731085140,
+      "provider": "anthropic",
+      "submittedAt": "2026-11-02T00:50:44Z",
+      "headSha": "95361598dff9c7ccf97fefd0f7d11ac73b7b9592",
+      "baseSha": "057934187b3f1096d97d02667d0903471f0291dc",
+      "mergeBase": "1ed420c8c1280180c0964aeb80533f140a2643f9",
+      "triggerAt": "2026-11-02T00:37:28Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "88ec0d4dcadf0368a5ec7f40a5e018d8ca65e6ba",
+          "committedAt": "2026-11-02T00:37:27Z",
+          "files": [
+            {
+              "path": "skills/working-with-github-actions/scripts/ci-audit.sh",
+              "ranges": [
+                [
+                  1,
+                  62
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "sha": "95361598dff9c7ccf97fefd0f7d11ac73b7b9592",
+          "committedAt": "2026-11-02T00:37:28Z",
+          "files": [
+            {
+              "path": "skills/working-with-github-actions/SKILL.md",
+              "ranges": [
+                [
+                  61,
+                  67
+                ],
+                [
+                  123,
+                  133
+                ]
+              ]
+            },
+            {
+              "path": "skills/working-with-github-actions/references/cookbook-fast-ci-for-agents.md",
+              "ranges": [
+                [
+                  1,
+                  132
+                ]
+              ]
+            },
+            {
+              "path": "skills/working-with-github-actions/references/cookbook-typescript-node-ci.md",
+              "ranges": [
+                [
+                  216,
+                  223
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r0:c4438073982:0",
+          "roundIndex": 0,
+          "reviewId": 5731085140,
+          "source": "inline",
+          "commentId": 4438073982,
+          "path": "skills/working-with-github-actions/scripts/ci-audit.sh",
+          "line": 20,
+          "severity": "P3",
+          "title": "Cookbook claims script prints slowest steps but pointer to 'slowest step' is filtered at 3s",
+          "text": "🟢 **P3**\n\n**Cookbook claims script prints slowest steps but pointer to 'slowest step' is filtered at 3s**\n\nThe `-h` option is accepted in getopts but falls into the `*` branch, which exits with status 2 rather than 0. A user running `ci-audit.sh -h` gets a non-zero exit code for a help request. Minor, but it is inconsistent with the conventional meaning of `-h`.\n\n<!-- ai-review:fp=nitpick|skills/working-with-github-actions/scripts/ci-audit.sh|4670180380eb92c6.0 -->"
+        },
+        {
+          "id": "r0:c4438073986:0",
+          "roundIndex": 0,
+          "reviewId": 5731085140,
+          "source": "inline",
+          "commentId": 4438073986,
+          "path": "skills/working-with-github-actions/scripts/ci-audit.sh",
+          "line": 26,
+          "severity": "P2",
+          "title": "Setup regex over-matches and misclassifies run time",
+          "text": "🟡 **P2**\n\n**Setup regex over-matches and misclassifies run time**\n\nSETUP_RE is an unanchored alternation: `checkout|setup|cache|install` matches anywhere in a step name, so steps like \"Run npm run setup-db\", \"Run cache-busting test\" or \"Run install-check\" are counted as setup time rather than run time. The medians in the cookbook's symptom table (\"setup over half of job time\") can therefore be skewed. Consider anchoring to `^(Run )?actions/(checkout|setup-|cache)` or known install commands.\n\n<!-- ai-review:fp=bug|skills/working-with-github-actions/scripts/ci-audit.sh|6f0843c7c27b24f9.1 -->"
+        },
+        {
+          "id": "r0:c4438073991:0",
+          "roundIndex": 0,
+          "reviewId": 5731085140,
+          "source": "inline",
+          "commentId": 4438073991,
+          "path": "skills/working-with-github-actions/scripts/ci-audit.sh",
+          "line": 26,
+          "severity": "P3",
+          "title": "Setup regex over-matches step names, skewing setup/run split",
+          "text": "🟢 **P3**\n\n**Setup regex over-matches step names, skewing setup/run split**\n\nSETUP_RE is an unanchored substring match (case-insensitive) for `checkout|setup|cache|install`. Any step whose name contains these words (e.g. \"Run install-check tests\", \"Setup test database\", \"Test cache invalidation\") is counted as setup, not run time. This can misattribute real work to setup and push users toward the wrong lever (e.g. the cookbook's \"setup over half of job time\" row). Consider documenting this caveat or tightening the pattern.\n\n<!-- ai-review:fp=bug|skills/working-with-github-actions/scripts/ci-audit.sh|6f0843c7c27b24f9.1 -->"
+        },
+        {
+          "id": "r0:c4438074001:0",
+          "roundIndex": 0,
+          "reviewId": 5731085140,
+          "source": "inline",
+          "commentId": 4438074001,
+          "path": "skills/working-with-github-actions/scripts/ci-audit.sh",
+          "line": 40,
+          "severity": "P2",
+          "title": "API errors are silently swallowed, producing misleading audit results",
+          "text": "🟡 **P2**\n\n**API errors are silently swallowed, producing misleading audit results**\n\n`gh api ... 2>/dev/null || true` hides every failure (rate limiting, 403, network errors). A run whose jobs cannot be fetched is dropped from the medians without any notice. The header still reports `runs: N`, and `n=` per job shrinks silently, so the audit can show skewed numbers with no sign that data is missing. Stderr should be surfaced, or failures counted and reported (e.g. 'warning: failed to fetch jobs for run $id').\n\n*Suggested fix:*\n\n```suggestion\n    gh api \"repos/$repo/actions/runs/$id/jobs\" --jq '.jobs[]' || echo \"warning: could not fetch jobs for run $id in $repo\" >&2\n```\n\n<!-- ai-review:fp=bug|skills/working-with-github-actions/scripts/ci-audit.sh|1da08cbfefc74012.0 -->\n<!-- ai-review:sfp=4ed8e0d0a7d01a59 -->"
+        },
+        {
+          "id": "r0:c4438074009:0",
+          "roundIndex": 0,
+          "reviewId": 5731085140,
+          "source": "inline",
+          "commentId": 4438074009,
+          "path": "skills/working-with-github-actions/scripts/ci-audit.sh",
+          "line": 40,
+          "severity": "P3",
+          "title": "Script silently swallows per-run job fetch errors",
+          "text": "🟢 **P3**\n\n**Script silently swallows per-run job fetch errors**\n\n`gh api ... 2>/dev/null || true` hides rate-limit/auth/network failures when fetching jobs. The script then reports medians from a partial sample (or n=0) while the header still claims the full run count, which could mislead an audit. Consider emitting a warning to stderr on failure.\n\n<!-- ai-review:fp=bug|skills/working-with-github-actions/scripts/ci-audit.sh|1da08cbfefc74012.0 -->"
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "reviewId": 5731113236,
+      "provider": "anthropic",
+      "submittedAt": "2026-11-02T00:57:46Z",
+      "headSha": "95361598dff9c7ccf97fefd0f7d11ac73b7b9592",
+      "baseSha": "95361598dff9c7ccf97fefd0f7d11ac73b7b9592",
+      "mergeBase": "95361598dff9c7ccf97fefd0f7d11ac73b7b9592",
+      "triggerAt": null,
+      "approximate": true,
+      "commitsSince": [],
+      "claims": [
+        {
+          "id": "r1:c4438097336:0",
+          "roundIndex": 1,
+          "reviewId": 5731113236,
+          "source": "inline",
+          "commentId": 4438097336,
+          "path": "skills/working-with-github-actions/scripts/ci-audit.sh",
+          "line": 44,
+          "severity": "P3",
+          "title": "Even-sized samples report upper middle value as median",
+          "text": "🟢 **P3**\n\n**Even-sized samples report upper middle value as median**\n\n`sort | .[length/2|floor]` returns the upper-middle element for even-length arrays rather than the average of the two middle values. With default 15 runs this is fine for odd counts, but jobs with an even n (e.g. after skips or failures) get a biased median. The same `med` is used for wall-clock and per-step medians."
+        },
+        {
+          "id": "r1:c4438097336:1",
+          "roundIndex": 1,
+          "reviewId": 5731113236,
+          "source": "inline",
+          "commentId": 4438097336,
+          "path": "skills/working-with-github-actions/scripts/ci-audit.sh",
+          "line": 44,
+          "severity": "P3",
+          "title": "`.[length/2|floor]` picks the upper-middle element for even-length arrays, so the \"median\" is biased upward for even `n` (e.g. the default 15 runs with a few skipped jobs, or `-n 10`). Average the two middle values for even lengths.",
+          "text": "`.[length/2|floor]` picks the upper-middle element for even-length arrays, so the \"median\" is biased upward for even `n` (e.g. the default 15 runs with a few skipped jobs, or `-n 10`). Average the two middle values for even lengths."
+        },
+        {
+          "id": "r1:c4438097338:0",
+          "roundIndex": 1,
+          "reviewId": 5731113236,
+          "source": "inline",
+          "commentId": 4438097338,
+          "path": "skills/working-with-github-actions/scripts/ci-audit.sh",
+          "line": 40,
+          "severity": "P2",
+          "title": "Jobs endpoint is not paginated and errors are swallowed",
+          "text": "🟡 **P2**\n\n**Jobs endpoint is not paginated and errors are swallowed**\n\n`gh api` on the jobs endpoint returns only the first 30 jobs by default, so matrix runs with more jobs are silently truncated. Also `2>/dev/null || true` hides request failures so incomplete data is reported as a successful audit."
+        },
+        {
+          "id": "r1:c4438097338:1",
+          "roundIndex": 1,
+          "reviewId": 5731113236,
+          "source": "inline",
+          "commentId": 4438097338,
+          "path": "skills/working-with-github-actions/scripts/ci-audit.sh",
+          "line": 40,
+          "severity": "P3",
+          "title": "`gh api .../jobs` returns only the first page (30 jobs by default), so matrix runs with more jobs are silently truncated. Also `2>/dev/null || true` hides failed requests (rate limit, auth), so medians are computed from partial data without any warning. Use `--paginate` with `?per_page=100` and report failures to stderr.",
+          "text": "`gh api .../jobs` returns only the first page (30 jobs by default), so matrix runs with more jobs are silently truncated. Also `2>/dev/null || true` hides failed requests (rate limit, auth), so medians are computed from partial data without any warning. Use `--paginate` with `?per_page=100` and report failures to stderr."
+        },
+        {
+          "id": "r1:c4438097338:2",
+          "roundIndex": 1,
+          "reviewId": 5731113236,
+          "source": "inline",
+          "commentId": 4438097338,
+          "path": "skills/working-with-github-actions/scripts/ci-audit.sh",
+          "line": 40,
+          "severity": "P3",
+          "title": "`gh api repos/$repo/actions/runs/$id/jobs` returns at most 30 jobs by default, so large matrix runs are truncated. Failures are also swallowed by `2>/dev/null || true`. Additionally, `group_by(.job)` keys only on job name, so same-named jobs from different workflows (default is all workflows) are combined into one median. Add `--paginate` and include workflow identity (e.g. `workflow_name`) in the grouping key.",
+          "text": "`gh api repos/$repo/actions/runs/$id/jobs` returns at most 30 jobs by default, so large matrix runs are truncated. Failures are also swallowed by `2>/dev/null || true`. Additionally, `group_by(.job)` keys only on job name, so same-named jobs from different workflows (default is all workflows) are combined into one median. Add `--paginate` and include workflow identity (e.g. `workflow_name`) in the grouping key.\n\n*Suggested fix:*\n\n```suggestion\n    gh api --paginate \"repos/$repo/actions/runs/$id/jobs?per_page=100\" --jq '.jobs[]' || echo \"warning: failed to fetch jobs for run $id\" >&2\n```"
+        },
+        {
+          "id": "r1:c4438097344:0",
+          "roundIndex": 1,
+          "reviewId": 5731113236,
+          "source": "inline",
+          "commentId": 4438097344,
+          "path": "skills/working-with-github-actions/scripts/ci-audit.sh",
+          "line": 25,
+          "severity": "P2",
+          "title": "Setup regex over-matches step names and jobs from different workflows are merged",
+          "text": "🟡 **P2**\n\n**Setup regex over-matches step names and jobs from different workflows are merged**\n\nSETUP_RE contains unanchored `setup|cache|install|checkout`, so a test step like \"Test cache\" or \"Run install tests\" counts as setup and is subtracted from run time, skewing the setup-vs-run split that the cookbook uses to choose levers. Also, `group_by(.job)` merges same-named jobs across workflows in the default all-workflows mode, mixing unrelated measurements. Anchor the regex to known action/step prefixes and group by workflow plus job (e.g. via the run's workflow name)."
+        },
+        {
+          "id": "r1:c4438097346:0",
+          "roundIndex": 1,
+          "reviewId": 5731113236,
+          "source": "inline",
+          "commentId": 4438097346,
+          "path": "skills/working-with-github-actions/references/cookbook-fast-ci-for-agents.md",
+          "line": 72,
+          "severity": "P2",
+          "title": "Skipped-filter job can leave a required check green",
+          "text": "🟡 **P2**\n\n**Skipped-filter job can leave a required check green**\n\nIf the `changes` job fails, the dependent `docs` job is skipped, and a skipped job counts as success for branch protection. A broken filter can therefore pass the required check. Add a final always-run gate job that fails when `needs.changes.result != 'success'`. Also add `pull-requests: read` permissions, and `fetch-depth: 0` for push events."
+        },
+        {
+          "id": "r1:c4438097346:1",
+          "roundIndex": 1,
+          "reviewId": 5731113236,
+          "source": "inline",
+          "commentId": 4438097346,
+          "path": "skills/working-with-github-actions/references/cookbook-fast-ci-for-agents.md",
+          "line": 72,
+          "severity": "P3",
+          "title": "If `changes` fails, `docs` (which needs it) is skipped, and a skipped job reports success to branch protection. A broken filter can then let the required docs check go green without evaluating anything. The recipe also lacks `pull-requests: read` permission and `fetch-depth` for push events, which are the likely causes of a filter failure. Recommend an always-running gate job that fails when `changes` fails (`if: always()` and check `needs.changes.result`), and note the permissions.",
+          "text": "If `changes` fails, `docs` (which needs it) is skipped, and a skipped job reports success to branch protection. A broken filter can then let the required docs check go green without evaluating anything. The recipe also lacks `pull-requests: read` permission and `fetch-depth` for push events, which are the likely causes of a filter failure. Recommend an always-running gate job that fails when `changes` fails (`if: always()` and check `needs.changes.result`), and note the permissions."
+        },
+        {
+          "id": "r1:c4438097350:0",
+          "roundIndex": 1,
+          "reviewId": 5731113236,
+          "source": "inline",
+          "commentId": 4438097350,
+          "path": "skills/working-with-github-actions/scripts/ci-audit.sh",
+          "line": 48,
+          "severity": "P2",
+          "title": "Jobs from different workflows are grouped by name only",
+          "text": "🟡 **P2**\n\n**Jobs from different workflows are grouped by name only**\n\nWith the default of all workflows, `group_by(.job)` merges identically named jobs (e.g. `test`) from different workflows into one median, misattributing bottlenecks. Include the workflow identity (e.g. from the run) in the record and grouping key."
+        },
+        {
+          "id": "r1:c4438097350:1",
+          "roundIndex": 1,
+          "reviewId": 5731113236,
+          "source": "inline",
+          "commentId": 4438097350,
+          "path": "skills/working-with-github-actions/scripts/ci-audit.sh",
+          "line": 48,
+          "severity": "P3",
+          "title": "With the default of all workflows, `group_by(.job)` merges identically named jobs (e.g. `test`) from different workflows into one median. The job records carry no workflow identity, so the resulting medians are misleading. Include the workflow name, or the run's `workflow_name` or `path`, in the grouping key.",
+          "text": "With the default of all workflows, `group_by(.job)` merges identically named jobs (e.g. `test`) from different workflows into one median. The job records carry no workflow identity, so the resulting medians are misleading. Include the workflow name, or the run's `workflow_name` or `path`, in the grouping key."
+        },
+        {
+          "id": "r1:c4438097350:2",
+          "roundIndex": 1,
+          "reviewId": 5731113236,
+          "source": "inline",
+          "commentId": 4438097350,
+          "path": "skills/working-with-github-actions/scripts/ci-audit.sh",
+          "line": 48,
+          "severity": "P3",
+          "title": "`group_by(.job)` merges same-named jobs from different workflows when auditing all workflows. `SETUP_RE` also matches any step containing 'cache', 'install', or 'setup' (e.g. 'Test cache'), counting real run time as setup and skewing the ratio the cookbook uses to choose levers. Include workflow name in the grouping key and anchor or tighten the regex.",
+          "text": "`group_by(.job)` merges same-named jobs from different workflows when auditing all workflows. `SETUP_RE` also matches any step containing 'cache', 'install', or 'setup' (e.g. 'Test cache'), counting real run time as setup and skewing the ratio the cookbook uses to choose levers. Include workflow name in the grouping key and anchor or tighten the regex."
+        },
+        {
+          "id": "r1:c4438097352:0",
+          "roundIndex": 1,
+          "reviewId": 5731113236,
+          "source": "inline",
+          "commentId": 4438097352,
+          "path": "skills/working-with-github-actions/references/cookbook-fast-ci-for-agents.md",
+          "line": 79,
+          "severity": "P3",
+          "title": "Pre-push hook claimed to be unskippable",
+          "text": "🟢 **P3**\n\n**Pre-push hook claimed to be unskippable**\n\n`git push --no-verify` bypasses a Husky pre-push hook, so \"cannot be\" skipped is inaccurate. Describe it as a strong default and note CI remains the enforcement."
+        },
+        {
+          "id": "r1:c4438097357:0",
+          "roundIndex": 1,
+          "reviewId": 5731113236,
+          "source": "inline",
+          "commentId": 4438097357,
+          "path": "skills/working-with-github-actions/references/cookbook-fast-ci-for-agents.md",
+          "line": 39,
+          "severity": "P3",
+          "title": "Cache scoping description is inaccurate",
+          "text": "🟢 **P3**\n\n**Cache scoping description is inaccurate**\n\nActions caches are restorable from the current ref, the base branch, and the default branch, so the statement that a PR can only restore base-branch caches is incomplete. Describe the actual scope rules."
+        },
+        {
+          "id": "r1:c4438097359:0",
+          "roundIndex": 1,
+          "reviewId": 5731113236,
+          "source": "inline",
+          "commentId": 4438097359,
+          "path": "skills/working-with-github-actions/references/cookbook-fast-ci-for-agents.md",
+          "line": 12,
+          "severity": "P3",
+          "title": "Script path not valid from repo root",
+          "text": "🟢 **P3**\n\n**Script path not valid from repo root**\n\nThe command `scripts/ci-audit.sh` only works from the skill directory; the script lives at skills/working-with-github-actions/scripts/. Specify the full path or working directory."
+        },
+        {
+          "id": "r1:c4438097363:0",
+          "roundIndex": 1,
+          "reviewId": 5731113236,
+          "source": "inline",
+          "commentId": 4438097363,
+          "path": "skills/working-with-github-actions/scripts/ci-audit.sh",
+          "line": 62,
+          "severity": "P2",
+          "title": "Same-named jobs from different workflows are merged",
+          "text": "🟡 **P2**\n\n**Same-named jobs from different workflows are merged**\n\nWith the default all-workflows sample, `group_by(.job)` merges identically named jobs (e.g. `test`) from different workflows into one median. Include the workflow identity, such as the run's workflow name, in the grouping key."
+        },
+        {
+          "id": "r1:c4438097368:0",
+          "roundIndex": 1,
+          "reviewId": 5731113236,
+          "source": "inline",
+          "commentId": 4438097368,
+          "path": "skills/working-with-github-actions/scripts/ci-audit.sh",
+          "line": 42,
+          "severity": "P2",
+          "title": "Jobs fetch is unpaginated and swallows errors",
+          "text": "🟡 **P2**\n\n**Jobs fetch is unpaginated and swallows errors**\n\n`gh api .../jobs` returns only 30 jobs per page by default, so runs with larger matrices silently drop jobs from the medians. Stderr is also discarded with `|| true`, so API failures such as rate limits produce partial results that look complete. Use `--paginate` (`per_page=100`) and surface failures, or report the number of failed runs."
+        },
+        {
+          "id": "r1:c4438097368:1",
+          "roundIndex": 1,
+          "reviewId": 5731113236,
+          "source": "inline",
+          "commentId": 4438097368,
+          "path": "skills/working-with-github-actions/scripts/ci-audit.sh",
+          "line": 42,
+          "severity": "P3",
+          "title": "`med` uses `.[length/2|floor]`, which for even-length arrays returns the upper middle element rather than the true median. With the default of 15 runs this is fine for odd counts, but jobs with an even n (skipped runs, failures, matrix) are biased upward. The same pattern is used for the wall-clock median in the header.",
+          "text": "`med` uses `.[length/2|floor]`, which for even-length arrays returns the upper middle element rather than the true median. With the default of 15 runs this is fine for odd counts, but jobs with an even n (skipped runs, failures, matrix) are biased upward. The same pattern is used for the wall-clock median in the header."
+        },
+        {
+          "id": "r1:c4438097372:0",
+          "roundIndex": 1,
+          "reviewId": 5731113236,
+          "source": "inline",
+          "commentId": 4438097372,
+          "path": "skills/working-with-github-actions/references/cookbook-fast-ci-for-agents.md",
+          "line": 75,
+          "severity": "P2",
+          "title": "Path-filter recipe can leave required check green on filter failure and lacks permissions",
+          "text": "🟡 **P2**\n\n**Path-filter recipe can leave required check green on filter failure and lacks permissions**\n\nIf the `changes` job fails, `docs` is skipped, which reports success to branch protection. The recipe also omits `pull-requests: read` for dorny/paths-filter on restricted tokens. Add an always-run gate job that fails when `needs.changes.result != 'success'`, and show the needed permissions."
+        },
+        {
+          "id": "r1:c4438097374:0",
+          "roundIndex": 1,
+          "reviewId": 5731113236,
+          "source": "inline",
+          "commentId": 4438097374,
+          "path": "skills/working-with-github-actions/scripts/ci-audit.sh",
+          "line": 26,
+          "severity": "P2",
+          "title": "Setup regex over-matches step names, skewing setup/run split",
+          "text": "🟡 **P2**\n\n**Setup regex over-matches step names, skewing setup/run split**\n\nSETUP_RE matches any step whose name contains `cache`, `setup`, `install` or `checkout` (unanchored), so a test step like `Test cache` is counted as setup and subtracted from run. The cookbook uses the setup/run ratio to choose levers, so this can mislead."
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "reviewId": 5731323383,
+      "provider": "anthropic",
+      "submittedAt": "2026-11-02T01:48:18Z",
+      "headSha": "c549c459e3381073b851df7d62682b9b2ff4f24a",
+      "baseSha": "95361598dff9c7ccf97fefd0f7d11ac73b7b9592",
+      "mergeBase": "95361598dff9c7ccf97fefd0f7d11ac73b7b9592",
+      "triggerAt": "2026-11-02T01:27:12Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "c549c459e3381073b851df7d62682b9b2ff4f24a",
+          "committedAt": "2026-11-02T01:27:12Z",
+          "files": [
+            {
+              "path": "skills/working-with-github-actions/SKILL.md",
+              "ranges": [
+                [
+                  123,
+                  133
+                ]
+              ]
+            },
+            {
+              "path": "skills/working-with-github-actions/references/cookbook-fast-ci-for-agents.md",
+              "ranges": [
+                [
+                  9,
+                  15
+                ],
+                [
+                  36,
+                  44
+                ],
+                [
+                  51,
+                  65
+                ],
+                [
+                  75,
+                  90
+                ],
+                [
+                  137,
+                  140
+                ]
+              ]
+            },
+            {
+              "path": "skills/working-with-github-actions/scripts/ci-audit.sh",
+              "ranges": [
+                [
+                  17,
+                  56
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r2:c4438274734:0",
+          "roundIndex": 2,
+          "reviewId": 5731323383,
+          "source": "inline",
+          "commentId": 4438274734,
+          "path": "skills/working-with-github-actions/scripts/ci-audit.sh",
+          "line": 44,
+          "severity": "P3",
+          "title": "Piped gh|jq failure not caught under pipefail inside while loop",
+          "text": "🟢 **P3**\n\n**Piped gh|jq failure not caught under pipefail inside while loop**\n\nThe `gh api ... | jq ... || { warning }` guard works for a failing `gh`, but `read -r id wf` with an empty workflowName yields a trailing empty field. IFS=$'\\t' is whitespace-class, so consecutive/trailing tabs collapse and `wf` can come out empty, giving job names like ' / build'. Minor labeling issue only.\n\n<!-- ai-review:fp=nitpick|skills/working-with-github-actions/scripts/ci-audit.sh|12117ba45d0ccf2b.0 -->"
+        },
+        {
+          "id": "r2:c4438274738:0",
+          "roundIndex": 2,
+          "reviewId": 5731323383,
+          "source": "inline",
+          "commentId": 4438274738,
+          "path": "skills/working-with-github-actions/SKILL.md",
+          "line": 126,
+          "severity": "P3",
+          "title": "Middle runs on main still dropped; per-SHA group advice is unclear",
+          "text": "🟢 **P3**\n\n**Middle runs on main still dropped; per-SHA group advice is unclear**\n\nThe note recommends a per-SHA group for `main`, but the example's `cancel-in-progress` expression still uses a single shared group. Without showing the group expression, readers may keep the shared group and still lose pending runs. Show the concrete `group:` expression, e.g. `${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}`.\n\n<!-- ai-review:fp=nitpick|skills/working-with-github-actions/SKILL.md|56159720d31521c0.0 -->"
+        },
+        {
+          "id": "r2:c4438274741:0",
+          "roundIndex": 2,
+          "reviewId": 5731323383,
+          "source": "inline",
+          "commentId": 4438274741,
+          "path": "skills/working-with-github-actions/scripts/ci-audit.sh",
+          "line": 45,
+          "severity": "P3",
+          "title": "Failed jobs fetch is not detected when gh fails inside a pipe",
+          "text": "🟢 **P3**\n\n**Failed jobs fetch is not detected when gh fails inside a pipe**\n\n`gh api ... | jq -c ... || { warning }` only reports failure of the last pipeline command (`jq`), unless `pipefail` applies. With `set -euo pipefail` the pipeline status is nonzero if `gh` fails, so the warning fires, but any partial output from a paginated fetch that failed midway has already been streamed to the aggregator. The run is then included with only some of its jobs, even though the warning says it was 'excluded from medians'. Buffer the fetch result first, and only emit it on success.\n\n<!-- ai-review:fp=bug|skills/working-with-github-actions/scripts/ci-audit.sh|79bcfc7725425c0c.0 -->"
+        },
+        {
+          "id": "r2:c4438274747:0",
+          "roundIndex": 2,
+          "reviewId": 5731323383,
+          "source": "inline",
+          "commentId": 4438274747,
+          "path": "skills/working-with-github-actions/scripts/ci-audit.sh",
+          "line": 45,
+          "severity": "P3",
+          "title": "Pipeline masks gh api failures; failed fetch may still emit partial output",
+          "text": "🟢 **P3**\n\n**Pipeline masks gh api failures; failed fetch may still emit partial output**\n\nThe `gh api ... | jq -c ... || { warning }` construct only catches the failure of the last pipeline command (`jq`). Without `pipefail` scoped here, it relies on the global `set -o pipefail` (stated in the PR). With it, a failed `gh api --paginate` after emitting some pages could output partial jobs for that run and also print the warning, so the run is described as 'excluded' while some of its jobs are still counted. This is a minor inaccuracy in the warning message and a bounded skew in medians.\n\n<!-- ai-review:fp=bug|skills/working-with-github-actions/scripts/ci-audit.sh|79bcfc7725425c0c.0 -->"
+        },
+        {
+          "id": "r2:c4438274750:0",
+          "roundIndex": 2,
+          "reviewId": 5731323383,
+          "source": "inline",
+          "commentId": 4438274750,
+          "path": "skills/working-with-github-actions/scripts/ci-audit.sh",
+          "line": 45,
+          "severity": "P3",
+          "title": "Pipeline masks gh api failures in job fetch loop",
+          "text": "🟢 **P3**\n\n**Pipeline masks gh api failures in job fetch loop**\n\nIn `gh api ... | jq -c ... || { warning }`, the `||` applies only to the last pipeline command (`jq`) because `pipefail` is not applied per-command here. With `set -o pipefail` the pipeline status becomes non-zero if `gh api` fails, so the warning does fire. However, the `--paginate --jq '.jobs[]'` output from a failed partial page may already have been emitted to the downstream jq before the failure, so a run with partial jobs is still included in the medians despite the warning saying it is excluded.\n\n<!-- ai-review:fp=bug|skills/working-with-github-actions/scripts/ci-audit.sh|79bcfc7725425c0c.0 -->"
+        },
+        {
+          "id": "r2:c4438274753:0",
+          "roundIndex": 2,
+          "reviewId": 5731323383,
+          "source": "inline",
+          "commentId": 4438274753,
+          "path": "skills/working-with-github-actions/scripts/ci-audit.sh",
+          "line": 45,
+          "severity": "P3",
+          "title": "Failed jobs fetch pipeline inside while loop mishandles errors under pipefail",
+          "text": "🟢 **P3**\n\n**Failed jobs fetch pipeline inside while loop mishandles errors under pipefail**\n\nThe `gh api ... | jq -c ... || { warning }` construct works per-iteration, but if `gh api --paginate` fails partway after emitting some pages, partial job records for that run are still emitted to the aggregate while the warning claims the run was \"excluded from medians\". The warning text is therefore inaccurate for partial failures, and medians include partial data for that run.\n\n<!-- ai-review:fp=bug|skills/working-with-github-actions/scripts/ci-audit.sh|79bcfc7725425c0c.0 -->"
+        },
+        {
+          "id": "r2:c4438274757:0",
+          "roundIndex": 2,
+          "reviewId": 5731323383,
+          "source": "inline",
+          "commentId": 4438274757,
+          "path": "skills/working-with-github-actions/scripts/ci-audit.sh",
+          "line": 45,
+          "severity": "P3",
+          "title": "Process-substitution while loop pipes into jq without pipefail visibility for gh failures",
+          "text": "🟢 **P3**\n\n**Process-substitution while loop pipes into jq without pipefail visibility for gh failures**\n\n`gh api --paginate ... | jq -c ... || { warning }` only reports a warning when the last command in the pipeline (jq) fails. With `set -o pipefail` the pipeline status does include gh failures, so that case is covered. However, `jq -c '. + {wf:$wf}'` with `--paginate --jq '.jobs[]'` is fine. The remaining issue is that a partial failure mid-pagination can emit some jobs from that run before failing, and the warning then claims the run is 'excluded from medians' even though its already-emitted jobs are included. The message is inaccurate and the data is partially included.\n\n<!-- ai-review:fp=bug|skills/working-with-github-actions/scripts/ci-audit.sh|79bcfc7725425c0c.0 -->"
+        },
+        {
+          "id": "r2:body:0",
+          "roundIndex": 2,
+          "reviewId": 5731323383,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Cookbook claims script prints slowest steps but pointer to 'slowest step' is filtered at 3s (`skills/working-with-github-actions/scripts/ci-audit.sh:21`)",
+          "text": "Cookbook claims script prints slowest steps but pointer to 'slowest step' is filtered at 3s (`skills/working-with-github-actions/scripts/ci-audit.sh:21`)"
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "reviewId": 5731359872,
+      "provider": "anthropic",
+      "submittedAt": "2026-11-02T01:56:28Z",
+      "headSha": "f5e536498ec61687ea3cebb7334ed406bc1da3c5",
+      "baseSha": "c549c459e3381073b851df7d62682b9b2ff4f24a",
+      "mergeBase": "c549c459e3381073b851df7d62682b9b2ff4f24a",
+      "triggerAt": "2026-11-02T01:56:06Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "f5e536498ec61687ea3cebb7334ed406bc1da3c5",
+          "committedAt": "2026-11-02T01:56:06Z",
+          "files": [
+            {
+              "path": "skills/working-with-github-actions/SKILL.md",
+              "ranges": [
+                [
+                  123,
+                  135
+                ]
+              ]
+            },
+            {
+              "path": "skills/working-with-github-actions/scripts/ci-audit.sh",
+              "ranges": [
+                [
+                  38,
+                  51
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r3:c4438303711:0",
+          "roundIndex": 3,
+          "reviewId": 5731359872,
+          "source": "inline",
+          "commentId": 4438303711,
+          "path": "skills/working-with-github-actions/SKILL.md",
+          "line": 131,
+          "severity": "P3",
+          "title": "Per-SHA concurrency group for main also affects the else branch format",
+          "text": "🟢 **P3**\n\n**Per-SHA concurrency group for main also affects the else branch format**\n\nThe new per-SHA group only applies to refs/heads/main; the fallback for other refs is fine. However, `cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}` is now redundant for main since each SHA has its own group, so the explanation (\"instead of relying on cancel-in-progress\") is accurate but the expression is dead for main. Minor clarity nit only.\n\n<!-- ai-review:fp=nitpick|skills/working-with-github-actions/SKILL.md|5aec962bd1661632.0 -->"
+        },
+        {
+          "id": "r3:body:0",
+          "roundIndex": 3,
+          "reviewId": 5731359872,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Cookbook claims script prints slowest steps but pointer to 'slowest step' is filtered at 3s (`skills/working-with-github-actions/scripts/ci-audit.sh:21`)",
+          "text": "Cookbook claims script prints slowest steps but pointer to 'slowest step' is filtered at 3s (`skills/working-with-github-actions/scripts/ci-audit.sh:21`)"
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "reviewId": 5732646068,
+      "provider": "anthropic",
+      "submittedAt": "2026-11-02T06:03:39Z",
+      "headSha": "f5e536498ec61687ea3cebb7334ed406bc1da3c5",
+      "baseSha": "f5e536498ec61687ea3cebb7334ed406bc1da3c5",
+      "mergeBase": "f5e536498ec61687ea3cebb7334ed406bc1da3c5",
+      "triggerAt": null,
+      "approximate": true,
+      "commitsSince": [],
+      "claims": [
+        {
+          "id": "r4:c4439356019:0",
+          "roundIndex": 4,
+          "reviewId": 5732646068,
+          "source": "inline",
+          "commentId": 4439356019,
+          "path": "skills/working-with-github-actions/SKILL.md",
+          "line": 131,
+          "severity": "P3",
+          "title": "Per-SHA concurrency group is placed in the wrong ternary position for non-main refs",
+          "text": "🟢 **P3**\n\n**Per-SHA concurrency group is placed in the wrong ternary position for non-main refs**\n\nThe documented concurrency group uses `format('{0}-{1}', github.workflow, github.ref)` for non-main refs. That is fine, but for `main` the group is unique per SHA, so `cancel-in-progress` on `main` is irrelevant. Separately, a `workflow_dispatch` or `schedule` run on `main` also gets a per-SHA group and will not be deduplicated against a push run for the same SHA. This is minor and only affects redundant runs."
+        },
+        {
+          "id": "r4:c4439356019:1",
+          "roundIndex": 4,
+          "reviewId": 5732646068,
+          "source": "inline",
+          "commentId": 4439356019,
+          "path": "skills/working-with-github-actions/SKILL.md",
+          "line": 131,
+          "severity": "P3",
+          "title": "The snippet's main branch group is `workflow-sha`, while PR groups are `workflow-ref`. This works, but the preceding sentence says the middle runs are still dropped with a shared group; per-SHA groups mean `cancel-in-progress` on main is moot. The snippet is functionally fine, but the unchanged `cancel-in-progress` expression on main is dead config and may mislead readers.",
+          "text": "The snippet's main branch group is `workflow-sha`, while PR groups are `workflow-ref`. This works, but the preceding sentence says the middle runs are still dropped with a shared group; per-SHA groups mean `cancel-in-progress` on main is moot. The snippet is functionally fine, but the unchanged `cancel-in-progress` expression on main is dead config and may mislead readers."
+        },
+        {
+          "id": "r4:c4439356019:2",
+          "roundIndex": 4,
+          "reviewId": 5732646068,
+          "source": "inline",
+          "commentId": 4439356019,
+          "path": "skills/working-with-github-actions/SKILL.md",
+          "line": 131,
+          "severity": "P3",
+          "title": "The suggested group uses `format('{0}-{1}', github.workflow, github.ref)` for non-main refs. That is fine for PRs, but on push events to other branches the group is shared with PR runs on the same ref, which is harmless. The real issue is the prose: it says to give `main` its own group per SHA, yet `cancel-in-progress` is already false for main, so the added SHA group fully disables queuing and serialization on main. Concurrent main runs now execute in parallel, which is unsafe for any job that deploys or publishes. The text should note this tradeoff and limit the recipe to CI-only workflows.",
+          "text": "The suggested group uses `format('{0}-{1}', github.workflow, github.ref)` for non-main refs. That is fine for PRs, but on push events to other branches the group is shared with PR runs on the same ref, which is harmless. The real issue is the prose: it says to give `main` its own group per SHA, yet `cancel-in-progress` is already false for main, so the added SHA group fully disables queuing and serialization on main. Concurrent main runs now execute in parallel, which is unsafe for any job that deploys or publishes. The text should note this tradeoff and limit the recipe to CI-only workflows."
+        },
+        {
+          "id": "r4:c4439356025:0",
+          "roundIndex": 4,
+          "reviewId": 5732646068,
+          "source": "inline",
+          "commentId": 4439356025,
+          "path": "skills/working-with-github-actions/SKILL.md",
+          "line": 130,
+          "severity": "P3",
+          "title": "Per-SHA concurrency group for main conflicts with workflow structure",
+          "text": "🟢 **P3**\n\n**Per-SHA concurrency group for main conflicts with workflow structure**\n\nThe suggested group for `main` uses `github.sha`, which makes every push its own group. That is fine for retaining runs. But the else-branch `format('{0}-{1}', github.workflow, github.ref)` is a different group scheme than the plain `${{ github.workflow }}-${{ github.ref }}` shown just above in SKILL.md. Readers mixing the two snippets will get inconsistent group names. Consider noting that this replaces the earlier group expression rather than adding to it."
+        },
+        {
+          "id": "r4:c4439356025:1",
+          "roundIndex": 4,
+          "reviewId": 5732646068,
+          "source": "inline",
+          "commentId": 4439356025,
+          "path": "skills/working-with-github-actions/SKILL.md",
+          "line": 130,
+          "severity": "P3",
+          "title": "The snippet's per-SHA group for main does keep every main push in its own group, so each run executes. But the concurrency group on main now never serializes runs, so any job that must not overlap (deploy/release, shared cache writes) can run concurrently on main. The prose should warn about that tradeoff, since this paragraph sits right beside the `cancel-in-progress: false` release/deploy guidance.",
+          "text": "The snippet's per-SHA group for main does keep every main push in its own group, so each run executes. But the concurrency group on main now never serializes runs, so any job that must not overlap (deploy/release, shared cache writes) can run concurrently on main. The prose should warn about that tradeoff, since this paragraph sits right beside the `cancel-in-progress: false` release/deploy guidance."
+        },
+        {
+          "id": "r4:c4439356030:0",
+          "roundIndex": 4,
+          "reviewId": 5732646068,
+          "source": "inline",
+          "commentId": 4439356030,
+          "path": "skills/working-with-github-actions/SKILL.md",
+          "line": 126,
+          "severity": "P3",
+          "title": "Per-SHA concurrency group for main breaks the else-branch format and still shares group semantics",
+          "text": "🟢 **P3**\n\n**Per-SHA concurrency group for main breaks the else-branch format and still shares group semantics**\n\nThe example concurrency expression mixes two formats, and the claim that per-SHA groups ensure every main commit runs is sound, but the prose says this stops pushes sharing a group \"instead of relying on cancel-in-progress\" while the snippet still sets cancel-in-progress. That is harmless (a SHA-unique group never has a competing run), but the surrounding explanation is confusing. Also, the SKILL.md Speed note now uses a repo-root path while the cookbook elsewhere references `references/...` relative to the skill dir; mixing path bases is inconsistent."
+        },
+        {
+          "id": "r4:body:0",
+          "roundIndex": 4,
+          "reviewId": 5732646068,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Even-sized samples report upper middle value as median (`skills/working-with-github-actions/scripts/ci-audit.sh:51`)",
+          "text": "Even-sized samples report upper middle value as median (`skills/working-with-github-actions/scripts/ci-audit.sh:51`)"
+        },
+        {
+          "id": "r4:body:1",
+          "roundIndex": 4,
+          "reviewId": 5732646068,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "floor]` picks the upper-middle element for even-length arrays, so the \"median\" is biased upward for even `n` (e.g. the default 15 runs with a few skipped jobs, or `-n 10`). Average the two middle values for even lengths. (`skills/working-with-github-actions/scripts/ci-audit.sh:51`)",
+          "text": "floor]` picks the upper-middle element for even-length arrays, so the \"median\" is biased upward for even `n` (e.g. the default 15 runs with a few skipped jobs, or `-n 10`). Average the two middle values for even lengths. (`skills/working-with-github-actions/scripts/ci-audit.sh:51`)"
+        },
+        {
+          "id": "r4:body:2",
+          "roundIndex": 4,
+          "reviewId": 5732646068,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "Jobs endpoint is not paginated and errors are swallowed (`skills/working-with-github-actions/scripts/ci-audit.sh:40`)",
+          "text": "Jobs endpoint is not paginated and errors are swallowed (`skills/working-with-github-actions/scripts/ci-audit.sh:40`)"
+        },
+        {
+          "id": "r4:body:3",
+          "roundIndex": 4,
+          "reviewId": 5732646068,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "| true` hides failed requests (rate limit, auth), so medians are computed from partial data without any warning. Use `--paginate` with `?per_page=100` and report failures to stderr. (`skills/working-with-github-actions/scripts/ci-audit.sh:40`)",
+          "text": "| true` hides failed requests (rate limit, auth), so medians are computed from partial data without any warning. Use `--paginate` with `?per_page=100` and report failures to stderr. (`skills/working-with-github-actions/scripts/ci-audit.sh:40`)"
+        },
+        {
+          "id": "r4:body:4",
+          "roundIndex": 4,
+          "reviewId": 5732646068,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "| true`. Additionally, `group_by(.job)` keys only on job name, so same-named jobs from different workflows (default is all workflows) are combined into one median. Add `--paginate` and include workflow identity (e.g. `workflow_name`) in the grouping key. (`skills/working-with-github-actions/scripts/ci-audit.sh:40`)",
+          "text": "| true`. Additionally, `group_by(.job)` keys only on job name, so same-named jobs from different workflows (default is all workflows) are combined into one median. Add `--paginate` and include workflow identity (e.g. `workflow_name`) in the grouping key. (`skills/working-with-github-actions/scripts/ci-audit.sh:40`)"
+        },
+        {
+          "id": "r4:body:5",
+          "roundIndex": 4,
+          "reviewId": 5732646068,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "Skipped-filter job can leave a required check green (`skills/working-with-github-actions/references/cookbook-fast-ci-for-agents.md:72`)",
+          "text": "Skipped-filter job can leave a required check green (`skills/working-with-github-actions/references/cookbook-fast-ci-for-agents.md:72`)"
+        },
+        {
+          "id": "r4:body:6",
+          "roundIndex": 4,
+          "reviewId": 5732646068,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "If `changes` fails, `docs` (which needs it) is skipped, and a skipped job reports success to branch protection. A broken filter can then let the required docs check go green without evaluating anything. The recipe also lacks `pull-requests: read` permission and `fetch-depth` for push events, which are the likely causes of a filter failure. Recommend an always-running gate job that fails when `changes` fails (`if: always()` and check `needs.changes.result`), and note the permissions. (`skills/working-with-github-actions/references/cookbook-fast-ci-for-agents.md:72`)",
+          "text": "If `changes` fails, `docs` (which needs it) is skipped, and a skipped job reports success to branch protection. A broken filter can then let the required docs check go green without evaluating anything. The recipe also lacks `pull-requests: read` permission and `fetch-depth` for push events, which are the likely causes of a filter failure. Recommend an always-running gate job that fails when `changes` fails (`if: always()` and check `needs.changes.result`), and note the permissions. (`skills/working-with-github-actions/references/cookbook-fast-ci-for-agents.md:72`)"
+        },
+        {
+          "id": "r4:body:7",
+          "roundIndex": 4,
+          "reviewId": 5732646068,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "Jobs from different workflows are grouped by name only (`skills/working-with-github-actions/scripts/ci-audit.sh:48`)",
+          "text": "Jobs from different workflows are grouped by name only (`skills/working-with-github-actions/scripts/ci-audit.sh:48`)"
+        },
+        {
+          "id": "r4:body:8",
+          "roundIndex": 4,
+          "reviewId": 5732646068,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "With the default of all workflows, `group_by(.job)` merges identically named jobs (e.g. `test`) from different workflows into one median. The job records carry no workflow identity, so the resulting medians are misleading. Include the workflow name, or the run's `workflow_name` or `path`, in the grouping key. (`skills/working-with-github-actions/scripts/ci-audit.sh:48`)",
+          "text": "With the default of all workflows, `group_by(.job)` merges identically named jobs (e.g. `test`) from different workflows into one median. The job records carry no workflow identity, so the resulting medians are misleading. Include the workflow name, or the run's `workflow_name` or `path`, in the grouping key. (`skills/working-with-github-actions/scripts/ci-audit.sh:48`)"
+        },
+        {
+          "id": "r4:body:9",
+          "roundIndex": 4,
+          "reviewId": 5732646068,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "`group_by(.job)` merges same-named jobs from different workflows when auditing all workflows. `SETUP_RE` also matches any step containing 'cache', 'install', or 'setup' (e.g. 'Test cache'), counting real run time as setup and skewing the ratio the cookbook uses to choose levers. Include workflow name in the grouping key and anchor or tighten the regex. (`skills/working-with-github-actions/scripts/ci-audit.sh:48`)",
+          "text": "`group_by(.job)` merges same-named jobs from different workflows when auditing all workflows. `SETUP_RE` also matches any step containing 'cache', 'install', or 'setup' (e.g. 'Test cache'), counting real run time as setup and skewing the ratio the cookbook uses to choose levers. Include workflow name in the grouping key and anchor or tighten the regex. (`skills/working-with-github-actions/scripts/ci-audit.sh:48`)"
+        },
+        {
+          "id": "r4:body:10",
+          "roundIndex": 4,
+          "reviewId": 5732646068,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Pre-push hook claimed to be unskippable (`skills/working-with-github-actions/references/cookbook-fast-ci-for-agents.md:79`)",
+          "text": "Pre-push hook claimed to be unskippable (`skills/working-with-github-actions/references/cookbook-fast-ci-for-agents.md:79`)"
+        },
+        {
+          "id": "r4:body:11",
+          "roundIndex": 4,
+          "reviewId": 5732646068,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Cache scoping description is inaccurate (`skills/working-with-github-actions/references/cookbook-fast-ci-for-agents.md:39`)",
+          "text": "Cache scoping description is inaccurate (`skills/working-with-github-actions/references/cookbook-fast-ci-for-agents.md:39`)"
+        },
+        {
+          "id": "r4:body:12",
+          "roundIndex": 4,
+          "reviewId": 5732646068,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Script path not valid from repo root (`skills/working-with-github-actions/references/cookbook-fast-ci-for-agents.md:12`)",
+          "text": "Script path not valid from repo root (`skills/working-with-github-actions/references/cookbook-fast-ci-for-agents.md:12`)"
+        },
+        {
+          "id": "r4:body:13",
+          "roundIndex": 4,
+          "reviewId": 5732646068,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "Jobs fetch is unpaginated and swallows errors (`skills/working-with-github-actions/scripts/ci-audit.sh:42`)",
+          "text": "Jobs fetch is unpaginated and swallows errors (`skills/working-with-github-actions/scripts/ci-audit.sh:42`)"
+        },
+        {
+          "id": "r4:body:14",
+          "roundIndex": 4,
+          "reviewId": 5732646068,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "floor]`, which for even-length arrays returns the upper middle element rather than the true median. With the default of 15 runs this is fine for odd counts, but jobs with an even n (skipped runs, failures, matrix) are biased upward. The same pattern is used for the wall-clock median in the header. (`skills/working-with-github-actions/scripts/ci-audit.sh:42`)",
+          "text": "floor]`, which for even-length arrays returns the upper middle element rather than the true median. With the default of 15 runs this is fine for odd counts, but jobs with an even n (skipped runs, failures, matrix) are biased upward. The same pattern is used for the wall-clock median in the header. (`skills/working-with-github-actions/scripts/ci-audit.sh:42`)"
+        },
+        {
+          "id": "r4:body:15",
+          "roundIndex": 4,
+          "reviewId": 5732646068,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "Setup regex over-matches step names, skewing setup/run split (`skills/working-with-github-actions/scripts/ci-audit.sh:26`)",
+          "text": "Setup regex over-matches step names, skewing setup/run split (`skills/working-with-github-actions/scripts/ci-audit.sh:26`)"
+        }
+      ]
+    },
+    {
+      "index": 5,
+      "reviewId": 5732702651,
+      "provider": "anthropic",
+      "submittedAt": "2026-11-02T06:12:22Z",
+      "headSha": "81532942d2e6bdef4b6a594aac54803d2bef9d32",
+      "baseSha": "f5e536498ec61687ea3cebb7334ed406bc1da3c5",
+      "mergeBase": "1ed420c8c1280180c0964aeb80533f140a2643f9",
+      "triggerAt": "2026-11-02T06:05:40Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "057934187b3f1096d97d02667d0903471f0291dc",
+          "committedAt": "2026-11-02T03:58:02Z",
+          "files": [
+            {
+              "path": ".github/workflows/lint-descriptions.yml",
+              "ranges": [
+                [
+                  1,
+                  18
+                ]
+              ]
+            },
+            {
+              "path": ".gitignore",
+              "ranges": [
+                [
+                  10,
+                  14
+                ]
+              ]
+            },
+            {
+              "path": "Makefile",
+              "ranges": [
+                [
+                  1,
+                  11
+                ]
+              ]
+            },
+            {
+              "path": "scripts/lint-descriptions.py",
+              "ranges": [
+                [
+                  1,
+                  193
+                ]
+              ]
+            },
+            {
+              "path": "skills/agent-instructions/SKILL.md",
+              "ranges": [
+                [
+                  1,
+                  11
+                ]
+              ]
+            },
+            {
+              "path": "skills/authoring-agent-skills/SKILL.md",
+              "ranges": [
+                [
+                  1,
+                  10
+                ],
+                [
+                  38,
+                  44
+                ]
+              ]
+            },
+            {
+              "path": "skills/authoring-agent-skills/references/description-conventions.md",
+              "ranges": [
+                [
+                  1,
+                  23
+                ]
+              ]
+            },
+            {
+              "path": "skills/authoring-agent-skills/references/registration-checklist.md",
+              "ranges": [
+                [
+                  74,
+                  78
+                ]
+              ]
+            },
+            {
+              "path": "skills/best-practices-for-agentic-development/SKILL.md",
+              "ranges": [
+                [
+                  1,
+                  9
+                ]
+              ]
+            },
+            {
+              "path": "skills/developing-claude-code-plugins/SKILL.md",
+              "ranges": [
+                [
+                  1,
+                  10
+                ],
+                [
+                  35,
+                  46
+                ],
+                [
+                  247,
+                  258
+                ]
+              ]
+            },
+            {
+              "path": "skills/developing-claude-code-plugins/references/agents.md",
+              "ranges": [
+                [
+                  1,
+                  184
+                ]
+              ]
+            },
+            {
+              "path": "skills/developing-claude-code-plugins/references/commands.md",
+              "ranges": [
+                [
+                  1,
+                  188
+                ]
+              ]
+            },
+            {
+              "path": "skills/developing-claude-code-plugins/references/hooks.md",
+              "ranges": [
+                [
+                  1,
+                  263
+                ]
+              ]
+            },
+            {
+              "path": "skills/developing-claude-code-plugins/references/mcp-integration.md",
+              "ranges": [
+                [
+                  1,
+                  209
+                ]
+              ]
+            },
+            {
+              "path": "skills/developing-claude-code-plugins/references/plugin-settings.md",
+              "ranges": [
+                [
+                  1,
+                  173
+                ]
+              ]
+            },
+            {
+              "path": "skills/developing-claude-code-plugins/scripts/fixtures/agents/bad-agent.md",
+              "ranges": [
+                [
+                  1,
+                  6
+                ]
+              ]
+            },
+            {
+              "path": "skills/developing-claude-code-plugins/scripts/fixtures/agents/good-agent.md",
+              "ranges": [
+                [
+                  1,
+                  13
+                ]
+              ]
+            },
+            {
+              "path": "skills/developing-claude-code-plugins/scripts/fixtures/hooks/bad-empty.json",
+              "ranges": []
+            },
+            {
+              "path": "skills/developing-claude-code-plugins/scripts/fixtures/hooks/bad-handler.json",
+              "ranges": [
+                [
+                  1,
+                  7
+                ]
+              ]
+            },
+            {
+              "path": "skills/developing-claude-code-plugins/scripts/fixtures/hooks/bad-hook.sh",
+              "ranges": [
+                [
+                  1,
+                  2
+                ]
+              ]
+            },
+            {
+              "path": "skills/developing-claude-code-plugins/scripts/fixtures/hooks/bad-two-docs.json",
+              "ranges": [
+                [
+                  1,
+                  2
+                ]
+              ]
+            },
+            {
+              "path": "skills/developing-claude-code-plugins/scripts/fixtures/hooks/bad-unwrapped.json",
+              "ranges": [
+                [
+                  1,
+                  5
+                ]
+              ]
+            },
+            {
+              "path": "skills/developing-claude-code-plugins/scripts/fixtures/hooks/event-rm.json",
+              "ranges": [
+                [
+                  1,
+                  1
+                ]
+              ]
+            },
+            {
+              "path": "skills/developing-claude-code-plugins/scripts/fixtures/hooks/event-safe.json",
+              "ranges": [
+                [
+                  1,
+                  1
+                ]
+              ]
+            },
+            {
+              "path": "skills/developing-claude-code-plugins/scripts/fixtures/hooks/good-hook.sh",
+              "ranges": [
+                [
+                  1,
+                  9
+                ]
+              ]
+            },
+            {
+              "path": "skills/developing-claude-code-plugins/scripts/fixtures/hooks/good-wrapped.json",
+              "ranges": [
+                [
+                  1,
+                  13
+                ]
+              ]
+            },
+            {
+              "path": "skills/developing-claude-code-plugins/scripts/fixtures/settings/bad.local.md",
+              "ranges": [
+                [
+                  1,
+                  5
+                ]
+              ]
+            },
+            {
+              "path": "skills/developing-claude-code-plugins/scripts/fixtures/settings/good.local.md",
+              "ranges": [
+                [
+                  1,
+                  9
+                ]
+              ]
+            },
+            {
+              "path": "skills/developing-claude-code-plugins/scripts/hook-linter.sh",
+              "ranges": [
+                [
+                  1,
+                  89
+                ]
+              ]
+            },
+            {
+              "path": "skills/developing-claude-code-plugins/scripts/parse-frontmatter.sh",
+              "ranges": [
+                [
+                  1,
+                  87
+                ]
+              ]
+            },
+            {
+              "path": "skills/developing-claude-code-plugins/scripts/run-fixtures.sh",
+              "ranges": [
+                [
+                  1,
+                  53
+                ]
+              ]
+            },
+            {
+              "path": "skills/developing-claude-code-plugins/scripts/test-hook.sh",
+              "ranges": [
+                [
+                  1,
+                  162
+                ]
+              ]
+            },
+            {
+              "path": "skills/developing-claude-code-plugins/scripts/validate-agent.sh",
+              "ranges": [
+                [
+                  1,
+                  123
+                ]
+              ]
+            },
+            {
+              "path": "skills/developing-claude-code-plugins/scripts/validate-hook-schema.sh",
+              "ranges": [
+                [
+                  1,
+                  106
+                ]
+              ]
+            },
+            {
+              "path": "skills/developing-claude-code-plugins/scripts/validate-settings.sh",
+              "ranges": [
+                [
+                  1,
+                  83
+                ]
+              ]
+            },
+            {
+              "path": "skills/developing-codex-plugins/SKILL.md",
+              "ranges": [
+                [
+                  1,
+                  9
+                ]
+              ]
+            },
+            {
+              "path": "skills/developing-cursor-plugins/SKILL.md",
+              "ranges": [
+                [
+                  1,
+                  9
+                ]
+              ]
+            },
+            {
+              "path": "skills/developing-gemini-plugins/SKILL.md",
+              "ranges": [
+                [
+                  1,
+                  10
+                ]
+              ]
+            },
+            {
+              "path": "skills/developing-opencode-plugins/SKILL.md",
+              "ranges": [
+                [
+                  1,
+                  9
+                ]
+              ]
+            },
+            {
+              "path": "skills/multi-provider-plugins/SKILL.md",
+              "ranges": [
+                [
+                  1,
+                  9
+                ]
+              ]
+            },
+            {
+              "path": "skills/senior-engineering-best-practices/SKILL.md",
+              "ranges": [
+                [
+                  1,
+                  10
+                ]
+              ]
+            },
+            {
+              "path": "skills/solid-principles/SKILL.md",
+              "ranges": [
+                [
+                  1,
+                  10
+                ]
+              ]
+            },
+            {
+              "path": "skills/working-with-bash/SKILL.md",
+              "ranges": [
+                [
+                  1,
+                  10
+                ]
+              ]
+            },
+            {
+              "path": "skills/working-with-claude-code/SKILL.md",
+              "ranges": [
+                [
+                  1,
+                  10
+                ]
+              ]
+            },
+            {
+              "path": "skills/working-with-codex/SKILL.md",
+              "ranges": [
+                [
+                  1,
+                  8
+                ]
+              ]
+            },
+            {
+              "path": "skills/working-with-cursor/SKILL.md",
+              "ranges": [
+                [
+                  1,
+                  9
+                ]
+              ]
+            },
+            {
+              "path": "skills/working-with-gemini/SKILL.md",
+              "ranges": [
+                [
+                  1,
+                  8
+                ]
+              ]
+            },
+            {
+              "path": "skills/working-with-opencode/SKILL.md",
+              "ranges": [
+                [
+                  1,
+                  8
+                ]
+              ]
+            },
+            {
+              "path": "skills/working-with-pieces/SKILL.md",
+              "ranges": [
+                [
+                  1,
+                  10
+                ]
+              ]
+            },
+            {
+              "path": "skills/working-with-release-please/SKILL.md",
+              "ranges": [
+                [
+                  1,
+                  11
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "sha": "94ad136b822b4c9e77f5fbfc2e34878da5fe73b6",
+          "committedAt": "2026-11-02T06:05:40Z",
+          "files": [
+            {
+              "path": "skills/working-with-github-actions/scripts/ci-audit.sh",
+              "ranges": [
+                [
+                  1,
+                  62
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "sha": "6888c62b9400000738d9fa0a85bb5f06744ffe1a",
+          "committedAt": "2026-11-02T06:05:40Z",
+          "files": [
+            {
+              "path": "skills/working-with-github-actions/SKILL.md",
+              "ranges": [
+                [
+                  61,
+                  67
+                ],
+                [
+                  123,
+                  133
+                ]
+              ]
+            },
+            {
+              "path": "skills/working-with-github-actions/references/cookbook-fast-ci-for-agents.md",
+              "ranges": [
+                [
+                  1,
+                  132
+                ]
+              ]
+            },
+            {
+              "path": "skills/working-with-github-actions/references/cookbook-typescript-node-ci.md",
+              "ranges": [
+                [
+                  216,
+                  223
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "sha": "64f095783986f3c8993c705043eb8feaad614949",
+          "committedAt": "2026-11-02T06:05:40Z",
+          "files": [
+            {
+              "path": "skills/working-with-github-actions/SKILL.md",
+              "ranges": [
+                [
+                  123,
+                  133
+                ]
+              ]
+            },
+            {
+              "path": "skills/working-with-github-actions/references/cookbook-fast-ci-for-agents.md",
+              "ranges": [
+                [
+                  9,
+                  15
+                ],
+                [
+                  36,
+                  44
+                ],
+                [
+                  51,
+                  65
+                ],
+                [
+                  75,
+                  90
+                ],
+                [
+                  137,
+                  140
+                ]
+              ]
+            },
+            {
+              "path": "skills/working-with-github-actions/scripts/ci-audit.sh",
+              "ranges": [
+                [
+                  17,
+                  56
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "sha": "4189face068e8a2f30900c3fad8f790f6318dcb9",
+          "committedAt": "2026-11-02T06:05:40Z",
+          "files": [
+            {
+              "path": "skills/working-with-github-actions/SKILL.md",
+              "ranges": [
+                [
+                  123,
+                  135
+                ]
+              ]
+            },
+            {
+              "path": "skills/working-with-github-actions/scripts/ci-audit.sh",
+              "ranges": [
+                [
+                  38,
+                  51
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "sha": "81532942d2e6bdef4b6a594aac54803d2bef9d32",
+          "committedAt": "2026-11-02T06:05:40Z",
+          "files": [
+            {
+              "path": "skills/working-with-github-actions/SKILL.md",
+              "ranges": [
+                [
+                  127,
+                  133
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r5:c4439402067:0",
+          "roundIndex": 5,
+          "reviewId": 5732702651,
+          "source": "inline",
+          "commentId": 4439402067,
+          "path": "skills/working-with-github-actions/scripts/ci-audit.sh",
+          "line": 51,
+          "severity": "P2",
+          "title": "Cancelled jobs skew medians",
+          "text": "🟡 **P2**\n\n**Cancelled jobs skew medians**\n\nOnly `skipped` jobs are excluded. Cancelled jobs (common with cancel-in-progress, which the cookbook recommends) have truncated durations and pull queue/run/total medians down, understating real CI time.\n\n*Suggested fix:*\n\n```suggestion\n    map(select(.started_at and .completed_at and .conclusion != \"skipped\" and .conclusion != \"cancelled\")\n```\n\n<!-- ai-review:fp=bug|skills/working-with-github-actions/scripts/ci-audit.sh|d29f935d40ad4950.0 -->\n<!-- ai-review:sfp=4ac0edfac10d0793 -->"
+        },
+        {
+          "id": "r5:c4439402075:0",
+          "roundIndex": 5,
+          "reviewId": 5732702651,
+          "source": "inline",
+          "commentId": 4439402075,
+          "path": "skills/working-with-github-actions/scripts/ci-audit.sh",
+          "line": 29,
+          "severity": "P3",
+          "title": "Setup regex counts test steps named like setup keywords",
+          "text": "🟢 **P3**\n\n**Setup regex counts test steps named like setup keywords**\n\nThe unanchored alternatives `cache`, `install`, `restore` and `set ?up` after `^` only match at the start, but names like `Cache tests` or `Install smoke test` would still be counted as setup and subtracted from run time. The cookbook uses the setup/run ratio to choose levers, so misclassification can mislead; the limitation should be documented in the header.\n\n<!-- ai-review:fp=bug|skills/working-with-github-actions/scripts/ci-audit.sh|81ad55f83c577a38.1 -->"
+        },
+        {
+          "id": "r5:body:0",
+          "roundIndex": 5,
+          "reviewId": 5732702651,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Per-SHA concurrency group for main also affects the else branch format (`skills/working-with-github-actions/SKILL.md:131`)",
+          "text": "Per-SHA concurrency group for main also affects the else branch format (`skills/working-with-github-actions/SKILL.md:131`)"
+        }
+      ]
+    },
+    {
+      "index": 6,
+      "reviewId": 5732984950,
+      "provider": "anthropic",
+      "submittedAt": "2026-11-02T06:53:17Z",
+      "headSha": "63595c647d2aca7b3ffd8830f12664d9c96ebba5",
+      "baseSha": "81532942d2e6bdef4b6a594aac54803d2bef9d32",
+      "mergeBase": "81532942d2e6bdef4b6a594aac54803d2bef9d32",
+      "triggerAt": "2026-11-02T06:47:08Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "63595c647d2aca7b3ffd8830f12664d9c96ebba5",
+          "committedAt": "2026-11-02T06:47:08Z",
+          "files": [
+            {
+              "path": "skills/working-with-github-actions/scripts/ci-audit.sh",
+              "ranges": [
+                [
+                  6,
+                  15
+                ],
+                [
+                  19,
+                  30
+                ],
+                [
+                  50,
+                  56
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r6:body:0",
+          "roundIndex": 6,
+          "reviewId": 5732984950,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Per-SHA concurrency group for main also affects the else branch format (`skills/working-with-github-actions/SKILL.md:131`)",
+          "text": "Per-SHA concurrency group for main also affects the else branch format (`skills/working-with-github-actions/SKILL.md:131`)"
+        },
+        {
+          "id": "r6:body:1",
+          "roundIndex": 6,
+          "reviewId": 5732984950,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Setup regex counts test steps named like setup keywords (`skills/working-with-github-actions/scripts/ci-audit.sh:29`)",
+          "text": "Setup regex counts test steps named like setup keywords (`skills/working-with-github-actions/scripts/ci-audit.sh:29`)"
+        }
+      ]
+    },
+    {
+      "index": 7,
+      "reviewId": 5733001403,
+      "provider": "anthropic",
+      "submittedAt": "2026-11-02T06:55:40Z",
+      "headSha": "63595c647d2aca7b3ffd8830f12664d9c96ebba5",
+      "baseSha": "63595c647d2aca7b3ffd8830f12664d9c96ebba5",
+      "mergeBase": "63595c647d2aca7b3ffd8830f12664d9c96ebba5",
+      "triggerAt": null,
+      "approximate": true,
+      "commitsSince": [],
+      "claims": [
+        {
+          "id": "r7:body:0",
+          "roundIndex": 7,
+          "reviewId": 5733001403,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "floor]` picks the upper-middle element for even-length arrays, so the \"median\" is biased upward for even `n` (e.g. the default 15 runs with a few skipped jobs, or `-n 10`). Average the two middle values for even lengths. (`skills/working-with-github-actions/scripts/ci-audit.sh:51`)",
+          "text": "floor]` picks the upper-middle element for even-length arrays, so the \"median\" is biased upward for even `n` (e.g. the default 15 runs with a few skipped jobs, or `-n 10`). Average the two middle values for even lengths. (`skills/working-with-github-actions/scripts/ci-audit.sh:51`)"
+        },
+        {
+          "id": "r7:body:1",
+          "roundIndex": 7,
+          "reviewId": 5733001403,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "true` hides failed requests (rate limit, auth), so medians are computed from partial data without any warning. Use `--paginate` with `?per_page=100` and report failures to stderr. (`skills/working-with-github-actions/scripts/ci-audit.sh:40`)",
+          "text": "true` hides failed requests (rate limit, auth), so medians are computed from partial data without any warning. Use `--paginate` with `?per_page=100` and report failures to stderr. (`skills/working-with-github-actions/scripts/ci-audit.sh:40`)"
+        }
+      ]
+    }
+  ],
+  "threads": [
+    {
+      "threadId": "PRRT_kwDOR7Lu486ygKLC",
+      "commentId": 4438073982,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 4439353275,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-11-02T06:03:05Z",
+          "editedAt": null,
+          "body": "Addressed on head f5e5364: median averages the two middle values, setup regex is anchored, jobs are grouped by workflow, jobs are paginated with fetch errors reported on stderr, -h exits 0, and the cookbook now documents requiring the changes job and the pull-requests: read permission."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOR7Lu486ygKLG",
+      "commentId": 4438073986,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "anthropicreviewbot[bot]",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOR7Lu486ygKLK",
+      "commentId": 4438073991,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "anthropicreviewbot[bot]",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOR7Lu486ygKLO",
+      "commentId": 4438074001,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "anthropicreviewbot[bot]",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOR7Lu486ygKLU",
+      "commentId": 4438074009,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "anthropicreviewbot[bot]",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOR7Lu486ygNuJ",
+      "commentId": 4438097336,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 4439352615,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-11-02T06:02:57Z",
+          "editedAt": null,
+          "body": "Addressed on head f5e5364: median averages the two middle values, setup regex is anchored, jobs are grouped by workflow, jobs are paginated with fetch errors reported on stderr, -h exits 0, and the cookbook now documents requiring the changes job and the pull-requests: read permission."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOR7Lu486ygNuL",
+      "commentId": 4438097338,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOR7Lu486ygNuP",
+      "commentId": 4438097344,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 4439352743,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-11-02T06:02:59Z",
+          "editedAt": null,
+          "body": "Addressed on head f5e5364: median averages the two middle values, setup regex is anchored, jobs are grouped by workflow, jobs are paginated with fetch errors reported on stderr, -h exits 0, and the cookbook now documents requiring the changes job and the pull-requests: read permission."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOR7Lu486ygNuQ",
+      "commentId": 4438097346,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 4439353045,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-11-02T06:03:02Z",
+          "editedAt": null,
+          "body": "Addressed on head f5e5364: median averages the two middle values, setup regex is anchored, jobs are grouped by workflow, jobs are paginated with fetch errors reported on stderr, -h exits 0, and the cookbook now documents requiring the changes job and the pull-requests: read permission."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOR7Lu486ygNuT",
+      "commentId": 4438097350,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOR7Lu486ygNuU",
+      "commentId": 4438097352,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOR7Lu486ygNuY",
+      "commentId": 4438097357,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOR7Lu486ygNuZ",
+      "commentId": 4438097359,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOR7Lu486ygNud",
+      "commentId": 4438097363,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 4439352880,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-11-02T06:03:00Z",
+          "editedAt": null,
+          "body": "Addressed on head f5e5364: median averages the two middle values, setup regex is anchored, jobs are grouped by workflow, jobs are paginated with fetch errors reported on stderr, -h exits 0, and the cookbook now documents requiring the changes job and the pull-requests: read permission."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOR7Lu486ygNuh",
+      "commentId": 4438097368,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOR7Lu486ygNuj",
+      "commentId": 4438097372,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 4439353160,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-11-02T06:03:03Z",
+          "editedAt": null,
+          "body": "Addressed on head f5e5364: median averages the two middle values, setup regex is anchored, jobs are grouped by workflow, jobs are paginated with fetch errors reported on stderr, -h exits 0, and the cookbook now documents requiring the changes job and the pull-requests: read permission."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOR7Lu486ygNum",
+      "commentId": 4438097374,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOR7Lu486ygork",
+      "commentId": 4438274734,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "anthropicreviewbot[bot]",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOR7Lu486ygorm",
+      "commentId": 4438274738,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "anthropicreviewbot[bot]",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOR7Lu486ygoro",
+      "commentId": 4438274741,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "anthropicreviewbot[bot]",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOR7Lu486ygors",
+      "commentId": 4438274747,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "anthropicreviewbot[bot]",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOR7Lu486ygoru",
+      "commentId": 4438274750,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "anthropicreviewbot[bot]",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOR7Lu486ygorx",
+      "commentId": 4438274753,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "anthropicreviewbot[bot]",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOR7Lu486ygor1",
+      "commentId": 4438274757,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "anthropicreviewbot[bot]",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOR7Lu486ygs-b",
+      "commentId": 4438303711,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOR7Lu486yjOzu",
+      "commentId": 4439356019,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOR7Lu486yjOzy",
+      "commentId": 4439356025,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOR7Lu486yjOz2",
+      "commentId": 4439356030,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOR7Lu486yjWNw",
+      "commentId": 4439402067,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "anthropicreviewbot[bot]",
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOR7Lu486yjWN2",
+      "commentId": 4439402075,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": []
+    }
+  ],
+  "reactions": []
+}

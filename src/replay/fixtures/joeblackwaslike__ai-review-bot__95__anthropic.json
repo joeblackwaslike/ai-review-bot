@@ -1,0 +1,1323 @@
+{
+  "schemaVersion": 1,
+  "owner": "joeblackwaslike",
+  "repo": "ai-review-bot",
+  "pull": 95,
+  "provider": "anthropic",
+  "reviewer": "claude",
+  "author": "joeblackwaslike",
+  "recordedAt": "2026-11-07T23:36:46.019Z",
+  "rounds": [
+    {
+      "index": 0,
+      "reviewId": 5720852473,
+      "provider": "anthropic",
+      "submittedAt": "2026-10-31T03:19:24Z",
+      "headSha": "48bf1d39f6f6c237fe777d98cfe0d62a20e07a28",
+      "baseSha": "42ff1c3c51a4b536f5f22663b33efadaa1948f3e",
+      "mergeBase": "42ff1c3c51a4b536f5f22663b33efadaa1948f3e",
+      "triggerAt": "2026-10-31T03:04:06Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "e08cfba81fc6ee26f36b941608772bce2f7256aa",
+          "committedAt": "2026-10-31T01:49:41Z",
+          "files": [
+            {
+              "path": "docs/superpowers/specs/2026-10-30-vercel-parity-design.md",
+              "ranges": [
+                [
+                  1,
+                  116
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "sha": "1cc79d4491f42cd9e2ad995099535f345c9590fd",
+          "committedAt": "2026-10-31T01:51:00Z",
+          "files": [
+            {
+              "path": "docs/superpowers/plans/2026-10-30-vercel-parity.md",
+              "ranges": [
+                [
+                  1,
+                  124
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "sha": "61763e7e9688f56b8525ecb4b45f5ee4de0150d7",
+          "committedAt": "2026-10-31T01:52:31Z",
+          "files": [
+            {
+              "path": "src/ledger/retarget.test.ts",
+              "ranges": [
+                [
+                  1,
+                  68
+                ]
+              ]
+            },
+            {
+              "path": "src/ledger/retarget.ts",
+              "ranges": [
+                [
+                  1,
+                  43
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "sha": "b234587ac0f5fba70600afe0ce91d7a3cae04d1e",
+          "committedAt": "2026-10-31T02:01:57Z",
+          "files": [
+            {
+              "path": "src/review.test.ts",
+              "ranges": [
+                [
+                  33,
+                  44
+                ],
+                [
+                  429,
+                  441
+                ],
+                [
+                  1056,
+                  1062
+                ],
+                [
+                  1952,
+                  1961
+                ],
+                [
+                  2344,
+                  2353
+                ],
+                [
+                  3439,
+                  3445
+                ],
+                [
+                  3464,
+                  3470
+                ],
+                [
+                  3699,
+                  3708
+                ],
+                [
+                  4976,
+                  4984
+                ],
+                [
+                  5418,
+                  5424
+                ],
+                [
+                  5468,
+                  5474
+                ],
+                [
+                  6103,
+                  6109
+                ],
+                [
+                  6125,
+                  6133
+                ],
+                [
+                  6161,
+                  6343
+                ]
+              ]
+            },
+            {
+              "path": "src/review.ts",
+              "ranges": [
+                [
+                  19,
+                  25
+                ],
+                [
+                  901,
+                  908
+                ],
+                [
+                  1029,
+                  1035
+                ],
+                [
+                  1081,
+                  1097
+                ],
+                [
+                  1141,
+                  1147
+                ],
+                [
+                  1705,
+                  1725
+                ],
+                [
+                  2660,
+                  2666
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "sha": "e11fd410adde30155abc0d2f7b18c8d7fc18016e",
+          "committedAt": "2026-10-31T02:08:34Z",
+          "files": [
+            {
+              "path": "src/ledger/retarget.test.ts",
+              "ranges": [
+                [
+                  34,
+                  41
+                ],
+                [
+                  62,
+                  86
+                ]
+              ]
+            },
+            {
+              "path": "src/prompt.ts",
+              "ranges": [
+                [
+                  105,
+                  111
+                ]
+              ]
+            },
+            {
+              "path": "src/review.test.ts",
+              "ranges": [
+                [
+                  5,
+                  11
+                ],
+                [
+                  34,
+                  40
+                ],
+                [
+                  6216,
+                  6256
+                ],
+                [
+                  6356,
+                  6364
+                ]
+              ]
+            },
+            {
+              "path": "src/review.ts",
+              "ranges": [
+                [
+                  27,
+                  33
+                ],
+                [
+                  1708,
+                  1727
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "sha": "784c10df1e80d37793fd0d9781f93e16f2fee1ff",
+          "committedAt": "2026-10-31T02:29:41Z",
+          "files": [
+            {
+              "path": "src/github-app.ts",
+              "ranges": [
+                [
+                  311,
+                  318
+                ],
+                [
+                  478,
+                  487
+                ],
+                [
+                  555,
+                  560
+                ]
+              ]
+            },
+            {
+              "path": "src/review-state.test.ts",
+              "ranges": [
+                [
+                  1,
+                  8
+                ],
+                [
+                  30,
+                  32
+                ]
+              ]
+            },
+            {
+              "path": "src/review-state.ts",
+              "ranges": [
+                [
+                  1,
+                  3
+                ],
+                [
+                  16,
+                  26
+                ],
+                [
+                  29,
+                  34
+                ],
+                [
+                  62,
+                  64
+                ]
+              ]
+            },
+            {
+              "path": "src/review.test.ts",
+              "ranges": [
+                [
+                  1,
+                  6
+                ],
+                [
+                  30,
+                  42
+                ],
+                [
+                  1006,
+                  1018
+                ],
+                [
+                  1030,
+                  1044
+                ],
+                [
+                  1865,
+                  1875
+                ],
+                [
+                  1888,
+                  1920
+                ],
+                [
+                  1932,
+                  1946
+                ],
+                [
+                  1973,
+                  2001
+                ],
+                [
+                  2027,
+                  2041
+                ],
+                [
+                  2057,
+                  2068
+                ],
+                [
+                  2097,
+                  2122
+                ],
+                [
+                  2139,
+                  2150
+                ],
+                [
+                  2177,
+                  2187
+                ],
+                [
+                  2194,
+                  2203
+                ],
+                [
+                  2218,
+                  2250
+                ],
+                [
+                  2273,
+                  2283
+                ],
+                [
+                  3097,
+                  3121
+                ],
+                [
+                  3140,
+                  3153
+                ],
+                [
+                  3159,
+                  3181
+                ],
+                [
+                  3366,
+                  3376
+                ],
+                [
+                  3389,
+                  3402
+                ],
+                [
+                  4157,
+                  4178
+                ],
+                [
+                  4487,
+                  4498
+                ],
+                [
+                  4503,
+                  4510
+                ],
+                [
+                  4566,
+                  4599
+                ],
+                [
+                  4602,
+                  4677
+                ],
+                [
+                  4686,
+                  4724
+                ],
+                [
+                  4737,
+                  4783
+                ],
+                [
+                  4794,
+                  4811
+                ],
+                [
+                  4996,
+                  5001
+                ],
+                [
+                  5165,
+                  5171
+                ],
+                [
+                  5178,
+                  5318
+                ],
+                [
+                  5329,
+                  5338
+                ],
+                [
+                  5363,
+                  5372
+                ],
+                [
+                  5387,
+                  5393
+                ],
+                [
+                  5415,
+                  5421
+                ],
+                [
+                  5463,
+                  5475
+                ],
+                [
+                  5481,
+                  5513
+                ],
+                [
+                  5557,
+                  5566
+                ],
+                [
+                  5583,
+                  5589
+                ],
+                [
+                  5607,
+                  5619
+                ],
+                [
+                  5629,
+                  5644
+                ],
+                [
+                  5677,
+                  5683
+                ],
+                [
+                  5697,
+                  5816
+                ],
+                [
+                  5820,
+                  5826
+                ],
+                [
+                  5851,
+                  5857
+                ],
+                [
+                  5871,
+                  5880
+                ],
+                [
+                  5891,
+                  5900
+                ],
+                [
+                  5913,
+                  5922
+                ],
+                [
+                  5935,
+                  5941
+                ],
+                [
+                  5962,
+                  5968
+                ],
+                [
+                  6015,
+                  6021
+                ],
+                [
+                  6103,
+                  6120
+                ],
+                [
+                  6164,
+                  6170
+                ],
+                [
+                  6174,
+                  6181
+                ],
+                [
+                  6186,
+                  6192
+                ],
+                [
+                  6215,
+                  6221
+                ],
+                [
+                  6261,
+                  6267
+                ],
+                [
+                  6285,
+                  6294
+                ],
+                [
+                  6303,
+                  6319
+                ],
+                [
+                  6327,
+                  6335
+                ],
+                [
+                  6339,
+                  6349
+                ],
+                [
+                  6389,
+                  6397
+                ],
+                [
+                  6496,
+                  6502
+                ],
+                [
+                  6515,
+                  6545
+                ],
+                [
+                  6572,
+                  6602
+                ],
+                [
+                  6606,
+                  6617
+                ],
+                [
+                  6787,
+                  6809
+                ],
+                [
+                  7060,
+                  7067
+                ],
+                [
+                  7074,
+                  7083
+                ],
+                [
+                  7087,
+                  7095
+                ]
+              ]
+            },
+            {
+              "path": "src/review.ts",
+              "ranges": [
+                [
+                  32,
+                  37
+                ],
+                [
+                  92,
+                  100
+                ],
+                [
+                  925,
+                  931
+                ],
+                [
+                  1588,
+                  1610
+                ],
+                [
+                  1640,
+                  1645
+                ],
+                [
+                  1654,
+                  1660
+                ],
+                [
+                  1679,
+                  1685
+                ],
+                [
+                  1719,
+                  1726
+                ],
+                [
+                  1747,
+                  1754
+                ],
+                [
+                  1802,
+                  1808
+                ],
+                [
+                  1828,
+                  1834
+                ],
+                [
+                  1859,
+                  1871
+                ],
+                [
+                  1887,
+                  1894
+                ],
+                [
+                  2505,
+                  2510
+                ],
+                [
+                  2627,
+                  2632
+                ]
+              ]
+            },
+            {
+              "path": "src/testing.ts",
+              "ranges": [
+                [
+                  7,
+                  13
+                ],
+                [
+                  246,
+                  286
+                ]
+              ]
+            },
+            {
+              "path": "src/watch.ts",
+              "ranges": [
+                [
+                  262,
+                  270
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "sha": "dcae1a2a7942090ad7dbe585e9645f198f5f5b44",
+          "committedAt": "2026-10-31T02:49:09Z",
+          "files": [
+            {
+              "path": "CLAUDE.md",
+              "ranges": [
+                [
+                  47,
+                  54
+                ],
+                [
+                  75,
+                  82
+                ],
+                [
+                  156,
+                  163
+                ]
+              ]
+            },
+            {
+              "path": "docs/post-mortem-re-review-memory.md",
+              "ranges": [
+                [
+                  116,
+                  122
+                ]
+              ]
+            },
+            {
+              "path": "src/replay/__snapshots__/snapshot.test.ts.snap",
+              "ranges": [
+                [
+                  25,
+                  42
+                ]
+              ]
+            },
+            {
+              "path": "src/replay/fixtures/joeblackwaslike__ai-review-bot__92__anthropic.json",
+              "ranges": [
+                [
+                  1,
+                  1121
+                ]
+              ]
+            },
+            {
+              "path": "src/replay/fixtures/joeblackwaslike__ai-review-bot__92__anthropic.labels.json",
+              "ranges": [
+                [
+                  1,
+                  176
+                ]
+              ]
+            },
+            {
+              "path": "src/replay/fixtures/joeblackwaslike__ai-review-bot__92__openai.json",
+              "ranges": [
+                [
+                  1,
+                  1201
+                ]
+              ]
+            },
+            {
+              "path": "src/replay/fixtures/joeblackwaslike__ai-review-bot__92__openai.labels.json",
+              "ranges": [
+                [
+                  1,
+                  190
+                ]
+              ]
+            },
+            {
+              "path": "src/replay/pipeline.test.ts",
+              "ranges": [
+                [
+                  59,
+                  66
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "sha": "681efdf382719d325fc8814cc82a503dcfcac3a9",
+          "committedAt": "2026-10-31T02:49:14Z",
+          "files": [
+            {
+              "path": "src/review.ts",
+              "ranges": [
+                [
+                  2233,
+                  2238
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "sha": "3f5da97c70e519932af769180a86a6d9223f8bfb",
+          "committedAt": "2026-10-31T02:50:13Z",
+          "files": [
+            {
+              "path": "docs/superpowers/plans/2026-10-30-vercel-parity.md",
+              "ranges": [
+                [
+                  117,
+                  144
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "sha": "d726d3fe753907a68bbdbd159f6c7a936b8e13e6",
+          "committedAt": "2026-10-31T02:58:06Z",
+          "files": [
+            {
+              "path": "CLAUDE.md",
+              "ranges": [
+                [
+                  79,
+                  85
+                ]
+              ]
+            },
+            {
+              "path": "docs/superpowers/specs/2026-10-30-vercel-parity-design.md",
+              "ranges": [
+                [
+                  83,
+                  90
+                ]
+              ]
+            },
+            {
+              "path": "src/ledger/github.test.ts",
+              "ranges": [
+                [
+                  258,
+                  270
+                ],
+                [
+                  363,
+                  420
+                ]
+              ]
+            },
+            {
+              "path": "src/ledger/github.ts",
+              "ranges": [
+                [
+                  1,
+                  6
+                ],
+                [
+                  177,
+                  189
+                ],
+                [
+                  193,
+                  199
+                ]
+              ]
+            },
+            {
+              "path": "src/ledger/live.test.ts",
+              "ranges": [
+                [
+                  9,
+                  21
+                ]
+              ]
+            },
+            {
+              "path": "src/ledger/live.ts",
+              "ranges": [
+                [
+                  18,
+                  30
+                ]
+              ]
+            },
+            {
+              "path": "src/review-metadata.test.ts",
+              "ranges": [
+                [
+                  1,
+                  9
+                ],
+                [
+                  47,
+                  114
+                ]
+              ]
+            },
+            {
+              "path": "src/review-metadata.ts",
+              "ranges": [
+                [
+                  35,
+                  58
+                ]
+              ]
+            },
+            {
+              "path": "src/review.test.ts",
+              "ranges": [
+                [
+                  5252,
+                  5379
+                ]
+              ]
+            },
+            {
+              "path": "src/review.ts",
+              "ranges": [
+                [
+                  30,
+                  36
+                ],
+                [
+                  1475,
+                  1490
+                ],
+                [
+                  1496,
+                  1510
+                ],
+                [
+                  1518,
+                  1524
+                ],
+                [
+                  1618,
+                  1624
+                ],
+                [
+                  1634,
+                  1640
+                ]
+              ]
+            },
+            {
+              "path": "src/testing.ts",
+              "ranges": [
+                [
+                  259,
+                  270
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "sha": "48bf1d39f6f6c237fe777d98cfe0d62a20e07a28",
+          "committedAt": "2026-10-31T03:04:06Z",
+          "files": [
+            {
+              "path": "CLAUDE.md",
+              "ranges": [
+                [
+                  80,
+                  86
+                ]
+              ]
+            },
+            {
+              "path": "docs/superpowers/specs/2026-10-30-vercel-parity-design.md",
+              "ranges": [
+                [
+                  85,
+                  92
+                ],
+                [
+                  118,
+                  122
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r0:c4430189966:0",
+          "roundIndex": 0,
+          "reviewId": 5720852473,
+          "source": "inline",
+          "commentId": 4430189966,
+          "path": "src/ledger/retarget.ts",
+          "line": 18,
+          "severity": "P3",
+          "title": "Findings on files the PR deletes are never retired",
+          "text": "🟢 **P3**\n\n**Findings on files the PR deletes are never retired**\n\n`present` is built from every `filename` in the PR file list. GitHub lists a file the PR deletes with `status: \"removed\"` under its old name. `PathFile` carries no status, so a carried finding on a deleted file counts as present and stays in `kept`. It keeps blocking at `REQUEST_CHANGES`, even though a removed file cannot anchor to the head any more. That is the same stuck-at-CHANGES_REQUESTED situation as #92, reached by deleting the file instead of renaming it. Consider adding `status?: string` to `PathFile` and leaving removed files out of `present`, with a test for it."
+        },
+        {
+          "id": "r0:c4430189972:0",
+          "roundIndex": 0,
+          "reviewId": 5720852473,
+          "source": "inline",
+          "commentId": 4430189972,
+          "path": "src/review.ts",
+          "line": 98,
+          "severity": "P3",
+          "title": "`ReviewContext.kv` is now dead state",
+          "text": "🟢 **P3**\n\n**`ReviewContext.kv` is now dead state**\n\n`buildReview` no longer reads `context.kv`. The doc comment says so, yet the field stays on `ReviewContext` and `github-app.ts` still passes `kv: stateKv`. A required-looking input that does nothing invites a later reader to wire KV state back in. Remove the field and the call-site argument, since feedback writes use the separately passed client."
+        },
+        {
+          "id": "r0:c4430189972:1",
+          "roundIndex": 0,
+          "reviewId": 5720852473,
+          "source": "inline",
+          "commentId": 4430189972,
+          "path": "src/review.ts",
+          "line": 98,
+          "severity": "P3",
+          "title": "The doc comment now says buildReview never touches `kv`, and the diff shows no remaining use in it. `github-app.ts` still passes `kv: stateKv`. This is dead state that implies a dependency that no longer exists. Remove the field and the call-site argument, or mark it reserved.",
+          "text": "The doc comment now says buildReview never touches `kv`, and the diff shows no remaining use in it. `github-app.ts` still passes `kv: stateKv`. This is dead state that implies a dependency that no longer exists. Remove the field and the call-site argument, or mark it reserved."
+        },
+        {
+          "id": "r0:c4430189972:2",
+          "roundIndex": 0,
+          "reviewId": 5720852473,
+          "source": "inline",
+          "commentId": 4430189972,
+          "path": "src/review.ts",
+          "line": 98,
+          "severity": "P3",
+          "title": "The new doc comment says `buildReview` never reads or writes `kv`. `github-app.ts` still passes `kv: stateKv` into the context anyway. The field is dead state: nothing in `buildReview` uses it, since feedback writes happen in `github-app.ts` through a separate client. A maintainer reading the type will assume it matters. Either drop it from `ReviewContext` and the call site, or mark it explicitly as reserved.",
+          "text": "The new doc comment says `buildReview` never reads or writes `kv`. `github-app.ts` still passes `kv: stateKv` into the context anyway. The field is dead state: nothing in `buildReview` uses it, since feedback writes happen in `github-app.ts` through a separate client. A maintainer reading the type will assume it matters. Either drop it from `ReviewContext` and the call site, or mark it explicitly as reserved."
+        },
+        {
+          "id": "r0:body:0",
+          "roundIndex": 0,
+          "reviewId": 5720852473,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Multi-round triage flow test removed with no GitHub-only replacement",
+          "text": "Multi-round triage flow test removed with no GitHub-only replacement"
+        },
+        {
+          "id": "r0:body:1",
+          "roundIndex": 0,
+          "reviewId": 5720852473,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "Silent or SKIP rounds no longer advance the baseline sha",
+          "text": "Silent or SKIP rounds no longer advance the baseline sha"
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "reviewId": 5721063897,
+      "provider": "anthropic",
+      "submittedAt": "2026-10-31T03:56:00Z",
+      "headSha": "b966dc6168d77372208a48da61e58807711b5510",
+      "baseSha": "48bf1d39f6f6c237fe777d98cfe0d62a20e07a28",
+      "mergeBase": "48bf1d39f6f6c237fe777d98cfe0d62a20e07a28",
+      "triggerAt": "2026-10-31T03:30:36Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "1821d1fd1c0903ac1fed828aa0a8de3e19f04531",
+          "committedAt": "2026-10-31T03:23:53Z",
+          "files": [
+            {
+              "path": "src/ledger/retarget.test.ts",
+              "ranges": [
+                [
+                  76,
+                  91
+                ]
+              ]
+            },
+            {
+              "path": "src/ledger/retarget.ts",
+              "ranges": [
+                [
+                  3,
+                  26
+                ]
+              ]
+            },
+            {
+              "path": "src/review.test.ts",
+              "ranges": [
+                [
+                  6173,
+                  6217
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "sha": "1f5ca12e2bba899cf16a554db8bdf83d5830f10b",
+          "committedAt": "2026-10-31T03:26:52Z",
+          "files": [
+            {
+              "path": "src/github-app.test.ts",
+              "ranges": [
+                [
+                  66,
+                  76
+                ],
+                [
+                  146,
+                  182
+                ]
+              ]
+            },
+            {
+              "path": "src/github-app.ts",
+              "ranges": [
+                [
+                  478,
+                  487
+                ],
+                [
+                  553,
+                  558
+                ]
+              ]
+            },
+            {
+              "path": "src/review.test.ts",
+              "ranges": [
+                [
+                  2,
+                  7
+                ],
+                [
+                  5177,
+                  5182
+                ],
+                [
+                  5312,
+                  5317
+                ],
+                [
+                  6339,
+                  6345
+                ],
+                [
+                  6353,
+                  6364
+                ]
+              ]
+            },
+            {
+              "path": "src/review.ts",
+              "ranges": [
+                [
+                  16,
+                  21
+                ],
+                [
+                  91,
+                  96
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "sha": "d72ec03bd37f5099ebfa61af3fdcbb4d678110ae",
+          "committedAt": "2026-10-31T03:27:49Z",
+          "files": [
+            {
+              "path": "src/review.test.ts",
+              "ranges": [
+                [
+                  6627,
+                  6684
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "sha": "84944d8fcd34c23400af068e812d0a290c12713a",
+          "committedAt": "2026-10-31T03:29:39Z",
+          "files": [
+            {
+              "path": "src/replay/__snapshots__/snapshot.test.ts.snap",
+              "ranges": [
+                [
+                  32,
+                  38
+                ]
+              ]
+            },
+            {
+              "path": "src/replay/fixtures/joeblackwaslike__ai-review-bot__92__openai.labels.json",
+              "ranges": [
+                [
+                  67,
+                  73
+                ],
+                [
+                  76,
+                  82
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "sha": "b966dc6168d77372208a48da61e58807711b5510",
+          "committedAt": "2026-10-31T03:30:36Z",
+          "files": [
+            {
+              "path": "docs/superpowers/specs/2026-10-30-vercel-parity-design.md",
+              "ranges": [
+                [
+                  73,
+                  80
+                ],
+                [
+                  102,
+                  108
+                ],
+                [
+                  113,
+                  124
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r1:c4430351677:0",
+          "roundIndex": 1,
+          "reviewId": 5721063897,
+          "source": "inline",
+          "commentId": 4430351677,
+          "path": "docs/superpowers/specs/2026-10-30-vercel-parity-design.md",
+          "line": 122,
+          "severity": "P3",
+          "title": "Spec cites a test by line number, which will go stale",
+          "text": "🟢 **P3**\n\n**Spec cites a test by line number, which will go stale**\n\nThe 'Known limits' section points to the multi-round test as `src/review.test.ts (line 5510)`. That file is about 6,700 lines and changes often, so the number will be wrong after the next edit above it and will send maintainers to the wrong place. The quoted test name already identifies the test, so the line number can be dropped."
+        },
+        {
+          "id": "r1:body:0",
+          "roundIndex": 1,
+          "reviewId": 5721063897,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Multi-round triage flow test removed with no GitHub-only replacement",
+          "text": "Multi-round triage flow test removed with no GitHub-only replacement"
+        },
+        {
+          "id": "r1:body:1",
+          "roundIndex": 1,
+          "reviewId": 5721063897,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "Silent or SKIP rounds no longer advance the baseline sha",
+          "text": "Silent or SKIP rounds no longer advance the baseline sha"
+        }
+      ]
+    }
+  ],
+  "threads": [
+    {
+      "threadId": "PRRT_kwDOSM5cU86yNIM4",
+      "commentId": 4430189966,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 4430351573,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-10-31T03:56:00Z",
+          "editedAt": null,
+          "body": "Confirmed: a deleted file stays in the PR file list as status removed under its old name, so it counted as present. PathFile now carries status and removed files are left out of the present set. Tests cover the helper and a full buildReview round (carried blocker on a removed file, clean delta, non-blocking review with the Retired note). Fixed in 1821d1f."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86yNIM-",
+      "commentId": 4430189972,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 4430351782,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-10-31T03:56:02Z",
+          "editedAt": null,
+          "body": "Confirmed: nothing in buildReview read the field. Removed ReviewContext.kv and the call-site argument; the claim and feedback code use their own client. The test that passed a kv into buildReview is replaced by one at maybeSubmitReview level showing a throwing KV still posts a review. Fixed in 1f5ca12."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86yNf9P",
+      "commentId": 4430351677,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 4430356127,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-10-31T03:56:55Z",
+          "editedAt": null,
+          "body": "Valid, and I am deferring it on purpose. This sentence was added during this review round, and the loop's scope boundary is to stop taking cosmetic findings on code introduced by review fixes. The test is named beside the number, so a reader can still find it. The number goes the next time that spec section is edited."
+        }
+      ]
+    }
+  ],
+  "reactions": [
+    {
+      "commentId": 4430189966,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-10-31T03:56:01Z"
+    },
+    {
+      "commentId": 4430189972,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-10-31T03:56:03Z"
+    },
+    {
+      "commentId": 4430351677,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-10-31T03:56:57Z"
+    }
+  ]
+}

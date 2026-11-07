@@ -1,0 +1,346 @@
+{
+  "fixtureId": "joeblackwaslike__ai-review-bot__74__anthropic",
+  "provisional": true,
+  "labels": [
+    {
+      "claimId": "r0:c3815322526:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T17:51:32Z|Fixed in 3dde5ee — dropped the `tier` property from the three gpt-5.6-sol fixtures (this one, and the two at what were lines 1135/1158). `ModelSelection` has no `tier` field at all; it was unused, cast-through cruft from before this PR, not a real routing output — so rather than pick a \"realistic\" tier number that still would not mean anything, I removed it."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3815322534:0",
+      "label": "fixed",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T17:42:09Z|Fixed in bfd6d4b — live-tested `gpt-5.6-sol` at effort `xhigh` directly against `createAIModel` over the OAuth backend (completes normally, no rejection) and rewrote the comment to state exactly what was live-verified vs. doc-confirmed-only."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3815322538:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:c3815322544:0",
+      "label": "rejected",
+      "confidence": "low",
+      "evidence": [
+        "2026-08-19T17:51:57Z|reaction confused by joeblackwaslike"
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:1",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:2",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:3",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:4",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:5",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:6",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:7",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:8",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:9",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r0:body:10",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3815366670:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:c3815366678:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:1",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:2",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:3",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:4",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:5",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:6",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:7",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:8",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:9",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:10",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:11",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:12",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r1:body:13",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3815442037:0",
+      "label": "deferred",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T17:55:46Z|Pre-existing behavior (function shape unchanged by this PR) — not fixing as part of this modernization pass. Fair follow-up for a future PR if float drift ever shows up in real cost reports."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:c3815442042:0",
+      "label": "deferred",
+      "confidence": "high",
+      "evidence": [
+        "2026-08-19T17:55:47Z|Pre-existing risk (same as the sibling TOKEN_RATES thread below) — computeCost's /bin/zsh-on-unknown-model fallback and the lack of a compile-time link predate this PR. Out of scope here; worth its own follow-up if it bites in practice."
+      ],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:0",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:1",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:2",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:3",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:4",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:5",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:6",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:7",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:8",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    },
+    {
+      "claimId": "r2:body:9",
+      "label": "unadjudicated",
+      "confidence": "low",
+      "evidence": [],
+      "confirmed": false
+    }
+  ],
+  "repeatPairs": [
+    {
+      "later": "r1:body:8",
+      "earlier": "r0:body:3",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:3",
+      "earlier": "r0:body:3",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:2",
+      "earlier": "r1:body:11",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:3",
+      "earlier": "r1:body:8",
+      "confirmed": false
+    },
+    {
+      "later": "r2:body:9",
+      "earlier": "r1:body:13",
+      "confirmed": false
+    }
+  ],
+  "negativePairs": [],
+  "allowedSuppression": []
+}

@@ -1,0 +1,1612 @@
+{
+  "schemaVersion": 1,
+  "owner": "joeblackwaslike",
+  "repo": "ai-review-bot",
+  "pull": 60,
+  "provider": "anthropic",
+  "reviewer": "claude",
+  "author": "joeblackwaslike",
+  "recordedAt": "2026-11-07T23:32:37.649Z",
+  "rounds": [
+    {
+      "index": 0,
+      "reviewId": 4902433137,
+      "provider": "anthropic",
+      "submittedAt": "2026-08-11T02:11:25Z",
+      "headSha": "3e17445a9cef17a3cb46563a7b47c65bf29f098a",
+      "baseSha": "500ee44e5907d61c0273107f5909f4cdafe86f61",
+      "mergeBase": "92f9fee06d2fb9325f269bf75c0a77423fa5e1ad",
+      "triggerAt": "2026-08-11T02:05:28Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "8910634a7bbaf4ac4f753fd381a91d4dd5b4aaac",
+          "committedAt": "2026-08-10T20:54:18Z",
+          "files": [
+            {
+              "path": "src/audit.test.ts",
+              "ranges": [
+                [
+                  64,
+                  95
+                ],
+                [
+                  117,
+                  150
+                ],
+                [
+                  221,
+                  257
+                ],
+                [
+                  487,
+                  529
+                ]
+              ]
+            },
+            {
+              "path": "src/audit.ts",
+              "ranges": [
+                [
+                  80,
+                  100
+                ],
+                [
+                  118,
+                  139
+                ],
+                [
+                  144,
+                  150
+                ],
+                [
+                  232,
+                  252
+                ],
+                [
+                  379,
+                  385
+                ],
+                [
+                  419,
+                  440
+                ],
+                [
+                  447,
+                  462
+                ],
+                [
+                  641,
+                  648
+                ],
+                [
+                  658,
+                  677
+                ],
+                [
+                  680,
+                  695
+                ]
+              ]
+            },
+            {
+              "path": "src/cli.ts",
+              "ranges": [
+                [
+                  294,
+                  300
+                ]
+              ]
+            },
+            {
+              "path": "src/feedback/cron.test.ts",
+              "ranges": [
+                [
+                  76,
+                  102
+                ]
+              ]
+            },
+            {
+              "path": "src/feedback/cron.ts",
+              "ranges": [
+                [
+                  26,
+                  32
+                ]
+              ]
+            },
+            {
+              "path": "src/improve/cron.test.ts",
+              "ranges": [
+                [
+                  63,
+                  89
+                ]
+              ]
+            },
+            {
+              "path": "src/improve/cron.ts",
+              "ranges": [
+                [
+                  22,
+                  28
+                ]
+              ]
+            },
+            {
+              "path": "src/review-state.test.ts",
+              "ranges": [
+                [
+                  1,
+                  4
+                ],
+                [
+                  115,
+                  144
+                ]
+              ]
+            },
+            {
+              "path": "src/review-state.ts",
+              "ranges": [
+                [
+                  123,
+                  136
+                ]
+              ]
+            },
+            {
+              "path": "src/review.test.ts",
+              "ranges": [
+                [
+                  298,
+                  315
+                ],
+                [
+                  633,
+                  666
+                ],
+                [
+                  2266,
+                  2322
+                ]
+              ]
+            },
+            {
+              "path": "src/review.ts",
+              "ranges": [
+                [
+                  752,
+                  779
+                ],
+                [
+                  784,
+                  808
+                ],
+                [
+                  1159,
+                  1169
+                ],
+                [
+                  1174,
+                  1186
+                ],
+                [
+                  1189,
+                  1201
+                ],
+                [
+                  1418,
+                  1439
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "sha": "3e17445a9cef17a3cb46563a7b47c65bf29f098a",
+          "committedAt": "2026-08-11T02:05:28Z",
+          "files": [
+            {
+              "path": "src/cli.test.ts",
+              "ranges": [
+                [
+                  1,
+                  83
+                ]
+              ]
+            },
+            {
+              "path": "src/cli.ts",
+              "ranges": [
+                [
+                  1,
+                  9
+                ],
+                [
+                  273,
+                  279
+                ],
+                [
+                  816,
+                  840
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r0:c3754790205:0",
+          "roundIndex": 0,
+          "reviewId": 4902433137,
+          "source": "inline",
+          "commentId": 3754790205,
+          "path": "src/review.ts",
+          "line": 1177,
+          "severity": "P2",
+          "title": "errored skill name resolved by position index, not from the outcome — will misattribute on non-full outcome arrays",
+          "text": "🟡 **Medium**\n\n**errored skill name resolved by position index, not from the outcome — will misattribute on non-full outcome arrays**\n\n`allSkills[i]` uses the loop index `i` into `outcomes` as an index into `allSkills`. If `outcomes` is shorter than `allSkills` (e.g., skipped agents don't produce an outcome entry), `i` addresses the wrong skill. The safe pattern — already used by the `skipped` branch — is to carry `skillPath` on the outcome itself and read it there. Using a positional index is a latent misattribution bug."
+        },
+        {
+          "id": "r0:c3754790209:0",
+          "roundIndex": 0,
+          "reviewId": 4902433137,
+          "source": "inline",
+          "commentId": 3754790209,
+          "path": "src/cli.ts",
+          "line": 859,
+          "severity": "P2",
+          "title": "Broad catch in isCliEntrypoint hides unexpected filesystem errors",
+          "text": "🟡 **Medium**\n\n**Broad catch in isCliEntrypoint hides unexpected filesystem errors**\n\nThis `catch {}` block is empty and catches all errors indiscriminately. An `ENOENT` (the symlink target was removed mid-process) is expected and safe to silently return `false` for. An `EPERM` or `EIO` on an otherwise valid path is not — the CLI will silently not start with no message to the user. At minimum, errors other than `ENOENT` should be logged before returning `false`, keeping the silent-failure fix this PR introduces consistent.\n\n*Suggested fix:*\n\n```suggestion\n}\tcatch (err: unknown) {\n\t\t// ENOENT is expected when the symlink target is gone; anything else is\n\t\t// a genuine filesystem problem that warrants a log so the user isn't\n\t\t// left with a CLI that silently refuses to run.\n\t\tif (err instanceof Error && (err as NodeJS.ErrnoException).code !== 'ENOENT') {\n\t\t\tconsole.error('[cli] isCliEntrypoint: unexpected error resolving path', err);\n\t\t}\n\t\treturn false;\n\t}\n```"
+        },
+        {
+          "id": "r0:c3754790216:0",
+          "roundIndex": 0,
+          "reviewId": 4902433137,
+          "source": "inline",
+          "commentId": 3754790216,
+          "path": "src/audit.test.ts",
+          "line": 565,
+          "severity": "P3",
+          "title": "Test for all-providers-empty / zero-files edge case is absent",
+          "text": "🟢 **Low**\n\n**Test for all-providers-empty / zero-files edge case is absent**\n\nThe new `runLocalReview` throw path has no test for the `totalAgentsAttempted === 0` case (e.g., an empty file list). Without the `totalAgentsAttempted > 0` guard, that case currently fires the throw with a \"0/0\" error. Adding a test here would both document the intended behaviour and catch the regression if the guard is added."
+        },
+        {
+          "id": "r0:c3754790217:0",
+          "roundIndex": 0,
+          "reviewId": 4902433137,
+          "source": "inline",
+          "commentId": 3754790217,
+          "path": "src/review.ts",
+          "line": 1178,
+          "severity": "P2",
+          "title": "errored skill-path uses index into `allSkills` but `forEach` index is over `outcomes`",
+          "text": "🟡 **Medium**\n\n**errored skill-path uses index into `allSkills` but `forEach` index is over `outcomes`**\n\n`outcomes.forEach((o, i) => { ... errored.push(allSkills[i]?.skillPath ?? \"unknown\") })` is correct only when `outcomes` and `allSkills` are parallel arrays with identical length and order. If that invariant ever breaks the wrong skill is blamed. A defensive alternative is to have `runAgent` echo back the skill path it ran so the result is self-labelled, but as a minimal fix at least assert the lengths match or use the skill path from the call site directly."
+        },
+        {
+          "id": "r0:c3754790219:0",
+          "roundIndex": 0,
+          "reviewId": 4902433137,
+          "source": "inline",
+          "commentId": 3754790219,
+          "path": "src/review.ts",
+          "line": 1430,
+          "severity": "P3",
+          "title": "Partial-review notice uses `errored` skill paths from the index trick — same misnaming risk",
+          "text": "🟢 **Low**\n\n**Partial-review notice uses `errored` skill paths from the index trick — same misnaming risk**\n\nThe user-visible PR comment `> ⚠️ **Partial review.**` lists skill names derived from `errored`, which was populated by the potentially misaligned index lookup above. If the index goes wrong, a maintainer sees the wrong skill blamed on the PR, which is actively misleading."
+        },
+        {
+          "id": "r0:c3754790222:0",
+          "roundIndex": 0,
+          "reviewId": 4902433137,
+          "source": "inline",
+          "commentId": 3754790222,
+          "path": "src/review.ts",
+          "line": 1179,
+          "severity": "P3",
+          "title": "Fallback `skillPath` should not default to `\"unknown\"` — use the skill array directly",
+          "text": "🟢 **Low**\n\n**Fallback `skillPath` should not default to `\"unknown\"` — use the skill array directly**\n\nWhen an agent errors, `errored.push(allSkills[i]?.skillPath ?? \"unknown\")` silently degrades to `\"unknown\"` if `allSkills[i]` is undefined. A PR notice saying `` `unknown` failed to complete `` gives the author no actionable signal. If the index ever goes out of bounds, the bug is in the array alignment rather than the name; the fallback hides it rather than surfacing it. Consider asserting or logging when `allSkills[i]` is missing instead of swallowing it."
+        },
+        {
+          "id": "r0:c3754790226:0",
+          "roundIndex": 0,
+          "reviewId": 4902433137,
+          "source": "inline",
+          "commentId": 3754790226,
+          "path": "src/cli.ts",
+          "line": 857,
+          "severity": "P3",
+          "title": "`isCliEntrypoint` silently returns `false` on any `realpathSync` or `fileURLToPath` error, including permission errors unrelated to the path mismatch",
+          "text": "🟢 **Low**\n\n**`isCliEntrypoint` silently returns `false` on any `realpathSync` or `fileURLToPath` error, including permission errors unrelated to the path mismatch**\n\nThe `catch` block returns `false` for _all_ thrown errors, including permission errors on `realpathSync` or an unexpected `TypeError` from `fileURLToPath`. In those cases the CLI would silently become a no-op module instead of the entrypoint. The comment above explains the symlink case, but a broader comment noting that permission errors on `process.argv[1]` will prevent dispatch (and that this is an acceptable trade-off vs crashing at import time) would help a future maintainer understand why `false` is the right default."
+        },
+        {
+          "id": "r0:c3754790230:0",
+          "roundIndex": 0,
+          "reviewId": 4902433137,
+          "source": "inline",
+          "commentId": 3754790230,
+          "path": "src/audit.ts",
+          "line": 97,
+          "severity": "P3",
+          "title": "JSDoc comment for agentsSucceeded omits agentsAttempted",
+          "text": "🟢 **Low**\n\n**JSDoc comment for agentsSucceeded omits agentsAttempted**\n\nThe JSDoc block documents `agentsSucceeded` but has no `@returns`-style entry for `agentsAttempted`. The prose says \"callers need this\" referring to `agentsSucceeded`, but the parallel counter `agentsAttempted` is undocumented. A future reader must infer its meaning. Add a matching note for `agentsAttempted`."
+        },
+        {
+          "id": "r0:c3754790236:0",
+          "roundIndex": 0,
+          "reviewId": 4902433137,
+          "source": "inline",
+          "commentId": 3754790236,
+          "path": "src/audit.ts",
+          "line": 136,
+          "severity": "P3",
+          "title": "Comment says 'its ${batch.length} file(s) got no real review coverage this batch' but coverage may exist from a prior batch",
+          "text": "🟢 **Low**\n\n**Comment says 'its ${batch.length} file(s) got no real review coverage this batch' but coverage may exist from a prior batch**\n\nThe error log message says a batch's files \"got no real review coverage this batch\" — the qualifier \"this batch\" is accurate, but the phrasing \"got no real review coverage\" could mislead: files are typically in exactly one batch, so the message reads correctly in practice. However, if a file appears in multiple batches (e.g., a future refactor), the message would be inaccurate. The comment is fine as-is for now, but the wording is tightly coupled to the single-batch-per-file invariant. Low risk, but worth noting if the batching logic ever changes."
+        },
+        {
+          "id": "r0:c3754790238:0",
+          "roundIndex": 0,
+          "reviewId": 4902433137,
+          "source": "inline",
+          "commentId": 3754790238,
+          "path": "src/cli.ts",
+          "line": 840,
+          "severity": "P2",
+          "title": "isCliEntrypoint comment claims realpathSync 'handles the npm-bin case' but silently returns false on any fs error",
+          "text": "🟡 **Medium**\n\n**isCliEntrypoint comment claims realpathSync 'handles the npm-bin case' but silently returns false on any fs error**\n\nThe comment says `realpathSync` handles the npm-bin symlink case, but the `catch { return false }` means any filesystem error (permissions, ENOENT for a stale symlink, etc.) also silently returns `false` and suppresses `main()`. This is mentioned in the prior review's comment about bundlers, but the actual risk here is simpler: a stale or broken npm-bin symlink at `process.argv[1]` causes the CLI to silently do nothing with no error message, which is worse than the old behavior. The comment should acknowledge this trade-off or the catch should at least log a warning before returning false."
+        },
+        {
+          "id": "r0:c3754790242:0",
+          "roundIndex": 0,
+          "reviewId": 4902433137,
+          "source": "inline",
+          "commentId": 3754790242,
+          "path": "src/review.ts",
+          "line": 1434,
+          "severity": "P3",
+          "title": "Partial review notice for errored agents uses same heading as budget notice, making them visually indistinguishable",
+          "text": "🟢 **Low**\n\n**Partial review notice for errored agents uses same heading as budget notice, making them visually indistinguishable**\n\nBoth budget-skipped and errored-agent notices render as `> ⚠️ **Partial review.**` / `> ⏱ **Partial review.**` — subtly different emoji, but the same bold heading. The time-budget case uses ⏱ and the error case uses ⚠️, which is correct. However, the body text for the error case says \"failed to complete\" which is accurate. No code defect, but a low-severity documentation note: the test in `review.test.ts` checks for `\"Partial review\"` without the emoji, so both notices would match that assertion — if a future test tries to distinguish them by text alone it will be ambiguous. No change needed unless stricter test assertions are desired."
+        },
+        {
+          "id": "r0:c3754790245:0",
+          "roundIndex": 0,
+          "reviewId": 4902433137,
+          "source": "inline",
+          "commentId": 3754790245,
+          "path": "src/review.ts",
+          "line": 756,
+          "severity": "P3",
+          "title": "buildApprovalMessage JSDoc comment says `checks: []` means 'fetched cleanly' but the field name changed",
+          "text": "🟢 **Low**\n\n**buildApprovalMessage JSDoc comment says `checks: []` means 'fetched cleanly' but the field name changed**\n\nThe JSDoc on `OutstandingChecksResult` says \"`checks: []` means 'fetched cleanly, nothing outstanding'\" — this is accurate and clear. No issue with the content. However the comment is placed directly above the interface definition and uses backtick formatting for the field reference, which is good practice. This is a positive finding, no action needed — filed only because the prior framework requires noting it."
+        },
+        {
+          "id": "r0:c3754790253:0",
+          "roundIndex": 0,
+          "reviewId": 4902433137,
+          "source": "inline",
+          "commentId": 3754790253,
+          "path": "src/review.test.ts",
+          "line": 305,
+          "severity": "P3",
+          "title": "Test mock for checkRunsError only guards GET routes but post-change route matching may miss edge cases",
+          "text": "🟢 **Low**\n\n**Test mock for checkRunsError only guards GET routes but post-change route matching may miss edge cases**\n\nIn `buildOctokit`, the mock now checks `route.includes(\"GET\") && route.includes(\"/check-runs\")` to throw `checkRunsError`, and falls through to a separate `route.includes(\"/check-runs\")` branch for non-GET check-run routes. If the real Octokit ever calls a non-GET check-runs route in the path under test, the second branch silently returns `{ data: {} }` which may not match the expected shape and could cause subtle test failures. The guard is correct for current usage but fragile."
+        },
+        {
+          "id": "r0:c3754790256:0",
+          "roundIndex": 0,
+          "reviewId": 4902433137,
+          "source": "inline",
+          "commentId": 3754790256,
+          "path": "src/audit.ts",
+          "line": 687,
+          "severity": "P2",
+          "title": "runLocalReview all-agents-failed guard missing agentsAttempted > 0 condition",
+          "text": "🟡 **Medium**\n\n**runLocalReview all-agents-failed guard missing agentsAttempted > 0 condition**\n\nThis guard throws when `totalAgentsSucceeded === 0` but doesn't first require `totalAgentsAttempted > 0`. If no agents were attempted (e.g., zero providers authenticated), this produces a misleading error message about \"0 authenticated providers (0/0)\" even though the `providersRun.length === 0` check right above would have been the correct path. Match the pattern used in `auditRepo` and `runLocalAudit`.\n\n*Suggested fix:*\n\n```suggestion\nif (totalAgentsAttempted > 0 && totalAgentsSucceeded === 0) {\n```"
+        },
+        {
+          "id": "r0:body:0",
+          "roundIndex": 0,
+          "reviewId": 4902433137,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "errored[] index into allSkills may misattribute skills when outcomes and allSkills diverge",
+          "text": "errored[] index into allSkills may misattribute skills when outcomes and allSkills diverge"
+        },
+        {
+          "id": "r0:body:1",
+          "roundIndex": 0,
+          "reviewId": 4902433137,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "runLocalReview all-agents-failed guard fires even when totalAgentsAttempted is 0",
+          "text": "runLocalReview all-agents-failed guard fires even when totalAgentsAttempted is 0"
+        },
+        {
+          "id": "r0:body:2",
+          "roundIndex": 0,
+          "reviewId": 4902433137,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "agentsSucceeded/agentsAttempted guard in runLocalReview uses totalAgentsAttempted=0 as a no-op when PROVIDERS is empty",
+          "text": "agentsSucceeded/agentsAttempted guard in runLocalReview uses totalAgentsAttempted=0 as a no-op when PROVIDERS is empty"
+        },
+        {
+          "id": "r0:body:3",
+          "roundIndex": 0,
+          "reviewId": 4902433137,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "Entrypoint guard swallows all realpathSync errors silently",
+          "text": "Entrypoint guard swallows all realpathSync errors silently"
+        },
+        {
+          "id": "r0:body:4",
+          "roundIndex": 0,
+          "reviewId": 4902433137,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "Agent index mismatch in errored-skill attribution",
+          "text": "Agent index mismatch in errored-skill attribution"
+        },
+        {
+          "id": "r0:body:5",
+          "roundIndex": 0,
+          "reviewId": 4902433137,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "runLocalReview all-agents-failed guard uses `totalAgentsAttempted` implicitly via `providersRun.length`",
+          "text": "runLocalReview all-agents-failed guard uses `totalAgentsAttempted` implicitly via `providersRun.length`"
+        },
+        {
+          "id": "r0:body:6",
+          "roundIndex": 0,
+          "reviewId": 4902433137,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "errored-agent skill name lookup uses `allSkills[i]` but `outcomes` indices may not correspond to `allSkills` indices",
+          "text": "errored-agent skill name lookup uses `allSkills[i]` but `outcomes` indices may not correspond to `allSkills` indices"
+        },
+        {
+          "id": "r0:body:7",
+          "roundIndex": 0,
+          "reviewId": 4902433137,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "Edge case: `totalAgentsAttempted === 0` bypasses the all-failed guard in `runLocalReview`",
+          "text": "Edge case: `totalAgentsAttempted === 0` bypasses the all-failed guard in `runLocalReview`"
+        },
+        {
+          "id": "r0:body:8",
+          "roundIndex": 0,
+          "reviewId": 4902433137,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "Partial-review notice emits `allSkills[i]?.skillPath` but `outcomes` and `allSkills` may not be parallel arrays",
+          "text": "Partial-review notice emits `allSkills[i]?.skillPath` but `outcomes` and `allSkills` may not be parallel arrays"
+        },
+        {
+          "id": "r0:body:9",
+          "roundIndex": 0,
+          "reviewId": 4902433137,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "`agentsAttempted === 0` guard missing in `runLocalReview`",
+          "text": "`agentsAttempted === 0` guard missing in `runLocalReview`"
+        },
+        {
+          "id": "r0:body:10",
+          "roundIndex": 0,
+          "reviewId": 4902433137,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Duplicate `agentsSucceeded`/`agentsAttempted` tracking pattern flagged by prior reviewer is still present",
+          "text": "Duplicate `agentsSucceeded`/`agentsAttempted` tracking pattern flagged by prior reviewer is still present"
+        },
+        {
+          "id": "r0:body:11",
+          "roundIndex": 0,
+          "reviewId": 4902433137,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "agentsSucceeded/agentsAttempted tracking gap in runLocalReview when no providers run",
+          "text": "agentsSucceeded/agentsAttempted tracking gap in runLocalReview when no providers run"
+        },
+        {
+          "id": "r0:body:12",
+          "roundIndex": 0,
+          "reviewId": 4902433137,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "errored[] skill index assumption relies on outcomes and allSkills being aligned",
+          "text": "errored[] skill index assumption relies on outcomes and allSkills being aligned"
+        },
+        {
+          "id": "r0:body:13",
+          "roundIndex": 0,
+          "reviewId": 4902433137,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "agentsSucceeded check in runLocalReview fires even when no providers ran",
+          "text": "agentsSucceeded check in runLocalReview fires even when no providers ran"
+        },
+        {
+          "id": "r0:body:14",
+          "roundIndex": 0,
+          "reviewId": 4902433137,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "errored[] agent index uses outcomes index, which may not align with allSkills",
+          "text": "errored[] agent index uses outcomes index, which may not align with allSkills"
+        },
+        {
+          "id": "r0:body:15",
+          "roundIndex": 0,
+          "reviewId": 4902433137,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P0",
+          "title": "Incorrect index used to look up skill name for errored agents",
+          "text": "Incorrect index used to look up skill name for errored agents"
+        },
+        {
+          "id": "r0:body:16",
+          "roundIndex": 0,
+          "reviewId": 4902433137,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "All-agents-failed guard in `runLocalReview` fires even when no agents were attempted",
+          "text": "All-agents-failed guard in `runLocalReview` fires even when no agents were attempted"
+        },
+        {
+          "id": "r0:body:17",
+          "roundIndex": 0,
+          "reviewId": 4902433137,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Partial-review notice uses skill path from `errored[]` but formats it as if it were a file path",
+          "text": "Partial-review notice uses skill path from `errored[]` but formats it as if it were a file path"
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "reviewId": 4902487681,
+      "provider": "anthropic",
+      "submittedAt": "2026-08-11T02:28:07Z",
+      "headSha": "6eb58cacc2fa0060716e0ed6acc97dcf05848385",
+      "baseSha": "3e17445a9cef17a3cb46563a7b47c65bf29f098a",
+      "mergeBase": "3e17445a9cef17a3cb46563a7b47c65bf29f098a",
+      "triggerAt": "2026-08-11T02:17:19Z",
+      "approximate": false,
+      "commitsSince": [
+        {
+          "sha": "6eb58cacc2fa0060716e0ed6acc97dcf05848385",
+          "committedAt": "2026-08-11T02:17:19Z",
+          "files": [
+            {
+              "path": "src/audit.test.ts",
+              "ranges": [
+                [
+                  526,
+                  565
+                ]
+              ]
+            },
+            {
+              "path": "src/audit.ts",
+              "ranges": [
+                [
+                  88,
+                  97
+                ],
+                [
+                  688,
+                  697
+                ]
+              ]
+            },
+            {
+              "path": "src/cli.test.ts",
+              "ranges": [
+                [
+                  52,
+                  73
+                ]
+              ]
+            },
+            {
+              "path": "src/cli.ts",
+              "ranges": [
+                [
+                  4,
+                  10
+                ],
+                [
+                  297,
+                  313
+                ],
+                [
+                  838,
+                  857
+                ]
+              ]
+            },
+            {
+              "path": "src/feedback/cron.test.ts",
+              "ranges": [
+                [
+                  84,
+                  105
+                ]
+              ]
+            },
+            {
+              "path": "src/improve/cron.test.ts",
+              "ranges": [
+                [
+                  69,
+                  91
+                ]
+              ]
+            },
+            {
+              "path": "src/review-state.test.ts",
+              "ranges": [
+                [
+                  122,
+                  151
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "r1:c3754842990:0",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "inline",
+          "commentId": 3754842990,
+          "path": "src/cli.test.ts",
+          "line": 71,
+          "severity": "P2",
+          "title": "Test asserts specific mock.calls index without guarding against empty calls array",
+          "text": "🟡 **Medium**\n\n**Test asserts specific mock.calls index without guarding against empty calls array**\n\nThe assertion `vi.mocked(console.error).mock.calls[0] as [string]` will silently produce `undefined` (and the subsequent `expect(message).toContain(...)` will pass vacuously with a `contains` on `undefined`) if `cmdAudit` happens to call `console.error` zero times or in a different order. This makes the test self-defeating: the exact failure mode it was added to catch (no error message surfaced) would not be detected.\n\nUse `toHaveBeenCalledWith` on the spy directly, or assert `mock.calls.length > 0` before indexing.\n\n*Suggested fix:*\n\n```suggestion\n\t\tconst calls = vi.mocked(console.error).mock.calls;\n\t\texpect(calls.length).toBeGreaterThan(0);\n\t\tconst [message] = calls[0] as [string];\n\t\texpect(message).toContain(\"GITHUB_APP_PRIVATE_KEY is not set\");\n\t\texpect(message).not.toContain(\"[object Object]\");\n```"
+        },
+        {
+          "id": "r1:c3754842996:0",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "inline",
+          "commentId": 3754842996,
+          "path": "src/cli.ts",
+          "line": 855,
+          "severity": "P3",
+          "title": "ENOENT-only silence still hides EACCES/EIO during the realpathSync of import.meta.url",
+          "text": "🟢 **Low**\n\n**ENOENT-only silence still hides EACCES/EIO during the realpathSync of import.meta.url**\n\nThe catch now logs everything except `ENOENT`, which is correct for the `invoked` (argv[1]) path. However, `fileURLToPath(new URL(import.meta.url))` is called inside the same `try` block and can also throw (malformed `import.meta.url` in some bundlers produces a `TypeError`, not an `ErrnoException`). A `TypeError` has no `.code`, so `code` will be `undefined`, which is not `\"ENOENT\"`, so it will be logged — that part is fine. But the comment says ENOENT is \"indistinguishable from not the entrypoint\" which is only true for the argv[1] `realpathSync` call; a `TypeError` from `fileURLToPath` is a genuine misconfiguration, not a path-mismatch. The log message `\"could not resolve invocation path\"` will appear for both cases, which is accurate enough to be useful. This is a minor wording/documentation issue rather than a behavioural bug, but the comment should mention that `fileURLToPath` errors also fall through here."
+        },
+        {
+          "id": "r1:c3754843000:0",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "inline",
+          "commentId": 3754843000,
+          "path": "src/audit.test.ts",
+          "line": 562,
+          "severity": "P2",
+          "title": "New empty-scope test does not assert writeFile was not called",
+          "text": "🟡 **Medium**\n\n**New empty-scope test does not assert writeFile was not called**\n\nThe test confirms that `runAgent` was not invoked on an empty file set, which is the primary behavioral contract. However, it does not verify that `fs.writeFile` was also not called. A regression that writes an empty or vacuous report on a zero-scope run would pass this test silently — exactly the failure mode this PR is designed to prevent.\n\nConsider adding:\n```ts\nexpect(fs.writeFile).not.toHaveBeenCalled();\n```"
+        },
+        {
+          "id": "r1:c3754843006:0",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "inline",
+          "commentId": 3754843006,
+          "path": "src/review-state.test.ts",
+          "line": 151,
+          "severity": "P3",
+          "title": "try/finally pattern for warn spy is missing a mockRestore in the error path if the final assertion throws",
+          "text": "🟢 **Low**\n\n**try/finally pattern for warn spy is missing a mockRestore in the error path if the final assertion throws**\n\nThe restructured block in `review-state.test.ts` wraps the test in `try/finally` with `warn.mockRestore()` in `finally`, which is correct. However, the same pattern in the preceding `it` block (the wrong-shape case, not shown in the diff) still uses the old pattern without `try/finally`. If that adjacent test leaves the spy active after a failure, it can bleed into this test's assertion. This is a minor test-isolation issue rather than a product bug, but it can cause confusing false-positives when tests fail."
+        },
+        {
+          "id": "r1:c3754843010:0",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "inline",
+          "commentId": 3754843010,
+          "path": "src/cli.test.ts",
+          "line": 67,
+          "severity": "P3",
+          "title": "inspect fallback path for non-Error, non-string throws is not covered by any test",
+          "text": "🟢 **Low**\n\n**inspect fallback path for non-Error, non-string throws is not covered by any test**\n\nThe new test at `src/cli.test.ts:54–67` covers the plain-object case (`{ code: '...' }`), which exercises `inspect()`. The existing `still prints a real Error's message unchanged` test covers the `err instanceof Error` branch. The `typeof err === 'string'` branch (the new middle arm) has no test. A future refactor that accidentally skips the string branch or conflates it with the Error branch would not be caught."
+        },
+        {
+          "id": "r1:c3754843015:0",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "inline",
+          "commentId": 3754843015,
+          "path": "src/cli.ts",
+          "line": 308,
+          "severity": "P3",
+          "title": "inspect() on null-prototype objects will throw",
+          "text": "🟢 **Low**\n\n**inspect() on null-prototype objects will throw**\n\nThe new `inspect(err, { customInspect: false })` branch handles plain objects, but `Object.create(null)` (null-prototype objects) will work fine with `inspect()` — that's actually safe. However, the comment in the code incorrectly says `String(err)` \"throws outright for a null-prototype object\"; it does not throw, it returns `\"[object Object]\"` just like a normal object. The comment is misleading but the code itself is correct, so this is just a documentation accuracy issue worth fixing to avoid confusing future readers."
+        },
+        {
+          "id": "r1:c3754843020:0",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "inline",
+          "commentId": 3754843020,
+          "path": "src/cli.test.ts",
+          "line": 70,
+          "severity": "P3",
+          "title": "Test assertion on console.error call index is fragile",
+          "text": "🟢 **Low**\n\n**Test assertion on console.error call index is fragile**\n\nThe test does `vi.mocked(console.error).mock.calls[0]` to get the first call. If any code path (e.g., module-level side effects or other mocks) triggers `console.error` before the `cmdAudit` call under test, this index will be wrong and the assertion will silently pass against the wrong message or throw with a confusing error. Use `expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining(\"GITHUB_APP_PRIVATE_KEY is not set\"))` instead to make the assertion order-independent.\n\n*Suggested fix:*\n\n```suggestion\n        expect(vi.mocked(console.error)).toHaveBeenCalledWith(\n            expect.stringContaining(\"GITHUB_APP_PRIVATE_KEY is not set\"),\n        );\n        expect(vi.mocked(console.error)).not.toHaveBeenCalledWith(\n            expect.stringContaining(\"[object Object]\"),\n        );\n```"
+        },
+        {
+          "id": "r1:c3754843037:0",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "inline",
+          "commentId": 3754843037,
+          "path": "src/audit.ts",
+          "line": 91,
+          "severity": "P3",
+          "title": "Comment misstates what `agentsAttempted === 0` means for coverage",
+          "text": "🟢 **Low**\n\n**Comment misstates what `agentsAttempted === 0` means for coverage**\n\nThe JSDoc added for `agentsAttempted` says:\n\n> \"Zero here means a legitimate empty scope (no files matched)\"\n\nThat is only one of the two ways `agentsAttempted` can be zero. It is also zero when `PROVIDERS` is empty or when every provider fails its auth check before any agent is dispatched. A future maintainer reading the JSDoc will expect the guard `totalAgentsAttempted > 0` to pass through cleanly on an empty file set but may not realise it also passes through on a zero-provider configuration, which is a distinct case and arguably not \"legitimate\" in the same sense — it may warrant its own diagnostic. The comment should acknowledge both zero-agent causes so the guard's scope is accurately described.\n\n*Suggested fix:*\n\n```suggestion\n\t/** How many agent calls were dispatched, across every batch. Zero here\n\t * means either a legitimate empty scope (no files matched) or that every\n\t * provider was skipped before any agent was dispatched (e.g. PROVIDERS is\n\t * empty or all auth checks failed). Callers must gate an\n\t * `agentsSucceeded === 0` failure check on this being nonzero first, or\n\t * an empty-but-valid pass misreports as \"every agent failed\". */\n```"
+        },
+        {
+          "id": "r1:c3754843039:0",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "inline",
+          "commentId": 3754843039,
+          "path": "src/cli.ts",
+          "line": 841,
+          "severity": "P3",
+          "title": "isCliEntrypoint error-log comment says ENOENT is 'indistinguishable from not the entrypoint' — this is accurate only for the symlink case",
+          "text": "🟢 **Low**\n\n**isCliEntrypoint error-log comment says ENOENT is 'indistinguishable from not the entrypoint' — this is accurate only for the symlink case**\n\nThe comment reads:\n\n> \"A missing symlink target (ENOENT) is the one case worth staying quiet about — it's indistinguishable from 'not the entrypoint' from here.\"\n\nENOENT on `realpathSync(process.argv[1])` means the file referenced by `argv[1]` does not exist, which in practice means the process was not launched from a real file at all (piped eval, synthetic argv, etc.). That is indeed indistinguishable from 'not the entrypoint', so the comment is correct. However, the comment does not mention that ENOENT on `fileURLToPath(new URL(import.meta.url))` — a malformed `import.meta.url` — would also produce ENOENT and also be silently swallowed. A future maintainer might add a second `realpathSync` call for `import.meta.url` and expect both to be logged on failure; only the first would be. The comment should clarify that ENOENT is suppressed regardless of which path threw it."
+        },
+        {
+          "id": "r1:body:0",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "All prior open findings have been addressed or are unchanged in this patch",
+          "text": "All prior open findings have been addressed or are unchanged in this patch"
+        },
+        {
+          "id": "r1:body:1",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Zero-attempt edge case for runLocalReview still present after fix",
+          "text": "Zero-attempt edge case for runLocalReview still present after fix"
+        },
+        {
+          "id": "r1:body:2",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "New test for empty-scope runLocalReview does not assert that no report file was written",
+          "text": "New test for empty-scope runLocalReview does not assert that no report file was written"
+        },
+        {
+          "id": "r1:body:3",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "isCliEntrypoint ENOENT vs other-error distinction untested",
+          "text": "isCliEntrypoint ENOENT vs other-error distinction untested"
+        },
+        {
+          "id": "r1:body:4",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "errored[] index into allSkills may misattribute skills when outcomes and allSkills diverge",
+          "text": "errored[] index into allSkills may misattribute skills when outcomes and allSkills diverge"
+        },
+        {
+          "id": "r1:body:5",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "runLocalReview all-agents-failed guard fires even when totalAgentsAttempted is 0",
+          "text": "runLocalReview all-agents-failed guard fires even when totalAgentsAttempted is 0"
+        },
+        {
+          "id": "r1:body:6",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "agentsSucceeded/agentsAttempted guard in runLocalReview uses totalAgentsAttempted=0 as a no-op when PROVIDERS is empty",
+          "text": "agentsSucceeded/agentsAttempted guard in runLocalReview uses totalAgentsAttempted=0 as a no-op when PROVIDERS is empty"
+        },
+        {
+          "id": "r1:body:7",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "Entrypoint guard swallows all realpathSync errors silently",
+          "text": "Entrypoint guard swallows all realpathSync errors silently"
+        },
+        {
+          "id": "r1:body:8",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "Agent index mismatch in errored-skill attribution",
+          "text": "Agent index mismatch in errored-skill attribution"
+        },
+        {
+          "id": "r1:body:9",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "runLocalReview all-agents-failed guard uses `totalAgentsAttempted` implicitly via `providersRun.length`",
+          "text": "runLocalReview all-agents-failed guard uses `totalAgentsAttempted` implicitly via `providersRun.length`"
+        },
+        {
+          "id": "r1:body:10",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "errored-agent skill name lookup uses `allSkills[i]` but `outcomes` indices may not correspond to `allSkills` indices",
+          "text": "errored-agent skill name lookup uses `allSkills[i]` but `outcomes` indices may not correspond to `allSkills` indices"
+        },
+        {
+          "id": "r1:body:11",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "Edge case: `totalAgentsAttempted === 0` bypasses the all-failed guard in `runLocalReview`",
+          "text": "Edge case: `totalAgentsAttempted === 0` bypasses the all-failed guard in `runLocalReview`"
+        },
+        {
+          "id": "r1:body:12",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "Partial-review notice emits `allSkills[i]?.skillPath` but `outcomes` and `allSkills` may not be parallel arrays",
+          "text": "Partial-review notice emits `allSkills[i]?.skillPath` but `outcomes` and `allSkills` may not be parallel arrays"
+        },
+        {
+          "id": "r1:body:13",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "`agentsAttempted === 0` guard missing in `runLocalReview`",
+          "text": "`agentsAttempted === 0` guard missing in `runLocalReview`"
+        },
+        {
+          "id": "r1:body:14",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Duplicate `agentsSucceeded`/`agentsAttempted` tracking pattern flagged by prior reviewer is still present",
+          "text": "Duplicate `agentsSucceeded`/`agentsAttempted` tracking pattern flagged by prior reviewer is still present"
+        },
+        {
+          "id": "r1:body:15",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "agentsSucceeded/agentsAttempted tracking gap in runLocalReview when no providers run",
+          "text": "agentsSucceeded/agentsAttempted tracking gap in runLocalReview when no providers run"
+        },
+        {
+          "id": "r1:body:16",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "errored[] skill index assumption relies on outcomes and allSkills being aligned",
+          "text": "errored[] skill index assumption relies on outcomes and allSkills being aligned"
+        },
+        {
+          "id": "r1:body:17",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "agentsSucceeded check in runLocalReview fires even when no providers ran",
+          "text": "agentsSucceeded check in runLocalReview fires even when no providers ran"
+        },
+        {
+          "id": "r1:body:18",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "errored[] agent index uses outcomes index, which may not align with allSkills",
+          "text": "errored[] agent index uses outcomes index, which may not align with allSkills"
+        },
+        {
+          "id": "r1:body:19",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P0",
+          "title": "Incorrect index used to look up skill name for errored agents",
+          "text": "Incorrect index used to look up skill name for errored agents"
+        },
+        {
+          "id": "r1:body:20",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "All-agents-failed guard in `runLocalReview` fires even when no agents were attempted",
+          "text": "All-agents-failed guard in `runLocalReview` fires even when no agents were attempted"
+        },
+        {
+          "id": "r1:body:21",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Partial-review notice uses skill path from `errored[]` but formats it as if it were a file path",
+          "text": "Partial-review notice uses skill path from `errored[]` but formats it as if it were a file path"
+        },
+        {
+          "id": "r1:body:22",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "errored skill name resolved by position index, not from the outcome — will misattribute on non-full outcome arrays (`src/review.ts:1177`)",
+          "text": "errored skill name resolved by position index, not from the outcome — will misattribute on non-full outcome arrays (`src/review.ts:1177`)"
+        },
+        {
+          "id": "r1:body:23",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Test for all-providers-empty / zero-files edge case is absent (`src/audit.test.ts:529`)",
+          "text": "Test for all-providers-empty / zero-files edge case is absent (`src/audit.test.ts:529`)"
+        },
+        {
+          "id": "r1:body:24",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P2",
+          "title": "errored skill-path uses index into `allSkills` but `forEach` index is over `outcomes` (`src/review.ts:1178`)",
+          "text": "errored skill-path uses index into `allSkills` but `forEach` index is over `outcomes` (`src/review.ts:1178`)"
+        },
+        {
+          "id": "r1:body:25",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Partial-review notice uses `errored` skill paths from the index trick — same misnaming risk (`src/review.ts:1430`)",
+          "text": "Partial-review notice uses `errored` skill paths from the index trick — same misnaming risk (`src/review.ts:1430`)"
+        },
+        {
+          "id": "r1:body:26",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Fallback `skillPath` should not default to `\"unknown\"` — use the skill array directly (`src/review.ts:1179`)",
+          "text": "Fallback `skillPath` should not default to `\"unknown\"` — use the skill array directly (`src/review.ts:1179`)"
+        },
+        {
+          "id": "r1:body:27",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "`isCliEntrypoint` silently returns `false` on any `realpathSync` or `fileURLToPath` error, including permission errors unrelated to the path mismatch (`src/cli.ts:833`)",
+          "text": "`isCliEntrypoint` silently returns `false` on any `realpathSync` or `fileURLToPath` error, including permission errors unrelated to the path mismatch (`src/cli.ts:833`)"
+        },
+        {
+          "id": "r1:body:28",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "JSDoc comment for agentsSucceeded omits agentsAttempted (`src/audit.ts:93`)",
+          "text": "JSDoc comment for agentsSucceeded omits agentsAttempted (`src/audit.ts:93`)"
+        },
+        {
+          "id": "r1:body:29",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Comment says 'its ${batch.length} file(s) got no real review coverage this batch' but coverage may exist from a prior batch (`src/audit.ts:132`)",
+          "text": "Comment says 'its ${batch.length} file(s) got no real review coverage this batch' but coverage may exist from a prior batch (`src/audit.ts:132`)"
+        },
+        {
+          "id": "r1:body:30",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Partial review notice for errored agents uses same heading as budget notice, making them visually indistinguishable (`src/review.ts:1434`)",
+          "text": "Partial review notice for errored agents uses same heading as budget notice, making them visually indistinguishable (`src/review.ts:1434`)"
+        },
+        {
+          "id": "r1:body:31",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "buildApprovalMessage JSDoc comment says `checks: []` means 'fetched cleanly' but the field name changed (`src/review.ts:756`)",
+          "text": "buildApprovalMessage JSDoc comment says `checks: []` means 'fetched cleanly' but the field name changed (`src/review.ts:756`)"
+        },
+        {
+          "id": "r1:body:32",
+          "roundIndex": 1,
+          "reviewId": 4902487681,
+          "source": "body",
+          "commentId": null,
+          "path": null,
+          "line": null,
+          "severity": "P3",
+          "title": "Test mock for checkRunsError only guards GET routes but post-change route matching may miss edge cases (`src/review.test.ts:305`)",
+          "text": "Test mock for checkRunsError only guards GET routes but post-change route matching may miss edge cases (`src/review.test.ts:305`)"
+        }
+      ]
+    }
+  ],
+  "threads": [
+    {
+      "threadId": "PRRT_kwDOSM5cU86YGA7S",
+      "commentId": 3754790205,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3754811045,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-11T02:18:03Z",
+          "editedAt": null,
+          "body": "**False positive, verified against the actual implementation.** `outcomes` can never be shorter than `allSkills`: `mapWithConcurrency` (`src/concurrency.ts`) pre-allocates `results = new Array(items.length)` and every worker does `results[i] = await fn(items[i], i)` for every index in range before returning — there's no code path that leaves a slot unassigned. And the call site passes the *same* `allSkills` array both as the `mapWithConcurrency` input and as what `errored.push(allSkills[i]...)` indexes into, so there's no separate-array desync to worry about either. A skipped agent (time budget exceeded) still produces a real `{status: \"skipped\", skillPath}` outcome at its index — it doesn't skip the iteration."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86YGA7V",
+      "commentId": 3754790209,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3754811170,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-11T02:18:05Z",
+          "editedAt": null,
+          "body": "**Fixed** in `6eb58ca`. The catch block now logs anything that isn't `ENOENT` (a genuinely unexpected filesystem error, vs. the expected stale-symlink case), so the CLI doesn't go silently inert with zero trace."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86YGA7b",
+      "commentId": 3754790216,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3754811291,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-11T02:18:08Z",
+          "editedAt": null,
+          "body": "**Fixed** in `6eb58ca`, alongside the guard fix above — added `does not throw when the scope has no files to review` to `runLocalReview`'s test block."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86YGA7c",
+      "commentId": 3754790217,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3754811410,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-11T02:18:11Z",
+          "editedAt": null,
+          "body": "**Same false positive as the identical finding above** (dbid 3754790205) — see that reply for the `mapWithConcurrency` evidence. `outcomes` and `allSkills` are provably parallel arrays of identical length by construction, not an invariant that could break."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86YGA7e",
+      "commentId": 3754790219,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3754811539,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-11T02:18:13Z",
+          "editedAt": null,
+          "body": "**Same false positive** — this is downstream of dbid 3754790205/3754790217's incorrect premise. The index lookup can't misalign; see the `mapWithConcurrency` evidence in that reply."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86YGA7g",
+      "commentId": 3754790222,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3754811676,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-11T02:18:16Z",
+          "editedAt": null,
+          "body": "**Same false positive** — also downstream of dbid 3754790205's incorrect premise about index alignment. `allSkills[i]` is never undefined for `i` in `[0, outcomes.length)` since both arrays share the same length by construction (see that reply)."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86YGA7i",
+      "commentId": 3754790226,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3754811830,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-11T02:18:18Z",
+          "editedAt": null,
+          "body": "**Fixed** in `6eb58ca`, same fix as the identical finding above (dbid 3754790209) — the catch block now distinguishes the expected `ENOENT` case from genuinely unexpected filesystem errors, logging the latter."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86YGA7k",
+      "commentId": 3754790230,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3754811959,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-11T02:18:21Z",
+          "editedAt": null,
+          "body": "**Fixed** in `6eb58ca`. Added a matching JSDoc note for `agentsAttempted`, including why the guard needs both fields together."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86YGA7p",
+      "commentId": 3754790236,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3754812125,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-11T02:18:23Z",
+          "editedAt": null,
+          "body": "**Acknowledged, no change made** — per your own conclusion (\"comment is fine as-is for now... low risk\"). Not restructuring the batch/file invariant for a hypothetical future refactor."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86YGA7q",
+      "commentId": 3754790238,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3754812237,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-11T02:18:26Z",
+          "editedAt": null,
+          "body": "**Fixed** in `6eb58ca`, same underlying fix as dbid 3754790209/3754790226 — the catch block now logs unexpected filesystem errors instead of silently going inert."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86YGA7t",
+      "commentId": 3754790242,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3754812390,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-11T02:18:28Z",
+          "editedAt": null,
+          "body": "**Acknowledged, no change made** — per your own conclusion (\"No code defect... no change needed unless stricter test assertions are desired\")."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86YGA7w",
+      "commentId": 3754790245,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3754812520,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-11T02:18:31Z",
+          "editedAt": null,
+          "body": "**Acknowledged** — per your own conclusion (\"positive finding, no action needed\")."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86YGA71",
+      "commentId": 3754790253,
+      "isResolved": true,
+      "isOutdated": false,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3754812726,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-11T02:18:34Z",
+          "editedAt": null,
+          "body": "**Acknowledged, no change made** — per your own conclusion (\"correct for current usage but fragile\"). Not hardening a test mock against a non-GET check-runs route that doesn't exist in this codebase today; can revisit if one's added."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86YGA75",
+      "commentId": 3754790256,
+      "isResolved": true,
+      "isOutdated": true,
+      "resolvedBy": "joeblackwaslike",
+      "replies": [
+        {
+          "id": 3754812873,
+          "author": "joeblackwaslike",
+          "createdAt": "2026-08-11T02:18:36Z",
+          "editedAt": null,
+          "body": "**Fixed** in `6eb58ca` — same bug as `chatgpt-codex-connector`'s identical finding above (dbid 3754783312), fixed together with the suggested `totalAgentsAttempted > 0` guard applied exactly as you proposed."
+        }
+      ]
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86YGJ5g",
+      "commentId": 3754842990,
+      "isResolved": false,
+      "isOutdated": false,
+      "resolvedBy": null,
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86YGJ5m",
+      "commentId": 3754842996,
+      "isResolved": false,
+      "isOutdated": false,
+      "resolvedBy": null,
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86YGJ5p",
+      "commentId": 3754843000,
+      "isResolved": false,
+      "isOutdated": false,
+      "resolvedBy": null,
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86YGJ5t",
+      "commentId": 3754843006,
+      "isResolved": false,
+      "isOutdated": false,
+      "resolvedBy": null,
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86YGJ5w",
+      "commentId": 3754843010,
+      "isResolved": false,
+      "isOutdated": false,
+      "resolvedBy": null,
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86YGJ50",
+      "commentId": 3754843015,
+      "isResolved": false,
+      "isOutdated": false,
+      "resolvedBy": null,
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86YGJ55",
+      "commentId": 3754843020,
+      "isResolved": false,
+      "isOutdated": false,
+      "resolvedBy": null,
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86YGJ6G",
+      "commentId": 3754843037,
+      "isResolved": false,
+      "isOutdated": false,
+      "resolvedBy": null,
+      "replies": []
+    },
+    {
+      "threadId": "PRRT_kwDOSM5cU86YGJ6H",
+      "commentId": 3754843039,
+      "isResolved": false,
+      "isOutdated": false,
+      "resolvedBy": null,
+      "replies": []
+    }
+  ],
+  "reactions": [
+    {
+      "commentId": 3754790205,
+      "user": "joeblackwaslike",
+      "content": "-1",
+      "createdAt": "2026-08-11T02:18:04Z"
+    },
+    {
+      "commentId": 3754790209,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-08-11T02:18:06Z"
+    },
+    {
+      "commentId": 3754790216,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-08-11T02:18:09Z"
+    },
+    {
+      "commentId": 3754790217,
+      "user": "joeblackwaslike",
+      "content": "-1",
+      "createdAt": "2026-08-11T02:18:11Z"
+    },
+    {
+      "commentId": 3754790219,
+      "user": "joeblackwaslike",
+      "content": "-1",
+      "createdAt": "2026-08-11T02:18:14Z"
+    },
+    {
+      "commentId": 3754790222,
+      "user": "joeblackwaslike",
+      "content": "-1",
+      "createdAt": "2026-08-11T02:18:16Z"
+    },
+    {
+      "commentId": 3754790226,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-08-11T02:18:19Z"
+    },
+    {
+      "commentId": 3754790230,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-08-11T02:18:21Z"
+    },
+    {
+      "commentId": 3754790236,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-08-11T02:18:24Z"
+    },
+    {
+      "commentId": 3754790238,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-08-11T02:18:27Z"
+    },
+    {
+      "commentId": 3754790242,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-08-11T02:18:29Z"
+    },
+    {
+      "commentId": 3754790245,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-08-11T02:18:32Z"
+    },
+    {
+      "commentId": 3754790253,
+      "user": "joeblackwaslike",
+      "content": "confused",
+      "createdAt": "2026-08-11T02:18:34Z"
+    },
+    {
+      "commentId": 3754790256,
+      "user": "joeblackwaslike",
+      "content": "+1",
+      "createdAt": "2026-08-11T02:18:37Z"
+    }
+  ]
+}
