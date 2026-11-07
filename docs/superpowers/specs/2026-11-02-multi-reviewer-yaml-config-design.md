@@ -138,6 +138,7 @@ Defaults equal today's values, so behavior is unchanged. The block is deployment
 - Only schema keys marked `live` are accepted: reviewer `enabled`, `review.enabled`, delays, budgets, concurrency and the `verifier` toggle. Everything else is frozen at cold start (models, App credentials, tiers) and is rejected here.
 - Edge Config can disable but cannot enable. For `review.enabled`, `reviewers.<id>.enabled` and the `verifier` toggle, an Edge `true` over a disabled base is ignored and reported under `edge.ignored`; an Edge `false` over an enabled base applies. Other live keys follow normal precedence.
 - Precedence becomes Edge Config, env, YAML, default. An unknown or non-`live` key in Edge Config is ignored for requests and reported at the top of `/api/debug`. A live typo must not crash a running bot, which is the opposite of the env rule. Edge Config is edited under pressure with no deploy gate in front of it.
+- When an Edge read fails or times out, the last good overrides stay in effect and the failure is reported; the cold config is used only before the first good read. A failing read is cached for the normal interval, then retried.
 - `EDGE_CONFIG` (the connection string) is env-only and optional. Without it the layer is off. The builder confirms current `@vercel/global-config` read semantics and plan limits.
 
 ### 7. Per-repo override files (slice 5)

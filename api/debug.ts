@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getEffectiveConfig } from "../src/config/edge.js";
-import { describeSecrets } from "../src/config/env.js";
+import { describeSecrets, envNameForPath } from "../src/config/env.js";
 import { describeConfig, getLoadedConfig } from "../src/config/load.js";
 
 const REDACTED_PATHS = new Set(["review.customPrompt"]);
@@ -74,6 +74,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 		live = { config: loaded.config, applied: [], ignored: [] };
 	}
 	const effective = live.config;
+	const appliedKeys = new Set(live.applied);
 	if (!authorized) {
 		res.status(200).json({
 			reviewEnabled: effective.review.enabled,
@@ -94,11 +95,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 			})),
 			...(edgeError ? { error: edgeError } : {}),
 		},
-		config: describeConfig(loaded).map((row) =>
-			isRedacted(row.path) && row.value !== undefined
-				? { ...row, value: "[set]" }
-				: row,
-		),
+		config: describeConfig({ ...loaded, config: effective }).map((row) => {
+			const sourced = appliedKeys.has(envNameForPath(row.path.split(".")))
+				? { ...row, source: "edge" as const }
+				: row;
+			return isRedacted(row.path) && row.value !== undefined
+				? { ...sourced, value: "[set]" }
+				: sourced;
+		}),
 		warnings: loaded.warnings,
 		secrets: describeSecrets(loaded.config, process.env),
 		reviewers: Object.entries(effective.reviewers).map(([id, r]) => ({

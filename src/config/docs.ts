@@ -84,7 +84,7 @@ export function renderConfigSection(): string {
 		"",
 		"Env overrides apply to every section. Dynamic map entries must already exist in the YAML before an env var can set them: `reviewers.<id>`, `reviewers.<id>.skills.<skill>` and `providers.<provider>`. `version` and everything under `models` have no env var. Array leaves take a JSON value. In `<ID>`, `<SKILL>` and `<PROVIDER>`, hyphens become underscores.",
 		"",
-		"Rows marked Live can also be overridden at runtime through Edge Config (`EDGE_CONFIG`, package `@vercel/global-config`) using the same env names as keys, with no redeploy. Edge Config can disable but cannot enable, so an Edge `true` over a disabled `review.enabled`, `reviewers.<id>.enabled` or `roles.verifier.enabled` is ignored and listed under `edge.ignored` in `/api/debug`.",
+		"Rows marked Live can also be overridden at runtime through Edge Config (`EDGE_CONFIG`, package `@vercel/global-config`) using the same env names as keys, with no redeploy. Edge Config can disable but cannot enable, so an Edge `true` over a disabled `review.enabled`, `reviewers.<id>.enabled` or `roles.verifier.enabled` is ignored and listed under `edge.ignored` in `/api/debug`. When an Edge read fails, the last good overrides stay in effect; the cold config is used only before the first good read.",
 		"",
 		"| YAML path | Env var | Alias | Type | Default | Live | Description |",
 		"| --- | --- | --- | --- | --- | --- | --- |",

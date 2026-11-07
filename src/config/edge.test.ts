@@ -248,4 +248,84 @@ describe("getEffectiveConfig", () => {
 		expect(result.error).toContain("failed");
 		warn.mockRestore();
 	});
+
+	it("keeps serving the last good overrides when a later read fails", async () => {
+		vi.stubEnv("EDGE_CONFIG", "https://edge-config.vercel.com/x?token=t");
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		let t = 1000;
+		const read = vi
+			.fn()
+			.mockResolvedValueOnce({ AI_REVIEW_REVIEWERS__CLAUDE__ENABLED: false })
+			.mockRejectedValueOnce(new Error("down"))
+			.mockResolvedValueOnce({});
+		const opts = { now: () => t, read };
+		expect((await getEffectiveConfig(opts)).error).toBeUndefined();
+		t += EDGE_CACHE_MS;
+		const stale = await getEffectiveConfig(opts);
+		expect(stale.config.reviewers.claude?.enabled).toBe(false);
+		expect(stale.applied).toEqual(["AI_REVIEW_REVIEWERS__CLAUDE__ENABLED"]);
+		expect(stale.error).toContain("down");
+		t += EDGE_CACHE_MS - 1;
+		await getEffectiveConfig(opts);
+		expect(read).toHaveBeenCalledTimes(2);
+		t += 1;
+		const recovered = await getEffectiveConfig(opts);
+		expect(recovered.error).toBeUndefined();
+		expect(recovered.config.reviewers.claude?.enabled).toBe(true);
+		warn.mockRestore();
+	});
+
+	it("falls back to the cold config when no read has ever succeeded", async () => {
+		vi.stubEnv("EDGE_CONFIG", "https://edge-config.vercel.com/x?token=t");
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const result = await getEffectiveConfig({
+			read: async () => {
+				throw new Error("down");
+			},
+		});
+		expect(result.config).toBe(getConfigTree());
+		expect(result.applied).toEqual([]);
+		expect(result.error).toContain("down");
+		warn.mockRestore();
+	});
+
+	it("shares one read between concurrent callers", async () => {
+		vi.stubEnv("EDGE_CONFIG", "https://edge-config.vercel.com/x?token=t");
+		const read = vi.fn(async () => ({
+			AI_REVIEW_REVIEWERS__CLAUDE__ENABLED: false,
+		}));
+		const [a, b] = await Promise.all([
+			getEffectiveConfig({ now: () => 1000, read }),
+			getEffectiveConfig({ now: () => 1000, read }),
+		]);
+		expect(read).toHaveBeenCalledTimes(1);
+		expect(a).toBe(b);
+	});
+
+	it("does not let an older slow refresh overwrite a newer good one", async () => {
+		vi.stubEnv("EDGE_CONFIG", "https://edge-config.vercel.com/x?token=t");
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		let failSlow: (e: Error) => void = () => {};
+		const slow = new Promise<unknown>((_, reject) => {
+			failSlow = reject;
+		});
+		const first = getEffectiveConfig({ now: () => 1000, read: () => slow });
+		resetEdgeCacheForTests();
+		const good = await getEffectiveConfig({
+			now: () => 1001,
+			read: async () => ({ AI_REVIEW_REVIEWERS__CLAUDE__ENABLED: false }),
+		});
+		expect(good.config.reviewers.claude?.enabled).toBe(false);
+		failSlow(new Error("late"));
+		await first;
+		const cached = await getEffectiveConfig({
+			now: () => 1002,
+			read: async () => {
+				throw new Error("must not read");
+			},
+		});
+		expect(cached.config.reviewers.claude?.enabled).toBe(false);
+		expect(cached.error).toBeUndefined();
+		warn.mockRestore();
+	});
 });

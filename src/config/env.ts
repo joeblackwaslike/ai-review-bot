@@ -4,7 +4,7 @@ import { type Config, ConfigSchema } from "./schema.js";
 
 export const ENV_PREFIX = "AI_REVIEW_";
 
-export type ValueSource = "env" | "alias" | "yaml" | "default";
+export type ValueSource = "env" | "alias" | "yaml" | "default" | "edge";
 
 export interface AliasEntry {
 	paths: readonly (readonly string[])[];

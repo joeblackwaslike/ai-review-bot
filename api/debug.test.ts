@@ -176,6 +176,27 @@ describe("GET /api/debug edge", () => {
 		expect(denied.reviewCommand).toBe("/edge");
 	});
 
+	it("shows applied Edge values in the config rows with source edge", async () => {
+		vi.mocked(getEffectiveConfig).mockImplementation(async () =>
+			applyLiveOverrides(getConfigTree(), {
+				AI_REVIEW_REVIEW__DELAY_SECONDS: 7,
+			}),
+		);
+		const body = (await call()) as {
+			config: { path: string; value: unknown; source: string }[];
+		};
+		expect(body.config).toContainEqual({
+			path: "review.delaySeconds",
+			value: 7,
+			source: "edge",
+		});
+		expect(body.config).toContainEqual({
+			path: "review.command",
+			value: "/ai-review",
+			source: "yaml",
+		});
+	});
+
 	it("reports edge disabled when EDGE_CONFIG is unset", async () => {
 		vi.stubEnv("EDGE_CONFIG", "");
 		const body = (await call()) as { edge: Record<string, unknown> };

@@ -155,10 +155,37 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 	return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-let cache: { at: number; result: LiveResult } | undefined;
+let cache: { at: number; seq: number; result: LiveResult } | undefined;
+let lastGood: { seq: number; result: LiveResult } | undefined;
+let inflight: Promise<LiveResult> | undefined;
+let refreshSeq = 0;
 
 export function resetEdgeCacheForTests(): void {
 	cache = undefined;
+	lastGood = undefined;
+	inflight = undefined;
+}
+
+async function refresh(
+	cold: Config,
+	now: number,
+	read: () => Promise<unknown>,
+): Promise<LiveResult> {
+	const seq = ++refreshSeq;
+	let result: LiveResult;
+	try {
+		const payload = await withTimeout(read(), EDGE_TIMEOUT_MS);
+		result = applyLiveOverrides(cold, isRecord(payload) ? payload : {});
+		if (!lastGood || lastGood.seq < seq) lastGood = { seq, result };
+	} catch (error) {
+		const message = errorMessage(error);
+		console.warn(`Edge Config read failed: ${message.slice(0, 200)}`);
+		result = lastGood
+			? { ...lastGood.result, error: message }
+			: { config: cold, applied: [], ignored: [], error: message };
+	}
+	if (!cache || cache.seq < seq) cache = { at: now, seq, result };
+	return result;
 }
 
 export async function getEffectiveConfig(
@@ -170,17 +197,12 @@ export async function getEffectiveConfig(
 
 	const now = (opts.now ?? Date.now)();
 	if (cache && now - cache.at < EDGE_CACHE_MS) return cache.result;
+	if (inflight) return inflight;
 
 	const read = opts.read ?? (() => createClient(connection).getAll());
-	let result: LiveResult;
-	try {
-		const payload = await withTimeout(read(), EDGE_TIMEOUT_MS);
-		result = applyLiveOverrides(cold, isRecord(payload) ? payload : {});
-	} catch (error) {
-		const message = errorMessage(error);
-		console.warn(`Edge Config read failed: ${message.slice(0, 200)}`);
-		result = { config: cold, applied: [], ignored: [], error: message };
-	}
-	cache = { at: now, result };
-	return result;
+	const run = refresh(cold, now, read).finally(() => {
+		if (inflight === run) inflight = undefined;
+	});
+	inflight = run;
+	return run;
 }
