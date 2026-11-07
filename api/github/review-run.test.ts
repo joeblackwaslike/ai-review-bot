@@ -1,6 +1,10 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { resetConfigForTests } from "../../src/config/load.js";
+import {
+	applyLiveOverrides,
+	getEffectiveConfig,
+} from "../../src/config/edge.js";
+import { getConfigTree, resetConfigForTests } from "../../src/config/load.js";
 import handler from "./review-run.js";
 
 const readRawBody = vi.hoisted(() => vi.fn());
@@ -8,6 +12,10 @@ const verifyQStashSignature = vi.hoisted(() => vi.fn());
 const runScheduledReview = vi.hoisted(() => vi.fn());
 const getReviewerGitHubApp = vi.hoisted(() => vi.fn());
 
+vi.mock("../../src/config/edge.js", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../../src/config/edge.js")>()),
+	getEffectiveConfig: vi.fn(),
+}));
 vi.mock("../../src/http.js", () => ({
 	readRawBody: (...args: unknown[]) => readRawBody(...args),
 }));
@@ -82,6 +90,11 @@ beforeEach(() => {
 	verifyQStashSignature.mockResolvedValue(true);
 	runScheduledReview.mockResolvedValue({ status: "reviewed" });
 	getReviewerGitHubApp.mockReturnValue({ app: true });
+	vi.mocked(getEffectiveConfig).mockImplementation(async () => ({
+		config: getConfigTree(),
+		applied: [],
+		ignored: [],
+	}));
 	warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 	resetConfigForTests();
 	claudeEnv();
@@ -162,6 +175,19 @@ describe("review-run request handling", () => {
 		const res = await call({ ...BASE, provider: "anthropic" });
 		expect(res.statusCode).toBe(503);
 		err.mockRestore();
+	});
+});
+
+describe("review-run live config", () => {
+	it("skips with 503 when Edge disables the reviewer", async () => {
+		vi.mocked(getEffectiveConfig).mockImplementation(async () =>
+			applyLiveOverrides(getConfigTree(), {
+				AI_REVIEW_REVIEWERS__CLAUDE__ENABLED: false,
+			}),
+		);
+		const res = await call({ ...BASE, provider: "anthropic" });
+		expect(res.statusCode).toBe(503);
+		expect(runScheduledReview).not.toHaveBeenCalled();
 	});
 });
 

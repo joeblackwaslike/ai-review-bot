@@ -63,24 +63,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 		});
 		return;
 	}
+	const edgeEnabled = !!process.env.EDGE_CONFIG?.trim();
+	let live: Awaited<ReturnType<typeof getEffectiveConfig>>;
+	let liveError: string | undefined;
+	try {
+		live = await getEffectiveConfig();
+	} catch (error) {
+		liveError = sanitizeConfigError(error);
+		console.error(`edge config failed: ${liveError}`);
+		live = { config: loaded.config, applied: [], ignored: [] };
+	}
+	const effective = live.config;
 	if (!authorized) {
 		res.status(200).json({
-			reviewEnabled: loaded.config.review.enabled,
-			reviewCommand: loaded.config.review.command,
+			reviewEnabled: effective.review.enabled,
+			reviewCommand: effective.review.command,
 			...hasFields,
 		});
 		return;
 	}
-	const live = await getEffectiveConfig();
+	const edgeError =
+		liveError ?? (live.error && sanitizeConfigError(live.error));
 	res.status(200).json({
 		edge: {
-			enabled: !!process.env.EDGE_CONFIG?.trim(),
+			enabled: edgeEnabled,
 			applied: live.applied,
 			ignored: live.ignored.map((i) => ({
 				key: i.key,
 				reason: sanitizeConfigError(i.reason),
 			})),
-			...(live.error ? { error: sanitizeConfigError(live.error) } : {}),
+			...(edgeError ? { error: edgeError } : {}),
 		},
 		config: describeConfig(loaded).map((row) =>
 			isRedacted(row.path) && row.value !== undefined
@@ -89,12 +101,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 		),
 		warnings: loaded.warnings,
 		secrets: describeSecrets(loaded.config, process.env),
-		reviewers: Object.entries(loaded.config.reviewers).map(([id, r]) => ({
+		reviewers: Object.entries(effective.reviewers).map(([id, r]) => ({
 			id,
 			enabled: r.enabled,
 		})),
-		reviewEnabled: loaded.config.review.enabled,
-		reviewCommand: loaded.config.review.command,
+		reviewEnabled: effective.review.enabled,
+		reviewCommand: effective.review.command,
 		...hasFields,
 	});
 }

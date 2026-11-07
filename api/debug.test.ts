@@ -138,6 +138,44 @@ describe("GET /api/debug edge", () => {
 		expect(JSON.stringify(body.edge)).not.toContain("secret-typo-value");
 	});
 
+	it("reports a sanitized edge.error instead of 500 when the effective read throws", async () => {
+		vi.stubEnv("EDGE_CONFIG", "https://edge-config.vercel.com/ecfg_x?token=t");
+		vi.mocked(getEffectiveConfig).mockRejectedValue(
+			new Error("boom\nTOPSECRET"),
+		);
+		const body = (await call()) as { edge: Record<string, unknown> };
+		expect(body.edge).toMatchObject({ enabled: true, applied: [] });
+		expect(String(body.edge.error)).toContain("boom");
+		expect(JSON.stringify(body)).not.toContain("TOPSECRET");
+	});
+
+	it("reports effective reviewEnabled, reviewCommand and reviewers[].enabled", async () => {
+		vi.mocked(getEffectiveConfig).mockImplementation(async () => {
+			const r = applyLiveOverrides(getConfigTree(), {
+				AI_REVIEW_REVIEW__ENABLED: false,
+				AI_REVIEW_REVIEWERS__CLAUDE__ENABLED: false,
+			});
+			return {
+				...r,
+				config: {
+					...r.config,
+					review: { ...r.config.review, command: "/edge" },
+				},
+			};
+		});
+		const body = (await call()) as {
+			reviewEnabled: boolean;
+			reviewCommand: string;
+			reviewers: { id: string; enabled: boolean }[];
+		};
+		expect(body.reviewEnabled).toBe(false);
+		expect(body.reviewCommand).toBe("/edge");
+		expect(body.reviewers.find((r) => r.id === "claude")?.enabled).toBe(false);
+		const denied = await call("Bearer wrong");
+		expect(denied.reviewEnabled).toBe(false);
+		expect(denied.reviewCommand).toBe("/edge");
+	});
+
 	it("reports edge disabled when EDGE_CONFIG is unset", async () => {
 		vi.stubEnv("EDGE_CONFIG", "");
 		const body = (await call()) as { edge: Record<string, unknown> };
