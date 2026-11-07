@@ -153,6 +153,43 @@ describe("reviewerReadiness", () => {
 	});
 });
 
+describe("reviewer role providers", () => {
+	function withRole(): ReturnType<typeof getConfigTree> {
+		const tree = getConfigTree();
+		const claude = tree.reviewers.claude as (typeof tree.reviewers)[string];
+		return {
+			...tree,
+			reviewers: {
+				...tree.reviewers,
+				claude: {
+					...claude,
+					roles: { triage: { model: "google/gemini-3-flash" } },
+				},
+			},
+		};
+	}
+
+	it("reviewerProviders includes providers used only by a role", () => {
+		claudeEnv();
+		const tree = withRole();
+		expect(reviewerProviders(getConfigTree(), "claude")).not.toContain(
+			"google",
+		);
+		expect(reviewerProviders(tree, "claude")).toContain("google");
+	});
+
+	it("a reviewer whose role provider has no key is not ready in hosted mode and names the missing key", () => {
+		claudeEnv();
+		delete process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+		process.env.AI_REVIEW_REVIEWERS__CLAUDE__ROLES__TRIAGE__MODEL =
+			"google/gemini-3-flash";
+		expect(reviewerReadiness("claude", "hosted")).toEqual({
+			ready: false,
+			missing: ["GOOGLE_GENERATIVE_AI_API_KEY"],
+		});
+	});
+});
+
 describe("logReviewerReadiness", () => {
 	it("logs one line per not-ready enabled reviewer, then nothing", () => {
 		claudeEnv();
