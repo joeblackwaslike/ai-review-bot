@@ -10,7 +10,7 @@ Add the reviewer under `reviewers` in `.ai-review.yaml`. The id must match `^[a-
 
 ```yaml
 reviewers:
-  gemini:
+  codex:
     enabled: false
     appSlug: gemini-review-bot
     commentPrefix: gemini-review-bot
@@ -114,6 +114,31 @@ Gemini's structured output was checked only against a mocked request. The first 
 ## 6. Keep it or turn it off
 
 If the results are acceptable, install the App on the other repos (a human step). If they are bad, set `enabled: false` again, commit, and deploy. The bot then stops reviewing, and you can change the tiers and repeat from step 4.
+
+## Roles
+
+A role is a non-finder model call. Each reviewer runs three: `summary` (the review summary), `triage` (reply triage) and `revalidate` (re-checking a finding after a push). Three more are deployment-wide: `qcJudge` and `classifier` (the improvement corpus) and `verifier`. All of them live in `src/roles.ts`. An entry is `{ model: provider/model, effort? }`, and `effort` is checked against the provider like any other model choice.
+
+Precedence for `summary`, `triage` and `revalidate`: `reviewers.<id>.roles.<role>`, then top-level `roles.<role>`, then the default. `qcJudge`, `classifier` and `verifier` exist only at top level.
+
+Defaults, which leave behavior unchanged until YAML sets a role:
+
+- `summary` uses the model that routed the finder.
+- `triage` and `revalidate` use the cheap model of the finder's provider.
+- `qcJudge` and `classifier` use `anthropic/claude-haiku-5-5` with effort `low`. The QC judge no longer matches the finding's provider, so Codex findings are judged by that model too.
+
+```yaml
+roles:
+  qcJudge: { model: anthropic/claude-haiku-5-5, effort: low }
+reviewers:
+  codex:
+    roles:
+      triage: { model: anthropic/claude-haiku-5-5, effort: low }
+```
+
+Env names follow the usual pattern, for example `AI_REVIEW_ROLES__QC_JUDGE__MODEL`. A role that points at a provider with no API key disables that role with a log line and does not crash the process. Hosted readiness checks the role providers as well as the finder's.
+
+The verifier has a resolver (`resolveVerifier()`) and tests but nothing calls it yet. The call site belongs to epic `ai-review-bot-t0c` (D1), so setting `roles.verifier` changes nothing today.
 
 ## Limits today
 
