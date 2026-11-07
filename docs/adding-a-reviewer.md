@@ -10,7 +10,7 @@ Add the reviewer under `reviewers` in `.ai-review.yaml`. The id must match `^[a-
 
 ```yaml
 reviewers:
-  codex:
+  gemini:
     enabled: false
     appSlug: gemini-review-bot
     commentPrefix: gemini-review-bot
@@ -124,7 +124,7 @@ Precedence for `summary`, `triage` and `revalidate`: `reviewers.<id>.roles.<role
 Defaults, which leave behavior unchanged until YAML sets a role:
 
 - `summary` uses the model that routed the finder.
-- `triage` and `revalidate` use the cheap model of the finder's provider.
+- `triage` and `revalidate` use a cheap model picked by the finder's provider: `claude-haiku-5-5` at effort `low` for anthropic, `gpt-6-luna` at effort `low` for openai. Any other provider, gemini included, keeps the finder's model with effort `low`.
 - `qcJudge` and `classifier` use `anthropic/claude-haiku-5-5` with effort `low`. The QC judge no longer matches the finding's provider, so Codex findings are judged by that model too.
 
 ```yaml
