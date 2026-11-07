@@ -7109,9 +7109,12 @@ describe("buildReview ledger suppression", () => {
 				...declinedThread,
 				comments: {
 					...declinedThread.comments,
+					nodes: [declinedThread.comments.nodes[0]],
+				},
+				rootComment: {
 					nodes: [
 						{
-							...declinedThread.comments.nodes[0],
+							databaseId: declinedThread.comments.nodes[0].databaseId,
 							reactions: { nodes: reactions },
 						},
 					],

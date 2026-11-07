@@ -64,21 +64,21 @@ function reactionVerdicts(
 }
 
 /** Verdicts for a thread's first comment, or none when the reaction list was cut off: a partial list can pick the wrong latest verdict. */
-function threadReactions(first: {
-	databaseId: number;
-	reactions?: {
-		pageInfo?: { hasNextPage: boolean };
-		nodes: Parameters<typeof reactionVerdicts>[0];
-	};
-}): Verdict[] {
-	if (!first.reactions) return [];
-	if (first.reactions.pageInfo?.hasNextPage) {
+function threadReactions(
+	firstId: number,
+	root: ThreadNode["rootComment"],
+): Verdict[] {
+	const reactions = root?.nodes.find(
+		(n) => n.databaseId === firstId,
+	)?.reactions;
+	if (!reactions) return [];
+	if (reactions.pageInfo?.hasNextPage) {
 		console.warn(
-			`comment ${first.databaseId} has more than 100 reactions; scoring it on its ledger status`,
+			`comment ${firstId} has more than 100 reactions; scoring it on its ledger status`,
 		);
 		return [];
 	}
-	return reactionVerdicts(first.reactions.nodes);
+	return reactionVerdicts(reactions.nodes);
 }
 
 const PER_PAGE = 100;
@@ -173,7 +173,13 @@ interface ThreadNode {
 			authorAssociation: string;
 			body: string;
 			createdAt: string;
+		}[];
+	};
+	rootComment?: {
+		nodes: {
+			databaseId: number;
 			reactions?: {
+				pageInfo?: { hasNextPage: boolean };
 				nodes: {
 					content: string;
 					user: { login: string } | null;
@@ -218,6 +224,12 @@ const THREADS_QUERY = `
                 authorAssociation
                 body
                 createdAt
+              }
+              }
+            }
+            rootComment: comments(first: 1) {
+              nodes {
+                databaseId
                 reactions(first: 100) {
                   pageInfo { hasNextPage }
                   nodes { content user { login } createdAt }
@@ -354,7 +366,7 @@ export async function fetchLedgerEvidence(
 				commentId: first.databaseId,
 				isResolved: t.isResolved,
 				resolvedBy: t.resolvedBy?.login ?? null,
-				reactions: threadReactions(first),
+				reactions: threadReactions(first.databaseId, t.rootComment),
 				replies: rest.map((r) => ({
 					author: r.author?.login ?? "",
 					createdAt: r.createdAt,

@@ -708,7 +708,19 @@ describe("ledger reactions", () => {
 		const octokit = fake(
 			[
 				page(
-					[t(10, [node(10, reactions === undefined ? {} : { reactions })])],
+					[
+						{
+							...t(10),
+							rootComment: {
+								nodes: [
+									{
+										databaseId: 10,
+										...(reactions === undefined ? {} : { reactions }),
+									},
+								],
+							},
+						},
+					],
 					null,
 				),
 			],
@@ -785,6 +797,45 @@ describe("ledger reactions", () => {
 			return inner(route, params);
 		}) as RequestLike["request"];
 		await fetchLedgerEvidence(octokit, opts);
+		expect(queries[0]).toMatch(/rootComment: comments\(first: 1\)/);
 		expect(queries[0]).toMatch(/reactions\(first: 100\)/);
+	});
+
+	/** Counts nodes the way GitHub does: every connection contributes the product of its own and its ancestors' `first:` sizes. */
+	const estimateNodes = (query: string): number => {
+		let total = 0;
+		const stack = [1];
+		for (const m of query.matchAll(
+			/(?:\w+\s*:\s*)?\w+\s*(?:\(([^)]*)\))?\s*\{|\}/g,
+		)) {
+			if (m[0] === "}") {
+				stack.pop();
+				continue;
+			}
+			const first = /first:\s*(\d+)/.exec(m[1] ?? "");
+			const size =
+				(stack[stack.length - 1] ?? 1) * (first ? Number(first[1]) : 1);
+			if (first) total += size;
+			stack.push(size);
+		}
+		return total;
+	};
+	const GITHUB_NODE_LIMIT = 500_000;
+
+	it("keeps the threads query under GitHub's node limit", async () => {
+		const queries: string[] = [];
+		const octokit = fake([page([t(10)], null)]);
+		const inner = octokit.request;
+		octokit.request = (async (
+			route: string,
+			params?: Record<string, unknown>,
+		) => {
+			if (route === "POST /graphql") queries.push(String(params?.query));
+			return inner(route, params);
+		}) as RequestLike["request"];
+		await fetchLedgerEvidence(octokit, opts);
+		expect(estimateNodes(queries[0] ?? "")).toBeLessThanOrEqual(
+			GITHUB_NODE_LIMIT,
+		);
 	});
 });
