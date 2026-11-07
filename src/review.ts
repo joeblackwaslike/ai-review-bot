@@ -89,6 +89,7 @@ import {
 	reviewerFromLegacy,
 } from "./reviewer-id.js";
 import { REVIEWER_TUNING, type ReviewerTuning } from "./reviewer-tuning.js";
+import { type ReviewerRoleName, resolveReviewerRole } from "./roles.js";
 import type { ModelSelection } from "./router.js";
 import {
 	outputBudget,
@@ -2086,6 +2087,11 @@ async function buildReviewInner(
 		},
 		context.reviewer,
 	);
+	const roleSelection = (role: ReviewerRoleName) =>
+		resolveReviewerRole(getConfigTree(), context.reviewer, role, selection);
+	const triageSelection = roleSelection("triage");
+	const revalidateSelection = roleSelection("revalidate");
+	const summarySelection = roleSelection("summary");
 	if (!shouldRunOnTier(getConfigTree(), context.reviewer, routedTier)) {
 		console.log("reviewer does not run on this tier; posting nothing", {
 			owner: context.owner,
@@ -2279,7 +2285,7 @@ async function buildReviewInner(
 			scope = fullScope(deltaMeta ? "compare truncated" : "compare failed");
 		} else {
 			const triage = await triageReReview(
-				selection,
+				triageSelection,
 				deltaMeta.diff,
 				state.findings.filter((f) => f.status === "open"),
 				context.auth,
@@ -2362,7 +2368,7 @@ async function buildReviewInner(
 		if (!incrementalPass && survivingPrior.length > 0) {
 			markResolved(
 				await revalidateFindings(
-					selection,
+					revalidateSelection,
 					survivingPrior,
 					files,
 					context.auth,
@@ -3297,7 +3303,7 @@ async function buildReviewInner(
 		try {
 			const summaryResult = await generateSummary(
 				modelReview,
-				selection,
+				summarySelection,
 				{
 					title: context.title,
 					body: context.body,
@@ -3323,7 +3329,10 @@ async function buildReviewInner(
 				);
 				summary = fallbackSummary;
 			}
-			bill(`${selection.provider}/${selection.model}`, summaryResult.usage);
+			bill(
+				`${summarySelection.provider}/${summarySelection.model}`,
+				summaryResult.usage,
+			);
 		} catch (error) {
 			// The summary is prose over findings the agents already produced; losing
 			// the whole review to a rate limit or timeout here would be worse.

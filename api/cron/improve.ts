@@ -9,6 +9,7 @@ import type { IssueOctokit } from "../../src/improve/issues.js";
 import { thresholdsFromEnv } from "../../src/improve/issues.js";
 import { installationOctokit } from "../../src/improve/octokit.js";
 import { runImproveCycle } from "../../src/improve/run.js";
+import { resolveJudgeRole } from "../../src/roles.js";
 
 function optionalKv(): KvClient | null {
 	try {
@@ -44,11 +45,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 				octokit,
 				owner,
 				repo,
-				selection: {
-					provider: "anthropic",
-					model: "claude-haiku-5-5",
-					effort: "low",
-				},
+				selection: resolveJudgeRole(getConfigTree(), "classifier"),
 				thresholds: thresholdsFromEnv(process.env),
 			});
 		},

@@ -8,7 +8,7 @@ This file provides context and conventions for AI coding agents working on this 
 pnpm install
 pnpm typecheck    # tsc --noEmit — must pass before any commit
 pnpm lint         # biome check — must pass before any commit
-pnpm test         # vitest run (3062 passed, 8 skipped) — must pass before any commit
+pnpm test         # vitest run (3101 passed, 8 skipped) — must pass before any commit
 pnpm dev          # vercel dev — local server on :3000
 ```
 
@@ -71,6 +71,7 @@ Findings carried from the previous review appear in the body's "Still open from 
 | `src/config.ts` | Environment variable parsing and defaults |
 | `src/config/` | YAML schema (`schema.ts`), loader (`load.ts`), env overlay and secret lookup (`env.ts`), generated docs (`docs.ts`) |
 | `src/reviewers.ts` | Reviewer registry: `getReviewerAppConfig()`, `getReviewerGitHubApp()`, `reviewerReadiness()` (hosted or CLI mode), `listReviewerIds()`, `routeReviewerModel()` |
+| `src/roles.ts` | `resolveReviewerRole()` (summary, triage, revalidate: reviewer entry, then top-level `roles`, then today's derivation), `resolveJudgeRole()` (`qcJudge`, `classifier`; `DEFAULT_JUDGE` is anthropic/claude-haiku-5-5, effort low), `resolveVerifier()` (no caller yet, epic `ai-review-bot-t0c`) |
 | `src/reviewer-id.ts` | `ReviewerId`, `LegacyProvider`, and the claude/codex to anthropic/openai maps (`legacyProviderOf()`, `reviewerFromLegacy()`) |
 | `src/skill-names.ts` | The set of valid skill names, used to validate `skills` entries in the YAML |
 | `src/webhook-handler.ts` | `createReviewerWebhookHandler()`: the shared handler behind `api/github/reviewer/[id].ts` and the two legacy wrappers |

@@ -1,13 +1,11 @@
 import { generateObject } from "ai";
 import { z } from "zod";
+import { getConfigTree } from "../config/load.js";
 import { createAIModel } from "../models.js";
 import { SEVERITY_LEVELS } from "../review.js";
-import { legacyProviderOf, type ReviewerId } from "../reviewer-id.js";
-import {
-	type ModelSelection,
-	outputBudget,
-	reasoningProviderOptions,
-} from "../router.js";
+import type { ReviewerId } from "../reviewer-id.js";
+import { resolveJudgeRole } from "../roles.js";
+import { outputBudget, reasoningProviderOptions } from "../router.js";
 
 export const QcVerdictSchema = z.object({
 	isFalsePositive: z
@@ -48,28 +46,6 @@ export function selectQcSample<T extends { id: number }>(
 	return [...findings].sort((a, b) => a.id - b.id).filter(() => rng() < rate);
 }
 
-/** Judging is a cheap per-finding call, so both providers use their small model
- * rather than whichever one the review itself was routed to.
- *
- * /qc (qc-app.ts) is webhook-only — GitHub App auth, no subscription/OAuth
- * concept anywhere in its call chain — so it stays on the API-key backend.
- * These are the same models router.ts's trivial tier and triage.ts use. Haiku
- * 5.5 thinks by default, so its judge pins effort "low" to stay cheap. */
-export const QC_OPENAI_MODEL = "gpt-6-luna";
-export const QC_ANTHROPIC_MODEL = "claude-haiku-5-5";
-
-/** Pure: a finding is judged by the same provider that raised it — not
- * necessarily the same model, since judging always uses the small model above.
- *
- * A cross-provider judge measures disagreement between two models, which is a
- * different question from whether the finding holds — and it would let one
- * provider's style systematically mark down the other's. */
-export function judgeSelection(identity: string): ModelSelection {
-	return identity === "openai"
-		? { provider: "openai", model: QC_OPENAI_MODEL, effort: "low" }
-		: { provider: "anthropic", model: QC_ANTHROPIC_MODEL, effort: "low" };
-}
-
 function buildJudgePrompt(finding: JudgeableFinding, hunk: string): string {
 	return [
 		"You are auditing a single finding raised by an AI code reviewer. You are NOT reviewing the code.",
@@ -105,7 +81,8 @@ function isProgrammingError(err: unknown): boolean {
 	return err instanceof TypeError || err instanceof ReferenceError;
 }
 
-/** Judge one finding with the same provider that raised it. Returns null when
+/** Judge one finding with the configured qcJudge model, whichever reviewer
+ * raised it. Returns null when
  * the call fails — an unjudged finding is recorded as unjudged rather than as a
  * pass, which would quietly inflate the quality score.
  *
@@ -116,7 +93,7 @@ export async function judgeFinding(
 	finding: JudgeableFinding,
 	hunk: string,
 ): Promise<QcVerdict | null> {
-	const selection = judgeSelection(legacyProviderOf(finding.reviewer));
+	const selection = resolveJudgeRole(getConfigTree(), "qcJudge");
 	try {
 		const { object } = await generateObject({
 			model: createAIModel(selection),

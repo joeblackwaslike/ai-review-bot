@@ -115,6 +115,31 @@ Gemini's structured output was checked only against a mocked request. The first 
 
 If the results are acceptable, install the App on the other repos (a human step). If they are bad, set `enabled: false` again, commit, and deploy. The bot then stops reviewing, and you can change the tiers and repeat from step 4.
 
+## Roles
+
+A role is a non-finder model call. Each reviewer runs three: `summary` (the review summary), `triage` (reply triage) and `revalidate` (re-checking a finding after a push). Three more are deployment-wide: `qcJudge` and `classifier` (the improvement corpus) and `verifier`. All of them live in `src/roles.ts`. An entry is `{ model: provider/model, effort? }`, and `effort` is checked against the provider like any other model choice.
+
+Precedence for `summary`, `triage` and `revalidate`: `reviewers.<id>.roles.<role>`, then top-level `roles.<role>`, then the default. `qcJudge`, `classifier` and `verifier` exist only at top level.
+
+Defaults, which leave behavior unchanged until YAML sets a role:
+
+- `summary` uses the model that routed the finder.
+- `triage` and `revalidate` use a cheap model picked by the finder's provider: `claude-haiku-5-5` at effort `low` for anthropic, `gpt-6-luna` at effort `low` for openai. Any other provider, gemini included, keeps the finder's model with effort `low`.
+- `qcJudge` and `classifier` use `anthropic/claude-haiku-5-5` with effort `low`. The QC judge no longer matches the finding's provider, so Codex findings are judged by that model too.
+
+```yaml
+roles:
+  qcJudge: { model: anthropic/claude-haiku-5-5, effort: low }
+reviewers:
+  codex:
+    roles:
+      triage: { model: anthropic/claude-haiku-5-5, effort: low }
+```
+
+Env names follow the usual pattern, for example `AI_REVIEW_ROLES__QC_JUDGE__MODEL`. Readiness is per reviewer, so a missing API key for any provider a reviewer's roles use makes the whole reviewer not ready. No individual role is disabled. Hosted mode answers 503 and names the missing variable, and the startup log names it too. Hosted readiness checks the role providers as well as the finder's.
+
+The verifier has a resolver (`resolveVerifier()`) and tests but nothing calls it yet. The call site belongs to epic `ai-review-bot-t0c` (D1), so setting `roles.verifier` changes nothing today.
+
 ## Limits today
 
 - The improvement corpus (`improve.enabled`, or `IMPROVE_ENABLED`) must be off until the database migration `src/improve/db/migrations/0005_reviewer_expand.sql` is applied, for every reviewer including `claude` and `codex`. This code writes and reads the new `reviewer` column everywhere, so without the migration each corpus capture, discard flush and daily drain fails with "column reviewer does not exist" (logged, rows lost; reviews still post). The migration is written and has not been applied. Applying it needs the repo owner's explicit go-ahead and a row-count check first: it changes four column types with `ALTER COLUMN ... TYPE text`, which takes an exclusive lock on `finding_catalog`, `finding_discards`, `qc_scores` and `raw_feedback` and rewrites each table, so run it when nothing is writing to them. It only adds columns, so the previous code keeps working against a migrated database.

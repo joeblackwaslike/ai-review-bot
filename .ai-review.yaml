@@ -82,3 +82,7 @@ reviewers:
       normal: { model: google/gemini-3.1-flash-lite, effort: medium }
       complex: { model: google/gemini-3.8-flash, effort: medium }
       deep: { model: google/gemini-3.8-flash, effort: high }
+
+roles:
+  qcJudge: { model: anthropic/claude-haiku-5-5, effort: low }
+  classifier: { model: anthropic/claude-haiku-5-5, effort: low }

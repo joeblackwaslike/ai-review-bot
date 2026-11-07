@@ -291,3 +291,73 @@ describe("ConfigSchema reviewer identity and cross-checks", () => {
 		expect(ConfigSchema.safeParse(bad).success).toBe(false);
 	});
 });
+
+const withRoles = (roles: Record<string, unknown>) => ({
+	...minimal(),
+	roles,
+});
+
+describe("ConfigSchema roles", () => {
+	const haiku = { model: "anthropic/claude-haiku-5-5", effort: "low" };
+
+	it("accepts a reviewer roles entry", () => {
+		const parsed = ConfigSchema.parse(
+			withClaude({
+				roles: { summary: haiku, triage: haiku, revalidate: haiku },
+			}),
+		);
+		expect(parsed.reviewers.claude?.roles?.summary).toEqual(haiku);
+	});
+
+	it("accepts top-level qcJudge and classifier", () => {
+		const parsed = ConfigSchema.parse(
+			withRoles({ qcJudge: haiku, classifier: haiku }),
+		);
+		expect(parsed.roles.qcJudge).toEqual(haiku);
+		expect(parsed.roles.classifier).toEqual(haiku);
+	});
+
+	it("defaults roles to empty and verifier enabled to true", () => {
+		expect(ConfigSchema.parse(minimal()).roles).toEqual({});
+		const parsed = ConfigSchema.parse(
+			withRoles({ verifier: { model: haiku.model } }),
+		);
+		expect(parsed.roles.verifier?.enabled).toBe(true);
+	});
+
+	it("rejects an unknown role key under a reviewer", () => {
+		const issues = issuesOf(withClaude({ roles: { verifier: haiku } }));
+		expect(JSON.stringify(issues)).toContain("verifier");
+	});
+
+	it("rejects an effort the role's provider does not take", () => {
+		const bad = { model: "anthropic/claude-haiku-5-5", effort: "none" };
+		const issues = issuesOf(withRoles({ qcJudge: bad }));
+		expect(issues.map((i) => i.message).join()).toContain("do not take effort");
+		expect(issues[0]?.path).toEqual(["roles", "qcJudge", "effort"]);
+		const reviewerIssues = issuesOf(withClaude({ roles: { triage: bad } }));
+		expect(reviewerIssues[0]?.path).toEqual([
+			"reviewers",
+			"claude",
+			"roles",
+			"triage",
+			"effort",
+		]);
+	});
+
+	it("rejects a role model with an unknown provider prefix", () => {
+		const issues = issuesOf(withRoles({ classifier: { model: "moonshot/x" } }));
+		expect(issues.map((i) => i.message).join()).toContain("unknown provider");
+	});
+
+	it("verifier accepts differentFrom finder and rejects any other value", () => {
+		const ok = withRoles({
+			verifier: { model: haiku.model, differentFrom: "finder" },
+		});
+		expect(ConfigSchema.safeParse(ok).success).toBe(true);
+		const bad = withRoles({
+			verifier: { model: haiku.model, differentFrom: "other" },
+		});
+		expect(ConfigSchema.safeParse(bad).success).toBe(false);
+	});
+});

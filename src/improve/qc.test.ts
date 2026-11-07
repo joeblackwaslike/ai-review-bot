@@ -1,10 +1,36 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { pins, createAIModel, generateObject } = vi.hoisted(() => ({
+	pins: { roles: undefined as Record<string, unknown> | undefined },
+	createAIModel: vi.fn(() => "model"),
+	generateObject: vi.fn(),
+}));
+
+vi.mock("ai", async (importOriginal) => ({
+	...(await importOriginal<typeof import("ai")>()),
+	generateObject,
+}));
+vi.mock("../models.js", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../models.js")>()),
+	createAIModel,
+}));
+vi.mock("../config/load.js", async (importOriginal) => {
+	const real = await importOriginal<typeof import("../config/load.js")>();
+	return {
+		...real,
+		getConfigTree: () => {
+			const tree = real.getConfigTree();
+			return pins.roles ? { ...tree, roles: pins.roles } : tree;
+		},
+	};
+});
+
 import { parseQcCommand } from "../commands.js";
 import { parseSampleRate } from "../config.js";
 import {
 	formatQcComment,
 	type JudgeableFinding,
-	judgeSelection,
+	judgeFinding,
 	type QcVerdict,
 	selectQcSample,
 	summarize,
@@ -103,29 +129,27 @@ describe("selectQcSample", () => {
 	});
 });
 
-describe("judgeSelection", () => {
-	// A cross-provider judge measures disagreement between models, which is a
-	// different question from whether the finding holds.
-	it("judges each finding with its own provider", () => {
-		expect(judgeSelection("openai").provider).toBe("openai");
-		expect(judgeSelection("anthropic").provider).toBe("anthropic");
+describe("judgeFinding", () => {
+	beforeEach(() => {
+		pins.roles = undefined;
+		createAIModel.mockClear();
+		generateObject.mockClear();
+		generateObject.mockResolvedValue({ object: verdict() });
 	});
 
-	it("judges gemini findings with the anthropic QC model", () => {
-		expect(judgeSelection("gemini")).toEqual(judgeSelection("anthropic"));
+	it("judges a codex finding with the configured qcJudge model", async () => {
+		pins.roles = { qcJudge: { model: "openai/gpt-6-luna", effort: "low" } };
+		await judgeFinding(finding({ reviewer: "codex" }), "hunk");
+		expect(createAIModel).toHaveBeenCalledWith({
+			provider: "openai",
+			model: "gpt-6-luna",
+			effort: "low",
+		});
 	});
 
-	// /qc is a webhook-only command (GitHub App auth via qc-app.ts) with no
-	// subscription/OAuth auth concept anywhere in its call chain — it always
-	// runs on the API-key backend, where gpt-6-luna is confirmed available.
-	it("judges openai findings with gpt-6-luna (api-key backend, no oauth path)", () => {
-		expect(judgeSelection("openai").model).toBe("gpt-6-luna");
-	});
-
-	// Haiku 5.5 thinks by default (effort defaults to medium); pin it low so the
-	// judge stays cheap and outputBudget sizes the cap for reasoning tokens.
-	it("judges anthropic findings with claude-haiku-5-5 at low effort", () => {
-		expect(judgeSelection("anthropic")).toEqual({
+	it("judges with the default haiku when qcJudge is unset, whatever raised the finding", async () => {
+		await judgeFinding(finding({ reviewer: "codex" }), "hunk");
+		expect(createAIModel).toHaveBeenCalledWith({
 			provider: "anthropic",
 			model: "claude-haiku-5-5",
 			effort: "low",

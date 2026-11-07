@@ -58,7 +58,11 @@ import type { PersistedFinding } from "./review-state.js";
 import { findingId, parseBodyFindings } from "./review-state.js";
 import { reviewerFromLegacy } from "./reviewer-id.js";
 import { REVIEWER_TUNING } from "./reviewer-tuning.js";
-import { type ModelSelection, reasoningProviderOptions } from "./router.js";
+import {
+	cheapSelection,
+	type ModelSelection,
+	reasoningProviderOptions,
+} from "./router.js";
 import {
 	buildGenerateObjectResponse,
 	buildInlineComment,
@@ -8354,6 +8358,7 @@ describe("delta scoping without KV", () => {
 	});
 
 	afterEach(() => {
+		reviewerPatch.value = undefined;
 		mockFetchDeltaMeta.mockReset();
 		mockRevalidateFindings.mockReset();
 		vi.restoreAllMocks();
@@ -8672,6 +8677,108 @@ describe("delta scoping without KV", () => {
 		expect(decision?.event).toBe("REQUEST_CHANGES");
 		expect(decision?.body).toContain("**Blocker**");
 		expect(decision?.body).toContain("scope: full (compare truncated)");
+	});
+
+	describe("triage, revalidate and summary roles", () => {
+		const roles = {
+			triage: { model: "anthropic/claude-opus-5-5" },
+			revalidate: { model: "openai/gpt-6-luna" },
+			summary: { model: "anthropic/claude-haiku-5-5", effort: "low" },
+		};
+		const calledModels = () =>
+			vi
+				.mocked(createAIModel)
+				.mock.calls.map(([selection]) => (selection as ModelSelection).model);
+
+		beforeEach(() => {
+			vi.mocked(createAIModel).mockClear();
+		});
+
+		it("routes triage through the triage role", async () => {
+			reviewerPatch.value = { roles };
+			routeModels({ agent: withFresh() });
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "INCREMENTAL",
+				resolved: [],
+				newRisk: true,
+			});
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: buildOwnReviewBody({ sha: OLD, count: 1 }) }],
+				compare: () => ({ status: "ahead", files: [bFile] }),
+			});
+
+			await buildReview({ octokit, ...baseContext });
+
+			expect(mockTriageReReview.mock.calls[0]?.[0]).toMatchObject({
+				provider: "anthropic",
+				model: "claude-opus-5-5",
+			});
+		});
+
+		it("with no roles configured, triage receives cheapSelection of the finder", async () => {
+			routeModels({ agent: withFresh() });
+			mockTriageReReview.mockResolvedValue({
+				recommendation: "INCREMENTAL",
+				resolved: [],
+				newRisk: true,
+			});
+			const { octokit } = prOctokit({
+				reviews: [{ id: 11, body: buildOwnReviewBody({ sha: OLD, count: 1 }) }],
+				compare: () => ({ status: "ahead", files: [bFile] }),
+			});
+
+			await buildReview({ octokit, ...baseContext });
+
+			expect(mockTriageReReview.mock.calls[0]?.[0]).toEqual(
+				cheapSelection({ provider: "anthropic", model: "claude-sonnet-5-5" }),
+			);
+		});
+
+		it("routes revalidation to the revalidate role and bills the summary under the summary role", async () => {
+			const fixedId = findingId("src/a.ts", 3, "Null deref");
+			const run = async () => {
+				routeModels({ agent: withFresh(), resolved: [fixedId] });
+				const inner = mockGenerateObject.getMockImplementation();
+				mockGenerateObject.mockImplementation(
+					async (args: { system?: unknown }) => {
+						const result = await inner?.(args);
+						return args.system === undefined
+							? result
+							: {
+									...result,
+									usage: { inputTokens: 1_000_000, outputTokens: 0 },
+								};
+					},
+				);
+				const { octokit } = prOctokit({
+					reviews: [
+						{
+							id: 11,
+							body: buildOwnReviewBody({
+								sha: OLD,
+								count: 1,
+								rows: ["| 🟠 | **Null deref** (`src/a.ts:3`) |"],
+							}),
+						},
+					],
+					compare: () => {
+						throw new Error("gone");
+					},
+				});
+				return buildReview({ octokit, ...baseContext });
+			};
+
+			const baseline = await run();
+			vi.mocked(createAIModel).mockClear();
+			reviewerPatch.value = { roles };
+			const withRoles = await run();
+
+			expect(calledModels()).toContain("gpt-6-luna");
+			expect(calledModels()).toContain("claude-haiku-5-5");
+			expect(withRoles?.metadata.cost).toBeLessThan(
+				baseline?.metadata.cost ?? 0,
+			);
+		});
 	});
 
 	it("fallback revalidation resolves a fixed finding", async () => {

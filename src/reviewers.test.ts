@@ -5,6 +5,7 @@ import {
 	listReviewerIds,
 	logReviewerReadiness,
 	ReviewerNotReadyError,
+	reviewerAuthProvider,
 	reviewerProviders,
 	reviewerReadiness,
 	UnknownReviewerError,
@@ -150,6 +151,86 @@ describe("reviewerReadiness", () => {
 		expect(reviewerReadiness("claude", "hosted").missing).toEqual([
 			"ANTHROPIC_API_KEY",
 		]);
+	});
+});
+
+describe("reviewer role providers", () => {
+	function withRole(): ReturnType<typeof getConfigTree> {
+		const tree = getConfigTree();
+		const claude = tree.reviewers.claude as (typeof tree.reviewers)[string];
+		return {
+			...tree,
+			reviewers: {
+				...tree.reviewers,
+				claude: {
+					...claude,
+					roles: { triage: { model: "google/gemini-3-flash" } },
+				},
+			},
+		};
+	}
+
+	it("reviewerProviders includes providers used only by a role", () => {
+		claudeEnv();
+		const tree = withRole();
+		expect(reviewerProviders(getConfigTree(), "claude")).not.toContain(
+			"google",
+		);
+		expect(reviewerProviders(tree, "claude")).toContain("google");
+	});
+
+	it("a reviewer whose role provider has no key is not ready in hosted mode and names the missing key", () => {
+		claudeEnv();
+		delete process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+		process.env.AI_REVIEW_REVIEWERS__CLAUDE__ROLES__TRIAGE__MODEL =
+			"google/gemini-3-flash";
+		expect(reviewerReadiness("claude", "hosted")).toEqual({
+			ready: false,
+			missing: ["GOOGLE_GENERATIVE_AI_API_KEY"],
+		});
+	});
+});
+
+describe("top-level role providers", () => {
+	it("a top-level triage role counts for every reviewer without its own entry", () => {
+		claudeEnv();
+		process.env.AI_REVIEW_ROLES__TRIAGE__MODEL = "openai/gpt-6-luna";
+		resetConfigForTests();
+		const tree = getConfigTree();
+		expect(reviewerProviders(tree, "claude")).toContain("openai");
+		expect(reviewerAuthProvider(tree, "claude")).toBeNull();
+	});
+
+	it("a reviewer's own role entry shadows the top-level one", () => {
+		claudeEnv();
+		process.env.AI_REVIEW_ROLES__TRIAGE__MODEL = "openai/gpt-6-luna";
+		process.env.AI_REVIEW_REVIEWERS__CLAUDE__ROLES__TRIAGE__MODEL =
+			"anthropic/claude-haiku-5-5";
+		resetConfigForTests();
+		expect(reviewerProviders(getConfigTree(), "claude")).not.toContain(
+			"openai",
+		);
+	});
+
+	it("qcJudge and classifier stay exempt", () => {
+		claudeEnv();
+		process.env.AI_REVIEW_ROLES__QC_JUDGE__MODEL = "openai/gpt-6-luna";
+		process.env.AI_REVIEW_ROLES__CLASSIFIER__MODEL = "google/gemini-3-flash";
+		resetConfigForTests();
+		const providers = reviewerProviders(getConfigTree(), "claude");
+		expect(providers).not.toContain("openai");
+		expect(providers).not.toContain("google");
+	});
+
+	it("hosted readiness names the missing key of a top-level role provider", () => {
+		claudeEnv();
+		delete process.env.OPENAI_API_KEY;
+		delete process.env.AI_REVIEW_PROVIDERS__OPENAI__API_KEY;
+		process.env.AI_REVIEW_ROLES__TRIAGE__MODEL = "openai/gpt-6-luna";
+		resetConfigForTests();
+		const r = reviewerReadiness("claude", "hosted");
+		expect(r.ready).toBe(false);
+		expect(r.missing).toContain("OPENAI_API_KEY");
 	});
 });
 
