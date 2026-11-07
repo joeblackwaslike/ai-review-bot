@@ -754,6 +754,25 @@ describe("ledger reactions", () => {
 		for (const e of entries) expect(e.reactions ?? []).toEqual([]);
 	});
 
+	it("drops reactions it could only read in part, so a partial list never picks a verdict", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const [e] = await reactedBuild({
+			pageInfo: { hasNextPage: true },
+			nodes: [reaction("THUMBS_DOWN", "joe", "2026-01-02T00:00:00Z")],
+		});
+		expect(e.reactions ?? []).toEqual([]);
+		expect(warn).toHaveBeenCalledTimes(1);
+		warn.mockRestore();
+	});
+
+	it("keeps reactions when the connection says it is complete", async () => {
+		const [e] = await reactedBuild({
+			pageInfo: { hasNextPage: false },
+			nodes: [reaction("THUMBS_DOWN", "joe", "2026-01-02T00:00:00Z")],
+		});
+		expect(e.reactions).toEqual(["down"]);
+	});
+
 	it("asks GraphQL for the first comment's reactions", async () => {
 		const queries: string[] = [];
 		const octokit = fake([page([t(10)], null)]);

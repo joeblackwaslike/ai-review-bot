@@ -63,6 +63,24 @@ function reactionVerdicts(
 	return Object.values(computeReactionDelta(current, {}).lastSeen);
 }
 
+/** Verdicts for a thread's first comment, or none when the reaction list was cut off: a partial list can pick the wrong latest verdict. */
+function threadReactions(first: {
+	databaseId: number;
+	reactions?: {
+		pageInfo?: { hasNextPage: boolean };
+		nodes: Parameters<typeof reactionVerdicts>[0];
+	};
+}): Verdict[] {
+	if (!first.reactions) return [];
+	if (first.reactions.pageInfo?.hasNextPage) {
+		console.warn(
+			`comment ${first.databaseId} has more than 100 reactions; scoring it on its ledger status`,
+		);
+		return [];
+	}
+	return reactionVerdicts(first.reactions.nodes);
+}
+
 const PER_PAGE = 100;
 
 export function buildLedger(e: LedgerEvidence): Ledger {
@@ -201,6 +219,7 @@ const THREADS_QUERY = `
                 body
                 createdAt
                 reactions(first: 100) {
+                  pageInfo { hasNextPage }
                   nodes { content user { login } createdAt }
                 }
               }
@@ -335,7 +354,7 @@ export async function fetchLedgerEvidence(
 				commentId: first.databaseId,
 				isResolved: t.isResolved,
 				resolvedBy: t.resolvedBy?.login ?? null,
-				reactions: reactionVerdicts(first.reactions?.nodes ?? []),
+				reactions: threadReactions(first),
 				replies: rest.map((r) => ({
 					author: r.author?.login ?? "",
 					createdAt: r.createdAt,
