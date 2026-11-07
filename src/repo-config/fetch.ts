@@ -37,7 +37,22 @@ export interface RepoConfigOctokit {
 
 type RepoConfigKv = Pick<KvClient, "get" | "set">;
 
-const note = (text: string): RepoConfigResult => ({ note: text.slice(0, 200) });
+const NOTE_LIMIT = 200;
+const SHA_PATTERN = /^[0-9a-f]{7,40}$/;
+
+const note = (text: string): RepoConfigResult => ({
+	note: text.slice(0, NOTE_LIMIT),
+});
+
+function cleanNote(text: string): string {
+	return text.replace(/[^\w .,()/-]/g, "?").slice(0, NOTE_LIMIT);
+}
+
+function safeToken(value: unknown): string {
+	return String(value)
+		.replace(/[^\w.-]/g, "?")
+		.slice(0, 120);
+}
 
 function fieldPath(path: ReadonlyArray<PropertyKey>): string {
 	const joined = path.map(String).join(".") || "(root)";
@@ -83,6 +98,12 @@ function interpret(data: unknown): RepoConfigResult {
 	const parsed = RepoConfigSchema.safeParse(raw);
 	if (parsed.success) return { config: parsed.data };
 	const issue = parsed.error.issues[0];
+	if (issue?.code === "unrecognized_keys") {
+		const key = (issue as { keys?: unknown[] }).keys?.[0];
+		return note(
+			`${REPO_CONFIG_PATH} is invalid at ${fieldPath(issue.path)} (unrecognized_keys: ${safeToken(key)})`,
+		);
+	}
 	return note(
 		`${REPO_CONFIG_PATH} is invalid at ${fieldPath(issue?.path ?? [])} (${issue?.code ?? "invalid"})`,
 	);
@@ -95,7 +116,21 @@ async function readThrough(
 	if (!kv || !key) return null;
 	try {
 		const hit = await kv.get(key);
-		return hit ? (JSON.parse(hit) as RepoConfigResult) : null;
+		if (!hit) return null;
+		const value: unknown = JSON.parse(hit);
+		if (typeof value !== "object" || value === null || Array.isArray(value)) {
+			return null;
+		}
+		const { config, note: cachedNote } = value as {
+			config?: unknown;
+			note?: unknown;
+		};
+		if (config !== undefined) {
+			const parsed = RepoConfigSchema.safeParse(config);
+			return parsed.success ? { config: parsed.data } : null;
+		}
+		if (typeof cachedNote === "string") return { note: cleanNote(cachedNote) };
+		return Object.keys(value).length === 0 ? {} : null;
 	} catch {
 		return null;
 	}
@@ -130,9 +165,8 @@ export async function fetchRepoConfig(args: {
 			branch,
 		});
 		const sha = branchData.commit.sha;
-		const key = /^[0-9a-f]{7,40}$/.test(sha)
-			? `repo-config:${owner}/${repo}@${sha}`
-			: null;
+		const validSha = SHA_PATTERN.test(sha);
+		const key = validSha ? `repo-config:${owner}/${repo}@${sha}` : null;
 		const cached = await readThrough(kv, key);
 		if (cached) return cached;
 
@@ -142,7 +176,7 @@ export async function fetchRepoConfig(args: {
 				owner,
 				repo,
 				path: REPO_CONFIG_PATH,
-				ref: branch,
+				ref: validSha ? sha : branch,
 			});
 			result = interpret(data);
 		} catch (err) {

@@ -48,8 +48,25 @@ describe("fetchRepoConfig", () => {
 			owner: "o",
 			repo: "r",
 			path: ".github/ai-review.yml",
-			ref: "trunk",
+			ref: SHA,
 		});
+	});
+
+	it("falls back to the branch name when the sha is not hex", async () => {
+		const getContent = vi.fn(async () => file("version: 1\n"));
+		const octokit: RepoConfigOctokit = {
+			rest: {
+				repos: {
+					get: async () => ({ data: { default_branch: "trunk" } }),
+					getBranch: async () => ({ data: { commit: { sha: "not-hex!" } } }),
+					getContent,
+				},
+			},
+		};
+		await run(octokit);
+		expect(getContent).toHaveBeenCalledWith(
+			expect.objectContaining({ ref: "trunk" }),
+		);
 	});
 
 	it("404 returns empty and is cached", async () => {
@@ -148,5 +165,52 @@ describe("fetchRepoConfig", () => {
 		expect(await run(octokit)).toEqual({
 			note: "repo config could not be read",
 		});
+	});
+
+	it("rejects a poisoned cache entry and reads fresh", async () => {
+		const kv = fakeKv();
+		kv.store.set(
+			`repo-config:o/r@${SHA}`,
+			JSON.stringify({ config: { version: 1, enabled: true } }),
+		);
+		const { octokit, getContent } = fakeOctokit(async () =>
+			file("version: 1\n"),
+		);
+		const r = await run(octokit, kv);
+		expect(r.config).toEqual({ version: 1 });
+		expect(getContent).toHaveBeenCalledTimes(1);
+	});
+
+	it("treats a non-object cached value as a miss", async () => {
+		const kv = fakeKv();
+		kv.store.set(`repo-config:o/r@${SHA}`, "[1,2]");
+		const { octokit, getContent } = fakeOctokit(async () =>
+			file("version: 1\n"),
+		);
+		expect((await run(octokit, kv)).config).toEqual({ version: 1 });
+		expect(getContent).toHaveBeenCalledTimes(1);
+	});
+
+	it("sanitizes and caps a cached note", async () => {
+		const kv = fakeKv();
+		kv.store.set(
+			`repo-config:o/r@${SHA}`,
+			JSON.stringify({ note: `<img src=x>\n@someone ${"y".repeat(300)}` }),
+		);
+		const { octokit } = fakeOctokit(async () => file("version: 1\n"));
+		const r = await run(octokit, kv);
+		expect(r.note).not.toMatch(/[<>@\n]/);
+		expect(r.note?.length).toBeLessThanOrEqual(200);
+	});
+
+	it("names an unknown key without echoing markup or mentions", async () => {
+		const { octokit } = fakeOctokit(async () =>
+			file('version: 1\n"<img src=x>": 1\n"@someone": 2\n'),
+		);
+		const r = await run(octokit);
+		expect(r.note).toMatch(/unrecognized_keys/);
+		expect(r.note).not.toContain("<img");
+		expect(r.note).not.toContain("@someone");
+		expect(r.note).not.toMatch(/[<>@ ]\S*=/);
 	});
 });

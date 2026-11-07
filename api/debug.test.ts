@@ -383,4 +383,13 @@ describe("sanitizeConfigError", () => {
 		expect(message).not.toContain("/var/task");
 		expect(message).toContain("file:x.yaml");
 	});
+
+	it("reports edge.error instead of a 500 when getEffectiveConfig throws", async () => {
+		vi.mocked(getEffectiveConfig).mockRejectedValue(
+			new Error("kaboom\nsecond line"),
+		);
+		const body = await call();
+		expect((body.edge as { error: string }).error).toBe("kaboom");
+		expect(body.reviewers).toBeDefined();
+	});
 });
