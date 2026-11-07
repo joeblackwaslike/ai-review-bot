@@ -1,3 +1,5 @@
+import type { Verdict } from "../feedback/types.js";
+
 export type LedgerStatus =
 	| "open"
 	| "fixed"
@@ -19,6 +21,8 @@ export interface LedgerEntry {
 	sfp?: string;
 	/** Posted by a quality or architecture agent; never blocks the verdict. */
 	advisory?: true;
+	/** Reaction verdicts on the posted comment, one per reactor. Set only for a comment carrying a single claim. */
+	reactions?: Verdict[];
 	status: LedgerStatus;
 	decidedBy: "author" | "reviewer" | null;
 	reason: string | null;

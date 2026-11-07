@@ -1,3 +1,5 @@
+import { computeReactionDelta } from "../feedback/reactions.js";
+import type { Verdict } from "../feedback/types.js";
 import { splitInlineClaims } from "../replay/claims.js";
 import type { PostedClaim } from "../replay/types.js";
 import { isOwnReview } from "../review-metadata.js";
@@ -19,6 +21,8 @@ export interface EvidenceThread {
 	isResolved: boolean;
 	resolvedBy: string | null;
 	replies: DecisionReply[];
+	/** Verdicts from reactions on the thread's first comment, one per reactor. */
+	reactions?: Verdict[];
 }
 
 export interface LedgerEvidence {
@@ -29,6 +33,54 @@ export interface LedgerEvidence {
 }
 
 const DECIDER_ASSOCIATIONS = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
+
+const REST_REACTION_BY_GRAPHQL = new Map([
+	["THUMBS_UP", "+1"],
+	["THUMBS_DOWN", "-1"],
+	["CONFUSED", "confused"],
+]);
+
+/** One verdict per reactor (the latest verdict-bearing reaction wins), the same reduction the feedback poller applies. */
+function reactionVerdicts(
+	nodes: readonly {
+		content: string;
+		user: { login: string } | null;
+		createdAt: string;
+	}[],
+): Verdict[] {
+	const current = nodes.flatMap((n) => {
+		const content = REST_REACTION_BY_GRAPHQL.get(n.content);
+		return content && n.user
+			? [
+					{
+						login: n.user.login,
+						content,
+						createdAtMs: Date.parse(n.createdAt),
+					},
+				]
+			: [];
+	});
+	return Object.values(computeReactionDelta(current, {}).lastSeen);
+}
+
+/** Verdicts for a thread's first comment, or none when the reaction list was cut off: a partial list can pick the wrong latest verdict. */
+function threadReactions(
+	firstId: number,
+	root: ThreadNode["rootComment"],
+): Verdict[] {
+	const reactions = root?.nodes.find(
+		(n) => n.databaseId === firstId,
+	)?.reactions;
+	if (!reactions) return [];
+	if (reactions.pageInfo?.hasNextPage) {
+		console.warn(
+			`comment ${firstId} has more than 100 reactions; scoring it on its ledger status`,
+		);
+		return [];
+	}
+	return reactionVerdicts(reactions.nodes);
+}
+
 const PER_PAGE = 100;
 
 export function buildLedger(e: LedgerEvidence): Ledger {
@@ -52,6 +104,10 @@ export function buildLedger(e: LedgerEvidence): Ledger {
 			);
 
 	return e.claims.map((c): LedgerEntry => {
+		const t = c.commentId === null ? undefined : byComment.get(c.commentId);
+		// One reply cannot say which of several merged claims it settles.
+		const isSingleClaim =
+			c.commentId !== null && claimsPerComment.get(c.commentId) === 1;
 		const base = {
 			id: c.id,
 			round: c.roundIndex,
@@ -61,11 +117,10 @@ export function buildLedger(e: LedgerEvidence): Ledger {
 			title: c.title,
 			body: stripFpMarkers(c.text),
 			...readFpMarkers(c.text),
+			...(isSingleClaim && t?.reactions?.length
+				? { reactions: t.reactions }
+				: {}),
 		};
-		const t = c.commentId === null ? undefined : byComment.get(c.commentId);
-		// One reply cannot say which of several merged claims it settles.
-		const isSingleClaim =
-			c.commentId !== null && claimsPerComment.get(c.commentId) === 1;
 		const d = t && isSingleClaim && classifyReplies(t.replies, isDecider);
 		const resolvedByDecider = Boolean(
 			t?.isResolved && t.resolvedBy && deciderLogins.has(t.resolvedBy),
@@ -120,6 +175,19 @@ interface ThreadNode {
 			createdAt: string;
 		}[];
 	};
+	rootComment?: {
+		nodes: {
+			databaseId: number;
+			reactions?: {
+				pageInfo?: { hasNextPage: boolean };
+				nodes: {
+					content: string;
+					user: { login: string } | null;
+					createdAt: string;
+				}[];
+			};
+		}[];
+	};
 }
 
 interface ThreadsResponse {
@@ -156,6 +224,16 @@ const THREADS_QUERY = `
                 authorAssociation
                 body
                 createdAt
+              }
+              }
+            }
+            rootComment: comments(first: 1) {
+              nodes {
+                databaseId
+                reactions(first: 100) {
+                  pageInfo { hasNextPage }
+                  nodes { content user { login } createdAt }
+                }
               }
             }
           }
@@ -288,6 +366,7 @@ export async function fetchLedgerEvidence(
 				commentId: first.databaseId,
 				isResolved: t.isResolved,
 				resolvedBy: t.resolvedBy?.login ?? null,
+				reactions: threadReactions(first.databaseId, t.rootComment),
 				replies: rest.map((r) => ({
 					author: r.author?.login ?? "",
 					createdAt: r.createdAt,

@@ -42,7 +42,6 @@ import {
 	type OffDiffCode,
 } from "./discards.js";
 import type { KvClient } from "./feedback/kv.js";
-import { loadReactionsFor } from "./feedback/reactions-for.js";
 import {
 	anchorFingerprint,
 	formatFpMarkers,
@@ -3067,15 +3066,9 @@ async function buildReviewInner(
 	let limitNote: string | null = null;
 	if (tuning.adaptiveLimits && loadedLedger) {
 		const currentRound = loadedLedger.reviewIds.length;
-		const hasEarlierRound = ledger.some((e) => e.round < currentRound);
 		const limits = resolveLimits({
 			entries: ledger,
-			reactionsFor: hasEarlierRound
-				? await loadReactionsFor(
-						context.feedbackEnabled ? context.getKv : undefined,
-						context,
-					)
-				: () => [],
+			reactionsFor: (e) => e.reactions ?? [],
 			currentRound,
 			delta:
 				incrementalPass && !anyWholePrSkill

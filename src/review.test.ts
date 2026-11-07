@@ -7105,115 +7105,73 @@ describe("buildReview ledger suppression", () => {
 		});
 
 		describe("author reactions", () => {
-			const [openThread] = [
-				{
-					...declinedThread,
-					comments: {
-						...declinedThread.comments,
-						nodes: [declinedThread.comments.nodes[0]],
-					},
+			const openThreadWith = (reactions: unknown[]) => ({
+				...declinedThread,
+				comments: {
+					...declinedThread.comments,
+					nodes: [declinedThread.comments.nodes[0]],
 				},
-			];
-			const downRecord = {
-				commentId: 11,
-				provider: "anthropic",
-				installationId: 1,
-				owner: baseContext.owner,
-				repo: baseContext.repo,
-				pr: baseContext.pullNumber,
-				headSha: "abc",
-				path: ownComment.path,
-				line: ownComment.line,
-				skills: [],
-				title: REPEAT_TITLE,
-				body: "",
-				postedAtMs: 0,
-				expiresAtMs: Date.now() + 1e9,
-				lastSeenReactions: { joe: "down" },
-			};
-			const fakeKv = (records: unknown[]) => ({
-				zrangebyscore: vi.fn(async () =>
-					records.map((_, i) => `anthropic:${i}`),
-				),
-				get: vi.fn(async (k: string) =>
-					JSON.stringify(records[Number(k.split(":").pop())]),
-				),
+				rootComment: {
+					nodes: [
+						{
+							databaseId: declinedThread.comments.nodes[0].databaseId,
+							reactions: { nodes: reactions },
+						},
+					],
+				},
 			});
-			const scoreWith = async (getKv?: () => unknown) => {
+			const reacted = (content: string, login: string) => ({
+				content,
+				user: { login },
+				createdAt: "2026-01-02T00:00:00Z",
+			});
+			const scoreWith = async (reactions: unknown[]) => {
 				REVIEWER_TUNING.adaptiveLimits = true;
 				const log = vi.spyOn(console, "log").mockImplementation(() => {});
 				routeAgents({ "code-reviewer.md": agentOutput(nine) }, none);
 				await buildReview({
-					octokit: ledgerOctokit({ threadNodes: [openThread] }),
+					octokit: ledgerOctokit({ threadNodes: [openThreadWith(reactions)] }),
 					...baseContext,
-					feedbackEnabled: true,
-					getKv: getKv as never,
 				});
-				const line = budgetLog(log) as { score: number | null } | undefined;
+				const line = budgetLog(log) as
+					| { score: number | null; rounds?: unknown[] }
+					| undefined;
 				log.mockRestore();
 				return line;
 			};
 
-			it("counts a down reaction on an open entry as rejected", async () => {
-				const kv = fakeKv([downRecord]);
-				expect((await scoreWith(() => kv))?.score).toBe(1);
-				expect((await scoreWith())?.score).toBeNull();
+			it("counts a thumbs-down on an open entry as rejected", async () => {
+				expect((await scoreWith([reacted("THUMBS_DOWN", "joe")]))?.score).toBe(
+					1,
+				);
 			});
 
-			it("proceeds on ledger statuses when KV is unset", async () => {
-				expect((await scoreWith(() => null))?.score).toBeNull();
+			it("scores an open entry nobody reacted to as unanswered", async () => {
+				expect((await scoreWith([]))?.score).toBeNull();
 			});
 
-			it("proceeds and warns once when KV throws", async () => {
-				const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-				const kv = {
-					zrangebyscore: vi.fn(async () => {
-						throw new Error("kv down");
-					}),
-					get: vi.fn(),
-				};
-				const line = await scoreWith(() => kv);
-				const calls = warn.mock.calls.length;
-				warn.mockRestore();
-				expect(line?.score).toBeNull();
-				expect(calls).toBe(1);
+			it("counts a thumbs-up as accepted, so the score stays at zero", async () => {
+				expect((await scoreWith([reacted("THUMBS_UP", "joe")]))?.score).toBe(0);
 			});
 
-			it("does not read KV when no ledger entry predates the current round", async () => {
+			it("reads reactions without KV, so feedback can stay off", async () => {
+				const getKv = vi.fn();
 				REVIEWER_TUNING.adaptiveLimits = true;
-				const kv = fakeKv([downRecord]);
-				const getKv = vi.fn(() => kv);
 				routeAgents({ "code-reviewer.md": agentOutput(nine) }, none);
 				await buildReview({
-					octokit: ledgerOctokit({ comments: [], threadNodes: [] }),
+					octokit: ledgerOctokit({
+						threadNodes: [openThreadWith([reacted("THUMBS_DOWN", "joe")])],
+					}),
 					...baseContext,
-					feedbackEnabled: true,
+					feedbackEnabled: false,
 					getKv: getKv as never,
 				});
 				expect(getKv).not.toHaveBeenCalled();
 			});
 
 			it("logs the per-round friction values", async () => {
-				const kv = fakeKv([downRecord]);
-				const line = (await scoreWith(() => kv)) as
-					| { rounds?: unknown[] }
-					| undefined;
+				const line = await scoreWith([reacted("THUMBS_DOWN", "joe")]);
 				expect(line?.rounds?.[0]).toHaveProperty("friction");
-			});
-
-			it("never touches KV with the switch off", async () => {
-				REVIEWER_TUNING.adaptiveLimits = false;
-				const kv = fakeKv([downRecord]);
-				const getKv = vi.fn(() => kv);
-				routeAgents({ "code-reviewer.md": agentOutput(nine) }, none);
-				await buildReview({
-					octokit: ledgerOctokit({ threadNodes: [openThread] }),
-					...baseContext,
-					feedbackEnabled: true,
-					getKv: getKv as never,
-				});
-				expect(getKv).not.toHaveBeenCalled();
-				expect(kv.zrangebyscore).not.toHaveBeenCalled();
 			});
 		});
 

@@ -691,3 +691,151 @@ describe("reviewer identity in the ledger", () => {
 		).toEqual([20]);
 	});
 });
+
+describe("ledger reactions", () => {
+	const reaction = (content: string, login: string | null, at: string) => ({
+		content,
+		user: login === null ? null : { login },
+		createdAt: at,
+	});
+	const oneComment = (body: string) => [
+		{ id: 10, pull_request_review_id: 1, path: "a.ts", line: 3, body },
+	];
+	const reactedBuild = async (
+		reactions: unknown,
+		comments = oneComment("**P2** thing"),
+	) => {
+		const octokit = fake(
+			[
+				page(
+					[
+						{
+							...t(10),
+							rootComment: {
+								nodes: [
+									{
+										databaseId: 10,
+										...(reactions === undefined ? {} : { reactions }),
+									},
+								],
+							},
+						},
+					],
+					null,
+				),
+			],
+			comments,
+		);
+		return buildLedger(await fetchLedgerEvidence(octokit, opts));
+	};
+
+	it("maps thumbs-down, thumbs-up and confused on the bot's comment to verdicts", async () => {
+		const [e] = await reactedBuild({
+			nodes: [
+				reaction("THUMBS_DOWN", "joe", "2026-01-02T00:00:00Z"),
+				reaction("THUMBS_UP", "sam", "2026-01-02T00:00:00Z"),
+				reaction("CONFUSED", "kim", "2026-01-02T00:00:00Z"),
+			],
+		});
+		expect([...(e.reactions ?? [])].sort()).toEqual(["confused", "down", "up"]);
+	});
+
+	it("keeps each reactor's latest verdict and ignores other emoji and deleted users", async () => {
+		const [e] = await reactedBuild({
+			nodes: [
+				reaction("THUMBS_UP", "joe", "2026-01-02T00:00:00Z"),
+				reaction("THUMBS_DOWN", "joe", "2026-01-03T00:00:00Z"),
+				reaction("HEART", "sam", "2026-01-03T00:00:00Z"),
+				reaction("THUMBS_UP", null, "2026-01-03T00:00:00Z"),
+			],
+		});
+		expect(e.reactions).toEqual(["down"]);
+	});
+
+	it("reads no reactions when the response carries none", async () => {
+		const [e] = await reactedBuild(undefined);
+		expect(e.reactions ?? []).toEqual([]);
+	});
+
+	it("does not attribute a comment's reactions to one of several merged claims", async () => {
+		const entries = await reactedBuild(
+			{ nodes: [reaction("THUMBS_DOWN", "joe", "2026-01-02T00:00:00Z")] },
+			oneComment("**P2** first\n\n---\n\n**P2** second"),
+		);
+		expect(entries.length).toBeGreaterThan(1);
+		for (const e of entries) expect(e.reactions ?? []).toEqual([]);
+	});
+
+	it("drops reactions it could only read in part, so a partial list never picks a verdict", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const [e] = await reactedBuild({
+			pageInfo: { hasNextPage: true },
+			nodes: [reaction("THUMBS_DOWN", "joe", "2026-01-02T00:00:00Z")],
+		});
+		expect(e.reactions ?? []).toEqual([]);
+		expect(warn).toHaveBeenCalledTimes(1);
+		warn.mockRestore();
+	});
+
+	it("keeps reactions when the connection says it is complete", async () => {
+		const [e] = await reactedBuild({
+			pageInfo: { hasNextPage: false },
+			nodes: [reaction("THUMBS_DOWN", "joe", "2026-01-02T00:00:00Z")],
+		});
+		expect(e.reactions).toEqual(["down"]);
+	});
+
+	it("asks GraphQL for the first comment's reactions", async () => {
+		const queries: string[] = [];
+		const octokit = fake([page([t(10)], null)]);
+		const inner = octokit.request;
+		octokit.request = (async (
+			route: string,
+			params?: Record<string, unknown>,
+		) => {
+			if (route === "POST /graphql") queries.push(String(params?.query));
+			return inner(route, params);
+		}) as RequestLike["request"];
+		await fetchLedgerEvidence(octokit, opts);
+		expect(queries[0]).toMatch(/rootComment: comments\(first: 1\)/);
+		expect(queries[0]).toMatch(/reactions\(first: 100\)/);
+	});
+
+	/** Counts nodes the way GitHub does: every connection contributes the product of its own and its ancestors' `first:` sizes. */
+	const estimateNodes = (query: string): number => {
+		let total = 0;
+		const stack = [1];
+		for (const m of query.matchAll(
+			/(?:\w+\s*:\s*)?\w+\s*(?:\(([^)]*)\))?\s*\{|\}/g,
+		)) {
+			if (m[0] === "}") {
+				stack.pop();
+				continue;
+			}
+			const first = /first:\s*(\d+)/.exec(m[1] ?? "");
+			const size =
+				(stack[stack.length - 1] ?? 1) * (first ? Number(first[1]) : 1);
+			if (first) total += size;
+			stack.push(size);
+		}
+		return total;
+	};
+	const GITHUB_NODE_LIMIT = 500_000;
+
+	it("keeps the threads query under GitHub's node limit", async () => {
+		const queries: string[] = [];
+		const octokit = fake([page([t(10)], null)]);
+		const inner = octokit.request;
+		octokit.request = (async (
+			route: string,
+			params?: Record<string, unknown>,
+		) => {
+			if (route === "POST /graphql") queries.push(String(params?.query));
+			return inner(route, params);
+		}) as RequestLike["request"];
+		await fetchLedgerEvidence(octokit, opts);
+		expect(estimateNodes(queries[0] ?? "")).toBeLessThanOrEqual(
+			GITHUB_NODE_LIMIT,
+		);
+	});
+});
