@@ -4,6 +4,7 @@ import {
 	type CatalogFinding,
 	formatSkillOutcomes,
 	ledgerKey,
+	prefixCandidates,
 	summarizeSkillOutcomes,
 } from "./skill-outcomes.js";
 
@@ -219,5 +220,22 @@ describe("formatSkillOutcomes", () => {
 			},
 		]);
 		expect(table).toContain("| a.md | 2 | 0 | 0 | 0 | 2 | 0 | 0 | - |");
+	});
+});
+
+describe("prefixCandidates", () => {
+	it("tries the configured prefix first, then the reviewer default and the bare ai-review heading", () => {
+		expect(prefixCandidates("claude", "ai-review-bot")).toEqual([
+			"ai-review-bot",
+			"claude-review-bot",
+			"ai-review",
+		]);
+	});
+
+	it("lists each prefix once", () => {
+		expect(prefixCandidates("codex", "codex-review-bot")).toEqual([
+			"codex-review-bot",
+			"ai-review",
+		]);
 	});
 });

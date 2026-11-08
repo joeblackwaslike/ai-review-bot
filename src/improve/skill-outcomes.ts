@@ -38,6 +38,20 @@ export function ledgerKey(
 	return `${f.owner}/${f.repo}#${f.pr}:${f.reviewer}`;
 }
 
+/** Review headings a reviewer may post under, most likely first. Production sets the prefix by env var, so it can differ from the YAML (the hosted Claude bot posts "### ai-review"). */
+export function prefixCandidates(
+	reviewer: string,
+	configured: string | undefined,
+): string[] {
+	return [
+		...new Set([
+			...(configured ? [configured] : []),
+			`${reviewer}-review-bot`,
+			"ai-review",
+		]),
+	];
+}
+
 function entryFor(f: CatalogFinding, ledger: Ledger): LedgerEntry | undefined {
 	if (f.commentId === null) return undefined;
 	const marker = `:c${f.commentId}:`;

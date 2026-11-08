@@ -55,6 +55,7 @@ import { installationApp, installationOctokit } from "./improve/octokit.js";
 import {
 	formatSkillOutcomes,
 	ledgerKey,
+	prefixCandidates,
 	summarizeSkillOutcomes,
 } from "./improve/skill-outcomes.js";
 import {
@@ -917,12 +918,14 @@ async function cmdSkillOutcomes(args: string[]): Promise<void> {
 	for (const f of findings) {
 		const key = ledgerKey(f);
 		if (ledgers.has(key) || failed.includes(key)) continue;
-		const prefix =
-			tree.reviewers[f.reviewer]?.commentPrefix ?? `${f.reviewer}-review-bot`;
-		try {
-			ledgers.set(
-				key,
-				buildLedger(
+		let lastError: unknown;
+		let loaded: Ledger | undefined;
+		for (const prefix of prefixCandidates(
+			f.reviewer,
+			tree.reviewers[f.reviewer]?.commentPrefix,
+		)) {
+			try {
+				const ledger = buildLedger(
 					await fetchLedgerEvidence(octokit as unknown as RequestLike, {
 						owner: f.owner,
 						repo: f.repo,
@@ -930,12 +933,19 @@ async function cmdSkillOutcomes(args: string[]): Promise<void> {
 						commentPrefix: prefix,
 						reviewer: f.reviewer,
 					}),
-				),
-			);
-		} catch (err) {
+				);
+				loaded = ledger;
+				if (ledger.length > 0) break;
+			} catch (err) {
+				lastError = err;
+				break;
+			}
+		}
+		if (loaded) ledgers.set(key, loaded);
+		else {
 			failed.push(key);
 			console.error(
-				`ledger unavailable for ${key}: ${err instanceof Error ? err.message : String(err)}`,
+				`ledger unavailable for ${key}: ${lastError instanceof Error ? lastError.message : String(lastError)}`,
 			);
 		}
 	}
