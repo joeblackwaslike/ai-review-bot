@@ -105,8 +105,6 @@ and recall figure.
 
 ## Known gaps
 
-- The scorer takes audit-added defects as input but the command does not yet read them from the
-  adjudication cache, so recall counts labelled claims only.
 - Paired comparisons score both strategies on the `(round, trial)` cells they share within each PR.
   The report prints the number of shared cells and the PRs with no shared cell (left out), plus the
   PRs left out of the precision interval for having no judged finding.

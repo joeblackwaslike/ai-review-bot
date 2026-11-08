@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -24,6 +23,7 @@ import {
 	type NamedJudge,
 } from "./adjudicate.js";
 import { type AuditJudge, type AuditStored, auditFixture } from "./audit.js";
+import { labelsHashOf } from "./audit-defects.js";
 import { VerdictCache } from "./cache.js";
 import type { JudgeInput } from "./judge.js";
 import { EVIDENCE_CHARS, possibleFirstModels, routeJudges } from "./judge.js";
@@ -179,10 +179,7 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 	) as ReplayFixture;
 	const labelsText = await readFile(labelsPath, "utf8");
 	const labels = JSON.parse(labelsText) as LabelFile;
-	const labelsHash = createHash("sha256")
-		.update(labelsText)
-		.digest("hex")
-		.slice(0, 16);
+	const labelsHash = labelsHashOf(labelsText);
 	const snapshot = snapshotId(fixture);
 	const cache: Cache = new VerdictCache(run.cacheDir);
 	const candidates = unmatchedCandidates(fixture, labels);

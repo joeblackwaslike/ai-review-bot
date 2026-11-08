@@ -1,7 +1,13 @@
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { AuditStored } from "../adjudication/audit.js";
+import {
+	auditDefectsFor,
+	labelsHashOf,
+} from "../adjudication/audit-defects.js";
 import { VerdictCache } from "../adjudication/cache.js";
+import { snapshotId } from "../adjudication/snapshot.js";
 import { type GhClient, ghCli } from "../gh.js";
 import { buildLiveWiring } from "../live-wiring.js";
 import { runStrategy } from "../run-strategy.js";
@@ -256,6 +262,7 @@ export function realExperimentDeps(opts: {
 }): ExperimentDeps {
 	registerBuiltinStrategies();
 	let client: GhClient | undefined = opts.client;
+	const auditCache = new VerdictCache<AuditStored>(opts.adjudicationDir);
 	return {
 		out: opts.out,
 		root: defaultExperimentsDir(),
@@ -276,13 +283,17 @@ export function realExperimentDeps(opts: {
 					const fixture = JSON.parse(
 						await readFile(`${stem}.json`, "utf8"),
 					) as ReplayFixture;
-					const labels = JSON.parse(
-						await readFile(`${stem}.labels.json`, "utf8"),
-					) as LabelFile;
+					const labelsText = await readFile(`${stem}.labels.json`, "utf8");
+					const labels = JSON.parse(labelsText) as LabelFile;
 					let wiring: ReturnType<typeof buildLiveWiring> | undefined;
 					const entry: LoadedFixture & ScoredFixture = {
 						fixture,
 						labels,
+						extraDefects: auditDefectsFor(
+							auditCache,
+							snapshotId(fixture),
+							labelsHashOf(labelsText),
+						),
 						fetchDiff: (round) => {
 							client ??= ghCli();
 							wiring ??= buildLiveWiring(fixture, client);
