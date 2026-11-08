@@ -1,6 +1,6 @@
 # Adding a reviewer
 
-A reviewer is one bot identity: its own GitHub App, its own comment heading, and its own model for each PR size. Claude and Codex ship enabled. Gemini ships in `.ai-review.yaml` with `enabled: false`. This page walks through adding another one, using `gemini` as the example id.
+A reviewer is one bot identity: its own GitHub App, its own comment heading, and its own model for each PR size. Claude, Codex and Gemini ship enabled. This page walks through adding another one, using `gemini` as the example id.
 
 Only a human can do three steps: create the GitHub App, install it on repos, and set environment variables in Vercel. Everything else happens in the repo.
 

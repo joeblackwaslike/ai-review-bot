@@ -2537,12 +2537,12 @@ describe("issue_comment review commands with a repo command", () => {
 		expect(mockFetchRepoConfig).not.toHaveBeenCalled();
 	});
 
-	it("does not fetch the repo config when the deployment reviewer is disabled", async () => {
+	it("does not fetch the repo config when the reviewer is not enabled in the deployment config", async () => {
 		const { app } = buildMockApp();
 		await maybeSubmitReview({
 			app,
 			...baseArgs,
-			config: { ...baseArgs.config, reviewer: "gemini" },
+			config: { ...baseArgs.config, reviewer: "not-in-config" },
 		});
 		expect(mockFetchRepoConfig).not.toHaveBeenCalled();
 	});

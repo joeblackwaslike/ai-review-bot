@@ -75,7 +75,7 @@ reviewers:
   # --max-cost <usd>`. Set enabled: false again if the false-positive rate or cost is bad.
   # See docs/adding-a-reviewer.md.
   gemini:
-    enabled: false
+    enabled: true
     appId: 5645368
     appSlug: geminireviewbot
     commentPrefix: gemini-review-bot
