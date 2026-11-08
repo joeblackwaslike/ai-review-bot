@@ -17,6 +17,7 @@ vi.mock("./run-strategy.js", () => ({
 	runStrategy: (s: { run: (i: unknown) => unknown }, i: unknown) => s.run(i),
 }));
 
+import { getConfigTree, resetConfigForTests } from "../config/load.js";
 import { VerdictCache } from "./adjudication/cache.js";
 import { PROMPT_HASH, possibleFirstModels } from "./adjudication/judge.js";
 import type { AdjudicationJudges } from "./adjudication/run.js";
@@ -744,7 +745,10 @@ describe("runReplay live and record flags", () => {
 	});
 
 	describe("--as", () => {
-		afterEach(() => vi.unstubAllEnvs());
+		afterEach(() => {
+			vi.unstubAllEnvs();
+			resetConfigForTests();
+		});
 		const base = (dir: string, extra: object = {}) => ({
 			fixturesDir: dir,
 			out: () => {},
@@ -775,7 +779,14 @@ describe("runReplay live and record flags", () => {
 					"https://github.com/o/r/pull/1",
 				],
 			],
-			["--as with --seeds", ["--seeds", "--as", "claude"]],
+			["--as with --seeds", ["--seeds", "--as", "gemini"]],
+			["--as with --seeds --check", ["--seeds", "--check", "--as", "gemini"]],
+			["--as with --seeds --plan", ["--seeds", "--plan", "--as", "gemini"]],
+			["--as with --experiment run", ["--experiment", "run", "--as", "gemini"]],
+			[
+				"--as with --experiment score",
+				["--experiment", "score", "--as", "gemini"],
+			],
 			["--as with --adjudicate", ["--adjudicate", "x", "--as", "claude"]],
 			[
 				"--as with --investigate-join",
@@ -825,8 +836,11 @@ describe("runReplay live and record flags", () => {
 			expect([runs, estimates]).toEqual([0, 0]);
 		});
 
-		it("runs a disabled reviewer, hands the strategy the --as id and names both reviewers", async () => {
+		it("runs a reviewer configured enabled: false, hands the strategy the --as id and names both reviewers", async () => {
 			vi.stubEnv("GOOGLE_GENERATIVE_AI_API_KEY", "k");
+			vi.stubEnv("AI_REVIEW_REVIEWERS__GEMINI__ENABLED", "false");
+			resetConfigForTests();
+			expect(getConfigTree().reviewers.gemini?.enabled).toBe(false);
 			const dir = tmp();
 			const { id } = seedLive(dir, false);
 			const seen: (string | undefined)[] = [];
