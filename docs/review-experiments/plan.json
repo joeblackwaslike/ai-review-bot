@@ -16,10 +16,7 @@
 		"anthropic": "routed per round by src/router.ts",
 		"openai": "routed per round by src/router.ts"
 	},
-	"providers": [
-		"anthropic",
-		"openai"
-	],
+	"providers": ["anthropic", "openai"],
 	"budgets": {
 		"maxAnthropicUsd": 150,
 		"maxOpenAiUsd": 20,
