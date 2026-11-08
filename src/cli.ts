@@ -174,7 +174,7 @@ function usage(): never {
 		"      fixtures); --record writes a fixture + proposed labels to src/replay/fixtures/.",
 	);
 	console.error(
-		"  ai-review replay --live [--rounds <n>] [--max-cost <usd>]  (opt-in, spends tokens, never gates CI)",
+		"  ai-review replay --live [--reviewer <id>] [--as <reviewer>] [--rounds <n>] [--max-cost <usd>]  (opt-in, spends tokens, never gates CI)",
 	);
 	console.error(
 		"  ai-review replay --experiment plan|run|score [--plan-file <path>] [--fixtures <dir>]  (pre-registered plan; run spends tokens, exits 3 when partial); score also takes --final (once per plan)",

@@ -6,6 +6,7 @@ import {
 	getReviewerAppConfig,
 	listReviewerIds,
 	logReviewerReadiness,
+	missingProviderKeys,
 	ReviewerNotReadyError,
 	reviewerAuthProvider,
 	reviewerProviders,
@@ -116,6 +117,20 @@ describe("getReviewerAppConfig", () => {
 		}
 		expect(message).toContain("PKCS#1");
 		expect(message).not.toContain("topsecret");
+	});
+});
+
+describe("missingProviderKeys", () => {
+	it("names the google key for gemini in cli mode without asking for app credentials", () => {
+		expect(missingProviderKeys("gemini", "cli", {})).toEqual([
+			"GOOGLE_GENERATIVE_AI_API_KEY",
+		]);
+		expect(
+			missingProviderKeys("gemini", "cli", {
+				GOOGLE_GENERATIVE_AI_API_KEY: "k",
+			}),
+		).toEqual([]);
+		expect(missingProviderKeys("claude", "cli", {})).toEqual([]);
 	});
 });
 

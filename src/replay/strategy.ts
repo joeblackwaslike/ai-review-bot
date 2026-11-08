@@ -1,5 +1,6 @@
 import type { Ledger } from "../ledger/types.js";
 import type { ModelReview, PullFile } from "../review.js";
+import type { ReviewerId } from "../reviewer-id.js";
 import type { FrozenFixture } from "./frozen.js";
 import type { LiveFinding } from "./live.js";
 import type { CandidateRecord, Round, RoundUsage } from "./types.js";
@@ -22,6 +23,8 @@ export interface ToolCallRecord {
 
 export interface StrategyInput {
 	fixture: FrozenFixture;
+	/** Route and price with this reviewer instead of the fixture's own (`replay --live --as`). */
+	asReviewer?: ReviewerId;
 	round: Round;
 	diff: string;
 	files: PullFile[];

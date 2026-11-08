@@ -39,8 +39,10 @@ export function strategyVersion(readSkill: (name: string) => string): string {
 let cachedVersion: string | undefined;
 
 const selectionFor = (input: StrategyInput) =>
-	routeReviewerModel(routerContext(input.files), fixtureReviewer(input.fixture))
-		.selection;
+	routeReviewerModel(
+		routerContext(input.files),
+		input.asReviewer ?? fixtureReviewer(input.fixture),
+	).selection;
 
 export const strategyA: ReviewStrategy = {
 	name: "a",
