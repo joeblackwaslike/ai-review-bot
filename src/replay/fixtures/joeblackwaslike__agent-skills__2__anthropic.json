@@ -1,0 +1,242 @@
+{
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "agent-skills",
+	"pull": 2,
+	"provider": "anthropic",
+	"reviewer": "claude",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-11-07T23:31:18.756Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 4892653347,
+			"provider": "anthropic",
+			"submittedAt": "2026-08-09T21:47:07Z",
+			"headSha": "916b0c2755e8ea2f6f3ac39a44f77b013ad04676",
+			"baseSha": "7b6955dd50f72e344ff274543b9ffc34392e4bfa",
+			"mergeBase": "96420a912f56bfe2e33ba8c7bf6985d3ce0f69c2",
+			"triggerAt": "2026-08-09T21:43:29Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "916b0c2755e8ea2f6f3ac39a44f77b013ad04676",
+					"committedAt": "2026-08-09T21:43:29Z",
+					"files": [
+						{
+							"path": "skills/working-with-github/references/howto/code-review-via-api.md",
+							"ranges": [[218, 237], [349, 379]]
+						},
+						{
+							"path": "skills/working-with-github/references/howto/driving-a-pr-to-approval.md",
+							"ranges": [[354, 360], [383, 389]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r0:c3745393153:0",
+					"roundIndex": 0,
+					"reviewId": 4892653347,
+					"source": "inline",
+					"commentId": 3745393153,
+					"path": "skills/working-with-github/references/howto/driving-a-pr-to-approval.md",
+					"line": 357,
+					"severity": "P3",
+					"title": "Serverless-timeout paragraph is too dense for practical use",
+					"text": "🟢 **Low**\n\n**Serverless-timeout paragraph is too dense for practical use**\n\nThis is a single 150-word sentence block covering two distinct failure modes and a decision heuristic. The prior reviewer already noted the density, and the paragraph still hasn't been restructured. As written, the two composable mechanisms (wall-clock budget and bounded wait-with-a-ceiling) are buried in prose and are hard to extract or apply independently. Promoting each mechanism to a sub-bullet would make this actionable without losing any content.\n\n*Suggested fix:*\n\n```suggestion\n- **A serverless-backed reviewer can silently stall on a large PR past its platform's function timeout** — the failure mode looks like a bot that simply never ran: no review, no error, no signal. Observed pattern: a deep-tier PR's agents ran 150–300 s each; 8 sequential agents didn't fit under an 800 s ceiling, the platform killed the function mid-run, and all output (including findings from completed agents) was lost silently.\n  - **(1) Wall-clock budget:** check elapsed time before dispatching each unit of work. A run that can't finish in budget submits what it has (with an explicit \n```"
+				},
+				{
+					"id": "r0:c3745393157:0",
+					"roundIndex": 0,
+					"reviewId": 4892653347,
+					"source": "inline",
+					"commentId": 3745393157,
+					"path": "skills/working-with-github/references/howto/driving-a-pr-to-approval.md",
+					"line": 386,
+					"severity": "P3",
+					"title": "Stacked-reviews caveat repeated in two places",
+					"text": "🟢 **Low**\n\n**Stacked-reviews caveat repeated in two places**\n\nThe stacked-reviews warning (\"blocking reviews from one reviewer stack: dismiss every `CHANGES_REQUESTED` from that reviewer, not just the latest\") appears both in the new cross-reference line in `driving-a-pr-to-approval.md` and in the new `code-review-via-api.md` section. The stated goal of this PR is to trim duplication in favour of cross-references; retaining the full prose of the stacking caveat in the cross-reference line defeats that purpose and will need to be updated in two places if the advice changes.\n\n*Suggested fix:*\n\n```suggestion\n**Dismiss mechanic and payload:** [`code-review-via-api.md § Dismiss a review`](./code-review-via-api.md#dismiss-a-review) — includes the stacked-reviews caveat (dismiss every `CHANGES_REQUESTED` from that reviewer, not just the latest).\n```"
+				},
+				{
+					"id": "r0:body:0",
+					"roundIndex": 0,
+					"reviewId": 4892653347,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Cross-reference anchor points to wrong section",
+					"text": "Cross-reference anchor points to wrong section"
+				}
+			]
+		},
+		{
+			"index": 1,
+			"reviewId": 4892691233,
+			"provider": "anthropic",
+			"submittedAt": "2026-08-09T22:07:10Z",
+			"headSha": "4330b22fcb8a946f7700eea5e007c178415f6b7e",
+			"baseSha": "916b0c2755e8ea2f6f3ac39a44f77b013ad04676",
+			"mergeBase": "916b0c2755e8ea2f6f3ac39a44f77b013ad04676",
+			"triggerAt": "2026-08-09T21:57:16Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "9e17fe446ef7d5077b18f457df6da453d6f93fdf",
+					"committedAt": "2026-08-09T21:54:11Z",
+					"files": [
+						{
+							"path": "skills/working-with-github/references/howto/code-review-via-api.md",
+							"ranges": [[218, 224], [230, 236], [349, 355], [365, 376]]
+						},
+						{
+							"path": "skills/working-with-github/references/howto/driving-a-pr-to-approval.md",
+							"ranges": [[354, 360]]
+						}
+					]
+				},
+				{
+					"sha": "125fd72fc47f57fef283ba380f41b28d03666b70",
+					"committedAt": "2026-08-09T21:55:14Z",
+					"files": [
+						{
+							"path": "skills/working-with-github/references/howto/code-review-via-api.md",
+							"ranges": [[166, 172], [187, 193]]
+						}
+					]
+				},
+				{
+					"sha": "4330b22fcb8a946f7700eea5e007c178415f6b7e",
+					"committedAt": "2026-08-09T21:57:16Z",
+					"files": [
+						{
+							"path": "skills/working-with-github/references/howto/code-review-via-api.md",
+							"ranges": [[218, 226], [351, 359]]
+						},
+						{
+							"path": "skills/working-with-github/references/howto/driving-a-pr-to-approval.md",
+							"ranges": [[354, 364], [387, 393]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r1:c3745447757:0",
+					"roundIndex": 1,
+					"reviewId": 4892691233,
+					"source": "inline",
+					"commentId": 3745447757,
+					"path": "skills/working-with-github/references/howto/code-review-via-api.md",
+					"line": 354,
+					"severity": "P2",
+					"title": "GraphQL `dismissPullRequestReview` `message` field is not required",
+					"text": "🟡 **Medium**\n\n**GraphQL `dismissPullRequestReview` `message` field is not required**\n\nThe diff states \"GraphQL's `message` is **required**; REST's is optional.\" The GitHub GraphQL `dismissPullRequestReview` mutation's `message` argument is documented as optional (nullable `String`), not required. Stating it's required will cause readers to unnecessarily add a message field when it may not be needed, and could mislead them into thinking omitting it causes an error.\n\n*Suggested fix:*\n\n```suggestion\nDismissals are per-review, keyed on the review `id` (REST integer, not a thread or comment id) — REST: `PUT /repos/{o}/{r}/pulls/{n}/reviews/{review_id}/dismissals` with a `message` and `event: \"DISMISS\"`. GraphQL also has this (`dismissPullRequestReview`, taking `pullRequestReviewId` + optional `message`) — REST is shown here since everything else in this doc's dismiss/review-listing flow is REST, but reach for the mutation if you're already in a GraphQL client.\n```"
+				},
+				{
+					"id": "r1:c3745447762:0",
+					"roundIndex": 1,
+					"reviewId": 4892691233,
+					"source": "inline",
+					"commentId": 3745447762,
+					"path": "skills/working-with-github/references/howto/code-review-via-api.md",
+					"line": 169,
+					"severity": "P3",
+					"title": "GraphQL databaseId clarification is slightly misleading",
+					"text": "🟢 **Low**\n\n**GraphQL databaseId clarification is slightly misleading**\n\nThe inline comment `# databaseId ← REST comment_id (id here is a node ID, not that)` is accurate but the parenthetical \"not that\" is ambiguous — a future reader may not know what \"that\" refers to without context. The surrounding prose in `### React to a review comment` already clarifies this clearly, so the inline comment is redundant and its ambiguous phrasing could confuse rather than help.\n\n*Suggested fix:*\n\n```suggestion\n          comments(first: 1) { nodes { body databaseId } }  # databaseId = REST integer comment_id; the id field above is a GraphQL node ID\n```"
+				},
+				{
+					"id": "r1:body:0",
+					"roundIndex": 1,
+					"reviewId": 4892691233,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Docs-only PR: no test coverage concerns",
+					"text": "Docs-only PR: no test coverage concerns"
+				},
+				{
+					"id": "r1:body:1",
+					"roundIndex": 1,
+					"reviewId": 4892691233,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Cross-reference anchor points to wrong section",
+					"text": "Cross-reference anchor points to wrong section"
+				}
+			]
+		}
+	],
+	"threads": [
+		{
+			"threadId": "PRRT_kwDOR7Lu486Xr7cF",
+			"commentId": 3745393153,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3745421529,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-09T21:57:24Z",
+					"editedAt": null,
+					"body": "Fixed in 4330b22 — restructured the two mechanisms into sub-bullets per your suggested diff."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOR7Lu486Xr7cK",
+			"commentId": 3745393157,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3745421498,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-09T21:57:23Z",
+					"editedAt": null,
+					"body": "Fixed in 4330b22 — promoted 'Dismiss a review' to a real ### heading (matching this file's existing 'position vs line' subheading precedent), fixed the cross-reference to #dismiss-a-review, and trimmed the duplicated stacked-reviews caveat out of the cross-reference line per your suggested wording."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOR7Lu486XsFwy",
+			"commentId": 3745447757,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		},
+		{
+			"threadId": "PRRT_kwDOR7Lu486XsFw4",
+			"commentId": 3745447762,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		}
+	],
+	"reactions": [
+		{
+			"commentId": 3745393153,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-09T21:57:25Z"
+		},
+		{
+			"commentId": 3745393157,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-09T21:57:25Z"
+		}
+	]
+}

@@ -1,0 +1,207 @@
+{
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "agent-skills",
+	"pull": 7,
+	"provider": "anthropic",
+	"reviewer": "claude",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-11-07T23:31:04.263Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 5135927598,
+			"provider": "anthropic",
+			"submittedAt": "2026-09-07T23:51:54Z",
+			"headSha": "88da3b2411e1abd5d460c1e9c8b2a711317ba501",
+			"baseSha": "0e2d27e0e4c4f3e1c204ef94f40aa4530ea1b293",
+			"mergeBase": "0e2d27e0e4c4f3e1c204ef94f40aa4530ea1b293",
+			"triggerAt": "2026-09-07T23:49:50Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "6c1ac1dd72b1e8049fa66a813224abe5973ab2f3",
+					"committedAt": "2026-09-07T23:10:31Z",
+					"files": [
+						{
+							"path": "skills/web-research/SKILL.md",
+							"ranges": [[60, 96], [109, 112]]
+						},
+						{
+							"path": "skills/web-research/references/browserless.md",
+							"ranges": [[1, 54]]
+						}
+					]
+				},
+				{
+					"sha": "9f8f0f490c3459b47a8a39f7ddb9acc6f1b24c47",
+					"committedAt": "2026-09-07T23:10:32Z",
+					"files": [
+						{
+							"path": ".gitignore",
+							"ranges": [[3, 9]]
+						},
+						{
+							"path": "skills/autonomous-agent-operations/SKILL.md",
+							"ranges": [[59, 75]]
+						},
+						{
+							"path": "skills/best-practices-for-agentic-development/SKILL.md",
+							"ranges": [[2, 8], [36, 42], [49, 55], [62, 68]]
+						},
+						{
+							"path": "skills/best-practices-for-agentic-development/references/agentic-development.md",
+							"ranges": [
+								[14, 33],
+								[41, 67],
+								[73, 84],
+								[91, 123],
+								[143, 165],
+								[178, 213],
+								[220, 236],
+								[245, 254],
+								[285, 287]
+							]
+						},
+						{
+							"path": "skills/best-practices-for-agentic-development/references/general-agent-development.md",
+							"ranges": [
+								[37, 65],
+								[100, 113],
+								[125, 139],
+								[157, 174],
+								[200, 207],
+								[212, 214]
+							]
+						},
+						{
+							"path": "skills/best-practices-for-agentic-development/references/mcp-development.md",
+							"ranges": [
+								[14, 20],
+								[35, 44],
+								[75, 93],
+								[110, 116],
+								[160, 168],
+								[182, 202],
+								[216, 218]
+							]
+						},
+						{
+							"path": "skills/best-practices-for-agentic-development/references/skill-development.md",
+							"ranges": [
+								[30, 38],
+								[126, 145],
+								[156, 173],
+								[247, 281],
+								[295, 380],
+								[385, 389]
+							]
+						},
+						{
+							"path": "skills/senior-engineering-best-practices/references/blast-radius-judgment.md",
+							"ranges": [[50, 75]]
+						}
+					]
+				},
+				{
+					"sha": "e9fe348ecbfae4f00fe513403084abf56c7a9cf5",
+					"committedAt": "2026-09-07T23:10:32Z",
+					"files": [
+						{
+							"path": ".clawhip/state/prompt-submit.json",
+							"ranges": [[0, 0]]
+						}
+					]
+				},
+				{
+					"sha": "07e974de1006e825f6d5be1fbbb8de569adb65d6",
+					"committedAt": "2026-09-07T23:37:49Z",
+					"files": [
+						{
+							"path": "skills/web-research/SKILL.md",
+							"ranges": [[79, 85]]
+						},
+						{
+							"path": "skills/web-research/references/browserless.md",
+							"ranges": [[9, 33], [52, 60]]
+						}
+					]
+				},
+				{
+					"sha": "88da3b2411e1abd5d460c1e9c8b2a711317ba501",
+					"committedAt": "2026-09-07T23:49:50Z",
+					"files": [
+						{
+							"path": "skills/web-research/SKILL.md",
+							"ranges": [[4, 10]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r0:body:0",
+					"roundIndex": 0,
+					"reviewId": 5135927598,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Credentials sourced via `source ~/creds.zsh` with no existence check",
+					"text": "Credentials sourced via `source ~/creds.zsh` with no existence check"
+				},
+				{
+					"id": "r0:body:1",
+					"roundIndex": 0,
+					"reviewId": 5135927598,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Bearer token passed via curl in bash examples with no redaction guidance",
+					"text": "Bearer token passed via curl in bash examples with no redaction guidance"
+				},
+				{
+					"id": "r0:body:2",
+					"roundIndex": 0,
+					"reviewId": 5135927598,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "No SSRF/arbitrary-URL guardrail mentioned for Browserless proxying",
+					"text": "No SSRF/arbitrary-URL guardrail mentioned for Browserless proxying"
+				},
+				{
+					"id": "r0:body:3",
+					"roundIndex": 0,
+					"reviewId": 5135927598,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Documentation-only PR has no automated tests for the described validation work",
+					"text": "Documentation-only PR has no automated tests for the described validation work"
+				},
+				{
+					"id": "r0:body:4",
+					"roundIndex": 0,
+					"reviewId": 5135927598,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Browserless credential fallback behavior undocumented",
+					"text": "Browserless credential fallback behavior undocumented"
+				}
+			]
+		}
+	],
+	"threads": [],
+	"reactions": []
+}

@@ -1,0 +1,1029 @@
+{
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "stealth-browser",
+	"pull": 4,
+	"provider": "anthropic",
+	"reviewer": "claude",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-11-07T23:32:09.755Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 5760908857,
+			"provider": "anthropic",
+			"submittedAt": "2026-11-03T23:23:32Z",
+			"headSha": "1c5c04f6c11bbf2575cbf362d5a7400e31a28b66",
+			"baseSha": "dbf3677f745b31cb3d70ccf98d5d79c2658ff5c6",
+			"mergeBase": "dbf3677f745b31cb3d70ccf98d5d79c2658ff5c6",
+			"triggerAt": "2026-11-03T23:15:27Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "f946358a578e334f221d1200e546fe56e8f6f776",
+					"committedAt": "2026-11-03T22:11:21Z",
+					"files": [
+						{
+							"path": "docs/superpowers/specs/2026-11-03-captcha-solver-design.md",
+							"ranges": [[1, 46]]
+						}
+					]
+				},
+				{
+					"sha": "77bd09478e2a6d8fd34142eb2c2cce1524267dce",
+					"committedAt": "2026-11-03T22:12:01Z",
+					"files": [
+						{
+							"path": "docs/superpowers/plans/2026-11-03-captcha-solver.md",
+							"ranges": [[1, 160]]
+						}
+					]
+				},
+				{
+					"sha": "cd4d7c7836f3c134dbd304d01cb980bc1fcccc2b",
+					"committedAt": "2026-11-03T22:13:06Z",
+					"files": [
+						{
+							"path": "src/profiles.ts",
+							"ranges": [[1, 5], [27, 38]]
+						},
+						{
+							"path": "test/profiles.test.ts",
+							"ranges": [[22, 41]]
+						}
+					]
+				},
+				{
+					"sha": "2b0140d76ff725b8803793b4c806f1a769a75652",
+					"committedAt": "2026-11-03T22:14:39Z",
+					"files": [
+						{
+							"path": "src/detect.ts",
+							"ranges": [[71, 106]]
+						},
+						{
+							"path": "test/detect.test.ts",
+							"ranges": [[1, 6], [278, 323]]
+						},
+						{
+							"path": "test/fixtures/google-sorry.html",
+							"ranges": [[1, 4]]
+						},
+						{
+							"path": "test/fixtures/recaptcha-widget.html",
+							"ranges": [[1, 4]]
+						}
+					]
+				},
+				{
+					"sha": "07d11761b9a9253d9f2c2b119b8641ea2e3b5f2e",
+					"committedAt": "2026-11-03T22:15:58Z",
+					"files": [
+						{
+							"path": "src/detect.ts",
+							"ranges": [[81, 87]]
+						},
+						{
+							"path": "test/detect.test.ts",
+							"ranges": [[320, 364]]
+						}
+					]
+				},
+				{
+					"sha": "7a467fb33a1945456f8217b5421b64d9acdbd0ea",
+					"committedAt": "2026-11-03T22:18:38Z",
+					"files": [
+						{
+							"path": "src/config.ts",
+							"ranges": [[8, 16], [27, 35], [40, 47]]
+						},
+						{
+							"path": "src/solver/budget.ts",
+							"ranges": [[1, 22]]
+						},
+						{
+							"path": "src/solver/index.ts",
+							"ranges": [[1, 24]]
+						},
+						{
+							"path": "src/solver/two-captcha.ts",
+							"ranges": [[1, 74]]
+						},
+						{
+							"path": "src/solver/types.ts",
+							"ranges": [[1, 14]]
+						},
+						{
+							"path": "test/config.test.ts",
+							"ranges": [[34, 69]]
+						},
+						{
+							"path": "test/solver.test.ts",
+							"ranges": [[1, 153]]
+						}
+					]
+				},
+				{
+					"sha": "d71c56eb5d37c5644be479d4fa5802011b285ed0",
+					"committedAt": "2026-11-03T22:20:41Z",
+					"files": [
+						{
+							"path": "src/solver/two-captcha.ts",
+							"ranges": [[26, 93]]
+						},
+						{
+							"path": "test/solver.test.ts",
+							"ranges": [[151, 210]]
+						}
+					]
+				},
+				{
+					"sha": "76664f9b88da9e885eb00debb5d05e15a4d52d4d",
+					"committedAt": "2026-11-03T22:25:56Z",
+					"files": [
+						{
+							"path": "src/app.ts",
+							"ranges": [
+								[2, 16],
+								[35, 41],
+								[51, 57],
+								[67, 79],
+								[115, 126],
+								[136, 145]
+							]
+						},
+						{
+							"path": "src/browser.ts",
+							"ranges": [[1, 22], [48, 113], [158, 172], [189, 196]]
+						},
+						{
+							"path": "src/profiles.ts",
+							"ranges": [[2, 8]]
+						},
+						{
+							"path": "src/server.ts",
+							"ranges": [[4, 10], [23, 29]]
+						},
+						{
+							"path": "src/solver/index.ts",
+							"ranges": [[4, 13]]
+						},
+						{
+							"path": "src/solver/two-captcha.ts",
+							"ranges": [[1, 8], [19, 25]]
+						},
+						{
+							"path": "test/app.test.ts",
+							"ranges": [[4, 12], [61, 67], [79, 85], [327, 367]]
+						},
+						{
+							"path": "test/browser.test.ts",
+							"ranges": [[1, 191]]
+						}
+					]
+				},
+				{
+					"sha": "7f7a22db7168c06ea2da5e9b677baf1de791d946",
+					"committedAt": "2026-11-03T22:32:26Z",
+					"files": [
+						{
+							"path": "src/browser.ts",
+							"ranges": [[51, 60], [68, 89], [107, 113], [197, 203]]
+						},
+						{
+							"path": "src/detect.ts",
+							"ranges": [[49, 59]]
+						},
+						{
+							"path": "test/browser.test.ts",
+							"ranges": [
+								[33, 45],
+								[51, 81],
+								[140, 178],
+								[195, 201],
+								[209, 215],
+								[232, 239]
+							]
+						},
+						{
+							"path": "test/detect.test.ts",
+							"ranges": [[192, 230]]
+						}
+					]
+				},
+				{
+					"sha": "5ece7a71e95cc7c1109113d22868257f18d30fbc",
+					"committedAt": "2026-11-03T22:34:42Z",
+					"files": [
+						{
+							"path": "README.md",
+							"ranges": [[73, 79], [96, 141]]
+						},
+						{
+							"path": "deploy/k8s/gateway-deployment.yaml",
+							"ranges": [[35, 50]]
+						},
+						{
+							"path": "docs/superpowers/specs/2026-10-16-stealth-browser-design.md",
+							"ranges": [[43, 50]]
+						}
+					]
+				},
+				{
+					"sha": "7435efce01e7eb441f39dbff8b930f2997383f9b",
+					"committedAt": "2026-11-03T22:38:02Z",
+					"files": [
+						{
+							"path": "package.json",
+							"ranges": [[14, 20]]
+						},
+						{
+							"path": "scripts/solver-check.ts",
+							"ranges": [[1, 103]]
+						},
+						{
+							"path": "test/solver-check.test.ts",
+							"ranges": [[1, 27]]
+						}
+					]
+				},
+				{
+					"sha": "41fa71f1310b13b960c2d02610bfffbab6403eb9",
+					"committedAt": "2026-11-03T22:48:43Z",
+					"files": [
+						{
+							"path": "src/app.ts",
+							"ranges": [[36, 43], [54, 60], [122, 128], [141, 150]]
+						},
+						{
+							"path": "src/browser.ts",
+							"ranges": [[17, 24], [112, 123]]
+						},
+						{
+							"path": "src/config.ts",
+							"ranges": [[1, 6], [12, 19], [33, 49], [57, 62]]
+						},
+						{
+							"path": "src/server.ts",
+							"ranges": [[24, 30]]
+						},
+						{
+							"path": "test/app.test.ts",
+							"ranges": [[1, 4], [62, 68], [81, 87], [329, 394], [411, 440]]
+						},
+						{
+							"path": "test/browser.test.ts",
+							"ranges": [[38, 44], [57, 66], [194, 200], [216, 240]]
+						},
+						{
+							"path": "test/config.test.ts",
+							"ranges": [[60, 85]]
+						},
+						{
+							"path": "test/solver.test.ts",
+							"ranges": [[141, 147]]
+						}
+					]
+				},
+				{
+					"sha": "0b4cf188b14b95a8cc48b832d5905d6c3eda1dfa",
+					"committedAt": "2026-11-03T22:48:54Z",
+					"files": [
+						{
+							"path": "README.md",
+							"ranges": [[42, 48], [87, 93], [119, 144]]
+						}
+					]
+				},
+				{
+					"sha": "9b5b57b86973fc91e0d9a4792b56e2181bd7b68c",
+					"committedAt": "2026-11-03T23:00:14Z",
+					"files": [
+						{
+							"path": "src/app.ts",
+							"ranges": [[142, 148]]
+						},
+						{
+							"path": "src/browser.ts",
+							"ranges": [[1, 11], [22, 29], [77, 97], [106, 137], [143, 165]]
+						},
+						{
+							"path": "src/solver/index.ts",
+							"ranges": [[8, 18]]
+						},
+						{
+							"path": "src/solver/two-captcha.ts",
+							"ranges": [[1, 5], [27, 34], [76, 91], [98, 107], [114, 121]]
+						},
+						{
+							"path": "src/solver/types.ts",
+							"ranges": [[12, 34]]
+						},
+						{
+							"path": "test/app.test.ts",
+							"ranges": [[411, 417], [421, 427], [431, 458]]
+						},
+						{
+							"path": "test/browser.test.ts",
+							"ranges": [[4, 10], [194, 200], [212, 223], [232, 257]]
+						}
+					]
+				},
+				{
+					"sha": "a1b4a372f7a16a96a36ce4017d628035197d41da",
+					"committedAt": "2026-11-03T23:09:55Z",
+					"files": [
+						{
+							"path": "src/browser.ts",
+							"ranges": [[1, 7], [119, 127]]
+						},
+						{
+							"path": "src/solver/index.ts",
+							"ranges": [[9, 15]]
+						},
+						{
+							"path": "src/solver/two-captcha.ts",
+							"ranges": [[1, 5], [30, 43], [54, 62], [102, 115], [130, 140]]
+						},
+						{
+							"path": "src/solver/types.ts",
+							"ranges": [[26, 46]]
+						},
+						{
+							"path": "test/browser.test.ts",
+							"ranges": [[237, 262]]
+						},
+						{
+							"path": "test/solver-check.test.ts",
+							"ranges": [[24, 47]]
+						},
+						{
+							"path": "test/solver.test.ts",
+							"ranges": [[93, 98], [207, 241]]
+						}
+					]
+				},
+				{
+					"sha": "451f257b47c208e164e7addce6d55aa1231be92b",
+					"committedAt": "2026-11-03T23:13:27Z",
+					"files": [
+						{
+							"path": "src/solver/two-captcha.ts",
+							"ranges": [[8, 22], [68, 85], [99, 121]]
+						},
+						{
+							"path": "test/solver.test.ts",
+							"ranges": [[221, 278]]
+						}
+					]
+				},
+				{
+					"sha": "1c5c04f6c11bbf2575cbf362d5a7400e31a28b66",
+					"committedAt": "2026-11-03T23:15:27Z",
+					"files": [
+						{
+							"path": "src/solver/two-captcha.ts",
+							"ranges": [[67, 76]]
+						},
+						{
+							"path": "test/solver.test.ts",
+							"ranges": [[273, 333]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r0:c4461659351:0",
+					"roundIndex": 0,
+					"reviewId": 5760908857,
+					"source": "inline",
+					"commentId": 4461659351,
+					"path": "src/browser.ts",
+					"line": 27,
+					"severity": "P3",
+					"title": "FetchResult allows contradictory solve/solveReason combinations",
+					"text": "🟢 **P3**\n\n**FetchResult allows contradictory solve/solveReason combinations**\n\n`solve` and `solveReason` are independent optionals, so the type permits `{ solve: \"solved\", solveReason: \"timeout\" }`, `{ solve: \"failed\" }` with no reason, and `{ solveReason }` with no `solve`. Only `solveOnce` upholds the real rule: a reason exists exactly when the solve failed. Modelling this as a union would make the invalid states unrepresentable, for example `{ solve?: undefined } | { solve: \"solved\" } | { solve: \"failed\"; solveReason: SolveReason }`. `app.ts` could then read `solveReason` only after narrowing on `solve === \"failed\"`. Related: `tagSolveReason` returns plain `Error` even though `SolveReasonError` is defined, so that type is never used.\n\n<!-- ai-review:fp=architecture|src/browser.ts|8a17630dc5f75006.0 -->"
+				},
+				{
+					"id": "r0:c4461659356:0",
+					"roundIndex": 0,
+					"reviewId": 5760908857,
+					"source": "inline",
+					"commentId": 4461659356,
+					"path": "src/solver/two-captcha.ts",
+					"line": 66,
+					"severity": "P2",
+					"title": "Transport failures are reported as \"HTTP 0\" with the cause discarded",
+					"text": "🟡 **P2**\n\n**Transport failures are reported as \"HTTP 0\" with the cause discarded**\n\nThis catch drops every fetch exception (DNS failure, TLS error, connection reset, injected-fetch throw) and returns `status: 0`. On submit, the caller then throws `solver submit failed: HTTP 0`, although no HTTP response existed. During polling, repeated transport failures end only as `solver timed out`. Operators cannot tell an unreachable provider from a slow solve, and the gateway log gets only the fixed `provider_error` or `timeout` reason. Keep a sanitized cause, such as the error name or a redacted message, in the call result and include it in the submit error and the final timeout. The existing `redact()` already covers the API key.\n\n<!-- ai-review:fp=bug|src/solver/two-captcha.ts|aa5a9a29b7f2fd0b.0 -->"
+				},
+				{
+					"id": "r0:c4461659361:0",
+					"roundIndex": 0,
+					"reviewId": 5760908857,
+					"source": "inline",
+					"commentId": 4461659361,
+					"path": "scripts/solver-check.ts",
+					"line": 31,
+					"severity": "P3",
+					"title": "Empty catch hides an unparseable 423 body",
+					"text": "🟢 **P3**\n\n**Empty catch hides an unparseable 423 body**\n\nThe empty `catch {}` swallows the JSON parse failure, and the reason silently stays `\"unknown\"`. An operator running the live check cannot distinguish a gateway 423 that carried reason `unknown` from a malformed or non-gateway 423 body, for example one from a proxy. Record the parse failure explicitly instead of leaving the catch empty. If you use a distinct reason such as `unparseable`, update the existing test that expects `unknown` for a non-JSON body.\n\n<!-- ai-review:fp=bug|scripts/solver-check.ts|9f615e5689c40766.0 -->"
+				},
+				{
+					"id": "r0:c4461659365:0",
+					"roundIndex": 0,
+					"reviewId": 5760908857,
+					"source": "inline",
+					"commentId": 4461659365,
+					"path": "src/browser.ts",
+					"line": 152,
+					"severity": "P3",
+					"title": "Solve failure detail is discarded; \"unknown\" reasons are undebuggable",
+					"text": "🟢 **P3**\n\n**Solve failure detail is discarded; \"unknown\" reasons are undebuggable**\n\nThe catch collapses every error into a fixed-vocabulary code, and the original error is dropped. That vocabulary is deliberate. But an unexpected failure, such as a Playwright error from `page.content()` or `page.evaluate`, or an adapter bug, becomes `solveReason: \"unknown\"`. The gateway log then has no name, class, or stack to debug with, and `solver-check` tells operators to rely on these logs. Carry a safe discriminator on the result for the `unknown` case, such as `error.name`, or the redacted message with the ws endpoint already stripped, so the app's `solve_failed` warning can log it.\n\n<!-- ai-review:fp=bug|src/browser.ts|bd0ff7a3096e0c26.0 -->"
+				},
+				{
+					"id": "r0:c4461659369:0",
+					"roundIndex": 0,
+					"reviewId": 5760908857,
+					"source": "inline",
+					"commentId": 4461659369,
+					"path": "src/solver/two-captcha.ts",
+					"line": 43,
+					"severity": "P3",
+					"title": "Comment typo: \"expect 429\" should be \"except 429\"",
+					"text": "🟢 **P3**\n\n**Comment typo: \"expect 429\" should be \"except 429\"**\n\nThe comment reads \"(expect 429)\" but means \"except 429\". As written it reads as if 429 is expected to be permanent, the opposite of what `isPermanentStatus` does.\n\n*Suggested fix:*\n\n```suggestion\n\t// \"transient\" failures, so treat 401/403/404/other-4xx (except 429) as\n```\n\n<!-- ai-review:fp=nitpick|src/solver/two-captcha.ts|6f86faf01296949e.0 -->\n<!-- ai-review:sfp=970d0885c6d299a7 -->"
+				},
+				{
+					"id": "r0:c4461659388:0",
+					"roundIndex": 0,
+					"reviewId": 5760908857,
+					"source": "inline",
+					"commentId": 4461659388,
+					"path": "test/browser.test.ts",
+					"line": 75,
+					"severity": "P2",
+					"title": "Browser solve tests never run the real token-fill and submit callbacks",
+					"text": "🟡 **P2**\n\n**Browser solve tests never run the real token-fill and submit callbacks**\n\nThe fake `page.evaluate` ignores its callback (`_fn`) and decides what to do from whether a `token` argument was passed. Every solve test therefore passes without running the production code in `submitToken`. That code locates `.g-recaptcha`'s enclosing form, fills or creates `textarea#g-recaptcha-response`, and calls `HTMLFormElement.prototype.submit`.\n\nThese tests would still pass if the callback wrote the token to the wrong field, picked the wrong form, never submitted, or returned the wrong boolean. That is the riskiest integration boundary in the feature, and the live Google check is still deferred.\n\nAdd a test that executes the real callbacks against `test/fixtures/google-sorry.html` in a DOM (jsdom/happy-dom, or a local page in real Firefox). It should assert two things: the submitted form holds the token, both with an existing response textarea and with one created when missing; and a page with no enclosing form returns `false`.\n\nThe `navigation_failed` reason is also never exercised, because the fake `waitForNavigation` only ever resolves.\n\n<!-- ai-review:fp=test-gap|test/browser.test.ts|4b25d5576ae3d345.0 -->"
+				},
+				{
+					"id": "r0:c4461659390:0",
+					"roundIndex": 0,
+					"reviewId": 5760908857,
+					"source": "inline",
+					"commentId": 4461659390,
+					"path": "src/solver/two-captcha.ts",
+					"line": 167,
+					"severity": "P3",
+					"title": "Empty token or task id from the provider is accepted as success",
+					"text": "🟢 **P3**\n\n**Empty token or task id from the provider is accepted as success**\n\n`isApiReply` only checks that `request` is a string. A reply of `{status:1, request:\"\"}` is therefore accepted. On submit, polling starts with an empty task id. On poll, `solve()` resolves with an empty token. That empty token is then injected and submitted, which spends a solve attempt on a form submission that cannot succeed and ends as `challenge_remained`. Require a non-empty `request` when `status === 1`, and treat an empty one as a malformed reply. No test covers this case.\n\n<!-- ai-review:fp=bug|src/solver/two-captcha.ts|654b7c45da749464.0 -->"
+				}
+			]
+		},
+		{
+			"index": 1,
+			"reviewId": 5761166266,
+			"provider": "anthropic",
+			"submittedAt": "2026-11-03T23:54:45Z",
+			"headSha": "dd0d6a0dd9b7375fb57529d87b90f707081d722c",
+			"baseSha": "1c5c04f6c11bbf2575cbf362d5a7400e31a28b66",
+			"mergeBase": "1c5c04f6c11bbf2575cbf362d5a7400e31a28b66",
+			"triggerAt": "2026-11-03T23:42:06Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "288b60170007d798c9cfe6f0b99b53db7bd8918e",
+					"committedAt": "2026-11-03T23:34:27Z",
+					"files": [
+						{
+							"path": "src/solver/two-captcha.ts",
+							"ranges": [[40, 46]]
+						}
+					]
+				},
+				{
+					"sha": "6ec8332d6f6e240b6f5a6d685305f5be48efe566",
+					"committedAt": "2026-11-03T23:34:52Z",
+					"files": [
+						{
+							"path": "src/solver/types.ts",
+							"ranges": [[44, 52]]
+						},
+						{
+							"path": "test/solver.test.ts",
+							"ranges": [[7, 13], [347, 357]]
+						}
+					]
+				},
+				{
+					"sha": "8dd866def080034232fde6aac47229fe89563f33",
+					"committedAt": "2026-11-03T23:35:12Z",
+					"files": [
+						{
+							"path": "src/solver/types.ts",
+							"ranges": [[13, 37]]
+						}
+					]
+				},
+				{
+					"sha": "cd7ec576c8ab3f45298c97fe50b2d86c05d4d42e",
+					"committedAt": "2026-11-03T23:36:12Z",
+					"files": [
+						{
+							"path": "src/app.ts",
+							"ranges": [[140, 146]]
+						},
+						{
+							"path": "src/browser.ts",
+							"ranges": [[16, 37], [111, 116]]
+						},
+						{
+							"path": "test/app.test.ts",
+							"ranges": [[52, 58], [372, 378], [399, 409], [440, 461]]
+						}
+					]
+				},
+				{
+					"sha": "fe94bd6f1bde9d0a2115f145bac17ce882334e3d",
+					"committedAt": "2026-11-03T23:37:00Z",
+					"files": [
+						{
+							"path": "src/solver/two-captcha.ts",
+							"ranges": [[8, 21]]
+						},
+						{
+							"path": "test/solver.test.ts",
+							"ranges": [[355, 395]]
+						}
+					]
+				},
+				{
+					"sha": "17d39dc19e9ed3bf03e676354ea1c78005b7c93e",
+					"committedAt": "2026-11-03T23:38:07Z",
+					"files": [
+						{
+							"path": "src/solver/two-captcha.ts",
+							"ranges": [
+								[19, 31],
+								[45, 59],
+								[67, 81],
+								[85, 94],
+								[122, 130],
+								[138, 163]
+							]
+						},
+						{
+							"path": "test/solver.test.ts",
+							"ranges": [[393, 433]]
+						}
+					]
+				},
+				{
+					"sha": "343ac0eaf24a7b566400935df6bb03af3eda8631",
+					"committedAt": "2026-11-03T23:38:56Z",
+					"files": [
+						{
+							"path": "src/app.ts",
+							"ranges": [[142, 153]]
+						},
+						{
+							"path": "src/browser.ts",
+							"ranges": [[18, 30], [140, 146], [160, 171], [226, 232]]
+						},
+						{
+							"path": "test/app.test.ts",
+							"ranges": [[416, 422], [456, 488]]
+						},
+						{
+							"path": "test/browser.test.ts",
+							"ranges": [[350, 374]]
+						}
+					]
+				},
+				{
+					"sha": "5427d99275bbcba470279e72e38ed7f6da139b27",
+					"committedAt": "2026-11-03T23:39:27Z",
+					"files": [
+						{
+							"path": "src/browser.ts",
+							"ranges": [[1, 5], [112, 117], [140, 146]]
+						},
+						{
+							"path": "src/detect.ts",
+							"ranges": [[39, 57], [64, 70]]
+						},
+						{
+							"path": "test/browser.test.ts",
+							"ranges": [[39, 45], [59, 71], [377, 416]]
+						}
+					]
+				},
+				{
+					"sha": "22e419d468ac521c7461b7e67c2a52c951bd95ad",
+					"committedAt": "2026-11-03T23:39:43Z",
+					"files": [
+						{
+							"path": "src/detect.ts",
+							"ranges": [[101, 107]]
+						},
+						{
+							"path": "test/detect.test.ts",
+							"ranges": [[395, 413]]
+						}
+					]
+				},
+				{
+					"sha": "f01235ec6eedf140418b3d169059168c3c21f0da",
+					"committedAt": "2026-11-03T23:40:12Z",
+					"files": [
+						{
+							"path": "src/solver/two-captcha.ts",
+							"ranges": [[41, 47], [77, 83], [112, 118], [147, 153]]
+						},
+						{
+							"path": "test/solver.test.ts",
+							"ranges": [[431, 456]]
+						}
+					]
+				},
+				{
+					"sha": "9c533e3fb23cd64a7053bb00d95d8edda626dc11",
+					"committedAt": "2026-11-03T23:40:12Z",
+					"files": [
+						{
+							"path": "src/config.ts",
+							"ranges": [[31, 41]]
+						},
+						{
+							"path": "test/config.test.ts",
+							"ranges": [[87, 106]]
+						}
+					]
+				},
+				{
+					"sha": "c4b6f891397a40f86fbe915722e0155e05cb339a",
+					"committedAt": "2026-11-03T23:40:34Z",
+					"files": [
+						{
+							"path": "scripts/solver-check.ts",
+							"ranges": [[25, 44]]
+						},
+						{
+							"path": "test/solver-check.test.ts",
+							"ranges": [[31, 40], [45, 61]]
+						}
+					]
+				},
+				{
+					"sha": "a4e6af29b5ab7d580587ad9b39040497297c1c18",
+					"committedAt": "2026-11-03T23:40:52Z",
+					"files": [
+						{
+							"path": "scripts/solver-check.ts",
+							"ranges": [[102, 108]]
+						},
+						{
+							"path": "test/solver-check.test.ts",
+							"ranges": [[1, 4], [60, 82]]
+						}
+					]
+				},
+				{
+					"sha": "2adc43ff745bab3c88de90d565bf7f1b264936c8",
+					"committedAt": "2026-11-03T23:41:08Z",
+					"files": [
+						{
+							"path": "README.md",
+							"ranges": [[117, 123], [129, 143]]
+						}
+					]
+				},
+				{
+					"sha": "065e187f7a741b6677b51a5ac0dd5448b70e24e6",
+					"committedAt": "2026-11-03T23:41:12Z",
+					"files": [
+						{
+							"path": "deploy/k8s/gateway-deployment.yaml",
+							"ranges": [[21, 27]]
+						},
+						{
+							"path": "package.json",
+							"ranges": [[1, 6]]
+						}
+					]
+				},
+				{
+					"sha": "dd0d6a0dd9b7375fb57529d87b90f707081d722c",
+					"committedAt": "2026-11-03T23:42:06Z",
+					"files": [
+						{
+							"path": "package.json",
+							"ranges": [[29, 35]]
+						},
+						{
+							"path": "pnpm-lock.yaml",
+							"ranges": [
+								[33, 47],
+								[252, 263],
+								[280, 289],
+								[292, 301],
+								[320, 329],
+								[584, 610],
+								[727, 738],
+								[748, 763],
+								[773, 791],
+								[946, 952],
+								[964, 977]
+							]
+						},
+						{
+							"path": "test/submit-token.test.ts",
+							"ranges": [[1, 125]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r1:body:0",
+					"roundIndex": 1,
+					"reviewId": 5761166266,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "FetchResult allows contradictory solve/solveReason combinations (`src/browser.ts:27`)",
+					"text": "FetchResult allows contradictory solve/solveReason combinations (`src/browser.ts:27`)"
+				},
+				{
+					"id": "r1:body:1",
+					"roundIndex": 1,
+					"reviewId": 5761166266,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Transport failures are reported as \"HTTP 0\" with the cause discarded (`src/solver/two-captcha.ts:66`)",
+					"text": "Transport failures are reported as \"HTTP 0\" with the cause discarded (`src/solver/two-captcha.ts:66`)"
+				},
+				{
+					"id": "r1:body:2",
+					"roundIndex": 1,
+					"reviewId": 5761166266,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Empty catch hides an unparseable 423 body (`scripts/solver-check.ts:31`)",
+					"text": "Empty catch hides an unparseable 423 body (`scripts/solver-check.ts:31`)"
+				},
+				{
+					"id": "r1:body:3",
+					"roundIndex": 1,
+					"reviewId": 5761166266,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Solve failure detail is discarded; \"unknown\" reasons are undebuggable (`src/browser.ts:152`)",
+					"text": "Solve failure detail is discarded; \"unknown\" reasons are undebuggable (`src/browser.ts:152`)"
+				},
+				{
+					"id": "r1:body:4",
+					"roundIndex": 1,
+					"reviewId": 5761166266,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Comment typo: \"expect 429\" should be \"except 429\" (`src/solver/two-captcha.ts:43`)",
+					"text": "Comment typo: \"expect 429\" should be \"except 429\" (`src/solver/two-captcha.ts:43`)"
+				},
+				{
+					"id": "r1:body:5",
+					"roundIndex": 1,
+					"reviewId": 5761166266,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Browser solve tests never run the real token-fill and submit callbacks (`test/browser.test.ts:75`)",
+					"text": "Browser solve tests never run the real token-fill and submit callbacks (`test/browser.test.ts:75`)"
+				},
+				{
+					"id": "r1:body:6",
+					"roundIndex": 1,
+					"reviewId": 5761166266,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Empty token or task id from the provider is accepted as success (`src/solver/two-captcha.ts:166`)",
+					"text": "Empty token or task id from the provider is accepted as success (`src/solver/two-captcha.ts:166`)"
+				}
+			]
+		},
+		{
+			"index": 2,
+			"reviewId": 5761325338,
+			"provider": "anthropic",
+			"submittedAt": "2026-11-04T00:12:06Z",
+			"headSha": "25ec8030825bcae06fe69e02d0cc23a3986fb32e",
+			"baseSha": "dd0d6a0dd9b7375fb57529d87b90f707081d722c",
+			"mergeBase": "dd0d6a0dd9b7375fb57529d87b90f707081d722c",
+			"triggerAt": "2026-11-04T00:03:08Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "cc722b96efbaa885340db71c28a33079e8cba23b",
+					"committedAt": "2026-11-04T00:03:07Z",
+					"files": [
+						{
+							"path": "src/solver/two-captcha.ts",
+							"ranges": [[85, 91]]
+						},
+						{
+							"path": "test/solver.test.ts",
+							"ranges": [[49, 72]]
+						}
+					]
+				},
+				{
+					"sha": "25ec8030825bcae06fe69e02d0cc23a3986fb32e",
+					"committedAt": "2026-11-04T00:03:08Z",
+					"files": [
+						{
+							"path": "README.md",
+							"ranges": [[136, 143]]
+						}
+					]
+				}
+			],
+			"claims": []
+		}
+	],
+	"threads": [
+		{
+			"threadId": "PRRT_kwDOVL2EQc6zYDcG",
+			"commentId": 4461659351,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4461878677,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-11-03T23:54:18Z",
+					"editedAt": null,
+					"body": "FetchResult's solve fields are now a union, so `solveReason` exists only when `solve` is \"failed\", and app.ts narrows on `result.solve === \"failed\"` before reading it (cd7ec576). `tagSolveReason` now returns `SolveReasonError` (6ec8332d)."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6zYDcJ",
+			"commentId": 4461659356,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4461879455,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-11-03T23:54:24Z",
+					"editedAt": null,
+					"body": "A failed fetch now keeps its class, message and cause code (e.g. `TypeError: fetch failed (ENOTFOUND)`), which appears in the submit error and as the last failure in the timeout error (17d39dc1). The redacted message reaches the `solve_failed` log as `err` via 343ac0ea."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6zYDcN",
+			"commentId": 4461659361,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4461880207,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-11-03T23:54:29Z",
+					"editedAt": null,
+					"body": "A 423 whose body isn't JSON now reports reason `unparseable`; a JSON body without a reason still reports `unknown`, and the test was updated (c4b6f891)."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6zYDcQ",
+			"commentId": 4461659365,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4461881046,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-11-03T23:54:34Z",
+					"editedAt": null,
+					"body": "A failed solve now carries `solveError`, the error's class and message with the ws endpoint redacted, and app.ts logs it as `err` next to the fixed `reason` in `solve_failed` (343ac0ea). The reason vocabulary is unchanged."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6zYDcS",
+			"commentId": 4461659369,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4461881928,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-11-03T23:54:39Z",
+					"editedAt": null,
+					"body": "Fixed in 288b6017."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6zYDci",
+			"commentId": 4461659388,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4461882892,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-11-03T23:54:45Z",
+					"editedAt": null,
+					"body": "test/submit-token.test.ts runs the real `page.evaluate` callbacks against the sorry fixture in happy-dom and covers a created response field, an existing one, no enclosing form (no submit), and a navigation that never arrives (`navigation_failed`) (dd0d6a0d). Breaking the token fill in browser.ts fails these tests while browser.test.ts stays green."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6zYDcj",
+			"commentId": 4461659390,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4461883894,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-11-03T23:54:50Z",
+					"editedAt": null,
+					"body": "A `status: 1` reply with an empty `request` now fails `isApiReply`, so an empty task id fails the submit as `provider_error` and an empty token is retried like any malformed poll until the deadline (fe94bd6f). Both cases have tests."
+				}
+			]
+		}
+	],
+	"reactions": [
+		{
+			"commentId": 4461659351,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-11-03T23:54:20Z"
+		},
+		{
+			"commentId": 4461659356,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-11-03T23:54:25Z"
+		},
+		{
+			"commentId": 4461659361,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-11-03T23:54:30Z"
+		},
+		{
+			"commentId": 4461659365,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-11-03T23:54:35Z"
+		},
+		{
+			"commentId": 4461659369,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-11-03T23:54:41Z"
+		},
+		{
+			"commentId": 4461659388,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-11-03T23:54:46Z"
+		},
+		{
+			"commentId": 4461659390,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-11-03T23:54:51Z"
+		}
+	]
+}

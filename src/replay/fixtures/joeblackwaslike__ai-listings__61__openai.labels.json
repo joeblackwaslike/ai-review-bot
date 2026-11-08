@@ -1,0 +1,16 @@
+{
+	"fixtureId": "joeblackwaslike__ai-listings__61__openai",
+	"provisional": true,
+	"labels": [
+		{
+			"claimId": "r0:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		}
+	],
+	"repeatPairs": [],
+	"negativePairs": [],
+	"allowedSuppression": []
+}

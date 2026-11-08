@@ -1,0 +1,556 @@
+{
+	"fixtureId": "joeblackwaslike__agent-skills__16__anthropic",
+	"provisional": true,
+	"labels": [
+		{
+			"claimId": "r0:c4438073982:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-11-02T06:03:05Z|Addressed on head f5e5364: median averages the two middle values, setup regex is anchored, jobs are grouped by workflow, jobs are paginated with fetch errors reported on stderr, -h exits 0, and the cookbook now documents requiring the changes job and the pull-requests: read permission."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4438073986:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4438073991:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4438074001:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4438074009:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4438097336:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-11-02T06:02:57Z|Addressed on head f5e5364: median averages the two middle values, setup regex is anchored, jobs are grouped by workflow, jobs are paginated with fetch errors reported on stderr, -h exits 0, and the cookbook now documents requiring the changes job and the pull-requests: read permission."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4438097336:1",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-11-02T06:02:57Z|Addressed on head f5e5364: median averages the two middle values, setup regex is anchored, jobs are grouped by workflow, jobs are paginated with fetch errors reported on stderr, -h exits 0, and the cookbook now documents requiring the changes job and the pull-requests: read permission."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4438097338:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-11-02T01:27:12Z|changed skills/working-with-github-actions/scripts/ci-audit.sh near line 40 in c549c459e3381073b851df7d62682b9b2ff4f24a"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4438097338:1",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-11-02T01:27:12Z|changed skills/working-with-github-actions/scripts/ci-audit.sh near line 40 in c549c459e3381073b851df7d62682b9b2ff4f24a"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4438097338:2",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-11-02T01:27:12Z|changed skills/working-with-github-actions/scripts/ci-audit.sh near line 40 in c549c459e3381073b851df7d62682b9b2ff4f24a"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4438097344:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-11-02T06:02:59Z|Addressed on head f5e5364: median averages the two middle values, setup regex is anchored, jobs are grouped by workflow, jobs are paginated with fetch errors reported on stderr, -h exits 0, and the cookbook now documents requiring the changes job and the pull-requests: read permission."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4438097346:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-11-02T06:03:02Z|Addressed on head f5e5364: median averages the two middle values, setup regex is anchored, jobs are grouped by workflow, jobs are paginated with fetch errors reported on stderr, -h exits 0, and the cookbook now documents requiring the changes job and the pull-requests: read permission."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4438097346:1",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-11-02T06:03:02Z|Addressed on head f5e5364: median averages the two middle values, setup regex is anchored, jobs are grouped by workflow, jobs are paginated with fetch errors reported on stderr, -h exits 0, and the cookbook now documents requiring the changes job and the pull-requests: read permission."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4438097350:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-11-02T01:27:12Z|changed skills/working-with-github-actions/scripts/ci-audit.sh near line 48 in c549c459e3381073b851df7d62682b9b2ff4f24a"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4438097350:1",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-11-02T01:27:12Z|changed skills/working-with-github-actions/scripts/ci-audit.sh near line 48 in c549c459e3381073b851df7d62682b9b2ff4f24a"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4438097350:2",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-11-02T01:27:12Z|changed skills/working-with-github-actions/scripts/ci-audit.sh near line 48 in c549c459e3381073b851df7d62682b9b2ff4f24a"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4438097352:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-11-02T01:27:12Z|changed skills/working-with-github-actions/references/cookbook-fast-ci-for-agents.md near line 79 in c549c459e3381073b851df7d62682b9b2ff4f24a"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4438097357:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-11-02T01:27:12Z|changed skills/working-with-github-actions/references/cookbook-fast-ci-for-agents.md near line 39 in c549c459e3381073b851df7d62682b9b2ff4f24a"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4438097359:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-11-02T01:27:12Z|changed skills/working-with-github-actions/references/cookbook-fast-ci-for-agents.md near line 12 in c549c459e3381073b851df7d62682b9b2ff4f24a"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4438097363:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-11-02T06:03:00Z|Addressed on head f5e5364: median averages the two middle values, setup regex is anchored, jobs are grouped by workflow, jobs are paginated with fetch errors reported on stderr, -h exits 0, and the cookbook now documents requiring the changes job and the pull-requests: read permission."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4438097368:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-11-02T01:27:12Z|changed skills/working-with-github-actions/scripts/ci-audit.sh near line 42 in c549c459e3381073b851df7d62682b9b2ff4f24a"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4438097368:1",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-11-02T01:27:12Z|changed skills/working-with-github-actions/scripts/ci-audit.sh near line 42 in c549c459e3381073b851df7d62682b9b2ff4f24a"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4438097372:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-11-02T06:03:03Z|Addressed on head f5e5364: median averages the two middle values, setup regex is anchored, jobs are grouped by workflow, jobs are paginated with fetch errors reported on stderr, -h exits 0, and the cookbook now documents requiring the changes job and the pull-requests: read permission."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4438097374:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-11-02T01:27:12Z|changed skills/working-with-github-actions/scripts/ci-audit.sh near line 26 in c549c459e3381073b851df7d62682b9b2ff4f24a"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c4438274734:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-11-02T01:56:06Z|changed skills/working-with-github-actions/scripts/ci-audit.sh near line 44 in f5e536498ec61687ea3cebb7334ed406bc1da3c5"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c4438274738:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-11-02T01:56:06Z|changed skills/working-with-github-actions/SKILL.md near line 126 in f5e536498ec61687ea3cebb7334ed406bc1da3c5"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c4438274741:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-11-02T01:56:06Z|changed skills/working-with-github-actions/scripts/ci-audit.sh near line 45 in f5e536498ec61687ea3cebb7334ed406bc1da3c5"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c4438274747:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-11-02T01:56:06Z|changed skills/working-with-github-actions/scripts/ci-audit.sh near line 45 in f5e536498ec61687ea3cebb7334ed406bc1da3c5"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c4438274750:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-11-02T01:56:06Z|changed skills/working-with-github-actions/scripts/ci-audit.sh near line 45 in f5e536498ec61687ea3cebb7334ed406bc1da3c5"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c4438274753:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-11-02T01:56:06Z|changed skills/working-with-github-actions/scripts/ci-audit.sh near line 45 in f5e536498ec61687ea3cebb7334ed406bc1da3c5"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c4438274757:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-11-02T01:56:06Z|changed skills/working-with-github-actions/scripts/ci-audit.sh near line 45 in f5e536498ec61687ea3cebb7334ed406bc1da3c5"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c4438303711:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:c4439356019:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-11-02T06:05:40Z|changed skills/working-with-github-actions/SKILL.md near line 131 in 6888c62b9400000738d9fa0a85bb5f06744ffe1a"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:c4439356019:1",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-11-02T06:05:40Z|changed skills/working-with-github-actions/SKILL.md near line 131 in 6888c62b9400000738d9fa0a85bb5f06744ffe1a"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:c4439356019:2",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-11-02T06:05:40Z|changed skills/working-with-github-actions/SKILL.md near line 131 in 6888c62b9400000738d9fa0a85bb5f06744ffe1a"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:c4439356025:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-11-02T06:05:40Z|changed skills/working-with-github-actions/SKILL.md near line 130 in 6888c62b9400000738d9fa0a85bb5f06744ffe1a"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:c4439356025:1",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-11-02T06:05:40Z|changed skills/working-with-github-actions/SKILL.md near line 130 in 6888c62b9400000738d9fa0a85bb5f06744ffe1a"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:c4439356030:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-11-02T06:05:40Z|changed skills/working-with-github-actions/SKILL.md near line 126 in 6888c62b9400000738d9fa0a85bb5f06744ffe1a"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:body:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:body:2",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:body:3",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:body:4",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:body:5",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:body:6",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:body:7",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:body:8",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:body:9",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:body:10",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:body:11",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:body:12",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:body:13",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:body:14",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r4:body:15",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r5:c4439402067:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-11-02T06:47:08Z|changed skills/working-with-github-actions/scripts/ci-audit.sh near line 51 in 63595c647d2aca7b3ffd8830f12664d9c96ebba5"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r5:c4439402075:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-11-02T06:47:08Z|changed skills/working-with-github-actions/scripts/ci-audit.sh near line 29 in 63595c647d2aca7b3ffd8830f12664d9c96ebba5"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r5:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r6:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r6:body:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r7:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r7:body:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		}
+	],
+	"repeatPairs": [
+		{
+			"later": "r1:c4438097374:0",
+			"earlier": "r0:c4438073991:0",
+			"confirmed": false
+		},
+		{
+			"later": "r3:body:0",
+			"earlier": "r2:body:0",
+			"confirmed": false
+		},
+		{
+			"later": "r4:c4439356030:0",
+			"earlier": "r3:c4438303711:0",
+			"confirmed": false
+		},
+		{
+			"later": "r6:body:0",
+			"earlier": "r5:body:0",
+			"confirmed": false
+		},
+		{
+			"later": "r7:body:0",
+			"earlier": "r4:body:1",
+			"confirmed": false
+		},
+		{
+			"later": "r7:body:0",
+			"earlier": "r4:body:14",
+			"confirmed": false
+		},
+		{
+			"later": "r7:body:1",
+			"earlier": "r4:body:3",
+			"confirmed": false
+		}
+	],
+	"negativePairs": [],
+	"allowedSuppression": []
+}

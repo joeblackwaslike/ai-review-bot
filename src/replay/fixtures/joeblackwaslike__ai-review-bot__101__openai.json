@@ -1,0 +1,74 @@
+{
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "ai-review-bot",
+	"pull": 101,
+	"provider": "openai",
+	"reviewer": "codex",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-11-07T23:37:10.917Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 5727007383,
+			"provider": "openai",
+			"submittedAt": "2026-11-01T07:43:24Z",
+			"headSha": "46ba17242abc51c1953174d1ab12ca139f7b4eab",
+			"baseSha": "81b3b37ca739901da208e4280ea9d5aac2943860",
+			"mergeBase": "81b3b37ca739901da208e4280ea9d5aac2943860",
+			"triggerAt": "2026-11-01T07:40:47Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "1c61f526653ea17c2b4b53514db3b389f08a2fd9",
+					"committedAt": "2026-11-01T07:27:45Z",
+					"files": [
+						{
+							"path": "CLAUDE.md",
+							"ranges": [[88, 94]]
+						},
+						{
+							"path": "src/auth.test.ts",
+							"ranges": [[467, 530], [630, 666]]
+						},
+						{
+							"path": "src/auth.ts",
+							"ranges": [[545, 584], [646, 667]]
+						}
+					]
+				},
+				{
+					"sha": "9c2d3e176facf46d77a8a1329561458a6a2561ba",
+					"committedAt": "2026-11-01T07:33:12Z",
+					"files": [
+						{
+							"path": "src/auth.test.ts",
+							"ranges": [[503, 516]]
+						},
+						{
+							"path": "src/auth.ts",
+							"ranges": [[545, 564], [573, 579]]
+						}
+					]
+				},
+				{
+					"sha": "46ba17242abc51c1953174d1ab12ca139f7b4eab",
+					"committedAt": "2026-11-01T07:40:47Z",
+					"files": [
+						{
+							"path": "README.md",
+							"ranges": [[291, 299]]
+						},
+						{
+							"path": "docs/cli-and-npm.md",
+							"ranges": [[25, 31]]
+						}
+					]
+				}
+			],
+			"claims": []
+		}
+	],
+	"threads": [],
+	"reactions": []
+}

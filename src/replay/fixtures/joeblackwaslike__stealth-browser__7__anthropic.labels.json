@@ -1,0 +1,52 @@
+{
+	"fixtureId": "joeblackwaslike__stealth-browser__7__anthropic",
+	"provisional": true,
+	"labels": [
+		{
+			"claimId": "r0:c4465303142:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-11-04T08:46:35Z|Both points were real and are fixed in e6171105: schedule keys are namespaced (profile:<name> versus host:<hostname>), so http://ebay/ no longer shares eBay's gap or pause, and the scheduler prunes idle host entries lazily once the map passes 256 entries."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4465303145:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-11-04T08:46:40Z|Fixed in e6171105: keys are now profile:<name> and host:<hostname>, with a test that http://ebay/ and the eBay profile neither share a gap nor a pause."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4465303151:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-11-04T08:46:46Z|Fixed in e6171105: the spec now calls the flag pauseOnBlock and says it applies to any block, not only a failed solve."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4465303159:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-11-04T08:46:51Z|Fixed in e6171105: attempts and challengeType are logged only when the solver was actually called, so budget_exceeded and no_form failures no longer count as attempts. Tests added for both reasons."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4465687399:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		}
+	],
+	"repeatPairs": [],
+	"negativePairs": [],
+	"allowedSuppression": []
+}

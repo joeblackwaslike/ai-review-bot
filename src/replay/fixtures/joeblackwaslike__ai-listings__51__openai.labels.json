@@ -1,0 +1,281 @@
+{
+	"fixtureId": "joeblackwaslike__ai-listings__51__openai",
+	"provisional": true,
+	"labels": [
+		{
+			"claimId": "r0:c3810709176:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-19T07:21:41Z|Fixed in 03f754c -- verified this exactly: skipping the pricing_comps insert/delete when toInsert.length===0 left the rest of the function computing confidenceScore/suggestedPriceCents from the still-empty filteredComps/filteredActive and pushing suggested_price_cents=null, which is exactly the ai-listings-drz regression the surrounding comments describe, one layer up. Added effectiveSoldComps/effectiveActiveComps that reload the still-persisted pricing_comps rows for the listing in that case (SELECT * WHERE listing_id = ...) and compute confidence/price/sources against those instead of an empty set. Every downstream use of filteredComps/filteredActive in that block now goes through the effective* variables."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3810709180:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-19T07:21:48Z|Partially fixed in 03f754c, with a caveat worth being upfront about. checkPoshmark now parses the JSON response and requires a `data` array before returning 'valid', instead of any HTTP 200. But digging into this further: poshmark.com/vm-rest/posts appears to be a *public, unauthenticated* search endpoint per third-party reverse-engineering docs (browse.sh) -- it's documented as working identically with or without cookies. If that's accurate, no amount of response-shape validation on this specific endpoint can fully confirm session validity, since the endpoint doesn't require a session at all. The shape check does catch one real class of invalid-cookie failure (a malformed/garbage cookie producing an HTML error/login page instead of the expected JSON), but I can't verify from here whether it closes the gap you're describing completely -- that needs a live test against Poshmark with a real expired cookie, which I can't safely do in this session. Flagging this rather than overclaiming a full fix."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3810709182:0",
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-19T07:21:54Z|Confirmed real -- url-verify.ts is genuinely dead code as shipped in this PR. Filed ai-listings-534 to track wiring it in, rather than doing it in this review-fix pass: it's a behavior change (adds live external verification calls to the pricing pipeline, with new rate-limit/bot-detection exposure on TheRealReal/Poshmark and a precision question -- see the identityConfirmed thread on url-verify.ts, also from this review round) that deserves its own review. The pre-existing 'Task 12' comment reference (which I reworded in an earlier commit to stop implying this runs today) suggests this was already intentionally scoped to a separate task by whoever wrote the original comment, not an oversight introduced by omission."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3810709188:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-19T07:22:01Z|Fixed in 03f754c -- added console.warn on the !res.ok and SerpAPI-error-payload early returns in both fetchEbaySoldComps and fetchTheRealRealComps, not just their catch-all blocks. Each logs the query and failure detail (HTTP status or SerpAPI error payload) so step3 can distinguish 'no comps exist' from 'the source broke' in production logs."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3810709191:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-19T07:22:07Z|Fixed in 03f754c -- added console.warn on verifyComp's !res.ok and oversized-response (readBoundedText returning null) early returns, in addition to the catch-all logging already added in an earlier commit this round. A 403 bot challenge or a response exceeding MAX_RESPONSE_BYTES now logs the listing_url and reason instead of silently looking identical to 'still active'."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3810709194:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-19T07:22:13Z|Fixed in 03f754c -- identityConfirmed now also requires at least one other significant word from the comp's own title (length >= 4, common stopwords excluded) to appear on the page, not just the brand name. Falls back to brand-only matching if the title has no other significant word (e.g. a title that's just the brand). This directly closes the wrong-model/wrong-color false-positive you're describing, since a same-brand-different-item page won't share the specific title tokens."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3810709197:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-19T07:22:19Z|Fixed in 03f754c -- threaded a refetchHealth callback from PlatformSettings down through PlatformSection to TextSettingRow (poshmark/ebay fields only), called after a successful credential save. Also had to add a ?fresh=1 cache-bypass to the health-check route itself, since the 60s server-side cache added earlier this round would otherwise have served the pre-save status back to this same refetch for up to a minute."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c3810867842:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-20T11:12:35Z|Fixed in fd9ebab — checkEbay now wraps getEbayCreds in try/catch and returns 'unreachable' on failure, matching checkPoshmark's guard around getSetting."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c3810867848:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-20T11:12:36Z|Fixed in fd9ebab — same fix as the duplicate finding on this line: getEbayCreds is now guarded, so a rejection no longer propagates through Promise.all and 500s the endpoint."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:2",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:3",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:4",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c3811041014:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-20T11:33:56Z|Fixed in bf0d350 — request-generation counter ensures a stale mount-time response can't overwrite a newer fresh=1 result."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c3811041023:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-20T11:23:50Z|Declining — the reload fallback is deliberately keyed off toInsert.length===0 regardless of *why* it's empty. Whether this run found nothing, or found candidates that got filtered out as irrelevant/outlier/duplicate, both cases mean 'no fresh usable evidence this run', and the fallback's whole purpose (ai-listings-drz) is to never let step3 null out suggested_price_cents when it has any real evidence at all, from any run. Narrowing the trigger to 'literal fetcher failure only' would reintroduce a version of the drz bug for the filtered-to-zero case: a listing whose comps all get legitimately outliered this run would still land at null price / 20% confidence, which is exactly the state this block exists to prevent. The staleness risk you're pointing at is real but orthogonal — that's what the dedup/outlier-on-reload and reload-limit fixes in 909ef2b address instead."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c3811041028:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-20T11:18:15Z|Fixed in 162beb3 — same fix as the duplicate anthropicreviewbot finding on this line: the reload now throws on a Supabase read error instead of silently treating it as zero comps."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c3811041031:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-20T11:10:18Z|Fixed in 459a937 — same root cause as the anthropicreviewbot duplicate of this finding: brand words are now excluded token-by-token, not by whole-string comparison."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c3811041034:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-20T11:23:09Z|Fixed in 162beb3 (pushed before this finding was visible to you) — the reload now checks the Supabase error and throws instead of defaulting to []."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c3811041037:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-20T11:23:06Z|Fixed in 162beb3 (pushed before this finding was visible to you) — the reload now checks the Supabase error and throws instead of defaulting to []."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c3811041045:0",
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-20T11:23:52Z|Same reasoning as the other finding on this — declining for the same reason: the fallback intentionally covers both 'fetchers failed' and 'fetchers succeeded but everything got filtered', since both are 'no fresh usable evidence' from this run's perspective and narrowing it would reopen a version of the ai-listings-drz bug for the filtered-to-zero case."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c3811041051:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-20T11:33:57Z|Same underlying race, same fix — bf0d350."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c3811041062:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-20T11:23:07Z|Fixed in 162beb3 (pushed before this finding was visible to you) — the reload now checks the Supabase error and throws instead of defaulting to []."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:body:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:body:2",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:body:3",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:body:4",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:body:5",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		}
+	],
+	"repeatPairs": [
+		{
+			"later": "r1:body:0",
+			"earlier": "r0:body:0",
+			"confirmed": false
+		},
+		{
+			"later": "r2:body:3",
+			"earlier": "r0:body:0",
+			"confirmed": false
+		},
+		{
+			"later": "r2:body:3",
+			"earlier": "r1:body:0",
+			"confirmed": false
+		},
+		{
+			"later": "r2:body:4",
+			"earlier": "r1:body:1",
+			"confirmed": false
+		},
+		{
+			"later": "r2:body:5",
+			"earlier": "r1:body:3",
+			"confirmed": false
+		}
+	],
+	"negativePairs": [],
+	"allowedSuppression": []
+}

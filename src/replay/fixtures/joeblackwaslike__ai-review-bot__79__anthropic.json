@@ -1,0 +1,850 @@
+{
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "ai-review-bot",
+	"pull": 79,
+	"provider": "anthropic",
+	"reviewer": "claude",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-11-07T23:36:15.742Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 5071451201,
+			"provider": "anthropic",
+			"submittedAt": "2026-08-31T21:30:25Z",
+			"headSha": "0a64666793a2d4df82a782ddd0f7aa5bd4395f55",
+			"baseSha": "481bc25f69181e3aeb8502a11508f2a45e054e70",
+			"mergeBase": "481bc25f69181e3aeb8502a11508f2a45e054e70",
+			"triggerAt": "2026-08-31T21:25:49Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "96eabbebf7732297d84b2e05674efa63d51ec9d0",
+					"committedAt": "2026-08-31T05:28:13Z",
+					"files": [
+						{
+							"path": "docs/superpowers/specs/2026-08-31-phase1-product-grade-pr-review.md",
+							"ranges": [[1, 322]]
+						}
+					]
+				},
+				{
+					"sha": "67c5a6ef8b6e356614835473abf7acbbf03588cb",
+					"committedAt": "2026-08-31T21:01:08Z",
+					"files": [
+						{
+							"path": "skills/architect-review.md",
+							"ranges": [[6, 46]]
+						},
+						{
+							"path": "skills/code-review-and-quality.md",
+							"ranges": [[4, 44]]
+						},
+						{
+							"path": "skills/code-reviewer.md",
+							"ranges": [[7, 47]]
+						},
+						{
+							"path": "skills/comment-analyzer.md",
+							"ranges": [[7, 47]]
+						},
+						{
+							"path": "skills/pr-test-analyzer.md",
+							"ranges": [[7, 46]]
+						},
+						{
+							"path": "skills/security-auditor.md",
+							"ranges": [[6, 46]]
+						},
+						{
+							"path": "skills/security-sast.md",
+							"ranges": [[32, 72]]
+						},
+						{
+							"path": "skills/silent-failure-hunter.md",
+							"ranges": [[7, 47], [136, 142]]
+						},
+						{
+							"path": "skills/type-design-analyzer.md",
+							"ranges": [[7, 47]]
+						},
+						{
+							"path": "src/audit-pr.test.ts",
+							"ranges": [[135, 145]]
+						},
+						{
+							"path": "src/audit.test.ts",
+							"ranges": [
+								[47, 63],
+								[170, 180],
+								[291, 301],
+								[351, 367],
+								[404, 420],
+								[460, 476]
+							]
+						},
+						{
+							"path": "src/claim-dedupe.test.ts",
+							"ranges": [[19, 25], [173, 193], [265, 276], [285, 301]]
+						},
+						{
+							"path": "src/claim-dedupe.ts",
+							"ranges": [[212, 218]]
+						},
+						{
+							"path": "src/improve/backfill.test.ts",
+							"ranges": [[15, 21], [188, 194]]
+						},
+						{
+							"path": "src/improve/capture.test.ts",
+							"ranges": [[21, 27], [32, 38], [60, 67]]
+						},
+						{
+							"path": "src/improve/findings.test.ts",
+							"ranges": [[4, 24], [27, 46], [52, 58], [62, 68]]
+						},
+						{
+							"path": "src/improve/findings.ts",
+							"ranges": [[10, 16], [21, 27]]
+						},
+						{
+							"path": "src/improve/issues.test.ts",
+							"ranges": [[12, 18], [27, 33], [58, 69], [172, 178]]
+						},
+						{
+							"path": "src/improve/qc.test.ts",
+							"ranges": [[17, 23]]
+						},
+						{
+							"path": "src/improve/trends.test.ts",
+							"ranges": [[21, 27], [172, 191], [199, 206]]
+						},
+						{
+							"path": "src/prompt.test.ts",
+							"ranges": [[91, 104], [112, 121]]
+						},
+						{
+							"path": "src/qc-app.test.ts",
+							"ranges": [[44, 50]]
+						},
+						{
+							"path": "src/report.test.ts",
+							"ranges": [[25, 57], [61, 71], [121, 130], [135, 141]]
+						},
+						{
+							"path": "src/report.ts",
+							"ranges": [
+								[28, 37],
+								[87, 102],
+								[123, 132],
+								[160, 166],
+								[169, 175]
+							]
+						},
+						{
+							"path": "src/review-state.test.ts",
+							"ranges": [[40, 46], [148, 267]]
+						},
+						{
+							"path": "src/review-state.ts",
+							"ranges": [[67, 84], [108, 123], [130, 142]]
+						},
+						{
+							"path": "src/review.test.ts",
+							"ranges": [
+								[9, 22],
+								[86, 162],
+								[230, 248],
+								[433, 443],
+								[491, 505],
+								[539, 553],
+								[638, 661],
+								[779, 793],
+								[1376, 1382],
+								[1703, 1709],
+								[1786, 1792],
+								[1821, 1828],
+								[2067, 2073],
+								[2165, 2171],
+								[2273, 2287],
+								[2552, 2562],
+								[2582, 2592],
+								[2686, 2700],
+								[2741, 2757],
+								[3074, 3080],
+								[3288, 3302],
+								[3344, 3350],
+								[3436, 3442],
+								[3464, 3470],
+								[3480, 3486],
+								[3518, 3532],
+								[3607, 3621]
+							]
+						},
+						{
+							"path": "src/review.ts",
+							"ranges": [[246, 287], [296, 316], [529, 538], [1543, 1552]]
+						},
+						{
+							"path": "src/testing.ts",
+							"ranges": [[7, 13], [72, 81], [88, 98], [107, 116]]
+						},
+						{
+							"path": "src/triage.test.ts",
+							"ranges": [[21, 27]]
+						}
+					]
+				},
+				{
+					"sha": "a4d2e90a06f703277f10b05ef064674828ace2d6",
+					"committedAt": "2026-08-31T21:11:11Z",
+					"files": [
+						{
+							"path": "src/review.test.ts",
+							"ranges": [[8, 22], [3737, 3898]]
+						},
+						{
+							"path": "src/review.ts",
+							"ranges": [[260, 279], [714, 797]]
+						}
+					]
+				},
+				{
+					"sha": "5a7a6548bd19458da3da63d07ec4714aa8649af7",
+					"committedAt": "2026-08-31T21:11:20Z",
+					"files": [
+						{
+							"path": "src/review-state.test.ts",
+							"ranges": [[45, 56], [266, 358]]
+						},
+						{
+							"path": "src/review-state.ts",
+							"ranges": [[16, 22], [46, 58], [100, 106], [141, 147]]
+						}
+					]
+				},
+				{
+					"sha": "feba1bf6b736608286fa63eae2600fb6149eb3ab",
+					"committedAt": "2026-08-31T21:13:39Z",
+					"files": [
+						{
+							"path": "src/review.test.ts",
+							"ranges": [[10, 16], [3897, 3984]]
+						},
+						{
+							"path": "src/review.ts",
+							"ranges": [[110, 116], [294, 301], [794, 954]]
+						}
+					]
+				},
+				{
+					"sha": "0a64666793a2d4df82a782ddd0f7aa5bd4395f55",
+					"committedAt": "2026-08-31T21:25:49Z",
+					"files": [
+						{
+							"path": "src/review.test.ts",
+							"ranges": [[907, 937]]
+						},
+						{
+							"path": "src/review.ts",
+							"ranges": [
+								[1252, 1257],
+								[1265, 1279],
+								[1282, 1299],
+								[1303, 1313],
+								[1921, 1963],
+								[2017, 2023]
+							]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r0:c3898555112:0",
+					"roundIndex": 0,
+					"reviewId": 5071451201,
+					"source": "inline",
+					"commentId": 3898555112,
+					"path": "src/review-state.ts",
+					"line": 55,
+					"severity": "P3",
+					"title": "saveReviewState always increments even for non-review callers",
+					"text": "🟢 **P3**\n\n**saveReviewState always increments even for non-review callers**\n\n`saveReviewState` now unconditionally increments `reviewCount` on every call, including the call in `parsePriorReview`'s cold-start recovery path (state.reviewCount is set to 0 there) and any other place that persists state without it representing an actual new review being posted. If saveReviewState is ever called more than once for the same logical review (e.g. retried on a transient KV failure, or from a different call site added later), the count will over-increment. Consider making the increment explicit at the call site (i.e., have callers pass the already-incremented value) rather than baking a side-effecting mutation into the generic save function, since `saveReviewState`'s name/signature doesn't signal that it mutates the passed-in state's count."
+				},
+				{
+					"id": "r0:c3898555122:0",
+					"roundIndex": 0,
+					"reviewId": 5071451201,
+					"source": "inline",
+					"commentId": 3898555122,
+					"path": "src/review.ts",
+					"line": 811,
+					"severity": "P3",
+					"title": "metadata regex extraction could match unintended earlier occurrences",
+					"text": "🟢 **P3**\n\n**metadata regex extraction could match unintended earlier occurrences**\n\n`extract()` uses `body.match(new RegExp(...))` without the global flag, so it returns the first match. If a review body ever contains a nested/quoted example of the metadata syntax (e.g., in a code block showing sample output, or in a finding's `evidence`/`body` text that quotes another review's metadata), `parseReviewMetadata` could pick up the wrong value. This is a minor robustness concern given metadata blocks are appended at the end and unlikely to be duplicated, but the function has no other named field, and could be tightened by anchoring to line start and using a shared join point."
+				},
+				{
+					"id": "r0:body:0",
+					"roundIndex": 0,
+					"reviewId": 5071451201,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "reviewCount in persisted review is stale relative to saveReviewState's own increment",
+					"text": "reviewCount in persisted review is stale relative to saveReviewState's own increment"
+				},
+				{
+					"id": "r0:body:1",
+					"roundIndex": 0,
+					"reviewId": 5071451201,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "provider inferred from model name string matching is fragile",
+					"text": "provider inferred from model name string matching is fragile"
+				},
+				{
+					"id": "r0:body:2",
+					"roundIndex": 0,
+					"reviewId": 5071451201,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "parseReviewMetadata assumes required fields but cost is not actually required for idempotency",
+					"text": "parseReviewMetadata assumes required fields but cost is not actually required for idempotency"
+				},
+				{
+					"id": "r0:body:3",
+					"roundIndex": 0,
+					"reviewId": 5071451201,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "provider inferred via naive model-name substring match",
+					"text": "provider inferred via naive model-name substring match"
+				},
+				{
+					"id": "r0:body:4",
+					"roundIndex": 0,
+					"reviewId": 5071451201,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "reviewCount used for metadata display is stale by one compared to the value that will actually be persisted",
+					"text": "reviewCount used for metadata display is stale by one compared to the value that will actually be persisted"
+				}
+			]
+		},
+		{
+			"index": 1,
+			"reviewId": 5071536263,
+			"provider": "anthropic",
+			"submittedAt": "2026-08-31T21:40:31Z",
+			"headSha": "dca5ff794238ad516a14d7fb18112fa032176b46",
+			"baseSha": "0a64666793a2d4df82a782ddd0f7aa5bd4395f55",
+			"mergeBase": "0a64666793a2d4df82a782ddd0f7aa5bd4395f55",
+			"triggerAt": "2026-08-31T21:37:52Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "dca5ff794238ad516a14d7fb18112fa032176b46",
+					"committedAt": "2026-08-31T21:37:52Z",
+					"files": [
+						{
+							"path": "src/review.test.ts",
+							"ranges": [[3951, 3957], [3977, 3983]]
+						},
+						{
+							"path": "src/review.ts",
+							"ranges": [
+								[264, 274],
+								[819, 825],
+								[846, 852],
+								[927, 933],
+								[1960, 1967]
+							]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r1:c3898622753:0",
+					"roundIndex": 1,
+					"reviewId": 5071536263,
+					"source": "inline",
+					"commentId": 3898622753,
+					"path": "src/review.ts",
+					"line": 734,
+					"severity": "P1",
+					"title": "formatFindings 3-column output breaks the cold-KV recovery row parser",
+					"text": "🟠 **P1**\n\n**formatFindings 3-column output breaks the cold-KV recovery row parser**\n\nThis changes the findings table shape from `| Sev | Finding |` to `| Sev | Category | Finding |`. The comment previously above this function (now removed) explicitly noted the row shape was kept in sync on purpose with `parsePriorReview`'s recovery parser in `src/review-state.ts`. That parser is unchanged in this diff and still expects a 2-column row, so a row like `| 🔴 | security | **Title** |` will be misparsed — the category text will bleed into the recovered title, corrupting finding identity used for triage dedup after a cold-KV event."
+				},
+				{
+					"id": "r1:c3898622760:0",
+					"roundIndex": 1,
+					"reviewId": 5071536263,
+					"source": "inline",
+					"commentId": 3898622760,
+					"path": "src/review.ts",
+					"line": 1934,
+					"severity": "P2",
+					"title": "hasP0 readiness check misses P0 findings reported only as inline comments",
+					"text": "🟡 **P2**\n\n**hasP0 readiness check misses P0 findings reported only as inline comments**\n\n`hasP0` is computed only from `modelReview.general_findings`, but the readiness score is meant to reflect overall blocking severity. A model can (and per the shared prompt instructions, is expected to) report P0 findings via `inline_comments` when they target a specific line — the prompt explicitly says to prefer inline comments over general findings when a finding has a specific code location. If a P0 is reported only inline, `hasP0` stays false and `computeReadinessScore` can return 3 or 4 (a 'looks fine' readiness bar) even though a critical, non-suppressible P0 exists in the review. This directly undermines the readiness score's stated purpose of flagging P0 presence."
+				},
+				{
+					"id": "r1:body:0",
+					"roundIndex": 1,
+					"reviewId": 5071536263,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P1",
+					"title": "Cold-KV fallback parser is broken by the new 3-column findings table",
+					"text": "Cold-KV fallback parser is broken by the new 3-column findings table"
+				},
+				{
+					"id": "r1:body:1",
+					"roundIndex": 1,
+					"reviewId": 5071536263,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Metadata `review=N` count is off-by-one from the persisted reviewCount",
+					"text": "Metadata `review=N` count is off-by-one from the persisted reviewCount"
+				},
+				{
+					"id": "r1:body:2",
+					"roundIndex": 1,
+					"reviewId": 5071536263,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P1",
+					"title": "Readiness score only inspects general_findings for P0, ignoring inline-only P0 findings",
+					"text": "Readiness score only inspects general_findings for P0, ignoring inline-only P0 findings"
+				},
+				{
+					"id": "r1:body:3",
+					"roundIndex": 1,
+					"reviewId": 5071536263,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "reviewCount displayed in metadata block is one behind the value persisted by saveReviewState",
+					"text": "reviewCount displayed in metadata block is one behind the value persisted by saveReviewState"
+				},
+				{
+					"id": "r1:body:4",
+					"roundIndex": 1,
+					"reviewId": 5071536263,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Readiness score does not account for P0 findings in inline_comments",
+					"text": "Readiness score does not account for P0 findings in inline_comments"
+				},
+				{
+					"id": "r1:body:5",
+					"roundIndex": 1,
+					"reviewId": 5071536263,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Cold-KV fallback (parsePriorReview) still depends on the removed legacy 'Reviewed commit:' marker and two-column findings table",
+					"text": "Cold-KV fallback (parsePriorReview) still depends on the removed legacy 'Reviewed commit:' marker and two-column findings table"
+				},
+				{
+					"id": "r1:body:6",
+					"roundIndex": 1,
+					"reviewId": 5071536263,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P1",
+					"title": "Cold-KV fallback parser is incompatible with new three-column findings table and missing legacy marker",
+					"text": "Cold-KV fallback parser is incompatible with new three-column findings table and missing legacy marker"
+				},
+				{
+					"id": "r1:body:7",
+					"roundIndex": 1,
+					"reviewId": 5071536263,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P1",
+					"title": "computeReadinessScore ignores P0 findings in inline_comments",
+					"text": "computeReadinessScore ignores P0 findings in inline_comments"
+				},
+				{
+					"id": "r1:body:8",
+					"roundIndex": 1,
+					"reviewId": 5071536263,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Missing test coverage for cold-KV recovery against the new-format review body",
+					"text": "Missing test coverage for cold-KV recovery against the new-format review body"
+				},
+				{
+					"id": "r1:body:9",
+					"roundIndex": 1,
+					"reviewId": 5071536263,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Duplicate/prior review findings not re-reported per instructions",
+					"text": "Duplicate/prior review findings not re-reported per instructions"
+				},
+				{
+					"id": "r1:body:10",
+					"roundIndex": 1,
+					"reviewId": 5071536263,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "parseReviewMetadata treats cost as required, weakening idempotency robustness",
+					"text": "parseReviewMetadata treats cost as required, weakening idempotency robustness"
+				},
+				{
+					"id": "r1:body:11",
+					"roundIndex": 1,
+					"reviewId": 5071536263,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Provider inferred from model name substring match instead of using known selection.provider",
+					"text": "Provider inferred from model name substring match instead of using known selection.provider"
+				},
+				{
+					"id": "r1:body:12",
+					"roundIndex": 1,
+					"reviewId": 5071536263,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "reviewCount emitted in metadata is stale relative to what saveReviewState persists",
+					"text": "reviewCount emitted in metadata is stale relative to what saveReviewState persists"
+				},
+				{
+					"id": "r1:body:13",
+					"roundIndex": 1,
+					"reviewId": 5071536263,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Cold-KV fallback (parsePriorReview) is not updated for the new metadata-block body format or 3-column findings table",
+					"text": "Cold-KV fallback (parsePriorReview) is not updated for the new metadata-block body format or 3-column findings table"
+				}
+			]
+		},
+		{
+			"index": 2,
+			"reviewId": 5076929073,
+			"provider": "anthropic",
+			"submittedAt": "2026-09-01T10:33:15Z",
+			"headSha": "67b8c58417c34d1a4584c2db0a5eb5565612196b",
+			"baseSha": "dca5ff794238ad516a14d7fb18112fa032176b46",
+			"mergeBase": "dca5ff794238ad516a14d7fb18112fa032176b46",
+			"triggerAt": "2026-09-01T10:30:18Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "67b8c58417c34d1a4584c2db0a5eb5565612196b",
+					"committedAt": "2026-09-01T10:30:18Z",
+					"files": [
+						{
+							"path": "src/review-state.test.ts",
+							"ranges": [[335, 373]]
+						},
+						{
+							"path": "src/review-state.ts",
+							"ranges": [[69, 86], [91, 103], [112, 122]]
+						},
+						{
+							"path": "src/review.ts",
+							"ranges": [[1932, 1940]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r2:c3903212721:0",
+					"roundIndex": 2,
+					"reviewId": 5076929073,
+					"source": "inline",
+					"commentId": 3903212721,
+					"path": "src/review.ts",
+					"line": 1288,
+					"severity": "P3",
+					"title": "priorBotReviews SHA comparison uses metadata SHA but idempotency check compares against context.headSha string form — confirm consistency of SHA formats",
+					"text": "🟢 **P3**\n\n**priorBotReviews SHA comparison uses metadata SHA but idempotency check compares against context.headSha string form — confirm consistency of SHA formats**\n\nparseReviewMetadata's `sha` is whatever was written into `<!-- ai-review:sha=... -->`, which is `context.headSha` (full SHA) per `formatReviewBody`'s `headSha` param. The idempotency check compares `meta.sha === context.headSha` (full SHA), which is consistent. But the external/legacy path still compares against `legacyMarker` built from `context.headSha.slice(0, 12)` (short SHA). This asymmetry (full SHA for new format, short SHA for legacy format) is intentional and appears correct given the two formats, but worth a comment noting why the two paths use different SHA lengths, since it's easy to introduce a bug here in future changes by conflating full vs short SHA comparisons across the two code paths."
+				},
+				{
+					"id": "r2:c3903212726:0",
+					"roundIndex": 2,
+					"reviewId": 5076929073,
+					"source": "inline",
+					"commentId": 3903212726,
+					"path": "src/review.ts",
+					"line": 1958,
+					"severity": "P2",
+					"title": "reviewCount emitted in metadata is one behind the persisted value (unresolved from prior review)",
+					"text": "🟡 **P2**\n\n**reviewCount emitted in metadata is one behind the persisted value (unresolved from prior review)**\n\n`reviewCount: (state?.reviewCount ?? 0) + 1` is used when building the metadata block, but `saveReviewState` separately increments `state.reviewCount` again (`(state.reviewCount ?? 0) + 1`) before persisting. Since the value passed into `formatReviewBody` is computed from the *pre-save* `state?.reviewCount`, and the persisted state object built afterward at the bottom of `buildReview` still uses `reviewCount: state?.reviewCount ?? 0` (not incremented) before being passed to `saveReviewState`, the number written into the review body and the number ultimately persisted can diverge across saves. This exact issue was already flagged by Sourcery (Comment 1) and by your own prior review pass — confirming it is still present in this diff."
+				},
+				{
+					"id": "r2:c3903212726:1",
+					"roundIndex": 2,
+					"reviewId": 5076929073,
+					"source": "inline",
+					"commentId": 3903212726,
+					"path": "src/review.ts",
+					"line": 1958,
+					"severity": "P3",
+					"title": "This call site correctly passes `provider: selection.provider` rather than re-deriving it from a substring match on `model`, which is good. Just confirming there's no duplicate/competing provider-inference logic elsewhere in this file that could disagree with `selection.provider` for models that don't cleanly fall into the openai/anthropic naming pattern (e.g. future third-party providers). Low-risk, but worth a quick grep to ensure `selection.provider` is always the single source of truth for the metadata block.",
+					"text": "This call site correctly passes `provider: selection.provider` rather than re-deriving it from a substring match on `model`, which is good. Just confirming there's no duplicate/competing provider-inference logic elsewhere in this file that could disagree with `selection.provider` for models that don't cleanly fall into the openai/anthropic naming pattern (e.g. future third-party providers). Low-risk, but worth a quick grep to ensure `selection.provider` is always the single source of truth for the metadata block."
+				},
+				{
+					"id": "r2:c3903212728:0",
+					"roundIndex": 2,
+					"reviewId": 5076929073,
+					"source": "inline",
+					"commentId": 3903212728,
+					"path": "src/review.ts",
+					"line": 1934,
+					"severity": "P3",
+					"title": "hasP0 correctly checks both general_findings and inline_comments for P0 readiness scoring",
+					"text": "🟢 **P3**\n\n**hasP0 correctly checks both general_findings and inline_comments for P0 readiness scoring**\n\nThis correctly checks P0 across both `modelReview.general_findings` and `modelReview.inline_comments`, resolving the previously-flagged gap where inline-only P0 findings would not drag the readiness score to 1. One remaining nuance: this uses `modelReview.inline_comments` (all inline comments from the model) rather than `effectiveInlineComments` or `reviewComments` (the post-filtered/post-dedup set actually posted). If P0 findings are later dropped by suppression, dedup, or anchoring failures, the readiness score would still reflect the original P0 presence even though it's no longer visible in the posted review — arguably correct (readiness reflects underlying risk, not what got posted) but worth confirming this is the intended semantic."
+				},
+				{
+					"id": "r2:body:0",
+					"roundIndex": 2,
+					"reviewId": 5076929073,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "reviewCount emitted in metadata is one behind persisted state",
+					"text": "reviewCount emitted in metadata is one behind persisted state"
+				},
+				{
+					"id": "r2:body:1",
+					"roundIndex": 2,
+					"reviewId": 5076929073,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Cold-KV fallback parser incompatible with new 3-column findings table and missing legacy SHA marker",
+					"text": "Cold-KV fallback parser incompatible with new 3-column findings table and missing legacy SHA marker"
+				},
+				{
+					"id": "r2:body:2",
+					"roundIndex": 2,
+					"reviewId": 5076929073,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Readiness score now considers P0 in both general_findings and inline_comments",
+					"text": "Readiness score now considers P0 in both general_findings and inline_comments"
+				},
+				{
+					"id": "r2:body:3",
+					"roundIndex": 2,
+					"reviewId": 5076929073,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "parseReviewMetadata requires all seven fields including cost, which may be brittle for future format evolution",
+					"text": "parseReviewMetadata requires all seven fields including cost, which may be brittle for future format evolution"
+				},
+				{
+					"id": "r2:body:4",
+					"roundIndex": 2,
+					"reviewId": 5076929073,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Provider inferred from model-name substring elsewhere in the codebase but formatReviewBody now takes provider directly",
+					"text": "Provider inferred from model-name substring elsewhere in the codebase but formatReviewBody now takes provider directly"
+				},
+				{
+					"id": "r2:body:5",
+					"roundIndex": 2,
+					"reviewId": 5076929073,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Missing test coverage for cold-KV recovery against new-format review body findings row parsing edge cases with category values containing pipe-adjacent text",
+					"text": "Missing test coverage for cold-KV recovery against new-format review body findings row parsing edge cases with category values containing pipe-adjacent text"
+				},
+				{
+					"id": "r2:body:6",
+					"roundIndex": 2,
+					"reviewId": 5076929073,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "This PR was already extensively reviewed by prior bots with identical findings",
+					"text": "This PR was already extensively reviewed by prior bots with identical findings"
+				},
+				{
+					"id": "r2:body:7",
+					"roundIndex": 2,
+					"reviewId": 5076929073,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "reviewCount emitted in body is one behind persisted value (already flagged by prior reviewers)",
+					"text": "reviewCount emitted in body is one behind persisted value (already flagged by prior reviewers)"
+				},
+				{
+					"id": "r2:body:8",
+					"roundIndex": 2,
+					"reviewId": 5076929073,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Provider inferred by substring match instead of using selection.provider",
+					"text": "Provider inferred by substring match instead of using selection.provider"
+				},
+				{
+					"id": "r2:body:9",
+					"roundIndex": 2,
+					"reviewId": 5076929073,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "parseReviewMetadata requires cost field, weakening idempotency robustness for future format evolution",
+					"text": "parseReviewMetadata requires cost field, weakening idempotency robustness for future format evolution"
+				},
+				{
+					"id": "r2:body:10",
+					"roundIndex": 2,
+					"reviewId": 5076929073,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Cold-KV fallback parser incompatible with new three-column findings table (confirmed regression, already flagged extensively by other bots)",
+					"text": "Cold-KV fallback parser incompatible with new three-column findings table (confirmed regression, already flagged extensively by other bots)"
+				}
+			]
+		}
+	],
+	"threads": [
+		{
+			"threadId": "PRRT_kwDOSM5cU86d4gYV",
+			"commentId": 3898555112,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86d4gYc",
+			"commentId": 3898555122,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86d4rFO",
+			"commentId": 3898622753,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86d4rFW",
+			"commentId": 3898622760,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86eESOG",
+			"commentId": 3903212721,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86eESOJ",
+			"commentId": 3903212726,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86eESOM",
+			"commentId": 3903212728,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		}
+	],
+	"reactions": []
+}

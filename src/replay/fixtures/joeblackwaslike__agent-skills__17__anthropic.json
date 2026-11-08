@@ -1,0 +1,439 @@
+{
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "agent-skills",
+	"pull": 17,
+	"provider": "anthropic",
+	"reviewer": "claude",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-11-07T23:30:38.001Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 5731590471,
+			"provider": "anthropic",
+			"submittedAt": "2026-11-02T02:47:37Z",
+			"headSha": "0da81e99e388b814709a818c18e3517a5b35634e",
+			"baseSha": "1ed420c8c1280180c0964aeb80533f140a2643f9",
+			"mergeBase": "1ed420c8c1280180c0964aeb80533f140a2643f9",
+			"triggerAt": "2026-11-02T02:45:31Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "aba2e0294ea9af2789ca9b1db5e4db2422589989",
+					"committedAt": "2026-11-02T02:22:20Z",
+					"files": [
+						{
+							"path": ".github/workflows/lint-descriptions.yml",
+							"ranges": [[1, 18]]
+						},
+						{
+							"path": "Makefile",
+							"ranges": [[1, 10]]
+						},
+						{
+							"path": "scripts/lint-descriptions.py",
+							"ranges": [[1, 102]]
+						},
+						{
+							"path": "skills/agent-instructions/SKILL.md",
+							"ranges": [[1, 10]]
+						},
+						{
+							"path": "skills/authoring-agent-skills/SKILL.md",
+							"ranges": [[34, 40]]
+						},
+						{
+							"path": "skills/authoring-agent-skills/references/description-conventions.md",
+							"ranges": [[1, 23]]
+						},
+						{
+							"path": "skills/authoring-agent-skills/references/registration-checklist.md",
+							"ranges": [[74, 78]]
+						},
+						{
+							"path": "skills/senior-engineering-best-practices/SKILL.md",
+							"ranges": [[1, 10]]
+						},
+						{
+							"path": "skills/solid-principles/SKILL.md",
+							"ranges": [[1, 10]]
+						},
+						{
+							"path": "skills/working-with-bash/SKILL.md",
+							"ranges": [[1, 10]]
+						},
+						{
+							"path": "skills/working-with-pieces/SKILL.md",
+							"ranges": [[1, 10]]
+						},
+						{
+							"path": "skills/working-with-release-please/SKILL.md",
+							"ranges": [[1, 11]]
+						}
+					]
+				},
+				{
+					"sha": "8d5aea431a8199053e569110e5b352857d203b43",
+					"committedAt": "2026-11-02T02:23:13Z",
+					"files": [
+						{
+							"path": "skills/authoring-agent-skills/SKILL.md",
+							"ranges": [[1, 10]]
+						},
+						{
+							"path": "skills/best-practices-for-agentic-development/SKILL.md",
+							"ranges": [[1, 9]]
+						},
+						{
+							"path": "skills/developing-claude-code-plugins/SKILL.md",
+							"ranges": [[1, 10]]
+						},
+						{
+							"path": "skills/developing-codex-plugins/SKILL.md",
+							"ranges": [[1, 9]]
+						},
+						{
+							"path": "skills/developing-cursor-plugins/SKILL.md",
+							"ranges": [[1, 9]]
+						},
+						{
+							"path": "skills/developing-gemini-plugins/SKILL.md",
+							"ranges": [[1, 10]]
+						},
+						{
+							"path": "skills/developing-opencode-plugins/SKILL.md",
+							"ranges": [[1, 9]]
+						},
+						{
+							"path": "skills/multi-provider-plugins/SKILL.md",
+							"ranges": [[1, 9]]
+						},
+						{
+							"path": "skills/working-with-claude-code/SKILL.md",
+							"ranges": [[1, 10]]
+						},
+						{
+							"path": "skills/working-with-codex/SKILL.md",
+							"ranges": [[1, 8]]
+						},
+						{
+							"path": "skills/working-with-cursor/SKILL.md",
+							"ranges": [[1, 9]]
+						},
+						{
+							"path": "skills/working-with-gemini/SKILL.md",
+							"ranges": [[1, 8]]
+						},
+						{
+							"path": "skills/working-with-opencode/SKILL.md",
+							"ranges": [[1, 8]]
+						}
+					]
+				},
+				{
+					"sha": "9782941b95198ff8dddace2ca27b9d4dc80c64fd",
+					"committedAt": "2026-11-02T02:31:30Z",
+					"files": [
+						{
+							"path": "skills/developing-claude-code-plugins/SKILL.md",
+							"ranges": [[35, 46], [247, 258]]
+						},
+						{
+							"path": "skills/developing-claude-code-plugins/references/agents.md",
+							"ranges": [[1, 180]]
+						},
+						{
+							"path": "skills/developing-claude-code-plugins/references/commands.md",
+							"ranges": [[1, 188]]
+						},
+						{
+							"path": "skills/developing-claude-code-plugins/references/hooks.md",
+							"ranges": [[1, 263]]
+						},
+						{
+							"path": "skills/developing-claude-code-plugins/references/mcp-integration.md",
+							"ranges": [[1, 209]]
+						},
+						{
+							"path": "skills/developing-claude-code-plugins/references/plugin-settings.md",
+							"ranges": [[1, 173]]
+						},
+						{
+							"path": "skills/developing-claude-code-plugins/scripts/fixtures/agents/bad-agent.md",
+							"ranges": [[1, 6]]
+						},
+						{
+							"path": "skills/developing-claude-code-plugins/scripts/fixtures/agents/good-agent.md",
+							"ranges": [[1, 13]]
+						},
+						{
+							"path": "skills/developing-claude-code-plugins/scripts/fixtures/hooks/bad-handler.json",
+							"ranges": [[1, 7]]
+						},
+						{
+							"path": "skills/developing-claude-code-plugins/scripts/fixtures/hooks/bad-hook.sh",
+							"ranges": [[1, 2]]
+						},
+						{
+							"path": "skills/developing-claude-code-plugins/scripts/fixtures/hooks/bad-unwrapped.json",
+							"ranges": [[1, 5]]
+						},
+						{
+							"path": "skills/developing-claude-code-plugins/scripts/fixtures/hooks/event-rm.json",
+							"ranges": [[1, 1]]
+						},
+						{
+							"path": "skills/developing-claude-code-plugins/scripts/fixtures/hooks/event-safe.json",
+							"ranges": [[1, 1]]
+						},
+						{
+							"path": "skills/developing-claude-code-plugins/scripts/fixtures/hooks/good-hook.sh",
+							"ranges": [[1, 9]]
+						},
+						{
+							"path": "skills/developing-claude-code-plugins/scripts/fixtures/hooks/good-wrapped.json",
+							"ranges": [[1, 13]]
+						},
+						{
+							"path": "skills/developing-claude-code-plugins/scripts/fixtures/settings/bad.local.md",
+							"ranges": [[1, 5]]
+						},
+						{
+							"path": "skills/developing-claude-code-plugins/scripts/fixtures/settings/good.local.md",
+							"ranges": [[1, 9]]
+						},
+						{
+							"path": "skills/developing-claude-code-plugins/scripts/hook-linter.sh",
+							"ranges": [[1, 89]]
+						},
+						{
+							"path": "skills/developing-claude-code-plugins/scripts/parse-frontmatter.sh",
+							"ranges": [[1, 85]]
+						},
+						{
+							"path": "skills/developing-claude-code-plugins/scripts/run-fixtures.sh",
+							"ranges": [[1, 48]]
+						},
+						{
+							"path": "skills/developing-claude-code-plugins/scripts/test-hook.sh",
+							"ranges": [[1, 162]]
+						},
+						{
+							"path": "skills/developing-claude-code-plugins/scripts/validate-agent.sh",
+							"ranges": [[1, 123]]
+						},
+						{
+							"path": "skills/developing-claude-code-plugins/scripts/validate-hook-schema.sh",
+							"ranges": [[1, 101]]
+						},
+						{
+							"path": "skills/developing-claude-code-plugins/scripts/validate-settings.sh",
+							"ranges": [[1, 83]]
+						}
+					]
+				},
+				{
+					"sha": "a928aa6f4cdcbe1e01fd8db869ae423cc8e0bb43",
+					"committedAt": "2026-11-02T02:40:08Z",
+					"files": [
+						{
+							"path": "scripts/lint-descriptions.py",
+							"ranges": [[12, 19], [24, 46], [67, 168]]
+						}
+					]
+				},
+				{
+					"sha": "0da81e99e388b814709a818c18e3517a5b35634e",
+					"committedAt": "2026-11-02T02:45:31Z",
+					"files": [
+						{
+							"path": "scripts/__pycache__/lint-descriptions.cpython-314.pyc",
+							"ranges": []
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r0:c4438494946:0",
+					"roundIndex": 0,
+					"reviewId": 5731590471,
+					"source": "inline",
+					"commentId": 4438494946,
+					"path": "skills/agent-instructions/SKILL.md",
+					"line": 7,
+					"severity": "P3",
+					"title": "Missing 'Not for' exclusion for authoring-agent-skills, contradicting the new convention",
+					"text": "🟢 **P3**\n\n**Missing 'Not for' exclusion for authoring-agent-skills, contradicting the new convention**\n\n`description-conventions.md` rule 4 says exclusions must be added in both directions. `authoring-agent-skills` now excludes `agent-instructions`, and `best-practices-for-agentic-development` does too. This description still claims \"a SKILL.md\" and \"edit this skill\" with no exclusion pointing back. The two skills' triggers overlap, which is the ambiguity this PR sets out to remove. Add a short `Not for creating skills in the agent-skills repo (authoring-agent-skills)` clause.\n\n<!-- ai-review:fp=style|skills/agent-instructions/SKILL.md|2aaa014bc70e8ade.0 -->"
+				},
+				{
+					"id": "r0:c4438494948:0",
+					"roundIndex": 0,
+					"reviewId": 5731590471,
+					"source": "inline",
+					"commentId": 4438494948,
+					"path": "scripts/lint-descriptions.py",
+					"line": 49,
+					"severity": "P3",
+					"title": "Length is measured after whitespace normalization, not on the parsed description",
+					"text": "🟢 **P3**\n\n**Length is measured after whitespace normalization, not on the parsed description**\n\n`\" \".join(description.split())` collapses runs of whitespace and newlines before the length checks. A quoted or literal-block description with repeated spaces or blank lines can pass the 400/1000 thresholds here while still using more characters in the real listing, which cuts at 1,536. Keep the parsed string for counting. If you want normalization for the prefix check, apply it only there.\n\n<!-- ai-review:fp=bug|scripts/lint-descriptions.py|78f201a565bb6740.0 -->"
+				},
+				{
+					"id": "r0:body:0",
+					"roundIndex": 0,
+					"reviewId": 5731590471,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Compiled Python bytecode committed to the repo",
+					"text": "Compiled Python bytecode committed to the repo"
+				}
+			]
+		},
+		{
+			"index": 1,
+			"reviewId": 5731928647,
+			"provider": "anthropic",
+			"submittedAt": "2026-11-02T03:54:11Z",
+			"headSha": "748e7f4d58408cacc11d57af439e19d3a9ec246d",
+			"baseSha": "0da81e99e388b814709a818c18e3517a5b35634e",
+			"mergeBase": "0da81e99e388b814709a818c18e3517a5b35634e",
+			"triggerAt": "2026-11-02T03:22:19Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "27a86ea6bec8115a81230ff4b3ddb01dc785737b",
+					"committedAt": "2026-11-02T02:57:24Z",
+					"files": [
+						{
+							"path": "Makefile",
+							"ranges": [[1, 5]]
+						},
+						{
+							"path": "scripts/lint-descriptions.py",
+							"ranges": [[46, 52], [67, 73]]
+						},
+						{
+							"path": "skills/agent-instructions/SKILL.md",
+							"ranges": [[4, 11]]
+						},
+						{
+							"path": "skills/developing-claude-code-plugins/references/commands.md",
+							"ranges": [[6, 12], [127, 133]]
+						},
+						{
+							"path": "skills/developing-claude-code-plugins/scripts/fixtures/hooks/bad-empty.json",
+							"ranges": []
+						},
+						{
+							"path": "skills/developing-claude-code-plugins/scripts/fixtures/hooks/bad-two-docs.json",
+							"ranges": [[1, 2]]
+						},
+						{
+							"path": "skills/developing-claude-code-plugins/scripts/parse-frontmatter.sh",
+							"ranges": [[51, 59]]
+						},
+						{
+							"path": "skills/developing-claude-code-plugins/scripts/run-fixtures.sh",
+							"ranges": [[12, 20], [26, 33]]
+						},
+						{
+							"path": "skills/developing-claude-code-plugins/scripts/validate-hook-schema.sh",
+							"ranges": [[34, 44]]
+						}
+					]
+				},
+				{
+					"sha": "5193d47c0e4bfbeff0fdd2c2940c6bcd73cdeb38",
+					"committedAt": "2026-11-02T02:57:58Z",
+					"files": [
+						{
+							"path": ".gitignore",
+							"ranges": [[10, 14]]
+						},
+						{
+							"path": "scripts/__pycache__/lint-descriptions.cpython-314.pyc",
+							"ranges": []
+						}
+					]
+				},
+				{
+					"sha": "a8f4e658033c33a27362fd966b8d10556b5c25b0",
+					"committedAt": "2026-11-02T03:04:07Z",
+					"files": [
+						{
+							"path": "scripts/lint-descriptions.py",
+							"ranges": [[41, 47], [97, 103], [114, 120], [135, 159]]
+						}
+					]
+				},
+				{
+					"sha": "748e7f4d58408cacc11d57af439e19d3a9ec246d",
+					"committedAt": "2026-11-02T03:22:19Z",
+					"files": [
+						{
+							"path": "skills/developing-claude-code-plugins/references/agents.md",
+							"ranges": [[149, 168]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r1:c4438776869:0",
+					"roundIndex": 1,
+					"reviewId": 5731928647,
+					"source": "inline",
+					"commentId": 4438776869,
+					"path": "skills/developing-claude-code-plugins/scripts/parse-frontmatter.sh",
+					"line": 54,
+					"severity": "P2",
+					"title": "Quote-truncation regex breaks values containing escaped or doubled quotes",
+					"text": "🟡 **P2**\n\n**Quote-truncation regex breaks values containing escaped or doubled quotes**\n\nThe new `match(out, /^\"[^\"]*\"/)` keeps only the text up to the first closing quote, and the next line then strips the outer quotes. A double-quoted value with escaped quotes, such as `description: \"Use when \\\"x\\\" happens\"`, matches `\"Use when \\\"`. The result is the truncated `Use when \\`. A single-quoted value with a doubled quote, such as `'it''s'`, is cut to `it`. Before this change the full text was returned. The validators then check a truncated value, so they can give wrong pass/fail results for descriptions or names that contain quotes. Match the closing quote while honoring `\\\"` in double-quoted values and `''` in single-quoted values, or only strip a trailing comment after a properly closed quoted string. Add a fixture for an escaped-quote value.\n\n<!-- ai-review:fp=bug|skills/developing-claude-code-plugins/scripts/parse-frontmatter.sh|7a0fa51f1f4fa108.0 -->"
+				},
+				{
+					"id": "r1:body:0",
+					"roundIndex": 1,
+					"reviewId": 5731928647,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Compiled Python bytecode committed to the repo",
+					"text": "Compiled Python bytecode committed to the repo"
+				}
+			]
+		}
+	],
+	"threads": [
+		{
+			"threadId": "PRRT_kwDOR7Lu486yhKLX",
+			"commentId": 4438494946,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "anthropicreviewbot[bot]",
+			"replies": []
+		},
+		{
+			"threadId": "PRRT_kwDOR7Lu486yhKLY",
+			"commentId": 4438494948,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "anthropicreviewbot[bot]",
+			"replies": []
+		},
+		{
+			"threadId": "PRRT_kwDOR7Lu486yh1cx",
+			"commentId": 4438776869,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		}
+	],
+	"reactions": []
+}

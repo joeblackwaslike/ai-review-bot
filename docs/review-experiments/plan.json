@@ -32,6 +32,41 @@
 			"provider": "anthropic"
 		},
 		{
+			"id": "joeblackwaslike/agent-skills#11@anthropic",
+			"split": "tuning",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/agent-skills#16@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/agent-skills#17@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/agent-skills#2@anthropic",
+			"split": "test",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/agent-skills#5@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/agent-skills#7@anthropic",
+			"split": "test",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/agent-skills#7@openai",
+			"split": "test",
+			"provider": "openai"
+		},
+		{
 			"id": "joeblackwaslike/ai-listings#50@anthropic",
 			"split": "test",
 			"provider": "anthropic"
@@ -40,6 +75,71 @@
 			"id": "joeblackwaslike/ai-listings#50@openai",
 			"split": "test",
 			"provider": "openai"
+		},
+		{
+			"id": "joeblackwaslike/ai-listings#51@anthropic",
+			"split": "test",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-listings#51@openai",
+			"split": "test",
+			"provider": "openai"
+		},
+		{
+			"id": "joeblackwaslike/ai-listings#52@anthropic",
+			"split": "tuning",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-listings#53@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-listings#56@anthropic",
+			"split": "test",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-listings#56@openai",
+			"split": "test",
+			"provider": "openai"
+		},
+		{
+			"id": "joeblackwaslike/ai-listings#57@anthropic",
+			"split": "test",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-listings#57@openai",
+			"split": "test",
+			"provider": "openai"
+		},
+		{
+			"id": "joeblackwaslike/ai-listings#58@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-listings#61@anthropic",
+			"split": "test",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-listings#61@openai",
+			"split": "test",
+			"provider": "openai"
+		},
+		{
+			"id": "joeblackwaslike/ai-listings#62@anthropic",
+			"split": "tuning",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-listings#68@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
 		},
 		{
 			"id": "joeblackwaslike/ai-listings#74@anthropic",
@@ -52,6 +152,16 @@
 			"provider": "openai"
 		},
 		{
+			"id": "joeblackwaslike/ai-listings#77@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot-demo#1@anthropic",
+			"split": "tuning",
+			"provider": "anthropic"
+		},
+		{
 			"id": "joeblackwaslike/ai-review-bot-demo#2@anthropic",
 			"split": "validation",
 			"provider": "anthropic"
@@ -62,7 +172,87 @@
 			"provider": "anthropic"
 		},
 		{
+			"id": "joeblackwaslike/ai-review-bot#100@anthropic",
+			"split": "tuning",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#101@anthropic",
+			"split": "test",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#101@openai",
+			"split": "test",
+			"provider": "openai"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#111@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#54@anthropic",
+			"split": "test",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#54@openai",
+			"split": "test",
+			"provider": "openai"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#60@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#61@anthropic",
+			"split": "tuning",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#67@anthropic",
+			"split": "tuning",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#68@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#69@anthropic",
+			"split": "tuning",
+			"provider": "anthropic"
+		},
+		{
 			"id": "joeblackwaslike/ai-review-bot#70@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#72@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#73@anthropic",
+			"split": "test",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#73@openai",
+			"split": "test",
+			"provider": "openai"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#74@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#79@anthropic",
 			"split": "validation",
 			"provider": "anthropic"
 		},
@@ -72,8 +262,18 @@
 			"provider": "openai"
 		},
 		{
+			"id": "joeblackwaslike/ai-review-bot#89@anthropic",
+			"split": "test",
+			"provider": "anthropic"
+		},
+		{
 			"id": "joeblackwaslike/ai-review-bot#92@anthropic",
 			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#95@anthropic",
+			"split": "tuning",
 			"provider": "anthropic"
 		},
 		{
@@ -85,6 +285,26 @@
 			"id": "joeblackwaslike/stealth-browser#1@openai",
 			"split": "test",
 			"provider": "openai"
+		},
+		{
+			"id": "joeblackwaslike/stealth-browser#4@anthropic",
+			"split": "tuning",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/stealth-browser#7@anthropic",
+			"split": "tuning",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/stealth-browser#8@anthropic",
+			"split": "tuning",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/stealth-browser#9@anthropic",
+			"split": "tuning",
+			"provider": "anthropic"
 		}
 	],
 	"metrics": [
@@ -107,5 +327,5 @@
 		"hostedFitSeconds": 210
 	},
 	"a0Tolerance": 0.1,
-	"selectionRule": "The eligible subset of the fixtures recorded to date: every anthropic fixture, and an openai fixture only when its PR lands in the test split, because OpenAI is rationed to the test split (the schema rejects the rest). Left out for that reason: the openai fixtures of agent-skills#10, ai-review-bot-demo#2, ai-review-bot#70, #92 and #94. Later PRs are chosen from Joe's repositories to spread languages and operation types, by this rule written before recording and without looking at outcomes."
+	"selectionRule": "The eligible subset of the fixtures recorded to date: every anthropic fixture, and an openai fixture only when its PR lands in the test split, because OpenAI is rationed to the test split (the schema rejects the rest). Left out for that reason: the openai fixtures of agent-skills#10, ai-review-bot-demo#2, ai-review-bot#70, #92 and #94. Phase 6 added PRs by a mechanical rule written before recording and applied without looking at outcomes: in ai-listings, agent-skills, stealth-browser, ai-review-bot-demo and ai-review-bot, every merged PR with at least 2 reviews from the Anthropic bot, at least 2 changed files and at most 2500 added lines that was not already recorded. OpenAI fixtures were recorded only for test-split PRs."
 }

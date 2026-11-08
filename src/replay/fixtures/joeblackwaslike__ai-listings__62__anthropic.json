@@ -1,0 +1,284 @@
+{
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "ai-listings",
+	"pull": 62,
+	"provider": "anthropic",
+	"reviewer": "claude",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-11-07T23:27:33.893Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 5248110660,
+			"provider": "anthropic",
+			"submittedAt": "2026-09-18T13:08:37Z",
+			"headSha": "36490c620e316c25d9750560eaa7ca6e493a110d",
+			"baseSha": "81c22f35f5ea0998fdd1e9ab9fe66eeb790cfb80",
+			"mergeBase": "81c22f35f5ea0998fdd1e9ab9fe66eeb790cfb80",
+			"triggerAt": "2026-09-18T12:55:51Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "9d6d19cc608bd21070f117cdcd805e2ca0eae000",
+					"committedAt": "2026-09-18T12:47:29Z",
+					"files": [
+						{
+							"path": "src/app/api/inngest/route.ts",
+							"ranges": [[14, 20], [33, 38]]
+						},
+						{
+							"path": "src/lib/inngest/functions/backfill-ebay-descriptions.ts",
+							"ranges": [[1, 78]]
+						},
+						{
+							"path": "src/lib/platforms/adapters/ebay.ts",
+							"ranges": [
+								[11, 17],
+								[316, 322],
+								[340, 346],
+								[448, 454],
+								[463, 469]
+							]
+						},
+						{
+							"path": "src/lib/platforms/ebay-description.ts",
+							"ranges": [[1, 23]]
+						}
+					]
+				},
+				{
+					"sha": "36490c620e316c25d9750560eaa7ca6e493a110d",
+					"committedAt": "2026-09-18T12:55:51Z",
+					"files": [
+						{
+							"path": "src/lib/platforms/ebay-description.test.ts",
+							"ranges": [[1, 53]]
+						},
+						{
+							"path": "src/lib/platforms/ebay-description.ts",
+							"ranges": [[1, 14], [22, 30]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r0:c4046994773:0",
+					"roundIndex": 0,
+					"reviewId": 5248110660,
+					"source": "inline",
+					"commentId": 4046994773,
+					"path": "src/lib/platforms/ebay-description.ts",
+					"line": 20,
+					"severity": "P1",
+					"title": "HTML pass-through branch allows unsanitized HTML/script injection",
+					"text": "🟠 **P1**\n\n**HTML pass-through branch allows unsanitized HTML/script injection**\n\nWhen input contains any HTML-like tag, the entire string is returned completely unchanged/unescaped (`if (HTML_TAG_RE.test(text)) return text`). This means user-supplied text like `<img src=x onerror=alert(1)>` or arbitrary script/style tags bypasses all escaping and is sent as-is to eBay, since HTML_TAG_RE only requires a single opening tag anywhere in the string to trigger full pass-through. This defeats the stated goal of this PR (XSS protection) for any description containing a tag-like substring."
+				},
+				{
+					"id": "r0:c4046994787:0",
+					"roundIndex": 0,
+					"reviewId": 5248110660,
+					"source": "inline",
+					"commentId": 4046994787,
+					"path": "src/lib/inngest/functions/backfill-ebay-descriptions.ts",
+					"line": 21,
+					"severity": "P2",
+					"title": "Query error from user_settings fetch is ignored",
+					"text": "🟡 **P2**\n\n**Query error from user_settings fetch is ignored**\n\nThe result of this query destructures only `data`, discarding any `error`. If the query fails (e.g. transient DB error), `rows` will be undefined/null, `userIds` becomes an empty array, and the function completes 'successfully' having backfilled zero users. This makes failures indistinguishable from a legitimately empty result set, and Inngest will not retry."
+				},
+				{
+					"id": "r0:c4046994795:0",
+					"roundIndex": 0,
+					"reviewId": 5248110660,
+					"source": "inline",
+					"commentId": 4046994795,
+					"path": "src/lib/inngest/functions/backfill-ebay-descriptions.ts",
+					"line": 74,
+					"severity": "P2",
+					"title": "Per-listing and per-user failures are only logged, never surfacing as a failed step",
+					"text": "🟡 **P2**\n\n**Per-listing and per-user failures are only logged, never surfacing as a failed step**\n\nFailures updating individual listings are caught, logged, and counted in `failed`, but the count is never checked afterward — the step function returns normally even when every listing for a user failed to update. Similarly, the outer per-user catch block only logs and continues. This means the Inngest function will always report success regardless of how many listings actually failed to be backfilled, and there is no retry or durable record of which listings still need fixing."
+				},
+				{
+					"id": "r0:c4046994808:0",
+					"roundIndex": 0,
+					"reviewId": 5248110660,
+					"source": "inline",
+					"commentId": 4046994808,
+					"path": "src/lib/inngest/functions/backfill-ebay-descriptions.ts",
+					"line": 18,
+					"severity": "P1",
+					"title": "Query error is not checked before using rows",
+					"text": "🟠 **P1**\n\n**Query error is not checked before using rows**\n\nIf this query fails, `rows` will be undefined/null and `userIds` silently becomes empty, causing the backfill to report success while doing nothing. Capture and throw the error."
+				},
+				{
+					"id": "r0:c4046994808:1",
+					"roundIndex": 0,
+					"reviewId": 5248110660,
+					"source": "inline",
+					"commentId": 4046994808,
+					"path": "src/lib/inngest/functions/backfill-ebay-descriptions.ts",
+					"line": 18,
+					"severity": "P3",
+					"title": "Both the `user_settings` query and the `listings` query rely on Supabase's default result limit (commonly 1000 rows) with no `.range()`/pagination. On an installation with more users or listings than that limit, rows beyond the limit are silently omitted from the backfill with no warning, and the job reports success.",
+					"text": "Both the `user_settings` query and the `listings` query rely on Supabase's default result limit (commonly 1000 rows) with no `.range()`/pagination. On an installation with more users or listings than that limit, rows beyond the limit are silently omitted from the backfill with no warning, and the job reports success.\n\n*Suggested fix:*\n\n```suggestion\n      const { data: rows, error } = await supabase\n        .from('user_settings')\n        .select('user_id')\n        .eq('setting_key', 'ebay_refresh_token')\n        .not('setting_value', 'is', null)\n      if (error) throw error\n      const userIds = (rows ?? []).map((r) => r.user_id as string)\n```"
+				},
+				{
+					"id": "r0:body:0",
+					"roundIndex": 0,
+					"reviewId": 5248110660,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Backfill job swallows query and per-listing errors without retry",
+					"text": "Backfill job swallows query and per-listing errors without retry"
+				},
+				{
+					"id": "r0:body:1",
+					"roundIndex": 0,
+					"reviewId": 5248110660,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Missing pagination on backfill queries",
+					"text": "Missing pagination on backfill queries"
+				},
+				{
+					"id": "r0:body:2",
+					"roundIndex": 0,
+					"reviewId": 5248110660,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Backfill job silently continues on query error and lacks pagination",
+					"text": "Backfill job silently continues on query error and lacks pagination"
+				},
+				{
+					"id": "r0:body:3",
+					"roundIndex": 0,
+					"reviewId": 5248110660,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Per-listing and per-user failures are swallowed without surfacing retryable errors",
+					"text": "Per-listing and per-user failures are swallowed without surfacing retryable errors"
+				},
+				{
+					"id": "r0:body:4",
+					"roundIndex": 0,
+					"reviewId": 5248110660,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Backfill job lacks any test coverage",
+					"text": "Backfill job lacks any test coverage"
+				},
+				{
+					"id": "r0:body:5",
+					"roundIndex": 0,
+					"reviewId": 5248110660,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "plaintextToEbayHtml has no negative test for HTML pass-through combined with script/event-handler injection",
+					"text": "plaintextToEbayHtml has no negative test for HTML pass-through combined with script/event-handler injection"
+				},
+				{
+					"id": "r0:body:6",
+					"roundIndex": 0,
+					"reviewId": 5248110660,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P1",
+					"title": "Backfill job silently ignores query errors and per-listing failures",
+					"text": "Backfill job silently ignores query errors and per-listing failures"
+				},
+				{
+					"id": "r0:body:7",
+					"roundIndex": 0,
+					"reviewId": 5248110660,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P0",
+					"title": "HTML pass-through branch enables stored XSS on eBay listings",
+					"text": "HTML pass-through branch enables stored XSS on eBay listings"
+				},
+				{
+					"id": "r0:body:8",
+					"roundIndex": 0,
+					"reviewId": 5248110660,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P1",
+					"title": "Backfill query error is silently ignored, causing silent no-op",
+					"text": "Backfill query error is silently ignored, causing silent no-op"
+				},
+				{
+					"id": "r0:body:9",
+					"roundIndex": 0,
+					"reviewId": 5248110660,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Backfill queries have no pagination and may silently omit rows beyond default limit",
+					"text": "Backfill queries have no pagination and may silently omit rows beyond default limit"
+				}
+			]
+		}
+	],
+	"threads": [
+		{
+			"threadId": "PRRT_kwDOSSBjYs6jv-gh",
+			"commentId": 4046994773,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6jv-gu",
+			"commentId": 4046994787,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6jv-g1",
+			"commentId": 4046994795,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6jv-g8",
+			"commentId": 4046994808,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		}
+	],
+	"reactions": []
+}

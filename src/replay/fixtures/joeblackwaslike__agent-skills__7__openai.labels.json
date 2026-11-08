@@ -1,0 +1,23 @@
+{
+	"fixtureId": "joeblackwaslike__agent-skills__7__openai",
+	"provisional": true,
+	"labels": [
+		{
+			"claimId": "r0:c3953229650:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3953229662:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		}
+	],
+	"repeatPairs": [],
+	"negativePairs": [],
+	"allowedSuppression": []
+}
