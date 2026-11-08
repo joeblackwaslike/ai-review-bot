@@ -62,6 +62,8 @@ export interface SpikeDeps {
 	fetchFile: FileFetcher;
 	call: RunOptions["call"];
 	costOf: typeof computeCost;
+	/** Calls in flight at once; the cost cap can be overshot by up to this many calls. */
+	concurrency?: number;
 }
 
 const USAGE =
@@ -154,6 +156,7 @@ export async function runVerifierSpike(
 		call: deps.call,
 		cacheDir,
 		maxCostUsd: parsed.maxCostUsd,
+		concurrency: deps.concurrency,
 	});
 	const cells = scoreSpike(
 		items,
@@ -192,7 +195,7 @@ export async function runVerifierSpike(
 		deps.out(formatSpikeReport(cells));
 		if (summary.capped)
 			deps.out(
-				`\nStopped at the cost cap ($${parsed.maxCostUsd}); rerun with a higher --max-cost to continue from the cache.`,
+				`\nStopped at the cost cap ($${parsed.maxCostUsd}); calls already in flight can push the spend a little past it. Rerun with a higher --max-cost to continue from the cache.`,
 			);
 	}
 	return summary.capped ? 3 : 0;

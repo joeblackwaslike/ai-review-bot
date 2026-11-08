@@ -19,6 +19,16 @@ export interface SelectResult {
 	};
 }
 
+function readJson<T>(path: string): T {
+	try {
+		return JSON.parse(readFileSync(path, "utf8")) as T;
+	} catch (err) {
+		throw new Error(
+			`${path}: ${err instanceof Error ? err.message : String(err)}`,
+		);
+	}
+}
+
 const FIXTURE_FILE = /^(?!.*\.(labels(\.proposed)?|classes)\.json$).+\.json$/;
 
 /**
@@ -39,9 +49,7 @@ export function selectItems(dir: string): SelectResult {
 		if (!FIXTURE_FILE.test(name)) continue;
 		const id = name.slice(0, -".json".length);
 		const labelsPath = join(dir, `${id}.labels.json`);
-		const fixture = JSON.parse(
-			readFileSync(join(dir, name), "utf8"),
-		) as Partial<ReplayFixture>;
+		const fixture = readJson<Partial<ReplayFixture>>(join(dir, name));
 		if (fixture.schemaVersion !== 1 || !fixture.rounds) continue;
 		if (!existsSync(labelsPath)) {
 			skipped.noLabelsFile += 1;
@@ -54,7 +62,7 @@ export function selectItems(dir: string): SelectResult {
 			skipped.unsupportedProvider += 1;
 			continue;
 		}
-		const labels = JSON.parse(readFileSync(labelsPath, "utf8")) as LabelFile;
+		const labels = readJson<LabelFile>(labelsPath);
 		const claims = new Map<string, { claim: PostedClaim; headSha: string }>();
 		for (const round of fixture.rounds)
 			for (const claim of round.claims)

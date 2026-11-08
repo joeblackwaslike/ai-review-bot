@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -164,5 +164,100 @@ describe("runSpike", () => {
 			cacheDir,
 		});
 		expect(call).toHaveBeenCalledTimes(2);
+	});
+
+	it("skips a corrupt cache line and still uses the rest", async () => {
+		const cacheDir = dir();
+		const call = vi.fn(async () => verdict);
+		const base = {
+			items: [item("a"), item("b")],
+			judgesFor: () => [judge("j1")],
+			fileFor: async () => "file",
+			call,
+			cacheDir,
+		};
+		await runSpike(base);
+		const file = join(cacheDir, "verdicts.jsonl");
+		const good = readFileSync(file, "utf8");
+		writeFileSync(file, `${good}{"key":"half a li`);
+		call.mockClear();
+		const second = await runSpike(base);
+		expect(call).not.toHaveBeenCalled();
+		expect(second.results).toHaveLength(2);
+	});
+
+	it("puts a file-fetch error in the unverified reason instead of calling it a missing file", async () => {
+		const { results } = await runSpike({
+			items: [item("a")],
+			judgesFor: () => [judge("j1")],
+			fileFor: async () => {
+				throw new Error("403 Forbidden");
+			},
+			call: vi.fn(),
+			cacheDir: dir(),
+		});
+		expect(results[0]?.outcome).toMatchObject({
+			kind: "unverified",
+			why: expect.stringContaining("403 Forbidden"),
+		});
+	});
+
+	it("asks the judge again when the finding's text changes", async () => {
+		const cacheDir = dir();
+		const call = vi.fn(async () => verdict);
+		const run = (text: string) =>
+			runSpike({
+				items: [item("a", { text })],
+				judgesFor: () => [judge("j1")],
+				fileFor: async () => "file",
+				call,
+				cacheDir,
+			});
+		await run("first wording");
+		await run("first wording");
+		expect(call).toHaveBeenCalledTimes(1);
+		await run("corrected wording");
+		expect(call).toHaveBeenCalledTimes(2);
+	});
+
+	it("still serves cached verdicts after the cap is reached, and is not capped when only they remain", async () => {
+		const cacheDir = dir();
+		const call = vi.fn(async () => ({ ...verdict, costUsd: 1 }));
+		const make = (ids: string[]) => ({
+			items: ids.map((id) => item(id)),
+			judgesFor: () => [judge("j1")],
+			fileFor: async () => "file",
+			call,
+			cacheDir,
+			maxCostUsd: 0.5,
+			concurrency: 1,
+		});
+		await runSpike(make(["a"]));
+		const second = await runSpike(make(["b", "a"]));
+		expect(second.results.map((r) => r.itemId)).toEqual(["b", "a"]);
+		expect(second.capped).toBe(false);
+		const third = await runSpike(make(["c", "d"]));
+		expect(third.capped).toBe(true);
+		expect(third.results.map((r) => r.itemId)).toEqual(["c"]);
+	});
+
+	it("keeps a paid verdict when the cache cannot be written", async () => {
+		const cacheDir = dir();
+		chmodSync(cacheDir, 0o500);
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		try {
+			const { results } = await runSpike({
+				items: [item("a")],
+				judgesFor: () => [judge("j1")],
+				fileFor: async () => "file",
+				call: vi.fn(async () => verdict),
+				cacheDir,
+			});
+			expect(results[0]?.outcome).toMatchObject({ kind: "verdict" });
+			expect(warn).toHaveBeenCalled();
+		} finally {
+			chmodSync(cacheDir, 0o700);
+			warn.mockRestore();
+		}
 	});
 });

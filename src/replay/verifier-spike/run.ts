@@ -40,6 +40,9 @@ export interface RunSummary {
 }
 
 function cacheKey(item: SpikeItem, judge: SpikeJudge): string {
+	const content = createHash("sha256")
+		.update(JSON.stringify([item.title, item.text, item.path, item.line]))
+		.digest("hex");
 	return createHash("sha256")
 		.update(
 			[
@@ -48,6 +51,7 @@ function cacheKey(item: SpikeItem, judge: SpikeJudge): string {
 				judge.effort,
 				item.id,
 				item.headSha,
+				content,
 			].join("|"),
 		)
 		.digest("hex");
@@ -65,11 +69,16 @@ async function loadCache(
 	}
 	for (const line of raw.split("\n")) {
 		if (!line) continue;
-		const row = JSON.parse(line) as {
-			key: string;
-			outcome: Extract<SpikeOutcome, { kind: "verdict" }>;
-		};
-		cache.set(row.key, row.outcome);
+		try {
+			const row = JSON.parse(line) as {
+				key: string;
+				outcome: Extract<SpikeOutcome, { kind: "verdict" }>;
+			};
+			if (typeof row.key === "string" && row.outcome?.kind === "verdict")
+				cache.set(row.key, row.outcome);
+		} catch {
+			// a line cut short by an interrupted append; the verdict is simply asked for again
+		}
 	}
 	return cache;
 }
@@ -96,30 +105,36 @@ export async function runSpike(o: RunOptions): Promise<RunSummary> {
 
 	const worker = async () => {
 		for (;;) {
-			if (o.maxCostUsd !== undefined && spentUsd >= o.maxCostUsd) {
-				capped = true;
-				return;
-			}
 			const index = next++;
 			const task = tasks[index];
 			if (!task) return;
 			const { item, judge } = task;
 			const key = cacheKey(item, judge);
-			const cached = cache.get(key);
-			let outcome: SpikeOutcome;
-			if (cached) {
-				outcome = cached;
-			} else {
+			let outcome: SpikeOutcome | undefined = cache.get(key);
+			if (!outcome) {
+				if (o.maxCostUsd !== undefined && spentUsd >= o.maxCostUsd) {
+					capped = true;
+					continue;
+				}
 				let file = files.get(item.id);
 				if (!file) {
 					file = o.fileFor(item);
 					files.set(item.id, file);
 				}
-				const fileText = await file.catch(() => null);
+				let fileText: string | null;
+				let fileError: unknown;
+				try {
+					fileText = await file;
+				} catch (err) {
+					fileText = null;
+					fileError = err;
+				}
 				if (fileText === null) {
 					outcome = {
 						kind: "unverified",
-						why: `no file at ${item.headSha.slice(0, 8)} for ${item.path}`,
+						why: fileError
+							? `file unavailable: ${fileError instanceof Error ? fileError.message : String(fileError)}`
+							: `no file at ${item.headSha.slice(0, 8)} for ${item.path}`,
 						costUsd: 0,
 					};
 				} else {
@@ -128,16 +143,24 @@ export async function runSpike(o: RunOptions): Promise<RunSummary> {
 						outcome = { kind: "verdict", ...r };
 						spentUsd += r.costUsd;
 						cache.set(key, outcome);
-						await appendFile(
-							cacheFile,
-							`${JSON.stringify({ key, outcome })}\n`,
-						);
 					} catch (err) {
 						outcome = {
 							kind: "unverified",
 							why: `call failed: ${err instanceof Error ? err.message : String(err)}`,
 							costUsd: 0,
 						};
+					}
+					if (outcome.kind === "verdict") {
+						try {
+							await appendFile(
+								cacheFile,
+								`${JSON.stringify({ key, outcome })}\n`,
+							);
+						} catch (err) {
+							console.warn(
+								`could not write the verdict cache ${cacheFile}; this verdict is kept for the run but a rerun will pay for it again: ${err instanceof Error ? err.message : String(err)}`,
+							);
+						}
 					}
 				}
 			}

@@ -9,7 +9,7 @@ Bead `ai-review-bot-t0c.15`. Run on 2026-11-08 with `ai-review verifier-spike`. 
 - **Input**: the finding text and the whole file at the head sha of the round that posted it, with line numbers. No ledger.
 - **Output**: `{refuted, reason, rationale}`, verdict first, as in the spec. The spec's fifth reason (contradicts a settled ledger entry) is left out because there is no ledger input.
 - **Prompt**: refute only with counter-evidence you can point to in the file. See `src/replay/verifier-spike/prompt.ts`.
-- **Cost**: 306 calls, $1.51 including a small smoke run. One sample per call.
+- **Cost**: two full runs of 306 calls each, $1.48 apiece, plus a $0.04 smoke run. The tables below are the first run.
 
 ## Results
 
@@ -43,6 +43,10 @@ The D1 criteria are to drop at least 40% of rejected findings, no fixed P0 or P1
 4. **The mid tier is the better choice.** `claude-sonnet-5-5` refuted none of the 41 confirmed-fixed findings but also only 1 of 7 rejected. `gpt-6.1-sol` refuted 16 of 37 rejected (43%) and 1 of 8 fixed P2 and P3.
 5. **"Fixed" is a weak ground truth for small findings.** The seven provisional fixed findings that `gpt-6.1-sol` refuted and I read were all P3 comments, test wording and style notes, refuted with specific line citations. Agent-driven authors fix nearly everything they are shown, including nits, so a fixed label means the author acted, not that the finding was right. The 5% ceiling on fixed P2 and P3 is probably too strict as written. Checking those refutations with the adjudication pipeline would settle it.
 
+## How stable it is
+
+A second full run, on a fresh cache and the final code, gave the same refuted flag for 266 of 286 verdicts (93%). No cell changed its pass or fail. Headline counts moved by at most 2 findings, except `gpt-6-luna` on fixed P2 and P3, which went from 3 of 8 to 1 of 8. That swing is what 8 findings can do, and it is why point 2 above says to read the small cells as direction only.
+
 ## Recommendation
 
 - Use the **mid tier** for both vendors: `gpt-6.1-sol` for Anthropic findings and `claude-sonnet-5-5` for OpenAI findings. A mid call costs about $0.009 to $0.010, so a review with ten findings adds about $0.10.
@@ -60,4 +64,4 @@ ai-review verifier-spike --plan               # counts and a cost estimate, no c
 ai-review verifier-spike [--tier cheap|mid] [--max-cost 10] [--json]
 ```
 
-Verdicts are cached in `~/.ai-review/verifier-spike/` (`AI_REVIEW_VERIFIER_SPIKE_DIR` overrides), keyed by prompt, model, effort and finding, so a rerun costs nothing and a changed prompt starts fresh. A run that stops at the cost cap exits 3.
+Verdicts are cached in `~/.ai-review/verifier-spike/` (`AI_REVIEW_VERIFIER_SPIKE_DIR` overrides), keyed by prompt, model, effort and the finding's text and location, so a rerun costs nothing and a changed prompt or finding starts fresh. A run that stops at the cost cap exits 3; calls already in flight can push the spend a little past the cap. The command refuses to run when a judge model has no price, because the cap could not hold.

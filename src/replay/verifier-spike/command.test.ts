@@ -190,6 +190,7 @@ describe("runVerifierSpike", () => {
 			fetchFile: async () => "file",
 			call,
 			costOf: () => 0,
+			concurrency: 1,
 		});
 		expect(code).toBe(3);
 		expect(s.text()).toMatch(/cost cap/i);

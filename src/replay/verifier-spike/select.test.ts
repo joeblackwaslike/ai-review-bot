@@ -143,4 +143,10 @@ describe("selectItems", () => {
 		writeFileSync(join(dir, "o__r__9__anthropic.json"), "{}");
 		expect(selectItems(dir).items).toHaveLength(1);
 	});
+
+	it("names the file when a fixture or labels file is not valid JSON", () => {
+		const dir = setup();
+		writeFileSync(join(dir, "o__r__9__anthropic.json"), "{ not json");
+		expect(() => selectItems(dir)).toThrow("o__r__9__anthropic.json");
+	});
 });
