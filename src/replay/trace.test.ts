@@ -15,6 +15,7 @@ import { ledgerFromView } from "./pipeline.js";
 import {
 	adaptiveInputForRound,
 	ledgerForRound,
+	ledgerFromPosted,
 	postFilterTrace,
 } from "./trace.js";
 import type { LabelFile, PostedClaim, ReplayFixture, Round } from "./types.js";
@@ -750,5 +751,87 @@ describe("adaptive limits in the trace", () => {
 		});
 		expect(result.adaptiveRemoved).toHaveLength(1);
 		expect(result.adaptiveRemoved?.[0]?.title).toBe(topics[4]);
+	});
+});
+
+describe("ledgerFromPosted", () => {
+	const mkRound = (index: number, claims: PostedClaim[]): Round => ({
+		index,
+		reviewId: index + 1,
+		provider: "anthropic",
+		submittedAt: `2026-10-0${index + 1}T12:00:00Z`,
+		headSha: `h${index}`,
+		baseSha: "b",
+		mergeBase: null,
+		triggerAt: `2026-10-0${index + 1}T11:00:00Z`,
+		approximate: false,
+		commitsSince: [],
+		claims,
+	});
+	const claim0 = priorClaim("r0:c1:0", 0, "Cache never expires", "a");
+	const fixture = {
+		rounds: [mkRound(0, [claim0]), mkRound(1, [])],
+	} as unknown as ReplayFixture;
+	const labels = {
+		labels: [
+			{
+				claimId: "r0:c1:0",
+				label: "fixed",
+				confidence: "high",
+				evidence: ["2026-10-01T18:00:00Z|Fixed."],
+				confirmed: true,
+			},
+		],
+	} as unknown as LabelFile;
+	const round1 = fixture.rounds[1] as Round;
+	const own = (title: string, line = 2) => ({
+		skill: "code-reviewer.md",
+		title,
+		path: "src/a.ts",
+		line,
+		severity: "P1",
+	});
+
+	it("ledgerFromPosted with no own output is empty", () => {
+		expect(ledgerFromPosted(fixture, labels, round1, [])).toEqual([]);
+	});
+
+	it("ledgerFromPosted settles an own finding that joins a recorded fixed claim", () => {
+		const ledger = ledgerFromPosted(fixture, labels, round1, [
+			{ roundIndex: 0, posted: [own("Cache never expires")] },
+		]);
+		expect(ledger.map((e) => [e.title, e.status])).toEqual([
+			["Cache never expires", "fixed"],
+		]);
+	});
+
+	it("ledgerFromPosted keeps an unjoined own finding open", () => {
+		const ledger = ledgerFromPosted(fixture, labels, round1, [
+			{ roundIndex: 0, posted: [own("Totally different problem", 40)] },
+		]);
+		expect(ledger.map((e) => [e.title, e.status])).toEqual([
+			["Totally different problem", "open"],
+		]);
+	});
+
+	it("ledgerFromPosted ignores own output of rounds at or after the target round", () => {
+		expect(
+			ledgerFromPosted(fixture, labels, round1, [
+				{ roundIndex: 1, posted: [own("Cache never expires")] },
+				{ roundIndex: 2, posted: [own("Other", 30)] },
+			]),
+		).toEqual([]);
+	});
+
+	it("ledgerFromPosted equals ledgerForRound when own output re-states the recorded claims", () => {
+		const shape = (l: Ledger) =>
+			l.map((e) => [e.round, e.path, e.line, e.title, e.status, e.severity]);
+		expect(
+			shape(
+				ledgerFromPosted(fixture, labels, round1, [
+					{ roundIndex: 0, posted: [own("Cache never expires")] },
+				]),
+			),
+		).toEqual(shape(ledgerForRound(fixture, labels, round1)));
 	});
 });
