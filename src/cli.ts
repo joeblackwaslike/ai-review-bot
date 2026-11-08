@@ -2,6 +2,8 @@
 import { execFileSync } from "node:child_process";
 import { realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { inspect } from "node:util";
@@ -73,8 +75,11 @@ import {
 import { ingest } from "./mistakes/ingest.js";
 import { mistakesRoot, openMistakeLog } from "./mistakes/log.js";
 import { branchForHead, headShaFor } from "./mistakes/session.js";
+import { computeCost } from "./models.js";
 import { defaultPricingFile, primePrices } from "./pricing.js";
-import { runReplay } from "./replay/command.js";
+import { defaultFixturesDir, runReplay } from "./replay/command.js";
+import { runVerifierSpike } from "./replay/verifier-spike/command.js";
+import { modelCall } from "./replay/verifier-spike/model.js";
 import { formatCost, slugify } from "./report.js";
 import { type LegacyProvider, reviewerFromLegacy } from "./reviewer-id.js";
 import {
@@ -187,6 +192,12 @@ function usage(): never {
 		"      Classify captured feedback into intents. Requires DATABASE_URL.",
 	);
 	console.error("  ai-review trends [--json]");
+	console.error(
+		"  ai-review verifier-spike [--tier cheap|mid] [--max-cost <usd>] [--plan] [--json] [--fixtures <dir>] [--cache <dir>]",
+	);
+	console.error(
+		"      Cross-vendor refute-to-drop verifier over the labelled fixtures (S3 spike). Needs GITHUB_TOKEN and both provider logins; --plan makes no calls.",
+	);
 	console.error(
 		"  ai-review skill-outcomes [--since <YYYY-MM-DD>] [--repo <owner/name>] [--json]",
 	);
@@ -1403,6 +1414,39 @@ async function cmdMistakes(args: string[]): Promise<void> {
 	);
 }
 
+async function cmdVerifierSpike(args: string[]): Promise<void> {
+	await primePrices({ file: defaultPricingFile() });
+	process.exitCode = await runVerifierSpike(args, {
+		fixturesDir: defaultFixturesDir(import.meta.url),
+		cacheDir:
+			process.env.AI_REVIEW_VERIFIER_SPIKE_DIR ??
+			join(homedir(), ".ai-review", "verifier-spike"),
+		out: (line) => console.log(line),
+		fetchFile: async (ref) => {
+			const token = process.env.GITHUB_TOKEN;
+			if (!token) fatal("GITHUB_TOKEN is required to read each finding's file");
+			try {
+				const res = await new Octokit({ auth: token }).request(
+					"GET /repos/{owner}/{repo}/contents/{path}",
+					{
+						owner: ref.owner,
+						repo: ref.repo,
+						path: ref.path,
+						ref: ref.sha,
+						headers: { accept: "application/vnd.github.raw+json" },
+					},
+				);
+				return typeof res.data === "string" ? res.data : null;
+			} catch (err) {
+				if ((err as { status?: number }).status === 404) return null;
+				throw err;
+			}
+		},
+		call: modelCall(),
+		costOf: computeCost,
+	});
+}
+
 async function cmdReplay(args: string[]): Promise<void> {
 	process.exitCode = await runReplay(args);
 }
@@ -1457,6 +1501,7 @@ export async function main(): Promise<void> {
 	}
 	if (sub === "creds") return cmdCreds(rest);
 	if (sub === "replay") return cmdReplay(rest);
+	if (sub === "verifier-spike") return cmdVerifierSpike(rest);
 	if (sub === "mistakes") return cmdMistakes(rest);
 	if (sub === "backfill") return cmdBackfill(rest);
 	if (sub === "unrated") return cmdUnrated(rest);
