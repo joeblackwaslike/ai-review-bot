@@ -21,6 +21,8 @@ export interface CellScore {
 	fixedP23DropRate: number;
 	/** Buckets with no finding in them. A criterion with nothing to test is not met. */
 	untested: string[];
+	/** Criteria that have findings to test and already fail. More data in the empty buckets cannot rescue the cell. */
+	failed: string[];
 	/** Drops at least 40% of rejected, drops no fixed P0 or P1, and drops at most 5% of fixed P2 and P3, with a finding in every bucket. */
 	meetsCriteria: boolean;
 }
@@ -66,6 +68,7 @@ export function scoreSpike(
 				rejectedDropRate: 0,
 				fixedP23DropRate: 0,
 				untested: [],
+				failed: [],
 				meetsCriteria: false,
 			};
 			cells.set(key, cell);
@@ -90,22 +93,36 @@ export function scoreSpike(
 			...(c.fixedP01.n === 0 ? ["fixed P0/P1"] : []),
 			...(c.fixedP23.n === 0 ? ["fixed P2/P3"] : []),
 		];
+		const failed = [
+			...(c.rejected.n > 0 && rejectedDropRate < MIN_REJECTED_DROP_RATE
+				? ["rejected dropped less than 40%"]
+				: []),
+			...(c.fixedP01.dropped > 0 ? ["fixed P0/P1 dropped"] : []),
+			...(c.fixedP23.n > 0 && fixedP23DropRate > MAX_FIXED_P23_DROP_RATE
+				? ["fixed P2/P3 dropped more than 5%"]
+				: []),
+		];
 		return {
 			...c,
 			rejectedDropRate,
 			fixedP23DropRate,
 			untested,
-			meetsCriteria:
-				untested.length === 0 &&
-				rejectedDropRate >= MIN_REJECTED_DROP_RATE &&
-				c.fixedP01.dropped === 0 &&
-				fixedP23DropRate <= MAX_FIXED_P23_DROP_RATE,
+			failed,
+			meetsCriteria: untested.length === 0 && failed.length === 0,
 		};
 	});
 }
 
 const show = (r: Rate): string =>
 	r.n === 0 ? "0/0" : `${r.dropped}/${r.n} (${Math.round(rate(r) * 100)}%)`;
+
+/** "no" as soon as a tested criterion fails, "insufficient data" only when nothing tested has failed and a bucket is empty. */
+const verdict = (c: CellScore): string =>
+	c.failed.length > 0
+		? "no"
+		: c.untested.length > 0
+			? "insufficient data"
+			: "yes";
 
 export function formatSpikeReport(cells: CellScore[]): string {
 	const lines = [
@@ -114,7 +131,7 @@ export function formatSpikeReport(cells: CellScore[]): string {
 	];
 	for (const c of cells)
 		lines.push(
-			`| ${c.producer} | ${c.judge.model} | ${c.judge.tier} | ${show(c.rejected)} | ${show(c.fixedP01)} | ${show(c.fixedP23)} | ${c.unverified} | $${c.costUsd.toFixed(2)} | ${c.untested.length > 0 ? "insufficient data" : c.meetsCriteria ? "yes" : "no"} |`,
+			`| ${c.producer} | ${c.judge.model} | ${c.judge.tier} | ${show(c.rejected)} | ${show(c.fixedP01)} | ${show(c.fixedP23)} | ${c.unverified} | $${c.costUsd.toFixed(2)} | ${verdict(c)} |`,
 		);
 	return lines.join("\n");
 }

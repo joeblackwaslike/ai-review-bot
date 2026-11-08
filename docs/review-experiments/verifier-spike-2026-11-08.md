@@ -17,8 +17,8 @@ Counts use confirmed labels only. A finding is "dropped" when the judge refuted 
 
 | Producer | Judge | Tier | Rejected dropped | Fixed P0/P1 dropped | Fixed P2/P3 dropped | Unverified | Cost | Meets criteria |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| anthropic | gpt-6-luna | cheap | 18/37 (49%) | 0/0 | 3/8 (38%) | 4 | $0.04 | insufficient data |
-| anthropic | gpt-6.1-sol | mid | 16/37 (43%) | 0/0 | 1/8 (12%) | 4 | $0.71 | insufficient data |
+| anthropic | gpt-6-luna | cheap | 18/37 (49%) | 0/0 | 3/8 (38%) | 4 | $0.04 | no |
+| anthropic | gpt-6.1-sol | mid | 16/37 (43%) | 0/0 | 1/8 (12%) | 4 | $0.71 | no |
 | openai | claude-haiku-5-5 | cheap | 2/7 (29%) | 1/6 (17%) | 4/35 (11%) | 6 | $0.04 | no |
 | openai | claude-sonnet-5-5 | mid | 1/7 (14%) | 0/6 (0%) | 0/35 (0%) | 6 | $0.72 | no |
 
@@ -33,11 +33,11 @@ The same cells for provisional labels (auto-labelled, not yet checked):
 
 Ten findings could not be judged (4 Anthropic-authored and 6 OpenAI-authored, so each judge's Unverified count is 4 or 6). All ten are provisional "fixed" claims on one file, `src/replay/retraction-rule.ts`, which does not exist at their head sha. They are counted as unverified and drop nothing, and no confirmed-label cell is affected.
 
-The D1 criteria are to drop at least 40% of rejected findings, no fixed P0 or P1, and at most 5% of fixed P2 and P3. A cell with no findings in one of those buckets cannot pass and is shown as "insufficient data".
+The D1 criteria are to drop at least 40% of rejected findings, no fixed P0 or P1, and at most 5% of fixed P2 and P3. A cell with no findings in one of those buckets cannot pass. It is shown as "no" when a measured criterion already fails, and as "insufficient data" only when nothing measured has failed.
 
 ## What it shows
 
-1. **No cell meets the criteria.** `claude-haiku-5-5` fails all three measures (rejected drop 29%, a dropped fixed P1, fixed P2 and P3 drop 11%). `claude-sonnet-5-5` fails only the 40% rejected-drop floor, on 7 findings. The two OpenAI judges clear that floor but miss the 5% ceiling on fixed P2 and P3 (8 findings), and have no fixed P0 or P1 to test, so their last column reads "insufficient data".
+1. **No cell meets the criteria.** `claude-haiku-5-5` fails all three measures (rejected drop 29%, a dropped fixed P1, fixed P2 and P3 drop 11%). `claude-sonnet-5-5` fails only the 40% rejected-drop floor, on 7 findings. The two OpenAI judges clear that floor but miss the 5% ceiling on fixed P2 and P3 (8 findings). They also have no fixed P0 or P1 to test, so even a pass on the rest could not be certified.
 2. **The samples are small.** OpenAI-authored findings have 7 confirmed-rejected and Anthropic-authored findings have no fixed P0 or P1. Every fixed P2 and P3 rate for Anthropic-authored findings rests on 8 findings, where one drop is 12.5%. Read these as direction, not as a pass or fail.
 3. **The cheap tier is not safe.** `claude-haiku-5-5` refuted a fixed P1 (a caller-controlled profile that bypasses pacing) and 4 of 35 fixed P2 and P3. It also contradicts itself: it marked a finding refuted while its rationale said the finding "is accurate". `gpt-6-luna` refuted 3 of 8 fixed P2 and P3.
 4. **The mid tier is the better choice.** `claude-sonnet-5-5` refuted none of the 41 confirmed-fixed findings but also only 1 of 7 rejected. `gpt-6.1-sol` refuted 16 of 37 rejected (43%) and 1 of 8 fixed P2 and P3.

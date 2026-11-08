@@ -194,6 +194,26 @@ describe("untested criteria", () => {
 		expect(cell?.untested).toEqual(["fixed P2/P3"]);
 	});
 
+	it("says no, not insufficient data, when a tested criterion has already failed", () => {
+		const items = [
+			...Array.from({ length: 5 }, (_, i) => item(`r${i}`)),
+			...Array.from({ length: 4 }, (_, i) =>
+				item(`f${i}`, { label: "fixed", severity: "P3" }),
+			),
+		];
+		const results = [
+			...items.slice(0, 5).map((r) => result(r.id, true)),
+			...items.slice(5).map((f, i) => result(f.id, i < 2)),
+		];
+		const [cell] = scoreSpike(items, [judge], results);
+		expect(cell?.untested).toEqual(["fixed P0/P1"]);
+		expect(cell?.failed).toEqual(["fixed P2/P3 dropped more than 5%"]);
+		expect(cell?.meetsCriteria).toBe(false);
+		const table = formatSpikeReport([cell as NonNullable<typeof cell>]);
+		expect(table).toMatch(/\| no \|$/m);
+		expect(table).not.toContain("insufficient data");
+	});
+
 	it("shows insufficient data instead of yes or no", () => {
 		const items = [item("r1")];
 		const cells = scoreSpike(items, [judge], [result("r1", true)]);
