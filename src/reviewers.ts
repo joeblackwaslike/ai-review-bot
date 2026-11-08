@@ -158,6 +158,17 @@ export function reviewerReadiness(
 	if (mode === "hosted" && readWebhookSecret(id, env) === undefined) {
 		missing.push(displayName(specs.webhookSecret));
 	}
+	missing.push(...missingProviderKeys(id, mode, env, config));
+	return { ready: missing.length === 0, missing };
+}
+
+export function missingProviderKeys(
+	id: ReviewerId,
+	mode: ReadinessMode,
+	env: Env = process.env,
+	config: Config = getConfigTree(),
+): string[] {
+	const missing: string[] = [];
 	for (const provider of reviewerProviders(config, id)) {
 		if (mode === "cli" && CLI_AUTHENTICATED.includes(provider)) continue;
 		const spec = providerKeySpec(provider);
@@ -165,7 +176,7 @@ export function reviewerReadiness(
 			missing.push(displayName(spec));
 		}
 	}
-	return { ready: missing.length === 0, missing };
+	return missing;
 }
 
 function requireValue(value: string | undefined, name: string): string {

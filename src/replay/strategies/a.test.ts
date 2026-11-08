@@ -135,6 +135,28 @@ describe("strategyA", () => {
 		);
 	});
 
+	it("routes and prices with asReviewer instead of the fixture's reviewer", async () => {
+		const input = { ...inputFor(), asReviewer: "codex" };
+		expect(strategyA.estimateCost(input)).toBe(
+			computeCost(
+				{ promptTokens: (4000 / 4) * 5, completionTokens: 2000 * 5 },
+				"gpt-6.1-sol",
+			),
+		);
+		mockRunAuditPass.mockResolvedValueOnce({
+			review: buildModelReview({ inline_comments: [], general_findings: [] }),
+			usage: { promptTokens: 0, completionTokens: 0 },
+			agentsSucceeded: 1,
+			agentsAttempted: 1,
+			agentReviews: [],
+			usageBySkill: {},
+		});
+		await strategyA.run(input);
+		expect(mockRunAuditPass.mock.lastCall?.[0].selection.model).toBe(
+			"gpt-6.1-sol",
+		);
+	});
+
 	it("maps saved trace candidates back to themselves", async () => {
 		const saved = (round.trace?.candidates ?? []) as CandidateRecord[];
 		expect(saved.length).toBeGreaterThan(0);

@@ -1,6 +1,7 @@
 import { isSameClaim } from "../claim-dedupe.js";
 import { candidateFamilies } from "../retraction.js";
 import type { PullFile } from "../review.js";
+import type { ReviewerId } from "../reviewer-id.js";
 import {
 	isCheckoutUnavailable,
 	withCheckout as realWithCheckout,
@@ -86,6 +87,7 @@ export interface LiveOptions {
 	labels: LabelFile;
 	rounds: number[];
 	maxCostUsd: number;
+	asReviewer?: ReviewerId;
 	strategy: ReviewStrategy;
 	fetchDiff: (
 		round: Round,
@@ -123,6 +125,7 @@ export async function runLiveTier(opts: LiveOptions): Promise<LiveReport> {
 		checkout: CheckoutHandle | null = null,
 	): StrategyInput => ({
 		fixture: freezeFixture(opts.fixture, d.round.index),
+		asReviewer: opts.asReviewer,
 		round: { ...d.round, claims: [], trace: undefined },
 		diff: d.diff,
 		files: d.files,

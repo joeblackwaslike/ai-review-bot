@@ -16,6 +16,7 @@ import {
 	type ReviewerId,
 	reviewerFromLegacy,
 } from "../reviewer-id.js";
+import { listReviewerIds, missingProviderKeys } from "../reviewers.js";
 import type { ModelSelection } from "../router.js";
 import { adaptiveReport } from "./adaptive-report.js";
 import { isCurrentVerdict } from "./adjudication/adjudicate.js";
@@ -98,6 +99,7 @@ export interface ReplayDeps {
 interface ParsedArgs {
 	record?: string;
 	reviewer?: ReviewerId;
+	as?: ReviewerId;
 	bot?: string;
 	fixtures?: string;
 	live?: boolean;
@@ -125,7 +127,7 @@ const USAGE = [
 	"Usage:",
 	"  ai-review replay [--fixtures <dir>]",
 	"  ai-review replay --record <pr-url> (--reviewer <id> | --provider anthropic|openai) --bot <login> [--held-out] [--expect-clean] [--fixtures <dir>]",
-	"  ai-review replay --live [--rounds <n>] [--max-cost <usd>] [--strategy <name>] [--save-trace] [--fixtures <dir>]",
+	"  ai-review replay --live [--rounds <n>] [--max-cost <usd>] [--reviewer <id>] [--as <reviewer>] [--strategy <name>] [--save-trace] [--fixtures <dir>]",
 	"  ai-review replay --investigate-join <fixture-id> [--fixtures <dir>]",
 	"  ai-review replay --seeds [--check | --plan [--strategy <name>] | --strategy <name> --max-cost <usd> [--gate-plan <hash>]]",
 	"  ai-review replay --experiment plan|run|score [--plan-file <path>] [--fixtures <dir>]  (--final is for score only)",
@@ -219,6 +221,7 @@ function parseArgs(args: string[]): ParsedArgs | null {
 				flag === "--adjudicate" ||
 				flag === "--provider" ||
 				flag === "--reviewer" ||
+				flag === "--as" ||
 				flag === "--bot" ||
 				flag === "--fixtures") &&
 			(value === undefined || value.startsWith("--"))
@@ -230,7 +233,10 @@ function parseArgs(args: string[]): ParsedArgs | null {
 		else if (flag === "--investigate-join") parsed.investigateJoin = value;
 		else if (flag === "--adjudicate") parsed.adjudicate = value;
 		else if (flag === "--bot") parsed.bot = value;
-		else if (flag === "--fixtures") parsed.fixtures = value;
+		else if (flag === "--as") {
+			if (value === "") return null;
+			parsed.as = value;
+		} else if (flag === "--fixtures") parsed.fixtures = value;
 		else if (flag === "--provider") {
 			if (value !== "anthropic" && value !== "openai") return null;
 			legacy = value;
@@ -601,7 +607,11 @@ async function liveAll(
 		const labels = JSON.parse(await readFile(labelsPath, "utf8")) as LabelFile;
 		const wiring = buildLiveWiring(f, client);
 		const rounds = f.rounds.slice(-(p.rounds ?? 2)).map((r) => r.index);
-		out(`live ${id}`);
+		out(
+			p.as === undefined
+				? `live ${id}`
+				: `live ${id} as ${p.as} (fixture reviewer ${fixtureReviewer(f)})`,
+		);
 		let report: LiveReport;
 		try {
 			report = await runLiveTier({
@@ -609,6 +619,7 @@ async function liveAll(
 				labels,
 				rounds,
 				maxCostUsd: remaining,
+				asReviewer: p.as,
 				out,
 				strategy,
 				...wiring,
@@ -658,6 +669,7 @@ async function runSeeds(
 			p.heldOut ||
 			p.expectClean ||
 			p.reviewer !== undefined ||
+			p.as !== undefined ||
 			p.bot !== undefined ||
 			p.rounds !== undefined ||
 			p.audit ||
@@ -746,6 +758,7 @@ function checkExperimentFlags(p: ParsedArgs): string | null {
 		p.maxAnthropic,
 		p.maxOpenai,
 		p.reviewer,
+		p.as,
 		p.bot,
 	];
 	if (others.some((v) => v !== undefined && v !== false))
@@ -801,6 +814,13 @@ export async function runReplay(
 		((parsed.heldOut || parsed.expectClean) &&
 			parsed.record === undefined &&
 			"--held-out and --expect-clean require --record") ||
+		(parsed.as !== undefined &&
+			(!parsed.live ||
+				parsed.saveTrace ||
+				parsed.record !== undefined ||
+				parsed.investigateJoin !== undefined ||
+				parsed.adjudicate !== undefined) &&
+			"--as requires --live and cannot combine with --save-trace, --record, --investigate-join or --adjudicate") ||
 		(parsed.strategy !== undefined &&
 			(!parsed.live || parsed.record !== undefined) &&
 			"--strategy requires --live without --record") ||
@@ -841,6 +861,20 @@ export async function runReplay(
 	if (misuse) {
 		out(`${misuse}\n${USAGE}`);
 		return 2;
+	}
+	if (parsed.as !== undefined) {
+		const known = listReviewerIds();
+		if (!known.includes(parsed.as)) {
+			out(
+				`unknown reviewer "${parsed.as}" for --as; known: ${known.join(", ")}`,
+			);
+			return 2;
+		}
+		const missing = missingProviderKeys(parsed.as, "cli");
+		if (missing.length > 0) {
+			out(`--as ${parsed.as} needs ${missing.join(", ")} in the environment`);
+			return 1;
+		}
 	}
 	let strategy: ReviewStrategy | undefined;
 	if (parsed.live) {

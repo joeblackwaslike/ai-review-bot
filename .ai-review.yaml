@@ -70,9 +70,9 @@ reviewers:
       complex: { model: openai/gpt-6.1-sol, effort: high }
       deep: { model: openai/gpt-6.1-sol, effort: xhigh }
   # A disabled reviewer cannot review. To trial it: create the GitHub App, install it on
-  # one test repo only, set enabled: true and deploy, open a PR there, then run
-  # `ai-review replay --record` on that PR and `ai-review replay --live --reviewer gemini
-  # --max-cost <usd>`. Set enabled: false again if the false-positive rate or cost is bad.
+  # one test repo only, run `ai-review replay --live --as gemini --max-cost <usd>` against
+  # the recorded fixtures, then set enabled: true and deploy. Set enabled: false again if
+  # the false-positive rate or cost is bad.
   # See docs/adding-a-reviewer.md.
   gemini:
     enabled: true

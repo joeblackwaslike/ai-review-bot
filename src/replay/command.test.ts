@@ -17,6 +17,7 @@ vi.mock("./run-strategy.js", () => ({
 	runStrategy: (s: { run: (i: unknown) => unknown }, i: unknown) => s.run(i),
 }));
 
+import { getConfigTree, resetConfigForTests } from "../config/load.js";
 import { VerdictCache } from "./adjudication/cache.js";
 import { PROMPT_HASH, possibleFirstModels } from "./adjudication/judge.js";
 import type { AdjudicationJudges } from "./adjudication/run.js";
@@ -741,6 +742,185 @@ describe("runReplay live and record flags", () => {
 			`live failed for ${id}: round 0: invalid cost estimate NaN`,
 		);
 		expect(reviews).toBe(0);
+	});
+
+	describe("--as", () => {
+		afterEach(() => {
+			vi.unstubAllEnvs();
+			resetConfigForTests();
+		});
+		const base = (dir: string, extra: object = {}) => ({
+			fixturesDir: dir,
+			out: () => {},
+			client: fakeClient(),
+			liveWiring: fetchOnly,
+			...extra,
+		});
+		const misuse = async (args: string[]) => {
+			const { lines, out } = collect();
+			const code = await runReplay(args, {
+				fixturesDir: tmp(),
+				out,
+				client: fakeClient(),
+			});
+			return { code, text: lines.join("\n") };
+		};
+
+		it.each([
+			["--as without --live", ["--as", "claude"]],
+			["--as with --save-trace", ["--live", "--as", "claude", "--save-trace"]],
+			[
+				"--as with --record",
+				[
+					"--live",
+					"--as",
+					"claude",
+					"--record",
+					"https://github.com/o/r/pull/1",
+				],
+			],
+			["--as with --seeds", ["--seeds", "--as", "gemini"]],
+			["--as with --seeds --check", ["--seeds", "--check", "--as", "gemini"]],
+			["--as with --seeds --plan", ["--seeds", "--plan", "--as", "gemini"]],
+			["--as with --experiment run", ["--experiment", "run", "--as", "gemini"]],
+			[
+				"--as with --experiment score",
+				["--experiment", "score", "--as", "gemini"],
+			],
+			["--as with --adjudicate", ["--adjudicate", "x", "--as", "claude"]],
+			[
+				"--as with --investigate-join",
+				["--investigate-join", "x", "--as", "claude"],
+			],
+			["--as with --experiment", ["--experiment", "plan", "--as", "claude"]],
+			["--as with an empty value", ["--live", "--as", ""]],
+			["--as with no value", ["--live", "--as"]],
+		])("exits 2 for %s", async (_name, args) => {
+			expect((await misuse(args)).code).toBe(2);
+		});
+
+		it("exits 2 for an unknown reviewer id and lists the known ones", async () => {
+			const dir = tmp();
+			seedLive(dir, false);
+			const { lines, out } = collect();
+			const code = await runReplay(
+				["--live", "--as", "nope"],
+				base(dir, { out }),
+			);
+			expect(code).toBe(2);
+			const text = lines.join("\n");
+			expect(text).toContain("nope");
+			expect(text).toContain("claude");
+			expect(text).toContain("gemini");
+		});
+
+		it("exits 1 naming the missing key and spends nothing", async () => {
+			vi.stubEnv("GOOGLE_GENERATIVE_AI_API_KEY", "");
+			const dir = tmp();
+			seedLive(dir, false);
+			let runs = 0;
+			let estimates = 0;
+			stubStrategy(
+				0,
+				() => ++estimates,
+				() => runs++,
+			);
+			const { lines, out } = collect();
+			const code = await runReplay(
+				["--live", "--as", "gemini"],
+				base(dir, { out }),
+			);
+			vi.unstubAllEnvs();
+			expect(code).toBe(1);
+			expect(lines.join("\n")).toContain("GOOGLE_GENERATIVE_AI_API_KEY");
+			expect([runs, estimates]).toEqual([0, 0]);
+		});
+
+		it("runs a reviewer configured enabled: false, hands the strategy the --as id and names both reviewers", async () => {
+			vi.stubEnv("GOOGLE_GENERATIVE_AI_API_KEY", "k");
+			vi.stubEnv("AI_REVIEW_REVIEWERS__GEMINI__ENABLED", "false");
+			resetConfigForTests();
+			expect(getConfigTree().reviewers.gemini?.enabled).toBe(false);
+			const dir = tmp();
+			const { id } = seedLive(dir, false);
+			const seen: (string | undefined)[] = [];
+			resetStrategiesForTest();
+			registerStrategy({
+				name: "a",
+				version: "1",
+				needsCheckout: false,
+				estimateCost: (i) => {
+					seen.push(i.asReviewer);
+					return 0;
+				},
+				run: async (i) => {
+					seen.push(i.asReviewer);
+					return {
+						findings: [],
+						candidates: [],
+						posted: [],
+						usage: {},
+						toolCalls: [],
+						agentReviews: [],
+						wallMs: 0,
+					};
+				},
+			});
+			const { lines, out } = collect();
+			const code = await runReplay(
+				["--live", "--as", "gemini", "--reviewer", "claude"],
+				base(dir, { out }),
+			);
+			vi.unstubAllEnvs();
+			expect(code).toBe(0);
+			expect(new Set(seen)).toEqual(new Set(["gemini"]));
+			expect(lines).toContain(`live ${id} as gemini (fixture reviewer claude)`);
+		});
+
+		it("still filters fixtures by --reviewer", async () => {
+			vi.stubEnv("GOOGLE_GENERATIVE_AI_API_KEY", "k");
+			const dir = tmp();
+			seedLive(dir, false);
+			let runs = 0;
+			stubStrategy(
+				0,
+				() => 0,
+				() => runs++,
+			);
+			await runReplay(
+				["--live", "--as", "gemini", "--reviewer", "codex"],
+				base(dir),
+			);
+			vi.unstubAllEnvs();
+			expect(runs).toBe(0);
+		});
+
+		it("leaves asReviewer unset without --as", async () => {
+			const dir = tmp();
+			seedLive(dir, false);
+			const seen: unknown[] = [];
+			resetStrategiesForTest();
+			registerStrategy({
+				name: "a",
+				version: "1",
+				needsCheckout: false,
+				estimateCost: (i) => {
+					seen.push(i.asReviewer);
+					return 0;
+				},
+				run: async () => ({
+					findings: [],
+					candidates: [],
+					posted: [],
+					usage: {},
+					toolCalls: [],
+					agentReviews: [],
+					wallMs: 0,
+				}),
+			});
+			await runReplay(["--live"], base(dir));
+			expect(seen).toEqual([undefined]);
+		});
 	});
 
 	describe("a clean fixture the cost cap cut short", () => {

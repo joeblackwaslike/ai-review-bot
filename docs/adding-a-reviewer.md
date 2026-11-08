@@ -86,21 +86,22 @@ An enabled reviewer that is not ready logs one warning naming the missing settin
 
 ## 5. Record the PR and run the live replay
 
-The replay can only run after the bot has reviewed at least one PR. `ai-review replay --live --reviewer <id>` skips every fixture recorded for a different reviewer, so for a reviewer with no recorded fixture it does nothing useful: it prints `no fixtures found` and exits 1 when the fixtures directory is empty, and otherwise skips everything and exits 0 without running a review.
+You can trial a new reviewer before it has reviewed anything. `--as <id>` re-runs the recorded claude and codex fixtures through that reviewer's tiers and scores the result against the same confirmed labels. It works while the reviewer is still `enabled: false`, and it needs only the provider API key (for Gemini, `GOOGLE_GENERATIVE_AI_API_KEY`), not the GitHub App settings. An unknown id exits 2, and a missing key exits 1 before any model call.
 
-Record the test PR. The bot login is the App slug plus `[bot]`:
+```bash
+ai-review replay --live --as gemini --max-cost 2
+```
+
+`--reviewer <id>` still selects which recorded fixtures to use, by the reviewer that produced them. Each fixture prints `live <fixture> as gemini (fixture reviewer claude)`, so the numbers are not mistaken for the native reviewer's. `--as` cannot be combined with `--save-trace`, because a trace saved into a fixture would be attributed to the wrong reviewer.
+
+Once the reviewer is enabled and has reviewed a PR, record that PR and replay it natively. The bot login is the App slug plus `[bot]`:
 
 ```bash
 ai-review replay --record <pr-url> --reviewer gemini --bot gemini-review-bot[bot]
-```
-
-Then re-run the reviewer on the last two recorded rounds with a spending cap:
-
-```bash
 ai-review replay --live --reviewer gemini --max-cost 2
 ```
 
-`--live` calls the models and costs real money, and it never gates CI. `--max-cost` is in USD and defaults to 5. `--rounds <n>` changes how many of the latest rounds are re-run (default 2). The run needs a known price for each model, so pin one under `models.<provider/model>.pricing` if OpenRouter does not list it.
+`--live` calls the models and costs real money, and it never gates CI. A round is re-run with the tier model the router picks for that round's diff; per-skill overrides and the summary, triage and revalidate roles are not exercised. `--max-cost` is in USD and defaults to 5. `--rounds <n>` changes how many of the latest rounds are re-run (default 2). The run needs a known price for each model, so pin one under `models.<provider/model>.pricing` if OpenRouter does not list it.
 
 Read these lines of the output:
 
