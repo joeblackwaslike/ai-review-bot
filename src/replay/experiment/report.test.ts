@@ -28,6 +28,7 @@ const base = (over: Partial<ExperimentScore> = {}): ExperimentScore => ({
 			medianCostUsd: 1.5,
 			medianWallMs: 42_000,
 			fitShare: 0.95,
+			joinRate: { joined: 3, candidates: 7, matcher: "isSameClaim@X" },
 		},
 	],
 	comparisons: [
@@ -56,6 +57,10 @@ const text = (s: ExperimentScore) =>
 	formatScoreReport(s, { planHash: "abc", hostedFitSeconds: 180 });
 
 describe("formatScoreReport", () => {
+	it("prints the join rate with the matcher", () => {
+		expect(text(base())).toMatch(/join rate 3\/7 \(matcher isSameClaim@X\)/);
+	});
+
 	it("always says per-round only and prints unresolved counts next to the figures", () => {
 		const out = text(base());
 		expect(out).toMatch(/per-round mode only/i);

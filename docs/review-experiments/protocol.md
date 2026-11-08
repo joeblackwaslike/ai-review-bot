@@ -79,8 +79,9 @@ Computed per PR, then aggregated by macro mean over PRs:
 - Wrong or irrelevant findings, with a separate count for findings about code that only moved.
 - Cost per PR from recorded usage; median wall latency per round; the share of rounds inside the
   plan's `hostedFitSeconds` (210 in the draft).
-- Join rate is deferred to phase 6. The scorer does not compute it; `replay` still reports it
-  offline for fixtures with saved traces.
+- Join rate: distinct candidates (by path, line and title) across a strategy's stored cells that
+  `joinsClaim` joins to any labelled claim, reported as `joined/candidates` with the matcher
+  version, per strategy and provider. It uses the same matcher and constants as `replay`.
 
 Unadjudicated labels, `unclear` or `unresolved` verdicts and missing verdicts leave the numerator and
 denominator. Their counts, and the count of `single-family` verdicts, print next to every precision

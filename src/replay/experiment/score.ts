@@ -1,6 +1,6 @@
 import { claimKey, snapshotId } from "../adjudication/snapshot.js";
 import type { VerdictRecord } from "../adjudication/types.js";
-import { joinsClaim, labelledClaims } from "../metrics.js";
+import { countJoined, joinsClaim, labelledClaims } from "../metrics.js";
 import type { SeedGate } from "../seeds/score.js";
 import {
 	type CandidateRecord,
@@ -31,6 +31,14 @@ export interface VerdictLookup {
 	get(snapshot: string, key: string): unknown;
 }
 
+export const JOIN_MATCHER = "isSameClaim@JOIN_CLAIM_MATCH+JOIN_BODY_MATCH";
+
+export interface JoinRate {
+	joined: number;
+	candidates: number;
+	matcher: string;
+}
+
 export interface PrScore {
 	strategy: string;
 	fixtureId: string;
@@ -46,6 +54,7 @@ export interface PrScore {
 	recall: number | null;
 	foundClaims: number;
 	totalClaims: number;
+	joinRate: JoinRate;
 	costUsd: number;
 	rounds: number;
 	fitRounds: number;
@@ -92,6 +101,7 @@ export function scorePr(args: {
 		recall: null,
 		foundClaims: 0,
 		totalClaims: 0,
+		joinRate: { joined: 0, candidates: 0, matcher: JOIN_MATCHER },
 		costUsd: 0,
 		rounds: records.length,
 		fitRounds: 0,
@@ -146,6 +156,13 @@ export function scorePr(args: {
 		else out.notReal++;
 	}
 
+	out.joinRate = {
+		...countJoined(
+			records.flatMap((r) => r.result.candidates),
+			claims,
+		),
+		matcher: JOIN_MATCHER,
+	};
 	out.foundClaims = found.size;
 	out.totalClaims = fixedClaims.length + extras.length;
 	const judged = out.real + out.notReal;
@@ -170,6 +187,7 @@ export interface Summary {
 	singleFamily: number;
 	moved: number;
 	provisional: number;
+	joinRate: JoinRate;
 	medianCostUsd: number;
 	medianWallMs: number;
 	fitShare: number;
@@ -193,6 +211,11 @@ export function aggregate(prs: PrScore[]): Summary {
 		singleFamily: sum((p) => p.singleFamily),
 		moved: sum((p) => p.moved),
 		provisional: sum((p) => p.provisional),
+		joinRate: {
+			joined: sum((p) => p.joinRate.joined),
+			candidates: sum((p) => p.joinRate.candidates),
+			matcher: prs[0]?.joinRate.matcher ?? JOIN_MATCHER,
+		},
 		medianCostUsd: median(prs.map((p) => p.costUsd)),
 		medianWallMs: median(prs.flatMap((p) => p.wallMs)),
 		fitShare: rounds > 0 ? sum((p) => p.fitRounds) / rounds : 0,

@@ -25,7 +25,7 @@ export function formatScoreReport(
 	lines.push("", "per strategy and provider (macro mean over PRs):");
 	for (const s of score.summaries)
 		lines.push(
-			`  ${s.strategy} [${s.provider}] PRs=${s.nPrs} precision ${num(s.precision)} recall ${num(s.recall)} | real ${s.real}, not-real ${s.notReal}, moved ${s.moved} | unresolved ${s.unresolved}, unadjudicated ${s.unadjudicated}, single-family ${s.singleFamily}, provisional labels ${s.provisional} | median cost $${num(s.medianCostUsd, 2)}, inside ${meta.hostedFitSeconds}s ${num(s.fitShare * 100, 0)}%, median latency ${num(s.medianWallMs / 1000, 1)}s`,
+			`  ${s.strategy} [${s.provider}] PRs=${s.nPrs} precision ${num(s.precision)} recall ${num(s.recall)} | real ${s.real}, not-real ${s.notReal}, moved ${s.moved} | unresolved ${s.unresolved}, unadjudicated ${s.unadjudicated}, single-family ${s.singleFamily}, provisional labels ${s.provisional} | join rate ${s.joinRate.joined}/${s.joinRate.candidates} (matcher ${s.joinRate.matcher}) | median cost $${num(s.medianCostUsd, 2)}, inside ${meta.hostedFitSeconds}s ${num(s.fitShare * 100, 0)}%, median latency ${num(s.medianWallMs / 1000, 1)}s`,
 		);
 
 	lines.push("", `paired against ${score.baseline} (PR-level bootstrap):`);
