@@ -55,13 +55,12 @@ describe("corpus schema", () => {
 });
 
 describe("reviewer identity", () => {
-	it("gives the four provider tables a nullable reviewer and a text provider", () => {
+	it("gives the four reviewer tables a required text reviewer and no provider", () => {
 		for (const t of [findingCatalog, rawFeedback, qcScores, findingDiscards]) {
-			expect(t.reviewer.notNull).toBe(false);
+			expect(t.reviewer.notNull).toBe(true);
 			expect(t.reviewer.dataType).toBe("string");
-			expect(t.provider.notNull).toBe(true);
-			expect(t.provider.dataType).toBe("string");
-			expect(t.provider.getSQLType()).toBe("text");
+			expect(t.reviewer.getSQLType()).toBe("text");
+			expect("provider" in t).toBe(false);
 		}
 	});
 });

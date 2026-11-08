@@ -188,7 +188,7 @@ describe("backfillPr", () => {
 			unparseable: 1,
 		});
 		expect(findingRows[0]).toMatchObject({
-			provider: "anthropic",
+			reviewer: "claude",
 			title: "a finding",
 			severity: "P2",
 			headSha: "sha1",
@@ -272,7 +272,7 @@ describe("backfillPr", () => {
 		);
 
 		expect(result.findings).toBe(1);
-		expect(rawRows[0]).toMatchObject({ provider: "gemini", commentId: 1 });
+		expect(rawRows[0]).toMatchObject({ reviewer: "gemini", commentId: 1 });
 	});
 
 	it("captures a top-level comment as pr_comment when exactly one provider reviewed", async () => {
@@ -297,7 +297,7 @@ describe("backfillPr", () => {
 		const prCommentRow = rawRows.find((r) => r.source === "pr_comment");
 		expect(prCommentRow).toMatchObject({
 			source: "pr_comment",
-			provider: "anthropic",
+			reviewer: "claude",
 			commentId: 200,
 			actor: "joeblackwaslike",
 			body: "this looks wrong to me",
@@ -349,7 +349,7 @@ describe("backfillPr", () => {
 		await backfillPr({ db, octokit }, { owner: "o", repo: "r", pr: 55 });
 
 		const prCommentRow = rawRows.find((r) => r.source === "pr_comment");
-		expect(prCommentRow).toMatchObject({ provider: "openai", commentId: 202 });
+		expect(prCommentRow).toMatchObject({ reviewer: "codex", commentId: 202 });
 	});
 
 	it("excludes bot-authored comments from pr_comment capture", async () => {
@@ -401,7 +401,7 @@ describe("backfillPr", () => {
 		expect(result.prComments).toBe(1);
 		const prCommentRow = rawRows.find((r) => r.source === "pr_comment");
 		expect(prCommentRow).toMatchObject({
-			provider: "anthropic",
+			reviewer: "claude",
 			commentId: 205,
 		});
 	});

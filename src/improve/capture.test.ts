@@ -307,13 +307,13 @@ describe("persistDiscards", () => {
 		})([open, offDiff]);
 
 		const r = await db.execute(
-			sql`select provider, owner, repo, pr, review_sha, reason, code, disposition,
+			sql`select reviewer, owner, repo, pr, review_sha, reason, code, disposition,
 				natural_key, path, line, severity, title, skill
 				from finding_discards order by title`,
 		);
 		expect(r.rows).toEqual([
 			{
-				provider: "openai",
+				reviewer: "codex",
 				owner: "o",
 				repo: "r",
 				pr: 7,
@@ -329,7 +329,7 @@ describe("persistDiscards", () => {
 				skill: "code-reviewer.md",
 			},
 			{
-				provider: "openai",
+				reviewer: "codex",
 				owner: "o",
 				repo: "r",
 				pr: 7,
