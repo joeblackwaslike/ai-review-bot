@@ -15,6 +15,13 @@ import {
 	median,
 	pairedBootstrap,
 } from "./bootstrap.js";
+import {
+	aggregateChains,
+	type ChainedScore,
+	type ChainScore,
+	compareChains,
+	scoreChain,
+} from "./chain-score.js";
 import { readableFixtureIds } from "./final-guard.js";
 import type { ExperimentPlan } from "./plan.js";
 import { isDirectional } from "./splits.js";
@@ -395,6 +402,83 @@ export interface ExperimentScore {
 		comparison: Comparison;
 	}[];
 	verdicts: { candidate: string; verdict: Verdict }[];
+	chained?: ChainedScore;
+}
+
+function scoreChained(args: {
+	plan: ExperimentPlan;
+	fresh: StoredCell[];
+	fixtures: Record<string, ScoredFixture>;
+	baseline: string;
+	opts: { level: number; resamples: number; seed: string };
+}): ChainedScore {
+	const { plan, fixtures } = args;
+	const groups = new Map<string, StoredCell[]>();
+	for (const r of args.fresh) {
+		const k = `${r.key.strategy}\u0000${r.key.fixtureId}\u0000${r.key.trial}`;
+		groups.set(k, [...(groups.get(k) ?? []), r]);
+	}
+	const chains: ChainScore[] = [];
+	for (const [k, records] of groups) {
+		const [strategy, fixtureId] = k.split("\u0000") as [string, string];
+		const fx = fixtures[fixtureId];
+		if (fx)
+			chains.push(
+				scoreChain({
+					strategy,
+					fixtureId,
+					records,
+					fx,
+					plannedRounds: fx.fixture.rounds.length,
+				}),
+			);
+	}
+	const perPr: ChainScore[] = [];
+	const keys = new Set(chains.map((c) => `${c.strategy}\u0000${c.fixtureId}`));
+	for (const k of keys) {
+		const cs = chains.filter((c) => `${c.strategy}\u0000${c.fixtureId}` === k);
+		const avg = (f: (c: ChainScore) => number | null) => {
+			const xs = cs.flatMap((c) => (f(c) === null ? [] : [f(c) as number]));
+			return xs.length === 0 ? null : xs.reduce((s, x) => s + x, 0) / xs.length;
+		};
+		perPr.push({
+			...(cs[0] as ChainScore),
+			recycling: avg((c) => c.recycling),
+			convergenceRound: avg((c) => c.convergenceRound) as number,
+			recall: avg((c) => c.recall),
+			complete: cs.every((c) => c.complete),
+		});
+	}
+	const strategies = plan.strategies.map((s) => s.name);
+	const providers = [...new Set(perPr.map((p) => p.provider))];
+	return {
+		perPr,
+		summaries: strategies.flatMap((strategy) =>
+			providers.flatMap((provider) => {
+				const cs = perPr.filter(
+					(p) => p.strategy === strategy && p.provider === provider,
+				);
+				return cs.length > 0 ? [aggregateChains(cs)] : [];
+			}),
+		),
+		comparisons: strategies
+			.filter((s) => s !== args.baseline)
+			.flatMap((candidate) =>
+				providers.map((provider) => {
+					const of = (strategy: string) =>
+						perPr.filter(
+							(p) => p.strategy === strategy && p.provider === provider,
+						);
+					return compareChains(
+						candidate,
+						provider,
+						of(candidate),
+						of(args.baseline),
+						args.opts,
+					);
+				}),
+			),
+	};
 }
 
 export function scoreExperiment(args: {
@@ -414,6 +498,45 @@ export function scoreExperiment(args: {
 	const staleExcluded = inScope.filter((r) => r.stale).length;
 	const fresh = inScope.filter((r) => !r.stale);
 	const overCapCells = fresh.filter((r) => r.overCap).length;
+
+	const opts = {
+		level: plan.thresholds.precisionBootstrap.level,
+		resamples: plan.thresholds.precisionBootstrap.resamples,
+		seed: args.bootstrapSeed ?? plan.seed,
+	};
+	if (plan.mode === "chained") {
+		const chained = scoreChained({
+			plan,
+			fresh,
+			fixtures,
+			baseline: args.baseline,
+			opts,
+		});
+		const planned = plan.fixtures
+			.filter((f) => readable.has(f.id) && plan.providers.includes(f.provider))
+			.reduce(
+				(n, f) =>
+					n +
+					(fixtures[f.id]?.fixture.rounds.length ?? 0) *
+						plan.trials *
+						plan.strategies.length,
+				0,
+			);
+		return {
+			final,
+			directional: isDirectional(plan),
+			exploratory: args.exploratory,
+			partial: fresh.length < planned || overCapCells > 0,
+			overCapCells,
+			staleExcluded,
+			baseline: args.baseline,
+			perPr: [],
+			summaries: [],
+			comparisons: [],
+			verdicts: [],
+			chained,
+		};
+	}
 
 	const groups = new Map<string, StoredCell[]>();
 	for (const r of fresh) {
@@ -452,11 +575,6 @@ export function scoreExperiment(args: {
 		}),
 	);
 
-	const opts = {
-		level: plan.thresholds.precisionBootstrap.level,
-		resamples: plan.thresholds.precisionBootstrap.resamples,
-		seed: args.bootstrapSeed ?? plan.seed,
-	};
 	const fixtureIds = [...new Set(perPr.map((p) => p.fixtureId))];
 	const comparisons = strategies
 		.filter((s) => s !== args.baseline)

@@ -1,12 +1,46 @@
+import type { ChainedScore } from "./chain-score.js";
 import type { ExperimentScore } from "./score.js";
 
 const num = (v: number | null, digits = 3): string =>
 	v === null || Number.isNaN(v) ? "n/a" : v.toFixed(digits);
 
+function formatChained(
+	score: ExperimentScore,
+	chained: ChainedScore,
+	planHash: string,
+): string {
+	const lines = [
+		`experiment ${planHash} (${score.final ? "FINAL, test split" : "tuning and validation splits"})`,
+		"chained: recycling and convergence only",
+	];
+	if (score.directional)
+		lines.push(
+			"DIRECTIONAL: below 30 PRs, 10 per split or 5 repositories; no go or no-go claim is made",
+		);
+	if (score.partial) lines.push("PARTIAL: some planned cells have no result");
+	if (score.staleExcluded > 0)
+		lines.push(`${score.staleExcluded} stale cell(s) excluded`);
+	if (score.exploratory) lines.push(score.exploratory);
+	lines.push("", "per strategy and provider (macro mean over PRs):");
+	for (const s of chained.summaries)
+		lines.push(
+			`  ${s.strategy} [${s.provider}] PRs=${s.nPrs} recycling ${num(s.recycling)} | convergence round ${num(s.convergenceRound, 2)} | recall ${num(s.recall)} | incomplete chains ${num(s.incompleteRate * 100, 0)}%`,
+		);
+	lines.push("", `paired against ${score.baseline} (PR-level bootstrap):`);
+	for (const c of chained.comparisons) {
+		lines.push(
+			`  ${c.candidate} vs ${score.baseline} [${c.provider}] n=${c.nPrs} recycling diff ${num(c.recycling.mean)} [${num(c.recycling.lo)}, ${num(c.recycling.hi)}], convergence diff ${num(c.convergence.mean, 2)} [${num(c.convergence.lo, 2)}, ${num(c.convergence.hi, 2)}]; excluded ${c.excludedIncomplete} PR(s) for incomplete chains`,
+		);
+	}
+	lines.push("", "no verdict in chained mode");
+	return lines.join("\n");
+}
+
 export function formatScoreReport(
 	score: ExperimentScore,
 	meta: { planHash: string; hostedFitSeconds: number },
 ): string {
+	if (score.chained) return formatChained(score, score.chained, meta.planHash);
 	const lines: string[] = [
 		`experiment ${meta.planHash} (${score.final ? "FINAL, test split" : "tuning and validation splits"})`,
 		"per-round mode only: recycling and convergence need chained mode (phase 6) and are not measured here",

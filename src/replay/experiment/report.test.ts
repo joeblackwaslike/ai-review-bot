@@ -129,3 +129,39 @@ describe("formatScoreReport", () => {
 		expect(directional).toMatch(/no go or no-go claim/);
 	});
 });
+
+describe("formatScoreReport chained", () => {
+	it("chained report omits precision and cost", () => {
+		const out = text(
+			base({
+				chained: {
+					perPr: [],
+					summaries: [
+						{
+							strategy: "a",
+							provider: "anthropic",
+							nPrs: 4,
+							recycling: 0.25,
+							convergenceRound: 2,
+							recall: 0.5,
+							incompleteRate: 0.25,
+						},
+					],
+					comparisons: [
+						{
+							candidate: "b",
+							provider: "anthropic",
+							nPrs: 3,
+							excludedIncomplete: 1,
+							recycling: { mean: -0.1, lo: -0.2, hi: 0, n: 3 },
+							convergence: { mean: -1, lo: -2, hi: 0, n: 3 },
+						},
+					],
+				},
+			}),
+		);
+		expect(out).toContain("chained: recycling and convergence only");
+		expect(out).toContain("recycling");
+		expect(out).not.toMatch(/precision|cost|latency/i);
+	});
+});
