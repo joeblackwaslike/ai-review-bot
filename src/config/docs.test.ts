@@ -59,6 +59,18 @@ describe("buildConfigRows", () => {
 });
 
 describe("renderConfigSection", () => {
+	it("the generated table marks live settings", () => {
+		const lines = renderConfigSection().split("\n");
+		const row = (path: string) =>
+			lines.find((l) => l.startsWith(`| \`${path}\` |`)) as string;
+		expect(lines).toContain(
+			"| YAML path | Env var | Alias | Type | Default | Live | Description |",
+		);
+		expect(row("review.enabled")).toContain("| yes |");
+		expect(row("reviewers.<id>.enabled")).toContain("| yes |");
+		expect(row("review.command")).not.toContain("| yes |");
+	});
+
 	it("is deterministic", () => {
 		expect(renderConfigSection()).toBe(renderConfigSection());
 	});

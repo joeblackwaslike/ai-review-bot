@@ -1,5 +1,6 @@
 import { waitUntil } from "@vercel/functions";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { getEffectiveConfig } from "./config/edge.js";
 import { getReviewerGitHubApp } from "./github-app.js";
 import { readRawBody } from "./http.js";
 import type { ReviewerId } from "./reviewer-id.js";
@@ -39,7 +40,12 @@ export function createReviewerWebhookHandler(fixedId?: ReviewerId) {
 			return;
 		}
 
-		const readiness = reviewerReadiness(id, "hosted");
+		const readiness = reviewerReadiness(
+			id,
+			"hosted",
+			process.env,
+			(await getEffectiveConfig()).config,
+		);
 		if (!readiness.ready) {
 			res.status(503).json({ error: "Reviewer unavailable" });
 			return;

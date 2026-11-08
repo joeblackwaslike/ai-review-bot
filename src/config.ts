@@ -1,4 +1,5 @@
 import { getConfigTree } from "./config/load.js";
+import type { Config } from "./config/schema.js";
 import type { ReviewerId } from "./reviewer-id.js";
 import { buildAppConfig } from "./reviewers.js";
 
@@ -72,8 +73,8 @@ export function validatePrivateKey(key: string): string {
  * the hard deadline: an agent still running at the budget is aborted and
  * counted as skipped, so the run submits what it has instead of being killed
  * with nothing posted. */
-export function parseAgentBudgetMs(): number {
-	const seconds = getConfigTree().review.agentBudgetSeconds;
+export function parseAgentBudgetMs(tree: Config = getConfigTree()): number {
+	const seconds = tree.review.agentBudgetSeconds;
 	// Rounded in milliseconds, not seconds. Flooring seconds first turned any
 	// sub-second value into a 0ms budget, which skips every agent — a review
 	// that silently does nothing.
@@ -81,15 +82,15 @@ export function parseAgentBudgetMs(): number {
 }
 
 /** `review.diffBudgetChars`: PR-wide character budget for the serialized diff. */
-export function parseDiffBudgetChars(): number {
-	return getConfigTree().review.diffBudgetChars;
+export function parseDiffBudgetChars(tree: Config = getConfigTree()): number {
+	return tree.review.diffBudgetChars;
 }
 
 /** Sequential agents cannot fit a review in the 300s Hobby cap (measured 212s at
  * 1 vs 75s at 4 on a 14-file diff, same cost, no 429s). Lower it if a provider's
  * input-tokens-per-minute limit starts rejecting the burst. */
-export function parseAgentConcurrency(): number {
-	return Math.floor(getConfigTree().review.agentConcurrency);
+export function parseAgentConcurrency(tree: Config = getConfigTree()): number {
+	return Math.floor(tree.review.agentConcurrency);
 }
 
 export interface GetConfigOptions {

@@ -24,7 +24,7 @@ const DEFAULT_YAML_PATH = fileURLToPath(
 	new URL("../../.ai-review.yaml", import.meta.url),
 );
 
-function deepFreeze<T>(value: T): T {
+export function deepFreeze<T>(value: T): T {
 	if (typeof value === "object" && value !== null && !Object.isFrozen(value)) {
 		Object.freeze(value);
 		for (const child of Object.values(value)) deepFreeze(child);

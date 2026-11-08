@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { getEffectiveConfig } from "../../src/config/edge.js";
 import type { AppConfig } from "../../src/config.js";
 import {
 	getReviewerGitHubApp,
@@ -6,7 +7,7 @@ import {
 } from "../../src/github-app.js";
 import { readRawBody } from "../../src/http.js";
 import {
-	getReviewerAppConfig,
+	getLiveReviewerAppConfig,
 	listReviewerIds,
 	logReviewerReadiness,
 	reviewerReadiness,
@@ -61,7 +62,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 		res.status(404).json({ error: "Unknown reviewer" });
 		return;
 	}
-	const readiness = reviewerReadiness(reviewerId, "hosted");
+	const readiness = reviewerReadiness(
+		reviewerId,
+		"hosted",
+		process.env,
+		(await getEffectiveConfig()).config,
+	);
 	if (!readiness.ready) {
 		console.warn("Reviewer not ready", {
 			reviewer: reviewerId,
@@ -73,7 +79,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
 	let config: AppConfig;
 	try {
-		config = getReviewerAppConfig(reviewerId);
+		config = await getLiveReviewerAppConfig(reviewerId);
 	} catch (error) {
 		console.error("Reviewer config unavailable", {
 			reviewer: reviewerId,

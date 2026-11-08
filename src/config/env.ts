@@ -4,7 +4,7 @@ import { type Config, ConfigSchema } from "./schema.js";
 
 export const ENV_PREFIX = "AI_REVIEW_";
 
-export type ValueSource = "env" | "alias" | "yaml" | "default";
+export type ValueSource = "env" | "alias" | "yaml" | "default" | "edge";
 
 export interface AliasEntry {
 	paths: readonly (readonly string[])[];
@@ -64,7 +64,7 @@ export class UnknownConfigEnvError extends Error {
 	}
 }
 
-type Kind = "boolean" | "number" | "string" | "json";
+export type Kind = "boolean" | "number" | "string" | "json";
 
 export interface SchemaLeaf {
 	path: string[];
@@ -103,7 +103,7 @@ export const unwrap = (node: ZodNode): ZodNode => {
 	return current;
 };
 
-const isRecord = (v: unknown): v is Record<string, unknown> =>
+export const isRecord = (v: unknown): v is Record<string, unknown> =>
 	typeof v === "object" && v !== null && !Array.isArray(v);
 
 const getAt = (obj: unknown, path: readonly string[]): unknown =>
@@ -118,7 +118,7 @@ const UNSAFE_KEYS: ReadonlySet<string> = new Set([
 	"prototype",
 ]);
 
-const setAt = (
+export const setAt = (
 	obj: Record<string, unknown>,
 	path: readonly string[],
 	value: unknown,
@@ -240,7 +240,7 @@ export function listSchemaLeaves(
 	return out;
 }
 
-function expandLeaves(leaves: SchemaLeaf[], raw: unknown): SchemaLeaf[] {
+export function expandLeaves(leaves: SchemaLeaf[], raw: unknown): SchemaLeaf[] {
 	return leaves.flatMap((leaf) => {
 		const go = (prefix: string[], from: number): string[][] => {
 			const m = leaf.mapIndexes.find((i) => i >= from);
@@ -256,7 +256,7 @@ function expandLeaves(leaves: SchemaLeaf[], raw: unknown): SchemaLeaf[] {
 	});
 }
 
-function coerce(name: string, text: string, kind: Kind): unknown {
+export function coerce(name: string, text: string, kind: Kind): unknown {
 	if (kind === "boolean") {
 		const lower = text.trim().toLowerCase();
 		if (lower === "true") return true;
@@ -296,7 +296,7 @@ function distance(a: string, b: string): number {
 	return prev[b.length] as number;
 }
 
-const closest = (name: string, candidates: string[]): string =>
+export const closest = (name: string, candidates: string[]): string =>
 	candidates.reduce((best, c) =>
 		distance(name, c) < distance(name, best) ? c : best,
 	);
