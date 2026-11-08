@@ -18,7 +18,7 @@ All three quality gates must pass before opening a PR.
 
 ## Architecture Overview
 
-This is a GitHub App deployment that runs one bot per reviewer entry in `.ai-review.yaml`: Claude (Anthropic) and Codex (OpenAI) are enabled, Gemini (Google) is defined with `enabled: false`. To add one, see `docs/adding-a-reviewer.md`. Each bot runs five Tier 1 review agents (plus conditional Tier 2 agents) in parallel and merges their findings into a single structured review posted to GitHub.
+This is a GitHub App deployment that runs one bot per reviewer entry in `.ai-review.yaml`: Claude (Anthropic), Codex (OpenAI) and Gemini (Google) are enabled. To add one, see `docs/adding-a-reviewer.md`. Each bot runs five Tier 1 review agents (plus conditional Tier 2 agents) in parallel and merges their findings into a single structured review posted to GitHub.
 
 ### Request flow
 
