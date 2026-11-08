@@ -5,6 +5,7 @@ review:
   delaySeconds: 0
   resyncDelaySeconds: 0
   command: /ai-review
+  customPrompt: "Review the requested PR, post comments inline"
   agentConcurrency: 4
   agentBudgetSeconds: 210
   diffBudgetChars: 200000
