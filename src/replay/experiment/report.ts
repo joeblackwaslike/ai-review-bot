@@ -46,7 +46,7 @@ export function formatScoreReport(
 	if (score.chained) return formatChained(score, score.chained, meta.planHash);
 	const lines: string[] = [
 		`experiment ${meta.planHash} (${score.final ? "FINAL, test split" : "tuning and validation splits"})`,
-		"per-round mode only: recycling and convergence need chained mode (phase 6) and are not measured here",
+		'per-round mode only: recycling and convergence are measured by a chained plan (`"mode": "chained"`) and are not measured here',
 	];
 	if (score.directional)
 		lines.push(

@@ -139,16 +139,16 @@
 
 **Files:**
 - Modify: `src/replay/experiment/command.ts` (`plan`/`run` pick `planChains`/`runChains` when `plan.mode === "chained"`; `score` unchanged otherwise), `docs/review-experiments/protocol.md` (Modes section: per-round and chained, results key, "recycling and convergence are measured only in a chained plan"), `CLAUDE.md` (`ai-review replay` bullet: one sentence on `--gate-plan` and chained mode)
-- Create: `docs/review-experiments/plan-chained.json` (draft, `mode: "chained"`, same fixtures, strategies and caps as `plan.json`, its own seed string `review-experiments-2026-11-chained`; splits recomputed from that seed)
+- Create: `docs/review-experiments/plan-chained.json` (draft, `mode: "chained"`, same fixtures, strategies and caps as `plan.json`, the same seed `review-experiments-2026-11`, so the same 56 fixtures and splits as `plan.json`; it has its own lock file `plan-chained.lock`)
 - Test: `src/replay/experiment/command.test.ts`
 
 **Interfaces:**
-- `--plan-file <path>` already selects the plan; a chained plan prints `chains` instead of `cells` in its first line.
+- `--plan-file <path>` already selects the plan; `score --final` on a chained plan exits 2 (no final verdict in chained mode); `--gate-plan` is validated as 16 hex chars; a chained plan prints `chains` instead of `cells` in its first line.
 - Consumes: `planChains`, `runChains` (Task 5), `scoreExperiment` (Task 6).
 
 - [ ] **Step 1:** Failing tests: `plan on a chained plan prints chains and the estimate`, `run on a chained plan calls runChains`, `score on a chained plan prints recycling and convergence`.
 - [ ] **Step 2:** Run `pnpm vitest run src/replay/experiment/command.test.ts`; expect FAIL.
-- [ ] **Step 3:** Implement, generate `plan-chained.json` with the same script approach as `plan.json` (splits from `splitOf`, OpenAI fixtures test-split only), update docs.
+- [ ] **Step 3:** Implement, generate `plan-chained.json` from `plan.json`'s fixtures and splits (same seed, only `mode` differs), update docs.
 - [ ] **Step 4:** `gates/verify.sh`; PASS. `bun src/cli.ts replay --experiment plan --plan-file docs/review-experiments/plan-chained.json` prints a chain count and estimate and runs nothing.
 - [ ] **Step 5:** Commit `feat(replay): chained mode in the experiment command`.
 

@@ -265,6 +265,21 @@ describe("scoreExperiment chained", () => {
 		expect(out.chained?.comparisons[0]?.excludedIncomplete).toBe(1);
 	});
 
+	it("a trial with no stored cells makes the PR incomplete and excluded from pairing", () => {
+		const out = run([
+			...full("a", 0, 1),
+			...full("b", 0, 1),
+			...full("b", 1, 1),
+		]);
+		const get = (s: string) => out.chained?.perPr.find((p) => p.strategy === s);
+		expect(get("a")?.complete).toBe(false);
+		expect(get("b")?.complete).toBe(true);
+		expect(out.chained?.comparisons[0]?.excludedIncomplete).toBe(1);
+		expect(
+			out.chained?.summaries.find((s) => s.strategy === "a")?.incompleteRate,
+		).toBe(1);
+	});
+
 	it("counts distinct cells, so a duplicated cell cannot hide a missing one", () => {
 		const out = run([
 			...full("a", 0, 1),

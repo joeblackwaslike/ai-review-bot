@@ -421,10 +421,17 @@ function scoreChained(args: {
 		groups.set(k, [...(groups.get(k) ?? []), r]);
 	}
 	const chains: ChainScore[] = [];
+	const trialsSeen = new Map<string, Set<string>>();
 	for (const [k, records] of groups) {
-		const [strategy, fixtureId] = k.split("\u0000") as [string, string];
+		const [strategy, fixtureId, trial] = k.split("\u0000") as [
+			string,
+			string,
+			string,
+		];
 		const fx = fixtures[fixtureId];
-		if (fx)
+		if (fx) {
+			const pr = `${strategy}\u0000${fixtureId}`;
+			trialsSeen.set(pr, (trialsSeen.get(pr) ?? new Set()).add(trial));
 			chains.push(
 				scoreChain({
 					strategy,
@@ -434,6 +441,7 @@ function scoreChained(args: {
 					plannedRounds: fx.fixture.rounds.length,
 				}),
 			);
+		}
 	}
 	const perPr: ChainScore[] = [];
 	const keys = new Set(chains.map((c) => `${c.strategy}\u0000${c.fixtureId}`));
@@ -446,7 +454,9 @@ function scoreChained(args: {
 			recycling: avg((c) => c.recycling),
 			convergenceRound: avg((c) => c.convergenceRound) as number,
 			recall: avg((c) => c.recall),
-			complete: cs.every((c) => c.complete),
+			complete:
+				(trialsSeen.get(k)?.size ?? 0) >= plan.trials &&
+				cs.every((c) => c.complete),
 		});
 	}
 	const strategies = plan.strategies.map((s) => s.name);
