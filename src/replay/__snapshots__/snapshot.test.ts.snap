@@ -13,48 +13,6 @@ joeblackwaslike__agent-skills__10__openai
   restated open: 0 of 13
   rounds with first-seen claims: 4 of 5, final round quiet: yes
 
-joeblackwaslike__agent-skills__11__anthropic
-  rejected: 0 of 1 adjudicated (deferred 0, unadjudicated 7)
-  recycled: 0 of 8
-  restated open: 0 of 8, +1 proposed
-  rounds with first-seen claims: 2 of 2, final round quiet: no
-
-joeblackwaslike__agent-skills__16__anthropic
-  rejected: 0 of 35 adjudicated (deferred 0, unadjudicated 28)
-  recycled: 0 of 63
-  restated open: 0 of 63, +6 proposed
-  rounds with first-seen claims: 8 of 8, final round quiet: no
-
-joeblackwaslike__agent-skills__17__anthropic
-  rejected: 0 of 2 adjudicated (deferred 0, unadjudicated 3)
-  recycled: 0 of 5
-  restated open: 0 of 5, +1 proposed
-  rounds with first-seen claims: 2 of 2, final round quiet: no
-
-joeblackwaslike__agent-skills__2__anthropic
-  rejected: 0 of 2 adjudicated (deferred 0, unadjudicated 5)
-  recycled: 0 of 7
-  restated open: 0 of 7, +1 proposed
-  rounds with first-seen claims: 2 of 2, final round quiet: no
-
-joeblackwaslike__agent-skills__5__anthropic
-  rejected: 0 of 0 adjudicated (deferred 0, unadjudicated 3)
-  recycled: 0 of 3
-  restated open: 0 of 3
-  rounds with first-seen claims: 1 of 3, final round quiet: no
-
-joeblackwaslike__agent-skills__7__anthropic
-  rejected: 0 of 0 adjudicated (deferred 0, unadjudicated 5)
-  recycled: 0 of 5
-  restated open: 0 of 5
-  rounds with first-seen claims: 1 of 1, final round quiet: no
-
-joeblackwaslike__agent-skills__7__openai
-  rejected: 0 of 0 adjudicated (deferred 0, unadjudicated 2)
-  recycled: 0 of 2
-  restated open: 0 of 2
-  rounds with first-seen claims: 1 of 1, final round quiet: no
-
 joeblackwaslike__ai-listings__50__anthropic
   rejected: 4 of 17 adjudicated (deferred 0, unadjudicated 14)
   recycled: 0 of 31
@@ -69,84 +27,6 @@ joeblackwaslike__ai-listings__50__openai
   rounds with first-seen claims: 2 of 2, final round quiet: no
   join rate: 0/5
 
-joeblackwaslike__ai-listings__51__anthropic
-  rejected: 33 of 146 adjudicated (deferred 6, unadjudicated 280)
-  recycled: 0 of 432
-  restated open: 0 of 432, +201 proposed
-  rounds with first-seen claims: 4 of 4, final round quiet: no
-
-joeblackwaslike__ai-listings__51__openai
-  rejected: 2 of 18 adjudicated (deferred 0, unadjudicated 12)
-  recycled: 0 of 30
-  restated open: 0 of 30, +4 proposed
-  rounds with first-seen claims: 3 of 3, final round quiet: no
-
-joeblackwaslike__ai-listings__52__anthropic
-  rejected: 0 of 0 adjudicated (deferred 0, unadjudicated 12)
-  recycled: 0 of 12
-  restated open: 0 of 12
-  rounds with first-seen claims: 1 of 1, final round quiet: no
-
-joeblackwaslike__ai-listings__53__anthropic
-  rejected: 20 of 35 adjudicated (deferred 1, unadjudicated 112)
-  recycled: 0 of 148, +2 proposed
-  restated open: 0 of 148, +55 proposed
-  rounds with first-seen claims: 11 of 11, final round quiet: no
-
-joeblackwaslike__ai-listings__56__anthropic
-  rejected: 5 of 10 adjudicated (deferred 4, unadjudicated 58)
-  recycled: 0 of 72
-  restated open: 0 of 72, +3 proposed
-  rounds with first-seen claims: 6 of 6, final round quiet: no
-
-joeblackwaslike__ai-listings__56__openai
-  rejected: 8 of 24 adjudicated (deferred 3, unadjudicated 1)
-  recycled: 0 of 28, +2 proposed
-  restated open: 0 of 28, +2 proposed
-  rounds with first-seen claims: 6 of 6, final round quiet: no
-
-joeblackwaslike__ai-listings__57__anthropic
-  rejected: 9 of 29 adjudicated (deferred 2, unadjudicated 24)
-  recycled: 0 of 55, +1 proposed
-  restated open: 0 of 55, +10 proposed
-  rounds with first-seen claims: 4 of 4, final round quiet: no
-
-joeblackwaslike__ai-listings__57__openai
-  rejected: 2 of 11 adjudicated (deferred 6, unadjudicated 11)
-  recycled: 0 of 28
-  restated open: 0 of 28, +2 proposed
-  rounds with first-seen claims: 3 of 3, final round quiet: no
-
-joeblackwaslike__ai-listings__58__anthropic
-  rejected: 0 of 0 adjudicated (deferred 0, unadjudicated 4)
-  recycled: 0 of 4
-  restated open: 0 of 4
-  rounds with first-seen claims: 1 of 1, final round quiet: no
-
-joeblackwaslike__ai-listings__61__anthropic
-  rejected: 0 of 0 adjudicated (deferred 0, unadjudicated 6)
-  recycled: 0 of 6
-  restated open: 0 of 6
-  rounds with first-seen claims: 1 of 1, final round quiet: no
-
-joeblackwaslike__ai-listings__61__openai
-  rejected: 0 of 0 adjudicated (deferred 0, unadjudicated 1)
-  recycled: 0 of 1
-  restated open: 0 of 1
-  rounds with first-seen claims: 1 of 1, final round quiet: no
-
-joeblackwaslike__ai-listings__62__anthropic
-  rejected: 0 of 0 adjudicated (deferred 0, unadjudicated 15)
-  recycled: 0 of 15
-  restated open: 0 of 15
-  rounds with first-seen claims: 1 of 1, final round quiet: no
-
-joeblackwaslike__ai-listings__68__anthropic
-  rejected: 0 of 0 adjudicated (deferred 0, unadjudicated 23)
-  recycled: 0 of 23
-  restated open: 0 of 23
-  rounds with first-seen claims: 1 of 1, final round quiet: no
-
 joeblackwaslike__ai-listings__74__anthropic
   rejected: 10 of 13 adjudicated (deferred 0, unadjudicated 27)
   recycled: 0 of 40
@@ -158,18 +38,6 @@ joeblackwaslike__ai-listings__74__openai
   recycled: 0 of 13
   restated open: 1 of 13
   rounds with first-seen claims: 4 of 5, final round quiet: no
-
-joeblackwaslike__ai-listings__77__anthropic
-  rejected: 0 of 0 adjudicated (deferred 0, unadjudicated 2)
-  recycled: 0 of 2
-  restated open: 0 of 2
-  rounds with first-seen claims: 1 of 1, final round quiet: no
-
-joeblackwaslike__ai-review-bot-demo__1__anthropic
-  rejected: 0 of 0 adjudicated (deferred 0, unadjudicated 1)
-  recycled: 0 of 1
-  restated open: 0 of 1
-  rounds with first-seen claims: 1 of 2, final round quiet: yes
 
 joeblackwaslike__ai-review-bot-demo__2__anthropic
   rejected: 1 of 1 adjudicated (deferred 0, unadjudicated 6)
@@ -192,72 +60,6 @@ joeblackwaslike__ai-review-bot-demo__3__anthropic
   rounds with first-seen claims: 0 of 1, final round quiet: yes
   join rate: 0/0
 
-joeblackwaslike__ai-review-bot__100__anthropic
-  rejected: 0 of 6 adjudicated (deferred 1, unadjudicated 17)
-  recycled: 0 of 24
-  restated open: 0 of 24, +6 proposed
-  rounds with first-seen claims: 4 of 4, final round quiet: no
-
-joeblackwaslike__ai-review-bot__101__anthropic
-  rejected: 0 of 5 adjudicated (deferred 0, unadjudicated 9)
-  recycled: 0 of 14
-  restated open: 0 of 14, +2 proposed
-  rounds with first-seen claims: 2 of 2, final round quiet: no
-
-joeblackwaslike__ai-review-bot__101__openai
-  rejected: 0 of 0 adjudicated (deferred 0, unadjudicated 0)
-  recycled: 0 of 0
-  restated open: 0 of 0
-  rounds with first-seen claims: 0 of 1, final round quiet: yes
-
-joeblackwaslike__ai-review-bot__111__anthropic
-  rejected: 1 of 2 adjudicated (deferred 0, unadjudicated 0)
-  recycled: 0 of 2
-  restated open: 0 of 2
-  rounds with first-seen claims: 2 of 2, final round quiet: no
-
-joeblackwaslike__ai-review-bot__54__anthropic
-  rejected: 3 of 4 adjudicated (deferred 0, unadjudicated 7)
-  recycled: 0 of 11
-  restated open: 0 of 11, +2 proposed
-  rounds with first-seen claims: 3 of 3, final round quiet: no
-
-joeblackwaslike__ai-review-bot__54__openai
-  rejected: 4 of 4 adjudicated (deferred 0, unadjudicated 4)
-  recycled: 0 of 8
-  restated open: 0 of 8
-  rounds with first-seen claims: 2 of 3, final round quiet: no
-
-joeblackwaslike__ai-review-bot__60__anthropic
-  rejected: 8 of 14 adjudicated (deferred 0, unadjudicated 60)
-  recycled: 0 of 74
-  restated open: 0 of 74, +17 proposed
-  rounds with first-seen claims: 2 of 2, final round quiet: no
-
-joeblackwaslike__ai-review-bot__61__anthropic
-  rejected: 1 of 3 adjudicated (deferred 0, unadjudicated 4)
-  recycled: 0 of 7
-  restated open: 0 of 7
-  rounds with first-seen claims: 2 of 2, final round quiet: no
-
-joeblackwaslike__ai-review-bot__67__anthropic
-  rejected: 43 of 83 adjudicated (deferred 1, unadjudicated 635)
-  recycled: 0 of 719
-  restated open: 0 of 719, +496 proposed
-  rounds with first-seen claims: 10 of 10, final round quiet: no
-
-joeblackwaslike__ai-review-bot__68__anthropic
-  rejected: 21 of 62 adjudicated (deferred 0, unadjudicated 551)
-  recycled: 0 of 613, +2 proposed
-  restated open: 0 of 613, +452 proposed
-  rounds with first-seen claims: 10 of 10, final round quiet: no
-
-joeblackwaslike__ai-review-bot__69__anthropic
-  rejected: 0 of 9 adjudicated (deferred 1, unadjudicated 78)
-  recycled: 0 of 88, +1 proposed
-  restated open: 0 of 88, +26 proposed
-  rounds with first-seen claims: 4 of 4, final round quiet: no
-
 joeblackwaslike__ai-review-bot__70__anthropic
   rejected: 5 of 9 adjudicated (deferred 0, unadjudicated 16)
   recycled: 0 of 25
@@ -272,48 +74,12 @@ joeblackwaslike__ai-review-bot__70__openai
   rounds with first-seen claims: 1 of 2, final round quiet: yes
   join rate: 0/0
 
-joeblackwaslike__ai-review-bot__72__anthropic
-  rejected: 80 of 205 adjudicated (deferred 12, unadjudicated 191)
-  recycled: 0 of 408, +35 proposed
-  restated open: 0 of 408, +37 proposed
-  rounds with first-seen claims: 11 of 11, final round quiet: no
-
-joeblackwaslike__ai-review-bot__73__anthropic
-  rejected: 1 of 14 adjudicated (deferred 0, unadjudicated 31)
-  recycled: 0 of 45
-  restated open: 0 of 45
-  rounds with first-seen claims: 2 of 2, final round quiet: no
-
-joeblackwaslike__ai-review-bot__73__openai
-  rejected: 0 of 5 adjudicated (deferred 0, unadjudicated 2)
-  recycled: 0 of 7
-  restated open: 0 of 7
-  rounds with first-seen claims: 1 of 2, final round quiet: yes
-
-joeblackwaslike__ai-review-bot__74__anthropic
-  rejected: 1 of 3 adjudicated (deferred 2, unadjudicated 38)
-  recycled: 0 of 43
-  restated open: 0 of 43, +4 proposed
-  rounds with first-seen claims: 3 of 3, final round quiet: no
-
-joeblackwaslike__ai-review-bot__79__anthropic
-  rejected: 0 of 1 adjudicated (deferred 0, unadjudicated 37)
-  recycled: 0 of 38
-  restated open: 0 of 38, +4 proposed
-  rounds with first-seen claims: 3 of 3, final round quiet: no
-
 joeblackwaslike__ai-review-bot__80__openai
   rejected: 0 of 0 adjudicated (deferred 0, unadjudicated 0)
   recycled: 0 of 0
   restated open: 0 of 0
   rounds with first-seen claims: 0 of 1, final round quiet: yes
   join rate: 0/1
-
-joeblackwaslike__ai-review-bot__89__anthropic
-  rejected: 0 of 9 adjudicated (deferred 1, unadjudicated 6)
-  recycled: 0 of 16
-  restated open: 0 of 16, +3 proposed
-  rounds with first-seen claims: 4 of 5, final round quiet: yes
 
 joeblackwaslike__ai-review-bot__92__anthropic
   rejected: 0 of 10 adjudicated (deferred 0, unadjudicated 8)
@@ -334,12 +100,6 @@ joeblackwaslike__ai-review-bot__94__openai
   rounds with first-seen claims: 0 of 1, final round quiet: yes
   join rate: 0/0
 
-joeblackwaslike__ai-review-bot__95__anthropic
-  rejected: 0 of 4 adjudicated (deferred 0, unadjudicated 5)
-  recycled: 0 of 9
-  restated open: 0 of 9, +2 proposed
-  rounds with first-seen claims: 2 of 2, final round quiet: no
-
 joeblackwaslike__stealth-browser__1__anthropic
   rejected: 29 of 33 adjudicated (deferred 0, unadjudicated 32)
   recycled: 7 of 65, +1 proposed
@@ -350,29 +110,5 @@ joeblackwaslike__stealth-browser__1__openai
   rejected: 6 of 28 adjudicated (deferred 1, unadjudicated 1)
   recycled: 4 of 30, +1 proposed
   restated open: 1 of 30
-  rounds with first-seen claims: 4 of 4, final round quiet: no
-
-joeblackwaslike__stealth-browser__4__anthropic
-  rejected: 0 of 7 adjudicated (deferred 0, unadjudicated 7)
-  recycled: 0 of 14
-  restated open: 0 of 14
-  rounds with first-seen claims: 2 of 3, final round quiet: yes
-
-joeblackwaslike__stealth-browser__7__anthropic
-  rejected: 0 of 4 adjudicated (deferred 0, unadjudicated 1)
-  recycled: 0 of 5
-  restated open: 0 of 5
-  rounds with first-seen claims: 2 of 2, final round quiet: no
-
-joeblackwaslike__stealth-browser__8__anthropic
-  rejected: 0 of 11 adjudicated (deferred 0, unadjudicated 0)
-  recycled: 0 of 11
-  restated open: 0 of 11
-  rounds with first-seen claims: 2 of 2, final round quiet: no
-
-joeblackwaslike__stealth-browser__9__anthropic
-  rejected: 2 of 6 adjudicated (deferred 0, unadjudicated 3)
-  recycled: 0 of 9
-  restated open: 0 of 9
-  rounds with first-seen claims: 2 of 3, final round quiet: yes"
+  rounds with first-seen claims: 4 of 4, final round quiet: no"
 `;
