@@ -3,7 +3,12 @@ import { runStrategy } from "../run-strategy.js";
 import type { ReviewStrategy, StrategyInput } from "../strategy.js";
 import { type SeedReviewInput, seedReviewInput, truthInDiff } from "./input.js";
 import { DEFAULT_SEEDS_ROOT, listSeeds, type Seed } from "./schema.js";
-import { type SeedOutcome, scoreSeed, seedGate } from "./score.js";
+import {
+	type SeedGate,
+	type SeedOutcome,
+	scoreSeed,
+	seedGate,
+} from "./score.js";
 
 const SEED_WALL_MS = 210_000;
 
@@ -14,6 +19,7 @@ export interface SeedRunOptions {
 
 export interface SeedStrategyOptions extends SeedRunOptions {
 	maxCostUsd: number;
+	onGate?: (gate: SeedGate) => void;
 }
 
 const message = (err: unknown): string =>
@@ -170,5 +176,6 @@ export async function runSeedsWithStrategy(
 		`gate: ${gate.pass ? "pass" : "fail"} (originals missed ${gate.originalsMissed}, clean control findings ${gate.cleanFindings})`,
 	);
 	for (const reason of gate.reasons) opts.out(`  ${reason}`);
+	if (!stopped) opts.onGate?.(gate);
 	return gate.pass && !stopped ? 0 : 1;
 }

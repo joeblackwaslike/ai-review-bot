@@ -94,12 +94,11 @@ and recall figure.
   clear their bars.
 - Hosted: at least 90% of rounds finish inside 210 seconds, otherwise the strategy is local-only.
 - Seeds: a gate. Missing more than one of the five originals, or any finding on a clean control, is
-  a no-go. The gate is run with `replay --seeds --strategy <name>`. `score --final` on a plan that
+  a no-go. The gate is run with `replay --seeds --strategy <name> --gate-plan <plan-hash>`, which writes the result into that file (a run stopped by the cost cap writes nothing). `score --final` on a plan that
   is not directional refuses (exit 1) before writing the one-shot marker unless every candidate
   strategy has a result in `<experiments dir>/<plan-hash>/seed-gates.json`, shaped
   `{"<strategy>": {"pass", "originalsMissed", "cleanFindings", "reasons"}}`. The marker is written
-  only after the report is produced. Storing `--seeds` results into that file is phase 6; until then
-  the file is written by hand from the `--seeds` output.
+  only after the report is produced. Without `--gate-plan` the run only prints the gate.
 - OpenAI is rationed. Fixtures for OpenAI run only on the test split, and the plan carries a separate
   `maxOpenAiUsd`. An Anthropic result that clears its bars but has no OpenAI confirmation reads
   "Anthropic-only, unconfirmed on OpenAI" and carries no go or no-go.
@@ -108,7 +107,6 @@ and recall figure.
 
 - The scorer takes audit-added defects as input but the command does not yet read them from the
   adjudication cache, so recall counts labelled claims only.
-- `--seeds` does not yet write `seed-gates.json` (phase 6).
 - Paired comparisons score both strategies on the `(round, trial)` cells they share within each PR.
   The report prints the number of shared cells and the PRs with no shared cell (left out), plus the
   PRs left out of the precision interval for having no judged finding.

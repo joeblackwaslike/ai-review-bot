@@ -8,6 +8,7 @@ vi.mock("../run-strategy.js", () => ({
 }));
 
 import { runReplay } from "../command.js";
+import { readSeedGates } from "../experiment/seed-gates.js";
 import {
 	type ReviewStrategy,
 	registerStrategy,
@@ -241,6 +242,40 @@ describe("runSeedsWithStrategy", () => {
 		expect(lines.join("\n")).toMatch(/cost cap/);
 	});
 
+	it("calls onGate once with the gate", async () => {
+		await fullRoot();
+		const onGate = vi.fn();
+		await runSeedsWithStrategy(stub(findsAll), {
+			root,
+			out,
+			maxCostUsd: 5,
+			onGate,
+		});
+		expect(onGate).toHaveBeenCalledTimes(1);
+		expect(onGate.mock.calls[0]?.[0]).toMatchObject({ pass: true });
+	});
+
+	it("does not call onGate when the cost cap stops the run", async () => {
+		await fullRoot();
+		const onGate = vi.fn();
+		await runSeedsWithStrategy(stub(findsAll, { estimateCost: () => 0.6 }), {
+			root,
+			out,
+			maxCostUsd: 1,
+			onGate,
+		});
+		expect(onGate).not.toHaveBeenCalled();
+	});
+
+	it("does not call onGate when a seed run throws", async () => {
+		await fullRoot();
+		const onGate = vi.fn();
+		const s = stub(findsAll);
+		s.run.mockRejectedValue(new Error("boom"));
+		await runSeedsWithStrategy(s, { root, out, maxCostUsd: 5, onGate });
+		expect(onGate).not.toHaveBeenCalled();
+	});
+
 	it("hands a read-only checkout only to strategies that need one", async () => {
 		await addSeed("REL-01", "original", defectAt(2));
 		const seen: (string | null)[] = [];
@@ -295,8 +330,24 @@ describe("ai-review replay --seeds", () => {
 		).toBe(0);
 	});
 
+	it("--gate-plan writes the gate for the strategy", async () => {
+		await fullRoot();
+		registerStrategy(stub(findsAll));
+		const dir = await mkdtemp(join(tmpdir(), "gate-dir-"));
+		const code = await runReplay(
+			["--seeds", "--strategy", "stub", "--gate-plan", "abc"],
+			{ out, seedsRoot: root, fixturesDir: root, experimentsDir: dir },
+		);
+		expect(code).toBe(0);
+		expect(readSeedGates(dir, "abc").stub).toMatchObject({ pass: true });
+		await rm(dir, { recursive: true, force: true });
+	});
+
 	it("exits 2 on misuse", async () => {
 		const bad = [
+			["--seeds", "--gate-plan", "abc"],
+			["--gate-plan", "abc"],
+			["--seeds", "--plan", "--strategy", "stub", "--gate-plan", "abc"],
 			["--seeds", "--live"],
 			["--seeds", "--record", "https://github.com/a/b/pull/1"],
 			["--seeds", "--adjudicate", "x"],
