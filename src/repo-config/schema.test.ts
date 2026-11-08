@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { parseReviewCommand } from "../commands.js";
 import { RepoConfigSchema } from "./schema.js";
 
 describe("RepoConfigSchema", () => {
@@ -76,5 +77,45 @@ describe("RepoConfigSchema", () => {
 			RepoConfigSchema.safeParse({ version: 1, review: { command: "/abc" } })
 				.success,
 		).toBe(true);
+	});
+	it("restricts review.command to a single safe token", () => {
+		const parse = (command: string) =>
+			RepoConfigSchema.safeParse({ version: 1, review: { command } }).success;
+		for (const bad of [
+			"/re`view",
+			"/review\nme",
+			"/re view",
+			"/<img>x",
+			"/@someone",
+			"/rev]ew",
+			"/rev(ew",
+			"//review",
+			"/lgtm ",
+			"/lgtm\n",
+			" /lgtm",
+		])
+			expect(parse(bad), bad).toBe(false);
+		expect(parse(`/${"a".repeat(50)}`)).toBe(false);
+		expect(parse("/lgtm")).toBe(true);
+		expect(parse("/re-review_2")).toBe(true);
+	});
+	it("every command the schema accepts is matched by parseReviewCommand", () => {
+		for (const command of [
+			"/lgtm",
+			"/re-review_2",
+			"/ABC",
+			"/a".padEnd(50, "b"),
+		]) {
+			const ok = RepoConfigSchema.safeParse({
+				version: 1,
+				review: { command },
+			}).success;
+			expect(ok, command).toBe(true);
+			expect(parseReviewCommand(command, command), command).not.toBeNull();
+			expect(
+				parseReviewCommand(`${command}\n`, command),
+				command,
+			).not.toBeNull();
+		}
 	});
 });

@@ -11,6 +11,7 @@ import {
 import { type AgentRecord, parseAgentsMarker } from "./agent-log.js";
 import { deriveBaseline } from "./baseline.js";
 import { commentKey } from "./comment-key.js";
+import { getConfigTree } from "./config/load.js";
 import { collectRightSideLines } from "./diff-lines.js";
 import { packDiff } from "./diff-pack.js";
 import type { Discard } from "./discards.js";
@@ -9391,6 +9392,65 @@ describe("delta scoping without KV", () => {
 		expect(decision?.body).toContain("**Real bug** (`src/new.ts:3`)");
 	});
 
+	describe("the repo severity floor and carried findings", () => {
+		const floorOverrides = (minSeverity: "P3" | "P2" | "P1") => ({
+			reviewerDisabled: false,
+			disabledSkills: new Set<string>(),
+			extraSensitivePatterns: [],
+			minSeverity,
+			ignoredKeys: [] as string[],
+		});
+		const freshP1 = buildModelReview({
+			event: "COMMENT",
+			general_findings: [{ ...fresh, severity: "P1" }],
+		});
+		const carried = (badge: string, minSeverity: "P3" | "P2" | "P1") => {
+			routeModels({ agent: freshP1 });
+			const { octokit } = prOctokit({
+				reviews: [
+					{
+						id: 11,
+						body: buildOwnReviewBody({
+							sha: OLD,
+							count: 1,
+							rows: [`| ${badge} | **Carried bug** (\`src/review.ts:3\`) |`],
+						}),
+					},
+				],
+				files: [buildPullFile("src/review.ts", SIMPLE_PATCH)],
+				compare: () => {
+					throw new Error("gone");
+				},
+			});
+			return buildReview({
+				octokit,
+				...baseContext,
+				repoOverrides: floorOverrides(minSeverity),
+			});
+		};
+
+		it("a carried P2 below a P1 floor neither blocks nor appears in the table", async () => {
+			const decision = await carried("🟡", "P1");
+			expect(decision?.event).not.toBe("REQUEST_CHANGES");
+			expect(decision?.body).not.toContain("Carried bug");
+			expect(decision?.body).not.toContain(
+				"Still open from the previous review",
+			);
+		});
+
+		it("a carried P1 still blocks under a P1 floor", async () => {
+			const decision = await carried("🟠", "P1");
+			expect(decision?.event).toBe("REQUEST_CHANGES");
+			expect(decision?.body).toContain("Carried bug");
+		});
+
+		it("the default P3 floor leaves a carried P2 blocking", async () => {
+			const decision = await carried("🟡", "P3");
+			expect(decision?.event).toBe("REQUEST_CHANGES");
+			expect(decision?.body).toContain("Carried bug");
+		});
+	});
+
 	describe("carried findings on a file that left the PR", () => {
 		const GONE = "src/self-retraction.ts";
 		const goneRows = [
@@ -12232,27 +12292,70 @@ describe("per-repo overrides", () => {
 		expect(timeless(withOverrides)).toEqual(timeless(plain));
 	});
 
-	it("extra sensitive patterns raise the model tier but not the tier that gates runOn", async () => {
-		runAgents();
-		const runOn = ["complex", "deep"] as const;
-		const without = await buildReview({
-			octokit: buildOctokit(),
-			...baseContext,
-			repoOverrides: { ...noOverrides, runOn: [...runOn] },
+	describe("extra sensitive patterns", () => {
+		const modelsUsed = () =>
+			new Set(
+				vi
+					.mocked(createAIModel)
+					.mock.calls.map((c) => `${c[0].model}/${c[0].effort}`),
+			);
+		const tierEntry = (tier: "normal" | "complex") => {
+			const t = getConfigTree().reviewers.claude.tiers[tier];
+			return `${t?.model.split("/").pop()}/${t?.effort}`;
+		};
+		const withPattern = {
+			...noOverrides,
+			extraSensitivePatterns: ["review"],
+		};
+
+		afterEach(() => {
+			reviewerPatch.value = undefined;
 		});
-		expect(without).toBeNull();
-		mockGenerateObject.mockClear();
-		runAgents();
-		const withPattern = await buildReview({
-			octokit: buildOctokit(),
-			...baseContext,
-			repoOverrides: {
-				...noOverrides,
-				runOn: [...runOn],
-				extraSensitivePatterns: ["review"],
-			},
+
+		it("raise the model tier used by the agents", async () => {
+			runAgents();
+			vi.mocked(createAIModel).mockClear();
+			await buildReview({
+				octokit: buildOctokit(),
+				...baseContext,
+				repoOverrides: noOverrides,
+			});
+			const normalModels = modelsUsed();
+			vi.mocked(createAIModel).mockClear();
+			runAgents();
+			await buildReview({
+				octokit: buildOctokit(),
+				...baseContext,
+				repoOverrides: withPattern,
+			});
+			const inflatedModels = modelsUsed();
+			expect([...normalModels]).toEqual([tierEntry("normal")]);
+			expect([...inflatedModels]).toEqual([tierEntry("complex")]);
 		});
-		expect(withPattern).toBeNull();
+
+		it("do not exclude a reviewer whose runOn lists only the deployment tier", async () => {
+			reviewerPatch.value = { runOn: ["normal"] };
+			runAgents();
+			const review = await buildReview({
+				octokit: buildOctokit(),
+				...baseContext,
+				repoOverrides: withPattern,
+			});
+			expect(review).not.toBeNull();
+			expect(mockGenerateObject).toHaveBeenCalled();
+		});
+
+		it("do not admit a reviewer whose runOn needs a tier only the pattern reaches", async () => {
+			reviewerPatch.value = { runOn: ["complex", "deep"] };
+			runAgents();
+			const review = await buildReview({
+				octokit: buildOctokit(),
+				...baseContext,
+				repoOverrides: withPattern,
+			});
+			expect(review).toBeNull();
+			expect(mockGenerateObject).not.toHaveBeenCalled();
+		});
 	});
 
 	const priorBodyFor = (pendingSkills: string[]) =>

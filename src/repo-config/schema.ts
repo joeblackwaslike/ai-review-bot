@@ -44,9 +44,10 @@ export const RepoConfigSchema = z
 				customPrompt: z.string().max(2000).optional(),
 				command: z
 					.string()
-					.min(4)
-					.max(50)
-					.refine((c) => c.startsWith("/"), "must start with /")
+					.regex(
+						/^\/[a-z0-9][a-z0-9_-]{2,48}$/i,
+						"must be / plus 3 to 49 letters, digits, - or _",
+					)
 					.optional(),
 			})
 			.strict()

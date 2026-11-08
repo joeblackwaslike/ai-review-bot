@@ -3044,6 +3044,7 @@ async function buildReviewInner(
 	});
 	const held = [...restated.values()];
 	survivingPrior = withHeld(survivingPrior, held);
+	survivingPrior = applySeverityFloor(survivingPrior, severityFloor).kept;
 	const heldCount = held.filter(blocksVerdict).length;
 	if (loadedLedger) {
 		console.log("ledger suppression", {
