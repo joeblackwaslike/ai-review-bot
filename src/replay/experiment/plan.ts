@@ -12,7 +12,7 @@ const FIXTURE_ID = /^[^/#@\s]+\/[^/#@\s]+#\d+(?:@(?:anthropic|openai))?$/;
 export const ExperimentPlanSchema = z
 	.object({
 		planVersion: z.number().int().positive(),
-		mode: z.literal("per-round"),
+		mode: z.enum(["per-round", "chained"]),
 		strategies: z
 			.array(z.object({ name: z.string().min(1), version: z.string().min(1) }))
 			.min(1),

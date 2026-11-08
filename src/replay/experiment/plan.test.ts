@@ -109,11 +109,17 @@ describe("ExperimentPlanSchema", () => {
 		expect(parsed.success && parsed.data.draft).toBe(true);
 	});
 
-	it("rejects a non per-round mode", () => {
+	it("rejects an unknown mode", () => {
 		expect(
-			ExperimentPlanSchema.safeParse({ ...samplePlan(), mode: "chained" })
+			ExperimentPlanSchema.safeParse({ ...samplePlan(), mode: "bogus" })
 				.success,
 		).toBe(false);
+	});
+
+	it("mode chained is accepted and hashes differently from per-round", () => {
+		const chained = { ...samplePlan(), mode: "chained" as const };
+		expect(ExperimentPlanSchema.safeParse(chained).success).toBe(true);
+		expect(planHash(chained)).not.toBe(planHash(samplePlan()));
 	});
 });
 
