@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -91,12 +91,15 @@ function stub(
 const findsAll = (repo: string) =>
 	repo.endsWith("-clean") ? [] : [posted("src/a.ts", 2)];
 
+let gateDir: string;
 beforeEach(async () => {
 	root = await mkdtemp(join(tmpdir(), "seed-run-"));
+	gateDir = await mkdtemp(join(tmpdir(), "gate-dir-"));
 	lines = [];
 	resetStrategiesForTest();
 });
 afterEach(async () => {
+	await rm(gateDir, { recursive: true, force: true });
 	await rm(root, { recursive: true, force: true });
 });
 
@@ -333,14 +336,28 @@ describe("ai-review replay --seeds", () => {
 	it("--gate-plan writes the gate for the strategy", async () => {
 		await fullRoot();
 		registerStrategy(stub(findsAll));
-		const dir = await mkdtemp(join(tmpdir(), "gate-dir-"));
 		const code = await runReplay(
 			["--seeds", "--strategy", "stub", "--gate-plan", "abc"],
-			{ out, seedsRoot: root, fixturesDir: root, experimentsDir: dir },
+			{ out, seedsRoot: root, fixturesDir: root, experimentsDir: gateDir },
 		);
 		expect(code).toBe(0);
-		expect(readSeedGates(dir, "abc").stub).toMatchObject({ pass: true });
-		await rm(dir, { recursive: true, force: true });
+		expect(readSeedGates(gateDir, "abc").stub).toMatchObject({ pass: true });
+		expect(lines.join("\n")).toContain(join(gateDir, "abc", "seed-gates.json"));
+	});
+
+	it("--gate-plan exits 1 and leaves a corrupt seed-gates.json untouched", async () => {
+		await fullRoot();
+		registerStrategy(stub(findsAll));
+		const file = join(gateDir, "abc", "seed-gates.json");
+		await mkdir(dirname(file), { recursive: true });
+		await writeFile(file, "{not json");
+		const code = await runReplay(
+			["--seeds", "--strategy", "stub", "--gate-plan", "abc"],
+			{ out, seedsRoot: root, fixturesDir: root, experimentsDir: gateDir },
+		);
+		expect(code).toBe(1);
+		expect(lines.join("\n")).toContain(`could not write ${file}`);
+		expect(await readFile(file, "utf8")).toBe("{not json");
 	});
 
 	it("exits 2 on misuse", async () => {

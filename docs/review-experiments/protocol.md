@@ -94,8 +94,8 @@ and recall figure.
   clear their bars.
 - Hosted: at least 90% of rounds finish inside 210 seconds, otherwise the strategy is local-only.
 - Seeds: a gate. Missing more than one of the five originals, or any finding on a clean control, is
-  a no-go. The gate is run with `replay --seeds --strategy <name> --gate-plan <plan-hash>`, which writes the result into that file (a run stopped by the cost cap writes nothing). `score --final` on a plan that
-  is not directional refuses (exit 1) before writing the one-shot marker unless every candidate
+  a no-go. The gate is run with `replay --seeds --strategy <name> --gate-plan <plan-hash>`, which writes the result into that file (a run stopped by the
+  cost cap writes nothing). `score --final` on a plan that is not directional refuses (exit 1) before writing the one-shot marker unless every candidate
   strategy has a result in `<experiments dir>/<plan-hash>/seed-gates.json`, shaped
   `{"<strategy>": {"pass", "originalsMissed", "cleanFindings", "reasons"}}`. The marker is written
   only after the report is produced. Without `--gate-plan` the run only prints the gate.

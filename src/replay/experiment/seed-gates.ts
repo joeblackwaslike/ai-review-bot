@@ -3,6 +3,7 @@ import {
 	mkdirSync,
 	readFileSync,
 	renameSync,
+	rmSync,
 	writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
@@ -38,6 +39,10 @@ export function writeSeedGate(
 	const next = { ...readSeedGates(root, planHash), [strategy]: gate };
 	mkdirSync(dirname(file), { recursive: true });
 	const tmp = `${file}.${process.pid}.tmp`;
-	writeFileSync(tmp, `${JSON.stringify(next, null, 2)}\n`);
-	renameSync(tmp, file);
+	try {
+		writeFileSync(tmp, `${JSON.stringify(next, null, 2)}\n`);
+		renameSync(tmp, file);
+	} finally {
+		rmSync(tmp, { force: true });
+	}
 }

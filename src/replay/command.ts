@@ -693,20 +693,29 @@ async function runSeeds(
 	}
 	if (p.plan) return planSeeds(strategy, opts);
 	const { gatePlan } = p;
-	return runSeedsWithStrategy(strategy, {
+	const gateRoot = deps.experimentsDir ?? defaultExperimentsDir();
+	const gateFile = join(gateRoot, gatePlan ?? "", "seed-gates.json");
+	let gateError: string | null = null;
+	const code = await runSeedsWithStrategy(strategy, {
 		...opts,
 		maxCostUsd: p.maxCost ?? 5,
 		onGate:
 			gatePlan === undefined
 				? undefined
-				: (gate) =>
-						writeSeedGate(
-							deps.experimentsDir ?? defaultExperimentsDir(),
-							gatePlan,
-							strategy.name,
-							gate,
-						),
+				: (gate) => {
+						try {
+							writeSeedGate(gateRoot, gatePlan, strategy.name, gate);
+							out(`gate written to ${gateFile}`);
+						} catch (err) {
+							gateError = err instanceof Error ? err.message : String(err);
+						}
+					},
 	});
+	if (gateError !== null) {
+		out(`could not write ${gateFile}: ${gateError}`);
+		return 1;
+	}
+	return code;
 }
 
 function checkExperimentFlags(p: ParsedArgs): string | null {
