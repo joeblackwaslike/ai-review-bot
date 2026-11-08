@@ -21,6 +21,9 @@ function formatChained(
 	if (score.staleExcluded > 0)
 		lines.push(`${score.staleExcluded} stale cell(s) excluded`);
 	if (score.exploratory) lines.push(score.exploratory);
+	lines.push(
+		"recycling is an upper bound: it includes restatements of findings the author fixed",
+	);
 	lines.push("", "per strategy and provider (macro mean over PRs):");
 	for (const s of chained.summaries)
 		lines.push(

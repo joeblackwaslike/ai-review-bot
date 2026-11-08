@@ -19,7 +19,9 @@ import {
 	aggregateChains,
 	type ChainedScore,
 	type ChainScore,
+	mean as chainMean,
 	compareChains,
+	present,
 	scoreChain,
 } from "./chain-score.js";
 import { readableFixtureIds } from "./final-guard.js";
@@ -437,10 +439,8 @@ function scoreChained(args: {
 	const keys = new Set(chains.map((c) => `${c.strategy}\u0000${c.fixtureId}`));
 	for (const k of keys) {
 		const cs = chains.filter((c) => `${c.strategy}\u0000${c.fixtureId}` === k);
-		const avg = (f: (c: ChainScore) => number | null) => {
-			const xs = cs.flatMap((c) => (f(c) === null ? [] : [f(c) as number]));
-			return xs.length === 0 ? null : xs.reduce((s, x) => s + x, 0) / xs.length;
-		};
+		const avg = (f: (c: ChainScore) => number | null) =>
+			chainMean(present(cs.map(f)));
 		perPr.push({
 			...(cs[0] as ChainScore),
 			recycling: avg((c) => c.recycling),

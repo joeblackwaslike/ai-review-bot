@@ -26,7 +26,12 @@ export function scoreChain(args: {
 	fx: ScoredFixture;
 	plannedRounds: number;
 }): ChainScore {
-	const rounds = [...args.records].sort((a, b) => a.key.round - b.key.round);
+	const lastPerCell = new Map<string, StoredCell>();
+	for (const r of [...args.records].sort((a, b) => a.at.localeCompare(b.at)))
+		lastPerCell.set(`${r.key.round}:${r.key.trial}`, r);
+	const rounds = [...lastPerCell.values()].sort(
+		(a, b) => a.key.round - b.key.round,
+	);
 	const seen: CandidateRecord[] = [];
 	let later = 0;
 	let recycled = 0;
@@ -54,7 +59,7 @@ export function scoreChain(args: {
 	};
 }
 
-const mean = (xs: number[]): number | null =>
+export const mean = (xs: number[]): number | null =>
 	xs.length === 0 ? null : xs.reduce((s, x) => s + x, 0) / xs.length;
 
 export interface ChainSummary {
@@ -67,7 +72,7 @@ export interface ChainSummary {
 	incompleteRate: number;
 }
 
-const present = (xs: (number | null)[]): number[] =>
+export const present = (xs: (number | null)[]): number[] =>
 	xs.flatMap((x) => (x === null ? [] : [x]));
 
 export function aggregateChains(chains: ChainScore[]): ChainSummary {

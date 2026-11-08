@@ -161,7 +161,7 @@ describe("formatScoreReport chained", () => {
 			}),
 		);
 		expect(out).toContain("chained: recycling and convergence only");
-		expect(out).toContain("recycling");
+		expect(out).toContain("recycling is an upper bound");
 		expect(out).not.toMatch(/precision|cost|latency/i);
 	});
 });
