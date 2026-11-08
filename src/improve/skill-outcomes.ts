@@ -1,21 +1,9 @@
 import { isSameClaim } from "../claim-dedupe.js";
 import type { Ledger, LedgerEntry } from "../ledger/types.js";
 import { type AuthorResponse, classifyFinding } from "../trajectory.js";
+import type { CatalogFinding } from "./catalog-finding.js";
 
-/** A posted finding as the corpus stores it. */
-export interface CatalogFinding {
-	id: number;
-	owner: string;
-	repo: string;
-	pr: number;
-	reviewer: string;
-	commentId: number | null;
-	path: string | null;
-	line: number | null;
-	title: string;
-	skills: string[];
-	postedAt: string;
-}
+export type { CatalogFinding } from "./catalog-finding.js";
 
 /** What happened to the findings one skill raised. `accepted` is the ledger's "fixed or resolved by the author". */
 export interface SkillOutcomeRow {

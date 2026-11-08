@@ -1,6 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { legacyProviderOf, type ReviewerId } from "../../reviewer-id.js";
-import type { CatalogFinding } from "../skill-outcomes.js";
+import type { CatalogFinding } from "../catalog-finding.js";
 import type { FindingOutcome } from "../trends.js";
 import type { Db } from "./client.js";
 import {
