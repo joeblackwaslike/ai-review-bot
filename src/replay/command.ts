@@ -327,6 +327,7 @@ async function writeRecording(
 }
 
 const FIXTURE_ID = /^[A-Za-z0-9._-]+$/;
+const PLAN_HASH = /^[0-9a-f]{16}$/;
 
 const JUDGE_MODELS: Record<LegacyProvider, ModelSelection> = {
 	anthropic: {
@@ -670,6 +671,9 @@ async function runSeeds(
 		(p.maxCost !== undefined &&
 			p.strategy === undefined &&
 			"--max-cost requires --strategy") ||
+		(p.gatePlan !== undefined &&
+			!PLAN_HASH.test(p.gatePlan) &&
+			"--gate-plan must be a 16 lowercase hex character plan hash") ||
 		(p.gatePlan !== undefined &&
 			(p.strategy === undefined || p.plan) &&
 			"--gate-plan requires --strategy and does not apply to --plan") ||

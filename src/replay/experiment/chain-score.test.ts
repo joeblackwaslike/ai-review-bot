@@ -104,6 +104,11 @@ describe("scoreChain", () => {
 		expect(s.convergenceRound).toBe(3);
 	});
 
+	it("convergence is the position in the ordered rounds, not the stored round index", () => {
+		const s = score([cell(5, [cand(C1)]), cell(6, []), cell(7, [cand(C2)])]);
+		expect(s.convergenceRound).toBe(1);
+	});
+
 	it("an incomplete chain is flagged and not counted as converged", () => {
 		const s = score([cell(0, [cand(C1)]), cell(1, [])]);
 		expect(s.complete).toBe(false);
@@ -150,6 +155,22 @@ describe("aggregateChains", () => {
 		expect(out.recycling).toBeCloseTo(0.4);
 		expect(out.convergenceRound).toBeCloseTo(2);
 		expect(out.incompleteRate).toBe(0.25);
+	});
+});
+
+describe("aggregateChains incomplete", () => {
+	it("averages convergence over complete chains only", () => {
+		const out = aggregateChains([
+			chain({ convergenceRound: 1 }),
+			chain({ fixtureId: "o/r#2", convergenceRound: 1 }),
+			chain({ fixtureId: "o/r#3", complete: false, convergenceRound: 3 }),
+		]);
+		expect(out.convergenceRound).toBeCloseTo(1);
+	});
+
+	it("is null when no chain is complete", () => {
+		const out = aggregateChains([chain({ complete: false })]);
+		expect(out.convergenceRound).toBeNull();
 	});
 });
 
@@ -242,6 +263,17 @@ describe("scoreExperiment chained", () => {
 		expect(get("b")?.complete).toBe(true);
 		expect(out.partial).toBe(true);
 		expect(out.chained?.comparisons[0]?.excludedIncomplete).toBe(1);
+	});
+
+	it("counts distinct cells, so a duplicated cell cannot hide a missing one", () => {
+		const out = run([
+			...full("a", 0, 1),
+			...full("a", 1, 1),
+			...full("b", 0, 1),
+			...full("b", 1, 1).slice(0, 2),
+			cell(0, [cand(C1)], { strategy: "b", trial: 1, at: "later" }),
+		]);
+		expect(out.partial).toBe(true);
 	});
 
 	it("is not partial when every planned cell is stored", () => {

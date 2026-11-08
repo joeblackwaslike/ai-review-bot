@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { z } from "zod";
 import { splitOf } from "./splits.js";
 
@@ -108,7 +108,7 @@ export function loadPlan(path: string): {
 	const plan = ExperimentPlanSchema.parse(
 		JSON.parse(readFileSync(path, "utf8")),
 	);
-	const lock = join(dirname(path), "plan.lock");
+	const lock = join(dirname(path), `${basename(path, ".json")}.lock`);
 	const lockedHash = existsSync(lock)
 		? readFileSync(lock, "utf8").trim()
 		: null;
@@ -121,7 +121,9 @@ export function assertCommittedPlan(
 ): void {
 	const actual = planHash(plan);
 	if (committedHash === null)
-		throw new Error("plan hash is not committed: plan.lock is missing");
+		throw new Error(
+			"plan hash is not committed: the plan lock file is missing",
+		);
 	if (actual !== committedHash)
 		throw new Error(
 			`plan hash ${actual} differs from the committed hash ${committedHash}`,

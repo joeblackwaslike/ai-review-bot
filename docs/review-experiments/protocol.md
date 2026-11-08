@@ -5,11 +5,13 @@ This protocol governs `ai-review replay --experiment`. Its design is in
 a run is `docs/review-experiments/plan.json`. The file in the repository is a draft: it
 carries `"draft": true`, and `run` and `score` refuse a draft.
 
-Nothing is scored until `plan.lock` is committed next to `plan.json`. The lock holds the plan hash
+Nothing is scored until a lock file is committed next to the plan file, named after it: `plan.lock`
+for `plan.json`, `plan-chained.lock` for `plan-chained.json`. The lock holds the plan hash
 (`planHash`, 16 hex characters of the canonical JSON). `run` and `score` exit 1 when the lock is
 missing or the hash differs, and `plan` exits 1 when a lock exists and differs. Any change to
 strategies, versions, fixtures, splits, budgets, metrics or thresholds is a new plan with a new
-hash and its own results directory.
+hash and its own results directory. The caps (`maxAnthropicUsd`, `maxOpenAiUsd`) apply per plan hash,
+so a per-round plan and a chained plan can each spend up to them.
 
 ## Modes
 
@@ -26,8 +28,10 @@ chain at its first failing, over-cap or unavailable round and lists the later ro
 Recycling and convergence are measured only in a chained plan. A chained report shows recycling,
 convergence round and recall per strategy and provider, paired against `a` with a PR-level
 bootstrap, and makes no go or no-go claim: precision, cost and latency are not scored, and there is
-no verdict. Chains are not paired with per-round cells, so a chained plan uses its own seed and
-splits.
+no verdict. Chains are not paired with per-round cells. A chained plan shares the per-round plan's seed, and so
+its splits, so a chained run can never see test PRs that plain `score` has not been allowed to. It has
+no final verdict: `score --final` on a chained plan exits 2 before reading cells or writing a marker.
+Convergence is averaged over complete chains only, and the report line says so.
 
 ## Commands
 
@@ -106,7 +110,7 @@ and recall figure.
   clear their bars.
 - Hosted: at least 90% of rounds finish inside 210 seconds, otherwise the strategy is local-only.
 - Seeds: a gate. Missing more than one of the five originals, or any finding on a clean control, is
-  a no-go. The gate is run with `replay --seeds --strategy <name> --gate-plan <plan-hash>`, which writes the result into that file (a run stopped by the
+  a no-go. The gate is run with `replay --seeds --strategy <name> --gate-plan <plan-hash>`, which writes the result into that file (the plan hash must be 16 lowercase hex characters, else exit 2) (a run stopped by the
   cost cap writes nothing). `score --final` on a plan that is not directional refuses (exit 1) before writing the one-shot marker unless every candidate
   strategy has a result in `<experiments dir>/<plan-hash>/seed-gates.json`, shaped
   `{"<strategy>": {"pass", "originalsMissed", "cleanFindings", "reasons"}}`. The marker is written

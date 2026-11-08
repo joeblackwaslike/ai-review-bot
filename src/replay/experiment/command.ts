@@ -96,6 +96,13 @@ export async function runExperiment(
 	const { plan, lockedHash } = loaded;
 	const hash = planHash(plan);
 
+	if (args.mode === "score" && args.final && plan.mode === "chained") {
+		out(
+			"chained plans have no final verdict; use plain score. Nothing was scored",
+		);
+		return 2;
+	}
+
 	if (args.mode !== "plan" || lockedHash !== null) {
 		try {
 			assertCommittedPlan(plan, lockedHash);

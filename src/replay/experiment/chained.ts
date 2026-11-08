@@ -182,6 +182,7 @@ export async function runChains(
 				);
 				if (prior) {
 					report.skippedExisting++;
+					if (prior.overCap) stoppedStrategies.add(s.name);
 					history.push({ roundIndex, posted: prior.result.posted });
 					if (s.name === A) aCosts.set(roundIndex, prior.costUsd);
 					continue;

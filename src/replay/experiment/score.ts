@@ -512,6 +512,12 @@ export function scoreExperiment(args: {
 			baseline: args.baseline,
 			opts,
 		});
+		const distinctCells = new Set(
+			fresh.map(
+				(r) =>
+					`${r.key.strategy}\u0000${r.key.fixtureId}\u0000${r.key.round}\u0000${r.key.trial}`,
+			),
+		).size;
 		const planned = plan.fixtures
 			.filter((f) => readable.has(f.id) && plan.providers.includes(f.provider))
 			.reduce(
@@ -526,7 +532,7 @@ export function scoreExperiment(args: {
 			final,
 			directional: isDirectional(plan),
 			exploratory: args.exploratory,
-			partial: fresh.length < planned || overCapCells > 0,
+			partial: distinctCells < planned || overCapCells > 0,
 			overCapCells,
 			staleExcluded,
 			baseline: args.baseline,

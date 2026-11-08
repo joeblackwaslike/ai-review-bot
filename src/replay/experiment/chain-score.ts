@@ -46,14 +46,14 @@ export function scoreChain(args: {
 	});
 	const complete =
 		new Set(rounds.map((r) => r.key.round)).size >= args.plannedRounds;
-	const firstEmpty = rounds.find((r) => r.result.posted.length === 0);
+	const firstEmpty = rounds.findIndex((r) => r.result.posted.length === 0);
 	return {
 		strategy: args.strategy,
 		fixtureId: args.fixtureId,
 		provider: fixtureFamily(args.fx.fixture),
 		recycling: later > 0 ? recycled / later : null,
 		convergenceRound:
-			complete && firstEmpty ? firstEmpty.key.round : args.plannedRounds,
+			complete && firstEmpty >= 0 ? firstEmpty : args.plannedRounds,
 		complete,
 		recall: scorePr({ ...args, cache: { get: () => undefined } }).recall,
 	};
@@ -81,7 +81,9 @@ export function aggregateChains(chains: ChainScore[]): ChainSummary {
 		provider: chains[0]?.provider ?? "anthropic",
 		nPrs: chains.length,
 		recycling: mean(present(chains.map((c) => c.recycling))),
-		convergenceRound: mean(chains.map((c) => c.convergenceRound)),
+		convergenceRound: mean(
+			chains.filter((c) => c.complete).map((c) => c.convergenceRound),
+		),
 		recall: mean(present(chains.map((c) => c.recall))),
 		incompleteRate:
 			chains.length > 0

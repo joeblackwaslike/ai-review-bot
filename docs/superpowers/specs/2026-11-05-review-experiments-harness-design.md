@@ -423,10 +423,13 @@ author's and carry their reason.
   restate a finding the ledger already held as settled or open. Convergence is rounds until the first
   round that posts nothing, with "never" counted at the chain length. Both are reported with recall and
   the incomplete-chain rate, per PR then macro-averaged, paired bootstrap as in section 7. Chained
-  cells are never mixed into per-round precision or cost.
+  cells are never mixed into per-round precision or cost. A chained plan has no final verdict:
+  `score --final` on one exits 2. It shares the per-round plan's seed and splits, so a chained run can
+  never see test PRs that plain `score` has not been allowed to.
 - **Cost.** Estimates from `--experiment plan` replace the earlier guess: $44.58 Anthropic and $9.98
   OpenAI for the 384-cell per-round grid, under the existing $150 and $20 caps, which stay. A chained
   grid is priced the same way and is run only after per-round scoring and only if its estimate is shown
-  and approved first.
+  and approved first. The caps (`maxAnthropicUsd`, `maxOpenAiUsd`) apply per plan hash, so a
+  per-round plan and a chained plan can each spend up to them.
 - **Run order.** Anthropic per-round on all splits; `score` on tuning and validation; OpenAI on the
   test split only for strategies that cleared on Anthropic; `score --final` once, when Joe says go.

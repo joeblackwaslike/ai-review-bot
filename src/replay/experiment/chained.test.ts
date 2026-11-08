@@ -205,6 +205,20 @@ describe("runChains", () => {
 		expect(titlesOf(calls[1] as Call)).toEqual([titleOf("a", 1)]);
 	});
 
+	it("a stored over-cap round stops that strategy's chain on resume", async () => {
+		const first = harness([stub("a")]);
+		const one = plan({ fixtures: [plan().fixtures[0] as never] });
+		await runChains(one, first.deps);
+		const stored = first.store.records
+			.filter((r) => r.key.round < 1)
+			.map((r) => ({ ...r, overCap: { allowedUsd: 1, actualUsd: 2 } }));
+		const { deps, calls } = harness([stub("a")], {}, stored);
+		const report = await runChains(one, deps);
+		expect(calls).toHaveLength(0);
+		expect(report.missing.map((m) => m.round)).toEqual([1, 2]);
+		expect(report.partial).toBe(true);
+	});
+
 	it("a0 targets a's cost for the same round in the chain", async () => {
 		const { deps, calls } = harness([stub("a"), stub("a0")]);
 		await runChains(
@@ -252,7 +266,7 @@ describe("runChains", () => {
 				perCellWallMs: 210_000,
 			},
 		});
-		const { deps } = harness([stub("a")], {
+		const { deps, calls } = harness([stub("a")], {
 			fixtures: {
 				"o/r#1": loaded(1),
 				"o/r#2@openai": {
@@ -269,6 +283,9 @@ describe("runChains", () => {
 		expect(report.missing.some((m) => m.fixtureId === "o/r#2@openai")).toBe(
 			false,
 		);
-		expect(report.ran).toBeGreaterThanOrEqual(1);
+		expect(report.ran).toBe(4);
+		expect(
+			calls.filter((c) => c.input.fixture.provider === "openai"),
+		).toHaveLength(3);
 	});
 });

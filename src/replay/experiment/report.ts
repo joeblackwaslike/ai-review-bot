@@ -27,7 +27,7 @@ function formatChained(
 	lines.push("", "per strategy and provider (macro mean over PRs):");
 	for (const s of chained.summaries)
 		lines.push(
-			`  ${s.strategy} [${s.provider}] PRs=${s.nPrs} recycling ${num(s.recycling)} | convergence round ${num(s.convergenceRound, 2)} | recall ${num(s.recall)} | incomplete chains ${num(s.incompleteRate * 100, 0)}%`,
+			`  ${s.strategy} [${s.provider}] PRs=${s.nPrs} recycling ${num(s.recycling)} | convergence round ${num(s.convergenceRound, 2)} (complete chains only) | recall ${num(s.recall)} | incomplete chains ${num(s.incompleteRate * 100, 0)}%`,
 		);
 	lines.push("", `paired against ${score.baseline} (PR-level bootstrap):`);
 	for (const c of chained.comparisons) {

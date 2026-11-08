@@ -1,4 +1,11 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+	mkdir,
+	mkdtemp,
+	readdir,
+	readFile,
+	rm,
+	writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -337,22 +344,26 @@ describe("ai-review replay --seeds", () => {
 		await fullRoot();
 		registerStrategy(stub(findsAll));
 		const code = await runReplay(
-			["--seeds", "--strategy", "stub", "--gate-plan", "abc"],
+			["--seeds", "--strategy", "stub", "--gate-plan", "0123456789abcdef"],
 			{ out, seedsRoot: root, fixturesDir: root, experimentsDir: gateDir },
 		);
 		expect(code).toBe(0);
-		expect(readSeedGates(gateDir, "abc").stub).toMatchObject({ pass: true });
-		expect(lines.join("\n")).toContain(join(gateDir, "abc", "seed-gates.json"));
+		expect(readSeedGates(gateDir, "0123456789abcdef").stub).toMatchObject({
+			pass: true,
+		});
+		expect(lines.join("\n")).toContain(
+			join(gateDir, "0123456789abcdef", "seed-gates.json"),
+		);
 	});
 
 	it("--gate-plan exits 1 and leaves a corrupt seed-gates.json untouched", async () => {
 		await fullRoot();
 		registerStrategy(stub(findsAll));
-		const file = join(gateDir, "abc", "seed-gates.json");
+		const file = join(gateDir, "0123456789abcdef", "seed-gates.json");
 		await mkdir(dirname(file), { recursive: true });
 		await writeFile(file, "{not json");
 		const code = await runReplay(
-			["--seeds", "--strategy", "stub", "--gate-plan", "abc"],
+			["--seeds", "--strategy", "stub", "--gate-plan", "0123456789abcdef"],
 			{ out, seedsRoot: root, fixturesDir: root, experimentsDir: gateDir },
 		);
 		expect(code).toBe(1);
@@ -360,11 +371,34 @@ describe("ai-review replay --seeds", () => {
 		expect(await readFile(file, "utf8")).toBe("{not json");
 	});
 
+	it.each([
+		"../x",
+		"abc",
+		"0123456789ABCDEF",
+	])("--gate-plan %s exits 2 and writes nothing", async (bad) => {
+		await fullRoot();
+		registerStrategy(stub(findsAll));
+		const code = await runReplay(
+			["--seeds", "--strategy", "stub", "--gate-plan", bad],
+			{ out, seedsRoot: root, fixturesDir: root, experimentsDir: gateDir },
+		);
+		expect(code).toBe(2);
+		expect(lines.join("\n")).toMatch(/16 lowercase hex/);
+		expect(await readdir(gateDir)).toEqual([]);
+	});
+
 	it("exits 2 on misuse", async () => {
 		const bad = [
-			["--seeds", "--gate-plan", "abc"],
-			["--gate-plan", "abc"],
-			["--seeds", "--plan", "--strategy", "stub", "--gate-plan", "abc"],
+			["--seeds", "--gate-plan", "0123456789abcdef"],
+			["--gate-plan", "0123456789abcdef"],
+			[
+				"--seeds",
+				"--plan",
+				"--strategy",
+				"stub",
+				"--gate-plan",
+				"0123456789abcdef",
+			],
 			["--seeds", "--live"],
 			["--seeds", "--record", "https://github.com/a/b/pull/1"],
 			["--seeds", "--adjudicate", "x"],
