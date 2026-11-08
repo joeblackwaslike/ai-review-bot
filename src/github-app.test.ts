@@ -4,6 +4,7 @@ import type { Discard } from "./discards.js";
 import { persistPostedComments } from "./feedback/persist.js";
 import {
 	budgetAfterDelay,
+	getReviewerGitHubApp,
 	maybeSubmitReview,
 	REVIEW_CLAIM_TTL_SECONDS,
 	runScheduledReview,
@@ -27,6 +28,12 @@ const DEFAULT_METADATA = {
 };
 
 const mockBuildReview = vi.hoisted(() => vi.fn());
+const mockFetchRepoConfig = vi.hoisted(() =>
+	vi.fn(async (): Promise<{ config?: unknown; note?: string }> => ({})),
+);
+vi.mock("./repo-config/fetch.js", () => ({
+	fetchRepoConfig: mockFetchRepoConfig,
+}));
 
 vi.mock("./config.js", async (importOriginal) => ({
 	...(await importOriginal<typeof import("./config.js")>()),
@@ -158,6 +165,74 @@ describe("maybeSubmitReview", () => {
 	});
 	afterEach(() => {
 		vi.useRealTimers();
+	});
+
+	describe("per-repo override file", () => {
+		const reviewResult = {
+			event: "COMMENT" as const,
+			body: "Review body.",
+			comments: [],
+			metadata: DEFAULT_METADATA,
+		};
+		beforeEach(() => {
+			mockFetchRepoConfig.mockReset().mockResolvedValue({});
+			mockBuildReview.mockReset().mockResolvedValue(reviewResult);
+		});
+
+		it("maybeSubmitReview skips when the repo file disables the reviewer", async () => {
+			mockFetchRepoConfig.mockResolvedValue({
+				config: { version: 1, reviewers: { claude: { enabled: false } } },
+			});
+			const { app } = buildMockApp();
+
+			const outcome = await maybeSubmitReview({ app, ...baseArgs });
+
+			expect(outcome).toEqual({
+				status: "skipped",
+				reason: "disabled by the repository's .github/ai-review.yml",
+			});
+			expect(mockBuildReview).not.toHaveBeenCalled();
+			expect(kvStore.size).toBe(0);
+		});
+
+		it("passes the repo overrides and note into buildReview", async () => {
+			mockFetchRepoConfig.mockResolvedValue({
+				config: {
+					version: 1,
+					review: { minSeverity: "P2" },
+					reviewers: {
+						claude: { skills: { "security-sast": { enabled: false } } },
+					},
+				},
+				note: "a note",
+			});
+			const { app } = buildMockApp();
+
+			await maybeSubmitReview({ app, ...baseArgs });
+
+			const args = mockBuildReview.mock.calls[0]?.[0];
+			expect(args.repoNote).toBe("a note");
+			expect(args.repoOverrides.minSeverity).toBe("P2");
+			expect([...args.repoOverrides.disabledSkills]).toEqual(["security-sast"]);
+		});
+
+		it("a repo-file fetch failure still posts the review", async () => {
+			vi.spyOn(console, "warn").mockImplementation(() => {});
+			mockFetchRepoConfig.mockRejectedValue(new Error("boom"));
+			const { app, octokit } = buildMockApp();
+
+			await maybeSubmitReview({ app, ...baseArgs });
+
+			expect(mockBuildReview).toHaveBeenCalledTimes(1);
+			expect(mockBuildReview.mock.calls[0]?.[0].repoOverrides.minSeverity).toBe(
+				"P3",
+			);
+			const posts = octokit.request.mock.calls.filter(
+				([route]) =>
+					route === "POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
+			);
+			expect(posts).toHaveLength(1);
+		});
 	});
 
 	it("a throwing KV does not fail a review", async () => {
@@ -2361,5 +2436,119 @@ describe("carrier comment wiring", () => {
 		const arg = mockCapturePostedReview.mock.calls[0][0];
 		expect(arg.postCarrier).toBe(true);
 		expect(arg.onCarrier).toBeTypeOf("function");
+	});
+});
+
+describe("issue_comment review commands with a repo command", () => {
+	const SNAPSHOT_ENV = { ...process.env };
+	const KEY =
+		"-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC7\n-----END PRIVATE KEY-----";
+
+	async function sendComment(body: string, association = "OWNER") {
+		const octokit = {
+			request: vi.fn().mockResolvedValue({ data: pr }),
+		};
+		const app = getReviewerGitHubApp("claude");
+		app.getInstallationOctokit = vi.fn().mockResolvedValue(octokit) as never;
+		await app.webhooks.receive({
+			id: "1",
+			name: "issue_comment",
+			payload: {
+				action: "created",
+				comment: { body, author_association: association },
+				issue: { number: 1, pull_request: {} },
+				repository: { owner: { login: "owner" }, name: "repo" },
+				installation: { id: 123 },
+			},
+		} as never);
+	}
+
+	beforeEach(() => {
+		kvStore.clear();
+		Object.assign(process.env, {
+			GITHUB_APP_ID: "123",
+			GITHUB_APP_PRIVATE_KEY: KEY,
+			GITHUB_WEBHOOK_SECRET: "secret",
+			ANTHROPIC_API_KEY: "sk-ant",
+		});
+		mockBuildReview.mockReset().mockResolvedValue(null);
+		mockFetchRepoConfig.mockReset().mockResolvedValue({});
+	});
+	afterEach(() => {
+		for (const k of Object.keys(process.env))
+			if (!(k in SNAPSHOT_ENV)) delete process.env[k];
+		Object.assign(process.env, SNAPSHOT_ENV);
+	});
+
+	it("an issue_comment using the repo command triggers a review, and the deployment command does not when the repo sets another", async () => {
+		mockFetchRepoConfig.mockResolvedValue({
+			config: { version: 1, review: { command: "/lgtm" } },
+		});
+
+		await sendComment("/ai-review");
+		expect(mockBuildReview).not.toHaveBeenCalled();
+
+		await sendComment("/lgtm");
+		expect(mockBuildReview).toHaveBeenCalledTimes(1);
+	});
+
+	it("the repo command matches only as a whole first token", async () => {
+		mockFetchRepoConfig.mockResolvedValue({
+			config: { version: 1, review: { command: "/lgtm" } },
+		});
+		await sendComment("/lgtmx please");
+		expect(mockBuildReview).not.toHaveBeenCalled();
+		await sendComment("/lgtm please look");
+		expect(mockBuildReview).toHaveBeenCalledTimes(1);
+	});
+
+	it("a repo-config fetch rejection falls back to the deployment command", async () => {
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		mockFetchRepoConfig.mockRejectedValue(new Error("boom"));
+		await sendComment("/ai-review");
+		expect(mockBuildReview).toHaveBeenCalledTimes(1);
+	});
+
+	it("an installation-token failure falls back to the deployment command", async () => {
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		const octokit = { request: vi.fn().mockResolvedValue({ data: pr }) };
+		const app = getReviewerGitHubApp("claude");
+		app.getInstallationOctokit = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("token"))
+			.mockResolvedValue(octokit) as never;
+		await app.webhooks.receive({
+			id: "2",
+			name: "issue_comment",
+			payload: {
+				action: "created",
+				comment: { body: "/ai-review", author_association: "OWNER" },
+				issue: { number: 1, pull_request: {} },
+				repository: { owner: { login: "owner" }, name: "repo" },
+				installation: { id: 123 },
+			},
+		} as never);
+		expect(mockBuildReview).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not fetch the repo config for an untrusted commenter or a non-command comment", async () => {
+		await sendComment("just a comment");
+		await sendComment("/ai-review", "NONE");
+		expect(mockFetchRepoConfig).not.toHaveBeenCalled();
+	});
+
+	it("does not fetch the repo config when the deployment reviewer is disabled", async () => {
+		const { app } = buildMockApp();
+		await maybeSubmitReview({
+			app,
+			...baseArgs,
+			config: { ...baseArgs.config, reviewer: "gemini" },
+		});
+		expect(mockFetchRepoConfig).not.toHaveBeenCalled();
+	});
+
+	it("the deployment command still works when the repo sets none", async () => {
+		await sendComment("/ai-review");
+		expect(mockBuildReview).toHaveBeenCalledTimes(1);
 	});
 });

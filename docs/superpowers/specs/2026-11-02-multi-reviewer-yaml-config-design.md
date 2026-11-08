@@ -1,6 +1,6 @@
 ---
 epic: ai-review-bot-dg4
-status: approved 2026-11-02; spec hardening, then plan and implementation
+status: slices 1-2 shipped (PR #108); slices 3-5 (roles, Edge Config live overrides, per-repo override files) shipped 2026-11-07
 ---
 
 # Design: multi-reviewer, YAML-driven config
@@ -157,6 +157,14 @@ Defaults equal today's values, so behavior is unchanged. The block is deployment
 - **Cost.** The equivalence test covers model and effort resolution only. Footer cost changes because cached tokens are now counted. The circuit breaker counts reviews, not dollars, so it is unaffected. `--max-cost` uses the new figure.
 - **In-flight QStash messages.** For one release, `review-run` accepts a missing reviewer id and infers it from the legacy provider.
 - **Provider and key validation.** The schema always checks the model id prefix against the registry. Credential readiness is evaluated per execution mode. Hosted: an enabled reviewer or in-use role needs an API key for its provider, and is disabled with a log line if it lacks one. CLI: readiness is decided after auth resolution (subscription first, then key), as in `src/audit.ts:686`, so a logged-in subscription with no API key still runs.
+- **Slices 3-5 rulings.**
+  - Top-level `roles` also accepts `summary`, `triage` and `revalidate` as deployment-wide defaults, because the precedence above names `roles.<role>` for them. `verifier`, `qcJudge` and `classifier` exist only at top level.
+  - `qcJudge` and `classifier` default to `DEFAULT_JUDGE` (`anthropic/claude-haiku-5-5`, effort `low`), today's classifier model and today's Anthropic QC model. Codex findings are now judged by that model too.
+  - The verifier resolver has no consumer yet (epic `ai-review-bot-t0c`).
+  - Reviewer readiness ignores the top-level `qcJudge` and `classifier` provider keys. A missing key shows up as unjudged results, not as a disabled reviewer.
+  - "Raise severity floors" needed a deployment key, so `review.minSeverity` was added (default `P3`, allowed `P3|P2|P1`). P0 and P1 are never dropped by the floor. Findings below it are dropped before merge and recorded as `ADAPTIVE_LIMIT` discards, so no enum migration was needed.
+  - Source rule for `review.customPrompt` and `review.command`: env beats the repo file, and the repo file beats YAML. The repo file applies only when the setting's source is `yaml` or `default`. A repo `review.command` replaces the deployment command in that repo.
+  - Edge Config can only disable. For `review.enabled`, `reviewers.*.enabled` and `roles.verifier.enabled`, an Edge `true` over a cold `false` is ignored and reported under `edge.ignored`, so the effective enabled state is never looser than the cold state. Repo-file merging reads the cold state and stays coherent.
 
 ## Constraints
 

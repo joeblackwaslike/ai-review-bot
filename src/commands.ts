@@ -6,10 +6,14 @@ export interface ReviewCommand {
 export function parseReviewCommand(
 	body: string,
 	commandName: string,
+	opts: { wholeToken?: boolean } = {},
 ): ReviewCommand | null {
 	const trimmed = body.trim();
 	if (!trimmed.startsWith(commandName)) {
 		return null;
+	}
+	if (opts.wholeToken && trimmed.length > commandName.length) {
+		if (!/\s/.test(trimmed.charAt(commandName.length))) return null;
 	}
 
 	const remainder = trimmed.slice(commandName.length).trim();

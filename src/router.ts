@@ -192,17 +192,20 @@ export function shouldRunOnTier(
 	config: Config,
 	reviewerId: string,
 	tier: ReviewTier,
+	repoRunOn?: readonly ReviewTier[],
 ): boolean {
 	const { runOn } = requireReviewer(config, reviewerId);
+	if (repoRunOn && !repoRunOn.includes(tier)) return false;
 	return runOn === undefined || runOn.includes(tier);
 }
 
 export function routeReviewerModel(
 	context: RouterContext,
 	reviewerId: ReviewerId,
+	routing: Config["routing"] = getConfigTree().routing,
 ): { selection: ModelSelection; tier: ReviewTier } {
 	const config = getConfigTree();
-	const tier = classifyTier(context, config.routing);
+	const tier = classifyTier(context, routing);
 	const { provider, model, effort } = resolveFinderModel(
 		config,
 		reviewerId,

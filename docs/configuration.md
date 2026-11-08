@@ -91,6 +91,17 @@ The aliased env vars (`REVIEW_ENABLED`, `AGENT_CONCURRENCY` and the rest) now go
 - Any unknown `AI_REVIEW_*` variable is a hard startup error.
 - Each deprecated alias logs one warning per cold start that names its replacement. For `PUBLIC_URL` and `QSTASH_URL` the replacements are `AI_REVIEW_INFRA__PUBLIC_URL` and `AI_REVIEW_INFRA__QSTASH_URL`.
 
+## Live overrides (Edge Config)
+
+Edge Config changes a few settings in seconds, with no redeploy. Typical use is turning off one reviewer, or all review, during an incident.
+
+- Set `EDGE_CONFIG` to your Vercel Edge Config connection string. Without it, nothing changes. The package is `@vercel/global-config`, the renamed `@vercel/edge-config` with the same API.
+- Store a flat JSON map. Each key is a derived env name, for example `AI_REVIEW_REVIEWERS__GEMINI__ENABLED`, with a JSON value.
+- Only settings marked Live in the reference below apply. A typo or a non-live key is ignored, and `/api/debug` lists it under `edge.ignored` with a reason.
+- Precedence is Edge Config, then env, then YAML.
+- Edge Config can only disable `review.enabled`, `reviewers.<id>.enabled` and `roles.verifier.enabled`. A `true` over a cold `false` is ignored and listed under `edge.ignored` with the reason "Edge Config can only disable". Edge Config never loosens the cold state, and a reviewer whose secrets are missing stays unready regardless.
+- If the read fails or takes longer than 2 seconds, the bot uses the cold config and `/api/debug` shows `edge.error`. Reads are cached for 5 seconds.
+
 ## Verifying your setup
 
 Two diagnostic endpoints are available after deployment:
@@ -173,6 +184,7 @@ Rows marked Live can also be overridden at runtime through Edge Config (`EDGE_CO
 | `review.resyncDelaySeconds` | `AI_REVIEW_REVIEW__RESYNC_DELAY_SECONDS` | `REVIEW_RESYNC_DELAY_SECONDS` (deprecated) | number | `0` | yes | Delay before re-reviewing after a push. |
 | `review.command` | `AI_REVIEW_REVIEW__COMMAND` | `REVIEW_COMMAND` (deprecated) | string | `"/ai-review"` |  | Comment command that triggers a review. |
 | `review.customPrompt` | `AI_REVIEW_REVIEW__CUSTOM_PROMPT` | `CUSTOM_REVIEW_PROMPT` (deprecated) | string | unset |  | Extra instructions appended to every agent prompt. |
+| `review.minSeverity` | `AI_REVIEW_REVIEW__MIN_SEVERITY` | none | one of P3, P2, P1 | `"P3"` |  | Findings below this floor are dropped. P0 and P1 are never dropped by the floor; P1 drops P2 and P3. |
 | `review.agentConcurrency` | `AI_REVIEW_REVIEW__AGENT_CONCURRENCY` | `AGENT_CONCURRENCY` (deprecated) | number | `4` | yes | Maximum review agents run in parallel per PR. |
 | `review.agentBudgetSeconds` | `AI_REVIEW_REVIEW__AGENT_BUDGET_SECONDS` | `REVIEW_AGENT_BUDGET_SECONDS` (deprecated) | number | `210` | yes | Wall-clock deadline for agents, in seconds. |
 | `review.diffBudgetChars` | `AI_REVIEW_REVIEW__DIFF_BUDGET_CHARS` | `REVIEW_DIFF_BUDGET_CHARS` (deprecated) | number | `200000` | yes | PR-wide character budget for the serialized diff. |

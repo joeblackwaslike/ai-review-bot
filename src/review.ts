@@ -74,6 +74,11 @@ import {
 	uniqueShortIds,
 } from "./relation.js";
 import { claimTitle } from "./replay/claims.js";
+import {
+	type RepoOverrides,
+	repoCoverageNotice,
+	repoIgnoredNotice,
+} from "./repo-config/merge.js";
 import type { ResolvedFindingRef } from "./resolve-threads.js";
 import { candidateFamilies, dropRetractions } from "./retraction.js";
 import { isOwnReview, readMetadataValue } from "./review-metadata.js";
@@ -90,14 +95,16 @@ import {
 } from "./reviewer-id.js";
 import { REVIEWER_TUNING, type ReviewerTuning } from "./reviewer-tuning.js";
 import { type ReviewerRoleName, resolveReviewerRole } from "./roles.js";
-import type { ModelSelection } from "./router.js";
 import {
+	classifyTier,
+	type ModelSelection,
 	outputBudget,
 	reasoningProviderOptions,
 	resolveSkillModel,
 	routeReviewerModel,
 	shouldRunOnTier,
 } from "./router.js";
+import { applySeverityFloor } from "./severity-floor.js";
 import { TIER1_SKILL_FILES } from "./skill-names.js";
 import { repairSuggestion } from "./suggestion.js";
 import { detectTier2Skills, TIER2_DETECTORS } from "./tier2.js";
@@ -167,6 +174,10 @@ interface ReviewContext {
 	 * Callers open the corpus inside it, so a connection failure rejects here
 	 * instead of failing the review before any agent runs. */
 	recordDiscards?: (discards: Discard[]) => Promise<void>;
+	/** Restrictive overrides from the repository's `.github/ai-review.yml`. */
+	repoOverrides?: RepoOverrides;
+	/** One sanitized line about an ignored repo file, shown in the review body. */
+	repoNote?: string;
 }
 
 export interface ReviewMetadata {
@@ -1113,6 +1124,10 @@ export interface FormatReviewBodyOptions {
 	scopeNote?: ScopeNote;
 	/** Plain sentence naming the adaptive limits that removed findings. */
 	limitNote?: string | null;
+	/** One line about an ignored repo override file. */
+	repoNote?: string;
+	/** The repo-defined review command, shown in the hint line. */
+	command?: string;
 }
 
 type ScopeReason =
@@ -1242,6 +1257,8 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		scopeNote,
 		carryIds = [],
 		limitNote = null,
+		repoNote,
+		command = "/ai-review",
 	} = opts;
 
 	const readinessBar = renderReadinessBar(readiness);
@@ -1327,8 +1344,7 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 			? "💬 React on any inline comment to train our reviewers: 👍 it helped, 👎 it was wrong, 😕 it didn't land. For 😕, please also reply saying why — the reply is what we learn from."
 			: "";
 
-	const commandHints =
-		"> Re-run: `/ai-review` · Full diff: `/ai-review --full` · Skip: `/ai-review --skip`";
+	const commandHints = `> Re-run: \`${command}\` · Full diff: \`${command} --full\` · Skip: \`${command} --skip\``;
 
 	const metadataBlock = [
 		`<!-- ai-review:sha=${headSha} -->`,
@@ -1357,6 +1373,7 @@ export function formatReviewBody(opts: FormatReviewBodyOptions): string {
 		droppedNotice,
 		overflowNotice,
 		limitNote ?? "",
+		repoNote ?? "",
 		feedbackInvite,
 		findingsBlock,
 		advisoryBlock,
@@ -2073,32 +2090,54 @@ async function buildReviewInner(
 		}
 	}
 
+	const repoOverrides = context.repoOverrides;
 	const customPrompt =
+		repoOverrides?.customPrompt ??
 		getConfigTree().review.customPrompt ??
 		"Focus on correctness, security, regressions, and missing tests.";
 
 	const filePaths = files.map((f) => f.filename);
+	const routerContext = {
+		additions: context.additions,
+		deletions: context.deletions,
+		filePaths,
+		labels: context.labels,
+	};
 	const { selection, tier: routedTier } = routeReviewerModel(
-		{
-			additions: context.additions,
-			deletions: context.deletions,
-			filePaths,
-			labels: context.labels,
-		},
+		routerContext,
 		context.reviewer,
+		repoOverrides
+			? {
+					...getConfigTree().routing,
+					sensitivePathPatterns: [
+						...getConfigTree().routing.sensitivePathPatterns,
+						...repoOverrides.extraSensitivePatterns,
+					],
+				}
+			: undefined,
 	);
 	const roleSelection = (role: ReviewerRoleName) =>
 		resolveReviewerRole(getConfigTree(), context.reviewer, role, selection);
 	const triageSelection = roleSelection("triage");
 	const revalidateSelection = roleSelection("revalidate");
 	const summarySelection = roleSelection("summary");
-	if (!shouldRunOnTier(getConfigTree(), context.reviewer, routedTier)) {
+	const gateTier = repoOverrides?.extraSensitivePatterns.length
+		? classifyTier(routerContext, getConfigTree().routing)
+		: routedTier;
+	if (
+		!shouldRunOnTier(
+			getConfigTree(),
+			context.reviewer,
+			gateTier,
+			repoOverrides?.runOn,
+		)
+	) {
 		console.log("reviewer does not run on this tier; posting nothing", {
 			owner: context.owner,
 			repo: context.repo,
 			pullNumber: context.pullNumber,
 			reviewer: context.reviewer,
-			tier: routedTier,
+			tier: gateTier,
 		});
 		return null;
 	}
@@ -2216,8 +2255,10 @@ async function buildReviewInner(
 	}
 	// Skills that still owe the PR a whole-PR review. One whose skill file is
 	// gone is dropped; a Tier 2 one waits while Tier 2 is switched off.
-	const priorPending = [...new Set(state?.incompleteSkills ?? [])].filter((s) =>
-		KNOWN_SKILLS.has(s),
+	const priorPending = [...new Set(state?.incompleteSkills ?? [])].filter(
+		(s) =>
+			KNOWN_SKILLS.has(s) &&
+			!context.repoOverrides?.disabledSkills.has(s.replace(/\.md$/, "")),
 	);
 	const scheduledPending = priorPending.filter(
 		(s) => context.tier2Enabled || TIER1_SKILLS.includes(s),
@@ -2489,7 +2530,13 @@ async function buildReviewInner(
 			const t2 = tier2Items[i];
 			return t2 !== undefined ? [t1, t2] : [t1];
 		})
-		.concat(tier2Items.slice(tier1Items.length));
+		.concat(tier2Items.slice(tier1Items.length))
+		.filter(
+			(s) =>
+				!repoOverrides?.disabledSkills.has(
+					baseName(s.skillPath).replace(/\.md$/, ""),
+				),
+		);
 	const isPending = (s: { skillPath: string }) =>
 		pendingSet.has(baseName(s.skillPath));
 	const pendingItems = queue.filter(isPending);
@@ -2501,6 +2548,15 @@ async function buildReviewInner(
 		...pendingItems,
 		...otherItems.slice(warmUp.length),
 	];
+	if (allSkills.length === 0 && repoOverrides?.disabledSkills.size) {
+		console.log("every skill is disabled by the repository; posting nothing", {
+			owner: context.owner,
+			repo: context.repo,
+			pullNumber: context.pullNumber,
+			reviewer: context.reviewer,
+		});
+		return null;
+	}
 
 	const skillName = (path: string) => path.split("/").pop() ?? path;
 	// A pending skill reviews the PR's own files, as on a FULL round; the rest
@@ -2901,6 +2957,8 @@ async function buildReviewInner(
 		fileListComplete ? new Set(files.map((f) => f.filename)) : null,
 	);
 	const restated = new Map<string, PersistedFinding>();
+	const severityFloor =
+		repoOverrides?.minSeverity ?? getConfigTree().review.minSeverity;
 	const unsettledResults = agentResults.map((agentResult, index) => {
 		const discard = (
 			finding: DiscardedFinding,
@@ -2927,8 +2985,25 @@ async function buildReviewInner(
 				files,
 			),
 		};
+		const generalFloor = applySeverityFloor(r.general_findings, severityFloor);
+		const inlineFloor = applySeverityFloor(r.inline_comments, severityFloor);
+		const floorDropped = [...generalFloor.dropped, ...inlineFloor.dropped];
+		for (const f of floorDropped) discard(f, "ADAPTIVE_LIMIT");
+		const blockingLeft = [...generalFloor.kept, ...inlineFloor.kept].some(
+			(f) => !f.advisory,
+		);
 		const outcome = suppressInReview(
-			r,
+			{
+				...r,
+				event:
+					floorDropped.length > 0 &&
+					!blockingLeft &&
+					r.event === "REQUEST_CHANGES"
+						? "COMMENT"
+						: r.event,
+				general_findings: generalFloor.kept,
+				inline_comments: inlineFloor.kept,
+			},
 			suppressionLedger,
 			declaredRepeat(suppressionLedger),
 		);
@@ -2969,6 +3044,7 @@ async function buildReviewInner(
 	});
 	const held = [...restated.values()];
 	survivingPrior = withHeld(survivingPrior, held);
+	survivingPrior = applySeverityFloor(survivingPrior, severityFloor).kept;
 	const heldCount = held.filter(blocksVerdict).length;
 	if (loadedLedger) {
 		console.log("ledger suppression", {
@@ -3416,6 +3492,17 @@ async function buildReviewInner(
 		carryIds: carryEntryIds(survivingPrior, ledger),
 		scopeNote: scope,
 		limitNote,
+		repoNote: [
+			context.repoNote,
+			repoIgnoredNotice(repoOverrides?.ignoredKeys ?? []),
+			repoCoverageNotice({
+				disabledSkills: repoOverrides?.disabledSkills ?? new Set(),
+				minSeverity: severityFloor,
+			}),
+		]
+			.filter(Boolean)
+			.join("\n\n"),
+		command: repoOverrides?.command,
 	});
 
 	return {

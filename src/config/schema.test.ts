@@ -27,6 +27,12 @@ describe("ConfigSchema", () => {
 		expect(model?.refusalFallback).toBe(false);
 	});
 
+	it("defaults review.minSeverity to P3 and rejects P0", () => {
+		expect(ConfigSchema.parse(minimal()).review.minSeverity).toBe("P3");
+		const cfg = { ...minimal(), review: { minSeverity: "P0" } };
+		expect(ConfigSchema.safeParse(cfg).success).toBe(false);
+	});
+
 	it("accepts a tier model that has no models entry", () => {
 		const cfg = minimal();
 		cfg.reviewers.claude.tiers.deep = {

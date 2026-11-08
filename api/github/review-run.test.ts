@@ -98,6 +98,11 @@ beforeEach(() => {
 	warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 	resetConfigForTests();
 	claudeEnv();
+	vi.mocked(getEffectiveConfig).mockImplementation(async () => ({
+		config: getConfigTree(),
+		applied: [],
+		ignored: [],
+	}));
 });
 
 afterEach(() => {

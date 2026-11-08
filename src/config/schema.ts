@@ -224,6 +224,12 @@ const ReviewSchema = z
 			.string()
 			.optional()
 			.describe("Extra instructions appended to every agent prompt."),
+		minSeverity: z
+			.enum(["P3", "P2", "P1"])
+			.default("P3")
+			.describe(
+				"Findings below this floor are dropped. P0 and P1 are never dropped by the floor; P1 drops P2 and P3.",
+			),
 		agentConcurrency: z
 			.number()
 			.min(1)
