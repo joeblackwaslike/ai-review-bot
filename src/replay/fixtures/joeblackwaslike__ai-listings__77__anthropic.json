@@ -1,279 +1,143 @@
 {
-  "schemaVersion": 1,
-  "owner": "joeblackwaslike",
-  "repo": "ai-listings",
-  "pull": 77,
-  "provider": "anthropic",
-  "reviewer": "claude",
-  "author": "joeblackwaslike",
-  "recordedAt": "2026-11-07T23:27:04.722Z",
-  "rounds": [
-    {
-      "index": 0,
-      "reviewId": 5721724219,
-      "provider": "anthropic",
-      "submittedAt": "2026-10-31T07:00:02Z",
-      "headSha": "28bd8c8c1fc427fefa3540287307b5979b2146ff",
-      "baseSha": "a5531940e1ced6b195a9eae256bb1f10395b4168",
-      "mergeBase": "a5531940e1ced6b195a9eae256bb1f10395b4168",
-      "triggerAt": "2026-10-31T06:23:08Z",
-      "approximate": false,
-      "commitsSince": [
-        {
-          "sha": "1c41aa19f399aef1640dd6151651100a35c55d11",
-          "committedAt": "2026-10-31T06:19:42Z",
-          "files": [
-            {
-              "path": "src/app/api/listings/[id]/archive/route.ts",
-              "ranges": [
-                [
-                  1,
-                  29
-                ]
-              ]
-            },
-            {
-              "path": "src/app/api/listings/[id]/auth-plan/route.ts",
-              "ranges": [
-                [
-                  1,
-                  9
-                ],
-                [
-                  12,
-                  34
-                ]
-              ]
-            },
-            {
-              "path": "src/app/api/listings/[id]/comps/route.ts",
-              "ranges": [
-                [
-                  1,
-                  16
-                ],
-                [
-                  77,
-                  96
-                ],
-                [
-                  122,
-                  147
-                ]
-              ]
-            },
-            {
-              "path": "src/app/api/listings/[id]/finalize/route.ts",
-              "ranges": [
-                [
-                  1,
-                  13
-                ],
-                [
-                  35,
-                  41
-                ],
-                [
-                  44,
-                  54
-                ]
-              ]
-            },
-            {
-              "path": "src/app/api/listings/[id]/publish/route.ts",
-              "ranges": [
-                [
-                  1,
-                  11
-                ],
-                [
-                  54,
-                  70
-                ],
-                [
-                  101,
-                  107
-                ],
-                [
-                  120,
-                  130
-                ]
-              ]
-            },
-            {
-              "path": "src/app/api/listings/ownership-routes.test.ts",
-              "ranges": [
-                [
-                  1,
-                  133
-                ]
-              ]
-            },
-            {
-              "path": "src/app/api/studio-upload/route.test.ts",
-              "ranges": [
-                [
-                  1,
-                  54
-                ]
-              ]
-            },
-            {
-              "path": "src/app/api/studio-upload/route.ts",
-              "ranges": [
-                [
-                  1,
-                  6
-                ],
-                [
-                  15,
-                  33
-                ],
-                [
-                  39,
-                  44
-                ],
-                [
-                  50,
-                  65
-                ],
-                [
-                  74,
-                  79
-                ],
-                [
-                  94,
-                  100
-                ],
-                [
-                  117,
-                  123
-                ],
-                [
-                  132,
-                  142
-                ]
-              ]
-            },
-            {
-              "path": "src/lib/test/fake-supabase.ts",
-              "ranges": [
-                [
-                  1,
-                  87
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "28bd8c8c1fc427fefa3540287307b5979b2146ff",
-          "committedAt": "2026-10-31T06:23:08Z",
-          "files": [
-            {
-              "path": "src/app/api/agent/[listingId]/route.ts",
-              "ranges": [
-                [
-                  1,
-                  37
-                ],
-                [
-                  53,
-                  59
-                ],
-                [
-                  71,
-                  87
-                ],
-                [
-                  96,
-                  114
-                ]
-              ]
-            },
-            {
-              "path": "src/app/api/agent/agent-route.test.ts",
-              "ranges": [
-                [
-                  1,
-                  72
-                ]
-              ]
-            },
-            {
-              "path": "src/app/api/studio-upload/route.test.ts",
-              "ranges": [
-                [
-                  52,
-                  74
-                ]
-              ]
-            },
-            {
-              "path": "src/lib/test/fake-supabase.ts",
-              "ranges": [
-                [
-                  13,
-                  49
-                ],
-                [
-                  77,
-                  84
-                ],
-                [
-                  99,
-                  103
-                ]
-              ]
-            }
-          ]
-        }
-      ],
-      "claims": [
-        {
-          "id": "r0:c4430888164:0",
-          "roundIndex": 0,
-          "reviewId": 5721724219,
-          "source": "inline",
-          "commentId": 4430888164,
-          "path": "src/app/api/studio-upload/route.ts",
-          "line": 53,
-          "severity": "P3",
-          "title": "Ownership lookup error is discarded, so DB failures return a misleading 404",
-          "text": "🟢 **P3**\n\n**Ownership lookup error is discarded, so DB failures return a misleading 404**\n\nThe ownership query destructures only `data` and drops `error`. If the lookup fails (network blip, PostgREST error, RLS misconfiguration), `ownedListing` is null and the caller gets \"Listing not found\" (404). The user is told the listing doesn't exist, and nothing is logged. This route already special-cases transient failures with the `AuthRetryableFetchError` retry above. The same pattern is in `handleAgentPost` and `handleAgentGet` in `src/app/api/agent/[listingId]/route.ts`. Consider destructuring `error`, logging it, and returning a 500 when it is set. Keep the uniform 404 only for the genuine no-row case."
-        },
-        {
-          "id": "r0:c4430888168:0",
-          "roundIndex": 0,
-          "reviewId": 5721724219,
-          "source": "inline",
-          "commentId": 4430888168,
-          "path": "src/app/api/listings/ownership-routes.test.ts",
-          "line": 90,
-          "severity": "P2",
-          "title": "Comps \"non-owner\" tests don't model a listing owned by someone else",
-          "text": "🟡 **P2**\n\n**Comps \"non-owner\" tests don't model a listing owned by someone else**\n\nThe comps handlers rely on RLS on the session client for ownership, but the fake Supabase has no RLS. For the non-owner case, `compsSetup(INTRUDER, false)` just empties the `listings` table, so the 404 comes from \"listing doesn't exist\", not \"listing belongs to another user\". If the handler's ownership/RLS-dependent lookup were weakened (for example, dropped a `user_id` filter), these tests would still pass. That makes them weaker than the other non-owner tests in this file, which seed a real row owned by `owner` and call as `intruder`. To keep the coverage meaningful, seed `listings: [{ id: 'l1', user_id: 'owner' }]` in the non-owner case. That only helps if the comps handler filters on `user_id` explicitly. If it relies purely on RLS, the test name or a comment should say so."
-        }
-      ]
-    }
-  ],
-  "threads": [
-    {
-      "threadId": "PRRT_kwDOSSBjYs6yOxgD",
-      "commentId": 4430888164,
-      "isResolved": false,
-      "isOutdated": false,
-      "resolvedBy": null,
-      "replies": []
-    },
-    {
-      "threadId": "PRRT_kwDOSSBjYs6yOxgF",
-      "commentId": 4430888168,
-      "isResolved": false,
-      "isOutdated": false,
-      "resolvedBy": null,
-      "replies": []
-    }
-  ],
-  "reactions": []
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "ai-listings",
+	"pull": 77,
+	"provider": "anthropic",
+	"reviewer": "claude",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-11-07T23:27:04.722Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 5721724219,
+			"provider": "anthropic",
+			"submittedAt": "2026-10-31T07:00:02Z",
+			"headSha": "28bd8c8c1fc427fefa3540287307b5979b2146ff",
+			"baseSha": "a5531940e1ced6b195a9eae256bb1f10395b4168",
+			"mergeBase": "a5531940e1ced6b195a9eae256bb1f10395b4168",
+			"triggerAt": "2026-10-31T06:23:08Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "1c41aa19f399aef1640dd6151651100a35c55d11",
+					"committedAt": "2026-10-31T06:19:42Z",
+					"files": [
+						{
+							"path": "src/app/api/listings/[id]/archive/route.ts",
+							"ranges": [[1, 29]]
+						},
+						{
+							"path": "src/app/api/listings/[id]/auth-plan/route.ts",
+							"ranges": [[1, 9], [12, 34]]
+						},
+						{
+							"path": "src/app/api/listings/[id]/comps/route.ts",
+							"ranges": [[1, 16], [77, 96], [122, 147]]
+						},
+						{
+							"path": "src/app/api/listings/[id]/finalize/route.ts",
+							"ranges": [[1, 13], [35, 41], [44, 54]]
+						},
+						{
+							"path": "src/app/api/listings/[id]/publish/route.ts",
+							"ranges": [[1, 11], [54, 70], [101, 107], [120, 130]]
+						},
+						{
+							"path": "src/app/api/listings/ownership-routes.test.ts",
+							"ranges": [[1, 133]]
+						},
+						{
+							"path": "src/app/api/studio-upload/route.test.ts",
+							"ranges": [[1, 54]]
+						},
+						{
+							"path": "src/app/api/studio-upload/route.ts",
+							"ranges": [
+								[1, 6],
+								[15, 33],
+								[39, 44],
+								[50, 65],
+								[74, 79],
+								[94, 100],
+								[117, 123],
+								[132, 142]
+							]
+						},
+						{
+							"path": "src/lib/test/fake-supabase.ts",
+							"ranges": [[1, 87]]
+						}
+					]
+				},
+				{
+					"sha": "28bd8c8c1fc427fefa3540287307b5979b2146ff",
+					"committedAt": "2026-10-31T06:23:08Z",
+					"files": [
+						{
+							"path": "src/app/api/agent/[listingId]/route.ts",
+							"ranges": [[1, 37], [53, 59], [71, 87], [96, 114]]
+						},
+						{
+							"path": "src/app/api/agent/agent-route.test.ts",
+							"ranges": [[1, 72]]
+						},
+						{
+							"path": "src/app/api/studio-upload/route.test.ts",
+							"ranges": [[52, 74]]
+						},
+						{
+							"path": "src/lib/test/fake-supabase.ts",
+							"ranges": [[13, 49], [77, 84], [99, 103]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r0:c4430888164:0",
+					"roundIndex": 0,
+					"reviewId": 5721724219,
+					"source": "inline",
+					"commentId": 4430888164,
+					"path": "src/app/api/studio-upload/route.ts",
+					"line": 53,
+					"severity": "P3",
+					"title": "Ownership lookup error is discarded, so DB failures return a misleading 404",
+					"text": "🟢 **P3**\n\n**Ownership lookup error is discarded, so DB failures return a misleading 404**\n\nThe ownership query destructures only `data` and drops `error`. If the lookup fails (network blip, PostgREST error, RLS misconfiguration), `ownedListing` is null and the caller gets \"Listing not found\" (404). The user is told the listing doesn't exist, and nothing is logged. This route already special-cases transient failures with the `AuthRetryableFetchError` retry above. The same pattern is in `handleAgentPost` and `handleAgentGet` in `src/app/api/agent/[listingId]/route.ts`. Consider destructuring `error`, logging it, and returning a 500 when it is set. Keep the uniform 404 only for the genuine no-row case."
+				},
+				{
+					"id": "r0:c4430888168:0",
+					"roundIndex": 0,
+					"reviewId": 5721724219,
+					"source": "inline",
+					"commentId": 4430888168,
+					"path": "src/app/api/listings/ownership-routes.test.ts",
+					"line": 90,
+					"severity": "P2",
+					"title": "Comps \"non-owner\" tests don't model a listing owned by someone else",
+					"text": "🟡 **P2**\n\n**Comps \"non-owner\" tests don't model a listing owned by someone else**\n\nThe comps handlers rely on RLS on the session client for ownership, but the fake Supabase has no RLS. For the non-owner case, `compsSetup(INTRUDER, false)` just empties the `listings` table, so the 404 comes from \"listing doesn't exist\", not \"listing belongs to another user\". If the handler's ownership/RLS-dependent lookup were weakened (for example, dropped a `user_id` filter), these tests would still pass. That makes them weaker than the other non-owner tests in this file, which seed a real row owned by `owner` and call as `intruder`. To keep the coverage meaningful, seed `listings: [{ id: 'l1', user_id: 'owner' }]` in the non-owner case. That only helps if the comps handler filters on `user_id` explicitly. If it relies purely on RLS, the test name or a comment should say so."
+				}
+			]
+		}
+	],
+	"threads": [
+		{
+			"threadId": "PRRT_kwDOSSBjYs6yOxgD",
+			"commentId": 4430888164,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6yOxgF",
+			"commentId": 4430888168,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		}
+	],
+	"reactions": []
 }

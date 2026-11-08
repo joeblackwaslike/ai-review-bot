@@ -1,596 +1,506 @@
 {
-  "schemaVersion": 1,
-  "owner": "joeblackwaslike",
-  "repo": "stealth-browser",
-  "pull": 8,
-  "provider": "anthropic",
-  "reviewer": "claude",
-  "author": "joeblackwaslike",
-  "recordedAt": "2026-11-07T23:31:34.260Z",
-  "rounds": [
-    {
-      "index": 0,
-      "reviewId": 5777872063,
-      "provider": "anthropic",
-      "submittedAt": "2026-11-05T00:13:47Z",
-      "headSha": "11ea4caebbc48dcc3ba8175a3f4764fe82f5d83c",
-      "baseSha": "f8cea911d9edb95760f30d049aa2addb17eb8722",
-      "mergeBase": "f8cea911d9edb95760f30d049aa2addb17eb8722",
-      "triggerAt": "2026-11-04T09:50:50Z",
-      "approximate": false,
-      "commitsSince": [
-        {
-          "sha": "1b27a559ce10411321969ddc1ed3f47c13cd12e4",
-          "committedAt": "2026-11-04T09:49:38Z",
-          "files": [
-            {
-              "path": "integrations/searxng/.gitignore",
-              "ranges": [
-                [
-                  1,
-                  2
-                ]
-              ]
-            },
-            {
-              "path": "integrations/searxng/README.md",
-              "ranges": [
-                [
-                  1,
-                  58
-                ]
-              ]
-            },
-            {
-              "path": "integrations/searxng/stealth_google.py",
-              "ranges": [
-                [
-                  1,
-                  118
-                ]
-              ]
-            },
-            {
-              "path": "integrations/searxng/tests/conftest.py",
-              "ranges": [
-                [
-                  1,
-                  50
-                ]
-              ]
-            },
-            {
-              "path": "integrations/searxng/tests/fixtures/google_results.html",
-              "ranges": [
-                [
-                  1,
-                  10
-                ]
-              ]
-            },
-            {
-              "path": "integrations/searxng/tests/test_stealth_google.py",
-              "ranges": [
-                [
-                  1,
-                  101
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "09db744af49d970cf8a4cb65fc9ad4753daeea21",
-          "committedAt": "2026-11-04T09:49:38Z",
-          "files": [
-            {
-              "path": "docs/superpowers/specs/2026-11-03-searxng-google-engine-design.md",
-              "ranges": [
-                [
-                  1,
-                  59
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "de18ea78c4bc4ebf60a32c0598094bb850410aea",
-          "committedAt": "2026-11-04T09:50:08Z",
-          "files": [
-            {
-              "path": "docs/superpowers/plans/2026-11-02-searxng-web-search.md",
-              "ranges": [
-                [
-                  1,
-                  80
-                ]
-              ]
-            },
-            {
-              "path": "docs/superpowers/specs/2026-11-02-searxng-web-search-design.md",
-              "ranges": [
-                [
-                  1,
-                  78
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "11ea4caebbc48dcc3ba8175a3f4764fe82f5d83c",
-          "committedAt": "2026-11-04T09:50:50Z",
-          "files": [
-            {
-              "path": "integrations/searxng/README.md",
-              "ranges": [
-                [
-                  18,
-                  24
-                ],
-                [
-                  55,
-                  58
-                ]
-              ]
-            }
-          ]
-        }
-      ],
-      "claims": [
-        {
-          "id": "r0:c4474998949:0",
-          "roundIndex": 0,
-          "reviewId": 5777872063,
-          "source": "inline",
-          "commentId": 4474998949,
-          "path": "integrations/searxng/stealth_google.py",
-          "line": 111,
-          "severity": "P2",
-          "title": "Snippet ancestor check searches the whole document, so snippets are never extracted",
-          "text": "🟡 **P2**\n\n**Snippet ancestor check searches the whole document, so snippets are never extracted**\n\n`RESULT_ANCHOR` starts with `//`. In lxml, `element.xpath(\"//a...\")` is evaluated from the document root, not from `parent`. `parent.xpath(RESULT_ANCHOR)` therefore returns every result anchor on the page (8 in the fixture), `len(...) != 1` is always true, and the loop breaks on the first iteration. `node` stays the `<a>` itself. `content` is then just the anchor's text (the site name and breadcrumb) minus the title and `<cite>` text, for example \"Python documentation\", rather than the result description.\n\nUse a relative expression for this check (`\".\" + RESULT_ANCHOR`, i.e. `.//a[...]`). Separately, in the fixture layout the snippet sits in a sibling `div.kb0PBd` under `div.N54PNb`. That is 5 levels above the anchor, and `MAX_SNIPPET_ANCESTORS` is 4, so the depth limit also needs checking against the real DOM.\n\nNo test asserts on `content`, so the 9 passing tests do not catch this.\n\n<!-- ai-review:fp=bug|integrations/searxng/stealth_google.py|68674a6e49c59e95.0 -->"
-        },
-        {
-          "id": "r0:c4474998957:0",
-          "roundIndex": 0,
-          "reviewId": 5777872063,
-          "source": "inline",
-          "commentId": 4474998957,
-          "path": "integrations/searxng/stealth_google.py",
-          "line": 82,
-          "severity": "P2",
-          "title": "Zero results without the interstitial is returned silently",
-          "text": "🟡 **P2**\n\n**Zero results without the interstitial is returned silently**\n\nWhen the page has no `/goto` result anchors and no interstitial text, `response()` returns an empty `EngineResults` with nothing logged. A Google block or \"unusual traffic\" page, a CAPTCHA the gateway failed to solve, or a layout change that breaks `RESULT_ANCHOR` all look like a search with no hits. The only distinguishable failure today is the interstitial. The README and spec list an unresolved \"unexpected crash\" and a 423 `blocked` case, and this path would hide a recurrence. Log a warning here (or raise `SearxEngineAPIException`) with context such as the page title and body length, so a parser or layout break can be told apart from a real empty result.\n\n<!-- ai-review:fp=bug|integrations/searxng/stealth_google.py|ecb5588c53f6631b.0 -->"
-        },
-        {
-          "id": "r0:c4474998963:0",
-          "roundIndex": 0,
-          "reviewId": 5777872063,
-          "source": "inline",
-          "commentId": 4474998963,
-          "path": "integrations/searxng/stealth_google.py",
-          "line": 57,
-          "severity": "P2",
-          "title": "Missing env vars surface as a bare KeyError",
-          "text": "🟡 **P2**\n\n**Missing env vars surface as a bare KeyError**\n\nIf `STEALTH_BROWSER_URL` or `STEALTH_BROWSER_TOKEN` is unset, which is the exact failure mode of the wiring the docs say was lost on the cluster, `request()` raises `KeyError: 'STEALTH_BROWSER_URL'`. SearXNG reports this as an unexpected engine crash, which does not say what to fix. Raise `SearxEngineAPIException` or `RuntimeError` with a message naming the variable and the engine, e.g. 'stealth google engine requires STEALTH_BROWSER_URL'.\n\n<!-- ai-review:fp=bug|integrations/searxng/stealth_google.py|f0ef6eac8c86c3b9.0 -->"
-        },
-        {
-          "id": "r0:c4474998968:0",
-          "roundIndex": 0,
-          "reviewId": 5777872063,
-          "source": "inline",
-          "commentId": 4474998968,
-          "path": "integrations/searxng/stealth_google.py",
-          "line": 67,
-          "severity": "P3",
-          "title": "Empty or non-HTML gateway body crashes with an opaque lxml error",
-          "text": "🟢 **P3**\n\n**Empty or non-HTML gateway body crashes with an opaque lxml error**\n\n`html.fromstring` raises `lxml.etree.ParserError` ('Document is empty') on an empty body, and can also fail on a non-HTML payload such as a JSON error from the gateway. Neither is handled, so the failure surfaces as a generic engine crash with no mention of the gateway. Guard with a check on `resp.text`, or catch the lxml error and re-raise `SearxEngineAPIException('gateway returned an unparseable body')`.\n\n<!-- ai-review:fp=bug|integrations/searxng/stealth_google.py|d1e1edbd5d58140c.0 -->"
-        },
-        {
-          "id": "r0:c4474998973:0",
-          "roundIndex": 0,
-          "reviewId": 5777872063,
-          "source": "inline",
-          "commentId": 4474998973,
-          "path": "integrations/searxng/README.md",
-          "line": 58,
-          "severity": "P3",
-          "title": "README records a transient deployment state that will rot",
-          "text": "🟢 **P3**\n\n**README records a transient deployment state that will rot**\n\nKnown issue 2 describes the state of one session's cluster on 2026-11-03: an overwritten deploy and lost env vars, mount and settings entry. It also says this has not been rechecked. A README in the gateway repo should not carry a claim like this. It becomes false once openclaw-setup is redeployed, and nobody will know to remove it. The same applies to \"Last run: 9 passed\" at line 42, which goes stale as soon as a test is added or removed. Move the deployment status to an issue or the PR description and drop the test count. The README can point to the test command alone.\n\n<!-- ai-review:fp=nitpick|integrations/searxng/README.md|7c0081bdf572fe00.0 -->"
-        },
-        {
-          "id": "r0:c4474998976:0",
-          "roundIndex": 0,
-          "reviewId": 5777872063,
-          "source": "inline",
-          "commentId": 4474998976,
-          "path": "docs/superpowers/specs/2026-11-03-searxng-google-engine-design.md",
-          "line": 57,
-          "severity": "P3",
-          "title": "Spec open items cite a transcript and plan that are not in the repo",
-          "text": "🟢 **P3**\n\n**Spec open items cite a transcript and plan that are not in the repo**\n\nTwo open items justify themselves by what \"the transcript\" does or does not show. They also lean on \"the plan\", which is not part of this PR. A later maintainer has no way to check either source. Each item should state the action as a self-contained check, for example \"confirm the engine path with `kubectl exec ... ls /usr/local/searxng/searx/engines`\" and \"run python-reviewer on the engine\". The references to unavailable artifacts can then be dropped.\n\n<!-- ai-review:fp=nitpick|docs/superpowers/specs/2026-11-03-searxng-google-engine-design.md|c5e22c8c74999765.0 -->"
-        },
-        {
-          "id": "r0:c4474998981:0",
-          "roundIndex": 0,
-          "reviewId": 5777872063,
-          "source": "inline",
-          "commentId": 4474998981,
-          "path": "integrations/searxng/stealth_google.py",
-          "line": 116,
-          "severity": "P2",
-          "title": "Empty noise fragment garbles the snippet text",
-          "text": "🟡 **P2**\n\n**Empty noise fragment garbles the snippet text**\n\n`str.replace(\"\", \" \")` inserts a space between every character. If a result has an empty `<h3>` or an empty `<cite>`, `_text()` returns `\"\"` and `noise` contains an empty string. The whole snippet then comes out spaced between each character. Skip empty fragments before replacing.\n\n*Suggested fix:*\n\n```suggestion\n    for fragment in filter(None, noise):\n```\n\n<!-- ai-review:fp=bug|integrations/searxng/stealth_google.py|8af42d482aa615b9.0 -->\n<!-- ai-review:sfp=8455fa63dc4f1137 -->"
-        }
-      ]
-    },
-    {
-      "index": 1,
-      "reviewId": 5777893815,
-      "provider": "anthropic",
-      "submittedAt": "2026-11-05T00:16:15Z",
-      "headSha": "486706ffddf093471952c479ce0303f879983472",
-      "baseSha": "11ea4caebbc48dcc3ba8175a3f4764fe82f5d83c",
-      "mergeBase": "11ea4caebbc48dcc3ba8175a3f4764fe82f5d83c",
-      "triggerAt": "2026-11-05T00:15:27Z",
-      "approximate": false,
-      "commitsSince": [
-        {
-          "sha": "486706ffddf093471952c479ce0303f879983472",
-          "committedAt": "2026-11-05T00:15:27Z",
-          "files": [
-            {
-              "path": "docs/superpowers/specs/2026-11-03-searxng-google-engine-design.md",
-              "ranges": [
-                [
-                  54,
-                  59
-                ]
-              ]
-            },
-            {
-              "path": "integrations/searxng/README.md",
-              "ranges": [
-                [
-                  39,
-                  44
-                ],
-                [
-                  53,
-                  56
-                ]
-              ]
-            },
-            {
-              "path": "integrations/searxng/stealth_google.py",
-              "ranges": [
-                [
-                  23,
-                  29
-                ],
-                [
-                  49,
-                  90
-                ],
-                [
-                  125,
-                  139
-                ]
-              ]
-            },
-            {
-              "path": "integrations/searxng/tests/test_stealth_google.py",
-              "ranges": [
-                [
-                  1,
-                  4
-                ],
-                [
-                  97,
-                  139
-                ]
-              ]
-            }
-          ]
-        }
-      ],
-      "claims": [
-        {
-          "id": "r1:c4475015937:0",
-          "roundIndex": 1,
-          "reviewId": 5777893815,
-          "source": "inline",
-          "commentId": 4475015937,
-          "path": "integrations/searxng/README.md",
-          "line": 61,
-          "severity": "P3",
-          "title": "Deployment note is attached to known issue 1",
-          "text": "🟢 **P3**\n\n**Deployment note is attached to known issue 1**\n\nThe new line follows item 1 with no blank line and no list marker. Markdown treats it as a lazy continuation of item 1, so it reads as part of the interstitial issue. It is not a known issue itself. Put it in its own paragraph after a blank line, or move it out of the Known issues list.\n\n*Suggested fix:*\n\n```suggestion\n\nDeployment status lives with the `openclaw-setup` wiring, not in this repo.\n```\n\n<!-- ai-review:fp=style|integrations/searxng/README.md|b1a439a323ba1474.0 -->\n<!-- ai-review:sfp=b1a439a323ba1474 -->"
-        },
-        {
-          "id": "r1:c4475015957:0",
-          "roundIndex": 1,
-          "reviewId": 5777893815,
-          "source": "inline",
-          "commentId": 4475015957,
-          "path": "integrations/searxng/README.md",
-          "line": 61,
-          "severity": "P3",
-          "title": "Deployment-status note now renders as part of list item 1",
-          "text": "🟢 **P3**\n\n**Deployment-status note now renders as part of list item 1**\n\nThe new line directly follows `1. After a solved CAPTCHA...` with no blank line. Markdown treats it as a lazy continuation of that list item, so the sentence reads as part of the CAPTCHA known issue instead of a separate note. Put it in its own paragraph.\n\n*Suggested fix:*\n\n```suggestion\n\nDeployment status lives with the `openclaw-setup` wiring, not in this repo.\n```\n\n<!-- ai-review:fp=style|integrations/searxng/README.md|b1a439a323ba1474.0 -->\n<!-- ai-review:sfp=b1a439a323ba1474 -->"
-        },
-        {
-          "id": "r1:c4475015976:0",
-          "roundIndex": 1,
-          "reviewId": 5777893815,
-          "source": "inline",
-          "commentId": 4475015976,
-          "path": "integrations/searxng/README.md",
-          "line": 61,
-          "severity": "P3",
-          "title": "Deployment note is glued onto the Known issues list item",
-          "text": "🟢 **P3**\n\n**Deployment note is glued onto the Known issues list item**\n\nThe new line comes directly after list item 1 with no blank line before it. Markdown treats it as a lazy continuation of that item, so \"Deployment status lives with the openclaw-setup wiring...\" renders as part of the `stealth-browser-1uo` bullet. Add a blank line before it, or turn it into a separate paragraph or a second list item.\n\n*Suggested fix:*\n\n```suggestion\n\nDeployment status lives with the `openclaw-setup` wiring, not in this repo.\n```\n\n<!-- ai-review:fp=style|integrations/searxng/README.md|b1a439a323ba1474.0 -->\n<!-- ai-review:sfp=b1a439a323ba1474 -->"
-        },
-        {
-          "id": "r1:c4475015982:0",
-          "roundIndex": 1,
-          "reviewId": 5777893815,
-          "source": "inline",
-          "commentId": 4475015982,
-          "path": "integrations/searxng/README.md",
-          "line": 61,
-          "severity": "P3",
-          "title": "Deployment-status sentence merges into the list item above",
-          "text": "🟢 **P3** · advisory\n\n**Deployment-status sentence merges into the list item above**\n\nThe new sentence directly follows `1. After a solved CAPTCHA...` with no blank line. Markdown treats it as a lazy continuation of item 1, so it renders as part of the CAPTCHA/interstitial bullet instead of a standalone note. Separate it with a blank line.\n\n*Suggested fix:*\n\n```suggestion\n\nDeployment status lives with the `openclaw-setup` wiring, not in this repo.\n```\n\n<!-- ai-review:fp=style|integrations/searxng/README.md|b1a439a323ba1474.0 -->\n<!-- ai-review:sfp=b1a439a323ba1474 -->\n<!-- ai-review:advisory -->"
-        }
-      ]
-    }
-  ],
-  "threads": [
-    {
-      "threadId": "PRRT_kwDOVL2EQc6z3TQl",
-      "commentId": 4474998949,
-      "isResolved": true,
-      "isOutdated": true,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 4475012208,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-11-05T00:15:43Z",
-          "editedAt": null,
-          "body": "Fixed in 486706ff. The ancestor check is now relative (`.//a[...]`) and MAX_SNIPPET_ANCESTORS is 5, which reaches div.N54PNb in the fixture. A new test asserts the first result's content starts with the description and has no site label or cite. The label is also stripped now, derived as the anchor text minus title and cite."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOVL2EQc6z3TQs",
-      "commentId": 4474998957,
-      "isResolved": true,
-      "isOutdated": false,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 4475012718,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-11-05T00:15:47Z",
-          "editedAt": null,
-          "body": "Fixed in 486706ff. A page with no result anchors and no interstitial now logs a warning with the page title and body length, then returns empty. Test: test_zero_results_without_interstitial_logs_a_warning."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOVL2EQc6z3TQv",
-      "commentId": 4474998963,
-      "isResolved": true,
-      "isOutdated": true,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 4475013221,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-11-05T00:15:51Z",
-          "editedAt": null,
-          "body": "Fixed in 486706ff. A missing or empty STEALTH_BROWSER_URL or STEALTH_BROWSER_TOKEN raises SearxEngineAPIException naming the variable. Tests cover both."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOVL2EQc6z3TQx",
-      "commentId": 4474998968,
-      "isResolved": true,
-      "isOutdated": true,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 4475013668,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-11-05T00:15:55Z",
-          "editedAt": null,
-          "body": "Fixed in 486706ff. An empty or whitespace body raises SearxEngineAPIException, and lxml ParserError is wrapped the same way. Tests cover the empty and whitespace cases."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOVL2EQc6z3TQy",
-      "commentId": 4474998973,
-      "isResolved": true,
-      "isOutdated": true,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 4475014142,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-11-05T00:15:59Z",
-          "editedAt": null,
-          "body": "Fixed in 486706ff. Removed the test count and the cluster-state known issue. The README now says deployment status lives with the openclaw-setup wiring."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOVL2EQc6z3TQ0",
-      "commentId": 4474998976,
-      "isResolved": true,
-      "isOutdated": true,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 4475014554,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-11-05T00:16:03Z",
-          "editedAt": null,
-          "body": "Fixed in 486706ff. The two open items are now self-contained checks (kubectl exec ls of the engines directory, and a Python review of stealth_google.py) with no transcript or plan references."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOVL2EQc6z3TQ2",
-      "commentId": 4474998981,
-      "isResolved": true,
-      "isOutdated": true,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 4475014952,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-11-05T00:16:07Z",
-          "editedAt": null,
-          "body": "Fixed in 486706ff. Empty fragments are skipped through a shared _strip helper. Test: test_empty_title_does_not_space_out_the_snippet."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOVL2EQc6z3VwM",
-      "commentId": 4475015937,
-      "isResolved": true,
-      "isOutdated": false,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 4475019810,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-11-05T00:16:50Z",
-          "editedAt": null,
-          "body": "Fixed in ce3adf28. Blank line added before the deployment note."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOVL2EQc6z3Vwa",
-      "commentId": 4475015957,
-      "isResolved": true,
-      "isOutdated": false,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 4475020292,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-11-05T00:16:54Z",
-          "editedAt": null,
-          "body": "Fixed in ce3adf28. Blank line added before the deployment note."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOVL2EQc6z3Vwm",
-      "commentId": 4475015976,
-      "isResolved": true,
-      "isOutdated": false,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 4475020859,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-11-05T00:16:58Z",
-          "editedAt": null,
-          "body": "Fixed in ce3adf28. Blank line added before the deployment note."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOVL2EQc6z3Vwr",
-      "commentId": 4475015982,
-      "isResolved": true,
-      "isOutdated": false,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 4475021330,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-11-05T00:17:02Z",
-          "editedAt": null,
-          "body": "Fixed in ce3adf28. Blank line added before the deployment note."
-        }
-      ]
-    }
-  ],
-  "reactions": [
-    {
-      "commentId": 4474998949,
-      "user": "joeblackwaslike",
-      "content": "+1",
-      "createdAt": "2026-11-05T00:15:45Z"
-    },
-    {
-      "commentId": 4474998957,
-      "user": "joeblackwaslike",
-      "content": "+1",
-      "createdAt": "2026-11-05T00:15:49Z"
-    },
-    {
-      "commentId": 4474998963,
-      "user": "joeblackwaslike",
-      "content": "+1",
-      "createdAt": "2026-11-05T00:15:52Z"
-    },
-    {
-      "commentId": 4474998968,
-      "user": "joeblackwaslike",
-      "content": "+1",
-      "createdAt": "2026-11-05T00:15:56Z"
-    },
-    {
-      "commentId": 4474998973,
-      "user": "joeblackwaslike",
-      "content": "+1",
-      "createdAt": "2026-11-05T00:16:00Z"
-    },
-    {
-      "commentId": 4474998976,
-      "user": "joeblackwaslike",
-      "content": "+1",
-      "createdAt": "2026-11-05T00:16:04Z"
-    },
-    {
-      "commentId": 4474998981,
-      "user": "joeblackwaslike",
-      "content": "+1",
-      "createdAt": "2026-11-05T00:16:08Z"
-    },
-    {
-      "commentId": 4475015937,
-      "user": "joeblackwaslike",
-      "content": "+1",
-      "createdAt": "2026-11-05T00:16:51Z"
-    },
-    {
-      "commentId": 4475015957,
-      "user": "joeblackwaslike",
-      "content": "+1",
-      "createdAt": "2026-11-05T00:16:55Z"
-    },
-    {
-      "commentId": 4475015976,
-      "user": "joeblackwaslike",
-      "content": "+1",
-      "createdAt": "2026-11-05T00:16:59Z"
-    },
-    {
-      "commentId": 4475015982,
-      "user": "joeblackwaslike",
-      "content": "+1",
-      "createdAt": "2026-11-05T00:17:04Z"
-    }
-  ]
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "stealth-browser",
+	"pull": 8,
+	"provider": "anthropic",
+	"reviewer": "claude",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-11-07T23:31:34.260Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 5777872063,
+			"provider": "anthropic",
+			"submittedAt": "2026-11-05T00:13:47Z",
+			"headSha": "11ea4caebbc48dcc3ba8175a3f4764fe82f5d83c",
+			"baseSha": "f8cea911d9edb95760f30d049aa2addb17eb8722",
+			"mergeBase": "f8cea911d9edb95760f30d049aa2addb17eb8722",
+			"triggerAt": "2026-11-04T09:50:50Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "1b27a559ce10411321969ddc1ed3f47c13cd12e4",
+					"committedAt": "2026-11-04T09:49:38Z",
+					"files": [
+						{
+							"path": "integrations/searxng/.gitignore",
+							"ranges": [[1, 2]]
+						},
+						{
+							"path": "integrations/searxng/README.md",
+							"ranges": [[1, 58]]
+						},
+						{
+							"path": "integrations/searxng/stealth_google.py",
+							"ranges": [[1, 118]]
+						},
+						{
+							"path": "integrations/searxng/tests/conftest.py",
+							"ranges": [[1, 50]]
+						},
+						{
+							"path": "integrations/searxng/tests/fixtures/google_results.html",
+							"ranges": [[1, 10]]
+						},
+						{
+							"path": "integrations/searxng/tests/test_stealth_google.py",
+							"ranges": [[1, 101]]
+						}
+					]
+				},
+				{
+					"sha": "09db744af49d970cf8a4cb65fc9ad4753daeea21",
+					"committedAt": "2026-11-04T09:49:38Z",
+					"files": [
+						{
+							"path": "docs/superpowers/specs/2026-11-03-searxng-google-engine-design.md",
+							"ranges": [[1, 59]]
+						}
+					]
+				},
+				{
+					"sha": "de18ea78c4bc4ebf60a32c0598094bb850410aea",
+					"committedAt": "2026-11-04T09:50:08Z",
+					"files": [
+						{
+							"path": "docs/superpowers/plans/2026-11-02-searxng-web-search.md",
+							"ranges": [[1, 80]]
+						},
+						{
+							"path": "docs/superpowers/specs/2026-11-02-searxng-web-search-design.md",
+							"ranges": [[1, 78]]
+						}
+					]
+				},
+				{
+					"sha": "11ea4caebbc48dcc3ba8175a3f4764fe82f5d83c",
+					"committedAt": "2026-11-04T09:50:50Z",
+					"files": [
+						{
+							"path": "integrations/searxng/README.md",
+							"ranges": [[18, 24], [55, 58]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r0:c4474998949:0",
+					"roundIndex": 0,
+					"reviewId": 5777872063,
+					"source": "inline",
+					"commentId": 4474998949,
+					"path": "integrations/searxng/stealth_google.py",
+					"line": 111,
+					"severity": "P2",
+					"title": "Snippet ancestor check searches the whole document, so snippets are never extracted",
+					"text": "🟡 **P2**\n\n**Snippet ancestor check searches the whole document, so snippets are never extracted**\n\n`RESULT_ANCHOR` starts with `//`. In lxml, `element.xpath(\"//a...\")` is evaluated from the document root, not from `parent`. `parent.xpath(RESULT_ANCHOR)` therefore returns every result anchor on the page (8 in the fixture), `len(...) != 1` is always true, and the loop breaks on the first iteration. `node` stays the `<a>` itself. `content` is then just the anchor's text (the site name and breadcrumb) minus the title and `<cite>` text, for example \"Python documentation\", rather than the result description.\n\nUse a relative expression for this check (`\".\" + RESULT_ANCHOR`, i.e. `.//a[...]`). Separately, in the fixture layout the snippet sits in a sibling `div.kb0PBd` under `div.N54PNb`. That is 5 levels above the anchor, and `MAX_SNIPPET_ANCESTORS` is 4, so the depth limit also needs checking against the real DOM.\n\nNo test asserts on `content`, so the 9 passing tests do not catch this.\n\n<!-- ai-review:fp=bug|integrations/searxng/stealth_google.py|68674a6e49c59e95.0 -->"
+				},
+				{
+					"id": "r0:c4474998957:0",
+					"roundIndex": 0,
+					"reviewId": 5777872063,
+					"source": "inline",
+					"commentId": 4474998957,
+					"path": "integrations/searxng/stealth_google.py",
+					"line": 82,
+					"severity": "P2",
+					"title": "Zero results without the interstitial is returned silently",
+					"text": "🟡 **P2**\n\n**Zero results without the interstitial is returned silently**\n\nWhen the page has no `/goto` result anchors and no interstitial text, `response()` returns an empty `EngineResults` with nothing logged. A Google block or \"unusual traffic\" page, a CAPTCHA the gateway failed to solve, or a layout change that breaks `RESULT_ANCHOR` all look like a search with no hits. The only distinguishable failure today is the interstitial. The README and spec list an unresolved \"unexpected crash\" and a 423 `blocked` case, and this path would hide a recurrence. Log a warning here (or raise `SearxEngineAPIException`) with context such as the page title and body length, so a parser or layout break can be told apart from a real empty result.\n\n<!-- ai-review:fp=bug|integrations/searxng/stealth_google.py|ecb5588c53f6631b.0 -->"
+				},
+				{
+					"id": "r0:c4474998963:0",
+					"roundIndex": 0,
+					"reviewId": 5777872063,
+					"source": "inline",
+					"commentId": 4474998963,
+					"path": "integrations/searxng/stealth_google.py",
+					"line": 57,
+					"severity": "P2",
+					"title": "Missing env vars surface as a bare KeyError",
+					"text": "🟡 **P2**\n\n**Missing env vars surface as a bare KeyError**\n\nIf `STEALTH_BROWSER_URL` or `STEALTH_BROWSER_TOKEN` is unset, which is the exact failure mode of the wiring the docs say was lost on the cluster, `request()` raises `KeyError: 'STEALTH_BROWSER_URL'`. SearXNG reports this as an unexpected engine crash, which does not say what to fix. Raise `SearxEngineAPIException` or `RuntimeError` with a message naming the variable and the engine, e.g. 'stealth google engine requires STEALTH_BROWSER_URL'.\n\n<!-- ai-review:fp=bug|integrations/searxng/stealth_google.py|f0ef6eac8c86c3b9.0 -->"
+				},
+				{
+					"id": "r0:c4474998968:0",
+					"roundIndex": 0,
+					"reviewId": 5777872063,
+					"source": "inline",
+					"commentId": 4474998968,
+					"path": "integrations/searxng/stealth_google.py",
+					"line": 67,
+					"severity": "P3",
+					"title": "Empty or non-HTML gateway body crashes with an opaque lxml error",
+					"text": "🟢 **P3**\n\n**Empty or non-HTML gateway body crashes with an opaque lxml error**\n\n`html.fromstring` raises `lxml.etree.ParserError` ('Document is empty') on an empty body, and can also fail on a non-HTML payload such as a JSON error from the gateway. Neither is handled, so the failure surfaces as a generic engine crash with no mention of the gateway. Guard with a check on `resp.text`, or catch the lxml error and re-raise `SearxEngineAPIException('gateway returned an unparseable body')`.\n\n<!-- ai-review:fp=bug|integrations/searxng/stealth_google.py|d1e1edbd5d58140c.0 -->"
+				},
+				{
+					"id": "r0:c4474998973:0",
+					"roundIndex": 0,
+					"reviewId": 5777872063,
+					"source": "inline",
+					"commentId": 4474998973,
+					"path": "integrations/searxng/README.md",
+					"line": 58,
+					"severity": "P3",
+					"title": "README records a transient deployment state that will rot",
+					"text": "🟢 **P3**\n\n**README records a transient deployment state that will rot**\n\nKnown issue 2 describes the state of one session's cluster on 2026-11-03: an overwritten deploy and lost env vars, mount and settings entry. It also says this has not been rechecked. A README in the gateway repo should not carry a claim like this. It becomes false once openclaw-setup is redeployed, and nobody will know to remove it. The same applies to \"Last run: 9 passed\" at line 42, which goes stale as soon as a test is added or removed. Move the deployment status to an issue or the PR description and drop the test count. The README can point to the test command alone.\n\n<!-- ai-review:fp=nitpick|integrations/searxng/README.md|7c0081bdf572fe00.0 -->"
+				},
+				{
+					"id": "r0:c4474998976:0",
+					"roundIndex": 0,
+					"reviewId": 5777872063,
+					"source": "inline",
+					"commentId": 4474998976,
+					"path": "docs/superpowers/specs/2026-11-03-searxng-google-engine-design.md",
+					"line": 57,
+					"severity": "P3",
+					"title": "Spec open items cite a transcript and plan that are not in the repo",
+					"text": "🟢 **P3**\n\n**Spec open items cite a transcript and plan that are not in the repo**\n\nTwo open items justify themselves by what \"the transcript\" does or does not show. They also lean on \"the plan\", which is not part of this PR. A later maintainer has no way to check either source. Each item should state the action as a self-contained check, for example \"confirm the engine path with `kubectl exec ... ls /usr/local/searxng/searx/engines`\" and \"run python-reviewer on the engine\". The references to unavailable artifacts can then be dropped.\n\n<!-- ai-review:fp=nitpick|docs/superpowers/specs/2026-11-03-searxng-google-engine-design.md|c5e22c8c74999765.0 -->"
+				},
+				{
+					"id": "r0:c4474998981:0",
+					"roundIndex": 0,
+					"reviewId": 5777872063,
+					"source": "inline",
+					"commentId": 4474998981,
+					"path": "integrations/searxng/stealth_google.py",
+					"line": 116,
+					"severity": "P2",
+					"title": "Empty noise fragment garbles the snippet text",
+					"text": "🟡 **P2**\n\n**Empty noise fragment garbles the snippet text**\n\n`str.replace(\"\", \" \")` inserts a space between every character. If a result has an empty `<h3>` or an empty `<cite>`, `_text()` returns `\"\"` and `noise` contains an empty string. The whole snippet then comes out spaced between each character. Skip empty fragments before replacing.\n\n*Suggested fix:*\n\n```suggestion\n    for fragment in filter(None, noise):\n```\n\n<!-- ai-review:fp=bug|integrations/searxng/stealth_google.py|8af42d482aa615b9.0 -->\n<!-- ai-review:sfp=8455fa63dc4f1137 -->"
+				}
+			]
+		},
+		{
+			"index": 1,
+			"reviewId": 5777893815,
+			"provider": "anthropic",
+			"submittedAt": "2026-11-05T00:16:15Z",
+			"headSha": "486706ffddf093471952c479ce0303f879983472",
+			"baseSha": "11ea4caebbc48dcc3ba8175a3f4764fe82f5d83c",
+			"mergeBase": "11ea4caebbc48dcc3ba8175a3f4764fe82f5d83c",
+			"triggerAt": "2026-11-05T00:15:27Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "486706ffddf093471952c479ce0303f879983472",
+					"committedAt": "2026-11-05T00:15:27Z",
+					"files": [
+						{
+							"path": "docs/superpowers/specs/2026-11-03-searxng-google-engine-design.md",
+							"ranges": [[54, 59]]
+						},
+						{
+							"path": "integrations/searxng/README.md",
+							"ranges": [[39, 44], [53, 56]]
+						},
+						{
+							"path": "integrations/searxng/stealth_google.py",
+							"ranges": [[23, 29], [49, 90], [125, 139]]
+						},
+						{
+							"path": "integrations/searxng/tests/test_stealth_google.py",
+							"ranges": [[1, 4], [97, 139]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r1:c4475015937:0",
+					"roundIndex": 1,
+					"reviewId": 5777893815,
+					"source": "inline",
+					"commentId": 4475015937,
+					"path": "integrations/searxng/README.md",
+					"line": 61,
+					"severity": "P3",
+					"title": "Deployment note is attached to known issue 1",
+					"text": "🟢 **P3**\n\n**Deployment note is attached to known issue 1**\n\nThe new line follows item 1 with no blank line and no list marker. Markdown treats it as a lazy continuation of item 1, so it reads as part of the interstitial issue. It is not a known issue itself. Put it in its own paragraph after a blank line, or move it out of the Known issues list.\n\n*Suggested fix:*\n\n```suggestion\n\nDeployment status lives with the `openclaw-setup` wiring, not in this repo.\n```\n\n<!-- ai-review:fp=style|integrations/searxng/README.md|b1a439a323ba1474.0 -->\n<!-- ai-review:sfp=b1a439a323ba1474 -->"
+				},
+				{
+					"id": "r1:c4475015957:0",
+					"roundIndex": 1,
+					"reviewId": 5777893815,
+					"source": "inline",
+					"commentId": 4475015957,
+					"path": "integrations/searxng/README.md",
+					"line": 61,
+					"severity": "P3",
+					"title": "Deployment-status note now renders as part of list item 1",
+					"text": "🟢 **P3**\n\n**Deployment-status note now renders as part of list item 1**\n\nThe new line directly follows `1. After a solved CAPTCHA...` with no blank line. Markdown treats it as a lazy continuation of that list item, so the sentence reads as part of the CAPTCHA known issue instead of a separate note. Put it in its own paragraph.\n\n*Suggested fix:*\n\n```suggestion\n\nDeployment status lives with the `openclaw-setup` wiring, not in this repo.\n```\n\n<!-- ai-review:fp=style|integrations/searxng/README.md|b1a439a323ba1474.0 -->\n<!-- ai-review:sfp=b1a439a323ba1474 -->"
+				},
+				{
+					"id": "r1:c4475015976:0",
+					"roundIndex": 1,
+					"reviewId": 5777893815,
+					"source": "inline",
+					"commentId": 4475015976,
+					"path": "integrations/searxng/README.md",
+					"line": 61,
+					"severity": "P3",
+					"title": "Deployment note is glued onto the Known issues list item",
+					"text": "🟢 **P3**\n\n**Deployment note is glued onto the Known issues list item**\n\nThe new line comes directly after list item 1 with no blank line before it. Markdown treats it as a lazy continuation of that item, so \"Deployment status lives with the openclaw-setup wiring...\" renders as part of the `stealth-browser-1uo` bullet. Add a blank line before it, or turn it into a separate paragraph or a second list item.\n\n*Suggested fix:*\n\n```suggestion\n\nDeployment status lives with the `openclaw-setup` wiring, not in this repo.\n```\n\n<!-- ai-review:fp=style|integrations/searxng/README.md|b1a439a323ba1474.0 -->\n<!-- ai-review:sfp=b1a439a323ba1474 -->"
+				},
+				{
+					"id": "r1:c4475015982:0",
+					"roundIndex": 1,
+					"reviewId": 5777893815,
+					"source": "inline",
+					"commentId": 4475015982,
+					"path": "integrations/searxng/README.md",
+					"line": 61,
+					"severity": "P3",
+					"title": "Deployment-status sentence merges into the list item above",
+					"text": "🟢 **P3** · advisory\n\n**Deployment-status sentence merges into the list item above**\n\nThe new sentence directly follows `1. After a solved CAPTCHA...` with no blank line. Markdown treats it as a lazy continuation of item 1, so it renders as part of the CAPTCHA/interstitial bullet instead of a standalone note. Separate it with a blank line.\n\n*Suggested fix:*\n\n```suggestion\n\nDeployment status lives with the `openclaw-setup` wiring, not in this repo.\n```\n\n<!-- ai-review:fp=style|integrations/searxng/README.md|b1a439a323ba1474.0 -->\n<!-- ai-review:sfp=b1a439a323ba1474 -->\n<!-- ai-review:advisory -->"
+				}
+			]
+		}
+	],
+	"threads": [
+		{
+			"threadId": "PRRT_kwDOVL2EQc6z3TQl",
+			"commentId": 4474998949,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4475012208,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-11-05T00:15:43Z",
+					"editedAt": null,
+					"body": "Fixed in 486706ff. The ancestor check is now relative (`.//a[...]`) and MAX_SNIPPET_ANCESTORS is 5, which reaches div.N54PNb in the fixture. A new test asserts the first result's content starts with the description and has no site label or cite. The label is also stripped now, derived as the anchor text minus title and cite."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6z3TQs",
+			"commentId": 4474998957,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4475012718,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-11-05T00:15:47Z",
+					"editedAt": null,
+					"body": "Fixed in 486706ff. A page with no result anchors and no interstitial now logs a warning with the page title and body length, then returns empty. Test: test_zero_results_without_interstitial_logs_a_warning."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6z3TQv",
+			"commentId": 4474998963,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4475013221,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-11-05T00:15:51Z",
+					"editedAt": null,
+					"body": "Fixed in 486706ff. A missing or empty STEALTH_BROWSER_URL or STEALTH_BROWSER_TOKEN raises SearxEngineAPIException naming the variable. Tests cover both."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6z3TQx",
+			"commentId": 4474998968,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4475013668,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-11-05T00:15:55Z",
+					"editedAt": null,
+					"body": "Fixed in 486706ff. An empty or whitespace body raises SearxEngineAPIException, and lxml ParserError is wrapped the same way. Tests cover the empty and whitespace cases."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6z3TQy",
+			"commentId": 4474998973,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4475014142,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-11-05T00:15:59Z",
+					"editedAt": null,
+					"body": "Fixed in 486706ff. Removed the test count and the cluster-state known issue. The README now says deployment status lives with the openclaw-setup wiring."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6z3TQ0",
+			"commentId": 4474998976,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4475014554,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-11-05T00:16:03Z",
+					"editedAt": null,
+					"body": "Fixed in 486706ff. The two open items are now self-contained checks (kubectl exec ls of the engines directory, and a Python review of stealth_google.py) with no transcript or plan references."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6z3TQ2",
+			"commentId": 4474998981,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4475014952,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-11-05T00:16:07Z",
+					"editedAt": null,
+					"body": "Fixed in 486706ff. Empty fragments are skipped through a shared _strip helper. Test: test_empty_title_does_not_space_out_the_snippet."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6z3VwM",
+			"commentId": 4475015937,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4475019810,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-11-05T00:16:50Z",
+					"editedAt": null,
+					"body": "Fixed in ce3adf28. Blank line added before the deployment note."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6z3Vwa",
+			"commentId": 4475015957,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4475020292,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-11-05T00:16:54Z",
+					"editedAt": null,
+					"body": "Fixed in ce3adf28. Blank line added before the deployment note."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6z3Vwm",
+			"commentId": 4475015976,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4475020859,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-11-05T00:16:58Z",
+					"editedAt": null,
+					"body": "Fixed in ce3adf28. Blank line added before the deployment note."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6z3Vwr",
+			"commentId": 4475015982,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4475021330,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-11-05T00:17:02Z",
+					"editedAt": null,
+					"body": "Fixed in ce3adf28. Blank line added before the deployment note."
+				}
+			]
+		}
+	],
+	"reactions": [
+		{
+			"commentId": 4474998949,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-11-05T00:15:45Z"
+		},
+		{
+			"commentId": 4474998957,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-11-05T00:15:49Z"
+		},
+		{
+			"commentId": 4474998963,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-11-05T00:15:52Z"
+		},
+		{
+			"commentId": 4474998968,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-11-05T00:15:56Z"
+		},
+		{
+			"commentId": 4474998973,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-11-05T00:16:00Z"
+		},
+		{
+			"commentId": 4474998976,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-11-05T00:16:04Z"
+		},
+		{
+			"commentId": 4474998981,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-11-05T00:16:08Z"
+		},
+		{
+			"commentId": 4475015937,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-11-05T00:16:51Z"
+		},
+		{
+			"commentId": 4475015957,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-11-05T00:16:55Z"
+		},
+		{
+			"commentId": 4475015976,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-11-05T00:16:59Z"
+		},
+		{
+			"commentId": 4475015982,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-11-05T00:17:04Z"
+		}
+	]
 }

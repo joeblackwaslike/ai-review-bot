@@ -1,1258 +1,1007 @@
 {
-  "schemaVersion": 1,
-  "owner": "joeblackwaslike",
-  "repo": "ai-listings",
-  "pull": 57,
-  "provider": "openai",
-  "reviewer": "codex",
-  "author": "joeblackwaslike",
-  "recordedAt": "2026-11-07T23:28:23.961Z",
-  "rounds": [
-    {
-      "index": 0,
-      "reviewId": 5057971928,
-      "provider": "openai",
-      "submittedAt": "2026-08-29T11:29:29Z",
-      "headSha": "dd3cc89ef2bc9b07dbd792b1e8c0229e9f0764c8",
-      "baseSha": "473705ebedcb2a14c323fdbc629af146749c7d0a",
-      "mergeBase": "473705ebedcb2a14c323fdbc629af146749c7d0a",
-      "triggerAt": "2026-08-29T11:12:49Z",
-      "approximate": false,
-      "commitsSince": [
-        {
-          "sha": "7fbfa5f381464be5bc452ad526d43223c87ecf9e",
-          "committedAt": "2026-08-29T10:36:56Z",
-          "files": [
-            {
-              "path": "src/components/dashboard/StatusBadge.tsx",
-              "ranges": [
-                [
-                  29,
-                  37
-                ]
-              ]
-            },
-            {
-              "path": "src/lib/inngest/client.ts",
-              "ranges": [
-                [
-                  1,
-                  5
-                ],
-                [
-                  70,
-                  87
-                ]
-              ]
-            },
-            {
-              "path": "src/lib/inngest/functions/condition-reassessment.ts",
-              "ranges": [
-                [
-                  100,
-                  111
-                ]
-              ]
-            },
-            {
-              "path": "src/types/listings.ts",
-              "ranges": [
-                [
-                  3,
-                  9
-                ]
-              ]
-            },
-            {
-              "path": "supabase/migrations/0022_condition_gate_status.sql",
-              "ranges": [
-                [
-                  1,
-                  7
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "3b0d4dd23485e07c1ab632981f83a03f9427805a",
-          "committedAt": "2026-08-29T10:46:40Z",
-          "files": [
-            {
-              "path": "src/app/api/inngest/route.ts",
-              "ranges": [
-                [
-                  11,
-                  17
-                ],
-                [
-                  27,
-                  32
-                ]
-              ]
-            },
-            {
-              "path": "src/app/api/listings/[id]/confirm-condition/route.ts",
-              "ranges": [
-                [
-                  1,
-                  101
-                ]
-              ]
-            },
-            {
-              "path": "src/lib/inngest/functions/description-rewrite.ts",
-              "ranges": [
-                [
-                  1,
-                  22
-                ]
-              ]
-            },
-            {
-              "path": "src/lib/pipeline/rewrite-listing.ts",
-              "ranges": [
-                [
-                  1,
-                  250
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "58cf593d9c5dfd808bc9cc52c6a29cac3acf2b8d",
-          "committedAt": "2026-08-29T10:51:10Z",
-          "files": [
-            {
-              "path": "src/components/dashboard/ListingCard.tsx",
-              "ranges": [
-                [
-                  135,
-                  192
-                ],
-                [
-                  338,
-                  344
-                ],
-                [
-                  396,
-                  402
-                ],
-                [
-                  418,
-                  429
-                ],
-                [
-                  437,
-                  451
-                ]
-              ]
-            },
-            {
-              "path": "src/components/workspace/ConditionReviewPanel.tsx",
-              "ranges": [
-                [
-                  1,
-                  115
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "364b662358a4a68fbfa02074f8ea36d3bf019c8d",
-          "committedAt": "2026-08-29T10:53:29Z",
-          "files": [
-            {
-              "path": "src/lib/inngest/functions/description-rewrite.ts",
-              "ranges": [
-                [
-                  10,
-                  20
-                ]
-              ]
-            },
-            {
-              "path": "src/lib/pipeline/rewrite-listing.ts",
-              "ranges": [
-                [
-                  42,
-                  49
-                ],
-                [
-                  132,
-                  138
-                ],
-                [
-                  198,
-                  207
-                ],
-                [
-                  220,
-                  250
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "025fd02aeff4eb165a097b0a3f4d1cf298d246bf",
-          "committedAt": "2026-08-29T10:58:22Z",
-          "files": [
-            {
-              "path": "src/app/listings/[id]/page.tsx",
-              "ranges": [
-                [
-                  124,
-                  136
-                ],
-                [
-                  157,
-                  163
-                ],
-                [
-                  231,
-                  237
-                ]
-              ]
-            },
-            {
-              "path": "src/components/workspace/FieldsPanel.tsx",
-              "ranges": [
-                [
-                  11,
-                  17
-                ],
-                [
-                  455,
-                  486
-                ]
-              ]
-            },
-            {
-              "path": "src/components/workspace/PipelineTimeline.tsx",
-              "ranges": [
-                [
-                  71,
-                  84
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "cbafe96208504f78cf04de031fa90bac3d67ffb6",
-          "committedAt": "2026-08-29T11:09:48Z",
-          "files": [
-            {
-              "path": "src/app/api/listings/[id]/confirm-condition/route.ts",
-              "ranges": [
-                [
-                  3,
-                  13
-                ],
-                [
-                  33,
-                  103
-                ]
-              ]
-            },
-            {
-              "path": "src/components/workspace/ConditionReviewPanel.tsx",
-              "ranges": [
-                [
-                  28,
-                  66
-                ]
-              ]
-            },
-            {
-              "path": "src/lib/inngest/functions/condition-reassessment.ts",
-              "ranges": [
-                [
-                  97,
-                  111
-                ]
-              ]
-            },
-            {
-              "path": "src/lib/inngest/functions/description-rewrite.ts",
-              "ranges": [
-                [
-                  1,
-                  30
-                ],
-                [
-                  34,
-                  51
-                ]
-              ]
-            },
-            {
-              "path": "src/lib/pipeline/gate-messages.ts",
-              "ranges": [
-                [
-                  170,
-                  174
-                ]
-              ]
-            },
-            {
-              "path": "src/lib/pipeline/rewrite-listing.ts",
-              "ranges": [
-                [
-                  61,
-                  75
-                ]
-              ]
-            },
-            {
-              "path": "supabase/migrations/0036_condition_gate_status.sql",
-              "ranges": [
-                [
-                  1,
-                  4
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "dd3cc89ef2bc9b07dbd792b1e8c0229e9f0764c8",
-          "committedAt": "2026-08-29T11:12:49Z",
-          "files": [
-            {
-              "path": "src/lib/inngest/functions/description-rewrite.ts",
-              "ranges": [
-                [
-                  43,
-                  49
-                ]
-              ]
-            }
-          ]
-        }
-      ],
-      "claims": [
-        {
-          "id": "r0:c3886485731:0",
-          "roundIndex": 0,
-          "reviewId": 5057971928,
-          "source": "inline",
-          "commentId": 3886485731,
-          "path": "src/lib/inngest/functions/condition-reassessment.ts",
-          "line": 106,
-          "severity": "P1",
-          "title": "Make reassessment's condition write and gate transition atomic",
-          "text": "🔴 **High**\n\n**Make reassessment's condition write and gate transition atomic**\n\n**Confidence: 88/100.** The condition reassessment writes the new condition in the preceding query while the listing remains `in_loop`, then performs this separate status update. During that interval, the FinalizeButton remains available (the PR explicitly uses `in_loop` as its availability gate), so a concurrently open workspace can finalize the listing with copy that predates the reassessed condition. Put `status: 'condition_gate'` in the original condition update and constrain that update with `.eq('status', 'in_loop')`; then require an affected row so the condition data and lock transition commit together."
-        },
-        {
-          "id": "r0:c3886485734:0",
-          "roundIndex": 0,
-          "reviewId": 5057971928,
-          "source": "inline",
-          "commentId": 3886485734,
-          "path": "src/lib/pipeline/rewrite-listing.ts",
-          "line": 186,
-          "severity": "P2",
-          "title": "Title length limits are only prompts",
-          "text": "🟡 **Medium**\n\n**Title length limits are only prompts**\n\n`RewriteOutput` models unvalidated LLM output, but neither the tool schema nor code after `runStructured` enforces the stated 80-character eBay/canonical and 50-character Poshmark title invariants. A longer model response is written directly to `platform_fields`, which can leave copy invalid for the target platform and fail later publication validation. Encode the limits in the output schema where possible and validate the returned values before the database update (with a regression test for oversized output)."
-        },
-        {
-          "id": "r0:c3886485737:0",
-          "roundIndex": 0,
-          "reviewId": 5057971928,
-          "source": "inline",
-          "commentId": 3886485737,
-          "path": "src/app/api/listings/[id]/confirm-condition/route.ts",
-          "line": 52,
-          "severity": "P2",
-          "title": "Do not turn listing-read failures into a 404",
-          "text": "🟡 **Medium**\n\n**Do not turn listing-read failures into a 404**\n\nThis discards the query error and treats every failure as `!existing`, returning “Listing not found.” A transient database/network failure is therefore neither logged nor distinguishable to the user from a nonexistent listing, so they cannot take the appropriate action (retry). Handle and log the query error before the not-found branch, then return a retryable 500 response.\n\n*Suggested fix:*\n\n```suggestion\n  const { data: existing, error: existingError } = await supabase\n    .from('listings')\n    .select('condition, condition_notes, condition_confirmed')\n    .eq('id', id)\n    .eq('user_id', user.id)\n    .maybeSingle()\n\n  if (existingError) {\n    console.error(`confirm-condition: failed to load listing ${id}:`, existingError)\n    return Response.json(\n      { error: 'Unable to load the listing. Please try again.' },\n      { status: 500 }\n    )\n  }\n```"
-        },
-        {
-          "id": "r0:c3886485741:0",
-          "roundIndex": 0,
-          "reviewId": 5057971928,
-          "source": "inline",
-          "commentId": 3886485741,
-          "path": "src/lib/pipeline/rewrite-listing.ts",
-          "line": 72,
-          "severity": "P1",
-          "title": "Fail the rewrite when studio-photo loading fails",
-          "text": "🔴 **High**\n\n**Fail the rewrite when studio-photo loading fails**\n\nThe photos query has no error handling, so a database failure is silently converted into an empty photo list by `(photos ?? [])`. The rewrite then succeeds and advances to `in_loop` using copy generated without the studio photos that this gate is specifically intended to incorporate. Capture `photosError` and throw with the listing ID so Inngest retries instead of finalizing an incomplete rewrite.\n\n*Suggested fix:*\n\n```suggestion\n  const { data: photos, error: photosError } = await supabase\n    .from('photos')\n    .select('processed_url')\n    .eq('listing_id', listingId)\n    .eq('type', 'studio')\n    .not('processed_url', 'is', null)\n    .limit(20)\n\n  if (photosError) {\n    throw new Error(\n      `rewrite-listing: failed to load studio photos for listing ${listingId} -- ${photosError.message}`\n    )\n  }\n```"
-        },
-        {
-          "id": "r0:c3886485746:0",
-          "roundIndex": 0,
-          "reviewId": 5057971928,
-          "source": "inline",
-          "commentId": 3886485746,
-          "path": "src/lib/pipeline/rewrite-listing.ts",
-          "line": 89,
-          "severity": "P2",
-          "title": "Do not silently omit platform rules after arbitrary failures",
-          "text": "🟡 **Medium**\n\n**Do not silently omit platform rules after arbitrary failures**\n\nThis broad catch suppresses every exception from fetching or processing platform rules—including database/network failures and unexpected implementation errors—and continues to produce copy without the user’s platform policies. The user receives no indication that their rules were ignored, while the function returns success. Let the error propagate so the rewrite is retried, or, if rules are genuinely optional, log the failure with `listingId` and return an explicit warning that can be surfaced to the user rather than silently generating noncompliant copy."
-        },
-        {
-          "id": "r0:c3886485748:0",
-          "roundIndex": 0,
-          "reviewId": 5057971928,
-          "source": "inline",
-          "commentId": 3886485748,
-          "path": "src/lib/pipeline/rewrite-listing.ts",
-          "line": 38,
-          "severity": "P3",
-          "title": "Document the condition-notes mutation accurately",
-          "text": "🟢 **Low**\n\n**Document the condition-notes mutation accurately**\n\nThis comment says the function patches only title/description, but the update below also writes `condition_notes: rewrite.condition_notes`. That makes the preservation guarantee misleading: condition notes are regenerated rather than retained. Update the comment to explicitly list title, description, condition notes, and the platform title/description fields as the only mutations."
-        },
-        {
-          "id": "r0:c3886485751:0",
-          "roundIndex": 0,
-          "reviewId": 5057971928,
-          "source": "inline",
-          "commentId": 3886485751,
-          "path": "src/lib/pipeline/rewrite-listing.ts",
-          "line": 192,
-          "severity": "P2",
-          "title": "Enforce platform title length limits before persisting",
-          "text": "🟡 **Medium**\n\n**Enforce platform title length limits before persisting**\n\nThe 80/50-character limits are only natural-language instructions in the prompt and `description` metadata; this schema supplies no `maxLength`, and there is no post-response validation. A model response exceeding those limits is written directly to canonical/platform fields, violating the stated platform constraints and potentially leaving the listing unpublishable. Add deterministic length validation (and fail/retry or repair the response) before the database update; schema `maxLength` can be added as an additional guard but should not be the only enforcement."
-        },
-        {
-          "id": "r0:c3886485753:0",
-          "roundIndex": 0,
-          "reviewId": 5057971928,
-          "source": "inline",
-          "commentId": 3886485753,
-          "path": "src/lib/inngest/functions/description-rewrite.ts",
-          "line": 26,
-          "severity": "P2",
-          "title": "Do not revive archived listings from the failure handler",
-          "text": "🟡 **Medium**\n\n**Do not revive archived listings from the failure handler**\n\n`runRewriteListing` intentionally throws when the listing is archived, which eventually invokes this handler. This update is scoped only by `id`, so that failure path changes an archived listing back to `condition_gate` and marks it unconfirmed/blocked. The archive state is thereby undone precisely in the case the zero-row guard is meant to protect.\n\nConstrain this compensation update to the expected in-flight state (at least `status = 'condition_gate'`, and ideally the matching confirmed submission), and add an integration test that archives a listing during a rewrite and verifies exhausted retries leave it archived. Test priority: 8/10; this prevents an async retry from reviving a user-archived listing."
-        },
-        {
-          "id": "r0:c3886485754:0",
-          "roundIndex": 0,
-          "reviewId": 5057971928,
-          "source": "inline",
-          "commentId": 3886485754,
-          "path": "src/app/api/listings/[id]/confirm-condition/route.ts",
-          "line": 93,
-          "severity": "P2",
-          "title": "Make condition confirmation and event publication durable",
-          "text": "🟡 **Medium**\n\n**Make condition confirmation and event publication durable**\n\nThe database confirmation is committed before the Inngest event is published. If the request process terminates after the update succeeds but before/during `inngest.send`, neither the catch-based compensation nor a rewrite event is guaranteed to run. The listing is then left in `condition_gate` with `condition_confirmed=true`, which makes the panel show the non-actionable “Rewriting copy” state indefinitely. Use a transactional outbox (written with the confirmation) and a dispatcher/recovery worker, or otherwise persist a dispatch-pending state that can be retried safely."
-        },
-        {
-          "id": "r0:c3886485757:0",
-          "roundIndex": 0,
-          "reviewId": 5057971928,
-          "source": "inline",
-          "commentId": 3886485757,
-          "path": "src/lib/pipeline/rewrite-listing.ts",
-          "line": 237,
-          "severity": "P2",
-          "title": "Validate generated titles before persisting them",
-          "text": "🟡 **Medium**\n\n**Validate generated titles before persisting them**\n\nThe prompt requests 80/80/50-character title limits, but the structured-output schema and persistence path impose no length validation. Model instructions are not an enforcement boundary, so an overlong eBay or Poshmark title can be stored and later fail platform validation (or make the listing non-publishable). Validate the three title lengths after `runStructured` (or add `maxLength` constraints to the schema plus a server-side backstop) and throw/retry or otherwise handle invalid output before this update."
-        }
-      ]
-    },
-    {
-      "index": 1,
-      "reviewId": 5058008656,
-      "provider": "openai",
-      "submittedAt": "2026-08-29T11:46:57Z",
-      "headSha": "ae01383d9e4dcf1053b6727d5ae0327190c76338",
-      "baseSha": "dd3cc89ef2bc9b07dbd792b1e8c0229e9f0764c8",
-      "mergeBase": "dd3cc89ef2bc9b07dbd792b1e8c0229e9f0764c8",
-      "triggerAt": "2026-08-29T11:33:36Z",
-      "approximate": false,
-      "commitsSince": [
-        {
-          "sha": "0feb65928ccb61b9ddf53aa75df03063b8a8b73c",
-          "committedAt": "2026-08-29T11:25:31Z",
-          "files": [
-            {
-              "path": "src/app/api/listings/[id]/confirm-condition/route.ts",
-              "ranges": [
-                [
-                  71,
-                  77
-                ]
-              ]
-            },
-            {
-              "path": "src/app/listings/[id]/page.tsx",
-              "ranges": [
-                [
-                  124,
-                  130
-                ]
-              ]
-            },
-            {
-              "path": "src/lib/inngest/functions/condition-reassessment.ts",
-              "ranges": [
-                [
-                  99,
-                  112
-                ]
-              ]
-            },
-            {
-              "path": "src/lib/inngest/functions/description-rewrite.ts",
-              "ranges": [
-                [
-                  24,
-                  30
-                ],
-                [
-                  40,
-                  53
-                ]
-              ]
-            },
-            {
-              "path": "src/lib/pipeline/rewrite-listing.ts",
-              "ranges": [
-                [
-                  63,
-                  80
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "ae01383d9e4dcf1053b6727d5ae0327190c76338",
-          "committedAt": "2026-08-29T11:33:36Z",
-          "files": [
-            {
-              "path": "src/app/api/listings/[id]/confirm-condition/route.ts",
-              "ranges": [
-                [
-                  48,
-                  64
-                ]
-              ]
-            },
-            {
-              "path": "src/lib/inngest/functions/condition-reassessment.ts",
-              "ranges": [
-                [
-                  91,
-                  107
-                ]
-              ]
-            },
-            {
-              "path": "src/lib/pipeline/rewrite-listing.ts",
-              "ranges": [
-                [
-                  35,
-                  43
-                ],
-                [
-                  91,
-                  98
-                ]
-              ]
-            }
-          ]
-        }
-      ],
-      "claims": [
-        {
-          "id": "r1:c3886518331:0",
-          "roundIndex": 1,
-          "reviewId": 5058008656,
-          "source": "inline",
-          "commentId": 3886518331,
-          "path": "src/lib/inngest/functions/description-rewrite.ts",
-          "line": 15,
-          "severity": "P1",
-          "title": "Failure handler reads the listing ID from the wrong event shape",
-          "text": "🔴 **High**\n\n**Failure handler reads the listing ID from the wrong event shape**\n\nThe rewrite handler itself reads the original event at `event.data`, but this failure handler dereferences `event.data.event.data`. On exhausted retries, `listingId` is therefore absent and the handler returns without clearing `condition_confirmed` or marking the listing blocked, leaving the workspace indefinitely in its rewrite-holding state.\n\n*Suggested fix:*\n\n```suggestion\n      const listingId = (event as unknown as ListingConditionConfirmedEvent).data.listingId\n```"
-        },
-        {
-          "id": "r1:c3886518333:0",
-          "roundIndex": 1,
-          "reviewId": 5058008656,
-          "source": "inline",
-          "commentId": 3886518333,
-          "path": "src/lib/inngest/functions/condition-reassessment.ts",
-          "line": 100,
-          "severity": "P1",
-          "title": "The gate is entered too late to reliably prevent stale finalization",
-          "text": "🔴 **High**\n\n**The gate is entered too late to reliably prevent stale finalization**\n\nReassessment is asynchronous while the listing remains `in_loop`. A user can finalize after studio photos are confirmed but before this update runs. Once finalization changes the status, this predicate affects zero rows without an error, and the function returns `{ ok: true }`; the listing can then complete with pre-reassessment copy and never show the condition gate. Move the transition out of `in_loop` to the photo-confirmation boundary (before asynchronous reassessment), or introduce a pending state that disables finalization during reassessment."
-        },
-        {
-          "id": "r1:c3886518334:0",
-          "roundIndex": 1,
-          "reviewId": 5058008656,
-          "source": "inline",
-          "commentId": 3886518334,
-          "path": "src/lib/pipeline/rewrite-listing.ts",
-          "line": 161,
-          "severity": "P2",
-          "title": "Title limits are only requested from the model, not enforced",
-          "text": "🟡 **Medium**\n\n**Title limits are only requested from the model, not enforced**\n\nThe model schema accepts unrestricted strings, and the returned titles are persisted unchanged. A response exceeding the stated 80-character canonical/eBay or 50-character Poshmark limit will therefore be stored and can be rejected or altered later by the marketplace integration. Validate the three lengths after `runStructured` (retry/fail the rewrite or apply a deliberate truncation policy) before the database update."
-        },
-        {
-          "id": "r1:c3886518335:0",
-          "roundIndex": 1,
-          "reviewId": 5058008656,
-          "source": "inline",
-          "commentId": 3886518335,
-          "path": "src/app/api/listings/[id]/confirm-condition/route.ts",
-          "line": 79,
-          "severity": "P2",
-          "title": "Database update errors are exposed to the client but not logged",
-          "text": "🟡 **Medium**\n\n**Database update errors are exposed to the client but not logged**\n\n`updateError` is returned directly to the browser without a server-side log. This makes production failures difficult to correlate with the listing/user, while also exposing raw database/provider text rather than a clear actionable message. Log the contextual error and return a stable user-facing retry message. Hidden errors include database connectivity failures, permission failures, and constraint violations.\n\n*Suggested fix:*\n\n```suggestion\n  if (updateError) {\n    console.error(`confirm-condition: failed to confirm condition for listing ${id}:`, updateError)\n    return Response.json(\n      { error: 'Unable to confirm the condition. Please try again.' },\n      { status: 500 }\n    )\n  }\n```"
-        },
-        {
-          "id": "r1:c3886518338:0",
-          "roundIndex": 1,
-          "reviewId": 5058008656,
-          "source": "inline",
-          "commentId": 3886518338,
-          "path": "src/lib/inngest/functions/description-rewrite.ts",
-          "line": 26,
-          "severity": "P1",
-          "title": "Failure remediation silently discards a failed database update",
-          "text": "🔴 **High**\n\n**Failure remediation silently discards a failed database update**\n\nThe exhausted-retry handler awaits its recovery update but discards both the database error and whether a row matched. If that update fails while the listing is still `condition_gate`, it remains `condition_confirmed=true`; the panel then permanently shows “Rewriting copy” even though no further rewrite will run. This is a silent failure at the only recovery point. Capture and log the result with `listingId`, and propagate/report a failed remediation rather than treating the handler as successful. The hidden failures include transient database outages, authorization failures, and write/constraint failures."
-        },
-        {
-          "id": "r1:c3886518342:0",
-          "roundIndex": 1,
-          "reviewId": 5058008656,
-          "source": "inline",
-          "commentId": 3886518342,
-          "path": "src/lib/pipeline/rewrite-listing.ts",
-          "line": 32,
-          "severity": "P2",
-          "title": "API-key lookup masks its database failure",
-          "text": "🟡 **Medium**\n\n**API-key lookup masks its database failure**\n\nThis query discards its `error` result and falls through to `getUserApiKeys(listingRow?.user_id ?? null)`. A failed or missing listing lookup is therefore indistinguishable from a legitimate null user ID, obscuring the real cause and potentially invoking the key resolver with the wrong scope. Check `error` and `listingRow.user_id`, then throw a contextual error so the Inngest failure path records an actionable rewrite failure. Hidden errors include a missing/deleted listing, database connectivity errors, and authorization failures."
-        },
-        {
-          "id": "r1:c3886518344:0",
-          "roundIndex": 1,
-          "reviewId": 5058008656,
-          "source": "inline",
-          "commentId": 3886518344,
-          "path": "src/lib/pipeline/rewrite-listing.ts",
-          "line": 243,
-          "severity": "P2",
-          "title": "Stale platform fields can overwrite concurrent updates",
-          "text": "🟡 **Medium**\n\n**Stale platform fields can overwrite concurrent updates**\n\n`existingPf` is read before the vision/model call and this later update replaces the entire `platform_fields` JSON value from that stale snapshot. If another workflow or user changes any platform field while the rewrite is running (for example, price, category, specifics, or a marketplace listing ID), this write discards that change. The nearby comments promise that existing keys survive, but that is only true for values present at the initial read. Use an optimistic revision/CAS guard, or merge the title/description patch against the latest database value atomically, rather than writing the old full object."
-        },
-        {
-          "id": "r1:body:0",
-          "roundIndex": 1,
-          "reviewId": 5058008656,
-          "source": "body",
-          "commentId": null,
-          "path": null,
-          "line": null,
-          "severity": "P2",
-          "title": "Condition-gate state transitions have no automated coverage",
-          "text": "Condition-gate state transitions have no automated coverage"
-        },
-        {
-          "id": "r1:body:1",
-          "roundIndex": 1,
-          "reviewId": 5058008656,
-          "source": "body",
-          "commentId": null,
-          "path": null,
-          "line": null,
-          "severity": "P2",
-          "title": "The new condition-gate workflow has no automated regression coverage",
-          "text": "The new condition-gate workflow has no automated regression coverage"
-        }
-      ]
-    },
-    {
-      "index": 2,
-      "reviewId": 5058034749,
-      "provider": "openai",
-      "submittedAt": "2026-08-29T12:04:11Z",
-      "headSha": "2489c1f341951d140d6ad1aecacf75caf27ba0a2",
-      "baseSha": "ae01383d9e4dcf1053b6727d5ae0327190c76338",
-      "mergeBase": "ae01383d9e4dcf1053b6727d5ae0327190c76338",
-      "triggerAt": "2026-08-29T11:48:34Z",
-      "approximate": false,
-      "commitsSince": [
-        {
-          "sha": "550d6d2e1be5182d60fc2c06f02f7f5d9e764eb2",
-          "committedAt": "2026-08-29T11:45:27Z",
-          "files": [
-            {
-              "path": "src/app/api/listings/[id]/confirm-condition/route.ts",
-              "ranges": [
-                [
-                  100,
-                  106
-                ]
-              ]
-            },
-            {
-              "path": "src/lib/inngest/functions/condition-reassessment.ts",
-              "ranges": [
-                [
-                  94,
-                  112
-                ]
-              ]
-            },
-            {
-              "path": "src/lib/inngest/functions/description-rewrite.ts",
-              "ranges": [
-                [
-                  15,
-                  21
-                ],
-                [
-                  25,
-                  37
-                ],
-                [
-                  47,
-                  65
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "2489c1f341951d140d6ad1aecacf75caf27ba0a2",
-          "committedAt": "2026-08-29T11:48:34Z",
-          "files": [
-            {
-              "path": "src/app/api/listings/[id]/confirm-condition/route.ts",
-              "ranges": [
-                [
-                  79,
-                  88
-                ]
-              ]
-            },
-            {
-              "path": "src/lib/pipeline/rewrite-listing.ts",
-              "ranges": [
-                [
-                  25,
-                  38
-                ]
-              ]
-            }
-          ]
-        }
-      ],
-      "claims": [
-        {
-          "id": "r2:c3886546579:0",
-          "roundIndex": 2,
-          "reviewId": 5058034749,
-          "source": "inline",
-          "commentId": 3886546579,
-          "path": "src/components/workspace/ConditionReviewPanel.tsx",
-          "line": 62,
-          "severity": "P2",
-          "title": "Refresh the losing tab after a confirmation conflict",
-          "text": "🟡 **Medium**\n\n**Refresh the losing tab after a confirmation conflict**\n\nThe API deliberately returns 409 when another tab has already confirmed the condition, but this branch leaves the stale form on screen and displays an error. In the normal duplicate-submit case the listing is still `condition_gate` with `condition_confirmed=true`, so the API's current “not in condition_gate” message is misleading and the user has no in-app path to the intended “Rewriting copy” state other than manually reloading. Refresh on 409 so the UI fetches the winning submission's state.\n\n*Suggested fix:*\n\n```suggestion\n      } else if (res.status === 409) {\n        router.refresh()\n      } else {\n        const body = await res.json().catch(() => ({}))\n        setError((body as { error?: string }).error ?? 'Failed to submit — please try again')\n      }\n```"
-        },
-        {
-          "id": "r2:c3886546592:0",
-          "roundIndex": 2,
-          "reviewId": 5058034749,
-          "source": "inline",
-          "commentId": 3886546592,
-          "path": "src/lib/pipeline/rewrite-listing.ts",
-          "line": 242,
-          "severity": "P2",
-          "title": "Rewrite can overwrite concurrent platform metadata",
-          "text": "🟡 **Medium**\n\n**Rewrite can overwrite concurrent platform metadata**\n\n`platform_fields` is read before photo conversion, rule loading, and the model call, then this full snapshot is written back. Any update to platform metadata during that interval (for example, a price, item-specific, or marketplace-ID update) is lost when this stale object replaces the JSON column. The nearby preservation comment is only true relative to the initial snapshot. Patch just the title/description paths in the database, or use an optimistic version/transaction and re-merge the latest value before writing."
-        },
-        {
-          "id": "r2:c3886546592:1",
-          "roundIndex": 2,
-          "reviewId": 5058034749,
-          "source": "inline",
-          "commentId": 3886546592,
-          "path": "src/lib/pipeline/rewrite-listing.ts",
-          "line": 242,
-          "severity": "P3",
-          "title": "`platform_fields` is read before the remote Claude call and then the entire JSON value is replaced here. Any concurrent update to pricing, category, specifics, or another platform field during that call is silently lost, despite the intended preservation of those fields. Use an optimistic version/CAS with a reload-and-remerge retry, or perform a database-side JSONB patch of only the generated title/description paths.",
-          "text": "`platform_fields` is read before the remote Claude call and then the entire JSON value is replaced here. Any concurrent update to pricing, category, specifics, or another platform field during that call is silently lost, despite the intended preservation of those fields. Use an optimistic version/CAS with a reload-and-remerge retry, or perform a database-side JSONB patch of only the generated title/description paths."
-        },
-        {
-          "id": "r2:body:0",
-          "roundIndex": 2,
-          "reviewId": 5058034749,
-          "source": "body",
-          "commentId": null,
-          "path": null,
-          "line": null,
-          "severity": "P2",
-          "title": "No automated coverage for the condition-gate workflow",
-          "text": "No automated coverage for the condition-gate workflow"
-        },
-        {
-          "id": "r2:body:1",
-          "roundIndex": 2,
-          "reviewId": 5058034749,
-          "source": "body",
-          "commentId": null,
-          "path": null,
-          "line": null,
-          "severity": "P2",
-          "title": "No automated coverage for the new event-driven gate",
-          "text": "No automated coverage for the new event-driven gate"
-        },
-        {
-          "id": "r2:body:2",
-          "roundIndex": 2,
-          "reviewId": 5058034749,
-          "source": "body",
-          "commentId": null,
-          "path": null,
-          "line": null,
-          "severity": "P2",
-          "title": "Add automated coverage for the new asynchronous gate workflow",
-          "text": "Add automated coverage for the new asynchronous gate workflow"
-        },
-        {
-          "id": "r2:body:3",
-          "roundIndex": 2,
-          "reviewId": 5058034749,
-          "source": "body",
-          "commentId": null,
-          "path": null,
-          "line": null,
-          "severity": "P2",
-          "title": "Condition-gate flow lacks automated regression coverage",
-          "text": "Condition-gate flow lacks automated regression coverage"
-        },
-        {
-          "id": "r2:body:4",
-          "roundIndex": 2,
-          "reviewId": 5058034749,
-          "source": "body",
-          "commentId": null,
-          "path": null,
-          "line": null,
-          "severity": "P0",
-          "title": "No automated regression coverage for the condition-gate state machine",
-          "text": "No automated regression coverage for the condition-gate state machine"
-        },
-        {
-          "id": "r2:body:5",
-          "roundIndex": 2,
-          "reviewId": 5058034749,
-          "source": "body",
-          "commentId": null,
-          "path": null,
-          "line": null,
-          "severity": "P0",
-          "title": "No data-integrity test covers the copy rewrite contract",
-          "text": "No data-integrity test covers the copy rewrite contract"
-        }
-      ]
-    }
-  ],
-  "threads": [
-    {
-      "threadId": "PRRT_kwDOSSBjYs6dZk2X",
-      "commentId": 3886485731,
-      "isResolved": true,
-      "isOutdated": true,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 3886492400,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-08-29T11:33:58Z",
-          "editedAt": null,
-          "body": "Fixed in ae01383: the two separate writes are now a single atomic update — `{ condition, condition_notes, condition_confirmed: false, status: 'condition_gate' }` with `.eq('status', 'in_loop')`. The FinalizeButton window is eliminated."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOSSBjYs6dZk2a",
-      "commentId": 3886485734,
-      "isResolved": true,
-      "isOutdated": false,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 3886492500,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-08-29T11:34:03Z",
-          "editedAt": null,
-          "body": "The existing codebase pattern (e.g. step4a-draft-listing.ts) also relies on prompt instructions for title length and does not enforce server-side. Adding length validation + retry/repair logic is a separate concern that applies uniformly to the entire rewrite pipeline, not just this new function. Tracking for a follow-up. No change in this PR."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOSSBjYs6dZk2d",
-      "commentId": 3886485737,
-      "isResolved": true,
-      "isOutdated": false,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 3886492685,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-08-29T11:34:11Z",
-          "editedAt": null,
-          "body": "Fixed in ae01383: the pre-read query now destructures `existingError`, logs it, and returns 500 for a DB failure instead of falling through to a misleading 404."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOSSBjYs6dZk2g",
-      "commentId": 3886485741,
-      "isResolved": true,
-      "isOutdated": true,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 3886492564,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-08-29T11:34:07Z",
-          "editedAt": null,
-          "body": "Already fixed in 0feb659 (prior commit): `photosError` is now checked and throws, which lets Inngest retry instead of rewriting with no photos."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOSSBjYs6dZk2j",
-      "commentId": 3886485746,
-      "isResolved": true,
-      "isOutdated": true,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 3886493108,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-08-29T11:34:28Z",
-          "editedAt": null,
-          "body": "Fixed in ae01383: the catch block now logs the error with listingId so failures are surfaced. Platform rules remain advisory/non-blocking by design — a failed rules fetch should not prevent the rewrite."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOSSBjYs6dZk2l",
-      "commentId": 3886485748,
-      "isResolved": true,
-      "isOutdated": true,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 3886493198,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-08-29T11:34:32Z",
-          "editedAt": null,
-          "body": "Fixed in ae01383: updated the docstring to explicitly list `condition_notes` as one of the fields mutated."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOSSBjYs6dZk2n",
-      "commentId": 3886485751,
-      "isResolved": true,
-      "isOutdated": false,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 3886493297,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-08-29T11:34:36Z",
-          "editedAt": null,
-          "body": "Same concern as the earlier finding on this PR — see the response there. Following existing codebase pattern; adding length enforcement is a follow-up that applies to the whole rewrite pipeline. No change."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOSSBjYs6dZk2p",
-      "commentId": 3886485753,
-      "isResolved": true,
-      "isOutdated": false,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 3886493391,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-08-29T11:34:40Z",
-          "editedAt": null,
-          "body": "Already handled in 0feb659: the `onFailure` update now has `.eq('status', 'condition_gate')`, so an archived listing (status='archived') doesn't match and remains archived. An archived listing that triggers `runRewriteListing` (which throws at the final update because of `.neq('status','archived')`) causes the onFailure handler to fire, but the handler's CAS check prevents any state change."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOSSBjYs6dZk2q",
-      "commentId": 3886485754,
-      "isResolved": true,
-      "isOutdated": false,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 3886493732,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-08-29T11:34:54Z",
-          "editedAt": null,
-          "body": "The outbox pattern is the correct long-term fix but is a significant architectural addition out of scope for this PR. The current compensating revert covers inngest.send failures at the application level. A process-death window between the DB update and inngest.send is a known limitation of this pattern; the practical impact is limited because: (1) listing stays in condition_gate (status not changed), (2) a pod restart would result in the user seeing the panel still and re-submitting. The stuck-confirmed=true case is edge-only. Tracking as a follow-up. No change."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOSSBjYs6dZk2t",
-      "commentId": 3886485757,
-      "isResolved": true,
-      "isOutdated": false,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 3886493836,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-08-29T11:34:58Z",
-          "editedAt": null,
-          "body": "Same concern as the earlier title-length findings — see responses there. No change in this PR."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOSSBjYs6dZqPu",
-      "commentId": 3886518331,
-      "isResolved": true,
-      "isOutdated": false,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 3886521451,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-08-29T11:48:49Z",
-          "editedAt": null,
-          "body": "Declining — this has been addressed twice in previous review rounds (see anthropicreviewbot threads and the type-evidence reply). `event` in `onFailure` is `FailureEventPayload<ListingConditionConfirmedEvent>` per `inngest/types.d.ts@4.18.1`, not the original event. The original triggering event is nested at `event.data.event`. The main function body uses `event.data` because it receives the original event directly — two different handler signatures with different `event` shapes. Path `event.data.event.data.listingId` is correct."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOSSBjYs6dZqPv",
-      "commentId": 3886518333,
-      "isResolved": true,
-      "isOutdated": false,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 3886521792,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-08-29T11:49:02Z",
-          "editedAt": null,
-          "body": "Declining as out-of-scope. This race exists because condition-reassessment runs async while the listing stays `in_loop`. The fix would require either (a) an intermediate 'pending-condition-gate' status set synchronously at photo-confirmation, or (b) blocking the photos-confirmed event until reassessment completes — both are architectural changes that go beyond this PR. The PR narrows the finalization window significantly: status flips to `condition_gate` as soon as reassessment completes (seconds), vs. the previous design where it was never gated. The zero-row warn added in 550d6d2 also makes the race visible in logs when it occurs. This is a valid future improvement and will be filed as a follow-up issue."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOSSBjYs6dZqPw",
-      "commentId": 3886518334,
-      "isResolved": true,
-      "isOutdated": false,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 3886521825,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-08-29T11:49:03Z",
-          "editedAt": null,
-          "body": "Declining — same as prior codexreviewbot round. The existing codebase (`step4a-draft-listing.ts`) follows the same pattern: title limits are prompting constraints, not post-hoc enforcement. Adding validation here but not in step4a creates inconsistency. Platform-level enforcement (truncation/error at post time) is the existing design. Filed as a follow-up improvement."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOSSBjYs6dZqPx",
-      "commentId": 3886518335,
-      "isResolved": true,
-      "isOutdated": false,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 3886522090,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-08-29T11:49:12Z",
-          "editedAt": null,
-          "body": "Fixed in 2489c1f. `confirm-condition` now logs `updateError` with listing ID context (`console.error`) and returns a sanitized user-facing message ('Failed to save condition. Please try again.') instead of the raw DB error text."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOSSBjYs6dZqPz",
-      "commentId": 3886518338,
-      "isResolved": true,
-      "isOutdated": false,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 3886522127,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-08-29T11:49:13Z",
-          "editedAt": null,
-          "body": "Already fixed in 550d6d2 (previous commit in this review round). The `onFailure` handler now uses `.select('id').maybeSingle()` and checks both the error (`console.error`) and whether the row was matched (`console.warn` on zero rows). This finding was addressed before this re-review was posted — the bot may have reviewed a stale diff."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOSSBjYs6dZqP1",
-      "commentId": 3886518342,
-      "isResolved": true,
-      "isOutdated": false,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 3886522485,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-08-29T11:49:24Z",
-          "editedAt": null,
-          "body": "Fixed in 2489c1f. `loadApiKeys` now destructures `error` and throws with a contextual message on DB error or missing `user_id`. Inngest will now record an actionable failure name instead of silently calling `getUserApiKeys(null)`."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOSSBjYs6dZqP3",
-      "commentId": 3886518344,
-      "isResolved": true,
-      "isOutdated": false,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 3886522511,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-08-29T11:49:25Z",
-          "editedAt": null,
-          "body": "Declining — same as prior codexreviewbot round. An atomic JSON-merge at the DB level (e.g. `jsonb_set` or a versioned CAS) would be the correct fix, but it's a significant change that goes beyond this PR's scope (rewiring the rewrite function's DB write pattern). The current spread+patch approach is used elsewhere in the codebase. The race window is narrow (the rewrite runs as a short-lived Inngest step). Filed as a follow-up improvement."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOSSBjYs6dZvCP",
-      "commentId": 3886546579,
-      "isResolved": false,
-      "isOutdated": false,
-      "resolvedBy": null,
-      "replies": []
-    },
-    {
-      "threadId": "PRRT_kwDOSSBjYs6dZvCb",
-      "commentId": 3886546592,
-      "isResolved": false,
-      "isOutdated": false,
-      "resolvedBy": null,
-      "replies": []
-    }
-  ],
-  "reactions": [
-    {
-      "commentId": 3886485731,
-      "user": "joeblackwaslike",
-      "content": "+1",
-      "createdAt": "2026-08-29T11:34:00Z"
-    },
-    {
-      "commentId": 3886485734,
-      "user": "joeblackwaslike",
-      "content": "confused",
-      "createdAt": "2026-08-29T11:34:04Z"
-    },
-    {
-      "commentId": 3886485737,
-      "user": "joeblackwaslike",
-      "content": "+1",
-      "createdAt": "2026-08-29T11:34:13Z"
-    },
-    {
-      "commentId": 3886485741,
-      "user": "joeblackwaslike",
-      "content": "+1",
-      "createdAt": "2026-08-29T11:34:08Z"
-    },
-    {
-      "commentId": 3886485746,
-      "user": "joeblackwaslike",
-      "content": "+1",
-      "createdAt": "2026-08-29T11:34:29Z"
-    },
-    {
-      "commentId": 3886485748,
-      "user": "joeblackwaslike",
-      "content": "+1",
-      "createdAt": "2026-08-29T11:34:33Z"
-    },
-    {
-      "commentId": 3886485751,
-      "user": "joeblackwaslike",
-      "content": "confused",
-      "createdAt": "2026-08-29T11:34:37Z"
-    },
-    {
-      "commentId": 3886485753,
-      "user": "joeblackwaslike",
-      "content": "+1",
-      "createdAt": "2026-08-29T11:34:42Z"
-    },
-    {
-      "commentId": 3886485754,
-      "user": "joeblackwaslike",
-      "content": "confused",
-      "createdAt": "2026-08-29T11:34:55Z"
-    },
-    {
-      "commentId": 3886485757,
-      "user": "joeblackwaslike",
-      "content": "confused",
-      "createdAt": "2026-08-29T11:35:00Z"
-    },
-    {
-      "commentId": 3886518331,
-      "user": "joeblackwaslike",
-      "content": "-1",
-      "createdAt": "2026-08-29T11:49:33Z"
-    },
-    {
-      "commentId": 3886518333,
-      "user": "joeblackwaslike",
-      "content": "confused",
-      "createdAt": "2026-08-29T11:49:34Z"
-    },
-    {
-      "commentId": 3886518334,
-      "user": "joeblackwaslike",
-      "content": "confused",
-      "createdAt": "2026-08-29T11:49:34Z"
-    },
-    {
-      "commentId": 3886518335,
-      "user": "joeblackwaslike",
-      "content": "+1",
-      "createdAt": "2026-08-29T11:49:33Z"
-    },
-    {
-      "commentId": 3886518338,
-      "user": "joeblackwaslike",
-      "content": "-1",
-      "createdAt": "2026-08-29T11:49:33Z"
-    },
-    {
-      "commentId": 3886518342,
-      "user": "joeblackwaslike",
-      "content": "+1",
-      "createdAt": "2026-08-29T11:49:34Z"
-    },
-    {
-      "commentId": 3886518344,
-      "user": "joeblackwaslike",
-      "content": "confused",
-      "createdAt": "2026-08-29T11:49:34Z"
-    }
-  ]
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "ai-listings",
+	"pull": 57,
+	"provider": "openai",
+	"reviewer": "codex",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-11-07T23:28:23.961Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 5057971928,
+			"provider": "openai",
+			"submittedAt": "2026-08-29T11:29:29Z",
+			"headSha": "dd3cc89ef2bc9b07dbd792b1e8c0229e9f0764c8",
+			"baseSha": "473705ebedcb2a14c323fdbc629af146749c7d0a",
+			"mergeBase": "473705ebedcb2a14c323fdbc629af146749c7d0a",
+			"triggerAt": "2026-08-29T11:12:49Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "7fbfa5f381464be5bc452ad526d43223c87ecf9e",
+					"committedAt": "2026-08-29T10:36:56Z",
+					"files": [
+						{
+							"path": "src/components/dashboard/StatusBadge.tsx",
+							"ranges": [[29, 37]]
+						},
+						{
+							"path": "src/lib/inngest/client.ts",
+							"ranges": [[1, 5], [70, 87]]
+						},
+						{
+							"path": "src/lib/inngest/functions/condition-reassessment.ts",
+							"ranges": [[100, 111]]
+						},
+						{
+							"path": "src/types/listings.ts",
+							"ranges": [[3, 9]]
+						},
+						{
+							"path": "supabase/migrations/0022_condition_gate_status.sql",
+							"ranges": [[1, 7]]
+						}
+					]
+				},
+				{
+					"sha": "3b0d4dd23485e07c1ab632981f83a03f9427805a",
+					"committedAt": "2026-08-29T10:46:40Z",
+					"files": [
+						{
+							"path": "src/app/api/inngest/route.ts",
+							"ranges": [[11, 17], [27, 32]]
+						},
+						{
+							"path": "src/app/api/listings/[id]/confirm-condition/route.ts",
+							"ranges": [[1, 101]]
+						},
+						{
+							"path": "src/lib/inngest/functions/description-rewrite.ts",
+							"ranges": [[1, 22]]
+						},
+						{
+							"path": "src/lib/pipeline/rewrite-listing.ts",
+							"ranges": [[1, 250]]
+						}
+					]
+				},
+				{
+					"sha": "58cf593d9c5dfd808bc9cc52c6a29cac3acf2b8d",
+					"committedAt": "2026-08-29T10:51:10Z",
+					"files": [
+						{
+							"path": "src/components/dashboard/ListingCard.tsx",
+							"ranges": [
+								[135, 192],
+								[338, 344],
+								[396, 402],
+								[418, 429],
+								[437, 451]
+							]
+						},
+						{
+							"path": "src/components/workspace/ConditionReviewPanel.tsx",
+							"ranges": [[1, 115]]
+						}
+					]
+				},
+				{
+					"sha": "364b662358a4a68fbfa02074f8ea36d3bf019c8d",
+					"committedAt": "2026-08-29T10:53:29Z",
+					"files": [
+						{
+							"path": "src/lib/inngest/functions/description-rewrite.ts",
+							"ranges": [[10, 20]]
+						},
+						{
+							"path": "src/lib/pipeline/rewrite-listing.ts",
+							"ranges": [[42, 49], [132, 138], [198, 207], [220, 250]]
+						}
+					]
+				},
+				{
+					"sha": "025fd02aeff4eb165a097b0a3f4d1cf298d246bf",
+					"committedAt": "2026-08-29T10:58:22Z",
+					"files": [
+						{
+							"path": "src/app/listings/[id]/page.tsx",
+							"ranges": [[124, 136], [157, 163], [231, 237]]
+						},
+						{
+							"path": "src/components/workspace/FieldsPanel.tsx",
+							"ranges": [[11, 17], [455, 486]]
+						},
+						{
+							"path": "src/components/workspace/PipelineTimeline.tsx",
+							"ranges": [[71, 84]]
+						}
+					]
+				},
+				{
+					"sha": "cbafe96208504f78cf04de031fa90bac3d67ffb6",
+					"committedAt": "2026-08-29T11:09:48Z",
+					"files": [
+						{
+							"path": "src/app/api/listings/[id]/confirm-condition/route.ts",
+							"ranges": [[3, 13], [33, 103]]
+						},
+						{
+							"path": "src/components/workspace/ConditionReviewPanel.tsx",
+							"ranges": [[28, 66]]
+						},
+						{
+							"path": "src/lib/inngest/functions/condition-reassessment.ts",
+							"ranges": [[97, 111]]
+						},
+						{
+							"path": "src/lib/inngest/functions/description-rewrite.ts",
+							"ranges": [[1, 30], [34, 51]]
+						},
+						{
+							"path": "src/lib/pipeline/gate-messages.ts",
+							"ranges": [[170, 174]]
+						},
+						{
+							"path": "src/lib/pipeline/rewrite-listing.ts",
+							"ranges": [[61, 75]]
+						},
+						{
+							"path": "supabase/migrations/0036_condition_gate_status.sql",
+							"ranges": [[1, 4]]
+						}
+					]
+				},
+				{
+					"sha": "dd3cc89ef2bc9b07dbd792b1e8c0229e9f0764c8",
+					"committedAt": "2026-08-29T11:12:49Z",
+					"files": [
+						{
+							"path": "src/lib/inngest/functions/description-rewrite.ts",
+							"ranges": [[43, 49]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r0:c3886485731:0",
+					"roundIndex": 0,
+					"reviewId": 5057971928,
+					"source": "inline",
+					"commentId": 3886485731,
+					"path": "src/lib/inngest/functions/condition-reassessment.ts",
+					"line": 106,
+					"severity": "P1",
+					"title": "Make reassessment's condition write and gate transition atomic",
+					"text": "🔴 **High**\n\n**Make reassessment's condition write and gate transition atomic**\n\n**Confidence: 88/100.** The condition reassessment writes the new condition in the preceding query while the listing remains `in_loop`, then performs this separate status update. During that interval, the FinalizeButton remains available (the PR explicitly uses `in_loop` as its availability gate), so a concurrently open workspace can finalize the listing with copy that predates the reassessed condition. Put `status: 'condition_gate'` in the original condition update and constrain that update with `.eq('status', 'in_loop')`; then require an affected row so the condition data and lock transition commit together."
+				},
+				{
+					"id": "r0:c3886485734:0",
+					"roundIndex": 0,
+					"reviewId": 5057971928,
+					"source": "inline",
+					"commentId": 3886485734,
+					"path": "src/lib/pipeline/rewrite-listing.ts",
+					"line": 186,
+					"severity": "P2",
+					"title": "Title length limits are only prompts",
+					"text": "🟡 **Medium**\n\n**Title length limits are only prompts**\n\n`RewriteOutput` models unvalidated LLM output, but neither the tool schema nor code after `runStructured` enforces the stated 80-character eBay/canonical and 50-character Poshmark title invariants. A longer model response is written directly to `platform_fields`, which can leave copy invalid for the target platform and fail later publication validation. Encode the limits in the output schema where possible and validate the returned values before the database update (with a regression test for oversized output)."
+				},
+				{
+					"id": "r0:c3886485737:0",
+					"roundIndex": 0,
+					"reviewId": 5057971928,
+					"source": "inline",
+					"commentId": 3886485737,
+					"path": "src/app/api/listings/[id]/confirm-condition/route.ts",
+					"line": 52,
+					"severity": "P2",
+					"title": "Do not turn listing-read failures into a 404",
+					"text": "🟡 **Medium**\n\n**Do not turn listing-read failures into a 404**\n\nThis discards the query error and treats every failure as `!existing`, returning “Listing not found.” A transient database/network failure is therefore neither logged nor distinguishable to the user from a nonexistent listing, so they cannot take the appropriate action (retry). Handle and log the query error before the not-found branch, then return a retryable 500 response.\n\n*Suggested fix:*\n\n```suggestion\n  const { data: existing, error: existingError } = await supabase\n    .from('listings')\n    .select('condition, condition_notes, condition_confirmed')\n    .eq('id', id)\n    .eq('user_id', user.id)\n    .maybeSingle()\n\n  if (existingError) {\n    console.error(`confirm-condition: failed to load listing ${id}:`, existingError)\n    return Response.json(\n      { error: 'Unable to load the listing. Please try again.' },\n      { status: 500 }\n    )\n  }\n```"
+				},
+				{
+					"id": "r0:c3886485741:0",
+					"roundIndex": 0,
+					"reviewId": 5057971928,
+					"source": "inline",
+					"commentId": 3886485741,
+					"path": "src/lib/pipeline/rewrite-listing.ts",
+					"line": 72,
+					"severity": "P1",
+					"title": "Fail the rewrite when studio-photo loading fails",
+					"text": "🔴 **High**\n\n**Fail the rewrite when studio-photo loading fails**\n\nThe photos query has no error handling, so a database failure is silently converted into an empty photo list by `(photos ?? [])`. The rewrite then succeeds and advances to `in_loop` using copy generated without the studio photos that this gate is specifically intended to incorporate. Capture `photosError` and throw with the listing ID so Inngest retries instead of finalizing an incomplete rewrite.\n\n*Suggested fix:*\n\n```suggestion\n  const { data: photos, error: photosError } = await supabase\n    .from('photos')\n    .select('processed_url')\n    .eq('listing_id', listingId)\n    .eq('type', 'studio')\n    .not('processed_url', 'is', null)\n    .limit(20)\n\n  if (photosError) {\n    throw new Error(\n      `rewrite-listing: failed to load studio photos for listing ${listingId} -- ${photosError.message}`\n    )\n  }\n```"
+				},
+				{
+					"id": "r0:c3886485746:0",
+					"roundIndex": 0,
+					"reviewId": 5057971928,
+					"source": "inline",
+					"commentId": 3886485746,
+					"path": "src/lib/pipeline/rewrite-listing.ts",
+					"line": 89,
+					"severity": "P2",
+					"title": "Do not silently omit platform rules after arbitrary failures",
+					"text": "🟡 **Medium**\n\n**Do not silently omit platform rules after arbitrary failures**\n\nThis broad catch suppresses every exception from fetching or processing platform rules—including database/network failures and unexpected implementation errors—and continues to produce copy without the user’s platform policies. The user receives no indication that their rules were ignored, while the function returns success. Let the error propagate so the rewrite is retried, or, if rules are genuinely optional, log the failure with `listingId` and return an explicit warning that can be surfaced to the user rather than silently generating noncompliant copy."
+				},
+				{
+					"id": "r0:c3886485748:0",
+					"roundIndex": 0,
+					"reviewId": 5057971928,
+					"source": "inline",
+					"commentId": 3886485748,
+					"path": "src/lib/pipeline/rewrite-listing.ts",
+					"line": 38,
+					"severity": "P3",
+					"title": "Document the condition-notes mutation accurately",
+					"text": "🟢 **Low**\n\n**Document the condition-notes mutation accurately**\n\nThis comment says the function patches only title/description, but the update below also writes `condition_notes: rewrite.condition_notes`. That makes the preservation guarantee misleading: condition notes are regenerated rather than retained. Update the comment to explicitly list title, description, condition notes, and the platform title/description fields as the only mutations."
+				},
+				{
+					"id": "r0:c3886485751:0",
+					"roundIndex": 0,
+					"reviewId": 5057971928,
+					"source": "inline",
+					"commentId": 3886485751,
+					"path": "src/lib/pipeline/rewrite-listing.ts",
+					"line": 192,
+					"severity": "P2",
+					"title": "Enforce platform title length limits before persisting",
+					"text": "🟡 **Medium**\n\n**Enforce platform title length limits before persisting**\n\nThe 80/50-character limits are only natural-language instructions in the prompt and `description` metadata; this schema supplies no `maxLength`, and there is no post-response validation. A model response exceeding those limits is written directly to canonical/platform fields, violating the stated platform constraints and potentially leaving the listing unpublishable. Add deterministic length validation (and fail/retry or repair the response) before the database update; schema `maxLength` can be added as an additional guard but should not be the only enforcement."
+				},
+				{
+					"id": "r0:c3886485753:0",
+					"roundIndex": 0,
+					"reviewId": 5057971928,
+					"source": "inline",
+					"commentId": 3886485753,
+					"path": "src/lib/inngest/functions/description-rewrite.ts",
+					"line": 26,
+					"severity": "P2",
+					"title": "Do not revive archived listings from the failure handler",
+					"text": "🟡 **Medium**\n\n**Do not revive archived listings from the failure handler**\n\n`runRewriteListing` intentionally throws when the listing is archived, which eventually invokes this handler. This update is scoped only by `id`, so that failure path changes an archived listing back to `condition_gate` and marks it unconfirmed/blocked. The archive state is thereby undone precisely in the case the zero-row guard is meant to protect.\n\nConstrain this compensation update to the expected in-flight state (at least `status = 'condition_gate'`, and ideally the matching confirmed submission), and add an integration test that archives a listing during a rewrite and verifies exhausted retries leave it archived. Test priority: 8/10; this prevents an async retry from reviving a user-archived listing."
+				},
+				{
+					"id": "r0:c3886485754:0",
+					"roundIndex": 0,
+					"reviewId": 5057971928,
+					"source": "inline",
+					"commentId": 3886485754,
+					"path": "src/app/api/listings/[id]/confirm-condition/route.ts",
+					"line": 93,
+					"severity": "P2",
+					"title": "Make condition confirmation and event publication durable",
+					"text": "🟡 **Medium**\n\n**Make condition confirmation and event publication durable**\n\nThe database confirmation is committed before the Inngest event is published. If the request process terminates after the update succeeds but before/during `inngest.send`, neither the catch-based compensation nor a rewrite event is guaranteed to run. The listing is then left in `condition_gate` with `condition_confirmed=true`, which makes the panel show the non-actionable “Rewriting copy” state indefinitely. Use a transactional outbox (written with the confirmation) and a dispatcher/recovery worker, or otherwise persist a dispatch-pending state that can be retried safely."
+				},
+				{
+					"id": "r0:c3886485757:0",
+					"roundIndex": 0,
+					"reviewId": 5057971928,
+					"source": "inline",
+					"commentId": 3886485757,
+					"path": "src/lib/pipeline/rewrite-listing.ts",
+					"line": 237,
+					"severity": "P2",
+					"title": "Validate generated titles before persisting them",
+					"text": "🟡 **Medium**\n\n**Validate generated titles before persisting them**\n\nThe prompt requests 80/80/50-character title limits, but the structured-output schema and persistence path impose no length validation. Model instructions are not an enforcement boundary, so an overlong eBay or Poshmark title can be stored and later fail platform validation (or make the listing non-publishable). Validate the three title lengths after `runStructured` (or add `maxLength` constraints to the schema plus a server-side backstop) and throw/retry or otherwise handle invalid output before this update."
+				}
+			]
+		},
+		{
+			"index": 1,
+			"reviewId": 5058008656,
+			"provider": "openai",
+			"submittedAt": "2026-08-29T11:46:57Z",
+			"headSha": "ae01383d9e4dcf1053b6727d5ae0327190c76338",
+			"baseSha": "dd3cc89ef2bc9b07dbd792b1e8c0229e9f0764c8",
+			"mergeBase": "dd3cc89ef2bc9b07dbd792b1e8c0229e9f0764c8",
+			"triggerAt": "2026-08-29T11:33:36Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "0feb65928ccb61b9ddf53aa75df03063b8a8b73c",
+					"committedAt": "2026-08-29T11:25:31Z",
+					"files": [
+						{
+							"path": "src/app/api/listings/[id]/confirm-condition/route.ts",
+							"ranges": [[71, 77]]
+						},
+						{
+							"path": "src/app/listings/[id]/page.tsx",
+							"ranges": [[124, 130]]
+						},
+						{
+							"path": "src/lib/inngest/functions/condition-reassessment.ts",
+							"ranges": [[99, 112]]
+						},
+						{
+							"path": "src/lib/inngest/functions/description-rewrite.ts",
+							"ranges": [[24, 30], [40, 53]]
+						},
+						{
+							"path": "src/lib/pipeline/rewrite-listing.ts",
+							"ranges": [[63, 80]]
+						}
+					]
+				},
+				{
+					"sha": "ae01383d9e4dcf1053b6727d5ae0327190c76338",
+					"committedAt": "2026-08-29T11:33:36Z",
+					"files": [
+						{
+							"path": "src/app/api/listings/[id]/confirm-condition/route.ts",
+							"ranges": [[48, 64]]
+						},
+						{
+							"path": "src/lib/inngest/functions/condition-reassessment.ts",
+							"ranges": [[91, 107]]
+						},
+						{
+							"path": "src/lib/pipeline/rewrite-listing.ts",
+							"ranges": [[35, 43], [91, 98]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r1:c3886518331:0",
+					"roundIndex": 1,
+					"reviewId": 5058008656,
+					"source": "inline",
+					"commentId": 3886518331,
+					"path": "src/lib/inngest/functions/description-rewrite.ts",
+					"line": 15,
+					"severity": "P1",
+					"title": "Failure handler reads the listing ID from the wrong event shape",
+					"text": "🔴 **High**\n\n**Failure handler reads the listing ID from the wrong event shape**\n\nThe rewrite handler itself reads the original event at `event.data`, but this failure handler dereferences `event.data.event.data`. On exhausted retries, `listingId` is therefore absent and the handler returns without clearing `condition_confirmed` or marking the listing blocked, leaving the workspace indefinitely in its rewrite-holding state.\n\n*Suggested fix:*\n\n```suggestion\n      const listingId = (event as unknown as ListingConditionConfirmedEvent).data.listingId\n```"
+				},
+				{
+					"id": "r1:c3886518333:0",
+					"roundIndex": 1,
+					"reviewId": 5058008656,
+					"source": "inline",
+					"commentId": 3886518333,
+					"path": "src/lib/inngest/functions/condition-reassessment.ts",
+					"line": 100,
+					"severity": "P1",
+					"title": "The gate is entered too late to reliably prevent stale finalization",
+					"text": "🔴 **High**\n\n**The gate is entered too late to reliably prevent stale finalization**\n\nReassessment is asynchronous while the listing remains `in_loop`. A user can finalize after studio photos are confirmed but before this update runs. Once finalization changes the status, this predicate affects zero rows without an error, and the function returns `{ ok: true }`; the listing can then complete with pre-reassessment copy and never show the condition gate. Move the transition out of `in_loop` to the photo-confirmation boundary (before asynchronous reassessment), or introduce a pending state that disables finalization during reassessment."
+				},
+				{
+					"id": "r1:c3886518334:0",
+					"roundIndex": 1,
+					"reviewId": 5058008656,
+					"source": "inline",
+					"commentId": 3886518334,
+					"path": "src/lib/pipeline/rewrite-listing.ts",
+					"line": 161,
+					"severity": "P2",
+					"title": "Title limits are only requested from the model, not enforced",
+					"text": "🟡 **Medium**\n\n**Title limits are only requested from the model, not enforced**\n\nThe model schema accepts unrestricted strings, and the returned titles are persisted unchanged. A response exceeding the stated 80-character canonical/eBay or 50-character Poshmark limit will therefore be stored and can be rejected or altered later by the marketplace integration. Validate the three lengths after `runStructured` (retry/fail the rewrite or apply a deliberate truncation policy) before the database update."
+				},
+				{
+					"id": "r1:c3886518335:0",
+					"roundIndex": 1,
+					"reviewId": 5058008656,
+					"source": "inline",
+					"commentId": 3886518335,
+					"path": "src/app/api/listings/[id]/confirm-condition/route.ts",
+					"line": 79,
+					"severity": "P2",
+					"title": "Database update errors are exposed to the client but not logged",
+					"text": "🟡 **Medium**\n\n**Database update errors are exposed to the client but not logged**\n\n`updateError` is returned directly to the browser without a server-side log. This makes production failures difficult to correlate with the listing/user, while also exposing raw database/provider text rather than a clear actionable message. Log the contextual error and return a stable user-facing retry message. Hidden errors include database connectivity failures, permission failures, and constraint violations.\n\n*Suggested fix:*\n\n```suggestion\n  if (updateError) {\n    console.error(`confirm-condition: failed to confirm condition for listing ${id}:`, updateError)\n    return Response.json(\n      { error: 'Unable to confirm the condition. Please try again.' },\n      { status: 500 }\n    )\n  }\n```"
+				},
+				{
+					"id": "r1:c3886518338:0",
+					"roundIndex": 1,
+					"reviewId": 5058008656,
+					"source": "inline",
+					"commentId": 3886518338,
+					"path": "src/lib/inngest/functions/description-rewrite.ts",
+					"line": 26,
+					"severity": "P1",
+					"title": "Failure remediation silently discards a failed database update",
+					"text": "🔴 **High**\n\n**Failure remediation silently discards a failed database update**\n\nThe exhausted-retry handler awaits its recovery update but discards both the database error and whether a row matched. If that update fails while the listing is still `condition_gate`, it remains `condition_confirmed=true`; the panel then permanently shows “Rewriting copy” even though no further rewrite will run. This is a silent failure at the only recovery point. Capture and log the result with `listingId`, and propagate/report a failed remediation rather than treating the handler as successful. The hidden failures include transient database outages, authorization failures, and write/constraint failures."
+				},
+				{
+					"id": "r1:c3886518342:0",
+					"roundIndex": 1,
+					"reviewId": 5058008656,
+					"source": "inline",
+					"commentId": 3886518342,
+					"path": "src/lib/pipeline/rewrite-listing.ts",
+					"line": 32,
+					"severity": "P2",
+					"title": "API-key lookup masks its database failure",
+					"text": "🟡 **Medium**\n\n**API-key lookup masks its database failure**\n\nThis query discards its `error` result and falls through to `getUserApiKeys(listingRow?.user_id ?? null)`. A failed or missing listing lookup is therefore indistinguishable from a legitimate null user ID, obscuring the real cause and potentially invoking the key resolver with the wrong scope. Check `error` and `listingRow.user_id`, then throw a contextual error so the Inngest failure path records an actionable rewrite failure. Hidden errors include a missing/deleted listing, database connectivity errors, and authorization failures."
+				},
+				{
+					"id": "r1:c3886518344:0",
+					"roundIndex": 1,
+					"reviewId": 5058008656,
+					"source": "inline",
+					"commentId": 3886518344,
+					"path": "src/lib/pipeline/rewrite-listing.ts",
+					"line": 243,
+					"severity": "P2",
+					"title": "Stale platform fields can overwrite concurrent updates",
+					"text": "🟡 **Medium**\n\n**Stale platform fields can overwrite concurrent updates**\n\n`existingPf` is read before the vision/model call and this later update replaces the entire `platform_fields` JSON value from that stale snapshot. If another workflow or user changes any platform field while the rewrite is running (for example, price, category, specifics, or a marketplace listing ID), this write discards that change. The nearby comments promise that existing keys survive, but that is only true for values present at the initial read. Use an optimistic revision/CAS guard, or merge the title/description patch against the latest database value atomically, rather than writing the old full object."
+				},
+				{
+					"id": "r1:body:0",
+					"roundIndex": 1,
+					"reviewId": 5058008656,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Condition-gate state transitions have no automated coverage",
+					"text": "Condition-gate state transitions have no automated coverage"
+				},
+				{
+					"id": "r1:body:1",
+					"roundIndex": 1,
+					"reviewId": 5058008656,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "The new condition-gate workflow has no automated regression coverage",
+					"text": "The new condition-gate workflow has no automated regression coverage"
+				}
+			]
+		},
+		{
+			"index": 2,
+			"reviewId": 5058034749,
+			"provider": "openai",
+			"submittedAt": "2026-08-29T12:04:11Z",
+			"headSha": "2489c1f341951d140d6ad1aecacf75caf27ba0a2",
+			"baseSha": "ae01383d9e4dcf1053b6727d5ae0327190c76338",
+			"mergeBase": "ae01383d9e4dcf1053b6727d5ae0327190c76338",
+			"triggerAt": "2026-08-29T11:48:34Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "550d6d2e1be5182d60fc2c06f02f7f5d9e764eb2",
+					"committedAt": "2026-08-29T11:45:27Z",
+					"files": [
+						{
+							"path": "src/app/api/listings/[id]/confirm-condition/route.ts",
+							"ranges": [[100, 106]]
+						},
+						{
+							"path": "src/lib/inngest/functions/condition-reassessment.ts",
+							"ranges": [[94, 112]]
+						},
+						{
+							"path": "src/lib/inngest/functions/description-rewrite.ts",
+							"ranges": [[15, 21], [25, 37], [47, 65]]
+						}
+					]
+				},
+				{
+					"sha": "2489c1f341951d140d6ad1aecacf75caf27ba0a2",
+					"committedAt": "2026-08-29T11:48:34Z",
+					"files": [
+						{
+							"path": "src/app/api/listings/[id]/confirm-condition/route.ts",
+							"ranges": [[79, 88]]
+						},
+						{
+							"path": "src/lib/pipeline/rewrite-listing.ts",
+							"ranges": [[25, 38]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r2:c3886546579:0",
+					"roundIndex": 2,
+					"reviewId": 5058034749,
+					"source": "inline",
+					"commentId": 3886546579,
+					"path": "src/components/workspace/ConditionReviewPanel.tsx",
+					"line": 62,
+					"severity": "P2",
+					"title": "Refresh the losing tab after a confirmation conflict",
+					"text": "🟡 **Medium**\n\n**Refresh the losing tab after a confirmation conflict**\n\nThe API deliberately returns 409 when another tab has already confirmed the condition, but this branch leaves the stale form on screen and displays an error. In the normal duplicate-submit case the listing is still `condition_gate` with `condition_confirmed=true`, so the API's current “not in condition_gate” message is misleading and the user has no in-app path to the intended “Rewriting copy” state other than manually reloading. Refresh on 409 so the UI fetches the winning submission's state.\n\n*Suggested fix:*\n\n```suggestion\n      } else if (res.status === 409) {\n        router.refresh()\n      } else {\n        const body = await res.json().catch(() => ({}))\n        setError((body as { error?: string }).error ?? 'Failed to submit — please try again')\n      }\n```"
+				},
+				{
+					"id": "r2:c3886546592:0",
+					"roundIndex": 2,
+					"reviewId": 5058034749,
+					"source": "inline",
+					"commentId": 3886546592,
+					"path": "src/lib/pipeline/rewrite-listing.ts",
+					"line": 242,
+					"severity": "P2",
+					"title": "Rewrite can overwrite concurrent platform metadata",
+					"text": "🟡 **Medium**\n\n**Rewrite can overwrite concurrent platform metadata**\n\n`platform_fields` is read before photo conversion, rule loading, and the model call, then this full snapshot is written back. Any update to platform metadata during that interval (for example, a price, item-specific, or marketplace-ID update) is lost when this stale object replaces the JSON column. The nearby preservation comment is only true relative to the initial snapshot. Patch just the title/description paths in the database, or use an optimistic version/transaction and re-merge the latest value before writing."
+				},
+				{
+					"id": "r2:c3886546592:1",
+					"roundIndex": 2,
+					"reviewId": 5058034749,
+					"source": "inline",
+					"commentId": 3886546592,
+					"path": "src/lib/pipeline/rewrite-listing.ts",
+					"line": 242,
+					"severity": "P3",
+					"title": "`platform_fields` is read before the remote Claude call and then the entire JSON value is replaced here. Any concurrent update to pricing, category, specifics, or another platform field during that call is silently lost, despite the intended preservation of those fields. Use an optimistic version/CAS with a reload-and-remerge retry, or perform a database-side JSONB patch of only the generated title/description paths.",
+					"text": "`platform_fields` is read before the remote Claude call and then the entire JSON value is replaced here. Any concurrent update to pricing, category, specifics, or another platform field during that call is silently lost, despite the intended preservation of those fields. Use an optimistic version/CAS with a reload-and-remerge retry, or perform a database-side JSONB patch of only the generated title/description paths."
+				},
+				{
+					"id": "r2:body:0",
+					"roundIndex": 2,
+					"reviewId": 5058034749,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "No automated coverage for the condition-gate workflow",
+					"text": "No automated coverage for the condition-gate workflow"
+				},
+				{
+					"id": "r2:body:1",
+					"roundIndex": 2,
+					"reviewId": 5058034749,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "No automated coverage for the new event-driven gate",
+					"text": "No automated coverage for the new event-driven gate"
+				},
+				{
+					"id": "r2:body:2",
+					"roundIndex": 2,
+					"reviewId": 5058034749,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Add automated coverage for the new asynchronous gate workflow",
+					"text": "Add automated coverage for the new asynchronous gate workflow"
+				},
+				{
+					"id": "r2:body:3",
+					"roundIndex": 2,
+					"reviewId": 5058034749,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Condition-gate flow lacks automated regression coverage",
+					"text": "Condition-gate flow lacks automated regression coverage"
+				},
+				{
+					"id": "r2:body:4",
+					"roundIndex": 2,
+					"reviewId": 5058034749,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P0",
+					"title": "No automated regression coverage for the condition-gate state machine",
+					"text": "No automated regression coverage for the condition-gate state machine"
+				},
+				{
+					"id": "r2:body:5",
+					"roundIndex": 2,
+					"reviewId": 5058034749,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P0",
+					"title": "No data-integrity test covers the copy rewrite contract",
+					"text": "No data-integrity test covers the copy rewrite contract"
+				}
+			]
+		}
+	],
+	"threads": [
+		{
+			"threadId": "PRRT_kwDOSSBjYs6dZk2X",
+			"commentId": 3886485731,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3886492400,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-29T11:33:58Z",
+					"editedAt": null,
+					"body": "Fixed in ae01383: the two separate writes are now a single atomic update — `{ condition, condition_notes, condition_confirmed: false, status: 'condition_gate' }` with `.eq('status', 'in_loop')`. The FinalizeButton window is eliminated."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6dZk2a",
+			"commentId": 3886485734,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3886492500,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-29T11:34:03Z",
+					"editedAt": null,
+					"body": "The existing codebase pattern (e.g. step4a-draft-listing.ts) also relies on prompt instructions for title length and does not enforce server-side. Adding length validation + retry/repair logic is a separate concern that applies uniformly to the entire rewrite pipeline, not just this new function. Tracking for a follow-up. No change in this PR."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6dZk2d",
+			"commentId": 3886485737,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3886492685,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-29T11:34:11Z",
+					"editedAt": null,
+					"body": "Fixed in ae01383: the pre-read query now destructures `existingError`, logs it, and returns 500 for a DB failure instead of falling through to a misleading 404."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6dZk2g",
+			"commentId": 3886485741,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3886492564,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-29T11:34:07Z",
+					"editedAt": null,
+					"body": "Already fixed in 0feb659 (prior commit): `photosError` is now checked and throws, which lets Inngest retry instead of rewriting with no photos."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6dZk2j",
+			"commentId": 3886485746,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3886493108,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-29T11:34:28Z",
+					"editedAt": null,
+					"body": "Fixed in ae01383: the catch block now logs the error with listingId so failures are surfaced. Platform rules remain advisory/non-blocking by design — a failed rules fetch should not prevent the rewrite."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6dZk2l",
+			"commentId": 3886485748,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3886493198,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-29T11:34:32Z",
+					"editedAt": null,
+					"body": "Fixed in ae01383: updated the docstring to explicitly list `condition_notes` as one of the fields mutated."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6dZk2n",
+			"commentId": 3886485751,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3886493297,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-29T11:34:36Z",
+					"editedAt": null,
+					"body": "Same concern as the earlier finding on this PR — see the response there. Following existing codebase pattern; adding length enforcement is a follow-up that applies to the whole rewrite pipeline. No change."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6dZk2p",
+			"commentId": 3886485753,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3886493391,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-29T11:34:40Z",
+					"editedAt": null,
+					"body": "Already handled in 0feb659: the `onFailure` update now has `.eq('status', 'condition_gate')`, so an archived listing (status='archived') doesn't match and remains archived. An archived listing that triggers `runRewriteListing` (which throws at the final update because of `.neq('status','archived')`) causes the onFailure handler to fire, but the handler's CAS check prevents any state change."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6dZk2q",
+			"commentId": 3886485754,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3886493732,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-29T11:34:54Z",
+					"editedAt": null,
+					"body": "The outbox pattern is the correct long-term fix but is a significant architectural addition out of scope for this PR. The current compensating revert covers inngest.send failures at the application level. A process-death window between the DB update and inngest.send is a known limitation of this pattern; the practical impact is limited because: (1) listing stays in condition_gate (status not changed), (2) a pod restart would result in the user seeing the panel still and re-submitting. The stuck-confirmed=true case is edge-only. Tracking as a follow-up. No change."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6dZk2t",
+			"commentId": 3886485757,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3886493836,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-29T11:34:58Z",
+					"editedAt": null,
+					"body": "Same concern as the earlier title-length findings — see responses there. No change in this PR."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6dZqPu",
+			"commentId": 3886518331,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3886521451,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-29T11:48:49Z",
+					"editedAt": null,
+					"body": "Declining — this has been addressed twice in previous review rounds (see anthropicreviewbot threads and the type-evidence reply). `event` in `onFailure` is `FailureEventPayload<ListingConditionConfirmedEvent>` per `inngest/types.d.ts@4.18.1`, not the original event. The original triggering event is nested at `event.data.event`. The main function body uses `event.data` because it receives the original event directly — two different handler signatures with different `event` shapes. Path `event.data.event.data.listingId` is correct."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6dZqPv",
+			"commentId": 3886518333,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3886521792,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-29T11:49:02Z",
+					"editedAt": null,
+					"body": "Declining as out-of-scope. This race exists because condition-reassessment runs async while the listing stays `in_loop`. The fix would require either (a) an intermediate 'pending-condition-gate' status set synchronously at photo-confirmation, or (b) blocking the photos-confirmed event until reassessment completes — both are architectural changes that go beyond this PR. The PR narrows the finalization window significantly: status flips to `condition_gate` as soon as reassessment completes (seconds), vs. the previous design where it was never gated. The zero-row warn added in 550d6d2 also makes the race visible in logs when it occurs. This is a valid future improvement and will be filed as a follow-up issue."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6dZqPw",
+			"commentId": 3886518334,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3886521825,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-29T11:49:03Z",
+					"editedAt": null,
+					"body": "Declining — same as prior codexreviewbot round. The existing codebase (`step4a-draft-listing.ts`) follows the same pattern: title limits are prompting constraints, not post-hoc enforcement. Adding validation here but not in step4a creates inconsistency. Platform-level enforcement (truncation/error at post time) is the existing design. Filed as a follow-up improvement."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6dZqPx",
+			"commentId": 3886518335,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3886522090,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-29T11:49:12Z",
+					"editedAt": null,
+					"body": "Fixed in 2489c1f. `confirm-condition` now logs `updateError` with listing ID context (`console.error`) and returns a sanitized user-facing message ('Failed to save condition. Please try again.') instead of the raw DB error text."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6dZqPz",
+			"commentId": 3886518338,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3886522127,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-29T11:49:13Z",
+					"editedAt": null,
+					"body": "Already fixed in 550d6d2 (previous commit in this review round). The `onFailure` handler now uses `.select('id').maybeSingle()` and checks both the error (`console.error`) and whether the row was matched (`console.warn` on zero rows). This finding was addressed before this re-review was posted — the bot may have reviewed a stale diff."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6dZqP1",
+			"commentId": 3886518342,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3886522485,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-29T11:49:24Z",
+					"editedAt": null,
+					"body": "Fixed in 2489c1f. `loadApiKeys` now destructures `error` and throws with a contextual message on DB error or missing `user_id`. Inngest will now record an actionable failure name instead of silently calling `getUserApiKeys(null)`."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6dZqP3",
+			"commentId": 3886518344,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3886522511,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-29T11:49:25Z",
+					"editedAt": null,
+					"body": "Declining — same as prior codexreviewbot round. An atomic JSON-merge at the DB level (e.g. `jsonb_set` or a versioned CAS) would be the correct fix, but it's a significant change that goes beyond this PR's scope (rewiring the rewrite function's DB write pattern). The current spread+patch approach is used elsewhere in the codebase. The race window is narrow (the rewrite runs as a short-lived Inngest step). Filed as a follow-up improvement."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6dZvCP",
+			"commentId": 3886546579,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6dZvCb",
+			"commentId": 3886546592,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		}
+	],
+	"reactions": [
+		{
+			"commentId": 3886485731,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-29T11:34:00Z"
+		},
+		{
+			"commentId": 3886485734,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-08-29T11:34:04Z"
+		},
+		{
+			"commentId": 3886485737,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-29T11:34:13Z"
+		},
+		{
+			"commentId": 3886485741,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-29T11:34:08Z"
+		},
+		{
+			"commentId": 3886485746,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-29T11:34:29Z"
+		},
+		{
+			"commentId": 3886485748,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-29T11:34:33Z"
+		},
+		{
+			"commentId": 3886485751,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-08-29T11:34:37Z"
+		},
+		{
+			"commentId": 3886485753,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-29T11:34:42Z"
+		},
+		{
+			"commentId": 3886485754,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-08-29T11:34:55Z"
+		},
+		{
+			"commentId": 3886485757,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-08-29T11:35:00Z"
+		},
+		{
+			"commentId": 3886518331,
+			"user": "joeblackwaslike",
+			"content": "-1",
+			"createdAt": "2026-08-29T11:49:33Z"
+		},
+		{
+			"commentId": 3886518333,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-08-29T11:49:34Z"
+		},
+		{
+			"commentId": 3886518334,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-08-29T11:49:34Z"
+		},
+		{
+			"commentId": 3886518335,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-29T11:49:33Z"
+		},
+		{
+			"commentId": 3886518338,
+			"user": "joeblackwaslike",
+			"content": "-1",
+			"createdAt": "2026-08-29T11:49:33Z"
+		},
+		{
+			"commentId": 3886518342,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-29T11:49:34Z"
+		},
+		{
+			"commentId": 3886518344,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-08-29T11:49:34Z"
+		}
+	]
 }

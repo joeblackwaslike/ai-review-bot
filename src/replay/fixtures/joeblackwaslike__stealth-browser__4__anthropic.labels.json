@@ -1,121 +1,119 @@
 {
-  "fixtureId": "joeblackwaslike__stealth-browser__4__anthropic",
-  "provisional": true,
-  "labels": [
-    {
-      "claimId": "r0:c4461659351:0",
-      "label": "fixed",
-      "confidence": "high",
-      "evidence": [
-        "2026-11-03T23:54:18Z|FetchResult's solve fields are now a union, so `solveReason` exists only when `solve` is \"failed\", and app.ts narrows on `result.solve === \"failed\"` before reading it (cd7ec576). `tagSolveReason` now returns `SolveReasonError` (6ec8332d)."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r0:c4461659356:0",
-      "label": "fixed",
-      "confidence": "high",
-      "evidence": [
-        "2026-11-03T23:54:24Z|A failed fetch now keeps its class, message and cause code (e.g. `TypeError: fetch failed (ENOTFOUND)`), which appears in the submit error and as the last failure in the timeout error (17d39dc1). The redacted message reaches the `solve_failed` log as `err` via 343ac0ea."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r0:c4461659361:0",
-      "label": "fixed",
-      "confidence": "high",
-      "evidence": [
-        "2026-11-03T23:54:29Z|A 423 whose body isn't JSON now reports reason `unparseable`; a JSON body without a reason still reports `unknown`, and the test was updated (c4b6f891)."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r0:c4461659365:0",
-      "label": "fixed",
-      "confidence": "high",
-      "evidence": [
-        "2026-11-03T23:54:34Z|A failed solve now carries `solveError`, the error's class and message with the ws endpoint redacted, and app.ts logs it as `err` next to the fixed `reason` in `solve_failed` (343ac0ea). The reason vocabulary is unchanged."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r0:c4461659369:0",
-      "label": "fixed",
-      "confidence": "high",
-      "evidence": [
-        "2026-11-03T23:54:39Z|Fixed in 288b6017."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r0:c4461659388:0",
-      "label": "fixed",
-      "confidence": "high",
-      "evidence": [
-        "2026-11-03T23:54:45Z|test/submit-token.test.ts runs the real `page.evaluate` callbacks against the sorry fixture in happy-dom and covers a created response field, an existing one, no enclosing form (no submit), and a navigation that never arrives (`navigation_failed`) (dd0d6a0d). Breaking the token fill in browser.ts fails these tests while browser.test.ts stays green."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r0:c4461659390:0",
-      "label": "fixed",
-      "confidence": "high",
-      "evidence": [
-        "2026-11-03T23:54:50Z|A `status: 1` reply with an empty `request` now fails `isApiReply`, so an empty task id fails the submit as `provider_error` and an empty token is retried like any malformed poll until the deadline (fe94bd6f). Both cases have tests."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r1:body:0",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r1:body:1",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r1:body:2",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r1:body:3",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r1:body:4",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r1:body:5",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r1:body:6",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    }
-  ],
-  "repeatPairs": [],
-  "negativePairs": [],
-  "allowedSuppression": []
+	"fixtureId": "joeblackwaslike__stealth-browser__4__anthropic",
+	"provisional": true,
+	"labels": [
+		{
+			"claimId": "r0:c4461659351:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-11-03T23:54:18Z|FetchResult's solve fields are now a union, so `solveReason` exists only when `solve` is \"failed\", and app.ts narrows on `result.solve === \"failed\"` before reading it (cd7ec576). `tagSolveReason` now returns `SolveReasonError` (6ec8332d)."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4461659356:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-11-03T23:54:24Z|A failed fetch now keeps its class, message and cause code (e.g. `TypeError: fetch failed (ENOTFOUND)`), which appears in the submit error and as the last failure in the timeout error (17d39dc1). The redacted message reaches the `solve_failed` log as `err` via 343ac0ea."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4461659361:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-11-03T23:54:29Z|A 423 whose body isn't JSON now reports reason `unparseable`; a JSON body without a reason still reports `unknown`, and the test was updated (c4b6f891)."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4461659365:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-11-03T23:54:34Z|A failed solve now carries `solveError`, the error's class and message with the ws endpoint redacted, and app.ts logs it as `err` next to the fixed `reason` in `solve_failed` (343ac0ea). The reason vocabulary is unchanged."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4461659369:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": ["2026-11-03T23:54:39Z|Fixed in 288b6017."],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4461659388:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-11-03T23:54:45Z|test/submit-token.test.ts runs the real `page.evaluate` callbacks against the sorry fixture in happy-dom and covers a created response field, an existing one, no enclosing form (no submit), and a navigation that never arrives (`navigation_failed`) (dd0d6a0d). Breaking the token fill in browser.ts fails these tests while browser.test.ts stays green."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4461659390:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-11-03T23:54:50Z|A `status: 1` reply with an empty `request` now fails `isApiReply`, so an empty task id fails the submit as `provider_error` and an empty token is retried like any malformed poll until the deadline (fe94bd6f). Both cases have tests."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:2",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:3",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:4",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:5",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:6",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		}
+	],
+	"repeatPairs": [],
+	"negativePairs": [],
+	"allowedSuppression": []
 }

@@ -1,1622 +1,959 @@
 {
-  "schemaVersion": 1,
-  "owner": "joeblackwaslike",
-  "repo": "ai-review-bot",
-  "pull": 89,
-  "provider": "anthropic",
-  "reviewer": "claude",
-  "author": "joeblackwaslike",
-  "recordedAt": "2026-11-07T23:36:32.073Z",
-  "rounds": [
-    {
-      "index": 0,
-      "reviewId": 5704371060,
-      "provider": "anthropic",
-      "submittedAt": "2026-10-29T20:16:56Z",
-      "headSha": "d49000bd7fba4ce25287396a8cb6b3cf2dccdac4",
-      "baseSha": "a7258c5d8a87e068c78b3f4c5ff31dfa486ea847",
-      "mergeBase": "a7258c5d8a87e068c78b3f4c5ff31dfa486ea847",
-      "triggerAt": "2026-10-29T20:11:28Z",
-      "approximate": false,
-      "commitsSince": [
-        {
-          "sha": "a4d59b002bafb6e636c0d08857f23324aa06c51b",
-          "committedAt": "2026-10-29T18:56:21Z",
-          "files": [
-            {
-              "path": "docs/superpowers/specs/2026-10-29-delta-scoping-warm-start-design.md",
-              "ranges": [
-                [
-                  1,
-                  138
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "190b3a62beffd2702b3820d66a305e4df51559f5",
-          "committedAt": "2026-10-29T18:59:36Z",
-          "files": [
-            {
-              "path": "docs/superpowers/specs/2026-10-29-delta-scoping-warm-start-design.md",
-              "ranges": [
-                [
-                  36,
-                  83
-                ],
-                [
-                  101,
-                  107
-                ],
-                [
-                  111,
-                  119
-                ],
-                [
-                  122,
-                  136
-                ],
-                [
-                  143,
-                  150
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "1fc90026f3ac496594587aebf556ae6256aea4dc",
-          "committedAt": "2026-10-29T19:02:13Z",
-          "files": [
-            {
-              "path": "docs/superpowers/specs/2026-10-29-delta-scoping-warm-start-design.md",
-              "ranges": [
-                [
-                  38,
-                  50
-                ],
-                [
-                  63,
-                  73
-                ],
-                [
-                  114,
-                  120
-                ],
-                [
-                  129,
-                  137
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "559702e23bdb05bff9ec6a4d481f2660df72b924",
-          "committedAt": "2026-10-29T19:03:26Z",
-          "files": [
-            {
-              "path": "docs/superpowers/plans/2026-10-29-delta-scoping-warm-start.md",
-              "ranges": [
-                [
-                  1,
-                  140
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "348b65092d3d402eb7f33353caf9d63c80c3d2e9",
-          "committedAt": "2026-10-29T19:05:40Z",
-          "files": [
-            {
-              "path": "src/ledger/github.test.ts",
-              "ranges": [
-                [
-                  1,
-                  6
-                ],
-                [
-                  37,
-                  43
-                ],
-                [
-                  145,
-                  151
-                ],
-                [
-                  320,
-                  360
-                ]
-              ]
-            },
-            {
-              "path": "src/ledger/github.ts",
-              "ranges": [
-                [
-                  22,
-                  28
-                ],
-                [
-                  280,
-                  284
-                ]
-              ]
-            },
-            {
-              "path": "src/ledger/live.test.ts",
-              "ranges": [
-                [
-                  1,
-                  6
-                ],
-                [
-                  46,
-                  52
-                ],
-                [
-                  60,
-                  112
-                ],
-                [
-                  124,
-                  134
-                ]
-              ]
-            },
-            {
-              "path": "src/ledger/live.ts",
-              "ranges": [
-                [
-                  10,
-                  16
-                ],
-                [
-                  35,
-                  53
-                ]
-              ]
-            },
-            {
-              "path": "src/testing.ts",
-              "ranges": [
-                [
-                  256,
-                  283
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "f39d4059dfa3fe618d7859f9ee09bb0d98db0be7",
-          "committedAt": "2026-10-29T19:08:08Z",
-          "files": [
-            {
-              "path": "src/prompt.ts",
-              "ranges": [
-                [
-                  76,
-                  82
-                ]
-              ]
-            },
-            {
-              "path": "src/review.ts",
-              "ranges": [
-                [
-                  1488,
-                  1500
-                ]
-              ]
-            },
-            {
-              "path": "src/triage.test.ts",
-              "ranges": [
-                [
-                  8,
-                  20
-                ],
-                [
-                  254,
-                  391
-                ]
-              ]
-            },
-            {
-              "path": "src/triage.ts",
-              "ranges": [
-                [
-                  2,
-                  8
-                ],
-                [
-                  58,
-                  64
-                ],
-                [
-                  69,
-                  77
-                ],
-                [
-                  96,
-                  157
-                ],
-                [
-                  169,
-                  175
-                ],
-                [
-                  189,
-                  201
-                ],
-                [
-                  207,
-                  233
-                ],
-                [
-                  237,
-                  249
-                ],
-                [
-                  259,
-                  264
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "fef40b3220e8c0c7468b7b8e0eda5b1c41e95f7a",
-          "committedAt": "2026-10-29T19:09:34Z",
-          "files": [
-            {
-              "path": "src/triage.test.ts",
-              "ranges": [
-                [
-                  282,
-                  291
-                ],
-                [
-                  370,
-                  378
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "c9e8cdc13727bf863d8413e9899d1f8447674e44",
-          "committedAt": "2026-10-29T19:13:33Z",
-          "files": [
-            {
-              "path": "src/baseline.test.ts",
-              "ranges": [
-                [
-                  1,
-                  205
-                ]
-              ]
-            },
-            {
-              "path": "src/baseline.ts",
-              "ranges": [
-                [
-                  1,
-                  87
-                ]
-              ]
-            },
-            {
-              "path": "src/review-state.test.ts",
-              "ranges": [
-                [
-                  49,
-                  80
-                ],
-                [
-                  87,
-                  93
-                ],
-                [
-                  121,
-                  127
-                ],
-                [
-                  143,
-                  149
-                ],
-                [
-                  165,
-                  171
-                ],
-                [
-                  187,
-                  201
-                ],
-                [
-                  209,
-                  215
-                ],
-                [
-                  223,
-                  237
-                ],
-                [
-                  242,
-                  252
-                ]
-              ]
-            },
-            {
-              "path": "src/review-state.ts",
-              "ranges": [
-                [
-                  91,
-                  96
-                ],
-                [
-                  117,
-                  122
-                ],
-                [
-                  149,
-                  153
-                ]
-              ]
-            },
-            {
-              "path": "src/review.test.ts",
-              "ranges": [
-                [
-                  1911,
-                  1916
-                ],
-                [
-                  1942,
-                  1948
-                ],
-                [
-                  2229,
-                  2235
-                ],
-                [
-                  2327,
-                  2333
-                ],
-                [
-                  4599,
-                  4604
-                ]
-              ]
-            },
-            {
-              "path": "src/review.ts",
-              "ranges": [
-                [
-                  1457,
-                  1462
-                ]
-              ]
-            },
-            {
-              "path": "src/watch.ts",
-              "ranges": [
-                [
-                  166,
-                  171
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "c3ac4fc4e340244a0fd6e7885b22f5c4b3968e2a",
-          "committedAt": "2026-10-29T19:14:28Z",
-          "files": [
-            {
-              "path": "docs/superpowers/specs/2026-10-29-delta-scoping-warm-start-design.md",
-              "ranges": [
-                [
-                  43,
-                  49
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "97058e4f92d76b67abda73ee18d9aa9ca1771bfd",
-          "committedAt": "2026-10-29T19:16:15Z",
-          "files": [
-            {
-              "path": "src/baseline.test.ts",
-              "ranges": [
-                [
-                  31,
-                  38
-                ],
-                [
-                  116,
-                  122
-                ],
-                [
-                  128,
-                  134
-                ],
-                [
-                  138,
-                  200
-                ],
-                [
-                  229,
-                  235
-                ],
-                [
-                  242,
-                  248
-                ]
-              ]
-            },
-            {
-              "path": "src/baseline.ts",
-              "ranges": [
-                [
-                  44,
-                  64
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "12cc03af39f94f1b1a5872f173869797db61a4ea",
-          "committedAt": "2026-10-29T19:25:40Z",
-          "files": [
-            {
-              "path": "src/review.test.ts",
-              "ranges": [
-                [
-                  33,
-                  39
-                ],
-                [
-                  66,
-                  72
-                ],
-                [
-                  81,
-                  93
-                ],
-                [
-                  4334,
-                  4346
-                ],
-                [
-                  5050,
-                  5605
-                ]
-              ]
-            },
-            {
-              "path": "src/review.ts",
-              "ranges": [
-                [
-                  2,
-                  8
-                ],
-                [
-                  26,
-                  36
-                ],
-                [
-                  133,
-                  139
-                ],
-                [
-                  837,
-                  859
-                ],
-                [
-                  880,
-                  886
-                ],
-                [
-                  965,
-                  971
-                ],
-                [
-                  1412,
-                  1445
-                ],
-                [
-                  1466,
-                  1525
-                ],
-                [
-                  1536,
-                  1653
-                ],
-                [
-                  2177,
-                  2183
-                ],
-                [
-                  2186,
-                  2192
-                ],
-                [
-                  2247,
-                  2253
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "69bf3599cca27e233d0981bbef41b91650ab946f",
-          "committedAt": "2026-10-29T19:30:33Z",
-          "files": [
-            {
-              "path": "docs/superpowers/specs/2026-10-29-delta-scoping-warm-start-design.md",
-              "ranges": [
-                [
-                  67,
-                  73
-                ],
-                [
-                  104,
-                  110
-                ],
-                [
-                  150,
-                  157
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "b26a7c44ce2c5483ba05e3d94bbe83ddbc53e414",
-          "committedAt": "2026-10-29T19:33:31Z",
-          "files": [
-            {
-              "path": "src/review.test.ts",
-              "ranges": [
-                [
-                  5337,
-                  5343
-                ],
-                [
-                  5346,
-                  5352
-                ],
-                [
-                  5356,
-                  5362
-                ],
-                [
-                  5374,
-                  5380
-                ],
-                [
-                  5383,
-                  5506
-                ],
-                [
-                  5657,
-                  5663
-                ],
-                [
-                  5673,
-                  5679
-                ],
-                [
-                  5688,
-                  5706
-                ]
-              ]
-            },
-            {
-              "path": "src/review.ts",
-              "ranges": [
-                [
-                  846,
-                  853
-                ],
-                [
-                  1562,
-                  1571
-                ],
-                [
-                  1607,
-                  1616
-                ],
-                [
-                  2229,
-                  2235
-                ]
-              ]
-            },
-            {
-              "path": "src/triage.test.ts",
-              "ranges": [
-                [
-                  323,
-                  335
-                ],
-                [
-                  341,
-                  405
-                ]
-              ]
-            },
-            {
-              "path": "src/triage.ts",
-              "ranges": [
-                [
-                  99,
-                  145
-                ],
-                [
-                  148,
-                  155
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "1638569f648b77fba55803b40f23f526b0bcdd13",
-          "committedAt": "2026-10-29T19:33:56Z",
-          "files": [
-            {
-              "path": "docs/superpowers/specs/2026-10-29-delta-scoping-warm-start-design.md",
-              "ranges": [
-                [
-                  67,
-                  73
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "e677789cd53312e5f552a1a09f1a7cc043f12881",
-          "committedAt": "2026-10-29T19:36:55Z",
-          "files": [
-            {
-              "path": "CLAUDE.md",
-              "ranges": [
-                [
-                  86,
-                  92
-                ]
-              ]
-            },
-            {
-              "path": "src/watch.test.ts",
-              "ranges": [
-                [
-                  3,
-                  8
-                ],
-                [
-                  226,
-                  232
-                ],
-                [
-                  248,
-                  256
-                ],
-                [
-                  358,
-                  363
-                ],
-                [
-                  466,
-                  477
-                ],
-                [
-                  481,
-                  500
-                ],
-                [
-                  602,
-                  608
-                ]
-              ]
-            },
-            {
-              "path": "src/watch.ts",
-              "ranges": [
-                [
-                  2,
-                  13
-                ],
-                [
-                  34,
-                  39
-                ],
-                [
-                  111,
-                  116
-                ],
-                [
-                  145,
-                  159
-                ],
-                [
-                  200,
-                  205
-                ],
-                [
-                  218,
-                  224
-                ],
-                [
-                  227,
-                  232
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "2c53c5c425e1e91fffc469f9c05e942682129e7c",
-          "committedAt": "2026-10-29T19:40:53Z",
-          "files": [
-            {
-              "path": "CLAUDE.md",
-              "ranges": [
-                [
-                  73,
-                  79
-                ]
-              ]
-            },
-            {
-              "path": "docs/post-mortem-re-review-memory.md",
-              "ranges": [
-                [
-                  110,
-                  122
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "dd7ae9ee8a2ddb88ea5f7f38dd38b891d9d28f60",
-          "committedAt": "2026-10-29T19:51:02Z",
-          "files": [
-            {
-              "path": "docs/superpowers/specs/2026-10-29-delta-scoping-warm-start-design.md",
-              "ranges": [
-                [
-                  49,
-                  55
-                ],
-                [
-                  69,
-                  82
-                ],
-                [
-                  123,
-                  129
-                ],
-                [
-                  139,
-                  145
-                ],
-                [
-                  158,
-                  166
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "7df5d12cd5ce0241abe0269efed3d58f45d081e2",
-          "committedAt": "2026-10-29T19:54:23Z",
-          "files": [
-            {
-              "path": "src/review.test.ts",
-              "ranges": [
-                [
-                  5116,
-                  5122
-                ],
-                [
-                  5142,
-                  5148
-                ],
-                [
-                  5266,
-                  5272
-                ],
-                [
-                  5708,
-                  5922
-                ]
-              ]
-            },
-            {
-              "path": "src/review.ts",
-              "ranges": [
-                [
-                  1288,
-                  1301
-                ],
-                [
-                  1481,
-                  1521
-                ],
-                [
-                  1630,
-                  1656
-                ],
-                [
-                  1992,
-                  2003
-                ],
-                [
-                  2035,
-                  2041
-                ],
-                [
-                  2098,
-                  2108
-                ],
-                [
-                  2118,
-                  2132
-                ],
-                [
-                  2202,
-                  2208
-                ]
-              ]
-            },
-            {
-              "path": "src/triage.test.ts",
-              "ranges": [
-                [
-                  278,
-                  294
-                ],
-                [
-                  300,
-                  305
-                ]
-              ]
-            },
-            {
-              "path": "src/triage.ts",
-              "ranges": [
-                [
-                  58,
-                  63
-                ],
-                [
-                  68,
-                  74
-                ],
-                [
-                  227,
-                  238
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "d49000bd7fba4ce25287396a8cb6b3cf2dccdac4",
-          "committedAt": "2026-10-29T20:11:28Z",
-          "files": [
-            {
-              "path": "docs/superpowers/specs/2026-10-29-delta-scoping-warm-start-design.md",
-              "ranges": [
-                [
-                  38,
-                  44
-                ]
-              ]
-            }
-          ]
-        }
-      ],
-      "claims": [
-        {
-          "id": "r0:c4417425453:0",
-          "roundIndex": 0,
-          "reviewId": 5704371060,
-          "source": "inline",
-          "commentId": 4417425453,
-          "path": "docs/post-mortem-re-review-memory.md",
-          "line": 119,
-          "severity": "P3",
-          "title": "Docs say KV is trusted only when it holds a newer sha, but the code never compares shas",
-          "text": "🟢 **P3**\n\n**Docs say KV is trusted only when it holds a newer sha, but the code never compares shas**\n\nThis bullet says KV is still trusted when it holds a newer sha. In `buildReview`, any valid KV state becomes the baseline (`state = await loadReviewState(...)`). The code never compares the KV sha with the sha in the latest own review on GitHub. The spec says KV wins whenever it is present, and its Known limits section lists the stale-KV case explicitly. A maintainer reading this doc would expect a newer-sha guard that does not exist. Reword it to say KV wins whenever it holds a valid state."
-        },
-        {
-          "id": "r0:c4417425453:1",
-          "roundIndex": 0,
-          "reviewId": 5704371060,
-          "source": "inline",
-          "commentId": 4417425453,
-          "path": "docs/post-mortem-re-review-memory.md",
-          "line": 119,
-          "severity": "P3",
-          "title": "This bullet says KV \"is still trusted when it holds a newer sha\". In `buildReview`, any valid KV state becomes the baseline. The sha is never compared with the latest own review's `ai-review:sha` marker. The spec says the same: \"KV wins in this sprint\". A maintainer reading this line would assume KV is dropped when GitHub has a newer review. In practice a stale KV state still wins, for example after local no-KV `watch` runs posted newer reviews. Reword to \"KV is still trusted whenever it holds a state\".",
-          "text": "This bullet says KV \"is still trusted when it holds a newer sha\". In `buildReview`, any valid KV state becomes the baseline. The sha is never compared with the latest own review's `ai-review:sha` marker. The spec says the same: \"KV wins in this sprint\". A maintainer reading this line would assume KV is dropped when GitHub has a newer review. In practice a stale KV state still wins, for example after local no-KV `watch` runs posted newer reviews. Reword to \"KV is still trusted whenever it holds a state\"."
-        },
-        {
-          "id": "r0:c4417425460:0",
-          "roundIndex": 0,
-          "reviewId": 5704371060,
-          "source": "inline",
-          "commentId": 4417425460,
-          "path": "src/triage.ts",
-          "line": 241,
-          "severity": "P3",
-          "title": "Non-ahead compare warning omits the PR, shas and status",
-          "text": "🟢 **P3**\n\n**Non-ahead compare warning omits the PR, shas and status**\n\nThe throw branch logs `owner`, `repo` and `basehead`, but this branch logs only `status`. When `fetchDeltaMeta` returns `null` for a `diverged` or `behind` compare, the warning cannot be tied to a PR or sha pair. `buildReview` then labels this case `compare failed`, so the log never says that the compare succeeded and was rejected. Include the same identifying fields as the catch branch. That makes the fallback to a full review traceable.\n\n*Suggested fix:*\n\n```suggestion\n\t\tconsole.warn(\"compare status is not ahead; delta unusable\", {\n\t\t\towner,\n\t\t\trepo,\n\t\t\tbasehead: `${baseSha}...${headSha}`,\n```"
-        },
-        {
-          "id": "r0:c4417425466:0",
-          "roundIndex": 0,
-          "reviewId": 5704371060,
-          "source": "inline",
-          "commentId": 4417425466,
-          "path": "src/triage.ts",
-          "line": 127,
-          "severity": "P2",
-          "title": "Path-less revalidation can resolve a finding from truncated patches",
-          "text": "🟡 **P2**\n\n**Path-less revalidation can resolve a finding from truncated patches**\n\nThe stated invariant is that a path-less finding is sent only when all PR patches fit under the 60,000-char cap. `pathlessFits` is computed from `blockOf`, which applies `trimPatch` (24,000-char default) to each file. A PR with two 100k-char patches counts as roughly 48k, so `pathlessFits` is true. The model then sees about a quarter of each file and is asked whether the whole-PR general finding is fixed. A wrong `resolved` answer drops a carried P0/P1 general finding, which can then flip the verdict to APPROVE. The condition should also require that no patch was trimmed, i.e. that `trimPatch(p) === p` for every file counted in `used` and `restChars`."
-        },
-        {
-          "id": "r0:body:0",
-          "roundIndex": 0,
-          "reviewId": 5704371060,
-          "source": "body",
-          "commentId": null,
-          "path": null,
-          "line": null,
-          "severity": "P3",
-          "title": "Post-mortem says KV is trusted only when it holds a newer sha, but the code has no such comparison",
-          "text": "Post-mortem says KV is trusted only when it holds a newer sha, but the code has no such comparison"
-        },
-        {
-          "id": "r0:body:1",
-          "roundIndex": 0,
-          "reviewId": 5704371060,
-          "source": "body",
-          "commentId": null,
-          "path": null,
-          "line": null,
-          "severity": "P3",
-          "title": "Spec Design table describes a different `deriveBaseline` signature and return type than the implementation",
-          "text": "Spec Design table describes a different `deriveBaseline` signature and return type than the implementation"
-        }
-      ]
-    },
-    {
-      "index": 1,
-      "reviewId": 5704380739,
-      "provider": "anthropic",
-      "submittedAt": "2026-10-29T20:17:44Z",
-      "headSha": "d49000bd7fba4ce25287396a8cb6b3cf2dccdac4",
-      "baseSha": "d49000bd7fba4ce25287396a8cb6b3cf2dccdac4",
-      "mergeBase": "d49000bd7fba4ce25287396a8cb6b3cf2dccdac4",
-      "triggerAt": null,
-      "approximate": true,
-      "commitsSince": [],
-      "claims": [
-        {
-          "id": "r1:c4417432513:0",
-          "roundIndex": 1,
-          "reviewId": 5704380739,
-          "source": "inline",
-          "commentId": 4417432513,
-          "path": "src/triage.ts",
-          "line": 242,
-          "severity": "P3",
-          "title": "Non-ahead compare warning cannot be tied to a PR or commit pair",
-          "text": "🟢 **P3**\n\n**Non-ahead compare warning cannot be tied to a PR or commit pair**\n\nThe throw path logs `owner`, `repo` and `basehead`, but this warning logs only `status`. A `diverged` or `behind` result is the signal that history was rewritten and the round fell back to a full review. A log line with just `status: \"diverged\"` can't be matched to a PR or sha pair when several PRs run in one process, such as a hosted deployment or a multi-PR watcher. `buildReview`'s `fullScope` warning does add `prLog` and the reason, so this is a small gap. Adding the same fields as the catch branch would make it consistent."
-        },
-        {
-          "id": "r1:c4417432521:0",
-          "roundIndex": 1,
-          "reviewId": 5704380739,
-          "source": "inline",
-          "commentId": 4417432521,
-          "path": "docs/post-mortem-re-review-memory.md",
-          "line": 119,
-          "severity": "P3",
-          "title": "Post-mortem says KV is trusted only when it holds a newer sha, but the code trusts any KV state",
-          "text": "🟢 **P3**\n\n**Post-mortem says KV is trusted only when it holds a newer sha, but the code trusts any KV state**\n\nThe bullet says KV is still trusted when it holds a newer sha. In `buildReview`, any valid KV state wins over the derived baseline, with no comparison against the GitHub marker sha (`state` is set from `loadReviewState`, and `deriveBaseline` runs only when `!state`). The spec's Known limits section says the same: KV is trusted over GitHub even when its review POST failed. The bullet's example scope strings also omit the `scope: ` prefix that the footer actually renders. Reword it to say that KV wins whenever present and that the footer reads `scope: full (first review)`."
-        },
-        {
-          "id": "r1:c4417432528:0",
-          "roundIndex": 1,
-          "reviewId": 5704380739,
-          "source": "inline",
-          "commentId": 4417432528,
-          "path": "src/triage.ts",
-          "line": 118,
-          "severity": "P2",
-          "title": "Carried path-bearing finding can never be revalidated once its file leaves the PR diff",
-          "text": "🟡 **P2**\n\n**Carried path-bearing finding can never be revalidated once its file leaves the PR diff**\n\n`revalidateFindings` skips any carried finding whose `path` is not in `files` (the PR's current file list). Suppose a file is reverted or dropped from the PR in a round that falls back to FULL, for example because the compare failed or the baseline was incomplete. The finding is never sent to the model and stays in `survivingPrior`. Because it has a `path`, `blocksVerdict` treats it as blocking at every severity, so it keeps forcing REQUEST_CHANGES. Delta triage could have seen the revert in the compare diff, but a fallback round has no delta. The only way out is a reply on the thread, which relies on the ledger recognising the thread as settled. The spec's Known limits cover only path-less findings on over-cap PRs, not this case.\n\nA finding whose file is no longer in the PR diff could be sent with a note such as \"file no longer changed by this PR\", or treated as resolved. Either needs a test."
-        },
-        {
-          "id": "r1:body:0",
-          "roundIndex": 1,
-          "reviewId": 5704380739,
-          "source": "body",
-          "commentId": null,
-          "path": null,
-          "line": null,
-          "severity": "P3",
-          "title": "Spec 'Design' table describes a stale deriveBaseline signature",
-          "text": "Spec 'Design' table describes a stale deriveBaseline signature"
-        },
-        {
-          "id": "r1:body:1",
-          "roundIndex": 1,
-          "reviewId": 5704380739,
-          "source": "body",
-          "commentId": null,
-          "path": null,
-          "line": null,
-          "severity": "P3",
-          "title": "Spec and plan describe a `mode` argument on `triageReReview` that this PR does not add",
-          "text": "Spec and plan describe a `mode` argument on `triageReReview` that this PR does not add"
-        }
-      ]
-    },
-    {
-      "index": 2,
-      "reviewId": 5704695552,
-      "provider": "anthropic",
-      "submittedAt": "2026-10-29T20:43:36Z",
-      "headSha": "11538570f9f294fc8ca7bae03acafa9a34bf77e0",
-      "baseSha": "d49000bd7fba4ce25287396a8cb6b3cf2dccdac4",
-      "mergeBase": "d49000bd7fba4ce25287396a8cb6b3cf2dccdac4",
-      "triggerAt": "2026-10-29T20:19:50Z",
-      "approximate": false,
-      "commitsSince": [
-        {
-          "sha": "706f5de895f7b31dceee9f4141d76eccde496d87",
-          "committedAt": "2026-10-29T20:19:50Z",
-          "files": [
-            {
-              "path": "src/review.test.ts",
-              "ranges": [
-                [
-                  5792,
-                  5822
-                ]
-              ]
-            },
-            {
-              "path": "src/triage.test.ts",
-              "ranges": [
-                [
-                  293,
-                  310
-                ],
-                [
-                  330,
-                  337
-                ],
-                [
-                  427,
-                  481
-                ]
-              ]
-            },
-            {
-              "path": "src/triage.ts",
-              "ranges": [
-                [
-                  96,
-                  109
-                ],
-                [
-                  113,
-                  128
-                ],
-                [
-                  136,
-                  154
-                ],
-                [
-                  177,
-                  188
-                ],
-                [
-                  257,
-                  271
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "dd2fcfa2e7c1c021773c281a20d19aeac589bdf3",
-          "committedAt": "2026-10-29T20:19:50Z",
-          "files": [
-            {
-              "path": "src/baseline.test.ts",
-              "ranges": [
-                [
-                  95,
-                  117
-                ]
-              ]
-            },
-            {
-              "path": "src/baseline.ts",
-              "ranges": [
-                [
-                  8,
-                  14
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "11538570f9f294fc8ca7bae03acafa9a34bf77e0",
-          "committedAt": "2026-10-29T20:19:50Z",
-          "files": [
-            {
-              "path": "docs/post-mortem-re-review-memory.md",
-              "ranges": [
-                [
-                  116,
-                  122
-                ]
-              ]
-            },
-            {
-              "path": "docs/superpowers/specs/2026-10-29-delta-scoping-warm-start-design.md",
-              "ranges": [
-                [
-                  67,
-                  73
-                ],
-                [
-                  120,
-                  130
-                ]
-              ]
-            }
-          ]
-        }
-      ],
-      "claims": [
-        {
-          "id": "r2:c4417676584:0",
-          "roundIndex": 2,
-          "reviewId": 5704695552,
-          "source": "inline",
-          "commentId": 4417676584,
-          "path": "src/triage.ts",
-          "line": 128,
-          "severity": "P2",
-          "title": "Moot resolution treats a renamed file as removed from the PR",
-          "text": "🟡 **P2**\n\n**Moot resolution treats a renamed file as removed from the PR**\n\n`moot` is computed from `byName`, which is keyed only by the current `filename`. If the file named by a carried finding is renamed inside the PR after that review, the old path no longer appears in `files`. The finding is then resolved without a model call, even though the code and the defect now live under the new name. Because the answer never reaches the model, a P0/P1 carried finding can stop blocking the verdict on a pure rename. Consider also keying on `previous_filename` and sending those findings with the renamed file's patch, if `DeltaFile` carries that field. Otherwise, restrict moot resolution to cases where the path is not the previous name of any listed file."
-        },
-        {
-          "id": "r2:body:0",
-          "roundIndex": 2,
-          "reviewId": 5704695552,
-          "source": "body",
-          "commentId": null,
-          "path": null,
-          "line": null,
-          "severity": "P3",
-          "title": "Spec and plan describe a `mode` argument on `triageReReview` that this PR does not add",
-          "text": "Spec and plan describe a `mode` argument on `triageReReview` that this PR does not add"
-        }
-      ]
-    },
-    {
-      "index": 3,
-      "reviewId": 5704864315,
-      "provider": "anthropic",
-      "submittedAt": "2026-10-29T20:57:31Z",
-      "headSha": "053a2067ebdd01dfb388be024ef08dbbabf6c860",
-      "baseSha": "11538570f9f294fc8ca7bae03acafa9a34bf77e0",
-      "mergeBase": "11538570f9f294fc8ca7bae03acafa9a34bf77e0",
-      "triggerAt": "2026-10-29T20:47:38Z",
-      "approximate": false,
-      "commitsSince": [
-        {
-          "sha": "053a2067ebdd01dfb388be024ef08dbbabf6c860",
-          "committedAt": "2026-10-29T20:47:38Z",
-          "files": [
-            {
-              "path": "src/triage.test.ts",
-              "ranges": [
-                [
-                  340,
-                  363
-                ]
-              ]
-            },
-            {
-              "path": "src/triage.ts",
-              "ranges": [
-                [
-                  113,
-                  129
-                ],
-                [
-                  202,
-                  209
-                ],
-                [
-                  235,
-                  251
-                ]
-              ]
-            }
-          ]
-        }
-      ],
-      "claims": [
-        {
-          "id": "r3:c4417813634:0",
-          "roundIndex": 3,
-          "reviewId": 5704864315,
-          "source": "inline",
-          "commentId": 4417813634,
-          "path": "src/triage.ts",
-          "line": 116,
-          "severity": "P2",
-          "title": "Renamed file's old path is excluded from moot resolution but never mapped for revalidation",
-          "text": "🟡 **P2**\n\n**Renamed file's old path is excluded from moot resolution but never mapped for revalidation**\n\n`presentPaths` now stops a finding with a pre-rename path from being auto-resolved. `byName` is still keyed only by the new `filename`, and the new test says the finding \"stays carried\". It looks like such a finding is neither resolved as moot nor looked up by its old path to get the renamed file's patch. If revalidation selects patches through `byName.get(f.path)`, the finding is carried unchanged on every later run. If it is P0/P1, it blocks the verdict until the author removes it. Consider also registering `previousFilename` in `byName` (or resolving the carried path to the renamed file before revalidation) so the finding can be rechecked against the new patch."
-        },
-        {
-          "id": "r3:c4417813634:1",
-          "roundIndex": 3,
-          "reviewId": 5704864315,
-          "source": "inline",
-          "commentId": 4417813634,
-          "path": "src/triage.ts",
-          "line": 116,
-          "severity": "P0",
-          "title": "The rename fix stops `old.ts` from being auto-resolved as moot, but `byName` is still keyed only on the new `filename`. A carried finding whose `path` is the pre-rename name therefore never matches a file block, and the new test expects `[]` with no model call. The finding stays carried indefinitely, and a carried P0/P1 finding blocks the verdict. The same dead-end was fixed for removed files and now reappears for renames. Look carried findings up through `previousFilename` as well, so they are revalidated against the renamed file's patch, or map the finding's path to the new filename.",
-          "text": "The rename fix stops `old.ts` from being auto-resolved as moot, but `byName` is still keyed only on the new `filename`. A carried finding whose `path` is the pre-rename name therefore never matches a file block, and the new test expects `[]` with no model call. The finding stays carried indefinitely, and a carried P0/P1 finding blocks the verdict. The same dead-end was fixed for removed files and now reappears for renames. Look carried findings up through `previousFilename` as well, so they are revalidated against the renamed file's patch, or map the finding's path to the new filename."
-        },
-        {
-          "id": "r3:body:0",
-          "roundIndex": 3,
-          "reviewId": 5704864315,
-          "source": "body",
-          "commentId": null,
-          "path": null,
-          "line": null,
-          "severity": "P3",
-          "title": "Spec and plan describe a `mode` argument on `triageReReview` that this PR does not add",
-          "text": "Spec and plan describe a `mode` argument on `triageReReview` that this PR does not add"
-        }
-      ]
-    },
-    {
-      "index": 4,
-      "reviewId": 5704970994,
-      "provider": "anthropic",
-      "submittedAt": "2026-10-29T21:07:16Z",
-      "headSha": "84165737067ab08617b1c50508ec21f7986038ed",
-      "baseSha": "053a2067ebdd01dfb388be024ef08dbbabf6c860",
-      "mergeBase": "053a2067ebdd01dfb388be024ef08dbbabf6c860",
-      "triggerAt": "2026-10-29T20:57:32Z",
-      "approximate": false,
-      "commitsSince": [
-        {
-          "sha": "e10f5a49626a93160642681d79b379daf79baf3f",
-          "committedAt": "2026-10-29T20:48:47Z",
-          "files": [
-            {
-              "path": "src/triage.test.ts",
-              "ranges": [
-                [
-                  340,
-                  345
-                ],
-                [
-                  444,
-                  494
-                ]
-              ]
-            },
-            {
-              "path": "src/triage.ts",
-              "ranges": [
-                [
-                  96,
-                  106
-                ],
-                [
-                  112,
-                  143
-                ],
-                [
-                  152,
-                  158
-                ],
-                [
-                  203,
-                  210
-                ],
-                [
-                  237,
-                  250
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "fb824b07fc20e40df3c0910bc11114e850c0346e",
-          "committedAt": "2026-10-29T20:48:48Z",
-          "files": [
-            {
-              "path": "src/review.test.ts",
-              "ranges": [
-                [
-                  5817,
-                  5911
-                ]
-              ]
-            },
-            {
-              "path": "src/review.ts",
-              "ranges": [
-                [
-                  49,
-                  56
-                ],
-                [
-                  1242,
-                  1254
-                ],
-                [
-                  2192,
-                  2198
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "674c403d3b61a406dbac515208ed97cb9567740a",
-          "committedAt": "2026-10-29T20:48:48Z",
-          "files": [
-            {
-              "path": "docs/post-mortem-re-review-memory.md",
-              "ranges": [
-                [
-                  116,
-                  122
-                ]
-              ]
-            },
-            {
-              "path": "docs/superpowers/plans/2026-10-29-delta-scoping-warm-start.md",
-              "ranges": [
-                [
-                  56,
-                  65
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "84165737067ab08617b1c50508ec21f7986038ed",
-          "committedAt": "2026-10-29T20:57:32Z",
-          "files": [
-            {
-              "path": "docs/superpowers/specs/2026-10-29-delta-scoping-warm-start-design.md",
-              "ranges": [
-                [
-                  67,
-                  73
-                ]
-              ]
-            }
-          ]
-        }
-      ],
-      "claims": []
-    }
-  ],
-  "threads": [
-    {
-      "threadId": "PRRT_kwDOSM5cU86xvKTx",
-      "commentId": 4417425453,
-      "isResolved": true,
-      "isOutdated": true,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 4417627206,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-10-29T20:38:22Z",
-          "editedAt": null,
-          "body": "Fixed in 1153857. The line now says a valid KV state wins whenever one exists, matching the code and the spec's known limits."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOSM5cU86xvKT1",
-      "commentId": 4417425460,
-      "isResolved": true,
-      "isOutdated": true,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 4417626146,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-10-29T20:38:15Z",
-          "editedAt": null,
-          "body": "Fixed in 706f5de. The not-ahead warning now logs owner, repo, basehead and status, and says the compare succeeded but was rejected as not ahead."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOSM5cU86xvKT6",
-      "commentId": 4417425466,
-      "isResolved": true,
-      "isOutdated": true,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 4417625634,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-10-29T20:38:11Z",
-          "editedAt": null,
-          "body": "Fixed in 706f5de. A path-less finding is now sent for revalidation only when no PR patch was cut by the per-file limit and the total still fits the 60,000-character cap. Test added with two oversized patches: the finding is not sent and stays carried."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOSM5cU86xvLXt",
-      "commentId": 4417432513,
-      "isResolved": true,
-      "isOutdated": true,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 4417846569,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-10-29T21:01:15Z",
-          "editedAt": null,
-          "body": "Already fixed in 706f5de: the not-ahead warning now logs owner, repo, basehead and status, and says the compare succeeded but was rejected."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOSM5cU86xvLXw",
-      "commentId": 4417432521,
-      "isResolved": true,
-      "isOutdated": true,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 4417847130,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-10-29T21:01:18Z",
-          "editedAt": null,
-          "body": "Fixed in 1153857 (KV wins whenever a valid state exists) and 674c403 (example footer strings now carry the scope: prefix)."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOSM5cU86xvLXz",
-      "commentId": 4417432528,
-      "isResolved": true,
-      "isOutdated": true,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 4417847636,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-10-29T21:01:22Z",
-          "editedAt": null,
-          "body": "Fixed in 706f5de: a carried finding whose file left the PR is resolved without a model call. The rename follow-up to this change is in e10f5a4."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOSM5cU86xvvfa",
-      "commentId": 4417676584,
-      "isResolved": true,
-      "isOutdated": true,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 4417848183,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-10-29T21:01:25Z",
-          "editedAt": null,
-          "body": "Fixed in e10f5a4. A path counts as gone only when it is neither a current filename nor any file's previous_filename. A finding on a renamed file's old path is revalidated against the renamed file's patch (headed with the old name). Test added; a model error resolves nothing."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOSM5cU86xwD_A",
-      "commentId": 4417813634,
-      "isResolved": true,
-      "isOutdated": true,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 4417848765,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-10-29T21:01:29Z",
-          "editedAt": null,
-          "body": "Fixed in e10f5a4. byName now registers each file's previous_filename, so the old path resolves to the renamed file and the finding is rechecked against the new patch instead of staying carried. This supersedes the carry-only change in 053a206."
-        }
-      ]
-    }
-  ],
-  "reactions": [
-    {
-      "commentId": 4417425453,
-      "user": "joeblackwaslike",
-      "content": "+1",
-      "createdAt": "2026-10-29T20:38:32Z"
-    },
-    {
-      "commentId": 4417425460,
-      "user": "joeblackwaslike",
-      "content": "+1",
-      "createdAt": "2026-10-29T20:38:29Z"
-    },
-    {
-      "commentId": 4417425466,
-      "user": "joeblackwaslike",
-      "content": "+1",
-      "createdAt": "2026-10-29T20:38:28Z"
-    },
-    {
-      "commentId": 4417432513,
-      "user": "joeblackwaslike",
-      "content": "+1",
-      "createdAt": "2026-10-29T21:01:32Z"
-    },
-    {
-      "commentId": 4417432521,
-      "user": "joeblackwaslike",
-      "content": "+1",
-      "createdAt": "2026-10-29T21:01:34Z"
-    },
-    {
-      "commentId": 4417432528,
-      "user": "joeblackwaslike",
-      "content": "+1",
-      "createdAt": "2026-10-29T21:01:35Z"
-    },
-    {
-      "commentId": 4417676584,
-      "user": "joeblackwaslike",
-      "content": "+1",
-      "createdAt": "2026-10-29T21:01:37Z"
-    },
-    {
-      "commentId": 4417813634,
-      "user": "joeblackwaslike",
-      "content": "+1",
-      "createdAt": "2026-10-29T21:01:38Z"
-    }
-  ]
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "ai-review-bot",
+	"pull": 89,
+	"provider": "anthropic",
+	"reviewer": "claude",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-11-07T23:36:32.073Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 5704371060,
+			"provider": "anthropic",
+			"submittedAt": "2026-10-29T20:16:56Z",
+			"headSha": "d49000bd7fba4ce25287396a8cb6b3cf2dccdac4",
+			"baseSha": "a7258c5d8a87e068c78b3f4c5ff31dfa486ea847",
+			"mergeBase": "a7258c5d8a87e068c78b3f4c5ff31dfa486ea847",
+			"triggerAt": "2026-10-29T20:11:28Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "a4d59b002bafb6e636c0d08857f23324aa06c51b",
+					"committedAt": "2026-10-29T18:56:21Z",
+					"files": [
+						{
+							"path": "docs/superpowers/specs/2026-10-29-delta-scoping-warm-start-design.md",
+							"ranges": [[1, 138]]
+						}
+					]
+				},
+				{
+					"sha": "190b3a62beffd2702b3820d66a305e4df51559f5",
+					"committedAt": "2026-10-29T18:59:36Z",
+					"files": [
+						{
+							"path": "docs/superpowers/specs/2026-10-29-delta-scoping-warm-start-design.md",
+							"ranges": [
+								[36, 83],
+								[101, 107],
+								[111, 119],
+								[122, 136],
+								[143, 150]
+							]
+						}
+					]
+				},
+				{
+					"sha": "1fc90026f3ac496594587aebf556ae6256aea4dc",
+					"committedAt": "2026-10-29T19:02:13Z",
+					"files": [
+						{
+							"path": "docs/superpowers/specs/2026-10-29-delta-scoping-warm-start-design.md",
+							"ranges": [[38, 50], [63, 73], [114, 120], [129, 137]]
+						}
+					]
+				},
+				{
+					"sha": "559702e23bdb05bff9ec6a4d481f2660df72b924",
+					"committedAt": "2026-10-29T19:03:26Z",
+					"files": [
+						{
+							"path": "docs/superpowers/plans/2026-10-29-delta-scoping-warm-start.md",
+							"ranges": [[1, 140]]
+						}
+					]
+				},
+				{
+					"sha": "348b65092d3d402eb7f33353caf9d63c80c3d2e9",
+					"committedAt": "2026-10-29T19:05:40Z",
+					"files": [
+						{
+							"path": "src/ledger/github.test.ts",
+							"ranges": [[1, 6], [37, 43], [145, 151], [320, 360]]
+						},
+						{
+							"path": "src/ledger/github.ts",
+							"ranges": [[22, 28], [280, 284]]
+						},
+						{
+							"path": "src/ledger/live.test.ts",
+							"ranges": [[1, 6], [46, 52], [60, 112], [124, 134]]
+						},
+						{
+							"path": "src/ledger/live.ts",
+							"ranges": [[10, 16], [35, 53]]
+						},
+						{
+							"path": "src/testing.ts",
+							"ranges": [[256, 283]]
+						}
+					]
+				},
+				{
+					"sha": "f39d4059dfa3fe618d7859f9ee09bb0d98db0be7",
+					"committedAt": "2026-10-29T19:08:08Z",
+					"files": [
+						{
+							"path": "src/prompt.ts",
+							"ranges": [[76, 82]]
+						},
+						{
+							"path": "src/review.ts",
+							"ranges": [[1488, 1500]]
+						},
+						{
+							"path": "src/triage.test.ts",
+							"ranges": [[8, 20], [254, 391]]
+						},
+						{
+							"path": "src/triage.ts",
+							"ranges": [
+								[2, 8],
+								[58, 64],
+								[69, 77],
+								[96, 157],
+								[169, 175],
+								[189, 201],
+								[207, 233],
+								[237, 249],
+								[259, 264]
+							]
+						}
+					]
+				},
+				{
+					"sha": "fef40b3220e8c0c7468b7b8e0eda5b1c41e95f7a",
+					"committedAt": "2026-10-29T19:09:34Z",
+					"files": [
+						{
+							"path": "src/triage.test.ts",
+							"ranges": [[282, 291], [370, 378]]
+						}
+					]
+				},
+				{
+					"sha": "c9e8cdc13727bf863d8413e9899d1f8447674e44",
+					"committedAt": "2026-10-29T19:13:33Z",
+					"files": [
+						{
+							"path": "src/baseline.test.ts",
+							"ranges": [[1, 205]]
+						},
+						{
+							"path": "src/baseline.ts",
+							"ranges": [[1, 87]]
+						},
+						{
+							"path": "src/review-state.test.ts",
+							"ranges": [
+								[49, 80],
+								[87, 93],
+								[121, 127],
+								[143, 149],
+								[165, 171],
+								[187, 201],
+								[209, 215],
+								[223, 237],
+								[242, 252]
+							]
+						},
+						{
+							"path": "src/review-state.ts",
+							"ranges": [[91, 96], [117, 122], [149, 153]]
+						},
+						{
+							"path": "src/review.test.ts",
+							"ranges": [
+								[1911, 1916],
+								[1942, 1948],
+								[2229, 2235],
+								[2327, 2333],
+								[4599, 4604]
+							]
+						},
+						{
+							"path": "src/review.ts",
+							"ranges": [[1457, 1462]]
+						},
+						{
+							"path": "src/watch.ts",
+							"ranges": [[166, 171]]
+						}
+					]
+				},
+				{
+					"sha": "c3ac4fc4e340244a0fd6e7885b22f5c4b3968e2a",
+					"committedAt": "2026-10-29T19:14:28Z",
+					"files": [
+						{
+							"path": "docs/superpowers/specs/2026-10-29-delta-scoping-warm-start-design.md",
+							"ranges": [[43, 49]]
+						}
+					]
+				},
+				{
+					"sha": "97058e4f92d76b67abda73ee18d9aa9ca1771bfd",
+					"committedAt": "2026-10-29T19:16:15Z",
+					"files": [
+						{
+							"path": "src/baseline.test.ts",
+							"ranges": [
+								[31, 38],
+								[116, 122],
+								[128, 134],
+								[138, 200],
+								[229, 235],
+								[242, 248]
+							]
+						},
+						{
+							"path": "src/baseline.ts",
+							"ranges": [[44, 64]]
+						}
+					]
+				},
+				{
+					"sha": "12cc03af39f94f1b1a5872f173869797db61a4ea",
+					"committedAt": "2026-10-29T19:25:40Z",
+					"files": [
+						{
+							"path": "src/review.test.ts",
+							"ranges": [
+								[33, 39],
+								[66, 72],
+								[81, 93],
+								[4334, 4346],
+								[5050, 5605]
+							]
+						},
+						{
+							"path": "src/review.ts",
+							"ranges": [
+								[2, 8],
+								[26, 36],
+								[133, 139],
+								[837, 859],
+								[880, 886],
+								[965, 971],
+								[1412, 1445],
+								[1466, 1525],
+								[1536, 1653],
+								[2177, 2183],
+								[2186, 2192],
+								[2247, 2253]
+							]
+						}
+					]
+				},
+				{
+					"sha": "69bf3599cca27e233d0981bbef41b91650ab946f",
+					"committedAt": "2026-10-29T19:30:33Z",
+					"files": [
+						{
+							"path": "docs/superpowers/specs/2026-10-29-delta-scoping-warm-start-design.md",
+							"ranges": [[67, 73], [104, 110], [150, 157]]
+						}
+					]
+				},
+				{
+					"sha": "b26a7c44ce2c5483ba05e3d94bbe83ddbc53e414",
+					"committedAt": "2026-10-29T19:33:31Z",
+					"files": [
+						{
+							"path": "src/review.test.ts",
+							"ranges": [
+								[5337, 5343],
+								[5346, 5352],
+								[5356, 5362],
+								[5374, 5380],
+								[5383, 5506],
+								[5657, 5663],
+								[5673, 5679],
+								[5688, 5706]
+							]
+						},
+						{
+							"path": "src/review.ts",
+							"ranges": [[846, 853], [1562, 1571], [1607, 1616], [2229, 2235]]
+						},
+						{
+							"path": "src/triage.test.ts",
+							"ranges": [[323, 335], [341, 405]]
+						},
+						{
+							"path": "src/triage.ts",
+							"ranges": [[99, 145], [148, 155]]
+						}
+					]
+				},
+				{
+					"sha": "1638569f648b77fba55803b40f23f526b0bcdd13",
+					"committedAt": "2026-10-29T19:33:56Z",
+					"files": [
+						{
+							"path": "docs/superpowers/specs/2026-10-29-delta-scoping-warm-start-design.md",
+							"ranges": [[67, 73]]
+						}
+					]
+				},
+				{
+					"sha": "e677789cd53312e5f552a1a09f1a7cc043f12881",
+					"committedAt": "2026-10-29T19:36:55Z",
+					"files": [
+						{
+							"path": "CLAUDE.md",
+							"ranges": [[86, 92]]
+						},
+						{
+							"path": "src/watch.test.ts",
+							"ranges": [
+								[3, 8],
+								[226, 232],
+								[248, 256],
+								[358, 363],
+								[466, 477],
+								[481, 500],
+								[602, 608]
+							]
+						},
+						{
+							"path": "src/watch.ts",
+							"ranges": [
+								[2, 13],
+								[34, 39],
+								[111, 116],
+								[145, 159],
+								[200, 205],
+								[218, 224],
+								[227, 232]
+							]
+						}
+					]
+				},
+				{
+					"sha": "2c53c5c425e1e91fffc469f9c05e942682129e7c",
+					"committedAt": "2026-10-29T19:40:53Z",
+					"files": [
+						{
+							"path": "CLAUDE.md",
+							"ranges": [[73, 79]]
+						},
+						{
+							"path": "docs/post-mortem-re-review-memory.md",
+							"ranges": [[110, 122]]
+						}
+					]
+				},
+				{
+					"sha": "dd7ae9ee8a2ddb88ea5f7f38dd38b891d9d28f60",
+					"committedAt": "2026-10-29T19:51:02Z",
+					"files": [
+						{
+							"path": "docs/superpowers/specs/2026-10-29-delta-scoping-warm-start-design.md",
+							"ranges": [[49, 55], [69, 82], [123, 129], [139, 145], [158, 166]]
+						}
+					]
+				},
+				{
+					"sha": "7df5d12cd5ce0241abe0269efed3d58f45d081e2",
+					"committedAt": "2026-10-29T19:54:23Z",
+					"files": [
+						{
+							"path": "src/review.test.ts",
+							"ranges": [[5116, 5122], [5142, 5148], [5266, 5272], [5708, 5922]]
+						},
+						{
+							"path": "src/review.ts",
+							"ranges": [
+								[1288, 1301],
+								[1481, 1521],
+								[1630, 1656],
+								[1992, 2003],
+								[2035, 2041],
+								[2098, 2108],
+								[2118, 2132],
+								[2202, 2208]
+							]
+						},
+						{
+							"path": "src/triage.test.ts",
+							"ranges": [[278, 294], [300, 305]]
+						},
+						{
+							"path": "src/triage.ts",
+							"ranges": [[58, 63], [68, 74], [227, 238]]
+						}
+					]
+				},
+				{
+					"sha": "d49000bd7fba4ce25287396a8cb6b3cf2dccdac4",
+					"committedAt": "2026-10-29T20:11:28Z",
+					"files": [
+						{
+							"path": "docs/superpowers/specs/2026-10-29-delta-scoping-warm-start-design.md",
+							"ranges": [[38, 44]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r0:c4417425453:0",
+					"roundIndex": 0,
+					"reviewId": 5704371060,
+					"source": "inline",
+					"commentId": 4417425453,
+					"path": "docs/post-mortem-re-review-memory.md",
+					"line": 119,
+					"severity": "P3",
+					"title": "Docs say KV is trusted only when it holds a newer sha, but the code never compares shas",
+					"text": "🟢 **P3**\n\n**Docs say KV is trusted only when it holds a newer sha, but the code never compares shas**\n\nThis bullet says KV is still trusted when it holds a newer sha. In `buildReview`, any valid KV state becomes the baseline (`state = await loadReviewState(...)`). The code never compares the KV sha with the sha in the latest own review on GitHub. The spec says KV wins whenever it is present, and its Known limits section lists the stale-KV case explicitly. A maintainer reading this doc would expect a newer-sha guard that does not exist. Reword it to say KV wins whenever it holds a valid state."
+				},
+				{
+					"id": "r0:c4417425453:1",
+					"roundIndex": 0,
+					"reviewId": 5704371060,
+					"source": "inline",
+					"commentId": 4417425453,
+					"path": "docs/post-mortem-re-review-memory.md",
+					"line": 119,
+					"severity": "P3",
+					"title": "This bullet says KV \"is still trusted when it holds a newer sha\". In `buildReview`, any valid KV state becomes the baseline. The sha is never compared with the latest own review's `ai-review:sha` marker. The spec says the same: \"KV wins in this sprint\". A maintainer reading this line would assume KV is dropped when GitHub has a newer review. In practice a stale KV state still wins, for example after local no-KV `watch` runs posted newer reviews. Reword to \"KV is still trusted whenever it holds a state\".",
+					"text": "This bullet says KV \"is still trusted when it holds a newer sha\". In `buildReview`, any valid KV state becomes the baseline. The sha is never compared with the latest own review's `ai-review:sha` marker. The spec says the same: \"KV wins in this sprint\". A maintainer reading this line would assume KV is dropped when GitHub has a newer review. In practice a stale KV state still wins, for example after local no-KV `watch` runs posted newer reviews. Reword to \"KV is still trusted whenever it holds a state\"."
+				},
+				{
+					"id": "r0:c4417425460:0",
+					"roundIndex": 0,
+					"reviewId": 5704371060,
+					"source": "inline",
+					"commentId": 4417425460,
+					"path": "src/triage.ts",
+					"line": 241,
+					"severity": "P3",
+					"title": "Non-ahead compare warning omits the PR, shas and status",
+					"text": "🟢 **P3**\n\n**Non-ahead compare warning omits the PR, shas and status**\n\nThe throw branch logs `owner`, `repo` and `basehead`, but this branch logs only `status`. When `fetchDeltaMeta` returns `null` for a `diverged` or `behind` compare, the warning cannot be tied to a PR or sha pair. `buildReview` then labels this case `compare failed`, so the log never says that the compare succeeded and was rejected. Include the same identifying fields as the catch branch. That makes the fallback to a full review traceable.\n\n*Suggested fix:*\n\n```suggestion\n\t\tconsole.warn(\"compare status is not ahead; delta unusable\", {\n\t\t\towner,\n\t\t\trepo,\n\t\t\tbasehead: `${baseSha}...${headSha}`,\n```"
+				},
+				{
+					"id": "r0:c4417425466:0",
+					"roundIndex": 0,
+					"reviewId": 5704371060,
+					"source": "inline",
+					"commentId": 4417425466,
+					"path": "src/triage.ts",
+					"line": 127,
+					"severity": "P2",
+					"title": "Path-less revalidation can resolve a finding from truncated patches",
+					"text": "🟡 **P2**\n\n**Path-less revalidation can resolve a finding from truncated patches**\n\nThe stated invariant is that a path-less finding is sent only when all PR patches fit under the 60,000-char cap. `pathlessFits` is computed from `blockOf`, which applies `trimPatch` (24,000-char default) to each file. A PR with two 100k-char patches counts as roughly 48k, so `pathlessFits` is true. The model then sees about a quarter of each file and is asked whether the whole-PR general finding is fixed. A wrong `resolved` answer drops a carried P0/P1 general finding, which can then flip the verdict to APPROVE. The condition should also require that no patch was trimmed, i.e. that `trimPatch(p) === p` for every file counted in `used` and `restChars`."
+				},
+				{
+					"id": "r0:body:0",
+					"roundIndex": 0,
+					"reviewId": 5704371060,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Post-mortem says KV is trusted only when it holds a newer sha, but the code has no such comparison",
+					"text": "Post-mortem says KV is trusted only when it holds a newer sha, but the code has no such comparison"
+				},
+				{
+					"id": "r0:body:1",
+					"roundIndex": 0,
+					"reviewId": 5704371060,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Spec Design table describes a different `deriveBaseline` signature and return type than the implementation",
+					"text": "Spec Design table describes a different `deriveBaseline` signature and return type than the implementation"
+				}
+			]
+		},
+		{
+			"index": 1,
+			"reviewId": 5704380739,
+			"provider": "anthropic",
+			"submittedAt": "2026-10-29T20:17:44Z",
+			"headSha": "d49000bd7fba4ce25287396a8cb6b3cf2dccdac4",
+			"baseSha": "d49000bd7fba4ce25287396a8cb6b3cf2dccdac4",
+			"mergeBase": "d49000bd7fba4ce25287396a8cb6b3cf2dccdac4",
+			"triggerAt": null,
+			"approximate": true,
+			"commitsSince": [],
+			"claims": [
+				{
+					"id": "r1:c4417432513:0",
+					"roundIndex": 1,
+					"reviewId": 5704380739,
+					"source": "inline",
+					"commentId": 4417432513,
+					"path": "src/triage.ts",
+					"line": 242,
+					"severity": "P3",
+					"title": "Non-ahead compare warning cannot be tied to a PR or commit pair",
+					"text": "🟢 **P3**\n\n**Non-ahead compare warning cannot be tied to a PR or commit pair**\n\nThe throw path logs `owner`, `repo` and `basehead`, but this warning logs only `status`. A `diverged` or `behind` result is the signal that history was rewritten and the round fell back to a full review. A log line with just `status: \"diverged\"` can't be matched to a PR or sha pair when several PRs run in one process, such as a hosted deployment or a multi-PR watcher. `buildReview`'s `fullScope` warning does add `prLog` and the reason, so this is a small gap. Adding the same fields as the catch branch would make it consistent."
+				},
+				{
+					"id": "r1:c4417432521:0",
+					"roundIndex": 1,
+					"reviewId": 5704380739,
+					"source": "inline",
+					"commentId": 4417432521,
+					"path": "docs/post-mortem-re-review-memory.md",
+					"line": 119,
+					"severity": "P3",
+					"title": "Post-mortem says KV is trusted only when it holds a newer sha, but the code trusts any KV state",
+					"text": "🟢 **P3**\n\n**Post-mortem says KV is trusted only when it holds a newer sha, but the code trusts any KV state**\n\nThe bullet says KV is still trusted when it holds a newer sha. In `buildReview`, any valid KV state wins over the derived baseline, with no comparison against the GitHub marker sha (`state` is set from `loadReviewState`, and `deriveBaseline` runs only when `!state`). The spec's Known limits section says the same: KV is trusted over GitHub even when its review POST failed. The bullet's example scope strings also omit the `scope: ` prefix that the footer actually renders. Reword it to say that KV wins whenever present and that the footer reads `scope: full (first review)`."
+				},
+				{
+					"id": "r1:c4417432528:0",
+					"roundIndex": 1,
+					"reviewId": 5704380739,
+					"source": "inline",
+					"commentId": 4417432528,
+					"path": "src/triage.ts",
+					"line": 118,
+					"severity": "P2",
+					"title": "Carried path-bearing finding can never be revalidated once its file leaves the PR diff",
+					"text": "🟡 **P2**\n\n**Carried path-bearing finding can never be revalidated once its file leaves the PR diff**\n\n`revalidateFindings` skips any carried finding whose `path` is not in `files` (the PR's current file list). Suppose a file is reverted or dropped from the PR in a round that falls back to FULL, for example because the compare failed or the baseline was incomplete. The finding is never sent to the model and stays in `survivingPrior`. Because it has a `path`, `blocksVerdict` treats it as blocking at every severity, so it keeps forcing REQUEST_CHANGES. Delta triage could have seen the revert in the compare diff, but a fallback round has no delta. The only way out is a reply on the thread, which relies on the ledger recognising the thread as settled. The spec's Known limits cover only path-less findings on over-cap PRs, not this case.\n\nA finding whose file is no longer in the PR diff could be sent with a note such as \"file no longer changed by this PR\", or treated as resolved. Either needs a test."
+				},
+				{
+					"id": "r1:body:0",
+					"roundIndex": 1,
+					"reviewId": 5704380739,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Spec 'Design' table describes a stale deriveBaseline signature",
+					"text": "Spec 'Design' table describes a stale deriveBaseline signature"
+				},
+				{
+					"id": "r1:body:1",
+					"roundIndex": 1,
+					"reviewId": 5704380739,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Spec and plan describe a `mode` argument on `triageReReview` that this PR does not add",
+					"text": "Spec and plan describe a `mode` argument on `triageReReview` that this PR does not add"
+				}
+			]
+		},
+		{
+			"index": 2,
+			"reviewId": 5704695552,
+			"provider": "anthropic",
+			"submittedAt": "2026-10-29T20:43:36Z",
+			"headSha": "11538570f9f294fc8ca7bae03acafa9a34bf77e0",
+			"baseSha": "d49000bd7fba4ce25287396a8cb6b3cf2dccdac4",
+			"mergeBase": "d49000bd7fba4ce25287396a8cb6b3cf2dccdac4",
+			"triggerAt": "2026-10-29T20:19:50Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "706f5de895f7b31dceee9f4141d76eccde496d87",
+					"committedAt": "2026-10-29T20:19:50Z",
+					"files": [
+						{
+							"path": "src/review.test.ts",
+							"ranges": [[5792, 5822]]
+						},
+						{
+							"path": "src/triage.test.ts",
+							"ranges": [[293, 310], [330, 337], [427, 481]]
+						},
+						{
+							"path": "src/triage.ts",
+							"ranges": [
+								[96, 109],
+								[113, 128],
+								[136, 154],
+								[177, 188],
+								[257, 271]
+							]
+						}
+					]
+				},
+				{
+					"sha": "dd2fcfa2e7c1c021773c281a20d19aeac589bdf3",
+					"committedAt": "2026-10-29T20:19:50Z",
+					"files": [
+						{
+							"path": "src/baseline.test.ts",
+							"ranges": [[95, 117]]
+						},
+						{
+							"path": "src/baseline.ts",
+							"ranges": [[8, 14]]
+						}
+					]
+				},
+				{
+					"sha": "11538570f9f294fc8ca7bae03acafa9a34bf77e0",
+					"committedAt": "2026-10-29T20:19:50Z",
+					"files": [
+						{
+							"path": "docs/post-mortem-re-review-memory.md",
+							"ranges": [[116, 122]]
+						},
+						{
+							"path": "docs/superpowers/specs/2026-10-29-delta-scoping-warm-start-design.md",
+							"ranges": [[67, 73], [120, 130]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r2:c4417676584:0",
+					"roundIndex": 2,
+					"reviewId": 5704695552,
+					"source": "inline",
+					"commentId": 4417676584,
+					"path": "src/triage.ts",
+					"line": 128,
+					"severity": "P2",
+					"title": "Moot resolution treats a renamed file as removed from the PR",
+					"text": "🟡 **P2**\n\n**Moot resolution treats a renamed file as removed from the PR**\n\n`moot` is computed from `byName`, which is keyed only by the current `filename`. If the file named by a carried finding is renamed inside the PR after that review, the old path no longer appears in `files`. The finding is then resolved without a model call, even though the code and the defect now live under the new name. Because the answer never reaches the model, a P0/P1 carried finding can stop blocking the verdict on a pure rename. Consider also keying on `previous_filename` and sending those findings with the renamed file's patch, if `DeltaFile` carries that field. Otherwise, restrict moot resolution to cases where the path is not the previous name of any listed file."
+				},
+				{
+					"id": "r2:body:0",
+					"roundIndex": 2,
+					"reviewId": 5704695552,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Spec and plan describe a `mode` argument on `triageReReview` that this PR does not add",
+					"text": "Spec and plan describe a `mode` argument on `triageReReview` that this PR does not add"
+				}
+			]
+		},
+		{
+			"index": 3,
+			"reviewId": 5704864315,
+			"provider": "anthropic",
+			"submittedAt": "2026-10-29T20:57:31Z",
+			"headSha": "053a2067ebdd01dfb388be024ef08dbbabf6c860",
+			"baseSha": "11538570f9f294fc8ca7bae03acafa9a34bf77e0",
+			"mergeBase": "11538570f9f294fc8ca7bae03acafa9a34bf77e0",
+			"triggerAt": "2026-10-29T20:47:38Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "053a2067ebdd01dfb388be024ef08dbbabf6c860",
+					"committedAt": "2026-10-29T20:47:38Z",
+					"files": [
+						{
+							"path": "src/triage.test.ts",
+							"ranges": [[340, 363]]
+						},
+						{
+							"path": "src/triage.ts",
+							"ranges": [[113, 129], [202, 209], [235, 251]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r3:c4417813634:0",
+					"roundIndex": 3,
+					"reviewId": 5704864315,
+					"source": "inline",
+					"commentId": 4417813634,
+					"path": "src/triage.ts",
+					"line": 116,
+					"severity": "P2",
+					"title": "Renamed file's old path is excluded from moot resolution but never mapped for revalidation",
+					"text": "🟡 **P2**\n\n**Renamed file's old path is excluded from moot resolution but never mapped for revalidation**\n\n`presentPaths` now stops a finding with a pre-rename path from being auto-resolved. `byName` is still keyed only by the new `filename`, and the new test says the finding \"stays carried\". It looks like such a finding is neither resolved as moot nor looked up by its old path to get the renamed file's patch. If revalidation selects patches through `byName.get(f.path)`, the finding is carried unchanged on every later run. If it is P0/P1, it blocks the verdict until the author removes it. Consider also registering `previousFilename` in `byName` (or resolving the carried path to the renamed file before revalidation) so the finding can be rechecked against the new patch."
+				},
+				{
+					"id": "r3:c4417813634:1",
+					"roundIndex": 3,
+					"reviewId": 5704864315,
+					"source": "inline",
+					"commentId": 4417813634,
+					"path": "src/triage.ts",
+					"line": 116,
+					"severity": "P0",
+					"title": "The rename fix stops `old.ts` from being auto-resolved as moot, but `byName` is still keyed only on the new `filename`. A carried finding whose `path` is the pre-rename name therefore never matches a file block, and the new test expects `[]` with no model call. The finding stays carried indefinitely, and a carried P0/P1 finding blocks the verdict. The same dead-end was fixed for removed files and now reappears for renames. Look carried findings up through `previousFilename` as well, so they are revalidated against the renamed file's patch, or map the finding's path to the new filename.",
+					"text": "The rename fix stops `old.ts` from being auto-resolved as moot, but `byName` is still keyed only on the new `filename`. A carried finding whose `path` is the pre-rename name therefore never matches a file block, and the new test expects `[]` with no model call. The finding stays carried indefinitely, and a carried P0/P1 finding blocks the verdict. The same dead-end was fixed for removed files and now reappears for renames. Look carried findings up through `previousFilename` as well, so they are revalidated against the renamed file's patch, or map the finding's path to the new filename."
+				},
+				{
+					"id": "r3:body:0",
+					"roundIndex": 3,
+					"reviewId": 5704864315,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Spec and plan describe a `mode` argument on `triageReReview` that this PR does not add",
+					"text": "Spec and plan describe a `mode` argument on `triageReReview` that this PR does not add"
+				}
+			]
+		},
+		{
+			"index": 4,
+			"reviewId": 5704970994,
+			"provider": "anthropic",
+			"submittedAt": "2026-10-29T21:07:16Z",
+			"headSha": "84165737067ab08617b1c50508ec21f7986038ed",
+			"baseSha": "053a2067ebdd01dfb388be024ef08dbbabf6c860",
+			"mergeBase": "053a2067ebdd01dfb388be024ef08dbbabf6c860",
+			"triggerAt": "2026-10-29T20:57:32Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "e10f5a49626a93160642681d79b379daf79baf3f",
+					"committedAt": "2026-10-29T20:48:47Z",
+					"files": [
+						{
+							"path": "src/triage.test.ts",
+							"ranges": [[340, 345], [444, 494]]
+						},
+						{
+							"path": "src/triage.ts",
+							"ranges": [
+								[96, 106],
+								[112, 143],
+								[152, 158],
+								[203, 210],
+								[237, 250]
+							]
+						}
+					]
+				},
+				{
+					"sha": "fb824b07fc20e40df3c0910bc11114e850c0346e",
+					"committedAt": "2026-10-29T20:48:48Z",
+					"files": [
+						{
+							"path": "src/review.test.ts",
+							"ranges": [[5817, 5911]]
+						},
+						{
+							"path": "src/review.ts",
+							"ranges": [[49, 56], [1242, 1254], [2192, 2198]]
+						}
+					]
+				},
+				{
+					"sha": "674c403d3b61a406dbac515208ed97cb9567740a",
+					"committedAt": "2026-10-29T20:48:48Z",
+					"files": [
+						{
+							"path": "docs/post-mortem-re-review-memory.md",
+							"ranges": [[116, 122]]
+						},
+						{
+							"path": "docs/superpowers/plans/2026-10-29-delta-scoping-warm-start.md",
+							"ranges": [[56, 65]]
+						}
+					]
+				},
+				{
+					"sha": "84165737067ab08617b1c50508ec21f7986038ed",
+					"committedAt": "2026-10-29T20:57:32Z",
+					"files": [
+						{
+							"path": "docs/superpowers/specs/2026-10-29-delta-scoping-warm-start-design.md",
+							"ranges": [[67, 73]]
+						}
+					]
+				}
+			],
+			"claims": []
+		}
+	],
+	"threads": [
+		{
+			"threadId": "PRRT_kwDOSM5cU86xvKTx",
+			"commentId": 4417425453,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4417627206,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-29T20:38:22Z",
+					"editedAt": null,
+					"body": "Fixed in 1153857. The line now says a valid KV state wins whenever one exists, matching the code and the spec's known limits."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86xvKT1",
+			"commentId": 4417425460,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4417626146,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-29T20:38:15Z",
+					"editedAt": null,
+					"body": "Fixed in 706f5de. The not-ahead warning now logs owner, repo, basehead and status, and says the compare succeeded but was rejected as not ahead."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86xvKT6",
+			"commentId": 4417425466,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4417625634,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-29T20:38:11Z",
+					"editedAt": null,
+					"body": "Fixed in 706f5de. A path-less finding is now sent for revalidation only when no PR patch was cut by the per-file limit and the total still fits the 60,000-character cap. Test added with two oversized patches: the finding is not sent and stays carried."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86xvLXt",
+			"commentId": 4417432513,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4417846569,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-29T21:01:15Z",
+					"editedAt": null,
+					"body": "Already fixed in 706f5de: the not-ahead warning now logs owner, repo, basehead and status, and says the compare succeeded but was rejected."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86xvLXw",
+			"commentId": 4417432521,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4417847130,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-29T21:01:18Z",
+					"editedAt": null,
+					"body": "Fixed in 1153857 (KV wins whenever a valid state exists) and 674c403 (example footer strings now carry the scope: prefix)."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86xvLXz",
+			"commentId": 4417432528,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4417847636,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-29T21:01:22Z",
+					"editedAt": null,
+					"body": "Fixed in 706f5de: a carried finding whose file left the PR is resolved without a model call. The rename follow-up to this change is in e10f5a4."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86xvvfa",
+			"commentId": 4417676584,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4417848183,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-29T21:01:25Z",
+					"editedAt": null,
+					"body": "Fixed in e10f5a4. A path counts as gone only when it is neither a current filename nor any file's previous_filename. A finding on a renamed file's old path is revalidated against the renamed file's patch (headed with the old name). Test added; a model error resolves nothing."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86xwD_A",
+			"commentId": 4417813634,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4417848765,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-10-29T21:01:29Z",
+					"editedAt": null,
+					"body": "Fixed in e10f5a4. byName now registers each file's previous_filename, so the old path resolves to the renamed file and the finding is rechecked against the new patch instead of staying carried. This supersedes the carry-only change in 053a206."
+				}
+			]
+		}
+	],
+	"reactions": [
+		{
+			"commentId": 4417425453,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-29T20:38:32Z"
+		},
+		{
+			"commentId": 4417425460,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-29T20:38:29Z"
+		},
+		{
+			"commentId": 4417425466,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-29T20:38:28Z"
+		},
+		{
+			"commentId": 4417432513,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-29T21:01:32Z"
+		},
+		{
+			"commentId": 4417432521,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-29T21:01:34Z"
+		},
+		{
+			"commentId": 4417432528,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-29T21:01:35Z"
+		},
+		{
+			"commentId": 4417676584,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-29T21:01:37Z"
+		},
+		{
+			"commentId": 4417813634,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-10-29T21:01:38Z"
+		}
+	]
 }

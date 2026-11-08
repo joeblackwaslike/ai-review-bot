@@ -1,8 +1,8 @@
 {
-  "fixtureId": "joeblackwaslike__ai-review-bot__101__openai",
-  "provisional": true,
-  "labels": [],
-  "repeatPairs": [],
-  "negativePairs": [],
-  "allowedSuppression": []
+	"fixtureId": "joeblackwaslike__ai-review-bot__101__openai",
+	"provisional": true,
+	"labels": [],
+	"repeatPairs": [],
+	"negativePairs": [],
+	"allowedSuppression": []
 }

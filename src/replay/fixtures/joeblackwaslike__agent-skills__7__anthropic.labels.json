@@ -1,44 +1,44 @@
 {
-  "fixtureId": "joeblackwaslike__agent-skills__7__anthropic",
-  "provisional": true,
-  "labels": [
-    {
-      "claimId": "r0:body:0",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r0:body:1",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r0:body:2",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r0:body:3",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r0:body:4",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    }
-  ],
-  "repeatPairs": [],
-  "negativePairs": [],
-  "allowedSuppression": []
+	"fixtureId": "joeblackwaslike__agent-skills__7__anthropic",
+	"provisional": true,
+	"labels": [
+		{
+			"claimId": "r0:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:body:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:body:2",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:body:3",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:body:4",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		}
+	],
+	"repeatPairs": [],
+	"negativePairs": [],
+	"allowedSuppression": []
 }

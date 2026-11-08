@@ -1,374 +1,302 @@
 {
-  "schemaVersion": 1,
-  "owner": "joeblackwaslike",
-  "repo": "ai-review-bot",
-  "pull": 54,
-  "provider": "openai",
-  "reviewer": "codex",
-  "author": "joeblackwaslike",
-  "recordedAt": "2026-11-07T23:32:27.427Z",
-  "rounds": [
-    {
-      "index": 0,
-      "reviewId": 4890282720,
-      "provider": "openai",
-      "submittedAt": "2026-08-09T01:42:25Z",
-      "headSha": "0a48e0a031b830f55919c0eb63a531ed19b4b2c6",
-      "baseSha": "8ed4380f33c6f4d4d2bff7ce7f1906c32a8f25d3",
-      "mergeBase": "8ed4380f33c6f4d4d2bff7ce7f1906c32a8f25d3",
-      "triggerAt": "2026-08-09T01:40:12Z",
-      "approximate": false,
-      "commitsSince": [
-        {
-          "sha": "0a48e0a031b830f55919c0eb63a531ed19b4b2c6",
-          "committedAt": "2026-08-09T01:40:12Z",
-          "files": [
-            {
-              "path": "CLAUDE.md",
-              "ranges": [
-                [
-                  64,
-                  70
-                ]
-              ]
-            },
-            {
-              "path": "src/review.test.ts",
-              "ranges": [
-                [
-                  2198,
-                  2216
-                ],
-                [
-                  2221,
-                  2227
-                ],
-                [
-                  2251,
-                  2264
-                ],
-                [
-                  2268,
-                  2274
-                ],
-                [
-                  2334,
-                  2341
-                ],
-                [
-                  2358,
-                  2367
-                ],
-                [
-                  2372,
-                  2384
-                ]
-              ]
-            },
-            {
-              "path": "src/review.ts",
-              "ranges": [
-                [
-                  13,
-                  19
-                ],
-                [
-                  1028,
-                  1034
-                ]
-              ]
-            },
-            {
-              "path": "src/reviewer-tuning.test.ts",
-              "ranges": [
-                [
-                  1,
-                  20
-                ]
-              ]
-            },
-            {
-              "path": "src/reviewer-tuning.ts",
-              "ranges": [
-                [
-                  1,
-                  21
-                ],
-                [
-                  25,
-                  32
-                ]
-              ]
-            }
-          ]
-        }
-      ],
-      "claims": []
-    },
-    {
-      "index": 1,
-      "reviewId": 4890309706,
-      "provider": "openai",
-      "submittedAt": "2026-08-09T02:03:06Z",
-      "headSha": "8bf7ed8f9144e49cb4ecb1a4484d2c25e28a2e9d",
-      "baseSha": "0a48e0a031b830f55919c0eb63a531ed19b4b2c6",
-      "mergeBase": "0a48e0a031b830f55919c0eb63a531ed19b4b2c6",
-      "triggerAt": "2026-08-09T01:53:04Z",
-      "approximate": false,
-      "commitsSince": [
-        {
-          "sha": "8bf7ed8f9144e49cb4ecb1a4484d2c25e28a2e9d",
-          "committedAt": "2026-08-09T01:53:04Z",
-          "files": [
-            {
-              "path": "src/review.test.ts",
-              "ranges": [
-                [
-                  1907,
-                  2008
-                ]
-              ]
-            },
-            {
-              "path": "src/review.ts",
-              "ranges": [
-                [
-                  925,
-                  951
-                ],
-                [
-                  1009,
-                  1024
-                ],
-                [
-                  1415,
-                  1434
-                ]
-              ]
-            }
-          ]
-        }
-      ],
-      "claims": [
-        {
-          "id": "r1:c3742301333:0",
-          "roundIndex": 1,
-          "reviewId": 4890309706,
-          "source": "inline",
-          "commentId": 3742301333,
-          "path": "src/reviewer-tuning.ts",
-          "line": 20,
-          "severity": "P2",
-          "title": "Overly historical comment block likely to rot; focus on stable behaviour and move narrative to docs",
-          "text": "🟡 **Medium**\n\n**Overly historical comment block likely to rot; focus on stable behaviour and move narrative to docs**\n\nThis header comment is very detailed, with specific PR numbers, dates, file names, and concrete examples of past fabricated findings. While accurate today, most of this context is highly time-bound and likely to become confusing as the code evolves.\n\nFrom a long-term maintainability perspective, this comment would be more durable if it:\n- Focused on the stable, *timeless* rationale (e.g. \"both providers exhibited confidently-false findings; these flags enforce stricter evidence and dedupe semantics\")\n- Avoided specific PR numbers, dates, and file paths, or relegated them to a changelog/ADR instead\n- Described the intended invariants (e.g. \"all providers share the same tuning; do not reintroduce per-provider differences without a compelling, measured reason\") rather than the investigative history\n\nSuggestion:\n- Shorten this block to a concise explanation of **why** these flags exist and that they are **provider-agnostic**.\n- Move the root-cause narrative (PR #44, ai-review-bot-5zu, peers.ts/vercel.json examples) into a central design doc or ADR and reference that doc here with a single line if needed (e.g. `See docs/reviewer-tuning.md for historical context`)."
-        },
-        {
-          "id": "r1:c3742301340:0",
-          "roundIndex": 1,
-          "reviewId": 4890309706,
-          "source": "inline",
-          "commentId": 3742301340,
-          "path": "src/reviewer-tuning.test.ts",
-          "line": 13,
-          "severity": "P2",
-          "title": "Test-level narrative is too specific to this PR and date; consider a more durable explanation",
-          "text": "🟡 **Medium**\n\n**Test-level narrative is too specific to this PR and date; consider a more durable explanation**\n\nThis comment embeds PR numbers, dates, and a detailed historical narrative about which bot did what on which PRs. For a test, that level of historical context is likely to age poorly and may distract from the invariant being asserted.\n\nFor future maintainers, the main enduring point seems to be:\n- `REVIEWER_TUNING` is applied unconditionally across providers because both demonstrated the same class of unfounded findings.\n\nSuggestion:\n- Compress this comment to one or two sentences that describe the invariant the test is pinning (\"all providers share the same tuning; we expect these flags to be `true` for every provider\").\n- Move the investigative story (anthropic-only first, later unified after observing codexreviewbot failures) into a doc or into the PR description/ADR rather than the test itself.\n- That keeps the test name + assertion self-explanatory, with a short comment for the \"why\" that won’t require maintenance as PR numbers and dates recede into history."
-        },
-        {
-          "id": "r1:c3742301344:0",
-          "roundIndex": 1,
-          "reviewId": 4890309706,
-          "source": "inline",
-          "commentId": 3742301344,
-          "path": "src/review.test.ts",
-          "line": 1910,
-          "severity": "P2",
-          "title": "Comment mixes durable behaviour with PR-specific history; consider separating them",
-          "text": "🟡 **Medium**\n\n**Comment mixes durable behaviour with PR-specific history; consider separating them**\n\nThis block does a good job explaining *why* FULL passes must also carry forward prior open findings, but it also bakes in PR number, bot name, and specific origin (\"Flagged by chatgpt-codex-connector on PR #54\"). The behavioural explanation is likely to remain valid; the PR reference is less so.\n\nTo avoid comment rot while preserving the valuable rationale:\n- Keep the explanation about how `showPriorOwnFindings` interacts with FULL vs INCREMENTAL and how a FULL pass could otherwise drop blocking findings.\n- Remove or soften the reference to this specific PR and bot (or move that history to a design doc / changelog if you want it recorded).\n\nThis way the comment remains focused on the invariant this test is pinning (FULL must not silently lose open findings) without tying it to transient project history."
-        },
-        {
-          "id": "r1:c3742301347:0",
-          "roundIndex": 1,
-          "reviewId": 4890309706,
-          "source": "inline",
-          "commentId": 3742301347,
-          "path": "CLAUDE.md",
-          "line": 67,
-          "severity": "P3",
-          "title": "CLAUDE.md entry references internal codename and timeline that may lose meaning",
-          "text": "🟢 **Low**\n\n**CLAUDE.md entry references internal codename and timeline that may lose meaning**\n\nThe updated CLAUDE.md row now mentions \"unified across both providers since ai-review-bot-5zu; previously anthropic-only\". For someone reading this documentation later, the \"ai-review-bot-5zu\" codename may not convey much and will require chasing history to understand.\n\nIf the important point is simply that `REVIEWER_TUNING` is **now unified**, the extra historical detail might be better suited to a changelog or ADR.\n\nSuggestion:\n- Consider simplifying this cell to something like: \"Signal-quality switches (`REVIEWER_TUNING`) — unified across both providers\".\n- Move the historical note (previously anthropic-only, unified after investigation) to a more appropriate long-form doc if it’s important to preserve.\n\nThis keeps the high-level architecture doc focused on current behavior rather than project history, which aligns with long-term maintainability."
-        }
-      ]
-    },
-    {
-      "index": 2,
-      "reviewId": 4890337588,
-      "provider": "openai",
-      "submittedAt": "2026-08-09T02:23:12Z",
-      "headSha": "3b707a17f7dd2152c350f625bcb3bebb82d0b3b3",
-      "baseSha": "8bf7ed8f9144e49cb4ecb1a4484d2c25e28a2e9d",
-      "mergeBase": "8bf7ed8f9144e49cb4ecb1a4484d2c25e28a2e9d",
-      "triggerAt": "2026-08-09T02:13:44Z",
-      "approximate": false,
-      "commitsSince": [
-        {
-          "sha": "3b707a17f7dd2152c350f625bcb3bebb82d0b3b3",
-          "committedAt": "2026-08-09T02:13:44Z",
-          "files": [
-            {
-              "path": "src/review.test.ts",
-              "ranges": [
-                [
-                  1994,
-                  2006
-                ]
-              ]
-            }
-          ]
-        }
-      ],
-      "claims": [
-        {
-          "id": "r2:body:0",
-          "roundIndex": 2,
-          "reviewId": 4890337588,
-          "source": "body",
-          "commentId": null,
-          "path": null,
-          "line": null,
-          "severity": "P2",
-          "title": "Overly historical comment block likely to rot; focus on stable behaviour and move narrative to docs (`src/reviewer-tuning.ts:20`)",
-          "text": "Overly historical comment block likely to rot; focus on stable behaviour and move narrative to docs (`src/reviewer-tuning.ts:20`)"
-        },
-        {
-          "id": "r2:body:1",
-          "roundIndex": 2,
-          "reviewId": 4890337588,
-          "source": "body",
-          "commentId": null,
-          "path": null,
-          "line": null,
-          "severity": "P2",
-          "title": "Test-level narrative is too specific to this PR and date; consider a more durable explanation (`src/reviewer-tuning.test.ts:13`)",
-          "text": "Test-level narrative is too specific to this PR and date; consider a more durable explanation (`src/reviewer-tuning.test.ts:13`)"
-        },
-        {
-          "id": "r2:body:2",
-          "roundIndex": 2,
-          "reviewId": 4890337588,
-          "source": "body",
-          "commentId": null,
-          "path": null,
-          "line": null,
-          "severity": "P3",
-          "title": "Narrative references to specific PRs and dates in tests may age poorly (`src/review.test.ts:2294`)",
-          "text": "Narrative references to specific PRs and dates in tests may age poorly (`src/review.test.ts:2294`)"
-        },
-        {
-          "id": "r2:body:3",
-          "roundIndex": 2,
-          "reviewId": 4890337588,
-          "source": "body",
-          "commentId": null,
-          "path": null,
-          "line": null,
-          "severity": "P3",
-          "title": "CLAUDE.md entry references internal codename and timeline that may lose meaning (`CLAUDE.md:67`)",
-          "text": "CLAUDE.md entry references internal codename and timeline that may lose meaning (`CLAUDE.md:67`)"
-        }
-      ]
-    }
-  ],
-  "threads": [
-    {
-      "threadId": "PRRT_kwDOSM5cU86XiqOg",
-      "commentId": 3742301333,
-      "isResolved": true,
-      "isOutdated": false,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 3742325969,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-08-09T02:14:12Z",
-          "editedAt": null,
-          "body": "**No change**. Declining per this repo's own AGENTS.md (\"Editing Skills, Runbooks and Instructions\": \"Anchor the rule to the incident that motivated it. A runbook line with a real failure attached survives review and gets followed; an abstract best-practice does not. Cite the PR, thread or transcript in the text.\") — the PR/bead references in these comments are load-bearing under that policy, not incidental detail to strip out."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOSM5cU86XiqOm",
-      "commentId": 3742301340,
-      "isResolved": true,
-      "isOutdated": false,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 3742326040,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-08-09T02:14:14Z",
-          "editedAt": null,
-          "body": "**No change** — same rationale as the sibling comment-verbosity finding on this PR. Declining per this repo's own AGENTS.md (\"Editing Skills, Runbooks and Instructions\": \"Anchor the rule to the incident that motivated it. A runbook line with a real failure attached survives review and gets followed; an abstract best-practice does not. Cite the PR, thread or transcript in the text.\") — the PR/bead references in these comments are load-bearing under that policy, not incidental detail to strip out."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOSM5cU86XiqOp",
-      "commentId": 3742301344,
-      "isResolved": true,
-      "isOutdated": false,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 3742326097,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-08-09T02:14:16Z",
-          "editedAt": null,
-          "body": "**No change** — same rationale as the sibling comment-verbosity finding on this PR. Declining per this repo's own AGENTS.md (\"Editing Skills, Runbooks and Instructions\": \"Anchor the rule to the incident that motivated it. A runbook line with a real failure attached survives review and gets followed; an abstract best-practice does not. Cite the PR, thread or transcript in the text.\") — the PR/bead references in these comments are load-bearing under that policy, not incidental detail to strip out."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOSM5cU86XiqOs",
-      "commentId": 3742301347,
-      "isResolved": true,
-      "isOutdated": false,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 3742326157,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-08-09T02:14:18Z",
-          "editedAt": null,
-          "body": "**No change** — same rationale; `ai-review-bot-5zu` is the bead this whole investigation is filed under, so it's the load-bearing pointer for anyone who wants the history, not decorative. Declining per this repo's own AGENTS.md (\"Editing Skills, Runbooks and Instructions\": \"Anchor the rule to the incident that motivated it. A runbook line with a real failure attached survives review and gets followed; an abstract best-practice does not. Cite the PR, thread or transcript in the text.\") — the PR/bead references in these comments are load-bearing under that policy, not incidental detail to strip out."
-        }
-      ]
-    }
-  ],
-  "reactions": [
-    {
-      "commentId": 3742301333,
-      "user": "joeblackwaslike",
-      "content": "confused",
-      "createdAt": "2026-08-09T02:14:13Z"
-    },
-    {
-      "commentId": 3742301340,
-      "user": "joeblackwaslike",
-      "content": "confused",
-      "createdAt": "2026-08-09T02:14:15Z"
-    },
-    {
-      "commentId": 3742301344,
-      "user": "joeblackwaslike",
-      "content": "confused",
-      "createdAt": "2026-08-09T02:14:16Z"
-    },
-    {
-      "commentId": 3742301347,
-      "user": "joeblackwaslike",
-      "content": "confused",
-      "createdAt": "2026-08-09T02:14:18Z"
-    }
-  ]
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "ai-review-bot",
+	"pull": 54,
+	"provider": "openai",
+	"reviewer": "codex",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-11-07T23:32:27.427Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 4890282720,
+			"provider": "openai",
+			"submittedAt": "2026-08-09T01:42:25Z",
+			"headSha": "0a48e0a031b830f55919c0eb63a531ed19b4b2c6",
+			"baseSha": "8ed4380f33c6f4d4d2bff7ce7f1906c32a8f25d3",
+			"mergeBase": "8ed4380f33c6f4d4d2bff7ce7f1906c32a8f25d3",
+			"triggerAt": "2026-08-09T01:40:12Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "0a48e0a031b830f55919c0eb63a531ed19b4b2c6",
+					"committedAt": "2026-08-09T01:40:12Z",
+					"files": [
+						{
+							"path": "CLAUDE.md",
+							"ranges": [[64, 70]]
+						},
+						{
+							"path": "src/review.test.ts",
+							"ranges": [
+								[2198, 2216],
+								[2221, 2227],
+								[2251, 2264],
+								[2268, 2274],
+								[2334, 2341],
+								[2358, 2367],
+								[2372, 2384]
+							]
+						},
+						{
+							"path": "src/review.ts",
+							"ranges": [[13, 19], [1028, 1034]]
+						},
+						{
+							"path": "src/reviewer-tuning.test.ts",
+							"ranges": [[1, 20]]
+						},
+						{
+							"path": "src/reviewer-tuning.ts",
+							"ranges": [[1, 21], [25, 32]]
+						}
+					]
+				}
+			],
+			"claims": []
+		},
+		{
+			"index": 1,
+			"reviewId": 4890309706,
+			"provider": "openai",
+			"submittedAt": "2026-08-09T02:03:06Z",
+			"headSha": "8bf7ed8f9144e49cb4ecb1a4484d2c25e28a2e9d",
+			"baseSha": "0a48e0a031b830f55919c0eb63a531ed19b4b2c6",
+			"mergeBase": "0a48e0a031b830f55919c0eb63a531ed19b4b2c6",
+			"triggerAt": "2026-08-09T01:53:04Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "8bf7ed8f9144e49cb4ecb1a4484d2c25e28a2e9d",
+					"committedAt": "2026-08-09T01:53:04Z",
+					"files": [
+						{
+							"path": "src/review.test.ts",
+							"ranges": [[1907, 2008]]
+						},
+						{
+							"path": "src/review.ts",
+							"ranges": [[925, 951], [1009, 1024], [1415, 1434]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r1:c3742301333:0",
+					"roundIndex": 1,
+					"reviewId": 4890309706,
+					"source": "inline",
+					"commentId": 3742301333,
+					"path": "src/reviewer-tuning.ts",
+					"line": 20,
+					"severity": "P2",
+					"title": "Overly historical comment block likely to rot; focus on stable behaviour and move narrative to docs",
+					"text": "🟡 **Medium**\n\n**Overly historical comment block likely to rot; focus on stable behaviour and move narrative to docs**\n\nThis header comment is very detailed, with specific PR numbers, dates, file names, and concrete examples of past fabricated findings. While accurate today, most of this context is highly time-bound and likely to become confusing as the code evolves.\n\nFrom a long-term maintainability perspective, this comment would be more durable if it:\n- Focused on the stable, *timeless* rationale (e.g. \"both providers exhibited confidently-false findings; these flags enforce stricter evidence and dedupe semantics\")\n- Avoided specific PR numbers, dates, and file paths, or relegated them to a changelog/ADR instead\n- Described the intended invariants (e.g. \"all providers share the same tuning; do not reintroduce per-provider differences without a compelling, measured reason\") rather than the investigative history\n\nSuggestion:\n- Shorten this block to a concise explanation of **why** these flags exist and that they are **provider-agnostic**.\n- Move the root-cause narrative (PR #44, ai-review-bot-5zu, peers.ts/vercel.json examples) into a central design doc or ADR and reference that doc here with a single line if needed (e.g. `See docs/reviewer-tuning.md for historical context`)."
+				},
+				{
+					"id": "r1:c3742301340:0",
+					"roundIndex": 1,
+					"reviewId": 4890309706,
+					"source": "inline",
+					"commentId": 3742301340,
+					"path": "src/reviewer-tuning.test.ts",
+					"line": 13,
+					"severity": "P2",
+					"title": "Test-level narrative is too specific to this PR and date; consider a more durable explanation",
+					"text": "🟡 **Medium**\n\n**Test-level narrative is too specific to this PR and date; consider a more durable explanation**\n\nThis comment embeds PR numbers, dates, and a detailed historical narrative about which bot did what on which PRs. For a test, that level of historical context is likely to age poorly and may distract from the invariant being asserted.\n\nFor future maintainers, the main enduring point seems to be:\n- `REVIEWER_TUNING` is applied unconditionally across providers because both demonstrated the same class of unfounded findings.\n\nSuggestion:\n- Compress this comment to one or two sentences that describe the invariant the test is pinning (\"all providers share the same tuning; we expect these flags to be `true` for every provider\").\n- Move the investigative story (anthropic-only first, later unified after observing codexreviewbot failures) into a doc or into the PR description/ADR rather than the test itself.\n- That keeps the test name + assertion self-explanatory, with a short comment for the \"why\" that won’t require maintenance as PR numbers and dates recede into history."
+				},
+				{
+					"id": "r1:c3742301344:0",
+					"roundIndex": 1,
+					"reviewId": 4890309706,
+					"source": "inline",
+					"commentId": 3742301344,
+					"path": "src/review.test.ts",
+					"line": 1910,
+					"severity": "P2",
+					"title": "Comment mixes durable behaviour with PR-specific history; consider separating them",
+					"text": "🟡 **Medium**\n\n**Comment mixes durable behaviour with PR-specific history; consider separating them**\n\nThis block does a good job explaining *why* FULL passes must also carry forward prior open findings, but it also bakes in PR number, bot name, and specific origin (\"Flagged by chatgpt-codex-connector on PR #54\"). The behavioural explanation is likely to remain valid; the PR reference is less so.\n\nTo avoid comment rot while preserving the valuable rationale:\n- Keep the explanation about how `showPriorOwnFindings` interacts with FULL vs INCREMENTAL and how a FULL pass could otherwise drop blocking findings.\n- Remove or soften the reference to this specific PR and bot (or move that history to a design doc / changelog if you want it recorded).\n\nThis way the comment remains focused on the invariant this test is pinning (FULL must not silently lose open findings) without tying it to transient project history."
+				},
+				{
+					"id": "r1:c3742301347:0",
+					"roundIndex": 1,
+					"reviewId": 4890309706,
+					"source": "inline",
+					"commentId": 3742301347,
+					"path": "CLAUDE.md",
+					"line": 67,
+					"severity": "P3",
+					"title": "CLAUDE.md entry references internal codename and timeline that may lose meaning",
+					"text": "🟢 **Low**\n\n**CLAUDE.md entry references internal codename and timeline that may lose meaning**\n\nThe updated CLAUDE.md row now mentions \"unified across both providers since ai-review-bot-5zu; previously anthropic-only\". For someone reading this documentation later, the \"ai-review-bot-5zu\" codename may not convey much and will require chasing history to understand.\n\nIf the important point is simply that `REVIEWER_TUNING` is **now unified**, the extra historical detail might be better suited to a changelog or ADR.\n\nSuggestion:\n- Consider simplifying this cell to something like: \"Signal-quality switches (`REVIEWER_TUNING`) — unified across both providers\".\n- Move the historical note (previously anthropic-only, unified after investigation) to a more appropriate long-form doc if it’s important to preserve.\n\nThis keeps the high-level architecture doc focused on current behavior rather than project history, which aligns with long-term maintainability."
+				}
+			]
+		},
+		{
+			"index": 2,
+			"reviewId": 4890337588,
+			"provider": "openai",
+			"submittedAt": "2026-08-09T02:23:12Z",
+			"headSha": "3b707a17f7dd2152c350f625bcb3bebb82d0b3b3",
+			"baseSha": "8bf7ed8f9144e49cb4ecb1a4484d2c25e28a2e9d",
+			"mergeBase": "8bf7ed8f9144e49cb4ecb1a4484d2c25e28a2e9d",
+			"triggerAt": "2026-08-09T02:13:44Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "3b707a17f7dd2152c350f625bcb3bebb82d0b3b3",
+					"committedAt": "2026-08-09T02:13:44Z",
+					"files": [
+						{
+							"path": "src/review.test.ts",
+							"ranges": [[1994, 2006]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r2:body:0",
+					"roundIndex": 2,
+					"reviewId": 4890337588,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Overly historical comment block likely to rot; focus on stable behaviour and move narrative to docs (`src/reviewer-tuning.ts:20`)",
+					"text": "Overly historical comment block likely to rot; focus on stable behaviour and move narrative to docs (`src/reviewer-tuning.ts:20`)"
+				},
+				{
+					"id": "r2:body:1",
+					"roundIndex": 2,
+					"reviewId": 4890337588,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Test-level narrative is too specific to this PR and date; consider a more durable explanation (`src/reviewer-tuning.test.ts:13`)",
+					"text": "Test-level narrative is too specific to this PR and date; consider a more durable explanation (`src/reviewer-tuning.test.ts:13`)"
+				},
+				{
+					"id": "r2:body:2",
+					"roundIndex": 2,
+					"reviewId": 4890337588,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Narrative references to specific PRs and dates in tests may age poorly (`src/review.test.ts:2294`)",
+					"text": "Narrative references to specific PRs and dates in tests may age poorly (`src/review.test.ts:2294`)"
+				},
+				{
+					"id": "r2:body:3",
+					"roundIndex": 2,
+					"reviewId": 4890337588,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "CLAUDE.md entry references internal codename and timeline that may lose meaning (`CLAUDE.md:67`)",
+					"text": "CLAUDE.md entry references internal codename and timeline that may lose meaning (`CLAUDE.md:67`)"
+				}
+			]
+		}
+	],
+	"threads": [
+		{
+			"threadId": "PRRT_kwDOSM5cU86XiqOg",
+			"commentId": 3742301333,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3742325969,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-09T02:14:12Z",
+					"editedAt": null,
+					"body": "**No change**. Declining per this repo's own AGENTS.md (\"Editing Skills, Runbooks and Instructions\": \"Anchor the rule to the incident that motivated it. A runbook line with a real failure attached survives review and gets followed; an abstract best-practice does not. Cite the PR, thread or transcript in the text.\") — the PR/bead references in these comments are load-bearing under that policy, not incidental detail to strip out."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86XiqOm",
+			"commentId": 3742301340,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3742326040,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-09T02:14:14Z",
+					"editedAt": null,
+					"body": "**No change** — same rationale as the sibling comment-verbosity finding on this PR. Declining per this repo's own AGENTS.md (\"Editing Skills, Runbooks and Instructions\": \"Anchor the rule to the incident that motivated it. A runbook line with a real failure attached survives review and gets followed; an abstract best-practice does not. Cite the PR, thread or transcript in the text.\") — the PR/bead references in these comments are load-bearing under that policy, not incidental detail to strip out."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86XiqOp",
+			"commentId": 3742301344,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3742326097,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-09T02:14:16Z",
+					"editedAt": null,
+					"body": "**No change** — same rationale as the sibling comment-verbosity finding on this PR. Declining per this repo's own AGENTS.md (\"Editing Skills, Runbooks and Instructions\": \"Anchor the rule to the incident that motivated it. A runbook line with a real failure attached survives review and gets followed; an abstract best-practice does not. Cite the PR, thread or transcript in the text.\") — the PR/bead references in these comments are load-bearing under that policy, not incidental detail to strip out."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86XiqOs",
+			"commentId": 3742301347,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3742326157,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-09T02:14:18Z",
+					"editedAt": null,
+					"body": "**No change** — same rationale; `ai-review-bot-5zu` is the bead this whole investigation is filed under, so it's the load-bearing pointer for anyone who wants the history, not decorative. Declining per this repo's own AGENTS.md (\"Editing Skills, Runbooks and Instructions\": \"Anchor the rule to the incident that motivated it. A runbook line with a real failure attached survives review and gets followed; an abstract best-practice does not. Cite the PR, thread or transcript in the text.\") — the PR/bead references in these comments are load-bearing under that policy, not incidental detail to strip out."
+				}
+			]
+		}
+	],
+	"reactions": [
+		{
+			"commentId": 3742301333,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-08-09T02:14:13Z"
+		},
+		{
+			"commentId": 3742301340,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-08-09T02:14:15Z"
+		},
+		{
+			"commentId": 3742301344,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-08-09T02:14:16Z"
+		},
+		{
+			"commentId": 3742301347,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-08-09T02:14:18Z"
+		}
+	]
 }

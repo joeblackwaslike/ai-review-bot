@@ -1,220 +1,189 @@
 {
-  "schemaVersion": 1,
-  "owner": "joeblackwaslike",
-  "repo": "agent-skills",
-  "pull": 11,
-  "provider": "anthropic",
-  "reviewer": "claude",
-  "author": "joeblackwaslike",
-  "recordedAt": "2026-11-07T23:30:59.956Z",
-  "rounds": [
-    {
-      "index": 0,
-      "reviewId": 5703595509,
-      "provider": "anthropic",
-      "submittedAt": "2026-10-29T19:15:06Z",
-      "headSha": "91da4d97611b1bad0c17812a733ec82e0bc4ae94",
-      "baseSha": "5ee9024524879d0fa619846a5a1e092964561dcf",
-      "mergeBase": "5ee9024524879d0fa619846a5a1e092964561dcf",
-      "triggerAt": "2026-10-29T19:12:46Z",
-      "approximate": false,
-      "commitsSince": [
-        {
-          "sha": "91da4d97611b1bad0c17812a733ec82e0bc4ae94",
-          "committedAt": "2026-10-29T19:12:46Z",
-          "files": [
-            {
-              "path": "skills/devcontainers/SKILL.md",
-              "ranges": [
-                [
-                  70,
-                  77
-                ]
-              ]
-            },
-            {
-              "path": "skills/devcontainers/references/joe-devcontainer.md",
-              "ranges": [
-                [
-                  7,
-                  13
-                ],
-                [
-                  17,
-                  23
-                ],
-                [
-                  55,
-                  61
-                ],
-                [
-                  76,
-                  83
-                ],
-                [
-                  105,
-                  111
-                ]
-              ]
-            }
-          ]
-        }
-      ],
-      "claims": [
-        {
-          "id": "r0:c4416818460:0",
-          "roundIndex": 0,
-          "reviewId": 5703595509,
-          "source": "inline",
-          "commentId": 4416818460,
-          "path": "skills/devcontainers/references/joe-devcontainer.md",
-          "line": 80,
-          "severity": "P2",
-          "title": "macOS-only pnpm store host path breaks bind mount on Linux hosts",
-          "text": "🟡 **P2**\n\n**macOS-only pnpm store host path breaks bind mount on Linux hosts**\n\nThe pnpm store mount uses `${localEnv:HOME}/Library/pnpm/store`, which exists only on macOS. On a Linux host the bind source is missing and the container may fail to start. Consider a platform-neutral host path or a note that this mount is macOS-only."
-        },
-        {
-          "id": "r0:c4416818467:0",
-          "roundIndex": 0,
-          "reviewId": 5703595509,
-          "source": "inline",
-          "commentId": 4416818467,
-          "path": "skills/devcontainers/references/joe-devcontainer.md",
-          "line": 108,
-          "severity": "P3",
-          "title": "Undefined spinup-ts hint in discover-deps description is unclear",
-          "text": "🟢 **P3**\n\n**Undefined spinup-ts hint in discover-deps description is unclear**\n\nThe discover-deps description tells users to run `bunx spinup-ts update . --yes` when no pnpm-lock.yaml exists, but this sentence gives no explanation of what the tool does or why it is the expected fix. It also sits oddly beside the rule that every package.json gets `pnpm install`. Explain the tool or drop the hint."
-        },
-        {
-          "id": "r0:c4416818479:0",
-          "roundIndex": 0,
-          "reviewId": 5703595509,
-          "source": "inline",
-          "commentId": 4416818479,
-          "path": "skills/devcontainers/references/joe-devcontainer.md",
-          "line": 110,
-          "severity": "P2",
-          "title": "Dependency discovery now runs pnpm install for npm and yarn projects",
-          "text": "🟡 **P2**\n\n**Dependency discovery now runs pnpm install for npm and yarn projects**\n\nDetection for bun.lockb, yarn.lock and package-lock.json was removed, so any package.json now gets `pnpm install`. Projects that use npm or yarn will get a second lockfile and may fail or drift. The documented hint to run `bunx spinup-ts update . --yes` also relies on a tool that is not defined in this PR."
-        },
-        {
-          "id": "r0:body:0",
-          "roundIndex": 0,
-          "reviewId": 5703595509,
-          "source": "body",
-          "commentId": null,
-          "path": null,
-          "line": null,
-          "severity": "P2",
-          "title": "PR description lists changes missing from the diff",
-          "text": "PR description lists changes missing from the diff"
-        }
-      ]
-    },
-    {
-      "index": 1,
-      "reviewId": 5703896187,
-      "provider": "anthropic",
-      "submittedAt": "2026-10-29T19:38:10Z",
-      "headSha": "158a29316e00c26df49d9776c8f3b3a80c477ae9",
-      "baseSha": "91da4d97611b1bad0c17812a733ec82e0bc4ae94",
-      "mergeBase": "91da4d97611b1bad0c17812a733ec82e0bc4ae94",
-      "triggerAt": "2026-10-29T19:28:33Z",
-      "approximate": false,
-      "commitsSince": [
-        {
-          "sha": "158a29316e00c26df49d9776c8f3b3a80c477ae9",
-          "committedAt": "2026-10-29T19:28:33Z",
-          "files": [
-            {
-              "path": "skills/devcontainers/references/joe-devcontainer.md",
-              "ranges": [
-                [
-                  82,
-                  89
-                ]
-              ]
-            }
-          ]
-        }
-      ],
-      "claims": [
-        {
-          "id": "r1:body:0",
-          "roundIndex": 1,
-          "reviewId": 5703896187,
-          "source": "body",
-          "commentId": null,
-          "path": null,
-          "line": null,
-          "severity": "P2",
-          "title": "PR description lists changes missing from the diff",
-          "text": "PR description lists changes missing from the diff"
-        },
-        {
-          "id": "r1:body:1",
-          "roundIndex": 1,
-          "reviewId": 5703896187,
-          "source": "body",
-          "commentId": null,
-          "path": null,
-          "line": null,
-          "severity": "P2",
-          "title": "macOS-only pnpm store host path breaks bind mount on Linux hosts (`skills/devcontainers/references/joe-devcontainer.md:80`)",
-          "text": "macOS-only pnpm store host path breaks bind mount on Linux hosts (`skills/devcontainers/references/joe-devcontainer.md:80`)"
-        },
-        {
-          "id": "r1:body:2",
-          "roundIndex": 1,
-          "reviewId": 5703896187,
-          "source": "body",
-          "commentId": null,
-          "path": null,
-          "line": null,
-          "severity": "P3",
-          "title": "Undefined spinup-ts hint in discover-deps description is unclear (`skills/devcontainers/references/joe-devcontainer.md:106`)",
-          "text": "Undefined spinup-ts hint in discover-deps description is unclear (`skills/devcontainers/references/joe-devcontainer.md:106`)"
-        },
-        {
-          "id": "r1:body:3",
-          "roundIndex": 1,
-          "reviewId": 5703896187,
-          "source": "body",
-          "commentId": null,
-          "path": null,
-          "line": null,
-          "severity": "P2",
-          "title": "Dependency discovery now runs pnpm install for npm and yarn projects (`skills/devcontainers/references/joe-devcontainer.md:108`)",
-          "text": "Dependency discovery now runs pnpm install for npm and yarn projects (`skills/devcontainers/references/joe-devcontainer.md:108`)"
-        }
-      ]
-    }
-  ],
-  "threads": [
-    {
-      "threadId": "PRRT_kwDOR7Lu486xtv5-",
-      "commentId": 4416818460,
-      "isResolved": false,
-      "isOutdated": false,
-      "resolvedBy": null,
-      "replies": []
-    },
-    {
-      "threadId": "PRRT_kwDOR7Lu486xtv6E",
-      "commentId": 4416818467,
-      "isResolved": false,
-      "isOutdated": false,
-      "resolvedBy": null,
-      "replies": []
-    },
-    {
-      "threadId": "PRRT_kwDOR7Lu486xtv6L",
-      "commentId": 4416818479,
-      "isResolved": false,
-      "isOutdated": false,
-      "resolvedBy": null,
-      "replies": []
-    }
-  ],
-  "reactions": []
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "agent-skills",
+	"pull": 11,
+	"provider": "anthropic",
+	"reviewer": "claude",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-11-07T23:30:59.956Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 5703595509,
+			"provider": "anthropic",
+			"submittedAt": "2026-10-29T19:15:06Z",
+			"headSha": "91da4d97611b1bad0c17812a733ec82e0bc4ae94",
+			"baseSha": "5ee9024524879d0fa619846a5a1e092964561dcf",
+			"mergeBase": "5ee9024524879d0fa619846a5a1e092964561dcf",
+			"triggerAt": "2026-10-29T19:12:46Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "91da4d97611b1bad0c17812a733ec82e0bc4ae94",
+					"committedAt": "2026-10-29T19:12:46Z",
+					"files": [
+						{
+							"path": "skills/devcontainers/SKILL.md",
+							"ranges": [[70, 77]]
+						},
+						{
+							"path": "skills/devcontainers/references/joe-devcontainer.md",
+							"ranges": [[7, 13], [17, 23], [55, 61], [76, 83], [105, 111]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r0:c4416818460:0",
+					"roundIndex": 0,
+					"reviewId": 5703595509,
+					"source": "inline",
+					"commentId": 4416818460,
+					"path": "skills/devcontainers/references/joe-devcontainer.md",
+					"line": 80,
+					"severity": "P2",
+					"title": "macOS-only pnpm store host path breaks bind mount on Linux hosts",
+					"text": "🟡 **P2**\n\n**macOS-only pnpm store host path breaks bind mount on Linux hosts**\n\nThe pnpm store mount uses `${localEnv:HOME}/Library/pnpm/store`, which exists only on macOS. On a Linux host the bind source is missing and the container may fail to start. Consider a platform-neutral host path or a note that this mount is macOS-only."
+				},
+				{
+					"id": "r0:c4416818467:0",
+					"roundIndex": 0,
+					"reviewId": 5703595509,
+					"source": "inline",
+					"commentId": 4416818467,
+					"path": "skills/devcontainers/references/joe-devcontainer.md",
+					"line": 108,
+					"severity": "P3",
+					"title": "Undefined spinup-ts hint in discover-deps description is unclear",
+					"text": "🟢 **P3**\n\n**Undefined spinup-ts hint in discover-deps description is unclear**\n\nThe discover-deps description tells users to run `bunx spinup-ts update . --yes` when no pnpm-lock.yaml exists, but this sentence gives no explanation of what the tool does or why it is the expected fix. It also sits oddly beside the rule that every package.json gets `pnpm install`. Explain the tool or drop the hint."
+				},
+				{
+					"id": "r0:c4416818479:0",
+					"roundIndex": 0,
+					"reviewId": 5703595509,
+					"source": "inline",
+					"commentId": 4416818479,
+					"path": "skills/devcontainers/references/joe-devcontainer.md",
+					"line": 110,
+					"severity": "P2",
+					"title": "Dependency discovery now runs pnpm install for npm and yarn projects",
+					"text": "🟡 **P2**\n\n**Dependency discovery now runs pnpm install for npm and yarn projects**\n\nDetection for bun.lockb, yarn.lock and package-lock.json was removed, so any package.json now gets `pnpm install`. Projects that use npm or yarn will get a second lockfile and may fail or drift. The documented hint to run `bunx spinup-ts update . --yes` also relies on a tool that is not defined in this PR."
+				},
+				{
+					"id": "r0:body:0",
+					"roundIndex": 0,
+					"reviewId": 5703595509,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "PR description lists changes missing from the diff",
+					"text": "PR description lists changes missing from the diff"
+				}
+			]
+		},
+		{
+			"index": 1,
+			"reviewId": 5703896187,
+			"provider": "anthropic",
+			"submittedAt": "2026-10-29T19:38:10Z",
+			"headSha": "158a29316e00c26df49d9776c8f3b3a80c477ae9",
+			"baseSha": "91da4d97611b1bad0c17812a733ec82e0bc4ae94",
+			"mergeBase": "91da4d97611b1bad0c17812a733ec82e0bc4ae94",
+			"triggerAt": "2026-10-29T19:28:33Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "158a29316e00c26df49d9776c8f3b3a80c477ae9",
+					"committedAt": "2026-10-29T19:28:33Z",
+					"files": [
+						{
+							"path": "skills/devcontainers/references/joe-devcontainer.md",
+							"ranges": [[82, 89]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r1:body:0",
+					"roundIndex": 1,
+					"reviewId": 5703896187,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "PR description lists changes missing from the diff",
+					"text": "PR description lists changes missing from the diff"
+				},
+				{
+					"id": "r1:body:1",
+					"roundIndex": 1,
+					"reviewId": 5703896187,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "macOS-only pnpm store host path breaks bind mount on Linux hosts (`skills/devcontainers/references/joe-devcontainer.md:80`)",
+					"text": "macOS-only pnpm store host path breaks bind mount on Linux hosts (`skills/devcontainers/references/joe-devcontainer.md:80`)"
+				},
+				{
+					"id": "r1:body:2",
+					"roundIndex": 1,
+					"reviewId": 5703896187,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Undefined spinup-ts hint in discover-deps description is unclear (`skills/devcontainers/references/joe-devcontainer.md:106`)",
+					"text": "Undefined spinup-ts hint in discover-deps description is unclear (`skills/devcontainers/references/joe-devcontainer.md:106`)"
+				},
+				{
+					"id": "r1:body:3",
+					"roundIndex": 1,
+					"reviewId": 5703896187,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Dependency discovery now runs pnpm install for npm and yarn projects (`skills/devcontainers/references/joe-devcontainer.md:108`)",
+					"text": "Dependency discovery now runs pnpm install for npm and yarn projects (`skills/devcontainers/references/joe-devcontainer.md:108`)"
+				}
+			]
+		}
+	],
+	"threads": [
+		{
+			"threadId": "PRRT_kwDOR7Lu486xtv5-",
+			"commentId": 4416818460,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		},
+		{
+			"threadId": "PRRT_kwDOR7Lu486xtv6E",
+			"commentId": 4416818467,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		},
+		{
+			"threadId": "PRRT_kwDOR7Lu486xtv6L",
+			"commentId": 4416818479,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		}
+	],
+	"reactions": []
 }

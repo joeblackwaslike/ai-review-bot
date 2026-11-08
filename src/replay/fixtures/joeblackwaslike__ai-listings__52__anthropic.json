@@ -1,267 +1,240 @@
 {
-  "schemaVersion": 1,
-  "owner": "joeblackwaslike",
-  "repo": "ai-listings",
-  "pull": 52,
-  "provider": "anthropic",
-  "reviewer": "claude",
-  "author": "joeblackwaslike",
-  "recordedAt": "2026-11-07T23:29:21.027Z",
-  "rounds": [
-    {
-      "index": 0,
-      "reviewId": 4999286426,
-      "provider": "anthropic",
-      "submittedAt": "2026-08-22T06:11:20Z",
-      "headSha": "f49f62cdb2827a970031955389341d2ca92f1e06",
-      "baseSha": "0c4042e36aeed22b8e91c1733bedfda0e5dc0b28",
-      "mergeBase": "0c4042e36aeed22b8e91c1733bedfda0e5dc0b28",
-      "triggerAt": "2026-08-22T06:09:28Z",
-      "approximate": false,
-      "commitsSince": [
-        {
-          "sha": "f49f62cdb2827a970031955389341d2ca92f1e06",
-          "committedAt": "2026-08-22T06:09:28Z",
-          "files": [
-            {
-              "path": "src/lib/pipeline/comps/ebay-insights.ts",
-              "ranges": [
-                [
-                  1,
-                  58
-                ]
-              ]
-            },
-            {
-              "path": "src/lib/pipeline/step3-pricing-research.ts",
-              "ranges": [
-                [
-                  3,
-                  9
-                ],
-                [
-                  92,
-                  97
-                ],
-                [
-                  622,
-                  628
-                ]
-              ]
-            },
-            {
-              "path": "src/lib/platforms/adapters/ebay.ts",
-              "ranges": [
-                [
-                  10,
-                  16
-                ],
-                [
-                  259,
-                  274
-                ]
-              ]
-            }
-          ]
-        }
-      ],
-      "claims": [
-        {
-          "id": "r0:c3835353668:0",
-          "roundIndex": 0,
-          "reviewId": 4999286426,
-          "source": "inline",
-          "commentId": 3835353668,
-          "path": "src/lib/pipeline/comps/ebay-insights.ts",
-          "line": 22,
-          "severity": "P2",
-          "title": "getEbayAppToken / EBAY_SCOPE_INSIGHTS imported from unseen module — verify token failure handling",
-          "text": "🟡 **Medium**\n\n**getEbayAppToken / EBAY_SCOPE_INSIGHTS imported from unseen module — verify token failure handling**\n\n`searchEbayInsights` relies on `getEbayAppToken` returning falsy to short-circuit gracefully when the scope isn't approved. This module (`./ebay-oauth`) isn't part of this diff, so its behavior (throwing vs. returning null/undefined on auth failure) can't be verified here. If `getEbayAppToken` throws instead of resolving to a falsy value on a 403/scope-denied response, the `try` block below wouldn't catch it since the call is outside the `try`, causing an unhandled promise rejection instead of the intended graceful `[]` degradation described in the PR."
-        },
-        {
-          "id": "r0:c3835353672:0",
-          "roundIndex": 0,
-          "reviewId": 4999286426,
-          "source": "inline",
-          "commentId": 3835353672,
-          "path": "src/lib/platforms/adapters/ebay.ts",
-          "line": 265,
-          "severity": "P3",
-          "title": "EbayAdapter.searchSoldComps discards soldAt=null items silently and hardcodes condition",
-          "text": "🟢 **Low**\n\n**EbayAdapter.searchSoldComps discards soldAt=null items silently and hardcodes condition**\n\nThe mapping sets `condition: 'Not specified'` unconditionally, even though `SoldListing` from `ebay-insights.ts` never actually carries condition data (it's not in the `InsightsItemSale` interface either). This isn't a bug introduced here per se, but it means `PlatformComp.condition` will always report 'Not specified' for eBay comps — worth flagging if downstream logic filters/weights by condition."
-        },
-        {
-          "id": "r0:c3835353674:0",
-          "roundIndex": 0,
-          "reviewId": 4999286426,
-          "source": "inline",
-          "commentId": 3835353674,
-          "path": "src/lib/platforms/adapters/ebay.ts",
-          "line": 270,
-          "severity": "P3",
-          "title": "soldAt can be an empty string but is treated as truthy Date input",
-          "text": "🟢 **Low**\n\n**soldAt can be an empty string but is treated as truthy Date input**\n\nIn `EbayAdapter.searchSoldComps`, `r.soldAt` from `searchEbayInsights` is filtered to be non-empty upstream (`.filter((it) => ... it.soldAt && ...)`), so this specific call site is fine. However, `SoldListing.soldAt` is typed as `string` (not `string | null`) yet the filtering guaranteeing non-empty values lives in a separate function far from the type definition — nothing in the type itself prevents a future caller of `searchEbayInsights` internals (e.g. if the filter is ever weakened) from producing an empty `soldAt` string, which would silently construct `new Date('')` → `Invalid Date` here rather than being caught at the type level."
-        },
-        {
-          "id": "r0:c3835353675:0",
-          "roundIndex": 0,
-          "reviewId": 4999286426,
-          "source": "inline",
-          "commentId": 3835353675,
-          "path": "src/lib/pipeline/comps/ebay-insights.ts",
-          "line": 41,
-          "severity": "P3",
-          "title": "priceCents truncated via Math.round without currency/locale validation",
-          "text": "🟢 **Low**\n\n**priceCents truncated via Math.round without currency/locale validation**\n\n`parseFloat(it.price?.value)` assumes the price value is always in the correct currency and decimal format; if eBay ever returns a non-USD marketplace price (unlikely given the hardcoded `EBAY_US` marketplace header, but worth noting) this would silently produce an incorrect priceCents without any currency validation against `it.price?.currency` (not read here)."
-        },
-        {
-          "id": "r0:c3835353677:0",
-          "roundIndex": 0,
-          "reviewId": 4999286426,
-          "source": "inline",
-          "commentId": 3835353677,
-          "path": "src/lib/pipeline/comps/ebay-insights.ts",
-          "line": 47,
-          "severity": "P3",
-          "title": "priceCents=0 filtered out even for legitimately free/near-zero-value sales",
-          "text": "🟢 **Low**\n\n**priceCents=0 filtered out even for legitimately free/near-zero-value sales**\n\nThe filter `it.priceCents > 0` combined with `Math.round(price*100)` means any parse failure of `it.price?.value` (NaN -> 0) is silently dropped along with genuinely free items. This is consistent with prior SerpAPI behavior, so not a regression, but worth noting there's no distinction/logging between \"parse failed\" and \"filtered as invalid\"."
-        },
-        {
-          "id": "r0:c3835353680:0",
-          "roundIndex": 0,
-          "reviewId": 4999286426,
-          "source": "inline",
-          "commentId": 3835353680,
-          "path": "src/lib/platforms/adapters/ebay.ts",
-          "line": 267,
-          "severity": "P3",
-          "title": "condition field hardcoded, dropping condition data from API response",
-          "text": "🟢 **Low**\n\n**condition field hardcoded, dropping condition data from API response**\n\nThe eBay Marketplace Insights `item_sales/search` response likely includes a `condition` field similar to other eBay APIs, but `searchSoldComps` hardcodes `condition: 'Not specified'` instead of passing through any condition info from `SoldListing`. Since `SoldListing` in ebay-insights.ts doesn't capture a condition field at all, this may be an intentional simplification, but it means condition-based comp filtering downstream (if any) will lose eBay condition data entirely for sold comps."
-        },
-        {
-          "id": "r0:body:0",
-          "roundIndex": 0,
-          "reviewId": 4999286426,
-          "source": "body",
-          "commentId": null,
-          "path": null,
-          "line": null,
-          "severity": "P2",
-          "title": "No automated tests added for new ebay-insights client or adapter changes",
-          "text": "No automated tests added for new ebay-insights client or adapter changes"
-        },
-        {
-          "id": "r0:body:1",
-          "roundIndex": 0,
-          "reviewId": 4999286426,
-          "source": "body",
-          "commentId": null,
-          "path": null,
-          "line": null,
-          "severity": "P3",
-          "title": "No caller passes serpapi retail-price key removal validation, but soldAt filter drops all unparseable dates silently without logging (minor behavior change from prior code)",
-          "text": "No caller passes serpapi retail-price key removal validation, but soldAt filter drops all unparseable dates silently without logging (minor behavior change from prior code)"
-        },
-        {
-          "id": "r0:body:2",
-          "roundIndex": 0,
-          "reviewId": 4999286426,
-          "source": "body",
-          "commentId": null,
-          "path": null,
-          "line": null,
-          "severity": "P3",
-          "title": "getEbayAppToken and EBAY_SCOPE_INSIGHTS imported from unseen module",
-          "text": "getEbayAppToken and EBAY_SCOPE_INSIGHTS imported from unseen module"
-        },
-        {
-          "id": "r0:body:3",
-          "roundIndex": 0,
-          "reviewId": 4999286426,
-          "source": "body",
-          "commentId": null,
-          "path": null,
-          "line": null,
-          "severity": "P3",
-          "title": "EbayAdapter.searchSoldComps drops condition/soldAt fidelity silently",
-          "text": "EbayAdapter.searchSoldComps drops condition/soldAt fidelity silently"
-        },
-        {
-          "id": "r0:body:4",
-          "roundIndex": 0,
-          "reviewId": 4999286426,
-          "source": "body",
-          "commentId": null,
-          "path": null,
-          "line": null,
-          "severity": "P3",
-          "title": "getEbayAppToken/EBAY_SCOPE_INSIGHTS imports not shown in diff",
-          "text": "getEbayAppToken/EBAY_SCOPE_INSIGHTS imports not shown in diff"
-        },
-        {
-          "id": "r0:body:5",
-          "roundIndex": 0,
-          "reviewId": 4999286426,
-          "source": "body",
-          "commentId": null,
-          "path": null,
-          "line": null,
-          "severity": "P3",
-          "title": "searchEbayInsights called without limiting concurrency/rate awareness across two call sites",
-          "text": "searchEbayInsights called without limiting concurrency/rate awareness across two call sites"
-        }
-      ]
-    }
-  ],
-  "threads": [
-    {
-      "threadId": "PRRT_kwDOSSBjYs6bW8sL",
-      "commentId": 3835353668,
-      "isResolved": false,
-      "isOutdated": false,
-      "resolvedBy": null,
-      "replies": []
-    },
-    {
-      "threadId": "PRRT_kwDOSSBjYs6bW8sO",
-      "commentId": 3835353672,
-      "isResolved": false,
-      "isOutdated": false,
-      "resolvedBy": null,
-      "replies": []
-    },
-    {
-      "threadId": "PRRT_kwDOSSBjYs6bW8sQ",
-      "commentId": 3835353674,
-      "isResolved": false,
-      "isOutdated": false,
-      "resolvedBy": null,
-      "replies": []
-    },
-    {
-      "threadId": "PRRT_kwDOSSBjYs6bW8sR",
-      "commentId": 3835353675,
-      "isResolved": false,
-      "isOutdated": false,
-      "resolvedBy": null,
-      "replies": []
-    },
-    {
-      "threadId": "PRRT_kwDOSSBjYs6bW8sT",
-      "commentId": 3835353677,
-      "isResolved": false,
-      "isOutdated": false,
-      "resolvedBy": null,
-      "replies": []
-    },
-    {
-      "threadId": "PRRT_kwDOSSBjYs6bW8sV",
-      "commentId": 3835353680,
-      "isResolved": false,
-      "isOutdated": false,
-      "resolvedBy": null,
-      "replies": []
-    }
-  ],
-  "reactions": []
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "ai-listings",
+	"pull": 52,
+	"provider": "anthropic",
+	"reviewer": "claude",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-11-07T23:29:21.027Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 4999286426,
+			"provider": "anthropic",
+			"submittedAt": "2026-08-22T06:11:20Z",
+			"headSha": "f49f62cdb2827a970031955389341d2ca92f1e06",
+			"baseSha": "0c4042e36aeed22b8e91c1733bedfda0e5dc0b28",
+			"mergeBase": "0c4042e36aeed22b8e91c1733bedfda0e5dc0b28",
+			"triggerAt": "2026-08-22T06:09:28Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "f49f62cdb2827a970031955389341d2ca92f1e06",
+					"committedAt": "2026-08-22T06:09:28Z",
+					"files": [
+						{
+							"path": "src/lib/pipeline/comps/ebay-insights.ts",
+							"ranges": [[1, 58]]
+						},
+						{
+							"path": "src/lib/pipeline/step3-pricing-research.ts",
+							"ranges": [[3, 9], [92, 97], [622, 628]]
+						},
+						{
+							"path": "src/lib/platforms/adapters/ebay.ts",
+							"ranges": [[10, 16], [259, 274]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r0:c3835353668:0",
+					"roundIndex": 0,
+					"reviewId": 4999286426,
+					"source": "inline",
+					"commentId": 3835353668,
+					"path": "src/lib/pipeline/comps/ebay-insights.ts",
+					"line": 22,
+					"severity": "P2",
+					"title": "getEbayAppToken / EBAY_SCOPE_INSIGHTS imported from unseen module — verify token failure handling",
+					"text": "🟡 **Medium**\n\n**getEbayAppToken / EBAY_SCOPE_INSIGHTS imported from unseen module — verify token failure handling**\n\n`searchEbayInsights` relies on `getEbayAppToken` returning falsy to short-circuit gracefully when the scope isn't approved. This module (`./ebay-oauth`) isn't part of this diff, so its behavior (throwing vs. returning null/undefined on auth failure) can't be verified here. If `getEbayAppToken` throws instead of resolving to a falsy value on a 403/scope-denied response, the `try` block below wouldn't catch it since the call is outside the `try`, causing an unhandled promise rejection instead of the intended graceful `[]` degradation described in the PR."
+				},
+				{
+					"id": "r0:c3835353672:0",
+					"roundIndex": 0,
+					"reviewId": 4999286426,
+					"source": "inline",
+					"commentId": 3835353672,
+					"path": "src/lib/platforms/adapters/ebay.ts",
+					"line": 265,
+					"severity": "P3",
+					"title": "EbayAdapter.searchSoldComps discards soldAt=null items silently and hardcodes condition",
+					"text": "🟢 **Low**\n\n**EbayAdapter.searchSoldComps discards soldAt=null items silently and hardcodes condition**\n\nThe mapping sets `condition: 'Not specified'` unconditionally, even though `SoldListing` from `ebay-insights.ts` never actually carries condition data (it's not in the `InsightsItemSale` interface either). This isn't a bug introduced here per se, but it means `PlatformComp.condition` will always report 'Not specified' for eBay comps — worth flagging if downstream logic filters/weights by condition."
+				},
+				{
+					"id": "r0:c3835353674:0",
+					"roundIndex": 0,
+					"reviewId": 4999286426,
+					"source": "inline",
+					"commentId": 3835353674,
+					"path": "src/lib/platforms/adapters/ebay.ts",
+					"line": 270,
+					"severity": "P3",
+					"title": "soldAt can be an empty string but is treated as truthy Date input",
+					"text": "🟢 **Low**\n\n**soldAt can be an empty string but is treated as truthy Date input**\n\nIn `EbayAdapter.searchSoldComps`, `r.soldAt` from `searchEbayInsights` is filtered to be non-empty upstream (`.filter((it) => ... it.soldAt && ...)`), so this specific call site is fine. However, `SoldListing.soldAt` is typed as `string` (not `string | null`) yet the filtering guaranteeing non-empty values lives in a separate function far from the type definition — nothing in the type itself prevents a future caller of `searchEbayInsights` internals (e.g. if the filter is ever weakened) from producing an empty `soldAt` string, which would silently construct `new Date('')` → `Invalid Date` here rather than being caught at the type level."
+				},
+				{
+					"id": "r0:c3835353675:0",
+					"roundIndex": 0,
+					"reviewId": 4999286426,
+					"source": "inline",
+					"commentId": 3835353675,
+					"path": "src/lib/pipeline/comps/ebay-insights.ts",
+					"line": 41,
+					"severity": "P3",
+					"title": "priceCents truncated via Math.round without currency/locale validation",
+					"text": "🟢 **Low**\n\n**priceCents truncated via Math.round without currency/locale validation**\n\n`parseFloat(it.price?.value)` assumes the price value is always in the correct currency and decimal format; if eBay ever returns a non-USD marketplace price (unlikely given the hardcoded `EBAY_US` marketplace header, but worth noting) this would silently produce an incorrect priceCents without any currency validation against `it.price?.currency` (not read here)."
+				},
+				{
+					"id": "r0:c3835353677:0",
+					"roundIndex": 0,
+					"reviewId": 4999286426,
+					"source": "inline",
+					"commentId": 3835353677,
+					"path": "src/lib/pipeline/comps/ebay-insights.ts",
+					"line": 47,
+					"severity": "P3",
+					"title": "priceCents=0 filtered out even for legitimately free/near-zero-value sales",
+					"text": "🟢 **Low**\n\n**priceCents=0 filtered out even for legitimately free/near-zero-value sales**\n\nThe filter `it.priceCents > 0` combined with `Math.round(price*100)` means any parse failure of `it.price?.value` (NaN -> 0) is silently dropped along with genuinely free items. This is consistent with prior SerpAPI behavior, so not a regression, but worth noting there's no distinction/logging between \"parse failed\" and \"filtered as invalid\"."
+				},
+				{
+					"id": "r0:c3835353680:0",
+					"roundIndex": 0,
+					"reviewId": 4999286426,
+					"source": "inline",
+					"commentId": 3835353680,
+					"path": "src/lib/platforms/adapters/ebay.ts",
+					"line": 267,
+					"severity": "P3",
+					"title": "condition field hardcoded, dropping condition data from API response",
+					"text": "🟢 **Low**\n\n**condition field hardcoded, dropping condition data from API response**\n\nThe eBay Marketplace Insights `item_sales/search` response likely includes a `condition` field similar to other eBay APIs, but `searchSoldComps` hardcodes `condition: 'Not specified'` instead of passing through any condition info from `SoldListing`. Since `SoldListing` in ebay-insights.ts doesn't capture a condition field at all, this may be an intentional simplification, but it means condition-based comp filtering downstream (if any) will lose eBay condition data entirely for sold comps."
+				},
+				{
+					"id": "r0:body:0",
+					"roundIndex": 0,
+					"reviewId": 4999286426,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "No automated tests added for new ebay-insights client or adapter changes",
+					"text": "No automated tests added for new ebay-insights client or adapter changes"
+				},
+				{
+					"id": "r0:body:1",
+					"roundIndex": 0,
+					"reviewId": 4999286426,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "No caller passes serpapi retail-price key removal validation, but soldAt filter drops all unparseable dates silently without logging (minor behavior change from prior code)",
+					"text": "No caller passes serpapi retail-price key removal validation, but soldAt filter drops all unparseable dates silently without logging (minor behavior change from prior code)"
+				},
+				{
+					"id": "r0:body:2",
+					"roundIndex": 0,
+					"reviewId": 4999286426,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "getEbayAppToken and EBAY_SCOPE_INSIGHTS imported from unseen module",
+					"text": "getEbayAppToken and EBAY_SCOPE_INSIGHTS imported from unseen module"
+				},
+				{
+					"id": "r0:body:3",
+					"roundIndex": 0,
+					"reviewId": 4999286426,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "EbayAdapter.searchSoldComps drops condition/soldAt fidelity silently",
+					"text": "EbayAdapter.searchSoldComps drops condition/soldAt fidelity silently"
+				},
+				{
+					"id": "r0:body:4",
+					"roundIndex": 0,
+					"reviewId": 4999286426,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "getEbayAppToken/EBAY_SCOPE_INSIGHTS imports not shown in diff",
+					"text": "getEbayAppToken/EBAY_SCOPE_INSIGHTS imports not shown in diff"
+				},
+				{
+					"id": "r0:body:5",
+					"roundIndex": 0,
+					"reviewId": 4999286426,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "searchEbayInsights called without limiting concurrency/rate awareness across two call sites",
+					"text": "searchEbayInsights called without limiting concurrency/rate awareness across two call sites"
+				}
+			]
+		}
+	],
+	"threads": [
+		{
+			"threadId": "PRRT_kwDOSSBjYs6bW8sL",
+			"commentId": 3835353668,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6bW8sO",
+			"commentId": 3835353672,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6bW8sQ",
+			"commentId": 3835353674,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6bW8sR",
+			"commentId": 3835353675,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6bW8sT",
+			"commentId": 3835353677,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6bW8sV",
+			"commentId": 3835353680,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		}
+	],
+	"reactions": []
 }

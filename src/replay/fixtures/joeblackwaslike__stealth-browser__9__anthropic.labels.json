@@ -1,84 +1,80 @@
 {
-  "fixtureId": "joeblackwaslike__stealth-browser__9__anthropic",
-  "provisional": true,
-  "labels": [
-    {
-      "claimId": "r0:c4475171382:0",
-      "label": "fixed",
-      "confidence": "high",
-      "evidence": [
-        "2026-11-05T00:40:32Z|Fixed in 87eb09c0. deploy.sh reads the token first and exits before applying anything if it is empty. Checked with a stub kubectl: an empty token exits 1 with no apply calls, and a present token still succeeds."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r0:c4475171388:0",
-      "label": "fixed",
-      "confidence": "high",
-      "evidence": [
-        "2026-11-05T00:40:36Z|Fixed in 87eb09c0. deploy.sh reads the token first and exits before applying anything if it is empty. Checked with a stub kubectl: an empty token exits 1 with no apply calls, and a present token still succeeds."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r0:c4475171393:0",
-      "label": "fixed",
-      "confidence": "high",
-      "evidence": [
-        "2026-11-05T00:40:40Z|Fixed in 87eb09c0. deploy.sh reads the token first and exits before applying anything if it is empty. Checked with a stub kubectl: an empty token exits 1 with no apply calls, and a present token still succeeds."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r0:c4475171397:0",
-      "label": "fixed",
-      "confidence": "high",
-      "evidence": [
-        "2026-11-05T00:40:44Z|Fixed in 87eb09c0. The README now notes the Reloader dependency for token rotation."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r0:c4475171404:0",
-      "label": "rejected",
-      "confidence": "low",
-      "evidence": [
-        "2026-11-05T00:40:50Z|reaction confused by joeblackwaslike"
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r0:c4475171409:0",
-      "label": "rejected",
-      "confidence": "low",
-      "evidence": [
-        "2026-11-05T00:40:54Z|reaction confused by joeblackwaslike"
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r1:body:0",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r1:body:1",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r1:body:2",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    }
-  ],
-  "repeatPairs": [],
-  "negativePairs": [],
-  "allowedSuppression": []
+	"fixtureId": "joeblackwaslike__stealth-browser__9__anthropic",
+	"provisional": true,
+	"labels": [
+		{
+			"claimId": "r0:c4475171382:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-11-05T00:40:32Z|Fixed in 87eb09c0. deploy.sh reads the token first and exits before applying anything if it is empty. Checked with a stub kubectl: an empty token exits 1 with no apply calls, and a present token still succeeds."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4475171388:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-11-05T00:40:36Z|Fixed in 87eb09c0. deploy.sh reads the token first and exits before applying anything if it is empty. Checked with a stub kubectl: an empty token exits 1 with no apply calls, and a present token still succeeds."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4475171393:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-11-05T00:40:40Z|Fixed in 87eb09c0. deploy.sh reads the token first and exits before applying anything if it is empty. Checked with a stub kubectl: an empty token exits 1 with no apply calls, and a present token still succeeds."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4475171397:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-11-05T00:40:44Z|Fixed in 87eb09c0. The README now notes the Reloader dependency for token rotation."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4475171404:0",
+			"label": "rejected",
+			"confidence": "low",
+			"evidence": ["2026-11-05T00:40:50Z|reaction confused by joeblackwaslike"],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4475171409:0",
+			"label": "rejected",
+			"confidence": "low",
+			"evidence": ["2026-11-05T00:40:54Z|reaction confused by joeblackwaslike"],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:2",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		}
+	],
+	"repeatPairs": [],
+	"negativePairs": [],
+	"allowedSuppression": []
 }

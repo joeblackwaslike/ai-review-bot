@@ -1,373 +1,214 @@
 {
-  "schemaVersion": 1,
-  "owner": "joeblackwaslike",
-  "repo": "ai-listings",
-  "pull": 58,
-  "provider": "anthropic",
-  "reviewer": "claude",
-  "author": "joeblackwaslike",
-  "recordedAt": "2026-11-07T23:27:47.935Z",
-  "rounds": [
-    {
-      "index": 0,
-      "reviewId": 5128887269,
-      "provider": "anthropic",
-      "submittedAt": "2026-09-07T06:55:29Z",
-      "headSha": "b946a738777419851754365f23dc240e9c8fae2e",
-      "baseSha": "a6d73156f6b1e6e91730568f14d2ec1840b01343",
-      "mergeBase": "a6d73156f6b1e6e91730568f14d2ec1840b01343",
-      "triggerAt": "2026-09-07T06:21:46Z",
-      "approximate": false,
-      "commitsSince": [
-        {
-          "sha": "836cad461ed2cd1ff73e94150f8a9227102c8af3",
-          "committedAt": "2026-09-07T05:47:10Z",
-          "files": [
-            {
-              "path": "deployment/kubernetes/browserless/deployment.yaml",
-              "ranges": [
-                [
-                  1,
-                  54
-                ]
-              ]
-            },
-            {
-              "path": "deployment/kubernetes/browserless/ingress.yaml",
-              "ranges": [
-                [
-                  1,
-                  18
-                ]
-              ]
-            },
-            {
-              "path": "deployment/kubernetes/browserless/service.yaml",
-              "ranges": [
-                [
-                  1,
-                  11
-                ]
-              ]
-            },
-            {
-              "path": "deployment/scripts/deploy-app.sh",
-              "ranges": [
-                [
-                  15,
-                  22
-                ],
-                [
-                  103,
-                  109
-                ]
-              ]
-            },
-            {
-              "path": "deployment/scripts/deploy-browserless.sh",
-              "ranges": [
-                [
-                  1,
-                  39
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "b61d41b10cc9b0a735812261ca7e7bbd2b460b53",
-          "committedAt": "2026-09-07T05:54:58Z",
-          "files": [
-            {
-              "path": "src/lib/pipeline/comps/url-verify.test.ts",
-              "ranges": [
-                [
-                  1,
-                  118
-                ]
-              ]
-            },
-            {
-              "path": "src/lib/pipeline/comps/url-verify.ts",
-              "ranges": [
-                [
-                  1,
-                  5
-                ],
-                [
-                  12,
-                  36
-                ],
-                [
-                  43,
-                  48
-                ],
-                [
-                  63,
-                  68
-                ],
-                [
-                  91,
-                  158
-                ],
-                [
-                  164,
-                  176
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "abe8a07c469a95927a43a2feeefdf3f55a7d5639",
-          "committedAt": "2026-09-07T06:00:55Z",
-          "files": [
-            {
-              "path": "pnpm-lock.yaml",
-              "ranges": [
-                [
-                  14,
-                  28
-                ],
-                [
-                  244,
-                  271
-                ],
-                [
-                  4144,
-                  4174
-                ]
-              ]
-            },
-            {
-              "path": "pnpm-workspace.yaml",
-              "ranges": [
-                [
-                  1,
-                  5
-                ]
-              ]
-            },
-            {
-              "path": "src/lib/pipeline/comps/url-verify.ts",
-              "ranges": [
-                [
-                  1,
-                  10
-                ],
-                [
-                  17,
-                  35
-                ],
-                [
-                  43,
-                  51
-                ],
-                [
-                  58,
-                  70
-                ],
-                [
-                  85,
-                  93
-                ],
-                [
-                  163,
-                  192
-                ],
-                [
-                  197,
-                  210
-                ],
-                [
-                  215,
-                  239
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "16bf024b27f691615349ed5ca4ca416edd0dfadc",
-          "committedAt": "2026-09-07T06:02:34Z",
-          "files": [
-            {
-              "path": "pnpm-lock.yaml",
-              "ranges": [
-                [
-                  14,
-                  19
-                ],
-                [
-                  235,
-                  240
-                ],
-                [
-                  4113,
-                  4118
-                ]
-              ]
-            },
-            {
-              "path": "pnpm-workspace.yaml",
-              "ranges": [
-                [
-                  1,
-                  5
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "9eebf2c58500e2ea1969315abd15dd654e771e34",
-          "committedAt": "2026-09-07T06:04:10Z",
-          "files": [
-            {
-              "path": ".claude/commands/reprice.md",
-              "ranges": [
-                [
-                  29,
-                  49
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "b946a738777419851754365f23dc240e9c8fae2e",
-          "committedAt": "2026-09-07T06:21:46Z",
-          "files": [
-            {
-              "path": ".claude/commands/reprice.md",
-              "ranges": [
-                [
-                  32,
-                  57
-                ]
-              ]
-            },
-            {
-              "path": "deployment/kubernetes/browserless/deployment.yaml",
-              "ranges": [
-                [
-                  5,
-                  12
-                ],
-                [
-                  28,
-                  34
-                ],
-                [
-                  41,
-                  53
-                ]
-              ]
-            },
-            {
-              "path": "deployment/kubernetes/browserless/ingress.yaml",
-              "ranges": [
-                [
-                  8,
-                  14
-                ]
-              ]
-            },
-            {
-              "path": "deployment/scripts/deploy-browserless.sh",
-              "ranges": [
-                [
-                  32,
-                  40
-                ]
-              ]
-            },
-            {
-              "path": "src/lib/pipeline/comps/url-verify.test.ts",
-              "ranges": [
-                [
-                  46,
-                  65
-                ]
-              ]
-            },
-            {
-              "path": "src/lib/pipeline/comps/url-verify.ts",
-              "ranges": [
-                [
-                  22,
-                  28
-                ],
-                [
-                  32,
-                  38
-                ]
-              ]
-            }
-          ]
-        }
-      ],
-      "claims": [
-        {
-          "id": "r0:c3947246040:0",
-          "roundIndex": 0,
-          "reviewId": 5128887269,
-          "source": "inline",
-          "commentId": 3947246040,
-          "path": "src/lib/pipeline/comps/url-verify.test.ts",
-          "line": 65,
-          "severity": "P3",
-          "title": "BROWSERLESS_TOKEN not restored after test, pollutes shared process env",
-          "text": "🟢 **P3**\n\n**BROWSERLESS_TOKEN not restored after test, pollutes shared process env**\n\nThis test sets `process.env.BROWSERLESS_TOKEN = 'test-token'` but never restores or deletes it after the test runs (no `afterEach` cleanup for this variable). Since `afterEach` in this file only restores `globalThis.fetch` and calls `mock.reset()`, the env var leaks into subsequent tests within this file and potentially into other test files run in the same Node process. Any later test that expects `BROWSERLESS_TOKEN` to be unset (to exercise the UNCONFIRMED-without-token path) could get a false pass/fail depending on execution order, since only the first test in this suite explicitly saves/restores the original value."
-        },
-        {
-          "id": "r0:body:0",
-          "roundIndex": 0,
-          "reviewId": 5128887269,
-          "source": "body",
-          "commentId": null,
-          "path": null,
-          "line": null,
-          "severity": "P3",
-          "title": "verifyComp has no wired callers yet",
-          "text": "verifyComp has no wired callers yet"
-        },
-        {
-          "id": "r0:body:1",
-          "roundIndex": 0,
-          "reviewId": 5128887269,
-          "source": "body",
-          "commentId": null,
-          "path": null,
-          "line": null,
-          "severity": "P2",
-          "title": "Redirect/navigation destination not validated for Browserless-fetched eBay content",
-          "text": "Redirect/navigation destination not validated for Browserless-fetched eBay content"
-        },
-        {
-          "id": "r0:body:2",
-          "roundIndex": 0,
-          "reviewId": 5128887269,
-          "source": "body",
-          "commentId": null,
-          "path": null,
-          "line": null,
-          "severity": "P3",
-          "title": "Test pollutes process.env.BROWSERLESS_TOKEN across test cases",
-          "text": "Test pollutes process.env.BROWSERLESS_TOKEN across test cases"
-        }
-      ]
-    }
-  ],
-  "threads": [
-    {
-      "threadId": "PRRT_kwDOSSBjYs6f0BmV",
-      "commentId": 3947246040,
-      "isResolved": false,
-      "isOutdated": false,
-      "resolvedBy": null,
-      "replies": []
-    }
-  ],
-  "reactions": []
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "ai-listings",
+	"pull": 58,
+	"provider": "anthropic",
+	"reviewer": "claude",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-11-07T23:27:47.935Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 5128887269,
+			"provider": "anthropic",
+			"submittedAt": "2026-09-07T06:55:29Z",
+			"headSha": "b946a738777419851754365f23dc240e9c8fae2e",
+			"baseSha": "a6d73156f6b1e6e91730568f14d2ec1840b01343",
+			"mergeBase": "a6d73156f6b1e6e91730568f14d2ec1840b01343",
+			"triggerAt": "2026-09-07T06:21:46Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "836cad461ed2cd1ff73e94150f8a9227102c8af3",
+					"committedAt": "2026-09-07T05:47:10Z",
+					"files": [
+						{
+							"path": "deployment/kubernetes/browserless/deployment.yaml",
+							"ranges": [[1, 54]]
+						},
+						{
+							"path": "deployment/kubernetes/browserless/ingress.yaml",
+							"ranges": [[1, 18]]
+						},
+						{
+							"path": "deployment/kubernetes/browserless/service.yaml",
+							"ranges": [[1, 11]]
+						},
+						{
+							"path": "deployment/scripts/deploy-app.sh",
+							"ranges": [[15, 22], [103, 109]]
+						},
+						{
+							"path": "deployment/scripts/deploy-browserless.sh",
+							"ranges": [[1, 39]]
+						}
+					]
+				},
+				{
+					"sha": "b61d41b10cc9b0a735812261ca7e7bbd2b460b53",
+					"committedAt": "2026-09-07T05:54:58Z",
+					"files": [
+						{
+							"path": "src/lib/pipeline/comps/url-verify.test.ts",
+							"ranges": [[1, 118]]
+						},
+						{
+							"path": "src/lib/pipeline/comps/url-verify.ts",
+							"ranges": [
+								[1, 5],
+								[12, 36],
+								[43, 48],
+								[63, 68],
+								[91, 158],
+								[164, 176]
+							]
+						}
+					]
+				},
+				{
+					"sha": "abe8a07c469a95927a43a2feeefdf3f55a7d5639",
+					"committedAt": "2026-09-07T06:00:55Z",
+					"files": [
+						{
+							"path": "pnpm-lock.yaml",
+							"ranges": [[14, 28], [244, 271], [4144, 4174]]
+						},
+						{
+							"path": "pnpm-workspace.yaml",
+							"ranges": [[1, 5]]
+						},
+						{
+							"path": "src/lib/pipeline/comps/url-verify.ts",
+							"ranges": [
+								[1, 10],
+								[17, 35],
+								[43, 51],
+								[58, 70],
+								[85, 93],
+								[163, 192],
+								[197, 210],
+								[215, 239]
+							]
+						}
+					]
+				},
+				{
+					"sha": "16bf024b27f691615349ed5ca4ca416edd0dfadc",
+					"committedAt": "2026-09-07T06:02:34Z",
+					"files": [
+						{
+							"path": "pnpm-lock.yaml",
+							"ranges": [[14, 19], [235, 240], [4113, 4118]]
+						},
+						{
+							"path": "pnpm-workspace.yaml",
+							"ranges": [[1, 5]]
+						}
+					]
+				},
+				{
+					"sha": "9eebf2c58500e2ea1969315abd15dd654e771e34",
+					"committedAt": "2026-09-07T06:04:10Z",
+					"files": [
+						{
+							"path": ".claude/commands/reprice.md",
+							"ranges": [[29, 49]]
+						}
+					]
+				},
+				{
+					"sha": "b946a738777419851754365f23dc240e9c8fae2e",
+					"committedAt": "2026-09-07T06:21:46Z",
+					"files": [
+						{
+							"path": ".claude/commands/reprice.md",
+							"ranges": [[32, 57]]
+						},
+						{
+							"path": "deployment/kubernetes/browserless/deployment.yaml",
+							"ranges": [[5, 12], [28, 34], [41, 53]]
+						},
+						{
+							"path": "deployment/kubernetes/browserless/ingress.yaml",
+							"ranges": [[8, 14]]
+						},
+						{
+							"path": "deployment/scripts/deploy-browserless.sh",
+							"ranges": [[32, 40]]
+						},
+						{
+							"path": "src/lib/pipeline/comps/url-verify.test.ts",
+							"ranges": [[46, 65]]
+						},
+						{
+							"path": "src/lib/pipeline/comps/url-verify.ts",
+							"ranges": [[22, 28], [32, 38]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r0:c3947246040:0",
+					"roundIndex": 0,
+					"reviewId": 5128887269,
+					"source": "inline",
+					"commentId": 3947246040,
+					"path": "src/lib/pipeline/comps/url-verify.test.ts",
+					"line": 65,
+					"severity": "P3",
+					"title": "BROWSERLESS_TOKEN not restored after test, pollutes shared process env",
+					"text": "🟢 **P3**\n\n**BROWSERLESS_TOKEN not restored after test, pollutes shared process env**\n\nThis test sets `process.env.BROWSERLESS_TOKEN = 'test-token'` but never restores or deletes it after the test runs (no `afterEach` cleanup for this variable). Since `afterEach` in this file only restores `globalThis.fetch` and calls `mock.reset()`, the env var leaks into subsequent tests within this file and potentially into other test files run in the same Node process. Any later test that expects `BROWSERLESS_TOKEN` to be unset (to exercise the UNCONFIRMED-without-token path) could get a false pass/fail depending on execution order, since only the first test in this suite explicitly saves/restores the original value."
+				},
+				{
+					"id": "r0:body:0",
+					"roundIndex": 0,
+					"reviewId": 5128887269,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "verifyComp has no wired callers yet",
+					"text": "verifyComp has no wired callers yet"
+				},
+				{
+					"id": "r0:body:1",
+					"roundIndex": 0,
+					"reviewId": 5128887269,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Redirect/navigation destination not validated for Browserless-fetched eBay content",
+					"text": "Redirect/navigation destination not validated for Browserless-fetched eBay content"
+				},
+				{
+					"id": "r0:body:2",
+					"roundIndex": 0,
+					"reviewId": 5128887269,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Test pollutes process.env.BROWSERLESS_TOKEN across test cases",
+					"text": "Test pollutes process.env.BROWSERLESS_TOKEN across test cases"
+				}
+			]
+		}
+	],
+	"threads": [
+		{
+			"threadId": "PRRT_kwDOSSBjYs6f0BmV",
+			"commentId": 3947246040,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		}
+	],
+	"reactions": []
 }

@@ -1,1157 +1,577 @@
 {
-  "schemaVersion": 1,
-  "owner": "joeblackwaslike",
-  "repo": "stealth-browser",
-  "pull": 7,
-  "provider": "anthropic",
-  "reviewer": "claude",
-  "author": "joeblackwaslike",
-  "recordedAt": "2026-11-07T23:31:46.822Z",
-  "rounds": [
-    {
-      "index": 0,
-      "reviewId": 5765453099,
-      "provider": "anthropic",
-      "submittedAt": "2026-11-04T08:26:35Z",
-      "headSha": "31d0bbd04b6d06dc3a63cbf770094f6b0bf11628",
-      "baseSha": "56c31545d97f9481ea8714e6c470525a199f8c72",
-      "mergeBase": "56c31545d97f9481ea8714e6c470525a199f8c72",
-      "triggerAt": "2026-11-04T08:15:36Z",
-      "approximate": false,
-      "commitsSince": [
-        {
-          "sha": "b6b96dff8f10408bdabbf8fccaa01076535d7bd2",
-          "committedAt": "2026-11-04T03:05:23Z",
-          "files": [
-            {
-              "path": "docs/superpowers/specs/2026-11-03-host-config-and-block-html-design.md",
-              "ranges": [
-                [
-                  1,
-                  198
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "b0d00d0a3cf3387f6af177d0d2a97f707b113f8d",
-          "committedAt": "2026-11-04T07:27:01Z",
-          "files": [
-            {
-              "path": "docs/superpowers/specs/2026-11-03-host-config-and-block-html-design.md",
-              "ranges": [
-                [
-                  170,
-                  180
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "da7bbb6baad46d2f0a09a37bfaa9c0a5799c8cf4",
-          "committedAt": "2026-11-04T07:28:41Z",
-          "files": [
-            {
-              "path": "docs/superpowers/plans/2026-11-04-host-config-and-block-html.md",
-              "ranges": [
-                [
-                  1,
-                  132
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "a4aa054dd0d137c3a4e7571a929bfdd5a1dc1b3f",
-          "committedAt": "2026-11-04T07:34:18Z",
-          "files": [
-            {
-              "path": "src/detect.ts",
-              "ranges": [
-                [
-                  3,
-                  15
-                ],
-                [
-                  28,
-                  101
-                ],
-                [
-                  106,
-                  117
-                ],
-                [
-                  127,
-                  148
-                ],
-                [
-                  165,
-                  176
-                ]
-              ]
-            },
-            {
-              "path": "test/app.test.ts",
-              "ranges": [
-                [
-                  130,
-                  140
-                ],
-                [
-                  206,
-                  216
-                ]
-              ]
-            },
-            {
-              "path": "test/browser.test.ts",
-              "ranges": [
-                [
-                  382,
-                  388
-                ]
-              ]
-            },
-            {
-              "path": "test/detect.test.ts",
-              "ranges": [
-                [
-                  5,
-                  23
-                ],
-                [
-                  29,
-                  35
-                ],
-                [
-                  40,
-                  93
-                ],
-                [
-                  97,
-                  107
-                ],
-                [
-                  225,
-                  231
-                ],
-                [
-                  239,
-                  245
-                ],
-                [
-                  273,
-                  283
-                ],
-                [
-                  303,
-                  328
-                ],
-                [
-                  333,
-                  343
-                ],
-                [
-                  362,
-                  368
-                ],
-                [
-                  377,
-                  383
-                ],
-                [
-                  442,
-                  451
-                ],
-                [
-                  473,
-                  481
-                ],
-                [
-                  489,
-                  506
-                ],
-                [
-                  530,
-                  554
-                ],
-                [
-                  572,
-                  594
-                ]
-              ]
-            },
-            {
-              "path": "test/submit-token.test.ts",
-              "ranges": [
-                [
-                  104,
-                  116
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "eb36d3e006e2f4cc0c74c2be00d13fdba42b140f",
-          "committedAt": "2026-11-04T07:36:49Z",
-          "files": [
-            {
-              "path": "src/app.ts",
-              "ranges": [
-                [
-                  7,
-                  16
-                ],
-                [
-                  113,
-                  150
-                ]
-              ]
-            },
-            {
-              "path": "src/profiles.ts",
-              "ranges": [
-                [
-                  11,
-                  18
-                ],
-                [
-                  22,
-                  49
-                ],
-                [
-                  72,
-                  83
-                ]
-              ]
-            },
-            {
-              "path": "src/server.ts",
-              "ranges": [
-                [
-                  3,
-                  16
-                ]
-              ]
-            },
-            {
-              "path": "src/throttle.ts",
-              "ranges": [
-                [
-                  1,
-                  3
-                ],
-                [
-                  13,
-                  73
-                ],
-                [
-                  77,
-                  86
-                ],
-                [
-                  93,
-                  110
-                ]
-              ]
-            },
-            {
-              "path": "test/app.test.ts",
-              "ranges": [
-                [
-                  5,
-                  11
-                ],
-                [
-                  16,
-                  21
-                ],
-                [
-                  69,
-                  75
-                ]
-              ]
-            },
-            {
-              "path": "test/profiles.test.ts",
-              "ranges": [
-                [
-                  4,
-                  10
-                ],
-                [
-                  57,
-                  81
-                ]
-              ]
-            },
-            {
-              "path": "test/throttle.test.ts",
-              "ranges": [
-                [
-                  7,
-                  15
-                ],
-                [
-                  32,
-                  46
-                ],
-                [
-                  53,
-                  86
-                ],
-                [
-                  89,
-                  113
-                ],
-                [
-                  117,
-                  127
-                ],
-                [
-                  130,
-                  167
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "91674e22de51fc87f33544ed6ba9d657cf6cdc3b",
-          "committedAt": "2026-11-04T07:42:05Z",
-          "files": [
-            {
-              "path": "src/app.ts",
-              "ranges": [
-                [
-                  38,
-                  43
-                ],
-                [
-                  54,
-                  59
-                ],
-                [
-                  70,
-                  86
-                ],
-                [
-                  130,
-                  136
-                ],
-                [
-                  142,
-                  150
-                ],
-                [
-                  163,
-                  181
-                ],
-                [
-                  243,
-                  254
-                ]
-              ]
-            },
-            {
-              "path": "src/server.ts",
-              "ranges": [
-                [
-                  23,
-                  28
-                ]
-              ]
-            },
-            {
-              "path": "src/state-store.ts",
-              "ranges": [
-                [
-                  54,
-                  60
-                ],
-                [
-                  141,
-                  148
-                ],
-                [
-                  153,
-                  159
-                ]
-              ]
-            },
-            {
-              "path": "test/app.test.ts",
-              "ranges": [
-                [
-                  5,
-                  10
-                ],
-                [
-                  40,
-                  47
-                ],
-                [
-                  56,
-                  61
-                ],
-                [
-                  74,
-                  79
-                ],
-                [
-                  120,
-                  219
-                ],
-                [
-                  262,
-                  268
-                ],
-                [
-                  275,
-                  282
-                ],
-                [
-                  398,
-                  405
-                ],
-                [
-                  409,
-                  431
-                ],
-                [
-                  444,
-                  461
-                ],
-                [
-                  496,
-                  501
-                ],
-                [
-                  536,
-                  541
-                ]
-              ]
-            },
-            {
-              "path": "test/state-store.test.ts",
-              "ranges": [
-                [
-                  107,
-                  122
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "d7aef5133d24ffd343b05182dd207e8e29f5f65c",
-          "committedAt": "2026-11-04T07:44:12Z",
-          "files": [
-            {
-              "path": "deploy/k8s/gateway-deployment.yaml",
-              "ranges": [
-                [
-                  44,
-                  50
-                ]
-              ]
-            },
-            {
-              "path": "src/config.ts",
-              "ranges": [
-                [
-                  1,
-                  5
-                ],
-                [
-                  11,
-                  16
-                ],
-                [
-                  33,
-                  39
-                ],
-                [
-                  47,
-                  51
-                ]
-              ]
-            },
-            {
-              "path": "test/config.test.ts",
-              "ranges": [
-                [
-                  41,
-                  53
-                ],
-                [
-                  63,
-                  76
-                ]
-              ]
-            },
-            {
-              "path": "test/solver.test.ts",
-              "ranges": [
-                [
-                  159,
-                  164
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "d47e457ec40284ed9d0980535087e88cb8bc2824",
-          "committedAt": "2026-11-04T07:49:03Z",
-          "files": [
-            {
-              "path": "README.md",
-              "ranges": [
-                [
-                  69,
-                  83
-                ],
-                [
-                  90,
-                  153
-                ],
-                [
-                  165,
-                  188
-                ],
-                [
-                  285,
-                  290
-                ]
-              ]
-            },
-            {
-              "path": "deploy/k8s/gateway-deployment.yaml",
-              "ranges": [
-                [
-                  21,
-                  27
-                ]
-              ]
-            },
-            {
-              "path": "package.json",
-              "ranges": [
-                [
-                  1,
-                  6
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "08b5db861b0bc6841b8c174e022b532b3a553367",
-          "committedAt": "2026-11-04T07:51:01Z",
-          "files": [
-            {
-              "path": "README.md",
-              "ranges": [
-                [
-                  108,
-                  120
-                ],
-                [
-                  124,
-                  131
-                ],
-                [
-                  140,
-                  157
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "6696e2608d8d04474e42f84be903c63895a897ca",
-          "committedAt": "2026-11-04T07:52:10Z",
-          "files": [
-            {
-              "path": "README.md",
-              "ranges": [
-                [
-                  125,
-                  132
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "93c1f8397b2f92c2dd784786a7849105f5d0de9e",
-          "committedAt": "2026-11-04T08:05:32Z",
-          "files": [
-            {
-              "path": "README.md",
-              "ranges": [
-                [
-                  136,
-                  152
-                ]
-              ]
-            },
-            {
-              "path": "src/browser.ts",
-              "ranges": [
-                [
-                  63,
-                  121
-                ],
-                [
-                  162,
-                  168
-                ]
-              ]
-            },
-            {
-              "path": "src/detect.ts",
-              "ranges": [
-                [
-                  54,
-                  91
-                ],
-                [
-                  122,
-                  131
-                ]
-              ]
-            },
-            {
-              "path": "test/browser.test.ts",
-              "ranges": [
-                [
-                  72,
-                  79
-                ],
-                [
-                  206,
-                  212
-                ],
-                [
-                  220,
-                  226
-                ]
-              ]
-            },
-            {
-              "path": "test/detect.test.ts",
-              "ranges": [
-                [
-                  1,
-                  18
-                ],
-                [
-                  86,
-                  162
-                ]
-              ]
-            },
-            {
-              "path": "test/fixtures/google-sorry.html",
-              "ranges": [
-                [
-                  1,
-                  3
-                ]
-              ]
-            },
-            {
-              "path": "test/submit-token.test.ts",
-              "ranges": [
-                [
-                  28,
-                  37
-                ],
-                [
-                  53,
-                  59
-                ],
-                [
-                  75,
-                  109
-                ],
-                [
-                  118,
-                  166
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "e65f117f51df61958892cef2a273b01b0fd7273f",
-          "committedAt": "2026-11-04T08:05:32Z",
-          "files": [
-            {
-              "path": "src/app.ts",
-              "ranges": [
-                [
-                  70,
-                  76
-                ],
-                [
-                  80,
-                  86
-                ],
-                [
-                  152,
-                  158
-                ]
-              ]
-            },
-            {
-              "path": "test/app.test.ts",
-              "ranges": [
-                [
-                  51,
-                  57
-                ],
-                [
-                  64,
-                  72
-                ],
-                [
-                  91,
-                  97
-                ],
-                [
-                  197,
-                  221
-                ],
-                [
-                  588,
-                  662
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "31d0bbd04b6d06dc3a63cbf770094f6b0bf11628",
-          "committedAt": "2026-11-04T08:15:36Z",
-          "files": [
-            {
-              "path": "src/browser.ts",
-              "ranges": [
-                [
-                  90,
-                  96
-                ]
-              ]
-            },
-            {
-              "path": "test/submit-token.test.ts",
-              "ranges": [
-                [
-                  109,
-                  127
-                ]
-              ]
-            }
-          ]
-        }
-      ],
-      "claims": [
-        {
-          "id": "r0:c4465303142:0",
-          "roundIndex": 0,
-          "reviewId": 5765453099,
-          "source": "inline",
-          "commentId": 4465303142,
-          "path": "src/throttle.ts",
-          "line": 87,
-          "severity": "P3",
-          "title": "Per-hostname scheduler maps grow without bound",
-          "text": "🟢 **P3**\n\n**Per-hostname scheduler maps grow without bound**\n\nAnon traffic is now keyed by hostname, so `lastStart` gets a new entry for every distinct host a caller fetches. These entries are never evicted, and `pausedUntilMs` grows the same way. Before this change the maps held at most four profile names. A long-running gateway fetching many distinct hosts will accumulate entries indefinitely. Only the latest start time matters, so entries older than the maximum gap are safe to drop. Prune them lazily in `run`, or cap the map size.\n\nSeparately, an anon hostname that is a bare label equal to a profile name (for example `http://ebay/`) produces the key `ebay`, which is also the eBay profile's key. It would share that profile's gap and pause state. Prefixing host keys, e.g. `host:${hostname}`, avoids the collision.\n\n<!-- ai-review:fp=performance|src/throttle.ts|0568abdd97054866.0 -->"
-        },
-        {
-          "id": "r0:c4465303145:0",
-          "roundIndex": 0,
-          "reviewId": 5765453099,
-          "source": "inline",
-          "commentId": 4465303145,
-          "path": "src/profiles.ts",
-          "line": 82,
-          "severity": "P3",
-          "title": "Hostname-derived schedule key can collide with a profile key",
-          "text": "🟢 **P3**\n\n**Hostname-derived schedule key can collide with a profile key**\n\nFor `anon`, `scheduleKey` returns the bare hostname, and for the other profiles it returns the bare profile name (`ebay`, `reddit`, `google`). Both share one string namespace in the scheduler's `lastStart` and `pausedUntilMs` maps. A single-label host such as `http://ebay/` or `http://reddit/` resolves to `anon` but gets the same key as the real profile. It would then share that profile's pacing gap. It would also be rejected as `paused` whenever eBay or Reddit is paused. The per-host isolation this PR adds is therefore not airtight. Namespace the keys, for example `profile:ebay` versus `host:ebay`, and update the tests that assert the raw keys.\n\n<!-- ai-review:fp=bug|src/profiles.ts|242c6fced1f6d0f5.0 -->"
-        },
-        {
-          "id": "r0:c4465303151:0",
-          "roundIndex": 0,
-          "reviewId": 5765453099,
-          "source": "inline",
-          "commentId": 4465303151,
-          "path": "docs/superpowers/specs/2026-11-03-host-config-and-block-html-design.md",
-          "line": 63,
-          "severity": "P3",
-          "title": "Spec names a field the code does not have",
-          "text": "🟢 **P3**\n\n**Spec names a field the code does not have**\n\nThe spec says a host entry has `pauseOnFailedSolve`, and the Risks section (line 199) tells maintainers to set it on the google entry. The implementation calls this field `pauseOnBlock` (`src/profiles.ts`). It is also set after any block, not only a failed solve: an interruption page or HTTP 403 pauses eBay and Reddit too. A maintainer following the Risks advice would search for a field that doesn't exist. Rename it in the spec (lines 63, 118 and 199), or add a note that the shipped name is `pauseOnBlock`.\n\n<!-- ai-review:fp=style|docs/superpowers/specs/2026-11-03-host-config-and-block-html-design.md|26ae724b9b01c221.0 -->"
-        },
-        {
-          "id": "r0:c4465303159:0",
-          "roundIndex": 0,
-          "reviewId": 5765453099,
-          "source": "inline",
-          "commentId": 4465303159,
-          "path": "src/app.ts",
-          "line": 85,
-          "severity": "P3",
-          "title": "`attempts`/`challengeType` are logged even when no solver call was made",
-          "text": "🟢 **P3**\n\n**`attempts`/`challengeType` are logged even when no solver call was made**\n\n`solve` is also `\"failed\"` for `budget_exceeded` and `no_form`, and the live-DOM recheck in `browser.ts` throws `no_form` before `solver.solve` runs. In those cases `attempts: 1` and `challengeType: \"recaptcha_v2\"` are still logged. The `solve` field cannot tell \"attempted and failed\" from \"refused before attempting\". A dashboard that sums `attempts` will overstate spend and attempts. Derive `attempts` from `solveReason`, or have the fetcher report the real count.\n\n<!-- ai-review:fp=bug|src/app.ts|d32ad605443a3fad.0 -->"
-        }
-      ]
-    },
-    {
-      "index": 1,
-      "reviewId": 5765943113,
-      "provider": "anthropic",
-      "submittedAt": "2026-11-04T09:07:16Z",
-      "headSha": "28034494d1541f0cdc023cbaa220f500a510b2c3",
-      "baseSha": "31d0bbd04b6d06dc3a63cbf770094f6b0bf11628",
-      "mergeBase": "31d0bbd04b6d06dc3a63cbf770094f6b0bf11628",
-      "triggerAt": "2026-11-04T09:05:16Z",
-      "approximate": false,
-      "commitsSince": [
-        {
-          "sha": "ea70c96cfd5c64344fca600abd882f41791ca5de",
-          "committedAt": "2026-11-04T08:34:23Z",
-          "files": [
-            {
-              "path": "README.md",
-              "ranges": [
-                [
-                  76,
-                  84
-                ]
-              ]
-            },
-            {
-              "path": "docs/superpowers/plans/2026-11-04-host-config-and-block-html.md",
-              "ranges": [
-                [
-                  30,
-                  39
-                ]
-              ]
-            },
-            {
-              "path": "docs/superpowers/specs/2026-11-03-host-config-and-block-html-design.md",
-              "ranges": [
-                [
-                  60,
-                  66
-                ],
-                [
-                  116,
-                  124
-                ],
-                [
-                  198,
-                  204
-                ]
-              ]
-            },
-            {
-              "path": "src/app.ts",
-              "ranges": [
-                [
-                  73,
-                  82
-                ],
-                [
-                  85,
-                  92
-                ]
-              ]
-            },
-            {
-              "path": "src/browser.ts",
-              "ranges": [
-                [
-                  65,
-                  73
-                ],
-                [
-                  83,
-                  89
-                ]
-              ]
-            },
-            {
-              "path": "src/profiles.ts",
-              "ranges": [
-                [
-                  74,
-                  86
-                ]
-              ]
-            },
-            {
-              "path": "src/throttle.ts",
-              "ranges": [
-                [
-                  26,
-                  35
-                ],
-                [
-                  85,
-                  91
-                ],
-                [
-                  98,
-                  111
-                ]
-              ]
-            },
-            {
-              "path": "test/app.test.ts",
-              "ranges": [
-                [
-                  619,
-                  658
-                ]
-              ]
-            },
-            {
-              "path": "test/profiles.test.ts",
-              "ranges": [
-                [
-                  6,
-                  12
-                ],
-                [
-                  61,
-                  91
-                ]
-              ]
-            },
-            {
-              "path": "test/submit-token.test.ts",
-              "ranges": [
-                [
-                  122,
-                  136
-                ],
-                [
-                  147,
-                  153
-                ]
-              ]
-            },
-            {
-              "path": "test/throttle.test.ts",
-              "ranges": [
-                [
-                  164,
-                  193
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "e6171105882198627ba364c0629cdae2ff9513c4",
-          "committedAt": "2026-11-04T08:46:02Z",
-          "files": [
-            {
-              "path": "docs/superpowers/plans/2026-11-04-host-config-and-block-html.md",
-              "ranges": [
-                [
-                  71,
-                  77
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "95e2524143451cbca3d85b5aa4b0b6c82d275b90",
-          "committedAt": "2026-11-04T08:49:32Z",
-          "files": [
-            {
-              "path": "README.md",
-              "ranges": [
-                [
-                  144,
-                  154
-                ]
-              ]
-            },
-            {
-              "path": "src/browser.ts",
-              "ranges": [
-                [
-                  66,
-                  73
-                ],
-                [
-                  78,
-                  92
-                ]
-              ]
-            },
-            {
-              "path": "test/submit-token.test.ts",
-              "ranges": [
-                [
-                  158,
-                  203
-                ]
-              ]
-            }
-          ]
-        },
-        {
-          "sha": "28034494d1541f0cdc023cbaa220f500a510b2c3",
-          "committedAt": "2026-11-04T09:05:16Z",
-          "files": [
-            {
-              "path": "deploy/k8s/gateway-deployment.yaml",
-              "ranges": [
-                [
-                  21,
-                  27
-                ]
-              ]
-            },
-            {
-              "path": "package.json",
-              "ranges": [
-                [
-                  1,
-                  6
-                ]
-              ]
-            }
-          ]
-        }
-      ],
-      "claims": [
-        {
-          "id": "r1:c4465687399:0",
-          "roundIndex": 1,
-          "reviewId": 5765943113,
-          "source": "inline",
-          "commentId": 4465687399,
-          "path": "src/app.ts",
-          "line": 79,
-          "severity": "P3",
-          "title": "`no_form` after a solver call is logged as zero attempts",
-          "text": "🟢 **P3** · advisory\n\n**`no_form` after a solver call is logged as zero attempts**\n\n`reachedSolver` treats every `solveReason === \"no_form\"` as \"solver never called\". `no_form` is also returned when the pre-submit live recheck fails after a token was already obtained, for example a field added while the solver runs, which the existing test suite covers. In that case the solver call and its budget are spent, but the done log reports `attempts: undefined` and `challengeType: undefined`. Downstream dashboard cost accounting will undercount those attempts. A separate reason for the post-solve recheck, or a flag set once the solver is actually invoked, would make this accurate.\n\n<!-- ai-review:fp=bug|src/app.ts|3641d4d00f5be4ee.0 -->\n<!-- ai-review:advisory -->"
-        }
-      ]
-    }
-  ],
-  "threads": [
-    {
-      "threadId": "PRRT_kwDOVL2EQc6zgnBO",
-      "commentId": 4465303142,
-      "isResolved": true,
-      "isOutdated": false,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 4465478898,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-11-04T08:46:35Z",
-          "editedAt": null,
-          "body": "Both points were real and are fixed in e6171105: schedule keys are namespaced (profile:<name> versus host:<hostname>), so http://ebay/ no longer shares eBay's gap or pause, and the scheduler prunes idle host entries lazily once the map passes 256 entries."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOVL2EQc6zgnBQ",
-      "commentId": 4465303145,
-      "isResolved": true,
-      "isOutdated": true,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 4465479657,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-11-04T08:46:40Z",
-          "editedAt": null,
-          "body": "Fixed in e6171105: keys are now profile:<name> and host:<hostname>, with a test that http://ebay/ and the eBay profile neither share a gap nor a pause."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOVL2EQc6zgnBU",
-      "commentId": 4465303151,
-      "isResolved": true,
-      "isOutdated": true,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 4465480426,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-11-04T08:46:46Z",
-          "editedAt": null,
-          "body": "Fixed in e6171105: the spec now calls the flag pauseOnBlock and says it applies to any block, not only a failed solve."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOVL2EQc6zgnBW",
-      "commentId": 4465303159,
-      "isResolved": true,
-      "isOutdated": true,
-      "resolvedBy": "joeblackwaslike",
-      "replies": [
-        {
-          "id": 4465481235,
-          "author": "joeblackwaslike",
-          "createdAt": "2026-11-04T08:46:51Z",
-          "editedAt": null,
-          "body": "Fixed in e6171105: attempts and challengeType are logged only when the solver was actually called, so budget_exceeded and no_form failures no longer count as attempts. Tests added for both reasons."
-        }
-      ]
-    },
-    {
-      "threadId": "PRRT_kwDOVL2EQc6zhhNV",
-      "commentId": 4465687399,
-      "isResolved": false,
-      "isOutdated": false,
-      "resolvedBy": null,
-      "replies": []
-    }
-  ],
-  "reactions": [
-    {
-      "commentId": 4465303142,
-      "user": "joeblackwaslike",
-      "content": "+1",
-      "createdAt": "2026-11-04T08:46:36Z"
-    },
-    {
-      "commentId": 4465303145,
-      "user": "joeblackwaslike",
-      "content": "+1",
-      "createdAt": "2026-11-04T08:46:42Z"
-    },
-    {
-      "commentId": 4465303151,
-      "user": "joeblackwaslike",
-      "content": "+1",
-      "createdAt": "2026-11-04T08:46:47Z"
-    },
-    {
-      "commentId": 4465303159,
-      "user": "joeblackwaslike",
-      "content": "+1",
-      "createdAt": "2026-11-04T08:46:53Z"
-    }
-  ]
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "stealth-browser",
+	"pull": 7,
+	"provider": "anthropic",
+	"reviewer": "claude",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-11-07T23:31:46.822Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 5765453099,
+			"provider": "anthropic",
+			"submittedAt": "2026-11-04T08:26:35Z",
+			"headSha": "31d0bbd04b6d06dc3a63cbf770094f6b0bf11628",
+			"baseSha": "56c31545d97f9481ea8714e6c470525a199f8c72",
+			"mergeBase": "56c31545d97f9481ea8714e6c470525a199f8c72",
+			"triggerAt": "2026-11-04T08:15:36Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "b6b96dff8f10408bdabbf8fccaa01076535d7bd2",
+					"committedAt": "2026-11-04T03:05:23Z",
+					"files": [
+						{
+							"path": "docs/superpowers/specs/2026-11-03-host-config-and-block-html-design.md",
+							"ranges": [[1, 198]]
+						}
+					]
+				},
+				{
+					"sha": "b0d00d0a3cf3387f6af177d0d2a97f707b113f8d",
+					"committedAt": "2026-11-04T07:27:01Z",
+					"files": [
+						{
+							"path": "docs/superpowers/specs/2026-11-03-host-config-and-block-html-design.md",
+							"ranges": [[170, 180]]
+						}
+					]
+				},
+				{
+					"sha": "da7bbb6baad46d2f0a09a37bfaa9c0a5799c8cf4",
+					"committedAt": "2026-11-04T07:28:41Z",
+					"files": [
+						{
+							"path": "docs/superpowers/plans/2026-11-04-host-config-and-block-html.md",
+							"ranges": [[1, 132]]
+						}
+					]
+				},
+				{
+					"sha": "a4aa054dd0d137c3a4e7571a929bfdd5a1dc1b3f",
+					"committedAt": "2026-11-04T07:34:18Z",
+					"files": [
+						{
+							"path": "src/detect.ts",
+							"ranges": [[3, 15], [28, 101], [106, 117], [127, 148], [165, 176]]
+						},
+						{
+							"path": "test/app.test.ts",
+							"ranges": [[130, 140], [206, 216]]
+						},
+						{
+							"path": "test/browser.test.ts",
+							"ranges": [[382, 388]]
+						},
+						{
+							"path": "test/detect.test.ts",
+							"ranges": [
+								[5, 23],
+								[29, 35],
+								[40, 93],
+								[97, 107],
+								[225, 231],
+								[239, 245],
+								[273, 283],
+								[303, 328],
+								[333, 343],
+								[362, 368],
+								[377, 383],
+								[442, 451],
+								[473, 481],
+								[489, 506],
+								[530, 554],
+								[572, 594]
+							]
+						},
+						{
+							"path": "test/submit-token.test.ts",
+							"ranges": [[104, 116]]
+						}
+					]
+				},
+				{
+					"sha": "eb36d3e006e2f4cc0c74c2be00d13fdba42b140f",
+					"committedAt": "2026-11-04T07:36:49Z",
+					"files": [
+						{
+							"path": "src/app.ts",
+							"ranges": [[7, 16], [113, 150]]
+						},
+						{
+							"path": "src/profiles.ts",
+							"ranges": [[11, 18], [22, 49], [72, 83]]
+						},
+						{
+							"path": "src/server.ts",
+							"ranges": [[3, 16]]
+						},
+						{
+							"path": "src/throttle.ts",
+							"ranges": [[1, 3], [13, 73], [77, 86], [93, 110]]
+						},
+						{
+							"path": "test/app.test.ts",
+							"ranges": [[5, 11], [16, 21], [69, 75]]
+						},
+						{
+							"path": "test/profiles.test.ts",
+							"ranges": [[4, 10], [57, 81]]
+						},
+						{
+							"path": "test/throttle.test.ts",
+							"ranges": [
+								[7, 15],
+								[32, 46],
+								[53, 86],
+								[89, 113],
+								[117, 127],
+								[130, 167]
+							]
+						}
+					]
+				},
+				{
+					"sha": "91674e22de51fc87f33544ed6ba9d657cf6cdc3b",
+					"committedAt": "2026-11-04T07:42:05Z",
+					"files": [
+						{
+							"path": "src/app.ts",
+							"ranges": [
+								[38, 43],
+								[54, 59],
+								[70, 86],
+								[130, 136],
+								[142, 150],
+								[163, 181],
+								[243, 254]
+							]
+						},
+						{
+							"path": "src/server.ts",
+							"ranges": [[23, 28]]
+						},
+						{
+							"path": "src/state-store.ts",
+							"ranges": [[54, 60], [141, 148], [153, 159]]
+						},
+						{
+							"path": "test/app.test.ts",
+							"ranges": [
+								[5, 10],
+								[40, 47],
+								[56, 61],
+								[74, 79],
+								[120, 219],
+								[262, 268],
+								[275, 282],
+								[398, 405],
+								[409, 431],
+								[444, 461],
+								[496, 501],
+								[536, 541]
+							]
+						},
+						{
+							"path": "test/state-store.test.ts",
+							"ranges": [[107, 122]]
+						}
+					]
+				},
+				{
+					"sha": "d7aef5133d24ffd343b05182dd207e8e29f5f65c",
+					"committedAt": "2026-11-04T07:44:12Z",
+					"files": [
+						{
+							"path": "deploy/k8s/gateway-deployment.yaml",
+							"ranges": [[44, 50]]
+						},
+						{
+							"path": "src/config.ts",
+							"ranges": [[1, 5], [11, 16], [33, 39], [47, 51]]
+						},
+						{
+							"path": "test/config.test.ts",
+							"ranges": [[41, 53], [63, 76]]
+						},
+						{
+							"path": "test/solver.test.ts",
+							"ranges": [[159, 164]]
+						}
+					]
+				},
+				{
+					"sha": "d47e457ec40284ed9d0980535087e88cb8bc2824",
+					"committedAt": "2026-11-04T07:49:03Z",
+					"files": [
+						{
+							"path": "README.md",
+							"ranges": [[69, 83], [90, 153], [165, 188], [285, 290]]
+						},
+						{
+							"path": "deploy/k8s/gateway-deployment.yaml",
+							"ranges": [[21, 27]]
+						},
+						{
+							"path": "package.json",
+							"ranges": [[1, 6]]
+						}
+					]
+				},
+				{
+					"sha": "08b5db861b0bc6841b8c174e022b532b3a553367",
+					"committedAt": "2026-11-04T07:51:01Z",
+					"files": [
+						{
+							"path": "README.md",
+							"ranges": [[108, 120], [124, 131], [140, 157]]
+						}
+					]
+				},
+				{
+					"sha": "6696e2608d8d04474e42f84be903c63895a897ca",
+					"committedAt": "2026-11-04T07:52:10Z",
+					"files": [
+						{
+							"path": "README.md",
+							"ranges": [[125, 132]]
+						}
+					]
+				},
+				{
+					"sha": "93c1f8397b2f92c2dd784786a7849105f5d0de9e",
+					"committedAt": "2026-11-04T08:05:32Z",
+					"files": [
+						{
+							"path": "README.md",
+							"ranges": [[136, 152]]
+						},
+						{
+							"path": "src/browser.ts",
+							"ranges": [[63, 121], [162, 168]]
+						},
+						{
+							"path": "src/detect.ts",
+							"ranges": [[54, 91], [122, 131]]
+						},
+						{
+							"path": "test/browser.test.ts",
+							"ranges": [[72, 79], [206, 212], [220, 226]]
+						},
+						{
+							"path": "test/detect.test.ts",
+							"ranges": [[1, 18], [86, 162]]
+						},
+						{
+							"path": "test/fixtures/google-sorry.html",
+							"ranges": [[1, 3]]
+						},
+						{
+							"path": "test/submit-token.test.ts",
+							"ranges": [[28, 37], [53, 59], [75, 109], [118, 166]]
+						}
+					]
+				},
+				{
+					"sha": "e65f117f51df61958892cef2a273b01b0fd7273f",
+					"committedAt": "2026-11-04T08:05:32Z",
+					"files": [
+						{
+							"path": "src/app.ts",
+							"ranges": [[70, 76], [80, 86], [152, 158]]
+						},
+						{
+							"path": "test/app.test.ts",
+							"ranges": [[51, 57], [64, 72], [91, 97], [197, 221], [588, 662]]
+						}
+					]
+				},
+				{
+					"sha": "31d0bbd04b6d06dc3a63cbf770094f6b0bf11628",
+					"committedAt": "2026-11-04T08:15:36Z",
+					"files": [
+						{
+							"path": "src/browser.ts",
+							"ranges": [[90, 96]]
+						},
+						{
+							"path": "test/submit-token.test.ts",
+							"ranges": [[109, 127]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r0:c4465303142:0",
+					"roundIndex": 0,
+					"reviewId": 5765453099,
+					"source": "inline",
+					"commentId": 4465303142,
+					"path": "src/throttle.ts",
+					"line": 87,
+					"severity": "P3",
+					"title": "Per-hostname scheduler maps grow without bound",
+					"text": "🟢 **P3**\n\n**Per-hostname scheduler maps grow without bound**\n\nAnon traffic is now keyed by hostname, so `lastStart` gets a new entry for every distinct host a caller fetches. These entries are never evicted, and `pausedUntilMs` grows the same way. Before this change the maps held at most four profile names. A long-running gateway fetching many distinct hosts will accumulate entries indefinitely. Only the latest start time matters, so entries older than the maximum gap are safe to drop. Prune them lazily in `run`, or cap the map size.\n\nSeparately, an anon hostname that is a bare label equal to a profile name (for example `http://ebay/`) produces the key `ebay`, which is also the eBay profile's key. It would share that profile's gap and pause state. Prefixing host keys, e.g. `host:${hostname}`, avoids the collision.\n\n<!-- ai-review:fp=performance|src/throttle.ts|0568abdd97054866.0 -->"
+				},
+				{
+					"id": "r0:c4465303145:0",
+					"roundIndex": 0,
+					"reviewId": 5765453099,
+					"source": "inline",
+					"commentId": 4465303145,
+					"path": "src/profiles.ts",
+					"line": 82,
+					"severity": "P3",
+					"title": "Hostname-derived schedule key can collide with a profile key",
+					"text": "🟢 **P3**\n\n**Hostname-derived schedule key can collide with a profile key**\n\nFor `anon`, `scheduleKey` returns the bare hostname, and for the other profiles it returns the bare profile name (`ebay`, `reddit`, `google`). Both share one string namespace in the scheduler's `lastStart` and `pausedUntilMs` maps. A single-label host such as `http://ebay/` or `http://reddit/` resolves to `anon` but gets the same key as the real profile. It would then share that profile's pacing gap. It would also be rejected as `paused` whenever eBay or Reddit is paused. The per-host isolation this PR adds is therefore not airtight. Namespace the keys, for example `profile:ebay` versus `host:ebay`, and update the tests that assert the raw keys.\n\n<!-- ai-review:fp=bug|src/profiles.ts|242c6fced1f6d0f5.0 -->"
+				},
+				{
+					"id": "r0:c4465303151:0",
+					"roundIndex": 0,
+					"reviewId": 5765453099,
+					"source": "inline",
+					"commentId": 4465303151,
+					"path": "docs/superpowers/specs/2026-11-03-host-config-and-block-html-design.md",
+					"line": 63,
+					"severity": "P3",
+					"title": "Spec names a field the code does not have",
+					"text": "🟢 **P3**\n\n**Spec names a field the code does not have**\n\nThe spec says a host entry has `pauseOnFailedSolve`, and the Risks section (line 199) tells maintainers to set it on the google entry. The implementation calls this field `pauseOnBlock` (`src/profiles.ts`). It is also set after any block, not only a failed solve: an interruption page or HTTP 403 pauses eBay and Reddit too. A maintainer following the Risks advice would search for a field that doesn't exist. Rename it in the spec (lines 63, 118 and 199), or add a note that the shipped name is `pauseOnBlock`.\n\n<!-- ai-review:fp=style|docs/superpowers/specs/2026-11-03-host-config-and-block-html-design.md|26ae724b9b01c221.0 -->"
+				},
+				{
+					"id": "r0:c4465303159:0",
+					"roundIndex": 0,
+					"reviewId": 5765453099,
+					"source": "inline",
+					"commentId": 4465303159,
+					"path": "src/app.ts",
+					"line": 85,
+					"severity": "P3",
+					"title": "`attempts`/`challengeType` are logged even when no solver call was made",
+					"text": "🟢 **P3**\n\n**`attempts`/`challengeType` are logged even when no solver call was made**\n\n`solve` is also `\"failed\"` for `budget_exceeded` and `no_form`, and the live-DOM recheck in `browser.ts` throws `no_form` before `solver.solve` runs. In those cases `attempts: 1` and `challengeType: \"recaptcha_v2\"` are still logged. The `solve` field cannot tell \"attempted and failed\" from \"refused before attempting\". A dashboard that sums `attempts` will overstate spend and attempts. Derive `attempts` from `solveReason`, or have the fetcher report the real count.\n\n<!-- ai-review:fp=bug|src/app.ts|d32ad605443a3fad.0 -->"
+				}
+			]
+		},
+		{
+			"index": 1,
+			"reviewId": 5765943113,
+			"provider": "anthropic",
+			"submittedAt": "2026-11-04T09:07:16Z",
+			"headSha": "28034494d1541f0cdc023cbaa220f500a510b2c3",
+			"baseSha": "31d0bbd04b6d06dc3a63cbf770094f6b0bf11628",
+			"mergeBase": "31d0bbd04b6d06dc3a63cbf770094f6b0bf11628",
+			"triggerAt": "2026-11-04T09:05:16Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "ea70c96cfd5c64344fca600abd882f41791ca5de",
+					"committedAt": "2026-11-04T08:34:23Z",
+					"files": [
+						{
+							"path": "README.md",
+							"ranges": [[76, 84]]
+						},
+						{
+							"path": "docs/superpowers/plans/2026-11-04-host-config-and-block-html.md",
+							"ranges": [[30, 39]]
+						},
+						{
+							"path": "docs/superpowers/specs/2026-11-03-host-config-and-block-html-design.md",
+							"ranges": [[60, 66], [116, 124], [198, 204]]
+						},
+						{
+							"path": "src/app.ts",
+							"ranges": [[73, 82], [85, 92]]
+						},
+						{
+							"path": "src/browser.ts",
+							"ranges": [[65, 73], [83, 89]]
+						},
+						{
+							"path": "src/profiles.ts",
+							"ranges": [[74, 86]]
+						},
+						{
+							"path": "src/throttle.ts",
+							"ranges": [[26, 35], [85, 91], [98, 111]]
+						},
+						{
+							"path": "test/app.test.ts",
+							"ranges": [[619, 658]]
+						},
+						{
+							"path": "test/profiles.test.ts",
+							"ranges": [[6, 12], [61, 91]]
+						},
+						{
+							"path": "test/submit-token.test.ts",
+							"ranges": [[122, 136], [147, 153]]
+						},
+						{
+							"path": "test/throttle.test.ts",
+							"ranges": [[164, 193]]
+						}
+					]
+				},
+				{
+					"sha": "e6171105882198627ba364c0629cdae2ff9513c4",
+					"committedAt": "2026-11-04T08:46:02Z",
+					"files": [
+						{
+							"path": "docs/superpowers/plans/2026-11-04-host-config-and-block-html.md",
+							"ranges": [[71, 77]]
+						}
+					]
+				},
+				{
+					"sha": "95e2524143451cbca3d85b5aa4b0b6c82d275b90",
+					"committedAt": "2026-11-04T08:49:32Z",
+					"files": [
+						{
+							"path": "README.md",
+							"ranges": [[144, 154]]
+						},
+						{
+							"path": "src/browser.ts",
+							"ranges": [[66, 73], [78, 92]]
+						},
+						{
+							"path": "test/submit-token.test.ts",
+							"ranges": [[158, 203]]
+						}
+					]
+				},
+				{
+					"sha": "28034494d1541f0cdc023cbaa220f500a510b2c3",
+					"committedAt": "2026-11-04T09:05:16Z",
+					"files": [
+						{
+							"path": "deploy/k8s/gateway-deployment.yaml",
+							"ranges": [[21, 27]]
+						},
+						{
+							"path": "package.json",
+							"ranges": [[1, 6]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r1:c4465687399:0",
+					"roundIndex": 1,
+					"reviewId": 5765943113,
+					"source": "inline",
+					"commentId": 4465687399,
+					"path": "src/app.ts",
+					"line": 79,
+					"severity": "P3",
+					"title": "`no_form` after a solver call is logged as zero attempts",
+					"text": "🟢 **P3** · advisory\n\n**`no_form` after a solver call is logged as zero attempts**\n\n`reachedSolver` treats every `solveReason === \"no_form\"` as \"solver never called\". `no_form` is also returned when the pre-submit live recheck fails after a token was already obtained, for example a field added while the solver runs, which the existing test suite covers. In that case the solver call and its budget are spent, but the done log reports `attempts: undefined` and `challengeType: undefined`. Downstream dashboard cost accounting will undercount those attempts. A separate reason for the post-solve recheck, or a flag set once the solver is actually invoked, would make this accurate.\n\n<!-- ai-review:fp=bug|src/app.ts|3641d4d00f5be4ee.0 -->\n<!-- ai-review:advisory -->"
+				}
+			]
+		}
+	],
+	"threads": [
+		{
+			"threadId": "PRRT_kwDOVL2EQc6zgnBO",
+			"commentId": 4465303142,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4465478898,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-11-04T08:46:35Z",
+					"editedAt": null,
+					"body": "Both points were real and are fixed in e6171105: schedule keys are namespaced (profile:<name> versus host:<hostname>), so http://ebay/ no longer shares eBay's gap or pause, and the scheduler prunes idle host entries lazily once the map passes 256 entries."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6zgnBQ",
+			"commentId": 4465303145,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4465479657,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-11-04T08:46:40Z",
+					"editedAt": null,
+					"body": "Fixed in e6171105: keys are now profile:<name> and host:<hostname>, with a test that http://ebay/ and the eBay profile neither share a gap nor a pause."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6zgnBU",
+			"commentId": 4465303151,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4465480426,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-11-04T08:46:46Z",
+					"editedAt": null,
+					"body": "Fixed in e6171105: the spec now calls the flag pauseOnBlock and says it applies to any block, not only a failed solve."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6zgnBW",
+			"commentId": 4465303159,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4465481235,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-11-04T08:46:51Z",
+					"editedAt": null,
+					"body": "Fixed in e6171105: attempts and challengeType are logged only when the solver was actually called, so budget_exceeded and no_form failures no longer count as attempts. Tests added for both reasons."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOVL2EQc6zhhNV",
+			"commentId": 4465687399,
+			"isResolved": false,
+			"isOutdated": false,
+			"resolvedBy": null,
+			"replies": []
+		}
+	],
+	"reactions": [
+		{
+			"commentId": 4465303142,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-11-04T08:46:36Z"
+		},
+		{
+			"commentId": 4465303145,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-11-04T08:46:42Z"
+		},
+		{
+			"commentId": 4465303151,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-11-04T08:46:47Z"
+		},
+		{
+			"commentId": 4465303159,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-11-04T08:46:53Z"
+		}
+	]
 }

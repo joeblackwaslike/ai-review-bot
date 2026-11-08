@@ -1,537 +1,533 @@
 {
-  "fixtureId": "joeblackwaslike__ai-listings__57__anthropic",
-  "provisional": true,
-  "labels": [
-    {
-      "claimId": "r0:c3886461972:0",
-      "label": "rejected",
-      "confidence": "high",
-      "evidence": [
-        "2026-08-29T11:28:51Z|The path is correct. Inngest `onFailure` handlers receive a synthetic `inngest/function.failed` event whose `data` object wraps the original triggering event at `data.event`. So `event.data.event.data.listingId` is the right access path for the original `listing/condition-confirmed` event's listingId. The `as unknown as` cast is the standard TypeScript pattern for Inngest failure events (the SDK doesn't export a typed failure envelope). The `if (!listingId) return` guard provides runtime safety if the shape ever differs. No change."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r0:c3886461972:1",
-      "label": "rejected",
-      "confidence": "high",
-      "evidence": [
-        "2026-08-29T11:28:51Z|The path is correct. Inngest `onFailure` handlers receive a synthetic `inngest/function.failed` event whose `data` object wraps the original triggering event at `data.event`. So `event.data.event.data.listingId` is the right access path for the original `listing/condition-confirmed` event's listingId. The `as unknown as` cast is the standard TypeScript pattern for Inngest failure events (the SDK doesn't export a typed failure envelope). The `if (!listingId) return` guard provides runtime safety if the shape ever differs. No change."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r0:c3886461978:0",
-      "label": "rejected",
-      "confidence": "high",
-      "evidence": [
-        "2026-08-29T11:28:54Z|Already guarded. The CAS on `status='condition_gate'` + `condition_confirmed=false` prevents any duplicate dispatch: a second tab submit returns 409 after the first submit sets `condition_confirmed=true`. An additional Inngest-level dedup would be redundant. No change."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r0:c3886461983:0",
-      "label": "deferred",
-      "confidence": "high",
-      "evidence": [
-        "2026-08-29T11:28:58Z|Intentional. `extra_notes` is an ephemeral rewrite input — user observations that get incorporated into `condition_notes` and descriptions by the Claude rewrite call. Persisting them would require a new DB column (out of scope for this PR). After the rewrite, the observations are reflected in the updated `condition_notes`; there's nothing to surface back to the user. No change."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r0:c3886461988:0",
-      "label": "rejected",
-      "confidence": "high",
-      "evidence": [
-        "2026-08-29T11:29:02Z|Correct behavior. The compensating revert only fires when `inngest.send` fails, which means no rewrite job was scheduled. Resetting `condition_confirmed=false` makes the form re-submittable so the user can retry — the listing stays in `condition_gate` and the UI shows the panel again. Reverting to the previous condition values (from the `existing` read) and resetting `condition_confirmed` is exactly what enables that retry path. No change."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r0:c3886461991:0",
-      "label": "fixed",
-      "confidence": "high",
-      "evidence": [
-        "2026-08-29T11:29:19Z|Fixed in 0feb659: added `.eq('status', 'condition_gate')` to the `onFailure` update. The handler now only fires when the listing is still in `condition_gate`; listings that already advanced to `in_loop` or beyond are not touched."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r0:c3886461997:0",
-      "label": "fixed",
-      "confidence": "high",
-      "evidence": [
-        "2026-08-29T11:29:22Z|Fixed in 0feb659: renamed `listing` to `_listing` in `conditionGateContext`."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r0:c3886462002:0",
-      "label": "fixed",
-      "confidence": "high",
-      "evidence": [
-        "2026-08-29T11:29:26Z|Fixed in 0feb659: the gate transition result is now destructured to `gateError` and logged on failure."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r0:c3886462002:1",
-      "label": "fixed",
-      "confidence": "high",
-      "evidence": [
-        "2026-08-29T11:29:26Z|Fixed in 0feb659: the gate transition result is now destructured to `gateError` and logged on failure."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r0:c3886462002:2",
-      "label": "fixed",
-      "confidence": "high",
-      "evidence": [
-        "2026-08-29T11:29:26Z|Fixed in 0feb659: the gate transition result is now destructured to `gateError` and logged on failure."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r0:c3886462005:0",
-      "label": "rejected",
-      "confidence": "high",
-      "evidence": [
-        "2026-08-29T11:29:29Z|The cast is safe. `existing.condition` is read from the DB and typed `string` by the Supabase client; the cast to `ConditionValue` is correct because the DB constraint ensures only valid enum values are stored. An explicit validation here would add dead code — the constraint is the authority. No change."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r0:c3886462009:0",
-      "label": "fixed",
-      "confidence": "high",
-      "evidence": [
-        "2026-08-29T11:29:32Z|Fixed in 0feb659 (same fix as the earlier comment: renamed to `_listing`)."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r0:c3886462014:0",
-      "label": "deferred",
-      "confidence": "high",
-      "evidence": [
-        "2026-08-29T11:29:50Z|Addressed above (3886461983). `extra_notes` is an ephemeral rewrite input; persisting it requires a schema change out of scope for this PR. The observations are incorporated into `condition_notes` by the Claude rewrite. No change."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r0:c3886462016:0",
-      "label": "rejected",
-      "confidence": "high",
-      "evidence": [
-        "2026-08-29T11:29:53Z|The event payload is the source of truth. `extraNotes` and `conditionNotes` are sent in the `listing/condition-confirmed` event (fired by the API route) and are passed through directly to `runRewriteListing`. Re-reading them from DB would add a round-trip and create a TOCTOU between the event fire and the DB read. No change."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r0:c3886462019:0",
-      "label": "rejected",
-      "confidence": "high",
-      "evidence": [
-        "2026-08-29T11:29:57Z|Intentional. The compensating revert only runs when `inngest.send` fails — meaning no rewrite was scheduled and the listing never left `condition_gate`. Status is unchanged (still `condition_gate`), and the condition fields are reverted to pre-submit values so the user can re-submit. Resetting status here would be wrong — it never changed. No change."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r0:body:0",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r0:body:1",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r0:body:2",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r0:body:3",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r1:c3886497846:0",
-      "label": "rejected",
-      "confidence": "low",
-      "evidence": [
-        "2026-08-29T11:46:47Z|reaction -1 by joeblackwaslike"
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r1:c3886497854:0",
-      "label": "fixed",
-      "confidence": "high",
-      "evidence": [
-        "2026-08-29T11:45:54Z|Fixed in 550d6d2. `condition-reassessment` now uses `.select('id').maybeSingle()` on the update: throws on `updateError` (so Inngest retries) and warns on zero-affected-rows (listing archived or concurrently transitioned). `{ ok: true }` is now only returned when the update matched a row."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r1:c3886497854:1",
-      "label": "fixed",
-      "confidence": "high",
-      "evidence": [
-        "2026-08-29T11:45:54Z|Fixed in 550d6d2. `condition-reassessment` now uses `.select('id').maybeSingle()` on the update: throws on `updateError` (so Inngest retries) and warns on zero-affected-rows (listing archived or concurrently transitioned). `{ ok: true }` is now only returned when the update matched a row."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r1:c3886497860:0",
-      "label": "fixed",
-      "confidence": "high",
-      "evidence": [
-        "2026-08-29T11:46:04Z|Fixed in 550d6d2. Added `.eq('status', 'condition_gate')` to the compensation revert in `confirm-condition/route.ts`. A late retry or concurrent advanced listing can no longer have its fields blindly overwritten by the revert — it silently no-ops on the already-advanced listing."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r1:c3886497861:0",
-      "label": "fixed",
-      "confidence": "high",
-      "evidence": [
-        "2026-08-29T11:46:05Z|Fixed in 550d6d2. `transition-to-in-loop` now uses `.select('id').maybeSingle()`: DB error still throws for Inngest retry; zero-row result (listing no longer in `condition_gate`) logs a warn instead of silently returning `{ ok: true }`. Matches the guard pattern used in `rewrite-listing.ts`."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r1:c3886497861:1",
-      "label": "fixed",
-      "confidence": "high",
-      "evidence": [
-        "2026-08-29T11:46:05Z|Fixed in 550d6d2. `transition-to-in-loop` now uses `.select('id').maybeSingle()`: DB error still throws for Inngest retry; zero-row result (listing no longer in `condition_gate`) logs a warn instead of silently returning `{ ok: true }`. Matches the guard pattern used in `rewrite-listing.ts`."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r1:c3886497865:0",
-      "label": "fixed",
-      "confidence": "high",
-      "evidence": [
-        "2026-08-29T11:46:14Z|Fixed in 550d6d2. `onFailure` now checks both the error and affected-row count from the compensation update. An existing `.eq('status', 'condition_gate')` guard was already correct; added `.select('id').maybeSingle()` to surface whether the compensation landed or was a no-op (logs `warn` on zero rows, `error` on DB error)."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r1:c3886497869:0",
-      "label": "fixed",
-      "confidence": "high",
-      "evidence": [
-        "2026-08-29T11:46:15Z|Fixed in 550d6d2 (same fix as sibling comment PRRT_kwDOSSBjYs6dZm6q). Added `.eq('status', 'condition_gate')` guard to the compensation revert in `confirm-condition/route.ts`."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r1:body:0",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r1:body:1",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r2:c3886502145:0",
-      "label": "fixed",
-      "confidence": "low",
-      "evidence": [
-        "2026-08-29T11:45:27Z|changed src/lib/inngest/functions/description-rewrite.ts near line 16 in 550d6d2e1be5182d60fc2c06f02f7f5d9e764eb2"
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r2:c3886502148:0",
-      "label": "fixed",
-      "confidence": "high",
-      "evidence": [
-        "2026-08-29T11:46:24Z|Fixed in 550d6d2 (same fix as sibling comment PRRT_kwDOSSBjYs6dZm6l). `condition-reassessment` now throws on `updateError` and warns on zero rows; `{ ok: true }` only returned when the row was actually updated."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r2:c3886502149:0",
-      "label": "fixed",
-      "confidence": "high",
-      "evidence": [
-        "2026-08-29T11:46:25Z|Fixed in 550d6d2 (same fix as sibling comments). Added `.select('id').maybeSingle()` to the atomic update in `condition-reassessment.ts`: `updateError` now throws (Inngest retry), zero rows logs a warn so the silent divergence is visible in logs."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r2:c3886502149:1",
-      "label": "fixed",
-      "confidence": "high",
-      "evidence": [
-        "2026-08-29T11:46:25Z|Fixed in 550d6d2 (same fix as sibling comments). Added `.select('id').maybeSingle()` to the atomic update in `condition-reassessment.ts`: `updateError` now throws (Inngest retry), zero rows logs a warn so the silent divergence is visible in logs."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r2:c3886502149:2",
-      "label": "fixed",
-      "confidence": "high",
-      "evidence": [
-        "2026-08-29T11:46:25Z|Fixed in 550d6d2 (same fix as sibling comments). Added `.select('id').maybeSingle()` to the atomic update in `condition-reassessment.ts`: `updateError` now throws (Inngest retry), zero rows logs a warn so the silent divergence is visible in logs."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r2:c3886502149:3",
-      "label": "fixed",
-      "confidence": "high",
-      "evidence": [
-        "2026-08-29T11:46:25Z|Fixed in 550d6d2 (same fix as sibling comments). Added `.select('id').maybeSingle()` to the atomic update in `condition-reassessment.ts`: `updateError` now throws (Inngest retry), zero rows logs a warn so the silent divergence is visible in logs."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r2:c3886502150:0",
-      "label": "rejected",
-      "confidence": "low",
-      "evidence": [
-        "2026-08-29T11:46:59Z|reaction confused by joeblackwaslike"
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r2:c3886502152:0",
-      "label": "fixed",
-      "confidence": "high",
-      "evidence": [
-        "2026-08-29T11:46:38Z|Fixed in 550d6d2 (same fix as LOW PRRT_kwDOSSBjYs6dZm6w). `onFailure` now uses `.select('id').maybeSingle()` and logs both error and zero-row cases. Status guard (`.eq('status', 'condition_gate')`) was already present; the onFailure event shape (`event.data.event.data.listingId`) is correct per the sibling HIGH-finding reply."
-      ],
-      "confirmed": false
-    },
-    {
-      "claimId": "r2:body:0",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r2:body:1",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r2:body:2",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r2:body:3",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r3:c3886524015:0",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r3:c3886524016:0",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r3:c3886524016:1",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r3:c3886524016:2",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r3:c3886524017:0",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r3:c3886524019:0",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r3:c3886524020:0",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r3:c3886524022:0",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r3:c3886524023:0",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r3:c3886524024:0",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r3:body:0",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r3:body:1",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r3:body:2",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    },
-    {
-      "claimId": "r3:body:3",
-      "label": "unadjudicated",
-      "confidence": "low",
-      "evidence": [],
-      "confirmed": false
-    }
-  ],
-  "repeatPairs": [
-    {
-      "later": "r2:body:0",
-      "earlier": "r0:body:3",
-      "confirmed": false
-    },
-    {
-      "later": "r2:c3886502145:0",
-      "earlier": "r1:c3886497846:0",
-      "confirmed": false
-    },
-    {
-      "later": "r2:c3886502149:1",
-      "earlier": "r1:c3886497854:1",
-      "confirmed": false
-    },
-    {
-      "later": "r2:c3886502149:2",
-      "earlier": "r1:c3886497854:1",
-      "confirmed": false
-    },
-    {
-      "later": "r2:body:1",
-      "earlier": "r1:body:0",
-      "confirmed": false
-    },
-    {
-      "later": "r2:body:3",
-      "earlier": "r1:body:0",
-      "confirmed": false
-    },
-    {
-      "later": "r3:c3886524024:0",
-      "earlier": "r0:c3886461983:0",
-      "confirmed": false
-    },
-    {
-      "later": "r3:body:1",
-      "earlier": "r0:body:2",
-      "confirmed": false
-    },
-    {
-      "later": "r3:body:3",
-      "earlier": "r0:body:3",
-      "confirmed": false
-    },
-    {
-      "later": "r3:c3886524016:0",
-      "earlier": "r1:c3886497846:0",
-      "confirmed": false
-    },
-    {
-      "later": "r3:body:1",
-      "earlier": "r1:body:0",
-      "confirmed": false
-    },
-    {
-      "later": "r3:body:2",
-      "earlier": "r1:body:1",
-      "confirmed": false
-    },
-    {
-      "later": "r3:c3886524016:0",
-      "earlier": "r2:c3886502145:0",
-      "confirmed": false
-    },
-    {
-      "later": "r3:body:1",
-      "earlier": "r2:body:2",
-      "confirmed": false
-    },
-    {
-      "later": "r3:body:1",
-      "earlier": "r2:body:3",
-      "confirmed": false
-    },
-    {
-      "later": "r3:body:3",
-      "earlier": "r2:body:0",
-      "confirmed": false
-    }
-  ],
-  "negativePairs": [],
-  "allowedSuppression": []
+	"fixtureId": "joeblackwaslike__ai-listings__57__anthropic",
+	"provisional": true,
+	"labels": [
+		{
+			"claimId": "r0:c3886461972:0",
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-29T11:28:51Z|The path is correct. Inngest `onFailure` handlers receive a synthetic `inngest/function.failed` event whose `data` object wraps the original triggering event at `data.event`. So `event.data.event.data.listingId` is the right access path for the original `listing/condition-confirmed` event's listingId. The `as unknown as` cast is the standard TypeScript pattern for Inngest failure events (the SDK doesn't export a typed failure envelope). The `if (!listingId) return` guard provides runtime safety if the shape ever differs. No change."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3886461972:1",
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-29T11:28:51Z|The path is correct. Inngest `onFailure` handlers receive a synthetic `inngest/function.failed` event whose `data` object wraps the original triggering event at `data.event`. So `event.data.event.data.listingId` is the right access path for the original `listing/condition-confirmed` event's listingId. The `as unknown as` cast is the standard TypeScript pattern for Inngest failure events (the SDK doesn't export a typed failure envelope). The `if (!listingId) return` guard provides runtime safety if the shape ever differs. No change."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3886461978:0",
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-29T11:28:54Z|Already guarded. The CAS on `status='condition_gate'` + `condition_confirmed=false` prevents any duplicate dispatch: a second tab submit returns 409 after the first submit sets `condition_confirmed=true`. An additional Inngest-level dedup would be redundant. No change."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3886461983:0",
+			"label": "deferred",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-29T11:28:58Z|Intentional. `extra_notes` is an ephemeral rewrite input — user observations that get incorporated into `condition_notes` and descriptions by the Claude rewrite call. Persisting them would require a new DB column (out of scope for this PR). After the rewrite, the observations are reflected in the updated `condition_notes`; there's nothing to surface back to the user. No change."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3886461988:0",
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-29T11:29:02Z|Correct behavior. The compensating revert only fires when `inngest.send` fails, which means no rewrite job was scheduled. Resetting `condition_confirmed=false` makes the form re-submittable so the user can retry — the listing stays in `condition_gate` and the UI shows the panel again. Reverting to the previous condition values (from the `existing` read) and resetting `condition_confirmed` is exactly what enables that retry path. No change."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3886461991:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-29T11:29:19Z|Fixed in 0feb659: added `.eq('status', 'condition_gate')` to the `onFailure` update. The handler now only fires when the listing is still in `condition_gate`; listings that already advanced to `in_loop` or beyond are not touched."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3886461997:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-29T11:29:22Z|Fixed in 0feb659: renamed `listing` to `_listing` in `conditionGateContext`."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3886462002:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-29T11:29:26Z|Fixed in 0feb659: the gate transition result is now destructured to `gateError` and logged on failure."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3886462002:1",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-29T11:29:26Z|Fixed in 0feb659: the gate transition result is now destructured to `gateError` and logged on failure."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3886462002:2",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-29T11:29:26Z|Fixed in 0feb659: the gate transition result is now destructured to `gateError` and logged on failure."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3886462005:0",
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-29T11:29:29Z|The cast is safe. `existing.condition` is read from the DB and typed `string` by the Supabase client; the cast to `ConditionValue` is correct because the DB constraint ensures only valid enum values are stored. An explicit validation here would add dead code — the constraint is the authority. No change."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3886462009:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-29T11:29:32Z|Fixed in 0feb659 (same fix as the earlier comment: renamed to `_listing`)."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3886462014:0",
+			"label": "deferred",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-29T11:29:50Z|Addressed above (3886461983). `extra_notes` is an ephemeral rewrite input; persisting it requires a schema change out of scope for this PR. The observations are incorporated into `condition_notes` by the Claude rewrite. No change."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3886462016:0",
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-29T11:29:53Z|The event payload is the source of truth. `extraNotes` and `conditionNotes` are sent in the `listing/condition-confirmed` event (fired by the API route) and are passed through directly to `runRewriteListing`. Re-reading them from DB would add a round-trip and create a TOCTOU between the event fire and the DB read. No change."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3886462019:0",
+			"label": "rejected",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-29T11:29:57Z|Intentional. The compensating revert only runs when `inngest.send` fails — meaning no rewrite was scheduled and the listing never left `condition_gate`. Status is unchanged (still `condition_gate`), and the condition fields are reverted to pre-submit values so the user can re-submit. Resetting status here would be wrong — it never changed. No change."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:body:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:body:2",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:body:3",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c3886497846:0",
+			"label": "rejected",
+			"confidence": "low",
+			"evidence": ["2026-08-29T11:46:47Z|reaction -1 by joeblackwaslike"],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c3886497854:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-29T11:45:54Z|Fixed in 550d6d2. `condition-reassessment` now uses `.select('id').maybeSingle()` on the update: throws on `updateError` (so Inngest retries) and warns on zero-affected-rows (listing archived or concurrently transitioned). `{ ok: true }` is now only returned when the update matched a row."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c3886497854:1",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-29T11:45:54Z|Fixed in 550d6d2. `condition-reassessment` now uses `.select('id').maybeSingle()` on the update: throws on `updateError` (so Inngest retries) and warns on zero-affected-rows (listing archived or concurrently transitioned). `{ ok: true }` is now only returned when the update matched a row."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c3886497860:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-29T11:46:04Z|Fixed in 550d6d2. Added `.eq('status', 'condition_gate')` to the compensation revert in `confirm-condition/route.ts`. A late retry or concurrent advanced listing can no longer have its fields blindly overwritten by the revert — it silently no-ops on the already-advanced listing."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c3886497861:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-29T11:46:05Z|Fixed in 550d6d2. `transition-to-in-loop` now uses `.select('id').maybeSingle()`: DB error still throws for Inngest retry; zero-row result (listing no longer in `condition_gate`) logs a warn instead of silently returning `{ ok: true }`. Matches the guard pattern used in `rewrite-listing.ts`."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c3886497861:1",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-29T11:46:05Z|Fixed in 550d6d2. `transition-to-in-loop` now uses `.select('id').maybeSingle()`: DB error still throws for Inngest retry; zero-row result (listing no longer in `condition_gate`) logs a warn instead of silently returning `{ ok: true }`. Matches the guard pattern used in `rewrite-listing.ts`."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c3886497865:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-29T11:46:14Z|Fixed in 550d6d2. `onFailure` now checks both the error and affected-row count from the compensation update. An existing `.eq('status', 'condition_gate')` guard was already correct; added `.select('id').maybeSingle()` to surface whether the compensation landed or was a no-op (logs `warn` on zero rows, `error` on DB error)."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c3886497869:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-29T11:46:15Z|Fixed in 550d6d2 (same fix as sibling comment PRRT_kwDOSSBjYs6dZm6q). Added `.eq('status', 'condition_gate')` guard to the compensation revert in `confirm-condition/route.ts`."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c3886502145:0",
+			"label": "fixed",
+			"confidence": "low",
+			"evidence": [
+				"2026-08-29T11:45:27Z|changed src/lib/inngest/functions/description-rewrite.ts near line 16 in 550d6d2e1be5182d60fc2c06f02f7f5d9e764eb2"
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c3886502148:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-29T11:46:24Z|Fixed in 550d6d2 (same fix as sibling comment PRRT_kwDOSSBjYs6dZm6l). `condition-reassessment` now throws on `updateError` and warns on zero rows; `{ ok: true }` only returned when the row was actually updated."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c3886502149:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-29T11:46:25Z|Fixed in 550d6d2 (same fix as sibling comments). Added `.select('id').maybeSingle()` to the atomic update in `condition-reassessment.ts`: `updateError` now throws (Inngest retry), zero rows logs a warn so the silent divergence is visible in logs."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c3886502149:1",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-29T11:46:25Z|Fixed in 550d6d2 (same fix as sibling comments). Added `.select('id').maybeSingle()` to the atomic update in `condition-reassessment.ts`: `updateError` now throws (Inngest retry), zero rows logs a warn so the silent divergence is visible in logs."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c3886502149:2",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-29T11:46:25Z|Fixed in 550d6d2 (same fix as sibling comments). Added `.select('id').maybeSingle()` to the atomic update in `condition-reassessment.ts`: `updateError` now throws (Inngest retry), zero rows logs a warn so the silent divergence is visible in logs."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c3886502149:3",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-29T11:46:25Z|Fixed in 550d6d2 (same fix as sibling comments). Added `.select('id').maybeSingle()` to the atomic update in `condition-reassessment.ts`: `updateError` now throws (Inngest retry), zero rows logs a warn so the silent divergence is visible in logs."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c3886502150:0",
+			"label": "rejected",
+			"confidence": "low",
+			"evidence": ["2026-08-29T11:46:59Z|reaction confused by joeblackwaslike"],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c3886502152:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-29T11:46:38Z|Fixed in 550d6d2 (same fix as LOW PRRT_kwDOSSBjYs6dZm6w). `onFailure` now uses `.select('id').maybeSingle()` and logs both error and zero-row cases. Status guard (`.eq('status', 'condition_gate')`) was already present; the onFailure event shape (`event.data.event.data.listingId`) is correct per the sibling HIGH-finding reply."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:body:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:body:2",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:body:3",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c3886524015:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c3886524016:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c3886524016:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c3886524016:2",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c3886524017:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c3886524019:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c3886524020:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c3886524022:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c3886524023:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c3886524024:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:body:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:body:2",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:body:3",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		}
+	],
+	"repeatPairs": [
+		{
+			"later": "r2:body:0",
+			"earlier": "r0:body:3",
+			"confirmed": false
+		},
+		{
+			"later": "r2:c3886502145:0",
+			"earlier": "r1:c3886497846:0",
+			"confirmed": false
+		},
+		{
+			"later": "r2:c3886502149:1",
+			"earlier": "r1:c3886497854:1",
+			"confirmed": false
+		},
+		{
+			"later": "r2:c3886502149:2",
+			"earlier": "r1:c3886497854:1",
+			"confirmed": false
+		},
+		{
+			"later": "r2:body:1",
+			"earlier": "r1:body:0",
+			"confirmed": false
+		},
+		{
+			"later": "r2:body:3",
+			"earlier": "r1:body:0",
+			"confirmed": false
+		},
+		{
+			"later": "r3:c3886524024:0",
+			"earlier": "r0:c3886461983:0",
+			"confirmed": false
+		},
+		{
+			"later": "r3:body:1",
+			"earlier": "r0:body:2",
+			"confirmed": false
+		},
+		{
+			"later": "r3:body:3",
+			"earlier": "r0:body:3",
+			"confirmed": false
+		},
+		{
+			"later": "r3:c3886524016:0",
+			"earlier": "r1:c3886497846:0",
+			"confirmed": false
+		},
+		{
+			"later": "r3:body:1",
+			"earlier": "r1:body:0",
+			"confirmed": false
+		},
+		{
+			"later": "r3:body:2",
+			"earlier": "r1:body:1",
+			"confirmed": false
+		},
+		{
+			"later": "r3:c3886524016:0",
+			"earlier": "r2:c3886502145:0",
+			"confirmed": false
+		},
+		{
+			"later": "r3:body:1",
+			"earlier": "r2:body:2",
+			"confirmed": false
+		},
+		{
+			"later": "r3:body:1",
+			"earlier": "r2:body:3",
+			"confirmed": false
+		},
+		{
+			"later": "r3:body:3",
+			"earlier": "r2:body:0",
+			"confirmed": false
+		}
+	],
+	"negativePairs": [],
+	"allowedSuppression": []
 }

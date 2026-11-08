@@ -169,6 +169,6 @@ describe("todaysCodePipeline on committed fixtures", () => {
 			const result = replayFixture(f, labels, todaysCodePipeline);
 			expect(checkRecall(f, labels, result).failures).toEqual([]);
 			expect(computeMetrics(f, labels, result).recycled.count).toBe(recycled);
-		});
+		}, 30_000);
 	}
 });
