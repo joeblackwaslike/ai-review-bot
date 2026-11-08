@@ -8,7 +8,7 @@ This file provides context and conventions for AI coding agents working on this 
 pnpm install
 pnpm typecheck    # tsc --noEmit — must pass before any commit
 pnpm lint         # biome check — must pass before any commit
-pnpm test         # vitest run (3260 passed, 8 skipped) — must pass before any commit
+pnpm test         # vitest run (3314 passed, 8 skipped) — must pass before any commit
 pnpm dev          # vercel dev — local server on :3000
 ```
 
@@ -92,6 +92,7 @@ Findings carried from the previous review appear in the body's "Still open from 
 | `src/router.ts` | PR tier classification (`classifyTier()`), model selection (`routeModel()`). A doc-only change under 20 lines is checked before the sensitive-path rule (prose docs only), `requirements*`/`constraints*.txt` are not docs, and a sensitive-named `.txt` falls through to `complex` |
 | `src/tier2.ts` | Tier 2 skill detection (`detectTier2Skills()`) |
 | `src/improve/skill-outcomes.ts` | `summarizeSkillOutcomes()`, `formatSkillOutcomes()`, `loadLedgers()`, `parseSinceDate()` and `prefixCandidates()`: per-skill fixed, rejected, deferred, unanswered and restated counts for corpus findings, with each outcome read from the live PR ledger; backs `ai-review skill-outcomes` (CLI-only, needs `DATABASE_URL` and `GITHUB_TOKEN`). Snapshot in `docs/review-experiments/skill-outcomes-2026-11-08.md` |
+| `src/replay/verifier-spike/` | The S3 spike behind `ai-review verifier-spike` (CLI-only): `select.ts` picks the fixed and rejected labelled claims, `files.ts` fetches and caches the head file, `prompt.ts` holds the refute-to-drop prompt and `{refuted, reason, rationale}` schema, `model.ts` maps each finding to the other vendor's cheap and mid judge and makes the call, `run.ts` runs them with a JSONL verdict cache and a cost cap, `score.ts` computes the D1 criteria per vendor pair and tier. Results in `docs/review-experiments/verifier-spike-2026-11-08.md` |
 | `src/trajectory.ts` | `scoreTrajectory()`, `limitsForScore()`, `classifyFinding()`: per-round author friction from ledger outcomes and the score-to-limits mapping |
 | `src/moved-blocks.ts` | `PushFile` and detection of blocks moved between files in one push, so a move does not count as new code |
 | `src/push-shape.ts` | `classifyPush()` and `shapedBudget()`: weights a push by file kind and scales the findings budget. A file is whitespace-only only if every change run (consecutive `-`/`+` lines with no context between them) matches its replacement after whitespace normalization, so a statement moved between runs keeps its weight, and a line break is ignored only when provably safe (not after `return`, not in a run with a `//` comment) |
