@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { runSpike } from "./run.js";
-import type { SpikeItem, SpikeJudge } from "./types.js";
+import { PaidCallError, type SpikeItem, type SpikeJudge } from "./types.js";
 
 const item = (id: string, over: Partial<SpikeItem> = {}): SpikeItem => ({
 	id,
@@ -299,5 +299,47 @@ describe("runSpike", () => {
 				cacheDir,
 			}),
 		).rejects.toThrow(/verdicts\.jsonl/);
+	});
+
+	it("counts a paid call that failed validation toward the spend and the cap", async () => {
+		const call = vi.fn(async () => {
+			throw new PaidCallError("schema failure", 0.5);
+		});
+		const { results, spentUsd, capped } = await runSpike({
+			items: [item("a"), item("b")],
+			judgesFor: () => [judge("j1")],
+			fileFor: async () => "file",
+			call,
+			cacheDir: dir(),
+			maxCostUsd: 0.4,
+			concurrency: 1,
+		});
+		expect(spentUsd).toBeCloseTo(0.5);
+		expect(capped).toBe(true);
+		expect(call).toHaveBeenCalledTimes(1);
+		expect(results[0]?.outcome).toMatchObject({
+			kind: "unverified",
+			costUsd: 0.5,
+			why: expect.stringContaining("schema failure"),
+		});
+	});
+
+	it("keeps every verdict written concurrently after a truncated cache tail", async () => {
+		const cacheDir = dir();
+		writeFileSync(join(cacheDir, "verdicts.jsonl"), '{"key":"cut off mid-li');
+		const call = vi.fn(async () => verdict);
+		const make = () => ({
+			items: ["a", "b", "c", "d"].map((id) => item(id)),
+			judgesFor: () => [judge("j1")],
+			fileFor: async () => "file",
+			call,
+			cacheDir,
+			concurrency: 4,
+		});
+		await runSpike(make());
+		call.mockClear();
+		const second = await runSpike(make());
+		expect(call).not.toHaveBeenCalled();
+		expect(second.results).toHaveLength(4);
 	});
 });

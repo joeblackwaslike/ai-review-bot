@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -44,5 +44,28 @@ describe("fetchHeadFile", () => {
 			fetchHeadFile({ ...ref, path: "../../etc/passwd" }, fetcher, cacheDir),
 		).resolves.toBe("x");
 		expect(fetcher).toHaveBeenCalledTimes(1);
+	});
+
+	it("fetches a file once when several callers ask for it at the same time", async () => {
+		const cacheDir = dir();
+		const fetcher = vi.fn(async () => {
+			await new Promise((r) => setTimeout(r, 20));
+			return "slow body";
+		});
+		const results = await Promise.all([
+			fetchHeadFile(ref, fetcher, cacheDir),
+			fetchHeadFile(ref, fetcher, cacheDir),
+			fetchHeadFile(ref, fetcher, cacheDir),
+		]);
+		expect(results).toEqual(["slow body", "slow body", "slow body"]);
+		expect(fetcher).toHaveBeenCalledTimes(1);
+	});
+
+	it("leaves only finished cache files behind, never a temporary one", async () => {
+		const cacheDir = dir();
+		await fetchHeadFile(ref, async () => "x", cacheDir);
+		const names = readdirSync(join(cacheDir, "files"));
+		expect(names).toHaveLength(1);
+		expect(names[0]).toMatch(/^[0-9a-f]{64}\.txt$/);
 	});
 });

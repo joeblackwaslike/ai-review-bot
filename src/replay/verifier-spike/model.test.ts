@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { judgesFor, modelCall, SPIKE_JUDGES } from "./model.js";
 import type { SpikeItem } from "./types.js";
+import { PaidCallError } from "./types.js";
 
 const item = (producer: "anthropic" | "openai"): SpikeItem => ({
 	id: "fx:a",
@@ -108,5 +109,44 @@ describe("modelCall", () => {
 			fileText: "a",
 		});
 		expect(result.costUsd).toBe(0);
+	});
+
+	it("keeps the cost of a generation that was paid for but failed validation", async () => {
+		const { NoObjectGeneratedError } = await import("ai");
+		const failing = vi.fn(async (_args: unknown) => {
+			throw new NoObjectGeneratedError({
+				message: "bad object",
+				text: "{}",
+				response: { id: "r", timestamp: new Date(), modelId: "m" },
+				usage: { inputTokens: 500, outputTokens: 40 } as never,
+				finishReason: "stop",
+			});
+		});
+		const call = modelCall({
+			...deps,
+			generate: failing as never,
+			costOf: () => 0.07,
+		});
+		const err = await call({
+			judge,
+			item: item("anthropic"),
+			fileText: "a",
+		}).catch((e: unknown) => e);
+		expect(err).toBeInstanceOf(PaidCallError);
+		expect((err as PaidCallError).costUsd).toBe(0.07);
+		expect((err as PaidCallError).message).toContain("bad object");
+	});
+
+	it("rethrows an error that carries no usage unchanged", async () => {
+		const failing = vi.fn(async (_args: unknown) => {
+			throw new Error("429 rate limited");
+		});
+		const call = modelCall({ ...deps, generate: failing as never });
+		await expect(
+			call({ judge, item: item("anthropic"), fileText: "a" }),
+		).rejects.toThrow("429 rate limited");
+		await expect(
+			call({ judge, item: item("anthropic"), fileText: "a" }),
+		).rejects.not.toBeInstanceOf(PaidCallError);
 	});
 });

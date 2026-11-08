@@ -128,12 +128,14 @@ describe("scoreSpike", () => {
 		const fixed = Array.from({ length: 20 }, (_, i) =>
 			item(`f${i}`, { label: "fixed", severity: "P3" }),
 		);
+		const severe = item("p1", { label: "fixed", severity: "P1" });
 		const make = (rejectedDrops: number, fixedDrops: number) => {
 			const results = [
 				...rejected.map((r, i) => result(r.id, i < rejectedDrops)),
 				...fixed.map((f, i) => result(f.id, i < fixedDrops)),
+				result(severe.id, false),
 			];
-			return scoreSpike([...rejected, ...fixed], [judge], results)[0];
+			return scoreSpike([...rejected, ...fixed, severe], [judge], results)[0];
 		};
 		expect(make(4, 1)?.meetsCriteria).toBe(true);
 		expect(make(3, 0)?.meetsCriteria).toBe(false);
@@ -163,6 +165,42 @@ describe("scoreSpike", () => {
 	});
 });
 
+describe("untested criteria", () => {
+	it("does not pass when there is no fixed P0 or P1 to test against", () => {
+		const items = [
+			...Array.from({ length: 5 }, (_, i) => item(`r${i}`)),
+			item("f1", { label: "fixed", severity: "P3" }),
+		];
+		const results = [
+			...items.slice(0, 5).map((r) => result(r.id, true)),
+			result("f1", false),
+		];
+		const [cell] = scoreSpike(items, [judge], results);
+		expect(cell?.meetsCriteria).toBe(false);
+		expect(cell?.untested).toEqual(["fixed P0/P1"]);
+	});
+
+	it("does not pass when there is no fixed P2 or P3 to test against", () => {
+		const items = [
+			...Array.from({ length: 5 }, (_, i) => item(`r${i}`)),
+			item("f1", { label: "fixed", severity: "P1" }),
+		];
+		const results = [
+			...items.slice(0, 5).map((r) => result(r.id, true)),
+			result("f1", false),
+		];
+		const [cell] = scoreSpike(items, [judge], results);
+		expect(cell?.meetsCriteria).toBe(false);
+		expect(cell?.untested).toEqual(["fixed P2/P3"]);
+	});
+
+	it("shows insufficient data instead of yes or no", () => {
+		const items = [item("r1")];
+		const cells = scoreSpike(items, [judge], [result("r1", true)]);
+		expect(formatSpikeReport(cells)).toContain("insufficient data");
+	});
+});
+
 describe("formatSpikeReport", () => {
 	it("renders one row per producer and judge with the criteria verdict", () => {
 		const items = [item("r1"), item("f1", { label: "fixed", severity: "P3" })];
@@ -175,6 +213,6 @@ describe("formatSpikeReport", () => {
 		expect(table).toContain("| Producer | Judge | Tier |");
 		expect(table).toContain("anthropic");
 		expect(table).toContain("gpt-6-luna");
-		expect(table).toMatch(/\| (yes|no) \|/);
+		expect(table).toMatch(/\| (yes|no|insufficient data) \|/);
 	});
 });

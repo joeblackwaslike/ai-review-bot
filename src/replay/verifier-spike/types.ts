@@ -53,3 +53,15 @@ export interface SpikeResult {
 	judgeId: string;
 	outcome: SpikeOutcome;
 }
+
+/** A model call that was paid for but gave no usable verdict, such as an invalid object. Its cost still counts toward the spend. */
+export class PaidCallError extends Error {
+	constructor(
+		message: string,
+		readonly costUsd: number,
+		options?: { cause?: unknown },
+	) {
+		super(message, options);
+		this.name = "PaidCallError";
+	}
+}

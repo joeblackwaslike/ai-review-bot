@@ -2,12 +2,13 @@ import { createHash } from "node:crypto";
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { VERIFIER_PROMPT_HASH } from "./prompt.js";
-import type {
-	RefutationReason,
-	SpikeItem,
-	SpikeJudge,
-	SpikeOutcome,
-	SpikeResult,
+import {
+	PaidCallError,
+	type RefutationReason,
+	type SpikeItem,
+	type SpikeJudge,
+	type SpikeOutcome,
+	type SpikeResult,
 } from "./types.js";
 
 export interface CallResult {
@@ -99,7 +100,15 @@ export async function runSpike(o: RunOptions): Promise<RunSummary> {
 	await mkdir(o.cacheDir, { recursive: true });
 	const cacheFile = join(o.cacheDir, "verdicts.jsonl");
 	const { cache, endsMidLine } = await loadCache(cacheFile);
-	let needsNewline = endsMidLine;
+	if (endsMidLine) {
+		try {
+			await appendFile(cacheFile, "\n");
+		} catch (err) {
+			console.warn(
+				`could not repair the end of the verdict cache ${cacheFile}: ${err instanceof Error ? err.message : String(err)}`,
+			);
+		}
+	}
 	const tasks = o.items.flatMap((item) =>
 		o.judgesFor(item).map((judge) => ({ item, judge })),
 	);
@@ -151,19 +160,19 @@ export async function runSpike(o: RunOptions): Promise<RunSummary> {
 						spentUsd += r.costUsd;
 						cache.set(key, outcome);
 					} catch (err) {
+						const paid = err instanceof PaidCallError ? err.costUsd : 0;
+						spentUsd += paid;
 						outcome = {
 							kind: "unverified",
 							why: `call failed: ${err instanceof Error ? err.message : String(err)}`,
-							costUsd: 0,
+							costUsd: paid,
 						};
 					}
 					if (outcome.kind === "verdict") {
-						const lead = needsNewline ? "\n" : "";
-						needsNewline = false;
 						try {
 							await appendFile(
 								cacheFile,
-								`${lead}${JSON.stringify({ key, outcome })}\n`,
+								`${JSON.stringify({ key, outcome })}\n`,
 							);
 						} catch (err) {
 							console.warn(

@@ -1,4 +1,5 @@
 import { generateObject } from "ai";
+import { usageFromError } from "../../agent-failure.js";
 import type { ResolvedAuth } from "../../auth.js";
 import { computeCost, createAIModel } from "../../models.js";
 import {
@@ -9,7 +10,12 @@ import {
 import type { Provider } from "../types.js";
 import { buildVerifierPrompt, VerifierSchema } from "./prompt.js";
 import type { CallResult } from "./run.js";
-import type { SpikeItem, SpikeJudge, Tier } from "./types.js";
+import {
+	PaidCallError,
+	type SpikeItem,
+	type SpikeJudge,
+	type Tier,
+} from "./types.js";
 
 const judge = (
 	vendor: Provider,
@@ -72,20 +78,30 @@ export function modelCall(
 			model: judge.model,
 			effort: judge.effort,
 		} as ModelSelection;
-		const { object, usage } = await deps.generate({
-			model: deps.createModel(spec, await auth),
-			schema: VerifierSchema,
-			maxOutputTokens: outputBudget(spec, 512),
-			maxRetries: 1,
-			providerOptions: reasoningProviderOptions(spec),
-			prompt: buildVerifierPrompt({
-				title: item.title,
-				path: item.path,
-				line: item.line,
-				text: item.text,
-				fileText,
-			}),
-		});
+		const { object, usage } = await deps
+			.generate({
+				model: deps.createModel(spec, await auth),
+				schema: VerifierSchema,
+				maxOutputTokens: outputBudget(spec, 512),
+				maxRetries: 1,
+				providerOptions: reasoningProviderOptions(spec),
+				prompt: buildVerifierPrompt({
+					title: item.title,
+					path: item.path,
+					line: item.line,
+					text: item.text,
+					fileText,
+				}),
+			})
+			.catch((err: unknown): never => {
+				const failed = usageFromError(err);
+				if (!failed) throw err;
+				throw new PaidCallError(
+					err instanceof Error ? err.message : String(err),
+					deps.costOf(failed, judge.model) ?? 0,
+					{ cause: err },
+				);
+			});
 		const costUsd =
 			deps.costOf(
 				{

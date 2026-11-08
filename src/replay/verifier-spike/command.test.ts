@@ -261,4 +261,34 @@ describe("runVerifierSpike", () => {
 			title: expect.any(String),
 		});
 	});
+
+	it("warns that the access may be wrong when most findings could not be judged", async () => {
+		const s = setup();
+		const call = vi.fn();
+		const code = await runVerifierSpike([], {
+			fixturesDir: s.fixtures,
+			cacheDir: s.cacheDir,
+			out: s.out,
+			fetchFile: async () => null,
+			call,
+			costOf: () => 0,
+		});
+		expect(code).toBe(0);
+		expect(call).not.toHaveBeenCalled();
+		expect(s.text()).toMatch(/could not be judged/i);
+		expect(s.text()).toContain("GITHUB_TOKEN");
+	});
+
+	it("reports the unverified share in the JSON", async () => {
+		const s = setup();
+		await runVerifierSpike(["--json"], {
+			fixturesDir: s.fixtures,
+			cacheDir: s.cacheDir,
+			out: s.out,
+			fetchFile: async () => null,
+			call: vi.fn(),
+			costOf: () => 0,
+		});
+		expect(JSON.parse(s.text()).unverifiedShare).toBe(1);
+	});
 });

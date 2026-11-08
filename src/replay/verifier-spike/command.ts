@@ -16,6 +16,7 @@ export interface SpikeArgs {
 }
 
 const DEFAULT_MAX_COST_USD = 10;
+const MAX_UNVERIFIED_SHARE = 0.25;
 const PLAN_INPUT_TOKENS = 12_000;
 const PLAN_OUTPUT_TOKENS = 150;
 
@@ -108,7 +109,7 @@ function plan(items: SpikeItem[], tiers: Tier[], deps: SpikeDeps): void {
 	);
 }
 
-/** Returns the exit code: 0 done, 2 bad arguments, 3 stopped early by the cost cap. */
+/** Returns the exit code: 0 done, 1 nothing to run (no findings, or a judge model has no price), 2 bad arguments, 3 stopped early by the cost cap. */
 export async function runVerifierSpike(
 	args: string[],
 	deps: SpikeDeps,
@@ -158,6 +159,11 @@ export async function runVerifierSpike(
 		maxCostUsd: parsed.maxCostUsd,
 		concurrency: deps.concurrency,
 	});
+	const unverified = summary.results.filter(
+		(r) => r.outcome.kind === "unverified",
+	).length;
+	const unverifiedShare =
+		summary.results.length === 0 ? 0 : unverified / summary.results.length;
 	const cells = scoreSpike(
 		items,
 		uniqueJudges(items, parsed.tiers),
@@ -171,6 +177,7 @@ export async function runVerifierSpike(
 					skipped,
 					spentUsd: summary.spentUsd,
 					capped: summary.capped,
+					unverifiedShare,
 					cells,
 					findings: items.map((i) => ({
 						id: i.id,
@@ -193,6 +200,10 @@ export async function runVerifierSpike(
 			`Verifier spike: ${items.length} findings, spent $${summary.spentUsd.toFixed(2)} this run.\n`,
 		);
 		deps.out(formatSpikeReport(cells));
+		if (unverifiedShare > MAX_UNVERIFIED_SHARE)
+			deps.out(
+				`\n${unverified} of ${summary.results.length} verdicts could not be judged (no file at the head sha, or a failed call). If most say "no file", check that GITHUB_TOKEN can read the fixtures' repositories: GitHub answers 404 for a private repo it cannot see.`,
+			);
 		if (summary.capped)
 			deps.out(
 				`\nStopped at the cost cap ($${parsed.maxCostUsd}); calls already in flight can push the spend a little past it. Rerun with a higher --max-cost to continue from the cache.`,

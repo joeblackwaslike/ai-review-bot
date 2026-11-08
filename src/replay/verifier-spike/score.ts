@@ -19,7 +19,9 @@ export interface CellScore {
 	costUsd: number;
 	rejectedDropRate: number;
 	fixedP23DropRate: number;
-	/** Drops at least 40% of rejected, drops no fixed P0 or P1, and drops at most 5% of fixed P2 and P3. */
+	/** Buckets with no finding in them. A criterion with nothing to test is not met. */
+	untested: string[];
+	/** Drops at least 40% of rejected, drops no fixed P0 or P1, and drops at most 5% of fixed P2 and P3, with a finding in every bucket. */
 	meetsCriteria: boolean;
 }
 
@@ -63,6 +65,7 @@ export function scoreSpike(
 				costUsd: 0,
 				rejectedDropRate: 0,
 				fixedP23DropRate: 0,
+				untested: [],
 				meetsCriteria: false,
 			};
 			cells.set(key, cell);
@@ -82,12 +85,18 @@ export function scoreSpike(
 	return [...cells.values()].map((c) => {
 		const rejectedDropRate = rate(c.rejected);
 		const fixedP23DropRate = rate(c.fixedP23);
+		const untested = [
+			...(c.rejected.n === 0 ? ["rejected"] : []),
+			...(c.fixedP01.n === 0 ? ["fixed P0/P1"] : []),
+			...(c.fixedP23.n === 0 ? ["fixed P2/P3"] : []),
+		];
 		return {
 			...c,
 			rejectedDropRate,
 			fixedP23DropRate,
+			untested,
 			meetsCriteria:
-				c.rejected.n > 0 &&
+				untested.length === 0 &&
 				rejectedDropRate >= MIN_REJECTED_DROP_RATE &&
 				c.fixedP01.dropped === 0 &&
 				fixedP23DropRate <= MAX_FIXED_P23_DROP_RATE,
@@ -105,7 +114,7 @@ export function formatSpikeReport(cells: CellScore[]): string {
 	];
 	for (const c of cells)
 		lines.push(
-			`| ${c.producer} | ${c.judge.model} | ${c.judge.tier} | ${show(c.rejected)} | ${show(c.fixedP01)} | ${show(c.fixedP23)} | ${c.unverified} | $${c.costUsd.toFixed(2)} | ${c.meetsCriteria ? "yes" : "no"} |`,
+			`| ${c.producer} | ${c.judge.model} | ${c.judge.tier} | ${show(c.rejected)} | ${show(c.fixedP01)} | ${show(c.fixedP23)} | ${c.unverified} | $${c.costUsd.toFixed(2)} | ${c.untested.length > 0 ? "insufficient data" : c.meetsCriteria ? "yes" : "no"} |`,
 		);
 	return lines.join("\n");
 }
