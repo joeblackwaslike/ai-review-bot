@@ -5,18 +5,33 @@ This protocol governs `ai-review replay --experiment`. Its design is in
 a run is `docs/review-experiments/plan.json`. The file in the repository is a draft: it
 carries `"draft": true`, and `run` and `score` refuse a draft.
 
-Nothing is scored until `plan.lock` is committed next to `plan.json`. The lock holds the plan hash
+Nothing is scored until a lock file is committed next to the plan file, named after it: `plan.lock`
+for `plan.json`, `plan-chained.lock` for `plan-chained.json`. The lock holds the plan hash
 (`planHash`, 16 hex characters of the canonical JSON). `run` and `score` exit 1 when the lock is
 missing or the hash differs, and `plan` exits 1 when a lock exists and differs. Any change to
 strategies, versions, fixtures, splits, budgets, metrics or thresholds is a new plan with a new
-hash and its own results directory.
+hash and its own results directory. The caps (`maxAnthropicUsd`, `maxOpenAiUsd`) apply per plan hash,
+so a per-round plan and a chained plan can each spend up to them.
 
 ## Modes
 
-Per-round mode only. Each recorded round is reviewed independently, with the suppression ledger
-built from the old bot's state at that time. Precision, recall, wrong or irrelevant findings, cost
-and latency are scored this way. Recycling and convergence need chained mode, which is phase 6;
-every report says they are not measured.
+A plan sets `mode`. A `per-round` plan reviews each recorded round independently, with the
+suppression ledger built from the old bot's state at that time; a cell is one (strategy, fixture,
+round, trial). Precision, recall, wrong or irrelevant findings, cost, latency and join rate are
+scored this way, and the report says recycling and convergence are not measured.
+
+A `chained` plan runs each (strategy, fixture, trial) as a chain: round i's ledger is built from the
+strategy's own posted findings in rounds before i, not from the old bot's. Results are stored under
+the same key as a per-round cell, with `round` set to the round index, so a chain is its rounds'
+records under one plan hash. `plan` prints a chain count instead of a cell count, and `run` stops a
+chain at its first failing, over-cap or unavailable round and lists the later rounds as missing.
+Recycling and convergence are measured only in a chained plan. A chained report shows recycling,
+convergence round and recall per strategy and provider, paired against `a` with a PR-level
+bootstrap, and makes no go or no-go claim: precision, cost and latency are not scored, and there is
+no verdict. Chains are not paired with per-round cells. A chained plan shares the per-round plan's seed, and so
+its splits, so a chained run can never see test PRs that plain `score` has not been allowed to. It has
+no final verdict: `score --final` on a chained plan exits 2 before reading cells or writing a marker.
+Convergence is averaged over complete chains only, and the report line says so.
 
 ## Commands
 
@@ -79,8 +94,9 @@ Computed per PR, then aggregated by macro mean over PRs:
 - Wrong or irrelevant findings, with a separate count for findings about code that only moved.
 - Cost per PR from recorded usage; median wall latency per round; the share of rounds inside the
   plan's `hostedFitSeconds` (210 in the draft).
-- Join rate is deferred to phase 6. The scorer does not compute it; `replay` still reports it
-  offline for fixtures with saved traces.
+- Join rate: distinct candidates (by path, line and title) across a strategy's stored cells that
+  `joinsClaim` joins to any labelled claim, reported as `joined/candidates` with the matcher
+  version, per strategy and provider. It uses the same matcher and constants as `replay`.
 
 Unadjudicated labels, `unclear` or `unresolved` verdicts and missing verdicts leave the numerator and
 denominator. Their counts, and the count of `single-family` verdicts, print next to every precision
@@ -94,21 +110,17 @@ and recall figure.
   clear their bars.
 - Hosted: at least 90% of rounds finish inside 210 seconds, otherwise the strategy is local-only.
 - Seeds: a gate. Missing more than one of the five originals, or any finding on a clean control, is
-  a no-go. The gate is run with `replay --seeds --strategy <name>`. `score --final` on a plan that
-  is not directional refuses (exit 1) before writing the one-shot marker unless every candidate
+  a no-go. The gate is run with `replay --seeds --strategy <name> --gate-plan <plan-hash>`, which writes the result into that file (the plan hash must be 16 lowercase hex characters, else exit 2) (a run stopped by the
+  cost cap writes nothing). `score --final` on a plan that is not directional refuses (exit 1) before writing the one-shot marker unless every candidate
   strategy has a result in `<experiments dir>/<plan-hash>/seed-gates.json`, shaped
   `{"<strategy>": {"pass", "originalsMissed", "cleanFindings", "reasons"}}`. The marker is written
-  only after the report is produced. Storing `--seeds` results into that file is phase 6; until then
-  the file is written by hand from the `--seeds` output.
+  only after the report is produced. Without `--gate-plan` the run only prints the gate.
 - OpenAI is rationed. Fixtures for OpenAI run only on the test split, and the plan carries a separate
   `maxOpenAiUsd`. An Anthropic result that clears its bars but has no OpenAI confirmation reads
   "Anthropic-only, unconfirmed on OpenAI" and carries no go or no-go.
 
 ## Known gaps
 
-- The scorer takes audit-added defects as input but the command does not yet read them from the
-  adjudication cache, so recall counts labelled claims only.
-- `--seeds` does not yet write `seed-gates.json` (phase 6).
 - Paired comparisons score both strategies on the `(round, trial)` cells they share within each PR.
   The report prints the number of shared cells and the PRs with no shared cell (left out), plus the
   PRs left out of the precision interval for having no judged finding.

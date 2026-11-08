@@ -1,5 +1,12 @@
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import {
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	renameSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
+import { dirname, join } from "node:path";
 import { z } from "zod";
 import type { SeedGate } from "../seeds/score.js";
 
@@ -10,7 +17,7 @@ const SeedGateSchema = z.object({
 	reasons: z.array(z.string()),
 });
 
-/** `<root>/<plan-hash>/seed-gates.json`, `{strategy: SeedGate}`. Nothing writes it yet; storing `--seeds` results is phase 6. */
+/** `<root>/<plan-hash>/seed-gates.json`, `{strategy: SeedGate}`. `replay --seeds --strategy <name> --gate-plan <hash>` writes it through `writeSeedGate`. */
 export function readSeedGates(
 	root: string,
 	planHash: string,
@@ -20,4 +27,22 @@ export function readSeedGates(
 	return z
 		.record(z.string(), SeedGateSchema)
 		.parse(JSON.parse(readFileSync(file, "utf8")));
+}
+
+export function writeSeedGate(
+	root: string,
+	planHash: string,
+	strategy: string,
+	gate: SeedGate,
+): void {
+	const file = join(root, planHash, "seed-gates.json");
+	const next = { ...readSeedGates(root, planHash), [strategy]: gate };
+	mkdirSync(dirname(file), { recursive: true });
+	const tmp = `${file}.${process.pid}.tmp`;
+	try {
+		writeFileSync(tmp, `${JSON.stringify(next, null, 2)}\n`);
+		renameSync(tmp, file);
+	} finally {
+		rmSync(tmp, { force: true });
+	}
 }

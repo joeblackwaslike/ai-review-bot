@@ -24,11 +24,14 @@ import {
 	sanitizeInlineComments,
 } from "../review.js";
 import type { ReviewerTuning } from "../reviewer-tuning.js";
+import { joinsClaim } from "./metrics.js";
 import { holdable, ledgerFromView } from "./pipeline.js";
 import { roundCutoff, visibleLabels } from "./replay.js";
 import type {
 	CandidateRecord,
+	ClaimLabel,
 	LabelFile,
+	PostedClaim,
 	ReplayFixture,
 	Round,
 } from "./types.js";
@@ -55,6 +58,47 @@ export function ledgerForRound(
 				.flatMap((r) => r.claims),
 			labels: visibleLabels(fixture, labels, roundCutoff(round)),
 		}),
+	);
+}
+
+/** The ledger a review of `round` would see when the reviewer's own earlier
+ * posted findings replace the recorded claims. The author's behaviour is held
+ * fixed: an own finding that joins a recorded claim inherits its label and
+ * text, any other stays open. */
+export function ledgerFromPosted(
+	fixture: ReplayFixture,
+	labels: LabelFile,
+	round: Round,
+	ownPosted: { roundIndex: number; posted: CandidateRecord[] }[],
+): Ledger {
+	const recorded = fixture.rounds.flatMap((r) => r.claims);
+	const visible = visibleLabels(fixture, labels, roundCutoff(round));
+	const claims = new Map<string, PostedClaim>();
+	const ownLabels = new Map<string, ClaimLabel>();
+	for (const { roundIndex, posted } of ownPosted) {
+		if (roundIndex >= round.index) continue;
+		for (const cand of posted) {
+			const id = `own:r${roundIndex}:${cand.path}:${cand.line}:${cand.title}`;
+			if (claims.has(id)) continue;
+			const match = recorded.find((c) => joinsClaim(cand, c));
+			claims.set(id, {
+				id,
+				roundIndex,
+				reviewId: match?.reviewId ?? -1,
+				source: match?.source ?? "inline",
+				commentId: null,
+				path: cand.path,
+				line: cand.line,
+				severity: cand.severity ?? match?.severity ?? "P2",
+				title: cand.title,
+				text: match?.text ?? cand.title,
+			});
+			const label = match && visible.get(match.id);
+			if (label) ownLabels.set(id, { ...label, claimId: id });
+		}
+	}
+	return holdable(
+		ledgerFromView({ priorClaims: [...claims.values()], labels: ownLabels }),
 	);
 }
 

@@ -65,6 +65,7 @@ const cell = (
 		round?: number;
 		trial?: number;
 		posted?: CandidateRecord[];
+		candidates?: CandidateRecord[];
 		costUsd?: number;
 		wallMs?: number;
 		stale?: boolean;
@@ -88,7 +89,7 @@ const cell = (
 	stale: over.stale ?? false,
 	result: {
 		findings: [],
-		candidates: [],
+		candidates: over.candidates ?? [],
 		posted: over.posted ?? [],
 		agentReviews: [],
 		usage: {},
@@ -98,6 +99,37 @@ const cell = (
 });
 
 describe("scorePr", () => {
+	it("counts a candidate once however many rounds repeat it", () => {
+		const pr = scorePr({
+			strategy: "a",
+			fixtureId: "o/r#1",
+			records: [
+				cell({ candidates: [cand(C1), UNMATCHED] }),
+				cell({ round: 1, candidates: [cand(C1), UNMATCHED] }),
+				cell({ round: 0, trial: 1, candidates: [cand(C2)] }),
+			],
+			fx: scored(),
+			cache: cacheOf([]),
+		});
+		expect(pr.joinRate).toEqual({
+			joined: 2,
+			candidates: 3,
+			matcher: "isSameClaim@JOIN_CLAIM_MATCH+JOIN_BODY_MATCH",
+		});
+	});
+
+	it("joinRate is 0 of 0 when nothing was posted", () => {
+		const pr = scorePr({
+			strategy: "a",
+			fixtureId: "o/r#1",
+			records: [cell()],
+			fx: scored(),
+			cache: cacheOf([]),
+		});
+		expect(pr.joinRate.joined).toBe(0);
+		expect(pr.joinRate.candidates).toBe(0);
+	});
+
 	it("classifies posted findings by label first, then cached verdict", () => {
 		const cache = cacheOf([[UNMATCHED, verdict("real")]]);
 		const pr = scorePr({
@@ -243,6 +275,7 @@ const pr = (
 	recall,
 	foundClaims: 0,
 	totalClaims: 0,
+	joinRate: { joined: 1, candidates: 4, matcher: "m" },
 	costUsd,
 	rounds: 2,
 	fitRounds: 2,
@@ -251,6 +284,11 @@ const pr = (
 });
 
 describe("aggregate and compareStrategies", () => {
+	it("sums join rates", () => {
+		const s = aggregate([pr("p1", "a", 0.5, 1), pr("p2", "a", 1, 0.5)]);
+		expect(s.joinRate).toEqual({ joined: 2, candidates: 8, matcher: "m" });
+	});
+
 	it("macro-averages per PR and sums the unresolved counts", () => {
 		const s = aggregate([
 			pr("p1", "a", 0.5, 1),

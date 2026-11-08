@@ -109,11 +109,17 @@ describe("ExperimentPlanSchema", () => {
 		expect(parsed.success && parsed.data.draft).toBe(true);
 	});
 
-	it("rejects a non per-round mode", () => {
+	it("rejects an unknown mode", () => {
 		expect(
-			ExperimentPlanSchema.safeParse({ ...samplePlan(), mode: "chained" })
+			ExperimentPlanSchema.safeParse({ ...samplePlan(), mode: "bogus" })
 				.success,
 		).toBe(false);
+	});
+
+	it("mode chained is accepted and hashes differently from per-round", () => {
+		const chained = { ...samplePlan(), mode: "chained" as const };
+		expect(ExperimentPlanSchema.safeParse(chained).success).toBe(true);
+		expect(planHash(chained)).not.toBe(planHash(samplePlan()));
 	});
 });
 
@@ -135,6 +141,27 @@ describe("assertCommittedPlan and loadPlan", () => {
 			plan,
 			lockedHash: planHash(plan),
 		});
+	});
+
+	it("gives each plan file in one directory its own lock", () => {
+		const dir = mkdtempSync(join(tmpdir(), "plan-"));
+		const per = samplePlan();
+		const chained = { ...samplePlan(), mode: "chained" as const };
+		writeFileSync(join(dir, "plan.json"), JSON.stringify(per));
+		writeFileSync(join(dir, "plan-chained.json"), JSON.stringify(chained));
+		writeFileSync(join(dir, "plan.lock"), `${planHash(per)}\n`);
+		writeFileSync(join(dir, "plan-chained.lock"), `${planHash(chained)}\n`);
+		expect(loadPlan(join(dir, "plan.json")).lockedHash).toBe(planHash(per));
+		expect(loadPlan(join(dir, "plan-chained.json")).lockedHash).toBe(
+			planHash(chained),
+		);
+	});
+
+	it("does not read plan.lock for another plan file", () => {
+		const dir = mkdtempSync(join(tmpdir(), "plan-"));
+		writeFileSync(join(dir, "plan-chained.json"), JSON.stringify(samplePlan()));
+		writeFileSync(join(dir, "plan.lock"), "0000000000000000\n");
+		expect(loadPlan(join(dir, "plan-chained.json")).lockedHash).toBeNull();
 	});
 
 	it("reports a missing lock as null", () => {

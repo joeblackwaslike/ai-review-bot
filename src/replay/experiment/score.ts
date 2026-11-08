@@ -1,6 +1,6 @@
 import { claimKey, snapshotId } from "../adjudication/snapshot.js";
 import type { VerdictRecord } from "../adjudication/types.js";
-import { joinsClaim, labelledClaims } from "../metrics.js";
+import { countJoined, joinsClaim, labelledClaims } from "../metrics.js";
 import type { SeedGate } from "../seeds/score.js";
 import {
 	type CandidateRecord,
@@ -15,6 +15,15 @@ import {
 	median,
 	pairedBootstrap,
 } from "./bootstrap.js";
+import {
+	aggregateChains,
+	type ChainedScore,
+	type ChainScore,
+	mean as chainMean,
+	compareChains,
+	present,
+	scoreChain,
+} from "./chain-score.js";
 import { readableFixtureIds } from "./final-guard.js";
 import type { ExperimentPlan } from "./plan.js";
 import { isDirectional } from "./splits.js";
@@ -29,6 +38,14 @@ export interface ScoredFixture {
 
 export interface VerdictLookup {
 	get(snapshot: string, key: string): unknown;
+}
+
+export const JOIN_MATCHER = "isSameClaim@JOIN_CLAIM_MATCH+JOIN_BODY_MATCH";
+
+export interface JoinRate {
+	joined: number;
+	candidates: number;
+	matcher: string;
 }
 
 export interface PrScore {
@@ -46,6 +63,7 @@ export interface PrScore {
 	recall: number | null;
 	foundClaims: number;
 	totalClaims: number;
+	joinRate: JoinRate;
 	costUsd: number;
 	rounds: number;
 	fitRounds: number;
@@ -92,6 +110,7 @@ export function scorePr(args: {
 		recall: null,
 		foundClaims: 0,
 		totalClaims: 0,
+		joinRate: { joined: 0, candidates: 0, matcher: JOIN_MATCHER },
 		costUsd: 0,
 		rounds: records.length,
 		fitRounds: 0,
@@ -146,6 +165,13 @@ export function scorePr(args: {
 		else out.notReal++;
 	}
 
+	out.joinRate = {
+		...countJoined(
+			records.flatMap((r) => r.result.candidates),
+			claims,
+		),
+		matcher: JOIN_MATCHER,
+	};
 	out.foundClaims = found.size;
 	out.totalClaims = fixedClaims.length + extras.length;
 	const judged = out.real + out.notReal;
@@ -170,6 +196,7 @@ export interface Summary {
 	singleFamily: number;
 	moved: number;
 	provisional: number;
+	joinRate: JoinRate;
 	medianCostUsd: number;
 	medianWallMs: number;
 	fitShare: number;
@@ -193,6 +220,11 @@ export function aggregate(prs: PrScore[]): Summary {
 		singleFamily: sum((p) => p.singleFamily),
 		moved: sum((p) => p.moved),
 		provisional: sum((p) => p.provisional),
+		joinRate: {
+			joined: sum((p) => p.joinRate.joined),
+			candidates: sum((p) => p.joinRate.candidates),
+			matcher: prs[0]?.joinRate.matcher ?? JOIN_MATCHER,
+		},
 		medianCostUsd: median(prs.map((p) => p.costUsd)),
 		medianWallMs: median(prs.flatMap((p) => p.wallMs)),
 		fitShare: rounds > 0 ? sum((p) => p.fitRounds) / rounds : 0,
@@ -372,6 +404,91 @@ export interface ExperimentScore {
 		comparison: Comparison;
 	}[];
 	verdicts: { candidate: string; verdict: Verdict }[];
+	chained?: ChainedScore;
+}
+
+function scoreChained(args: {
+	plan: ExperimentPlan;
+	fresh: StoredCell[];
+	fixtures: Record<string, ScoredFixture>;
+	baseline: string;
+	opts: { level: number; resamples: number; seed: string };
+}): ChainedScore {
+	const { plan, fixtures } = args;
+	const groups = new Map<string, StoredCell[]>();
+	for (const r of args.fresh) {
+		const k = `${r.key.strategy}\u0000${r.key.fixtureId}\u0000${r.key.trial}`;
+		groups.set(k, [...(groups.get(k) ?? []), r]);
+	}
+	const chains: ChainScore[] = [];
+	const trialsSeen = new Map<string, Set<string>>();
+	for (const [k, records] of groups) {
+		const [strategy, fixtureId, trial] = k.split("\u0000") as [
+			string,
+			string,
+			string,
+		];
+		const fx = fixtures[fixtureId];
+		if (fx) {
+			const pr = `${strategy}\u0000${fixtureId}`;
+			trialsSeen.set(pr, (trialsSeen.get(pr) ?? new Set()).add(trial));
+			chains.push(
+				scoreChain({
+					strategy,
+					fixtureId,
+					records,
+					fx,
+					plannedRounds: fx.fixture.rounds.length,
+				}),
+			);
+		}
+	}
+	const perPr: ChainScore[] = [];
+	const keys = new Set(chains.map((c) => `${c.strategy}\u0000${c.fixtureId}`));
+	for (const k of keys) {
+		const cs = chains.filter((c) => `${c.strategy}\u0000${c.fixtureId}` === k);
+		const avg = (f: (c: ChainScore) => number | null) =>
+			chainMean(present(cs.map(f)));
+		perPr.push({
+			...(cs[0] as ChainScore),
+			recycling: avg((c) => c.recycling),
+			convergenceRound: avg((c) => c.convergenceRound) as number,
+			recall: avg((c) => c.recall),
+			complete:
+				(trialsSeen.get(k)?.size ?? 0) >= plan.trials &&
+				cs.every((c) => c.complete),
+		});
+	}
+	const strategies = plan.strategies.map((s) => s.name);
+	const providers = [...new Set(perPr.map((p) => p.provider))];
+	return {
+		perPr,
+		summaries: strategies.flatMap((strategy) =>
+			providers.flatMap((provider) => {
+				const cs = perPr.filter(
+					(p) => p.strategy === strategy && p.provider === provider,
+				);
+				return cs.length > 0 ? [aggregateChains(cs)] : [];
+			}),
+		),
+		comparisons: strategies
+			.filter((s) => s !== args.baseline)
+			.flatMap((candidate) =>
+				providers.map((provider) => {
+					const of = (strategy: string) =>
+						perPr.filter(
+							(p) => p.strategy === strategy && p.provider === provider,
+						);
+					return compareChains(
+						candidate,
+						provider,
+						of(candidate),
+						of(args.baseline),
+						args.opts,
+					);
+				}),
+			),
+	};
 }
 
 export function scoreExperiment(args: {
@@ -391,6 +508,51 @@ export function scoreExperiment(args: {
 	const staleExcluded = inScope.filter((r) => r.stale).length;
 	const fresh = inScope.filter((r) => !r.stale);
 	const overCapCells = fresh.filter((r) => r.overCap).length;
+
+	const opts = {
+		level: plan.thresholds.precisionBootstrap.level,
+		resamples: plan.thresholds.precisionBootstrap.resamples,
+		seed: args.bootstrapSeed ?? plan.seed,
+	};
+	if (plan.mode === "chained") {
+		const chained = scoreChained({
+			plan,
+			fresh,
+			fixtures,
+			baseline: args.baseline,
+			opts,
+		});
+		const distinctCells = new Set(
+			fresh.map(
+				(r) =>
+					`${r.key.strategy}\u0000${r.key.fixtureId}\u0000${r.key.round}\u0000${r.key.trial}`,
+			),
+		).size;
+		const planned = plan.fixtures
+			.filter((f) => readable.has(f.id) && plan.providers.includes(f.provider))
+			.reduce(
+				(n, f) =>
+					n +
+					(fixtures[f.id]?.fixture.rounds.length ?? 0) *
+						plan.trials *
+						plan.strategies.length,
+				0,
+			);
+		return {
+			final,
+			directional: isDirectional(plan),
+			exploratory: args.exploratory,
+			partial: distinctCells < planned || overCapCells > 0,
+			overCapCells,
+			staleExcluded,
+			baseline: args.baseline,
+			perPr: [],
+			summaries: [],
+			comparisons: [],
+			verdicts: [],
+			chained,
+		};
+	}
 
 	const groups = new Map<string, StoredCell[]>();
 	for (const r of fresh) {
@@ -429,11 +591,6 @@ export function scoreExperiment(args: {
 		}),
 	);
 
-	const opts = {
-		level: plan.thresholds.precisionBootstrap.level,
-		resamples: plan.thresholds.precisionBootstrap.resamples,
-		seed: args.bootstrapSeed ?? plan.seed,
-	};
 	const fixtureIds = [...new Set(perPr.map((p) => p.fixtureId))];
 	const comparisons = strategies
 		.filter((s) => s !== args.baseline)

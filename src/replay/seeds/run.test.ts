@@ -1,4 +1,11 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import {
+	mkdir,
+	mkdtemp,
+	readdir,
+	readFile,
+	rm,
+	writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -8,6 +15,7 @@ vi.mock("../run-strategy.js", () => ({
 }));
 
 import { runReplay } from "../command.js";
+import { readSeedGates } from "../experiment/seed-gates.js";
 import {
 	type ReviewStrategy,
 	registerStrategy,
@@ -90,12 +98,15 @@ function stub(
 const findsAll = (repo: string) =>
 	repo.endsWith("-clean") ? [] : [posted("src/a.ts", 2)];
 
+let gateDir: string;
 beforeEach(async () => {
 	root = await mkdtemp(join(tmpdir(), "seed-run-"));
+	gateDir = await mkdtemp(join(tmpdir(), "gate-dir-"));
 	lines = [];
 	resetStrategiesForTest();
 });
 afterEach(async () => {
+	await rm(gateDir, { recursive: true, force: true });
 	await rm(root, { recursive: true, force: true });
 });
 
@@ -241,6 +252,40 @@ describe("runSeedsWithStrategy", () => {
 		expect(lines.join("\n")).toMatch(/cost cap/);
 	});
 
+	it("calls onGate once with the gate", async () => {
+		await fullRoot();
+		const onGate = vi.fn();
+		await runSeedsWithStrategy(stub(findsAll), {
+			root,
+			out,
+			maxCostUsd: 5,
+			onGate,
+		});
+		expect(onGate).toHaveBeenCalledTimes(1);
+		expect(onGate.mock.calls[0]?.[0]).toMatchObject({ pass: true });
+	});
+
+	it("does not call onGate when the cost cap stops the run", async () => {
+		await fullRoot();
+		const onGate = vi.fn();
+		await runSeedsWithStrategy(stub(findsAll, { estimateCost: () => 0.6 }), {
+			root,
+			out,
+			maxCostUsd: 1,
+			onGate,
+		});
+		expect(onGate).not.toHaveBeenCalled();
+	});
+
+	it("does not call onGate when a seed run throws", async () => {
+		await fullRoot();
+		const onGate = vi.fn();
+		const s = stub(findsAll);
+		s.run.mockRejectedValue(new Error("boom"));
+		await runSeedsWithStrategy(s, { root, out, maxCostUsd: 5, onGate });
+		expect(onGate).not.toHaveBeenCalled();
+	});
+
 	it("hands a read-only checkout only to strategies that need one", async () => {
 		await addSeed("REL-01", "original", defectAt(2));
 		const seen: (string | null)[] = [];
@@ -295,8 +340,65 @@ describe("ai-review replay --seeds", () => {
 		).toBe(0);
 	});
 
+	it("--gate-plan writes the gate for the strategy", async () => {
+		await fullRoot();
+		registerStrategy(stub(findsAll));
+		const code = await runReplay(
+			["--seeds", "--strategy", "stub", "--gate-plan", "0123456789abcdef"],
+			{ out, seedsRoot: root, fixturesDir: root, experimentsDir: gateDir },
+		);
+		expect(code).toBe(0);
+		expect(readSeedGates(gateDir, "0123456789abcdef").stub).toMatchObject({
+			pass: true,
+		});
+		expect(lines.join("\n")).toContain(
+			join(gateDir, "0123456789abcdef", "seed-gates.json"),
+		);
+	});
+
+	it("--gate-plan exits 1 and leaves a corrupt seed-gates.json untouched", async () => {
+		await fullRoot();
+		registerStrategy(stub(findsAll));
+		const file = join(gateDir, "0123456789abcdef", "seed-gates.json");
+		await mkdir(dirname(file), { recursive: true });
+		await writeFile(file, "{not json");
+		const code = await runReplay(
+			["--seeds", "--strategy", "stub", "--gate-plan", "0123456789abcdef"],
+			{ out, seedsRoot: root, fixturesDir: root, experimentsDir: gateDir },
+		);
+		expect(code).toBe(1);
+		expect(lines.join("\n")).toContain(`could not write ${file}`);
+		expect(await readFile(file, "utf8")).toBe("{not json");
+	});
+
+	it.each([
+		"../x",
+		"abc",
+		"0123456789ABCDEF",
+	])("--gate-plan %s exits 2 and writes nothing", async (bad) => {
+		await fullRoot();
+		registerStrategy(stub(findsAll));
+		const code = await runReplay(
+			["--seeds", "--strategy", "stub", "--gate-plan", bad],
+			{ out, seedsRoot: root, fixturesDir: root, experimentsDir: gateDir },
+		);
+		expect(code).toBe(2);
+		expect(lines.join("\n")).toMatch(/16 lowercase hex/);
+		expect(await readdir(gateDir)).toEqual([]);
+	});
+
 	it("exits 2 on misuse", async () => {
 		const bad = [
+			["--seeds", "--gate-plan", "0123456789abcdef"],
+			["--gate-plan", "0123456789abcdef"],
+			[
+				"--seeds",
+				"--plan",
+				"--strategy",
+				"stub",
+				"--gate-plan",
+				"0123456789abcdef",
+			],
 			["--seeds", "--live"],
 			["--seeds", "--record", "https://github.com/a/b/pull/1"],
 			["--seeds", "--adjudicate", "x"],

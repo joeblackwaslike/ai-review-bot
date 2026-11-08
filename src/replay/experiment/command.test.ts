@@ -1,13 +1,24 @@
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { buildPullFile, SIMPLE_PATCH } from "../../testing.js";
+import type { AuditRecord } from "../adjudication/audit.js";
+import { labelsHashOf } from "../adjudication/audit-defects.js";
+import { VerdictCache } from "../adjudication/cache.js";
+import { snapshotId } from "../adjudication/snapshot.js";
 import type { ReviewStrategy, StrategyResult } from "../strategy.js";
 import { makeFixture, makeLabels } from "../testkit.js";
 import {
 	defaultPlanFile,
 	type ExperimentDeps,
+	realExperimentDeps,
 	runExperiment,
 } from "./command.js";
 import { type ExperimentPlan, planHash } from "./plan.js";
@@ -289,5 +300,134 @@ describe("defaultPlanFile", () => {
 			true,
 		);
 		expect(existsSync(file)).toBe(true);
+	});
+});
+
+describe("runExperiment in chained mode", () => {
+	const chained = () => plan({ mode: "chained" });
+
+	it("plan prints chains and the estimate", async () => {
+		const s = setup(chained(), null);
+		expect(await call(s, "plan")).toBe(0);
+		const text = s.lines.join("\n");
+		expect(text).toMatch(/: 2 chains/);
+		expect(text).not.toMatch(/cells/);
+		expect(text).toMatch(/anthropic \$0\.02/);
+		expect(text).toMatch(/nothing was run/);
+	});
+
+	it("run goes through runChains: a later round sees the earlier round's own findings", async () => {
+		const s = setup(chained());
+		const seen: string[][] = [];
+		s.deps.loadFixtures = async () => ({
+			"o/r#1": {
+				fixture: makeFixture([["c1"], ["c2"]], {
+					pull: 1,
+					provider: "anthropic",
+				}),
+				labels: makeLabels(),
+				fetchDiff: async () => ({
+					diff: "d",
+					files: [buildPullFile("src/a.ts", SIMPLE_PATCH)],
+					approximate: false,
+				}),
+			},
+		});
+		s.deps.runStrategy = async (st, i) => {
+			if (st.name === "a") seen.push(i.history.ledger.map((e) => e.title));
+			return {
+				...result(),
+				posted: [
+					{
+						skill: null,
+						title: `zebra ${i.round.index}`,
+						path: "src/a.ts",
+						line: 10,
+						severity: "P2",
+					},
+				],
+			};
+		};
+		expect(await call(s, "run")).toBe(0);
+		expect(seen).toEqual([[], ["zebra 0"]]);
+	});
+
+	it("score prints recycling and convergence and no verdict", async () => {
+		const s = setup(chained());
+		expect(await call(s, "run")).toBe(0);
+		s.lines.length = 0;
+		expect(await call(s, "score")).toBe(0);
+		const text = s.lines.join("\n");
+		expect(text).toMatch(/chained: recycling and convergence only/);
+		expect(text).toMatch(/a \[anthropic\] PRs=1/);
+		expect(text).toMatch(/a0 vs a \[anthropic\]/);
+		expect(text).toMatch(/no verdict in chained mode/);
+		expect(text).not.toMatch(/PARTIAL/);
+	});
+
+	it("score marks a partly run chained plan PARTIAL", async () => {
+		const s = setup(chained());
+		expect(await call(s, "score")).toBe(0);
+		expect(s.lines.join("\n")).toMatch(/PARTIAL/);
+	});
+});
+
+describe("score --final in chained mode", () => {
+	it("exits 2 before reading cells and writes no marker", async () => {
+		const p = plan({ mode: "chained" });
+		const s = setup(p);
+		expect(await call(s, "score", true)).toBe(2);
+		expect(s.lines.join("\n")).toMatch(/chained plans have no final verdict/);
+		expect(existsSync(join(s.deps.root, planHash(p), "final.marker"))).toBe(
+			false,
+		);
+	});
+});
+
+describe("realExperimentDeps loadFixtures", () => {
+	const dirs: string[] = [];
+	afterEach(() => {
+		for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+	});
+
+	it("attaches the agreed audit defects for the fixture's labels hash", async () => {
+		const fixturesDir = mkdtempSync(join(tmpdir(), "fx-"));
+		const adjDir = mkdtempSync(join(tmpdir(), "adj-"));
+		dirs.push(fixturesDir, adjDir);
+		const fixture = makeFixture([["c1"]], { pull: 1, provider: "anthropic" });
+		const labelsText = JSON.stringify(makeLabels());
+		const stem = join(fixturesDir, "o__r__1__anthropic");
+		writeFileSync(`${stem}.json`, JSON.stringify(fixture));
+		writeFileSync(`${stem}.labels.json`, labelsText);
+		const judge = { family: "anthropic", model: "m", promptHash: "h" } as const;
+		const record: AuditRecord = {
+			kind: "audit",
+			auditAdded: true,
+			status: "agreed",
+			path: "src/a.ts",
+			line: 7,
+			title: "missed defect",
+			body: "b",
+			first: judge,
+			second: null,
+		};
+		new VerdictCache<AuditRecord>(adjDir).put(
+			snapshotId(fixture),
+			`audit:${labelsHashOf(labelsText)}:src/a.ts:7:k`,
+			record,
+		);
+		const deps = realExperimentDeps({
+			fixturesDir,
+			out: () => {},
+			adjudicationDir: adjDir,
+		});
+		const loaded = await deps.loadFixtures(
+			plan({
+				fixtures: [{ id: "o/r#1", split: "tuning", provider: "anthropic" }],
+			}),
+		);
+		expect(loaded["o/r#1"]?.extraDefects).toEqual([
+			{ path: "src/a.ts", line: 7, title: "missed defect" },
+		]);
 	});
 });

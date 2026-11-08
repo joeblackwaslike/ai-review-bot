@@ -395,3 +395,41 @@ Each phase ends with `pnpm typecheck`, `pnpm lint` and `pnpm test` green and its
   `ReviewStrategy`.
 - Running tests or coverage for untrusted PRs.
 - Moving a winning candidate to the hosted path.
+
+## Addendum: phase 6 (2026-11-07)
+
+Phase 6 is one branch and one PR. Joe approved the plan on 2026-11-07; the calls below are the
+author's and carry their reason.
+
+- **Fixtures.** 46 PRs were recorded on top of the original 10 (45 PRs, 6 repositories, 14 tuning,
+  17 validation, 14 test). Selection was mechanical, written before recording: in each of Joe's
+  repositories with bot history, every merged PR with at least 2 Anthropic-bot reviews, at least 2
+  changed files and at most 2500 added lines that was not already recorded. OpenAI fixtures exist only
+  for test-split PRs, because of the rationing rule. Fixtures with zero rounds are not kept.
+- **Scorer gaps closed.** (1) `replay --seeds --strategy <name>` writes
+  `<experiments dir>/<plan-hash>/seed-gates.json` when given the plan hash, so `score --final` no
+  longer needs a hand-written file. (2) The scorer reads audit-added defects from the adjudication
+  cache, so recall uses labelled real claims plus `auditAdded`. (3) The scorer computes join rate per
+  PR as `{joined, candidates}` with the matcher version, using the saved traces' candidates.
+- **Chained mode.** Selected by `"mode": "chained"` in the plan, never mixed with per-round in one
+  plan hash. Trial unit is `(strategy, fixture, trial)` with rounds in order inside it; the results
+  record key gains no new field, and a chained cell stores `round` as its index so existing records
+  stay valid. Round 0 history is the fixture's recorded pre-review state; round i+1's ledger is built
+  from the strategy's own `posted` set for rounds 0..i, through the same ledger builder the replay
+  uses, with the recorded author replies and thread resolutions applied (the author's behaviour is
+  held fixed; only the reviewer varies). A round the strategy cannot run stops the chain and the
+  remaining rounds are listed as missing.
+- **Chained metrics.** Recycling is the share of posted findings in rounds after the first that
+  restate a finding the ledger already held as settled or open. Convergence is rounds until the first
+  round that posts nothing, with "never" counted at the chain length. Both are reported with recall and
+  the incomplete-chain rate, per PR then macro-averaged, paired bootstrap as in section 7. Chained
+  cells are never mixed into per-round precision or cost. A chained plan has no final verdict:
+  `score --final` on one exits 2. It shares the per-round plan's seed and splits, so a chained run can
+  never see test PRs that plain `score` has not been allowed to.
+- **Cost.** Estimates from `--experiment plan` replace the earlier guess: $44.58 Anthropic and $9.98
+  OpenAI for the 384-cell per-round grid, under the existing $150 and $20 caps, which stay. A chained
+  grid is priced the same way and is run only after per-round scoring and only if its estimate is shown
+  and approved first. The caps (`maxAnthropicUsd`, `maxOpenAiUsd`) apply per plan hash, so a
+  per-round plan and a chained plan can each spend up to them.
+- **Run order.** Anthropic per-round on all splits; `score` on tuning and validation; OpenAI on the
+  test split only for strategies that cleared on Anthropic; `score --final` once, when Joe says go.

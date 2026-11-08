@@ -41,6 +41,8 @@ import {
 	realExperimentDeps,
 	runExperiment,
 } from "./experiment/command.js";
+import { writeSeedGate } from "./experiment/seed-gates.js";
+import { defaultExperimentsDir } from "./experiment/store.js";
 import { filterMargin, formatMargin } from "./filter-margin.js";
 import { type GhClient, ghCli } from "./gh.js";
 import { checkClean, checkRecall } from "./guard.js";
@@ -88,6 +90,8 @@ export interface ReplayDeps {
 	adjudicationDir?: string;
 	/** Seed root for `--seeds`; defaults to the committed seeds. */
 	seedsRoot?: string;
+	/** Experiments root for `--gate-plan`; defaults to `defaultExperimentsDir()`. */
+	experimentsDir?: string;
 	experiment?: ExperimentDeps;
 }
 
@@ -103,6 +107,7 @@ interface ParsedArgs {
 	heldOut?: boolean;
 	expectClean?: boolean;
 	strategy?: string;
+	gatePlan?: string;
 	investigateJoin?: string;
 	adjudicate?: string;
 	maxAnthropic?: number;
@@ -122,7 +127,7 @@ const USAGE = [
 	"  ai-review replay --record <pr-url> (--reviewer <id> | --provider anthropic|openai) --bot <login> [--held-out] [--expect-clean] [--fixtures <dir>]",
 	"  ai-review replay --live [--rounds <n>] [--max-cost <usd>] [--strategy <name>] [--save-trace] [--fixtures <dir>]",
 	"  ai-review replay --investigate-join <fixture-id> [--fixtures <dir>]",
-	"  ai-review replay --seeds [--check | --plan [--strategy <name>] | --strategy <name> --max-cost <usd>]",
+	"  ai-review replay --seeds [--check | --plan [--strategy <name>] | --strategy <name> --max-cost <usd> [--gate-plan <hash>]]",
 	"  ai-review replay --experiment plan|run|score [--plan-file <path>] [--fixtures <dir>]  (--final is for score only)",
 	"  ai-review replay --adjudicate <fixture-id> [--max-anthropic <n>] [--max-openai <n>] [--plan | --audit] [--fixtures <dir>]",
 ].join("\n");
@@ -209,6 +214,7 @@ function parseArgs(args: string[]): ParsedArgs | null {
 		if (
 			(flag === "--record" ||
 				flag === "--strategy" ||
+				flag === "--gate-plan" ||
 				flag === "--investigate-join" ||
 				flag === "--adjudicate" ||
 				flag === "--provider" ||
@@ -220,6 +226,7 @@ function parseArgs(args: string[]): ParsedArgs | null {
 			return null;
 		if (flag === "--record") parsed.record = value;
 		else if (flag === "--strategy") parsed.strategy = value;
+		else if (flag === "--gate-plan") parsed.gatePlan = value;
 		else if (flag === "--investigate-join") parsed.investigateJoin = value;
 		else if (flag === "--adjudicate") parsed.adjudicate = value;
 		else if (flag === "--bot") parsed.bot = value;
@@ -320,6 +327,7 @@ async function writeRecording(
 }
 
 const FIXTURE_ID = /^[A-Za-z0-9._-]+$/;
+const PLAN_HASH = /^[0-9a-f]{16}$/;
 
 const JUDGE_MODELS: Record<LegacyProvider, ModelSelection> = {
 	anthropic: {
@@ -663,6 +671,12 @@ async function runSeeds(
 		(p.maxCost !== undefined &&
 			p.strategy === undefined &&
 			"--max-cost requires --strategy") ||
+		(p.gatePlan !== undefined &&
+			!PLAN_HASH.test(p.gatePlan) &&
+			"--gate-plan must be a 16 lowercase hex character plan hash") ||
+		(p.gatePlan !== undefined &&
+			(p.strategy === undefined || p.plan) &&
+			"--gate-plan requires --strategy and does not apply to --plan") ||
 		(p.maxCost !== undefined &&
 			p.plan &&
 			"--max-cost does not apply to --plan");
@@ -682,10 +696,30 @@ async function runSeeds(
 		return 2;
 	}
 	if (p.plan) return planSeeds(strategy, opts);
-	return runSeedsWithStrategy(strategy, {
+	const { gatePlan } = p;
+	const gateRoot = deps.experimentsDir ?? defaultExperimentsDir();
+	const gateFile = join(gateRoot, gatePlan ?? "", "seed-gates.json");
+	let gateError: string | null = null;
+	const code = await runSeedsWithStrategy(strategy, {
 		...opts,
 		maxCostUsd: p.maxCost ?? 5,
+		onGate:
+			gatePlan === undefined
+				? undefined
+				: (gate) => {
+						try {
+							writeSeedGate(gateRoot, gatePlan, strategy.name, gate);
+							out(`gate written to ${gateFile}`);
+						} catch (err) {
+							gateError = err instanceof Error ? err.message : String(err);
+						}
+					},
 	});
+	if (gateError !== null) {
+		out(`could not write ${gateFile}: ${gateError}`);
+		return 1;
+	}
+	return code;
 }
 
 function checkExperimentFlags(p: ParsedArgs): string | null {
@@ -697,6 +731,7 @@ function checkExperimentFlags(p: ParsedArgs): string | null {
 		p.live,
 		p.record,
 		p.strategy,
+		p.gatePlan,
 		p.investigateJoin,
 		p.adjudicate,
 		p.seeds,
@@ -758,6 +793,8 @@ export async function runReplay(
 	if (parsed.seeds) return runSeeds(parsed, deps, out);
 	const misuse =
 		(parsed.check && "--check requires --seeds") ||
+		(parsed.gatePlan !== undefined &&
+			"--gate-plan requires --seeds --strategy") ||
 		(parsed.saveTrace &&
 			(!parsed.live || parsed.record !== undefined) &&
 			"--save-trace requires --live without --record") ||

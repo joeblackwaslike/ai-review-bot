@@ -1,3 +1,4 @@
+import type { Ledger } from "../../ledger/types.js";
 import type { PullFile } from "../../review.js";
 import { routeReviewerModel } from "../../router.js";
 import {
@@ -8,7 +9,11 @@ import { requireCost, roundCostUsd } from "../cost.js";
 import { freezeFixture } from "../frozen.js";
 import { routerContext } from "../live-wiring.js";
 import type { runStrategy as runStrategyFn } from "../run-strategy.js";
-import type { ReviewStrategy, StrategyInput } from "../strategy.js";
+import type {
+	ReviewStrategy,
+	StrategyInput,
+	StrategyResult,
+} from "../strategy.js";
 import { ledgerForRound } from "../trace.js";
 import {
 	fixtureFamily,
@@ -72,7 +77,7 @@ export interface GridReport {
 const A = "a";
 const A0 = "a0";
 
-function shuffled<T>(items: T[], seed: string): T[] {
+export function shuffled<T>(items: T[], seed: string): T[] {
 	const out = [...items];
 	const rand = mulberry32(seed);
 	for (let i = out.length - 1; i > 0; i--) {
@@ -82,7 +87,7 @@ function shuffled<T>(items: T[], seed: string): T[] {
 	return out;
 }
 
-function resolveStrategies(
+export function resolveStrategies(
 	plan: ExperimentPlan,
 	deps: RunnerDeps,
 ): ReviewStrategy[] {
@@ -118,7 +123,7 @@ function unitsOf(plan: ExperimentPlan, deps: RunnerDeps) {
 	return shuffled(units, plan.seed);
 }
 
-class InputBuilder {
+export class InputBuilder {
 	private readonly diffs = new Map<
 		string,
 		Promise<Awaited<ReturnType<LoadedFixture["fetchDiff"]>>>
@@ -130,7 +135,7 @@ class InputBuilder {
 		fixtureId: string,
 		roundIndex: number,
 		plan: ExperimentPlan,
-		extra: { spendTargetUsd?: number },
+		extra: { spendTargetUsd?: number; ledger?: Ledger },
 	): Promise<{ input: StrategyInput; round: Round; loaded: LoadedFixture }> {
 		const loaded = this.deps.fixtures[fixtureId] as LoadedFixture;
 		const round = loaded.fixture.rounds.find(
@@ -150,7 +155,10 @@ class InputBuilder {
 			files: d.files,
 			approximateDiff: d.approximate,
 			checkout: null,
-			history: { ledger: ledgerForRound(loaded.fixture, loaded.labels, round) },
+			history: {
+				ledger:
+					extra.ledger ?? ledgerForRound(loaded.fixture, loaded.labels, round),
+			},
 			budget: {
 				maxUsd: plan.budgets.perCellUsd,
 				maxWallMs: plan.budgets.perCellWallMs,
@@ -167,14 +175,78 @@ class InputBuilder {
 	}
 }
 
-const capFor = (plan: ExperimentPlan, p: Provider): number =>
+export const capFor = (plan: ExperimentPlan, p: Provider): number =>
 	p === "anthropic" ? plan.budgets.maxAnthropicUsd : plan.budgets.maxOpenAiUsd;
 
 const splitOfFixture = (plan: ExperimentPlan, id: string) =>
 	plan.fixtures.find((f) => f.id === id)?.split;
 
-const refusedOpenAi = (plan: ExperimentPlan, id: string, p: Provider) =>
+export const refusedOpenAi = (plan: ExperimentPlan, id: string, p: Provider) =>
 	p === "openai" && splitOfFixture(plan, id) !== "test";
+
+export interface ExecuteCellArgs {
+	strategy: ReviewStrategy;
+	input: StrategyInput;
+	loaded: LoadedFixture;
+	round: Round;
+	provider: Provider;
+	key: CellKey;
+	allowedUsd: number;
+	plan: ExperimentPlan;
+	deps: RunnerDeps;
+	planHashValue: string;
+	modelFor: (input: StrategyInput) => string;
+	checkoutFor: typeof realWithCheckout;
+}
+
+export async function executeCell(
+	a: ExecuteCellArgs,
+): Promise<"unavailable" | { record: CellRecord; result: StrategyResult }> {
+	const { strategy: s, input, loaded, round } = a;
+	const run = (i: StrategyInput) => a.deps.runStrategy(s, i);
+	const ran = s.needsCheckout
+		? await a.checkoutFor(
+				{
+					owner: loaded.fixture.owner,
+					repo: loaded.fixture.repo,
+					baseSha: round.mergeBase ?? round.baseSha,
+					headSha: round.headSha,
+				},
+				(handle) => run({ ...input, checkout: handle }),
+			)
+		: await run(input);
+	if (isCheckoutUnavailable(ran)) return "unavailable";
+	const costUsd = requireCost(
+		roundCostUsd(ran.usage, a.modelFor(input)),
+		a.modelFor(input),
+	);
+	const overCap =
+		costUsd > a.allowedUsd + 1e-9
+			? { allowedUsd: a.allowedUsd, actualUsd: costUsd }
+			: undefined;
+	const record: CellRecord = {
+		key: a.key,
+		provider: a.provider,
+		planHash: a.planHashValue,
+		at: a.deps.now().toISOString(),
+		costUsd,
+		fitIn210s: ran.wallMs <= a.plan.thresholds.hostedFitSeconds * 1000,
+		failedAttempts: ran.spend?.failedAttempts ?? 0,
+		cacheTemperature: "unknown",
+		...(overCap ? { overCap } : {}),
+		result: {
+			findings: ran.findings,
+			candidates: ran.candidates,
+			posted: ran.posted,
+			agentReviews: ran.agentReviews,
+			usage: ran.usage,
+			toolCalls: ran.toolCalls,
+			wallMs: ran.wallMs,
+			spend: ran.spend,
+		},
+	};
+	return { record, result: ran };
+}
 
 export async function planGrid(
 	plan: ExperimentPlan,
@@ -310,55 +382,29 @@ export async function runGrid(
 			);
 			input.budget = { ...input.budget, maxUsd: allowedUsd };
 			try {
-				const run = (i: StrategyInput) => deps.runStrategy(s, i);
-				const ran = s.needsCheckout
-					? await checkoutFor(
-							{
-								owner: loaded.fixture.owner,
-								repo: loaded.fixture.repo,
-								baseSha: round.mergeBase ?? round.baseSha,
-								headSha: round.headSha,
-							},
-							(handle) => run({ ...input, checkout: handle }),
-						)
-					: await run(input);
-				if (isCheckoutUnavailable(ran)) {
+				const done = await executeCell({
+					strategy: s,
+					input,
+					loaded,
+					round,
+					provider,
+					key,
+					allowedUsd,
+					plan,
+					deps,
+					planHashValue,
+					modelFor,
+					checkoutFor,
+				});
+				if (done === "unavailable") {
 					report.unavailable.push(cell);
 					continue;
 				}
-				const costUsd = requireCost(
-					roundCostUsd(ran.usage, modelFor(input)),
-					modelFor(input),
-				);
-				spentUsd[provider] += costUsd;
-				if (s.name === A) aCost = costUsd;
-				const overCap =
-					costUsd > allowedUsd + 1e-9
-						? { allowedUsd, actualUsd: costUsd }
-						: undefined;
-				if (overCap) report.overCap.push({ ...cell, ...overCap });
-				const record: CellRecord = {
-					key,
-					provider,
-					planHash: planHashValue,
-					at: deps.now().toISOString(),
-					costUsd,
-					fitIn210s: ran.wallMs <= plan.thresholds.hostedFitSeconds * 1000,
-					failedAttempts: ran.spend?.failedAttempts ?? 0,
-					cacheTemperature: "unknown",
-					...(overCap ? { overCap } : {}),
-					result: {
-						findings: ran.findings,
-						candidates: ran.candidates,
-						posted: ran.posted,
-						agentReviews: ran.agentReviews,
-						usage: ran.usage,
-						toolCalls: ran.toolCalls,
-						wallMs: ran.wallMs,
-						spend: ran.spend,
-					},
-				};
-				deps.store.append(record);
+				spentUsd[provider] += done.record.costUsd;
+				if (s.name === A) aCost = done.record.costUsd;
+				if (done.record.overCap)
+					report.overCap.push({ ...cell, ...done.record.overCap });
+				deps.store.append(done.record);
 				report.ran++;
 			} catch (err) {
 				spentUsd[provider] += estimate;

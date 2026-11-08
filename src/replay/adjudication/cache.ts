@@ -23,6 +23,10 @@ export class VerdictCache<T = VerdictRecord> {
 		return this.load(snapshot).get(key);
 	}
 
+	entries(snapshot: string): IterableIterator<[string, T]> {
+		return this.load(snapshot).entries();
+	}
+
 	put(snapshot: string, key: string, record: T): void {
 		this.load(snapshot).set(key, record);
 		mkdirSync(this.dir, { recursive: true });

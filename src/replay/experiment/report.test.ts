@@ -28,6 +28,7 @@ const base = (over: Partial<ExperimentScore> = {}): ExperimentScore => ({
 			medianCostUsd: 1.5,
 			medianWallMs: 42_000,
 			fitShare: 0.95,
+			joinRate: { joined: 3, candidates: 7, matcher: "isSameClaim@X" },
 		},
 	],
 	comparisons: [
@@ -56,6 +57,10 @@ const text = (s: ExperimentScore) =>
 	formatScoreReport(s, { planHash: "abc", hostedFitSeconds: 180 });
 
 describe("formatScoreReport", () => {
+	it("prints the join rate with the matcher", () => {
+		expect(text(base())).toMatch(/join rate 3\/7 \(matcher isSameClaim@X\)/);
+	});
+
 	it("always says per-round only and prints unresolved counts next to the figures", () => {
 		const out = text(base());
 		expect(out).toMatch(/per-round mode only/i);
@@ -122,5 +127,41 @@ describe("formatScoreReport", () => {
 		);
 		expect(directional).not.toMatch(/unconfirmed on OpenAI/);
 		expect(directional).toMatch(/no go or no-go claim/);
+	});
+});
+
+describe("formatScoreReport chained", () => {
+	it("chained report omits precision and cost", () => {
+		const out = text(
+			base({
+				chained: {
+					perPr: [],
+					summaries: [
+						{
+							strategy: "a",
+							provider: "anthropic",
+							nPrs: 4,
+							recycling: 0.25,
+							convergenceRound: 2,
+							recall: 0.5,
+							incompleteRate: 0.25,
+						},
+					],
+					comparisons: [
+						{
+							candidate: "b",
+							provider: "anthropic",
+							nPrs: 3,
+							excludedIncomplete: 1,
+							recycling: { mean: -0.1, lo: -0.2, hi: 0, n: 3 },
+							convergence: { mean: -1, lo: -2, hi: 0, n: 3 },
+						},
+					],
+				},
+			}),
+		);
+		expect(out).toContain("chained: recycling and convergence only");
+		expect(out).toContain("recycling is an upper bound");
+		expect(out).not.toMatch(/precision|cost|latency/i);
 	});
 });
