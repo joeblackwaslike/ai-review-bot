@@ -891,8 +891,8 @@ async function cmdSkillOutcomes(args: string[]): Promise<void> {
 	for (let i = 0; i < args.length; i++) {
 		const a = args[i];
 		if (a === "--json") json = true;
-		else if (a === "--since") since = args[++i] ?? "";
-		else if (a === "--repo") repoFilter = args[++i];
+		else if (a === "--since") since = requireValue(args, i++, a);
+		else if (a === "--repo") repoFilter = requireValue(args, i++, a);
 		else fatal(`Unexpected argument: ${a}`);
 	}
 	const sinceDate = new Date(`${since}T00:00:00Z`);
@@ -937,6 +937,7 @@ async function cmdSkillOutcomes(args: string[]): Promise<void> {
 				loaded = ledger;
 				if (ledger.length > 0) break;
 			} catch (err) {
+				loaded = undefined;
 				lastError = err;
 				break;
 			}

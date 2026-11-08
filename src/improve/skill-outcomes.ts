@@ -52,11 +52,16 @@ export function prefixCandidates(
 	];
 }
 
-function entryFor(f: CatalogFinding, ledger: Ledger): LedgerEntry | undefined {
+/** The ledger entry for a finding's claim. A comment that carries several claims, in the corpus or in the ledger, is matched by title only: taking its sole remaining entry would hand one claim another's outcome. */
+function entryFor(
+	f: CatalogFinding,
+	ledger: Ledger,
+	findingsOnComment: number,
+): LedgerEntry | undefined {
 	if (f.commentId === null) return undefined;
 	const marker = `:c${f.commentId}:`;
 	const candidates = ledger.filter((e) => e.id.includes(marker));
-	if (candidates.length <= 1) return candidates[0];
+	if (candidates.length === 1 && findingsOnComment === 1) return candidates[0];
 	const title = f.title.trim().toLowerCase();
 	const exact = candidates.filter(
 		(e) => e.title.trim().toLowerCase() === title,
@@ -106,8 +111,16 @@ export function summarizeSkillOutcomes(
 	ledgerFor: (f: CatalogFinding) => Ledger | undefined,
 ): SkillOutcomeRow[] {
 	const rows = new Map<string, SkillOutcomeRow>();
+	const perComment = new Map<number, number>();
+	for (const f of findings)
+		if (f.commentId !== null)
+			perComment.set(f.commentId, (perComment.get(f.commentId) ?? 0) + 1);
 	for (const f of findings) {
-		const e = entryFor(f, ledgerFor(f) ?? []);
+		const e = entryFor(
+			f,
+			ledgerFor(f) ?? [],
+			f.commentId === null ? 0 : (perComment.get(f.commentId) ?? 0),
+		);
 		const outcome = e ? classifyFinding(e, e.reactions ?? []) : undefined;
 		const restated = restatesEarlier(f, findings);
 		for (const skill of f.skills) {

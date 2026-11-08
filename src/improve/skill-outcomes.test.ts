@@ -143,6 +143,42 @@ describe("summarizeSkillOutcomes", () => {
 		expect(bySkill(rows, "b.md").rejected).toBe(1);
 	});
 
+	it("does not hand a merged comment's only ledger entry to a different claim", () => {
+		const findings = [
+			finding({ id: 1, title: "First claim", skills: ["a.md"] }),
+			finding({ id: 2, title: "Second claim", line: 30, skills: ["b.md"] }),
+		];
+		const ledger: Ledger = [
+			entry({
+				id: "r0:c11:0",
+				title: "First claim",
+				status: "fixed",
+				decidedBy: "author",
+			}),
+		];
+		const rows = summarize(findings, ledger);
+		expect(bySkill(rows, "a.md").accepted).toBe(1);
+		expect(bySkill(rows, "b.md")).toMatchObject({ accepted: 0, unmatched: 1 });
+	});
+
+	it("leaves a finding unmatched when several claims share its comment and none has its title", () => {
+		const ledger: Ledger = [
+			entry({ id: "r0:c11:0", title: "Something else" }),
+			entry({ id: "r0:c11:1", title: "Another thing", line: 30 }),
+		];
+		expect(
+			bySkill(summarize([finding()], ledger), "code-reviewer.md"),
+		).toMatchObject({ unmatched: 1, unanswered: 0 });
+	});
+
+	it("leaves a finding with no comment id unmatched", () => {
+		const row = bySkill(
+			summarize([finding({ commentId: null })], [entry()]),
+			"code-reviewer.md",
+		);
+		expect(row.unmatched).toBe(1);
+	});
+
 	it("counts a later finding that restates an earlier one on the same PR and reviewer", () => {
 		const earlier = finding({ id: 1, commentId: 11 });
 		const later = finding({
