@@ -91,9 +91,11 @@ export function mergeRepoConfig(args: {
 		extraSensitivePatterns,
 		minSeverity,
 		ignoredKeys,
-		customPrompt: repoMayOverride(sources["review.customPrompt"])
-			? repo?.review?.customPrompt
-			: undefined,
+		customPrompt:
+			repoMayOverride(sources["review.customPrompt"]) &&
+			repo?.review?.customPrompt?.trim()
+				? repo.review.customPrompt
+				: undefined,
 		command: repoMayOverride(sources["review.command"])
 			? repo?.review?.command
 			: undefined,

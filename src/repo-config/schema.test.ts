@@ -118,4 +118,12 @@ describe("RepoConfigSchema", () => {
 			).not.toBeNull();
 		}
 	});
+	it("rejects an empty or whitespace-only customPrompt", () => {
+		const parse = (customPrompt: string) =>
+			RepoConfigSchema.safeParse({ version: 1, review: { customPrompt } })
+				.success;
+		expect(parse("")).toBe(false);
+		expect(parse("  \n\t")).toBe(false);
+		expect(parse("Check billing.")).toBe(true);
+	});
 });

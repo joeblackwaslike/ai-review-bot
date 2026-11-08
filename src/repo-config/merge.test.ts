@@ -146,6 +146,16 @@ describe("mergeRepoConfig", () => {
 		expect(merge(repo).reviewerDisabled).toBe(false);
 	});
 
+	it("a blank repo customPrompt never overrides the deployment prompt", () => {
+		for (const customPrompt of ["", "  \n\t"]) {
+			const repo: RepoConfig = { version: 1, review: { customPrompt } };
+			expect(
+				merge(repo, { sources: { "review.customPrompt": "yaml" } })
+					.customPrompt,
+			).toBeUndefined();
+		}
+	});
+
 	it("an absent sources key with a repo customPrompt yields no override", () => {
 		const repo: RepoConfig = { version: 1, review: { customPrompt: "hi" } };
 		expect(merge(repo, { sources: {} }).customPrompt).toBeUndefined();

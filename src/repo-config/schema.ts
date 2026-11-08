@@ -41,7 +41,7 @@ export const RepoConfigSchema = z
 		review: z
 			.object({
 				minSeverity: z.enum(["P3", "P2", "P1"]).optional(),
-				customPrompt: z.string().max(2000).optional(),
+				customPrompt: z.string().trim().min(1).max(2000).optional(),
 				command: z
 					.string()
 					.regex(

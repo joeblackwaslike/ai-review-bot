@@ -17,7 +17,7 @@ The file must be a regular file of 20 KB or less, valid UTF-8 and valid YAML.
 | `reviewers.<id>.skills.<name>.enabled: false` | Turn one skill off for that reviewer. |
 | `routing.sensitivePathPatterns` | Extra path fragments that count as sensitive when the PR is classified. A path matches if it contains the fragment, ignoring case. Up to 50 fragments, each 3 to 100 characters. |
 | `review.minSeverity` | Drop findings below `P2` or `P1`. `P3` is the default. P0 and P1 are never dropped by the floor. |
-| `review.customPrompt` | Review instructions (up to 2000 characters). They replace the deployment's custom prompt in this repo; they do not append to it. |
+| `review.customPrompt` | Review instructions (1 to 2000 characters, not blank). They replace the deployment's custom prompt in this repo; they do not append to it. |
 | `review.command` | The slash command that starts a review in this repo. It is one word: `/` followed by 3 to 49 letters, digits, `-` or `_`, starting with a letter or digit. Spaces, backticks, `@`, `<` and other punctuation are rejected. In a comment it matches only as the whole first word, so `/lgtm` does not match `/lgtmx`. |
 
 ## What a repo cannot do
