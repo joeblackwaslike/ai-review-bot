@@ -1,0 +1,172 @@
+{
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "ai-review-bot",
+	"pull": 111,
+	"provider": "anthropic",
+	"reviewer": "claude",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-11-07T23:37:16.253Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 5780288919,
+			"provider": "anthropic",
+			"submittedAt": "2026-11-05T05:27:47Z",
+			"headSha": "db1708a8318f1c20d04e32b2413797837dae9229",
+			"baseSha": "6ea9ab36afca1115efe1c43f943d23d2da857df3",
+			"mergeBase": "6ea9ab36afca1115efe1c43f943d23d2da857df3",
+			"triggerAt": "2026-11-05T05:27:24Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "db1708a8318f1c20d04e32b2413797837dae9229",
+					"committedAt": "2026-11-05T05:27:24Z",
+					"files": [
+						{
+							"path": "src/router.test.ts",
+							"ranges": [[25, 51]]
+						},
+						{
+							"path": "src/router.ts",
+							"ranges": [[38, 47], [53, 69]]
+						},
+						{
+							"path": "src/tier2.test.ts",
+							"ranges": [[85, 118]]
+						},
+						{
+							"path": "src/tier2.ts",
+							"ranges": [[142, 172]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r0:c4476942187:0",
+					"roundIndex": 0,
+					"reviewId": 5780288919,
+					"source": "inline",
+					"commentId": 4476942187,
+					"path": "src/router.ts",
+					"line": 57,
+					"severity": "P3",
+					"title": "Sensitive-path docs now bypass review when small, including non-prose doc extensions",
+					"text": "🟢 **P3** · advisory\n\n**Sensitive-path docs now bypass review when small, including non-prose doc extensions**\n\nThe doc-only trivial check now runs before isSensitivePath, so any <20-line change to files with a DOC_EXTENSIONS extension skips the sensitive check. This is intended for .md. If DOC_EXTENSIONS also includes extensions like .txt or .rst (not visible in the diff), a small edit to a sensitive-named file such as secrets.txt or auth/allowlist.txt would now be trivial. The requirements/constraints carve-out only covers two names, so it is a narrow special case rather than a general rule. Consider restricting the early-trivial path to prose doc extensions.\n\n<!-- ai-review:fp=architecture|src/router.ts|46bea9eacfe8aab1.0 -->\n<!-- ai-review:advisory -->"
+				}
+			]
+		},
+		{
+			"index": 1,
+			"reviewId": 5795653527,
+			"provider": "anthropic",
+			"submittedAt": "2026-11-06T04:14:20Z",
+			"headSha": "2c60112c0f28cf805676336b52d19211aefc1c52",
+			"baseSha": "db1708a8318f1c20d04e32b2413797837dae9229",
+			"mergeBase": "db1708a8318f1c20d04e32b2413797837dae9229",
+			"triggerAt": "2026-11-06T04:13:59Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "89a7476954125efcf4a41714dcaf24604579283f",
+					"committedAt": "2026-11-06T04:13:58Z",
+					"files": [
+						{
+							"path": "src/tier2.test.ts",
+							"ranges": [[92, 101], [112, 124]]
+						},
+						{
+							"path": "src/tier2.ts",
+							"ranges": [[122, 128], [153, 178]]
+						}
+					]
+				},
+				{
+					"sha": "2c60112c0f28cf805676336b52d19211aefc1c52",
+					"committedAt": "2026-11-06T04:13:59Z",
+					"files": [
+						{
+							"path": "CLAUDE.md",
+							"ranges": [[71, 77]]
+						},
+						{
+							"path": "docs/how-it-works.md",
+							"ranges": [[39, 46]]
+						},
+						{
+							"path": "src/router.test.ts",
+							"ranges": [[40, 58]]
+						},
+						{
+							"path": "src/router.ts",
+							"ranges": [[37, 52], [64, 70]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r1:c4488957232:0",
+					"roundIndex": 1,
+					"reviewId": 5795653527,
+					"source": "inline",
+					"commentId": 4488957232,
+					"path": "src/router.ts",
+					"line": 46,
+					"severity": "P3",
+					"title": "Doc ordering: isDocFile defined after isTrivialDoc and sensitive .txt logic relies on extension slice",
+					"text": "🟢 **P3** · advisory\n\n**Doc ordering: isDocFile defined after isTrivialDoc and sensitive .txt logic relies on extension slice**\n\nWhen a path has no \".\" (e.g. `docs/LICENSE`), `lastIndexOf(\".\")` returns -1 and `slice(-1)` yields the last character of the path, which is harmless here but fragile. More importantly, a dotfile or a dot in a directory name (e.g. `docs.v2/README`) yields an extension like `.v2/README`, so the prose check is skipped and the sensitive-path fallback applies. Consider using the basename when computing the extension.\n\n*Suggested fix:*\n\n```suggestion\n\tconst base = path.slice(path.lastIndexOf(\"/\") + 1);\n\tconst dot = base.lastIndexOf(\".\");\n\tconst ext = dot === -1 ? \"\" : base.slice(dot).toLowerCase();\n```\n\n<!-- ai-review:fp=nitpick|src/router.ts|07f397df81f0a14e.0 -->\n<!-- ai-review:sfp=46ffb44ca888abdd -->\n<!-- ai-review:advisory -->"
+				}
+			]
+		}
+	],
+	"threads": [
+		{
+			"threadId": "PRRT_kwDOSM5cU86z742_",
+			"commentId": 4476942187,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4488963482,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-11-06T04:15:38Z",
+					"editedAt": null,
+					"body": "Fixed in 2c60112c. A small sensitive-named .txt now falls through to the sensitive check and routes complex; only .md, .mdx and .rst count as prose docs for the trivial shortcut. Tests cover secrets.txt and auth/allowlist.txt."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU860YC-9",
+			"commentId": 4488957232,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 4488966652,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-11-06T04:16:20Z",
+					"editedAt": null,
+					"body": "Hardened in 7ffceca1 by taking the extension from the basename. The failure described does not occur with today's extension sets, since .v2/README and a single trailing character match no entry in DOC_EXTENSIONS, so behaviour is unchanged and the new tests (docs.v2/README, docs/LICENSE, auth.v2/LICENSE, docs.v2/guide.md) pass before and after. Rating this as a fragility note, not a bug."
+				}
+			]
+		}
+	],
+	"reactions": [
+		{
+			"commentId": 4476942187,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-11-06T04:15:42Z"
+		},
+		{
+			"commentId": 4488957232,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-11-06T04:16:24Z"
+		}
+	]
+}

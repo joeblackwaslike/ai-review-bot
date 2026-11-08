@@ -1,0 +1,64 @@
+{
+	"fixtureId": "joeblackwaslike__ai-review-bot__61__anthropic",
+	"provisional": true,
+	"labels": [
+		{
+			"claimId": "r0:c3755255234:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-11T04:39:57Z|Fixed in 82ba81cd: applied your suggested fix verbatim — the summary call is now found by system prompt content (\"ground truth\") instead of a positional index.",
+				"2026-08-11T04:40:06Z|Fixed in 82ba81cd: applied your suggested fix verbatim — the summary call is now found by system prompt content (\"ground truth\") instead of a positional index."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3755255243:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-11T04:39:58Z|Fixed in 82ba81cd: applied your suggested fix verbatim — .filter(Boolean) before the outer join.",
+				"2026-08-11T04:40:07Z|Fixed in 82ba81cd: applied your suggested fix verbatim — .filter(Boolean) before the outer join."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:body:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c3755300903:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c3755300907:0",
+			"label": "rejected",
+			"confidence": "low",
+			"evidence": ["2026-08-11T04:55:30Z|reaction -1 by joeblackwaslike"],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c3755300911:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		}
+	],
+	"repeatPairs": [],
+	"negativePairs": [],
+	"allowedSuppression": []
+}

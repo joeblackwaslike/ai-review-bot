@@ -1,0 +1,68 @@
+{
+	"fixtureId": "joeblackwaslike__ai-review-bot__73__openai",
+	"provisional": true,
+	"labels": [
+		{
+			"claimId": "r0:c3812628490:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-19T11:49:57Z|Fixed in 2bfac5b — replaced commit_id+body equality with a per-attempt marker (invisible HTML comment, same technique as quotaCommentMarker/rateLimitCommentMarker in notify.ts), fully paginated. This closes both the whitespace-drift false-negative risk and the coincidental-match-against-an-unrelated-review risk in one change — see the commit message for the full rationale."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3812628493:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-19T11:49:58Z|Fixed in 2bfac5b — replaced commit_id+body equality with a per-attempt marker (invisible HTML comment, same technique as quotaCommentMarker/rateLimitCommentMarker in notify.ts), fully paginated. This closes both the whitespace-drift false-negative risk and the coincidental-match-against-an-unrelated-review risk in one change — see the commit message for the full rationale."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3812628496:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-19T11:49:59Z|Fixed in 2bfac5b — replaced commit_id+body equality with a per-attempt marker (invisible HTML comment, same technique as quotaCommentMarker/rateLimitCommentMarker in notify.ts), fully paginated. This closes both the whitespace-drift false-negative risk and the coincidental-match-against-an-unrelated-review risk in one change — see the commit message for the full rationale."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3812628499:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-19T11:50:01Z|Fixed in 2bfac5b — replaced commit_id+body equality with a per-attempt marker (invisible HTML comment, same technique as quotaCommentMarker/rateLimitCommentMarker in notify.ts), fully paginated. This closes both the whitespace-drift false-negative risk and the coincidental-match-against-an-unrelated-review risk in one change — see the commit message for the full rationale."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c3812628504:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-08-19T11:50:02Z|Fixed in 2bfac5b — replaced commit_id+body equality with a per-attempt marker (invisible HTML comment, same technique as quotaCommentMarker/rateLimitCommentMarker in notify.ts), fully paginated. This closes both the whitespace-drift false-negative risk and the coincidental-match-against-an-unrelated-review risk in one change — see the commit message for the full rationale."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:body:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		}
+	],
+	"repeatPairs": [],
+	"negativePairs": [],
+	"allowedSuppression": []
+}

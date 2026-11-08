@@ -1,0 +1,108 @@
+{
+	"fixtureId": "joeblackwaslike__stealth-browser__8__anthropic",
+	"provisional": true,
+	"labels": [
+		{
+			"claimId": "r0:c4474998949:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-11-05T00:15:43Z|Fixed in 486706ff. The ancestor check is now relative (`.//a[...]`) and MAX_SNIPPET_ANCESTORS is 5, which reaches div.N54PNb in the fixture. A new test asserts the first result's content starts with the description and has no site label or cite. The label is also stripped now, derived as the anchor text minus title and cite."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4474998957:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-11-05T00:15:47Z|Fixed in 486706ff. A page with no result anchors and no interstitial now logs a warning with the page title and body length, then returns empty. Test: test_zero_results_without_interstitial_logs_a_warning."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4474998963:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-11-05T00:15:51Z|Fixed in 486706ff. A missing or empty STEALTH_BROWSER_URL or STEALTH_BROWSER_TOKEN raises SearxEngineAPIException naming the variable. Tests cover both."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4474998968:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-11-05T00:15:55Z|Fixed in 486706ff. An empty or whitespace body raises SearxEngineAPIException, and lxml ParserError is wrapped the same way. Tests cover the empty and whitespace cases."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4474998973:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-11-05T00:15:59Z|Fixed in 486706ff. Removed the test count and the cluster-state known issue. The README now says deployment status lives with the openclaw-setup wiring."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4474998976:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-11-05T00:16:03Z|Fixed in 486706ff. The two open items are now self-contained checks (kubectl exec ls of the engines directory, and a Python review of stealth_google.py) with no transcript or plan references."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4474998981:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-11-05T00:16:07Z|Fixed in 486706ff. Empty fragments are skipped through a shared _strip helper. Test: test_empty_title_does_not_space_out_the_snippet."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4475015937:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-11-05T00:16:50Z|Fixed in ce3adf28. Blank line added before the deployment note."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4475015957:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-11-05T00:16:54Z|Fixed in ce3adf28. Blank line added before the deployment note."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4475015976:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-11-05T00:16:58Z|Fixed in ce3adf28. Blank line added before the deployment note."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4475015982:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-11-05T00:17:02Z|Fixed in ce3adf28. Blank line added before the deployment note."
+			],
+			"confirmed": false
+		}
+	],
+	"repeatPairs": [],
+	"negativePairs": [],
+	"allowedSuppression": []
+}

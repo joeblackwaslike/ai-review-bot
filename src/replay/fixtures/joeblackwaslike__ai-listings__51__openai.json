@@ -1,0 +1,1545 @@
+{
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "ai-listings",
+	"pull": 51,
+	"provider": "openai",
+	"reviewer": "codex",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-11-07T23:30:30.757Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 4969226566,
+			"provider": "openai",
+			"submittedAt": "2026-08-19T06:51:54Z",
+			"headSha": "3962e72d37113bb57dc1245b269bfd07847d4613",
+			"baseSha": "3074113e34e26dc101e4fe2023a7df0871d5dcf3",
+			"mergeBase": "3074113e34e26dc101e4fe2023a7df0871d5dcf3",
+			"triggerAt": "2026-08-19T06:29:14Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "931549ab15e74e653c2a94b82723bc7ae9d3d10d",
+					"committedAt": "2026-08-14T05:52:20Z",
+					"files": [
+						{
+							"path": "docs/superpowers/specs/2026-08-14-comps-pipeline-hardening-design.md",
+							"ranges": [[1, 142]]
+						}
+					]
+				},
+				{
+					"sha": "7db64fdec7e9169d9e55a96773ce932863bb67df",
+					"committedAt": "2026-08-14T06:19:56Z",
+					"files": [
+						{
+							"path": "docs/superpowers/plans/2026-08-14-comps-pipeline-hardening.md",
+							"ranges": [[1, 1429]]
+						}
+					]
+				},
+				{
+					"sha": "2aea7459d2b9b5d6c289b76f49cb725f2a1088f5",
+					"committedAt": "2026-08-14T06:25:33Z",
+					"files": [
+						{
+							"path": "src/lib/pipeline/step4a-draft-listing.ts",
+							"ranges": [[193, 202]]
+						}
+					]
+				},
+				{
+					"sha": "12dcb5416708f9102e9ed1e20fadc3ee74afda7d",
+					"committedAt": "2026-08-14T06:30:09Z",
+					"files": [
+						{
+							"path": "src/lib/pipeline/step3-pricing-research.ts",
+							"ranges": [
+								[221, 226],
+								[297, 302],
+								[456, 462],
+								[465, 470],
+								[526, 531],
+								[542, 547]
+							]
+						}
+					]
+				},
+				{
+					"sha": "3dc1972d92298272c4d32d0953c51524154a6ccf",
+					"committedAt": "2026-08-14T06:34:09Z",
+					"files": [
+						{
+							"path": "src/lib/pipeline/step3-pricing-research.ts",
+							"ranges": [[90, 144]]
+						}
+					]
+				},
+				{
+					"sha": "c3c654cc507cff4807ba3dcc0de53a3a14056ed9",
+					"committedAt": "2026-08-14T06:38:57Z",
+					"files": [
+						{
+							"path": "src/lib/pipeline/step3-pricing-research.ts",
+							"ranges": [[139, 198]]
+						}
+					]
+				},
+				{
+					"sha": "6b9689de43fd971c0c3f1168031ecc564dbf8dab",
+					"committedAt": "2026-08-14T06:43:10Z",
+					"files": [
+						{
+							"path": "src/lib/pipeline/step3-pricing-research.ts",
+							"ranges": [[559, 565], [568, 575], [631, 646], [657, 669]]
+						}
+					]
+				},
+				{
+					"sha": "ceb518b9c31fe43b6d2c1cb78ac4d5767e0f2dc2",
+					"committedAt": "2026-08-14T19:41:34Z",
+					"files": [
+						{
+							"path": "src/lib/pipeline/step3-pricing-research.ts",
+							"ranges": [[702, 722], [748, 759], [793, 799]]
+						}
+					]
+				},
+				{
+					"sha": "37c978423be5b317606c55b5763fbb066b323476",
+					"committedAt": "2026-08-14T19:49:46Z",
+					"files": [
+						{
+							"path": "src/lib/pipeline/step3-pricing-research.ts",
+							"ranges": [[693, 704]]
+						}
+					]
+				},
+				{
+					"sha": "f1a7e289343864cbe92886476bd79bcab31e4ff4",
+					"committedAt": "2026-08-14T19:54:44Z",
+					"files": []
+				},
+				{
+					"sha": "5c3a2eba25041f99996528bc2cc8a5c14e866404",
+					"committedAt": "2026-08-14T19:56:50Z",
+					"files": [
+						{
+							"path": "src/lib/pipeline/step3-pricing-research.ts",
+							"ranges": [[202, 209], [225, 234], [769, 776]]
+						}
+					]
+				},
+				{
+					"sha": "8d03309657effba5f9919e429e13fc1dda707dc8",
+					"committedAt": "2026-08-14T20:12:50Z",
+					"files": [
+						{
+							"path": "src/lib/pipeline/step3-pricing-research.ts",
+							"ranges": [[703, 723]]
+						}
+					]
+				},
+				{
+					"sha": "83cd2c24d4d48bd8b53dd036bd7abb536f734c99",
+					"committedAt": "2026-08-14T20:14:48Z",
+					"files": [
+						{
+							"path": "src/app/api/settings/platform/route.ts",
+							"ranges": [[23, 42]]
+						}
+					]
+				},
+				{
+					"sha": "0343751f30d27fee357608cb396f02c1b2e6d7cd",
+					"committedAt": "2026-08-14T23:48:15Z",
+					"files": [
+						{
+							"path": "src/app/api/settings/platform/health-check/route.ts",
+							"ranges": [[1, 60]]
+						},
+						{
+							"path": "src/components/settings/PlatformSettings.tsx",
+							"ranges": [
+								[1, 6],
+								[155, 177],
+								[183, 189],
+								[196, 205],
+								[256, 262],
+								[405, 417],
+								[434, 440],
+								[499, 551],
+								[555, 561]
+							]
+						}
+					]
+				},
+				{
+					"sha": "70f8ddf339950d0ee449860a7089a4dd9b1d6d9e",
+					"committedAt": "2026-08-14T23:58:01Z",
+					"files": [
+						{
+							"path": "src/lib/pipeline/comps/url-verify.ts",
+							"ranges": [[1, 139]]
+						}
+					]
+				},
+				{
+					"sha": "3962e72d37113bb57dc1245b269bfd07847d4613",
+					"committedAt": "2026-08-19T06:29:14Z",
+					"files": [
+						{
+							"path": ".clawhip/state/prompt-submit.json",
+							"ranges": [[0, 0]]
+						},
+						{
+							"path": ".gitignore",
+							"ranges": [[48, 65]]
+						},
+						{
+							"path": ".serena/.gitignore",
+							"ranges": [[0, 0]]
+						},
+						{
+							"path": ".serena/memories/project_overview.md",
+							"ranges": [[0, 0]]
+						},
+						{
+							"path": ".serena/memories/suggested_commands.md",
+							"ranges": [[0, 0]]
+						},
+						{
+							"path": ".serena/project.yml",
+							"ranges": [[0, 0]]
+						},
+						{
+							"path": "AGENTS.md",
+							"ranges": [[37, 46]]
+						},
+						{
+							"path": "deployment/kubernetes/app/deployment.yaml",
+							"ranges": [[4, 10], [13, 30]]
+						},
+						{
+							"path": "deployment/kubernetes/supabase/values.yaml.template",
+							"ranges": [[41, 65]]
+						},
+						{
+							"path": "docs/superpowers/plans/2026-08-15-measurement-gate-foundation.md",
+							"ranges": [[1, 1283]]
+						},
+						{
+							"path": "docs/superpowers/plans/2026-08-15-shipping-measurements-finalizing-gate.md",
+							"ranges": [[1, 1175]]
+						},
+						{
+							"path": "docs/superpowers/plans/2026-08-15-shoe-sizing-table.md",
+							"ranges": [[1, 625]]
+						},
+						{
+							"path": "docs/superpowers/plans/2026-08-17-data-integrity-measurements-batch.md",
+							"ranges": [[1, 830]]
+						},
+						{
+							"path": "docs/superpowers/plans/2026-08-17-inclusions-taxonomy-confirmation-ui.md",
+							"ranges": [[1, 824]]
+						},
+						{
+							"path": "docs/superpowers/plans/2026-08-18-condition-reassessment-qa-escalation.md",
+							"ranges": [[1, 1425]]
+						},
+						{
+							"path": "docs/superpowers/plans/2026-08-18-pricing-gate-inclusions-authenticity.md",
+							"ranges": [[1, 1405]]
+						},
+						{
+							"path": "docs/superpowers/specs/2026-08-15-jewelry-shoe-measurement-gate-design.md",
+							"ranges": [[1, 162]]
+						},
+						{
+							"path": "docs/superpowers/specs/2026-08-17-data-integrity-measurements-batch-design.md",
+							"ranges": [[1, 203]]
+						},
+						{
+							"path": "docs/superpowers/specs/2026-08-17-inclusions-taxonomy-confirmation-ui-design.md",
+							"ranges": [[1, 239]]
+						},
+						{
+							"path": "docs/superpowers/specs/2026-08-18-condition-reassessment-qa-escalation-design.md",
+							"ranges": [[1, 650]]
+						},
+						{
+							"path": "docs/superpowers/specs/2026-08-18-pricing-gate-inclusions-authenticity-design.md",
+							"ranges": [[1, 124]]
+						},
+						{
+							"path": "next.config.ts",
+							"ranges": [[2, 15]]
+						},
+						{
+							"path": "package.json",
+							"ranges": [[7, 13]]
+						},
+						{
+							"path": "src/app/api/auth/callback/[platform]/route.ts",
+							"ranges": [[2, 8], [159, 173]]
+						},
+						{
+							"path": "src/app/api/auth/connect/[platform]/route.ts",
+							"ranges": [[6, 11], [17, 58]]
+						},
+						{
+							"path": "src/app/api/inngest/route.ts",
+							"ranges": [[3, 26]]
+						},
+						{
+							"path": "src/app/api/listings/[id]/condition/route.ts",
+							"ranges": [[1, 26]]
+						},
+						{
+							"path": "src/app/api/listings/[id]/confirm-photos/route.ts",
+							"ranges": [[1, 6], [13, 74]]
+						},
+						{
+							"path": "src/app/api/listings/[id]/finalize/route.ts",
+							"ranges": [[1, 53]]
+						},
+						{
+							"path": "src/app/api/listings/[id]/inclusions/route.ts",
+							"ranges": [[22, 28]]
+						},
+						{
+							"path": "src/app/api/listings/[id]/measurements/route.ts",
+							"ranges": [[1, 83]]
+						},
+						{
+							"path": "src/app/api/listings/[id]/post-to-ebay/route.ts",
+							"ranges": [[4, 11], [37, 54], [83, 107]]
+						},
+						{
+							"path": "src/app/api/listings/[id]/publish/route.ts",
+							"ranges": [[1, 6], [72, 82]]
+						},
+						{
+							"path": "src/app/api/photos/[id]/quality-override/route.ts",
+							"ranges": [[1, 107]]
+						},
+						{
+							"path": "src/app/api/pipeline/bulk-restart/route.ts",
+							"ranges": [[36, 53]]
+						},
+						{
+							"path": "src/app/api/pipeline/confirm-gender/route.ts",
+							"ranges": [[34, 73]]
+						},
+						{
+							"path": "src/app/api/pipeline/confirm-id/route.ts",
+							"ranges": [[1, 5], [11, 20], [29, 37], [44, 82]]
+						},
+						{
+							"path": "src/app/api/studio-upload/route.ts",
+							"ranges": [[15, 21], [27, 46], [75, 81]]
+						},
+						{
+							"path": "src/app/api/upload/route.ts",
+							"ranges": [[50, 60]]
+						},
+						{
+							"path": "src/app/auth/callback/route.ts",
+							"ranges": [[2, 35], [48, 74], [79, 117]]
+						},
+						{
+							"path": "src/app/listings/[id]/page.tsx",
+							"ranges": [
+								[3, 15],
+								[124, 135],
+								[143, 153],
+								[202, 213],
+								[216, 224],
+								[243, 249],
+								[269, 275]
+							]
+						},
+						{
+							"path": "src/app/listings/[id]/publish/page.tsx",
+							"ranges": [[2, 9], [13, 45], [57, 68]]
+						},
+						{
+							"path": "src/app/login/page.tsx",
+							"ranges": [[1, 27], [41, 47]]
+						},
+						{
+							"path": "src/components/workspace/AgentChat.tsx",
+							"ranges": [[6, 12], [157, 170], [399, 405]]
+						},
+						{
+							"path": "src/components/workspace/FieldsPanel.tsx",
+							"ranges": [
+								[1, 17],
+								[44, 132],
+								[166, 215],
+								[235, 292],
+								[306, 334],
+								[350, 393],
+								[406, 413],
+								[449, 529],
+								[534, 540],
+								[660, 707]
+							]
+						},
+						{
+							"path": "src/components/workspace/FinalizeButton.tsx",
+							"ranges": [[1, 39]]
+						},
+						{
+							"path": "src/components/workspace/FinalizingChecklist.tsx",
+							"ranges": [[1, 162]]
+						},
+						{
+							"path": "src/components/workspace/MeasurementFields.tsx",
+							"ranges": [[2, 24], [32, 44], [70, 91]]
+						},
+						{
+							"path": "src/lib/agent/tools.ts",
+							"ranges": [[4, 18], [134, 140], [153, 168], [253, 263]]
+						},
+						{
+							"path": "src/lib/auth-log.ts",
+							"ranges": [[1, 48]]
+						},
+						{
+							"path": "src/lib/claude/api-key-backend.ts",
+							"ranges": [[22, 35], [57, 63]]
+						},
+						{
+							"path": "src/lib/claude/oauth-backend.ts",
+							"ranges": [[44, 64], [70, 77]]
+						},
+						{
+							"path": "src/lib/claude/types.ts",
+							"ranges": [[15, 22]]
+						},
+						{
+							"path": "src/lib/inclusions.test.ts",
+							"ranges": [[1, 92]]
+						},
+						{
+							"path": "src/lib/inclusions.ts",
+							"ranges": [[1, 46]]
+						},
+						{
+							"path": "src/lib/inngest/client.ts",
+							"ranges": [[47, 64]]
+						},
+						{
+							"path": "src/lib/inngest/functions/auto-discount-cron.ts",
+							"ranges": [[1, 7], [17, 23], [91, 122]]
+						},
+						{
+							"path": "src/lib/inngest/functions/condition-reassessment.ts",
+							"ranges": [[1, 105]]
+						},
+						{
+							"path": "src/lib/inngest/functions/intake-pipeline.ts",
+							"ranges": [[8, 32], [140, 186]]
+						},
+						{
+							"path": "src/lib/inngest/functions/photo-quality-gate.ts",
+							"ranges": [[5, 13], [63, 112], [126, 191], [203, 211]]
+						},
+						{
+							"path": "src/lib/inngest/functions/studio-photo-process.ts",
+							"ranges": [[0, 0]]
+						},
+						{
+							"path": "src/lib/inngest/functions/text-intake-pipeline.ts",
+							"ranges": [[6, 18], [177, 185], [214, 222], [230, 309]]
+						},
+						{
+							"path": "src/lib/jewelry-detection.test.ts",
+							"ranges": [[1, 111]]
+						},
+						{
+							"path": "src/lib/jewelry-detection.ts",
+							"ranges": [[1, 29]]
+						},
+						{
+							"path": "src/lib/jewelry-llm-fallback.ts",
+							"ranges": [[1, 27]]
+						},
+						{
+							"path": "src/lib/pipeline/finalizing-checklist.test.ts",
+							"ranges": [[1, 45]]
+						},
+						{
+							"path": "src/lib/pipeline/finalizing-checklist.ts",
+							"ranges": [[1, 26]]
+						},
+						{
+							"path": "src/lib/pipeline/gate-messages.test.ts",
+							"ranges": [
+								[6, 13],
+								[120, 178],
+								[191, 197],
+								[214, 254],
+								[283, 303]
+							]
+						},
+						{
+							"path": "src/lib/pipeline/gate-messages.ts",
+							"ranges": [[1, 6], [14, 22], [56, 85], [141, 158]]
+						},
+						{
+							"path": "src/lib/pipeline/pricing-adjust.test.ts",
+							"ranges": [[1, 282]]
+						},
+						{
+							"path": "src/lib/pipeline/pricing-adjust.ts",
+							"ranges": [[1, 276]]
+						},
+						{
+							"path": "src/lib/pipeline/step1-product-id.ts",
+							"ranges": [[25, 35], [110, 132], [156, 162]]
+						},
+						{
+							"path": "src/lib/pipeline/step2-vision-analysis.ts",
+							"ranges": [
+								[4, 12],
+								[36, 95],
+								[109, 115],
+								[128, 138],
+								[148, 164],
+								[229, 236],
+								[282, 288],
+								[300, 306]
+							]
+						},
+						{
+							"path": "src/lib/pipeline/step3-pricing-research.test.ts",
+							"ranges": [[1, 85]]
+						},
+						{
+							"path": "src/lib/pipeline/step3-pricing-research.ts",
+							"ranges": [
+								[3, 9],
+								[447, 452],
+								[458, 580],
+								[590, 613],
+								[646, 653],
+								[669, 676],
+								[686, 693],
+								[698, 704],
+								[709, 715],
+								[720, 742],
+								[748, 770],
+								[773, 837],
+								[857, 862]
+							]
+						},
+						{
+							"path": "src/lib/pipeline/step4a-draft-listing.ts",
+							"ranges": [[5, 12], [59, 85], [111, 120], [124, 131], [139, 145]]
+						},
+						{
+							"path": "src/lib/pipeline/title-check.test.ts",
+							"ranges": [[1, 29]]
+						},
+						{
+							"path": "src/lib/pipeline/title-check.ts",
+							"ranges": [[1, 25]]
+						},
+						{
+							"path": "src/lib/platforms/unified-listing.test.ts",
+							"ranges": [
+								[1, 7],
+								[18, 24],
+								[53, 59],
+								[76, 93],
+								[97, 103],
+								[106, 171],
+								[175, 209]
+							]
+						},
+						{
+							"path": "src/lib/platforms/unified-listing.ts",
+							"ranges": [[1, 11], [16, 34], [48, 66]]
+						},
+						{
+							"path": "src/lib/sizing/bangle-ladders.test.ts",
+							"ranges": [[1, 21]]
+						},
+						{
+							"path": "src/lib/sizing/bangle-ladders.ts",
+							"ranges": [[1, 38]]
+						},
+						{
+							"path": "src/lib/sizing/ring-size.test.ts",
+							"ranges": [[1, 35]]
+						},
+						{
+							"path": "src/lib/sizing/ring-size.ts",
+							"ranges": [[1, 15]]
+						},
+						{
+							"path": "src/lib/sizing/shipping-box.test.ts",
+							"ranges": [[1, 97]]
+						},
+						{
+							"path": "src/lib/sizing/shipping-box.ts",
+							"ranges": [[1, 58]]
+						},
+						{
+							"path": "src/lib/sizing/shoe-conversion.test.ts",
+							"ranges": [[1, 242]]
+						},
+						{
+							"path": "src/lib/sizing/shoe-conversion.ts",
+							"ranges": [[1, 203]]
+						},
+						{
+							"path": "src/lib/supabase/server.ts",
+							"ranges": [[1, 6], [18, 36]]
+						},
+						{
+							"path": "src/lib/units.test.ts",
+							"ranges": [[1, 6], [41, 98]]
+						},
+						{
+							"path": "src/lib/units.ts",
+							"ranges": [[12, 42]]
+						},
+						{
+							"path": "src/lib/utils.test.ts",
+							"ranges": [[1, 95]]
+						},
+						{
+							"path": "src/lib/utils.ts",
+							"ranges": [[1, 5], [30, 82], [125, 131]]
+						},
+						{
+							"path": "src/proxy.ts",
+							"ranges": [[1, 63], [68, 74], [79, 146]]
+						},
+						{
+							"path": "src/types/listings.ts",
+							"ranges": [
+								[54, 70],
+								[81, 94],
+								[129, 144],
+								[155, 190],
+								[193, 210],
+								[223, 229],
+								[256, 262]
+							]
+						},
+						{
+							"path": "supabase/migrations/0016_sub_type_rename.sql",
+							"ranges": [[1, 9]]
+						},
+						{
+							"path": "supabase/migrations/0017_sub_type_backfill.sql",
+							"ranges": [[1, 41]]
+						},
+						{
+							"path": "supabase/migrations/0018_measurements_merge_rpc.sql",
+							"ranges": [[1, 34]]
+						},
+						{
+							"path": "supabase/migrations/0019_harden_merge_measurements_rpc.sql",
+							"ranges": [[1, 45]]
+						},
+						{
+							"path": "supabase/migrations/0020_inclusions_shape_backfill.sql",
+							"ranges": [[1, 45]]
+						},
+						{
+							"path": "supabase/migrations/0021_condition_confirmed.sql",
+							"ranges": [[1, 10]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r0:c3810709176:0",
+					"roundIndex": 0,
+					"reviewId": 4969226566,
+					"source": "inline",
+					"commentId": 3810709176,
+					"path": "src/lib/pipeline/step3-pricing-research.ts",
+					"line": 878,
+					"severity": "P1",
+					"title": "Empty reruns still clear the listing-level price",
+					"text": "🔴 **High**\n\n**Empty reruns still clear the listing-level price**\n\nConfidence 96%. This guard only protects `pricing_comps`. If every fetcher degrades to `[]`, `toInsert` is empty so the old comp rows are preserved, but execution still falls through to recompute `confidenceScore`/`suggestedPriceCents` from empty arrays and later persists step 3 with `suggestedPriceCents = null`. That recreates the bad state this PR is trying to avoid: the listing loses its visible price/confidence while stale comps remain in the table. Please short-circuit before recomputing/persisting step-3 output when `toInsert.length === 0`, or reload/reuse the existing persisted comps-derived values in that case."
+				},
+				{
+					"id": "r0:c3810709180:0",
+					"roundIndex": 0,
+					"reviewId": 4969226566,
+					"source": "inline",
+					"commentId": 3810709180,
+					"path": "src/app/api/settings/platform/health-check/route.ts",
+					"line": 25,
+					"severity": "P2",
+					"title": "The Poshmark health check treats any 200 response as a valid credential",
+					"text": "🟡 **Medium**\n\n**The Poshmark health check treats any 200 response as a valid credential**\n\nConfidence 93%. The failure mode called out in this PR was 'bad cookies silently returning zero results for months'. In that case this branch still reports `valid`, because it never inspects the response payload. A well-formed but non-working cookie string can therefore show a green badge while the comp fetchers still return nothing. Please parse the JSON and require the expected result shape/content (or reuse the existing Poshmark fetch helper and validate it returns at least one row) before returning `valid`."
+				},
+				{
+					"id": "r0:c3810709182:0",
+					"roundIndex": 0,
+					"reviewId": 4969226566,
+					"source": "inline",
+					"commentId": 3810709182,
+					"path": "src/lib/pipeline/step3-pricing-research.ts",
+					"line": 776,
+					"severity": "P2",
+					"title": "TheRealReal rows are inserted without ever running the new URL verification pass",
+					"text": "🟡 **Medium**\n\n**TheRealReal rows are inserted without ever running the new URL verification pass**\n\nConfidence 95%. This PR adds `src/lib/pipeline/comps/url-verify.ts`, but nothing in the diff imports or calls it before these rows are persisted. As written, every TheRealReal result stays `therealreal_active` permanently and the sold/active reclassification logic is dead code. If URL verification is meant to be part of this hardening pass, it needs to run on the candidate active rows before `relevantActive`/`toInsert` are finalized, with confirmed sold pages rewritten to a sold source and populated `sold_at`."
+				},
+				{
+					"id": "r0:c3810709188:0",
+					"roundIndex": 0,
+					"reviewId": 4969226566,
+					"source": "inline",
+					"commentId": 3810709188,
+					"path": "src/lib/pipeline/step3-pricing-research.ts",
+					"line": 135,
+					"severity": "P2",
+					"title": "New comp fetchers swallow source failures as empty results",
+					"text": "🟡 **Medium**\n\n**New comp fetchers swallow source failures as empty results**\n\nThis fallback recreates the exact silent `0 comps` failure mode this PR is trying to root out. Here (and in `fetchTheRealRealComps` below), `!res.ok`, SerpAPI error payloads, timeout aborts, JSON shape changes, and parse errors all collapse to `[]` with no logging, so step3 cannot distinguish “no comps exist” from “the source broke”. When one of these upstreams goes dark again, pricing will just degrade with no trail to debug. Please log the source, query, and failure details before returning the empty fallback."
+				},
+				{
+					"id": "r0:c3810709191:0",
+					"roundIndex": 0,
+					"reviewId": 4969226566,
+					"source": "inline",
+					"commentId": 3810709191,
+					"path": "src/lib/pipeline/comps/url-verify.ts",
+					"line": 113,
+					"severity": "P2",
+					"title": "Verification failures are silently downgraded to unconfirmed comps",
+					"text": "🟡 **Medium**\n\n**Verification failures are silently downgraded to unconfirmed comps**\n\nReturning `UNCONFIRMED` is a reasonable fallback, but doing it for every HTTP/network/parse failure without any logging means URL verification can quietly stop working. 403 bot challenges, timeout aborts, oversized bodies, and markup regressions will all look identical to “listing is still active”, so sold reclassification can disappear with no operational signal at all. Please log the source URL and failure reason before falling back."
+				},
+				{
+					"id": "r0:c3810709194:0",
+					"roundIndex": 0,
+					"reviewId": 4969226566,
+					"source": "inline",
+					"commentId": 3810709194,
+					"path": "src/lib/pipeline/comps/url-verify.ts",
+					"line": 145,
+					"severity": "P2",
+					"title": "URL verification does not actually confirm the claimed item",
+					"text": "🟡 **Medium**\n\n**URL verification does not actually confirm the claimed item**\n\n`identityConfirmed` only checks whether the brand name appears anywhere in the HTML. On TheRealReal/Poshmark, unrelated listings from the same brand will satisfy that, so a wrong model/color page with a sold badge can be reclassified as a genuine sold comp. Since this function is explicitly used to confirm comp identity before reclassification, it needs to match title/model tokens (or another item-specific signal), not just the brand."
+				},
+				{
+					"id": "r0:c3810709197:0",
+					"roundIndex": 0,
+					"reviewId": 4969226566,
+					"source": "inline",
+					"commentId": 3810709197,
+					"path": "src/components/settings/PlatformSettings.tsx",
+					"line": 518,
+					"severity": "P3",
+					"title": "Health badge never refreshes after saving new credentials",
+					"text": "🟢 **Low**\n\n**Health badge never refreshes after saving new credentials**\n\nThe fetch only runs once on mount. If a user fixes their Poshmark cookie or eBay setup in this screen, the badge continues to show the stale pre-save status until they manually reload the page, so the new UI doesn't provide immediate feedback on whether the update worked."
+				},
+				{
+					"id": "r0:body:0",
+					"roundIndex": 0,
+					"reviewId": 4969226566,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "URL verification helpers are added but never wired into the pricing pipeline",
+					"text": "URL verification helpers are added but never wired into the pricing pipeline"
+				}
+			]
+		},
+		{
+			"index": 1,
+			"reviewId": 4969426565,
+			"provider": "openai",
+			"submittedAt": "2026-08-19T07:20:34Z",
+			"headSha": "de47357580e28ba8d109931ee105b863424c632c",
+			"baseSha": "3962e72d37113bb57dc1245b269bfd07847d4613",
+			"mergeBase": "3962e72d37113bb57dc1245b269bfd07847d4613",
+			"triggerAt": "2026-08-19T07:02:56Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "a5fedc28a23063c5fdb1429493077881c4501f74",
+					"committedAt": "2026-08-19T06:57:40Z",
+					"files": [
+						{
+							"path": "src/app/api/settings/platform/health-check/route.ts",
+							"ranges": [[1, 23], [38, 61], [67, 91]]
+						},
+						{
+							"path": "src/app/api/settings/platform/route.ts",
+							"ranges": [[27, 44]]
+						},
+						{
+							"path": "src/components/settings/PlatformSettings.tsx",
+							"ranges": [[159, 168], [502, 516]]
+						},
+						{
+							"path": "src/lib/pipeline/comps/url-verify.ts",
+							"ranges": [[17, 27], [48, 56], [98, 117], [123, 145], [154, 167]]
+						},
+						{
+							"path": "src/lib/pipeline/step3-pricing-research.ts",
+							"ranges": [
+								[128, 153],
+								[162, 177],
+								[182, 190],
+								[843, 877],
+								[900, 910],
+								[917, 926]
+							]
+						}
+					]
+				},
+				{
+					"sha": "de47357580e28ba8d109931ee105b863424c632c",
+					"committedAt": "2026-08-19T07:02:56Z",
+					"files": [
+						{
+							"path": "src/lib/pipeline/step3-pricing-research.ts",
+							"ranges": [
+								[808, 827],
+								[842, 848],
+								[877, 890],
+								[907, 913],
+								[916, 922],
+								[960, 966]
+							]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r1:c3810867842:0",
+					"roundIndex": 1,
+					"reviewId": 4969426565,
+					"source": "inline",
+					"commentId": 3810867842,
+					"path": "src/app/api/settings/platform/health-check/route.ts",
+					"line": 56,
+					"severity": "P2",
+					"title": "eBay credential lookup can still take down the whole health-check endpoint",
+					"text": "🟡 **Medium**\n\n**eBay credential lookup can still take down the whole health-check endpoint**\n\nUnlike the Poshmark path, the user-settings lookup happens outside any guard here. If `getEbayCreds(userId)` rejects (for example due to a settings-store outage, decryption problem, or malformed saved record), `GET()` will throw and return a 500 instead of the `'unreachable'` status this endpoint is supposed to surface. That gives the UI no actionable status and makes this path harder to debug than the one you just hardened above."
+				},
+				{
+					"id": "r1:c3810867848:0",
+					"roundIndex": 1,
+					"reviewId": 4969426565,
+					"source": "inline",
+					"commentId": 3810867848,
+					"path": "src/app/api/settings/platform/health-check/route.ts",
+					"line": 88,
+					"severity": "P2",
+					"title": "eBay credential lookup errors still bypass the route's error handling",
+					"text": "🟡 **Medium**\n\n**eBay credential lookup errors still bypass the route's error handling**\n\n`checkPoshmark()` now treats a settings-read failure as `'unreachable'`, but `checkEbay()` still awaits `getEbayCreds(userId)` before entering its `try`. If that lookup rejects, `Promise.all()` in `GET()` rejects and the whole endpoint 500s instead of returning an eBay status. One transient settings/Supabase failure would now hide both platform badges.\n\n*Suggested fix:*\n\n```suggestion\nasync function checkEbay(userId: string): Promise<HealthStatus> {\n  let creds\n  try {\n    creds = await getEbayCreds(userId)\n  } catch (err) {\n    console.error('checkEbay: getEbayCreds failed', err)\n    return 'unreachable'\n  }\n  if (!creds) return 'not_configured'\n  try {\n    const basic = Buffer.from(`${creds.clientId}:${creds.clientSecret}`).toString('base64')\n    // No `scope` param: per RFC 6749 §6, omitting it on a refresh_token grant\n    // returns a token with the same scope(s) originally granted during the\n    // user's OAuth consent, which we don't know here and shouldn't guess at.\n    const res = await fetch('https://api.ebay.com/identity/v1/oauth2/token', {\n      method: 'POST',\n      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: `Basic ${basic}` },\n      body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(creds.refreshToken)}`,\n      signal: AbortSignal.timeout(10_000),\n    })\n    if (res.status === 401 || res.status === 400) return 'invalid'\n    if (!res.ok) return 'unreachable'\n    return 'valid'\n  } catch {\n    return 'unreachable'\n  }\n}\n```"
+				},
+				{
+					"id": "r1:body:0",
+					"roundIndex": 1,
+					"reviewId": 4969426565,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "URL verification helpers are added but never wired into the pricing pipeline",
+					"text": "URL verification helpers are added but never wired into the pricing pipeline"
+				},
+				{
+					"id": "r1:body:1",
+					"roundIndex": 1,
+					"reviewId": 4969426565,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "TheRealReal rows are inserted without ever running the new URL verification pass (`src/lib/pipeline/step3-pricing-research.ts:733`)",
+					"text": "TheRealReal rows are inserted without ever running the new URL verification pass (`src/lib/pipeline/step3-pricing-research.ts:733`)"
+				},
+				{
+					"id": "r1:body:2",
+					"roundIndex": 1,
+					"reviewId": 4969426565,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "New comp fetchers swallow source failures as empty results (`src/lib/pipeline/step3-pricing-research.ts:135`)",
+					"text": "New comp fetchers swallow source failures as empty results (`src/lib/pipeline/step3-pricing-research.ts:135`)"
+				},
+				{
+					"id": "r1:body:3",
+					"roundIndex": 1,
+					"reviewId": 4969426565,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Verification failures are silently downgraded to unconfirmed comps (`src/lib/pipeline/comps/url-verify.ts:113`)",
+					"text": "Verification failures are silently downgraded to unconfirmed comps (`src/lib/pipeline/comps/url-verify.ts:113`)"
+				},
+				{
+					"id": "r1:body:4",
+					"roundIndex": 1,
+					"reviewId": 4969426565,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "URL verification does not actually confirm the claimed item (`src/lib/pipeline/comps/url-verify.ts:103`)",
+					"text": "URL verification does not actually confirm the claimed item (`src/lib/pipeline/comps/url-verify.ts:103`)"
+				}
+			]
+		},
+		{
+			"index": 2,
+			"reviewId": 4969651257,
+			"provider": "openai",
+			"submittedAt": "2026-08-19T07:48:27Z",
+			"headSha": "03f754c5cacc9342f9ba14fd2ddcba5516585249",
+			"baseSha": "de47357580e28ba8d109931ee105b863424c632c",
+			"mergeBase": "de47357580e28ba8d109931ee105b863424c632c",
+			"triggerAt": "2026-08-19T07:20:51Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "03f754c5cacc9342f9ba14fd2ddcba5516585249",
+					"committedAt": "2026-08-19T07:20:51Z",
+					"files": [
+						{
+							"path": "src/app/api/settings/platform/health-check/route.ts",
+							"ranges": [[31, 45], [81, 97]]
+						},
+						{
+							"path": "src/components/settings/PlatformSettings.tsx",
+							"ranges": [
+								[1, 6],
+								[178, 188],
+								[210, 216],
+								[412, 425],
+								[480, 492],
+								[523, 531],
+								[549, 556],
+								[568, 574]
+							]
+						},
+						{
+							"path": "src/lib/pipeline/comps/url-verify.ts",
+							"ranges": [[44, 62], [120, 155]]
+						},
+						{
+							"path": "src/lib/pipeline/step3-pricing-research.ts",
+							"ranges": [
+								[121, 136],
+								[204, 213],
+								[217, 224],
+								[880, 923],
+								[939, 954],
+								[992, 998]
+							]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r2:c3811041014:0",
+					"roundIndex": 2,
+					"reviewId": 4969651257,
+					"source": "inline",
+					"commentId": 3811041014,
+					"path": "src/components/settings/PlatformSettings.tsx",
+					"line": 532,
+					"severity": "P2",
+					"title": "Health refetches can race and overwrite a newer status with an older response",
+					"text": "🟡 **Medium**\n\n**Health refetches can race and overwrite a newer status with an older response**\n\nConfidence: 88%\n\n`refetchHealth` now gets called both from the mount effect and from `onCredentialSaved`, but each invocation keeps its own local `cancelled` flag and only the effect path ever uses the returned cleanup. That means two in-flight requests are free to resolve out of order: an older mount-time request can complete after a later `fresh=1` request and replace the badge with stale status. This is a real UI correctness bug for the new post-save refresh flow.\n\nPlease gate updates by request sequence or share an `AbortController`/in-flight token across calls so only the latest response can commit state."
+				},
+				{
+					"id": "r2:c3811041023:0",
+					"roundIndex": 2,
+					"reviewId": 4969651257,
+					"source": "inline",
+					"commentId": 3811041023,
+					"path": "src/lib/pipeline/step3-pricing-research.ts",
+					"line": 918,
+					"severity": "P2",
+					"title": "The new persisted-comps fallback also fires when this run found only rejected comps",
+					"text": "🟡 **Medium**\n\n**The new persisted-comps fallback also fires when this run found only rejected comps**\n\nConfidence: 91%\n\nThis branch treats every `toInsert.length === 0` case as \"all fetchers failed/returned empty\" and reloads prior `pricing_comps`. But `toInsert` is also empty when the current run fetched candidates and then filtered all of them out as irrelevant/outliers. In that case, recomputing from previously persisted rows preserves a stale price/confidence even though the current run concluded there are no usable comps.\n\nThe fallback should only reuse persisted rows when the run produced no fresh candidate data at all, not whenever the post-filter insert set is empty."
+				},
+				{
+					"id": "r2:c3811041028:0",
+					"roundIndex": 2,
+					"reviewId": 4969651257,
+					"source": "inline",
+					"commentId": 3811041028,
+					"path": "src/lib/pipeline/step3-pricing-research.ts",
+					"line": 921,
+					"severity": "P1",
+					"title": "Reloading persisted comps ignores database read failures",
+					"text": "🔴 **High**\n\n**Reloading persisted comps ignores database read failures**\n\nThis new `toInsert.length === 0` fallback silently treats any `pricing_comps` read failure as “no existing comps” because it discards the Supabase `error` and defaults `existingRows` to `[]`. In the exact failure mode this block is trying to protect, a transient DB/network/RLS error here will still drive `effectiveSoldComps`/`effectiveActiveComps` empty, recompute `suggestedPriceCents` as `null` and confidence as the empty-data path, and overwrite the listing with the same bad result. Please handle and log the query error explicitly, then abort or preserve the prior listing-level values instead of degrading to an empty result set."
+				},
+				{
+					"id": "r2:c3811041031:0",
+					"roundIndex": 2,
+					"reviewId": 4969651257,
+					"source": "inline",
+					"commentId": 3811041031,
+					"path": "src/lib/pipeline/comps/url-verify.ts",
+					"line": 150,
+					"severity": "P2",
+					"title": "Multi-word brands bypass the new title-word verification check",
+					"text": "🟡 **Medium**\n\n**Multi-word brands bypass the new title-word verification check**\n\n`significantTitleWords()` returns individual tokens, but this filter removes only the full brand phrase. For brands like `Louis Vuitton` or `Saint Laurent`, `otherTitleWords` still contains `louis`/`vuitton` or `saint`/`laurent`, so `brandConfirmed && otherTitleWords.some(...)` becomes true on any same-brand page even when none of the non-brand model/color words match. That defeats the hardening this block is trying to add."
+				},
+				{
+					"id": "r2:c3811041034:0",
+					"roundIndex": 2,
+					"reviewId": 4969651257,
+					"source": "inline",
+					"commentId": 3811041034,
+					"path": "src/lib/pipeline/step3-pricing-research.ts",
+					"line": 917,
+					"severity": "P2",
+					"title": "Failed comp reloads are treated the same as 'no existing comps'",
+					"text": "🟡 **Medium**\n\n**Failed comp reloads are treated the same as 'no existing comps'**\n\nThis fallback fixes empty reruns by reloading persisted comps, but it ignores the readback error. If the `pricing_comps` query fails, `existingRows ?? []` collapses that failure to an empty set and the code below recomputes `suggestedPriceCents`/confidence from nothing again. That reintroduces the cleared-price behavior on the error path the new block is meant to protect."
+				},
+				{
+					"id": "r2:c3811041037:0",
+					"roundIndex": 2,
+					"reviewId": 4969651257,
+					"source": "inline",
+					"commentId": 3811041037,
+					"path": "src/lib/pipeline/step3-pricing-research.ts",
+					"line": 900,
+					"severity": "P2",
+					"title": "Fallback reload silently fails back to an empty comp set",
+					"text": "🟡 **Medium**\n\n**Fallback reload silently fails back to an empty comp set**\n\nThis new preservation path ignores the Supabase read result's error state. If the `pricing_comps` query fails in the `toInsert.length === 0` branch, `existingRows ?? []` turns that failure into an empty array and the code below recomputes `suggestedPriceCents` as `null` / confidence as `20`, which recreates the listing-level clobber this block is meant to avoid. This branch needs to stop or preserve the prior listing values when the fallback reload cannot be read successfully."
+				},
+				{
+					"id": "r2:c3811041045:0",
+					"roundIndex": 2,
+					"reviewId": 4969651257,
+					"source": "inline",
+					"commentId": 3811041045,
+					"path": "src/lib/pipeline/step3-pricing-research.ts",
+					"line": 919,
+					"severity": "P2",
+					"title": "Empty insert set is being treated as fetch failure",
+					"text": "🟡 **Medium**\n\n**Empty insert set is being treated as fetch failure**\n\n`toInsert.length === 0` is not the same thing as \"every fetcher came back empty\". It also happens when the run succeeds but every candidate comp is filtered out as irrelevant/outlier data. In that case this branch revives stale rows from a previous run and prices from them instead of reflecting the current \"no usable comps\" result. The preservation fallback should be keyed off an explicit fetch failure condition, not just an empty post-filter insert set."
+				},
+				{
+					"id": "r2:c3811041051:0",
+					"roundIndex": 2,
+					"reviewId": 4969651257,
+					"source": "inline",
+					"commentId": 3811041051,
+					"path": "src/components/settings/PlatformSettings.tsx",
+					"line": 531,
+					"severity": "P2",
+					"title": "Fresh health result can be overwritten by an older in-flight fetch",
+					"text": "🟡 **Medium**\n\n**Fresh health result can be overwritten by an older in-flight fetch**\n\n`refetchHealth` now serves both the mount-time load and the post-save `fresh=1` refresh, but each invocation keeps its own `cancelled` flag. The earlier request is never cancelled or superseded when `onCredentialSaved` triggers a second fetch, so a slow mount-time response can resolve after the fresh response and overwrite the badge back to stale pre-save state."
+				},
+				{
+					"id": "r2:c3811041062:0",
+					"roundIndex": 2,
+					"reviewId": 4969651257,
+					"source": "inline",
+					"commentId": 3811041062,
+					"path": "src/lib/pipeline/step3-pricing-research.ts",
+					"line": 896,
+					"severity": "P2",
+					"title": "Fallback read silently reintroduces the empty-rerun overwrite on query failure",
+					"text": "🟡 **Medium**\n\n**Fallback read silently reintroduces the empty-rerun overwrite on query failure**\n\nThis safeguard only works if the rescue read succeeds. When the `pricing_comps` query errors, `existingRows ?? []` collapses that failure into an empty array, and the rest of the function recomputes `suggestedPriceCents`/confidence from no comps — restoring the same null-price + 20% confidence overwrite this block is meant to prevent. Please handle the Supabase error explicitly instead of treating a failed read as “no existing comps.”"
+				},
+				{
+					"id": "r2:body:0",
+					"roundIndex": 2,
+					"reviewId": 4969651257,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "eBay credential lookup can still take down the whole health-check endpoint (`src/app/api/settings/platform/health-check/route.ts:44`)",
+					"text": "eBay credential lookup can still take down the whole health-check endpoint (`src/app/api/settings/platform/health-check/route.ts:44`)"
+				},
+				{
+					"id": "r2:body:1",
+					"roundIndex": 2,
+					"reviewId": 4969651257,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Broad catch silently collapses eBay failures into 'unreachable' (`src/app/api/settings/platform/health-check/route.ts:61`)",
+					"text": "Broad catch silently collapses eBay failures into 'unreachable' (`src/app/api/settings/platform/health-check/route.ts:61`)"
+				},
+				{
+					"id": "r2:body:2",
+					"roundIndex": 2,
+					"reviewId": 4969651257,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "eBay credential lookup errors still bypass the route's error handling (`src/app/api/settings/platform/health-check/route.ts:67`)",
+					"text": "eBay credential lookup errors still bypass the route's error handling (`src/app/api/settings/platform/health-check/route.ts:67`)"
+				},
+				{
+					"id": "r2:body:3",
+					"roundIndex": 2,
+					"reviewId": 4969651257,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "URL verification helpers are added but never wired into the pricing pipeline",
+					"text": "URL verification helpers are added but never wired into the pricing pipeline"
+				},
+				{
+					"id": "r2:body:4",
+					"roundIndex": 2,
+					"reviewId": 4969651257,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "TheRealReal rows are inserted without ever running the new URL verification pass (`src/lib/pipeline/step3-pricing-research.ts:733`)",
+					"text": "TheRealReal rows are inserted without ever running the new URL verification pass (`src/lib/pipeline/step3-pricing-research.ts:733`)"
+				},
+				{
+					"id": "r2:body:5",
+					"roundIndex": 2,
+					"reviewId": 4969651257,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Verification failures are silently downgraded to unconfirmed comps (`src/lib/pipeline/comps/url-verify.ts:113`)",
+					"text": "Verification failures are silently downgraded to unconfirmed comps (`src/lib/pipeline/comps/url-verify.ts:113`)"
+				}
+			]
+		}
+	],
+	"threads": [
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aX0Ju",
+			"commentId": 3810709176,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3810875726,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T07:21:41Z",
+					"editedAt": null,
+					"body": "Fixed in 03f754c -- verified this exactly: skipping the pricing_comps insert/delete when toInsert.length===0 left the rest of the function computing confidenceScore/suggestedPriceCents from the still-empty filteredComps/filteredActive and pushing suggested_price_cents=null, which is exactly the ai-listings-drz regression the surrounding comments describe, one layer up. Added effectiveSoldComps/effectiveActiveComps that reload the still-persisted pricing_comps rows for the listing in that case (SELECT * WHERE listing_id = ...) and compute confidence/price/sources against those instead of an empty set. Every downstream use of filteredComps/filteredActive in that block now goes through the effective* variables."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aX0Jw",
+			"commentId": 3810709180,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3810876267,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T07:21:48Z",
+					"editedAt": null,
+					"body": "Partially fixed in 03f754c, with a caveat worth being upfront about. checkPoshmark now parses the JSON response and requires a `data` array before returning 'valid', instead of any HTTP 200. But digging into this further: poshmark.com/vm-rest/posts appears to be a *public, unauthenticated* search endpoint per third-party reverse-engineering docs (browse.sh) -- it's documented as working identically with or without cookies. If that's accurate, no amount of response-shape validation on this specific endpoint can fully confirm session validity, since the endpoint doesn't require a session at all. The shape check does catch one real class of invalid-cookie failure (a malformed/garbage cookie producing an HTML error/login page instead of the expected JSON), but I can't verify from here whether it closes the gap you're describing completely -- that needs a live test against Poshmark with a real expired cookie, which I can't safely do in this session. Flagging this rather than overclaiming a full fix."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aX0Jx",
+			"commentId": 3810709182,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3810876874,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T07:21:54Z",
+					"editedAt": null,
+					"body": "Confirmed real -- url-verify.ts is genuinely dead code as shipped in this PR. Filed ai-listings-534 to track wiring it in, rather than doing it in this review-fix pass: it's a behavior change (adds live external verification calls to the pricing pipeline, with new rate-limit/bot-detection exposure on TheRealReal/Poshmark and a precision question -- see the identityConfirmed thread on url-verify.ts, also from this review round) that deserves its own review. The pre-existing 'Task 12' comment reference (which I reworded in an earlier commit to stop implying this runs today) suggests this was already intentionally scoped to a separate task by whoever wrote the original comment, not an oversight introduced by omission."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aX0Jz",
+			"commentId": 3810709188,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3810877555,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T07:22:01Z",
+					"editedAt": null,
+					"body": "Fixed in 03f754c -- added console.warn on the !res.ok and SerpAPI-error-payload early returns in both fetchEbaySoldComps and fetchTheRealRealComps, not just their catch-all blocks. Each logs the query and failure detail (HTTP status or SerpAPI error payload) so step3 can distinguish 'no comps exist' from 'the source broke' in production logs."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aX0J1",
+			"commentId": 3810709191,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3810878088,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T07:22:07Z",
+					"editedAt": null,
+					"body": "Fixed in 03f754c -- added console.warn on verifyComp's !res.ok and oversized-response (readBoundedText returning null) early returns, in addition to the catch-all logging already added in an earlier commit this round. A 403 bot challenge or a response exceeding MAX_RESPONSE_BYTES now logs the listing_url and reason instead of silently looking identical to 'still active'."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aX0J3",
+			"commentId": 3810709194,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3810878621,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T07:22:13Z",
+					"editedAt": null,
+					"body": "Fixed in 03f754c -- identityConfirmed now also requires at least one other significant word from the comp's own title (length >= 4, common stopwords excluded) to appear on the page, not just the brand name. Falls back to brand-only matching if the title has no other significant word (e.g. a title that's just the brand). This directly closes the wrong-model/wrong-color false-positive you're describing, since a same-brand-different-item page won't share the specific title tokens."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aX0J5",
+			"commentId": 3810709197,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3810879100,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T07:22:19Z",
+					"editedAt": null,
+					"body": "Fixed in 03f754c -- threaded a refetchHealth callback from PlatformSettings down through PlatformSection to TextSettingRow (poshmark/ebay fields only), called after a successful credential save. Also had to add a ?fresh=1 cache-bypass to the health-check route itself, since the 60s server-side cache added earlier this round would otherwise have served the pre-save status back to this same refetch for up to a minute."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aYOWP",
+			"commentId": 3810867842,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3820989690,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-20T11:12:35Z",
+					"editedAt": null,
+					"body": "Fixed in fd9ebab — checkEbay now wraps getEbayCreds in try/catch and returns 'unreachable' on failure, matching checkPoshmark's guard around getSetting."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aYOWT",
+			"commentId": 3810867848,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3820989919,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-20T11:12:36Z",
+					"editedAt": null,
+					"body": "Fixed in fd9ebab — same fix as the duplicate finding on this line: getEbayCreds is now guarded, so a rejection no longer propagates through Promise.all and 500s the endpoint."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aYrJ5",
+			"commentId": 3811041014,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3821137674,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-20T11:33:56Z",
+					"editedAt": null,
+					"body": "Fixed in bf0d350 — request-generation counter ensures a stale mount-time response can't overwrite a newer fresh=1 result."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aYrJ8",
+			"commentId": 3811041023,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3821068524,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-20T11:23:50Z",
+					"editedAt": null,
+					"body": "Declining — the reload fallback is deliberately keyed off toInsert.length===0 regardless of *why* it's empty. Whether this run found nothing, or found candidates that got filtered out as irrelevant/outlier/duplicate, both cases mean 'no fresh usable evidence this run', and the fallback's whole purpose (ai-listings-drz) is to never let step3 null out suggested_price_cents when it has any real evidence at all, from any run. Narrowing the trigger to 'literal fetcher failure only' would reintroduce a version of the drz bug for the filtered-to-zero case: a listing whose comps all get legitimately outliered this run would still land at null price / 20% confidence, which is exactly the state this block exists to prevent. The staleness risk you're pointing at is real but orthogonal — that's what the dedup/outlier-on-reload and reload-limit fixes in 909ef2b address instead."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aYrKC",
+			"commentId": 3811041028,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3821032583,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-20T11:18:15Z",
+					"editedAt": null,
+					"body": "Fixed in 162beb3 — same fix as the duplicate anthropicreviewbot finding on this line: the reload now throws on a Supabase read error instead of silently treating it as zero comps."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aYrKD",
+			"commentId": 3811041031,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3820975495,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-20T11:10:18Z",
+					"editedAt": null,
+					"body": "Fixed in 459a937 — same root cause as the anthropicreviewbot duplicate of this finding: brand words are now excluded token-by-token, not by whole-string comparison."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aYrKF",
+			"commentId": 3811041034,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3821064083,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-20T11:23:09Z",
+					"editedAt": null,
+					"body": "Fixed in 162beb3 (pushed before this finding was visible to you) — the reload now checks the Supabase error and throws instead of defaulting to []."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aYrKI",
+			"commentId": 3811041037,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3821063795,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-20T11:23:06Z",
+					"editedAt": null,
+					"body": "Fixed in 162beb3 (pushed before this finding was visible to you) — the reload now checks the Supabase error and throws instead of defaulting to []."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aYrKO",
+			"commentId": 3811041045,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3821068714,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-20T11:23:52Z",
+					"editedAt": null,
+					"body": "Same reasoning as the other finding on this — declining for the same reason: the fallback intentionally covers both 'fetchers failed' and 'fetchers succeeded but everything got filtered', since both are 'no fresh usable evidence' from this run's perspective and narrowing it would reopen a version of the ai-listings-drz bug for the filtered-to-zero case."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aYrKU",
+			"commentId": 3811041051,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3821137806,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-20T11:33:57Z",
+					"editedAt": null,
+					"body": "Same underlying race, same fix — bf0d350."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6aYrKa",
+			"commentId": 3811041062,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3821063934,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-20T11:23:07Z",
+					"editedAt": null,
+					"body": "Fixed in 162beb3 (pushed before this finding was visible to you) — the reload now checks the Supabase error and throws instead of defaulting to []."
+				}
+			]
+		}
+	],
+	"reactions": [
+		{
+			"commentId": 3810709176,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-19T07:21:44Z"
+		},
+		{
+			"commentId": 3810709180,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-19T07:21:50Z"
+		},
+		{
+			"commentId": 3810709182,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-19T07:21:56Z"
+		},
+		{
+			"commentId": 3810709188,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-19T07:22:03Z"
+		},
+		{
+			"commentId": 3810709191,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-19T07:22:09Z"
+		},
+		{
+			"commentId": 3810709194,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-19T07:22:15Z"
+		},
+		{
+			"commentId": 3810709197,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-19T07:22:21Z"
+		},
+		{
+			"commentId": 3810867842,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-20T11:12:36Z"
+		},
+		{
+			"commentId": 3810867848,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-20T11:12:37Z"
+		},
+		{
+			"commentId": 3811041014,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-20T11:33:57Z"
+		},
+		{
+			"commentId": 3811041023,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-08-20T11:23:51Z"
+		},
+		{
+			"commentId": 3811041028,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-20T11:18:16Z"
+		},
+		{
+			"commentId": 3811041031,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-20T11:10:19Z"
+		},
+		{
+			"commentId": 3811041034,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-20T11:23:10Z"
+		},
+		{
+			"commentId": 3811041037,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-20T11:23:07Z"
+		},
+		{
+			"commentId": 3811041045,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-08-20T11:23:53Z"
+		},
+		{
+			"commentId": 3811041051,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-20T11:34:00Z"
+		},
+		{
+			"commentId": 3811041062,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-20T11:23:08Z"
+		}
+	]
+}

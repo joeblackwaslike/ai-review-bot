@@ -1,0 +1,861 @@
+{
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "ai-review-bot",
+	"pull": 74,
+	"provider": "anthropic",
+	"reviewer": "claude",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-11-07T23:36:07.547Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 4975032370,
+			"provider": "anthropic",
+			"submittedAt": "2026-08-19T17:37:25Z",
+			"headSha": "f28759cee2423f58606c26a570928a77cd69f02f",
+			"baseSha": "aa7ec1de78feb8dd485fd31d6d517af7e4e98c9d",
+			"mergeBase": "aa7ec1de78feb8dd485fd31d6d517af7e4e98c9d",
+			"triggerAt": "2026-08-19T17:34:27Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "f28759cee2423f58606c26a570928a77cd69f02f",
+					"committedAt": "2026-08-19T17:34:27Z",
+					"files": [
+						{
+							"path": "docs/code-reviews/2026-08-19-model-verify-oauth-01.md",
+							"ranges": [[1, 192]]
+						},
+						{
+							"path": "docs/configuration.md",
+							"ranges": [[72, 81]]
+						},
+						{
+							"path": "docs/how-it-works.md",
+							"ranges": [[34, 45]]
+						},
+						{
+							"path": "src/audit.test.ts",
+							"ranges": [[464, 474], [486, 531]]
+						},
+						{
+							"path": "src/audit.ts",
+							"ranges": [[661, 666]]
+						},
+						{
+							"path": "src/check-run.test.ts",
+							"ranges": [[9, 15]]
+						},
+						{
+							"path": "src/github-app.test.ts",
+							"ranges": [[14, 20], [578, 584]]
+						},
+						{
+							"path": "src/improve/qc.test.ts",
+							"ranges": [[112, 121]]
+						},
+						{
+							"path": "src/improve/qc.ts",
+							"ranges": [[51, 60]]
+						},
+						{
+							"path": "src/models.test.ts",
+							"ranges": [[10, 51], [59, 78]]
+						},
+						{
+							"path": "src/models.ts",
+							"ranges": [[8, 26]]
+						},
+						{
+							"path": "src/report.test.ts",
+							"ranges": [[17, 23]]
+						},
+						{
+							"path": "src/review.test.ts",
+							"ranges": [
+								[1001, 1007],
+								[1058, 1064],
+								[1067, 1073],
+								[1086, 1092],
+								[1131, 1137],
+								[1141, 1147],
+								[1154, 1160],
+								[3216, 3226],
+								[3260, 3274],
+								[3299, 3305]
+							]
+						},
+						{
+							"path": "src/review.ts",
+							"ranges": [[336, 342], [351, 357], [969, 974]]
+						},
+						{
+							"path": "src/router.test.ts",
+							"ranges": [[108, 114], [117, 129], [132, 170]]
+						},
+						{
+							"path": "src/router.ts",
+							"ranges": [[69, 106]]
+						},
+						{
+							"path": "src/triage.test.ts",
+							"ranges": [
+								[36, 42],
+								[50, 89],
+								[96, 110],
+								[134, 140],
+								[155, 161],
+								[184, 190]
+							]
+						},
+						{
+							"path": "src/triage.ts",
+							"ranges": [[41, 52], [76, 82]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r0:c3815322526:0",
+					"roundIndex": 0,
+					"reviewId": 4975032370,
+					"source": "inline",
+					"commentId": 3815322526,
+					"path": "src/review.test.ts",
+					"line": 1061,
+					"severity": "P3",
+					"title": "gpt-5.6-sol used as a stand-in for tier-1/trivial OpenAI model in review.test.ts",
+					"text": "🟢 **Low**\n\n**gpt-5.6-sol used as a stand-in for tier-1/trivial OpenAI model in review.test.ts**\n\nThese `runAgent caching + telemetry` tests build `ModelSelection` objects with `model: \"gpt-5.6-sol\"` for `tier: 1` and `tier: 3` selections (previously `gpt-5.1`). Per the new `OPENAI_TIER_MAP` in `router.ts`, `gpt-5.6-sol` is only ever selected for the `deep` tier (tier 4), never tier 1 or tier 3. Since these are hand-built `ModelSelection` fixtures rather than values from `routeModel`, the tests still pass, but the model name no longer reflects a routing combination `routeModel` would actually produce, which could mask a routing regression if `runAgent`'s behavior were ever made model-name-dependent for reasoning-effort mapping in the future."
+				},
+				{
+					"id": "r0:c3815322534:0",
+					"roundIndex": 0,
+					"reviewId": 4975032370,
+					"source": "inline",
+					"commentId": 3815322534,
+					"path": "src/router.ts",
+					"line": 114,
+					"severity": "P2",
+					"title": "gpt-5.6-sol capped at effort \"high\" previously, now routed to \"xhigh\" for deep tier without a stated verification note",
+					"text": "🟡 **Medium**\n\n**gpt-5.6-sol capped at effort \"high\" previously, now routed to \"xhigh\" for deep tier without a stated verification note**\n\nThe old OPENAI_TIER_MAP_API_KEY/OAUTH explicitly capped gpt-5.5's deep-tier effort at \"high\" with a comment stating \"xhigh\" was unverified on the OpenAI API. The new OPENAI_TIER_MAP silently drops that caveat and sets deep-tier effort to \"xhigh\" for gpt-5.6-sol with no comment indicating this was confirmed. Given the PR body only claims gpt-5.6-terra was live-verified (not gpt-5.6-sol / xhigh specifically), this could be an unverified assumption carried over from the Anthropic side. If gpt-5.6-sol rejects \"xhigh\" the same way gpt-5.1 rejected the OAuth backend, this would break every deep-tier OpenAI review immediately (both webhook and watch paths), since there's no fallback here."
+				},
+				{
+					"id": "r0:c3815322538:0",
+					"roundIndex": 0,
+					"reviewId": 4975032370,
+					"source": "inline",
+					"commentId": 3815322538,
+					"path": "src/triage.test.ts",
+					"line": 86,
+					"severity": "P3",
+					"title": "triage.ts oauth-mode comment no longer matches behavior — verify test intent",
+					"text": "🟢 **Low**\n\n**triage.ts oauth-mode comment no longer matches behavior — verify test intent**\n\nThe test name says \"routes openai triage calls to gpt-5.6-luna under oauth auth too\" and correctly expects gpt-5.6-luna, consistent with the unification. This is fine, just noting the test still passes an `auth` object with `mode: \"oauth\"` purely to exercise the `createAIModel(..., auth)` pass-through — that's appropriate and not a defect, but the surrounding comment above the test (removed in this diff) previously explained why oauth needed separate handling; now that gpt-5.1/gpt-5.4 split is gone, confirm no other code path still branches on auth.mode for openai model selection (e.g., stale conditionals elsewhere in triage.ts or router.ts) since a leftover branch would silently diverge from this test's assumption."
+				},
+				{
+					"id": "r0:c3815322544:0",
+					"roundIndex": 0,
+					"reviewId": 4975032370,
+					"source": "inline",
+					"commentId": 3815322544,
+					"path": "src/models.ts",
+					"line": 24,
+					"severity": "P3",
+					"title": "gpt-5.6-sol pricing test comment/value mismatch check",
+					"text": "🟢 **Low**\n\n**gpt-5.6-sol pricing test comment/value mismatch check**\n\nIn src/models.ts, `gpt-5.6-sol` is priced identically to the old `claude-opus-5`/`gpt-5.5` rate ($5/$30), while `gpt-5.6-terra` is priced at $2/$12 — higher output rate than `claude-sonnet-5`'s $2/$10 despite `router.ts` routing `normal`/`complex` tiers to terra as the 'lower' tier below sol. This isn't a bug per se (pricing doesn't have to track routing tier ordering), but worth a sanity check: `gpt-5.6-luna` at $0.20/$1.20 is far cheaper than `gpt-5.1`'s old $1.25/$10, a >8x drop in output price for what's described as merely a renamed/modernized 'cheapest tier'. If this pricing was estimated rather than confirmed (unlike the PR body's claim that all three tiers were verified against `developers.openai.com/api/docs/models/gpt-5.6-{sol,terra,luna}`), cost telemetry in reports could be significantly wrong."
+				},
+				{
+					"id": "r0:body:0",
+					"roundIndex": 0,
+					"reviewId": 4975032370,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "OAuth-only fetch header-stripping comment for Anthropic now orphaned from OpenAI's routing change",
+					"text": "OAuth-only fetch header-stripping comment for Anthropic now orphaned from OpenAI's routing change"
+				},
+				{
+					"id": "r0:body:1",
+					"roundIndex": 0,
+					"reviewId": 4975032370,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Sonnet 5 output cost changed from $15 to $10 but effort tiers unchanged",
+					"text": "Sonnet 5 output cost changed from $15 to $10 but effort tiers unchanged"
+				},
+				{
+					"id": "r0:body:2",
+					"roundIndex": 0,
+					"reviewId": 4975032370,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "gpt-5.6-sol pricing missing xhigh reasoning cost consideration is unverifiable from diff",
+					"text": "gpt-5.6-sol pricing missing xhigh reasoning cost consideration is unverifiable from diff"
+				},
+				{
+					"id": "r0:body:3",
+					"roundIndex": 0,
+					"reviewId": 4975032370,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "TOKEN_RATES pricing changes are unverifiable from the diff",
+					"text": "TOKEN_RATES pricing changes are unverifiable from the diff"
+				},
+				{
+					"id": "r0:body:4",
+					"roundIndex": 0,
+					"reviewId": 4975032370,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "gpt-5.6-terra pricing regression vs gpt-5.4/gpt-5.1",
+					"text": "gpt-5.6-terra pricing regression vs gpt-5.4/gpt-5.1"
+				},
+				{
+					"id": "r0:body:5",
+					"roundIndex": 0,
+					"reviewId": 4975032370,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "gpt-5.6-luna cost regression not covered by new pricing test",
+					"text": "gpt-5.6-luna cost regression not covered by new pricing test"
+				},
+				{
+					"id": "r0:body:6",
+					"roundIndex": 0,
+					"reviewId": 4975032370,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "router.ts drops the previously-noted xhigh-effort caveat for OpenAI without justification",
+					"text": "router.ts drops the previously-noted xhigh-effort caveat for OpenAI without justification"
+				},
+				{
+					"id": "r0:body:7",
+					"roundIndex": 0,
+					"reviewId": 4975032370,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Model rename doesn't guard against invalid config typos",
+					"text": "Model rename doesn't guard against invalid config typos"
+				},
+				{
+					"id": "r0:body:8",
+					"roundIndex": 0,
+					"reviewId": 4975032370,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Anthropic Opus 5 pricing marked \"confirmed\" but rate is unchanged from prior estimated Opus 4.8 rate",
+					"text": "Anthropic Opus 5 pricing marked \"confirmed\" but rate is unchanged from prior estimated Opus 4.8 rate"
+				},
+				{
+					"id": "r0:body:9",
+					"roundIndex": 0,
+					"reviewId": 4975032370,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "gpt-5.6-luna cost rate does not match test comment",
+					"text": "gpt-5.6-luna cost rate does not match test comment"
+				},
+				{
+					"id": "r0:body:10",
+					"roundIndex": 0,
+					"reviewId": 4975032370,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "gpt-5.6-sol deep-tier effort raised from \"high\" to \"xhigh\" without the prior caveat comment being re-verified",
+					"text": "gpt-5.6-sol deep-tier effort raised from \"high\" to \"xhigh\" without the prior caveat comment being re-verified"
+				}
+			]
+		},
+		{
+			"index": 1,
+			"reviewId": 4975084420,
+			"provider": "anthropic",
+			"submittedAt": "2026-08-19T17:43:53Z",
+			"headSha": "bfd6d4b086cd76a90e3ec3166763ff66ae5dab0e",
+			"baseSha": "f28759cee2423f58606c26a570928a77cd69f02f",
+			"mergeBase": "f28759cee2423f58606c26a570928a77cd69f02f",
+			"triggerAt": "2026-08-19T17:41:51Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "bfd6d4b086cd76a90e3ec3166763ff66ae5dab0e",
+					"committedAt": "2026-08-19T17:41:51Z",
+					"files": [
+						{
+							"path": "src/improve/qc.ts",
+							"ranges": [[52, 61]]
+						},
+						{
+							"path": "src/router.ts",
+							"ranges": [[78, 95]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r1:c3815366670:0",
+					"roundIndex": 1,
+					"reviewId": 4975084420,
+					"source": "inline",
+					"commentId": 3815366670,
+					"path": "src/router.ts",
+					"line": 90,
+					"severity": "P2",
+					"title": "gpt-5.6-sol deep-tier effort raised from \"high\" to \"xhigh\" without prior live verification of that exact path via the API-key backend",
+					"text": "🟡 **Medium**\n\n**gpt-5.6-sol deep-tier effort raised from \"high\" to \"xhigh\" without prior live verification of that exact path via the API-key backend**\n\nThe new comment states the API-key backend was down during this change and that xhigh-effort gpt-5.6-sol was only verified against the OAuth backend (\"directly against createAIModel\") plus vendor docs, not via a live end-to-end run through this exact code path. Since routeModel no longer splits by auth mode, the deep tier for hosted webhook bots and `ai-review audit` (which run on the API-key backend) will now request `effort: \"xhigh\"` for gpt-5.6-sol without a same-backend live confirmation that xhigh is accepted there. The previous version of this map deliberately kept effort capped at \"high\" specifically because xhigh support was unconfirmed on the OpenAI API; that caveat has been removed here based on partial verification. If xhigh is rejected by the API-key backend for gpt-5.6-sol, every deep-tier OpenAI review through the hosted bot path will fail outright (not just be more expensive), and the PR's stated verification only covers the OAuth backend."
+				},
+				{
+					"id": "r1:c3815366678:0",
+					"roundIndex": 1,
+					"reviewId": 4975084420,
+					"source": "inline",
+					"commentId": 3815366678,
+					"path": "src/router.ts",
+					"line": 107,
+					"severity": "P3",
+					"title": "Effort caps for gpt-5.6-sol at \"xhigh\" carried into review.ts's maxOutputTokens budget without corresponding verification",
+					"text": "🟢 **Low**\n\n**Effort caps for gpt-5.6-sol at \"xhigh\" carried into review.ts's maxOutputTokens budget without corresponding verification**\n\n`OUTPUT_TOKEN_BUDGET` in review.ts (not shown in this diff but referenced by the reasoning-token comment near line 351) presumably scales with effort level; if \"xhigh\" is a newly-introduced effort value for OpenAI models that wasn't previously exercised end-to-end, the token budget assigned to it hasn't been live-verified either. This compounds the router.ts finding: not just whether the API accepts \"xhigh\", but whether the existing budget headroom is sufficient for it."
+				},
+				{
+					"id": "r1:body:0",
+					"roundIndex": 1,
+					"reviewId": 4975084420,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "gpt-5.6-terra pricing test comment does not match rate assigned in TOKEN_RATES",
+					"text": "gpt-5.6-terra pricing test comment does not match rate assigned in TOKEN_RATES"
+				},
+				{
+					"id": "r1:body:1",
+					"roundIndex": 1,
+					"reviewId": 4975084420,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "PR description's deep-tier verification claim is weaker than the code comment implies",
+					"text": "PR description's deep-tier verification claim is weaker than the code comment implies"
+				},
+				{
+					"id": "r1:body:2",
+					"roundIndex": 1,
+					"reviewId": 4975084420,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "TOKEN_RATES lacks a compile-time guarantee against router/pricing drift (pre-existing, unchanged risk)",
+					"text": "TOKEN_RATES lacks a compile-time guarantee against router/pricing drift (pre-existing, unchanged risk)"
+				},
+				{
+					"id": "r1:body:3",
+					"roundIndex": 1,
+					"reviewId": 4975084420,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "OPENAI_TIER_MAP deep tier bumped to xhigh with only doc-confirmed (not live) verification",
+					"text": "OPENAI_TIER_MAP deep tier bumped to xhigh with only doc-confirmed (not live) verification"
+				},
+				{
+					"id": "r1:body:4",
+					"roundIndex": 1,
+					"reviewId": 4975084420,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "No SAST-relevant vulnerabilities introduced in this diff",
+					"text": "No SAST-relevant vulnerabilities introduced in this diff"
+				},
+				{
+					"id": "r1:body:5",
+					"roundIndex": 1,
+					"reviewId": 4975084420,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Deep-tier OpenAI effort raised from \"high\" to \"xhigh\" without confirmed API support",
+					"text": "Deep-tier OpenAI effort raised from \"high\" to \"xhigh\" without confirmed API support"
+				},
+				{
+					"id": "r1:body:6",
+					"roundIndex": 1,
+					"reviewId": 4975084420,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "TOKEN_RATES pricing changes are unverifiable from the diff and gpt-5.6-terra shows a cost regression",
+					"text": "TOKEN_RATES pricing changes are unverifiable from the diff and gpt-5.6-terra shows a cost regression"
+				},
+				{
+					"id": "r1:body:7",
+					"roundIndex": 1,
+					"reviewId": 4975084420,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Deep-tier OpenAI effort 'xhigh' unverified against live API-key backend, with safety caveat removed",
+					"text": "Deep-tier OpenAI effort 'xhigh' unverified against live API-key backend, with safety caveat removed"
+				},
+				{
+					"id": "r1:body:8",
+					"roundIndex": 1,
+					"reviewId": 4975084420,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "TOKEN_RATES pricing entries unverifiable from the diff",
+					"text": "TOKEN_RATES pricing entries unverifiable from the diff"
+				},
+				{
+					"id": "r1:body:9",
+					"roundIndex": 1,
+					"reviewId": 4975084420,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Comment header claims xhigh is live-verified but pricing/effort caveat removed without replacement verification",
+					"text": "Comment header claims xhigh is live-verified but pricing/effort caveat removed without replacement verification"
+				},
+				{
+					"id": "r1:body:10",
+					"roundIndex": 1,
+					"reviewId": 4975084420,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "No enforced consistency check between router model IDs and TOKEN_RATES pricing table",
+					"text": "No enforced consistency check between router model IDs and TOKEN_RATES pricing table"
+				},
+				{
+					"id": "r1:body:11",
+					"roundIndex": 1,
+					"reviewId": 4975084420,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "gpt-5.6-sol effort raised from capped \"high\" to \"xhigh\" without live verification on the API-key backend",
+					"text": "gpt-5.6-sol effort raised from capped \"high\" to \"xhigh\" without live verification on the API-key backend"
+				},
+				{
+					"id": "r1:body:12",
+					"roundIndex": 1,
+					"reviewId": 4975084420,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Anthropic Opus 5 pricing described as \"confirmed\" but numerically identical to the prior unverified Opus 4.8 estimate",
+					"text": "Anthropic Opus 5 pricing described as \"confirmed\" but numerically identical to the prior unverified Opus 4.8 estimate"
+				},
+				{
+					"id": "r1:body:13",
+					"roundIndex": 1,
+					"reviewId": 4975084420,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "gpt-5.6-sol deep-tier reasoning effort raised to \"xhigh\" without live verification of that specific path",
+					"text": "gpt-5.6-sol deep-tier reasoning effort raised to \"xhigh\" without live verification of that specific path"
+				}
+			]
+		},
+		{
+			"index": 2,
+			"reviewId": 4975176237,
+			"provider": "anthropic",
+			"submittedAt": "2026-08-19T17:54:54Z",
+			"headSha": "3dde5eee017fab38dd1bdfd6bff47874fa92e6c8",
+			"baseSha": "bfd6d4b086cd76a90e3ec3166763ff66ae5dab0e",
+			"mergeBase": "bfd6d4b086cd76a90e3ec3166763ff66ae5dab0e",
+			"triggerAt": "2026-08-19T17:51:02Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "3dde5eee017fab38dd1bdfd6bff47874fa92e6c8",
+					"committedAt": "2026-08-19T17:51:02Z",
+					"files": [
+						{
+							"path": "src/review.test.ts",
+							"ranges": [[1059, 1064], [1131, 1136], [1153, 1158]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r2:c3815442037:0",
+					"roundIndex": 2,
+					"reviewId": 4975176237,
+					"source": "inline",
+					"commentId": 3815442037,
+					"path": "src/models.ts",
+					"line": 25,
+					"severity": "P3",
+					"title": "computeCost has no protection against floating-point summation drift for repeated/large usage",
+					"text": "🟢 **Low**\n\n**computeCost has no protection against floating-point summation drift for repeated/large usage**\n\n`computeCost` sums `(promptTokens/1e6)*rate.input + (completionTokens/1e6)*rate.output` and returns the raw float with no rounding. This isn't a new defect introduced by this PR (the function shape is unchanged), but the new TOKEN_RATES values (e.g. `gpt-5.6-luna` at $0.20/$1.20) make small-value floating point drift more visible in cost aggregation across many agent calls. Consider rounding to a fixed number of decimal places (e.g. 6) at the boundary where costs are summed for reporting, to avoid accumulating float error in the persisted report/metadata."
+				},
+				{
+					"id": "r2:c3815442042:0",
+					"roundIndex": 2,
+					"reviewId": 4975176237,
+					"source": "inline",
+					"commentId": 3815442042,
+					"path": "src/models.ts",
+					"line": 19,
+					"severity": "P3",
+					"title": "TOKEN_RATES has no compile-time link to router model IDs, so a router rename silently zeroes cost",
+					"text": "🟢 **Low**\n\n**TOKEN_RATES has no compile-time link to router model IDs, so a router rename silently zeroes cost**\n\n`TOKEN_RATES` is a plain string-keyed record with no type-level relationship to the model IDs produced by `routeModel` in `src/router.ts` (or `QC_OPENAI_MODEL`/`QC_ANTHROPIC_MODEL` in `src/improve/qc.ts`). Per `computeCost`'s existing behavior (confirmed by `models.test.ts`'s \"unknown-model-xyz\" case), any model ID not present in this table silently costs $0 rather than erroring or warning. This PR changes model IDs in three places (`router.ts`, `qc.ts`, and `TOKEN_RATES` itself) that must all stay in sync by convention only — a future rename in one location without the corresponding update here would silently zero out cost tracking for that model rather than surfacing as a bug. Consider deriving `TOKEN_RATES`'s keys from a shared union type of router-selectable models, or adding a runtime assertion/warning when `computeCost` is called with a model absent from the table."
+				},
+				{
+					"id": "r2:body:0",
+					"roundIndex": 2,
+					"reviewId": 4975176237,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "gpt-5.6-terra pricing comment/rate consistency and unverified deep-tier effort bump remain unresolved",
+					"text": "gpt-5.6-terra pricing comment/rate consistency and unverified deep-tier effort bump remain unresolved"
+				},
+				{
+					"id": "r2:body:1",
+					"roundIndex": 2,
+					"reviewId": 4975176237,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Effort \"none\" removed from src/review.test.ts model selections without corresponding model field left intact",
+					"text": "Effort \"none\" removed from src/review.test.ts model selections without corresponding model field left intact"
+				},
+				{
+					"id": "r2:body:2",
+					"roundIndex": 2,
+					"reviewId": 4975176237,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "gpt-5.6-sol effort raised to \"xhigh\" without live verification against the API-key backend",
+					"text": "gpt-5.6-sol effort raised to \"xhigh\" without live verification against the API-key backend"
+				},
+				{
+					"id": "r2:body:3",
+					"roundIndex": 2,
+					"reviewId": 4975176237,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "TOKEN_RATES pricing entries are unverifiable from the diff alone",
+					"text": "TOKEN_RATES pricing entries are unverifiable from the diff alone"
+				},
+				{
+					"id": "r2:body:4",
+					"roundIndex": 2,
+					"reviewId": 4975176237,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "TOKEN_RATES entries are string keys with no compile-time link to router model IDs (pre-existing, unchanged)",
+					"text": "TOKEN_RATES entries are string keys with no compile-time link to router model IDs (pre-existing, unchanged)"
+				},
+				{
+					"id": "r2:body:5",
+					"roundIndex": 2,
+					"reviewId": 4975176237,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Deep-tier gpt-5.6-sol effort raised from \"high\" to \"xhigh\" without a confirmed live API-key test",
+					"text": "Deep-tier gpt-5.6-sol effort raised from \"high\" to \"xhigh\" without a confirmed live API-key test"
+				},
+				{
+					"id": "r2:body:6",
+					"roundIndex": 2,
+					"reviewId": 4975176237,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Comment claims xhigh effort was live-verified but header also says API-key backend confirmation is doc-based only",
+					"text": "Comment claims xhigh effort was live-verified but header also says API-key backend confirmation is doc-based only"
+				},
+				{
+					"id": "r2:body:7",
+					"roundIndex": 2,
+					"reviewId": 4975176237,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "TOKEN_RATES gpt-5.6-terra pricing not independently checkable",
+					"text": "TOKEN_RATES gpt-5.6-terra pricing not independently checkable"
+				},
+				{
+					"id": "r2:body:8",
+					"roundIndex": 2,
+					"reviewId": 4975176237,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "No compile-time link between router model IDs and TOKEN_RATES pricing map",
+					"text": "No compile-time link between router model IDs and TOKEN_RATES pricing map"
+				},
+				{
+					"id": "r2:body:9",
+					"roundIndex": 2,
+					"reviewId": 4975176237,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "gpt-5.6-sol deep-tier effort raised to \"xhigh\" without live-verified support for that specific value",
+					"text": "gpt-5.6-sol deep-tier effort raised to \"xhigh\" without live-verified support for that specific value"
+				}
+			]
+		}
+	],
+	"threads": [
+		{
+			"threadId": "PRRT_kwDOSM5cU86ajtvR",
+			"commentId": 3815322526,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3815417937,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T17:51:32Z",
+					"editedAt": null,
+					"body": "Fixed in 3dde5ee — dropped the `tier` property from the three gpt-5.6-sol fixtures (this one, and the two at what were lines 1135/1158). `ModelSelection` has no `tier` field at all; it was unused, cast-through cruft from before this PR, not a real routing output — so rather than pick a \"realistic\" tier number that still would not mean anything, I removed it."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86ajtvZ",
+			"commentId": 3815322534,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3815353855,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T17:42:09Z",
+					"editedAt": null,
+					"body": "Fixed in bfd6d4b — live-tested `gpt-5.6-sol` at effort `xhigh` directly against `createAIModel` over the OAuth backend (completes normally, no rejection) and rewrote the comment to state exactly what was live-verified vs. doc-confirmed-only."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86ajtvc",
+			"commentId": 3815322538,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3815418088,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T17:51:33Z",
+					"editedAt": null,
+					"body": "Verified — the only remaining `auth.mode` branches in the codebase are in `src/models.ts` `createAIModel()` (lines 44/61), and those are unrelated to this PR's change: they select HTTP transport/auth plumbing (API-key client vs. OAuth client + custom fetch), not which model to call. `routeModel`/`triageSelection` no longer branch on auth mode anywhere — grepped `authMode|auth\\.mode` across `src/` outside test files to confirm."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86ajtvh",
+			"commentId": 3815322544,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3815418245,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T17:51:35Z",
+					"editedAt": null,
+					"body": "No code change — the PR body already states these three rates were confirmed against developers.openai.com/api/docs/models/gpt-5.6-{sol,terra,luna} (Aug 2026), which is also cited directly in the `TOKEN_RATES` comment. luna at $0.20/$1.20 vs gpt-5.1's old $1.25/$10 is a real, large drop, but it reflects GPT-5.6 luna being a genuinely cheaper tier per the vendor's own pricing page, not an estimate."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86aj09t",
+			"commentId": 3815366670,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3815419427,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T17:51:46Z",
+					"editedAt": null,
+					"body": "Confirmed real and not yet resolvable: gpt-5.6-sol at effort xhigh has only been live-verified over the OAuth/subscription backend, not the API-key backend — the API-key backend is down (known outage, documented in this repo's CLAUDE.md/AGENTS.md, unrelated to this change) so a same-path live run isn't possible right now. This is a deliberate, accepted risk for this PR, not an oversight: the router.ts comment already states precisely this (OAuth-verified + vendor-docs-confirmed only, API-key path pending re-verification once the outage clears). Leaving this thread open rather than resolving it — it needs the repo owner's sign-off to accept, or a decision to add a defensive fallback, neither of which is mine to make unilaterally."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86aj090",
+			"commentId": 3815366678,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3815419639,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T17:51:47Z",
+					"editedAt": null,
+					"body": "Same open-risk status as the sibling thread on line 90 — the token-budget-headroom question for xhigh compounds that same unverified-on-API-key-backend gap rather than being a separate issue. Leaving unresolved for the same reason."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86akBXc",
+			"commentId": 3815442037,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3815448076,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T17:55:46Z",
+					"editedAt": null,
+					"body": "Pre-existing behavior (function shape unchanged by this PR) — not fixing as part of this modernization pass. Fair follow-up for a future PR if float drift ever shows up in real cost reports."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSM5cU86akBXg",
+			"commentId": 3815442042,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3815448174,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-19T17:55:47Z",
+					"editedAt": null,
+					"body": "Pre-existing risk (same as the sibling TOKEN_RATES thread below) — computeCost's /bin/zsh-on-unknown-model fallback and the lack of a compile-time link predate this PR. Out of scope here; worth its own follow-up if it bites in practice."
+				}
+			]
+		}
+	],
+	"reactions": [
+		{
+			"commentId": 3815322526,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-19T17:51:54Z"
+		},
+		{
+			"commentId": 3815322534,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-19T17:51:55Z"
+		},
+		{
+			"commentId": 3815322538,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-19T17:51:55Z"
+		},
+		{
+			"commentId": 3815322544,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-08-19T17:51:57Z"
+		},
+		{
+			"commentId": 3815366670,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-19T17:51:56Z"
+		},
+		{
+			"commentId": 3815366678,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-19T17:51:57Z"
+		}
+	]
+}

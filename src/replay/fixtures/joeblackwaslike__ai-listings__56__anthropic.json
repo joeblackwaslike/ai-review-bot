@@ -1,0 +1,1490 @@
+{
+	"schemaVersion": 1,
+	"owner": "joeblackwaslike",
+	"repo": "ai-listings",
+	"pull": 56,
+	"provider": "anthropic",
+	"reviewer": "claude",
+	"author": "joeblackwaslike",
+	"recordedAt": "2026-11-07T23:28:37.161Z",
+	"rounds": [
+		{
+			"index": 0,
+			"reviewId": 5024743753,
+			"provider": "anthropic",
+			"submittedAt": "2026-08-25T22:12:04Z",
+			"headSha": "1e35e3e78808b2a0c932ce9fab9ceba1edde423e",
+			"baseSha": "6d97a0247acae1cc3b04bcf9c0b9853327202ff9",
+			"mergeBase": "6d97a0247acae1cc3b04bcf9c0b9853327202ff9",
+			"triggerAt": "2026-08-25T22:01:16Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "1e35e3e78808b2a0c932ce9fab9ceba1edde423e",
+					"committedAt": "2026-08-25T22:01:16Z",
+					"files": [
+						{
+							"path": "src/lib/pipeline/crop-denoise.test.ts",
+							"ranges": [[1, 66]]
+						},
+						{
+							"path": "src/lib/pipeline/crop-denoise.ts",
+							"ranges": [[1, 37]]
+						},
+						{
+							"path": "src/lib/pipeline/process-raw-photo.ts",
+							"ranges": [[1, 35]]
+						},
+						{
+							"path": "src/lib/pipeline/remove-background.ts",
+							"ranges": [[1, 9], [22, 30]]
+						},
+						{
+							"path": "src/lib/pipeline/step4b-photoroom.ts",
+							"ranges": [[1, 6], [13, 37]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r0:c3857895410:0",
+					"roundIndex": 0,
+					"reviewId": 5024743753,
+					"source": "inline",
+					"commentId": 3857895410,
+					"path": "src/lib/pipeline/process-raw-photo.ts",
+					"line": 41,
+					"severity": "P3",
+					"title": "processed_url now populated for skip-background-removal listings — but other consumers may still read raw_url",
+					"text": "🟢 **Low**\n\n**processed_url now populated for skip-background-removal listings — but other consumers may still read raw_url**\n\nThis matches the already-raised Codex/Sourcery finding: with this change, `processed_url` is now set for jewelry/skip_background_removal photos, whereas previously it was left unset and consumers (listing UI, condition-reassessment) deliberately fell back to `raw_url` for that case. Since that finding was already reported, flagging only for visibility — but note there's no error handling gap here per se, this is a behavioral/data-consistency issue: downstream code that specifically checks `skip_background_removal` to decide whether to use `raw_url` vs `processed_url` will now silently keep using stale/wrong data with no error surfaced, i.e. this new processing is invisible without an explicit audit of those consumers."
+				},
+				{
+					"id": "r0:c3857895413:0",
+					"roundIndex": 0,
+					"reviewId": 5024743753,
+					"source": "inline",
+					"commentId": 3857895413,
+					"path": "src/lib/pipeline/crop-denoise.ts",
+					"line": 38,
+					"severity": "P3",
+					"title": "No specific handling for image-processing failures (corrupt/invalid image buffer)",
+					"text": "🟢 **Low**\n\n**No specific handling for image-processing failures (corrupt/invalid image buffer)**\n\n`cropDenoiseAndFlatten` performs a chain of sharp operations (`trim`, `median`, `flatten`, `jpeg`) with no error handling. If the input buffer is not a valid/decodable image (e.g. corrupt download, non-image content-type), sharp will throw, and this exception propagates unannotated up through `processRawPhoto`/`removeBackground` with no added context (e.g. which photoId/listingId was being processed, what stage of the sharp chain failed). Consider wrapping with a try/catch that rethrows a contextualized error including the photo/listing identifiers so failures are debuggable instead of showing up as an opaque sharp/libvips error with no application context."
+				},
+				{
+					"id": "r0:body:0",
+					"roundIndex": 0,
+					"reviewId": 5024743753,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "skip_background_removal consumers may still read raw_url, bypassing new processing",
+					"text": "skip_background_removal consumers may still read raw_url, bypassing new processing"
+				},
+				{
+					"id": "r0:body:1",
+					"roundIndex": 0,
+					"reviewId": 5024743753,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "processRawPhoto errors are unhandled at the call site, silently failing the pipeline step",
+					"text": "processRawPhoto errors are unhandled at the call site, silently failing the pipeline step"
+				},
+				{
+					"id": "r0:body:2",
+					"roundIndex": 0,
+					"reviewId": 5024743753,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "processRawPhoto lacks direct test coverage",
+					"text": "processRawPhoto lacks direct test coverage"
+				},
+				{
+					"id": "r0:body:3",
+					"roundIndex": 0,
+					"reviewId": 5024743753,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "No test for step4b-photoroom routing changes",
+					"text": "No test for step4b-photoroom routing changes"
+				},
+				{
+					"id": "r0:body:4",
+					"roundIndex": 0,
+					"reviewId": 5024743753,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "processed_url now populated for skip-background listings, but other consumers may still read raw_url",
+					"text": "processed_url now populated for skip-background listings, but other consumers may still read raw_url"
+				},
+				{
+					"id": "r0:body:5",
+					"roundIndex": 0,
+					"reviewId": 5024743753,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "processRawPhoto has no error handling/rollback around upload+DB update sequencing",
+					"text": "processRawPhoto has no error handling/rollback around upload+DB update sequencing"
+				},
+				{
+					"id": "r0:body:6",
+					"roundIndex": 0,
+					"reviewId": 5024743753,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "skip_background_removal photos still shown/analyzed via raw_url, ignoring new processing",
+					"text": "skip_background_removal photos still shown/analyzed via raw_url, ignoring new processing"
+				}
+			]
+		},
+		{
+			"index": 1,
+			"reviewId": 5025023831,
+			"provider": "anthropic",
+			"submittedAt": "2026-08-25T22:50:05Z",
+			"headSha": "ed9a5100dc974e053a9a7e8e5495fbf6534abe2f",
+			"baseSha": "1e35e3e78808b2a0c932ce9fab9ceba1edde423e",
+			"mergeBase": "1e35e3e78808b2a0c932ce9fab9ceba1edde423e",
+			"triggerAt": "2026-08-25T22:48:50Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "ed9a5100dc974e053a9a7e8e5495fbf6534abe2f",
+					"committedAt": "2026-08-25T22:48:50Z",
+					"files": [
+						{
+							"path": "src/components/dashboard/ListingCard.tsx",
+							"ranges": [[290, 296]]
+						},
+						{
+							"path": "src/components/workspace/PhotoPanel.tsx",
+							"ranges": [[6, 22], [35, 41]]
+						},
+						{
+							"path": "src/components/workspace/PhotoSection.tsx",
+							"ranges": [[50, 56]]
+						},
+						{
+							"path": "src/lib/inngest/functions/condition-reassessment.ts",
+							"ranges": [[66, 72], [80, 86]]
+						},
+						{
+							"path": "src/lib/pipeline/process-raw-photo.test.ts",
+							"ranges": [[1, 101]]
+						},
+						{
+							"path": "src/lib/pipeline/process-raw-photo.ts",
+							"ranges": [[1, 53]]
+						},
+						{
+							"path": "src/lib/pipeline/step4b-photoroom.test.ts",
+							"ranges": [[1, 84]]
+						},
+						{
+							"path": "src/lib/pipeline/step4b-photoroom.ts",
+							"ranges": [[1, 4], [7, 52]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r1:body:0",
+					"roundIndex": 1,
+					"reviewId": 5025023831,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "processRawPhoto has no error handling around fetch/upload/DB update sequencing",
+					"text": "processRawPhoto has no error handling around fetch/upload/DB update sequencing"
+				},
+				{
+					"id": "r1:body:1",
+					"roundIndex": 1,
+					"reviewId": 5025023831,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Test coverage gap: step4b storage path change and processRawPhoto not exercised through the full inngest flow",
+					"text": "Test coverage gap: step4b storage path change and processRawPhoto not exercised through the full inngest flow"
+				},
+				{
+					"id": "r1:body:2",
+					"roundIndex": 1,
+					"reviewId": 5025023831,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "No test asserts consumers now read processed_url for skip-bg/jewelry listings",
+					"text": "No test asserts consumers now read processed_url for skip-bg/jewelry listings"
+				},
+				{
+					"id": "r1:body:3",
+					"roundIndex": 1,
+					"reviewId": 5025023831,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "New processRawPhoto path introduces network+processing failure risk without retry/cleanup",
+					"text": "New processRawPhoto path introduces network+processing failure risk without retry/cleanup"
+				},
+				{
+					"id": "r1:body:4",
+					"roundIndex": 1,
+					"reviewId": 5025023831,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "New processRawPhoto path introduces failure modes on a previously infallible path",
+					"text": "New processRawPhoto path introduces failure modes on a previously infallible path"
+				},
+				{
+					"id": "r1:body:5",
+					"roundIndex": 1,
+					"reviewId": 5025023831,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Consumers already updated to use processed_url ?? raw_url",
+					"text": "Consumers already updated to use processed_url ?? raw_url"
+				},
+				{
+					"id": "r1:body:6",
+					"roundIndex": 1,
+					"reviewId": 5025023831,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "processRawPhoto errors will fail the Inngest step but no explicit handling added",
+					"text": "processRawPhoto errors will fail the Inngest step but no explicit handling added"
+				},
+				{
+					"id": "r1:body:7",
+					"roundIndex": 1,
+					"reviewId": 5025023831,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "processed_url now populated for skip-background photos, but this consequence appears already fixed elsewhere in the diff",
+					"text": "processed_url now populated for skip-background photos, but this consequence appears already fixed elsewhere in the diff"
+				},
+				{
+					"id": "r1:body:8",
+					"roundIndex": 1,
+					"reviewId": 5025023831,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "processRawPhoto has no cleanup on partial failure",
+					"text": "processRawPhoto has no cleanup on partial failure"
+				}
+			]
+		},
+		{
+			"index": 2,
+			"reviewId": 5025183006,
+			"provider": "anthropic",
+			"submittedAt": "2026-08-25T23:13:28Z",
+			"headSha": "c46178f3c1092a7b5ba447a670dff492ab775c0d",
+			"baseSha": "ed9a5100dc974e053a9a7e8e5495fbf6534abe2f",
+			"mergeBase": "ed9a5100dc974e053a9a7e8e5495fbf6534abe2f",
+			"triggerAt": "2026-08-25T23:08:57Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "c46178f3c1092a7b5ba447a670dff492ab775c0d",
+					"committedAt": "2026-08-25T23:08:57Z",
+					"files": [
+						{
+							"path": "src/app/api/listings/[id]/skip-bg/route.ts",
+							"ranges": [[1, 106]]
+						},
+						{
+							"path": "src/app/api/listings/skip-bg-route.test.ts",
+							"ranges": [[1, 180]]
+						},
+						{
+							"path": "src/lib/pipeline/crop-denoise.test.ts",
+							"ranges": [[29, 54], [84, 103]]
+						},
+						{
+							"path": "src/lib/pipeline/crop-denoise.ts",
+							"ranges": [[29, 39]]
+						},
+						{
+							"path": "src/lib/pipeline/step4b-photoroom.ts",
+							"ranges": [[24, 30]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r2:c3858281377:0",
+					"roundIndex": 2,
+					"reviewId": 5025183006,
+					"source": "inline",
+					"commentId": 3858281377,
+					"path": "src/app/api/listings/[id]/skip-bg/route.ts",
+					"line": 78,
+					"severity": "P3",
+					"title": "skip-bg reprocessing skipped when a listing has no processed photo yet, silently allowing flag to flip out of sync with pipeline state",
+					"text": "🟢 **Low**\n\n**skip-bg reprocessing skipped when a listing has no processed photo yet, silently allowing flag to flip out of sync with pipeline state**\n\nIn `handleSkipBg`, reprocessing (and thus the flag flip's usefulness) is entirely gated on `photo?.processed_url && photo.raw_url` already being truthy. If a listing's intake photo hasn't been processed yet (still mid-pipeline, `processed_url` is null), the code silently skips reprocessing but *still flips the flag* (per the PR's own test `'a listing with no processed_url yet ... skips reprocessing but still flips the flag'`). This means when the pipeline eventually runs step4b for that photo, it will read the *already-updated* `skip_background_removal` flag and process correctly — so this particular case is actually benign. However, it's worth confirming there's no window where the pipeline reads the flag mid-transaction in a way that could produce inconsistent output; if the pipeline step4b step has already run and only conditionRe­assessment/consumers need the toggle-time reprocessing, this is fine. No fix needed if step4b always runs after this flag write."
+				},
+				{
+					"id": "r2:c3858281386:0",
+					"roundIndex": 2,
+					"reviewId": 5025183006,
+					"source": "inline",
+					"commentId": 3858281386,
+					"path": "src/app/api/listings/[id]/skip-bg/route.ts",
+					"line": 108,
+					"severity": "P3",
+					"title": "Reprocessing photo before persisting flag flip creates a window where a request failure leaves listing flag and photo processed_url out of sync with each other",
+					"text": "🟢 **Low**\n\n**Reprocessing photo before persisting flag flip creates a window where a request failure leaves listing flag and photo processed_url out of sync with each other**\n\nThe flow is: (1) reprocess photo via `processRaw`/`removeBg`, writing a new `processed_url` to the `photos` table, then (2) update the `listings.skip_background_removal` flag. If step (2)'s DB update fails (e.g., transient DB error) after step (1) succeeded, the photo's `processed_url` will reflect the *new* skip setting while `listings.skip_background_removal` still holds the *old* value — leaving the listing's flag and its photo's processed image inconsistent with each other until the user retries. This is a narrow window (DB update failure after a successful reprocess) but has no rollback/compensation. Consider swapping the order (update the flag first, then reprocess, with the flag update rolled back if reprocessing fails) or wrapping both in a single transaction if the underlying Supabase client supports it."
+				},
+				{
+					"id": "r2:c3858281392:0",
+					"roundIndex": 2,
+					"reviewId": 5025183006,
+					"source": "inline",
+					"commentId": 3858281392,
+					"path": "src/app/api/listings/[id]/skip-bg/route.ts",
+					"line": 63,
+					"severity": "P3",
+					"title": "storagePath is not unique across skip toggles, so repeated toggling overwrites the same intake photo storage object",
+					"text": "🟢 **Low**\n\n**storagePath is not unique across skip toggles, so repeated toggling overwrites the same intake photo storage object**\n\nIn `handleSkipBg`, `storagePath` is always `intake/${listingId}/processed-${photo.id}.png`, identical to the path `runStep4bPhotoRoom` originally wrote to. Every time the flag is toggled, this call overwrites that same storage object with the newly reprocessed image. Functionally this matches the intent (there is only one \"current\" processed image per intake photo), but combined with the lack of any versioning/cache-busting, CDN caches or the browser could keep serving the pre-toggle image for a period after the toggle succeeds, since the URL string returned by `uploadFile` never changes. Consider whether the storage layer already handles cache invalidation for overwrites at a stable key, otherwise clients may see a stale image despite `processed_url` being correctly persisted in the DB."
+				},
+				{
+					"id": "r2:body:0",
+					"roundIndex": 2,
+					"reviewId": 5025183006,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "processRawPhoto has no cleanup or compensating action when the DB update fails after a successful upload",
+					"text": "processRawPhoto has no cleanup or compensating action when the DB update fails after a successful upload"
+				},
+				{
+					"id": "r2:body:1",
+					"roundIndex": 2,
+					"reviewId": 5025183006,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "skip-bg route: reprocessing failure returns 500 but leaves listing in ambiguous state if partial writes occurred",
+					"text": "skip-bg route: reprocessing failure returns 500 but leaves listing in ambiguous state if partial writes occurred"
+				},
+				{
+					"id": "r2:body:2",
+					"roundIndex": 2,
+					"reviewId": 5025183006,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Missing test coverage for step4b-photoroom storage path change to per-photo naming",
+					"text": "Missing test coverage for step4b-photoroom storage path change to per-photo naming"
+				},
+				{
+					"id": "r2:body:3",
+					"roundIndex": 2,
+					"reviewId": 5025183006,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "No test exercises processRawPhoto's crop/denoise output end-to-end through step4b or the skip-bg route",
+					"text": "No test exercises processRawPhoto's crop/denoise output end-to-end through step4b or the skip-bg route"
+				},
+				{
+					"id": "r2:body:4",
+					"roundIndex": 2,
+					"reviewId": 5025183006,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "processRawPhoto network fetch and storage upload lack error handling/rollback on partial failure",
+					"text": "processRawPhoto network fetch and storage upload lack error handling/rollback on partial failure"
+				},
+				{
+					"id": "r2:body:5",
+					"roundIndex": 2,
+					"reviewId": 5025183006,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "processRawPhoto and removeBackground can race / conflict when a second toggle occurs mid-reprocessing",
+					"text": "processRawPhoto and removeBackground can race / conflict when a second toggle occurs mid-reprocessing"
+				},
+				{
+					"id": "r2:body:6",
+					"roundIndex": 2,
+					"reviewId": 5025183006,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "processRawPhoto and removeBackground have no rollback on partial failure",
+					"text": "processRawPhoto and removeBackground have no rollback on partial failure"
+				},
+				{
+					"id": "r2:body:7",
+					"roundIndex": 2,
+					"reviewId": 5025183006,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Comment in crop-denoise.ts about jpeg().toBuffer() is slightly misleading",
+					"text": "Comment in crop-denoise.ts about jpeg().toBuffer() is slightly misleading"
+				},
+				{
+					"id": "r2:body:8",
+					"roundIndex": 2,
+					"reviewId": 5025183006,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Concurrent step4b-photoroom and skip-bg reprocessing can race on the same storage path",
+					"text": "Concurrent step4b-photoroom and skip-bg reprocessing can race on the same storage path"
+				}
+			]
+		},
+		{
+			"index": 3,
+			"reviewId": 5025490740,
+			"provider": "anthropic",
+			"submittedAt": "2026-08-26T00:01:26Z",
+			"headSha": "f455437efb0febbc69f42926cb8f0f2d76d95c35",
+			"baseSha": "c46178f3c1092a7b5ba447a670dff492ab775c0d",
+			"mergeBase": "c46178f3c1092a7b5ba447a670dff492ab775c0d",
+			"triggerAt": "2026-08-25T23:59:12Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "ec50f8521493a17e5b901f2cb3f34e2733be921e",
+					"committedAt": "2026-08-25T23:59:06Z",
+					"files": [
+						{
+							"path": "src/lib/inngest/functions/photo-quality-gate.ts",
+							"ranges": [[4, 10], [183, 188], [193, 214]]
+						}
+					]
+				},
+				{
+					"sha": "f455437efb0febbc69f42926cb8f0f2d76d95c35",
+					"committedAt": "2026-08-25T23:59:12Z",
+					"files": [
+						{
+							"path": "src/app/api/listings/[id]/skip-bg/route.ts",
+							"ranges": [[3, 9], [40, 46], [56, 80]]
+						},
+						{
+							"path": "src/app/api/listings/skip-bg-route.test.ts",
+							"ranges": [[21, 29], [37, 46], [166, 209]]
+						},
+						{
+							"path": "src/lib/pipeline/step4b-photoroom.ts",
+							"ranges": [[7, 18], [35, 41]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r3:c3858557511:0",
+					"roundIndex": 3,
+					"reviewId": 5025490740,
+					"source": "inline",
+					"commentId": 3858557511,
+					"path": "src/lib/pipeline/process-raw-photo.ts",
+					"line": 29,
+					"severity": "P3",
+					"title": "Update overwrites processed_url without checking for a concurrent processed_url change (lost update)",
+					"text": "🟢 **Low**\n\n**Update overwrites processed_url without checking for a concurrent processed_url change (lost update)**\n\n`processRawPhoto` performs a blind `.update({ processed_url: processedUrl }).eq('id', photoId)`. Combined with the skip-bg route's reprocessing flow (which can run concurrently with step4b-photoroom's initial processing for the same photo, per the PR's own storage-path scheme `intake/${listingId}/processed-${photoId}.png`), two in-flight processing calls for the same photo can both succeed and the update that lands last silently wins, even if it corresponds to a stale toggle state. This isn't caught by the existing `updatedRows.length === 0` guard since the row does exist — it's a lost-update race, not a missing-row error."
+				},
+				{
+					"id": "r3:c3858557515:0",
+					"roundIndex": 3,
+					"reviewId": 5025490740,
+					"source": "inline",
+					"commentId": 3858557515,
+					"path": "src/lib/inngest/functions/photo-quality-gate.ts",
+					"line": 197,
+					"severity": "P2",
+					"title": "Studio quality-gate path doesn't apply the jewelry category exclusion",
+					"text": "🟡 **Medium**\n\n**Studio quality-gate path doesn't apply the jewelry category exclusion**\n\nThis branch only checks `listingRow?.skip_background_removal` to decide whether to route through `processRawPhoto` vs `removeBackground`. Unlike `step4b-photoroom.ts` (which also checks `categorySkipsBackgroundRemoval(category)` so jewelry always avoids background removal regardless of the flag) and `skip-bg/route.ts` (which explicitly reuses that same helper), this studio-upload path has no equivalent category check. If a jewelry-category listing has `skip_background_removal` set to `false` (the flag's default), a studio replacement photo for that listing will go through `removeBackground` here — inconsistent with how intake photos for the same listing are treated. Consider fetching `category` alongside `skip_background_removal` in the `listingRow` query above and routing through `processRawPhoto` when `categorySkipsBackgroundRemoval(category)` is true, matching the logic in `step4b-photoroom.ts`."
+				},
+				{
+					"id": "r3:body:0",
+					"roundIndex": 3,
+					"reviewId": 5025490740,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "processed_url now persisted for skip-background-removal photos, but skip-bg consumers were already updated to use processed_url in this same diff",
+					"text": "processed_url now persisted for skip-background-removal photos, but skip-bg consumers were already updated to use processed_url in this same diff"
+				},
+				{
+					"id": "r3:body:1",
+					"roundIndex": 3,
+					"reviewId": 5025490740,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "storage path collision risk between step4b-photoroom and skip-bg route reprocessing",
+					"text": "storage path collision risk between step4b-photoroom and skip-bg route reprocessing"
+				},
+				{
+					"id": "r3:body:2",
+					"roundIndex": 3,
+					"reviewId": 5025490740,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "processRawPhoto has no cleanup on partial failure between upload and DB update",
+					"text": "processRawPhoto has no cleanup on partial failure between upload and DB update"
+				},
+				{
+					"id": "r3:body:3",
+					"roundIndex": 3,
+					"reviewId": 5025490740,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "No test exercises the studio quality-gate skip-bg path end-to-end",
+					"text": "No test exercises the studio quality-gate skip-bg path end-to-end"
+				},
+				{
+					"id": "r3:body:4",
+					"roundIndex": 3,
+					"reviewId": 5025490740,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Missing negative test for `categorySkipsBackgroundRemoval` case-insensitivity and null/undefined handling",
+					"text": "Missing negative test for `categorySkipsBackgroundRemoval` case-insensitivity and null/undefined handling"
+				},
+				{
+					"id": "r3:body:5",
+					"roundIndex": 3,
+					"reviewId": 5025490740,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "processRawPhoto write races with step4b-photoroom pipeline via same derived storage path",
+					"text": "processRawPhoto write races with step4b-photoroom pipeline via same derived storage path"
+				},
+				{
+					"id": "r3:body:6",
+					"roundIndex": 3,
+					"reviewId": 5025490740,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "processRawPhoto used for studio photo-quality-gate but storagePath/type inconsistency with intake path naming",
+					"text": "processRawPhoto used for studio photo-quality-gate but storagePath/type inconsistency with intake path naming"
+				},
+				{
+					"id": "r3:body:7",
+					"roundIndex": 3,
+					"reviewId": 5025490740,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "categorySkipsBackgroundRemoval / SKIP_BG_REMOVAL invariant not enforced as a single source of truth at the type level",
+					"text": "categorySkipsBackgroundRemoval / SKIP_BG_REMOVAL invariant not enforced as a single source of truth at the type level"
+				},
+				{
+					"id": "r3:body:8",
+					"roundIndex": 3,
+					"reviewId": 5025490740,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Storage path collision for skip-bg reprocessing overlaps with in-flight step4b-photoroom writes",
+					"text": "Storage path collision for skip-bg reprocessing overlaps with in-flight step4b-photoroom writes"
+				},
+				{
+					"id": "r3:body:9",
+					"roundIndex": 3,
+					"reviewId": 5025490740,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "processRawPhoto leaves an orphaned storage object when the photos row update fails",
+					"text": "processRawPhoto leaves an orphaned storage object when the photos row update fails"
+				}
+			]
+		},
+		{
+			"index": 4,
+			"reviewId": 5025567534,
+			"provider": "anthropic",
+			"submittedAt": "2026-08-26T00:17:54Z",
+			"headSha": "8a33c7f3e944f7700f54b5e17d7fa7d643e9aba2",
+			"baseSha": "f455437efb0febbc69f42926cb8f0f2d76d95c35",
+			"mergeBase": "f455437efb0febbc69f42926cb8f0f2d76d95c35",
+			"triggerAt": "2026-08-26T00:08:03Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "8a33c7f3e944f7700f54b5e17d7fa7d643e9aba2",
+					"committedAt": "2026-08-26T00:08:03Z",
+					"files": [
+						{
+							"path": "src/lib/inngest/functions/photo-quality-gate.ts",
+							"ranges": [[5, 11], [180, 186], [196, 202]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r4:c3858626853:0",
+					"roundIndex": 4,
+					"reviewId": 5025567534,
+					"source": "inline",
+					"commentId": 3858626853,
+					"path": "src/app/api/listings/[id]/skip-bg/route.ts",
+					"line": 94,
+					"severity": "P3",
+					"title": "handleSkipBg persists the flag flip even when reprocessing was silently skipped due to a missing intake photo",
+					"text": "🟢 **Low**\n\n**handleSkipBg persists the flag flip even when reprocessing was silently skipped due to a missing intake photo**\n\nWhen `photo` is null/undefined (e.g. no intake-type photo row yet, or query returns nothing), the `if (photo?.processed_url && photo.raw_url)` block is skipped entirely and the code falls through to updating `listings.skip_background_removal` unconditionally. This means the flag can flip to a state where `processed_url` was never generated for the current setting, and there's no signal to the caller that reprocessing didn't happen — the UI will show `{ ok: true, skip }` as if everything succeeded. Compare this to the case where `photo.processed_url` is null (photo exists but pipeline hasn't produced output yet) — that case is intentionally treated as a no-op success per the existing test `handleSkipBg: a listing with no processed_url yet...`, so this may be working as designed for that specific sub-case, but a missing/undefined photo row for a listing that has photos elsewhere (e.g. lookup filtered by `type = 'intake'` finding nothing because the type value differs) would fail the same way without being caught by that test."
+				},
+				{
+					"id": "r4:c3858626860:0",
+					"roundIndex": 4,
+					"reviewId": 5025567534,
+					"source": "inline",
+					"commentId": 3858626860,
+					"path": "src/lib/inngest/functions/condition-reassessment.ts",
+					"line": 83,
+					"severity": "P3",
+					"title": "condition-reassessment.ts and skip-bg reprocessing route both silently drop the case where processed_url exists but its underlying variant is stale relative to the flag being toggled at the exact moment reassessment runs",
+					"text": "🟢 **Low**\n\n**condition-reassessment.ts and skip-bg reprocessing route both silently drop the case where processed_url exists but its underlying variant is stale relative to the flag being toggled at the exact moment reassessment runs**\n\nNot a new finding to re-report, but flagging for completeness: `condition-reassessment.ts` now unconditionally uses `p.processed_url ?? p.raw_url` without checking `skip_background_removal`. This is consistent with the PR's design (processed_url is now populated correctly on both the bg-removal and skip-bg paths), so this is not a defect on its own. No action needed here — included only to confirm this line was reviewed and found consistent with the new invariant established by process-raw-photo.ts and step4b-photoroom.ts."
+				},
+				{
+					"id": "r4:c3858626867:0",
+					"roundIndex": 4,
+					"reviewId": 5025567534,
+					"source": "inline",
+					"commentId": 3858626867,
+					"path": "src/lib/pipeline/step4b-photoroom.ts",
+					"line": 15,
+					"severity": "P3",
+					"title": "categorySkipsBackgroundRemoval() lowercases category but skip-bg route passes category through unchanged",
+					"text": "🟢 **Low**\n\n**categorySkipsBackgroundRemoval() lowercases category but skip-bg route passes category through unchanged**\n\n`categorySkipsBackgroundRemoval` is exported and reused in `skip-bg/route.ts` to decide `useRaw = turningSkipOn || categorySkipsBackgroundRemoval(listing.category)`. This function itself lowercases internally, so that part is fine. However, note that `runStep4bPhotoRoom`'s jewelry branch and the skip-bg route's reprocessing branch can now diverge in behavior if `category` is ever undefined vs empty string vs null in the `listings` row — `categorySkipsBackgroundRemoval` handles all three the same way (`!!category && ...`), so this is actually consistent. Retracting — no defect here."
+				},
+				{
+					"id": "r4:c3858626870:0",
+					"roundIndex": 4,
+					"reviewId": 5025567534,
+					"source": "inline",
+					"commentId": 3858626870,
+					"path": "src/lib/inngest/functions/photo-quality-gate.ts",
+					"line": 202,
+					"severity": "P3",
+					"title": "photo-quality-gate.ts: processRawPhoto call is unguarded by a step.run wrapper unlike the removeBackground call",
+					"text": "🟢 **Low**\n\n**photo-quality-gate.ts: processRawPhoto call is unguarded by a step.run wrapper unlike the removeBackground call**\n\nIn the new skip-background branch, `processRawPhoto(photoId, photoRow.raw_url as string, storagePath)` is called directly (not wrapped in `step.run(...)`), while the pre-existing `removeBackground` call a few lines below likely relies on Inngest step semantics for retry/memoization (as suggested by the surrounding `step.run('supersede-replaced-photo', ...)` and `step.run('reconcile-quality-escalation', ...)` calls). If Inngest step boundaries matter for idempotent retries in this function, an unwrapped async call that performs a network fetch + sharp processing + storage upload + DB write will re-execute in full on any function-level retry, unlike calls that are wrapped in `step.run`. This mirrors the diff context shown (removeBackground on the line below is also unwrapped in this snippet), so this may be consistent with existing code and not a regression — flagging as low confidence."
+				},
+				{
+					"id": "r4:c3858626876:0",
+					"roundIndex": 4,
+					"reviewId": 5025567534,
+					"source": "inline",
+					"commentId": 3858626876,
+					"path": "src/lib/pipeline/crop-denoise.ts",
+					"line": 34,
+					"severity": "P3",
+					"title": "Misleading comment: jpeg().toBuffer() claim about EXIF is not about the method being described",
+					"text": "🟢 **Low**\n\n**Misleading comment: jpeg().toBuffer() claim about EXIF is not about the method being described**\n\nThe comment says '`jpeg().toBuffer()` alone doesn't honor that tag' to justify calling `.rotate()` first, but `jpeg()` and `.toBuffer()` are terminal/output operations — they were never going to interpret the EXIF orientation of the *input* regardless of order; it's `sharp()`'s default read behavior (which preserves the stored/raw pixel orientation unless `.rotate()` is called) that's relevant here, not the JPEG encoding step. This was flagged in a previous review round as 'slightly misleading' and is still present verbatim in this diff. Consider rewording to something like: 'sharp does not auto-orient by EXIF on read; without `.rotate()` here, `.trim()` and the median/flatten steps below would operate on — and the final buffer would stay in — the raw sensor orientation.'"
+				},
+				{
+					"id": "r4:c3858626877:0",
+					"roundIndex": 4,
+					"reviewId": 5025567534,
+					"source": "inline",
+					"commentId": 3858626877,
+					"path": "src/lib/inngest/functions/photo-quality-gate.ts",
+					"line": 197,
+					"severity": "P3",
+					"title": "photo-quality-gate.ts: skip branch reuses studio storagePath declared for the removeBackground call, risk of confusing scope if reordered",
+					"text": "🟢 **Low**\n\n**photo-quality-gate.ts: skip branch reuses studio storagePath declared for the removeBackground call, risk of confusing scope if reordered**\n\n`storagePath` is now declared once and shared between the new `processRawPhoto` skip-branch and the pre-existing `removeBackground` call below it. Since `categorySkipsBackgroundRemoval` and `skip_background_removal` were previously checked *before* fetching `photoRow`/computing `storagePath`, the early-return ordering changed: the DB row and internal photo fetch now happen unconditionally before the skip check. If `photoRow.raw_url` lookup or the row selection fails for a listing that would have hit the old fast-skip path, this now surfaces as an error rather than a silent skip. Given `photoRow` is only fetched right before this new logic and used in both branches, this is likely intended, but worth confirming there's no behavior change for photos previously skipped due to missing `raw_url` on studio uploads for skip-bg listings."
+				},
+				{
+					"id": "r4:c3858626880:0",
+					"roundIndex": 4,
+					"reviewId": 5025567534,
+					"source": "inline",
+					"commentId": 3858626880,
+					"path": "src/app/api/listings/[id]/skip-bg/route.ts",
+					"line": 78,
+					"severity": "P2",
+					"title": "skip-bg reprocessing runs before the flag is persisted, risking a state where the flag flip fails but reprocessing already happened",
+					"text": "🟡 **Medium**\n\n**skip-bg reprocessing runs before the flag is persisted, risking a state where the flag flip fails but reprocessing already happened**\n\nReprocessing (`processRaw`/`removeBg`) is performed and can succeed, and only afterward does the code attempt to persist `skip_background_removal` on the `listings` row. If that final update fails (line ~110-114), the response is a 500, but the photo has already been reprocessed and `processed_url` already updated to reflect the *new* flag value -- while the listing row still has the *old* flag value. This leaves `photos.processed_url` and `listings.skip_background_removal` in an inconsistent state that no retry can safely undo (a client retry after a 500 will use whichever flag it originally requested, so it should converge, but any other consumer reading between the two writes sees a mismatched pair). Consider updating the flag first (or wrapping both writes in a way that lets the caller detect partial application), or at minimum documenting this ordering as an accepted risk."
+				},
+				{
+					"id": "r4:c3858626882:0",
+					"roundIndex": 4,
+					"reviewId": 5025567534,
+					"source": "inline",
+					"commentId": 3858626882,
+					"path": "src/app/api/listings/[id]/skip-bg/route.ts",
+					"line": 75,
+					"severity": "P3",
+					"title": "jewelry photos with skip toggled ON reuse the shared crop/denoise path, but the branch condition duplicates category logic already centralized in categorySkipsBackgroundRemoval",
+					"text": "🟢 **Low**\n\n**jewelry photos with skip toggled ON reuse the shared crop/denoise path, but the branch condition duplicates category logic already centralized in categorySkipsBackgroundRemoval**\n\n`useRaw` is computed as `turningSkipOn || categorySkipsBackgroundRemoval(listing.category)`, which is correct, but note this duplicates the routing decision that `step4b-photoroom.ts` makes independently via `runStep4bPhotoRoom`. If the two implementations of \"should this photo skip background removal\" ever diverge (e.g. a future change to `SKIP_BG_REMOVAL` category handling, or additional exclusion criteria added to one call site but not the other), the skip-bg route and the intake pipeline could disagree on which path a photo should take. Since `categorySkipsBackgroundRemoval` is already exported and reused here, this is low risk currently, but there's no shared helper for the full routing decision (category-or-flag), so the OR-composition itself has to be kept in sync manually in both places."
+				},
+				{
+					"id": "r4:body:0",
+					"roundIndex": 4,
+					"reviewId": 5025567534,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Race between step4b-photoroom pipeline and skip-bg reprocessing writing to the same storage path",
+					"text": "Race between step4b-photoroom pipeline and skip-bg reprocessing writing to the same storage path"
+				},
+				{
+					"id": "r4:body:1",
+					"roundIndex": 4,
+					"reviewId": 5025567534,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "processRawPhoto lacks direct test coverage for network fetch failure (non-OK response)",
+					"text": "processRawPhoto lacks direct test coverage for network fetch failure (non-OK response)"
+				},
+				{
+					"id": "r4:body:2",
+					"roundIndex": 4,
+					"reviewId": 5025567534,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "No test verifies photo-quality-gate.ts routes skip-bg/jewelry studio uploads through processRawPhoto",
+					"text": "No test verifies photo-quality-gate.ts routes skip-bg/jewelry studio uploads through processRawPhoto"
+				},
+				{
+					"id": "r4:body:3",
+					"roundIndex": 4,
+					"reviewId": 5025567534,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "storagePath collision risk when a photo's raw_url changes between skip-bg toggles",
+					"text": "storagePath collision risk when a photo's raw_url changes between skip-bg toggles"
+				},
+				{
+					"id": "r4:body:4",
+					"roundIndex": 4,
+					"reviewId": 5025567534,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "processRawPhoto and removeBackground still lack any orphaned-storage cleanup",
+					"text": "processRawPhoto and removeBackground still lack any orphaned-storage cleanup"
+				},
+				{
+					"id": "r4:body:5",
+					"roundIndex": 4,
+					"reviewId": 5025567534,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "getSupabaseAdmin() called on every processRawPhoto/runStep4bPhotoRoom invocation without dependency reuse",
+					"text": "getSupabaseAdmin() called on every processRawPhoto/runStep4bPhotoRoom invocation without dependency reuse"
+				},
+				{
+					"id": "r4:body:6",
+					"roundIndex": 4,
+					"reviewId": 5025567534,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "processRawPhoto has no cleanup on partial failure between upload and DB update",
+					"text": "processRawPhoto has no cleanup on partial failure between upload and DB update"
+				},
+				{
+					"id": "r4:body:7",
+					"roundIndex": 4,
+					"reviewId": 5025567534,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "categorySkipsBackgroundRemoval is case-sensitive against SKIP_BG_REMOVAL but the set is lowercase-only",
+					"text": "categorySkipsBackgroundRemoval is case-sensitive against SKIP_BG_REMOVAL but the set is lowercase-only"
+				},
+				{
+					"id": "r4:body:8",
+					"roundIndex": 4,
+					"reviewId": 5025567534,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "photo-quality-gate.ts: skip-branch return still calls itself \"skipped\" even when processRawPhoto now runs",
+					"text": "photo-quality-gate.ts: skip-branch return still calls itself \"skipped\" even when processRawPhoto now runs"
+				},
+				{
+					"id": "r4:body:9",
+					"roundIndex": 4,
+					"reviewId": 5025567534,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "processRawPhoto can leave an orphaned uploaded file on DB update failure",
+					"text": "processRawPhoto can leave an orphaned uploaded file on DB update failure"
+				}
+			]
+		},
+		{
+			"index": 5,
+			"reviewId": 5025634135,
+			"provider": "anthropic",
+			"submittedAt": "2026-08-26T00:33:21Z",
+			"headSha": "0b1b1def2402e25108b5dab6ae36f331bf827924",
+			"baseSha": "8a33c7f3e944f7700f54b5e17d7fa7d643e9aba2",
+			"mergeBase": "8a33c7f3e944f7700f54b5e17d7fa7d643e9aba2",
+			"triggerAt": "2026-08-26T00:20:24Z",
+			"approximate": false,
+			"commitsSince": [
+				{
+					"sha": "0b1b1def2402e25108b5dab6ae36f331bf827924",
+					"committedAt": "2026-08-26T00:20:24Z",
+					"files": [
+						{
+							"path": "src/app/api/listings/[id]/skip-bg/route.ts",
+							"ranges": [[68, 77]]
+						},
+						{
+							"path": "src/app/api/listings/skip-bg-route.test.ts",
+							"ranges": [[145, 182]]
+						},
+						{
+							"path": "src/lib/pipeline/crop-denoise.ts",
+							"ranges": [[31, 37]]
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"id": "r5:c3858689465:0",
+					"roundIndex": 5,
+					"reviewId": 5025634135,
+					"source": "inline",
+					"commentId": 3858689465,
+					"path": "src/app/api/listings/[id]/skip-bg/route.ts",
+					"line": 78,
+					"severity": "P3",
+					"title": "storagePath is now derived per-photo but overwrites on every reprocessing pass without versioning",
+					"text": "🟢 **Low**\n\n**storagePath is now derived per-photo but overwrites on every reprocessing pass without versioning**\n\n`skip-bg/route.ts` computes `storagePath = intake/${listingId}/processed-${photo.id}.png` and calls `processRaw`/`removeBg` against that fixed path every time the flag is toggled. Because `uploadFile` writes to the same key each time, repeated toggles overwrite the same storage object. If a CDN or browser caches the URL (which is returned unchanged from `uploadFile`), stale processed images can be served after a toggle even though the underlying object was replaced. This mirrors a concern already raised in the prior review round (stale/unversioned storage path), so I'm not re-filing it as new — flagging only because it's visible again in this diff for completeness."
+				},
+				{
+					"id": "r5:c3858689469:0",
+					"roundIndex": 5,
+					"reviewId": 5025634135,
+					"source": "inline",
+					"commentId": 3858689469,
+					"path": "src/app/api/listings/[id]/skip-bg/route.ts",
+					"line": 100,
+					"severity": "P3",
+					"title": "flag update happens after reprocessing succeeds — reprocessing failures now block the toggle entirely",
+					"text": "🟢 **Low**\n\n**flag update happens after reprocessing succeeds — reprocessing failures now block the toggle entirely**\n\nIn `handleSkipBg`, if `turningSkipOn || turningSkipOff` and a photo row exists, reprocessing (`processRaw`/`removeBg`) is awaited before the `listings.skip_background_removal` update runs. If reprocessing throws, the function returns 500 and the flag is never flipped — this is intentional per the tests (`flag must not flip when reprocessing fails`), so it's consistent behavior, not a defect. No action needed; noting only that this ties user-visible toggle success entirely to the image-processing pipeline succeeding, which is a product/UX tradeoff rather than a bug."
+				},
+				{
+					"id": "r5:body:0",
+					"roundIndex": 5,
+					"reviewId": 5025634135,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "photo-quality-gate: skip_background_removal listing may still call getUserApiKeys unnecessarily but not tested for jewelry+studio path",
+					"text": "photo-quality-gate: skip_background_removal listing may still call getUserApiKeys unnecessarily but not tested for jewelry+studio path"
+				},
+				{
+					"id": "r5:body:1",
+					"roundIndex": 5,
+					"reviewId": 5025634135,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "No test verifies condition-reassessment.ts and ListingCard.tsx behavior change end-to-end",
+					"text": "No test verifies condition-reassessment.ts and ListingCard.tsx behavior change end-to-end"
+				},
+				{
+					"id": "r5:body:2",
+					"roundIndex": 5,
+					"reviewId": 5025634135,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "process-raw-photo.test.ts does not cover the fetch-failure (non-ok response) path",
+					"text": "process-raw-photo.test.ts does not cover the fetch-failure (non-ok response) path"
+				},
+				{
+					"id": "r5:body:3",
+					"roundIndex": 5,
+					"reviewId": 5025634135,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "processRawPhoto's fetch of the raw photo is unauthenticated and lacks size/type validation",
+					"text": "processRawPhoto's fetch of the raw photo is unauthenticated and lacks size/type validation"
+				},
+				{
+					"id": "r5:body:4",
+					"roundIndex": 5,
+					"reviewId": 5025634135,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Same photo may be processed concurrently by step4b-photoroom and the new skip-bg route with no coordination",
+					"text": "Same photo may be processed concurrently by step4b-photoroom and the new skip-bg route with no coordination"
+				},
+				{
+					"id": "r5:body:5",
+					"roundIndex": 5,
+					"reviewId": 5025634135,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P2",
+					"title": "Skip-bg reprocessing runs before flag is persisted, allowing inconsistent state on partial failure",
+					"text": "Skip-bg reprocessing runs before flag is persisted, allowing inconsistent state on partial failure"
+				},
+				{
+					"id": "r5:body:6",
+					"roundIndex": 5,
+					"reviewId": 5025634135,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "step4b-photoroom.ts storage path changed to per-photo naming without a migration/backfill note",
+					"text": "step4b-photoroom.ts storage path changed to per-photo naming without a migration/backfill note"
+				},
+				{
+					"id": "r5:body:7",
+					"roundIndex": 5,
+					"reviewId": 5025634135,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "Studio path bypasses the shared category/skip routing helper introduced in this PR",
+					"text": "Studio path bypasses the shared category/skip routing helper introduced in this PR"
+				},
+				{
+					"id": "r5:body:8",
+					"roundIndex": 5,
+					"reviewId": 5025634135,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "processRawPhoto denoise output is claimed to be JPEG but consumers may expect PNG per storage path extension",
+					"text": "processRawPhoto denoise output is claimed to be JPEG but consumers may expect PNG per storage path extension"
+				},
+				{
+					"id": "r5:body:9",
+					"roundIndex": 5,
+					"reviewId": 5025634135,
+					"source": "body",
+					"commentId": null,
+					"path": null,
+					"line": null,
+					"severity": "P3",
+					"title": "process-raw-photo.ts persists an image derived from the raw asset regardless of what future skip-bg consumers select",
+					"text": "process-raw-photo.ts persists an image derived from the raw asset regardless of what future skip-bg consumers select"
+				}
+			]
+		}
+	],
+	"threads": [
+		{
+			"threadId": "PRRT_kwDOSSBjYs6cRAuK",
+			"commentId": 3857895410,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3858553678,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-26T00:00:30Z",
+					"editedAt": null,
+					"body": "Duplicate of the Codex/Sourcery finding above -- already fixed in ed9a510 (`processed_url ?? raw_url` in all consumers)."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6cRAuN",
+			"commentId": 3857895413,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3858553862,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-26T00:00:33Z",
+					"editedAt": null,
+					"body": "Declining for this PR -- the callers that matter already have the identifiers this would add: `processRawPhoto`'s throw propagates to skip-bg/route.ts's catch (which logs listingId) and to the Inngest step context (which has listingId/photoId in event.data). Wrapping here would duplicate identifiers already available one level up, for a low-severity ergonomics gain."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6cR9ic",
+			"commentId": 3858281377,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3858555389,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-26T00:00:56Z",
+					"editedAt": null,
+					"body": "Confirmed benign, as you noted -- the intake photo row is created synchronously at upload (before any pipeline step runs), and step4b always runs after, reading the flag's then-current value. No fix needed."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6cR9ij",
+			"commentId": 3858281386,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3858555548,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-26T00:00:58Z",
+					"editedAt": null,
+					"body": "Declining for this PR -- narrow window (DB update failure after a successful reprocess), and it matches the existing reprocess-then-flip-flag ordering already used by photos/[id]/quality-override/route.ts (removeBackground runs before the metadata update there too). A transactional rewrite is out of scope for this PR; filing a follow-up if it recurs in practice."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6cR9in",
+			"commentId": 3858281392,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3858555721,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-26T00:01:00Z",
+					"editedAt": null,
+					"body": "Declining -- the fixed storage key (`intake/<listingId>/processed-<photoId>.png`) is the same pattern step4b-photoroom.ts already writes to at intake time. Overwriting a stable key on reprocess isn't new risk introduced by this route; cache invalidation for that pattern is an existing, separate concern."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6cSp26",
+			"commentId": 3858557511,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3858587260,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-26T00:08:19Z",
+					"editedAt": null,
+					"body": "Declining for this PR -- same race theme flagged repeatedly across earlier rounds (step4b vs skip-bg storage-path overlap), narrowed here to the DB row specifically. The window requires a skip-bg toggle to land mid-flight while step4b's own initial processing for the same photo is still in progress, which needs an already-toggled listing to still be mid-intake-pipeline -- a narrow, low-frequency edge case. Optimistic locking or serializing the two paths is a real fix but a bigger design change than this PR's scope; filing a follow-up rather than blocking on it here."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6cSp29",
+			"commentId": 3858557515,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3858587174,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-26T00:08:17Z",
+					"editedAt": null,
+					"body": "Fixed in 8a33c7f -- reused categorySkipsBackgroundRemoval() here too, so the jewelry exclusion is checked alongside skip_background_removal, matching step4b-photoroom.ts and the skip-bg toggle route."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6cS1Ad",
+			"commentId": 3858626853,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3858641002,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-26T00:21:24Z",
+					"editedAt": null,
+					"body": "Declining -- the intake photo row is created synchronously with raw_url at upload time (src/app/api/upload/route.ts), atomically with the listing itself, so a listing that reaches this route always has an intake-type photo row with raw_url set. The genuinely-missing-photo branch you're describing isn't reachable in practice for an existing listing; if it ever became reachable (e.g. a future upload path that creates a listing without its intake photo), that'd be a bug at the upload site, not here."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6cS1Ag",
+			"commentId": 3858626860,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3858641144,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-26T00:21:27Z",
+					"editedAt": null,
+					"body": "Acknowledged, matches your own conclusion -- no action needed."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6cS1Am",
+			"commentId": 3858626867,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3858641318,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-26T00:21:30Z",
+					"editedAt": null,
+					"body": "Acknowledged, matches your own retraction -- no action needed."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6cS1An",
+			"commentId": 3858626870,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3858641514,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-26T00:21:32Z",
+					"editedAt": null,
+					"body": "Declining -- correct that it's unwrapped, but that mirrors the existing removeBackground call two lines below it, which was already unwrapped before this PR. Not a regression introduced here; if step.run wrapping matters for retry idempotency it's a pre-existing gap across both calls, not specific to the new path."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6cS1As",
+			"commentId": 3858626876,
+			"isResolved": true,
+			"isOutdated": true,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3858641680,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-26T00:21:35Z",
+					"editedAt": null,
+					"body": "Fixed in 0b1b1de -- reworded to attribute the behavior to sharp's read-time default rather than the jpeg()/toBuffer() output step."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6cS1At",
+			"commentId": 3858626877,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3858641859,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-26T00:21:38Z",
+					"editedAt": null,
+					"body": "Declining -- the reordering is intentional: raw_url should always be present (photos are only ever created with raw_url set), so surfacing a missing/unreadable photo row as an error is more correct than the old silent-skip-if-flag-checked-first behavior. No known path leaves a studio photo without raw_url."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6cS1Av",
+			"commentId": 3858626880,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3858642055,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-26T00:21:40Z",
+					"editedAt": null,
+					"body": "Declining -- same finding as an earlier round (reprocess-then-flip-flag ordering), same rationale: narrow window, matches the existing precedent in photos/[id]/quality-override/route.ts (removeBackground before the metadata update there too), and a transactional rewrite is out of scope for this PR."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6cS1Ay",
+			"commentId": 3858626882,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3858642265,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-26T00:21:43Z",
+					"editedAt": null,
+					"body": "Declining for this PR -- correct observation, but low risk as you note. categorySkipsBackgroundRemoval() is already the shared piece; unifying the full routing decision (category-or-flag) into one helper both call sites use is a reasonable follow-up, not required here."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6cS_EH",
+			"commentId": 3858689465,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3858698468,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-26T00:35:42Z",
+					"editedAt": null,
+					"body": "Acknowledged, matches your own note that this isn't a new finding -- tracked under the same storage-path/cache theme already declined earlier this PR. No action needed."
+				}
+			]
+		},
+		{
+			"threadId": "PRRT_kwDOSSBjYs6cS_EK",
+			"commentId": 3858689469,
+			"isResolved": true,
+			"isOutdated": false,
+			"resolvedBy": "joeblackwaslike",
+			"replies": [
+				{
+					"id": 3858698534,
+					"author": "joeblackwaslike",
+					"createdAt": "2026-08-26T00:35:44Z",
+					"editedAt": null,
+					"body": "Acknowledged, matches your own conclusion -- intentional, not a defect. No action needed."
+				}
+			]
+		}
+	],
+	"reactions": [
+		{
+			"commentId": 3857895410,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-26T00:00:31Z"
+		},
+		{
+			"commentId": 3857895413,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-08-26T00:00:34Z"
+		},
+		{
+			"commentId": 3858281377,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-26T00:00:56Z"
+		},
+		{
+			"commentId": 3858281386,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-08-26T00:00:59Z"
+		},
+		{
+			"commentId": 3858281392,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-08-26T00:01:01Z"
+		},
+		{
+			"commentId": 3858557511,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-08-26T00:08:20Z"
+		},
+		{
+			"commentId": 3858557515,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-26T00:08:18Z"
+		},
+		{
+			"commentId": 3858626853,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-08-26T00:21:25Z"
+		},
+		{
+			"commentId": 3858626860,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-26T00:21:28Z"
+		},
+		{
+			"commentId": 3858626867,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-26T00:21:31Z"
+		},
+		{
+			"commentId": 3858626870,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-08-26T00:21:33Z"
+		},
+		{
+			"commentId": 3858626876,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-26T00:21:36Z"
+		},
+		{
+			"commentId": 3858626877,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-08-26T00:21:38Z"
+		},
+		{
+			"commentId": 3858626880,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-08-26T00:21:41Z"
+		},
+		{
+			"commentId": 3858626882,
+			"user": "joeblackwaslike",
+			"content": "confused",
+			"createdAt": "2026-08-26T00:21:44Z"
+		},
+		{
+			"commentId": 3858689465,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-26T00:35:43Z"
+		},
+		{
+			"commentId": 3858689469,
+			"user": "joeblackwaslike",
+			"content": "+1",
+			"createdAt": "2026-08-26T00:35:45Z"
+		}
+	]
+}

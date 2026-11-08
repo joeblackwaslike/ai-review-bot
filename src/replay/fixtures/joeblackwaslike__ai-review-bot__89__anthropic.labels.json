@@ -1,0 +1,162 @@
+{
+	"fixtureId": "joeblackwaslike__ai-review-bot__89__anthropic",
+	"provisional": true,
+	"labels": [
+		{
+			"claimId": "r0:c4417425453:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-29T20:38:22Z|Fixed in 1153857. The line now says a valid KV state wins whenever one exists, matching the code and the spec's known limits."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4417425453:1",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-29T20:38:22Z|Fixed in 1153857. The line now says a valid KV state wins whenever one exists, matching the code and the spec's known limits."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4417425460:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-29T20:38:15Z|Fixed in 706f5de. The not-ahead warning now logs owner, repo, basehead and status, and says the compare succeeded but was rejected as not ahead."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:c4417425466:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-29T20:38:11Z|Fixed in 706f5de. A path-less finding is now sent for revalidation only when no PR patch was cut by the per-file limit and the total still fits the 60,000-character cap. Test added with two oversized patches: the finding is not sent and stays carried."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r0:body:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4417432513:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-29T21:01:15Z|Already fixed in 706f5de: the not-ahead warning now logs owner, repo, basehead and status, and says the compare succeeded but was rejected."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4417432521:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-29T21:01:18Z|Fixed in 1153857 (KV wins whenever a valid state exists) and 674c403 (example footer strings now carry the scope: prefix)."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:c4417432528:0",
+			"label": "deferred",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-29T21:01:22Z|Fixed in 706f5de: a carried finding whose file left the PR is resolved without a model call. The rename follow-up to this change is in e10f5a4."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r1:body:1",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:c4417676584:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-29T21:01:25Z|Fixed in e10f5a4. A path counts as gone only when it is neither a current filename nor any file's previous_filename. A finding on a renamed file's old path is revalidated against the renamed file's patch (headed with the old name). Test added; a model error resolves nothing."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r2:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c4417813634:0",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-29T21:01:29Z|Fixed in e10f5a4. byName now registers each file's previous_filename, so the old path resolves to the renamed file and the finding is rechecked against the new patch instead of staying carried. This supersedes the carry-only change in 053a206."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:c4417813634:1",
+			"label": "fixed",
+			"confidence": "high",
+			"evidence": [
+				"2026-10-29T21:01:29Z|Fixed in e10f5a4. byName now registers each file's previous_filename, so the old path resolves to the renamed file and the finding is rechecked against the new patch instead of staying carried. This supersedes the carry-only change in 053a206."
+			],
+			"confirmed": false
+		},
+		{
+			"claimId": "r3:body:0",
+			"label": "unadjudicated",
+			"confidence": "low",
+			"evidence": [],
+			"confirmed": false
+		}
+	],
+	"repeatPairs": [
+		{
+			"later": "r1:c4417432521:0",
+			"earlier": "r0:c4417425453:0",
+			"confirmed": false
+		},
+		{
+			"later": "r2:body:0",
+			"earlier": "r1:body:1",
+			"confirmed": false
+		},
+		{
+			"later": "r3:body:0",
+			"earlier": "r1:body:1",
+			"confirmed": false
+		},
+		{
+			"later": "r3:body:0",
+			"earlier": "r2:body:0",
+			"confirmed": false
+		}
+	],
+	"negativePairs": [],
+	"allowedSuppression": []
+}
