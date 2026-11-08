@@ -1,5 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { legacyProviderOf, type ReviewerId } from "../../reviewer-id.js";
+import type { CatalogFinding } from "../skill-outcomes.js";
 import type { FindingOutcome } from "../trends.js";
 import type { Db } from "./client.js";
 import {
@@ -229,6 +230,47 @@ export async function listFindingOutcomes(db: Db): Promise<FindingOutcome[]> {
 		skills: r.skills ?? [],
 		backfilled: r.backfilled,
 		intent: r.intent,
+	}));
+}
+
+/** Live (not backfilled) findings with a skill attribution, posted on or after `since`. */
+export async function listCatalogSince(
+	db: Db,
+	since: Date,
+): Promise<CatalogFinding[]> {
+	const result = await db.execute(sql`
+		select id, owner, repo, pr, ${reviewerExpr} as reviewer, comment_id, path, line,
+		       title, skills, posted_at
+		from finding_catalog
+		where not backfilled and cardinality(skills) > 0 and posted_at >= ${since.toISOString()}
+		order by id
+	`);
+	return (
+		result.rows as unknown as {
+			id: string | number;
+			owner: string;
+			repo: string;
+			pr: number;
+			reviewer: string;
+			comment_id: string | number | null;
+			path: string | null;
+			line: number | null;
+			title: string;
+			skills: string[];
+			posted_at: Date | string;
+		}[]
+	).map((r) => ({
+		id: Number(r.id),
+		owner: r.owner,
+		repo: r.repo,
+		pr: Number(r.pr),
+		reviewer: r.reviewer,
+		commentId: r.comment_id === null ? null : Number(r.comment_id),
+		path: r.path,
+		line: r.line,
+		title: r.title,
+		skills: r.skills,
+		postedAt: new Date(r.posted_at).toISOString(),
 	}));
 }
 
