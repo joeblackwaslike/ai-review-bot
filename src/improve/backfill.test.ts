@@ -262,7 +262,7 @@ describe("backfillPr", () => {
 
 	it("attributes a gemini bot finding to gemini", async () => {
 		const { octokit, db, rawRows } = buildRouteAwareDeps(
-			[comment({ id: 1, user: { login: "gemini-review-bot[bot]" } })],
+			[comment({ id: 1, user: { login: "geminireviewbot[bot]" } })],
 			[],
 		);
 
@@ -472,7 +472,7 @@ describe("attributeProviderForComment", () => {
 		expect(
 			attributeProviderForComment(
 				new Set(["claude", "gemini"]),
-				"@gemini-review-bot nice catch",
+				"@geminireviewbot nice catch",
 			),
 		).toBe("gemini");
 	});
@@ -511,7 +511,7 @@ describe("botLoginsToReviewer", () => {
 		const logins = botLoginsToReviewer();
 		expect(logins["anthropicreviewbot[bot]"]).toBe("claude");
 		expect(logins["codexreviewbot[bot]"]).toBe("codex");
-		expect(logins["gemini-review-bot[bot]"]).toBe("gemini");
+		expect(logins["geminireviewbot[bot]"]).toBe("gemini");
 	});
 
 	it("omits a reviewer with no appSlug", () => {
@@ -529,7 +529,7 @@ describe("botLoginsToReviewer", () => {
 
 	it("catalogs a gemini finding and excludes its replies from feedback", () => {
 		const { findings, replies } = partitionComments([
-			comment({ id: 1, user: { login: "gemini-review-bot[bot]" } }),
+			comment({ id: 1, user: { login: "geminireviewbot[bot]" } }),
 			comment({
 				id: 2,
 				in_reply_to_id: 1,

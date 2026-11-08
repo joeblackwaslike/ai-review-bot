@@ -80,7 +80,7 @@ describe("getReviewerAppConfig", () => {
 		expect(c.agentConcurrency).toBe(2);
 		expect(c.reviewCommentPrefix).toBe("gemini-review-bot");
 		expect(c.reviewer).toBe("gemini");
-		expect(c.appSlug).toBe("gemini-review-bot");
+		expect(c.appSlug).toBe("geminireviewbot");
 		expect(c.webhookSecret).toBe("gem-secret");
 	});
 

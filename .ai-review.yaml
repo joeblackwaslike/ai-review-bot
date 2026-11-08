@@ -76,7 +76,8 @@ reviewers:
   # See docs/adding-a-reviewer.md.
   gemini:
     enabled: false
-    appSlug: gemini-review-bot
+    appId: 5645368
+    appSlug: geminireviewbot
     commentPrefix: gemini-review-bot
     tiers:
       trivial: { model: google/gemini-3.1-flash-lite, effort: low }
