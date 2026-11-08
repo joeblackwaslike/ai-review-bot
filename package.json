@@ -70,6 +70,7 @@
 		"@types/node": "^22.15.3",
 		"@types/pg": "^8.20.0",
 		"drizzle-kit": "^0.31.10",
+		"graphql": "^17.1.0",
 		"husky": "^9.1.7",
 		"pg-mem": "^3.0.14",
 		"typescript": "^7.0.2",

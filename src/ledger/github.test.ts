@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parse } from "graphql";
 import { describe, expect, it, vi } from "vitest";
 import { ledgerEntryFinding } from "../baseline.js";
 import { declaredRepeat, shortFindingId } from "../relation.js";
@@ -821,6 +822,21 @@ describe("ledger reactions", () => {
 		return total;
 	};
 	const GITHUB_NODE_LIMIT = 500_000;
+
+	it("sends a threads query that is valid GraphQL", async () => {
+		const queries: string[] = [];
+		const octokit = fake([page([t(10)], null)]);
+		const inner = octokit.request;
+		octokit.request = (async (
+			route: string,
+			params?: Record<string, unknown>,
+		) => {
+			if (route === "POST /graphql") queries.push(String(params?.query));
+			return inner(route, params);
+		}) as RequestLike["request"];
+		await fetchLedgerEvidence(octokit, opts);
+		expect(() => parse(queries[0] ?? "")).not.toThrow();
+	});
 
 	it("keeps the threads query under GitHub's node limit", async () => {
 		const queries: string[] = [];

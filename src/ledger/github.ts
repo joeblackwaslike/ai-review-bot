@@ -225,7 +225,6 @@ const THREADS_QUERY = `
                 body
                 createdAt
               }
-              }
             }
             rootComment: comments(first: 1) {
               nodes {
