@@ -14,6 +14,7 @@ import { runStrategy } from "../run-strategy.js";
 import { registerBuiltinStrategies } from "../strategies/index.js";
 import { getStrategy } from "../strategy.js";
 import type { LabelFile, ReplayFixture } from "../types.js";
+import { planChains, runChains } from "./chained.js";
 import {
 	exploratoryReason,
 	FinalAlreadyScoredError,
@@ -123,17 +124,21 @@ export async function runExperiment(
 	});
 
 	if (args.mode === "plan") {
-		const grid = await planGrid(
-			plan,
-			runnerDeps({
-				append: () => {},
-				hasCell: () => false,
-				readAll: () => ({ records: [], skipped: 0 }),
-			}),
-		);
+		const dry = runnerDeps({
+			append: () => {},
+			hasCell: () => false,
+			readAll: () => ({ records: [], skipped: 0 }),
+		});
+		const isChained = plan.mode === "chained";
+		const grid = isChained
+			? await planChains(plan, dry)
+			: await planGrid(plan, dry);
+		const count = isChained
+			? `${(grid as Awaited<ReturnType<typeof planChains>>).chains.length} chains`
+			: `${(grid as Awaited<ReturnType<typeof planGrid>>).cells.length} cells`;
 		out(
 			[
-				`experiment plan ${hash}${plan.draft ? " (draft)" : ""}: ${grid.cells.length} cells`,
+				`experiment plan ${hash}${plan.draft ? " (draft)" : ""}: ${count}`,
 				`estimated spend: anthropic $${grid.estimate.anthropic.toFixed(2)}, openai $${grid.estimate.openai.toFixed(2)}`,
 				`caps: anthropic $${grid.caps.maxAnthropicUsd.toFixed(2)}, openai $${grid.caps.maxOpenAiUsd.toFixed(2)}, per cell $${grid.caps.perCellUsd.toFixed(2)}`,
 				isDirectional(plan)
@@ -147,7 +152,8 @@ export async function runExperiment(
 
 	const store = new ResultsStore(deps.root, hash);
 	if (args.mode === "run") {
-		const report = await runGrid(plan, runnerDeps(store), hash);
+		const run = plan.mode === "chained" ? runChains : runGrid;
+		const report = await run(plan, runnerDeps(store), hash);
 		out(
 			[
 				`ran ${report.ran} cell(s), ${report.skippedExisting} already stored`,

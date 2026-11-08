@@ -13,10 +13,21 @@ hash and its own results directory.
 
 ## Modes
 
-Per-round mode only. Each recorded round is reviewed independently, with the suppression ledger
-built from the old bot's state at that time. Precision, recall, wrong or irrelevant findings, cost
-and latency are scored this way. Recycling and convergence need chained mode, which is phase 6;
-every report says they are not measured.
+A plan sets `mode`. A `per-round` plan reviews each recorded round independently, with the
+suppression ledger built from the old bot's state at that time; a cell is one (strategy, fixture,
+round, trial). Precision, recall, wrong or irrelevant findings, cost, latency and join rate are
+scored this way, and the report says recycling and convergence are not measured.
+
+A `chained` plan runs each (strategy, fixture, trial) as a chain: round i's ledger is built from the
+strategy's own posted findings in rounds before i, not from the old bot's. Results are stored under
+the same key as a per-round cell, with `round` set to the round index, so a chain is its rounds'
+records under one plan hash. `plan` prints a chain count instead of a cell count, and `run` stops a
+chain at its first failing, over-cap or unavailable round and lists the later rounds as missing.
+Recycling and convergence are measured only in a chained plan. A chained report shows recycling,
+convergence round and recall per strategy and provider, paired against `a` with a PR-level
+bootstrap, and makes no go or no-go claim: precision, cost and latency are not scored, and there is
+no verdict. Chains are not paired with per-round cells, so a chained plan uses its own seed and
+splits.
 
 ## Commands
 

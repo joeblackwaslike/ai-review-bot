@@ -291,3 +291,72 @@ describe("defaultPlanFile", () => {
 		expect(existsSync(file)).toBe(true);
 	});
 });
+
+describe("runExperiment in chained mode", () => {
+	const chained = () => plan({ mode: "chained" });
+
+	it("plan prints chains and the estimate", async () => {
+		const s = setup(chained(), null);
+		expect(await call(s, "plan")).toBe(0);
+		const text = s.lines.join("\n");
+		expect(text).toMatch(/: 2 chains/);
+		expect(text).not.toMatch(/cells/);
+		expect(text).toMatch(/anthropic \$0\.02/);
+		expect(text).toMatch(/nothing was run/);
+	});
+
+	it("run goes through runChains: a later round sees the earlier round's own findings", async () => {
+		const s = setup(chained());
+		const seen: string[][] = [];
+		s.deps.loadFixtures = async () => ({
+			"o/r#1": {
+				fixture: makeFixture([["c1"], ["c2"]], {
+					pull: 1,
+					provider: "anthropic",
+				}),
+				labels: makeLabels(),
+				fetchDiff: async () => ({
+					diff: "d",
+					files: [buildPullFile("src/a.ts", SIMPLE_PATCH)],
+					approximate: false,
+				}),
+			},
+		});
+		s.deps.runStrategy = async (st, i) => {
+			if (st.name === "a") seen.push(i.history.ledger.map((e) => e.title));
+			return {
+				...result(),
+				posted: [
+					{
+						skill: null,
+						title: `zebra ${i.round.index}`,
+						path: "src/a.ts",
+						line: 10,
+						severity: "P2",
+					},
+				],
+			};
+		};
+		expect(await call(s, "run")).toBe(0);
+		expect(seen).toEqual([[], ["zebra 0"]]);
+	});
+
+	it("score prints recycling and convergence and no verdict", async () => {
+		const s = setup(chained());
+		expect(await call(s, "run")).toBe(0);
+		s.lines.length = 0;
+		expect(await call(s, "score")).toBe(0);
+		const text = s.lines.join("\n");
+		expect(text).toMatch(/chained: recycling and convergence only/);
+		expect(text).toMatch(/a \[anthropic\] PRs=1/);
+		expect(text).toMatch(/a0 vs a \[anthropic\]/);
+		expect(text).toMatch(/no verdict in chained mode/);
+		expect(text).not.toMatch(/PARTIAL/);
+	});
+
+	it("score marks a partly run chained plan PARTIAL", async () => {
+		const s = setup(chained());
+		expect(await call(s, "score")).toBe(0);
+		expect(s.lines.join("\n")).toMatch(/PARTIAL/);
+	});
+});

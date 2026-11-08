@@ -1,0 +1,301 @@
+{
+	"draft": true,
+	"planVersion": 1,
+	"mode": "chained",
+	"strategies": [
+		{
+			"name": "a",
+			"version": "56298c95497f"
+		},
+		{
+			"name": "a0",
+			"version": "0f38679f0407"
+		}
+	],
+	"models": {
+		"anthropic": "routed per round by src/router.ts",
+		"openai": "routed per round by src/router.ts"
+	},
+	"providers": ["anthropic", "openai"],
+	"budgets": {
+		"maxAnthropicUsd": 150,
+		"maxOpenAiUsd": 20,
+		"perCellUsd": 3,
+		"perCellWallMs": 210000
+	},
+	"trials": 1,
+	"seed": "review-experiments-2026-11-chained",
+	"fixtures": [
+		{
+			"id": "joeblackwaslike/agent-skills#10@anthropic",
+			"split": "test",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/agent-skills#10@openai",
+			"split": "test",
+			"provider": "openai"
+		},
+		{
+			"id": "joeblackwaslike/agent-skills#11@anthropic",
+			"split": "tuning",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/agent-skills#16@anthropic",
+			"split": "test",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/agent-skills#17@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/agent-skills#2@anthropic",
+			"split": "tuning",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/agent-skills#5@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/agent-skills#7@anthropic",
+			"split": "tuning",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-listings#50@anthropic",
+			"split": "tuning",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-listings#51@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-listings#52@anthropic",
+			"split": "test",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-listings#53@anthropic",
+			"split": "test",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-listings#56@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-listings#57@anthropic",
+			"split": "test",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-listings#57@openai",
+			"split": "test",
+			"provider": "openai"
+		},
+		{
+			"id": "joeblackwaslike/ai-listings#58@anthropic",
+			"split": "test",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-listings#61@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-listings#62@anthropic",
+			"split": "test",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-listings#68@anthropic",
+			"split": "test",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-listings#74@anthropic",
+			"split": "tuning",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-listings#77@anthropic",
+			"split": "test",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot-demo#1@anthropic",
+			"split": "test",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot-demo#2@anthropic",
+			"split": "test",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot-demo#2@openai",
+			"split": "test",
+			"provider": "openai"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot-demo#3@anthropic",
+			"split": "tuning",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#100@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#101@anthropic",
+			"split": "test",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#101@openai",
+			"split": "test",
+			"provider": "openai"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#111@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#54@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#60@anthropic",
+			"split": "test",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#61@anthropic",
+			"split": "tuning",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#67@anthropic",
+			"split": "tuning",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#68@anthropic",
+			"split": "tuning",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#69@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#70@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#72@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#73@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#74@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#79@anthropic",
+			"split": "test",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#89@anthropic",
+			"split": "tuning",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#92@anthropic",
+			"split": "test",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#92@openai",
+			"split": "test",
+			"provider": "openai"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#94@openai",
+			"split": "test",
+			"provider": "openai"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#95@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/stealth-browser#1@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/stealth-browser#4@anthropic",
+			"split": "tuning",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/stealth-browser#7@anthropic",
+			"split": "test",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/stealth-browser#8@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/stealth-browser#9@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		}
+	],
+	"metrics": [
+		"precision",
+		"recall",
+		"wrongOrIrrelevant",
+		"movedCode",
+		"costPerPr",
+		"latency",
+		"fitIn210s",
+		"joinRate"
+	],
+	"thresholds": {
+		"precisionBootstrap": {
+			"level": 0.95,
+			"resamples": 10000
+		},
+		"maxRecallDropPoints": 5,
+		"hostedFitShare": 0.9,
+		"hostedFitSeconds": 210
+	},
+	"a0Tolerance": 0.1,
+	"selectionRule": "The eligible subset of the fixtures recorded to date: every anthropic fixture, and an openai fixture only when its PR lands in the test split, because OpenAI is rationed to the test split (the schema rejects the rest). Left out for that reason under this plan's seed: the openai fixtures of agent-skills#7, ai-listings#50, ai-listings#51, ai-listings#56, ai-listings#61, ai-listings#74, ai-review-bot#54, ai-review-bot#70, ai-review-bot#73, ai-review-bot#80, stealth-browser#1. Phase 6 added PRs by a mechanical rule written before recording and applied without looking at outcomes: in ai-listings, agent-skills, stealth-browser, ai-review-bot-demo and ai-review-bot, every merged PR with at least 2 reviews from the Anthropic bot, at least 2 changed files and at most 2500 added lines that was not already recorded. The same recorded fixtures as plan.json, re-split under this plan's own seed; both providers of one PR share a split."
+}
