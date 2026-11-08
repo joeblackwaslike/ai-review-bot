@@ -233,16 +233,13 @@ export async function listFindingOutcomes(db: Db): Promise<FindingOutcome[]> {
 	}));
 }
 
-/** Live (not backfilled) findings with a skill attribution, posted on or after `since`. */
-export async function listCatalogSince(
-	db: Db,
-	since: Date,
-): Promise<CatalogFinding[]> {
+/** Every live (not backfilled) finding in the corpus, with or without a skill attribution. */
+export async function listLiveCatalog(db: Db): Promise<CatalogFinding[]> {
 	const result = await db.execute(sql`
 		select id, owner, repo, pr, ${reviewerExpr} as reviewer, comment_id, path, line,
 		       title, skills, posted_at
 		from finding_catalog
-		where not backfilled and cardinality(skills) > 0 and posted_at >= ${since.toISOString()}
+		where not backfilled
 		order by id
 	`);
 	return (

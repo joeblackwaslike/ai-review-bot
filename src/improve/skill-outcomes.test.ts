@@ -4,6 +4,8 @@ import {
 	type CatalogFinding,
 	formatSkillOutcomes,
 	ledgerKey,
+	loadLedgers,
+	parseSinceDate,
 	prefixCandidates,
 	summarizeSkillOutcomes,
 } from "./skill-outcomes.js";
@@ -179,6 +181,51 @@ describe("summarizeSkillOutcomes", () => {
 		expect(row.unmatched).toBe(1);
 	});
 
+	it("counts a restatement of a finding posted before the reporting window, without counting the old one", () => {
+		const before = finding({
+			id: 1,
+			commentId: 11,
+			postedAt: "2026-11-01T10:00:00Z",
+			skills: ["old.md"],
+		});
+		const inWindow = finding({
+			id: 2,
+			commentId: 12,
+			line: 12,
+			postedAt: "2026-11-03T10:00:00Z",
+			skills: ["new.md"],
+		});
+		const rows = summarizeSkillOutcomes([before, inWindow], () => [], {
+			since: new Date("2026-11-02T00:00:00Z"),
+		});
+		expect(rows.map((r) => r.skill)).toEqual(["new.md"]);
+		expect(bySkill(rows, "new.md")).toMatchObject({ posted: 1, restated: 1 });
+	});
+
+	it("does not give a comment's only ledger entry to a claim whose unattributed sibling shares the comment", () => {
+		const attributed = finding({ id: 1, title: "Attributed claim" });
+		const sibling = finding({
+			id: 2,
+			title: "Unattributed claim",
+			line: 30,
+			skills: [],
+		});
+		const ledger: Ledger = [
+			entry({
+				id: "r0:c11:1",
+				title: "Unattributed claim",
+				line: 30,
+				status: "fixed",
+				decidedBy: "author",
+			}),
+		];
+		const row = bySkill(
+			summarize([attributed, sibling], ledger),
+			"code-reviewer.md",
+		);
+		expect(row).toMatchObject({ accepted: 0, unmatched: 1 });
+	});
+
 	it("counts a later finding that restates an earlier one on the same PR and reviewer", () => {
 		const earlier = finding({ id: 1, commentId: 11 });
 		const later = finding({
@@ -273,5 +320,85 @@ describe("prefixCandidates", () => {
 			"codex-review-bot",
 			"ai-review",
 		]);
+	});
+});
+
+describe("parseSinceDate", () => {
+	it("accepts a real calendar date as midnight UTC", () => {
+		expect(parseSinceDate("2026-11-02")?.toISOString()).toBe(
+			"2026-11-02T00:00:00.000Z",
+		);
+	});
+
+	it.each([
+		"2026-02-30",
+		"2026-13-01",
+		"2026-1-5",
+		"yesterday",
+		"",
+	])("rejects %j", (input) => {
+		expect(parseSinceDate(input)).toBeNull();
+	});
+});
+
+describe("loadLedgers", () => {
+	const f1 = finding({ id: 1, pr: 7 });
+	const f2 = finding({ id: 2, pr: 7, commentId: 12 });
+	const f3 = finding({ id: 3, pr: 8, commentId: 13 });
+	const populated: Ledger = [entry()];
+	const configured = () => "ai-review-bot";
+
+	it("falls back to the next prefix when the first ledger is empty", async () => {
+		const tried: string[] = [];
+		const { ledgers, failed } = await loadLedgers(
+			[f1],
+			async (_f, prefix) => {
+				tried.push(prefix);
+				return prefix === "claude-review-bot" ? populated : [];
+			},
+			configured,
+		);
+		expect(tried).toEqual(["ai-review-bot", "claude-review-bot"]);
+		expect(ledgers.get(ledgerKey(f1))).toBe(populated);
+		expect(failed.size).toBe(0);
+	});
+
+	it("keeps an empty ledger as a success when every prefix is empty", async () => {
+		const { ledgers, failed } = await loadLedgers(
+			[f1],
+			async () => [],
+			configured,
+		);
+		expect(ledgers.get(ledgerKey(f1))).toEqual([]);
+		expect(failed.size).toBe(0);
+	});
+
+	it("does not let an earlier empty ledger hide a later fetch failure", async () => {
+		const { ledgers, failed } = await loadLedgers(
+			[f1],
+			async (_f, prefix) => {
+				if (prefix === "ai-review-bot") return [];
+				throw new Error("403 from GitHub");
+			},
+			configured,
+		);
+		expect(ledgers.has(ledgerKey(f1))).toBe(false);
+		expect(failed.get(ledgerKey(f1))).toContain("403 from GitHub");
+	});
+
+	it("loads each PR and reviewer once and records a failed one once", async () => {
+		let calls = 0;
+		const { ledgers, failed } = await loadLedgers(
+			[f1, f2, f3],
+			async (f) => {
+				calls += 1;
+				if (f.pr === 8) throw new Error("boom");
+				return populated;
+			},
+			configured,
+		);
+		expect(ledgers.has(ledgerKey(f1))).toBe(true);
+		expect([...failed.keys()]).toEqual([ledgerKey(f3)]);
+		expect(calls).toBe(2);
 	});
 });

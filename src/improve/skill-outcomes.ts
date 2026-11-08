@@ -89,14 +89,25 @@ const OUTCOME_FIELD: Record<
 	unanswered: "unanswered",
 };
 
+/** True for a finding that counts in a report: attributed to a skill and posted in the window. */
+export function inReportingWindow(f: CatalogFinding, since?: Date): boolean {
+	return f.skills.length > 0 && (!since || new Date(f.postedAt) >= since);
+}
+
 /**
  * Per-skill counts of posted findings by author outcome, read from the live
  * ledger the way adaptive limits read it (`classifyFinding`). A finding that
  * several skills raised counts under each of them. Most posted skill first.
+ *
+ * `findings` is every live corpus row, not only the reported ones: rows before
+ * `since` and rows without a skill are never counted, but they are the history
+ * a restatement is checked against and the siblings a merged comment is
+ * matched among.
  */
 export function summarizeSkillOutcomes(
 	findings: CatalogFinding[],
 	ledgerFor: (f: CatalogFinding) => Ledger | undefined,
+	options: { since?: Date } = {},
 ): SkillOutcomeRow[] {
 	const rows = new Map<string, SkillOutcomeRow>();
 	const perComment = new Map<number, number>();
@@ -104,6 +115,7 @@ export function summarizeSkillOutcomes(
 		if (f.commentId !== null)
 			perComment.set(f.commentId, (perComment.get(f.commentId) ?? 0) + 1);
 	for (const f of findings) {
+		if (!inReportingWindow(f, options.since)) continue;
 		const e = entryFor(
 			f,
 			ledgerFor(f) ?? [],
@@ -123,6 +135,51 @@ export function summarizeSkillOutcomes(
 	return [...rows.values()].sort(
 		(a, b) => b.posted - a.posted || a.skill.localeCompare(b.skill),
 	);
+}
+
+/** A `YYYY-MM-DD` date as midnight UTC, or null when the text is not a real calendar date (`2026-02-30` is not, though `new Date` would roll it into March). */
+export function parseSinceDate(input: string): Date | null {
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(input)) return null;
+	const date = new Date(`${input}T00:00:00Z`);
+	return Number.isNaN(date.getTime()) ||
+		date.toISOString().slice(0, 10) !== input
+		? null
+		: date;
+}
+
+/**
+ * One ledger per PR and reviewer, loaded through `fetchLedger` for the
+ * reviewed findings. Tries each candidate heading prefix until a ledger has
+ * entries; a ledger empty under every prefix is kept as empty, and a fetch that
+ * throws marks the key failed even when an earlier prefix returned empty.
+ */
+export async function loadLedgers(
+	findings: CatalogFinding[],
+	fetchLedger: (f: CatalogFinding, prefix: string) => Promise<Ledger>,
+	configuredPrefix: (reviewer: string) => string | undefined,
+): Promise<{ ledgers: Map<string, Ledger>; failed: Map<string, string> }> {
+	const ledgers = new Map<string, Ledger>();
+	const failed = new Map<string, string>();
+	for (const f of findings) {
+		const key = ledgerKey(f);
+		if (ledgers.has(key) || failed.has(key)) continue;
+		let loaded: Ledger | undefined;
+		for (const prefix of prefixCandidates(
+			f.reviewer,
+			configuredPrefix(f.reviewer),
+		)) {
+			try {
+				loaded = await fetchLedger(f, prefix);
+			} catch (err) {
+				loaded = undefined;
+				failed.set(key, err instanceof Error ? err.message : String(err));
+				break;
+			}
+			if (loaded.length > 0) break;
+		}
+		if (loaded) ledgers.set(key, loaded);
+	}
+	return { ledgers, failed };
 }
 
 /** Markdown table; the last column is rejected over answered (fixed, rejected, deferred). */

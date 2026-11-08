@@ -41,8 +41,8 @@ import { classifyBundles } from "./improve/classify.js";
 import { getDb } from "./improve/db/client.js";
 import {
 	insertClassified,
-	listCatalogSince,
 	listFindingOutcomes,
+	listLiveCatalog,
 	listUnclassifiedBundles,
 } from "./improve/db/repo.js";
 import {
@@ -54,8 +54,10 @@ import { fpSignature } from "./improve/match.js";
 import { installationApp, installationOctokit } from "./improve/octokit.js";
 import {
 	formatSkillOutcomes,
+	inReportingWindow,
 	ledgerKey,
-	prefixCandidates,
+	loadLedgers,
+	parseSinceDate,
 	summarizeSkillOutcomes,
 } from "./improve/skill-outcomes.js";
 import {
@@ -68,7 +70,6 @@ import {
 	fetchLedgerEvidence,
 	type RequestLike,
 } from "./ledger/github.js";
-import type { Ledger } from "./ledger/types.js";
 import { ingest } from "./mistakes/ingest.js";
 import { mistakesRoot, openMistakeLog } from "./mistakes/log.js";
 import { branchForHead, headShaFor } from "./mistakes/session.js";
@@ -895,15 +896,14 @@ async function cmdSkillOutcomes(args: string[]): Promise<void> {
 		else if (a === "--repo") repoFilter = requireValue(args, i++, a);
 		else fatal(`Unexpected argument: ${a}`);
 	}
-	const sinceDate = new Date(`${since}T00:00:00Z`);
-	if (Number.isNaN(sinceDate.getTime()))
-		fatal("--since must be a date like 2026-11-02");
+	const sinceDate = parseSinceDate(since);
+	if (!sinceDate) fatal("--since must be a real date in YYYY-MM-DD form");
 	const token = process.env.GITHUB_TOKEN;
 	if (!token) fatal("GITHUB_TOKEN is required to read each PR's ledger");
 	const octokit = new Octokit({ auth: token });
 
-	const findings = (
-		await listCatalogSince(getDb(), sinceDate).catch((err: unknown) => {
+	const all = (
+		await listLiveCatalog(getDb()).catch((err: unknown) => {
 			fatal(
 				`could not read the corpus (is DATABASE_URL set?): ${
 					err instanceof Error ? err.message : String(err)
@@ -911,58 +911,38 @@ async function cmdSkillOutcomes(args: string[]): Promise<void> {
 			);
 		})
 	).filter((f) => !repoFilter || `${f.owner}/${f.repo}` === repoFilter);
+	const reported = all.filter((f) => inReportingWindow(f, sinceDate));
 
 	const tree = getConfigTree();
-	const ledgers = new Map<string, Ledger>();
-	const failed: string[] = [];
-	for (const f of findings) {
-		const key = ledgerKey(f);
-		if (ledgers.has(key) || failed.includes(key)) continue;
-		let lastError: unknown;
-		let loaded: Ledger | undefined;
-		for (const prefix of prefixCandidates(
-			f.reviewer,
-			tree.reviewers[f.reviewer]?.commentPrefix,
-		)) {
-			try {
-				const ledger = buildLedger(
-					await fetchLedgerEvidence(octokit as unknown as RequestLike, {
-						owner: f.owner,
-						repo: f.repo,
-						pull: f.pr,
-						commentPrefix: prefix,
-						reviewer: f.reviewer,
-					}),
-				);
-				loaded = ledger;
-				if (ledger.length > 0) break;
-			} catch (err) {
-				loaded = undefined;
-				lastError = err;
-				break;
-			}
-		}
-		if (loaded) ledgers.set(key, loaded);
-		else {
-			failed.push(key);
-			console.error(
-				`ledger unavailable for ${key}: ${lastError instanceof Error ? lastError.message : String(lastError)}`,
-			);
-		}
-	}
-
-	const rows = summarizeSkillOutcomes(findings, (f) =>
-		ledgers.get(ledgerKey(f)),
+	const { ledgers, failed } = await loadLedgers(
+		reported,
+		async (f, prefix) =>
+			buildLedger(
+				await fetchLedgerEvidence(octokit as unknown as RequestLike, {
+					owner: f.owner,
+					repo: f.repo,
+					pull: f.pr,
+					commentPrefix: prefix,
+					reviewer: f.reviewer,
+				}),
+			),
+		(reviewer) => tree.reviewers[reviewer]?.commentPrefix,
 	);
+	for (const [key, message] of failed)
+		console.error(`ledger unavailable for ${key}: ${message}`);
+
+	const rows = summarizeSkillOutcomes(all, (f) => ledgers.get(ledgerKey(f)), {
+		since: sinceDate,
+	});
 	if (json) {
 		console.log(
 			JSON.stringify(
 				{
 					since,
-					findings: findings.length,
-					prs: new Set(findings.map((f) => `${f.owner}/${f.repo}#${f.pr}`))
+					findings: reported.length,
+					prs: new Set(reported.map((f) => `${f.owner}/${f.repo}#${f.pr}`))
 						.size,
-					ledgersFailed: failed,
+					ledgersFailed: [...failed.keys()],
 					rows,
 				},
 				null,
@@ -971,11 +951,11 @@ async function cmdSkillOutcomes(args: string[]): Promise<void> {
 		);
 		return;
 	}
-	console.log(`Findings posted since ${since}: ${findings.length}\n`);
+	console.log(`Findings posted since ${since}: ${reported.length}\n`);
 	console.log(formatSkillOutcomes(rows));
-	if (failed.length > 0)
+	if (failed.size > 0)
 		console.log(
-			`\n${failed.length} ledger(s) unavailable; those findings count as unmatched.`,
+			`\n${failed.size} ledger(s) unavailable; those findings count as unmatched.`,
 		);
 }
 
