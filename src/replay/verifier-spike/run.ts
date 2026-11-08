@@ -57,15 +57,21 @@ function cacheKey(item: SpikeItem, judge: SpikeJudge): string {
 		.digest("hex");
 }
 
-async function loadCache(
-	file: string,
-): Promise<Map<string, Extract<SpikeOutcome, { kind: "verdict" }>>> {
+/** The cached verdicts, and whether the file ended mid-line (an interrupted append) so the next append must start on a fresh line. */
+async function loadCache(file: string): Promise<{
+	cache: Map<string, Extract<SpikeOutcome, { kind: "verdict" }>>;
+	endsMidLine: boolean;
+}> {
 	const cache = new Map<string, Extract<SpikeOutcome, { kind: "verdict" }>>();
 	let raw: string;
 	try {
 		raw = await readFile(file, "utf8");
-	} catch {
-		return cache;
+	} catch (err) {
+		if ((err as NodeJS.ErrnoException).code === "ENOENT")
+			return { cache, endsMidLine: false };
+		throw new Error(
+			`could not read the verdict cache ${file}: ${err instanceof Error ? err.message : String(err)}`,
+		);
 	}
 	for (const line of raw.split("\n")) {
 		if (!line) continue;
@@ -80,7 +86,7 @@ async function loadCache(
 			// a line cut short by an interrupted append; the verdict is simply asked for again
 		}
 	}
-	return cache;
+	return { cache, endsMidLine: raw.length > 0 && !raw.endsWith("\n") };
 }
 
 /**
@@ -92,7 +98,8 @@ async function loadCache(
 export async function runSpike(o: RunOptions): Promise<RunSummary> {
 	await mkdir(o.cacheDir, { recursive: true });
 	const cacheFile = join(o.cacheDir, "verdicts.jsonl");
-	const cache = await loadCache(cacheFile);
+	const { cache, endsMidLine } = await loadCache(cacheFile);
+	let needsNewline = endsMidLine;
 	const tasks = o.items.flatMap((item) =>
 		o.judgesFor(item).map((judge) => ({ item, judge })),
 	);
@@ -151,10 +158,12 @@ export async function runSpike(o: RunOptions): Promise<RunSummary> {
 						};
 					}
 					if (outcome.kind === "verdict") {
+						const lead = needsNewline ? "\n" : "";
+						needsNewline = false;
 						try {
 							await appendFile(
 								cacheFile,
-								`${JSON.stringify({ key, outcome })}\n`,
+								`${lead}${JSON.stringify({ key, outcome })}\n`,
 							);
 						} catch (err) {
 							console.warn(

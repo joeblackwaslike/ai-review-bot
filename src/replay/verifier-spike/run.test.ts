@@ -1,4 +1,10 @@
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -259,5 +265,39 @@ describe("runSpike", () => {
 			chmodSync(cacheDir, 0o700);
 			warn.mockRestore();
 		}
+	});
+
+	it("keeps a verdict written right after a truncated cache tail", async () => {
+		const cacheDir = dir();
+		const call = vi.fn(async () => verdict);
+		const make = (ids: string[]) => ({
+			items: ids.map((id) => item(id)),
+			judgesFor: () => [judge("j1")],
+			fileFor: async () => "file",
+			call,
+			cacheDir,
+		});
+		await runSpike(make(["a"]));
+		const file = join(cacheDir, "verdicts.jsonl");
+		writeFileSync(file, `${readFileSync(file, "utf8")}{"key":"cut off mid-li`);
+		await runSpike(make(["a", "b"]));
+		call.mockClear();
+		const third = await runSpike(make(["a", "b"]));
+		expect(call).not.toHaveBeenCalled();
+		expect(third.results).toHaveLength(2);
+	});
+
+	it("fails loudly when the cache cannot be read, instead of treating it as empty", async () => {
+		const cacheDir = dir();
+		mkdirSync(join(cacheDir, "verdicts.jsonl"));
+		await expect(
+			runSpike({
+				items: [item("a")],
+				judgesFor: () => [judge("j1")],
+				fileFor: async () => "file",
+				call: vi.fn(async () => verdict),
+				cacheDir,
+			}),
+		).rejects.toThrow(/verdicts\.jsonl/);
 	});
 });
