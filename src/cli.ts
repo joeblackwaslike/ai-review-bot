@@ -42,6 +42,7 @@ import { getDb } from "./improve/db/client.js";
 import {
 	insertClassified,
 	listFindingOutcomes,
+	listLiveCatalog,
 	listUnclassifiedBundles,
 } from "./improve/db/repo.js";
 import {
@@ -52,10 +53,23 @@ import {
 import { fpSignature } from "./improve/match.js";
 import { installationApp, installationOctokit } from "./improve/octokit.js";
 import {
+	formatSkillOutcomes,
+	inReportingWindow,
+	ledgerKey,
+	loadLedgers,
+	parseSinceDate,
+	summarizeSkillOutcomes,
+} from "./improve/skill-outcomes.js";
+import {
 	computeSeverityReliability,
 	computeSkillSignals,
 	detectDuplicateClusters,
 } from "./improve/trends.js";
+import {
+	buildLedger,
+	fetchLedgerEvidence,
+	type RequestLike,
+} from "./ledger/github.js";
 import { ingest } from "./mistakes/ingest.js";
 import { mistakesRoot, openMistakeLog } from "./mistakes/log.js";
 import { branchForHead, headShaFor } from "./mistakes/session.js";
@@ -173,6 +187,15 @@ function usage(): never {
 		"      Classify captured feedback into intents. Requires DATABASE_URL.",
 	);
 	console.error("  ai-review trends [--json]");
+	console.error(
+		"  ai-review skill-outcomes [--since <YYYY-MM-DD>] [--repo <owner/name>] [--json]",
+	);
+	console.error(
+		"      Per-skill fixed/rejected/deferred/restated counts for findings posted since a date (default 2026-11-02, after B2).",
+	);
+	console.error(
+		"      Reads skills from the corpus (DATABASE_URL) and each outcome from the live PR ledger (GITHUB_TOKEN).",
+	);
 	console.error("  ai-review propose [--repo <owner/name>] [--dry-run]");
 	console.error(
 		"      File a GitHub issue for each quality signal above threshold.",
@@ -862,6 +885,80 @@ async function cmdClassify(args: string[]): Promise<void> {
 	);
 }
 
+async function cmdSkillOutcomes(args: string[]): Promise<void> {
+	let json = false;
+	let since = "2026-11-02";
+	let repoFilter: string | undefined;
+	for (let i = 0; i < args.length; i++) {
+		const a = args[i];
+		if (a === "--json") json = true;
+		else if (a === "--since") since = requireValue(args, i++, a);
+		else if (a === "--repo") repoFilter = requireValue(args, i++, a);
+		else fatal(`Unexpected argument: ${a}`);
+	}
+	const sinceDate = parseSinceDate(since);
+	if (!sinceDate) fatal("--since must be a real date in YYYY-MM-DD form");
+	const token = process.env.GITHUB_TOKEN;
+	if (!token) fatal("GITHUB_TOKEN is required to read each PR's ledger");
+	const octokit = new Octokit({ auth: token });
+
+	const all = (
+		await listLiveCatalog(getDb()).catch((err: unknown) => {
+			fatal(
+				`could not read the corpus (is DATABASE_URL set?): ${
+					err instanceof Error ? err.message : String(err)
+				}`,
+			);
+		})
+	).filter((f) => !repoFilter || `${f.owner}/${f.repo}` === repoFilter);
+	const reported = all.filter((f) => inReportingWindow(f, sinceDate));
+
+	const tree = getConfigTree();
+	const { ledgers, failed } = await loadLedgers(
+		reported,
+		async (f, prefix) =>
+			buildLedger(
+				await fetchLedgerEvidence(octokit as unknown as RequestLike, {
+					owner: f.owner,
+					repo: f.repo,
+					pull: f.pr,
+					commentPrefix: prefix,
+					reviewer: f.reviewer,
+				}),
+			),
+		(reviewer) => tree.reviewers[reviewer]?.commentPrefix,
+	);
+	for (const [key, message] of failed)
+		console.error(`ledger unavailable for ${key}: ${message}`);
+
+	const rows = summarizeSkillOutcomes(all, (f) => ledgers.get(ledgerKey(f)), {
+		since: sinceDate,
+	});
+	if (json) {
+		console.log(
+			JSON.stringify(
+				{
+					since,
+					findings: reported.length,
+					prs: new Set(reported.map((f) => `${f.owner}/${f.repo}#${f.pr}`))
+						.size,
+					ledgersFailed: [...failed.keys()],
+					rows,
+				},
+				null,
+				2,
+			),
+		);
+		return;
+	}
+	console.log(`Findings posted since ${since}: ${reported.length}\n`);
+	console.log(formatSkillOutcomes(rows));
+	if (failed.size > 0)
+		console.log(
+			`\n${failed.size} ledger(s) unavailable; those findings count as unmatched.`,
+		);
+}
+
 async function cmdTrends(args: string[]): Promise<void> {
 	let json = false;
 	for (const a of args) {
@@ -1363,6 +1460,7 @@ export async function main(): Promise<void> {
 	if (sub === "mistakes") return cmdMistakes(rest);
 	if (sub === "backfill") return cmdBackfill(rest);
 	if (sub === "unrated") return cmdUnrated(rest);
+	if (sub === "skill-outcomes") return cmdSkillOutcomes(rest);
 	if (sub?.includes("/")) return cmdLegacyRemote([sub, ...rest]); // back-compat
 	usage();
 }
