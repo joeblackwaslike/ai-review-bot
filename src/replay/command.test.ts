@@ -32,11 +32,17 @@ import type { AdjudicationJudges } from "./adjudication/run.js";
 import { claimKey, snapshotId } from "./adjudication/snapshot.js";
 import { fixtureId } from "./claims.js";
 import { defaultFixturesDir, runReplay } from "./command.js";
+import { planHash } from "./experiment/plan.js";
 import { samplePlan } from "./experiment/testkit.js";
 import type { GhClient } from "./gh.js";
 import type { ReplayPipeline } from "./pipeline.js";
 import { strategyA } from "./strategies/a.js";
-import { registerStrategy, resetStrategiesForTest } from "./strategy.js";
+import { registerBuiltinStrategies } from "./strategies/index.js";
+import {
+	getStrategy,
+	registerStrategy,
+	resetStrategiesForTest,
+} from "./strategy.js";
 import { makeFixture, makeLabel, makeLabels } from "./testkit.js";
 
 const failRename = vi.hoisted(() => ({ on: false }));
@@ -1365,6 +1371,38 @@ describe("runReplay --investigate-join", () => {
 			["--investigate-join"],
 		])
 			expect(await runReplay(args, { out: () => {} })).toBe(2);
+	});
+
+	it("--adjudicate-results registers the builtin strategies itself", async () => {
+		resetStrategiesForTest();
+		registerBuiltinStrategies();
+		const real = samplePlan();
+		const plan = {
+			...real,
+			strategies: real.strategies.map((s) => ({
+				name: s.name,
+				version: getStrategy(s.name).version,
+			})),
+		};
+		resetStrategiesForTest();
+		const dir = tmp();
+		const planFile = join(dir, "plan.json");
+		writeFileSync(planFile, JSON.stringify(plan));
+		writeFileSync(join(dir, "plan.lock"), planHash(plan as never));
+		const lines: string[] = [];
+		await runReplay(
+			[
+				"--adjudicate-results",
+				"--plan",
+				"--plan-file",
+				planFile,
+				"--fixtures",
+				dir,
+			],
+			{ out: (s) => lines.push(s), experimentsDir: dir },
+		);
+		expect(lines.join("\n")).not.toMatch(/unknown strategy/i);
+		expect(lines.join("\n")).toContain("total distinct candidates");
 	});
 
 	it("exits 1 when the fixture is missing", async () => {

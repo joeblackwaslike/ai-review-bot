@@ -846,6 +846,7 @@ export async function runReplay(
 			out(`${misuse}\n${USAGE}`);
 			return 2;
 		}
+		registerBuiltinStrategies();
 		return runResultsAdjudication({
 			planFile: parsed.planFile ?? defaultPlanFile(import.meta.url),
 			root: deps.experimentsDir ?? defaultExperimentsDir(),
