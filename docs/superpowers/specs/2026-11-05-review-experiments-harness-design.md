@@ -433,3 +433,33 @@ author's and carry their reason.
   per-round plan and a chained plan can each spend up to them.
 - **Run order.** Anthropic per-round on all splits; `score` on tuning and validation; OpenAI on the
   test split only for strategies that cleared on Anthropic; `score --final` once, when Joe says go.
+
+## Addendum: adjudicating experiment output (2026-11-08)
+
+Section 5 says candidates the join leaves unmatched go to adjudication, and the scorer reads the
+cached verdicts. The phase 3 command only reads saved-trace candidates from a fixture, and the
+fixtures recorded for phase 6 have none, so nothing could judge what a strategy actually posted.
+Without it, a posted finding that restates no labelled claim stays unadjudicated and leaves
+precision's numerator and denominator.
+
+- `ai-review replay --adjudicate-results [--plan-file <path>] [--max-anthropic <n>] [--max-openai <n>] [--plan]`
+  reads the committed plan's results store and judges, per fixture, the distinct `posted` findings
+  (path, line, title) across all stored cells that `joinsClaim` leaves unmatched. Verdicts go in the
+  same per-snapshot cache the scorer already reads, keyed by `claimKey`, so no scorer change is needed.
+- Judging, models, prompts, evidence (the numbered patch of the finding's round), the cross-family
+  rule and the `single-family` marking are the phase 3 machinery unchanged. The producer family of a
+  finding is its fixture's family. OpenAI-produced findings are judged by Anthropic models only.
+- The caps are totals for the whole command, not per fixture: each fixture's run is given what the
+  earlier ones left. `--plan` calls no model. For non-test fixtures it prints distinct candidates,
+  cached, candidates to judge and calls allowed; for test-split fixtures only the candidate count and
+  the Anthropic calls allowed.
+- It needs the same lock as `run` and `score`: a draft or unlocked plan is refused, so it cannot read
+  results for a plan that is not binding. Test-split fixtures must be judged before `score --final`
+  can use them, but judging must not leak how a strategy did on the test set. So for a test-split
+  fixture the command writes verdicts and prints a single `verdicts recorded, details hidden until
+  score --final` line, never the real, not-real or unclear counts. Tuning and validation fixtures
+  print the per-fixture breakdown. The last line reports total Anthropic calls (all fixtures) and,
+  once a test fixture ran, withholds the OpenAI and deferred figures. The verdict cache and
+  `--adjudicate <id>` show cached verdicts regardless of split, so `--adjudicate` must not be run on a
+  test-split fixture before `score --final`.
+- Judge spend is its own line, outside the strategy cost comparison, as in section 7.
