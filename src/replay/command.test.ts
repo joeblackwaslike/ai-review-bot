@@ -24,6 +24,7 @@ import type { AdjudicationJudges } from "./adjudication/run.js";
 import { claimKey, snapshotId } from "./adjudication/snapshot.js";
 import { fixtureId } from "./claims.js";
 import { defaultFixturesDir, runReplay } from "./command.js";
+import { samplePlan } from "./experiment/testkit.js";
 import type { GhClient } from "./gh.js";
 import type { ReplayPipeline } from "./pipeline.js";
 import { strategyA } from "./strategies/a.js";
@@ -1465,6 +1466,26 @@ describe("runReplay --adjudicate", () => {
 			["--adjudicate"],
 		])
 			expect(await runReplay(args, { out: () => {} })).toBe(2);
+	});
+
+	it("--adjudicate-results with --audit exits 2", async () => {
+		for (const extra of [["--audit"], ["--adjudicate", "x"], ["--live"]])
+			expect(
+				await runReplay(["--adjudicate-results", ...extra], { out: () => {} }),
+			).toBe(2);
+	});
+
+	it("--adjudicate-results dispatches with default caps", async () => {
+		const dir = tmp();
+		const planFile = join(dir, "plan.json");
+		writeFileSync(planFile, JSON.stringify({ ...samplePlan(), draft: true }));
+		const lines: string[] = [];
+		const code = await runReplay(
+			["--adjudicate-results", "--plan-file", planFile, "--fixtures", dir],
+			{ out: (s) => lines.push(s), experimentsDir: dir },
+		);
+		expect(code).toBe(1);
+		expect(lines.join("\n")).toContain("marked draft");
 	});
 
 	it("exits 1 when the fixture is missing", async () => {

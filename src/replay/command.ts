@@ -21,6 +21,7 @@ import type { ModelSelection } from "../router.js";
 import { adaptiveReport } from "./adaptive-report.js";
 import { isCurrentVerdict } from "./adjudication/adjudicate.js";
 import { VerdictCache } from "./adjudication/cache.js";
+import { runResultsAdjudication } from "./adjudication/from-results.js";
 import { possibleFirstModels } from "./adjudication/judge.js";
 import {
 	type AdjudicationJudges,
@@ -112,6 +113,7 @@ interface ParsedArgs {
 	gatePlan?: string;
 	investigateJoin?: string;
 	adjudicate?: string;
+	adjudicateResults?: boolean;
 	maxAnthropic?: number;
 	maxOpenai?: number;
 	plan?: boolean;
@@ -132,6 +134,7 @@ const USAGE = [
 	"  ai-review replay --seeds [--check | --plan [--strategy <name>] | --strategy <name> --max-cost <usd> [--gate-plan <hash>]]",
 	"  ai-review replay --experiment plan|run|score [--plan-file <path>] [--fixtures <dir>]  (--final is for score only)",
 	"  ai-review replay --adjudicate <fixture-id> [--max-anthropic <n>] [--max-openai <n>] [--plan | --audit] [--fixtures <dir>]",
+	"  ai-review replay --adjudicate-results [--plan-file <path>] [--max-anthropic <n>] [--max-openai <n>] [--plan] [--fixtures <dir>]",
 ].join("\n");
 
 const PR_URL = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)\/?$/;
@@ -185,6 +188,10 @@ function parseArgs(args: string[]): ParsedArgs | null {
 			if (value === undefined || value.startsWith("--")) return null;
 			parsed.planFile = value;
 			i++;
+			continue;
+		}
+		if (flag === "--adjudicate-results") {
+			parsed.adjudicateResults = true;
 			continue;
 		}
 		if (flag === "--seeds" || flag === "--check") {
@@ -664,6 +671,7 @@ async function runSeeds(
 		((p.live ||
 			p.record !== undefined ||
 			p.adjudicate !== undefined ||
+			p.adjudicateResults ||
 			p.investigateJoin !== undefined ||
 			p.saveTrace ||
 			p.heldOut ||
@@ -735,10 +743,12 @@ async function runSeeds(
 }
 
 function checkExperimentFlags(p: ParsedArgs): string | null {
-	if (p.experiment === undefined)
-		return p.final || p.planFile !== undefined
-			? "--final and --plan-file require --experiment"
+	if (p.experiment === undefined) {
+		if (p.final) return "--final requires --experiment";
+		return p.planFile !== undefined && !p.adjudicateResults
+			? "--plan-file requires --experiment or --adjudicate-results"
 			: null;
+	}
 	const others = [
 		p.live,
 		p.record,
@@ -746,6 +756,7 @@ function checkExperimentFlags(p: ParsedArgs): string | null {
 		p.gatePlan,
 		p.investigateJoin,
 		p.adjudicate,
+		p.adjudicateResults,
 		p.seeds,
 		p.check,
 		p.plan,
@@ -766,6 +777,32 @@ function checkExperimentFlags(p: ParsedArgs): string | null {
 	if (p.final && p.experiment !== "score")
 		return "--final applies only to --experiment score";
 	return null;
+}
+
+function checkAdjudicateResultsFlags(p: ParsedArgs): string | null {
+	const others = [
+		p.live,
+		p.record,
+		p.strategy,
+		p.gatePlan,
+		p.investigateJoin,
+		p.adjudicate,
+		p.seeds,
+		p.check,
+		p.audit,
+		p.final,
+		p.rounds,
+		p.maxCost,
+		p.saveTrace,
+		p.heldOut,
+		p.expectClean,
+		p.reviewer,
+		p.as,
+		p.bot,
+	];
+	return others.some((v) => v !== undefined && v !== false)
+		? "--adjudicate-results takes only --plan-file, --plan, --max-anthropic, --max-openai and --fixtures"
+		: null;
 }
 
 export async function runReplay(
@@ -802,6 +839,34 @@ export async function runReplay(
 					adjudicationDir: deps.adjudicationDir,
 				}),
 		);
+	}
+	if (parsed.adjudicateResults) {
+		const misuse = checkAdjudicateResultsFlags(parsed);
+		if (misuse) {
+			out(`${misuse}\n${USAGE}`);
+			return 2;
+		}
+		return runResultsAdjudication({
+			planFile: parsed.planFile ?? defaultPlanFile(import.meta.url),
+			root: deps.experimentsDir ?? defaultExperimentsDir(),
+			fixturesDir:
+				parsed.fixtures ??
+				deps.fixturesDir ??
+				defaultFixturesDir(import.meta.url),
+			caps: {
+				anthropic: parsed.maxAnthropic ?? DEFAULT_MAX_ANTHROPIC,
+				openai: parsed.maxOpenai ?? DEFAULT_MAX_OPENAI,
+			},
+			plan: parsed.plan === true,
+			client: deps.client ?? ghCli(),
+			out,
+			cacheDir: deps.adjudicationDir,
+			judges:
+				deps.adjudicationJudges ??
+				(async () =>
+					(await import("./adjudication/model-judges.js"))
+						.modelAdjudicationJudges),
+		});
 	}
 	if (parsed.seeds) return runSeeds(parsed, deps, out);
 	const misuse =

@@ -51,6 +51,13 @@ Convergence is averaged over complete chains only, and the report line says so.
   final; once the marker exists, a second `--final` for the same plan hash is refused. A marker that
   cannot be read is treated as scored, and a revised plan that shares test PRs with a scored plan, or
   finds an unreadable marker, is labeled exploratory.
+- `ai-review replay --adjudicate-results [--plan-file <path>] [--max-anthropic <n>] [--max-openai <n>] [--plan]`
+  reads the stored cells of a locked, non-draft plan (stale cells ignored) and gives a blind verdict to
+  every distinct finding a strategy posted that no labelled claim covers, cached per fixture snapshot
+  like `--adjudicate`. The caps are totals across all fixtures, not per fixture; the last line reports
+  the judge calls made and how many findings the cap left unjudged. A test-split fixture is judged
+  without printing verdict counts, so the run does not reveal test results before `score --final`.
+  `--plan` prints the candidate counts and builds no judge.
 
 `run` exits 0 only when the grid is complete, 3 when it is partial (a provider cap, a per-cell cap, a
 round without a checkout), and 1 when a cell failed. A cell whose strategy threw is charged at its
