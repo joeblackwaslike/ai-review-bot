@@ -56,11 +56,15 @@ export interface AdjudicationRun {
 	out: (s: string) => void;
 	cacheDir?: string;
 	judges: AdjudicationJudges | (() => Promise<AdjudicationJudges>);
+	candidates?: (
+		fixture: ReplayFixture,
+		labels: LabelFile,
+	) => AdjudicationCandidate[];
+	onSpend?: (spend: { anthropic: number; openai: number }) => void;
+	quiet?: boolean;
 }
 
-interface Located extends AdjCandidate {
-	roundIndex: number;
-}
+export type AdjudicationCandidate = AdjCandidate & { roundIndex: number };
 
 interface ModelInfo {
 	model: string;
@@ -114,9 +118,9 @@ const add = (
 function unmatchedCandidates(
 	fixture: ReplayFixture,
 	labels: LabelFile,
-): Located[] {
+): AdjudicationCandidate[] {
 	const claims = labelledClaims(fixture, labels);
-	const seen = new Map<string, Located>();
+	const seen = new Map<string, AdjudicationCandidate>();
 	for (const round of fixture.rounds)
 		for (const c of round.trace?.candidates ?? []) {
 			const key = `${c.path}\0${c.line}\0${c.title}`;
@@ -132,7 +136,7 @@ function unmatchedCandidates(
 }
 
 function planLines(
-	candidates: Located[],
+	candidates: AdjudicationCandidate[],
 	cache: Cache,
 	snapshot: string,
 	producer: Provider,
@@ -182,7 +186,7 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 	const labelsHash = labelsHashOf(labelsText);
 	const snapshot = snapshotId(fixture);
 	const cache: Cache = new VerdictCache(run.cacheDir);
-	const candidates = unmatchedCandidates(fixture, labels);
+	const candidates = (run.candidates ?? unmatchedCandidates)(fixture, labels);
 
 	if (run.plan) {
 		for (const line of planLines(
@@ -195,6 +199,14 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 			out(line);
 		return 0;
 	}
+
+	const spend = { anthropic: 0, openai: 0 };
+	let spendReported = false;
+	const reportSpend = () => {
+		if (run.plan || run.audit || spendReported) return;
+		spendReported = true;
+		run.onSpend?.({ ...spend });
+	};
 
 	const { fetchDiff } = buildLiveWiring(fixture, run.client);
 	const modelOf = new Map<number, ModelInfo>();
@@ -225,7 +237,9 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 		}
 	}
 
-	const evidenceOf = (c: Located): { text: string } | { reason: string } => {
+	const evidenceOf = (
+		c: AdjudicationCandidate,
+	): { text: string } | { reason: string } => {
 		const failure = unavailable.get(c.roundIndex);
 		if (failure !== undefined)
 			return {
@@ -242,8 +256,11 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 		return { text: numbered };
 	};
 	const evidenceByKey = new Map<string, string>();
-	const judgeable: Located[] = [];
-	const skipped = new Map<string, { c: Located; reason: string }>();
+	const judgeable: AdjudicationCandidate[] = [];
+	const skipped = new Map<
+		string,
+		{ c: AdjudicationCandidate; reason: string }
+	>();
 	for (const c of candidates) {
 		const key = claimKey(c);
 		if (evidenceByKey.has(key)) continue;
@@ -338,7 +355,7 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 			return 0;
 		}
 
-		const groups = new Map<string, Located[]>();
+		const groups = new Map<string, AdjudicationCandidate[]>();
 		const notes = new Map<string, string>();
 		for (const c of judgeable) {
 			const info = modelOf.get(c.roundIndex) as ModelInfo;
@@ -350,7 +367,6 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 			counts.deferred++;
 			out(`not judged, ${reason}: ${c.title}`);
 		}
-		const spend = { anthropic: 0, openai: 0 };
 		const errorSamples: string[] = [];
 		let unavailableMessage: string | null = null;
 		for (const [model, group] of groups) {
@@ -413,8 +429,11 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 				break;
 			}
 		}
+		reportSpend();
 		out(
-			`verdicts: real=${counts.real} not-real=${counts.notReal} unclear=${counts.unclear} unresolved=${counts.unresolved} single-family=${counts.singleFamily} cached=${counts.cached} deferred=${counts.deferred} errors=${counts.errors}`,
+			run.quiet
+				? `judge calls made: anthropic=${spend.anthropic} openai=${spend.openai}`
+				: `verdicts: real=${counts.real} not-real=${counts.notReal} unclear=${counts.unclear} unresolved=${counts.unresolved} single-family=${counts.singleFamily} cached=${counts.cached} deferred=${counts.deferred} errors=${counts.errors}`,
 		);
 		if (errorSamples.length > 0)
 			out(`error samples: ${errorSamples.join(" | ")}`);
@@ -428,6 +447,7 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 		if (counts.singleFamily > 0) out(SINGLE_FAMILY_NOTE);
 		return 0;
 	} catch (err) {
+		reportSpend();
 		if (err instanceof JudgeUnavailableError) {
 			out(`judge unavailable: ${err.message}`);
 			return 1;
