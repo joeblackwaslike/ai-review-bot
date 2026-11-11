@@ -154,3 +154,46 @@ describe("runAdjudication unavailable judge", () => {
 		expect(onSpend).toHaveBeenCalledWith({ anthropic: 0, openai: 0 });
 	});
 });
+
+describe("runAdjudication quiet with a cross-check", () => {
+	it("prints no line that reveals verdict counts, onSpend keeps the truth", async () => {
+		const { base, lines } = setup();
+		const titles = ["Alpha handler drops errors", "Beta cache never expires"];
+		const verdictFor = (title: string) =>
+			title.startsWith("Alpha")
+				? { verdict: "real" as const, scope: "change" as const, reason: "r" }
+				: { verdict: "not-real" as const, scope: null, reason: "n" };
+		const second = vi.fn(async () => ({
+			verdict: "real" as const,
+			scope: "change" as const,
+			reason: "r",
+		}));
+		const judges: AdjudicationJudges = {
+			verdictJudges: async () => ({
+				first: {
+					family: "anthropic",
+					model: "m",
+					run: async (input) => verdictFor(input.claim.title),
+				},
+				second: { family: "openai", model: "m2", run: second },
+			}),
+			auditJudges: async () => {
+				throw new Error("unused");
+			},
+		};
+		const onSpend = vi.fn();
+		await runAdjudication({
+			...base,
+			judges,
+			caps: { anthropic: 10, openai: 10 },
+			quiet: true,
+			onSpend,
+			candidates: () =>
+				titles.map((title, i) => ({ ...candidate, title, line: 2 + i * 0 })),
+		});
+		const text = lines.join("\n");
+		expect(text).toContain("judge calls made: anthropic=2");
+		expect(text).not.toMatch(/openai=|real|unclear|single-family/);
+		expect(onSpend).toHaveBeenCalledWith({ anthropic: 2, openai: 1 });
+	});
+});

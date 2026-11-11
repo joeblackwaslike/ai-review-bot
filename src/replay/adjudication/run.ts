@@ -432,19 +432,20 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 		reportSpend();
 		out(
 			run.quiet
-				? `judge calls made: anthropic=${spend.anthropic} openai=${spend.openai}`
+				? `judge calls made: anthropic=${spend.anthropic}`
 				: `verdicts: real=${counts.real} not-real=${counts.notReal} unclear=${counts.unclear} unresolved=${counts.unresolved} single-family=${counts.singleFamily} cached=${counts.cached} deferred=${counts.deferred} errors=${counts.errors}`,
 		);
 		if (errorSamples.length > 0)
 			out(`error samples: ${errorSamples.join(" | ")}`);
-		out(
-			`judge spend (calls, outside strategy cost): anthropic=${spend.anthropic} openai=${spend.openai}`,
-		);
+		if (!run.quiet)
+			out(
+				`judge spend (calls, outside strategy cost): anthropic=${spend.anthropic} openai=${spend.openai}`,
+			);
 		if (unavailableMessage !== null) {
 			out(`judge unavailable: ${unavailableMessage}`);
 			return 1;
 		}
-		if (counts.singleFamily > 0) out(SINGLE_FAMILY_NOTE);
+		if (counts.singleFamily > 0 && !run.quiet) out(SINGLE_FAMILY_NOTE);
 		return 0;
 	} catch (err) {
 		reportSpend();
