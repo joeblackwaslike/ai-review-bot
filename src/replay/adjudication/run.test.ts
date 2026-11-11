@@ -113,7 +113,11 @@ describe("runAdjudication hooks", () => {
 		const onSpend = vi.fn();
 		await runAdjudication({ ...base, onSpend });
 		expect(onSpend).toHaveBeenCalledTimes(1);
-		expect(onSpend).toHaveBeenCalledWith({ anthropic: 1, openai: 0 });
+		expect(onSpend).toHaveBeenCalledWith({
+			anthropic: 1,
+			openai: 0,
+			unjudgeable: expect.any(Array),
+		});
 	});
 
 	it("onSpend reports 0 when everything is cached", async () => {
@@ -121,7 +125,11 @@ describe("runAdjudication hooks", () => {
 		await runAdjudication(base);
 		const onSpend = vi.fn();
 		await runAdjudication({ ...base, onSpend });
-		expect(onSpend).toHaveBeenCalledWith({ anthropic: 0, openai: 0 });
+		expect(onSpend).toHaveBeenCalledWith({
+			anthropic: 0,
+			openai: 0,
+			unjudgeable: expect.any(Array),
+		});
 	});
 
 	it("quiet hides verdict counts", async () => {
@@ -152,7 +160,11 @@ describe("runAdjudication unavailable judge", () => {
 		});
 		expect(code).toBe(1);
 		expect(onSpend).toHaveBeenCalledTimes(1);
-		expect(onSpend).toHaveBeenCalledWith({ anthropic: 0, openai: 0 });
+		expect(onSpend).toHaveBeenCalledWith({
+			anthropic: 0,
+			openai: 0,
+			unjudgeable: expect.any(Array),
+		});
 	});
 });
 
@@ -195,7 +207,11 @@ describe("runAdjudication quiet with a cross-check", () => {
 		const text = lines.join("\n");
 		expect(text).toContain("judge calls made: anthropic=2");
 		expect(text).not.toMatch(/openai=|real|unclear|single-family/);
-		expect(onSpend).toHaveBeenCalledWith({ anthropic: 2, openai: 1 });
+		expect(onSpend).toHaveBeenCalledWith({
+			anthropic: 2,
+			openai: 1,
+			unjudgeable: expect.any(Array),
+		});
 	});
 });
 

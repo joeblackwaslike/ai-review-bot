@@ -450,11 +450,16 @@ precision's numerator and denominator.
   rule and the `single-family` marking are the phase 3 machinery unchanged. The producer family of a
   finding is its fixture's family. OpenAI-produced findings are judged by Anthropic models only.
 - The caps are totals for the whole command, not per fixture: each fixture's run is given what the
-  earlier ones left. `--plan` prints distinct candidates, cached, to judge and calls allowed, per
-  fixture and in total, and calls no model.
+  earlier ones left. `--plan` calls no model. For non-test fixtures it prints distinct candidates,
+  cached, candidates to judge and calls allowed; for test-split fixtures only the candidate count and
+  the Anthropic calls allowed.
 - It needs the same lock as `run` and `score`: a draft or unlocked plan is refused, so it cannot read
   results for a plan that is not binding. Test-split fixtures must be judged before `score --final`
   can use them, but judging must not leak how a strategy did on the test set. So for a test-split
-  fixture the command writes verdicts and prints only the number of calls made, never the real,
-  not-real or unclear counts. Tuning and validation fixtures print the full breakdown.
+  fixture the command writes verdicts and prints a single `verdicts recorded, details hidden until
+  score --final` line, never the real, not-real or unclear counts. Tuning and validation fixtures
+  print the per-fixture breakdown. The last line reports total Anthropic calls (all fixtures) and,
+  once a test fixture ran, withholds the OpenAI and deferred figures. The verdict cache and
+  `--adjudicate <id>` show cached verdicts regardless of split, so `--adjudicate` must not be run on a
+  test-split fixture before `score --final`.
 - Judge spend is its own line, outside the strategy cost comparison, as in section 7.

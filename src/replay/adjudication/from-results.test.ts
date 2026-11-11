@@ -29,11 +29,12 @@ const cell = (
 		strategy?: string;
 		stale?: boolean;
 		fixtureId?: string;
+		version?: string;
 	} = {},
 ): StoredCell => ({
 	key: {
 		strategy: o.strategy ?? "a",
-		version: "v1",
+		version: o.version ?? "v1",
 		fixtureId: o.fixtureId ?? "o/r#1",
 		round: o.round ?? 0,
 		trial: 0,
@@ -111,6 +112,8 @@ function setup(
 		posted?: boolean;
 		anthropicBoth?: boolean;
 		noTest?: boolean;
+		offPatch?: boolean;
+		cellVersion?: string;
 	} = {},
 ) {
 	const root = mkdtempSync(join(tmpdir(), "fr-"));
@@ -153,8 +156,15 @@ function setup(
 				cand("alpha finding about the retry loop here", 2),
 				cand("gamma real finding about the queue drain", 2),
 			],
-			{ fixtureId: "o/r#1" },
+			{ fixtureId: "o/r#1", version: opts.cellVersion },
 		),
+		...(opts.offPatch
+			? [
+					cell([cand("zeta finding in a file with no patch", 1, "other.ts")], {
+						fixtureId: "o/r#1",
+					}),
+				]
+			: []),
 		...(opts.noTest
 			? []
 			: [
@@ -204,6 +214,7 @@ function setup(
 		out: (s: string) => lines.push(s),
 		cacheDir: mkdtempSync(join(tmpdir(), "fr-cache-")),
 		judges,
+		registry: (name: string) => ({ name, version: "v1" }) as never,
 	};
 	return { base, lines, first, second };
 }
@@ -236,6 +247,33 @@ describe("runResultsAdjudication", () => {
 		expect(lines.join("\n")).toContain(
 			"total judge calls: anthropic=1 openai=0, unjudged (deferred by cap): 1",
 		);
+	});
+
+	it("counts only cap-deferred candidates, not ones that can never be judged", async () => {
+		const { base, lines } = setup({ offPatch: true });
+		await runResultsAdjudication({
+			...base,
+			caps: { anthropic: 10, openai: 0 },
+		});
+		expect(lines.join("\n")).toContain("not judged");
+		expect(lines.join("\n")).toContain("unjudged (deferred by cap): 0");
+	});
+
+	it("judges only cells at the registry's version", async () => {
+		const { base, first } = setup({ cellVersion: "v0" });
+		expect(await runResultsAdjudication(base)).toBe(0);
+		expect(first).toHaveBeenCalledTimes(3);
+	});
+
+	it("refuses when the registry version differs from the plan's", async () => {
+		const { base, lines, first } = setup();
+		const code = await runResultsAdjudication({
+			...base,
+			registry: (name: string) => ({ name, version: "v2" }) as never,
+		});
+		expect(code).toBe(1);
+		expect(lines.join("\n")).toContain("differs from the plan's v1");
+		expect(first).not.toHaveBeenCalled();
 	});
 
 	it("--plan builds no judge", async () => {

@@ -860,6 +860,7 @@ export async function runReplay(
 			plan: parsed.plan === true,
 			client: deps.client ?? ghCli(),
 			out,
+			registry: deps.experiment?.registry ?? getStrategy,
 			cacheDir: deps.adjudicationDir,
 			judges:
 				deps.adjudicationJudges ??

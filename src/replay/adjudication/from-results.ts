@@ -6,6 +6,7 @@ import { splitOf } from "../experiment/splits.js";
 import { ResultsStore, type StoredCell } from "../experiment/store.js";
 import type { GhClient } from "../gh.js";
 import { joinsClaim, labelledClaims } from "../metrics.js";
+import type { ReviewStrategy } from "../strategy.js";
 import { fixtureFamily, type LabelFile, type ReplayFixture } from "../types.js";
 import { isCurrentVerdict } from "./adjudicate.js";
 import { VerdictCache } from "./cache.js";
@@ -53,6 +54,7 @@ export async function runResultsAdjudication(args: {
 	out: (s: string) => void;
 	cacheDir?: string;
 	judges: AdjudicationRun["judges"];
+	registry: (name: string) => ReviewStrategy;
 }): Promise<number> {
 	const { out } = args;
 	let loaded: ReturnType<typeof loadPlan>;
@@ -78,17 +80,30 @@ export async function runResultsAdjudication(args: {
 		return 1;
 	}
 
+	const versions: Record<string, string> = {};
+	try {
+		for (const p of plan.strategies) {
+			const { version } = args.registry(p.name);
+			if (version !== p.version)
+				throw new Error(
+					`strategy ${p.name} version ${version} differs from the plan's ${p.version}`,
+				);
+			versions[p.name] = version;
+		}
+	} catch (err) {
+		out(err instanceof Error ? err.message : String(err));
+		return 1;
+	}
 	const { records, skipped } = new ResultsStore(
 		args.root,
 		planHash(plan),
-	).readAll(
-		Object.fromEntries(plan.strategies.map((s) => [s.name, s.version])),
-	);
+	).readAll(versions);
 	if (skipped > 0) out(`${skipped} unreadable result line(s) skipped`);
 
 	const cache = new VerdictCache<VerdictRecord>(args.cacheDir);
 	const spent = { anthropic: 0, openai: 0 };
 	const visible = { openai: 0, deferred: 0 };
+	let unjudgeable: string[] = [];
 	let testRan = false;
 	let total = 0;
 	let failed = false;
@@ -125,6 +140,7 @@ export async function runResultsAdjudication(args: {
 			out(
 				`fixture ${ref.id} (${splitFor(ref.id)} split): ${candidates.length} candidate(s)`,
 			);
+		unjudgeable = [];
 		const spend = { anthropic: 0, openai: 0 };
 		const code = await runAdjudication({
 			id: stem,
@@ -143,6 +159,7 @@ export async function runResultsAdjudication(args: {
 			onSpend: (s) => {
 				spend.anthropic += s.anthropic;
 				spend.openai += s.openai;
+				unjudgeable = s.unjudgeable;
 			},
 			quiet: hidden,
 		});
@@ -168,8 +185,12 @@ export async function runResultsAdjudication(args: {
 			visible.openai += spend.openai;
 			const snapshot = snapshotId(fixture);
 			const models = possibleFirstModels(fixtureFamily(fixture));
+			const never = new Set(unjudgeable);
 			for (const key of new Set(candidates.map((c) => claimKey(c))))
-				if (!isCurrentVerdict(cache.get(snapshot, key), models))
+				if (
+					!never.has(key) &&
+					!isCurrentVerdict(cache.get(snapshot, key), models)
+				)
 					visible.deferred++;
 		}
 		if (code !== 0) {

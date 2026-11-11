@@ -60,7 +60,11 @@ export interface AdjudicationRun {
 		fixture: ReplayFixture,
 		labels: LabelFile,
 	) => AdjudicationCandidate[];
-	onSpend?: (spend: { anthropic: number; openai: number }) => void;
+	onSpend?: (spend: {
+		anthropic: number;
+		openai: number;
+		unjudgeable: string[];
+	}) => void;
 	quiet?: boolean;
 }
 
@@ -207,7 +211,7 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 	const reportSpend = () => {
 		if (run.plan || run.audit || spendReported) return;
 		spendReported = true;
-		run.onSpend?.({ ...spend });
+		run.onSpend?.({ ...spend, unjudgeable: [...skipped.keys()] });
 	};
 
 	const { fetchDiff } = buildLiveWiring(fixture, run.client);

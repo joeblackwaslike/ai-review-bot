@@ -54,10 +54,16 @@ Convergence is averaged over complete chains only, and the report line says so.
 - `ai-review replay --adjudicate-results [--plan-file <path>] [--max-anthropic <n>] [--max-openai <n>] [--plan]`
   reads the stored cells of a locked, non-draft plan (stale cells ignored) and gives a blind verdict to
   every distinct finding a strategy posted that no labelled claim covers, cached per fixture snapshot
-  like `--adjudicate`. The caps are totals across all fixtures, not per fixture; the last line reports
-  the judge calls made and how many findings the cap left unjudged. A test-split fixture is judged
-  without printing verdict counts, so the run does not reveal test results before `score --final`.
-  `--plan` prints the candidate counts and builds no judge.
+  like `--adjudicate`. The caps are totals across all fixtures, not per fixture. A non-plan run prints
+  the per-fixture verdict breakdown for non-test fixtures and a single `verdicts recorded, details
+  hidden until score --final` line for each test-split fixture. The last line reports the total
+  Anthropic calls (all fixtures); once a test fixture ran, it withholds the OpenAI and deferred
+  figures. `--plan` builds no judge and prints, for non-test fixtures, the distinct candidates,
+  cached, candidates to judge and calls allowed; for test-split fixtures it prints only the candidate
+  count and the Anthropic calls allowed.
+  The verdict cache files, and `--adjudicate <id>`, print cached verdicts regardless of split, so a
+  test-split fixture with saved traces would be visible there. Do not run `--adjudicate` on a
+  test-split fixture before `score --final`.
 
 `run` exits 0 only when the grid is complete, 3 when it is partial (a provider cap, a per-cell cap, a
 round without a checkout), and 1 when a cell failed. A cell whose strategy threw is charged at its
