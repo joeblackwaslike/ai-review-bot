@@ -13,12 +13,20 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("./adjudication/from-results.js", async (orig) => {
+	const actual = await orig<typeof import("./adjudication/from-results.js")>();
+	return {
+		...actual,
+		runResultsAdjudication: vi.fn(actual.runResultsAdjudication),
+	};
+});
 vi.mock("./run-strategy.js", () => ({
 	runStrategy: (s: { run: (i: unknown) => unknown }, i: unknown) => s.run(i),
 }));
 
 import { getConfigTree, resetConfigForTests } from "../config/load.js";
 import { VerdictCache } from "./adjudication/cache.js";
+import { runResultsAdjudication } from "./adjudication/from-results.js";
 import { PROMPT_HASH, possibleFirstModels } from "./adjudication/judge.js";
 import type { AdjudicationJudges } from "./adjudication/run.js";
 import { claimKey, snapshotId } from "./adjudication/snapshot.js";
@@ -1486,6 +1494,9 @@ describe("runReplay --adjudicate", () => {
 		);
 		expect(code).toBe(1);
 		expect(lines.join("\n")).toContain("marked draft");
+		expect(vi.mocked(runResultsAdjudication)).toHaveBeenLastCalledWith(
+			expect.objectContaining({ caps: { anthropic: 40, openai: 0 } }),
+		);
 	});
 
 	it("exits 1 when the fixture is missing", async () => {

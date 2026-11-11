@@ -105,12 +105,28 @@ const client: GhClient = {
 };
 
 function setup(
-	opts: { draft?: boolean; lock?: boolean | "wrong"; posted?: boolean } = {},
+	opts: {
+		draft?: boolean;
+		lock?: boolean | "wrong";
+		posted?: boolean;
+		anthropicBoth?: boolean;
+		noTest?: boolean;
+	} = {},
 ) {
 	const root = mkdtempSync(join(tmpdir(), "fr-"));
 	const fixturesDir = join(root, "fixtures");
 	mkdirSync(fixturesDir);
-	const plan = { ...samplePlan(), draft: opts.draft ? true : undefined };
+	const sample = samplePlan();
+	const plan = {
+		...sample,
+		draft: opts.draft ? true : undefined,
+		fixtures: sample.fixtures
+			.filter((f) => !(opts.noTest && f.split === "test"))
+			.map((f) => ({
+				...f,
+				provider: opts.anthropicBoth ? ("anthropic" as const) : f.provider,
+			})),
+	};
 	const planFile = join(root, "plan.json");
 	writeFileSync(planFile, JSON.stringify(plan));
 	const hash = planHash(plan as never);
@@ -130,32 +146,49 @@ function setup(
 		writeFileSync(join(fixturesDir, `${stem}.labels.json`), JSON.stringify(l));
 	};
 	mk(1, "anthropic");
-	mk(2, "openai");
+	mk(2, opts.anthropicBoth ? "anthropic" : "openai");
 	const records = [
-		cell([cand("alpha finding about the retry loop here", 2)], {
-			fixtureId: "o/r#1",
-		}),
-		{
-			...cell([cand("beta finding about the cache key here", 2)], {
-				fixtureId: "o/r#2",
-			}),
-			provider: "openai" as const,
-		},
+		cell(
+			[
+				cand("alpha finding about the retry loop here", 2),
+				cand("gamma real finding about the queue drain", 2),
+			],
+			{ fixtureId: "o/r#1" },
+		),
+		...(opts.noTest
+			? []
+			: [
+					cell(
+						[
+							cand("beta finding about the cache key here", 2),
+							cand("delta real finding about the lock order", 2),
+							cand("epsilon finding about the log format", 2),
+						],
+						{ fixtureId: "o/r#2" },
+					),
+				]),
 	];
 	if (opts.posted !== false)
 		writeFileSync(
 			join(store, "results.jsonl"),
 			records.map((r) => JSON.stringify(r)).join("\n"),
 		);
-	const first = vi.fn(async () => ({
+	const first = vi.fn(async (input: { claim: { title: string } }) => ({
+		verdict: input.claim.title.includes("real")
+			? ("real" as const)
+			: ("not-real" as const),
+		scope: null,
+		reason: "r",
+	}));
+	const second = vi.fn(async () => ({
 		verdict: "real" as const,
 		scope: null,
 		reason: "r",
 	}));
 	const judges: AdjudicationJudges = {
 		verdictJudges: async () => ({
-			first: { family: "openai", model: "m", run: first },
-			second: null,
+			first: { family: "anthropic", model: "m", run: first },
+			second: { family: "openai", model: "m2", run: second },
 		}),
 		auditJudges: async () => {
 			throw new Error("unused");
@@ -172,7 +205,7 @@ function setup(
 		cacheDir: mkdtempSync(join(tmpdir(), "fr-cache-")),
 		judges,
 	};
-	return { base, lines, first };
+	return { base, lines, first, second };
 }
 
 describe("runResultsAdjudication", () => {
@@ -220,12 +253,97 @@ describe("runResultsAdjudication", () => {
 		expect(lines.join("\n")).toContain("no model is called");
 	});
 
-	it("prints no verdict counts for a test-split fixture", async () => {
-		const { base, lines } = setup();
-		await runResultsAdjudication(base);
-		const text = lines.join("\n");
-		expect(text).toMatch(/real=1/);
-		expect(text.match(/\sreal=/g)).toHaveLength(1);
-		expect(text).toContain("judge calls made");
+	it("withholds every detail of a test-split fixture", async () => {
+		const { base, lines, second } = setup({ anthropicBoth: true });
+		const code = await runResultsAdjudication({
+			...base,
+			caps: { anthropic: 10, openai: 5 },
+		});
+		expect(code).toBe(0);
+		const i = lines.findIndex((l) => l.includes("(test split)"));
+		expect(i).toBeGreaterThan(-1);
+		expect(lines[i]).toBe(
+			"fixture o/r#2 (test split): verdicts recorded, details hidden until score --final",
+		);
+		const after = lines.slice(i + 1);
+		expect(after).toHaveLength(1);
+		expect(after[0]).toMatch(/^total judge calls: anthropic=5 openai=1,/);
+		expect(after[0]).toContain(
+			"(test-split openai calls and deferred counts withheld)",
+		);
+		const afterTuning = lines.slice(0, i).join("\n");
+		expect(afterTuning).toContain("real=");
+		expect(second).toHaveBeenCalledTimes(2);
+		const text = lines.slice(i).join("\n");
+		for (const word of [
+			"single-family",
+			"upgrad",
+			"unclear",
+			"producer model",
+			"not judged",
+			"real=",
+		])
+			expect(text).not.toContain(word);
+	});
+
+	it("records test-split verdicts in the cache", async () => {
+		const { base, first } = setup({ anthropicBoth: true });
+		const caps = { anthropic: 10, openai: 5 };
+		await runResultsAdjudication({ ...base, caps });
+		expect(first).toHaveBeenCalledTimes(5);
+		await runResultsAdjudication({ ...base, caps });
+		expect(first).toHaveBeenCalledTimes(5);
+	});
+
+	it("prints the same for a tuning fixture whether or not a test fixture follows", async () => {
+		const withTest = setup({ anthropicBoth: true });
+		const without = setup({ anthropicBoth: true, noTest: true });
+		const caps = { anthropic: 10, openai: 5 };
+		await runResultsAdjudication({ ...withTest.base, caps });
+		await runResultsAdjudication({ ...without.base, caps });
+		const tuning = (ls: string[]) =>
+			ls.slice(
+				0,
+				ls.findIndex((l) => l.startsWith("total judge calls")),
+			);
+		const a = tuning(withTest.lines);
+		const b = tuning(without.lines);
+		expect(a.slice(0, b.length)).toEqual(b);
+	});
+
+	it("processes the test split last and lets it share the caps", async () => {
+		const { base, lines } = setup({ anthropicBoth: true });
+		await runResultsAdjudication({
+			...base,
+			caps: { anthropic: 2, openai: 0 },
+		});
+		const t = lines.findIndex((l) => l.includes("(test split)"));
+		const v = lines.findIndex((l) => l.startsWith("fixture o/r#1"));
+		expect(v).toBeLessThan(t);
+		expect(lines.join("\n")).toContain("anthropic=2 openai=0");
+	});
+
+	it("--plan prints only candidate and anthropic figures for a test fixture", async () => {
+		const { base, lines } = setup({ anthropicBoth: true });
+		await runResultsAdjudication({
+			...base,
+			plan: true,
+			caps: { anthropic: 10, openai: 5 },
+		});
+		const i = lines.findIndex((l) => l.startsWith("fixture o/r#2"));
+		const test = lines.slice(i);
+		expect(
+			test.some((l) => l.includes("distinct unmatched candidates: 3")),
+		).toBe(true);
+		expect(test.some((l) => l.startsWith("anthropic calls allowed"))).toBe(
+			true,
+		);
+		for (const word of [
+			"cached",
+			"candidates to judge",
+			"openai calls",
+			"upgrad",
+		])
+			expect(test.join("\n")).not.toContain(word);
 	});
 });

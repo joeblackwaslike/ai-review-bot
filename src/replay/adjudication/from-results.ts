@@ -88,10 +88,16 @@ export async function runResultsAdjudication(args: {
 
 	const cache = new VerdictCache<VerdictRecord>(args.cacheDir);
 	const spent = { anthropic: 0, openai: 0 };
-	let deferred = 0;
+	const visible = { openai: 0, deferred: 0 };
+	let testRan = false;
 	let total = 0;
 	let failed = false;
-	for (const ref of plan.fixtures) {
+	const splitFor = (id: string) => splitOf(id, plan.seed);
+	const ordered = [
+		...plan.fixtures.filter((f) => splitFor(f.id) !== "test"),
+		...plan.fixtures.filter((f) => splitFor(f.id) === "test"),
+	];
+	for (const ref of ordered) {
 		const m = ref.id.match(/^([^/]+)\/([^#]+)#(\d+)(?:@\w+)?$/);
 		if (!m) continue;
 		const stem = `${m[1]}__${m[2]}__${m[3]}__${ref.provider}`;
@@ -110,10 +116,16 @@ export async function runResultsAdjudication(args: {
 		const candidates = postedCandidates(cells, fixture, labels);
 		if (candidates.length === 0) continue;
 		total += candidates.length;
-		const split = splitOf(ref.id, plan.seed);
-		out(
-			`fixture ${ref.id} (${split} split): ${candidates.length} candidate(s)`,
-		);
+		const hidden = splitFor(ref.id) === "test";
+		if (hidden) testRan = true;
+		const planLines: string[] = [];
+		if (args.plan && hidden)
+			out(`fixture ${ref.id} (test split): ${candidates.length} candidate(s)`);
+		else if (!hidden)
+			out(
+				`fixture ${ref.id} (${splitFor(ref.id)} split): ${candidates.length} candidate(s)`,
+			);
+		const spend = { anthropic: 0, openai: 0 };
 		const code = await runAdjudication({
 			id: stem,
 			dir: args.fixturesDir,
@@ -124,22 +136,42 @@ export async function runResultsAdjudication(args: {
 			plan: args.plan,
 			audit: false,
 			client: args.client,
-			out,
+			out: hidden ? (l) => planLines.push(l) : out,
 			cacheDir: args.cacheDir,
 			judges: args.judges,
 			candidates: () => candidates,
 			onSpend: (s) => {
-				spent.anthropic += s.anthropic;
-				spent.openai += s.openai;
+				spend.anthropic += s.anthropic;
+				spend.openai += s.openai;
 			},
-			quiet: split === "test",
+			quiet: hidden,
 		});
-		if (args.plan) continue;
-		const snapshot = snapshotId(fixture);
-		const models = possibleFirstModels(fixtureFamily(fixture));
-		const keys = new Set(candidates.map((c) => claimKey(c)));
-		for (const key of keys)
-			if (!isCurrentVerdict(cache.get(snapshot, key), models)) deferred++;
+		if (args.plan) {
+			if (hidden)
+				for (const l of planLines)
+					if (
+						l.startsWith("distinct unmatched candidates") ||
+						l.startsWith("anthropic calls allowed")
+					)
+						out(l);
+			continue;
+		}
+		spent.anthropic += spend.anthropic;
+		spent.openai += spend.openai;
+		if (hidden) {
+			out(
+				code === 0
+					? `fixture ${ref.id} (test split): verdicts recorded, details hidden until score --final`
+					: `fixture ${ref.id} (test split): adjudication failed, details hidden until score --final`,
+			);
+		} else {
+			visible.openai += spend.openai;
+			const snapshot = snapshotId(fixture);
+			const models = possibleFirstModels(fixtureFamily(fixture));
+			for (const key of new Set(candidates.map((c) => claimKey(c))))
+				if (!isCurrentVerdict(cache.get(snapshot, key), models))
+					visible.deferred++;
+		}
 		if (code !== 0) {
 			failed = true;
 			break;
@@ -148,7 +180,7 @@ export async function runResultsAdjudication(args: {
 	out(
 		args.plan
 			? `total distinct candidates across fixtures: ${total}`
-			: `total judge calls: anthropic=${spent.anthropic} openai=${spent.openai}, unjudged (deferred by cap): ${deferred}`,
+			: `total judge calls: anthropic=${spent.anthropic} openai=${visible.openai}, unjudged (deferred by cap): ${visible.deferred}${testRan ? " (test-split openai calls and deferred counts withheld)" : ""}`,
 	);
 	return failed ? 1 : 0;
 }
