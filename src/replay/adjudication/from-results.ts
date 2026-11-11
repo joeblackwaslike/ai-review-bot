@@ -123,10 +123,22 @@ export async function runResultsAdjudication(args: {
 			failed = true;
 			continue;
 		}
-		const fixture = JSON.parse(
-			await readFile(fixturePath, "utf8"),
-		) as ReplayFixture;
-		const labels = JSON.parse(await readFile(labelsPath, "utf8")) as LabelFile;
+		let fixture: ReplayFixture;
+		let labels: LabelFile;
+		try {
+			fixture = JSON.parse(
+				await readFile(fixturePath, "utf8"),
+			) as ReplayFixture;
+			labels = JSON.parse(await readFile(labelsPath, "utf8")) as LabelFile;
+		} catch (err) {
+			out(
+				splitFor(ref.id) === "test"
+					? `cannot read fixture/labels for ${ref.id}`
+					: `cannot read fixture/labels for ${ref.id}: ${err instanceof Error ? err.message : String(err)}`,
+			);
+			failed = true;
+			continue;
+		}
 		const cells = records.filter((r) => r.key.fixtureId === ref.id);
 		const candidates = postedCandidates(cells, fixture, labels);
 		if (candidates.length === 0) continue;

@@ -276,6 +276,25 @@ describe("runResultsAdjudication", () => {
 		expect(first).not.toHaveBeenCalled();
 	});
 
+	it("reports an unreadable fixture, keeps going and still prints the total", async () => {
+		const { base, lines, first } = setup();
+		writeFileSync(join(base.fixturesDir, "o__r__1__anthropic.json"), "{trunc");
+		const code = await runResultsAdjudication(base);
+		expect(code).toBe(1);
+		const text = lines.join("\n");
+		expect(text).toMatch(/cannot read fixture\/labels for o\/r#1: .+/);
+		expect(first).toHaveBeenCalledTimes(3);
+		expect(text).toContain("total judge calls: anthropic=3");
+	});
+
+	it("prints no error text for an unreadable test-split fixture", async () => {
+		const { base, lines } = setup();
+		writeFileSync(join(base.fixturesDir, "o__r__2__openai.json"), "{trunc");
+		expect(await runResultsAdjudication(base)).toBe(1);
+		expect(lines).toContain("cannot read fixture/labels for o/r#2");
+		expect(lines.join("\n")).toContain("total judge calls");
+	});
+
 	it("--plan builds no judge", async () => {
 		const { base, lines } = setup();
 		const judges = vi.fn(async () => {
