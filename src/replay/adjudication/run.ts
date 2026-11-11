@@ -88,6 +88,8 @@ function lineShown(numbered: string, line: number | null): boolean {
 	return line <= lastShown;
 }
 
+const QUIET_UNAVAILABLE = "judging stopped: a judge was unavailable";
+
 const SINGLE_FAMILY_NOTE = "single-family verdicts have no second-model check";
 
 const zero = (): AdjudicationCounts => ({
@@ -435,14 +437,18 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 				? `judge calls made: anthropic=${spend.anthropic}`
 				: `verdicts: real=${counts.real} not-real=${counts.notReal} unclear=${counts.unclear} unresolved=${counts.unresolved} single-family=${counts.singleFamily} cached=${counts.cached} deferred=${counts.deferred} errors=${counts.errors}`,
 		);
-		if (errorSamples.length > 0)
+		if (errorSamples.length > 0 && !run.quiet)
 			out(`error samples: ${errorSamples.join(" | ")}`);
 		if (!run.quiet)
 			out(
 				`judge spend (calls, outside strategy cost): anthropic=${spend.anthropic} openai=${spend.openai}`,
 			);
 		if (unavailableMessage !== null) {
-			out(`judge unavailable: ${unavailableMessage}`);
+			out(
+				run.quiet
+					? QUIET_UNAVAILABLE
+					: `judge unavailable: ${unavailableMessage}`,
+			);
 			return 1;
 		}
 		if (counts.singleFamily > 0 && !run.quiet) out(SINGLE_FAMILY_NOTE);
@@ -450,11 +456,13 @@ export async function runAdjudication(run: AdjudicationRun): Promise<number> {
 	} catch (err) {
 		reportSpend();
 		if (err instanceof JudgeUnavailableError) {
-			out(`judge unavailable: ${err.message}`);
+			out(run.quiet ? QUIET_UNAVAILABLE : `judge unavailable: ${err.message}`);
 			return 1;
 		}
 		out(
-			`adjudication failed: ${err instanceof Error ? err.message : String(err)}`,
+			run.quiet
+				? "adjudication failed"
+				: `adjudication failed: ${err instanceof Error ? err.message : String(err)}`,
 		);
 		return 1;
 	}

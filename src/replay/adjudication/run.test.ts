@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { GhClient } from "../gh.js";
 import type { LabelFile, ReplayFixture } from "../types.js";
+import { JudgeUnavailableError } from "./adjudicate.js";
 import {
 	type AdjudicationCandidate,
 	type AdjudicationJudges,
@@ -195,5 +196,59 @@ describe("runAdjudication quiet with a cross-check", () => {
 		expect(text).toContain("judge calls made: anthropic=2");
 		expect(text).not.toMatch(/openai=|real|unclear|single-family/);
 		expect(onSpend).toHaveBeenCalledWith({ anthropic: 2, openai: 1 });
+	});
+});
+
+describe("runAdjudication quiet hides judge errors", () => {
+	const run = async (secondError: Error) => {
+		const { base, lines } = setup();
+		const judges: AdjudicationJudges = {
+			verdictJudges: async () => ({
+				first: {
+					family: "anthropic",
+					model: "m",
+					run: async () => ({
+						verdict: "real" as const,
+						scope: "change" as const,
+						reason: "r",
+					}),
+				},
+				second: {
+					family: "openai",
+					model: "m2",
+					run: async () => {
+						throw secondError;
+					},
+				},
+			}),
+			auditJudges: async () => {
+				throw new Error("unused");
+			},
+		};
+		const onSpend = vi.fn();
+		const code = await runAdjudication({
+			...base,
+			judges,
+			caps: { anthropic: 10, openai: 10 },
+			quiet: true,
+			onSpend,
+		});
+		return { code, text: lines.join("\n"), onSpend };
+	};
+
+	it("hides a normal second-judge error", async () => {
+		const { text, onSpend } = await run(new Error("secret-boom"));
+		expect(text).not.toMatch(/secret-boom|error samples/);
+		expect(onSpend).toHaveBeenCalledTimes(1);
+	});
+
+	it("hides a JudgeUnavailableError message and keeps exit 1", async () => {
+		const { code, text, onSpend } = await run(
+			new JudgeUnavailableError("secret-down"),
+		);
+		expect(code).toBe(1);
+		expect(text).not.toMatch(/secret-down|error samples/);
+		expect(text).toContain("judging stopped: a judge was unavailable");
+		expect(onSpend).toHaveBeenCalledTimes(1);
 	});
 });
