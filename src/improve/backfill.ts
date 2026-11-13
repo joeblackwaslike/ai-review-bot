@@ -1,12 +1,8 @@
 import { getConfigTree } from "../config/load.js";
 import type { Config } from "../config/schema.js";
-import type { ReviewerId } from "../reviewer-id.js";
+import { legacyProviderOf, type ReviewerId } from "../reviewer-id.js";
 import type { Db } from "./db/client.js";
-import {
-	identityColumns,
-	insertRawFeedback,
-	upsertFinding,
-} from "./db/repo.js";
+import { insertRawFeedback, upsertFinding } from "./db/repo.js";
 import { findingNaturalKey, parseFindingComment } from "./findings.js";
 
 export interface BackfillOctokit {
@@ -259,7 +255,7 @@ export async function backfillPr(
 	};
 
 	for (const comment of findings) {
-		const identity = identityColumns(botLogins[comment.user?.login ?? ""]);
+		const reviewer = botLogins[comment.user?.login ?? ""];
 		const parsed = parseFindingComment(comment.body);
 		if (!parsed) {
 			result.unparseable++;
@@ -267,7 +263,7 @@ export async function backfillPr(
 		}
 
 		await upsertFinding(deps.db, {
-			...identity,
+			reviewer,
 			owner,
 			repo,
 			pr,
@@ -285,7 +281,7 @@ export async function backfillPr(
 			headSha: comment.original_commit_id ?? comment.commit_id ?? "unknown",
 			postedAt: parseTimestamp(comment.created_at),
 			naturalKey: findingNaturalKey({
-				provider: identity.provider,
+				provider: legacyProviderOf(reviewer),
 				owner,
 				repo,
 				pr,
@@ -308,7 +304,7 @@ export async function backfillPr(
 			const actor = reaction.user?.login ?? "unknown";
 			result.reactions += await insertRawFeedback(deps.db, {
 				source: "inline_reaction",
-				...identity,
+				reviewer,
 				owner,
 				repo,
 				pr,
@@ -338,10 +334,9 @@ export async function backfillPr(
 		// silently misattributing another reviewer's thread to us.
 		const parentReviewer = botLogins[parent?.user?.login ?? ""];
 		if (!parentReviewer) continue;
-		const identity = identityColumns(parentReviewer);
 		result.replies += await insertRawFeedback(deps.db, {
 			source: "inline_reply",
-			...identity,
+			reviewer: parentReviewer,
 			owner,
 			repo,
 			pr,
@@ -383,10 +378,9 @@ export async function backfillPr(
 		if (isBotLogin(login)) continue;
 		const attributed = attributeProviderForComment(activeReviewers, ic.body);
 		if (!attributed) continue;
-		const identity = identityColumns(attributed);
 		result.prComments += await insertRawFeedback(deps.db, {
 			source: "pr_comment",
-			...identity,
+			reviewer: attributed,
 			owner,
 			repo,
 			pr,

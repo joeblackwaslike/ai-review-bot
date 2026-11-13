@@ -4,7 +4,7 @@ import type { FindingInsert, RawFeedbackInsert } from "./repo.js";
  * real-Postgres integration test so the two exercise identical inputs. */
 export const baseRaw: RawFeedbackInsert = {
 	source: "inline_reaction",
-	provider: "anthropic",
+	reviewer: "claude",
 	owner: "joeblackwaslike",
 	repo: "ai-review-bot",
 	pr: 7,
@@ -23,7 +23,7 @@ export const baseRaw: RawFeedbackInsert = {
 };
 
 export const baseFinding: FindingInsert = {
-	provider: "anthropic",
+	reviewer: "claude",
 	owner: "joeblackwaslike",
 	repo: "ai-review-bot",
 	pr: 7,

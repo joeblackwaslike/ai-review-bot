@@ -1,11 +1,9 @@
 import { sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import type { Db } from "./client.js";
-import { loadMigrationStatements } from "./migrate.js";
 import { baseFinding, baseRaw } from "./repo.fixtures.js";
 import {
 	type DiscardInsert,
-	identityColumns,
 	insertDiscards,
 	insertRawFeedback,
 	listFindingsForPr,
@@ -116,7 +114,7 @@ describe("upsertFinding", () => {
 });
 
 const baseDiscard: DiscardInsert = {
-	provider: "anthropic",
+	reviewer: "claude",
 	owner: "o",
 	repo: "r",
 	pr: 1,
@@ -198,129 +196,54 @@ describe("insertDiscards", () => {
 	});
 });
 
-describe("reviewer identity columns", () => {
-	it("identityColumns maps claude and codex to the legacy provider and passes other ids through", () => {
-		expect(identityColumns("claude")).toEqual({
-			reviewer: "claude",
-			provider: "anthropic",
-		});
-		expect(identityColumns("codex")).toEqual({
-			reviewer: "codex",
-			provider: "openai",
-		});
-		expect(identityColumns("gemini")).toEqual({
-			reviewer: "gemini",
-			provider: "gemini",
-		});
-	});
-
-	it("new writes store reviewer and the legacy provider", async () => {
+describe("reviewer identity column", () => {
+	it("stores the reviewer and listFindingsForPr reads it back unchanged", async () => {
 		const db = await createTestDb();
 		await upsertFinding(db, {
 			...baseFinding,
-			...identityColumns("claude"),
+			reviewer: "claude",
 			naturalKey: "k-claude",
 		});
 		await upsertFinding(db, {
 			...baseFinding,
-			...identityColumns("gemini"),
+			reviewer: "gemini",
 			naturalKey: "k-gemini",
 		});
-		const r = await db.execute(
-			sql`select reviewer, provider from finding_catalog order by natural_key`,
-		);
-		expect(r.rows).toEqual([
-			{ reviewer: "claude", provider: "anthropic" },
-			{ reviewer: "gemini", provider: "gemini" },
-		]);
-	});
-
-	it("provider accepts a value outside the old enum", async () => {
-		const db = await createTestDb();
-		const inserted = await insertRawFeedback(db, {
-			...baseRaw,
-			...identityColumns("gemini"),
-		});
-		expect(inserted).toBe(1);
-	});
-
-	it("an old-shape row inserted after the backfill (provider only, reviewer NULL) is read back as claude", async () => {
-		const db = await createTestDb();
-		await upsertFinding(db, { ...baseFinding, provider: "anthropic" });
-		const raw = await db.execute(sql`select reviewer from finding_catalog`);
-		expect(raw.rows).toEqual([{ reviewer: null }]);
 		const rows = await listFindingsForPr(
 			db,
 			baseFinding.owner,
 			baseFinding.repo,
 			baseFinding.pr,
 		);
-		expect(rows.map((r) => r.reviewer)).toEqual(["claude"]);
+		expect(rows.map((r) => r.reviewer)).toEqual(["claude", "gemini"]);
 	});
 
-	it("reads map an old-shape openai row to codex and keep an old-shape custom provider as is", async () => {
+	it("a row without a provider inserts, and no provider column or enum remains", async () => {
 		const db = await createTestDb();
-		await upsertFinding(db, {
-			...baseFinding,
-			provider: "openai",
-			naturalKey: "k1",
-		});
-		await upsertFinding(db, {
-			...baseFinding,
-			provider: "gemini",
-			naturalKey: "k2",
-		});
-		const rows = await listFindingsForPr(
-			db,
-			baseFinding.owner,
-			baseFinding.repo,
-			baseFinding.pr,
-		);
-		expect(rows.map((r) => r.reviewer)).toEqual(["codex", "gemini"]);
+		expect(
+			await insertRawFeedback(db, { ...baseRaw, reviewer: "gemini" }),
+		).toBe(1);
+		await expect(
+			db.execute(sql`select provider from raw_feedback`),
+		).rejects.toThrow();
+		await expect(
+			db.execute(sql`select 'anthropic'::provider`),
+		).rejects.toThrow();
 	});
 
-	it("backfill statements set reviewer on pre-existing rows", async () => {
+	it("a row with no reviewer is rejected", async () => {
 		const db = await createTestDb();
-		for (const [i, provider] of ["anthropic", "openai", "gemini"].entries()) {
-			await db.execute(sql`
-				insert into finding_catalog
-				  (provider, owner, repo, pr, skills, title, head_sha, posted_at, natural_key)
-				values
-				  (${provider}, 'o', 'r', 1, '{}', 't', 'sha', now(), ${`nk${i}`})
-			`);
-			await db.execute(sql`
-				insert into raw_feedback
-				  (source, provider, owner, repo, pr, actor, event_at, dedup_key)
-				values
-				  ('inline_reaction', ${provider}, 'o', 'r', 1, 'a', now(), ${`dk${i}`})
-			`);
-		}
-		for (const stmt of loadMigrationStatements().filter((s) =>
-			/^UPDATE/i.test(s),
-		)) {
-			await db.execute(sql.raw(stmt));
-		}
-		for (const table of ["finding_catalog", "raw_feedback"]) {
-			const r = await db.execute(
-				sql.raw(`select provider, reviewer from ${table} order by id`),
-			);
-			expect(r.rows).toEqual([
-				{ provider: "anthropic", reviewer: "claude" },
-				{ provider: "openai", reviewer: "codex" },
-				{ provider: "gemini", reviewer: "gemini" },
-			]);
-		}
-	});
-
-	it("keeps the legacy provider enum type after the expand migration", async () => {
-		const db = await createTestDb();
-		const r = await db.execute(sql`select 'anthropic'::provider as p`);
-		expect(r.rows).toEqual([{ p: "anthropic" }]);
+		await expect(
+			db.execute(sql`
+				insert into raw_feedback (source, owner, repo, pr, actor, event_at, dedup_key)
+				values ('inline_reaction', 'o', 'r', 1, 'a', now(), 'k')
+			`),
+		).rejects.toThrow();
 	});
 
 	it("discards: the same reviewer twice yields one row, and a second reviewer with a different natural key yields a second row", async () => {
 		const db = await createTestDb();
-		const row = { ...baseDiscard, provider: "shared" };
+		const row = baseDiscard;
 		await insertDiscards(db, [{ ...row, reviewer: "alpha" }]);
 		await insertDiscards(db, [{ ...row, reviewer: "alpha" }]);
 		let r = await db.execute(

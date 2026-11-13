@@ -26,7 +26,7 @@ describe("mapKvEventToRaw", () => {
 	it("carries the verdict and provenance through unchanged", () => {
 		expect(mapKvEventToRaw(event())).toMatchObject({
 			source: "inline_reaction",
-			provider: "anthropic",
+			reviewer: "claude",
 			commentId: 101,
 			verdict: "confused",
 			actor: "joeblackwaslike",
@@ -125,7 +125,7 @@ describe("legacy events queued before the reviewer field", () => {
 		return JSON.stringify({ ...rest, ...over });
 	}
 
-	it("writes provider and reviewer for events carrying only provider, and skips events with neither", async () => {
+	it("writes only reviewer for events carrying only provider, and skips events with neither", async () => {
 		const written: Record<string, unknown>[] = [];
 		const db = {
 			insert: () => ({
@@ -146,10 +146,8 @@ describe("legacy events queued before the reviewer field", () => {
 		} as never;
 		const { drainKvEvents } = await import("./drain.js");
 		const result = await drainKvEvents({ kv, db });
-		expect(written.map((r) => [r.provider, r.reviewer])).toEqual([
-			["anthropic", "claude"],
-			["openai", "codex"],
-		]);
+		expect(written.map((r) => r.reviewer)).toEqual(["claude", "codex"]);
+		expect(written.every((r) => !("provider" in r))).toBe(true);
 		expect(result).toMatchObject({ read: 3, inserted: 2, malformed: 1 });
 	});
 });

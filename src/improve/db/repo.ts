@@ -1,5 +1,4 @@
 import { eq, sql } from "drizzle-orm";
-import { legacyProviderOf, type ReviewerId } from "../../reviewer-id.js";
 import type { CatalogFinding } from "../catalog-finding.js";
 import type { FindingOutcome } from "../trends.js";
 import type { Db } from "./client.js";
@@ -10,18 +9,6 @@ import {
 	qcRuns,
 	rawFeedback,
 } from "./schema.js";
-
-export function identityColumns(reviewer: ReviewerId): {
-	reviewer: string;
-	provider: string;
-} {
-	return { reviewer, provider: legacyProviderOf(reviewer) };
-}
-
-/** Reviewer id for a corpus row. Rows written by code that predates the
- * `reviewer` column carry only `provider`, so reads must never use `reviewer`
- * alone. */
-export const reviewerExpr = sql`coalesce(reviewer, case provider when 'anthropic' then 'claude' when 'openai' then 'codex' else provider end)`;
 
 export type RawFeedbackInsert = typeof rawFeedback.$inferInsert;
 export type DiscardInsert = typeof findingDiscards.$inferInsert;
@@ -236,7 +223,7 @@ export async function listFindingOutcomes(db: Db): Promise<FindingOutcome[]> {
 /** Every live (not backfilled) finding in the corpus, with or without a skill attribution. */
 export async function listLiveCatalog(db: Db): Promise<CatalogFinding[]> {
 	const result = await db.execute(sql`
-		select id, owner, repo, pr, ${reviewerExpr} as reviewer, comment_id, path, line,
+		select id, owner, repo, pr, reviewer, comment_id, path, line,
 		       title, skills, posted_at
 		from finding_catalog
 		where not backfilled
@@ -293,7 +280,7 @@ export async function listFindingsForPr(
 	}[]
 > {
 	const result = await db.execute(sql`
-		select id, ${reviewerExpr} as reviewer, comment_id, path, line, title, severity
+		select id, reviewer, comment_id, path, line, title, severity
 		from finding_catalog
 		where owner = ${owner} and repo = ${repo} and pr = ${pr}
 		order by id

@@ -4,7 +4,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadMigrationStatements } from "./migrate.js";
 import { baseFinding, baseRaw } from "./repo.fixtures.js";
 import {
-	identityColumns,
 	insertDiscards,
 	insertRawFeedback,
 	listFindingsForPr,
@@ -69,7 +68,7 @@ describe.skipIf(!url)("repo (real postgres)", () => {
 
 	it("insertDiscards inserts 0 rows on a duplicate unique key", async () => {
 		const row = {
-			provider: "anthropic" as const,
+			reviewer: "claude",
 			owner: "o",
 			repo: "r",
 			pr: 1,
@@ -90,7 +89,7 @@ describe.skipIf(!url)("repo (real postgres)", () => {
 
 	it("insertDiscards inserts one row per skill and none for a repeat", async () => {
 		const row = {
-			provider: "anthropic" as const,
+			reviewer: "claude",
 			owner: "o",
 			repo: "r",
 			pr: 2,
@@ -116,7 +115,7 @@ describe.skipIf(!url)("repo (real postgres)", () => {
 
 	it("insertDiscards inserts one row per line and none for a repeat", async () => {
 		const row = {
-			provider: "anthropic" as const,
+			reviewer: "claude",
 			owner: "o",
 			repo: "r",
 			pr: 3,
@@ -137,18 +136,18 @@ describe.skipIf(!url)("repo (real postgres)", () => {
 		expect(await insertDiscards(db, [{ ...row, line: null }])).toBe(0);
 	});
 
-	it("persists a custom reviewer and reads an old-shape row back through the coalesce", async () => {
+	it("persists a custom reviewer and reads it back", async () => {
 		await upsertFinding(db, {
 			...baseFinding,
-			...identityColumns("gemini"),
+			reviewer: "gemini",
 			pr: 9,
 			naturalKey: "k-gemini-9",
 		});
 		await upsertFinding(db, {
 			...baseFinding,
-			provider: "openai",
+			reviewer: "codex",
 			pr: 9,
-			naturalKey: "k-old-9",
+			naturalKey: "k-codex-9",
 		});
 		const rows = await listFindingsForPr(
 			db,
