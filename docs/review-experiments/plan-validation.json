@@ -1,0 +1,136 @@
+{
+	"draft": false,
+	"planVersion": 1,
+	"mode": "per-round",
+	"strategies": [
+		{
+			"name": "a",
+			"version": "56298c95497f"
+		},
+		{
+			"name": "a0",
+			"version": "0f38679f0407"
+		}
+	],
+	"models": {
+		"anthropic": "routed per round by src/router.ts",
+		"openai": "routed per round by src/router.ts"
+	},
+	"providers": ["anthropic"],
+	"budgets": {
+		"maxAnthropicUsd": 150,
+		"maxOpenAiUsd": 20,
+		"perCellUsd": 3,
+		"perCellWallMs": 210000
+	},
+	"trials": 1,
+	"seed": "review-experiments-2026-11",
+	"fixtures": [
+		{
+			"id": "joeblackwaslike/agent-skills#10@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/agent-skills#16@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/agent-skills#17@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/agent-skills#5@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-listings#53@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-listings#58@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-listings#68@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-listings#77@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot-demo#2@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#111@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#60@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#68@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#70@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#72@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#74@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#79@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		},
+		{
+			"id": "joeblackwaslike/ai-review-bot#92@anthropic",
+			"split": "validation",
+			"provider": "anthropic"
+		}
+	],
+	"metrics": [
+		"precision",
+		"recall",
+		"wrongOrIrrelevant",
+		"movedCode",
+		"costPerPr",
+		"latency",
+		"fitIn210s",
+		"joinRate"
+	],
+	"thresholds": {
+		"precisionBootstrap": {
+			"level": 0.95,
+			"resamples": 10000
+		},
+		"maxRecallDropPoints": 5,
+		"hostedFitShare": 0.9,
+		"hostedFitSeconds": 210
+	},
+	"a0Tolerance": 0.1,
+	"selectionRule": "Pilot 2: the 17 anthropic fixtures in the validation split of plan.json. Anthropic only."
+}
