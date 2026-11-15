@@ -58,13 +58,13 @@ export function strategyA0Version(
 
 let cachedVersion: string | undefined;
 
-const selectionFor = (input: StrategyInput) =>
+export const selectionFor = (input: StrategyInput) =>
 	routeReviewerModel(
 		routerContext(input.files),
 		input.asReviewer ?? fixtureReviewer(input.fixture),
 	).selection;
 
-const oneRunEstimate = (input: StrategyInput): number | undefined =>
+export const oneRunEstimate = (input: StrategyInput): number | undefined =>
 	computeCost(
 		{
 			promptTokens: input.diff.length / CHARS_PER_TOKEN,
