@@ -25,4 +25,17 @@ describe("strategy versions pinned by the committed plan", () => {
 	it("strategy f0 matches plan.json", () => {
 		expect(strategyF0.version).toBe(pinned("f0"));
 	});
+
+	it("plan-chained.json pins the same strategy versions as plan.json", () => {
+		const chained = JSON.parse(
+			readFileSync(
+				new URL(
+					"../../../docs/review-experiments/plan-chained.json",
+					import.meta.url,
+				),
+				"utf8",
+			),
+		) as { strategies: { name: string; version: string }[] };
+		expect(chained.strategies).toEqual(plan.strategies);
+	});
 });
