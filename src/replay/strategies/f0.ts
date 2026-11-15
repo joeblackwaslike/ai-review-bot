@@ -7,7 +7,11 @@ import { legacyTierMap } from "../../router.js";
 import { resolveSelectionAuth, toLiveFindings } from "../live-wiring.js";
 import type { ReviewStrategy } from "../strategy.js";
 import type { RoundUsage } from "../types.js";
-import { oneRunEstimate, selectionFor } from "./a0.js";
+import {
+	A0_IMPLEMENTATION_REVISION,
+	oneRunEstimate,
+	selectionFor,
+} from "./a0.js";
 
 const F0_SKILL = "f0-runbook-reviewer.md";
 
@@ -16,11 +20,12 @@ const readSkillFile = (name: string): string =>
 	readFileSync(`${skillsDir}/${name}`, "utf8");
 
 /** Bump when run or estimateCost behavior changes, so stored cells go stale. */
-export const F0_IMPLEMENTATION_REVISION = 1;
+export const F0_IMPLEMENTATION_REVISION = 2;
 
 export function strategyF0Version(
 	readSkill: (name: string) => string,
 	revision: number = F0_IMPLEMENTATION_REVISION,
+	a0Revision: number = A0_IMPLEMENTATION_REVISION,
 ): string {
 	return createHash("sha256")
 		.update(
@@ -29,6 +34,7 @@ export function strategyF0Version(
 				legacyTierMap("claude"),
 				legacyTierMap("codex"),
 				revision,
+				a0Revision,
 			]),
 		)
 		.digest("hex")
@@ -53,7 +59,7 @@ export const strategyF0: ReviewStrategy = {
 		const context = buildAuditUserMessage({
 			owner: fixture.owner,
 			repo: fixture.repo,
-			ref: "replay",
+			ref: "replay-f0",
 			extraInstructions: "",
 			files: [{ path: "replay.diff", content: input.diff }],
 		});

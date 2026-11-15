@@ -45,6 +45,8 @@ Inlining the full runbooks was dropped: the six operations files and `triage.md`
 
 The digest is hand-distilled. If F0 loses, the idea may have failed or the distillation may have dropped the useful parts. F1 injects full runbooks and is the check on that.
 
+F0 also drops a0's generic "What to look for" list, so a loss could come from that removal and not only from the runbooks.
+
 ## Verification
 
 - `f0` is registered and appears in `strategyNames()`.

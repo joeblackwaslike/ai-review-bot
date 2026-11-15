@@ -94,6 +94,18 @@ describe("strategyF0", () => {
 		);
 	});
 
+	it("uses its own message ref so it never reads a's prompt cache", async () => {
+		await strategyF0.run(inputFor());
+		expect(mockRunAgent.mock.calls[0]?.[1]).toContain("- Ref: replay-f0");
+	});
+
+	it("changes version when only the a0 revision changes", () => {
+		const read = () => "same";
+		expect(strategyF0Version(read, F0_IMPLEMENTATION_REVISION, 1)).not.toBe(
+			strategyF0Version(read, F0_IMPLEMENTATION_REVISION, 2),
+		);
+	});
+
 	it("throws on a non-ok outcome", async () => {
 		mockRunAgent.mockResolvedValue({
 			status: "quota_exhausted",
