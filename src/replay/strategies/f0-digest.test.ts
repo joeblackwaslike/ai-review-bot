@@ -21,6 +21,11 @@ describe("f0 runbook digest", () => {
 		expect(skill).toMatch(new RegExp(`^${id} `, "m"));
 	});
 
+	it.each(ids)("gives %s a skip clause", (id) => {
+		const line = skill.split("\n").find((l) => l.startsWith(`${id} `));
+		expect(line).toMatch(/\bskip\b/);
+	});
+
 	it("fits the byte budget", () => {
 		expect(Buffer.byteLength(skill, "utf8")).toBeLessThanOrEqual(12000);
 	});

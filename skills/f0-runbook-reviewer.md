@@ -117,7 +117,7 @@ MEC-06 codemod: rule right in general, new API defaults, hand-edited outliers; s
 MEC-07 generated: review the source change, no generated-only edits; skip output the source explains.
 MEC-08 lockfile: manifest change explains it, fork/URL sources; skip line-by-line text.
 MEC-09 vendored: version marker, local patches kept, no new binaries/scripts; skip upstream code line by line.
-MEC-10 tooling config loosened: reason sufficient and narrow; flag when loosened in the same PR as the violating code; hand-review the exempted code for exactly what the check would have caught.
+MEC-10 tooling config loosened: reason sufficient and narrow; flag when loosened in the same PR as the violating code; hand-review the exempted code for exactly what the check would have caught; skip the rest of the exempted code.
 CMP-01 refactor+behavior: classify each residual diff, changed guard in moved code; skip lines that moved or were renamed unchanged.
 CMP-02 cleanup: list the operations found first, migration/auth hiding in cleanup; skip clusters verified mechanical, relocated or generated.
 CMP-03 revert: exact inverse or name the differences, migrations; skip restored lines if exact inverse.
