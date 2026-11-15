@@ -96,6 +96,16 @@ cost for the same round in the same grid run, within a tolerance of plus or minu
 (`a0Tolerance`). `a` always runs before `a0` for a round. Cost is computed from recorded tokens at
 list price, with cache reads priced as cache reads.
 
+`f0` is the first candidate-F slice: one reviewer with a distilled runbook digest (`skills/f0-runbook-reviewer.md`).
+It needs no `a` pairing and is scored against baseline `a` like `a0`. Its version changes whenever the
+digest changes, so re-pin it in both plan files.
+
+`f0` runs between `a` and `a0` for a round and builds its message with its own ref, so it does not read `a`'s
+prompt cache. It omits a0's generic "What to look for" list (injection, XSS, secrets, swallowed exceptions,
+null handling) in favor of the digest, so a loss could come from that removal as well as from the runbooks.
+`estimateCost` counts only the diff and under-reports `f0`'s fixed prompt of about 3.4K tokens, so plan
+estimates run low on small diffs.
+
 ## Metrics
 
 Computed per PR, then aggregated by macro mean over PRs:

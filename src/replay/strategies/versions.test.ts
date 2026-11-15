@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { strategyA } from "./a.js";
 import { strategyA0 } from "./a0.js";
+import { strategyF0 } from "./f0.js";
 
 describe("strategy versions pinned by the committed plan", () => {
 	const plan = JSON.parse(
@@ -19,5 +20,22 @@ describe("strategy versions pinned by the committed plan", () => {
 
 	it("strategy a0 matches plan.json", () => {
 		expect(strategyA0.version).toBe(pinned("a0"));
+	});
+
+	it("strategy f0 matches plan.json", () => {
+		expect(strategyF0.version).toBe(pinned("f0"));
+	});
+
+	it("plan-chained.json pins the same strategy versions as plan.json", () => {
+		const chained = JSON.parse(
+			readFileSync(
+				new URL(
+					"../../../docs/review-experiments/plan-chained.json",
+					import.meta.url,
+				),
+				"utf8",
+			),
+		) as { strategies: { name: string; version: string }[] };
+		expect(chained.strategies).toEqual(plan.strategies);
 	});
 });
