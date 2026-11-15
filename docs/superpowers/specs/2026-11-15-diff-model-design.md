@@ -127,7 +127,6 @@ interface Divergence {
 
 interface PrFacts {
   testsChanged: boolean | "unknown";
-  sourceWithoutTests: string[];
   intentClaims: IntentClaim[];
 }
 ```
@@ -142,7 +141,9 @@ An operation carries the spans it covers, a flag for whether the match is exact 
 | --- | --- | --- |
 | relocation | Matching runs of deleted and added lines across files, extended to tolerate changed lines inside a run, with the changed lines recorded as divergences | Extends `findMovedBlocks()` |
 | rename | `status: renamed` with `previous_filename`, plus content similarity | PR files API data |
-| mechanical | Whitespace-only and import-only hunks | `classifyPush()` for whitespace; a new import-only check |
+| mechanical | Whitespace-only and import-only hunks | A new check that applies the same conservative lexical rule as the relocation checker; a new import-only check |
+
+The model does not take its whitespace-only verdict from `classifyPush()`. That function normalizes line by line with no string context, so a changed space inside a multiline template literal is reported as whitespace-only with zero weight (confirmed by running it). The model emits a mechanical operation only where the conservative check confirms a safe context, and otherwise treats the hunk as ordinary change. The existing `classifyPush()` bug is filed separately and is not fixed here.
 
 Relocation is the hard one. Today a run breaks at the first changed line, so a 40-line move with one edited line matches as two shorter runs, and one may fall under the 5-line minimum. The builder needs a match that finds the pair and then reports differences inside it. Seed REL-10 (a move with one changed comparison) is the acceptance test.
 
@@ -204,7 +205,7 @@ Patch preparation serves `buildUserMessage()`. `prepareDiffInput({ scopeFiles, p
 
 Content preparation serves `buildAuditUserMessage()`, which takes whole-file content, has no patches, and deliberately does not pack. Its serialization is unchanged. With no patches there are no operations to find, so an audit's section holds only the file mix (kinds and counts) and the stated-intent claims, or nothing.
 
-Test coupling and intent claims describe the whole PR, even when a round's prompt carries only a delta, so they are computed from `prFiles`. When `prFilesComplete` is false, the section says test coupling is unknown. It never says no tests changed. Relocation and the other operations are computed over `scopeFiles`. Each sentence in the section says which scope it describes.
+Test coupling and intent claims describe the whole PR, even when a round's prompt carries only a delta, so they are computed from `prFiles`. When `prFilesComplete` is false, the section says test coupling is unknown. It never says no tests changed. This version reports only whether any test file changed in the PR (`testsChanged`). Mapping each changed source file to its test file needs a per-language matching rule and is a follow-up. Relocation and the other operations are computed over `scopeFiles`. Each sentence in the section says which scope it describes.
 
 Call sites to wire are the webhook and scheduled-review path (including the two-scope incremental dispatch), `watch`, `gate` and `review` for patch preparation, and `audit` for content preparation.
 
@@ -229,6 +230,7 @@ A `REVIEWER_TUNING.diffModel` switch in [src/reviewer-tuning.ts](src/reviewer-tu
 - The reviewer tool surface exposes queries such as `moved_code` over the same objects.
 - Head-file fetching to fill `role` for files where the hunk does not show the imports.
 - Signature and interface change detection, and domain assignment by role.
+- Per-file source-to-test mapping, so a changed module with no changed test can be named.
 - Blast radius and trust-boundary reachability, once a checkout or language server is available.
 
 ## Calls made without asking Joe
