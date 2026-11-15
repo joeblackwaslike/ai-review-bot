@@ -18,11 +18,20 @@ describe("f0 runbook digest", () => {
 	});
 
 	it.each(ids)("covers %s", (id) => {
-		expect(skill).toContain(id);
+		expect(skill).toMatch(new RegExp(`^${id} `, "m"));
 	});
 
 	it("fits the byte budget", () => {
 		expect(Buffer.byteLength(skill, "utf8")).toBeLessThanOrEqual(12000);
+	});
+
+	it("copies the a0 severity section verbatim", () => {
+		const a0 = readFileSync("skills/a0-single-reviewer.md", "utf8");
+		const section = a0.match(
+			/^## Severity, Fields, and Suggestions\n[\s\S]*?(?=^## )/m,
+		)?.[0];
+		expect(section).toBeTruthy();
+		expect(skill).toContain(section?.trimEnd() ?? "");
 	});
 
 	it("keeps the severity scale and confidence rule", () => {
