@@ -54,10 +54,11 @@ This work fails, even if it technically runs, when any of these happens.
 - The packed diff text is byte-identical with the model on or off. A test enforces it.
 - The analysis reads full patches, not the packed prompt. A move whose deleted half the packer dropped is still detected, and the note says which lines are not shown.
 - It is linear in patch size, with no I/O and no model, so it runs inside the existing function budget.
-- The rendered section depends only on the PR, so it is identical for every agent and sits in the shared first block, which is cached.
-- File names and the PR description come from the author. They are rendered as data inside the existing untrusted-text fence, never as instructions, and long values are truncated.
+- The rendered section depends only on the input it describes, so it is identical for every agent that receives the same input and sits in the shared first block, which is cached.
+- Everything derived from the author goes through the existing untrusted-text fence helper in [src/prompt.ts](src/prompt.ts), including file names, the PR description, quoted intent phrases, and the original code or comment text shown for a divergence. Each value has a length limit (200 characters, my call). Fixed instructions to the reviewer stay outside the fence. Tests render adversarial values (a closing fence tag, an instruction in a comment or file name).
 - If building or rendering throws or exceeds its time cap, the review proceeds without the section and logs why, as the summary call does today.
-- Incremental rounds review a delta. The model is built over the same files the prompt covers, so a move whose halves land in different rounds is not seen. This is accepted and logged, not worked around.
+- On an incremental round, dispatch builds two inputs today: agents with pending skills get the whole PR, and the rest get the delta. The model is built and packed once per input scope, using the same grouping, and each section says which scope it describes. A move whose halves land in different rounds is not seen by the delta group. This is accepted and logged.
+- A file GitHub returns without a patch (too large, binary) gets a `FileNode` and a kind, and no operations. The summary counts it as "no patch".
 
 ## Approaches considered
 
@@ -104,6 +105,7 @@ interface Span {
   side: "base" | "head";
   startLine: number;
   endLine: number;
+  shown: "full" | "partial" | "none";
 }
 
 interface Operation {
@@ -117,12 +119,14 @@ interface Operation {
 }
 
 interface Divergence {
-  head: Span;
-  original: string;
+  kind: "changed" | "inserted" | "removed";
+  base?: Span;
+  head?: Span;
+  original?: string;
 }
 
 interface PrFacts {
-  testsChanged: boolean;
+  testsChanged: boolean | "unknown";
   sourceWithoutTests: string[];
   intentClaims: IntentClaim[];
 }
@@ -142,9 +146,15 @@ An operation carries the spans it covers, a flag for whether the match is exact 
 
 Relocation is the hard one. Today a run breaks at the first changed line, so a 40-line move with one edited line matches as two shorter runs, and one may fall under the 5-line minimum. The builder needs a match that finds the pair and then reports differences inside it. Seed REL-10 (a move with one changed comparison) is the acceptance test.
 
-A divergence is any line inside a matched span whose text differs after whitespace normalization. Each divergence has a kind. A whitespace-only difference is not a divergence. A comment-only difference is its own kind. A consistent identifier substitution (the same name replaced the same way everywhere in the block) is a rename kind. Anything else is a code kind. The renderer lists code divergences prominently, mentions the other kinds in one line, and says "unchanged" about a block only when it has no divergence of any kind.
+Within a matched pair of spans, the base and head lines are aligned (a longest-common-subsequence alignment over normalized lines). Every line of both spans ends up either matched or in a divergence. A divergence is a `changed` pair, a line that exists only in the head (`inserted`), or a line that exists only in the base (`removed`). A deleted guard inside a moved function is a `removed` divergence, so the head span does not have to contain it.
 
-The starting thresholds, to be tuned on the seeds, are a minimum of 5 meaningful lines per match and up to 3 differing lines or 20 percent of the block, whichever is smaller. For a deleted and added file pair that git did not mark as a rename, the content similarity cutoff starts at 0.6. A relocation claim is checked by a second, simpler routine that compares the normalized text of the two spans line by line, and a claim that fails the check is dropped. Each clean control must produce zero relocations and zero divergences.
+Normalization has to be conservative. Collapsing whitespace is safe in code and unsafe inside a multiline string or template literal, where it changes a runtime value, and in indentation-sensitive languages. Where the lexical context is unknown, lines are compared raw. A whitespace-only difference outside such contexts is not a divergence. A comment-only difference is its own divergence class. A consistent identifier substitution (the same name replaced the same way everywhere in the block) is a rename class. Anything else is a code class.
+
+The renderer lists code divergences prominently, mentions the other classes in one line, and says "unchanged" about a block only when it has no divergence of any class.
+
+The starting thresholds, to be tuned on the seeds, are a minimum of 5 meaningful lines per match and up to 3 differing lines or 20 percent of the block, whichever is smaller. For a deleted and added file pair that git did not mark as a rename, the content similarity cutoff starts at 0.6.
+
+A second routine checks every relocation claim independently of the matcher. It accounts for every line of both spans exactly once, in one of three ways: an identical pair, a pair that differs only by whitespace in a context the checker itself confirms is safe (outside any string or template literal and outside an indentation-sensitive language), or a listed divergence. It uses raw text where it cannot confirm the context, and it reproduces the divergence set on its own. A claim that fails the check is dropped and counted. Required tests are two negative cases, a multiline template literal whose inner whitespace changed and a moved function with a deleted guard, and a positive case, a move that was only reformatted, which is reported as a relocation with no divergence.
 
 Stated intent is parsed into `intentClaims`, a short list of phrases such as "no functional change", "refactor only" and "rename", each with the PR text span it came from. The renderer pairs a claim with a conflicting operation or a divergence in a moved block.
 
@@ -186,7 +196,19 @@ The section has its own character cap (`DIFF_MODEL_BUDGET_CHARS`, default 6000, 
 
 ## Where it is built
 
-Callers assemble `PromptContext` from the compare or PR files, which carry `previous_filename`, `additions`, `deletions` and the full patches. Each caller builds the model from those raw files plus the title and body, renders it, and passes the string in a new optional `PromptContext` field, `diffModelSection`. `buildUserMessage()` places it in the shared first block and does no analysis. The call sites to wire are the webhook and scheduled-review path, `watch`, `gate`, `review`, `audit` and the replay strategies. An incremental round builds the model from its delta files, so the model matches what that round's prompt shows.
+Packing happens privately inside prompt serialization today, and the renderer needs the packer's output to say which spans are visible. So the work introduces a prepared-input step that both prompt builders share.
+
+There are two preparation contracts, because the prompt builders take different inputs.
+
+Patch preparation serves `buildUserMessage()`. `prepareDiffInput({ scopeFiles, prFiles, prFilesComplete, meta, budget })` takes the files in the round's input scope, the whole PR's file list, and a flag saying whether that list is complete. The files carry `previous_filename`, `additions`, `deletions` and the full patches. It returns the packed diff, the diff model, and for each span whether its lines were shown. The model is built from the full patches before packing, and visibility is read from the packed result afterward. The summary goes in the shared metadata part of the first block. A file's notes are separate text inserted before that file's serialized diff, so the original diff bytes are preserved. The prompt builder does no analysis.
+
+Content preparation serves `buildAuditUserMessage()`, which takes whole-file content, has no patches, and deliberately does not pack. Its serialization is unchanged. With no patches there are no operations to find, so an audit's section holds only the file mix (kinds and counts) and the stated-intent claims, or nothing.
+
+Test coupling and intent claims describe the whole PR, even when a round's prompt carries only a delta, so they are computed from `prFiles`. When `prFilesComplete` is false, the section says test coupling is unknown. It never says no tests changed. Relocation and the other operations are computed over `scopeFiles`. Each sentence in the section says which scope it describes.
+
+Call sites to wire are the webhook and scheduled-review path (including the two-scope incremental dispatch), `watch`, `gate` and `review` for patch preparation, and `audit` for content preparation.
+
+The replay strategies matter for the experiment. Strategy `a` reaches the model through `runAuditPass`, which wraps the recorded diff as one synthetic `replay.diff` file and uses the audit builder. To exercise the feature there, the replay path parses the recorded unified diff back into per-file patches (reusing an existing parser if one exists), runs patch preparation on them, and passes the resulting section to the audit builder as an opaque string. Without this the replay comparison would not test the feature at all.
 
 ## Switch and rollout
 
@@ -195,7 +217,7 @@ A `REVIEWER_TUNING.diffModel` switch in [src/reviewer-tuning.ts](src/reviewer-tu
 ## Verification
 
 - Unit tests build the model from patches and assert exact spans, divergences and renderings. No model is called.
-- The five seeded operations (REL-01, REL-10, DEL-04, REL-03, MEC-01) with their original, v1, v2, v3 and clean variants. Required: every relocation and its divergence is found at the right lines, and no clean control produces a relocation or a divergence.
+- The five seeded operations (REL-01, REL-10, DEL-04, REL-03, MEC-01) with their original, v1, v2, v3 and clean variants. A clean control has no defect. It can still contain an operation: the REL-10 control moves `page_bounds` unchanged, and the MEC-01 control is a formatter-only change. Seed truth today holds one defect range or a clean flag, which cannot score detection. Each seed's truth gets an operations list: the expected relocations, renames and mechanical changes, with source and destination spans and divergences. Required: every expected operation is found at the right lines, a clean control's unchanged move is reported with no divergence, no operation appears that truth does not list, and no reviewer finding appears on a clean control. Detection metrics are reported separately from defect-finding metrics.
 - A test that the packed diff text is byte-identical with the model on and off, and that anchor validation behaves the same.
 - The seeds that test intent claims need a PR title and body. Seeds carry none today, so the REL-10 variants get a description ("no functional change" on a move that changes a comparison), stored next to `truth.json`.
 - A replay comparison, as a strategy variant of `a` in the experiments harness. The pilot is directional because the pilot fixtures give no verdict. The measures are precision and recall on the seeds, wrong findings on lines that only moved, and prompt tokens, which are reported with no threshold.
@@ -217,7 +239,11 @@ A `REVIEWER_TUNING.diffModel` switch in [src/reviewer-tuning.ts](src/reviewer-tu
 - Citing base-side line numbers for deleted code, labeled as such.
 - The divergence kinds and the starting match thresholds.
 - Never asserting that a difference is functional. The renderer reports a code difference.
-- Building the model in the callers and passing a rendered string in `PromptContext`.
+- Two preparation contracts, patch preparation (`prepareDiffInput`, which builds the model before packing and reads span visibility after) and content preparation for audits, which has no operations to report.
+- Test coupling reported as unknown when the PR file list is incomplete.
+- One model per input scope on incremental rounds, with test and intent facts computed over the whole PR file list.
+- Conservative normalization with raw comparison where the lexical context is unknown, and an independent line-accounting check on every relocation claim.
+- An operations list in each seed's truth, and clean controls that may contain an unchanged operation.
 - Adding a PR description to the REL-10 seeds.
 - Stage order. Relocation, rename, whole-file and import-only mechanical changes, test coupling and intent claims come first. Signature changes and role from fetched files come later.
 - Logging the model for every PR while the switch is off.
