@@ -203,11 +203,11 @@ There are two preparation contracts, because the prompt builders take different 
 
 Patch preparation serves `buildUserMessage()`. `prepareDiffInput({ scopeFiles, prFiles, prFilesComplete, meta, budget })` takes the files in the round's input scope, the whole PR's file list, and a flag saying whether that list is complete. The files carry `previous_filename`, `additions`, `deletions` and the full patches. It returns the packed diff, the diff model, and for each span whether its lines were shown. The model is built from the full patches before packing, and visibility is read from the packed result afterward. The summary goes in the shared metadata part of the first block. A file's notes are separate text inserted before that file's serialized diff, so the original diff bytes are preserved. The prompt builder does no analysis.
 
-Content preparation serves `buildAuditUserMessage()`, which takes whole-file content, has no patches, and deliberately does not pack. Its serialization is unchanged. With no patches there are no operations to find, so an audit's section holds only the file mix (kinds and counts) and the stated-intent claims, or nothing.
+Content preparation for `buildAuditUserMessage()` is deferred. An audit takes whole-file content, has no patches and no PR text, so there are no operations to find and no intent claims to read. Audits therefore get no section in this version, which matches the original plan of a section of nothing. Its serialization is unchanged.
 
 Test coupling and intent claims describe the whole PR, even when a round's prompt carries only a delta, so they are computed from `prFiles`. When `prFilesComplete` is false, the section says test coupling is unknown. It never says no tests changed. This version reports only whether any test file changed in the PR (`testsChanged`). Mapping each changed source file to its test file needs a per-language matching rule and is a follow-up. Relocation and the other operations are computed over `scopeFiles`. Each sentence in the section says which scope it describes.
 
-Call sites to wire are the webhook and scheduled-review path (including the two-scope incremental dispatch), `watch`, `gate` and `review` for patch preparation, and `audit` for content preparation.
+Call sites wired in this version are the webhook and scheduled-review path (including the two-scope incremental dispatch) and `watch`. `gate` and `review` reach the reviewer through `runAuditPass`, so they are not wired in this version and are a follow-up. `review.ts` calls `prepareDiffInput`, and `buildUserMessage()` only takes the rendered result.
 
 The replay strategies matter for the experiment. Strategy `a` reaches the model through `runAuditPass`, which wraps the recorded diff as one synthetic `replay.diff` file and uses the audit builder. To exercise the feature there, the replay path parses the recorded unified diff back into per-file patches (reusing an existing parser if one exists), runs patch preparation on them, and passes the resulting section to the audit builder as an opaque string. Without this the replay comparison would not test the feature at all.
 
@@ -231,6 +231,8 @@ A `REVIEWER_TUNING.diffModel` switch in [src/reviewer-tuning.ts](src/reviewer-tu
 - Head-file fetching to fill `role` for files where the hunk does not show the imports.
 - Signature and interface change detection, and domain assignment by role.
 - Per-file source-to-test mapping, so a changed module with no changed test can be named.
+- Content preparation for audits, if audits ever carry PR text.
+- Wiring `gate` and `review`, which reach the reviewer through `runAuditPass`.
 - Blast radius and trust-boundary reachability, once a checkout or language server is available.
 
 ## Calls made without asking Joe
@@ -241,7 +243,7 @@ A `REVIEWER_TUNING.diffModel` switch in [src/reviewer-tuning.ts](src/reviewer-tu
 - Citing base-side line numbers for deleted code, labeled as such.
 - The divergence kinds and the starting match thresholds.
 - Never asserting that a difference is functional. The renderer reports a code difference.
-- Two preparation contracts, patch preparation (`prepareDiffInput`, which builds the model before packing and reads span visibility after) and content preparation for audits, which has no operations to report.
+- Patch preparation (`prepareDiffInput`, which builds the model before packing and reads span visibility after). Content preparation for audits is deferred.
 - Test coupling reported as unknown when the PR file list is incomplete.
 - One model per input scope on incremental rounds, with test and intent facts computed over the whole PR file list.
 - Conservative normalization with raw comparison where the lexical context is unknown, and an independent line-accounting check on every relocation claim.
