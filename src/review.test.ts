@@ -3660,18 +3660,27 @@ describe("agent time budget", () => {
 
 	it("logs setup time and the effective budget when agents start", async () => {
 		const log = vi.spyOn(console, "log").mockImplementation(() => {});
-		vi.spyOn(console, "warn").mockImplementation(() => {});
-		await buildReview({
-			octokit: buildOctokit(),
-			...baseContext,
-			agentBudgetMs: 210_000,
-			requestStartedAtMs: Date.now() - 30_000,
-		}).catch(() => undefined);
-		const call = log.mock.calls.find(([m]) => m === "review setup done");
-		expect(call).toBeDefined();
-		const fields = call?.[1] as { setupMs: number; effectiveBudgetMs: number };
-		expect(fields.setupMs).toBeGreaterThanOrEqual(30_000);
-		expect(fields.effectiveBudgetMs).toBeLessThanOrEqual(210_000);
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		try {
+			await buildReview({
+				octokit: buildOctokit(),
+				...baseContext,
+				agentBudgetMs: 210_000,
+				requestStartedAtMs: Date.now() - 100_000,
+			}).catch(() => undefined);
+			const call = log.mock.calls.find(([m]) => m === "review setup done");
+			expect(call).toBeDefined();
+			const fields = call?.[1] as {
+				setupMs: number;
+				effectiveBudgetMs: number;
+			};
+			expect(fields.setupMs).toBeGreaterThanOrEqual(100_000);
+			expect(fields.effectiveBudgetMs).toBeGreaterThanOrEqual(139_000);
+			expect(fields.effectiveBudgetMs).toBeLessThanOrEqual(140_000);
+		} finally {
+			log.mockRestore();
+			warn.mockRestore();
+		}
 	});
 
 	it("runs every agent and says nothing about the budget when there is room", async () => {

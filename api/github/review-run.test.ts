@@ -122,6 +122,15 @@ describe("review-run request handling", () => {
 		expect(runScheduledReview).toHaveBeenCalledTimes(1);
 	});
 
+	it("passes the request start to runScheduledReview", async () => {
+		const before = Date.now();
+		await call({ ...BASE, provider: "anthropic" });
+		const startedAt = runScheduledReview.mock.calls[0]?.[3];
+		expect(typeof startedAt).toBe("number");
+		expect(startedAt).toBeGreaterThanOrEqual(before);
+		expect(startedAt).toBeLessThanOrEqual(Date.now());
+	});
+
 	it("accepts a message carrying both fields", async () => {
 		const res = await call({
 			...BASE,
