@@ -10102,7 +10102,12 @@ describe("delta scoping without KV", () => {
 					files: [aFile, bFile, docFile],
 					compare: deltaBDoc,
 				});
-				return buildReview({ octokit, ...baseContext, ...o });
+				return buildReview({
+					octokit,
+					...baseContext,
+					body: "No functional changes.",
+					...o,
+				});
 			}
 
 			it("dispatch builds one model per input scope and labels each section", async () => {
