@@ -7,5 +7,67 @@
 			"endLine": 5,
 			"description": "applyDiscount moved to ./discount, but the test still calls vi.mock('./cart'). The mock no longer replaces the function checkout.ts imports, so applyDiscount is the real implementation and the mock assertions never exercise the intended path."
 		}
+	],
+	"operations": [
+		{
+			"type": "relocation",
+			"from": [
+				{
+					"filename": "src/pricing/cart.ts",
+					"side": "base",
+					"startLine": 11,
+					"endLine": 15
+				}
+			],
+			"to": [
+				{
+					"filename": "src/pricing/discount.ts",
+					"side": "head",
+					"startLine": 1,
+					"endLine": 5
+				}
+			],
+			"divergences": []
+		},
+		{
+			"type": "mechanical",
+			"from": [
+				{
+					"filename": "src/pricing/checkout.test.ts",
+					"side": "base",
+					"startLine": 3,
+					"endLine": 3
+				}
+			],
+			"to": [
+				{
+					"filename": "src/pricing/checkout.test.ts",
+					"side": "head",
+					"startLine": 3,
+					"endLine": 3
+				}
+			],
+			"divergences": []
+		},
+		{
+			"type": "mechanical",
+			"from": [
+				{
+					"filename": "src/pricing/checkout.ts",
+					"side": "base",
+					"startLine": 1,
+					"endLine": 1
+				}
+			],
+			"to": [
+				{
+					"filename": "src/pricing/checkout.ts",
+					"side": "head",
+					"startLine": 1,
+					"endLine": 2
+				}
+			],
+			"divergences": []
+		}
 	]
 }

@@ -7,5 +7,43 @@
 			"endLine": 14,
 			"description": "Free shipping check changed from >= to >, so orders exactly at FREE_SHIPPING_MIN_CENTS no longer ship free."
 		}
+	],
+	"operations": [
+		{
+			"type": "relocation",
+			"from": [
+				{
+					"filename": "lib/pricing.rb",
+					"side": "base",
+					"startLine": 13,
+					"endLine": 27
+				}
+			],
+			"to": [
+				{
+					"filename": "lib/shipping.rb",
+					"side": "head",
+					"startLine": 2,
+					"endLine": 16
+				}
+			],
+			"divergences": [
+				{
+					"kind": "changed",
+					"base": {
+						"filename": "lib/pricing.rb",
+						"side": "base",
+						"startLine": 25,
+						"endLine": 25
+					},
+					"head": {
+						"filename": "lib/shipping.rb",
+						"side": "head",
+						"startLine": 14,
+						"endLine": 14
+					}
+				}
+			]
+		}
 	]
 }

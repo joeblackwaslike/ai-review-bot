@@ -7,5 +7,56 @@
 			"endLine": 12,
 			"description": "Minimum refundable total check changed from < to <=, so orders totalling exactly MIN_REFUNDABLE_TOTAL are no longer refundable."
 		}
+	],
+	"operations": [
+		{
+			"type": "relocation",
+			"from": [
+				{
+					"filename": "src/orders.ts",
+					"side": "base",
+					"startLine": 31,
+					"endLine": 54
+				}
+			],
+			"to": [
+				{
+					"filename": "src/refunds.ts",
+					"side": "head",
+					"startLine": 11,
+					"endLine": 34
+				}
+			],
+			"divergences": [
+				{
+					"kind": "changed",
+					"base": {
+						"filename": "src/orders.ts",
+						"side": "base",
+						"startLine": 32,
+						"endLine": 32
+					},
+					"head": {
+						"filename": "src/refunds.ts",
+						"side": "head",
+						"startLine": 12,
+						"endLine": 12
+					}
+				}
+			]
+		},
+		{
+			"type": "mechanical",
+			"from": [],
+			"to": [
+				{
+					"filename": "src/refunds.ts",
+					"side": "head",
+					"startLine": 1,
+					"endLine": 1
+				}
+			],
+			"divergences": []
+		}
 	]
 }

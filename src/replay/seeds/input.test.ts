@@ -87,6 +87,29 @@ describe("seedReviewInput", () => {
 	});
 });
 
+describe("seedReviewInput description", () => {
+	it("reads pr.json next to truth.json and defaults to empty text", async () => {
+		const plain = await makeSeed({ clean: true }, "clean");
+		const described = await makeSeed({ clean: true }, "v1");
+		await write(
+			join(described.dir, "pr.json"),
+			JSON.stringify({ title: "Move helper", body: "no functional change" }),
+		);
+		const a = await seedReviewInput(plain);
+		const b = await seedReviewInput(described);
+		try {
+			expect([a.title, a.body]).toEqual(["", ""]);
+			expect([b.title, b.body]).toEqual([
+				"Move helper",
+				"no functional change",
+			]);
+		} finally {
+			await a.cleanup();
+			await b.cleanup();
+		}
+	});
+});
+
 describe("truthInDiff", () => {
 	it("is true for a defect on shown right-side lines", async () => {
 		const seed = await makeSeed(defectAt("src/a.ts", 2, 4));

@@ -1,0 +1,4 @@
+{
+	"title": "Move LateFee into fees.go",
+	"body": "Splits LateFee out of invoice.go into fees.go. This is a pure move with no functional change."
+}

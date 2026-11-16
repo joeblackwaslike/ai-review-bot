@@ -7,5 +7,27 @@
 			"endLine": 6,
 			"description": "maxAttempts drops from 5 to 1 inside the gofmt realignment, so shouldRetry never allows a retry and failed jobs are dropped after one attempt."
 		}
+	],
+	"operations": [
+		{
+			"type": "mechanical",
+			"from": [
+				{
+					"filename": "errors.go",
+					"side": "base",
+					"startLine": 7,
+					"endLine": 11
+				}
+			],
+			"to": [
+				{
+					"filename": "errors.go",
+					"side": "head",
+					"startLine": 7,
+					"endLine": 11
+				}
+			],
+			"divergences": []
+		}
 	]
 }

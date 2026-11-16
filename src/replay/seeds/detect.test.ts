@@ -1,0 +1,228 @@
+import { describe, expect, it } from "vitest";
+import { buildDiffModel } from "../../diff-model/index.js";
+import type {
+	DiffModel,
+	Divergence,
+	Operation,
+	Span,
+} from "../../diff-model/types.js";
+import { scoreDetection } from "./detect.js";
+import { type SeedReviewInput, seedReviewInput } from "./input.js";
+import { listSeeds, type SeedOperation } from "./schema.js";
+
+const span = (
+	filename: string,
+	side: "base" | "head",
+	startLine: number,
+	endLine: number,
+): Span => ({ filename, side, startLine, endLine, shown: "full" });
+
+const truthSpan = (
+	filename: string,
+	side: "base" | "head",
+	startLine: number,
+	endLine: number,
+) => ({ filename, side, startLine, endLine });
+
+function modelOf(operations: Operation[]): DiffModel {
+	return {
+		files: [],
+		operations,
+		facts: { testsChanged: "unknown", intentClaims: [] },
+		droppedClaims: 0,
+	};
+}
+
+function relocation(divergences: Divergence[] = []): Operation {
+	return {
+		id: "relocation-1",
+		type: "relocation",
+		from: [span("a.py", "base", 10, 30)],
+		to: [span("b.py", "head", 4, 24)],
+		exact: divergences.length === 0,
+		divergences,
+		reviewWeight: 1,
+	};
+}
+
+const expectedRelocation = (
+	divergences: SeedOperation["divergences"] = [],
+): SeedOperation => ({
+	type: "relocation",
+	from: [truthSpan("a.py", "base", 10, 30)],
+	to: [truthSpan("b.py", "head", 4, 24)],
+	divergences,
+});
+
+const changedLine: Divergence = {
+	kind: "changed",
+	class: "code",
+	base: span("a.py", "base", 20, 20),
+	head: span("b.py", "head", 14, 14),
+};
+
+describe("scoreDetection", () => {
+	it("matches an expected relocation by spans and divergences", () => {
+		const result = scoreDetection(
+			[
+				expectedRelocation([
+					{
+						kind: "changed",
+						base: truthSpan("a.py", "base", 20, 20),
+						head: truthSpan("b.py", "head", 14, 14),
+					},
+				]),
+			],
+			modelOf([relocation([changedLine])]),
+		);
+		expect(result).toEqual({
+			matched: 1,
+			missing: [],
+			unexpected: [],
+			divergenceMisses: 0,
+		});
+	});
+
+	it("reports an unexpected operation", () => {
+		const found = relocation();
+		const result = scoreDetection([], modelOf([found]));
+		expect(result.unexpected).toEqual([found]);
+		expect(result.matched).toBe(0);
+	});
+
+	it("reports an expected operation the model does not contain", () => {
+		const expected = expectedRelocation();
+		const result = scoreDetection([expected], modelOf([]));
+		expect(result.missing).toEqual([expected]);
+		expect(result.matched).toBe(0);
+	});
+
+	it("does not match an operation at different spans", () => {
+		const moved: Operation = {
+			...relocation(),
+			to: [span("other.py", "head", 4, 24)],
+		};
+		const result = scoreDetection([expectedRelocation()], modelOf([moved]));
+		expect(result.missing).toHaveLength(1);
+		expect(result.unexpected).toEqual([moved]);
+	});
+
+	it("reports a missing divergence", () => {
+		const result = scoreDetection(
+			[
+				expectedRelocation([
+					{
+						kind: "changed",
+						base: truthSpan("a.py", "base", 20, 20),
+						head: truthSpan("b.py", "head", 14, 14),
+					},
+				]),
+			],
+			modelOf([relocation()]),
+		);
+		expect(result.matched).toBe(1);
+		expect(result.divergenceMisses).toBe(1);
+	});
+
+	it("counts a divergence the truth does not list", () => {
+		const result = scoreDetection(
+			[expectedRelocation()],
+			modelOf([relocation([changedLine])]),
+		);
+		expect(result.matched).toBe(1);
+		expect(result.divergenceMisses).toBe(1);
+	});
+});
+
+function modelOfSeed(input: SeedReviewInput): DiffModel {
+	const files = input.files.map((f) => ({
+		...f,
+		additions: f.additions ?? 0,
+		deletions: f.deletions ?? 0,
+	}));
+	return buildDiffModel({
+		scopeFiles: files,
+		prFiles: files,
+		prFilesComplete: true,
+		title: input.title,
+		body: input.body,
+	});
+}
+
+const SLOW = 120_000;
+
+const MOVES_BELOW_MINIMUM = new Set([
+	"REL-01/original",
+	"REL-01/v1",
+	"REL-01/v3",
+]);
+
+describe("seed operation truth", () => {
+	it(
+		"every committed seed's detection matches its truth operations",
+		async () => {
+			const seeds = (await listSeeds()).filter(
+				(s) => !MOVES_BELOW_MINIMUM.has(s.id),
+			);
+			expect(seeds).toHaveLength(22);
+			for (const seed of seeds) {
+				expect(seed.truth.operations, seed.id).toBeDefined();
+				const input = await seedReviewInput(seed);
+				try {
+					const model = modelOfSeed(input);
+					const result = scoreDetection(seed.truth.operations ?? [], model);
+					expect(result.missing, `${seed.id} missing`).toEqual([]);
+					expect(result.unexpected, `${seed.id} unexpected`).toEqual([]);
+					expect(result.divergenceMisses, `${seed.id} divergences`).toBe(0);
+				} finally {
+					await input.cleanup();
+				}
+			}
+		},
+		SLOW,
+	);
+
+	it(
+		"misses exactly the relocation of a 3 or 4 line function, under the 5 line minimum",
+		async () => {
+			const gaps = (await listSeeds()).filter((s) =>
+				MOVES_BELOW_MINIMUM.has(s.id),
+			);
+			expect(gaps).toHaveLength(MOVES_BELOW_MINIMUM.size);
+			for (const seed of gaps) {
+				const input = await seedReviewInput(seed);
+				try {
+					const model = modelOfSeed(input);
+					const result = scoreDetection(seed.truth.operations ?? [], model);
+					expect(
+						result.missing.map((m) => m.type),
+						seed.id,
+					).toEqual(["relocation"]);
+					expect(result.unexpected, seed.id).toEqual([]);
+				} finally {
+					await input.cleanup();
+				}
+			}
+		},
+		SLOW,
+	);
+
+	it(
+		"gives the REL-10 variants a description that claims no functional change",
+		async () => {
+			const rel10 = (await listSeeds()).filter((s) => s.opId === "REL-10");
+			const described = rel10.filter((s) => s.variant !== "clean");
+			expect(described).toHaveLength(4);
+			for (const seed of described) {
+				const input = await seedReviewInput(seed);
+				try {
+					expect(input.title, seed.id).not.toBe("");
+					expect(input.body, seed.id).toContain("no functional change");
+				} finally {
+					await input.cleanup();
+				}
+			}
+		},
+		SLOW,
+	);
+});

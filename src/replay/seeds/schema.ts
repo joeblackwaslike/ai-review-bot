@@ -13,12 +13,48 @@ const Defect = z
 	})
 	.refine((d) => d.endLine >= d.startLine, "endLine before startLine");
 
+const SeedSpan = z
+	.object({
+		filename: z.string().min(1),
+		side: z.enum(["base", "head"]),
+		startLine: z.number().int().positive(),
+		endLine: z.number().int().positive(),
+	})
+	.strict()
+	.refine((s) => s.endLine >= s.startLine, "endLine before startLine");
+
+/**
+ * An operation a correct diff model reports for a seed. Lines are base-side numbers for
+ * deleted code and head-side numbers for added code.
+ */
+export const SeedOperation = z
+	.object({
+		type: z.enum(["relocation", "rename", "mechanical"]),
+		from: z.array(SeedSpan),
+		to: z.array(SeedSpan),
+		divergences: z.array(
+			z
+				.object({
+					kind: z.enum(["changed", "inserted", "removed"]),
+					base: SeedSpan.optional(),
+					head: SeedSpan.optional(),
+				})
+				.strict(),
+		),
+	})
+	.strict();
+export type SeedOperation = z.infer<typeof SeedOperation>;
+export type SeedSpan = z.infer<typeof SeedSpan>;
+
+const Operations = z.array(SeedOperation).optional();
+
 export const SeedTruth = z.union([
-	z.object({ clean: z.literal(true) }).strict(),
+	z.object({ clean: z.literal(true), operations: Operations }).strict(),
 	z
 		.object({
 			clean: z.literal(false),
 			defects: z.array(Defect).length(1),
+			operations: Operations,
 		})
 		.strict(),
 ]);

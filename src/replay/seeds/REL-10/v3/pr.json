@@ -1,0 +1,4 @@
+{
+	"title": "Move shipping_fee into lib/shipping.rb",
+	"body": "Moves Pricing.shipping_fee into its own file. Behavior is the same, no functional change."
+}

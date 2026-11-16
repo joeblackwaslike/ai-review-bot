@@ -7,5 +7,27 @@
 			"endLine": 19,
 			"description": "wait_before_retry moved into app/client.py, but the test still patches app.util.backoff.time, which the moved function no longer uses, so the patch has no effect and the sleep assertion fails."
 		}
+	],
+	"operations": [
+		{
+			"type": "relocation",
+			"from": [
+				{
+					"filename": "app/util/backoff.py",
+					"side": "base",
+					"startLine": 6,
+					"endLine": 9
+				}
+			],
+			"to": [
+				{
+					"filename": "app/client.py",
+					"side": "head",
+					"startLine": 10,
+					"endLine": 13
+				}
+			],
+			"divergences": []
+		}
 	]
 }

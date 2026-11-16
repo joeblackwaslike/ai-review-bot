@@ -7,5 +7,56 @@
 			"endLine": 16,
 			"description": "The moved expiry_status changes `age < ttl` to `age <= ttl`, so a token whose age equals ttl is still reported valid, one tick past its lifetime, and inconsistent with the strict `<` used for the grace boundary."
 		}
+	],
+	"operations": [
+		{
+			"type": "relocation",
+			"from": [
+				{
+					"filename": "auth/sessions.py",
+					"side": "base",
+					"startLine": 14,
+					"endLine": 30
+				}
+			],
+			"to": [
+				{
+					"filename": "auth/tokens.py",
+					"side": "head",
+					"startLine": 4,
+					"endLine": 20
+				}
+			],
+			"divergences": [
+				{
+					"kind": "changed",
+					"base": {
+						"filename": "auth/sessions.py",
+						"side": "base",
+						"startLine": 26,
+						"endLine": 26
+					},
+					"head": {
+						"filename": "auth/tokens.py",
+						"side": "head",
+						"startLine": 16,
+						"endLine": 16
+					}
+				}
+			]
+		},
+		{
+			"type": "mechanical",
+			"from": [],
+			"to": [
+				{
+					"filename": "auth/sessions.py",
+					"side": "head",
+					"startLine": 5,
+					"endLine": 5
+				}
+			],
+			"divergences": []
+		}
 	]
 }

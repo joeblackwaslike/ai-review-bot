@@ -1,1 +1,25 @@
-{ "clean": true }
+{
+	"clean": true,
+	"operations": [
+		{
+			"type": "relocation",
+			"from": [
+				{
+					"filename": "api/listing.py",
+					"side": "base",
+					"startLine": 6,
+					"endLine": 24
+				}
+			],
+			"to": [
+				{
+					"filename": "api/paging.py",
+					"side": "head",
+					"startLine": 4,
+					"endLine": 22
+				}
+			],
+			"divergences": []
+		}
+	]
+}
