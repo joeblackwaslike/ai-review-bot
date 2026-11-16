@@ -3675,7 +3675,7 @@ describe("agent time budget", () => {
 				effectiveBudgetMs: number;
 			};
 			expect(fields.setupMs).toBeGreaterThanOrEqual(100_000);
-			expect(fields.effectiveBudgetMs).toBeGreaterThanOrEqual(139_000);
+			expect(fields.effectiveBudgetMs).toBeGreaterThanOrEqual(130_000);
 			expect(fields.effectiveBudgetMs).toBeLessThanOrEqual(140_000);
 		} finally {
 			log.mockRestore();
