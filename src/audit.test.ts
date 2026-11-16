@@ -29,6 +29,7 @@ vi.mock("./audit-pr.js", () => ({
 import { runAuditPass } from "./audit.js";
 import type { Provider } from "./auth.js";
 import { toGateFinding } from "./gate/report.js";
+import { buildAuditUserMessage } from "./prompt.js";
 import { runAgent, TIER1_SKILLS } from "./review.js";
 import type { ModelSelection } from "./router.js";
 import { buildModelReview } from "./testing.js";
@@ -1199,5 +1200,42 @@ describe("runAuditPass advisory skills", () => {
 			evidence: [],
 		});
 		expect(gate.severity).not.toBe("error");
+	});
+});
+
+describe("runAuditPass diff model section", () => {
+	const run = (diffModelSection?: string) =>
+		runAuditPass({
+			files: [{ path: "a.ts", content: "x" }],
+			selection,
+			extraInstructions: "",
+			meta: { owner: "o", repo: "r", ref: "local" },
+			...(diffModelSection === undefined ? {} : { diffModelSection }),
+		});
+
+	beforeEach(() => {
+		vi.mocked(buildAuditUserMessage).mockClear();
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		(runAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
+			status: "ok",
+			review: buildModelReview(),
+			usage: { promptTokens: 1, completionTokens: 1 },
+			durationMs: 1,
+		});
+	});
+
+	it("forwards the section to the audit message builder", async () => {
+		await run("SECTION");
+		expect(vi.mocked(buildAuditUserMessage).mock.calls[0]?.[0]).toMatchObject({
+			diffModelSection: "SECTION",
+		});
+	});
+
+	it("leaves the audit message input unchanged without a section", async () => {
+		await run();
+		expect(
+			vi.mocked(buildAuditUserMessage).mock.calls[0]?.[0],
+		).not.toHaveProperty("diffModelSection");
 	});
 });

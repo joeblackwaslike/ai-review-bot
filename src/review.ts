@@ -144,7 +144,7 @@ export interface PullFile {
 
 const DIFF_MODEL_TIME_CAP_MS = 2_000;
 
-function toPushFile(file: PullFile): PushFile {
+export function toPushFile(file: PullFile): PushFile {
 	const lines = file.patch?.split("\n") ?? [];
 	return {
 		filename: file.filename,
