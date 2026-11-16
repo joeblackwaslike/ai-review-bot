@@ -54,7 +54,8 @@ const TYPE_PLURAL: Record<Operation["type"], string> = {
 	mechanical: "mechanical",
 };
 
-function untrusted(value: string): string {
+/** Clips an author-derived value to 200 characters and fences it as untrusted text. */
+export function untrusted(value: string): string {
 	const clipped =
 		value.length > MAX_VALUE_CHARS ? value.slice(0, MAX_VALUE_CHARS) : value;
 	return fenceUntrusted(clipped);

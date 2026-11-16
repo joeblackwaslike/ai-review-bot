@@ -416,6 +416,32 @@ describe("buildLiveWiring", () => {
 		expect(routes).toHaveLength(1);
 	});
 
+	it("carries rename and change counts from the compare files", async () => {
+		const client = {
+			rest: async () => ({
+				files: [
+					{
+						filename: "src/new.ts",
+						status: "renamed",
+						previous_filename: "src/old.ts",
+						additions: 2,
+						deletions: 1,
+						patch: SIMPLE_PATCH,
+					},
+				],
+			}),
+		} as unknown as GhClient;
+		const fetched = await buildLiveWiring(fixture, client).fetchDiff(
+			fixture.rounds[1] as Round,
+		);
+		expect(fetched.files[0]).toMatchObject({
+			filename: "src/new.ts",
+			previous_filename: "src/old.ts",
+			additions: 2,
+			deletions: 1,
+		});
+	});
+
 	it("shows the agents each compare patch with right-side line numbers", async () => {
 		const routes: string[] = [];
 		const client = {
