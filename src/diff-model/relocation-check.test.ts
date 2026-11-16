@@ -139,4 +139,36 @@ describe("verifyRelocation", () => {
 		};
 		expect(verifyRelocation(bogus, files)).toBe(false);
 	});
+
+	it("rejects a reordered block claimed clean", () => {
+		const block = fn(body(20));
+		const swapped = block.map((line, i) =>
+			i === 5 ? (block[6] as string) : i === 6 ? (block[5] as string) : line,
+		);
+		const { files, op } = relocation(block, swapped);
+		expect(verifyRelocation(claimedClean(op), files)).toBe(false);
+	});
+
+	it("rejects a changed string-literal interior claimed clean", () => {
+		const base = withLine(fn(body(20)), 5, '  const s = "a  b";');
+		const head = withLine(base, 5, '  const s = "a b";');
+		const { files, op } = relocation(base, head);
+		expect(verifyRelocation(claimedClean(op), files)).toBe(false);
+	});
+
+	it("accepts a re-indented line that contains a string", () => {
+		const block = withLine(fn(body(20)), 5, '  const s = "a  b";');
+		const { files, op } = relocation(
+			block,
+			block.map((line) => `    ${line}`),
+		);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("rejects x + +y changed to x ++y claimed clean", () => {
+		const base = withLine(fn(body(20)), 5, "  const z = x + +y;");
+		const head = withLine(base, 5, "  const z = x ++y;");
+		const { files, op } = relocation(base, head);
+		expect(verifyRelocation(claimedClean(op), files)).toBe(false);
+	});
 });

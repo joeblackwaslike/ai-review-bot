@@ -106,10 +106,6 @@ function insideLiteral(lines: string[]): boolean[] {
 	return marks;
 }
 
-function squash(line: string): string {
-	return line.replace(/\s+/g, "");
-}
-
 function claimLine(
 	span: Span | undefined,
 	sides: Side[],
@@ -155,34 +151,24 @@ function unclaimed(sides: Side[], spent: Set<string>): Entry[] {
 	);
 }
 
-function removeIdentical(base: Entry[], head: Entry[]): [Entry[], Entry[]] {
-	const pool = new Map<string, Entry[]>();
-	for (const entry of head)
-		pool.set(entry.text, [...(pool.get(entry.text) ?? []), entry]);
-	const baseOnly = base.filter((entry) => {
-		const bucket = pool.get(entry.text);
-		if (!bucket || bucket.length === 0) return true;
-		bucket.pop();
-		return false;
-	});
-	return [baseOnly, [...pool.values()].flat()];
+function interior(line: string): string {
+	const text = line.trim();
+	return /["'`/]/.test(text) ? text : text.replace(/\s+/g, " ");
 }
 
-function whitespaceOnly(base: Entry[], head: Entry[]): boolean {
-	if (base.length !== head.length) return false;
+function pairsUp(base: Entry, head: Entry): boolean {
+	if (base.text === head.text) return true;
 	const safe = (entry: Entry) => !entry.inLiteral && !entry.indentSensitive;
-	if (!base.every(safe) || !head.every(safe)) return false;
-	const pool = new Map<string, number>();
-	for (const entry of head) {
-		const key = squash(entry.text);
-		pool.set(key, (pool.get(key) ?? 0) + 1);
-	}
-	return base.every((entry) => {
-		const key = squash(entry.text);
-		const have = pool.get(key) ?? 0;
-		pool.set(key, have - 1);
-		return have > 0;
-	});
+	return (
+		safe(base) && safe(head) && interior(base.text) === interior(head.text)
+	);
+}
+
+function accountedPositionally(base: Entry[], head: Entry[]): boolean {
+	return (
+		base.length === head.length &&
+		base.every((entry, i) => pairsUp(entry, head[i] as Entry))
+	);
 }
 
 /**
@@ -209,9 +195,8 @@ export function verifyRelocation(op: Operation, files: PushFile[]): boolean {
 		)
 			return false;
 	}
-	const [baseOnly, headOnly] = removeIdentical(
+	return accountedPositionally(
 		unclaimed(base, baseSpent),
 		unclaimed(head, headSpent),
 	);
-	return whitespaceOnly(baseOnly, headOnly);
 }
