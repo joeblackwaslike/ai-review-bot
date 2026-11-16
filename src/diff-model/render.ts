@@ -43,6 +43,11 @@ const DIVERGENCE_CLASS: Record<Divergence["class"], string> = {
 	rename: "identifier rename",
 };
 
+const MECHANICAL_PHRASE = {
+	whitespace: "the lines shown differ only in whitespace",
+	imports: "the lines shown are import lines only",
+} as const;
+
 const TYPE_PLURAL: Record<Operation["type"], string> = {
 	relocation: "relocation",
 	rename: "rename",
@@ -133,7 +138,7 @@ function headline(op: Operation): string {
 		return `Rename: ${untrusted(from)} to ${untrusted(to)}, ${content}.`;
 	}
 	const spans = op.to.length > 0 ? op.to : op.from;
-	return `Mechanical: the lines shown differ only in whitespace, or the lines shown are import lines only (${spansText(spans)}).`;
+	return `Mechanical: ${MECHANICAL_PHRASE[op.reason ?? "whitespace"]} (${spansText(spans)}).`;
 }
 
 function detailBlock(op: Operation, number: number): string {
@@ -190,7 +195,7 @@ function addFileNotes(
 		addNote(
 			notes,
 			s.filename,
-			`Mechanical, ${spanRange(s)}: the lines shown differ only in whitespace, or the lines shown are import lines only, ${see}`,
+			`Mechanical, ${spanRange(s)}: ${MECHANICAL_PHRASE[op.reason ?? "whitespace"]}, ${see}`,
 		);
 	}
 }
@@ -230,7 +235,16 @@ function intentLine(
 		.slice(0, MAX_CLAIM_PHRASES)
 		.map((c) => untrusted(c.phrase));
 	if (phrases.length === 0) return null;
-	const says = `The description says ${phrases.join(" and ")}.`;
+	const sources = new Set(
+		model.facts.intentClaims.slice(0, MAX_CLAIM_PHRASES).map((c) => c.source),
+	);
+	const speaker =
+		sources.size > 1
+			? "The title and description say"
+			: sources.has("title")
+				? "The title says"
+				: "The description says";
+	const says = `${speaker} ${phrases.join(" and ")}.`;
 	const codeIndex = ranked.findIndex(hasCodeDivergence);
 	if (codeIndex >= 0) {
 		const d = ranked[codeIndex]?.divergences.find((x) => x.class === "code");
@@ -252,12 +266,10 @@ function intentLine(
 }
 
 function nothingToSay(model: DiffModel): boolean {
-	const kinds = new Set(model.files.map((f) => f.kind));
 	return (
 		model.operations.length === 0 &&
 		model.facts.intentClaims.length === 0 &&
-		model.droppedClaims === 0 &&
-		kinds.size < 2
+		model.droppedClaims === 0
 	);
 }
 

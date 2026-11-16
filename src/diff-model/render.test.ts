@@ -96,7 +96,7 @@ describe("renderDiffModel", () => {
 		expect(r.summary).toContain("line 5");
 		expect(r.summary).toContain("Math.floor(x)");
 		expect(r.summary).toContain("Tests: no test files changed");
-		expect(r.summary).toContain("The description says");
+		expect(r.summary).toContain("The title says");
 		expect(r.summary).toContain("has a code difference from the original");
 		const withoutFenced = r.summary.replace(
 			/<untrusted_pr_text>[\s\S]*?<\/untrusted_pr_text>/g,
@@ -256,14 +256,33 @@ describe("renderDiffModel", () => {
 		expect(s).not.toContain("no test files changed");
 	});
 
-	it("words mechanical operations without calling them safe", () => {
-		const s = renderDiffModel(
-			model({ operations: [op({ id: "mechanical-1", type: "mechanical" })] }),
+	it("names exactly one phrase for a whitespace mechanical operation", () => {
+		const r = renderDiffModel(
+			model({
+				operations: [
+					op({ id: "mechanical-1", type: "mechanical", reason: "whitespace" }),
+				],
+			}),
 			OPTS,
-		).summary;
+		);
+		const s = allText(r);
 		expect(s).toContain("the lines shown differ only in whitespace");
-		expect(s).toContain("the lines shown are import lines only");
+		expect(s).not.toContain("import lines only");
 		expect(s).not.toMatch(/no code change|safe|skip/i);
+	});
+
+	it("names exactly one phrase for an import mechanical operation", () => {
+		const r = renderDiffModel(
+			model({
+				operations: [
+					op({ id: "mechanical-1", type: "mechanical", reason: "imports" }),
+				],
+			}),
+			OPTS,
+		);
+		const s = allText(r);
+		expect(s).toContain("the lines shown are import lines only");
+		expect(s).not.toContain("differ only in whitespace");
 	});
 
 	it("returns nothing for a PR with no operations and no claims", () => {
@@ -275,7 +294,22 @@ describe("renderDiffModel", () => {
 		expect(r.fileNotes.size).toBe(0);
 	});
 
-	it("renders a file mix for files with no operations when kinds differ", () => {
+	it("returns nothing for a code change plus a test change with no operations", () => {
+		const r = renderDiffModel(
+			model({
+				files: [
+					codeFile("src/a.ts"),
+					{ ...codeFile("src/a.test.ts"), kind: "test" },
+				],
+				facts: { testsChanged: true, intentClaims: [] },
+			}),
+			OPTS,
+		);
+		expect(r.summary).toBe("");
+		expect(r.fileNotes.size).toBe(0);
+	});
+
+	it("renders a file mix when there is an operation", () => {
 		const r = renderDiffModel(
 			model({
 				files: [
@@ -283,12 +317,46 @@ describe("renderDiffModel", () => {
 					codeFile("b.ts"),
 					{ ...codeFile("README.md"), kind: "docs" },
 				],
+				operations: [op({ id: "relocation-1", type: "relocation" })],
 			}),
 			{ maxChars: 6000, scopeLabel: "delta since the last review" },
 		);
 		expect(r.summary).toContain("3 files: 2 code, 1 docs");
 		expect(r.summary).toContain("delta since the last review");
-		expect(r.fileNotes.size).toBe(0);
+	});
+
+	it("words the claim from the body when it came from the description", () => {
+		const r = renderDiffModel(
+			model({
+				operations: [op({ id: "relocation-1", type: "relocation" })],
+				facts: {
+					testsChanged: false,
+					intentClaims: [
+						{ phrase: "rename", source: "body", start: 0, end: 6 },
+					],
+				},
+			}),
+			OPTS,
+		);
+		expect(r.summary).toContain("The description says");
+		expect(r.summary).not.toContain("The title says");
+	});
+
+	it("words the claim from both when the title and description carry one", () => {
+		const r = renderDiffModel(
+			model({
+				operations: [op({ id: "relocation-1", type: "relocation" })],
+				facts: {
+					testsChanged: false,
+					intentClaims: [
+						{ phrase: "rename", source: "title", start: 0, end: 6 },
+						{ phrase: "rename", source: "body", start: 0, end: 6 },
+					],
+				},
+			}),
+			OPTS,
+		);
+		expect(r.summary).toContain("The title and description say");
 	});
 
 	it("opens with the fixed paragraph saying the diff wins", () => {
@@ -356,7 +424,7 @@ describe("renderDiffModel", () => {
 			},
 		});
 		const r = renderDiffModel(m, { ...OPTS, maxChars: 1 });
-		expect(r.summary).toContain("The description says");
+		expect(r.summary).toContain("The title says");
 		expect(r.summary).not.toMatch(/Operation \d+/);
 		expect(r.summary).toContain("has a code difference from the original");
 		expect(r.summary).toContain("line 5");

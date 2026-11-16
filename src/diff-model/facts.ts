@@ -2,17 +2,17 @@ import type { PushFile } from "../moved-blocks.js";
 import { classifyFile } from "../push-shape.js";
 import type { IntentClaim, PrFacts } from "./types.js";
 
-const INTENT_PHRASES = [
-	"no functional change",
-	"refactor only",
-	"formatting only",
-	"whitespace only",
-	"rename",
+const INTENT_PHRASES: { phrase: string; pattern: string }[] = [
+	{ phrase: "no functional change", pattern: "no functional changes?" },
+	{ phrase: "refactor only", pattern: "refactor only" },
+	{ phrase: "formatting only", pattern: "formatting only" },
+	{ phrase: "whitespace only", pattern: "whitespace only" },
+	{ phrase: "rename", pattern: "renames?" },
 ];
 
 function claimsIn(text: string, source: IntentClaim["source"]): IntentClaim[] {
-	return INTENT_PHRASES.flatMap((phrase) =>
-		[...text.matchAll(new RegExp(`\\b${phrase}\\b`, "gi"))].map((m) => ({
+	return INTENT_PHRASES.flatMap(({ phrase, pattern }) =>
+		[...text.matchAll(new RegExp(`\\b${pattern}\\b`, "gi"))].map((m) => ({
 			phrase,
 			source,
 			start: m.index,

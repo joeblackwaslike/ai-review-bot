@@ -76,4 +76,23 @@ describe("buildPrFacts", () => {
 		});
 		expect(facts.intentClaims).toEqual([]);
 	});
+
+	it("intent claims match the plural 'no functional changes'", () => {
+		const facts = buildPrFacts({
+			prFiles: [],
+			prFilesComplete: true,
+			title: "Tidy: no functional changes",
+			body: "Two renames, no functional changes.",
+		});
+		expect(facts.intentClaims.map((c) => c.phrase)).toEqual([
+			"no functional change",
+			"no functional change",
+			"rename",
+		]);
+		expect(facts.intentClaims.map((c) => c.source)).toEqual([
+			"title",
+			"body",
+			"body",
+		]);
+	});
 });

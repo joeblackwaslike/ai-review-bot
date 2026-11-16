@@ -56,6 +56,8 @@ export interface Operation {
 	exact: boolean;
 	divergences: Divergence[];
 	reviewWeight: number;
+	/** Why a mechanical operation is mechanical. */
+	reason?: "whitespace" | "imports";
 }
 
 /** A phrase of stated intent and the PR text span it came from. */

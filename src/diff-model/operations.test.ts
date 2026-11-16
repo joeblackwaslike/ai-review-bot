@@ -66,6 +66,36 @@ describe("findRenames", () => {
 		expect(ops[0]).toMatchObject({ type: "rename", exact: false });
 	});
 
+	it("does not call a re-indented unpaired rename identical", () => {
+		const ops = findRenames([
+			file("billing/old.py", hunk(["gateway.charge(inv)"], []), {
+				status: "removed",
+			}),
+			file("billing/new.py", hunk([], ["    gateway.charge(inv)"]), {
+				status: "added",
+			}),
+		]);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]).toMatchObject({ type: "rename", exact: false });
+	});
+
+	it("calls an unpaired rename with identical ordered lines exact", () => {
+		const lines = ["a", "  b", "c"];
+		const ops = findRenames([
+			file("src/old.ts", hunk(lines, []), { status: "removed" }),
+			file("src/new.ts", hunk([], lines), { status: "added" }),
+		]);
+		expect(ops[0]).toMatchObject({ exact: true });
+	});
+
+	it("does not call a reordered unpaired rename identical", () => {
+		const ops = findRenames([
+			file("src/old.ts", hunk(["a", "b", "c"], []), { status: "removed" }),
+			file("src/new.ts", hunk([], ["c", "b", "a"]), { status: "added" }),
+		]);
+		expect(ops[0]).toMatchObject({ exact: false });
+	});
+
 	it("does not pair files below the similarity threshold", () => {
 		const ops = findRenames([
 			file(
@@ -249,6 +279,32 @@ describe("findMechanical", () => {
 		);
 		expect(findMechanical([ts])).toHaveLength(1);
 		expect(findMechanical([py])).toHaveLength(1);
+	});
+
+	it("does not report a statement moved out of a block as whitespace-only", () => {
+		const patch = "@@ -1,4 +1,4 @@\n if (x) {\n-  a();\n }\n+a();";
+		expect(findMechanical([file("src/a.ts", patch)])).toEqual([]);
+	});
+
+	it("does not report swapped statement order as whitespace-only", () => {
+		const patch = "@@ -1,2 +1,2 @@\n-  first();\n second();\n+first();";
+		expect(findMechanical([file("src/a.ts", patch)])).toEqual([]);
+	});
+
+	it("does not report a whitespace change inside a regex literal", () => {
+		const patch = hunk(["const r = /a  b/;"], ["const r = /a b/;"]);
+		expect(findMechanical([file("src/a.ts", patch)])).toEqual([]);
+	});
+
+	it("records whether a mechanical hunk is whitespace or imports", () => {
+		const ws = findMechanical([
+			file("src/a.ts", hunk(["    const a = 1;"], ["const a = 1;"])),
+		]);
+		const imp = findMechanical([
+			file("src/a.ts", hunk([], ['import { x } from "./x.js";'])),
+		]);
+		expect(ws[0]?.reason).toBe("whitespace");
+		expect(imp[0]?.reason).toBe("imports");
 	});
 
 	it("does not report a hunk that mixes an import with code", () => {
