@@ -8,7 +8,7 @@
 					"filename": "gateway/bucket.py",
 					"side": "base",
 					"startLine": 4,
-					"endLine": 9
+					"endLine": 11
 				}
 			],
 			"to": [
@@ -16,7 +16,7 @@
 					"filename": "gateway/handler.py",
 					"side": "head",
 					"startLine": 6,
-					"endLine": 11
+					"endLine": 13
 				}
 			],
 			"divergences": []

@@ -13,23 +13,31 @@ export interface DetectionScore {
 	divergenceMisses: number;
 }
 
-const overlaps = (truth: SeedSpan, found: Span): boolean =>
+const EDGE_TOLERANCE_LINES = 1;
+
+const covers = (truth: SeedSpan, found: Span): boolean =>
 	truth.filename === found.filename &&
 	truth.side === found.side &&
-	truth.startLine <= found.endLine &&
-	found.startLine <= truth.endLine;
+	found.startLine <= truth.startLine &&
+	found.endLine >= truth.endLine &&
+	truth.startLine - found.startLine <= EDGE_TOLERANCE_LINES &&
+	found.endLine - truth.endLine <= EDGE_TOLERANCE_LINES;
 
 function spansMatch(truth: SeedSpan[], found: Span[]): boolean {
-	return (
-		truth.length === found.length &&
-		truth.every((t) => found.some((f) => overlaps(t, f)))
-	);
+	if (truth.length !== found.length) return false;
+	const unclaimed = [...found];
+	for (const t of truth) {
+		const at = unclaimed.findIndex((f) => covers(t, f));
+		if (at === -1) return false;
+		unclaimed.splice(at, 1);
+	}
+	return true;
 }
 
 function sideMatches(truth: SeedSpan | undefined, found: Span | undefined) {
 	return truth === undefined || found === undefined
 		? truth === found
-		: overlaps(truth, found);
+		: covers(truth, found);
 }
 
 function divergenceMatches(
@@ -59,7 +67,7 @@ function divergenceMisses(
 
 /**
  * Scores a model's operations against a seed's expected ones. An operation matches by type
- * and by spans that overlap the expected spans in the same file and side. Divergences are
+ * and by spans that each contain one expected span in the same file and side, extending past it by at most `EDGE_TOLERANCE_LINES` on each side. Each found span satisfies one expected span. Divergences are
  * scored on matched operations: one the truth lists and the model lacks, or one the model
  * reports and the truth does not list, each counts as a miss. An operation the truth does
  * not list is `unexpected`.

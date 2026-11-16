@@ -107,6 +107,51 @@ describe("scoreDetection", () => {
 		expect(result.unexpected).toEqual([moved]);
 	});
 
+	const withTo = (to: Span[]): Operation => ({ ...relocation(), to });
+
+	it("does not match a found span that only grazes the truth span", () => {
+		const result = scoreDetection(
+			[expectedRelocation()],
+			modelOf([withTo([span("b.py", "head", 24, 40)])]),
+		);
+		expect(result.missing).toHaveLength(1);
+	});
+
+	it("does not match a clipped span", () => {
+		const result = scoreDetection(
+			[expectedRelocation()],
+			modelOf([withTo([span("b.py", "head", 4, 20)])]),
+		);
+		expect(result.missing).toHaveLength(1);
+	});
+
+	it("does not match an over-wide span but allows one line at each edge", () => {
+		const wide = scoreDetection(
+			[expectedRelocation()],
+			modelOf([withTo([span("b.py", "head", 2, 24)])]),
+		);
+		expect(wide.missing).toHaveLength(1);
+		const edge = scoreDetection(
+			[expectedRelocation()],
+			modelOf([withTo([span("b.py", "head", 3, 25)])]),
+		);
+		expect(edge.matched).toBe(1);
+	});
+
+	it("lets one found span satisfy only one truth span", () => {
+		const expected: SeedOperation = {
+			...expectedRelocation(),
+			to: [truthSpan("b.py", "head", 4, 24), truthSpan("b.py", "head", 4, 24)],
+		};
+		const result = scoreDetection(
+			[expected],
+			modelOf([
+				withTo([span("b.py", "head", 4, 24), span("c.py", "head", 1, 2)]),
+			]),
+		);
+		expect(result.missing).toHaveLength(1);
+	});
+
 	it("reports a missing divergence", () => {
 		const result = scoreDetection(
 			[
