@@ -27,7 +27,7 @@ describe("f0 runbook digest", () => {
 	});
 
 	it("fits the byte budget", () => {
-		expect(Buffer.byteLength(skill, "utf8")).toBeLessThanOrEqual(12000);
+		expect(Buffer.byteLength(skill, "utf8")).toBeLessThanOrEqual(13000);
 	});
 
 	it("copies the a0 severity section verbatim", () => {
@@ -37,6 +37,15 @@ describe("f0 runbook digest", () => {
 		)?.[0];
 		expect(section).toBeTruthy();
 		expect(skill).toContain(section?.trimEnd() ?? "");
+	});
+
+	it("copies the a0 general checklist verbatim and before the runbook triage", () => {
+		const a0 = readFileSync("skills/a0-single-reviewer.md", "utf8");
+		const section = a0.match(/^## What to look for\n[\s\S]*?(?=^## )/m)?.[0];
+		expect(section).toBeTruthy();
+		const body = section?.trimEnd() ?? "";
+		expect(skill).toContain(body);
+		expect(skill.indexOf(body)).toBeLessThan(skill.indexOf("## Triage"));
 	});
 
 	it("keeps the severity scale and confidence rule", () => {
