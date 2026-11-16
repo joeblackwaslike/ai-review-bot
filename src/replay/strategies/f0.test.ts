@@ -79,14 +79,14 @@ describe("strategyF0", () => {
 		).not.toBe(strategyF0Version(read("one")));
 	});
 
-	it("makes exactly one call even when the spend target is ten runs", async () => {
+	it("repeats to the spend target like a0, labelling each run f0-run-N", async () => {
 		const out = await strategyF0.run(inputFor(1000));
 
-		expect(mockRunAgent).toHaveBeenCalledTimes(1);
+		expect(mockRunAgent.mock.calls.length).toBeGreaterThan(1);
 		expect(mockRunAgent.mock.calls[0]?.[0]).toBe("f0-runbook-reviewer.md");
-		expect(out.agentReviews.map((a) => a.skill)).toEqual(["f0"]);
-		expect(Object.keys(out.usage)).toEqual(["f0.md"]);
-		expect(out.spend).toBeUndefined();
+		expect(out.agentReviews[0]?.skill).toBe("f0-run-1");
+		expect(Object.keys(out.usage)[0]).toBe("f0-run-1.md");
+		expect(out.spend?.targetUsd).toBe(1000);
 		expect(out.findings.map((f) => f.title)).toEqual(
 			mergeReviewsDetailed(
 				out.agentReviews.map((a) => a.review),
@@ -112,15 +112,19 @@ describe("strategyF0", () => {
 			provider: "anthropic",
 		});
 		await expect(strategyF0.run(inputFor())).rejects.toThrow(
-			/^f0 run failed: quota_exhausted$/,
+			/^f0 first run failed: quota_exhausted$/,
 		);
 	});
 
-	it("estimates one run, like a0", () => {
+	it("estimates the same spend-matched cost as a0", () => {
 		const input = inputFor(1000);
-		expect(strategyF0.estimateCost(input)).toBe(
-			strategyA0.estimateCost({ ...input, spendTargetUsd: undefined }),
-		);
+		expect(strategyF0.estimateCost(input)).toBe(strategyA0.estimateCost(input));
+	});
+
+	it("makes one call when no spend target is set", async () => {
+		const out = await strategyF0.run(inputFor());
+		expect(mockRunAgent).toHaveBeenCalledTimes(1);
+		expect(out.agentReviews.map((a) => a.skill)).toEqual(["f0-run-1"]);
 	});
 
 	it("registers alongside a and a0", () => {

@@ -25,6 +25,7 @@ import {
 } from "../types.js";
 import { mulberry32 } from "./bootstrap.js";
 import type { ExperimentPlan } from "./plan.js";
+import { isSpendMatched } from "./spend-matched-names.js";
 import type { CellKey, CellRecord, ResultsStore } from "./store.js";
 
 export interface LoadedFixture {
@@ -75,7 +76,6 @@ export interface GridReport {
 }
 
 const A = "a";
-const A0 = "a0";
 
 export function shuffled<T>(items: T[], seed: string): T[] {
 	const out = [...items];
@@ -99,12 +99,12 @@ export function resolveStrategies(
 			);
 		return s;
 	});
-	if (
-		resolved.some((s) => s.name === A0) &&
-		!resolved.some((s) => s.name === A)
-	)
-		throw new Error(`strategy "${A0}" requires "${A}" in the same plan`);
-	const rank = (s: ReviewStrategy) => (s.name === A0 ? 1 : 0);
+	const spendMatched = resolved.find((s) => isSpendMatched(s.name));
+	if (spendMatched && !resolved.some((s) => s.name === A))
+		throw new Error(
+			`strategy "${spendMatched.name}" requires "${A}" in the same plan`,
+		);
+	const rank = (s: ReviewStrategy) => (isSpendMatched(s.name) ? 1 : 0);
 	return [...resolved].sort((x, y) => rank(x) - rank(y));
 }
 
@@ -265,7 +265,7 @@ export async function planGrid(
 		let aEstimate: number | undefined;
 		for (const s of strategies) {
 			const { input } = await builder.build(u.fixtureId, u.round, plan, {
-				spendTargetUsd: s.name === A0 ? aEstimate : undefined,
+				spendTargetUsd: isSpendMatched(s.name) ? aEstimate : undefined,
 			});
 			const e = requireCost(s.estimateCost(input), `strategy ${s.name}`);
 			if (s.name === A) aEstimate = e;
@@ -352,13 +352,16 @@ export async function runGrid(
 					)?.costUsd;
 				continue;
 			}
-			if (stopped.has(provider) || (s.name === A0 && aCost === undefined)) {
+			if (
+				stopped.has(provider) ||
+				(isSpendMatched(s.name) && aCost === undefined)
+			) {
 				report.missing.push(cell);
 				continue;
 			}
 
 			const { input, round } = await builder.build(u.fixtureId, u.round, plan, {
-				spendTargetUsd: s.name === A0 ? aCost : undefined,
+				spendTargetUsd: isSpendMatched(s.name) ? aCost : undefined,
 			});
 			const estimate = requireCost(s.estimateCost(input), `strategy ${s.name}`);
 			if (!Number.isFinite(estimate) || estimate < 0)

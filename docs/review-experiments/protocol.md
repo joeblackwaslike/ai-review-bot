@@ -96,15 +96,17 @@ cost for the same round in the same grid run, within a tolerance of plus or minu
 (`a0Tolerance`). `a` always runs before `a0` for a round. Cost is computed from recorded tokens at
 list price, with cache reads priced as cache reads.
 
-`f0` is the first candidate-F slice: one reviewer with a distilled runbook digest (`skills/f0-runbook-reviewer.md`).
-It needs no `a` pairing and is scored against baseline `a` like `a0`. Its version changes whenever the
-digest changes, so re-pin it in both plan files.
+`f0` is the first candidate-F slice: one reviewer prompt with a distilled runbook digest
+(`skills/f0-runbook-reviewer.md`) followed by `a0`'s general "What to look for" list. Like `a0`, it repeats
+the same single reviewer until its spend matches `a` within `a0Tolerance`, through the shared loop in
+`src/replay/strategies/spend-matched.ts`, so `a` runs before it and a plan with `f0` must contain `a`. It is
+scored against baseline `a`, so `a0` and `f0` meet only indirectly, and the two prompts are the only
+difference between them. Its version changes whenever the digest or the loop changes, so re-pin it in both
+plan files. It builds its message with its own ref so it does not read `a`'s prompt cache.
 
-`f0` runs between `a` and `a0` for a round and builds its message with its own ref, so it does not read `a`'s
-prompt cache. It omits a0's generic "What to look for" list (injection, XSS, secrets, swallowed exceptions,
-null handling) in favor of the digest, so a loss could come from that removal as well as from the runbooks.
-`estimateCost` counts only the diff and under-reports `f0`'s fixed prompt of about 3.4K tokens, so plan
-estimates run low on small diffs.
+The first pilots, before spend matching, showed what a single `f0` call gives: 0.7 findings per cell against
+3.7 for `a`, which came from call count and not from the prompt (restoring the general list moved recall from
+0.005 to 0.031). Those cells were judged at `f0`'s own single-pass cost and are not comparable to this mode.
 
 ## Metrics
 
