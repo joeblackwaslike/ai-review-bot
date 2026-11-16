@@ -142,6 +142,22 @@ vi.mock("./prompt.js", async (importOriginal) => ({
 	},
 }));
 
+const diffModelSpy = vi.hoisted(() => ({
+	calls: [] as Array<Record<string, unknown>>,
+	failWith: undefined as Error | undefined,
+}));
+vi.mock("./diff-model/prepare.js", async (importOriginal) => {
+	const real = await importOriginal<typeof import("./diff-model/prepare.js")>();
+	return {
+		...real,
+		prepareDiffInput: (input: Parameters<typeof real.prepareDiffInput>[0]) => {
+			diffModelSpy.calls.push(input);
+			if (diffModelSpy.failWith) throw diffModelSpy.failWith;
+			return real.prepareDiffInput(input);
+		},
+	};
+});
+
 const mockTriageReReview = vi.hoisted(() => vi.fn());
 const mockFetchDeltaMeta = vi.hoisted(() =>
 	vi.fn(async () => ({ files: [], diff: "delta", truncated: false })),
@@ -10055,6 +10071,113 @@ describe("delta scoping without KV", () => {
 				expect(seen[skill]).toEqual([DELTA]);
 			expect(decision?.body).toContain("Fresh issue");
 			expect(pendingIn(decision?.body)).toEqual([]);
+		});
+
+		describe("diff model wiring", () => {
+			const docFile = buildPullFile("docs/x.md", SIMPLE_PATCH);
+			const deltaBDoc = () => ({ status: "ahead", files: [bFile, docFile] });
+			const modelContexts = () =>
+				mockBuildUserMessage.mock.calls.map(
+					(c) =>
+						c[0] as {
+							diffModel?: { summary: string };
+							diffScope?: string;
+						},
+				);
+
+			beforeEach(() => {
+				diffModelSpy.calls = [];
+				diffModelSpy.failWith = undefined;
+			});
+			afterEach(() => {
+				REVIEWER_TUNING.diffModel = false;
+				vi.restoreAllMocks();
+			});
+
+			function run(o: { changedFiles?: number } = {}) {
+				agents();
+				incremental();
+				const { octokit } = prOctokit({
+					reviews: [{ id: 11, body: withPending([SAST]) }],
+					files: [aFile, bFile, docFile],
+					compare: deltaBDoc,
+				});
+				return buildReview({ octokit, ...baseContext, ...o });
+			}
+
+			it("dispatch builds one model per input scope and labels each section", async () => {
+				REVIEWER_TUNING.diffModel = true;
+
+				await run();
+
+				const scopes = diffModelSpy.calls.map((c) => ({
+					label: c.scopeLabel,
+					scope: (c.scopeFiles as Array<{ filename: string }>)
+						.map((f) => f.filename)
+						.sort(),
+				}));
+				expect(scopes).toHaveLength(2);
+				expect(new Set(scopes.map((s) => s.label)).size).toBe(2);
+				expect(scopes.map((s) => s.scope).sort()).toEqual([
+					["docs/x.md", "src/a.ts", "src/b.ts"],
+					["docs/x.md", "src/b.ts"],
+				]);
+				const delta = modelContexts().find((c) =>
+					c.diffScope?.startsWith("INCREMENTAL"),
+				);
+				const whole = modelContexts().find(
+					(c) => !c.diffScope?.startsWith("INCREMENTAL"),
+				);
+				expect(delta?.diffModel?.summary).toContain(
+					"delta since the last review",
+				);
+				expect(whole?.diffModel?.summary).toContain("whole PR");
+			});
+
+			it("a delta round does not say no tests changed when the PR list is incomplete", async () => {
+				REVIEWER_TUNING.diffModel = true;
+
+				await run({ changedFiles: 50 });
+
+				const delta = modelContexts().find((c) =>
+					c.diffScope?.startsWith("INCREMENTAL"),
+				);
+				expect(delta?.diffModel?.summary).toContain("Tests: unknown");
+				expect(delta?.diffModel?.summary).not.toContain(
+					"no test files changed",
+				);
+			});
+
+			it("with the switch off the user message is unchanged and a diff-model log line is still written", async () => {
+				const log = vi.spyOn(console, "log").mockImplementation(() => {});
+
+				await run();
+
+				for (const ctx of modelContexts())
+					expect(ctx).not.toHaveProperty("diffModel");
+				const lines = log.mock.calls.filter((c) => c[0] === "diff model built");
+				expect(lines).toHaveLength(2);
+				expect(lines[0]?.[1]).toMatchObject({
+					used: false,
+					droppedClaims: 0,
+					operations: { relocation: 0, rename: 0, mechanical: 0 },
+				});
+			});
+
+			it("a throw inside the model build omits the section and the review continues", async () => {
+				REVIEWER_TUNING.diffModel = true;
+				diffModelSpy.failWith = new Error("boom");
+				const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+				const decision = await run();
+
+				expect(decision).not.toBeNull();
+				for (const ctx of modelContexts())
+					expect(ctx).not.toHaveProperty("diffModel");
+				expect(warn.mock.calls.some((c) => c[0] === "diff model failed")).toBe(
+					true,
+				);
+			});
 		});
 
 		it("a pending skill gets the whole PR on its retry too; the delta never reaches it", async () => {

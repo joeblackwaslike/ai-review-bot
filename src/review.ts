@@ -34,6 +34,9 @@ import {
 } from "./concurrency.js";
 import { getConfigTree } from "./config/load.js";
 import { collectRightSideLines, rightSideText } from "./diff-lines.js";
+import { prepareDiffInput } from "./diff-model/prepare.js";
+import type { RenderedDiffModel } from "./diff-model/render.js";
+import { DEFAULT_DIFF_BUDGET_CHARS } from "./diff-pack.js";
 import {
 	type Discard,
 	type DiscardFields,
@@ -58,6 +61,7 @@ import {
 } from "./ledger/suppress.js";
 import { isAcknowledged, isSettled, type LedgerEntry } from "./ledger/types.js";
 import { createAIModel, modelLabel, sumCost } from "./models.js";
+import type { PushFile } from "./moved-blocks.js";
 import {
 	type AgentPromptOptions,
 	buildAgentSystemPrompt,
@@ -136,6 +140,78 @@ export interface PullFile {
 	deletions?: number;
 	/** Set by GitHub on a renamed file. */
 	previous_filename?: string;
+}
+
+const DIFF_MODEL_TIME_CAP_MS = 2_000;
+
+function toPushFile(file: PullFile): PushFile {
+	const lines = file.patch?.split("\n") ?? [];
+	return {
+		filename: file.filename,
+		status: file.status,
+		...(file.previous_filename
+			? { previous_filename: file.previous_filename }
+			: {}),
+		...(file.patch === undefined ? {} : { patch: file.patch }),
+		additions: file.additions ?? lines.filter((l) => l.startsWith("+")).length,
+		deletions: file.deletions ?? lines.filter((l) => l.startsWith("-")).length,
+	};
+}
+
+/**
+ * Builds the diff model for one input scope and logs what it found. Returns the rendered
+ * section only when `REVIEWER_TUNING.diffModel` is on and the build finished inside its
+ * time cap; any failure is logged and yields no section, so a review never fails on it.
+ */
+function buildDiffModelSection(input: {
+	scopeFiles: PullFile[];
+	prFiles: PullFile[];
+	prFilesComplete: boolean;
+	title: string;
+	body: string | null;
+	diffBudgetChars: number | undefined;
+	scopeLabel: string;
+	prLog: Record<string, unknown>;
+}): RenderedDiffModel | undefined {
+	const startedAt = Date.now();
+	try {
+		const { model, rendered } = prepareDiffInput({
+			scopeFiles: input.scopeFiles.map(toPushFile),
+			prFiles: input.prFiles.map(toPushFile),
+			prFilesComplete: input.prFilesComplete,
+			title: input.title,
+			body: input.body,
+			budgetChars: input.diffBudgetChars ?? DEFAULT_DIFF_BUDGET_CHARS,
+			sectionBudgetChars: getConfigTree().review.diffModelBudgetChars,
+			scopeLabel: input.scopeLabel,
+		});
+		const elapsedMs = Date.now() - startedAt;
+		if (elapsedMs > DIFF_MODEL_TIME_CAP_MS)
+			throw new Error(`took ${elapsedMs}ms, over the time cap`);
+		const used = REVIEWER_TUNING.diffModel;
+		console.log("diff model built", {
+			...input.prLog,
+			scope: input.scopeLabel,
+			operations: {
+				relocation: model.operations.filter((o) => o.type === "relocation")
+					.length,
+				rename: model.operations.filter((o) => o.type === "rename").length,
+				mechanical: model.operations.filter((o) => o.type === "mechanical")
+					.length,
+			},
+			droppedClaims: model.droppedClaims,
+			used,
+			elapsedMs,
+		});
+		return used ? rendered : undefined;
+	} catch (error) {
+		console.warn("diff model failed", {
+			...input.prLog,
+			scope: input.scopeLabel,
+			error: error instanceof Error ? error.message : String(error),
+		});
+		return undefined;
+	}
 }
 
 interface ReviewContext {
@@ -2572,10 +2648,26 @@ async function buildReviewInner(
 	for (const { skillPath } of allSkills) {
 		const wholePr = wholePrFor(skillPath);
 		if (userMessages.has(wholePr)) continue;
+		const diffModel = buildDiffModelSection({
+			scopeFiles: wholePr ? files : scopedFiles,
+			prFiles: files,
+			prFilesComplete: fileListComplete,
+			title: context.title,
+			body: context.body,
+			diffBudgetChars: context.diffBudgetChars,
+			scopeLabel: wholePr ? "whole PR" : "delta since the last review",
+			prLog: {
+				owner: context.owner,
+				repo: context.repo,
+				pullNumber: context.pullNumber,
+				reviewer: context.reviewer,
+			},
+		});
 		userMessages.set(
 			wholePr,
 			buildUserMessage({
 				...promptBase,
+				...(diffModel ? { diffModel } : {}),
 				files: wholePr ? files : scopedFiles,
 				diffScope: wholePr
 					? undefined
