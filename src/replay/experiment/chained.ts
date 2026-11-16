@@ -23,10 +23,10 @@ import {
 	resolveStrategies,
 	shuffled,
 } from "./runner.js";
+import { isSpendMatched } from "./spend-matched-names.js";
 import type { CellKey } from "./store.js";
 
 const A = "a";
-const A0 = "a0";
 
 export interface PlannedChain {
 	strategy: string;
@@ -72,7 +72,9 @@ export async function planChains(
 		for (const s of strategies) {
 			for (const r of rounds) {
 				const { input } = await builder.build(u.fixtureId, r, plan, {
-					spendTargetUsd: s.name === A0 ? aEstimates.get(r) : undefined,
+					spendTargetUsd: isSpendMatched(s.name)
+						? aEstimates.get(r)
+						: undefined,
 				});
 				const e = requireCost(s.estimateCost(input), `strategy ${s.name}`);
 				if (s.name === A) aEstimates.set(r, e);
@@ -190,7 +192,7 @@ export async function runChains(
 				if (
 					stoppedProviders.has(provider) ||
 					stoppedStrategies.has(s.name) ||
-					(s.name === A0 && !aCosts.has(roundIndex))
+					(isSpendMatched(s.name) && !aCosts.has(roundIndex))
 				) {
 					report.missing.push(cell);
 					continue;
@@ -200,7 +202,9 @@ export async function runChains(
 					(r) => r.index === roundIndex,
 				) as (typeof loaded.fixture.rounds)[number];
 				const { input } = await builder.build(u.fixtureId, roundIndex, plan, {
-					spendTargetUsd: s.name === A0 ? aCosts.get(roundIndex) : undefined,
+					spendTargetUsd: isSpendMatched(s.name)
+						? aCosts.get(roundIndex)
+						: undefined,
 					ledger: ledgerFromPosted(
 						loaded.fixture,
 						loaded.labels,

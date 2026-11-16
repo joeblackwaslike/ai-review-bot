@@ -320,6 +320,26 @@ describe("runGrid", () => {
 		).rejects.toThrow(/requires "a"/);
 	});
 
+	it("requires a when f0 is planned, and gives f0 a's spend as its target", async () => {
+		const noA = harness([stub("f0")]);
+		await expect(
+			runGrid(plan({ strategies: [{ name: "f0", version: "v1" }] }), noA.deps),
+		).rejects.toThrow(/strategy "f0" requires "a"/);
+
+		const { deps, calls } = harness([stub("a"), stub("f0")]);
+		await runGrid(
+			plan({
+				strategies: [
+					{ name: "a", version: "v1" },
+					{ name: "f0", version: "v1" },
+				],
+			}),
+			deps,
+		);
+		const f0 = calls.find((c) => c.strategy === "f0");
+		expect(f0?.input.spendTargetUsd).toBeCloseTo(ONE);
+	});
+
 	it("counts the estimate of a cell whose strategy threw, and lists the amount", async () => {
 		const boom = stub("a", {
 			run: async () => {
