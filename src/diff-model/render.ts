@@ -169,7 +169,7 @@ function addFileNotes(
 			const lines = own.map((d) => {
 				const at = divergenceSpan(d);
 				return at
-					? `${lineRange(at.startLine, at.endLine)} differs from the original`
+					? `${spanRange(at)} differs from the original`
 					: "differs from the original";
 			});
 			const tail = lines.length > 0 ? `, ${lines.join(", ")}` : "";
@@ -190,7 +190,7 @@ function addFileNotes(
 		addNote(
 			notes,
 			s.filename,
-			`Mechanical, ${lineRange(s.startLine, s.endLine)}: the lines shown differ only in whitespace, or the lines shown are import lines only, ${see}`,
+			`Mechanical, ${spanRange(s)}: the lines shown differ only in whitespace, or the lines shown are import lines only, ${see}`,
 		);
 	}
 }
@@ -221,7 +221,11 @@ function countsLine(omitted: Operation[]): string | null {
 	return `Not detailed: ${parts.join(", ")}.`;
 }
 
-function intentLine(model: DiffModel, ranked: Operation[]): string | null {
+function intentLine(
+	model: DiffModel,
+	ranked: Operation[],
+	detailCount: number,
+): string | null {
 	const phrases = model.facts.intentClaims
 		.slice(0, MAX_CLAIM_PHRASES)
 		.map((c) => untrusted(c.phrase));
@@ -231,10 +235,12 @@ function intentLine(model: DiffModel, ranked: Operation[]): string | null {
 	if (codeIndex >= 0) {
 		const d = ranked[codeIndex]?.divergences.find((x) => x.class === "code");
 		const at = d ? divergenceSpan(d) : undefined;
-		const where = at
-			? ` at ${untrusted(at.filename)} ${lineRange(at.startLine, at.endLine)}`
-			: "";
-		return `${says} Operation ${codeIndex + 1} has a code difference from the original${where}.`;
+		const where = at ? ` at ${untrusted(at.filename)} ${spanRange(at)}` : "";
+		const subject =
+			codeIndex < detailCount
+				? `Operation ${codeIndex + 1}`
+				: "An operation not detailed here";
+		return `${says} ${subject} has a code difference from the original${where}.`;
 	}
 	const nonMechanical = ranked.filter((op) => op.type !== "mechanical");
 	if (nonMechanical.length > 0) {
@@ -286,7 +292,7 @@ function layout(
 			? `${plural(model.droppedClaims, "relocation claim")} ${model.droppedClaims === 1 ? "was" : "were"} not confirmed by an independent check and is not listed.`
 			: null,
 		testsLine(model.facts.testsChanged),
-		intentLine(model, ranked),
+		intentLine(model, ranked, detailCount),
 	];
 	const summary = sections.filter((s): s is string => s !== null).join("\n");
 	const size =

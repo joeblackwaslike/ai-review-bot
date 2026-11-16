@@ -308,4 +308,57 @@ describe("renderDiffModel", () => {
 		const s = renderDiffModel(model({ droppedClaims: 2 }), OPTS).summary;
 		expect(s).toContain("2 relocation claims were not confirmed");
 	});
+
+	it("labels base-side lines in divergences and mechanical notes", () => {
+		const m = model({
+			operations: [
+				op({
+					id: "relocation-1",
+					type: "relocation",
+					to: [span("src/b.ts", "head", 1, 10)],
+					divergences: [
+						{
+							kind: "removed",
+							class: "code",
+							base: span("src/b.ts", "base", 7, 8),
+						},
+					],
+				}),
+				op({
+					id: "mechanical-1",
+					type: "mechanical",
+					from: [span("src/m.ts", "base", 3, 4)],
+					to: [],
+				}),
+			],
+		});
+		const r = renderDiffModel(m, OPTS);
+		expect(r.fileNotes.get("src/b.ts")).toContain(
+			"base lines 7-8 differs from the original",
+		);
+		expect(r.fileNotes.get("src/m.ts")).toContain("base lines 3-4");
+	});
+
+	it("does not cite an operation number that was dropped from the detail", () => {
+		const m = model({
+			operations: [
+				op({
+					id: "relocation-1",
+					type: "relocation",
+					divergences: [codeDivergence()],
+				}),
+			],
+			facts: {
+				testsChanged: false,
+				intentClaims: [
+					{ phrase: "pure move", source: "title", start: 0, end: 9 },
+				],
+			},
+		});
+		const r = renderDiffModel(m, { ...OPTS, maxChars: 1 });
+		expect(r.summary).toContain("The description says");
+		expect(r.summary).not.toMatch(/Operation \d+/);
+		expect(r.summary).toContain("has a code difference from the original");
+		expect(r.summary).toContain("line 5");
+	});
 });
