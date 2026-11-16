@@ -12,6 +12,11 @@ import { lexicallySafe, normalizeSafe } from "./lexical.js";
 import type { Divergence, DivergenceClass, Operation, Span } from "./types.js";
 
 const MIN_MEANINGFUL_LINES = 5;
+const MIN_DEFINITION_LINES = 3;
+const MIN_DEFINITION_CHARS = 40;
+const DEFINITION_OPENER =
+	/^(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function\b|class\b|def\b|fn\b|func\b|pub\s+fn\b)|^(?:export\s+)?(?:const|let)\s+\w+\s*=\s*(?:async\s*)?(?:\([^)]*\)|\w+)\s*=>/;
+const DEFINITION_CLOSER = /^(?:\}|end\b)/;
 const MAX_DIVERGENCES = 3;
 const MAX_DIVERGENCE_SHARE = 0.2;
 const EDGE_SIMILARITY = 0.5;
@@ -606,8 +611,24 @@ function resolveChain(chain: Candidate[]): Operation[] {
 	return [toOperation(from, to, plain)];
 }
 
+function isCompactDefinition(c: Candidate): boolean {
+	const lines = c.from.lines.slice(c.fromStart, c.fromStart + c.length);
+	const first = lines.find((line) => line.trim() !== "");
+	if (first === undefined || !DEFINITION_OPENER.test(first.trim()))
+		return false;
+	const last = [...lines].reverse().find((line) => line.trim() !== "");
+	if (!c.from.indentSensitive && !DEFINITION_CLOSER.test(last?.trim() ?? ""))
+		return false;
+	return lines.join("").replace(/\s/g, "").length >= MIN_DEFINITION_CHARS;
+}
+
+function acceptSeed(c: Candidate): boolean {
+	return c.counted >= MIN_MEANINGFUL_LINES || isCompactDefinition(c);
+}
+
 /**
- * Finds blocks of at least 5 meaningful lines that were deleted from one file and added to
+ * Finds blocks of at least 5 meaningful lines, or 3 or 4 when the block is a whole
+ * function or class definition, that were deleted from one file and added to
  * another, tolerating a few changed, inserted or removed lines inside the block. Exact runs
  * seed each block; the block is then widened over the lines between and next to the seeds,
  * its two sides are aligned, and every line that does not align becomes a divergence
@@ -617,7 +638,7 @@ function resolveChain(chain: Candidate[]): Operation[] {
  */
 export function findRelocations(files: PushFile[]): Operation[] {
 	const { deleted, added } = collectRuns(files);
-	const seeds = selectMatches(deleted, added, MIN_MEANINGFUL_LINES);
+	const seeds = selectMatches(deleted, added, MIN_DEFINITION_LINES, acceptSeed);
 	const groups = new Map<string, Candidate[]>();
 	for (const seed of seeds) {
 		const key = `${seed.from.index}|${seed.to.index}`;

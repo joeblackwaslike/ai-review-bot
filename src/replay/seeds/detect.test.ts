@@ -290,20 +290,12 @@ function modelOfSeed(input: SeedReviewInput): DiffModel {
 
 const SLOW = 120_000;
 
-const MOVES_BELOW_MINIMUM = new Set([
-	"REL-01/original",
-	"REL-01/v1",
-	"REL-01/v3",
-]);
-
 describe("seed operation truth", () => {
 	it(
 		"every committed seed's detection matches its truth operations",
 		async () => {
-			const seeds = (await listSeeds()).filter(
-				(s) => !MOVES_BELOW_MINIMUM.has(s.id),
-			);
-			expect(seeds).toHaveLength(22);
+			const seeds = await listSeeds();
+			expect(seeds).toHaveLength(25);
 			for (const seed of seeds) {
 				const input = await seedReviewInput(seed);
 				try {
@@ -328,31 +320,6 @@ describe("seed operation truth", () => {
 		expect(types).toContain("rename");
 		expect(types).toContain("mechanical");
 	});
-
-	it(
-		"misses exactly the relocation of a 3 or 4 line function, under the 5 line minimum",
-		async () => {
-			const gaps = (await listSeeds()).filter((s) =>
-				MOVES_BELOW_MINIMUM.has(s.id),
-			);
-			expect(gaps).toHaveLength(MOVES_BELOW_MINIMUM.size);
-			for (const seed of gaps) {
-				const input = await seedReviewInput(seed);
-				try {
-					const model = modelOfSeed(input);
-					const result = scoreDetection(seed.truth.operations, model);
-					expect(
-						result.missing.map((m) => m.type),
-						seed.id,
-					).toEqual(["relocation"]);
-					expect(result.unexpected, seed.id).toEqual([]);
-				} finally {
-					await input.cleanup();
-				}
-			}
-		},
-		SLOW,
-	);
 
 	it(
 		"gives the REL-10 variants a description that claims no functional change",

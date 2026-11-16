@@ -294,6 +294,7 @@ function collectCandidates(
 	deleted: Run[],
 	added: Run[],
 	minLines: number,
+	accept?: (c: Candidate) => boolean,
 ): Candidate[] {
 	const index = new Map<string, { run: Run; pos: number }[]>();
 	for (const run of added) {
@@ -322,7 +323,7 @@ function collectCandidates(
 				if (pos < (coveredTo.get(diagonal) ?? 0)) continue;
 				const c = extend(run, pos, hit.run, hit.pos);
 				coveredTo.set(diagonal, c.fromStart + c.length);
-				if (c.counted < minLines) continue;
+				if (c.counted < minLines || (accept && !accept(c))) continue;
 				const id = `${diagonal}|${c.fromStart}`;
 				if (seen.has(id)) continue;
 				seen.add(id);
@@ -333,7 +334,11 @@ function collectCandidates(
 	return out;
 }
 
-function unusedSegments(c: Candidate, minLines: number): Candidate[] {
+function unusedSegments(
+	c: Candidate,
+	minLines: number,
+	accept?: (c: Candidate) => boolean,
+): Candidate[] {
 	const out: Candidate[] = [];
 	let k = 0;
 	while (k < c.length) {
@@ -350,16 +355,15 @@ function unusedSegments(c: Candidate, minLines: number): Candidate[] {
 			k++;
 		}
 		const counted = countRange(c.from.lines, c.fromStart + start, k - start);
-		if (counted >= minLines) {
-			out.push({
-				from: c.from,
-				to: c.to,
-				fromStart: c.fromStart + start,
-				toStart: c.toStart + start,
-				length: k - start,
-				counted,
-			});
-		}
+		const part: Candidate = {
+			from: c.from,
+			to: c.to,
+			fromStart: c.fromStart + start,
+			toStart: c.toStart + start,
+			length: k - start,
+			counted,
+		};
+		if (counted >= minLines && (!accept || accept(part))) out.push(part);
 	}
 	return out;
 }
@@ -387,20 +391,22 @@ export function collectRuns(files: PushFile[]): {
 
 /**
  * Selects the non-overlapping exact matches of at least `minLines` counted lines, largest
- * first, and marks their lines used on both runs.
+ * first, and marks their lines used on both runs. `accept` further filters candidates and
+ * the unused parts of larger ones.
  */
 export function selectMatches(
 	deleted: Run[],
 	added: Run[],
 	minLines: number,
+	accept?: (c: Candidate) => boolean,
 ): Candidate[] {
 	const queue: Candidate[] = [];
-	for (const c of collectCandidates(deleted, added, minLines)) {
+	for (const c of collectCandidates(deleted, added, minLines, accept)) {
 		insertSorted(queue, c);
 	}
 	const selected: Candidate[] = [];
 	for (let c = queue.pop(); c; c = queue.pop()) {
-		const free = unusedSegments(c, minLines);
+		const free = unusedSegments(c, minLines, accept);
 		if (free.length !== 1 || free[0]?.length !== c.length) {
 			for (const part of free) insertSorted(queue, part);
 			continue;

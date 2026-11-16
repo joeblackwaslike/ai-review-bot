@@ -243,9 +243,65 @@ describe("findRelocations", () => {
 		expect(ops[0]).toMatchObject({ exact: true, divergences: [] });
 	});
 
-	it("ignores runs under 5 meaningful lines", () => {
-		const block = fn(body(2));
+	it("ignores runs under 5 meaningful lines that are not a whole definition", () => {
+		const block = body(4);
 		expect(move(block, block)).toEqual([]);
+	});
+
+	it("ignores 3 lines of import boilerplate and a short literal", () => {
+		const imports = [
+			'import { readFile } from "node:fs/promises";',
+			'import { join } from "node:path";',
+			'import { z } from "zod";',
+		];
+		const literal = ["const modes = [", '  "fast", "slow", "balanced",', "];"];
+		expect(move(imports, imports)).toEqual([]);
+		expect(move(literal, literal)).toEqual([]);
+	});
+
+	it("finds a 4-line function moved between files", () => {
+		const block = fn(body(2));
+		const ops = move(block, block);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]).toMatchObject({ exact: true, divergences: [] });
+	});
+
+	it("ignores a function signature that moved without its body", () => {
+		const signature = [
+			"export function reasoningProviderOptions(",
+			"  selection: ModelSelection,",
+			"): Record<string, Record<string, string>> | undefined {",
+		];
+		expect(move(signature, signature)).toEqual([]);
+	});
+
+	it("ignores a 3-line function too short to be distinctive", () => {
+		const block = ["function id(x) {", "  return x;", "}"];
+		expect(move(block, block)).toEqual([]);
+	});
+
+	it("finds a short Python def and a Ruby method", () => {
+		const py = [
+			"def wait(attempt, base=0.25):",
+			"    delay = min(base * (2 ** attempt), MAX_DELAY)",
+			"    return delay",
+		];
+		const ops = findRelocations([
+			deletedFrom("a/util.py", 6, py),
+			addedTo("a/client.py", 10, py),
+		]);
+		expect(ops).toHaveLength(1);
+		const rb = [
+			"def self.money(cents)",
+			'  format("$%d.%02d", cents / 100, cents % 100)',
+			"end",
+		];
+		expect(
+			findRelocations([
+				deletedFrom("a/fmt.rb", 7, rb),
+				addedTo("a/cur.rb", 3, rb),
+			]),
+		).toHaveLength(1);
 	});
 
 	it("classes a consistent identifier substitution as a rename", () => {
