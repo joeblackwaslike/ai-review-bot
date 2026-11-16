@@ -24,6 +24,9 @@ export interface ReviewerTuning {
 	/** Drop P2/P3 suppressible findings whose own closing sentence retracts them.
 	 * Off by default: the phrase rule keeps meeting new false-drop shapes. */
 	dropRetractions: boolean;
+	/** Add computed diff-model notes (moves, renames, mechanical changes, stated intent)
+	 * to the reviewer prompt. The packed diff text is the same either way. */
+	diffModel: boolean;
 	/** Show each agent every finding this reviewer already filed on this PR. */
 	showPriorOwnFindings: boolean;
 	/** Require a finding to name a defect and rest on the diff. */
@@ -34,6 +37,7 @@ export const REVIEWER_TUNING: ReviewerTuning = {
 	adaptiveLimits: false,
 	dedupeNearDuplicateClaims: true,
 	dropRetractions: false,
+	diffModel: false,
 	showPriorOwnFindings: true,
 	strictEvidenceRules: true,
 };

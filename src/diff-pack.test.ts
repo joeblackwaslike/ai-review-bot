@@ -296,3 +296,25 @@ describe("packDiff and anchor validation", () => {
 		expect([...shown].every((n) => before.has(n))).toBe(true);
 	});
 });
+
+describe("formatPackedDiff notes", () => {
+	const packed = packDiff(
+		[
+			file("a.ts", added(1, 3, "a")),
+			file("b.ts", added(1, 2, "b")),
+			file("c.md", added(1, 1, "c")),
+		],
+		{ budgetChars: DEFAULT_DIFF_BUDGET_CHARS },
+	);
+
+	it("formatPackedDiff output is byte-identical when notes are absent", () => {
+		expect(formatPackedDiff(packed, new Map())).toBe(formatPackedDiff(packed));
+	});
+
+	it("formatPackedDiff places a file's note before its diff block and leaves every diff line unchanged", () => {
+		const plain = formatPackedDiff(packed);
+		const withNote = formatPackedDiff(packed, new Map([["b.ts", "NOTE-B"]]));
+		expect(withNote).toContain("NOTE-B\nFILE: b.ts\n");
+		expect(withNote.replace("NOTE-B\n", "")).toBe(plain);
+	});
+});

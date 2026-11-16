@@ -86,6 +86,13 @@ export function parseDiffBudgetChars(tree: Config = getConfigTree()): number {
 	return tree.review.diffBudgetChars;
 }
 
+/** `review.diffModelBudgetChars`: character budget for the computed diff-model notes. */
+export function parseDiffModelBudgetChars(
+	tree: Config = getConfigTree(),
+): number {
+	return tree.review.diffModelBudgetChars;
+}
+
 /** Concurrency cuts latency at the same cost (measured 212s at
  * 1 vs 75s at 4 on a 14-file diff, same cost, no 429s). Lower it if a provider's
  * input-tokens-per-minute limit starts rejecting the burst. */

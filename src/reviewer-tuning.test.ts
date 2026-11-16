@@ -14,6 +14,7 @@ describe("REVIEWER_TUNING", () => {
 		expect(REVIEWER_TUNING).toEqual({
 			adaptiveLimits: false,
 			dedupeNearDuplicateClaims: true,
+			diffModel: false,
 			dropRetractions: false,
 			showPriorOwnFindings: true,
 			strictEvidenceRules: true,

@@ -367,3 +367,11 @@ describe("ConfigSchema roles", () => {
 		expect(ConfigSchema.safeParse(bad).success).toBe(false);
 	});
 });
+
+describe("review.diffModelBudgetChars", () => {
+	it("config key review.diffModelBudgetChars defaults to 6000", () => {
+		expect(ConfigSchema.parse(minimal()).review.diffModelBudgetChars).toBe(
+			6000,
+		);
+	});
+});

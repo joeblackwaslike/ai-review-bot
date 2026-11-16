@@ -121,8 +121,8 @@ function fileFrame(file: PackedFile): string {
 	return `FILE: ${file.filename}\nSTATUS: ${file.status}\n${note}${patchLabel(file)}`;
 }
 
-function formatFile(file: PackedFile): string {
-	return `${fileFrame(file)}${file.patch ? numberPatchLines(file.patch) : ""}`;
+function formatFile(file: PackedFile, note?: string): string {
+	return `${note ? `${note}\n` : ""}${fileFrame(file)}${file.patch ? numberPatchLines(file.patch) : ""}`;
 }
 
 function omittedSection(names: readonly string[]): string {
@@ -146,9 +146,14 @@ function omittedUpperBound(names: readonly string[]): number {
 }
 
 /** The diff section of the prompt: the omitted-files line, then each file's
- * block. `packDiff` keeps its length within the budget. */
-export function formatPackedDiff(diff: PackedDiff): string {
-	return `${omittedSection(diff.omitted)}${diff.files.map(formatFile).join(FILE_SEPARATOR)}`;
+ * block. `packDiff` keeps its length within the budget. A file's note, when
+ * given, goes on the lines before that file's block; notes are outside the
+ * packed budget and no diff line changes. */
+export function formatPackedDiff(
+	diff: PackedDiff,
+	notes?: ReadonlyMap<string, string>,
+): string {
+	return `${omittedSection(diff.omitted)}${diff.files.map((f) => formatFile(f, notes?.get(f.filename))).join(FILE_SEPARATOR)}`;
 }
 
 interface Prepared {
