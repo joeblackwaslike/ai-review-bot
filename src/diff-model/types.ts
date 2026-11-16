@@ -38,8 +38,11 @@ export interface Span {
 	shown: Shown;
 }
 
+export type DivergenceClass = "comment-only" | "rename" | "code";
+
 export interface Divergence {
 	kind: "changed" | "inserted" | "removed";
+	class: DivergenceClass;
 	base?: Span;
 	head?: Span;
 	original?: string;

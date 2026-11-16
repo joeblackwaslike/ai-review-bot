@@ -21,11 +21,14 @@ export interface MovedBlock {
 	spanLines: number;
 }
 
-interface Run {
+/** A maximal run of consecutive deleted or added lines, with the line number of its first line. */
+export interface Run {
 	index: number;
 	filename: string;
 	indentSensitive: boolean;
 	lines: string[];
+	raw: string[];
+	startLine: number;
 	used: boolean[];
 }
 
@@ -33,22 +36,27 @@ const MIN_COUNTED_LENGTH = 3;
 const MAX_KEY_OCCURRENCES = 50;
 
 const QUOTES = new Set(['"', "'", "`"]);
-/** True when `line` has a `//` outside any string literal; an unterminated quote hides the rest of the line. */
-export function hasLineComment(line: string): boolean {
+/** Index of a `//` outside any string literal, or -1; an unterminated quote hides the rest of the line. */
+export function lineCommentIndex(line: string): number {
 	let i = 0;
 	while (i < line.length) {
 		const ch = line[i] as string;
-		if (ch === "/" && line[i + 1] === "/") return true;
+		if (ch === "/" && line[i + 1] === "/") return i;
 		if (!QUOTES.has(ch)) {
 			i++;
 			continue;
 		}
 		let j = i + 1;
 		while (j < line.length && line[j] !== ch) j += line[j] === "\\" ? 2 : 1;
-		if (j >= line.length) return false;
+		if (j >= line.length) return -1;
 		i = j + 1;
 	}
-	return false;
+	return -1;
+}
+
+/** True when `line` has a `//` outside any string literal; an unterminated quote hides the rest of the line. */
+export function hasLineComment(line: string): boolean {
+	return lineCommentIndex(line) >= 0;
 }
 
 const OPERATOR_CHARS = new Set("+-*/%&|<>=!~^?:");
@@ -128,7 +136,8 @@ function countsTowardBlock(line: string): boolean {
 	return line.trimStart().length >= MIN_COUNTED_LENGTH;
 }
 
-function extractRuns(
+/** Splits one file's patch into its runs of deleted and added lines, numbered from the hunk headers. */
+export function extractRuns(
 	filename: string,
 	patch: string | undefined,
 ): { deleted: Run[]; added: Run[] } {
@@ -140,6 +149,12 @@ function extractRuns(
 		normalizeCodeLine(line, { keepIndent: indentSensitive });
 	let del: string[] = [];
 	let add: string[] = [];
+	let delRaw: string[] = [];
+	let addRaw: string[] = [];
+	let oldLine = 0;
+	let newLine = 0;
+	let delStart = 0;
+	let addStart = 0;
 	const flush = () => {
 		if (del.length) {
 			deleted.push({
@@ -147,6 +162,8 @@ function extractRuns(
 				filename,
 				indentSensitive,
 				lines: del,
+				raw: delRaw,
+				startLine: delStart,
 				used: del.map(() => false),
 			});
 		}
@@ -156,28 +173,47 @@ function extractRuns(
 				filename,
 				indentSensitive,
 				lines: add,
+				raw: addRaw,
+				startLine: addStart,
 				used: add.map(() => false),
 			});
 		}
 		del = [];
 		add = [];
+		delRaw = [];
+		addRaw = [];
 	};
 	for (const line of patch.split("\n")) {
 		if (line.startsWith("\\")) continue;
 		if (line.startsWith("-")) {
 			if (add.length) flush();
+			if (!del.length) delStart = oldLine;
 			del.push(normalize(line.slice(1)));
+			delRaw.push(line.slice(1));
+			oldLine++;
 		} else if (line.startsWith("+")) {
+			if (!add.length) addStart = newLine;
 			add.push(normalize(line.slice(1)));
+			addRaw.push(line.slice(1));
+			newLine++;
 		} else {
 			flush();
+			const header = /^@@ -(\d+)(?:,\d+)? \+(\d+)/.exec(line);
+			if (header) {
+				oldLine = Number(header[1]);
+				newLine = Number(header[2]);
+			} else {
+				oldLine++;
+				newLine++;
+			}
 		}
 	}
 	flush();
 	return { deleted, added };
 }
 
-interface Candidate {
+/** A matched stretch of equal normalized lines between a deleted run and an added run. */
+export interface Candidate {
 	from: Run;
 	to: Run;
 	fromStart: number;
@@ -328,16 +364,11 @@ function unusedSegments(c: Candidate, minLines: number): Candidate[] {
 	return out;
 }
 
-/**
- * Finds runs of at least `minLines` lines deleted in one file and added to
- * another. Lines are compared after trimming and collapsing whitespace outside string literals; lines
- * under 3 characters stay inside a run but do not count toward its length.
- * A window of lines that occurs more than 50 times (repeated boilerplate) is matched
- * only through its first 50 occurrences: counted across all added runs on the added
- * side, and within each deleted run on the deleted side.
- */
-export function findMovedBlocks(files: PushFile[], minLines = 5): MovedBlock[] {
-	const need = Math.max(1, minLines);
+/** Every file's deleted and added runs, indexed in file order. */
+export function collectRuns(files: PushFile[]): {
+	deleted: Run[];
+	added: Run[];
+} {
 	const deleted: Run[] = [];
 	const added: Run[] = [];
 	for (const f of files) {
@@ -351,13 +382,25 @@ export function findMovedBlocks(files: PushFile[], minLines = 5): MovedBlock[] {
 	added.forEach((r, i) => {
 		r.index = i;
 	});
+	return { deleted, added };
+}
+
+/**
+ * Selects the non-overlapping exact matches of at least `minLines` counted lines, largest
+ * first, and marks their lines used on both runs.
+ */
+export function selectMatches(
+	deleted: Run[],
+	added: Run[],
+	minLines: number,
+): Candidate[] {
 	const queue: Candidate[] = [];
-	for (const c of collectCandidates(deleted, added, need)) {
+	for (const c of collectCandidates(deleted, added, minLines)) {
 		insertSorted(queue, c);
 	}
-	const blocks: MovedBlock[] = [];
+	const selected: Candidate[] = [];
 	for (let c = queue.pop(); c; c = queue.pop()) {
-		const free = unusedSegments(c, need);
+		const free = unusedSegments(c, minLines);
 		if (free.length !== 1 || free[0]?.length !== c.length) {
 			for (const part of free) insertSorted(queue, part);
 			continue;
@@ -366,12 +409,25 @@ export function findMovedBlocks(files: PushFile[], minLines = 5): MovedBlock[] {
 			c.from.used[c.fromStart + k] = true;
 			c.to.used[c.toStart + k] = true;
 		}
-		blocks.push({
-			from: c.from.filename,
-			to: c.to.filename,
-			lineCount: c.counted,
-			spanLines: c.length,
-		});
+		selected.push(c);
 	}
-	return blocks;
+	return selected;
+}
+
+/**
+ * Finds runs of at least `minLines` lines deleted in one file and added to
+ * another. Lines are compared after trimming and collapsing whitespace outside string literals; lines
+ * under 3 characters stay inside a run but do not count toward its length.
+ * A window of lines that occurs more than 50 times (repeated boilerplate) is matched
+ * only through its first 50 occurrences: counted across all added runs on the added
+ * side, and within each deleted run on the deleted side.
+ */
+export function findMovedBlocks(files: PushFile[], minLines = 5): MovedBlock[] {
+	const { deleted, added } = collectRuns(files);
+	return selectMatches(deleted, added, Math.max(1, minLines)).map((c) => ({
+		from: c.from.filename,
+		to: c.to.filename,
+		lineCount: c.counted,
+		spanLines: c.length,
+	}));
 }
