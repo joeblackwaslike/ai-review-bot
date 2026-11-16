@@ -1,6 +1,7 @@
 import {
 	type Candidate,
 	collectRuns,
+	isIndentSensitive,
 	lineCommentIndex,
 	normalizeCodeLine,
 	type PushFile,
@@ -146,9 +147,53 @@ function divergencesBetween(
 	return out;
 }
 
-function commentOnlyLine(filename: string, line: string): boolean {
-	if (/^\s*(\/\/|\/\*|\*\/|\*(\s|$))/.test(line)) return true;
-	return HASH_COMMENT_FILE.test(filename) && /^\s*#/.test(line);
+const HEREDOC_OR_TRIPLE = /"""|'''|<<[-~]?\s*['"]?\w/;
+
+function backtickCount(line: string): number {
+	return (line.match(/(?<!\\)`/g) ?? []).length;
+}
+
+/**
+ * Per line, whether a whitespace change there could alter a runtime value: the line touches a
+ * multi-line template literal, or the file has heredocs, triple-quoted strings or
+ * significant indentation (then every line counts).
+ */
+function riskyLines(filename: string, lines: string[]): boolean[] {
+	if (
+		isIndentSensitive(filename) ||
+		lines.some((l) => HEREDOC_OR_TRIPLE.test(l))
+	)
+		return lines.map(() => true);
+	let inside = false;
+	return lines.map((line) => {
+		const startsInside = inside;
+		if (backtickCount(line) % 2 === 1) inside = !inside;
+		return startsInside || inside;
+	});
+}
+
+/** Per line, whether it is wholly a comment: `//` or `#` lines, or lines of a `/* ... *\/` block opened in these lines. */
+function commentLines(filename: string, lines: string[]): boolean[] {
+	let inBlock = false;
+	return lines.map((line) => {
+		const trimmed = line.trim();
+		if (inBlock) {
+			const close = trimmed.indexOf("*/");
+			if (close < 0) return true;
+			inBlock = false;
+			return trimmed.slice(close + 2).trim() === "";
+		}
+		if (trimmed.startsWith("//")) return true;
+		if (HASH_COMMENT_FILE.test(filename) && trimmed.startsWith("#"))
+			return true;
+		if (!trimmed.startsWith("/*")) return false;
+		const close = trimmed.indexOf("*/", 2);
+		if (close < 0) {
+			inBlock = true;
+			return true;
+		}
+		return trimmed.slice(close + 2).trim() === "";
+	});
 }
 
 function stripLineComment(line: string): string {
@@ -158,19 +203,16 @@ function stripLineComment(line: string): string {
 
 function isCommentOnly(
 	divergence: RawDivergence,
-	baseFile: string,
-	headFile: string,
+	baseComment: boolean,
+	headComment: boolean,
 	baseText: string | undefined,
 	headText: string | undefined,
 ): boolean {
-	if (divergence.kind === "removed")
-		return commentOnlyLine(baseFile, baseText as string);
-	if (divergence.kind === "inserted")
-		return commentOnlyLine(headFile, headText as string);
+	if (divergence.kind === "removed") return baseComment;
+	if (divergence.kind === "inserted") return headComment;
 	const base = baseText as string;
 	const head = headText as string;
-	if (commentOnlyLine(baseFile, base) && commentOnlyLine(headFile, head))
-		return true;
+	if (baseComment && headComment) return true;
 	return (
 		lineCommentIndex(base) + lineCommentIndex(head) !== -2 &&
 		stripLineComment(base) === stripLineComment(head)
@@ -272,7 +314,11 @@ function limitFor(blockLines: number): number {
 	);
 }
 
-function build(chain: Candidate[], withEdges: boolean): Built {
+function build(
+	chain: Candidate[],
+	withEdges: boolean,
+	onlyRisky = false,
+): Built {
 	const first = chain[0] as Candidate;
 	const last = chain[chain.length - 1] as Candidate;
 	const { from, to } = first;
@@ -304,11 +350,22 @@ function build(chain: Candidate[], withEdges: boolean): Built {
 		lexicallySafe(to.filename, headRaw);
 	const baseCmp = safe ? normalizeSafe(from.filename, baseRaw) : baseRaw;
 	const headCmp = safe ? normalizeSafe(to.filename, headRaw) : headRaw;
-	const raw = divergencesBetween(
+	const baseRisky = riskyLines(from.filename, baseRaw);
+	const headRisky = riskyLines(to.filename, headRaw);
+	const baseComment = commentLines(from.filename, baseRaw);
+	const headComment = commentLines(to.filename, headRaw);
+	const aligned = divergencesBetween(
 		baseRaw.length,
 		headRaw.length,
 		alignLines(baseCmp, headCmp),
 	);
+	const raw = onlyRisky
+		? aligned.filter(
+				(d) =>
+					(d.baseIndex !== undefined && baseRisky[d.baseIndex]) ||
+					(d.headIndex !== undefined && headRisky[d.headIndex]),
+			)
+		: aligned;
 	const text = (lines: string[], index?: number) =>
 		index === undefined ? undefined : (lines[index] as string);
 	const changed = raw.flatMap((d, at) =>
@@ -331,8 +388,8 @@ function build(chain: Candidate[], withEdges: boolean): Built {
 			counted++;
 		const cls: DivergenceClass = isCommentOnly(
 			d,
-			from.filename,
-			to.filename,
+			d.baseIndex !== undefined && baseComment[d.baseIndex] === true,
+			d.headIndex !== undefined && headComment[d.headIndex] === true,
 			baseText,
 			headText,
 		)
@@ -430,7 +487,7 @@ function resolveChain(chain: Candidate[]): Operation[] {
 		return [toOperation(from, to, whole)];
 	}
 	if (chain.length > 1) return chain.flatMap((seed) => resolveChain([seed]));
-	const plain = build(chain, false);
+	const plain = build(chain, false, true);
 	claim(from, to, plain);
 	return [toOperation(from, to, plain)];
 }

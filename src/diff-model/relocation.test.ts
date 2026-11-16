@@ -190,4 +190,57 @@ describe("findRelocations", () => {
 			true,
 		);
 	});
+	it("a re-indented move containing a single-line template literal reports a relocation without a full divergence list", () => {
+		const base = fn(body(13));
+		base.splice(5, 0, "  const label = `x`.repeat(2);");
+		const head = base.map((line) => `    ${line}`);
+		const ops = move(base, head);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]?.divergences).toEqual([]);
+		expect(ops[0]?.exact).toBe(true);
+	});
+
+	it("still surfaces a changed multi-line template literal inside a re-indented move", () => {
+		const base = [
+			"export function banner() {",
+			"  const a = compute(1);",
+			"  const b = compute(2);",
+			"  const text = `",
+			"    hello   world",
+			"  `;",
+			"  const c = compute(3);",
+			"  const d = compute(4);",
+			"  const e = compute(5);",
+			"  const f = compute(6);",
+			"  return text + a + b + c + d + e + f;",
+			"}",
+		];
+		const head = base.map((line) => `    ${line}`);
+		const ops = move(base, head);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]?.exact).toBe(false);
+		expect(ops[0]?.divergences.some((d) => d.original?.includes("hello"))).toBe(
+			true,
+		);
+		expect(ops[0]?.divergences.length).toBeLessThan(base.length);
+	});
+
+	it("classes a changed continuation line starting with an asterisk as code", () => {
+		const base = fn(body(30));
+		base.splice(15, 0, "  * qty;");
+		const head = withLine(base, 15, "  * qty * 2;");
+		const ops = move(base, head);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]?.divergences).toHaveLength(1);
+		expect(ops[0]?.divergences[0]?.class).toBe("code");
+	});
+
+	it("classes a changed line inside a block comment opened in the block as comment-only", () => {
+		const base = fn(body(30));
+		base.splice(15, 0, "  /*", "   * apply the discount", "   */");
+		const head = withLine(base, 16, "   * apply discount");
+		const ops = move(base, head);
+		expect(ops[0]?.divergences).toHaveLength(1);
+		expect(ops[0]?.divergences[0]?.class).toBe("comment-only");
+	});
 });
