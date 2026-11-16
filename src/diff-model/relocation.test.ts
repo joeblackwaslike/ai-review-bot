@@ -88,6 +88,46 @@ describe("findRelocations", () => {
 		});
 	});
 
+	it("extends a moved block over the unchanged lines after a changed line near its end", () => {
+		const base = withLine(
+			fn(body(12)),
+			10,
+			"  const rate = Math.floor(price * pct);",
+		);
+		const head = withLine(base, 10, "  const rate = Math.round(price * pct);");
+		const ops = move(base, head);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]).toMatchObject({
+			from: [{ startLine: 10, endLine: 23 }],
+			to: [{ startLine: 3, endLine: 16 }],
+		});
+		expect(ops[0]?.divergences).toHaveLength(1);
+	});
+
+	it("extends a moved block backwards across a lone closing bracket before a changed line", () => {
+		const guard = [
+			"export function applyDiscount(input) {",
+			"  if (input.free) {",
+			"    return 0;",
+			"  }",
+			"  const base = input.price * input.qty;",
+			"  const rate = Math.floor(base * input.pct);",
+			...body(14),
+			"}",
+		];
+		const head = withLine(
+			guard,
+			5,
+			"  const rate = Math.round(base * input.pct);",
+		);
+		const ops = move(guard, head);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]).toMatchObject({
+			from: [{ startLine: 10, endLine: 30 }],
+			to: [{ startLine: 3, endLine: 23 }],
+		});
+	});
+
 	it("reports an inserted line and a removed line as divergences", () => {
 		const base = fn(body(40));
 		const head = [...base];

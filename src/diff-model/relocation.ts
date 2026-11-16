@@ -345,6 +345,24 @@ function adjacentEdge(
 	);
 }
 
+function identicalEdge(
+	from: Run,
+	fromIndex: number,
+	to: Run,
+	toIndex: number,
+): boolean {
+	const a = from.raw[fromIndex];
+	const b = to.raw[toIndex];
+	return (
+		a !== undefined &&
+		b !== undefined &&
+		!from.used[fromIndex] &&
+		!to.used[toIndex] &&
+		a.trim() !== "" &&
+		normalizeSafe(from.filename, [a])[0] === normalizeSafe(to.filename, [b])[0]
+	);
+}
+
 function limitFor(blockLines: number): number {
 	return Math.min(
 		MAX_DIVERGENCES,
@@ -367,18 +385,24 @@ function build(
 	if (withEdges) {
 		const budget = limitFor(Math.max(fromEnd - fromStart, toEnd - toStart));
 		let spent = 0;
-		while (
-			spent < budget &&
-			adjacentEdge(from, fromStart - 1, to, toStart - 1)
-		) {
+		for (;;) {
+			const same = identicalEdge(from, fromStart - 1, to, toStart - 1);
+			if (
+				!same &&
+				!(spent < budget && adjacentEdge(from, fromStart - 1, to, toStart - 1))
+			)
+				break;
 			fromStart--;
 			toStart--;
-			spent++;
+			if (!same) spent++;
 		}
-		while (spent < budget && adjacentEdge(from, fromEnd, to, toEnd)) {
+		for (;;) {
+			const same = identicalEdge(from, fromEnd, to, toEnd);
+			if (!same && !(spent < budget && adjacentEdge(from, fromEnd, to, toEnd)))
+				break;
 			fromEnd++;
 			toEnd++;
-			spent++;
+			if (!same) spent++;
 		}
 	}
 	const baseRaw = from.raw.slice(fromStart, fromEnd);
