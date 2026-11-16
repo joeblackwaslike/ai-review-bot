@@ -191,7 +191,7 @@ export function findRenames(files: PushFile[]): Operation[] {
 					operations.length + 1,
 					file.previous_filename,
 					file.filename,
-					!file.patch,
+					!file.patch && file.additions === 0 && file.deletions === 0,
 				),
 			);
 		}

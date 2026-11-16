@@ -42,6 +42,18 @@ describe("findRenames", () => {
 		});
 	});
 
+	it("reports a renamed file with no patch but changed content as inexact", () => {
+		const ops = findRenames([
+			file("src/new.ts", undefined, {
+				status: "renamed",
+				previous_filename: "src/old.ts",
+				additions: 50,
+			}),
+		]);
+		expect(ops[0]).toMatchObject({ type: "rename", exact: false });
+		expect(ops[0]?.reviewWeight).toBeGreaterThan(0);
+	});
+
 	it("pairs a deleted and added file at similarity 0.6 or above", () => {
 		const lines = ["a", "b", "c", "d", "e"];
 		const ops = findRenames([
