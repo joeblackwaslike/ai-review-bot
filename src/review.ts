@@ -162,6 +162,7 @@ interface ReviewContext {
 	 * skipped and the review is submitted with what completed — the platform's own
 	 * timeout would otherwise kill the run with nothing posted at all. */
 	agentBudgetMs: number;
+	/** When set (hosted paths), the agent deadline is also capped at this start plus 240s; local CLI callers leave it unset. */
 	requestStartedAtMs?: number;
 	/** PR-wide diff budget passed to `buildUserMessage`; absent means the default. */
 	diffBudgetChars?: number;
@@ -862,8 +863,10 @@ export function mergeReviewsDetailed(
 	};
 }
 
-/** Cap on the summary call. The agent deadline leaves about 90s of the 300s
- * function budget for the summary, the review POST and the feedback writes. */
+/** Cap on the summary call. The agent deadline leaves at least 60s
+ * (`FINISH_RESERVE_MS` in `review-deadline.ts`) of the function budget after the
+ * agents for the summary, the review POST and the feedback writes; the summary
+ * takes at most 30s of it. */
 const SUMMARY_TIMEOUT_MS = 30_000;
 
 export async function generateSummary(
@@ -2610,7 +2613,8 @@ async function buildReviewInner(
 		agentBudgetMs: context.agentBudgetMs,
 		requestStartedAtMs: context.requestStartedAtMs,
 	});
-	console.log("review setup done", {
+	const logSetup = deadline <= agentStartMs ? console.warn : console.log;
+	logSetup("review setup done", {
 		...(context.requestStartedAtMs !== undefined && {
 			setupMs: agentStartMs - context.requestStartedAtMs,
 		}),

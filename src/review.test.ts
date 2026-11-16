@@ -3644,18 +3644,71 @@ describe("agent time budget", () => {
 
 	it("skips every agent when the request started more than 240s ago", async () => {
 		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-		await buildReview({
-			octokit: buildOctokit(),
-			...baseContext,
-			agentBudgetMs: 210_000,
-			requestStartedAtMs: Date.now() - 250_000,
-		}).catch(() => undefined);
-		expect(mockGenerateObject).not.toHaveBeenCalled();
-		expect(warn).toHaveBeenCalledWith(
-			"agent skipped: review time budget exhausted",
-			expect.anything(),
-		);
-		warn.mockRestore();
+		try {
+			await buildReview({
+				octokit: buildOctokit(),
+				...baseContext,
+				agentBudgetMs: 210_000,
+				requestStartedAtMs: Date.now() - 250_000,
+			}).catch((error: unknown) => {
+				if (
+					!(error instanceof Error) ||
+					!error.message.includes("All review agents failed")
+				) {
+					throw error;
+				}
+			});
+			expect(mockGenerateObject).not.toHaveBeenCalled();
+			expect(warn).toHaveBeenCalledWith(
+				"agent skipped: review time budget exhausted",
+				expect.anything(),
+			);
+		} finally {
+			warn.mockRestore();
+		}
+	});
+
+	it("warns instead of logging when no time is left for any agent", async () => {
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		try {
+			await buildReview({
+				octokit: buildOctokit(),
+				...baseContext,
+				agentBudgetMs: 210_000,
+				requestStartedAtMs: Date.now() - 250_000,
+			}).catch(() => undefined);
+			expect(warn.mock.calls.some(([m]) => m === "review setup done")).toBe(
+				true,
+			);
+			expect(log.mock.calls.some(([m]) => m === "review setup done")).toBe(
+				false,
+			);
+		} finally {
+			log.mockRestore();
+			warn.mockRestore();
+		}
+	});
+
+	it("omits setupMs and keeps the full budget when no request start is given", async () => {
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		try {
+			await buildReview({
+				octokit: buildOctokit(),
+				...baseContext,
+				agentBudgetMs: 210_000,
+			}).catch(() => undefined);
+			const call = log.mock.calls.find(([m]) => m === "review setup done");
+			expect(call).toBeDefined();
+			const fields = call?.[1] as Record<string, number>;
+			expect(fields).not.toHaveProperty("setupMs");
+			expect(fields.effectiveBudgetMs).toBeGreaterThanOrEqual(209_000);
+			expect(fields.effectiveBudgetMs).toBeLessThanOrEqual(210_000);
+		} finally {
+			log.mockRestore();
+			warn.mockRestore();
+		}
 	});
 
 	it("logs setup time and the effective budget when agents start", async () => {

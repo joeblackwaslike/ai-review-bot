@@ -2513,6 +2513,40 @@ describe("issue_comment review commands with a repo command", () => {
 		expect(arg.requestStartedAtMs).toBeLessThanOrEqual(Date.now());
 	});
 
+	it("anchors requestStartedAtMs before the inline-fallback sleep on pull_request", async () => {
+		vi.useFakeTimers();
+		try {
+			const pinned = new Date("2026-11-15T12:00:00Z");
+			vi.setSystemTime(pinned);
+			process.env.AI_REVIEW_REVIEW__DELAY_SECONDS = "30";
+			mockScheduleReview.mockResolvedValue(null);
+			const octokit = { request: vi.fn().mockResolvedValue({ data: pr }) };
+			const app = getReviewerGitHubApp("claude");
+			app.getInstallationOctokit = vi.fn().mockResolvedValue(octokit) as never;
+			const received = app.webhooks.receive({
+				id: "3",
+				name: "pull_request",
+				payload: {
+					...buildPullRequestPayload(),
+					action: "opened",
+					installation: { id: 123 },
+				},
+			} as never);
+			await vi.advanceTimersByTimeAsync(29_000);
+			expect(mockBuildReview).not.toHaveBeenCalled();
+			await vi.advanceTimersByTimeAsync(2_000);
+			await received;
+			expect(mockBuildReview).toHaveBeenCalledTimes(1);
+			const arg = mockBuildReview.mock.calls[0][0] as {
+				requestStartedAtMs: number;
+			};
+			expect(arg.requestStartedAtMs).toBe(pinned.getTime());
+			expect(Date.now()).toBeGreaterThan(pinned.getTime());
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it("the repo command matches only as a whole first token", async () => {
 		mockFetchRepoConfig.mockResolvedValue({
 			config: { version: 1, review: { command: "/lgtm" } },
