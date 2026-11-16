@@ -8,6 +8,7 @@ import {
 	type Run,
 	selectMatches,
 } from "../moved-blocks.js";
+import { findDeclarationMoves } from "./declarations.js";
 import { lexicallySafe, normalizeSafe } from "./lexical.js";
 import type { Divergence, DivergenceClass, Operation, Span } from "./types.js";
 
@@ -15,8 +16,8 @@ const MIN_MEANINGFUL_LINES = 5;
 const MIN_DEFINITION_LINES = 3;
 const MIN_DEFINITION_CHARS = 40;
 const DEFINITION_OPENER =
-	/^(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function\b|class\b|def\b|fn\b|func\b|pub\s+fn\b)|^(?:export\s+)?(?:const|let)\s+\w+\s*=\s*(?:async\s*)?(?:\([^)]*\)|\w+)\s*=>/;
-const DEFINITION_CLOSER = /^(?:\}|end\b)/;
+	/^(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function\b|class\b|def\b|fn\b|func\b|pub\s+fn\b|const\s+[A-Za-z_$]|type\s+\w|interface\s+\w|enum\s+\w)/;
+const DEFINITION_CLOSER = /^(?:[}\]]|end\b)/;
 const MAX_DIVERGENCES = 3;
 const MAX_DIVERGENCE_SHARE = 0.2;
 const EDGE_SIMILARITY = 0.5;
@@ -628,7 +629,7 @@ function acceptSeed(c: Candidate): boolean {
 
 /**
  * Finds blocks of at least 5 meaningful lines, or 3 or 4 when the block is a whole
- * function or class definition, that were deleted from one file and added to
+ * function, class or type definition, that were deleted from one file and added to
  * another, tolerating a few changed, inserted or removed lines inside the block. Exact runs
  * seed each block; the block is then widened over the lines between and next to the seeds,
  * its two sides are aligned, and every line that does not align becomes a divergence
@@ -651,6 +652,7 @@ export function findRelocations(files: PushFile[]): Operation[] {
 			(a[0] as Candidate).from.index - (b[0] as Candidate).from.index,
 	);
 	const operations = chains.flatMap(resolveChain);
+	operations.push(...findDeclarationMoves(deleted, added));
 	operations.sort(
 		(a, b) =>
 			compareText(a.from[0]?.filename, b.from[0]?.filename) ||

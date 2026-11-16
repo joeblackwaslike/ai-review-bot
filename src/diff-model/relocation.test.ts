@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PushFile } from "../moved-blocks.js";
 import { findRelocations } from "./relocation.js";
+import { verifyRelocation } from "./relocation-check.js";
 
 function pushFile(filename: string, patch: string): PushFile {
 	return { filename, status: "modified", patch, additions: 0, deletions: 0 };
@@ -665,5 +666,104 @@ describe("findRelocations block comment allowlist", () => {
 		const [base, head] = pair(["  /* old */"], ["  /* new */"], [15]);
 		const ops = moveNamed(base, head, "docs/a.md", "docs/b.md");
 		expect(ops[0]?.divergences.map((d) => d.class)).toEqual(["code"]);
+	});
+});
+
+describe("findRelocations one-line declarations", () => {
+
+	describe("one-line declarations", () => {
+		function moveDeclaration(base: string, head: string) {
+			const files = [
+				deletedFrom("src/config.ts", 4, [base]),
+				addedTo("src/limits.ts", 9, [head]),
+			];
+			return { ops: findRelocations(files), files };
+		}
+
+		it("finds a constant moved unchanged to another file", () => {
+			const { ops, files } = moveDeclaration(
+				"export const MAX_RETRIES = 3;",
+				"export const MAX_RETRIES = 3;",
+			);
+			expect(ops).toHaveLength(1);
+			expect(ops[0]).toMatchObject({
+				type: "relocation",
+				exact: true,
+				divergences: [],
+				from: [{ filename: "src/config.ts", startLine: 4, endLine: 4 }],
+				to: [{ filename: "src/limits.ts", startLine: 9, endLine: 9 }],
+			});
+			expect(verifyRelocation(ops[0] as never, files)).toBe(true);
+		});
+
+		it("reports a moved constant whose value changed, with the original line", () => {
+			const { ops, files } = moveDeclaration(
+				"export const MAX_RETRIES = 3;",
+				"export const MAX_RETRIES = 30;",
+			);
+			expect(ops).toHaveLength(1);
+			expect(ops[0]?.exact).toBe(false);
+			expect(ops[0]?.divergences).toHaveLength(1);
+			expect(ops[0]?.divergences[0]).toMatchObject({
+				kind: "changed",
+				class: "code",
+				original: "export const MAX_RETRIES = 3;",
+			});
+			expect(verifyRelocation(ops[0] as never, files)).toBe(true);
+		});
+
+		it("finds a moved type alias and a Python constant", () => {
+			expect(
+				moveDeclaration(
+					"export type Cents = number;",
+					"export type Cents = number;",
+				).ops,
+			).toHaveLength(1);
+			const py = findRelocations([
+				deletedFrom("app/a.py", 2, ["MAX_DELAY = 30.0"]),
+				addedTo("app/b.py", 5, ["MAX_DELAY = 60.0"]),
+			]);
+			expect(py).toHaveLength(1);
+			expect(py[0]?.exact).toBe(false);
+		});
+
+		it("ignores indented locals and names declared more than once", () => {
+			expect(
+				moveDeclaration(
+					"  const result = compute();",
+					"  const result = compute();",
+				).ops,
+			).toEqual([]);
+			const twice = findRelocations([
+				deletedFrom("src/a.ts", 1, ["export const LIMIT = 1;"]),
+				deletedFrom("src/b.ts", 1, ["export const LIMIT = 2;"]),
+				addedTo("src/c.ts", 1, ["export const LIMIT = 1;"]),
+			]);
+			expect(twice).toEqual([]);
+		});
+
+		it("ignores a declaration inside a prose file and a line that continues", () => {
+			const doc = findRelocations([
+				deletedFrom("src/a.ts", 1, ["const MAP: Record<"]),
+				addedTo("docs/plan.md", 1, ["const MAP: Record<"]),
+				deletedFrom("src/b.ts", 1, ["export const NOTE = 1;"]),
+				addedTo("docs/plan.md", 5, ["export const NOTE = 1;"]),
+			]);
+			expect(doc).toEqual([]);
+		});
+
+		it("ignores a constant re-declared in the same file and a multi-line start", () => {
+			expect(
+				findRelocations([
+					pushFile(
+						"src/a.ts",
+						"@@ -1,1 +1,1 @@\n-export const LIMIT = 1;\n+export const LIMIT = 2;",
+					),
+				]),
+			).toEqual([]);
+			expect(
+				moveDeclaration("export const TABLE = {", "export const TABLE = {").ops,
+			).toEqual([]);
+		});
 	});
 });
