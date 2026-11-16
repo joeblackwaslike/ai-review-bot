@@ -3642,6 +3642,38 @@ describe("agent time budget", () => {
 		warn.mockRestore();
 	});
 
+	it("skips every agent when the request started more than 240s ago", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			agentBudgetMs: 210_000,
+			requestStartedAtMs: Date.now() - 250_000,
+		}).catch(() => undefined);
+		expect(mockGenerateObject).not.toHaveBeenCalled();
+		expect(warn).toHaveBeenCalledWith(
+			"agent skipped: review time budget exhausted",
+			expect.anything(),
+		);
+		warn.mockRestore();
+	});
+
+	it("logs setup time and the effective budget when agents start", async () => {
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		await buildReview({
+			octokit: buildOctokit(),
+			...baseContext,
+			agentBudgetMs: 210_000,
+			requestStartedAtMs: Date.now() - 30_000,
+		}).catch(() => undefined);
+		const call = log.mock.calls.find(([m]) => m === "review setup done");
+		expect(call).toBeDefined();
+		const fields = call?.[1] as { setupMs: number; effectiveBudgetMs: number };
+		expect(fields.setupMs).toBeGreaterThanOrEqual(30_000);
+		expect(fields.effectiveBudgetMs).toBeLessThanOrEqual(210_000);
+	});
+
 	it("runs every agent and says nothing about the budget when there is room", async () => {
 		const agentResponse = buildGenerateObjectResponse(
 			buildModelReview({

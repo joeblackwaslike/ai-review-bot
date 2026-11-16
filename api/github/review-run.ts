@@ -24,6 +24,7 @@ import {
 // budget. We verify the Upstash signature before any side effect, then hand off
 // to runScheduledReview (which coalesces stale pushes via a head-SHA check).
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+	const requestStartedAtMs = Date.now();
 	if (req.method !== "POST") {
 		res.setHeader("Allow", "POST");
 		res.status(405).json({ error: "Method not allowed" });
@@ -110,7 +111,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 	try {
 		// Awaited directly (not waitUntil): we WANT the function to stay alive for
 		// the full review (up to maxDuration) and respond only after it finishes.
-		const result = await runScheduledReview(message, app, config);
+		const result = await runScheduledReview(
+			message,
+			app,
+			config,
+			requestStartedAtMs,
+		);
 		res.status(200).json({ ok: true, status: result.status });
 	} catch (error) {
 		// Non-2xx makes QStash retry, which is the desired resilience.

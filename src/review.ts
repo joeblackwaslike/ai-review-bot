@@ -81,6 +81,7 @@ import {
 } from "./repo-config/merge.js";
 import type { ResolvedFindingRef } from "./resolve-threads.js";
 import { candidateFamilies, dropRetractions } from "./retraction.js";
+import { agentDeadline } from "./review-deadline.js";
 import { isOwnReview, readMetadataValue } from "./review-metadata.js";
 import {
 	moreSevere,
@@ -161,6 +162,7 @@ interface ReviewContext {
 	 * skipped and the review is submitted with what completed — the platform's own
 	 * timeout would otherwise kill the run with nothing posted at all. */
 	agentBudgetMs: number;
+	requestStartedAtMs?: number;
 	/** PR-wide diff budget passed to `buildUserMessage`; absent means the default. */
 	diffBudgetChars?: number;
 	tier2Enabled: boolean;
@@ -2602,7 +2604,18 @@ async function buildReviewInner(
 	const reviewModelLabel = modelLabel(usedModels);
 
 	let lastRateLimit: RateLimitInfo | undefined;
-	const deadline = Date.now() + context.agentBudgetMs;
+	const agentStartMs = Date.now();
+	const deadline = agentDeadline({
+		agentStartMs,
+		agentBudgetMs: context.agentBudgetMs,
+		requestStartedAtMs: context.requestStartedAtMs,
+	});
+	console.log("review setup done", {
+		...(context.requestStartedAtMs !== undefined && {
+			setupMs: agentStartMs - context.requestStartedAtMs,
+		}),
+		effectiveBudgetMs: deadline - agentStartMs,
+	});
 	const dispatch = async (skillPath: string): Promise<AgentOutcome> => {
 		const outcome = await runAgent(
 			skillPath,

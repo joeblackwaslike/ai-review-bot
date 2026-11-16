@@ -40,14 +40,6 @@ function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** The inline fallback sleeps inside the webhook's own function budget, so that
- * sleep comes out of the agent budget. If the delay would consume all of it the
- * configured budget is kept as is: a near-zero budget skips every agent and the
- * PR gets no review at all. */
-export function budgetAfterDelay(budgetMs: number, delayMs: number): number {
-	return budgetMs > delayMs ? budgetMs - delayMs : budgetMs;
-}
-
 export function selectReviewDelayMs(action: string, config: AppConfig): number {
 	return action === "synchronize"
 		? config.reviewResyncDelayMs
@@ -475,6 +467,7 @@ export async function maybeSubmitReview(args: {
 	force: boolean;
 	config: AppConfig;
 	auth?: ResolvedAuth;
+	requestStartedAtMs?: number;
 }): Promise<SubmitReviewOutcome> {
 	const {
 		app,
@@ -487,6 +480,7 @@ export async function maybeSubmitReview(args: {
 		force,
 		config,
 		auth,
+		requestStartedAtMs,
 	} = args;
 
 	if (!config.reviewEnabled) {
@@ -612,6 +606,7 @@ export async function maybeSubmitReview(args: {
 			getKv,
 			agentConcurrency: config.agentConcurrency,
 			agentBudgetMs: config.agentBudgetMs,
+			requestStartedAtMs,
 			diffBudgetChars: config.diffBudgetChars,
 			tier2Enabled: config.tier2Enabled,
 			auth,
@@ -994,6 +989,7 @@ export async function runScheduledReview(
 	message: ReviewRunMessage,
 	app: App,
 	config: AppConfig,
+	requestStartedAtMs?: number,
 ): Promise<{ status: "reviewed" | "superseded" }> {
 	const { owner, repo, pullNumber, headSha, installationId } = message;
 	const octokit = await app.getInstallationOctokit(installationId);
@@ -1023,6 +1019,7 @@ export async function runScheduledReview(
 		extraInstructions: "",
 		force: false,
 		config,
+		requestStartedAtMs,
 	});
 	return { status: "reviewed" };
 }
@@ -1036,6 +1033,7 @@ function registerHandlers(app: App, configFn: () => Promise<AppConfig>) {
 			"pull_request.ready_for_review",
 		],
 		async ({ payload }) => {
+			const requestStartedAtMs = Date.now();
 			const prPayload = payload as PullRequestWebhookPayload;
 
 			const installationId = prPayload.installation?.id;
@@ -1095,15 +1093,14 @@ function registerHandlers(app: App, configFn: () => Promise<AppConfig>) {
 				pullRequest: prPayload.pull_request,
 				extraInstructions: "",
 				force: false,
-				config: {
-					...config,
-					agentBudgetMs: budgetAfterDelay(config.agentBudgetMs, delayMs),
-				},
+				config,
+				requestStartedAtMs,
 			});
 		},
 	);
 
 	app.webhooks.on("issue_comment.created", async ({ payload }) => {
+		const requestStartedAtMs = Date.now();
 		const config = await configFn();
 		const commentPayload = payload as IssueCommentWebhookPayload;
 
@@ -1195,6 +1192,7 @@ function registerHandlers(app: App, configFn: () => Promise<AppConfig>) {
 			extraInstructions: command.extraInstructions,
 			force: command.force,
 			config,
+			requestStartedAtMs,
 		});
 	});
 
