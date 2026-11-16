@@ -161,6 +161,58 @@ describe("findRelocations", () => {
 		expect(ops[0]?.divergences[0]?.original).toContain("missing input");
 	});
 
+	describe("a guard at the edge of the moved block", () => {
+		const guard = '  if (!input) throw new Error("missing input");';
+
+		it("reports a deleted first-statement guard and spans the signature", () => {
+			const head = fn(body(30));
+			const base = [head[0] as string, guard, ...head.slice(1)];
+			const ops = move(base, head);
+			expect(ops).toHaveLength(1);
+			expect(ops[0]).toMatchObject({
+				exact: false,
+				from: [{ startLine: 10, endLine: 10 + base.length - 1 }],
+				to: [{ startLine: 3, endLine: 3 + head.length - 1 }],
+			});
+			expect(ops[0]?.divergences).toHaveLength(1);
+			expect(ops[0]?.divergences[0]).toMatchObject({
+				kind: "removed",
+				class: "code",
+				original: guard.trim(),
+			});
+		});
+
+		it("reports a deleted last-statement guard and spans the closing brace", () => {
+			const head = fn(body(30));
+			const base = [...head.slice(0, -1), guard, "}"];
+			const ops = move(base, head);
+			expect(ops).toHaveLength(1);
+			expect(ops[0]).toMatchObject({
+				exact: false,
+				from: [{ startLine: 10, endLine: 10 + base.length - 1 }],
+				to: [{ startLine: 3, endLine: 3 + head.length - 1 }],
+			});
+			expect(ops[0]?.divergences).toHaveLength(1);
+			expect(ops[0]?.divergences[0]).toMatchObject({
+				kind: "removed",
+				class: "code",
+			});
+		});
+
+		it("reports an added first-statement guard as inserted", () => {
+			const base = fn(body(30));
+			const head = [base[0] as string, guard, ...base.slice(1)];
+			const ops = move(base, head);
+			expect(ops).toHaveLength(1);
+			expect(ops[0]?.exact).toBe(false);
+			expect(ops[0]?.divergences).toHaveLength(1);
+			expect(ops[0]?.divergences[0]).toMatchObject({
+				kind: "inserted",
+				class: "code",
+			});
+		});
+	});
+
 	it("does not call a block unchanged when a template literal's inner whitespace changed", () => {
 		const template = (gap: string) => [
 			"export function banner() {",

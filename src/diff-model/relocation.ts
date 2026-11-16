@@ -363,6 +363,48 @@ function identicalEdge(
 	);
 }
 
+interface EdgeStep {
+	base: number;
+	head: number;
+	cost: number;
+}
+
+function unusedLine(run: Run, index: number): boolean {
+	return run.raw[index] !== undefined && !run.used[index];
+}
+
+/**
+ * How far one edge of a block can grow by one step. An identical pair is free, a similar
+ * pair costs one divergence, and when `canSpend` a single removed or inserted line may be
+ * skipped if the lines after it are identical, so a guard at the edge of a moved block is
+ * kept inside the block as a divergence instead of cutting the block short.
+ */
+function edgeStep(
+	from: Run,
+	to: Run,
+	fromIndex: number,
+	toIndex: number,
+	dir: -1 | 1,
+	canSpend: boolean,
+): EdgeStep | null {
+	if (identicalEdge(from, fromIndex, to, toIndex))
+		return { base: 1, head: 1, cost: 0 };
+	if (!canSpend) return null;
+	if (adjacentEdge(from, fromIndex, to, toIndex))
+		return { base: 1, head: 1, cost: 1 };
+	if (
+		unusedLine(from, fromIndex) &&
+		identicalEdge(from, fromIndex + dir, to, toIndex)
+	)
+		return { base: 2, head: 1, cost: 1 };
+	if (
+		unusedLine(to, toIndex) &&
+		identicalEdge(from, fromIndex, to, toIndex + dir)
+	)
+		return { base: 1, head: 2, cost: 1 };
+	return null;
+}
+
 function limitFor(blockLines: number): number {
 	return Math.min(
 		MAX_DIVERGENCES,
@@ -385,24 +427,27 @@ function build(
 	if (withEdges) {
 		const budget = limitFor(Math.max(fromEnd - fromStart, toEnd - toStart));
 		let spent = 0;
-		for (;;) {
-			const same = identicalEdge(from, fromStart - 1, to, toStart - 1);
-			if (
-				!same &&
-				!(spent < budget && adjacentEdge(from, fromStart - 1, to, toStart - 1))
-			)
-				break;
-			fromStart--;
-			toStart--;
-			if (!same) spent++;
-		}
-		for (;;) {
-			const same = identicalEdge(from, fromEnd, to, toEnd);
-			if (!same && !(spent < budget && adjacentEdge(from, fromEnd, to, toEnd)))
-				break;
-			fromEnd++;
-			toEnd++;
-			if (!same) spent++;
+		for (const dir of [-1, 1] as const) {
+			for (;;) {
+				const edge = dir < 0 ? [fromStart - 1, toStart - 1] : [fromEnd, toEnd];
+				const step = edgeStep(
+					from,
+					to,
+					edge[0] as number,
+					edge[1] as number,
+					dir,
+					spent < budget,
+				);
+				if (!step) break;
+				if (dir < 0) {
+					fromStart -= step.base;
+					toStart -= step.head;
+				} else {
+					fromEnd += step.base;
+					toEnd += step.head;
+				}
+				spent += step.cost;
+			}
 		}
 	}
 	const baseRaw = from.raw.slice(fromStart, fromEnd);

@@ -94,6 +94,74 @@ describe("verifyRelocation", () => {
 		expect(verifyRelocation(op, files)).toBe(true);
 	});
 
+	it("accepts a move that dropped a first-statement guard and rejects it as clean", () => {
+		const head = fn(body(30));
+		const base = [
+			head[0] as string,
+			"  if (!input) return null;",
+			...head.slice(1),
+		];
+		const { files, op } = relocation(base, head);
+		expect(op.divergences).toHaveLength(1);
+		expect(verifyRelocation(op, files)).toBe(true);
+		expect(verifyRelocation(claimedClean(op), files)).toBe(false);
+	});
+
+	it("rejects a claim that omits an inserted line", () => {
+		const base = fn(body(30));
+		const head = [...base.slice(0, 15), "  audit(input);", ...base.slice(15)];
+		const { files, op } = relocation(base, head);
+		expect(op.divergences).toHaveLength(1);
+		expect(op.divergences[0]?.kind).toBe("inserted");
+		expect(verifyRelocation(claimedClean(op), files)).toBe(false);
+	});
+
+	it("rejects an exact claim over a re-indented Python block", () => {
+		const lines = Array.from(
+			{ length: 8 },
+			(_, i) => `    value_${i} = f(${i})`,
+		);
+		const reindented = lines.map((line) => `        ${line.trim()}`);
+		const files = [
+			{
+				...pushFile(
+					"billing/old.py",
+					[`@@ -10,8 +9,0 @@`, ...lines.map((l) => `-${l}`)].join("\n"),
+				),
+			},
+			pushFile(
+				"billing/new.py",
+				[`@@ -0,0 +3,8 @@`, ...reindented.map((l) => `+${l}`)].join("\n"),
+			),
+		];
+		const claim: Operation = {
+			id: "relocation-1",
+			type: "relocation",
+			from: [
+				{
+					filename: "billing/old.py",
+					side: "base",
+					startLine: 10,
+					endLine: 17,
+					shown: "full",
+				},
+			],
+			to: [
+				{
+					filename: "billing/new.py",
+					side: "head",
+					startLine: 3,
+					endLine: 10,
+					shown: "full",
+				},
+			],
+			exact: true,
+			divergences: [],
+			reviewWeight: 0,
+		};
+		expect(verifyRelocation(claim, files)).toBe(false);
+	});
+
 	it("rejects a claim that omits a changed line", () => {
 		const base = fn(body(30));
 		const head = withLine(base, 10, "  const rate = Math.round(p);");
