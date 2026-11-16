@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Discard } from "./discards.js";
 import { persistPostedComments } from "./feedback/persist.js";
 import {
-	budgetAfterDelay,
 	getReviewerGitHubApp,
 	maybeSubmitReview,
 	REVIEW_CLAIM_TTL_SECONDS,
@@ -2159,6 +2158,34 @@ describe("runScheduledReview", () => {
 		expect(result).toEqual({ status: "reviewed" });
 	});
 
+	it("passes requestStartedAtMs from runScheduledReview to buildReview", async () => {
+		mockBuildReview.mockReset().mockResolvedValue(null);
+		const octokit = {
+			paginate: vi.fn(async () => []),
+			request: vi.fn(async (_route: string) => ({
+				data: {
+					draft: false,
+					head: { sha: "SAME" },
+					additions: 0,
+					deletions: 0,
+					changed_files: 0,
+					title: "t",
+					body: null,
+				},
+			})),
+		};
+		const app = { getInstallationOctokit: vi.fn(async () => octokit) } as never;
+		await runScheduledReview(
+			{ ...message, headSha: "SAME" },
+			app,
+			baseArgs.config,
+			1_700_000_000_000,
+		);
+		expect(mockBuildReview).toHaveBeenCalledWith(
+			expect.objectContaining({ requestStartedAtMs: 1_700_000_000_000 }),
+		);
+	});
+
 	it("reviews immediately without polling reviews or searching for peer bots", async () => {
 		mockBuildReview.mockReset().mockResolvedValue({
 			event: "COMMENT" as const,
@@ -2207,21 +2234,6 @@ describe("runScheduledReview", () => {
 		).toBe(false);
 		expect(mockScheduleReview).not.toHaveBeenCalled();
 		expect(mockBuildReview).toHaveBeenCalledTimes(1);
-	});
-});
-
-describe("budgetAfterDelay", () => {
-	it("takes the inline delay out of the agent budget", () => {
-		expect(budgetAfterDelay(210_000, 90_000)).toBe(120_000);
-	});
-
-	it("keeps the full budget when nothing was slept", () => {
-		expect(budgetAfterDelay(210_000, 0)).toBe(210_000);
-	});
-
-	it("keeps the configured budget when the delay would consume all of it, rather than skipping every agent", () => {
-		expect(budgetAfterDelay(60_000, 90_000)).toBe(60_000);
-		expect(budgetAfterDelay(90_000, 90_000)).toBe(90_000);
 	});
 });
 
@@ -2490,6 +2502,49 @@ describe("issue_comment review commands with a repo command", () => {
 
 		await sendComment("/lgtm");
 		expect(mockBuildReview).toHaveBeenCalledTimes(1);
+	});
+
+	it("passes requestStartedAtMs from the issue_comment handler to buildReview", async () => {
+		await sendComment("/ai-review");
+		const arg = mockBuildReview.mock.calls[0][0] as {
+			requestStartedAtMs: number;
+		};
+		expect(typeof arg.requestStartedAtMs).toBe("number");
+		expect(arg.requestStartedAtMs).toBeLessThanOrEqual(Date.now());
+	});
+
+	it("anchors requestStartedAtMs before the inline-fallback sleep on pull_request", async () => {
+		vi.useFakeTimers();
+		try {
+			const pinned = new Date("2026-11-15T12:00:00Z");
+			vi.setSystemTime(pinned);
+			process.env.AI_REVIEW_REVIEW__DELAY_SECONDS = "30";
+			mockScheduleReview.mockResolvedValue(null);
+			const octokit = { request: vi.fn().mockResolvedValue({ data: pr }) };
+			const app = getReviewerGitHubApp("claude");
+			app.getInstallationOctokit = vi.fn().mockResolvedValue(octokit) as never;
+			const received = app.webhooks.receive({
+				id: "3",
+				name: "pull_request",
+				payload: {
+					...buildPullRequestPayload(),
+					action: "opened",
+					installation: { id: 123 },
+				},
+			} as never);
+			await vi.advanceTimersByTimeAsync(29_000);
+			expect(mockBuildReview).not.toHaveBeenCalled();
+			await vi.advanceTimersByTimeAsync(2_000);
+			await received;
+			expect(mockBuildReview).toHaveBeenCalledTimes(1);
+			const arg = mockBuildReview.mock.calls[0][0] as {
+				requestStartedAtMs: number;
+			};
+			expect(arg.requestStartedAtMs).toBe(pinned.getTime());
+			expect(Date.now()).toBeGreaterThan(pinned.getTime());
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it("the repo command matches only as a whole first token", async () => {
