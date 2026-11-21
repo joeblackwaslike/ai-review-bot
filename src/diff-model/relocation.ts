@@ -18,6 +18,7 @@ import {
 	similarity,
 	tokens,
 } from "./lexical.js";
+import { findTokenOperations } from "./token-pass.js";
 import type { Divergence, DivergenceClass, Operation, Span } from "./types.js";
 
 const MAX_DIVERGENCES = 3;
@@ -652,6 +653,8 @@ export function findRelocations(
 		if (!seedsExhausted && budget.exhausted) break;
 		operations.push(...resolveChain(chain, budget));
 	}
+	if (!budget.exhausted)
+		operations.push(...findTokenOperations(deleted, added, budget));
 	if (!budget.exhausted)
 		operations.push(...findDeclarationMoves(deleted, added, budget));
 	operations.sort(

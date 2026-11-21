@@ -58,6 +58,7 @@ export interface Operation {
 	reviewWeight: number;
 	/** Why a mechanical operation is mechanical. Required for a mechanical operation, which is not rendered without it. */
 	reason?: "whitespace" | "imports";
+	shape?: { reindent?: number; sourceNew?: boolean };
 }
 
 /** A phrase of stated intent and the PR text span it came from. */

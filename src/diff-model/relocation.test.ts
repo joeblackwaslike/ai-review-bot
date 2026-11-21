@@ -1344,3 +1344,27 @@ describe("findRelocations budget exhaustion paths", () => {
 		expect(verifyRelocation(ops[0] as Operation, files)).toBe(true);
 	});
 });
+
+describe("token pass integration", () => {
+	it("finds a reformatted block after the line matcher and keeps its exact neighbor separate", () => {
+		const exact = body(6);
+		const wrapped =
+			'const settings = { name: "alpha", retries: 3, timeout: 5000, verbose: false, region: "us-east" };';
+		const reflowed = [
+			"const settings = {",
+			'  name: "alpha",',
+			"  retries: 3,",
+			"  timeout: 5000,",
+			"  verbose: false,",
+			'  region: "us-east",',
+			"};",
+		];
+		const ops = move(
+			[...exact, "// gap", wrapped],
+			[...exact, "// gap", ...reflowed],
+		);
+		expect(ops.map((op) => op.exact)).toEqual([true, true]);
+		expect(ops[0]?.to[0]).toMatchObject({ startLine: 3, endLine: 9 });
+		expect(ops[1]?.to[0]).toMatchObject({ startLine: 10, endLine: 16 });
+	});
+});

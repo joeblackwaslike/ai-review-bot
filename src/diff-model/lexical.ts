@@ -78,7 +78,7 @@ const NON_LITERAL_UNSAFE = /`|"""|'''|<<[-~]?\s*["']?\w/;
 const CONTROL_KEYWORD = /\b(?:if|while|for|with)\b/;
 const SLASH_ALWAYS_AMBIGUOUS = new Set(["rb", "pl", "awk"]);
 const RUBY_PERCENT_LITERAL = /%[rqQwWiIxs]\W/;
-const PERL_QUOTE_LIKE = /\b(?:m|qr|s|tr|y)\s*[{(\[<|!#]/;
+const PERL_QUOTE_LIKE = /\b(?:m|qr|s|tr|y)\s*[{([<|!#]/;
 const EXPRESSION_KEYWORDS = new Set([
 	"return",
 	"typeof",
