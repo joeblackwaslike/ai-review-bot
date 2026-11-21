@@ -30,11 +30,13 @@ That leaves the runbooks untested. The digest is about 11 KB hand-distilled from
 ## Design
 
 - `skills/f1-runbook-reviewer.md`: `a0`'s severity, fields and suggestions section and its "What to look for" list, verbatim, then a short section saying the entries below are the operations this diff performs, that each adds to the general list, and that an entry's skip clause is binding. No digest, no triage table.
-- `src/replay/strategies/f1-runbooks.ts`: `parseEntries(markdown)` reads each family file under `docs/review-ontology/operations/` into `Map<id, text>`, an entry being one `## XXX-NN` heading up to the next. `selectEntries(ids)` returns the text of known ids in the order given and drops unknown ones.
-- Triage call, once per cell: one `generateObject` call on the classifier role's model (`resolveJudgeRole`, Haiku at low effort by default). Its prompt is the diff and the 16-row diff-shape table from `skills/f0-runbook-reviewer.md` plus the 60 id and name pairs. Its schema is `{ operations: string[] }` with at most 4 ids. Ids not in the entry map are dropped. If none remain, the review runs with the general list only and the cell records that no entry matched.
+- `src/replay/strategies/f1-runbooks.ts`: `parseEntries(markdown)` reads each family file under `docs/review-ontology/operations/` into `Map<id, text>`, an entry being one `## XXX-NN` heading up to the next. The text kept per entry is its heading plus the "What not to spend review on", "Checklist" and "Red flags" sections, the same three the F0 digest drew from. The rest (signals, context to gather, worked example, tool and eval notes) is dropped, because the reviewer has no tools and the entries tell a reviewer with tools to run them. `selectEntries(ids)` returns the kept text of known ids in the order given and drops unknown ones.
+- Triage call, once per cell: one `generateObject` call on the classifier role's model (`resolveJudgeRole`, Haiku at low effort by default). Its prompt is the diff plus `skills/f1-triage.md`, which holds the 16-row diff-shape table (copied from `skills/f0-runbook-reviewer.md`, so editing F0 never changes F1) and the instruction to answer with ids only, followed by the 60 id and name pairs read from the entry files. Its schema is `{ operations: string[] }` with at most 4 ids. Ids not in the entry map are dropped. If none remain, the review runs with the general list only and the cell records that no entry matched.
 - Review calls: the shared spend-matching loop in `src/replay/strategies/spend-matched.ts` runs the reviewer repeatedly to `a`'s spend, as `f0` does. `SpendMatchedConfig` gains an optional `customPrompt`, which `runAgent` already appends to the system prompt, and `f1` passes the selected entries there. Triage runs once and every repeat reuses its selection. The message ref is `replay-f1`, so the prompt cache does not cross with other strategies.
+- The triage output is recorded as one `toolCalls` entry named `triage:` followed by the chosen ids (for example `triage:REL-01,DEL-02`), with its wall time and cost, so adjudication can read what was selected without a new result field.
 - Cost: the triage call's usage is recorded under `f1-triage.md` and counts toward the cell's spend and the per-cell cap, so `achievedUsd` is honest. The spend target is `a`'s cost for the round, and review calls fill what triage leaves.
-- `strategyF1Version` hashes the skill text, the triage prompt, the content of the six entry files, the tier maps, `F1_IMPLEMENTATION_REVISION` and the spend-matched revision, so editing an entry makes stored cells stale.
+- `skills/f1-runbook-reviewer.md` also tells the reviewer that a check needing information outside the diff is skipped, never reported as a question, as F0's digest does.
+- `strategyF1Version` hashes the skill text, `skills/f1-triage.md`, the content of the six entry files, the tier maps, `F1_IMPLEMENTATION_REVISION` and the spend-matched revision, so editing an entry makes stored cells stale.
 - Register `f1` in `src/replay/strategies/index.ts`. `isSpendMatched` in `src/replay/experiment/spend-matched-names.ts` gains `f1`, so the runner runs it after `a` and gives it `a`'s spend as its target.
 - `docs/review-experiments/plan-pilot-f1.json` and its lock: the pilot fixtures with strategies `a`, `f0` (at its current pinned version) and `f1`. The full `plan.json` and `plan-chained.json` gain `f1`, stay `draft`, and get no lock.
 - `protocol.md` gets a paragraph on `f1`, the triage call's cost accounting and the stop rule.
@@ -49,7 +51,7 @@ Compared at equal spend on the pilot, adjudicated Anthropic-only, `f1` against `
 
 ## What is left to the builder
 
-- The triage prompt's wording, within the schema above.
+- The wording of `skills/f1-triage.md` outside its table, within the schema above.
 - How `parseEntries` handles the template file and any heading that is not an operation id.
 - Whether triage failure (a non-ok outcome or an invalid object) throws or falls back to the general list. Preferred: fall back and record it, since a failed triage is a property of `f1` and should not leave a hole in the grid.
 
@@ -64,7 +66,8 @@ Compared at equal spend on the pilot, adjudicated Anthropic-only, `f1` against `
 
 - `f1` is registered and appears in `strategyNames()`, and the runner requires `a` in a plan that holds it.
 - `parseEntries` returns all 60 ids from the committed entry files, and `selectEntries` drops an unknown id.
-- `strategyF1Version` changes when the skill text, the triage prompt or an entry file changes.
+- `strategyF1Version` changes when the skill text, `skills/f1-triage.md` or an entry file changes.
+- `parseEntries` keeps only the three named sections of an entry.
 - A mocked triage returning ids produces a review prompt containing exactly those entries, and one returning nothing produces the general list only.
 - Triage usage appears in the cell's usage and counts toward its spend.
 - `--experiment plan` on the pilot plan lists the three strategies with a cost estimate and runs nothing.
