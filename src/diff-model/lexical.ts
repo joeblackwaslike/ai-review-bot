@@ -61,3 +61,112 @@ export function similarity(a: string, b: string): number {
 	const union = left.size + right.size - shared;
 	return union === 0 ? 0 : shared / union;
 }
+
+const REGEX_FAMILY = new Set([
+	"js",
+	"ts",
+	"jsx",
+	"tsx",
+	"mjs",
+	"cjs",
+	"rb",
+	"swift",
+	"pl",
+	"awk",
+]);
+const NON_LITERAL_UNSAFE = /`|"""|'''|<<[-~]?\s*["']?\w/;
+const EXPRESSION_KEYWORDS = new Set([
+	"return",
+	"typeof",
+	"case",
+	"in",
+	"of",
+	"delete",
+	"void",
+	"throw",
+	"yield",
+	"await",
+	"else",
+	"do",
+	"instanceof",
+	"new",
+]);
+
+function extension(filename: string): string {
+	const name = filename.split("/").pop() ?? filename;
+	const dot = name.lastIndexOf(".");
+	return dot < 0 ? "" : name.slice(dot + 1).toLowerCase();
+}
+
+function slashIsDivision(before: string): boolean {
+	const prev = before.trimEnd();
+	if (prev === "") return false;
+	const last = prev[prev.length - 1] as string;
+	if (last === ")" || last === "]") return true;
+	if (!/[\w$]/.test(last)) return false;
+	const word = /[\w$]+$/.exec(prev)?.[0] ?? "";
+	return !EXPRESSION_KEYWORDS.has(word);
+}
+
+function lineHasRegexAmbiguity(line: string): boolean {
+	for (let i = 0; i < line.length; i++) {
+		const ch = line[i] as string;
+		if (ch === '"' || ch === "'") {
+			let j = i + 1;
+			while (j < line.length && line[j] !== ch) j += line[j] === "\\" ? 2 : 1;
+			if (j >= line.length) return true;
+			i = j;
+		} else if (ch === "/") {
+			const next = line[i + 1];
+			if (next === "/") return false;
+			if (next === "*") {
+				const close = line.indexOf("*/", i + 2);
+				if (close < 0) return true;
+				i = close + 1;
+			} else if (!slashIsDivision(line.slice(0, i))) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+/**
+ * Whether these lines contain no backtick, triple quote, heredoc or slash that could open a
+ * regex literal. Slashes are only ambiguous in the regex-literal language family, and
+ * there only when not clearly division or a closed comment.
+ */
+export function literalSafe(
+	lines: readonly string[],
+	filename: string,
+): boolean {
+	if (lines.some((line) => NON_LITERAL_UNSAFE.test(line))) return false;
+	if (!REGEX_FAMILY.has(extension(filename))) return true;
+	return !lines.some(lineHasRegexAmbiguity);
+}
+
+/**
+ * Each non-empty line with its indentation minus the block's smallest indent, as that many
+ * spaces; null when any indentation contains a tab.
+ */
+export function relativeIndent(
+	lines: readonly string[],
+): { shape: string[]; base: number } | null {
+	const indents: number[] = [];
+	for (const line of lines) {
+		if (line.trim() === "") continue;
+		const lead = /^\s*/.exec(line)?.[0] ?? "";
+		if (lead.includes("\t")) return null;
+		indents.push(lead.length);
+	}
+	const base = indents.length ? Math.min(...indents) : 0;
+	return {
+		base,
+		shape: lines.map((line) =>
+			line.trim() === ""
+				? ""
+				: " ".repeat((/^\s*/.exec(line)?.[0].length ?? 0) - base) +
+					line.trimStart(),
+		),
+	};
+}
