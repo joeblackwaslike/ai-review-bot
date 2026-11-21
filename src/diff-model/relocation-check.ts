@@ -3,7 +3,10 @@ import { hasBrokenContinuation, hasOddBreak } from "./lexical.js";
 import {
 	hasBlockScalarHeader,
 	jsxPossible,
+	leadingSignature,
 	opensUnclosedString,
+	receiverOnlyLine,
+	reshapeEquivalent,
 	tokenEquivalent,
 	unbalancedBlockComment,
 } from "./token-check.js";
@@ -589,12 +592,15 @@ function classesHold(op: Operation, base: Side[], head: Side[]): number | null {
 		return at >= 0 && marks.get(side?.filename as string)?.[at] === true;
 	};
 	let code = 0;
+	let receivers = false;
 	const renamePairs: [string, string][][] = [];
 	for (const d of op.divergences) {
 		const baseText = textOf(d.base, base);
 		const headText = textOf(d.head, head);
-		if (d.class === "code") {
+		if (d.class === "code" || d.class === "signature") {
 			code++;
+		} else if (d.class === "receiver") {
+			receivers = true;
 		} else if (d.class === "comment-only") {
 			const slashBoth =
 				slashStyle(d.base?.filename ?? "") &&
@@ -625,7 +631,9 @@ function classesHold(op: Operation, base: Side[], head: Side[]): number | null {
 		}
 	}
 	const renamed = verifiedRenames(renamePairs, base, head);
-	return renamed === null ? null : code + renamed;
+	return renamed === null
+		? null
+		: Math.max(code + renamed, receivers ? 1 : 0);
 }
 
 function textOf(span: Span | undefined, sides: Side[]): string | undefined {
@@ -656,6 +664,12 @@ export function verifyRelocation(op: Operation, files: PushFile[]): boolean {
 	if (!base || !head) return false;
 	if (!sameFileHolds(base, head, index)) return false;
 	if (!smallClaimHolds(base, head, index)) return false;
+	if (op.exact && op.divergences.length > 0) return false;
+	if (op.divergences.some((d) => d.class === "signature")) {
+		const weight = classesHold(op, base, head);
+		if (weight === null || weight !== op.reviewWeight) return false;
+		return shapeVerified(op, base, head, index);
+	}
 	const baseSpent = new Set<string>();
 	const headSpent = new Set<string>();
 	for (const divergence of op.divergences) {
@@ -668,8 +682,12 @@ export function verifyRelocation(op: Operation, files: PushFile[]): boolean {
 			baseLine?.trim() !== divergence.original
 		)
 			return false;
+		if (
+			divergence.class === "receiver" &&
+			!receiverLineHolds(divergence, baseLine, headLine)
+		)
+			return false;
 	}
-	if (op.exact && op.divergences.length > 0) return false;
 	const weight = classesHold(op, base, head);
 	if (weight === null || weight !== op.reviewWeight) return false;
 	if (
@@ -679,7 +697,21 @@ export function verifyRelocation(op: Operation, files: PushFile[]): boolean {
 		)
 	)
 		return (op.shape?.reindent ?? 0) === 0;
-	return op.divergences.length === 0 && tokenVerified(op, base, head, index);
+	if (op.divergences.length === 0) return tokenVerified(op, base, head, index);
+	return op.divergences.every((d) => d.class === "receiver")
+		? shapeVerified(op, base, head, index)
+		: false;
+}
+
+function receiverLineHolds(
+	divergence: Divergence,
+	base: string | null | undefined,
+	head: string | null | undefined,
+): boolean {
+	const { base: from, head: to } = divergence;
+	if (divergence.kind !== "changed" || !from || !to) return false;
+	if (typeof base !== "string" || typeof head !== "string") return false;
+	return receiverOnlyLine(base, head, from.filename, to.filename);
 }
 
 function tokenVerified(
@@ -703,6 +735,125 @@ function tokenVerified(
 		to.filename,
 	);
 	return result.equivalent && (op.shape?.reindent ?? 0) === result.reindent;
+}
+
+function lineDiffers(
+	span: Span | undefined,
+	side: Side,
+	want: "base" | "head",
+): number | null | undefined {
+	if (!span) return undefined;
+	if (span.side !== want || span.filename !== side.filename) return null;
+	if (span.startLine !== span.endLine) return null;
+	const at = side.positions.indexOf(span.startLine);
+	return at < 0 ? null : at;
+}
+
+function signatureCovered(
+	divergences: Divergence[],
+	from: Side,
+	to: Side,
+	baseEnd: number,
+	headEnd: number,
+): boolean {
+	const baseSeen = new Set<number>();
+	const headSeen = new Set<number>();
+	for (const d of divergences) {
+		const b = lineDiffers(d.base, from, "base");
+		const h = lineDiffers(d.head, to, "head");
+		if (b === null || h === null) return false;
+		if (d.kind === "changed" && (b === undefined || h === undefined))
+			return false;
+		if (d.kind === "inserted" && (b !== undefined || h === undefined))
+			return false;
+		if (d.kind === "removed" && (b === undefined || h !== undefined))
+			return false;
+		if (b !== undefined) {
+			if (b > baseEnd || baseSeen.has(b)) return false;
+			baseSeen.add(b);
+			if (d.original !== (from.lines[b] as string).trim()) return false;
+		} else if (d.original !== undefined) return false;
+		if (h !== undefined) {
+			if (h > headEnd || headSeen.has(h)) return false;
+			headSeen.add(h);
+		}
+	}
+	return baseSeen.size === baseEnd + 1 && headSeen.size === headEnd + 1;
+}
+
+function receiversListed(
+	divergences: Divergence[],
+	from: Side,
+	to: Side,
+	offset: [number, number],
+	pairs: [number, number][],
+): boolean {
+	if (divergences.length !== pairs.length) return false;
+	const wanted = new Set(
+		pairs.map(
+			([b, h]) =>
+				`${from.positions[offset[0] + b]}|${to.positions[offset[1] + h]}`,
+		),
+	);
+	const seen = new Set<string>();
+	for (const d of divergences) {
+		const b = lineDiffers(d.base, from, "base");
+		const h = lineDiffers(d.head, to, "head");
+		if (d.kind !== "changed" || typeof b !== "number" || typeof h !== "number")
+			return false;
+		const key = `${from.positions[b]}|${to.positions[h]}`;
+		if (!wanted.has(key) || seen.has(key)) return false;
+		seen.add(key);
+		if (d.original !== (from.lines[b] as string).trim()) return false;
+	}
+	return true;
+}
+
+function shapeVerified(
+	op: Operation,
+	base: Side[],
+	head: Side[],
+	index: PatchIndex,
+): boolean {
+	const from = base[0];
+	const to = head[0];
+	if (base.length !== 1 || head.length !== 1 || !from || !to) return false;
+	const tainted = [from, to].some((side) => {
+		const patch = index.patches.get(side.filename);
+		return (patch?.risky ?? false) || (patch?.jsx ?? false);
+	});
+	if (tainted) return false;
+	const sigBase = leadingSignature(from.lines, from.filename);
+	const sigHead = leadingSignature(to.lines, to.filename);
+	if (!sigBase || !sigHead) return false;
+	const signatures = op.divergences.filter((d) => d.class === "signature");
+	const receivers = op.divergences.filter((d) => d.class === "receiver");
+	const same = sigBase.tokens.join("\u0001") === sigHead.tokens.join("\u0001");
+	let skip: [number, number] = [0, 0];
+	if (same) {
+		if (signatures.length > 0) return false;
+	} else {
+		if (!signatureCovered(signatures, from, to, sigBase.end, sigHead.end))
+			return false;
+		skip = [sigBase.end + 1, sigHead.end + 1];
+	}
+	const result = reshapeEquivalent(
+		{
+			filename: from.filename,
+			lines: from.lines.slice(skip[0]),
+			opener: same ? undefined : from.lines[sigBase.decorators],
+			opensBrace: !same && sigBase.opensBrace,
+		},
+		{
+			filename: to.filename,
+			lines: to.lines.slice(skip[1]),
+			opener: same ? undefined : to.lines[sigHead.decorators],
+			opensBrace: !same && sigHead.opensBrace,
+		},
+	);
+	if (!result.equivalent) return false;
+	if ((op.shape?.reindent ?? 0) !== result.reindent) return false;
+	return receiversListed(receivers, from, to, skip, result.pairs);
 }
 
 function squeezed(line: string): string {

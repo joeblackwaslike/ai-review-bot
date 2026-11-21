@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { tokenEquivalent } from "./token-check.js";
+import {
+	leadingSignature,
+	receiverOnlyLine,
+	reshapeEquivalent,
+	tokenEquivalent,
+} from "./token-check.js";
 
 function same(
 	base: string[],
@@ -294,5 +299,152 @@ describe("tokenEquivalent negatives for each structural rule", () => {
 		expect(
 			same(['x = "a\\" // b";'], ['x   =   "a\\" // b";']).equivalent,
 		).toBe(true);
+	});
+});
+
+describe("receiverOnlyLine", () => {
+	it("accepts a gained or lost receiver prefix", () => {
+		expect(
+			receiverOnlyLine("total = f(x)", "total = self.f(x)", "a.py", "b.py"),
+		).toBe(true);
+		expect(receiverOnlyLine("this.f(x);", "f(x);", "a.ts", "b.ts")).toBe(true);
+		expect(receiverOnlyLine("g(x)", "Self::g(x)", "a.rs", "b.rs")).toBe(true);
+		expect(receiverOnlyLine("self.f(x)", "cls.f(x)", "a.py", "b.py")).toBe(
+			true,
+		);
+	});
+
+	it("rejects anything beyond a receiver token", () => {
+		expect(receiverOnlyLine("this.f(x);", "that.f(x);", "a.ts", "b.ts")).toBe(
+			false,
+		);
+		expect(receiverOnlyLine("self.a", "self.b", "a.py", "b.py")).toBe(false);
+		expect(receiverOnlyLine("f(x, y)", "self.f(y, x)", "a.py", "b.py")).toBe(
+			false,
+		);
+		expect(receiverOnlyLine("Self::g(x)", "Other::g(x)", "a.rs", "b.rs")).toBe(
+			false,
+		);
+		expect(receiverOnlyLine("f(x)", "f(x)", "a.py", "b.py")).toBe(false);
+	});
+
+	it("never removes a receiver after a dot, at line end or inside a string", () => {
+		expect(receiverOnlyLine("obj.x", "obj.self.x", "a.py", "b.py")).toBe(false);
+		expect(receiverOnlyLine("x = self", "x = self.", "a.py", "b.py")).toBe(
+			false,
+		);
+		expect(receiverOnlyLine("a = b", "self = b", "a.py", "b.py")).toBe(false);
+		expect(receiverOnlyLine("s = 'x'", "s = 'self.x'", "a.py", "b.py")).toBe(
+			false,
+		);
+	});
+
+	it("rejects other families and languages", () => {
+		expect(receiverOnlyLine("this.f(x);", "f(x);", "A.java", "b.ts")).toBe(
+			false,
+		);
+		expect(receiverOnlyLine("this.f(x)", "f(x)", "a.go", "b.go")).toBe(false);
+	});
+});
+
+describe("leadingSignature", () => {
+	it("reads decorators and a multi-line opening line", () => {
+		const found = leadingSignature(
+			["@retry", "def f(", "    a,", "    b,", "):", "    return a"],
+			"a.py",
+		);
+		expect(found).toMatchObject({ decorators: 1, end: 4, opensBrace: false });
+	});
+
+	it("reads a brace signature and flags the open brace", () => {
+		expect(
+			leadingSignature(
+				["  process(items: Item[]): number {", "    return 1;", "  }"],
+				"a.ts",
+			),
+		).toMatchObject({ decorators: 0, end: 0, opensBrace: true });
+	});
+
+	it("reads Rust attributes", () => {
+		expect(
+			leadingSignature(
+				["#[inline]", "pub fn go(&self) -> u32 {", "1", "}"],
+				"a.rs",
+			),
+		).toMatchObject({
+			decorators: 1,
+			end: 1,
+		});
+	});
+
+	it("is null for a block that does not start with a definition", () => {
+		expect(leadingSignature(["total = a + b", "    x = 1"], "a.py")).toBeNull();
+		expect(leadingSignature(["if (ready(x)) {", "}"], "a.ts")).toBeNull();
+		expect(leadingSignature(["const f = (a) => {", "}"], "a.ts")).toBeNull();
+	});
+
+	it("is null without the block terminator, with a comment, or outside the languages", () => {
+		expect(
+			leadingSignature(["def f(x) -> int", "    pass"], "a.py"),
+		).toBeNull();
+		expect(
+			leadingSignature(["def f(x):  # note", "    pass"], "a.py"),
+		).toBeNull();
+		expect(leadingSignature(["func f(x int) {", "}"], "a.go")).toBeNull();
+	});
+});
+
+describe("reshapeEquivalent", () => {
+	const block = (
+		filename: string,
+		lines: string[],
+		opener?: string,
+		opensBrace = false,
+	) => ({
+		filename,
+		lines,
+		opener,
+		opensBrace,
+	});
+
+	it("lists the lines that match only after receiver removal", () => {
+		const result = reshapeEquivalent(
+			block("a.py", ["    x = f(1)", "    g(x)", "    return x"], "def a(v):"),
+			block(
+				"b.py",
+				["        x = f(1)", "        self.g(x)", "        return x"],
+				"    def a(self, v):",
+			),
+		);
+		expect(result).toEqual({ equivalent: true, pairs: [[1, 1]], reindent: 4 });
+	});
+
+	it("rejects a body that differs beyond a receiver", () => {
+		const result = reshapeEquivalent(
+			block("a.ts", ["  f(a, b);", "}"], undefined, true),
+			block("b.ts", ["  this.f(b, a);", "}"], undefined, true),
+		);
+		expect(result.equivalent).toBe(false);
+	});
+
+	it("rejects tabs, comments, other families and unbalanced bodies", () => {
+		const py = (lines: string[]) => block("a.py", lines, "def a(v):");
+		expect(
+			reshapeEquivalent(py(["\tx = 1"]), py(["    x = 1"])).equivalent,
+		).toBe(false);
+		expect(
+			reshapeEquivalent(py(["    x = 1  # c"]), py(["    x = 1  # c"]))
+				.equivalent,
+		).toBe(false);
+		expect(
+			reshapeEquivalent(block("a.ts", ["  f();"]), block("b.java", ["  f();"]))
+				.equivalent,
+		).toBe(false);
+		expect(
+			reshapeEquivalent(
+				block("a.ts", ["  f();", "}"]),
+				block("b.ts", ["  f();", "}"]),
+			).equivalent,
+		).toBe(false);
 	});
 });
