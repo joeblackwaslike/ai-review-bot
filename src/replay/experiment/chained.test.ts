@@ -57,6 +57,24 @@ const stub = (
 	}),
 	...over,
 });
+const triageF1 = (triageUsd: number) =>
+	stub("f1", {
+		run: async () => ({
+			...result(),
+			usage: {
+				x: USAGE.x,
+				"f1-triage.md": { promptTokens: 1000, completionTokens: 0 },
+			},
+			toolCalls: [
+				{
+					name: "triage:BEH-01",
+					provider: "anthropic" as const,
+					wallMs: 1,
+					costUsd: triageUsd,
+				},
+			],
+		}),
+	});
 
 const memoryStore = (initial: CellRecord[] = []) => {
 	const records = [...initial];
@@ -273,6 +291,36 @@ describe("runChains", () => {
 			"2.a0",
 		]);
 		expect(titlesOf(a0[1] as Call)).toEqual([titleOf("a0", 0)]);
+	});
+
+	it("charges an anthropic triage call to anthropic and the rest of an OpenAI chain to openai", async () => {
+		const { deps } = harness([stub("a"), triageF1(0.03)], {
+			fixtures: {
+				"o/r#2@openai": {
+					...loaded(2),
+					fixture: makeFixture([[], [], []], { pull: 2, provider: "openai" }),
+				},
+			},
+			modelFor: () => MODEL,
+		});
+		const report = await runChains(
+			plan({
+				strategies: [
+					{ name: "a", version: "v1" },
+					{ name: "f1", version: "v1" },
+				],
+				fixtures: [
+					{
+						id: "o/r#2@openai",
+						split: "test" as const,
+						provider: "openai" as const,
+					},
+				],
+			}),
+			deps,
+		);
+		expect(report.spentUsd.anthropic).toBeCloseTo(0.03 * 3);
+		expect(report.spentUsd.openai).toBeCloseTo(ONE * 6);
 	});
 
 	it("an exhausted provider cap stops that provider's chains only", async () => {

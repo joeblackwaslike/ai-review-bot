@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { loadPlan, planHash } from "../experiment/plan.js";
 import { strategyA } from "./a.js";
@@ -46,10 +47,12 @@ describe("strategy versions pinned by the committed plan", () => {
 	});
 
 	it("plan-pilot-f1.json loads against its lock and pins the strategies' versions", () => {
-		const path = new URL(
-			"../../../docs/review-experiments/plan-pilot-f1.json",
-			import.meta.url,
-		).pathname;
+		const path = fileURLToPath(
+			new URL(
+				"../../../docs/review-experiments/plan-pilot-f1.json",
+				import.meta.url,
+			),
+		);
 		const { plan: pilot, lockedHash } = loadPlan(path);
 		expect(lockedHash).toBe(planHash(pilot));
 		const byName = { a: strategyA, f0: strategyF0, f1: strategyF1 } as const;

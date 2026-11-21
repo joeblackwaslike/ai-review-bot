@@ -6,6 +6,7 @@ import { z } from "zod";
 import { getConfigTree } from "../../config/load.js";
 import { isProgrammingError } from "../../improve/qc.js";
 import { computeCost, createAIModel } from "../../models.js";
+import { stripFrontmatter } from "../../prompt.js";
 import { resolveJudgeRole } from "../../roles.js";
 import type { ModelSelection } from "../../router.js";
 import {
@@ -20,7 +21,7 @@ import {
 } from "../experiment/spend-matched-names.js";
 import { resolveSelectionAuth } from "../live-wiring.js";
 import type { ReviewStrategy, StrategyInput } from "../strategy.js";
-import type { RoundUsage } from "../types.js";
+import type { Provider, RoundUsage } from "../types.js";
 import { A0_IMPLEMENTATION_REVISION } from "./a0.js";
 import {
 	entriesHash,
@@ -70,6 +71,7 @@ export function strategyF1Version(
 }
 
 export interface TriageResult {
+	provider: Provider | undefined;
 	ids: string[];
 	costUsd: number;
 	wallMs: number;
@@ -81,6 +83,7 @@ export interface TriageResult {
 export async function triage(
 	input: StrategyInput,
 	entries: Map<string, string>,
+	readSkill: (name: string) => string = readSkillFile,
 ): Promise<TriageResult> {
 	const started = Date.now();
 	const selection = resolveJudgeRole(getConfigTree(), "classifier");
@@ -100,11 +103,12 @@ export async function triage(
 		);
 		return { tokens, costUsd };
 	};
-	const skillText = readSkillFile(TRIAGE_SKILL);
+	const skillText = stripFrontmatter(readSkill(TRIAGE_SKILL));
 	const operations = entryHeadings(entries)
 		.map((h) => `${h.id}: ${h.name}`)
 		.join("\n");
 	const auth = await resolveSelectionAuth(selection.provider);
+	const provider = billedProvider(selection.provider);
 	const fixtureId = `${input.fixture.owner}/${input.fixture.repo}`;
 	let call: Awaited<ReturnType<typeof generateObject<typeof TriageSchema>>>;
 	try {
@@ -133,6 +137,7 @@ export async function triage(
 			wallMs: Date.now() - started,
 			usage: spent?.tokens,
 			failed: true,
+			provider,
 		};
 	}
 	const returned = [
@@ -152,8 +157,12 @@ export async function triage(
 		wallMs: Date.now() - started,
 		usage: tokens,
 		failed: false,
+		provider,
 	};
 }
+
+const billedProvider = (p: string): Provider | undefined =>
+	p === "anthropic" || p === "openai" ? p : undefined;
 
 let cachedVersion: string | undefined;
 
@@ -193,6 +202,7 @@ export const strategyF1: ReviewStrategy = {
 				extraToolCalls: [
 					{
 						name: `${TRIAGE_CALL_PREFIX}${label}`,
+						...(picked.provider ? { provider: picked.provider } : {}),
 						wallMs: picked.wallMs,
 						costUsd: picked.costUsd,
 					},

@@ -13,6 +13,7 @@ import type {
 	ReviewStrategy,
 	StrategyInput,
 	StrategyResult,
+	ToolCallRecord,
 } from "../strategy.js";
 import { ledgerForRound } from "../trace.js";
 import {
@@ -203,6 +204,22 @@ export interface ExecuteCellArgs {
 	checkoutFor: typeof realWithCheckout;
 }
 
+/** Charges a cell to the provider caps: each triage call to its own provider, the rest to the cell's. */
+export function chargeCell(
+	spentUsd: Record<Provider, number>,
+	provider: Provider,
+	costUsd: number,
+	toolCalls: readonly ToolCallRecord[],
+): void {
+	let rest = costUsd;
+	for (const t of toolCalls) {
+		if (!t.name.startsWith(TRIAGE_CALL_PREFIX) || !t.provider) continue;
+		spentUsd[t.provider] += t.costUsd;
+		rest -= t.costUsd;
+	}
+	spentUsd[provider] += rest;
+}
+
 export async function executeCell(
 	a: ExecuteCellArgs,
 ): Promise<"unavailable" | { record: CellRecord; result: StrategyResult }> {
@@ -310,7 +327,8 @@ export async function runGrid(
 
 	const stored = deps.store.readAll().records;
 	const spentUsd: Record<Provider, number> = { anthropic: 0, openai: 0 };
-	for (const r of stored) spentUsd[r.provider] += r.costUsd;
+	for (const r of stored)
+		chargeCell(spentUsd, r.provider, r.costUsd, r.result?.toolCalls ?? []);
 	const report: GridReport = {
 		ran: 0,
 		skippedExisting: 0,
@@ -412,7 +430,12 @@ export async function runGrid(
 					report.unavailable.push(cell);
 					continue;
 				}
-				spentUsd[provider] += done.record.costUsd;
+				chargeCell(
+					spentUsd,
+					provider,
+					done.record.costUsd,
+					done.result.toolCalls,
+				);
 				if (s.name === A) aCost = done.record.costUsd;
 				if (done.record.overCap)
 					report.overCap.push({ ...cell, ...done.record.overCap });

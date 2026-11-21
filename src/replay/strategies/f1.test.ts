@@ -16,6 +16,7 @@ import {
 	F1_IMPLEMENTATION_REVISION,
 	strategyF1,
 	strategyF1Version,
+	triage,
 } from "./f1.js";
 import { loadEntries } from "./f1-runbooks.js";
 import { registerBuiltinStrategies } from "./index.js";
@@ -23,18 +24,6 @@ import { registerBuiltinStrategies } from "./index.js";
 const mockRunAgent = vi.hoisted(() => vi.fn());
 const mockGenerateObject = vi.hoisted(() => vi.fn());
 const haikuPin = vi.hoisted(() => ({ on: true }));
-const mockSkillRead = vi.hoisted(() => ({ fail: false }));
-vi.mock("node:fs", async (orig) => {
-	const real = await orig<typeof import("node:fs")>();
-	return {
-		...real,
-		readFileSync: ((path: string, ...rest: never[]) => {
-			if (mockSkillRead.fail && String(path).endsWith("f1-triage.md"))
-				throw new Error("ENOENT");
-			return (real.readFileSync as (...a: unknown[]) => unknown)(path, ...rest);
-		}) as typeof real.readFileSync,
-	};
-});
 vi.mock("../../review.js", async (orig) => ({
 	...(await orig<typeof import("../../review.js")>()),
 	runAgent: mockRunAgent,
@@ -289,12 +278,20 @@ describe("strategyF1", () => {
 	});
 
 	it("surfaces a missing triage skill file instead of recording triage:failed", async () => {
-		mockSkillRead.fail = true;
-		try {
-			await expect(strategyF1.run(inputFor())).rejects.toThrow("ENOENT");
-		} finally {
-			mockSkillRead.fail = false;
-		}
+		const missing = () => {
+			throw new Error("ENOENT");
+		};
+		await expect(triage(inputFor(), entries, missing)).rejects.toThrow(
+			"ENOENT",
+		);
+	});
+
+	it("sends the triage skill without its frontmatter and tags the call with the classifier provider", async () => {
+		const out = await strategyF1.run(inputFor());
+		const prompt = mockGenerateObject.mock.calls[0]?.[0].prompt as string;
+		expect(prompt).not.toContain("name: f1-triage");
+		expect(prompt.startsWith("---")).toBe(false);
+		expect(out.toolCalls[0]?.provider).toBe("anthropic");
 	});
 
 	it("rethrows when the signal is aborted instead of recording triage:failed", async () => {

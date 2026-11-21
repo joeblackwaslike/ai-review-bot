@@ -41,6 +41,24 @@ const stub = (
 	run: async () => result(),
 	...over,
 });
+const triageF1 = (triageUsd: number) =>
+	stub("f1", {
+		run: async () => ({
+			...result(),
+			usage: {
+				x: USAGE.x,
+				"f1-triage.md": { promptTokens: 1000, completionTokens: 0 },
+			},
+			toolCalls: [
+				{
+					name: "triage:BEH-01",
+					provider: "anthropic" as const,
+					wallMs: 1,
+					costUsd: triageUsd,
+				},
+			],
+		}),
+	});
 
 const memoryStore = (initial: CellRecord[] = []) => {
 	const records = [...initial];
@@ -388,6 +406,26 @@ describe("runGrid", () => {
 		);
 		const rec = store.records.find((r) => r.key.strategy === "f1");
 		expect(rec?.costUsd).toBeCloseTo(ONE + triageUsd);
+	});
+
+	it("charges an anthropic triage call to anthropic and the rest of an OpenAI cell to openai", async () => {
+		const { deps } = harness([stub("a"), triageF1(0.03)], {
+			fixtures: { "o/r#1": loaded(1, "openai") },
+			modelFor: () => MODEL,
+		});
+		const report = await runGrid(
+			plan({
+				strategies: [
+					{ name: "a", version: "v1" },
+					{ name: "f1", version: "v1" },
+				],
+				providers: ["openai"],
+				fixtures: [{ id: "o/r#1", split: "test", provider: "openai" }],
+			}),
+			deps,
+		);
+		expect(report.spentUsd.anthropic).toBeCloseTo(0.03 * 2);
+		expect(report.spentUsd.openai).toBeCloseTo(ONE * 4);
 	});
 
 	it("books a failed triage's cost into the cell cost", async () => {
