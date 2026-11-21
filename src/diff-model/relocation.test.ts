@@ -793,7 +793,6 @@ describe("distinctiveness acceptance and same-file moves", () => {
 	});
 
 	it("rejects two identical short definitions", () => {
-		const helper = ["function pad(value, width) {", "  return value;", "}"];
 		const wide = [
 			"function formatCurrency(amount, currency) {",
 			"  return amount.toFixed(2) + currency;",
@@ -805,7 +804,92 @@ describe("distinctiveness acceptance and same-file moves", () => {
 			addedTo("src/b.ts", 1, wide),
 		];
 		expect(findRelocations(files)).toEqual([]);
-		expect(move(helper, helper)).toEqual([]);
+	});
+
+	it("accepts a short unique definition of 30 to 39 characters", () => {
+		const def = ["function areaOf(a, b) {", "  return a * b;", "}"];
+		expect(move(def, def)).toHaveLength(1);
+	});
+
+	it("rejects a definition duplicated only on the added side", () => {
+		const def = [
+			"function formatCurrency(amount, currency) {",
+			"  return amount.toFixed(2) + currency;",
+			"}",
+		];
+		const files = [
+			deletedFrom("src/a.ts", 1, def),
+			addedTo("src/b.ts", 1, def),
+			addedTo("src/c.ts", 1, def),
+		];
+		expect(findRelocations(files)).toEqual([]);
+	});
+
+	it("rejects a lone signature line and a lone Python def line", () => {
+		const ts = ["export async function fetchEverythingFromTheServer("];
+		expect(move(ts, ts)).toEqual([]);
+		const py = ["def compute_the_total_with_offset(value, offset):"];
+		expect(
+			findRelocations([
+				deletedFrom("a/util.py", 1, py),
+				addedTo("a/client.py", 1, py),
+			]),
+		).toEqual([]);
+	});
+
+	it("accepts a one-line Python def with a body of at least 40 characters", () => {
+		const py = [
+			"def total_with_offset(value, offset): return value * 2 + offset + 1",
+		];
+		expect(
+			findRelocations([
+				deletedFrom("a/util.py", 1, py),
+				addedTo("a/client.py", 1, py),
+			]),
+		).toHaveLength(1);
+	});
+
+	it("rejects a line of only Python keywords", () => {
+		const lines = ["    return None", "    return None"];
+		const long = ["  return None"];
+		expect(move(long, long)).toEqual([]);
+		expect(move(lines, lines)).toEqual([]);
+	});
+
+	it("accepts four identical lines in one run as one block", () => {
+		const block = Array.from({ length: 4 }, () => `${statement}`);
+		expect(move(block, block)).toHaveLength(1);
+	});
+
+	it("keeps the relocations found before the budget ran out and repeats them exactly", () => {
+		const files = [1, 2, 3].flatMap((i) => {
+			const line = `  const result${i} = computeSomething${i}(first, second, third);`;
+			return [
+				deletedFrom(`src/a${i}.ts`, 1, [line]),
+				addedTo(`src/b${i}.ts`, 1, [line]),
+			];
+		});
+		const full = findRelocations(files);
+		expect(full).toHaveLength(3);
+		const limited = findRelocations(files, { candidates: 1 });
+		expect(limited).toHaveLength(1);
+		expect(
+			full.some(
+				(op) => JSON.stringify(op.from) === JSON.stringify(limited[0]?.from),
+			),
+		).toBe(true);
+		expect(findRelocations(files, { candidates: 1 })).toEqual(limited);
+		expect(findRelocations(files, { tokens: 0 })).toEqual([]);
+	});
+
+	it("stops accepting large seeds once the budget is exhausted", () => {
+		const block = body(8);
+		expect(
+			findRelocations(
+				[deletedFrom("src/a.ts", 1, block), addedTo("src/b.ts", 1, block)],
+				{ candidates: 0 },
+			),
+		).toEqual([]);
 	});
 
 	it("rejects an import line", () => {

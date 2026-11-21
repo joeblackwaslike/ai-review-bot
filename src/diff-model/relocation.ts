@@ -8,13 +8,12 @@ import {
 	type Run,
 	selectMatches,
 } from "../moved-blocks.js";
-import { acceptSeed } from "./acceptance.js";
-import { WorkBudget } from "./budget.js";
+import { acceptSeed, MIN_COUNTED_LINES } from "./acceptance.js";
+import { type BudgetLimits, WorkBudget } from "./budget.js";
 import { findDeclarationMoves } from "./declarations.js";
 import { lexicallySafe, normalizeSafe } from "./lexical.js";
 import type { Divergence, DivergenceClass, Operation, Span } from "./types.js";
 
-const MIN_MEANINGFUL_LINES = 5;
 const MAX_DIVERGENCES = 3;
 const MAX_DIVERGENCE_SHARE = 0.2;
 const EDGE_SIMILARITY = 0.5;
@@ -623,13 +622,16 @@ function resolveChain(chain: Candidate[], budget: WorkBudget): Operation[] {
  * lines or 20 percent of its length is reported as its exact runs only. Lines are compared
  * raw wherever whitespace-insensitive comparison is not known to be safe.
  */
-export function findRelocations(files: PushFile[]): Operation[] {
+export function findRelocations(
+	files: PushFile[],
+	limits: Partial<BudgetLimits> = {},
+): Operation[] {
 	const { deleted, added } = collectRuns(files);
-	const budget = new WorkBudget();
+	const budget = new WorkBudget(limits);
 	const ctx = { deleted, added, budget };
 	const seeds = selectMatches(deleted, added, 1, (c) => acceptSeed(c, ctx), {
 		allowSameFile: true,
-		uniqueBelow: MIN_MEANINGFUL_LINES,
+		uniqueBelow: MIN_COUNTED_LINES,
 	});
 	const groups = new Map<string, Candidate[]>();
 	for (const seed of seeds) {
@@ -642,8 +644,14 @@ export function findRelocations(files: PushFile[]): Operation[] {
 			size(b) - size(a) ||
 			(a[0] as Candidate).from.index - (b[0] as Candidate).from.index,
 	);
-	const operations = chains.flatMap((chain) => resolveChain(chain, budget));
-	operations.push(...findDeclarationMoves(deleted, added));
+	const operations: Operation[] = [];
+	const seedsExhausted = budget.exhausted;
+	for (const chain of chains) {
+		if (!seedsExhausted && budget.exhausted) break;
+		operations.push(...resolveChain(chain, budget));
+	}
+	if (!budget.exhausted)
+		operations.push(...findDeclarationMoves(deleted, added));
 	operations.sort(
 		(a, b) =>
 			compareText(a.from[0]?.filename, b.from[0]?.filename) ||

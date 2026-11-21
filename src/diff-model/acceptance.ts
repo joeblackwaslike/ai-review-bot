@@ -1,7 +1,7 @@
 import type { Candidate, Run } from "../moved-blocks.js";
 import type { WorkBudget } from "./budget.js";
 
-const MIN_COUNTED_LINES = 5;
+export const MIN_COUNTED_LINES = 5;
 const MIN_INFORMATION = 30;
 const MIN_DEFINITION_CHARS = 40;
 
@@ -10,7 +10,8 @@ const KEYWORDS = new Set(
 	finally except throw raise new function class def fn func end let const var in of
 	async await yield import export from as true false null undefined none nil self
 	this super static public private protected void and or not is then begin pub mut
-	type interface enum extends implements`.split(/\s+/),
+	type interface enum extends implements None True False pass with lambda del
+	assert defer go range impl match elsif unless`.split(/\s+/),
 );
 const DEFINITION_OPENER =
 	/^(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function\b|class\b|def\b|fn\b|func\b|pub\s+fn\b|const\s+[A-Za-z_$]|type\s+\w|interface\s+\w|enum\s+\w)/;
@@ -82,6 +83,32 @@ export function isUnique(c: Candidate, deleted: Run[], added: Run[]): boolean {
 	);
 }
 
+const drawn = new WeakMap<WorkBudget, Set<string>>();
+
+function drawBudget(c: Candidate, chars: number, budget: WorkBudget): boolean {
+	const key = `${c.from.index}|${c.to.index}|${c.fromStart}|${c.toStart}|${c.length}`;
+	let keys = drawn.get(budget);
+	if (!keys) {
+		keys = new Set();
+		drawn.set(budget, keys);
+	}
+	if (keys.has(key)) return true;
+	if (!budget.spendCandidates(1) || !budget.spendTokens(chars)) return false;
+	keys.add(key);
+	return true;
+}
+
+function isOpenSingleLine(c: Candidate, lines: string[]): boolean {
+	const present = lines.filter((line) => line.trim() !== "");
+	if (present.length !== 1) return false;
+	if (c.from.indentSensitive && (present[0] as string).trimEnd().endsWith(":"))
+		return true;
+	const code = (present[0] as string).replace(LITERAL, "");
+	const opened = (code.match(/[([{]/g) ?? []).length;
+	const closed = (code.match(/[)\]}]/g) ?? []).length;
+	return opened > closed;
+}
+
 function isWholeDefinition(c: Candidate): boolean {
 	const lines = c.from.lines
 		.slice(c.fromStart, c.fromStart + c.length)
@@ -90,33 +117,34 @@ function isWholeDefinition(c: Candidate): boolean {
 	const last = lines[lines.length - 1]?.trim();
 	if (first === undefined || last === undefined) return false;
 	if (!DEFINITION_OPENER.test(first)) return false;
-	if (c.from.indentSensitive) return true;
+	if (c.from.indentSensitive) return lines.length > 1 || !last.endsWith(":");
 	if (lines.length === 1) return /[}\]][;,]?$/.test(last);
 	return DEFINITION_CLOSER.test(last);
 }
 
 /**
- * Decides whether an exact run is a block worth reporting. Five or more counted lines always
- * qualify. One to four lines qualify when they carry at least 30 characters of information
- * and occur once on each side, or form a whole definition of at least 40 non-space
- * characters that occurs once on each side. Each call draws one candidate and the seed's
- * characters from the budget, and rejects once either pool runs dry.
+ * Decides whether an exact run is a block worth reporting. Every call draws one candidate and
+ * the seed's characters from the budget, and rejects once either pool runs dry. Five or more
+ * counted lines then qualify. One to four lines qualify when they carry at least 30
+ * characters of information, or form a whole definition of at least 40 non-space characters,
+ * and occur once on each side. A single line with unclosed brackets, or ending in a colon in an
+ * indentation-sensitive file, never qualifies.
  */
 export function acceptSeed(
 	c: Candidate,
 	ctx: { deleted: Run[]; added: Run[]; budget?: WorkBudget },
 ): boolean {
-	if (c.counted >= MIN_COUNTED_LINES) return true;
 	const lines = c.from.lines.slice(c.fromStart, c.fromStart + c.length);
 	const chars = nonSpace(lines.join(""));
-	if (ctx.budget) {
-		if (!ctx.budget.spendCandidates(1)) return false;
-		if (!ctx.budget.spendTokens(chars)) return false;
-	}
-	const definition = isWholeDefinition(c);
-	const enough = definition
-		? chars >= MIN_DEFINITION_CHARS
-		: lines.reduce((sum, line) => sum + lineInformation(line), 0) >=
-			MIN_INFORMATION;
+	if (ctx.budget && !drawBudget(c, chars, ctx.budget)) return false;
+	if (c.counted >= MIN_COUNTED_LINES) return true;
+	if (isOpenSingleLine(c, lines)) return false;
+	const information = lines.reduce(
+		(sum, line) => sum + lineInformation(line),
+		0,
+	);
+	const enough =
+		information >= MIN_INFORMATION ||
+		(isWholeDefinition(c) && chars >= MIN_DEFINITION_CHARS);
 	return enough && isUnique(c, ctx.deleted, ctx.added);
 }

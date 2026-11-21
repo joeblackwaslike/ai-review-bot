@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { type Candidate, collectRuns, type PushFile } from "../moved-blocks.js";
+import {
+	type Candidate,
+	collectRuns,
+	type PushFile,
+	type Run,
+} from "../moved-blocks.js";
 import { acceptSeed, isUnique, lineInformation } from "./acceptance.js";
 import { WorkBudget } from "./budget.js";
 
@@ -64,6 +69,11 @@ describe("lineInformation", () => {
 			expect(lineInformation(line)).toBe(0);
 	});
 
+	it("is zero for lines of only Python and Go keywords", () => {
+		for (const line of ["  return None", "  pass", "  return True", "  defer"])
+			expect(lineInformation(line)).toBe(0);
+	});
+
 	it("is zero for a bare string, number or array literal", () => {
 		for (const line of ['  "fast", "slow",', "  42,", "[1, 2, 3]"])
 			expect(lineInformation(line)).toBe(0);
@@ -112,6 +122,51 @@ describe("acceptSeed", () => {
 		const block = ["  const a = f(x);"];
 		const { c, deleted, added } = seedFor([block], [block]);
 		expect(acceptSeed(c, { deleted, added })).toBe(false);
+	});
+
+	it("accepts a unique definition of 30 to 39 characters", () => {
+		const def = ["function areaOf(a, b) {", "  return a * b;", "}"];
+		const chars = def.join("").replace(/\s/g, "").length;
+		expect(chars).toBeGreaterThanOrEqual(30);
+		expect(chars).toBeLessThan(40);
+		const seed = seedFor([def], [def]);
+		expect(acceptSeed(seed.c, seed)).toBe(true);
+	});
+
+	it("rejects two identical short definitions by uniqueness", () => {
+		const def = ["function areaOf(a, b) {", "  return a * b;", "}"];
+		const { c, deleted, added } = seedFor([def, def], [def]);
+		expect(acceptSeed(c, { deleted, added })).toBe(false);
+	});
+
+	it("rejects a one-line seed with more openers than closers", () => {
+		const block = ["export async function fetchEverythingFromTheServer("];
+		const { c, deleted, added } = seedFor([block], [block]);
+		expect(acceptSeed(c, { deleted, added })).toBe(false);
+	});
+
+	it("rejects a lone Python def line ending in a colon", () => {
+		const block = ["def compute_the_total_with_offset(value, offset):"];
+		const files = [deletedLines("d.py", block), addedLines("a.py", block)];
+		const { deleted, added } = collectRuns(files);
+		const from = deleted[0] as Run;
+		const to = added[0] as Run;
+		const c: Candidate = {
+			from,
+			to,
+			fromStart: 0,
+			toStart: 0,
+			length: 1,
+			counted: 1,
+		};
+		expect(acceptSeed(c, { deleted, added })).toBe(false);
+	});
+
+	it("draws the budget for a seed of five or more counted lines", () => {
+		const block = Array.from({ length: 5 }, () => "  next();");
+		const { c, deleted, added } = seedFor([block], [block]);
+		const budget = new WorkBudget({ candidates: 0 });
+		expect(acceptSeed(c, { deleted, added, budget })).toBe(false);
 	});
 
 	it("rejects everything once the budget is exhausted", () => {
