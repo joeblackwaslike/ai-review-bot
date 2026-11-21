@@ -80,6 +80,8 @@ const OPENERS = new Set(["(", "[", "{"]);
 const CLOSERS = new Set([")", "]", "}"]);
 const GROUPERS = new Set(["(", "["]);
 const GROUP_CLOSERS = new Set([")", "]"]);
+const ASI_HAZARDS = new Set(["(", "[", "`", "+", "-", "/", "++", "--"]);
+const STATEMENT_END = /^(?:[\p{L}\p{N}_$"'`]|\)|\]|\}|\+\+|--)/u;
 const EMPTY_BODY_KEYWORDS = new Set(["if", "for", "while", "switch"]);
 
 function extension(filename: string): string {
@@ -90,6 +92,10 @@ function extension(filename: string): string {
 /** Whether line breaks carry no meaning in this file's language. */
 export function newlineClass(filename: string): NewlineClass {
 	return FREE_EXTENSIONS.has(extension(filename)) ? "free" : "significant";
+}
+
+function endsStatement(token: string | undefined): boolean {
+	return token !== undefined && token !== "\n" && STATEMENT_END.test(token);
 }
 
 function stringEnd(line: string, start: number, quote: string): number {
@@ -173,6 +179,7 @@ export function tokenize(
 	filename: string,
 ): { tokens: string[]; lineOf: number[] } {
 	const free = newlineClass(filename) === "free";
+	const jsFamily = JS_FAMILY.has(extension(filename));
 	const preprocessor = PREPROCESSOR_EXTENSIONS.has(extension(filename));
 	const openers = free ? OPENERS : GROUPERS;
 	const closers = free ? CLOSERS : GROUP_CLOSERS;
@@ -181,6 +188,16 @@ export function tokenize(
 	let depth = 0;
 	lines.forEach((line, index) => {
 		const found = scanLine(line, filename);
+		const first = found[0];
+		if (
+			jsFamily &&
+			first !== undefined &&
+			ASI_HAZARDS.has(first) &&
+			endsStatement(tokens[tokens.length - 1])
+		) {
+			tokens.push("\n");
+			lineOf.push(lineOf[lineOf.length - 1] as number);
+		}
 		for (const t of found) {
 			tokens.push(t);
 			lineOf.push(index);
@@ -265,8 +282,7 @@ export function normalizeTokens(tokens: string[], filename: string): string[] {
 		if (t === "," && droppableComma(tokens, i, filename)) return;
 		if (jsFamily && t === ";") {
 			const next = tokens[i + 1];
-			if ((next === undefined || next === "}") && !endsEmptyBody(tokens, i))
-				return;
+			if (next === "}" && !endsEmptyBody(tokens, i)) return;
 		}
 		if ((jsFamily || python) && swappable(t, python)) {
 			out.push(`"${t.slice(1, -1)}"`);

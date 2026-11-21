@@ -164,29 +164,27 @@ describe("token pass", () => {
 	});
 
 	it("leaves a reformatted template literal unmatched", () => {
-		const interpolate = (line: string) => line.replaceAll("@{", "$" + "{");
 		const base = [
-			"logger.info(`Order @{order.id} for @{customer.name} ships to @{address.city} on @{date}`);",
-		].map(interpolate);
+			"emit(first, second, third, fourth, `fixed text`, fifth, sixth);",
+		];
 		const head = [
-			"logger.info(`Order @{order.id} for @{customer.name} ships to @{address.city}",
-			"on @{date}`);",
-		].map(interpolate);
+			"emit(first, second, third, fourth,",
+			"`fixed text`, fifth, sixth);",
+		];
 		expect(moveBetween("src/a.ts", "src/b.ts", base, head)).toEqual([]);
 	});
 
 	it("leaves a Ruby reformat unmatched", () => {
 		const base = [
-			'config = { name: "alpha", retries: 3, timeout: 5000, verbose: false, region: "us-east" }',
+			"result = process_order(customer_id, order_items, discount_code, shipping_address)",
 		];
 		const head = [
-			"config = {",
-			'  name: "alpha",',
-			"  retries: 3,",
-			"  timeout: 5000,",
-			"  verbose: false,",
-			'  region: "us-east"',
-			"}",
+			"result = process_order(",
+			"  customer_id,",
+			"  order_items,",
+			"  discount_code,",
+			"  shipping_address",
+			")",
 		];
 		expect(moveBetween("lib/a.rb", "lib/b.rb", base, head)).toEqual([]);
 	});
@@ -268,10 +266,21 @@ describe("token pass", () => {
 	});
 
 	it("does not pair a pair within one change region", () => {
+		const multiline = [
+			"setupServer({",
+			"  port: 8080,",
+			'  host: "0.0.0.0",',
+			"  retries: 3,",
+			"  timeout: 5000,",
+			"});",
+		];
+		const oneLine = [
+			'setupServer({ port: 8080, host: "0.0.0.0", retries: 3, timeout: 5000 });',
+		];
 		const patch = [
-			"@@ -1,1 +1,7 @@",
-			...PRETTIER_BASE.map((l) => `-${l}`),
-			...PRETTIER_HEAD.map((l) => `+${l}`),
+			"@@ -1,6 +1,1 @@",
+			...multiline.map((l) => `-${l}`),
+			...oneLine.map((l) => `+${l}`),
 		].join("\n");
 		expect(findRelocations([pushFile("src/a.ts", patch)])).toEqual([]);
 	});
@@ -288,5 +297,230 @@ describe("token pass", () => {
 		expect(run(5)).toEqual([]);
 		expect(run(5)).toEqual([]);
 		expect(run(200_000)).toHaveLength(1);
+	});
+});
+
+function withContext(
+	filename: string,
+	before: string[],
+	changed: string[],
+	after: string[],
+	sign: "-" | "+",
+): PushFile {
+	const total = before.length + changed.length + after.length;
+	const header =
+		sign === "-"
+			? `@@ -1,${total} +1,${before.length + after.length} @@`
+			: `@@ -1,${before.length + after.length} +1,${total} @@`;
+	return pushFile(
+		filename,
+		[
+			header,
+			...before.map((l) => ` ${l}`),
+			...changed.map((l) => `${sign}${l}`),
+			...after.map((l) => ` ${l}`),
+		].join("\n"),
+	);
+}
+
+function claimedHeadLines(
+	ops: { to: { startLine: number; endLine: number }[] }[],
+) {
+	return ops.flatMap((op) =>
+		op.to.flatMap((s) =>
+			Array.from(
+				{ length: s.endLine - s.startLine + 1 },
+				(_, k) => s.startLine + k,
+			),
+		),
+	);
+}
+
+describe("token pass false-relocation guards", () => {
+	it("leaves CSS selectors unmatched when whitespace between tokens changed", () => {
+		const base = [
+			"ul .item { color: red; margin: 0 auto; padding: 4px 8px; border: 1px solid blue; }",
+		];
+		const head = [
+			"ul.item { color: red; margin: 0 auto; padding: 4px 8px; border: 1px solid blue; }",
+		];
+		expect(moveBetween("web/a.css", "web/b.css", base, head)).toEqual([]);
+	});
+
+	it("leaves a Scala braceless definition unmatched when its call is rewrapped", () => {
+		const base = [
+			"def apply(order: Order): Total = process(order, taxRate, shippingRate, discountCode)",
+		];
+		const head = [
+			"def apply(order: Order): Total = process(",
+			"  order,",
+			"  taxRate,",
+			"  shippingRate,",
+			"  discountCode",
+			")",
+		];
+		expect(moveBetween("app/a.scala", "app/b.scala", base, head)).toEqual([]);
+	});
+
+	it("leaves a YAML value unmatched when the space after the colon is dropped", () => {
+		const base = [
+			"server:",
+			"  host: example.com",
+			"  port: 8080",
+			"  tls: true",
+			"  retries: 3",
+			"  timeout: 30",
+			"  region: us-east-1",
+		];
+		const head = indented(base, 2).map((l) =>
+			l.replace("port: 8080", "port:8080"),
+		);
+		const ops = moveBetween("ci/a.yml", "ci/b.yml", base, head);
+		expect(claimedHeadLines(ops)).not.toContain(3 + 2);
+	});
+
+	it("leaves a YAML list item unmatched when the space after the dash is dropped", () => {
+		const base = [
+			"versions:",
+			"  - 1.0",
+			"  - 1.1",
+			"  - 1.2",
+			"  - 2.0",
+			"  - 2.1",
+			"  - 3.0",
+		];
+		const head = indented(base, 2).map((l) => l.replace("- 1.1", "-1.1"));
+		const ops = moveBetween("ci/a.yml", "ci/b.yml", base, head);
+		expect(claimedHeadLines(ops)).not.toContain(3 + 2);
+	});
+
+	it("leaves a YAML block scalar unmatched when its inner spacing changed", () => {
+		const base = [
+			"steps:",
+			"  run: |",
+			"    echo  one   two",
+			"    echo three",
+			"  shell: bash",
+			"  name: build-and-test",
+			"  retries: 3",
+		];
+		const head = indented(base, 2).map((l) =>
+			l.replace("echo  one   two", "echo one two"),
+		);
+		const ops = moveBetween("ci/a.yml", "ci/b.yml", base, head);
+		expect(claimedHeadLines(ops)).not.toContain(3 + 2);
+	});
+
+	it("keeps a line break between count++ and a following ++limit", () => {
+		const base = [
+			"items.forEach(register);",
+			"count++",
+			"limit(alpha, beta, gamma, delta, epsilon)",
+		];
+		const head = [
+			"items.forEach(register);",
+			"count",
+			"++limit(alpha, beta, gamma, delta, epsilon)",
+		];
+		const ops = moveBetween("src/a.ts", "src/b.ts", base, head);
+		expect(claimedHeadLines(ops)).not.toContain(3 + 1);
+		expect(claimedHeadLines(ops)).not.toContain(3 + 2);
+	});
+
+	it("leaves a C preprocessor line unmatched when whitespace after the macro name changed", () => {
+		const base = [
+			"#define CLAMP_TO_RANGE(value, low, high) ((value) < (low) ? (low) : ((value) > (high) ? (high) : (value)))",
+		];
+		const head = [
+			"#define CLAMP_TO_RANGE (value, low, high) ((value) < (low) ? (low) : ((value) > (high) ? (high) : (value)))",
+		];
+		expect(moveBetween("src/a.c", "src/b.c", base, head)).toEqual([]);
+	});
+
+	it("leaves a joined SQL template body unmatched", () => {
+		const body = [
+			"SELECT id, name, email, created_at",
+			"FROM users",
+			"WHERE active = 1",
+			"AND created_at > last_login",
+			"ORDER BY name",
+		];
+		const joined = [body.join(" ")];
+		const ops = findRelocations([
+			withContext("src/a.ts", ["const q = `"], body, ["`;"], "-"),
+			withContext("src/b.ts", ["const q = `"], joined, ["`;"], "+"),
+		]);
+		expect(ops).toEqual([]);
+	});
+
+	it("leaves a Python docstring interior unmatched when moved deeper", () => {
+		const body = [
+			"    Compute the total price for the order, applying the discount",
+			"    first and then the tax, and return the rounded amount owed",
+			"    in the currency of the customer account on file.",
+		];
+		const ops = findRelocations([
+			withContext(
+				"a/old.py",
+				["def total(order):", '    """'],
+				body,
+				['    """'],
+				"-",
+			),
+			withContext(
+				"a/new.py",
+				["class Pricing:", "    def total(self, order):", '        """'],
+				indented(body, 4),
+				['        """'],
+				"+",
+			),
+		]);
+		expect(ops).toEqual([]);
+	});
+
+	it("still matches a reformat of balanced statements one per line", () => {
+		const base = [
+			"registerUser(request.body); sendWelcome(request.user); trackSignup(request.user, campaign);",
+		];
+		const head = [
+			"registerUser(request.body);",
+			"sendWelcome(request.user);",
+			"trackSignup(request.user, campaign);",
+		];
+		const ops = moveBetween("src/a.ts", "src/b.ts", base, head);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]?.exact).toBe(true);
+	});
+
+	it("leaves a block fragment with an unmatched closing bracket unclaimed", () => {
+		const base = [
+			"if (ready) {",
+			"  startEngine(alpha,beta);",
+			"  runDiagnostics(gamma);",
+			"}",
+		];
+		const head = [
+			"while (ready) {",
+			"  startEngine(alpha, beta);",
+			"  runDiagnostics( gamma );",
+			"}",
+		];
+		expect(moveBetween("src/a.ts", "src/b.ts", base, head)).toEqual([]);
+	});
+
+	it("never pairs files of different language families", () => {
+		const base = [
+			"result := process(customerID, orderItems, discountCode, shippingAddress)",
+		];
+		const head = [
+			"result := process(",
+			"  customerID,",
+			"  orderItems,",
+			"  discountCode,",
+			"  shippingAddress",
+			")",
+		];
+		expect(moveBetween("svc/a.go", "svc/b.kt", base, head)).toEqual([]);
+		expect(moveBetween("svc/a.go", "svc/b.go", base, head)).toHaveLength(1);
 	});
 });

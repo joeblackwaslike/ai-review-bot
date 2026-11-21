@@ -1,4 +1,4 @@
-import type { Candidate, Run } from "../moved-blocks.js";
+import type { Candidate, PushFile, Run } from "../moved-blocks.js";
 import { acceptSeed } from "./acceptance.js";
 import type { WorkBudget } from "./budget.js";
 import { literalSafe, relativeIndent } from "./lexical.js";
@@ -8,14 +8,30 @@ import type { Operation, Span } from "./types.js";
 const WINDOW = 8;
 const MAX_WINDOW_OCCURRENCES = 2;
 const MIN_COUNTED_LENGTH = 3;
-const ELIGIBLE = new Set(
-	"js jsx mjs cjs ts tsx java c h cpp hpp cs rs php css py pyi go kt kts swift scala dart groovy yml yaml".split(
-		" ",
-	),
-);
+const FAMILIES = [
+	["js", "jsx", "mjs", "cjs"],
+	["ts", "tsx"],
+	["java"],
+	["c", "h", "cpp", "hpp"],
+	["cs"],
+	["rs"],
+	["py", "pyi"],
+	["go"],
+	["kt", "kts"],
+	["dart"],
+	["yml", "yaml"],
+];
+const FAMILY = new Map(FAMILIES.flatMap((exts, i) => exts.map((e) => [e, i])));
+const LINE_MODE = new Set(["yml", "yaml"]);
+const PREPROCESSOR = new Set(["c", "h", "cpp", "hpp", "cs"]);
+const LITERAL_OPENER = /`|"""|'''|<<[-~]?\s*['"]?\w/;
+const OPENERS = new Set(["(", "[", "{"]);
+const CLOSERS = new Set([")", "]", "}"]);
+const LINE_WINDOW = 5;
 
 interface Segment {
 	id: number;
+	window: number;
 	run: Run;
 	start: number;
 	tokens: string[];
@@ -85,6 +101,25 @@ function commentBearing(
 	return lines.map((line, l) => nonSpace(line) !== tokenChars[l]);
 }
 
+function lineModeTokens(lines: string[]): {
+	tokens: string[];
+	lineOf: number[];
+} {
+	const tokens: string[] = [];
+	const lineOf: number[] = [];
+	lines.forEach((line, l) => {
+		const text = line.trim();
+		if (text === "") return;
+		if (tokens.length > 0) {
+			tokens.push("\n");
+			lineOf.push(lineOf[lineOf.length - 1] as number);
+		}
+		tokens.push(text);
+		lineOf.push(l);
+	});
+	return { tokens, lineOf };
+}
+
 function buildSegment(
 	id: number,
 	run: Run,
@@ -93,10 +128,26 @@ function buildSegment(
 	budget: WorkBudget,
 ): Segment | null | undefined {
 	const lines = run.raw.slice(start, end);
-	const { tokens: raw, lineOf: rawLine } = tokenize(lines, run.filename);
-	if (!budget.spendTokens(raw.length)) return undefined;
-	const tokens = normalizeTokens(raw, run.filename);
-	const lineOf = normalizedLines(raw, tokens, rawLine);
+	const ext = extension(run.filename);
+	const lineMode = LINE_MODE.has(ext);
+	let tokens: string[];
+	let lineOf: number[] | null;
+	let bad: boolean[];
+	if (lineMode) {
+		({ tokens, lineOf } = lineModeTokens(lines));
+		if (!budget.spendTokens(tokens.length)) return undefined;
+		bad = lines.map(() => false);
+	} else {
+		const { tokens: raw, lineOf: rawLine } = tokenize(lines, run.filename);
+		if (!budget.spendTokens(raw.length)) return undefined;
+		tokens = normalizeTokens(raw, run.filename);
+		lineOf = normalizedLines(raw, tokens, rawLine);
+		bad = commentBearing(lines, raw, rawLine);
+		if (PREPROCESSOR.has(ext))
+			bad = bad.map(
+				(b, l) => b || (lines[l] as string).trimStart().startsWith("#"),
+			);
+	}
 	if (!lineOf) return null;
 	const firstToken = lines.map(() => Number.POSITIVE_INFINITY);
 	const lastToken = lines.map(() => -1);
@@ -108,20 +159,26 @@ function buildSegment(
 	});
 	return {
 		id,
+		window: lineMode ? LINE_WINDOW : WINDOW,
 		run,
 		start,
 		tokens,
 		lineOf,
 		firstToken,
 		lastToken,
-		bad: commentBearing(lines, raw, rawLine),
+		bad,
 	};
 }
 
-function buildSegments(runs: Run[], budget: WorkBudget): Segment[] | null {
+function buildSegments(
+	runs: Run[],
+	budget: WorkBudget,
+	skip: ReadonlySet<string>,
+): Segment[] | null {
 	const out: Segment[] = [];
 	for (const run of runs) {
-		if (!ELIGIBLE.has(extension(run.filename))) continue;
+		if (!FAMILY.has(extension(run.filename)) || skip.has(run.filename))
+			continue;
 		let i = 0;
 		while (i < run.raw.length) {
 			if (run.used[i]) {
@@ -148,8 +205,8 @@ interface Hit {
 function windowIndex(segments: Segment[]): Map<string, Hit[]> {
 	const index = new Map<string, Hit[]>();
 	for (const seg of segments) {
-		for (let pos = 0; pos + WINDOW <= seg.tokens.length; pos++) {
-			const key = seg.tokens.slice(pos, pos + WINDOW).join("\u0001");
+		for (let pos = 0; pos + seg.window <= seg.tokens.length; pos++) {
+			const key = seg.tokens.slice(pos, pos + seg.window).join("\u0001");
 			const hits = index.get(key);
 			if (!hits) index.set(key, [{ seg, pos }]);
 			else if (hits.length <= MAX_WINDOW_OCCURRENCES) hits.push({ seg, pos });
@@ -165,7 +222,7 @@ function widen(d: Hit, a: Hit): Range {
 		di--;
 		ai--;
 	}
-	let len = d.pos - di + WINDOW;
+	let len = d.pos - di + d.seg.window;
 	while (
 		di + len < d.seg.tokens.length &&
 		ai + len < a.seg.tokens.length &&
@@ -177,6 +234,8 @@ function widen(d: Hit, a: Hit): Range {
 
 function pairable(d: Segment, a: Segment): boolean {
 	return (
+		FAMILY.get(extension(d.run.filename)) ===
+			FAMILY.get(extension(a.run.filename)) &&
 		d.run.indentSensitive === a.run.indentSensitive &&
 		newlineClass(d.run.filename) === newlineClass(a.run.filename) &&
 		(d.run.filename !== a.run.filename || d.run.region !== a.run.region)
@@ -384,6 +443,17 @@ function reindentShift(m: Match): number | null | undefined {
 	return head.base - base.base;
 }
 
+function balanced(seg: Segment, pos: number, len: number): boolean {
+	if (seg.window === LINE_WINDOW) return true;
+	let depth = 0;
+	for (let k = pos; k < pos + len; k++) {
+		const t = seg.tokens[k] as string;
+		if (OPENERS.has(t)) depth++;
+		else if (CLOSERS.has(t) && --depth < 0) return false;
+	}
+	return depth === 0;
+}
+
 function span(run: Run, side: Span["side"], first: number, last: number): Span {
 	return {
 		filename: run.filename,
@@ -442,6 +512,19 @@ function rank(a: Match, b: Match): number {
 }
 
 /**
+ * Names of the files whose visible patch text holds a backtick, a triple quote or a
+ * heredoc opener. A changed line there may sit inside a multi-line literal, so the token
+ * pass leaves the file to the line matcher.
+ */
+export function filesWithLiterals(files: PushFile[]): Set<string> {
+	return new Set(
+		files
+			.filter((f) => LITERAL_OPENER.test(f.patch ?? ""))
+			.map((f) => f.filename),
+	);
+}
+
+/**
  * Finds exact relocations between unclaimed lines whose text differs only by formatting
  * (Prettier or Black rewraps, quote style, trailing commas) or by uniform indentation in
  * indentation-sensitive files. Eight-token windows seed matches, which grow to maximal
@@ -454,9 +537,10 @@ export function findTokenOperations(
 	deleted: Run[],
 	added: Run[],
 	budget: WorkBudget,
+	skip: ReadonlySet<string> = new Set(),
 ): Operation[] {
-	const dSegments = buildSegments(deleted, budget);
-	const aSegments = dSegments && buildSegments(added, budget);
+	const dSegments = buildSegments(deleted, budget, skip);
+	const aSegments = dSegments && buildSegments(added, budget, skip);
 	if (!dSegments || !aSegments) return [];
 	const matches = discoverRanges(dSegments, aSegments)
 		.flatMap(cutAtComments)
@@ -475,6 +559,8 @@ export function findTokenOperations(
 			!literalSafe(a.run.raw.slice(m.aFirst, m.aLast + 1), a.run.filename)
 		)
 			continue;
+		if (!balanced(d, m.range.di, m.range.len)) continue;
+		if (!balanced(a, m.range.ai, m.range.len)) continue;
 		const shift = reindentShift(m);
 		if (shift === null || shift === undefined) continue;
 		if (!acceptSeed(asCandidate(m), ctx)) continue;

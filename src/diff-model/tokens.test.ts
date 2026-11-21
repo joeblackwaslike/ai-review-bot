@@ -81,12 +81,14 @@ describe("normalizeTokens", () => {
 	});
 
 	it("drops a trailing semicolon only in the JS family", () => {
-		expect(normalizeTokens(toks(["a = 1;"], "x.ts"), "x.ts")).toEqual([
+		expect(normalizeTokens(toks(["{ a = 1; }"], "x.ts"), "x.ts")).toEqual([
+			"{",
 			"a",
 			"=",
 			"1",
+			"}",
 		]);
-		expect(normalizeTokens(toks(["a = 1;"], "x.java"), "x.java")).toContain(
+		expect(normalizeTokens(toks(["{ a = 1; }"], "x.java"), "x.java")).toContain(
 			";",
 		);
 	});
@@ -235,5 +237,32 @@ describe("trailing commas outside tuple languages", () => {
 
 	it("still drops a trailing comma in a Python call", () => {
 		expect(norm("f(a, b,)", "x.py")).toEqual(norm("f(a, b)", "x.py"));
+	});
+});
+
+describe("JS family automatic semicolon insertion", () => {
+	it("tells count++ then limit from count then ++limit", () => {
+		expect(toks(["count++", "limit"], "x.ts")).not.toEqual(
+			toks(["count", "++limit"], "x.ts"),
+		);
+	});
+
+	it("keeps a line break before a line starting with a parenthesis after an identifier", () => {
+		expect(toks(["run()", "(a || b).go()"], "x.js")).toContain("\n");
+	});
+
+	it("joins a wrapped argument list whose line starts with a parenthesis after an opener or comma", () => {
+		const wrapped = toks(["foo(", "(a + b),", "(c),", "d", ")"], "x.ts");
+		expect(wrapped).toEqual(toks(["foo((a + b), (c), d)"], "x.ts"));
+	});
+
+	it("keeps a semicolon that ends the stream", () => {
+		expect(normalizeTokens(toks(["a = 1;"], "x.ts"), "x.ts")).toContain(";");
+	});
+
+	it("adds no such line break in Java", () => {
+		expect(toks(["count++", "limit"], "x.java")).toEqual(
+			toks(["count", "++limit"], "x.java"),
+		);
 	});
 });
