@@ -20,13 +20,13 @@ import {
 	entriesHash,
 	entryHeadings,
 	loadEntries,
+	MAX_SELECTED,
 	selectEntries,
 } from "./f1-runbooks.js";
 import { estimateSpendMatched, runSpendMatched } from "./spend-matched.js";
 
 const F1_SKILL = "f1-runbook-reviewer.md";
 const TRIAGE_SKILL = "f1-triage.md";
-const MAX_SELECTED = 4;
 const TRIAGE_OUTPUT_TOKENS = 512;
 
 const TriageSchema = z.object({ operations: z.array(z.string()) });
@@ -79,13 +79,14 @@ export async function triage(
 		wallMs: Date.now() - started,
 		usage: undefined,
 	});
+	const selection = resolveJudgeRole(getConfigTree(), "classifier");
+	let call: Awaited<ReturnType<typeof generateObject<typeof TriageSchema>>>;
 	try {
-		const selection = resolveJudgeRole(getConfigTree(), "classifier");
 		const auth = await resolveSelectionAuth(selection.provider);
 		const operations = entryHeadings(entries)
 			.map((h) => `${h.id}: ${h.name}`)
 			.join("\n");
-		const { object, usage } = await generateObject({
+		call = await generateObject({
 			model: createAIModel(selection, auth),
 			schema: TriageSchema,
 			maxOutputTokens: outputBudget(selection, TRIAGE_OUTPUT_TOKENS),
@@ -94,22 +95,23 @@ export async function triage(
 			abortSignal: input.signal,
 			prompt: `${readSkillFile(TRIAGE_SKILL)}\n${operations}\n\nDiff:\n${input.diff}`,
 		});
-		const ids = [...new Set(object.operations)]
-			.filter((id) => entries.has(id))
-			.slice(0, MAX_SELECTED);
-		const tokens = {
-			promptTokens: usage.inputTokens ?? 0,
-			completionTokens: usage.outputTokens ?? 0,
-			cachedInputTokens: usage.inputTokenDetails?.cacheReadTokens ?? 0,
-		};
-		const costUsd = requireCost(
-			computeCost(tokens, selection.model),
-			selection.model,
-		);
-		return { ids, costUsd, wallMs: Date.now() - started, usage: tokens };
 	} catch {
 		return none();
 	}
+	const { object, usage } = call;
+	const ids = [...new Set(object.operations)]
+		.filter((id) => entries.has(id))
+		.slice(0, MAX_SELECTED);
+	const tokens = {
+		promptTokens: usage.inputTokens ?? 0,
+		completionTokens: usage.outputTokens ?? 0,
+		cachedInputTokens: usage.inputTokenDetails?.cacheReadTokens ?? 0,
+	};
+	const costUsd = requireCost(
+		computeCost(tokens, selection.model),
+		selection.model,
+	);
+	return { ids, costUsd, wallMs: Date.now() - started, usage: tokens };
 }
 
 let cachedVersion: string | undefined;

@@ -94,10 +94,8 @@ describe("strategyF1", () => {
 		const custom = mockRunAgent.mock.calls[0]?.[3] as string;
 		expect(custom).toContain(entries.get(firstId));
 		expect(custom).toContain(entries.get(secondId));
-		const others = [...entries.keys()].filter(
-			(id) => id !== firstId && id !== secondId,
-		);
-		expect(custom).not.toContain(entries.get(others[0] as string));
+		for (const [id, text] of entries)
+			if (id !== firstId && id !== secondId) expect(custom).not.toContain(text);
 	});
 
 	it("triage returning an unknown id or nothing runs the general list and records triage:none", async () => {
@@ -141,6 +139,42 @@ describe("strategyF1", () => {
 	it("reports the input spend target, not the one reduced by the triage cost", async () => {
 		const out = await strategyF1.run(inputFor(0.5));
 		expect(out.spend?.targetUsd).toBe(0.5);
+	});
+
+	it("counts the triage cost against the spend target so one fewer repeat runs", async () => {
+		mockGenerateObject.mockResolvedValue({
+			object: { operations: [firstId] },
+			usage: { inputTokens: 2_000_000, outputTokens: 0 },
+		});
+		const out = await strategyF1.run(inputFor(0.9));
+		expect(mockRunAgent).toHaveBeenCalledTimes(2);
+		expect(out.toolCalls[0]?.costUsd).toBeCloseTo(0.2);
+	});
+
+	it("counts the triage cost against the per-cell cap so no repeat launches", async () => {
+		mockGenerateObject.mockResolvedValue({
+			object: { operations: [firstId] },
+			usage: { inputTokens: 2_000_000, outputTokens: 0 },
+		});
+		const input = inputFor(1000);
+		input.budget = { maxUsd: 0.7, maxWallMs: 600_000 };
+		await strategyF1.run(input);
+		expect(mockRunAgent).toHaveBeenCalledTimes(1);
+	});
+
+	it("surfaces a pricing failure after a successful triage call", async () => {
+		mockGenerateObject.mockResolvedValue({
+			object: { operations: [firstId] },
+			usage: { inputTokens: 1, outputTokens: 1 },
+		});
+		setPriceTable({
+			"anthropic/claude-sonnet-5-5": { input: 2, cachedInput: 0.2, output: 10 },
+		});
+		await expect(strategyF1.run(inputFor())).rejects.toThrow(/no price known/);
+		setPriceTable({
+			"anthropic/claude-sonnet-5-5": { input: 2, cachedInput: 0.2, output: 10 },
+			"anthropic/claude-haiku-5-5": { input: 1, cachedInput: 0.1, output: 5 },
+		});
 	});
 
 	it("toolCalls has one triage entry naming the ids", async () => {

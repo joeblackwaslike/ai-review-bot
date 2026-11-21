@@ -199,6 +199,8 @@ export interface ExecuteCellArgs {
 	checkoutFor: typeof realWithCheckout;
 }
 
+const TRIAGE_USAGE_KEY = "f1-triage.md";
+
 export async function executeCell(
 	a: ExecuteCellArgs,
 ): Promise<"unavailable" | { record: CellRecord; result: StrategyResult }> {
@@ -216,10 +218,15 @@ export async function executeCell(
 			)
 		: await run(input);
 	if (isCheckoutUnavailable(ran)) return "unavailable";
-	const costUsd = requireCost(
-		roundCostUsd(ran.usage, a.modelFor(input)),
-		a.modelFor(input),
-	);
+	const { [TRIAGE_USAGE_KEY]: _triage, ...reviewerUsage } = ran.usage;
+	const triageUsd = ran.toolCalls
+		.filter((t) => t.name.startsWith("triage:"))
+		.reduce((sum, t) => sum + t.costUsd, 0);
+	const costUsd =
+		requireCost(
+			roundCostUsd(reviewerUsage, a.modelFor(input)),
+			a.modelFor(input),
+		) + triageUsd;
 	const overCap =
 		costUsd > a.allowedUsd + 1e-9
 			? { allowedUsd: a.allowedUsd, actualUsd: costUsd }

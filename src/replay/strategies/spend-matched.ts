@@ -94,8 +94,6 @@ export async function runSpendMatched(
 	const target = input.spendTargetUsd;
 	const extraToolCalls = config.extraToolCalls ?? [];
 	const extraUsd = extraToolCalls.reduce((sum, t) => sum + t.costUsd, 0);
-	const loopTarget =
-		target === undefined ? undefined : Math.max(0, target - extraUsd);
 	const tolerance = input.tolerance ?? DEFAULT_TOLERANCE;
 	const selection = selectionFor(input);
 	const auth = await resolveSelectionAuth(selection.provider);
@@ -124,13 +122,13 @@ export async function runSpendMatched(
 	if (first.status !== "ok")
 		throw new Error(`${config.label} first run failed: ${first.status}`);
 	const attempts: AgentOutcome[] = [first];
-	let spent = costOf(first);
-	const coldUsd = spent;
+	const coldUsd = costOf(first);
+	let spent = coldUsd + extraUsd;
 
 	if (
-		loopTarget !== undefined &&
-		loopTarget > spent &&
-		!withinTolerance(spent, loopTarget, tolerance) &&
+		target !== undefined &&
+		target > spent &&
+		!withinTolerance(spent, target, tolerance) &&
 		spent + coldUsd <= maxUsd &&
 		mayLaunch()
 	) {
@@ -139,7 +137,7 @@ export async function runSpendMatched(
 		spent += costOf(second);
 		const warmUsd = costOf(second);
 		if (warmUsd > 0) {
-			const wanted = Math.max(0, Math.round((loopTarget - spent) / warmUsd));
+			const wanted = Math.max(0, Math.round((target - spent) / warmUsd));
 			const room = Math.floor((maxUsd - spent) / warmUsd);
 			const extra = Math.max(
 				0,

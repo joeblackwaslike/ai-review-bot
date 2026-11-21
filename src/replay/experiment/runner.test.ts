@@ -360,6 +360,36 @@ describe("runGrid", () => {
 		expect(f1?.input.spendTargetUsd).toBeCloseTo(ONE);
 	});
 
+	it("prices a cell as reviewer-priced runs plus the triage tool-call cost", async () => {
+		setPriceTable({
+			"anthropic/claude-sonnet-5-5": { input: 2, cachedInput: 0.2, output: 10 },
+			"anthropic/claude-haiku-5-5": { input: 1, cachedInput: 0.1, output: 5 },
+		});
+		const triageUsd = 0.05;
+		const f1 = stub("f1", {
+			run: async () => ({
+				...result(),
+				usage: {
+					"f1-run-1.md": USAGE.x,
+					"f1-triage.md": { promptTokens: 50_000, completionTokens: 0 },
+				},
+				toolCalls: [{ name: "triage:BEH-01", wallMs: 1, costUsd: triageUsd }],
+			}),
+		});
+		const { deps, store } = harness([stub("a"), f1]);
+		await runGrid(
+			plan({
+				strategies: [
+					{ name: "a", version: "v1" },
+					{ name: "f1", version: "v1" },
+				],
+			}),
+			deps,
+		);
+		const rec = store.records.find((r) => r.key.strategy === "f1");
+		expect(rec?.costUsd).toBeCloseTo(ONE + triageUsd);
+	});
+
 	it("counts the estimate of a cell whose strategy threw, and lists the amount", async () => {
 		const boom = stub("a", {
 			run: async () => {

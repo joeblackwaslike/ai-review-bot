@@ -13,7 +13,7 @@ const KEPT_SECTIONS = new Set([
 	"Checklist",
 	"Red flags",
 ]);
-const MAX_SELECTED = 4;
+export const MAX_SELECTED = 4;
 
 function keptText(entryLines: string[]): string {
 	const out = [entryLines[0] as string];
