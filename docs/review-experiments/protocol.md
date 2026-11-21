@@ -108,6 +108,16 @@ The first pilots, before spend matching, showed what a single `f0` call gives: 0
 3.7 for `a`, which came from call count and not from the prompt (restoring the general list moved recall from
 0.005 to 0.031). Those cells were judged at `f0`'s own single-pass cost and are not comparable to this mode.
 
+`f1` is the second candidate-F slice. It replaces `f0`'s digest with the full matching runbook entries. A triage call runs once per cell on the classifier role's model (Haiku at low effort by default) and sees the diff, the diff-shape table in `skills/f1-triage.md` and the id and name of every operation entry. It answers with at most four operation ids, and ids that match no entry are dropped. The reviewer prompt, `skills/f1-runbook-reviewer.md`, is `a0`'s general list plus the selected entries, each cut to its heading and its "What not to spend review on", "Checklist" and "Red flags" sections. An entry's skip clause is binding, and a check that needs information outside the diff is skipped and never reported as a question. If triage fails or selects nothing, the review runs on the general list alone and the cell records that. Like `f0`, it runs after `a` through the shared spend-matching loop, and a plan with `f1` must contain `a`. Triage runs once and every repeat reuses its selection. The triage call's usage counts toward the cell's spend and the per-cell cap, so achieved spend is honest and the review calls fill what triage leaves. The selection is recorded as one `toolCalls` entry named `triage:` followed by the chosen ids, with its wall time and cost, so adjudication can check what was selected. Its version hashes both skill files, the six entry files, the tier maps and the loop, so editing an entry makes stored cells stale and the version must be re-pinned in both plan files.
+
+The stop rule was fixed before the pilot run and compares `f1` against `f0` at equal spend on the pilot, adjudicated and Anthropic only.
+
+- Proceed to the validation split if `f1` recall is at least 3 points above `f0` and precision is not lower by more than 3 points. Full runbooks then help, and the validation split with its 17 PRs is the first run that can separate them.
+- Stop injecting runbooks if `f1` is within 3 points of `f0` on both, or below. If `f0` and `f1` both stay level with `a`, the runbooks add nothing at this spend, and the next candidate should change something else, such as scanners or diff splitting.
+- The pilot has 14 PRs and carries no verdict. These rules only decide what to spend next.
+
+Tuning the entries or the triage prompt after seeing pilot results and re-running on the same fixtures is not allowed. A change means a new version, and conclusions come from the validation split.
+
 ## Metrics
 
 Computed per PR, then aggregated by macro mean over PRs:
