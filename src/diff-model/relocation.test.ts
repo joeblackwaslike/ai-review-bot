@@ -1023,4 +1023,70 @@ describe("distinctiveness acceptance and same-file moves", () => {
 		const lines = ['  .split("\\n")', "  .find((l) => l.trim())"];
 		expect(move(lines, lines)).toEqual([]);
 	});
+
+	it.each([
+		["  .map((item) => item.registeredHandlerCount)", "  .filter(Boolean)"],
+		["  ?.registeredHandlerCount.toString()", "  ?.trim()"],
+		["  ?? loadRegisteredHandlerCount(config)", "  ?? 0"],
+		["  ? registeredHandlerCount : fallbackHandlerCount", "  : 0"],
+		["  => registeredHandlerCount(config, options)", "  => 1"],
+		["  + computeRegisteredOffset(config, options)", "  + 1"],
+		["  , registeredHandlerCount(config, options)", "  , 1"],
+		["  && registeredHandlerCount(config, options)", "  && 1"],
+		["  || registeredHandlerCount(config, options)", "  || 1"],
+	])("rejects a short seed that continues an expression: %s", (first, second) => {
+		const lines = [first, second];
+		expect(move(lines, lines)).toEqual([]);
+	});
+
+	it("rejects two identical short Python definitions on the deleted side", () => {
+		const def = [
+			"def is_retryable_status(status):",
+			"    return status >= 500 and status != 501",
+		];
+		const files = [
+			deletedFrom("a.py", 1, def),
+			deletedFrom("c.py", 1, def),
+			addedTo("b.py", 1, def),
+		];
+		expect(findRelocations(files)).toEqual([]);
+	});
+
+	it.each([
+		"package-lock.json",
+		"pnpm-lock.yaml",
+		"yarn.lock",
+		"bun.lock",
+		"Cargo.lock",
+		"poetry.lock",
+		"Gemfile.lock",
+		"dist/app.min.js",
+		"dist/app.min.css",
+		"src/__snapshots__/a.test.ts.snap",
+	])("ignores %s in relocation matching", (name) => {
+		const lines = body(12);
+		const patch = [
+			"@@ -1,13 +1,1 @@",
+			...lines.map((l) => `-${l}`),
+			" context one",
+			" context two",
+			" context three",
+			" context four",
+			" context five",
+			" context six",
+			" context seven",
+			" context eight",
+			"@@ -60,3 +50,15 @@",
+			" context nine",
+			...lines.map((l) => `+${l}`),
+		].join("\n");
+		expect(findRelocations([pushFile(name, patch)])).toEqual([]);
+		expect(
+			findRelocations([
+				deletedFrom(name, 1, lines),
+				addedTo("src/b.ts", 1, lines),
+			]),
+		).toEqual([]);
+		expect(findRelocations([pushFile("src/a.ts", patch)])).toHaveLength(1);
+	});
 });

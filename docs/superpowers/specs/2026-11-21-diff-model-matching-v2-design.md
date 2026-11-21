@@ -67,6 +67,8 @@ Each PR extends `verifyRelocation` for the equivalences it adds, adds seeds, and
 
 **Same-file moves.** Each run records the change region it belongs to: the stretch of consecutive `-` and `+` lines between two context lines or hunk boundaries. A deleted run and an added run in the same file may pair only when they are in different regions. Two runs of one region are an ordinary edit of one spot. `findRelocations` passes an `allowSameFile` option to the shared matcher. `findMovedBlocks()` does not, so `push-shape.ts` is unchanged.
 
+A short same-file seed (1 to 4 counted lines) also needs its two sides in different hunks. Git splits hunks only after 3 context lines, but a line that is deleted and re-added within one hunk is nearly always a misaligned diff, not a move. The 150-commit measurement found `src/reviewers.ts` of `32a55e79` (a `return` left behind when a loop was extracted) and a one-line `ITEMS = []` declaration in the REL-10/clean seed reported as moves for that reason. The one-line declaration pass follows the same rule. Lockfiles and generated files (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `bun.lock`, `bun.lockb`, any `*.lock`, `*.min.js`, `*.min.css`, `*.snap`) are left out of relocation matching, because regenerating one produced 60 same-file moves in a single commit.
+
 Spans in a same-file operation name the same file on both sides, base lines in `from` and head lines in `to`. The checker already verifies each side on its own, so it needs no overlap rule.
 
 **Acceptance by distinctiveness.** The line-count floor is replaced. A seed is accepted when its information is high enough and, for short seeds, when it cannot be confused with another.
@@ -75,6 +77,8 @@ Spans in a same-file operation name the same file on both sides, base lines in `
 - A seed of 5 or more counted lines keeps today's rule.
 - A seed of 1 to 4 counted lines is accepted when its total information is at least 30 non-space characters and it is unique: its normalized text, all lines joined, occurs at most once among the deleted runs and at most once among the added runs of the whole change.
 - A whole definition (opener keyword, closer, as today) is accepted at any length from 1 line with at least 40 non-space characters, and it must pass the same uniqueness test. Several identical helper definitions in a change therefore never pair.
+
+Measurement tightened the 1 to 4 line rule in two ways. A short seed within one file needs 50 non-space characters of information instead of 30: `render.test.ts` of `229b796f` (`expect(r.fileNotes.size).toBe(0);`, 31 characters) and `src/reviewers.ts` of `32a55e79` (41 characters) were alignment artifacts. A short seed whose first line continues an expression (a leading `.name`, `?`, `:`, `??`, `?.`, `=>`, `+`, `,`, `&&` or `||`) is rejected in both the same-file and cross-file cases, because it is not a self-contained block: `996b67e0` reported two lines of a method chain, copied into a test helper, as a move. The checker applies the same tests on its own.
 
 The one-line declaration pass in `declarations.ts` stays. It matches by name and tolerates a changed value, which the content rule cannot.
 
@@ -159,6 +163,8 @@ Relocations in the same file read "moved within `file`". `shape.reindent` adds "
 - Quote-style swaps are limited to JS, TS and Python. Ruby and shell use quotes to switch interpolation.
 - Unknown file extensions are treated as line-significant, the stricter class.
 - Copies get a higher floor than relocations.
+- Short same-file seeds need different hunks and 50 characters of information, and short seeds that continue an expression are rejected, all toward a miss, on the evidence of three false positives in the PR A measurement (`measure-A.md`).
+- Lockfiles and generated files are excluded from relocation matching in `findRelocations` only. `findMovedBlocks()` is unchanged.
 - The `signature` and `receiver` divergence classes are new, so a changed signature or a changed call receiver is not buried among comment-only and rename classes.
 - The work ships as three PRs, ordered by risk and dependency.
 

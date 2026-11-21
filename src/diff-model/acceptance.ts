@@ -17,7 +17,7 @@ const KEYWORDS = new Set(
 const DEFINITION_OPENER =
 	/^(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function\b|class\b|def\b|fn\b|func\b|pub\s+fn\b|const\s+[A-Za-z_$]|type\s+\w|interface\s+\w|enum\s+\w)/;
 const DEFINITION_CLOSER = /^(?:[}\]]|end\b)/;
-const MID_EXPRESSION = /^(?:\.[A-Za-z_$]|[?:]\s|&&|\|\|)/;
+const MID_EXPRESSION = /^(?:\.[A-Za-z_$]|[?:]|=>|\+|,|&&|\|\|)/;
 const IMPORT_LIKE =
 	/^(?:import\b|export\s+(?:\*|\{[^}]*\})\s*(?:as\s+\w+\s*)?(?:from\b|;|$)|from\s+\S+\s+import\b|use\s+[\w:{]|require(?:_relative)?\b|#include\b|using\s+[\w.]+\s*;|package\b)|\brequire\s*\(|\bimport\s*\(/;
 const LITERAL =
@@ -128,10 +128,12 @@ function isWholeDefinition(c: Candidate): boolean {
  * Decides whether an exact run is a block worth reporting. Every call draws one candidate and
  * the seed's characters from the budget, and rejects once either pool runs dry. Five or more
  * counted lines then qualify. One to four lines qualify when they carry at least 30
- * characters of information (50 within one file), or form a whole definition of at least 40 non-space characters,
- * and occur once on each side. A single line with unclosed brackets, or ending in a colon in an
- * indentation-sensitive file, never qualifies, and neither does one that starts mid-expression (a leading `.call`, `?`, `:`, `&&` or `||`). Within one file the two sides must also lie
- * in different hunks, since a short block moved inside one hunk is usually a misaligned diff.
+ * characters of information (50 within one file), or form a whole definition of at least 40
+ * non-space characters, and occur once on each side. Such a short seed never qualifies when
+ * it is a single line with unclosed brackets, ends in a colon in an indentation-sensitive
+ * file, or starts by continuing an expression (a leading `.name`, `?`, `:`, `=>`, `+`, `,`,
+ * `&&` or `||`). Within one file its two sides must also lie in different hunks, since a
+ * short block moved inside one hunk is usually a misaligned diff.
  */
 export function acceptSeed(
 	c: Candidate,

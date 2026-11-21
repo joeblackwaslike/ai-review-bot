@@ -614,6 +614,13 @@ function resolveChain(chain: Candidate[], budget: WorkBudget): Operation[] {
 }
 
 /**
+ * Files whose lines are not matched as relocations: lockfiles, minified bundles and snapshots.
+ * Regenerating them re-sorts large blocks, which reads as many same-file moves of no review value.
+ */
+export const UNMATCHED_FILES =
+	/(?:^|\/)(?:package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?|[^/]+\.lock)$|\.min\.(?:js|css)$|\.snap$/;
+
+/**
  * Finds blocks that were deleted from one region and added to another, across files or
  * within one file, tolerating a few changed, inserted or removed lines inside the block. Exact runs
  * seed each block; the block is then widened over the lines between and next to the seeds,
@@ -626,7 +633,9 @@ export function findRelocations(
 	files: PushFile[],
 	limits: Partial<BudgetLimits> = {},
 ): Operation[] {
-	const { deleted, added } = collectRuns(files);
+	const { deleted, added } = collectRuns(
+		files.filter((f) => !UNMATCHED_FILES.test(f.filename)),
+	);
 	const budget = new WorkBudget(limits);
 	const ctx = { deleted, added, budget };
 	const seeds = selectMatches(deleted, added, 1, (c) => acceptSeed(c, ctx), {

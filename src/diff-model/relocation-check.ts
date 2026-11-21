@@ -40,7 +40,7 @@ const FILLER_WORDS = new Set(
 );
 const IMPORT_LINE =
 	/^(?:import\b|export\s+(?:\*|\{[^}]*\})\s*(?:as\s+\w+\s*)?(?:from\b|;|$)|from\s+\S+\s+import\b|use\s+[\w:{]|require(?:_relative)?\b|#include\b|package\b)|\brequire\s*\(|\bimport\s*\(/;
-const CONTINUATION = /^(?:\.[A-Za-z_$]|[?:]\s|&&|\|\|)/;
+const CONTINUATION = /^(?:\.[A-Za-z_$]|[?:]|=>|\+|,|&&|\|\|)/;
 const LITERALS =
 	/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\b\d[\w.]*/g;
 const WORDS = /[A-Za-z_$][\w$]*/g;
@@ -48,7 +48,15 @@ const DEFINITION_START =
 	/^(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function\b|class\b|def\b|fn\b|func\b|pub\s+fn\b|const\s+[A-Za-z_$]|type\s+\w|interface\s+\w|enum\s+\w)/;
 const DEFINITION_END = /^(?:[}\]]|end\b)/;
 const ONE_LINE_DECLARATION =
-	/^(?:(?:export\s+)?(?:pub\s+)?(?:declare\s+)?(?:const|let|var|static|type|interface|enum)\s+\w|[A-Z][A-Z0-9_]*\s*(?::[^=]+)?=)/;
+	/^(?:(?:export\s+)?(?:pub\s+)?(?:declare\s+)?(?:const|let|var|static|type|interface|enum)\s+(?:mut\s+)?([A-Za-z_$][\w$]*)|([A-Z][A-Z0-9_]*)\s*(?::[^=]+)?=)/;
+const SCREAMING = /^[A-Z][A-Z0-9_]*$/;
+
+function isTopLevelDeclaration(line: string): boolean {
+	const found = ONE_LINE_DECLARATION.exec(line.trim());
+	const name = found?.[1] ?? found?.[2];
+	if (name === undefined) return false;
+	return !/^\s/.test(line) || SCREAMING.test(name);
+}
 
 interface Side {
 	filename: string;
@@ -534,8 +542,7 @@ function smallClaimHolds(
 		(total >=
 			(sameFile ? SMALL_SAME_FILE_INFORMATION : SMALL_CLAIM_INFORMATION) ||
 			(isDefinition(lines, sensitive) && chars >= SMALL_DEFINITION_CHARS) ||
-			(present.length === 1 &&
-				ONE_LINE_DECLARATION.test(present[0] as string)));
+			(present.length === 1 && isTopLevelDeclaration(present[0] as string)));
 	return (
 		informative &&
 		distinctEnough(base, files, "-") &&

@@ -900,4 +900,160 @@ describe("verifyRelocation whole-line // allowlist", () => {
 		];
 		expect(verifyRelocation(op, files)).toBe(false);
 	});
+
+	function oneLine(
+		baseFile: string,
+		headFile: string,
+		base: string,
+		head: string = base,
+	) {
+		const op: Operation = {
+			id: "relocation-1",
+			type: "relocation",
+			from: [
+				{
+					filename: baseFile,
+					side: "base",
+					startLine: 10,
+					endLine: 10,
+					shown: "full",
+				},
+			],
+			to: [
+				{
+					filename: headFile,
+					side: "head",
+					startLine: 40,
+					endLine: 40,
+					shown: "full",
+				},
+			],
+			exact: true,
+			divergences: [],
+			reviewWeight: 0,
+		};
+		const files =
+			baseFile === headFile
+				? [
+						pushFile(
+							baseFile,
+							[
+								"@@ -10,1 +9,0 @@",
+								`-${base}`,
+								"@@ -39,0 +40,1 @@",
+								`+${head}`,
+							].join("\n"),
+						),
+					]
+				: [
+						pushFile(baseFile, ["@@ -10,1 +9,0 @@", `-${base}`].join("\n")),
+						pushFile(headFile, ["@@ -39,0 +40,1 @@", `+${head}`].join("\n")),
+					];
+		return { op, files };
+	}
+
+	it("requires 50 characters of information for a short same-file claim", () => {
+		const short = oneLine(
+			"src/a.ts",
+			"src/a.ts",
+			"  return { ready: missing.length === 0, missing };",
+		);
+		const long = oneLine(
+			"src/a.ts",
+			"src/a.ts",
+			"  const subtotal = computeSubtotal(items, taxRate, shippingZone);",
+		);
+		expect(verifyRelocation(short.op, short.files)).toBe(false);
+		expect(verifyRelocation(long.op, long.files)).toBe(true);
+	});
+
+	it("accepts the same 41-character line when it crosses files", () => {
+		const { op, files } = oneLine(
+			"src/a.ts",
+			"src/b.ts",
+			"  return { ready: missing.length === 0, missing };",
+		);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it.each([
+		"  .map((item) => item.registeredHandlerCount)",
+		"  ?.registeredHandlerCount.toString()",
+		"  ?? loadRegisteredHandlerCount(config)",
+		"  ? registeredHandlerCount : fallbackHandlerCount",
+		"  => registeredHandlerCount(config, options)",
+		"  + computeRegisteredOffset(config, options)",
+		"  , registeredHandlerCount(config, options)",
+		"  && registeredHandlerCount(config, options)",
+		"  || registeredHandlerCount(config, options)",
+	])("drops a short claim that continues an expression: %s", (line) => {
+		const { op, files } = oneLine("src/a.ts", "src/b.ts", line);
+		expect(verifyRelocation(op, files)).toBe(false);
+	});
+
+	it("accepts a short whole-definition claim", () => {
+		const base = [
+			"def is_retryable(status):",
+			"    return status >= 500 and status != 501",
+		];
+		const op: Operation = {
+			id: "relocation-1",
+			type: "relocation",
+			from: [
+				{
+					filename: "a.py",
+					side: "base",
+					startLine: 10,
+					endLine: 11,
+					shown: "full",
+				},
+			],
+			to: [
+				{
+					filename: "b.py",
+					side: "head",
+					startLine: 4,
+					endLine: 5,
+					shown: "full",
+				},
+			],
+			exact: true,
+			divergences: [],
+			reviewWeight: 0,
+		};
+		const files = [
+			pushFile(
+				"a.py",
+				["@@ -10,2 +9,0 @@", ...base.map((l) => `-${l}`)].join("\n"),
+			),
+			pushFile(
+				"b.py",
+				["@@ -3,0 +4,2 @@", ...base.map((l) => `+${l}`)].join("\n"),
+			),
+		];
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("accepts an unindented one-line declaration under 30 characters", () => {
+		const { op, files } = oneLine(
+			"src/a.ts",
+			"src/b.ts",
+			"export const MAX = 3;",
+		);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("accepts an indented SCREAMING_CASE declaration", () => {
+		const { op, files } = oneLine(
+			"src/a.ts",
+			"src/b.ts",
+			"  const MAX_RETRIES = 3;",
+		);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("drops an indented lower-case declaration under 30 characters", () => {
+		const { op, files } = oneLine("src/a.ts", "src/b.ts", "  const max = 3;");
+		expect(verifyRelocation(op, files)).toBe(false);
+	});
 });
