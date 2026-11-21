@@ -266,3 +266,35 @@ describe("JS family automatic semicolon insertion", () => {
 		);
 	});
 });
+
+describe("quote normalization by language", () => {
+	const jsx = ["<p className=\"note\">Don't forget we won't be there today"];
+	const jsxDouble = [
+		'<p className="note">Don"t forget we won"t be there today',
+	];
+
+	it.each([
+		"jsx",
+		"tsx",
+	])("keeps single and double quotes apart in %s", (ext) => {
+		const a = normalizeTokens(toks(jsx, `x.${ext}`), `x.${ext}`);
+		const b = normalizeTokens(toks(jsxDouble, `x.${ext}`), `x.${ext}`);
+		expect(a).not.toEqual(b);
+	});
+
+	it.each([
+		"ts",
+		"js",
+		"mjs",
+		"cjs",
+		"py",
+	])("still swaps quotes in %s", (ext) => {
+		const a = normalizeTokens(toks(["f('a')"], `x.${ext}`), `x.${ext}`);
+		const b = normalizeTokens(toks(['f("a")'], `x.${ext}`), `x.${ext}`);
+		expect(a).toEqual(b);
+	});
+
+	it("tokenizes Kotlin a!!.x differently from a! !.x", () => {
+		expect(toks(["a!!.x"], "x.kt")).not.toEqual(toks(["a! !.x"], "x.kt"));
+	});
+});

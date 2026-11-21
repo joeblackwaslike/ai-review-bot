@@ -28,7 +28,7 @@ const PREPROCESSOR = words("c h cpp hpp cs");
 const PYTHON = words("py pyi");
 const INDENTED = words("py pyi yml yaml");
 const SIBLING_COMMA = words("py pyi go rs kt kts dart");
-const QUOTE_SWAP = words("js jsx mjs cjs ts tsx py pyi");
+const QUOTE_SWAP = words("js mjs cjs ts py pyi");
 const BREAKING_WORDS = words("return throw break continue yield");
 const BEFORE_EXPRESSION = words(
 	"return typeof case in of delete void throw yield await else do instanceof new",

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PushFile } from "../moved-blocks.js";
 import { partialStatements } from "./partial-statements.fixture.js";
+import { buildDiffModel } from "./index.js";
 import { findRelocations } from "./relocation.js";
 import { verifyRelocation } from "./relocation-check.js";
 import type { Operation } from "./types.js";
@@ -1436,6 +1437,16 @@ describe("verifyRelocation token equivalence", () => {
 		expect(verifyRelocation(op, tainted)).toBe(false);
 	});
 
+	it("drops a claim over a file whose context holds a triple quote", () => {
+		const base = ["const total = a + b + c + d + e + f + g + h + i + j;"];
+		const head = ["const total =", "  a + b + c + d + e + f + g + h + i + j;"];
+		const { op, files } = handClaim("src/a.ts", "src/b.ts", base, head);
+		const tainted = files.map((f) =>
+			f.filename === "src/a.ts" ? { ...f, patch: `${f.patch}\n x = '''` } : f,
+		);
+		expect(verifyRelocation(op, tainted)).toBe(false);
+	});
+
 	it("drops a claim over a file whose context holds a heredoc opener", () => {
 		const base = ["const total = a + b + c + d + e + f + g + h + i + j;"];
 		const head = ["const total =", "  a + b + c + d + e + f + g + h + i + j;"];
@@ -1502,7 +1513,6 @@ describe("verifyRelocation token equivalence", () => {
 
 describe("buildDiffModel with the real checker", () => {
 	it("keeps a reformat-only move without dropping a claim", async () => {
-		const { buildDiffModel } = await import("./index.js");
 		const files = movePair(
 			"src/a.ts",
 			"src/b.ts",
@@ -1523,7 +1533,6 @@ describe("buildDiffModel with the real checker", () => {
 	});
 
 	it("does not report a Ruby reformat as an operation", async () => {
-		const { buildDiffModel } = await import("./index.js");
 		const rubyBase = [
 			'config = { name: "alpha", retries: 3, timeout: 5000, verbose: false, region: "us-east" }',
 		];
@@ -1540,5 +1549,66 @@ describe("buildDiffModel with the real checker", () => {
 		});
 		expect(model.operations.filter((o) => o.type === "relocation")).toEqual([]);
 		expect(model.droppedClaims).toBe(0);
+	});
+});
+
+describe("buildDiffModel with legitimate reformats", () => {
+	function model(files: PushFile[]) {
+		return buildDiffModel({
+			scopeFiles: files,
+			prFiles: files,
+			prFilesComplete: true,
+			title: "t",
+			body: null,
+		});
+	}
+
+	it("keeps a Black-wrapped Python reformat", () => {
+		const base = [
+			"result = process_order(customer_id, order_items, discount_code, shipping_address, billing_address)",
+		];
+		const head = [
+			"result = process_order(",
+			"    customer_id,",
+			"    order_items,",
+			"    discount_code,",
+			"    shipping_address,",
+			"    billing_address,",
+			")",
+		];
+		const built = model(movePair("a.py", "b.py", base, head));
+		expect(built.droppedClaims).toBe(0);
+		expect(
+			built.operations.filter((o) => o.type === "relocation"),
+		).toHaveLength(1);
+	});
+
+	it("keeps a YAML block moved one level deeper", () => {
+		const head = YAML_BASE.map((l) => `  ${l}`);
+		const built = model(movePair("a.yml", "b.yml", YAML_BASE, head));
+		expect(built.droppedClaims).toBe(0);
+		expect(
+			built.operations.filter((o) => o.type === "relocation"),
+		).toHaveLength(1);
+	});
+
+	it("keeps a gofmt-style Go reformat", () => {
+		const base = [
+			"server := NewServer(listenAddress, readTimeout, writeTimeout, maxHeaderBytes, tlsConfig)",
+		];
+		const head = [
+			"server := NewServer(",
+			"\tlistenAddress,",
+			"\treadTimeout,",
+			"\twriteTimeout,",
+			"\tmaxHeaderBytes,",
+			"\ttlsConfig,",
+			")",
+		];
+		const built = model(movePair("a.go", "b.go", base, head));
+		expect(built.droppedClaims).toBe(0);
+		expect(
+			built.operations.filter((o) => o.type === "relocation"),
+		).toHaveLength(1);
 	});
 });

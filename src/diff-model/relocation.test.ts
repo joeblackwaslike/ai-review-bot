@@ -1368,3 +1368,16 @@ describe("token pass integration", () => {
 		expect(ops[1]?.to[0]).toMatchObject({ startLine: 10, endLine: 16 });
 	});
 });
+
+describe("token pass and JSX text", () => {
+	it.each(["jsx", "tsx"])("does not claim a quote change in %s text", (ext) => {
+		const base = ["<p className=\"note\">Don't forget we won't be there today"];
+		const head = ['<p className="note">Don"t forget we won"t be there today'];
+		expect(
+			findRelocations([
+				deletedFrom(`src/a.${ext}`, 10, base),
+				addedTo(`src/b.${ext}`, 3, head),
+			]),
+		).toEqual([]);
+	});
+});

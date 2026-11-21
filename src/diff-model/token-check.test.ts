@@ -175,4 +175,76 @@ describe("tokenEquivalent", () => {
 	it("drops a semicolon removal after an empty loop header", () => {
 		expect(same(["{ while (x); }"], ["{ while (x) }"]).equivalent).toBe(false);
 	});
+	it.each(["jsx", "tsx"])("drops a quote swap in %s text", (ext) => {
+		expect(
+			same(
+				["<p className=\"note\">Don't forget we won't be there today"],
+				['<p className="note">Don"t forget we won"t be there today'],
+				`a.${ext}`,
+				`b.${ext}`,
+			).equivalent,
+		).toBe(false);
+	});
+
+	it.each([
+		["ts", "ts"],
+		["js", "js"],
+		["py", "py"],
+	])("still verifies a quote swap in %s", (ext) => {
+		expect(
+			same(["x = f('a', 'b')"], ['x = f("a", "b")'], `a.${ext}`, `b.${ext}`)
+				.equivalent,
+		).toBe(true);
+	});
+
+	it("drops a slash after a control-word header", () => {
+		expect(
+			same(
+				["if (ready) /re/.test(value)"],
+				["if (ready) /re/.test( value)"],
+				"a.js",
+				"b.js",
+			).equivalent,
+		).toBe(false);
+	});
+
+	it("drops a trailing comma that follows a kept line break", () => {
+		expect(same(["foo(return", ", )"], ["foo(return", ")"]).equivalent).toBe(
+			false,
+		);
+	});
+
+	it("drops a trailing comma after an opener", () => {
+		expect(same(["f(,)"], ["f()"]).equivalent).toBe(false);
+	});
+
+	it("drops a line holding an unterminated string", () => {
+		expect(same(["x  =  'abc d"], ["x = 'abc d"]).equivalent).toBe(false);
+	});
+
+	it("drops a semicolon removal at the end of a block", () => {
+		expect(
+			same(["const x = compute(a, b);"], ["const x = compute(a, b)"])
+				.equivalent,
+		).toBe(false);
+	});
+
+	it("drops a Python one-tuple that loses its comma", () => {
+		expect(
+			same(["value = (1,)"], ["value = (1)"], "a.py", "b.py").equivalent,
+		).toBe(false);
+	});
+
+	it("drops Go lines joined onto one line", () => {
+		expect(
+			same(["a := f(1)", "b := 2"], ["a := f(1) b := 2"], "a.go", "b.go")
+				.equivalent,
+		).toBe(false);
+	});
+
+	it("drops a Go return joined to its value", () => {
+		expect(
+			same(["return", "value"], ["return value"], "a.go", "b.go").equivalent,
+		).toBe(false);
+	});
 });

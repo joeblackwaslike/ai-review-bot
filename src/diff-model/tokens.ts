@@ -27,6 +27,7 @@ export const OPERATORS: readonly string[] = [
 	"::",
 	"++",
 	"--",
+	"!!",
 	"**",
 	"//",
 	"&&",
@@ -64,6 +65,7 @@ const TUPLE_EXTENSIONS = new Set(
 	"py pyi go rs kt kts swift scala dart groovy".split(" "),
 );
 const JS_FAMILY = new Set("js ts jsx tsx mjs cjs".split(" "));
+const QUOTE_SWAP_EXTENSIONS = new Set("js ts mjs cjs py pyi".split(" "));
 const HASH_COMMENT_FILE = /\.(py|pyi|sh|bash|zsh|rb|ya?ml|toml|mk)$/i;
 const PYTHON_FILE = /\.pyi?$/i;
 const STRING_PREFIX = /^[rbfuRBFU]{1,2}$/;
@@ -277,6 +279,7 @@ function droppableComma(
 export function normalizeTokens(tokens: string[], filename: string): string[] {
 	const jsFamily = JS_FAMILY.has(extension(filename));
 	const python = PYTHON_FILE.test(filename);
+	const swapQuotes = QUOTE_SWAP_EXTENSIONS.has(extension(filename));
 	const out: string[] = [];
 	tokens.forEach((t, i) => {
 		if (t === "," && droppableComma(tokens, i, filename)) return;
@@ -284,7 +287,7 @@ export function normalizeTokens(tokens: string[], filename: string): string[] {
 			const next = tokens[i + 1];
 			if (next === "}" && !endsEmptyBody(tokens, i)) return;
 		}
-		if ((jsFamily || python) && swappable(t, python)) {
+		if (swapQuotes && swappable(t, python)) {
 			out.push(`"${t.slice(1, -1)}"`);
 			return;
 		}
