@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { QcAppConfig } from "./config.js";
 import { runPrQc } from "./qc-app.js";
+import { VERCEL_FUNCTION_LIMIT_MS } from "./review-deadline.js";
 
 const db = { marker: "db" };
 
@@ -188,7 +189,7 @@ describe("runPrQc dedup claim", () => {
 		expect(reclaimStaleQcRun).toHaveBeenCalledWith(
 			db,
 			"qcrun:o/r#7:HEAD1",
-			800,
+			VERCEL_FUNCTION_LIMIT_MS / 1000,
 		);
 		expect(result.posted).toBe(true);
 	});

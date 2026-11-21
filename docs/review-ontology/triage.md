@@ -310,7 +310,7 @@ the logic agents, and the checks come from the operation entry.
 `security-sast` and `security-auditor` take the tier's top effort whenever they run, and
 `comment-analyzer` and `pr-test-analyzer` on a non-risky PR take one step lower than the tier. The
 existing Anthropic constraint stays: the `deep` tier is capped at `high` effort because `xhigh`
-Opus can outlast the 210-second agent deadline on Vercel Hobby (comment in `src/router.ts`). The
+Opus can outlasted the old 210-second agent deadline on Vercel Hobby (comment in `src/router.ts`). The
 OpenAI route currently maps `deep` to `xhigh`, so the deadline constraint is provider-specific
 and the cap has to be set per provider.
 
@@ -341,7 +341,7 @@ rounds with labeled findings, which makes the following experiments cheap:
    whether lowering the tier loses any confirmed finding.
 3. Build a held-out set of PRs that are small but dangerous (auth dependency changes, one-line guard
    removals) and check that the floors catch all of them.
-4. Track cost per review and wall-clock time per agent set against the 210-second agent budget.
+4. Track cost per review and wall-clock time per agent set against the 600-second agent budget.
 
 A weight stays only if confirmed-finding recall holds and cost goes down.
 

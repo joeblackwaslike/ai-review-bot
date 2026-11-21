@@ -1,6 +1,11 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
-import { agentDeadline, VERCEL_FUNCTION_LIMIT_MS } from "./review-deadline.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { parseAgentBudgetMs } from "./config.js";
+import {
+	agentDeadline,
+	FINISH_RESERVE_MS,
+	VERCEL_FUNCTION_LIMIT_MS,
+} from "./review-deadline.js";
 
 const agentStartMs = 1_000_000;
 const agentBudgetMs = 600_000;
@@ -53,6 +58,24 @@ describe("agentDeadline", () => {
 	it("matches maxDuration for api/github in vercel.json", () => {
 		const config = JSON.parse(readFileSync("vercel.json", "utf8"));
 		expect(config.functions["api/github/**/*.ts"].maxDuration * 1000).toBe(
+			VERCEL_FUNCTION_LIMIT_MS,
+		);
+	});
+});
+
+describe("configured agent budget", () => {
+	let original: string | undefined;
+	beforeEach(() => {
+		original = process.env.REVIEW_AGENT_BUDGET_SECONDS;
+		delete process.env.REVIEW_AGENT_BUDGET_SECONDS;
+	});
+	afterEach(() => {
+		if (original === undefined) delete process.env.REVIEW_AGENT_BUDGET_SECONDS;
+		else process.env.REVIEW_AGENT_BUDGET_SECONDS = original;
+	});
+
+	it("keeps the configured agent budget inside the function limit minus the finish reserve", () => {
+		expect(parseAgentBudgetMs() + FINISH_RESERVE_MS).toBeLessThanOrEqual(
 			VERCEL_FUNCTION_LIMIT_MS,
 		);
 	});

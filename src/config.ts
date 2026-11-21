@@ -69,7 +69,7 @@ export function validatePrivateKey(key: string): string {
 /** Wall-clock allowance for launching review agents, in ms.
  *
  * Sized under the Vercel Pro `maxDuration` limit (800s) for the review routes,
- * leaving ~200s for fetching, the summary call, and the review POST. It is also
+ * capping hosted agent time at 740s from request start, with a 60s reserve after the agent deadline for the summary call and the review POST. It is also
  * the hard deadline: an agent still running at the budget is aborted and
  * counted as skipped, so the run submits what it has instead of being killed
  * with nothing posted. */
@@ -86,7 +86,7 @@ export function parseDiffBudgetChars(tree: Config = getConfigTree()): number {
 	return tree.review.diffBudgetChars;
 }
 
-/** Sequential agents cannot fit a review in the 300s Hobby cap (measured 212s at
+/** Concurrency cuts latency and cost (measured 212s at
  * 1 vs 75s at 4 on a 14-file diff, same cost, no 429s). Lower it if a provider's
  * input-tokens-per-minute limit starts rejecting the burst. */
 export function parseAgentConcurrency(tree: Config = getConfigTree()): number {

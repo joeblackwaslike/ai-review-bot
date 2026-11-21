@@ -105,7 +105,7 @@ version of step 3, and no steps 2, 4 or 6.
 | **A0** | Baseline: one diff-only reviewer, same model and token budget as A, run several times | Step 5 once | Set to match A's spend for a fair comparison | Good | Shows whether personas beat buying more inference | Yes, with a pluggable strategy |
 | **A** | Today: tiered personas in parallel on one input, then merge | Step 5 only, five times | Known: about 75s for a 14-file diff at concurrency 4 | Good: shared prefix | Overlap, unchecked claims | Yes, today |
 | **B** | A planner reads the classification and builds a per-PR graph of passes from the catalog and the playbooks | Steps 2–3 explicit; passes are domain playbooks, not personas | One planner call, then only the passes that apply | Good if passes share a context block | A bad plan skips a needed pass | Yes, with a pluggable strategy |
-| **C** | One senior-reviewer agent with tools, in a loop | All seven steps, in one context | Long loop; risk against the 210s budget | To be measured: depends on how each provider caches a growing conversation | One model's blind spots; hard to bound | Yes, but runs vary more |
+| **C** | One senior-reviewer agent with tools, in a loop | All seven steps, in one context | Long loop; risk against the 600s budget | To be measured: depends on how each provider caches a growing conversation | One model's blind spots; hard to bound | Yes, but runs vary more |
 | **D** | Triage, then specialist investigators with tools, then a verifier, then a writer | Steps 1–7 split by role | Depends on how many investigators run; the verifier adds a call per candidate or per batch | To be measured per provider | Coordination, cost | Yes |
 | **E** | Hybrids, for example B's planner, a deterministic context pre-pass, domain passes, D's verifier | Steps 1–7, with the deterministic parts in code | Between A and D | Good for the shared block | More moving parts | Yes |
 
@@ -204,7 +204,7 @@ What has to be measured before F replaces A, all of it in the experiments below:
   should cost less, but by how much is what A0 measures.
 - **Attention on large PRs.** One agent spread across every concern may miss what a focused
   pass catches. The targeted subagents are the answer to test.
-- **Time.** A long tool loop has to finish inside the 210-second hosted budget, or run on the
+- **Time.** A long tool loop has to finish inside the 600-second hosted budget, or run on the
   local CLI.
 - **Running PR code.** The coverage tool needs the tests to run. For an untrusted PR, read
   coverage from CI artifacts or run in an isolated sandbox. The guide's
@@ -277,7 +277,7 @@ Then:
    passes may beat one agent's choices.
 
 Measure hosted-budget completion from the first run, not only at the end, so a winner that
-can't finish in 210 seconds is known early. Run locally first; move a candidate to the hosted
+can't finish in 600 seconds is known early. Run locally first; move a candidate to the hosted
 path once it wins locally and the completion rate fits.
 
 ### When a result counts

@@ -57,8 +57,8 @@ reviewers:
       trivial: { model: anthropic/claude-haiku-5-5, effort: low }
       normal: { model: anthropic/claude-sonnet-5-5, effort: medium }
       complex: { model: anthropic/claude-sonnet-5-5, effort: high }
-      # high, not xhigh: xhigh Opus can outlast the 210s agent deadline on
-      # Vercel Hobby, which would abort every deep-review agent and post nothing.
+      # high is kept because xhigh Opus outlasted the old 210s agent budget on
+      # Vercel Hobby. The 600s budget may make xhigh viable.
       deep: { model: anthropic/claude-opus-5-5, effort: high }
   codex:
     enabled: true
