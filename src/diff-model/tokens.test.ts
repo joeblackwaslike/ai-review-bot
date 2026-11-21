@@ -107,3 +107,108 @@ describe("normalizeTokens", () => {
 		expect(normalizeTokens(t, "x.py")).toEqual(t);
 	});
 });
+
+const norm = (line: string, file: string) =>
+	normalizeTokens(toks([line], file), file);
+
+describe("false equivalences", () => {
+	it("keeps the comma of a Python one-tuple", () => {
+		expect(norm("x = (1,)", "x.py")).not.toEqual(norm("x = (1)", "x.py"));
+	});
+
+	it("drops a trailing comma after another comma in Python", () => {
+		expect(norm("f(a, b,)", "x.py")).toEqual(norm("f(a, b)", "x.py"));
+	});
+
+	it("drops a trailing comma in TypeScript", () => {
+		expect(norm("foo(a,)", "x.ts")).toEqual(norm("foo(a)", "x.ts"));
+	});
+
+	it("keeps holes in JavaScript arrays", () => {
+		expect(norm("[,]", "x.js")).not.toEqual(norm("[]", "x.js"));
+		expect(norm("[a,,]", "x.js")).not.toEqual(norm("[a,]", "x.js"));
+	});
+
+	it("keeps one-tuple and expansion commas in Rust and shell", () => {
+		expect(norm("(1,)", "x.rs")).not.toEqual(norm("(1)", "x.rs"));
+		const withComma = ["echo $", "{v,}"].join("");
+		const without = ["echo $", "{v}"].join("");
+		expect(norm(withComma, "x.sh")).not.toEqual(norm(without, "x.sh"));
+	});
+
+	it("does not join lines on braces in Go", () => {
+		expect(toks(["return", "x"], "x.go")).not.toEqual(
+			toks(["return x"], "x.go"),
+		);
+	});
+
+	it("does not join lines on braces in shell", () => {
+		expect(toks(["f(){ echo a", "rm x }"], "x.sh")).not.toEqual(
+			toks(["f(){ echo a rm x }"], "x.sh"),
+		);
+	});
+
+	it("keeps // as an operator in a Dockerfile", () => {
+		expect(toks(["RUN curl http://a.com/x"], "Dockerfile")).not.toEqual(
+			toks(["RUN curl http://b.com/y"], "Dockerfile"),
+		);
+	});
+
+	it("keeps // as an operator in CSS", () => {
+		expect(toks(["a{b:url(http://a/x)}"], "x.css")).not.toEqual(
+			toks(["a{b:url(http://b/y)}"], "x.css"),
+		);
+	});
+
+	it("keeps Python floor division", () => {
+		expect(toks(["a // b"], "x.py")).toEqual(["a", "//", "b"]);
+		expect(toks(["a // b"], "x.py")).not.toEqual(toks(["a // c"], "x.py"));
+	});
+
+	it("does not treat $# in shell as a comment", () => {
+		expect(toks(["[ $# -eq 0 ]"], "x.sh")).not.toEqual(
+			toks(["[ $# -eq 1 ]"], "x.sh"),
+		);
+	});
+
+	it("does not treat a # inside a URL in YAML as a comment", () => {
+		expect(toks(["url: http://x/#a"], "x.yaml")).not.toEqual(
+			toks(["url: http://x/#b"], "x.yaml"),
+		);
+	});
+
+	it("still drops a trailing hash comment after whitespace", () => {
+		expect(toks(["a = 1 # note"], "x.py")).toEqual(toks(["a = 1"], "x.py"));
+	});
+
+	it("does not strip a glob as a block comment in shell", () => {
+		expect(toks(["cp src/* /dst"], "x.sh")).not.toEqual(
+			toks(["cp src/* /tmp"], "x.sh"),
+		);
+	});
+
+	it("tells send from less-than-negative in Go", () => {
+		expect(toks(["ch <- v"], "x.go")).not.toEqual(toks(["ch < -v"], "x.go"));
+	});
+
+	it("tells =~ from = ~ in Ruby", () => {
+		expect(toks(["b =~ c"], "x.rb")).not.toEqual(toks(["b = ~c"], "x.rb"));
+	});
+
+	it("keeps the line break after a C preprocessor line", () => {
+		expect(toks(["#define A 1", "int b;"], "x.c")).not.toEqual(
+			toks(["#define A 1 int b;"], "x.c"),
+		);
+	});
+
+	it("keeps the semicolon of an empty if body", () => {
+		expect(norm("if (x);", "x.ts")).not.toEqual(norm("if (x)", "x.ts"));
+		expect(norm("while (f(x));", "x.js")).not.toEqual(
+			norm("while (f(x))", "x.js"),
+		);
+	});
+
+	it("still drops a semicolon before a closing brace", () => {
+		expect(norm("{ foo(); }", "x.ts")).toEqual(norm("{ foo() }", "x.ts"));
+	});
+});
