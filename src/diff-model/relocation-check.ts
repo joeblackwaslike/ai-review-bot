@@ -1,10 +1,12 @@
 import { isIndentSensitive, type PushFile } from "../moved-blocks.js";
 import { hasBrokenContinuation } from "./lexical.js";
+import { tokenEquivalent } from "./token-check.js";
 import type { Divergence, Operation, Span } from "./types.js";
 
 const HUNK_HEADER = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
 const TRIPLE_QUOTE = /"""|'''/g;
 const HEREDOC_OPEN = /<<[-~]?\s*['"]?(\w+)/;
+const LITERAL_OPENER = /`|"""|'''|<<[-~]?\s*['"]?\w/;
 
 const HASH_FAMILY =
 	/(?:\.(?:py|pyi|rb|sh|bash|zsh|ya?ml|toml|mk)|(?:^|\/)Makefile)$/i;
@@ -57,7 +59,6 @@ const CLOSING_BRACKETS = ")]}";
 const OPERATOR_ENDS = "=+*%&|^?:\\([-";
 const STATEMENT_ENDS = ";})]";
 const MOST_SITES = 50;
-const LITERAL_OPENER = /`|"""|'''|<<[-~]?\s*['"]?\w/;
 const CONTROL_WORDS =
 	/^(?:if|else|elif|while|for|foreach|switch|case|when|unless|until|with|try|catch|except|finally|def|class|fn|func|function)\b/;
 const DECORATION = /^(?:@[A-Za-z_$]|#!?\[)/;
@@ -629,6 +630,9 @@ function textOf(span: Span | undefined, sides: Side[]): string | undefined {
  *
  * A claim whose spans share a file must lie in different change regions with unique text. A
  * claim under 5 counted lines must also pass the small-claim rules of the matching v2 spec.
+ * A claim with no divergences that fails the line accounting is instead accepted when
+ * `tokenEquivalent` holds, neither file's patch text shows a backtick, triple quote or heredoc
+ * opener, and `shape.reindent` matches the checker's shift.
  * The patch scan is built once per `files` array, so a batch is verified in linear time.
  */
 export function verifyRelocation(op: Operation, files: PushFile[]): boolean {
@@ -654,10 +658,38 @@ export function verifyRelocation(op: Operation, files: PushFile[]): boolean {
 	if (op.exact && op.divergences.length > 0) return false;
 	const weight = classesHold(op, base, head);
 	if (weight === null || weight !== op.reviewWeight) return false;
-	return accountedPositionally(
-		unclaimed(base, baseSpent),
-		unclaimed(head, headSpent),
+	if (
+		accountedPositionally(
+			unclaimed(base, baseSpent),
+			unclaimed(head, headSpent),
+		)
+	)
+		return true;
+	return op.divergences.length === 0 && tokenVerified(op, base, head, files);
+}
+
+function tokenVerified(
+	op: Operation,
+	base: Side[],
+	head: Side[],
+	files: PushFile[],
+): boolean {
+	const from = base[0];
+	const to = head[0];
+	if (base.length !== 1 || head.length !== 1 || !from || !to) return false;
+	const tainted = [from, to].some((side) =>
+		LITERAL_OPENER.test(
+			files.find((f) => f.filename === side.filename)?.patch ?? "",
+		),
 	);
+	if (tainted) return false;
+	const result = tokenEquivalent(
+		from.lines,
+		to.lines,
+		from.filename,
+		to.filename,
+	);
+	return result.equivalent && (op.shape?.reindent ?? 0) === result.reindent;
 }
 
 function squeezed(line: string): string {

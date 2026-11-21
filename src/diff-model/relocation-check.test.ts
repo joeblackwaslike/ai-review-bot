@@ -1273,3 +1273,272 @@ describe("verifyRelocation independent small-claim rules", () => {
 		expect(performance.now() - started).toBeLessThan(1000);
 	});
 });
+
+function movePair(
+	baseName: string,
+	headName: string,
+	base: string[],
+	head: string[],
+): PushFile[] {
+	return [
+		pushFile(
+			baseName,
+			[`@@ -10,${base.length} +9,0 @@`, ...base.map((l) => `-${l}`)].join("\n"),
+		),
+		pushFile(
+			headName,
+			[`@@ -0,0 +3,${head.length} @@`, ...head.map((l) => `+${l}`)].join("\n"),
+		),
+	];
+}
+
+function handClaim(
+	baseName: string,
+	headName: string,
+	base: string[],
+	head: string[],
+	shape?: Operation["shape"],
+): { op: Operation; files: PushFile[] } {
+	const op: Operation = {
+		id: "relocation-1",
+		type: "relocation",
+		from: [
+			{
+				filename: baseName,
+				side: "base",
+				startLine: 10,
+				endLine: 9 + base.length,
+				shown: "full",
+			},
+		],
+		to: [
+			{
+				filename: headName,
+				side: "head",
+				startLine: 3,
+				endLine: 2 + head.length,
+				shown: "full",
+			},
+		],
+		exact: true,
+		divergences: [],
+		reviewWeight: 0,
+		...(shape ? { shape } : {}),
+	};
+	return { op, files: movePair(baseName, headName, base, head) };
+}
+
+const PRETTIER_BASE = [
+	'const config = { name: "alpha", retries: 3, timeout: 5000, verbose: false, region: "us-east" };',
+];
+const PRETTIER_HEAD = [
+	"const config = {",
+	'  name: "alpha",',
+	"  retries: 3,",
+	"  timeout: 5000,",
+	"  verbose: false,",
+	'  region: "us-east",',
+	"};",
+];
+const PY_BASE = [
+	"def total_price(items, tax_rate):",
+	"    subtotal = sum(item.price for item in items)",
+	"    tax = subtotal * tax_rate",
+	"    return subtotal + tax",
+];
+const YAML_BASE = [
+	"database:",
+	"  host: db.internal.example",
+	"  port: 5432",
+	"  pool:",
+	"    size: 20",
+];
+
+describe("verifyRelocation token equivalence", () => {
+	it("verifies a reformatted TypeScript move", () => {
+		const files = movePair(
+			"src/a.ts",
+			"src/b.ts",
+			PRETTIER_BASE,
+			PRETTIER_HEAD,
+		);
+		const ops = findRelocations(files);
+		expect(ops).toHaveLength(1);
+		expect(verifyRelocation(ops[0] as Operation, files)).toBe(true);
+	});
+
+	it("verifies a Black-wrapped Python call", () => {
+		const base = [
+			"result = process_order(customer_id, order_items, discount_code, shipping_address, billing_address)",
+		];
+		const head = [
+			"result = process_order(",
+			"    customer_id,",
+			"    order_items,",
+			"    discount_code,",
+			"    shipping_address,",
+			"    billing_address,",
+			")",
+		];
+		const files = movePair("a.py", "b.py", base, head);
+		const ops = findRelocations(files);
+		expect(ops).toHaveLength(1);
+		expect(verifyRelocation(ops[0] as Operation, files)).toBe(true);
+	});
+
+	it("verifies a re-indented Python move with the right shift", () => {
+		const head = PY_BASE.map((l) => `    ${l}`);
+		const files = movePair("a.py", "b.py", PY_BASE, head);
+		const ops = findRelocations(files);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]?.shape).toEqual({ reindent: 4 });
+		expect(verifyRelocation(ops[0] as Operation, files)).toBe(true);
+	});
+
+	it("drops a claim whose shape.reindent is wrong", () => {
+		const head = PY_BASE.map((l) => `    ${l}`);
+		const { op, files } = handClaim("a.py", "b.py", PY_BASE, head, {
+			reindent: 8,
+		});
+		expect(verifyRelocation(op, files)).toBe(false);
+	});
+
+	it("drops a claim that omits a needed shape.reindent", () => {
+		const head = PY_BASE.map((l) => `    ${l}`);
+		const { op, files } = handClaim("a.py", "b.py", PY_BASE, head);
+		expect(verifyRelocation(op, files)).toBe(false);
+	});
+
+	it("verifies a YAML block moved one level deeper", () => {
+		const head = YAML_BASE.map((l) => `  ${l}`);
+		const files = movePair("a.yml", "b.yml", YAML_BASE, head);
+		const ops = findRelocations(files);
+		expect(ops).toHaveLength(1);
+		expect(verifyRelocation(ops[0] as Operation, files)).toBe(true);
+	});
+
+	it("drops a YAML claim that removes a space after the colon", () => {
+		const head = YAML_BASE.map((l) => l.replace("port: 5432", "port:5432"));
+		const { op, files } = handClaim("a.yml", "b.yml", YAML_BASE, head);
+		expect(verifyRelocation(op, files)).toBe(false);
+	});
+
+	it("drops a claim over a file whose patch contains a backtick", () => {
+		const base = ["const total = a + b + c + d + e + f + g + h + i + j;"];
+		const head = ["const total =", "  a + b + c + d + e + f + g + h + i + j;"];
+		const { op, files } = handClaim("src/a.ts", "src/b.ts", base, head);
+		expect(verifyRelocation(op, files)).toBe(true);
+		const tainted = files.map((f) =>
+			f.filename === "src/b.ts"
+				? { ...f, patch: `${f.patch}\n unrelated(\`ctx\`)` }
+				: f,
+		);
+		expect(verifyRelocation(op, tainted)).toBe(false);
+	});
+
+	it("drops a claim over a file whose context holds a heredoc opener", () => {
+		const base = ["const total = a + b + c + d + e + f + g + h + i + j;"];
+		const head = ["const total =", "  a + b + c + d + e + f + g + h + i + j;"];
+		const { op, files } = handClaim("src/a.ts", "src/b.ts", base, head);
+		const tainted = files.map((f) =>
+			f.filename === "src/a.ts" ? { ...f, patch: `${f.patch}\n cat <<EOF` } : f,
+		);
+		expect(verifyRelocation(op, tainted)).toBe(false);
+	});
+
+	it("drops a Ruby reformat claim", () => {
+		const { op, files } = handClaim(
+			"a.rb",
+			"b.rb",
+			["total = compute_the_total_price(items, tax_rate, discount_code_value)"],
+			[
+				"total = compute_the_total_price(",
+				"  items, tax_rate, discount_code_value)",
+			],
+		);
+		expect(verifyRelocation(op, files)).toBe(false);
+	});
+
+	it("drops a template literal reformat claim", () => {
+		const { op, files } = handClaim(
+			"src/a.ts",
+			"src/b.ts",
+			[
+				"const message = `hello \u0024{name}, your order \u0024{orderId} has shipped`;",
+			],
+			[
+				"const message =",
+				"  `hello \u0024{name}, your order \u0024{orderId} has shipped`;",
+			],
+		);
+		expect(verifyRelocation(op, files)).toBe(false);
+	});
+
+	it("drops a claim whose lines hold unbalanced brackets", () => {
+		const { op, files } = handClaim(
+			"src/a.ts",
+			"src/b.ts",
+			[
+				"const total = computeTotal(itemsInCart, taxRateForRegion,",
+				"  couponCode);",
+			],
+			[
+				"const total = computeTotal(itemsInCart, taxRateForRegion, couponCode);",
+			],
+		);
+		expect(verifyRelocation(op, files)).toBe(true);
+		const broken = handClaim(
+			"src/a.ts",
+			"src/b.ts",
+			[
+				"const total = computeTotal(itemsInCart, taxRateForRegion,",
+				"  couponCode",
+			],
+			["const total = computeTotal(itemsInCart, taxRateForRegion, couponCode"],
+		);
+		expect(verifyRelocation(broken.op, broken.files)).toBe(false);
+	});
+});
+
+describe("buildDiffModel with the real checker", () => {
+	it("keeps a reformat-only move without dropping a claim", async () => {
+		const { buildDiffModel } = await import("./index.js");
+		const files = movePair(
+			"src/a.ts",
+			"src/b.ts",
+			PRETTIER_BASE,
+			PRETTIER_HEAD,
+		);
+		const model = buildDiffModel({
+			scopeFiles: files,
+			prFiles: files,
+			prFilesComplete: true,
+			title: "t",
+			body: null,
+		});
+		expect(model.droppedClaims).toBe(0);
+		expect(
+			model.operations.filter((o) => o.type === "relocation"),
+		).toHaveLength(1);
+	});
+
+	it("does not report a Ruby reformat as an operation", async () => {
+		const { buildDiffModel } = await import("./index.js");
+		const rubyBase = [
+			'config = { name: "alpha", retries: 3, timeout: 5000, verbose: false, region: "us-east" }',
+		];
+		const rubyHead = PRETTIER_HEAD.map((l) => l.replace(/;$/, ""));
+		rubyHead[0] = "config = {";
+		rubyHead[rubyHead.length - 1] = "}";
+		const files = movePair("lib/a.rb", "lib/b.rb", rubyBase, rubyHead);
+		const model = buildDiffModel({
+			scopeFiles: files,
+			prFiles: files,
+			prFilesComplete: true,
+			title: "t",
+			body: null,
+		});
+		expect(model.operations.filter((o) => o.type === "relocation")).toEqual([]);
+		expect(model.droppedClaims).toBe(0);
+	});
+});
