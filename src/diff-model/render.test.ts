@@ -596,4 +596,39 @@ describe("renderDiffModel", () => {
 		expect(r.summary).toContain("base lines 10-20");
 		expect(r.summary).toContain("lines 40-50");
 	});
+
+	it("says a move was re-indented", () => {
+		const moved = (filename: string, reindent: number) =>
+			renderDiffModel(
+				model({
+					operations: [
+						op({
+							id: "relocation-1",
+							type: "relocation",
+							from: [span(filename, "base", 10, 20)],
+							to: [span(filename, "head", 40, 50)],
+							shape: { reindent },
+						}),
+					],
+				}),
+				OPTS,
+			).summary;
+		expect(moved("src/a.py", 4)).toContain("re-indented one level deeper");
+		expect(moved("src/a.py", -8)).toContain("re-indented 2 levels shallower");
+		expect(moved("ci/a.yml", 2)).toContain("re-indented one level deeper");
+		expect(moved("ci/a.yaml", 6)).toContain("re-indented 3 levels deeper");
+		expect(moved("src/a.py", 3)).toContain("re-indented 3 columns deeper");
+		expect(moved("src/a.py", -2)).toContain("re-indented 2 columns shallower");
+		expect(moved("src/a.ts", 2)).toContain("re-indented 2 columns deeper");
+		expect(moved("src/a.ts", 1)).toContain("re-indented 1 column deeper");
+	});
+
+	it("says nothing about indentation when there is no shape", () => {
+		const r = renderDiffModel(
+			model({ operations: [op({ id: "relocation-1", type: "relocation" })] }),
+			OPTS,
+		);
+		expect(r.summary).not.toContain("re-indented");
+		expect(allText(r)).not.toMatch(/\b(safe|unchanged behavior|functional)\b/);
+	});
 });

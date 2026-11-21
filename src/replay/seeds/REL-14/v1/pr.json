@@ -1,0 +1,4 @@
+{
+	"title": "Move resources into the api section of deploy/api.yaml",
+	"body": "Moves the resource settings under an api key in a new file so each component owns its own. There is no functional change."
+}

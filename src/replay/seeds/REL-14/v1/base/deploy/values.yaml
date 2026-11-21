@@ -1,0 +1,14 @@
+image:
+  repository: registry.internal/api
+  tag: "1.8.2"
+replicaCount: 3
+resources:
+  limits:
+    cpu: 500m
+    memory: 256Mi
+  requests:
+    cpu: 250m
+    memory: 128Mi
+service:
+  type: ClusterIP
+  port: 8080

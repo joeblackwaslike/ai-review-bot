@@ -1,0 +1,26 @@
+{
+	"clean": false,
+	"defects": [
+		{
+			"path": "src/mail/body.ts",
+			"startLine": 6,
+			"endLine": 7,
+			"description": "The receipt text is now wrapped inside the template literal, so the email body gets a line break and two leading spaces before the total."
+		}
+	],
+	"operations": [
+		{
+			"type": "mechanical",
+			"from": [],
+			"to": [
+				{
+					"filename": "src/mail/render.ts",
+					"side": "head",
+					"startLine": 1,
+					"endLine": 1
+				}
+			],
+			"divergences": []
+		}
+	]
+}

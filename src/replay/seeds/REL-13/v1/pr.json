@@ -1,0 +1,4 @@
+{
+	"title": "Move receiptBody into mail/body.ts and run Prettier",
+	"body": "Moves the receipt text into its own module and formats it with Prettier. There is no functional change."
+}

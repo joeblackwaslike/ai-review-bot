@@ -145,6 +145,28 @@ function plural(n: number, word: string): string {
 	return `${n} ${word}${n === 1 ? "" : "s"}`;
 }
 
+const COLUMNS_PER_LEVEL: Record<string, number> = {
+	py: 4,
+	pyi: 4,
+	yml: 2,
+	yaml: 2,
+};
+
+function reindentPhrase(op: Operation): string {
+	const shift = op.shape?.reindent ?? 0;
+	if (shift === 0) return "";
+	const extension = (op.to[0]?.filename ?? "").split(".").pop() ?? "";
+	const perLevel = COLUMNS_PER_LEVEL[extension.toLowerCase()];
+	const size = Math.abs(shift);
+	const direction = shift > 0 ? "deeper" : "shallower";
+	if (perLevel !== undefined && size % perLevel === 0) {
+		const levels = size / perLevel;
+		const count = levels === 1 ? "one level" : `${levels} levels`;
+		return `, re-indented ${count} ${direction}`;
+	}
+	return `, re-indented ${plural(size, "column")} ${direction}`;
+}
+
 function headline(op: Operation): string {
 	if (op.type === "relocation") {
 		const n = op.divergences.length;
@@ -155,9 +177,9 @@ function headline(op: Operation): string {
 		const within = movedWithin(op);
 		if (within !== null) {
 			const part = (s: Span) => `${spanRange(s)} (${shownWording(s)})`;
-			return `${lead}: moved within ${untrusted(within)}, ${op.from.map(part).join(", ")} match ${op.to.map(part).join(", ")}.`;
+			return `${lead}: moved within ${untrusted(within)}, ${op.from.map(part).join(", ")} match ${op.to.map(part).join(", ")}${reindentPhrase(op)}.`;
 		}
-		return `${lead}: ${spansText(op.from)} match ${spansText(op.to)}.`;
+		return `${lead}: ${spansText(op.from)} match ${spansText(op.to)}${reindentPhrase(op)}.`;
 	}
 	if (op.type === "rename") {
 		const from = op.from[0]?.filename ?? "";
