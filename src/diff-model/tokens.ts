@@ -60,6 +60,9 @@ const SLASH_COMMENT_EXTENSIONS = new Set(
 );
 const BLOCK_COMMENT_EXTENSIONS = new Set([...SLASH_COMMENT_EXTENSIONS, "css"]);
 const PREPROCESSOR_EXTENSIONS = new Set("c h cpp hpp cs".split(" "));
+const TUPLE_EXTENSIONS = new Set(
+	"py pyi go rs kt kts swift scala dart groovy".split(" "),
+);
 const JS_FAMILY = new Set("js ts jsx tsx mjs cjs".split(" "));
 const HASH_COMMENT_FILE = /\.(py|pyi|sh|bash|zsh|rb|ya?ml|toml|mk)$/i;
 const PYTHON_FILE = /\.pyi?$/i;
@@ -237,11 +240,13 @@ function endsEmptyBody(tokens: string[], semicolon: number): boolean {
 function droppableComma(
 	tokens: string[],
 	i: number,
-	jsFamily: boolean,
+	filename: string,
 ): boolean {
+	const ext = extension(filename);
+	const jsFamily = JS_FAMILY.has(ext);
 	const next = tokens[i + 1];
 	if (next === undefined || !CLOSERS.has(next)) return false;
-	if (!jsFamily) return hasSiblingComma(tokens, i);
+	if (!jsFamily) return TUPLE_EXTENSIONS.has(ext) && hasSiblingComma(tokens, i);
 	const prev = tokens[i - 1];
 	return prev !== undefined && prev !== "," && !OPENERS.has(prev);
 }
@@ -257,7 +262,7 @@ export function normalizeTokens(tokens: string[], filename: string): string[] {
 	const python = PYTHON_FILE.test(filename);
 	const out: string[] = [];
 	tokens.forEach((t, i) => {
-		if (t === "," && droppableComma(tokens, i, jsFamily)) return;
+		if (t === "," && droppableComma(tokens, i, filename)) return;
 		if (jsFamily && t === ";") {
 			const next = tokens[i + 1];
 			if ((next === undefined || next === "}") && !endsEmptyBody(tokens, i))

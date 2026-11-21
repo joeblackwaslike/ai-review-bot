@@ -212,3 +212,28 @@ describe("false equivalences", () => {
 		expect(norm("{ foo(); }", "x.ts")).toEqual(norm("{ foo() }", "x.ts"));
 	});
 });
+
+describe("trailing commas outside tuple languages", () => {
+	it("keeps the trailing comma of a shell brace expansion", () => {
+		const withComma = "echo {a,b,}";
+		expect(norm(withComma, "x.sh")).not.toEqual(norm("echo {a,b}", "x.sh"));
+	});
+
+	it("keeps the trailing comma of a shell glob class", () => {
+		expect(norm("ls [a,b,]*", "x.sh")).not.toEqual(norm("ls [a,b]*", "x.sh"));
+	});
+
+	it("keeps the trailing comma of a Ruby word list", () => {
+		expect(norm("w = %w[a,b,]", "x.rb")).not.toEqual(
+			norm("w = %w[a,b]", "x.rb"),
+		);
+	});
+
+	it("still drops a trailing comma in a Go call", () => {
+		expect(norm("f(a, b,)", "x.go")).toEqual(norm("f(a, b)", "x.go"));
+	});
+
+	it("still drops a trailing comma in a Python call", () => {
+		expect(norm("f(a, b,)", "x.py")).toEqual(norm("f(a, b)", "x.py"));
+	});
+});
