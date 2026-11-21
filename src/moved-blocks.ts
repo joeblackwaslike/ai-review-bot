@@ -29,6 +29,7 @@ export interface Run {
 	lines: string[];
 	raw: string[];
 	startLine: number;
+	region: number;
 	used: boolean[];
 }
 
@@ -155,6 +156,7 @@ export function extractRuns(
 	let newLine = 0;
 	let delStart = 0;
 	let addStart = 0;
+	let region = 0;
 	const flush = () => {
 		if (del.length) {
 			deleted.push({
@@ -164,6 +166,7 @@ export function extractRuns(
 				lines: del,
 				raw: delRaw,
 				startLine: delStart,
+				region,
 				used: del.map(() => false),
 			});
 		}
@@ -175,6 +178,7 @@ export function extractRuns(
 				lines: add,
 				raw: addRaw,
 				startLine: addStart,
+				region,
 				used: add.map(() => false),
 			});
 		}
@@ -198,6 +202,7 @@ export function extractRuns(
 			newLine++;
 		} else {
 			flush();
+			region++;
 			const header = /^@@ -(\d+)(?:,\d+)? \+(\d+)/.exec(line);
 			if (header) {
 				oldLine = Number(header[1]);
@@ -290,11 +295,16 @@ function extend(from: Run, fromPos: number, to: Run, toPos: number): Candidate {
 	};
 }
 
+export interface MatchOptions {
+	allowSameFile?: boolean;
+}
+
 function collectCandidates(
 	deleted: Run[],
 	added: Run[],
 	minLines: number,
 	accept?: (c: Candidate) => boolean,
+	options: MatchOptions = {},
 ): Candidate[] {
 	const index = new Map<string, { run: Run; pos: number }[]>();
 	for (const run of added) {
@@ -314,9 +324,10 @@ function collectCandidates(
 			occurrences.set(key, n);
 			if (n > MAX_KEY_OCCURRENCES) continue;
 			for (const hit of index.get(key) ?? []) {
+				if (hit.run.indentSensitive !== run.indentSensitive) continue;
 				if (
-					hit.run.filename === run.filename ||
-					hit.run.indentSensitive !== run.indentSensitive
+					hit.run.filename === run.filename &&
+					(!options.allowSameFile || hit.run.region === run.region)
 				)
 					continue;
 				const diagonal = `${run.index}|${hit.run.index}|${pos - hit.pos}`;
@@ -399,9 +410,16 @@ export function selectMatches(
 	added: Run[],
 	minLines: number,
 	accept?: (c: Candidate) => boolean,
+	options?: MatchOptions,
 ): Candidate[] {
 	const queue: Candidate[] = [];
-	for (const c of collectCandidates(deleted, added, minLines, accept)) {
+	for (const c of collectCandidates(
+		deleted,
+		added,
+		minLines,
+		accept,
+		options,
+	)) {
 		insertSorted(queue, c);
 	}
 	const selected: Candidate[] = [];

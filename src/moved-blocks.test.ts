@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+	collectRuns,
 	findMovedBlocks,
 	normalizeCodeLine,
 	type PushFile,
+	selectMatches,
 } from "./moved-blocks.js";
 
 describe("normalizeCodeLine with strip", () => {
@@ -325,5 +327,41 @@ describe("findMovedBlocks at scale", () => {
 		const elapsed = performance.now() - start;
 		expect(out.filter((b) => b.lineCount === 5)).toHaveLength(100);
 		expect(elapsed).toBeLessThan(1000);
+	});
+});
+
+describe("same-file pairing across change regions", () => {
+	const SPLIT = [
+		"@@ -1,20 +1,20 @@",
+		...LINES.map((l) => `-${l}`),
+		" context one",
+		" context two",
+		" context three",
+		...LINES.map((l) => `+${l}`),
+	].join("\n");
+	const SAME_REGION = [
+		"@@ -1,20 +1,20 @@",
+		...LINES.map((l) => `-${l}`),
+		...LINES.map((l) => `+${l}`),
+	].join("\n");
+
+	function pair(patch: string, allowSameFile: boolean) {
+		const { deleted, added } = collectRuns([file("a.ts", [], [], patch)]);
+		return selectMatches(deleted, added, 5, undefined, { allowSameFile });
+	}
+
+	it("pairs a deleted and an added block in different regions of one file when allowSameFile is set", () => {
+		const matches = pair(SPLIT, true);
+		expect(matches).toHaveLength(1);
+		expect(matches[0]?.counted).toBe(6);
+		expect(pair(SPLIT, false)).toEqual([]);
+	});
+
+	it("does not pair runs of one change region", () => {
+		expect(pair(SAME_REGION, true)).toEqual([]);
+	});
+
+	it("keeps findMovedBlocks cross-file only", () => {
+		expect(findMovedBlocks([file("a.ts", [], [], SPLIT)])).toEqual([]);
 	});
 });
