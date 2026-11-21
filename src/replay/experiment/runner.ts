@@ -25,7 +25,11 @@ import {
 } from "../types.js";
 import { mulberry32 } from "./bootstrap.js";
 import type { ExperimentPlan } from "./plan.js";
-import { isSpendMatched } from "./spend-matched-names.js";
+import {
+	isSpendMatched,
+	TRIAGE_CALL_PREFIX,
+	TRIAGE_USAGE_KEY,
+} from "./spend-matched-names.js";
 import type { CellKey, CellRecord, ResultsStore } from "./store.js";
 
 export interface LoadedFixture {
@@ -199,8 +203,6 @@ export interface ExecuteCellArgs {
 	checkoutFor: typeof realWithCheckout;
 }
 
-const TRIAGE_USAGE_KEY = "f1-triage.md";
-
 export async function executeCell(
 	a: ExecuteCellArgs,
 ): Promise<"unavailable" | { record: CellRecord; result: StrategyResult }> {
@@ -220,7 +222,7 @@ export async function executeCell(
 	if (isCheckoutUnavailable(ran)) return "unavailable";
 	const { [TRIAGE_USAGE_KEY]: _triage, ...reviewerUsage } = ran.usage;
 	const triageUsd = ran.toolCalls
-		.filter((t) => t.name.startsWith("triage:"))
+		.filter((t) => t.name.startsWith(TRIAGE_CALL_PREFIX))
 		.reduce((sum, t) => sum + t.costUsd, 0);
 	const costUsd =
 		requireCost(

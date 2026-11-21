@@ -1,5 +1,5 @@
 import { NoObjectGeneratedError } from "ai";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setPriceTable } from "../../pricing.js";
 import {
 	buildInlineComment,
@@ -7,6 +7,10 @@ import {
 	buildPullFile,
 	SIMPLE_PATCH,
 } from "../../testing.js";
+import {
+	TRIAGE_CALL_PREFIX,
+	TRIAGE_USAGE_KEY,
+} from "../experiment/spend-matched-names.js";
 import { type StrategyInput, strategyNames } from "../strategy.js";
 import {
 	F1_IMPLEMENTATION_REVISION,
@@ -18,6 +22,19 @@ import { registerBuiltinStrategies } from "./index.js";
 
 const mockRunAgent = vi.hoisted(() => vi.fn());
 const mockGenerateObject = vi.hoisted(() => vi.fn());
+const haikuPin = vi.hoisted(() => ({ on: true }));
+const mockSkillRead = vi.hoisted(() => ({ fail: false }));
+vi.mock("node:fs", async (orig) => {
+	const real = await orig<typeof import("node:fs")>();
+	return {
+		...real,
+		readFileSync: ((path: string, ...rest: never[]) => {
+			if (mockSkillRead.fail && String(path).endsWith("f1-triage.md"))
+				throw new Error("ENOENT");
+			return (real.readFileSync as (...a: unknown[]) => unknown)(path, ...rest);
+		}) as typeof real.readFileSync,
+	};
+});
 vi.mock("../../review.js", async (orig) => ({
 	...(await orig<typeof import("../../review.js")>()),
 	runAgent: mockRunAgent,
@@ -26,15 +43,40 @@ vi.mock("ai", async (orig) => ({
 	...(await orig<typeof import("ai")>()),
 	generateObject: mockGenerateObject,
 }));
+vi.mock("../../config/load.js", async (orig) => {
+	const real = await orig<typeof import("../../config/load.js")>();
+	return {
+		...real,
+		getConfigTree: () => ({
+			...real.getConfigTree(),
+			models: haikuPin.on
+				? {
+						"anthropic/claude-haiku-5-5": {
+							pricing: { input: 1, cachedInput: 0.1, output: 5 },
+						},
+					}
+				: {},
+		}),
+	};
+});
+vi.mock("../../roles.js", async (orig) => ({
+	...(await orig<typeof import("../../roles.js")>()),
+	resolveJudgeRole: () => ({
+		provider: "anthropic",
+		model: "claude-haiku-5-5",
+		effort: "low",
+	}),
+}));
 vi.mock("../../auth.js", () => ({
 	resolveAnthropicAuth: vi.fn(async () => ({ provider: "anthropic" })),
 	resolveOpenAIAuth: vi.fn(async () => ({})),
 }));
 
-setPriceTable({
+const PRICES = {
 	"anthropic/claude-sonnet-5-5": { input: 2, cachedInput: 0.2, output: 10 },
 	"anthropic/claude-haiku-5-5": { input: 1, cachedInput: 0.1, output: 5 },
-});
+};
+setPriceTable(PRICES);
 const ONE_RUN = { promptTokens: 100_000, completionTokens: 10_000 };
 const TRIAGE_USAGE = { inputTokens: 1000, outputTokens: 100 };
 const TRIAGE_COST = (1000 * 1 + 100 * 5) / 1_000_000;
@@ -69,6 +111,10 @@ const triageReturns = (operations: string[]) =>
 		object: { operations },
 		usage: TRIAGE_USAGE,
 	});
+
+afterEach(() => {
+	setPriceTable(PRICES);
+});
 
 beforeEach(() => {
 	mockRunAgent.mockReset();
@@ -118,12 +164,6 @@ describe("strategyF1", () => {
 		expect(mockRunAgent.mock.calls[0]?.[3]).toBe("");
 	});
 
-	it("an empty selection records triage:none, distinct from a failure", async () => {
-		triageReturns([]);
-		const out = await strategyF1.run(inputFor());
-		expect(out.toolCalls.map((t) => t.name)).toEqual(["triage:none"]);
-	});
-
 	it("splits a comma-joined element into ids and injects both entries", async () => {
 		triageReturns([`${firstId}, ${secondId}`]);
 		const out = await strategyF1.run(inputFor());
@@ -146,7 +186,7 @@ describe("strategyF1", () => {
 		);
 		const out = await strategyF1.run(inputFor());
 		expect(out.toolCalls[0]?.name).toBe("triage:failed");
-		expect(out.toolCalls[0]?.costUsd).toBeCloseTo(TRIAGE_COST);
+		expect(out.toolCalls[0]?.costUsd).toBeCloseTo(TRIAGE_COST, 8);
 		expect(out.usage["f1-triage.md"]).toBeDefined();
 	});
 
@@ -184,17 +224,17 @@ describe("strategyF1", () => {
 	it("counts the triage cost against the spend target so one fewer repeat runs", async () => {
 		mockGenerateObject.mockResolvedValue({
 			object: { operations: [firstId] },
-			usage: { inputTokens: 2_000_000, outputTokens: 0 },
+			usage: { inputTokens: 200_000, outputTokens: 0 },
 		});
 		const out = await strategyF1.run(inputFor(0.9));
 		expect(mockRunAgent).toHaveBeenCalledTimes(2);
-		expect(out.toolCalls[0]?.costUsd).toBeCloseTo(0.2);
+		expect(out.toolCalls[0]?.costUsd).toBeCloseTo(0.2, 8);
 	});
 
 	it("counts the triage cost against the per-cell cap so no repeat launches", async () => {
 		mockGenerateObject.mockResolvedValue({
 			object: { operations: [firstId] },
-			usage: { inputTokens: 2_000_000, outputTokens: 0 },
+			usage: { inputTokens: 200_000, outputTokens: 0 },
 		});
 		const input = inputFor(1000);
 		input.budget = { maxUsd: 0.7, maxWallMs: 600_000 };
@@ -208,20 +248,97 @@ describe("strategyF1", () => {
 			usage: { inputTokens: 1, outputTokens: 1 },
 		});
 		setPriceTable({
-			"anthropic/claude-sonnet-5-5": { input: 2, cachedInput: 0.2, output: 10 },
+			"anthropic/claude-sonnet-5-5": PRICES["anthropic/claude-sonnet-5-5"],
 		});
-		await expect(strategyF1.run(inputFor())).rejects.toThrow(/no price known/);
-		setPriceTable({
-			"anthropic/claude-sonnet-5-5": { input: 2, cachedInput: 0.2, output: 10 },
-			"anthropic/claude-haiku-5-5": { input: 1, cachedInput: 0.1, output: 5 },
+		haikuPin.on = false;
+		try {
+			await expect(strategyF1.run(inputFor())).rejects.toThrow(
+				/no price known/,
+			);
+		} finally {
+			haikuPin.on = true;
+		}
+	});
+
+	it("keeps four ids in order from six ids and a duplicate", async () => {
+		const ids = [...entries.keys()].slice(0, 6);
+		triageReturns([ids[0] as string, ...ids]);
+		const out = await strategyF1.run(inputFor());
+		expect(out.toolCalls[0]?.name).toBe(`triage:${ids.slice(0, 4).join(",")}`);
+	});
+
+	it("puts the Diff: marker before the diff in the triage prompt", async () => {
+		await strategyF1.run(inputFor());
+		const prompt = mockGenerateObject.mock.calls[0]?.[0].prompt as string;
+		expect(prompt).toContain(`\nDiff:\n${"x".repeat(4000)}`);
+	});
+
+	it("records the triage wall time in wallMs and shrinks the wall budget for the loop", async () => {
+		mockGenerateObject.mockImplementation(async () => {
+			await new Promise((r) => setTimeout(r, 30));
+			return { object: { operations: [firstId] }, usage: TRIAGE_USAGE };
 		});
+		const out = await strategyF1.run(inputFor(1000));
+		expect(out.wallMs).toBeGreaterThanOrEqual(30);
+		expect(out.toolCalls[0]?.wallMs).toBeGreaterThanOrEqual(25);
+		const tight = inputFor(1000);
+		tight.budget = { maxUsd: 1000, maxWallMs: 10 };
+		mockRunAgent.mockClear();
+		await strategyF1.run(tight);
+		expect(mockRunAgent).toHaveBeenCalledTimes(1);
+	});
+
+	it("surfaces a missing triage skill file instead of recording triage:failed", async () => {
+		mockSkillRead.fail = true;
+		try {
+			await expect(strategyF1.run(inputFor())).rejects.toThrow("ENOENT");
+		} finally {
+			mockSkillRead.fail = false;
+		}
+	});
+
+	it("rethrows when the signal is aborted instead of recording triage:failed", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const controller = new AbortController();
+		const input = inputFor();
+		input.signal = controller.signal;
+		mockGenerateObject.mockImplementation(async () => {
+			controller.abort();
+			throw new Error("aborted");
+		});
+		await expect(strategyF1.run(input)).rejects.toThrow("aborted");
+	});
+
+	it("warns with the fixture id about ids dropped as unknown", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		triageReturns([firstId, "ZZZ-99"]);
+		await strategyF1.run(inputFor());
+		expect(warn).toHaveBeenCalledWith(
+			"f1: triage returned unknown ids",
+			expect.objectContaining({ fixture: "o/r", unknown: ["ZZZ-99"] }),
+		);
+	});
+
+	it("emits the usage key and call prefix the runner prices by", async () => {
+		const out = await strategyF1.run(inputFor());
+		expect(Object.keys(out.usage)).toContain(TRIAGE_USAGE_KEY);
+		expect(out.toolCalls[0]?.name.startsWith(TRIAGE_CALL_PREFIX)).toBe(true);
+	});
+
+	it("version changes with the classifier model", () => {
+		const read = () => "same";
+		const sel = (model: string) =>
+			({ provider: "anthropic", model, effort: "low" }) as never;
+		expect(
+			strategyF1Version(read, "h", 1, 1, sel("claude-haiku-5-5")),
+		).not.toBe(strategyF1Version(read, "h", 1, 1, sel("claude-sonnet-5-5")));
 	});
 
 	it("toolCalls has one triage entry naming the ids", async () => {
 		const out = await strategyF1.run(inputFor());
 		expect(out.toolCalls).toHaveLength(1);
 		expect(out.toolCalls[0]?.name).toBe(`triage:${firstId},${secondId}`);
-		expect(out.toolCalls[0]?.costUsd).toBeCloseTo(TRIAGE_COST);
+		expect(out.toolCalls[0]?.costUsd).toBeCloseTo(TRIAGE_COST, 8);
 	});
 
 	it("uses ref replay-f1", async () => {

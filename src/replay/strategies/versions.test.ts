@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { loadPlan, planHash } from "../experiment/plan.js";
 import { strategyA } from "./a.js";
 import { strategyA0 } from "./a0.js";
 import { strategyF0 } from "./f0.js";
@@ -42,5 +43,19 @@ describe("strategy versions pinned by the committed plan", () => {
 			),
 		) as { strategies: { name: string; version: string }[] };
 		expect(chained.strategies).toEqual(plan.strategies);
+	});
+
+	it("plan-pilot-f1.json loads against its lock and pins the strategies' versions", () => {
+		const path = new URL(
+			"../../../docs/review-experiments/plan-pilot-f1.json",
+			import.meta.url,
+		).pathname;
+		const { plan: pilot, lockedHash } = loadPlan(path);
+		expect(lockedHash).toBe(planHash(pilot));
+		const byName = { a: strategyA, f0: strategyF0, f1: strategyF1 } as const;
+		for (const [name, strategy] of Object.entries(byName))
+			expect(pilot.strategies.find((s) => s.name === name)?.version).toBe(
+				strategy.version,
+			);
 	});
 });

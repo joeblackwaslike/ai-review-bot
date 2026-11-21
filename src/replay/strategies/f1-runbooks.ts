@@ -55,6 +55,10 @@ export function loadEntries(dir: string = DEFAULT_DIR): Map<string, string> {
 		for (const [id, text] of parseEntries(
 			readFileSync(join(dir, file), "utf8"),
 		)) {
+			if (entries.has(id))
+				throw new Error(`duplicate operation id ${id} in ${file}`);
+			if (text.split("\n").length < 2)
+				throw new Error(`operation ${id} in ${file} has no kept section`);
 			entries.set(id, text);
 		}
 	}

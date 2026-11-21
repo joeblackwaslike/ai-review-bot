@@ -1,3 +1,6 @@
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
 	entryHeadings,
@@ -76,5 +79,21 @@ describe("f1 runbooks", () => {
 		const found = entryHeadings(loadEntries()).find((h) => h.id === "REL-01");
 		expect(found?.id).toBe("REL-01");
 		expect(found?.name.length).toBeGreaterThan(0);
+	});
+
+	it("throws on a duplicate id across files", () => {
+		const dir = mkdtempSync(join(tmpdir(), "f1-dup-"));
+		writeFileSync(join(dir, "a.md"), entry("REL-01", "one"));
+		writeFileSync(join(dir, "b.md"), entry("REL-01", "two"));
+		expect(() => loadEntries(dir)).toThrow(/duplicate operation id REL-01/);
+	});
+
+	it("throws when an entry has no kept section", () => {
+		const dir = mkdtempSync(join(tmpdir(), "f1-empty-"));
+		writeFileSync(
+			join(dir, "a.md"),
+			"## REL-01: one\n\n### Worked example\n\nbody\n",
+		);
+		expect(() => loadEntries(dir)).toThrow(/REL-01.*no kept section/);
 	});
 });

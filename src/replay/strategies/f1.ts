@@ -7,12 +7,17 @@ import { getConfigTree } from "../../config/load.js";
 import { isProgrammingError } from "../../improve/qc.js";
 import { computeCost, createAIModel } from "../../models.js";
 import { resolveJudgeRole } from "../../roles.js";
+import type { ModelSelection } from "../../router.js";
 import {
 	legacyTierMap,
 	outputBudget,
 	reasoningProviderOptions,
 } from "../../router.js";
 import { requireCost } from "../cost.js";
+import {
+	TRIAGE_CALL_PREFIX,
+	TRIAGE_USAGE_KEY,
+} from "../experiment/spend-matched-names.js";
 import { resolveSelectionAuth } from "../live-wiring.js";
 import type { ReviewStrategy, StrategyInput } from "../strategy.js";
 import type { RoundUsage } from "../types.js";
@@ -45,6 +50,7 @@ export function strategyF1Version(
 	entriesDigest: string,
 	revision: number = F1_IMPLEMENTATION_REVISION,
 	a0Revision: number = A0_IMPLEMENTATION_REVISION,
+	classifier: ModelSelection = resolveJudgeRole(getConfigTree(), "classifier"),
 ): string {
 	return createHash("sha256")
 		.update(
@@ -56,6 +62,7 @@ export function strategyF1Version(
 				legacyTierMap("codex"),
 				revision,
 				a0Revision,
+				[classifier.provider, classifier.model, classifier.effort ?? null],
 			]),
 		)
 		.digest("hex")
@@ -93,12 +100,14 @@ export async function triage(
 		);
 		return { tokens, costUsd };
 	};
+	const skillText = readSkillFile(TRIAGE_SKILL);
+	const operations = entryHeadings(entries)
+		.map((h) => `${h.id}: ${h.name}`)
+		.join("\n");
+	const auth = await resolveSelectionAuth(selection.provider);
+	const fixtureId = `${input.fixture.owner}/${input.fixture.repo}`;
 	let call: Awaited<ReturnType<typeof generateObject<typeof TriageSchema>>>;
 	try {
-		const auth = await resolveSelectionAuth(selection.provider);
-		const operations = entryHeadings(entries)
-			.map((h) => `${h.id}: ${h.name}`)
-			.join("\n");
 		call = await generateObject({
 			model: createAIModel(selection, auth),
 			schema: TriageSchema,
@@ -106,12 +115,12 @@ export async function triage(
 			maxRetries: TRIAGE_MAX_RETRIES,
 			providerOptions: reasoningProviderOptions(selection),
 			abortSignal: input.signal,
-			prompt: `${readSkillFile(TRIAGE_SKILL)}\n${operations}\n\nDiff:\n${input.diff}`,
+			prompt: `${skillText}\n${operations}\n\nDiff:\n${input.diff}`,
 		});
 	} catch (err) {
-		if (isProgrammingError(err)) throw err;
+		if (isProgrammingError(err) || input.signal.aborted) throw err;
 		console.error("f1: triage call failed", {
-			fixture: `${input.fixture.owner}/${input.fixture.repo}`,
+			fixture: fixtureId,
 			err,
 		});
 		const spent =
@@ -126,11 +135,16 @@ export async function triage(
 			failed: true,
 		};
 	}
-	const ids = [
+	const returned = [
 		...new Set(call.object.operations.flatMap((o) => o.split(/[\s,]+/))),
-	]
-		.filter((id) => entries.has(id))
-		.slice(0, MAX_SELECTED);
+	].filter(Boolean);
+	const unknown = returned.filter((id) => !entries.has(id));
+	if (unknown.length)
+		console.warn("f1: triage returned unknown ids", {
+			fixture: fixtureId,
+			unknown,
+		});
+	const ids = returned.filter((id) => entries.has(id)).slice(0, MAX_SELECTED);
 	const { tokens, costUsd } = priced(call.usage);
 	return {
 		ids,
@@ -155,23 +169,36 @@ export const strategyF1: ReviewStrategy = {
 		const entries = loadEntries();
 		const picked = await triage(input, entries);
 		const usage: RoundUsage = picked.usage
-			? { [TRIAGE_SKILL]: picked.usage }
+			? { [TRIAGE_USAGE_KEY]: picked.usage }
 			: {};
-		return runSpendMatched(input, {
-			skill: F1_SKILL,
-			label: "f1",
-			ref: "replay-f1",
-			customPrompt: selectEntries(entries, picked.ids),
-			extraUsage: usage,
-			extraToolCalls: [
-				{
-					name: picked.failed
-						? "triage:failed"
-						: `triage:${picked.ids.length ? picked.ids.join(",") : "none"}`,
-					wallMs: picked.wallMs,
-					costUsd: picked.costUsd,
+		const label = picked.failed
+			? "failed"
+			: picked.ids.length
+				? picked.ids.join(",")
+				: "none";
+		const result = await runSpendMatched(
+			{
+				...input,
+				budget: {
+					...input.budget,
+					maxWallMs: Math.max(0, input.budget.maxWallMs - picked.wallMs),
 				},
-			],
-		});
+			},
+			{
+				skill: F1_SKILL,
+				label: "f1",
+				ref: "replay-f1",
+				customPrompt: selectEntries(entries, picked.ids),
+				extraUsage: usage,
+				extraToolCalls: [
+					{
+						name: `${TRIAGE_CALL_PREFIX}${label}`,
+						wallMs: picked.wallMs,
+						costUsd: picked.costUsd,
+					},
+				],
+			},
+		);
+		return { ...result, wallMs: result.wallMs + picked.wallMs };
 	},
 };

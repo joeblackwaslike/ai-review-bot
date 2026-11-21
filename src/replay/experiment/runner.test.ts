@@ -390,6 +390,32 @@ describe("runGrid", () => {
 		expect(rec?.costUsd).toBeCloseTo(ONE + triageUsd);
 	});
 
+	it("books a failed triage's cost into the cell cost", async () => {
+		const triageUsd = 0.03;
+		const f1 = stub("f1", {
+			run: async () => ({
+				...result(),
+				usage: {
+					"f1-run-1.md": USAGE.x,
+					"f1-triage.md": { promptTokens: 9_000_000, completionTokens: 0 },
+				},
+				toolCalls: [{ name: "triage:failed", wallMs: 1, costUsd: triageUsd }],
+			}),
+		});
+		const { deps, store } = harness([stub("a"), f1]);
+		await runGrid(
+			plan({
+				strategies: [
+					{ name: "a", version: "v1" },
+					{ name: "f1", version: "v1" },
+				],
+			}),
+			deps,
+		);
+		const rec = store.records.find((r) => r.key.strategy === "f1");
+		expect(rec?.costUsd).toBeCloseTo(ONE + triageUsd);
+	});
+
 	it("counts the estimate of a cell whose strategy threw, and lists the amount", async () => {
 		const boom = stub("a", {
 			run: async () => {
