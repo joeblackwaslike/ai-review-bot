@@ -17,11 +17,12 @@ import {
 	selectQcSample,
 	summarize,
 } from "./improve/qc.js";
+import { VERCEL_FUNCTION_LIMIT_MS } from "./review-deadline.js";
 
 /** How long a claim can go unfinished before another /qc may take it over.
  * Matches the QC function's `maxDuration` in vercel.json: past that the
  * instance is gone, so nothing can still be working under that claim. */
-const QC_CLAIM_TTL_S = 300;
+const QC_CLAIM_TTL_S = VERCEL_FUNCTION_LIMIT_MS / 1000;
 
 let qcAppSingleton: App | null = null;
 

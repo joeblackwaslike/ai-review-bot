@@ -412,9 +412,9 @@ describe("parseAgentBudgetMs", () => {
 		else process.env.REVIEW_AGENT_BUDGET_SECONDS = original;
 	});
 
-	it("defaults to 210s, leaving room under the 300s Hobby cap", () => {
+	it("defaults to 600s, leaving room under the 800s Pro cap", () => {
 		delete process.env.REVIEW_AGENT_BUDGET_SECONDS;
-		expect(parseAgentBudgetMs()).toBe(210_000);
+		expect(parseAgentBudgetMs()).toBe(600_000);
 	});
 
 	// Flooring seconds first turned these into a 0ms budget, which skips every
@@ -446,7 +446,7 @@ describe("parseAgentBudgetMs", () => {
 		"   ",
 	])("a blank value %j is unset and gives the default", (raw) => {
 		process.env.REVIEW_AGENT_BUDGET_SECONDS = raw;
-		expect(parseAgentBudgetMs()).toBe(210_000);
+		expect(parseAgentBudgetMs()).toBe(600_000);
 	});
 });
 
@@ -510,7 +510,7 @@ describe("config tree wiring", () => {
 			improveEnabled: false,
 			improveCarrierEnabled: false,
 			agentConcurrency: 4,
-			agentBudgetMs: 210_000,
+			agentBudgetMs: 600_000,
 			diffBudgetChars: 200_000,
 			tier2Enabled: true,
 			qstashToken: undefined,

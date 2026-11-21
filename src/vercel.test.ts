@@ -6,9 +6,9 @@ const vercel = JSON.parse(readFileSync("vercel.json", "utf8")) as {
 };
 
 describe("vercel.json functions", () => {
-	it("gives every api/github route a 300s budget through one glob", () => {
+	it("gives every api/github route an 800s budget through one glob", () => {
 		expect(vercel.functions["api/github/**/*.ts"]).toEqual({
-			maxDuration: 300,
+			maxDuration: 800,
 		});
 	});
 

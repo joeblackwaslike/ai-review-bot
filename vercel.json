@@ -2,7 +2,7 @@
 	"buildCommand": "",
 	"functions": {
 		"api/github/**/*.ts": {
-			"maxDuration": 300
+			"maxDuration": 800
 		},
 		"api/cron/poll-feedback.ts": {
 			"maxDuration": 60

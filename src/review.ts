@@ -162,7 +162,7 @@ interface ReviewContext {
 	 * skipped and the review is submitted with what completed — the platform's own
 	 * timeout would otherwise kill the run with nothing posted at all. */
 	agentBudgetMs: number;
-	/** When set (hosted paths), the agent deadline is also capped at this start plus 240s; local CLI callers leave it unset. */
+	/** When set (hosted paths), the agent deadline is also capped at this start plus the function limit minus `FINISH_RESERVE_MS` (both in `src/review-deadline.ts`); local CLI callers leave it unset. */
 	requestStartedAtMs?: number;
 	/** PR-wide diff budget passed to `buildUserMessage`; absent means the default. */
 	diffBudgetChars?: number;

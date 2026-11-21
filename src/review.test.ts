@@ -3642,14 +3642,14 @@ describe("agent time budget", () => {
 		warn.mockRestore();
 	});
 
-	it("skips every agent when the request started more than 240s ago", async () => {
+	it("skips every agent when the request started more than 740s ago", async () => {
 		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 		try {
 			await buildReview({
 				octokit: buildOctokit(),
 				...baseContext,
-				agentBudgetMs: 210_000,
-				requestStartedAtMs: Date.now() - 250_000,
+				agentBudgetMs: 600_000,
+				requestStartedAtMs: Date.now() - 750_000,
 			}).catch((error: unknown) => {
 				if (
 					!(error instanceof Error) ||
@@ -3675,8 +3675,8 @@ describe("agent time budget", () => {
 			await buildReview({
 				octokit: buildOctokit(),
 				...baseContext,
-				agentBudgetMs: 210_000,
-				requestStartedAtMs: Date.now() - 250_000,
+				agentBudgetMs: 600_000,
+				requestStartedAtMs: Date.now() - 750_000,
 			}).catch(() => undefined);
 			expect(warn.mock.calls.some(([m]) => m === "review setup done")).toBe(
 				true,
@@ -3697,14 +3697,14 @@ describe("agent time budget", () => {
 			await buildReview({
 				octokit: buildOctokit(),
 				...baseContext,
-				agentBudgetMs: 210_000,
+				agentBudgetMs: 600_000,
 			}).catch(() => undefined);
 			const call = log.mock.calls.find(([m]) => m === "review setup done");
 			expect(call).toBeDefined();
 			const fields = call?.[1] as Record<string, number>;
 			expect(fields).not.toHaveProperty("setupMs");
-			expect(fields.effectiveBudgetMs).toBeGreaterThanOrEqual(209_000);
-			expect(fields.effectiveBudgetMs).toBeLessThanOrEqual(210_000);
+			expect(fields.effectiveBudgetMs).toBeGreaterThanOrEqual(599_000);
+			expect(fields.effectiveBudgetMs).toBeLessThanOrEqual(600_000);
 		} finally {
 			log.mockRestore();
 			warn.mockRestore();
@@ -3718,8 +3718,8 @@ describe("agent time budget", () => {
 			await buildReview({
 				octokit: buildOctokit(),
 				...baseContext,
-				agentBudgetMs: 210_000,
-				requestStartedAtMs: Date.now() - 100_000,
+				agentBudgetMs: 600_000,
+				requestStartedAtMs: Date.now() - 250_000,
 			}).catch(() => undefined);
 			const call = log.mock.calls.find(([m]) => m === "review setup done");
 			expect(call).toBeDefined();
@@ -3727,9 +3727,9 @@ describe("agent time budget", () => {
 				setupMs: number;
 				effectiveBudgetMs: number;
 			};
-			expect(fields.setupMs).toBeGreaterThanOrEqual(100_000);
-			expect(fields.effectiveBudgetMs).toBeGreaterThanOrEqual(130_000);
-			expect(fields.effectiveBudgetMs).toBeLessThanOrEqual(140_000);
+			expect(fields.setupMs).toBeGreaterThanOrEqual(250_000);
+			expect(fields.effectiveBudgetMs).toBeGreaterThanOrEqual(480_000);
+			expect(fields.effectiveBudgetMs).toBeLessThanOrEqual(490_000);
 		} finally {
 			log.mockRestore();
 			warn.mockRestore();

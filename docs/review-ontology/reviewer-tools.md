@@ -196,7 +196,7 @@ Today every agent makes one `generateObject` call with no tools. Three shapes ar
   anticipate.
 - **A tool loop for every agent.** Each agent explores on its own. Flexible, but cost and
   latency grow with the number of agents, each loop breaks the shared prompt cache, and it can
-  exceed the 210-second agent budget on the hosted path.
+  exceed the 600-second agent budget on the hosted path.
 - **A hybrid.** The pre-pass, plus a small tool budget per agent for follow-ups.
 
 [process-design.md](process-design.md) chooses between them as part of choosing the review
@@ -204,7 +204,7 @@ architecture.
 
 ## Constraints
 
-- **Time.** The hosted path gives agents 210 seconds inside a 300-second function. Tier 1 calls
+- **Time.** The hosted path gives agents 600 seconds inside an 800-second function. Tier 1 calls
   are each a network round trip; a pre-pass has to fit before the agents start.
 - **Rate limits.** Installation tokens have a primary hourly limit and secondary limits on
   bursts. A per-review call budget keeps one large PR from exhausting them.
