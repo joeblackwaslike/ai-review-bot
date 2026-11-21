@@ -62,7 +62,9 @@ describe("f1 triage skill", () => {
 	it("asks for ids only and at most 4", () => {
 		expect(triage).toMatch(/ids only/i);
 		expect(triage).toMatch(/at most 4/);
-		expect(triage).toMatch(/none when nothing matches/i);
+		expect(triage).toMatch(/each id as its own array item/);
+		expect(triage).toMatch(/empty list when nothing matches/i);
+		expect(triage).not.toMatch(/separated by commas|reply with none/i);
 	});
 
 	it("ends with the Operations line", () => {

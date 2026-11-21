@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { generateObject } from "ai";
+import { generateObject, NoObjectGeneratedError } from "ai";
 import { z } from "zod";
 import { getConfigTree } from "../../config/load.js";
+import { isProgrammingError } from "../../improve/qc.js";
 import { computeCost, createAIModel } from "../../models.js";
 import { resolveJudgeRole } from "../../roles.js";
 import {
@@ -28,6 +29,7 @@ import { estimateSpendMatched, runSpendMatched } from "./spend-matched.js";
 const F1_SKILL = "f1-runbook-reviewer.md";
 const TRIAGE_SKILL = "f1-triage.md";
 const TRIAGE_OUTPUT_TOKENS = 512;
+const TRIAGE_MAX_RETRIES = 4;
 
 const TriageSchema = z.object({ operations: z.array(z.string()) });
 
@@ -65,21 +67,32 @@ export interface TriageResult {
 	costUsd: number;
 	wallMs: number;
 	usage: RoundUsage[string] | undefined;
+	failed: boolean;
 }
 
-/** Asks the cheap judge model which operations the diff performs; any failure yields no ids. */
+/** Asks the cheap judge model which operations the diff performs; a failed call yields no ids and is flagged. */
 export async function triage(
 	input: StrategyInput,
 	entries: Map<string, string>,
 ): Promise<TriageResult> {
 	const started = Date.now();
-	const none = (): TriageResult => ({
-		ids: [],
-		costUsd: 0,
-		wallMs: Date.now() - started,
-		usage: undefined,
-	});
 	const selection = resolveJudgeRole(getConfigTree(), "classifier");
+	const priced = (u: {
+		inputTokens?: number;
+		outputTokens?: number;
+		inputTokenDetails?: { cacheReadTokens?: number };
+	}) => {
+		const tokens = {
+			promptTokens: u.inputTokens ?? 0,
+			completionTokens: u.outputTokens ?? 0,
+			cachedInputTokens: u.inputTokenDetails?.cacheReadTokens ?? 0,
+		};
+		const costUsd = requireCost(
+			computeCost(tokens, selection.model),
+			selection.model,
+		);
+		return { tokens, costUsd };
+	};
 	let call: Awaited<ReturnType<typeof generateObject<typeof TriageSchema>>>;
 	try {
 		const auth = await resolveSelectionAuth(selection.provider);
@@ -90,28 +103,42 @@ export async function triage(
 			model: createAIModel(selection, auth),
 			schema: TriageSchema,
 			maxOutputTokens: outputBudget(selection, TRIAGE_OUTPUT_TOKENS),
-			maxRetries: 0,
+			maxRetries: TRIAGE_MAX_RETRIES,
 			providerOptions: reasoningProviderOptions(selection),
 			abortSignal: input.signal,
 			prompt: `${readSkillFile(TRIAGE_SKILL)}\n${operations}\n\nDiff:\n${input.diff}`,
 		});
-	} catch {
-		return none();
+	} catch (err) {
+		if (isProgrammingError(err)) throw err;
+		console.error("f1: triage call failed", {
+			fixture: `${input.fixture.owner}/${input.fixture.repo}`,
+			err,
+		});
+		const spent =
+			NoObjectGeneratedError.isInstance(err) && err.usage
+				? priced(err.usage)
+				: undefined;
+		return {
+			ids: [],
+			costUsd: spent?.costUsd ?? 0,
+			wallMs: Date.now() - started,
+			usage: spent?.tokens,
+			failed: true,
+		};
 	}
-	const { object, usage } = call;
-	const ids = [...new Set(object.operations)]
+	const ids = [
+		...new Set(call.object.operations.flatMap((o) => o.split(/[\s,]+/))),
+	]
 		.filter((id) => entries.has(id))
 		.slice(0, MAX_SELECTED);
-	const tokens = {
-		promptTokens: usage.inputTokens ?? 0,
-		completionTokens: usage.outputTokens ?? 0,
-		cachedInputTokens: usage.inputTokenDetails?.cacheReadTokens ?? 0,
+	const { tokens, costUsd } = priced(call.usage);
+	return {
+		ids,
+		costUsd,
+		wallMs: Date.now() - started,
+		usage: tokens,
+		failed: false,
 	};
-	const costUsd = requireCost(
-		computeCost(tokens, selection.model),
-		selection.model,
-	);
-	return { ids, costUsd, wallMs: Date.now() - started, usage: tokens };
 }
 
 let cachedVersion: string | undefined;
@@ -138,7 +165,9 @@ export const strategyF1: ReviewStrategy = {
 			extraUsage: usage,
 			extraToolCalls: [
 				{
-					name: `triage:${picked.ids.length ? picked.ids.join(",") : "none"}`,
+					name: picked.failed
+						? "triage:failed"
+						: `triage:${picked.ids.length ? picked.ids.join(",") : "none"}`,
 					wallMs: picked.wallMs,
 					costUsd: picked.costUsd,
 				},

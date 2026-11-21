@@ -1,3 +1,4 @@
+import { NoObjectGeneratedError } from "ai";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setPriceTable } from "../../pricing.js";
 import {
@@ -108,12 +109,51 @@ describe("strategyF1", () => {
 		}
 	});
 
-	it("triage returning a failure falls back and records triage:none", async () => {
+	it("triage returning a failure falls back and records triage:failed", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
 		mockGenerateObject.mockRejectedValue(new Error("boom"));
 		const out = await strategyF1.run(inputFor());
-		expect(out.toolCalls.map((t) => t.name)).toEqual(["triage:none"]);
+		expect(out.toolCalls.map((t) => t.name)).toEqual(["triage:failed"]);
 		expect(out.toolCalls[0]?.costUsd).toBe(0);
 		expect(mockRunAgent.mock.calls[0]?.[3]).toBe("");
+	});
+
+	it("an empty selection records triage:none, distinct from a failure", async () => {
+		triageReturns([]);
+		const out = await strategyF1.run(inputFor());
+		expect(out.toolCalls.map((t) => t.name)).toEqual(["triage:none"]);
+	});
+
+	it("splits a comma-joined element into ids and injects both entries", async () => {
+		triageReturns([`${firstId}, ${secondId}`]);
+		const out = await strategyF1.run(inputFor());
+		expect(out.toolCalls[0]?.name).toBe(`triage:${firstId},${secondId}`);
+		const custom = mockRunAgent.mock.calls[0]?.[3] as string;
+		expect(custom).toContain(entries.get(firstId));
+		expect(custom).toContain(entries.get(secondId));
+	});
+
+	it("books the cost of a failed call that carried usage", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		mockGenerateObject.mockRejectedValue(
+			new NoObjectGeneratedError({
+				message: "bad",
+				text: "x",
+				response: {} as never,
+				usage: { inputTokens: 1000, outputTokens: 100 } as never,
+				finishReason: "stop",
+			}),
+		);
+		const out = await strategyF1.run(inputFor());
+		expect(out.toolCalls[0]?.name).toBe("triage:failed");
+		expect(out.toolCalls[0]?.costUsd).toBeCloseTo(TRIAGE_COST);
+		expect(out.usage["f1-triage.md"]).toBeDefined();
+	});
+
+	it("rethrows a programming error from the triage call", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		mockGenerateObject.mockRejectedValue(new TypeError("bug"));
+		await expect(strategyF1.run(inputFor())).rejects.toThrow(TypeError);
 	});
 
 	it("triage runs once and every repeat reuses the selection", async () => {

@@ -53,7 +53,7 @@ Compared at equal spend on the pilot, adjudicated Anthropic-only, `f1` against `
 
 - The wording of `skills/f1-triage.md` outside its table, within the schema above.
 - How `parseEntries` handles the template file and any heading that is not an operation id.
-- Whether triage failure (a non-ok outcome or an invalid object) throws or falls back to the general list. Preferred: fall back and record it, since a failed triage is a property of `f1` and should not leave a hole in the grid.
+- Whether triage failure (a non-ok outcome or an invalid object) throws or falls back to the general list. Preferred: fall back and record it as `triage:failed` (a genuine empty selection records `triage:none`), since a failed triage is a property of `f1` and should not leave a hole in the grid.
 
 ## Risks
 
