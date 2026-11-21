@@ -1,4 +1,4 @@
-export const VERCEL_FUNCTION_LIMIT_MS = 300_000;
+export const VERCEL_FUNCTION_LIMIT_MS = 800_000;
 export const FINISH_RESERVE_MS = 60_000;
 
 export function agentDeadline(input: {

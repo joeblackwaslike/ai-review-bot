@@ -188,7 +188,7 @@ describe("runPrQc dedup claim", () => {
 		expect(reclaimStaleQcRun).toHaveBeenCalledWith(
 			db,
 			"qcrun:o/r#7:HEAD1",
-			300,
+			800,
 		);
 		expect(result.posted).toBe(true);
 	});

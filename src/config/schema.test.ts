@@ -15,7 +15,7 @@ describe("ConfigSchema", () => {
 	it("accepts the minimal valid config", () => {
 		const parsed = ConfigSchema.parse(minimal());
 		expect(parsed.review.agentConcurrency).toBe(4);
-		expect(parsed.review.agentBudgetSeconds).toBe(210);
+		expect(parsed.review.agentBudgetSeconds).toBe(600);
 		expect(parsed.review.diffBudgetChars).toBe(DEFAULT_DIFF_BUDGET_CHARS);
 		expect(parsed.review.command).toBe("/ai-review");
 		expect(parsed.review.enabled).toBe(true);

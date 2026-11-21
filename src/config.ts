@@ -68,8 +68,8 @@ export function validatePrivateKey(key: string): string {
 
 /** Wall-clock allowance for launching review agents, in ms.
  *
- * Sized under the Vercel Hobby `maxDuration` cap (300s) for the review routes,
- * leaving ~90s for fetching, the summary call, and the review POST. It is also
+ * Sized under the Vercel Pro `maxDuration` limit (800s) for the review routes,
+ * leaving ~200s for fetching, the summary call, and the review POST. It is also
  * the hard deadline: an agent still running at the budget is aborted and
  * counted as skipped, so the run submits what it has instead of being killed
  * with nothing posted. */

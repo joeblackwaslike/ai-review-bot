@@ -238,9 +238,9 @@ const ReviewSchema = z
 		agentBudgetSeconds: z
 			.number()
 			.positive()
-			.default(210)
+			.default(600)
 			.describe(
-				"Wall-clock deadline for agents, in seconds. On hosted paths agent time is also capped at 240 seconds from request start (the 300 second function limit minus a 60 second reserve for the summary call, review POST and feedback writes), so slow setup shortens the agent window. Local CLI paths are not capped.",
+				"Wall-clock deadline for agents, in seconds. On hosted paths agent time is also capped at 740 seconds from request start (the 800 second function limit minus a 60 second reserve for the summary call, review POST and feedback writes), so slow setup shortens the agent window. Local CLI paths are not capped.",
 			),
 		diffBudgetChars: z
 			.number()

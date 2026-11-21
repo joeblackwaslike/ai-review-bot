@@ -7,7 +7,7 @@ review:
   command: /ai-review
   customPrompt: "Review the requested PR, post comments inline"
   agentConcurrency: 4
-  agentBudgetSeconds: 210
+  agentBudgetSeconds: 600
   diffBudgetChars: 200000
   tier2Enabled: true
   feedbackEnabled: false
