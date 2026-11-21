@@ -73,16 +73,16 @@ Spans in a same-file operation name the same file on both sides, base lines in `
 
 - A line's information is its count of non-space characters, and a line counts only if it has at least one identifier that is not a keyword, or a string or number literal. A line of only `}`, `)`, `end`, `else` or a bare keyword carries none. An import, `require`, `use`, `from ... import` or re-export line carries none, because imports are reshuffled in nearly every refactor. A line that is only a string or number literal carries none.
 - A seed of 5 or more counted lines keeps today's rule.
-- A seed of 1 to 4 counted lines is accepted when its total information is at least 30 non-space characters, and every counted line is unique in the patch: its normalized text occurs at most once among all deleted lines and at most once among all added lines, in the whole change.
-- A whole definition (opener keyword, closer, as today) is accepted at any length from 1 line with at least 40 non-space characters.
+- A seed of 1 to 4 counted lines is accepted when its total information is at least 30 non-space characters and it is unique: its normalized text, all lines joined, occurs at most once among the deleted runs and at most once among the added runs of the whole change.
+- A whole definition (opener keyword, closer, as today) is accepted at any length from 1 line with at least 40 non-space characters, and it must pass the same uniqueness test. Several identical helper definitions in a change therefore never pair.
 
 The one-line declaration pass in `declarations.ts` stays. It matches by name and tolerates a changed value, which the content rule cannot.
 
-**Cost guard.** For a seed of 1 to 4 lines the seeding index skips any line that occurs more than once on either side, so a repeated line never creates candidates.
+**Cost guard.** Seeds of 1 to 4 lines are indexed by their joined normalized text, and any text that occurs more than once on either side is skipped, so repeated code never creates candidates.
 
 ### PR B: token streams, reformat, re-indent
 
-**Token stream.** For a candidate block, each side is tokenized with the existing `TOKEN` pattern, keeping a map from each token back to its source line. Two blocks are exact when their token streams are equal after the normalizations below. A line joins a match only when all of its tokens fall inside the matched range, so a line shared between a matched and an unmatched statement (`} else {`) stays out and spans stay whole-line spans.
+**Token stream.** Each changed run is tokenized with a new pattern, keeping a map from each token back to its source line. The existing `TOKEN` pattern reads any operator character as its own token, so it cannot tell `a + ++b` from `a++ + b`. The new pattern matches whole multi-character operators, longest first (`===`, `>>>=`, `++`, `->`, `::`, `=>`, `**`, `&&=` and the rest of each language class's operator set), so those two lines produce different streams. That pair is a required negative test for the matcher and for the checker. Two blocks are exact when their token streams are equal after the normalizations below. A line joins a match only when all of its tokens fall inside the matched range, so a line shared between a matched and an unmatched statement (`} else {`) stays out and spans stay whole-line spans.
 
 **Two newline classes by file type.**
 
@@ -91,25 +91,27 @@ The one-line declaration pass in `declarations.ts` stays. It matches by name and
 
 **Allowed normalizations.** Whitespace and, in free-newline files, line breaks. A trailing comma before a closing bracket. A trailing semicolon in JS and TS. A single-quoted string against a double-quoted one in JS, TS and Python, only when the content has no quote, backslash or interpolation marker. These are what Prettier, Black and Biome change. Anything else that differs is a divergence.
 
-**Safety.** A block that fails the existing lexical-safety check (backtick templates, triple quotes, heredocs, ambiguous `/`) is compared by raw lines only, as today, so a reformat there goes unmatched. This is deliberate.
+**Safety.** The lexical-safety check is split in two. Literal-context safety (backtick templates, triple quotes, heredocs, ambiguous `/`) applies to every file: a block that fails it is compared by raw lines only, as today, so a reformat there goes unmatched. This is deliberate. Indentation sensitivity is a separate property, handled by the re-indent rule below instead of forcing raw comparison.
 
-**Re-indent.** For indentation-sensitive files (Python, YAML, Makefile), each block's lines are compared by indentation relative to the block's smallest indent. A block whose relative shape is equal on both sides is exact, whatever the absolute shift. The operation records the shift as `shape.reindent` (head minus base, in columns) so the renderer can say "moved one level deeper".
+**Re-indent.** For indentation-sensitive files (Python, YAML, Makefile), each block's lines are compared by indentation relative to the block's smallest indent. A block whose relative shape is equal on both sides is exact, whatever the absolute shift. The rule applies only when the block is literal-safe and indented with spaces throughout. A block with tabs, or with tabs mixed with spaces, is compared by raw lines. The operation records the shift as `shape.reindent` (head minus base, in columns) so the renderer can say "moved one level deeper".
 
-**Budget.** The token pass is skipped when a change has more than 200,000 tokens in its changed runs. The line matcher still runs.
+**Candidate discovery.** The token pass runs after the line matcher and only on lines the line matcher left unclaimed. It hashes 8-token windows of each run's stream and skips any window that occurs more than twice on either side. Windows that match across a deleted and an added run are merged into maximal token ranges. A range becomes a candidate block when it covers at least one whole line (rule above) and passes the PR A acceptance rule. Competing candidates are resolved largest first, as `selectMatches` does. Because seeds come from body tokens, a block is found even when no whole line survives a reformat unchanged. The declaration pass and then the copy pass run after it, each only on unclaimed lines.
+
+**Budget.** One work budget covers a whole change, counted in work units instead of time so the same input always gives the same output: tokens compared, candidates created and alignment cells filled. The limits are 200,000 tokens across changed runs and any context-line sources, 5,000 candidates, and 16,000,000 alignment cells in total (the existing per-alignment cap becomes this shared pool). The checker draws from the same pool. When the budget runs out, the matcher stops, returns the operations it has already verified in ranking order, and counts the rest in `droppedClaims`. The 2,000 ms post-hoc cap in `review.ts` stays as a backstop. Tests include two adversarial inputs, thousands of unique one-line moves and many repeated copy candidates, and assert the budget holds.
 
 ### PR C: function-to-method and copies
 
 **Reshape normalization.** Two blocks that open with a definition are compared as signature plus body.
 
-- The signature is the opening logical line, plus decorators or attributes directly above it. It is paired with the other side's signature however different the name, parameters and types are, and reported as one divergence of the new class `signature`, with the original text.
-- In the body, a `self.`, `this.`, `cls.` or `Self::` prefix is removed from one side before comparing. This covers a parameter becoming an attribute and a sibling call gaining a prefix. It applies in either direction, so method-to-function works too.
+- Discovery is from body tokens (PR B). The signature is then found by walking up from the matched body on both sides: the opening logical line (bracket depth decides where it ends, so a four-line parameter list is one signature) and any decorators or attributes directly above it (`@name` lines in Python, `#[...]` in Rust). The two signatures are paired however different the name, parameters and types are. Each physical line of either signature becomes one divergence of the new class `signature`, with its original text. The checker derives these boundaries from the patch text itself, not from the matcher's segmentation.
+- A `self.`, `this.`, `cls.` or `Self::` prefix may be removed from one side to nominate a match. It never hides a change. Every body line that matched only because of the prefix rule becomes a divergence of the new class `receiver`, with the original text. A call that gained `this.` can resolve to different code, so the reviewer sees each such line. `receiver` lines are excluded from the divergence limit, and a block with any of them has a review weight of at least 1.
 - Indentation uses the PR B rule.
-
-The operation records `shape.method: true` when the prefix rule was needed to make the body match. Body lines that still differ become ordinary divergences.
 
 **The `copy` operation.** A block added in the head that matches other code which still exists in the head.
 
-- The source is either another added block in the same change (a duplicate addition), or a run of unchanged context lines that a hunk shows. Both are head-side spans. A source of context lines can only be as large as the hunk's context, so large copies of unchanged code stay invisible. The renderer says "source visible in this diff only".
+- The source is either a run of unchanged context lines that a hunk shows, or another added block in the same change. Both are head-side spans. `Operation.shape.sourceNew` is true for the second kind.
+- Only a context source shows that the code already existed. A block copied from another added block is a duplicate: both occurrences are new, and a defect in one is a defect in both. The renderer says so, and its review weight is not discounted. It is the larger of 1 and the divergence count.
+- A source of context lines can only be as large as the hunk's context, so large copies of unchanged code stay invisible. The renderer says "source visible in this diff only".
 - A copy match runs after relocation and only on lines no relocation claimed.
 - Duplicates are normal in code (test setup, repeated handlers), so the copy floor is the old one: 5 counted lines, or a 3-line whole definition. The 1 to 4 line distinctiveness rule does not apply.
 - Divergences work as for relocation, so a copied block with edits lists them.
@@ -119,11 +121,12 @@ The operation records `shape.method: true` when the prefix rule was needed to ma
 
 ```ts
 type OperationType = "relocation" | "rename" | "mechanical" | "copy";
-type DivergenceClass = "comment-only" | "rename" | "signature" | "code";
+type DivergenceClass =
+  | "comment-only" | "rename" | "signature" | "receiver" | "code";
 
 interface Operation {
   // existing fields unchanged
-  shape?: { reindent?: number; method?: boolean };
+  shape?: { reindent?: number; sourceNew?: boolean };
 }
 ```
 
@@ -133,11 +136,11 @@ interface Operation {
 
 - A: both spans lie on changed lines on their own sides, and the lines of the two spans are identical after whitespace normalization, apart from listed divergences.
 - B: the token streams it builds itself are equal, using the same newline class and only the listed normalizations.
-- C: a copy's `from` span exists in the head, as an added or context line, and a signature divergence covers the opening line.
+- C: a copy's `from` span exists in the head, as an added or context line, a signature divergence covers every physical line of the signature it derives from the patch, and every body line that matches only after receiver removal appears as a `receiver` divergence.
 
 ### Rendering
 
-Relocations in the same file read "moved within `file`". `shape.reindent` adds "re-indented N levels". `shape.method` adds "now a method". A `signature` divergence is listed with the code divergences, with the original signature. A copy reads "copied from <span> (source visible in this diff only)". None of this text says the code is safe or unchanged in behavior. The 12 detailed operations and 6000 character limits stay. Operations rank by lines covered, then by code divergences, so one-line moves fall below larger ones and are the first to be summarized in the count line. Copies rank below relocations.
+Relocations in the same file read "moved within `file`". `shape.reindent` adds "re-indented N levels". `signature` and `receiver` divergences are listed with the code divergences, each with its original text. A copy reads "copied from <span> (source visible in this diff only)". None of this text says the code is safe or unchanged in behavior. The 12 detailed operations and 6000 character limits stay. Operations rank by lines covered, then by code divergences, so one-line moves fall below larger ones and are the first to be summarized in the count line. Copies rank below relocations.
 
 ## Verification
 
@@ -156,7 +159,7 @@ Relocations in the same file read "moved within `file`". `shape.reindent` adds "
 - Quote-style swaps are limited to JS, TS and Python. Ruby and shell use quotes to switch interpolation.
 - Unknown file extensions are treated as line-significant, the stricter class.
 - Copies get a higher floor than relocations.
-- The `signature` divergence class is new, so a changed signature is not buried among comment-only and rename classes.
+- The `signature` and `receiver` divergence classes are new, so a changed signature or a changed call receiver is not buried among comment-only and rename classes.
 - The work ships as three PRs, ordered by risk and dependency.
 
 ## Left to the builder
