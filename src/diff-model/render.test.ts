@@ -631,4 +631,29 @@ describe("renderDiffModel", () => {
 		expect(r.summary).not.toContain("re-indented");
 		expect(allText(r)).not.toMatch(/\b(safe|unchanged behavior|functional)\b/);
 	});
+
+	it("lists signature and receiver divergences like code divergences", () => {
+		const m = model({
+			operations: [
+				op({
+					id: "relocation-1",
+					type: "relocation",
+					exact: false,
+					divergences: [
+						codeDivergence({ class: "signature", original: "def f(a):" }),
+						codeDivergence({
+							class: "receiver",
+							original: "x = load(a)",
+							head: span("src/b.ts", "head", 6, 6),
+						}),
+					],
+					reviewWeight: 1,
+				}),
+			],
+		});
+		const text = allText(renderDiffModel(m, OPTS));
+		expect(text).toContain("(signature)");
+		expect(text).toContain("(receiver prefix)");
+		expect(text).toContain("def f(a):");
+	});
 });

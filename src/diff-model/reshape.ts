@@ -4,6 +4,7 @@ import type { WorkBudget } from "./budget.js";
 import { literalSafe } from "./lexical.js";
 import {
 	asCandidate,
+	balanced,
 	claimable,
 	extension,
 	findMatches,
@@ -11,10 +12,9 @@ import {
 	type Lens,
 	logicalFirstLines,
 	type Match,
-	type Segment,
 	span,
 } from "./token-pass.js";
-import { normalizeTokens, tokenize } from "./tokens.js";
+import { CLOSERS, normalizeTokens, OPENERS, tokenize } from "./tokens.js";
 import type { Divergence, Operation } from "./types.js";
 
 const MAX_SIGNATURE_LINES = 16;
@@ -40,8 +40,6 @@ const METHOD =
 	/^\s*(?:(?:public|private|protected|internal|static|async|override|abstract|final|virtual|sealed|readonly|get|set|open|suspend|inline|synchronized|native|unsafe|partial)\s+)*(?:[\w$.<>,?[\]]+\s+)*[A-Za-z_$][\w$]*\s*(?:<[^>()]*>)?\(/;
 const DECORATOR = /^\s*@[\w.$]+/;
 const RUST_ATTRIBUTE = /^\s*#\[.*\]\s*$/;
-const OPENERS = new Set(["(", "[", "{"]);
-const CLOSERS = new Set([")", "]", "}"]);
 
 interface LineRange {
 	start: number;
@@ -127,7 +125,8 @@ function findSignature(
 	for (let e = first; e <= Math.min(last, first + MAX_SIGNATURE_LINES); e++) {
 		if ((raw[e] as string).trim() === "") return null;
 		const inside = signatureEndingAt(raw, e, filename);
-		if (inside && inside.start <= first) return inside;
+		if (inside && inside.start <= first)
+			return { start: Math.max(inside.start, first), end: inside.end };
 	}
 	return null;
 }
@@ -140,43 +139,27 @@ function signatureTokens(run: Run, sig: LineRange): string {
 	return normalizeTokens(tokens, run.filename).join("\u0001");
 }
 
-function logicalSignatureLines(
-	run: Run,
-	sig: LineRange,
-	before: number,
-): string[] {
+function openerLineAbove(run: Run, sig: LineRange, before: number): string[] {
 	const ext = extension(run.filename);
-	const out: string[] = [];
-	for (let i = sig.start; i <= sig.end && i < before; i++) {
-		out.push(run.raw[i] as string);
-		if (!isDecorator(run.raw[i] as string, ext)) break;
-	}
-	return out;
+	let i = sig.start;
+	while (i < sig.end && isDecorator(run.raw[i] as string, ext)) i++;
+	return i < before ? [run.raw[i] as string] : [];
+}
+
+function decoratorCount(run: Run, sig: LineRange): number {
+	const ext = extension(run.filename);
+	let n = 0;
+	while (
+		sig.start + n < sig.end &&
+		isDecorator(run.raw[sig.start + n] as string, ext)
+	)
+		n++;
+	return n;
 }
 
 function opensBrace(run: Run, sig: LineRange): boolean {
 	const { tokens } = tokenize([run.raw[sig.end] as string], run.filename);
 	return tokens[tokens.length - 1] === "{";
-}
-
-function closesWithin(
-	seg: Segment,
-	pos: number,
-	len: number,
-	opens: boolean,
-): boolean {
-	const start = opens ? 1 : 0;
-	let depth = start;
-	for (let k = pos; k < pos + len; k++) {
-		const t = seg.tokens[k] as string;
-		if (OPENERS.has(t)) depth++;
-		else if (CLOSERS.has(t)) {
-			depth--;
-			if (depth < 0 || (opens && depth === 0 && k < pos + len - 1))
-				return false;
-		}
-	}
-	return depth === start || depth === 0;
 }
 
 function lineDivergence(
@@ -197,11 +180,7 @@ function lineDivergence(
 	return out;
 }
 
-function signatureDivergences(
-	m: Match,
-	base: LineRange,
-	head: LineRange,
-): Divergence[] {
+function pairLines(m: Match, base: LineRange, head: LineRange): Divergence[] {
 	const { d, a } = m.range;
 	const baseLines = base.end - base.start + 1;
 	const headLines = head.end - head.start + 1;
@@ -214,6 +193,28 @@ function signatureDivergences(
 		out.push(lineDivergence(kind, "signature", b, h, d.run, a.run));
 	}
 	return out;
+}
+
+function signatureDivergences(
+	m: Match,
+	base: LineRange,
+	head: LineRange,
+): Divergence[] {
+	const { d, a } = m.range;
+	const baseDecorators = decoratorCount(d.run, base);
+	const headDecorators = decoratorCount(a.run, head);
+	return [
+		...pairLines(
+			m,
+			{ start: base.start, end: base.start + baseDecorators - 1 },
+			{ start: head.start, end: head.start + headDecorators - 1 },
+		),
+		...pairLines(
+			m,
+			{ start: base.start + baseDecorators, end: base.end },
+			{ start: head.start + headDecorators, end: head.end },
+		),
+	];
 }
 
 function receiverDivergences(m: Match): Divergence[] {
@@ -265,17 +266,11 @@ const receiverLens: Lens = {
 	},
 };
 
-interface Sides {
-	base: LineRange;
-	head: LineRange;
-}
-
 function reshape(m: Match): Operation | null {
 	const { d, a, di, ai, len } = m.range;
 	const base = findSignature(d.run.raw, m.dFirst, m.dLast, d.run.filename);
 	const head = findSignature(a.run.raw, m.aFirst, m.aLast, a.run.filename);
 	if (!base || !head) return null;
-	const sides: Sides = { base, head };
 	const fromStart = Math.min(base.start, m.dFirst);
 	const toStart = Math.min(head.start, m.aFirst);
 	for (let i = fromStart; i < m.dFirst; i++) if (d.run.used[i]) return null;
@@ -287,25 +282,21 @@ function reshape(m: Match): Operation | null {
 		return null;
 	const opensBase = base.end < m.dFirst && opensBrace(d.run, base);
 	const opensHead = head.end < m.aFirst && opensBrace(a.run, head);
-	if (
-		!closesWithin(d, di, len, opensBase) ||
-		!closesWithin(a, ai, len, opensHead)
-	)
+	if (!balanced(d, di, len, opensBase) || !balanced(a, ai, len, opensHead))
 		return null;
 	const receivers = receiverDivergences(m);
-	const same =
-		signatureTokens(d.run, sides.base) === signatureTokens(a.run, sides.head);
+	const same = signatureTokens(d.run, base) === signatureTokens(a.run, head);
 	if (same && receivers.length === 0) return null;
 	const shift = indentShift(
 		d.run.indentSensitive,
 		d.run.raw.slice(fromStart, m.dLast + 1),
 		a.run.raw.slice(toStart, m.aLast + 1),
 		[
-			...logicalSignatureLines(d.run, base, m.dFirst),
+			...openerLineAbove(d.run, base, m.dFirst),
 			...logicalFirstLines(d, di, len),
 		],
 		[
-			...logicalSignatureLines(a.run, head, m.aFirst),
+			...openerLineAbove(a.run, head, m.aFirst),
 			...logicalFirstLines(a, ai, len),
 		],
 	);
@@ -323,6 +314,36 @@ function reshape(m: Match): Operation | null {
 		reviewWeight: 0,
 		...(shift !== 0 ? { shape: { reindent: shift } } : {}),
 	};
+}
+
+/**
+ * Whether two lines differ only by a receiver prefix (`self.`, `cls.`, `this.`, `Self::`):
+ * their normalized tokens are equal once receivers are removed, and the removed receivers
+ * differ. False outside the reshape languages.
+ */
+export function receiverOnlyDifference(
+	base: string,
+	head: string,
+	baseFilename: string,
+	headFilename: string,
+): boolean {
+	if (
+		!receiverLens.accepts(baseFilename) ||
+		!receiverLens.accepts(headFilename)
+	)
+		return false;
+	const side = (line: string, filename: string) => {
+		const tokens = normalizeTokens(tokenize([line], filename).tokens, filename);
+		return receiverLens.strip(
+			tokens,
+			tokens.map(() => 0),
+			filename,
+		);
+	};
+	const b = side(base, baseFilename);
+	const h = side(head, headFilename);
+	const key = (xs: string[]) => xs.join("\u0001");
+	return key(b.tokens) === key(h.tokens) && key(b.dropped) !== key(h.dropped);
 }
 
 function weigh(op: Operation): Operation {

@@ -19,7 +19,7 @@ import {
 	similarity,
 	tokens,
 } from "./lexical.js";
-import { findReshapes } from "./reshape.js";
+import { findReshapes, receiverOnlyDifference } from "./reshape.js";
 import { filesWithLiterals, findTokenOperations } from "./token-pass.js";
 import type { Divergence, DivergenceClass, Operation, Span } from "./types.js";
 
@@ -493,8 +493,6 @@ function build(
 	const divergences = raw.map((d, at): Divergence => {
 		const baseText = text(baseRaw, d.baseIndex);
 		const headText = text(headRaw, d.headIndex);
-		if ([baseText, headText].some((t) => t !== undefined && isMeaningful(t)))
-			counted++;
 		const cls: DivergenceClass = isCommentOnly(
 			d,
 			d.baseIndex !== undefined && baseComment[d.baseIndex] === true,
@@ -506,9 +504,22 @@ function build(
 			? "comment-only"
 			: renames.has(at)
 				? "rename"
-				: "code";
+				: d.kind === "changed" &&
+						receiverOnlyDifference(
+							baseText as string,
+							headText as string,
+							from.filename,
+							to.filename,
+						)
+					? "receiver"
+					: "code";
 		if (cls === "rename")
 			for (const name of renames.get(at) ?? []) renamedNames.add(name);
+		if (
+			cls !== "receiver" &&
+			[baseText, headText].some((t) => t !== undefined && isMeaningful(t))
+		)
+			counted++;
 		const out: Divergence = { kind: d.kind, class: cls };
 		if (d.baseIndex !== undefined)
 			out.base = lineSpan(from, "base", fromStart, d.baseIndex);
@@ -559,9 +570,10 @@ function gapIsFree(last: Candidate, next: Candidate): boolean {
 }
 
 function toOperation(from: Run, to: Run, built: Built): Operation {
-	const codeDivergences = built.divergences.filter(
-		(d) => d.class === "code",
+	const weighed = built.divergences.filter(
+		(d) => d.class === "code" || d.class === "signature",
 	).length;
+	const hasReceiver = built.divergences.some((d) => d.class === "receiver");
 	return {
 		id: "",
 		type: "relocation",
@@ -583,7 +595,7 @@ function toOperation(from: Run, to: Run, built: Built): Operation {
 		],
 		exact: built.divergences.length === 0,
 		divergences: built.divergences,
-		reviewWeight: codeDivergences + built.renamed,
+		reviewWeight: Math.max(weighed + built.renamed, hasReceiver ? 1 : 0),
 	};
 }
 

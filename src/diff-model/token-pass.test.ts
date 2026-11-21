@@ -475,4 +475,18 @@ describe("token pass false-relocation guards", () => {
 		expect(moveBetween("svc/a.go", "svc/b.py", base, head)).toEqual([]);
 		expect(moveBetween("svc/a.go", "svc/b.go", base, head)).toHaveLength(1);
 	});
+
+	it("does not remove receiver tokens in the plain token pass", () => {
+		const base = [
+			"rows = load_rows(source)",
+			"keys = build_keys(rows)",
+			"index = build_index(keys)",
+			"check(index, len(rows))",
+			"stats = collect(index)",
+		];
+		const head = base.map((l) =>
+			l.replace(/(\w+\()/, "self.$1").replace(/= (\w+)\(/, "= self.$1("),
+		);
+		expect(moveBetween("a.py", "b.py", base, head)).toEqual([]);
+	});
 });

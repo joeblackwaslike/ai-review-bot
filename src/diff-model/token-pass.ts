@@ -4,8 +4,10 @@ import type { WorkBudget } from "./budget.js";
 import { literalSafe, relativeIndent } from "./lexical.js";
 import {
 	BLOCK_SCALAR,
+	CLOSERS,
 	newlineClass,
 	normalizeTokens,
+	OPENERS,
 	opaqueLine,
 	tokenize,
 	yamlOpaqueLines,
@@ -26,8 +28,6 @@ export const FAMILIES = [
 const FAMILY = new Map(FAMILIES.flatMap((exts, i) => exts.map((e) => [e, i])));
 const LINE_MODE = new Set(["yml", "yaml"]);
 const LITERAL_OPENER = /`|"""|'''|<<[-~]?\s*['"]?\w/;
-const OPENERS = new Set(["(", "[", "{"]);
-const CLOSERS = new Set([")", "]", "}"]);
 const LINE_WINDOW = 5;
 const MAX_DEPTH = 200;
 const JSX_FILES = new Set(["jsx", "tsx"]);
@@ -492,17 +492,31 @@ function reindentShift(m: Match): number | null {
 	);
 }
 
-/** Whether the token range closes every bracket it opens and never closes an unopened one. */
-export function balanced(seg: Segment, pos: number, len: number): boolean {
+/**
+ * Whether the token range closes every bracket it opens and never closes an unopened one.
+ * With `opens`, the range sits inside one bracket opened just before it (a signature's `{`),
+ * so it may also end by closing that bracket, but not before its last token.
+ */
+export function balanced(
+	seg: Segment,
+	pos: number,
+	len: number,
+	opens = false,
+): boolean {
 	if (seg.window === LINE_WINDOW) return true;
-	let depth = 0;
+	const start = opens ? 1 : 0;
+	let depth = start;
 	for (let k = pos; k < pos + len; k++) {
 		const t = seg.tokens[k] as string;
 		if (OPENERS.has(t)) {
 			if (++depth > MAX_DEPTH) return false;
-		} else if (CLOSERS.has(t) && --depth < 0) return false;
+		} else if (CLOSERS.has(t)) {
+			depth--;
+			if (depth < 0 || (opens && depth === 0 && k < pos + len - 1))
+				return false;
+		}
 	}
-	return depth === 0;
+	return depth === start || depth === 0;
 }
 
 /** A span over run-level line indices `first` to `last`, shown in full. */
@@ -522,7 +536,7 @@ export function span(
 }
 
 /** Whether any line of the match is already claimed on either side. */
-export function overlapsClaimed(m: Match): boolean {
+function overlapsClaimed(m: Match): boolean {
 	const { d, a } = m.range;
 	for (let i = m.dFirst; i <= m.dLast; i++) if (d.run.used[i]) return true;
 	for (let j = m.aFirst; j <= m.aLast; j++) if (a.run.used[j]) return true;
@@ -562,7 +576,7 @@ function toOperation(m: Match, shift: number): Operation {
 }
 
 /** Longest matches first, then by position. */
-export function rank(a: Match, b: Match): number {
+function rank(a: Match, b: Match): number {
 	return (
 		b.range.len - a.range.len ||
 		a.range.d.run.index - b.range.d.run.index ||

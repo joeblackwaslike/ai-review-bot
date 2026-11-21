@@ -113,8 +113,28 @@ describe("signatureRange", () => {
 
 	it("returns null when the lines above are not a definition", () => {
 		expect(signatureRange(["const x = compute(1);"], "a.ts")).toBeNull();
-		expect(signatureRange(["if (ready(x)) {"], "a.ts")).toBeNull();
+		expect(signatureRange(["  if (ready(x)) {"], "a.ts")).toBeNull();
 		expect(signatureRange(["x = compute(1)"], "a.py")).toBeNull();
+	});
+
+	it("returns null when the opening line has no block terminator", () => {
+		expect(signatureRange(["def f(x) -> int"], "a.py")).toBeNull();
+		expect(signatureRange(["process(items): number"], "a.ts")).toBeNull();
+	});
+
+	it("returns null when the brackets of the candidate do not balance", () => {
+		expect(signatureRange(["foo(bar, {"], "a.ts")).toBeNull();
+	});
+
+	it("does not swallow body lines into a Python signature", () => {
+		expect(
+			signatureRange(["def f(x):", "    a = 1", "    if y:"], "a.py"),
+		).toBeNull();
+	});
+
+	it("returns null for files outside the reshape languages", () => {
+		expect(signatureRange(["func f(x int) {"], "a.go")).toBeNull();
+		expect(signatureRange(["def f(x)"], "a.rb")).toBeNull();
 	});
 });
 
@@ -228,38 +248,52 @@ describe("reshape matching", () => {
 		expect((ops[0] as Operation).reviewWeight).toBe(1);
 	});
 
-	it("does not pair unrelated functions that share a short body", () => {
+	it("does not pair unrelated functions that share a four-line body", () => {
 		const ops = move(
 			"src/a.py",
 			"src/b.py",
-			["def increment(value):", "    x = y + 1", "    return x"],
-			["    def bump(self, counter):", "        x = y + 1", "        return x"],
+			[
+				"def bump(value):",
+				"    x = y + 1",
+				"    z = x * 2",
+				"    w = z - x",
+				"    return w",
+			],
+			[
+				"    def step(self, counter):",
+				"        x = y + 1",
+				"        z = x * 2",
+				"        w = z - x",
+				"        return w",
+			],
 		);
 		expect(ops).toEqual([]);
 	});
 
 	it("does not reshape across languages", () => {
-		const body = [
-			"    total = compute(items, rate)",
-			"    taxed = apply(total, rate, region)",
-			"    rounded = round(taxed, digits)",
-			"    record(rounded, items.length)",
-			"    result = finish(rounded, taxed)",
+		const base = [
+			"function total(items: Item[], rate: number): number {",
+			"  const rows = loadRows(items);",
+			"  const keys = buildKeys(rows, rate);",
+			"  const index = buildIndex(keys);",
+			"  check(index, rows.length);",
+			"  return wrap(index);",
+			"}",
 		];
-		const pyHead = [
-			"    def total(self, items):",
-			...body.map((l) => `    ${l}`),
+		const head = [
+			"  total(items: Item[], rate: number): number {",
+			"    const rows = this.loadRows(items);",
+			"    const keys = this.buildKeys(rows, rate);",
+			"    const index = this.buildIndex(keys);",
+			"    this.check(index, rows.length);",
+			"    return this.wrap(index);",
+			"  }",
 		];
-		const tsHead = [
-			"  total(items: Item[]): number {",
-			...body.map((l) => `  ${l}`),
-		];
-		const pyBase = ["def total_price(items, rate):", ...body.map((l) => l)];
-		expect(move("src/a.py", "src/b.py", pyBase, pyHead)).toHaveLength(1);
-		expect(move("src/a.py", "src/b.ts", pyBase, tsHead)).toEqual([]);
+		expect(move("src/a.ts", "src/b.ts", base, head)).toHaveLength(1);
+		expect(move("src/a.ts", "src/b.java", base, head)).toEqual([]);
 	});
 
-	it("does not claim signature lines that the line matcher already claimed", () => {
+	it("leaves signature lines the line matcher claimed to the line matcher", () => {
 		const signature = [
 			"@cached",
 			"def build(",
@@ -274,7 +308,10 @@ describe("reshape matching", () => {
 			"    totals = self.sum_groups(grouped, options)",
 			"    header = self.render_header(options, totals)",
 			"    self.write_header(sink, header)",
-			"    return self.finish(header, totals)",
+			"    footer = self.render_footer(options, totals)",
+			"    self.write_footer(sink, footer)",
+			"    stats = self.collect(grouped, totals)",
+			"    return self.finish(header, stats)",
 		];
 		const head = [
 			...signature,
@@ -284,7 +321,6 @@ describe("reshape matching", () => {
 		expect(ops).toHaveLength(1);
 		expect(ops[0]?.from[0]?.startLine).toBe(10);
 		expect(classes(ops[0])).not.toContain("signature");
-		expect(classes(ops[0])).not.toContain("receiver");
 	});
 
 	it("leaves a function without a signature on one side to the plain token pass", () => {
@@ -404,5 +440,237 @@ describe("reshape matching", () => {
 		expect(ops).toHaveLength(1);
 		expect((ops[0] as Operation).shape).toEqual({ reindent: -4 });
 		expect(classes(ops[0])).toEqual(["signature"]);
+	});
+});
+
+function indented(lines: string[], by: number): string[] {
+	return lines.map((l) => `${" ".repeat(by)}${l}`);
+}
+
+describe("reshape decorators", () => {
+	const plain = [
+		"rows = load_rows(a)",
+		"keys = build_keys(rows, a)",
+		"index = build_index(keys)",
+		"check(index, len(rows))",
+		"return wrap(index)",
+	];
+	const withCls = [
+		"rows = cls.load_rows(a)",
+		"keys = cls.build_keys(rows, a)",
+		"index = cls.build_index(keys)",
+		"cls.check(index, len(rows))",
+		"return cls.wrap(index)",
+	];
+
+	it("reshapes a function into a classmethod that gained a decorator", () => {
+		const ops = move(
+			"src/a.py",
+			"src/b.py",
+			["def make(a):", ...indented(plain, 4)],
+			["    @classmethod", "    def make(cls, a):", ...indented(withCls, 8)],
+		);
+		expect(ops).toHaveLength(1);
+		expect(classes(ops[0])).toEqual([
+			"signature",
+			"signature",
+			"receiver",
+			"receiver",
+			"receiver",
+			"receiver",
+			"receiver",
+		]);
+		expect(ops[0]?.divergences.map((d) => d.kind).slice(0, 2)).toEqual([
+			"inserted",
+			"changed",
+		]);
+		expect(ops[0]?.shape).toEqual({ reindent: 4 });
+	});
+
+	it("reshapes a function into a staticmethod that gained a decorator", () => {
+		const ops = move(
+			"src/a.py",
+			"src/b.py",
+			["def make(a):", ...indented(plain, 4)],
+			[
+				"    @staticmethod",
+				"    def make(a, extra=None):",
+				...indented(plain, 8),
+			],
+		);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]?.divergences.map((d) => d.kind)).toEqual([
+			"inserted",
+			"changed",
+		]);
+		expect(ops[0]?.shape).toEqual({ reindent: 4 });
+	});
+
+	it("flags self changed to cls as a receiver difference when a decorator is added", () => {
+		const selfBody = withCls.map((l) => l.replace("cls.", "self."));
+		const ops = move(
+			"src/a.py",
+			"src/b.py",
+			["    def make(self, a):", ...indented(selfBody, 8)],
+			["    @classmethod", "    def make(cls, a):", ...indented(withCls, 8)],
+		);
+		expect(ops).toHaveLength(1);
+		const receivers = (ops[0]?.divergences ?? []).filter(
+			(d) => d.class === "receiver",
+		);
+		expect(receivers).toHaveLength(5);
+		expect(receivers[0]?.original).toBe("rows = self.load_rows(a)");
+		expect(ops[0]?.shape).toBeUndefined();
+	});
+
+	it("leaves an identical definition exact when only a decorator above it was added", () => {
+		const ops = move(
+			"src/a.py",
+			"src/b.py",
+			["def make(a):", ...indented(plain, 4)],
+			["    @staticmethod", "    def make(a):", ...indented(plain, 8)],
+		);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]?.exact).toBe(true);
+		expect(ops[0]?.divergences).toEqual([]);
+		expect(ops[0]?.from[0]).toMatchObject({ startLine: 10, endLine: 15 });
+		expect(ops[0]?.to[0]).toMatchObject({ startLine: 4, endLine: 9 });
+	});
+
+	it("pairs a py function with a pyi method", () => {
+		expect(move("src/a.py", "src/b.pyi", PY_FUNCTION, PY_METHOD)).toHaveLength(
+			1,
+		);
+	});
+});
+
+describe("reshape receiver probes", () => {
+	const head = [
+		"    def make(self, source):",
+		"        rows = self.load_rows(source)",
+		"        keys = self.build_keys(rows)",
+		"        index = self.build_index(keys)",
+		"        self.check(index, len(rows))",
+		"        stats = self.collect(index)",
+	];
+	const base = [
+		"def make(source):",
+		"    rows = load_rows(source)",
+		"    keys = build_keys(rows)",
+		"    index = build_index(keys)",
+		"    check(index, len(rows))",
+		"    stats = collect(index)",
+	];
+
+	function probe(diffBase: string, diffHead: string) {
+		const ops = move(
+			"src/a.py",
+			"src/b.py",
+			[...base, `    ${diffBase}`, "    return finish(stats)"],
+			[...head, `        ${diffHead}`, "        return self.finish(stats)"],
+		);
+		const all = ops.flatMap((o) => o.divergences);
+		return {
+			ops,
+			endLine: ops[0]?.from[0]?.endLine,
+			receiverOriginals: all
+				.filter((d) => d.class === "receiver")
+				.map((d) => d.original),
+		};
+	}
+
+	it("ends the range at a changed operator instead of reporting it as a receiver", () => {
+		const r = probe("total = stats + 1", "total = stats - 1");
+		expect(r.ops).toHaveLength(1);
+		expect(r.endLine).toBe(15);
+		expect(r.receiverOriginals).not.toContain("total = stats + 1");
+	});
+
+	it("ends the range at swapped argument order", () => {
+		const r = probe("total = apply(stats, rows)", "total = apply(rows, stats)");
+		expect(r.ops).toHaveLength(1);
+		expect(r.endLine).toBe(15);
+		expect(r.receiverOriginals).not.toContain("total = apply(stats, rows)");
+	});
+
+	it("does not treat obj.self.x as a receiver", () => {
+		const r = probe("value = obj.self.x", "value = obj.x");
+		expect(r.ops).toHaveLength(1);
+		expect(r.endLine).toBe(15);
+		expect(r.receiverOriginals).not.toContain("value = obj.self.x");
+	});
+
+	it("does not treat other.cls.y as a receiver", () => {
+		const r = probe("value = other.cls.y", "value = other.y");
+		expect(r.ops).toHaveLength(1);
+		expect(r.endLine).toBe(15);
+		expect(r.receiverOriginals).not.toContain("value = other.cls.y");
+	});
+
+	it("leaves a string literal containing self. untouched", () => {
+		const r = probe('label = "self.value"', 'label = "value"');
+		expect(r.ops).toHaveLength(1);
+		expect(r.endLine).toBe(15);
+		expect(r.receiverOriginals).not.toContain('label = "self.value"');
+	});
+
+	it("keeps self as a plain identifier inside the range", () => {
+		const r = probe("self = wrap(stats)", "self = wrap(stats)");
+		expect(r.ops).toHaveLength(1);
+		expect(r.endLine).toBe(17);
+		expect(r.receiverOriginals).not.toContain("self = wrap(stats)");
+		expect(r.receiverOriginals).toContain("return finish(stats)");
+	});
+
+	it("does not match a Rust Self:: receiver against another path", () => {
+		const rsBase = [
+			"fn build(prefix: &str) -> String {",
+			"    let base = normalize(prefix);",
+			"    let suffix = encode(base, 36);",
+			"    let label = join(base, suffix);",
+			"    record(label.len());",
+			"    let tail = clip(label);",
+			"    finish(tail)",
+			"}",
+		];
+		const rsHead = [
+			"    fn build(&self, prefix: &str) -> String {",
+			"        let base = Self::normalize(prefix);",
+			"        let suffix = Self::encode(base, 36);",
+			"        let label = Self::join(base, suffix);",
+			"        Self::record(label.len());",
+			"        let tail = Other::clip(label);",
+			"        Self::finish(tail)",
+			"    }",
+		];
+		const ops = move("src/a.rs", "src/b.rs", rsBase, rsHead);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]?.from[0]?.endLine).toBe(14);
+		const originals = (ops[0]?.divergences ?? [])
+			.filter((d) => d.class === "receiver")
+			.map((d) => d.original);
+		expect(originals).not.toContain("let tail = clip(label);");
+	});
+
+	it("flags self changed to cls as a receiver difference", () => {
+		const selfSide = head.map((l) => l.replace("make(self", "make(cls"));
+		const clsSide = selfSide.map((l) => l.replaceAll("self.", "cls."));
+		const ops = move("src/a.py", "src/b.py", selfSide, clsSide);
+		expect(ops).toHaveLength(1);
+		expect(
+			(ops[0]?.divergences ?? []).filter((d) => d.class === "receiver"),
+		).toHaveLength(5);
+	});
+});
+
+describe("reshape budget", () => {
+	it("returns the same result on every run when the token budget is tiny", () => {
+		const files = [
+			deletedFrom("src/pricing.py", 10, PY_FUNCTION),
+			addedTo("src/cart.py", 3, PY_METHOD),
+		];
+		const first = findRelocations(files, { tokens: 40 });
+		expect(findRelocations(files, { tokens: 40 })).toEqual(first);
+		expect(findRelocations(files, { tokens: 40 })).toEqual(first);
 	});
 });
