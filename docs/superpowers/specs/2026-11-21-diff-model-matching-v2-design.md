@@ -71,7 +71,7 @@ Spans in a same-file operation name the same file on both sides, base lines in `
 
 **Acceptance by distinctiveness.** The line-count floor is replaced. A seed is accepted when its information is high enough and, for short seeds, when it cannot be confused with another.
 
-- A line's information is its count of non-space characters, and a line counts only if it has at least one identifier that is not a keyword, or a string or number literal. A line of only `}`, `)`, `end`, `else` or a bare keyword carries none.
+- A line's information is its count of non-space characters, and a line counts only if it has at least one identifier that is not a keyword, or a string or number literal. A line of only `}`, `)`, `end`, `else` or a bare keyword carries none. An import, `require`, `use`, `from ... import` or re-export line carries none, because imports are reshuffled in nearly every refactor. A line that is only a string or number literal carries none.
 - A seed of 5 or more counted lines keeps today's rule.
 - A seed of 1 to 4 counted lines is accepted when its total information is at least 30 non-space characters, and every counted line is unique in the patch: its normalized text occurs at most once among all deleted lines and at most once among all added lines, in the whole change.
 - A whole definition (opener keyword, closer, as today) is accepted at any length from 1 line with at least 40 non-space characters.
@@ -82,7 +82,7 @@ The one-line declaration pass in `declarations.ts` stays. It matches by name and
 
 ### PR B: token streams, reformat, re-indent
 
-**Token stream.** For a candidate block, each side is tokenized with the existing `TOKEN` pattern, keeping a map from each token back to its source line. Two blocks are exact when their token streams are equal after the normalizations below. A matched range is widened to whole lines on both sides, so spans stay line spans.
+**Token stream.** For a candidate block, each side is tokenized with the existing `TOKEN` pattern, keeping a map from each token back to its source line. Two blocks are exact when their token streams are equal after the normalizations below. A line joins a match only when all of its tokens fall inside the matched range, so a line shared between a matched and an unmatched statement (`} else {`) stays out and spans stay whole-line spans.
 
 **Two newline classes by file type.**
 
@@ -137,7 +137,7 @@ interface Operation {
 
 ### Rendering
 
-Relocations in the same file read "moved within `file`". `shape.reindent` adds "re-indented N levels". `shape.method` adds "now a method". A `signature` divergence is listed with the code divergences, with the original signature. A copy reads "copied from <span> (source visible in this diff only)". None of this text says the code is safe or unchanged in behavior. The 12 detailed operations and 6000 character limits stay, with copies ranked below relocations.
+Relocations in the same file read "moved within `file`". `shape.reindent` adds "re-indented N levels". `shape.method` adds "now a method". A `signature` divergence is listed with the code divergences, with the original signature. A copy reads "copied from <span> (source visible in this diff only)". None of this text says the code is safe or unchanged in behavior. The 12 detailed operations and 6000 character limits stay. Operations rank by lines covered, then by code divergences, so one-line moves fall below larger ones and are the first to be summarized in the count line. Copies rank below relocations.
 
 ## Verification
 
