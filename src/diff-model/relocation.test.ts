@@ -824,9 +824,15 @@ describe("distinctiveness acceptance and same-file moves", () => {
 			addedTo("src/b.ts", 1, def),
 			addedTo("src/c.ts", 1, def),
 		];
-		expect(
-			findRelocations(files).filter((op) => op.type === "relocation"),
-		).toEqual([]);
+		const ops = findRelocations(files);
+		expect(ops.filter((op) => op.type === "relocation")).toEqual([]);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]).toMatchObject({
+			type: "copy",
+			from: [{ filename: "src/b.ts", side: "head", startLine: 1, endLine: 3 }],
+			to: [{ filename: "src/c.ts", side: "head", startLine: 1, endLine: 3 }],
+			shape: { sourceNew: true },
+		});
 	});
 
 	it("rejects a lone signature line and a lone Python def line", () => {

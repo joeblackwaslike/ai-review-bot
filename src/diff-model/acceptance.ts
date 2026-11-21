@@ -303,7 +303,6 @@ export function acceptSeed(
 }
 
 const MIN_DEFINITION_LINES = 3;
-const PROSE_FILE = /\.(md|mdx|txt|rst|adoc)$/i;
 const PROPERTY_LINE =
 	/^(?:\.\.\.\S.*|["']?[\w$-]+["']?\??:(?:\s.*)?|[\w$]+|[{[(]+|[}\])]+[,;)]*)$/;
 const IMPORT_CLOSER = /^[})\]]\s*from\b/;
@@ -355,8 +354,7 @@ function hasSubstance(lines: string[]): boolean {
  * Decides whether an exact duplicate is a block worth reporting as a copy: five or more counted
  * lines, or a whole definition of at least three non-blank lines that is not a `const` assignment, and in either case at least
  * one line that carries information (a block of imports, closers, bare keywords and bare name
- * lists never qualifies). Outside prose files its brackets must also close within the block and
- * it must hold more than object properties, so a slice through the middle of a call or a run of
+ * lists never qualifies). Its brackets must also close within the block and it must hold more than object properties, so a slice through the middle of a call or a run of
  * test data is not a copy. A candidate that
  * passes these draws once from the budget and is rejected when either pool runs dry.
  */
@@ -371,7 +369,6 @@ export function acceptCopySeed(c: Candidate, budget: WorkBudget): boolean {
 			isWholeDefinition(c));
 	if (!floor) return false;
 	if (!hasSubstance(lines)) return false;
-	const codeShaped = bracketsClose(lines) && !onlyProperties(lines);
-	if (!PROSE_FILE.test(c.to.filename) && !codeShaped) return false;
+	if (!bracketsClose(lines) || onlyProperties(lines)) return false;
 	return drawBudget(c, nonSpace(lines.join("")), budget, "copy|");
 }

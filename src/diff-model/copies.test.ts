@@ -348,4 +348,72 @@ describe("findCopies", () => {
 			]),
 		).toEqual([]);
 	});
+
+	it("keeps sourceNew for a copy of an edited copy of new code", () => {
+		const a = body(12);
+		const b = a.map((l, i) =>
+			i === 6 ? "  const rate = Math.floor(price * pct);" : l,
+		);
+		const ops = copies([
+			added("src/a.ts", 1, a),
+			added("src/b.ts", 1, b),
+			added("src/c.ts", 1, b),
+		]);
+		const toC = ops.find((op) => op.to[0]?.filename === "src/c.ts");
+		expect(toC?.shape?.sourceNew).toBe(true);
+		expect(toC?.reviewWeight).toBeGreaterThanOrEqual(1);
+	});
+
+	it("marks a copy new when only some of its source lines are new", () => {
+		const eight = body(8);
+		const deleted = pushFile(
+			"src/old.ts",
+			hunk(
+				1,
+				0,
+				eight.slice(0, 5).map((l) => `-${l}`),
+			),
+		);
+		const ops = findRelocations([
+			deleted,
+			added("src/b.ts", 1, eight),
+			added("src/c.ts", 1, eight),
+		]).filter((op) => op.type === "copy");
+		expect(ops).toHaveLength(1);
+		expect(ops[0]?.shape?.sourceNew).toBe(true);
+		expect(ops[0]?.reviewWeight).toBeGreaterThanOrEqual(1);
+	});
+
+	it("leaves a copy of fully relocated code not new with no weight", () => {
+		const eight = body(8);
+		const deleted = pushFile(
+			"src/old.ts",
+			hunk(
+				1,
+				0,
+				eight.map((l) => `-${l}`),
+			),
+		);
+		const ops = findRelocations([
+			deleted,
+			added("src/b.ts", 1, eight),
+			added("src/c.ts", 1, eight),
+		]).filter((op) => op.type === "copy");
+		expect(ops).toHaveLength(1);
+		expect(ops[0]?.shape?.sourceNew).toBeUndefined();
+		expect(ops[0]?.reviewWeight).toBe(0);
+	});
+
+	it("skips duplicated blocks in prose files", () => {
+		const prose = [
+			"The review bot reads the diff and posts findings.",
+			"Each finding carries a severity and a suggested fix.",
+			"Findings are grouped by file and ordered by line.",
+			"A reviewer can reply to dismiss any single finding.",
+			"Dismissed findings are not repeated on later pushes.",
+		];
+		expect(
+			copies([added("docs/one.md", 1, prose), added("docs/two.md", 1, prose)]),
+		).toEqual([]);
+	});
 });
