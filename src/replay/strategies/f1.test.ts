@@ -1,0 +1,180 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setPriceTable } from "../../pricing.js";
+import {
+	buildInlineComment,
+	buildModelReview,
+	buildPullFile,
+	SIMPLE_PATCH,
+} from "../../testing.js";
+import { type StrategyInput, strategyNames } from "../strategy.js";
+import {
+	F1_IMPLEMENTATION_REVISION,
+	strategyF1,
+	strategyF1Version,
+} from "./f1.js";
+import { loadEntries } from "./f1-runbooks.js";
+import { registerBuiltinStrategies } from "./index.js";
+
+const mockRunAgent = vi.hoisted(() => vi.fn());
+const mockGenerateObject = vi.hoisted(() => vi.fn());
+vi.mock("../../review.js", async (orig) => ({
+	...(await orig<typeof import("../../review.js")>()),
+	runAgent: mockRunAgent,
+}));
+vi.mock("ai", async (orig) => ({
+	...(await orig<typeof import("ai")>()),
+	generateObject: mockGenerateObject,
+}));
+vi.mock("../../auth.js", () => ({
+	resolveAnthropicAuth: vi.fn(async () => ({ provider: "anthropic" })),
+	resolveOpenAIAuth: vi.fn(async () => ({})),
+}));
+
+setPriceTable({
+	"anthropic/claude-sonnet-5-5": { input: 2, cachedInput: 0.2, output: 10 },
+	"anthropic/claude-haiku-5-5": { input: 1, cachedInput: 0.1, output: 5 },
+});
+const ONE_RUN = { promptTokens: 100_000, completionTokens: 10_000 };
+const TRIAGE_USAGE = { inputTokens: 1000, outputTokens: 100 };
+const TRIAGE_COST = (1000 * 1 + 100 * 5) / 1_000_000;
+
+const entries = loadEntries();
+const [firstId, secondId] = [...entries.keys()] as [string, string];
+
+const inputFor = (target?: number): StrategyInput =>
+	({
+		fixture: { provider: "anthropic", owner: "o", repo: "r" },
+		diff: "x".repeat(4000),
+		files: [buildPullFile("src/a.ts", SIMPLE_PATCH)],
+		history: { ledger: [] },
+		spendTargetUsd: target,
+		budget: { maxUsd: 1000, maxWallMs: 600_000 },
+		signal: new AbortController().signal,
+	}) as unknown as StrategyInput;
+
+const okOutcome = {
+	status: "ok" as const,
+	review: buildModelReview({
+		inline_comments: [
+			buildInlineComment({ title: "finding", path: "src/a.ts", line: 2 }),
+		],
+	}),
+	usage: ONE_RUN,
+	durationMs: 1,
+};
+
+const triageReturns = (operations: string[]) =>
+	mockGenerateObject.mockResolvedValue({
+		object: { operations },
+		usage: TRIAGE_USAGE,
+	});
+
+beforeEach(() => {
+	mockRunAgent.mockReset();
+	mockRunAgent.mockResolvedValue(okOutcome);
+	mockGenerateObject.mockReset();
+	triageReturns([firstId, secondId]);
+});
+
+describe("strategyF1", () => {
+	it("is named f1, needs no checkout and has a stable version", () => {
+		expect(strategyF1.name).toBe("f1");
+		expect(strategyF1.needsCheckout).toBe(false);
+		expect(strategyF1.version).toMatch(/^[0-9a-f]{12}$/);
+	});
+
+	it("runs one triage call then reviews with exactly the selected entries in the custom prompt", async () => {
+		await strategyF1.run(inputFor());
+
+		expect(mockGenerateObject).toHaveBeenCalledTimes(1);
+		const prompt = mockGenerateObject.mock.calls[0]?.[0].prompt as string;
+		expect(prompt).toContain("Operations:");
+		expect(prompt).toContain(firstId);
+		expect(mockRunAgent.mock.calls[0]?.[0]).toBe("f1-runbook-reviewer.md");
+		const custom = mockRunAgent.mock.calls[0]?.[3] as string;
+		expect(custom).toContain(entries.get(firstId));
+		expect(custom).toContain(entries.get(secondId));
+		const others = [...entries.keys()].filter(
+			(id) => id !== firstId && id !== secondId,
+		);
+		expect(custom).not.toContain(entries.get(others[0] as string));
+	});
+
+	it("triage returning an unknown id or nothing runs the general list and records triage:none", async () => {
+		for (const ops of [["ZZZ-99"], []]) {
+			mockRunAgent.mockClear();
+			triageReturns(ops);
+			const out = await strategyF1.run(inputFor());
+			expect(out.toolCalls.map((t) => t.name)).toEqual(["triage:none"]);
+			expect(mockRunAgent.mock.calls[0]?.[3]).toBe("");
+		}
+	});
+
+	it("triage returning a failure falls back and records triage:none", async () => {
+		mockGenerateObject.mockRejectedValue(new Error("boom"));
+		const out = await strategyF1.run(inputFor());
+		expect(out.toolCalls.map((t) => t.name)).toEqual(["triage:none"]);
+		expect(out.toolCalls[0]?.costUsd).toBe(0);
+		expect(mockRunAgent.mock.calls[0]?.[3]).toBe("");
+	});
+
+	it("triage runs once and every repeat reuses the selection", async () => {
+		await strategyF1.run(inputFor(1000));
+		expect(mockRunAgent.mock.calls.length).toBeGreaterThan(1);
+		expect(mockGenerateObject).toHaveBeenCalledTimes(1);
+		const customs = new Set(mockRunAgent.mock.calls.map((c) => c[3]));
+		expect(customs.size).toBe(1);
+	});
+
+	it("usage holds f1-triage.md and f1-run-N.md keys and the spend counts the triage cost", async () => {
+		const out = await strategyF1.run(inputFor());
+		expect(Object.keys(out.usage)).toEqual(["f1-run-1.md", "f1-triage.md"]);
+		expect(out.usage["f1-triage.md"]).toMatchObject({
+			promptTokens: 1000,
+			completionTokens: 100,
+		});
+		const runCost = (100_000 * 2 + 10_000 * 10) / 1_000_000;
+		expect(out.spend?.achievedUsd).toBeCloseTo(runCost + TRIAGE_COST);
+		expect(out.agentReviews[0]?.skill).toBe("f1-run-1");
+	});
+
+	it("reports the input spend target, not the one reduced by the triage cost", async () => {
+		const out = await strategyF1.run(inputFor(0.5));
+		expect(out.spend?.targetUsd).toBe(0.5);
+	});
+
+	it("toolCalls has one triage entry naming the ids", async () => {
+		const out = await strategyF1.run(inputFor());
+		expect(out.toolCalls).toHaveLength(1);
+		expect(out.toolCalls[0]?.name).toBe(`triage:${firstId},${secondId}`);
+		expect(out.toolCalls[0]?.costUsd).toBeCloseTo(TRIAGE_COST);
+	});
+
+	it("uses ref replay-f1", async () => {
+		await strategyF1.run(inputFor());
+		expect(mockRunAgent.mock.calls[0]?.[1]).toContain("- Ref: replay-f1");
+	});
+
+	it("version changes with the skill text, the triage skill, the entries hash and the revision", () => {
+		const read = (a: string, b: string) => (name: string) =>
+			name === "f1-triage.md" ? b : a;
+		const base = strategyF1Version(read("one", "t"), "h");
+		expect(strategyF1Version(read("one", "t"), "h")).toBe(base);
+		expect(strategyF1Version(read("two", "t"), "h")).not.toBe(base);
+		expect(strategyF1Version(read("one", "u"), "h")).not.toBe(base);
+		expect(strategyF1Version(read("one", "t"), "g")).not.toBe(base);
+		expect(
+			strategyF1Version(read("one", "t"), "h", F1_IMPLEMENTATION_REVISION + 1),
+		).not.toBe(base);
+		expect(
+			strategyF1Version(read("one", "t"), "h", F1_IMPLEMENTATION_REVISION, 99),
+		).not.toBe(base);
+	});
+
+	it("registers alongside a, a0 and f0", () => {
+		registerBuiltinStrategies();
+		expect(strategyNames()).toEqual(
+			expect.arrayContaining(["a", "a0", "f0", "f1"]),
+		);
+	});
+});

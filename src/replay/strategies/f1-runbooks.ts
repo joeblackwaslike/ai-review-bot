@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -58,6 +59,16 @@ export function loadEntries(dir: string = DEFAULT_DIR): Map<string, string> {
 		}
 	}
 	return entries;
+}
+
+/** Hashes the contents of the sorted entry files, so editing a runbook makes stored cells stale. */
+export function entriesHash(dir: string = DEFAULT_DIR): string {
+	const hash = createHash("sha256");
+	for (const file of readdirSync(dir).sort()) {
+		if (!file.endsWith(".md") || file === "_template.md") continue;
+		hash.update(readFileSync(join(dir, file), "utf8"));
+	}
+	return hash.digest("hex");
 }
 
 /** Joins the kept text of known ids in order, deduplicated, capped at four. */
