@@ -75,6 +75,10 @@ const REGEX_FAMILY = new Set([
 	"awk",
 ]);
 const NON_LITERAL_UNSAFE = /`|"""|'''|<<[-~]?\s*["']?\w/;
+const CONTROL_KEYWORD = /\b(?:if|while|for|with)\b/;
+const SLASH_ALWAYS_AMBIGUOUS = new Set(["rb", "pl", "awk"]);
+const RUBY_PERCENT_LITERAL = /%[rqQwWiIxs]\W/;
+const PERL_QUOTE_LIKE = /\b(?:m|qr|s|tr|y)\s*[{(\[<|!#]/;
 const EXPRESSION_KEYWORDS = new Set([
 	"return",
 	"typeof",
@@ -102,7 +106,8 @@ function slashIsDivision(before: string): boolean {
 	const prev = before.trimEnd();
 	if (prev === "") return false;
 	const last = prev[prev.length - 1] as string;
-	if (last === ")" || last === "]") return true;
+	if (last === ")") return !CONTROL_KEYWORD.test(before);
+	if (last === "]") return true;
 	if (!/[\w$]/.test(last)) return false;
 	const word = /[\w$]+$/.exec(prev)?.[0] ?? "";
 	return !EXPRESSION_KEYWORDS.has(word);
@@ -131,6 +136,30 @@ function lineHasRegexAmbiguity(line: string): boolean {
 	return false;
 }
 
+function withoutStrings(line: string): string | null {
+	let out = "";
+	for (let i = 0; i < line.length; i++) {
+		const ch = line[i] as string;
+		if (ch !== '"' && ch !== "'") {
+			out += ch;
+			continue;
+		}
+		let j = i + 1;
+		while (j < line.length && line[j] !== ch) j += line[j] === "\\" ? 2 : 1;
+		if (j >= line.length) return null;
+		out += " ";
+		i = j;
+	}
+	return out;
+}
+
+function hasUnsafeQuoteLike(line: string, ext: string): boolean {
+	const bare = withoutStrings(line);
+	if (bare === null || bare.includes("/")) return true;
+	if (ext === "rb") return RUBY_PERCENT_LITERAL.test(bare);
+	return ext === "pl" && PERL_QUOTE_LIKE.test(bare);
+}
+
 /**
  * Whether these lines contain no backtick, triple quote, heredoc or slash that could open a
  * regex literal. Slashes are only ambiguous in the regex-literal language family, and
@@ -141,7 +170,11 @@ export function literalSafe(
 	filename: string,
 ): boolean {
 	if (lines.some((line) => NON_LITERAL_UNSAFE.test(line))) return false;
-	if (!REGEX_FAMILY.has(extension(filename))) return true;
+	const ext = extension(filename);
+	if (!REGEX_FAMILY.has(ext)) return true;
+	if (SLASH_ALWAYS_AMBIGUOUS.has(ext)) {
+		return !lines.some((line) => hasUnsafeQuoteLike(line, ext));
+	}
 	return !lines.some(lineHasRegexAmbiguity);
 }
 
@@ -155,8 +188,9 @@ export function relativeIndent(
 	const indents: number[] = [];
 	for (const line of lines) {
 		if (line.trim() === "") continue;
-		const lead = /^\s*/.exec(line)?.[0] ?? "";
-		if (lead.includes("\t")) return null;
+		if (/^[ \t]*\S/.exec(line) === null) return null;
+		const lead = /^[ ]*/.exec(line)?.[0] ?? "";
+		if (/^[ ]*\t/.test(line)) return null;
 		indents.push(lead.length);
 	}
 	const base = indents.length ? Math.min(...indents) : 0;
@@ -165,7 +199,7 @@ export function relativeIndent(
 		shape: lines.map((line) =>
 			line.trim() === ""
 				? ""
-				: " ".repeat((/^\s*/.exec(line)?.[0].length ?? 0) - base) +
+				: " ".repeat((/^ */.exec(line)?.[0].length ?? 0) - base) +
 					line.trimStart(),
 		),
 	};
