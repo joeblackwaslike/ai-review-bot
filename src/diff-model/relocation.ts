@@ -19,6 +19,7 @@ import {
 	similarity,
 	tokens,
 } from "./lexical.js";
+import { findReshapes } from "./reshape.js";
 import { filesWithLiterals, findTokenOperations } from "./token-pass.js";
 import type { Divergence, DivergenceClass, Operation, Span } from "./types.js";
 
@@ -654,11 +655,14 @@ export function findRelocations(
 		if (!seedsExhausted && budget.exhausted) break;
 		operations.push(...resolveChain(chain, budget));
 	}
+	const literalFiles = filesWithLiterals(files);
+	if (!budget.exhausted)
+		operations.push(...findReshapes(deleted, added, budget, literalFiles));
 	if (!budget.exhausted)
 		operations.push(...findDeclarationMoves(deleted, added, budget));
 	if (!budget.exhausted)
 		operations.push(
-			...findTokenOperations(deleted, added, budget, filesWithLiterals(files)),
+			...findTokenOperations(deleted, added, budget, literalFiles),
 		);
 	operations.sort(
 		(a, b) =>

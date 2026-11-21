@@ -34,7 +34,21 @@ const JSX_FILES = new Set(["jsx", "tsx"]);
 const JSX_CAPABLE = new Set(["js", "mjs", "cjs"]);
 const JSX_TEXT = /<[A-Za-z][\w.-]*[\s>/]|<\/|\/>|<>/;
 
-interface Segment {
+/**
+ * Rewrites a normalized token stream before seeding: drops tokens the pass must not compare
+ * and reports, per kept token, what was dropped just before it.
+ */
+export interface Lens {
+	accepts(filename: string): boolean;
+	strip(
+		tokens: string[],
+		lineOf: number[],
+		filename: string,
+	): { tokens: string[]; lineOf: number[]; dropped: string[] };
+}
+
+/** A maximal run of unclaimed lines of one file, tokenized. */
+export interface Segment {
 	id: number;
 	window: number;
 	run: Run;
@@ -44,9 +58,11 @@ interface Segment {
 	firstToken: number[];
 	lastToken: number[];
 	bad: boolean[];
+	dropped: string[];
 }
 
-interface Range {
+/** Equal tokens `len` long starting at token `di` of `d` and token `ai` of `a`. */
+export interface Range {
 	d: Segment;
 	a: Segment;
 	di: number;
@@ -54,7 +70,8 @@ interface Range {
 	len: number;
 }
 
-interface Match {
+/** A token range that matched across two segments, as run-level line indices. */
+export interface Match {
 	range: Range;
 	dFirst: number;
 	dLast: number;
@@ -62,7 +79,8 @@ interface Match {
 	aLast: number;
 }
 
-function extension(filename: string): string {
+/** Lowercased extension of a filename, or empty. */
+export function extension(filename: string): string {
 	const dot = filename.lastIndexOf(".");
 	return dot < 0 ? "" : filename.slice(dot + 1).toLowerCase();
 }
@@ -130,6 +148,7 @@ function buildSegment(
 	start: number,
 	end: number,
 	budget: WorkBudget,
+	lens?: Lens,
 ): Segment | null | undefined {
 	const lines = run.raw.slice(start, end);
 	const ext = extension(run.filename);
@@ -150,6 +169,9 @@ function buildSegment(
 	}
 	if (!lineOf) return null;
 	bad = bad.map((b, l) => b || opaqueLine(lines[l] as string, run.filename));
+	let dropped: string[] = [];
+	if (lens && !lineMode)
+		({ tokens, lineOf, dropped } = lens.strip(tokens, lineOf, run.filename));
 	const firstToken = lines.map(() => Number.POSITIVE_INFINITY);
 	const lastToken = lines.map(() => -1);
 	tokens.forEach((token, k) => {
@@ -168,6 +190,7 @@ function buildSegment(
 		firstToken,
 		lastToken,
 		bad,
+		dropped,
 	};
 }
 
@@ -175,11 +198,13 @@ function buildSegments(
 	runs: Run[],
 	budget: WorkBudget,
 	skip: ReadonlySet<string>,
+	lens?: Lens,
 ): Segment[] | null {
 	const out: Segment[] = [];
 	for (const run of runs) {
 		if (!FAMILY.has(extension(run.filename)) || skip.has(run.filename))
 			continue;
+		if (lens && !lens.accepts(run.filename)) continue;
 		let i = 0;
 		while (i < run.raw.length) {
 			if (run.used[i]) {
@@ -190,7 +215,7 @@ function buildSegments(
 			while (i < run.raw.length && !run.used[i]) i++;
 			const lines = run.raw.slice(start, i);
 			if (!lines.some((l) => l.trim().length >= MIN_COUNTED_LENGTH)) continue;
-			const seg = buildSegment(out.length, run, start, i, budget);
+			const seg = buildSegment(out.length, run, start, i, budget, lens);
 			if (seg === undefined) return null;
 			if (seg) out.push(seg);
 		}
@@ -407,7 +432,12 @@ function toMatch(r: Range): Match {
 	};
 }
 
-function logicalFirstLines(seg: Segment, pos: number, len: number): string[] {
+/** First physical line of each logical line of the token range, from the run's raw lines. */
+export function logicalFirstLines(
+	seg: Segment,
+	pos: number,
+	len: number,
+): string[] {
 	const lines: string[] = [];
 	for (let k = 0; k < len; k++) {
 		if (k === 0 || seg.tokens[pos + k - 1] === "\n")
@@ -429,22 +459,41 @@ function indentShape(
 	};
 }
 
-function reindentShift(m: Match): number | null | undefined {
-	const { d, a, di, ai, len } = m.range;
-	if (!d.run.indentSensitive) return 0;
-	const whole = [
-		relativeIndent(d.run.raw.slice(m.dFirst, m.dLast + 1)),
-		relativeIndent(a.run.raw.slice(m.aFirst, m.aLast + 1)),
-	];
-	if (whole.some((w) => w === null)) return null;
-	const base = indentShape(logicalFirstLines(d, di, len));
-	const head = indentShape(logicalFirstLines(a, ai, len));
+/**
+ * The uniform indentation shift between two spans of an indentation-sensitive file, or null
+ * when either span mixes tabs or the logical lines' relative depths differ. Zero when
+ * indentation carries no meaning.
+ */
+export function indentShift(
+	indentSensitive: boolean,
+	baseWhole: string[],
+	headWhole: string[],
+	baseLogical: string[],
+	headLogical: string[],
+): number | null {
+	if (!indentSensitive) return 0;
+	if (relativeIndent(baseWhole) === null || relativeIndent(headWhole) === null)
+		return null;
+	const base = indentShape(baseLogical);
+	const head = indentShape(headLogical);
 	if (!base || !head) return null;
 	if (base.depths.join(",") !== head.depths.join(",")) return null;
 	return head.base - base.base;
 }
 
-function balanced(seg: Segment, pos: number, len: number): boolean {
+function reindentShift(m: Match): number | null {
+	const { d, a, di, ai, len } = m.range;
+	return indentShift(
+		d.run.indentSensitive,
+		d.run.raw.slice(m.dFirst, m.dLast + 1),
+		a.run.raw.slice(m.aFirst, m.aLast + 1),
+		logicalFirstLines(d, di, len),
+		logicalFirstLines(a, ai, len),
+	);
+}
+
+/** Whether the token range closes every bracket it opens and never closes an unopened one. */
+export function balanced(seg: Segment, pos: number, len: number): boolean {
 	if (seg.window === LINE_WINDOW) return true;
 	let depth = 0;
 	for (let k = pos; k < pos + len; k++) {
@@ -456,7 +505,13 @@ function balanced(seg: Segment, pos: number, len: number): boolean {
 	return depth === 0;
 }
 
-function span(run: Run, side: Span["side"], first: number, last: number): Span {
+/** A span over run-level line indices `first` to `last`, shown in full. */
+export function span(
+	run: Run,
+	side: Span["side"],
+	first: number,
+	last: number,
+): Span {
 	return {
 		filename: run.filename,
 		side,
@@ -466,14 +521,16 @@ function span(run: Run, side: Span["side"], first: number, last: number): Span {
 	};
 }
 
-function overlapsClaimed(m: Match): boolean {
+/** Whether any line of the match is already claimed on either side. */
+export function overlapsClaimed(m: Match): boolean {
 	const { d, a } = m.range;
 	for (let i = m.dFirst; i <= m.dLast; i++) if (d.run.used[i]) return true;
 	for (let j = m.aFirst; j <= m.aLast; j++) if (a.run.used[j]) return true;
 	return false;
 }
 
-function asCandidate(m: Match): Candidate {
+/** The match as an acceptance candidate for `acceptSeed`. */
+export function asCandidate(m: Match): Candidate {
 	const from = m.range.d.run;
 	const length = m.dLast - m.dFirst + 1;
 	return {
@@ -504,7 +561,8 @@ function toOperation(m: Match, shift: number): Operation {
 	return op;
 }
 
-function rank(a: Match, b: Match): number {
+/** Longest matches first, then by position. */
+export function rank(a: Match, b: Match): number {
 	return (
 		b.range.len - a.range.len ||
 		a.range.d.run.index - b.range.d.run.index ||
@@ -584,6 +642,40 @@ export function filesWithLiterals(files: PushFile[]): Set<string> {
 }
 
 /**
+ * Discovers token ranges between unclaimed lines of the deleted and added runs: eight-token
+ * windows seed matches, which grow to maximal ranges, are cut at comments and narrowed to
+ * whole lines (and whole logical lines in line-significant languages). Longest first.
+ * A lens rewrites the token streams first and restricts the files considered.
+ */
+export function findMatches(
+	deleted: Run[],
+	added: Run[],
+	budget: WorkBudget,
+	skip: ReadonlySet<string>,
+	lens?: Lens,
+): Match[] {
+	const dSegments = buildSegments(deleted, budget, skip, lens);
+	const aSegments = dSegments && buildSegments(added, budget, skip, lens);
+	if (!dSegments || !aSegments) return [];
+	return discoverRanges(dSegments, aSegments)
+		.flatMap(cutAtComments)
+		.map(settle)
+		.filter((r): r is Range => r !== null)
+		.map(toMatch)
+		.sort(rank);
+}
+
+/** Whether the match's lines are unclaimed on both sides and literal-safe. */
+export function claimable(m: Match): boolean {
+	const { d, a } = m.range;
+	return (
+		!overlapsClaimed(m) &&
+		literalSafe(d.run.raw.slice(m.dFirst, m.dLast + 1), d.run.filename) &&
+		literalSafe(a.run.raw.slice(m.aFirst, m.aLast + 1), a.run.filename)
+	);
+}
+
+/**
  * Finds exact relocations between unclaimed lines whose text differs only by formatting
  * (Prettier or Black rewraps, quote style, trailing commas) or by uniform indentation in
  * indentation-sensitive files. Eight-token windows seed matches, which grow to maximal
@@ -598,30 +690,17 @@ export function findTokenOperations(
 	budget: WorkBudget,
 	skip: ReadonlySet<string> = new Set(),
 ): Operation[] {
-	const dSegments = buildSegments(deleted, budget, skip);
-	const aSegments = dSegments && buildSegments(added, budget, skip);
-	if (!dSegments || !aSegments) return [];
-	const matches = discoverRanges(dSegments, aSegments)
-		.flatMap(cutAtComments)
-		.map(settle)
-		.filter((r): r is Range => r !== null)
-		.map(toMatch)
-		.sort(rank);
+	const matches = findMatches(deleted, added, budget, skip);
 	const ctx = { deleted, added, budget };
 	const out: Operation[] = [];
 	for (const m of matches) {
 		if (budget.exhausted) break;
-		if (overlapsClaimed(m)) continue;
+		if (!claimable(m)) continue;
 		const { d, a } = m.range;
-		if (
-			!literalSafe(d.run.raw.slice(m.dFirst, m.dLast + 1), d.run.filename) ||
-			!literalSafe(a.run.raw.slice(m.aFirst, m.aLast + 1), a.run.filename)
-		)
-			continue;
 		if (!balanced(d, m.range.di, m.range.len)) continue;
 		if (!balanced(a, m.range.ai, m.range.len)) continue;
 		const shift = reindentShift(m);
-		if (shift === null || shift === undefined) continue;
+		if (shift === null) continue;
 		if (!acceptSeed(asCandidate(m), ctx)) continue;
 		for (let i = m.dFirst; i <= m.dLast; i++) d.run.used[i] = true;
 		for (let j = m.aFirst; j <= m.aLast; j++) a.run.used[j] = true;

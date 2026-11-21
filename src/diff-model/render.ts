@@ -40,6 +40,8 @@ const DIVERGENCE_CLASS: Record<Divergence["class"], string> = {
 	code: "code",
 	"comment-only": "comment only",
 	rename: "identifier rename",
+	signature: "signature",
+	receiver: "receiver prefix",
 };
 
 const MECHANICAL_PHRASE = {
@@ -108,8 +110,14 @@ function divergenceText(d: Divergence): string {
 	return `${DIVERGENCE_LABEL[d.kind]} (${DIVERGENCE_CLASS[d.class]})${where}${original}.`;
 }
 
+function isCodeLike(d: Divergence): boolean {
+	return (
+		d.class === "code" || d.class === "signature" || d.class === "receiver"
+	);
+}
+
 function hasCodeDivergence(op: Operation): boolean {
-	return op.divergences.some((d) => d.class === "code");
+	return op.divergences.some(isCodeLike);
 }
 
 const TYPE_RANK: Record<Operation["type"], number> = {
@@ -316,7 +324,7 @@ function intentBody(
 	const says = `${speaker} ${phrases.join(" and ")}.`;
 	const codeIndex = ranked.findIndex(hasCodeDivergence);
 	if (codeIndex >= 0) {
-		const d = ranked[codeIndex]?.divergences.find((x) => x.class === "code");
+		const d = ranked[codeIndex]?.divergences.find(isCodeLike);
 		const at = d ? divergenceSpan(d) : undefined;
 		const where = at ? ` at ${untrusted(at.filename)} ${spanRange(at)}` : "";
 		const subject =
