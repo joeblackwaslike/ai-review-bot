@@ -68,4 +68,13 @@ describe("f1 triage skill", () => {
 	it("ends with the Operations line", () => {
 		expect(triage.trimEnd().split("\n").pop()).toBe("Operations:");
 	});
+
+	it("tells triage to use listed ids and never a range", () => {
+		expect(triage).toContain("never write a range");
+		expect(triage).toContain("ids from the list after `Operations:`");
+	});
+
+	it("tells the reviewer to skip steps that need a tool it lacks", () => {
+		expect(reviewer).toContain("a tool you do not have");
+	});
 });

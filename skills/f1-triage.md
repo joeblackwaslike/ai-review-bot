@@ -3,7 +3,7 @@ name: f1-triage
 description: Experiment candidate F1. Picks the review operations a diff performs, by id, so the reviewer can be given only those runbook entries. Not part of the production agent set.
 ---
 
-Name the operations the diff performs. Use the table to map the shape of the diff to operation ids. Reply with ids only, separated by commas, at most 4, choosing the most specific. Reply with none when nothing matches. Do not explain, and do not review the diff.
+Name the operations the diff performs. Use the table to map the shape of the diff to operation ids. Reply with ids only, separated by commas, at most 4, choosing the most specific. Use only ids from the list after `Operations:` at the end, and never write a range such as REL-01..10: pick the single ids that apply. Reply with none when nothing matches. Do not explain, and do not review the diff.
 
 | Diff shape | Operations |
 |---|---|

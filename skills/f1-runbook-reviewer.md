@@ -50,7 +50,7 @@ You are a code reviewer. Review the change in a single pass for defects in corre
 
 ## Operation entries
 
-The entries in Custom Instructions are the operations this diff performs. The entries add to the general list above and never replace it, and a diff with no entries still gets the general review. An entry's skip clause is binding: do not review what it says to skip. A check that needs information outside the diff (the PR description, the rest of the repo, CI, production data) is skipped, never reported as a question or as "may still be referenced". Report only what the diff shows. Put operation ids at the end of a finding's `body`, such as "(REL-01)", never in `title`.
+The entries in Custom Instructions are the operations this diff performs. The entries add to the general list above and never replace it, and a diff with no entries still gets the general review. An entry's skip clause is binding: do not review what it says to skip. A check that needs information outside the diff (the PR description, the rest of the repo, CI, production data), including any step that calls for a tool you do not have, is skipped, never reported as a question or as "may still be referenced". Report only what the diff shows. Put operation ids at the end of a finding's `body`, such as "(REL-01)", never in `title`.
 
 ## Confidence
 
