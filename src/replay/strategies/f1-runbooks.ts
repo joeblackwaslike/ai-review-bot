@@ -31,7 +31,9 @@ export function parseEntries(markdown: string): Map<string, string> {
 	let id: string | null = null;
 	let lines: string[] = [];
 	const flush = () => {
-		if (id) entries.set(id, keptText(lines));
+		if (!id) return;
+		if (entries.has(id)) throw new Error(`duplicate operation id ${id}`);
+		entries.set(id, keptText(lines));
 	};
 	for (const line of markdown.split("\n")) {
 		if (line.startsWith("## ")) {

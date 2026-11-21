@@ -96,4 +96,10 @@ describe("f1 runbooks", () => {
 		);
 		expect(() => loadEntries(dir)).toThrow(/REL-01.*no kept section/);
 	});
+
+	it("throws on a duplicate id inside one file", () => {
+		const md =
+			"## REL-01: A\n### Checklist\n- a\n## REL-01: B\n### Checklist\n- b\n";
+		expect(() => parseEntries(md)).toThrow(/duplicate operation id REL-01/);
+	});
 });
