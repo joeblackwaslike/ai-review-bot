@@ -365,3 +365,20 @@ describe("same-file pairing across change regions", () => {
 		expect(findMovedBlocks([file("a.ts", [], [], SPLIT)])).toEqual([]);
 	});
 });
+
+describe("hunk header as a region boundary", () => {
+	it("separates a deleted run from an added run when a second hunk header has no context line before it", () => {
+		const patch = [
+			"@@ -1,5 +1,0 @@",
+			...LINES.map((l) => `-${l}`),
+			"@@ -40,0 +30,5 @@",
+			...LINES.map((l) => `+${l}`),
+		].join("\n");
+		const { deleted, added } = collectRuns([file("a.ts", [], [], patch)]);
+		const matches = selectMatches(deleted, added, 5, undefined, {
+			allowSameFile: true,
+		});
+		expect(matches).toHaveLength(1);
+		expect(deleted[0]?.region).not.toBe(added[0]?.region);
+	});
+});

@@ -297,6 +297,21 @@ function extend(from: Run, fromPos: number, to: Run, toPos: number): Candidate {
 
 export interface MatchOptions {
 	allowSameFile?: boolean;
+	uniqueBelow?: number;
+}
+
+interface SeedPlan {
+	size: number;
+	unique: boolean;
+}
+
+function seedPlans(minLines: number, options: MatchOptions): SeedPlan[] {
+	const plans: SeedPlan[] = [];
+	const top = options.uniqueBelow ?? minLines;
+	for (let size = minLines; size < top; size++)
+		plans.push({ size, unique: true });
+	plans.push({ size: Math.max(top, minLines), unique: false });
+	return plans;
 }
 
 function collectCandidates(
@@ -306,39 +321,53 @@ function collectCandidates(
 	accept?: (c: Candidate) => boolean,
 	options: MatchOptions = {},
 ): Candidate[] {
-	const index = new Map<string, { run: Run; pos: number }[]>();
-	for (const run of added) {
-		for (const [pos, key] of windowKeys(run, minLines)) {
-			const hits = index.get(key);
-			if (!hits) index.set(key, [{ run, pos }]);
-			else if (hits.length < MAX_KEY_OCCURRENCES) hits.push({ run, pos });
-		}
-	}
 	const seen = new Set<string>();
 	const coveredTo = new Map<string, number>();
 	const out: Candidate[] = [];
-	for (const run of deleted) {
-		const occurrences = new Map<string, number>();
-		for (const [pos, key] of windowKeys(run, minLines)) {
-			const n = (occurrences.get(key) ?? 0) + 1;
-			occurrences.set(key, n);
-			if (n > MAX_KEY_OCCURRENCES) continue;
-			for (const hit of index.get(key) ?? []) {
-				if (hit.run.indentSensitive !== run.indentSensitive) continue;
+	for (const plan of seedPlans(minLines, options)) {
+		const index = new Map<string, { run: Run; pos: number }[]>();
+		for (const run of added) {
+			for (const [pos, key] of windowKeys(run, plan.size)) {
+				const hits = index.get(key);
+				if (!hits) index.set(key, [{ run, pos }]);
+				else if (hits.length < MAX_KEY_OCCURRENCES) hits.push({ run, pos });
+			}
+		}
+		const totals = new Map<string, number>();
+		if (plan.unique) {
+			for (const run of deleted) {
+				for (const key of windowKeys(run, plan.size).values())
+					totals.set(key, (totals.get(key) ?? 0) + 1);
+			}
+		}
+		for (const run of deleted) {
+			const occurrences = new Map<string, number>();
+			for (const [pos, key] of windowKeys(run, plan.size)) {
+				const n = (occurrences.get(key) ?? 0) + 1;
+				occurrences.set(key, n);
+				if (n > MAX_KEY_OCCURRENCES) continue;
 				if (
-					hit.run.filename === run.filename &&
-					(!options.allowSameFile || hit.run.region === run.region)
+					plan.unique &&
+					(totals.get(key) !== 1 || index.get(key)?.length !== 1)
 				)
 					continue;
-				const diagonal = `${run.index}|${hit.run.index}|${pos - hit.pos}`;
-				if (pos < (coveredTo.get(diagonal) ?? 0)) continue;
-				const c = extend(run, pos, hit.run, hit.pos);
-				coveredTo.set(diagonal, c.fromStart + c.length);
-				if (c.counted < minLines || (accept && !accept(c))) continue;
-				const id = `${diagonal}|${c.fromStart}`;
-				if (seen.has(id)) continue;
-				seen.add(id);
-				out.push(c);
+				for (const hit of index.get(key) ?? []) {
+					if (hit.run.indentSensitive !== run.indentSensitive) continue;
+					if (
+						hit.run.filename === run.filename &&
+						(!options.allowSameFile || hit.run.region === run.region)
+					)
+						continue;
+					const diagonal = `${run.index}|${hit.run.index}|${pos - hit.pos}`;
+					if (pos < (coveredTo.get(diagonal) ?? 0)) continue;
+					const c = extend(run, pos, hit.run, hit.pos);
+					coveredTo.set(diagonal, c.fromStart + c.length);
+					if (c.counted < minLines || (accept && !accept(c))) continue;
+					const id = `${diagonal}|${c.fromStart}`;
+					if (seen.has(id)) continue;
+					seen.add(id);
+					out.push(c);
+				}
 			}
 		}
 	}

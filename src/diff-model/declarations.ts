@@ -80,7 +80,11 @@ export function findDeclarationMoves(
 		if (from.length !== 1 || to?.length !== 1) continue;
 		const base = from[0] as Site;
 		const head = to[0] as Site;
-		if (base.run.filename === head.run.filename) continue;
+		if (
+			base.run.filename === head.run.filename &&
+			base.run.region === head.run.region
+		)
+			continue;
 		if (base.run.used[base.at] || head.run.used[head.at]) continue;
 		const baseText = base.run.raw[base.at] as string;
 		const headText = head.run.raw[head.at] as string;

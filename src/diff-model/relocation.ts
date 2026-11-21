@@ -8,21 +8,17 @@ import {
 	type Run,
 	selectMatches,
 } from "../moved-blocks.js";
+import { acceptSeed } from "./acceptance.js";
+import { WorkBudget } from "./budget.js";
 import { findDeclarationMoves } from "./declarations.js";
 import { lexicallySafe, normalizeSafe } from "./lexical.js";
 import type { Divergence, DivergenceClass, Operation, Span } from "./types.js";
 
 const MIN_MEANINGFUL_LINES = 5;
-const MIN_DEFINITION_LINES = 3;
-const MIN_DEFINITION_CHARS = 40;
-const DEFINITION_OPENER =
-	/^(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function\b|class\b|def\b|fn\b|func\b|pub\s+fn\b|const\s+[A-Za-z_$]|type\s+\w|interface\s+\w|enum\s+\w)/;
-const DEFINITION_CLOSER = /^(?:[}\]]|end\b)/;
 const MAX_DIVERGENCES = 3;
 const MAX_DIVERGENCE_SHARE = 0.2;
 const EDGE_SIMILARITY = 0.5;
 const MIN_COUNTED_LENGTH = 3;
-const MAX_ALIGNMENT_CELLS = 16_000_000;
 const MIN_RENAME_OCCURRENCES = 2;
 const MAX_TOKENIZED_LENGTH = 2000;
 
@@ -85,7 +81,11 @@ function similarity(a: string, b: string): number {
  * Longest-common-subsequence alignment. Returns the matched index pairs in order.
  * A common prefix and suffix are matched first so only the differing middle is tabulated.
  */
-function alignLines(base: string[], head: string[]): [number, number][] {
+function alignLines(
+	base: string[],
+	head: string[],
+	budget: WorkBudget,
+): [number, number][] {
 	const pairs: [number, number][] = [];
 	let lo = 0;
 	while (lo < base.length && lo < head.length && base[lo] === head[lo]) {
@@ -106,7 +106,7 @@ function alignLines(base: string[], head: string[]): [number, number][] {
 	}
 	const n = baseEnd - lo;
 	const m = headEnd - lo;
-	if (n > 0 && m > 0 && (n + 1) * (m + 1) <= MAX_ALIGNMENT_CELLS) {
+	if (n > 0 && m > 0 && budget.spendCells((n + 1) * (m + 1))) {
 		const width = m + 1;
 		const table = new Uint32Array((n + 1) * width);
 		for (let i = n - 1; i >= 0; i--) {
@@ -421,6 +421,7 @@ function limitFor(blockLines: number): number {
 function build(
 	chain: Candidate[],
 	withEdges: boolean,
+	budget: WorkBudget,
 	onlyRisky = false,
 ): Built {
 	const first = chain[0] as Candidate;
@@ -470,7 +471,7 @@ function build(
 	const aligned = divergencesBetween(
 		baseRaw.length,
 		headRaw.length,
-		alignLines(baseCmp, headCmp),
+		alignLines(baseCmp, headCmp, budget),
 	);
 	const raw = onlyRisky
 		? aligned.filter(
@@ -599,38 +600,23 @@ function claim(from: Run, to: Run, built: Built): void {
 	for (let j = built.toStart; j < built.toEnd; j++) to.used[j] = true;
 }
 
-function resolveChain(chain: Candidate[]): Operation[] {
+function resolveChain(chain: Candidate[], budget: WorkBudget): Operation[] {
 	const { from, to } = chain[0] as Candidate;
-	const whole = build(chain, true);
+	const whole = build(chain, true, budget);
 	if (whole.counted <= whole.limit) {
 		claim(from, to, whole);
 		return [toOperation(from, to, whole)];
 	}
-	if (chain.length > 1) return chain.flatMap((seed) => resolveChain([seed]));
-	const plain = build(chain, false, true);
+	if (chain.length > 1)
+		return chain.flatMap((seed) => resolveChain([seed], budget));
+	const plain = build(chain, false, budget, true);
 	claim(from, to, plain);
 	return [toOperation(from, to, plain)];
 }
 
-function isCompactDefinition(c: Candidate): boolean {
-	const lines = c.from.lines.slice(c.fromStart, c.fromStart + c.length);
-	const first = lines.find((line) => line.trim() !== "");
-	if (first === undefined || !DEFINITION_OPENER.test(first.trim()))
-		return false;
-	const last = [...lines].reverse().find((line) => line.trim() !== "");
-	if (!c.from.indentSensitive && !DEFINITION_CLOSER.test(last?.trim() ?? ""))
-		return false;
-	return lines.join("").replace(/\s/g, "").length >= MIN_DEFINITION_CHARS;
-}
-
-function acceptSeed(c: Candidate): boolean {
-	return c.counted >= MIN_MEANINGFUL_LINES || isCompactDefinition(c);
-}
-
 /**
- * Finds blocks of at least 5 meaningful lines, or 3 or 4 when the block is a whole
- * function, class or type definition, that were deleted from one file and added to
- * another, tolerating a few changed, inserted or removed lines inside the block. Exact runs
+ * Finds blocks that were deleted from one region and added to another, across files or
+ * within one file, tolerating a few changed, inserted or removed lines inside the block. Exact runs
  * seed each block; the block is then widened over the lines between and next to the seeds,
  * its two sides are aligned, and every line that does not align becomes a divergence
  * classed as comment-only, rename or code. A block that would need more than 3 differing
@@ -639,7 +625,12 @@ function acceptSeed(c: Candidate): boolean {
  */
 export function findRelocations(files: PushFile[]): Operation[] {
 	const { deleted, added } = collectRuns(files);
-	const seeds = selectMatches(deleted, added, MIN_DEFINITION_LINES, acceptSeed);
+	const budget = new WorkBudget();
+	const ctx = { deleted, added, budget };
+	const seeds = selectMatches(deleted, added, 1, (c) => acceptSeed(c, ctx), {
+		allowSameFile: true,
+		uniqueBelow: MIN_MEANINGFUL_LINES,
+	});
 	const groups = new Map<string, Candidate[]>();
 	for (const seed of seeds) {
 		const key = `${seed.from.index}|${seed.to.index}`;
@@ -651,7 +642,7 @@ export function findRelocations(files: PushFile[]): Operation[] {
 			size(b) - size(a) ||
 			(a[0] as Candidate).from.index - (b[0] as Candidate).from.index,
 	);
-	const operations = chains.flatMap(resolveChain);
+	const operations = chains.flatMap((chain) => resolveChain(chain, budget));
 	operations.push(...findDeclarationMoves(deleted, added));
 	operations.sort(
 		(a, b) =>

@@ -244,9 +244,14 @@ describe("findRelocations", () => {
 		expect(ops[0]).toMatchObject({ exact: true, divergences: [] });
 	});
 
-	it("ignores runs under 5 meaningful lines that are not a whole definition", () => {
-		const block = body(4);
+	it("ignores a run under 5 lines that carries too little information", () => {
+		const block = ["  a++;", "  b++;", "  c++;", "  d++;"];
 		expect(move(block, block)).toEqual([]);
+	});
+
+	it("accepts a run of 4 distinct lines that carries enough information", () => {
+		const block = body(4);
+		expect(move(block, block)).toHaveLength(1);
 	});
 
 	it("ignores 3 lines of import boilerplate and a short literal", () => {
@@ -267,13 +272,13 @@ describe("findRelocations", () => {
 		expect(ops[0]).toMatchObject({ exact: true, divergences: [] });
 	});
 
-	it("ignores a function signature that moved without its body", () => {
+	it("reports a distinctive function signature that moved without its body", () => {
 		const signature = [
 			"export function reasoningProviderOptions(",
 			"  selection: ModelSelection,",
 			"): Record<string, Record<string, string>> | undefined {",
 		];
-		expect(move(signature, signature)).toEqual([]);
+		expect(move(signature, signature)).toHaveLength(1);
 	});
 
 	it("ignores a 3-line function too short to be distinctive", () => {
@@ -765,5 +770,101 @@ describe("findRelocations one-line declarations", () => {
 				moveDeclaration("export const TABLE = {", "export const TABLE = {").ops,
 			).toEqual([]);
 		});
+	});
+});
+
+describe("distinctiveness acceptance and same-file moves", () => {
+	const statement =
+		"  const subtotal = computeSubtotal(items, taxRate, shippingZone);";
+
+	it("accepts a distinctive one-line statement moved between files", () => {
+		const ops = move([statement], [statement]);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]).toMatchObject({ exact: true, divergences: [] });
+	});
+
+	it("rejects a repeated line", () => {
+		const files = [
+			deletedFrom("src/a.ts", 10, [statement]),
+			deletedFrom("src/c.ts", 10, [statement]),
+			addedTo("src/b.ts", 3, [statement]),
+		];
+		expect(findRelocations(files)).toEqual([]);
+	});
+
+	it("rejects two identical short definitions", () => {
+		const helper = ["function pad(value, width) {", "  return value;", "}"];
+		const wide = [
+			"function formatCurrency(amount, currency) {",
+			"  return amount.toFixed(2) + currency;",
+			"}",
+		];
+		const files = [
+			deletedFrom("src/a.ts", 1, wide),
+			deletedFrom("src/c.ts", 1, wide),
+			addedTo("src/b.ts", 1, wide),
+		];
+		expect(findRelocations(files)).toEqual([]);
+		expect(move(helper, helper)).toEqual([]);
+	});
+
+	it("rejects an import line", () => {
+		const line =
+			'import { computeSubtotal, computeTax } from "./pricing/subtotal.js";';
+		expect(move([line], [line])).toEqual([]);
+	});
+
+	it("rejects a bare literal line", () => {
+		const line = '  "alpha-beta-gamma-delta-epsilon-zeta-eta-theta-iota",';
+		expect(move([line], [line])).toEqual([]);
+	});
+
+	it("accepts a two-line definition", () => {
+		const block = [
+			"export function applyDiscount(input, rate) {",
+			"  return input.price * rate; }",
+		];
+		const ops = move(block, block);
+		expect(ops).toHaveLength(1);
+	});
+
+	it("reports a block moved within one file", () => {
+		const block = body(2);
+		const patch = [
+			"@@ -1,9 +1,9 @@",
+			...block.map((l) => `-${l}`),
+			" context one",
+			" context two",
+			" context three",
+			...block.map((l) => `+${l}`),
+		].join("\n");
+		const files = [pushFile("src/a.ts", patch)];
+		const ops = findRelocations(files);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]?.from[0]?.filename).toBe("src/a.ts");
+		expect(ops[0]?.to[0]?.filename).toBe("src/a.ts");
+		expect(verifyRelocation(ops[0] as never, files)).toBe(true);
+	});
+
+	it("does not report an in-place edit as a same-file move", () => {
+		const block = body(2);
+		const patch = [
+			"@@ -1,2 +1,2 @@",
+			...block.map((l) => `-${l}`),
+			...block.map((l) => `+${l}`),
+		].join("\n");
+		expect(findRelocations([pushFile("src/a.ts", patch)])).toEqual([]);
+	});
+
+	it("reports a one-line declaration moved within one file", () => {
+		const patch = [
+			"@@ -1,5 +1,5 @@",
+			"-export const MAX_RETRIES = 3;",
+			" context one",
+			" context two",
+			"+export const MAX_RETRIES = 3;",
+		].join("\n");
+		const ops = findRelocations([pushFile("src/a.ts", patch)]);
+		expect(ops).toHaveLength(1);
 	});
 });
