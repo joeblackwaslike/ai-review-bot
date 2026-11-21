@@ -1,0 +1,12 @@
+{
+	"clean": false,
+	"defects": [
+		{
+			"path": "jobs/handlers.py",
+			"startLine": 14,
+			"endLine": 14,
+			"description": "The continue is dedented out of the empty value branch, so every key is skipped and trim_payload returns an empty dict."
+		}
+	],
+	"operations": []
+}

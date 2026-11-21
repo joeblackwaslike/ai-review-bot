@@ -72,17 +72,19 @@ function operationMatches(expected: SeedOperation, op: Operation): boolean {
 		op.type === expected.type &&
 		(expected.exact === undefined || expected.exact === op.exact) &&
 		(expected.reason === undefined || expected.reason === op.reason) &&
+		(expected.shape === undefined ||
+			(op.shape?.reindent ?? 0) === expected.shape.reindent) &&
 		spansMatch(expected.from, op.from) &&
 		spansMatch(expected.to, op.to)
 	);
 }
 
 /**
- * Scores a model's operations against a seed's expected ones. An operation matches by type
- * and by spans that each contain one expected span in the same file and side, extending past it by at most `EDGE_TOLERANCE_LINES` on each side. Each found span satisfies one expected span. Divergences are
+ * Scores a model's operations against a seed's expected ones. An operation matches by type,
+ * by `shape.reindent` when the truth records one, and by spans that each contain one expected span in the same file and side, extending past it by at most `EDGE_TOLERANCE_LINES` on each side. Each found span satisfies one expected span. Divergences are
  * scored on matched operations: one the truth lists and the model lacks counts as missed,
  * and one the model reports and the truth does not list counts as extra. A divergence
- * matches by kind, class and spans. When the truth states `exact` or `reason`, the model's
+ * matches by kind, class and spans. When the truth states `exact`, `reason` or `shape`, the model's
  * operation must agree to match. An operation the truth does not list is `unexpected`.
  */
 export function scoreDetection(

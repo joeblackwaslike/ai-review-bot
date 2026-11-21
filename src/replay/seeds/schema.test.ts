@@ -128,7 +128,7 @@ describe("defaultSeedsRoot", () => {
 
 	it("resolves to the committed seeds from source", async () => {
 		expect(defaultSeedsRoot(import.meta.url)).toBe(real);
-		expect(await listSeeds()).toHaveLength(33);
+		expect(await listSeeds()).toHaveLength(34);
 	});
 
 	it("resolves to the committed seeds from a built dist path", () => {

@@ -615,8 +615,8 @@ describe("renderDiffModel", () => {
 			).summary;
 		expect(moved("src/a.py", 4)).toContain("re-indented one level deeper");
 		expect(moved("src/a.py", -8)).toContain("re-indented 2 levels shallower");
-		expect(moved("ci/a.yml", 2)).toContain("re-indented one level deeper");
-		expect(moved("ci/a.yaml", 6)).toContain("re-indented 3 levels deeper");
+		expect(moved("ci/a.yml", 2)).toContain("re-indented 2 columns deeper");
+		expect(moved("ci/a.yaml", 6)).toContain("re-indented 6 columns deeper");
 		expect(moved("src/a.py", 3)).toContain("re-indented 3 columns deeper");
 		expect(moved("src/a.py", -2)).toContain("re-indented 2 columns shallower");
 		expect(moved("src/a.ts", 2)).toContain("re-indented 2 columns deeper");

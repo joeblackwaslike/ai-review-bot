@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PushFile } from "../moved-blocks.js";
 import { partialStatements } from "./partial-statements.fixture.js";
+import { buildDiffModel } from "./index.js";
 import { findRelocations } from "./relocation.js";
 import { verifyRelocation } from "./relocation-check.js";
 import type { Operation } from "./types.js";
@@ -1412,9 +1413,37 @@ describe("adversarial work budget", () => {
 		const started = performance.now();
 		const first = findRelocations(files);
 		expect(performance.now() - started).toBeLessThan(BACKSTOP_MS);
-		expect(first.length).toBeGreaterThan(0);
-		expect(first.length).toBeLessThanOrEqual(5_000);
+		expect(first).toHaveLength(2_978);
 		expect(findRelocations(files)).toEqual(first);
+	});
+
+	function modelOf(files: PushFile[]) {
+		return buildDiffModel({
+			scopeFiles: files,
+			prFiles: files,
+			prFilesComplete: true,
+			title: "",
+			body: null,
+		});
+	}
+
+	it("builds the whole model for 1,500 unique move pairs within half a second and repeats exactly", () => {
+		const files = uniqueMoves(1_500);
+		const started = performance.now();
+		const first = modelOf(files);
+		expect(performance.now() - started).toBeLessThan(500);
+		expect(first.operations.length).toBeGreaterThan(1_000);
+		expect(modelOf(files)).toEqual(first);
+	});
+
+	it("builds the whole model for 5,000 unique one-line moves within 1 second and repeats exactly", () => {
+		const files = uniqueMoves(5_000);
+		const started = performance.now();
+		const first = modelOf(files);
+		expect(performance.now() - started).toBeLessThan(1_000);
+		expect(first.operations).toHaveLength(2_978);
+		expect(first.droppedClaims).toBe(0);
+		expect(modelOf(files)).toEqual(first);
 	});
 
 	it("returns the operations found so far when the candidate budget runs out", () => {

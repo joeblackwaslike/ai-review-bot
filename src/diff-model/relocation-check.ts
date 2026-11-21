@@ -665,22 +665,20 @@ export function verifyRelocation(op: Operation, files: PushFile[]): boolean {
 		)
 	)
 		return true;
-	return op.divergences.length === 0 && tokenVerified(op, base, head, files);
+	return op.divergences.length === 0 && tokenVerified(op, base, head, index);
 }
 
 function tokenVerified(
 	op: Operation,
 	base: Side[],
 	head: Side[],
-	files: PushFile[],
+	index: PatchIndex,
 ): boolean {
 	const from = base[0];
 	const to = head[0];
 	if (base.length !== 1 || head.length !== 1 || !from || !to) return false;
-	const tainted = [from, to].some((side) =>
-		LITERAL_OPENER.test(
-			files.find((f) => f.filename === side.filename)?.patch ?? "",
-		),
+	const tainted = [from, to].some(
+		(side) => index.patches.get(side.filename)?.risky ?? false,
 	);
 	if (tainted) return false;
 	const result = tokenEquivalent(

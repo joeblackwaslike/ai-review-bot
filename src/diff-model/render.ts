@@ -148,8 +148,6 @@ function plural(n: number, word: string): string {
 const COLUMNS_PER_LEVEL: Record<string, number> = {
 	py: 4,
 	pyi: 4,
-	yml: 2,
-	yaml: 2,
 };
 
 function reindentPhrase(op: Operation): string {

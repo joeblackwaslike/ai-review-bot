@@ -27,7 +27,10 @@
 					"endLine": 16
 				}
 			],
-			"divergences": []
+			"divergences": [],
+			"shape": {
+				"reindent": 4
+			}
 		}
 	]
 }
