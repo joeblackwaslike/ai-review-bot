@@ -102,7 +102,12 @@ const CellRecordSchema = z.object({
 		),
 		usage: Usage,
 		toolCalls: z.array(
-			z.object({ name: z.string(), wallMs: z.number(), costUsd: z.number() }),
+			z.object({
+				name: z.string(),
+				provider: z.enum(["anthropic", "openai"]).optional(),
+				wallMs: z.number(),
+				costUsd: z.number(),
+			}),
 		),
 		wallMs: z.number(),
 		spend: z

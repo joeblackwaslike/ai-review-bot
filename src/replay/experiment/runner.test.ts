@@ -1,3 +1,6 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { setPriceTable } from "../../pricing.js";
 import { buildPullFile, SIMPLE_PATCH } from "../../testing.js";
@@ -10,7 +13,7 @@ import type {
 import { makeFixture, makeLabels } from "../testkit.js";
 import { planGrid, type RunnerDeps, runGrid } from "./runner.js";
 import type { CellKey, CellRecord } from "./store.js";
-import { cellId } from "./store.js";
+import { cellId, ResultsStore } from "./store.js";
 import { samplePlan } from "./testkit.js";
 
 setPriceTable({
@@ -426,6 +429,51 @@ describe("runGrid", () => {
 		);
 		expect(report.spentUsd.anthropic).toBeCloseTo(0.03 * 2);
 		expect(report.spentUsd.openai).toBeCloseTo(ONE * 4);
+	});
+
+	it("charges a stored triage call to its provider after a restart", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "restart-"));
+		new ResultsStore(dir, "ph").append({
+			key: {
+				strategy: "f1",
+				version: "v1",
+				fixtureId: "o/r#1",
+				round: 0,
+				trial: 0,
+			},
+			provider: "openai",
+			planHash: "ph",
+			at: "2026-11-06T00:00:00.000Z",
+			costUsd: 0.5,
+			fitIn210s: true,
+			failedAttempts: 0,
+			cacheTemperature: "unknown",
+			result: {
+				findings: [],
+				candidates: [],
+				posted: [],
+				agentReviews: [],
+				usage: {},
+				toolCalls: [
+					{
+						name: "triage:BEH-01",
+						provider: "anthropic",
+						wallMs: 1,
+						costUsd: 0.03,
+					},
+				],
+				wallMs: 1,
+			},
+		});
+		const { deps } = harness([stub("a")], {
+			store: new ResultsStore(dir, "ph"),
+		});
+		const report = await runGrid(
+			plan({ fixtures: [], strategies: [{ name: "a", version: "v1" }] }),
+			deps,
+		);
+		expect(report.spentUsd.anthropic).toBeCloseTo(0.03);
+		expect(report.spentUsd.openai).toBeCloseTo(0.47);
 	});
 
 	it("books a failed triage's cost into the cell cost", async () => {

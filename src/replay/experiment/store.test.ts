@@ -49,6 +49,23 @@ describe("ResultsStore", () => {
 		expect(skipped).toBe(0);
 	});
 
+	it("keeps toolCalls[].provider through a write and read", () => {
+		const rec = record();
+		rec.result.toolCalls = [
+			{
+				name: "triage:BEH-01",
+				provider: "anthropic",
+				wallMs: 1,
+				costUsd: 0.03,
+			},
+		];
+		const store = new ResultsStore(tmp(), "abc");
+		store.append(rec);
+		expect(store.readAll().records[0]?.result.toolCalls).toEqual(
+			rec.result.toolCalls,
+		);
+	});
+
 	it("hasCell sees stored cells, including from another instance", () => {
 		const dir = tmp();
 		new ResultsStore(dir, "abc").append(record());
