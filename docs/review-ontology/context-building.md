@@ -473,9 +473,9 @@ Where each tool can run on today's infrastructure.
 The webhook path runs inside one Vercel function. Facts from
 [CLAUDE.md](../../CLAUDE.md) and `src/config.ts`:
 
-- The route's `maxDuration` is 800 seconds on Vercel Pro. The agents have a hard 600-second
-  wall-clock budget (`REVIEW_AGENT_BUDGET_SECONDS`), leaving a 60-second reserve for the summary
-  call, the review POST and feedback writes.
+- The route's `maxDuration` is 800 seconds on Vercel Pro. The agents get at most a 600-second
+  wall-clock budget (`REVIEW_AGENT_BUDGET_SECONDS`), and on hosted paths they are also capped at 740 seconds from request start, so slow setup shortens the window.
+  A 60-second reserve after the agent deadline covers the summary call, the review POST and feedback writes.
 - Agents run up to `AGENT_CONCURRENCY` at a time (default 4), after the first runs alone to write
   the prompt cache.
 - Each agent makes one `generateObject` call with no tools. Adding tool use means several model

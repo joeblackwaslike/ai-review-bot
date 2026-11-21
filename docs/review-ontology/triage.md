@@ -310,7 +310,7 @@ the logic agents, and the checks come from the operation entry.
 `security-sast` and `security-auditor` take the tier's top effort whenever they run, and
 `comment-analyzer` and `pr-test-analyzer` on a non-risky PR take one step lower than the tier. The
 existing Anthropic constraint stays: the `deep` tier is capped at `high` effort because `xhigh`
-Opus can outlasted the old 210-second agent deadline on Vercel Hobby (comment in `src/router.ts`). The
+Opus outlasted the old 210-second agent deadline on Vercel Hobby (comment in `src/router.ts`). The
 OpenAI route currently maps `deep` to `xhigh`, so the deadline constraint is provider-specific
 and the cap has to be set per provider.
 
