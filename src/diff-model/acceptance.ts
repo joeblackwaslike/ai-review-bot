@@ -3,6 +3,7 @@ import type { WorkBudget } from "./budget.js";
 
 export const MIN_COUNTED_LINES = 5;
 const MIN_INFORMATION = 30;
+const MIN_SAME_FILE_INFORMATION = 50;
 const MIN_DEFINITION_CHARS = 40;
 
 const KEYWORDS = new Set(
@@ -16,6 +17,7 @@ const KEYWORDS = new Set(
 const DEFINITION_OPENER =
 	/^(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function\b|class\b|def\b|fn\b|func\b|pub\s+fn\b|const\s+[A-Za-z_$]|type\s+\w|interface\s+\w|enum\s+\w)/;
 const DEFINITION_CLOSER = /^(?:[}\]]|end\b)/;
+const MID_EXPRESSION = /^(?:\.[A-Za-z_$]|[?:]\s|&&|\|\|)/;
 const IMPORT_LIKE =
 	/^(?:import\b|export\s+(?:\*|\{[^}]*\})\s*(?:as\s+\w+\s*)?(?:from\b|;|$)|from\s+\S+\s+import\b|use\s+[\w:{]|require(?:_relative)?\b|#include\b|using\s+[\w.]+\s*;|package\b)|\brequire\s*\(|\bimport\s*\(/;
 const LITERAL =
@@ -126,9 +128,10 @@ function isWholeDefinition(c: Candidate): boolean {
  * Decides whether an exact run is a block worth reporting. Every call draws one candidate and
  * the seed's characters from the budget, and rejects once either pool runs dry. Five or more
  * counted lines then qualify. One to four lines qualify when they carry at least 30
- * characters of information, or form a whole definition of at least 40 non-space characters,
+ * characters of information (50 within one file), or form a whole definition of at least 40 non-space characters,
  * and occur once on each side. A single line with unclosed brackets, or ending in a colon in an
- * indentation-sensitive file, never qualifies.
+ * indentation-sensitive file, never qualifies, and neither does one that starts mid-expression (a leading `.call`, `?`, `:`, `&&` or `||`). Within one file the two sides must also lie
+ * in different hunks, since a short block moved inside one hunk is usually a misaligned diff.
  */
 export function acceptSeed(
 	c: Candidate,
@@ -139,12 +142,16 @@ export function acceptSeed(
 	if (ctx.budget && !drawBudget(c, chars, ctx.budget)) return false;
 	if (c.counted >= MIN_COUNTED_LINES) return true;
 	if (isOpenSingleLine(c, lines)) return false;
+	if (MID_EXPRESSION.test(lines.find((l) => l.trim() !== "")?.trim() ?? ""))
+		return false;
+	const sameFile = c.from.filename === c.to.filename;
+	if (sameFile && c.from.hunk === c.to.hunk) return false;
 	const information = lines.reduce(
 		(sum, line) => sum + lineInformation(line),
 		0,
 	);
 	const enough =
-		information >= MIN_INFORMATION ||
+		information >= (sameFile ? MIN_SAME_FILE_INFORMATION : MIN_INFORMATION) ||
 		(isWholeDefinition(c) && chars >= MIN_DEFINITION_CHARS);
 	return enough && isUnique(c, ctx.deleted, ctx.added);
 }

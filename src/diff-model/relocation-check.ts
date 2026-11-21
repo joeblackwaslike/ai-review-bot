@@ -26,6 +26,30 @@ const NOT_RENAMABLE = new Set(
 );
 const LONGEST_RENAMABLE_LINE = 2000;
 
+const SMALL_CLAIM_LINES = 5;
+const SMALL_CLAIM_INFORMATION = 30;
+const SMALL_SAME_FILE_INFORMATION = 50;
+const SMALL_DEFINITION_CHARS = 40;
+const MIN_LINE_CHARS = 3;
+const FILLER_WORDS = new Set(
+	`if else for while do return break continue switch case default try catch finally
+	throw new function class def fn func end let const var in of async await yield
+	import export from as true false null undefined this self super static public
+	private protected void and or not is then pub mut type interface enum extends
+	implements with lambda pass assert defer match`.split(/\s+/),
+);
+const IMPORT_LINE =
+	/^(?:import\b|export\s+(?:\*|\{[^}]*\})\s*(?:as\s+\w+\s*)?(?:from\b|;|$)|from\s+\S+\s+import\b|use\s+[\w:{]|require(?:_relative)?\b|#include\b|package\b)|\brequire\s*\(|\bimport\s*\(/;
+const CONTINUATION = /^(?:\.[A-Za-z_$]|[?:]\s|&&|\|\|)/;
+const LITERALS =
+	/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\b\d[\w.]*/g;
+const WORDS = /[A-Za-z_$][\w$]*/g;
+const DEFINITION_START =
+	/^(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function\b|class\b|def\b|fn\b|func\b|pub\s+fn\b|const\s+[A-Za-z_$]|type\s+\w|interface\s+\w|enum\s+\w)/;
+const DEFINITION_END = /^(?:[}\]]|end\b)/;
+const ONE_LINE_DECLARATION =
+	/^(?:(?:export\s+)?(?:pub\s+)?(?:declare\s+)?(?:const|let|var|static|type|interface|enum)\s+\w|[A-Z][A-Z0-9_]*\s*(?::[^=]+)?=)/;
+
 interface Side {
 	filename: string;
 	lines: string[];
@@ -396,12 +420,14 @@ function textOf(span: Span | undefined, sides: Side[]): string | undefined {
  * Every line of both spans must be an identical raw pair, a pair that differs only in
  * whitespace outside any multi-line literal of a file without significant indentation,
  * or a divergence the operation lists; a listed divergence the lines do not bear out
- * also fails the claim.
+ * also fails the claim. A claim under 5 counted lines must also carry its own information
+ * and occur once among the deleted lines and once among the added lines of the patches.
  */
 export function verifyRelocation(op: Operation, files: PushFile[]): boolean {
 	const base = readSide(op.from, files);
 	const head = readSide(op.to, files);
 	if (!base || !head) return false;
+	if (!smallClaimHolds(base, head, files)) return false;
 	const baseSpent = new Set<string>();
 	const headSpent = new Set<string>();
 	for (const divergence of op.divergences) {
@@ -421,5 +447,98 @@ export function verifyRelocation(op: Operation, files: PushFile[]): boolean {
 	return accountedPositionally(
 		unclaimed(base, baseSpent),
 		unclaimed(head, headSpent),
+	);
+}
+
+function squeezed(line: string): string {
+	return line.trim().replace(/\s+/g, " ");
+}
+
+function information(line: string): number {
+	const text = line.trim();
+	if (text === "" || IMPORT_LINE.test(text)) return 0;
+	const rest = text.replace(LITERALS, " ");
+	const named = (rest.match(WORDS) ?? []).some((w) => !FILLER_WORDS.has(w));
+	const literalOnly = text !== rest && /[^\s,;:()[\]{}]/.test(rest);
+	return named || literalOnly ? text.replace(/\s/g, "").length : 0;
+}
+
+function isDefinition(lines: string[], indentSensitive: boolean): boolean {
+	const present = lines.map((l) => l.trim()).filter((l) => l !== "");
+	const first = present[0];
+	const last = present[present.length - 1];
+	if (first === undefined || last === undefined) return false;
+	if (!DEFINITION_START.test(first)) return false;
+	if (indentSensitive) return present.length > 1 || !last.endsWith(":");
+	return present.length === 1
+		? /[}\]][;,]?$/.test(last)
+		: DEFINITION_END.test(last);
+}
+
+function changedRuns(patch: string | undefined, sign: "-" | "+"): string[][] {
+	const runs: string[][] = [];
+	let current: string[] | null = null;
+	for (const row of (patch ?? "").split("\n")) {
+		if (row.startsWith(sign) && !HUNK_HEADER.test(row)) {
+			if (!current) {
+				current = [];
+				runs.push(current);
+			}
+			current.push(squeezed(row.slice(1)));
+		} else {
+			current = null;
+		}
+	}
+	return runs;
+}
+
+function occurrences(window: string[], runs: string[][]): number {
+	let found = 0;
+	for (const run of runs) {
+		for (let k = 0; k + window.length <= run.length; k++) {
+			if (window.every((line, i) => run[k + i] === line)) found++;
+		}
+	}
+	return found;
+}
+
+function distinctEnough(
+	sides: Side[],
+	files: PushFile[],
+	sign: "-" | "+",
+): boolean {
+	const runs = files.flatMap((f) => changedRuns(f.patch, sign));
+	return sides.every(
+		(side) => occurrences(side.lines.map(squeezed), runs) <= 1,
+	);
+}
+
+function smallClaimHolds(
+	base: Side[],
+	head: Side[],
+	files: PushFile[],
+): boolean {
+	const lines = base.flatMap((side) => side.lines);
+	const counted = lines.filter((l) => l.trim().length >= MIN_LINE_CHARS).length;
+	if (counted >= SMALL_CLAIM_LINES) return true;
+	const present = lines.filter((l) => l.trim() !== "");
+	const sensitive = base.some((side) => isIndentSensitive(side.filename));
+	const chars = present.join("").replace(/\s/g, "").length;
+	const total = lines.reduce((sum, l) => sum + information(l), 0);
+	const sameFile = base.every((side) =>
+		head.some((other) => other.filename === side.filename),
+	);
+	const first = present[0]?.trim() ?? "";
+	const informative =
+		!CONTINUATION.test(first) &&
+		(total >=
+			(sameFile ? SMALL_SAME_FILE_INFORMATION : SMALL_CLAIM_INFORMATION) ||
+			(isDefinition(lines, sensitive) && chars >= SMALL_DEFINITION_CHARS) ||
+			(present.length === 1 &&
+				ONE_LINE_DECLARATION.test(present[0] as string)));
+	return (
+		informative &&
+		distinctEnough(base, files, "-") &&
+		distinctEnough(head, files, "+")
 	);
 }

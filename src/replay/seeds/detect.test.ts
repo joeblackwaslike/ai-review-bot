@@ -295,7 +295,7 @@ describe("seed operation truth", () => {
 		"every committed seed's detection matches its truth operations",
 		async () => {
 			const seeds = await listSeeds();
-			expect(seeds).toHaveLength(25);
+			expect(seeds).toHaveLength(29);
 			for (const seed of seeds) {
 				const input = await seedReviewInput(seed);
 				try {

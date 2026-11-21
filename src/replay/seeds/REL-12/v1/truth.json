@@ -1,0 +1,12 @@
+{
+	"clean": false,
+	"defects": [
+		{
+			"path": "sync/accounts.py",
+			"startLine": 7,
+			"endLine": 7,
+			"description": "same_account now compares a normalized left key against the raw right key, so keys that differ only in case or padding no longer match."
+		}
+	],
+	"operations": []
+}

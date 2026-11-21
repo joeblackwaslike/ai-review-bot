@@ -30,6 +30,7 @@ export interface Run {
 	raw: string[];
 	startLine: number;
 	region: number;
+	hunk: number;
 	used: boolean[];
 }
 
@@ -157,6 +158,7 @@ export function extractRuns(
 	let delStart = 0;
 	let addStart = 0;
 	let region = 0;
+	let hunk = 0;
 	const flush = () => {
 		if (del.length) {
 			deleted.push({
@@ -167,6 +169,7 @@ export function extractRuns(
 				raw: delRaw,
 				startLine: delStart,
 				region,
+				hunk,
 				used: del.map(() => false),
 			});
 		}
@@ -179,6 +182,7 @@ export function extractRuns(
 				raw: addRaw,
 				startLine: addStart,
 				region,
+				hunk,
 				used: add.map(() => false),
 			});
 		}
@@ -205,6 +209,7 @@ export function extractRuns(
 			region++;
 			const header = /^@@ -(\d+)(?:,\d+)? \+(\d+)/.exec(line);
 			if (header) {
+				hunk++;
 				oldLine = Number(header[1]);
 				newLine = Number(header[2]);
 			} else {

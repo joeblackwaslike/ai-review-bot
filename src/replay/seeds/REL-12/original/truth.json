@@ -1,0 +1,33 @@
+{
+	"clean": false,
+	"defects": [
+		{
+			"path": "retry/policy.py",
+			"startLine": 10,
+			"endLine": 10,
+			"description": "The retry bound changes from attempt < max_attempts to attempt <= max_attempts, so one extra retry is made past the configured maximum."
+		}
+	],
+	"operations": [
+		{
+			"type": "relocation",
+			"from": [
+				{
+					"filename": "retry/policy.py",
+					"side": "base",
+					"startLine": 8,
+					"endLine": 9
+				}
+			],
+			"to": [
+				{
+					"filename": "retry/status.py",
+					"side": "head",
+					"startLine": 4,
+					"endLine": 5
+				}
+			],
+			"divergences": []
+		}
+	]
+}

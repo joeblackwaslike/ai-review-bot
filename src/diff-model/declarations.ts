@@ -82,7 +82,7 @@ export function findDeclarationMoves(
 		const head = to[0] as Site;
 		if (
 			base.run.filename === head.run.filename &&
-			base.run.region === head.run.region
+			base.run.hunk === head.run.hunk
 		)
 			continue;
 		if (base.run.used[base.at] || head.run.used[head.at]) continue;

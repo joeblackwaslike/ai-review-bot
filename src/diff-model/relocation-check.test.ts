@@ -762,4 +762,142 @@ describe("verifyRelocation whole-line // allowlist", () => {
 		const forged = { ...reclassed(op, "comment-only"), reviewWeight: 0 };
 		expect(verifyRelocation(forged, files)).toBe(false);
 	});
+
+	it("verifies a same-file relocation", () => {
+		const block = fn(body(20));
+		const files = [
+			pushFile(
+				"src/a.ts",
+				[
+					`@@ -10,${block.length} +9,0 @@`,
+					...block.map((line) => `-${line}`),
+					`@@ -60,0 +50,${block.length} @@`,
+					...block.map((line) => `+${line}`),
+				].join("\n"),
+			),
+		];
+		const ops = findRelocations(files);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]?.from[0]?.filename).toBe(ops[0]?.to[0]?.filename);
+		expect(verifyRelocation(ops[0] as Operation, files)).toBe(true);
+	});
+
+	it("drops a one-line claim whose text occurs twice on the base side", () => {
+		const line = "  const registeredHandlerCount = loadHandlers(config);";
+		const claim = (): Operation => ({
+			id: "relocation-1",
+			type: "relocation",
+			from: [
+				{
+					filename: "src/a.ts",
+					side: "base",
+					startLine: 10,
+					endLine: 10,
+					shown: "full",
+				},
+			],
+			to: [
+				{
+					filename: "src/b.ts",
+					side: "head",
+					startLine: 3,
+					endLine: 3,
+					shown: "full",
+				},
+			],
+			exact: true,
+			divergences: [],
+			reviewWeight: 0,
+		});
+		const added = pushFile(
+			"src/b.ts",
+			["@@ -0,0 +3,1 @@", `+${line}`].join("\n"),
+		);
+		const once = pushFile(
+			"src/a.ts",
+			["@@ -10,1 +9,0 @@", `-${line}`].join("\n"),
+		);
+		const twice = pushFile(
+			"src/a.ts",
+			["@@ -10,1 +9,0 @@", `-${line}`, "@@ -40,1 +38,0 @@", `-${line}`].join(
+				"\n",
+			),
+		);
+		expect(verifyRelocation(claim(), [once, added])).toBe(true);
+		expect(verifyRelocation(claim(), [twice, added])).toBe(false);
+	});
+
+	it("drops a one-line claim whose text occurs twice on the head side", () => {
+		const line = "  const registeredHandlerCount = loadHandlers(config);";
+		const op: Operation = {
+			id: "relocation-1",
+			type: "relocation",
+			from: [
+				{
+					filename: "src/a.ts",
+					side: "base",
+					startLine: 10,
+					endLine: 10,
+					shown: "full",
+				},
+			],
+			to: [
+				{
+					filename: "src/b.ts",
+					side: "head",
+					startLine: 3,
+					endLine: 3,
+					shown: "full",
+				},
+			],
+			exact: true,
+			divergences: [],
+			reviewWeight: 0,
+		};
+		const removed = pushFile(
+			"src/a.ts",
+			["@@ -10,1 +9,0 @@", `-${line}`].join("\n"),
+		);
+		const twice = pushFile(
+			"src/b.ts",
+			["@@ -0,0 +3,1 @@", `+${line}`, "@@ -30,0 +33,1 @@", `+${line}`].join(
+				"\n",
+			),
+		);
+		expect(verifyRelocation(op, [removed, twice])).toBe(false);
+	});
+
+	it("drops a short claim that carries too little information", () => {
+		const line = "  return value;";
+		const op: Operation = {
+			id: "relocation-1",
+			type: "relocation",
+			from: [
+				{
+					filename: "src/a.ts",
+					side: "base",
+					startLine: 10,
+					endLine: 10,
+					shown: "full",
+				},
+			],
+			to: [
+				{
+					filename: "src/b.ts",
+					side: "head",
+					startLine: 3,
+					endLine: 3,
+					shown: "full",
+				},
+			],
+			exact: true,
+			divergences: [],
+			reviewWeight: 0,
+		};
+		const files = [
+			pushFile("src/a.ts", ["@@ -10,1 +9,0 @@", `-${line}`].join("\n")),
+			pushFile("src/b.ts", ["@@ -0,0 +3,1 @@", `+${line}`].join("\n")),
+		];
+		expect(verifyRelocation(op, files)).toBe(false);
+	});
 });

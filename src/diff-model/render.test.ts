@@ -525,4 +525,75 @@ describe("renderDiffModel", () => {
 		expect(r.summary).toContain("has a code difference from the original");
 		expect(r.summary).toContain("line 5");
 	});
+
+	it("orders operations by lines covered before code divergences", () => {
+		const big = op({
+			id: "relocation-1",
+			type: "relocation",
+			from: [span("src/big.ts", "base", 1, 30)],
+			to: [span("src/big2.ts", "head", 1, 30)],
+		});
+		const small = op({
+			id: "relocation-2",
+			type: "relocation",
+			from: [span("src/small.ts", "base", 1, 1)],
+			to: [span("src/small2.ts", "head", 1, 1)],
+			exact: false,
+			divergences: [codeDivergence()],
+		});
+		const r = renderDiffModel(model({ operations: [small, big] }), OPTS);
+		expect(r.summary.indexOf("src/big.ts")).toBeLessThan(
+			r.summary.indexOf("src/small.ts"),
+		);
+	});
+
+	it("ranks a code divergence first among moves of equal size", () => {
+		const clean = op({ id: "relocation-1", type: "relocation" });
+		const edited = op({
+			id: "relocation-2",
+			type: "relocation",
+			from: [span("src/c.ts", "base", 1, 10)],
+			to: [span("src/d.ts", "head", 1, 10)],
+			exact: false,
+			divergences: [codeDivergence()],
+		});
+		const r = renderDiffModel(model({ operations: [clean, edited] }), OPTS);
+		expect(r.summary.indexOf("src/c.ts")).toBeLessThan(
+			r.summary.indexOf("src/a.ts"),
+		);
+	});
+
+	it("summarizes one-line moves first when the detail limit bites", () => {
+		const bigOps = Array.from({ length: 12 }, (_, i) =>
+			op({
+				id: `relocation-${i + 1}`,
+				type: "relocation",
+				from: [span(`src/big${i}.ts`, "base", 1, 20)],
+				to: [span(`src/dest${i}.ts`, "head", 1, 20)],
+			}),
+		);
+		const one = op({
+			id: "relocation-13",
+			type: "relocation",
+			from: [span("src/tiny.ts", "base", 5, 5)],
+			to: [span("src/tiny2.ts", "head", 5, 5)],
+		});
+		const r = renderDiffModel(model({ operations: [one, ...bigOps] }), OPTS);
+		expect(r.summary).not.toContain("src/tiny.ts");
+		expect(r.summary).toContain("Not detailed: 1 relocation");
+	});
+
+	it("words a same-file move as moved within the file", () => {
+		const same = op({
+			id: "relocation-1",
+			type: "relocation",
+			from: [span("src/a.ts", "base", 10, 20)],
+			to: [span("src/a.ts", "head", 40, 50)],
+		});
+		const r = renderDiffModel(model({ operations: [same] }), OPTS);
+		expect(r.summary).toContain("moved within");
+		expect(r.summary).toContain("src/a.ts");
+		expect(r.summary).toContain("base lines 10-20");
+		expect(r.summary).toContain("lines 40-50");
+	});
 });

@@ -915,12 +915,15 @@ describe("distinctiveness acceptance and same-file moves", () => {
 	it("reports a block moved within one file", () => {
 		const block = body(2);
 		const patch = [
-			"@@ -1,9 +1,9 @@",
+			"@@ -1,4 +1,2 @@",
 			...block.map((l) => `-${l}`),
 			" context one",
 			" context two",
+			"@@ -40,3 +38,5 @@",
 			" context three",
 			...block.map((l) => `+${l}`),
+			" context four",
+			" context five",
 		].join("\n");
 		const files = [pushFile("src/a.ts", patch)];
 		const ops = findRelocations(files);
@@ -942,13 +945,82 @@ describe("distinctiveness acceptance and same-file moves", () => {
 
 	it("reports a one-line declaration moved within one file", () => {
 		const patch = [
+			"@@ -1,3 +1,2 @@",
+			"-export const MAX_RETRIES = 3;",
+			" context one",
+			" context two",
+			"@@ -40,2 +39,3 @@",
+			" context three",
+			"+export const MAX_RETRIES = 3;",
+			" context four",
+		].join("\n");
+		const ops = findRelocations([pushFile("src/a.ts", patch)]);
+		expect(ops).toHaveLength(1);
+	});
+
+	it("does not report a one-line declaration deleted and re-added within one hunk", () => {
+		const patch = [
 			"@@ -1,5 +1,5 @@",
 			"-export const MAX_RETRIES = 3;",
 			" context one",
 			" context two",
 			"+export const MAX_RETRIES = 3;",
 		].join("\n");
-		const ops = findRelocations([pushFile("src/a.ts", patch)]);
-		expect(ops).toHaveLength(1);
+		expect(findRelocations([pushFile("src/a.ts", patch)])).toEqual([]);
+	});
+
+	it("does not pair a short same-file seed whose runs share one hunk", () => {
+		const line =
+			"  const subtotal = computeSubtotal(items, taxRate, shippingZone);";
+		const patch = [
+			"@@ -1,9 +1,9 @@",
+			` context zero`,
+			`-${line}`,
+			" context one",
+			" context two",
+			" context three",
+			`+${line}`,
+		].join("\n");
+		expect(findRelocations([pushFile("src/a.ts", patch)])).toEqual([]);
+	});
+
+	it("pairs a short same-file seed across two hunks", () => {
+		const line =
+			"  const subtotal = computeSubtotal(items, taxRate, shippingZone);";
+		const patch = [
+			"@@ -10,4 +10,3 @@",
+			" context zero",
+			`-${line}`,
+			" context one",
+			" context two",
+			"@@ -40,3 +39,4 @@",
+			" context three",
+			`+${line}`,
+			" context four",
+			" context five",
+		].join("\n");
+		expect(findRelocations([pushFile("src/a.ts", patch)])).toHaveLength(1);
+	});
+
+	it("rejects a short same-file seed under 50 characters of information", () => {
+		const line = "  return { ready: missing.length === 0, missing };";
+		const patch = [
+			"@@ -10,4 +10,3 @@",
+			" context zero",
+			`-${line}`,
+			" context one",
+			" context two",
+			"@@ -40,3 +39,4 @@",
+			" context three",
+			`+${line}`,
+			" context four",
+			" context five",
+		].join("\n");
+		expect(findRelocations([pushFile("src/a.ts", patch)])).toEqual([]);
+	});
+
+	it("rejects a short seed that starts mid-expression", () => {
+		const lines = ['  .split("\\n")', "  .find((l) => l.trim())"];
+		expect(move(lines, lines)).toEqual([]);
 	});
 });
