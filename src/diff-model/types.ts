@@ -55,7 +55,7 @@ export interface Divergence {
 
 export interface Operation {
 	id: string;
-	type: "relocation" | "rename" | "mechanical";
+	type: "relocation" | "rename" | "mechanical" | "copy";
 	from: Span[];
 	to: Span[];
 	exact: boolean;

@@ -112,8 +112,13 @@ export function isUnique(c: Candidate, deleted: Run[], added: Run[]): boolean {
 
 const drawn = new WeakMap<WorkBudget, Set<string>>();
 
-function drawBudget(c: Candidate, chars: number, budget: WorkBudget): boolean {
-	const key = `${c.from.index}|${c.to.index}|${c.fromStart}|${c.toStart}|${c.length}`;
+function drawBudget(
+	c: Candidate,
+	chars: number,
+	budget: WorkBudget,
+	scope = "",
+): boolean {
+	const key = `${scope}${c.from.index}|${c.to.index}|${c.fromStart}|${c.toStart}|${c.length}`;
 	let keys = drawn.get(budget);
 	if (!keys) {
 		keys = new Set();
@@ -295,4 +300,78 @@ export function acceptSeed(
 		information >= (sameFile ? MIN_SAME_FILE_INFORMATION : MIN_INFORMATION) ||
 		(isWholeDefinition(c) && chars >= MIN_DEFINITION_CHARS);
 	return enough && isUnique(c, ctx.deleted, ctx.added);
+}
+
+const MIN_DEFINITION_LINES = 3;
+const PROSE_FILE = /\.(md|mdx|txt|rst|adoc)$/i;
+const PROPERTY_LINE =
+	/^(?:\.\.\.\S.*|["']?[\w$-]+["']?\??:(?:\s.*)?|[\w$]+|[{[(]+|[}\])]+[,;)]*)$/;
+const IMPORT_CLOSER = /^[})\]]\s*from\b/;
+const BARE_NAME = /^(?:type\s+)?[\w$]+(?:\s+as\s+[\w$]+)?,?$/;
+
+function bracketBalance(text: string): number {
+	return (
+		(text.match(/[({[]/g) ?? []).length - (text.match(/[)}\]]/g) ?? []).length
+	);
+}
+
+/** Whether every line is part of an object literal body: a property, a spread, a shorthand name or a bracket. */
+function onlyProperties(lines: string[]): boolean {
+	return lines.every((line) => {
+		const text = line.trim().replace(/,$/, "");
+		return text === "" || PROPERTY_LINE.test(text);
+	});
+}
+
+/** Whether the brackets outside string literals close exactly within the lines, never closing before they open. */
+function bracketsClose(lines: string[]): boolean {
+	let depth = 0;
+	for (const line of lines) {
+		depth += bracketBalance(line.replace(LITERAL, " "));
+		if (depth < 0) return false;
+	}
+	return depth === 0;
+}
+
+/** Whether any line says something beyond import syntax: statements, multi-line import lists and bare name lists carry nothing. */
+function hasSubstance(lines: string[]): boolean {
+	let depth = 0;
+	return lines.some((line) => {
+		const text = line.trim();
+		if (depth > 0) {
+			depth += bracketBalance(text);
+			return false;
+		}
+		if (IMPORT_LIKE.test(text)) {
+			depth = Math.max(0, bracketBalance(text));
+			return false;
+		}
+		if (IMPORT_CLOSER.test(text) || BARE_NAME.test(text)) return false;
+		return lineInformation(text) > 0;
+	});
+}
+
+/**
+ * Decides whether an exact duplicate is a block worth reporting as a copy: five or more counted
+ * lines, or a whole definition of at least three non-blank lines that is not a `const` assignment, and in either case at least
+ * one line that carries information (a block of imports, closers, bare keywords and bare name
+ * lists never qualifies). Outside prose files its brackets must also close within the block and
+ * it must hold more than object properties, so a slice through the middle of a call or a run of
+ * test data is not a copy. A candidate that
+ * passes these draws once from the budget and is rejected when either pool runs dry.
+ */
+export function acceptCopySeed(c: Candidate, budget: WorkBudget): boolean {
+	const lines = c.from.lines.slice(c.fromStart, c.fromStart + c.length);
+	const present = lines.filter((line) => line.trim() !== "").length;
+	const first = lines.find((line) => line.trim() !== "") ?? "";
+	const floor =
+		c.counted >= MIN_COUNTED_LINES ||
+		(present >= MIN_DEFINITION_LINES &&
+			!first.startsWith("const ") &&
+			isWholeDefinition(c));
+	if (!floor) return false;
+	if (!hasSubstance(lines)) return false;
+	const codeShaped = bracketsClose(lines) && !onlyProperties(lines);
+	if (!PROSE_FILE.test(c.to.filename) && !codeShaped) return false;
+	return drawBudget(c, nonSpace(lines.join("")), budget, "copy|");
 }

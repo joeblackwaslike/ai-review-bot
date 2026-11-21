@@ -10,6 +10,7 @@ import {
 } from "../moved-blocks.js";
 import { acceptSeed, MIN_COUNTED_LINES } from "./acceptance.js";
 import { type BudgetLimits, WorkBudget } from "./budget.js";
+import { findCopies } from "./copies.js";
 import { findDeclarationMoves } from "./declarations.js";
 import {
 	hasOddBreak,
@@ -60,7 +61,7 @@ interface RawDivergence {
 	headIndex?: number;
 }
 
-interface Built {
+export interface Built {
 	renamed: number;
 	fromStart: number;
 	fromEnd: number;
@@ -416,11 +417,16 @@ function limitFor(blockLines: number): number {
 	);
 }
 
-function build(
+/**
+ * Widens a chain of seeds into one block and aligns its two sides. `fromSide` names the file
+ * version the source lines belong to: "base" for deleted lines, "head" for a copy's source.
+ */
+export function build(
 	chain: Candidate[],
 	withEdges: boolean,
 	budget: WorkBudget,
 	onlyRisky = false,
+	fromSide: Span["side"] = "base",
 ): Built {
 	const first = chain[0] as Candidate;
 	const last = chain[chain.length - 1] as Candidate;
@@ -530,7 +536,7 @@ function build(
 			counted++;
 		const out: Divergence = { kind: d.kind, class: cls };
 		if (d.baseIndex !== undefined)
-			out.base = lineSpan(from, "base", fromStart, d.baseIndex);
+			out.base = lineSpan(from, fromSide, fromStart, d.baseIndex);
 		if (d.headIndex !== undefined)
 			out.head = lineSpan(to, "head", toStart, d.headIndex);
 		if (baseText !== undefined) out.original = baseText.trim();
@@ -548,7 +554,8 @@ function build(
 	};
 }
 
-function chainSeeds(seeds: Candidate[]): Candidate[][] {
+/** Groups the seeds of one run pair into chains that are close enough to widen into one block. */
+export function chainSeeds(seeds: Candidate[]): Candidate[][] {
 	const chains: Candidate[][] = [];
 	for (const seed of [...seeds].sort((a, b) => a.fromStart - b.fromStart)) {
 		const target = chains.find((chain) => {
@@ -648,9 +655,8 @@ export function findRelocations(
 	files: PushFile[],
 	limits: Partial<BudgetLimits> = {},
 ): Operation[] {
-	const { deleted, added } = collectRuns(
-		files.filter((f) => !UNMATCHED_FILES.test(f.filename)),
-	);
+	const matched = files.filter((f) => !UNMATCHED_FILES.test(f.filename));
+	const { deleted, added } = collectRuns(matched);
 	const budget = new WorkBudget(limits);
 	const ctx = { deleted, added, budget };
 	const seeds = selectMatches(deleted, added, 1, (c) => acceptSeed(c, ctx), {
@@ -684,14 +690,19 @@ export function findRelocations(
 		operations.push(
 			...findTokenOperations(deleted, added, budget, literalFiles),
 		);
-	operations.sort(
-		(a, b) =>
-			compareText(a.from[0]?.filename, b.from[0]?.filename) ||
-			(a.from[0]?.startLine ?? 0) - (b.from[0]?.startLine ?? 0) ||
-			compareText(a.to[0]?.filename, b.to[0]?.filename) ||
-			(a.to[0]?.startLine ?? 0) - (b.to[0]?.startLine ?? 0),
+	const copies = budget.exhausted ? [] : findCopies(matched, added, budget);
+	const numbered = (ops: Operation[], prefix: string) =>
+		ops.sort(byPosition).map((op, k) => ({ ...op, id: `${prefix}-${k + 1}` }));
+	return [...numbered(operations, "relocation"), ...numbered(copies, "copy")];
+}
+
+function byPosition(a: Operation, b: Operation): number {
+	return (
+		compareText(a.from[0]?.filename, b.from[0]?.filename) ||
+		(a.from[0]?.startLine ?? 0) - (b.from[0]?.startLine ?? 0) ||
+		compareText(a.to[0]?.filename, b.to[0]?.filename) ||
+		(a.to[0]?.startLine ?? 0) - (b.to[0]?.startLine ?? 0)
 	);
-	return operations.map((op, k) => ({ ...op, id: `relocation-${k + 1}` }));
 }
 
 function size(chain: Candidate[]): number {

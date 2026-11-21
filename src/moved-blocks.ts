@@ -332,6 +332,8 @@ export interface MatchOptions {
 	allowSameFile?: boolean;
 	uniqueBelow?: number;
 	charge?: () => boolean;
+	/** Source lines are never consumed: they are neither skipped when used nor marked used by a match. */
+	sharedSources?: boolean;
 }
 
 interface SeedPlan {
@@ -413,20 +415,20 @@ function unusedSegments(
 	c: Candidate,
 	minLines: number,
 	accept?: (c: Candidate) => boolean,
+	sharedSources = false,
 ): Candidate[] {
 	const out: Candidate[] = [];
+	const taken = (at: number) =>
+		(!sharedSources && c.from.used[c.fromStart + at]) ||
+		c.to.used[c.toStart + at];
 	let k = 0;
 	while (k < c.length) {
-		if (c.from.used[c.fromStart + k] || c.to.used[c.toStart + k]) {
+		if (taken(k)) {
 			k++;
 			continue;
 		}
 		const start = k;
-		while (
-			k < c.length &&
-			!c.from.used[c.fromStart + k] &&
-			!c.to.used[c.toStart + k]
-		) {
+		while (k < c.length && !taken(k)) {
 			k++;
 		}
 		const counted = countRange(c.from.lines, c.fromStart + start, k - start);
@@ -441,6 +443,76 @@ function unusedSegments(
 		if (counted >= minLines && (!accept || accept(part))) out.push(part);
 	}
 	return out;
+}
+
+/**
+ * Splits one file's patch into its maximal runs of unchanged context lines, numbered on the
+ * head side from the hunk headers. A hunk header ends a run, so lines of different hunks never
+ * join. Each run gets its own negative `region`.
+ */
+export function extractContextRuns(
+	filename: string,
+	patch: string | undefined,
+): Run[] {
+	const runs: Run[] = [];
+	if (!patch) return runs;
+	const indentSensitive = isIndentSensitive(filename);
+	let raw: string[] = [];
+	let start = 0;
+	let newLine = 0;
+	let hunk = 0;
+	const flush = () => {
+		if (raw.length) {
+			runs.push({
+				index: -1,
+				filename,
+				indentSensitive,
+				lines: raw.map((line) =>
+					normalizeCodeLine(line, { keepIndent: indentSensitive }),
+				),
+				raw,
+				startLine: start,
+				region: -(runs.length + 1),
+				hunk,
+				used: raw.map(() => false),
+			});
+		}
+		raw = [];
+	};
+	for (const line of patch.split("\n")) {
+		if (line.startsWith("\\")) continue;
+		if (line.startsWith("-")) {
+			flush();
+		} else if (line.startsWith("+")) {
+			flush();
+			newLine++;
+		} else {
+			const header = /^@@ -(\d+)(?:,\d+)? \+(\d+)/.exec(line);
+			if (header) {
+				flush();
+				hunk++;
+				newLine = Number(header[2]);
+			} else {
+				if (!raw.length) start = newLine;
+				raw.push(line.slice(1));
+				newLine++;
+			}
+		}
+	}
+	flush();
+	return runs;
+}
+
+/**
+ * Every file's runs of unchanged context lines, indexed from minus their count up to -1 so
+ * they order ahead of the added runs, which start at 0.
+ */
+export function collectContextRuns(files: PushFile[]): Run[] {
+	const runs = files.flatMap((f) => extractContextRuns(f.filename, f.patch));
+	runs.forEach((r, i) => {
+		r.index = i - runs.length;
+	});
+	return runs;
 }
 
 /** Every file's deleted and added runs, indexed in file order. */
@@ -490,13 +562,13 @@ export function selectMatches(
 	}
 	const selected: Candidate[] = [];
 	for (let c = queue.pop(); c; c = queue.pop()) {
-		const free = unusedSegments(c, minLines, accept);
+		const free = unusedSegments(c, minLines, accept, options?.sharedSources);
 		if (free.length !== 1 || free[0]?.length !== c.length) {
 			for (const part of free) insertSorted(queue, part);
 			continue;
 		}
 		for (let k = 0; k < c.length; k++) {
-			c.from.used[c.fromStart + k] = true;
+			if (!options?.sharedSources) c.from.used[c.fromStart + k] = true;
 			c.to.used[c.toStart + k] = true;
 		}
 		selected.push(c);

@@ -824,7 +824,9 @@ describe("distinctiveness acceptance and same-file moves", () => {
 			addedTo("src/b.ts", 1, def),
 			addedTo("src/c.ts", 1, def),
 		];
-		expect(findRelocations(files)).toEqual([]);
+		expect(
+			findRelocations(files).filter((op) => op.type === "relocation"),
+		).toEqual([]);
 	});
 
 	it("rejects a lone signature line and a lone Python def line", () => {
@@ -1625,6 +1627,21 @@ describe("findRelocations receiver and reshape output", () => {
 					shown: "full",
 				},
 			},
+		]);
+	});
+
+	it("keeps relocation ids when copies are also found", () => {
+		const moved = body(8);
+		const dup = body(6).map((l) => l.replace("compute", "derive"));
+		const ops = findRelocations([
+			deletedFrom("src/a.ts", 10, moved),
+			addedTo("src/b.ts", 3, moved),
+			addedTo("src/c.ts", 3, dup),
+			addedTo("src/d.ts", 3, dup),
+		]);
+		expect(ops.map((op) => [op.type, op.id])).toEqual([
+			["relocation", "relocation-1"],
+			["copy", "copy-1"],
 		]);
 	});
 });
