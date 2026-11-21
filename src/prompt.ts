@@ -12,12 +12,15 @@ import {
 
 const skillsDir = fileURLToPath(new URL("../skills", import.meta.url));
 
-function loadSkill(relativePath: string): string {
-	const raw = readFileSync(`${skillsDir}/${relativePath}`, "utf8");
-	// Strip YAML frontmatter if present
+/** Removes a leading YAML frontmatter block from skill text, if present. */
+export function stripFrontmatter(raw: string): string {
 	if (!raw.startsWith("---")) return raw;
 	const end = raw.indexOf("---", 3);
 	return end === -1 ? raw : raw.slice(end + 3).trimStart();
+}
+
+function loadSkill(relativePath: string): string {
+	return stripFrontmatter(readFileSync(`${skillsDir}/${relativePath}`, "utf8"));
 }
 
 export interface PromptContext {

@@ -14,7 +14,11 @@ import {
 	routerContext,
 	toLiveFindings,
 } from "../live-wiring.js";
-import type { StrategyInput, StrategyResult } from "../strategy.js";
+import type {
+	StrategyInput,
+	StrategyResult,
+	ToolCallRecord,
+} from "../strategy.js";
 import { fixtureReviewer, type RoundUsage } from "../types.js";
 import { CHARS_PER_TOKEN, EXPECTED_COMPLETION_TOKENS } from "./a.js";
 import {
@@ -34,6 +38,12 @@ export interface SpendMatchedConfig {
 	label: string;
 	/** The `- Ref:` line of the cached prompt prefix; keep it distinct per strategy so prompt caches don't cross. */
 	ref: string;
+	/** Text passed to every run as the agent's custom prompt. */
+	customPrompt?: string;
+	/** Usage of work done before the loop; added to the result and counted toward the spend. */
+	extraUsage?: RoundUsage;
+	/** Tool calls made before the loop; their cost is spent before the target is chased. */
+	extraToolCalls?: ToolCallRecord[];
 }
 
 export const selectionFor = (input: StrategyInput) =>
@@ -82,6 +92,8 @@ export async function runSpendMatched(
 	const { fixture, signal } = input;
 	const { maxUsd, maxWallMs } = input.budget;
 	const target = input.spendTargetUsd;
+	const extraToolCalls = config.extraToolCalls ?? [];
+	const extraUsd = extraToolCalls.reduce((sum, t) => sum + t.costUsd, 0);
 	const tolerance = input.tolerance ?? DEFAULT_TOLERANCE;
 	const selection = selectionFor(input);
 	const auth = await resolveSelectionAuth(selection.provider);
@@ -93,7 +105,7 @@ export async function runSpendMatched(
 		files: [{ path: "replay.diff", content: input.diff }],
 	});
 	const once = () =>
-		runAgent(config.skill, context, selection, "", {
+		runAgent(config.skill, context, selection, config.customPrompt ?? "", {
 			auth,
 			abortSignal: signal,
 		});
@@ -110,8 +122,8 @@ export async function runSpendMatched(
 	if (first.status !== "ok")
 		throw new Error(`${config.label} first run failed: ${first.status}`);
 	const attempts: AgentOutcome[] = [first];
-	let spent = costOf(first);
-	const coldUsd = spent;
+	const coldUsd = costOf(first);
+	let spent = coldUsd + extraUsd;
 
 	if (
 		target !== undefined &&
@@ -148,18 +160,19 @@ export async function runSpendMatched(
 	}
 
 	const usage: RoundUsage = {};
+	const loopUsage: RoundUsage = {};
 	const agentReviews: { skill: string; review: OkOutcome["review"] }[] = [];
 	let failedAttempts = 0;
 	for (const [i, o] of attempts.entries()) {
 		const skill = `${config.label}-run-${i + 1}`;
 		if (isOk(o)) agentReviews.push({ skill, review: o.review });
 		else failedAttempts++;
-		if ("usage" in o && o.usage) usage[`${skill}.md`] = o.usage;
+		if ("usage" in o && o.usage) loopUsage[`${skill}.md`] = o.usage;
 	}
-	const achievedUsd = requireCost(
-		roundCostUsd(usage, selection.model),
-		selection.model,
-	);
+	Object.assign(usage, loopUsage, config.extraUsage);
+	const achievedUsd =
+		requireCost(roundCostUsd(loopUsage, selection.model), selection.model) +
+		extraUsd;
 	const merged = mergeReviewsDetailed(agentReviews.map((a) => a.review));
 	return {
 		findings: toLiveFindings(merged.review),
@@ -167,7 +180,7 @@ export async function runSpendMatched(
 		posted: [],
 		agentReviews,
 		usage,
-		toolCalls: [],
+		toolCalls: extraToolCalls,
 		wallMs: Date.now() - started,
 		spend: {
 			targetUsd: target ?? null,

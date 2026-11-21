@@ -13,6 +13,7 @@ import {
 import type { ExperimentPlan } from "./plan.js";
 import {
 	capFor,
+	chargeCell,
 	executeCell,
 	type GridReport,
 	InputBuilder,
@@ -116,7 +117,8 @@ export async function runChains(
 
 	const stored = deps.store.readAll().records;
 	const spentUsd: Record<Provider, number> = { anthropic: 0, openai: 0 };
-	for (const r of stored) spentUsd[r.provider] += r.costUsd;
+	for (const r of stored)
+		chargeCell(spentUsd, r.provider, r.costUsd, r.result?.toolCalls ?? []);
 	const report: GridReport = {
 		ran: 0,
 		skippedExisting: 0,
@@ -257,7 +259,12 @@ export async function runChains(
 						stoppedStrategies.add(s.name);
 						continue;
 					}
-					spentUsd[provider] += done.record.costUsd;
+					chargeCell(
+						spentUsd,
+						provider,
+						done.record.costUsd,
+						done.result.toolCalls,
+					);
 					if (s.name === A) aCosts.set(roundIndex, done.record.costUsd);
 					if (done.record.overCap) {
 						report.overCap.push({ ...cell, ...done.record.overCap });

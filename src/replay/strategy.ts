@@ -3,7 +3,7 @@ import type { ModelReview, PullFile } from "../review.js";
 import type { ReviewerId } from "../reviewer-id.js";
 import type { FrozenFixture } from "./frozen.js";
 import type { LiveFinding } from "./live.js";
-import type { CandidateRecord, Round, RoundUsage } from "./types.js";
+import type { CandidateRecord, Provider, Round, RoundUsage } from "./types.js";
 
 export interface CheckoutHandle {
 	path: string;
@@ -17,6 +17,8 @@ export interface FrozenHistory {
 
 export interface ToolCallRecord {
 	name: string;
+	/** Provider billed for this call when it differs from the cell's provider. */
+	provider?: Provider;
 	wallMs: number;
 	costUsd: number;
 }

@@ -121,6 +121,14 @@ describe("strategyF0", () => {
 		expect(strategyF0.estimateCost(input)).toBe(strategyA0.estimateCost(input));
 	});
 
+	it("records no tool calls, only run usage keys and an empty custom prompt", async () => {
+		const out = await strategyF0.run(inputFor(1000));
+		expect(out.toolCalls).toEqual([]);
+		for (const key of Object.keys(out.usage))
+			expect(key).toMatch(/^f0-run-\d+\.md$/);
+		for (const call of mockRunAgent.mock.calls) expect(call[3]).toBe("");
+	});
+
 	it("makes one call when no spend target is set", async () => {
 		const out = await strategyF0.run(inputFor());
 		expect(mockRunAgent).toHaveBeenCalledTimes(1);

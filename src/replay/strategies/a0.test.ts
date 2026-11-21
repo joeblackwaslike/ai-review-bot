@@ -94,6 +94,14 @@ describe("strategyA0", () => {
 		);
 	});
 
+	it("records no tool calls, only run usage keys and an empty custom prompt", async () => {
+		const out = await strategyA0.run(inputFor(1000));
+		expect(out.toolCalls).toEqual([]);
+		for (const key of Object.keys(out.usage))
+			expect(key).toMatch(/^a0-run-\d+\.md$/);
+		for (const call of mockRunAgent.mock.calls) expect(call[3]).toBe("");
+	});
+
 	it("runs 3 times when the target is 3x one run, each repeat its own group", async () => {
 		const out = await strategyA0.run(inputFor(oneRunUsd * 3));
 

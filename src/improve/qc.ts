@@ -77,7 +77,7 @@ function buildJudgePrompt(finding: JudgeableFinding, hunk: string): string {
  * A `TypeError` from the SDK is possible in principle; failing loudly on a
  * whole run is still the better trade, because the alternative renders a real
  * bug as "every provider call was flaky". */
-function isProgrammingError(err: unknown): boolean {
+export function isProgrammingError(err: unknown): boolean {
 	return err instanceof TypeError || err instanceof ReferenceError;
 }
 
