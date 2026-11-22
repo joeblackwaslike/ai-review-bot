@@ -1,0 +1,12 @@
+{
+	"clean": false,
+	"defects": [
+		{
+			"path": "src/http/worker.ts",
+			"startLine": 6,
+			"endLine": 6,
+			"description": "run expects milliseconds but receives the batch timeout divided by 1000, so every batch job expires a thousand times too early."
+		}
+	],
+	"operations": []
+}

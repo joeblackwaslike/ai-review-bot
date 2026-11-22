@@ -1,0 +1,12 @@
+{
+	"clean": false,
+	"defects": [
+		{
+			"path": "src/billing/invoices.ts",
+			"startLine": 19,
+			"endLine": 19,
+			"description": "refundCard refunds the total plus the tax again, so every refund overshoots by the tax amount."
+		}
+	],
+	"operations": []
+}

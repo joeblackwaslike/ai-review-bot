@@ -1,0 +1,4 @@
+{
+	"title": "Record card charges and refunds in the audit log",
+	"body": "Both card operations now run inside withAudit. The amount calculation only moves one level in. There is no other functional change."
+}

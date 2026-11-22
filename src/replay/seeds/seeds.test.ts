@@ -7,7 +7,7 @@ import { listSeeds, type Seed } from "./schema.js";
 
 const OPS = ["DEL-04", "MEC-01", "REL-01", "REL-03", "REL-10"];
 const VARIANTS = ["clean", "original", "v1", "v2", "v3"];
-const MATCHING_OPS = ["REL-11", "REL-12"];
+const MATCHING_OPS = ["REL-11", "REL-12", "REL-13", "REL-14"];
 const MATCHING_VARIANTS = ["original", "v1"];
 const DEFECT_VARIANTS = ["original", "v1", "v2", "v3"];
 const HINT_WORDS = /\b(bug|seed|todo|fixme|stale)\b/i;

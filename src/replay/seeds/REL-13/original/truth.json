@@ -1,0 +1,12 @@
+{
+	"clean": false,
+	"defects": [
+		{
+			"path": "src/ui/Card.tsx",
+			"startLine": 6,
+			"endLine": 6,
+			"description": "The class names are swapped, so an elevated card renders without the elevated class and a flat card gets it."
+		}
+	],
+	"operations": []
+}
