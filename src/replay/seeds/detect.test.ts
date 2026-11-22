@@ -434,6 +434,25 @@ function modelOfSeed(input: SeedReviewInput): DiffModel {
 
 const SLOW = 120_000;
 
+describe("COP-01 original", () => {
+	it("scores a model that calls the context-sourced copy new as a miss", async () => {
+		const seed = (await listSeeds()).find((x) => x.id === "COP-01/original");
+		expect(seed?.truth.operations[0]?.shape?.sourceNew).toBe(false);
+		if (!seed) return;
+		const model = modelOfSeed(await seedReviewInput(seed));
+		expect(scoreDetection(seed.truth.operations, model).missing).toEqual([]);
+		const claimed = {
+			...model,
+			operations: model.operations.map((o) => ({
+				...o,
+				shape: { ...o.shape, sourceNew: true },
+			})),
+		};
+		const result = scoreDetection(seed.truth.operations, claimed);
+		expect(result.missing).toHaveLength(1);
+	}, 60_000);
+});
+
 describe("seed operation truth", () => {
 	it(
 		"every committed seed's detection matches its truth operations",

@@ -44,7 +44,10 @@
 						"endLine": 22
 					}
 				}
-			]
+			],
+			"shape": {
+				"sourceNew": false
+			}
 		}
 	]
 }
