@@ -7,6 +7,7 @@ import {
 	type PushFile,
 	selectMatches,
 } from "./moved-blocks.js";
+import { classifyPush } from "./push-shape.js";
 
 describe("selectMatches discovery charge", () => {
 	it("stops extending candidates once the charge refuses", () => {
@@ -324,7 +325,7 @@ describe("findMovedBlocks span", () => {
 });
 
 describe("findMovedBlocks at scale", () => {
-	it("finds 100 scattered moves among 3000 lines each way", () => {
+	it("finds 100 scattered moves among 3000 lines each way in under 500 ms", () => {
 		const unique = (tag: string, n: number) =>
 			Array.from({ length: n }, (_, i) => `const ${tag}${i} = call(${i});`);
 		const deleted = unique("old", 3000);
@@ -339,17 +340,17 @@ describe("findMovedBlocks at scale", () => {
 		const out = findMovedBlocks(files);
 		const elapsed = performance.now() - start;
 		expect(out).toHaveLength(100);
-		expect(elapsed).toBeLessThan(3000);
+		expect(elapsed).toBeLessThan(500);
 	});
 
-	it("handles 2000 identical lines moved as one block", () => {
+	it("handles 2000 identical lines moved as one block in under 500 ms", () => {
 		const same = Array.from({ length: 2000 }, () => "const same = repeat();");
 		const files = [file("a.ts", same, []), file("b.ts", [], same)];
 		const start = performance.now();
 		const out = findMovedBlocks(files);
 		const elapsed = performance.now() - start;
 		expect(out).toMatchObject([{ from: "a.ts", to: "b.ts", lineCount: 2000 }]);
-		expect(elapsed).toBeLessThan(3000);
+		expect(elapsed).toBeLessThan(500);
 	});
 
 	it("keeps distinct moves visible among 3000 repeated lines per file", () => {
@@ -436,5 +437,43 @@ describe("hunk header as a region boundary", () => {
 		});
 		expect(matches).toHaveLength(1);
 		expect(deleted[0]?.region).not.toBe(added[0]?.region);
+	});
+});
+
+describe("indentation outside the diff model's strict rule", () => {
+	const nested = LINES.map((l) => `    ${l}`);
+
+	it.each([
+		"rb",
+		"sh",
+		"scala",
+	])("still collapses leading indentation for .%s in findMovedBlocks", (ext) => {
+		const out = findMovedBlocks([
+			file(`a.${ext}`, nested, []),
+			file(`b.${ext}`, [], LINES),
+		]);
+		expect(out).toMatchObject([{ from: `a.${ext}`, lineCount: 6 }]);
+		expect(out).toHaveLength(1);
+	});
+
+	it.each([
+		"rb",
+		"sh",
+		"scala",
+	])("still counts a dedented .%s block as moved in the push shape", (ext) => {
+		const shape = classifyPush([
+			file(`a.${ext}`, nested, []),
+			file(`b.${ext}`, [], LINES),
+		]);
+		expect(shape.moved).toHaveLength(1);
+	});
+
+	it("keeps Run.indentSensitive for the old rule when a caller widens what keeps indentation", () => {
+		const patch = file("a.rb", nested, []).patch;
+		const strict = collectRuns([file("a.rb", nested, [], patch)], () => true);
+		expect(strict.deleted[0]?.indentSensitive).toBe(false);
+		expect(strict.deleted[0]?.lines[0]).toBe(nested[0]);
+		const shared = collectRuns([file("a.rb", nested, [], patch)]);
+		expect(shared.deleted[0]?.lines[0]).toBe(LINES[0]);
 	});
 });

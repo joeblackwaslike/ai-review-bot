@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { PushFile } from "../moved-blocks.js";
+import { INDENT_COLLAPSIBLE_FILE } from "./file-kinds.js";
 import { buildDiffModel } from "./index.js";
+import { findMechanical } from "./operations.js";
 import { findRelocations } from "./relocation.js";
-import { verifyRelocation } from "./relocation-check.js";
+import { verifyRelocation, WHITESPACE_FREE } from "./relocation-check.js";
 import type { Divergence, Operation } from "./types.js";
 
 function pushFile(filename: string, patch: string): PushFile {
@@ -414,6 +416,365 @@ describe("the checker stays linear on repeated openers", () => {
 			body: null,
 		});
 		expect(performance.now() - started).toBeLessThan(5000);
-		expect(model.operations.length).toBeGreaterThanOrEqual(0);
+		expect(model.droppedClaims).toBe(0);
+		expect(model.operations.some((op) => op.type === "relocation")).toBe(true);
+	});
+});
+
+describe("multi-line strings hide comment and rename lines", () => {
+	const around = (
+		inner: string[],
+		before: string[] = [],
+		after: string[] = [],
+	) => [
+		"export function banner() {",
+		...body(6),
+		...before,
+		...inner,
+		...after,
+		...body(6),
+		"}",
+	];
+	const cases: [string, (word: string) => string[]][] = [
+		[
+			"a quoted backtick before and after a template",
+			(w) =>
+				around(
+					["  const t = `", `    // banner: ${w} world here`, "  `;"],
+					['  const a = "`";'],
+					['  const b = "`";'],
+				),
+		],
+		[
+			"a regex with a backtick",
+			(w) =>
+				around(
+					["  const t = `", `    // banner: ${w} world here`, "  `;"],
+					["  const r = /`/;"],
+				),
+		],
+		[
+			"a comment with a backtick",
+			(w) =>
+				around(
+					["  const t = `", `    // banner: ${w} world here`, "  `;"],
+					["  // use ` carefully"],
+				),
+		],
+		[
+			"an opener and a closer that hold quoted backticks",
+			(w) =>
+				around([
+					'  const s = "`" + `',
+					`    // banner: ${w} world here`,
+					'  `; const q = "`";',
+				]),
+		],
+		[
+			"a double-quoted string continued by a backslash",
+			(w) =>
+				around([
+					'  const text = "first line \\',
+					`    // banner: ${w} world here \\`,
+					'    end";',
+				]),
+		],
+		[
+			"a one-line template beside a quoted string",
+			(w) => around(['  const t = `a` + "b";', `  // banner: ${w} world here`]),
+		],
+		[
+			"two one-line templates",
+			(w) =>
+				around([
+					"  const a = `x`;",
+					"  const b = `y`;",
+					`  // banner: ${w} world here`,
+				]),
+		],
+		[
+			"a line continued by a backslash",
+			(w) =>
+				around([
+					"  const total = a + \\",
+					"    b;",
+					`  // banner: ${w} world here`,
+				]),
+		],
+		[
+			"a double-quoted string left open at the end of a line",
+			(w) =>
+				around([
+					'  const text = "first line',
+					`    // banner: ${w} world here`,
+					'    end";',
+				]),
+		],
+	];
+
+	it.each(
+		cases,
+	)("keeps a changed comment-looking line as code with %s", (_name, make) => {
+		const files = moveFiles(make("hello"), make("goodbye"));
+		const ops = findRelocations(files);
+		expect(classes(ops)).toEqual(["code"]);
+		expect(verifyRelocation(ops[0] as Operation, files)).toBe(true);
+	});
+
+	it.each(
+		cases,
+	)("rejects a comment-only class forged over %s", (_name, make) => {
+		const files = moveFiles(make("hello"), make("goodbye"));
+		const [op] = findRelocations(files) as [Operation];
+		expect(verifyRelocation(forged(op, "comment-only", 0), files)).toBe(false);
+	});
+
+	it("keeps a changed comment as comment-only when the block only has a lone apostrophe", () => {
+		const make = (w: string) => around([`  // don't ${w} the cache`]);
+		const ops = findRelocations(moveFiles(make("touch"), make("clear")));
+		expect(classes(ops)).toEqual(["comment-only"]);
+	});
+
+	it("keeps a changed line as code in a block that starts inside a template literal", () => {
+		const make = (w: string) => [
+			`    // banner: ${w} world here`,
+			"  `;",
+			...body(8),
+		];
+		const files = moveFiles(make("hello"), make("goodbye"));
+		const ops = findRelocations(files);
+		expect(classes(ops)).toEqual(["code"]);
+		expect(
+			verifyRelocation(forged(ops[0] as Operation, "comment-only", 0), files),
+		).toBe(false);
+	});
+
+	it.each([
+		"rs",
+		"cs",
+		"ts",
+	])("does not claim a dedented .%s block with a multi-line string as exact", (ext) => {
+		const nested = [
+			"  if cond {",
+			'    let s = "first',
+			'      second line here";',
+			"    publish(ctx, sources, options);",
+			"    flush(ctx, sources, options);",
+			"    report(ctx, sources, options);",
+		];
+		const dedented = nested.map((l) => l.slice(2));
+		const files = moveFiles(nested, dedented, [`src/a.${ext}`, `src/b.${ext}`]);
+		const ops = findRelocations(files);
+		expect(ops.filter((op) => op.exact)).toEqual([]);
+		const claim: Operation = {
+			id: "relocation-1",
+			type: "relocation",
+			from: [
+				{
+					filename: `src/a.${ext}`,
+					side: "base",
+					startLine: 10,
+					endLine: 15,
+					shown: "full",
+				},
+			],
+			to: [
+				{
+					filename: `src/b.${ext}`,
+					side: "head",
+					startLine: 3,
+					endLine: 8,
+					shown: "full",
+				},
+			],
+			exact: true,
+			divergences: [],
+			reviewWeight: 0,
+		};
+		expect(verifyRelocation(claim, files)).toBe(false);
+	});
+});
+
+describe("a literal on one side of a divergence", () => {
+	const lines = (note: string, extra: string) => [
+		"export function applyDiscount(input) {",
+		...body(8),
+		`  // ${note}`,
+		extra,
+		...body(2),
+		"}",
+	];
+	const risky = '  const q = "`";';
+	const calm = "  const q = 1;";
+
+	function claim(
+		baseLines: string[],
+		headLines: string[],
+		baseAt: number,
+		headAt: number,
+		removed: boolean,
+		extra = risky,
+	): { files: PushFile[]; op: Operation } {
+		const files = moveFiles(baseLines, headLines);
+		const span = (filename: string, side: "base" | "head", line: number) => ({
+			filename,
+			side,
+			startLine: line,
+			endLine: line,
+			shown: "full" as const,
+		});
+		const op: Operation = {
+			id: "relocation-1",
+			type: "relocation",
+			from: [
+				{ ...span("src/a.ts", "base", 10), endLine: 10 + baseLines.length - 1 },
+			],
+			to: [
+				{ ...span("src/b.ts", "head", 3), endLine: 3 + headLines.length - 1 },
+			],
+			exact: false,
+			divergences: [
+				{
+					kind: "changed",
+					class: "comment-only",
+					base: span("src/a.ts", "base", 10 + baseAt),
+					head: span("src/b.ts", "head", 3 + headAt),
+					original: (baseLines[baseAt] as string).trim(),
+				},
+				removed
+					? {
+							kind: "removed",
+							class: "code",
+							base: span("src/a.ts", "base", 10 + baseLines.length - 4),
+							original: extra.trim(),
+						}
+					: {
+							kind: "inserted",
+							class: "code",
+							head: span("src/b.ts", "head", 3 + headLines.length - 4),
+						},
+			],
+			reviewWeight: 1,
+		};
+		return { files, op };
+	}
+
+	it("accepts the claim when neither side holds a risky line", () => {
+		const base = lines("hello there", calm);
+		const head = lines("goodbye there", calm);
+		head.splice(head.length - 4, 1);
+		const { files, op } = claim(base, head, 9, 9, true, calm);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("rejects comment-only when only the base side holds a risky line", () => {
+		const base = lines("hello there", risky);
+		const head = lines("goodbye there", risky);
+		head.splice(head.length - 4, 1);
+		const { files, op } = claim(base, head, 9, 9, true);
+		expect(verifyRelocation(op, files)).toBe(false);
+	});
+
+	it("rejects comment-only when only the head side holds a risky line", () => {
+		const base = lines("hello there", calm);
+		base.splice(base.length - 4, 1);
+		const head = lines("goodbye there", risky);
+		const { files, op } = claim(base, head, 9, 9, false);
+		expect(verifyRelocation(op, files)).toBe(false);
+	});
+});
+
+describe("re-indented edge of a block", () => {
+	const make = (ext: string, edge: string) => {
+		const block = body(10);
+		return moveFiles(
+			[...block, "  ship(ctx)"],
+			[...block, edge],
+			[`src/a.${ext}`, `src/b.${ext}`],
+		);
+	};
+
+	it("lists a re-indented edge line of a Ruby block as a divergence", () => {
+		const ops = findRelocations(make("rb", "    ship(ctx)"));
+		expect(ops.every((op) => !op.exact)).toBe(true);
+		expect(classes(ops)).toContain("code");
+	});
+
+	it("takes the same re-indented edge line of a TypeScript block as identical", () => {
+		const ops = findRelocations(make("ts", "    ship(ctx)"));
+		expect(ops).toHaveLength(1);
+		expect(ops[0]?.exact).toBe(true);
+		expect(ops[0]?.to[0]?.endLine).toBe(3 + 10);
+	});
+});
+
+describe("whitespace-only mechanical hunks", () => {
+	const patch = ["@@ -1,1 +1,1 @@", "-    const a = 1;", "+const a = 1;"].join(
+		"\n",
+	);
+
+	it("reports a dedent in a TypeScript file", () => {
+		expect(findMechanical([pushFile("src/a.ts", patch)])).toHaveLength(1);
+	});
+
+	it.each([
+		"rb",
+		"sh",
+		"coffee",
+		"bzl",
+		"pyw",
+		"fs",
+		"sass",
+	])("does not report a dedent in a .%s file", (ext) => {
+		expect(findMechanical([pushFile(`src/a.${ext}`, patch)])).toEqual([]);
+	});
+});
+
+describe("the checker's whitespace-free list matches the matcher's", () => {
+	const names = [
+		"a.js",
+		"a.jsx",
+		"a.mjs",
+		"a.cjs",
+		"a.ts",
+		"a.tsx",
+		"a.java",
+		"a.c",
+		"a.h",
+		"a.cpp",
+		"a.hpp",
+		"a.cs",
+		"a.rs",
+		"a.go",
+		"a.kt",
+		"a.kts",
+		"a.dart",
+		"a.php",
+		"a.css",
+		"a.scss",
+		"a.less",
+		"a.json",
+		"a.py",
+		"a.pyi",
+		"a.rb",
+		"a.sh",
+		"a.scala",
+		"a.bzl",
+		"a.fs",
+		"a.coffee",
+		"a.yml",
+		"a.yaml",
+		"Makefile",
+		"a.mk",
+		"a.cc",
+		"a.swift",
+		"a.md",
+		"a.TS",
+		"a.RS",
+		"a",
+	];
+
+	it.each(names)("agrees on %s", (name) => {
+		expect(WHITESPACE_FREE.test(name)).toBe(INDENT_COLLAPSIBLE_FILE.test(name));
 	});
 });

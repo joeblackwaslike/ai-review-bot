@@ -176,7 +176,9 @@ function backtickCount(line: string): number {
 function riskyLines(filename: string, lines: string[]): boolean[] {
 	if (
 		isIndentSensitive(filename) ||
-		lines.some((l) => HEREDOC_OR_TRIPLE.test(l) || hasOddBreak(l))
+		lines.some(
+			(l) => HEREDOC_OR_TRIPLE.test(l) || hasOddBreak(l) || continuesString(l),
+		)
 	)
 		return lines.map(() => true);
 	let inside = false;
@@ -187,21 +189,37 @@ function riskyLines(filename: string, lines: string[]): boolean[] {
 	});
 }
 
+/** Whether a line ends in an unescaped backslash, or holds an odd count of unescaped double quotes: a string or macro that may continue on the next line. */
+export function continuesString(line: string): boolean {
+	const trailing = /\\+$/.exec(line.trimEnd());
+	if (trailing && trailing[0].length % 2 === 1) return true;
+	return (line.replace(/\\./g, "").match(/"/g) ?? []).length % 2 === 1;
+}
+
 /**
  * Per line, whether it opens, sits inside or closes a multi-line string. Text there is data
  * that only looks like a comment or a name, so such a line is never comment-only or a rename.
- * A heredoc or triple-quote opener, or a template literal left open, marks every line.
+ * Every line of the block is marked when any line holds a heredoc or triple-quote opener, an
+ * odd break, a backtick beside a quote or slash, a continued string, or when the block has more
+ * than one backtick pair or a backtick left open.
  */
-function literalLines(lines: string[]): boolean[] {
-	if (lines.some((l) => HEREDOC_OR_TRIPLE.test(l) || hasOddBreak(l)))
-		return lines.map(() => true);
+export function literalLines(lines: string[]): boolean[] {
+	const ticks = (line: string) => line.split("`").length - 1;
+	const total = lines.reduce((sum, line) => sum + ticks(line), 0);
+	const risky = lines.some(
+		(line) =>
+			HEREDOC_OR_TRIPLE.test(line) ||
+			hasOddBreak(line) ||
+			continuesString(line) ||
+			(ticks(line) > 0 && /["'/]/.test(line)),
+	);
+	if (risky || total > 2 || total === 1) return lines.map(() => true);
 	let inside = false;
-	const marks = lines.map((line) => {
+	return lines.map((line) => {
 		const startsInside = inside;
-		if (backtickCount(line) % 2 === 1) inside = !inside;
+		if (ticks(line) % 2 === 1) inside = !inside;
 		return startsInside || inside;
 	});
-	return inside ? marks.map(() => true) : marks;
 }
 
 /** Per line, whether it is wholly a comment: `//` or `#` lines, or lines of a `/* ... *\/` block opened in these lines. */
@@ -420,7 +438,9 @@ function identicalEdge(
 
 function collapsible(filename: string, lines: readonly string[]): boolean {
 	return (
-		INDENT_COLLAPSIBLE_FILE.test(filename) && lexicallySafe(filename, lines)
+		INDENT_COLLAPSIBLE_FILE.test(filename) &&
+		lexicallySafe(filename, lines) &&
+		!lines.some(continuesString)
 	);
 }
 

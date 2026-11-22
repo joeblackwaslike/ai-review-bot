@@ -1,5 +1,4 @@
 import { isIndentSensitive, type PushFile } from "../moved-blocks.js";
-import { INDENT_COLLAPSIBLE_FILE } from "./file-kinds.js";
 import { hasBrokenContinuation, hasOddBreak } from "./lexical.js";
 import {
 	hasBlockScalarHeader,
@@ -18,6 +17,9 @@ const TRIPLE_QUOTE = /"""|'''/g;
 const HEREDOC_OPEN = /<<[-~]?\s*['"]?(\w+)/;
 const LITERAL_OPENER = /`|"""|'''|<<[-~]?\s*['"]?\w/;
 
+/** Extensions whose leading whitespace carries no meaning. The checker keeps its own copy, and a test pins it to the matcher's. */
+export const WHITESPACE_FREE =
+	/\.(?:js|jsx|mjs|cjs|ts|tsx|java|c|h|cpp|hpp|cs|rs|go|kt|kts|dart|php|css|scss|less|json)$/i;
 const HASH_FAMILY =
 	/(?:\.(?:py|pyi|rb|sh|bash|zsh|ya?ml|toml|mk)|(?:^|\/)Makefile)$/i;
 const C_LINE_COMMENTS =
@@ -363,10 +365,29 @@ function count(line: string, pattern: RegExp): number {
 }
 
 /**
+ * Whether a span holds a form that may hide a string across lines: a backtick beside a quote
+ * or slash, more than one backtick pair, a line that ends in a backslash, or a line with an odd
+ * number of unescaped double quotes. Such a span is read as all literal.
+ */
+function mayHideString(lines: string[]): boolean {
+	let ticks = 0;
+	for (const line of lines) {
+		const here = count(line, /`/g);
+		ticks += here;
+		if (here > 0 && /["'/]/.test(line)) return true;
+		const slashes = /\\*$/.exec(line.trimEnd())?.[0].length ?? 0;
+		if (slashes % 2 === 1) return true;
+		if (count(line.replace(/\\[\s\S]/g, ""), /"/g) % 2 === 1) return true;
+	}
+	return ticks > 2;
+}
+
+/**
  * Marks each line that opens, sits inside or closes a multi-line template literal,
  * triple-quoted string or heredoc. A span whose delimiters do not balance is all marked.
  */
 export function insideLiteral(lines: string[]): boolean[] {
+	if (mayHideString(lines)) return lines.map(() => true);
 	const marks: boolean[] = [];
 	let template = false;
 	let triple = false;
@@ -435,9 +456,7 @@ export function unclaimed(sides: Side[], spent: Set<string>): Entry[] {
 						{
 							text,
 							inLiteral: side.inLiteral[i] as boolean,
-							indentSensitive:
-								isIndentSensitive(side.filename) ||
-								!INDENT_COLLAPSIBLE_FILE.test(side.filename),
+							indentSensitive: !WHITESPACE_FREE.test(side.filename),
 						},
 					],
 		),
