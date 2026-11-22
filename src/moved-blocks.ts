@@ -457,6 +457,7 @@ export function extractContextRuns(
 	const runs: Run[] = [];
 	if (!patch) return runs;
 	const indentSensitive = isIndentSensitive(filename);
+	const literalRisk = UNSAFE_FILE_TEXT.test(patch);
 	let raw: string[] = [];
 	let start = 0;
 	let newLine = 0;
@@ -474,6 +475,8 @@ export function extractContextRuns(
 				startLine: start,
 				region: -(runs.length + 1),
 				hunk,
+				after: undefined,
+				literalRisk,
 				used: raw.map(() => false),
 			});
 		}
