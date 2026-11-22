@@ -654,11 +654,11 @@ export function findRelocations(
 		operations.push(...resolveChain(chain, budget));
 	}
 	if (!budget.exhausted)
+		operations.push(...findDeclarationMoves(deleted, added, budget));
+	if (!budget.exhausted)
 		operations.push(
 			...findTokenOperations(deleted, added, budget, filesWithLiterals(files)),
 		);
-	if (!budget.exhausted)
-		operations.push(...findDeclarationMoves(deleted, added, budget));
 	operations.sort(
 		(a, b) =>
 			compareText(a.from[0]?.filename, b.from[0]?.filename) ||

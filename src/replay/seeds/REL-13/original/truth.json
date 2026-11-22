@@ -28,19 +28,6 @@
 				}
 			],
 			"divergences": []
-		},
-		{
-			"type": "mechanical",
-			"from": [],
-			"to": [
-				{
-					"filename": "src/billing/invoice.ts",
-					"side": "head",
-					"startLine": 2,
-					"endLine": 2
-				}
-			],
-			"divergences": []
 		}
 	]
 }

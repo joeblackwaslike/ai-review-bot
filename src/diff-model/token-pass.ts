@@ -480,6 +480,7 @@ function asCandidate(m: Match): Candidate {
 		fromStart: m.dFirst,
 		toStart: m.aFirst,
 		length,
+		toLength: m.aLast - m.aFirst + 1,
 		counted: from.lines
 			.slice(m.dFirst, m.dFirst + length)
 			.filter((l) => l.trimStart().length >= MIN_COUNTED_LENGTH).length,

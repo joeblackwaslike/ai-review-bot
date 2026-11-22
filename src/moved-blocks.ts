@@ -249,6 +249,8 @@ export interface Candidate {
 	fromStart: number;
 	toStart: number;
 	length: number;
+	/** Length of the head side when it differs from `length`, as in a reformatted move. */
+	toLength?: number;
 	counted: number;
 }
 

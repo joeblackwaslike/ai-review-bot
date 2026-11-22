@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PushFile } from "../moved-blocks.js";
-import { partialStatements } from "./partial-statements.fixture.js";
 import { buildDiffModel } from "./index.js";
+import { partialStatements } from "./partial-statements.fixture.js";
 import { findRelocations } from "./relocation.js";
 import { verifyRelocation } from "./relocation-check.js";
 import type { Operation } from "./types.js";
