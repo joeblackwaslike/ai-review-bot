@@ -164,17 +164,6 @@ describe("numbers and HTML-like comments", () => {
 });
 
 describe("trailing comma removal by language", () => {
-	const wrapped = [
-		"result = process(",
-		"    one_value,",
-		"    two_value,",
-		"    three_value,",
-		"    four_value,",
-		")",
-	];
-	const flat =
-		"result = process(one_value, two_value, three_value, four_value)";
-
 	it("keeps the comma of a Python lambda tuple", () => {
 		const line =
 			"handler = (lambda alpha, beta: alpha + beta + gamma_value + delta,)";

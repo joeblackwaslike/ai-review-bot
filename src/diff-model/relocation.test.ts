@@ -1488,3 +1488,143 @@ describe("adversarial work budget", () => {
 		expect(ops[0]?.to[0]?.filename).toBe("src/ledger-new.ts");
 	});
 });
+
+describe("findRelocations receiver and reshape output", () => {
+	const TS_BODY = [
+		"const cart = loadCart(userId);",
+		"const items = cart.items.filter((item) => item.active);",
+		"const subtotal = items.reduce((sum, item) => sum + item.price, 0);",
+		"const discount = lookupDiscount(cart.code);",
+		"const taxed = subtotal * (1 - discount);",
+		"const shipping = shippingFor(cart.region, items.length);",
+		"const total = taxed + shipping;",
+		"recordTotal(cart.id, total);",
+		"const receipt = buildReceipt(cart, items, total);",
+		"sendReceipt(cart.email, receipt);",
+		"auditTotal(cart.id, total, items.length);",
+		"return total;",
+	];
+
+	function tsMove(base: string[], head: string[]) {
+		return move(
+			base.map((l) => `  ${l}`),
+			head.map((l) => `    ${l}`),
+		);
+	}
+
+	it("reports a single gained this. in a moved body as a receiver divergence", () => {
+		const head = withLine(TS_BODY, 7, "this.recordTotal(cart.id, total);");
+		const ops = tsMove(TS_BODY, head);
+		expect(ops).toHaveLength(1);
+		const op = ops[0];
+		expect(op?.divergences).toHaveLength(1);
+		expect(op?.divergences[0]).toMatchObject({
+			class: "receiver",
+			kind: "changed",
+			original: "recordTotal(cart.id, total);",
+		});
+		expect(op?.reviewWeight).toBe(1);
+		expect(op?.exact).toBe(false);
+	});
+
+	it("reports a call that lost this. as a receiver divergence", () => {
+		const base = withLine(TS_BODY, 7, "this.recordTotal(cart.id, total);");
+		const ops = tsMove(base, TS_BODY);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]?.divergences.map((d) => d.class)).toEqual(["receiver"]);
+		expect(ops[0]?.divergences[0]?.original).toBe(
+			"this.recordTotal(cart.id, total);",
+		);
+		expect(ops[0]?.reviewWeight).toBe(1);
+	});
+
+	it("keeps a changed operator beside a receiver edit as code", () => {
+		const head = withLine(
+			withLine(TS_BODY, 7, "this.recordTotal(cart.id, total);"),
+			6,
+			"const total = taxed - shipping;",
+		);
+		const ops = tsMove(TS_BODY, head);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]?.divergences.map((d) => d.class)).toEqual([
+			"code",
+			"receiver",
+		]);
+		expect(ops[0]?.reviewWeight).toBe(2);
+	});
+
+	it("does not count receiver divergences against the block limit and weighs them flat", () => {
+		const base = Array.from(
+			{ length: 90 },
+			(_, i) => `record${i}(cart.id, total, ${i});`,
+		);
+		const head = base.map((l, i) => (i % 3 === 0 ? `this.${l}` : l));
+		const ops = tsMove(base, head);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]?.divergences).toHaveLength(30);
+		expect(ops[0]?.divergences.every((d) => d.class === "receiver")).toBe(true);
+		expect(ops[0]?.reviewWeight).toBe(1);
+	});
+
+	it("reports a Python line that differs only by self. as a receiver divergence", () => {
+		const base = TS_BODY.map((l) => l.replace(/^const /, "").replace(/;$/, ""));
+		const head = withLine(base, 7, "self.recordTotal(cart.id, total)");
+		const ops = findRelocations([
+			deletedFrom("src/a.py", 10, base),
+			addedTo("src/b.py", 3, head),
+		]);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]?.divergences.map((d) => d.class)).toEqual(["receiver"]);
+		expect(ops[0]?.reviewWeight).toBe(1);
+	});
+
+	it("pins a renamed function with new parameters and an identical body", () => {
+		const pyBody = [
+			"    subtotal = sum(i.price for i in items)",
+			"    taxed = subtotal * (1 + rate)",
+			"    rounded = round(taxed, 2)",
+			"    log_total(rounded, len(items))",
+			"    return rounded",
+		];
+		const ops = findRelocations([
+			deletedFrom("src/pricing.py", 10, [
+				"def total_price(items, rate):",
+				...pyBody,
+			]),
+			addedTo("src/cart.py", 3, [
+				"    def compute(self, items, rate, region):",
+				...pyBody.map((l) => `    ${l}`),
+			]),
+		]);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]).toMatchObject({
+			type: "relocation",
+			exact: false,
+			reviewWeight: 1,
+			shape: { reindent: 4 },
+			from: [{ filename: "src/pricing.py", startLine: 10, endLine: 15 }],
+			to: [{ filename: "src/cart.py", startLine: 3, endLine: 8 }],
+		});
+		expect(ops[0]?.divergences).toEqual([
+			{
+				kind: "changed",
+				class: "signature",
+				original: "def total_price(items, rate):",
+				base: {
+					filename: "src/pricing.py",
+					side: "base",
+					startLine: 10,
+					endLine: 10,
+					shown: "full",
+				},
+				head: {
+					filename: "src/cart.py",
+					side: "head",
+					startLine: 3,
+					endLine: 3,
+					shown: "full",
+				},
+			},
+		]);
+	});
+});

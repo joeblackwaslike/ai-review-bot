@@ -102,8 +102,10 @@ const ODD_BREAK =
 const HTML_COMMENT = /<!--|-->/;
 const IDENTIFIER = /[\p{ID_Start}_$][\p{ID_Continue}$\u200c\u200d]*/uy;
 const NUMBER = /0[xXoObB]\w*|\d[\d_]*(?:\.(?!\.)[\d_]*)?(?:[eE][+-]?\d+)?\w*/y;
-const OPENERS = new Set(["(", "[", "{"]);
-const CLOSERS = new Set([")", "]", "}"]);
+/** Bracket tokens that open a group. */
+export const OPENERS: ReadonlySet<string> = new Set(["(", "[", "{"]);
+/** Bracket tokens that close a group. */
+export const CLOSERS: ReadonlySet<string> = new Set([")", "]", "}"]);
 const GROUPERS = new Set(["(", "["]);
 const GROUP_CLOSERS = new Set([")", "]"]);
 const ASI_HAZARDS = new Set(["(", "[", "`", "+", "-", "/", "++", "--"]);

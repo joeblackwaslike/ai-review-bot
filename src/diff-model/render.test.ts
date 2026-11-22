@@ -631,4 +631,55 @@ describe("renderDiffModel", () => {
 		expect(r.summary).not.toContain("re-indented");
 		expect(allText(r)).not.toMatch(/\b(safe|unchanged behavior|functional)\b/);
 	});
+
+	it("lists signature and receiver divergences like code divergences", () => {
+		const m = model({
+			operations: [
+				op({
+					id: "relocation-1",
+					type: "relocation",
+					exact: false,
+					divergences: [
+						codeDivergence({ class: "signature", original: "def f(a):" }),
+						codeDivergence({
+							class: "receiver",
+							original: "x = load(a)",
+							head: span("src/b.ts", "head", 6, 6),
+						}),
+					],
+					reviewWeight: 1,
+				}),
+			],
+		});
+		const text = allText(renderDiffModel(m, OPTS));
+		expect(text).toContain("(signature)");
+		expect(text).toContain("(receiver prefix)");
+		expect(text).toContain("def f(a):");
+	});
+
+	it("never calls a receiver-only change unchanged, identical or harmless", () => {
+		const m = model({
+			operations: [
+				op({
+					id: "relocation-1",
+					type: "relocation",
+					exact: false,
+					divergences: [
+						codeDivergence({
+							class: "receiver",
+							original: "x = load(a)",
+							head: span("src/b.ts", "head", 6, 6),
+						}),
+					],
+					reviewWeight: 1,
+				}),
+			],
+		});
+		const r = renderDiffModel(m, OPTS);
+		expect(r.summary).toContain("1 difference from the original");
+		expect(r.summary).toContain("(receiver prefix)");
+		expect(allText(r)).not.toMatch(
+			/\b(unchanged|identical|harmless|safe|exact)\b/i,
+		);
+	});
 });

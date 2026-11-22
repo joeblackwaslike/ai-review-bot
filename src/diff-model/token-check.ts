@@ -121,6 +121,7 @@ const STATEMENT_END = /^(?:[\p{L}\p{N}_$"'`]|\)|\]|\}|\+\+|--)/u;
 interface Tokenized {
 	tokens: string[];
 	starts: number[];
+	lineOf: number[];
 }
 
 function extensionOf(filename: string): string {
@@ -302,8 +303,13 @@ function tokenizeLines(lines: string[], ext: string): Tokenized | null {
 	const free = FREE.has(ext);
 	const braceBlocks = BRACE_BLOCKS.has(ext);
 	const tokens: string[] = [];
+	const lineOf: number[] = [];
 	const starts: number[] = [];
 	const open: string[] = [];
+	const push = (t: string, n: number) => {
+		tokens.push(t);
+		lineOf.push(n);
+	};
 	let depth = 0;
 	const grouped = () =>
 		braceBlocks ? open.length > 0 && open[open.length - 1] !== "{" : depth > 0;
@@ -320,7 +326,7 @@ function tokenizeLines(lines: string[], ext: string): Tokenized | null {
 			ASI_HAZARDS.has(first) &&
 			endsStatement(tokens[tokens.length - 1])
 		)
-			tokens.push("\n");
+			push("\n", n);
 		const before = tokens[tokens.length - 1];
 		if (
 			free &&
@@ -329,10 +335,10 @@ function tokenizeLines(lines: string[], ext: string): Tokenized | null {
 			(BREAKING_WORDS.has(before) ||
 				!(WRAP_AFTER.has(before) || WRAP_BEFORE.has(first)))
 		)
-			tokens.push("\n");
+			push("\n", n);
 		if (!free && !grouped()) starts.push(n);
 		for (const t of found) {
-			tokens.push(t);
+			push(t, n);
 			if (free) continue;
 			if (braceBlocks) {
 				if (OPENING.has(t)) open.push(t);
@@ -340,22 +346,29 @@ function tokenizeLines(lines: string[], ext: string): Tokenized | null {
 			} else if (t === "(" || t === "[") depth++;
 			else if (t === ")" || t === "]") depth--;
 		}
-		if (free ? BREAKING_WORDS.has(last) : !grouped()) tokens.push("\n");
+		if (free ? BREAKING_WORDS.has(last) : !grouped()) push("\n", n);
 	}
-	if (tokens[tokens.length - 1] === "\n") tokens.pop();
-	return { tokens, starts };
+	if (tokens[tokens.length - 1] === "\n") {
+		tokens.pop();
+		lineOf.pop();
+	}
+	return { tokens, starts, lineOf };
 }
 
-function balanced(tokens: string[]): boolean {
-	const stack: string[] = [];
-	for (const t of tokens) {
+function balanced(tokens: string[], opened = false): boolean {
+	const stack: string[] = opened ? ["}"] : [];
+	for (let k = 0; k < tokens.length; k++) {
+		const t = tokens[k] as string;
 		const close = OPENING.get(t);
 		if (close) {
 			stack.push(close);
 			if (stack.length > MAX_DEPTH) return false;
-		} else if (CLOSING.has(t) && stack.pop() !== t) return false;
+		} else if (CLOSING.has(t)) {
+			if (stack.pop() !== t) return false;
+			if (opened && stack.length === 0 && k < tokens.length - 1) return false;
+		}
 	}
-	return stack.length === 0;
+	return opened ? stack.length <= 1 : stack.length === 0;
 }
 
 interface Shape {
@@ -419,9 +432,13 @@ function swappable(token: string, ext: string): boolean {
 	return !(PYTHON.has(ext) && /[{}]/.test(body));
 }
 
-function normalized(tokens: string[], ext: string): string[] {
+function normalizedWithKept(
+	tokens: string[],
+	ext: string,
+): { tokens: string[]; kept: number[] } {
 	const shape = shapeOf(tokens, ext);
 	const out: string[] = [];
+	const kept: number[] = [];
 	tokens.forEach((t, i) => {
 		if (t === "," && removableComma(tokens, i, ext, shape)) return;
 		if (
@@ -432,8 +449,13 @@ function normalized(tokens: string[], ext: string): string[] {
 		)
 			return;
 		out.push(swappable(t, ext) ? `"${t.slice(1, -1)}"` : t);
+		kept.push(i);
 	});
-	return out;
+	return { tokens: out, kept };
+}
+
+function normalized(tokens: string[], ext: string): string[] {
+	return normalizedWithKept(tokens, ext).tokens;
 }
 
 function indentShape(
@@ -452,7 +474,11 @@ function lineModeTokens(lines: string[]): Tokenized | null {
 	if (lines.some((l) => UNSAFE_TEXT.test(l) || BLOCK_SCALAR.test(l.trimEnd())))
 		return null;
 	const starts = lines.flatMap((l, n) => (l.trim() === "" ? [] : [n]));
-	return { tokens: lines.map((l) => l.trim()), starts };
+	return {
+		tokens: lines.map((l) => l.trim()),
+		starts,
+		lineOf: lines.map((_, n) => n),
+	};
 }
 
 function trailingSpace(lines: string[], starts: number[]): string[] {
@@ -519,4 +545,456 @@ export function tokenEquivalent(
 	if (!sameTokens(baseShape.depths.map(String), headShape.depths.map(String)))
 		return no;
 	return { equivalent: true, reindent: headShape.base - baseShape.base };
+}
+
+/**
+ * Receiver prefixes per extension, as maps so an extension such as `constructor` never
+ * resolves through the prototype. reshape.ts keeps its own copy (RECEIVERS) so the checker
+ * stays independent of the matcher; the table pin test in token-check.test.ts compares
+ * the two.
+ */
+export const RESHAPE_RECEIVERS: ReadonlyMap<
+	string,
+	ReadonlyMap<string, string>
+> = new Map<string, ReadonlyMap<string, string>>([
+	[
+		"py",
+		new Map([
+			["self", "."],
+			["cls", "."],
+		]),
+	],
+	[
+		"pyi",
+		new Map([
+			["self", "."],
+			["cls", "."],
+		]),
+	],
+	["js", new Map([["this", "."]])],
+	["jsx", new Map([["this", "."]])],
+	["mjs", new Map([["this", "."]])],
+	["cjs", new Map([["this", "."]])],
+	["ts", new Map([["this", "."]])],
+	["tsx", new Map([["this", "."]])],
+]);
+const MAX_SIGNATURE_LINES = 16;
+const PY_DEF = /^\s*(?:async\s+)?def\s+\w/;
+const NOT_A_DEFINITION =
+	/^\s*(?:if|else|for|while|switch|catch|try|do|return|throw|new|with|using|await|yield|case)\b/;
+const KEYWORD_DEFINITION =
+	/^\s*(?:(?:export|default|async|public|private|protected|static)\s+)*function\b/;
+const METHOD_DEFINITION =
+	/^\s*(?:[\w$.<>,?[\]]+\s+)*[A-Za-z_$][\w$]*\s*(?:<[^>()]*>)?\(/;
+const MAX_OPENER_LINE = 400;
+const BINDING_WORD =
+	/^(?:for|while|del|delete|as|in|of|with|lambda|global|nonlocal|yield|import|from|class|def|function|if|else|elif|try|except|finally|switch|case|default|\+\+|--|\{|\})$/;
+const CONTINUES_STATEMENT =
+	/^(?:[-=.[(?:,+*/%&|^<>!~]|(?:and|or|if|else|in|is|not|for)(?![\w$]))/;
+const NAME_START = /^[\p{L}_$]/u;
+const VALUE_END = /^[\p{L}\p{N}_$"')\]]/u;
+const ASSIGNMENT_TOKEN = /^(?:\*\*|\/\/|<<|>>>?|&&|\|\||\?\?|[-+*/%&|^:])?=$/;
+const ANNOTATION = /^\s*@[\w.$]+/;
+
+interface Stripped {
+	tokens: string[];
+	lineOf: number[];
+	dropped: string[];
+}
+
+function stripReceivers(
+	tokens: string[],
+	lineOf: number[],
+	ext: string,
+): Stripped {
+	const rules = RESHAPE_RECEIVERS.get(ext);
+	const out: Stripped = { tokens: [], lineOf: [], dropped: [] };
+	let pending = "";
+	for (let k = 0; k < tokens.length; k++) {
+		const t = tokens[k] as string;
+		const sep = rules?.get(t);
+		const next = tokens[k + 2];
+		const before = tokens[k - 1];
+		if (
+			sep !== undefined &&
+			tokens[k + 1] === sep &&
+			next !== undefined &&
+			next !== "\n" &&
+			before !== "." &&
+			before !== "::"
+		) {
+			pending = t + sep;
+			k++;
+			continue;
+		}
+		out.tokens.push(t);
+		out.lineOf.push(lineOf[k] as number);
+		out.dropped.push(pending);
+		pending = "";
+	}
+	return out;
+}
+
+function reshapeExtensions(
+	baseFile: string,
+	baseLines: string[],
+	headFile: string,
+	headLines: string[],
+): [string, string] | null {
+	const base = extensionOf(baseFile);
+	const head = extensionOf(headFile);
+	if (!RESHAPE_RECEIVERS.has(base) || !RESHAPE_RECEIVERS.has(head)) return null;
+	if (FAMILY_OF.get(base) !== FAMILY_OF.get(head)) return null;
+	if (jsxPossible(baseFile, baseLines.join("\n"))) return null;
+	if (jsxPossible(headFile, headLines.join("\n"))) return null;
+	if (baseLines.some((l) => unreadable(l, base))) return null;
+	if (headLines.some((l) => unreadable(l, head))) return null;
+	return [base, head];
+}
+
+interface Comparable {
+	tokens: string[];
+	droppedAt: string[];
+	lineOf: number[];
+}
+
+function comparable(
+	lines: string[],
+	ext: string,
+	opened: boolean,
+	mustBalance: boolean,
+): (Comparable & { starts: number[] }) | null {
+	const found = tokenizeLines(lines, ext);
+	if (!found || (mustBalance && !balanced(found.tokens, opened))) return null;
+	const stripped = stripReceivers(found.tokens, found.lineOf, ext);
+	const norm = normalizedWithKept(stripped.tokens, ext);
+	return {
+		tokens: norm.tokens,
+		droppedAt: norm.kept.map((i) => stripped.dropped[i] as string),
+		lineOf: norm.kept.map((i) => stripped.lineOf[i] as number),
+		starts: found.starts,
+	};
+}
+
+/**
+ * The kind of a receiver difference on one physical line. The tokens are equal on both
+ * sides once receivers are removed; `baseDropped` and `headDropped` hold, per token, the
+ * receiver removed just before it. The difference is `receiver` only when the line is a
+ * complete read-only line: it starts with a name, ends with a name, literal or closing
+ * bracket, balances its brackets, has no trailing backslash or unclosed string, no
+ * assignment operator, no `++` or `--`, no `;` before the last token, no braces and none
+ * of the binding keywords, and it is a `return` or contains a call. A line that lost one
+ * receiver and gained another is `code` too. Null when no receiver differs.
+ */
+function receiverKind(
+	tokens: string[],
+	baseDropped: string[],
+	headDropped: string[],
+	rawBase: string,
+	rawHead: string,
+	boundary: boolean,
+): "receiver" | "code" | null {
+	const differing = tokens.flatMap((_, k) =>
+		baseDropped[k] === headDropped[k] ? [] : [k],
+	);
+	if (differing.length === 0) return null;
+	const lost = differing.some((k) => baseDropped[k] && !headDropped[k]);
+	const gained = differing.some((k) => !baseDropped[k] && headDropped[k]);
+	if (lost && gained) return "code";
+	return boundary && readsOnly(tokens, rawBase, rawHead) ? "receiver" : "code";
+}
+
+function readsOnly(
+	tokens: string[],
+	rawBase: string,
+	rawHead: string,
+): boolean {
+	if (/\\\s*$/.test(rawBase) || /\\\s*$/.test(rawHead)) return false;
+	const words = tokens.filter((t) => t !== "\n");
+	const semicolons = words.flatMap((t, k) => (t === ";" ? [k] : []));
+	if (semicolons.some((k) => k !== words.length - 1)) return false;
+	const body = semicolons.length > 0 ? words.slice(0, -1) : words;
+	const head = body[0];
+	const tail = body[body.length - 1];
+	if (head === undefined || tail === undefined) return false;
+	if (!NAME_START.test(head) || !VALUE_END.test(tail)) return false;
+	const stack: string[] = [];
+	for (const t of body) {
+		if (ASSIGNMENT_TOKEN.test(t) || BINDING_WORD.test(t)) return false;
+		if (/^["']/.test(t) && !(t.length > 1 && t.at(-1) === t[0])) return false;
+		const close = OPENING.get(t);
+		if (close) stack.push(close);
+		else if (CLOSING.has(t) && stack.pop() !== t) return false;
+	}
+	return stack.length === 0 && (head === "return" || body.includes("("));
+}
+
+function startsContinuation(lines: readonly string[], at: number): boolean {
+	for (let n = at + 1; n < lines.length; n++) {
+		const next = (lines[n] as string).trim();
+		if (next !== "") return CONTINUES_STATEMENT.test(next);
+	}
+	return false;
+}
+
+interface Depths {
+	start: number[];
+	end: number[];
+}
+
+function depthsOfTokens(
+	tokens: readonly string[],
+	lineOf: readonly number[],
+	lineCount: number,
+): Depths {
+	const start: number[] = Array(lineCount).fill(Number.NaN);
+	const end: number[] = Array(lineCount).fill(Number.NaN);
+	let depth = 0;
+	tokens.forEach((t, k) => {
+		const line = lineOf[k] as number;
+		if (Number.isNaN(start[line] as number)) start[line] = depth;
+		if (t === "(" || t === "[") depth += 1;
+		else if (t === ")" || t === "]") depth -= 1;
+		end[line] = depth;
+	});
+	let carry = 0;
+	for (let line = 0; line < lineCount; line++) {
+		if (Number.isNaN(start[line] as number)) {
+			start[line] = carry;
+			end[line] = carry;
+		}
+		carry = end[line] as number;
+	}
+	return { start, end };
+}
+
+const spanDepths = new WeakMap<readonly string[], Depths | null>();
+
+function depthsOfSpan(lines: string[], ext: string): Depths | null {
+	if (spanDepths.has(lines)) return spanDepths.get(lines) ?? null;
+	const found = tokenizeLines(lines, ext);
+	const depths = found
+		? depthsOfTokens(found.tokens, found.lineOf, lines.length)
+		: null;
+	spanDepths.set(lines, depths);
+	return depths;
+}
+
+/**
+ * Whether line `baseAt` of the base span and line `headAt` of the head span differ only by
+ * a receiver prefix and each ends its statement: the running bracket depth over the whole
+ * span is 0 on entry and exit, and the next non-blank line of either span does not start
+ * with a continuation token. False when the span cannot be tokenized.
+ */
+export function receiverLineInContext(
+	baseLines: string[],
+	baseAt: number,
+	headLines: string[],
+	headAt: number,
+	baseFile: string,
+	headFile: string,
+): boolean {
+	const depths = depthsOfSpan(baseLines, extensionOf(baseFile));
+	const boundary =
+		depths !== null &&
+		depths.start[baseAt] === 0 &&
+		depths.end[baseAt] === 0 &&
+		!startsContinuation(baseLines, baseAt) &&
+		!startsContinuation(headLines, headAt);
+	return receiverOnlyLine(
+		baseLines[baseAt] as string,
+		headLines[headAt] as string,
+		baseFile,
+		headFile,
+		boundary,
+	);
+}
+
+/**
+ * Whether two single lines differ only by a receiver prefix that does not touch state
+ * meaning: equal tokens once `self.`/`cls.` (py pyi) or `this.` (js jsx mjs cjs ts tsx)
+ * are removed, with different removed receivers, none of them on an assignment target and
+ * not one receiver swapped for another. A receiver is never removed after `.` or `::`,
+ * nor at the end of a line. False for lines holding a comment, template literal or string
+ * delimiter the tokenizer cannot read, and across language families.
+ */
+export function receiverOnlyLine(
+	base: string,
+	head: string,
+	baseFile: string,
+	headFile: string,
+	boundary = true,
+): boolean {
+	const exts = reshapeExtensions(baseFile, [base], headFile, [head]);
+	if (!exts) return false;
+	const b = comparable([base], exts[0], false, false);
+	const h = comparable([head], exts[1], false, false);
+	if (!b || !h) return false;
+	return (
+		sameTokens(b.tokens, h.tokens) &&
+		receiverKind(b.tokens, b.droppedAt, h.droppedAt, base, head, boundary) ===
+			"receiver"
+	);
+}
+
+export interface SignatureShape {
+	decorators: number;
+	end: number;
+	opensBrace: boolean;
+	tokens: string[];
+}
+
+function isDecoratorLine(line: string): boolean {
+	return ANNOTATION.test(line);
+}
+
+function isDefinitionLine(line: string, ext: string): boolean {
+	if (line.length > MAX_OPENER_LINE) return false;
+	if (PYTHON.has(ext)) return PY_DEF.test(line);
+	if (NOT_A_DEFINITION.test(line)) return false;
+	return KEYWORD_DEFINITION.test(line) || METHOD_DEFINITION.test(line);
+}
+
+/**
+ * Reads the signature at the start of a block: decorators (`@name` lines) then
+ * one definition line whose logical line ends where the ( and [ depth returns to zero,
+ * closed by `:` in Python and `{` elsewhere. `end` is the index of the last signature
+ * line; `tokens` are the normalized tokens of decorators plus opening line. Null when the
+ * block does not start with a definition, holds a comment on those lines, or the file is
+ * outside py pyi js jsx mjs cjs ts tsx.
+ */
+export function leadingSignature(
+	lines: string[],
+	filename: string,
+): SignatureShape | null {
+	const ext = extensionOf(filename);
+	if (!RESHAPE_RECEIVERS.has(ext)) return null;
+	if (jsxPossible(filename, lines.join("\n"))) return null;
+	let decorators = 0;
+	while (
+		decorators < lines.length &&
+		isDecoratorLine(lines[decorators] as string)
+	)
+		decorators++;
+	const opener = lines[decorators];
+	if (opener === undefined || !isDefinitionLine(opener, ext)) return null;
+	let depth = 0;
+	let end = -1;
+	let last: string | undefined;
+	for (
+		let e = decorators;
+		e < Math.min(lines.length, decorators + MAX_SIGNATURE_LINES);
+		e++
+	) {
+		const line = lines[e] as string;
+		if (UNSAFE_TEXT.test(line) || unreadable(line, ext)) return null;
+		const scanned = scanLine(line, ext);
+		if (!scanned) return null;
+		for (const t of scanned) {
+			if (t === "(" || t === "[") depth++;
+			else if (t === ")" || t === "]") depth--;
+			if (depth < 0) return null;
+		}
+		last = scanned[scanned.length - 1];
+		if (depth === 0) {
+			end = e;
+			break;
+		}
+	}
+	const terminator = PYTHON.has(ext) ? ":" : "{";
+	if (end < 0 || last !== terminator) return null;
+	const found = tokenizeLines(lines.slice(0, end + 1), ext);
+	if (!found) return null;
+	return {
+		decorators,
+		end,
+		opensBrace: terminator === "{",
+		tokens: normalized(found.tokens, ext),
+	};
+}
+
+export interface ReshapeBlock {
+	filename: string;
+	lines: string[];
+	opener?: string;
+	opensBrace: boolean;
+}
+
+/**
+ * Whether two blocks hold the same tokens once receiver prefixes are removed, written
+ * independently of the matcher. `pairs` lists every (base line, head line) index pair
+ * whose tokens only match because a receiver was removed, differing in the removed text;
+ * `codePairs` is the subset whose difference changes state meaning (see `receiverKind`).
+ * Both files must be in the same family among the reshape languages, lines may hold no
+ * comment, template literal, triple-quoted string, heredoc or possible regex literal, and
+ * brackets must balance (a `{` already opened by the signature counts as open). In Python
+ * the opener (when given) plus the logical lines must be space-indented with the same
+ * relative indentation, and `reindent` is the head opener indent minus the base one.
+ */
+export function reshapeEquivalent(
+	base: ReshapeBlock,
+	head: ReshapeBlock,
+): {
+	equivalent: boolean;
+	pairs: [number, number][];
+	codePairs: [number, number][];
+	reindent: number;
+} {
+	const no = { equivalent: false, pairs: [], codePairs: [], reindent: 0 };
+	const exts = reshapeExtensions(
+		base.filename,
+		base.lines,
+		head.filename,
+		head.lines,
+	);
+	if (!exts) return no;
+	const b = comparable(base.lines, exts[0], base.opensBrace, true);
+	const h = comparable(head.lines, exts[1], head.opensBrace, true);
+	if (!b || !h || b.tokens.length === 0 || !sameTokens(b.tokens, h.tokens))
+		return no;
+	const groups = new Map<string, number[]>();
+	b.tokens.forEach((_, k) => {
+		const key = `${b.lineOf[k]}|${h.lineOf[k]}`;
+		const group = groups.get(key);
+		if (group) group.push(k);
+		else groups.set(key, [k]);
+	});
+	const pairs: [number, number][] = [];
+	const codePairs: [number, number][] = [];
+	const depths = depthsOfTokens(b.tokens, b.lineOf, base.lines.length);
+	for (const [key, ks] of groups) {
+		const pair = key.split("|").map(Number) as [number, number];
+		const kind = receiverKind(
+			ks.map((k) => b.tokens[k] as string),
+			ks.map((k) => b.droppedAt[k] as string),
+			ks.map((k) => h.droppedAt[k] as string),
+			base.lines[pair[0]] as string,
+			head.lines[pair[1]] as string,
+			depths.start[pair[0]] === 0 &&
+				depths.end[pair[0]] === 0 &&
+				!startsContinuation(base.lines, pair[0]) &&
+				!startsContinuation(head.lines, pair[1]),
+		);
+		if (kind === null) continue;
+		pairs.push(pair);
+		if (kind === "code") codePairs.push(pair);
+	}
+	if (!INDENTED.has(exts[0]))
+		return { equivalent: true, pairs, codePairs, reindent: 0 };
+	const shape = (block: ReshapeBlock, starts: number[]) => {
+		const all = [
+			...(block.opener === undefined ? [] : [block.opener]),
+			...starts.map((n) => block.lines[n] as string),
+		];
+		if (all.some((l) => l.trim() !== "" && !/^ *\S/.test(l))) return null;
+		const indents = all.map((l) => l.search(/\S/));
+		const first = indents[0];
+		if (first === undefined) return null;
+		return { first, depths: indents.map((d) => d - first) };
+	};
+	const bs = shape(base, b.starts);
+	const hs = shape(head, h.starts);
+	if (!bs || !hs) return no;
+	if (!sameTokens(bs.depths.map(String), hs.depths.map(String))) return no;
+	return { equivalent: true, pairs, codePairs, reindent: hs.first - bs.first };
 }

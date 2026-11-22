@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { tokenEquivalent } from "./token-check.js";
+import {
+	AGREEMENT_LINES,
+	READ_CASES,
+	WRITE_CASES,
+} from "./receiver-cases.fixture.js";
+import { RECEIVERS, receiverChangeClass, signatureRange } from "./reshape.js";
+import {
+	leadingSignature,
+	RESHAPE_RECEIVERS,
+	receiverOnlyLine,
+	reshapeEquivalent,
+	tokenEquivalent,
+} from "./token-check.js";
 
 function same(
 	base: string[],
@@ -294,5 +306,469 @@ describe("tokenEquivalent negatives for each structural rule", () => {
 		expect(
 			same(['x = "a\\" // b";'], ['x   =   "a\\" // b";']).equivalent,
 		).toBe(true);
+	});
+});
+
+describe("receiverOnlyLine", () => {
+	it("accepts a gained or lost receiver prefix", () => {
+		expect(
+			receiverOnlyLine("return f(x)", "return self.f(x)", "a.py", "b.py"),
+		).toBe(true);
+		expect(receiverOnlyLine("this.f(x);", "f(x);", "a.ts", "b.ts")).toBe(true);
+		expect(receiverOnlyLine("g(x)", "Self::g(x)", "a.rs", "b.rs")).toBe(false);
+		expect(receiverOnlyLine("self.f(x)", "cls.f(x)", "a.py", "b.py")).toBe(
+			true,
+		);
+	});
+
+	it("rejects anything beyond a receiver token", () => {
+		expect(receiverOnlyLine("this.f(x);", "that.f(x);", "a.ts", "b.ts")).toBe(
+			false,
+		);
+		expect(receiverOnlyLine("self.a", "self.b", "a.py", "b.py")).toBe(false);
+		expect(receiverOnlyLine("f(x, y)", "self.f(y, x)", "a.py", "b.py")).toBe(
+			false,
+		);
+		expect(receiverOnlyLine("Self::g(x)", "Other::g(x)", "a.rs", "b.rs")).toBe(
+			false,
+		);
+		expect(receiverOnlyLine("f(x)", "f(x)", "a.py", "b.py")).toBe(false);
+	});
+
+	it("never removes a receiver after a dot, at line end or inside a string", () => {
+		expect(receiverOnlyLine("obj.x", "obj.self.x", "a.py", "b.py")).toBe(false);
+		expect(receiverOnlyLine("x = self", "x = self.", "a.py", "b.py")).toBe(
+			false,
+		);
+		expect(receiverOnlyLine("a = b", "self = b", "a.py", "b.py")).toBe(false);
+		expect(receiverOnlyLine("s = 'x'", "s = 'self.x'", "a.py", "b.py")).toBe(
+			false,
+		);
+	});
+
+	it("rejects other families and languages", () => {
+		expect(receiverOnlyLine("this.f(x);", "f(x);", "A.java", "b.ts")).toBe(
+			false,
+		);
+		expect(receiverOnlyLine("this.f(x)", "f(x)", "a.go", "b.go")).toBe(false);
+	});
+});
+
+describe("leadingSignature", () => {
+	it("reads decorators and a multi-line opening line", () => {
+		const found = leadingSignature(
+			["@retry", "def f(", "    a,", "    b,", "):", "    return a"],
+			"a.py",
+		);
+		expect(found).toMatchObject({ decorators: 1, end: 4, opensBrace: false });
+	});
+
+	it("reads a brace signature and flags the open brace", () => {
+		expect(
+			leadingSignature(
+				["  process(items: Item[]): number {", "    return 1;", "  }"],
+				"a.ts",
+			),
+		).toMatchObject({ decorators: 0, end: 0, opensBrace: true });
+	});
+
+	it("is null for a block that does not start with a definition", () => {
+		expect(leadingSignature(["total = a + b", "    x = 1"], "a.py")).toBeNull();
+		expect(leadingSignature(["if (ready(x)) {", "}"], "a.ts")).toBeNull();
+		expect(leadingSignature(["const f = (a) => {", "}"], "a.ts")).toBeNull();
+	});
+
+	it("is null without the block terminator, with a comment, or outside the languages", () => {
+		expect(
+			leadingSignature(["def f(x) -> int", "    pass"], "a.py"),
+		).toBeNull();
+		expect(
+			leadingSignature(["def f(x):  # note", "    pass"], "a.py"),
+		).toBeNull();
+		expect(leadingSignature(["func f(x int) {", "}"], "a.go")).toBeNull();
+	});
+});
+
+describe("reshapeEquivalent", () => {
+	const block = (
+		filename: string,
+		lines: string[],
+		opener?: string,
+		opensBrace = false,
+	) => ({
+		filename,
+		lines,
+		opener,
+		opensBrace,
+	});
+
+	it("lists the lines that match only after receiver removal", () => {
+		const result = reshapeEquivalent(
+			block("a.py", ["    x = f(1)", "    g(x)", "    return x"], "def a(v):"),
+			block(
+				"b.py",
+				["        x = f(1)", "        self.g(x)", "        return x"],
+				"    def a(self, v):",
+			),
+		);
+		expect(result).toEqual({
+			equivalent: true,
+			pairs: [[1, 1]],
+			codePairs: [],
+			reindent: 4,
+		});
+	});
+
+	it("rejects a body that differs beyond a receiver", () => {
+		const result = reshapeEquivalent(
+			block("a.ts", ["  f(a, b);", "}"], undefined, true),
+			block("b.ts", ["  this.f(b, a);", "}"], undefined, true),
+		);
+		expect(result.equivalent).toBe(false);
+	});
+
+	it("rejects tabs, comments, other families and unbalanced bodies", () => {
+		const py = (lines: string[]) => block("a.py", lines, "def a(v):");
+		expect(
+			reshapeEquivalent(py(["\tx = 1"]), py(["    x = 1"])).equivalent,
+		).toBe(false);
+		expect(
+			reshapeEquivalent(py(["    x = 1  # c"]), py(["    x = 1  # c"]))
+				.equivalent,
+		).toBe(false);
+		expect(
+			reshapeEquivalent(block("a.ts", ["  f();"]), block("b.java", ["  f();"]))
+				.equivalent,
+		).toBe(false);
+		expect(
+			reshapeEquivalent(
+				block("a.ts", ["  f();", "}"]),
+				block("b.ts", ["  f();", "}"]),
+			).equivalent,
+		).toBe(false);
+	});
+});
+
+describe("receiverOnlyLine state meaning", () => {
+	it("refuses a receiver gained or lost on an assignment target", () => {
+		expect(
+			receiverOnlyLine("count = n", "self.count = n", "a.py", "b.py"),
+		).toBe(false);
+		expect(
+			receiverOnlyLine("self.count = n", "count = n", "a.py", "b.py"),
+		).toBe(false);
+		expect(
+			receiverOnlyLine("cls.count += n", "self.count += n", "a.py", "b.py"),
+		).toBe(false);
+		expect(
+			receiverOnlyLine(
+				"total = total + 1",
+				"self.total = total + 1",
+				"a.py",
+				"b.py",
+			),
+		).toBe(false);
+		expect(receiverOnlyLine("this.n = n;", "n = n;", "a.ts", "b.ts")).toBe(
+			false,
+		);
+	});
+
+	it("refuses one receiver dropped while another is added", () => {
+		expect(
+			receiverOnlyLine(
+				"total = self.a + x",
+				"total = a + self.x",
+				"a.py",
+				"b.py",
+			),
+		).toBe(false);
+	});
+
+	it("still accepts a receiver gained on the value side", () => {
+		expect(
+			receiverOnlyLine("return a + x", "return self.a + x", "a.py", "b.py"),
+		).toBe(true);
+	});
+});
+
+describe("reshapeEquivalent code pairs", () => {
+	const block = (filename: string, lines: string[], opensBrace = false) => ({
+		filename,
+		lines,
+		opensBrace,
+	});
+
+	it("lists an assignment target change as a code pair", () => {
+		const result = reshapeEquivalent(
+			block("a.ts", ["  n = 1;", "  f(x);"], true),
+			block("b.ts", ["  this.n = 1;", "  this.f(x);"], true),
+		);
+		expect(result.equivalent).toBe(true);
+		expect(result.pairs).toEqual([
+			[0, 0],
+			[1, 1],
+		]);
+		expect(result.codePairs).toEqual([[0, 0]]);
+	});
+
+	it("lists a swapped receiver as a code pair", () => {
+		const result = reshapeEquivalent(
+			block("a.py", ["total = self.a + x"]),
+			block("b.py", ["total = a + self.x"]),
+		);
+		expect(result.codePairs).toEqual([[0, 0]]);
+	});
+});
+
+describe("checker opener scan", () => {
+	it("returns null for hostile lines without scanning them", () => {
+		for (const line of [
+			`${"static ".repeat(32000)}!`,
+			"a <b ".repeat(32000),
+			"a b<".repeat(56000),
+		]) {
+			const started = performance.now();
+			expect(leadingSignature([line, "}"], "a.ts")).toBeNull();
+			expect(receiverOnlyLine(line, line, "a.ts", "b.ts")).toBe(false);
+			expect(
+				reshapeEquivalent(
+					{ filename: "a.ts", lines: [line], opensBrace: false },
+					{ filename: "b.ts", lines: [line], opensBrace: false },
+				).equivalent,
+			).toBe(false);
+			expect(performance.now() - started).toBeLessThan(1000);
+		}
+	}, 5000);
+
+	it("does not read with (scope) { as a definition opening", () => {
+		expect(leadingSignature(["with (scope) {", "}"], "a.js")).toBeNull();
+		expect(leadingSignature(["run(scope) {", "}"], "a.js")).not.toBeNull();
+	});
+});
+
+describe("matcher and checker agree on the shared reshape vocabulary", () => {
+	const openers: [string, string][] = [
+		["function f(a) {", "a.ts"],
+		["async function f(a) {", "a.js"],
+		["export default function f(a) {", "a.ts"],
+		["  run(a, b) {", "a.ts"],
+		["  static make(a) {", "a.ts"],
+		["  async load<T>(a: T) {", "a.ts"],
+		["  get value() {", "a.ts"],
+		["if (ready(x)) {", "a.ts"],
+		["while (more(x)) {", "a.ts"],
+		["switch (kind(x)) {", "a.ts"],
+		["with (scope) {", "a.js"],
+		["return f(x) {", "a.ts"],
+		["} catch (e) {", "a.ts"],
+		["const x = f(y) {", "a.ts"],
+		["def f(self, a):", "a.py"],
+		["async def f(a):", "a.py"],
+		["class A(Base):", "a.py"],
+		["if ready(x):", "a.py"],
+		["for x in f(y):", "a.py"],
+	];
+
+	it.each(openers)("agrees on %s in %s", (line, file) => {
+		const terminator = file.endsWith(".py") ? [] : ["}"];
+		const matcher = signatureRange([line], file) !== null;
+		const checker = leadingSignature([line, ...terminator], file) !== null;
+		expect(checker).toBe(matcher);
+	});
+
+	const receivers: [string, string, string][] = [
+		["f(x)", "this.f(x)", "ts"],
+		["f(x)", "this.f(x)", "js"],
+		["this.n = 1;", "n = 1;", "ts"],
+		["f(x)", "self.f(x)", "py"],
+		["f(x)", "cls.f(x)", "py"],
+		["self.f(x)", "cls.f(x)", "py"],
+		["total = self.a + x", "total = a + self.x", "py"],
+		["count = n", "self.count = n", "py"],
+		["x = self", "x = self.", "py"],
+		["f(x)", "that.f(x)", "ts"],
+		["f(x)", "self.f(x)", "ts"],
+		["f(x)", "this.f(x)", "py"],
+	];
+
+	it.each(receivers)("classifies %s against %s the same in %s", (a, b, ext) => {
+		const file = `f.${ext}`;
+		const matcher = receiverChangeClass(a, b, file, file);
+		expect(receiverOnlyLine(a, b, file, file)).toBe(matcher === "receiver");
+	});
+});
+
+describe("receiver positive rule in the checker", () => {
+	const file = (lang: "py" | "ts") => (lang === "py" ? "f.py" : "f.ts");
+
+	it.each(
+		WRITE_CASES.filter((c) => c.base.length === 1).map(
+			(c) => [c.name, c] as const,
+		),
+	)("refuses %s as a receiver line", (_name, c) => {
+		const [from, to] = [c.base[0] as string, c.head[0] as string];
+		expect(receiverOnlyLine(from, to, file(c.lang), file(c.lang))).toBe(false);
+		expect(receiverChangeClass(from, to, file(c.lang), file(c.lang))).not.toBe(
+			"receiver",
+		);
+	});
+
+	it.each(
+		WRITE_CASES.filter((c) => c.base.length > 1).map(
+			(c) => [c.name, c] as const,
+		),
+	)("lists %s as a code pair when the block is compared whole", (_name, c) => {
+		const block = (lines: string[]) => ({
+			filename: file(c.lang),
+			lines,
+			opensBrace: false,
+		});
+		const result = reshapeEquivalent(block(c.base), block(c.head));
+		if (!result.equivalent) return;
+		expect(result.pairs.length).toBeGreaterThan(0);
+		expect(result.codePairs).toEqual(result.pairs);
+	});
+
+	it.each(
+		READ_CASES.map((c) => [c.name, c] as const),
+	)("keeps %s as a receiver line", (_name, c) => {
+		const [from, to] = [c.base[0] as string, c.head[0] as string];
+		expect(receiverOnlyLine(from, to, file(c.lang), file(c.lang))).toBe(true);
+	});
+});
+
+describe("each clause of the receiver positive rule on its own", () => {
+	const only: [string, string, string, string][] = [
+		["a trailing backslash", "f(a) \\", "f(self.a) \\", "py"],
+		[
+			"a semicolon before the last token",
+			"f(a); g(b)",
+			"f(self.a); g(b)",
+			"py",
+		],
+		["a leading operator", ".then(g(a))", ".then(this.g(a))", "ts"],
+		["a trailing operator", "f(a) +", "f(self.a) +", "py"],
+		[
+			"a cast with as",
+			"process(a) as Result",
+			"this.process(a) as Result",
+			"ts",
+		],
+		["an in test", "has(a) in table", "this.has(a) in table", "ts"],
+		["an unclosed bracket", "foo(bar(a)", "foo(self.bar(a)", "py"],
+		["a closer that comes first", "a) + f(b, c", "a) + f(self.b, c", "py"],
+		["no call and no return", "a + b", "self.a + b", "py"],
+		["an unclosed string", "f('abc)", "f(self.x, 'abc)", "py"],
+		[
+			"a receiver swapped on a read-only line",
+			"return self.a + x",
+			"return a + self.x",
+			"py",
+		],
+	];
+
+	it.each(only)("refuses %s", (_name, from, to, ext) => {
+		const file = `f.${ext}`;
+		expect(receiverOnlyLine(from, to, file, file)).toBe(false);
+		expect(receiverChangeClass(from, to, file, file)).not.toBe("receiver");
+	});
+});
+
+describe("receiver tables", () => {
+	it("pins the matcher table to the checker table", () => {
+		const flat = (table: ReadonlyMap<string, ReadonlyMap<string, string>>) =>
+			[...table].map(([ext, rules]) => [ext, [...rules]]).sort();
+		expect(flat(RECEIVERS)).toEqual(flat(RESHAPE_RECEIVERS));
+		expect([...RECEIVERS.keys()].sort()).toEqual([
+			"cjs",
+			"js",
+			"jsx",
+			"mjs",
+			"py",
+			"pyi",
+			"ts",
+			"tsx",
+		]);
+	});
+});
+
+describe("prototype-named extensions", () => {
+	const names = ["constructor", "__proto__", "toString", "hasOwnProperty"];
+
+	it.each(names)("never treats x.%s as a reshape file", (ext) => {
+		const file = `x.${ext}`;
+		expect(RECEIVERS.has(ext)).toBe(false);
+		expect(RESHAPE_RECEIVERS.has(ext)).toBe(false);
+		expect(signatureRange(["function f(a) {"], file)).toBeNull();
+		expect(leadingSignature(["function f(a) {", "}"], file)).toBeNull();
+		expect(receiverChangeClass("f(x)", "this.f(x)", file, file)).toBeNull();
+		expect(receiverOnlyLine("f(x)", "this.f(x)", file, file)).toBe(false);
+		expect(
+			reshapeEquivalent(
+				{ filename: file, lines: ["f(x)"], opensBrace: false },
+				{ filename: file, lines: ["this.f(x)"], opensBrace: false },
+			).equivalent,
+		).toBe(false);
+	});
+});
+
+describe("matcher and checker agree on receiver labels", () => {
+	it.each(AGREEMENT_LINES)("agrees on %s: %s", (ext, from, to) => {
+		const file = `f.${ext}`;
+		const label = receiverChangeClass(from, to, file, file);
+		if (label === "receiver")
+			expect(receiverOnlyLine(from, to, file, file)).toBe(true);
+	});
+});
+
+describe("readable operators do not hide receiver labels", () => {
+	const label = (ext: string, from: string, to: string) =>
+		receiverChangeClass(from, to, `f.${ext}`, `f.${ext}`);
+
+	it("keeps receiver for Python division, floor division, modulo and matmul", () => {
+		expect(label("py", "return ratio(a) / 2", "return self.ratio(a) / 2")).toBe(
+			"receiver",
+		);
+		expect(
+			label("py", "return ratio(a) // 2", "return self.ratio(a) // 2"),
+		).toBe("receiver");
+		expect(label("py", "return total(a) % 7", "return self.total(a) % 7")).toBe(
+			"receiver",
+		);
+		expect(
+			label(
+				"py",
+				"return left(a) @ right(b)",
+				"return self.left(a) @ right(b)",
+			),
+		).toBe("receiver");
+	});
+
+	it("keeps receiver for JavaScript division after a name, number or bracket and refuses regex literals and comments", () => {
+		expect(label("ts", "return xs[0] / 2;", "return this.xs[0] / 2;")).toBe(
+			"receiver",
+		);
+		expect(
+			label("ts", "return n / 2 + f(x);", "return n / 2 + this.f(x);"),
+		).toBe("receiver");
+		expect(
+			label("ts", "return /a+/.test(f(x));", "return /a+/.test(this.f(x));"),
+		).toBe("code");
+		expect(label("ts", "return f(x); // c", "return this.f(x); // c")).toBe(
+			"code",
+		);
+	});
+
+	it("labels a leading if, else, try or case line code", () => {
+		for (const [ext, from, to] of [
+			["py", "if ok(x): go(x)", "if self.ok(x): go(x)"],
+			["ts", "if (ok(x)) go(x);", "if (this.ok(x)) go(x);"],
+			["ts", "else go(x);", "else this.go(x);"],
+			["py", "try: go(x)", "try: self.go(x)"],
+			["ts", "case ok(x): go(x);", "case ok(x): this.go(x);"],
+		] as const) {
+			expect(label(ext, from, to)).not.toBe("receiver");
+			expect(receiverOnlyLine(from, to, `f.${ext}`, `f.${ext}`)).toBe(false);
+		}
 	});
 });

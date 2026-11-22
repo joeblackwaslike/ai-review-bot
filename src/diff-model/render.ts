@@ -40,6 +40,8 @@ const DIVERGENCE_CLASS: Record<Divergence["class"], string> = {
 	code: "code",
 	"comment-only": "comment only",
 	rename: "identifier rename",
+	signature: "signature",
+	receiver: "receiver prefix",
 };
 
 const MECHANICAL_PHRASE = {
@@ -108,8 +110,14 @@ function divergenceText(d: Divergence): string {
 	return `${DIVERGENCE_LABEL[d.kind]} (${DIVERGENCE_CLASS[d.class]})${where}${original}.`;
 }
 
+function isCodeLike(d: Divergence): boolean {
+	return (
+		d.class === "code" || d.class === "signature" || d.class === "receiver"
+	);
+}
+
 function hasCodeDivergence(op: Operation): boolean {
-	return op.divergences.some((d) => d.class === "code");
+	return op.divergences.some(isCodeLike);
 }
 
 const TYPE_RANK: Record<Operation["type"], number> = {
@@ -145,16 +153,16 @@ function plural(n: number, word: string): string {
 	return `${n} ${word}${n === 1 ? "" : "s"}`;
 }
 
-const COLUMNS_PER_LEVEL: Record<string, number> = {
-	py: 4,
-	pyi: 4,
-};
+const COLUMNS_PER_LEVEL: ReadonlyMap<string, number> = new Map([
+	["py", 4],
+	["pyi", 4],
+]);
 
 function reindentPhrase(op: Operation): string {
 	const shift = op.shape?.reindent ?? 0;
 	if (shift === 0) return "";
 	const extension = (op.to[0]?.filename ?? "").split(".").pop() ?? "";
-	const perLevel = COLUMNS_PER_LEVEL[extension.toLowerCase()];
+	const perLevel = COLUMNS_PER_LEVEL.get(extension.toLowerCase());
 	const size = Math.abs(shift);
 	const direction = shift > 0 ? "deeper" : "shallower";
 	if (perLevel !== undefined && size % perLevel === 0) {
@@ -316,7 +324,7 @@ function intentBody(
 	const says = `${speaker} ${phrases.join(" and ")}.`;
 	const codeIndex = ranked.findIndex(hasCodeDivergence);
 	if (codeIndex >= 0) {
-		const d = ranked[codeIndex]?.divergences.find((x) => x.class === "code");
+		const d = ranked[codeIndex]?.divergences.find(isCodeLike);
 		const at = d ? divergenceSpan(d) : undefined;
 		const where = at ? ` at ${untrusted(at.filename)} ${spanRange(at)}` : "";
 		const subject =

@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest";
 import type { PushFile } from "../moved-blocks.js";
 import { buildDiffModel } from "./index.js";
 import { partialStatements } from "./partial-statements.fixture.js";
+import {
+	AGREEMENT_LINES,
+	READ_CASES,
+	scaffold,
+	WRITE_CASES,
+} from "./receiver-cases.fixture.js";
 import { findRelocations } from "./relocation.js";
 import { verifyRelocation } from "./relocation-check.js";
 import type { Operation, Span } from "./types.js";
@@ -131,7 +137,9 @@ describe("verifyRelocation", () => {
 		const { files, op } = relocation(base, head);
 		expect(op.divergences).toHaveLength(1);
 		expect(verifyRelocation(op, files)).toBe(true);
-		expect(verifyRelocation(claimedClean(op), files)).toBe(false);
+		expect(
+			verifyRelocation({ ...claimedClean(op), reviewWeight: 0 }, files),
+		).toBe(false);
 	});
 
 	it("rejects a claim that omits an inserted line", () => {
@@ -140,7 +148,9 @@ describe("verifyRelocation", () => {
 		const { files, op } = relocation(base, head);
 		expect(op.divergences).toHaveLength(1);
 		expect(op.divergences[0]?.kind).toBe("inserted");
-		expect(verifyRelocation(claimedClean(op), files)).toBe(false);
+		expect(
+			verifyRelocation({ ...claimedClean(op), reviewWeight: 0 }, files),
+		).toBe(false);
 	});
 
 	it("rejects an exact claim over a re-indented Python block", () => {
@@ -194,7 +204,9 @@ describe("verifyRelocation", () => {
 		const head = withLine(base, 10, "  const rate = Math.round(p);");
 		const { files, op } = relocation(base, head);
 		expect(op.divergences).toHaveLength(1);
-		expect(verifyRelocation(claimedClean(op), files)).toBe(false);
+		expect(
+			verifyRelocation({ ...claimedClean(op), reviewWeight: 0 }, files),
+		).toBe(false);
 	});
 
 	it("rejects a template literal whose inner whitespace changed when the claim says unchanged", () => {
@@ -208,7 +220,9 @@ describe("verifyRelocation", () => {
 		]);
 		const head = withLine(base, 10, "        select id");
 		const { files, op } = relocation(base, head);
-		expect(verifyRelocation(claimedClean(op), files)).toBe(false);
+		expect(
+			verifyRelocation({ ...claimedClean(op), reviewWeight: 0 }, files),
+		).toBe(false);
 	});
 
 	it("rejects a claim that omits a deleted guard", () => {
@@ -216,7 +230,9 @@ describe("verifyRelocation", () => {
 		const head = [...base.slice(0, 12), ...base.slice(13)];
 		const { files, op } = relocation(base, head);
 		expect(op.divergences.map((d) => d.kind)).toContain("removed");
-		expect(verifyRelocation(claimedClean(op), files)).toBe(false);
+		expect(
+			verifyRelocation({ ...claimedClean(op), reviewWeight: 0 }, files),
+		).toBe(false);
 	});
 
 	it("rejects a listed divergence the lines do not support", () => {
@@ -245,14 +261,18 @@ describe("verifyRelocation", () => {
 			i === 5 ? (block[6] as string) : i === 6 ? (block[5] as string) : line,
 		);
 		const { files, op } = relocation(block, swapped);
-		expect(verifyRelocation(claimedClean(op), files)).toBe(false);
+		expect(
+			verifyRelocation({ ...claimedClean(op), reviewWeight: 0 }, files),
+		).toBe(false);
 	});
 
 	it("rejects a changed string-literal interior claimed clean", () => {
 		const base = withLine(fn(body(20)), 5, '  const s = "a  b";');
 		const head = withLine(base, 5, '  const s = "a b";');
 		const { files, op } = relocation(base, head);
-		expect(verifyRelocation(claimedClean(op), files)).toBe(false);
+		expect(
+			verifyRelocation({ ...claimedClean(op), reviewWeight: 0 }, files),
+		).toBe(false);
 	});
 
 	it("accepts a re-indented line that contains a string", () => {
@@ -268,7 +288,9 @@ describe("verifyRelocation", () => {
 		const base = withLine(fn(body(20)), 5, "  const z = x + +y;");
 		const head = withLine(base, 5, "  const z = x ++y;");
 		const { files, op } = relocation(base, head);
-		expect(verifyRelocation(claimedClean(op), files)).toBe(false);
+		expect(
+			verifyRelocation({ ...claimedClean(op), reviewWeight: 0 }, files),
+		).toBe(false);
 	});
 
 	describe("forged claims", () => {
@@ -440,14 +462,18 @@ describe("verifyRelocation", () => {
 			const { files, op } = relocation(base, head, ["a.py", "b.py"]);
 			expect(op.divergences.length).toBeGreaterThanOrEqual(1);
 			expect(verifyRelocation(op, files)).toBe(true);
-			expect(verifyRelocation(claimedClean(op), files)).toBe(false);
+			expect(
+				verifyRelocation({ ...claimedClean(op), reviewWeight: 0 }, files),
+			).toBe(false);
 		});
 
 		it("rejects a shell continuation broken by trailing whitespace claimed clean", () => {
 			const base = withLine(body(10), 4, "  cmd --flag \\");
 			const head = withLine(base, 4, "  cmd --flag \\ ");
 			const { files, op } = relocation(base, head, ["a.sh", "b.sh"]);
-			expect(verifyRelocation(claimedClean(op), files)).toBe(false);
+			expect(
+				verifyRelocation({ ...claimedClean(op), reviewWeight: 0 }, files),
+			).toBe(false);
 		});
 
 		it("does not treat a shell heredoc whose inner whitespace changed as exact", () => {
@@ -461,7 +487,9 @@ describe("verifyRelocation", () => {
 			const head = withLine(base, 7, "  inner text");
 			const { files, op } = relocation(base, head, ["a.sh", "b.sh"]);
 			expect(op.exact).toBe(false);
-			expect(verifyRelocation(claimedClean(op), files)).toBe(false);
+			expect(
+				verifyRelocation({ ...claimedClean(op), reviewWeight: 0 }, files),
+			).toBe(false);
 		});
 	});
 });
@@ -1769,4 +1797,929 @@ describe("verifyRelocation shape on positional claims", () => {
 				false,
 			);
 	});
+});
+
+const PY_FUNCTION = [
+	"def total_price(items, tax_rate):",
+	"    subtotal = sum(item.price * item.qty for item in items)",
+	"    taxed = subtotal * (1 + tax_rate)",
+	"    rounded = round(taxed, 2)",
+	"    log_total(rounded, len(items))",
+	"    return rounded",
+];
+const PY_METHOD = [
+	"    def total(self, items):",
+	"        subtotal = sum(item.price * item.qty for item in items)",
+	"        taxed = subtotal * (1 + self.tax_rate)",
+	"        rounded = round(taxed, 2)",
+	"        self.log_total(rounded, len(items))",
+	"        return rounded",
+];
+const TS_FUNCTION = [
+	"function applyDiscount(cart: Cart, code: string): number {",
+	"  const rate = lookupRate(code);",
+	"  const gross = totalOf(cart);",
+	"  recordDiscount(cart.id, code, gross);",
+	"  const net = applyRate(gross, rate);",
+	"  return finalize(net, code);",
+	"}",
+];
+const TS_METHOD = [
+	"  discount(cart: Cart, code: string): number {",
+	"    const rate = this.lookupRate(code);",
+	"    const gross = this.totalOf(cart);",
+	"    this.recordDiscount(cart.id, code, gross);",
+	"    const net = this.applyRate(gross, rate);",
+	"    return this.finalize(net, code);",
+	"  }",
+];
+const TS_LINES = [
+	"const cart = loadCart(userId);",
+	"const items = cart.items.filter((item) => item.active);",
+	"const subtotal = items.reduce((sum, item) => sum + item.price, 0);",
+	"const discount = lookupDiscount(cart.code);",
+	"const taxed = subtotal * (1 - discount);",
+	"const shipping = shippingFor(cart.region, items.length);",
+	"const total = taxed + shipping;",
+	"recordTotal(cart.id, total);",
+	"const receipt = buildReceipt(cart, items, total);",
+	"sendReceipt(cart.email, receipt);",
+	"auditTotal(cart.id, total, items.length);",
+	"return total;",
+];
+
+function named(
+	baseName: string,
+	headName: string,
+	base: string[],
+	head: string[],
+): PushFile[] {
+	return [
+		pushFile(
+			baseName,
+			[`@@ -10,${base.length} +9,0 @@`, ...base.map((l) => `-${l}`)].join("\n"),
+		),
+		pushFile(
+			headName,
+			[`@@ -0,0 +3,${head.length} @@`, ...head.map((l) => `+${l}`)].join("\n"),
+		),
+	];
+}
+
+function claim(
+	baseName: string,
+	headName: string,
+	base: string[],
+	head: string[],
+) {
+	const files = named(baseName, headName, base, head);
+	const ops = findRelocations(files);
+	expect(ops).toHaveLength(1);
+	return { files, op: ops[0] as Operation };
+}
+
+function reweighed(op: Operation): Operation {
+	const counted = op.divergences.filter(
+		(d) => d.class === "signature" || d.class === "code",
+	).length;
+	const receivers = op.divergences.some((d) => d.class === "receiver");
+	return { ...op, reviewWeight: counted + (receivers ? 1 : 0) };
+}
+
+function without(
+	op: Operation,
+	drop: (d: Operation["divergences"][number]) => boolean,
+) {
+	return reweighed({
+		...op,
+		divergences: op.divergences.filter((d) => !drop(d)),
+	});
+}
+
+function headSpanOf(op: Operation, line: number) {
+	return {
+		...(op.to[0] as Operation["to"][number]),
+		startLine: line,
+		endLine: line,
+	};
+}
+
+function baseSpanOf(op: Operation, line: number) {
+	return {
+		...(op.from[0] as Operation["from"][number]),
+		startLine: line,
+		endLine: line,
+	};
+}
+
+function withHeadText(files: PushFile[], from: string, to: string): PushFile[] {
+	return files.map((f) => ({ ...f, patch: (f.patch ?? "").replace(from, to) }));
+}
+
+function retargetHead(op: Operation, filename: string): Operation {
+	const move = <T extends { filename: string; side: string }>(s: T): T =>
+		s.side === "head" ? { ...s, filename } : s;
+	return {
+		...op,
+		to: op.to.map(move),
+		divergences: op.divergences.map((d) => ({
+			...d,
+			...(d.head ? { head: move(d.head) } : {}),
+		})),
+	};
+}
+
+describe("verifyRelocation with signature and receiver divergences", () => {
+	it("verifies a Python function turned into a method", () => {
+		const { files, op } = claim(
+			"src/pricing.py",
+			"src/cart.py",
+			PY_FUNCTION,
+			PY_METHOD,
+		);
+		expect(op.divergences.map((d) => d.class)).toEqual([
+			"signature",
+			"code",
+			"receiver",
+		]);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("verifies a renamed function with new parameters and an identical body", () => {
+		const pyBody = [
+			"    subtotal = sum(i.price for i in items)",
+			"    taxed = subtotal * (1 + rate)",
+			"    rounded = round(taxed, 2)",
+			"    log_total(rounded, len(items))",
+			"    return rounded",
+		];
+		const { files, op } = claim(
+			"src/pricing.py",
+			"src/cart.py",
+			["def total_price(items, rate):", ...pyBody],
+			[
+				"    def compute(self, items, rate, region):",
+				...pyBody.map((l) => `    ${l}`),
+			],
+		);
+		expect(op.shape).toEqual({ reindent: 4 });
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("keeps a function-to-method claim through buildDiffModel", () => {
+		const files = named(
+			"src/pricing.py",
+			"src/cart.py",
+			PY_FUNCTION,
+			PY_METHOD,
+		);
+		const model = buildDiffModel({
+			scopeFiles: files,
+			prFiles: files,
+			prFilesComplete: true,
+			title: "t",
+			body: null,
+		});
+		expect(model.droppedClaims).toBe(0);
+		expect(model.operations.map((o) => o.type)).toEqual(["relocation"]);
+	});
+
+	it("verifies a TypeScript method with a signature change and receiver lines", () => {
+		const { files, op } = claim(
+			"src/discount.ts",
+			"src/cart.ts",
+			TS_FUNCTION,
+			TS_METHOD,
+		);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("verifies a brace-language reshape that stops partway through the body", () => {
+		const lines = [
+			"const subtotal = sumItems(items, rate);",
+			"const taxed = applyTax(subtotal, rate);",
+			"const fee = feeFor(taxed, rate);",
+			"const rounded = roundTo(taxed, 2);",
+			"logTotal(rounded, items.length);",
+			"audit(rounded, rate);",
+			"return rounded;",
+		];
+		const gained = lines.map((l, i) =>
+			[0, 1, 2, 3].includes(i) ? l.replace(/(\w+)\(/, "this.$1(") : l,
+		);
+		const files = named(
+			"src/a.ts",
+			"src/b.ts",
+			[
+				"function total(items: Item[], rate: number): number {",
+				...lines.map((l) => `  ${l}`),
+				"}",
+			],
+			[
+				"  total(items: Item[]): number {",
+				...gained.map((l) => `    ${l}`),
+				"  }",
+			],
+		);
+		const ops = findRelocations(files);
+		const reshape = ops.find((o) =>
+			o.divergences.some((d) => d.class === "signature"),
+		);
+		expect(reshape).toBeDefined();
+		expect(verifyRelocation(reshape as Operation, files)).toBe(true);
+		const model = buildDiffModel({
+			scopeFiles: files,
+			prFiles: files,
+			prFilesComplete: true,
+			title: "t",
+			body: null,
+		});
+		expect(model.droppedClaims).toBe(0);
+	});
+
+	it("drops a claim that hides a gained this.", () => {
+		const { files, op } = claim(
+			"src/discount.ts",
+			"src/cart.ts",
+			TS_FUNCTION,
+			TS_METHOD,
+		);
+		const hidden = without(
+			op,
+			(d) =>
+				d.class === "receiver" &&
+				d.original === "recordDiscount(cart.id, code, gross);",
+		);
+		expect(hidden.divergences).toHaveLength(op.divergences.length - 1);
+		expect(verifyRelocation(hidden, files)).toBe(false);
+	});
+
+	it("drops a line-matcher claim that hides a gained this.", () => {
+		const head = TS_LINES.map((l, i) =>
+			i === 7 ? "this.recordTotal(cart.id, total);" : l,
+		);
+		const { files, op } = claim(
+			"src/a.ts",
+			"src/b.ts",
+			TS_LINES.map((l) => `  ${l}`),
+			head.map((l) => `    ${l}`),
+		);
+		expect(verifyRelocation(op, files)).toBe(true);
+		expect(
+			verifyRelocation({ ...claimedClean(op), reviewWeight: 0 }, files),
+		).toBe(false);
+	});
+
+	describe("a receiver label on a line that differs by more than a receiver", () => {
+		const base = TS_LINES.map((l) => `  ${l}`);
+		function mislabelled(headLine: string) {
+			const head = TS_LINES.map((l, i) => (i === 7 ? headLine : l));
+			const files = named(
+				"src/a.ts",
+				"src/b.ts",
+				base,
+				head.map((l) => `    ${l}`),
+			);
+			const legit = findRelocations(files)[0] as Operation;
+			const forged = reweighed({
+				...legit,
+				divergences: legit.divergences.map((d) => ({
+					...d,
+					class: "receiver" as const,
+				})),
+			});
+			return { files, forged };
+		}
+
+		it("drops this.x relabelled that.x", () => {
+			const { files, forged } = mislabelled(
+				"that.recordTotal(cart.id, total);",
+			);
+			expect(forged.divergences).toHaveLength(1);
+			expect(verifyRelocation(forged, files)).toBe(false);
+		});
+
+		it("drops an argument change beside this.", () => {
+			const { files, forged } = mislabelled(
+				"this.recordTotal(cart.id, total + 1);",
+			);
+			expect(forged.divergences).toHaveLength(1);
+			expect(verifyRelocation(forged, files)).toBe(false);
+		});
+
+		it("drops self.a relabelled self.b in Python", () => {
+			const py = TS_LINES.map((l) =>
+				l.replace(/^const /, "").replace(/;$/, ""),
+			);
+			const basePy = py.map((l, i) =>
+				i === 7 ? "self.recordTotal(cart.id, total)" : l,
+			);
+			const headPy = py.map((l, i) =>
+				i === 7 ? "self.auditTotal(cart.id, total)" : l,
+			);
+			const files = named("src/a.py", "src/b.py", basePy, headPy);
+			const legit = findRelocations(files)[0] as Operation;
+			const forged = reweighed({
+				...legit,
+				divergences: legit.divergences.map((d) => ({
+					...d,
+					class: "receiver" as const,
+				})),
+			});
+			expect(forged.divergences).toHaveLength(1);
+			expect(verifyRelocation(forged, files)).toBe(false);
+		});
+	});
+
+	it("drops a reshape whose body changed an argument beside a receiver line", () => {
+		const { files, op } = claim(
+			"src/pricing.py",
+			"src/cart.py",
+			PY_FUNCTION,
+			PY_METHOD,
+		);
+		const edited = withHeadText(
+			files,
+			"self.log_total(rounded, len(items))",
+			"self.log_total(rounded, len(items), 1)",
+		);
+		expect(verifyRelocation(op, edited)).toBe(false);
+	});
+
+	it("drops a claim missing a signature line", () => {
+		const base = [
+			"def build_report(",
+			"    rows,",
+			"    options,",
+			"):",
+			"    grouped = group_rows(rows, options.group_by)",
+			"    totals = [sum_group(g, options.currency) for g in grouped]",
+			"    header = render_header(options.title, len(totals))",
+			"    sink.write(header)",
+			"    return header, totals, grouped",
+		];
+		const head = [
+			"    def build(self, rows, options):",
+			...base.slice(4).map((l) => `    ${l}`),
+		];
+		const { files, op } = claim("src/report.py", "src/builder.py", base, head);
+		expect(verifyRelocation(op, files)).toBe(true);
+		const openerOnly = without(
+			op,
+			(d) => d.class === "signature" && d.kind !== "changed",
+		);
+		expect(openerOnly.divergences).toHaveLength(1);
+		expect(verifyRelocation(openerOnly, files)).toBe(false);
+	});
+
+	it("drops a claim with an invented signature divergence", () => {
+		const { files, op } = claim(
+			"src/pricing.py",
+			"src/cart.py",
+			PY_FUNCTION,
+			PY_METHOD,
+		);
+		const invented = reweighed({
+			...op,
+			divergences: [
+				...op.divergences,
+				{
+					kind: "changed",
+					class: "signature",
+					base: baseSpanOf(op, 12),
+					head: headSpanOf(op, 5),
+					original: "taxed = subtotal * (1 + tax_rate)",
+				},
+			],
+		});
+		expect(verifyRelocation(invented, files)).toBe(false);
+	});
+
+	it("drops a signature divergence on token-equal signatures", () => {
+		const base = TS_LINES.map((l) => `  ${l}`);
+		const wrapped = (lines: string[]) => [
+			"  process(items: Item[]): number {",
+			...lines,
+			"  }",
+		];
+		const baseBlock = wrapped(
+			base.map((l) => l.replace("recordTotal(", "this.recordTotal(")),
+		);
+		const headBlock = wrapped(base);
+		const { files, op } = claim("src/a.ts", "src/b.ts", baseBlock, headBlock);
+		const invented = reweighed({
+			...op,
+			divergences: [
+				{
+					kind: "changed",
+					class: "signature",
+					base: baseSpanOf(op, 10),
+					head: headSpanOf(op, 3),
+					original: "process(items: Item[]): number {",
+				},
+				...op.divergences,
+			],
+		});
+		expect(verifyRelocation(invented, files)).toBe(false);
+	});
+
+	it("drops a claim whose shape.reindent is wrong or missing", () => {
+		const { files, op } = claim(
+			"src/pricing.py",
+			"src/cart.py",
+			PY_FUNCTION,
+			PY_METHOD,
+		);
+		expect(op.shape).toEqual({ reindent: 4 });
+		const { shape: _shape, ...unshaped } = op;
+		expect(verifyRelocation(unshaped, files)).toBe(false);
+		expect(verifyRelocation({ ...op, shape: { reindent: 8 } }, files)).toBe(
+			false,
+		);
+	});
+
+	it("drops a Python reshape indented with tabs", () => {
+		const { op } = claim(
+			"src/pricing.py",
+			"src/cart.py",
+			PY_FUNCTION,
+			PY_METHOD,
+		);
+		const tabs = (lines: string[], opener: number) =>
+			lines.map((l) =>
+				l.replace(/^ +/, (s) => "\t".repeat(s.length / 4 - opener)),
+			);
+		const files = named(
+			"src/pricing.py",
+			"src/cart.py",
+			tabs(PY_FUNCTION, 0),
+			tabs(PY_METHOD, 0),
+		);
+		expect(verifyRelocation({ ...op, shape: { reindent: 1 } }, files)).toBe(
+			false,
+		);
+	});
+
+	it("verifies a decorator added to the method as an inserted signature divergence", () => {
+		const base = [
+			"def total_price(items, tax_rate):",
+			"    subtotal = sum(item.price * item.qty for item in items)",
+			"    taxed = subtotal * (1 + tax_rate)",
+			"    rounded = round(taxed, 2)",
+			"    log_total(rounded, len(items))",
+			"    return rounded",
+		];
+		const head = [
+			"    @classmethod",
+			"    def total(cls, items):",
+			"        subtotal = sum(item.price * item.qty for item in items)",
+			"        taxed = subtotal * (1 + cls.tax_rate)",
+			"        rounded = round(taxed, 2)",
+			"        cls.log_total(rounded, len(items))",
+			"        return rounded",
+		];
+		const { files, op } = claim("src/pricing.py", "src/cart.py", base, head);
+		expect(
+			op.divergences.some(
+				(d) => d.class === "signature" && d.kind === "inserted",
+			),
+		).toBe(true);
+		expect(verifyRelocation(op, files)).toBe(true);
+		const lost = without(op, (d) => d.kind === "inserted");
+		expect(verifyRelocation(lost, files)).toBe(false);
+	});
+
+	it("verifies a TypeScript line-matcher claim with one receiver divergence and weight 1", () => {
+		const head = TS_LINES.map((l, i) =>
+			i === 7 ? "this.recordTotal(cart.id, total);" : l,
+		);
+		const { files, op } = claim(
+			"src/a.ts",
+			"src/b.ts",
+			TS_LINES.map((l) => `  ${l}`),
+			head.map((l) => `    ${l}`),
+		);
+		expect(op.divergences.map((d) => d.class)).toEqual(["receiver"]);
+		expect(op.reviewWeight).toBe(1);
+		expect(verifyRelocation(op, files)).toBe(true);
+		expect(verifyRelocation({ ...op, reviewWeight: 0 }, files)).toBe(false);
+		expect(verifyRelocation({ ...op, exact: true }, files)).toBe(false);
+	});
+
+	describe("files from different families", () => {
+		const unterminated = (lines: string[]) =>
+			lines.map((l, i) => (i === 5 ? l.replace(/;$/, "") : l));
+
+		function retargeted(baseName: string, headName: string, javaName: string) {
+			const { files, op } = claim(
+				baseName,
+				headName,
+				unterminated(TS_FUNCTION),
+				unterminated(TS_METHOD),
+			);
+			const java = files.map((f) =>
+				f.filename === headName ? { ...f, filename: javaName } : f,
+			);
+			return { files, op, java, moved: retargetHead(op, javaName) };
+		}
+
+		it("drops a ts reshape whose head is a java file", () => {
+			const { files, op, java, moved } = retargeted(
+				"src/discount.ts",
+				"src/cart.ts",
+				"src/Cart.java",
+			);
+			expect(verifyRelocation(op, files)).toBe(true);
+			expect(verifyRelocation(moved, java)).toBe(false);
+		});
+	});
+});
+
+const STATE_BASE = [
+	"def tally(items, n):",
+	"    count = n + 1",
+	"    rows = load_rows(items)",
+	"    keys = build_keys(rows, items)",
+	"    check_keys(keys, rows)",
+	"    return count",
+];
+const STATE_HEAD = [
+	"    def tally(self, items, n):",
+	"        self.count = n + 1",
+	"        rows = load_rows(items)",
+	"        keys = build_keys(rows, items)",
+	"        check_keys(keys, rows)",
+	"        return count",
+];
+const SWAP_BASE = [
+	"    def tally(self, x):",
+	"        total = self.a + x",
+	"        rows = load_rows(total)",
+	"        keys = build_keys(rows, x)",
+	"        check_keys(keys, rows)",
+	"        return total",
+];
+const SWAP_HEAD = [
+	"def tally(x):",
+	"    total = a + self.x",
+	"    rows = load_rows(total)",
+	"    keys = build_keys(rows, x)",
+	"    check_keys(keys, rows)",
+	"    return total",
+];
+const TS_RISKY_TAIL = "\n+  const s = `a\n+  b`;";
+
+describe("verifyRelocation review weight for receivers", () => {
+	it("weighs a signature, a code line and a read-only receiver line as 3", () => {
+		const { files, op } = claim("a.py", "b.py", PY_FUNCTION, PY_METHOD);
+		expect(op.reviewWeight).toBe(3);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("drops a signature claim whose weight was forged to 0, 1 or 9", () => {
+		const { files, op } = claim("a.py", "b.py", PY_FUNCTION, PY_METHOD);
+		for (const w of [0, 1, 9])
+			expect(verifyRelocation({ ...op, reviewWeight: w }, files)).toBe(false);
+	});
+
+	it("drops a claim that keeps the old max(...) receiver weight", () => {
+		const { files, op } = claim("a.ts", "b.ts", TS_FUNCTION, TS_METHOD);
+		const old = Math.max(
+			op.divergences.filter((d) => d.class === "signature").length,
+			1,
+		);
+		expect(old).not.toBe(op.reviewWeight);
+		expect(verifyRelocation({ ...op, reviewWeight: old }, files)).toBe(false);
+	});
+
+	it("classes an assignment target that gained self. as code", () => {
+		const { files, op } = claim("a.py", "b.py", STATE_BASE, STATE_HEAD);
+		expect(op.divergences.map((d) => d.class)).toEqual(["signature", "code"]);
+		expect(op.reviewWeight).toBe(2);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("drops a claim that calls an assignment target change a receiver", () => {
+		const { files, op } = claim("a.py", "b.py", STATE_BASE, STATE_HEAD);
+		const forged = reweighed({
+			...op,
+			divergences: op.divergences.map((d) =>
+				d.class === "code" ? { ...d, class: "receiver" as const } : d,
+			),
+		});
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("classes one receiver dropped and another added on a line as code", () => {
+		const { files, op } = claim("a.py", "b.py", SWAP_BASE, SWAP_HEAD);
+		expect(op.divergences.map((d) => d.class)).toEqual(["signature", "code"]);
+		expect(verifyRelocation(op, files)).toBe(true);
+		const forged = reweighed({
+			...op,
+			divergences: op.divergences.map((d) =>
+				d.class === "code" ? { ...d, class: "receiver" as const } : d,
+			),
+		});
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("drops a code claim whose weight leaves out the code line", () => {
+		const { files, op } = claim("a.py", "b.py", STATE_BASE, STATE_HEAD);
+		expect(verifyRelocation({ ...op, reviewWeight: 1 }, files)).toBe(false);
+	});
+});
+
+describe("verifyRelocation forged signature and receiver claims", () => {
+	it("drops a body line dedented in the head of a Python method", () => {
+		const { files, op } = claim("a.py", "b.py", PY_FUNCTION, PY_METHOD);
+		const edited = withHeadText(
+			files,
+			"+        rounded = round(taxed, 2)",
+			"+    rounded = round(taxed, 2)",
+		);
+		expect(verifyRelocation(op, edited)).toBe(false);
+	});
+
+	it("drops a body line indented deeper in the head of a Python method", () => {
+		const { files, op } = claim("a.py", "b.py", PY_FUNCTION, PY_METHOD);
+		const edited = withHeadText(
+			files,
+			"+        rounded = round(taxed, 2)",
+			"+            rounded = round(taxed, 2)",
+		);
+		expect(verifyRelocation(op, edited)).toBe(false);
+	});
+
+	it("drops a signature divergence whose original text was tampered", () => {
+		const { files, op } = claim("a.py", "b.py", PY_FUNCTION, PY_METHOD);
+		const forged = {
+			...op,
+			divergences: op.divergences.map((d) =>
+				d.class === "signature" ? { ...d, original: "def other():" } : d,
+			),
+		};
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("drops a receiver divergence whose original text was tampered", () => {
+		const { files, op } = claim("a.py", "b.py", PY_FUNCTION, PY_METHOD);
+		const forged = {
+			...op,
+			divergences: op.divergences.map((d) =>
+				d.class === "receiver" ? { ...d, original: "zzz" } : d,
+			),
+		};
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("drops a duplicated signature divergence", () => {
+		const { files, op } = claim("a.py", "b.py", PY_FUNCTION, PY_METHOD);
+		const sig = op.divergences.filter((d) => d.class === "signature");
+		const forged = reweighed({
+			...op,
+			divergences: [...op.divergences, ...sig],
+		});
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("drops a TypeScript reshape when a template literal sits elsewhere in the head patch", () => {
+		const { files, op } = claim("a.ts", "b.ts", TS_FUNCTION, TS_METHOD);
+		expect(verifyRelocation(op, files)).toBe(true);
+		const tainted = files.map((f) =>
+			f.filename === "b.ts" ? { ...f, patch: `${f.patch}${TS_RISKY_TAIL}` } : f,
+		);
+		expect(verifyRelocation(op, tainted)).toBe(false);
+	});
+});
+
+describe("verifyRelocation opener scan stays bounded", () => {
+	const longLines = [
+		`${"static ".repeat(32000)}!`,
+		"a <b ".repeat(32000),
+		"a b<".repeat(56000),
+	];
+
+	it.each(longLines)("returns quickly for a %#th pathological line", (line) => {
+		const lines = [...TS_METHOD.slice(0, 3), line, ...TS_METHOD.slice(3)];
+		const files = named("a.ts", "b.ts", TS_FUNCTION, lines);
+		const started = performance.now();
+		const ops = findRelocations(files);
+		for (const op of ops) verifyRelocation(op, files);
+		expect(performance.now() - started).toBeLessThan(1000);
+	}, 5000);
+});
+
+describe("verifyRelocation receiver positive rule", () => {
+	const formed = (c: (typeof WRITE_CASES)[number]) => {
+		const ext = c.lang;
+		const files = named(
+			`a.${ext}`,
+			`b.${ext}`,
+			scaffold(c, "base"),
+			scaffold(c, "head"),
+		);
+		const ops = findRelocations(files);
+		return { files, op: ops.find((o) => o.divergences.length > 0) };
+	};
+
+	it.each(
+		WRITE_CASES.map((c) => [c.name, c] as const),
+	)("drops a claim that calls %s a receiver difference", (_name, c) => {
+		const { files, op } = formed(c);
+		if (!op) return;
+		expect(verifyRelocation(op, files)).toBe(true);
+		const forged = reweighed({
+			...op,
+			divergences: op.divergences.map((d) =>
+				d.class === "code" ? { ...d, class: "receiver" as const } : d,
+			),
+		});
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("forms and verifies at least six of the single-line write cases", () => {
+		const verified = WRITE_CASES.filter((c) => {
+			const { files, op } = formed(c);
+			return op !== undefined && verifyRelocation(op, files);
+		});
+		expect(verified.length).toBeGreaterThanOrEqual(6);
+	});
+
+	it.each(
+		READ_CASES.map((c) => [c.name, c] as const),
+	)("verifies %s as a receiver difference", (_name, c) => {
+		const { files, op } = formed(c);
+		expect(op?.divergences.some((d) => d.class === "receiver")).toBe(true);
+		expect(verifyRelocation(op as Operation, files)).toBe(true);
+	});
+});
+
+describe("plain relocations with receiver edits still verify", () => {
+	const body = (ext: string, line: string | string[]) => {
+		const py = ext === "py";
+		const before = py
+			? [
+					"rows = load_rows(items, n)",
+					"keys = build_keys(rows, items)",
+					"check_keys(keys, rows)",
+					"flush_keys(keys, rows, n)",
+				]
+			: [
+					"const rows = loadRows(items, n);",
+					"const keys = buildKeys(rows, items);",
+					"checkKeys(keys, rows);",
+					"flushKeys(keys, rows, n);",
+				];
+		const after = py
+			? [
+					"summary = summarize_rows(rows, keys)",
+					"report = render_summary(summary, n)",
+					"publish_report(report, items)",
+					"archive_report(report, n)",
+				]
+			: [
+					"const summary = summarizeRows(rows, keys);",
+					"const report = renderSummary(summary, n);",
+					"publishReport(report, items);",
+					"archiveReport(report, n);",
+				];
+		return [...before, ...(Array.isArray(line) ? line : [line]), ...after];
+	};
+
+	it.each(
+		AGREEMENT_LINES,
+	)("never drops a %s relocation changing %s", (ext, from, to) => {
+		const base = body(ext, from);
+		const head = body(ext, to);
+		const files = named(`a.${ext}`, `b.${ext}`, base, head);
+		for (const op of findRelocations(files).filter(
+			(o) => o.divergences.length > 0,
+		))
+			expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("never labels a multi-line write target a receiver difference on the plain path", () => {
+		for (const c of WRITE_CASES.filter((w) => w.base.length > 1)) {
+			const files = named(
+				`a.${c.lang}`,
+				`b.${c.lang}`,
+				body(c.lang, c.base),
+				body(c.lang, c.head),
+			);
+			for (const op of findRelocations(files)) {
+				expect(op.divergences.map((d) => d.class)).not.toContain("receiver");
+				if (!op.divergences.some((d) => d.class === "code")) continue;
+				const forged = reweighed({
+					...op,
+					divergences: op.divergences.map((d) =>
+						d.class === "code" ? { ...d, class: "receiver" as const } : d,
+					),
+				});
+				expect(verifyRelocation(forged, files)).toBe(false);
+			}
+		}
+	});
+
+	it("keeps a plain-path receiver label verifiable when a comment line sits elsewhere in the span", () => {
+		const base = body("ts", "return f(x);");
+		const head = body("ts", "return this.f(x);");
+		const withComment = (lines: string[]) => [
+			lines[0] as string,
+			"// keep",
+			...lines.slice(1),
+		];
+		const files = named("a.ts", "b.ts", withComment(base), withComment(head));
+		const ops = findRelocations(files).filter((o) => o.divergences.length > 0);
+		expect(ops.length).toBeGreaterThan(0);
+		for (const op of ops) expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("verifies a this. change on a line with a trailing comment as class code", () => {
+		const base = body("ts", "return f(x); // note");
+		const head = body("ts", "return this.f(x); // note");
+		const files = named("a.ts", "b.ts", base, head);
+		const ops = findRelocations(files);
+		expect(ops).toHaveLength(1);
+		const op = ops[0] as Operation;
+		expect(op.divergences.map((d) => d.class)).toEqual(["code"]);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+});
+
+describe("prototype-named extension files are never reshape claims", () => {
+	it.each([
+		"constructor",
+		"__proto__",
+		"toString",
+		"hasOwnProperty",
+	])("drops a forged reshape claim on x.%s", (ext) => {
+		const { files, op } = claim("a.py", "b.py", PY_FUNCTION, PY_METHOD);
+		expect(verifyRelocation(op, files)).toBe(true);
+		const swap = <T>(value: T): T =>
+			JSON.parse(
+				JSON.stringify(value)
+					.replaceAll("a.py", `x.${ext}`)
+					.replaceAll("b.py", `y.${ext}`),
+			);
+		expect(verifyRelocation(swap(op), swap(files))).toBe(false);
+	});
+
+	it.each([
+		"constructor",
+		"__proto__",
+		"toString",
+		"hasOwnProperty",
+	])("never emits a reshape claim for x.%s", (ext) => {
+		const ops = findRelocations(
+			named(`x.${ext}`, `y.${ext}`, PY_FUNCTION, PY_METHOD),
+		);
+		expect(
+			ops.some((o) =>
+				o.divergences.some(
+					(d) => d.class === "signature" || d.class === "receiver",
+				),
+			),
+		).toBe(false);
+	});
+});
+
+describe("a readable operator elsewhere does not disable receiver labels", () => {
+	const base = [
+		"def run(items, n):",
+		"    value = compute(n) / 2",
+		"    check_rows(items, n)",
+		"    flush_rows(items, value)",
+		"    audit_rows(items, n)",
+		"    return finish(value, n)",
+	];
+	const head = [
+		"    def run(self, items, n):",
+		"        value = compute(n) / 2",
+		"        self.check_rows(items, n)",
+		"        self.flush_rows(items, value)",
+		"        self.audit_rows(items, n)",
+		"        return self.finish(value, n)",
+	];
+
+	it("still emits a verified reshape claim with receiver labels on the clean lines", () => {
+		const { files, op } = claim("a.py", "b.py", base, head);
+		const kinds = op.divergences.map((d) => d.class);
+		expect(kinds.filter((k) => k === "receiver").length).toBe(4);
+		expect(op.reviewWeight).toBe(2);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("verifies 1000 receiver lines on the plain path within the backstop", () => {
+		const lines = Array.from(
+			{ length: 3000 },
+			(_, i) => `record${i}(cart.id, total, ${i});`,
+		);
+		const changed = lines.map((l, i) => (i % 3 === 0 ? `this.${l}` : l));
+		const files = named("a.ts", "b.ts", lines, changed);
+		const started = performance.now();
+		const ops = findRelocations(files).filter((o) => o.divergences.length > 0);
+		expect(ops.length).toBeGreaterThan(0);
+		for (const op of ops) expect(verifyRelocation(op, files)).toBe(true);
+		expect(performance.now() - started).toBeLessThan(3000);
+	}, 10000);
 });
