@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { newlineClass, normalizeTokens, tokenize } from "./tokens.js";
+import { normalizeTokens, tokenize } from "./tokens.js";
 
 const toks = (lines: string[], file: string) => tokenize(lines, file).tokens;
 
