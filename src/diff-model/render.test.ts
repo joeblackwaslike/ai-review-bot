@@ -713,5 +713,12 @@ describe("renderDiffModel copies", () => {
 			OPTS,
 		);
 		expect(withMove.summary).toContain("When code moved");
+		const withRename = renderDiffModel(
+			model({
+				operations: [copy(), op({ id: "rename-1", type: "rename" })],
+			}),
+			OPTS,
+		);
+		expect(withRename.summary).toContain("When code moved");
 	});
 });

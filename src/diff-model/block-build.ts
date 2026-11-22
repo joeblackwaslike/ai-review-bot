@@ -212,8 +212,6 @@ function commentLines(filename: string, lines: string[]): boolean[] {
 	});
 }
 
-const REGEX_FILE = /\.(?:[cm]?[jt]sx?)$/i;
-const REGEX_START = /(?:^|[(=,:[!&|?{};>]|\breturn|\btypeof)\s*\/(?![/*])/;
 const QUOTE_CHARS = new Set(['"', "'", "`"]);
 
 /**
@@ -244,6 +242,12 @@ function stripLineComment(line: string): string {
 	return normalizeCodeLine(at < 0 ? line : line.slice(0, at));
 }
 
+/** The part before a trailing comment holds no quote and no slash, so no regex or string can hide the comment start. */
+function plainCode(line: string): boolean {
+	const at = commentStart(line);
+	return !/['"`/]/.test(at < 0 ? line : line.slice(0, at));
+}
+
 function isCommentOnly(
 	divergence: RawDivergence,
 	baseComment: boolean,
@@ -260,6 +264,8 @@ function isCommentOnly(
 	return (
 		trailing &&
 		commentStart(base) + commentStart(head) !== -2 &&
+		plainCode(base) &&
+		plainCode(head) &&
 		stripLineComment(base) === stripLineComment(head)
 	);
 }
@@ -526,8 +532,6 @@ export function build(
 	const renames = renameIndexes(changed, baseRaw, headRaw);
 	const trailing =
 		SLASH_LINE_FILE.test(from.filename) && SLASH_LINE_FILE.test(to.filename);
-	const regexFiles =
-		REGEX_FILE.test(from.filename) && REGEX_FILE.test(to.filename);
 	const baseDepths = lineDepths(baseRaw, from.filename);
 	let counted = 0;
 	const renamedNames = new Set<string>();
@@ -540,13 +544,7 @@ export function build(
 			d.headIndex !== undefined && headComment[d.headIndex] === true,
 			baseText,
 			headText,
-			trailing &&
-				!(
-					regexFiles &&
-					[baseText, headText].some(
-						(t) => t !== undefined && REGEX_START.test(t),
-					)
-				),
+			trailing,
 		)
 			? "comment-only"
 			: renames.has(at)

@@ -59,8 +59,6 @@ const DEFINITION_START =
 const DEFINITION_END = /^(?:[}\]]|end\b)/;
 const ONE_LINE_DECLARATION =
 	/^(?:(?:export\s+)?(?:pub\s+)?(?:declare\s+)?(?:const|let|var|static|type|interface|enum)\s+(?:mut\s+)?([A-Za-z_$][\w$]*)|([A-Z][A-Z0-9_]*)\s*(?::[^=]+)?=(?!=))/;
-const REGEX_FILE = /\.(?:[cm]?[jt]sx?)$/i;
-const REGEX_START = /(?:^|[(=,:[!&|?{};>]|\breturn|\btypeof)\s*\/(?![/*])/;
 const SCREAMING = /^[A-Z][A-Z0-9_]*$/;
 const SHORTEST_DECLARED_NAME = 3;
 const MIN_VALUE_OVERLAP = 0.5;
@@ -510,6 +508,11 @@ function wholeCommentLines(side: Side): boolean[] {
 	});
 }
 
+function bareCode(line: string): boolean {
+	const at = commentStart(line);
+	return !/['"`/]/.test(at < 0 ? line : line.slice(0, at));
+}
+
 function codePart(line: string): string {
 	const at = commentStart(line);
 	return interior(at < 0 ? line : line.slice(0, at));
@@ -522,16 +525,19 @@ function commentOnlyHolds(
 	baseWhole: boolean,
 	headWhole: boolean,
 	slashBoth: boolean,
-	regexLine: boolean,
 ): boolean {
 	if (divergence.kind === "removed") return baseWhole;
 	if (divergence.kind === "inserted") return headWhole;
 	if (base === undefined || head === undefined) return false;
 	if (baseWhole && headWhole) return true;
-	if (regexLine) return false;
 	if (!slashBoth) return false;
 	const differs = commentStart(base) >= 0 || commentStart(head) >= 0;
-	return differs && codePart(base) === codePart(head);
+	return (
+		differs &&
+		bareCode(base) &&
+		bareCode(head) &&
+		codePart(base) === codePart(head)
+	);
 }
 
 function words(lines: string[]): string[] {
@@ -643,15 +649,6 @@ export function classesHold(
 					whole(d.base, base, wholeBase),
 					whole(d.head, head, wholeHead),
 					slashBoth,
-					[
-						[d.base, baseText],
-						[d.head, headText],
-					].some(
-						([sp, t]) =>
-							typeof t === "string" &&
-							REGEX_FILE.test((sp as Span | undefined)?.filename ?? "") &&
-							REGEX_START.test(t),
-					),
 				)
 			)
 				return null;

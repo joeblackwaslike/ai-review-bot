@@ -8,8 +8,8 @@ import {
 import { acceptCopySeed, copyBlockQualifies } from "./acceptance.js";
 import { type Built, build, chainSeeds } from "./block-build.js";
 import type { WorkBudget } from "./budget.js";
-import { type Regions, scanRegions } from "./copy-regions.js";
 import {
+	copyEligible,
 	DATA_FILE,
 	INDENT_FREE_FILE,
 	PROSE_FILE,
@@ -29,7 +29,6 @@ interface Pending {
 
 interface Context {
 	budget: WorkBudget;
-	regions: Map<string, Regions>;
 }
 
 function headSpan(run: Run, start: number, end: number): Span {
@@ -62,14 +61,6 @@ function toCopy(from: Run, to: Run, built: Built): Pending {
 
 function claimTarget(to: Run, built: Built): void {
 	for (let j = built.toStart; j < built.toEnd; j++) to.used[j] = true;
-}
-
-function clear(ctx: Context, run: Run, start: number, end: number): boolean {
-	const unsafe = ctx.regions.get(run.filename)?.unsafe;
-	if (!unsafe) return true;
-	for (let n = run.startLine + start; n < run.startLine + end; n++)
-		if (unsafe.has(n)) return false;
-	return true;
 }
 
 function interior(line: string): string {
@@ -110,8 +101,6 @@ function resolve(chain: Candidate[], ctx: Context): Pending[] {
 	const { from, to } = chain[0] as Candidate;
 	const holds = (built: Built) =>
 		copyBlockQualifies(from, built.fromStart, built.fromEnd) &&
-		clear(ctx, from, built.fromStart, built.fromEnd) &&
-		clear(ctx, to, built.toStart, built.toEnd) &&
 		sameText(from, to, built);
 	const whole = build(chain, true, ctx.budget, false, "head");
 	if (whole.counted <= whole.limit && holds(whole)) {
@@ -174,10 +163,9 @@ function settle(
  * earlier operations). Among identical duplicates the earliest added block is the source, and
  * a context source wins. A copy needs five counted lines or a whole definition, and edits
  * inside it are divergences. Lines differing only in whitespace pair up only in brace
- * languages whose patch holds no literal opener, else raw text must match. A span inside or
- * touching a multi-line comment, template literal, triple-quoted string or heredoc is never a
- * copy, nor is any block of a file whose patch leaves one open. JSON, prose, lockfiles and
- * minified bundles are skipped. Work is drawn from the shared budget.
+ * languages, else raw text must match. Only files that pass `copyEligible` take part, as
+ * source or target. JSON, prose, lockfiles and minified bundles are skipped. Work is drawn
+ * from the shared budget.
  */
 export function findCopies(
 	files: PushFile[],
@@ -185,23 +173,23 @@ export function findCopies(
 	budget: WorkBudget,
 	claimed: Operation[] = [],
 ): Operation[] {
-	const regions = new Map(
-		files.map((f) => [f.filename, scanRegions(f.filename, f.patch)] as const),
+	const ctx: Context = { budget };
+	const eligible = new Set(
+		files
+			.filter((f) => copyEligible(f.filename, f.patch))
+			.map((f) => f.filename),
 	);
-	const ctx: Context = { budget, regions };
 	const skipped = (name: string) =>
 		DATA_FILE.test(name) ||
 		PROSE_FILE.test(name) ||
 		UNMATCHED_FILES.test(name) ||
-		regions.get(name)?.risky === true;
+		!eligible.has(name);
 	const code = files.filter((f) => !skipped(f.filename));
 	const targets = added.filter((run) => !skipped(run.filename));
 	const sources = [...collectContextRuns(code), ...targets];
 	const accept = (c: Candidate) =>
 		c.from !== c.to &&
 		(c.from.index < 0 || c.from.index < c.to.index) &&
-		clear(ctx, c.from, c.fromStart, c.fromStart + c.length) &&
-		clear(ctx, c.to, c.toStart, c.toStart + (c.toLength ?? c.length)) &&
 		acceptCopySeed(c, budget);
 	const seeds = selectMatches(sources, targets, MIN_SEED_LINES, accept, {
 		allowSameFile: true,

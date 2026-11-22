@@ -23,8 +23,7 @@ const MAX_FLOOR_LINE = 500;
 const WHOLE_COMMENT_LINE = /^(?:\/\/|\/\*|\*\/|\*(?:\s|$))/;
 const HASH_COMMENT_LINE = /^#(?![![])/;
 const HASH_FILES = /\.(?:py|pyi|sh|bash|zsh|rb|ya?ml|toml|mk)$/i;
-const WHITESPACE_FREE_FILES =
-	/\.(?:[cm]?[jt]sx?|java|go|rs|c|h|cc|cpp|cxx|hpp|cs|kt|kts|swift|php|scala|dart|css|scss|less)$/i;
+const WHITESPACE_FREE_FILES = /\.(?:jsx?|mjs|cjs|tsx?|go|java)$/i;
 const IDLE_WORDS = new Set(
 	`if else for while do return break continue switch case default try catch finally
 	throw new function class def fn func end let const var in of async await yield
@@ -32,24 +31,15 @@ const IDLE_WORDS = new Set(
 	private protected void and or not is then pub mut type interface enum extends
 	implements with lambda pass assert defer match`.split(/\s+/),
 );
-const REGION_TOKENS =
-	/\/\*|\*\/|`|"""|'''|<<[-~]?(["']?)([A-Za-z_]\w*)\1|\\[\s\S]|"|'|\/\/|#/g;
-
 interface HeadRead {
 	side: Side;
 	segment: number;
-}
-
-interface FileRegions {
-	unsafe: Set<number>;
-	risky: boolean;
 }
 
 const coverages = new WeakMap<
 	readonly Operation[],
 	{ targets: Map<string, Set<number>>; reviewed: Map<string, Set<number>> }
 >();
-const regionCaches = new WeakMap<object, FileRegions>();
 
 function eligible(filename: string): boolean {
 	return (
@@ -59,83 +49,42 @@ function eligible(filename: string): boolean {
 	);
 }
 
-function closer(text: string, from: number, close: string): number {
-	for (let i = from; i < text.length; i++) {
-		if (text[i] === "\\") i++;
-		else if (text.startsWith(close, i)) return i;
-	}
-	return -1;
+const COPY_LANGUAGES = /\.(?:jsx?|mjs|cjs|tsx?|pyi?|go|java)$/i;
+const OPENERS =
+	/`|"""|'''|\/\*|\*\/|<<|<!--|-->|\\$|R"|%q|=begin|\{-|--\[\[|\(\*/m;
+const eligibility = new WeakMap<readonly PushFile[], Map<string, boolean>>();
+
+function evenQuotes(row: string): boolean {
+	const bare = row.slice(1).replace(/\\['"]/g, "");
+	return bare.split("'").length % 2 === 1 && bare.split('"').length % 2 === 1;
 }
 
-/** Unsafe lines and risk for one file, scanned from its head rows, as the matcher does. */
-export function regionsOfRows(
+/**
+ * Coarse file level rule, written here for the checker: a language on the short list, a patch
+ * with no multi-line opener of any kind, and an even count of each quote on every row.
+ */
+export function patchEligible(
 	filename: string,
-	rows: [number, string][],
-): FileRegions {
-	const hash = HASH_FILES.test(filename);
-	const unsafe = new Set<number>();
-	let open: { close: string; at: number; word?: string } | null = null;
-	for (const [n, text] of rows) {
-		if (open?.word !== undefined) {
-			if (text.trim() === open.word) {
-				for (let k = open.at; k <= n; k++) unsafe.add(k);
-				open = null;
-			}
-			continue;
-		}
-		let skip = 0;
-		let quote = "";
-		for (const m of text.matchAll(REGION_TOKENS)) {
-			const at = m.index as number;
-			const token = m[0];
-			if (at < skip) continue;
-			if (open) {
-				if (token !== open.close) continue;
-				for (let k = open.at; k <= n; k++) unsafe.add(k);
-				open = null;
-				quote = "";
-				continue;
-			}
-			if (quote) {
-				if (token === quote) quote = "";
-				continue;
-			}
-			const spaced = at === 0 || /\s/.test(text[at - 1] as string);
-			if (token === "//") {
-				if (spaced && !hash) break;
-			} else if (token === "#") {
-				if (spaced && hash) break;
-			} else if (token === '"' || token === "'") {
-				quote = token;
-			} else if (m[2] !== undefined) {
-				open = { close: "", at: n, word: m[2] };
-				break;
-			} else if (token !== "*/" && !token.startsWith("\\")) {
-				const end = token === "/*" ? "*/" : token;
-				const found = closer(text, at + token.length, end);
-				if (found >= 0) skip = found + end.length;
-				else {
-					open = { close: end, at: n };
-					break;
-				}
-			}
-		}
-	}
-	return { unsafe, risky: open !== null };
+	patch: string | undefined,
+): boolean {
+	const text = patch ?? "";
+	return (
+		COPY_LANGUAGES.test(filename) &&
+		!OPENERS.test(text) &&
+		text.split("\n").every((row) => row.startsWith("@@") || evenQuotes(row))
+	);
 }
 
-function regionsOf(filename: string, index: ChangeIndex): FileRegions {
-	const file = index.byName.get(filename);
-	if (!file) return { unsafe: new Set(), risky: false };
-	const cached = regionCaches.get(file);
-	if (cached) return cached;
-	const rows: [number, string][] = [
-		...file.changed.added,
-		...file.changed.context,
-	].sort((a, b) => a[0] - b[0]);
-	const built = regionsOfRows(filename, rows);
-	regionCaches.set(file, built);
-	return built;
+function eligibleFile(files: PushFile[], filename: string): boolean {
+	let known = eligibility.get(files);
+	if (!known) {
+		known = new Map();
+		for (const f of files)
+			if (!known.has(f.filename))
+				known.set(f.filename, patchEligible(f.filename, f.patch));
+		eligibility.set(files, known);
+	}
+	return known.get(filename) === true;
 }
 
 function readHead(
@@ -146,8 +95,6 @@ function readHead(
 	if (span.side !== "head" || span.endLine < span.startLine) return null;
 	const file = index.byName.get(span.filename);
 	if (!file) return null;
-	const regions = regionsOf(span.filename, index);
-	if (regions.risky) return null;
 	const { added, context, segments } = file.changed;
 	const lines: string[] = [];
 	const positions: number[] = [];
@@ -156,7 +103,6 @@ function readHead(
 		const text = added.get(n) ?? (allowContext ? context.get(n) : undefined);
 		const seen = segments.get(n);
 		if (text === undefined || seen === undefined) return null;
-		if (regions.unsafe.has(n)) return null;
 		if (segment !== undefined && seen !== segment) return null;
 		segment = seen;
 		lines.push(text);
@@ -356,14 +302,15 @@ function sameText(
 /**
  * Checks a copy claim against the patches without using the matcher. Both spans are head-side
  * ranges inside one run each: the target added lines, the source added or context lines of a
- * different run, with no overlap. Prose, JSON and lockfiles are out. No span may begin inside
- * or touch a multi-line comment, template literal, triple-quoted string or heredoc, and a file
- * whose patch leaves one open has no copy. The block must clear the copy floor, which is
+ *  * different run, with no overlap. Both files must pass `patchEligible`, which is coarse on
+ * purpose (a short language list, no multi-line opener anywhere in the patch, even quote
+ * counts on every row); a miss is cheap and an opener outside the patch stays undetected.
+ * The block must clear the copy floor, which is
  * reimplemented here on purpose so the checker shares no code with the matcher: five counted
  * lines or a whole definition, no block of whole comment lines, no line over 500 characters,
  * brackets that close, and more than object properties. Divergences are checked as for
  * relocations, and a signature divergence is never valid. Lines outside them pair by raw text,
- * or ignoring whitespace only in brace languages whose patch has no literal opener.
+ * or ignoring whitespace only in brace languages.
  * `sourceNew` is recomputed: true when a source line is added and is neither a verified
  * non-copy target line nor one of that operation's own divergence lines. A target line of a
  * verified non-copy operation is never a copy. Claimed `sourceNew`, `reviewWeight` and `exact`
@@ -379,6 +326,11 @@ export function verifyCopy(
 	if (op.type !== "copy" || !fromSpan || !toSpan) return false;
 	if (op.from.length !== 1 || op.to.length !== 1) return false;
 	if (!eligible(fromSpan.filename) || !eligible(toSpan.filename)) return false;
+	if (
+		!eligibleFile(files, fromSpan.filename) ||
+		!eligibleFile(files, toSpan.filename)
+	)
+		return false;
 	if (op.divergences.length > 0 && op.exact) return false;
 	if (op.divergences.some((d) => d.class === "signature")) return false;
 	if ((op.shape?.reindent ?? 0) !== 0) return false;

@@ -401,7 +401,9 @@ function layout(
 
 	const sections: (string | null)[] = [
 		HEADING,
-		model.operations.some((op) => op.type === "relocation")
+		model.operations.some(
+			(op) => op.type === "relocation" || op.type === "rename",
+		)
 			? `${FIXED_PARAGRAPH} ${MOVE_PARAGRAPH}`
 			: FIXED_PARAGRAPH,
 		`Scope: ${scopeLabel}.`,

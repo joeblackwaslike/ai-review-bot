@@ -13,8 +13,8 @@ import {
 } from "./acceptance.js";
 import { commentStart as matcherCommentStart } from "./block-build.js";
 import { WorkBudget } from "./budget.js";
-import { floorHolds, regionsOfRows, verifyCopy } from "./copy-check.js";
-import { scanRegions } from "./copy-regions.js";
+import { floorHolds, patchEligible, verifyCopy } from "./copy-check.js";
+import { copyEligible } from "./file-kinds.js";
 import { buildDiffModel } from "./index.js";
 import { findRelocations } from "./relocation.js";
 import {
@@ -143,40 +143,67 @@ describe("sourceNew through a relocation", () => {
 	});
 });
 
-describe("copies and multi-line constructs", () => {
-	const wrappers: [string, string, string, string][] = [
-		["a block comment", "a.ts", "/*", "*/"],
-		["a template literal", "a.ts", "const t = `", "`;"],
-		["a python docstring", "a.py", '"""', '"""'],
-		["a heredoc", "a.sh", "cat <<EOF", "EOF"],
-	];
-
-	it.each(
-		wrappers,
-	)("rejects a source inside %s, keeps a clean one beside it", (_, name, open, close) => {
-		const [a, b] = [`src/${name}`, `src/${name.replace("a.", "b.")}`];
-		expect(copiesOf([ctx(a, 10, fn), added(b, 3, fn)])).toHaveLength(1);
-		const files = [ctx(a, 10, [open, ...fn, close]), added(b, 3, fn)];
+describe("copy file eligibility", () => {
+	const none = (a: string, b: string, source: string[], target = fn) => {
+		const files = [ctx(a, 10, source), added(b, 3, target)];
 		expect(copiesOf(files)).toEqual([]);
 		expect(modelCopies(files)).toEqual([]);
 		expect(accepts(forge(a, 11, 19, b, 3, 11), files)).toBe(false);
-		const clean = body(8, "w");
-		const beside = [
-			file(
-				a,
-				`${hunk(1, 1, [...rows(" ", [open, ...fn, close]), "+  done();"])}\n${hunk(40, 40, rows(" ", clean))}`,
-			),
-			added(b, 3, clean),
-		];
-		const [op] = copiesOf(beside);
-		expect(op?.from[0]?.startLine).toBeGreaterThanOrEqual(40);
-		expect(accepts(op as Operation, beside)).toBe(true);
+	};
+
+	it("still copies a clean ts and a clean python block", () => {
+		const py = Array.from(
+			{ length: 7 },
+			(_, i) => `    v${i} = compute(${i}) + offset`,
+		);
+		for (const [a, b, lines] of [
+			["src/a.ts", "src/b.ts", fn],
+			["src/a.py", "src/b.py", py],
+		] as const) {
+			const files = [ctx(a, 10, [...lines]), added(b, 3, [...lines])];
+			expect(modelCopies(files)).toHaveLength(1);
+			expect(accepts(copiesOf(files)[0] as Operation, files)).toBe(true);
+		}
 	});
 
-	it("rejects a target inside a block comment", () => {
+	it.each([
+		["a backtick", "const t = `"],
+		["a block comment opener", "/* header"],
+		["a stray block comment closer", " */"],
+		["a docstring", "x = DQ3"],
+		["a triple single quote", "x = SQ3"],
+		["a heredoc", "cat <<EOF"],
+		["an html comment", "<!-- note"],
+		["an html comment closer", "end -->"],
+		["a trailing backslash", "x = a + \\"],
+		["a ruby percent literal", "%q(abc"],
+		["a ruby block comment", "=begin"],
+		["a haskell comment", "{- note"],
+		["a lua comment", "--[[ note"],
+		["an ml comment", "(* note"],
+		["a regex with a quote and a template", "const re = /'/; const t = `"],
+		["a regex class and a block comment", "const re = /[ //]/; /*"],
+		["an odd apostrophe", "if (s) /'/.test(s) + ' // x', t = ok;"],
+		["an odd double quote", 'let s = "it;'],
+	])("skips a file with %s", (_, marker) => {
+		none("src/a.ts", "src/b.ts", [
+			marker.replace("DQ3", '"' + '""').replace("SQ3", "'" + "''"),
+			...fn,
+		]);
+	});
+
+	it("skips a raw string opener", () => {
+		none("src/a.ts", "src/b.ts", ['x = R"(', ...fn]);
+	});
+
+	it.each([
+		"const t = `",
+		"/* header",
+		"x = 'a",
+	])("skips a target holding %s", (marker) => {
 		const files = [
 			ctx("src/a.ts", 10, fn),
-			added("src/b.ts", 3, ["/*", ...fn, "*/"]),
+			added("src/b.ts", 3, [marker, ...fn]),
 		];
 		expect(copiesOf(files)).toEqual([]);
 		expect(accepts(forge("src/a.ts", 10, 18, "src/b.ts", 4, 12), files)).toBe(
@@ -184,14 +211,32 @@ describe("copies and multi-line constructs", () => {
 		);
 	});
 
+	it("skips jsx text with an apostrophe before an opener", () => {
+		none("src/a.tsx", "src/b.tsx", ["<p>don't</p>; const t = `", ...fn]);
+	});
+
 	it.each([
-		["a block comment opener", "/* header"],
-		["an odd backtick", "const s = `"],
-		["an odd triple quote", 'x = """'],
-		["a heredoc opener", "cat <<EOF"],
-	])("treats a file with %s left open as risky", (_, opener) => {
+		"a.html",
+		"a.lua",
+		"a.hs",
+		"a.ml",
+		"a.rb",
+		"a.rs",
+		"a.sh",
+		"a.sql",
+		"a.cpp",
+		"a.swift",
+		"a.c",
+	])("gives %s no copy claims", (name) => {
+		none(`src/${name}`, `src/${name.replace("a.", "b.")}`, fn);
+	});
+
+	it("skips a file whose backticks cancel across three hunks", () => {
+		const hunks = [10, 30, 50].map((start) =>
+			hunk(start, start, rows(" ", ["const t = `x`;", ...fn])),
+		);
 		const files = [
-			ctx("src/a.ts", 10, [opener, ...fn]),
+			file("src/a.ts", hunks.join("\n")),
 			added("src/b.ts", 3, fn),
 		];
 		expect(copiesOf(files)).toEqual([]);
@@ -200,51 +245,45 @@ describe("copies and multi-line constructs", () => {
 		);
 	});
 
+	it("skips a file whose hunk starts inside a comment", () => {
+		none("src/a.ts", "src/b.ts", [" */", ...fn]);
+	});
+
+	it("skips a file whose only apostrophes sit inside a trailing comment", () => {
+		none("src/a.ts", "src/b.ts", [
+			...fn.slice(0, 4),
+			"  // don't change this",
+			...fn.slice(4),
+		]);
+	});
+
 	it("rejects whole comment blocks, keeps one comment among code", () => {
 		const license = Array.from(
 			{ length: 7 },
 			(_, i) => `// Copyright line ${i} of the license header`,
 		);
-		for (const lines of [
-			license,
-			["/**", ...license.map((l) => ` * ${l}`), " */"],
-		]) {
-			const files = [ctx("src/a.ts", 10, lines), added("src/b.ts", 3, lines)];
-			expect(copiesOf(files)).toEqual([]);
-			expect(accepts(forge("src/a.ts", 10, 16, "src/b.ts", 3, 9), files)).toBe(
-				false,
-			);
-		}
+		const files = [ctx("src/a.ts", 10, license), added("src/b.ts", 3, license)];
+		expect(copiesOf(files)).toEqual([]);
+		expect(accepts(forge("src/a.ts", 10, 16, "src/b.ts", 3, 9), files)).toBe(
+			false,
+		);
 		const mixed = at(body(7), 3, "  // keep this note");
-		const files = [ctx("src/a.ts", 10, mixed), added("src/b.ts", 3, mixed)];
-		expect(accepts(copiesOf(files)[0] as Operation, files)).toBe(true);
+		const kept = [ctx("src/a.ts", 10, mixed), added("src/b.ts", 3, mixed)];
+		expect(accepts(copiesOf(kept)[0] as Operation, kept)).toBe(true);
 	});
 
-	it("scans the same regions in the matcher and the checker", () => {
-		const text = [
-			" const a = 1;",
-			" /* open",
-			" inside",
-			" */",
-			" const t = `x",
-			" y`;",
-			" # hash",
-			' s = """doc',
-			' more"""',
+	it("applies the same file rule in the matcher and the checker", () => {
+		const patches = [
+			hunk(1, 1, rows(" ", fn)),
+			hunk(1, 1, rows(" ", ["const t = `", ...fn])),
+			hunk(1, 1, rows(" ", ["x = 'a", ...fn])),
+			hunk(1, 1, rows(" ", ['x = "it\\"s"', ...fn])),
+			hunk(1, 1, rows(" ", ["x = a \\", ...fn])),
+			"@@ -1,1 +1,1 @@ it's a header\n x",
 		];
-		const patch = `@@ -1,9 +1,9 @@\n${text.join("\n")}`;
-		const numbered = text.map((row, i): [number, string] => [
-			i + 1,
-			row.slice(1),
-		]);
-		for (const name of ["a.ts", "a.py"]) {
-			const [mine, theirs] = [
-				scanRegions(name, patch),
-				regionsOfRows(name, numbered),
-			];
-			expect([...mine.unsafe].sort()).toEqual([...theirs.unsafe].sort());
-			expect(mine.risky).toBe(theirs.risky);
-		}
+		for (const name of ["a.ts", "a.py", "a.rs", "a.go"])
+			for (const patch of patches)
+				expect(patchEligible(name, patch)).toBe(copyEligible(name, patch));
 	});
 });
 
@@ -400,31 +439,69 @@ describe("regex literals and comment starts", () => {
 			i === 6 ? text : `    v${i} = compute(${i}) + offset`,
 		);
 
-	it.each([
-		[
-			"  const r = /'/.test(s) + ' // x', t = ok;",
-			"  const r = /'/.test(s) + ' // x', t = evil;",
-		],
-		["  const r = /[ //a]/.test(input);", "  const r = /[ //b]/.test(input);"],
-	])("classes a regex line edit as code, drops a relabel: %s", (a, b) => {
-		const files = moved(a, b);
+	const variants: [string, string, string][] = [
+		["if (s)", "ts", "  if (s) /'/.test(s) + ' // x', t = ok;"],
+		["else", "ts", "  else /'/.test(s) + ' // x', t = ok;"],
+		["yield", "ts", "  yield /'/.test(s) + ' // x', t = ok;"],
+		["for", "ts", "  for (;;) /'/.test(s) + ' // x', t = ok;"],
+		["while", "ts", "  while (s) /'/.test(s) + ' // x', t = ok;"],
+		["assignment", "ts", "  const r = /'/.test(s) + ' // x', t = ok;"],
+		["class", "ts", "  const r = /[ //a]/.test(input), t = ok;"],
+		["rust", "rs", "  let r: &'a str = \"it's // y\"; let t = ok;"],
+		["swift", "swift", '  let r = /\'/; let s = "a // b"; let t = ok;'],
+	];
+
+	it.each(
+		variants,
+	)("classes a %s line edit as code and drops a relabel", (_, ext, a) => {
+		const b = a.replace("ok", "evil");
+		const files = [
+			deleted(`src/a.${ext}`, 10, lineAt(a)),
+			added(`src/b.${ext}`, 3, lineAt(b)),
+		];
 		const [op] = nonCopies(files);
 		expect(classes(op)).toEqual(["code"]);
 		expect(op?.reviewWeight).toBe(1);
 		expect(verifyRelocation(relabeled(op as Operation), files)).toBe(false);
 		const inCopy = [
-			ctx("src/a.ts", 10, lineAt(a)),
-			added("src/b.ts", 3, lineAt(b)),
+			ctx(`src/a.${ext}`, 10, lineAt(a)),
+			added(`src/b.${ext}`, 3, lineAt(b)),
 		];
-		const [copy] = copiesOf(inCopy);
-		expect(classes(copy)).toEqual(["code"]);
-		expect(accepts(relabeled(copy as Operation), inCopy)).toBe(false);
+		for (const copy of copiesOf(inCopy))
+			expect(classes(copy)).toEqual(["code"]);
+		const span = (name: string, n: number) => ({
+			filename: name,
+			side: "head" as const,
+			startLine: n,
+			endLine: n,
+			shown: "full" as const,
+		});
+		const lie = {
+			...forge(`src/a.${ext}`, 10, 22, `src/b.${ext}`, 3, 15),
+			exact: false,
+			divergences: [
+				{
+					kind: "changed" as const,
+					class: "comment-only" as const,
+					base: span(`src/a.${ext}`, 16),
+					head: span(`src/b.${ext}`, 9),
+				},
+			],
+		};
+		expect(accepts(lie, inCopy)).toBe(false);
 	});
 
 	it.each([
 		[
 			"plain division before a comment",
 			moved("  q = a / b; // note", "  q = a / b; // changed"),
+			"code",
+			1,
+			true,
+		],
+		[
+			"a call before a comment",
+			moved("  foo(x); // note", "  foo(x); // changed"),
 			"comment-only",
 			0,
 			true,

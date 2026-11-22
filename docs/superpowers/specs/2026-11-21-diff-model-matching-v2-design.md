@@ -153,8 +153,8 @@ The checker applies each of these on its own, with its own scanner and tables. I
 - Duplicates are normal in code (test setup, repeated handlers), so the copy floor is the old one: 5 counted lines, or a 3-line whole definition. The 1 to 4 line distinctiveness rule does not apply.
 - Divergences work as for relocation, so a copied block with edits lists them. A copy never carries a signature divergence, and the checker rejects one.
 - A block of whole comment lines is never a copy, and no line over 500 characters qualifies.
-- Lines outside the divergences match as raw text. Only brace and free-form languages (`INDENT_FREE_FILE`) with no literal opener in the patch may pair lines that differ in whitespace.
-- A span that begins inside or touches a block comment, template literal, triple-quoted string or heredoc is never a copy. Both sides track these over each file's rows in order. A file whose patch leaves one open has no copy claims.
+- Lines outside the divergences match as raw text. Only `js jsx mjs cjs ts tsx go java` may pair lines that differ in whitespace.
+- Eligibility is file level and coarse on purpose, since a miss is cheap and a false claim is not. Source and target files must both be `js jsx mjs cjs ts tsx py pyi go java`, and their whole patch must hold no backtick, triple quote, `/*`, `*/`, `<<`, `<!--`, `-->`, trailing backslash, `R"`, `%q`, `=begin`, `{-`, `--[[` or `(*`, and every row must hold an even count of `'` and of `"` once escaped quotes are removed. So a file with an apostrophe in a comment gets no copies. An opener outside the patch stays undetected. Both the matcher and the checker apply the rule, each with its own code.
 - `Operation.type` gains `copy`. A copy has `from` and `to` spans that are both on the head side. Its `reviewWeight` is its code divergences plus one per distinct renamed identifier plus 1 when any divergence is a receiver, and at least 1 when `sourceNew` is true.
 
 ### Types
@@ -223,4 +223,4 @@ Relocations in the same file read "moved within `file`". `shape.reindent` adds "
 
 ### Comment starts
 
-A `//` starts a trailing comment only at line start or after whitespace, and a line that may hold a regex literal in JavaScript or TypeScript is never comment-only. `;//a` to `;//b` is now a code divergence with weight 1, and a relocation test pins it.
+A changed trailing `//` comment is comment-only only when the code before it holds no quote, backtick or slash. Otherwise the line is a code divergence with weight 1, so `x = a / b; // note` is code and `foo(x); // note` is comment-only. `;//a` to `;//b` is code too, and relocation tests pin both.
