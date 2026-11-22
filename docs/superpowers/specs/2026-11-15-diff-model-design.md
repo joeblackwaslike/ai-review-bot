@@ -187,7 +187,7 @@ Tests: no test files changed.
 The description says "no functional change". Operation 1 has a code difference from the original at charge.ts line 5.
 ```
 
-The `utils.ts` block starts with "Relocated out, base lines 10-49, see operation 1", and the `charge.ts` block with "Relocated in, line 5 differs from the original". The renderer never asserts that a change is functional. It reports that the code differs and lets the reviewer judge.
+The `utils.ts` block starts with "Relocated out, base lines 10-49, see operation 1", and the `charge.ts` block with "Relocated in, line 5 differs from the original". In a move across files, a divergence that exists only in the source (a deleted guard) is listed in the source file's "Relocated out" note as "is absent from the destination". The renderer never asserts that a change is functional. It reports that the code differs and lets the reviewer judge.
 
 ### Budget
 

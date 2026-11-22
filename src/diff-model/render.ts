@@ -168,11 +168,28 @@ function addFileNotes(
 ): void {
 	const see = `see operation ${number}`;
 	if (op.type === "relocation") {
+		const destinations = new Set(op.to.map((s) => s.filename));
+		const reported = new Set<string>();
 		for (const s of op.from) {
+			const lost =
+				destinations.has(s.filename) || reported.has(s.filename)
+					? []
+					: op.divergences.filter(
+							(d) => divergenceSpan(d)?.filename === s.filename,
+						);
+			reported.add(s.filename);
+			const lines = lost.map((d) => {
+				const at = divergenceSpan(d);
+				const where = at ? `${spanRange(at)} ` : "";
+				return d.kind === "removed"
+					? `${where}is absent from the destination`
+					: `${where}differs from the destination`;
+			});
+			const tail = lines.length > 0 ? `, ${lines.join(", ")}` : "";
 			addNote(
 				notes,
 				s.filename,
-				`Relocated out, ${spanRange(s)}${s.shown === "full" ? "" : ` (${shownWording(s)})`}, ${see}`,
+				`Relocated out, ${spanRange(s)}${s.shown === "full" ? "" : ` (${shownWording(s)})`}, ${see}${tail}`,
 			);
 		}
 		for (const s of op.to) {

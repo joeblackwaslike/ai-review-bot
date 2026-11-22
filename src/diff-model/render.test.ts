@@ -452,6 +452,55 @@ describe("renderDiffModel", () => {
 		expect(r.fileNotes.get("src/m.ts")).toContain("base lines 3-4");
 	});
 
+	it("puts a removed divergence in the source file note of a cross-file move once", () => {
+		const m = model({
+			operations: [
+				op({
+					id: "relocation-1",
+					type: "relocation",
+					from: [span("src/a.ts", "base", 1, 10)],
+					to: [span("src/b.ts", "head", 1, 9)],
+					divergences: [
+						{
+							kind: "removed",
+							class: "code",
+							base: span("src/a.ts", "base", 4, 4),
+						},
+					],
+				}),
+			],
+		});
+		const r = renderDiffModel(m, OPTS);
+		expect(r.fileNotes.get("src/a.ts")).toContain(
+			"base line 4 is absent from the destination",
+		);
+		expect(r.fileNotes.get("src/b.ts")).not.toContain("line 4");
+		expect(r.fileNotes.get("src/b.ts")).not.toContain("differs");
+	});
+
+	it("keeps a same-file move note free of duplicate divergence text", () => {
+		const m = model({
+			operations: [
+				op({
+					id: "relocation-1",
+					type: "relocation",
+					from: [span("src/a.ts", "base", 1, 10)],
+					to: [span("src/a.ts", "head", 20, 29)],
+					divergences: [
+						{
+							kind: "removed",
+							class: "code",
+							base: span("src/a.ts", "base", 4, 4),
+						},
+					],
+				}),
+			],
+		});
+		const note = renderDiffModel(m, OPTS).fileNotes.get("src/a.ts") ?? "";
+		expect(note.match(/line 4/g)).toHaveLength(1);
+		expect(note).not.toContain("the destination");
+	});
+
 	it("does not cite an operation number that was dropped from the detail", () => {
 		const m = model({
 			operations: [
