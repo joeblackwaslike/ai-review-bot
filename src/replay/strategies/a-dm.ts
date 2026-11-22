@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { prepareDiffInput } from "../../diff-model/prepare.js";
 import { untrusted } from "../../diff-model/render.js";
@@ -13,9 +14,10 @@ import { runAuditStrategy, strategyA } from "./a.js";
 
 const FILE_NOTES_HEADING = "Per-file computed notes:";
 
-const diffModelDir = fileURLToPath(
-	new URL("../../diff-model", import.meta.url),
-);
+const srcDir = fileURLToPath(new URL("../..", import.meta.url));
+const SOURCE_FILE = /\.(ts|js)$/;
+const NOT_HASHED = /\.(test|d)\.(ts|js)$/;
+const SHARED_SOURCES = ["prompt", "diff-pack"];
 
 /**
  * The computed notes for a replay round: the rendered summary, then each file's note under
@@ -47,11 +49,31 @@ export function replayDiffModelSection(input: StrategyInput): string {
 
 let cachedVersion: string | undefined;
 
-function diffModelVersion(): string {
-	const sources = readdirSync(diffModelDir)
-		.filter((name) => name.endsWith(".ts") && !name.endsWith(".test.ts"))
+/**
+ * The source files whose content decides what a-dm sends: every diff model module, plus
+ * the prompt and diff packing modules that place its output. Compiled `.js` is used when
+ * no `.ts` is on disk.
+ */
+export function diffModelSourceFiles(): string[] {
+	const dir = join(srcDir, "diff-model");
+	const own = readdirSync(dir)
+		.filter((name) => SOURCE_FILE.test(name) && !NOT_HASHED.test(name))
 		.sort()
-		.map((name) => [name, readFileSync(`${diffModelDir}/${name}`, "utf8")]);
+		.map((name) => join(dir, name));
+	const shared = SHARED_SOURCES.flatMap((base) =>
+		[".ts", ".js"]
+			.map((ext) => join(srcDir, `${base}${ext}`))
+			.filter(existsSync)
+			.slice(0, 1),
+	);
+	return [...own, ...shared];
+}
+
+function diffModelVersion(): string {
+	const sources = diffModelSourceFiles().map((file) => [
+		relative(srcDir, file),
+		readFileSync(file, "utf8"),
+	]);
 	return createHash("sha256")
 		.update(JSON.stringify([strategyA.version, sources]))
 		.digest("hex")

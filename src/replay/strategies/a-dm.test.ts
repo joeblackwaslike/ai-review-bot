@@ -1,3 +1,5 @@
+import { relative } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import { prepareDiffInput } from "../../diff-model/prepare.js";
 import { DEFAULT_DIFF_BUDGET_CHARS } from "../../diff-pack.js";
@@ -8,8 +10,14 @@ import type { StrategyInput } from "../strategy.js";
 import { strategyNames } from "../strategy.js";
 import type { ReplayFixture, Round } from "../types.js";
 import { strategyA } from "./a.js";
-import { replayDiffModelSection, strategyAdm } from "./a-dm.js";
+import {
+	diffModelSourceFiles,
+	replayDiffModelSection,
+	strategyAdm,
+} from "./a-dm.js";
 import { registerBuiltinStrategies } from "./index.js";
+
+const srcDir = fileURLToPath(new URL("../..", import.meta.url));
 
 const mockRunAuditPass = vi.hoisted(() => vi.fn());
 vi.mock("../../audit.js", () => ({ runAuditPass: mockRunAuditPass }));
@@ -137,6 +145,15 @@ describe("strategyAdm", () => {
 		expect(strategyAdm.version).not.toBe(strategyA.version);
 		expect(strategyAdm.version).toBe(strategyAdm.version);
 		expect(strategyAdm.version).toMatch(/^[0-9a-f]{12}$/);
+	});
+
+	it("a-dm version hashes the diff model, prompt and diff packing sources but no tests", () => {
+		const names = diffModelSourceFiles().map((f) => relative(srcDir, f));
+		expect(names).toContain("diff-model/render.ts");
+		expect(names).toContain("diff-model/operations.ts");
+		expect(names).toContain("prompt.ts");
+		expect(names).toContain("diff-pack.ts");
+		expect(names.filter((n) => /\.test\.|\.d\.ts$/.test(n))).toEqual([]);
 	});
 
 	it("a-dm estimates a cost above a's when it renders a section", () => {
