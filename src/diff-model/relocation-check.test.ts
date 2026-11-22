@@ -685,3 +685,13 @@ describe("verifyRelocation block comment allowlist", () => {
 		expect(verifyRelocation(op, files)).toBe(true);
 	});
 });
+
+describe("verifyRelocation whole-line // allowlist", () => {
+	it("drops a whole-line // change in a .md file forged as comment-only", () => {
+		const [base, head] = pairBlock(["  // old"], ["  // new"], [15]);
+		const { files, op } = relocation(base, head, ["docs/a.md", "docs/b.md"]);
+		expect(op.divergences.map((d) => d.class)).toEqual(["code"]);
+		const forged = { ...reclassed(op, "comment-only"), reviewWeight: 0 };
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+});
