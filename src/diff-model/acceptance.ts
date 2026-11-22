@@ -1,6 +1,7 @@
 import type { Candidate, Run } from "../moved-blocks.js";
 import type { WorkBudget } from "./budget.js";
 import { isProseFile, MAX_ANALYZED_LINE } from "./lexical.js";
+import { stripLiterals } from "./literals.js";
 
 export const MIN_COUNTED_LINES = 5;
 const MIN_INFORMATION = 30;
@@ -63,8 +64,7 @@ export function lineInformation(line: string): number {
 	const text = line.trim();
 	if (text === "" || text.length > MAX_ANALYZED_LINE || IMPORT_LIKE.test(text))
 		return 0;
-	const withoutLiterals = text.replace(LITERAL, " ");
-	const hasLiteral = text.match(LITERAL) !== null;
+	const { text: withoutLiterals, hasLiteral } = stripLiterals(text);
 	const names = withoutLiterals.match(IDENTIFIER) ?? [];
 	const hasName = names.some((name) => !KEYWORDS.has(name));
 	if (hasName) return nonSpace(text);
@@ -331,7 +331,7 @@ function onlyProperties(lines: string[]): boolean {
 function bracketsClose(lines: string[]): boolean {
 	let depth = 0;
 	for (const line of lines) {
-		depth += bracketBalance(line.replace(LITERAL, " "));
+		depth += bracketBalance(stripLiterals(line).text);
 		if (depth < 0) return false;
 	}
 	return depth === 0;
@@ -355,13 +355,32 @@ function hasSubstance(lines: string[]): boolean {
 	});
 }
 
-function copyBlockHolds(lines: string[], indentSensitive: boolean): boolean {
-	if (lines.some((line) => line.length > MAX_ANALYZED_LINE)) return false;
-	const present = lines.filter((line) => line.trim() !== "").length;
-	const first = (lines.find((line) => line.trim() !== "") ?? "").trim();
+const MAX_COPY_LINE = 500;
+const WHOLE_COMMENT = /^(?:\/\/|\/\*|\*\/|\*(?:\s|$))/;
+const HASH_COMMENT = /^#(?![![])/;
+const HASH_COMMENT_FILE = /\.(py|pyi|sh|bash|zsh|rb|ya?ml|toml|mk)$/i;
+
+/** Counts evaluations of the copy floor that were not answered from the memo. */
+export const copyQualifyCalls = { count: 0 };
+
+function wholeComment(line: string, hash: boolean): boolean {
+	const text = line.trim();
+	return WHOLE_COMMENT.test(text) || (hash && HASH_COMMENT.test(text));
+}
+
+function copyBlockHolds(
+	lines: string[],
+	indentSensitive: boolean,
+	hash: boolean,
+): boolean {
+	copyQualifyCalls.count++;
+	if (lines.some((line) => line.length > MAX_COPY_LINE)) return false;
+	const present = lines.filter((line) => line.trim() !== "");
+	if (present.every((line) => wholeComment(line, hash))) return false;
+	const first = (present[0] ?? "").trim();
 	const counted = lines.filter((line) => line.trim().length >= 3).length;
 	const definition =
-		present >= MIN_DEFINITION_LINES &&
+		present.length >= MIN_DEFINITION_LINES &&
 		!first.startsWith("const ") &&
 		definitionOf(lines, indentSensitive) &&
 		nonSpace(lines.join("")) >= MIN_DEFINITION_CHARS;
@@ -370,30 +389,48 @@ function copyBlockHolds(lines: string[], indentSensitive: boolean): boolean {
 	return bracketsClose(lines) && !onlyProperties(lines);
 }
 
+const qualified = new WeakMap<Run, Map<string, boolean>>();
+
 /**
  * Decides whether a block of a run, as it will be reported, qualifies as a copy: five or more
  * counted lines, or a whole definition of at least three non-blank lines and 40 non-space
  * characters that is not a `const` assignment, and in either case at least one line that carries
  * information (a block of imports, closers, bare keywords and bare name lists never qualifies).
  * Its brackets must close within the block and it must hold more than object properties, so a
- * slice through the middle of a call or a run of test data is not a copy.
+ * slice through the middle of a call or a run of test data is not a copy. A block of whole
+ * comment lines is never code, and a line over 500 characters never qualifies. The answer is
+ * memoized per run and range.
  */
 export function copyBlockQualifies(
 	run: Run,
 	start: number,
 	end: number,
 ): boolean {
-	return copyBlockHolds(run.raw.slice(start, end), run.indentSensitive);
+	let memo = qualified.get(run);
+	if (!memo) {
+		memo = new Map();
+		qualified.set(run, memo);
+	}
+	const key = `${start}|${end}`;
+	const known = memo.get(key);
+	if (known !== undefined) return known;
+	const answer = copyBlockHolds(
+		run.raw.slice(start, end),
+		run.indentSensitive,
+		HASH_COMMENT_FILE.test(run.filename),
+	);
+	memo.set(key, answer);
+	return answer;
 }
 
 /**
  * Decides whether an exact duplicate is a block worth reporting as a copy, by the rules of
- * `copyBlockQualifies`. A candidate that passes draws once from the budget and is rejected
- * when either pool runs dry.
+ * `copyBlockQualifies`. The candidate draws from the budget first, so a flood of duplicates
+ * runs dry before any floor work, and is rejected when either pool runs dry.
  */
 export function acceptCopySeed(c: Candidate, budget: WorkBudget): boolean {
 	const end = c.fromStart + c.length;
-	if (!copyBlockQualifies(c.from, c.fromStart, end)) return false;
 	const lines = c.from.lines.slice(c.fromStart, end);
-	return drawBudget(c, nonSpace(lines.join("")), budget, "copy|");
+	if (!drawBudget(c, nonSpace(lines.join("")), budget, "copy|")) return false;
+	return copyBlockQualifies(c.from, c.fromStart, end);
 }
