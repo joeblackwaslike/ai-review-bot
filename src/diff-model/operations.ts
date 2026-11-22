@@ -17,7 +17,9 @@ const NAMESPACE_CLAUSE = String.raw`\*(?:\s+as\s+[\w$]+)?`;
 const TS_FROM = new RegExp(
 	String.raw`^(import|export)\s+(type\s+)?(${NAMESPACE_CLAUSE}|${NAMED_CLAUSE}|[\w$]+(?:\s*,\s*(?:${NAMED_CLAUSE}|\*\s+as\s+[\w$]+))?)\s+from\s+(["'])([^"'\n]+)\4$`,
 );
-const TS_BARE = /^import\s+(["'])([^"'\n]+)\1$/;
+const PROSE_FILE = /\.(md|mdx|txt|rst|adoc)$/i;
+const LITERAL_RISK = /["'`/]/;
+const MAX_WHITESPACE_LINE = 2000;
 const PY_PLAIN = /^import\s+([\w., ]+)$/;
 const PY_FROM = /^from\s+([\w.]+)\s+import\s+(\*|[\w., ]+)$/;
 
@@ -87,8 +89,6 @@ function sortedList(list: string): string {
 }
 
 function tsImportKey(statement: string): string | null {
-	const bare = TS_BARE.exec(statement);
-	if (bare) return `import ${bare[2]}`;
 	const from = TS_FROM.exec(statement);
 	if (!from) return null;
 	const clause = (from[3] ?? "")
@@ -116,17 +116,19 @@ function importKey(filename: string, line: string): string | null {
 }
 
 function isWhitespaceOnly(filename: string, hunk: HunkLines): boolean {
-	if (hunk.groups !== 1) return false;
+	if (hunk.groups !== 1 || PROSE_FILE.test(filename)) return false;
 	if (hunk.deleted.length === 0 || hunk.deleted.length !== hunk.added.length) {
 		return false;
 	}
 	const all = [...hunk.context, ...hunk.deleted, ...hunk.added];
+	if (all.some((line) => line.length > MAX_WHITESPACE_LINE)) return false;
 	if (!lexicallySafe(filename, all)) return false;
-	const before = normalizeSafe(filename, hunk.deleted);
-	const after = normalizeSafe(filename, hunk.added);
+	const compare = (line: string) =>
+		LITERAL_RISK.test(line) ? line.trim() : normalizeSafe(filename, [line])[0];
 	return (
-		before.every((line, i) => line === after[i]) &&
-		hunk.deleted.join("\n") !== hunk.added.join("\n")
+		hunk.deleted.every(
+			(line, i) => compare(line) === compare(hunk.added[i] ?? ""),
+		) && hunk.deleted.join("\n") !== hunk.added.join("\n")
 	);
 }
 
@@ -149,6 +151,7 @@ function isImportOnly(filename: string, hunk: HunkLines): boolean {
 	const before = importKeys(filename, hunk.deleted);
 	const after = importKeys(filename, hunk.added);
 	return (
+		hunk.groups === 1 &&
 		before !== null &&
 		after !== null &&
 		before.length > 0 &&

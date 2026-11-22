@@ -385,4 +385,92 @@ describe("findMechanical", () => {
 		findMechanical([file("src/a.ts", hunk([bad], [`${bad}y`]))]);
 		expect(performance.now() - start).toBeLessThan(1000);
 	});
+
+	it("does not report a space change inside a regex literal", () => {
+		const patch = hunk(["x.split(/a  b/);"], ["x.split(/a b/);"]);
+		expect(findMechanical([file("src/a.ts", patch)])).toEqual([]);
+	});
+
+	it("does not report whitespace changes in whitespace-significant prose files", () => {
+		for (const name of ["a.md", "a.mdx", "a.txt", "a.rst", "a.adoc"]) {
+			expect(findMechanical([file(name, hunk(["foo  "], ["foo"]))])).toEqual(
+				[],
+			);
+		}
+	});
+
+	it("still reports a plain reindent and a trimmed-only line with a quote", () => {
+		expect(
+			findMechanical([
+				file(
+					"src/a.ts",
+					hunk(["  run();", "  go();"], ["    run();", "    go();"]),
+				),
+			]),
+		).toHaveLength(1);
+		expect(
+			findMechanical([
+				file("src/a.ts", hunk(['  say("a  b");'], ['say("a  b");'])),
+			]),
+		).toHaveLength(1);
+	});
+
+	it("does not report whitespace on a line over 2000 characters, quickly", () => {
+		const long = "a ".repeat(50_000);
+		const start = performance.now();
+		const ops = findMechanical([file("src/a.ts", hunk([` ${long}`], [long]))]);
+		expect(performance.now() - start).toBeLessThan(1000);
+		expect(ops).toEqual([]);
+	});
+
+	it("does not report reordered bare side-effect imports", () => {
+		const patch = hunk(
+			['import "./a";', 'import "./b";'],
+			['import "./b";', 'import "./a";'],
+		);
+		expect(findMechanical([file("src/a.ts", patch)])).toEqual([]);
+	});
+
+	it("does not report Python imports reordered across an unrelated statement", () => {
+		const patch = [
+			"@@ -1,3 +1,3 @@",
+			"-import os",
+			" setup()",
+			"+import os",
+		].join("\n");
+		expect(findMechanical([file("a.py", patch)])).toEqual([]);
+	});
+
+	it("does not report a hunk that keeps one import and adds another", () => {
+		const patch = hunk(["import a"], ["import a", "import b"]);
+		expect(findMechanical([file("a.py", patch)])).toEqual([]);
+	});
+
+	it("does not report import type becoming a value import", () => {
+		const patch = hunk(['import type {A} from "x";'], ['import {A} from "x";']);
+		expect(findMechanical([file("src/a.ts", patch)])).toEqual([]);
+	});
+
+	it("reports an import reorder with a blank line between, and not with a blank on one side only", () => {
+		const a = 'import { a } from "./a";';
+		const b = 'import { b } from "./b";';
+		expect(
+			findMechanical([file("src/a.ts", hunk([a, "", b], [b, a]))]),
+		).toHaveLength(1);
+		expect(
+			findMechanical([file("src/a.ts", hunk([a, b], [b, "", a]))]),
+		).toHaveLength(1);
+		expect(
+			findMechanical([file("src/a.ts", hunk([a, "", b], [b, "run();"]))]),
+		).toEqual([]);
+	});
+
+	it("does not pair files whose lines are under 3 characters", () => {
+		const tiny = ["a;", "b;", "c;", "d;", "e;"];
+		const ops = findRenames([
+			file("src/old.ts", hunk(tiny, []), { status: "removed" }),
+			file("src/new.ts", hunk([], tiny), { status: "added" }),
+		]);
+		expect(ops).toEqual([]);
+	});
 });

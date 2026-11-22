@@ -240,6 +240,10 @@ function renameIndexes(
 	changed: { at: number; base: string; head: string }[],
 	baseLines: string[],
 ): Set<number> {
+	const oversized = (line: string) => line.length > MAX_TOKENIZED_LENGTH;
+	if (baseLines.some(oversized) || changed.some((c) => oversized(c.head))) {
+		return new Set();
+	}
 	const perChange = changed.map((c) => substitutions(c.base, c.head));
 	const target = new Map<string, Set<string>>();
 	const seen = new Map<string, number>();

@@ -293,4 +293,49 @@ describe("findRelocations", () => {
 			true,
 		);
 	});
+
+	it("does not class a change hidden past the tokenizer cap as a rename", () => {
+		const pad = "x".repeat(2100);
+		const line = (a: string, b: string) =>
+			`  r = ${a}(1) + ${a}(2) + "${pad}" + ${b}();`;
+		const base = withLine(fn(body(30)), 15, line("foo", "safe"));
+		const head = withLine(base, 15, line("bar", "evil"));
+		const ops = move(base, head);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]?.divergences).toHaveLength(1);
+		expect(ops[0]?.divergences[0]?.class).toBe("code");
+	});
+
+	it("does not class a rename when only the head line exceeds the cap", () => {
+		const base = withLine(fn(body(30)), 15, "  r = foo(1) + foo(2);");
+		const head = withLine(
+			base,
+			15,
+			`  r = bar(1) + bar(2);${" ".repeat(2100)}evil();`,
+		);
+		const ops = move(base, head);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]?.divergences.every((d) => d.class !== "rename")).toBe(true);
+	});
+
+	it("does not class a rename whose name also occurs past the cap on an unchanged line", () => {
+		const long = `  keep(${"x".repeat(2100)}, foo(3));`;
+		const base = fn(body(30));
+		base.splice(2, 0, "  const foo = compute(0);");
+		base.splice(12, 0, "  log(foo, 1);");
+		base.splice(20, 0, long);
+		const head = base.map((l) => (l === long ? l : l.replaceAll("foo", "bar")));
+		const ops = move(base, head);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]?.divergences.every((d) => d.class === "code")).toBe(true);
+	});
+
+	it("still classes a short-line rename as rename", () => {
+		const base = fn(body(30));
+		base.splice(2, 0, "  const total = compute(0);");
+		base.splice(12, 0, "  log(total, 1);");
+		const head = base.map((l) => l.replaceAll("total", "sum"));
+		const ops = move(base, head);
+		expect(ops[0]?.divergences.every((d) => d.class === "rename")).toBe(true);
+	});
 });
