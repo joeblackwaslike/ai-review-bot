@@ -22,7 +22,11 @@ const LEADING_OPERATOR = /^(?:\.|[?:,=^%&|*+-]|\/(?![/*]))/;
 const LEADING_OPERATOR_IN_LISTED_FILES =
 	/^(?:\.[A-Za-z_$]|[?:]|=>|\+|,|&&|\|\|)/;
 const CLOSER_START = /^[)\]}]/;
-const TERMINATOR = /(?:[;}\]),>]|\b(?:end|fi|done|esac))$/;
+const TERMINATOR = /(?:[;}\])]|\b(?:end|fi|done|esac))$/;
+const CONTINUING_START = /^(?:(?:as|satisfies|instanceof|in)\s|[([`])/;
+const SIGNATURE_START =
+	/^(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function\b|class\b|def\b|fn\b|func\b|pub\s+fn\b|interface\b|enum\b)/;
+const MAX_SITES = 50;
 const OPEN_ENDING = /(?:[=+*%&|^?:\\([-]|=>)$/;
 const IMPORT_LIKE =
 	/^(?:import\b|export\s+(?:\*|\{[^}]*\})\s*(?:as\s+\w+\s*)?(?:from\b|;|$)|from\s+\S+\s+import\b|use\s+[\w:{]|require(?:_relative)?\b|#include\b|using\s+[\w.]+\s*;|package\b)|\brequire\s*\(|\bimport\s*\(/;
@@ -84,7 +88,9 @@ function lineIndex(runs: Run[]): Map<string, LineSite[]> {
 
 function occurrences(runs: Run[], window: string[]): number {
 	let found = 0;
-	for (const { run, at } of lineIndex(runs).get(window[0] as string) ?? []) {
+	const sites = lineIndex(runs).get(window[0] as string) ?? [];
+	if (sites.length > MAX_SITES) return 2;
+	for (const { run, at } of sites) {
 		if (at + window.length > run.lines.length) continue;
 		if (window.every((line, k) => run.lines[at + k] === line) && ++found > 1)
 			break;
@@ -144,11 +150,7 @@ function listsItems(run: Run): boolean {
 	return run.indentSensitive || isProseFile(run.filename);
 }
 
-/**
- * True when a line cannot start a statement: it opens with a closing bracket or a leading
- * operator. Indentation-sensitive and prose files list items with `-`, `*` and `+`, so there
- * only chained-call and ternary starts count.
- */
+/** True when a line opens with a closing bracket or a leading operator (a narrower set in files that list items with `-`, `*` and `+`). */
 export function startsMidStatement(line: string, run: Run): boolean {
 	const text = line.trim();
 	if (CLOSER_START.test(text)) return true;
@@ -165,12 +167,52 @@ function lastPresentLine(run: Run, start: number, end: number): string {
 	return "";
 }
 
+function stripComment(line: string, run: Run): string {
+	const hash = run.indentSensitive;
+	const slash = !hash && !isProseFile(run.filename);
+	let quote = "";
+	for (let i = 0; i < line.length; i++) {
+		const ch = line[i] as string;
+		if (quote) {
+			if (ch === "\\") i++;
+			else if (ch === quote) quote = "";
+		} else if (ch === '"' || ch === "'" || ch === "`") {
+			quote = ch;
+		} else if (
+			(slash && ch === "/" && line[i + 1] === "/") ||
+			(hash && ch === "#")
+		) {
+			return line.slice(0, i);
+		}
+	}
+	return line;
+}
+
+function bracketsBalance(run: Run, start: number, end: number): boolean {
+	const rows = run.raw.slice(start, end);
+	const lastAt = rows.reduce((at, row, k) => (row.trim() === "" ? at : k), -1);
+	const signature = SIGNATURE_START.test(
+		rows.find((r) => r.trim())?.trim() ?? "",
+	);
+	let depth = 0;
+	for (const [k, row] of rows.entries()) {
+		if (row.length > MAX_ANALYZED_LINE) return false;
+		let code = stripComment(row, run).replace(LITERAL, "");
+		if (signature && k === lastAt) code = code.replace(/\{\s*$/, "");
+		for (const ch of code) {
+			if (ch === "(" || ch === "[" || ch === "{") depth++;
+			else if ((ch === ")" || ch === "]" || ch === "}") && --depth < 0)
+				return false;
+		}
+	}
+	return depth === 0;
+}
+
 /**
- * True when the statement ending at line `end` of the run may carry on. That holds when the
- * last line ends in an operator or opening bracket, when the next line (in the run, or the
- * context line after it) starts mid-statement or is a closing bracket indented deeper, or,
- * outside indentation-sensitive and prose files, when a line follows a last line with no
- * statement terminator. A run that ends its hunk with no context line counts as finished.
+ * True when the statement ending at line `end` of the run may carry on: its brackets do not
+ * balance (a signature may end in `{`), its last line, minus a trailing comment, ends in an
+ * operator, or the next line (in the run, or the context line after it) continues it. See
+ * the matching v2 spec for the exact tests.
  */
 export function leavesStatementOpen(
 	run: Run,
@@ -179,30 +221,26 @@ export function leavesStatementOpen(
 ): boolean {
 	const last = lastPresentLine(run, start, end);
 	if (last === "") return false;
-	const code = last.trimEnd();
-	const strict = !listsItems(run);
-	if (strict && OPEN_ENDING.test(code)) return true;
+	if (!bracketsBalance(run, start, end)) return true;
+	const code = stripComment(last, run).trimEnd();
+	if (OPEN_ENDING.test(code)) return true;
 	const next = end < run.raw.length ? run.raw[end] : run.after;
 	const text = next?.trim() ?? "";
 	if (text === "") return false;
-	if (startsMidStatement(text, run)) {
-		return (
-			!CLOSER_START.test(text) || indentOf(next as string) > indentOf(last)
-		);
-	}
-	return strict && !TERMINATOR.test(code);
+	const deeper = indentOf(next as string) > indentOf(last);
+	if (CLOSER_START.test(text)) return deeper;
+	if (startsMidStatement(text, run)) return true;
+	if (listsItems(run)) return deeper;
+	return CONTINUING_START.test(text) || !TERMINATOR.test(code);
 }
 
 /**
  * Decides whether an exact run is a block worth reporting. Five or more counted lines
- * qualify without drawing the budget's token and candidate pools, and within one file must
- * occur once on each side. One to four lines draw once per distinct candidate (one candidate
- * and the seed's characters) and are rejected when a pool is dry. They qualify with 30
- * characters of information (50 within one file) or a whole definition of 40 non-space
- * characters, and occur once on each side. They never qualify with a line over 2000
- * characters, as a single line with unclosed brackets or a trailing colon in an
- * indentation-sensitive file, when starting mid-statement, or when `leavesStatementOpen`
- * holds on either side. Within one file the sides must lie in different hunks.
+ * qualify, drawing one candidate from the budget and, within one file, needing unique text.
+ * One to four lines draw a candidate and their characters, and need 30 characters of
+ * information (50 within one file) or a whole definition of 40, unique on each side, no
+ * line over 2000 characters, no mid-statement start, no `leavesStatementOpen` on either
+ * side, and different hunks within one file.
  */
 export function acceptSeed(
 	c: Candidate,
@@ -210,7 +248,10 @@ export function acceptSeed(
 ): boolean {
 	const sameFile = c.from.filename === c.to.filename;
 	if (c.counted >= MIN_COUNTED_LINES)
-		return !sameFile || isUnique(c, ctx.deleted, ctx.added);
+		return (
+			(!sameFile || isUnique(c, ctx.deleted, ctx.added)) &&
+			(!ctx.budget || drawBudget(c, 0, ctx.budget))
+		);
 	const lines = c.from.lines.slice(c.fromStart, c.fromStart + c.length);
 	if (lines.some((line) => line.length > MAX_ANALYZED_LINE)) return false;
 	const chars = nonSpace(lines.join(""));

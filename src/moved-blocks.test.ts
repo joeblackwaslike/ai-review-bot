@@ -1,11 +1,32 @@
 import { describe, expect, it } from "vitest";
 import {
 	collectRuns,
+	extractRuns,
 	findMovedBlocks,
 	normalizeCodeLine,
 	type PushFile,
 	selectMatches,
 } from "./moved-blocks.js";
+
+describe("normalizeCodeLine on long lines", () => {
+	it("normalizes a 200KB line of spaced tokens in linear time", () => {
+		const line = "1 ".repeat(100_000);
+		const started = performance.now();
+		expect(normalizeCodeLine(line)).toBe(line.trim());
+		expect(performance.now() - started).toBeLessThan(1000);
+	});
+});
+
+describe("extractRuns after lines", () => {
+	it("gives a run closed by a later deletion the line that follows", () => {
+		const { deleted, added } = extractRuns(
+			"a.ts",
+			["@@ -1,5 +1,3 @@", "-a", "+b", "-c", " ctx"].join("\n"),
+		);
+		expect(deleted.map((r) => r.after)).toEqual(["c", "ctx"]);
+		expect(added.map((r) => r.after)).toEqual(["ctx"]);
+	});
+});
 
 describe("normalizeCodeLine with strip", () => {
 	const strip = (s: string) => normalizeCodeLine(s, { strip: true });

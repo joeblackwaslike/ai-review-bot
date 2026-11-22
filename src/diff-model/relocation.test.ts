@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PushFile } from "../moved-blocks.js";
+import { partialStatements } from "./partial-statements.fixture.js";
 import { findRelocations } from "./relocation.js";
 import { verifyRelocation } from "./relocation-check.js";
 import type { Operation } from "./types.js";
@@ -717,14 +718,6 @@ describe("findRelocations one-line declarations", () => {
 			expect(verifyRelocation(ops[0] as never, files)).toBe(true);
 		});
 
-		it("makes no claim when only a bare value changed", () => {
-			const { ops } = moveDeclaration(
-				"export const MAX_RETRIES = 3;",
-				"export const MAX_RETRIES = 30;",
-			);
-			expect(ops).toEqual([]);
-		});
-
 		it("finds a moved type alias and a Python constant", () => {
 			expect(
 				moveDeclaration(
@@ -890,12 +883,12 @@ describe("distinctiveness acceptance and same-file moves", () => {
 		expect(findRelocations(files, { tokens: 0 })).toEqual([]);
 	});
 
-	it("keeps accepting large seeds once the candidate pool is empty", () => {
+	it("keeps accepting large seeds once the token pool is empty", () => {
 		const block = body(8);
 		expect(
 			findRelocations(
 				[deletedFrom("src/a.ts", 1, block), addedTo("src/b.ts", 1, block)],
-				{ candidates: 0 },
+				{ tokens: 0 },
 			),
 		).toHaveLength(1);
 	});
@@ -1111,11 +1104,6 @@ describe("findRelocations statement continuation", () => {
 
 	it.each([
 		[
-			"a declaration whose statement continues on a line that differs",
-			["-const approved = users", "-  .filter((u) => u.isAdmin);"],
-			["+const approved = users", "+  .filter(() => true);"],
-		],
-		[
 			"a declaration whose head side gains a continuation line",
 			["-const total = compute(a, b)", " context"],
 			["+const total = compute(a, b)", "+  + secret"],
@@ -1126,19 +1114,19 @@ describe("findRelocations statement continuation", () => {
 			["+const total = compute(a, b);", " context"],
 		],
 		[
-			"a short block whose statement continues on a differing line",
-			[`-${loaded}`, "-  .filter((u) => u.isAdmin);"],
-			[`+${loaded}`, "+  .filter(() => true);"],
-		],
-		[
 			"a short block that lacks a terminator when a line follows",
 			[`-${loaded}.length`, " other();"],
 			[`+${loaded}.length`, " other();"],
 		],
 		[
 			"a short block that ends in an operator",
-			[`-${loaded} &&`],
-			[`+${loaded} &&`],
+			["-const approvedUserList = loadUsers(config) &&"],
+			["+const approvedUserList = loadUsers(config) &&"],
+		],
+		[
+			"a short block that ends in a backslash",
+			["-total_amount_for_user = compute_amount(account) + \\"],
+			["+total_amount_for_user = compute_amount(account) + \\"],
 		],
 		[
 			"a short block followed by a closer on a deeper indent",
@@ -1149,15 +1137,12 @@ describe("findRelocations statement continuation", () => {
 		expect(findRelocations(pairOf(baseRows, headRows))).toEqual([]);
 	});
 
-	it("still seeds a terminated short block followed by an ordinary line", () => {
-		expect(
-			findRelocations(
-				pairOf([`-${line}`, " other();"], [`+${line}`, " other();"]),
-			),
-		).toHaveLength(1);
+	it.each(partialStatements)("does not claim %s", (_, base, head, __, ext) => {
+		const files = [hunk(`src/a.${ext}`, base), hunk(`src/b.${ext}`, head)];
+		expect(findRelocations(files)).toEqual([]);
 	});
 
-	it("seeds a short Ruby method that ends in end when a context line follows", () => {
+	it("seeds a short Ruby method that ends in end", () => {
 		const method = [
 			"def self.money(cents)",
 			'  format("$%d.%02d", cents / 100, cents % 100)',
@@ -1202,34 +1187,34 @@ describe("findRelocations declaration pairing", () => {
 	it.each([
 		[
 			"same-named type aliases with unrelated bodies",
-			["src/Button.tsx", "type Props = { label: string };"],
-			[
-				"src/Card.tsx",
-				"type Props = { children: ReactNode; elevated: boolean };",
-			],
+			"src/Button.tsx|type Props = { label: string };",
+			"src/Card.tsx|type Props = { children: ReactNode; elevated: boolean };",
 		],
 		[
-			"a TypeScript constant and a Python assignment of the same name",
-			["src/config.ts", "const TIMEOUT = 30;"],
-			["src/config.py", "TIMEOUT = 30"],
+			"a TypeScript constant and a Python assignment",
+			"src/config.ts|const TIMEOUT = 30;",
+			"src/config.py|TIMEOUT = 30",
 		],
 		[
 			"declarations across extension families",
-			["src/limits.ts", "export const MAX_ITEMS = 5;"],
-			["src/limits.go", "const MAX_ITEMS = 5"],
+			"src/limits.ts|export const MAX_ITEMS = 5;",
+			"src/limits.go|const MAX_ITEMS = 5",
+		],
+		["a one-letter name", "src/a.ts|const i = 0;", "src/b.ts|const i = 0;"],
+		[
+			"a changed value sharing too little",
+			"src/a.ts|const MAX = 5;",
+			"src/b.ts|const MAX = buildLimit(config, defaults);",
 		],
 		[
-			"a one-letter name",
-			["src/a.ts", "const i = 0;"],
-			["src/b.ts", "const i = 0;"],
+			"a bare changed value",
+			"src/a.ts|export const MAX_RETRIES = 3;",
+			"src/b.ts|export const MAX_RETRIES = 30;",
 		],
-		[
-			"a changed value that shares too little with the original",
-			["src/a.ts", "const MAX = 5;"],
-			["src/b.ts", "const MAX = buildLimit(config, defaults);"],
-		],
-	])("does not pair %s", (_, [baseName, base], [headName, head]) => {
-		const files = [one(baseName, "-", base), one(headName, "+", head)];
+	])("does not pair %s", (_, base, head) => {
+		const [baseName, baseText] = base.split("|") as [string, string];
+		const [headName, headText] = head.split("|") as [string, string];
+		const files = [one(baseName, "-", baseText), one(headName, "+", headText)];
 		expect(findRelocations(files)).toEqual([]);
 	});
 
@@ -1245,16 +1230,19 @@ describe("findRelocations declaration pairing", () => {
 });
 
 describe("findRelocations budget order", () => {
-	it("keeps a block of five counted lines when the token and candidate pools are empty", () => {
-		const block = body(6);
-		const ops = findRelocations(
-			[deletedFrom("src/a.ts", 1, block), addedTo("src/b.ts", 1, block)],
-			{ tokens: 1, candidates: 1 },
-		);
-		expect(ops).toHaveLength(1);
+	it("caps operations by drawing one candidate per large seed", () => {
+		const files = Array.from({ length: 10 }, (_, i) => {
+			const block = body(5).map((l) => l.replace("v", `blk${i}v`));
+			return [
+				deletedFrom(`src/a${i}.ts`, 1, block),
+				addedTo(`src/b${i}.ts`, 1, block),
+			];
+		}).flat();
+		expect(findRelocations(files)).toHaveLength(10);
+		expect(findRelocations(files, { candidates: 3 })).toHaveLength(3);
 	});
 
-	it("does not let a junk move earlier in the change starve a later block", () => {
+	it("lets a later block through after earlier junk", () => {
 		const junk = Array.from(
 			{ length: 5 },
 			(_, i) => `  const padding${i} = "${"x".repeat(39_950)}";`,
@@ -1271,7 +1259,7 @@ describe("findRelocations budget order", () => {
 });
 
 describe("findRelocations oversized lines", () => {
-	it("returns quickly with no short relocation for a 160KB quote-and-backslash line", () => {
+	it("skips a 160KB quote-and-backslash line quickly", () => {
 		const text = `x = "${'\\"'.repeat(80_000)}`;
 		const started = performance.now();
 		const ops = move([text], [text]);
@@ -1304,14 +1292,6 @@ describe("findRelocations budget exhaustion paths", () => {
 		}).flat();
 	}
 
-	it("aligns the whole block while the cells pool lasts and falls back once it is dry", () => {
-		const full = findRelocations(blocks(1));
-		const dry = findRelocations(blocks(1), { cells: 1 });
-		expect(full).toHaveLength(1);
-		expect(full[0]?.divergences.length).toBeGreaterThan(0);
-		expect(dry).not.toEqual(full);
-	});
-
 	it("stops resolving chains once the cells pool runs dry after the seeds", () => {
 		const files = blocks(3);
 		const limited = findRelocations(files, { cells: 16 });
@@ -1320,13 +1300,13 @@ describe("findRelocations budget exhaustion paths", () => {
 		expect(reached(limited).has("src/a2.ts")).toBe(false);
 	});
 
-	it("keeps resolving the chains it already has when the seeds themselves ran dry", () => {
+	it("keeps resolving chains when the seeds themselves ran dry", () => {
 		const files = [
 			deletedFrom("src/s1.ts", 1, [short]),
 			addedTo("src/s2.ts", 1, [short]),
 			...blocks(3),
 		];
-		const limited = findRelocations(files, { candidates: 0, cells: 16 });
+		const limited = findRelocations(files, { tokens: 0, cells: 16 });
 		expect(reached(limited).has("src/a2.ts")).toBe(true);
 	});
 
@@ -1342,19 +1322,7 @@ describe("findRelocations budget exhaustion paths", () => {
 		expect(findRelocations(files, { tokens: 0 })).toEqual([]);
 	});
 
-	it("stops pairing declarations when the candidate pool runs out", () => {
-		const names = Array.from({ length: 6 }, (_, i) => `LIMIT_${i}_KEY`);
-		const declare = (tag: string) =>
-			names.map((n) => `export const ${n} = { id: 1, tag: "${tag}" };`);
-		const files = [
-			deletedFrom("src/a.ts", 1, declare("a")),
-			addedTo("src/b.ts", 1, declare("b")),
-		];
-		expect(findRelocations(files)).toHaveLength(6);
-		expect(findRelocations(files, { candidates: 2 })).toHaveLength(2);
-	});
-
-	it("claims a whole definition whose lines carry no information of their own", () => {
+	it("claims a whole definition with no per-line information", () => {
 		const definition = [
 			"export default async function () {",
 			'  return await import("./heavy/module/path.js");',

@@ -23,10 +23,9 @@ export interface MovedBlock {
 
 /**
  * A maximal run of consecutive deleted or added lines, with the line number of its first line.
- * `region` numbers the stretches of the patch between context lines or hunk headers, so a
- * deleted run and the added run that replaces it share one region. `hunk` numbers the `@@`
- * hunks of the file. `after` is the context line that follows the run's change group, or
- * undefined when a hunk header or the end of the patch follows.
+ * `region` numbers the stretches between context lines or hunk headers, so a deleted run and
+ * its replacement share one region. `hunk` numbers the `@@` hunks. `after` is the context
+ * line after the run's change group, or undefined at a hunk header or the end of the patch.
  */
 export interface Run {
 	index: number;
@@ -105,6 +104,7 @@ export function normalizeCodeLine(
 		out = line.slice(0, i);
 	}
 	let pendingSpace = false;
+	let hasContent = false;
 	while (i < line.length) {
 		const ch = line[i] as string;
 		if (/\s/.test(ch)) {
@@ -112,13 +112,10 @@ export function normalizeCodeLine(
 			i++;
 			continue;
 		}
-		if (
-			pendingSpace &&
-			out.trim() !== "" &&
-			(!opts.strip || needsSeparator(out, ch))
-		)
+		if (pendingSpace && hasContent && (!opts.strip || needsSeparator(out, ch)))
 			out += " ";
 		pendingSpace = false;
+		hasContent = true;
 		if (!QUOTES.has(ch)) {
 			out += ch;
 			i++;
@@ -166,6 +163,7 @@ export function extractRuns(
 	let addStart = 0;
 	let region = 0;
 	let hunk = 0;
+	let awaiting: Run[] = [];
 	const flush = (after?: string) => {
 		if (del.length) {
 			deleted.push({
@@ -203,7 +201,11 @@ export function extractRuns(
 	for (const line of patch.split("\n")) {
 		if (line.startsWith("\\")) continue;
 		if (line.startsWith("-")) {
-			if (add.length) flush();
+			if (add.length) {
+				const first = added.length;
+				flush(line.slice(1));
+				awaiting.push(...added.slice(first));
+			}
 			if (!del.length) delStart = oldLine;
 			del.push(normalize(line.slice(1)));
 			delRaw.push(line.slice(1));
@@ -215,7 +217,10 @@ export function extractRuns(
 			newLine++;
 		} else {
 			const header = /^@@ -(\d+)(?:,\d+)? \+(\d+)/.exec(line);
-			flush(header ? undefined : line.slice(1));
+			const after = header ? undefined : line.slice(1);
+			for (const run of awaiting) run.after = after;
+			awaiting = [];
+			flush(after);
 			region++;
 			if (header) {
 				hunk++;

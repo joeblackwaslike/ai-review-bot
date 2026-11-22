@@ -104,15 +104,11 @@ function sameDeclaration(name: string, base: Site, head: Site): boolean {
 }
 
 /**
- * Finds one-line declarations (constants, types, interfaces, enums) deleted from one file and
- * added to another under the same name, whether or not the value changed. The name must be
- * declared once on each side of the whole change, at the top level (not indented, unless
- * SCREAMING_CASE) and with at least 3 characters. Neither line may already belong to a larger
- * relocation or be followed by a line that may continue its statement. The files must share
- * an extension family, a changed value must keep half of the original's tokens, and within
- * one file the lines must lie in different hunks. Each pair draws one candidate from `budget`
- * and the pass stops when the pool runs dry. Multi-line declarations are left to the block
- * matcher.
+ * Finds one-line declarations deleted from one file and added to another under the same
+ * name (at least 3 characters, top level, declared once on each side), whether or not the
+ * value changed. The files must share an extension family, a changed value must keep half
+ * of its tokens, neither line may continue onto the next, and within one file the lines
+ * must lie in different hunks. Each pair draws one candidate from `budget`.
  */
 export function findDeclarationMoves(
 	deleted: Run[],

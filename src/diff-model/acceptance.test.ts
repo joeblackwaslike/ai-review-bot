@@ -171,14 +171,6 @@ describe("acceptSeed", () => {
 		expect(acceptSeed(c, { deleted, added })).toBe(false);
 	});
 
-	it("does not draw the token or candidate pools for a seed of five or more counted lines", () => {
-		const block = Array.from({ length: 5 }, () => "  next();");
-		const { c, deleted, added } = seedFor([block], [block]);
-		const budget = new WorkBudget({ candidates: 0, tokens: 0 });
-		expect(acceptSeed(c, { deleted, added, budget })).toBe(true);
-		expect(budget.exhausted).toBe(false);
-	});
-
 	it("rejects everything once the budget is exhausted", () => {
 		const block = [
 			"  const subtotal = computeSubtotal(items);",
