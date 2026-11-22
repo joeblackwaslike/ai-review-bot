@@ -17,7 +17,7 @@ const FILE_NOTES_HEADING = "Per-file computed notes:";
 const srcDir = fileURLToPath(new URL("../..", import.meta.url));
 const SOURCE_FILE = /\.(ts|js)$/;
 const NOT_HASHED = /\.(test|d)\.(ts|js)$/;
-const SHARED_SOURCES = ["prompt", "diff-pack"];
+const SHARED_SOURCES = ["prompt", "diff-pack", "moved-blocks", "push-shape"];
 
 /**
  * The computed notes for a replay round: the rendered summary, then each file's note under
