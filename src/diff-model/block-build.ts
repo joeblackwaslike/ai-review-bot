@@ -212,6 +212,8 @@ function commentLines(filename: string, lines: string[]): boolean[] {
 	});
 }
 
+const REGEX_FILE = /\.(?:[cm]?[jt]sx?)$/i;
+const REGEX_START = /(?:^|[(=,:[!&|?{};>]|\breturn|\btypeof)\s*\/(?![/*])/;
 const QUOTE_CHARS = new Set(['"', "'", "`"]);
 
 /**
@@ -219,7 +221,7 @@ const QUOTE_CHARS = new Set(['"', "'", "`"]);
  * the start of the line or right after whitespace, so a `//` inside a regex literal or glued to
  * code is code. An unterminated quote hides the rest of the line.
  */
-function commentStart(line: string): number {
+export function commentStart(line: string): number {
 	let quote = "";
 	for (let i = 0; i < line.length; i++) {
 		const ch = line[i] as string;
@@ -524,6 +526,8 @@ export function build(
 	const renames = renameIndexes(changed, baseRaw, headRaw);
 	const trailing =
 		SLASH_LINE_FILE.test(from.filename) && SLASH_LINE_FILE.test(to.filename);
+	const regexFiles =
+		REGEX_FILE.test(from.filename) && REGEX_FILE.test(to.filename);
 	const baseDepths = lineDepths(baseRaw, from.filename);
 	let counted = 0;
 	const renamedNames = new Set<string>();
@@ -536,7 +540,13 @@ export function build(
 			d.headIndex !== undefined && headComment[d.headIndex] === true,
 			baseText,
 			headText,
-			trailing,
+			trailing &&
+				!(
+					regexFiles &&
+					[baseText, headText].some(
+						(t) => t !== undefined && REGEX_START.test(t),
+					)
+				),
 		)
 			? "comment-only"
 			: renames.has(at)
