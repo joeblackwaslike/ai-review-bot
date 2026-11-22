@@ -141,15 +141,13 @@ function isOpenSingleLine(c: Candidate, lines: string[]): boolean {
 	return opened > closed;
 }
 
-function isWholeDefinition(c: Candidate): boolean {
-	const lines = c.from.lines
-		.slice(c.fromStart, c.fromStart + c.length)
-		.filter((line) => line.trim() !== "");
+function definitionOf(rows: string[], indentSensitive: boolean): boolean {
+	const lines = rows.filter((line) => line.trim() !== "");
 	const first = lines[0]?.trim();
 	const last = lines[lines.length - 1]?.trim();
 	if (first === undefined || last === undefined) return false;
 	if (!DEFINITION_OPENER.test(first)) return false;
-	if (c.from.indentSensitive) return lines.length > 1 || !last.endsWith(":");
+	if (indentSensitive) return lines.length > 1 || !last.endsWith(":");
 	if (lines.length === 1) return /[}\]][;,]?$/.test(last);
 	return DEFINITION_CLOSER.test(last);
 }
@@ -261,6 +259,13 @@ export function leavesStatementOpen(
 	return CONTINUING_START.test(text) || !TERMINATOR.test(code);
 }
 
+function isWholeDefinition(c: Candidate): boolean {
+	return definitionOf(
+		c.from.lines.slice(c.fromStart, c.fromStart + c.length),
+		c.from.indentSensitive,
+	);
+}
+
 /**
  * Decides whether an exact run is a block worth reporting. Five or more counted lines draw
  * one candidate (and need unique text within one file). One to four lines draw a candidate
@@ -350,25 +355,44 @@ function hasSubstance(lines: string[]): boolean {
 	});
 }
 
+function copyBlockHolds(lines: string[], indentSensitive: boolean): boolean {
+	const present = lines.filter((line) => line.trim() !== "").length;
+	const first = (lines.find((line) => line.trim() !== "") ?? "").trim();
+	const counted = lines.filter((line) => line.trim().length >= 3).length;
+	const definition =
+		present >= MIN_DEFINITION_LINES &&
+		!first.startsWith("const ") &&
+		definitionOf(lines, indentSensitive) &&
+		nonSpace(lines.join("")) >= MIN_DEFINITION_CHARS;
+	if (counted < MIN_COUNTED_LINES && !definition) return false;
+	if (!hasSubstance(lines)) return false;
+	return bracketsClose(lines) && !onlyProperties(lines);
+}
+
 /**
- * Decides whether an exact duplicate is a block worth reporting as a copy: five or more counted
- * lines, or a whole definition of at least three non-blank lines that is not a `const` assignment, and in either case at least
- * one line that carries information (a block of imports, closers, bare keywords and bare name
- * lists never qualifies). Its brackets must also close within the block and it must hold more than object properties, so a slice through the middle of a call or a run of
- * test data is not a copy. A candidate that
- * passes these draws once from the budget and is rejected when either pool runs dry.
+ * Decides whether a block of a run, as it will be reported, qualifies as a copy: five or more
+ * counted lines, or a whole definition of at least three non-blank lines and 40 non-space
+ * characters that is not a `const` assignment, and in either case at least one line that carries
+ * information (a block of imports, closers, bare keywords and bare name lists never qualifies).
+ * Its brackets must close within the block and it must hold more than object properties, so a
+ * slice through the middle of a call or a run of test data is not a copy.
+ */
+export function copyBlockQualifies(
+	run: Run,
+	start: number,
+	end: number,
+): boolean {
+	return copyBlockHolds(run.raw.slice(start, end), run.indentSensitive);
+}
+
+/**
+ * Decides whether an exact duplicate is a block worth reporting as a copy, by the rules of
+ * `copyBlockQualifies`. A candidate that passes draws once from the budget and is rejected
+ * when either pool runs dry.
  */
 export function acceptCopySeed(c: Candidate, budget: WorkBudget): boolean {
-	const lines = c.from.lines.slice(c.fromStart, c.fromStart + c.length);
-	const present = lines.filter((line) => line.trim() !== "").length;
-	const first = lines.find((line) => line.trim() !== "") ?? "";
-	const floor =
-		c.counted >= MIN_COUNTED_LINES ||
-		(present >= MIN_DEFINITION_LINES &&
-			!first.startsWith("const ") &&
-			isWholeDefinition(c));
-	if (!floor) return false;
-	if (!hasSubstance(lines)) return false;
-	if (!bracketsClose(lines) || onlyProperties(lines)) return false;
+	const end = c.fromStart + c.length;
+	if (!copyBlockQualifies(c.from, c.fromStart, end)) return false;
+	const lines = c.from.lines.slice(c.fromStart, end);
 	return drawBudget(c, nonSpace(lines.join("")), budget, "copy|");
 }

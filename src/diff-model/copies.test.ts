@@ -121,6 +121,41 @@ describe("findCopies", () => {
 		expect(ops[0]?.reviewWeight).toBe(1);
 	});
 
+	it("falls back to the seed range when widening ends inside an unclosed call", () => {
+		const shared = body(6);
+		const ops = copies([
+			withContext(
+				"src/a.ts",
+				10,
+				[...shared, '  it("alpha case", async () => {'],
+				[],
+			),
+			added("src/b.ts", 3, [...shared, '  it("beta case", async () => {']),
+		]);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]).toMatchObject({
+			exact: true,
+			divergences: [],
+			from: [{ startLine: 10, endLine: 15 }],
+			to: [{ startLine: 3, endLine: 8 }],
+		});
+	});
+
+	it("keeps a widening that stays valid with its divergence", () => {
+		const shared = body(6);
+		const ops = copies([
+			withContext("src/a.ts", 10, [...shared, '  log("alpha");'], []),
+			added("src/b.ts", 3, [...shared, '  log("beta");']),
+		]);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]).toMatchObject({
+			exact: false,
+			from: [{ startLine: 10, endLine: 16 }],
+			to: [{ startLine: 3, endLine: 9 }],
+		});
+		expect(ops[0]?.divergences).toHaveLength(1);
+	});
+
 	it("does not copy-match lines a relocation claimed", () => {
 		const block = body(8);
 		const files = [

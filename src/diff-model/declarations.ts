@@ -23,7 +23,6 @@ const SCRIPT_FAMILY = new Set([
 	"mts",
 	"cts",
 ]);
-export const PROSE_FILE = /\.(md|mdx|txt|rst|adoc)$/i;
 
 interface Site {
 	run: Run;

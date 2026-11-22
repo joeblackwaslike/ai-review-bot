@@ -260,7 +260,7 @@ describe("verifyCopy", () => {
 		expect(verifyCopy(bad, files, [])).toBe(false);
 	});
 
-	it("drops overlapping source and target ranges", () => {
+	it("pins the same-run guard for overlapping source and target ranges", () => {
 		const lines = body(12);
 		const files = [added("src/b.ts", 3, lines)];
 		const bad = claim(head("src/b.ts", 3, 8), head("src/b.ts", 5, 10), {
@@ -491,6 +491,113 @@ describe("verifyCopy", () => {
 		);
 	});
 
+	it("drops a copy whose target is the target of a verified relocation", () => {
+		const eight = body(8);
+		const files = [
+			deleted("src/old.ts", 1, eight),
+			added("src/b.ts", 1, eight),
+			withContext("src/a.ts", 10, eight, ["done"]),
+		];
+		const { others } = found(files);
+		expect(others).toHaveLength(1);
+		const claimed = claim(head("src/a.ts", 10, 17), head("src/b.ts", 1, 8));
+		expect(verifyCopy(claimed, files, [])).toBe(true);
+		expect(verifyCopy(claimed, files, others)).toBe(false);
+	});
+
+	it("does not treat a verified copy as pre-existing source", () => {
+		const a = body(10);
+		const b = a.map((l, i) =>
+			i === 2 ? "  const v2 = compute(2) - offset;" : l,
+		);
+		const files = [
+			added("src/a.ts", 10, a),
+			added("src/b.ts", 3, b),
+			added("src/c.ts", 5, b),
+		];
+		const { copies, others } = found(files);
+		const edited = copies.find((op) => op.divergences.length > 0) as Operation;
+		const chained = copies.find(
+			(op) => op.to[0]?.filename === "src/c.ts",
+		) as Operation;
+		expect(verifyCopy(chained, files, [...others, edited])).toBe(true);
+	});
+
+	it("keys source coverage by filename and head side", () => {
+		const files = addedSource();
+		const { op, others } = onlyCopy(files);
+		const covering = (filename: string, side: "head" | "base") => ({
+			id: "relocation-1",
+			type: "relocation" as const,
+			from: [],
+			to: [
+				{ filename, side, startLine: 10, endLine: 15, shown: "full" as const },
+			],
+			exact: true,
+			divergences: [],
+			reviewWeight: 0,
+		});
+		expect(verifyCopy(op, files, [covering("src/other.ts", "head")])).toBe(
+			true,
+		);
+		expect(verifyCopy(op, files, [covering("src/a.ts", "base")])).toBe(true);
+		expect(verifyCopy(op, files, [covering("src/a.ts", "head")])).toBe(false);
+		expect(others).toEqual([]);
+	});
+
+	it("drops a prose or JSON source copied into a code target", () => {
+		const lines = body(6);
+		const target = added("src/b.ts", 3, lines);
+		const prose = claim(head("docs/a.md", 10, 15), head("src/b.ts", 3, 8));
+		const data = claim(head("src/a.json", 10, 15), head("src/b.ts", 3, 8));
+		expect(
+			verifyCopy(
+				prose,
+				[withContext("docs/a.md", 10, lines, ["x"]), target],
+				[],
+			),
+		).toBe(false);
+		expect(
+			verifyCopy(
+				data,
+				[withContext("src/a.json", 10, lines, ["x"]), target],
+				[],
+			),
+		).toBe(false);
+		const code = claim(head("src/a.ts", 10, 15), head("src/b.ts", 3, 8));
+		expect(
+			verifyCopy(code, [withContext("src/a.ts", 10, lines, ["x"]), target], []),
+		).toBe(true);
+	});
+
+	it("needs three lines for a definition below five counted lines", () => {
+		const two = ["function clampValueToRange(value, low, high) {", "}"];
+		const files = [
+			withContext("src/a.ts", 10, two, ["done"]),
+			added("src/b.ts", 3, two),
+		];
+		const bad = claim(head("src/a.ts", 10, 11), head("src/b.ts", 3, 4));
+		expect(verifyCopy(bad, files, [])).toBe(false);
+	});
+
+	it("weighs a receiver-only divergence at least 1", () => {
+		const a = body(10).map((l, i) =>
+			i === 4 ? "  const v4 = this.compute(4) + offset;" : l,
+		);
+		const b = a.map((l, i) =>
+			i === 4 ? "  const v4 = compute(4) + offset;" : l,
+		);
+		const files = [
+			withContext("src/a.ts", 10, a, ["done"]),
+			added("src/b.ts", 3, b),
+		];
+		const { op, others } = onlyCopy(files);
+		expect(op.divergences.map((d) => d.class)).toEqual(["receiver"]);
+		expect(op.reviewWeight).toBe(1);
+		expect(verifyCopy(op, files, others)).toBe(true);
+		expect(verifyCopy({ ...op, reviewWeight: 0 }, files, others)).toBe(false);
+	});
+
 	it("drops a claim that carries a reindent", () => {
 		const files = contextSource();
 		const { op, others } = onlyCopy(files);
@@ -531,6 +638,66 @@ describe("buildDiffModel with copies", () => {
 		expect(model.operations.filter((op) => op.type === "copy")).toHaveLength(1);
 	});
 
+	it("keeps one of a copy listed twice and counts the other", () => {
+		const files = contextSource();
+		const { op } = onlyCopy(files);
+		vi.mocked(relocationModule.findRelocations).mockReturnValue([
+			op,
+			{ ...op, id: "copy-2" },
+		]);
+		const model = buildDiffModel({
+			scopeFiles: files,
+			prFiles: files,
+			...meta,
+		});
+		expect(model.operations.filter((o) => o.type === "copy")).toHaveLength(1);
+		expect(model.droppedClaims).toBe(1);
+	});
+
+	it("keeps the first of two copies claiming the same target in position order", () => {
+		const shared = body(6);
+		const files = [
+			withContext("src/a.ts", 10, shared, ["done"]),
+			withContext("src/c.ts", 10, shared, ["done"]),
+			added("src/b.ts", 3, shared),
+		];
+		const fromA = claim(head("src/a.ts", 10, 15), head("src/b.ts", 3, 8));
+		const fromC = claim(head("src/c.ts", 10, 15), head("src/b.ts", 3, 8), {
+			id: "copy-2",
+		});
+		vi.mocked(relocationModule.findRelocations).mockReturnValue([fromC, fromA]);
+		const model = buildDiffModel({
+			scopeFiles: files,
+			prFiles: files,
+			...meta,
+		});
+		const kept = model.operations.filter((o) => o.type === "copy");
+		expect(kept.map((o) => o.from[0]?.filename)).toEqual(["src/a.ts"]);
+		expect(model.droppedClaims).toBe(1);
+	});
+
+	it("drops a copy that overlaps the target of a verified relocation", () => {
+		const eight = body(8);
+		const files = [
+			deleted("src/old.ts", 1, eight),
+			added("src/b.ts", 1, eight),
+			withContext("src/a.ts", 10, eight, ["done"]),
+		];
+		const real = findRelocations(files).filter((o) => o.type !== "copy");
+		const copy = claim(head("src/a.ts", 10, 17), head("src/b.ts", 1, 8));
+		vi.mocked(relocationModule.findRelocations).mockReturnValue([
+			...real,
+			copy,
+		]);
+		const model = buildDiffModel({
+			scopeFiles: files,
+			prFiles: files,
+			...meta,
+		});
+		expect(model.operations.map((o) => o.type)).toEqual(["relocation"]);
+		expect(model.droppedClaims).toBe(1);
+	});
+
 	it("drops a copy whose source relocation the checker rejects", () => {
 		const eight = body(8);
 		const files = [
@@ -554,5 +721,91 @@ describe("buildDiffModel with copies", () => {
 			[],
 		);
 		expect(model.droppedClaims).toBe(2);
+	});
+});
+
+describe("verifyCopy divergence classes", () => {
+	const edited = (text: string) => {
+		const a = body(10);
+		return {
+			a,
+			b: a.map((l, i) => (i === 2 ? text : l)),
+		};
+	};
+
+	function setup(text: string) {
+		const { a, b } = edited(text);
+		const files = [
+			withContext("src/a.ts", 10, a, ["done"]),
+			added("src/b.ts", 3, b),
+		];
+		return { files, ...onlyCopy(files) };
+	}
+
+	function relabel(op: Operation, cls: Operation["divergences"][0]["class"]) {
+		return {
+			...op,
+			exact: false,
+			reviewWeight: 0,
+			divergences: op.divergences.map((d) => ({ ...d, class: cls })),
+		};
+	}
+
+	it("drops an operator change relabelled comment-only or rename", () => {
+		const { files, op, others } = setup("  const v2 = compute(2) - offset;");
+		expect(verifyCopy(op, files, others)).toBe(true);
+		expect(verifyCopy(relabel(op, "comment-only"), files, others)).toBe(false);
+		expect(verifyCopy(relabel(op, "rename"), files, others)).toBe(false);
+	});
+
+	it("drops a literal change relabelled rename", () => {
+		const { files, op, others } = setup("  const v2 = compute(3) + offset;");
+		expect(verifyCopy(relabel(op, "rename"), files, others)).toBe(false);
+	});
+
+	it("verifies a true comment-only edit", () => {
+		const { files, op, others } = setup(
+			"  const v2 = compute(2) + offset; // note",
+		);
+		expect(op.divergences.map((d) => d.class)).toEqual(["comment-only"]);
+		expect(verifyCopy(op, files, others)).toBe(true);
+	});
+
+	it("verifies a true rename", () => {
+		const a = body(16).map((l, i) =>
+			i === 4 || i === 10 ? `  use(tmpValue, ${i});` : l,
+		);
+		const b = a.map((l) => l.replace("tmpValue", "cached"));
+		const files = [
+			withContext("src/a.ts", 10, a, ["done"]),
+			added("src/b.ts", 3, b),
+		];
+		const { op, others } = onlyCopy(files);
+		expect(op.divergences.map((d) => d.class)).toEqual(["rename", "rename"]);
+		expect(verifyCopy(op, files, others)).toBe(true);
+	});
+
+	it("verifies a comment line inserted in a copy", () => {
+		const a = body(10);
+		const b = [...a.slice(0, 5), "  // explain", ...a.slice(5)];
+		const files = [
+			withContext("src/a.ts", 10, a, ["done"]),
+			added("src/b.ts", 3, b),
+		];
+		const { op, others } = onlyCopy(files);
+		expect(op.divergences.map((d) => d.class)).toEqual(["comment-only"]);
+		expect(verifyCopy(op, files, others)).toBe(true);
+	});
+
+	it("drops a code line inserted relabelled comment-only", () => {
+		const a = body(10);
+		const b = [...a.slice(0, 5), "  launch(rocket);", ...a.slice(5)];
+		const files = [
+			withContext("src/a.ts", 10, a, ["done"]),
+			added("src/b.ts", 3, b),
+		];
+		const { op, others } = onlyCopy(files);
+		expect(verifyCopy(op, files, others)).toBe(true);
+		expect(verifyCopy(relabel(op, "comment-only"), files, others)).toBe(false);
 	});
 });

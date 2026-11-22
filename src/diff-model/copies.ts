@@ -5,14 +5,13 @@ import {
 	type Run,
 	selectMatches,
 } from "../moved-blocks.js";
-import { acceptCopySeed } from "./acceptance.js";
+import { acceptCopySeed, copyBlockQualifies } from "./acceptance.js";
 import { type Built, build, chainSeeds } from "./block-build.js";
 import type { WorkBudget } from "./budget.js";
-import { PROSE_FILE } from "./declarations.js";
+import { DATA_FILE, PROSE_FILE } from "./file-kinds.js";
 import type { Operation, Span } from "./types.js";
 
 const MIN_SEED_LINES = 2;
-const DATA_FILE = /\.jsonl?$/i;
 
 interface Pending {
 	op: Operation;
@@ -54,13 +53,16 @@ function claimTarget(to: Run, built: Built): void {
 
 function resolve(chain: Candidate[], budget: WorkBudget): Pending[] {
 	const { from, to } = chain[0] as Candidate;
+	const holds = (built: Built) =>
+		copyBlockQualifies(from, built.fromStart, built.fromEnd);
 	const whole = build(chain, true, budget, false, "head");
-	if (whole.counted <= whole.limit) {
+	if (whole.counted <= whole.limit && holds(whole)) {
 		claimTarget(to, whole);
 		return [toCopy(from, to, whole)];
 	}
 	if (chain.length > 1) return chain.flatMap((seed) => resolve([seed], budget));
 	const plain = build(chain, false, budget, true, "head");
+	if (!holds(plain)) return [];
 	claimTarget(to, plain);
 	return [toCopy(from, to, plain)];
 }

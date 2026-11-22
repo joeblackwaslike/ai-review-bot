@@ -593,7 +593,11 @@ function verifiedRenames(
 	return forward.size;
 }
 
-function classesHold(op: Operation, base: Side[], head: Side[]): number | null {
+export function classesHold(
+	op: Operation,
+	base: Side[],
+	head: Side[],
+): number | null {
 	const wholeBase = new Map(
 		base.map((s) => [s.filename, wholeCommentLines(s)]),
 	);

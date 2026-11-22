@@ -10,6 +10,7 @@ import { type Built, build, chainSeeds, span } from "./block-build.js";
 import { type BudgetLimits, WorkBudget } from "./budget.js";
 import { findCopies } from "./copies.js";
 import { findDeclarationMoves } from "./declarations.js";
+import { UNMATCHED_FILES } from "./file-kinds.js";
 import { findReshapes } from "./reshape.js";
 import { filesWithLiterals, findTokenOperations } from "./token-pass.js";
 import type { Operation } from "./types.js";
@@ -62,13 +63,6 @@ function resolveChain(chain: Candidate[], budget: WorkBudget): Operation[] {
 	claim(from, to, plain);
 	return [toOperation(from, to, plain)];
 }
-
-/**
- * Files whose lines are not matched as relocations: lockfiles, minified bundles and snapshots.
- * Regenerating them re-sorts large blocks, which reads as many same-file moves of no review value.
- */
-export const UNMATCHED_FILES =
-	/(?:^|\/)(?:package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?|[^/]+\.lock)$|\.min\.(?:js|css)$|\.snap$/;
 
 /**
  * Finds blocks that were deleted from one region and added to another, across files or

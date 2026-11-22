@@ -1,10 +1,10 @@
 import { isIndentSensitive, type PushFile } from "../moved-blocks.js";
-import { PROSE_FILE } from "./declarations.js";
-import { UNMATCHED_FILES } from "./relocation.js";
+import { DATA_FILE, PROSE_FILE, UNMATCHED_FILES } from "./file-kinds.js";
 import {
 	accountedPositionally,
 	type ChangeIndex,
 	claimedDivergences,
+	classesHold,
 	IMPORT_LINE,
 	indexOf,
 	information,
@@ -19,7 +19,6 @@ import {
 } from "./relocation-check.js";
 import type { Operation, Span } from "./types.js";
 
-const DATA_FILE = /\.jsonl?$/i;
 const PROPERTY_LINE =
 	/^(?:\.\.\.\S.*|["']?[\w$-]+["']?\??:(?:\s.*)?|[\w$]+|[{[(]+|[}\])]+[,;)]*)$/;
 const IMPORT_CLOSER = /^[})\]]\s*from\b/;
@@ -171,7 +170,8 @@ function expectedWeight(op: Operation, sourceNew: boolean): number {
  * more than object properties. Divergences are checked as for relocations; a signature
  * divergence is never valid on a copy. `sourceNew` is recomputed: true when any source line
  * is an added line that no operation in `verified` (the already-verified non-copy
- * operations of the same model) has as its target. The claimed `sourceNew` and `reviewWeight` must
+ * operations of the same model) has as its target. A target line that a verified non-copy
+ * operation also has as its target is never a copy. The claimed `sourceNew` and `reviewWeight` must
  * match, and `exact` cannot be true with divergences.
  */
 export function verifyCopy(
@@ -196,6 +196,8 @@ export function verifyCopy(
 		return false;
 	if (!floorHolds(from.side.lines, isIndentSensitive(from.side.filename)))
 		return false;
+	const targets = coverageOf(verified).get(to.side.filename);
+	if (to.side.positions.some((n) => targets?.has(n) === true)) return false;
 	const covered = coverageOf(verified).get(from.side.filename);
 	const added = index.byName.get(from.side.filename)?.changed.added;
 	const sourceNew = from.side.positions.some(
@@ -205,6 +207,7 @@ export function verifyCopy(
 	if (op.reviewWeight !== expectedWeight(op, sourceNew)) return false;
 	const spent = claimedDivergences(op, [from.side], [to.side]);
 	if (!spent) return false;
+	if (classesHold(op, [from.side], [to.side]) === null) return false;
 	return accountedPositionally(
 		unclaimed([from.side], spent.base),
 		unclaimed([to.side], spent.head),
