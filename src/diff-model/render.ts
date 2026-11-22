@@ -15,7 +15,9 @@ const HEADING =
 	"Computed notes (not part of the diff; the diff wins if they disagree)";
 
 const FIXED_PARAGRAPH =
-	"These notes are computed from the diff. They are not part of it, and when they disagree with it the diff wins. " +
+	"These notes are computed from the diff. They are not part of it, and when they disagree with it the diff wins.";
+
+const MOVE_PARAGRAPH =
 	"When code moved, spend your effort on what the move could break that is visible in this diff: import lines, mocks, test and config paths.";
 
 const KIND_ORDER: FileKind[] = [
@@ -53,6 +55,7 @@ const TYPE_PLURAL: Record<Operation["type"], string> = {
 	relocation: "relocation",
 	rename: "rename",
 	mechanical: "mechanical",
+	copy: "copy",
 };
 
 /** Clips an author-derived value to 200 characters and fences it as untrusted text. */
@@ -124,6 +127,7 @@ const TYPE_RANK: Record<Operation["type"], number> = {
 	relocation: 0,
 	rename: 1,
 	mechanical: 2,
+	copy: 3,
 };
 
 function linesCovered(op: Operation): number {
@@ -186,6 +190,14 @@ function headline(op: Operation): string {
 			return `${lead}: moved within ${untrusted(within)}, ${op.from.map(part).join(", ")} match ${op.to.map(part).join(", ")}${reindentPhrase(op)}.`;
 		}
 		return `${lead}: ${spansText(op.from)} match ${spansText(op.to)}${reindentPhrase(op)}.`;
+	}
+	if (op.type === "copy") {
+		const place = (s: Span) =>
+			`${untrusted(s.filename)} ${lineRange(s.startLine, s.endLine)}`;
+		const origin = op.shape?.sourceNew
+			? ", itself new in this change"
+			: " (source visible in this diff only)";
+		return `Copy: ${op.to.map(place).join(", ")} repeats ${op.from.map(place).join(", ")}${origin}.`;
 	}
 	if (op.type === "rename") {
 		const from = op.from[0]?.filename ?? "";
@@ -259,6 +271,15 @@ function addFileNotes(
 				`Relocated in, ${lineRange(s.startLine, s.endLine)}, ${see}${tail}`,
 			);
 		}
+		return;
+	}
+	if (op.type === "copy") {
+		for (const s of op.to)
+			addNote(
+				notes,
+				s.filename,
+				`Copied, ${lineRange(s.startLine, s.endLine)}, ${see}`,
+			);
 		return;
 	}
 	if (op.type === "rename") {
@@ -380,7 +401,11 @@ function layout(
 
 	const sections: (string | null)[] = [
 		HEADING,
-		FIXED_PARAGRAPH,
+		model.operations.some(
+			(op) => op.type === "relocation" || op.type === "rename",
+		)
+			? `${FIXED_PARAGRAPH} ${MOVE_PARAGRAPH}`
+			: FIXED_PARAGRAPH,
 		`Scope: ${scopeLabel}.`,
 		fileMix(model),
 		ranked.length > 0 ? "Operations in this scope, most relevant first:" : null,

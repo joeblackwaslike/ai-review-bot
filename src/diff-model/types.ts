@@ -55,7 +55,7 @@ export interface Divergence {
 
 export interface Operation {
 	id: string;
-	type: "relocation" | "rename" | "mechanical";
+	type: "relocation" | "rename" | "mechanical" | "copy";
 	from: Span[];
 	to: Span[];
 	exact: boolean;
@@ -64,9 +64,9 @@ export interface Operation {
 	/** Why a mechanical operation is mechanical. Required for a mechanical operation, which is not rendered without it. */
 	reason?: "whitespace" | "imports";
 	/**
-	 * Shape of a relocation beyond its text. `reindent` is the head block's indentation minus
-	 * the base block's, in columns, set only when it is not 0. `sourceNew` is reserved for copy
-	 * operations and is not set by relocations.
+	 * Shape of a relocation or copy beyond its text. `reindent` is the head block's indentation minus
+	 * the base block's, in columns, set only when it is not 0. `sourceNew` is set on copy
+	 * operations only: the copied source holds code this change also adds.
 	 */
 	shape?: { reindent?: number; sourceNew?: boolean };
 }

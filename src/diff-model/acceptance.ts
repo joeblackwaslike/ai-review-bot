@@ -1,6 +1,7 @@
 import type { Candidate, Run } from "../moved-blocks.js";
 import type { WorkBudget } from "./budget.js";
 import { isProseFile, MAX_ANALYZED_LINE } from "./lexical.js";
+import { stripLiterals } from "./literals.js";
 
 export const MIN_COUNTED_LINES = 5;
 const MIN_INFORMATION = 30;
@@ -63,8 +64,7 @@ export function lineInformation(line: string): number {
 	const text = line.trim();
 	if (text === "" || text.length > MAX_ANALYZED_LINE || IMPORT_LIKE.test(text))
 		return 0;
-	const withoutLiterals = text.replace(LITERAL, " ");
-	const hasLiteral = text.match(LITERAL) !== null;
+	const { text: withoutLiterals, hasLiteral } = stripLiterals(text);
 	const names = withoutLiterals.match(IDENTIFIER) ?? [];
 	const hasName = names.some((name) => !KEYWORDS.has(name));
 	if (hasName) return nonSpace(text);
@@ -112,8 +112,13 @@ export function isUnique(c: Candidate, deleted: Run[], added: Run[]): boolean {
 
 const drawn = new WeakMap<WorkBudget, Set<string>>();
 
-function drawBudget(c: Candidate, chars: number, budget: WorkBudget): boolean {
-	const key = `${c.from.index}|${c.to.index}|${c.fromStart}|${c.toStart}|${c.length}`;
+function drawBudget(
+	c: Candidate,
+	chars: number,
+	budget: WorkBudget,
+	scope = "",
+): boolean {
+	const key = `${scope}${c.from.index}|${c.to.index}|${c.fromStart}|${c.toStart}|${c.length}`;
 	let keys = drawn.get(budget);
 	if (!keys) {
 		keys = new Set();
@@ -136,15 +141,13 @@ function isOpenSingleLine(c: Candidate, lines: string[]): boolean {
 	return opened > closed;
 }
 
-function isWholeDefinition(c: Candidate): boolean {
-	const lines = c.from.lines
-		.slice(c.fromStart, c.fromStart + c.length)
-		.filter((line) => line.trim() !== "");
+function definitionOf(rows: string[], indentSensitive: boolean): boolean {
+	const lines = rows.filter((line) => line.trim() !== "");
 	const first = lines[0]?.trim();
 	const last = lines[lines.length - 1]?.trim();
 	if (first === undefined || last === undefined) return false;
 	if (!DEFINITION_OPENER.test(first)) return false;
-	if (c.from.indentSensitive) return lines.length > 1 || !last.endsWith(":");
+	if (indentSensitive) return lines.length > 1 || !last.endsWith(":");
 	if (lines.length === 1) return /[}\]][;,]?$/.test(last);
 	return DEFINITION_CLOSER.test(last);
 }
@@ -256,6 +259,13 @@ export function leavesStatementOpen(
 	return CONTINUING_START.test(text) || !TERMINATOR.test(code);
 }
 
+function isWholeDefinition(c: Candidate): boolean {
+	return definitionOf(
+		c.from.lines.slice(c.fromStart, c.fromStart + c.length),
+		c.from.indentSensitive,
+	);
+}
+
 /**
  * Decides whether an exact run is a block worth reporting. Five or more counted lines draw
  * one candidate (and need unique text within one file). One to four lines draw a candidate
@@ -295,4 +305,124 @@ export function acceptSeed(
 		information >= (sameFile ? MIN_SAME_FILE_INFORMATION : MIN_INFORMATION) ||
 		(isWholeDefinition(c) && chars >= MIN_DEFINITION_CHARS);
 	return enough && isUnique(c, ctx.deleted, ctx.added);
+}
+
+const MIN_DEFINITION_LINES = 3;
+const PROPERTY_LINE =
+	/^(?:\.\.\.\S.*|["']?[\w$-]+["']?\??:(?:\s.*)?|[\w$]+|[{[(]+|[}\])]+[,;)]*)$/;
+const IMPORT_CLOSER = /^[})\]]\s*from\b/;
+const BARE_NAME = /^(?:type\s+)?[\w$]+(?:\s+as\s+[\w$]+)?,?$/;
+
+function bracketBalance(text: string): number {
+	return (
+		(text.match(/[({[]/g) ?? []).length - (text.match(/[)}\]]/g) ?? []).length
+	);
+}
+
+/** Whether every line is part of an object literal body: a property, a spread, a shorthand name or a bracket. */
+function onlyProperties(lines: string[]): boolean {
+	return lines.every((line) => {
+		const text = line.trim().replace(/,$/, "");
+		return text === "" || PROPERTY_LINE.test(text);
+	});
+}
+
+/** Whether the brackets outside string literals close exactly within the lines, never closing before they open. */
+function bracketsClose(lines: string[]): boolean {
+	let depth = 0;
+	for (const line of lines) {
+		depth += bracketBalance(stripLiterals(line).text);
+		if (depth < 0) return false;
+	}
+	return depth === 0;
+}
+
+/** Whether any line says something beyond import syntax: statements, multi-line import lists and bare name lists carry nothing. */
+function hasSubstance(lines: string[]): boolean {
+	let depth = 0;
+	return lines.some((line) => {
+		const text = line.trim();
+		if (depth > 0) {
+			depth += bracketBalance(text);
+			return false;
+		}
+		if (IMPORT_LIKE.test(text)) {
+			depth = Math.max(0, bracketBalance(text));
+			return false;
+		}
+		if (IMPORT_CLOSER.test(text) || BARE_NAME.test(text)) return false;
+		return lineInformation(text) > 0;
+	});
+}
+
+const MAX_COPY_LINE = 500;
+const WHOLE_COMMENT = /^(?:\/\/|\/\*|\*\/|\*(?:\s|$))/;
+const HASH_COMMENT = /^#(?![![])/;
+const HASH_COMMENT_FILE = /\.(py|pyi|sh|bash|zsh|rb|ya?ml|toml|mk)$/i;
+
+/** Counts evaluations of the copy floor that were not answered from the memo. */
+export const copyQualifyCalls = { count: 0 };
+
+function wholeComment(line: string, hash: boolean): boolean {
+	const text = line.trim();
+	return WHOLE_COMMENT.test(text) || (hash && HASH_COMMENT.test(text));
+}
+
+function copyBlockHolds(
+	lines: string[],
+	indentSensitive: boolean,
+	hash: boolean,
+): boolean {
+	copyQualifyCalls.count++;
+	if (lines.some((line) => line.length > MAX_COPY_LINE)) return false;
+	const present = lines.filter((line) => line.trim() !== "");
+	if (present.every((line) => wholeComment(line, hash))) return false;
+	const first = (present[0] ?? "").trim();
+	const counted = lines.filter((line) => line.trim().length >= 3).length;
+	const definition =
+		present.length >= MIN_DEFINITION_LINES &&
+		!first.startsWith("const ") &&
+		definitionOf(lines, indentSensitive) &&
+		nonSpace(lines.join("")) >= MIN_DEFINITION_CHARS;
+	if (counted < MIN_COUNTED_LINES && !definition) return false;
+	if (!hasSubstance(lines)) return false;
+	return bracketsClose(lines) && !onlyProperties(lines);
+}
+
+const qualified = new WeakMap<Run, Map<string, boolean>>();
+
+/**
+ * Whether a block of a run qualifies as a copy: five counted lines, or a whole definition of
+ * three lines and 40 non-space characters that is not a `const`; at least one line that
+ * carries information; brackets that close; more than object properties. A block of whole
+ * comment lines never qualifies, nor does a line over 500 characters. Memoized per range.
+ */
+export function copyBlockQualifies(
+	run: Run,
+	start: number,
+	end: number,
+): boolean {
+	let memo = qualified.get(run);
+	if (!memo) {
+		memo = new Map();
+		qualified.set(run, memo);
+	}
+	const key = `${start}|${end}`;
+	const known = memo.get(key);
+	if (known !== undefined) return known;
+	const answer = copyBlockHolds(
+		run.raw.slice(start, end),
+		run.indentSensitive,
+		HASH_COMMENT_FILE.test(run.filename),
+	);
+	memo.set(key, answer);
+	return answer;
+}
+
+/** Draws from the budget first, so a flood of duplicates runs dry before any floor work. */
+export function acceptCopySeed(c: Candidate, budget: WorkBudget): boolean {
+	const end = c.fromStart + c.length;
+	const lines = c.from.lines.slice(c.fromStart, end);
+	if (!drawBudget(c, nonSpace(lines.join("")), budget, "copy|")) return false;
+	return copyBlockQualifies(c.from, c.fromStart, end);
 }

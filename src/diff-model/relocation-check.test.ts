@@ -2723,3 +2723,265 @@ describe("a readable operator elsewhere does not disable receiver labels", () =>
 		expect(performance.now() - started).toBeLessThan(3000);
 	}, 10000);
 });
+
+describe("verifyRelocation divergence classes", () => {
+	const named = (count: number) =>
+		body(count).map((line, i) =>
+			i === 4 || i === 9 ? `  use(tmpValue, ${i});` : line,
+		);
+
+	function relabel(op: Operation, cls: Operation["divergences"][0]["class"]) {
+		return {
+			...op,
+			exact: false,
+			reviewWeight: 0,
+			divergences: op.divergences.map((d) => ({ ...d, class: cls })),
+		};
+	}
+
+	it("drops an operator change relabelled comment-only", () => {
+		const base = fn(body(20));
+		const head = withLine(base, 6, "  const v5 = compute(5) - offset;");
+		const { files, op } = relocation(base, head);
+		expect(op.divergences.map((d) => d.class)).toEqual(["code"]);
+		expect(verifyRelocation(op, files)).toBe(true);
+		expect(verifyRelocation(relabel(op, "comment-only"), files)).toBe(false);
+	});
+
+	it("drops an operator change relabelled rename", () => {
+		const base = fn(body(20));
+		const head = withLine(base, 6, "  const v5 = compute(5) - offset;");
+		const { files, op } = relocation(base, head);
+		expect(verifyRelocation(relabel(op, "rename"), files)).toBe(false);
+	});
+
+	it("drops a literal change relabelled rename", () => {
+		const base = fn(body(20));
+		const head = withLine(base, 6, "  const v5 = compute(6) + offset;");
+		const { files, op } = relocation(base, head);
+		expect(verifyRelocation(relabel(op, "rename"), files)).toBe(false);
+	});
+
+	it("drops a member-access change relabelled rename", () => {
+		const base = withLine(fn(body(20)), 6, "  const v5 = box.size + offset;");
+		const head = withLine(base, 6, "  const v5 = box.count + offset;");
+		const { files, op } = relocation(base, head);
+		expect(verifyRelocation(relabel(op, "rename"), files)).toBe(false);
+	});
+
+	it("drops a divergence with an unknown class", () => {
+		const base = fn(body(20));
+		const head = withLine(base, 6, "  const v5 = compute(5) - offset;");
+		const { files, op } = relocation(base, head);
+		const odd = {
+			...op,
+			exact: false,
+			reviewWeight: 0,
+			divergences: op.divergences.map((d) => ({
+				...d,
+				class: "other" as unknown as "code",
+			})),
+		};
+		expect(verifyRelocation(odd, files)).toBe(false);
+	});
+
+	it("drops a changed line that keeps its comment relabelled comment-only", () => {
+		const base = withLine(
+			fn(body(20)),
+			6,
+			"  const v5 = compute(5) + offset; // n",
+		);
+		const head = withLine(base, 6, "  const v5 = compute(5) - offset; // n");
+		const { files, op } = relocation(base, head);
+		expect(verifyRelocation(op, files)).toBe(true);
+		expect(verifyRelocation(relabel(op, "comment-only"), files)).toBe(false);
+	});
+
+	it("drops a code line removed relabelled comment-only", () => {
+		const head = fn(body(20));
+		const base = [...head.slice(0, 8), "  launch(rocket);", ...head.slice(8)];
+		const { files, op } = relocation(base, head);
+		expect(verifyRelocation(op, files)).toBe(true);
+		expect(verifyRelocation(relabel(op, "comment-only"), files)).toBe(false);
+	});
+
+	it("drops an added token relabelled rename", () => {
+		const base = fn(body(20));
+		const head = withLine(base, 6, "  const w5 = compute(5) + offset; extra");
+		const { files, op } = relocation(base, head);
+		expect(verifyRelocation(relabel(op, "rename"), files)).toBe(false);
+	});
+
+	it("drops a keyword swap relabelled rename", () => {
+		const base = fn(body(20));
+		const head = withLine(base, 6, "  let v5 = compute(5) + offset;");
+		const { files, op } = relocation(base, head);
+		expect(verifyRelocation(relabel(op, "rename"), files)).toBe(false);
+	});
+
+	it("verifies a true comment-only edit", () => {
+		const base = fn(body(20));
+		const head = withLine(base, 6, "  const v5 = compute(5) + offset; // note");
+		const { files, op } = relocation(base, head);
+		expect(op.divergences.map((d) => d.class)).toEqual(["comment-only"]);
+		expect(op.reviewWeight).toBe(0);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("verifies a true rename", () => {
+		const base = fn(named(20));
+		const head = base.map((l) => l.replace("tmpValue", "cached"));
+		const { files, op } = relocation(base, head);
+		expect(op.divergences.map((d) => d.class)).toEqual(["rename", "rename"]);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("verifies a comment line inserted and removed", () => {
+		const base = fn(body(20));
+		const inserted = [...base.slice(0, 8), "  // explain", ...base.slice(8)];
+		const added = relocation(base, inserted);
+		expect(added.op.divergences.map((d) => d.class)).toEqual(["comment-only"]);
+		expect(verifyRelocation(added.op, added.files)).toBe(true);
+		const removed = relocation(inserted, base);
+		expect(removed.op.divergences.map((d) => d.class)).toEqual([
+			"comment-only",
+		]);
+		expect(verifyRelocation(removed.op, removed.files)).toBe(true);
+	});
+
+	it("drops a code line inserted relabelled comment-only", () => {
+		const base = fn(body(20));
+		const inserted = [
+			...base.slice(0, 8),
+			"  launch(rocket);",
+			...base.slice(8),
+		];
+		const { files, op } = relocation(base, inserted);
+		expect(verifyRelocation(op, files)).toBe(true);
+		expect(verifyRelocation(relabel(op, "comment-only"), files)).toBe(false);
+	});
+});
+
+describe("verifyRelocation comment starts and member renames", () => {
+	function relabeled(
+		cls: "comment-only" | "rename",
+		base: string[],
+		head: string[],
+		file = "src/b.ts",
+	) {
+		const { files, op } = relocationIn(base, head, file);
+		return verifyRelocation(
+			{
+				...op,
+				exact: false,
+				reviewWeight: 0,
+				divergences: op.divergences.map((d) => ({ ...d, class: cls })),
+			},
+			files,
+		);
+	}
+
+	function relocationIn(base: string[], head: string[], file: string) {
+		const files = moveFiles(base, head).map((f) =>
+			f.filename === "src/b.ts" ? { ...f, filename: file } : f,
+		);
+		const ops = findRelocations(files);
+		expect(ops).toHaveLength(1);
+		return { files, op: ops[0] as Operation };
+	}
+
+	const edit = (before: string, after: string) => {
+		const base = withLine(fn(body(20)), 6, before);
+		return [base, withLine(base, 6, after)] as const;
+	};
+
+	it("drops a regex literal change labelled comment-only", () => {
+		const [a, b] = edit(
+			"  const v2 = s.replace(/\\//g, '-') + f(1);",
+			"  const v2 = s.replace(/\\//g, '-') + f(2);",
+		);
+		expect(relabeled("comment-only", a, b)).toBe(false);
+		const [c, d] = edit(
+			"  const v2 = s.split(/^\\/\\//) + f(1);",
+			"  const v2 = s.split(/^\\/\\//) + f(2);",
+		);
+		expect(relabeled("comment-only", c, d)).toBe(false);
+	});
+
+	it("accepts a trailing comment edit after whitespace and a whole-line edit", () => {
+		const [a, b] = edit("  x = 1; // note", "  x = 1; // changed");
+		expect(relabeled("comment-only", a, b)).toBe(true);
+		const [c, d] = edit("  // c", "  // d");
+		expect(relabeled("comment-only", c, d)).toBe(true);
+	});
+
+	it("does not treat a double slash glued to code as a comment start", () => {
+		const [a, b] = edit("  x = 1;// note", "  x = 1;// changed");
+		expect(relabeled("comment-only", a, b)).toBe(false);
+	});
+
+	it("never reads a double slash inside a string as a comment", () => {
+		const [a, b] = edit(
+			'  const v2 = "a // b" + f(1);',
+			'  const v2 = "a // b" + f(2);',
+		);
+		expect(relabeled("comment-only", a, b)).toBe(false);
+	});
+
+	it("does not accept a trailing hash comment edit labelled comment-only", () => {
+		const base = withLine(fn(body(20)), 6, "  x = 1  # note");
+		const head = withLine(base, 6, "  x = 1  # changed");
+		const files = [
+			pushFile(
+				"src/a.py",
+				[`@@ -10,${base.length} +9,0 @@`, ...base.map((l) => `-${l}`)].join(
+					"\n",
+				),
+			),
+			pushFile(
+				"src/b.py",
+				[`@@ -0,0 +3,${head.length} @@`, ...head.map((l) => `+${l}`)].join(
+					"\n",
+				),
+			),
+		];
+		const ops = findRelocations(files);
+		expect(ops).toHaveLength(1);
+		const op = ops[0] as Operation;
+		const lie = {
+			...op,
+			exact: false,
+			reviewWeight: 0,
+			divergences: op.divergences.map((d) => ({
+				...d,
+				class: "comment-only" as const,
+			})),
+		};
+		expect(verifyRelocation(lie, files)).toBe(false);
+	});
+
+	it("drops a changed member after an arrow or scope operator labelled rename", () => {
+		const pointer = body(20).map((l, i) =>
+			i === 4 || i === 9 ? `  use(p->x, ${i});` : l,
+		);
+		const scoped = body(20).map((l, i) =>
+			i === 4 || i === 9 ? `  use(Foo::bar, ${i});` : l,
+		);
+		expect(
+			relabeled(
+				"rename",
+				fn(pointer),
+				fn(pointer.map((l) => l.replace("p->x", "p->y"))),
+				"src/b.c",
+			),
+		).toBe(false);
+		expect(
+			relabeled(
+				"rename",
+				fn(scoped),
+				fn(scoped.map((l) => l.replace("Foo::bar", "Foo::baz"))),
+				"src/b.rs",
+			),
+		).toBe(false);
+	});
+});

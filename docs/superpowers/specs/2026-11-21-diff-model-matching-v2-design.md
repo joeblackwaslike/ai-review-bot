@@ -146,13 +146,16 @@ The checker applies each of these on its own, with its own scanner and tables. I
 
 **The `copy` operation.** A block added in the head that matches other code which still exists in the head.
 
-- The source is either a run of unchanged context lines that a hunk shows, or another added block in the same change. Both are head-side spans. `Operation.shape.sourceNew` is true for the second kind.
+- The source is either a run of unchanged context lines that a hunk shows, or another added block in the same change. Both are head-side spans. `Operation.shape.sourceNew` is true when any source line is an added line that is not in the target of an exact relocation and not on a relocation divergence line. A source that is a relocation's changed line is new code in this change.
 - Only a context source shows that the code already existed. A block copied from another added block is a duplicate: both occurrences are new, and a defect in one is a defect in both. The renderer says so, and its review weight is not discounted. It is the larger of 1 and the divergence count.
 - A source of context lines can only be as large as the hunk's context, so large copies of unchanged code stay invisible. The renderer says "source visible in this diff only".
 - A copy match runs after relocation and only on lines no relocation claimed.
 - Duplicates are normal in code (test setup, repeated handlers), so the copy floor is the old one: 5 counted lines, or a 3-line whole definition. The 1 to 4 line distinctiveness rule does not apply.
-- Divergences work as for relocation, so a copied block with edits lists them.
-- `Operation.type` gains `copy`. A copy has `from` and `to` spans that are both on the head side. Its `reviewWeight` is its code and signature divergences, as for relocation.
+- Divergences work as for relocation, so a copied block with edits lists them. A copy never carries a signature divergence, and the checker rejects one.
+- A block of whole comment lines is never a copy, and no line over 500 characters qualifies.
+- Lines outside the divergences match as raw text. Only `js jsx mjs cjs ts tsx go java` may pair lines that differ in whitespace.
+- Eligibility is file level and coarse on purpose, since a miss is cheap and a false claim is not. Source and target files must both be `js jsx mjs cjs ts tsx py pyi go java`, and their whole patch must hold no backtick, triple quote, `/*`, `*/`, `<<`, `<!--`, `-->`, trailing backslash, `R"`, `%q`, `=begin`, `{-`, `--[[` or `(*`, and every row must hold an even count of `'` and of `"` once escaped quotes are removed. So a file with an apostrophe in a comment gets no copies. An opener outside the patch stays undetected. Both the matcher and the checker apply the rule, each with its own code.
+- `Operation.type` gains `copy`. A copy has `from` and `to` spans that are both on the head side. Its `reviewWeight` is its code divergences plus one per distinct renamed identifier plus 1 when any divergence is a receiver, and at least 1 when `sourceNew` is true.
 
 ### Types
 
@@ -217,3 +220,7 @@ Relocations in the same file read "moved within `file`". `shape.reindent` adds "
 
 - Detecting in-place reformats as `mechanical` operations with the PR B token normalization.
 - Reading base file contents to find copies of unchanged code, if the cost is ever accepted.
+
+### Comment starts
+
+A changed trailing `//` comment is comment-only only when the code before it holds no quote, backtick or slash. Otherwise the line is a code divergence with weight 1, so `x = a / b; // note` is code and `foo(x); // note` is comment-only. `;//a` to `;//b` is code too, and relocation tests pin both.
