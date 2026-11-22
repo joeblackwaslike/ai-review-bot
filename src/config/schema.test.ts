@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_DIFF_BUDGET_CHARS } from "../diff-pack.js";
+import {
+	DEFAULT_DIFF_BUDGET_CHARS,
+	DEFAULT_DIFF_MODEL_BUDGET_CHARS,
+} from "../diff-pack.js";
 import { ConfigSchema } from "./schema.js";
 
 const tier = { model: "anthropic/claude-sonnet-5-5", effort: "high" };
@@ -132,6 +135,28 @@ const withClaude = (extra: Record<string, unknown>) => {
 	Object.assign(cfg.reviewers.claude, extra);
 	return cfg;
 };
+
+describe("ConfigSchema diff model budget", () => {
+	const withBudget = (diffModelBudgetChars: number) => ({
+		...minimal(),
+		review: { diffModelBudgetChars },
+	});
+
+	it("defaults to the shared constant", () => {
+		expect(ConfigSchema.parse(minimal()).review.diffModelBudgetChars).toBe(
+			DEFAULT_DIFF_MODEL_BUDGET_CHARS,
+		);
+	});
+
+	it("rejects a budget under 1000 characters", () => {
+		expect(ConfigSchema.safeParse(withBudget(999)).success).toBe(false);
+		expect(ConfigSchema.safeParse(withBudget(1)).success).toBe(false);
+	});
+
+	it("accepts a budget of exactly 1000 characters", () => {
+		expect(ConfigSchema.safeParse(withBudget(1000)).success).toBe(true);
+	});
+});
 
 describe("ConfigSchema reviewer identity and cross-checks", () => {
 	it("rejects a model with an unknown provider prefix", () => {

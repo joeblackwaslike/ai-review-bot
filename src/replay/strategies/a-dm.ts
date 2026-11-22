@@ -3,12 +3,14 @@ import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { prepareDiffInput } from "../../diff-model/prepare.js";
 import { untrusted } from "../../diff-model/render.js";
-import { DEFAULT_DIFF_BUDGET_CHARS } from "../../diff-pack.js";
+import {
+	DEFAULT_DIFF_BUDGET_CHARS,
+	DEFAULT_DIFF_MODEL_BUDGET_CHARS,
+} from "../../diff-pack.js";
 import { toPushFile } from "../../review.js";
 import type { ReviewStrategy, StrategyInput } from "../strategy.js";
 import { runAuditStrategy, strategyA } from "./a.js";
 
-const SECTION_BUDGET_CHARS = 6000;
 const FILE_NOTES_HEADING = "Per-file computed notes:";
 
 const diffModelDir = fileURLToPath(
@@ -29,7 +31,7 @@ export function replayDiffModelSection(input: StrategyInput): string {
 		title: input.title ?? "",
 		body: input.body ?? null,
 		budgetChars: DEFAULT_DIFF_BUDGET_CHARS,
-		sectionBudgetChars: SECTION_BUDGET_CHARS,
+		sectionBudgetChars: DEFAULT_DIFF_MODEL_BUDGET_CHARS,
 		scopeLabel: "whole PR",
 	});
 	const notes = [...rendered.fileNotes].map(

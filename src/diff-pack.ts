@@ -23,6 +23,9 @@ export function isGeneratedFile(path: string): boolean {
 /** PR-wide diff budget, in characters of the serialized diff section. */
 export const DEFAULT_DIFF_BUDGET_CHARS = 200_000;
 
+/** Default character budget for the diff model's operation detail. */
+export const DEFAULT_DIFF_MODEL_BUDGET_CHARS = 6000;
+
 const TRUNCATION_MARKER = "[patch truncated]";
 const MARKER_COST = `\n\n${TRUNCATION_MARKER}`.length;
 const FILE_SEPARATOR = "\n\n---\n\n";
