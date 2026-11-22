@@ -1,4 +1,0 @@
-{
-	"title": "Wrap the user service writes in error handling",
-	"body": "Both write paths now run inside a try block and report failures. Nothing else changes."
-}

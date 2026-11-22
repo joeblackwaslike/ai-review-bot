@@ -1,4 +1,0 @@
-{
-	"title": "Name the Card props and inline the Button props",
-	"body": "Card declares its props type and Button inlines its prop. No functional change."
-}

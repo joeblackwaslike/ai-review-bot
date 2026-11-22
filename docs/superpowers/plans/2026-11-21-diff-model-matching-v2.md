@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-> Superseded in part. The acceptance rules, the checker rules, the work budget description and the render ranking in this plan are replaced by [the matching v2 spec](../specs/2026-11-21-diff-model-matching-v2-design.md) as amended after the PR 3 reviews. Where the two differ, the spec wins.
+> Superseded in part by [the matching v2 spec](../specs/2026-11-21-diff-model-matching-v2-design.md) as amended after the PR 3 reviews. The spec wins where they differ.
 
 - `findMovedBlocks()` in `src/moved-blocks.ts` and `push-shape.ts` behavior must not change. New matcher behavior is behind options that only `findRelocations` passes.
 - No operation may say "safe", "unchanged behavior" or "functional".
