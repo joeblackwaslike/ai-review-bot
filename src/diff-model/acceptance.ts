@@ -274,6 +274,7 @@ export function acceptSeed(
 			(!ctx.budget || drawBudget(c, 0, ctx.budget))
 		);
 	const lines = c.from.lines.slice(c.fromStart, c.fromStart + c.length);
+	if (c.from.literalRisk || c.to.literalRisk) return false;
 	if (lines.some((line) => line.length > MAX_ANALYZED_LINE)) return false;
 	const chars = nonSpace(lines.join(""));
 	if (ctx.budget && !drawBudget(c, chars, ctx.budget)) return false;

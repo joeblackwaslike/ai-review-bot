@@ -49,18 +49,28 @@ function topLevel(raw: string, name: string): boolean {
 	return !/^\s/.test(raw) || SCREAMING_CASE.test(name);
 }
 
-function collect(runs: Run[]): Map<string, Site[]> {
-	const byName = new Map<string, Site[]>();
+interface Declared {
+	count: number;
+	sites: Site[];
+}
+
+function collect(runs: Run[]): Map<string, Declared> {
+	const byName = new Map<string, Declared>();
 	for (const run of runs) {
 		if (isProseFile(run.filename)) continue;
 		run.lines.forEach((line, at) => {
 			const name = declaredName(line);
-			if (!name || name.length < MIN_NAME_LENGTH || !isComplete(line)) return;
+			if (!name) return;
+			let entry = byName.get(name);
+			if (!entry) {
+				entry = { count: 0, sites: [] };
+				byName.set(name, entry);
+			}
+			entry.count++;
+			if (name.length < MIN_NAME_LENGTH || !isComplete(line)) return;
 			if (!topLevel(run.raw[at] as string, name)) return;
 			if (leavesStatementOpen(run, at, at + 1)) return;
-			const sites = byName.get(name);
-			if (sites) sites.push({ run, at });
-			else byName.set(name, [{ run, at }]);
+			entry.sites.push({ run, at });
 		});
 	}
 	return byName;
@@ -120,9 +130,10 @@ export function findDeclarationMoves(
 	const out: Operation[] = [];
 	for (const [name, from] of gone) {
 		const to = arrived.get(name);
-		if (from.length !== 1 || to?.length !== 1) continue;
-		const base = from[0] as Site;
-		const head = to[0] as Site;
+		if (from.count !== 1 || to?.count !== 1) continue;
+		const base = from.sites[0];
+		const head = to.sites[0];
+		if (!base || !head) continue;
 		if (
 			base.run.filename === head.run.filename &&
 			base.run.hunk === head.run.hunk

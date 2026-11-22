@@ -633,6 +633,7 @@ export function findRelocations(
 	const seeds = selectMatches(deleted, added, 1, (c) => acceptSeed(c, ctx), {
 		allowSameFile: true,
 		uniqueBelow: MIN_COUNTED_LINES,
+		charge: () => budget.spendExtensions(1),
 	});
 	const groups = new Map<string, Candidate[]>();
 	for (const seed of seeds) {

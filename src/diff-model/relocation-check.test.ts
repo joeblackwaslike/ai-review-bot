@@ -1147,6 +1147,53 @@ describe("verifyRelocation independent small-claim rules", () => {
 		);
 	});
 
+	it.each([
+		["a template literal", "const a = `start", "end`;", false],
+		["no literal opener", "const a = start;", "end;", true],
+	])("verifies a short claim in a file with %s", (_, open, close, holds) => {
+		const seed = '    const userDisplayNameForAccount = "first";';
+		const patch = (sign: string, line: string) =>
+			["@@ -1,3 +1,3 @@", ` ${open}`, `${sign}${line}`, ` ${close}`].join("\n");
+		const files = [
+			pushFile("src/a.ts", patch("-", seed)),
+			pushFile("src/b.ts", patch("+", seed.trimStart())),
+		];
+		const op = exactClaim(
+			[span("src/a.ts", "base", 2)],
+			[span("src/b.ts", "head", 2)],
+		);
+		expect(verifyRelocation(op, files)).toBe(holds);
+	});
+
+	it("drops a declaration claim when the name is also declared on a multi-line deleted line", () => {
+		const claim = (extra: string[]) => {
+			const files = [
+				pushFile(
+					"src/b.ts",
+					["@@ -10,1 +10,0 @@", "-const LIMIT = { n: 1 };"].join("\n"),
+				),
+				pushFile(
+					"src/c.ts",
+					["@@ -3,0 +3,1 @@", "+const LIMIT = { n: 2 };"].join("\n"),
+				),
+				pushFile(
+					"src/a.ts",
+					["@@ -1,3 +1,0 @@", ...extra.map((l) => `-${l}`)].join("\n"),
+				),
+			];
+			const op = exactClaim(
+				[span("src/b.ts", "base", 10)],
+				[span("src/c.ts", "head", 3)],
+			);
+			return verifyRelocation(
+				forgedChange(op, "const LIMIT = { n: 1 };"),
+				files,
+			);
+		};
+		expect(claim([])).toBe(true);
+		expect(claim(["const LIMIT = {", "  n: 1,", "};"])).toBe(false);
+	});
+
 	const sameFileLine =
 		"  const subtotal = computeSubtotal(items, taxRate, shippingZone);";
 

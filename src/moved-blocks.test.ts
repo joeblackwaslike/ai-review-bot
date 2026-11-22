@@ -8,6 +8,41 @@ import {
 	selectMatches,
 } from "./moved-blocks.js";
 
+describe("selectMatches discovery charge", () => {
+	it("stops extending candidates once the charge refuses", () => {
+		const block = Array.from(
+			{ length: 6 },
+			(_, i) => `  const value${i} = compute(${i});`,
+		);
+		const hunk = (sign: string, at: number) =>
+			[
+				`@@ -${at},${sign === "-" ? 6 : 0} +${at},${sign === "+" ? 6 : 0} @@`,
+				...block.map((l) => `${sign}${l}`),
+			].join("\n");
+		const patch = [
+			...Array.from({ length: 30 }, (_, i) => hunk("-", i * 20 + 1)),
+			...Array.from({ length: 30 }, (_, i) => hunk("+", 1000 + i * 20)),
+		].join("\n");
+		const file: PushFile = {
+			filename: "a.ts",
+			status: "modified",
+			patch,
+			additions: 0,
+			deletions: 0,
+		};
+		const { deleted, added } = collectRuns([file]);
+		let calls = 0;
+		selectMatches(deleted, added, 5, undefined, {
+			allowSameFile: true,
+			charge: () => ++calls <= 10,
+		});
+		expect(calls).toBe(11);
+		calls = 0;
+		selectMatches(deleted, added, 5, undefined, { allowSameFile: true });
+		expect(calls).toBe(0);
+	});
+});
+
 describe("normalizeCodeLine on long lines", () => {
 	it("normalizes a 200KB line of spaced tokens in linear time", () => {
 		const line = "1 ".repeat(100_000);

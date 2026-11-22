@@ -1,5 +1,3 @@
-"""Retry policy for outbound requests."""
-
 import math
 
 DEFAULT_ATTEMPTS = 3

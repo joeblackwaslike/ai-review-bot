@@ -37,9 +37,12 @@ export interface Run {
 	region: number;
 	hunk: number;
 	after: string | undefined;
+	literalRisk: boolean;
 	used: boolean[];
 }
 
+/** Matches a file patch that mentions a backtick, a triple quote or a heredoc opener. */
+export const UNSAFE_FILE_TEXT = /`|"{3}|'{3}|<<[-~]?\s*["']?\w/;
 const MIN_COUNTED_LENGTH = 3;
 const MAX_KEY_OCCURRENCES = 50;
 
@@ -150,6 +153,7 @@ export function extractRuns(
 	const deleted: Run[] = [];
 	const added: Run[] = [];
 	if (!patch) return { deleted, added };
+	const literalRisk = UNSAFE_FILE_TEXT.test(patch);
 	const indentSensitive = isIndentSensitive(filename);
 	const normalize = (line: string) =>
 		normalizeCodeLine(line, { keepIndent: indentSensitive });
@@ -176,6 +180,7 @@ export function extractRuns(
 				region,
 				hunk,
 				after,
+				literalRisk,
 				used: del.map(() => false),
 			});
 		}
@@ -190,6 +195,7 @@ export function extractRuns(
 				region,
 				hunk,
 				after,
+				literalRisk,
 				used: add.map(() => false),
 			});
 		}
@@ -318,10 +324,12 @@ function extend(from: Run, fromPos: number, to: Run, toPos: number): Candidate {
  * `allowSameFile` also pairs a deleted and an added run of one file when they lie in
  * different regions. `uniqueBelow` seeds windows shorter than that many counted lines only
  * when the window occurs exactly once among the deleted runs and once among the added runs.
+ * `charge` is called before each candidate is extended, and discovery stops when it returns false.
  */
 export interface MatchOptions {
 	allowSameFile?: boolean;
 	uniqueBelow?: number;
+	charge?: () => boolean;
 }
 
 interface SeedPlan {
@@ -384,6 +392,7 @@ function collectCandidates(
 						continue;
 					const diagonal = `${run.index}|${hit.run.index}|${pos - hit.pos}`;
 					if (pos < (coveredTo.get(diagonal) ?? 0)) continue;
+					if (options.charge && !options.charge()) return out;
 					const c = extend(run, pos, hit.run, hit.pos);
 					coveredTo.set(diagonal, c.fromStart + c.length);
 					if (c.counted < minLines || (accept && !accept(c))) continue;

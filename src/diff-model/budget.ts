@@ -1,14 +1,16 @@
-/** `tokens` counts non-space characters of short seeds, despite its name. */
+/** `tokens` counts non-space characters of short seeds, despite its name. `extensions` counts candidates extended during discovery. */
 export interface BudgetLimits {
 	tokens: number;
 	candidates: number;
 	cells: number;
+	extensions: number;
 }
 
 const DEFAULT_LIMITS: BudgetLimits = {
 	tokens: 200_000,
 	candidates: 5_000,
 	cells: 16_000_000,
+	extensions: 50_000,
 };
 
 /**
@@ -17,7 +19,12 @@ const DEFAULT_LIMITS: BudgetLimits = {
  */
 export class WorkBudget {
 	readonly #limits: BudgetLimits;
-	readonly #spent: BudgetLimits = { tokens: 0, candidates: 0, cells: 0 };
+	readonly #spent: BudgetLimits = {
+		tokens: 0,
+		candidates: 0,
+		cells: 0,
+		extensions: 0,
+	};
 	#exhausted = false;
 
 	constructor(limits: Partial<BudgetLimits> = {}) {
@@ -38,6 +45,10 @@ export class WorkBudget {
 
 	spendCells(n: number): boolean {
 		return this.#spend("cells", n);
+	}
+
+	spendExtensions(n: number): boolean {
+		return this.#spend("extensions", n);
 	}
 
 	#spend(pool: keyof BudgetLimits, n: number): boolean {

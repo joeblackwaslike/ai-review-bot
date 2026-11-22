@@ -57,6 +57,7 @@ const CLOSING_BRACKETS = ")]}";
 const OPERATOR_ENDS = "=+*%&|^?:\\([-";
 const STATEMENT_ENDS = ";})]";
 const MOST_SITES = 50;
+const LITERAL_OPENER = /`|"""|'''|<<[-~]?\s*['"]?\w/;
 const CONTROL_WORDS =
 	/^(?:if|else|elif|while|for|foreach|switch|case|when|unless|until|with|try|catch|except|finally|def|class|fn|func|function)\b/;
 const DECORATION = /^(?:@[A-Za-z_$]|#!?\[)/;
@@ -148,6 +149,7 @@ interface PatchRow {
 interface ParsedPatch {
 	deleted: Map<number, PatchRow>;
 	added: Map<number, PatchRow>;
+	risky: boolean;
 }
 
 interface Scanned {
@@ -159,7 +161,11 @@ interface Scanned {
 const parsedPatches = new WeakMap<PushFile, ParsedPatch>();
 
 function scanPatch(patch: string | undefined): ParsedPatch {
-	const out: ParsedPatch = { deleted: new Map(), added: new Map() };
+	const out: ParsedPatch = {
+		deleted: new Map(),
+		added: new Map(),
+		risky: LITERAL_OPENER.test(patch ?? ""),
+	};
 	const scanned: Scanned[] = [];
 	let oldLine = 0;
 	let newLine = 0;
@@ -223,6 +229,7 @@ interface PatchIndex {
 	patches: Map<string, ParsedPatch>;
 	deleted: RunSet;
 	added: RunSet;
+	declared: { "-": Map<string, number>; "+": Map<string, number> };
 }
 
 const patchIndexes = new WeakMap<readonly PushFile[], PatchIndex>();
@@ -240,6 +247,20 @@ function runSetOf(files: readonly PushFile[], sign: "-" | "+"): RunSet {
 	return { runs, byFirstLine };
 }
 
+function declarationCounts(set: RunSet): Map<string, number> {
+	const counts = new Map<string, number>();
+	for (const line of set.byFirstLine.keys()) {
+		const found = ONE_LINE_DECLARATION.exec(line);
+		const name = found?.[1] ?? found?.[2];
+		if (name === undefined) continue;
+		counts.set(
+			name,
+			(counts.get(name) ?? 0) + (set.byFirstLine.get(line)?.length ?? 0),
+		);
+	}
+	return counts;
+}
+
 function indexOfPatches(files: readonly PushFile[]): PatchIndex {
 	const cached = patchIndexes.get(files);
 	if (cached) return cached;
@@ -253,10 +274,16 @@ function indexOfPatches(files: readonly PushFile[]): PatchIndex {
 		}
 		patches.set(file.filename, parsed);
 	}
+	const deleted = runSetOf(files, "-");
+	const added = runSetOf(files, "+");
 	const built = {
 		patches,
-		deleted: runSetOf(files, "-"),
-		added: runSetOf(files, "+"),
+		deleted,
+		added,
+		declared: {
+			"-": declarationCounts(deleted),
+			"+": declarationCounts(added),
+		},
 	};
 	patchIndexes.set(files, built);
 	return built;
@@ -847,6 +874,8 @@ function smallClaimHolds(
 		return false;
 	const shared = sharedFiles(base, head);
 	if (shared.some(([b, h]) => overlaps(b.hunks, h.hunks))) return false;
+	if ([...base, ...head].some((s) => index.patches.get(s.filename)?.risky))
+		return false;
 	const present = lines.filter((line) => line.trim() !== "");
 	const sensitive = base.some((side) => isIndentSensitive(side.filename));
 	const sides = [...base, ...head];
@@ -864,7 +893,10 @@ function smallClaimHolds(
 		total >=
 			(sameFile ? SMALL_SAME_FILE_INFORMATION : SMALL_CLAIM_INFORMATION) ||
 		(isDefinition(lines, sensitive) && chars >= SMALL_DEFINITION_CHARS) ||
-		(declared !== undefined && headDeclares(declared, base, head));
+		(declared !== undefined &&
+			headDeclares(declared, base, head) &&
+			index.declared["-"].get(declared) === 1 &&
+			index.declared["+"].get(declared) === 1);
 	return (
 		informative &&
 		distinctEnough(base, index, "-") &&

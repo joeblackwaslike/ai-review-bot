@@ -1195,6 +1195,47 @@ describe("findRelocations declaration pairing", () => {
 	});
 });
 
+describe("findRelocations literal-risk files and declaration names", () => {
+	const inTemplate = (
+		open: string,
+		sign: string,
+		line: string,
+		close: string,
+	) =>
+		["@@ -1,3 +1,3 @@", ` ${open}`, `${sign}${line}`, ` ${close}`].join("\n");
+	const seed = '    const userDisplayNameForAccount = "first";';
+
+	it.each([
+		["a template literal", "const a = `start", "end`;", true],
+		["no literal opener", "const a = start;", "end;", false],
+	])("handles a short seed in a file with %s", (_, open, close, risky) => {
+		const files = [
+			pushFile("src/a.ts", inTemplate(open, "-", seed, close)),
+			pushFile("src/b.ts", inTemplate(open, "+", seed.trimStart(), close)),
+		];
+		expect(findRelocations(files)).toHaveLength(risky ? 0 : 1);
+	});
+
+	it("stops discovery when the extension pool is empty", () => {
+		const block = body(8);
+		const files = [
+			deletedFrom("src/a.ts", 1, block),
+			addedTo("src/b.ts", 1, block),
+		];
+		expect(findRelocations(files)).toHaveLength(1);
+		expect(findRelocations(files, { extensions: 0 })).toEqual([]);
+	});
+
+	it("counts a multi-line declaration against a one-line declaration of the same name", () => {
+		const files = [
+			deletedFrom("src/a.ts", 1, ["const LIMIT = {", "  n: 1,", "};"]),
+			deletedFrom("src/b.ts", 1, ["const LIMIT = { n: 1 };"]),
+			addedTo("src/c.ts", 1, ["const LIMIT = { n: 2 };"]),
+		];
+		expect(findRelocations(files)).toEqual([]);
+	});
+});
+
 describe("findRelocations budget order", () => {
 	it("caps operations by drawing one candidate per large seed", () => {
 		const files = Array.from({ length: 10 }, (_, i) => {

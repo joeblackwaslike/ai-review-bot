@@ -1,5 +1,3 @@
-"""Retry policy for outbound requests."""
-
 import math
 from retry.status import is_retryable
 
