@@ -1,6 +1,8 @@
 # Diff Model Matching v2 Implementation Plan
 
 > **Historical implementation plan.** Review changed thresholds, language scope and class rules after it was written, so the spec and the code are authoritative wherever they differ, including this plan's Global Constraints and thresholds.
+>
+> Delivery as built, eight stacked PRs: (1/8) core model with relocation, renames and the independent checker; (2/8) rendering behind a switch; (3/8) short blocks, one-line definitions and same-file moves; (4/8) token pass for reformatted and re-indented moves; (5/8) function-to-method reshape; (6/8) copies and `sourceNew`; (7/8) rendering of reshape, copy and re-indent operations, plus seeds; (8/8) final hardening and this plan.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -243,4 +245,4 @@ Seeds live under `src/replay/seeds/<OP-ID>/<variant>/` with `truth.json`. `src/r
 
 # Landing
 
-After task 14 the controller runs the whole-branch review, applies one fix wave, then lands the work as three stacked PRs cut by commit group (A, B, C, with the earlier diff-model commits already on the branch landing first as the earlier stack). Each PR goes through `/self-review`, then `/pr-loop`. The worktree is removed with `wt-reap` after the last merge.
+After task 14 the controller runs the whole-branch review, applies one fix wave, then landed the work as eight stacked PRs (see the delivery note at the top). Each PR goes through `/self-review`, then `/pr-loop`. The worktree is removed with `wt-reap` after the last merge.
