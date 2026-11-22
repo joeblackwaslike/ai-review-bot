@@ -146,13 +146,17 @@ The checker applies each of these on its own, with its own scanner and tables. I
 
 **The `copy` operation.** A block added in the head that matches other code which still exists in the head.
 
-- The source is either a run of unchanged context lines that a hunk shows, or another added block in the same change. Both are head-side spans. `Operation.shape.sourceNew` is true for the second kind.
-- Only a context source shows that the code already existed. A block copied from another added block is a duplicate: both occurrences are new, and a defect in one is a defect in both. The renderer says so, and its review weight is not discounted. It is the larger of 1 and the divergence count.
-- A source of context lines can only be as large as the hunk's context, so large copies of unchanged code stay invisible. The renderer says "source visible in this diff only".
+- The source is either a run of unchanged context lines that a hunk shows, or another added block in the same change. Both are head-side spans. `Operation.shape.sourceNew` is true when any source line is an added line that is not in the target of an exact relocation and not on a relocation divergence line. A source that is a relocation's changed line is new code in this change.
+- Only a context source shows that the code already existed. A block copied from another added block is a duplicate: both occurrences are new, and a defect in one is a defect in both. The renderer says so, and its review weight is not discounted. It is at least 1 when `sourceNew` is true.
+- A source of context lines can only be as large as the hunk's context, so large copies of unchanged code stay invisible. The renderer says "source visible in this diff only" on every copy whose source is not new.
 - A copy match runs after relocation and only on lines no relocation claimed.
 - Duplicates are normal in code (test setup, repeated handlers), so the copy floor is the old one: 5 counted lines, or a 3-line whole definition. The 1 to 4 line distinctiveness rule does not apply.
-- Divergences work as for relocation, so a copied block with edits lists them.
-- `Operation.type` gains `copy`. A copy has `from` and `to` spans that are both on the head side. Its `reviewWeight` is its code and signature divergences, as for relocation.
+- Divergences work as for relocation, so a copied block with edits lists them. A copy never carries a signature divergence, and the checker rejects one.
+- A block of whole comment lines is never a copy, and no line over 500 characters qualifies.
+- Lines outside the divergences must match as raw text. Only in brace and free-form languages (`INDENT_FREE_FILE`) whose patch holds no backtick, triple quote or heredoc opener may lines that differ in whitespace pair up, and then only by the checker's interior rule. Unknown extensions, Python, YAML, CoffeeScript and Haskell compare raw text.
+- A span that begins inside or touches a block comment, template literal, triple-quoted string or heredoc is never a copy. Both the matcher and the checker track these over each file's context and added rows in order. A file whose patch leaves one open is risky and has no copy claims. An opener that no hunk shows stays undetected.
+- Callers may pass any files. The matcher skips lockfiles, minified bundles, JSON and prose itself.
+- `Operation.type` gains `copy`. A copy has `from` and `to` spans that are both on the head side. Its `reviewWeight` is its code divergences plus one per distinct renamed identifier plus 1 when any divergence is a receiver, and at least 1 when `sourceNew` is true.
 
 ### Types
 
@@ -217,3 +221,7 @@ Relocations in the same file read "moved within `file`". `shape.reindent` adds "
 
 - Detecting in-place reformats as `mechanical` operations with the PR B token normalization.
 - Reading base file contents to find copies of unchanged code, if the cost is ever accepted.
+
+### Comment starts after the block-build split
+
+A `//` starts a trailing comment only at the start of a line or after whitespace, and a line that may hold a regular expression literal in a JavaScript or TypeScript file is never classed comment-only. A glued edit such as `;//a` to `;//b` is therefore a code divergence with weight 1, where the earlier matcher classed it comment-only with weight 0. This is the safe direction and a relocation test pins it.

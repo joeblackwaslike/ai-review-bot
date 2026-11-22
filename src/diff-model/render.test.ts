@@ -683,3 +683,41 @@ describe("renderDiffModel", () => {
 		);
 	});
 });
+
+describe("renderDiffModel copies", () => {
+	const copy = (shape?: Operation["shape"]) =>
+		op({
+			id: "copy-1",
+			type: "copy",
+			from: [span("src/a.ts", "head", 1, 8)],
+			to: [span("src/b.ts", "head", 3, 10)],
+			shape,
+		});
+
+	it("says the source is visible in this diff only when it is not new", () => {
+		const r = renderDiffModel(model({ operations: [copy()] }), OPTS);
+		expect(r.summary).toContain("(source visible in this diff only)");
+		expect(r.summary).not.toContain("itself new");
+	});
+
+	it("says the source is new when it is", () => {
+		const r = renderDiffModel(
+			model({ operations: [copy({ sourceNew: true })] }),
+			OPTS,
+		);
+		expect(r.summary).toContain("itself new in this change");
+		expect(r.summary).not.toContain("source visible in this diff only");
+	});
+
+	it("leaves the move preamble out of a copy-only summary", () => {
+		const copyOnly = renderDiffModel(model({ operations: [copy()] }), OPTS);
+		expect(copyOnly.summary).not.toContain("When code moved");
+		const withMove = renderDiffModel(
+			model({
+				operations: [copy(), op({ id: "relocation-1", type: "relocation" })],
+			}),
+			OPTS,
+		);
+		expect(withMove.summary).toContain("When code moved");
+	});
+});

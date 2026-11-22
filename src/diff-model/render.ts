@@ -15,7 +15,9 @@ const HEADING =
 	"Computed notes (not part of the diff; the diff wins if they disagree)";
 
 const FIXED_PARAGRAPH =
-	"These notes are computed from the diff. They are not part of it, and when they disagree with it the diff wins. " +
+	"These notes are computed from the diff. They are not part of it, and when they disagree with it the diff wins.";
+
+const MOVE_PARAGRAPH =
 	"When code moved, spend your effort on what the move could break that is visible in this diff: import lines, mocks, test and config paths.";
 
 const KIND_ORDER: FileKind[] = [
@@ -192,7 +194,9 @@ function headline(op: Operation): string {
 	if (op.type === "copy") {
 		const place = (s: Span) =>
 			`${untrusted(s.filename)} ${lineRange(s.startLine, s.endLine)}`;
-		const origin = op.shape?.sourceNew ? ", itself new in this change" : "";
+		const origin = op.shape?.sourceNew
+			? ", itself new in this change"
+			: " (source visible in this diff only)";
 		return `Copy: ${op.to.map(place).join(", ")} repeats ${op.from.map(place).join(", ")}${origin}.`;
 	}
 	if (op.type === "rename") {
@@ -397,7 +401,9 @@ function layout(
 
 	const sections: (string | null)[] = [
 		HEADING,
-		FIXED_PARAGRAPH,
+		model.operations.some((op) => op.type === "relocation")
+			? `${FIXED_PARAGRAPH} ${MOVE_PARAGRAPH}`
+			: FIXED_PARAGRAPH,
 		`Scope: ${scopeLabel}.`,
 		fileMix(model),
 		ranked.length > 0 ? "Operations in this scope, most relevant first:" : null,
