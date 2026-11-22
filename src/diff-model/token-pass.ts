@@ -7,13 +7,15 @@ import {
 	normalizeTokens,
 	opaqueLine,
 	tokenize,
+	yamlOpaqueLines,
 } from "./tokens.js";
 import type { Operation, Span } from "./types.js";
 
 const WINDOW = 8;
 const MAX_WINDOW_OCCURRENCES = 2;
 const MIN_COUNTED_LENGTH = 3;
-const FAMILIES = [
+/** The language families the token pass pairs, exposed so a test can pin them to the checker's. */
+export const FAMILIES = [
 	["js", "jsx", "mjs", "cjs"],
 	["ts", "tsx"],
 	["java"],
@@ -33,6 +35,10 @@ const LITERAL_OPENER = /`|"""|'''|<<[-~]?\s*['"]?\w/;
 const OPENERS = new Set(["(", "[", "{"]);
 const CLOSERS = new Set([")", "]", "}"]);
 const LINE_WINDOW = 5;
+const MAX_DEPTH = 200;
+const JSX_FILES = new Set(["jsx", "tsx"]);
+const JSX_CAPABLE = new Set(["js", "mjs", "cjs", "ts"]);
+const JSX_TEXT = /<[A-Za-z][\w.-]*[\s>/]|<\/|\/>|<>/;
 
 interface Segment {
 	id: number;
@@ -141,7 +147,7 @@ function buildSegment(
 	if (lineMode) {
 		({ tokens, lineOf } = lineModeTokens(lines));
 		if (!budget.spendTokens(tokens.length)) return undefined;
-		bad = lines.map(() => false);
+		bad = yamlOpaqueLines(lines);
 	} else {
 		const { tokens: raw, lineOf: rawLine } = tokenize(lines, run.filename);
 		if (!budget.spendTokens(raw.length)) return undefined;
@@ -454,8 +460,9 @@ function balanced(seg: Segment, pos: number, len: number): boolean {
 	let depth = 0;
 	for (let k = pos; k < pos + len; k++) {
 		const t = seg.tokens[k] as string;
-		if (OPENERS.has(t)) depth++;
-		else if (CLOSERS.has(t) && --depth < 0) return false;
+		if (OPENERS.has(t)) {
+			if (++depth > MAX_DEPTH) return false;
+		} else if (CLOSERS.has(t) && --depth < 0) return false;
 	}
 	return depth === 0;
 }
@@ -518,15 +525,23 @@ function rank(a: Match, b: Match): number {
 	);
 }
 
+function mayHoldJsx(file: PushFile): boolean {
+	const ext = extension(file.filename);
+	return (
+		JSX_FILES.has(ext) ||
+		(JSX_CAPABLE.has(ext) && JSX_TEXT.test(file.patch ?? ""))
+	);
+}
+
 /**
- * Names of the files whose visible patch text holds a backtick, a triple quote or a
- * heredoc opener. A changed line there may sit inside a multi-line literal, so the token
- * pass leaves the file to the line matcher.
+ * Names of the files the token pass leaves to the line matcher: those whose visible patch
+ * text holds a backtick, a triple quote or a heredoc opener, and JSX-capable files, where
+ * whitespace, commas and quotes in text are content.
  */
 export function filesWithLiterals(files: PushFile[]): Set<string> {
 	return new Set(
 		files
-			.filter((f) => LITERAL_OPENER.test(f.patch ?? ""))
+			.filter((f) => LITERAL_OPENER.test(f.patch ?? "") || mayHoldJsx(f))
 			.map((f) => f.filename),
 	);
 }

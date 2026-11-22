@@ -56,11 +56,7 @@ describe("literalSafe", () => {
 	it("accepts a TypeScript block with division and comments", () => {
 		expect(
 			literalSafe(
-				[
-					"const a = (b + c) / 2; // half",
-					"const d = xs[0] / n;",
-					"/* c */ x = 1;",
-				],
+				["const a = b / 2; // half", "const d = xs[0] / n;", "/* c */ x = 1;"],
 				"a.ts",
 			),
 		).toBe(true);
@@ -132,9 +128,9 @@ describe("literalSafe in the Ruby, Perl and awk family", () => {
 });
 
 describe("literalSafe slash after a control-flow paren", () => {
-	it("rejects a regex after if(...) but accepts a call division", () => {
+	it("rejects a slash after any closing parenthesis", () => {
 		expect(literalSafe(["if (a) /x  y/.test(s)"], "a.ts")).toBe(false);
-		expect(literalSafe(["f(a) / b"], "a.ts")).toBe(true);
+		expect(literalSafe(["f(a) / b"], "a.ts")).toBe(false);
 	});
 });
 

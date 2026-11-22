@@ -84,7 +84,6 @@ const REGEX_FAMILY = new Set([
 	"awk",
 ]);
 const NON_LITERAL_UNSAFE = /`|"""|'''|<<[-~]?\s*["']?\w/;
-const CONTROL_KEYWORD = /\b(?:if|while|for|with)\b/;
 const SLASH_ALWAYS_AMBIGUOUS = new Set(["rb", "pl", "awk"]);
 const RUBY_PERCENT_LITERAL = /%[rqQwWiIxs]\W/;
 const PERL_QUOTE_LIKE = /\b(?:m|qr|s|tr|y)\s*[{([<|!#]/;
@@ -103,6 +102,7 @@ const EXPRESSION_KEYWORDS = new Set([
 	"do",
 	"instanceof",
 	"new",
+	"default",
 ]);
 
 function extension(filename: string): string {
@@ -111,18 +111,17 @@ function extension(filename: string): string {
 	return dot < 0 ? "" : name.slice(dot + 1).toLowerCase();
 }
 
-function slashIsDivision(before: string): boolean {
-	const prev = before.trimEnd();
-	if (prev === "") return false;
-	const last = prev[prev.length - 1] as string;
-	if (last === ")") return !CONTROL_KEYWORD.test(before);
+function slashIsDivision(last: string, word: string): boolean {
+	if (last === "") return false;
 	if (last === "]") return true;
 	if (!/[\w$]/.test(last)) return false;
-	const word = /[\w$]+$/.exec(prev)?.[0] ?? "";
 	return !EXPRESSION_KEYWORDS.has(word);
 }
 
 function lineHasRegexAmbiguity(line: string): boolean {
+	let last = "";
+	let word = "";
+	let wordOpen = false;
 	for (let i = 0; i < line.length; i++) {
 		const ch = line[i] as string;
 		if (ch === '"' || ch === "'") {
@@ -130,6 +129,9 @@ function lineHasRegexAmbiguity(line: string): boolean {
 			while (j < line.length && line[j] !== ch) j += line[j] === "\\" ? 2 : 1;
 			if (j >= line.length) return true;
 			i = j;
+			last = ch;
+			word = "";
+			wordOpen = false;
 		} else if (ch === "/") {
 			const next = line[i + 1];
 			if (next === "/") return false;
@@ -137,9 +139,22 @@ function lineHasRegexAmbiguity(line: string): boolean {
 				const close = line.indexOf("*/", i + 2);
 				if (close < 0) return true;
 				i = close + 1;
-			} else if (!slashIsDivision(line.slice(0, i))) {
+			} else if (!slashIsDivision(last, word)) {
 				return true;
 			}
+			last = "/";
+			word = "";
+			wordOpen = false;
+		} else if (/\s/.test(ch)) {
+			wordOpen = false;
+		} else if (/[\w$]/.test(ch)) {
+			word = wordOpen ? word + ch : ch;
+			wordOpen = true;
+			last = ch;
+		} else {
+			last = ch;
+			word = "";
+			wordOpen = false;
 		}
 	}
 	return false;
@@ -171,13 +186,15 @@ function hasUnsafeQuoteLike(line: string, ext: string): boolean {
 
 /**
  * Whether these lines contain no backtick, triple quote, heredoc or slash that could open a
- * regex literal. Slashes are only ambiguous in the regex-literal language family, and
- * there only when not clearly division or a closed comment.
+ * regex literal, and none longer than `MAX_ANALYZED_LINE`. Slashes are only ambiguous in the
+ * regex-literal language family, and there only when not clearly division or a closed comment;
+ * a slash after a closing parenthesis always counts as ambiguous.
  */
 export function literalSafe(
 	lines: readonly string[],
 	filename: string,
 ): boolean {
+	if (lines.some((line) => line.length > MAX_ANALYZED_LINE)) return false;
 	if (lines.some((line) => NON_LITERAL_UNSAFE.test(line))) return false;
 	const ext = extension(filename);
 	if (!REGEX_FAMILY.has(ext)) return true;
@@ -189,7 +206,7 @@ export function literalSafe(
 
 /**
  * Each non-empty line with its indentation minus the block's smallest indent, as that many
- * spaces; null when any indentation contains a tab.
+ * spaces; null when any indentation contains a tab or another non-space whitespace character.
  */
 export function relativeIndent(
 	lines: readonly string[],

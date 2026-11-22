@@ -1,6 +1,6 @@
 import { isIndentSensitive, type PushFile } from "../moved-blocks.js";
 import { hasBrokenContinuation, hasOddBreak } from "./lexical.js";
-import { tokenEquivalent } from "./token-check.js";
+import { jsxPossible, tokenEquivalent } from "./token-check.js";
 import type { Divergence, Operation, Span } from "./types.js";
 
 const HUNK_HEADER = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
@@ -151,6 +151,7 @@ interface ParsedPatch {
 	deleted: Map<number, PatchRow>;
 	added: Map<number, PatchRow>;
 	risky: boolean;
+	jsx: boolean;
 }
 
 interface Scanned {
@@ -161,11 +162,12 @@ interface Scanned {
 
 const parsedPatches = new WeakMap<PushFile, ParsedPatch>();
 
-function scanPatch(patch: string | undefined): ParsedPatch {
+function scanPatch(patch: string | undefined, filename: string): ParsedPatch {
 	const out: ParsedPatch = {
 		deleted: new Map(),
 		added: new Map(),
 		risky: LITERAL_OPENER.test(patch ?? ""),
+		jsx: jsxPossible(filename, patch ?? ""),
 	};
 	const scanned: Scanned[] = [];
 	let oldLine = 0;
@@ -270,7 +272,7 @@ function indexOfPatches(files: readonly PushFile[]): PatchIndex {
 		if (patches.has(file.filename)) continue;
 		let parsed = parsedPatches.get(file);
 		if (!parsed) {
-			parsed = scanPatch(file.patch);
+			parsed = scanPatch(file.patch, file.filename);
 			parsedPatches.set(file, parsed);
 		}
 		patches.set(file.filename, parsed);
@@ -678,9 +680,10 @@ function tokenVerified(
 	const from = base[0];
 	const to = head[0];
 	if (base.length !== 1 || head.length !== 1 || !from || !to) return false;
-	const tainted = [from, to].some(
-		(side) => index.patches.get(side.filename)?.risky ?? false,
-	);
+	const tainted = [from, to].some((side) => {
+		const patch = index.patches.get(side.filename);
+		return (patch?.risky ?? false) || (patch?.jsx ?? false);
+	});
 	if (tainted) return false;
 	const result = tokenEquivalent(
 		from.lines,
