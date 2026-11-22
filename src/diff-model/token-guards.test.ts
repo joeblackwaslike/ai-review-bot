@@ -8,6 +8,7 @@ import {
 	checkerOperatorsFor,
 	opensUnclosedString,
 	tokenEquivalent,
+	unbalancedBlockComment,
 } from "./token-check.js";
 import {
 	FAMILIES,
@@ -681,5 +682,137 @@ describe("final review holes", () => {
 				...pair("yml"),
 			),
 		).toBe(false);
+	});
+});
+
+describe("line breaks that are not obviously a wrap", () => {
+	const more = "alpha + beta + gamma + delta;";
+
+	it.each([
+		["const a = 1\nconst b = 2", `const a = 1 const b = 2`],
+		["a = b\nc = d", "a = b c = d"],
+		["x\nfoo()", "x foo()"],
+		["let a\nlet b", "let a let b"],
+	])("keeps the break in %j", (base, head) => {
+		const [b, h] = [
+			`${base} ${more}`.split("\n"),
+			`${head} ${more}`.split("\n"),
+		];
+		for (const ext of ["ts", "js"]) rejected(b, h, ...pair(ext));
+	});
+
+	it.each([
+		[
+			"call args",
+			"const r = compute(alpha, beta, gamma, delta, epsilon, zeta);",
+			[
+				"const r = compute(",
+				"  alpha,",
+				"  beta,",
+				"  gamma,",
+				"  delta,",
+				"  epsilon,",
+				"  zeta",
+				");",
+			],
+		],
+		[
+			"ternary",
+			"const r = ready ? alphaValue(betaValue) : gammaValue(deltaValue);",
+			[
+				"const r = ready",
+				"  ? alphaValue(betaValue)",
+				"  : gammaValue(deltaValue);",
+			],
+		],
+		[
+			"chain",
+			"const r = items.filter(isReady).map(toValue).reduce(sumAll, 0);",
+			[
+				"const r = items",
+				"  .filter(isReady)",
+				"  .map(toValue)",
+				"  .reduce(sumAll, 0);",
+			],
+		],
+		[
+			"arrow",
+			"const f = (alpha, beta) => alpha.value + beta.value + gamma.value;",
+			[
+				"const f = (alpha, beta) =>",
+				"  alpha.value + beta.value + gamma.value;",
+			],
+		],
+		[
+			"Allman",
+			"function handler(request, response) { return respond(request, response); }",
+			[
+				"function handler(request, response)",
+				"{",
+				"  return respond(request, response);",
+				"}",
+			],
+		],
+	])("still matches a Prettier wrap of %s", (_, flat, wrapped) => {
+		accepted(flat, wrapped);
+		accepted(wrapped, flat);
+	});
+});
+
+describe("block comment bodies", () => {
+	const statements = Array.from(
+		{ length: 5 },
+		(_, i) => `const setting${i} = processOption(accountId, customerId, ${i});`,
+	);
+	const wrapped = statements.flatMap((l) => [l.slice(0, 22), l.slice(22)]);
+	const file = (name: string, patch: string): PushFile => ({
+		filename: name,
+		status: "modified",
+		patch,
+		additions: 0,
+		deletions: 0,
+	});
+
+	it.each([
+		"ts",
+		"js",
+		"tsx",
+		"go",
+	])("skips a %s file whose changed lines sit inside a comment", (ext) => {
+		const head = file(
+			`src/b.${ext}`,
+			["@@ -1,2 +1,12 @@", " /*", ...wrapped.map((l) => `+${l}`), " */"].join(
+				"\n",
+			),
+		);
+		const base = file(
+			`src/a.${ext}`,
+			["@@ -1,5 +1,0 @@", ...statements.map((l) => `-${l}`)].join("\n"),
+		);
+		expect(filesWithLiterals([head]).has(head.filename)).toBe(true);
+		expect(findRelocations([base, head]).filter((o) => o.exact)).toEqual([]);
+	});
+
+	it.each([
+		["a closer without an opener", " */\n+x = 1;"],
+		["an opener without a closer", "+/* note\n y = 2;"],
+		["a changed row inside a comment", " /*\n+x = 1;\n */"],
+	])("flags %s", (_, body) => {
+		const patch = `@@ -1 +1 @@\n${body}`;
+		expect(unbalancedBlockComment("a.ts", patch)).toBe(true);
+		const file = {
+			filename: "a.ts",
+			status: "modified",
+			patch,
+			additions: 0,
+			deletions: 0,
+		};
+		expect(filesWithLiterals([file]).has("a.ts")).toBe(true);
+	});
+
+	it("leaves balanced comments alone", () => {
+		expect(unbalancedBlockComment("a.ts", " /* c */\n+x = 1;\n+/**/")).toBe(
+			false,
+		);
 	});
 });

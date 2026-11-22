@@ -4,6 +4,7 @@ import {
 	jsxPossible,
 	opensUnclosedString,
 	tokenEquivalent,
+	unbalancedBlockComment,
 } from "./token-check.js";
 import type { Divergence, Operation, Span } from "./types.js";
 
@@ -172,7 +173,8 @@ function scanPatch(patch: string | undefined, filename: string): ParsedPatch {
 		added: new Map(),
 		risky:
 			LITERAL_OPENER.test(patch ?? "") ||
-			opensUnclosedString(filename, patch ?? ""),
+			opensUnclosedString(filename, patch ?? "") ||
+			unbalancedBlockComment(filename, patch ?? ""),
 		jsx: jsxPossible(filename, patch ?? ""),
 	};
 	const scanned: Scanned[] = [];

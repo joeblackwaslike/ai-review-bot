@@ -513,6 +513,7 @@ function rank(a: Match, b: Match): number {
 	);
 }
 
+const COMMENTED_EXTENSIONS = new Set("js mjs cjs ts jsx tsx go".split(" "));
 const QUOTED_EXTENSIONS = new Set("js mjs cjs ts jsx tsx py pyi go".split(" "));
 
 function opensUnclosedString(file: PushFile): boolean {
@@ -535,6 +536,19 @@ function opensUnclosedString(file: PushFile): boolean {
 	return false;
 }
 
+function blockCommentHazard(patch: string): boolean {
+	let open = false;
+	for (const row of patch.split("\n")) {
+		if (open && /^[-+]/.test(row)) return true;
+		for (const [mark] of row.matchAll(/\/\*|\*\//g)) {
+			if (mark === "/*") open = true;
+			else if (!open) return true;
+			else open = false;
+		}
+	}
+	return open;
+}
+
 function mayHoldJsx(file: PushFile): boolean {
 	const ext = extension(file.filename);
 	return (
@@ -546,7 +560,7 @@ function mayHoldJsx(file: PushFile): boolean {
 /**
  * Names of the files the token pass leaves to the line matcher: those whose visible patch
  * text holds a backtick, a triple quote, a heredoc opener or a line that opens a string
- * it does not close, and JSX-capable files, where whitespace, commas and quotes in text
+ * it does not close, a block comment that is unbalanced or holds a changed line, and JSX-capable files, where whitespace, commas and quotes in text
  * are content.
  */
 export function filesWithLiterals(files: PushFile[]): Set<string> {
@@ -556,7 +570,9 @@ export function filesWithLiterals(files: PushFile[]): Set<string> {
 				(f) =>
 					LITERAL_OPENER.test(f.patch ?? "") ||
 					mayHoldJsx(f) ||
-					opensUnclosedString(f),
+					opensUnclosedString(f) ||
+					(COMMENTED_EXTENSIONS.has(extension(f.filename)) &&
+						blockCommentHazard(f.patch ?? "")),
 			)
 			.map((f) => f.filename),
 	);

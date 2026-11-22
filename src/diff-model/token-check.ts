@@ -90,6 +90,12 @@ const BREAKING_WORDS = words(
 const BEFORE_EXPRESSION = words(
 	"return typeof case in of delete void throw yield await else do instanceof new default",
 );
+const WRAP_AFTER = words(
+	", ( [ { ; } => = . ?. ? : && || ?? + - * / % < > <= >= == === != !== & | ^ ~ ! += -= *= /= %= &= |= ^= <<= >>= >>>= &&= ||= ??= **= ** << >> >>>",
+);
+const WRAP_BEFORE = words(
+	") ] } . ?. , ; ? : => + - * / % < > <= >= == === != !== & | ^ && || ?? { in instanceof ** << >> >>>",
+);
 const HEADER_WORDS = words("if for while switch with await");
 const KEEP_SEMICOLON_AFTER = words("else : =>");
 const ASI_HAZARDS = words("( [ ` + - / ++ --");
@@ -157,6 +163,29 @@ export function opensUnclosedString(filename: string, patch: string): boolean {
 		if (quote && !row.endsWith("\\")) return true;
 	}
 	return false;
+}
+
+/**
+ * Whether a JS, TS or Go patch has a block comment that is closed without an opener, never
+ * closed, or holds a changed line, so changed lines may be comment text. Conservative:
+ * delimiters inside strings count too.
+ */
+export function unbalancedBlockComment(
+	filename: string,
+	patch: string,
+): boolean {
+	const ext = extensionOf(filename);
+	if (!(JS_LIKE.has(ext) || ext === "go")) return false;
+	let open = false;
+	for (const row of patch.split("\n")) {
+		if (open && /^[-+]/.test(row)) return true;
+		for (const [mark] of row.matchAll(/\/\*|\*\//g)) {
+			if (mark === "/*") open = true;
+			else if (!open) return true;
+			else open = false;
+		}
+	}
+	return open;
 }
 
 function nestsFStringQuote(line: string): boolean {
@@ -280,6 +309,15 @@ function tokenizeLines(lines: string[], ext: string): Tokenized | null {
 			JS_LIKE.has(ext) &&
 			ASI_HAZARDS.has(first) &&
 			endsStatement(tokens[tokens.length - 1])
+		)
+			tokens.push("\n");
+		const before = tokens[tokens.length - 1];
+		if (
+			free &&
+			before !== undefined &&
+			before !== "\n" &&
+			(BREAKING_WORDS.has(before) ||
+				!(WRAP_AFTER.has(before) || WRAP_BEFORE.has(first)))
 		)
 			tokens.push("\n");
 		if (!free && !grouped()) starts.push(n);
@@ -421,13 +459,15 @@ function sameTokens(a: string[], b: string[]): boolean {
 
 /**
  * Whether two blocks hold the same token stream once formatting-only differences are
- * removed, written independently of the matcher's tokenizer. Both files must share a
- * language family. Lines with comments, templates, triple-quoted strings, heredocs,
- * preprocessor directives, possible regex literals, raw or verbatim strings, odd line
- * terminators, over 2,000 characters, and JSX-capable files, YAML block scalars and
- * brackets nested over 200 deep are refused. Indentation-sensitive files must indent with
- * spaces only and keep the same relative indentation; `reindent` is the uniform shift of
- * the head block against the base block (0 elsewhere).
+ * removed, written independently of the matcher's tokenizer. Only the families listed in
+ * `CHECKER_FAMILIES` are accepted, and both files must share one. Refused: comments,
+ * templates, triple-quoted strings, heredocs, possible regex literals, odd line terminators
+ * or non-ASCII spaces, HTML-like comment markers, nested same-quote f-strings, lines over
+ * 2,000 characters, JSX-capable files, YAML block scalars and trailing whitespace
+ * differences, unbalanced brackets and nesting over 200 deep. A line break in a JS or TS
+ * file counts as a difference unless it is obviously a wrap. Indentation-sensitive files
+ * must indent with spaces only and keep the same relative indentation; `reindent` is the
+ * uniform shift of the head block against the base block (0 elsewhere).
  */
 export function tokenEquivalent(
 	baseLines: string[],

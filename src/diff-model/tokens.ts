@@ -119,6 +119,16 @@ const EMPTY_BODY_KEYWORDS = new Set([
 	"with",
 	"await",
 ]);
+const WRAP_PREV = new Set(
+	", ( [ { ; } => = . ?. ? : && || ?? + - * / % < > <= >= == === != !== & | ^ ~ ! += -= *= /= %= &= |= ^= <<= >>= >>>= &&= ||= ??= **= ** << >> >>>".split(
+		" ",
+	),
+);
+const WRAP_NEXT = new Set(
+	") ] } . ?. , ; ? : => + - * / % < > <= >= == === != !== & | ^ && || ?? { in instanceof ** << >> >>>".split(
+		" ",
+	),
+);
 const KEEP_SEMICOLON_AFTER = new Set(["else", ":", "=>"]);
 
 function extension(filename: string): string {
@@ -253,9 +263,12 @@ function scanLine(line: string, filename: string): string[] {
 
 /**
  * Splits source lines into tokens (identifiers, numbers, whole strings, longest-match
- * operators), dropping comments. `lineOf[k]` is the index in `lines` of token `k`. Free
- * files drop line breaks except after return/throw/break/continue/yield; significant
- * files emit a "\n" token between logical lines (grouped by bracket depth).
+ * operators), dropping comments. `lineOf[k]` is the index in `lines` of token `k`. A JS or TS
+ * file keeps a "\n" token between lines unless the break is obviously a wrap (the previous
+ * token opens, separates or continues an expression, or the next one closes or continues
+ * it), and always after a restricted-production keyword or before a statement-continuing
+ * line under automatic semicolon insertion. Significant files emit a "\n" token between
+ * logical lines (grouped by bracket depth).
  */
 export function tokenize(
 	lines: readonly string[],
@@ -281,6 +294,18 @@ export function tokenize(
 			first !== undefined &&
 			ASI_HAZARDS.has(first) &&
 			endsStatement(tokens[tokens.length - 1])
+		) {
+			tokens.push("\n");
+			lineOf.push(lineOf[lineOf.length - 1] as number);
+		}
+		const before = tokens[tokens.length - 1];
+		if (
+			free &&
+			first !== undefined &&
+			before !== undefined &&
+			before !== "\n" &&
+			(BREAK_KEYWORDS.has(before) ||
+				!(WRAP_PREV.has(before) || WRAP_NEXT.has(first)))
 		) {
 			tokens.push("\n");
 			lineOf.push(lineOf[lineOf.length - 1] as number);
