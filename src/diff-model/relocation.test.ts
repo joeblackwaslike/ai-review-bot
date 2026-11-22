@@ -339,3 +339,114 @@ describe("findRelocations", () => {
 		expect(ops[0]?.divergences.every((d) => d.class === "rename")).toBe(true);
 	});
 });
+
+function moveNamed(base: string[], head: string[], from: string, to: string) {
+	return findRelocations([deletedFrom(from, 10, base), addedTo(to, 3, head)]);
+}
+
+function pair(
+	base: string[],
+	head: string[],
+	at: number[],
+): [string[], string[]] {
+	const b = fn(body(30));
+	const h = fn(body(30));
+	at.forEach((index, k) => {
+		b.splice(index, 0, base[k] as string);
+		h.splice(index, 0, head[k] as string);
+	});
+	return [b, h];
+}
+
+describe("findRelocations class guards", () => {
+	it("keeps a changed python floor-division line as code", () => {
+		const [base, head] = pair(["  x = a // b"], ["  x = a // c"], [15]);
+		const ops = moveNamed(base, head, "src/a.py", "src/b.py");
+		expect(ops).toHaveLength(1);
+		expect(ops[0]?.divergences.map((d) => d.class)).toEqual(["code"]);
+		expect(ops[0]?.reviewWeight).toBe(1);
+	});
+
+	it("keeps a changed python continuation line starting with // as code", () => {
+		const [base, head] = pair(["        // b)"], ["        // c)"], [15]);
+		const ops = moveNamed(base, head, "src/a.py", "src/b.py");
+		expect(ops[0]?.divergences.map((d) => d.class)).toEqual(["code"]);
+	});
+
+	it("keeps a changed shell URL as code", () => {
+		const [base, head] = pair(
+			["  curl http://good.example.com/x"],
+			["  curl http://evil.example.com/x"],
+			[15],
+		);
+		const ops = moveNamed(base, head, "src/a.sh", "src/b.sh");
+		expect(ops[0]?.divergences.map((d) => d.class)).toEqual(["code"]);
+	});
+
+	it("keeps a changed Makefile // line as code", () => {
+		const [base, head] = pair(["  echo a // b"], ["  echo a // c"], [15]);
+		const ops = moveNamed(base, head, "build/Makefile", "other/Makefile");
+		expect(ops[0]?.divergences.map((d) => d.class)).toEqual(["code"]);
+	});
+
+	it("does not class a swap of two names as a rename", () => {
+		const [base, head] = pair(
+			["  f(a, b);", "  g(a, b);"],
+			["  f(b, a);", "  g(b, a);"],
+			[10, 20],
+		);
+		const ops = move(base, head);
+		expect(ops[0]?.divergences.every((d) => d.class === "code")).toBe(true);
+	});
+
+	it("does not class a merge into an existing name as a rename", () => {
+		const [base, head] = pair(
+			["  f(a, b);", "  g(a, b);"],
+			["  f(b, b);", "  g(b, b);"],
+			[10, 20],
+		);
+		const ops = move(base, head);
+		expect(ops[0]?.divergences.every((d) => d.class === "code")).toBe(true);
+	});
+
+	it("does not class two old names collapsing into one new name as a rename", () => {
+		const [base, head] = pair(
+			["  f(a, b);", "  g(a, b);"],
+			["  f(c, c);", "  g(c, c);"],
+			[10, 20],
+		);
+		const ops = move(base, head);
+		expect(ops[0]?.divergences.every((d) => d.class === "code")).toBe(true);
+	});
+
+	it("does not class a literal flip as a rename", () => {
+		const [base, head] = pair(
+			["  done = true;", "  flag(true);"],
+			["  done = false;", "  flag(false);"],
+			[10, 20],
+		);
+		const ops = move(base, head);
+		expect(ops[0]?.divergences.every((d) => d.class === "code")).toBe(true);
+	});
+
+	it("does not class a rename when the old name survives in the head block", () => {
+		const [base, head] = pair(
+			["  f(a);", "  g(a);", "  h(a);"],
+			["  f(z);", "  g(z);", "  h(a);"],
+			[8, 14, 20],
+		);
+		const ops = move(base, head);
+		expect(ops[0]?.divergences.every((d) => d.class === "code")).toBe(true);
+	});
+
+	it("weighs a rename as one point per distinct renamed identifier", () => {
+		const [base, head] = pair(
+			["  f(alpha, beta);", "  g(alpha, beta);", "  h(alpha);"],
+			["  f(first, second);", "  g(first, second);", "  h(first);"],
+			[8, 14, 20],
+		);
+		const ops = move(base, head);
+		expect(ops[0]?.divergences.every((d) => d.class === "rename")).toBe(true);
+		expect(ops[0]?.reviewWeight).toBe(2);
+	});
+});

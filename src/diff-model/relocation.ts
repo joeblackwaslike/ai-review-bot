@@ -23,7 +23,17 @@ const MAX_TOKENIZED_LENGTH = 2000;
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
 const TOKEN =
 	/[A-Za-z_$][\w$]*|\d+(?:\.\d+)?|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\S/g;
-const HASH_COMMENT_FILE = /\.(py|pyi|sh|bash|zsh|rb|ya?ml|toml|mk)$/i;
+const HASH_COMMENT_FILE =
+	/(?:\.(?:py|pyi|sh|bash|zsh|rb|ya?ml|toml|mk)|(?:^|\/)Makefile)$/i;
+const RESERVED = new Set(
+	`true false null undefined None True False nil NaN Infinity let const var function return if else for while do in of
+	await async yield new this self super public private protected static class interface enum type import export from
+	default switch case break continue try catch finally throw typeof instanceof void delete with and or not is as def
+	lambda pass del global nonlocal raise except elif end then begin unless until module struct fn mut pub impl trait
+	use mod match loop where abstract extends implements final readonly package int string number boolean`.split(
+		/\s+/,
+	),
+);
 
 interface RawDivergence {
 	kind: Divergence["kind"];
@@ -32,6 +42,7 @@ interface RawDivergence {
 }
 
 interface Built {
+	renamed: number;
 	fromStart: number;
 	fromEnd: number;
 	toStart: number;
@@ -175,6 +186,7 @@ function riskyLines(filename: string, lines: string[]): boolean[] {
 
 /** Per line, whether it is wholly a comment: `//` or `#` lines, or lines of a `/* ... *\/` block opened in these lines. */
 function commentLines(filename: string, lines: string[]): boolean[] {
+	const slashes = !HASH_COMMENT_FILE.test(filename);
 	let inBlock = false;
 	return lines.map((line) => {
 		const trimmed = line.trim();
@@ -184,10 +196,9 @@ function commentLines(filename: string, lines: string[]): boolean[] {
 			inBlock = false;
 			return trimmed.slice(close + 2).trim() === "";
 		}
-		if (trimmed.startsWith("//")) return true;
-		if (HASH_COMMENT_FILE.test(filename) && trimmed.startsWith("#"))
-			return true;
-		if (!trimmed.startsWith("/*")) return false;
+		if (slashes && trimmed.startsWith("//")) return true;
+		if (!slashes && trimmed.startsWith("#")) return true;
+		if (!slashes || !trimmed.startsWith("/*")) return false;
 		const close = trimmed.indexOf("*/", 2);
 		if (close < 0) {
 			inBlock = true;
@@ -208,6 +219,7 @@ function isCommentOnly(
 	headComment: boolean,
 	baseText: string | undefined,
 	headText: string | undefined,
+	trailing: boolean,
 ): boolean {
 	if (divergence.kind === "removed") return baseComment;
 	if (divergence.kind === "inserted") return headComment;
@@ -215,6 +227,7 @@ function isCommentOnly(
 	const head = headText as string;
 	if (baseComment && headComment) return true;
 	return (
+		trailing &&
 		lineCommentIndex(base) + lineCommentIndex(head) !== -2 &&
 		stripLineComment(base) === stripLineComment(head)
 	);
@@ -230,6 +243,7 @@ function substitutions(base: string, head: string): [string, string][] | null {
 		const b = right[k] as string;
 		if (a === b) continue;
 		if (!IDENTIFIER.test(a) || !IDENTIFIER.test(b)) return null;
+		if (RESERVED.has(a) || RESERVED.has(b)) return null;
 		if (left[k - 1] === "." || right[k - 1] === ".") return null;
 		out.push([a, b]);
 	}
@@ -239,37 +253,48 @@ function substitutions(base: string, head: string): [string, string][] | null {
 function renameIndexes(
 	changed: { at: number; base: string; head: string }[],
 	baseLines: string[],
-): Set<number> {
+	headLines: string[],
+): Map<number, string[]> {
 	const oversized = (line: string) => line.length > MAX_TOKENIZED_LENGTH;
-	if (baseLines.some(oversized) || changed.some((c) => oversized(c.head))) {
-		return new Set();
-	}
+	if (baseLines.some(oversized) || headLines.some(oversized)) return new Map();
 	const perChange = changed.map((c) => substitutions(c.base, c.head));
 	const target = new Map<string, Set<string>>();
+	const source = new Map<string, Set<string>>();
 	const seen = new Map<string, number>();
 	for (const subs of perChange) {
 		for (const [from, to] of subs ?? []) {
 			if (!target.has(from)) target.set(from, new Set());
 			target.get(from)?.add(to);
+			if (!source.has(to)) source.set(to, new Set());
+			source.get(to)?.add(from);
 			seen.set(from, (seen.get(from) ?? 0) + 1);
 		}
 	}
-	const blockCount = new Map<string, number>();
-	for (const line of baseLines) {
-		for (const token of tokens(line)) {
-			if (seen.has(token))
-				blockCount.set(token, (blockCount.get(token) ?? 0) + 1);
-		}
-	}
-	const consistent = (from: string) =>
-		target.get(from)?.size === 1 &&
-		(seen.get(from) ?? 0) >= MIN_RENAME_OCCURRENCES &&
-		seen.get(from) === blockCount.get(from);
-	const out = new Set<number>();
+	const baseTokens = new Map<string, number>();
+	for (const line of baseLines)
+		for (const token of tokens(line))
+			baseTokens.set(token, (baseTokens.get(token) ?? 0) + 1);
+	const headTokens = new Set(headLines.flatMap(tokens));
+	const consistent = (from: string) => {
+		const to = [...(target.get(from) ?? [])];
+		return (
+			to.length === 1 &&
+			source.get(to[0] as string)?.size === 1 &&
+			!baseTokens.has(to[0] as string) &&
+			!headTokens.has(from) &&
+			(seen.get(from) ?? 0) >= MIN_RENAME_OCCURRENCES &&
+			seen.get(from) === baseTokens.get(from)
+		);
+	};
+	const out = new Map<number, string[]>();
 	changed.forEach((c, k) => {
 		const subs = perChange[k];
-		if (subs && subs.length > 0 && subs.every(([from]) => consistent(from)))
-			out.add(c.at);
+		if (subs && subs.length > 0 && subs.every(([from]) => consistent(from))) {
+			out.set(
+				c.at,
+				subs.map(([from]) => from),
+			);
+		}
 	});
 	return out;
 }
@@ -384,8 +409,12 @@ function build(
 				]
 			: [],
 	);
-	const renames = renameIndexes(changed, baseRaw);
+	const renames = renameIndexes(changed, baseRaw, headRaw);
+	const trailing =
+		!HASH_COMMENT_FILE.test(from.filename) &&
+		!HASH_COMMENT_FILE.test(to.filename);
 	let counted = 0;
+	const renamedNames = new Set<string>();
 	const divergences = raw.map((d, at): Divergence => {
 		const baseText = text(baseRaw, d.baseIndex);
 		const headText = text(headRaw, d.headIndex);
@@ -397,11 +426,14 @@ function build(
 			d.headIndex !== undefined && headComment[d.headIndex] === true,
 			baseText,
 			headText,
+			trailing,
 		)
 			? "comment-only"
 			: renames.has(at)
 				? "rename"
 				: "code";
+		if (cls === "rename")
+			for (const name of renames.get(at) ?? []) renamedNames.add(name);
 		const out: Divergence = { kind: d.kind, class: cls };
 		if (d.baseIndex !== undefined)
 			out.base = lineSpan(from, "base", fromStart, d.baseIndex);
@@ -411,6 +443,7 @@ function build(
 		return out;
 	});
 	return {
+		renamed: renamedNames.size,
 		fromStart,
 		fromEnd,
 		toStart,
@@ -475,7 +508,7 @@ function toOperation(from: Run, to: Run, built: Built): Operation {
 		],
 		exact: built.divergences.length === 0,
 		divergences: built.divergences,
-		reviewWeight: codeDivergences,
+		reviewWeight: codeDivergences + built.renamed,
 	};
 }
 

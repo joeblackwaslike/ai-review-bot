@@ -6,6 +6,22 @@ const HUNK_HEADER = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
 const TRIPLE_QUOTE = /"""|'''/g;
 const HEREDOC_OPEN = /<<[-~]?\s*['"]?(\w+)/;
 
+const HASH_FAMILY =
+	/(?:\.(?:py|pyi|rb|sh|bash|zsh|ya?ml|toml|mk)|(?:^|\/)Makefile)$/i;
+const WORD =
+	/[A-Za-z_$][\w$]*|\d+(?:\.\d+)?|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\S/g;
+const NAME = /^[A-Za-z_$][\w$]*$/;
+const NOT_RENAMABLE = new Set(
+	`true false null undefined None True False nil NaN Infinity let const var function return if else for while do in of
+	await async yield new this self super public private protected static class interface enum type import export from
+	default switch case break continue try catch finally throw typeof instanceof void delete with and or not is as def
+	lambda pass del global nonlocal raise except elif end then begin unless until module struct fn mut pub impl trait
+	use mod match loop where abstract extends implements final readonly package int string number boolean`.split(
+		/\s+/,
+	),
+);
+const LONGEST_RENAMABLE_LINE = 2000;
+
 interface Side {
 	filename: string;
 	lines: string[];
@@ -175,6 +191,199 @@ function accountedPositionally(base: Entry[], head: Entry[]): boolean {
 	);
 }
 
+function slashStyle(filename: string): boolean {
+	return !HASH_FAMILY.test(filename);
+}
+
+function commentStart(line: string): number {
+	let quote = "";
+	for (let i = 0; i < line.length; i++) {
+		const ch = line[i] as string;
+		if (quote) {
+			if (ch === "\\") i++;
+			else if (ch === quote) quote = "";
+		} else if (ch === '"' || ch === "'" || ch === "`") {
+			quote = ch;
+		} else if (ch === "/" && line[i + 1] === "/") {
+			return i;
+		}
+	}
+	return -1;
+}
+
+function wholeCommentLines(side: Side): boolean[] {
+	const slash = slashStyle(side.filename);
+	let open = false;
+	return side.lines.map((raw) => {
+		const line = raw.trim();
+		if (open) {
+			const end = line.indexOf("*/");
+			if (end < 0) return true;
+			open = false;
+			return line.slice(end + 2).trim() === "";
+		}
+		if (!slash) return line.startsWith("#");
+		if (line.startsWith("//")) return true;
+		if (!line.startsWith("/*")) return false;
+		const end = line.indexOf("*/", 2);
+		if (end < 0) {
+			open = true;
+			return true;
+		}
+		return line.slice(end + 2).trim() === "";
+	});
+}
+
+function codePart(line: string): string {
+	const at = commentStart(line);
+	return interior(at < 0 ? line : line.slice(0, at));
+}
+
+function commentOnlyHolds(
+	divergence: Divergence,
+	base: string | undefined,
+	head: string | undefined,
+	baseWhole: boolean,
+	headWhole: boolean,
+	slashBoth: boolean,
+): boolean {
+	if (divergence.kind === "removed") return baseWhole;
+	if (divergence.kind === "inserted") return headWhole;
+	if (base === undefined || head === undefined) return false;
+	if (baseWhole && headWhole) return true;
+	if (!slashBoth) return false;
+	const differs = commentStart(base) >= 0 || commentStart(head) >= 0;
+	return differs && codePart(base) === codePart(head);
+}
+
+function words(lines: string[]): string[] {
+	return lines.flatMap((line) => line.match(WORD) ?? []);
+}
+
+function renamedPairs(base: string, head: string): [string, string][] | null {
+	const left = base.match(WORD) ?? [];
+	const right = head.match(WORD) ?? [];
+	if (left.length !== right.length) return null;
+	const pairs: [string, string][] = [];
+	for (let i = 0; i < left.length; i++) {
+		const a = left[i] as string;
+		const b = right[i] as string;
+		if (a === b) continue;
+		const bothNames = NAME.test(a) && NAME.test(b);
+		const free = !NOT_RENAMABLE.has(a) && !NOT_RENAMABLE.has(b);
+		const member = left[i - 1] === "." || right[i - 1] === ".";
+		if (!bothNames || !free || member) return null;
+		pairs.push([a, b]);
+	}
+	return pairs;
+}
+
+function tally(items: string[], item: string): number {
+	return items.filter((x) => x === item).length;
+}
+
+/**
+ * Re-derives a rename claim: the renamed pairs of every claimed rename divergence must form a
+ * one-to-one mapping, the new names must be absent from the base span, the old names absent
+ * from the head span, and every base occurrence of an old name must sit on a claimed line.
+ * Returns the number of distinct renamed identifiers, or null when the claim does not hold.
+ */
+function verifiedRenames(
+	pairsPerLine: [string, string][][],
+	baseSides: Side[],
+	headSides: Side[],
+): number | null {
+	const baseLines = baseSides.flatMap((side) => side.lines);
+	const headLines = headSides.flatMap((side) => side.lines);
+	if (
+		[...baseLines, ...headLines].some((l) => l.length > LONGEST_RENAMABLE_LINE)
+	)
+		return null;
+	const forward = new Map<string, string>();
+	const backward = new Map<string, string>();
+	const occurrences = new Map<string, number>();
+	for (const [from, to] of pairsPerLine.flat()) {
+		if (forward.get(from) !== undefined && forward.get(from) !== to)
+			return null;
+		if (backward.get(to) !== undefined && backward.get(to) !== from)
+			return null;
+		forward.set(from, to);
+		backward.set(to, from);
+		occurrences.set(from, (occurrences.get(from) ?? 0) + 1);
+	}
+	const baseWords = words(baseLines);
+	const headWords = words(headLines);
+	for (const [from, to] of forward) {
+		const total = occurrences.get(from) ?? 0;
+		if (total < 2 || tally(baseWords, to) > 0 || tally(headWords, from) > 0)
+			return null;
+		if (tally(baseWords, from) !== total) return null;
+	}
+	return forward.size;
+}
+
+function classesHold(op: Operation, base: Side[], head: Side[]): number | null {
+	const wholeBase = new Map(
+		base.map((s) => [s.filename, wholeCommentLines(s)]),
+	);
+	const wholeHead = new Map(
+		head.map((s) => [s.filename, wholeCommentLines(s)]),
+	);
+	const whole = (
+		span: Span | undefined,
+		sides: Side[],
+		marks: Map<string, boolean[]>,
+	) => {
+		const side = sides.find((s) => s.filename === span?.filename);
+		const at = side?.positions.indexOf(span?.startLine ?? -1) ?? -1;
+		return at >= 0 && marks.get(side?.filename as string)?.[at] === true;
+	};
+	let code = 0;
+	const renamePairs: [string, string][][] = [];
+	for (const d of op.divergences) {
+		const baseText = textOf(d.base, base);
+		const headText = textOf(d.head, head);
+		if (d.class === "code") {
+			code++;
+		} else if (d.class === "comment-only") {
+			const slashBoth =
+				slashStyle(d.base?.filename ?? "") &&
+				slashStyle(d.head?.filename ?? "");
+			if (
+				!commentOnlyHolds(
+					d,
+					baseText,
+					headText,
+					whole(d.base, base, wholeBase),
+					whole(d.head, head, wholeHead),
+					slashBoth,
+				)
+			)
+				return null;
+		} else if (d.class === "rename") {
+			if (
+				d.kind !== "changed" ||
+				baseText === undefined ||
+				headText === undefined
+			)
+				return null;
+			const pairs = renamedPairs(baseText, headText);
+			if (!pairs || pairs.length === 0) return null;
+			renamePairs.push(pairs);
+		} else {
+			return null;
+		}
+	}
+	const renamed = verifiedRenames(renamePairs, base, head);
+	return renamed === null ? null : code + renamed;
+}
+
+function textOf(span: Span | undefined, sides: Side[]): string | undefined {
+	const side = sides.find((s) => s.filename === span?.filename);
+	const at = side?.positions.indexOf(span?.startLine ?? -1) ?? -1;
+	return at < 0 ? undefined : side?.lines[at];
+}
+
 /**
  * Checks a relocation claim against the patches without using the matcher's alignment.
  * Every line of both spans must be an identical raw pair, a pair that differs only in
@@ -199,6 +408,9 @@ export function verifyRelocation(op: Operation, files: PushFile[]): boolean {
 		)
 			return false;
 	}
+	if (op.exact && op.divergences.length > 0) return false;
+	const weight = classesHold(op, base, head);
+	if (weight === null || weight !== op.reviewWeight) return false;
 	return accountedPositionally(
 		unclaimed(base, baseSpent),
 		unclaimed(head, headSpent),

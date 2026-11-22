@@ -370,3 +370,142 @@ describe("verifyRelocation", () => {
 		});
 	});
 });
+
+function pairBlock(
+	base: string[],
+	head: string[],
+	at: number[],
+): [string[], string[]] {
+	const b = fn(body(30));
+	const h = fn(body(30));
+	at.forEach((index, k) => {
+		b.splice(index, 0, base[k] as string);
+		h.splice(index, 0, head[k] as string);
+	});
+	return [b, h];
+}
+
+function reclassed(
+	op: Operation,
+	cls: Operation["divergences"][number]["class"],
+) {
+	return {
+		...op,
+		divergences: op.divergences.map((d) => ({ ...d, class: cls })),
+	};
+}
+
+function codeChange() {
+	return relocation(
+		fn(body(30)),
+		withLine(fn(body(30)), 15, "  const v14 = evil() + offset;"),
+	);
+}
+
+describe("verifyRelocation divergence classes", () => {
+	it("accepts a real comment-only divergence", () => {
+		const base = fn(body(30));
+		base.splice(15, 0, "  // apply the discount");
+		const head = withLine(base, 15, "  // apply discount");
+		const { files, op } = relocation(base, head);
+		expect(op.divergences[0]?.class).toBe("comment-only");
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("accepts a real rename and its distinct-identifier weight", () => {
+		const [base, head] = pairBlock(
+			["  f(alpha);", "  g(alpha);"],
+			["  f(first);", "  g(first);"],
+			[10, 20],
+		);
+		const { files, op } = relocation(base, head);
+		expect(op.divergences.every((d) => d.class === "rename")).toBe(true);
+		expect(op.reviewWeight).toBe(1);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("drops a forged comment-only class on a real code change", () => {
+		const { files, op } = codeChange();
+		expect(op.divergences[0]?.class).toBe("code");
+		const forged = { ...reclassed(op, "comment-only"), reviewWeight: 0 };
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("drops a forged rename class on a real code change", () => {
+		const { files, op } = codeChange();
+		const forged = { ...reclassed(op, "rename"), reviewWeight: 0 };
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("drops an exact claim that lists a divergence", () => {
+		const { files, op } = codeChange();
+		expect(verifyRelocation({ ...op, exact: true }, files)).toBe(false);
+	});
+
+	it("drops a claim whose reviewWeight differs from the verified divergences", () => {
+		const { files, op } = codeChange();
+		expect(verifyRelocation({ ...op, reviewWeight: 0 }, files)).toBe(false);
+	});
+
+	it("drops a python floor-division change forged as comment-only", () => {
+		const [base, head] = pairBlock(["  x = a // b"], ["  x = a // c"], [15]);
+		const { files, op } = relocation(base, head, ["src/a.py", "src/b.py"]);
+		const forged = { ...reclassed(op, "comment-only"), reviewWeight: 0 };
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("drops a shell URL change forged as comment-only", () => {
+		const [base, head] = pairBlock(
+			["  curl http://good.example.com/x"],
+			["  curl http://evil.example.com/x"],
+			[15],
+		);
+		const { files, op } = relocation(base, head, ["src/a.sh", "src/b.sh"]);
+		const forged = { ...reclassed(op, "comment-only"), reviewWeight: 0 };
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("drops a swap forged as a rename", () => {
+		const [base, head] = pairBlock(
+			["  f(a, b);", "  g(a, b);"],
+			["  f(b, a);", "  g(b, a);"],
+			[10, 20],
+		);
+		const { files, op } = relocation(base, head);
+		const forged = { ...reclassed(op, "rename"), reviewWeight: 2 };
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("drops a merge forged as a rename", () => {
+		const [base, head] = pairBlock(
+			["  f(a, b);", "  g(a, b);"],
+			["  f(b, b);", "  g(b, b);"],
+			[10, 20],
+		);
+		const { files, op } = relocation(base, head);
+		const forged = { ...reclassed(op, "rename"), reviewWeight: 1 };
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("drops a literal flip forged as a rename", () => {
+		const [base, head] = pairBlock(
+			["  done = true;", "  flag(true);"],
+			["  done = false;", "  flag(false);"],
+			[10, 20],
+		);
+		const { files, op } = relocation(base, head);
+		const forged = { ...reclassed(op, "rename"), reviewWeight: 1 };
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("drops a rename that leaves the old name in the head span", () => {
+		const [base, head] = pairBlock(
+			["  f(a);", "  g(a);", "  h(a);"],
+			["  f(z);", "  g(z);", "  h(a);"],
+			[8, 14, 20],
+		);
+		const { files, op } = relocation(base, head);
+		const forged = { ...reclassed(op, "rename"), reviewWeight: 1 };
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+});
