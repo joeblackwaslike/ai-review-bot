@@ -418,7 +418,9 @@ describe("renderDiffModel", () => {
 
 	it("reports dropped relocation claims as a count", () => {
 		const s = renderDiffModel(model({ droppedClaims: 2 }), OPTS).summary;
-		expect(s).toContain("2 relocation claims were not confirmed");
+		expect(s).toContain(
+			"2 relocation claims were not confirmed by an independent check and are not listed.",
+		);
 	});
 
 	it("labels base-side lines in divergences and mechanical notes", () => {
