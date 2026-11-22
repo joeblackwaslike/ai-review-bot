@@ -102,6 +102,21 @@ describe("isUnique", () => {
 	});
 });
 
+describe("lineInformation on oversized lines", () => {
+	it("gives a line over 2000 characters no information without scanning it", () => {
+		const line = `x = "${'\\"'.repeat(80_000)}`;
+		const started = performance.now();
+		expect(lineInformation(line)).toBe(0);
+		expect(performance.now() - started).toBeLessThan(1000);
+	});
+
+	it("still counts a line of exactly 2000 characters", () => {
+		const line = `const a = "${"x".repeat(1987)}";`;
+		expect(line.length).toBe(2000);
+		expect(lineInformation(line)).toBeGreaterThan(0);
+	});
+});
+
 describe("acceptSeed", () => {
 	it("keeps accepting five counted lines whatever their text", () => {
 		const block = Array.from({ length: 5 }, () => "  next();");
@@ -162,11 +177,12 @@ describe("acceptSeed", () => {
 		expect(acceptSeed(c, { deleted, added })).toBe(false);
 	});
 
-	it("draws the budget for a seed of five or more counted lines", () => {
+	it("does not draw the token or candidate pools for a seed of five or more counted lines", () => {
 		const block = Array.from({ length: 5 }, () => "  next();");
 		const { c, deleted, added } = seedFor([block], [block]);
-		const budget = new WorkBudget({ candidates: 0 });
-		expect(acceptSeed(c, { deleted, added, budget })).toBe(false);
+		const budget = new WorkBudget({ candidates: 0, tokens: 0 });
+		expect(acceptSeed(c, { deleted, added, budget })).toBe(true);
+		expect(budget.exhausted).toBe(false);
 	});
 
 	it("rejects everything once the budget is exhausted", () => {

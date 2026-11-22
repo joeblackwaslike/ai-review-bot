@@ -21,7 +21,13 @@ export interface MovedBlock {
 	spanLines: number;
 }
 
-/** A maximal run of consecutive deleted or added lines, with the line number of its first line. */
+/**
+ * A maximal run of consecutive deleted or added lines, with the line number of its first line.
+ * `region` numbers the stretches of the patch between context lines or hunk headers, so a
+ * deleted run and the added run that replaces it share one region. `hunk` numbers the `@@`
+ * hunks of the file. `after` is the context line that follows the run's change group, or
+ * undefined when a hunk header or the end of the patch follows.
+ */
 export interface Run {
 	index: number;
 	filename: string;
@@ -31,6 +37,7 @@ export interface Run {
 	startLine: number;
 	region: number;
 	hunk: number;
+	after: string | undefined;
 	used: boolean[];
 }
 
@@ -159,7 +166,7 @@ export function extractRuns(
 	let addStart = 0;
 	let region = 0;
 	let hunk = 0;
-	const flush = () => {
+	const flush = (after?: string) => {
 		if (del.length) {
 			deleted.push({
 				index: -1,
@@ -170,6 +177,7 @@ export function extractRuns(
 				startLine: delStart,
 				region,
 				hunk,
+				after,
 				used: del.map(() => false),
 			});
 		}
@@ -183,6 +191,7 @@ export function extractRuns(
 				startLine: addStart,
 				region,
 				hunk,
+				after,
 				used: add.map(() => false),
 			});
 		}
@@ -205,9 +214,9 @@ export function extractRuns(
 			addRaw.push(line.slice(1));
 			newLine++;
 		} else {
-			flush();
-			region++;
 			const header = /^@@ -(\d+)(?:,\d+)? \+(\d+)/.exec(line);
+			flush(header ? undefined : line.slice(1));
+			region++;
 			if (header) {
 				hunk++;
 				oldLine = Number(header[1]);
@@ -300,6 +309,11 @@ function extend(from: Run, fromPos: number, to: Run, toPos: number): Candidate {
 	};
 }
 
+/**
+ * `allowSameFile` also pairs a deleted and an added run of one file when they lie in
+ * different regions. `uniqueBelow` seeds windows shorter than that many counted lines only
+ * when the window occurs exactly once among the deleted runs and once among the added runs.
+ */
 export interface MatchOptions {
 	allowSameFile?: boolean;
 	uniqueBelow?: number;
@@ -437,7 +451,9 @@ export function collectRuns(files: PushFile[]): {
 /**
  * Selects the non-overlapping exact matches of at least `minLines` counted lines, largest
  * first, and marks their lines used on both runs. `accept` further filters candidates and
- * the unused parts of larger ones.
+ * the unused parts of larger ones. With `options.uniqueBelow` the seed windows start at
+ * `minLines` and grow to that size, the shorter ones only when unique; with
+ * `options.allowSameFile` a run may pair with a run of its own file from another region.
  */
 export function selectMatches(
 	deleted: Run[],

@@ -1,5 +1,6 @@
 import type { Candidate, Run } from "../moved-blocks.js";
 import type { WorkBudget } from "./budget.js";
+import { isProseFile, MAX_ANALYZED_LINE } from "./lexical.js";
 
 export const MIN_COUNTED_LINES = 5;
 const MIN_INFORMATION = 30;
@@ -17,7 +18,12 @@ const KEYWORDS = new Set(
 const DEFINITION_OPENER =
 	/^(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function\b|class\b|def\b|fn\b|func\b|pub\s+fn\b|const\s+[A-Za-z_$]|type\s+\w|interface\s+\w|enum\s+\w)/;
 const DEFINITION_CLOSER = /^(?:[}\]]|end\b)/;
-const MID_EXPRESSION = /^(?:\.[A-Za-z_$]|[?:]|=>|\+|,|&&|\|\|)/;
+const LEADING_OPERATOR = /^(?:\.|[?:,=^%&|*+-]|\/(?![/*]))/;
+const LEADING_OPERATOR_IN_LISTED_FILES =
+	/^(?:\.[A-Za-z_$]|[?:]|=>|\+|,|&&|\|\|)/;
+const CLOSER_START = /^[)\]}]/;
+const TERMINATOR = /(?:[;}\]),>]|\b(?:end|fi|done|esac))$/;
+const OPEN_ENDING = /(?:[=+*%&|^?:\\([-]|=>)$/;
 const IMPORT_LIKE =
 	/^(?:import\b|export\s+(?:\*|\{[^}]*\})\s*(?:as\s+\w+\s*)?(?:from\b|;|$)|from\s+\S+\s+import\b|use\s+[\w:{]|require(?:_relative)?\b|#include\b|using\s+[\w.]+\s*;|package\b)|\brequire\s*\(|\bimport\s*\(/;
 const LITERAL =
@@ -25,23 +31,31 @@ const LITERAL =
 const IDENTIFIER = /[A-Za-z_$][\w$]*/g;
 const ONLY_PUNCTUATION = /^[\s,;:()[\]{}]*$/;
 
-const uniquenessIndexes = new WeakMap<
-	Run[],
-	Map<number, Map<string, number>>
->();
+interface LineSite {
+	run: Run;
+	at: number;
+}
+
+const firstLineIndexes = new WeakMap<Run[], Map<string, LineSite[]>>();
 
 function nonSpace(text: string): number {
 	return text.replace(/\s/g, "").length;
 }
 
+function indentOf(line: string): number {
+	return line.length - line.trimStart().length;
+}
+
 /**
  * How much a line says about its block: its non-space character count when it has a
  * non-keyword identifier, or a string or number literal that is not the whole line. Closers,
- * bare keywords, imports, requires, uses, re-exports and bare literals carry none.
+ * bare keywords, imports, requires, uses, re-exports and bare literals carry none. A line
+ * longer than 2000 characters carries none, so a crafted line never reaches the literal scan.
  */
 export function lineInformation(line: string): number {
 	const text = line.trim();
-	if (text === "" || IMPORT_LIKE.test(text)) return 0;
+	if (text === "" || text.length > MAX_ANALYZED_LINE || IMPORT_LIKE.test(text))
+		return 0;
 	const withoutLiterals = text.replace(LITERAL, " ");
 	const hasLiteral = text.match(LITERAL) !== null;
 	const names = withoutLiterals.match(IDENTIFIER) ?? [];
@@ -52,23 +66,30 @@ export function lineInformation(line: string): number {
 	return 0;
 }
 
-function windowCounts(runs: Run[], size: number): Map<string, number> {
-	let bySize = uniquenessIndexes.get(runs);
-	if (!bySize) {
-		bySize = new Map();
-		uniquenessIndexes.set(runs, bySize);
-	}
-	const cached = bySize.get(size);
-	if (cached) return cached;
-	const counts = new Map<string, number>();
-	for (const run of runs) {
-		for (let k = 0; k + size <= run.lines.length; k++) {
-			const key = run.lines.slice(k, k + size).join("\n");
-			counts.set(key, (counts.get(key) ?? 0) + 1);
+function lineIndex(runs: Run[]): Map<string, LineSite[]> {
+	let index = firstLineIndexes.get(runs);
+	if (!index) {
+		index = new Map();
+		for (const run of runs) {
+			run.lines.forEach((line, at) => {
+				const sites = index?.get(line);
+				if (sites) sites.push({ run, at });
+				else index?.set(line, [{ run, at }]);
+			});
 		}
+		firstLineIndexes.set(runs, index);
 	}
-	bySize.set(size, counts);
-	return counts;
+	return index;
+}
+
+function occurrences(runs: Run[], window: string[]): number {
+	let found = 0;
+	for (const { run, at } of lineIndex(runs).get(window[0] as string) ?? []) {
+		if (at + window.length > run.lines.length) continue;
+		if (window.every((line, k) => run.lines[at + k] === line) && ++found > 1)
+			break;
+	}
+	return found;
 }
 
 /**
@@ -76,13 +97,8 @@ function windowCounts(runs: Run[], size: number): Map<string, number> {
  * and at most once among the added runs of the whole change.
  */
 export function isUnique(c: Candidate, deleted: Run[], added: Run[]): boolean {
-	const key = c.from.lines
-		.slice(c.fromStart, c.fromStart + c.length)
-		.join("\n");
-	return (
-		(windowCounts(deleted, c.length).get(key) ?? 0) <= 1 &&
-		(windowCounts(added, c.length).get(key) ?? 0) <= 1
-	);
+	const window = c.from.lines.slice(c.fromStart, c.fromStart + c.length);
+	return occurrences(deleted, window) <= 1 && occurrences(added, window) <= 1;
 }
 
 const drawn = new WeakMap<WorkBudget, Set<string>>();
@@ -103,9 +119,9 @@ function drawBudget(c: Candidate, chars: number, budget: WorkBudget): boolean {
 function isOpenSingleLine(c: Candidate, lines: string[]): boolean {
 	const present = lines.filter((line) => line.trim() !== "");
 	if (present.length !== 1) return false;
-	if (c.from.indentSensitive && (present[0] as string).trimEnd().endsWith(":"))
-		return true;
-	const code = (present[0] as string).replace(LITERAL, "");
+	const only = present[0] as string;
+	if (c.from.indentSensitive && only.trimEnd().endsWith(":")) return true;
+	const code = only.replace(LITERAL, "");
 	const opened = (code.match(/[([{]/g) ?? []).length;
 	const closed = (code.match(/[)\]}]/g) ?? []).length;
 	return opened > closed;
@@ -124,29 +140,94 @@ function isWholeDefinition(c: Candidate): boolean {
 	return DEFINITION_CLOSER.test(last);
 }
 
+function listsItems(run: Run): boolean {
+	return run.indentSensitive || isProseFile(run.filename);
+}
+
 /**
- * Decides whether an exact run is a block worth reporting. Every call draws one candidate and
- * the seed's characters from the budget, and rejects once either pool runs dry. Five or more
- * counted lines then qualify. One to four lines qualify when they carry at least 30
+ * True when a line cannot start a statement of its own: it opens with a closing bracket or a
+ * leading operator (`.`, `?`, `:`, `,`, `=`, `+`, `-`, `*`, `%`, `&`, `|`, `^`, `/`, `=>`).
+ * Indentation-sensitive and prose files list items with `-`, `*` and `+`, so there only the
+ * narrower set of chained-call and ternary starts counts.
+ */
+export function startsMidStatement(line: string, run: Run): boolean {
+	const text = line.trim();
+	if (CLOSER_START.test(text)) return true;
+	return (
+		listsItems(run) ? LEADING_OPERATOR_IN_LISTED_FILES : LEADING_OPERATOR
+	).test(text);
+}
+
+function lastPresentLine(run: Run, start: number, end: number): string {
+	for (let k = end - 1; k >= start; k--) {
+		const line = run.raw[k] as string;
+		if (line.trim() !== "") return line;
+	}
+	return "";
+}
+
+/**
+ * True when the statement that lines `start` up to `end` of the run finish may carry on past
+ * them. That holds when the last line ends in an operator or an opening bracket, when the
+ * line after it (in the run, or the context line that follows the run) starts mid-statement
+ * or is a closing bracket indented deeper than the last line, or, outside indentation-sensitive
+ * and prose files, when a line follows and the last line ends in none of `;`, `}`, `)`, `]`
+ * or `,`. A run that ends its hunk with no context line after it counts as finished.
+ */
+export function leavesStatementOpen(
+	run: Run,
+	start: number,
+	end: number,
+): boolean {
+	const last = lastPresentLine(run, start, end);
+	if (last === "") return false;
+	const code = last.trimEnd();
+	const strict = !listsItems(run);
+	if (strict && OPEN_ENDING.test(code)) return true;
+	const next = end < run.raw.length ? run.raw[end] : run.after;
+	const text = next?.trim() ?? "";
+	if (text === "") return false;
+	if (startsMidStatement(text, run)) {
+		return (
+			!CLOSER_START.test(text) || indentOf(next as string) > indentOf(last)
+		);
+	}
+	return strict && !TERMINATOR.test(code);
+}
+
+/**
+ * Decides whether an exact run is a block worth reporting. Five or more counted lines
+ * qualify without drawing from the budget's token and candidate pools, so a large block is
+ * never starved by earlier junk; within one file they must also occur once on each side. One
+ * to four lines draw once per distinct candidate, one candidate and the seed's characters,
+ * and are rejected when either pool is dry. They qualify when they carry at least 30
  * characters of information (50 within one file), or form a whole definition of at least 40
  * non-space characters, and occur once on each side. Such a short seed never qualifies when
- * it is a single line with unclosed brackets, ends in a colon in an indentation-sensitive
- * file, or starts by continuing an expression (a leading `.name`, `?`, `:`, `=>`, `+`, `,`,
- * `&&` or `||`). Within one file its two sides must also lie in different hunks, since a
- * short block moved inside one hunk is usually a misaligned diff.
+ * it holds a line over 2000 characters, is a single line with unclosed brackets, ends in a
+ * colon in an indentation-sensitive file, starts by continuing an expression, or may be
+ * continued by the line after it on either side (see `leavesStatementOpen`). Within one file
+ * its two sides must also lie in different hunks, since a short block moved inside one hunk
+ * is usually a misaligned diff.
  */
 export function acceptSeed(
 	c: Candidate,
 	ctx: { deleted: Run[]; added: Run[]; budget?: WorkBudget },
 ): boolean {
+	const sameFile = c.from.filename === c.to.filename;
+	if (c.counted >= MIN_COUNTED_LINES)
+		return !sameFile || isUnique(c, ctx.deleted, ctx.added);
 	const lines = c.from.lines.slice(c.fromStart, c.fromStart + c.length);
+	if (lines.some((line) => line.length > MAX_ANALYZED_LINE)) return false;
 	const chars = nonSpace(lines.join(""));
 	if (ctx.budget && !drawBudget(c, chars, ctx.budget)) return false;
-	if (c.counted >= MIN_COUNTED_LINES) return true;
 	if (isOpenSingleLine(c, lines)) return false;
-	if (MID_EXPRESSION.test(lines.find((l) => l.trim() !== "")?.trim() ?? ""))
+	if (startsMidStatement(lines.find((l) => l.trim() !== "") ?? "", c.from))
 		return false;
-	const sameFile = c.from.filename === c.to.filename;
+	if (
+		leavesStatementOpen(c.from, c.fromStart, c.fromStart + c.length) ||
+		leavesStatementOpen(c.to, c.toStart, c.toStart + c.length)
+	)
+		return false;
 	if (sameFile && c.from.hunk === c.to.hunk) return false;
 	const information = lines.reduce(
 		(sum, line) => sum + lineInformation(line),

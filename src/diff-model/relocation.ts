@@ -11,7 +11,13 @@ import {
 import { acceptSeed, MIN_COUNTED_LINES } from "./acceptance.js";
 import { type BudgetLimits, WorkBudget } from "./budget.js";
 import { findDeclarationMoves } from "./declarations.js";
-import { lexicallySafe, normalizeSafe } from "./lexical.js";
+import {
+	lexicallySafe,
+	MAX_ANALYZED_LINE,
+	normalizeSafe,
+	similarity,
+	tokens,
+} from "./lexical.js";
 import type { Divergence, DivergenceClass, Operation, Span } from "./types.js";
 
 const MAX_DIVERGENCES = 3;
@@ -19,11 +25,8 @@ const MAX_DIVERGENCE_SHARE = 0.2;
 const EDGE_SIMILARITY = 0.5;
 const MIN_COUNTED_LENGTH = 3;
 const MIN_RENAME_OCCURRENCES = 2;
-const MAX_TOKENIZED_LENGTH = 2000;
 
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
-const TOKEN =
-	/[A-Za-z_$][\w$]*|\d+(?:\.\d+)?|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\S/g;
 const HASH_COMMENT_FILE =
 	/(?:\.(?:py|pyi|sh|bash|zsh|rb|ya?ml|toml|mk)|(?:^|\/)Makefile)$/i;
 const SLASH_LINE_FILE =
@@ -61,19 +64,6 @@ interface Built {
 
 function isMeaningful(line: string): boolean {
 	return line.trim().length >= MIN_COUNTED_LENGTH;
-}
-
-function tokens(line: string): string[] {
-	return line.slice(0, MAX_TOKENIZED_LENGTH).match(TOKEN) ?? [];
-}
-
-function similarity(a: string, b: string): number {
-	const left = new Set(tokens(a));
-	const right = new Set(tokens(b));
-	let shared = 0;
-	for (const token of left) if (right.has(token)) shared++;
-	const union = left.size + right.size - shared;
-	return union === 0 ? 0 : shared / union;
 }
 
 /**
@@ -268,7 +258,7 @@ function renameIndexes(
 	baseLines: string[],
 	headLines: string[],
 ): Map<number, string[]> {
-	const oversized = (line: string) => line.length > MAX_TOKENIZED_LENGTH;
+	const oversized = (line: string) => line.length > MAX_ANALYZED_LINE;
 	if (baseLines.some(oversized) || headLines.some(oversized)) return new Map();
 	const perChange = changed.map((c) => substitutions(c.base, c.head));
 	const target = new Map<string, Set<string>>();
@@ -623,11 +613,14 @@ export const UNMATCHED_FILES =
 /**
  * Finds blocks that were deleted from one region and added to another, across files or
  * within one file, tolerating a few changed, inserted or removed lines inside the block. Exact runs
- * seed each block; the block is then widened over the lines between and next to the seeds,
- * its two sides are aligned, and every line that does not align becomes a divergence
- * classed as comment-only, rename or code. A block that would need more than 3 differing
- * lines or 20 percent of its length is reported as its exact runs only. Lines are compared
- * raw wherever whitespace-insensitive comparison is not known to be safe.
+ * seed each block, accepted by `acceptSeed`; the block is then widened over the lines between
+ * and next to the seeds, its two sides are aligned, and every line that does not align
+ * becomes a divergence classed as comment-only, rename or code. A block that would need more
+ * than 3 differing lines or 20 percent of its length is reported as its exact runs only.
+ * Lines are compared raw wherever whitespace-insensitive comparison is not known to be safe.
+ * One-line declarations are then paired by name (`findDeclarationMoves`). One `WorkBudget`
+ * covers the call. When its pools run dry the pass stops without reporting the loss, and
+ * the operations already found are returned.
  */
 export function findRelocations(
 	files: PushFile[],
@@ -660,7 +653,7 @@ export function findRelocations(
 		operations.push(...resolveChain(chain, budget));
 	}
 	if (!budget.exhausted)
-		operations.push(...findDeclarationMoves(deleted, added));
+		operations.push(...findDeclarationMoves(deleted, added, budget));
 	operations.sort(
 		(a, b) =>
 			compareText(a.from[0]?.filename, b.from[0]?.filename) ||
