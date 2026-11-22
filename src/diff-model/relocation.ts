@@ -19,7 +19,7 @@ import {
 	similarity,
 	tokens,
 } from "./lexical.js";
-import { findReshapes, receiverOnlyDifference } from "./reshape.js";
+import { findReshapes, receiverChangeClass } from "./reshape.js";
 import { filesWithLiterals, findTokenOperations } from "./token-pass.js";
 import type { Divergence, DivergenceClass, Operation, Span } from "./types.js";
 
@@ -504,15 +504,14 @@ function build(
 			? "comment-only"
 			: renames.has(at)
 				? "rename"
-				: d.kind === "changed" &&
-						receiverOnlyDifference(
+				: (d.kind === "changed" &&
+						receiverChangeClass(
 							baseText as string,
 							headText as string,
 							from.filename,
 							to.filename,
-						)
-					? "receiver"
-					: "code";
+						)) ||
+					"code";
 		if (cls === "rename")
 			for (const name of renames.get(at) ?? []) renamedNames.add(name);
 		if (
@@ -595,7 +594,7 @@ function toOperation(from: Run, to: Run, built: Built): Operation {
 		],
 		exact: built.divergences.length === 0,
 		divergences: built.divergences,
-		reviewWeight: Math.max(weighed + built.renamed, hasReceiver ? 1 : 0),
+		reviewWeight: weighed + built.renamed + (hasReceiver ? 1 : 0),
 	};
 }
 

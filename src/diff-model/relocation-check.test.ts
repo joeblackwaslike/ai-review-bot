@@ -456,14 +456,18 @@ describe("verifyRelocation", () => {
 			const { files, op } = relocation(base, head, ["a.py", "b.py"]);
 			expect(op.divergences.length).toBeGreaterThanOrEqual(1);
 			expect(verifyRelocation(op, files)).toBe(true);
-			expect(verifyRelocation(claimedClean(op), files)).toBe(false);
+			expect(
+				verifyRelocation({ ...claimedClean(op), reviewWeight: 0 }, files),
+			).toBe(false);
 		});
 
 		it("rejects a shell continuation broken by trailing whitespace claimed clean", () => {
 			const base = withLine(body(10), 4, "  cmd --flag \\");
 			const head = withLine(base, 4, "  cmd --flag \\ ");
 			const { files, op } = relocation(base, head, ["a.sh", "b.sh"]);
-			expect(verifyRelocation(claimedClean(op), files)).toBe(false);
+			expect(
+				verifyRelocation({ ...claimedClean(op), reviewWeight: 0 }, files),
+			).toBe(false);
 		});
 
 		it("does not treat a shell heredoc whose inner whitespace changed as exact", () => {
@@ -477,7 +481,9 @@ describe("verifyRelocation", () => {
 			const head = withLine(base, 7, "  inner text");
 			const { files, op } = relocation(base, head, ["a.sh", "b.sh"]);
 			expect(op.exact).toBe(false);
-			expect(verifyRelocation(claimedClean(op), files)).toBe(false);
+			expect(
+				verifyRelocation({ ...claimedClean(op), reviewWeight: 0 }, files),
+			).toBe(false);
 		});
 	});
 });
@@ -1871,7 +1877,7 @@ function reweighed(op: Operation): Operation {
 		(d) => d.class === "signature" || d.class === "code",
 	).length;
 	const receivers = op.divergences.some((d) => d.class === "receiver");
-	return { ...op, reviewWeight: Math.max(counted, receivers ? 1 : 0) };
+	return { ...op, reviewWeight: counted + (receivers ? 1 : 0) };
 }
 
 function without(
@@ -2321,4 +2327,174 @@ describe("verifyRelocation with signature and receiver divergences", () => {
 			expect(verifyRelocation(moved, java)).toBe(false);
 		});
 	});
+});
+
+const STATE_BASE = [
+	"def tally(items, n):",
+	"    count = n + 1",
+	"    rows = load_rows(items)",
+	"    keys = build_keys(rows, items)",
+	"    check_keys(keys, rows)",
+	"    return count",
+];
+const STATE_HEAD = [
+	"    def tally(self, items, n):",
+	"        self.count = n + 1",
+	"        rows = load_rows(items)",
+	"        keys = build_keys(rows, items)",
+	"        check_keys(keys, rows)",
+	"        return count",
+];
+const SWAP_BASE = [
+	"    def tally(self, x):",
+	"        total = self.a + x",
+	"        rows = load_rows(total)",
+	"        keys = build_keys(rows, x)",
+	"        check_keys(keys, rows)",
+	"        return total",
+];
+const SWAP_HEAD = [
+	"def tally(x):",
+	"    total = a + self.x",
+	"    rows = load_rows(total)",
+	"    keys = build_keys(rows, x)",
+	"    check_keys(keys, rows)",
+	"    return total",
+];
+const TS_RISKY_TAIL = "\n+  const s = `a\n+  b`;";
+
+describe("verifyRelocation review weight for receivers", () => {
+	it("weighs a signature change plus plain receiver lines as 2", () => {
+		const { files, op } = claim("a.py", "b.py", PY_FUNCTION, PY_METHOD);
+		expect(op.reviewWeight).toBe(2);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("drops a signature claim whose weight was forged to 0, 1 or 9", () => {
+		const { files, op } = claim("a.py", "b.py", PY_FUNCTION, PY_METHOD);
+		for (const w of [0, 1, 9])
+			expect(verifyRelocation({ ...op, reviewWeight: w }, files)).toBe(false);
+	});
+
+	it("drops a claim that keeps the old max(...) receiver weight", () => {
+		const { files, op } = claim("a.ts", "b.ts", TS_FUNCTION, TS_METHOD);
+		const old = Math.max(
+			op.divergences.filter((d) => d.class === "signature").length,
+			1,
+		);
+		expect(old).not.toBe(op.reviewWeight);
+		expect(verifyRelocation({ ...op, reviewWeight: old }, files)).toBe(false);
+	});
+
+	it("classes an assignment target that gained self. as code", () => {
+		const { files, op } = claim("a.py", "b.py", STATE_BASE, STATE_HEAD);
+		expect(op.divergences.map((d) => d.class)).toEqual(["signature", "code"]);
+		expect(op.reviewWeight).toBe(2);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("drops a claim that calls an assignment target change a receiver", () => {
+		const { files, op } = claim("a.py", "b.py", STATE_BASE, STATE_HEAD);
+		const forged = reweighed({
+			...op,
+			divergences: op.divergences.map((d) =>
+				d.class === "code" ? { ...d, class: "receiver" as const } : d,
+			),
+		});
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("classes one receiver dropped and another added on a line as code", () => {
+		const { files, op } = claim("a.py", "b.py", SWAP_BASE, SWAP_HEAD);
+		expect(op.divergences.map((d) => d.class)).toEqual(["signature", "code"]);
+		expect(verifyRelocation(op, files)).toBe(true);
+		const forged = reweighed({
+			...op,
+			divergences: op.divergences.map((d) =>
+				d.class === "code" ? { ...d, class: "receiver" as const } : d,
+			),
+		});
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("drops a code claim whose weight leaves out the code line", () => {
+		const { files, op } = claim("a.py", "b.py", STATE_BASE, STATE_HEAD);
+		expect(verifyRelocation({ ...op, reviewWeight: 1 }, files)).toBe(false);
+	});
+});
+
+describe("verifyRelocation forged signature and receiver claims", () => {
+	it("drops a body line dedented in the head of a Python method", () => {
+		const { files, op } = claim("a.py", "b.py", PY_FUNCTION, PY_METHOD);
+		const edited = withHeadText(
+			files,
+			"+        rounded = round(taxed, 2)",
+			"+    rounded = round(taxed, 2)",
+		);
+		expect(verifyRelocation(op, edited)).toBe(false);
+	});
+
+	it("drops a body line indented deeper in the head of a Python method", () => {
+		const { files, op } = claim("a.py", "b.py", PY_FUNCTION, PY_METHOD);
+		const edited = withHeadText(
+			files,
+			"+        rounded = round(taxed, 2)",
+			"+            rounded = round(taxed, 2)",
+		);
+		expect(verifyRelocation(op, edited)).toBe(false);
+	});
+
+	it("drops a signature divergence whose original text was tampered", () => {
+		const { files, op } = claim("a.py", "b.py", PY_FUNCTION, PY_METHOD);
+		const forged = {
+			...op,
+			divergences: op.divergences.map((d) =>
+				d.class === "signature" ? { ...d, original: "def other():" } : d,
+			),
+		};
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("drops a receiver divergence whose original text was tampered", () => {
+		const { files, op } = claim("a.py", "b.py", PY_FUNCTION, PY_METHOD);
+		const forged = {
+			...op,
+			divergences: op.divergences.map((d) =>
+				d.class === "receiver" ? { ...d, original: "zzz" } : d,
+			),
+		};
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("drops a duplicated signature divergence", () => {
+		const { files, op } = claim("a.py", "b.py", PY_FUNCTION, PY_METHOD);
+		const sig = op.divergences.filter((d) => d.class === "signature");
+		const forged = reweighed({
+			...op,
+			divergences: [...op.divergences, ...sig],
+		});
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("drops a TypeScript reshape when a template literal sits elsewhere in the head patch", () => {
+		const { files, op } = claim("a.ts", "b.ts", TS_FUNCTION, TS_METHOD);
+		expect(verifyRelocation(op, files)).toBe(true);
+		const tainted = files.map((f) =>
+			f.filename === "b.ts" ? { ...f, patch: `${f.patch}${TS_RISKY_TAIL}` } : f,
+		);
+		expect(verifyRelocation(op, tainted)).toBe(false);
+	});
+});
+
+describe("verifyRelocation opener scan stays linear", () => {
+	const longLines = [`${"static ".repeat(32000)}!`, "a <b ".repeat(32000)];
+
+	it.each(longLines)("returns quickly for a %#th pathological line", (line) => {
+		const lines = [...TS_METHOD.slice(0, 3), line, ...TS_METHOD.slice(3)];
+		const files = named("a.ts", "b.ts", TS_FUNCTION, lines);
+		const started = performance.now();
+		const ops = findRelocations(files);
+		for (const op of ops) verifyRelocation(op, files);
+		expect(performance.now() - started).toBeLessThan(1000);
+	}, 5000);
 });

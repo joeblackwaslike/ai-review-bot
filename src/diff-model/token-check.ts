@@ -547,6 +547,10 @@ export function tokenEquivalent(
 	return { equivalent: true, reindent: headShape.base - baseShape.base };
 }
 
+/**
+ * Receiver prefixes per extension. reshape.ts keeps its own copy (RECEIVERS) so the checker
+ * stays independent of the matcher; reshape.test.ts pins the two together.
+ */
 const RESHAPE_RECEIVERS: Record<string, Record<string, string>> = {
 	py: { self: ".", cls: "." },
 	pyi: { self: ".", cls: "." },
@@ -557,11 +561,12 @@ const RESHAPE_RECEIVERS: Record<string, Record<string, string>> = {
 const MAX_SIGNATURE_LINES = 16;
 const PY_DEF = /^\s*(?:async\s+)?def\s+\w/;
 const NOT_A_DEFINITION =
-	/^\s*(?:if|else|for|while|switch|catch|try|do|return|throw|new|synchronized|using|lock|when|foreach|await|yield|case)\b/;
+	/^\s*(?:if|else|for|while|switch|catch|try|do|return|throw|new|with|using|await|yield|case)\b/;
 const KEYWORD_DEFINITION =
-	/^\s*(?:(?:export|default|async|public|private|protected|static|pub)\s+)*(?:function|fun)\b/;
+	/^\s*(?:(?:export|default|async|public|private|protected|static)\s+)*function\b/;
 const METHOD_DEFINITION =
-	/^\s*(?:(?:public|private|protected|internal|static|async|override|abstract|final|virtual|sealed|readonly|get|set|open|suspend|inline|synchronized|native|unsafe|partial)\s+)*(?:[\w$.<>,?[\]]+\s+)*[A-Za-z_$][\w$]*\s*(?:<[^>()]*>)?\(/;
+	/^\s*(?:[\w$.<>,?[\]]+\s+)*[A-Za-z_$][\w$]*\s*(?:<[^>()]*>)?\(/;
+const ASSIGNMENT_TOKEN = /^(?:\*\*|\/\/|<<|>>>?|&&|\|\||\?\?|[-+*/%&|^:])?=$/;
 const ANNOTATION = /^\s*@[\w.$]+/;
 
 interface Stripped {
@@ -645,12 +650,36 @@ function comparable(
 }
 
 /**
- * Whether two single lines differ only by a receiver prefix: equal tokens once
- * `self.`/`cls.` (py pyi) or `this.` (js jsx mjs cjs ts tsx) are removed, with different
- * removed receivers. A receiver is
- * never removed after `.` or `::`, nor at the end of a line. False for lines holding a
- * comment, template literal or string delimiter the tokenizer cannot read, and across
- * language families.
+ * The kind of a receiver difference on one logical line. The tokens are equal on both
+ * sides once receivers are removed; `baseDropped` and `headDropped` hold, per token, the
+ * receiver removed just before it. A difference is `code` when it sits before the first
+ * assignment operator (it names the state being written) or when one receiver was lost
+ * and another gained on the same line (the line now reads different state). Otherwise it
+ * is `receiver`, and null when no receiver differs.
+ */
+function receiverKind(
+	tokens: string[],
+	baseDropped: string[],
+	headDropped: string[],
+): "receiver" | "code" | null {
+	const differing = tokens.flatMap((_, k) =>
+		baseDropped[k] === headDropped[k] ? [] : [k],
+	);
+	if (differing.length === 0) return null;
+	const write = tokens.findIndex((t) => ASSIGNMENT_TOKEN.test(t));
+	if (write >= 0 && differing.some((k) => k < write)) return "code";
+	const lost = differing.some((k) => baseDropped[k] && !headDropped[k]);
+	const gained = differing.some((k) => !baseDropped[k] && headDropped[k]);
+	return lost && gained ? "code" : "receiver";
+}
+
+/**
+ * Whether two single lines differ only by a receiver prefix that does not touch state
+ * meaning: equal tokens once `self.`/`cls.` (py pyi) or `this.` (js jsx mjs cjs ts tsx)
+ * are removed, with different removed receivers, none of them on an assignment target and
+ * not one receiver swapped for another. A receiver is never removed after `.` or `::`,
+ * nor at the end of a line. False for lines holding a comment, template literal or string
+ * delimiter the tokenizer cannot read, and across language families.
  */
 export function receiverOnlyLine(
 	base: string,
@@ -664,7 +693,8 @@ export function receiverOnlyLine(
 	const h = comparable([head], exts[1], false, false);
 	if (!b || !h) return false;
 	return (
-		sameTokens(b.tokens, h.tokens) && !sameTokens(b.droppedAt, h.droppedAt)
+		sameTokens(b.tokens, h.tokens) &&
+		receiverKind(b.tokens, b.droppedAt, h.droppedAt) === "receiver"
 	);
 }
 
@@ -680,18 +710,19 @@ function isDecoratorLine(line: string): boolean {
 }
 
 function isDefinitionLine(line: string, ext: string): boolean {
+	if (line.length > MAX_LINE) return false;
 	if (PYTHON.has(ext)) return PY_DEF.test(line);
 	if (NOT_A_DEFINITION.test(line)) return false;
 	return KEYWORD_DEFINITION.test(line) || METHOD_DEFINITION.test(line);
 }
 
 /**
- * Reads the signature at the start of a block: decorators (`@name`, Rust `#[...]`) then
+ * Reads the signature at the start of a block: decorators (`@name` lines) then
  * one definition line whose logical line ends where the ( and [ depth returns to zero,
  * closed by `:` in Python and `{` elsewhere. `end` is the index of the last signature
  * line; `tokens` are the normalized tokens of decorators plus opening line. Null when the
  * block does not start with a definition, holds a comment on those lines, or the file is
- * outside the reshape languages.
+ * outside py pyi js jsx mjs cjs ts tsx.
  */
 export function leadingSignature(
 	lines: string[],
@@ -753,7 +784,8 @@ export interface ReshapeBlock {
 /**
  * Whether two blocks hold the same tokens once receiver prefixes are removed, written
  * independently of the matcher. `pairs` lists every (base line, head line) index pair
- * whose tokens only match because a receiver was removed, differing in the removed text.
+ * whose tokens only match because a receiver was removed, differing in the removed text;
+ * `codePairs` is the subset whose difference changes state meaning (see `receiverKind`).
  * Both files must be in the same family among the reshape languages, lines may hold no
  * comment, template literal, triple-quoted string, heredoc or possible regex literal, and
  * brackets must balance (a `{` already opened by the signature counts as open). In Python
@@ -763,8 +795,13 @@ export interface ReshapeBlock {
 export function reshapeEquivalent(
 	base: ReshapeBlock,
 	head: ReshapeBlock,
-): { equivalent: boolean; pairs: [number, number][]; reindent: number } {
-	const no = { equivalent: false, pairs: [], reindent: 0 };
+): {
+	equivalent: boolean;
+	pairs: [number, number][];
+	codePairs: [number, number][];
+	reindent: number;
+} {
+	const no = { equivalent: false, pairs: [], codePairs: [], reindent: 0 };
 	const exts = reshapeExtensions(
 		base.filename,
 		base.lines,
@@ -776,16 +813,26 @@ export function reshapeEquivalent(
 	const h = comparable(head.lines, exts[1], head.opensBrace, true);
 	if (!b || !h || b.tokens.length === 0 || !sameTokens(b.tokens, h.tokens))
 		return no;
-	const pairs: [number, number][] = [];
-	const seen = new Set<string>();
+	const groups = new Map<string, number[]>();
 	b.tokens.forEach((_, k) => {
-		if (b.droppedAt[k] === h.droppedAt[k]) return;
 		const key = `${b.lineOf[k]}|${h.lineOf[k]}`;
-		if (seen.has(key)) return;
-		seen.add(key);
-		pairs.push([b.lineOf[k] as number, h.lineOf[k] as number]);
+		groups.set(key, [...(groups.get(key) ?? []), k]);
 	});
-	if (!INDENTED.has(exts[0])) return { equivalent: true, pairs, reindent: 0 };
+	const pairs: [number, number][] = [];
+	const codePairs: [number, number][] = [];
+	for (const [key, ks] of groups) {
+		const kind = receiverKind(
+			ks.map((k) => b.tokens[k] as string),
+			ks.map((k) => b.droppedAt[k] as string),
+			ks.map((k) => h.droppedAt[k] as string),
+		);
+		if (kind === null) continue;
+		const pair = key.split("|").map(Number) as [number, number];
+		pairs.push(pair);
+		if (kind === "code") codePairs.push(pair);
+	}
+	if (!INDENTED.has(exts[0]))
+		return { equivalent: true, pairs, codePairs, reindent: 0 };
 	const shape = (block: ReshapeBlock, starts: number[]) => {
 		const all = [
 			...(block.opener === undefined ? [] : [block.opener]),
@@ -801,5 +848,5 @@ export function reshapeEquivalent(
 	const hs = shape(head, h.starts);
 	if (!bs || !hs) return no;
 	if (!sameTokens(bs.depths.map(String), hs.depths.map(String))) return no;
-	return { equivalent: true, pairs, reindent: hs.first - bs.first };
+	return { equivalent: true, pairs, codePairs, reindent: hs.first - bs.first };
 }

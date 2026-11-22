@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { receiverChangeClass, signatureRange } from "./reshape.js";
 import {
 	leadingSignature,
 	receiverOnlyLine,
@@ -404,7 +405,12 @@ describe("reshapeEquivalent", () => {
 				"    def a(self, v):",
 			),
 		);
-		expect(result).toEqual({ equivalent: true, pairs: [[1, 1]], reindent: 4 });
+		expect(result).toEqual({
+			equivalent: true,
+			pairs: [[1, 1]],
+			codePairs: [],
+			reindent: 4,
+		});
 	});
 
 	it("rejects a body that differs beyond a receiver", () => {
@@ -434,5 +440,156 @@ describe("reshapeEquivalent", () => {
 				block("b.ts", ["  f();", "}"]),
 			).equivalent,
 		).toBe(false);
+	});
+});
+
+describe("receiverOnlyLine state meaning", () => {
+	it("refuses a receiver gained or lost on an assignment target", () => {
+		expect(
+			receiverOnlyLine("count = n", "self.count = n", "a.py", "b.py"),
+		).toBe(false);
+		expect(
+			receiverOnlyLine("self.count = n", "count = n", "a.py", "b.py"),
+		).toBe(false);
+		expect(
+			receiverOnlyLine("cls.count += n", "self.count += n", "a.py", "b.py"),
+		).toBe(false);
+		expect(
+			receiverOnlyLine(
+				"total = total + 1",
+				"self.total = total + 1",
+				"a.py",
+				"b.py",
+			),
+		).toBe(false);
+		expect(receiverOnlyLine("this.n = n;", "n = n;", "a.ts", "b.ts")).toBe(
+			false,
+		);
+	});
+
+	it("refuses one receiver dropped while another is added", () => {
+		expect(
+			receiverOnlyLine(
+				"total = self.a + x",
+				"total = a + self.x",
+				"a.py",
+				"b.py",
+			),
+		).toBe(false);
+	});
+
+	it("still accepts a receiver gained on the value side", () => {
+		expect(
+			receiverOnlyLine("total = a + x", "total = self.a + x", "a.py", "b.py"),
+		).toBe(true);
+	});
+});
+
+describe("reshapeEquivalent code pairs", () => {
+	const block = (filename: string, lines: string[], opensBrace = false) => ({
+		filename,
+		lines,
+		opensBrace,
+	});
+
+	it("lists an assignment target change as a code pair", () => {
+		const result = reshapeEquivalent(
+			block("a.ts", ["  n = 1;", "  f(x);"], true),
+			block("b.ts", ["  this.n = 1;", "  this.f(x);"], true),
+		);
+		expect(result.equivalent).toBe(true);
+		expect(result.pairs).toEqual([
+			[0, 0],
+			[1, 1],
+		]);
+		expect(result.codePairs).toEqual([[0, 0]]);
+	});
+
+	it("lists a swapped receiver as a code pair", () => {
+		const result = reshapeEquivalent(
+			block("a.py", ["total = self.a + x"]),
+			block("b.py", ["total = a + self.x"]),
+		);
+		expect(result.codePairs).toEqual([[0, 0]]);
+	});
+});
+
+describe("checker opener scan", () => {
+	it("returns null for hostile lines without scanning them", () => {
+		for (const line of [`${"static ".repeat(32000)}!`, "a <b ".repeat(32000)]) {
+			const started = performance.now();
+			expect(leadingSignature([line, "}"], "a.ts")).toBeNull();
+			expect(receiverOnlyLine(line, line, "a.ts", "b.ts")).toBe(false);
+			expect(
+				reshapeEquivalent(
+					{ filename: "a.ts", lines: [line], opensBrace: false },
+					{ filename: "b.ts", lines: [line], opensBrace: false },
+				).equivalent,
+			).toBe(false);
+			expect(performance.now() - started).toBeLessThan(1000);
+		}
+	}, 5000);
+
+	it("handles a 2000-character modifier run quickly", () => {
+		const started = performance.now();
+		leadingSignature([`${"static ".repeat(285)}!`], "a.ts");
+		expect(performance.now() - started).toBeLessThan(1000);
+	});
+
+	it("does not read with (scope) { as a definition opening", () => {
+		expect(leadingSignature(["with (scope) {", "}"], "a.js")).toBeNull();
+		expect(leadingSignature(["run(scope) {", "}"], "a.js")).not.toBeNull();
+	});
+});
+
+describe("matcher and checker agree on the shared reshape vocabulary", () => {
+	const openers: [string, string][] = [
+		["function f(a) {", "a.ts"],
+		["async function f(a) {", "a.js"],
+		["export default function f(a) {", "a.ts"],
+		["  run(a, b) {", "a.ts"],
+		["  static make(a) {", "a.ts"],
+		["  async load<T>(a: T) {", "a.ts"],
+		["  get value() {", "a.ts"],
+		["if (ready(x)) {", "a.ts"],
+		["while (more(x)) {", "a.ts"],
+		["switch (kind(x)) {", "a.ts"],
+		["with (scope) {", "a.js"],
+		["return f(x) {", "a.ts"],
+		["} catch (e) {", "a.ts"],
+		["const x = f(y) {", "a.ts"],
+		["def f(self, a):", "a.py"],
+		["async def f(a):", "a.py"],
+		["class A(Base):", "a.py"],
+		["if ready(x):", "a.py"],
+		["for x in f(y):", "a.py"],
+	];
+
+	it.each(openers)("agrees on %s in %s", (line, file) => {
+		const terminator = file.endsWith(".py") ? [] : ["}"];
+		const matcher = signatureRange([line], file) !== null;
+		const checker = leadingSignature([line, ...terminator], file) !== null;
+		expect(checker).toBe(matcher);
+	});
+
+	const receivers: [string, string, string][] = [
+		["f(x)", "this.f(x)", "ts"],
+		["f(x)", "this.f(x)", "js"],
+		["this.n = 1;", "n = 1;", "ts"],
+		["f(x)", "self.f(x)", "py"],
+		["f(x)", "cls.f(x)", "py"],
+		["self.f(x)", "cls.f(x)", "py"],
+		["total = self.a + x", "total = a + self.x", "py"],
+		["count = n", "self.count = n", "py"],
+		["x = self", "x = self.", "py"],
+		["f(x)", "that.f(x)", "ts"],
+		["f(x)", "self.f(x)", "ts"],
+		["f(x)", "this.f(x)", "py"],
+	];
+
+	it.each(receivers)("classifies %s against %s the same in %s", (a, b, ext) => {
+		const file = `f.${ext}`;
+		const matcher = receiverChangeClass(a, b, file, file);
+		expect(receiverOnlyLine(a, b, file, file)).toBe(matcher === "receiver");
 	});
 });

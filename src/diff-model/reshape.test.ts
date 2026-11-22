@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PushFile } from "../moved-blocks.js";
+import { buildDiffModel } from "./index.js";
 import { findRelocations } from "./relocation.js";
 import { signatureRange } from "./reshape.js";
 import type { Operation } from "./types.js";
@@ -142,7 +143,7 @@ describe("reshape matching", () => {
 		expect(classes(op)).toEqual(["signature", "receiver", "receiver"]);
 		expect(op.shape).toEqual({ reindent: 4 });
 		expect(op.exact).toBe(false);
-		expect(op.reviewWeight).toBe(1);
+		expect(op.reviewWeight).toBe(2);
 	});
 
 	it("reports every line of a four-line signature", () => {
@@ -600,4 +601,330 @@ describe("reshape budget", () => {
 		expect(findRelocations(files, { tokens: 40 })).toEqual(first);
 		expect(findRelocations(files, { tokens: 40 })).toEqual(first);
 	});
+});
+
+const STATE_BASE = [
+	"def tally(items, n):",
+	"    count = n + 1",
+	"    rows = load_rows(items)",
+	"    keys = build_keys(rows, items)",
+	"    check_keys(keys, rows)",
+	"    return count",
+];
+const STATE_HEAD = [
+	"    def tally(self, items, n):",
+	"        self.count = n + 1",
+	"        rows = load_rows(items)",
+	"        keys = build_keys(rows, items)",
+	"        check_keys(keys, rows)",
+	"        return count",
+];
+const reshapeOf = (ops: Operation[]) =>
+	ops.find((o) => o.divergences.some((d) => d.class !== "comment-only"));
+
+describe("reshape receiver weight and code classification", () => {
+	it("adds a flat 1 for any number of plain receiver lines", () => {
+		const op = reshapeOf(move("a.ts", "b.ts", TS_FUNCTION, TS_METHOD));
+		expect(classes(op)).toEqual([
+			"signature",
+			"receiver",
+			"receiver",
+			"receiver",
+			"receiver",
+			"receiver",
+		]);
+		expect(op?.reviewWeight).toBe(2);
+	});
+
+	it("classes an assignment target that gained self. as code and weighs it", () => {
+		const op = reshapeOf(move("a.py", "b.py", STATE_BASE, STATE_HEAD));
+		expect(classes(op)).toEqual(["signature", "code"]);
+		expect(op?.reviewWeight).toBe(2);
+	});
+
+	it("classes an augmented assignment target that changed from cls. to self. as code", () => {
+		const base = [
+			"    def bump(cls, n):",
+			"        cls.count += n",
+			"        rows = load_rows(n)",
+			"        keys = build_keys(rows, n)",
+			"        check_keys(keys, rows)",
+			"        return rows",
+		];
+		const head = base.map((l) => `    ${l.replace("cls", "self")}`);
+		const op = reshapeOf(move("a.py", "b.py", base, head));
+		expect(classes(op)).toEqual(["signature", "code"]);
+	});
+
+	it("classes a local assignment that became an attribute assignment as code", () => {
+		const base = [
+			"def tally(n):",
+			"    total = total + 1",
+			"    rows = load_rows(n)",
+			"    keys = build_keys(rows, n)",
+			"    check_keys(keys, rows)",
+			"    return rows",
+		];
+		const head = [
+			"    def tally(self, n):",
+			"        self.total = total + 1",
+			"        rows = load_rows(n)",
+			"        keys = build_keys(rows, n)",
+			"        check_keys(keys, rows)",
+			"        return rows",
+		];
+		expect(classes(reshapeOf(move("a.py", "b.py", base, head)))).toEqual([
+			"signature",
+			"code",
+		]);
+	});
+
+	it("classes one receiver dropped and another added on a line as code", () => {
+		const base = [
+			"    def tally(self, x):",
+			"        total = self.a + x",
+			"        rows = load_rows(total)",
+			"        keys = build_keys(rows, x)",
+			"        check_keys(keys, rows)",
+			"        return total",
+		];
+		const head = [
+			"def tally(x):",
+			"    total = a + self.x",
+			"    rows = load_rows(total)",
+			"    keys = build_keys(rows, x)",
+			"    check_keys(keys, rows)",
+			"    return total",
+		];
+		expect(classes(reshapeOf(move("a.py", "b.py", base, head)))).toEqual([
+			"signature",
+			"code",
+		]);
+	});
+
+	it("keeps a plain gained receiver on the right of an assignment as receiver", () => {
+		const base = [
+			"def tally(n):",
+			"    count = n + 1",
+			"    rows = load_rows(n)",
+			"    keys = build_keys(rows, n)",
+			"    check_keys(keys, rows)",
+			"    return count",
+		];
+		const head = [
+			"    def tally(self, n):",
+			"        count = self.n + 1",
+			"        rows = load_rows(n)",
+			"        keys = build_keys(rows, n)",
+			"        check_keys(keys, rows)",
+			"        return count",
+		];
+		expect(classes(reshapeOf(move("a.py", "b.py", base, head)))).toEqual([
+			"signature",
+			"receiver",
+		]);
+	});
+});
+
+describe("reshape opener scan stays linear", () => {
+	const hostile = [`${"static ".repeat(32000)}!`, "a <b ".repeat(32000)];
+
+	it.each(hostile)("finishes under a second for hostile line %#", (line) => {
+		const base = [...TS_FUNCTION.slice(0, 3), line, ...TS_FUNCTION.slice(3)];
+		const head = [...TS_METHOD.slice(0, 3), line, ...TS_METHOD.slice(3)];
+		const started = performance.now();
+		move("a.ts", "b.ts", base, head);
+		expect(performance.now() - started).toBeLessThan(1000);
+		const files = [deletedFrom("a.ts", 10, base), addedTo("b.ts", 3, head)];
+		const modelStarted = performance.now();
+		buildDiffModel({
+			scopeFiles: files,
+			prFiles: files,
+			prFilesComplete: true,
+			title: "t",
+			body: null,
+		});
+		expect(performance.now() - modelStarted).toBeLessThan(1000);
+	}, 5000);
+
+	it("finishes a 2000-character modifier run under a second", () => {
+		const line = `${"static ".repeat(330)}!`;
+		const started = performance.now();
+		signatureRange([line], "a.ts");
+		expect(performance.now() - started).toBeLessThan(1000);
+	});
+
+	it("refuses a line longer than the analysis cap as an opener", () => {
+		expect(
+			signatureRange([`function f(${"a, ".repeat(900)}) {`], "a.ts"),
+		).toBeNull();
+	});
+});
+
+describe("reshape treats with as control flow", () => {
+	it("does not read with (scope) { as a definition opening", () => {
+		expect(signatureRange(["  with (scope) {"], "a.js")).toBeNull();
+		expect(signatureRange(["  run(scope) {"], "a.js")).toEqual({
+			start: 0,
+			end: 0,
+		});
+	});
+});
+
+describe("reshape guards that keep a claim from forming", () => {
+	it("makes no claim for a claim shorter than 5 counted lines", () => {
+		const base = [
+			"def compute_invoice_total(line_items, region_code):",
+			"    discounted_subtotal = apply_regional_discount(line_items, region_code)",
+			"    shipping_with_surcharge = estimate_shipping(discounted_subtotal, region_code)",
+			"    return finalize_invoice_amount(discounted_subtotal, shipping_with_surcharge)",
+		];
+		const head = [
+			"    def compute_invoice_total(self, line_items, region_code):",
+			"        discounted_subtotal = self.apply_regional_discount(line_items, region_code)",
+			"        shipping_with_surcharge = self.estimate_shipping(discounted_subtotal, region_code)",
+			"        return self.finalize_invoice_amount(discounted_subtotal, shipping_with_surcharge)",
+		];
+		expect(reshapeOf(move("a.py", "b.py", base, head))).toBeUndefined();
+	});
+
+	it("makes no claim when the base signature opens a template literal", () => {
+		const base = [
+			"function applyDiscount(cart: Cart, code = `a",
+			"b`): number {",
+			...TS_FUNCTION.slice(1),
+		];
+		expect(reshapeOf(move("a.ts", "b.ts", base, TS_METHOD))).toBeUndefined();
+	});
+
+	it("makes no claim when the head signature opens a template literal", () => {
+		const head = [
+			"  discount(cart: Cart, code = `a",
+			"b`): number {",
+			...TS_METHOD.slice(1),
+		];
+		expect(reshapeOf(move("a.ts", "b.ts", TS_FUNCTION, head))).toBeUndefined();
+	});
+
+	it("makes no claim when the matched body closes a bracket it never opened", () => {
+		const base = [...TS_FUNCTION.slice(0, 5), "  });", "}"];
+		const head = [...TS_METHOD.slice(0, 5), "    });", "  }"];
+		expect(reshapeOf(move("a.ts", "b.ts", base, head))).toBeUndefined();
+	});
+});
+
+const PREFACE = [
+	"const REGION_TABLE = buildRegionTable(loadRegions(), defaultCurrency);",
+	"const SURCHARGE_TABLE = buildSurchargeTable(REGION_TABLE, surchargePolicy);",
+	"const AUDIT_SINK = createAuditSink(auditConfig, REGION_TABLE, SURCHARGE_TABLE);",
+	"const CACHE_KEY = deriveCacheKey(REGION_TABLE, SURCHARGE_TABLE, AUDIT_SINK);",
+	"registerInvoiceHooks(AUDIT_SINK, CACHE_KEY, SURCHARGE_TABLE, REGION_TABLE);",
+];
+
+describe("reshape never claims a signature another claim already took", () => {
+	it("makes no reshape when the base signature belongs to an earlier exact move", () => {
+		const base = [...PREFACE, ...TS_FUNCTION];
+		const files = [
+			deletedFrom("a.ts", 10, base),
+			addedTo("b.ts", 3, TS_METHOD),
+			addedTo("c.ts", 3, [...PREFACE, TS_FUNCTION[0] as string]),
+		];
+		const ops = findRelocations(files);
+		expect(
+			ops.some((o) => o.divergences.some((d) => d.class === "signature")),
+		).toBe(false);
+	});
+
+	it("makes no reshape when the head signature belongs to an earlier exact move", () => {
+		const head = [...PREFACE, ...TS_METHOD];
+		const files = [
+			deletedFrom("a.ts", 10, TS_FUNCTION),
+			addedTo("b.ts", 3, head),
+			deletedFrom("c.ts", 10, [...PREFACE, TS_METHOD[0] as string]),
+		];
+		const ops = findRelocations(files);
+		expect(
+			ops.some((o) => o.divergences.some((d) => d.class === "signature")),
+		).toBe(false);
+	});
+});
+
+describe("reshape signature literal safety", () => {
+	const regexSignature = (name: string) =>
+		`${name}(cart: Cart, pattern = /a+/g, code: string): number {`;
+
+	it("makes no claim when the base signature holds a regex literal", () => {
+		const base = [
+			`function ${regexSignature("applyDiscount")}`,
+			...TS_FUNCTION.slice(1),
+		];
+		expect(reshapeOf(move("a.ts", "b.ts", base, TS_METHOD))).toBeUndefined();
+	});
+
+	it("makes no claim when the head signature holds a regex literal", () => {
+		const head = [`  ${regexSignature("discount")}`, ...TS_METHOD.slice(1)];
+		expect(reshapeOf(move("a.ts", "b.ts", TS_FUNCTION, head))).toBeUndefined();
+	});
+});
+
+describe("reshape at scale", () => {
+	const pair = (i: number) => {
+		const base = [
+			`function fn${i}(cart: Cart, code: string): number {`,
+			`  const rate${i} = lookupRate${i}(code);`,
+			`  const gross${i} = totalOf${i}(cart);`,
+			`  recordDiscount${i}(cart.id, code, gross${i});`,
+			`  const net${i} = applyRate${i}(gross${i}, rate${i});`,
+			`  return finalize${i}(net${i}, code);`,
+			"}",
+		];
+		const head = [
+			`  method${i}(cart: Cart, code: string): number {`,
+			`    const rate${i} = this.lookupRate${i}(code);`,
+			`    const gross${i} = this.totalOf${i}(cart);`,
+			`    this.recordDiscount${i}(cart.id, code, gross${i});`,
+			`    const net${i} = this.applyRate${i}(gross${i}, rate${i});`,
+			`    return this.finalize${i}(net${i}, code);`,
+			"  }",
+		];
+		return { base, head };
+	};
+	const filesOf = (count: number) => {
+		const pairs = Array.from({ length: count }, (_, i) => pair(i));
+		return [
+			deletedFrom(
+				"src/a.ts",
+				10,
+				pairs.flatMap((p) => p.base),
+			),
+			addedTo(
+				"src/b.ts",
+				3,
+				pairs.flatMap((p) => p.head),
+			),
+		];
+	};
+	const files = filesOf(500);
+
+	it("finishes 2000 function-to-method pairs in under 3 seconds even when the budget truncates", () => {
+		const started = performance.now();
+		findRelocations(filesOf(2000));
+		expect(performance.now() - started).toBeLessThan(3000);
+	}, 8000);
+
+	it("claims 500 function-to-method pairs in under 3 seconds", () => {
+		const started = performance.now();
+		const ops = findRelocations(files);
+		const reshaped = ops.filter((o) =>
+			o.divergences.some((d) => d.class === "signature"),
+		);
+		expect(reshaped.length).toBeGreaterThan(400);
+		expect(performance.now() - started).toBeLessThan(3000);
+	}, 8000);
+
+	it("truncates under a tiny budget", () => {
+		const full = findRelocations(files).length;
+		const tiny = findRelocations(files, { tokens: 500, candidates: 50 }).length;
+		expect(tiny).toBeLessThan(full);
+	}, 8000);
 });

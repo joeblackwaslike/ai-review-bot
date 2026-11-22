@@ -631,7 +631,7 @@ function classesHold(op: Operation, base: Side[], head: Side[]): number | null {
 		}
 	}
 	const renamed = verifiedRenames(renamePairs, base, head);
-	return renamed === null ? null : Math.max(code + renamed, receivers ? 1 : 0);
+	return renamed === null ? null : code + renamed + (receivers ? 1 : 0);
 }
 
 function textOf(span: Span | undefined, sides: Side[]): string | undefined {
@@ -696,7 +696,9 @@ export function verifyRelocation(op: Operation, files: PushFile[]): boolean {
 	)
 		return (op.shape?.reindent ?? 0) === 0;
 	if (op.divergences.length === 0) return tokenVerified(op, base, head, index);
-	return op.divergences.every((d) => d.class === "receiver")
+	return op.divergences.every(
+		(d) => d.class === "receiver" || d.class === "code",
+	)
 		? shapeVerified(op, base, head, index)
 		: false;
 }
@@ -785,14 +787,13 @@ function receiversListed(
 	to: Side,
 	offset: [number, number],
 	pairs: [number, number][],
+	codePairs: [number, number][],
 ): boolean {
 	if (divergences.length !== pairs.length) return false;
-	const wanted = new Set(
-		pairs.map(
-			([b, h]) =>
-				`${from.positions[offset[0] + b]}|${to.positions[offset[1] + h]}`,
-		),
-	);
+	const keyOf = ([b, h]: [number, number]) =>
+		`${from.positions[offset[0] + b]}|${to.positions[offset[1] + h]}`;
+	const wanted = new Set(pairs.map(keyOf));
+	const code = new Set(codePairs.map(keyOf));
 	const seen = new Set<string>();
 	for (const d of divergences) {
 		const b = lineDiffers(d.base, from, "base");
@@ -801,6 +802,7 @@ function receiversListed(
 			return false;
 		const key = `${from.positions[b]}|${to.positions[h]}`;
 		if (!wanted.has(key) || seen.has(key)) return false;
+		if (d.class !== (code.has(key) ? "code" : "receiver")) return false;
 		seen.add(key);
 		if (d.original !== (from.lines[b] as string).trim()) return false;
 	}
@@ -825,7 +827,7 @@ function shapeVerified(
 	const sigHead = leadingSignature(to.lines, to.filename);
 	if (!sigBase || !sigHead) return false;
 	const signatures = op.divergences.filter((d) => d.class === "signature");
-	const receivers = op.divergences.filter((d) => d.class === "receiver");
+	const bodyLines = op.divergences.filter((d) => d.class !== "signature");
 	const same = sigBase.tokens.join("\u0001") === sigHead.tokens.join("\u0001");
 	let skip: [number, number] = [0, 0];
 	if (same) {
@@ -851,7 +853,14 @@ function shapeVerified(
 	);
 	if (!result.equivalent) return false;
 	if ((op.shape?.reindent ?? 0) !== result.reindent) return false;
-	return receiversListed(receivers, from, to, skip, result.pairs);
+	return receiversListed(
+		bodyLines,
+		from,
+		to,
+		skip,
+		result.pairs,
+		result.codePairs,
+	);
 }
 
 function squeezed(line: string): string {

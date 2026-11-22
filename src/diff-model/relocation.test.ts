@@ -1550,7 +1550,7 @@ describe("findRelocations receiver and reshape output", () => {
 			"code",
 			"receiver",
 		]);
-		expect(ops[0]?.reviewWeight).toBe(1);
+		expect(ops[0]?.reviewWeight).toBe(2);
 	});
 
 	it("does not count receiver divergences against the block limit", () => {

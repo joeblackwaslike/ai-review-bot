@@ -1,7 +1,7 @@
 import type { Run } from "../moved-blocks.js";
 import { acceptSeed, MIN_COUNTED_LINES } from "./acceptance.js";
 import type { WorkBudget } from "./budget.js";
-import { literalSafe } from "./lexical.js";
+import { literalSafe, MAX_ANALYZED_LINE } from "./lexical.js";
 import {
 	asCandidate,
 	balanced,
@@ -20,6 +20,10 @@ import type { Divergence, Operation } from "./types.js";
 const MAX_SIGNATURE_LINES = 16;
 const MIN_COUNTED_LENGTH = 3;
 const PYTHON = new Set(["py", "pyi"]);
+/**
+ * Receiver prefixes per extension. token-check.ts keeps its own copy (RESHAPE_RECEIVERS)
+ * so the checker stays independent of the matcher; reshape.test.ts pins the two together.
+ */
 const RECEIVERS: Record<string, Record<string, string>> = {
 	py: { self: ".", cls: "." },
 	pyi: { self: ".", cls: "." },
@@ -29,11 +33,13 @@ const RECEIVERS: Record<string, Record<string, string>> = {
 };
 const PYTHON_OPENER = /^\s*(?:async\s+)?def\s+\w/;
 const CONTROL =
-	/^\s*(?:if|else|for|while|switch|catch|try|do|return|throw|new|synchronized|using|lock|when|foreach|await|yield|case)\b/;
+	/^\s*(?:if|else|for|while|switch|catch|try|do|return|throw|new|with|using|await|yield|case)\b/;
 const FUNCTION_KEYWORD =
-	/^\s*(?:(?:export|default|async|public|private|protected|static|pub)\s+)*(?:function|fun)\b/;
-const METHOD =
-	/^\s*(?:(?:public|private|protected|internal|static|async|override|abstract|final|virtual|sealed|readonly|get|set|open|suspend|inline|synchronized|native|unsafe|partial)\s+)*(?:[\w$.<>,?[\]]+\s+)*[A-Za-z_$][\w$]*\s*(?:<[^>()]*>)?\(/;
+	/^\s*(?:(?:export|default|async|public|private|protected|static)\s+)*function\b/;
+const METHOD = /^\s*(?:[\w$.<>,?[\]]+\s+)*[A-Za-z_$][\w$]*\s*(?:<[^>()]*>)?\(/;
+const ASSIGNMENT = new Set(
+	"= += -= *= /= %= **= //= &= |= ^= <<= >>= >>>= &&= ||= ??= :=".split(" "),
+);
 const DECORATOR = /^\s*@[\w.$]+/;
 
 interface LineRange {
@@ -42,6 +48,7 @@ interface LineRange {
 }
 
 function isOpener(line: string, ext: string): boolean {
+	if (line.length > MAX_ANALYZED_LINE) return false;
 	if (PYTHON.has(ext)) return PYTHON_OPENER.test(line);
 	if (CONTROL.test(line)) return false;
 	return FUNCTION_KEYWORD.test(line) || METHOD.test(line);
@@ -75,9 +82,10 @@ function closesCleanly(lines: readonly string[], filename: string): boolean {
 /**
  * Finds the signature that ends on the last of `lines`: the opening logical line of a
  * definition, whose parameter list may span several lines (bracket depth decides), plus the
- * decorators (`@name`) directly above it. Indices are inclusive
- * into `lines`. Null when the last line does not end a definition's opening, for files
- * outside py pyi js jsx mjs cjs ts tsx.
+ * decorators (`@name`) directly above it. Indices are inclusive into `lines`. Returns null
+ * for files outside py pyi js jsx mjs cjs ts tsx, for an empty `lines`, when a blank line
+ * appears among the last 16 lines before an opening is found, and when no definition
+ * opening within those 16 lines closes cleanly on the last line.
  */
 export function signatureRange(
 	lines: readonly string[],
@@ -140,7 +148,6 @@ function openerLineAbove(run: Run, sig: LineRange, before: number): string[] {
 }
 
 function decoratorCount(run: Run, sig: LineRange): number {
-	const ext = extension(run.filename);
 	let n = 0;
 	while (
 		sig.start + n < sig.end &&
@@ -210,17 +217,49 @@ function signatureDivergences(
 	];
 }
 
+/**
+ * Classifies a line that differs from its counterpart only by receiver prefixes. `dropped`
+ * lists, per token, the receiver stripped just before it on each side. The change is `code`
+ * when a receiver was added, removed or changed on an assignment target (a differing token
+ * before the first assignment operator of the line), or when one receiver was dropped and
+ * another added on the same line, because both alter which state the line reads or writes.
+ */
+function receiverClass(
+	tokens: readonly string[],
+	baseDropped: readonly string[],
+	headDropped: readonly string[],
+): "receiver" | "code" {
+	const assignAt = tokens.findIndex((t) => ASSIGNMENT.has(t));
+	let lost = false;
+	let gained = false;
+	for (let k = 0; k < tokens.length; k++) {
+		if (baseDropped[k] === headDropped[k]) continue;
+		if (assignAt >= 0 && k < assignAt) return "code";
+		if (baseDropped[k] && !headDropped[k]) lost = true;
+		if (!baseDropped[k] && headDropped[k]) gained = true;
+	}
+	return lost && gained ? "code" : "receiver";
+}
+
 function receiverDivergences(m: Match): Divergence[] {
 	const { d, a, di, ai, len } = m.range;
-	const seen = new Set<string>();
-	const out: Divergence[] = [];
+	const lines = new Map<string, number[]>();
 	for (let k = 0; k < len; k++) {
-		if (d.dropped[di + k] === a.dropped[ai + k]) continue;
-		const b = d.start + (d.lineOf[di + k] as number);
-		const h = a.start + (a.lineOf[ai + k] as number);
-		if (seen.has(`${b}|${h}`)) continue;
-		seen.add(`${b}|${h}`);
-		out.push(lineDivergence("changed", "receiver", b, h, d.run, a.run));
+		const key = `${d.lineOf[di + k]}|${a.lineOf[ai + k]}`;
+		lines.set(key, [...(lines.get(key) ?? []), k]);
+	}
+	const out: Divergence[] = [];
+	for (const [key, ks] of lines) {
+		if (ks.every((k) => d.dropped[di + k] === a.dropped[ai + k])) continue;
+		const [bl, hl] = key.split("|").map(Number) as [number, number];
+		const cls = receiverClass(
+			ks.map((k) => d.tokens[di + k] as string),
+			ks.map((k) => d.dropped[di + k] as string),
+			ks.map((k) => a.dropped[ai + k] as string),
+		);
+		out.push(
+			lineDivergence("changed", cls, d.start + bl, a.start + hl, d.run, a.run),
+		);
 	}
 	return out;
 }
@@ -314,21 +353,24 @@ function reshape(m: Match): Operation | null {
 }
 
 /**
- * Whether two lines differ only by a receiver prefix (`self.`, `cls.`, `this.`):
- * their normalized tokens are equal once receivers are removed, and the removed receivers
- * differ. False outside the reshape languages.
+ * Classifies one changed physical line pair that differs only by receiver prefixes:
+ * `receiver` for a plain change, `code` when the change touches an assignment target or
+ * swaps one receiver for another, and null when the lines differ by anything else or are
+ * outside the reshape languages. The comparison is per physical line, so a statement split
+ * over several lines is judged one line at a time. The checker's `receiverOnlyLine` is
+ * stricter and also refuses lines with comments or unreadable text.
  */
-export function receiverOnlyDifference(
+export function receiverChangeClass(
 	base: string,
 	head: string,
 	baseFilename: string,
 	headFilename: string,
-): boolean {
+): "receiver" | "code" | null {
 	if (
 		!receiverLens.accepts(baseFilename) ||
 		!receiverLens.accepts(headFilename)
 	)
-		return false;
+		return null;
 	const side = (line: string, filename: string) => {
 		const tokens = normalizeTokens(tokenize([line], filename).tokens, filename);
 		return receiverLens.strip(
@@ -340,24 +382,31 @@ export function receiverOnlyDifference(
 	const b = side(base, baseFilename);
 	const h = side(head, headFilename);
 	const key = (xs: string[]) => xs.join("\u0001");
-	return key(b.tokens) === key(h.tokens) && key(b.dropped) !== key(h.dropped);
+	if (key(b.tokens) !== key(h.tokens) || key(b.dropped) === key(h.dropped))
+		return null;
+	return receiverClass(b.tokens, b.dropped, h.dropped);
+}
+
+function reshapeWeight(divergences: Divergence[]): number {
+	const counted = divergences.filter(
+		(x) => x.class === "signature" || x.class === "code",
+	).length;
+	return counted + (divergences.some((x) => x.class === "receiver") ? 1 : 0);
 }
 
 function weigh(op: Operation): Operation {
-	const counted = op.divergences.filter(
-		(x) => x.class === "signature" || x.class === "code",
-	).length;
-	const receivers = op.divergences.some((x) => x.class === "receiver");
-	return { ...op, reviewWeight: Math.max(counted, receivers ? 1 : 0) };
+	return { ...op, reviewWeight: reshapeWeight(op.divergences) };
 }
 
 /**
  * Finds function-to-method and method-to-function conversions between unclaimed lines.
  * Body tokens are compared with receiver prefixes (`self.`, `cls.`, `this.`) removed;
  * the signatures above the matched bodies are paired however different they are. Each
- * signature line and each body line whose receiver differs becomes a divergence of class
- * `signature` or `receiver`; the review weight counts signature divergences and is at least
- * 1 when any receiver differs. A match needs a signature on both sides and either a
+ * signature line becomes a `signature` divergence. Each body line whose receiver differs
+ * becomes a `receiver` divergence, or a `code` one when the change touches an assignment
+ * target or swaps one receiver for another. The review weight counts signature and code
+ * divergences and adds 1 when any receiver divergence is present; `toOperation` in
+ * relocation.ts is the canonical formula. A match needs a signature on both sides and either a
  * different signature or a receiver difference, otherwise the plain token pass takes it.
  * Uses the token pass guards: file allowlist, literal safety, balanced brackets, relative
  * indentation in Python, comment cuts, seed acceptance and the work budget.
