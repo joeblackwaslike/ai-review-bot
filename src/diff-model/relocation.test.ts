@@ -464,3 +464,58 @@ describe("findRelocations rename head guard", () => {
 		expect(ops[0]?.divergences.some((d) => d.class === "rename")).toBe(false);
 	});
 });
+
+describe("findRelocations comment allowlist", () => {
+	it.each([
+		[
+			"src/a.css",
+			"src/b.css",
+			"  background: url(http://a/x.png);",
+			"  background: url(http://b/x.png);",
+		],
+		["docs/a.md", "docs/b.md", "  [docs](http://a)", "  [docs](http://b)"],
+		[
+			"web/a.html",
+			"web/b.html",
+			'  <a href="http://a/x">go</a>',
+			'  <a href="http://b/x">go</a>',
+		],
+		[
+			"notes/a.txt",
+			"notes/b.txt",
+			"  see http://a/x now",
+			"  see http://b/x now",
+		],
+		["lib/a.zzz", "lib/b.zzz", "  see http://a/x now", "  see http://b/x now"],
+		["db/a.sql", "db/b.sql", "  select 1 // a", "  select 1 // b"],
+	])("keeps a changed // line in %s as code", (from, to, before, after) => {
+		const [base, head] = pair([before], [after], [15]);
+		const ops = moveNamed(base, head, from, to);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]?.divergences.map((d) => d.class)).toEqual(["code"]);
+	});
+
+	it.each([
+		["ts"],
+		["go"],
+		["java"],
+	])("still classes a changed // comment in a .%s file as comment-only", (ext) => {
+		const [base, head] = pair(["  // old note"], ["  // new note"], [15]);
+		const ops = moveNamed(base, head, `src/a.${ext}`, `src/b.${ext}`);
+		expect(ops[0]?.divergences.map((d) => d.class)).toEqual(["comment-only"]);
+	});
+
+	it("still classes a changed /* */ comment in a .css file as comment-only", () => {
+		const [base, head] = pair(["  /* old */"], ["  /* new */"], [15]);
+		const ops = moveNamed(base, head, "src/a.css", "src/b.css");
+		expect(ops[0]?.divergences.map((d) => d.class)).toEqual(["comment-only"]);
+	});
+});
+
+describe("findRelocations block comment allowlist", () => {
+	it("keeps a changed /* */ line in a .md file as code", () => {
+		const [base, head] = pair(["  /* old */"], ["  /* new */"], [15]);
+		const ops = moveNamed(base, head, "docs/a.md", "docs/b.md");
+		expect(ops[0]?.divergences.map((d) => d.class)).toEqual(["code"]);
+	});
+});

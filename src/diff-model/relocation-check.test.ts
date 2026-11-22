@@ -595,3 +595,93 @@ describe("verifyRelocation rename guards", () => {
 		expect(verifyRelocation(op, files)).toBe(true);
 	});
 });
+
+describe("verifyRelocation comment allowlist", () => {
+	it.each([
+		[
+			"src/a.css",
+			"src/b.css",
+			"  background: url(http://a/x.png);",
+			"  background: url(http://b/x.png);",
+		],
+		["docs/a.md", "docs/b.md", "  [docs](http://a)", "  [docs](http://b)"],
+		[
+			"web/a.html",
+			"web/b.html",
+			'  <a href="http://a/x">go</a>',
+			'  <a href="http://b/x">go</a>',
+		],
+		[
+			"notes/a.txt",
+			"notes/b.txt",
+			"  see http://a/x now",
+			"  see http://b/x now",
+		],
+		["lib/a.zzz", "lib/b.zzz", "  see http://a/x now", "  see http://b/x now"],
+	])("drops a changed // line in %s forged as comment-only", (from, to, before, after) => {
+		const [base, head] = pairBlock([before], [after], [15]);
+		const { files, op } = relocation(base, head, [from, to]);
+		expect(op.divergences.map((d) => d.class)).toEqual(["code"]);
+		const forged = { ...reclassed(op, "comment-only"), reviewWeight: 0 };
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it.each([
+		["ts"],
+		["go"],
+		["java"],
+	])("accepts a real // comment change in a .%s file", (ext) => {
+		const [base, head] = pairBlock(["  // old note"], ["  // new note"], [15]);
+		const { files, op } = relocation(base, head, [
+			`src/a.${ext}`,
+			`src/b.${ext}`,
+		]);
+		expect(op.divergences.map((d) => d.class)).toEqual(["comment-only"]);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+});
+
+describe("verifyRelocation oversized lines", () => {
+	const long = `  const big = "${"x".repeat(2100)}";`;
+
+	it("verifies an exact claim containing a very long line", () => {
+		const block = withLine(fn(body(30)), 15, long);
+		const { files, op } = relocation(block, block);
+		expect(op.exact).toBe(true);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("verifies a code-divergence claim containing a very long line", () => {
+		const base = withLine(fn(body(30)), 15, long);
+		const head = withLine(base, 5, "  const v4 = evil() + offset;");
+		const { files, op } = relocation(base, head);
+		expect(op.divergences.map((d) => d.class)).toEqual(["code"]);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("still drops a rename claim over an oversized line", () => {
+		const base = withLine(fn(body(30)), 15, long);
+		base.splice(8, 0, "  f(a);");
+		base.splice(20, 0, "  g(a);");
+		const head = base.map((l) => l.replace("(a)", "(z)"));
+		const { files, op } = relocation(base, head);
+		const forged = { ...reclassed(op, "rename"), reviewWeight: 1 };
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+});
+
+describe("verifyRelocation block comment allowlist", () => {
+	it("drops a changed /* */ line in a .md file forged as comment-only", () => {
+		const [base, head] = pairBlock(["  /* old */"], ["  /* new */"], [15]);
+		const { files, op } = relocation(base, head, ["docs/a.md", "docs/b.md"]);
+		const forged = { ...reclassed(op, "comment-only"), reviewWeight: 0 };
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("accepts a real /* */ comment change in a .css file", () => {
+		const [base, head] = pairBlock(["  /* old */"], ["  /* new */"], [15]);
+		const { files, op } = relocation(base, head, ["src/a.css", "src/b.css"]);
+		expect(op.divergences.map((d) => d.class)).toEqual(["comment-only"]);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+});

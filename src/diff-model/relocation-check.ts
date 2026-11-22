@@ -8,6 +8,10 @@ const HEREDOC_OPEN = /<<[-~]?\s*['"]?(\w+)/;
 
 const HASH_FAMILY =
 	/(?:\.(?:py|pyi|rb|sh|bash|zsh|ya?ml|toml|mk)|(?:^|\/)Makefile)$/i;
+const C_LINE_COMMENTS =
+	/\.(?:ts|tsx|js|jsx|mjs|cjs|java|c|h|cpp|cc|hpp|cs|go|rs|swift|kt|kts|dart|php|scala)$/i;
+const C_BLOCK_COMMENTS =
+	/\.(?:ts|tsx|js|jsx|mjs|cjs|java|c|h|cpp|cc|hpp|cs|go|rs|swift|kt|kts|dart|php|scala|css|scss|less)$/i;
 const WORD =
 	/[A-Za-z_$][\w$]*|\d+(?:\.\d+)?|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\S/g;
 const NAME = /^[A-Za-z_$][\w$]*$/;
@@ -192,7 +196,7 @@ function accountedPositionally(base: Entry[], head: Entry[]): boolean {
 }
 
 function slashStyle(filename: string): boolean {
-	return !HASH_FAMILY.test(filename);
+	return C_LINE_COMMENTS.test(filename);
 }
 
 function commentStart(line: string): number {
@@ -212,7 +216,9 @@ function commentStart(line: string): number {
 }
 
 function wholeCommentLines(side: Side): boolean[] {
-	const slash = slashStyle(side.filename);
+	const lineSlashes = C_LINE_COMMENTS.test(side.filename);
+	const blockSlashes = C_BLOCK_COMMENTS.test(side.filename);
+	const hash = HASH_FAMILY.test(side.filename);
 	let open = false;
 	return side.lines.map((raw) => {
 		const line = raw.trim();
@@ -222,9 +228,9 @@ function wholeCommentLines(side: Side): boolean[] {
 			open = false;
 			return line.slice(end + 2).trim() === "";
 		}
-		if (!slash) return line.startsWith("#");
-		if (line.startsWith("//")) return true;
-		if (!line.startsWith("/*")) return false;
+		if (hash && line.startsWith("#")) return true;
+		if (lineSlashes && line.startsWith("//")) return true;
+		if (!blockSlashes || !line.startsWith("/*")) return false;
 		const end = line.indexOf("*/", 2);
 		if (end < 0) {
 			open = true;
@@ -295,6 +301,7 @@ function verifiedRenames(
 ): number | null {
 	const baseLines = baseSides.flatMap((side) => side.lines);
 	const headLines = headSides.flatMap((side) => side.lines);
+	if (pairsPerLine.length === 0) return 0;
 	if (
 		[...baseLines, ...headLines].some((l) => l.length > LONGEST_RENAMABLE_LINE)
 	)

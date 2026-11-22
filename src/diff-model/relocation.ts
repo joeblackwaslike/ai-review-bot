@@ -25,6 +25,12 @@ const TOKEN =
 	/[A-Za-z_$][\w$]*|\d+(?:\.\d+)?|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\S/g;
 const HASH_COMMENT_FILE =
 	/(?:\.(?:py|pyi|sh|bash|zsh|rb|ya?ml|toml|mk)|(?:^|\/)Makefile)$/i;
+const SLASH_LINE_FILE =
+	/\.(?:tsx?|jsx?|mjs|cjs|java|c|h|cpp|cc|hpp|cs|go|rs|swift|kts?|dart|php|scala)$/i;
+const SLASH_BLOCK_FILE = new RegExp(
+	`${SLASH_LINE_FILE.source.slice(0, -2)}|css|scss|less)$`,
+	"i",
+);
 const RESERVED = new Set(
 	`true false null undefined None True False nil NaN Infinity let const var function return if else for while do in of
 	await async yield new this self super public private protected static class interface enum type import export from
@@ -186,7 +192,9 @@ function riskyLines(filename: string, lines: string[]): boolean[] {
 
 /** Per line, whether it is wholly a comment: `//` or `#` lines, or lines of a `/* ... *\/` block opened in these lines. */
 function commentLines(filename: string, lines: string[]): boolean[] {
-	const slashes = !HASH_COMMENT_FILE.test(filename);
+	const slashLine = SLASH_LINE_FILE.test(filename);
+	const block = SLASH_BLOCK_FILE.test(filename);
+	const hash = HASH_COMMENT_FILE.test(filename);
 	let inBlock = false;
 	return lines.map((line) => {
 		const trimmed = line.trim();
@@ -196,9 +204,9 @@ function commentLines(filename: string, lines: string[]): boolean[] {
 			inBlock = false;
 			return trimmed.slice(close + 2).trim() === "";
 		}
-		if (slashes && trimmed.startsWith("//")) return true;
-		if (!slashes && trimmed.startsWith("#")) return true;
-		if (!slashes || !trimmed.startsWith("/*")) return false;
+		if (slashLine && trimmed.startsWith("//")) return true;
+		if (hash && trimmed.startsWith("#")) return true;
+		if (!block || !trimmed.startsWith("/*")) return false;
 		const close = trimmed.indexOf("*/", 2);
 		if (close < 0) {
 			inBlock = true;
@@ -411,8 +419,7 @@ function build(
 	);
 	const renames = renameIndexes(changed, baseRaw, headRaw);
 	const trailing =
-		!HASH_COMMENT_FILE.test(from.filename) &&
-		!HASH_COMMENT_FILE.test(to.filename);
+		SLASH_LINE_FILE.test(from.filename) && SLASH_LINE_FILE.test(to.filename);
 	let counted = 0;
 	const renamedNames = new Set<string>();
 	const divergences = raw.map((d, at): Divergence => {
