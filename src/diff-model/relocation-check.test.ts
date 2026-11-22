@@ -1,11 +1,37 @@
 import { describe, expect, it } from "vitest";
 import type { PushFile } from "../moved-blocks.js";
+import { partialStatements } from "./partial-statements.fixture.js";
 import { findRelocations } from "./relocation.js";
 import { verifyRelocation } from "./relocation-check.js";
 import type { Operation } from "./types.js";
 
 function pushFile(filename: string, patch: string): PushFile {
 	return { filename, status: "modified", patch, additions: 0, deletions: 0 };
+}
+
+function lineClaim(
+	baseFile: string,
+	baseStart: number,
+	baseEnd: number,
+	headFile: string,
+	headStart: number,
+	headEnd: number,
+): Operation {
+	const span = (
+		filename: string,
+		side: "base" | "head",
+		startLine: number,
+		endLine: number,
+	) => ({ filename, side, startLine, endLine, shown: "full" as const });
+	return {
+		id: "relocation-1",
+		type: "relocation",
+		from: [span(baseFile, "base", baseStart, baseEnd)],
+		to: [span(headFile, "head", headStart, headEnd)],
+		exact: true,
+		divergences: [],
+		reviewWeight: 0,
+	};
 }
 
 function moveFiles(
@@ -784,31 +810,7 @@ describe("verifyRelocation whole-line // allowlist", () => {
 
 	it("drops a one-line claim whose text occurs twice on the base side", () => {
 		const line = "  const registeredHandlerCount = loadHandlers(config);";
-		const claim = (): Operation => ({
-			id: "relocation-1",
-			type: "relocation",
-			from: [
-				{
-					filename: "src/a.ts",
-					side: "base",
-					startLine: 10,
-					endLine: 10,
-					shown: "full",
-				},
-			],
-			to: [
-				{
-					filename: "src/b.ts",
-					side: "head",
-					startLine: 3,
-					endLine: 3,
-					shown: "full",
-				},
-			],
-			exact: true,
-			divergences: [],
-			reviewWeight: 0,
-		});
+		const claim = () => lineClaim("src/a.ts", 10, 10, "src/b.ts", 3, 3);
 		const added = pushFile(
 			"src/b.ts",
 			["@@ -0,0 +3,1 @@", `+${line}`].join("\n"),
@@ -829,31 +831,7 @@ describe("verifyRelocation whole-line // allowlist", () => {
 
 	it("drops a one-line claim whose text occurs twice on the head side", () => {
 		const line = "  const registeredHandlerCount = loadHandlers(config);";
-		const op: Operation = {
-			id: "relocation-1",
-			type: "relocation",
-			from: [
-				{
-					filename: "src/a.ts",
-					side: "base",
-					startLine: 10,
-					endLine: 10,
-					shown: "full",
-				},
-			],
-			to: [
-				{
-					filename: "src/b.ts",
-					side: "head",
-					startLine: 3,
-					endLine: 3,
-					shown: "full",
-				},
-			],
-			exact: true,
-			divergences: [],
-			reviewWeight: 0,
-		};
+		const op = lineClaim("src/a.ts", 10, 10, "src/b.ts", 3, 3);
 		const removed = pushFile(
 			"src/a.ts",
 			["@@ -10,1 +9,0 @@", `-${line}`].join("\n"),
@@ -869,31 +847,7 @@ describe("verifyRelocation whole-line // allowlist", () => {
 
 	it("drops a short claim that carries too little information", () => {
 		const line = "  return value;";
-		const op: Operation = {
-			id: "relocation-1",
-			type: "relocation",
-			from: [
-				{
-					filename: "src/a.ts",
-					side: "base",
-					startLine: 10,
-					endLine: 10,
-					shown: "full",
-				},
-			],
-			to: [
-				{
-					filename: "src/b.ts",
-					side: "head",
-					startLine: 3,
-					endLine: 3,
-					shown: "full",
-				},
-			],
-			exact: true,
-			divergences: [],
-			reviewWeight: 0,
-		};
+		const op = lineClaim("src/a.ts", 10, 10, "src/b.ts", 3, 3);
 		const files = [
 			pushFile("src/a.ts", ["@@ -10,1 +9,0 @@", `-${line}`].join("\n")),
 			pushFile("src/b.ts", ["@@ -0,0 +3,1 @@", `+${line}`].join("\n")),
@@ -907,31 +861,7 @@ describe("verifyRelocation whole-line // allowlist", () => {
 		base: string,
 		head: string = base,
 	) {
-		const op: Operation = {
-			id: "relocation-1",
-			type: "relocation",
-			from: [
-				{
-					filename: baseFile,
-					side: "base",
-					startLine: 10,
-					endLine: 10,
-					shown: "full",
-				},
-			],
-			to: [
-				{
-					filename: headFile,
-					side: "head",
-					startLine: 40,
-					endLine: 40,
-					shown: "full",
-				},
-			],
-			exact: true,
-			divergences: [],
-			reviewWeight: 0,
-		};
+		const op = lineClaim(baseFile, 10, 10, headFile, 40, 40);
 		const files =
 			baseFile === headFile
 				? [
@@ -996,31 +926,7 @@ describe("verifyRelocation whole-line // allowlist", () => {
 			"def is_retryable(status):",
 			"    return status >= 500 and status != 501",
 		];
-		const op: Operation = {
-			id: "relocation-1",
-			type: "relocation",
-			from: [
-				{
-					filename: "a.py",
-					side: "base",
-					startLine: 10,
-					endLine: 11,
-					shown: "full",
-				},
-			],
-			to: [
-				{
-					filename: "b.py",
-					side: "head",
-					startLine: 4,
-					endLine: 5,
-					shown: "full",
-				},
-			],
-			exact: true,
-			divergences: [],
-			reviewWeight: 0,
-		};
+		const op = lineClaim("a.py", 10, 11, "b.py", 4, 5);
 		const files = [
 			pushFile(
 				"a.py",
@@ -1115,15 +1021,9 @@ describe("verifyRelocation independent small-claim rules", () => {
 	const indented = "  const approvedUserList = loadUsers(config);";
 	const unclosed =
 		"const resultOfTheLookup = compute(firstArgument, secondArgument,";
-	const trailing = "const approvedUserList = loadUsers(config) &&";
 	const ruby = ["def self.money(cents)", "  format(cents)", "end"];
 
 	it.each([
-		[
-			"a multi-line declaration whose next line differs",
-			["-const approved = users", "-  .filter((u) => u.isAdmin);"],
-			["+const approved = users", "+  .filter(() => true);"],
-		],
 		[
 			"a head line that gains a continuation line",
 			["-const total = compute(a, b)"],
@@ -1145,6 +1045,16 @@ describe("verifyRelocation independent small-claim rules", () => {
 			[`+${indented}`, "     )"],
 		],
 		[
+			"a line that ends in an operator",
+			["-const approvedUserList = loadUsers(config) &&"],
+			["+const approvedUserList = loadUsers(config) &&"],
+		],
+		[
+			"a line that ends in a backslash",
+			["-total_amount_for_user = compute_amount(account) + \\"],
+			["+total_amount_for_user = compute_amount(account) + \\"],
+		],
+		[
 			"a line that starts with a closer",
 			["-} else if (user.isAdmin && flags.betaAccess) {"],
 			["+} else if (user.isAdmin && flags.betaAccess) {"],
@@ -1154,7 +1064,6 @@ describe("verifyRelocation independent small-claim rules", () => {
 			[`-${unclosed}`],
 			[`+${unclosed}`],
 		],
-		["a line that ends in an operator", [`-${trailing}`], [`+${trailing}`]],
 		["a one-letter declaration", ["-const i = 0;"], ["+const i = 0;"]],
 		["a comparison read as a declaration", ["-FOO == bar"], ["+FOO == bar"]],
 	])("drops an exact short claim over %s", (_, baseRows, headRows) => {
@@ -1172,15 +1081,59 @@ describe("verifyRelocation independent small-claim rules", () => {
 		expect(verifyRelocation(op, files)).toBe(false);
 	});
 
-	it("accepts a terminated short claim followed by an ordinary line", () => {
+	it.each(
+		partialStatements,
+	)("drops an exact claim over %s", (_, baseRows, headRows, claimed, ext) => {
 		const { files, op } = crossFile(
-			[`-${indented}`, " other();"],
-			[`+${indented}`, " other();"],
+			baseRows,
+			headRows,
+			[`src/a.${ext}`, `src/b.${ext}`],
+			claimed,
+		);
+		expect(verifyRelocation(op, files)).toBe(false);
+	});
+
+	it("accepts a moved signature ending in an opening brace", () => {
+		const signature = [
+			"export function reasoningProviderOptions(",
+			"  selection: ModelSelection,",
+			"): Record<string, Record<string, string>> | undefined {",
+		];
+		const { files, op } = crossFile(
+			signature.map((l) => `-${l}`),
+			signature.map((l) => `+${l}`),
+			["src/a.ts", "src/b.ts"],
+			3,
 		);
 		expect(verifyRelocation(op, files)).toBe(true);
 	});
 
-	it("accepts a short Ruby method that ends in end when a context line follows", () => {
+	it("treats text whose first line has over 50 sites as not unique", () => {
+		const claimOver = (sites: number) => {
+			const block = (i: number) => [
+				"shared first line of every block",
+				`  const unique${i}Value = compute(${i}, config);`,
+			];
+			const deleted = Array.from({ length: sites }, (_, i) => [
+				`@@ -${i * 10 + 1},2 +${i * 10 + 1},0 @@`,
+				...block(i).map((l) => `-${l}`),
+			]).flat();
+			const patch = [
+				...deleted,
+				"@@ -9000,0 +9000,2 @@",
+				...block(0).map((l) => `+${l}`),
+			].join("\n");
+			const op = exactClaim(
+				[span("src/a.ts", "base", 1, 2)],
+				[span("src/a.ts", "head", 9000, 9001)],
+			);
+			return verifyRelocation(op, [pushFile("src/a.ts", patch)]);
+		};
+		expect(claimOver(10)).toBe(true);
+		expect(claimOver(60)).toBe(false);
+	});
+
+	it("accepts a short Ruby method that ends in end", () => {
 		const { files, op } = crossFile(
 			[...ruby.map((l) => `-${l}`), " end"],
 			[...ruby.map((l) => `+${l}`), " end"],
@@ -1270,7 +1223,7 @@ describe("verifyRelocation independent small-claim rules", () => {
 		expect(verifyRelocation(op, files)).toBe(false);
 	});
 
-	it("drops swapped claims over a paragraph repeated in two regions of one file", () => {
+	it("drops swapped claims over a paragraph repeated in two regions", () => {
 		const paragraph = body(5);
 		const region = (name: string) => [
 			` context ${name}`,

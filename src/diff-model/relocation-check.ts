@@ -55,7 +55,11 @@ const OPERATOR_STARTS = "?:,=^%&|*+-.";
 const LISTED_STARTS = "?:,+";
 const CLOSING_BRACKETS = ")]}";
 const OPERATOR_ENDS = "=+*%&|^?:\\([-";
-const STATEMENT_ENDS = ";}]),>";
+const STATEMENT_ENDS = ";})]";
+const MOST_SITES = 50;
+const SIGNATURE_WORDS =
+	/^(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function|class|def|fn|func|pub\s+fn|interface|enum)\b/;
+const CONTINUING_WORDS = /^(?:as|satisfies|instanceof|in)\s/;
 const BLOCK_END_WORD = /\b(?:end|fi|done|esac)$/;
 const PROSE_NAME = /\.(?:md|mdx|txt|rst|adoc)$/i;
 
@@ -593,12 +597,9 @@ function textOf(span: Span | undefined, sides: Side[]): string | undefined {
  * indentation, or a divergence the operation lists; a listed divergence the lines do not
  * bear out also fails the claim.
  *
- * A claim whose spans share a file must lie in different change regions, and each side's
- * text must occur once among the changed runs. A claim under 5 counted lines must also pass
- * the small-claim rules, listed in the matching v2 spec: no line over 2000 characters, hunks
- * apart within one file, no unclosed single line, no statement that may continue, and enough
- * information, a whole definition, or a matching one-line declaration. The patch scan is built
- * once per `files` array, so a batch of claims is verified in linear time.
+ * A claim whose spans share a file must lie in different change regions with unique text. A
+ * claim under 5 counted lines must also pass the small-claim rules of the matching v2 spec.
+ * The patch scan is built once per `files` array, so a batch is verified in linear time.
  */
 export function verifyRelocation(op: Operation, files: PushFile[]): boolean {
 	const index = indexOfPatches(files);
@@ -673,7 +674,9 @@ function changedRuns(patch: string | undefined, sign: "-" | "+"): string[][] {
 
 function occurrences(window: string[], set: RunSet): number {
 	let found = 0;
-	for (const { run, at } of set.byFirstLine.get(window[0] as string) ?? []) {
+	const sites = set.byFirstLine.get(window[0] as string) ?? [];
+	if (sites.length > MOST_SITES) return 2;
+	for (const { run, at } of sites) {
 		const lines = set.runs[run] as string[];
 		if (at + window.length > lines.length) continue;
 		if (window.every((line, i) => lines[at + i] === line) && ++found > 1) break;
@@ -703,12 +706,7 @@ function overlaps(a: Set<number>, b: Set<number>): boolean {
 	return false;
 }
 
-/**
- * Rules for a claim whose two sides touch one file, whatever its size. The two sides must not
- * sit in one change region (one stretch of changed lines between context), and the text on
- * each side must occur once among the changed runs of the patches, so a paragraph repeated
- * in two places cannot be paired across them.
- */
+/** A claim whose sides share a file needs different change regions and unique text on each side. */
 function sameFileHolds(base: Side[], head: Side[], index: PatchIndex): boolean {
 	const shared = sharedFiles(base, head);
 	if (shared.length === 0) return true;
@@ -722,26 +720,49 @@ function lastWithText(lines: string[]): string | undefined {
 	return undefined;
 }
 
-function brackets(line: string): number {
-	const code = line.replace(LITERALS, "");
-	let depth = 0;
-	for (const ch of code) {
-		if ("([{".includes(ch)) depth++;
-		else if (CLOSING_BRACKETS.includes(ch)) depth--;
+function uncommented(line: string, filename: string): string {
+	const hash = isIndentSensitive(filename) || HASH_FAMILY.test(filename);
+	const slashes = !hash && C_LINE_COMMENTS.test(filename);
+	let quote = "";
+	for (let i = 0; i < line.length; i++) {
+		const ch = line[i] as string;
+		if (quote) {
+			if (ch === "\\") i++;
+			else if (ch === quote) quote = "";
+		} else if ("\"'`".includes(ch)) {
+			quote = ch;
+		} else if ((hash && ch === "#") || (slashes && line.startsWith("//", i))) {
+			return line.slice(0, i);
+		}
 	}
-	return depth;
+	return line;
 }
 
-function isUnfinishedLine(lines: string[], sensitive: boolean): boolean {
-	const present = lines.filter((l) => l.trim() !== "");
-	if (present.length !== 1) return false;
-	const only = present[0] as string;
-	if (sensitive && only.trimEnd().endsWith(":")) return true;
-	return brackets(only) > 0;
+function bracketsBalance(side: Side): boolean {
+	const lastAt = side.lines.map((l) => l.trim() !== "").lastIndexOf(true);
+	const signature = SIGNATURE_WORDS.test(
+		side.lines.find((l) => l.trim() !== "")?.trim() ?? "",
+	);
+	let depth = 0;
+	for (const [at, line] of side.lines.entries()) {
+		let code = uncommented(line, side.filename).replace(LITERALS, "");
+		if (signature && at === lastAt) code = code.replace(/\{\s*$/, "");
+		for (const ch of code) {
+			if ("([{".includes(ch)) depth++;
+			else if (CLOSING_BRACKETS.includes(ch) && --depth < 0) return false;
+		}
+	}
+	return depth === 0;
 }
 
 function unfinished(side: Side): boolean {
-	return isUnfinishedLine(side.lines, isIndentSensitive(side.filename));
+	if (!bracketsBalance(side)) return true;
+	const present = side.lines.filter((l) => l.trim() !== "");
+	return (
+		isIndentSensitive(side.filename) &&
+		present.length === 1 &&
+		(present[0] as string).trimEnd().endsWith(":")
+	);
 }
 
 function beginsMid(side: Side): boolean {
@@ -753,20 +774,21 @@ function mayContinue(side: Side): boolean {
 	const last = lastWithText(side.lines);
 	if (last === undefined) return false;
 	const listy = listsItems(side.filename);
-	const code = last.trimEnd();
-	const final = code[code.length - 1] as string;
-	if (!listy && (OPERATOR_ENDS.includes(final) || code.endsWith("=>")))
-		return true;
+	const code = uncommented(last, side.filename).trimEnd();
+	if (code === "") return false;
+	if (OPERATOR_ENDS.includes(code[code.length - 1] as string)) return true;
+	if (code.endsWith("=>")) return true;
 	const next = side.following?.trim() ?? "";
 	if (next === "") return false;
-	if (beginsMidStatement(next, listy)) {
-		return (
-			!CLOSING_BRACKETS.includes(next[0] as string) ||
-			indentWidth(side.following as string) > indentWidth(last)
-		);
-	}
+	const deeper = indentWidth(side.following as string) > indentWidth(last);
+	if (CLOSING_BRACKETS.includes(next[0] as string)) return deeper;
+	if (beginsMidStatement(next, listy)) return true;
+	if (listy) return deeper;
+	if (CONTINUING_WORDS.test(next) || "([`".includes(next[0] as string))
+		return true;
 	return (
-		!listy && !STATEMENT_ENDS.includes(final) && !BLOCK_END_WORD.test(code)
+		!STATEMENT_ENDS.includes(code[code.length - 1] as string) &&
+		!BLOCK_END_WORD.test(code)
 	);
 }
 
