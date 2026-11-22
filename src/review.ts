@@ -159,9 +159,11 @@ export function toPushFile(file: PullFile): PushFile {
 }
 
 /**
- * Builds the diff model for one input scope and logs what it found. Returns the rendered
- * section only when `REVIEWER_TUNING.diffModel` is on and the build finished inside its
- * time cap; any failure is logged and yields no section, so a review never fails on it.
+ * Builds the diff model for one input scope. Returns the rendered section only when
+ * `REVIEWER_TUNING.diffModel` is on and the build finished inside its time cap. The cap is
+ * measured after the build returns, so a slow build is discarded and never interrupted.
+ * Counts are logged only for a build inside the cap. A failure or an over-cap build is
+ * logged as a warning and yields no section, so a review never fails on it.
  */
 function buildDiffModelSection(input: {
 	scopeFiles: PullFile[];

@@ -145,6 +145,7 @@ vi.mock("./prompt.js", async (importOriginal) => ({
 const diffModelSpy = vi.hoisted(() => ({
 	calls: [] as Array<Record<string, unknown>>,
 	failWith: undefined as Error | undefined,
+	advanceMs: 0,
 }));
 vi.mock("./diff-model/prepare.js", async (importOriginal) => {
 	const real = await importOriginal<typeof import("./diff-model/prepare.js")>();
@@ -153,7 +154,10 @@ vi.mock("./diff-model/prepare.js", async (importOriginal) => {
 		prepareDiffInput: (input: Parameters<typeof real.prepareDiffInput>[0]) => {
 			diffModelSpy.calls.push(input);
 			if (diffModelSpy.failWith) throw diffModelSpy.failWith;
-			return real.prepareDiffInput(input);
+			const prepared = real.prepareDiffInput(input);
+			if (diffModelSpy.advanceMs > 0)
+				vi.setSystemTime(Date.now() + diffModelSpy.advanceMs);
+			return prepared;
 		},
 	};
 });
@@ -10088,9 +10092,11 @@ describe("delta scoping without KV", () => {
 			beforeEach(() => {
 				diffModelSpy.calls = [];
 				diffModelSpy.failWith = undefined;
+				diffModelSpy.advanceMs = 0;
 			});
 			afterEach(() => {
 				REVIEWER_TUNING.diffModel = false;
+				vi.useRealTimers();
 				vi.restoreAllMocks();
 			});
 
@@ -10167,6 +10173,39 @@ describe("delta scoping without KV", () => {
 					droppedClaims: 0,
 					operations: { relocation: 0, rename: 0, mechanical: 0 },
 				});
+			});
+
+			it("a build slower than the time cap yields no section and logs a failure", async () => {
+				REVIEWER_TUNING.diffModel = true;
+				vi.useFakeTimers({ toFake: ["Date"] });
+				diffModelSpy.advanceMs = 2_001;
+				const log = vi.spyOn(console, "log").mockImplementation(() => {});
+				const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+				const decision = await run();
+
+				expect(decision).not.toBeNull();
+				for (const ctx of modelContexts())
+					expect(ctx).not.toHaveProperty("diffModel");
+				expect(warn.mock.calls.some((c) => c[0] === "diff model failed")).toBe(
+					true,
+				);
+				expect(log.mock.calls.some((c) => c[0] === "diff model built")).toBe(
+					false,
+				);
+			});
+
+			it("a build that takes exactly the time cap is kept", async () => {
+				REVIEWER_TUNING.diffModel = true;
+				vi.useFakeTimers({ toFake: ["Date"] });
+				diffModelSpy.advanceMs = 2_000;
+				vi.spyOn(console, "log").mockImplementation(() => {});
+
+				await run();
+
+				expect(modelContexts().some((ctx) => ctx.diffModel !== undefined)).toBe(
+					true,
+				);
 			});
 
 			it("a throw inside the model build omits the section and the review continues", async () => {
