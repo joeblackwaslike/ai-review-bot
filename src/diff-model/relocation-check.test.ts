@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { PushFile } from "../moved-blocks.js";
 import { buildDiffModel } from "./index.js";
 import { partialStatements } from "./partial-statements.fixture.js";
+import { READ_CASES, scaffold, WRITE_CASES } from "./receiver-cases.fixture.js";
 import { findRelocations } from "./relocation.js";
 import { verifyRelocation } from "./relocation-check.js";
 import type { Operation, Span } from "./types.js";
@@ -1933,7 +1934,7 @@ describe("verifyRelocation with signature and receiver divergences", () => {
 		);
 		expect(op.divergences.map((d) => d.class)).toEqual([
 			"signature",
-			"receiver",
+			"code",
 			"receiver",
 		]);
 		expect(verifyRelocation(op, files)).toBe(true);
@@ -2364,9 +2365,9 @@ const SWAP_HEAD = [
 const TS_RISKY_TAIL = "\n+  const s = `a\n+  b`;";
 
 describe("verifyRelocation review weight for receivers", () => {
-	it("weighs a signature change plus plain receiver lines as 2", () => {
+	it("weighs a signature, a code line and a read-only receiver line as 3", () => {
 		const { files, op } = claim("a.py", "b.py", PY_FUNCTION, PY_METHOD);
-		expect(op.reviewWeight).toBe(2);
+		expect(op.reviewWeight).toBe(3);
 		expect(verifyRelocation(op, files)).toBe(true);
 	});
 
@@ -2486,8 +2487,12 @@ describe("verifyRelocation forged signature and receiver claims", () => {
 	});
 });
 
-describe("verifyRelocation opener scan stays linear", () => {
-	const longLines = [`${"static ".repeat(32000)}!`, "a <b ".repeat(32000)];
+describe("verifyRelocation opener scan stays bounded", () => {
+	const longLines = [
+		`${"static ".repeat(32000)}!`,
+		"a <b ".repeat(32000),
+		"a b<".repeat(56000),
+	];
 
 	it.each(longLines)("returns quickly for a %#th pathological line", (line) => {
 		const lines = [...TS_METHOD.slice(0, 3), line, ...TS_METHOD.slice(3)];
@@ -2497,4 +2502,55 @@ describe("verifyRelocation opener scan stays linear", () => {
 		for (const op of ops) verifyRelocation(op, files);
 		expect(performance.now() - started).toBeLessThan(1000);
 	}, 5000);
+});
+
+describe("verifyRelocation receiver positive rule", () => {
+	const formed = (c: (typeof WRITE_CASES)[number]) => {
+		const ext = c.lang;
+		const files = named(
+			`a.${ext}`,
+			`b.${ext}`,
+			scaffold(c, "base"),
+			scaffold(c, "head"),
+		);
+		const ops = findRelocations(files);
+		return { files, op: ops.find((o) => o.divergences.length > 0) };
+	};
+
+	it.each(
+		WRITE_CASES.map((c) => [c.name, c] as const),
+	)("drops a claim that calls %s a receiver difference", (_name, c) => {
+		const { files, op } = formed(c);
+		if (!op) return;
+		expect(verifyRelocation(op, files)).toBe(true);
+		const forged = reweighed({
+			...op,
+			divergences: op.divergences.map((d) =>
+				d.class === "code" ? { ...d, class: "receiver" as const } : d,
+			),
+		});
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("forms and verifies at least six of the single-line write cases", () => {
+		const verified = WRITE_CASES.filter((c) => {
+			const { files, op } = formed(c);
+			return op !== undefined && verifyRelocation(op, files);
+		});
+		expect(verified.length).toBeGreaterThanOrEqual(6);
+	});
+
+	it.each(
+		READ_CASES.map((c) => [c.name, c] as const),
+	)("verifies %s as a receiver difference", (_name, c) => {
+		const { files, op } = formed(c);
+		expect(op?.divergences.some((d) => d.class === "receiver")).toBe(true);
+		expect(verifyRelocation(op as Operation, files)).toBe(true);
+	});
+
+	it("drops a read-only receiver claim whose weight counts the line as code", () => {
+		const { files, op } = formed(READ_CASES[0] as (typeof READ_CASES)[number]);
+		const heavier = { ...(op as Operation), reviewWeight: 3 };
+		expect(verifyRelocation(heavier, files)).toBe(false);
+	});
 });

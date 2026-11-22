@@ -1553,21 +1553,16 @@ describe("findRelocations receiver and reshape output", () => {
 		expect(ops[0]?.reviewWeight).toBe(2);
 	});
 
-	it("does not count receiver divergences against the block limit", () => {
-		const gain = (l: string) =>
-			l.replace(/(= )?(\w+)\(/, (_m, eq, name) => `${eq ?? ""}this.${name}(`);
-		const head = TS_BODY.map((l, i) =>
-			[0, 3, 5, 7, 9].includes(i) ? gain(l) : l,
+	it("does not count receiver divergences against the block limit and weighs them flat", () => {
+		const base = Array.from(
+			{ length: 90 },
+			(_, i) => `record${i}(cart.id, total, ${i});`,
 		);
-		const ops = tsMove(TS_BODY, head);
+		const head = base.map((l, i) => (i % 3 === 0 ? `this.${l}` : l));
+		const ops = tsMove(base, head);
 		expect(ops).toHaveLength(1);
-		expect(ops[0]?.divergences.map((d) => d.class)).toEqual([
-			"receiver",
-			"receiver",
-			"receiver",
-			"receiver",
-			"receiver",
-		]);
+		expect(ops[0]?.divergences).toHaveLength(30);
+		expect(ops[0]?.divergences.every((d) => d.class === "receiver")).toBe(true);
 		expect(ops[0]?.reviewWeight).toBe(1);
 	});
 

@@ -1,7 +1,7 @@
 import type { Run } from "../moved-blocks.js";
 import { acceptSeed, MIN_COUNTED_LINES } from "./acceptance.js";
 import type { WorkBudget } from "./budget.js";
-import { literalSafe, MAX_ANALYZED_LINE } from "./lexical.js";
+import { literalSafe } from "./lexical.js";
 import {
 	asCandidate,
 	balanced,
@@ -19,6 +19,7 @@ import type { Divergence, Operation } from "./types.js";
 
 const MAX_SIGNATURE_LINES = 16;
 const MIN_COUNTED_LENGTH = 3;
+const MAX_OPENER_LINE = 400;
 const PYTHON = new Set(["py", "pyi"]);
 /**
  * Receiver prefixes per extension. token-check.ts keeps its own copy (RESHAPE_RECEIVERS)
@@ -37,6 +38,13 @@ const CONTROL =
 const FUNCTION_KEYWORD =
 	/^\s*(?:(?:export|default|async|public|private|protected|static)\s+)*function\b/;
 const METHOD = /^\s*(?:[\w$.<>,?[\]]+\s+)*[A-Za-z_$][\w$]*\s*(?:<[^>()]*>)?\(/;
+const NOT_READ_ONLY = new Set(
+	"for while del delete as in of with lambda global nonlocal yield import from class def function ++ -- { }".split(
+		" ",
+	),
+);
+const LINE_START = /^[\p{L}_$]/u;
+const LINE_END = /^[\p{L}\p{N}_$"')\]]/u;
 const ASSIGNMENT = new Set(
 	"= += -= *= /= %= **= //= &= |= ^= <<= >>= >>>= &&= ||= ??= :=".split(" "),
 );
@@ -48,7 +56,7 @@ interface LineRange {
 }
 
 function isOpener(line: string, ext: string): boolean {
-	if (line.length > MAX_ANALYZED_LINE) return false;
+	if (line.length > MAX_OPENER_LINE) return false;
 	if (PYTHON.has(ext)) return PYTHON_OPENER.test(line);
 	if (CONTROL.test(line)) return false;
 	return FUNCTION_KEYWORD.test(line) || METHOD.test(line);
@@ -218,27 +226,64 @@ function signatureDivergences(
 }
 
 /**
- * Classifies a line that differs from its counterpart only by receiver prefixes. `dropped`
- * lists, per token, the receiver stripped just before it on each side. The change is `code`
- * when a receiver was added, removed or changed on an assignment target (a differing token
- * before the first assignment operator of the line), or when one receiver was dropped and
- * another added on the same line, because both alter which state the line reads or writes.
+ * Whether a physical line is a complete read-only line: it starts with a name and ends
+ * with a name, literal or closing bracket, its brackets balance within the line, it has no
+ * trailing backslash, no unclosed string, no assignment of any kind, no `++` or `--`, no
+ * `;` except as the last token, no braces, and none of the keywords that bind or rebind a
+ * name (for, del, as, with, lambda, ...). It must also be a `return` or hold a call, so a
+ * bare name or a fragment of a longer statement never qualifies.
+ */
+function readOnlyLine(
+	tokens: readonly string[],
+	rawBase: string,
+	rawHead: string,
+): boolean {
+	if ([rawBase, rawHead].some((raw) => raw.trimEnd().endsWith("\\")))
+		return false;
+	const all = tokens.filter((t) => t !== "\n");
+	const last = all.length - 1;
+	const kept = all[last] === ";" ? all.slice(0, last) : all;
+	if (all.slice(0, last).includes(";")) return false;
+	const first = kept[0];
+	const end = kept[kept.length - 1];
+	if (first === undefined || end === undefined) return false;
+	if (!LINE_START.test(first) || !LINE_END.test(end)) return false;
+	let depth = 0;
+	for (const t of kept) {
+		if (ASSIGNMENT.has(t) || NOT_READ_ONLY.has(t)) return false;
+		if (/^["']/.test(t) && !(t.length > 1 && t.endsWith(t[0] as string)))
+			return false;
+		if (OPENERS.has(t)) depth++;
+		else if (CLOSERS.has(t) && --depth < 0) return false;
+	}
+	return depth === 0 && (first === "return" || kept.includes("("));
+}
+
+/**
+ * Classifies a physical line that differs from its counterpart only by receiver prefixes.
+ * `dropped` lists, per token, the receiver stripped just before it on each side. The line
+ * is `receiver` only when it is a complete read-only line (see `readOnlyLine`) and no line
+ * both lost one receiver and gained another. Everything else is `code`, because a receiver
+ * on a write target, a loop or binding header, or a fragment of a longer statement can
+ * change which state is touched. Weight-light `receiver` is deliberately narrow; a missed
+ * `receiver` only raises the weight.
  */
 function receiverClass(
 	tokens: readonly string[],
 	baseDropped: readonly string[],
 	headDropped: readonly string[],
+	rawBase: string,
+	rawHead: string,
 ): "receiver" | "code" {
-	const assignAt = tokens.findIndex((t) => ASSIGNMENT.has(t));
 	let lost = false;
 	let gained = false;
 	for (let k = 0; k < tokens.length; k++) {
 		if (baseDropped[k] === headDropped[k]) continue;
-		if (assignAt >= 0 && k < assignAt) return "code";
 		if (baseDropped[k] && !headDropped[k]) lost = true;
 		if (!baseDropped[k] && headDropped[k]) gained = true;
 	}
-	return lost && gained ? "code" : "receiver";
+	if (lost && gained) return "code";
+	return readOnlyLine(tokens, rawBase, rawHead) ? "receiver" : "code";
 }
 
 function receiverDivergences(m: Match): Divergence[] {
@@ -246,7 +291,9 @@ function receiverDivergences(m: Match): Divergence[] {
 	const lines = new Map<string, number[]>();
 	for (let k = 0; k < len; k++) {
 		const key = `${d.lineOf[di + k]}|${a.lineOf[ai + k]}`;
-		lines.set(key, [...(lines.get(key) ?? []), k]);
+		const group = lines.get(key);
+		if (group) group.push(k);
+		else lines.set(key, [k]);
 	}
 	const out: Divergence[] = [];
 	for (const [key, ks] of lines) {
@@ -256,6 +303,8 @@ function receiverDivergences(m: Match): Divergence[] {
 			ks.map((k) => d.tokens[di + k] as string),
 			ks.map((k) => d.dropped[di + k] as string),
 			ks.map((k) => a.dropped[ai + k] as string),
+			d.run.raw[d.start + bl] as string,
+			a.run.raw[a.start + hl] as string,
 		);
 		out.push(
 			lineDivergence("changed", cls, d.start + bl, a.start + hl, d.run, a.run),
@@ -384,7 +433,7 @@ export function receiverChangeClass(
 	const key = (xs: string[]) => xs.join("\u0001");
 	if (key(b.tokens) !== key(h.tokens) || key(b.dropped) === key(h.dropped))
 		return null;
-	return receiverClass(b.tokens, b.dropped, h.dropped);
+	return receiverClass(b.tokens, b.dropped, h.dropped, base, head);
 }
 
 function reshapeWeight(divergences: Divergence[]): number {

@@ -566,6 +566,11 @@ const KEYWORD_DEFINITION =
 	/^\s*(?:(?:export|default|async|public|private|protected|static)\s+)*function\b/;
 const METHOD_DEFINITION =
 	/^\s*(?:[\w$.<>,?[\]]+\s+)*[A-Za-z_$][\w$]*\s*(?:<[^>()]*>)?\(/;
+const MAX_OPENER_LINE = 400;
+const BINDING_WORD =
+	/^(?:for|while|del|delete|as|in|of|with|lambda|global|nonlocal|yield|import|from|class|def|function|\+\+|--|\{|\})$/;
+const NAME_START = /^[\p{L}_$]/u;
+const VALUE_END = /^[\p{L}\p{N}_$"')\]]/u;
 const ASSIGNMENT_TOKEN = /^(?:\*\*|\/\/|<<|>>>?|&&|\|\||\?\?|[-+*/%&|^:])?=$/;
 const ANNOTATION = /^\s*@[\w.$]+/;
 
@@ -650,27 +655,55 @@ function comparable(
 }
 
 /**
- * The kind of a receiver difference on one logical line. The tokens are equal on both
+ * The kind of a receiver difference on one physical line. The tokens are equal on both
  * sides once receivers are removed; `baseDropped` and `headDropped` hold, per token, the
- * receiver removed just before it. A difference is `code` when it sits before the first
- * assignment operator (it names the state being written) or when one receiver was lost
- * and another gained on the same line (the line now reads different state). Otherwise it
- * is `receiver`, and null when no receiver differs.
+ * receiver removed just before it. The difference is `receiver` only when the line is a
+ * complete read-only line: it starts with a name, ends with a name, literal or closing
+ * bracket, balances its brackets, has no trailing backslash or unclosed string, no
+ * assignment operator, no `++` or `--`, no `;` before the last token, no braces and none
+ * of the binding keywords, and it is a `return` or contains a call. A line that lost one
+ * receiver and gained another is `code` too. Null when no receiver differs.
  */
 function receiverKind(
 	tokens: string[],
 	baseDropped: string[],
 	headDropped: string[],
+	rawBase: string,
+	rawHead: string,
 ): "receiver" | "code" | null {
 	const differing = tokens.flatMap((_, k) =>
 		baseDropped[k] === headDropped[k] ? [] : [k],
 	);
 	if (differing.length === 0) return null;
-	const write = tokens.findIndex((t) => ASSIGNMENT_TOKEN.test(t));
-	if (write >= 0 && differing.some((k) => k < write)) return "code";
 	const lost = differing.some((k) => baseDropped[k] && !headDropped[k]);
 	const gained = differing.some((k) => !baseDropped[k] && headDropped[k]);
-	return lost && gained ? "code" : "receiver";
+	if (lost && gained) return "code";
+	return readsOnly(tokens, rawBase, rawHead) ? "receiver" : "code";
+}
+
+function readsOnly(
+	tokens: string[],
+	rawBase: string,
+	rawHead: string,
+): boolean {
+	if (/\\\s*$/.test(rawBase) || /\\\s*$/.test(rawHead)) return false;
+	const words = tokens.filter((t) => t !== "\n");
+	const semicolons = words.flatMap((t, k) => (t === ";" ? [k] : []));
+	if (semicolons.some((k) => k !== words.length - 1)) return false;
+	const body = semicolons.length > 0 ? words.slice(0, -1) : words;
+	const head = body[0];
+	const tail = body[body.length - 1];
+	if (head === undefined || tail === undefined) return false;
+	if (!NAME_START.test(head) || !VALUE_END.test(tail)) return false;
+	const stack: string[] = [];
+	for (const t of body) {
+		if (ASSIGNMENT_TOKEN.test(t) || BINDING_WORD.test(t)) return false;
+		if (/^["']/.test(t) && !(t.length > 1 && t.at(-1) === t[0])) return false;
+		const close = OPENING.get(t);
+		if (close) stack.push(close);
+		else if (CLOSING.has(t) && stack.pop() !== t) return false;
+	}
+	return stack.length === 0 && (head === "return" || body.includes("("));
 }
 
 /**
@@ -694,7 +727,7 @@ export function receiverOnlyLine(
 	if (!b || !h) return false;
 	return (
 		sameTokens(b.tokens, h.tokens) &&
-		receiverKind(b.tokens, b.droppedAt, h.droppedAt) === "receiver"
+		receiverKind(b.tokens, b.droppedAt, h.droppedAt, base, head) === "receiver"
 	);
 }
 
@@ -710,7 +743,7 @@ function isDecoratorLine(line: string): boolean {
 }
 
 function isDefinitionLine(line: string, ext: string): boolean {
-	if (line.length > MAX_LINE) return false;
+	if (line.length > MAX_OPENER_LINE) return false;
 	if (PYTHON.has(ext)) return PY_DEF.test(line);
 	if (NOT_A_DEFINITION.test(line)) return false;
 	return KEYWORD_DEFINITION.test(line) || METHOD_DEFINITION.test(line);
@@ -816,18 +849,22 @@ export function reshapeEquivalent(
 	const groups = new Map<string, number[]>();
 	b.tokens.forEach((_, k) => {
 		const key = `${b.lineOf[k]}|${h.lineOf[k]}`;
-		groups.set(key, [...(groups.get(key) ?? []), k]);
+		const group = groups.get(key);
+		if (group) group.push(k);
+		else groups.set(key, [k]);
 	});
 	const pairs: [number, number][] = [];
 	const codePairs: [number, number][] = [];
 	for (const [key, ks] of groups) {
+		const pair = key.split("|").map(Number) as [number, number];
 		const kind = receiverKind(
 			ks.map((k) => b.tokens[k] as string),
 			ks.map((k) => b.droppedAt[k] as string),
 			ks.map((k) => h.droppedAt[k] as string),
+			base.lines[pair[0]] as string,
+			head.lines[pair[1]] as string,
 		);
 		if (kind === null) continue;
-		const pair = key.split("|").map(Number) as [number, number];
 		pairs.push(pair);
 		if (kind === "code") codePairs.push(pair);
 	}

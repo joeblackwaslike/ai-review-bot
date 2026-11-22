@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PushFile } from "../moved-blocks.js";
 import { buildDiffModel } from "./index.js";
+import { READ_CASES, scaffold, WRITE_CASES } from "./receiver-cases.fixture.js";
 import { findRelocations } from "./relocation.js";
 import { signatureRange } from "./reshape.js";
 import type { Operation } from "./types.js";
@@ -140,10 +141,10 @@ describe("reshape matching", () => {
 		const op = ops[0] as Operation;
 		expect(op.from[0]).toMatchObject({ startLine: 10, endLine: 15 });
 		expect(op.to[0]).toMatchObject({ startLine: 3, endLine: 8 });
-		expect(classes(op)).toEqual(["signature", "receiver", "receiver"]);
+		expect(classes(op)).toEqual(["signature", "code", "receiver"]);
 		expect(op.shape).toEqual({ reindent: 4 });
 		expect(op.exact).toBe(false);
-		expect(op.reviewWeight).toBe(2);
+		expect(op.reviewWeight).toBe(3);
 	});
 
 	it("reports every line of a four-line signature", () => {
@@ -193,16 +194,13 @@ describe("reshape matching", () => {
 			(d) => d.class === "receiver",
 		);
 		expect(receivers.map((d) => d.original)).toEqual([
-			"const rate = lookupRate(code);",
-			"const gross = totalOf(cart);",
 			"recordDiscount(cart.id, code, gross);",
-			"const net = applyRate(gross, rate);",
 			"return finalize(net, code);",
 		]);
 		expect(receivers[0]).toMatchObject({
 			kind: "changed",
-			base: { startLine: 11, endLine: 11 },
-			head: { startLine: 4, endLine: 4 },
+			base: { startLine: 13, endLine: 13 },
+			head: { startLine: 6, endLine: 6 },
 		});
 		expect(classes(ops[0])).toContain("signature");
 	});
@@ -214,7 +212,6 @@ describe("reshape matching", () => {
 			(d) => d.class === "receiver",
 		);
 		expect(receivers.map((d) => d.original)).toEqual([
-			"taxed = subtotal * (1 + self.tax_rate)",
 			"self.log_total(rounded, len(items))",
 		]);
 	});
@@ -233,14 +230,14 @@ describe("reshape matching", () => {
 		const ops = move("src/a.ts", "src/b.ts", base, head);
 		expect(ops).toHaveLength(1);
 		expect(classes(ops[0])).toEqual([
+			"code",
+			"code",
 			"receiver",
-			"receiver",
-			"receiver",
-			"receiver",
+			"code",
 			"receiver",
 		]);
 		expect((ops[0] as Operation).exact).toBe(false);
-		expect((ops[0] as Operation).reviewWeight).toBe(1);
+		expect((ops[0] as Operation).reviewWeight).toBe(4);
 	});
 
 	it("does not pair unrelated functions that share a four-line body", () => {
@@ -432,9 +429,9 @@ describe("reshape decorators", () => {
 		expect(classes(ops[0])).toEqual([
 			"signature",
 			"signature",
-			"receiver",
-			"receiver",
-			"receiver",
+			"code",
+			"code",
+			"code",
 			"receiver",
 			"receiver",
 		]);
@@ -476,8 +473,8 @@ describe("reshape decorators", () => {
 		const receivers = (ops[0]?.divergences ?? []).filter(
 			(d) => d.class === "receiver",
 		);
-		expect(receivers).toHaveLength(5);
-		expect(receivers[0]?.original).toBe("rows = self.load_rows(a)");
+		expect(receivers).toHaveLength(2);
+		expect(receivers[0]?.original).toBe("self.check(index, len(rows))");
 		expect(ops[0]?.shape).toBeUndefined();
 	});
 
@@ -587,7 +584,7 @@ describe("reshape receiver probes", () => {
 		expect(ops).toHaveLength(1);
 		expect(
 			(ops[0]?.divergences ?? []).filter((d) => d.class === "receiver"),
-		).toHaveLength(5);
+		).toHaveLength(1);
 	});
 });
 
@@ -627,13 +624,13 @@ describe("reshape receiver weight and code classification", () => {
 		const op = reshapeOf(move("a.ts", "b.ts", TS_FUNCTION, TS_METHOD));
 		expect(classes(op)).toEqual([
 			"signature",
+			"code",
+			"code",
 			"receiver",
-			"receiver",
-			"receiver",
-			"receiver",
+			"code",
 			"receiver",
 		]);
-		expect(op?.reviewWeight).toBe(2);
+		expect(op?.reviewWeight).toBe(5);
 	});
 
 	it("classes an assignment target that gained self. as code and weighs it", () => {
@@ -702,32 +699,35 @@ describe("reshape receiver weight and code classification", () => {
 		]);
 	});
 
-	it("keeps a plain gained receiver on the right of an assignment as receiver", () => {
+	it("keeps a read-only return that gained a receiver as receiver", () => {
 		const base = [
 			"def tally(n):",
-			"    count = n + 1",
 			"    rows = load_rows(n)",
 			"    keys = build_keys(rows, n)",
 			"    check_keys(keys, rows)",
-			"    return count",
+			"    flush_keys(keys, rows, n)",
+			"    return n + 1",
 		];
 		const head = [
 			"    def tally(self, n):",
-			"        count = self.n + 1",
 			"        rows = load_rows(n)",
 			"        keys = build_keys(rows, n)",
 			"        check_keys(keys, rows)",
-			"        return count",
+			"        flush_keys(keys, rows, n)",
+			"        return self.n + 1",
 		];
-		expect(classes(reshapeOf(move("a.py", "b.py", base, head)))).toEqual([
-			"signature",
-			"receiver",
-		]);
+		const op = reshapeOf(move("a.py", "b.py", base, head));
+		expect(classes(op)).toEqual(["signature", "receiver"]);
+		expect(op?.reviewWeight).toBe(2);
 	});
 });
 
-describe("reshape opener scan stays linear", () => {
-	const hostile = [`${"static ".repeat(32000)}!`, "a <b ".repeat(32000)];
+describe("reshape opener scan stays bounded", () => {
+	const hostile = [
+		`${"static ".repeat(32000)}!`,
+		"a <b ".repeat(32000),
+		"a b<".repeat(56000),
+	];
 
 	it.each(hostile)("finishes under a second for hostile line %#", (line) => {
 		const base = [...TS_FUNCTION.slice(0, 3), line, ...TS_FUNCTION.slice(3)];
@@ -747,11 +747,21 @@ describe("reshape opener scan stays linear", () => {
 		expect(performance.now() - modelStarted).toBeLessThan(1000);
 	}, 5000);
 
-	it("finishes a 2000-character modifier run under a second", () => {
-		const line = `${"static ".repeat(330)}!`;
+	it("finishes a 400-character modifier run under a second", () => {
+		const line = `${"static ".repeat(55)}!`;
 		const started = performance.now();
 		signatureRange([line], "a.ts");
 		expect(performance.now() - started).toBeLessThan(1000);
+	});
+
+	it("reads an opener of 399 characters but not one of 401", () => {
+		const pad = (n: number) => `function f(${"a, ".repeat(n)}z) {`;
+		const ok = pad(127);
+		expect(ok.length).toBeLessThanOrEqual(400);
+		expect(signatureRange([ok], "a.ts")).not.toBeNull();
+		const long = pad(133);
+		expect(long.length).toBeGreaterThan(400);
+		expect(signatureRange([long], "a.ts")).toBeNull();
 	});
 
 	it("refuses a line longer than the analysis cap as an opener", () => {
@@ -927,4 +937,88 @@ describe("reshape at scale", () => {
 		const tiny = findRelocations(files, { tokens: 500, candidates: 50 }).length;
 		expect(tiny).toBeLessThan(full);
 	}, 8000);
+});
+
+describe("reshape receiver positive rule", () => {
+	const run = (c: (typeof WRITE_CASES)[number]) => {
+		const ext = c.lang === "py" ? "py" : "ts";
+		return reshapeOf(
+			move(`a.${ext}`, `b.${ext}`, scaffold(c, "base"), scaffold(c, "head")),
+		);
+	};
+
+	it.each(
+		WRITE_CASES.map((c) => [c.name, c] as const),
+	)("never calls %s a receiver difference", (_name, c) => {
+		const op = run(c);
+		const receivers = (op?.divergences ?? []).filter(
+			(d) => d.class === "receiver",
+		);
+		expect(receivers).toEqual([]);
+		if (c.base.length === 1 && op)
+			expect(
+				op.divergences.some(
+					(d) => d.class === "code" && d.original === c.base[0],
+				),
+			).toBe(true);
+	});
+
+	it("claims at least the single-line write cases as code", () => {
+		const claimed = WRITE_CASES.filter((c) => c.base.length === 1).filter(
+			(c) => run(c) !== undefined,
+		);
+		expect(claimed.length).toBeGreaterThanOrEqual(6);
+	});
+
+	it.each(
+		READ_CASES.map((c) => [c.name, c] as const),
+	)("keeps %s as receiver", (_name, c) => {
+		const op = run(c);
+		expect(op?.divergences.filter((d) => d.class === "receiver")).toHaveLength(
+			1,
+		);
+		expect(op?.reviewWeight).toBe(
+			(op?.divergences ?? []).filter(
+				(d) => d.class === "signature" || d.class === "code",
+			).length + 1,
+		);
+	});
+
+	it("weighs a body of 30 read-only receiver lines as a flat 1 over the signature", () => {
+		const calls = Array.from(
+			{ length: 30 },
+			(_, i) => `step${i}(items, n, ${i})`,
+		);
+		const base = ["def run(items, n):", ...calls.map((l) => `    ${l}`)];
+		const head = [
+			"    def run(self, items, n):",
+			...calls.map((l) => `        self.${l}`),
+		];
+		const op = reshapeOf(move("a.py", "b.py", base, head));
+		expect(op?.divergences.filter((d) => d.class === "receiver")).toHaveLength(
+			30,
+		);
+		expect(op?.reviewWeight).toBe(2);
+	});
+
+	it("emits no receiver class for the write cases end to end", () => {
+		for (const c of WRITE_CASES) {
+			const ext = c.lang === "py" ? "py" : "ts";
+			const files = [
+				deletedFrom(`a.${ext}`, 10, scaffold(c, "base")),
+				addedTo(`b.${ext}`, 3, scaffold(c, "head")),
+			];
+			const model = buildDiffModel({
+				scopeFiles: files,
+				prFiles: files,
+				prFilesComplete: true,
+				title: "t",
+				body: null,
+			});
+			const classesSeen = model.operations.flatMap((o) =>
+				o.divergences.map((d) => d.class),
+			);
+			expect(classesSeen).not.toContain("receiver");
+		}
+	});
 });
