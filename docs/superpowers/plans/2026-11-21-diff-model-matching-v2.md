@@ -12,11 +12,13 @@
 
 ## Global Constraints
 
+> Superseded in part. The acceptance rules, the checker rules, the work budget description and the render ranking in this plan are replaced by [the matching v2 spec](../specs/2026-11-21-diff-model-matching-v2-design.md) as amended after the PR 3 reviews. Where the two differ, the spec wins.
+
 - `findMovedBlocks()` in `src/moved-blocks.ts` and `push-shape.ts` behavior must not change. New matcher behavior is behind options that only `findRelocations` passes.
 - No operation may say "safe", "unchanged behavior" or "functional".
 - A claim the checker cannot verify independently is dropped and counted in `droppedClaims`. The checker must not call matcher functions for an equivalence it verifies. Sharing a data constant such as the operator table is allowed.
 - Thresholds err toward a miss. The bar is zero added operations over the last 150 commits that are not a true move or copy. Starting values: 30 non-space characters for a 1 to 4 line seed, 40 for a definition, 5 counted lines or a 3-line definition for copies.
-- Work budget limits per change: 200,000 tokens, 5,000 candidates, 16,000,000 alignment cells, counted in work units, never time. The 2,000 ms post-hoc cap stays.
+- Work budget limits per change: 200,000 characters, 5,000 candidates, 16,000,000 alignment cells, counted in work units, never time. The 2,000 ms post-hoc cap stays.
 - Unknown extensions are line-significant. Quote swaps only in JS, TS and Python, only when the string has no quote, backslash or interpolation marker. Blocks failing literal-context safety compare by raw lines.
 - `DivergenceClass` gains `signature` and `receiver`. `OperationType` gains `copy`. `Operation.shape?: { reindent?: number; sourceNew?: boolean }`.
 - No comments in code except where nothing else works. No section-banner comments. Docstrings on exported functions. Tests are named by behavior.
