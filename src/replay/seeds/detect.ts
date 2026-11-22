@@ -93,11 +93,14 @@ function shapeMatches(
 
 /**
  * Scores a model's operations against a seed's expected ones. An operation matches by type,
- * by `shape.reindent` and `shape.sourceNew` when the truth records them, and by spans that each contain one expected span in the same file and side, extending past it by at most `EDGE_TOLERANCE_LINES` on each side. Each found span satisfies one expected span. Divergences are
- * scored on matched operations: one the truth lists and the model lacks counts as missed,
- * and one the model reports and the truth does not list counts as extra. A divergence
- * matches by kind, class and spans. When the truth states `exact`, `reason` or `shape`, the model's
- * operation must agree to match. An operation the truth does not list is `unexpected`.
+ * by `shape.reindent` and `shape.sourceNew` when the truth records them, and by spans that
+ * each contain one expected span in the same file and side, extending past it by at most
+ * `EDGE_TOLERANCE_LINES` on each side. Each found span satisfies one expected span.
+ * Divergences are scored on matched operations: one the truth lists and the model lacks
+ * counts as missed, and one the model reports and the truth does not list counts as extra.
+ * A divergence matches by kind, class and spans. When the truth states `exact`, `reason`
+ * or `shape`, the model's operation must agree to match. An operation the truth does not
+ * list is `unexpected`.
  */
 export function scoreDetection(
 	truthOps: SeedOperation[],
