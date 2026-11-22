@@ -47,7 +47,7 @@ export function isProseFile(filename: string): boolean {
 	return PROSE_FILE.test(filename);
 }
 
-/** Tokens of the first `MAX_ANALYZED_LINE` characters of a line: names, numbers, string literals and single symbols. */
+/** Tokens of the first `MAX_ANALYZED_LINE` characters of a line. */
 export function tokens(line: string): string[] {
 	return line.slice(0, MAX_ANALYZED_LINE).match(TOKEN) ?? [];
 }

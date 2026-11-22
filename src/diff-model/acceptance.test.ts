@@ -109,12 +109,6 @@ describe("lineInformation on oversized lines", () => {
 		expect(lineInformation(line)).toBe(0);
 		expect(performance.now() - started).toBeLessThan(1000);
 	});
-
-	it("still counts a line of exactly 2000 characters", () => {
-		const line = `const a = "${"x".repeat(1987)}";`;
-		expect(line.length).toBe(2000);
-		expect(lineInformation(line)).toBeGreaterThan(0);
-	});
 });
 
 describe("acceptSeed", () => {

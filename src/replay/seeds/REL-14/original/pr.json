@@ -1,4 +1,4 @@
 {
 	"title": "Wrap the user service writes in error handling",
-	"body": "Both write paths now run inside a try block and report failures. The existing logic only moves one level in. There is no other functional change."
+	"body": "Both write paths now run inside a try block and report failures. Nothing else changes."
 }

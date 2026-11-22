@@ -78,7 +78,6 @@ function declaredValue(line: string, name: string): string {
 function fileKind(filename: string): string {
 	const ext = (filename.split(".").pop() ?? filename).toLowerCase();
 	if (/^(?:[cm]?[jt]sx?)$/.test(ext)) return "script";
-	if (/^(?:c|h|cc|cpp|hpp)$/.test(ext)) return "native";
 	return ext;
 }
 
@@ -594,18 +593,12 @@ function textOf(span: Span | undefined, sides: Side[]): string | undefined {
  * indentation, or a divergence the operation lists; a listed divergence the lines do not
  * bear out also fails the claim.
  *
- * A claim whose spans share a file must not have both sides in one change region, and the
- * text of each side must occur once among the changed runs of the patches. A claim under 5
- * counted lines also fails when a line exceeds 2000 characters; when a same-file claim has
- * both sides in one hunk; when a side is one line with unclosed brackets or, in an
- * indentation-sensitive file, ends in a colon; when a side begins with a closing bracket or
- * a leading operator; when a side ends in an operator or an opening bracket, or the next
- * line of the patch continues the statement, or a line follows a span that does not end in
- * a statement terminator; and unless it carries 30 characters of information (50 within one
- * file), is a whole definition of 40 characters, or is a one-line top-level declaration
- * whose head side declares the same name of at least 3 characters in the same extension
- * family with the same value or one sharing half its tokens. The patch scan is built once
- * per `files` array, so a batch of claims is verified in linear time.
+ * A claim whose spans share a file must lie in different change regions, and each side's
+ * text must occur once among the changed runs. A claim under 5 counted lines must also pass
+ * the small-claim rules, listed in the matching v2 spec: no line over 2000 characters, hunks
+ * apart within one file, no unclosed single line, no statement that may continue, and enough
+ * information, a whole definition, or a matching one-line declaration. The patch scan is built
+ * once per `files` array, so a batch of claims is verified in linear time.
  */
 export function verifyRelocation(op: Operation, files: PushFile[]): boolean {
 	const index = indexOfPatches(files);

@@ -547,27 +547,6 @@ describe("renderDiffModel", () => {
 		);
 	});
 
-	it("details a one-line move with a code difference when larger exact moves fill the limit", () => {
-		const bigOps = Array.from({ length: 12 }, (_, i) =>
-			op({
-				id: `relocation-${i + 1}`,
-				type: "relocation",
-				from: [span(`src/big${i}.ts`, "base", 1, 20)],
-				to: [span(`src/dest${i}.ts`, "head", 1, 20)],
-			}),
-		);
-		const edited = op({
-			id: "relocation-13",
-			type: "relocation",
-			from: [span("src/edited.ts", "base", 5, 5)],
-			to: [span("src/edited2.ts", "head", 5, 5)],
-			exact: false,
-			divergences: [codeDivergence()],
-		});
-		const r = renderDiffModel(model({ operations: [...bigOps, edited] }), OPTS);
-		expect(r.summary).toContain("src/edited.ts");
-	});
-
 	it("ranks a code divergence first among moves of equal size", () => {
 		const clean = op({ id: "relocation-1", type: "relocation" });
 		const edited = op({

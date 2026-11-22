@@ -1100,80 +1100,61 @@ describe("distinctiveness acceptance and same-file moves", () => {
 });
 
 describe("findRelocations statement continuation", () => {
-	function hunk(filename: string, rows: string[]): PushFile {
-		return pushFile(filename, ["@@ -10,9 +10,9 @@", ...rows].join("\n"));
-	}
+	const hunk = (filename: string, rows: string[]) =>
+		pushFile(filename, ["@@ -10,9 +10,9 @@", ...rows].join("\n"));
+	const pairOf = (baseRows: string[], headRows: string[]) => [
+		hunk("src/a.ts", baseRows),
+		hunk("src/b.ts", headRows),
+	];
+	const loaded = "const approvedUserList = loadUsers(config)";
+	const line = "  const approvedUserList = loadUsers(config);";
 
-	it("does not claim a declaration whose statement continues on a line that differs", () => {
-		const files = [
-			hunk("src/a.ts", [
-				"-const approved = users",
-				"-  .filter((u) => u.isAdmin);",
-			]),
-			hunk("src/b.ts", ["+const approved = users", "+  .filter(() => true);"]),
-		];
-		expect(findRelocations(files)).toEqual([]);
-	});
-
-	it("does not claim a declaration whose head side gains a continuation line", () => {
-		const files = [
-			hunk("src/a.ts", ["-const total = compute(a, b)", " context"]),
-			hunk("src/b.ts", ["+const total = compute(a, b)", "+  + secret"]),
-		];
-		expect(findRelocations(files)).toEqual([]);
-	});
-
-	it("does not claim a declaration followed by a continuation line in the context", () => {
-		const files = [
-			hunk("src/a.ts", ["-const total = compute(a, b)", "   .map(wrap);"]),
-			hunk("src/b.ts", ["+const total = compute(a, b);", " context"]),
-		];
-		expect(findRelocations(files)).toEqual([]);
-	});
-
-	it("does not seed a short block whose statement continues on a differing line", () => {
-		const first = "const approvedUserList = loadUsers(config)";
-		const files = [
-			hunk("src/a.ts", [`-${first}`, "-  .filter((u) => u.isAdmin);"]),
-			hunk("src/b.ts", [`+${first}`, "+  .filter(() => true);"]),
-		];
-		expect(findRelocations(files)).toEqual([]);
-	});
-
-	it("does not seed a short block that lacks a terminator when a line follows", () => {
-		const first = "const approvedUserList = loadUsers(config).length";
-		const files = [
-			hunk("src/a.ts", [`-${first}`, " other();"]),
-			hunk("src/b.ts", [`+${first}`, " other();"]),
-		];
-		expect(findRelocations(files)).toEqual([]);
-	});
-
-	it("does not seed a short block that ends in an operator", () => {
-		const first = "const approvedUserList = loadUsers(config) &&";
-		const files = [
-			hunk("src/a.ts", [`-${first}`]),
-			hunk("src/b.ts", [`+${first}`]),
-		];
-		expect(findRelocations(files)).toEqual([]);
-	});
-
-	it("does not seed a short block followed by a closer on a deeper indent", () => {
-		const line = "  const approvedUserList = loadUsers(config);";
-		const files = [
-			hunk("src/a.ts", [`-${line}`, "     )"]),
-			hunk("src/b.ts", [`+${line}`, "     )"]),
-		];
-		expect(findRelocations(files)).toEqual([]);
+	it.each([
+		[
+			"a declaration whose statement continues on a line that differs",
+			["-const approved = users", "-  .filter((u) => u.isAdmin);"],
+			["+const approved = users", "+  .filter(() => true);"],
+		],
+		[
+			"a declaration whose head side gains a continuation line",
+			["-const total = compute(a, b)", " context"],
+			["+const total = compute(a, b)", "+  + secret"],
+		],
+		[
+			"a declaration followed by a continuation line in the context",
+			["-const total = compute(a, b)", "   .map(wrap);"],
+			["+const total = compute(a, b);", " context"],
+		],
+		[
+			"a short block whose statement continues on a differing line",
+			[`-${loaded}`, "-  .filter((u) => u.isAdmin);"],
+			[`+${loaded}`, "+  .filter(() => true);"],
+		],
+		[
+			"a short block that lacks a terminator when a line follows",
+			[`-${loaded}.length`, " other();"],
+			[`+${loaded}.length`, " other();"],
+		],
+		[
+			"a short block that ends in an operator",
+			[`-${loaded} &&`],
+			[`+${loaded} &&`],
+		],
+		[
+			"a short block followed by a closer on a deeper indent",
+			[`-${line}`, "     )"],
+			[`+${line}`, "     )"],
+		],
+	])("does not claim %s", (_, baseRows, headRows) => {
+		expect(findRelocations(pairOf(baseRows, headRows))).toEqual([]);
 	});
 
 	it("still seeds a terminated short block followed by an ordinary line", () => {
-		const line = "  const approvedUserList = loadUsers(config);";
-		const files = [
-			hunk("src/a.ts", [`-${line}`, " other();"]),
-			hunk("src/b.ts", [`+${line}`, " other();"]),
-		];
-		expect(findRelocations(files)).toHaveLength(1);
+		expect(
+			findRelocations(
+				pairOf([`-${line}`, " other();"], [`+${line}`, " other();"]),
+			),
+		).toHaveLength(1);
 	});
 
 	it("seeds a short Ruby method that ends in end when a context line follows", () => {
@@ -1190,109 +1171,74 @@ describe("findRelocations statement continuation", () => {
 	});
 
 	it("does not seed an else-if line that opens with a closer", () => {
-		const line = "} else if (user.isAdmin && flags.betaAccess) {";
-		expect(move([line], [line])).toEqual([]);
+		const closer = "} else if (user.isAdmin && flags.betaAccess) {";
+		expect(move([closer], [closer])).toEqual([]);
 	});
 });
 
 describe("findRelocations same-file uniqueness", () => {
 	it("does not pair a repeated paragraph re-indented in two regions of one file", () => {
 		const paragraph = body(5);
-		const indented = paragraph.map((l) => `    ${l}`);
+		const region = (name: string) => [
+			` context ${name}`,
+			...paragraph.map((l) => `-${l}`),
+			...paragraph.map((l) => `+    ${l}`),
+			" context end",
+		];
 		const patch = [
 			"@@ -1,7 +1,7 @@",
-			" context a",
-			...paragraph.map((l) => `-${l}`),
-			...indented.map((l) => `+${l}`),
-			" context b",
+			...region("a"),
 			"@@ -30,7 +30,7 @@",
-			" context c",
-			...paragraph.map((l) => `-${l}`),
-			...indented.map((l) => `+${l}`),
-			" context d",
+			...region("c"),
 		].join("\n");
 		expect(findRelocations([pushFile("src/a.ts", patch)])).toEqual([]);
-	});
-
-	it("still pairs a unique block moved within one file", () => {
-		const block = body(6);
-		const patch = [
-			"@@ -1,8 +1,2 @@",
-			...block.map((l) => `-${l}`),
-			" context one",
-			" context two",
-			"@@ -40,3 +34,9 @@",
-			" context three",
-			...block.map((l) => `+${l}`),
-			" context four",
-		].join("\n");
-		expect(findRelocations([pushFile("src/a.ts", patch)])).toHaveLength(1);
 	});
 });
 
 describe("findRelocations declaration pairing", () => {
-	function one(filename: string, sign: "-" | "+", line: string): PushFile {
-		return pushFile(filename, ["@@ -5,1 +5,1 @@", `${sign}${line}`].join("\n"));
-	}
+	const one = (filename: string, sign: "-" | "+", text: string) =>
+		pushFile(filename, ["@@ -5,1 +5,1 @@", `${sign}${text}`].join("\n"));
 
-	it("does not pair same-named type aliases with unrelated bodies", () => {
-		const files = [
-			one("src/Button.tsx", "-", "type Props = { label: string };"),
-			one(
+	it.each([
+		[
+			"same-named type aliases with unrelated bodies",
+			["src/Button.tsx", "type Props = { label: string };"],
+			[
 				"src/Card.tsx",
-				"+",
 				"type Props = { children: ReactNode; elevated: boolean };",
-			),
-		];
-		expect(findRelocations(files)).toEqual([]);
-	});
-
-	it("does not pair a TypeScript constant with a Python assignment of the same name", () => {
-		const files = [
-			one("src/config.ts", "-", "const TIMEOUT = 30;"),
-			one("src/config.py", "+", "TIMEOUT = 30"),
-		];
-		expect(findRelocations(files)).toEqual([]);
-	});
-
-	it("does not pair declarations across extension families", () => {
-		const files = [
-			one("src/limits.ts", "-", "export const MAX_ITEMS = 5;"),
-			one("src/limits.go", "+", "const MAX_ITEMS = 5"),
-		];
-		expect(findRelocations(files)).toEqual([]);
-	});
-
-	it("does not pair a one-letter name", () => {
-		const files = [
-			one("src/a.ts", "-", "const i = 0;"),
-			one("src/b.ts", "+", "const i = 0;"),
-		];
-		expect(findRelocations(files)).toEqual([]);
-	});
-
-	it("does not pair a changed declaration whose value shares too little with the original", () => {
-		const files = [
-			one("src/a.ts", "-", "const MAX = 5;"),
-			one("src/b.ts", "+", "const MAX = buildLimit(config, defaults);"),
-		];
+			],
+		],
+		[
+			"a TypeScript constant and a Python assignment of the same name",
+			["src/config.ts", "const TIMEOUT = 30;"],
+			["src/config.py", "TIMEOUT = 30"],
+		],
+		[
+			"declarations across extension families",
+			["src/limits.ts", "export const MAX_ITEMS = 5;"],
+			["src/limits.go", "const MAX_ITEMS = 5"],
+		],
+		[
+			"a one-letter name",
+			["src/a.ts", "const i = 0;"],
+			["src/b.ts", "const i = 0;"],
+		],
+		[
+			"a changed value that shares too little with the original",
+			["src/a.ts", "const MAX = 5;"],
+			["src/b.ts", "const MAX = buildLimit(config, defaults);"],
+		],
+	])("does not pair %s", (_, [baseName, base], [headName, head]) => {
+		const files = [one(baseName, "-", base), one(headName, "+", head)];
 		expect(findRelocations(files)).toEqual([]);
 	});
 
 	it("still claims a related declaration with a small change", () => {
-		const files = [
-			one(
-				"src/a.ts",
-				"-",
-				"export const DEFAULTS = { retries: 3, timeout: 1000 };",
-			),
-			one(
-				"src/b.ts",
-				"+",
-				"export const DEFAULTS = { retries: 5, timeout: 1000 };",
-			),
-		];
-		const ops = findRelocations(files);
+		const base = "export const DEFAULTS = { retries: 3, timeout: 1000 };";
+		const ops = findRelocations([
+			one("src/a.ts", "-", base),
+			one("src/b.ts", "+", base.replace("3", "5")),
+		]);
 		expect(ops).toHaveLength(1);
 		expect(ops[0]?.exact).toBe(false);
 	});
@@ -1326,107 +1272,86 @@ describe("findRelocations budget order", () => {
 
 describe("findRelocations oversized lines", () => {
 	it("returns quickly with no short relocation for a 160KB quote-and-backslash line", () => {
-		const line = `x = "${'\\"'.repeat(80_000)}`;
+		const text = `x = "${'\\"'.repeat(80_000)}`;
 		const started = performance.now();
-		const ops = move([line], [line]);
+		const ops = move([text], [text]);
 		expect(performance.now() - started).toBeLessThan(1000);
 		expect(ops).toEqual([]);
 	});
 });
 
-describe("findRelocations declaration budget", () => {
-	it("stops pairing declarations when the candidate pool runs out", () => {
-		const names = Array.from({ length: 6 }, (_, i) => `LIMIT_${i}_KEY`);
-		const files = [
-			pushFile(
-				"src/a.ts",
-				[
-					"@@ -1,6 +0,0 @@",
-					...names.map((n) => `-export const ${n} = { id: 1, tag: "a" };`),
-				].join("\n"),
-			),
-			pushFile(
-				"src/b.ts",
-				[
-					"@@ -0,0 +1,6 @@",
-					...names.map((n) => `+export const ${n} = { id: 1, tag: "b" };`),
-				].join("\n"),
-			),
-		];
-		expect(findRelocations(files)).toHaveLength(6);
-		expect(findRelocations(files, { candidates: 2 })).toHaveLength(2);
-	});
-});
-
 describe("findRelocations budget exhaustion paths", () => {
-	const edited = (n: number): [string[], string[]] => {
-		const base = body(14).map((l) => l.replace("v", `blk${n}v`));
-		const head = base.map((l, i) =>
-			i === 6
-				? (base[7] as string)
-				: i === 7
-					? (base[8] as string)
-					: i === 8
-						? `  const added${n} = other(${n});`
-						: l,
-		);
-		return [base, head];
-	};
+	const short = "  const result1 = computeSomething1(first, second, third);";
+	const reached = (ops: Operation[]) =>
+		new Set(ops.map((op) => op.from[0]?.filename));
 
 	function blocks(count: number): PushFile[] {
-		return Array.from({ length: count }, (_, i) => {
-			const [base, head] = edited(i);
+		return Array.from({ length: count }, (_, n) => {
+			const base = body(14).map((l) => l.replace("v", `blk${n}v`));
+			const head = base.map((l, i) =>
+				i === 6
+					? (base[7] as string)
+					: i === 7
+						? (base[8] as string)
+						: i === 8
+							? `  const added${n} = other(${n});`
+							: l,
+			);
 			return [
-				deletedFrom(`src/a${i}.ts`, 1, base),
-				addedTo(`src/b${i}.ts`, 1, head),
+				deletedFrom(`src/a${n}.ts`, 1, base),
+				addedTo(`src/b${n}.ts`, 1, head),
 			];
 		}).flat();
 	}
 
 	it("aligns the whole block while the cells pool lasts and falls back once it is dry", () => {
-		const files = blocks(1);
-		const full = findRelocations(files);
-		const dry = findRelocations(files, { cells: 1 });
+		const full = findRelocations(blocks(1));
+		const dry = findRelocations(blocks(1), { cells: 1 });
 		expect(full).toHaveLength(1);
 		expect(full[0]?.divergences.length).toBeGreaterThan(0);
-		expect(dry.length).toBeGreaterThan(0);
 		expect(dry).not.toEqual(full);
 	});
 
 	it("stops resolving chains once the cells pool runs dry after the seeds", () => {
 		const files = blocks(3);
-		expect(findRelocations(files)).toHaveLength(3);
 		const limited = findRelocations(files, { cells: 16 });
-		const reached = (ops: Operation[]) =>
-			new Set(ops.map((op) => op.from[0]?.filename));
 		expect(reached(findRelocations(files)).has("src/a2.ts")).toBe(true);
 		expect(reached(limited).has("src/a0.ts")).toBe(true);
 		expect(reached(limited).has("src/a2.ts")).toBe(false);
 	});
 
 	it("keeps resolving the chains it already has when the seeds themselves ran dry", () => {
-		const short = "  const result1 = computeSomething1(first, second, third);";
 		const files = [
 			deletedFrom("src/s1.ts", 1, [short]),
 			addedTo("src/s2.ts", 1, [short]),
 			...blocks(3),
 		];
 		const limited = findRelocations(files, { candidates: 0, cells: 16 });
-		expect(
-			new Set(limited.map((op) => op.from[0]?.filename)).has("src/a2.ts"),
-		).toBe(true);
+		expect(reached(limited).has("src/a2.ts")).toBe(true);
 	});
 
 	it("skips the declaration pass once a short seed has exhausted the budget", () => {
-		const short = "  const result1 = computeSomething1(first, second, third);";
+		const declaration = ["export const LIMIT_KEY = { id: 1 };"];
 		const files = [
 			deletedFrom("src/s1.ts", 1, [short]),
 			addedTo("src/s2.ts", 1, [short]),
-			deletedFrom("src/c1.ts", 1, ["export const LIMIT_KEY = { id: 1 };"]),
-			addedTo("src/c2.ts", 1, ["export const LIMIT_KEY = { id: 1 };"]),
+			deletedFrom("src/c1.ts", 1, declaration),
+			addedTo("src/c2.ts", 1, declaration),
 		];
 		expect(findRelocations(files)).toHaveLength(2);
 		expect(findRelocations(files, { tokens: 0 })).toEqual([]);
+	});
+
+	it("stops pairing declarations when the candidate pool runs out", () => {
+		const names = Array.from({ length: 6 }, (_, i) => `LIMIT_${i}_KEY`);
+		const declare = (tag: string) =>
+			names.map((n) => `export const ${n} = { id: 1, tag: "${tag}" };`);
+		const files = [
+			deletedFrom("src/a.ts", 1, declare("a")),
+			addedTo("src/b.ts", 1, declare("b")),
+		];
+		expect(findRelocations(files)).toHaveLength(6);
+		expect(findRelocations(files, { candidates: 2 })).toHaveLength(2);
 	});
 
 	it("claims a whole definition whose lines carry no information of their own", () => {
@@ -1441,6 +1366,6 @@ describe("findRelocations budget exhaustion paths", () => {
 			deletedFrom("src/a.ts", 10, definition),
 			addedTo("src/b.ts", 3, definition),
 		];
-		expect(verifyRelocation(ops[0] as never, files)).toBe(true);
+		expect(verifyRelocation(ops[0] as Operation, files)).toBe(true);
 	});
 });

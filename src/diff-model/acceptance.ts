@@ -145,10 +145,9 @@ function listsItems(run: Run): boolean {
 }
 
 /**
- * True when a line cannot start a statement of its own: it opens with a closing bracket or a
- * leading operator (`.`, `?`, `:`, `,`, `=`, `+`, `-`, `*`, `%`, `&`, `|`, `^`, `/`, `=>`).
- * Indentation-sensitive and prose files list items with `-`, `*` and `+`, so there only the
- * narrower set of chained-call and ternary starts counts.
+ * True when a line cannot start a statement: it opens with a closing bracket or a leading
+ * operator. Indentation-sensitive and prose files list items with `-`, `*` and `+`, so there
+ * only chained-call and ternary starts count.
  */
 export function startsMidStatement(line: string, run: Run): boolean {
 	const text = line.trim();
@@ -167,12 +166,11 @@ function lastPresentLine(run: Run, start: number, end: number): string {
 }
 
 /**
- * True when the statement that lines `start` up to `end` of the run finish may carry on past
- * them. That holds when the last line ends in an operator or an opening bracket, when the
- * line after it (in the run, or the context line that follows the run) starts mid-statement
- * or is a closing bracket indented deeper than the last line, or, outside indentation-sensitive
- * and prose files, when a line follows and the last line ends in none of `;`, `}`, `)`, `]`
- * or `,`. A run that ends its hunk with no context line after it counts as finished.
+ * True when the statement ending at line `end` of the run may carry on. That holds when the
+ * last line ends in an operator or opening bracket, when the next line (in the run, or the
+ * context line after it) starts mid-statement or is a closing bracket indented deeper, or,
+ * outside indentation-sensitive and prose files, when a line follows a last line with no
+ * statement terminator. A run that ends its hunk with no context line counts as finished.
  */
 export function leavesStatementOpen(
 	run: Run,
@@ -197,17 +195,14 @@ export function leavesStatementOpen(
 
 /**
  * Decides whether an exact run is a block worth reporting. Five or more counted lines
- * qualify without drawing from the budget's token and candidate pools, so a large block is
- * never starved by earlier junk; within one file they must also occur once on each side. One
- * to four lines draw once per distinct candidate, one candidate and the seed's characters,
- * and are rejected when either pool is dry. They qualify when they carry at least 30
- * characters of information (50 within one file), or form a whole definition of at least 40
- * non-space characters, and occur once on each side. Such a short seed never qualifies when
- * it holds a line over 2000 characters, is a single line with unclosed brackets, ends in a
- * colon in an indentation-sensitive file, starts by continuing an expression, or may be
- * continued by the line after it on either side (see `leavesStatementOpen`). Within one file
- * its two sides must also lie in different hunks, since a short block moved inside one hunk
- * is usually a misaligned diff.
+ * qualify without drawing the budget's token and candidate pools, and within one file must
+ * occur once on each side. One to four lines draw once per distinct candidate (one candidate
+ * and the seed's characters) and are rejected when a pool is dry. They qualify with 30
+ * characters of information (50 within one file) or a whole definition of 40 non-space
+ * characters, and occur once on each side. They never qualify with a line over 2000
+ * characters, as a single line with unclosed brackets or a trailing colon in an
+ * indentation-sensitive file, when starting mid-statement, or when `leavesStatementOpen`
+ * holds on either side. Within one file the sides must lie in different hunks.
  */
 export function acceptSeed(
 	c: Candidate,

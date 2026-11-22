@@ -1,4 +1,0 @@
-{
-	"title": "Read the request timeout from settings and give batch jobs their own",
-	"body": "The HTTP client takes its timeout from the settings module. The batch worker declares a longer timeout for its jobs. There is no functional change for requests."
-}

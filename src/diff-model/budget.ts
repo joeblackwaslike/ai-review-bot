@@ -1,7 +1,4 @@
-/**
- * `tokens` counts non-space characters of short seeds, despite its name. `candidates` counts
- * short seeds and one-line declaration pairs. `cells` counts alignment table cells.
- */
+/** `tokens` counts non-space characters of short seeds, despite its name. */
 export interface BudgetLimits {
 	tokens: number;
 	candidates: number;

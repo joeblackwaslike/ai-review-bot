@@ -1059,14 +1059,12 @@ describe("verifyRelocation whole-line // allowlist", () => {
 });
 
 describe("verifyRelocation independent small-claim rules", () => {
-	function span(
+	const span = (
 		filename: string,
 		side: "base" | "head",
 		startLine: number,
 		endLine = startLine,
-	) {
-		return { filename, side, startLine, endLine, shown: "full" as const };
-	}
+	) => ({ filename, side, startLine, endLine, shown: "full" as const });
 
 	function exactClaim(from: Operation["from"], to: Operation["to"]): Operation {
 		return {
@@ -1084,106 +1082,83 @@ describe("verifyRelocation independent small-claim rules", () => {
 		baseRows: string[],
 		headRows: string[],
 		names: [string, string] = ["src/a.ts", "src/b.ts"],
+		claimed = 1,
 	) {
 		const files = [
-			pushFile(names[0], ["@@ -10,3 +10,1 @@", ...baseRows].join("\n")),
-			pushFile(names[1], ["@@ -3,1 +3,3 @@", ...headRows].join("\n")),
+			pushFile(names[0], ["@@ -10,4 +10,1 @@", ...baseRows].join("\n")),
+			pushFile(names[1], ["@@ -3,1 +3,4 @@", ...headRows].join("\n")),
 		];
+		const op = exactClaim(
+			[span(names[0], "base", 10, 9 + claimed)],
+			[span(names[1], "head", 3, 2 + claimed)],
+		);
+		return { files, op };
+	}
+
+	function forgedChange(op: Operation, original: string): Operation {
 		return {
-			files,
-			op: exactClaim([span(names[0], "base", 10)], [span(names[1], "head", 3)]),
+			...op,
+			exact: false,
+			reviewWeight: 1,
+			divergences: [
+				{
+					kind: "changed",
+					class: "code",
+					base: op.from[0],
+					head: op.to[0],
+					original,
+				},
+			],
 		};
 	}
 
-	it("drops an exact one-line claim for a multi-line declaration whose next line differs", () => {
-		const { files, op } = crossFile(
+	const indented = "  const approvedUserList = loadUsers(config);";
+	const unclosed =
+		"const resultOfTheLookup = compute(firstArgument, secondArgument,";
+	const trailing = "const approvedUserList = loadUsers(config) &&";
+	const ruby = ["def self.money(cents)", "  format(cents)", "end"];
+
+	it.each([
+		[
+			"a multi-line declaration whose next line differs",
 			["-const approved = users", "-  .filter((u) => u.isAdmin);"],
 			["+const approved = users", "+  .filter(() => true);"],
-		);
-		expect(verifyRelocation(op, files)).toBe(false);
-	});
-
-	it("drops an exact claim whose head line gains a continuation line", () => {
-		const { files, op } = crossFile(
+		],
+		[
+			"a head line that gains a continuation line",
 			["-const total = compute(a, b)"],
 			["+const total = compute(a, b)", "+  + secret"],
-		);
-		expect(verifyRelocation(op, files)).toBe(false);
-	});
-
-	it("drops an exact claim whose base line is followed by a continuation context line", () => {
-		const { files, op } = crossFile(
+		],
+		[
+			"a base line followed by a continuation context line",
 			["-const total = compute(a, b)", " .map(wrap);"],
 			["+const total = compute(a, b)"],
-		);
-		expect(verifyRelocation(op, files)).toBe(false);
-	});
-
-	it("drops a short claim lacking a terminator when a line follows it", () => {
-		const { files, op } = crossFile(
+		],
+		[
+			"a line without a terminator followed by another line",
 			["-const approvedUserList = loadUsers(config).length", " other();"],
 			["+const approvedUserList = loadUsers(config).length", " other();"],
-		);
-		expect(verifyRelocation(op, files)).toBe(false);
-	});
-
-	it("drops a short claim followed by a closer on a deeper indent", () => {
-		const line = "  const approvedUserList = loadUsers(config);";
-		const { files, op } = crossFile(
-			[`-${line}`, "     )"],
-			[`+${line}`, "     )"],
-		);
-		expect(verifyRelocation(op, files)).toBe(false);
-	});
-
-	it("accepts a terminated short claim followed by an ordinary line", () => {
-		const line = "  const approvedUserList = loadUsers(config);";
-		const { files, op } = crossFile(
-			[`-${line}`, " other();"],
-			[`+${line}`, " other();"],
-		);
-		expect(verifyRelocation(op, files)).toBe(true);
-	});
-
-	it("accepts a short Ruby method that ends in end when a context line follows", () => {
-		const method = [
-			"def self.money(cents)",
-			'  format("$%d.%02d", cents / 100, cents % 100)',
-			"end",
-		];
-		const files = [
-			pushFile(
-				"lib/a.rb",
-				["@@ -10,4 +10,1 @@", ...method.map((l) => `-${l}`), " end"].join("\n"),
-			),
-			pushFile(
-				"lib/b.rb",
-				["@@ -3,1 +3,4 @@", ...method.map((l) => `+${l}`), " end"].join("\n"),
-			),
-		];
-		const op = exactClaim(
-			[span("lib/a.rb", "base", 10, 12)],
-			[span("lib/b.rb", "head", 3, 5)],
-		);
-		expect(verifyRelocation(op, files)).toBe(true);
-	});
-
-	it("drops a short claim that ends in an operator", () => {
-		const line = "const approvedUserList = loadUsers(config) &&";
-		const { files, op } = crossFile([`-${line}`], [`+${line}`]);
-		expect(verifyRelocation(op, files)).toBe(false);
-	});
-
-	it("drops a claim whose first character is a closer", () => {
-		const line = "} else if (user.isAdmin && flags.betaAccess) {";
-		const { files, op } = crossFile([`-${line}`], [`+${line}`]);
-		expect(verifyRelocation(op, files)).toBe(false);
-	});
-
-	it("drops a claim that is a single line with unclosed brackets", () => {
-		const line =
-			"const resultOfTheLookup = compute(firstArgument, secondArgument,";
-		const { files, op } = crossFile([`-${line}`], [`+${line}`]);
+		],
+		[
+			"a line followed by a closer on a deeper indent",
+			[`-${indented}`, "     )"],
+			[`+${indented}`, "     )"],
+		],
+		[
+			"a line that starts with a closer",
+			["-} else if (user.isAdmin && flags.betaAccess) {"],
+			["+} else if (user.isAdmin && flags.betaAccess) {"],
+		],
+		[
+			"a single line with unclosed brackets",
+			[`-${unclosed}`],
+			[`+${unclosed}`],
+		],
+		["a line that ends in an operator", [`-${trailing}`], [`+${trailing}`]],
+		["a one-letter declaration", ["-const i = 0;"], ["+const i = 0;"]],
+		["a comparison read as a declaration", ["-FOO == bar"], ["+FOO == bar"]],
+	])("drops an exact short claim over %s", (_, baseRows, headRows) => {
+		const { files, op } = crossFile(baseRows, headRows);
 		expect(verifyRelocation(op, files)).toBe(false);
 	});
 
@@ -1197,19 +1172,73 @@ describe("verifyRelocation independent small-claim rules", () => {
 		expect(verifyRelocation(op, files)).toBe(false);
 	});
 
+	it("accepts a terminated short claim followed by an ordinary line", () => {
+		const { files, op } = crossFile(
+			[`-${indented}`, " other();"],
+			[`+${indented}`, " other();"],
+		);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("accepts a short Ruby method that ends in end when a context line follows", () => {
+		const { files, op } = crossFile(
+			[...ruby.map((l) => `-${l}`), " end"],
+			[...ruby.map((l) => `+${l}`), " end"],
+			["lib/a.rb", "lib/b.rb"],
+			3,
+		);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it.each([
+		[
+			"a forged declaration claim with an unrelated head line",
+			"-const MAX = 5;",
+			"+foo(bar, baz);",
+			["src/a.ts", "src/b.ts"],
+		],
+		[
+			"a forged claim between differently named constants",
+			"-const ALPHA = 5;",
+			"+const BETA = 5;",
+			["src/a.ts", "src/b.ts"],
+		],
+		[
+			"a declaration claim across extension families",
+			"-const TIMEOUT = 30;",
+			"+TIMEOUT = 30",
+			["src/config.ts", "src/config.py"],
+		],
+	] as const)("drops %s", (_, baseRow, headRow, names) => {
+		const { files, op } = crossFile([baseRow], [headRow], [...names]);
+		expect(verifyRelocation(forgedChange(op, baseRow.slice(1)), files)).toBe(
+			false,
+		);
+	});
+
+	it("accepts a related one-line declaration with a small change", () => {
+		const base = "export const DEFAULTS = { retries: 3, timeout: 1000 };";
+		const { files, op } = crossFile(
+			[`-${base}`],
+			[`+${base.replace("3", "5")}`],
+		);
+		expect(verifyRelocation(forgedChange(op, base), files)).toBe(true);
+	});
+
+	const sameFileLine =
+		"  const subtotal = computeSubtotal(items, taxRate, shippingZone);";
+
 	it("drops a same-file short claim whose lines share one hunk", () => {
-		const line =
-			"  const subtotal = computeSubtotal(items, taxRate, shippingZone);";
 		const files = [
 			pushFile(
 				"src/a.ts",
 				[
 					"@@ -10,6 +10,6 @@",
-					`-${line}`,
+					`-${sameFileLine}`,
 					" context one",
 					" context two",
 					" context three",
-					`+${line}`,
+					`+${sameFileLine}`,
 				].join("\n"),
 			),
 		];
@@ -1218,31 +1247,6 @@ describe("verifyRelocation independent small-claim rules", () => {
 			[span("src/a.ts", "head", 13)],
 		);
 		expect(verifyRelocation(op, files)).toBe(false);
-	});
-
-	it("accepts the same short claim once its lines sit in different hunks", () => {
-		const line =
-			"  const subtotal = computeSubtotal(items, taxRate, shippingZone);";
-		const files = [
-			pushFile(
-				"src/a.ts",
-				[
-					"@@ -10,4 +10,3 @@",
-					" context zero",
-					`-${line}`,
-					" context one",
-					"@@ -40,2 +39,3 @@",
-					" context three",
-					`+${line}`,
-					" context four",
-				].join("\n"),
-			),
-		];
-		const op = exactClaim(
-			[span("src/a.ts", "base", 11)],
-			[span("src/a.ts", "head", 40)],
-		);
-		expect(verifyRelocation(op, files)).toBe(true);
 	});
 
 	it("drops a same-file claim whose two sides sit in one change region", () => {
@@ -1268,21 +1272,20 @@ describe("verifyRelocation independent small-claim rules", () => {
 
 	it("drops swapped claims over a paragraph repeated in two regions of one file", () => {
 		const paragraph = body(5);
-		const indented = paragraph.map((l) => `    ${l}`);
+		const region = (name: string) => [
+			` context ${name}`,
+			...paragraph.map((l) => `-${l}`),
+			...paragraph.map((l) => `+    ${l}`),
+			" context end",
+		];
 		const files = [
 			pushFile(
 				"src/a.ts",
 				[
 					"@@ -1,7 +1,7 @@",
-					" context a",
-					...paragraph.map((l) => `-${l}`),
-					...indented.map((l) => `+${l}`),
-					" context b",
+					...region("a"),
 					"@@ -30,7 +30,7 @@",
-					" context c",
-					...paragraph.map((l) => `-${l}`),
-					...indented.map((l) => `+${l}`),
-					" context d",
+					...region("c"),
 				].join("\n"),
 			),
 		];
@@ -1291,101 +1294,6 @@ describe("verifyRelocation independent small-claim rules", () => {
 			[span("src/a.ts", "head", 31, 35)],
 		);
 		expect(verifyRelocation(swapped, files)).toBe(false);
-	});
-
-	it("drops a forged one-line declaration claim whose head line is unrelated", () => {
-		const { files, op } = crossFile(["-const MAX = 5;"], ["+foo(bar, baz);"]);
-		const forged: Operation = {
-			...op,
-			exact: false,
-			reviewWeight: 1,
-			divergences: [
-				{
-					kind: "changed",
-					class: "code",
-					base: span("src/a.ts", "base", 10),
-					head: span("src/b.ts", "head", 3),
-					original: "const MAX = 5;",
-				},
-			],
-		};
-		expect(verifyRelocation(forged, files)).toBe(false);
-	});
-
-	it("drops a forged declaration claim between differently named constants", () => {
-		const { files, op } = crossFile(
-			["-const ALPHA = 5;"],
-			["+const BETA = 5;"],
-		);
-		const forged: Operation = {
-			...op,
-			exact: false,
-			reviewWeight: 1,
-			divergences: [
-				{
-					kind: "changed",
-					class: "code",
-					base: span("src/a.ts", "base", 10),
-					head: span("src/b.ts", "head", 3),
-					original: "const ALPHA = 5;",
-				},
-			],
-		};
-		expect(verifyRelocation(forged, files)).toBe(false);
-	});
-
-	it("drops a declaration claim across extension families", () => {
-		const { files, op } = crossFile(
-			["-const TIMEOUT = 30;"],
-			["+TIMEOUT = 30"],
-			["src/config.ts", "src/config.py"],
-		);
-		const forged: Operation = {
-			...op,
-			exact: false,
-			reviewWeight: 1,
-			divergences: [
-				{
-					kind: "changed",
-					class: "code",
-					base: span("src/config.ts", "base", 10),
-					head: span("src/config.py", "head", 3),
-					original: "const TIMEOUT = 30;",
-				},
-			],
-		};
-		expect(verifyRelocation(forged, files)).toBe(false);
-	});
-
-	it("drops an exact claim over a one-letter declaration", () => {
-		const { files, op } = crossFile(["-const i = 0;"], ["+const i = 0;"]);
-		expect(verifyRelocation(op, files)).toBe(false);
-	});
-
-	it("does not read a comparison as a declaration", () => {
-		const { files, op } = crossFile(["-FOO == bar"], ["+FOO == bar"]);
-		expect(verifyRelocation(op, files)).toBe(false);
-	});
-
-	it("accepts a related one-line declaration with a small change", () => {
-		const base = "export const DEFAULTS = { retries: 3, timeout: 1000 };";
-		const head = "export const DEFAULTS = { retries: 5, timeout: 1000 };";
-		const { files, op } = crossFile([`-${base}`], [`+${head}`]);
-		const claim: Operation = {
-			...op,
-			exact: false,
-			reviewWeight: 1,
-			divergences: [
-				{
-					kind: "changed",
-					class: "code",
-					base: span("src/a.ts", "base", 10),
-					head: span("src/b.ts", "head", 3),
-					original: base,
-				},
-			],
-		};
-		expect(verifyRelocation(claim, files)).toBe(true);
 	});
 
 	it("verifies a claim over a 160KB line without scanning it", () => {
