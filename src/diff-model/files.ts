@@ -22,6 +22,6 @@ export function buildFileNodes(files: PushFile[]): FileNode[] {
 		status: f.status,
 		kind: classifyFile(f.filename),
 		hunks: parseHunks(f.patch),
-		shown: "full",
+		shown: f.patch ? "full" : "none",
 	}));
 }

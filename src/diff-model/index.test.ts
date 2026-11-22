@@ -72,4 +72,22 @@ describe("buildDiffModel", () => {
 		expect(model.files).toHaveLength(1);
 		expect(model.operations).toEqual([]);
 	});
+
+	it("tokenizes an adversarial escaped-quote line in linear time", () => {
+		const hostile = `  const x = "${'\\"'.repeat(40_000)}`;
+		const base = block.map((l, i) => (i === 5 ? hostile : l));
+		const head = block.map((l, i) => (i === 5 ? `${hostile}y` : l));
+		const files = moveFiles();
+		files[0] = {
+			...(files[0] as PushFile),
+			patch: ["@@ -10,12 +9,0 @@", ...base.map((l) => `-${l}`)].join("\n"),
+		};
+		files[1] = {
+			...(files[1] as PushFile),
+			patch: ["@@ -0,0 +3,12 @@", ...head.map((l) => `+${l}`)].join("\n"),
+		};
+		const start = performance.now();
+		buildDiffModel({ scopeFiles: files, prFiles: files, ...meta });
+		expect(performance.now() - start).toBeLessThan(1000);
+	});
 });

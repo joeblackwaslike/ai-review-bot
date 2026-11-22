@@ -1,6 +1,12 @@
 import { isIndentSensitive, normalizeCodeLine } from "../moved-blocks.js";
 
 const UNSAFE_LEXEME = /`|"""|'''|<</;
+const BROKEN_CONTINUATION = /\\\s+$/;
+
+/** Whether trailing whitespace after a backslash would break a line continuation. */
+export function hasBrokenContinuation(line: string): boolean {
+	return BROKEN_CONTINUATION.test(line);
+}
 
 /**
  * Whether whitespace-insensitive comparison of these lines cannot hide a token change.
@@ -13,7 +19,9 @@ export function lexicallySafe(
 ): boolean {
 	return (
 		!isIndentSensitive(filename) &&
-		!lines.some((line) => UNSAFE_LEXEME.test(line))
+		!lines.some(
+			(line) => UNSAFE_LEXEME.test(line) || hasBrokenContinuation(line),
+		)
 	);
 }
 

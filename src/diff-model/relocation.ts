@@ -18,6 +18,7 @@ const EDGE_SIMILARITY = 0.5;
 const MIN_COUNTED_LENGTH = 3;
 const MAX_ALIGNMENT_CELLS = 16_000_000;
 const MIN_RENAME_OCCURRENCES = 2;
+const MAX_TOKENIZED_LENGTH = 2000;
 
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
 const TOKEN =
@@ -45,7 +46,7 @@ function isMeaningful(line: string): boolean {
 }
 
 function tokens(line: string): string[] {
-	return line.match(TOKEN) ?? [];
+	return line.slice(0, MAX_TOKENIZED_LENGTH).match(TOKEN) ?? [];
 }
 
 function similarity(a: string, b: string): number {

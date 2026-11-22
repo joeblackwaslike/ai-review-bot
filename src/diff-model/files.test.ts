@@ -34,8 +34,17 @@ describe("buildFileNodes", () => {
 		expect(node).toMatchObject({
 			filename: "logo.png",
 			hunks: [],
-			shown: "full",
+			shown: "none",
 		});
+	});
+
+	it("marks shown none for an empty patch and full for a present one", () => {
+		const [empty, present] = buildFileNodes([
+			file({ patch: "" }),
+			file({ patch: "@@ -1 +1 @@\n-a\n+b" }),
+		]);
+		expect(empty?.shown).toBe("none");
+		expect(present?.shown).toBe("full");
 	});
 
 	it("carries previous_filename for a rename", () => {

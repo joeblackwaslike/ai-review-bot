@@ -19,6 +19,12 @@ describe("lexicallySafe", () => {
 		expect(lexicallySafe("a.sh", ["cat <<EOF"])).toBe(false);
 	});
 
+	it("is unsafe when a line ends in a backslash followed by whitespace", () => {
+		expect(lexicallySafe("a.sh", ["cmd \\ "])).toBe(false);
+		expect(lexicallySafe("a.sh", ["cmd \\\t"])).toBe(false);
+		expect(lexicallySafe("a.sh", ["cmd \\"])).toBe(true);
+	});
+
 	it("is safe for plain TypeScript statements", () => {
 		expect(lexicallySafe("a.ts", ["const a = 1;", "return a;"])).toBe(true);
 	});

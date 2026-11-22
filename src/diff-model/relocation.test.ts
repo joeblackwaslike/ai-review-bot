@@ -243,4 +243,14 @@ describe("findRelocations", () => {
 		expect(ops[0]?.divergences).toHaveLength(1);
 		expect(ops[0]?.divergences[0]?.class).toBe("comment-only");
 	});
+
+	it("does not report a shell continuation broken by trailing whitespace as exact", () => {
+		const base = withLine(body(10), 4, "  cmd --flag \\");
+		const head = withLine(base, 4, "  cmd --flag \\ ");
+		const ops = findRelocations([
+			deletedFrom("src/a.sh", 10, base),
+			addedTo("src/b.sh", 3, head),
+		]);
+		expect(ops.some((op) => op.exact)).toBe(false);
+	});
 });
