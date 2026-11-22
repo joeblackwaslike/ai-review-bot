@@ -56,6 +56,7 @@ const SeedDivergence = z
 export const SeedOperation = z
 	.object({
 		type: z.enum(["relocation", "rename", "mechanical"]),
+		shape: z.object({ reindent: z.number().int() }).strict().optional(),
 		from: z.array(SeedSpan),
 		to: z.array(SeedSpan),
 		divergences: z.array(SeedDivergence),

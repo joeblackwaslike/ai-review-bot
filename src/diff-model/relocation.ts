@@ -12,12 +12,14 @@ import { acceptSeed, MIN_COUNTED_LINES } from "./acceptance.js";
 import { type BudgetLimits, WorkBudget } from "./budget.js";
 import { findDeclarationMoves } from "./declarations.js";
 import {
+	hasOddBreak,
 	lexicallySafe,
 	MAX_ANALYZED_LINE,
 	normalizeSafe,
 	similarity,
 	tokens,
 } from "./lexical.js";
+import { filesWithLiterals, findTokenOperations } from "./token-pass.js";
 import type { Divergence, DivergenceClass, Operation, Span } from "./types.js";
 
 const MAX_DIVERGENCES = 3;
@@ -174,7 +176,7 @@ function backtickCount(line: string): number {
 function riskyLines(filename: string, lines: string[]): boolean[] {
 	if (
 		isIndentSensitive(filename) ||
-		lines.some((l) => HEREDOC_OR_TRIPLE.test(l))
+		lines.some((l) => HEREDOC_OR_TRIPLE.test(l) || hasOddBreak(l))
 	)
 		return lines.map(() => true);
 	let inside = false;
@@ -654,6 +656,10 @@ export function findRelocations(
 	}
 	if (!budget.exhausted)
 		operations.push(...findDeclarationMoves(deleted, added, budget));
+	if (!budget.exhausted)
+		operations.push(
+			...findTokenOperations(deleted, added, budget, filesWithLiterals(files)),
+		);
 	operations.sort(
 		(a, b) =>
 			compareText(a.from[0]?.filename, b.from[0]?.filename) ||

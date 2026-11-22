@@ -85,6 +85,45 @@ describe("scoreDetection", () => {
 		});
 	});
 
+	it("matches an expected shape against the found reindent", () => {
+		const found: Operation = { ...relocation(), shape: { reindent: 4 } };
+		const result = scoreDetection(
+			[{ ...expectedRelocation(), shape: { reindent: 4 } }],
+			modelOf([found]),
+		);
+		expect(result.matched).toBe(1);
+		expect(result.missing).toEqual([]);
+		expect(result.unexpected).toEqual([]);
+	});
+
+	it("counts a different reindent as unmatched", () => {
+		const found: Operation = { ...relocation(), shape: { reindent: 2 } };
+		const expected: SeedOperation = {
+			...expectedRelocation(),
+			shape: { reindent: 4 },
+		};
+		const result = scoreDetection([expected], modelOf([found]));
+		expect(result.matched).toBe(0);
+		expect(result.missing).toEqual([expected]);
+		expect(result.unexpected).toEqual([found]);
+	});
+
+	it("counts a found operation without a shape as unmatched when truth has one", () => {
+		const expected: SeedOperation = {
+			...expectedRelocation(),
+			shape: { reindent: 4 },
+		};
+		const result = scoreDetection([expected], modelOf([relocation()]));
+		expect(result.matched).toBe(0);
+		expect(result.missing).toEqual([expected]);
+	});
+
+	it("ignores the found shape when truth records none", () => {
+		const found: Operation = { ...relocation(), shape: { reindent: 4 } };
+		const result = scoreDetection([expectedRelocation()], modelOf([found]));
+		expect(result.matched).toBe(1);
+	});
+
 	it("reports an unexpected operation", () => {
 		const found = relocation();
 		const result = scoreDetection([], modelOf([found]));
@@ -295,7 +334,7 @@ describe("seed operation truth", () => {
 		"every committed seed's detection matches its truth operations",
 		async () => {
 			const seeds = await listSeeds();
-			expect(seeds).toHaveLength(29);
+			expect(seeds).toHaveLength(34);
 			for (const seed of seeds) {
 				const input = await seedReviewInput(seed);
 				try {
@@ -305,6 +344,7 @@ describe("seed operation truth", () => {
 					expect(result.unexpected, `${seed.id} unexpected`).toEqual([]);
 					expect(result.divergencesMissed, `${seed.id} missed`).toBe(0);
 					expect(result.divergencesExtra, `${seed.id} extra`).toBe(0);
+					expect(model.droppedClaims, `${seed.id} dropped`).toBe(0);
 				} finally {
 					await input.cleanup();
 				}

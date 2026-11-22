@@ -283,7 +283,7 @@ export function acceptSeed(
 		return false;
 	if (
 		leavesStatementOpen(c.from, c.fromStart, c.fromStart + c.length) ||
-		leavesStatementOpen(c.to, c.toStart, c.toStart + c.length)
+		leavesStatementOpen(c.to, c.toStart, c.toStart + (c.toLength ?? c.length))
 	)
 		return false;
 	if (sameFile && c.from.hunk === c.to.hunk) return false;

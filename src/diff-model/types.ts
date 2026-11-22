@@ -58,6 +58,12 @@ export interface Operation {
 	reviewWeight: number;
 	/** Why a mechanical operation is mechanical. Required for a mechanical operation, which is not rendered without it. */
 	reason?: "whitespace" | "imports";
+	/**
+	 * Shape of a relocation beyond its text. `reindent` is the head block's indentation minus
+	 * the base block's, in columns, set only when it is not 0. `sourceNew` is reserved for copy
+	 * operations and is not set by relocations.
+	 */
+	shape?: { reindent?: number; sourceNew?: boolean };
 }
 
 /** A phrase of stated intent and the PR text span it came from. */

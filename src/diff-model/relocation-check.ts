@@ -1,10 +1,18 @@
 import { isIndentSensitive, type PushFile } from "../moved-blocks.js";
-import { hasBrokenContinuation } from "./lexical.js";
+import { hasBrokenContinuation, hasOddBreak } from "./lexical.js";
+import {
+	hasBlockScalarHeader,
+	jsxPossible,
+	opensUnclosedString,
+	tokenEquivalent,
+	unbalancedBlockComment,
+} from "./token-check.js";
 import type { Divergence, Operation, Span } from "./types.js";
 
 const HUNK_HEADER = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
 const TRIPLE_QUOTE = /"""|'''/g;
 const HEREDOC_OPEN = /<<[-~]?\s*['"]?(\w+)/;
+const LITERAL_OPENER = /`|"""|'''|<<[-~]?\s*['"]?\w/;
 
 const HASH_FAMILY =
 	/(?:\.(?:py|pyi|rb|sh|bash|zsh|ya?ml|toml|mk)|(?:^|\/)Makefile)$/i;
@@ -57,7 +65,6 @@ const CLOSING_BRACKETS = ")]}";
 const OPERATOR_ENDS = "=+*%&|^?:\\([-";
 const STATEMENT_ENDS = ";})]";
 const MOST_SITES = 50;
-const LITERAL_OPENER = /`|"""|'''|<<[-~]?\s*['"]?\w/;
 const CONTROL_WORDS =
 	/^(?:if|else|elif|while|for|foreach|switch|case|when|unless|until|with|try|catch|except|finally|def|class|fn|func|function)\b/;
 const DECORATION = /^(?:@[A-Za-z_$]|#!?\[)/;
@@ -150,6 +157,7 @@ interface ParsedPatch {
 	deleted: Map<number, PatchRow>;
 	added: Map<number, PatchRow>;
 	risky: boolean;
+	jsx: boolean;
 }
 
 interface Scanned {
@@ -160,11 +168,16 @@ interface Scanned {
 
 const parsedPatches = new WeakMap<PushFile, ParsedPatch>();
 
-function scanPatch(patch: string | undefined): ParsedPatch {
+function scanPatch(patch: string | undefined, filename: string): ParsedPatch {
 	const out: ParsedPatch = {
 		deleted: new Map(),
 		added: new Map(),
-		risky: LITERAL_OPENER.test(patch ?? ""),
+		risky:
+			LITERAL_OPENER.test(patch ?? "") ||
+			opensUnclosedString(filename, patch ?? "") ||
+			unbalancedBlockComment(filename, patch ?? "") ||
+			hasBlockScalarHeader(filename, patch ?? ""),
+		jsx: jsxPossible(filename, patch ?? ""),
 	};
 	const scanned: Scanned[] = [];
 	let oldLine = 0;
@@ -269,7 +282,7 @@ function indexOfPatches(files: readonly PushFile[]): PatchIndex {
 		if (patches.has(file.filename)) continue;
 		let parsed = parsedPatches.get(file);
 		if (!parsed) {
-			parsed = scanPatch(file.patch);
+			parsed = scanPatch(file.patch, file.filename);
 			parsedPatches.set(file, parsed);
 		}
 		patches.set(file.filename, parsed);
@@ -411,7 +424,8 @@ function pairsUp(base: Entry, head: Entry): boolean {
 	const safe = (entry: Entry) =>
 		!entry.inLiteral &&
 		!entry.indentSensitive &&
-		!hasBrokenContinuation(entry.text);
+		!hasBrokenContinuation(entry.text) &&
+		!hasOddBreak(entry.text);
 	return (
 		safe(base) && safe(head) && interior(base.text) === interior(head.text)
 	);
@@ -629,6 +643,10 @@ function textOf(span: Span | undefined, sides: Side[]): string | undefined {
  *
  * A claim whose spans share a file must lie in different change regions with unique text. A
  * claim under 5 counted lines must also pass the small-claim rules of the matching v2 spec.
+ * A claim with no divergences that fails the line accounting is instead accepted when
+ * `tokenEquivalent` holds, `shape.reindent` matches the checker's shift, and neither file is
+ * risky (literal opener, unclosed string, unbalanced block comment, YAML block scalar header)
+ * or `jsxPossible`.
  * The patch scan is built once per `files` array, so a batch is verified in linear time.
  */
 export function verifyRelocation(op: Operation, files: PushFile[]): boolean {
@@ -654,10 +672,37 @@ export function verifyRelocation(op: Operation, files: PushFile[]): boolean {
 	if (op.exact && op.divergences.length > 0) return false;
 	const weight = classesHold(op, base, head);
 	if (weight === null || weight !== op.reviewWeight) return false;
-	return accountedPositionally(
-		unclaimed(base, baseSpent),
-		unclaimed(head, headSpent),
+	if (
+		accountedPositionally(
+			unclaimed(base, baseSpent),
+			unclaimed(head, headSpent),
+		)
+	)
+		return (op.shape?.reindent ?? 0) === 0;
+	return op.divergences.length === 0 && tokenVerified(op, base, head, index);
+}
+
+function tokenVerified(
+	op: Operation,
+	base: Side[],
+	head: Side[],
+	index: PatchIndex,
+): boolean {
+	const from = base[0];
+	const to = head[0];
+	if (base.length !== 1 || head.length !== 1 || !from || !to) return false;
+	const tainted = [from, to].some((side) => {
+		const patch = index.patches.get(side.filename);
+		return (patch?.risky ?? false) || (patch?.jsx ?? false);
+	});
+	if (tainted) return false;
+	const result = tokenEquivalent(
+		from.lines,
+		to.lines,
+		from.filename,
+		to.filename,
 	);
+	return result.equivalent && (op.shape?.reindent ?? 0) === result.reindent;
 }
 
 function squeezed(line: string): string {

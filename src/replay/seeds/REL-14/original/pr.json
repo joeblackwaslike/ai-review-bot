@@ -1,0 +1,4 @@
+{
+	"title": "Move normalize_payload into PayloadHandler",
+	"body": "Moves normalize_payload from runner.py into a PayloadHandler class so handlers can share it. There is no functional change."
+}

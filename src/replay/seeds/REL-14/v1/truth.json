@@ -1,0 +1,36 @@
+{
+	"clean": false,
+	"defects": [
+		{
+			"path": "deploy/api.yaml",
+			"startLine": 2,
+			"endLine": 2,
+			"description": "replicaCount drops from 3 to 1 in the moved configuration, so the api loses its redundancy."
+		}
+	],
+	"operations": [
+		{
+			"type": "relocation",
+			"from": [
+				{
+					"filename": "deploy/values.yaml",
+					"side": "base",
+					"startLine": 5,
+					"endLine": 11
+				}
+			],
+			"to": [
+				{
+					"filename": "deploy/api.yaml",
+					"side": "head",
+					"startLine": 3,
+					"endLine": 9
+				}
+			],
+			"divergences": [],
+			"shape": {
+				"reindent": 2
+			}
+		}
+	]
+}

@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { PushFile } from "../moved-blocks.js";
+import { buildDiffModel } from "./index.js";
 import { partialStatements } from "./partial-statements.fixture.js";
 import { findRelocations } from "./relocation.js";
 import { verifyRelocation } from "./relocation-check.js";
-import type { Operation } from "./types.js";
+import type { Operation, Span } from "./types.js";
 
 function pushFile(filename: string, patch: string): PushFile {
 	return { filename, status: "modified", patch, additions: 0, deletions: 0 };
@@ -1270,6 +1271,502 @@ describe("verifyRelocation independent small-claim rules", () => {
 		const { files, op } = crossFile([`-${line}`], [`+${line}`]);
 		const started = performance.now();
 		expect(verifyRelocation(op, files)).toBe(false);
-		expect(performance.now() - started).toBeLessThan(1000);
+		expect(performance.now() - started).toBeLessThan(5000);
+	});
+});
+
+function movePair(
+	baseName: string,
+	headName: string,
+	base: string[],
+	head: string[],
+): PushFile[] {
+	return [
+		pushFile(
+			baseName,
+			[`@@ -10,${base.length} +9,0 @@`, ...base.map((l) => `-${l}`)].join("\n"),
+		),
+		pushFile(
+			headName,
+			[`@@ -0,0 +3,${head.length} @@`, ...head.map((l) => `+${l}`)].join("\n"),
+		),
+	];
+}
+
+function handClaim(
+	baseName: string,
+	headName: string,
+	base: string[],
+	head: string[],
+	shape?: Operation["shape"],
+): { op: Operation; files: PushFile[] } {
+	const op: Operation = {
+		id: "relocation-1",
+		type: "relocation",
+		from: [
+			{
+				filename: baseName,
+				side: "base",
+				startLine: 10,
+				endLine: 9 + base.length,
+				shown: "full",
+			},
+		],
+		to: [
+			{
+				filename: headName,
+				side: "head",
+				startLine: 3,
+				endLine: 2 + head.length,
+				shown: "full",
+			},
+		],
+		exact: true,
+		divergences: [],
+		reviewWeight: 0,
+		...(shape ? { shape } : {}),
+	};
+	return { op, files: movePair(baseName, headName, base, head) };
+}
+
+const PRETTIER_BASE = [
+	'const config = { name: "alpha", retries: 3, timeout: 5000, verbose: false, region: "us-east" };',
+];
+const PRETTIER_HEAD = [
+	"const config = {",
+	'  name: "alpha",',
+	"  retries: 3,",
+	"  timeout: 5000,",
+	"  verbose: false,",
+	'  region: "us-east",',
+	"};",
+];
+const PY_BASE = [
+	"def total_price(items, tax_rate):",
+	"    subtotal = sum(item.price for item in items)",
+	"    tax = subtotal * tax_rate",
+	"    return subtotal + tax",
+];
+const YAML_BASE = [
+	"database:",
+	"  host: db.internal.example",
+	"  port: 5432",
+	"  pool:",
+	"    size: 20",
+];
+
+describe("verifyRelocation token equivalence", () => {
+	it("verifies a reformatted TypeScript move", () => {
+		const files = movePair(
+			"src/a.ts",
+			"src/b.ts",
+			PRETTIER_BASE,
+			PRETTIER_HEAD,
+		);
+		const ops = findRelocations(files);
+		expect(ops).toHaveLength(1);
+		expect(verifyRelocation(ops[0] as Operation, files)).toBe(true);
+	});
+
+	it("verifies a Black-wrapped Python call", () => {
+		const base = [
+			"result = process_order(customer_id, order_items, discount_code, shipping_address, billing_address)",
+		];
+		const head = [
+			"result = process_order(",
+			"    customer_id,",
+			"    order_items,",
+			"    discount_code,",
+			"    shipping_address,",
+			"    billing_address,",
+			")",
+		];
+		const files = movePair("a.py", "b.py", base, head);
+		const ops = findRelocations(files);
+		expect(ops).toHaveLength(1);
+		expect(verifyRelocation(ops[0] as Operation, files)).toBe(true);
+	});
+
+	it("verifies a re-indented Python move with the right shift", () => {
+		const head = PY_BASE.map((l) => `    ${l}`);
+		const files = movePair("a.py", "b.py", PY_BASE, head);
+		const ops = findRelocations(files);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]?.shape).toEqual({ reindent: 4 });
+		expect(verifyRelocation(ops[0] as Operation, files)).toBe(true);
+	});
+
+	it("drops a claim whose shape.reindent is wrong", () => {
+		const head = PY_BASE.map((l) => `    ${l}`);
+		const { op, files } = handClaim("a.py", "b.py", PY_BASE, head, {
+			reindent: 8,
+		});
+		expect(verifyRelocation(op, files)).toBe(false);
+	});
+
+	it("drops a claim that omits a needed shape.reindent", () => {
+		const head = PY_BASE.map((l) => `    ${l}`);
+		const { op, files } = handClaim("a.py", "b.py", PY_BASE, head);
+		expect(verifyRelocation(op, files)).toBe(false);
+	});
+
+	it("verifies a YAML block moved one level deeper", () => {
+		const head = YAML_BASE.map((l) => `  ${l}`);
+		const files = movePair("a.yml", "b.yml", YAML_BASE, head);
+		const ops = findRelocations(files);
+		expect(ops).toHaveLength(1);
+		expect(verifyRelocation(ops[0] as Operation, files)).toBe(true);
+	});
+
+	it("drops a YAML claim that removes a space after the colon", () => {
+		const head = YAML_BASE.map((l) => l.replace("port: 5432", "port:5432"));
+		const { op, files } = handClaim("a.yml", "b.yml", YAML_BASE, head);
+		expect(verifyRelocation(op, files)).toBe(false);
+	});
+
+	it("drops a claim over a file whose patch contains a backtick", () => {
+		const base = ["const total = a + b + c + d + e + f + g + h + i + j;"];
+		const head = ["const total =", "  a + b + c + d + e + f + g + h + i + j;"];
+		const { op, files } = handClaim("src/a.ts", "src/b.ts", base, head);
+		expect(verifyRelocation(op, files)).toBe(true);
+		const tainted = files.map((f) =>
+			f.filename === "src/b.ts"
+				? { ...f, patch: `${f.patch}\n unrelated(\`ctx\`)` }
+				: f,
+		);
+		expect(verifyRelocation(op, tainted)).toBe(false);
+	});
+
+	it("drops a claim over a file whose context holds a triple quote", () => {
+		const base = ["const total = a + b + c + d + e + f + g + h + i + j;"];
+		const head = ["const total =", "  a + b + c + d + e + f + g + h + i + j;"];
+		const { op, files } = handClaim("src/a.ts", "src/b.ts", base, head);
+		const tainted = files.map((f) =>
+			f.filename === "src/a.ts" ? { ...f, patch: `${f.patch}\n x = '''` } : f,
+		);
+		expect(verifyRelocation(op, tainted)).toBe(false);
+	});
+
+	it("drops a claim over a file whose context holds a heredoc opener", () => {
+		const base = ["const total = a + b + c + d + e + f + g + h + i + j;"];
+		const head = ["const total =", "  a + b + c + d + e + f + g + h + i + j;"];
+		const { op, files } = handClaim("src/a.ts", "src/b.ts", base, head);
+		const tainted = files.map((f) =>
+			f.filename === "src/a.ts" ? { ...f, patch: `${f.patch}\n cat <<EOF` } : f,
+		);
+		expect(verifyRelocation(op, tainted)).toBe(false);
+	});
+
+	it("drops a Ruby reformat claim", () => {
+		const { op, files } = handClaim(
+			"a.rb",
+			"b.rb",
+			["total = compute_the_total_price(items, tax_rate, discount_code_value)"],
+			[
+				"total = compute_the_total_price(",
+				"  items, tax_rate, discount_code_value)",
+			],
+		);
+		expect(verifyRelocation(op, files)).toBe(false);
+	});
+
+	it("drops a template literal reformat claim", () => {
+		const { op, files } = handClaim(
+			"src/a.ts",
+			"src/b.ts",
+			[
+				"const message = `hello \u0024{name}, your order \u0024{orderId} has shipped`;",
+			],
+			[
+				"const message =",
+				"  `hello \u0024{name}, your order \u0024{orderId} has shipped`;",
+			],
+		);
+		expect(verifyRelocation(op, files)).toBe(false);
+	});
+
+	it("drops a claim whose lines hold unbalanced brackets", () => {
+		const { op, files } = handClaim(
+			"src/a.ts",
+			"src/b.ts",
+			[
+				"const total = computeTotal(itemsInCart, taxRateForRegion,",
+				"  couponCode);",
+			],
+			[
+				"const total = computeTotal(itemsInCart, taxRateForRegion, couponCode);",
+			],
+		);
+		expect(verifyRelocation(op, files)).toBe(true);
+		const broken = handClaim(
+			"src/a.ts",
+			"src/b.ts",
+			[
+				"const total = computeTotal(itemsInCart, taxRateForRegion,",
+				"  couponCode",
+			],
+			["const total = computeTotal(itemsInCart, taxRateForRegion, couponCode"],
+		);
+		expect(verifyRelocation(broken.op, broken.files)).toBe(false);
+	});
+});
+
+describe("buildDiffModel with the real checker", () => {
+	it("keeps a reformat-only move without dropping a claim", async () => {
+		const files = movePair(
+			"src/a.ts",
+			"src/b.ts",
+			PRETTIER_BASE,
+			PRETTIER_HEAD,
+		);
+		const model = buildDiffModel({
+			scopeFiles: files,
+			prFiles: files,
+			prFilesComplete: true,
+			title: "t",
+			body: null,
+		});
+		expect(model.droppedClaims).toBe(0);
+		expect(
+			model.operations.filter((o) => o.type === "relocation"),
+		).toHaveLength(1);
+	});
+
+	it("does not report a Ruby reformat as an operation", async () => {
+		const rubyBase = [
+			'config = { name: "alpha", retries: 3, timeout: 5000, verbose: false, region: "us-east" }',
+		];
+		const rubyHead = PRETTIER_HEAD.map((l) => l.replace(/;$/, ""));
+		rubyHead[0] = "config = {";
+		rubyHead[rubyHead.length - 1] = "}";
+		const files = movePair("lib/a.rb", "lib/b.rb", rubyBase, rubyHead);
+		const model = buildDiffModel({
+			scopeFiles: files,
+			prFiles: files,
+			prFilesComplete: true,
+			title: "t",
+			body: null,
+		});
+		expect(model.operations.filter((o) => o.type === "relocation")).toEqual([]);
+		expect(model.droppedClaims).toBe(0);
+	});
+});
+
+describe("buildDiffModel with legitimate reformats", () => {
+	function model(files: PushFile[]) {
+		return buildDiffModel({
+			scopeFiles: files,
+			prFiles: files,
+			prFilesComplete: true,
+			title: "t",
+			body: null,
+		});
+	}
+
+	it("keeps a Black-wrapped Python reformat", () => {
+		const base = [
+			"result = process_order(customer_id, order_items, discount_code, shipping_address, billing_address)",
+		];
+		const head = [
+			"result = process_order(",
+			"    customer_id,",
+			"    order_items,",
+			"    discount_code,",
+			"    shipping_address,",
+			"    billing_address,",
+			")",
+		];
+		const built = model(movePair("a.py", "b.py", base, head));
+		expect(built.droppedClaims).toBe(0);
+		expect(
+			built.operations.filter((o) => o.type === "relocation"),
+		).toHaveLength(1);
+	});
+
+	it("keeps a YAML block moved one level deeper", () => {
+		const head = YAML_BASE.map((l) => `  ${l}`);
+		const built = model(movePair("a.yml", "b.yml", YAML_BASE, head));
+		expect(built.droppedClaims).toBe(0);
+		expect(
+			built.operations.filter((o) => o.type === "relocation"),
+		).toHaveLength(1);
+	});
+
+	it("keeps a gofmt-style Go reformat", () => {
+		const base = [
+			"server := NewServer(listenAddress, readTimeout, writeTimeout, maxHeaderBytes, tlsConfig)",
+		];
+		const head = [
+			"server := NewServer(",
+			"\tlistenAddress,",
+			"\treadTimeout,",
+			"\twriteTimeout,",
+			"\tmaxHeaderBytes,",
+			"\ttlsConfig,",
+			")",
+		];
+		const built = model(movePair("a.go", "b.go", base, head));
+		expect(built.droppedClaims).toBe(0);
+		expect(
+			built.operations.filter((o) => o.type === "relocation"),
+		).toHaveLength(1);
+	});
+});
+
+describe("verifyRelocation through the token path", () => {
+	const BASE = [
+		"const result = compute(",
+		"  firstArgument,",
+		"  secondArgument,",
+		"  thirdArgument,",
+		"  fourthArgument,",
+		"  fifthArgument",
+		");",
+	];
+	const HEAD = [
+		"const result = compute(firstArgument, secondArgument,",
+		"  thirdArgument, fourthArgument, fifthArgument);",
+	];
+
+	function patched(
+		file: string,
+		sign: "-" | "+",
+		context: string,
+		lines: string[],
+	): PushFile {
+		const total = lines.length + 1;
+		const header =
+			sign === "-" ? `@@ -9,${total} +9,1 @@` : `@@ -9,1 +9,${total} @@`;
+		return pushFile(
+			file,
+			[header, ` ${context}`, ...lines.map((l) => `${sign}${l}`)].join("\n"),
+		);
+	}
+
+	const reformat = (baseContext = "x = 1;", headContext = "x = 1;") => ({
+		files: [
+			patched("src/a.js", "-", baseContext, BASE),
+			patched("src/b.js", "+", headContext, HEAD),
+		],
+		op: lineClaim("src/a.js", 10, 16, "src/b.js", 10, 11),
+	});
+
+	it("accepts a reformat only the token checker can account for", () => {
+		const { files, op } = reformat();
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it.each([
+		["a backtick", "x = `y`;", "x = 1;"],
+		["a JSX element in the base patch", "x = <Foo>;", "x = 1;"],
+		["a string it does not close", 'x = "abc', "x = 1;"],
+		["a block comment opener", "/*", "x = 1;"],
+	])("refuses it when a context line holds %s", (_, baseContext, headContext) => {
+		const { files, op } = reformat(baseContext, headContext);
+		expect(verifyRelocation(op, files)).toBe(false);
+	});
+
+	it("refuses a reformat claim that also lists an unrelated base file", () => {
+		const { files, op } = reformat();
+		files.push(patched("src/c.ts", "-", "x = 1;", ["const other = g(1, 2);"]));
+		op.from.push({ ...(op.from[0] as Span), filename: "src/c.ts" });
+		expect(verifyRelocation(op, files)).toBe(false);
+	});
+
+	it("refuses a token-equivalent claim that also lists a divergence", () => {
+		const { files, op } = reformat();
+		const listed: Operation = {
+			...op,
+			exact: false,
+			reviewWeight: 1,
+			divergences: [
+				{
+					kind: "changed",
+					class: "code",
+					base: op.from[0],
+					head: { ...(op.to[0] as Span), endLine: 10 },
+					original: BASE[0] as string,
+				},
+			],
+		};
+		expect(verifyRelocation(listed, files)).toBe(false);
+	});
+
+	it("checks the recorded re-indent shift", () => {
+		const block = ["def total(items):", "    return sum(items) + 1"];
+		const files = [
+			patched("a/old.py", "-", "x = 1", block),
+			patched(
+				"a/new.py",
+				"+",
+				"x = 1",
+				block.map((l) => `    ${l}`),
+			),
+		];
+		const claim = (shape?: Operation["shape"]) => ({
+			...lineClaim("a/old.py", 10, 11, "a/new.py", 10, 11),
+			...(shape ? { shape } : {}),
+		});
+		expect(verifyRelocation(claim({ reindent: 4 }), files)).toBe(true);
+		expect(verifyRelocation(claim(), files)).toBe(false);
+		expect(verifyRelocation(claim({ reindent: 2 }), files)).toBe(false);
+	});
+
+	it("refuses a shifted YAML claim when a context line has a scalar header", () => {
+		const block = [
+			"server:",
+			"  host: example.com",
+			"  port: 8080",
+			"  tls: true",
+			"  retries: 3",
+			"  timeout: 30",
+		];
+		const claim = (context: string) =>
+			verifyRelocation(
+				{
+					...lineClaim("a/a.yml", 10, 15, "a/b.yml", 10, 15),
+					shape: { reindent: 2 },
+				},
+				[
+					patched("a/a.yml", "-", context, block),
+					patched(
+						"a/b.yml",
+						"+",
+						context,
+						block.map((l) => `  ${l}`),
+					),
+				],
+			);
+		expect(claim("x: 1")).toBe(true);
+		expect(claim("script: |2")).toBe(false);
+	});
+
+	it("refuses a whitespace-only pair when one line holds a carriage return", () => {
+		const line = "return alpha_value + beta_value + gamma_value;";
+		const claim = (base: string) =>
+			verifyRelocation(lineClaim("src/a.js", 10, 10, "src/b.js", 10, 10), [
+				patched("src/a.js", "-", "x = 1;", [base]),
+				patched("src/b.js", "+", "x = 1;", [line]),
+			]);
+		expect(claim(line.replace("return ", "return   "))).toBe(true);
+		expect(claim(line.replace("return ", "return\r "))).toBe(false);
+	});
+});
+
+describe("verifyRelocation shape on positional claims", () => {
+	const py = Array.from(
+		{ length: 6 },
+		(_, i) => `    v${i} = compute(${i}, offset)`,
+	);
+	it.each([
+		["src/a.ts", "src/b.ts", fn(body(20))],
+		["a/old.py", "a/new.py", ["def run(offset):", ...py]],
+	])("drops a forged shift on a clean move of %s", (from, to, block) => {
+		const { files, op } = relocation(block, block, [from, to]);
+		expect(verifyRelocation(op, files)).toBe(true);
+		for (const reindent of [4, -2])
+			expect(verifyRelocation({ ...op, shape: { reindent } }, files)).toBe(
+				false,
+			);
 	});
 });

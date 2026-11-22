@@ -1,0 +1,36 @@
+{
+	"clean": false,
+	"defects": [
+		{
+			"path": "jobs/runner.py",
+			"startLine": 9,
+			"endLine": 9,
+			"description": "run_job now calls normalize_payload with strict=False instead of strict=True, so empty values are silently dropped instead of raising ValueError."
+		}
+	],
+	"operations": [
+		{
+			"type": "relocation",
+			"from": [
+				{
+					"filename": "jobs/runner.py",
+					"side": "base",
+					"startLine": 6,
+					"endLine": 17
+				}
+			],
+			"to": [
+				{
+					"filename": "jobs/handlers.py",
+					"side": "head",
+					"startLine": 5,
+					"endLine": 16
+				}
+			],
+			"divergences": [],
+			"shape": {
+				"reindent": 4
+			}
+		}
+	]
+}

@@ -1,0 +1,33 @@
+{
+	"clean": false,
+	"defects": [
+		{
+			"path": "src/billing/invoice.ts",
+			"startLine": 18,
+			"endLine": 18,
+			"description": "The billable filter changes from quantity > 0 to quantity >= 0, so zero quantity lines are now included in the charged invoice."
+		}
+	],
+	"operations": [
+		{
+			"type": "relocation",
+			"from": [
+				{
+					"filename": "src/billing/invoice.ts",
+					"side": "base",
+					"startLine": 16,
+					"endLine": 22
+				}
+			],
+			"to": [
+				{
+					"filename": "src/billing/summary.ts",
+					"side": "head",
+					"startLine": 3,
+					"endLine": 20
+				}
+			],
+			"divergences": []
+		}
+	]
+}

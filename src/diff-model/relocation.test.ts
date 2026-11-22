@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PushFile } from "../moved-blocks.js";
+import { buildDiffModel } from "./index.js";
 import { partialStatements } from "./partial-statements.fixture.js";
 import { findRelocations } from "./relocation.js";
 import { verifyRelocation } from "./relocation-check.js";
@@ -1342,5 +1343,148 @@ describe("findRelocations budget exhaustion paths", () => {
 			addedTo("src/b.ts", 3, definition),
 		];
 		expect(verifyRelocation(ops[0] as Operation, files)).toBe(true);
+	});
+});
+
+describe("token pass integration", () => {
+	it("finds a reformatted block after the line matcher and keeps its exact neighbor separate", () => {
+		const exact = body(6);
+		const wrapped =
+			'const settings = { name: "alpha", retries: 3, timeout: 5000, verbose: false, region: "us-east" };';
+		const reflowed = [
+			"const settings = {",
+			'  name: "alpha",',
+			"  retries: 3,",
+			"  timeout: 5000,",
+			"  verbose: false,",
+			'  region: "us-east",',
+			"};",
+		];
+		const ops = move(
+			[...exact, "// gap", wrapped],
+			[...exact, "// gap", ...reflowed],
+		);
+		expect(ops.map((op) => op.exact)).toEqual([true, true]);
+		expect(ops[0]?.to[0]).toMatchObject({ startLine: 3, endLine: 9 });
+		expect(ops[1]?.to[0]).toMatchObject({ startLine: 10, endLine: 16 });
+	});
+});
+
+describe("token pass and JSX text", () => {
+	it.each(["jsx", "tsx"])("does not claim a quote change in %s text", (ext) => {
+		const base = ["<p className=\"note\">Don't forget we won't be there today"];
+		const head = ['<p className="note">Don"t forget we won"t be there today'];
+		expect(
+			findRelocations([
+				deletedFrom(`src/a.${ext}`, 10, base),
+				addedTo(`src/b.${ext}`, 3, head),
+			]),
+		).toEqual([]);
+	});
+});
+
+describe("adversarial work budget", () => {
+	const BACKSTOP_MS = 5_000;
+
+	function uniqueMoves(count: number): PushFile[] {
+		return Array.from({ length: count }, (_, i) => {
+			const line = `  const result${i} = computeSomething${i}(first${i}, second${i}, third${i});`;
+			return [
+				deletedFrom(`src/old${i}.ts`, 1, [line]),
+				addedTo(`src/new${i}.ts`, 1, [line]),
+			];
+		}).flat();
+	}
+
+	function copies(count: number): PushFile[] {
+		const block = [
+			"  const total = computeSubtotal(items) + computeTax(items, rate);",
+			"  const rounded = Math.round(total * 100) / 100;",
+			"  return formatCurrency(rounded, currency);",
+		];
+		return Array.from({ length: count }, (_, i) => [
+			deletedFrom(`src/old${i}.ts`, 1, block),
+			addedTo(`src/new${i}.ts`, 1, block),
+		]).flat();
+	}
+
+	it("returns within the backstop for thousands of unique one-line moves and repeats exactly", () => {
+		const files = uniqueMoves(5_000);
+		const started = performance.now();
+		const first = findRelocations(files);
+		expect(performance.now() - started).toBeLessThan(BACKSTOP_MS);
+		expect(first.length).toBeGreaterThan(1_000);
+		expect(findRelocations(files)).toEqual(first);
+	});
+
+	function modelOf(files: PushFile[]) {
+		return buildDiffModel({
+			scopeFiles: files,
+			prFiles: files,
+			prFilesComplete: true,
+			title: "",
+			body: null,
+		});
+	}
+
+	it("builds the whole model for 1,500 unique move pairs within the backstop and repeats exactly", () => {
+		const files = uniqueMoves(1_500);
+		const started = performance.now();
+		const first = modelOf(files);
+		expect(performance.now() - started).toBeLessThan(BACKSTOP_MS);
+		expect(first.operations.length).toBeGreaterThan(1_000);
+		expect(modelOf(files)).toEqual(first);
+	});
+
+	it("builds the whole model for 5,000 unique one-line moves within the backstop and repeats exactly", () => {
+		const files = uniqueMoves(5_000);
+		const started = performance.now();
+		const first = modelOf(files);
+		expect(performance.now() - started).toBeLessThan(BACKSTOP_MS);
+		expect(first.operations.length).toBeGreaterThan(1_000);
+		expect(first.droppedClaims).toBe(0);
+		expect(modelOf(files)).toEqual(first);
+	});
+
+	it("returns the operations found so far when the candidate budget runs out", () => {
+		const files = uniqueMoves(2_000);
+		const full = findRelocations(files);
+		const limited = findRelocations(files, { candidates: 100 });
+		expect(limited.length).toBeGreaterThan(0);
+		expect(limited.length).toBeLessThan(full.length);
+		expect(findRelocations(files, { candidates: 100 })).toEqual(limited);
+		const fullFrom = new Set(full.map((op) => JSON.stringify(op.from)));
+		for (const op of limited) {
+			expect(fullFrom.has(JSON.stringify(op.from))).toBe(true);
+		}
+	});
+
+	it("returns within the backstop for many repeated copy-like candidates and repeats exactly", () => {
+		const files = copies(400);
+		const started = performance.now();
+		const first = findRelocations(files);
+		expect(performance.now() - started).toBeLessThan(BACKSTOP_MS);
+		expect(findRelocations(files)).toEqual(first);
+		const limited = findRelocations(files, { candidates: 50, tokens: 2_000 });
+		expect(findRelocations(files, { candidates: 50, tokens: 2_000 })).toEqual(
+			limited,
+		);
+	});
+
+	it("claims no repeated copy as a move but still finds a unique move among them", () => {
+		expect(findRelocations(copies(60))).toEqual([]);
+		const unique = [
+			"  const settled = reconcileLedger(entries, cutoff, tolerance);",
+			"  await archiveSettled(settled, archiveBucket, retentionDays);",
+			"  return summarizeSettlement(settled, entries.length);",
+		];
+		const ops = findRelocations([
+			...copies(60),
+			deletedFrom("src/ledger-old.ts", 1, unique),
+			addedTo("src/ledger-new.ts", 1, unique),
+		]);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]?.from[0]?.filename).toBe("src/ledger-old.ts");
+		expect(ops[0]?.to[0]?.filename).toBe("src/ledger-new.ts");
 	});
 });
