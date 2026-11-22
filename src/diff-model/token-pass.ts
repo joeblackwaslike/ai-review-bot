@@ -18,19 +18,12 @@ const MIN_COUNTED_LENGTH = 3;
 export const FAMILIES = [
 	["js", "jsx", "mjs", "cjs"],
 	["ts", "tsx"],
-	["java"],
-	["c", "h", "cpp", "hpp"],
-	["cs"],
-	["rs"],
 	["py", "pyi"],
 	["go"],
-	["kt", "kts"],
-	["dart"],
 	["yml", "yaml"],
 ];
 const FAMILY = new Map(FAMILIES.flatMap((exts, i) => exts.map((e) => [e, i])));
 const LINE_MODE = new Set(["yml", "yaml"]);
-const PREPROCESSOR = new Set(["c", "h", "cpp", "hpp", "cs"]);
 const LITERAL_OPENER = /`|"""|'''|<<[-~]?\s*['"]?\w/;
 const OPENERS = new Set(["(", "[", "{"]);
 const CLOSERS = new Set([")", "]", "}"]);
@@ -120,8 +113,7 @@ function lineModeTokens(lines: string[]): {
 	const lineOf: number[] = [];
 	lines.forEach((line, l) => {
 		const text = line.trim();
-		if (text === "") return;
-		if (tokens.length > 0) {
+		if (l > 0) {
 			tokens.push("\n");
 			lineOf.push(lineOf[lineOf.length - 1] as number);
 		}
@@ -154,10 +146,6 @@ function buildSegment(
 		tokens = normalizeTokens(raw, run.filename);
 		lineOf = normalizedLines(raw, tokens, rawLine);
 		bad = commentBearing(lines, raw, rawLine);
-		if (PREPROCESSOR.has(ext))
-			bad = bad.map(
-				(b, l) => b || (lines[l] as string).trimStart().startsWith("#"),
-			);
 	}
 	if (!lineOf) return null;
 	bad = bad.map((b, l) => b || opaqueLine(lines[l] as string, run.filename));
@@ -525,6 +513,28 @@ function rank(a: Match, b: Match): number {
 	);
 }
 
+const QUOTED_EXTENSIONS = new Set("js mjs cjs ts jsx tsx py pyi go".split(" "));
+
+function opensUnclosedString(file: PushFile): boolean {
+	const ext = extension(file.filename);
+	if (!QUOTED_EXTENSIONS.has(ext)) return false;
+	const hash = ext === "py" || ext === "pyi";
+	for (const row of (file.patch ?? "").split("\n")) {
+		if (/^.\s*(?:\*|\/\*)/.test(row)) continue;
+		let quote = "";
+		for (let i = 1; i < row.length; i++) {
+			const ch = row[i] as string;
+			if (quote) {
+				if (ch === "\\") i++;
+				else if (ch === quote) quote = "";
+			} else if (ch === '"' || ch === "'") quote = ch;
+			else if (hash ? ch === "#" : row.startsWith("//", i)) break;
+		}
+		if (quote && !row.endsWith("\\")) return true;
+	}
+	return false;
+}
+
 function mayHoldJsx(file: PushFile): boolean {
 	const ext = extension(file.filename);
 	return (
@@ -535,13 +545,19 @@ function mayHoldJsx(file: PushFile): boolean {
 
 /**
  * Names of the files the token pass leaves to the line matcher: those whose visible patch
- * text holds a backtick, a triple quote or a heredoc opener, and JSX-capable files, where
- * whitespace, commas and quotes in text are content.
+ * text holds a backtick, a triple quote, a heredoc opener or a line that opens a string
+ * it does not close, and JSX-capable files, where whitespace, commas and quotes in text
+ * are content.
  */
 export function filesWithLiterals(files: PushFile[]): Set<string> {
 	return new Set(
 		files
-			.filter((f) => LITERAL_OPENER.test(f.patch ?? "") || mayHoldJsx(f))
+			.filter(
+				(f) =>
+					LITERAL_OPENER.test(f.patch ?? "") ||
+					mayHoldJsx(f) ||
+					opensUnclosedString(f),
+			)
 			.map((f) => f.filename),
 	);
 }

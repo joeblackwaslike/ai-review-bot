@@ -174,21 +174,6 @@ describe("token pass", () => {
 		expect(moveBetween("src/a.ts", "src/b.ts", base, head)).toEqual([]);
 	});
 
-	it("leaves a Ruby reformat unmatched", () => {
-		const base = [
-			"result = process_order(customer_id, order_items, discount_code, shipping_address)",
-		];
-		const head = [
-			"result = process_order(",
-			"  customer_id,",
-			"  order_items,",
-			"  discount_code,",
-			"  shipping_address",
-			")",
-		];
-		expect(moveBetween("lib/a.rb", "lib/b.rb", base, head)).toEqual([]);
-	});
-
 	it("does not claim lines the line matcher already claimed", () => {
 		const exact = Array.from(
 			{ length: 6 },
@@ -339,31 +324,6 @@ function claimedHeadLines(
 }
 
 describe("token pass false-relocation guards", () => {
-	it("leaves CSS selectors unmatched when whitespace between tokens changed", () => {
-		const base = [
-			"ul .item { color: red; margin: 0 auto; padding: 4px 8px; border: 1px solid blue; }",
-		];
-		const head = [
-			"ul.item { color: red; margin: 0 auto; padding: 4px 8px; border: 1px solid blue; }",
-		];
-		expect(moveBetween("web/a.css", "web/b.css", base, head)).toEqual([]);
-	});
-
-	it("leaves a Scala braceless definition unmatched when its call is rewrapped", () => {
-		const base = [
-			"def apply(order: Order): Total = process(order, taxRate, shippingRate, discountCode)",
-		];
-		const head = [
-			"def apply(order: Order): Total = process(",
-			"  order,",
-			"  taxRate,",
-			"  shippingRate,",
-			"  discountCode",
-			")",
-		];
-		expect(moveBetween("app/a.scala", "app/b.scala", base, head)).toEqual([]);
-	});
-
 	it("leaves a YAML value unmatched when the space after the colon is dropped", () => {
 		const base = [
 			"server:",
@@ -427,16 +387,6 @@ describe("token pass false-relocation guards", () => {
 		const ops = moveBetween("src/a.ts", "src/b.ts", base, head);
 		expect(claimedHeadLines(ops)).not.toContain(3 + 1);
 		expect(claimedHeadLines(ops)).not.toContain(3 + 2);
-	});
-
-	it("leaves a C preprocessor line unmatched when whitespace after the macro name changed", () => {
-		const base = [
-			"#define CLAMP_TO_RANGE(value, low, high) ((value) < (low) ? (low) : ((value) > (high) ? (high) : (value)))",
-		];
-		const head = [
-			"#define CLAMP_TO_RANGE (value, low, high) ((value) < (low) ? (low) : ((value) > (high) ? (high) : (value)))",
-		];
-		expect(moveBetween("src/a.c", "src/b.c", base, head)).toEqual([]);
 	});
 
 	it("leaves a joined SQL template body unmatched", () => {
@@ -522,7 +472,7 @@ describe("token pass false-relocation guards", () => {
 			"  shippingAddress",
 			")",
 		];
-		expect(moveBetween("svc/a.go", "svc/b.kt", base, head)).toEqual([]);
+		expect(moveBetween("svc/a.go", "svc/b.py", base, head)).toEqual([]);
 		expect(moveBetween("svc/a.go", "svc/b.go", base, head)).toHaveLength(1);
 	});
 });

@@ -1,6 +1,10 @@
 import { isIndentSensitive, type PushFile } from "../moved-blocks.js";
 import { hasBrokenContinuation, hasOddBreak } from "./lexical.js";
-import { jsxPossible, tokenEquivalent } from "./token-check.js";
+import {
+	jsxPossible,
+	opensUnclosedString,
+	tokenEquivalent,
+} from "./token-check.js";
 import type { Divergence, Operation, Span } from "./types.js";
 
 const HUNK_HEADER = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
@@ -166,7 +170,9 @@ function scanPatch(patch: string | undefined, filename: string): ParsedPatch {
 	const out: ParsedPatch = {
 		deleted: new Map(),
 		added: new Map(),
-		risky: LITERAL_OPENER.test(patch ?? ""),
+		risky:
+			LITERAL_OPENER.test(patch ?? "") ||
+			opensUnclosedString(filename, patch ?? ""),
 		jsx: jsxPossible(filename, patch ?? ""),
 	};
 	const scanned: Scanned[] = [];

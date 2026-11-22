@@ -5,7 +5,8 @@ import { literalSafe } from "./lexical.js";
 import { findRelocations } from "./relocation.js";
 import {
 	CHECKER_FAMILIES,
-	CHECKER_OPERATORS,
+	checkerOperatorsFor,
+	opensUnclosedString,
 	tokenEquivalent,
 } from "./token-check.js";
 import {
@@ -13,7 +14,14 @@ import {
 	filesWithLiterals,
 	findTokenOperations,
 } from "./token-pass.js";
-import { normalizeTokens, OPERATORS } from "./tokens.js";
+import {
+	newlineClass,
+	normalizeTokens,
+	opaqueLine,
+	operatorsFor,
+	tokenize,
+	yamlOpaqueLines,
+} from "./tokens.js";
 
 type Src = string | string[];
 const rows = (src: Src) => (Array.isArray(src) ? src : [src]);
@@ -178,54 +186,10 @@ describe("trailing comma removal by language", () => {
 	const flat =
 		"result = process(one_value, two_value, three_value, four_value)";
 
-	it.each([
-		[
-			"python lambda tuple",
-			"handler = (lambda alpha, beta: alpha + beta + gamma_value + delta,)",
-			"py",
-		],
-		[
-			"rust closure tuple",
-			"let handler = (|alpha, beta| alpha + beta + gamma_value + delta,);",
-			"rs",
-		],
-		[
-			"rust generic tuple",
-			"let handlers: (HashMap<String, Handler>,) = build_handlers(registry);",
-			"rs",
-		],
-		[
-			"kotlin call",
-			"result = compute(alpha, beta, gamma, delta, epsilon, zeta,)",
-			"kt",
-		],
-		[
-			"dart call",
-			"result = compute(alpha, beta, gamma, delta, epsilon, zeta,)",
-			"dart",
-		],
-	])("keeps the comma of a %s", (_, line, ext) => {
-		rejected([line], [line.replace(",)", ")")], ...pair(ext));
-	});
-
-	it.each(["rs", "kts", "swift"])("drops no trailing comma in %s", (ext) => {
-		expect(checker("f(a, b,)", "f(a, b)", ...pair(ext))).toBe(false);
-	});
-
-	it.each(
-		"java c h cpp hpp cs".split(" "),
-	)("drops a comma before } after a sibling in %s", (ext) => {
-		const line = "values = {first_value, second_value, third_value, fourth,};";
-		accepted([line], [line.replace(",}", "}")], ...pair(ext));
-	});
-
-	it.each(["java", "c", "cs"])("keeps a comma before ) in %s", (ext) => {
+	it("keeps the comma of a Python lambda tuple", () => {
 		const line =
-			"result = compute(first_value, second_value, third_value, fourth,);";
-		rejected([line], [line.replace(",)", ")")], ...pair(ext));
-		expect(checker("int v[] = {1,};", "int v[] = {1};", ...pair(ext))).toBe(
-			false,
-		);
+			"handler = (lambda alpha, beta: alpha + beta + gamma_value + delta,)";
+		rejected(line, line.replace(",)", ")"), ...pair("py"));
 	});
 
 	it("keeps the lone comma of a Go call", () => {
@@ -275,53 +239,6 @@ describe("Python nested same-quote f-strings", () => {
 		expect(checker(other, other, ...pair("py"))).toBe(true);
 		const plain = ['v = f"{{literal}} {name:{width}} done"'];
 		expect(checker(plain, plain, ...pair("py"))).toBe(true);
-	});
-});
-
-describe("raw and verbatim strings", () => {
-	it.each([
-		[
-			'let doc = r#"say "hello   there" and goodbye"#;',
-			'let doc = r#"say "hello there" and goodbye"#;',
-			"rs",
-		],
-		[
-			'auto doc = R"(say "hello   there" and goodbye)";',
-			'auto doc = R"(say "hello there" and goodbye)";',
-			"cpp",
-		],
-		[
-			'var doc = $"say {Format("hello   there")} and goodbye";',
-			'var doc = $"say {Format("hello there")} and goodbye";',
-			"cs",
-		],
-	])("rejects inner spacing changes in %s", (a, b, ext) => {
-		rejected([a], [b], ...pair(ext), true);
-	});
-
-	it.each([
-		["rs", 'let v = compute(r"alpha",  beta);'],
-		["rs", 'let v = compute(br#"alpha"#,  beta);'],
-		["c", 'const char *v = compute(R"x(alpha)x",  beta);'],
-		["h", 'const char *v = compute(u8R"x(alpha)x",  beta);'],
-		["hpp", 'auto v = compute(LR"(alpha)",  beta);'],
-		["cs", 'var v = compute(@"alpha",  beta);'],
-		["cs", 'var v = compute($"alpha",  beta);'],
-	])("rejects any %s line holding a raw or verbatim string: %s", (ext, line) => {
-		expect(checker([line], [line.replace("  ", " ")], ...pair(ext))).toBe(
-			false,
-		);
-	});
-
-	it("keeps lines whose ordinary strings merely end in r or R", () => {
-		const rust = 'let m = f("user", "error", "filter", settings, defaults);';
-		expect(checker([rust], [rust.replace(", ", ",  ")], ...pair("rs"))).toBe(
-			true,
-		);
-		const cpp = 'call("OR", "FOR", first, second);';
-		expect(checker([cpp], [cpp.replace(", ", ",  ")], ...pair("cpp"))).toBe(
-			true,
-		);
 	});
 });
 
@@ -395,25 +312,13 @@ describe("YAML line mode", () => {
 	});
 });
 
-describe("line breaks inside braces of line-significant languages", () => {
-	it.each([
-		[
-			"kt",
-			["val r = collection.map({ elementAlpha", "  -elementBeta })"],
-			"val r = collection.map({ elementAlpha -elementBeta })",
-		],
-		[
-			"go",
+describe("line breaks inside braces of Go", () => {
+	it("keeps a line break inside a function literal in a call", () => {
+		rejected(
 			["value := compute(func() int { first", "-second }, alpha, beta)"],
 			"value := compute(func() int { first -second }, alpha, beta)",
-		],
-		[
-			"dart",
-			["final r = items.map((e) { first", "-second });"],
-			"final r = items.map((e) { first -second });",
-		],
-	])("keeps a line break inside a %s lambda in a call", (ext, base, head) => {
-		rejected(base, [head], ...pair(ext));
+			...pair("go"),
+		);
 	});
 });
 
@@ -512,15 +417,6 @@ describe("JSX text keeps its whitespace, commas and quotes", () => {
 	});
 });
 
-describe("checker independence", () => {
-	it("pins the operator table and the families", () => {
-		expect([...CHECKER_OPERATORS].sort()).toEqual([...OPERATORS].sort());
-		const lengths = CHECKER_OPERATORS.map((o) => o.length);
-		expect(lengths).toEqual([...lengths].sort((a, b) => b - a));
-		expect(CHECKER_FAMILIES).toEqual(FAMILIES);
-	});
-});
-
 function readCounter(tokens: string[]) {
 	let reads = 0;
 	const proxy = new Proxy(tokens, {
@@ -596,5 +492,194 @@ describe("deep nesting and long lines stay linear", () => {
 		expect(literalSafe([line], "a.js")).toBe(false);
 		expect(tokenPassOps([line], [line], "src/a.ts", "src/b.ts")).toEqual([]);
 		expect(performance.now() - started).toBeLessThan(5000);
+	});
+});
+
+describe("narrowed eligibility", () => {
+	it("lists only the trusted families in both passes", () => {
+		const trusted = "js jsx mjs cjs ts tsx py pyi go yml yaml".split(" ");
+		expect(FAMILIES.flat().sort()).toEqual([...trusted].sort());
+		expect(CHECKER_FAMILIES.flat().sort()).toEqual([...trusted].sort());
+	});
+
+	it.each(
+		"rs java c h cpp hpp cs kt kts dart".split(" "),
+	)("gives no equivalence in %s", (ext) => {
+		expect(checker("f(a,   b);", "f(a, b);", ...pair(ext))).toBe(false);
+		rejected(
+			"f(alpha,   beta, gamma, delta, epsilon, zeta);",
+			"f(alpha, beta, gamma, delta, epsilon, zeta);",
+			...pair(ext),
+			true,
+		);
+	});
+
+	it("treats a dropped language as line-significant", () => {
+		expect(newlineClass("a.java")).toBe("significant");
+		expect(newlineClass("a.ts")).toBe("free");
+	});
+
+	it("pins the tables the checker intentionally duplicates: operators per language", () => {
+		for (const ext of ["ts", "js", "py", "go"]) {
+			expect([...checkerOperatorsFor(ext)].sort()).toEqual(
+				[...operatorsFor(ext)].sort(),
+			);
+		}
+		expect(operatorsFor("go")).toContain("<-");
+		expect(operatorsFor("ts")).not.toContain("<-");
+		expect(checkerOperatorsFor("ts")).not.toContain("<-");
+	});
+});
+
+describe("final review holes", () => {
+	const tail = "alpha + beta + gamma + delta + epsilon + zeta;";
+
+	it("tells x<--y from x<- -y in JavaScript and TypeScript", () => {
+		for (const ext of ["js", "ts"]) {
+			rejected(
+				"if (x<--y) z(a, b, c, d, e, f);",
+				"if (x<- -y) z(a, b, c, d, e, f);",
+				...pair(ext),
+			);
+		}
+		expect(checker("ch <- v", "ch <-  v", ...pair("go"))).toBe(true);
+		expect(checker("ch <- v", "ch < -v", ...pair("go"))).toBe(false);
+	});
+
+	it.each(
+		"public private protected readonly override accessor using".split(" "),
+	)("keeps the line break after %s", (word) => {
+		rejected(
+			[`class A { ${word}`, `x = ${tail} }`],
+			`class A { ${word} x = ${tail} }`,
+		);
+	});
+
+	it("tells a combining mark that joins a word from a split one", () => {
+		rejected(["x = e\u0301", `z = 2; ${tail}`], [`x = e\u0301z = 2; ${tail}`]);
+	});
+
+	it.each([
+		"\u00a0",
+		"\u1680",
+		"\u2003",
+		"\u202f",
+		"\u205f",
+		"\u3000",
+		"\ufeff",
+	])("refuses %j as whitespace in code", (mark) => {
+		for (const ext of ["ts", "py", "go", "yml"]) {
+			expect(
+				checker(`a =${mark}b + c + d`, "a = b + c + d", ...pair(ext)),
+			).toBe(false);
+		}
+		expect(opaqueLine(`a =${mark}b`, "a.ts")).toBe(true);
+	});
+
+	it.each([
+		"{ for await (a of b) ; }",
+		"{ with (a) ; }",
+		"{ if (a) b; else ; }",
+		"{ l: ; }",
+	])("keeps the semicolon in %s", (code) => {
+		expect(checker(code, code.replace(" ; }", " }").replace("; }", " }"))).toBe(
+			false,
+		);
+	});
+
+	it.each([
+		"{ for await (a of b) ; }",
+		"{ with (a) ; }",
+		"{ if (a) b; else ; }",
+		"{ l: ; }",
+	])("keeps the matcher's semicolon in %s", (code) => {
+		const tokens = tokenize([code], "a.ts").tokens;
+		expect(normalizeTokens(tokens, "a.ts")).toContain(";");
+	});
+
+	it("reads block scalar indicators with an indent digit in either order", () => {
+		for (const line of ["k: |2-", "k: >1+", "k: |-2", "k: >+1"])
+			expect(yamlOpaqueLines([line])).toEqual([true]);
+	});
+
+	it("lets a trailing backslash continue a string in a patch", () => {
+		expect(opensUnclosedString("a.ts", "+x = 'abc")).toBe(true);
+		expect(opensUnclosedString("a.ts", "+x = 'abc\\")).toBe(false);
+	});
+
+	it("still drops a semicolon after an ordinary statement", () => {
+		expect(checker("{ a = 1; }", "{ a = 1 }")).toBe(true);
+	});
+
+	it("scans a hostile f-string line in linear time", () => {
+		const lines = Array.from(
+			{ length: 20 },
+			() => "f'".repeat(400) + "{".repeat(1000),
+		);
+		const started = performance.now();
+		expect(checker(lines, lines, ...pair("py"))).toBe(false);
+		for (const line of lines) opaqueLine(line, "a.py");
+		expect(performance.now() - started).toBeLessThan(1000);
+	});
+
+	it.each([
+		"ts",
+		"js",
+		"py",
+		"go",
+	])("skips a %s file whose patch opens a string it does not close", (ext) => {
+		const open = ext === "py" ? "x = 'abc" : 'x = "abc';
+		const clean =
+			ext === "py" ? "x = 'abc'  # it's fine" : 'x = "abc"; // it\'s fine';
+		const file = (line: string): PushFile => ({
+			filename: `src/a.${ext}`,
+			status: "modified",
+			patch: `@@ -1,2 +1,2 @@\n ${line}\n-y = 1`,
+			additions: 0,
+			deletions: 0,
+		});
+		expect(filesWithLiterals([file(open)]).has(`src/a.${ext}`)).toBe(true);
+		expect(filesWithLiterals([file(clean)]).has(`src/a.${ext}`)).toBe(false);
+		for (const line of [" * it's a doc comment", "x = 'abc\\"]) {
+			expect(filesWithLiterals([file(line)]).has(`src/a.${ext}`)).toBe(false);
+		}
+	});
+
+	it("keeps a blank line inside a multi-line YAML scalar", () => {
+		const base = [
+			"root:",
+			"  text: first part of the text",
+			"",
+			"    second part after the blank",
+			"  other: 1",
+			"  more: 2",
+		];
+		const deeper = (l: string[]) => l.map((x) => (x ? `  ${x}` : x));
+		const without = base.filter((l) => l !== "");
+		for (const [from, to] of [
+			[base, deeper(without)],
+			[without, deeper(base)],
+		] as const) {
+			expect(checker(from, to, ...pair("yml"))).toBe(false);
+			const claimed = claimedLines(tokenPassOps(from, to, ...pair("yml")));
+			expect(claimed).not.toContain(11);
+			expect(claimed.includes(12) && from === base).toBe(false);
+		}
+		accepted(base, deeper(base), ...pair("yml"));
+	});
+
+	it.each([
+		"key: |2-",
+		"key: >1+",
+		"key: |-2",
+		"key: >+1",
+	])("rejects the indicator in %s", (line) => {
+		expect(
+			checker(
+				["root:", `  ${line}`, "    text"],
+				["  root:", `    ${line}`, "      text"],
+				...pair("yml"),
+			),
+		).toBe(false);
 	});
 });

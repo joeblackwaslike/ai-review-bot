@@ -2,11 +2,10 @@ import { MAX_ANALYZED_LINE } from "./lexical.js";
 
 export type NewlineClass = "free" | "significant";
 
-export const OPERATORS: readonly string[] = [
+const BASE_OPERATORS = [
 	">>>=",
 	"..=",
 	"<<<",
-	"<-",
 	"=~",
 	"!~",
 	"&.",
@@ -53,37 +52,25 @@ export const OPERATORS: readonly string[] = [
 	":=",
 	"..",
 ].sort((a, b) => b.length - a.length);
-const FREE_EXTENSIONS = new Set(
-	"js ts jsx tsx mjs cjs java c h cpp hpp cs rs php css".split(" "),
+const GO_OPERATORS = ["<-", ...BASE_OPERATORS].sort(
+	(a, b) => b.length - a.length,
 );
-const SLASH_COMMENT_EXTENSIONS = new Set(
-	"js ts jsx tsx mjs cjs java c h cpp hpp cs rs php go kt kts swift scala dart groovy".split(
-		" ",
-	),
-);
-const BLOCK_COMMENT_EXTENSIONS = new Set([...SLASH_COMMENT_EXTENSIONS, "css"]);
-const PREPROCESSOR_EXTENSIONS = new Set("c h cpp hpp cs".split(" "));
+
+/** The operator table for a file extension; only Go has `<-`. */
+export function operatorsFor(ext: string): readonly string[] {
+	return ext === "go" ? GO_OPERATORS : BASE_OPERATORS;
+}
+
+const FREE_EXTENSIONS = new Set("js ts jsx tsx mjs cjs".split(" "));
+const SLASH_COMMENT_EXTENSIONS = new Set("js ts jsx tsx mjs cjs go".split(" "));
 const SIBLING_COMMA_EXTENSIONS = new Set("py pyi go".split(" "));
-const SIBLING_BRACE_COMMA_EXTENSIONS = new Set(
-	"java c h cpp hpp cs".split(" "),
-);
-const BRACE_BLOCK_EXTENSIONS = new Set(
-	"go kt kts swift scala dart groovy".split(" "),
-);
-const BLOCK_SCALAR = /[|>][+-]?\d*\s*(?:#.*)?$/;
-const C_RAW = /(?<![\p{L}\p{N}_])(?:u8|[uUL])?R"/u;
-const RAW_STRING: Record<string, RegExp> = {
-	rs: /(?<![\p{L}\p{N}_])(?:br|cr|r)#*"/u,
-	c: C_RAW,
-	h: C_RAW,
-	cpp: C_RAW,
-	hpp: C_RAW,
-	cs: /@"|\$"|"""/,
-};
-const F_PREFIX = /(?<![\p{L}\p{N}_])(?:[rR][fF]|[fF][rR]?)(["'])/gu;
+const BLOCK_SCALAR = /[|>](?:[1-9][+-]?|[+-][1-9]?)?\s*(?:#.*)?$/;
+const F_PREFIX_DQ = /(?<![\p{L}\p{N}_])(?:[rR][fF]|[fF][rR]?)"/u;
+const F_PREFIX_SQ = /(?<![\p{L}\p{N}_])(?:[rR][fF]|[fF][rR]?)'/u;
+const NEST_DQ = /\{[^{}]*"/;
+const NEST_SQ = /\{[^{}]*'/;
 const JS_FAMILY = new Set("js ts jsx tsx mjs cjs".split(" "));
 const QUOTE_SWAP_EXTENSIONS = new Set("js ts mjs cjs py pyi".split(" "));
-const HASH_COMMENT_FILE = /\.(py|pyi|sh|bash|zsh|rb|ya?ml|toml|mk)$/i;
 const PYTHON_FILE = /\.pyi?$/i;
 const STRING_PREFIX = /^[rbfuRBFU]{1,2}$/;
 const BREAK_KEYWORDS = new Set([
@@ -105,10 +92,18 @@ const BREAK_KEYWORDS = new Set([
 	"static",
 	"let",
 	"await",
+	"public",
+	"private",
+	"protected",
+	"readonly",
+	"override",
+	"accessor",
+	"using",
 ]);
-const ODD_BREAK = /[\r\v\f\u0085\u2028\u2029]/;
+const ODD_BREAK =
+	/[\r\v\f\u0085\u2028\u2029\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000\ufeff]/;
 const HTML_COMMENT = /<!--|-->/;
-const IDENTIFIER = /[\p{L}_$][\p{L}\p{N}_$]*/uy;
+const IDENTIFIER = /[\p{ID_Start}_$][\p{ID_Continue}$\u200c\u200d]*/uy;
 const NUMBER = /0[xXoObB]\w*|\d[\d_]*(?:\.(?!\.)[\d_]*)?(?:[eE][+-]?\d+)?\w*/y;
 const OPENERS = new Set(["(", "[", "{"]);
 const CLOSERS = new Set([")", "]", "}"]);
@@ -116,7 +111,15 @@ const GROUPERS = new Set(["(", "["]);
 const GROUP_CLOSERS = new Set([")", "]"]);
 const ASI_HAZARDS = new Set(["(", "[", "`", "+", "-", "/", "++", "--"]);
 const STATEMENT_END = /^(?:[\p{L}\p{N}_$"'`]|\)|\]|\}|\+\+|--)/u;
-const EMPTY_BODY_KEYWORDS = new Set(["if", "for", "while", "switch"]);
+const EMPTY_BODY_KEYWORDS = new Set([
+	"if",
+	"for",
+	"while",
+	"switch",
+	"with",
+	"await",
+]);
+const KEEP_SEMICOLON_AFTER = new Set(["else", ":", "=>"]);
 
 function extension(filename: string): string {
 	const dot = filename.lastIndexOf(".");
@@ -125,9 +128,8 @@ function extension(filename: string): string {
 
 /**
  * Whether a line holds text the token pass cannot compare reliably: over the analysis cap,
- * an odd line terminator other than one trailing carriage return, an HTML-like comment
- * marker in a JS-family file, or a Python, Rust, C, C++ or C# string form the scanner
- * would split wrongly.
+ * an odd line terminator or non-ASCII whitespace other than one trailing carriage return,
+ * an HTML-like comment marker in a JS-family file, or a nested Python f-string quote.
  */
 export function opaqueLine(line: string, filename: string): boolean {
 	if (line.length > MAX_ANALYZED_LINE) return true;
@@ -135,14 +137,17 @@ export function opaqueLine(line: string, filename: string): boolean {
 	if (ODD_BREAK.test(text)) return true;
 	const ext = extension(filename);
 	if (JS_FAMILY.has(ext)) return HTML_COMMENT.test(text);
-	if (ext === "py" || ext === "pyi") return nestsFStringQuote(text);
-	return RAW_STRING[ext]?.test(text) ?? false;
+	return (ext === "py" || ext === "pyi") && nestsFStringQuote(text);
 }
 
 function nestsFStringQuote(line: string): boolean {
-	for (const found of line.matchAll(F_PREFIX)) {
-		const rest = line.slice((found.index ?? 0) + found[0].length);
-		if (new RegExp(`\\{[^}]*${found[1]}`).test(rest)) return true;
+	for (const [prefix, nested] of [
+		[F_PREFIX_DQ, NEST_DQ],
+		[F_PREFIX_SQ, NEST_SQ],
+	] as const) {
+		const found = prefix.exec(line);
+		if (found && nested.test(line.slice(found.index + found[0].length)))
+			return true;
 	}
 	return false;
 }
@@ -189,10 +194,9 @@ function matchAt(re: RegExp, line: string, i: number): string | undefined {
 }
 
 function scanLine(line: string, filename: string): string[] {
-	const hash = HASH_COMMENT_FILE.test(filename);
 	const ext = extension(filename);
 	const slash = SLASH_COMMENT_EXTENSIONS.has(ext);
-	const block = BLOCK_COMMENT_EXTENSIONS.has(ext);
+	const operators = operatorsFor(ext);
 	const python = PYTHON_FILE.test(filename);
 	const out: string[] = [];
 	let i = 0;
@@ -202,10 +206,10 @@ function scanLine(line: string, filename: string): string[] {
 			i++;
 			continue;
 		}
-		if (hash && ch === "#" && (i === 0 || /\s/.test(line[i - 1] as string)))
+		if (python && ch === "#" && (i === 0 || /\s/.test(line[i - 1] as string)))
 			break;
 		if (slash && line.startsWith("//", i)) break;
-		if (block && line.startsWith("/*", i)) {
+		if (slash && line.startsWith("/*", i)) {
 			const close = line.indexOf("*/", i + 2);
 			if (close < 0) break;
 			i = close + 2;
@@ -240,7 +244,7 @@ function scanLine(line: string, filename: string): string[] {
 			i += num.length;
 			continue;
 		}
-		const op = OPERATORS.find((o) => line.startsWith(o, i)) ?? ch;
+		const op = operators.find((o) => line.startsWith(o, i)) ?? ch;
 		out.push(op);
 		i += op.length;
 	}
@@ -259,8 +263,7 @@ export function tokenize(
 ): { tokens: string[]; lineOf: number[] } {
 	const free = newlineClass(filename) === "free";
 	const jsFamily = JS_FAMILY.has(extension(filename));
-	const preprocessor = PREPROCESSOR_EXTENSIONS.has(extension(filename));
-	const braceBlocks = BRACE_BLOCK_EXTENSIONS.has(extension(filename));
+	const braceBlocks = extension(filename) === "go";
 	const openers = free || braceBlocks ? OPENERS : GROUPERS;
 	const closers = free || braceBlocks ? CLOSERS : GROUP_CLOSERS;
 	const tokens: string[] = [];
@@ -295,9 +298,7 @@ export function tokenize(
 		}
 		const last = found[found.length - 1];
 		if (last === undefined) return;
-		const breaks = free
-			? BREAK_KEYWORDS.has(last) || (preprocessor && /^\s*#/.test(line))
-			: !grouped();
+		const breaks = free ? BREAK_KEYWORDS.has(last) : !grouped();
 		if (breaks) {
 			tokens.push("\n");
 			lineOf.push(index);
@@ -351,6 +352,13 @@ function endsEmptyBody(tokens: string[], semicolon: number, shape: Shape) {
 	return open > 0 && EMPTY_BODY_KEYWORDS.has(tokens[open - 1] ?? "");
 }
 
+function keepsSemicolon(tokens: string[], at: number, shape: Shape): boolean {
+	return (
+		KEEP_SEMICOLON_AFTER.has(tokens[at - 1] ?? "") ||
+		endsEmptyBody(tokens, at, shape)
+	);
+}
+
 function droppableComma(
 	tokens: string[],
 	i: number,
@@ -364,19 +372,15 @@ function droppableComma(
 		const prev = tokens[i - 1];
 		return prev !== undefined && prev !== "," && !OPENERS.has(prev);
 	}
-	if (shape.sibling[i] !== true) return false;
-	return (
-		SIBLING_COMMA_EXTENSIONS.has(ext) ||
-		(SIBLING_BRACE_COMMA_EXTENSIONS.has(ext) && next === "}")
-	);
+	return shape.sibling[i] === true && SIBLING_COMMA_EXTENSIONS.has(ext);
 }
 
 /**
- * Removes formatting-only differences from a token stream: a trailing comma that follows
- * a sibling comma (JS and TS drop any comma not after an opener or another comma; Java, C
- * and C# only before `}`; Rust, Kotlin and Dart never), a semicolon directly before `}` in
- * the JS family unless it ends an empty if, for, while or switch body, and a single-quoted
- * string in JS, TS or Python whose content has no quote, backslash or interpolation marker.
+ * Removes formatting-only differences from a token stream: a trailing comma (JS and TS drop
+ * any comma not after an opener or another comma, Python and Go only after a sibling comma),
+ * a semicolon directly before `}` in the JS family unless it follows `else`, a label or `=>`
+ * or ends an empty if, for, while, switch, with or for-await body, and a single-quoted string
+ * in JS, TS or Python whose content has no quote, backslash or interpolation marker.
  */
 export function normalizeTokens(tokens: string[], filename: string): string[] {
 	const jsFamily = JS_FAMILY.has(extension(filename));
@@ -388,7 +392,7 @@ export function normalizeTokens(tokens: string[], filename: string): string[] {
 		if (t === "," && droppableComma(tokens, i, filename, shape)) return;
 		if (jsFamily && t === ";") {
 			const next = tokens[i + 1];
-			if (next === "}" && !endsEmptyBody(tokens, i, shape)) return;
+			if (next === "}" && !keepsSemicolon(tokens, i, shape)) return;
 		}
 		if (swapQuotes && swappable(t, python)) {
 			out.push(`"${t.slice(1, -1)}"`);

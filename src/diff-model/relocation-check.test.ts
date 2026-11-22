@@ -1659,6 +1659,7 @@ describe("verifyRelocation through the token path", () => {
 	it.each([
 		["a backtick", "x = `y`;", "x = 1;"],
 		["a JSX element in the base patch", "x = <Foo>;", "x = 1;"],
+		["a string it does not close", 'x = "abc', "x = 1;"],
 	])("refuses it when a context line holds %s", (_, baseContext, headContext) => {
 		const { files, op } = reformat(baseContext, headContext);
 		expect(verifyRelocation(op, files)).toBe(false);

@@ -107,24 +107,6 @@ describe("tokenEquivalent", () => {
 		).toBe(false);
 	});
 
-	it("drops a CSS claim", () => {
-		expect(
-			same([".a { color: red; }"], [".a { color:  red; }"], "a.css", "b.css")
-				.equivalent,
-		).toBe(false);
-	});
-
-	it("drops a Ruby claim", () => {
-		expect(
-			same(
-				["total = compute(a, b)"],
-				["total = compute(a,  b)"],
-				"a.rb",
-				"b.rb",
-			).equivalent,
-		).toBe(false);
-	});
-
 	it("drops a claim across language families", () => {
 		expect(
 			same(
@@ -138,24 +120,6 @@ describe("tokenEquivalent", () => {
 
 	it("drops a claim with unbalanced brackets", () => {
 		expect(same(["call(a,", "b"], ["call(a, b"]).equivalent).toBe(false);
-	});
-
-	it("drops a C macro that differs by a space before the parameter list", () => {
-		expect(
-			same(
-				["#define SQUARE(x) ((x) * (x))"],
-				["#define SQUARE (x) ((x) * (x))"],
-				"a.c",
-				"b.h",
-			).equivalent,
-		).toBe(false);
-	});
-
-	it("drops a claim when a line carries a comment", () => {
-		expect(
-			same(["run(a, b); // go"], ["run(a, b);  // go"], "A.java", "B.java")
-				.equivalent,
-		).toBe(false);
 	});
 
 	it("drops a division that may be a regex literal", () => {

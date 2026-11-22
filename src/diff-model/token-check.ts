@@ -1,8 +1,7 @@
-const OPERATOR_TABLE = [
+const BASE_OPERATORS = [
 	">>>=",
 	"..=",
 	"<<<",
-	"<-",
 	"=~",
 	"!~",
 	"&.",
@@ -49,21 +48,20 @@ const OPERATOR_TABLE = [
 	":=",
 	"..",
 ].sort((a, b) => b.length - a.length);
+const GO_OPERATORS = ["<-", ...BASE_OPERATORS].sort(
+	(a, b) => b.length - a.length,
+);
 
-/** The checker's own operator table, exposed so a test can pin it to the matcher's. */
-export const CHECKER_OPERATORS: readonly string[] = OPERATOR_TABLE;
+/** The checker's own operator table for an extension, exposed so a test can pin it to the matcher's. */
+export function checkerOperatorsFor(ext: string): readonly string[] {
+	return ext === "go" ? GO_OPERATORS : BASE_OPERATORS;
+}
 
 const FAMILIES = [
 	["js", "jsx", "mjs", "cjs"],
 	["ts", "tsx"],
-	["java"],
-	["c", "h", "cpp", "hpp"],
-	["cs"],
-	["rs"],
 	["py", "pyi"],
 	["go"],
-	["kt", "kts"],
-	["dart"],
 	["yml", "yaml"],
 ];
 
@@ -75,28 +73,25 @@ const FAMILY_OF = new Map(
 );
 const words = (list: string) => new Set(list.split(" "));
 const LINE_MODE = words("yml yaml");
-const FREE = words("js jsx mjs cjs ts tsx java c h cpp hpp cs rs");
+const FREE = words("js jsx mjs cjs ts tsx");
 const JS_LIKE = words("js jsx mjs cjs ts tsx");
-const SLASH_COMMENTS = words(
-	"js jsx mjs cjs ts tsx java c h cpp hpp cs rs go kt kts dart",
-);
+const SLASH_COMMENTS = words("js jsx mjs cjs ts tsx go");
 const HASH_COMMENTS = words("py pyi");
-const PREPROCESSOR = words("c h cpp hpp cs");
 const PYTHON = words("py pyi");
 const INDENTED = words("py pyi yml yaml");
 const SIBLING_COMMA = words("py pyi go");
-const SIBLING_BRACE_COMMA = words("java c h cpp hpp cs");
-const BRACE_BLOCKS = words("go kt kts dart");
+const BRACE_BLOCKS = words("go");
 const QUOTE_SWAP = words("js mjs cjs ts py pyi");
 const JSX_ALWAYS = words("jsx tsx");
 const JSX_POSSIBLE = words("js mjs cjs ts");
 const BREAKING_WORDS = words(
-	"return throw break continue yield async type declare abstract namespace module interface enum get set static let await",
+	"return throw break continue yield async type declare abstract namespace module interface enum get set static let await public private protected readonly override accessor using",
 );
 const BEFORE_EXPRESSION = words(
 	"return typeof case in of delete void throw yield await else do instanceof new default",
 );
-const HEADER_WORDS = words("if for while switch");
+const HEADER_WORDS = words("if for while switch with await");
+const KEEP_SEMICOLON_AFTER = words("else : =>");
 const ASI_HAZARDS = words("( [ ` + - / ++ --");
 const OPENING = new Map([
 	["(", ")"],
@@ -106,21 +101,16 @@ const OPENING = new Map([
 const CLOSING = new Set(OPENING.values());
 const MAX_LINE = 2000;
 const MAX_DEPTH = 200;
-const ODD_BREAKS = /[\r\v\f\u0085\u2028\u2029]/;
+const ODD_BREAKS =
+	/[\r\v\f\u0085\u2028\u2029\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000\ufeff]/;
 const UNSAFE_TEXT = /`|"""|'''|<<[-~]?\s*['"]?\w/;
 const JSX_START = /<[A-Za-z][\w.-]*[\s>/]|<\/|\/>|<>/;
-const BLOCK_SCALAR = /[|>][+-]?\d*\s*(?:#.*)?$/;
-const F_PREFIX = /(?<![\p{L}\p{N}_])(?:[rR][fF]|[fF][rR]?)(["'])/gu;
-const C_RAW = /(?<![\p{L}\p{N}_])(?:u8|[uUL])?R"/u;
-const RAW_STRING: Record<string, RegExp> = {
-	rs: /(?<![\p{L}\p{N}_])(?:br|cr|r)#*"/u,
-	c: C_RAW,
-	h: C_RAW,
-	cpp: C_RAW,
-	hpp: C_RAW,
-	cs: /@"|\$"|"""/,
-};
-const IDENTIFIER = /[\p{L}_$][\p{L}\p{N}_$]*/uy;
+const BLOCK_SCALAR = /[|>](?:[1-9][+-]?|[+-][1-9]?)?\s*(?:#.*)?$/;
+const F_DQ = /(?<![\p{L}\p{N}_])(?:[rR][fF]|[fF][rR]?)"/u;
+const F_SQ = /(?<![\p{L}\p{N}_])(?:[rR][fF]|[fF][rR]?)'/u;
+const NESTED_DQ = /\{[^{}]*"/;
+const NESTED_SQ = /\{[^{}]*'/;
+const IDENTIFIER = /[\p{ID_Start}_$][\p{ID_Continue}$\u200c\u200d]*/uy;
 const NUMBER = /0[xXoObB]\w*|\d[\d_]*(?:\.(?!\.)[\d_]*)?(?:[eE][+-]?\d+)?\w*/y;
 const STRING_PREFIX = /^[rbfuRBFU]{1,2}$/;
 const STATEMENT_END = /^(?:[\p{L}\p{N}_$"'`]|\)|\]|\}|\+\+|--)/u;
@@ -145,10 +135,38 @@ export function jsxPossible(filename: string, text: string): boolean {
 	return JSX_ALWAYS.has(ext) || (JSX_POSSIBLE.has(ext) && JSX_START.test(text));
 }
 
+/**
+ * Whether any line of a patch for a JS, TS, Python or Go file opens a single or double quote
+ * it does not close (a trailing backslash continues the string), so the lines around it may
+ * sit inside a multi-line string body. Comment-looking lines are ignored.
+ */
+export function opensUnclosedString(filename: string, patch: string): boolean {
+	const ext = extensionOf(filename);
+	if (!(JS_LIKE.has(ext) || PYTHON.has(ext) || ext === "go")) return false;
+	for (const row of patch.split("\n")) {
+		if (/^.\s*(?:\*|\/\*)/.test(row)) continue;
+		let quote = "";
+		for (let i = 1; i < row.length; i++) {
+			const ch = row[i] as string;
+			if (quote) {
+				if (ch === "\\") i++;
+				else if (ch === quote) quote = "";
+			} else if (ch === '"' || ch === "'") quote = ch;
+			else if (PYTHON.has(ext) ? ch === "#" : row.startsWith("//", i)) break;
+		}
+		if (quote && !row.endsWith("\\")) return true;
+	}
+	return false;
+}
+
 function nestsFStringQuote(line: string): boolean {
-	for (const found of line.matchAll(F_PREFIX)) {
-		const rest = line.slice((found.index ?? 0) + found[0].length);
-		if (new RegExp(`\\{[^}]*${found[1]}`).test(rest)) return true;
+	for (const [start, nested] of [
+		[F_DQ, NESTED_DQ],
+		[F_SQ, NESTED_SQ],
+	] as const) {
+		const found = start.exec(line);
+		if (found && nested.test(line.slice(found.index + found[0].length)))
+			return true;
 	}
 	return false;
 }
@@ -160,7 +178,7 @@ function unreadable(line: string, ext: string): boolean {
 	if (JS_LIKE.has(ext) && (body.includes("<!--") || body.includes("-->")))
 		return true;
 	if (PYTHON.has(ext)) return nestsFStringQuote(body);
-	return RAW_STRING[ext]?.test(body) ?? false;
+	return false;
 }
 
 function stringEnd(line: string, start: number): number {
@@ -211,11 +229,8 @@ function scanLine(line: string, ext: string): string[] | null {
 				quoteAt = after;
 		}
 		if (quoteAt >= 0) {
-			let end = stringEnd(line, quoteAt);
-			if (end < 0) {
-				if (ext !== "rs" || line[quoteAt] !== "'") return null;
-				end = line.length;
-			}
+			const end = stringEnd(line, quoteAt);
+			if (end < 0) return null;
 			out.push(line.slice(i, end));
 			i = end;
 			continue;
@@ -231,7 +246,8 @@ function scanLine(line: string, ext: string): string[] | null {
 			i += num.length;
 			continue;
 		}
-		const op = OPERATOR_TABLE.find((o) => line.startsWith(o, i)) ?? ch;
+		const op =
+			checkerOperatorsFor(ext).find((o) => line.startsWith(o, i)) ?? ch;
 		if (JS_LIKE.has(ext) && op.startsWith("/") && !isDivision(out)) return null;
 		out.push(op);
 		i += op.length;
@@ -255,7 +271,6 @@ function tokenizeLines(lines: string[], ext: string): Tokenized | null {
 	for (let n = 0; n < lines.length; n++) {
 		const line = lines[n] as string;
 		if (UNSAFE_TEXT.test(line)) return null;
-		if (PREPROCESSOR.has(ext) && line.trimStart().startsWith("#")) return null;
 		const found = scanLine(line, ext);
 		if (!found) return null;
 		const first = found[0];
@@ -337,13 +352,11 @@ function removableComma(
 			prev !== undefined && prev !== "," && prev !== "\n" && !OPENING.has(prev)
 		);
 	}
-	if (shape.sibling[at] !== true) return false;
-	return (
-		SIBLING_COMMA.has(ext) || (SIBLING_BRACE_COMMA.has(ext) && next === "}")
-	);
+	return shape.sibling[at] === true && SIBLING_COMMA.has(ext);
 }
 
-function closesLoopHeader(tokens: string[], at: number, shape: Shape): boolean {
+function keepsSemicolon(tokens: string[], at: number, shape: Shape): boolean {
+	if (KEEP_SEMICOLON_AFTER.has(tokens[at - 1] ?? "")) return true;
 	if (tokens[at - 1] !== ")") return false;
 	const open = shape.parenOpen[at - 1] ?? -1;
 	return open > 0 && HEADER_WORDS.has(tokens[open - 1] ?? "");
@@ -367,7 +380,7 @@ function normalized(tokens: string[], ext: string): string[] {
 			t === ";" &&
 			JS_LIKE.has(ext) &&
 			tokens[i + 1] === "}" &&
-			!closesLoopHeader(tokens, i, shape)
+			!keepsSemicolon(tokens, i, shape)
 		)
 			return;
 		out.push(swappable(t, ext) ? `"${t.slice(1, -1)}"` : t);
@@ -391,7 +404,7 @@ function lineModeTokens(lines: string[]): Tokenized | null {
 	if (lines.some((l) => UNSAFE_TEXT.test(l) || BLOCK_SCALAR.test(l.trimEnd())))
 		return null;
 	const starts = lines.flatMap((l, n) => (l.trim() === "" ? [] : [n]));
-	return { tokens: starts.map((n) => (lines[n] as string).trim()), starts };
+	return { tokens: lines.map((l) => l.trim()), starts };
 }
 
 function trailingSpace(lines: string[], starts: number[]): string[] {
