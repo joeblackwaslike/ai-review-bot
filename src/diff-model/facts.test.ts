@@ -72,7 +72,7 @@ describe("buildPrFacts", () => {
 			prFiles: [],
 			prFilesComplete: true,
 			title: "Renamed the helper",
-			body: "There are no functional changes. Also a renamed field.",
+			body: "Also a renamed field.",
 		});
 		expect(facts.intentClaims).toEqual([]);
 	});

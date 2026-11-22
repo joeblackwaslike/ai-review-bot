@@ -68,19 +68,37 @@ describe("findRenames", () => {
 
 	it("does not call a re-indented unpaired rename identical", () => {
 		const ops = findRenames([
-			file("billing/old.py", hunk(["gateway.charge(inv)"], []), {
-				status: "removed",
-			}),
-			file("billing/new.py", hunk([], ["    gateway.charge(inv)"]), {
-				status: "added",
-			}),
+			file(
+				"billing/old.py",
+				hunk(
+					["gateway.charge(inv)", "gateway.refund(inv)", "gateway.void(inv)"],
+					[],
+				),
+				{
+					status: "removed",
+				},
+			),
+			file(
+				"billing/new.py",
+				hunk(
+					[],
+					[
+						"    gateway.charge(inv)",
+						"gateway.refund(inv)",
+						"gateway.void(inv)",
+					],
+				),
+				{
+					status: "added",
+				},
+			),
 		]);
 		expect(ops).toHaveLength(1);
 		expect(ops[0]).toMatchObject({ type: "rename", exact: false });
 	});
 
 	it("calls an unpaired rename with identical ordered lines exact", () => {
-		const lines = ["a", "  b", "c"];
+		const lines = ["alpha", "  bravo", "charlie"];
 		const ops = findRenames([
 			file("src/old.ts", hunk(lines, []), { status: "removed" }),
 			file("src/new.ts", hunk([], lines), { status: "added" }),
@@ -90,8 +108,12 @@ describe("findRenames", () => {
 
 	it("does not call a reordered unpaired rename identical", () => {
 		const ops = findRenames([
-			file("src/old.ts", hunk(["a", "b", "c"], []), { status: "removed" }),
-			file("src/new.ts", hunk([], ["c", "b", "a"]), { status: "added" }),
+			file("src/old.ts", hunk(["alpha", "bravo", "charlie"], []), {
+				status: "removed",
+			}),
+			file("src/new.ts", hunk([], ["charlie", "bravo", "alpha"]), {
+				status: "added",
+			}),
 		]);
 		expect(ops[0]).toMatchObject({ exact: false });
 	});
@@ -301,7 +323,13 @@ describe("findMechanical", () => {
 			file("src/a.ts", hunk(["    const a = 1;"], ["const a = 1;"])),
 		]);
 		const imp = findMechanical([
-			file("src/a.ts", hunk([], ['import { x } from "./x.js";'])),
+			file(
+				"src/a.ts",
+				hunk(
+					['import { b } from "./b.js";', 'import { a } from "./a.js";'],
+					['import { a } from "./a.js";', 'import { b } from "./b.js";'],
+				),
+			),
 		]);
 		expect(ws[0]?.reason).toBe("whitespace");
 		expect(imp[0]?.reason).toBe("imports");

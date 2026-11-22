@@ -1,25 +1,4 @@
 {
 	"clean": true,
-	"operations": [
-		{
-			"type": "mechanical",
-			"from": [
-				{
-					"filename": "shop/routes.py",
-					"side": "base",
-					"startLine": 2,
-					"endLine": 2
-				}
-			],
-			"to": [
-				{
-					"filename": "shop/routes.py",
-					"side": "head",
-					"startLine": 2,
-					"endLine": 2
-				}
-			],
-			"divergences": []
-		}
-	]
+	"operations": []
 }

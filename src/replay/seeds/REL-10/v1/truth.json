@@ -44,19 +44,6 @@
 					}
 				}
 			]
-		},
-		{
-			"type": "mechanical",
-			"from": [],
-			"to": [
-				{
-					"filename": "src/refunds.ts",
-					"side": "head",
-					"startLine": 1,
-					"endLine": 1
-				}
-			],
-			"divergences": []
 		}
 	]
 }

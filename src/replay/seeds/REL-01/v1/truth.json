@@ -28,46 +28,6 @@
 				}
 			],
 			"divergences": []
-		},
-		{
-			"type": "mechanical",
-			"from": [
-				{
-					"filename": "src/pricing/checkout.test.ts",
-					"side": "base",
-					"startLine": 3,
-					"endLine": 3
-				}
-			],
-			"to": [
-				{
-					"filename": "src/pricing/checkout.test.ts",
-					"side": "head",
-					"startLine": 3,
-					"endLine": 3
-				}
-			],
-			"divergences": []
-		},
-		{
-			"type": "mechanical",
-			"from": [
-				{
-					"filename": "src/pricing/checkout.ts",
-					"side": "base",
-					"startLine": 1,
-					"endLine": 1
-				}
-			],
-			"to": [
-				{
-					"filename": "src/pricing/checkout.ts",
-					"side": "head",
-					"startLine": 1,
-					"endLine": 2
-				}
-			],
-			"divergences": []
 		}
 	]
 }
