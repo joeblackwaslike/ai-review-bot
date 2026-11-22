@@ -1,0 +1,697 @@
+import { describe, expect, it } from "vitest";
+import type { PushFile } from "../moved-blocks.js";
+import { findRelocations } from "./relocation.js";
+import { verifyRelocation } from "./relocation-check.js";
+import type { Operation } from "./types.js";
+
+function pushFile(filename: string, patch: string): PushFile {
+	return { filename, status: "modified", patch, additions: 0, deletions: 0 };
+}
+
+function moveFiles(
+	base: string[],
+	head: string[],
+	names: [string, string] = ["src/a.ts", "src/b.ts"],
+): PushFile[] {
+	return [
+		pushFile(
+			names[0],
+			[`@@ -10,${base.length} +9,0 @@`, ...base.map((line) => `-${line}`)].join(
+				"\n",
+			),
+		),
+		pushFile(
+			names[1],
+			[`@@ -0,0 +3,${head.length} @@`, ...head.map((line) => `+${line}`)].join(
+				"\n",
+			),
+		),
+	];
+}
+
+function relocation(base: string[], head: string[], names?: [string, string]) {
+	const files = moveFiles(base, head, names);
+	const ops = findRelocations(files);
+	expect(ops).toHaveLength(1);
+	return { files, op: ops[0] as Operation };
+}
+
+function body(count: number): string[] {
+	return Array.from(
+		{ length: count },
+		(_, i) => `  const v${i} = compute(${i}) + offset;`,
+	);
+}
+
+function fn(lines: string[]): string[] {
+	return ["export function applyDiscount(input) {", ...lines, "}"];
+}
+
+function withLine(lines: string[], index: number, text: string): string[] {
+	return lines.map((line, i) => (i === index ? text : line));
+}
+
+function claimedClean(op: Operation): Operation {
+	return { ...op, exact: true, divergences: [] };
+}
+
+describe("verifyRelocation", () => {
+	it("accepts a clean move", () => {
+		const block = fn(body(20));
+		const { files, op } = relocation(block, block);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("accepts a reformatted-only move", () => {
+		const block = fn(body(20));
+		const { files, op } = relocation(
+			block,
+			block.map((line) => `    ${line}`),
+		);
+		expect(op.divergences).toEqual([]);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("accepts a re-indented move containing a single-line template literal", () => {
+		const block = withLine(fn(body(20)), 5, `  const label = \`x \${v}\`;`);
+		const { files, op } = relocation(
+			block,
+			block.map((line) => `    ${line}`),
+		);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("accepts a move whose divergences are all listed", () => {
+		const base = withLine(fn(body(30)), 10, "  const rate = Math.floor(p);");
+		const changed = withLine(base, 10, "  const rate = Math.round(p);");
+		const head = [
+			...changed.slice(0, 20),
+			"  audit(rate);",
+			...changed.slice(20),
+		];
+		const { files, op } = relocation(base, head);
+		expect(op.divergences.length).toBeGreaterThanOrEqual(2);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("rejects a claim that omits a changed line", () => {
+		const base = fn(body(30));
+		const head = withLine(base, 10, "  const rate = Math.round(p);");
+		const { files, op } = relocation(base, head);
+		expect(op.divergences).toHaveLength(1);
+		expect(verifyRelocation(claimedClean(op), files)).toBe(false);
+	});
+
+	it("rejects a template literal whose inner whitespace changed when the claim says unchanged", () => {
+		const base = fn([
+			...body(8),
+			"  const sql = `",
+			"    select id",
+			"    from t",
+			"  `;",
+			...body(8),
+		]);
+		const head = withLine(base, 10, "        select id");
+		const { files, op } = relocation(base, head);
+		expect(verifyRelocation(claimedClean(op), files)).toBe(false);
+	});
+
+	it("rejects a claim that omits a deleted guard", () => {
+		const base = fn(body(30));
+		const head = [...base.slice(0, 12), ...base.slice(13)];
+		const { files, op } = relocation(base, head);
+		expect(op.divergences.map((d) => d.kind)).toContain("removed");
+		expect(verifyRelocation(claimedClean(op), files)).toBe(false);
+	});
+
+	it("rejects a listed divergence the lines do not support", () => {
+		const block = fn(body(20));
+		const { files, op } = relocation(block, block);
+		const from = op.from[0] as Operation["from"][0];
+		const to = op.to[0] as Operation["to"][0];
+		const bogus: Operation = {
+			...op,
+			exact: false,
+			divergences: [
+				{
+					kind: "changed",
+					class: "code",
+					base: { ...from, startLine: 12, endLine: 12 },
+					head: { ...to, startLine: 5, endLine: 5 },
+				},
+			],
+		};
+		expect(verifyRelocation(bogus, files)).toBe(false);
+	});
+
+	it("rejects a reordered block claimed clean", () => {
+		const block = fn(body(20));
+		const swapped = block.map((line, i) =>
+			i === 5 ? (block[6] as string) : i === 6 ? (block[5] as string) : line,
+		);
+		const { files, op } = relocation(block, swapped);
+		expect(verifyRelocation(claimedClean(op), files)).toBe(false);
+	});
+
+	it("rejects a changed string-literal interior claimed clean", () => {
+		const base = withLine(fn(body(20)), 5, '  const s = "a  b";');
+		const head = withLine(base, 5, '  const s = "a b";');
+		const { files, op } = relocation(base, head);
+		expect(verifyRelocation(claimedClean(op), files)).toBe(false);
+	});
+
+	it("accepts a re-indented line that contains a string", () => {
+		const block = withLine(fn(body(20)), 5, '  const s = "a  b";');
+		const { files, op } = relocation(
+			block,
+			block.map((line) => `    ${line}`),
+		);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("rejects x + +y changed to x ++y claimed clean", () => {
+		const base = withLine(fn(body(20)), 5, "  const z = x + +y;");
+		const head = withLine(base, 5, "  const z = x ++y;");
+		const { files, op } = relocation(base, head);
+		expect(verifyRelocation(claimedClean(op), files)).toBe(false);
+	});
+
+	describe("forged claims", () => {
+		function changedMove() {
+			const base = fn(body(30));
+			const head = withLine(base, 10, "  const rate = Math.round(p);");
+			const { files, op } = relocation(base, head);
+			const [divergence] = op.divergences;
+			expect(op.divergences).toHaveLength(1);
+			expect(verifyRelocation(op, files)).toBe(true);
+			return {
+				files,
+				op,
+				divergence: divergence as Operation["divergences"][0],
+			};
+		}
+
+		function withDivergence(
+			op: Operation,
+			divergence: Operation["divergences"][0],
+			extra: Operation["divergences"] = [],
+		): Operation {
+			return { ...op, divergences: [divergence, ...extra] };
+		}
+
+		it("rejects a span in a file that is not in the patch set", () => {
+			const { files, op, divergence } = changedMove();
+			const forged = withDivergence(op, {
+				...divergence,
+				base: {
+					...(divergence.base as Operation["from"][0]),
+					filename: "src/nope.ts",
+				},
+			});
+			expect(verifyRelocation(forged, files)).toBe(false);
+			const missing: Operation = {
+				...op,
+				from: [
+					{ ...(op.from[0] as Operation["from"][0]), filename: "src/nope.ts" },
+				],
+			};
+			expect(verifyRelocation(missing, files)).toBe(false);
+		});
+
+		it("rejects a claim whose spans are all missing from the patch set or off the changed lines", () => {
+			const { files, op } = changedMove();
+			const from = op.from[0] as Operation["from"][0];
+			const to = op.to[0] as Operation["to"][0];
+			const absent: Operation = {
+				...op,
+				divergences: [],
+				from: [{ ...from, filename: "src/nope-a.ts" }],
+				to: [{ ...to, filename: "src/nope-b.ts" }],
+			};
+			const offLines: Operation = {
+				...op,
+				divergences: [],
+				from: [{ ...from, startLine: 900, endLine: 930 }],
+				to: [{ ...to, startLine: 900, endLine: 930 }],
+			};
+			expect(verifyRelocation(absent, files)).toBe(false);
+			expect(verifyRelocation(offLines, files)).toBe(false);
+		});
+
+		it("rejects a span on lines that are not changed lines of the patch", () => {
+			const { files, op, divergence } = changedMove();
+			const forged = withDivergence(op, {
+				...divergence,
+				head: {
+					...(divergence.head as Operation["to"][0]),
+					startLine: 900,
+					endLine: 900,
+				},
+			});
+			expect(verifyRelocation(forged, files)).toBe(false);
+		});
+
+		it("rejects a base span that points into the head file", () => {
+			const { files, op, divergence } = changedMove();
+			const forged = withDivergence(op, {
+				...divergence,
+				base: divergence.head,
+			});
+			expect(verifyRelocation(forged, files)).toBe(false);
+		});
+
+		it("rejects a divergence span covering more than one line", () => {
+			const { files, op, divergence } = changedMove();
+			const base = divergence.base as Operation["from"][0];
+			const forged = withDivergence(op, {
+				...divergence,
+				base: { ...base, endLine: base.endLine + 1 },
+			});
+			expect(verifyRelocation(forged, files)).toBe(false);
+		});
+
+		it("rejects the same line claimed by two divergences", () => {
+			const { files, op, divergence } = changedMove();
+			expect(
+				verifyRelocation(withDivergence(op, divergence, [divergence]), files),
+			).toBe(false);
+		});
+
+		it("rejects a divergence with a wrong original text", () => {
+			const { files, op, divergence } = changedMove();
+			const forged = withDivergence(op, {
+				...divergence,
+				original: "  const rate = somethingElse(p);",
+			});
+			expect(verifyRelocation(forged, files)).toBe(false);
+		});
+
+		it("rejects a claim with an extra unlisted trailing line on the head side", () => {
+			const block = fn(body(20));
+			const { op } = relocation(block, block);
+			const files = moveFiles(block, [...block, "  extra();"]);
+			const to = op.to[0] as Operation["to"][0];
+			const forged: Operation = {
+				...op,
+				to: [{ ...to, endLine: to.endLine + 1 }],
+			};
+			expect(verifyRelocation(forged, files)).toBe(false);
+		});
+
+		it("rejects inserted or removed claimed over lines that are actually paired", () => {
+			const block = fn(body(20));
+			const { files, op } = relocation(block, block);
+			const from = op.from[0] as Operation["from"][0];
+			const to = op.to[0] as Operation["to"][0];
+			const inserted: Operation = {
+				...op,
+				exact: false,
+				divergences: [
+					{
+						kind: "inserted",
+						class: "code",
+						head: {
+							...to,
+							startLine: to.startLine + 3,
+							endLine: to.startLine + 3,
+						},
+					},
+				],
+			};
+			const removed: Operation = {
+				...op,
+				exact: false,
+				divergences: [
+					{
+						kind: "removed",
+						class: "code",
+						base: {
+							...from,
+							startLine: from.startLine + 3,
+							endLine: from.startLine + 3,
+						},
+					},
+				],
+			};
+			expect(verifyRelocation(inserted, files)).toBe(false);
+			expect(verifyRelocation(removed, files)).toBe(false);
+		});
+	});
+
+	describe("indentation-sensitive and heredoc content", () => {
+		it("reports one dedented line of a Python move as a divergence and rejects a clean claim", () => {
+			const base = body(20);
+			const head = withLine(base, 8, "const v8 = compute(8) + offset;");
+			const { files, op } = relocation(base, head, ["a.py", "b.py"]);
+			expect(op.divergences.length).toBeGreaterThanOrEqual(1);
+			expect(verifyRelocation(op, files)).toBe(true);
+			expect(verifyRelocation(claimedClean(op), files)).toBe(false);
+		});
+
+		it("rejects a shell continuation broken by trailing whitespace claimed clean", () => {
+			const base = withLine(body(10), 4, "  cmd --flag \\");
+			const head = withLine(base, 4, "  cmd --flag \\ ");
+			const { files, op } = relocation(base, head, ["a.sh", "b.sh"]);
+			expect(verifyRelocation(claimedClean(op), files)).toBe(false);
+		});
+
+		it("does not treat a shell heredoc whose inner whitespace changed as exact", () => {
+			const base = [
+				...body(6),
+				"cat <<EOF",
+				"  inner   text",
+				"EOF",
+				...body(6),
+			];
+			const head = withLine(base, 7, "  inner text");
+			const { files, op } = relocation(base, head, ["a.sh", "b.sh"]);
+			expect(op.exact).toBe(false);
+			expect(verifyRelocation(claimedClean(op), files)).toBe(false);
+		});
+	});
+});
+
+function pairBlock(
+	base: string[],
+	head: string[],
+	at: number[],
+): [string[], string[]] {
+	const b = fn(body(30));
+	const h = fn(body(30));
+	at.forEach((index, k) => {
+		b.splice(index, 0, base[k] as string);
+		h.splice(index, 0, head[k] as string);
+	});
+	return [b, h];
+}
+
+function reclassed(
+	op: Operation,
+	cls: Operation["divergences"][number]["class"],
+) {
+	return {
+		...op,
+		divergences: op.divergences.map((d) => ({ ...d, class: cls })),
+	};
+}
+
+function codeChange() {
+	return relocation(
+		fn(body(30)),
+		withLine(fn(body(30)), 15, "  const v14 = evil() + offset;"),
+	);
+}
+
+describe("verifyRelocation divergence classes", () => {
+	it("accepts a real comment-only divergence", () => {
+		const base = fn(body(30));
+		base.splice(15, 0, "  // apply the discount");
+		const head = withLine(base, 15, "  // apply discount");
+		const { files, op } = relocation(base, head);
+		expect(op.divergences[0]?.class).toBe("comment-only");
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("accepts a real rename and its distinct-identifier weight", () => {
+		const [base, head] = pairBlock(
+			["  f(alpha);", "  g(alpha);"],
+			["  f(first);", "  g(first);"],
+			[10, 20],
+		);
+		const { files, op } = relocation(base, head);
+		expect(op.divergences.every((d) => d.class === "rename")).toBe(true);
+		expect(op.reviewWeight).toBe(1);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("drops a forged comment-only class on a real code change", () => {
+		const { files, op } = codeChange();
+		expect(op.divergences[0]?.class).toBe("code");
+		const forged = { ...reclassed(op, "comment-only"), reviewWeight: 0 };
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("drops a forged rename class on a real code change", () => {
+		const { files, op } = codeChange();
+		const forged = { ...reclassed(op, "rename"), reviewWeight: 0 };
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("drops an exact claim that lists a divergence", () => {
+		const { files, op } = codeChange();
+		expect(verifyRelocation({ ...op, exact: true }, files)).toBe(false);
+	});
+
+	it("drops a claim whose reviewWeight differs from the verified divergences", () => {
+		const { files, op } = codeChange();
+		expect(verifyRelocation({ ...op, reviewWeight: 0 }, files)).toBe(false);
+	});
+
+	it("drops a python floor-division change forged as comment-only", () => {
+		const [base, head] = pairBlock(["  x = a // b"], ["  x = a // c"], [15]);
+		const { files, op } = relocation(base, head, ["src/a.py", "src/b.py"]);
+		const forged = { ...reclassed(op, "comment-only"), reviewWeight: 0 };
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("drops a shell URL change forged as comment-only", () => {
+		const [base, head] = pairBlock(
+			["  curl http://good.example.com/x"],
+			["  curl http://evil.example.com/x"],
+			[15],
+		);
+		const { files, op } = relocation(base, head, ["src/a.sh", "src/b.sh"]);
+		const forged = { ...reclassed(op, "comment-only"), reviewWeight: 0 };
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("drops a swap forged as a rename", () => {
+		const [base, head] = pairBlock(
+			["  f(a, b);", "  g(a, b);"],
+			["  f(b, a);", "  g(b, a);"],
+			[10, 20],
+		);
+		const { files, op } = relocation(base, head);
+		const forged = { ...reclassed(op, "rename"), reviewWeight: 2 };
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("drops a merge forged as a rename", () => {
+		const [base, head] = pairBlock(
+			["  f(a, b);", "  g(a, b);"],
+			["  f(b, b);", "  g(b, b);"],
+			[10, 20],
+		);
+		const { files, op } = relocation(base, head);
+		const forged = { ...reclassed(op, "rename"), reviewWeight: 1 };
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("drops a literal flip forged as a rename", () => {
+		const [base, head] = pairBlock(
+			["  done = true;", "  flag(true);"],
+			["  done = false;", "  flag(false);"],
+			[10, 20],
+		);
+		const { files, op } = relocation(base, head);
+		const forged = { ...reclassed(op, "rename"), reviewWeight: 1 };
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("drops a rename that leaves the old name in the head span", () => {
+		const [base, head] = pairBlock(
+			["  f(a);", "  g(a);", "  h(a);"],
+			["  f(z);", "  g(z);", "  h(a);"],
+			[8, 14, 20],
+		);
+		const { files, op } = relocation(base, head);
+		const forged = { ...reclassed(op, "rename"), reviewWeight: 1 };
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+});
+
+describe("verifyRelocation rename guards", () => {
+	it("drops a rename claim when an inserted head line still uses the old name", () => {
+		const [base, head] = pairBlock(
+			["  f(a);", "  g(a);"],
+			["  f(z);", "  g(z);"],
+			[8, 20],
+		);
+		const clean = relocation(base, head);
+		const dirty = [...head];
+		dirty.splice(25, 0, "  k(a);");
+		const files = moveFiles(base, dirty);
+		const spanTo = clean.op.to[0] as Operation["to"][number];
+		const forged: Operation = {
+			...clean.op,
+			to: [{ ...spanTo, endLine: spanTo.endLine + 1 }],
+			divergences: [
+				...clean.op.divergences,
+				{
+					kind: "inserted",
+					class: "code",
+					head: {
+						filename: "src/b.ts",
+						side: "head",
+						startLine: spanTo.startLine + 25,
+						endLine: spanTo.startLine + 25,
+						shown: "full",
+					},
+				},
+			],
+			reviewWeight: 2,
+		};
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("drops two old names collapsed into one new name forged as a rename", () => {
+		const [base, head] = pairBlock(
+			["  f(a, b);", "  g(a, b);"],
+			["  f(c, c);", "  g(c, c);"],
+			[10, 20],
+		);
+		const { files, op } = relocation(base, head);
+		const forged = { ...reclassed(op, "rename"), reviewWeight: 2 };
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("drops a rename claim that covers only some base occurrences of the old name", () => {
+		const base = fn(body(30));
+		base.splice(8, 0, "  f(a);");
+		base.splice(14, 0, "  g(a);");
+		base.splice(20, 0, "  h(a);");
+		const head = fn(body(30));
+		head.splice(8, 0, "  f(z);");
+		head.splice(14, 0, "  g(z);");
+		const { files, op } = relocation(base, head);
+		expect(op.divergences.map((d) => d.kind)).toEqual([
+			"changed",
+			"changed",
+			"removed",
+		]);
+		const forged: Operation = {
+			...op,
+			divergences: op.divergences.map((d) =>
+				d.kind === "changed" ? { ...d, class: "rename" as const } : d,
+			),
+			reviewWeight: 2,
+		};
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("drops a claim carrying a class the checker does not know", () => {
+		const { files, op } = codeChange();
+		const forged = {
+			...op,
+			divergences: op.divergences.map((d) => ({ ...d, class: "trivial" })),
+		} as unknown as Operation;
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("accepts a real python hash-comment change as comment-only", () => {
+		const [base, head] = pairBlock(["  # old note"], ["  # new note"], [15]);
+		const { files, op } = relocation(base, head, ["src/a.py", "src/b.py"]);
+		expect(op.divergences.map((d) => d.class)).toEqual(["comment-only"]);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+});
+
+describe("verifyRelocation comment allowlist", () => {
+	it.each([
+		[
+			"src/a.css",
+			"src/b.css",
+			"  background: url(http://a/x.png);",
+			"  background: url(http://b/x.png);",
+		],
+		["docs/a.md", "docs/b.md", "  [docs](http://a)", "  [docs](http://b)"],
+		[
+			"web/a.html",
+			"web/b.html",
+			'  <a href="http://a/x">go</a>',
+			'  <a href="http://b/x">go</a>',
+		],
+		[
+			"notes/a.txt",
+			"notes/b.txt",
+			"  see http://a/x now",
+			"  see http://b/x now",
+		],
+		["lib/a.zzz", "lib/b.zzz", "  see http://a/x now", "  see http://b/x now"],
+	])("drops a changed // line in %s forged as comment-only", (from, to, before, after) => {
+		const [base, head] = pairBlock([before], [after], [15]);
+		const { files, op } = relocation(base, head, [from, to]);
+		expect(op.divergences.map((d) => d.class)).toEqual(["code"]);
+		const forged = { ...reclassed(op, "comment-only"), reviewWeight: 0 };
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it.each([
+		["ts"],
+		["go"],
+		["java"],
+	])("accepts a real // comment change in a .%s file", (ext) => {
+		const [base, head] = pairBlock(["  // old note"], ["  // new note"], [15]);
+		const { files, op } = relocation(base, head, [
+			`src/a.${ext}`,
+			`src/b.${ext}`,
+		]);
+		expect(op.divergences.map((d) => d.class)).toEqual(["comment-only"]);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+});
+
+describe("verifyRelocation oversized lines", () => {
+	const long = `  const big = "${"x".repeat(2100)}";`;
+
+	it("verifies an exact claim containing a very long line", () => {
+		const block = withLine(fn(body(30)), 15, long);
+		const { files, op } = relocation(block, block);
+		expect(op.exact).toBe(true);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("verifies a code-divergence claim containing a very long line", () => {
+		const base = withLine(fn(body(30)), 15, long);
+		const head = withLine(base, 5, "  const v4 = evil() + offset;");
+		const { files, op } = relocation(base, head);
+		expect(op.divergences.map((d) => d.class)).toEqual(["code"]);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("still drops a rename claim over an oversized line", () => {
+		const base = withLine(fn(body(30)), 15, long);
+		base.splice(8, 0, "  f(a);");
+		base.splice(20, 0, "  g(a);");
+		const head = base.map((l) => l.replace("(a)", "(z)"));
+		const { files, op } = relocation(base, head);
+		const forged = { ...reclassed(op, "rename"), reviewWeight: 1 };
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+});
+
+describe("verifyRelocation block comment allowlist", () => {
+	it("drops a changed /* */ line in a .md file forged as comment-only", () => {
+		const [base, head] = pairBlock(["  /* old */"], ["  /* new */"], [15]);
+		const { files, op } = relocation(base, head, ["docs/a.md", "docs/b.md"]);
+		const forged = { ...reclassed(op, "comment-only"), reviewWeight: 0 };
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("accepts a real /* */ comment change in a .css file", () => {
+		const [base, head] = pairBlock(["  /* old */"], ["  /* new */"], [15]);
+		const { files, op } = relocation(base, head, ["src/a.css", "src/b.css"]);
+		expect(op.divergences.map((d) => d.class)).toEqual(["comment-only"]);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+});
+
+describe("verifyRelocation whole-line // allowlist", () => {
+	it("drops a whole-line // change in a .md file forged as comment-only", () => {
+		const [base, head] = pairBlock(["  // old"], ["  // new"], [15]);
+		const { files, op } = relocation(base, head, ["docs/a.md", "docs/b.md"]);
+		expect(op.divergences.map((d) => d.class)).toEqual(["code"]);
+		const forged = { ...reclassed(op, "comment-only"), reviewWeight: 0 };
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+});
