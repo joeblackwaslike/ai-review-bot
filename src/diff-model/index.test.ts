@@ -90,4 +90,64 @@ describe("buildDiffModel", () => {
 		buildDiffModel({ scopeFiles: files, prFiles: files, ...meta });
 		expect(performance.now() - start).toBeLessThan(1000);
 	});
+
+	it("takes operations from scopeFiles and facts from prFiles", () => {
+		vi.mocked(verifyRelocation).mockReturnValue(true);
+		const scopeFiles: PushFile[] = [
+			{ filename: "src/c.ts", status: "modified", additions: 1, deletions: 0 },
+		];
+		const prFiles = [
+			...moveFiles(),
+			{
+				filename: "src/c.test.ts",
+				status: "added",
+				additions: 1,
+				deletions: 0,
+			},
+		];
+		const model = buildDiffModel({ scopeFiles, prFiles, ...meta });
+		expect(model.facts.testsChanged).toBe(true);
+		expect(model.operations).toEqual([]);
+		expect(model.files.map((f) => f.filename)).toEqual(["src/c.ts"]);
+	});
+
+	it("reports both a rename and a whitespace hunk", () => {
+		const lines = [
+			"const alpha = 1;",
+			"const bravo = 2;",
+			"const charlie = 3;",
+		];
+		const files: PushFile[] = [
+			{
+				filename: "src/old.ts",
+				status: "removed",
+				patch: ["@@ -1,3 +0,0 @@", ...lines.map((l) => `-${l}`)].join("\n"),
+				additions: 0,
+				deletions: 3,
+			},
+			{
+				filename: "src/new.ts",
+				status: "added",
+				patch: ["@@ -0,0 +1,3 @@", ...lines.map((l) => `+${l}`)].join("\n"),
+				additions: 3,
+				deletions: 0,
+			},
+			{
+				filename: "src/fmt.ts",
+				status: "modified",
+				patch: "@@ -1,1 +1,1 @@\n-    run();\n+run();",
+				additions: 1,
+				deletions: 1,
+			},
+		];
+		const model = buildDiffModel({
+			scopeFiles: files,
+			prFiles: files,
+			...meta,
+		});
+		expect(model.operations.map((o) => o.type).sort()).toEqual([
+			"mechanical",
+			"rename",
+		]);
+	});
 });

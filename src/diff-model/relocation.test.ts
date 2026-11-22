@@ -253,4 +253,44 @@ describe("findRelocations", () => {
 		]);
 		expect(ops.some((op) => op.exact)).toBe(false);
 	});
+
+	it("widens a block over a changed signature line as one changed divergence", () => {
+		const base = fn(body(30));
+		const head = withLine(
+			base,
+			0,
+			"export function applyDiscount(input, opts) {",
+		);
+		const ops = move(base, head);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]?.from[0]).toMatchObject({ startLine: 10 });
+		expect(ops[0]?.to[0]).toMatchObject({ startLine: 3 });
+		expect(ops[0]?.divergences).toHaveLength(1);
+		expect(ops[0]?.divergences[0]).toMatchObject({
+			kind: "changed",
+			class: "code",
+			base: { startLine: 10, endLine: 10 },
+			head: { startLine: 3, endLine: 3 },
+		});
+		expect(ops[0]?.divergences[0]?.original).toContain("applyDiscount(input)");
+	});
+
+	it("falls back to exact runs when the differing middle is too large to align", () => {
+		const edge = body(6);
+		const baseMiddle = Array.from({ length: 4001 }, (_, i) => `  b_${i}();`);
+		const headMiddle = Array.from(
+			{ length: 4001 },
+			(_, i) => `  let h${i} = ${i} * 2;`,
+		);
+		const start = performance.now();
+		const ops = move(
+			[...edge, ...baseMiddle, ...edge.map((l) => `${l} // end`)],
+			[...edge, ...headMiddle, ...edge.map((l) => `${l} // end`)],
+		);
+		expect(performance.now() - start).toBeLessThan(10_000);
+		expect(ops.length).toBeGreaterThanOrEqual(2);
+		expect(ops.every((op) => op.exact && op.divergences.length === 0)).toBe(
+			true,
+		);
+	});
 });

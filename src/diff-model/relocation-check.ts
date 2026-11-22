@@ -1,4 +1,5 @@
 import { isIndentSensitive, type PushFile } from "../moved-blocks.js";
+import { hasBrokenContinuation } from "./lexical.js";
 import type { Divergence, Operation, Span } from "./types.js";
 
 const HUNK_HEADER = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
@@ -158,7 +159,10 @@ function interior(line: string): string {
 
 function pairsUp(base: Entry, head: Entry): boolean {
 	if (base.text === head.text) return true;
-	const safe = (entry: Entry) => !entry.inLiteral && !entry.indentSensitive;
+	const safe = (entry: Entry) =>
+		!entry.inLiteral &&
+		!entry.indentSensitive &&
+		!hasBrokenContinuation(entry.text);
 	return (
 		safe(base) && safe(head) && interior(base.text) === interior(head.text)
 	);

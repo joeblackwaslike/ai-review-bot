@@ -54,4 +54,26 @@ describe("buildPrFacts", () => {
 			},
 		]);
 	});
+
+	it("attributes a title claim to the title source", () => {
+		const facts = buildPrFacts({
+			prFiles: [],
+			prFilesComplete: true,
+			title: "Refactor only: split module",
+			body: null,
+		});
+		expect(facts.intentClaims).toEqual([
+			{ phrase: "refactor only", source: "title", start: 0, end: 13 },
+		]);
+	});
+
+	it("does not match a phrase inside a longer word or a negation", () => {
+		const facts = buildPrFacts({
+			prFiles: [],
+			prFilesComplete: true,
+			title: "Renamed the helper",
+			body: "There are no functional changes. Also a renamed field.",
+		});
+		expect(facts.intentClaims).toEqual([]);
+	});
 });

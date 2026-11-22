@@ -8,16 +8,20 @@ function pushFile(filename: string, patch: string): PushFile {
 	return { filename, status: "modified", patch, additions: 0, deletions: 0 };
 }
 
-function moveFiles(base: string[], head: string[]): PushFile[] {
+function moveFiles(
+	base: string[],
+	head: string[],
+	names: [string, string] = ["src/a.ts", "src/b.ts"],
+): PushFile[] {
 	return [
 		pushFile(
-			"src/a.ts",
+			names[0],
 			[`@@ -10,${base.length} +9,0 @@`, ...base.map((line) => `-${line}`)].join(
 				"\n",
 			),
 		),
 		pushFile(
-			"src/b.ts",
+			names[1],
 			[`@@ -0,0 +3,${head.length} @@`, ...head.map((line) => `+${line}`)].join(
 				"\n",
 			),
@@ -25,8 +29,8 @@ function moveFiles(base: string[], head: string[]): PushFile[] {
 	];
 }
 
-function relocation(base: string[], head: string[]) {
-	const files = moveFiles(base, head);
+function relocation(base: string[], head: string[], names?: [string, string]) {
+	const files = moveFiles(base, head, names);
 	const ops = findRelocations(files);
 	expect(ops).toHaveLength(1);
 	return { files, op: ops[0] as Operation };
@@ -170,5 +174,199 @@ describe("verifyRelocation", () => {
 		const head = withLine(base, 5, "  const z = x ++y;");
 		const { files, op } = relocation(base, head);
 		expect(verifyRelocation(claimedClean(op), files)).toBe(false);
+	});
+
+	describe("forged claims", () => {
+		function changedMove() {
+			const base = fn(body(30));
+			const head = withLine(base, 10, "  const rate = Math.round(p);");
+			const { files, op } = relocation(base, head);
+			const [divergence] = op.divergences;
+			expect(op.divergences).toHaveLength(1);
+			expect(verifyRelocation(op, files)).toBe(true);
+			return {
+				files,
+				op,
+				divergence: divergence as Operation["divergences"][0],
+			};
+		}
+
+		function withDivergence(
+			op: Operation,
+			divergence: Operation["divergences"][0],
+			extra: Operation["divergences"] = [],
+		): Operation {
+			return { ...op, divergences: [divergence, ...extra] };
+		}
+
+		it("rejects a span in a file that is not in the patch set", () => {
+			const { files, op, divergence } = changedMove();
+			const forged = withDivergence(op, {
+				...divergence,
+				base: {
+					...(divergence.base as Operation["from"][0]),
+					filename: "src/nope.ts",
+				},
+			});
+			expect(verifyRelocation(forged, files)).toBe(false);
+			const missing: Operation = {
+				...op,
+				from: [
+					{ ...(op.from[0] as Operation["from"][0]), filename: "src/nope.ts" },
+				],
+			};
+			expect(verifyRelocation(missing, files)).toBe(false);
+		});
+
+		it("rejects a claim whose spans are all missing from the patch set or off the changed lines", () => {
+			const { files, op } = changedMove();
+			const from = op.from[0] as Operation["from"][0];
+			const to = op.to[0] as Operation["to"][0];
+			const absent: Operation = {
+				...op,
+				divergences: [],
+				from: [{ ...from, filename: "src/nope-a.ts" }],
+				to: [{ ...to, filename: "src/nope-b.ts" }],
+			};
+			const offLines: Operation = {
+				...op,
+				divergences: [],
+				from: [{ ...from, startLine: 900, endLine: 930 }],
+				to: [{ ...to, startLine: 900, endLine: 930 }],
+			};
+			expect(verifyRelocation(absent, files)).toBe(false);
+			expect(verifyRelocation(offLines, files)).toBe(false);
+		});
+
+		it("rejects a span on lines that are not changed lines of the patch", () => {
+			const { files, op, divergence } = changedMove();
+			const forged = withDivergence(op, {
+				...divergence,
+				head: {
+					...(divergence.head as Operation["to"][0]),
+					startLine: 900,
+					endLine: 900,
+				},
+			});
+			expect(verifyRelocation(forged, files)).toBe(false);
+		});
+
+		it("rejects a base span that points into the head file", () => {
+			const { files, op, divergence } = changedMove();
+			const forged = withDivergence(op, {
+				...divergence,
+				base: divergence.head,
+			});
+			expect(verifyRelocation(forged, files)).toBe(false);
+		});
+
+		it("rejects a divergence span covering more than one line", () => {
+			const { files, op, divergence } = changedMove();
+			const base = divergence.base as Operation["from"][0];
+			const forged = withDivergence(op, {
+				...divergence,
+				base: { ...base, endLine: base.endLine + 1 },
+			});
+			expect(verifyRelocation(forged, files)).toBe(false);
+		});
+
+		it("rejects the same line claimed by two divergences", () => {
+			const { files, op, divergence } = changedMove();
+			expect(
+				verifyRelocation(withDivergence(op, divergence, [divergence]), files),
+			).toBe(false);
+		});
+
+		it("rejects a divergence with a wrong original text", () => {
+			const { files, op, divergence } = changedMove();
+			const forged = withDivergence(op, {
+				...divergence,
+				original: "  const rate = somethingElse(p);",
+			});
+			expect(verifyRelocation(forged, files)).toBe(false);
+		});
+
+		it("rejects a claim with an extra unlisted trailing line on the head side", () => {
+			const block = fn(body(20));
+			const { op } = relocation(block, block);
+			const files = moveFiles(block, [...block, "  extra();"]);
+			const to = op.to[0] as Operation["to"][0];
+			const forged: Operation = {
+				...op,
+				to: [{ ...to, endLine: to.endLine + 1 }],
+			};
+			expect(verifyRelocation(forged, files)).toBe(false);
+		});
+
+		it("rejects inserted or removed claimed over lines that are actually paired", () => {
+			const block = fn(body(20));
+			const { files, op } = relocation(block, block);
+			const from = op.from[0] as Operation["from"][0];
+			const to = op.to[0] as Operation["to"][0];
+			const inserted: Operation = {
+				...op,
+				exact: false,
+				divergences: [
+					{
+						kind: "inserted",
+						class: "code",
+						head: {
+							...to,
+							startLine: to.startLine + 3,
+							endLine: to.startLine + 3,
+						},
+					},
+				],
+			};
+			const removed: Operation = {
+				...op,
+				exact: false,
+				divergences: [
+					{
+						kind: "removed",
+						class: "code",
+						base: {
+							...from,
+							startLine: from.startLine + 3,
+							endLine: from.startLine + 3,
+						},
+					},
+				],
+			};
+			expect(verifyRelocation(inserted, files)).toBe(false);
+			expect(verifyRelocation(removed, files)).toBe(false);
+		});
+	});
+
+	describe("indentation-sensitive and heredoc content", () => {
+		it("reports one dedented line of a Python move as a divergence and rejects a clean claim", () => {
+			const base = body(20);
+			const head = withLine(base, 8, "const v8 = compute(8) + offset;");
+			const { files, op } = relocation(base, head, ["a.py", "b.py"]);
+			expect(op.divergences.length).toBeGreaterThanOrEqual(1);
+			expect(verifyRelocation(op, files)).toBe(true);
+			expect(verifyRelocation(claimedClean(op), files)).toBe(false);
+		});
+
+		it("rejects a shell continuation broken by trailing whitespace claimed clean", () => {
+			const base = withLine(body(10), 4, "  cmd --flag \\");
+			const head = withLine(base, 4, "  cmd --flag \\ ");
+			const { files, op } = relocation(base, head, ["a.sh", "b.sh"]);
+			expect(verifyRelocation(claimedClean(op), files)).toBe(false);
+		});
+
+		it("does not treat a shell heredoc whose inner whitespace changed as exact", () => {
+			const base = [
+				...body(6),
+				"cat <<EOF",
+				"  inner   text",
+				"EOF",
+				...body(6),
+			];
+			const head = withLine(base, 7, "  inner text");
+			const { files, op } = relocation(base, head, ["a.sh", "b.sh"]);
+			expect(op.exact).toBe(false);
+			expect(verifyRelocation(claimedClean(op), files)).toBe(false);
+		});
 	});
 });
