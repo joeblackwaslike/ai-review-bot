@@ -200,16 +200,18 @@ describe("token pass", () => {
 			[...exact, "", ...PRETTIER_BASE],
 			[...exact, "", ...PRETTIER_HEAD],
 		);
-		const claimed = ops.flatMap((op) =>
-			(op.to as { startLine: number; endLine: number }[]).flatMap((s) =>
-				Array.from(
-					{ length: s.endLine - s.startLine + 1 },
-					(_, k) => s.startLine + k,
-				),
-			),
-		);
-		expect(new Set(claimed).size).toBe(claimed.length);
-		expect(ops.length).toBeGreaterThanOrEqual(1);
+		expect(ops).toHaveLength(2);
+		expect(ops.map((op) => [op.from[0], op.to[0]])).toMatchObject([
+			[
+				{ startLine: 10, endLine: 16 },
+				{ startLine: 3, endLine: 9 },
+			],
+			[
+				{ startLine: 17, endLine: 17 },
+				{ startLine: 10, endLine: 16 },
+			],
+		]);
+		expect(ops.every((op) => op.exact)).toBe(true);
 	});
 
 	it("returns an exact operation with no divergences for a reformat-only move", () => {

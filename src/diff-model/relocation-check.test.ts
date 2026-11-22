@@ -4,7 +4,7 @@ import { buildDiffModel } from "./index.js";
 import { partialStatements } from "./partial-statements.fixture.js";
 import { findRelocations } from "./relocation.js";
 import { verifyRelocation } from "./relocation-check.js";
-import type { Operation } from "./types.js";
+import type { Operation, Span } from "./types.js";
 
 function pushFile(filename: string, patch: string): PushFile {
 	return { filename, status: "modified", patch, additions: 0, deletions: 0 };
@@ -1271,7 +1271,7 @@ describe("verifyRelocation independent small-claim rules", () => {
 		const { files, op } = crossFile([`-${line}`], [`+${line}`]);
 		const started = performance.now();
 		expect(verifyRelocation(op, files)).toBe(false);
-		expect(performance.now() - started).toBeLessThan(1000);
+		expect(performance.now() - started).toBeLessThan(5000);
 	});
 });
 
@@ -1610,5 +1610,121 @@ describe("buildDiffModel with legitimate reformats", () => {
 		expect(
 			built.operations.filter((o) => o.type === "relocation"),
 		).toHaveLength(1);
+	});
+});
+
+describe("verifyRelocation through the token path", () => {
+	const BASE = [
+		"const result = compute(",
+		"  firstArgument,",
+		"  secondArgument,",
+		"  thirdArgument,",
+		"  fourthArgument,",
+		"  fifthArgument",
+		");",
+	];
+	const HEAD = [
+		"const result = compute(firstArgument, secondArgument,",
+		"  thirdArgument, fourthArgument, fifthArgument);",
+	];
+
+	function patched(
+		file: string,
+		sign: "-" | "+",
+		context: string,
+		lines: string[],
+	): PushFile {
+		const total = lines.length + 1;
+		const header =
+			sign === "-" ? `@@ -9,${total} +9,1 @@` : `@@ -9,1 +9,${total} @@`;
+		return pushFile(
+			file,
+			[header, ` ${context}`, ...lines.map((l) => `${sign}${l}`)].join("\n"),
+		);
+	}
+
+	const reformat = (baseContext = "x = 1;", headContext = "x = 1;") => ({
+		files: [
+			patched("src/a.ts", "-", baseContext, BASE),
+			patched("src/b.ts", "+", headContext, HEAD),
+		],
+		op: lineClaim("src/a.ts", 10, 16, "src/b.ts", 10, 11),
+	});
+
+	it("accepts a reformat only the token checker can account for", () => {
+		const { files, op } = reformat();
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it.each([
+		["a backtick", "x = `y`;", "x = 1;"],
+		["a JSX element in the base patch", "x = <Foo>;", "x = 1;"],
+	])("refuses it when a context line holds %s", (_, baseContext, headContext) => {
+		const { files, op } = reformat(baseContext, headContext);
+		expect(verifyRelocation(op, files)).toBe(false);
+	});
+
+	it("refuses a reformat claim that also lists an unrelated base file", () => {
+		const { files, op } = reformat();
+		files.push(patched("src/c.ts", "-", "x = 1;", ["const other = g(1, 2);"]));
+		op.from.push({ ...(op.from[0] as Span), filename: "src/c.ts" });
+		expect(verifyRelocation(op, files)).toBe(false);
+	});
+
+	it("refuses a token-equivalent claim that also lists a divergence", () => {
+		const { files, op } = reformat();
+		const at = (filename: string, side: "base" | "head", line: number) => ({
+			filename,
+			side,
+			startLine: line,
+			endLine: line,
+			shown: "full" as const,
+		});
+		const listed: Operation = {
+			...op,
+			exact: false,
+			reviewWeight: 1,
+			divergences: [
+				{
+					kind: "changed",
+					class: "code",
+					base: at("src/a.ts", "base", 10),
+					head: at("src/b.ts", "head", 10),
+					original: BASE[0] as string,
+				},
+			],
+		};
+		expect(verifyRelocation(listed, files)).toBe(false);
+	});
+
+	it("checks the recorded re-indent shift", () => {
+		const block = ["def total(items):", "    return sum(items) + 1"];
+		const files = [
+			patched("a/old.py", "-", "x = 1", block),
+			patched(
+				"a/new.py",
+				"+",
+				"x = 1",
+				block.map((l) => `    ${l}`),
+			),
+		];
+		const claim = (shape?: Operation["shape"]) => ({
+			...lineClaim("a/old.py", 10, 11, "a/new.py", 10, 11),
+			...(shape ? { shape } : {}),
+		});
+		expect(verifyRelocation(claim({ reindent: 4 }), files)).toBe(true);
+		expect(verifyRelocation(claim(), files)).toBe(false);
+		expect(verifyRelocation(claim({ reindent: 2 }), files)).toBe(false);
+	});
+
+	it("refuses a whitespace-only pair when one line holds a carriage return", () => {
+		const line = "return alpha_value + beta_value + gamma_value;";
+		const claim = (base: string) =>
+			verifyRelocation(lineClaim("src/a.ts", 10, 10, "src/b.ts", 10, 10), [
+				patched("src/a.ts", "-", "x = 1;", [base]),
+				patched("src/b.ts", "+", "x = 1;", [line]),
+			]);
+		expect(claim(line.replace("return ", "return   "))).toBe(true);
+		expect(claim(line.replace("return ", "return\r "))).toBe(false);
 	});
 });

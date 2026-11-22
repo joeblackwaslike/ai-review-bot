@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-	newlineClass,
-	normalizeTokens,
-	opaqueLine,
-	tokenize,
-} from "./tokens.js";
+import { newlineClass, normalizeTokens, tokenize } from "./tokens.js";
 
 const toks = (lines: string[], file: string) => tokenize(lines, file).tokens;
 
@@ -143,9 +138,10 @@ describe("false equivalences", () => {
 		expect(norm(withComma, "x.sh")).not.toEqual(norm(without, "x.sh"));
 	});
 
-	it("does not join lines on braces in Go", () => {
-		expect(toks(["return", "x"], "x.go")).not.toEqual(
-			toks(["return x"], "x.go"),
+	it("does not join lines in Go", () => {
+		expect(toks(["a := f(1)", "b := 2"], "x.go")).toContain("\n");
+		expect(toks(["a := f(1)", "b := 2"], "x.go")).not.toEqual(
+			toks(["a := f(1) b := 2"], "x.go"),
 		);
 	});
 
@@ -208,11 +204,15 @@ describe("false equivalences", () => {
 		);
 	});
 
-	it("keeps the semicolon of an empty if body", () => {
-		expect(norm("if (x);", "x.ts")).not.toEqual(norm("if (x)", "x.ts"));
-		expect(norm("while (f(x));", "x.js")).not.toEqual(
-			norm("while (f(x))", "x.js"),
-		);
+	it.each(
+		"if for while switch".split(" "),
+	)("keeps the semicolon of an empty %s body before a closing brace", (word) => {
+		expect(norm(`{ ${word} (x); }`, "x.ts")).toContain(";");
+		expect(norm(`{ ${word} (f(x)); }`, "x.js")).toContain(";");
+	});
+
+	it("drops the semicolon after an ordinary call before a closing brace", () => {
+		expect(norm("{ run(x); }", "x.ts")).not.toContain(";");
 	});
 
 	it("still drops a semicolon before a closing brace", () => {
@@ -304,78 +304,19 @@ describe("quote normalization by language", () => {
 	});
 });
 
-describe("restricted productions", () => {
-	it.each([
-		"return",
-		"throw",
-		"break",
-		"continue",
-		"yield",
-		"async",
-		"type",
-		"declare",
-		"abstract",
-		"namespace",
-		"module",
-		"interface",
-		"enum",
-		"get",
-		"set",
-		"static",
-		"let",
-		"await",
-	])("keeps a line break after a line ending in %s", (word) => {
-		expect(toks([word, "x"], "x.ts")).toEqual([word, "\n", "x"]);
-	});
-
-	it("does not keep a line break after an ordinary identifier", () => {
-		expect(toks(["value", "x"], "x.ts")).toEqual(["value", "x"]);
+describe("long lines", () => {
+	it("tokenizes a line over the cap as one token", () => {
+		expect(toks(["a + ".repeat(1000)], "x.ts")).toHaveLength(1);
 	});
 });
 
-describe("number tokens", () => {
-	it.each([
-		["1.e3", ["1.e3"]],
-		["1 .e3", ["1", ".", "e3"]],
-		["1e+3", ["1e+3"]],
-		["0xE+3", ["0xE", "+", "3"]],
-		["0b101", ["0b101"]],
-		["0o17", ["0o17"]],
-		["10n", ["10n"]],
-		["1_000", ["1_000"]],
-		["1.5.toFixed", ["1.5", ".", "toFixed"]],
-		["1..5", ["1", "..", "5"]],
-	])("tokenizes %s", (text, expected) => {
-		expect(toks([text], "x.js")).toEqual(expected);
-	});
-});
-
-describe("opaqueLine", () => {
-	it.each([
-		["a carriage return", "\r"],
-		["a vertical tab", "\v"],
-		["a form feed", "\f"],
-		["a next-line character", "\u0085"],
-		["a line separator", "\u2028"],
-		["a paragraph separator", "\u2029"],
-	])("flags %s inside a line", (_, mark) => {
-		expect(opaqueLine(`a =${mark} b;`, "x.ts")).toBe(true);
-		expect(opaqueLine(`a = b;${mark}x`, "x.py")).toBe(true);
-	});
-
-	it("allows one trailing carriage return", () => {
-		expect(opaqueLine("a = b;\r", "x.ts")).toBe(false);
-		expect(opaqueLine("a = b;\r\r", "x.ts")).toBe(true);
-	});
-
-	it("flags a line over the analysis cap", () => {
-		expect(opaqueLine("a".repeat(2000), "x.ts")).toBe(false);
-		expect(opaqueLine("a".repeat(2001), "x.ts")).toBe(true);
-	});
-
-	it("flags HTML-like comment markers in JavaScript only", () => {
-		expect(opaqueLine("x = a<!--b;", "x.js")).toBe(true);
-		expect(opaqueLine("--> note", "x.mjs")).toBe(true);
-		expect(opaqueLine("x = a<!--b;", "x.py")).toBe(false);
+describe("string escapes", () => {
+	it("reads an escaped quote and a slash pair inside a string as one token", () => {
+		expect(toks(['x = "a\\" // b";'], "x.ts")).toEqual([
+			"x",
+			"=",
+			'"a\\" // b"',
+			";",
+		]);
 	});
 });

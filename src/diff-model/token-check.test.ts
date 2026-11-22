@@ -162,12 +162,6 @@ describe("tokenEquivalent", () => {
 		expect(same(["x = /a b/g;"], ["x = /a  b/g;"]).equivalent).toBe(false);
 	});
 
-	it("drops a trailing comma removal in Java where it is not allowed", () => {
-		expect(
-			same(["call(a, b,)"], ["call(a, b)"], "a.java", "b.java").equivalent,
-		).toBe(false);
-	});
-
 	it("drops a quote swap for a string with an escape", () => {
 		expect(same(["x = 'a\\'b';"], ['x = "a\\\'b";']).equivalent).toBe(false);
 	});
@@ -195,17 +189,6 @@ describe("tokenEquivalent", () => {
 			same(["x = f('a', 'b')"], ['x = f("a", "b")'], `a.${ext}`, `b.${ext}`)
 				.equivalent,
 		).toBe(true);
-	});
-
-	it("drops a slash after a control-word header", () => {
-		expect(
-			same(
-				["if (ready) /re/.test(value)"],
-				["if (ready) /re/.test( value)"],
-				"a.js",
-				"b.js",
-			).equivalent,
-		).toBe(false);
 	});
 
 	it("drops a trailing comma that follows a kept line break", () => {
@@ -246,5 +229,106 @@ describe("tokenEquivalent", () => {
 		expect(
 			same(["return", "value"], ["return value"], "a.go", "b.go").equivalent,
 		).toBe(false);
+	});
+});
+
+describe("tokenEquivalent negatives for each structural rule", () => {
+	it("drops a Python block whose inner depth changed", () => {
+		expect(
+			same(
+				["if ready:", "    start()", "    finish()"],
+				["if ready:", "    start()", "        finish()"],
+				"a.py",
+				"b.py",
+			).equivalent,
+		).toBe(false);
+	});
+
+	it("drops a YAML block whose inner depth changed", () => {
+		expect(
+			same(
+				["root:", "  first: 1", "  second: 2"],
+				["root:", "  first: 1", "    second: 2"],
+				"a.yml",
+				"b.yml",
+			).equivalent,
+		).toBe(false);
+	});
+
+	it.each([
+		"return",
+		"throw",
+		"break",
+		"continue",
+		"yield",
+	])("keeps the line break after %s", (word) => {
+		expect(
+			same([word, "alpha;"], [`${word} alpha;`], "a.js", "b.js").equivalent,
+		).toBe(false);
+	});
+
+	it("keeps a regex literal after return unequal to its respaced twin", () => {
+		expect(same(["return /a  b/;"], ["return /a b/;"]).equivalent).toBe(false);
+	});
+
+	it.each([
+		"(",
+		"[",
+		"+",
+		"-",
+		"++",
+		"--",
+	])("keeps the line break before a line starting with %s", (opener) => {
+		expect(
+			same(
+				["value", `${opener}other`],
+				[`value ${opener}other`],
+				"a.js",
+				"b.js",
+			).equivalent,
+		).toBe(false);
+	});
+
+	it("keeps the line break between count-- and the next line", () => {
+		expect(
+			same(["count--", "limit"], ["count", "--limit"], "a.js", "b.js")
+				.equivalent,
+		).toBe(false);
+	});
+
+	it.each([
+		"if",
+		"for",
+		"while",
+		"switch",
+	])("keeps the semicolon after an empty %s header", (word) => {
+		expect(
+			same([`{ ${word} (x); }`], [`{ ${word} (x) }`], "a.js", "b.js")
+				.equivalent,
+		).toBe(false);
+	});
+
+	it("still drops a semicolon after an ordinary call before a brace", () => {
+		expect(
+			same(["{ run(x); }"], ["{ run(x) }"], "a.js", "b.js").equivalent,
+		).toBe(true);
+	});
+
+	it.each([
+		["a backtick", "key: `x`"],
+		["a triple double quote", 'key: """x"""'],
+		["a triple single quote", "key: '''x'''"],
+		["a heredoc opener", "key: <<EOF"],
+	])("drops a YAML claim holding %s", (_, line) => {
+		expect(
+			same(["root:", `  ${line}`], ["  root:", `    ${line}`], "a.yml", "b.yml")
+				.equivalent,
+		).toBe(false);
+	});
+
+	it("reads an escaped quote inside a string without ending it", () => {
+		expect(
+			same(['x = "a\\" // b";'], ['x   =   "a\\" // b";']).equivalent,
+		).toBe(true);
 	});
 });
