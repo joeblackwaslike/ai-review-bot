@@ -1,0 +1,36 @@
+{
+	"clean": false,
+	"defects": [
+		{
+			"path": "src/handlers/refunds.ts",
+			"startLine": 15,
+			"endLine": 15,
+			"description": "createRefund responds with the request body instead of the saved row, so clients never see the generated id."
+		}
+	],
+	"operations": [
+		{
+			"type": "copy",
+			"shape": {
+				"sourceNew": true
+			},
+			"from": [
+				{
+					"filename": "src/handlers/orders.ts",
+					"side": "head",
+					"startLine": 5,
+					"endLine": 13
+				}
+			],
+			"to": [
+				{
+					"filename": "src/handlers/refunds.ts",
+					"side": "head",
+					"startLine": 5,
+					"endLine": 13
+				}
+			],
+			"divergences": []
+		}
+	]
+}

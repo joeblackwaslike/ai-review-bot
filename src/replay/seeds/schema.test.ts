@@ -123,12 +123,71 @@ describe("SeedOperation structure", () => {
 	});
 });
 
+describe("SeedTruth copy and class fields", () => {
+	const copy = {
+		type: "copy",
+		shape: { sourceNew: true },
+		from: [{ filename: "a.ts", side: "head", startLine: 5, endLine: 13 }],
+		to: [{ filename: "b.ts", side: "head", startLine: 5, endLine: 13 }],
+		divergences: [
+			{
+				kind: "changed",
+				class: "receiver",
+				base: { filename: "a.ts", side: "head", startLine: 7, endLine: 7 },
+				head: { filename: "b.ts", side: "head", startLine: 7, endLine: 7 },
+			},
+		],
+	};
+	const parse = (operation: unknown) =>
+		SeedTruth.safeParse({ clean: true, operations: [operation] }).success;
+
+	it("accepts a copy with sourceNew and a divergence class", () => {
+		expect(parse(copy)).toBe(true);
+	});
+
+	it("accepts the signature class and a reindent next to sourceNew", () => {
+		expect(
+			parse({
+				...copy,
+				shape: { reindent: 4, sourceNew: false },
+				divergences: [
+					{
+						kind: "changed",
+						class: "signature",
+						base: { filename: "a.ts", side: "head", startLine: 5, endLine: 5 },
+						head: { filename: "b.ts", side: "head", startLine: 5, endLine: 5 },
+					},
+				],
+			}),
+		).toBe(true);
+	});
+
+	it("rejects an unknown divergence class or shape key", () => {
+		expect(
+			parse({
+				...copy,
+				divergences: [
+					{
+						kind: "changed",
+						class: "other",
+						base: { filename: "a.ts", side: "head", startLine: 7, endLine: 7 },
+						head: { filename: "b.ts", side: "head", startLine: 7, endLine: 7 },
+					},
+				],
+			}),
+		).toBe(false);
+		expect(parse({ ...copy, shape: { sourceNew: true, extra: 1 } })).toBe(
+			false,
+		);
+	});
+});
+
 describe("defaultSeedsRoot", () => {
 	const real = join(process.cwd(), "src", "replay", "seeds");
 
 	it("resolves to the committed seeds from source", async () => {
 		expect(defaultSeedsRoot(import.meta.url)).toBe(real);
-		expect(await listSeeds()).toHaveLength(34);
+		expect(await listSeeds()).toHaveLength(39);
 	});
 
 	it("resolves to the committed seeds from a built dist path", () => {

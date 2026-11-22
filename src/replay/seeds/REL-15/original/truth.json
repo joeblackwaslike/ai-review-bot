@@ -1,0 +1,101 @@
+{
+	"clean": false,
+	"defects": [
+		{
+			"path": "billing/pricing.py",
+			"startLine": 20,
+			"endLine": 20,
+			"description": "checkout now passes cart.tax_rate where it passed cart.rate, so the discount is computed from the tax rate instead of the discount rate."
+		}
+	],
+	"operations": [
+		{
+			"type": "relocation",
+			"shape": {
+				"reindent": 4
+			},
+			"from": [
+				{
+					"filename": "billing/pricing.py",
+					"side": "base",
+					"startLine": 12,
+					"endLine": 20
+				}
+			],
+			"to": [
+				{
+					"filename": "billing/pricing.py",
+					"side": "head",
+					"startLine": 8,
+					"endLine": 16
+				}
+			],
+			"divergences": [
+				{
+					"kind": "changed",
+					"class": "signature",
+					"base": {
+						"filename": "billing/pricing.py",
+						"side": "base",
+						"startLine": 12,
+						"endLine": 12
+					},
+					"head": {
+						"filename": "billing/pricing.py",
+						"side": "head",
+						"startLine": 8,
+						"endLine": 8
+					}
+				},
+				{
+					"kind": "changed",
+					"class": "code",
+					"base": {
+						"filename": "billing/pricing.py",
+						"side": "base",
+						"startLine": 17,
+						"endLine": 17
+					},
+					"head": {
+						"filename": "billing/pricing.py",
+						"side": "head",
+						"startLine": 13,
+						"endLine": 13
+					}
+				},
+				{
+					"kind": "changed",
+					"class": "code",
+					"base": {
+						"filename": "billing/pricing.py",
+						"side": "base",
+						"startLine": 18,
+						"endLine": 18
+					},
+					"head": {
+						"filename": "billing/pricing.py",
+						"side": "head",
+						"startLine": 14,
+						"endLine": 14
+					}
+				},
+				{
+					"kind": "changed",
+					"class": "receiver",
+					"base": {
+						"filename": "billing/pricing.py",
+						"side": "base",
+						"startLine": 19,
+						"endLine": 19
+					},
+					"head": {
+						"filename": "billing/pricing.py",
+						"side": "head",
+						"startLine": 15,
+						"endLine": 15
+					}
+				}
+			]
+		}
+	]
+}

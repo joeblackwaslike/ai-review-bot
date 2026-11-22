@@ -23,10 +23,18 @@ const SeedSpan = z
 	.strict()
 	.refine((s) => s.endLine >= s.startLine, "endLine before startLine");
 
+const DivergenceClass = z.enum([
+	"code",
+	"comment-only",
+	"rename",
+	"signature",
+	"receiver",
+]);
+
 const SeedDivergence = z
 	.object({
 		kind: z.enum(["changed", "inserted", "removed"]),
-		class: z.enum(["comment-only", "rename", "code"]),
+		class: DivergenceClass,
 		base: SeedSpan.optional(),
 		head: SeedSpan.optional(),
 	})
@@ -55,8 +63,14 @@ const SeedDivergence = z
  */
 export const SeedOperation = z
 	.object({
-		type: z.enum(["relocation", "rename", "mechanical"]),
-		shape: z.object({ reindent: z.number().int() }).strict().optional(),
+		type: z.enum(["relocation", "rename", "mechanical", "copy"]),
+		shape: z
+			.object({
+				reindent: z.number().int().optional(),
+				sourceNew: z.boolean().optional(),
+			})
+			.strict()
+			.optional(),
 		from: z.array(SeedSpan),
 		to: z.array(SeedSpan),
 		divergences: z.array(SeedDivergence),
@@ -71,8 +85,12 @@ export const SeedOperation = z
 				message: `${op.type} needs from and to spans`,
 			});
 		}
-		if (op.from.some((s) => s.side !== "base")) {
-			ctx.addIssue({ code: "custom", message: "from spans are base side" });
+		const fromSide = op.type === "copy" ? "head" : "base";
+		if (op.from.some((s) => s.side !== fromSide)) {
+			ctx.addIssue({
+				code: "custom",
+				message: `from spans are ${fromSide} side`,
+			});
 		}
 		if (op.to.some((s) => s.side !== "head")) {
 			ctx.addIssue({ code: "custom", message: "to spans are head side" });

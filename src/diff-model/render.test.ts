@@ -57,9 +57,22 @@ function codeFile(filename: string) {
 	};
 }
 
+function unfenced(text: string): string {
+	return text.replace(/<\/?untrusted_pr_text>/g, "");
+}
+
 function allText(r: ReturnType<typeof renderDiffModel>): string {
 	return [r.summary, ...r.fileNotes.values()].join("\n");
 }
+
+const receiverLines = (n: number) =>
+	Array.from({ length: n }, (_, i) =>
+		codeDivergence({
+			class: "receiver",
+			original: `value_${i} = load(${i})`,
+			head: span("src/b.ts", "head", 20 + i, 20 + i),
+		}),
+	);
 
 describe("renderDiffModel", () => {
 	it("renders the spec example for a move with one changed line", () => {
@@ -682,6 +695,86 @@ describe("renderDiffModel", () => {
 			/\b(unchanged|identical|harmless|safe|exact)\b/i,
 		);
 	});
+
+	it("lists a receiver divergence with its original line", () => {
+		const m = model({
+			operations: [
+				op({
+					id: "relocation-1",
+					type: "relocation",
+					exact: false,
+					divergences: [
+						codeDivergence({
+							class: "receiver",
+							original: "if discount > LIMIT:",
+							head: span("src/b.ts", "head", 13, 13),
+						}),
+					],
+					reviewWeight: 1,
+				}),
+			],
+		});
+		const r = renderDiffModel(m, OPTS);
+		expect(r.summary).toContain("Changed (receiver prefix)");
+		expect(r.summary).toContain("the original was");
+		expect(r.summary).toContain("if discount > LIMIT:");
+		expect(allText(r)).not.toMatch(/\b(safe|unchanged behavior|functional)\b/);
+	});
+
+	const receiverRender = (n: number) =>
+		renderDiffModel(
+			model({
+				operations: [
+					op({
+						id: "relocation-1",
+						type: "relocation",
+						exact: false,
+						divergences: receiverLines(n),
+						reviewWeight: 1,
+					}),
+				],
+			}),
+			OPTS,
+		);
+
+	it("lists at most 6 receiver lines of an operation and counts the rest", () => {
+		const r = receiverRender(10);
+		for (let i = 0; i < 6; i++)
+			expect(r.summary).toContain(`value_${i} = load`);
+		expect(r.summary).not.toContain("value_6 = load");
+		expect(r.summary).toContain("and 4 more receiver lines");
+		expect(r.summary).toContain("Relocation with 10 differences");
+		const notes = r.fileNotes.get("src/b.ts") ?? "";
+		expect(notes).toContain("line 25 differs from the original");
+		expect(notes).not.toContain("line 26 differs from the original");
+	});
+
+	it("adds no count line for 6 or fewer receiver lines", () => {
+		const r = receiverRender(6);
+		expect(r.summary).toContain("value_5 = load");
+		expect(r.summary).not.toContain("more receiver");
+	});
+
+	it("keeps code divergences visible beside capped receiver lines", () => {
+		const r = renderDiffModel(
+			model({
+				operations: [
+					op({
+						id: "relocation-1",
+						type: "relocation",
+						exact: false,
+						divergences: [
+							...receiverLines(8),
+							codeDivergence({ original: "Math.ceil(y)" }),
+						],
+					}),
+				],
+			}),
+			OPTS,
+		);
+		expect(r.summary).toContain("Math.ceil(y)");
+		expect(r.summary).toContain("and 2 more receiver lines");
+	});
 });
 
 describe("renderDiffModel copies", () => {
@@ -720,5 +813,130 @@ describe("renderDiffModel copies", () => {
 			OPTS,
 		);
 		expect(withRename.summary).toContain("When code moved");
+	});
+
+	const copyWith = (over: Partial<Operation> = {}) =>
+		op({
+			id: "copy-1",
+			type: "copy",
+			from: [span("src/a.ts", "head", 5, 13)],
+			to: [span("src/b.ts", "head", 40, 48)],
+			...over,
+		});
+
+	it("says a copy of context or older code is visible in this diff only", () => {
+		const r = renderDiffModel(model({ operations: [copyWith()] }), OPTS);
+		const summary = unfenced(r.summary);
+		expect(summary).toContain(
+			"repeats src/a.ts lines 5-13 (source visible in this diff only)",
+		);
+		expect(summary).toContain("src/b.ts lines 40-48");
+		expect(r.summary).not.toContain("both occurrences are new");
+		expect(allText(r)).not.toMatch(/\b(safe|unchanged behavior|functional)\b/);
+		expect(allText(r)).not.toMatch(/ [-\u2013\u2014] /);
+	});
+
+	it("says a duplicate addition is new in both places", () => {
+		const r = renderDiffModel(
+			model({ operations: [copyWith({ shape: { sourceNew: true } })] }),
+			OPTS,
+		);
+		expect(r.summary).toContain(
+			"duplicate: both occurrences are new, review the first in full",
+		);
+		expect(unfenced(r.summary)).toContain("src/a.ts lines 5-13");
+		expect(r.summary).toContain("itself new in this change");
+		expect(r.summary).not.toContain("source visible in this diff only");
+		expect(allText(r)).not.toMatch(/\b(safe|unchanged behavior|functional)\b/);
+		expect(allText(r)).not.toMatch(/ [-\u2013\u2014] /);
+	});
+
+	it("lists a code divergence of a copy with its original line", () => {
+		const r = renderDiffModel(
+			model({
+				operations: [
+					copyWith({
+						exact: false,
+						divergences: [codeDivergence({ original: "Math.round(z)" })],
+					}),
+				],
+			}),
+			OPTS,
+		);
+		expect(r.summary).toContain("Math.round(z)");
+		expect(r.summary).toContain("Copy with 1 difference");
+	});
+
+	it("ranks copies below relocations, renames and mechanical changes", () => {
+		const m = model({
+			operations: [
+				copyWith({ divergences: [codeDivergence()] }),
+				op({ id: "mechanical-1", type: "mechanical", reason: "whitespace" }),
+				op({
+					id: "rename-1",
+					type: "rename",
+					from: [span("old.ts", "base", 1, 5)],
+					to: [span("new.ts", "head", 1, 5)],
+				}),
+				op({ id: "relocation-1", type: "relocation" }),
+			],
+		});
+		const s = renderDiffModel(m, OPTS).summary;
+		const order = ["Relocation:", "Rename:", "Mechanical:", "Copy"].map(
+			(needle) => s.indexOf(needle),
+		);
+		expect(order.every((i) => i >= 0)).toBe(true);
+		expect([...order].sort((a, b) => a - b)).toEqual(order);
+	});
+
+	it("still sorts one-line copies after larger copies", () => {
+		const m = model({
+			operations: [
+				copyWith({ id: "copy-1", to: [span("src/small.ts", "head", 3, 3)] }),
+				copyWith({ id: "copy-2", to: [span("src/large.ts", "head", 3, 30)] }),
+			],
+		});
+		const s = renderDiffModel(m, OPTS).summary;
+		expect(s.indexOf("src/large.ts")).toBeLessThan(s.indexOf("src/small.ts"));
+	});
+
+	it("keeps the operation and character limits with many copies", () => {
+		const many = Array.from({ length: 40 }, (_, i) =>
+			copyWith({
+				id: `copy-${i}`,
+				from: [span(`src/very/long/source/path/file${i}.ts`, "head", 5, 13)],
+				to: [span(`src/very/long/target/path/file${i}.ts`, "head", 40, 48)],
+				exact: false,
+				divergences: [
+					codeDivergence({ original: `call_${i}(${"y".repeat(150)})` }),
+					...receiverLines(3),
+				],
+				...(i % 2 === 0 ? { shape: { sourceNew: true } } : {}),
+			}),
+		);
+		const r = renderDiffModel(model({ operations: many }), OPTS);
+		const detailed = r.summary.split("\n").filter((l) => /^\d+\. /.test(l));
+		expect(detailed.length).toBeLessThanOrEqual(12);
+		expect(r.summary).toMatch(/Not detailed: \d+ copy/);
+		const size =
+			r.summary.length +
+			[...r.fileNotes.values()].reduce((n, t) => n + t.length, 0);
+		expect(size).toBeLessThanOrEqual(OPTS.maxChars);
+		expect(allText(r)).not.toMatch(/\b(safe|unchanged behavior|functional)\b/);
+	});
+
+	it("does not call a copy a relocation or rename in the intent line", () => {
+		const m = model({
+			operations: [copyWith()],
+			facts: {
+				testsChanged: false,
+				intentClaims: [
+					{ phrase: "a refactor", source: "title", start: 0, end: 10 },
+				],
+			},
+		});
+		const s = renderDiffModel(m, OPTS).summary;
+		expect(s).toContain("The title says");
+		expect(s).not.toContain("relocation or rename");
 	});
 });

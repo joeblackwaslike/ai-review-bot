@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PushFile } from "../moved-blocks.js";
+import { buildDiffModel } from "./index.js";
 import { findRelocations } from "./relocation.js";
 
 function pushFile(filename: string, patch: string): PushFile {
@@ -491,5 +492,76 @@ describe("copies under the shared work limits", () => {
 			"rename",
 		]);
 		expect(op?.reviewWeight).toBe(1);
+	});
+});
+
+describe("adversarial copy budget", () => {
+	const BACKSTOP_MS = 5_000;
+	const FILES = 200;
+
+	const block = [
+		"  const subtotal = computeSubtotal(items) + computeTax(items, rate);",
+		"  const rounded = Math.round(subtotal * 100) / 100;",
+		"  const label = formatCurrency(rounded, currency);",
+		"  audit.record(label, rounded, items.length);",
+		"  cache.store(label, rounded);",
+		"  return label;",
+	];
+
+	function repeated(): PushFile[] {
+		return Array.from({ length: FILES }, (_, i) =>
+			added(`src/dup/file${i}.ts`, 1, [
+				...block,
+				`  const marker${i} = ${i};`,
+				...block,
+			]),
+		);
+	}
+
+	function modelOf(files: PushFile[]) {
+		return buildDiffModel({
+			scopeFiles: files,
+			prFiles: files,
+			prFilesComplete: true,
+			title: "",
+			body: null,
+		});
+	}
+
+	it("builds the model for 400 identical blocks across 200 files, repeats exactly and stays fast", () => {
+		const files = repeated();
+		const started = performance.now();
+		const first = modelOf(files);
+		expect(performance.now() - started).toBeLessThan(BACKSTOP_MS);
+		expect(modelOf(files)).toEqual(first);
+		const found = first.operations.filter((op) => op.type === "copy");
+		expect(found.length).toBeGreaterThan(0);
+		expect(found.length).toBeLessThanOrEqual(FILES * 2);
+		expect(first.droppedClaims).toBe(0);
+		for (const op of found) {
+			expect(op.shape?.sourceNew).toBe(true);
+			expect(op.reviewWeight).toBeGreaterThanOrEqual(1);
+		}
+	});
+
+	it("returns what it found when the budget runs out and repeats exactly", () => {
+		const files = repeated();
+		const full = findRelocations(files).filter((op) => op.type === "copy");
+		const limits = { candidates: 40 };
+		const limited = findRelocations(files, limits);
+		expect(findRelocations(files, limits)).toEqual(limited);
+		expect(limited.length).toBeGreaterThan(0);
+		expect(limited.length).toBeLessThan(full.length);
+		const fullTargets = new Set(full.map((op) => JSON.stringify(op.to)));
+		for (const op of limited)
+			expect(fullTargets.has(JSON.stringify(op.to))).toBe(true);
+	});
+
+	it("returns no copies at all once the candidate budget is empty", () => {
+		expect(
+			findRelocations(repeated(), { candidates: 0 }).filter(
+				(op) => op.type === "copy",
+			),
+		).toEqual([]);
 	});
 });

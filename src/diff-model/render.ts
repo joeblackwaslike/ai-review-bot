@@ -10,6 +10,7 @@ export interface RenderedDiffModel {
 const MAX_DETAILED_OPERATIONS = 12;
 const MAX_VALUE_CHARS = 200;
 const MAX_CLAIM_PHRASES = 3;
+const MAX_RECEIVER_LINES = 6;
 
 const HEADING =
 	"Computed notes (not part of the diff; the diff wins if they disagree)";
@@ -197,7 +198,9 @@ function headline(op: Operation): string {
 		const origin = op.shape?.sourceNew
 			? ", itself new in this change"
 			: " (source visible in this diff only)";
-		return `Copy: ${op.to.map(place).join(", ")} repeats ${op.from.map(place).join(", ")}${origin}.`;
+		const n = op.divergences.length;
+		const lead = n > 0 ? `Copy with ${plural(n, "difference")}` : "Copy";
+		return `${lead}: ${op.to.map(place).join(", ")} repeats ${op.from.map(place).join(", ")}${origin}.`;
 	}
 	if (op.type === "rename") {
 		const from = op.from[0]?.filename ?? "";
@@ -211,9 +214,29 @@ function headline(op: Operation): string {
 	return `Mechanical: ${mechanicalPhrase(op)} (${spansText(spans)}).`;
 }
 
+function shownDivergences(op: Operation): {
+	shown: Divergence[];
+	hiddenReceivers: number;
+} {
+	let receivers = 0;
+	const shown = op.divergences.filter(
+		(d) => d.class !== "receiver" || ++receivers <= MAX_RECEIVER_LINES,
+	);
+	return { shown, hiddenReceivers: op.divergences.length - shown.length };
+}
+
 function detailBlock(op: Operation, number: number): string {
 	const lines = [`${number}. ${headline(op)}`];
-	for (const d of op.divergences) lines.push(`   ${divergenceText(d)}`);
+	if (op.type === "copy" && op.shape?.sourceNew)
+		lines.push(
+			"   duplicate: both occurrences are new, review the first in full.",
+		);
+	const { shown, hiddenReceivers } = shownDivergences(op);
+	for (const d of shown) lines.push(`   ${divergenceText(d)}`);
+	if (hiddenReceivers > 0)
+		lines.push(
+			`   and ${hiddenReceivers} more receiver ${hiddenReceivers === 1 ? "line" : "lines"}.`,
+		);
 	return lines.join("\n");
 }
 
@@ -255,7 +278,7 @@ function addFileNotes(
 			);
 		}
 		for (const s of op.to) {
-			const own = op.divergences.filter(
+			const own = shownDivergences(op).shown.filter(
 				(d) => divergenceSpan(d)?.filename === s.filename,
 			);
 			const lines = own.map((d) => {
@@ -354,9 +377,11 @@ function intentBody(
 				: "An operation not detailed here";
 		return `${says} ${subject} has a code difference from the original${where}.`;
 	}
-	const nonMechanical = ranked.filter((op) => op.type !== "mechanical");
-	if (nonMechanical.length > 0) {
-		return `${says} This scope contains ${plural(nonMechanical.length, "relocation or rename operation")}.`;
+	const moves = ranked.filter(
+		(op) => op.type === "relocation" || op.type === "rename",
+	);
+	if (moves.length > 0) {
+		return `${says} This scope contains ${plural(moves.length, "relocation or rename operation")}.`;
 	}
 	if (ranked.length === 0)
 		return `${says} No operations were detected in this scope.`;

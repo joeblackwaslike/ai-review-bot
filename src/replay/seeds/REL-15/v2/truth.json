@@ -1,0 +1,12 @@
+{
+	"clean": false,
+	"defects": [
+		{
+			"path": "text/format.py",
+			"startLine": 18,
+			"endLine": 18,
+			"description": "collect returns parts[1:], so the first name in every list is silently dropped."
+		}
+	],
+	"operations": []
+}
