@@ -321,6 +321,14 @@ describe("seed operation truth", () => {
 		SLOW,
 	);
 
+	it("keeps a rename and a mechanical operation the model really emits in the truth", async () => {
+		const types = (await listSeeds()).flatMap((seed) =>
+			seed.truth.operations.map((op) => op.type),
+		);
+		expect(types).toContain("rename");
+		expect(types).toContain("mechanical");
+	});
+
 	it(
 		"misses exactly the relocation of a 3 or 4 line function, under the 5 line minimum",
 		async () => {
