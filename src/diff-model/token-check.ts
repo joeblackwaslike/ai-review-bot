@@ -83,7 +83,7 @@ const SIBLING_COMMA = words("py pyi go");
 const BRACE_BLOCKS = words("go");
 const QUOTE_SWAP = words("js mjs cjs ts py pyi");
 const JSX_ALWAYS = words("jsx tsx");
-const JSX_POSSIBLE = words("js mjs cjs ts");
+const JSX_POSSIBLE = words("js mjs cjs");
 const BREAKING_WORDS = words(
 	"return throw break continue yield async type declare abstract namespace module interface enum get set static let await public private protected readonly override accessor using",
 );
@@ -91,7 +91,7 @@ const BEFORE_EXPRESSION = words(
 	"return typeof case in of delete void throw yield await else do instanceof new default",
 );
 const WRAP_AFTER = words(
-	", ( [ { ; } => = . ?. ? : && || ?? + - * / % < > <= >= == === != !== & | ^ ~ ! += -= *= /= %= &= |= ^= <<= >>= >>>= &&= ||= ??= **= ** << >> >>>",
+	", ( [ { ; } => = . ?. ? : && || ?? + - * / % < <= >= == === != !== & | ^ ~ += -= *= /= %= &= |= ^= <<= >>= >>>= &&= ||= ??= **= ** << >> >>>",
 );
 const WRAP_BEFORE = words(
 	") ] } . ?. , ; ? : => + - * / % < > <= >= == === != !== & | ^ && || ?? { in instanceof ** << >> >>>",

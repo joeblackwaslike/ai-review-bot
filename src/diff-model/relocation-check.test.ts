@@ -1645,10 +1645,10 @@ describe("verifyRelocation through the token path", () => {
 
 	const reformat = (baseContext = "x = 1;", headContext = "x = 1;") => ({
 		files: [
-			patched("src/a.ts", "-", baseContext, BASE),
-			patched("src/b.ts", "+", headContext, HEAD),
+			patched("src/a.js", "-", baseContext, BASE),
+			patched("src/b.js", "+", headContext, HEAD),
 		],
-		op: lineClaim("src/a.ts", 10, 16, "src/b.ts", 10, 11),
+		op: lineClaim("src/a.js", 10, 16, "src/b.js", 10, 11),
 	});
 
 	it("accepts a reformat only the token checker can account for", () => {
@@ -1744,9 +1744,9 @@ describe("verifyRelocation through the token path", () => {
 	it("refuses a whitespace-only pair when one line holds a carriage return", () => {
 		const line = "return alpha_value + beta_value + gamma_value;";
 		const claim = (base: string) =>
-			verifyRelocation(lineClaim("src/a.ts", 10, 10, "src/b.ts", 10, 10), [
-				patched("src/a.ts", "-", "x = 1;", [base]),
-				patched("src/b.ts", "+", "x = 1;", [line]),
+			verifyRelocation(lineClaim("src/a.js", 10, 10, "src/b.js", 10, 10), [
+				patched("src/a.js", "-", "x = 1;", [base]),
+				patched("src/b.js", "+", "x = 1;", [line]),
 			]);
 		expect(claim(line.replace("return ", "return   "))).toBe(true);
 		expect(claim(line.replace("return ", "return\r "))).toBe(false);

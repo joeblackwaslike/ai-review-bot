@@ -370,7 +370,7 @@ describe("JSX text keeps its whitespace, commas and quotes", () => {
 	const respaced = text.replace("  world", " world");
 
 	it.each(
-		"tsx jsx js mjs cjs ts".split(" "),
+		"tsx jsx js mjs cjs".split(" "),
 	)("rejects collapsed text in %s end to end", (ext) => {
 		rejected(["<p>", text], ["<p>", respaced], ...pair(ext), true);
 	});
@@ -384,7 +384,7 @@ describe("JSX text keeps its whitespace, commas and quotes", () => {
 		);
 	});
 
-	it("rejects bare text in tsx and a lone element start in ts", () => {
+	it("rejects bare text in tsx", () => {
 		expect(checker([text], [respaced], "a.tsx", "b.tsx")).toBe(false);
 	});
 
@@ -395,12 +395,25 @@ describe("JSX text keeps its whitespace, commas and quotes", () => {
 		"<>",
 		"x = <a-b>",
 	])("sees %s as an element start", (line) => {
-		expect(checker([line], [line])).toBe(false);
+		expect(checker([line], [line], "a.js", "b.js")).toBe(false);
 	});
 
 	it("rejects when only one side shows an element", () => {
-		expect(checker(["< b >", text], ["<b>", text])).toBe(false);
-		expect(checker(["<b>", text], ["< b >", text])).toBe(false);
+		expect(checker(["< b >", text], ["<b>", text], "a.js", "b.js")).toBe(false);
+		expect(checker(["<b>", text], ["< b >", text], "a.js", "b.js")).toBe(false);
+	});
+
+	it("keeps matching a TypeScript move whose lines hold generics", () => {
+		const line =
+			"const r: Promise<Array<string>> = compute(alpha, beta, gamma, delta);";
+		accepted(line, [
+			"const r: Promise<Array<string>> = compute(",
+			"  alpha,",
+			"  beta,",
+			"  gamma,",
+			"  delta",
+			");",
+		]);
 	});
 });
 
@@ -644,6 +657,14 @@ describe("line breaks that are not obviously a wrap", () => {
 		["a = b\nc = d", "a = b c = d"],
 		["x\nfoo()", "x foo()"],
 		["let a\nlet b", "let a let b"],
+		[
+			"const el = lookup()!\nconst next = 1",
+			"const el = lookup()! const next = 1",
+		],
+		[
+			"type X = Array<string>\nconst y = 1",
+			"type X = Array<string> const y = 1",
+		],
 	])("keeps the break in %j", (base, head) => {
 		const [b, h] = [
 			`${base} ${more}`.split("\n"),

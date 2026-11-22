@@ -31,7 +31,7 @@ const CLOSERS = new Set([")", "]", "}"]);
 const LINE_WINDOW = 5;
 const MAX_DEPTH = 200;
 const JSX_FILES = new Set(["jsx", "tsx"]);
-const JSX_CAPABLE = new Set(["js", "mjs", "cjs", "ts"]);
+const JSX_CAPABLE = new Set(["js", "mjs", "cjs"]);
 const JSX_TEXT = /<[A-Za-z][\w.-]*[\s>/]|<\/|\/>|<>/;
 
 interface Segment {

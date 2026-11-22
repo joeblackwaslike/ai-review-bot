@@ -644,8 +644,9 @@ function textOf(span: Span | undefined, sides: Side[]): string | undefined {
  * A claim whose spans share a file must lie in different change regions with unique text. A
  * claim under 5 counted lines must also pass the small-claim rules of the matching v2 spec.
  * A claim with no divergences that fails the line accounting is instead accepted when
- * `tokenEquivalent` holds, neither file's patch text shows a backtick, triple quote or heredoc
- * opener, and `shape.reindent` matches the checker's shift.
+ * `tokenEquivalent` holds, `shape.reindent` matches the checker's shift, and neither file is
+ * risky (literal opener, unclosed string, unbalanced block comment, YAML block scalar header)
+ * or `jsxPossible`.
  * The patch scan is built once per `files` array, so a batch is verified in linear time.
  */
 export function verifyRelocation(op: Operation, files: PushFile[]): boolean {
