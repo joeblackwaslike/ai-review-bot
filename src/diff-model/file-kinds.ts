@@ -17,6 +17,14 @@ export const UNMATCHED_FILES =
  */
 export const INDENT_FREE_FILE = /\.(?:jsx?|mjs|cjs|tsx?|go|java)$/i;
 
+/**
+ * Languages where leading whitespace carries no meaning, so a relocation may differ from its
+ * source in indentation. Every other extension, unknown ones included, is compared with its
+ * indentation, because Starlark, F#, Scala 3, CoffeeScript, Ruby and shell can all read it.
+ */
+export const INDENT_COLLAPSIBLE_FILE =
+	/\.(?:jsx?|mjs|cjs|tsx?|java|c|h|cpp|hpp|cs|rs|go|kts?|dart|php|s?css|less|json)$/i;
+
 /** The only languages that get copy claims. Every other extension gets none. */
 export const COPY_FILE = /\.(?:jsx?|mjs|cjs|tsx?|pyi?|go|java)$/i;
 

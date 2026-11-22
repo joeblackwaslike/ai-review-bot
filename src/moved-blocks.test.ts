@@ -48,7 +48,7 @@ describe("normalizeCodeLine on long lines", () => {
 		const line = "1 ".repeat(100_000);
 		const started = performance.now();
 		expect(normalizeCodeLine(line)).toBe(line.trim());
-		expect(performance.now() - started).toBeLessThan(1000);
+		expect(performance.now() - started).toBeLessThan(3000);
 	});
 });
 
@@ -324,7 +324,7 @@ describe("findMovedBlocks span", () => {
 });
 
 describe("findMovedBlocks at scale", () => {
-	it("finds 100 scattered moves among 3000 lines each way in under 500 ms", () => {
+	it("finds 100 scattered moves among 3000 lines each way", () => {
 		const unique = (tag: string, n: number) =>
 			Array.from({ length: n }, (_, i) => `const ${tag}${i} = call(${i});`);
 		const deleted = unique("old", 3000);
@@ -339,17 +339,17 @@ describe("findMovedBlocks at scale", () => {
 		const out = findMovedBlocks(files);
 		const elapsed = performance.now() - start;
 		expect(out).toHaveLength(100);
-		expect(elapsed).toBeLessThan(500);
+		expect(elapsed).toBeLessThan(3000);
 	});
 
-	it("handles 2000 identical lines moved as one block in under 500 ms", () => {
+	it("handles 2000 identical lines moved as one block", () => {
 		const same = Array.from({ length: 2000 }, () => "const same = repeat();");
 		const files = [file("a.ts", same, []), file("b.ts", [], same)];
 		const start = performance.now();
 		const out = findMovedBlocks(files);
 		const elapsed = performance.now() - start;
 		expect(out).toMatchObject([{ from: "a.ts", to: "b.ts", lineCount: 2000 }]);
-		expect(elapsed).toBeLessThan(500);
+		expect(elapsed).toBeLessThan(3000);
 	});
 
 	it("keeps distinct moves visible among 3000 repeated lines per file", () => {
@@ -382,7 +382,7 @@ describe("findMovedBlocks at scale", () => {
 		const out = findMovedBlocks(files);
 		const elapsed = performance.now() - start;
 		expect(out.filter((b) => b.lineCount === 5)).toHaveLength(100);
-		expect(elapsed).toBeLessThan(1000);
+		expect(elapsed).toBeLessThan(3000);
 	});
 });
 

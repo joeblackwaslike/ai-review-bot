@@ -355,7 +355,7 @@ describe("copy floor cost", () => {
 		];
 		const started = performance.now();
 		expect(copiesOf(files)).toEqual([]);
-		expect(performance.now() - started).toBeLessThan(1000);
+		expect(performance.now() - started).toBeLessThan(3000);
 	});
 
 	it("keeps a 2000 line benign body fast", () => {

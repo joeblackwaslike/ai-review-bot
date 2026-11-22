@@ -5,6 +5,7 @@ import {
 	type Run,
 } from "../moved-blocks.js";
 import type { WorkBudget } from "./budget.js";
+import { INDENT_COLLAPSIBLE_FILE } from "./file-kinds.js";
 import {
 	hasOddBreak,
 	lexicallySafe,
@@ -184,6 +185,23 @@ function riskyLines(filename: string, lines: string[]): boolean[] {
 		if (backtickCount(line) % 2 === 1) inside = !inside;
 		return startsInside || inside;
 	});
+}
+
+/**
+ * Per line, whether it opens, sits inside or closes a multi-line string. Text there is data
+ * that only looks like a comment or a name, so such a line is never comment-only or a rename.
+ * A heredoc or triple-quote opener, or a template literal left open, marks every line.
+ */
+function literalLines(lines: string[]): boolean[] {
+	if (lines.some((l) => HEREDOC_OR_TRIPLE.test(l) || hasOddBreak(l)))
+		return lines.map(() => true);
+	let inside = false;
+	const marks = lines.map((line) => {
+		const startsInside = inside;
+		if (backtickCount(line) % 2 === 1) inside = !inside;
+		return startsInside || inside;
+	});
+	return inside ? marks.map(() => true) : marks;
 }
 
 /** Per line, whether it is wholly a comment: `//` or `#` lines, or lines of a `/* ... *\/` block opened in these lines. */
@@ -396,8 +414,20 @@ function identicalEdge(
 		!from.used[fromIndex] &&
 		!to.used[toIndex] &&
 		a.trim() !== "" &&
-		normalizeSafe(from.filename, [a])[0] === normalizeSafe(to.filename, [b])[0]
+		comparable(from.filename, [a])[0] === comparable(to.filename, [b])[0]
 	);
+}
+
+function collapsible(filename: string, lines: readonly string[]): boolean {
+	return (
+		INDENT_COLLAPSIBLE_FILE.test(filename) && lexicallySafe(filename, lines)
+	);
+}
+
+function comparable(filename: string, lines: readonly string[]): string[] {
+	return collapsible(filename, lines)
+		? normalizeSafe(filename, lines)
+		: [...lines];
 }
 
 interface EdgeStep {
@@ -496,14 +526,15 @@ export function build(
 	const baseRaw = from.raw.slice(fromStart, fromEnd);
 	const headRaw = to.raw.slice(toStart, toEnd);
 	const safe =
-		lexicallySafe(from.filename, baseRaw) &&
-		lexicallySafe(to.filename, headRaw);
+		collapsible(from.filename, baseRaw) && collapsible(to.filename, headRaw);
 	const baseCmp = safe ? normalizeSafe(from.filename, baseRaw) : baseRaw;
 	const headCmp = safe ? normalizeSafe(to.filename, headRaw) : headRaw;
 	const baseRisky = riskyLines(from.filename, baseRaw);
 	const headRisky = riskyLines(to.filename, headRaw);
 	const baseComment = commentLines(from.filename, baseRaw);
 	const headComment = commentLines(to.filename, headRaw);
+	const baseLiteral = literalLines(baseRaw);
+	const headLiteral = literalLines(headRaw);
 	const aligned = divergencesBetween(
 		baseRaw.length,
 		headRaw.length,
@@ -518,8 +549,11 @@ export function build(
 		: aligned;
 	const text = (lines: string[], index?: number) =>
 		index === undefined ? undefined : (lines[index] as string);
+	const inLiteral = (d: RawDivergence) =>
+		(d.baseIndex !== undefined && baseLiteral[d.baseIndex] === true) ||
+		(d.headIndex !== undefined && headLiteral[d.headIndex] === true);
 	const changed = raw.flatMap((d, at) =>
-		d.kind === "changed"
+		d.kind === "changed" && !inLiteral(d)
 			? [
 					{
 						at,
@@ -538,27 +572,29 @@ export function build(
 	const divergences = raw.map((d, at): Divergence => {
 		const baseText = text(baseRaw, d.baseIndex);
 		const headText = text(headRaw, d.headIndex);
-		const cls: DivergenceClass = isCommentOnly(
-			d,
-			d.baseIndex !== undefined && baseComment[d.baseIndex] === true,
-			d.headIndex !== undefined && headComment[d.headIndex] === true,
-			baseText,
-			headText,
-			trailing,
-		)
-			? "comment-only"
-			: renames.has(at)
-				? "rename"
-				: (d.kind === "changed" &&
-						receiverChangeClass(
-							baseText as string,
-							headText as string,
-							from.filename,
-							to.filename,
-							statementBoundary(baseRaw, baseDepths, d.baseIndex as number) &&
-								!continuesNext(headRaw, d.headIndex as number),
-						)) ||
-					"code";
+		const cls: DivergenceClass =
+			!inLiteral(d) &&
+			isCommentOnly(
+				d,
+				d.baseIndex !== undefined && baseComment[d.baseIndex] === true,
+				d.headIndex !== undefined && headComment[d.headIndex] === true,
+				baseText,
+				headText,
+				trailing,
+			)
+				? "comment-only"
+				: renames.has(at)
+					? "rename"
+					: (d.kind === "changed" &&
+							receiverChangeClass(
+								baseText as string,
+								headText as string,
+								from.filename,
+								to.filename,
+								statementBoundary(baseRaw, baseDepths, d.baseIndex as number) &&
+									!continuesNext(headRaw, d.headIndex as number),
+							)) ||
+						"code";
 		if (cls === "rename")
 			for (const name of renames.get(at) ?? []) renamedNames.add(name);
 		if (

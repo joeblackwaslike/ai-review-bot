@@ -1,4 +1,5 @@
 import { isIndentSensitive, type PushFile } from "../moved-blocks.js";
+import { INDENT_COLLAPSIBLE_FILE } from "./file-kinds.js";
 import { hasBrokenContinuation, hasOddBreak } from "./lexical.js";
 import {
 	hasBlockScalarHeader,
@@ -323,11 +324,15 @@ function indexOfPatches(files: readonly PushFile[]): PatchIndex {
 	return built;
 }
 
-function readSide(spans: Span[], index: PatchIndex): Side[] | null {
+function readSide(
+	spans: Span[],
+	index: PatchIndex,
+	want: Span["side"],
+): Side[] | null {
 	const sides: Side[] = [];
 	for (const span of spans) {
 		const parsed = index.patches.get(span.filename);
-		if (!parsed) return null;
+		if (!parsed || span.side !== want) return null;
 		const source = span.side === "base" ? parsed.deleted : parsed.added;
 		const side: Side = {
 			filename: span.filename,
@@ -416,7 +421,9 @@ function supports(
 		return base !== undefined && head !== undefined && base !== head;
 	if (divergence.kind === "removed")
 		return base !== undefined && head === undefined;
-	return head !== undefined && base === undefined;
+	if (divergence.kind === "inserted")
+		return head !== undefined && base === undefined;
+	return false;
 }
 
 export function unclaimed(sides: Side[], spent: Set<string>): Entry[] {
@@ -428,7 +435,9 @@ export function unclaimed(sides: Side[], spent: Set<string>): Entry[] {
 						{
 							text,
 							inLiteral: side.inLiteral[i] as boolean,
-							indentSensitive: isIndentSensitive(side.filename),
+							indentSensitive:
+								isIndentSensitive(side.filename) ||
+								!INDENT_COLLAPSIBLE_FILE.test(side.filename),
 						},
 					],
 		),
@@ -627,6 +636,13 @@ export function classesHold(
 		const at = side?.positions.indexOf(span?.startLine ?? -1) ?? -1;
 		return at >= 0 && marks.get(side?.filename as string)?.[at] === true;
 	};
+	const literal = (span: Span | undefined, sides: Side[]) => {
+		const side = sides.find((s) => s.filename === span?.filename);
+		const at = side ? positionAt(side.positions, span?.startLine ?? -1) : -1;
+		return at >= 0 && side?.inLiteral[at] === true;
+	};
+	const inLiteral = (d: Divergence) =>
+		literal(d.base, base) || literal(d.head, head);
 	let code = 0;
 	let receivers = false;
 	const renamePairs: [string, string][][] = [];
@@ -638,6 +654,7 @@ export function classesHold(
 		} else if (d.class === "receiver") {
 			receivers = true;
 		} else if (d.class === "comment-only") {
+			if (inLiteral(d)) return null;
 			const slashBoth =
 				slashStyle(d.base?.filename ?? "") &&
 				slashStyle(d.head?.filename ?? "");
@@ -654,6 +671,7 @@ export function classesHold(
 				return null;
 		} else if (d.class === "rename") {
 			if (
+				inLiteral(d) ||
 				d.kind !== "changed" ||
 				baseText === undefined ||
 				headText === undefined
@@ -694,8 +712,8 @@ function textOf(span: Span | undefined, sides: Side[]): string | undefined {
 export function verifyRelocation(op: Operation, files: PushFile[]): boolean {
 	if (op.type === "copy") return false;
 	const index = indexOfPatches(files);
-	const base = readSide(op.from, index);
-	const head = readSide(op.to, index);
+	const base = readSide(op.from, index, "base");
+	const head = readSide(op.to, index, "head");
 	if (!base || !head) return false;
 	if (!sameFileHolds(base, head, index)) return false;
 	if (!smallClaimHolds(base, head, index)) return false;
@@ -715,7 +733,7 @@ export function verifyRelocation(op: Operation, files: PushFile[]): boolean {
 			unclaimed(head, spent.head),
 		)
 	)
-		return (op.shape?.reindent ?? 0) === 0;
+		return (op.shape?.reindent ?? 0) === 0 && keepsOrder(op, base, head, spent);
 	if (op.divergences.length === 0) return tokenVerified(op, base, head, index);
 	return op.divergences.every(
 		(d) => d.class === "receiver" || d.class === "code",
@@ -753,6 +771,46 @@ export function claimedDivergences(
 			return null;
 	}
 	return { base: baseSpent, head: headSpent };
+}
+
+function lineKeys(sides: Side[]): string[] {
+	return sides.flatMap((side) =>
+		side.positions.map((line) => `${side.filename}:${line}`),
+	);
+}
+
+/**
+ * Whether the pairs of a positional claim keep their order: the unchanged lines pair up in
+ * sequence, and together with the listed changed pairs no two pairs cross. A changed line
+ * that moved past unchanged lines is a reordering, whatever class it carries.
+ */
+function keepsOrder(
+	op: Operation,
+	base: Side[],
+	head: Side[],
+	spent: { base: Set<string>; head: Set<string> },
+): boolean {
+	const baseKeys = lineKeys(base);
+	const headKeys = lineKeys(head);
+	const baseAt = new Map(baseKeys.map((key, at) => [key, at]));
+	const headAt = new Map(headKeys.map((key, at) => [key, at]));
+	const keptBase = baseKeys.filter((key) => !spent.base.has(key));
+	const keptHead = headKeys.filter((key) => !spent.head.has(key));
+	const pairs: [number, number][] = keptBase.map((key, k) => [
+		baseAt.get(key) as number,
+		headAt.get(keptHead[k] as string) as number,
+	]);
+	for (const d of op.divergences) {
+		if (d.kind !== "changed" || !d.base || !d.head) continue;
+		pairs.push([
+			baseAt.get(`${d.base.filename}:${d.base.startLine}`) as number,
+			headAt.get(`${d.head.filename}:${d.head.startLine}`) as number,
+		]);
+	}
+	pairs.sort((a, b) => a[0] - b[0]);
+	return pairs.every(
+		(pair, i) => i === 0 || pair[1] > (pairs[i - 1] as [number, number])[1],
+	);
 }
 
 const positionIndexes = new WeakMap<number[], Map<number, number>>();

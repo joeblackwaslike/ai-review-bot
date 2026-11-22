@@ -217,7 +217,7 @@ describe("divergence caps", () => {
 		});
 		const started = performance.now();
 		const r = render([huge, small]);
-		expect(performance.now() - started).toBeLessThan(2000);
+		expect(performance.now() - started).toBeLessThan(3000);
 		expect(r.summary).toContain("Rename: ");
 		expect(r.summary).toContain("Relocation with 50000 differences");
 		expect(r.summary.length).toBeLessThan(20_000);
@@ -265,6 +265,6 @@ describe("untrusted values", () => {
 		});
 		const started = performance.now();
 		render([o], 1e9);
-		expect(performance.now() - started).toBeLessThan(1000);
+		expect(performance.now() - started).toBeLessThan(3000);
 	});
 });

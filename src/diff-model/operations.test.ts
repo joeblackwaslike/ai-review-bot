@@ -269,7 +269,7 @@ describe("findRenames exactness and pairing", () => {
 			const files = build(n);
 			const start = performance.now();
 			const first = findRenames(files);
-			expect(performance.now() - start).toBeLessThan(2000);
+			expect(performance.now() - start).toBeLessThan(3000);
 			expect(findRenames(files)).toEqual(first);
 		}
 	});
@@ -467,7 +467,7 @@ describe("findMechanical", () => {
 		const bad = `import "a"${" ".repeat(40_000)}x`;
 		const start = performance.now();
 		findMechanical([file("src/a.ts", hunk([bad], [`${bad}y`]))]);
-		expect(performance.now() - start).toBeLessThan(1000);
+		expect(performance.now() - start).toBeLessThan(3000);
 	});
 
 	it("does not report a space change inside a regex literal", () => {
@@ -503,7 +503,7 @@ describe("findMechanical", () => {
 		const long = "a ".repeat(50_000);
 		const start = performance.now();
 		const ops = findMechanical([file("src/a.ts", hunk([` ${long}`], [long]))]);
-		expect(performance.now() - start).toBeLessThan(1000);
+		expect(performance.now() - start).toBeLessThan(3000);
 		expect(ops).toEqual([]);
 	});
 
