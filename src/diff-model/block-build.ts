@@ -5,6 +5,7 @@ import {
 	type Run,
 } from "../moved-blocks.js";
 import type { WorkBudget } from "./budget.js";
+import { INDENT_COLLAPSIBLE_FILE } from "./file-kinds.js";
 import {
 	hasOddBreak,
 	lexicallySafe,
@@ -175,13 +176,51 @@ function backtickCount(line: string): number {
 function riskyLines(filename: string, lines: string[]): boolean[] {
 	if (
 		isIndentSensitive(filename) ||
-		lines.some((l) => HEREDOC_OR_TRIPLE.test(l) || hasOddBreak(l))
+		lines.some(
+			(l) => HEREDOC_OR_TRIPLE.test(l) || hasOddBreak(l) || continuesString(l),
+		)
 	)
 		return lines.map(() => true);
 	let inside = false;
 	return lines.map((line) => {
 		const startsInside = inside;
 		if (backtickCount(line) % 2 === 1) inside = !inside;
+		return startsInside || inside;
+	});
+}
+
+/** Whether a line ends in an unescaped backslash, or holds an odd count of unescaped double quotes: a string or macro that may continue on the next line. */
+export function continuesString(line: string): boolean {
+	const text = line.trimEnd();
+	let slashes = 0;
+	while (slashes < text.length && text[text.length - 1 - slashes] === "\\")
+		slashes++;
+	if (slashes % 2 === 1) return true;
+	return (line.replace(/\\./g, "").match(/"/g) ?? []).length % 2 === 1;
+}
+
+/**
+ * Per line, whether it opens, sits inside or closes a multi-line string. Text there is data
+ * that only looks like a comment or a name, so such a line is never comment-only or a rename.
+ * Every line of the block is marked when any line holds a heredoc or triple-quote opener, an
+ * odd break, a backtick beside a quote or slash, a continued string, or when the block has more
+ * than one backtick pair or a backtick left open.
+ */
+export function literalLines(lines: string[]): boolean[] {
+	const ticks = (line: string) => line.split("`").length - 1;
+	const total = lines.reduce((sum, line) => sum + ticks(line), 0);
+	const risky = lines.some(
+		(line) =>
+			HEREDOC_OR_TRIPLE.test(line) ||
+			hasOddBreak(line) ||
+			continuesString(line) ||
+			(ticks(line) > 0 && /["'/]/.test(line)),
+	);
+	if (risky || total > 2 || total === 1) return lines.map(() => true);
+	let inside = false;
+	return lines.map((line) => {
+		const startsInside = inside;
+		if (ticks(line) % 2 === 1) inside = !inside;
 		return startsInside || inside;
 	});
 }
@@ -396,8 +435,22 @@ function identicalEdge(
 		!from.used[fromIndex] &&
 		!to.used[toIndex] &&
 		a.trim() !== "" &&
-		normalizeSafe(from.filename, [a])[0] === normalizeSafe(to.filename, [b])[0]
+		comparable(from.filename, [a])[0] === comparable(to.filename, [b])[0]
 	);
+}
+
+function collapsible(filename: string, lines: readonly string[]): boolean {
+	return (
+		INDENT_COLLAPSIBLE_FILE.test(filename) &&
+		lexicallySafe(filename, lines) &&
+		!lines.some(continuesString)
+	);
+}
+
+function comparable(filename: string, lines: readonly string[]): string[] {
+	return collapsible(filename, lines)
+		? normalizeSafe(filename, lines)
+		: [...lines];
 }
 
 interface EdgeStep {
@@ -496,14 +549,15 @@ export function build(
 	const baseRaw = from.raw.slice(fromStart, fromEnd);
 	const headRaw = to.raw.slice(toStart, toEnd);
 	const safe =
-		lexicallySafe(from.filename, baseRaw) &&
-		lexicallySafe(to.filename, headRaw);
+		collapsible(from.filename, baseRaw) && collapsible(to.filename, headRaw);
 	const baseCmp = safe ? normalizeSafe(from.filename, baseRaw) : baseRaw;
 	const headCmp = safe ? normalizeSafe(to.filename, headRaw) : headRaw;
 	const baseRisky = riskyLines(from.filename, baseRaw);
 	const headRisky = riskyLines(to.filename, headRaw);
 	const baseComment = commentLines(from.filename, baseRaw);
 	const headComment = commentLines(to.filename, headRaw);
+	const baseLiteral = literalLines(baseRaw);
+	const headLiteral = literalLines(headRaw);
 	const aligned = divergencesBetween(
 		baseRaw.length,
 		headRaw.length,
@@ -518,8 +572,11 @@ export function build(
 		: aligned;
 	const text = (lines: string[], index?: number) =>
 		index === undefined ? undefined : (lines[index] as string);
+	const inLiteral = (d: RawDivergence) =>
+		(d.baseIndex !== undefined && baseLiteral[d.baseIndex] === true) ||
+		(d.headIndex !== undefined && headLiteral[d.headIndex] === true);
 	const changed = raw.flatMap((d, at) =>
-		d.kind === "changed"
+		d.kind === "changed" && !inLiteral(d)
 			? [
 					{
 						at,
@@ -538,27 +595,29 @@ export function build(
 	const divergences = raw.map((d, at): Divergence => {
 		const baseText = text(baseRaw, d.baseIndex);
 		const headText = text(headRaw, d.headIndex);
-		const cls: DivergenceClass = isCommentOnly(
-			d,
-			d.baseIndex !== undefined && baseComment[d.baseIndex] === true,
-			d.headIndex !== undefined && headComment[d.headIndex] === true,
-			baseText,
-			headText,
-			trailing,
-		)
-			? "comment-only"
-			: renames.has(at)
-				? "rename"
-				: (d.kind === "changed" &&
-						receiverChangeClass(
-							baseText as string,
-							headText as string,
-							from.filename,
-							to.filename,
-							statementBoundary(baseRaw, baseDepths, d.baseIndex as number) &&
-								!continuesNext(headRaw, d.headIndex as number),
-						)) ||
-					"code";
+		const cls: DivergenceClass =
+			!inLiteral(d) &&
+			isCommentOnly(
+				d,
+				d.baseIndex !== undefined && baseComment[d.baseIndex] === true,
+				d.headIndex !== undefined && headComment[d.headIndex] === true,
+				baseText,
+				headText,
+				trailing,
+			)
+				? "comment-only"
+				: renames.has(at)
+					? "rename"
+					: (d.kind === "changed" &&
+							receiverChangeClass(
+								baseText as string,
+								headText as string,
+								from.filename,
+								to.filename,
+								statementBoundary(baseRaw, baseDepths, d.baseIndex as number) &&
+									!continuesNext(headRaw, d.headIndex as number),
+							)) ||
+						"code";
 		if (cls === "rename")
 			for (const name of renames.get(at) ?? []) renamedNames.add(name);
 		if (

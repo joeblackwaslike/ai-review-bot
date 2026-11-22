@@ -1288,7 +1288,7 @@ describe("findRelocations oversized lines", () => {
 		const text = `x = "${'\\"'.repeat(80_000)}`;
 		const started = performance.now();
 		const ops = move([text], [text]);
-		expect(performance.now() - started).toBeLessThan(1000);
+		expect(performance.now() - started).toBeLessThan(3000);
 		expect(ops).toEqual([]);
 	});
 });

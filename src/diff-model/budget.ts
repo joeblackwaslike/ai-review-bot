@@ -14,7 +14,7 @@ const DEFAULT_LIMITS: BudgetLimits = {
 };
 
 /**
- * Three independent work pools for one change. Each spend call either takes the
+ * Four independent work pools for one change. Each spend call either takes the
  * full amount from its pool or takes nothing and marks the budget exhausted. Work cut short is silent.
  */
 export class WorkBudget {

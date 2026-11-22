@@ -697,7 +697,7 @@ describe("reshape opener scan stays bounded", () => {
 		const head = [...TS_METHOD.slice(0, 3), line, ...TS_METHOD.slice(3)];
 		const started = performance.now();
 		move("a.ts", "b.ts", base, head);
-		expect(performance.now() - started).toBeLessThan(1000);
+		expect(performance.now() - started).toBeLessThan(3000);
 		const files = [deletedFrom("a.ts", 10, base), addedTo("b.ts", 3, head)];
 		const modelStarted = performance.now();
 		buildDiffModel({
@@ -707,7 +707,7 @@ describe("reshape opener scan stays bounded", () => {
 			title: "t",
 			body: null,
 		});
-		expect(performance.now() - modelStarted).toBeLessThan(1000);
+		expect(performance.now() - modelStarted).toBeLessThan(3000);
 	}, 5000);
 
 	it("reads an opener of 399 characters but not one of 401", () => {

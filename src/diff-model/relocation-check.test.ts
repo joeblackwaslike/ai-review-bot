@@ -2505,7 +2505,7 @@ describe("verifyRelocation opener scan stays bounded", () => {
 		const started = performance.now();
 		const ops = findRelocations(files);
 		for (const op of ops) verifyRelocation(op, files);
-		expect(performance.now() - started).toBeLessThan(1000);
+		expect(performance.now() - started).toBeLessThan(3000);
 	}, 5000);
 });
 

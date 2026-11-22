@@ -10,7 +10,7 @@ import { type Built, build, chainSeeds, span } from "./block-build.js";
 import { type BudgetLimits, WorkBudget } from "./budget.js";
 import { findCopies } from "./copies.js";
 import { findDeclarationMoves } from "./declarations.js";
-import { UNMATCHED_FILES } from "./file-kinds.js";
+import { INDENT_COLLAPSIBLE_FILE, UNMATCHED_FILES } from "./file-kinds.js";
 import { findReshapes } from "./reshape.js";
 import { filesWithLiterals, findTokenOperations } from "./token-pass.js";
 import type { Operation } from "./types.js";
@@ -80,7 +80,10 @@ export function findRelocations(
 	limits: Partial<BudgetLimits> = {},
 ): Operation[] {
 	const matched = files.filter((f) => !UNMATCHED_FILES.test(f.filename));
-	const { deleted, added } = collectRuns(matched);
+	const { deleted, added } = collectRuns(
+		matched,
+		(name) => !INDENT_COLLAPSIBLE_FILE.test(name),
+	);
 	const budget = new WorkBudget(limits);
 	const ctx = { deleted, added, budget };
 	const seeds = selectMatches(deleted, added, 1, (c) => acceptSeed(c, ctx), {

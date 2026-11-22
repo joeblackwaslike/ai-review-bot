@@ -1,4 +1,5 @@
 import { type PushFile, UNSAFE_FILE_TEXT } from "../moved-blocks.js";
+import { INDENT_COLLAPSIBLE_FILE } from "./file-kinds.js";
 import { lexicallySafe, normalizeSafe } from "./lexical.js";
 import type { Operation, Span } from "./types.js";
 
@@ -116,6 +117,7 @@ function importKey(filename: string, line: string): string | null {
 
 function isWhitespaceOnly(filename: string, hunk: HunkLines): boolean {
 	if (hunk.groups !== 1 || PROSE_FILE.test(filename)) return false;
+	if (!INDENT_COLLAPSIBLE_FILE.test(filename)) return false;
 	if (hunk.deleted.length === 0 || hunk.deleted.length !== hunk.added.length) {
 		return false;
 	}

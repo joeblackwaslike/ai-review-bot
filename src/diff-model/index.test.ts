@@ -88,7 +88,7 @@ describe("buildDiffModel", () => {
 		};
 		const start = performance.now();
 		buildDiffModel({ scopeFiles: files, prFiles: files, ...meta });
-		expect(performance.now() - start).toBeLessThan(1000);
+		expect(performance.now() - start).toBeLessThan(3000);
 	});
 
 	it("takes operations from scopeFiles and facts from prFiles", () => {

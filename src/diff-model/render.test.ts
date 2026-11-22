@@ -429,10 +429,10 @@ describe("renderDiffModel", () => {
 		expect(s).toContain("whole PR");
 	});
 
-	it("reports dropped relocation claims as a count", () => {
+	it("reports dropped claims as a count", () => {
 		const s = renderDiffModel(model({ droppedClaims: 2 }), OPTS).summary;
 		expect(s).toContain(
-			"2 relocation claims were not confirmed by an independent check and are not listed.",
+			"2 claims were not confirmed by an independent check and are not listed.",
 		);
 	});
 

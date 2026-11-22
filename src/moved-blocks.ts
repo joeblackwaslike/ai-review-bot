@@ -149,14 +149,15 @@ function countsTowardBlock(line: string): boolean {
 export function extractRuns(
 	filename: string,
 	patch: string | undefined,
+	keepsIndent: (filename: string) => boolean = isIndentSensitive,
 ): { deleted: Run[]; added: Run[] } {
 	const deleted: Run[] = [];
 	const added: Run[] = [];
 	if (!patch) return { deleted, added };
 	const literalRisk = UNSAFE_FILE_TEXT.test(patch);
 	const indentSensitive = isIndentSensitive(filename);
-	const normalize = (line: string) =>
-		normalizeCodeLine(line, { keepIndent: indentSensitive });
+	const keepIndent = keepsIndent(filename);
+	const normalize = (line: string) => normalizeCodeLine(line, { keepIndent });
 	let del: string[] = [];
 	let add: string[] = [];
 	let delRaw: string[] = [];
@@ -518,15 +519,22 @@ export function collectContextRuns(files: PushFile[]): Run[] {
 	return runs;
 }
 
-/** Every file's deleted and added runs, indexed in file order. */
-export function collectRuns(files: PushFile[]): {
+/**
+ * Every file's deleted and added runs, indexed in file order. `keepsIndent` names the files
+ * whose lines are compared with their leading whitespace, which is the indentation-sensitive
+ * set unless a caller passes a wider one.
+ */
+export function collectRuns(
+	files: PushFile[],
+	keepsIndent?: (filename: string) => boolean,
+): {
 	deleted: Run[];
 	added: Run[];
 } {
 	const deleted: Run[] = [];
 	const added: Run[] = [];
 	for (const f of files) {
-		const runs = extractRuns(f.filename, f.patch);
+		const runs = extractRuns(f.filename, f.patch, keepsIndent);
 		deleted.push(...runs.deleted);
 		added.push(...runs.added);
 	}

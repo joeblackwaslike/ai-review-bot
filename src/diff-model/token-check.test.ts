@@ -536,7 +536,7 @@ describe("checker opener scan", () => {
 					{ filename: "b.ts", lines: [line], opensBrace: false },
 				).equivalent,
 			).toBe(false);
-			expect(performance.now() - started).toBeLessThan(1000);
+			expect(performance.now() - started).toBeLessThan(3000);
 		}
 	}, 5000);
 

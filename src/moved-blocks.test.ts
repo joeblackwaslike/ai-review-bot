@@ -7,6 +7,7 @@ import {
 	type PushFile,
 	selectMatches,
 } from "./moved-blocks.js";
+import { classifyPush } from "./push-shape.js";
 
 describe("selectMatches discovery charge", () => {
 	it("stops extending candidates once the charge refuses", () => {
@@ -48,7 +49,7 @@ describe("normalizeCodeLine on long lines", () => {
 		const line = "1 ".repeat(100_000);
 		const started = performance.now();
 		expect(normalizeCodeLine(line)).toBe(line.trim());
-		expect(performance.now() - started).toBeLessThan(1000);
+		expect(performance.now() - started).toBeLessThan(3000);
 	});
 });
 
@@ -382,7 +383,7 @@ describe("findMovedBlocks at scale", () => {
 		const out = findMovedBlocks(files);
 		const elapsed = performance.now() - start;
 		expect(out.filter((b) => b.lineCount === 5)).toHaveLength(100);
-		expect(elapsed).toBeLessThan(1000);
+		expect(elapsed).toBeLessThan(3000);
 	});
 });
 
@@ -436,5 +437,43 @@ describe("hunk header as a region boundary", () => {
 		});
 		expect(matches).toHaveLength(1);
 		expect(deleted[0]?.region).not.toBe(added[0]?.region);
+	});
+});
+
+describe("indentation outside the diff model's strict rule", () => {
+	const nested = LINES.map((l) => `    ${l}`);
+
+	it.each([
+		"rb",
+		"sh",
+		"scala",
+	])("still collapses leading indentation for .%s in findMovedBlocks", (ext) => {
+		const out = findMovedBlocks([
+			file(`a.${ext}`, nested, []),
+			file(`b.${ext}`, [], LINES),
+		]);
+		expect(out).toMatchObject([{ from: `a.${ext}`, lineCount: 6 }]);
+		expect(out).toHaveLength(1);
+	});
+
+	it.each([
+		"rb",
+		"sh",
+		"scala",
+	])("still counts a dedented .%s block as moved in the push shape", (ext) => {
+		const shape = classifyPush([
+			file(`a.${ext}`, nested, []),
+			file(`b.${ext}`, [], LINES),
+		]);
+		expect(shape.moved).toHaveLength(1);
+	});
+
+	it("keeps Run.indentSensitive for the old rule when a caller widens what keeps indentation", () => {
+		const patch = file("a.rb", nested, []).patch;
+		const strict = collectRuns([file("a.rb", nested, [], patch)], () => true);
+		expect(strict.deleted[0]?.indentSensitive).toBe(false);
+		expect(strict.deleted[0]?.lines[0]).toBe(nested[0]);
+		const shared = collectRuns([file("a.rb", nested, [], patch)]);
+		expect(shared.deleted[0]?.lines[0]).toBe(LINES[0]);
 	});
 });

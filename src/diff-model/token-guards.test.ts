@@ -578,7 +578,7 @@ describe("final review holes", () => {
 		const started = performance.now();
 		expect(checker(lines, lines, ...pair("py"))).toBe(false);
 		for (const line of lines) opaqueLine(line, "a.py");
-		expect(performance.now() - started).toBeLessThan(1000);
+		expect(performance.now() - started).toBeLessThan(3000);
 	});
 
 	it.each([

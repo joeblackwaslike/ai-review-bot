@@ -528,7 +528,7 @@ function layout(
 		...detailed.map((op, i) => detailBlock(op, i + 1, brief.has(op))),
 		countsLine(ranked.slice(detailCount)),
 		model.droppedClaims > 0
-			? `${plural(model.droppedClaims, "relocation claim")} ${model.droppedClaims === 1 ? "was" : "were"} not confirmed by an independent check and ${model.droppedClaims === 1 ? "is" : "are"} not listed.`
+			? `${plural(model.droppedClaims, "claim")} ${model.droppedClaims === 1 ? "was" : "were"} not confirmed by an independent check and ${model.droppedClaims === 1 ? "is" : "are"} not listed.`
 			: null,
 		testsLine(model.facts.testsChanged),
 		intentLine(model, ranked, detailCount),

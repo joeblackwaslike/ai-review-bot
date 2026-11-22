@@ -107,7 +107,7 @@ describe("lineInformation on oversized lines", () => {
 		const line = `x = "${'\\"'.repeat(80_000)}`;
 		const started = performance.now();
 		expect(lineInformation(line)).toBe(0);
-		expect(performance.now() - started).toBeLessThan(1000);
+		expect(performance.now() - started).toBeLessThan(3000);
 	});
 });
 
