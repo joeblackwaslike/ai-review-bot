@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PushFile } from "../moved-blocks.js";
+import { continuesString } from "./block-build.js";
 import { INDENT_COLLAPSIBLE_FILE } from "./file-kinds.js";
 import { buildDiffModel } from "./index.js";
 import { findMechanical } from "./operations.js";
@@ -776,5 +777,15 @@ describe("the checker's whitespace-free list matches the matcher's", () => {
 
 	it.each(names)("agrees on %s", (name) => {
 		expect(WHITESPACE_FREE.test(name)).toBe(INDENT_COLLAPSIBLE_FILE.test(name));
+	});
+});
+
+describe("the trailing-backslash scan stays linear", () => {
+	it("handles a long run of backslashes that does not end the line", () => {
+		const hostile = `${"\\".repeat(200_000)}x`;
+		const started = performance.now();
+		expect(continuesString(hostile)).toBe(false);
+		expect(continuesString(`${"\\".repeat(200_001)}`)).toBe(true);
+		expect(performance.now() - started).toBeLessThan(500);
 	});
 });

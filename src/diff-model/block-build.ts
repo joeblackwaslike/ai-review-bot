@@ -191,8 +191,11 @@ function riskyLines(filename: string, lines: string[]): boolean[] {
 
 /** Whether a line ends in an unescaped backslash, or holds an odd count of unescaped double quotes: a string or macro that may continue on the next line. */
 export function continuesString(line: string): boolean {
-	const trailing = /\\+$/.exec(line.trimEnd());
-	if (trailing && trailing[0].length % 2 === 1) return true;
+	const text = line.trimEnd();
+	let slashes = 0;
+	while (slashes < text.length && text[text.length - 1 - slashes] === "\\")
+		slashes++;
+	if (slashes % 2 === 1) return true;
 	return (line.replace(/\\./g, "").match(/"/g) ?? []).length % 2 === 1;
 }
 

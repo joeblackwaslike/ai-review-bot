@@ -375,7 +375,10 @@ function mayHideString(lines: string[]): boolean {
 		const here = count(line, /`/g);
 		ticks += here;
 		if (here > 0 && /["'/]/.test(line)) return true;
-		const slashes = /\\*$/.exec(line.trimEnd())?.[0].length ?? 0;
+		const text = line.trimEnd();
+		let slashes = 0;
+		while (slashes < text.length && text[text.length - 1 - slashes] === "\\")
+			slashes++;
 		if (slashes % 2 === 1) return true;
 		if (count(line.replace(/\\[\s\S]/g, ""), /"/g) % 2 === 1) return true;
 	}
