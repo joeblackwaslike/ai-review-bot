@@ -40,7 +40,6 @@ const FILLER_WORDS = new Set(
 );
 const IMPORT_LINE =
 	/^(?:import\b|export\s+(?:\*|\{[^}]*\})\s*(?:as\s+\w+\s*)?(?:from\b|;|$)|from\s+\S+\s+import\b|use\s+[\w:{]|require(?:_relative)?\b|#include\b|package\b)|\brequire\s*\(|\bimport\s*\(/;
-const CONTINUATION = /^(?:\.[A-Za-z_$]|[?:]|=>|\+|,|&&|\|\|)/;
 const LITERALS =
 	/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\b\d[\w.]*/g;
 const WORDS = /[A-Za-z_$][\w$]*/g;
@@ -48,14 +47,73 @@ const DEFINITION_START =
 	/^(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function\b|class\b|def\b|fn\b|func\b|pub\s+fn\b|const\s+[A-Za-z_$]|type\s+\w|interface\s+\w|enum\s+\w)/;
 const DEFINITION_END = /^(?:[}\]]|end\b)/;
 const ONE_LINE_DECLARATION =
-	/^(?:(?:export\s+)?(?:pub\s+)?(?:declare\s+)?(?:const|let|var|static|type|interface|enum)\s+(?:mut\s+)?([A-Za-z_$][\w$]*)|([A-Z][A-Z0-9_]*)\s*(?::[^=]+)?=)/;
+	/^(?:(?:export\s+)?(?:pub\s+)?(?:declare\s+)?(?:const|let|var|static|type|interface|enum)\s+(?:mut\s+)?([A-Za-z_$][\w$]*)|([A-Z][A-Z0-9_]*)\s*(?::[^=]+)?=(?!=))/;
 const SCREAMING = /^[A-Z][A-Z0-9_]*$/;
+const SHORTEST_DECLARED_NAME = 3;
+const MIN_VALUE_OVERLAP = 0.5;
+const OPERATOR_STARTS = "?:,=^%&|*+-.";
+const LISTED_STARTS = "?:,+";
+const CLOSING_BRACKETS = ")]}";
+const OPERATOR_ENDS = "=+*%&|^?:\\([-";
+const STATEMENT_ENDS = ";}]),>";
+const BLOCK_END_WORD = /\b(?:end|fi|done|esac)$/;
+const PROSE_NAME = /\.(?:md|mdx|txt|rst|adoc)$/i;
 
-function isTopLevelDeclaration(line: string): boolean {
+function declaredNameOf(line: string): string | undefined {
 	const found = ONE_LINE_DECLARATION.exec(line.trim());
 	const name = found?.[1] ?? found?.[2];
-	if (name === undefined) return false;
-	return !/^\s/.test(line) || SCREAMING.test(name);
+	if (name === undefined || name.length < SHORTEST_DECLARED_NAME)
+		return undefined;
+	return !/^\s/.test(line) || SCREAMING.test(name) ? name : undefined;
+}
+
+function declaredValue(line: string, name: string): string {
+	const text = line.trim();
+	const at = text.indexOf("=");
+	return at >= 0
+		? text.slice(at + 1)
+		: text.slice(text.indexOf(name) + name.length);
+}
+
+function fileKind(filename: string): string {
+	const ext = (filename.split(".").pop() ?? filename).toLowerCase();
+	if (/^(?:[cm]?[jt]sx?)$/.test(ext)) return "script";
+	if (/^(?:c|h|cc|cpp|hpp)$/.test(ext)) return "native";
+	return ext;
+}
+
+function valueOverlap(a: string, b: string): number {
+	const left = new Set(a.slice(0, LONGEST_RENAMABLE_LINE).match(WORD) ?? []);
+	const right = new Set(b.slice(0, LONGEST_RENAMABLE_LINE).match(WORD) ?? []);
+	let both = 0;
+	for (const word of left) if (right.has(word)) both++;
+	const all = left.size + right.size - both;
+	return all === 0 ? 0 : both / all;
+}
+
+function indentWidth(line: string): number {
+	return line.length - line.trimStart().length;
+}
+
+function listsItems(filename: string): boolean {
+	return isIndentSensitive(filename) || PROSE_NAME.test(filename);
+}
+
+function beginsMidStatement(text: string, listy: boolean): boolean {
+	const first = text[0];
+	if (first === undefined) return false;
+	if (CLOSING_BRACKETS.includes(first)) return true;
+	if (listy) {
+		return (
+			text.startsWith("&&") ||
+			text.startsWith("||") ||
+			text.startsWith("=>") ||
+			LISTED_STARTS.includes(first) ||
+			/^\.[A-Za-z_$]/.test(text)
+		);
+	}
+	if (OPERATOR_STARTS.includes(first)) return true;
+	return first === "/" && !text.startsWith("//") && !text.startsWith("/*");
 }
 
 interface Side {
@@ -63,6 +121,9 @@ interface Side {
 	lines: string[];
 	positions: number[];
 	inLiteral: boolean[];
+	hunks: Set<number>;
+	groups: Set<number>;
+	following: string | undefined;
 }
 
 interface Entry {
@@ -71,50 +132,153 @@ interface Entry {
 	indentSensitive: boolean;
 }
 
-interface ChangedLines {
-	deleted: Map<number, string>;
-	added: Map<number, string>;
+interface PatchRow {
+	text: string;
+	hunk: number;
+	group: number;
+	following: string | undefined;
 }
 
-function changedLines(patch: string | undefined): ChangedLines {
-	const out: ChangedLines = { deleted: new Map(), added: new Map() };
+interface ParsedPatch {
+	deleted: Map<number, PatchRow>;
+	added: Map<number, PatchRow>;
+}
+
+interface Scanned {
+	sign: "-" | "+" | " " | "@";
+	text: string;
+	row?: PatchRow;
+}
+
+const parsedPatches = new WeakMap<PushFile, ParsedPatch>();
+
+function scanPatch(patch: string | undefined): ParsedPatch {
+	const out: ParsedPatch = { deleted: new Map(), added: new Map() };
+	const scanned: Scanned[] = [];
 	let oldLine = 0;
 	let newLine = 0;
-	for (const row of (patch ?? "").split("\n")) {
-		const header = HUNK_HEADER.exec(row);
+	let hunk = 0;
+	let group = 0;
+	let changing = false;
+	for (const raw of (patch ?? "").split("\n")) {
+		const header = HUNK_HEADER.exec(raw);
 		if (header) {
 			oldLine = Number(header[1]);
 			newLine = Number(header[2]);
-		} else if (row.startsWith("-")) {
-			out.deleted.set(oldLine++, row.slice(1));
-		} else if (row.startsWith("+")) {
-			out.added.set(newLine++, row.slice(1));
-		} else if (row.startsWith(" ")) {
+			hunk++;
+			changing = false;
+			scanned.push({ sign: "@", text: raw });
+		} else if (raw.startsWith("-") || raw.startsWith("+")) {
+			if (!changing) group++;
+			changing = true;
+			const row: PatchRow = {
+				text: raw.slice(1),
+				hunk,
+				group,
+				following: undefined,
+			};
+			if (raw.startsWith("-")) out.deleted.set(oldLine++, row);
+			else out.added.set(newLine++, row);
+			scanned.push({ sign: raw[0] as "-" | "+", text: row.text, row });
+		} else if (raw.startsWith(" ")) {
+			changing = false;
 			oldLine++;
 			newLine++;
+			scanned.push({ sign: " ", text: raw.slice(1) });
+		}
+	}
+	let nextBase: string | undefined;
+	let nextHead: string | undefined;
+	for (let i = scanned.length - 1; i >= 0; i--) {
+		const item = scanned[i] as Scanned;
+		if (item.sign === "@") {
+			nextBase = undefined;
+			nextHead = undefined;
+			continue;
+		}
+		if (item.sign !== "+") {
+			if (item.row) item.row.following = nextBase;
+			nextBase = item.text;
+		}
+		if (item.sign !== "-") {
+			if (item.row) item.row.following = nextHead;
+			nextHead = item.text;
 		}
 	}
 	return out;
 }
 
-function readSide(spans: Span[], files: PushFile[]): Side[] | null {
+interface RunSet {
+	runs: string[][];
+	byFirstLine: Map<string, { run: number; at: number }[]>;
+}
+
+interface PatchIndex {
+	patches: Map<string, ParsedPatch>;
+	deleted: RunSet;
+	added: RunSet;
+}
+
+const patchIndexes = new WeakMap<readonly PushFile[], PatchIndex>();
+
+function runSetOf(files: readonly PushFile[], sign: "-" | "+"): RunSet {
+	const runs = files.flatMap((f) => changedRuns(f.patch, sign));
+	const byFirstLine = new Map<string, { run: number; at: number }[]>();
+	runs.forEach((run, r) => {
+		run.forEach((line, at) => {
+			const hits = byFirstLine.get(line);
+			if (hits) hits.push({ run: r, at });
+			else byFirstLine.set(line, [{ run: r, at }]);
+		});
+	});
+	return { runs, byFirstLine };
+}
+
+function indexOfPatches(files: readonly PushFile[]): PatchIndex {
+	const cached = patchIndexes.get(files);
+	if (cached) return cached;
+	const patches = new Map<string, ParsedPatch>();
+	for (const file of files) {
+		if (patches.has(file.filename)) continue;
+		let parsed = parsedPatches.get(file);
+		if (!parsed) {
+			parsed = scanPatch(file.patch);
+			parsedPatches.set(file, parsed);
+		}
+		patches.set(file.filename, parsed);
+	}
+	const built = {
+		patches,
+		deleted: runSetOf(files, "-"),
+		added: runSetOf(files, "+"),
+	};
+	patchIndexes.set(files, built);
+	return built;
+}
+
+function readSide(spans: Span[], index: PatchIndex): Side[] | null {
 	const sides: Side[] = [];
 	for (const span of spans) {
-		const file = files.find((f) => f.filename === span.filename);
-		if (!file) return null;
-		const changed = changedLines(file.patch);
-		const source = span.side === "base" ? changed.deleted : changed.added;
+		const parsed = index.patches.get(span.filename);
+		if (!parsed) return null;
+		const source = span.side === "base" ? parsed.deleted : parsed.added;
 		const side: Side = {
 			filename: span.filename,
 			lines: [],
 			positions: [],
 			inLiteral: [],
+			hunks: new Set(),
+			groups: new Set(),
+			following: undefined,
 		};
 		for (let n = span.startLine; n <= span.endLine; n++) {
-			const text = source.get(n);
-			if (text === undefined) return null;
-			side.lines.push(text);
+			const row = source.get(n);
+			if (row === undefined) return null;
+			side.lines.push(row.text);
 			side.positions.push(n);
+			side.hunks.add(row.hunk);
+			side.groups.add(row.group);
+			side.following = row.following;
 		}
 		side.inLiteral = insideLiteral(side.lines);
 		sides.push(side);
@@ -424,18 +588,32 @@ function textOf(span: Span | undefined, sides: Side[]): string | undefined {
 }
 
 /**
- * Checks a relocation claim against the patches without using the matcher's alignment.
- * Every line of both spans must be an identical raw pair, a pair that differs only in
- * whitespace outside any multi-line literal of a file without significant indentation,
- * or a divergence the operation lists; a listed divergence the lines do not bear out
- * also fails the claim. A claim under 5 counted lines must also carry its own information
- * and occur once among the deleted lines and once among the added lines of the patches.
+ * Checks a relocation claim against the patches without using the matcher's alignment or
+ * its helpers. Every line of both spans must be an identical raw pair, a pair that differs
+ * only in whitespace outside any multi-line literal of a file without significant
+ * indentation, or a divergence the operation lists; a listed divergence the lines do not
+ * bear out also fails the claim.
+ *
+ * A claim whose spans share a file must not have both sides in one change region, and the
+ * text of each side must occur once among the changed runs of the patches. A claim under 5
+ * counted lines also fails when a line exceeds 2000 characters; when a same-file claim has
+ * both sides in one hunk; when a side is one line with unclosed brackets or, in an
+ * indentation-sensitive file, ends in a colon; when a side begins with a closing bracket or
+ * a leading operator; when a side ends in an operator or an opening bracket, or the next
+ * line of the patch continues the statement, or a line follows a span that does not end in
+ * a statement terminator; and unless it carries 30 characters of information (50 within one
+ * file), is a whole definition of 40 characters, or is a one-line top-level declaration
+ * whose head side declares the same name of at least 3 characters in the same extension
+ * family with the same value or one sharing half its tokens. The patch scan is built once
+ * per `files` array, so a batch of claims is verified in linear time.
  */
 export function verifyRelocation(op: Operation, files: PushFile[]): boolean {
-	const base = readSide(op.from, files);
-	const head = readSide(op.to, files);
+	const index = indexOfPatches(files);
+	const base = readSide(op.from, index);
+	const head = readSide(op.to, index);
 	if (!base || !head) return false;
-	if (!smallClaimHolds(base, head, files)) return false;
+	if (!sameFileHolds(base, head, index)) return false;
+	if (!smallClaimHolds(base, head, index)) return false;
 	const baseSpent = new Set<string>();
 	const headSpent = new Set<string>();
 	for (const divergence of op.divergences) {
@@ -500,52 +678,159 @@ function changedRuns(patch: string | undefined, sign: "-" | "+"): string[][] {
 	return runs;
 }
 
-function occurrences(window: string[], runs: string[][]): number {
+function occurrences(window: string[], set: RunSet): number {
 	let found = 0;
-	for (const run of runs) {
-		for (let k = 0; k + window.length <= run.length; k++) {
-			if (window.every((line, i) => run[k + i] === line)) found++;
-		}
+	for (const { run, at } of set.byFirstLine.get(window[0] as string) ?? []) {
+		const lines = set.runs[run] as string[];
+		if (at + window.length > lines.length) continue;
+		if (window.every((line, i) => lines[at + i] === line) && ++found > 1) break;
 	}
 	return found;
 }
 
 function distinctEnough(
 	sides: Side[],
-	files: PushFile[],
+	index: PatchIndex,
 	sign: "-" | "+",
 ): boolean {
-	const runs = files.flatMap((f) => changedRuns(f.patch, sign));
-	return sides.every(
-		(side) => occurrences(side.lines.map(squeezed), runs) <= 1,
+	const set = sign === "-" ? index.deleted : index.added;
+	return sides.every((side) => occurrences(side.lines.map(squeezed), set) <= 1);
+}
+
+function sharedFiles(base: Side[], head: Side[]): [Side, Side][] {
+	return base.flatMap((b) =>
+		head
+			.filter((h) => h.filename === b.filename)
+			.map((h): [Side, Side] => [b, h]),
+	);
+}
+
+function overlaps(a: Set<number>, b: Set<number>): boolean {
+	for (const item of a) if (b.has(item)) return true;
+	return false;
+}
+
+/**
+ * Rules for a claim whose two sides touch one file, whatever its size. The two sides must not
+ * sit in one change region (one stretch of changed lines between context), and the text on
+ * each side must occur once among the changed runs of the patches, so a paragraph repeated
+ * in two places cannot be paired across them.
+ */
+function sameFileHolds(base: Side[], head: Side[], index: PatchIndex): boolean {
+	const shared = sharedFiles(base, head);
+	if (shared.length === 0) return true;
+	if (shared.some(([b, h]) => overlaps(b.groups, h.groups))) return false;
+	return distinctEnough(base, index, "-") && distinctEnough(head, index, "+");
+}
+
+function lastWithText(lines: string[]): string | undefined {
+	for (let i = lines.length - 1; i >= 0; i--)
+		if ((lines[i] as string).trim() !== "") return lines[i];
+	return undefined;
+}
+
+function brackets(line: string): number {
+	const code = line.replace(LITERALS, "");
+	let depth = 0;
+	for (const ch of code) {
+		if ("([{".includes(ch)) depth++;
+		else if (CLOSING_BRACKETS.includes(ch)) depth--;
+	}
+	return depth;
+}
+
+function isUnfinishedLine(lines: string[], sensitive: boolean): boolean {
+	const present = lines.filter((l) => l.trim() !== "");
+	if (present.length !== 1) return false;
+	const only = present[0] as string;
+	if (sensitive && only.trimEnd().endsWith(":")) return true;
+	return brackets(only) > 0;
+}
+
+function unfinished(side: Side): boolean {
+	return isUnfinishedLine(side.lines, isIndentSensitive(side.filename));
+}
+
+function beginsMid(side: Side): boolean {
+	const first = side.lines.find((l) => l.trim() !== "")?.trim() ?? "";
+	return beginsMidStatement(first, listsItems(side.filename));
+}
+
+function mayContinue(side: Side): boolean {
+	const last = lastWithText(side.lines);
+	if (last === undefined) return false;
+	const listy = listsItems(side.filename);
+	const code = last.trimEnd();
+	const final = code[code.length - 1] as string;
+	if (!listy && (OPERATOR_ENDS.includes(final) || code.endsWith("=>")))
+		return true;
+	const next = side.following?.trim() ?? "";
+	if (next === "") return false;
+	if (beginsMidStatement(next, listy)) {
+		return (
+			!CLOSING_BRACKETS.includes(next[0] as string) ||
+			indentWidth(side.following as string) > indentWidth(last)
+		);
+	}
+	return (
+		!listy && !STATEMENT_ENDS.includes(final) && !BLOCK_END_WORD.test(code)
+	);
+}
+
+function headDeclares(name: string, base: Side[], head: Side[]): boolean {
+	const baseFile = base[0]?.filename ?? "";
+	const headLines = head.flatMap((side) =>
+		side.lines.filter((l) => l.trim() !== ""),
+	);
+	if (headLines.length !== 1 || head.length !== 1) return false;
+	const text = headLines[0] as string;
+	if (declaredNameOf(text) !== name) return false;
+	const headFile = head[0]?.filename ?? "";
+	if (fileKind(baseFile) !== fileKind(headFile)) return false;
+	const baseText = base
+		.flatMap((side) => side.lines)
+		.find((l) => l.trim() !== "") as string;
+	if (squeezed(baseText) === squeezed(text)) return true;
+	return (
+		valueOverlap(declaredValue(baseText, name), declaredValue(text, name)) >=
+		MIN_VALUE_OVERLAP
 	);
 }
 
 function smallClaimHolds(
 	base: Side[],
 	head: Side[],
-	files: PushFile[],
+	index: PatchIndex,
 ): boolean {
 	const lines = base.flatMap((side) => side.lines);
 	const counted = lines.filter((l) => l.trim().length >= MIN_LINE_CHARS).length;
 	if (counted >= SMALL_CLAIM_LINES) return true;
-	const present = lines.filter((l) => l.trim() !== "");
+	const headLines = head.flatMap((side) => side.lines);
+	if ([...lines, ...headLines].some((l) => l.length > LONGEST_RENAMABLE_LINE))
+		return false;
+	const shared = sharedFiles(base, head);
+	if (shared.some(([b, h]) => overlaps(b.hunks, h.hunks))) return false;
+	const present = lines.filter((line) => line.trim() !== "");
 	const sensitive = base.some((side) => isIndentSensitive(side.filename));
+	const sides = [...base, ...head];
+	if (sides.some(unfinished)) return false;
+	if (sides.some(mayContinue)) return false;
+	if (sides.some(beginsMid)) return false;
 	const chars = present.join("").replace(/\s/g, "").length;
 	const total = lines.reduce((sum, l) => sum + information(l), 0);
 	const sameFile = base.every((side) =>
 		head.some((other) => other.filename === side.filename),
 	);
-	const first = present[0]?.trim() ?? "";
+	const declared =
+		present.length === 1 ? declaredNameOf(present[0] as string) : undefined;
 	const informative =
-		!CONTINUATION.test(first) &&
-		(total >=
+		total >=
 			(sameFile ? SMALL_SAME_FILE_INFORMATION : SMALL_CLAIM_INFORMATION) ||
-			(isDefinition(lines, sensitive) && chars >= SMALL_DEFINITION_CHARS) ||
-			(present.length === 1 && isTopLevelDeclaration(present[0] as string)));
+		(isDefinition(lines, sensitive) && chars >= SMALL_DEFINITION_CHARS) ||
+		(declared !== undefined && headDeclares(declared, base, head));
 	return (
 		informative &&
-		distinctEnough(base, files, "-") &&
-		distinctEnough(head, files, "+")
+		distinctEnough(base, index, "-") &&
+		distinctEnough(head, index, "+")
 	);
 }
