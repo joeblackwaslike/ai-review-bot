@@ -115,7 +115,7 @@ describe("renderDiffModel", () => {
 	it("ranks code divergences before relocations, renames and mechanical changes", () => {
 		const m = model({
 			operations: [
-				op({ id: "mechanical-1", type: "mechanical" }),
+				op({ id: "mechanical-1", type: "mechanical", reason: "whitespace" }),
 				op({
 					id: "rename-1",
 					type: "rename",
@@ -146,6 +146,7 @@ describe("renderDiffModel", () => {
 			op({
 				id: `mechanical-${i}`,
 				type: "mechanical",
+				reason: "whitespace",
 				to: [span(`f${i}.ts`, "head", 1, 2)],
 			}),
 		);
@@ -168,6 +169,7 @@ describe("renderDiffModel", () => {
 				op({
 					id: `mechanical-${i}`,
 					type: "mechanical",
+					reason: "whitespace",
 					to: [span(`some/long/path/file${i}.ts`, "head", 1, 2)],
 				}),
 			),
@@ -266,7 +268,7 @@ describe("renderDiffModel", () => {
 			OPTS,
 		);
 		const s = allText(r);
-		expect(s).toContain("the lines shown differ only in whitespace");
+		expect(s).toContain("the changed lines differ only in whitespace");
 		expect(s).not.toContain("import lines only");
 		expect(s).not.toMatch(/no code change|safe|skip/i);
 	});
@@ -281,8 +283,50 @@ describe("renderDiffModel", () => {
 			OPTS,
 		);
 		const s = allText(r);
-		expect(s).toContain("the lines shown are import lines only");
+		expect(s).toContain("the changed lines are import lines only");
 		expect(s).not.toContain("differ only in whitespace");
+	});
+
+	it("renders no claim for a mechanical operation without a reason", () => {
+		const r = renderDiffModel(
+			model({
+				operations: [op({ id: "mechanical-1", type: "mechanical" })],
+			}),
+			OPTS,
+		);
+		expect(allText(r)).not.toMatch(/whitespace|Mechanical|import lines only/);
+		expect(r.summary).toBe("");
+		expect(r.fileNotes.size).toBe(0);
+	});
+
+	it("keeps other operations when a reasonless mechanical one is skipped", () => {
+		const r = renderDiffModel(
+			model({
+				operations: [
+					op({ id: "mechanical-1", type: "mechanical" }),
+					op({ id: "relocation-1", type: "relocation" }),
+				],
+			}),
+			OPTS,
+		);
+		expect(r.summary).toContain("Relocation");
+		expect(allText(r)).not.toMatch(/whitespace|Mechanical/);
+		expect(r.summary).not.toContain("Not detailed");
+	});
+
+	it("warns that detection can miss small moves when stating intent", () => {
+		const r = renderDiffModel(
+			model({
+				facts: {
+					testsChanged: false,
+					intentClaims: [
+						{ phrase: "pure move", source: "title", start: 0, end: 9 },
+					],
+				},
+			}),
+			OPTS,
+		);
+		expect(r.summary).toContain("Detection can miss small moves.");
 	});
 
 	it("returns nothing for a PR with no operations and no claims", () => {
@@ -368,7 +412,7 @@ describe("renderDiffModel", () => {
 		expect(s).toContain("not part of the diff");
 		expect(s).toContain("the diff wins");
 		expect(s).toContain("import lines, mocks, test and config paths");
-		expect(s).toContain("cannot read other files");
+		expect(s).not.toContain("cannot read other files");
 		expect(s).toContain("whole PR");
 	});
 
@@ -395,6 +439,7 @@ describe("renderDiffModel", () => {
 				op({
 					id: "mechanical-1",
 					type: "mechanical",
+					reason: "whitespace",
 					from: [span("src/m.ts", "base", 3, 4)],
 					to: [],
 				}),

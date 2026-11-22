@@ -16,8 +16,7 @@ const HEADING =
 
 const FIXED_PARAGRAPH =
 	"These notes are computed from the diff. They are not part of it, and when they disagree with it the diff wins. " +
-	"A move implies spending effort on what the move could break and is visible in this diff: import lines, mocks, test and config paths. " +
-	"You cannot read other files in this version, so say what you could not check instead of guessing.";
+	"When code moved, spend your effort on what the move could break that is visible in this diff: import lines, mocks, test and config paths.";
 
 const KIND_ORDER: FileKind[] = [
 	"code",
@@ -44,8 +43,8 @@ const DIVERGENCE_CLASS: Record<Divergence["class"], string> = {
 };
 
 const MECHANICAL_PHRASE = {
-	whitespace: "the lines shown differ only in whitespace",
-	imports: "the lines shown are import lines only",
+	whitespace: "the changed lines differ only in whitespace",
+	imports: "the changed lines are import lines only",
 } as const;
 
 const TYPE_PLURAL: Record<Operation["type"], string> = {
@@ -59,6 +58,14 @@ export function untrusted(value: string): string {
 	const clipped =
 		value.length > MAX_VALUE_CHARS ? value.slice(0, MAX_VALUE_CHARS) : value;
 	return fenceUntrusted(clipped);
+}
+
+function mechanicalPhrase(op: Operation): string {
+	return op.reason ? MECHANICAL_PHRASE[op.reason] : "";
+}
+
+function isRenderable(op: Operation): boolean {
+	return op.type !== "mechanical" || op.reason !== undefined;
 }
 
 function lineRange(start: number, end: number): string {
@@ -139,7 +146,7 @@ function headline(op: Operation): string {
 		return `Rename: ${untrusted(from)} to ${untrusted(to)}, ${content}.`;
 	}
 	const spans = op.to.length > 0 ? op.to : op.from;
-	return `Mechanical: ${MECHANICAL_PHRASE[op.reason ?? "whitespace"]} (${spansText(spans)}).`;
+	return `Mechanical: ${mechanicalPhrase(op)} (${spansText(spans)}).`;
 }
 
 function detailBlock(op: Operation, number: number): string {
@@ -196,7 +203,7 @@ function addFileNotes(
 		addNote(
 			notes,
 			s.filename,
-			`Mechanical, ${spanRange(s)}: ${MECHANICAL_PHRASE[op.reason ?? "whitespace"]}, ${see}`,
+			`Mechanical, ${spanRange(s)}: ${mechanicalPhrase(op)}, ${see}`,
 		);
 	}
 }
@@ -227,7 +234,9 @@ function countsLine(omitted: Operation[]): string | null {
 	return `Not detailed: ${parts.join(", ")}.`;
 }
 
-function intentLine(
+const INTENT_CAVEAT = "Detection can miss small moves.";
+
+function intentBody(
 	model: DiffModel,
 	ranked: Operation[],
 	detailCount: number,
@@ -264,6 +273,15 @@ function intentLine(
 	if (ranked.length === 0)
 		return `${says} No operations were detected in this scope.`;
 	return says;
+}
+
+function intentLine(
+	model: DiffModel,
+	ranked: Operation[],
+	detailCount: number,
+): string | null {
+	const body = intentBody(model, ranked, detailCount);
+	return body === null ? null : `${body} ${INTENT_CAVEAT}`;
 }
 
 function nothingToSay(model: DiffModel): boolean {
@@ -318,12 +336,16 @@ function layout(
  * the section and per-file notes to place before each file's diff text. It reports facts
  * and never judges whether a change is functional. Author-derived values are clipped and
  * fenced as untrusted. The total length stays within `maxChars` by dropping the
- * lowest-ranked operation detail first, keeping the per-type counts.
+ * lowest-ranked operation detail first, keeping the per-type counts. It bounds only the
+ * operation detail, so the fixed text, heading and facts remain whatever `maxChars` is.
+ * A mechanical operation without a reason is not rendered, because no claim can be
+ * worded for it.
  */
 export function renderDiffModel(
-	model: DiffModel,
+	input: DiffModel,
 	opts: { maxChars: number; scopeLabel: string },
 ): RenderedDiffModel {
+	const model = { ...input, operations: input.operations.filter(isRenderable) };
 	if (nothingToSay(model)) return { summary: "", fileNotes: new Map() };
 	const ranked = rankOperations(model.operations);
 	let count = Math.min(ranked.length, MAX_DETAILED_OPERATIONS);
