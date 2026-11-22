@@ -1,0 +1,53 @@
+{
+	"clean": false,
+	"defects": [
+		{
+			"path": "api/client.py",
+			"startLine": 28,
+			"endLine": 28,
+			"description": "fetch_account returns response.text where fetch_user returns response.json(), so callers get an unparsed string instead of the user record."
+		}
+	],
+	"operations": [
+		{
+			"type": "copy",
+			"from": [
+				{
+					"filename": "api/client.py",
+					"side": "head",
+					"startLine": 10,
+					"endLine": 15
+				}
+			],
+			"to": [
+				{
+					"filename": "api/client.py",
+					"side": "head",
+					"startLine": 22,
+					"endLine": 27
+				}
+			],
+			"divergences": [
+				{
+					"kind": "changed",
+					"class": "code",
+					"base": {
+						"filename": "api/client.py",
+						"side": "head",
+						"startLine": 10,
+						"endLine": 10
+					},
+					"head": {
+						"filename": "api/client.py",
+						"side": "head",
+						"startLine": 22,
+						"endLine": 22
+					}
+				}
+			],
+			"shape": {
+				"sourceNew": false
+			}
+		}
+	]
+}

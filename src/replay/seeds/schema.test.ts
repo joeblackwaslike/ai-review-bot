@@ -123,12 +123,165 @@ describe("SeedOperation structure", () => {
 	});
 });
 
+describe("SeedTruth copy and class fields", () => {
+	const copy = {
+		type: "copy",
+		shape: { sourceNew: true },
+		from: [{ filename: "a.ts", side: "head", startLine: 5, endLine: 13 }],
+		to: [{ filename: "b.ts", side: "head", startLine: 5, endLine: 13 }],
+		divergences: [
+			{
+				kind: "changed",
+				class: "receiver",
+				base: { filename: "a.ts", side: "head", startLine: 7, endLine: 7 },
+				head: { filename: "b.ts", side: "head", startLine: 7, endLine: 7 },
+			},
+		],
+	};
+	const parse = (operation: unknown) =>
+		SeedTruth.safeParse({ clean: true, operations: [operation] }).success;
+
+	it("accepts a copy with sourceNew and a divergence class", () => {
+		expect(parse(copy)).toBe(true);
+	});
+
+	const at = (file: string, side: "base" | "head", line: number) => ({
+		filename: file,
+		side,
+		startLine: line,
+		endLine: line,
+	});
+	const signatureDivergence = {
+		kind: "changed",
+		class: "signature",
+		base: at("a.ts", "base", 5),
+		head: at("b.ts", "head", 5),
+	};
+	const relocation = {
+		type: "relocation",
+		shape: { reindent: 4 },
+		from: [{ filename: "a.ts", side: "base", startLine: 5, endLine: 13 }],
+		to: [{ filename: "b.ts", side: "head", startLine: 5, endLine: 13 }],
+		divergences: [signatureDivergence],
+	};
+
+	it("accepts a relocation with a signature divergence and a reindent", () => {
+		expect(parse(relocation)).toBe(true);
+	});
+
+	it("rejects a copy with a signature divergence", () => {
+		expect(
+			parse({
+				...copy,
+				divergences: [{ ...signatureDivergence, base: at("a.ts", "head", 5) }],
+			}),
+		).toBe(false);
+	});
+
+	it("allows sourceNew only on a copy and reindent only on a relocation", () => {
+		expect(parse({ ...relocation, shape: { sourceNew: true } })).toBe(false);
+		expect(parse({ ...copy, shape: { reindent: 4 } })).toBe(false);
+		expect(
+			parse({ ...relocation, type: "rename", shape: { reindent: 4 } }),
+		).toBe(false);
+	});
+
+	it("rejects an empty shape", () => {
+		expect(parse({ ...copy, shape: {} })).toBe(false);
+	});
+
+	it("requires both copy spans on the head side", () => {
+		expect(parse({ ...copy, from: [{ ...copy.from[0], side: "base" }] })).toBe(
+			false,
+		);
+		expect(parse({ ...copy, to: [{ ...copy.to[0], side: "base" }] })).toBe(
+			false,
+		);
+	});
+
+	it("rejects a copy whose spans overlap or are equal", () => {
+		const same = { ...copy, to: [{ ...copy.from[0] }], divergences: [] };
+		expect(parse(same)).toBe(false);
+		const overlap = {
+			...copy,
+			from: [{ filename: "a.ts", side: "head", startLine: 5, endLine: 13 }],
+			to: [{ filename: "a.ts", side: "head", startLine: 13, endLine: 20 }],
+			divergences: [],
+		};
+		expect(parse(overlap)).toBe(false);
+		const apart = {
+			...overlap,
+			to: [{ filename: "a.ts", side: "head", startLine: 14, endLine: 20 }],
+		};
+		expect(parse(apart)).toBe(true);
+	});
+
+	it("keeps divergence spans inside the operation's own spans", () => {
+		expect(
+			parse({
+				...copy,
+				divergences: [
+					{
+						...copy.divergences[0],
+						head: at("b.ts", "head", 99),
+					},
+				],
+			}),
+		).toBe(false);
+		expect(
+			parse({
+				...copy,
+				divergences: [
+					{
+						...copy.divergences[0],
+						base: at("other.ts", "head", 7),
+					},
+				],
+			}),
+		).toBe(false);
+	});
+
+	it("keeps a divergence span on the side of the span it lies in", () => {
+		expect(
+			parse({
+				...copy,
+				divergences: [{ ...copy.divergences[0], base: at("a.ts", "base", 7) }],
+			}),
+		).toBe(false);
+	});
+
+	it("forbids divergences on an exact operation", () => {
+		expect(parse({ ...copy, exact: true })).toBe(false);
+		expect(parse({ ...copy, exact: false })).toBe(true);
+		expect(parse({ ...copy, exact: true, divergences: [] })).toBe(true);
+	});
+
+	it("rejects an unknown divergence class or shape key", () => {
+		expect(
+			parse({
+				...copy,
+				divergences: [
+					{
+						kind: "changed",
+						class: "other",
+						base: { filename: "a.ts", side: "head", startLine: 7, endLine: 7 },
+						head: { filename: "b.ts", side: "head", startLine: 7, endLine: 7 },
+					},
+				],
+			}),
+		).toBe(false);
+		expect(parse({ ...copy, shape: { sourceNew: true, extra: 1 } })).toBe(
+			false,
+		);
+	});
+});
+
 describe("defaultSeedsRoot", () => {
 	const real = join(process.cwd(), "src", "replay", "seeds");
 
 	it("resolves to the committed seeds from source", async () => {
 		expect(defaultSeedsRoot(import.meta.url)).toBe(real);
-		expect(await listSeeds()).toHaveLength(34);
+		expect(await listSeeds()).toHaveLength(39);
 	});
 
 	it("resolves to the committed seeds from a built dist path", () => {

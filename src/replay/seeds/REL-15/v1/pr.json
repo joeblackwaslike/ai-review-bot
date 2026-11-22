@@ -1,0 +1,4 @@
+{
+	"title": "Move formatLine into LineFormatter",
+	"body": "Moves formatLine out of lines.ts into a LineFormatter class and keeps the rounding helper on the class. There is no functional change."
+}

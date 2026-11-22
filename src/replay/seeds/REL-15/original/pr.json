@@ -1,0 +1,4 @@
+{
+	"title": "Move total_price into a Pricer class",
+	"body": "Moves total_price from a module function into Pricer.compute_total so pricing settings live on the class. There is no functional change."
+}

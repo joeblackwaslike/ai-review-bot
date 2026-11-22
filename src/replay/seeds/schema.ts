@@ -23,10 +23,18 @@ const SeedSpan = z
 	.strict()
 	.refine((s) => s.endLine >= s.startLine, "endLine before startLine");
 
+const DivergenceClass = z.enum([
+	"code",
+	"comment-only",
+	"rename",
+	"signature",
+	"receiver",
+]);
+
 const SeedDivergence = z
 	.object({
 		kind: z.enum(["changed", "inserted", "removed"]),
-		class: z.enum(["comment-only", "rename", "code"]),
+		class: DivergenceClass,
 		base: SeedSpan.optional(),
 		head: SeedSpan.optional(),
 	})
@@ -48,15 +56,39 @@ const SeedDivergence = z
 		}
 	});
 
+function contains(outer: SeedSpan, inner: SeedSpan): boolean {
+	return (
+		outer.filename === inner.filename &&
+		outer.side === inner.side &&
+		outer.startLine <= inner.startLine &&
+		inner.endLine <= outer.endLine
+	);
+}
+
+function overlaps(a: SeedSpan, b: SeedSpan): boolean {
+	return (
+		a.filename === b.filename &&
+		a.startLine <= b.endLine &&
+		b.startLine <= a.endLine
+	);
+}
+
 /**
  * An operation a correct diff model reports for a seed. Lines are base-side numbers for
- * deleted code and head-side numbers for added code. `exact` and `reason`, when given,
+ * deleted code and head-side numbers for added code, except that a copy's `from` span, like
+ * its `to` span, is head-side. `exact` and `reason`, when given,
  * are compared against the model's output. `reason` belongs to mechanical operations.
  */
 export const SeedOperation = z
 	.object({
-		type: z.enum(["relocation", "rename", "mechanical"]),
-		shape: z.object({ reindent: z.number().int() }).strict().optional(),
+		type: z.enum(["relocation", "rename", "mechanical", "copy"]),
+		shape: z
+			.object({
+				reindent: z.number().int().optional(),
+				sourceNew: z.boolean().optional(),
+			})
+			.strict()
+			.optional(),
 		from: z.array(SeedSpan),
 		to: z.array(SeedSpan),
 		divergences: z.array(SeedDivergence),
@@ -71,11 +103,41 @@ export const SeedOperation = z
 				message: `${op.type} needs from and to spans`,
 			});
 		}
-		if (op.from.some((s) => s.side !== "base")) {
-			ctx.addIssue({ code: "custom", message: "from spans are base side" });
+		const fromSide = op.type === "copy" ? "head" : "base";
+		if (op.from.some((s) => s.side !== fromSide)) {
+			ctx.addIssue({
+				code: "custom",
+				message: `from spans are ${fromSide} side`,
+			});
 		}
 		if (op.to.some((s) => s.side !== "head")) {
 			ctx.addIssue({ code: "custom", message: "to spans are head side" });
+		}
+		const issue = (message: string) =>
+			ctx.addIssue({ code: "custom", message });
+		const shape = op.shape;
+		if (shape !== undefined) {
+			if (shape.reindent === undefined && shape.sourceNew === undefined)
+				issue("shape must state reindent or sourceNew");
+			if (shape.sourceNew !== undefined && op.type !== "copy")
+				issue("shape.sourceNew belongs to copy operations");
+			if (shape.reindent !== undefined && op.type !== "relocation")
+				issue("shape.reindent belongs to relocation operations");
+		}
+		if (op.exact === true && op.divergences.length > 0)
+			issue("an exact operation has no divergences");
+		if (op.type === "copy") {
+			if (op.divergences.some((d) => d.class === "signature"))
+				issue("a copy has no signature divergence");
+			if (op.from.some((f) => op.to.some((t) => overlaps(f, t))))
+				issue("copy from and to spans must not overlap");
+		}
+		for (const d of op.divergences) {
+			const { base, head } = d;
+			if (base && !op.from.some((f) => contains(f, base)))
+				issue("a divergence base span must lie inside a from span");
+			if (head && !op.to.some((t) => contains(t, head)))
+				issue("a divergence head span must lie inside a to span");
 		}
 		if (op.reason !== undefined && op.type !== "mechanical") {
 			ctx.addIssue({

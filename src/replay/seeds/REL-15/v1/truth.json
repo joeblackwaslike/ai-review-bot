@@ -1,0 +1,66 @@
+{
+	"clean": false,
+	"defects": [
+		{
+			"path": "src/format/line-formatter.ts",
+			"startLine": 5,
+			"endLine": 5,
+			"description": "The class helper floors the cents value where the imported roundCents rounded it, so a price of 1999.5 cents now formats one cent low."
+		}
+	],
+	"operations": [
+		{
+			"type": "relocation",
+			"from": [
+				{
+					"filename": "src/format/lines.ts",
+					"side": "base",
+					"startLine": 9,
+					"endLine": 18
+				}
+			],
+			"to": [
+				{
+					"filename": "src/format/line-formatter.ts",
+					"side": "head",
+					"startLine": 8,
+					"endLine": 17
+				}
+			],
+			"divergences": [
+				{
+					"kind": "changed",
+					"class": "code",
+					"base": {
+						"filename": "src/format/lines.ts",
+						"side": "base",
+						"startLine": 9,
+						"endLine": 9
+					},
+					"head": {
+						"filename": "src/format/line-formatter.ts",
+						"side": "head",
+						"startLine": 8,
+						"endLine": 8
+					}
+				},
+				{
+					"kind": "changed",
+					"class": "code",
+					"base": {
+						"filename": "src/format/lines.ts",
+						"side": "base",
+						"startLine": 12,
+						"endLine": 12
+					},
+					"head": {
+						"filename": "src/format/line-formatter.ts",
+						"side": "head",
+						"startLine": 11,
+						"endLine": 11
+					}
+				}
+			]
+		}
+	]
+}

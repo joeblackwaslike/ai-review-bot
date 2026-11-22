@@ -1,0 +1,4 @@
+{
+	"title": "Replace join_lines with NameList.collect",
+	"body": "Drops join_lines and adds NameList.collect for building sorted name lists."
+}

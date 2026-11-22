@@ -1,0 +1,4 @@
+{
+	"title": "Trace fetch_user and add fetch_owner",
+	"body": "Adds a tracing decorator to fetch_user and a fetch_owner lookup that handles responses the same way."
+}

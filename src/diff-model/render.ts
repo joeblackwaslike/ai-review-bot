@@ -10,6 +10,9 @@ export interface RenderedDiffModel {
 const MAX_DETAILED_OPERATIONS = 12;
 const MAX_VALUE_CHARS = 200;
 const MAX_CLAIM_PHRASES = 3;
+const MAX_RECEIVER_LINES = 6;
+const MAX_CODE_LINES = 12;
+const MAX_SPANS_LISTED = 12;
 
 const HEADING =
 	"Computed notes (not part of the diff; the diff wins if they disagree)";
@@ -60,8 +63,9 @@ const TYPE_PLURAL: Record<Operation["type"], string> = {
 
 /** Clips an author-derived value to 200 characters and fences it as untrusted text. */
 export function untrusted(value: string): string {
+	const flat = value.replace(/\s+/g, " ");
 	const clipped =
-		value.length > MAX_VALUE_CHARS ? value.slice(0, MAX_VALUE_CHARS) : value;
+		flat.length > MAX_VALUE_CHARS ? `${flat.slice(0, MAX_VALUE_CHARS)}…` : flat;
 	return fenceUntrusted(clipped);
 }
 
@@ -95,8 +99,15 @@ function spanText(span: Span): string {
 	return `${untrusted(span.filename)} ${spanRange(span)} (${shown})`;
 }
 
+function listed(spans: Span[], text: (s: Span) => string): string {
+	const parts = spans.slice(0, MAX_SPANS_LISTED).map(text);
+	const more = spans.length - MAX_SPANS_LISTED;
+	if (more > 0) parts.push(`and ${plural(more, "more span")}`);
+	return parts.join(", ");
+}
+
 function spansText(spans: Span[]): string {
-	return spans.map(spanText).join(", ");
+	return listed(spans, spanText);
 }
 
 function divergenceSpan(d: Divergence): Span | undefined {
@@ -187,7 +198,7 @@ function headline(op: Operation): string {
 		const within = movedWithin(op);
 		if (within !== null) {
 			const part = (s: Span) => `${spanRange(s)} (${shownWording(s)})`;
-			return `${lead}: moved within ${untrusted(within)}, ${op.from.map(part).join(", ")} match ${op.to.map(part).join(", ")}${reindentPhrase(op)}.`;
+			return `${lead}: moved within ${untrusted(within)}, ${listed(op.from, part)} match ${listed(op.to, part)}${reindentPhrase(op)}.`;
 		}
 		return `${lead}: ${spansText(op.from)} match ${spansText(op.to)}${reindentPhrase(op)}.`;
 	}
@@ -195,9 +206,11 @@ function headline(op: Operation): string {
 		const place = (s: Span) =>
 			`${untrusted(s.filename)} ${lineRange(s.startLine, s.endLine)}`;
 		const origin = op.shape?.sourceNew
-			? ", itself new in this change"
+			? ", whose source has lines this change also adds"
 			: " (source visible in this diff only)";
-		return `Copy: ${op.to.map(place).join(", ")} repeats ${op.from.map(place).join(", ")}${origin}.`;
+		const n = op.divergences.length;
+		const lead = n > 0 ? `Copy with ${plural(n, "difference")}` : "Copy";
+		return `${lead}: ${listed(op.to, place)} repeats ${listed(op.from, place)}${origin}.`;
 	}
 	if (op.type === "rename") {
 		const from = op.from[0]?.filename ?? "";
@@ -211,9 +224,49 @@ function headline(op: Operation): string {
 	return `Mechanical: ${mechanicalPhrase(op)} (${spansText(spans)}).`;
 }
 
-function detailBlock(op: Operation, number: number): string {
+interface ShownDivergences {
+	shown: Set<Divergence>;
+	hiddenReceivers: number;
+	hiddenOther: number;
+}
+
+function shownDivergences(op: Operation): ShownDivergences {
+	const shown = new Set<Divergence>();
+	const seen = { receiver: 0, code: 0, harmless: 0 };
+	let hiddenReceivers = 0;
+	let hiddenOther = 0;
+	for (const d of op.divergences) {
+		if (d.class === "receiver") {
+			if (++seen.receiver <= MAX_RECEIVER_LINES) shown.add(d);
+			else hiddenReceivers++;
+			continue;
+		}
+		const bucket =
+			d.class === "code" || d.class === "signature" ? "code" : "harmless";
+		if (++seen[bucket] <= MAX_CODE_LINES) shown.add(d);
+		else hiddenOther++;
+	}
+	return { shown, hiddenReceivers, hiddenOther };
+}
+
+function moreReceivers(n: number): string {
+	return `${plural(n, "more receiver line")}`;
+}
+
+function detailBlock(op: Operation, number: number, brief: boolean): string {
 	const lines = [`${number}. ${headline(op)}`];
-	for (const d of op.divergences) lines.push(`   ${divergenceText(d)}`);
+	if (brief) return lines[0] ?? "";
+	if (op.type === "copy" && op.shape?.sourceNew)
+		lines.push(
+			"   part of the copied source is new in this change, review the source too.",
+		);
+	const { shown, hiddenReceivers, hiddenOther } = shownDivergences(op);
+	for (const d of op.divergences)
+		if (shown.has(d)) lines.push(`   ${divergenceText(d)}`);
+	if (hiddenOther > 0)
+		lines.push(`   and ${plural(hiddenOther, "more difference")}.`);
+	if (hiddenReceivers > 0)
+		lines.push(`   and ${moreReceivers(hiddenReceivers)}.`);
 	return lines.join("\n");
 }
 
@@ -221,6 +274,46 @@ function addNote(notes: Map<string, string[]>, filename: string, text: string) {
 	const list = notes.get(filename) ?? [];
 	list.push(text);
 	notes.set(filename, list);
+}
+
+interface FileDivergences {
+	lines: string[];
+	hiddenReceivers: number;
+	hiddenOther: number;
+}
+
+function groupByFile(
+	op: Operation,
+	describe: (d: Divergence) => string,
+): Map<string, FileDivergences> {
+	const { shown } = shownDivergences(op);
+	const groups = new Map<string, FileDivergences>();
+	for (const d of op.divergences) {
+		const file = divergenceSpan(d)?.filename;
+		if (file === undefined) continue;
+		const group = groups.get(file) ?? {
+			lines: [],
+			hiddenReceivers: 0,
+			hiddenOther: 0,
+		};
+		groups.set(file, group);
+		if (shown.has(d)) group.lines.push(describe(d));
+		else if (d.class === "receiver") group.hiddenReceivers++;
+		else group.hiddenOther++;
+	}
+	return groups;
+}
+
+function hiddenTail(g: FileDivergences | undefined, than: string): string[] {
+	if (g === undefined) return [];
+	const out: string[] = [];
+	if (g.hiddenReceivers > 0)
+		out.push(
+			`${moreReceivers(g.hiddenReceivers)} ${g.hiddenReceivers === 1 ? "differs" : "differ"} from ${than}`,
+		);
+	if (g.hiddenOther > 0)
+		out.push(`${plural(g.hiddenOther, "more difference")} from ${than}`);
+	return out;
 }
 
 function addFileNotes(
@@ -231,40 +324,46 @@ function addFileNotes(
 	const see = `see operation ${number}`;
 	if (op.type === "relocation") {
 		const destinations = new Set(op.to.map((s) => s.filename));
+		const lost = groupByFile(op, (d) => {
+			const at = divergenceSpan(d);
+			const where = at ? `${spanRange(at)} ` : "";
+			return d.kind === "removed"
+				? `${where}is absent from the destination`
+				: `${where}differs from the destination`;
+		});
+		const arrived = groupByFile(op, (d) => {
+			const at = divergenceSpan(d);
+			return at
+				? `${spanRange(at)} differs from the original`
+				: "differs from the original";
+		});
 		const reported = new Set<string>();
 		for (const s of op.from) {
-			const lost =
+			const own =
 				destinations.has(s.filename) || reported.has(s.filename)
-					? []
-					: op.divergences.filter(
-							(d) => divergenceSpan(d)?.filename === s.filename,
-						);
+					? undefined
+					: lost.get(s.filename);
 			reported.add(s.filename);
-			const lines = lost.map((d) => {
-				const at = divergenceSpan(d);
-				const where = at ? `${spanRange(at)} ` : "";
-				return d.kind === "removed"
-					? `${where}is absent from the destination`
-					: `${where}differs from the destination`;
-			});
-			const tail = lines.length > 0 ? `, ${lines.join(", ")}` : "";
+			const parts = own
+				? [...own.lines, ...hiddenTail(own, "the destination")]
+				: [];
+			const tail = parts.length > 0 ? `, ${parts.join(", ")}` : "";
 			addNote(
 				notes,
 				s.filename,
 				`Relocated out, ${spanRange(s)}${s.shown === "full" ? "" : ` (${shownWording(s)})`}, ${see}${tail}`,
 			);
 		}
+		const arrivedReported = new Set<string>();
 		for (const s of op.to) {
-			const own = op.divergences.filter(
-				(d) => divergenceSpan(d)?.filename === s.filename,
-			);
-			const lines = own.map((d) => {
-				const at = divergenceSpan(d);
-				return at
-					? `${spanRange(at)} differs from the original`
-					: "differs from the original";
-			});
-			const tail = lines.length > 0 ? `, ${lines.join(", ")}` : "";
+			const own = arrivedReported.has(s.filename)
+				? undefined
+				: arrived.get(s.filename);
+			arrivedReported.add(s.filename);
+			const parts = own
+				? [...own.lines, ...hiddenTail(own, "the original")]
+				: [];
+			const tail = parts.length > 0 ? `, ${parts.join(", ")}` : "";
 			addNote(
 				notes,
 				s.filename,
@@ -274,12 +373,25 @@ function addFileNotes(
 		return;
 	}
 	if (op.type === "copy") {
-		for (const s of op.to)
-			addNote(
-				notes,
-				s.filename,
-				`Copied, ${lineRange(s.startLine, s.endLine)}, ${see}`,
-			);
+		const counts = new Map<string, number>();
+		for (const d of op.divergences) {
+			const file = divergenceSpan(d)?.filename;
+			if (file !== undefined) counts.set(file, (counts.get(file) ?? 0) + 1);
+		}
+		const reported = new Set<string>();
+		for (const s of op.to) {
+			const n = reported.has(s.filename) ? 0 : (counts.get(s.filename) ?? 0);
+			reported.add(s.filename);
+			const parts = [`Copied, ${lineRange(s.startLine, s.endLine)}`];
+			if (n > 0) parts.push(`${plural(n, "difference")} from the source`);
+			if (op.shape?.sourceNew)
+				parts.push("part of the source is new in this change");
+			parts.push(see);
+			addNote(notes, s.filename, parts.join(", "));
+		}
+		const sources = new Set(op.from.map((s) => s.filename));
+		for (const file of sources)
+			addNote(notes, file, `Source of a copy, ${see}`);
 		return;
 	}
 	if (op.type === "rename") {
@@ -354,9 +466,11 @@ function intentBody(
 				: "An operation not detailed here";
 		return `${says} ${subject} has a code difference from the original${where}.`;
 	}
-	const nonMechanical = ranked.filter((op) => op.type !== "mechanical");
-	if (nonMechanical.length > 0) {
-		return `${says} This scope contains ${plural(nonMechanical.length, "relocation or rename operation")}.`;
+	const moves = ranked.filter(
+		(op) => op.type === "relocation" || op.type === "rename",
+	);
+	if (moves.length > 0) {
+		return `${says} This scope contains ${plural(moves.length, "relocation or rename operation")}.`;
 	}
 	if (ranked.length === 0)
 		return `${says} No operations were detected in this scope.`;
@@ -391,10 +505,12 @@ function layout(
 	ranked: Operation[],
 	detailCount: number,
 	scopeLabel: string,
+	brief: ReadonlySet<Operation>,
 ): Layout {
 	const detailed = ranked.slice(0, detailCount);
 	const noteLists = new Map<string, string[]>();
-	for (const [i, op] of detailed.entries()) addFileNotes(noteLists, op, i + 1);
+	for (const [i, op] of detailed.entries())
+		if (!brief.has(op)) addFileNotes(noteLists, op, i + 1);
 	const notes = new Map(
 		[...noteLists].map(([file, list]) => [file, list.join("\n")]),
 	);
@@ -409,7 +525,7 @@ function layout(
 		`Scope: ${scopeLabel}.`,
 		fileMix(model),
 		ranked.length > 0 ? "Operations in this scope, most relevant first:" : null,
-		...detailed.map((op, i) => detailBlock(op, i + 1)),
+		...detailed.map((op, i) => detailBlock(op, i + 1, brief.has(op))),
 		countsLine(ranked.slice(detailCount)),
 		model.droppedClaims > 0
 			? `${plural(model.droppedClaims, "relocation claim")} ${model.droppedClaims === 1 ? "was" : "were"} not confirmed by an independent check and ${model.droppedClaims === 1 ? "is" : "are"} not listed.`
@@ -423,12 +539,23 @@ function layout(
 	return { summary, notes, size };
 }
 
+function detailSize(op: Operation, number: number): number {
+	const noteLists = new Map<string, string[]>();
+	addFileNotes(noteLists, op, number);
+	let size = detailBlock(op, number, false).length;
+	for (const list of noteLists.values())
+		for (const note of list) size += note.length + 1;
+	return size;
+}
+
 /**
  * Renders the model as computed notes for the reviewer prompt: a summary for the top of
  * the section and per-file notes to place before each file's diff text. It reports facts
  * and never judges whether a change is functional. Author-derived values are clipped and
  * fenced as untrusted. The total length stays within `maxChars` by dropping the
- * lowest-ranked operation detail first, keeping the per-type counts. It bounds only the
+ * lowest-ranked operation detail first, keeping the per-type counts. An operation whose
+ * detail alone exceeds `maxChars` keeps only its headline, so it cannot empty the others.
+ * It bounds only the
  * operation detail, so the fixed text, heading and facts remain whatever `maxChars` is.
  * A mechanical operation without a reason is not rendered, because no claim can be
  * worded for it.
@@ -441,10 +568,15 @@ export function renderDiffModel(
 	if (nothingToSay(model)) return { summary: "", fileNotes: new Map() };
 	const ranked = rankOperations(model.operations);
 	let count = Math.min(ranked.length, MAX_DETAILED_OPERATIONS);
-	let result = layout(model, ranked, count, opts.scopeLabel);
+	const brief = new Set(
+		ranked
+			.slice(0, count)
+			.filter((op, i) => detailSize(op, i + 1) > opts.maxChars),
+	);
+	let result = layout(model, ranked, count, opts.scopeLabel, brief);
 	while (result.size > opts.maxChars && count > 0) {
 		count -= 1;
-		result = layout(model, ranked, count, opts.scopeLabel);
+		result = layout(model, ranked, count, opts.scopeLabel, brief);
 	}
 	return { summary: result.summary, fileNotes: result.notes };
 }
