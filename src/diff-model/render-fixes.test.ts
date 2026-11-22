@@ -133,6 +133,22 @@ describe("repeated spans in one file", () => {
 	});
 });
 
+describe("source notes of a copy", () => {
+	it("adds the source note once per file however many source spans it has", () => {
+		const r = render([
+			copyOp({
+				from: [
+					span("src/a.ts", "head", 1, 5),
+					span("src/a.ts", "head", 10, 15),
+					span("src/a.ts", "head", 20, 25),
+				],
+			}),
+		]);
+		const note = r.fileNotes.get("src/a.ts") ?? "";
+		expect(note.match(/Source of a copy/g)).toHaveLength(1);
+	});
+});
+
 describe("copy file notes", () => {
 	it("keeps the differences and the source status on the target note", () => {
 		const r = render([

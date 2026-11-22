@@ -389,8 +389,9 @@ function addFileNotes(
 			parts.push(see);
 			addNote(notes, s.filename, parts.join(", "));
 		}
-		for (const s of op.from)
-			addNote(notes, s.filename, `Source of a copy, ${see}`);
+		const sources = new Set(op.from.map((s) => s.filename));
+		for (const file of sources)
+			addNote(notes, file, `Source of a copy, ${see}`);
 		return;
 	}
 	if (op.type === "rename") {
