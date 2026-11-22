@@ -8,7 +8,13 @@ import {
 import { acceptCopySeed, copyBlockQualifies } from "./acceptance.js";
 import { type Built, build, chainSeeds } from "./block-build.js";
 import type { WorkBudget } from "./budget.js";
-import { DATA_FILE, PROSE_FILE } from "./file-kinds.js";
+import { type Regions, scanRegions } from "./copy-regions.js";
+import {
+	DATA_FILE,
+	INDENT_FREE_FILE,
+	PROSE_FILE,
+	UNMATCHED_FILES,
+} from "./file-kinds.js";
 import type { Operation, Span } from "./types.js";
 
 const MIN_SEED_LINES = 2;
@@ -19,6 +25,11 @@ interface Pending {
 	fromStart: number;
 	fromEnd: number;
 	renamed: number;
+}
+
+interface Context {
+	budget: WorkBudget;
+	regions: Map<string, Regions>;
 }
 
 function headSpan(run: Run, start: number, end: number): Span {
@@ -53,35 +64,103 @@ function claimTarget(to: Run, built: Built): void {
 	for (let j = built.toStart; j < built.toEnd; j++) to.used[j] = true;
 }
 
-function resolve(chain: Candidate[], budget: WorkBudget): Pending[] {
+function clear(ctx: Context, run: Run, start: number, end: number): boolean {
+	const unsafe = ctx.regions.get(run.filename)?.unsafe;
+	if (!unsafe) return true;
+	for (let n = run.startLine + start; n < run.startLine + end; n++)
+		if (unsafe.has(n)) return false;
+	return true;
+}
+
+function interior(line: string): string {
+	const text = line.trim();
+	return /["'`/]/.test(text) ? text : text.replace(/\s+/g, " ");
+}
+
+function sameText(from: Run, to: Run, built: Built): boolean {
+	const spent = (spans: (Span | undefined)[]) => {
+		const lines = new Set<number>();
+		for (const s of spans)
+			if (s) for (let n = s.startLine; n <= s.endLine; n++) lines.add(n);
+		return lines;
+	};
+	const fromSpent = spent(built.divergences.map((d) => d.base));
+	const toSpent = spent(built.divergences.map((d) => d.head));
+	const rest = (run: Run, start: number, end: number, gone: Set<number>) =>
+		run.raw
+			.slice(start, end)
+			.filter((_, i) => !gone.has(run.startLine + start + i));
+	const left = rest(from, built.fromStart, built.fromEnd, fromSpent);
+	const right = rest(to, built.toStart, built.toEnd, toSpent);
+	if (left.length !== right.length) return false;
+	const strict =
+		!INDENT_FREE_FILE.test(from.filename) ||
+		!INDENT_FREE_FILE.test(to.filename) ||
+		from.literalRisk ||
+		to.literalRisk;
+	return left.every((line, i) => {
+		const other = right[i] as string;
+		if (line === other) return true;
+		if (strict || /\\\s*$/.test(line) || /\\\s*$/.test(other)) return false;
+		return interior(line) === interior(other);
+	});
+}
+
+function resolve(chain: Candidate[], ctx: Context): Pending[] {
 	const { from, to } = chain[0] as Candidate;
 	const holds = (built: Built) =>
-		copyBlockQualifies(from, built.fromStart, built.fromEnd);
-	const whole = build(chain, true, budget, false, "head");
+		copyBlockQualifies(from, built.fromStart, built.fromEnd) &&
+		clear(ctx, from, built.fromStart, built.fromEnd) &&
+		clear(ctx, to, built.toStart, built.toEnd) &&
+		sameText(from, to, built);
+	const whole = build(chain, true, ctx.budget, false, "head");
 	if (whole.counted <= whole.limit && holds(whole)) {
 		claimTarget(to, whole);
 		return [toCopy(from, to, whole)];
 	}
-	if (chain.length > 1) return chain.flatMap((seed) => resolve([seed], budget));
-	const plain = build(chain, false, budget, true, "head");
+	if (chain.length > 1) return chain.flatMap((seed) => resolve([seed], ctx));
+	const plain = build(chain, false, ctx.budget, true, "head");
 	if (!holds(plain)) return [];
 	claimTarget(to, plain);
 	return [toCopy(from, to, plain)];
 }
 
+/**
+ * Head lines an earlier operation already accounts for: its target lines, except the lines of
+ * its own divergences, which carry text the base block did not have.
+ */
+function reviewedLines(claimed: Operation[]): Map<string, Set<number>> {
+	const reviewed = new Map<string, Set<number>>();
+	for (const op of claimed) {
+		if (op.type === "copy") continue;
+		for (const span of op.to) {
+			if (span.side !== "head") continue;
+			const own = new Set<number>();
+			for (let n = span.startLine; n <= span.endLine; n++) own.add(n);
+			for (const d of op.divergences)
+				if (d.head?.filename === span.filename)
+					for (let n = d.head.startLine; n <= d.head.endLine; n++)
+						own.delete(n);
+			const lines = reviewed.get(span.filename) ?? new Set<number>();
+			for (const n of own) lines.add(n);
+			reviewed.set(span.filename, lines);
+		}
+	}
+	return reviewed;
+}
+
 function settle(
 	{ op, from, fromStart, fromEnd, renamed }: Pending,
-	before: Map<Run, boolean[]>,
+	reviewed: Map<string, Set<number>>,
 ): Operation {
-	const weighed = op.divergences.filter(
-		(d) => d.class === "code" || d.class === "signature",
-	).length;
+	const weighed = op.divergences.filter((d) => d.class === "code").length;
 	const hasReceiver = op.divergences.some((d) => d.class === "receiver");
 	const count = weighed + renamed + (hasReceiver ? 1 : 0);
-	const claimed = before.get(from);
+	const known = reviewed.get(from.filename);
 	let sourceNew = false;
-	for (let i = fromStart; i < fromEnd; i++)
-		if (claimed && !claimed[i]) sourceNew = true;
+	if (from.index >= 0)
+		for (let i = fromStart; i < fromEnd; i++)
+			if (known?.has(from.startLine + i) !== true) sourceNew = true;
 	return sourceNew
 		? { ...op, reviewWeight: Math.max(1, count), shape: { sourceNew: true } }
 		: { ...op, reviewWeight: count };
@@ -90,29 +169,43 @@ function settle(
 /**
  * Finds blocks added in this change that duplicate other code the patch shows: unchanged
  * context lines or another added block. Only added lines no earlier pass claimed can be a
- * copy; a source may be any visible line. A source containing any added line no earlier pass
- * claimed is `shape.sourceNew`: the original is new code in this change too. Among identical
- * duplicates the earliest added block is the source and the later ones are copies, and a
- * context source wins over an added one. A copy needs five counted lines or a whole definition
- * of three lines, at least one line that carries information, and edits inside it are
- * divergences under the relocation limits. Both spans are head-side. Work is drawn from the
- * shared budget and stops when it runs out. JSON and prose files are skipped: repeated records and repeated
- * wording are not copied logic.
+ * copy; a source may be any visible line. A source is `shape.sourceNew` when any of its lines
+ * is an added line that is not in the target of an exact relocation or on a relocation
+ * divergence line (`claimed` lists the earlier operations): the original is new code in this
+ * change too. Among identical duplicates the earliest added block is the source and the later
+ * ones are copies, and a context source wins over an added one. A copy needs five counted
+ * lines or a whole definition of three lines, at least one line that carries information, and
+ * edits inside it are divergences under the relocation limits. Both spans are head-side. Lines
+ * that differ only in whitespace pair up only in brace and free-form languages whose patch
+ * holds no literal opener; elsewhere raw text must match. A span that begins inside or touches
+ * a multi-line comment, template literal, triple-quoted string or heredoc is never a copy, and
+ * neither is any block of a file whose patch leaves one open. Work is drawn from the shared
+ * budget and stops when it runs out. JSON, prose, lockfiles and minified bundles are skipped:
+ * repeated records and repeated wording are not copied logic.
  */
 export function findCopies(
 	files: PushFile[],
 	added: Run[],
 	budget: WorkBudget,
+	claimed: Operation[] = [],
 ): Operation[] {
+	const regions = new Map(
+		files.map((f) => [f.filename, scanRegions(f.filename, f.patch)] as const),
+	);
+	const ctx: Context = { budget, regions };
 	const skipped = (name: string) =>
-		DATA_FILE.test(name) || PROSE_FILE.test(name);
+		DATA_FILE.test(name) ||
+		PROSE_FILE.test(name) ||
+		UNMATCHED_FILES.test(name) ||
+		regions.get(name)?.risky === true;
 	const code = files.filter((f) => !skipped(f.filename));
 	const targets = added.filter((run) => !skipped(run.filename));
-	const before = new Map(targets.map((run) => [run, [...run.used]]));
 	const sources = [...collectContextRuns(code), ...targets];
 	const accept = (c: Candidate) =>
 		c.from !== c.to &&
 		(c.from.index < 0 || c.from.index < c.to.index) &&
+		clear(ctx, c.from, c.fromStart, c.fromStart + c.length) &&
+		clear(ctx, c.to, c.toStart, c.toStart + (c.toLength ?? c.length)) &&
 		acceptCopySeed(c, budget);
 	const seeds = selectMatches(sources, targets, MIN_SEED_LINES, accept, {
 		allowSameFile: true,
@@ -135,9 +228,10 @@ export function findCopies(
 	const seedsExhausted = budget.exhausted;
 	for (const chain of chains) {
 		if (!seedsExhausted && budget.exhausted) break;
-		pending.push(...resolve(chain, budget));
+		pending.push(...resolve(chain, ctx));
 	}
-	return pending.map((p) => settle(p, before));
+	const reviewed = reviewedLines(claimed);
+	return pending.map((p) => settle(p, reviewed));
 }
 
 function weight(chain: Candidate[]): number {

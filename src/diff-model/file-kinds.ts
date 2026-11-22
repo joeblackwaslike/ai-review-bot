@@ -10,3 +10,10 @@ export const DATA_FILE = /\.json(?:l|5)?$/i;
  */
 export const UNMATCHED_FILES =
 	/(?:^|\/)(?:package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?|go\.sum|[^/]+\.lock)$|\.min\.(?:js|css)$|\.snap$/;
+
+/**
+ * Brace and free-form languages where leading and repeated whitespace carries no meaning. Copy
+ * claims in any other extension, unknown ones included, compare raw line text.
+ */
+export const INDENT_FREE_FILE =
+	/\.(?:[cm]?[jt]sx?|java|go|rs|c|h|cc|cpp|cxx|hpp|cs|kt|kts|swift|php|scala|dart|css|scss|less)$/i;

@@ -1163,6 +1163,14 @@ describe("findRelocations same-file uniqueness", () => {
 		].join("\n");
 		const ops = findRelocations([pushFile("src/a.ts", patch)]);
 		expect(ops.filter((op) => op.type === "relocation")).toEqual([]);
+		expect(ops.filter((op) => op.type === "copy")).toMatchObject([
+			{
+				from: [{ filename: "src/a.ts", startLine: 2, endLine: 6 }],
+				to: [{ filename: "src/a.ts", startLine: 31, endLine: 35 }],
+				reviewWeight: 1,
+				shape: { sourceNew: true },
+			},
+		]);
 	});
 });
 

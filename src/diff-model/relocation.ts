@@ -114,7 +114,9 @@ export function findRelocations(
 		operations.push(
 			...findTokenOperations(deleted, added, budget, literalFiles),
 		);
-	const copies = budget.exhausted ? [] : findCopies(matched, added, budget);
+	const copies = budget.exhausted
+		? []
+		: findCopies(matched, added, budget, operations);
 	const numbered = (ops: Operation[], prefix: string) =>
 		ops.sort(byPosition).map((op, k) => ({ ...op, id: `${prefix}-${k + 1}` }));
 	return [...numbered(operations, "relocation"), ...numbered(copies, "copy")];

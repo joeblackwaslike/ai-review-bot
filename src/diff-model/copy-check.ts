@@ -1,21 +1,15 @@
 import { isIndentSensitive, type PushFile } from "../moved-blocks.js";
 import { DATA_FILE, PROSE_FILE, UNMATCHED_FILES } from "./file-kinds.js";
 import {
-	accountedPositionally,
 	type ChangeIndex,
 	claimedDivergences,
 	classesHold,
 	IMPORT_LINE,
 	indexOf,
-	information,
-	insideLiteral,
 	isDefinition,
-	LITERALS,
-	MIN_LINE_CHARS,
 	type Side,
 	SMALL_CLAIM_LINES,
 	SMALL_DEFINITION_CHARS,
-	unclaimed,
 } from "./relocation-check.js";
 import type { Operation, Span } from "./types.js";
 
@@ -23,13 +17,39 @@ const PROPERTY_LINE =
 	/^(?:\.\.\.\S.*|["']?[\w$-]+["']?\??:(?:\s.*)?|[\w$]+|[{[(]+|[}\])]+[,;)]*)$/;
 const IMPORT_CLOSER = /^[})\]]\s*from\b/;
 const BARE_NAME = /^(?:type\s+)?[\w$]+(?:\s+as\s+[\w$]+)?,?$/;
+const NAME = /[A-Za-z_$][\w$]*/g;
+const MIN_LINE_CHARS = 3;
+const MAX_FLOOR_LINE = 500;
+const WHOLE_COMMENT_LINE = /^(?:\/\/|\/\*|\*\/|\*(?:\s|$))/;
+const HASH_COMMENT_LINE = /^#(?![![])/;
+const HASH_FILES = /\.(?:py|pyi|sh|bash|zsh|rb|ya?ml|toml|mk)$/i;
+const WHITESPACE_FREE_FILES =
+	/\.(?:[cm]?[jt]sx?|java|go|rs|c|h|cc|cpp|cxx|hpp|cs|kt|kts|swift|php|scala|dart|css|scss|less)$/i;
+const IDLE_WORDS = new Set(
+	`if else for while do return break continue switch case default try catch finally
+	throw new function class def fn func end let const var in of async await yield
+	import export from as true false null undefined this self super static public
+	private protected void and or not is then pub mut type interface enum extends
+	implements with lambda pass assert defer match`.split(/\s+/),
+);
+const REGION_TOKENS =
+	/\/\*|\*\/|`|"""|'''|<<[-~]?(["']?)([A-Za-z_]\w*)\1|\\[\s\S]|"|'|\/\/|#/g;
 
 interface HeadRead {
 	side: Side;
 	segment: number;
 }
 
-const coverages = new WeakMap<readonly Operation[], Map<string, Set<number>>>();
+interface FileRegions {
+	unsafe: Set<number>;
+	risky: boolean;
+}
+
+const coverages = new WeakMap<
+	readonly Operation[],
+	{ targets: Map<string, Set<number>>; reviewed: Map<string, Set<number>> }
+>();
+const regionCaches = new WeakMap<object, FileRegions>();
 
 function eligible(filename: string): boolean {
 	return (
@@ -37,6 +57,89 @@ function eligible(filename: string): boolean {
 		!PROSE_FILE.test(filename) &&
 		!UNMATCHED_FILES.test(filename)
 	);
+}
+
+function closer(text: string, from: number, close: string): number {
+	for (let i = from; i < text.length; i++) {
+		if (text[i] === "\\") i++;
+		else if (text.startsWith(close, i)) return i;
+	}
+	return -1;
+}
+
+/**
+ * Lines that begin inside, open, or close a construct spanning several lines (block comment,
+ * template literal, triple-quoted string, heredoc), read from the head rows in line order. A
+ * construct still open after the last row makes the file risky.
+ */
+export function regionsOfRows(
+	filename: string,
+	rows: [number, string][],
+): FileRegions {
+	const hash = HASH_FILES.test(filename);
+	const unsafe = new Set<number>();
+	let open: { close: string; at: number; word?: string } | null = null;
+	for (const [n, text] of rows) {
+		if (open?.word !== undefined) {
+			if (text.trim() === open.word) {
+				for (let k = open.at; k <= n; k++) unsafe.add(k);
+				open = null;
+			}
+			continue;
+		}
+		let skip = 0;
+		let quote = "";
+		for (const m of text.matchAll(REGION_TOKENS)) {
+			const at = m.index as number;
+			const token = m[0];
+			if (at < skip) continue;
+			if (open) {
+				if (token !== open.close) continue;
+				for (let k = open.at; k <= n; k++) unsafe.add(k);
+				open = null;
+				quote = "";
+				continue;
+			}
+			if (quote) {
+				if (token === quote) quote = "";
+				continue;
+			}
+			const spaced = at === 0 || /\s/.test(text[at - 1] as string);
+			if (token === "//") {
+				if (spaced && !hash) break;
+			} else if (token === "#") {
+				if (spaced && hash) break;
+			} else if (token === '"' || token === "'") {
+				quote = token;
+			} else if (m[2] !== undefined) {
+				open = { close: "", at: n, word: m[2] };
+				break;
+			} else if (token !== "*/" && !token.startsWith("\\")) {
+				const end = token === "/*" ? "*/" : token;
+				const found = closer(text, at + token.length, end);
+				if (found >= 0) skip = found + end.length;
+				else {
+					open = { close: end, at: n };
+					break;
+				}
+			}
+		}
+	}
+	return { unsafe, risky: open !== null };
+}
+
+function regionsOf(filename: string, index: ChangeIndex): FileRegions {
+	const file = index.byName.get(filename);
+	if (!file) return { unsafe: new Set(), risky: false };
+	const cached = regionCaches.get(file);
+	if (cached) return cached;
+	const rows: [number, string][] = [
+		...file.changed.added,
+		...file.changed.context,
+	].sort((a, b) => a[0] - b[0]);
+	const built = regionsOfRows(filename, rows);
+	regionCaches.set(file, built);
+	return built;
 }
 
 function readHead(
@@ -47,6 +150,8 @@ function readHead(
 	if (span.side !== "head" || span.endLine < span.startLine) return null;
 	const file = index.byName.get(span.filename);
 	if (!file) return null;
+	const regions = regionsOf(span.filename, index);
+	if (regions.risky) return null;
 	const { added, context, segments } = file.changed;
 	const lines: string[] = [];
 	const positions: number[] = [];
@@ -55,6 +160,7 @@ function readHead(
 		const text = added.get(n) ?? (allowContext ? context.get(n) : undefined);
 		const seen = segments.get(n);
 		if (text === undefined || seen === undefined) return null;
+		if (regions.unsafe.has(n)) return null;
 		if (segment !== undefined && seen !== segment) return null;
 		segment = seen;
 		lines.push(text);
@@ -66,7 +172,7 @@ function readHead(
 			filename: span.filename,
 			lines,
 			positions,
-			inLiteral: insideLiteral(lines),
+			inLiteral: lines.map(() => false),
 			hunks: new Set(),
 			groups: new Set(),
 			following: undefined,
@@ -74,36 +180,84 @@ function readHead(
 	};
 }
 
-function coverageOf(verified: readonly Operation[]): Map<string, Set<number>> {
+function coverageOf(verified: readonly Operation[]) {
 	const cached = coverages.get(verified);
 	if (cached) return cached;
-	const covered = new Map<string, Set<number>>();
+	const targets = new Map<string, Set<number>>();
+	const reviewed = new Map<string, Set<number>>();
+	const into = (map: Map<string, Set<number>>, name: string) => {
+		let lines = map.get(name);
+		if (!lines) {
+			lines = new Set();
+			map.set(name, lines);
+		}
+		return lines;
+	};
 	for (const op of verified) {
 		if (op.type === "copy") continue;
 		for (const span of op.to) {
 			if (span.side !== "head") continue;
-			let lines = covered.get(span.filename);
-			if (!lines) {
-				lines = new Set();
-				covered.set(span.filename, lines);
-			}
-			for (let n = span.startLine; n <= span.endLine; n++) lines.add(n);
+			const own = new Set<number>();
+			for (let n = span.startLine; n <= span.endLine; n++) own.add(n);
+			for (const n of own) into(targets, span.filename).add(n);
+			for (const d of op.divergences)
+				if (d.head?.filename === span.filename)
+					for (let n = d.head.startLine; n <= d.head.endLine; n++)
+						own.delete(n);
+			for (const n of own) into(reviewed, span.filename).add(n);
 		}
 	}
-	coverages.set(verified, covered);
-	return covered;
+	const built = { targets, reviewed };
+	coverages.set(verified, built);
+	return built;
+}
+
+function withoutLiterals(line: string): { rest: string; had: boolean } {
+	const dead = new Set<string>();
+	const pieces: string[] = [];
+	let had = false;
+	let i = 0;
+	while (i < line.length) {
+		const ch = line[i] as string;
+		if ("\"'`".includes(ch) && !dead.has(ch)) {
+			let j = i + 1;
+			while (j < line.length && line[j] !== ch) j += line[j] === "\\" ? 2 : 1;
+			if (j < line.length) {
+				pieces.push(" ");
+				had = true;
+				i = j + 1;
+				continue;
+			}
+			dead.add(ch);
+		}
+		const before = i > 0 ? (line[i - 1] as string) : "";
+		if (ch >= "0" && ch <= "9" && !/\w/.test(before)) {
+			let j = i + 1;
+			while (j < line.length && /[\w.]/.test(line[j] as string)) j++;
+			pieces.push(" ");
+			had = true;
+			i = j;
+			continue;
+		}
+		pieces.push(ch);
+		i++;
+	}
+	return { rest: pieces.join(""), had };
 }
 
 function bracketBalance(text: string): number {
-	return (
-		(text.match(/[({[]/g) ?? []).length - (text.match(/[)}\]]/g) ?? []).length
-	);
+	let balance = 0;
+	for (const ch of text) {
+		if (ch === "(" || ch === "[" || ch === "{") balance++;
+		else if (ch === ")" || ch === "]" || ch === "}") balance--;
+	}
+	return balance;
 }
 
 function bracketsClose(lines: string[]): boolean {
 	let depth = 0;
 	for (const line of lines) {
-		depth += bracketBalance(line.replace(LITERALS, " "));
+		depth += bracketBalance(withoutLiterals(line).rest);
 		if (depth < 0) return false;
 	}
 	return depth === 0;
@@ -114,6 +268,15 @@ function onlyProperties(lines: string[]): boolean {
 		const text = line.trim().replace(/,$/, "");
 		return text === "" || PROPERTY_LINE.test(text);
 	});
+}
+
+function lineWeight(line: string): number {
+	const text = line.trim();
+	if (text === "" || IMPORT_LINE.test(text)) return 0;
+	const { rest, had } = withoutLiterals(text);
+	const named = (rest.match(NAME) ?? []).some((w) => !IDLE_WORDS.has(w));
+	const literalOnly = had && /[^\s,;:()[\]{}]/.test(rest);
+	return named || literalOnly ? text.replace(/\s/g, "").length : 0;
 }
 
 function hasSubstance(lines: string[]): boolean {
@@ -129,16 +292,28 @@ function hasSubstance(lines: string[]): boolean {
 			return false;
 		}
 		if (IMPORT_CLOSER.test(text) || BARE_NAME.test(text)) return false;
-		return information(text) > 0;
+		return lineWeight(text) > 0;
 	});
 }
 
-const MAX_LINE_CHARS = 2000;
-
-function floorHolds(lines: string[], indentSensitive: boolean): boolean {
-	if (lines.some((l) => l.length > MAX_LINE_CHARS)) return false;
-	const counted = lines.filter((l) => l.trim().length >= MIN_LINE_CHARS).length;
+/**
+ * The copy floor, implemented here on purpose so the checker does not borrow the matcher's.
+ * `acceptance.ts` has its own copy and a test pins the two equal on shared inputs.
+ */
+export function floorHolds(
+	lines: string[],
+	indentSensitive: boolean,
+	hash = false,
+): boolean {
+	if (lines.some((l) => l.length > MAX_FLOOR_LINE)) return false;
 	const present = lines.map((l) => l.trim()).filter((l) => l !== "");
+	if (
+		present.every(
+			(l) => WHOLE_COMMENT_LINE.test(l) || (hash && HASH_COMMENT_LINE.test(l)),
+		)
+	)
+		return false;
+	const counted = lines.filter((l) => l.trim().length >= MIN_LINE_CHARS).length;
 	const chars = present.join("").replace(/\s/g, "").length;
 	const definition =
 		present.length >= 3 &&
@@ -157,18 +332,52 @@ function rangesOverlap(a: Side, b: Side): boolean {
 	);
 }
 
+function interior(line: string): string {
+	const text = line.trim();
+	return /["'`/]/.test(text) ? text : text.replace(/\s+/g, " ");
+}
+
+function leftover(side: Side, spent: Set<string>): string[] {
+	return side.lines.filter(
+		(_, i) => !spent.has(`${side.filename}:${side.positions[i]}`),
+	);
+}
+
+function sameText(
+	from: Side,
+	to: Side,
+	spent: { base: Set<string>; head: Set<string> },
+	tolerant: boolean,
+): boolean {
+	const left = leftover(from, spent.base);
+	const right = leftover(to, spent.head);
+	if (left.length !== right.length) return false;
+	return left.every((line, i) => {
+		const other = right[i] as string;
+		if (line === other) return true;
+		if (!tolerant || /\\\s*$/.test(line) || /\\\s*$/.test(other)) return false;
+		return interior(line) === interior(other);
+	});
+}
+
 /**
  * Checks a copy claim against the patches without using the matcher. Both spans are head-side
  * ranges inside one run of the patch each: the target is added lines, the source added or
  * visible context lines of a different run, and the two do not overlap. Neither file may be prose,
- * JSON or a lockfile. The block must clear the copy floor (five counted lines, or a whole
- * definition of three lines and 40 characters), carry information, close its brackets and be
- * more than object properties. Divergences are checked as for relocations; a signature
- * divergence is never valid on a copy. `sourceNew` is recomputed: true when any source line
- * is an added line that no operation in `verified` (the already-verified non-copy
- * operations of the same model) has as its target. A target line that a verified non-copy
- * operation also has as its target is never a copy. The claimed `sourceNew` and `reviewWeight` must
- * match, and `exact` cannot be true with divergences.
+ * JSON or a lockfile, and no span may begin inside or touch a multi-line comment, template
+ * literal, triple-quoted string or heredoc (a file whose patch leaves one open has no valid
+ * copy). The block must clear the copy floor (five counted lines, or a whole
+ * definition of three lines and 40 characters; a block of whole comment lines never counts;
+ * a line over 500 characters never qualifies), carry information, close its brackets and be
+ * more than object properties. The floor is reimplemented here on purpose, so the checker
+ * does not share the matcher's code. Divergences are checked as for relocations; a signature
+ * divergence is never valid on a copy. Lines outside the divergences pair by raw text, or
+ * ignoring whitespace only in brace and free-form languages whose patch has no literal opener.
+ * `sourceNew` is recomputed: true when any source line is an added line that is not a target
+ * line of a verified non-copy operation, or is one of that operation's own divergence lines.
+ * A target line that a verified non-copy operation also has as its target is never a copy.
+ * The claimed `sourceNew` and `reviewWeight` must match, and `exact` cannot be true with
+ * divergences.
  */
 export function verifyCopy(
 	op: Operation,
@@ -190,14 +399,16 @@ export function verifyCopy(
 	if (rangesOverlap(from.side, to.side)) return false;
 	if (from.side.filename === to.side.filename && from.segment === to.segment)
 		return false;
-	if (!floorHolds(from.side.lines, isIndentSensitive(from.side.filename)))
+	const hash = HASH_FILES.test(from.side.filename);
+	if (!floorHolds(from.side.lines, isIndentSensitive(from.side.filename), hash))
 		return false;
-	const targets = coverageOf(verified).get(to.side.filename);
-	if (to.side.positions.some((n) => targets?.has(n) === true)) return false;
-	const covered = coverageOf(verified).get(from.side.filename);
+	const { targets, reviewed } = coverageOf(verified);
+	const taken = targets.get(to.side.filename);
+	if (to.side.positions.some((n) => taken?.has(n) === true)) return false;
+	const known = reviewed.get(from.side.filename);
 	const added = index.byName.get(from.side.filename)?.changed.added;
 	const sourceNew = from.side.positions.some(
-		(n) => added?.has(n) === true && covered?.has(n) !== true,
+		(n) => added?.has(n) === true && known?.has(n) !== true,
 	);
 	if ((op.shape?.sourceNew === true) !== sourceNew) return false;
 	const spent = claimedDivergences(op, [from.side], [to.side]);
@@ -206,8 +417,10 @@ export function verifyCopy(
 	if (weight === null) return false;
 	if (op.reviewWeight !== (sourceNew ? Math.max(1, weight) : weight))
 		return false;
-	return accountedPositionally(
-		unclaimed([from.side], spent.base),
-		unclaimed([to.side], spent.head),
+	const tolerant = [from.side.filename, to.side.filename].every(
+		(name) =>
+			WHITESPACE_FREE_FILES.test(name) &&
+			index.byName.get(name)?.risky === false,
 	);
+	return sameText(from.side, to.side, spent, tolerant);
 }
