@@ -6,9 +6,8 @@ export interface Stripped {
 const WORD = /\w/;
 
 /**
- * Replaces each string literal ("..", '..', `..`) and number (`\d[\w.]*` at a word boundary)
- * with one space, in one pass. A quote with no closer on the line stays as it is, and a
- * quote kind that failed once fails for every later quote of that kind, so the scan is linear.
+ * Replaces each string literal and number with one space in one pass. A quote kind with no
+ * closer fails once and for every later quote, so the scan stays linear.
  */
 export function stripLiterals(line: string): Stripped {
 	let out = "";

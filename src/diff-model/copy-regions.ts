@@ -17,10 +17,9 @@ function closeIndex(text: string, from: number, close: string): number {
 }
 
 /**
- * Scans the head-side rows of one patch, context and added rows in order, for constructs
- * that span lines: block comments, template literals, triple-quoted strings and heredocs.
- * Every line from the opener to the closer is unsafe for a copy claim. A construct still
- * open at the end of the patch marks the whole file risky.
+ * Head rows of one patch in order. Lines from the opener to the closer of a multi-line block
+ * comment, template literal, triple-quoted string or heredoc are unsafe; a construct left
+ * open at the end makes the file risky.
  */
 export function scanRegions(
 	filename: string,

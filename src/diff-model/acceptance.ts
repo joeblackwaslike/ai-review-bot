@@ -392,14 +392,10 @@ function copyBlockHolds(
 const qualified = new WeakMap<Run, Map<string, boolean>>();
 
 /**
- * Decides whether a block of a run, as it will be reported, qualifies as a copy: five or more
- * counted lines, or a whole definition of at least three non-blank lines and 40 non-space
- * characters that is not a `const` assignment, and in either case at least one line that carries
- * information (a block of imports, closers, bare keywords and bare name lists never qualifies).
- * Its brackets must close within the block and it must hold more than object properties, so a
- * slice through the middle of a call or a run of test data is not a copy. A block of whole
- * comment lines is never code, and a line over 500 characters never qualifies. The answer is
- * memoized per run and range.
+ * Whether a block of a run qualifies as a copy: five counted lines, or a whole definition of
+ * three lines and 40 non-space characters that is not a `const`; at least one line that
+ * carries information; brackets that close; more than object properties. A block of whole
+ * comment lines never qualifies, nor does a line over 500 characters. Memoized per range.
  */
 export function copyBlockQualifies(
 	run: Run,
@@ -423,11 +419,7 @@ export function copyBlockQualifies(
 	return answer;
 }
 
-/**
- * Decides whether an exact duplicate is a block worth reporting as a copy, by the rules of
- * `copyBlockQualifies`. The candidate draws from the budget first, so a flood of duplicates
- * runs dry before any floor work, and is rejected when either pool runs dry.
- */
+/** Draws from the budget first, so a flood of duplicates runs dry before any floor work. */
 export function acceptCopySeed(c: Candidate, budget: WorkBudget): boolean {
 	const end = c.fromStart + c.length;
 	const lines = c.from.lines.slice(c.fromStart, end);

@@ -67,11 +67,7 @@ function closer(text: string, from: number, close: string): number {
 	return -1;
 }
 
-/**
- * Lines that begin inside, open, or close a construct spanning several lines (block comment,
- * template literal, triple-quoted string, heredoc), read from the head rows in line order. A
- * construct still open after the last row makes the file risky.
- */
+/** Unsafe lines and risk for one file, scanned from its head rows, as the matcher does. */
 export function regionsOfRows(
 	filename: string,
 	rows: [number, string][],
@@ -296,10 +292,7 @@ function hasSubstance(lines: string[]): boolean {
 	});
 }
 
-/**
- * The copy floor, implemented here on purpose so the checker does not borrow the matcher's.
- * `acceptance.ts` has its own copy and a test pins the two equal on shared inputs.
- */
+/** The copy floor, reimplemented here on purpose. A test pins it equal to the matcher's. */
 export function floorHolds(
 	lines: string[],
 	indentSensitive: boolean,
@@ -362,22 +355,19 @@ function sameText(
 
 /**
  * Checks a copy claim against the patches without using the matcher. Both spans are head-side
- * ranges inside one run of the patch each: the target is added lines, the source added or
- * visible context lines of a different run, and the two do not overlap. Neither file may be prose,
- * JSON or a lockfile, and no span may begin inside or touch a multi-line comment, template
- * literal, triple-quoted string or heredoc (a file whose patch leaves one open has no valid
- * copy). The block must clear the copy floor (five counted lines, or a whole
- * definition of three lines and 40 characters; a block of whole comment lines never counts;
- * a line over 500 characters never qualifies), carry information, close its brackets and be
- * more than object properties. The floor is reimplemented here on purpose, so the checker
- * does not share the matcher's code. Divergences are checked as for relocations; a signature
- * divergence is never valid on a copy. Lines outside the divergences pair by raw text, or
- * ignoring whitespace only in brace and free-form languages whose patch has no literal opener.
- * `sourceNew` is recomputed: true when any source line is an added line that is not a target
- * line of a verified non-copy operation, or is one of that operation's own divergence lines.
- * A target line that a verified non-copy operation also has as its target is never a copy.
- * The claimed `sourceNew` and `reviewWeight` must match, and `exact` cannot be true with
- * divergences.
+ * ranges inside one run each: the target added lines, the source added or context lines of a
+ * different run, with no overlap. Prose, JSON and lockfiles are out. No span may begin inside
+ * or touch a multi-line comment, template literal, triple-quoted string or heredoc, and a file
+ * whose patch leaves one open has no copy. The block must clear the copy floor, which is
+ * reimplemented here on purpose so the checker shares no code with the matcher: five counted
+ * lines or a whole definition, no block of whole comment lines, no line over 500 characters,
+ * brackets that close, and more than object properties. Divergences are checked as for
+ * relocations, and a signature divergence is never valid. Lines outside them pair by raw text,
+ * or ignoring whitespace only in brace languages whose patch has no literal opener.
+ * `sourceNew` is recomputed: true when a source line is added and is neither a verified
+ * non-copy target line nor one of that operation's own divergence lines. A target line of a
+ * verified non-copy operation is never a copy. Claimed `sourceNew`, `reviewWeight` and `exact`
+ * must match.
  */
 export function verifyCopy(
 	op: Operation,

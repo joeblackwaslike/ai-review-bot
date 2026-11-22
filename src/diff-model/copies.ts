@@ -169,19 +169,15 @@ function settle(
 /**
  * Finds blocks added in this change that duplicate other code the patch shows: unchanged
  * context lines or another added block. Only added lines no earlier pass claimed can be a
- * copy; a source may be any visible line. A source is `shape.sourceNew` when any of its lines
- * is an added line that is not in the target of an exact relocation or on a relocation
- * divergence line (`claimed` lists the earlier operations): the original is new code in this
- * change too. Among identical duplicates the earliest added block is the source and the later
- * ones are copies, and a context source wins over an added one. A copy needs five counted
- * lines or a whole definition of three lines, at least one line that carries information, and
- * edits inside it are divergences under the relocation limits. Both spans are head-side. Lines
- * that differ only in whitespace pair up only in brace and free-form languages whose patch
- * holds no literal opener; elsewhere raw text must match. A span that begins inside or touches
- * a multi-line comment, template literal, triple-quoted string or heredoc is never a copy, and
- * neither is any block of a file whose patch leaves one open. Work is drawn from the shared
- * budget and stops when it runs out. JSON, prose, lockfiles and minified bundles are skipped:
- * repeated records and repeated wording are not copied logic.
+ * copy. A source is `shape.sourceNew` when any of its lines is added and is neither in the
+ * target of an exact relocation nor on a relocation divergence line (`claimed` lists the
+ * earlier operations). Among identical duplicates the earliest added block is the source, and
+ * a context source wins. A copy needs five counted lines or a whole definition, and edits
+ * inside it are divergences. Lines differing only in whitespace pair up only in brace
+ * languages whose patch holds no literal opener, else raw text must match. A span inside or
+ * touching a multi-line comment, template literal, triple-quoted string or heredoc is never a
+ * copy, nor is any block of a file whose patch leaves one open. JSON, prose, lockfiles and
+ * minified bundles are skipped. Work is drawn from the shared budget.
  */
 export function findCopies(
 	files: PushFile[],

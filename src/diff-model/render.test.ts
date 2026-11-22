@@ -694,19 +694,13 @@ describe("renderDiffModel copies", () => {
 			shape,
 		});
 
-	it("says the source is visible in this diff only when it is not new", () => {
-		const r = renderDiffModel(model({ operations: [copy()] }), OPTS);
-		expect(r.summary).toContain("(source visible in this diff only)");
-		expect(r.summary).not.toContain("itself new");
-	});
-
-	it("says the source is new when it is", () => {
-		const r = renderDiffModel(
-			model({ operations: [copy({ sourceNew: true })] }),
-			OPTS,
-		);
-		expect(r.summary).toContain("itself new in this change");
-		expect(r.summary).not.toContain("source visible in this diff only");
+	it.each([
+		[undefined, "(source visible in this diff only)", "itself new"],
+		[{ sourceNew: true }, "itself new in this change", "visible in this diff"],
+	])("words a copy with shape %j", (shape, shown, hidden) => {
+		const r = renderDiffModel(model({ operations: [copy(shape)] }), OPTS);
+		expect(r.summary).toContain(shown);
+		expect(r.summary).not.toContain(hidden);
 	});
 
 	it("leaves the move preamble out of a copy-only summary", () => {
