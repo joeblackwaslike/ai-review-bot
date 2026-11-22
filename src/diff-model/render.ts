@@ -128,8 +128,8 @@ function rankOperations(operations: Operation[]): Operation[] {
 		.sort(
 			(a, b) =>
 				TYPE_RANK[a.op.type] - TYPE_RANK[b.op.type] ||
-				linesCovered(b.op) - linesCovered(a.op) ||
 				Number(hasCodeDivergence(b.op)) - Number(hasCodeDivergence(a.op)) ||
+				linesCovered(b.op) - linesCovered(a.op) ||
 				a.index - b.index,
 		)
 		.map(({ op }) => op);
