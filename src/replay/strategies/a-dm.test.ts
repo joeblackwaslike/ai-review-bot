@@ -141,9 +141,8 @@ describe("strategyAdm", () => {
 		expect(notes).not.toMatch(/^src\/new\.ts$/m);
 	});
 
-	it("a-dm version differs from a's and is stable across calls", () => {
+	it("a-dm version differs from a's and is a 12 character hash", () => {
 		expect(strategyAdm.version).not.toBe(strategyA.version);
-		expect(strategyAdm.version).toBe(strategyAdm.version);
 		expect(strategyAdm.version).toMatch(/^[0-9a-f]{12}$/);
 	});
 
