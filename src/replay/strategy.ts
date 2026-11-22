@@ -30,6 +30,9 @@ export interface StrategyInput {
 	round: Round;
 	diff: string;
 	files: PullFile[];
+	/** The PR title and description, when the input has them (seeds do). */
+	title?: string;
+	body?: string | null;
 	approximateDiff: boolean;
 	checkout: CheckoutHandle | null;
 	history: FrozenHistory;

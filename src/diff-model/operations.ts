@@ -188,13 +188,15 @@ export function findMechanical(files: PushFile[]): Operation[] {
 	for (const file of files) {
 		const literalRisk = UNSAFE_FILE_TEXT.test(file.patch ?? "");
 		for (const hunk of parseHunks(file.patch)) {
-			if (
-				(literalRisk || !isWhitespaceOnly(file.filename, hunk)) &&
-				!isImportOnly(file.filename, hunk)
-			) {
-				continue;
-			}
+			const reason =
+				!literalRisk && isWhitespaceOnly(file.filename, hunk)
+					? "whitespace"
+					: isImportOnly(file.filename, hunk)
+						? "imports"
+						: null;
+			if (!reason) continue;
 			operations.push({
+				reason,
 				id: `mechanical-${operations.length + 1}`,
 				type: "mechanical",
 				...mechanicalSpans(file.filename, hunk),

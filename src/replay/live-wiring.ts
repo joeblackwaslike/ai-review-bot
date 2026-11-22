@@ -18,7 +18,14 @@ import type {
 } from "./types.js";
 
 interface CompareResponse {
-	files?: { filename: string; status?: string; patch?: string }[];
+	files?: {
+		filename: string;
+		status?: string;
+		patch?: string;
+		previous_filename?: string;
+		additions?: number;
+		deletions?: number;
+	}[];
 }
 
 export function toLiveFindings(review: ModelReview): LiveFinding[] {
@@ -135,6 +142,11 @@ export function buildLiveWiring(
 					filename: f.filename,
 					status: f.status ?? "modified",
 					patch: f.patch ?? "",
+					...(f.previous_filename
+						? { previous_filename: f.previous_filename }
+						: {}),
+					...(f.additions === undefined ? {} : { additions: f.additions }),
+					...(f.deletions === undefined ? {} : { deletions: f.deletions }),
 				})),
 			);
 		compared.set(round.index, files);

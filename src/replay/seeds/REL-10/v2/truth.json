@@ -7,5 +7,45 @@
 			"endLine": 10,
 			"description": "Grace period check changed from <= to <, so an invoice exactly GraceDays late is charged a late fee although still within the grace period."
 		}
+	],
+	"operations": [
+		{
+			"type": "relocation",
+			"exact": false,
+			"from": [
+				{
+					"filename": "invoice.go",
+					"side": "base",
+					"startLine": 24,
+					"endLine": 45
+				}
+			],
+			"to": [
+				{
+					"filename": "fees.go",
+					"side": "head",
+					"startLine": 5,
+					"endLine": 26
+				}
+			],
+			"divergences": [
+				{
+					"kind": "changed",
+					"class": "code",
+					"base": {
+						"filename": "invoice.go",
+						"side": "base",
+						"startLine": 29,
+						"endLine": 29
+					},
+					"head": {
+						"filename": "fees.go",
+						"side": "head",
+						"startLine": 10,
+						"endLine": 10
+					}
+				}
+			]
+		}
 	]
 }

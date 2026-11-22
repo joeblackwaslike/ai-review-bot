@@ -103,6 +103,8 @@ export async function runAuditPass(opts: {
 	extraInstructions: string;
 	meta: { owner: string; repo: string; ref: string };
 	auth?: ResolvedAuth;
+	/** Computed notes placed after the repo context of every audit message. */
+	diffModelSection?: string;
 }): Promise<{
 	review: ModelReview;
 	usage: PassUsage;
@@ -120,7 +122,8 @@ export async function runAuditPass(opts: {
 	/** Tokens per skill (same names as `agentReviews`); values sum to `usage`. */
 	usageBySkill: Record<string, PassUsage>;
 }> {
-	const { files, selection, extraInstructions, meta, auth } = opts;
+	const { files, selection, extraInstructions, meta, auth, diffModelSection } =
+		opts;
 	const reviews: ModelReview[] = [];
 	const agentReviews: { skill: string; review: ModelReview }[] = [];
 	const usage: PassUsage = { promptTokens: 0, completionTokens: 0 };
@@ -151,6 +154,7 @@ export async function runAuditPass(opts: {
 			ref: meta.ref,
 			extraInstructions,
 			files: batch,
+			...(diffModelSection ? { diffModelSection } : {}),
 		});
 		const concurrency = parseAgentConcurrency();
 		const outcomes = await mapWithConcurrency(

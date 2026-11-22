@@ -7,5 +7,6 @@
 			"endLine": 10,
 			"description": "The serialized response key owner_id was renamed to account_id; the SDK client and API contract doc still use owner_id, so existing consumers break."
 		}
-	]
+	],
+	"operations": []
 }

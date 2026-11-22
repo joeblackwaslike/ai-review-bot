@@ -39,6 +39,7 @@ async function inlineSeed(
 const defect = (startLine = 1, endLine = 1) => ({
 	clean: false,
 	defects: [{ path: "src/a.ts", startLine, endLine, description: "bad" }],
+	operations: [],
 });
 
 beforeEach(async () => {
@@ -62,8 +63,14 @@ describe("loadSeed", () => {
 	});
 
 	it("accepts a clean truth", async () => {
-		const dir = await inlineSeed("REL-01", "clean", { clean: true });
-		expect((await loadSeed(dir)).truth).toEqual({ clean: true });
+		const dir = await inlineSeed("REL-01", "clean", {
+			clean: true,
+			operations: [],
+		});
+		expect((await loadSeed(dir)).truth).toEqual({
+			clean: true,
+			operations: [],
+		});
 	});
 
 	it("rejects two defects", async () => {
@@ -71,6 +78,7 @@ describe("loadSeed", () => {
 		const dir = await inlineSeed("REL-01", "v1", {
 			clean: false,
 			defects: [d, d],
+			operations: [],
 		});
 		await expect(loadSeed(dir)).rejects.toThrow();
 	});
@@ -228,7 +236,7 @@ describe("listSeeds", () => {
 	it("lists op-id directories in stable order and skips other directories", async () => {
 		await inlineSeed("REL-10", "v1", defect());
 		await inlineSeed("REL-01", "original", defect());
-		await inlineSeed("REL-01", "clean", { clean: true });
+		await inlineSeed("REL-01", "clean", { clean: true, operations: [] });
 		await mkdir(join(root, "__ignored__", "head"), { recursive: true });
 		const seeds = await listSeeds(root);
 		expect(seeds.map((s) => s.id)).toEqual([

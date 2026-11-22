@@ -41,8 +41,7 @@ describe("shipped seeds", () => {
 
 	it("keep clean controls defect free and defect seeds with one defect", () => {
 		for (const s of seeds) {
-			if (s.variant === "clean") expect(s.truth).toEqual({ clean: true });
-			else expect(s.truth.clean).toBe(false);
+			expect(s.truth.clean, s.id).toBe(s.variant === "clean");
 		}
 	});
 

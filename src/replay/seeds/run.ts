@@ -35,6 +35,8 @@ function strategyInput(
 		round: input.round,
 		diff: input.diff,
 		files: input.files,
+		title: input.title,
+		body: input.body,
 		approximateDiff: false,
 		checkout: checkout ? input.checkout : null,
 		history: { ledger: [] },

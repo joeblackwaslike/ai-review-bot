@@ -15,9 +15,13 @@ The three variants use other languages, other names and a defect in a different 
 `clean` control has the same shape as the original with no defect.
 
 A seed lives in `src/replay/seeds/<op-id>/<variant>/` and holds a `base/` tree, a `head/`
-tree and a `truth.json`. The truth file is either `{ "clean": true }` or one defect with its
-path, a start and end line on the head side, and a description. Lines are right-side lines
-of the diff. The trees are fixture data: `tsc`, Biome and the test runner all skip them, so a
+tree and a `truth.json`. The truth file is `{ "clean": true, "operations": [...] }` or one defect with its
+path, a start and end line on the head side, and a description, plus the same `operations`
+list. Defect lines are right-side lines of the diff. `operations` lists what a correct diff
+model reports for the seed (type, from and to spans, and divergences with their class; `exact` and `reason` are optional and compared when set), and
+may be empty. Its line numbers are base-side for deleted code and head-side for added code. A
+seed may also hold a `pr.json` with the PR `{ "title", "body" }`, which replay passes to the
+strategy. The trees are fixture data: `tsc`, Biome and the test runner all skip them, so a
 seed may contain a test file or a type error on purpose.
 
 ## How a seed is reviewed

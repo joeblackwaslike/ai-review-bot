@@ -1,5 +1,9 @@
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { promisify } from "node:util";
+import { z } from "zod";
 import { collectRightSideLines, numberPatchLines } from "../../diff-lines.js";
 import type { PullFile } from "../../review.js";
 import type { FrozenFixture } from "../frozen.js";
@@ -12,6 +16,8 @@ import type { Seed } from "./schema.js";
 const execFileAsync = promisify(execFile);
 
 export interface SeedReviewInput {
+	title: string;
+	body: string;
 	fixture: FrozenFixture;
 	round: Round;
 	diff: string;
@@ -71,6 +77,16 @@ async function diffFiles(m: MaterializedSeed): Promise<PullFile[]> {
 	return files;
 }
 
+const Description = z.object({ title: z.string(), body: z.string() }).strict();
+
+async function readDescription(
+	seed: Seed,
+): Promise<{ title: string; body: string }> {
+	const path = join(seed.dir, "pr.json");
+	if (!existsSync(path)) return { title: "", body: "" };
+	return Description.parse(JSON.parse(await readFile(path, "utf8")));
+}
+
 /**
  * Materialises the seed and shapes it like a one-round replay input: files from the
  * base..head diff, a right-side-numbered diff, and a read-only checkout of the head tree.
@@ -111,7 +127,10 @@ export async function seedReviewInput(seed: Seed): Promise<SeedReviewInput> {
 			excluded: { unknownTimestamp: 0, later: 0 },
 		};
 		await execFileAsync("chmod", ["-R", "a-w", m.repoPath]);
+		const { title, body } = await readDescription(seed);
 		return {
+			title,
+			body,
 			fixture,
 			round,
 			diff,

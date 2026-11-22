@@ -10,7 +10,11 @@ import {
 	routerContext,
 	toLiveReviewOutput,
 } from "../live-wiring.js";
-import type { ReviewStrategy, StrategyInput } from "../strategy.js";
+import type {
+	ReviewStrategy,
+	StrategyInput,
+	StrategyResult,
+} from "../strategy.js";
 import { fixtureReviewer } from "../types.js";
 
 const AGENTS_PER_REVIEW = 5;
@@ -44,6 +48,33 @@ const selectionFor = (input: StrategyInput) =>
 		input.asReviewer ?? fixtureReviewer(input.fixture),
 	).selection;
 
+export async function runAuditStrategy(
+	input: StrategyInput,
+	diffModelSection?: string,
+): Promise<StrategyResult> {
+	const started = Date.now();
+	const { fixture } = input;
+	const selection = selectionFor(input);
+	const auth = await resolveSelectionAuth(selection.provider);
+	const result = await runAuditPass({
+		files: [{ path: "replay.diff", content: input.diff }],
+		selection,
+		extraInstructions: "",
+		meta: { owner: fixture.owner, repo: fixture.repo, ref: "replay" },
+		auth,
+		...(diffModelSection ? { diffModelSection } : {}),
+	});
+	if (result.agentsAttempted > 0 && result.agentsSucceeded === 0)
+		throw new Error(`all ${result.agentsAttempted} review agents failed`);
+	return {
+		...toLiveReviewOutput(result),
+		posted: [],
+		agentReviews: result.agentReviews,
+		toolCalls: [],
+		wallMs: Date.now() - started,
+	};
+}
+
 export const strategyA: ReviewStrategy = {
 	name: "a",
 	get version() {
@@ -61,26 +92,5 @@ export const strategyA: ReviewStrategy = {
 			AGENTS_PER_REVIEW,
 		);
 	},
-	async run(input) {
-		const started = Date.now();
-		const { fixture } = input;
-		const selection = selectionFor(input);
-		const auth = await resolveSelectionAuth(selection.provider);
-		const result = await runAuditPass({
-			files: [{ path: "replay.diff", content: input.diff }],
-			selection,
-			extraInstructions: "",
-			meta: { owner: fixture.owner, repo: fixture.repo, ref: "replay" },
-			auth,
-		});
-		if (result.agentsAttempted > 0 && result.agentsSucceeded === 0)
-			throw new Error(`all ${result.agentsAttempted} review agents failed`);
-		return {
-			...toLiveReviewOutput(result),
-			posted: [],
-			agentReviews: result.agentReviews,
-			toolCalls: [],
-			wallMs: Date.now() - started,
-		};
-	},
+	run: (input) => runAuditStrategy(input),
 };

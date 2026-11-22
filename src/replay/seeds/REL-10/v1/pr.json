@@ -1,0 +1,4 @@
+{
+	"title": "Move refundableAmount into refunds.ts",
+	"body": "Moves refundableAmount next to recordRefund so the refund rules live in one file, with no functional change."
+}

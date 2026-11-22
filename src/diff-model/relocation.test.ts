@@ -88,6 +88,46 @@ describe("findRelocations", () => {
 		});
 	});
 
+	it("extends a moved block over the unchanged lines after a changed line near its end", () => {
+		const base = withLine(
+			fn(body(12)),
+			10,
+			"  const rate = Math.floor(price * pct);",
+		);
+		const head = withLine(base, 10, "  const rate = Math.round(price * pct);");
+		const ops = move(base, head);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]).toMatchObject({
+			from: [{ startLine: 10, endLine: 23 }],
+			to: [{ startLine: 3, endLine: 16 }],
+		});
+		expect(ops[0]?.divergences).toHaveLength(1);
+	});
+
+	it("extends a moved block backwards across a lone closing bracket before a changed line", () => {
+		const guard = [
+			"export function applyDiscount(input) {",
+			"  if (input.free) {",
+			"    return 0;",
+			"  }",
+			"  const base = input.price * input.qty;",
+			"  const rate = Math.floor(base * input.pct);",
+			...body(14),
+			"}",
+		];
+		const head = withLine(
+			guard,
+			5,
+			"  const rate = Math.round(base * input.pct);",
+		);
+		const ops = move(guard, head);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]).toMatchObject({
+			from: [{ startLine: 10, endLine: 30 }],
+			to: [{ startLine: 3, endLine: 23 }],
+		});
+	});
+
 	it("reports an inserted line and a removed line as divergences", () => {
 		const base = fn(body(40));
 		const head = [...base];
@@ -119,6 +159,58 @@ describe("findRelocations", () => {
 			class: "code",
 		});
 		expect(ops[0]?.divergences[0]?.original).toContain("missing input");
+	});
+
+	describe("a guard at the edge of the moved block", () => {
+		const guard = '  if (!input) throw new Error("missing input");';
+
+		it("reports a deleted first-statement guard and spans the signature", () => {
+			const head = fn(body(30));
+			const base = [head[0] as string, guard, ...head.slice(1)];
+			const ops = move(base, head);
+			expect(ops).toHaveLength(1);
+			expect(ops[0]).toMatchObject({
+				exact: false,
+				from: [{ startLine: 10, endLine: 10 + base.length - 1 }],
+				to: [{ startLine: 3, endLine: 3 + head.length - 1 }],
+			});
+			expect(ops[0]?.divergences).toHaveLength(1);
+			expect(ops[0]?.divergences[0]).toMatchObject({
+				kind: "removed",
+				class: "code",
+				original: guard.trim(),
+			});
+		});
+
+		it("reports a deleted last-statement guard and spans the closing brace", () => {
+			const head = fn(body(30));
+			const base = [...head.slice(0, -1), guard, "}"];
+			const ops = move(base, head);
+			expect(ops).toHaveLength(1);
+			expect(ops[0]).toMatchObject({
+				exact: false,
+				from: [{ startLine: 10, endLine: 10 + base.length - 1 }],
+				to: [{ startLine: 3, endLine: 3 + head.length - 1 }],
+			});
+			expect(ops[0]?.divergences).toHaveLength(1);
+			expect(ops[0]?.divergences[0]).toMatchObject({
+				kind: "removed",
+				class: "code",
+			});
+		});
+
+		it("reports an added first-statement guard as inserted", () => {
+			const base = fn(body(30));
+			const head = [base[0] as string, guard, ...base.slice(1)];
+			const ops = move(base, head);
+			expect(ops).toHaveLength(1);
+			expect(ops[0]?.exact).toBe(false);
+			expect(ops[0]?.divergences).toHaveLength(1);
+			expect(ops[0]?.divergences[0]).toMatchObject({
+				kind: "inserted",
+				class: "code",
+			});
+		});
 	});
 
 	it("does not call a block unchanged when a template literal's inner whitespace changed", () => {

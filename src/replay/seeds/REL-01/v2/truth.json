@@ -7,5 +7,45 @@
 			"endLine": 12,
 			"description": "NextDelay moved to the backoff package, which has its own jitter variable. The test still overrides queue.jitter, which now only affects pollInterval, so backoff.NextDelay runs with real randomness and the exact-duration assertion is flaky."
 		}
+	],
+	"operations": [
+		{
+			"type": "relocation",
+			"exact": false,
+			"from": [
+				{
+					"filename": "queue/worker.go",
+					"side": "base",
+					"startLine": 15,
+					"endLine": 24
+				}
+			],
+			"to": [
+				{
+					"filename": "backoff/delay.go",
+					"side": "head",
+					"startLine": 10,
+					"endLine": 19
+				}
+			],
+			"divergences": [
+				{
+					"kind": "changed",
+					"class": "code",
+					"base": {
+						"filename": "queue/worker.go",
+						"side": "base",
+						"startLine": 15,
+						"endLine": 15
+					},
+					"head": {
+						"filename": "backoff/delay.go",
+						"side": "head",
+						"startLine": 10,
+						"endLine": 10
+					}
+				}
+			]
+		}
 	]
 }

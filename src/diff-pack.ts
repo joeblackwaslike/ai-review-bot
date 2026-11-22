@@ -23,6 +23,9 @@ export function isGeneratedFile(path: string): boolean {
 /** PR-wide diff budget, in characters of the serialized diff section. */
 export const DEFAULT_DIFF_BUDGET_CHARS = 200_000;
 
+/** Default character budget for the diff model's operation detail. */
+export const DEFAULT_DIFF_MODEL_BUDGET_CHARS = 6000;
+
 const TRUNCATION_MARKER = "[patch truncated]";
 const MARKER_COST = `\n\n${TRUNCATION_MARKER}`.length;
 const FILE_SEPARATOR = "\n\n---\n\n";
@@ -121,8 +124,8 @@ function fileFrame(file: PackedFile): string {
 	return `FILE: ${file.filename}\nSTATUS: ${file.status}\n${note}${patchLabel(file)}`;
 }
 
-function formatFile(file: PackedFile): string {
-	return `${fileFrame(file)}${file.patch ? numberPatchLines(file.patch) : ""}`;
+function formatFile(file: PackedFile, note?: string): string {
+	return `${note ? `${note}\n` : ""}${fileFrame(file)}${file.patch ? numberPatchLines(file.patch) : ""}`;
 }
 
 function omittedSection(names: readonly string[]): string {
@@ -146,9 +149,16 @@ function omittedUpperBound(names: readonly string[]): number {
 }
 
 /** The diff section of the prompt: the omitted-files line, then each file's
- * block. `packDiff` keeps its length within the budget. */
-export function formatPackedDiff(diff: PackedDiff): string {
-	return `${omittedSection(diff.omitted)}${diff.files.map(formatFile).join(FILE_SEPARATOR)}`;
+ * block. `packDiff` keeps its length within the budget. A file's note, when
+ * given, goes on the lines before that file's block; notes are outside the
+ * packed budget and no diff line changes. A note for a file with no block in
+ * the packed diff, such as an omitted file or the old name of a rename, is not
+ * placed, so it appears only in the summary. */
+export function formatPackedDiff(
+	diff: PackedDiff,
+	notes?: ReadonlyMap<string, string>,
+): string {
+	return `${omittedSection(diff.omitted)}${diff.files.map((f) => formatFile(f, notes?.get(f.filename))).join(FILE_SEPARATOR)}`;
 }
 
 interface Prepared {

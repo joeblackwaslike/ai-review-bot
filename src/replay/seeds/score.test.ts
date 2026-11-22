@@ -14,10 +14,12 @@ const defectSeed = (variant = "original", opId = "REL-01") =>
 			defects: [
 				{ path: "src/a.ts", startLine: 10, endLine: 12, description: "d" },
 			],
+			operations: [],
 		},
 		opId,
 	);
-const cleanSeed = (opId = "REL-01") => seed("clean", { clean: true }, opId);
+const cleanSeed = (opId = "REL-01") =>
+	seed("clean", { clean: true, operations: [] }, opId);
 
 const f = (path: string | null, line: number | null) => ({
 	path,

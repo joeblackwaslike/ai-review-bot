@@ -1,6 +1,9 @@
 import type { JSONObject } from "@ai-sdk/provider";
 import { z } from "zod";
-import { DEFAULT_DIFF_BUDGET_CHARS } from "../diff-pack.js";
+import {
+	DEFAULT_DIFF_BUDGET_CHARS,
+	DEFAULT_DIFF_MODEL_BUDGET_CHARS,
+} from "../diff-pack.js";
 import { supportedEfforts } from "../providers/effort.js";
 import { isProviderName, PROVIDER_NAMES } from "../providers/names.js";
 import { SKILL_NAMES } from "../skill-names.js";
@@ -247,7 +250,17 @@ const ReviewSchema = z
 			.int()
 			.positive()
 			.default(DEFAULT_DIFF_BUDGET_CHARS)
-			.describe("PR-wide character budget for the serialized diff."),
+			.describe(
+				"PR-wide character budget for the serialized diff. The diff-model notes have their own budget, `review.diffModelBudgetChars`.",
+			),
+		diffModelBudgetChars: z
+			.number()
+			.int()
+			.min(1000)
+			.default(DEFAULT_DIFF_MODEL_BUDGET_CHARS)
+			.describe(
+				"Character budget for the operation detail in the computed diff-model notes. The fixed heading, instructions and facts always remain, so the notes can run past it. Minimum 1000.",
+			),
 		tier2Enabled: z
 			.boolean()
 			.default(true)

@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-
+import type { RenderedDiffModel } from "./diff-model/render.js";
 import {
 	DEFAULT_DIFF_BUDGET_CHARS,
 	formatPackedDiff,
@@ -47,6 +47,9 @@ export interface PromptContext {
 	/** PR-wide budget for the numbered diff text (`packDiff`); defaults to
 	 * `DEFAULT_DIFF_BUDGET_CHARS`. */
 	diffBudgetChars?: number;
+	/** Computed notes: the summary goes before the diffs, each file's note
+	 * before that file's diff block. */
+	diffModel?: RenderedDiffModel;
 	priorBotReviews?: string[];
 	priorOwnReview?: string | null;
 	/** Every finding this reviewer already filed on this PR, with its current
@@ -152,8 +155,9 @@ export function wholePrInputComplete(
 function serializeFiles(
 	files: PromptContext["files"],
 	budgetChars: number,
+	notes?: ReadonlyMap<string, string>,
 ): string {
-	return formatPackedDiff(packPromptFiles(files, budgetChars));
+	return formatPackedDiff(packPromptFiles(files, budgetChars), notes);
 }
 
 export function buildUserMessage(context: PromptContext): string {
@@ -221,6 +225,7 @@ export function buildUserMessage(context: PromptContext): string {
 		...priorReviewsSection,
 		...priorOwnReviewSection,
 		...priorOwnFindingsSection,
+		...(context.diffModel?.summary ? ["", context.diffModel.summary] : []),
 		"",
 		context.diffScope
 			? `Changed file diffs (${context.diffScope}):`
@@ -228,6 +233,7 @@ export function buildUserMessage(context: PromptContext): string {
 		serializeFiles(
 			context.files,
 			context.diffBudgetChars ?? DEFAULT_DIFF_BUDGET_CHARS,
+			context.diffModel?.fileNotes,
 		),
 	].join("\n");
 }
@@ -238,6 +244,8 @@ export interface AuditContext {
 	ref: string;
 	extraInstructions: string;
 	files: Array<{ path: string; content: string }>;
+	/** Computed notes placed after the repo context. */
+	diffModelSection?: string;
 }
 
 export function buildAuditUserMessage(context: AuditContext): string {
@@ -261,6 +269,7 @@ export function buildAuditUserMessage(context: AuditContext): string {
 		`- Ref: ${context.ref}`,
 		`- Files reviewed: ${context.files.length}`,
 		...instructionsSection,
+		...(context.diffModelSection ? ["", context.diffModelSection] : []),
 		"",
 		"Repository files:",
 		serialized,

@@ -7,5 +7,6 @@
 			"endLine": 5,
 			"description": "RESET_TTL_SECONDS grows from 900 to 90_000 inside the style cleanup, so password reset tokens stay valid for 25 hours instead of 15 minutes."
 		}
-	]
+	],
+	"operations": []
 }

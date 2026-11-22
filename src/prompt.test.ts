@@ -766,3 +766,78 @@ describe("numbered right-side diff lines", () => {
 		);
 	});
 });
+
+describe("diff model prompt wiring", () => {
+	const ctx = {
+		owner: "o",
+		repo: "r",
+		pullNumber: 1,
+		headSha: "abc",
+		title: "t",
+		body: null,
+		additions: 1,
+		deletions: 0,
+		changedFiles: 2,
+		labels: [],
+		extraInstructions: "",
+		files: [
+			{ filename: "a.ts", status: "modified", patch: "@@ -1 +1 @@\n+x" },
+			{ filename: "b.ts", status: "modified", patch: "@@ -1 +1 @@\n+y" },
+		],
+	};
+
+	it("buildUserMessage puts the summary in the first block and inserts notes per file", () => {
+		const plain = buildUserMessage(ctx);
+		const msg = buildUserMessage({
+			...ctx,
+			diffModel: {
+				summary: "SUMMARY-TEXT",
+				fileNotes: new Map([["b.ts", "NOTE-B"]]),
+			},
+		});
+		expect(msg.indexOf("Deleted lines: 0")).toBeLessThan(
+			msg.indexOf("SUMMARY-TEXT"),
+		);
+		expect(msg.indexOf("SUMMARY-TEXT")).toBeLessThan(
+			msg.indexOf("Changed file diffs:"),
+		);
+		expect(msg).toContain("NOTE-B\nFILE: b.ts\n");
+		expect(msg.replace("\nSUMMARY-TEXT\n", "").replace("NOTE-B\n", "")).toBe(
+			plain,
+		);
+	});
+
+	it("buildUserMessage is unchanged for an empty summary", () => {
+		expect(
+			buildUserMessage({
+				...ctx,
+				diffModel: { summary: "", fileNotes: new Map() },
+			}),
+		).toBe(buildUserMessage(ctx));
+	});
+
+	it("buildAuditUserMessage appends diffModelSection after repo context and serializes files as before", () => {
+		const audit = {
+			owner: "o",
+			repo: "r",
+			ref: "x",
+			extraInstructions: "",
+			files: [{ path: "a.ts", content: "hello" }],
+		};
+		const plain = buildAuditUserMessage(audit);
+		const msg = buildAuditUserMessage({
+			...audit,
+			diffModelSection: "SECTION",
+		});
+		expect(msg.indexOf("- Files reviewed: 1")).toBeLessThan(
+			msg.indexOf("SECTION"),
+		);
+		expect(msg.indexOf("SECTION")).toBeLessThan(
+			msg.indexOf("Repository files:"),
+		);
+		expect(msg.replace("\nSECTION\n", "")).toBe(plain);
+		expect(buildAuditUserMessage({ ...audit, diffModelSection: "" })).toBe(
+			plain,
+		);
+	});
+});
