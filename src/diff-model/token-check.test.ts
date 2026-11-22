@@ -308,7 +308,7 @@ describe("receiverOnlyLine", () => {
 			receiverOnlyLine("total = f(x)", "total = self.f(x)", "a.py", "b.py"),
 		).toBe(true);
 		expect(receiverOnlyLine("this.f(x);", "f(x);", "a.ts", "b.ts")).toBe(true);
-		expect(receiverOnlyLine("g(x)", "Self::g(x)", "a.rs", "b.rs")).toBe(true);
+		expect(receiverOnlyLine("g(x)", "Self::g(x)", "a.rs", "b.rs")).toBe(false);
 		expect(receiverOnlyLine("self.f(x)", "cls.f(x)", "a.py", "b.py")).toBe(
 			true,
 		);
@@ -363,18 +363,6 @@ describe("leadingSignature", () => {
 				"a.ts",
 			),
 		).toMatchObject({ decorators: 0, end: 0, opensBrace: true });
-	});
-
-	it("reads Rust attributes", () => {
-		expect(
-			leadingSignature(
-				["#[inline]", "pub fn go(&self) -> u32 {", "1", "}"],
-				"a.rs",
-			),
-		).toMatchObject({
-			decorators: 1,
-			end: 1,
-		});
 	});
 
 	it("is null for a block that does not start with a definition", () => {

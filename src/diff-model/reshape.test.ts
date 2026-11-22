@@ -105,12 +105,6 @@ describe("signatureRange", () => {
 		).toEqual({ start: 1, end: 4 });
 	});
 
-	it("includes Rust attributes directly above the opening line", () => {
-		expect(
-			signatureRange(["#[inline]", "pub fn go(&self) -> u32 {"], "a.rs"),
-		).toEqual({ start: 0, end: 1 });
-	});
-
 	it("returns null when the lines above are not a definition", () => {
 		expect(signatureRange(["const x = compute(1);"], "a.ts")).toBeNull();
 		expect(signatureRange(["  if (ready(x)) {"], "a.ts")).toBeNull();
@@ -382,43 +376,6 @@ describe("reshape matching", () => {
 		expect((ops[0] as Operation).from[0]).toMatchObject({ startLine: 10 });
 	});
 
-	it("matches a Rust Self:: receiver", () => {
-		const base = [
-			"fn build_label(prefix: &str, id: u32) -> String {",
-			"    let base = normalize(prefix);",
-			"    let suffix = encode(id, 36);",
-			"    let label = join(base, suffix);",
-			"    record(label.len());",
-			"    finish(label)",
-			"}",
-		];
-		const head = [
-			"    fn label(&self, prefix: &str) -> String {",
-			"        let base = Self::normalize(prefix);",
-			"        let suffix = Self::encode(id, 36);",
-			"        let label = Self::join(base, suffix);",
-			"        Self::record(label.len());",
-			"        Self::finish(label)",
-			"    }",
-		];
-		const ops = move("src/label.rs", "src/model.rs", base, head);
-		expect(ops).toHaveLength(1);
-		expect(classes(ops[0])).toEqual([
-			"signature",
-			"receiver",
-			"receiver",
-			"receiver",
-			"receiver",
-			"receiver",
-		]);
-		expect(
-			(ops[0] as Operation).divergences.map((d) => d.original).slice(1, 3),
-		).toEqual([
-			"let base = normalize(prefix);",
-			"let suffix = encode(id, 36);",
-		]);
-	});
-
 	it("matches a method moved out of a class to a free function with indent -4", () => {
 		const base = [
 			"    def render(self, rows):",
@@ -620,36 +577,6 @@ describe("reshape receiver probes", () => {
 		expect(r.endLine).toBe(17);
 		expect(r.receiverOriginals).not.toContain("self = wrap(stats)");
 		expect(r.receiverOriginals).toContain("return finish(stats)");
-	});
-
-	it("does not match a Rust Self:: receiver against another path", () => {
-		const rsBase = [
-			"fn build(prefix: &str) -> String {",
-			"    let base = normalize(prefix);",
-			"    let suffix = encode(base, 36);",
-			"    let label = join(base, suffix);",
-			"    record(label.len());",
-			"    let tail = clip(label);",
-			"    finish(tail)",
-			"}",
-		];
-		const rsHead = [
-			"    fn build(&self, prefix: &str) -> String {",
-			"        let base = Self::normalize(prefix);",
-			"        let suffix = Self::encode(base, 36);",
-			"        let label = Self::join(base, suffix);",
-			"        Self::record(label.len());",
-			"        let tail = Other::clip(label);",
-			"        Self::finish(tail)",
-			"    }",
-		];
-		const ops = move("src/a.rs", "src/b.rs", rsBase, rsHead);
-		expect(ops).toHaveLength(1);
-		expect(ops[0]?.from[0]?.endLine).toBe(14);
-		const originals = (ops[0]?.divergences ?? [])
-			.filter((d) => d.class === "receiver")
-			.map((d) => d.original);
-		expect(originals).not.toContain("let tail = clip(label);");
 	});
 
 	it("flags self changed to cls as a receiver difference", () => {

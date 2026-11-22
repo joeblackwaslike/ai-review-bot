@@ -675,7 +675,7 @@ export interface SignatureShape {
 	tokens: string[];
 }
 
-function isDecoratorLine(line: string, ext: string): boolean {
+function isDecoratorLine(line: string): boolean {
 	return ANNOTATION.test(line);
 }
 
@@ -703,7 +703,7 @@ export function leadingSignature(
 	let decorators = 0;
 	while (
 		decorators < lines.length &&
-		isDecoratorLine(lines[decorators] as string, ext)
+		isDecoratorLine(lines[decorators] as string)
 	)
 		decorators++;
 	const opener = lines[decorators];

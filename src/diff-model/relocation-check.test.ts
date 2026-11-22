@@ -1986,13 +1986,14 @@ describe("verifyRelocation with signature and receiver divergences", () => {
 		const lines = [
 			"const subtotal = sumItems(items, rate);",
 			"const taxed = applyTax(subtotal, rate);",
+			"const fee = feeFor(taxed, rate);",
 			"const rounded = roundTo(taxed, 2);",
 			"logTotal(rounded, items.length);",
 			"audit(rounded, rate);",
 			"return rounded;",
 		];
 		const gained = lines.map((l, i) =>
-			[0, 1, 3, 4].includes(i) ? l.replace(/(\w+)\(/, "this.$1(") : l,
+			[0, 1, 2, 3].includes(i) ? l.replace(/(\w+)\(/, "this.$1(") : l,
 		);
 		const files = named(
 			"src/a.ts",
@@ -2318,49 +2319,6 @@ describe("verifyRelocation with signature and receiver divergences", () => {
 			);
 			expect(verifyRelocation(op, files)).toBe(true);
 			expect(verifyRelocation(moved, java)).toBe(false);
-		});
-
-		it("drops a cs reshape whose head is a java file", () => {
-			const { files, op, java, moved } = retargeted(
-				"src/Discount.cs",
-				"src/Cart.cs",
-				"src/Cart.java",
-			);
-			expect(verifyRelocation(op, files)).toBe(true);
-			expect(verifyRelocation(moved, java)).toBe(false);
-		});
-	});
-
-	describe("Rust Self::", () => {
-		const base = [
-			"fn total(items: &[Item]) -> u32 {",
-			"    let cleaned = sanitize(items);",
-			"    let sum = sum_costs(&cleaned);",
-			"    audit(cleaned.len(), sum);",
-			"    let out = finish(sum);",
-			"    publish(out)",
-			"}",
-		];
-		const head = [
-			"    pub fn total(items: &[Item]) -> u32 {",
-			"        let cleaned = Self::sanitize(items);",
-			"        let sum = Self::sum_costs(&cleaned);",
-			"        Self::audit(cleaned.len(), sum);",
-			"        let out = Self::finish(sum);",
-			"        Self::publish(out)",
-			"    }",
-		];
-
-		it("verifies a function that gained Self::", () => {
-			const { files, op } = claim("src/a.rs", "src/b.rs", base, head);
-			expect(op.divergences.some((d) => d.class === "receiver")).toBe(true);
-			expect(verifyRelocation(op, files)).toBe(true);
-		});
-
-		it("drops Self:: changed to Other::", () => {
-			const { files, op } = claim("src/a.rs", "src/b.rs", base, head);
-			const edited = withHeadText(files, "Self::audit", "Other::audit");
-			expect(verifyRelocation(op, edited)).toBe(false);
 		});
 	});
 });

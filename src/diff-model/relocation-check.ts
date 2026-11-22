@@ -631,9 +631,7 @@ function classesHold(op: Operation, base: Side[], head: Side[]): number | null {
 		}
 	}
 	const renamed = verifiedRenames(renamePairs, base, head);
-	return renamed === null
-		? null
-		: Math.max(code + renamed, receivers ? 1 : 0);
+	return renamed === null ? null : Math.max(code + renamed, receivers ? 1 : 0);
 }
 
 function textOf(span: Span | undefined, sides: Side[]): string | undefined {

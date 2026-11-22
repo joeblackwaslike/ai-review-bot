@@ -1,5 +1,5 @@
 import type { Run } from "../moved-blocks.js";
-import { acceptSeed } from "./acceptance.js";
+import { acceptSeed, MIN_COUNTED_LINES } from "./acceptance.js";
 import type { WorkBudget } from "./budget.js";
 import { literalSafe } from "./lexical.js";
 import {
@@ -18,20 +18,16 @@ import { CLOSERS, normalizeTokens, OPENERS, tokenize } from "./tokens.js";
 import type { Divergence, Operation } from "./types.js";
 
 const MAX_SIGNATURE_LINES = 16;
+const MIN_COUNTED_LENGTH = 3;
 const PYTHON = new Set(["py", "pyi"]);
 const RECEIVERS: Record<string, Record<string, string>> = {
 	py: { self: ".", cls: "." },
 	pyi: { self: ".", cls: "." },
-	rs: { self: ".", Self: "::" },
 	...Object.fromEntries(
-		"js jsx mjs cjs ts tsx java cs kt kts dart"
-			.split(" ")
-			.map((ext) => [ext, { this: "." }]),
+		"js jsx mjs cjs ts tsx".split(" ").map((ext) => [ext, { this: "." }]),
 	),
 };
 const PYTHON_OPENER = /^\s*(?:async\s+)?def\s+\w/;
-const RUST_OPENER =
-	/^\s*(?:pub(?:\([^)]*\))?\s+)?(?:(?:const|async|unsafe|extern(?:\s+"[^"]*")?)\s+)*fn\s+\w/;
 const CONTROL =
 	/^\s*(?:if|else|for|while|switch|catch|try|do|return|throw|new|synchronized|using|lock|when|foreach|await|yield|case)\b/;
 const FUNCTION_KEYWORD =
@@ -39,7 +35,6 @@ const FUNCTION_KEYWORD =
 const METHOD =
 	/^\s*(?:(?:public|private|protected|internal|static|async|override|abstract|final|virtual|sealed|readonly|get|set|open|suspend|inline|synchronized|native|unsafe|partial)\s+)*(?:[\w$.<>,?[\]]+\s+)*[A-Za-z_$][\w$]*\s*(?:<[^>()]*>)?\(/;
 const DECORATOR = /^\s*@[\w.$]+/;
-const RUST_ATTRIBUTE = /^\s*#\[.*\]\s*$/;
 
 interface LineRange {
 	start: number;
@@ -48,13 +43,12 @@ interface LineRange {
 
 function isOpener(line: string, ext: string): boolean {
 	if (PYTHON.has(ext)) return PYTHON_OPENER.test(line);
-	if (ext === "rs") return RUST_OPENER.test(line);
 	if (CONTROL.test(line)) return false;
 	return FUNCTION_KEYWORD.test(line) || METHOD.test(line);
 }
 
-function isDecorator(line: string, ext: string): boolean {
-	return (ext === "rs" ? RUST_ATTRIBUTE : DECORATOR).test(line);
+function isDecorator(line: string): boolean {
+	return DECORATOR.test(line);
 }
 
 function closesCleanly(lines: readonly string[], filename: string): boolean {
@@ -81,9 +75,9 @@ function closesCleanly(lines: readonly string[], filename: string): boolean {
 /**
  * Finds the signature that ends on the last of `lines`: the opening logical line of a
  * definition, whose parameter list may span several lines (bracket depth decides), plus the
- * decorators (`@name`) or Rust attributes (`#[...]`) directly above it. Indices are inclusive
+ * decorators (`@name`) directly above it. Indices are inclusive
  * into `lines`. Null when the last line does not end a definition's opening, for files
- * outside py pyi js jsx mjs cjs ts tsx java cs rs kt kts dart.
+ * outside py pyi js jsx mjs cjs ts tsx.
  */
 export function signatureRange(
 	lines: readonly string[],
@@ -98,7 +92,7 @@ export function signatureRange(
 		if (!isOpener(lines[s] as string, ext)) continue;
 		if (!closesCleanly(lines.slice(s, end + 1), filename)) continue;
 		let start = s;
-		while (start > 0 && isDecorator(lines[start - 1] as string, ext)) start--;
+		while (start > 0 && isDecorator(lines[start - 1] as string)) start--;
 		return { start, end };
 	}
 	return null;
@@ -140,9 +134,8 @@ function signatureTokens(run: Run, sig: LineRange): string {
 }
 
 function openerLineAbove(run: Run, sig: LineRange, before: number): string[] {
-	const ext = extension(run.filename);
 	let i = sig.start;
-	while (i < sig.end && isDecorator(run.raw[i] as string, ext)) i++;
+	while (i < sig.end && isDecorator(run.raw[i] as string)) i++;
 	return i < before ? [run.raw[i] as string] : [];
 }
 
@@ -151,7 +144,7 @@ function decoratorCount(run: Run, sig: LineRange): number {
 	let n = 0;
 	while (
 		sig.start + n < sig.end &&
-		isDecorator(run.raw[sig.start + n] as string, ext)
+		isDecorator(run.raw[sig.start + n] as string)
 	)
 		n++;
 	return n;
@@ -273,6 +266,10 @@ function reshape(m: Match): Operation | null {
 	if (!base || !head) return null;
 	const fromStart = Math.min(base.start, m.dFirst);
 	const toStart = Math.min(head.start, m.aFirst);
+	const counted = d.run.raw
+		.slice(fromStart, m.dLast + 1)
+		.filter((l) => l.trim().length >= MIN_COUNTED_LENGTH).length;
+	if (counted < MIN_COUNTED_LINES) return null;
 	for (let i = fromStart; i < m.dFirst; i++) if (d.run.used[i]) return null;
 	for (let j = toStart; j < m.aFirst; j++) if (a.run.used[j]) return null;
 	if (
@@ -317,7 +314,7 @@ function reshape(m: Match): Operation | null {
 }
 
 /**
- * Whether two lines differ only by a receiver prefix (`self.`, `cls.`, `this.`, `Self::`):
+ * Whether two lines differ only by a receiver prefix (`self.`, `cls.`, `this.`):
  * their normalized tokens are equal once receivers are removed, and the removed receivers
  * differ. False outside the reshape languages.
  */
@@ -356,7 +353,7 @@ function weigh(op: Operation): Operation {
 
 /**
  * Finds function-to-method and method-to-function conversions between unclaimed lines.
- * Body tokens are compared with receiver prefixes (`self.`, `cls.`, `this.`, `Self::`) removed;
+ * Body tokens are compared with receiver prefixes (`self.`, `cls.`, `this.`) removed;
  * the signatures above the matched bodies are paired however different they are. Each
  * signature line and each body line whose receiver differs becomes a divergence of class
  * `signature` or `receiver`; the review weight counts signature divergences and is at least
@@ -373,7 +370,13 @@ export function findReshapes(
 ): Operation[] {
 	const ctx = { deleted, added, budget };
 	const out: Operation[] = [];
-	for (const m of findMatches(deleted, added, budget, skip, receiverLens)) {
+	const defines = (run: Run) =>
+		RECEIVERS[extension(run.filename)] !== undefined &&
+		run.raw.some((line) => isOpener(line, extension(run.filename)));
+	const from = deleted.filter(defines);
+	const to = added.filter(defines);
+	if (from.length === 0 || to.length === 0) return out;
+	for (const m of findMatches(from, to, budget, skip, receiverLens)) {
 		if (budget.exhausted) break;
 		if (!claimable(m)) continue;
 		const op = reshape(m);
