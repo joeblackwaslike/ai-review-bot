@@ -675,7 +675,6 @@ describe("findRelocations block comment allowlist", () => {
 });
 
 describe("findRelocations one-line declarations", () => {
-
 	describe("one-line declarations", () => {
 		function moveDeclaration(base: string, head: string) {
 			const files = [
