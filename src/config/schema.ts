@@ -250,7 +250,9 @@ const ReviewSchema = z
 			.int()
 			.positive()
 			.default(DEFAULT_DIFF_BUDGET_CHARS)
-			.describe("PR-wide character budget for the serialized diff."),
+			.describe(
+				"PR-wide character budget for the serialized diff. The diff-model notes have their own budget, `review.diffModelBudgetChars`.",
+			),
 		diffModelBudgetChars: z
 			.number()
 			.int()

@@ -10,7 +10,7 @@ describe("REVIEWER_TUNING", () => {
 	// compilation-break claim, a fabricated invalid-JSON claim), so the
 	// signal-quality settings are provider-agnostic prompt/merge mechanics —
 	// unified for both providers rather than re-forking per bot.
-	it("turns the signal-quality changes on unconditionally, except the retraction filter", () => {
+	it("turns the signal-quality changes on unconditionally, except the retraction filter, adaptive limits and the diff model", () => {
 		expect(REVIEWER_TUNING).toEqual({
 			adaptiveLimits: false,
 			dedupeNearDuplicateClaims: true,

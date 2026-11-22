@@ -67,7 +67,7 @@ describe("buildPrFacts", () => {
 		]);
 	});
 
-	it("does not match a phrase inside a longer word or a negation", () => {
+	it("does not match a phrase inside a longer word", () => {
 		const facts = buildPrFacts({
 			prFiles: [],
 			prFilesComplete: true,

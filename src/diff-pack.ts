@@ -151,7 +151,9 @@ function omittedUpperBound(names: readonly string[]): number {
 /** The diff section of the prompt: the omitted-files line, then each file's
  * block. `packDiff` keeps its length within the budget. A file's note, when
  * given, goes on the lines before that file's block; notes are outside the
- * packed budget and no diff line changes. */
+ * packed budget and no diff line changes. A note for a file with no block in
+ * the packed diff, such as an omitted file or the old name of a rename, is not
+ * placed, so it appears only in the summary. */
 export function formatPackedDiff(
 	diff: PackedDiff,
 	notes?: ReadonlyMap<string, string>,
