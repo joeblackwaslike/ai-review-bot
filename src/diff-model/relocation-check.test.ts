@@ -509,3 +509,89 @@ describe("verifyRelocation divergence classes", () => {
 		expect(verifyRelocation(forged, files)).toBe(false);
 	});
 });
+
+describe("verifyRelocation rename guards", () => {
+	it("drops a rename claim when an inserted head line still uses the old name", () => {
+		const [base, head] = pairBlock(
+			["  f(a);", "  g(a);"],
+			["  f(z);", "  g(z);"],
+			[8, 20],
+		);
+		const clean = relocation(base, head);
+		const dirty = [...head];
+		dirty.splice(25, 0, "  k(a);");
+		const files = moveFiles(base, dirty);
+		const spanTo = clean.op.to[0] as Operation["to"][number];
+		const forged: Operation = {
+			...clean.op,
+			to: [{ ...spanTo, endLine: spanTo.endLine + 1 }],
+			divergences: [
+				...clean.op.divergences,
+				{
+					kind: "inserted",
+					class: "code",
+					head: {
+						filename: "src/b.ts",
+						side: "head",
+						startLine: spanTo.startLine + 25,
+						endLine: spanTo.startLine + 25,
+						shown: "full",
+					},
+				},
+			],
+			reviewWeight: 2,
+		};
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("drops two old names collapsed into one new name forged as a rename", () => {
+		const [base, head] = pairBlock(
+			["  f(a, b);", "  g(a, b);"],
+			["  f(c, c);", "  g(c, c);"],
+			[10, 20],
+		);
+		const { files, op } = relocation(base, head);
+		const forged = { ...reclassed(op, "rename"), reviewWeight: 2 };
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("drops a rename claim that covers only some base occurrences of the old name", () => {
+		const base = fn(body(30));
+		base.splice(8, 0, "  f(a);");
+		base.splice(14, 0, "  g(a);");
+		base.splice(20, 0, "  h(a);");
+		const head = fn(body(30));
+		head.splice(8, 0, "  f(z);");
+		head.splice(14, 0, "  g(z);");
+		const { files, op } = relocation(base, head);
+		expect(op.divergences.map((d) => d.kind)).toEqual([
+			"changed",
+			"changed",
+			"removed",
+		]);
+		const forged: Operation = {
+			...op,
+			divergences: op.divergences.map((d) =>
+				d.kind === "changed" ? { ...d, class: "rename" as const } : d,
+			),
+			reviewWeight: 2,
+		};
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("drops a claim carrying a class the checker does not know", () => {
+		const { files, op } = codeChange();
+		const forged = {
+			...op,
+			divergences: op.divergences.map((d) => ({ ...d, class: "trivial" })),
+		} as unknown as Operation;
+		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("accepts a real python hash-comment change as comment-only", () => {
+		const [base, head] = pairBlock(["  # old note"], ["  # new note"], [15]);
+		const { files, op } = relocation(base, head, ["src/a.py", "src/b.py"]);
+		expect(op.divergences.map((d) => d.class)).toEqual(["comment-only"]);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+});

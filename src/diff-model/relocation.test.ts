@@ -450,3 +450,17 @@ describe("findRelocations class guards", () => {
 		expect(ops[0]?.reviewWeight).toBe(2);
 	});
 });
+
+describe("findRelocations rename head guard", () => {
+	it("does not class a rename when an inserted head line still uses the old name", () => {
+		const [base, head] = pair(
+			["  f(a);", "  g(a);"],
+			["  f(z);", "  g(z);"],
+			[8, 20],
+		);
+		head.splice(14, 0, "  k(a);");
+		const ops = move(base, head);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]?.divergences.some((d) => d.class === "rename")).toBe(false);
+	});
+});
