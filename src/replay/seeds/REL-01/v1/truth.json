@@ -11,6 +11,7 @@
 	"operations": [
 		{
 			"type": "relocation",
+			"exact": true,
 			"from": [
 				{
 					"filename": "src/pricing/cart.ts",

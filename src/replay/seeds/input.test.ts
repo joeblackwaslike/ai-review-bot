@@ -31,6 +31,7 @@ async function makeSeed(
 const defectAt = (path: string, startLine: number, endLine: number) => ({
 	clean: false,
 	defects: [{ path, startLine, endLine, description: "d" }],
+	operations: [],
 });
 
 beforeEach(async () => {
@@ -89,8 +90,8 @@ describe("seedReviewInput", () => {
 
 describe("seedReviewInput description", () => {
 	it("reads pr.json next to truth.json and defaults to empty text", async () => {
-		const plain = await makeSeed({ clean: true }, "clean");
-		const described = await makeSeed({ clean: true }, "v1");
+		const plain = await makeSeed({ clean: true, operations: [] }, "clean");
+		const described = await makeSeed({ clean: true, operations: [] }, "v1");
 		await write(
 			join(described.dir, "pr.json"),
 			JSON.stringify({ title: "Move helper", body: "no functional change" }),
@@ -134,7 +135,7 @@ describe("truthInDiff", () => {
 	});
 
 	it("is true for a clean control", async () => {
-		const seed = await makeSeed({ clean: true }, "clean");
+		const seed = await makeSeed({ clean: true, operations: [] }, "clean");
 		expect(truthInDiff(seed, [])).toBe(true);
 	});
 });

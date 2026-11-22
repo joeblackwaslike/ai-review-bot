@@ -11,6 +11,7 @@
 	"operations": [
 		{
 			"type": "relocation",
+			"exact": false,
 			"from": [
 				{
 					"filename": "lib/pricing.rb",
@@ -30,6 +31,7 @@
 			"divergences": [
 				{
 					"kind": "changed",
+					"class": "code",
 					"base": {
 						"filename": "lib/pricing.rb",
 						"side": "base",

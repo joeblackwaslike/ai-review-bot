@@ -68,6 +68,7 @@ describe("scoreDetection", () => {
 				expectedRelocation([
 					{
 						kind: "changed",
+						class: "code",
 						base: truthSpan("a.py", "base", 20, 20),
 						head: truthSpan("b.py", "head", 14, 14),
 					},
@@ -79,7 +80,8 @@ describe("scoreDetection", () => {
 			matched: 1,
 			missing: [],
 			unexpected: [],
-			divergenceMisses: 0,
+			divergencesMissed: 0,
+			divergencesExtra: 0,
 		});
 	});
 
@@ -158,6 +160,7 @@ describe("scoreDetection", () => {
 				expectedRelocation([
 					{
 						kind: "changed",
+						class: "code",
 						base: truthSpan("a.py", "base", 20, 20),
 						head: truthSpan("b.py", "head", 14, 14),
 					},
@@ -166,16 +169,107 @@ describe("scoreDetection", () => {
 			modelOf([relocation()]),
 		);
 		expect(result.matched).toBe(1);
-		expect(result.divergenceMisses).toBe(1);
+		expect(result.divergencesMissed).toBe(1);
+		expect(result.divergencesExtra).toBe(0);
 	});
 
-	it("counts a divergence the truth does not list", () => {
+	it("counts a divergence the truth does not list as extra", () => {
 		const result = scoreDetection(
 			[expectedRelocation()],
 			modelOf([relocation([changedLine])]),
 		);
 		expect(result.matched).toBe(1);
-		expect(result.divergenceMisses).toBe(1);
+		expect(result.divergencesMissed).toBe(0);
+		expect(result.divergencesExtra).toBe(1);
+	});
+
+	const truthDivergence = (cls: "comment-only" | "rename" | "code") => ({
+		kind: "changed" as const,
+		class: cls,
+		base: truthSpan("a.py", "base", 20, 20),
+		head: truthSpan("b.py", "head", 14, 14),
+	});
+
+	it("treats a divergence of another class as one missed and one extra", () => {
+		const result = scoreDetection(
+			[expectedRelocation([truthDivergence("comment-only")])],
+			modelOf([relocation([changedLine])]),
+		);
+		expect(result.matched).toBe(1);
+		expect(result.divergencesMissed).toBe(1);
+		expect(result.divergencesExtra).toBe(1);
+	});
+
+	it("matches a divergence of the same class", () => {
+		const result = scoreDetection(
+			[expectedRelocation([truthDivergence("code")])],
+			modelOf([relocation([changedLine])]),
+		);
+		expect(result.divergencesMissed).toBe(0);
+		expect(result.divergencesExtra).toBe(0);
+	});
+
+	it("does not match an operation whose exactness differs from the truth", () => {
+		const found = relocation();
+		const result = scoreDetection(
+			[{ ...expectedRelocation(), exact: false }],
+			modelOf([found]),
+		);
+		expect(result.matched).toBe(0);
+		expect(result.missing).toHaveLength(1);
+		expect(result.unexpected).toEqual([found]);
+	});
+
+	it("matches an operation whose exactness equals the truth, or is not stated", () => {
+		expect(
+			scoreDetection(
+				[{ ...expectedRelocation(), exact: true }],
+				modelOf([relocation()]),
+			).matched,
+		).toBe(1);
+		expect(
+			scoreDetection([expectedRelocation()], modelOf([relocation()])).matched,
+		).toBe(1);
+	});
+
+	const mechanical = (reason?: "whitespace" | "imports"): Operation => ({
+		id: "mechanical-1",
+		type: "mechanical",
+		from: [span("a.py", "base", 3, 3)],
+		to: [span("a.py", "head", 3, 3)],
+		exact: true,
+		divergences: [],
+		reviewWeight: 0,
+		reason,
+	});
+
+	const expectedMechanical = (
+		reason?: "whitespace" | "imports",
+	): SeedOperation => ({
+		type: "mechanical",
+		from: [truthSpan("a.py", "base", 3, 3)],
+		to: [truthSpan("a.py", "head", 3, 3)],
+		divergences: [],
+		reason,
+	});
+
+	it("does not match a mechanical operation with a different reason", () => {
+		const result = scoreDetection(
+			[expectedMechanical("imports")],
+			modelOf([mechanical("whitespace")]),
+		);
+		expect(result.matched).toBe(0);
+		expect(result.missing).toHaveLength(1);
+		expect(result.unexpected).toHaveLength(1);
+	});
+
+	it("matches a mechanical operation with the same reason", () => {
+		expect(
+			scoreDetection(
+				[expectedMechanical("whitespace")],
+				modelOf([mechanical("whitespace")]),
+			).matched,
+		).toBe(1);
 	});
 });
 
@@ -211,14 +305,14 @@ describe("seed operation truth", () => {
 			);
 			expect(seeds).toHaveLength(22);
 			for (const seed of seeds) {
-				expect(seed.truth.operations, seed.id).toBeDefined();
 				const input = await seedReviewInput(seed);
 				try {
 					const model = modelOfSeed(input);
-					const result = scoreDetection(seed.truth.operations ?? [], model);
+					const result = scoreDetection(seed.truth.operations, model);
 					expect(result.missing, `${seed.id} missing`).toEqual([]);
 					expect(result.unexpected, `${seed.id} unexpected`).toEqual([]);
-					expect(result.divergenceMisses, `${seed.id} divergences`).toBe(0);
+					expect(result.divergencesMissed, `${seed.id} missed`).toBe(0);
+					expect(result.divergencesExtra, `${seed.id} extra`).toBe(0);
 				} finally {
 					await input.cleanup();
 				}
@@ -238,7 +332,7 @@ describe("seed operation truth", () => {
 				const input = await seedReviewInput(seed);
 				try {
 					const model = modelOfSeed(input);
-					const result = scoreDetection(seed.truth.operations ?? [], model);
+					const result = scoreDetection(seed.truth.operations, model);
 					expect(
 						result.missing.map((m) => m.type),
 						seed.id,

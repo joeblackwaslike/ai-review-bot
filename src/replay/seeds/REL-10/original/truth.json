@@ -11,6 +11,7 @@
 	"operations": [
 		{
 			"type": "relocation",
+			"exact": false,
 			"from": [
 				{
 					"filename": "auth/sessions.py",
@@ -30,6 +31,7 @@
 			"divergences": [
 				{
 					"kind": "changed",
+					"class": "code",
 					"base": {
 						"filename": "auth/sessions.py",
 						"side": "base",

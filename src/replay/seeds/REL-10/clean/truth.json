@@ -3,6 +3,7 @@
 	"operations": [
 		{
 			"type": "relocation",
+			"exact": true,
 			"from": [
 				{
 					"filename": "api/listing.py",

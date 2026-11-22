@@ -1,4 +1,26 @@
 {
 	"clean": true,
-	"operations": []
+	"operations": [
+		{
+			"type": "rename",
+			"exact": true,
+			"from": [
+				{
+					"filename": "tests/test_routes.py",
+					"side": "base",
+					"startLine": 1,
+					"endLine": 1
+				}
+			],
+			"to": [
+				{
+					"filename": "tests/test_invoice_routes.py",
+					"side": "head",
+					"startLine": 1,
+					"endLine": 1
+				}
+			],
+			"divergences": []
+		}
+	]
 }

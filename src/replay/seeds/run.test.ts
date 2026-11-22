@@ -51,12 +51,13 @@ async function addSeed(
 const defectAt = (startLine: number, endLine = startLine) => ({
 	clean: false,
 	defects: [{ path: "src/a.ts", startLine, endLine, description: "d" }],
+	operations: [],
 });
 
 async function fullRoot(): Promise<void> {
 	for (const op of OPS) {
 		await addSeed(op, "original", defectAt(2));
-		await addSeed(op, "clean", { clean: true });
+		await addSeed(op, "clean", { clean: true, operations: [] });
 	}
 }
 
@@ -128,7 +129,11 @@ describe("checkSeeds", () => {
 	});
 
 	it("fails on a malformed truth", async () => {
-		await addSeed("REL-01", "original", { clean: false, defects: [] });
+		await addSeed("REL-01", "original", {
+			clean: false,
+			defects: [],
+			operations: [],
+		});
 		expect(await checkSeeds({ root, out })).toBe(1);
 	});
 });
@@ -143,7 +148,11 @@ describe("zero seeds and malformed truth", () => {
 	});
 
 	it("a malformed truth.json prints and exits 1 in all three modes", async () => {
-		await addSeed("REL-01", "original", { clean: false, defects: [] });
+		await addSeed("REL-01", "original", {
+			clean: false,
+			defects: [],
+			operations: [],
+		});
 		const s = stub(findsAll);
 		expect(await checkSeeds({ root, out })).toBe(1);
 		expect(await planSeeds(s, { root, out })).toBe(1);

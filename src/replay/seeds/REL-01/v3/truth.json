@@ -11,6 +11,7 @@
 	"operations": [
 		{
 			"type": "relocation",
+			"exact": true,
 			"from": [
 				{
 					"filename": "lib/shop/formatting.rb",
