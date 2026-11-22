@@ -789,7 +789,11 @@ describe("renderDiffModel copies", () => {
 
 	it.each([
 		[undefined, "(source visible in this diff only)", "itself new"],
-		[{ sourceNew: true }, "itself new in this change", "visible in this diff"],
+		[
+			{ sourceNew: true },
+			"whose source has lines this change also adds",
+			"visible in this diff",
+		],
 	])("words a copy with shape %j", (shape, shown, hidden) => {
 		const r = renderDiffModel(model({ operations: [copy(shape)] }), OPTS);
 		expect(r.summary).toContain(shown);
@@ -836,16 +840,16 @@ describe("renderDiffModel copies", () => {
 		expect(allText(r)).not.toMatch(/ [-\u2013\u2014] /);
 	});
 
-	it("says a duplicate addition is new in both places", () => {
+	it("says part of a copy source is new", () => {
 		const r = renderDiffModel(
 			model({ operations: [copyWith({ shape: { sourceNew: true } })] }),
 			OPTS,
 		);
 		expect(r.summary).toContain(
-			"duplicate: both occurrences are new, review the first in full",
+			"part of the copied source is new in this change, review the source too",
 		);
 		expect(unfenced(r.summary)).toContain("src/a.ts lines 5-13");
-		expect(r.summary).toContain("itself new in this change");
+		expect(r.summary).toContain("whose source has lines this change also adds");
 		expect(r.summary).not.toContain("source visible in this diff only");
 		expect(allText(r)).not.toMatch(/\b(safe|unchanged behavior|functional)\b/);
 		expect(allText(r)).not.toMatch(/ [-\u2013\u2014] /);
