@@ -302,7 +302,7 @@ function sameText(
 /**
  * Checks a copy claim against the patches without using the matcher. Both spans are head-side
  * ranges inside one run each: the target added lines, the source added or context lines of a
- *  * different run, with no overlap. Both files must pass `patchEligible`, which is coarse on
+ * different run, with no overlap. Both files must pass `patchEligible`, which is coarse on
  * purpose (a short language list, no multi-line opener anywhere in the patch, even quote
  * counts on every row); a miss is cheap and an opener outside the patch stays undetected.
  * The block must clear the copy floor, which is
