@@ -139,8 +139,9 @@ The checker applies each of these on its own, with its own scanner and tables. I
 
 **Reshape normalization.** Two blocks that open with a definition are compared as signature plus body.
 
-- Discovery is from body tokens (PR B). The signature is then found by walking up from the matched body on both sides: the opening logical line (bracket depth decides where it ends, so a four-line parameter list is one signature) and any decorators or attributes directly above it (`@name` lines in Python, `#[...]` in Rust). The two signatures are paired however different the name, parameters and types are. Each physical line of either signature becomes one divergence of the new class `signature`, with its original text. The checker derives these boundaries from the patch text itself, not from the matcher's segmentation.
-- A `self.`, `this.`, `cls.` or `Self::` prefix may be removed from one side to nominate a match. It never hides a change. Every body line that matched only because of the prefix rule becomes a divergence of the new class `receiver`, with the original text. A call that gained `this.` can resolve to different code, so the reviewer sees each such line. `receiver` lines are excluded from the divergence limit, and a block with any of them has a review weight of at least 1.
+- Discovery is from body tokens (PR B). The signature is then found by walking up from the matched body on both sides: the opening logical line (bracket depth decides where it ends, so a four-line parameter list is one signature) and any decorators directly above it (`@name` lines). The two signatures are paired however different the name, parameters and types are. Each physical line of either signature becomes one divergence of the new class `signature`, with its original text. The checker derives these boundaries from the patch text itself, not from the matcher's segmentation.
+- The reshape scope is `py`, `pyi`, `js`, `jsx`, `mjs`, `cjs`, `ts` and `tsx`. A `self.` or `cls.` prefix (Python) or a `this.` prefix (JavaScript and TypeScript) may be removed from one side to nominate a match. It never hides a change. Every body line that matched only because of the prefix rule becomes a divergence with the original text. A call that gained `this.` can resolve to different code, so the reviewer sees each such line. A line is class `receiver` when the prefix changed on the read side of the line. It is class `code` when the prefix was added, removed or changed on an assignment target (the left side of `=` or of an augmented assignment such as `+=`), or when one receiver was dropped and another added on the same line, because those edits change which state the line reads or writes. `receiver` lines are excluded from the divergence limit. The review weight is the number of `signature` and `code` divergences, plus the renamed identifiers, plus 1 when any `receiver` divergence is present (a flat 1, however many receiver lines there are).
+- The opener scan ignores lines over 2000 characters and treats `with` as control flow, so `with (scope) {` is never a definition.
 - Indentation uses the PR B rule.
 
 **The `copy` operation.** A block added in the head that matches other code which still exists in the head.
@@ -175,7 +176,7 @@ interface Operation {
   - A claim under 5 counted lines fails on a line over 2000 characters, on two same-file sides in one hunk, on a side that begins with a closing bracket or leading operator, on a side that is an unclosed single line or whose span does not balance its brackets, and when the statement may continue past a side by the matcher's tests, read from the next line of the patch.
   - It then needs 30 non-space characters of information (50 within one file), a whole definition of 40, or a one-line top-level declaration whose head side passes the same name, family and value tests (`FOO == bar` is not a declaration). Each side must occur at most once among the changed runs.
 - B: the token streams it builds itself are equal, using the same newline class and only the listed normalizations.
-- C: a copy's `from` span exists in the head, as an added or context line, a signature divergence covers every physical line of the signature it derives from the patch, and every body line that matches only after receiver removal appears as a `receiver` divergence.
+- C: a copy's `from` span exists in the head, as an added or context line, a signature divergence covers every physical line of the signature it derives from the patch, and every body line that matches only after receiver removal appears as a `receiver` divergence, or as a `code` divergence when the prefix change touches an assignment target or swaps one receiver for another, and the weight equals the signature and code count plus the renamed count plus 1 for any receiver.
 
 ### Rendering
 
@@ -206,7 +207,7 @@ Relocations in the same file read "moved within `file`". `shape.reindent` adds "
 
 ## Left to the builder
 
-- The exact token regex additions for Rust `Self::` and for decorators or attributes.
+- The exact token regex additions for decorators.
 - How the change region id is stored on `Run`.
 - Tuning the information and uniqueness thresholds against the measurement.
 - Names and numbering of the new seed families.
